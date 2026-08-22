@@ -165,6 +165,83 @@ describe('where cargo runs', () => {
         expect(spawnSync.mock.calls[0][0]).toBe('cargo');
     });
 
+    // DOCKER_EXEC attaches to a container the user made by hand; crossbind never creates it, and
+    // the name and mounts are documented nowhere. A container without the cargo mount keeps the
+    // registry inside itself, so bridge generation reads a host path that was never written and
+    // binds nothing - the same silent failure the host-path mapping just fixed, by another route.
+    const inspectReturning = (execFileSync, mounts, running = true) => {
+        execFileSync.mockImplementation((cmd, argv) => {
+            if (cmd === 'docker' && argv[0] === 'container') {
+                return JSON.stringify([{ State: { Running: running }, Mounts: mounts }]);
+            }
+            return '';
+        });
+    };
+    const bothMounts = () => [
+        { Destination: '/tmp/crossbind/live', Source: '/repo' },
+        { Destination: '/var/cache/crossbind/cargo', Source: path.join(work, 'home', '.crossbind', 'cargo') },
+    ];
+
+    test('DOCKER_EXEC runs cargo in the existing container when its mounts are right', async () => {
+        setRunner('DOCKER_EXEC');
+        const { mod, spawnSync } = await importFresh();
+        const { execFileSync } = await import('node:child_process');
+        inspectReturning(execFileSync, bothMounts());
+
+        mod.default(['build'], { target: { platform: 'wasm' } });
+
+        const argv = argvOf(spawnSync);
+        expect(spawnSync.mock.calls[0][0]).toBe('docker');
+        expect(argv[0]).toBe('exec');
+        expect(argv).toContain('cargo');
+    });
+
+    test('DOCKER_EXEC creates the working directory the exec flag will not', async () => {
+        // `docker run --workdir` creates the directory, `docker exec --workdir` does not. Without
+        // this the runtime refuses the exec with an OCI "chdir to cwd" error naming nothing the
+        // user can act on - and no unit test saw it, because only a real container has a real /tmp.
+        setRunner('DOCKER_EXEC');
+        const { mod } = await importFresh();
+        const { execFileSync } = await import('node:child_process');
+        inspectReturning(execFileSync, bothMounts());
+
+        mod.default(['build'], { target: { platform: 'wasm' } });
+
+        const mkdir = execFileSync.mock.calls.find((c) => c[1]?.includes('mkdir'));
+        expect(mkdir).toBeDefined();
+        expect(mkdir[1]).toEqual(expect.arrayContaining(['exec', 'mkdir', '-p', '/tmp/crossbind-cargo']));
+    });
+
+    test('DOCKER_EXEC fails with the create command when the container is missing', async () => {
+        setRunner('DOCKER_EXEC');
+        const { mod } = await importFresh();
+        const { execFileSync } = await import('node:child_process');
+        execFileSync.mockImplementation(() => { throw new Error('No such container'); });
+
+        expect(() => mod.default(['build'], { target: { platform: 'wasm' } }))
+            .toThrow(/does not exist[\s\S]*docker run -d --name crossbind-/);
+    });
+
+    test('DOCKER_EXEC fails when the container predates the cargo mount', async () => {
+        setRunner('DOCKER_EXEC');
+        const { mod } = await importFresh();
+        const { execFileSync } = await import('node:child_process');
+        inspectReturning(execFileSync, [{ Destination: '/tmp/crossbind/live', Source: '/repo' }]);
+
+        expect(() => mod.default(['build'], { target: { platform: 'wasm' } }))
+            .toThrow(/does not mount[\s\S]*var\/cache\/crossbind\/cargo/);
+    });
+
+    test('DOCKER_EXEC fails when the container is stopped', async () => {
+        setRunner('DOCKER_EXEC');
+        const { mod } = await importFresh();
+        const { execFileSync } = await import('node:child_process');
+        inspectReturning(execFileSync, bothMounts(), false);
+
+        expect(() => mod.default(['build'], { target: { platform: 'wasm' } }))
+            .toThrow(/not running[\s\S]*docker start/);
+    });
+
     test('android forces the amd64 platform', async () => {
         setRunner('DOCKER_RUN');
         const { mod, spawnSync } = await importFresh();

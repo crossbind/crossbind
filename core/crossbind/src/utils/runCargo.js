@@ -1,4 +1,4 @@
-import { spawnSync } from 'node:child_process';
+import { spawnSync, execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -122,6 +122,54 @@ function cargoEnv({
     return env;
 }
 
+// docker exec attaches to a container the user created; crossbind never creates one, and until
+// now nothing checked what it carries. A container missing the cargo mount is the worst case: cargo
+// keeps its registry inside the container, so bridge generation reads a crate source from a host
+// path that was never written and emits a bridge that binds nothing - silently. Fail first, and say
+// exactly how to fix it, because the container name and mounts are otherwise undocumented.
+function createHint(name, base, home, image) {
+    return [
+        'Create it with:',
+        `  docker run -d --name ${name} \\`,
+        `    -v ${base}:${DOCKER_BASE} \\`,
+        `    -v ${home}:${CONTAINER_CARGO_HOME} \\`,
+        `    ${image} sleep infinity`,
+    ].join('\n');
+}
+
+function samePath(a, b) {
+    const real = (p) => { try { return fs.realpathSync(p); } catch { return path.resolve(p); } };
+    return real(a) === real(b);
+}
+
+function assertExecContainer(name, base, home, image) {
+    const hint = createHint(name, base, home, image);
+    let info;
+    try {
+        // stderr is dropped: docker's own "No such container" would land before the message below.
+        info = JSON.parse(execFileSync('docker', ['container', 'inspect', name], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }))[0];
+    } catch {
+        throw new Error(`crossbind: RUNNER=DOCKER_EXEC needs a container named '${name}', which does not exist.\n${hint}`);
+    }
+    if (!info?.State?.Running) {
+        throw new Error(`crossbind: the container '${name}' exists but is not running. Start it with \`docker start ${name}\`, or recreate it.\n${hint}`);
+    }
+    for (const [destination, source] of [[DOCKER_BASE, base], [CONTAINER_CARGO_HOME, home]]) {
+        const mount = (info.Mounts ?? []).find((m) => m.Destination === destination);
+        if (!mount || !samePath(mount.Source, source)) {
+            const found = mount ? ` - it mounts ${mount.Source} there` : '';
+            throw new Error(`crossbind: the container '${name}' does not mount ${source} at ${destination}${found}. It predates the cargo mount, so recreate it.\n${hint}`);
+        }
+    }
+    // `docker run --workdir` creates the directory; `docker exec --workdir` does not, and cargo
+    // dies with an OCI "chdir to cwd" error that names nothing the user can act on.
+    try {
+        execFileSync('docker', ['exec', '--user', getOsUserAndGroupId(), name, 'mkdir', '-p', CONTAINER_CWD], { stdio: 'ignore' });
+    } catch (e) {
+        throw new Error(`crossbind: could not create the working directory ${CONTAINER_CWD} inside '${name}'.\n${hint}`, { cause: e });
+    }
+}
+
 export default function runCargo(args, {
     cwd, rustflags = [], panic, capture = false, maxBuffer, allowUnstable = false, target,
 } = {}) {
@@ -158,10 +206,12 @@ export default function runCargo(args, {
 
     let runnerArgs;
     if (runner === 'DOCKER_EXEC') {
+        const name = getDockerContainerName(base, role);
+        assertExecContainer(name, base, home, getDockerImage(role, platform));
         runnerArgs = ['exec', ...envArgs,
             '--user', getOsUserAndGroupId(),
             '--workdir', CONTAINER_CWD,
-            getDockerContainerName(base, role)];
+            name];
     } else {
         pullDockerImage(role, platform);
         runnerArgs = ['run', '--rm',
