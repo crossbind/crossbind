@@ -202,7 +202,7 @@ Use when you need to share an override across **multiple crossbind packages**. I
 | Key | Default | Notes |
 |-----|---------|-------|
 | `XCODE_DEVELOPMENT_TEAM` | `''` | Required for iOS device (not simulator) builds |
-| `RUNNER` | `'DOCKER_RUN'` | `'DOCKER_EXEC'` keeps a long-lived container; `'LOCAL'` skips Docker entirely (only works if you have all toolchains installed) |
+| `RUNNER` | `'DOCKER_RUN'` | `'DOCKER_EXEC'` reuses a long-lived container that you create yourself — crossbind never creates one, and tells you the exact `docker run` command (name and both mounts) if it is missing or wrong; `'LOCAL'` skips Docker entirely (only works if you have all toolchains installed) |
 | `LOG_LEVEL` | `'INFO'` | `'DEBUG'` for verbose tracing during build issues |
 | `DOCKER_REGISTRY_MIRROR` | `''` | Registry prefix to pull the build images from, e.g. `registry.example.dev/crossbind`. crossbind appends the release digest itself, so builds stay reproducible. Env: `CROSSBIND_REGISTRY_MIRROR` |
 | `DOCKER_IMAGE_WEB` | `''` | Image used for wasm and wasi builds instead of the pinned one. A reference without the release digest disables the reproducibility guarantee. Env: `CROSSBIND_IMAGE_WEB` |
