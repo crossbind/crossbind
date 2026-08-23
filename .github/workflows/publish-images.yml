@@ -494,14 +494,21 @@ jobs:
             echo "ok  ${registry}/android linux/amd64 leaf ${leaf}  signer=${subject}"
           done
 
-          # Negative: an identity nothing in this repo can produce must be refused, and the harness
-          # must be able to tell that failure apart from a passing gate.
+          # Negative cases, and they are deliberately NEAR misses. An obviously foreign identity
+          # would be refused even by a policy that ignored the ref and the workflow file entirely,
+          # so it proves nothing about the two things that actually matter here: only this workflow
+          # signs, and only from main. Each is asserted on its own, and each must exit non-zero.
           root="sha256:$(docker buildx imagetools inspect "${GHCR}/web:${V}" --raw | sha256sum | cut -d' ' -f1)"
-          if cosign verify --certificate-identity 'https://github.com/not-crossbind/nope/.github/workflows/publish-images.yml@refs/heads/main' \
-               --certificate-oidc-issuer "$ISSUER" "${GHCR}/web@${root}" >/dev/null 2>&1; then
-            echo "FAIL a signature verified under an identity that cannot exist"; exit 1
-          fi
-          echo "ok  a wrong certificate identity is refused"
+          refuse() { # $1 = label, $2 = identity that must NOT verify
+            if cosign verify --certificate-identity "$2" \
+                 --certificate-oidc-issuer "$ISSUER" "${GHCR}/web@${root}" >/dev/null 2>&1; then
+              echo "FAIL  ${1}: verified under ${2}"; exit 1
+            fi
+            echo "ok    ${1} is refused"
+          }
+          repo="https://github.com/${{ github.repository }}/.github/workflows"
+          refuse "the same workflow from another branch" "${repo}/publish-images.yml@refs/heads/not-main"
+          refuse "another workflow in this repository"   "${repo}/build-linux.yml@refs/heads/main"
 
       - uses: actions/upload-artifact@v4
         with:
