@@ -81,7 +81,20 @@ jobs:
       - name: Build examples/lib-prebuilt-matrix
         run: pnpm --filter=@crossbind/example-lib-prebuilt-matrix run build:ios
       - name: Pod install
-        run: cd examples/mobile-reactnative-cli/ios && pod install && cd ../../../
+        # CocoaPods resolves paths through the symlink thicket a pnpm workspace creates and
+        # intermittently dies on "pathname contains null byte" - its own issue list calls that one
+        # "sometimes". Retrying costs a minute; letting a known flake fail the release path costs a
+        # rerun of everything behind it. Three attempts, and the third failure is a real one.
+        working-directory: examples/mobile-reactnative-cli/ios
+        run: |
+          set -euo pipefail
+          for attempt in 1 2 3; do
+            if pod install; then exit 0; fi
+            echo "pod install failed (attempt ${attempt}/3)"
+            sleep 5
+          done
+          echo "pod install failed three times - this is not a flake"
+          exit 1
       - name: E2E IOS
         # The playground under e2e/ needs the full port matrix and its own pods; CI builds the
         # sample, the same boundary ci:linux:e2e draws.
