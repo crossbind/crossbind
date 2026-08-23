@@ -8,6 +8,7 @@
     "types": "dist/js/index.d.ts",
     "scripts": {
         "build:ios": "crossbind build -p ios",
+        "build:android": "crossbind build -p android",
         "clear": "rm -rf .crossbind dist *.xcframework target"
     },
     "devDependencies": {
