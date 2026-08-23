@@ -148,6 +148,22 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ github.token }}
+      # The certificate this job mints carries job_workflow_ref as its identity, and the policy that
+      # verifies it later is an exact string. Checking that here costs nothing and fails in seconds;
+      # discovering a mismatch at verification time means a whole publish run - build, sign, mirror -
+      # was spent learning it. The value is logged either way, so a mismatch names the real one.
+      - name: The signing identity must be the one the policy accepts
+        env:
+          EXPECTED: crossbind/crossbind/.github/workflows/publish-images.yml@refs/heads/main
+        run: |
+          set -euo pipefail
+          actual='${{ github.workflow_ref }}'
+          echo "job_workflow_ref: ${actual}"
+          echo "expected        : ${EXPECTED}"
+          [ "$actual" = "$EXPECTED" ] || {
+            echo "refusing to sign: the certificate identity would not match the verification policy"
+            exit 1
+          }
       - name: Sign each root index, and the android leaf the CLI pins
         env:
           V: ${{ needs.setup.outputs.tag }}
@@ -453,13 +469,15 @@ jobs:
           GHCR: ${{ needs.setup.outputs.registry }}
           HUB: docker.io/${{ github.repository_owner }}
           ISSUER: https://token.actions.githubusercontent.com
-          IDENTITY: ^https://github\.com/${{ github.repository }}/\.github/workflows/publish-images\.yml@refs/heads/main$
+          # Exact, not a pattern: this release has exactly one legitimate signer, and every
+          # character a regex leaves loose is a signer it would also accept.
+          IDENTITY: https://github.com/${{ github.repository }}/.github/workflows/publish-images.yml@refs/heads/main
         run: |
           set -euo pipefail
           echo "expected signer identity: $IDENTITY"
 
           verify() { # $1 = ref
-            cosign verify --certificate-identity-regexp "$IDENTITY" \
+            cosign verify --certificate-identity "$IDENTITY" \
               --certificate-oidc-issuer "$ISSUER" "$1" > /tmp/v.json
             jq -r '.[0].optional.Subject // "(no subject)"' /tmp/v.json
           }
@@ -479,7 +497,7 @@ jobs:
           # Negative: an identity nothing in this repo can produce must be refused, and the harness
           # must be able to tell that failure apart from a passing gate.
           root="sha256:$(docker buildx imagetools inspect "${GHCR}/web:${V}" --raw | sha256sum | cut -d' ' -f1)"
-          if cosign verify --certificate-identity-regexp '^https://github\.com/not-crossbind/nope/.*$' \
+          if cosign verify --certificate-identity 'https://github.com/not-crossbind/nope/.github/workflows/publish-images.yml@refs/heads/main' \
                --certificate-oidc-issuer "$ISSUER" "${GHCR}/web@${root}" >/dev/null 2>&1; then
             echo "FAIL a signature verified under an identity that cannot exist"; exit 1
           fi
