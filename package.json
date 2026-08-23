@@ -3,6 +3,7 @@
     "scripts": {
         "build:ports": "pnpm --filter='@crossbind/port-*' run build",
         "build:examples": "pnpm --filter='@crossbind/example-*' run build",
+        "gate:toolchain": "node scripts/gate-toolchain.js",
         "gate:local-sysroot": "node scripts/gate-local-sysroot.js",
         "build:e2e": "pnpm --filter='@crossbind/e2e-web-*' --filter='@crossbind/e2e-cloud-*' --filter='@crossbind/e2e-backend-*' --filter='@crossbind/e2e-cli-*' run build",
         "build:examples:lib": "pnpm --filter='@crossbind/example-lib-*' run build",
