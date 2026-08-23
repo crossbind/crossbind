@@ -102,12 +102,29 @@ refuses to promote anything it has not verified on both registries.
 
 Four choices were left to the implementer. All four are pinned in the release scripts:
 
-- **Signature storage: native OCI 1.1 referrers, and cosign v3.1.3's default is what provides it.**
-  This was measured rather than assumed. `scripts/gate-local-signature.js` signs a root index and a
-  child leaf with no `--registry-referrers-mode` flag at all, and both are discoverable through
-  `oras discover --distribution-spec v1.1-referrers-api` on the source and on a mirror copied with
-  `oras cp -r`. The deprecated v2 flag is therefore not passed. Had the default fallen back to the
-  legacy tag schema, that gate would have failed and the flag would have gone in.
+- **Signature storage: OCI 1.1 referrers, in the mode each registry actually serves - declared per
+  registry, never negotiated.** The first attempt pinned the native referrers API everywhere and was
+  wrong, which the gates caught before any release depended on it. GHCR does not implement the
+  referrers API (measured on 2026-08-24: `HTTP 404` on `/v2/crossbind/web/referrers/<digest>`), so
+  cosign stores through the OCI 1.1 **tag schema** there; Docker Hub does implement it (`HTTP 200`).
+  cosign picks per registry, so no single mode can serve both: forcing the API found nothing on
+  GHCR, and forcing the tag schema found nothing on a registry that had used the API. The matrix is
+  therefore asymmetric and explicit - discover GHCR with `v1.1-referrers-tag`, copy with
+  `--from-distribution-spec v1.1-referrers-tag --to-distribution-spec v1.1-referrers-api`, discover
+  the mirror with `v1.1-referrers-api`. Declaring each end is what keeps this a gate: a registry
+  that silently changes capability fails it instead of moving the signature somewhere unwatched.
+  The cosign v2 `.sig` layout is a different scheme and stays forbidden; its absence is asserted on
+  both registries. No `--registry-referrers-mode` flag is passed, because the choice is not ours to
+  make - it belongs to what the registry implements.
+
+  Two things were verified rather than reasoned about. The conversion leg was proved locally end to
+  end: a GHCR-shaped tag-schema source copied with `--from tag --to api` lands on the destination
+  with identical descriptors and subject digests, and `cosign verify` succeeds there. And the GHCR
+  leg was proved live - `cosign verify` against the published staging digest, with the exact
+  certificate identity, succeeds with the signature stored in the tag schema.
+
+  Revisit if GHCR ships the referrers API: flip `--primary-mode` and the copy's `--from`, and the
+  gate proves the new path or fails.
 - **Copying: `oras cp -r` with the native API forced on both ends.** `imagetools create` rebuilds an
   index on the destination and leaves the signature behind on the source; a copy that quietly fell
   back to the tag schema would produce a mirror that looks correct and a policy that finds nothing.

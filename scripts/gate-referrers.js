@@ -8,10 +8,14 @@
 //
 // Two different claims, asserted separately because one does not imply the other:
 //
-//   1. The referrer EXISTS and is reachable through the native API. Discovery is forced onto it:
-//      oras falls back to the legacy tag schema when a registry lacks referrers support, and that
-//      fallback is exactly the failure this gate exists to catch - the mirror would look correct
-//      while a policy speaking the native API finds nothing.
+//   1. The referrer EXISTS and is reachable in the mode that registry actually serves - declared
+//      here, never negotiated. The two differ and cannot be made uniform: GHCR does not implement
+//      the referrers API (measured: HTTP 404 on /v2/.../referrers/) so cosign stores through the
+//      OCI 1.1 tag schema there, while Docker Hub does implement it and the mirror copy converts
+//      into it. Forcing one mode on both was tried and is wrong - it finds nothing on whichever
+//      side did not use it. What matters is that each mode is PINNED, so a registry silently
+//      changing capability fails this gate instead of moving the signature somewhere unwatched.
+//      The cosign v2 `.sig` layout is a different scheme and stays forbidden; absence asserted.
 //   2. The referrer POINTS AT the digest we meant to sign. A signature that exists in the right
 //      repository but names another subject would satisfy any count-based check and protect
 //      nothing, so the referrer manifest is fetched and its .subject.digest compared exactly.
@@ -26,6 +30,9 @@ const TAG = arg('--tag');
 const PRIMARY = arg('--primary') ?? 'ghcr.io/crossbind';
 const MIRROR = arg('--mirror') ?? 'docker.io/crossbind';
 const PRIMARY_ONLY = process.argv.includes('--primary-only');
+// Declared per registry because their capabilities differ; see the note above.
+const PRIMARY_MODE = arg('--primary-mode') ?? 'v1.1-referrers-tag';
+const MIRROR_MODE = arg('--mirror-mode') ?? 'v1.1-referrers-api';
 if (!TAG) { console.error('gate-referrers: --tag is required'); process.exit(1); }
 
 const IMAGES = ['rust-sysroot', 'base', 'web', 'android'];
@@ -33,7 +40,13 @@ let failed = 0;
 const ok = (m) => console.log(`  ok    ${m}`);
 const bad = (m, d = '') => { failed += 1; console.error(`  FAIL  ${m}`); if (d) console.error(`        ${d}`); };
 
-const sh = (args) => execFileSync(args[0], args.slice(1), { encoding: 'utf8', maxBuffer: 32 * 1024 * 1024 });
+// CROSSBIND_ORAS lets this run against a containerised oras without installing one, which is how
+// it gets exercised against a real registry before a release depends on it. CI leaves it unset.
+const ORAS = (process.env.CROSSBIND_ORAS ?? 'oras').split(' ').filter(Boolean);
+const sh = (args) => {
+    const argv = args[0] === 'oras' ? [...ORAS, ...args.slice(1)] : args;
+    return execFileSync(argv[0], argv.slice(1), { encoding: 'utf8', maxBuffer: 32 * 1024 * 1024 });
+};
 const shellOut = (cmd) => execFileSync('sh', ['-c', cmd], { encoding: 'utf8' }).trim();
 
 // Computed over the raw body the registry serves, the same way the CLI and gate-registry compute it.
@@ -41,8 +54,8 @@ const indexDigest = (ref) => `sha256:${shellOut(`docker buildx imagetools inspec
 const rawIndex = (ref) => JSON.parse(sh(['docker', 'buildx', 'imagetools', 'inspect', ref, '--raw']));
 
 // Only the fields that must survive a copy, sorted so registry ordering cannot decide the result.
-function discover(repo, digest) {
-    const out = sh(['oras', 'discover', '--distribution-spec', 'v1.1-referrers-api',
+function discover(repo, digest, mode) {
+    const out = sh(['oras', 'discover', '--distribution-spec', mode,
         '--format', 'json', '--depth', '1', `${repo}@${digest}`]);
     const parsed = JSON.parse(out);
     const list = parsed.referrers ?? parsed.manifests ?? [];
@@ -72,12 +85,12 @@ function assertSubjects(label, repo, subject, descriptors) {
 
 function check(label, image, subject) {
     let primary;
-    try { primary = discover(`${PRIMARY}/${image}`, subject); } catch (e) {
-        bad(`${label}: native discovery failed on the primary`, (e.stderr || e.message).toString().trim().split('\n').slice(-2).join(' '));
+    try { primary = discover(`${PRIMARY}/${image}`, subject, PRIMARY_MODE); } catch (e) {
+        bad(`${label}: discovery failed on the primary (${PRIMARY_MODE})`, (e.stderr || e.message).toString().trim().split('\n').slice(-2).join(' '));
         return;
     }
     if (primary.length === 0) {
-        bad(`${label}: the primary reports no referrers - nothing was signed, or it went to the legacy tag schema`);
+        bad(`${label}: the primary reports no referrers in ${PRIMARY_MODE} - nothing was signed, or it went somewhere unwatched`);
         return;
     }
     if (!assertSubjects(label, `${PRIMARY}/${image}`, subject, primary)) return;
@@ -86,8 +99,8 @@ function check(label, image, subject) {
     if (PRIMARY_ONLY) return;
 
     let mirror;
-    try { mirror = discover(`${MIRROR}/${image}`, subject); } catch (e) {
-        bad(`${label}: native discovery failed on the mirror`, (e.stderr || e.message).toString().trim().split('\n').slice(-2).join(' '));
+    try { mirror = discover(`${MIRROR}/${image}`, subject, MIRROR_MODE); } catch (e) {
+        bad(`${label}: discovery failed on the mirror (${MIRROR_MODE})`, (e.stderr || e.message).toString().trim().split('\n').slice(-2).join(' '));
         return;
     }
     if (JSON.stringify(primary) !== JSON.stringify(mirror)) {
@@ -98,7 +111,17 @@ function check(label, image, subject) {
     ok(`${label}: the mirror carries the same ${mirror.length} referrer(s), same subject`);
 }
 
-console.log(`gate-referrers: ${PRIMARY}${PRIMARY_ONLY ? '' : ` vs ${MIRROR}`}, tag ${TAG}\n`);
+// A registry carrying both schemes would let a verifier pick the one nobody gated.
+function assertNoLegacySignatureTags(registry) {
+    for (const image of IMAGES) {
+        let tags;
+        try { tags = sh(['oras', 'repo', 'tags', `${registry}/${image}`]).split('\n'); } catch { continue; }
+        const legacy = tags.map((t) => t.trim()).filter((t) => t.endsWith('.sig'));
+        if (legacy.length) bad(`${registry}/${image}: cosign v2 legacy signature tags present`, legacy.join(', '));
+    }
+}
+
+console.log(`gate-referrers: ${PRIMARY} (${PRIMARY_MODE})${PRIMARY_ONLY ? '' : ` vs ${MIRROR} (${MIRROR_MODE})`}, tag ${TAG}\n`);
 
 for (const image of IMAGES) check(`${image} root`, image, indexDigest(`${PRIMARY}/${image}:${TAG}`));
 
@@ -109,6 +132,9 @@ const leaf = (rawIndex(`${PRIMARY}/android@${androidRoot}`).manifests ?? [])
     .find((m) => m.platform?.os === 'linux' && m.platform?.architecture === 'amd64');
 if (!leaf) bad('the android index carries no linux/amd64 leaf');
 else check('android linux/amd64 leaf', 'android', leaf.digest);
+
+for (const registry of PRIMARY_ONLY ? [PRIMARY] : [PRIMARY, MIRROR]) assertNoLegacySignatureTags(registry);
+if (!failed) ok('no cosign v2 .sig tags on any registry');
 
 console.log(`\ngate-referrers: ${failed ? `${failed} problem(s)` : 'every signed subject is discoverable and names itself'}`);
 process.exit(failed ? 1 : 0);

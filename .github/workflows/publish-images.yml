@@ -120,10 +120,12 @@ jobs:
   # verifying the leaf cannot discover a signature attached only to the root. Signing --recursive
   # would attach one to every leaf of every image; we sign the one that is actually consumed.
   #
-  # STORAGE: native OCI 1.1 referrers. cosign v3.1.3 does this by default - measured, not assumed,
-  # by scripts/gate-local-signature.js: signatures made with no --registry-referrers-mode flag are
-  # discoverable through `oras discover --distribution-spec v1.1-referrers-api`. The deprecated v2
-  # flag is therefore NOT passed.
+  # STORAGE: the OCI 1.1 referrers TAG SCHEMA, pinned rather than negotiated. cosign v3.1.3 needs no
+  # --registry-referrers-mode flag: it writes whatever the registry supports, and GHCR does not
+  # implement the referrers API (HTTP 404 on /v2/.../referrers/) while Docker Hub does. Left to
+  # negotiate, the same signature would be stored one way here and another way on the mirror. So
+  # every copy and every discovery below forces the tag schema, and the cosign v2 `.sig` layout -
+  # a different scheme - is asserted absent.
   sign:
     needs: [setup, sysroot, base, web, android]
     if: inputs.push
@@ -210,9 +212,12 @@ jobs:
             --tag "${{ needs.setup.outputs.tag }}" \
             --primary "${{ needs.setup.outputs.registry }}"
 
-  # oras carries the image graph AND its referrer graph in one operation, with the native API forced
-  # on BOTH ends: a silent fall back to the tag schema would still produce a working mirror and a
-  # policy that cannot find the signature.
+  # oras carries the image graph AND its referrer graph in one operation, converting between the two
+  # registries' modes: GHCR holds the OCI 1.1 tag schema because it does not implement the referrers
+  # API (HTTP 404), Docker Hub implements it. Both ends are declared rather than negotiated, so a
+  # registry that changes capability fails here instead of moving the signature somewhere unwatched.
+  # Proved locally end to end - the conversion preserves the descriptors, the subject digests, and
+  # cosign's ability to verify on the destination.
   mirror:
     needs: [setup, sign]
     if: inputs.push && inputs.mirror
@@ -248,7 +253,7 @@ jobs:
           set -euo pipefail
           for image in rust-sysroot base web android; do
             oras cp -r \
-              --from-distribution-spec v1.1-referrers-api \
+              --from-distribution-spec v1.1-referrers-tag \
               --to-distribution-spec v1.1-referrers-api \
               "${GHCR}/${image}:${V}" "docker.io/${OWNER}/${image}:${V}"
           done
