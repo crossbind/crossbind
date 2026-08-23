@@ -14,10 +14,7 @@ const pin = { current: null };
 vi.mock('../src/utils/rustSysrootPin.js', () => ({ get default() { return pin.current; } }));
 
 const ensure = vi.fn();
-vi.mock('../src/utils/downloadAndExtractFile.js', () => ({
-    downloadFile: (...a) => ensure(...a),
-    verifyIntegrity: vi.fn(),
-}));
+vi.mock('../src/utils/ociArtifact.js', () => ({ default: (...a) => ensure(...a) }));
 
 const MT = { platform: 'wasm', arch: 'wasm32', runtime: 'mt' };
 const ST = { platform: 'wasm', arch: 'wasm32', runtime: 'st' };
@@ -62,7 +59,7 @@ describe('sysrootFor', () => {
 
 describe('prepareRustSysroot', () => {
     test('downloads nothing when no target will consume it', async () => {
-        pin.current = { url: 'https://example.test/s.tar', sha256: 'a'.repeat(64) };
+        pin.current = { image: 'registry.test/ns/rust-sysroot', index: `sha256:${'a'.repeat(64)}` };
         const { prepareRustSysroot } = await importFresh();
 
         await expect(prepareRustSysroot([ST, IOS])).resolves.toBe(null);
@@ -78,8 +75,8 @@ describe('prepareRustSysroot', () => {
 
     test('a failed download leaves the nightly path working instead of killing the build', async () => {
         // Refusing here would take away a build that works today: the artifact is an optimisation.
-        pin.current = { url: 'https://example.test/s.tar', sha256: 'a'.repeat(64) };
-        ensure.mockRejectedValue(new Error('HTTP 404'));
+        pin.current = { image: 'registry.test/ns/rust-sysroot', index: `sha256:${'a'.repeat(64)}` };
+        ensure.mockRejectedValue(new Error('the registry returned HTTP 404'));
         const { prepareRustSysroot, sysrootFor } = await importFresh();
         const log = vi.fn();
 

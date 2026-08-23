@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 // Release gate (ADR rev 6.6): the sysroot artifact a host build downloads is actually consumable.
 //
-//   node scripts/gate-local-sysroot.js --tar tooling/docker/dist/crossbind-rust-sysroot-1.97.1.tar
-//   node scripts/gate-local-sysroot.js            # the pinned, published artifact
+//   node scripts/gate-local-sysroot.js --image ghcr.io/crossbind/rust-sysroot --index sha256:...
+//   node scripts/gate-local-sysroot.js            # whatever rustSysrootPin.js pins
 //
 // The containerized path gets the sysroots as an image layer, and the image build probes them. This
 // is the OTHER channel: a tarball on a developer's machine. Everything here is a way that channel
@@ -27,11 +27,10 @@ const PIN = (await import(src('rustSysrootPin.js'))).default;
 const { cargoBuildInvocation } = await import(src('rustMt.js'));
 
 const arg = (flag) => { const i = process.argv.indexOf(flag); return i !== -1 ? process.argv[i + 1] : null; };
-const TAR = arg('--tar');
-// The publish workflow gates the archive it has just uploaded, before anyone pins it: that is the
-// only moment a bad artifact can still be caught without a release going out behind it.
-const SOURCE = arg('--url') && arg('--sha256')
-    ? { url: arg('--url'), sha256: arg('--sha256') }
+// The publish workflow gates the image it has just pushed, before anyone pins it: the only moment
+// a bad sysroot can still be caught without a release standing behind it.
+const SOURCE = arg('--image') && arg('--index')
+    ? { image: arg('--image'), index: arg('--index') }
     : PIN;
 const SEP = String.fromCharCode(0x1f);
 
@@ -109,18 +108,14 @@ console.log(`gate-local-sysroot: ${os.platform()}/${os.arch()}, rustc ${hostRust
 
 let tree;
 try {
-    if (TAR) {
-        // "relocatable" is the whole point of extracting somewhere with a space in it: an rlib tree
-        // that baked its own path in would work in CI and break on a real machine.
-        tree = extract(path.resolve(TAR), path.join(work, 'with space'));
-            ok('extracted and read back from a path containing a space');
-    } else if (SOURCE) {
-        tree = await ensureRustSysroot({ url: SOURCE.url, sha256: SOURCE.sha256, root: path.join(work, 'cache') });
-        ok('downloaded and verified the pinned artifact through the CLI loader');
-    } else {
-        console.log('  skip  no --tar, --url or pinned artifact - nothing to gate');
+    if (!SOURCE) {
+        console.log('  skip  no --image/--index and nothing pinned - nothing to gate');
         process.exit(0);
     }
+    // A path with a space in it is the point: an rlib tree that baked its own location in would
+    // work in CI and break on a real machine.
+    tree = await ensureRustSysroot({ ...SOURCE, root: path.join(work, 'with space') });
+    ok('fetched the pinned layer through the CLI loader, unpacked under a path with a space');
 } catch (e) {
     fail('obtaining the artifact', e.message);
     process.exit(1);
@@ -151,27 +146,23 @@ if (fs.existsSync(path.join(probe, 't-mt-release'))) {
     ok('the build script compiled for the host while wasm units used the shipped sysroot');
 }
 
-// A second tree at a different root must serve the same builds: proves nothing was path-baked.
-if (TAR) {
-    try {
-        const moved = extract(path.resolve(TAR), path.join(work, 'other-root'));
-        const r = build({ tree: moved, variant: 'mt', buildType: 'release', dir: probe });
-        if (r.status === 0) ok('the same artifact works from a second, unrelated root');
-        else fail('relocated tree', r.stderr);
-    } catch (e) { fail('relocating the tree', e.message); }
-}
+// A second copy at an unrelated root must serve the same builds: proves nothing was path-baked.
+try {
+    const moved = await ensureRustSysroot({ ...SOURCE, root: path.join(work, 'other-root') });
+    const r = build({ tree: moved, variant: 'mt', buildType: 'release', dir: probe });
+    if (r.status === 0) ok('the same sysroot works from a second, unrelated root');
+    else fail('relocated tree', r.stderr);
+} catch (e) { fail('relocating the tree', e.message); }
 
 // Concurrency is a property of the loader, not the tarball: N builds starting at once must not
 // tear the cache. Only a real URL exercises the download+rename path the loader locks around.
-if (!TAR && SOURCE) {
+{
     const root = path.join(work, 'race');
-    const runs = await Promise.allSettled(Array.from({ length: 4 }, () => ensureRustSysroot({ url: SOURCE.url, sha256: SOURCE.sha256, root })));
+    const runs = await Promise.allSettled(Array.from({ length: 4 }, () => ensureRustSysroot({ ...SOURCE, root })));
     const bad = runs.filter((r) => r.status === 'rejected');
     if (bad.length) fail('concurrent extraction', bad.map((b) => b.reason?.message).join('\n'));
     else if (new Set(runs.map((r) => r.value)).size !== 1) fail('concurrent extraction returned different directories');
     else ok('four concurrent loads share one verified directory');
-} else {
-    skip('concurrent download/extraction (needs a published artifact)');
 }
 
 fs.rmSync(work, { recursive: true, force: true });

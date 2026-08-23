@@ -299,55 +299,6 @@ jobs:
             digests.json
             raw-*.json
 
-  # The sysroots ship twice: as a layer inside the web image, and as this archive for RUNNER=LOCAL.
-  # Packed from the PUBLISHED image rather than rebuilt, so the two channels carry the same bytes by
-  # construction and the manifest inside is the same contract the CLI verifies.
-  sysroot-artifact:
-    needs: [setup, sysroot]
-    if: inputs.push
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-      packages: read
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22.x
-      - uses: docker/setup-buildx-action@v3
-      - uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ github.token }}
-      - name: Pack the sysroot archive
-        run: node scripts/pack-rust-sysroot.js --image "${{ needs.setup.outputs.registry }}/rust-sysroot:${{ needs.setup.outputs.tag }}"
-      - name: Attach it to a release
-        env:
-          GH_TOKEN: ${{ github.token }}
-          TAG: rust-sysroot-${{ needs.setup.outputs.version }}
-        run: |
-          set -euo pipefail
-          cd tooling/docker/dist
-          gh release view "$TAG" >/dev/null 2>&1 \
-            || gh release create "$TAG" --title "Rust sysroot ${{ needs.setup.outputs.version }}" \
-                 --notes "Prebuilt st/mt Rust sysroots for RUNNER=LOCAL, packed from the ${{ needs.setup.outputs.version }} image."
-          gh release upload "$TAG" ./*.tar ./*.tar.sha256 manifest.json --clobber
-          tar_name="$(basename ./*.tar)"
-          {
-            echo "{"
-            echo "  \"version\": \"${{ needs.setup.outputs.version }}\","
-            echo "  \"url\": \"${{ github.server_url }}/${{ github.repository }}/releases/download/${TAG}/${tar_name}\","
-            echo "  \"sha256\": \"$(cut -d' ' -f1 < ./*.tar.sha256)\""
-            echo "}"
-          } > sysroot-pin.json
-          jq . sysroot-pin.json
-          { echo '### Rust sysroot artifact'; echo '```json'; jq . sysroot-pin.json; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
-      - uses: actions/upload-artifact@v4
-        with:
-          name: sysroot-pin
-          path: tooling/docker/dist/sysroot-pin.json
-
   # Release gate (rev 6.6): what the toolchain must REFUSE. smoke-images asserts the image has what
   # it promises; this asserts it cannot be talked out of being stable - against the real Linux cargo
   # in the image, because config discovery, flag precedence and RUSTC_BOOTSTRAP are cargo's
@@ -378,11 +329,11 @@ jobs:
       - run: node scripts/gate-toolchain.js --published --tag ${{ needs.setup.outputs.tag }} --arch ${{ matrix.arch }}
 
   # Release gate (rev 6.6): the OTHER consumption channel. The image build probes the sysroots it
-  # embeds; nothing yet proves the tarball a host downloads is consumable - relocatable, offline,
-  # matching the compiler on PATH. Gated on the archive just uploaded, so a bad one cannot be
-  # pinned, across the host OSes crossbind supports for RUNNER=LOCAL.
+  # embeds; this proves a HOST build can read the very same layer straight out of the registry -
+  # relocatable, offline, matching the compiler on PATH - across the OSes RUNNER=LOCAL supports.
+  # There is no second artifact to publish, so the two channels cannot drift.
   gate-local-sysroot:
-    needs: [setup, sysroot-artifact]
+    needs: [setup, sysroot]
     if: inputs.push
     strategy:
       fail-fast: false
@@ -404,15 +355,11 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: wasm32-unknown-emscripten
-      - uses: actions/download-artifact@v4
-        with:
-          name: sysroot-pin
-      - name: Gate the published artifact
+      - name: Gate the sysroot image this run published
         run: |
-          set -euo pipefail
           node scripts/gate-local-sysroot.js \
-            --url "$(jq -r .url sysroot-pin.json)" \
-            --sha256 "$(jq -r .sha256 sysroot-pin.json)"
+            --image "${{ needs.setup.outputs.registry }}/rust-sysroot" \
+            --index "${{ needs.sysroot.outputs.digest }}"
 
   # Rev 6.6: the mirror is compared from the RAW bodies both registries serve - index, every linux
   # platform manifest, and each manifest's config and layer digests - because an index-only check

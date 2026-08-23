@@ -3,15 +3,18 @@ import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import withDirLock from './dirLock.js';
-import { downloadFile, verifyIntegrity } from './downloadAndExtractFile.js';
+import fetchOciLayer from './ociArtifact.js';
 import { cargoRunner } from './runCargo.js';
 import { isMtWasm } from './rustMt.js';
 import PIN from './rustSysrootPin.js';
 
-// The second consumption channel for the Rust sysroots: containerized builds get them as an image
-// layer, a host build (RUNNER=LOCAL) downloads the same tree as a sha256-pinned artifact. Same
-// pattern as the wasi-sdk/wasmtime pins - verify before unpacking, never let the archive choose
-// where its files land, and key the cache by digest so two versions can coexist.
+// The second consumption channel for the Rust sysroots. A containerized build gets them as an image
+// layer; a host build (RUNNER=LOCAL) reads that SAME layer straight out of the registry over plain
+// HTTPS. Not a repackaged copy hosted somewhere else - the same object, so the two channels cannot
+// drift, and there is no second artifact to publish, verify or forget to delete.
+//
+// Everything hangs off one pinned index digest. Verify before unpacking, never let the archive
+// choose where its files land, and key the cache by digest so two versions coexist.
 
 const SCHEMA = 1;
 
@@ -67,22 +70,38 @@ function findSysrootTree(extracted) {
     return found;
 }
 
+// An archive is untrusted input even when its digest checks out: the digest says "these are the
+// bytes that were published", not "these bytes are harmless". Entries are listed first and anything
+// that could write outside the staging directory is refused before a single file is created.
 function extractTo(archive, work) {
+    const list = spawnSync('tar', ['-tzf', archive], { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
+    if (list.status !== 0) {
+        throw new Error(`crossbind: cannot read the sysroot archive: ${(list.stderr || '').trim() || `tar exited ${list.status}`}`);
+    }
+    const escaping = list.stdout.split('\n').map((e) => e.trim()).filter(Boolean)
+        .filter((entry) => entry.startsWith('/') || entry.split('/').includes('..'));
+    if (escaping.length) {
+        throw new Error(`crossbind: the sysroot archive contains entries that escape the extraction directory: ${escaping.slice(0, 3).join(', ')}`);
+    }
     fs.mkdirSync(work, { recursive: true });
-    const tar = spawnSync('tar', ['-xf', archive, '-C', work], { encoding: 'utf8' });
+    const tar = spawnSync('tar', ['-xzf', archive, '-C', work], { encoding: 'utf8' });
     if (tar.error) throw new Error(`crossbind: cannot run tar to extract ${archive}: ${tar.error.message}`);
     if (tar.status !== 0) {
-        throw new Error(`crossbind: extracting the rust sysroot archive failed: ${(tar.stderr || '').trim() || `tar exited ${tar.status}`}`);
+        throw new Error(`crossbind: extracting the rust sysroot layer failed: ${(tar.stderr || '').trim() || `tar exited ${tar.status}`}`);
     }
 }
 
-// Returns the directory holding {st,mt,manifest.json}, downloading it once per digest.
+// The architecture whose leaf to pull. The trees hold wasm rlibs either way, but they were produced
+// by a host-arch rustc and the manifest records which - so take the leaf built for this machine.
+const hostArch = () => (process.arch === 'arm64' ? 'arm64' : 'amd64');
+
+// Returns the directory holding {st,mt,manifest.json}, fetched once per pinned index digest.
 export default async function ensureRustSysroot({
-    url, sha256, root = sysrootRoot(), host,
+    image, index, root = sysrootRoot(), host, arch = hostArch(),
 }) {
-    if (!sha256) throw new Error('crossbind: a rust sysroot artifact must be pinned by sha256.');
+    if (!image || !index) throw new Error('crossbind: a rust sysroot must be pinned by image and index digest.');
     const check = (manifest) => assertManifest(manifest, host ?? hostRustc());
-    const dest = path.join(root, sha256);
+    const dest = path.join(root, index.replace(':', '-'));
     if (fs.existsSync(path.join(dest, 'manifest.json'))) {
         check(readManifest(dest));
         return dest;
@@ -97,8 +116,8 @@ export default async function ensureRustSysroot({
         }
         const work = fs.mkdtempSync(path.join(root, '.staging-'));
         try {
-            const archive = await downloadFile(url, path.join(work, 'download'));
-            verifyIntegrity(archive, url, sha256);
+            const archive = path.join(work, 'layer.tar.gz');
+            await fetchOciLayer({ image, index, arch, dest: archive });
             const extracted = path.join(work, 'extract');
             extractTo(archive, extracted);
             const tree = findSysrootTree(extracted);
@@ -133,7 +152,7 @@ export async function prepareRustSysroot(targets, log = console.log) {
     if (resolved || !PIN) return resolved;
     if (!targets.some((target) => isMtWasm(target) && cargoRunner(target) === 'LOCAL')) return null;
     try {
-        resolved = await ensureRustSysroot({ url: PIN.url, sha256: PIN.sha256 });
+        resolved = await ensureRustSysroot({ image: PIN.image, index: PIN.index });
     } catch (e) {
         // A host on a different rustc, or a release that cannot be reached: mt still builds, the
         // slow way. Refusing here would take away a build that works today.
