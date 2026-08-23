@@ -1,4 +1,4 @@
-package org.js.cpp.crossbindSampleReactNativeCLI
+package dev.crossbind.sampleReactNativeCLI
 
 import android.app.Application
 import com.facebook.react.PackageList

@@ -273,7 +273,7 @@
 					"-ObjC",
 					"-lc++",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = org.js.cpp.crossbindSampleReactNativeCLI;
+				PRODUCT_BUNDLE_IDENTIFIER = dev.crossbind.sampleReactNativeCLI;
 				PRODUCT_NAME = crossbindSampleReactNativeCLI;
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
@@ -302,7 +302,7 @@
 					"-ObjC",
 					"-lc++",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = org.js.cpp.crossbindSampleReactNativeCLI;
+				PRODUCT_BUNDLE_IDENTIFIER = dev.crossbind.sampleReactNativeCLI;
 				PRODUCT_NAME = crossbindSampleReactNativeCLI;
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
 				SWIFT_VERSION = 5.0;
