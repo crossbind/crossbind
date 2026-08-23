@@ -352,8 +352,19 @@ jobs:
       # This gate drives the CLI's own loader rather than a copy of it, which is the point - so it
       # needs the CLI's dependencies. The other gates import nothing but node builtins.
       - run: pnpm install --frozen-lockfile
-      - uses: dtolnay/rust-toolchain@stable
+      # NOT @stable. Prebuilt rlibs are consumable only by the compiler that produced them, so the
+      # host here has to be the rustc the sysroot was built with - the gate refuses anything else,
+      # correctly, and @stable moves out from under it the day upstream releases.
+      - id: rustc
+        run: |
+          set -euo pipefail
+          v=$(sed -n 's/^ARG RUST_VERSION=//p' tooling/docker/rust-sysroot.Dockerfile | head -1)
+          [ -n "$v" ] || { echo "no RUST_VERSION in rust-sysroot.Dockerfile"; exit 1; }
+          echo "version=$v" >> "$GITHUB_OUTPUT"
+          echo "sysroot rustc: $v"
+      - uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772 # master, 2026-08-05
         with:
+          toolchain: ${{ steps.rustc.outputs.version }}
           targets: wasm32-unknown-emscripten
       - name: Gate the sysroot image this run published
         run: |
