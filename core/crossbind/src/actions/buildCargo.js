@@ -5,7 +5,8 @@ import logger from '../utils/logger.js';
 import { cargoTripleFor } from '../utils/cargoTarget.js';
 import { isMtWasm, assertMtRustToolchain, cargoTargetDirFor, cargoBuildInvocation } from '../utils/rustMt.js';
 import generateRustBridge from '../utils/rustBridgeGen.js';
-import runCargo, { cargoRunner } from '../utils/runCargo.js';
+import runCargo from '../utils/runCargo.js';
+import { sysrootFor } from '../utils/rustSysroot.js';
 
 // buildType 'cargo': build a Rust staticlib on the host for the target's triple and stage it
 // like any other prebuilt (lib/lib<name>.a + include/*), so the normal prebuilt-link machinery
@@ -24,8 +25,7 @@ export default function buildCargo(target, libdir) {
         throw new Error('crossbind: cargo not found on PATH - install Rust (https://rustup.rs) to build cargo packages.');
     }
     const isMt = isMtWasm(target);
-    // The prebuilt sysroots live in the image, so they answer only where the build runs there.
-    const sysroot = cargoRunner(target) !== 'LOCAL';
+    const sysroot = sysrootFor(target);
     // Only the nightly rebuild needs a nightly toolchain on this machine.
     if (isMt && !sysroot) assertMtRustToolchain();
 

@@ -4,6 +4,9 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import withDirLock from './dirLock.js';
 import { downloadFile, verifyIntegrity } from './downloadAndExtractFile.js';
+import { cargoRunner } from './runCargo.js';
+import { isMtWasm } from './rustMt.js';
+import PIN from './rustSysrootPin.js';
 
 // The second consumption channel for the Rust sysroots: containerized builds get them as an image
 // layer, a host build (RUNNER=LOCAL) downloads the same tree as a sha256-pinned artifact. Same
@@ -116,4 +119,34 @@ export function sysrootPath(dir, variant) {
         throw new Error(`crossbind: the rust sysroot at ${dir} has no '${variant}' variant.`);
     }
     return target;
+}
+
+// Resolved once per process. The download has to happen in an async step, but every consumer of
+// the result - createLib, buildCargo, the bundler plugins - is synchronous, and threading a
+// promise through them would mean making createLib and four plugins async for a case that only
+// arises on RUNNER=LOCAL. So: prepare here, read synchronously below.
+let resolved = null;
+
+// Called from buildDependencies, the one async step every build path awaits before the sync work
+// starts. Only downloads when a target will actually consume it.
+export async function prepareRustSysroot(targets, log = console.log) {
+    if (resolved || !PIN) return resolved;
+    if (!targets.some((target) => isMtWasm(target) && cargoRunner(target) === 'LOCAL')) return null;
+    try {
+        resolved = await ensureRustSysroot({ url: PIN.url, sha256: PIN.sha256 });
+    } catch (e) {
+        // A host on a different rustc, or a release that cannot be reached: mt still builds, the
+        // slow way. Refusing here would take away a build that works today.
+        log(`crossbind: prebuilt rust sysroot unavailable, falling back to the nightly std rebuild - ${e.message}`);
+    }
+    return resolved;
+}
+
+// What cargoBuildInvocation takes for `sysroot`: true where the image carries the trees, an
+// absolute path where a downloaded artifact answers, false where mt must rebuild std on nightly.
+// st needs nothing - rustup's stock std is already correct for it.
+export function sysrootFor(target) {
+    if (cargoRunner(target) !== 'LOCAL') return true;
+    if (!isMtWasm(target)) return false;
+    return resolved ?? false;
 }

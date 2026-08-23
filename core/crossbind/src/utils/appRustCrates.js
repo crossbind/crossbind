@@ -2,7 +2,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { cargoTripleFor } from './cargoTarget.js';
 import { isMtWasm, assertMtRustToolchain, cargoTargetDirFor, cargoBuildInvocation } from './rustMt.js';
-import runCargo, { cargoRunner } from './runCargo.js';
+import runCargo from './runCargo.js';
+import { sysrootFor } from './rustSysroot.js';
 import { relPath } from './rustBridgeGen.js';
 import writeIfChanged from './writeIfChanged.js';
 
@@ -47,9 +48,9 @@ export default function buildAppRustCrates(target, cacheDir, cargoDependencies =
     if (crates.length === 0) return [];
 
     const isMt = isMtWasm(target);
-    // The prebuilt sysroots live in the image, so they answer only where the build runs there;
-    // only the nightly rebuild needs a nightly toolchain on this machine.
-    const sysroot = cargoRunner(target) !== 'LOCAL';
+    // true in the image, a downloaded artifact path on a host that has one, false where mt must
+    // still rebuild std - and only that last case needs a nightly toolchain here.
+    const sysroot = sysrootFor(target);
     if (isMt && !sysroot) assertMtRustToolchain();
 
     const superDir = `${root}/${SUPER}`;
