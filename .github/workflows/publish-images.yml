@@ -388,9 +388,14 @@ jobs:
       contents: read
     steps:
       - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@fe02b34f77f8bc703788d5817da081398fad5dd2 # v4
       - uses: actions/setup-node@v4
         with:
           node-version: 22.x
+          cache: 'pnpm'
+      # This gate drives the CLI's own loader rather than a copy of it, which is the point - so it
+      # needs the CLI's dependencies. The other gates import nothing but node builtins.
+      - run: pnpm install --frozen-lockfile
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: wasm32-unknown-emscripten
