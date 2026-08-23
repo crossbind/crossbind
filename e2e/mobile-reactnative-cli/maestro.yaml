@@ -1,4 +1,19 @@
-appId: org.js.cpp.crossbindSampleReactNativeCLI
+appId: dev.crossbind.conformanceReactNativeCLI
 ---
+# This playground runs the same conformance suite the web legs do, over the jsi runtime. Asserting
+# a single feature would leave the other forty-odd unguarded, so the summaries are what get checked.
+#
+# Two things about the patterns. Maestro matches a pattern against the WHOLE text of a node, and
+# the app renders its entire report as one node, so every pattern is wrapped in (?s).*...*  - the
+# (?s) is what lets . cross the newlines between report lines.
+#
+# The web spec pins pass == run with a backreference; Maestro's matcher does not support one, so
+# the NO check carries that guarantee instead: every failed feature adds a "NO <section>:" line to
+# the same node, and a suite that cannot run renders "CONFORMANCE ERR", which the digits reject.
 - launchApp
-- assertVisible: 'Matrix multiplier with c++.*=>.*J₃ \* \(2\*J₃\) = 6\*J₃'
+# The suite is async and touches every port, so give it room on a cold simulator.
+- extendedWaitUntil:
+    visible: '(?s).*CONFORMANCE \d+/\d+.*'
+    timeout: 120000
+- assertVisible: '(?s).*rust \d+/\d+.*'
+- assertNotVisible: '(?s).*NO [a-zA-Z]+:.*'
