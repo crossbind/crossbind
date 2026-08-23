@@ -1,6 +1,7 @@
 import {
     describe, test, expect, afterEach, vi,
 } from 'vitest';
+import path from 'node:path';
 
 // cargo/rustup run on the host; the tests assert what the engine hands them, not the compile.
 vi.mock('node:child_process', () => ({ spawnSync: vi.fn(), execFileSync: vi.fn() }));
@@ -100,6 +101,19 @@ describe('rustMt', () => {
         expect(args).not.toContain('+nightly');
         expect(args.join(' ')).not.toContain('-Zbuild-std');
         expect(rustflags).toEqual(['--sysroot', '/opt/crossbind/rust/current/mt', '-Ctarget-feature=+atomics,+bulk-memory,+mutable-globals']);
+        expect(allowUnstable).toBe(false);
+    });
+
+    test('cargoBuildInvocation takes a downloaded sysroot as a path', async () => {
+        // RUNNER=LOCAL gets the same trees as an artifact on this machine rather than as an image
+        // layer, so the flag has to accept a host path, not just the container's fixed location.
+        const { cargoBuildInvocation } = await importFresh();
+        const { args, rustflags, allowUnstable } = cargoBuildInvocation({
+            target: MT, triple: TRIPLE, targetDir: '/x/target-mt', manifestPath: '/x/Cargo.toml', sysroot: '/home/u/.crossbind/rust-sysroot/abc',
+        });
+        expect(args).not.toContain('+nightly');
+        expect(rustflags[0]).toBe('--sysroot');
+        expect(rustflags[1]).toBe(path.join('/home/u/.crossbind/rust-sysroot/abc', 'mt'));
         expect(allowUnstable).toBe(false);
     });
 
