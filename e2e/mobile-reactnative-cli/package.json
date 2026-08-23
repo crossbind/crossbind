@@ -13,7 +13,11 @@
         "start": "react-native start",
         "test": "jest",
         "run:android": "react-native run-android --no-packager --mode Release",
-        "run:ios": "react-native run-ios --no-packager --mode Release"
+        "run:ios": "react-native run-ios --no-packager --mode Release",
+        "maestro:ios": "maestro --device \"$(xcrun simctl list devices booted | sed -n 's/.*(\\([0-9A-F-]\\{36\\}\\)) (Booted).*/\\1/p' | head -1)\" test ./maestro.yaml",
+        "maestro:android": "maestro --device \"$(adb devices | sed -n '2p' | cut -f1)\" test ./maestro.yaml",
+        "e2e:ios": "pnpm run run:ios && pnpm run maestro:ios",
+        "e2e:android": "pnpm run run:android && pnpm run maestro:android"
     },
     "dependencies": {
         "@crossbind/core-embind-jsi": "workspace:^",
