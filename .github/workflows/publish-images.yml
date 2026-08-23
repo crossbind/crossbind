@@ -228,6 +228,41 @@ jobs:
           name: sysroot-pin
           path: tooling/docker/dist/sysroot-pin.json
 
+
+  # Release gate (rev 6.6): what the toolchain must REFUSE. smoke-images asserts the image has what
+  # it promises; this asserts it cannot be talked out of being stable - against the real Linux cargo
+  # in the image, because config discovery, flag precedence and RUSTC_BOOTSTRAP are cargo's
+  # behaviour, not ours. A unit test can only pin what we pass.
+  gate-toolchain:
+    needs: [setup, web]
+    if: inputs.push
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { arch: amd64, runner: ubuntu-latest }
+          - { arch: arm64, runner: ubuntu-24.04-arm }
+    runs-on: ${{ matrix.runner }}
+    permissions:
+      contents: read
+      packages: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.x
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+      - run: node scripts/gate-toolchain.js --published --tag ${{ needs.setup.outputs.tag }} --arch ${{ matrix.arch }}
+
+  # Release gate (rev 6.6): the OTHER consumption channel. The image build probes the sysroots it
+  # embeds; nothing yet proves the tarball a host downloads is consumable - relocatable, offline,
+  # matching the compiler on PATH. Gated on the archive just uploaded, so a bad one cannot be
+  # pinned, across the host OSes crossbind supports for RUNNER=LOCAL.
+
   # Release gate (rev 6.6): what the toolchain must REFUSE. smoke-images asserts the image has what
   # it promises; this asserts it cannot be talked out of being stable - against the real Linux cargo
   # in the image, because config discovery, flag precedence and RUSTC_BOOTSTRAP are cargo's
