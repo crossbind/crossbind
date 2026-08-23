@@ -83,4 +83,6 @@ jobs:
       - name: Pod install
         run: cd examples/mobile-reactnative-cli/ios && pod install && cd ../../../
       - name: E2E IOS
-        run: pnpm run e2e:ios
+        # The playground under e2e/ needs the full port matrix and its own pods; CI builds the
+        # sample, the same boundary ci:linux:e2e draws.
+        run: pnpm run ci:ios:e2e
