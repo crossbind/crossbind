@@ -37,7 +37,9 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       version: ${{ steps.v.outputs.version }}
-      tag: ${{ inputs.push && steps.v.outputs.version || format('ci-{0}', github.run_id) }}
+      # Build-once/promote-digest (rev 7.2 §6): a push run publishes under a staging tag and only
+      # earns the stable one after every gate has passed on exactly these bytes.
+      tag: ${{ inputs.push && format('v{0}-staging-{1}', steps.v.outputs.version, github.run_id) || format('ci-{0}', github.run_id) }}
       registry: ghcr.io/${{ github.repository_owner }}
       both: '[{"platform":"linux/amd64","runner":"ubuntu-latest"},{"platform":"linux/arm64","runner":"ubuntu-24.04-arm"}]'
       # Google ships the linux NDK host tools for x86_64 only.
@@ -104,15 +106,114 @@ jobs:
       build-args: |
         BASE_IMAGE=${{ needs.setup.outputs.registry }}/base@${{ needs.base.outputs.digest }}
 
-  mirror:
+  # The release digest is signed ONCE, on the primary, and the signature then travels to the mirror
+  # with the image - never re-signed there, or the two registries would carry different attestations
+  # for the same bytes. Keyless: the identity is this workflow, proved by the GitHub OIDC token.
+  #
+  # Storage mode is pinned rather than negotiated (rev 6.6 leaves the choice free, not the pinning):
+  # OCI 1.1 referrers, so `oras cp -r` carries the signature as part of the image graph. Tool
+  # versions are pinned for the same reason - copy semantics have changed between releases.
+  # Signing (ADR rev 7.2). Two things are pinned here and neither is cosmetic.
+  #
+  # SCOPE: every public image's root index, PLUS the android linux/amd64 leaf. The CLI pins that
+  # leaf directly - a classic image store holds one platform per digest reference - and a consumer
+  # verifying the leaf cannot discover a signature attached only to the root. Signing --recursive
+  # would attach one to every leaf of every image; we sign the one that is actually consumed.
+  #
+  # STORAGE: native OCI 1.1 referrers. cosign v3.1.3 does this by default - measured, not assumed,
+  # by scripts/gate-local-signature.js: signatures made with no --registry-referrers-mode flag are
+  # discoverable through `oras discover --distribution-spec v1.1-referrers-api`. The deprecated v2
+  # flag is therefore NOT passed.
+  sign:
     needs: [setup, sysroot, base, web, android]
+    if: inputs.push
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+    steps:
+      - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+        with:
+          cosign-release: v3.1.3
+      - name: The pinned version is the one that runs
+        run: |
+          set -euo pipefail
+          got=$(cosign version 2>&1 | sed -n 's/^GitVersion:[[:space:]]*//p')
+          [ "$got" = v3.1.3 ] || { echo "cosign is $got, expected v3.1.3"; exit 1; }
+          echo "cosign $got"
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+      - name: Sign each root index, and the android leaf the CLI pins
+        env:
+          V: ${{ needs.setup.outputs.tag }}
+          GHCR: ${{ needs.setup.outputs.registry }}
+          COSIGN_YES: "true"
+        run: |
+          set -euo pipefail
+          digest_of() { docker buildx imagetools inspect "$1" --raw | sha256sum | cut -d' ' -f1; }
+
+          for image in rust-sysroot base web android; do
+            root="sha256:$(digest_of "${GHCR}/${image}:${V}")"
+            cosign sign "${GHCR}/${image}@${root}"
+            echo "signed ${image} root ${root}"
+          done
+
+          # The android leaf, signed as its own subject.
+          root="sha256:$(digest_of "${GHCR}/android:${V}")"
+          leaf=$(docker buildx imagetools inspect "${GHCR}/android@${root}" --raw \
+            | jq -r '.manifests[] | select(.platform.os=="linux" and .platform.architecture=="amd64") | .digest')
+          [ -n "$leaf" ] || { echo "the android index carries no linux/amd64 leaf"; exit 1; }
+          cosign sign "${GHCR}/android@${leaf}"
+          echo "signed android linux/amd64 leaf ${leaf}"
+
+      # Subject verification, on the primary, before anything is copied: each signature is found
+      # through the native referrers API and its manifest's .subject.digest must equal the digest we
+      # signed. cosign triangulate is deliberately not used - it is the deprecated legacy-tag path,
+      # and this release stores signatures as native OCI 1.1 referrers.
+      - uses: oras-project/setup-oras@1d808f7d7f6995cc68b7bf507bfe5c5446e1dc9d # v2.0.1
+        with:
+          version: 1.3.3
+      - name: The pinned oras is the one that runs
+        run: |
+          set -euo pipefail
+          got=$(oras version | sed -n 's/^Version:[[:space:]]*//p')
+          [ "$got" = 1.3.3 ] || { echo "oras is $got, expected 1.3.3"; exit 1; }
+          echo "oras $got"
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.x
+      - name: Every signature must name the digest it was made for
+        run: |
+          node scripts/gate-referrers.js --primary-only \
+            --tag "${{ needs.setup.outputs.tag }}" \
+            --primary "${{ needs.setup.outputs.registry }}"
+
+  # oras carries the image graph AND its referrer graph in one operation, with the native API forced
+  # on BOTH ends: a silent fall back to the tag schema would still produce a working mirror and a
+  # policy that cannot find the signature.
+  mirror:
+    needs: [setup, sign]
     if: inputs.push && inputs.mirror
     runs-on: ubuntu-latest
     permissions:
       contents: read
       packages: read
     steps:
-      - uses: docker/setup-buildx-action@v3
+      - uses: oras-project/setup-oras@1d808f7d7f6995cc68b7bf507bfe5c5446e1dc9d # v2.0.1
+        with:
+          version: 1.3.3
+      - name: The pinned version is the one that runs
+        run: |
+          set -euo pipefail
+          got=$(oras version | sed -n 's/^Version:[[:space:]]*//p')
+          [ "$got" = 1.3.3 ] || { echo "oras is $got, expected 1.3.3"; exit 1; }
+          echo "oras $got"
       - uses: docker/login-action@v3
         with:
           registry: ghcr.io
@@ -122,19 +223,18 @@ jobs:
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
-      # Copied by digest, so the mirror carries the same bytes rather than a rebuild that happens
-      # to look alike. verify-mirror re-reads both registries and fails if they diverge.
-      - name: Copy each index to Docker Hub
+      - name: Copy each image and its referrers, native API on both ends
         env:
-          V: ${{ needs.setup.outputs.version }}
+          V: ${{ needs.setup.outputs.tag }}
           GHCR: ${{ needs.setup.outputs.registry }}
           OWNER: ${{ github.repository_owner }}
         run: |
           set -euo pipefail
           for image in rust-sysroot base web android; do
-            docker buildx imagetools create \
-              --tag "docker.io/${OWNER}/${image}:${V}" \
-              "${GHCR}/${image}:${V}"
+            oras cp -r \
+              --from-distribution-spec v1.1-referrers-api \
+              --to-distribution-spec v1.1-referrers-api \
+              "${GHCR}/${image}:${V}" "docker.io/${OWNER}/${image}:${V}"
           done
 
   digests:
@@ -156,7 +256,7 @@ jobs:
       # platform per digest reference. Taken from the raw manifest, not from a formatted view.
       - name: Emit the digest table
         env:
-          V: ${{ needs.setup.outputs.version }}
+          V: ${{ needs.setup.outputs.tag }}
           GHCR: ${{ needs.setup.outputs.registry }}
         run: |
           set -euo pipefail
@@ -177,7 +277,6 @@ jobs:
           path: |
             digests.json
             raw-*.json
-
 
   # The sysroots ship twice: as a layer inside the web image, and as this archive for RUNNER=LOCAL.
   # Packed from the PUBLISHED image rather than rebuilt, so the two channels carry the same bytes by
@@ -228,7 +327,6 @@ jobs:
           name: sysroot-pin
           path: tooling/docker/dist/sysroot-pin.json
 
-
   # Release gate (rev 6.6): what the toolchain must REFUSE. smoke-images asserts the image has what
   # it promises; this asserts it cannot be talked out of being stable - against the real Linux cargo
   # in the image, because config discovery, flag precedence and RUSTC_BOOTSTRAP are cargo's
@@ -257,17 +355,6 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ github.token }}
       - run: node scripts/gate-toolchain.js --published --tag ${{ needs.setup.outputs.tag }} --arch ${{ matrix.arch }}
-
-  # Release gate (rev 6.6): the OTHER consumption channel. The image build probes the sysroots it
-  # embeds; nothing yet proves the tarball a host downloads is consumable - relocatable, offline,
-  # matching the compiler on PATH. Gated on the archive just uploaded, so a bad one cannot be
-  # pinned, across the host OSes crossbind supports for RUNNER=LOCAL.
-
-  # Release gate (rev 6.6): what the toolchain must REFUSE. smoke-images asserts the image has what
-  # it promises; this asserts it cannot be talked out of being stable - against the real Linux cargo
-  # in the image, because config discovery, flag precedence and RUSTC_BOOTSTRAP are cargo's
-  # behaviour, not ours. A unit test can only pin what we pass.
-
 
   # Release gate (rev 6.6): the OTHER consumption channel. The image build probes the sysroots it
   # embeds; nothing yet proves the tarball a host downloads is consumable - relocatable, offline,
@@ -313,32 +400,129 @@ jobs:
     needs: [setup, mirror]
     if: inputs.push && inputs.mirror
     runs-on: ubuntu-latest
+    # No id-token: this job only reads and verifies. The OIDC token is what lets a job MINT a
+    # signing identity, so it belongs to the sign job alone.
     permissions:
       contents: read
       packages: read
     steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.x
       - uses: docker/setup-buildx-action@v3
+      - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+        with:
+          cosign-release: v3.1.3
+      - uses: oras-project/setup-oras@1d808f7d7f6995cc68b7bf507bfe5c5446e1dc9d # v2.0.1
+        with:
+          version: 1.3.3
+      - name: The pinned versions are the ones that run
+        run: |
+          set -euo pipefail
+          c=$(cosign version 2>&1 | sed -n 's/^GitVersion:[[:space:]]*//p')
+          o=$(oras version | sed -n 's/^Version:[[:space:]]*//p')
+          [ "$c" = v3.1.3 ] || { echo "cosign is $c, expected v3.1.3"; exit 1; }
+          [ "$o" = 1.3.3 ] || { echo "oras is $o, expected 1.3.3"; exit 1; }
+          echo "cosign $c, oras $o"
       - uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ github.token }}
-      - name: The mirror must carry the same index digests
+
+      # §3 invariant 4/5: the mirror carries the same bytes, index to layers.
+      - name: Both registries must agree, index to layers
+        run: node scripts/gate-registry.js --tag ${{ needs.setup.outputs.tag }} --table digests.json
+
+      # §3.2: discovery through the NATIVE API, on both registries, for every signed subject - with
+      # the descriptor sets compared field by field rather than merely counted.
+      - name: Referrer sets must match through the native API
         env:
-          V: ${{ needs.setup.outputs.version }}
+          V: ${{ needs.setup.outputs.tag }}
           GHCR: ${{ needs.setup.outputs.registry }}
           HUB: docker.io/${{ github.repository_owner }}
+        run: node scripts/gate-referrers.js --tag "$V" --primary "$GHCR" --mirror "$HUB"
+
+      # §3.3 and §5: cryptographic verification on every subject, on BOTH registries, by digest -
+      # and a deliberately wrong identity that must be refused. The expected identity is declared
+      # here, printed, and compared: a mismatch fails the release rather than widening the policy.
+      - name: Signatures must verify, and a wrong identity must not
+        env:
+          V: ${{ needs.setup.outputs.tag }}
+          GHCR: ${{ needs.setup.outputs.registry }}
+          HUB: docker.io/${{ github.repository_owner }}
+          ISSUER: https://token.actions.githubusercontent.com
+          IDENTITY: ^https://github\.com/${{ github.repository }}/\.github/workflows/publish-images\.yml@refs/heads/main$
         run: |
           set -euo pipefail
-          fail=0
-          for image in rust-sysroot base web android; do
-            a=$(docker buildx imagetools inspect "${GHCR}/${image}:${V}" --raw | sha256sum | cut -d' ' -f1)
-            b=$(docker buildx imagetools inspect "${HUB}/${image}:${V}" --raw | sha256sum | cut -d' ' -f1)
-            if [ "$a" = "$b" ]; then
-              echo "ok   ${image}  sha256:${a}"
-            else
-              echo "FAIL ${image}  ghcr=sha256:${a}  hub=sha256:${b}"
-              fail=1
-            fi
+          echo "expected signer identity: $IDENTITY"
+
+          verify() { # $1 = ref
+            cosign verify --certificate-identity-regexp "$IDENTITY" \
+              --certificate-oidc-issuer "$ISSUER" "$1" > /tmp/v.json
+            jq -r '.[0].optional.Subject // "(no subject)"' /tmp/v.json
+          }
+
+          for registry in "$GHCR" "$HUB"; do
+            for image in rust-sysroot base web android; do
+              root="sha256:$(docker buildx imagetools inspect "${registry}/${image}:${V}" --raw | sha256sum | cut -d' ' -f1)"
+              subject=$(verify "${registry}/${image}@${root}")
+              echo "ok  ${registry}/${image} root ${root}  signer=${subject}"
+            done
+            leaf=$(docker buildx imagetools inspect "${registry}/android:${V}" --raw \
+              | jq -r '.manifests[] | select(.platform.os=="linux" and .platform.architecture=="amd64") | .digest')
+            subject=$(verify "${registry}/android@${leaf}")
+            echo "ok  ${registry}/android linux/amd64 leaf ${leaf}  signer=${subject}"
           done
-          exit $fail
+
+          # Negative: an identity nothing in this repo can produce must be refused, and the harness
+          # must be able to tell that failure apart from a passing gate.
+          root="sha256:$(docker buildx imagetools inspect "${GHCR}/web:${V}" --raw | sha256sum | cut -d' ' -f1)"
+          if cosign verify --certificate-identity-regexp '^https://github\.com/not-crossbind/nope/.*$' \
+               --certificate-oidc-issuer "$ISSUER" "${GHCR}/web@${root}" >/dev/null 2>&1; then
+            echo "FAIL a signature verified under an identity that cannot exist"; exit 1
+          fi
+          echo "ok  a wrong certificate identity is refused"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: digests
+          path: digests.json
+
+  # The stable tag is the LAST thing that happens, and it only points at bytes every gate above has
+  # already accepted: same digests on both registries, referrers discoverable natively on both,
+  # signatures verifying on both, a wrong identity refused, and the toolchain and LOCAL artifact
+  # gates green. Nothing is rebuilt - `oras tag` points a name at a digest that already exists.
+  promote:
+    needs: [setup, digests, verify-mirror, gate-toolchain, gate-local-sysroot]
+    if: inputs.push && inputs.mirror
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.x
+      - uses: docker/setup-buildx-action@v3
+      - uses: oras-project/setup-oras@1d808f7d7f6995cc68b7bf507bfe5c5446e1dc9d # v2.0.1
+        with:
+          version: 1.3.3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+      - uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+      - name: Promote the staged digests to the stable tag
+        run: |
+          node scripts/promote-tags.js \
+            --version "${{ needs.setup.outputs.version }}" \
+            --staging "${{ needs.setup.outputs.tag }}" \
+            --primary "${{ needs.setup.outputs.registry }}" \
+            --mirror "docker.io/${{ github.repository_owner }}"

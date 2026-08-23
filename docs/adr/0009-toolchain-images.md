@@ -94,6 +94,60 @@ projects, survives `clear`, and stays addressable from the host — so bridge
 generation and `parseCrateSurface` remain on the host, and only a path
 translation is needed. The accepted cost is unmeasured filesystem slowness.
 
+### Revision, 2026-08-23: the release gate, and what it is allowed to assume
+
+The images were reproducible but unattested: a pinned digest proves the bytes did not change, not
+that they came from this repository. The gate added here signs them, mirrors the signature, and
+refuses to promote anything it has not verified on both registries.
+
+Four choices were left to the implementer. All four are pinned in the release scripts:
+
+- **Signature storage: native OCI 1.1 referrers, and cosign v3.1.3's default is what provides it.**
+  This was measured rather than assumed. `scripts/gate-local-signature.js` signs a root index and a
+  child leaf with no `--registry-referrers-mode` flag at all, and both are discoverable through
+  `oras discover --distribution-spec v1.1-referrers-api` on the source and on a mirror copied with
+  `oras cp -r`. The deprecated v2 flag is therefore not passed. Had the default fallen back to the
+  legacy tag schema, that gate would have failed and the flag would have gone in.
+- **Copying: `oras cp -r` with the native API forced on both ends.** `imagetools create` rebuilds an
+  index on the destination and leaves the signature behind on the source; a copy that quietly fell
+  back to the tag schema would produce a mirror that looks correct and a policy that finds nothing.
+- **Tool versions: cosign v3.1.3, oras 1.3.3**, installed from SHA-pinned actions, with the running
+  version asserted before use. No release step queries a "latest version" API - the release path
+  does not depend on an external service being up.
+- **The digest table keeps its existing JSON shape**; it gained config digests, not a new format.
+
+Two decisions are worth recording because they are easy to get wrong later:
+
+- **The android `linux/amd64` leaf is signed as its own subject**, not covered by `--recursive`. The
+  CLI pins that leaf directly - a classic image store holds one platform per digest reference - and
+  a consumer verifying the leaf cannot discover a signature attached only to the root index.
+- **Build once, promote a digest.** A push run publishes under `v<version>-staging-<run id>` and
+  earns the stable tag only after every gate passes on exactly those bytes. Promotion is idempotent
+  and never moves an existing stable tag: with no transaction spanning two registries, a rerun after
+  a half-finished promotion has to be safe, and silently repointing a published tag is worse than
+  failing. Docker Hub is tagged first and canonical GHCR last, so the commit point is the canonical
+  registry.
+
+The local signature gate proves MECHANICS, not identity, and the two must not be confused. It signs
+with a throwaway key pair, so its negative case is "a key that never signed this is refused". That
+is a different claim from the one the release actually depends on: "a certificate identity nothing
+in this repository can mint is refused". Keyless identity exists only inside a real workflow run,
+against Fulcio, so the local gate cannot stand in for it. Acceptance criterion 11 is satisfied only
+when the live staging run shows a non-zero exit for a wrong `--certificate-identity-regexp` against
+GHCR - a green local gate says nothing about it.
+
+Subject verification does not use `cosign triangulate`. That command resolves the legacy tag-schema
+location, and this release stores signatures as native OCI 1.1 referrers; asserting through it would
+be checking a path we do not use. Instead the referrer is discovered through the native API and its
+manifest fetched, and `.subject.digest` must equal the digest that was signed - the one claim a
+count of referrers can never make. The sign job asserts it on the primary before anything is copied,
+and the mirror verification re-asserts it on both registries, from the same script.
+
+The gates split what a single "cosign verify passed" would have conflated: storage (discoverable
+through the native API), discovery (identical descriptor sets on both registries), and cryptographic
+verification (per subject, per registry, by digest) are separate assertions, plus a negative test
+that a certificate identity nothing in this repository can produce is refused.
+
 ## See also
 
 - Related ADRs: ADR-0005 (wasi platform), ADR-0006 (rust bindings), ADR-0007 (`cargo:` imports)
