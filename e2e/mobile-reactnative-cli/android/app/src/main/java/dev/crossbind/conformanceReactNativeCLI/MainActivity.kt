@@ -1,4 +1,4 @@
-package org.js.cpp.crossbindSampleReactNativeCLI
+package dev.crossbind.conformanceReactNativeCLI
 
 import com.facebook.react.ReactActivity
 import com.facebook.react.ReactActivityDelegate
