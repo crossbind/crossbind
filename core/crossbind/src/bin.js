@@ -90,6 +90,17 @@ program.command('build')
         }
     });
 
+// The path a package publishes its SBOM at, as recorded for the publish gate. Absent for ordinary
+// projects, which keep the plain default.
+function declaredSbomPath(projectDir) {
+    try {
+        const manifest = JSON.parse(fs.readFileSync(`${projectDir}/package.json`, 'utf8'));
+        return manifest.crossbind?.provenance?.sbom ?? null;
+    } catch {
+        return null;
+    }
+}
+
 program.command('licenses')
     .description('list bundled native dependencies with SPDX license, versions and source URL')
     .option('--notices [file]', 'write a THIRD-PARTY-NOTICES markdown file (default: THIRD-PARTY-NOTICES.md)')
@@ -111,7 +122,13 @@ program.command('licenses')
             logger.info(`crossbind: wrote ${file}`);
         }
         if (options.sbom) {
-            const file = typeof options.sbom === 'string' ? options.sbom : `${state.config.paths.project}/sbom.cdx.json`;
+            // Without a path, write where the package says its SBOM lives. A -bin package declares
+            // that in crossbind.provenance.sbom and the publish gate checks exactly that path, so
+            // taking it from there is what keeps `--sbom` from needing the path spelled out again
+            // in every package - and from disagreeing with the gate when one of them is edited.
+            const file = typeof options.sbom === 'string'
+                ? options.sbom
+                : `${state.config.paths.project}/${declaredSbomPath(state.config.paths.project) ?? 'sbom.cdx.json'}`;
             const target = { name: state.config.package?.name, version: state.config.package?.version };
             fs.writeFileSync(file, formatCycloneDxSbom(rows, target));
             logger.info(`crossbind: wrote ${file}`);

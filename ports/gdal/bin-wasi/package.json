@@ -24,7 +24,7 @@
         "build": "crossbind build -p wasi -b release",
         "e2e": "node e2e/run.mjs",
         "clear": "rm -rf .crossbind dist",
-        "prepublishOnly": "crossbind build -p wasi -b release"
+        "prepublishOnly": "crossbind build -p wasi -b release && crossbind licenses --sbom"
     },
     "dependencies": {
         "@crossbind/port-gdal": "workspace:^",
