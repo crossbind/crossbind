@@ -91,7 +91,9 @@ export default function run(program, params = [], platformPrefix = null, target 
     // wasi is host-run only with a locally configured wasi-sdk; otherwise docker carries it.
     const wasiHostSdk = target?.platform === 'wasi' ? resolveWasiSdkPath(state.config.system) : null;
     if ((target?.platform !== 'ios' && !(target?.platform === 'wasi' && wasiHostSdk)) || program !== null) {
-        pullDockerImage(imageRoleFor(target));
+        // Google ships the linux NDK for x86_64 only, so the android index carries no arm64 leaf;
+        // pull its amd64 leaf by ref or an arm64 host finds no matching manifest.
+        pullDockerImage(imageRoleFor(target), target?.platform === 'android' ? 'linux/amd64' : undefined);
     }
 
     let dProgram = program;
