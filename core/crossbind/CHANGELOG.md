@@ -1,5 +1,16 @@
 # crossbind
 
+## 2.0.0-beta.51
+
+### Patch Changes
+
+- **Android builds work on Apple Silicon again.** Google ships the linux NDK host tools for x86_64
+  only, so the android toolchain image is amd64-only and its multi-arch index carries no arm64 leaf.
+  Three call sites asked docker for that image by the leaf ref; the pull that runs before bridge
+  generation asked for the index instead, and on an arm64 host docker answered "no matching manifest
+  for linux/arm64/v8". Machines that already had the image cached never noticed, which is why this
+  reached beta.50 - a fresh install on an Apple Silicon Mac could not build for android at all.
+
 ## 2.0.0-beta.50
 
 ### Major Changes

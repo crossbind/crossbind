@@ -1,5 +1,21 @@
 # crossbind
 
+## 2.0.0-beta.51
+
+Only `crossbind` moves in this release. beta.50 said the numbers would move together from then on;
+they do not have to, and here they should not. The fix is in the CLI alone, and every package that
+depends on it was published with a `^2.0.0-beta.50` range, which already accepts beta.51 - so
+republishing 107 unchanged packages would produce 107 identical tarballs under a new number and
+throw away the fact that beta.50 was tested as one set. The versions move together when the change
+does; a minor bump would still require the whole set, because a caret range does not cross one.
+
+### What is in it
+
+- **Android builds work on Apple Silicon again.** The pull that runs before bridge generation asked
+  docker for the android image by its multi-arch index, which carries no arm64 leaf, so a fresh
+  install on an Apple Silicon Mac failed with "no matching manifest for linux/arm64/v8" before it
+  compiled anything. It now asks for the amd64 leaf, as the other three call sites already did.
+
 ## 2.0.0-beta.50
 
 The first release published under the crossbind name. cpp.js shipped to npm; crossbind has not, so
