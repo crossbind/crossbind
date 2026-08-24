@@ -124,12 +124,26 @@ jobs:
 
       - name: Create the multi-arch index
         id: index
+        # imagetools create pulls every layer of every architecture through GHCR's blob CDN, and
+        # that CDN resets connections - a run died here on "read: connection reset by peer" with
+        # both architectures already pushed and the sysroot's own merge succeeding beside it.
+        # Nothing about a retry is unsafe: the index is derived from digests that already exist, so
+        # a second attempt produces the same bytes or fails the same way.
         run: |
           set -euo pipefail
           cd /tmp/digests
-          docker buildx imagetools create \
-            --tag "${REGISTRY}/${{ inputs.image }}:${{ inputs.tag }}" \
-            $(printf "${REGISTRY}/${{ inputs.image }}@sha256:%s " *)
+          refs=()
+          for file in *; do refs+=("${REGISTRY}/${{ inputs.image }}@sha256:${file}"); done
+          [ ${#refs[@]} -gt 0 ] || { echo "no per-architecture digests to merge"; exit 1; }
+          for attempt in 1 2 3; do
+            if docker buildx imagetools create \
+                 --tag "${REGISTRY}/${{ inputs.image }}:${{ inputs.tag }}" "${refs[@]}"; then
+              break
+            fi
+            [ "$attempt" = 3 ] && { echo "imagetools create failed three times - not a flake"; exit 1; }
+            echo "imagetools create failed (attempt ${attempt}/3), retrying"
+            sleep 10
+          done
           digest=$(docker buildx imagetools inspect \
             "${REGISTRY}/${{ inputs.image }}:${{ inputs.tag }}" --format '{{json .Manifest.Digest}}' | tr -d '"')
           echo "digest=${digest}" >> "$GITHUB_OUTPUT"
