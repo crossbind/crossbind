@@ -1,6 +1,6 @@
 {
     "name": "@crossbind/port-tiff-bin-wasi",
-    "version": "2.0.0-beta.37",
+    "version": "2.0.0-beta.50",
     "nativeVersion": "4.7.2",
     "description": "libtiff command-line tools prebuilt as WASI (wasm32-wasip3) command components.",
     "homepage": "https://github.com/crossbind/crossbind/tree/main/ports/tiff#readme",
@@ -52,7 +52,7 @@
         "provenance": {
             "recipe": {
                 "name": "@crossbind/port-tiff",
-                "version": "2.0.0-beta.37",
+                "version": "2.0.0-beta.50",
                 "nativeVersion": "4.7.2"
             },
             "source": {
@@ -61,7 +61,7 @@
             },
             "environment": {
                 "builder": "host",
-                "dockerImage": "ghcr.io/crossbind/web@sha256:8dfa1aaeb12e3f3bef101a6312268cabe8bbd06ae1f7883e7763e4d93b1638fa",
+                "dockerImage": "ghcr.io/crossbind/web@sha256:c1d1d81a4775871cd90c8ac980e0a5f87cb7890822117f77be1c8345f51b1f47",
                 "hostPlatform": "darwin-arm64",
                 "toolchain": {
                     "name": "wasi-sdk",

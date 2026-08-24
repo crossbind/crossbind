@@ -1,6 +1,6 @@
 {
     "name": "@crossbind/plugin-vite",
-    "version": "2.0.0-beta.38",
+    "version": "2.0.0-beta.50",
     "description": "crossbind Vite plugin: A tool for seamless C++ integration with the Vite.",
     "homepage": "https://github.com/crossbind/crossbind/tree/main/plugins/vite#readme",
     "repository": "https://github.com/crossbind/crossbind.git",

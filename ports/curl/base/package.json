@@ -1,6 +1,6 @@
 {
     "name": "@crossbind/port-curl",
-    "version": "2.0.0-beta.37",
+    "version": "2.0.0-beta.50",
     "nativeVersion": "8.21.0",
     "description": "This package provides a CURL library compiled with crossbind, enabling seamless usage of CURL functionalities in JavaScript, WebAssembly and React Native projects. Client-side URL transfers for web and mobile applications.",
     "homepage": "https://github.com/crossbind/crossbind/tree/main/ports/curl#readme",

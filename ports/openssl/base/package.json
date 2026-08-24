@@ -1,6 +1,6 @@
 {
     "name": "@crossbind/port-openssl",
-    "version": "2.0.0-beta.37",
+    "version": "2.0.0-beta.50",
     "nativeVersion": "4.0.1",
     "description": "This package provides a OpenSSL library compiled with crossbind, enabling seamless usage of OpenSSL functionalities in JavaScript, WebAssembly and React Native projects. It supports cryptography and secure communication for web and mobile applications.",
     "homepage": "https://github.com/crossbind/crossbind/tree/main/ports/openssl#readme",

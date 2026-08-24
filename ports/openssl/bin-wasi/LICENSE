@@ -24,7 +24,7 @@ is not legal advice; the compliance assessment is yours.
 
 ## openssl — Apache-2.0
 
-- package: @crossbind/port-openssl-bin-wasi@2.0.0-beta.37
+- package: @crossbind/port-openssl-bin-wasi@2.0.0-beta.50
 - native version: 4.0.1
 - source: https://github.com/openssl/openssl/releases/download/openssl-4.0.1/openssl-4.0.1.tar.gz (sha256: 2db3f3a0d6ea4b59e1f094ace2c8cd536dffb87cdc39084c5afa1e6f7f37dd09)
 

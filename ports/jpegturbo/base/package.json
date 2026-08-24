@@ -1,6 +1,6 @@
 {
     "name": "@crossbind/port-jpegturbo",
-    "version": "2.0.0-beta.37",
+    "version": "2.0.0-beta.50",
     "nativeVersion": "3.2.0",
     "description": "This package provides a libjpeg-turbo library compiled with crossbind, enabling seamless usage of JPEG functionalities in JavaScript, WebAssembly and React Native projects.",
     "homepage": "https://github.com/crossbind/crossbind/tree/main/ports/jpegturbo#readme",

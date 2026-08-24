@@ -1,5 +1,12 @@
 # @crossbind/core-embind-rust
 
+## 2.0.0-beta.50
+
+### Patch Changes
+
+- Aligned on the 2.0.0-beta.50 baseline. No source change; the version exists so every package in
+  the workspace names the same release.
+
 ## 2.0.0-beta.33
 
 ### Minor Changes

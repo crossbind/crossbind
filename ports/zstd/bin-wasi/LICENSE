@@ -31,7 +31,7 @@ is not legal advice; the compliance assessment is yours.
 
 ## zstd — BSD-3-Clause OR GPL-2.0-only
 
-- package: @crossbind/port-zstd-bin-wasi@2.0.0-beta.37
+- package: @crossbind/port-zstd-bin-wasi@2.0.0-beta.50
 - native version: 1.5.7
 - source: https://github.com/facebook/zstd/releases/download/v1.5.7/zstd-1.5.7.tar.gz (sha256: eb33e51f49a15e023950cd7825ca74a4a2b43db8354825ac24fc1b7ee09e6fa3)
 - no license election recorded; the declared expression applies and all texts are included

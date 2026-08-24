@@ -1,6 +1,6 @@
 {
     "name": "@crossbind/port-expat",
-    "version": "2.0.0-beta.37",
+    "version": "2.0.0-beta.50",
     "nativeVersion": "2.8.3",
     "description": "This package provides the precompiled Expat XML parser library, built using crossbind, for seamless integration into JavaScript, WebAssembly, and React Native projects. It enables fast and efficient parsing of XML data, making it ideal for applications requiring robust XML handling across platforms. Perfect for web, server-side, and mobile development environments.",
     "homepage": "https://github.com/crossbind/crossbind/tree/main/ports/expat#readme",

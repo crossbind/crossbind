@@ -1,6 +1,6 @@
 {
     "name": "@crossbind/port-sqlite3",
-    "version": "2.0.0-beta.37",
+    "version": "2.0.0-beta.50",
     "nativeVersion": "3.53.4",
     "description": "This package provides the precompiled sqlite3 library, built using crossbind, for easy integration into JavaScript, WebAssembly and React Native projects. It offers database functionalities through the sqlite3 API, ensuring high performance and cross-platform compatibility. Ideal for use in web and mobile applications.",
     "homepage": "https://github.com/crossbind/crossbind/tree/main/ports/sqlite3#readme",

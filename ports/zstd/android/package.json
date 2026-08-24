@@ -1,6 +1,6 @@
 {
     "name": "@crossbind/port-zstd-android",
-    "version": "2.0.0-beta.37",
+    "version": "2.0.0-beta.50",
     "nativeVersion": "1.5.7",
     "description": "Android build of the precompiled Zstandard (zstd) library, built with crossbind. Use it together with the main package @crossbind/port-zstd.",
     "homepage": "https://github.com/crossbind/crossbind/tree/main/ports/zstd#readme",

@@ -18,7 +18,7 @@ is not legal advice; the compliance assessment is yours.
 
 ## geos — LGPL-2.1-only
 
-- package: @crossbind/port-geos-bin-wasi@2.0.0-beta.37
+- package: @crossbind/port-geos-bin-wasi@2.0.0-beta.50
 - native version: 3.14.1
 - source: https://download.osgeo.org/geos/geos-3.14.1.tar.bz2 (sha256: 3c20919cda9a505db07b5216baa980bacdaa0702da715b43f176fb07eff7e716)
 

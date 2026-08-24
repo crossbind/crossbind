@@ -31,7 +31,7 @@ is not legal advice; the compliance assessment is yours.
 
 ## webp — BSD-3-Clause
 
-- package: @crossbind/port-webp-bin-wasi@2.0.0-beta.37
+- package: @crossbind/port-webp-bin-wasi@2.0.0-beta.50
 - native version: 1.6.0
 - source: https://storage.googleapis.com/downloads.webmproject.org/releases/webp/libwebp-1.6.0.tar.gz (sha256: e4ab7009bf0629fd11982d4c2aa83964cf244cffba7347ecd39019a9e38c4564)
 

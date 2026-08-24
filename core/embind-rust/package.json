@@ -1,6 +1,6 @@
 {
     "name": "@crossbind/core-embind-rust",
-    "version": "2.0.0-beta.38",
+    "version": "2.0.0-beta.50",
     "description": "Rust producer for the crossbind embind registration protocol - bind Rust structs as classes reachable from JS on web (embind) and mobile (embind-jsi). Research/spike stage.",
     "homepage": "https://github.com/crossbind/crossbind/tree/main/core/embind-rust#readme",
     "repository": "https://github.com/crossbind/crossbind.git",

@@ -1,6 +1,6 @@
 {
     "name": "@crossbind/port-lerc-android",
-    "version": "2.0.0-beta.37",
+    "version": "2.0.0-beta.50",
     "nativeVersion": "4.2.0",
     "description": "Android build of the precompiled LERC (Limited Error Raster Compression) library, built with crossbind. Use it together with the main package @crossbind/port-lerc.",
     "homepage": "https://github.com/crossbind/crossbind/tree/main/ports/lerc#readme",

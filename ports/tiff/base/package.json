@@ -1,6 +1,6 @@
 {
     "name": "@crossbind/port-tiff",
-    "version": "2.0.0-beta.37",
+    "version": "2.0.0-beta.50",
     "nativeVersion": "4.7.2",
     "description": "This package provides the Tiff library compiled with crossbind, enabling fast and efficient image processing using the TIFF format. It is built with crossbind to provide cross-platform support, leveraging both WebAssembly (WASM) for web applications and native code for mobile platforms. Ideal for developers looking to handle TIFF images with high performance in JavaScript environments.",
     "homepage": "https://github.com/crossbind/crossbind/tree/main/ports/tiff#readme",

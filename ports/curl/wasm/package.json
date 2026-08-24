@@ -1,6 +1,6 @@
 {
     "name": "@crossbind/port-curl-wasm",
-    "version": "2.0.0-beta.37",
+    "version": "2.0.0-beta.50",
     "nativeVersion": "8.21.0",
     "description": "WebAssembly build of the precompiled libcurl (CURL) library, built with crossbind. Use it together with the main package @crossbind/port-curl.",
     "homepage": "https://github.com/crossbind/crossbind/tree/main/ports/curl#readme",

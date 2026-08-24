@@ -1,5 +1,42 @@
 # crossbind
 
+## 2.0.0-beta.50
+
+### Major Changes
+
+- **Generated framework identifiers moved to `dev.crossbind`.** Every iOS and macOS framework
+  crossbind builds now identifies itself as `dev.crossbind.<name>` rather than
+  `org.js.cpp.<name>`. Anything that pins, inspects or signs against the old identifier has to be
+  updated.
+
+### Minor Changes
+
+- **`RUNNER=LOCAL` no longer needs nightly Rust for shared-memory wasm.** The st and mt sysroots
+  shipped inside the toolchain image are now readable by a host build too: the CLI resolves a
+  pinned index digest and streams the layer straight out of the registry over HTTPS — no docker, no
+  second artifact hosted anywhere, the same object the image embeds. mt links a std that was
+  already built with the shared-memory features, so `-Zbuild-std` and the nightly toolchain are
+  gone from that path. Where the host compiler does not match the one that produced the rlibs, the
+  build says so and falls back to the nightly rebuild instead of failing.
+
+- **Cargo dependencies build themselves.** A cargo package carries every target in one package, so
+  a missing prebuilt never meant "not for this platform" — it meant nobody had built it, and
+  nothing did. On android that surfaced as an error; on wasm the dependency dropped out of the link
+  and the module built clean and died at init. The dependency step now builds it, and a guard
+  refuses to link one that is still missing afterwards.
+
+- **`RUNNER=DOCKER_EXEC` works with the cargo mount.** `docker exec` does not create the working
+  directory `--workdir` names, and a container made before the cargo mount existed kept its
+  registry inside itself — which made bridge generation read a host path that was never written.
+  Both are handled, and a container that is missing, stopped or wrongly mounted now fails with the
+  exact `docker run` command that fixes it.
+
+### Patch Changes
+
+- Pinned to the 1.0.2 toolchain images. They are published to GHCR, mirrored to Docker Hub with
+  byte-identical digests, and signed with keyless Sigstore certificates that verify on both
+  registries — including the android `linux/amd64` leaf the CLI pins directly.
+
 ## 2.0.0-beta.35
 
 ### Patch Changes

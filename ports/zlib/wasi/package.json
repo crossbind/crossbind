@@ -1,6 +1,6 @@
 {
     "name": "@crossbind/port-zlib-wasi",
-    "version": "2.0.0-beta.37",
+    "version": "2.0.0-beta.50",
     "nativeVersion": "1.3.2",
     "description": "WASI build of the precompiled zlib library, built with crossbind. Use it together with the main package @crossbind/port-zlib.",
     "homepage": "https://github.com/crossbind/crossbind/tree/main/ports/zlib#readme",

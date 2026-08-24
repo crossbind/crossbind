@@ -54,7 +54,6 @@
         "publish:create": "pnpm --filter=create-crossbind publish --no-git-checks --tag beta",
         "publish:mcp": "pnpm --filter=@crossbind/mcp publish --no-git-checks --tag beta",
         "publish:all": "pnpm run publish:core && pnpm run publish:mcp && pnpm run publish:plugins && pnpm run publish:examples",
-        "publish:changeset": "changeset publish",
         "publish:beta": "pnpm --filter='@crossbind/*' publish --no-git-checks --tag beta --access public --report-summary",
         "check:dist": "node scripts/check-dist.js",
         "check:beta": "node scripts/check-beta-status.js",
@@ -82,7 +81,6 @@
         "eslint": "^10.8.1",
         "globals": "^17.9.0",
         "@playwright/test": "^1.62.1",
-        "@changesets/cli": "^2.31.1",
         "rimraf": "^6.1.3"
     },
     "pnpm": {

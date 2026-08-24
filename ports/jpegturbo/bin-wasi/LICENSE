@@ -18,7 +18,7 @@ is not legal advice; the compliance assessment is yours.
 
 ## jpeg — IJG AND BSD-3-Clause AND Zlib
 
-- package: @crossbind/port-jpegturbo-bin-wasi@2.0.0-beta.37
+- package: @crossbind/port-jpegturbo-bin-wasi@2.0.0-beta.50
 - native version: 3.2.0
 - source: https://github.com/libjpeg-turbo/libjpeg-turbo/releases/download/3.2.0/libjpeg-turbo-3.2.0.tar.gz (sha256: 6f30092cef9fb839779646608f4ee14ae3cbac989c47fa05e841b0841f09878e)
 
