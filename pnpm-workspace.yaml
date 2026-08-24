@@ -10,9 +10,41 @@ packages:
   - 'landing'
   - '!**/test/**'
 allowBuilds:
-  '@swc/core': set this to true or false
-  core-js: set this to true or false
-  esbuild: set this to true or false
-  sharp: set this to true or false
-  unrs-resolver: set this to true or false
-  workerd: set this to true or false
+  '@swc/core': true
+  core-js: false
+  esbuild: true
+  sharp: true
+  unrs-resolver: true
+  workerd: true
+overrides:
+  '@hono/node-server@2': '^2.1.0'
+  'body-parser@1': '^1.20.6'
+  'body-parser@2': '^2.3.0'
+  'brace-expansion@1': '^1.1.18'
+  'brace-expansion@2': '^2.1.4'
+  'brace-expansion@5': '^5.0.9'
+  'dompurify@3': '^3.4.13'
+  'fast-uri@3': '^3.1.5'
+  'hono@4': '^4.13.1'
+  'http-proxy-middleware@2': '^2.0.10'
+  'ip-address@10': '^10.4.0'
+  'joi@17': '^17.13.4'
+  'js-yaml@3': '^3.15.1'
+  'js-yaml@4': '^4.3.1'
+  'launch-editor@2': '^2.14.1'
+  'mermaid@11': '^11.16.1'
+  'minimatch@3': '^3.1.4'
+  'nanoid@3': '^3.3.18'
+  'on-headers@1': '^1.1.0'
+  'postcss@8': '^8.5.26'
+  'qs@6': '^6.15.2'
+  serialize-javascript: '^7.0.5'
+  shell-quote: '^1.10.0'
+  'svgo@3': '^3.3.4'
+  'undici@6': '^6.28.0'
+  'undici@7': '^7.29.0'
+  uuid: '^11.1.1'
+  'webpack-dev-server@5': '^5.2.6'
+  websocket-driver: '^0.7.5'
+  'ws@6': '^6.2.6'
+  'ws@7': '^7.5.13'
