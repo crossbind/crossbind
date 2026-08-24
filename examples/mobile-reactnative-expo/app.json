@@ -5,11 +5,11 @@
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "crossbindsamplemobilereactnativeexpo",
+    "scheme": "crossbindsamplereactnativeexpo",
     "userInterfaceStyle": "automatic",
     "ios": {
       "icon": "./assets/expo.icon",
-      "bundleIdentifier": "com.anonymous.crossbindsamplemobilereactnativeexpo"
+      "bundleIdentifier": "dev.crossbind.sampleReactNativeExpo"
     },
     "android": {
       "adaptiveIcon": {
@@ -19,7 +19,7 @@
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
       "predictiveBackGestureEnabled": false,
-      "package": "com.anonymous.crossbindsamplemobilereactnativeexpo"
+      "package": "dev.crossbind.sampleReactNativeExpo"
     },
     "web": {
       "output": "static",
