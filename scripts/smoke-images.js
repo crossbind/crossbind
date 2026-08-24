@@ -13,7 +13,11 @@
 import fs from 'node:fs';
 import { execFileSync } from 'node:child_process';
 
-const RUST_VERSION = '1.97.1';
+// The version lives in one place - the Dockerfile that builds the sysroot - because a copy here
+// would agree with it right up until someone bumps one and not the other.
+const RUST_VERSION = fs.readFileSync(new URL('../tooling/docker/rust-sysroot.Dockerfile', import.meta.url), 'utf8')
+    .match(/^ARG RUST_VERSION=(.+)$/m)?.[1]?.trim();
+if (!RUST_VERSION) throw new Error('cannot read ARG RUST_VERSION from tooling/docker/rust-sysroot.Dockerfile');
 const MIN_NODE_MAJOR = 20; // crossbind's engines.node floor
 
 // Local builds carry one tag per architecture, because `docker build --load` cannot produce a

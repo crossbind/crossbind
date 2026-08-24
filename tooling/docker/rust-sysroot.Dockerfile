@@ -5,8 +5,8 @@
 # for RUNNER=LOCAL. Bootstrap lives only in this stage; nothing here reaches a final image.
 #
 # Digest-pinned (multi-arch INDEX): bump via `docker manifest inspect rust:<tag>`.
-ARG RUST_VERSION=1.97.1
-FROM rust:${RUST_VERSION}-slim@sha256:8e8cf8f7fd54a2d23d5a743b3a03f56e26b6c774276c33fa0595111704ebb15c AS builder
+ARG RUST_VERSION=1.98.0
+FROM rust:${RUST_VERSION}-slim@sha256:cc0448b41c3b7b7fea44f5dc50eacba729a56db365b65b7bd5e8a82d5b3db078 AS builder
 
 ARG RUST_VERSION
 # Recorded in the manifest so a sysroot can never be paired with the wrong emscripten.
