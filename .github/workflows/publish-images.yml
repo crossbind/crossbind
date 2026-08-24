@@ -278,10 +278,14 @@ jobs:
       - name: Emit the digest table
         env:
           V: ${{ needs.setup.outputs.tag }}
+          # The table names the RELEASE, not the tag the bytes happen to sit under while they are
+          # being gated: the digests do not change when the stable tag is added, and a pin that
+          # recorded the staging tag would refuse to match tooling/docker/VERSION.
+          RELEASE: ${{ needs.setup.outputs.version }}
           GHCR: ${{ needs.setup.outputs.registry }}
         run: |
           set -euo pipefail
-          echo "{\"version\":\"${V}\",\"registry\":\"${GHCR}\",\"images\":{}}" > digests.json
+          echo "{\"version\":\"${RELEASE}\",\"registry\":\"${GHCR}\",\"images\":{}}" > digests.json
           for image in rust-sysroot base web android; do
             docker buildx imagetools inspect "${GHCR}/${image}:${V}" --raw > "raw-${image}.json"
             index="sha256:$(sha256sum "raw-${image}.json" | cut -d' ' -f1)"
@@ -478,9 +482,12 @@ jobs:
           refuse "the same workflow from another branch" "${repo}/publish-images.yml@refs/heads/not-main"
           refuse "another workflow in this repository"   "${repo}/build-linux.yml@refs/heads/main"
 
+      # A distinct name: the digests job publishes the canonical table the CLI pins from, and two
+      # artifacts sharing one name make it ambiguous which a consumer downloads. This one is the
+      # verification record - the same graph, walked across both registries.
       - uses: actions/upload-artifact@v4
         with:
-          name: digests
+          name: digests-verified
           path: digests.json
 
   # The stable tag is the LAST thing that happens, and it only points at bytes every gate above has

@@ -62,7 +62,10 @@ function compare(label, primaryRef, mirrorRef) {
 }
 
 console.log(`gate-registry: ${PRIMARY} vs ${MIRROR}, version ${TAG}\n`);
-const table = { version: VERSION, primary: PRIMARY, mirror: MIRROR, images: {} };
+// `registry` is the field the CLI's pinner reads; primary/mirror record what was compared.
+const table = {
+    version: VERSION, registry: PRIMARY, primary: PRIMARY, mirror: MIRROR, images: {},
+};
 
 for (const image of IMAGES) {
     const index = compare(`${image} index`, `${PRIMARY}/${image}:${TAG}`, `${MIRROR}/${image}:${TAG}`);
