@@ -54,7 +54,7 @@
         "publish:create": "pnpm --filter=create-crossbind publish --no-git-checks --tag beta",
         "publish:mcp": "pnpm --filter=@crossbind/mcp publish --no-git-checks --tag beta",
         "publish:all": "pnpm run publish:beta",
-        "publish:beta": "pnpm --filter='@crossbind/*' --filter=crossbind --filter=create-crossbind publish --no-git-checks --tag beta --access public --report-summary",
+        "publish:beta": "pnpm --filter='@crossbind/*' --filter=crossbind publish --no-git-checks --tag beta --access public --report-summary",
         "check:dist": "node scripts/check-dist.js",
         "check:beta": "node scripts/check-beta-status.js",
         "check:deps": "node scripts/check-external-dependencies.js",
