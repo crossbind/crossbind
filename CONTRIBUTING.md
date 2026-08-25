@@ -29,7 +29,7 @@ See [`docs/CODEMAP.md`](./docs/CODEMAP.md) for the concept→file map and [`AGEN
 
 | Want to | Look at |
 |---------|---------|
-| Add a new prebuilt C++ library | [`docs/playbooks/new-package.md`](./docs/playbooks/new-package.md) |
+| Add a new native-library port | [`docs/playbooks/new-port.md`](./docs/playbooks/new-port.md) |
 | Fix a bug | [`docs/playbooks/bug-fix.md`](./docs/playbooks/bug-fix.md) |
 | Understand the build pipeline | [`docs/api/build-state.md`](./docs/api/build-state.md), [`docs/api/overrides.md`](./docs/api/overrides.md) |
 | Author runtime API | [`docs/api/init.md`](./docs/api/init.md), [`docs/api/crossbind-config.md`](./docs/api/crossbind-config.md) |
@@ -43,7 +43,6 @@ Directories carry no brand prefix; the npm name does.
 |-----------|----------|
 | `core/crossbind` | `crossbind` |
 | `core/embind-jsi` | `@crossbind/core-embind-jsi` |
-| `tooling/mcp` | `@crossbind/mcp` |
 | `plugins/vite` | `@crossbind/plugin-vite` |
 | `ports/<lib>/base` | `@crossbind/port-<lib>` |
 | `ports/<lib>/<target>` | `@crossbind/port-<lib>-<target>` |
@@ -123,10 +122,9 @@ crossbind uses **manual semver releases**. Beta tag for in-development, latest f
 
 ```bash
 pnpm run check                      # full health check
-pnpm run publish:all                # publish core + mcp + plugins + samples
+pnpm run publish:all                # publish core + plugins + samples
 # or piecewise:
 pnpm run publish:core               # crossbind
-pnpm run publish:mcp                # @crossbind/mcp
 pnpm run publish:plugins            # @crossbind/plugin-*
 pnpm run publish:examples            # @crossbind/example-*
 pnpm run publish:beta               # all under @crossbind/* with --tag beta
@@ -141,7 +139,7 @@ If you're using an AI coding agent (Claude Code, Cursor, Codex, …), great — 
 - The agent should mention itself in the PR's "Agent assistance" section. Reviewers like to know what to spot-check.
 - Agents must not commit, push, tag, or open PRs autonomously. The human contributor reviews and ships. (See `AGENTS.md` "Never" section.)
 
-Plugin + MCP install: see [`crossbind.dev/docs/agent/overview`](https://crossbind.dev/docs/agent/overview).
+Install the single portable skill: see [`docs/agent-overview.md`](docs/agent-overview.md).
 
 ## Code of Conduct
 

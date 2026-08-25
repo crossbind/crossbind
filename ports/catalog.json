@@ -1,0 +1,66 @@
+{
+    "curl": {
+        "category": "network",
+        "summary": "HTTP, HTTPS and file-transfer client library"
+    },
+    "expat": {
+        "category": "text",
+        "summary": "Streaming XML parser"
+    },
+    "gdal": {
+        "category": "geo",
+        "summary": "Raster and vector geospatial data processing"
+    },
+    "geos": {
+        "category": "geo",
+        "summary": "Geometry predicates and spatial operations"
+    },
+    "geotiff": {
+        "category": "geo",
+        "summary": "GeoTIFF metadata and coordinate-system support"
+    },
+    "iconv": {
+        "category": "text",
+        "summary": "Character-set conversion"
+    },
+    "jpegturbo": {
+        "category": "image",
+        "summary": "High-performance JPEG codec"
+    },
+    "lerc": {
+        "category": "image",
+        "summary": "Limited-error raster compression"
+    },
+    "openssl": {
+        "category": "crypto",
+        "summary": "TLS and cryptographic primitives"
+    },
+    "proj": {
+        "category": "geo",
+        "summary": "Coordinate reference-system transformations"
+    },
+    "spatialite": {
+        "category": "database",
+        "summary": "Spatial SQL extension for SQLite"
+    },
+    "sqlite3": {
+        "category": "database",
+        "summary": "Embedded relational database"
+    },
+    "tiff": {
+        "category": "image",
+        "summary": "TIFF image reader and writer"
+    },
+    "webp": {
+        "category": "image",
+        "summary": "WebP image codec"
+    },
+    "zlib": {
+        "category": "compression",
+        "summary": "DEFLATE compression"
+    },
+    "zstd": {
+        "category": "compression",
+        "summary": "Zstandard compression"
+    }
+}

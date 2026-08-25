@@ -8,13 +8,13 @@ Drop crossbind into the user's project with the smallest, most idiomatic config 
 
 ## Step 0 — Detect the framework first
 
-Don't guess. Run framework detection:
+Don't guess. If the portable crossbind skill is installed, run its bundled read-only inspector:
 
 ```bash
-node scripts/detect-framework.js [path-to-project]
+node <crossbind-skill>/scripts/inspect-project.mjs [path-to-project] --json
 ```
 
-*(Sprint 2 helper. From outside this repo: copy `scripts/detect-framework.js` or describe the target's `package.json` and key config files.)*
+When working from this repository, the same inspector is at `agents/skills/crossbind/scripts/inspect-project.mjs`. If it is unavailable, inspect `package.json`, lockfiles and framework config files directly.
 
 The detector inspects `package.json` deps + filesystem signatures (`vite.config.*`, `next.config.*`, `metro.config.*`, `wrangler.toml`, etc.) and returns:
 
@@ -53,7 +53,7 @@ Per-framework playbooks contain:
 - The exact config diff
 - Where to call `init(...)`
 - Headers / build hooks specific to that bundler
-- A reference sample (`examples/web-vue-vite/`, etc.) to mirror
+- A reference example (`examples/web-vue-vite/`, etc.) to mirror
 
 ## Step 2 — Multithread decision
 
@@ -96,7 +96,7 @@ Does the user need a library crossbind already prebuilds?
           Two sub-options:
             (a) Inline in their project: write `crossbind.config.js` pointing at
                 their src/native/, no separate package needed.
-            (b) Publish a reusable package: see docs/playbooks/new-package.md
+            (b) Publish a reusable port: see docs/playbooks/new-port.md
                 (Persona 3).
           Sub-option (a) is most common for "my own code".
 ```
@@ -154,6 +154,6 @@ The framework playbook lists what to look for in the dev/build output (e.g. "you
 ## Reference
 
 - Plugin sources: `plugins/{vite,webpack,rollup,react-native,metro}/index.js`
-- Sample integrations: `examples/web-*` and `examples/mobile-*`
-- Framework detector: `scripts/detect-framework.js`
-- Per-framework playbooks: `docs/playbooks/integration/<framework>.md` (added in Sprint 3)
+- Reference integrations: `examples/web-*` and `examples/mobile-*`
+- Project inspector: `agents/skills/crossbind/scripts/inspect-project.mjs`
+- Per-framework playbooks: `docs/playbooks/integration/<framework>.md`

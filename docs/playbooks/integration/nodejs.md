@@ -125,7 +125,7 @@ Caveats:
 - **Forgetting to rebuild after editing `.cpp`.** No bundler watcher here. Re-run `pnpm build` (or wire `chokidar`/`nodemon` to do so).
 - **Running on Node < 20.** crossbind requires Node ≥ 20 (see `engines` in `core/crossbind/package.json`).
 
-## Reference samples
+## Reference examples
 
 - `examples/backend-nodejs-wasm/` — minimal Node + crossbind (single-thread), canonical
 - `e2e/backend-nodejs/` — playground with prebuilt packages

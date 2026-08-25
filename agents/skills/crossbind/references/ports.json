@@ -1,0 +1,352 @@
+{
+  "ports": [
+    {
+      "name": "curl",
+      "npm": "@crossbind/port-curl",
+      "category": "network",
+      "summary": "HTTP, HTTPS and file-transfer client library",
+      "nativeVersion": "8.21.0",
+      "license": "curl",
+      "homepage": "https://github.com/crossbind/crossbind/tree/main/ports/curl#readme",
+      "targets": [
+        "wasm",
+        "android",
+        "ios",
+        "wasi",
+        "bin-wasi"
+      ],
+      "binCommands": [
+        "curl-wasi"
+      ]
+    },
+    {
+      "name": "expat",
+      "npm": "@crossbind/port-expat",
+      "category": "text",
+      "summary": "Streaming XML parser",
+      "nativeVersion": "2.8.3",
+      "license": "MIT",
+      "homepage": "https://github.com/crossbind/crossbind/tree/main/ports/expat#readme",
+      "targets": [
+        "wasm",
+        "android",
+        "ios",
+        "wasi",
+        "bin-wasi"
+      ],
+      "binCommands": [
+        "xmlwf-wasi"
+      ]
+    },
+    {
+      "name": "gdal",
+      "npm": "@crossbind/port-gdal",
+      "category": "geo",
+      "summary": "Raster and vector geospatial data processing",
+      "nativeVersion": "3.13.3",
+      "license": "MIT",
+      "homepage": "https://github.com/crossbind/crossbind/tree/main/ports/gdal#readme",
+      "targets": [
+        "wasm",
+        "android",
+        "ios",
+        "wasi",
+        "bin-wasi"
+      ],
+      "binCommands": [
+        "gdal-wasi",
+        "gdal_contour-wasi",
+        "gdal_create-wasi",
+        "gdal_footprint-wasi",
+        "gdal_grid-wasi",
+        "gdal_rasterize-wasi",
+        "gdal_translate-wasi",
+        "gdal_viewshed-wasi",
+        "gdaladdo-wasi",
+        "gdalbuildvrt-wasi",
+        "gdaldem-wasi",
+        "gdalenhance-wasi",
+        "gdalinfo-wasi",
+        "gdallocationinfo-wasi",
+        "gdalmanage-wasi",
+        "gdalmdiminfo-wasi",
+        "gdalmdimtranslate-wasi",
+        "gdalsrsinfo-wasi",
+        "gdaltindex-wasi",
+        "gdaltransform-wasi",
+        "gdalwarp-wasi",
+        "gnmanalyse-wasi",
+        "gnmmanage-wasi",
+        "nearblack-wasi",
+        "ogr2ogr-wasi",
+        "ogrinfo-wasi",
+        "ogrlineref-wasi",
+        "ogrtindex-wasi",
+        "sozip-wasi"
+      ]
+    },
+    {
+      "name": "geos",
+      "npm": "@crossbind/port-geos",
+      "category": "geo",
+      "summary": "Geometry predicates and spatial operations",
+      "nativeVersion": "3.14.1",
+      "license": "LGPL-2.1-only",
+      "homepage": "https://github.com/crossbind/crossbind/tree/main/ports/geos#readme",
+      "targets": [
+        "wasm",
+        "android",
+        "ios",
+        "wasi",
+        "bin-wasi"
+      ],
+      "binCommands": [
+        "geosop-wasi"
+      ]
+    },
+    {
+      "name": "geotiff",
+      "npm": "@crossbind/port-geotiff",
+      "category": "geo",
+      "summary": "GeoTIFF metadata and coordinate-system support",
+      "nativeVersion": "1.7.4",
+      "license": "MIT",
+      "homepage": "https://github.com/crossbind/crossbind/tree/main/ports/geotiff#readme",
+      "targets": [
+        "wasm",
+        "android",
+        "ios",
+        "wasi",
+        "bin-wasi"
+      ],
+      "binCommands": [
+        "applygeo-wasi",
+        "geotifcp-wasi",
+        "listgeo-wasi"
+      ]
+    },
+    {
+      "name": "iconv",
+      "npm": "@crossbind/port-iconv",
+      "category": "text",
+      "summary": "Character-set conversion",
+      "nativeVersion": "1.19",
+      "license": "LGPL-2.1-or-later",
+      "homepage": "https://github.com/crossbind/crossbind/tree/main/ports/iconv#readme",
+      "targets": [
+        "wasm",
+        "android",
+        "ios",
+        "wasi"
+      ],
+      "binCommands": []
+    },
+    {
+      "name": "jpegturbo",
+      "npm": "@crossbind/port-jpegturbo",
+      "category": "image",
+      "summary": "High-performance JPEG codec",
+      "nativeVersion": "3.2.0",
+      "license": "IJG AND BSD-3-Clause AND Zlib",
+      "homepage": "https://github.com/crossbind/crossbind/tree/main/ports/jpegturbo#readme",
+      "targets": [
+        "wasm",
+        "android",
+        "ios",
+        "wasi",
+        "bin-wasi"
+      ],
+      "binCommands": [
+        "cjpeg-wasi",
+        "djpeg-wasi",
+        "jpegtran-wasi"
+      ]
+    },
+    {
+      "name": "lerc",
+      "npm": "@crossbind/port-lerc",
+      "category": "image",
+      "summary": "Limited-error raster compression",
+      "nativeVersion": "4.2.0",
+      "license": "Apache-2.0",
+      "homepage": "https://github.com/crossbind/crossbind/tree/main/ports/lerc#readme",
+      "targets": [
+        "wasm",
+        "android",
+        "ios",
+        "wasi"
+      ],
+      "binCommands": []
+    },
+    {
+      "name": "openssl",
+      "npm": "@crossbind/port-openssl",
+      "category": "crypto",
+      "summary": "TLS and cryptographic primitives",
+      "nativeVersion": "4.0.1",
+      "license": "Apache-2.0",
+      "homepage": "https://github.com/crossbind/crossbind/tree/main/ports/openssl#readme",
+      "targets": [
+        "wasm",
+        "android",
+        "ios",
+        "wasi",
+        "bin-wasi"
+      ],
+      "binCommands": [
+        "openssl-wasi"
+      ]
+    },
+    {
+      "name": "proj",
+      "npm": "@crossbind/port-proj",
+      "category": "geo",
+      "summary": "Coordinate reference-system transformations",
+      "nativeVersion": "9.8.1",
+      "license": "MIT",
+      "homepage": "https://github.com/crossbind/crossbind/tree/main/ports/proj#readme",
+      "targets": [
+        "wasm",
+        "android",
+        "ios",
+        "wasi",
+        "bin-wasi"
+      ],
+      "binCommands": [
+        "cct-wasi",
+        "cs2cs-wasi",
+        "geod-wasi",
+        "gie-wasi",
+        "proj-wasi",
+        "projinfo-wasi"
+      ]
+    },
+    {
+      "name": "spatialite",
+      "npm": "@crossbind/port-spatialite",
+      "category": "database",
+      "summary": "Spatial SQL extension for SQLite",
+      "nativeVersion": "5.1.0",
+      "license": "MPL-1.1 OR GPL-2.0-or-later OR LGPL-2.1-or-later",
+      "homepage": "https://github.com/crossbind/crossbind/tree/main/ports/spatialite#readme",
+      "targets": [
+        "wasm",
+        "android",
+        "ios",
+        "wasi"
+      ],
+      "binCommands": []
+    },
+    {
+      "name": "sqlite3",
+      "npm": "@crossbind/port-sqlite3",
+      "category": "database",
+      "summary": "Embedded relational database",
+      "nativeVersion": "3.53.4",
+      "license": "blessing",
+      "homepage": "https://github.com/crossbind/crossbind/tree/main/ports/sqlite3#readme",
+      "targets": [
+        "wasm",
+        "android",
+        "ios",
+        "wasi",
+        "bin-wasi"
+      ],
+      "binCommands": [
+        "sqlite3-wasi"
+      ]
+    },
+    {
+      "name": "tiff",
+      "npm": "@crossbind/port-tiff",
+      "category": "image",
+      "summary": "TIFF image reader and writer",
+      "nativeVersion": "4.7.2",
+      "license": "libtiff",
+      "homepage": "https://github.com/crossbind/crossbind/tree/main/ports/tiff#readme",
+      "targets": [
+        "wasm",
+        "android",
+        "ios",
+        "wasi",
+        "bin-wasi"
+      ],
+      "binCommands": [
+        "fax2ps-wasi",
+        "fax2tiff-wasi",
+        "pal2rgb-wasi",
+        "ppm2tiff-wasi",
+        "raw2tiff-wasi",
+        "tiff2bw-wasi",
+        "tiff2pdf-wasi",
+        "tiff2ps-wasi",
+        "tiff2rgba-wasi",
+        "tiffcmp-wasi",
+        "tiffcp-wasi",
+        "tiffcrop-wasi",
+        "tiffdither-wasi",
+        "tiffdump-wasi",
+        "tiffinfo-wasi",
+        "tiffmedian-wasi",
+        "tiffset-wasi",
+        "tiffsplit-wasi"
+      ]
+    },
+    {
+      "name": "webp",
+      "npm": "@crossbind/port-webp",
+      "category": "image",
+      "summary": "WebP image codec",
+      "nativeVersion": "1.6.0",
+      "license": "BSD-3-Clause",
+      "homepage": "https://github.com/crossbind/crossbind/tree/main/ports/webp#readme",
+      "targets": [
+        "wasm",
+        "android",
+        "ios",
+        "wasi",
+        "bin-wasi"
+      ],
+      "binCommands": [
+        "cwebp-wasi",
+        "dwebp-wasi",
+        "webpinfo-wasi"
+      ]
+    },
+    {
+      "name": "zlib",
+      "npm": "@crossbind/port-zlib",
+      "category": "compression",
+      "summary": "DEFLATE compression",
+      "nativeVersion": "1.3.2",
+      "license": "Zlib",
+      "homepage": "https://github.com/crossbind/crossbind/tree/main/ports/zlib#readme",
+      "targets": [
+        "wasm",
+        "android",
+        "ios",
+        "wasi"
+      ],
+      "binCommands": []
+    },
+    {
+      "name": "zstd",
+      "npm": "@crossbind/port-zstd",
+      "category": "compression",
+      "summary": "Zstandard compression",
+      "nativeVersion": "1.5.7",
+      "license": "BSD-3-Clause OR GPL-2.0-only",
+      "homepage": "https://github.com/crossbind/crossbind/tree/main/ports/zstd#readme",
+      "targets": [
+        "wasm",
+        "android",
+        "ios",
+        "wasi",
+        "bin-wasi"
+      ],
+      "binCommands": [
+        "zstd-wasi"
+      ]
+    }
+  ]
+}

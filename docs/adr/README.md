@@ -8,15 +8,16 @@ ADRs are **immutable**. When a decision is overturned, write a new ADR that supe
 
 | # | Title | Status | Affects |
 |---|-------|--------|---------|
-| [0001](./0001-agent-first-class-support.md) | AI agents are first-class consumers of crossbind | Accepted | Plugin, MCP, AGENTS.md, playbooks |
+| [0001](./0001-agent-first-class-support.md) | AI agents are first-class consumers of crossbind | Accepted | Skill, contributor context, playbooks |
 | [0002](./0002-pnpm-topological-build-order.md) | Use pnpm workspace dependencies for transitive C++ build order | Accepted | All `ports/*/*/package.json` |
 | [0003](./0003-function-typed-env-values.md) | Allow env values in `crossbind.config.js` to be functions of `(state, target)` | Accepted | `core/crossbind/src/state/`, plugin authors |
-| [0004](./0004-three-layer-agent-distribution.md) | Distribute agent integration in 3 layers: Claude Code plugin, MCP server, AGENTS.md snippet | Accepted | `agents/`, `tooling/mcp/`, `website/src/pages/agents.mdx` |
+| [0004](./0004-three-layer-agent-distribution.md) | Distribute agent integration in three layers | Superseded by ADR-0010 | Historical agent distribution architecture |
 | [0005](./0005-wasi-platform.md) | Add `platform: 'wasi'` as a first-class build platform (wasm32-wasip3 command components) | Accepted | `buildWasiCommand.js`, `-wasi`/`-bin-wasi` packages, CI |
 | [0006](./0006-rust-bindings.md) | Bind plain Rust through a flat C ABI; the engine never depends on the binding layer | Accepted | `core-embind-rust/`, `rustBridgeGen.js`, bundler plugins |
 | [0007](./0007-cargo-import-scheme.md) | Prefix direct crate imports with `cargo:` | Accepted | `getDependFilePath.js`, bundler plugins, `cargoDependencies` |
 | [0008](./0008-bin-license-contract.md) | Govern published binaries with a derived Bin & License Contract (K1-K4) | Accepted | `ports/README.md`, `buildBinTools.js`, `check-publish-hygiene.js` |
 | [0009](./0009-toolchain-images.md) | Own the toolchain images, and run cargo where the build runs | Accepted | `tooling/docker/`, `pullDockerImage.js`, `runCargo.js`, publish workflows |
+| [0010](./0010-skills-first-agent-architecture.md) | Use one portable skill and normal project tools for agent support | Accepted | `agents/`, docs, contributor context |
 
 ## Writing a new ADR
 

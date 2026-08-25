@@ -1,6 +1,6 @@
 # ADR-0004: Distribute agent integration in three layers — Claude Code plugin, MCP server, AGENTS.md snippet
 
-- **Status:** Accepted
+- **Status:** Superseded by ADR-0010
 - **Date:** 2026-05-03
 - **Affects:** `agents/`, `tooling/mcp/`, `website/src/pages/agents.mdx`, `docs/playbooks/`
 
@@ -50,6 +50,4 @@ Internally, all three layers reference the same `docs/playbooks/*.md` as the sou
 ## See also
 
 - ADR-0001: AI agents are first-class consumers of crossbind.
-- `agents/.claude-plugin/plugin.json` — plugin manifest.
-- `tooling/mcp/src/index.js` — MCP server entry.
-- `website/src/pages/agents.mdx` — public-facing comparison and install instructions.
+- ADR-0010: One portable skill and normal project tools (supersedes this decision).

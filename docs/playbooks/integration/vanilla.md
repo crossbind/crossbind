@@ -145,7 +145,7 @@ For `runtime: 'st'`, no headers needed — works on any static host including GH
 - **Trying `import` from the loader script** — the build emits UMD with a global `initNative`. For ES modules, you'd need a different output target (currently not exposed for vanilla).
 - **`serve.json` ignored.** `serve` reads `serve.json` from the current working directory. Run `serve` from the same directory the JSON lives in (or pass `-c <path>`).
 
-## Reference samples
+## Reference examples
 
 - `examples/web-vanilla/` — single-thread vanilla, canonical
 - `e2e/web-vanilla/` — bigger demo with multiple packages

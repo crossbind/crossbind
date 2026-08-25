@@ -42,7 +42,7 @@ Strict gate (touches plugin → consumers):
 pnpm run ci:linux:build && pnpm run e2e:dev && pnpm run e2e:prod
 ```
 
-Plus smoke-test against the canonical Vite samples:
+Plus smoke-test against the canonical Vite examples and E2E fixtures:
 
 ```bash
 pnpm --filter=@crossbind/example-web-vue-vite run build
@@ -56,4 +56,4 @@ Multithread-specific check: `e2e/web-vite-multithread/`.
 
 - Inner kernel: `plugins/rollup/index.js`
 - Integration recipe: `docs/playbooks/integration/vite.md`
-- Canonical samples: `examples/web-{vue,react,svelte}-vite`, `e2e/web-vite{,-multithread}`
+- Canonical examples and fixtures: `examples/web-{vue,react,svelte}-vite`, `e2e/web-vite{,-multithread}`

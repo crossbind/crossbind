@@ -114,10 +114,10 @@ If the user picks `runtime: 'st'` (single-thread), none of this applies — no h
 - **Editing `vite.config` to inline crossbind paths.** Don't. The plugin resolves paths via `crossbind.config.js`. Touch that file instead.
 - **Forgetting production headers** on hosts other than `vercel`/`netlify` (which the plugin doesn't touch). Multithread works in `pnpm preview` but breaks in production with no error in the build output.
 - **Mismatched runtime.** If `crossbind.config.js` says `runtime: 'st'` but the user expected threading, threads won't run. Check both.
-- **`pnpm dev` shows `crossbind build` errors but page loads.** The plugin reports build failures via the dev server overlay; if the page loads anyway, it's a stale cached artifact. Run `pnpm --filter=<sample-name> run build` once explicitly to surface the error.
+- **`pnpm dev` shows `crossbind build` errors but page loads.** The plugin reports build failures via the dev server overlay; if the page loads anyway, it's a stale cached artifact. Run `pnpm --filter=<example-name> run build` once explicitly to surface the error.
 - **HMR doesn't rebuild after `.cpp` edit.** Check `paths.native` in the project's `crossbind.config.js`. Default `src/native/` works; if the user moved C++ files elsewhere, point at the new location.
 
-## Reference samples
+## Reference examples
 
 - `examples/web-vue-vite/` — Vue 3 + Vite, simplest reference
 - `examples/web-react-vite/` — React + Vite

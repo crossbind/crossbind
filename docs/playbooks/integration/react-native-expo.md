@@ -126,7 +126,7 @@ If the user also targets `expo-router` web build (RN Web), then they're effectiv
 - **arm64e / x86_64 simulator.** `@crossbind/port-*-ios` podspecs already exclude `x86_64` for simulators. Custom packages must include the exclusion (see `react-native-cli.md` "Common pitfalls").
 - **TypeScript paths broken.** `crossbind.config.{js,mjs,cjs}` is JS; ensure `tsconfig.json` includes it or excludes via `allowJs: true` if you want type checking.
 
-## Reference samples
+## Reference examples
 
 - `examples/mobile-reactnative-expo/` — canonical Expo reference
 

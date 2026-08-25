@@ -2,7 +2,7 @@
 
 > Persona 2 sub-playbook. The user's project is a Next.js app. Detection: `next` in deps, `next.config.{js,mjs,ts}` at root.
 
-> No canonical sample exists in this repo yet. This playbook synthesizes the Webpack and Vite playbooks; verify edge cases against `examples/web-react-rspack/` (closest cousin).
+> No canonical Next.js example exists in this repo yet. This playbook synthesizes the Webpack and Vite playbooks; verify edge cases against `examples/web-react-rspack/` (the closest equivalent).
 
 ## Goal
 
@@ -138,6 +138,6 @@ If the user wants crossbind on the server side too (Node SSR with WASM), that's 
 
 ## Reference
 
-- No canonical Next sample yet — closest is `examples/web-react-rspack/` (similar webpack-based React setup).
+- No canonical Next.js example yet; the closest is `examples/web-react-rspack/` (a similar Webpack-based React setup).
 - Plugin: `plugins/webpack/index.js`.
 - Webpack/Rspack equivalent (with full devServer integration): `docs/playbooks/integration/webpack-rspack.md`.

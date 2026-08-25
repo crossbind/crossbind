@@ -122,7 +122,7 @@ Same as the Vite playbook — devServer is handled by the plugin, production dep
 - **Trying to use `getRule()` outside `module.rules`** (e.g. inside `plugins`). It's a rule, not a plugin instance. Plugin instance also goes in `plugins:` array.
 - **TurboPack / Next 13+ App Router.** This playbook is for plain Webpack/Rspack. For Next, see `docs/playbooks/integration/nextjs.md`.
 
-## Reference samples
+## Reference examples
 
 - `examples/web-react-rspack/` — React + Rspack, canonical
 - `e2e/web-rspack/` — React + Rspack + GDAL/CURL playground

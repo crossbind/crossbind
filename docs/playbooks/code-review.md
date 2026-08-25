@@ -15,15 +15,16 @@ Run these before any code-specific review:
 - [ ] `.gitignore` not weakened to allow build artifacts (`.crossbind/`, `dist/`, `*.xcframework`).
 - [ ] LICENSE file untouched (unless intentional).
 
-## Package PRs (new `ports/*` or upstream-version bump)
+## Port PRs (new `ports/*` family or upstream-version bump)
 
 For PRs touching `ports/`:
 
 ### Structure
 
-- [ ] All four sub-dirs present: `ports/<name>/`, `-wasm/`, `-android/`, `-ios/`.
-- [ ] Each sub-arch has `package.json`, `crossbind.config.js`, `crossbind.build.js`, `README.md`, `LICENSE` (upstream's), `.npmignore`.
-- [ ] iOS sub-arch has `crossbind-port-<name>.podspec` with `EXCLUDED_ARCHS[sdk=iphonesimulator*] = x86_64`.
+- [ ] The family uses `ports/<name>/{base,wasm,android,ios,wasi}`; add `bin-wasi/` only when an upstream CLI is published.
+- [ ] `base/` contains `package.json`, `build.mjs`, `mergeConfig.mjs`, `README.md` and `.npmignore`.
+- [ ] Each platform variant has `package.json`, `crossbind.config.js`, `crossbind.build.js`, `README.md`, upstream `LICENSE` and `.npmignore`.
+- [ ] The iOS variant has any required `crossbind-port-<name>.podspec`, including `EXCLUDED_ARCHS[sdk=iphonesimulator*] = x86_64` when its prebuilt slices require that exclusion.
 - [ ] `.npmignore` excludes `.crossbind/`, source tarballs, intermediates — but **keeps** `dist/prebuilt/`.
 
 ### `crossbind.build.js`
@@ -51,8 +52,8 @@ For PRs touching `ports/`:
 
 ### Validation
 
-- [ ] All three sub-arches build clean: `pnpm --filter '@crossbind/port-<name>*' run build`.
-- [ ] If the package is in the `crossbind` repo (not community / user-org), an e2e exercise exists in a sample.
+- [ ] Every claimed platform variant builds clean: `pnpm --filter '@crossbind/port-<name>*' run build`.
+- [ ] An isolated `e2e/` fixture exercises the public port surface; an optional `bin-wasi/` package executes its published commands.
 - [ ] e2e: `pnpm run e2e:dev && pnpm run e2e:prod` pass.
 
 ## Fix / feature PRs (everything else)
@@ -82,7 +83,7 @@ For PRs touching `core/`, `tooling/`, `plugins/`, `examples/`, `e2e/`, or `scrip
 
 ### crossbind-specific
 
-- [ ] If touching a bundler plugin (vite/webpack/rollup/RN), check the **other plugins** for the same antipattern and fix consistently. (See `AGENTS.md` "Project-specific antipatterns" — don't update one plugin without checking siblings.)
+- [ ] If touching a bundler plugin (Vite/Webpack/Rollup/RN), check the **other plugins** for the same behavior and validate affected siblings.
 - [ ] If `paths.native` is read, it's iterated as an array — never `fs.existsSync(paths.native)` directly.
 - [ ] If `force: true` is added to a build call, there's a comment explaining why the cache invalidation is needed.
 - [ ] If a new env var or build flag is introduced, it's documented in the relevant `docs/api/*.md` (likely `overrides.md` or `performance.md`).
@@ -103,9 +104,10 @@ The right validation depends on what changed:
 |---------|-----|
 | `core/crossbind/src/utils/` | `pnpm test` |
 | `core/crossbind/src/actions/` | `pnpm test` + at least one wasm + one ios + one android package build |
-| One bundler plugin | The matching sample's `dev` + `build` (e.g. plugin-vite → `examples/web-vue-vite`) |
-| One package family | `pnpm --filter '@crossbind/port-<name>*' run build` for all 3 arches |
-| A sample | `pnpm install && pnpm dev && pnpm build` inside that sample |
+| One bundler plugin | The matching example's `dev` + `build` (e.g. plugin-vite → `examples/web-vue-vite`) |
+| One port family | `pnpm --filter '@crossbind/port-<name>*' run build` for every affected variant |
+| An example | Run that `@crossbind/example-*` package's build and relevant smoke check |
+| An E2E fixture | Run that `@crossbind/e2e-*` package's dev/prod or native gate |
 
 For multithread (`mt`) fixes, also verify `crossOriginIsolated === true` in the browser console.
 
@@ -143,8 +145,8 @@ When commenting, mark severity:
 ## See also
 
 - [`bug-fix.md`](./bug-fix.md) — fix-a-bug workflow (use this BEFORE writing the fix).
-- [`new-package.md`](./new-package.md) — author a new package (this is what's reviewed).
+- [`new-port.md`](./new-port.md) — author a new port family (this is what's reviewed).
 - [`../api/overrides.md`](../api/overrides.md) — override mechanism catalog.
 - [`../adr/README.md`](../adr/README.md) — when to write an ADR.
 - [`../../CONTRIBUTING.md`](../../CONTRIBUTING.md) — contributor process.
-- [`../../AGENTS.md`](../../AGENTS.md) — root agent context with antipattern catalog.
+- [`../../AGENTS.md`](../../AGENTS.md) — repository map, safety rules and validation matrix.

@@ -1,8 +1,0 @@
-{
-    "mcpServers": {
-        "crossbind": {
-            "command": "npx",
-            "args": ["-y", "@crossbind/mcp"]
-        }
-    }
-}
