@@ -24,7 +24,6 @@ crossbind/
 │   └── embind-rust/                  ← Rust producer crate + per-host adapters (see docs/api/rust.md)
 ├── tooling/                          ← dev-time helpers, not part of a consumer build
 │   ├── create-app/                   ← create-crossbind scaffolder (templates built from examples/)
-│   ├── mcp/                          ← MCP server for agents
 │   ├── docker/                       ← pinned build image
 │   └── typescript-config/            ← shared tsconfig
 ├── plugins/
@@ -38,14 +37,14 @@ crossbind/
 │   ├── README.md                     ← Bin & License Contract (K1-K4 rules, bin map + provenance schemas)
 │   └── <name>/
 │       ├── base/                     ← brand package (@crossbind/port-<name>): recipe body (build.mjs) + upstream license truth
-│       ├── wasm/                     ← per-platform sub-packages
+│       ├── wasm/                     ← per-platform variants
 │       ├── android/
 │       ├── ios/
 │       ├── wasi/                     ← wasi prebuilt (wasm32-wasip3)
 │       └── bin-wasi/                 ← upstream CLI as npm commands (where upstream ships one)
 ├── examples/                         ← reference integrations, published as create-crossbind templates
 ├── e2e/                              ← internal test benches + conformance kit
-├── agents/                           ← agent skills, commands, install docs
+├── agents/                           ← one portable skill, generated references, contributor context
 └── landing/                          ← crossbind.dev site
 ```
 
@@ -70,10 +69,10 @@ Every consumer-facing field, every default, every constraint lives in [`docs/api
 
 Index + decision tree: [`docs/api/README.md`](./api/README.md).
 
-Playbooks added in Sprint 9:
+Additional playbooks:
 
 - [`playbooks/code-review.md`](./playbooks/code-review.md) — review checklist for package + fix/feature PRs.
-- [`playbooks/verify-install.md`](./playbooks/verify-install.md) — verify your plugin / MCP / AGENTS.md install actually works.
+- [`playbooks/verify-install.md`](./playbooks/verify-install.md) — verify the portable crossbind skill and its bundled inspector.
 - [`playbooks/override-dependencies.md`](./playbooks/override-dependencies.md) — rebuild/override dependencies from source via `crossbind.overrides.js` (all platforms), marker/stamp mechanics, `crossbind clean-deps`.
 - [`playbooks/licensing-lgpl.md`](./playbooks/licensing-lgpl.md) — shipping closed-source apps with LGPL native deps; `crossbind licenses` (SPDX table, `--notices`, `--check`).
 
@@ -81,14 +80,15 @@ Playbooks added in Sprint 9:
 
 Load-bearing decisions live in `docs/adr/`. Read the relevant ADR before changing the affected surface:
 
-- [ADR-0001](./adr/0001-agent-first-class-support.md) — AI agents are first-class consumers (driving the plugin / MCP / playbooks investment).
+- [ADR-0001](./adr/0001-agent-first-class-support.md) — AI agents are first-class consumers.
 - [ADR-0002](./adr/0002-pnpm-topological-build-order.md) — pnpm workspace deps drive C++ link order.
 - [ADR-0003](./adr/0003-function-typed-env-values.md) — `env` values can be functions of `(state, target)`.
-- [ADR-0004](./adr/0004-three-layer-agent-distribution.md) — Plugin / MCP / AGENTS.md snippet, why three.
+- [ADR-0004](./adr/0004-three-layer-agent-distribution.md) — historical three-layer distribution decision, superseded.
 - [ADR-0005](./adr/0005-wasi-platform.md) — `platform: 'wasi'` command components (wasm32-wasip3, dual-mode toolchain).
 - [ADR-0006](./adr/0006-rust-bindings.md) — Rust via a flat C ABI; consumers declare the binding layer, never the engine.
 - [ADR-0007](./adr/0007-cargo-import-scheme.md) — `cargo:` prefix for direct crate imports (no npm-name collisions).
 - [ADR-0008](./adr/0008-bin-license-contract.md) — derived Bin & License Contract (K1-K4) for published binaries.
+- [ADR-0010](./adr/0010-skills-first-agent-architecture.md) — one portable agent skill, generated references and normal project tools.
 
 Index + template: [`docs/adr/README.md`](./adr/README.md).
 
@@ -210,7 +210,7 @@ Each `ports/<name>/<name>-<arch>/` has the same skeleton:
 | `LICENSE` | upstream library license |
 | `.npmignore` | exclude `.crossbind/`, `dist/.../source/`, etc. from publish |
 
-To add a new `ports/<X>`: see `docs/playbooks/new-package.md` (uses `ports/zlib` as the canonical reference).
+To add a new `ports/<X>`: see `docs/playbooks/new-port.md` (uses `ports/zlib` as the canonical reference).
 
 ## Samples (`examples/`)
 
@@ -239,10 +239,12 @@ To add a new `ports/<X>`: see `docs/playbooks/new-package.md` (uses `ports/zlib`
 | `check-publish-hygiene.js` | K1/K4 gates: no executable leaks, provenance + derived license on -bin packages |
 | `generate-third-party.js` | K3 wrapper: `crossbind licenses --notices --sbom --platform` per dist host |
 | `pin-docker-image.js` | Re-pin the digest-locked build image after a docker publish |
-| `detect-framework.js` *(Sprint 2)* | Identify the user's project framework from package.json deps + filesystem signatures |
-| `doctor.sh` *(Sprint 4)* | Toolchain readiness (Node, pnpm, Docker, emscripten, NDK, Xcode) |
-| `scaffold-package.js` *(Sprint 4)* | Generate a new `ports/<name>` skeleton |
-| `help.js` *(Sprint 2)* | `pnpm run help` — grouped, annotated script listing |
+| `build-agent-context.mjs` | Generate repository instruction files from `agents/contributor-context.md` |
+| `build-agent-skill.mjs` | Generate the installed skill's reference and port-catalog bundle |
+| `check-agent-surface.mjs` | Reject stale generated content and obsolete agent integration surfaces |
+| `doctor.sh` | Toolchain readiness (Node, pnpm, Docker, emscripten, NDK, Xcode) |
+| `scaffold-port.mjs` | Generate a new in-repository `ports/<name>` skeleton |
+| `help.js` | `pnpm run help` — grouped, annotated script listing |
 
 All `check:*` and `clear:*` are exposed as `pnpm run` aliases — see `package.json`.
 
@@ -258,9 +260,9 @@ All `check:*` and `clear:*` are exposed as `pnpm run` aliases — see `package.j
 
 ## Common recipes
 
-### "Add a new C++ library as a crossbind-package"
+### "Add a new C++ library as a crossbind port"
 
-1. Read `docs/playbooks/new-package.md`.
+1. Read `docs/playbooks/new-port.md`.
 2. Mirror `ports/zlib/` (smallest, simplest).
 3. Add workspace deps in each sub-arch's `package.json` to its native deps.
 4. Run `pnpm --filter=@crossbind/port-<name>* run build`.

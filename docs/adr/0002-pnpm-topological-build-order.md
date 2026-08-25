@@ -48,4 +48,4 @@ The dependency edge encodes both:
 
 - Root `pnpm-workspace.yaml` — workspace globber declaring `ports/*/*` as a workspace.
 - Any `ports/gdal/wasm/package.json` — example with 13 transitive deps.
-- `docs/playbooks/new-package.md` — Step 4 ("Wire transitive C++ deps") references this ADR.
+- `docs/playbooks/new-port.md` — port dependency guidance references this ADR.

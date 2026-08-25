@@ -31,6 +31,7 @@ const ANNOTATIONS = {
     'build:examples:lib:ios': 'Build sample-lib-* for iOS only',
     'build:examples:wasm': 'Build all wasm-targeting samples (web/cloud/backend) + sample-lib wasm',
     'build:website': 'Build the Docusaurus site',
+    'build:agents': 'Generate contributor context and the portable skill reference bundle',
     build: 'build:ports then build:examples (full)',
 
     // clear
@@ -78,9 +79,11 @@ const ANNOTATIONS = {
     'check:deps:strict': 'Same as check:deps but exits non-zero on outdated/unknown',
     'check:native': 'Native library version drift report (GitHub/registry/HTML)',
     'check:native:strict': 'Same as check:native but exits non-zero on outdated/unknown',
-    check: 'check:dist + check:deps:strict + check:native:strict (CI-suitable)',
+    'check:agents': 'Verify the single-skill agent surface and run its deterministic tests',
+    check: 'check:dist + dependency/native checks + agent-surface checks (CI-suitable)',
 
     // self
+    'scaffold:port': 'Generate a new in-repository ports/<name> family skeleton',
     help: 'This command — list all pnpm scripts grouped by area',
 };
 

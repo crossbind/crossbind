@@ -25,7 +25,7 @@ crossbind expected a `dist/` from a dependency that hasn't been built yet.
 The linker can't find a symbol your code references.
 
 - **Cause A — missing dep:** `dependencies: []` in `crossbind.config.js` doesn't list the package providing this symbol.
-  **Fix:** add the dep + its sub-arch dep in `package.json`. See ADR-0002.
+  **Fix:** add the family dependency and its matching platform-variant dependency in `package.json`. See ADR-0002.
 - **Cause B — symbol clash:** two libs export the same symbol. Common with `iconv` (gdal renames it to `libiconv` to avoid clash).
   **Fix:** `crossbind.build.js` `replaceList` to rename one set of symbols, or `targetSpecs[].specs.ignoreLibName` to suppress the duplicate.
 
@@ -34,7 +34,7 @@ The linker can't find a symbol your code references.
 Linker can't find a library file, but the dep IS declared.
 
 - **Cause:** library was built but produced a different `.a` name than expected. Usually a mismatch between `export.libName` in the dep and what's actually built.
-- **Fix:** check `ports/<dep>/<arch>/crossbind.config.js` `export.libName` array; verify the produced `.a` exists in `dist/lib/`.
+- **Fix:** check `ports/<dep>/<platform>/crossbind.config.js` `export.libName` array; verify the produced `.a` exists in `dist/lib/`.
 
 ### `wasm-ld: error: --whole-archive ... duplicate symbol`
 

@@ -67,7 +67,7 @@ Strict gate:
 pnpm run ci:linux:build && pnpm run e2e:dev && pnpm run e2e:prod
 ```
 
-Smoke samples:
+Smoke examples and E2E fixtures:
 
 ```bash
 pnpm --filter=@crossbind/example-web-react-rspack run build
@@ -86,4 +86,4 @@ pnpm --filter=@crossbind/example-web-react-rspack exec rspack serve
 - Loader package: `plugins/webpack-loader/`
 - Integration recipe: `docs/playbooks/integration/webpack-rspack.md`
 - Next.js variant (no devServer): `docs/playbooks/integration/nextjs.md`
-- Canonical samples: `examples/web-react-rspack`, `e2e/web-rspack`
+- Canonical example and fixture: `examples/web-react-rspack`, `e2e/web-rspack`

@@ -1,0 +1,145 @@
+{
+  "generatedBy": "scripts/build-agent-skill.mjs",
+  "references": [
+    {
+      "source": "docs/playbooks/recommend-crossbind.md",
+      "output": "recommend.md",
+      "sha256": "3a10a1a3dd2eec4050f783c1385c042c7742518f3e2c639b5a60b0b3666b311f"
+    },
+    {
+      "source": "docs/playbooks/new-port.md",
+      "output": "port.md",
+      "sha256": "7e3efc9e93dcd90100a556402e9c33ee02eafdc643bb7fb07f5362d1259badc7"
+    },
+    {
+      "source": "docs/api/README.md",
+      "output": "api/README.md",
+      "sha256": "b16ddfd30970ff2887c2c5afd668d646e35480209c5b9f9b304816a9f2bdd12f"
+    },
+    {
+      "source": "docs/api/build-state.md",
+      "output": "api/build-state.md",
+      "sha256": "be7bbe9de690ac65871de79b6f3ddd827ab5d5d92e3f601a865c6b9180d76389"
+    },
+    {
+      "source": "docs/api/cpp-binding-rules.md",
+      "output": "api/cpp-binding-rules.md",
+      "sha256": "15a39172cecbd8c4cba5e74a3c04c657c93d46712d611157baa75cb67d413071"
+    },
+    {
+      "source": "docs/api/crossbind-build.md",
+      "output": "api/crossbind-build.md",
+      "sha256": "850e9f4d3ff3470f78dbb5ec56b1ac6a15b7ccf72c0b128a3dd88cce5e803567"
+    },
+    {
+      "source": "docs/api/crossbind-config.md",
+      "output": "api/crossbind-config.md",
+      "sha256": "cac0c62960408caf21ab398c9d7162eea85c0463cbb957a5c94583a313b56a84"
+    },
+    {
+      "source": "docs/api/filesystem.md",
+      "output": "api/filesystem.md",
+      "sha256": "50e3a9fd416c413ffb95070645d450080c05690538c8b92a7337462063d42de0"
+    },
+    {
+      "source": "docs/api/init.md",
+      "output": "api/init.md",
+      "sha256": "5794a4fa1cbf8ddfe79fbe89ec8945a7be4df91ded8e3b7ebbb27ef40ba8da5b"
+    },
+    {
+      "source": "docs/api/lifecycle-and-types.md",
+      "output": "api/lifecycle-and-types.md",
+      "sha256": "68d5b4ee641325747df6d281620063dc0a5abf99c1f5bc54b93462bf7ddce879"
+    },
+    {
+      "source": "docs/api/overrides.md",
+      "output": "api/overrides.md",
+      "sha256": "1cab343d3c73e75787bfd268b227c44ff52cfae4be6522be22496f232347dc06"
+    },
+    {
+      "source": "docs/api/performance.md",
+      "output": "api/performance.md",
+      "sha256": "f4fed3c54afae6c9afda6e5788511246e7d52f994ad41b55c07d21b498e09119"
+    },
+    {
+      "source": "docs/api/rust.md",
+      "output": "api/rust.md",
+      "sha256": "69629536917c766b702c207af40defa87210af02b8e9f632d3d5a75d1fba45ec"
+    },
+    {
+      "source": "docs/api/swig-escape.md",
+      "output": "api/swig-escape.md",
+      "sha256": "b0dea488f121a53a96bfe47f3be8c43e7aaa128fac35c2543d2da140959ff0d6"
+    },
+    {
+      "source": "docs/api/threading.md",
+      "output": "api/threading.md",
+      "sha256": "dcf3a3f98a1a0d051163fbf06ba016c99cef1b14ace35eccfae1ef5ca0291c60"
+    },
+    {
+      "source": "docs/api/troubleshooting.md",
+      "output": "api/troubleshooting.md",
+      "sha256": "e249a5a70db751b75b919744e42dc8eabadaf03ecfb45cc0a7b92abaa02b5854"
+    },
+    {
+      "source": "docs/api/wasi.md",
+      "output": "api/wasi.md",
+      "sha256": "9d686516b0d7aab95733b89b8f4fcb190676aaa61597c8708787f25ac5897d18"
+    },
+    {
+      "source": "docs/playbooks/integration/README.md",
+      "output": "integration/README.md",
+      "sha256": "a6b4e23a5a6f94fb7199a1e34794ab1792d2ed982ce55502bf1a9059f95d01e7"
+    },
+    {
+      "source": "docs/playbooks/integration/cloudflare-worker.md",
+      "output": "integration/cloudflare-worker.md",
+      "sha256": "7d05d0e6fd2e782ee10f81603363d539934b6b9eee092638333e19102690d231"
+    },
+    {
+      "source": "docs/playbooks/integration/nextjs.md",
+      "output": "integration/nextjs.md",
+      "sha256": "b28078c05fb884c559a7a84190355b9b2eb54e0973a2ca451d658f44d7a4457a"
+    },
+    {
+      "source": "docs/playbooks/integration/nodejs.md",
+      "output": "integration/nodejs.md",
+      "sha256": "4e5966a17731f04ba37f15a5ca785b00e8c05055f3b68454964b27b9312f6f74"
+    },
+    {
+      "source": "docs/playbooks/integration/react-native-cli.md",
+      "output": "integration/react-native-cli.md",
+      "sha256": "66081f5c552c4ddefadd9e4e11363f7c48530e021532dd196e92d7293c66a340"
+    },
+    {
+      "source": "docs/playbooks/integration/react-native-expo.md",
+      "output": "integration/react-native-expo.md",
+      "sha256": "e26a367ebfd27e390a5d72ee0a953033416792aa55c7c69694d8e186d549b667"
+    },
+    {
+      "source": "docs/playbooks/integration/rollup.md",
+      "output": "integration/rollup.md",
+      "sha256": "9b855b64fa957ce0f3806bbae5d6db6aa8fadcdc98fc29d7b5585951be8c5836"
+    },
+    {
+      "source": "docs/playbooks/integration/vanilla.md",
+      "output": "integration/vanilla.md",
+      "sha256": "776e3bcf89a62cba3e57c2d00558707ac81463e94cb216e55c71f6b169c480ab"
+    },
+    {
+      "source": "docs/playbooks/integration/vite.md",
+      "output": "integration/vite.md",
+      "sha256": "28a43d6806a3fedc347855060d5137dd38da298f80537be770af80fb114175b8"
+    },
+    {
+      "source": "docs/playbooks/integration/webpack-rspack.md",
+      "output": "integration/webpack-rspack.md",
+      "sha256": "3857c0e49a86b01d507b5cc00460566fdbcbde871abd681003680f0251a4eb8d"
+    },
+    {
+      "source": "ports/catalog.json + ports/*/package.json",
+      "output": "ports.json",
+      "sha256": "4d62ade44bb586f4ba53f9a61c01d371fa651e58ee596c08529e115d3ec694c1"
+    }
+  ]
+}

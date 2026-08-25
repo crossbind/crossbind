@@ -4,7 +4,7 @@
 
 ## What lives here
 
-- `bin.js` — `crossbind` / `crossbind` CLI entry; commander commands, target filtering, top-level orchestration.
+- `src/bin.js` — `crossbind` CLI entry; commander commands, target filtering and top-level orchestration.
 - `src/index.js` — public API barrel re-exported as the `crossbind` npm package (`createLib`, `buildWasm`, `state`, `getData`, `isSourceNewer`, …).
 - `src/actions/` — the actual build steps. **Most edits land here.**
 - `src/state/` — config loading + target matrix.
@@ -18,7 +18,7 @@ Use `docs/CODEMAP.md` (repo root) for "concept → file" lookups before guessing
 
 Order of operations when a user runs `pnpm crossbind build`:
 
-1. **`bin.js`** parses CLI flags, calls `getBuildTargets` to expand the target matrix.
+1. **`src/bin.js`** parses CLI flags, calls `getBuildTargets` to expand the target matrix.
 2. For each target:
    - **`actions/createLib.js`** compiles user C++ to a static lib per platform (cmake/make for wasm/android via Docker; xcodebuild on darwin for iOS). Cache short-circuit when `<output>/prebuilt/<target>/lib` exists, unless `options.force`.
    - **`actions/createXCFramework.js`** combines iOS slices into an `.xcframework` (darwin only).
@@ -68,9 +68,9 @@ pnpm run ci:linux:build && pnpm run e2e:dev && pnpm run e2e:prod
 
 Plus, depending on the area:
 
-- Touched a new public export → search consumers: `grep -rn "from 'crossbind'" plugins examples scripts`.
+- Touched a new public export → search consumers: `rg "from ['\"]crossbind['\"]" plugins examples e2e scripts`.
 - Touched `actions/run.js` (Docker / Xcode shell-out) → smoke a fresh `pnpm crossbind build` against `examples/lib-prebuilt-matrix` (smallest C++ surface).
-- Touched `src/assets/js-runtime/` (browser/node/edge adapters) → at least one sample per runtime must build + run (`examples/web-vue-vite`, `examples/backend-nodejs-wasm`, `examples/cloud-cloudflare-worker`).
+- Touched `src/assets/js-runtime/` (browser/node/edge adapters) → at least one example per runtime must build and run (`examples/web-vue-vite`, `examples/backend-nodejs-wasm`, `examples/cloud-cloudflare-worker`).
 - Touched `src/assets/js-runtime/adapters/worker-comlink.js` → coverage MUST include embind **instance** methods, not just statics: statics skip embind's `this` conversion, so a statics-only smoke passes while every instance call is broken (this shipped once, as beta.26's "Expected null or instance of X, got an instance of X"). Run the `e2e/web-vite-multithread` e2e (its Counter spec exists for exactly this), and before publishing run gdal3.js's `packages/wasm-test` suite against the packed tarball — it calls every binding, one method at a time.
 - Touched `state/loadConfig.js` defaults → assume blast radius = whole monorepo. Run the full matrix.
 
@@ -88,5 +88,5 @@ Plus, depending on the area:
 - `docs/ARCHITECTURE.md` — high-level flow + key abstractions.
 - `docs/CODEMAP.md` — concept → file index.
 - `docs/playbooks/bug-fix.md` — fix workflow.
-- `docs/playbooks/new-package.md` — package author workflow (for `ports/` not this dir).
+- `docs/playbooks/new-port.md` — port-authoring workflow (for `ports/`, not this directory).
 - Logger: `src/utils/logger.js` — read this before adding any user-facing output.

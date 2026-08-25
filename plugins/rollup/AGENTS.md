@@ -33,7 +33,7 @@
 
 Touching this plugin propagates to:
 
-- `plugins/vite` (wraps it) — all Vite samples must keep working.
+- `plugins/vite` (wraps it) — all affected Vite examples and E2E fixtures must keep working.
 - Anyone using rollup standalone (rare).
 
 Strict gate:

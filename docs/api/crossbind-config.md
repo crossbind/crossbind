@@ -73,7 +73,7 @@ export default {
       // Project root. Defaults to the dir of paths.config (or cwd if neither set).
 
     base: undefined,
-      // Alternative project root override. Used by samples to point above
+      // Alternative project root override. Used by examples to point above
       // the workspace boundary in the monorepo.
 
     cache:  '.crossbind',                 // build cache root
@@ -271,7 +271,7 @@ export default {
 }
 ```
 
-### Monorepo sample (above-workspace project root)
+### Monorepo example (above-workspace project root)
 
 ```js
 import Matrix from '@crossbind/example-lib-prebuilt-matrix/crossbind.config.js'

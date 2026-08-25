@@ -305,7 +305,7 @@ Used internally by built-in extensions (e.g. for OpenSSL Android cert injection)
 | Add an emcc flag | `targetSpecs[].specs.emccFlags` |
 | Inject env to the running Wasm | `targetSpecs[].specs.env` or `crossbind.config.js` `env: {}` |
 | Patch upstream source | `crossbind.build.js` `replaceList` or `sourceReplaceList(target, depPaths)` hook |
-| Bundle data files into the .data preload | `targetSpecs[].specs.data` or sub-arch `data: {}` |
+| Bundle data files into the .data preload | `targetSpecs[].specs.data` or platform-variant `data: {}` |
 | Run something before cmake | `crossbind.build.js` `beforeRun(cmakeDir)` |
 
 ## See also

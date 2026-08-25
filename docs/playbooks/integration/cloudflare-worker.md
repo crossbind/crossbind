@@ -126,7 +126,7 @@ If the user insists on multithread, route them to a Node backend (`docs/playbook
 - **CPU time limits.** Free-tier Workers cap CPU at 10ms — large wasm computations may need paid tier or an alternative (Cloudflare Containers, Durable Objects).
 - **Missing Wrangler `assets` config** when bundling `*.wasm`. crossbind's loader handles this internally for the standard layout; don't double-declare wasm bindings unless you import wasm elsewhere.
 
-## Reference samples
+## Reference examples
 
 - `examples/cloud-cloudflare-worker/` — canonical Worker reference
 - `e2e/cloud-cloudflare-worker/` — bigger demo with more packages

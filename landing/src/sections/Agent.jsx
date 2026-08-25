@@ -44,7 +44,7 @@ export default function Agent({ tokens }) {
                             without reading the docs.
                         </h2>
                         <p style={{ color: tokens.textDim, fontSize: 16, lineHeight: 1.6, marginBottom: 24 }}>
-                            The crossbind Agent reads your project, writes
+                            The portable crossbind skill helps your coding agent inspect the project, write
                             {' '}
                             <code style={code}>crossbind.config.js</code>
                             {' and '}
@@ -79,22 +79,22 @@ export default function Agent({ tokens }) {
                                 fontSize: 14,
                             }}
                         >
-                            Try the agent →
+                            Install the skill →
                         </a>
                     </div>
 
                     <CodeWindow tokens={tokens} title="agent · integrating into vite app" accent={tokens.violet} glass>
-                        <div style={{ color: tokens.codeMuted }}>&gt; crossbind-agent integrate</div>
+                        <div style={{ color: tokens.codeMuted }}>&gt; Add crossbind to this Vite app and verify the build.</div>
                         <div style={{ marginTop: 8, color: tokens.accent }}>┌─ Detecting project</div>
                         <div style={dim}>│ ✓ Vite + React + TypeScript</div>
                         <div style={dim}>│ ✓ vendored C++ at ./vendor/matrix.cpp</div>
                         <div style={{ marginTop: 8, color: tokens.blue }}>┌─ Writing config</div>
                         <div style={dim}>│ ✓ crossbind.config.js</div>
                         <div style={dim}>│ ✓ crossbind.build.js</div>
-                        <div style={dim}>│ ✓ vite.config.ts &nbsp; + plugin-crossbind</div>
+                        <div style={dim}>│ ✓ vite.config.ts &nbsp; + @crossbind/plugin-vite</div>
                         <div style={dim}>│ ✓ src/main.tsx &nbsp;&nbsp; await initNative()</div>
                         <div style={{ marginTop: 8, color: tokens.warn }}>⚠ React Native target requested but no RN setup</div>
-                        <div style={dim}>&nbsp;&nbsp;Skipped — add later via `--rn` flag</div>
+                        <div style={dim}>&nbsp;&nbsp;Skipped — this project has no mobile target</div>
                         <div style={{ marginTop: 8, color: tokens.accent }}>✓ npm run dev compiles · WASM 184 kB</div>
                         <div style={{ marginTop: 8, color: tokens.violet }}>
                             &gt;

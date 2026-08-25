@@ -1,6 +1,7 @@
 {
     "private": true,
     "scripts": {
+        "build:agents": "node scripts/build-agent-context.mjs && node scripts/build-agent-skill.mjs",
         "build:ports": "pnpm --filter='@crossbind/port-*' run build",
         "build:examples": "pnpm --filter='@crossbind/example-*' run build",
         "promote:tags": "node scripts/promote-tags.js",
@@ -52,7 +53,6 @@
         "publish:plugins": "pnpm --filter='@crossbind/plugin-*' publish --no-git-checks --tag beta",
         "publish:core": "pnpm --filter=crossbind publish --no-git-checks --tag beta",
         "publish:create": "pnpm --filter=create-crossbind publish --no-git-checks --tag beta",
-        "publish:mcp": "pnpm --filter=@crossbind/mcp publish --no-git-checks --tag beta",
         "publish:all": "pnpm run publish:beta",
         "publish:beta": "pnpm --filter='@crossbind/*' --filter=crossbind publish --no-git-checks --tag beta --access public --report-summary",
         "check:dist": "node scripts/check-dist.js",
@@ -66,10 +66,12 @@
         "check:sources": "node scripts/check-source-hashes.js",
         "check:sources:strict": "node scripts/check-source-hashes.js --check",
         "check:publish": "node scripts/check-publish-hygiene.js",
-        "check": "pnpm run lint && pnpm run check:dist && pnpm run check:deps:strict && pnpm run check:native:strict && pnpm run check:wiring:strict && pnpm run check:sources:strict && pnpm run check:publish",
+        "test:agents": "node --test agents/test/*.test.mjs",
+        "check:agents": "node scripts/build-agent-context.mjs --check && node scripts/build-agent-skill.mjs --check && node scripts/check-agent-surface.mjs && pnpm run test:agents",
+        "check": "pnpm run lint && pnpm run check:agents && pnpm run check:dist && pnpm run check:deps:strict && pnpm run check:native:strict && pnpm run check:wiring:strict && pnpm run check:sources:strict && pnpm run check:publish",
         "help": "node scripts/help.js",
         "doctor": "bash scripts/doctor.sh",
-        "scaffold:port": "node scripts/scaffold-package.js",
+        "scaffold:port": "node scripts/scaffold-port.mjs",
         "test": "pnpm --filter crossbind test",
         "test:watch": "pnpm --filter crossbind test:watch",
         "test:coverage": "pnpm --filter crossbind test:coverage"

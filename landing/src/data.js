@@ -3,13 +3,13 @@
 // TODO(rename): the project is moving from crossbind to crossbind, shipping as stable 2.0.
 // @crossbind/* is not published yet, so `npm create crossbind` and the package names in the
 // code samples below only resolve after that publish. DOCS_HOST and REPO_URL deliberately
-// still point at crossbind so the links keep working. One open question the rename has to
-// answer: do `crossbind.config.js` and `crossbind-agent` follow? (The boot call already landed on
-// the brand-neutral `initNative`, exported by every generated module.)
+// still point at crossbind so the links keep working. `crossbind.config.js` remains the public
+// build-time config name. The boot call is the brand-neutral `initNative`, exported by every
+// generated module.
 //
 // Content note (15 Aug 2026): every figure below is now measured or counted from this repo -
-// 16 library recipes, 68 wasi commands, 30 build targets, 20 override points, 9 MCP tools,
-// 4 skills, 12 templates, the pinned upstream versions in SHOWCASE, live GitHub counters, and
+// 16 library recipes, 68 wasi commands, 30 build targets, 20 override points, one portable
+// agent skill, 12 templates, the pinned upstream versions in SHOWCASE, live GitHub counters, and
 // the real release notes. The performance section is gone entirely - see the note above
 // RUNTIME_CHIPS for the measurements that retired it.
 //
@@ -39,7 +39,7 @@ const DOCS_HOST = 'https://crossbind.dev';
 
 export const REPO_URL = 'https://github.com/crossbind/crossbind';
 export const API_URL = `${DOCS_HOST}/docs/api/cpp-bindings/overview`;
-export const AGENT_URL = `${DOCS_HOST}/docs/agent/overview`;
+export const AGENT_URL = 'https://github.com/crossbind/crossbind/blob/main/docs/agent-overview.md';
 export const SHOWCASE_URL = `${DOCS_HOST}/docs/package/package/showcase`;
 export const CHANGELOG_URL = `${DOCS_HOST}/docs/changelog/core/crossbind`;
 export const CREATE_COMMAND = 'npm create crossbind';
@@ -52,7 +52,7 @@ First inspect the repo and tell me what you found: package manager, bundler (Vit
 
 Then:
 
-1. Install \`crossbind\` and the plugin matching my bundler (\`@crossbind/plugin-vite\`, \`@crossbind/plugin-webpack\`, \`@crossbind/plugin-rspack\`, \`@crossbind/plugin-rollup\`, \`@crossbind/plugin-metro\`).
+1. Install \`crossbind\` and the plugin matching my bundler (\`@crossbind/plugin-vite\`, \`@crossbind/plugin-webpack\` for Webpack or Rspack, \`@crossbind/plugin-rollup\`, \`@crossbind/plugin-metro\`).
 2. Create \`crossbind.config.js\` at the repo root and register the plugin in my bundler config. Keep the change idempotent - do not duplicate an existing entry.
 3. If I already have C++ or Rust sources, wire those up. Otherwise add one small example: a header under \`src/native/\`, imported directly from JavaScript.
 4. Call \`await initNative()\` once at my app's entry point, before the first native call - import it from the header or crate the app already imports, not from a separate runtime package.
@@ -113,7 +113,7 @@ export const RUNTIME_CHIPS = [
 // gdal3.js's landing set the pattern: numbered cards, benefit-first titles, and a spec-style
 // proof tag instead of marketing adjectives. Every figure below is counted from this repo.
 // The hero's tabbed code block already demos "import a header / a crate", so no card repeats it,
-// and the Agent section right below the grid owns the MCP/skills pitch on its own.
+// and the Agent section right below the grid owns the portable-skill pitch on its own.
 //
 // Cards carry the caveat next to the claim - the pthread pool really is capped at two workers,
 // OPFS really is worker-only, Android really is the one platform without dead-code elimination.
@@ -437,7 +437,7 @@ export const SCAFFOLD_LINES = [
 
 export const AGENT_STEPS = [
     'Detects your stack (Vite, Webpack, RN, Next…)',
-    'Writes crossbind.config.js + crossbind.build.js',
-    'Patches your bundler config — idempotent',
-    'Runs your build and reports the diff',
+    'Loads only the relevant API and integration references',
+    'Makes an idempotent, reviewable config change',
+    'Runs your real build and reports the diff',
 ];

@@ -23,7 +23,7 @@
 <h3 align="center">
   <a href="https://crossbind.dev/docs/guide/getting-started/introduction"><strong>For Developers</strong></a>
   <span> · </span>
-  <a href="https://crossbind.dev/docs/agent/overview"><strong>For AI Agents</strong></a>
+  <a href="https://github.com/crossbind/crossbind/blob/main/docs/agent-overview.md"><strong>For AI Agents</strong></a>
   <span> · </span>
   <a href="https://crossbind.dev/docs/package/package/showcase">Showcase</a>
 </h3>
@@ -35,25 +35,18 @@
 - **Battle-tested libraries** — drop-in support for GDAL, GEOS, OpenSSL, SQLite, PROJ, and more.
 - **CLI tools from npm** — upstream command-line tools (gdal, proj, sqlite3, curl, …) prebuilt as WASI components: install the `-bin-wasi` package, run `<tool>-wasi` under wasmtime, no compiler involved.
 - **Bundler-agnostic** — first-class plugins for Vite, Rollup, Webpack, Metro, and React Native.
-- **AI-agent ready** — Claude Code plugin, MCP server, and vendor-neutral `AGENTS.md` snippet so your agent recommends crossbind correctly and integrates it for you.
+- **AI-agent ready** — one portable skill teaches coding agents when crossbind fits, how to integrate it and how to verify the result.
 
 ## For AI coding agents
-When you describe a problem ("use C++ in browser", "add GDAL to my Vite app", "wrap libsodium for crossbind"), your AI coding agent recommends crossbind correctly and walks you through the integration. **Native plugins for 6 clients** — pick yours:
+When you describe a problem ("use C++ in browser", "add GDAL to my Vite app", "wrap libsodium for crossbind"), the crossbind skill inspects the project, selects the relevant reference and walks your coding agent through a verified integration.
 
-| Client | Install |
-|--------|---------|
-| 🔌 **Claude Code** | `/plugin marketplace add crossbind/crossbind` then `/plugin install crossbind` |
-| 🎯 **Cursor 2.5+** | Settings → Plugins → Add from GitHub: `crossbind/crossbind` |
-| 🧪 **OpenAI Codex CLI** | Add `crossbind/crossbind` to `~/.agents/plugins/marketplace.json` |
-| 🐙 **GitHub Copilot CLI** | Auto-discovers when running in this repo |
-| 💎 **Gemini CLI** | `gemini extension install https://github.com/crossbind/crossbind` |
-| ⚡ **OpenCode** | Add `@crossbind/mcp` to your `opencode.json` |
+```bash
+npx skills add https://github.com/crossbind/crossbind/tree/main/agents/skills --global --yes
+```
 
-Plus two universal fallbacks: **🧰 [`@crossbind/mcp`](https://www.npmjs.com/package/@crossbind/mcp)** server (any MCP-aware client) and **📄 [AGENTS.md snippet](https://crossbind.dev/docs/agent/install/snippet)** (no install).
+The skill is self-contained and uses the coding agent's normal filesystem and terminal capabilities. It does not require a client-specific extension or background service. Its source, deterministic inspector and generated references live in [`agents/`](../../agents/).
 
-All clients share the same skills + slash commands + MCP tools — single source of truth at [`agents/`](./agents/), zero duplication.
-
-Full agent guide, runtime/config API reference, and troubleshooting catalogue: [**crossbind.dev/docs/agent/overview**](https://crossbind.dev/docs/agent/overview). Programmatic discovery via [llms.txt](https://crossbind.dev/llms.txt) + [llms-full.txt](https://crossbind.dev/llms-full.txt).
+Full agent guide, runtime/config API reference, and troubleshooting catalogue: [**docs/agent-overview.md**](https://github.com/crossbind/crossbind/blob/main/docs/agent-overview.md).
 
 ## Create a New Project
 Requires **Docker** + **Node 22+**. Mobile builds also need CMake 3.28+, Xcode, and CocoaPods — see the full [prerequisites](https://crossbind.dev/docs/guide/getting-started/prerequisites) page.

@@ -1,8 +1,8 @@
 # AGENTS.md — @crossbind/example-mobile-reactnative-cli
 
-> Canonical reference for the **React Native CLI** integration. This sample is what `docs/playbooks/integration/react-native-cli.md` and the iOS CI workflow point at.
+> Canonical reference example for the **React Native CLI** integration. `docs/playbooks/integration/react-native-cli.md` and the native CI workflows point here.
 
-## What this sample is for
+## What this example is for
 
 - A minimal RN-cli app that loads `@crossbind/example-lib-prebuilt-matrix` and calls into it from JS.
 - Reference for `metro.config.js` + `crossbind.config.mjs` shape in a bare RN project.
@@ -20,12 +20,13 @@ examples/mobile-reactnative-cli/
 │       ├── build/bridge/native.i.cpp.exports.json
 │       ├── build/interface/native.i
 │       └── cache.json
-├── src/                                  ← RN JS app
+├── src/                                  ← RN app and native bridge input
+├── __tests__/                            ← Jest component smoke
 ├── app.json
-├── crossbind.config.mjs                       ← imports Matrix sample-lib
+├── crossbind.config.mjs                  ← imports @crossbind/example-lib-prebuilt-matrix
 ├── metro.config.js                        ← wraps getDefaultConfig with CrossbindMetroPlugin
 ├── package.json
-└── playwright.{dev,prod}.config.cjs       ← e2e configs
+└── maestro.yaml                          ← native UI E2E flow
 ```
 
 ## Key files an agent will touch

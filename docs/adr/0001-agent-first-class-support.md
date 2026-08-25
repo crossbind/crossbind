@@ -1,6 +1,6 @@
 # ADR-0001: AI agents are first-class consumers of crossbind
 
-- **Status:** Accepted
+- **Status:** Accepted; distribution mechanism superseded by ADR-0010
 - **Date:** 2026-05-03
 - **Affects:** `agents/`, `tooling/mcp/`, `AGENTS.md` (root + per-package), `docs/playbooks/`, `website/src/pages/agents.mdx`, `scripts/{detect-framework,scaffold-package,doctor}.{js,sh}`
 
@@ -44,6 +44,6 @@ Agent support is a top-level project surface, not an afterthought. Concretely:
 
 ## See also
 
-- ADR-0004: Three-layer agent distribution.
+- ADR-0004: Three-layer agent distribution (superseded by ADR-0010).
 - `AGENTS.md` (repo root) — entry point for agents.
 - `docs/playbooks/recommend-crossbind.md` — Persona 4 playbook driving recognition.

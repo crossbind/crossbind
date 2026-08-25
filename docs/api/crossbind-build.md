@@ -1,6 +1,6 @@
 # `crossbind.build.js` — Package-author Build Hooks
 
-> **Package authors only.** Apps and libraries consuming `@crossbind/port-*` do NOT write this file. It lives inside the platform sub-packages (`ports/<name>-{wasm,wasi,android,ios,bin-wasi}/`); in this repo the recipe body itself lives once in the family package (`ports/<name>/build.mjs`) and each variant's `crossbind.build.js` imports and spreads it.
+> **Port authors only.** Apps and libraries consuming `@crossbind/port-*` do not write this file. Each platform variant owns one at `ports/<name>/<platform>/crossbind.build.js`; the shared recipe lives at `ports/<name>/base/build.mjs`, and variants import or extend it.
 
 `crossbind.build.js` describes how to fetch and build the upstream C++ library that this package wraps. The CLI auto-merges its exports into `config.build` of the sibling `crossbind.config.js` at build time.
 
@@ -233,6 +233,6 @@ Start with the simplest hook that works. Most packages need only `getURL` + `bui
 ## See also
 
 - [`crossbind-config.md`](./crossbind-config.md) — sibling config file. The CLI merges this file's exports into `config.build`.
-- `docs/playbooks/new-package.md` — full walkthrough of authoring a new `ports/*`.
+- `docs/playbooks/new-port.md` — full walkthrough of authoring a new `ports/*` family.
 - ADR-0002 — pnpm topological build order driven by `dependencies` in `package.json` (NOT here).
 - Canonical examples: `ports/zlib/` (smallest), `ports/openssl/` (autotools), `ports/gdal/` (largest aggregator).

@@ -59,9 +59,8 @@ step. `src/main.jsx` writes each route's `<title>`, description and canonical du
 behind it exists yet: `crossbind.dev` is not registered, `@crossbind/*` is not published, and
 `npm create crossbind` will not resolve until that publish. `REPO_URL` deliberately still points at
 `crossbind/crossbind` so the GitHub link works.
-The code samples keep today's API names (`init`, `crossbind.config.js`, `crossbind-agent`) because
-renaming them here would show commands that do not exist — whether those symbols follow the brand
-is still an open decision.
+The code samples keep today's public API names (`initNative`, `crossbind.config.js`) so the landing
+matches the implementation. Agent guidance is distributed as the portable skill under `agents/`.
 
 `TODO(content)` — the per-runtime timings, the init times, the "42 prebuilt libraries" count, the
 community counters and the changelog came from the mock and are not corroborated in this repo. The

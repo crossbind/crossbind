@@ -49,13 +49,8 @@ testem.log
 Thumbs.db
 
 .vscode
-# Contents ignored, but the GitNexus skills ship with the repo, so they are re-included.
-.claude/*
-!.claude/skills/
+.claude/
 default.profraw
-
-# GitNexus knowledge-graph index (rebuilt by `npx gitnexus analyze`)
-.gitnexus/
 
 # Stale outputs from former check-* scripts (now print to terminal)
 /beta-releases.md

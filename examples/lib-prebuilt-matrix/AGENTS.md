@@ -1,33 +1,32 @@
 # AGENTS.md — @crossbind/example-lib-prebuilt-matrix
 
-> Canonical minimal **C++ library packaging** reference. This is what `docs/playbooks/new-package.md` (Persona 3) and most other samples point at when they need a small `@crossbind/port-*`-shaped consumable.
+> Canonical minimal **application-owned C++ library packaging** reference. This is a published example package, not a `ports/*` family template.
 
-## What this sample is for
+## What this example is for
 
-- Smallest possible working example of "I have a tiny C++ project, package it for crossbind so other samples / RN apps / web apps can consume it."
-- Used by `examples/mobile-reactnative-cli`, `examples/backend-nodejs-wasm`, and a few playgrounds as their dependency.
+- Smallest working example of “I have a tiny C++ project and want other examples or E2E fixtures to consume it.”
+- Used by browser, Node and React Native examples and fixtures as a workspace dependency.
 - Reference for `crossbind.config.js` shape with `export.type: 'cmake'`.
 
 ## Layout
 
 ```
 examples/lib-prebuilt-matrix/
-├── src/                                  ← C++ source (matrix multiplier)
+├── src/native/                           ← C++ source (matrix multiplier)
 ├── playground/                           ← optional standalone test
 ├── crossbind.config.js                       ← export.type cmake, base + output paths
-├── examples/lib-prebuilt-matrix.podspec   ← iOS package manifest
-├── examples/lib-prebuilt-matrix.xcframework  ← prebuilt iOS slices
-├── dist/                                 ← built artifacts (committed for prebuilt consumption)
+├── crossbind-example-lib-prebuilt-matrix.podspec  ← iOS package manifest
+├── dist/                                 ← generated package output; do not hand-edit
 ├── package.json
 └── README.md
 ```
 
-`dist/prebuilt/<target>/{lib,include}` is **committed** so consumers can `pnpm add @crossbind/example-lib-prebuilt-matrix` and link without rebuilding.
+`prepublishOnly` rebuilds `dist/` before publication. The directory is generated and filtered out of create-app templates.
 
-## Why a sample, not a real crossbind-package
+## Why an example, not a port family
 
 Two reasons:
-1. The matrix-multiplier C++ is too small to justify a full `ports/*` family; sample status keeps the surface light.
+1. The matrix-multiplier C++ is application-owned demonstration code, not a versioned upstream dependency.
 2. Demonstrates the inline alternative to packaging: the user's own C++ wrapped in a `crossbind.config.js` and exported as a workspace dep.
 
 If you're looking at how a real prebuilt package is shaped, see `ports/zlib/` instead — that's the canonical for new `ports/*`.
@@ -48,11 +47,11 @@ pnpm --filter=@crossbind/example-lib-prebuilt-matrix run build:ios          # ma
 
 ## Common pitfalls
 
-- **Treating this as a `ports/` template.** It's a sample first; for real package authoring follow `docs/playbooks/new-package.md` and mirror `ports/zlib/`.
-- **Deleting committed `dist/prebuilt/`.** Consumers (`examples/mobile-reactnative-cli`, etc.) link against these artifacts. Rebuild + recommit if you change the C++.
+- **Treating this as a `ports/` template.** It is an example; for port authoring follow `docs/playbooks/new-port.md` and mirror `ports/zlib/`.
+- **Editing `dist/prebuilt/` manually.** Rebuild the example after changing its native source or config.
 - **Forgetting `prepublishOnly`.** Without it, npm could publish a stale `dist/`. The script is the safety net.
 - **Adding a heavy native dep** (e.g. another package). Defeats the "smallest possible" purpose. Keep it tiny.
-- **Wrapping with extra plugins** (Metro, Vite, etc.). The sample is plugin-free; consumers add their own plugins.
+- **Wrapping with extra plugins** (Metro, Vite, etc.). The example is plugin-free; consumers add their own plugins.
 
 ## Validation
 
@@ -61,7 +60,7 @@ pnpm --filter=@crossbind/example-lib-prebuilt-matrix run build:ios          # ma
 pnpm --filter=@crossbind/example-lib-prebuilt-matrix run build
 
 # Verify prebuilt artifacts
-pnpm run check:dist | grep sample-lib-prebuilt-matrix
+pnpm run check:dist | rg example-lib-prebuilt-matrix
 
 # Smoke a downstream consumer
 pnpm --filter=@crossbind/example-backend-nodejs-wasm run build
@@ -70,9 +69,9 @@ node examples/backend-nodejs-wasm/src/index.js
 
 ## Reference
 
-- Package author playbook (the real flow for `ports/*`): `docs/playbooks/new-package.md`
+- Port-authoring playbook (the real flow for `ports/*`): `docs/playbooks/new-port.md`
 - Real-package canonical template: `ports/zlib/`
-- Downstream consumers of this sample:
+- Representative downstream consumers of this example:
   - `examples/mobile-reactnative-cli/`
   - `examples/mobile-reactnative-expo/`
   - `examples/backend-nodejs-wasm/`

@@ -66,7 +66,7 @@ Sibling packages:
 
 ## Validation
 
-Strict gate (RN plugin → both mobile samples):
+Strict gate (RN plugin → both mobile examples and their E2E fixtures):
 
 ```bash
 pnpm run ci:linux:build && pnpm run e2e:dev && pnpm run e2e:prod
@@ -92,5 +92,5 @@ CI workflows: `.github/workflows/test-{android,ios}-sample.yml`.
 - Sibling iOS helper: `plugins/react-native-ios-helper/`
 - Sibling Metro plugin: `plugins/metro/`
 - Integration recipes: `docs/playbooks/integration/react-native-cli.md`, `docs/playbooks/integration/react-native-expo.md`
-- Canonical samples: `examples/mobile-reactnative-cli`, `examples/mobile-reactnative-expo`, `e2e/mobile-reactnative-cli`
+- Canonical examples and fixture: `examples/mobile-reactnative-cli`, `examples/mobile-reactnative-expo`, `e2e/mobile-reactnative-cli`
 - iOS CI workflow (uses bridge cache): `.github/workflows/test-ios-sample.yml`

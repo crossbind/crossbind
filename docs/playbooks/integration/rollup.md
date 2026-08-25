@@ -91,4 +91,4 @@ If the user picks `runtime: 'mt'` in `crossbind.config.js`, the resulting librar
 
 - Plugin source: `plugins/rollup/index.js`
 - Used as kernel of: `plugins/vite/index.js`
-- No standalone Rollup sample in this repo — `plugins/rollup` is exercised through `plugin-vite` and the various Vite samples.
+- No standalone Rollup example exists in this repo; `plugins/rollup` is exercised through `plugin-vite` and the Vite examples and fixtures.
