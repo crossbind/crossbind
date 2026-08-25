@@ -23,7 +23,7 @@
         "libz",
         "compression",
         "crossbind",
-        "crossbind-package",
+        "crossbind-port",
         "webassembly",
         "wasm"
     ]

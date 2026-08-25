@@ -159,7 +159,7 @@ Index + template: [`docs/adr/README.md`](./adr/README.md).
 
 | Concept | File |
 |---------|------|
-| iOS package podspec template | `src/assets/packaging/crossbind-package.podspec` |
+| iOS package podspec template | `src/assets/packaging/crossbind-port.podspec` |
 
 ### Utilities
 

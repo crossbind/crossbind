@@ -13,7 +13,7 @@
         "geometry",
         "gis",
         "crossbind",
-        "crossbind-package",
+        "crossbind-port",
         "ios",
         "react-native"
     ],

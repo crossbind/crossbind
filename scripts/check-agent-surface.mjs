@@ -57,6 +57,7 @@ if (JSON.stringify(skillRoots) !== JSON.stringify(['crossbind'])) {
 const currentSurface = [
     'agents',
     'docs',
+    'ports',
     'CONTRIBUTING.md',
     'README.md',
     'core/crossbind/README.md',
@@ -67,9 +68,11 @@ const currentSurface = [
 ];
 // Architecture decision records keep the superseded MCP wording on purpose; research notes are untracked.
 const excludedDirectories = new Set(['docs/adr', 'docs/research']);
+// Dependency trees and build output are not authored surfaces; ports/ carries thousands of both.
+const excludedDirectoryNames = new Set(['node_modules', 'dist', '.crossbind']);
 const forbiddenContent = /@crossbind\/mcp|mcpServers|crossbind_(?:recommend|list_ports|detect_framework|get_api_reference|scaffold_port|build_port|check_native_versions|doctor|cloud_build_port)|9 MCP tools/i;
 const removedDocumentationRoutes = /crossbind\.dev\/docs\/agent|crossbind\.dev\/llms/i;
-const obsoleteRepositoryLanguage = /sub-arches?|coming via MCP|Sprint \d+|build:(?:packages|samples|playgrounds)|ports\/<[^>]+>-(?:wasm|android|ios|wasi|bin-wasi)/i;
+const obsoleteRepositoryLanguage = /crossbind-package|sub-arches?|coming via MCP|Sprint \d+|build:(?:packages|samples|playgrounds)|ports\/<[^>]+>-(?:wasm|android|ios|wasi|bin-wasi)/i;
 
 function textFiles(target) {
     if (!fs.existsSync(target)) return [];
@@ -78,6 +81,7 @@ function textFiles(target) {
     for (const entry of fs.readdirSync(target, { withFileTypes: true })) {
         const absolute = path.join(target, entry.name);
         if (entry.isDirectory()) {
+            if (excludedDirectoryNames.has(entry.name)) continue;
             if (excludedDirectories.has(path.relative(ROOT, absolute))) continue;
             files.push(...textFiles(absolute));
         }

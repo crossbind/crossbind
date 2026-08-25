@@ -15,7 +15,7 @@
         "raster",
         "vector",
         "crossbind",
-        "crossbind-package",
+        "crossbind-port",
         "webassembly",
         "wasm",
         "android",

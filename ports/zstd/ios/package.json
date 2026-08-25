@@ -13,7 +13,7 @@
         "libzstd",
         "compression",
         "crossbind",
-        "crossbind-package",
+        "crossbind-port",
         "ios",
         "react-native"
     ],

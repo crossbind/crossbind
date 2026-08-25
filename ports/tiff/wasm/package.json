@@ -12,7 +12,7 @@
         "libtiff",
         "image",
         "crossbind",
-        "crossbind-package",
+        "crossbind-port",
         "webassembly",
         "wasm"
     ],

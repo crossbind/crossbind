@@ -12,7 +12,7 @@
         "libLerc",
         "raster-compression",
         "crossbind",
-        "crossbind-package",
+        "crossbind-port",
         "android",
         "react-native"
     ],
