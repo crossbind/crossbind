@@ -1,126 +1,348 @@
 <div align="center">
   <a href="https://crossbind.dev">
-    <picture>
-      <img alt="crossbind logo" src="https://crossbind.dev/img/logo.png" height="128">
-    </picture>
+    <img src="https://raw.githubusercontent.com/crossbind/crossbind/main/landing/public/favicon.svg" alt="crossbind logo" height="96">
   </a>
-  <h1>crossbind</h1>
-<p align="center">
-  <strong>Bind C++ to JavaScript with no extra code.</strong><br>
-  WebAssembly, WASI & React Native
-</p>
 
-<a href="https://www.npmjs.com/package/crossbind/v/beta"><img alt="NPM version" src="https://img.shields.io/npm/v/crossbind/beta?style=for-the-badge&label=npm" /></a>
-<a href="https://github.com/crossbind/crossbind/pkgs/container/web"><img alt="Build image" src="https://img.shields.io/badge/ghcr.io-crossbind%2Fweb-20B2AA?style=for-the-badge&logo=docker&label=image" /></a>
-<a href="https://github.com/crossbind/crossbind/blob/main/LICENSE"><img alt="License" src="https://img.shields.io/github/license/crossbind/crossbind?style=for-the-badge" /></a>
-<br />
-<img alt="CodeQL" src="https://img.shields.io/github/actions/workflow/status/crossbind/crossbind/github-code-scanning/codeql?branch=main&style=for-the-badge&label=CodeQL">
-<img alt="Linux Build" src="https://img.shields.io/github/actions/workflow/status/crossbind/crossbind/build-linux.yml?branch=main&style=for-the-badge&label=Linux%20Build">
-<img alt="Macos Build" src="https://img.shields.io/github/actions/workflow/status/crossbind/crossbind/build-macos.yml?branch=main&style=for-the-badge&label=Macos%20Build">
-<img alt="Windows Build" src="https://img.shields.io/github/actions/workflow/status/crossbind/crossbind/build-windows.yml?branch=main&style=for-the-badge&label=Windows%20Build">
+  <h1>crossbind</h1>
+
+  <p>
+    <strong>Import C++ and Rust like JavaScript modules.</strong><br>
+    Build, package, and run native libraries across browsers, Node.js, edge
+    runtimes, iOS, Android, and WASI.
+  </p>
+
+  <p>
+    <a href="https://www.npmjs.com/package/crossbind/v/beta"><img src="https://img.shields.io/npm/v/crossbind/beta?style=flat-square&label=npm%20beta" alt="npm beta version"></a>
+    <a href="https://github.com/crossbind/crossbind/actions/workflows/build-linux.yml"><img src="https://img.shields.io/github/actions/workflow/status/crossbind/crossbind/build-linux.yml?branch=main&style=flat-square&label=linux" alt="Linux build status"></a>
+    <a href="https://github.com/crossbind/crossbind/blob/main/LICENSE"><img src="https://img.shields.io/github/license/crossbind/crossbind?style=flat-square" alt="MIT license"></a>
+  </p>
+
+  <p>
+    <a href="#start-with-a-coding-agent">Coding agents</a>
+    · <a href="https://crossbind.dev/guide/">Guide</a>
+    · <a href="https://crossbind.dev/guide/quick-start/">Quick start</a>
+    · <a href="https://crossbind.dev/guide/packages/">Libraries</a>
+    · <a href="https://github.com/crossbind/crossbind/tree/main/examples">Examples</a>
+    · <a href="https://github.com/crossbind/crossbind/blob/main/CONTRIBUTING.md">Contributing</a>
+  </p>
 </div>
 
-<h3 align="center">
-  <a href="https://crossbind.dev/docs/guide/getting-started/introduction"><strong>For Developers</strong></a>
-  <span> · </span>
-  <a href="https://github.com/crossbind/crossbind/blob/main/docs/agent-overview.md"><strong>For AI Agents</strong></a>
-  <span> · </span>
-  <a href="https://crossbind.dev/docs/package/package/showcase">Showcase</a>
-</h3>
+crossbind makes native libraries as easy to distribute and consume as
+JavaScript packages. A C++ header, an app-local Rust file, or a declared Cargo
+crate becomes an importable module; crossbind generates the binding layer,
+resolves the transitive native dependency graph, and selects the right artifact
+for every target.
 
-## Why crossbind?
-- **No glue code** — write standard C++ headers; bindings are generated for you.
-- **Rust too** — import a crates.io crate (`import { Uuid } from 'cargo:uuid'`) or a plain `.rs` file the same way; no proc-macros, no glue.
-- **Single source, multi-target** — the same code runs in browsers, Node.js, iOS, Android — and as WASI components.
-- **Battle-tested libraries** — drop-in support for GDAL, GEOS, OpenSSL, SQLite, PROJ, and more.
-- **CLI tools from npm** — upstream command-line tools (gdal, proj, sqlite3, curl, …) prebuilt as WASI components: install the `-bin-wasi` package, run `<tool>-wasi` under wasmtime, no compiler involved.
-- **Bundler-agnostic** — first-class plugins for Vite, Rollup, Webpack, Metro, and React Native.
-- **AI-agent ready** — one portable skill teaches coding agents when crossbind fits, how to integrate it and how to verify the result.
+> **Note** — crossbind 2.0 is currently published on the npm `beta` channel.
+> The commands below use `@beta` deliberately.
 
-## For AI coding agents
-When you describe a problem ("use C++ in browser", "add GDAL to my Vite app", "wrap libsodium for crossbind"), the crossbind skill inspects the project, selects the relevant reference and walks your coding agent through a verified integration.
+## Start with a coding agent
+
+The shortest path is to give your coding agent the crossbind skill. It inspects
+the existing project, detects the package manager, bundler, target runtime, and
+native sources, checks whether a prebuilt port already exists, wires the right
+integration, and verifies the build.
 
 ```bash
 npx skills add https://github.com/crossbind/crossbind/tree/main/agents/skills --global --yes
 ```
 
-The skill is self-contained and uses the coding agent's normal filesystem and terminal capabilities. It does not require a client-specific extension or background service. Its source, deterministic inspector and generated references live in [`agents/`](../../agents/).
+Then describe the outcome you want:
 
-Full agent guide, runtime/config API reference, and troubleshooting catalogue: [**docs/agent-overview.md**](https://github.com/crossbind/crossbind/blob/main/docs/agent-overview.md).
+```text
+Add crossbind to this project so I can call C++ or Rust from JavaScript.
+Inspect the repository, choose the correct integration, make the smallest
+required changes, and verify the build.
+```
 
-## Create a New Project
-Requires **Docker** + **Node 22+**. Mobile builds also need CMake 3.28+, Xcode, and CocoaPods — see the full [prerequisites](https://crossbind.dev/docs/guide/getting-started/prerequisites) page.
+The skill uses the agent's existing filesystem and terminal access; no
+crossbind-specific background service is required. Its behavior and sources of
+truth are documented in the
+[agent guide](https://github.com/crossbind/crossbind/blob/main/docs/agent-overview.md).
 
-```sh
+## Why crossbind
+
+The header import is the front door. Underneath it, crossbind provides the
+native library distribution layer for JavaScript runtimes: versioned packages,
+target-specific artifacts, transitive dependencies, build recipes, and runtime
+adapters.
+
+- **Target-aware distribution.** A package family can carry WebAssembly, iOS,
+  Android, and WASI variants; each build consumes only the artifact valid for
+  its platform, architecture, runtime, environment, and build type.
+- **Native dependency resolution.** Package manifests and crossbind configs
+  carry the transitive native graph, so prerequisites are built and linked in
+  the correct order.
+- **A reproducible package contract.** Port recipes record upstream versions,
+  source integrity, licenses, dependencies, and target-specific artifacts.
+- **No hand-written binding glue.** Public functions, classes, methods, enums,
+  containers, and supported standard-library types are generated from the
+  interface you already own.
+- **C++ and Rust.** Import local native sources, a `cargo:` crate, or a reusable
+  native package through the same project.
+- **First-party integrations and ports.** Bundler plugins provide incremental
+  builds, while version-pinned ports make libraries such as GDAL, SQLite,
+  OpenSSL, GEOS, and PROJ available without rebuilding upstream source.
+
+## Quick start
+
+Prefer to scaffold and configure the project yourself? You need
+[Node.js 22+](https://nodejs.org/) and
+[Docker](https://www.docker.com/). Docker carries the browser, Android, and
+WASI toolchains and is pulled automatically on the first build. iOS additionally
+requires macOS, CMake 3.28+, Xcode, and CocoaPods.
+
+Create a project:
+
+```bash
 npm create crossbind@beta
 ```
 
-## Basic Usage
-**src/index.js**
-```js
-import { initNative, Factorial } from './native/Factorial.h';
+If you are unsure which template to choose, start with **Web → React → Vite**.
+Then run the commands printed by the scaffolder:
 
-await initNative();
-const factorial = new Factorial(99999);
-const result = factorial.calculate();
-console.log(result);
+```bash
+cd my-app
+npm install
+npm run dev
 ```
 
-**src/native/Factorial.h**
-```c++
-class Factorial {
-private:
-    int number;
+The first native build takes longer because it pulls the toolchain and fills the
+build cache. Later rebuilds are incremental.
 
-public:
-    Factorial(int num) : number(num) {}
+### Your first native call
 
-    int calculate() {
-        if (number < 0) return -1;
+Put the public C++ interface under `src/native`:
 
-        int result = 1;
-        for (int i = 2; i <= number; i++) {
-            result *= i;
-        }
-        return result;
-    }
+```cpp
+// src/native/hello.h
+#pragma once
+#include <string>
+
+inline std::string hello(const std::string& name) {
+    return "Hello, " + name + "!";
+}
+```
+
+Import the header from JavaScript and initialize the runtime before the first
+native call:
+
+```js
+// src/main.js
+import { initNative, hello } from './native/hello.h';
+
+await initNative();
+console.log(hello('crossbind'));
+```
+
+`initNative()` is exported by every generated native module. One call starts
+the runtime and binds all native modules imported by the application.
+
+## Add crossbind to an existing Vite app
+
+Install the Vite integration:
+
+```bash
+npm install --save-dev @crossbind/plugin-vite@beta
+```
+
+Register it in `vite.config.js`:
+
+```js
+import { defineConfig } from 'vite';
+import viteCrossbindPlugin from '@crossbind/plugin-vite';
+
+export default defineConfig({
+    plugins: [viteCrossbindPlugin()],
+});
+```
+
+Add the build-time configuration at the project root:
+
+```js
+// crossbind.config.js
+export default {
+    paths: {
+        config: import.meta.url,
+    },
 };
 ```
 
-## Official Packages
-Officially maintained, prebuilt C++ libraries you can install as npm packages and use directly from JavaScript:
+You can now add the header and JavaScript import from the quick-start example.
+For React, Vue, Svelte, Webpack, Rspack, Rollup, Metro, and framework-specific
+setups, use the [integration playbooks](https://github.com/crossbind/crossbind/blob/main/docs/playbooks/integration/README.md)
+or start from the closest project in [`examples/`](https://github.com/crossbind/crossbind/tree/main/examples).
 
-| Package | Latest (beta) |
-| --- | --- |
-| [@crossbind/port-gdal](https://www.npmjs.com/package/@crossbind/port-gdal) | ![npm](https://img.shields.io/npm/v/@crossbind/port-gdal/beta) |
-| [@crossbind/port-geos](https://www.npmjs.com/package/@crossbind/port-geos) | ![npm](https://img.shields.io/npm/v/@crossbind/port-geos/beta) |
-| [@crossbind/port-proj](https://www.npmjs.com/package/@crossbind/port-proj) | ![npm](https://img.shields.io/npm/v/@crossbind/port-proj/beta) |
-| [@crossbind/port-spatialite](https://www.npmjs.com/package/@crossbind/port-spatialite) | ![npm](https://img.shields.io/npm/v/@crossbind/port-spatialite/beta) |
-| [@crossbind/port-sqlite3](https://www.npmjs.com/package/@crossbind/port-sqlite3) | ![npm](https://img.shields.io/npm/v/@crossbind/port-sqlite3/beta) |
-| [@crossbind/port-openssl](https://www.npmjs.com/package/@crossbind/port-openssl) | ![npm](https://img.shields.io/npm/v/@crossbind/port-openssl/beta) |
-| [@crossbind/port-curl](https://www.npmjs.com/package/@crossbind/port-curl) | ![npm](https://img.shields.io/npm/v/@crossbind/port-curl/beta) |
-| [@crossbind/port-tiff](https://www.npmjs.com/package/@crossbind/port-tiff) | ![npm](https://img.shields.io/npm/v/@crossbind/port-tiff/beta) |
-| [@crossbind/port-geotiff](https://www.npmjs.com/package/@crossbind/port-geotiff) | ![npm](https://img.shields.io/npm/v/@crossbind/port-geotiff/beta) |
-| [@crossbind/port-webp](https://www.npmjs.com/package/@crossbind/port-webp) | ![npm](https://img.shields.io/npm/v/@crossbind/port-webp/beta) |
-| [@crossbind/port-expat](https://www.npmjs.com/package/@crossbind/port-expat) | ![npm](https://img.shields.io/npm/v/@crossbind/port-expat/beta) |
-| [@crossbind/port-iconv](https://www.npmjs.com/package/@crossbind/port-iconv) | ![npm](https://img.shields.io/npm/v/@crossbind/port-iconv/beta) |
-| [@crossbind/port-zlib](https://www.npmjs.com/package/@crossbind/port-zlib) | ![npm](https://img.shields.io/npm/v/@crossbind/port-zlib/beta) |
-| [@crossbind/port-zstd](https://www.npmjs.com/package/@crossbind/port-zstd) | ![npm](https://img.shields.io/npm/v/@crossbind/port-zstd/beta) |
-| [@crossbind/port-lerc](https://www.npmjs.com/package/@crossbind/port-lerc) | ![npm](https://img.shields.io/npm/v/@crossbind/port-lerc/beta) |
-| [@crossbind/port-jpegturbo](https://www.npmjs.com/package/@crossbind/port-jpegturbo) | ![npm](https://img.shields.io/npm/v/@crossbind/port-jpegturbo/beta) |
+## How it works
 
-Browse all available packages at [crossbind.dev/docs/package/package/showcase](https://crossbind.dev/docs/package/package/showcase).
+```text
+  C++ / Rust source                        header, .rs, or
+  or prebuilt port                         cargo: import
+          |                                       |
+          v                                       |
+  versioned native package graph                  |
+  dependencies + target variants                  |
+          |                                       |
+          +-------------------+-------------------+
+                              |
+                              v
+                      target resolution
+                    + binding generation
+                   + native build and link
+                              |
+        +---------------------+---------------------+
+        |                     |                     |
+        v                     v                     v
+  browser / Node / edge   iOS / Android            WASI
+  JavaScript + Wasm       native library + JSI     command component
+```
 
-## 🌱 Community Packages
-Community-maintained, prebuilt C++ libraries packaged for crossbind — published under the [crossbind-community](https://github.com/crossbind-community) organization. Anyone can contribute new packages following the same standard, and they'll be listed here.
+There are two configuration surfaces:
 
-| Package | Repository |
-| --- | --- |
-| simdjson | [github.com/crossbind-community/package-simdjson](https://github.com/crossbind-community/package-simdjson) |
+| Surface               | When it is read | What belongs there                                                                     |
+| --------------------- | --------------- | -------------------------------------------------------------------------------------- |
+| `crossbind.config.js` | Build time      | Native paths, dependencies, target, runtime (`st`/`mt`), output, and compiler settings |
+| `initNative(options)` | Runtime         | Worker mode, filesystem behavior, environment, asset resolution, and lifecycle hooks   |
 
-Want to add yours? Start a discussion at [crossbind/crossbind/discussions](https://github.com/crossbind/crossbind/discussions).
+Do not put runtime options such as `useWorker` in `crossbind.config.js`; they
+only take effect when passed to `initNative(...)`. See the
+[runtime and configuration reference](https://github.com/crossbind/crossbind/blob/main/docs/api/README.md) for the complete
+contract.
+
+## Runtimes
+
+| Runtime      | Output                                | Important behavior                                                                    |
+| ------------ | ------------------------------------- | ------------------------------------------------------------------------------------- |
+| Browser      | JavaScript loader + WebAssembly       | Single-threaded by default; multithreaded builds need COOP/COEP headers in production |
+| Node.js      | JavaScript loader + WebAssembly       | Supports CommonJS or ESM and reads the host filesystem                                |
+| Edge         | JavaScript loader + WebAssembly       | Single-threaded, memory-backed, with no OPFS or nested worker mode                    |
+| React Native | Native iOS/Android libraries over JSI | No WebAssembly or browser isolation headers                                           |
+| WASI         | One `wasm32-wasip3` command component | No JavaScript host; run with a compatible WASI runtime such as wasmtime 47+           |
+
+Threading and worker execution are independent choices:
+
+- `target.runtime: 'mt'` enables a multithreaded build.
+- `initNative({ useWorker: true })` moves the module into a browser Web Worker.
+- Browser OPFS persistence requires `useWorker: true`.
+- Browser `mt` builds require COOP/COEP response headers in production.
+
+Read [Threading and workers](https://github.com/crossbind/crossbind/blob/main/docs/api/threading.md)
+and [Filesystem](https://github.com/crossbind/crossbind/blob/main/docs/api/filesystem.md)
+before enabling those features.
+
+## Build integrations
+
+| Build tool or runtime | Packages                                                        |
+| --------------------- | --------------------------------------------------------------- |
+| Vite                  | `@crossbind/plugin-vite`                                        |
+| Rollup                | `@crossbind/plugin-rollup`                                      |
+| Webpack / Rspack      | `@crossbind/plugin-webpack`, `@crossbind/plugin-webpack-loader` |
+| React Native / Metro  | `@crossbind/plugin-react-native`, `@crossbind/plugin-metro`     |
+| No bundler            | `crossbind` CLI                                                 |
+
+The plugins resolve native imports, generate bridges, trigger builds, watch
+native source directories, and place the produced assets into the application
+bundle. The CLI exposes the same build pipeline for Node.js, edge, library, and
+WASI projects.
+
+## Prebuilt libraries and commands
+
+The repository contains 16 port families:
+
+**cURL · Expat · GDAL · GEOS · GeoTIFF · iconv · libjpeg-turbo · LERC ·
+OpenSSL · PROJ · SpatiaLite · SQLite · libTIFF · WebP · zlib · Zstandard**
+
+Each family has target-specific packages. For example, a browser or Node.js
+project uses `@crossbind/port-gdal-wasm`, while mobile and WASI builds use the
+matching `-android`, `-ios`, or `-wasi` variant. Import the variant's
+`crossbind.config.js` into the application's dependency list:
+
+```bash
+npm install @crossbind/port-gdal-wasm@beta
+```
+
+```js
+// crossbind.config.js
+import gdal from '@crossbind/port-gdal-wasm/crossbind.config.js';
+
+export default {
+    dependencies: [gdal],
+    paths: {
+        config: import.meta.url,
+    },
+};
+```
+
+The variant declares its transitive native dependency graph, so link order is
+derived automatically. Install and register every platform variant your
+project actually builds. See the [package guide](https://crossbind.dev/guide/packages/)
+and [`ports/README.md`](https://github.com/crossbind/crossbind/blob/main/ports/README.md)
+for the package and license contracts.
+
+Some upstream command-line tools are also published as WASI-powered npm
+commands. They require `wasmtime` on `PATH`, but no compiler:
+
+```bash
+npm install --global @crossbind/port-gdal-bin-wasi@beta
+gdalinfo-wasi --version
+```
+
+## Rust
+
+crossbind supports app-local `.rs` files, direct crates.io imports through the
+`cargo:` scheme, and reusable Cargo-backed packages. Rust uses the same
+generated-module and `initNative()` model as C++.
+
+A local Rust toolchain is required. WebAssembly multithreading currently needs
+nightly Rust, and WASI command builds do not yet support Rust because there is
+no `wasm32-wasip3` Rust target. Start with the
+[Rust guide](https://github.com/crossbind/crossbind/blob/main/docs/api/rust.md)
+for the supported type surface and configuration.
+
+## Documentation
+
+- [Guide](https://crossbind.dev/guide/) — product concepts, quick start,
+  runtimes, bundlers, bindings, packages, and troubleshooting.
+- [Runtime and configuration API](https://github.com/crossbind/crossbind/blob/main/docs/api/README.md)
+  — canonical build-time and runtime behavior.
+- [Integration playbooks](https://github.com/crossbind/crossbind/blob/main/docs/playbooks/integration/README.md)
+  — Vite, Webpack/Rspack, Rollup, Node.js, edge, React Native, and more.
+- [Examples](https://github.com/crossbind/crossbind/tree/main/examples) —
+  runnable reference applications and library templates.
+- [Architecture](https://github.com/crossbind/crossbind/blob/main/docs/ARCHITECTURE.md)
+  and [codemap](https://github.com/crossbind/crossbind/blob/main/docs/CODEMAP.md)
+  — how the monorepo is organized and where each subsystem lives.
+- [Troubleshooting](https://github.com/crossbind/crossbind/blob/main/docs/api/troubleshooting.md)
+  — common errors and their standard fixes.
+- [Changelog](https://github.com/crossbind/crossbind/blob/main/CHANGELOG.md) —
+  release history.
+
+## Contributing
+
+This is a pnpm monorepo. To work on crossbind itself:
+
+```bash
+git clone https://github.com/crossbind/crossbind.git
+cd crossbind
+pnpm install
+pnpm run doctor
+pnpm test
+```
+
+Use a package filter for day-to-day builds; the full native matrix is
+intentionally expensive. Read
+[CONTRIBUTING.md](https://github.com/crossbind/crossbind/blob/main/CONTRIBUTING.md)
+for the repository layout, validation matrix, coding conventions, and
+pull-request process.
+
+## Support
+
+- Ask usage questions in [GitHub Discussions](https://github.com/crossbind/crossbind/discussions).
+- Report reproducible bugs in [GitHub Issues](https://github.com/crossbind/crossbind/issues).
 
 ## License
-[MIT](https://github.com/crossbind/crossbind/blob/main/LICENSE)
 
-Copyright (c) 2026, Buğra Sarı
+crossbind is available under the
+[MIT License](https://github.com/crossbind/crossbind/blob/main/LICENSE).
+
+Copyright © 2026 Buğra Sarı
