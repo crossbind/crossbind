@@ -11,7 +11,7 @@
         "webp",
         "cli",
         "crossbind",
-        "crossbind-package",
+        "crossbind-port",
         "webassembly",
         "wasi",
         "wasmtime"

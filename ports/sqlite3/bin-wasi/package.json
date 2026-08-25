@@ -11,7 +11,7 @@
         "sqlite3",
         "cli",
         "crossbind",
-        "crossbind-package",
+        "crossbind-port",
         "webassembly",
         "wasi",
         "wasmtime"

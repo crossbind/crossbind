@@ -14,7 +14,7 @@
         "database",
         "sql",
         "crossbind",
-        "crossbind-package",
+        "crossbind-port",
         "webassembly",
         "wasm",
         "android",

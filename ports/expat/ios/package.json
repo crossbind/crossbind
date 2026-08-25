@@ -12,7 +12,7 @@
         "libexpat",
         "xml",
         "crossbind",
-        "crossbind-package",
+        "crossbind-port",
         "ios",
         "react-native"
     ],

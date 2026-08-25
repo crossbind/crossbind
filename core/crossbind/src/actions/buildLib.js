@@ -79,7 +79,7 @@ export default function buildLib(targetParams, options = {}) {
                         : `-Wl,-u,_crossbind_keep_${l}`)).join(' ');
                     ldFlags = `, 'OTHER_LDFLAGS' => '${flags}'`;
                 }
-                const distPodSpecContent = fs.readFileSync(`${state.config.paths.cli}/assets/packaging/crossbind-package.podspec`, { encoding: 'utf8', flag: 'r' })
+                const distPodSpecContent = fs.readFileSync(`${state.config.paths.cli}/assets/packaging/crossbind-port.podspec`, { encoding: 'utf8', flag: 'r' })
                     // module_name must be a valid C99 identifier (pod names may carry dashes).
                     .replace('___PROJECT_MODULE_NAME___', state.config.general.name.replace(/[^a-zA-Z0-9_]/g, '_'))
                     .replaceAll('___PROJECT_NAME___', state.config.general.name)

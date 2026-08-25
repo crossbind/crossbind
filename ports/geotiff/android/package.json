@@ -13,7 +13,7 @@
         "gis",
         "geospatial",
         "crossbind",
-        "crossbind-package",
+        "crossbind-port",
         "android",
         "react-native"
     ],

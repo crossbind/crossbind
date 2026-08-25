@@ -12,7 +12,7 @@
         "libwebp",
         "image",
         "crossbind",
-        "crossbind-package",
+        "crossbind-port",
         "webassembly",
         "wasi"
     ],

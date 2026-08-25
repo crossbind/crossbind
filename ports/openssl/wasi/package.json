@@ -14,7 +14,7 @@
         "crypto",
         "libcrypto",
         "crossbind",
-        "crossbind-package",
+        "crossbind-port",
         "webassembly",
         "wasi"
     ],
