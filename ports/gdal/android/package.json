@@ -1,6 +1,6 @@
 {
     "name": "@crossbind/port-gdal-android",
-    "version": "2.0.0-beta.50",
+    "version": "2.0.0-beta.53",
     "nativeVersion": "3.13.3",
     "description": "Android build of the precompiled GDAL geospatial library, built with crossbind. Use it together with the main package @crossbind/port-gdal.",
     "homepage": "https://github.com/crossbind/crossbind/tree/main/ports/gdal#readme",

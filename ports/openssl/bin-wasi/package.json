@@ -1,6 +1,6 @@
 {
     "name": "@crossbind/port-openssl-bin-wasi",
-    "version": "2.0.0-beta.50",
+    "version": "2.0.0-beta.53",
     "nativeVersion": "4.0.2",
     "description": "The openssl CLI prebuilt as a WASI (wasm32-wasip3) command component.",
     "homepage": "https://github.com/crossbind/crossbind/tree/main/ports/openssl#readme",
@@ -34,7 +34,7 @@
         "provenance": {
             "recipe": {
                 "name": "@crossbind/port-openssl",
-                "version": "2.0.0-beta.50",
+                "version": "2.0.0-beta.53",
                 "nativeVersion": "4.0.2"
             },
             "source": {

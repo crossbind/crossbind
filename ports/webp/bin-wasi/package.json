@@ -1,6 +1,6 @@
 {
     "name": "@crossbind/port-webp-bin-wasi",
-    "version": "2.0.0-beta.50",
+    "version": "2.0.0-beta.53",
     "nativeVersion": "1.6.0",
     "description": "cwebp/dwebp/webpinfo prebuilt as WASI (wasm32-wasip3) command components.",
     "homepage": "https://github.com/crossbind/crossbind/tree/main/ports/webp#readme",
@@ -36,7 +36,7 @@
         "provenance": {
             "recipe": {
                 "name": "@crossbind/port-webp",
-                "version": "2.0.0-beta.50",
+                "version": "2.0.0-beta.53",
                 "nativeVersion": "1.6.0"
             },
             "source": {

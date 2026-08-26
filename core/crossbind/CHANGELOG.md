@@ -1,5 +1,21 @@
 # crossbind
 
+## 2.0.0-beta.53
+
+### Patch Changes
+
+- The rebuild the source stamp triggers now clears the previous upstream release's configure
+  output and staged install tree first. Without that, an install step fails where it cannot
+  overwrite a file it did not create, which is what stopped the beta.52 publish partway.
+
+## 2.0.0-beta.52
+
+### Patch Changes
+
+- A prebuilt library is now rebuilt when its upstream source changes. The cache keyed on existence
+  alone, so bumping nativeVersion produced binaries of the previous upstream release while the
+  manifest, provenance and licence metadata already named the new one.
+
 ## 2.0.0-beta.51
 
 ### Patch Changes

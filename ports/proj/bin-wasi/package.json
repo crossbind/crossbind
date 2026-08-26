@@ -1,6 +1,6 @@
 {
     "name": "@crossbind/port-proj-bin-wasi",
-    "version": "2.0.0-beta.50",
+    "version": "2.0.0-beta.53",
     "nativeVersion": "9.8.1",
     "description": "The PROJ CLIs (proj + cs2cs/cct/geod/gie/projinfo via multicall) as a WASI command component.",
     "homepage": "https://github.com/crossbind/crossbind/tree/main/ports/proj#readme",
@@ -39,7 +39,7 @@
         "provenance": {
             "recipe": {
                 "name": "@crossbind/port-proj",
-                "version": "2.0.0-beta.50",
+                "version": "2.0.0-beta.53",
                 "nativeVersion": "9.8.1"
             },
             "source": {

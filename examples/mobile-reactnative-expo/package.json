@@ -22,10 +22,10 @@
         "e2e:android": "npm run run:android && npm run maestro:android"
     },
     "dependencies": {
-        "@crossbind/core-embind-jsi": "2.0.0-beta.50",
-        "@crossbind/plugin-react-native": "2.0.0-beta.50",
-        "@crossbind/plugin-react-native-ios-helper": "2.0.0-beta.50",
-        "@crossbind/example-lib-prebuilt-matrix": "2.0.0-beta.50",
+        "@crossbind/core-embind-jsi": "2.0.0-beta.53",
+        "@crossbind/plugin-react-native": "2.0.0-beta.53",
+        "@crossbind/plugin-react-native-ios-helper": "2.0.0-beta.53",
+        "@crossbind/example-lib-prebuilt-matrix": "2.0.0-beta.53",
         "hermes-compiler": "*",
         "expo": "^56.0.5",
         "expo-constants": "~56.0.16",
@@ -53,8 +53,8 @@
     "devDependencies": {
         "@types/react": "~19.2.18",
         "typescript": "~6.0.3",
-        "@crossbind/typescript-config": "2.0.0-beta.50",
-        "@crossbind/plugin-metro": "2.0.0-beta.50"
+        "@crossbind/typescript-config": "2.0.0-beta.53",
+        "@crossbind/plugin-metro": "2.0.0-beta.53"
     },
     "overrides": {
         "uuid": "11.1.1",

@@ -1,6 +1,6 @@
 {
     "name": "@crossbind/port-geos-android",
-    "version": "2.0.0-beta.50",
+    "version": "2.0.0-beta.53",
     "nativeVersion": "3.14.1",
     "description": "Android build of the precompiled GEOS geometry library, built with crossbind. Use it together with the main package @crossbind/port-geos.",
     "homepage": "https://github.com/crossbind/crossbind/tree/main/ports/geos#readme",

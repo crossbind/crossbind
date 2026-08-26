@@ -1,6 +1,6 @@
 {
     "name": "@crossbind/port-zstd-bin-wasi",
-    "version": "2.0.0-beta.50",
+    "version": "2.0.0-beta.53",
     "nativeVersion": "1.5.7",
     "description": "The zstd CLI prebuilt as a WASI (wasm32-wasip3) command component.",
     "homepage": "https://github.com/crossbind/crossbind/tree/main/ports/zstd#readme",
@@ -34,7 +34,7 @@
         "provenance": {
             "recipe": {
                 "name": "@crossbind/port-zstd",
-                "version": "2.0.0-beta.50",
+                "version": "2.0.0-beta.53",
                 "nativeVersion": "1.5.7"
             },
             "source": {

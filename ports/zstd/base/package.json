@@ -1,6 +1,6 @@
 {
     "name": "@crossbind/port-zstd",
-    "version": "2.0.0-beta.50",
+    "version": "2.0.0-beta.53",
     "nativeVersion": "1.5.7",
     "description": "This package provides a libzstd library compiled with crossbind, enabling seamless usage of Zstandard (de)compression functionalities in JavaScript, WebAssembly and React Native projects.",
     "homepage": "https://github.com/crossbind/crossbind/tree/main/ports/zstd#readme",

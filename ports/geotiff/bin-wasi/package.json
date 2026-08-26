@@ -1,6 +1,6 @@
 {
     "name": "@crossbind/port-geotiff-bin-wasi",
-    "version": "2.0.0-beta.50",
+    "version": "2.0.0-beta.53",
     "nativeVersion": "1.7.4",
     "description": "listgeo/geotifcp/applygeo prebuilt as WASI (wasm32-wasip3) command components.",
     "homepage": "https://github.com/crossbind/crossbind/tree/main/ports/geotiff#readme",
@@ -36,7 +36,7 @@
         "provenance": {
             "recipe": {
                 "name": "@crossbind/port-geotiff",
-                "version": "2.0.0-beta.50",
+                "version": "2.0.0-beta.53",
                 "nativeVersion": "1.7.4"
             },
             "source": {

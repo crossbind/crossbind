@@ -1,6 +1,6 @@
 {
     "name": "@crossbind/port-geotiff-ios",
-    "version": "2.0.0-beta.50",
+    "version": "2.0.0-beta.53",
     "nativeVersion": "1.7.4",
     "description": "iOS build of the precompiled libgeotiff (GeoTIFF) library, built with crossbind. Use it together with the main package @crossbind/port-geotiff.",
     "homepage": "https://github.com/crossbind/crossbind/tree/main/ports/geotiff#readme",

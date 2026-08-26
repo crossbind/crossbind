@@ -1,6 +1,6 @@
 {
     "name": "@crossbind/port-tiff-bin-wasi",
-    "version": "2.0.0-beta.50",
+    "version": "2.0.0-beta.53",
     "nativeVersion": "4.7.2",
     "description": "libtiff command-line tools prebuilt as WASI (wasm32-wasip3) command components.",
     "homepage": "https://github.com/crossbind/crossbind/tree/main/ports/tiff#readme",
@@ -52,7 +52,7 @@
         "provenance": {
             "recipe": {
                 "name": "@crossbind/port-tiff",
-                "version": "2.0.0-beta.50",
+                "version": "2.0.0-beta.53",
                 "nativeVersion": "4.7.2"
             },
             "source": {

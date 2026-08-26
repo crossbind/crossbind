@@ -1,6 +1,6 @@
 {
     "name": "@crossbind/port-sqlite3-wasi",
-    "version": "2.0.0-beta.50",
+    "version": "2.0.0-beta.53",
     "nativeVersion": "3.53.4",
     "description": "WASI build of the precompiled SQLite3 database engine, built with crossbind. Use it together with the main package @crossbind/port-sqlite3.",
     "homepage": "https://github.com/crossbind/crossbind/tree/main/ports/sqlite3#readme",

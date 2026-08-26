@@ -1,6 +1,6 @@
 {
     "name": "@crossbind/plugin-metro",
-    "version": "2.0.0-beta.50",
+    "version": "2.0.0-beta.53",
     "description": "crossbind Metro plugin: A tool for seamless C++ integration with the Metro bundler.",
     "homepage": "https://github.com/crossbind/crossbind/tree/main/plugins/metro#readme",
     "repository": "https://github.com/crossbind/crossbind.git",

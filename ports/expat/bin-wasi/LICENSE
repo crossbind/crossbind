@@ -18,7 +18,7 @@ is not legal advice; the compliance assessment is yours.
 
 ## expat — MIT
 
-- package: @crossbind/port-expat-bin-wasi@2.0.0-beta.50
+- package: @crossbind/port-expat-bin-wasi@2.0.0-beta.53
 - native version: 2.8.3
 - source: https://github.com/libexpat/libexpat/releases/download/R_2_8_3/expat-2.8.3.tar.gz (sha256: 22920a86c83f32300b11463635b71f11137a917975af297725e55525027d4e50)
 

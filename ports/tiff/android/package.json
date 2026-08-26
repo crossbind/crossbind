@@ -1,6 +1,6 @@
 {
     "name": "@crossbind/port-tiff-android",
-    "version": "2.0.0-beta.50",
+    "version": "2.0.0-beta.53",
     "nativeVersion": "4.7.2",
     "description": "Android build of the precompiled TIFF (libtiff) image library, built with crossbind. Use it together with the main package @crossbind/port-tiff.",
     "homepage": "https://github.com/crossbind/crossbind/tree/main/ports/tiff#readme",

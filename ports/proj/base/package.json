@@ -1,6 +1,6 @@
 {
     "name": "@crossbind/port-proj",
-    "version": "2.0.0-beta.50",
+    "version": "2.0.0-beta.53",
     "nativeVersion": "9.8.1",
     "description": "This package provides the precompiled proj library, built using crossbind, for easy integration into JavaScript, WebAssembly and React Native projects. It allows users to perform geodetic computations such as projections and coordinate transformations, ensuring high performance and cross-platform compatibility. Ideal for use in web and mobile applications.",
     "homepage": "https://github.com/crossbind/crossbind/tree/main/ports/proj#readme",

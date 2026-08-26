@@ -1,6 +1,6 @@
 {
     "name": "@crossbind/port-webp-wasm",
-    "version": "2.0.0-beta.50",
+    "version": "2.0.0-beta.53",
     "nativeVersion": "1.6.0",
     "description": "WebAssembly build of the precompiled WebP image library, built with crossbind. Use it together with the main package @crossbind/port-webp.",
     "homepage": "https://github.com/crossbind/crossbind/tree/main/ports/webp#readme",

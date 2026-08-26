@@ -1,6 +1,6 @@
 {
     "name": "@crossbind/port-openssl-wasi",
-    "version": "2.0.0-beta.50",
+    "version": "2.0.0-beta.53",
     "nativeVersion": "4.0.2",
     "description": "WASI build of the precompiled OpenSSL library, built with crossbind. Use it together with the main package @crossbind/port-openssl.",
     "homepage": "https://github.com/crossbind/crossbind/tree/main/ports/openssl#readme",

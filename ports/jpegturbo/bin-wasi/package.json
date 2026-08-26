@@ -1,6 +1,6 @@
 {
     "name": "@crossbind/port-jpegturbo-bin-wasi",
-    "version": "2.0.0-beta.50",
+    "version": "2.0.0-beta.53",
     "nativeVersion": "3.2.0",
     "description": "cjpeg/djpeg/jpegtran prebuilt as WASI (wasm32-wasip3) command components.",
     "homepage": "https://github.com/crossbind/crossbind/tree/main/ports/jpegturbo#readme",
@@ -36,7 +36,7 @@
         "provenance": {
             "recipe": {
                 "name": "@crossbind/port-jpegturbo",
-                "version": "2.0.0-beta.50",
+                "version": "2.0.0-beta.53",
                 "nativeVersion": "3.2.0"
             },
             "source": {

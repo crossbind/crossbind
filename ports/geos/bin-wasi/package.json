@@ -1,6 +1,6 @@
 {
     "name": "@crossbind/port-geos-bin-wasi",
-    "version": "2.0.0-beta.50",
+    "version": "2.0.0-beta.53",
     "nativeVersion": "3.14.1",
     "description": "The geosop CLI prebuilt as a WASI (wasm32-wasip3) command component.",
     "homepage": "https://github.com/crossbind/crossbind/tree/main/ports/geos#readme",
@@ -34,7 +34,7 @@
         "provenance": {
             "recipe": {
                 "name": "@crossbind/port-geos",
-                "version": "2.0.0-beta.50",
+                "version": "2.0.0-beta.53",
                 "nativeVersion": "3.14.1"
             },
             "source": {

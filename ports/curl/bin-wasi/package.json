@@ -1,6 +1,6 @@
 {
     "name": "@crossbind/port-curl-bin-wasi",
-    "version": "2.0.0-beta.50",
+    "version": "2.0.0-beta.53",
     "nativeVersion": "8.21.0",
     "description": "The curl CLI prebuilt as a WASI (wasm32-wasip3) command component.",
     "homepage": "https://github.com/crossbind/crossbind/tree/main/ports/curl#readme",
@@ -34,7 +34,7 @@
         "provenance": {
             "recipe": {
                 "name": "@crossbind/port-curl",
-                "version": "2.0.0-beta.50",
+                "version": "2.0.0-beta.53",
                 "nativeVersion": "8.21.0"
             },
             "source": {

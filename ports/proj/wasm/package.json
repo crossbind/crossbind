@@ -1,6 +1,6 @@
 {
     "name": "@crossbind/port-proj-wasm",
-    "version": "2.0.0-beta.50",
+    "version": "2.0.0-beta.53",
     "nativeVersion": "9.8.1",
     "description": "WebAssembly build of the precompiled PROJ coordinate-transformation library, built with crossbind. Use it together with the main package @crossbind/port-proj.",
     "homepage": "https://github.com/crossbind/crossbind/tree/main/ports/proj#readme",

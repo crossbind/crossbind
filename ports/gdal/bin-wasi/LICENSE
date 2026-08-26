@@ -18,7 +18,7 @@ is not legal advice; the compliance assessment is yours.
 
 ## curl — curl
 
-- package: @crossbind/port-curl-wasi@2.0.0-beta.50
+- package: @crossbind/port-curl-wasi@2.0.0-beta.53
 - native version: 8.21.0
 - source: https://curl.se/download/curl-8.21.0.tar.gz (sha256: d9b327997999045a24cda50f3983e69e51c516bd8be6ef9842fc7f99135e33bb)
 
@@ -51,7 +51,7 @@ in this Software without prior written authorization of the copyright holder.
 
 ## gdal — MIT
 
-- package: @crossbind/port-gdal-bin-wasi@2.0.0-beta.50
+- package: @crossbind/port-gdal-bin-wasi@2.0.0-beta.53
 - native version: 3.13.3
 - source: https://github.com/OSGeo/gdal/releases/download/v3.13.3/gdal-3.13.3.tar.gz (sha256: 5e0c388d83da2d686cc00a40272882432cdb54edff43d4af173e532844a0a0ea)
 
@@ -528,7 +528,7 @@ limitations under the License.
 
 ## geotiff — MIT
 
-- package: @crossbind/port-geotiff-wasi@2.0.0-beta.50
+- package: @crossbind/port-geotiff-wasi@2.0.0-beta.53
 - native version: 1.7.4
 - source: https://download.osgeo.org/geotiff/libgeotiff/libgeotiff-1.7.4.tar.gz (sha256: c598d04fdf2ba25c4352844dafa81dde3f7fd968daa7ad131228cd91e9d3dc47)
 - note: Mixed X-style/MIT with public-domain parts; see LICENSE.
@@ -1203,7 +1203,7 @@ be appreciated.
 
 ## openssl — Apache-2.0
 
-- package: @crossbind/port-openssl-wasi@2.0.0-beta.50
+- package: @crossbind/port-openssl-wasi@2.0.0-beta.53
 - native version: 4.0.2
 - source: https://github.com/openssl/openssl/releases/download/openssl-4.0.2/openssl-4.0.2.tar.gz (sha256: 736b467530f916737b7031310ccb21d8218c6229e61e8e160cd1d3458cd543a8)
 
@@ -1390,7 +1390,7 @@ Apache License
 
 ## proj — MIT
 
-- package: @crossbind/port-proj-wasi@2.0.0-beta.50
+- package: @crossbind/port-proj-wasi@2.0.0-beta.53
 - native version: 9.8.1
 - source: https://download.osgeo.org/proj/proj-9.8.1.tar.gz (sha256: af5b731c145c1d13c4e3b4eeb7d167e94e845e440f71e3496b4ed8dae0291960)
 
@@ -1434,14 +1434,14 @@ Copyright information can be found in source files.
 
 ## sqlite3 — blessing
 
-- package: @crossbind/port-sqlite3-wasi@2.0.0-beta.50
+- package: @crossbind/port-sqlite3-wasi@2.0.0-beta.53
 - native version: 3.53.4
 - source: https://www.sqlite.org/2026/sqlite-autoconf-3530400.tar.gz (sha256: 0e9483900e92cd5de8fd48d16bf9200145a61f7fd5be542a5ac81d8a9516eb9c)
 - note: Public domain (SQLite blessing); the amalgamation tarball ships no license file.
 
 ## tiff — libtiff
 
-- package: @crossbind/port-tiff-wasi@2.0.0-beta.50
+- package: @crossbind/port-tiff-wasi@2.0.0-beta.53
 - native version: 4.7.2
 - source: https://download.osgeo.org/libtiff/tiff-4.7.2.tar.gz (sha256: 672bd7d10aee4606171afb864f3570b83340f6a33e2c186dc0512f7145ffdf6a)
 
@@ -1508,7 +1508,7 @@ WARRANTIES OF MERCHANTIBILITY AND FITNESS FOR A PARTICULAR PURPOSE.
 
 ## z — Zlib
 
-- package: @crossbind/port-zlib-wasi@2.0.0-beta.50
+- package: @crossbind/port-zlib-wasi@2.0.0-beta.53
 - native version: 1.3.2
 - source: https://zlib.net/zlib-1.3.2.tar.gz (sha256: bb329a0a2cd0274d05519d61c667c062e06990d72e125ee2dfa8de64f0119d16)
 

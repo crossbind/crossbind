@@ -1,5 +1,55 @@
 # crossbind
 
+## 2.0.0-beta.53
+
+beta.52 reached npm only in part: 33 of 107 packages published before the run stopped, and every
+package that carries an OpenSSL binary was on the wrong side of that line - so the security patch
+had not actually shipped. The run stopped because the CLI it had just published turns rebuilds on
+without being able to finish one; that is fixed here, and the whole set moves to beta.53 so what is
+on npm is again one build.
+
+### What is in it
+
+- **Rebuilds finish.** The source stamp added in beta.52 makes a `nativeVersion` bump rebuild the
+  library instead of serving the previous one. It did not clear what the previous upstream release
+  left behind, so the rebuild it triggered then failed wherever an install step could not overwrite
+  a file it had not created - a read-only `geos-config`, a SQLite man page under a Docker bind
+  mount. The stale configure output and staged install tree are now removed first.
+- **The OpenSSL 4.0.2 patch ships.** Every OpenSSL target and everything that statically links it -
+  the curl family and the GDAL WASI command - is republished from one clean build of the whole
+  matrix.
+
+### Upgrading
+
+Reinstall to pick up the patched TLS stack. Nothing to change in application code.
+
+## 2.0.0-beta.52
+
+Every package moves together this time. beta.51 argued against republishing unchanged packages, and
+that argument still holds for an ordinary fix - but this release carries a TLS security patch that
+reaches consumers through statically linked artifacts. A caret range cannot tell anyone which tarball
+contains the patched stack; one baseline number can. So the whole set is pinned at beta.52 and
+published as one tested set.
+
+### What is in it
+
+- **OpenSSL 4.0.2.** A security patch release fixing seven CVEs, the most severe Moderate: a QUIC
+  double free, a heap buffer overflow in CMS key unwrapping, an invalid pointer dereference in the
+  CMP server, unbounded QUIC queue growth, an RPK certificate dereference, excessive DTLS record
+  buffering and a client-side OCSP memory leak. Every OpenSSL target was rebuilt from the new
+  source, and every package that statically links it - the curl family and the GDAL WASI command -
+  was rebuilt against it.
+- **A prebuilt library is rebuilt when its upstream source changes.** The build cache keyed on the
+  existence of the output alone. Bumping `nativeVersion` and rebuilding therefore produced binaries
+  of the previous upstream release, while the manifest, provenance and licence metadata already
+  named the new one - a stale binary published under a patched version number. The cache now carries
+  a stamp of the upstream version and the recipe source hash, and misses when either moves.
+
+### Upgrading
+
+Nothing to change in application code. Reinstall to pick up the patched TLS stack; if you vendor the
+prebuilt artifacts, rebuild rather than reusing the beta.50 output.
+
 ## 2.0.0-beta.51
 
 Only `crossbind` moves in this release. beta.50 said the numbers would move together from then on;

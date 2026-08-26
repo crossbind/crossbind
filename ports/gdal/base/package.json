@@ -1,6 +1,6 @@
 {
     "name": "@crossbind/port-gdal",
-    "version": "2.0.0-beta.50",
+    "version": "2.0.0-beta.53",
     "nativeVersion": "3.13.3",
     "description": "This package provides the precompiled GDAL, built using crossbind, for seamless integration into JavaScript, WebAssembly, and React Native projects. It enables advanced geospatial data processing, including raster and vector data manipulation, format conversion, and spatial analysis, ensuring high performance and cross-platform compatibility. Perfect for web, server-side, and mobile geospatial applications.",
     "homepage": "https://github.com/crossbind/crossbind/tree/main/ports/gdal#readme",

@@ -1,6 +1,6 @@
 {
     "name": "@crossbind/port-spatialite",
-    "version": "2.0.0-beta.50",
+    "version": "2.0.0-beta.53",
     "nativeVersion": "5.1.0",
     "description": "This package provides SpatiaLite, a spatial extension to SQLite, compiled with crossbind for seamless integration in JavaScript, WebAssembly and React Native environments. By using crossbind, this package enables high-performance spatial database operations both on the web (via WebAssembly) and native mobile environments (via machine code).",
     "homepage": "https://github.com/crossbind/crossbind/tree/main/ports/spatialite#readme",

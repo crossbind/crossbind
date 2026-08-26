@@ -1,6 +1,6 @@
 {
     "name": "@crossbind/port-gdal-bin-wasi",
-    "version": "2.0.0-beta.50",
+    "version": "2.0.0-beta.53",
     "nativeVersion": "3.13.3",
     "description": "The upstream `gdal` command-line interface prebuilt as a single WASI (wasm32-wasip3) command component. Install, point wasmtime at the shipped .wasm and data folder, and run - no compiler involved.",
     "homepage": "https://github.com/crossbind/crossbind/tree/main/ports/gdal#readme",
@@ -72,7 +72,7 @@
         "provenance": {
             "recipe": {
                 "name": "@crossbind/port-gdal",
-                "version": "2.0.0-beta.50",
+                "version": "2.0.0-beta.53",
                 "nativeVersion": "3.13.3"
             },
             "source": {
