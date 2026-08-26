@@ -14,7 +14,7 @@ crossbind/
 │   ├── adr/                          ← architecture decision records (why-we-chose-X)
 │   ├── api/                          ← runtime + build API reference (init, crossbind.config.js, fs, threading)
 │   └── playbooks/                    ← per-persona / per-framework workflows
-├── .github/                          ← workflows, PR + issue templates
+├── .github/                          ← CI workflows and repository metadata
 ├── scripts/                          ← repo-level Node CLIs (check-*, doctor.sh, …)
 ├── package.json                      ← root scripts: build, clear, ci:*, e2e, publish, check
 ├── pnpm-workspace.yaml               ← workspace globs

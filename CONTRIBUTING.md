@@ -104,15 +104,13 @@ For build-pipeline changes, the validation matrix in [`AGENTS.md`](./AGENTS.md) 
 
 1. **Open against `main`.** No long-lived feature branches.
 2. **One topic per PR.** "Add libsodium" is one PR; "Add libsodium and refactor logger" is two.
-3. **Fill the [PR template](./.github/PULL_REQUEST_TEMPLATE.md)** — Summary, Scope, Test plan, Risk, Agent assistance. The Test plan is not optional; reviewers use it to know what to re-run locally.
+3. **Describe what changed, what you ran, and what could break.** The test plan is not optional; reviewers use it to know what to re-run locally.
 4. **Wait for CI green.** GitHub Actions runs the matrix. Don't ask for review until checks pass.
 5. **Review pace:** the maintainer aims for first-pass response within a few days. Ping the PR if a week has passed in silence.
 
 For larger changes (new package family, new bundler plugin, architectural shift), open an issue first to align on the approach. Avoids surprise rewrites at review time.
 
 ## Issues
-
-Three templates in `.github/ISSUE_TEMPLATE/`: **Bug**, **Feature**, **New package**. Pick the one that fits.
 
 Bug reports need: crossbind version, package(s) affected, reproducer (smallest possible), what you observed, what you expected. "Doesn't work" without a reproducer will be closed with a request for one.
 
@@ -136,7 +134,7 @@ Releases are maintainer-driven. Contributors don't need to bump versions in thei
 
 If you're using an AI coding agent (Claude Code, Cursor, Codex, …), great — crossbind is built to be agent-friendly. Two notes:
 
-- The agent should mention itself in the PR's "Agent assistance" section. Reviewers like to know what to spot-check.
+- The agent should be named in the PR description. Reviewers like to know what to spot-check.
 - Agents must not commit, push, tag, or open PRs autonomously. The human contributor reviews and ships. (See `AGENTS.md` "Never" section.)
 
 Install the single portable skill: see [`docs/agent-overview.md`](docs/agent-overview.md).

@@ -7,7 +7,7 @@
 Run these before any code-specific review:
 
 - [ ] CI is green. If not, comment "rerun CI when X is fixed" and stop.
-- [ ] PR template fields filled — Summary, Scope, Test plan, Risk, Agent assistance.
+- [ ] PR describes the change, the validation that was run, and the risk.
 - [ ] Branch named per `CONTRIBUTING.md` convention (`feat/`, `fix/`, `package/`, …).
 - [ ] Commits use Conventional Commits format.
 - [ ] No `console.log` left in source (check the diff).
