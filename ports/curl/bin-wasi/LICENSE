@@ -58,8 +58,8 @@ in this Software without prior written authorization of the copyright holder.
 ## openssl — Apache-2.0
 
 - package: @crossbind/port-openssl-wasi@2.0.0-beta.50
-- native version: 4.0.1
-- source: https://github.com/openssl/openssl/releases/download/openssl-4.0.1/openssl-4.0.1.tar.gz (sha256: 2db3f3a0d6ea4b59e1f094ace2c8cd536dffb87cdc39084c5afa1e6f7f37dd09)
+- native version: 4.0.2
+- source: https://github.com/openssl/openssl/releases/download/openssl-4.0.2/openssl-4.0.2.tar.gz (sha256: 736b467530f916737b7031310ccb21d8218c6229e61e8e160cd1d3458cd543a8)
 
 ```
 === LICENSE.txt ===

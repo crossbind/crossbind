@@ -8,7 +8,7 @@ const WASI_CONFIGURE_FLAGS = [
 ];
 
 export default {
-    sha256: '2db3f3a0d6ea4b59e1f094ace2c8cd536dffb87cdc39084c5afa1e6f7f37dd09', // openssl-4.0.1.tar.gz
+    sha256: '736b467530f916737b7031310ccb21d8218c6229e61e8e160cd1d3458cd543a8', // openssl-4.0.2.tar.gz
     getURL: (version) => `https://github.com/openssl/openssl/releases/download/openssl-${version}/openssl-${version}.tar.gz`,
     buildType: 'configure',
     // Inert outside wasi: Configure reads it only when the wasi-p3 name is requested.
