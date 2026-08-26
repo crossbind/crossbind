@@ -1,5 +1,14 @@
 # @crossbind/plugin-react-native
 
+## 2.0.0-beta.54
+
+### Patch Changes
+
+- Stopped shipping a stale xcframework. The published tarball is 18 kB instead of 16 MB: the
+  ignore list excluded the current xcframework by name, so the pre-rename directory left on disk
+  was packed instead - 30 MB of a library nothing links. It matches by shape now. The xcframework
+  a build produces was never published and still is not; it is built on the consuming machine.
+
 ## 2.0.0-beta.53
 
 ### Patch Changes

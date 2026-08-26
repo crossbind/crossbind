@@ -1,4 +1,5 @@
 *.tgz
-react-native-crossbind.xcframework
+*.xcframework
+*.xcframework.zip
 .cxx
 build

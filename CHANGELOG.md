@@ -1,5 +1,20 @@
 # crossbind
 
+## 2.0.0-beta.54
+
+Only `@crossbind/plugin-react-native` moves. Nothing published depends on it - the three packages
+that do are all private samples and fixtures - so the rest of the beta.53 set stays as it was
+tested.
+
+### What is in it
+
+- **The React Native plugin tarball is 18 kB instead of 16 MB.** Its ignore list named the current
+  xcframework directly, so when the rename left a directory behind under the old name, that one was
+  packed: 30 MB unpacked of a static library nothing links against. The list matches `*.xcframework`
+  now, so no name can slip past it again. The xcframework an iOS build produces was never shipped
+  and still is not - it is built on the consuming machine, which is why nothing was broken by
+  carrying the wrong one.
+
 ## 2.0.0-beta.53
 
 beta.52 reached npm only in part: 33 of 107 packages published before the run stopped, and every
