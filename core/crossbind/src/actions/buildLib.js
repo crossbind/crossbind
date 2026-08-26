@@ -6,6 +6,7 @@ import { getBuildTargets, getFilteredTargetSpec } from './target.js';
 import state from '../state/index.js';
 import logger from '../utils/logger.js';
 import findFiles from '../utils/findFiles.js';
+import { getSourceFingerprint, isSourceFingerprintStale, staleTargetDirectories, writeSourceFingerprint } from '../utils/sourceFingerprint.js';
 
 export default function buildLib(targetParams, options = {}) {
     let isChanged = false;
@@ -19,8 +20,20 @@ export default function buildLib(targetParams, options = {}) {
         // Cargo re-enters the build unconditionally: cargo is the incremental cache, and the
         // existence-only skip below would keep serving a stale staged staticlib after source edits.
         const isCargo = state.config.export?.type === 'cargo';
-        if (isCargo || !fs.existsSync(`${state.config.paths.output}/prebuilt/${target.path}/lib`)) {
-            createLib(target, 'Source', { buildSource: true });
+        const libdir = `${state.config.paths.output}/prebuilt/${target.path}`;
+        const sourceFingerprint = getSourceFingerprint(state.config);
+        const sourceChanged = isSourceFingerprintStale(libdir, sourceFingerprint);
+        if (isCargo || sourceChanged || !fs.existsSync(`${libdir}/lib`)) {
+            if (sourceChanged) {
+                for (const stale of staleTargetDirectories({
+                    buildPath: state.config.paths.build,
+                    outputPath: state.config.paths.output,
+                    targetPath: target.path,
+                })) fs.rmSync(stale, { recursive: true, force: true });
+            }
+            // createLib caches on existence too, so re-entering is not enough: a stale stamp means
+            // the lib on disk came from a different upstream release and has to be rebuilt.
+            createLib(target, 'Source', { buildSource: true, force: sourceChanged });
 
             const modules = [];
             state.config.paths.module.forEach((modulePath) => {
@@ -34,6 +47,7 @@ export default function buildLib(targetParams, options = {}) {
                 const fileName = modulePath.split('/').at(-1);
                 fs.copyFileSync(modulePath, `${state.config.paths.output}/prebuilt/${target.path}/swig/${fileName}`);
             });
+            writeSourceFingerprint(libdir, sourceFingerprint);
             isChanged = true;
         } else {
             // The skip is existence-only; without this warning a source edit is served stale silently.
