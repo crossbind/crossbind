@@ -31,6 +31,15 @@ Read `docs/ARCHITECTURE.md` for the system flow and `docs/CODEMAP.md` before gue
 4. Run the narrowest test/build that proves the change, then the package-level gate when risk warrants it.
 5. Report changed files, validation and any remaining risk. Do not commit, push, publish or open a pull request unless explicitly asked.
 
+## Branch and commit naming
+
+A branch name and its commit subject carry the same parts, so either can be derived from the other:
+
+- Branch: `<type>/<scope>/<short-description>`, for example `fix/create-crossbind/template-install-fails`.
+- Commit: `<type>(<scope>): <short description>`, for example `fix(create-crossbind): template install fails`.
+
+The middle segment of the branch is the commit scope, verbatim; the branch spells the description in kebab-case where the commit spells it as a phrase. Drop the scope segment only for repository-wide changes (`chore/bump-pnpm` pairs with `chore: bump pnpm`). Types are `feat`, `fix`, `refactor`, `docs`, `test`, `chore`, `perf` and `ci`; append `!` to the type for a breaking change. A scope is one token: a package name or an area.
+
 ## Validation matrix
 
 | Changed surface | Minimum validation |

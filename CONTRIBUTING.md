@@ -51,32 +51,31 @@ Directories carry no brand prefix; the npm name does.
 (`wasm`, `wasi`, `bin-wasi`, `android`, `ios`). `examples/` holds the user-facing samples that
 create-crossbind publishes as templates; `e2e/` holds the internal test benches.
 
-## Branch naming
+## Branch and commit naming
+
+A branch name and its commit subject carry the same three parts, so either one can be derived from the other:
 
 ```
-feat/<short-desc>          # new feature
-fix/<short-desc>           # bug fix
-refactor/<short-desc>      # internal cleanup, no behavior change
-docs/<short-desc>          # docs / playbooks / READMEs only
-chore/<short-desc>         # tooling, deps, CI
-package/<name>             # changes to a single ports/*
+branch    <type>/<scope>/<short-description>
+commit    <type>(<scope>): <short description>
 ```
 
-Examples: `feat/agent-ready`, `fix/vite-hmr-paths-native-array`, `package/libsodium`.
+The middle segment of the branch is the commit scope, verbatim. The branch spells the description in kebab-case; the commit spells it as a normal phrase.
 
-## Commit messages
+| Branch | Commit subject |
+| --- | --- |
+| `fix/create-crossbind/template-install-fails` | `fix(create-crossbind): template install fails` |
+| `feat/port-libsodium/add-prebuilt-package` | `feat(port-libsodium): add prebuilt package` |
+| `docs/api/document-target-specs` | `docs(api): document targetSpecs field-by-field` |
 
-Conventional commits. Type prefix + colon + short imperative summary, optionally with a scope:
+Drop the scope segment only when a change genuinely spans the repository:
 
 ```
-feat: add libsodium prebuilt package
-fix(plugin-vite): iterate paths.native array instead of fs.existsSync on it
-docs(api): document targetSpecs.specs field-by-field
-refactor(crossbind/state): collapse runtime adapters into core.js
-chore: bump pnpm to 10.33.2
+branch    chore/bump-pnpm
+commit    chore: bump pnpm to 11.24.0
 ```
 
-Types: `feat`, `fix`, `refactor`, `docs`, `test`, `chore`, `perf`, `ci`.
+Types: `feat`, `fix`, `refactor`, `docs`, `test`, `chore`, `perf`, `ci`. The scope is a single token — a package name (`create-crossbind`, `plugin-vite`, `port-gdal`) or an area (`agents`, `landing`, `ci`). Append `!` to the type for a breaking change.
 
 Body and footers optional — use them when the change needs context the diff doesn't show. Wrap at ~72 chars. Reference issues with `Closes #123`.
 

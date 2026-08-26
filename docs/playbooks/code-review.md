@@ -8,8 +8,7 @@ Run these before any code-specific review:
 
 - [ ] CI is green. If not, comment "rerun CI when X is fixed" and stop.
 - [ ] PR describes the change, the validation that was run, and the risk.
-- [ ] Branch named per `CONTRIBUTING.md` convention (`feat/`, `fix/`, `package/`, …).
-- [ ] Commits use Conventional Commits format.
+- [ ] Branch and commit subject match: `<type>/<scope>/<desc>` pairs with `<type>(<scope>): <desc>` (see `CONTRIBUTING.md`).
 - [ ] No `console.log` left in source (check the diff).
 - [ ] No secrets, tokens, API keys, or `.env`-like files committed.
 - [ ] `.gitignore` not weakened to allow build artifacts (`.crossbind/`, `dist/`, `*.xcframework`).
