@@ -23,7 +23,7 @@
     },
     "dependencies": {
         "@crossbind/core-embind-jsi": "2.0.0-beta.53",
-        "@crossbind/plugin-react-native": "2.0.0-beta.53",
+        "@crossbind/plugin-react-native": "2.0.0-beta.54",
         "@crossbind/plugin-react-native-ios-helper": "2.0.0-beta.53",
         "@crossbind/example-lib-prebuilt-matrix": "2.0.0-beta.53",
         "hermes-compiler": "*",

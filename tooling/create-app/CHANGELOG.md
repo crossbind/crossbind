@@ -1,5 +1,13 @@
 # create-crossbind
 
+## 2.0.0-beta.54
+
+### Patch Changes
+
+- The Expo template now scaffolds `@crossbind/plugin-react-native` at 2.0.0-beta.54. Its six
+  crossbind dependencies are pinned exactly rather than by range, so a new project kept getting the
+  beta.53 plugin and its 30 MB of stale xcframework long after that was fixed.
+
 ## 2.0.0-beta.53
 
 ### Patch Changes

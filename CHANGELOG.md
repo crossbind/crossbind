@@ -2,9 +2,9 @@
 
 ## 2.0.0-beta.54
 
-Only `@crossbind/plugin-react-native` moves. Nothing published depends on it - the three packages
-that do are all private samples and fixtures - so the rest of the beta.53 set stays as it was
-tested.
+Two packages move: `@crossbind/plugin-react-native` and `create-crossbind`, which scaffolds it.
+Nothing published depends on the plugin - the three packages that do are private samples and
+fixtures - so the rest of the beta.53 set stays as it was tested.
 
 ### What is in it
 
@@ -14,6 +14,9 @@ tested.
   now, so no name can slip past it again. The xcframework an iOS build produces was never shipped
   and still is not - it is built on the consuming machine, which is why nothing was broken by
   carrying the wrong one.
+- **`create-crossbind` scaffolds the fixed plugin.** A new Expo project was still getting
+  the beta.53 plugin - the Expo template pins its crossbind dependencies exactly rather than by
+  range, so the caret that carried the fix into every other template did not reach it.
 
 ## 2.0.0-beta.53
 
