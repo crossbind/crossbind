@@ -9,6 +9,7 @@ packages:
   - 'e2e/*'
   - 'landing'
   - '!**/test/**'
+minimumReleaseAge: 10080
 allowBuilds:
   '@swc/core': true
   core-js: false
