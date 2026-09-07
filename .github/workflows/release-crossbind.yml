@@ -81,7 +81,7 @@ jobs:
               run: |
                   node -e '
                     const plan = JSON.parse(require("node:fs").readFileSync(process.argv[1]));
-                    console.log(`### ${plan.channel} npm train: ${plan.packageCount} package(s)`);
+                    console.log(`### ${plan.trainVersion} (${plan.channel}) npm train: ${plan.packageCount} package(s)`);
                     for (const name of plan.publishOrder) {
                       const item = plan.packages.find(candidate => candidate.name === name);
                       console.log(`- ${item.name}@${item.version} → ${item.npmDistTag}; ${item.buildKind}; ${item.reason}`);

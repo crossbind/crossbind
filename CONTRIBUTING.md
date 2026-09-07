@@ -116,16 +116,16 @@ Bug reports need: crossbind version, package(s) affected, reproducer (smallest p
 
 ## Releases
 
-Public workspace packages use independent versions and one manual release train. The workflow
-selects version-bumped packages, builds their native artifacts on Linux/macOS, then publishes in
-dependency order after every tarball is ready. Beta versions publish to `beta`, release candidates
-to `next`, and stable versions to `latest`. All npm writes use OIDC Trusted Publishing; no npm token
-is stored in GitHub. Maintainers may use `release:version` when a specific train should align all
-public package versions, as with `2.0.0-beta.55`; this is optional rather than a permanent policy.
+Public workspace packages use a Babel-style locked release train: changed packages receive one
+common train version, while unchanged packages retain their older versions and are not republished.
+The workflow builds selected native artifacts on Linux/macOS, then publishes in dependency order
+after every tarball is ready. Beta versions publish to `beta`, release candidates to `next`, and
+stable versions to `latest`. All npm writes use OIDC Trusted Publishing; no npm token is stored in
+GitHub.
 
 ```bash
 pnpm run check:release
-pnpm run release:version -- --version 2.0.0-beta.55
+pnpm run release:version -- --version 2.0.0-beta.56 --package crossbind
 pnpm run release:package
 pnpm run release:dry-run
 pnpm run release:train:dry-run -- --channel beta

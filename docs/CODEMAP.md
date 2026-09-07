@@ -247,7 +247,7 @@ To add a new `ports/<X>`: see `docs/playbooks/new-port.md` (uses `ports/zlib` as
 | `generate-third-party.js` | K3 wrapper: `crossbind licenses --notices --sbom --platform` per dist host |
 | `pin-docker-image.js` | Re-pin the digest-locked build image after a docker publish |
 | `release/actionlint.mjs` | Download SHA-pinned actionlint and validate package-release workflows |
-| `release/set-workspace-version.mjs` | Optionally preview/apply one common version across every public workspace package |
+| `release/set-workspace-version.mjs` | Prepare one common train version for explicit changed packages or an intentional `--all` release |
 | `release/package-artifact.mjs` | Pack, inspect and hash exact npm tarballs; consumer-smoke the canonical `crossbind` tarball |
 | `release/package-crossbind.mjs` | CLI entrypoint for exact tarball creation and smoke validation |
 | `release/workspace-release.mjs` | Discover public workspaces, select channel bumps and derive platform/dependency order |
