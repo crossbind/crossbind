@@ -19,7 +19,6 @@ The rule: **if your build runs and your app works, the defaults are fine**. Only
 | `-lembind` | always | Embind binding lib | 🔒 Required |
 | `-Wl,--whole-archive` | Bridge archive only | Keep embind registrations (static initializers) alive | ✅ `export.wholeArchive: true` on the app restores the legacy all-archives layout; a library can declare the same in its own config |
 | `-fwasm-exceptions` | always | C++ exceptions via Wasm EH | 🔒 Required for proper `throw` semantics |
-| `-sWASM_BIGINT=1` | always | BigInt for i64 | 🔒 Required for modern browsers |
 | `-sWASM=1` | always | Output wasm (not asm.js) | 🔒 Don't touch |
 | `-sMODULARIZE=1` | always | ES module wrapper | 🔒 crossbind bundling depends on this |
 | `-sDYNAMIC_EXECUTION=0` | always | Disable eval / new Function | 🔒 Required for CSP-strict environments |
@@ -28,6 +27,10 @@ The rule: **if your build runs and your app works, the defaults are fine**. Only
 | `-sFORCE_FILESYSTEM=1` | browser, node | Always include FS | 🔒 crossbind fs adapters depend on this |
 | `-sWASMFS` | browser, node | New filesystem backend | 🔒 OPFS depends on this |
 | `-sEXPORT_NAME=Module2` | always | JS namespace name | 🔒 crossbind bundling depends on this |
+
+Emscripten 6.0.9 enables WebAssembly BigInt integration for every supported engine. Crossbind
+therefore relies on that toolchain default instead of passing the deprecated `WASM_BIGINT` setting;
+`i64` values still cross the JavaScript boundary as `bigint`.
 
 ### Per-runtimeEnv flags
 

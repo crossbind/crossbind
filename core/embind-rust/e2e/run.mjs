@@ -2,15 +2,24 @@
 // embind class from node. (2) MOBILE-SHAPE - build the same crate native, run it against a
 // jsi-shaped mock consumer (validates the adapter's wrapping/marshalling/param-dropping; the
 // real Hermes/device smoke is separate - see the README status matrix).
-import { execFileSync, execSync } from 'node:child_process';
+import { execFileSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 const root = resolve(import.meta.dirname, '..');
-const emsdkEnv = '/Users/bugra/Documents/other/emsdk/emsdk_env.sh';
+const emsdkEnv = process.env.CROSSBIND_EMSDK_ENV || '/Users/bugra/Documents/other/emsdk/emsdk_env.sh';
+const sourceEmsdk = existsSync(emsdkEnv);
 
 function sh(cmd, opts = {}) {
-    return execSync(`bash -lc 'source ${emsdkEnv} >/dev/null 2>&1; ${cmd}'`, { cwd: root, stdio: 'pipe', encoding: 'utf8', ...opts });
+    const { env: extraEnv = {}, ...spawnOptions } = opts;
+    const script = `${sourceEmsdk ? 'source "$CROSSBIND_E2E_EMSDK_ENV" >/dev/null 2>&1; ' : ''}${cmd}`;
+    return execFileSync('bash', ['-c', script], {
+        cwd: root,
+        stdio: 'pipe',
+        encoding: 'utf8',
+        env: { ...process.env, CROSSBIND_E2E_EMSDK_ENV: emsdkEnv, ...extraEnv },
+        ...spawnOptions,
+    });
 }
 
 // emcc+node here instead of wasmtime; cargo is required.
@@ -18,8 +27,8 @@ try { execFileSync('cargo', ['--version'], { stdio: 'ignore' }); } catch {
     console.log('SKIP: cargo not found - install Rust + `rustup target add wasm32-unknown-emscripten`.');
     process.exit(0);
 }
-if (!existsSync(emsdkEnv)) {
-    console.log('SKIP: emsdk not found at expected path - web leg needs a local emsdk.');
+try { sh('emcc --version'); } catch {
+    console.log('SKIP: emsdk not found on PATH and CROSSBIND_EMSDK_ENV does not name emsdk_env.sh.');
     process.exit(0);
 }
 
@@ -29,9 +38,13 @@ sh('cd demo && node ../../crossbind/src/utils/rustBridgeGen.js');
 const bridgeLib = (triple) => `demo/.crossbind/bridge-crate/target/${triple}/release/libdemo_crossbind_bridge.a`;
 
 // (1) WEB
-sh('cargo build --release --target wasm32-unknown-emscripten -q --manifest-path demo/.crossbind/bridge-crate/Cargo.toml');
+const wasmSysroot = process.env.CROSSBIND_E2E_RUST_SYSROOT;
+const wasmEnv = wasmSysroot
+    ? { CARGO_ENCODED_RUSTFLAGS: `--sysroot${String.fromCharCode(0x1f)}${wasmSysroot}` }
+    : {};
+sh('cargo build --release --target wasm32-unknown-emscripten -q --manifest-path demo/.crossbind/bridge-crate/Cargo.toml', { env: wasmEnv });
 // whole-archive: no C++ trigger references the demo, so force its init-array ctor into the link.
-sh(`emcc adapters/web.cpp -Wl,--whole-archive ${bridgeLib('wasm32-unknown-emscripten')} -Wl,--no-whole-archive -lembind -O1 -sMODULARIZE -sEXPORT_ES6 -o e2e/demo.mjs`);
+sh(`em++ adapters/web.cpp -Wl,--whole-archive ${bridgeLib('wasm32-unknown-emscripten')} -Wl,--no-whole-archive -lembind -O1 -sMODULARIZE -sEXPORT_ES6 -o e2e/demo.mjs`);
 // FORCE_COLOR off: the markers below match console.log values, which node would otherwise wrap in ANSI codes.
 const web = execFileSync('node', ['e2e/use.mjs'], { cwd: root, encoding: 'utf8', env: { ...process.env, FORCE_COLOR: '0' } });
 // f64/bool (scale, positive) are verified here against real embind-js; the jsi-mock leg below
@@ -59,7 +72,11 @@ console.log('ok web: rust producer -> flat ABI -> web adapter -> embind-js class
 
 // (2) MOBILE-SHAPE (host build: no --target, so the artifact sits under target/release directly)
 sh('cargo build --release -q --manifest-path demo/.crossbind/bridge-crate/Cargo.toml');
-sh('clang++ -std=c++17 e2e/jsi-shape-check.cpp -Wl,-force_load,demo/.crossbind/bridge-crate/target/release/libdemo_crossbind_bridge.a -o e2e/jsi-shape-check');
+const nativeBridge = 'demo/.crossbind/bridge-crate/target/release/libdemo_crossbind_bridge.a';
+const keepNativeBridge = process.platform === 'darwin'
+    ? `-Wl,-force_load,${nativeBridge}`
+    : `-Wl,--whole-archive ${nativeBridge} -Wl,--no-whole-archive`;
+sh(`c++ -std=c++17 e2e/jsi-shape-check.cpp ${keepNativeBridge} -o e2e/jsi-shape-check`);
 const mob = execFileSync('./e2e/jsi-shape-check', { cwd: root, encoding: 'utf8' });
 for (const m of ['current: 50', 'describe: count=50', 'span 2..10', 'area: 36', 'mode: 1',
     'fromText current: 42', 'label: n=42', 'checkedDiv raised: 1 msg: division by zero',

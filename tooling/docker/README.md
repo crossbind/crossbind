@@ -12,17 +12,18 @@ and Node and nothing else.
 
 ## The family
 
-| Image | Carries | Platforms |
-| --- | --- | --- |
-| `base` | Debian, Node, the pinned Rust toolchain, swig, cmake | amd64, arm64 |
-| `web` | base + Emscripten, wasi-sdk, the prebuilt Rust sysroots | amd64, arm64 |
-| `android` | base + the NDK and the android Rust targets | amd64 only |
-| `rust-sysroot` | just the ST/MT Rust sysroots and their manifest | amd64, arm64 |
+| Image          | Carries                                                 | Platforms    |
+| -------------- | ------------------------------------------------------- | ------------ |
+| `base`         | Debian, Node, the pinned Rust toolchain, swig, cmake    | amd64, arm64 |
+| `web`          | base + Emscripten, wasi-sdk, the prebuilt Rust sysroots | amd64, arm64 |
+| `android`      | base + the NDK and the android Rust targets             | amd64 only   |
+| `rust-sysroot` | just the ST/MT Rust sysroots and their manifest         | amd64, arm64 |
 
 `web` and `android` are built `FROM base`, so all three share one toolchain layer. Nothing above
-Debian is installed here: Node, Rust and Emscripten are copied out of digest-pinned upstream
-images, which keeps their build recipes upstream's problem while the runtime layout — PATH, Node
-version, `CARGO_HOME`, cache permissions — stays ours to guarantee.
+Debian is inherited here: Node and Emscripten are copied out of digest-pinned upstream images;
+Rust is installed as an exact release by the rustup from a digest-pinned bootstrap image. This
+keeps the upstream distributions authoritative while the runtime layout — PATH, Node version,
+`CARGO_HOME`, cache permissions — stays ours to guarantee.
 
 `android` is amd64-only because Google ships the Linux NDK host tools for x86_64 alone; the CLI
 pins android builds to that platform even on an arm64 host.
@@ -45,9 +46,48 @@ compile that actually runs, writable caches, and the absence of `rust-src` and `
 
 ## Publishing
 
-`.github/workflows/publish-images.yml`, run by hand. It builds each image on a native runner per
-architecture, merges them into a multi-arch index, mirrors the result to Docker Hub by digest, and
-emits the digest table the CLI pins against. The image version lives in `VERSION`.
+`.github/workflows/publish-images.yml` is manual and defaults to a write-free dry run. It builds
+each image locally on a native runner and smoke-tests the hardened execution profile without
+logging in or writing to a registry. The same run also scans the local images for fixable high and
+critical vulnerabilities with no shared Trivy cache write:
 
-The predecessor — a single image published as `bugra9/cpp.js` — is retired. It stays on Docker Hub
-because released CLI versions still pull it; its recipe is in the git history.
+```sh
+gh workflow run publish-images.yml --ref main -f dry_run=true
+```
+
+After review, `dry_run=false` enters the protected `toolchain-release` environment, builds each
+platform once, publishes hidden staging indexes to canonical GHCR, produces subject-bound SLSA
+provenance and SPDX SBOMs, scans every exact platform digest, signs the release through GitHub OIDC
+and promotes the same bytes to the version tag:
+
+```sh
+gh workflow run publish-images.yml --ref main -f dry_run=false
+```
+
+The environment must allow only `main`, require a reviewer, disallow self-review and administrator
+bypass, and the workflow must have package write access. No stored registry or signing credential
+is used. Docker Hub is not an official release target; an enterprise consumer may copy the exact
+GHCR digest into its private registry and set `CROSSBIND_REGISTRY_MIRROR`. The CLI preserves the
+release digest when it changes the registry host.
+
+The writing run emits the digest table the CLI pins against. After the image gates pass,
+`scripts/pin-docker-image.js` writes that complete table to the canonical
+`core/crossbind/src/assets/toolchain-digests.json`. The CLI, npm release manifests and GitHub
+package-release asset all consume that one file. The image version lives in `VERSION`.
+
+Published digests are rescanned daily by `.github/workflows/scan-toolchain-images.yml`. Fixable
+high or critical findings fail both the release scan and the recurring scan. An exception must be
+reviewed and time-bounded; do not turn off the gate or replace an immutable digest in place.
+
+Consumers should pull by the committed digest, not by tag. To verify the keyless signature:
+
+```sh
+cosign verify \
+  --certificate-identity https://github.com/crossbind/crossbind/.github/workflows/publish-images.yml@refs/heads/main \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+  ghcr.io/crossbind/web@sha256:<digest>
+```
+
+The predecessor — a single image published as `bugra9/cpp.js` — and the historical `1.0.2` mirrors
+stay on Docker Hub because released CLI versions may still pull them. New image trains are GHCR-only;
+their recipes and exact digests remain in git.

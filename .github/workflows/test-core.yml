@@ -1,47 +1,49 @@
 name: test core
 on:
-  workflow_dispatch:
-  push:
-    branches:
-      - main
-    paths:
-      - core/crossbind/**
-      - ports/**
-      - .github/workflows/test-core.yml
-  pull_request:
-    branches:
-      - main
-    paths:
-      - core/crossbind/**
-      - ports/**
-      - .github/workflows/test-core.yml
+    workflow_dispatch:
+    push:
+        branches:
+            - main
+        paths:
+            - core/crossbind/**
+            - ports/**
+            - .nvmrc
+            - .github/workflows/test-core.yml
+    pull_request:
+        branches:
+            - main
+        paths:
+            - core/crossbind/**
+            - ports/**
+            - .nvmrc
+            - .github/workflows/test-core.yml
 
 permissions: {}
 jobs:
-  unit:
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, windows-latest]
-    runs-on: ${{ matrix.os }}
-    steps:
-      - uses: actions/checkout@v7
-      - name: Install pnpm
-        uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
-      - name: Use Node.js
-        uses: actions/setup-node@v7
-        with:
-          node-version: 22.x
-          cache: 'pnpm'
-      - name: Install dependencies
-        run: pnpm install
-      - name: Unit tests with coverage thresholds
-        if: matrix.os == 'ubuntu-latest'
-        run: pnpm --filter crossbind test:coverage
-      - name: Unit tests
-        if: matrix.os == 'windows-latest'
-        run: pnpm --filter crossbind test
-      - name: License SPDX check
-        if: matrix.os == 'ubuntu-latest'
-        working-directory: e2e/web-vanilla
-        run: node ../../core/crossbind/src/bin.js licenses --check
+    unit:
+        strategy:
+            fail-fast: false
+            matrix:
+                os: [ubuntu-latest, windows-latest]
+        runs-on: ${{ matrix.os }}
+        steps:
+            - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+            - name: Install pnpm
+              uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
+            - name: Use Node.js
+              uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+              with:
+                  node-version-file: .nvmrc
+                  cache: 'pnpm'
+            - name: Install dependencies
+              run: pnpm install
+            - name: Unit tests with coverage thresholds
+              if: matrix.os == 'ubuntu-latest'
+              run: pnpm --filter crossbind test:coverage
+            - name: Unit tests
+              if: matrix.os == 'windows-latest'
+              run: pnpm --filter crossbind test
+            - name: License SPDX check
+              if: matrix.os == 'ubuntu-latest'
+              working-directory: e2e/web-vanilla
+              run: node ../../core/crossbind/src/bin.js licenses --check

@@ -1,12 +1,20 @@
 # syntax=docker/dockerfile:1
 
 # The common layer of the crossbind image family: host build tools, Node and the pinned Rust
-# toolchain. Nothing above Debian is inherited - Node, Rust and (in web.Dockerfile) Emscripten are
-# copied out of digest-pinned upstream images, so their build recipes stay upstream's problem while
-# the runtime layout - PATH, Node version, CARGO_HOME, cache permissions - is ours to guarantee.
+# toolchain. Nothing above Debian is inherited. Node and (in web.Dockerfile) Emscripten are copied
+# out of digest-pinned upstream images. Rust is installed as an exact release by the rustup shipped
+# in a digest-pinned upstream image; the point-release Docker tag can lag the Rust release itself.
+# The runtime layout - PATH, Node version, CARGO_HOME, cache permissions - is ours to guarantee.
 
-FROM node:24-trixie-slim@sha256:0711b541c1c33a8a530ac4f0d391baa9a15b3d804695b1b24a47daa5fb60e74d AS node
+ARG RUST_VERSION=1.98.1
+
+FROM node:24.20.0-trixie-slim@sha256:50c3b2f6988dfc307b86e5301d69611af31f4789bdf232863b07d3b02fe55ae0 AS node
 FROM rust:1.98.0-slim@sha256:cc0448b41c3b7b7fea44f5dc50eacba729a56db365b65b7bd5e8a82d5b3db078 AS rust
+ARG RUST_VERSION
+RUN rustup toolchain install "${RUST_VERSION}" --profile minimal --no-self-update && \
+    rustup default "${RUST_VERSION}" && \
+    rustup toolchain uninstall 1.98.0 && \
+    test "$(rustc -vV | sed -n 's/^release: //p')" = "${RUST_VERSION}"
 
 FROM debian:trixie-slim@sha256:3a39a0592364683e6bab97937b72cad5a8fa6dcbbee90edb3bb48c7f8e94f258 AS os
 
@@ -50,6 +58,11 @@ RUN wget -q "https://github.com/crossbind/swig/archive/${SWIG_REV}.zip" -O swig.
 
 FROM os AS base
 
+# Safe default for direct consumers. The CLI still overrides this with the host uid:gid so bind
+# mount outputs remain owned by the developer rather than by this fixed image account.
+RUN groupadd --gid 10001 crossbind && \
+    useradd --uid 10001 --gid 10001 --no-log-init --create-home --shell /bin/sh crossbind
+
 COPY --from=node /usr/local/bin/node /usr/local/bin/node
 COPY --from=node /usr/local/lib/node_modules /usr/local/lib/node_modules
 RUN ln -s ../lib/node_modules/npm/bin/npm-cli.js /usr/local/bin/npm && \
@@ -77,3 +90,4 @@ COPY --from=swig /out/licenses/LICENSE-UNIVERSITIES /opt/licenses/swig-LICENSE-U
 COPY licenses-README.md /opt/licenses/README.md
 
 WORKDIR /
+USER 10001:10001

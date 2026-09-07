@@ -15,10 +15,16 @@ import { execFileSync } from 'node:child_process';
 
 // The version lives in one place - the Dockerfile that builds the sysroot - because a copy here
 // would agree with it right up until someone bumps one and not the other.
-const RUST_VERSION = fs.readFileSync(new URL('../tooling/docker/rust-sysroot.Dockerfile', import.meta.url), 'utf8')
-    .match(/^ARG RUST_VERSION=(.+)$/m)?.[1]?.trim();
+const RUST_VERSION = fs
+    .readFileSync(new URL('../tooling/docker/rust-sysroot.Dockerfile', import.meta.url), 'utf8')
+    .match(/^ARG RUST_VERSION=(.+)$/m)?.[1]
+    ?.trim();
 if (!RUST_VERSION) throw new Error('cannot read ARG RUST_VERSION from tooling/docker/rust-sysroot.Dockerfile');
-const MIN_NODE_MAJOR = 20; // crossbind's engines.node floor
+const WEB_DOCKERFILE = fs.readFileSync(new URL('../tooling/docker/web.Dockerfile', import.meta.url), 'utf8');
+const EMSDK_VERSION = WEB_DOCKERFILE.match(/^ARG EMSDK_VERSION=(.+)$/m)?.[1]?.trim();
+const WASI_SDK_VERSION = WEB_DOCKERFILE.match(/^ARG WASI_SDK_VERSION=(.+)$/m)?.[1]?.trim();
+if (!EMSDK_VERSION || !WASI_SDK_VERSION) throw new Error('cannot read web toolchain versions from tooling/docker/web.Dockerfile');
+const NODE_VERSION = fs.readFileSync(new URL('../.nvmrc', import.meta.url), 'utf8').trim();
 
 // Local builds carry one tag per architecture, because `docker build --load` cannot produce a
 // multi-arch index; a published image is a single index that resolves per platform on pull.
@@ -39,7 +45,7 @@ const IMAGES = [
 const HOST_UID = '1000:1000';
 
 const BASE_SCRIPT = `set -e
-node -e 'process.exit(+process.versions.node.split(".")[0] >= ${MIN_NODE_MAJOR} ? 0 : 1)'
+node -e 'process.exit(process.versions.node === "${NODE_VERSION}" ? 0 : 1)'
 echo "node $(node -v)"
 rustc -vV | sed -n 's/^release: //p' | grep -qx '${RUST_VERSION}'
 echo "rustc $(rustc -vV | sed -n 's/^release: //p') cargo $(cargo --version | cut -d' ' -f2)"
@@ -51,16 +57,24 @@ touch "$CARGO_HOME/.probe" && rm "$CARGO_HOME/.probe" && echo "cargo home writab
 `;
 
 const WEB_SCRIPT = `${BASE_SCRIPT}
-emcc --version | head -1
+emcc --version | head -1 | grep -F ' ${EMSDK_VERSION} '
+echo "emscripten ${EMSDK_VERSION}"
 test -x /opt/wasi-sdk/bin/clang && echo "wasi-sdk present"
+head -1 /opt/wasi-sdk/VERSION | grep -E '^${WASI_SDK_VERSION}(\\.0)?([+ -]|$)'
+echo "wasi-sdk $(head -1 /opt/wasi-sdk/VERSION)"
 node -e 'const m=require("/opt/crossbind/rust/${RUST_VERSION}/manifest.json");
   if (m.rustc !== "${RUST_VERSION}") { console.error("sysroot rustc " + m.rustc); process.exit(1) }
+  if (m.emsdk !== "${EMSDK_VERSION}") { console.error("sysroot emsdk " + m.emsdk); process.exit(1) }
   for (const v of ["st","mt"]) if (!m.variants[v]) { console.error("missing variant " + v); process.exit(1) }
-  console.log("sysroot " + m.rustc + " " + m.target + " panic=" + m.panic)'
+  console.log("sysroot " + m.rustc + " emsdk=" + m.emsdk + " " + m.target + " panic=" + m.panic)'
 test -f /opt/crossbind/rust/${RUST_VERSION}/mt/lib/rustlib/wasm32-unknown-emscripten/lib/libstd-*.rlib && echo "mt std present"
 touch "$EM_CACHE/.probe" && rm "$EM_CACHE/.probe" && echo "em cache writable"
 cd /tmp && printf '#include <stdio.h>\\nint main(){printf("ok\\\\n");return 0;}\\n' > s.c
 emcc s.c -o s.js && node s.js | grep -qx ok && echo "emcc compile+run ok"
+printf '#include <emscripten/bind.h>\\n#include <string>\\nint pick(int){return 1;} int pick(std::string){return 2;}\\nEMSCRIPTEN_BINDINGS(smoke){emscripten::function("pick", emscripten::select_overload<int(int)>(&pick)); emscripten::function("pick", emscripten::select_overload<int(std::string)>(&pick));}\\n' > overload.cpp
+em++ overload.cpp -lembind -sMODULARIZE=1 -sEXPORT_ES6=1 -o overload.mjs
+printf 'import createModule from "./overload.mjs"; const m=await createModule(); if(m.pick(7)!==1||m.pick("x")!==2) process.exit(1);\\n' > overload-check.mjs
+node overload-check.mjs && echo "embind type overload compile+run ok"
 `;
 
 const ANDROID_SCRIPT = `${BASE_SCRIPT}
@@ -68,7 +82,14 @@ test -x "$NDK_ROOT/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-andro
 test -x "$NDK_ROOT/toolchains/llvm/prebuilt/linux-x86_64/bin/x86_64-linux-android33-clang" && echo "ndk x86_64 clang present"
 rustup target list --installed | grep -qx aarch64-linux-android
 rustup target list --installed | grep -qx x86_64-linux-android
-echo "android rust targets installed"
+cd /tmp && printf 'extern "C" int crossbind_probe(){return 7;}\n' > android.cpp
+for target in aarch64-linux-android x86_64-linux-android; do
+  "$NDK_ROOT/toolchains/llvm/prebuilt/linux-x86_64/bin/\${target}33-clang++" -c android.cpp -o "\${target}.o"
+  printf 'pub extern "C" fn crossbind_rust_probe()->i32{7}\n' > android.rs
+  rustc --target "\${target}" --crate-type staticlib -C panic=abort android.rs -o "lib\${target}.a"
+  test -s "\${target}.o" && test -s "lib\${target}.a"
+done
+echo "android C++ and Rust targets compile"
 `;
 
 const SCRIPTS = { base: BASE_SCRIPT, web: WEB_SCRIPT, android: ANDROID_SCRIPT };
@@ -87,11 +108,32 @@ function smoke({ name, ref, arch }) {
     if (actual !== arch) throw new Error(`${ref} is ${actual}, expected ${arch}`);
     const env = inspect(ref, '{{json .Config.Env}}');
     if (env.includes('RUSTC_BOOTSTRAP')) throw new Error(`${ref} carries RUSTC_BOOTSTRAP in Config.Env`);
+    const configuredUser = inspect(ref, '{{.Config.User}}');
+    if (configuredUser !== '10001:10001') throw new Error(`${ref} defaults to ${configuredUser || 'root'}, expected 10001:10001`);
 
-    const out = execFileSync('docker', ['run', '--rm', '--platform', `linux/${arch}`, '--user', HOST_UID, ref, 'sh', '-c', SCRIPTS[name]], {
-        encoding: 'utf8',
-        stdio: ['ignore', 'pipe', 'pipe'],
-    });
+    const out = execFileSync(
+        'docker',
+        [
+            'run',
+            '--rm',
+            '--platform',
+            `linux/${arch}`,
+            '--cap-drop',
+            'ALL',
+            '--security-opt',
+            'no-new-privileges=true',
+            '--user',
+            HOST_UID,
+            ref,
+            'sh',
+            '-c',
+            SCRIPTS[name],
+        ],
+        {
+            encoding: 'utf8',
+            stdio: ['ignore', 'pipe', 'pipe'],
+        },
+    );
     return out.trim().split('\n');
 }
 

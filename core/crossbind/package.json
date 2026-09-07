@@ -7,7 +7,7 @@
     "description": "Bind C++ to JavaScript without extra code. crossbind supports WebAssembly and React Native for cross-platform compatibility.",
     "type": "module",
     "engines": {
-        "node": ">=20"
+        "node": ">=24"
     },
     "bin": {
         "crossbind": "./src/bin.js"

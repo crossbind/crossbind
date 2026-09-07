@@ -1,66 +1,68 @@
 name: build linux
 on:
-  workflow_dispatch:
-  push:
-    branches:
-      - main
-    paths:
-      - core/**
-      - tooling/**
-      - ports/**
-      - plugins/**
-      - examples/**
-      - e2e/**
-      - .github/workflows/build-linux.yml
-  pull_request:
-    branches:
-      - main
-    paths:
-      - core/**
-      - tooling/**
-      - ports/**
-      - plugins/**
-      - examples/**
-      - e2e/**
-      - .github/workflows/build-linux.yml
+    workflow_dispatch:
+    push:
+        branches:
+            - main
+        paths:
+            - core/**
+            - tooling/**
+            - ports/**
+            - plugins/**
+            - examples/**
+            - e2e/**
+            - .nvmrc
+            - .github/workflows/build-linux.yml
+    pull_request:
+        branches:
+            - main
+        paths:
+            - core/**
+            - tooling/**
+            - ports/**
+            - plugins/**
+            - examples/**
+            - e2e/**
+            - .nvmrc
+            - .github/workflows/build-linux.yml
 
 permissions: {}
 jobs:
-  build:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v7
-      - name: Install pnpm
-        uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
-      - name: Use Node.js
-        uses: actions/setup-node@v7
-        with:
-          node-version: 22.x
-          cache: 'pnpm'
-      - name: Install dependencies
-        run: pnpm install
-      - name: Build for Linux
-        run: pnpm run ci:linux:build
-      - name: Publish hygiene (K1)
-        run: pnpm run check:publish
-      - name: Install Playwright Browsers
-        run: pnpm exec playwright install --with-deps
-      - name: Run Playwright tests
-        # Playgrounds are excluded: their prebuilt trees exist only on dev machines (see AGENTS.md).
-        run: pnpm run ci:linux:e2e
-      - name: Install wasi-sdk (wasi e2e toolchain)
-        run: |
-          curl -sSfL https://github.com/WebAssembly/wasi-sdk/releases/download/wasi-sdk-34-rc.3/wasi-sdk-34.0-rc.3-x86_64-linux.tar.gz -o "$RUNNER_TEMP/wasi-sdk.tar.gz"
-          echo "12ad05db5cb7e8d949b5383b84f2b7d169e6db33538f97d62a9eb7ac4e985daa  $RUNNER_TEMP/wasi-sdk.tar.gz" | sha256sum -c -
-          tar -xzf "$RUNNER_TEMP/wasi-sdk.tar.gz" -C "$RUNNER_TEMP"
-      - name: Install wasmtime (wasi e2e runtime)
-        run: |
-          curl -sSfL https://github.com/bytecodealliance/wasmtime/releases/download/v47.0.2/wasmtime-v47.0.2-x86_64-linux.tar.xz -o "$RUNNER_TEMP/wasmtime.tar.xz"
-          echo "9ec85751649139711b6a5061c4f48a41412bf9b1ab98a08b9924ca73f22ca575  $RUNNER_TEMP/wasmtime.tar.xz" | sha256sum -c -
-          tar -xJf "$RUNNER_TEMP/wasmtime.tar.xz" -C "$RUNNER_TEMP"
-          echo "$RUNNER_TEMP/wasmtime-v47.0.2-x86_64-linux" >> "$GITHUB_PATH"
-      - name: Run wasi e2e
-        # The build step already produced the prebuilt via docker (zero-config); this recompiles the probe with the runner sdk and runs it under wasmtime.
-        env:
-          CROSSBIND_WASI_SDK_PATH: ${{ runner.temp }}/wasi-sdk-34.0-rc.3-x86_64-linux
-        run: pnpm run ci:linux:e2e:wasi
+    build:
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+            - name: Install pnpm
+              uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
+            - name: Use Node.js
+              uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+              with:
+                  node-version-file: .nvmrc
+                  cache: 'pnpm'
+            - name: Install dependencies
+              run: pnpm install
+            - name: Build for Linux
+              run: pnpm run ci:linux:build
+            - name: Publish hygiene (K1)
+              run: pnpm run check:publish
+            - name: Install Playwright Browsers
+              run: pnpm exec playwright install --with-deps
+            - name: Run Playwright tests
+              # Playgrounds are excluded: their prebuilt trees exist only on dev machines (see AGENTS.md).
+              run: pnpm run ci:linux:e2e
+            - name: Install wasi-sdk (wasi e2e toolchain)
+              run: |
+                  curl -sSfL https://github.com/WebAssembly/wasi-sdk/releases/download/wasi-sdk-34/wasi-sdk-34.0-x86_64-linux.tar.gz -o "$RUNNER_TEMP/wasi-sdk.tar.gz"
+                  echo "b761e3a0721dbae9c09a0059e5fdb2bf917d1b4a8a7b430fb3b5aafb0984b2c4  $RUNNER_TEMP/wasi-sdk.tar.gz" | sha256sum -c -
+                  tar -xzf "$RUNNER_TEMP/wasi-sdk.tar.gz" -C "$RUNNER_TEMP"
+            - name: Install wasmtime (wasi e2e runtime)
+              run: |
+                  curl -sSfL https://github.com/bytecodealliance/wasmtime/releases/download/v47.0.2/wasmtime-v47.0.2-x86_64-linux.tar.xz -o "$RUNNER_TEMP/wasmtime.tar.xz"
+                  echo "9ec85751649139711b6a5061c4f48a41412bf9b1ab98a08b9924ca73f22ca575  $RUNNER_TEMP/wasmtime.tar.xz" | sha256sum -c -
+                  tar -xJf "$RUNNER_TEMP/wasmtime.tar.xz" -C "$RUNNER_TEMP"
+                  echo "$RUNNER_TEMP/wasmtime-v47.0.2-x86_64-linux" >> "$GITHUB_PATH"
+            - name: Run wasi e2e
+              # The build step already produced the prebuilt via docker (zero-config); this recompiles the probe with the runner sdk and runs it under wasmtime.
+              env:
+                  CROSSBIND_WASI_SDK_PATH: ${{ runner.temp }}/wasi-sdk-34.0-x86_64-linux
+              run: pnpm run ci:linux:e2e:wasi

@@ -1,6 +1,4 @@
-import {
-    describe, test, expect, vi, beforeEach, afterEach,
-} from 'vitest';
+import { describe, test, expect, vi, beforeEach, afterEach } from 'vitest';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -12,7 +10,13 @@ import path from 'node:path';
 vi.mock('node:child_process', () => ({ execFileSync: vi.fn() }));
 
 const holder = { config: {} };
-vi.mock('../src/state/index.js', () => ({ default: { get config() { return holder.config; } } }));
+vi.mock('../src/state/index.js', () => ({
+    default: {
+        get config() {
+            return holder.config;
+        },
+    },
+}));
 
 let work;
 
@@ -31,9 +35,8 @@ async function importFresh() {
     return { run, images, execFileSync };
 }
 
-const pulledRefs = (execFileSync) => execFileSync.mock.calls
-    .filter(([cmd, args]) => cmd === 'docker' && args?.[0] === 'pull')
-    .map(([, args]) => args[1]);
+const pulledRefs = (execFileSync) =>
+    execFileSync.mock.calls.filter(([cmd, args]) => cmd === 'docker' && args?.[0] === 'pull').map(([, args]) => args[1]);
 
 // run() carries on into the container once the image is there; only the pull is under test.
 function runIgnoringContainer(run, target) {
@@ -58,6 +61,19 @@ afterEach(() => {
 });
 
 describe('run: which image ref reaches docker pull', () => {
+    test('one-shot containers drop capabilities and cannot gain new privileges', async () => {
+        const { run, execFileSync } = await importFresh();
+
+        try {
+            run('true', [], null, { platform: 'wasm' });
+        } catch {
+            // The mock does not emulate a full Docker process; argv construction is the contract.
+        }
+
+        const invocation = execFileSync.mock.calls.find(([cmd, args]) => cmd === 'docker' && args?.[0] === 'run');
+        expect(invocation?.[1]).toEqual(expect.arrayContaining(['--cap-drop', 'ALL', '--security-opt', 'no-new-privileges=true']));
+    });
+
     test('android asks for the amd64 leaf, never the index that has no arm64', async () => {
         const { run, images, execFileSync } = await importFresh();
 

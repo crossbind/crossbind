@@ -169,19 +169,19 @@ export default async function buildWasm(target, options = {}) {
         triggerExtensions('buildWasm', 'beforeBuildBrowser', [emccFlags]);
 
         const data = Object.entries(getData('data', target)).map(([key, value]) => ['--preload-file', `${key.replaceAll('@', '@@')}@/crossbind/${value}`]).flat();
-        run('emcc', [
+        run('em++', [
             '-lembind',
             ...emccFlags,
             // '-lwebsocket.js', '-sPROXY_POSIX_SOCKETS', '-sWEBSOCKET_DEBUG=1', '-sJSPI', '-g', '-sWASMFS',
-            '-sWASM_BIGINT=1', '-s', 'FORCE_FILESYSTEM=1',
+            '-s', 'FORCE_FILESYSTEM=1',
             '-sEXPORT_NAME=Module2', // '-pthread', '-sPTHREAD_POOL_SIZE=5',
             ...linkLibs, ...rustSources, `${state.config.paths.cli}/assets/cpp-runtime/browser.cpp`,
             ...(isProd ? ['-O3'] : []),
             '-s', 'WASM=1', '-s', 'MODULARIZE=1', '-s', 'DYNAMIC_EXECUTION=0',
             '-s', 'RESERVED_FUNCTION_POINTERS=200', // '-s', 'FORCE_FILESYSTEM=1',
             '-s', 'ALLOW_MEMORY_GROWTH=1',
-            // emsdk 6 defaults GROWABLE_ARRAYBUFFERS=1; Firefox/WebKit TextDecoder rejects views
-            // over resizable ArrayBuffers, breaking every string crossing the wasm boundary.
+            // Keep this explicit: Firefox/WebKit TextDecoder rejects views over resizable
+            // ArrayBuffers, breaking every string crossing the wasm boundary.
             '-s', 'GROWABLE_ARRAYBUFFERS=0',
             '-s', 'WASMFS',
             '-s', 'ENVIRONMENT=web,webview,worker',
@@ -240,10 +240,9 @@ export default async function buildWasm(target, options = {}) {
         triggerExtensions('buildWasm', 'beforeBuildEdge', [emccFlags]);
 
         const data = Object.entries(getData('data', target)).map(([key, value]) => ['--preload-file', `${key.replaceAll('@', '@@')}@/crossbind/${value}`]).flat();
-        run('emcc', [
+        run('em++', [
             '-lembind',
             ...emccFlags,
-            '-sWASM_BIGINT=1',
             '-sEXPORT_NAME=Module2',
             // rustSources carries the embind-rust adapter TU (emval/json/tid hooks); without
             // it any linked Rust package archive fails with undefined crossbind_* symbols.
@@ -273,11 +272,11 @@ export default async function buildWasm(target, options = {}) {
 
         triggerExtensions('buildWasm', 'beforeBuildNodeJS', [emccFlags]);
 
-        run('emcc', [
+        run('em++', [
             '-lembind',
             ...emccFlags,
-            // '-s', 'FETCH', '-sJSPI', '-sWASM_BIGINT=1', '-pthread', '-sPTHREAD_POOL_SIZE=5',
-            '-sWASM_BIGINT=1', '-s', 'FORCE_FILESYSTEM=1',
+            // '-s', 'FETCH', '-sJSPI', '-pthread', '-sPTHREAD_POOL_SIZE=5',
+            '-s', 'FORCE_FILESYSTEM=1',
             ...linkLibs, ...rustSources, `${state.config.paths.cli}/assets/cpp-runtime/node.cpp`,
             ...(isProd ? ['-O3'] : []),
             '-s', 'WASM=1', '-s', 'MODULARIZE=1', '-s', 'DYNAMIC_EXECUTION=0',

@@ -2,7 +2,7 @@
 # scripts/doctor.sh — verify the crossbind development toolchain is ready.
 #
 # Checks (in order):
-#   - Node              ≥ 20    (crossbind engines.node ≥ 20)
+#   - Node              ≥ 24    (crossbind engines.node ≥ 24)
 #   - pnpm              ≥ 10    (workspace packageManager pin)
 #   - git               (any version)
 #   - Docker            (running daemon, can pull crossbind's Emscripten image)
@@ -45,15 +45,15 @@ printf '\n%s\n' "Node.js"
 if command -v node >/dev/null 2>&1; then
     node_v=$(node --version | sed 's/^v//')
     node_major=${node_v%%.*}
-    if [ "$node_major" -ge 20 ] 2>/dev/null; then
-        check_ok "node $node_v (≥ 20)"
+    if [ "$node_major" -ge 24 ] 2>/dev/null; then
+        check_ok "node $node_v (≥ 24)"
     else
-        check_fail "node $node_v (need ≥ 20)"
-        hint "Install via nvm: 'nvm install 22 && nvm use 22' (.nvmrc pins 22)"
+        check_fail "node $node_v (need ≥ 24)"
+        hint "Install the repository pin via nvm: 'nvm install && nvm use'"
     fi
 else
     check_fail "node not found"
-    hint "Install Node 22 via nvm/fnm/volta. .nvmrc at repo root pins the major version."
+    hint "Install Node via nvm/fnm/volta. The root .nvmrc pins the exact supported LTS version."
 fi
 
 # -------- pnpm --------

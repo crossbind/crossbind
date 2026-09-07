@@ -59,7 +59,7 @@
     {
       "source": "docs/api/performance.md",
       "output": "api/performance.md",
-      "sha256": "f4fed3c54afae6c9afda6e5788511246e7d52f994ad41b55c07d21b498e09119"
+      "sha256": "d39a0ea736f6e4595ea634e1c6c3a576d74ed6347ee9af5b8ace175989ec8bf8"
     },
     {
       "source": "docs/api/rust.md",
@@ -104,7 +104,7 @@
     {
       "source": "docs/playbooks/integration/nodejs.md",
       "output": "integration/nodejs.md",
-      "sha256": "4e5966a17731f04ba37f15a5ca785b00e8c05055f3b68454964b27b9312f6f74"
+      "sha256": "f46c72dcec47c991c741b2449c728e989fd238b0675a03091a3a41ac0ecb3475"
     },
     {
       "source": "docs/playbooks/integration/react-native-cli.md",

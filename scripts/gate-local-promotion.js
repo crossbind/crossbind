@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Release gate (ADR rev 7.2 §6): promotion is the only step that MUTATES a published name, and its
-// first real execution must not be against Docker Hub.
+// first real execution must not be against a public registry.
 //
 //   node scripts/gate-local-promotion.js
 //
@@ -8,13 +8,14 @@
 // seen. Promotion is different: it points an existing, public name at a digest. The failure that
 // matters is not "the tag was not created", it is "a tag that already meant something now means
 // something else", and no amount of reading the script proves it cannot happen. So it is exercised
-// here, on two disposable zot registries, against the four cases that decide whether a rerun after
+// here, on two disposable zot registries, against the five cases that decide whether a rerun after
 // a half-finished promotion is safe:
 //
-//   1. the stable tag does not exist          -> created, at the staged digest
-//   2. the same promotion runs again          -> accepted, nothing changes (idempotent)
-//   3. the stable tag points somewhere else   -> refused, and the tag is left alone
-//   4. after a successful promotion           -> the tag resolves to exactly the staged digest
+//   1. primary-only promotion                 -> never writes to an unrequested mirror
+//   2. the stable tag does not exist          -> created, at the staged digest
+//   3. the same promotion runs again          -> accepted, nothing changes (idempotent)
+//   4. the stable tag points somewhere else   -> refused, and the tag is left alone
+//   5. after a successful promotion           -> the tag resolves to exactly the staged digest
 //
 // Case 3 is the one worth the whole file: a promotion that overwrites is indistinguishable from a
 // successful one until someone pulls the old digest and gets different bytes.
@@ -44,16 +45,24 @@ const SEED = 'ghcr.io/oras-project/oras:v1.3.3';
 const OTHER = 'ghcr.io/sigstore/cosign/cosign:v3.1.3';
 
 const results = [];
-const ok = (m) => { results.push(['ok', m]); console.log(`  ok    ${m}`); };
+const ok = (m) => {
+    results.push(['ok', m]);
+    console.log(`  ok    ${m}`);
+};
 const fail = (m, d = '') => {
     results.push(['fail', m]);
     console.error(`  FAIL  ${m}`);
-    if (d) d.trim().split('\n').slice(-4).forEach((l) => console.error(`        ${l}`));
+    if (d)
+        d.trim()
+            .split('\n')
+            .slice(-4)
+            .forEach((l) => console.error(`        ${l}`));
 };
 
 const work = fs.mkdtempSync(path.join(os.tmpdir(), 'crossbind-promogate-'));
 const ORAS_CMD = `docker run --rm --network ${NET} ${ORAS_IMAGE}`;
-const oras = (args) => execFileSync('docker', ['run', '--rm', '--network', NET, ORAS_IMAGE, ...args], { encoding: 'utf8', maxBuffer: 32 * 1024 * 1024 });
+const oras = (args) =>
+    execFileSync('docker', ['run', '--rm', '--network', NET, ORAS_IMAGE, ...args], { encoding: 'utf8', maxBuffer: 32 * 1024 * 1024 });
 
 function cleanup() {
     spawnSync('docker', ['rm', '-f', REG_A, REG_B], { stdio: 'ignore' });
@@ -62,20 +71,41 @@ function cleanup() {
 
 const ready = (name) => {
     for (let i = 0; i < 60; i += 1) {
-        if (spawnSync('docker', ['run', '--rm', '--network', NET, ORAS_IMAGE, 'repo', 'ls', '--plain-http', `${name}:5000`], { stdio: 'ignore' }).status === 0) return true;
+        if (
+            spawnSync('docker', ['run', '--rm', '--network', NET, ORAS_IMAGE, 'repo', 'ls', '--plain-http', `${name}:5000`], { stdio: 'ignore' })
+                .status === 0
+        )
+            return true;
         spawnSync('sh', ['-c', 'sleep 1']);
     }
     return false;
 };
 
 const digestOf = (ref) => JSON.parse(oras(['manifest', 'fetch', '--descriptor', '--plain-http', ref])).digest;
+const optionalDigestOf = (ref) => {
+    try {
+        return digestOf(ref);
+    } catch {
+        return null;
+    }
+};
 
 // Drives the real promotion script, with oras pointed at the containerised binary.
-function promote() {
-    return spawnSync('node', ['scripts/promote-tags.js',
-        '--version', VERSION, '--staging', STAGING,
-        '--primary', `${REG_A}:5000`, '--mirror', `${REG_B}:5000`,
-        '--images', IMAGE, '--plain-http'], {
+function promote({ mirror = false } = {}) {
+    const args = [
+        'scripts/promote-tags.js',
+        '--version',
+        VERSION,
+        '--staging',
+        STAGING,
+        '--primary',
+        `${REG_A}:5000`,
+        '--images',
+        IMAGE,
+        '--plain-http',
+    ];
+    if (mirror) args.push('--mirror', `${REG_B}:5000`);
+    return spawnSync('node', args, {
         encoding: 'utf8',
         env: { ...process.env, CROSSBIND_ORAS: ORAS_CMD },
     });
@@ -93,28 +123,35 @@ try {
     const staged = digestOf(`${REG_A}:5000/${IMAGE}:${STAGING}`);
     ok(`staged ${staged.slice(0, 19)}… on both registries under ${STAGING}`);
 
-    // 1. The stable tag does not exist yet.
+    // 1. The canonical GHCR path has no implicit mirror. This is the production default.
     let r = promote();
     if (r.status !== 0) fail('promotion into a clean registry', r.stdout + r.stderr);
     else {
         const a = digestOf(`${REG_A}:5000/${IMAGE}:${VERSION}`);
-        const b = digestOf(`${REG_B}:5000/${IMAGE}:${VERSION}`);
-        if (a === staged && b === staged) ok('a missing stable tag is created at the staged digest, on both registries');
-        else fail('the created tag does not resolve to the staged digest', `primary ${a} mirror ${b} staged ${staged}`);
+        const b = optionalDigestOf(`${REG_B}:5000/${IMAGE}:${VERSION}`);
+        if (a === staged && b === null) ok('primary-only promotion creates GHCR and leaves an unrequested mirror untouched');
+        else fail('primary-only promotion touched the wrong registry', `primary ${a} mirror ${b ?? '(absent)'} staged ${staged}`);
     }
 
-    // 2. Idempotent: the same promotion again must be accepted and change nothing.
-    r = promote();
+    // 2. An explicitly configured private mirror can be added later without moving GHCR.
+    r = promote({ mirror: true });
+    if (r.status !== 0) fail('adding an explicitly requested private mirror', r.stdout + r.stderr);
+    else if (digestOf(`${REG_A}:5000/${IMAGE}:${VERSION}`) === staged && digestOf(`${REG_B}:5000/${IMAGE}:${VERSION}`) === staged) {
+        ok('an explicit mirror receives the same staged digest while GHCR stays unchanged');
+    } else fail('the explicit mirror promotion did not converge on the staged digest');
+
+    // 3. Idempotent: the same promotion again must be accepted and change nothing.
+    r = promote({ mirror: true });
     if (r.status !== 0) fail('rerunning an already-finished promotion', r.stdout + r.stderr);
     else if (digestOf(`${REG_A}:5000/${IMAGE}:${VERSION}`) !== staged) fail('a rerun moved the tag');
     else ok('a rerun is accepted and moves nothing (idempotent)');
 
-    // 3. The tag already points at other bytes: promotion must refuse AND leave it alone.
+    // 4. The tag already points at other bytes: promotion must refuse AND leave it alone.
     oras(['cp', '--to-plain-http', OTHER, `${REG_B}:5000/${IMAGE}:${VERSION}`]);
     const foreign = digestOf(`${REG_B}:5000/${IMAGE}:${VERSION}`);
     if (foreign === staged) fail('the second seed hashed to the staged digest - the case is untestable');
     else {
-        r = promote();
+        r = promote({ mirror: true });
         if (r.status === 0) fail('promotion accepted a stable tag that pointed at other bytes');
         else {
             const after = digestOf(`${REG_B}:5000/${IMAGE}:${VERSION}`);
@@ -123,7 +160,7 @@ try {
         }
     }
 } catch (e) {
-    fail('gate setup', (e.stderr?.toString() || e.message));
+    fail('gate setup', e.stderr?.toString() || e.message);
 } finally {
     cleanup();
     fs.rmSync(work, { recursive: true, force: true });

@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import pullDockerImage, { getDockerImage, getDockerContainerName, imageRoleFor } from '../utils/pullDockerImage.js';
 import getOsUserAndGroupId from '../utils/getOsUserAndGroupId.js';
 import replaceBasePathForDockerUtil from '../utils/replaceBasePathForDocker.js';
+import { DOCKER_RUN_SECURITY_ARGS } from '../utils/dockerSecurity.js';
 import state from '../state/index.js';
 import { wasiCFlags, wasiCxxFlags, resolveWasiSdkPath, WASI_TARGET_TRIPLE } from '../utils/wasiToolchain.js';
 
@@ -20,51 +21,70 @@ const iosSdkPath = `${iOSDevPath}/Platforms/iPhoneOS.platform/Developer/SDKs/iPh
 const iosSimSdkPath = `${iOSDevPath}/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator.sdk`;
 
 const androidParamsArm64 = [
-    '-e', `AR=${t}/llvm-ar`,
-    '-e', `AS=${t}/llvm-as`,
-    '-e', `CC=${t}/${CROSSCOMPILER_ARM64}-clang`,
-    '-e', `CXX=${t}/${CROSSCOMPILER_ARM64}-clang++`,
-    '-e', `LD=${t}/ld`,
-    '-e', `RANLIB=${t}/llvm-ranlib`,
-    '-e', `STRIP=${t}/llvm-strip`,
-    '-e', `NM=${t}/nm`,
-    '-e', `CFLAGS=--sysroot=${t2}/sysroot`,
+    '-e',
+    `AR=${t}/llvm-ar`,
+    '-e',
+    `AS=${t}/llvm-as`,
+    '-e',
+    `CC=${t}/${CROSSCOMPILER_ARM64}-clang`,
+    '-e',
+    `CXX=${t}/${CROSSCOMPILER_ARM64}-clang++`,
+    '-e',
+    `LD=${t}/ld`,
+    '-e',
+    `RANLIB=${t}/llvm-ranlib`,
+    '-e',
+    `STRIP=${t}/llvm-strip`,
+    '-e',
+    `NM=${t}/nm`,
+    '-e',
+    `CFLAGS=--sysroot=${t2}/sysroot`,
 ];
 
 const androidParamsX86_64 = [
-    '-e', `AR=${t}/llvm-ar`,
-    '-e', `AS=${t}/llvm-as`,
-    '-e', `CC=${t}/${CROSSCOMPILER_x86_64}-clang`,
-    '-e', `CXX=${t}/${CROSSCOMPILER_x86_64}-clang++`,
-    '-e', `LD=${t}/ld`,
-    '-e', `RANLIB=${t}/llvm-ranlib`,
-    '-e', `STRIP=${t}/llvm-strip`,
-    '-e', `NM=${t}/nm`,
-    '-e', `CFLAGS=--sysroot=${t2}/sysroot`,
+    '-e',
+    `AR=${t}/llvm-ar`,
+    '-e',
+    `AS=${t}/llvm-as`,
+    '-e',
+    `CC=${t}/${CROSSCOMPILER_x86_64}-clang`,
+    '-e',
+    `CXX=${t}/${CROSSCOMPILER_x86_64}-clang++`,
+    '-e',
+    `LD=${t}/ld`,
+    '-e',
+    `RANLIB=${t}/llvm-ranlib`,
+    '-e',
+    `STRIP=${t}/llvm-strip`,
+    '-e',
+    `NM=${t}/nm`,
+    '-e',
+    `CFLAGS=--sysroot=${t2}/sysroot`,
 ];
 
 const IOS_HOST_FLAGS = `-arch arm64 -isysroot ${iosSdkPath} -fembed-bitcode`;
 const IOS_SIM_HOST_FLAGS = `-arch arm64 -isysroot ${iosSimSdkPath} -fembed-bitcode`;
-const IOS_IPHONE_PARAMS = [
-    '-e', `CFLAGS="${IOS_HOST_FLAGS}"`,
-    '-e', `CXXFLAGS="${IOS_HOST_FLAGS}"`,
-    '-e', `LDFLAGS="${IOS_HOST_FLAGS}"`,
-];
-const IOS_SIM_PARAMS = [
-    '-e', `CFLAGS="${IOS_SIM_HOST_FLAGS}"`,
-    '-e', `CXXFLAGS="${IOS_SIM_HOST_FLAGS}"`,
-    '-e', `LDFLAGS="${IOS_SIM_HOST_FLAGS}"`,
-];
+const IOS_IPHONE_PARAMS = ['-e', `CFLAGS="${IOS_HOST_FLAGS}"`, '-e', `CXXFLAGS="${IOS_HOST_FLAGS}"`, '-e', `LDFLAGS="${IOS_HOST_FLAGS}"`];
+const IOS_SIM_PARAMS = ['-e', `CFLAGS="${IOS_SIM_HOST_FLAGS}"`, '-e', `CXXFLAGS="${IOS_SIM_HOST_FLAGS}"`, '-e', `LDFLAGS="${IOS_SIM_HOST_FLAGS}"`];
 const iosParams = [
-    '-e', `AR=${iosBinPath}/ar`,
-    '-e', `AS=${iosBinPath}/as`,
-    '-e', `CC=${iosBinPath}/clang`,
-    '-e', `CXX=${iosBinPath}/clang++`,
-    '-e', `CPP=${iosBinPath}/cpp`,
-    '-e', `LD=${iosBinPath}/ld`,
-    '-e', `RANLIB=${iosBinPath}/ranlib`,
-    '-e', `STRIP=${iosBinPath}/strip`,
-    '-e', `NM=${iosBinPath}/llvm-nm`,
+    '-e',
+    `AR=${iosBinPath}/ar`,
+    '-e',
+    `AS=${iosBinPath}/as`,
+    '-e',
+    `CC=${iosBinPath}/clang`,
+    '-e',
+    `CXX=${iosBinPath}/clang++`,
+    '-e',
+    `CPP=${iosBinPath}/cpp`,
+    '-e',
+    `LD=${iosBinPath}/ld`,
+    '-e',
+    `RANLIB=${iosBinPath}/ranlib`,
+    '-e',
+    `STRIP=${iosBinPath}/strip`,
+    '-e',
+    `NM=${iosBinPath}/llvm-nm`,
 ];
 
 /* const iosMetalParams = [
@@ -111,23 +131,29 @@ export default function run(program, params = [], platformPrefix = null, target 
             case 'wasi': {
                 const wasiSdk = wasiHostSdk || '/opt/wasi-sdk';
                 if (wasiHostSdk && !fs.existsSync(`${wasiHostSdk}/share/wasi-sysroot/lib/${WASI_TARGET_TRIPLE}`)) {
-                    throw new Error(`crossbind: the wasi-sdk at ${wasiHostSdk} has no ${WASI_TARGET_TRIPLE} sysroot. platform:'wasi' targets WASI 0.3 (p3) - upgrade to wasi-sdk >= 34.`);
+                    throw new Error(
+                        `crossbind: the wasi-sdk at ${wasiHostSdk} has no ${WASI_TARGET_TRIPLE} sysroot. platform:'wasi' targets WASI 0.3 (p3) - upgrade to wasi-sdk >= 34.`,
+                    );
                 }
                 [dProgram, ...dParams] = params;
                 platformParams = [
-                    '-e', `CC=${wasiSdk}/bin/clang`,
-                    '-e', `CXX=${wasiSdk}/bin/clang++`,
-                    '-e', `AR=${wasiSdk}/bin/ar`,
-                    '-e', `RANLIB=${wasiSdk}/bin/ranlib`,
-                    '-e', `NM=${wasiSdk}/bin/nm`,
-                    '-e', `CFLAGS=${wasiCFlags().join(' ')}`,
-                    '-e', `CXXFLAGS=${wasiCxxFlags().join(' ')}`,
+                    '-e',
+                    `CC=${wasiSdk}/bin/clang`,
+                    '-e',
+                    `CXX=${wasiSdk}/bin/clang++`,
+                    '-e',
+                    `AR=${wasiSdk}/bin/ar`,
+                    '-e',
+                    `RANLIB=${wasiSdk}/bin/ranlib`,
+                    '-e',
+                    `NM=${wasiSdk}/bin/nm`,
+                    '-e',
+                    `CFLAGS=${wasiCFlags().join(' ')}`,
+                    '-e',
+                    `CXXFLAGS=${wasiCxxFlags().join(' ')}`,
                 ];
                 if (dProgram === 'cmake' && dParams[0] !== '--build' && dParams[0] !== '--install') {
-                    dParams = [
-                        ...dParams,
-                        `-DCMAKE_TOOLCHAIN_FILE=${wasiSdk}/share/cmake/wasi-sdk-p3.cmake`,
-                    ];
+                    dParams = [...dParams, `-DCMAKE_TOOLCHAIN_FILE=${wasiSdk}/share/cmake/wasi-sdk-p3.cmake`];
                 } else if (dProgram === 'wasi-clang++') {
                     dProgram = `${wasiSdk}/bin/clang++`;
                     platformParams = [];
@@ -158,7 +184,8 @@ export default function run(program, params = [], platformPrefix = null, target 
                     if (dParams[0] !== '--build' && dParams[0] !== '--install') {
                         dParams = [
                             ...dParams,
-                            '-G', 'Xcode',
+                            '-G',
+                            'Xcode',
                             '-DBUILD_SHARED_LIBS=OFF',
                             '-DFRAMEWORK=TRUE',
                             '-DCMAKE_OSX_DEPLOYMENT_TARGET=13.0',
@@ -170,7 +197,7 @@ export default function run(program, params = [], platformPrefix = null, target 
                             '-DCMAKE_SYSTEM_PROCESSOR=arm64',
                             `-DCMAKE_C_FLAGS=${target.arch === 'iphoneos' ? '-fembed-bitcode' : '-fembed-bitcode-marker'}`,
                             `-DCMAKE_CXX_FLAGS=${target.arch === 'iphoneos' ? '-fembed-bitcode' : '-fembed-bitcode-marker'}`,
-                            '-DCMAKE_XCODE_ATTRIBUTE_CODE_SIGN_IDENTITY=\'iPhone Developer\'',
+                            "-DCMAKE_XCODE_ATTRIBUTE_CODE_SIGN_IDENTITY='iPhone Developer'",
                             `-DCMAKE_XCODE_ATTRIBUTE_DEVELOPMENT_TEAM=${state.config.system.XCODE_DEVELOPMENT_TEAM}`,
                         ];
                     }
@@ -195,7 +222,7 @@ export default function run(program, params = [], platformPrefix = null, target 
                             '-DCMAKE_SYSTEM_PROCESSOR=arm64',
                             `-DCMAKE_C_FLAGS=${target.arch === 'iphoneos' ? '-fembed-bitcode' : '-fembed-bitcode-marker'}`,
                             `-DCMAKE_CXX_FLAGS=${target.arch === 'iphoneos' ? '-fembed-bitcode' : '-fembed-bitcode-marker'}`,
-                            '-DCMAKE_XCODE_ATTRIBUTE_CODE_SIGN_IDENTITY=\'iPhone Developer\'',
+                            "-DCMAKE_XCODE_ATTRIBUTE_CODE_SIGN_IDENTITY='iPhone Developer'",
                             `-DCMAKE_XCODE_ATTRIBUTE_DEVELOPMENT_TEAM=${state.config.system.XCODE_DEVELOPMENT_TEAM}`,
                         ];
                     }
@@ -207,14 +234,25 @@ export default function run(program, params = [], platformPrefix = null, target 
 
     const env = {};
     let runner = 'DOCKER';
-    if (((target?.platform === 'ios' || (target?.platform === 'wasi' && wasiHostSdk)) && program === null) || state.config.system.RUNNER === 'LOCAL') {
+    if (
+        ((target?.platform === 'ios' || (target?.platform === 'wasi' && wasiHostSdk)) && program === null) ||
+        state.config.system.RUNNER === 'LOCAL'
+    ) {
         runner = 'LOCAL';
     }
 
     if (runner === 'LOCAL') {
         const allowedEnv = [
-            '^PWD$', '^SHELL$', '^LC_CTYPE$', '^PATH$', '^HOME$', '^TMPDIR$', '^USER$',
-            '^PODS_*', '^CONFIGURATION_BUILD_DIR$', '^UNLOCALIZED_RESOURCES_FOLDER_PATH$',
+            '^PWD$',
+            '^SHELL$',
+            '^LC_CTYPE$',
+            '^PATH$',
+            '^HOME$',
+            '^TMPDIR$',
+            '^USER$',
+            '^PODS_*',
+            '^CONFIGURATION_BUILD_DIR$',
+            '^UNLOCALIZED_RESOURCES_FOLDER_PATH$',
         ];
         Object.entries(process.env).forEach(([key, value]) => {
             if (allowedEnv.some((e) => key.match(e))) {
@@ -230,7 +268,7 @@ export default function run(program, params = [], platformPrefix = null, target 
             const value = rest.join('=');
             if (['CFLAGS', 'CXXFLAGS', 'CPPFLAGS', 'LDFLAGS'].includes(key)) {
                 let v = value;
-                if (v.startsWith('\'') || v.startsWith('"')) {
+                if (v.startsWith("'") || v.startsWith('"')) {
                     v = v.substring(1, v.length - 1);
                 }
                 if (env[key]) env[key] += ` ${v}`;
@@ -264,7 +302,7 @@ export default function run(program, params = [], platformPrefix = null, target 
         const role = imageRoleFor(target);
         if (state.config.system.RUNNER === 'DOCKER_RUN') {
             imageOrContainer = getDockerImage(role);
-            runnerParams = ['run', '--rm', '-v', `${state.config.paths.base}:/tmp/crossbind/live`];
+            runnerParams = ['run', '--rm', ...DOCKER_RUN_SECURITY_ARGS, '-v', `${state.config.paths.base}:/tmp/crossbind/live`];
             if (target?.platform === 'android') {
                 // Google ships the linux NDK for x86_64 only; use the amd64 leaf ref (classic store holds one platform per digest).
                 pullDockerImage(role, 'linux/amd64');
@@ -280,8 +318,10 @@ export default function run(program, params = [], platformPrefix = null, target 
 
         const args = [
             ...runnerParams,
-            '--user', getOsUserAndGroupId(),
-            '--workdir', replaceBasePathForDocker(dockerOptions.workdir || buildPath),
+            '--user',
+            getOsUserAndGroupId(),
+            '--workdir',
+            replaceBasePathForDocker(dockerOptions.workdir || buildPath),
             ...replaceBasePathForDocker(dockerEnv),
             // '-e', replaceBasePathForDocker(`CCACHE_DIR=${state.config.paths.build}/ccache`),
             imageOrContainer,

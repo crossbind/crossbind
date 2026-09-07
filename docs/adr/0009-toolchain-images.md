@@ -117,14 +117,15 @@ Four choices were left to the implementer. All four are pinned in the release sc
   both registries. No `--registry-referrers-mode` flag is passed, because the choice is not ours to
   make - it belongs to what the registry implements.
 
-  Two things were verified rather than reasoned about. The conversion leg was proved locally end to
-  end: a GHCR-shaped tag-schema source copied with `--from tag --to api` lands on the destination
-  with identical descriptors and subject digests, and `cosign verify` succeeds there. And the GHCR
-  leg was proved live - `cosign verify` against the published staging digest, with the exact
-  certificate identity, succeeds with the signature stored in the tag schema.
+    Two things were verified rather than reasoned about. The conversion leg was proved locally end to
+    end: a GHCR-shaped tag-schema source copied with `--from tag --to api` lands on the destination
+    with identical descriptors and subject digests, and `cosign verify` succeeds there. And the GHCR
+    leg was proved live - `cosign verify` against the published staging digest, with the exact
+    certificate identity, succeeds with the signature stored in the tag schema.
 
-  Revisit if GHCR ships the referrers API: flip `--primary-mode` and the copy's `--from`, and the
-  gate proves the new path or fails.
+    Revisit if GHCR ships the referrers API: flip `--primary-mode` and the copy's `--from`, and the
+    gate proves the new path or fails.
+
 - **Copying: `oras cp -r` with the native API forced on both ends.** `imagetools create` rebuilds an
   index on the destination and leaves the signature behind on the source; a copy that quietly fell
   back to the tag schema would produce a mirror that looks correct and a policy that finds nothing.
@@ -164,6 +165,29 @@ The gates split what a single "cosign verify passed" would have conflated: stora
 through the native API), discovery (identical descriptor sets on both registries), and cryptographic
 verification (per subject, per registry, by digest) are separate assertions, plus a negative test
 that a certificate identity nothing in this repository can produce is refused.
+
+### Revision, 2026-09-06: canonical GHCR, attestations and least privilege
+
+Docker Hub mirroring is retired for new image trains. Its token-free OIDC publishing requires a
+paid organization account, while a personal access token would create a long-lived release secret.
+GHCR is therefore the only canonical registry and uses the job-scoped GitHub token. Enterprise
+consumers can mirror the committed digest into their own registry; the CLI's registry override
+changes only the host and preserves the digest. Historical Docker Hub images are not deleted.
+
+The release contract is tightened in four other places:
+
+- BuildKit emits max-mode SLSA provenance and an SPDX SBOM for every platform. A gate checks that
+  each attestation manifest names the exact runnable manifest before the root index is promoted.
+- Trivy scans every exact staged platform digest and refuses fixable high or critical findings. A
+  daily workflow re-evaluates the committed published digests as vulnerability data changes.
+- Registry-writing runs require `main` before the first write and pass through the protected
+  `toolchain-release` environment. External actions use immutable commit SHAs; Buildx and Trivy
+  binary versions are explicit. The default dry run builds and vulnerability-scans locally and
+  performs no registry or shared-cache write.
+- Runnable images default to uid/gid `10001:10001`. The CLI still uses the host uid/gid for bind
+  mount ownership and additionally drops all Linux capabilities and enables no-new-privileges.
+  This is least-privilege defence, not a promise that Docker safely executes hostile multi-tenant
+  code; enterprise runners must still isolate secrets, caches and network egress.
 
 ## See also
 

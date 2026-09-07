@@ -9,6 +9,7 @@ Thanks for considering a contribution. crossbind is small and friendly — a few
 ```bash
 git clone https://github.com/crossbind/crossbind.git
 cd crossbind
+nvm install && nvm use # or select the exact .nvmrc version with fnm/Volta
 pnpm install
 pnpm run doctor       # verify Node, pnpm, Docker, NDK, Xcode
 pnpm test             # unit tests (Vitest)

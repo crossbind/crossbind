@@ -5,15 +5,22 @@ name: build windows
 # offline) and no pull_request trigger (public repo: fork PRs must never execute on
 # a self-hosted machine). Hosted Windows coverage lives in test-core's windows lane.
 on:
-  workflow_dispatch:
+    workflow_dispatch:
 
 permissions: {}
 jobs:
-  build:
-    runs-on: Windows
-    steps:
-      - uses: actions/checkout@v7
-      - name: Install dependencies
-        run: pnpm install
-      - name: Build for windows
-        run: pnpm run ci:windows:build
+    build:
+        runs-on: Windows
+        steps:
+            - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+            - name: Install pnpm
+              uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
+            - name: Use Node.js
+              uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+              with:
+                  node-version-file: .nvmrc
+                  cache: 'pnpm'
+            - name: Install dependencies
+              run: pnpm install
+            - name: Build for windows
+              run: pnpm run ci:windows:build
