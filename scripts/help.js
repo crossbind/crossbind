@@ -81,7 +81,7 @@ const ANNOTATIONS = {
 
     // release
     'release:dry-run': 'Validate and preview the exact crossbind package release without writes',
-    'release:version': 'Preview or apply one fixed version to every public workspace package',
+    'release:version': 'Optionally preview or apply one common version to every public package',
     'release:package': 'Pack and smoke-test crossbind exactly as a registry consumer installs it',
     'release:manifest': 'Validate a crossbind-release.json against schema and canonical sources',
     'test:release': 'Run deterministic package-release infrastructure tests',
