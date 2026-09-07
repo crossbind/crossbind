@@ -116,14 +116,14 @@ Bug reports need: crossbind version, package(s) affected, reproducer (smallest p
 
 ## Releases
 
-All public workspace packages use one manual release train. It selects only packages whose
-committed version is newer than the matching npm channel, builds native artifacts on Linux/macOS,
-then publishes in dependency order after every tarball is ready. Beta versions publish to `beta`,
-release candidates to `next`, and stable versions to `latest`. All npm writes use OIDC Trusted
-Publishing; no npm token is stored in GitHub.
+All 107 public workspace packages use one fixed version and one manual release train. The workflow
+builds native artifacts on Linux/macOS, then publishes in dependency order after every tarball is
+ready. Beta versions publish to `beta`, release candidates to `next`, and stable versions to
+`latest`. All npm writes use OIDC Trusted Publishing; no npm token is stored in GitHub.
 
 ```bash
 pnpm run check:release
+pnpm run release:version -- --version 2.0.0-beta.55
 pnpm run release:package
 pnpm run release:dry-run
 pnpm run release:train:dry-run -- --channel beta
