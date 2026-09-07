@@ -6,6 +6,7 @@ export const WORKSPACE_REPOSITORY = 'https://github.com/crossbind/crossbind.git'
 export const WORKSPACE_RELEASE_WORKFLOW = '.github/workflows/release-crossbind.yml';
 export const WORKSPACE_RELEASE_SCHEMA_VERSION = 1;
 export const STABLE_ENTRYPOINTS_SOURCE = 'releases/npm/stable-entrypoints.json';
+export const TRAIN_VERSION_SOURCE = 'releases/npm/VERSION';
 
 const WORKSPACE_LAYOUT = [
     ['core', 1],
@@ -95,21 +96,12 @@ export function discoverPublishablePackages(root = process.cwd()) {
     return packages.sort((left, right) => left.name.localeCompare(right.name));
 }
 
-export function commonWorkspaceVersion(packages) {
-    const versions = new Map();
-    for (const candidate of packages) {
-        const names = versions.get(candidate.version) ?? [];
-        names.push(candidate.name);
-        versions.set(candidate.version, names);
-    }
-    if (versions.size !== 1) {
-        const details = [...versions]
-            .sort(([left], [right]) => compareSupportedVersions(left, right))
-            .map(([version, names]) => `${version}: ${names.length} package(s) (${names.slice(0, 5).join(', ')}${names.length > 5 ? ', ...' : ''})`)
-            .join('\n- ');
-        throw new Error(`Workspace packages do not share one version:\n- ${details}`);
-    }
-    return versions.keys().next().value;
+export function readTrainVersion(root = process.cwd()) {
+    const source = path.join(root, TRAIN_VERSION_SOURCE);
+    if (!fs.existsSync(source)) throw new Error(`Missing canonical npm train version: ${TRAIN_VERSION_SOURCE}.`);
+    const version = fs.readFileSync(source, 'utf8').trim();
+    semverChannelPolicy(version);
+    return version;
 }
 
 export function classifyBuild(candidate) {
@@ -323,6 +315,19 @@ export async function buildWorkspaceReleasePlan({
     if (!/^[0-9a-f]{40}$/.test(gitCommit ?? '')) throw new Error('A full 40-character release commit SHA is required.');
 
     const packages = discoverPublishablePackages(root);
+    const trainVersion = readTrainVersion(root);
+    const trainPolicy = semverChannelPolicy(trainVersion);
+    if (trainPolicy.channel !== channel) {
+        throw new Error(`Train version ${trainVersion} belongs to ${trainPolicy.channel}, but this run was dispatched for ${channel}.`);
+    }
+    for (const candidate of packages) {
+        if (compareSupportedVersions(candidate.version, trainVersion) > 0) {
+            throw new Error(
+                `${candidate.manifestPath}: ${candidate.name}@${candidate.version} is newer than canonical train ${trainVersion}. ` +
+                    `Prepare a new train version before publishing it.`,
+            );
+        }
+    }
     const statuses = new Map();
     const concurrency = 8;
     let next = 0;
@@ -352,6 +357,12 @@ export async function buildWorkspaceReleasePlan({
             else if (status.provenanceCommit === gitCommit) reason = 'resume';
         }
         if (!reason) continue;
+        if (candidate.version !== trainVersion) {
+            throw new Error(
+                `${candidate.manifestPath}: ${candidate.name}@${candidate.version} needs publication, but the canonical train version is ` +
+                    `${trainVersion}. Every package selected for one train must use its common target version.`,
+            );
+        }
         if (candidate.policy.channel !== channel) {
             throw new Error(
                 `${candidate.manifestPath}: ${candidate.name}@${candidate.version} needs publication on ${candidate.policy.channel}, ` +
@@ -359,6 +370,20 @@ export async function buildWorkspaceReleasePlan({
             );
         }
         candidates.push({ ...candidate, reason, registry: status });
+    }
+
+    if (candidates.length > 0) {
+        const selectedNames = new Set(candidates.map((candidate) => candidate.name));
+        const conflictingParticipants = packages
+            .filter((candidate) => candidate.version === trainVersion && !selectedNames.has(candidate.name))
+            .map((candidate) => candidate.name);
+        if (conflictingParticipants.length) {
+            throw new Error(
+                `Train ${trainVersion} is partially associated with another release commit: ` +
+                    `${conflictingParticipants.slice(0, 8).join(', ')}${conflictingParticipants.length > 8 ? ', ...' : ''}. ` +
+                    'Do not add packages to an already-used train version; prepare the next train version.',
+            );
+        }
     }
 
     const candidateNames = new Set(candidates.map((candidate) => candidate.name));
@@ -434,6 +459,7 @@ export async function buildWorkspaceReleasePlan({
         schemaVersion: WORKSPACE_RELEASE_SCHEMA_VERSION,
         gitCommit,
         channel,
+        trainVersion,
         packageCount: candidates.length,
         publishOrder,
         buildOrderByRunner,
@@ -450,6 +476,9 @@ export function validateWorkspaceReleasePlan(plan, { root } = {}) {
     if (plan?.schemaVersion !== WORKSPACE_RELEASE_SCHEMA_VERSION) throw new Error('Unsupported workspace release-plan schema.');
     if (!/^[0-9a-f]{40}$/.test(plan.gitCommit ?? '')) throw new Error('Workspace release plan has no full git commit.');
     if (!['beta', 'rc', 'stable'].includes(plan.channel)) throw new Error('Workspace release plan has an invalid channel.');
+    if (semverChannelPolicy(plan.trainVersion).channel !== plan.channel) {
+        throw new Error('Workspace release plan train version does not match its channel.');
+    }
     if (!Array.isArray(plan.packages) || plan.packageCount !== plan.packages.length)
         throw new Error('Workspace release plan package count conflicts.');
     const names = new Set(plan.packages.map((candidate) => candidate.name));
@@ -465,6 +494,9 @@ export function validateWorkspaceReleasePlan(plan, { root } = {}) {
     }
     if (root) {
         const canonical = discoverPublishablePackages(root);
+        if (readTrainVersion(root) !== plan.trainVersion) {
+            throw new Error('Workspace release plan train version does not match the release checkout.');
+        }
         const plannedNames = Object.keys(plan.workspacePackages ?? {}).sort();
         const canonicalNames = canonical.map((candidate) => candidate.name).sort();
         if (JSON.stringify(plannedNames) !== JSON.stringify(canonicalNames)) {

@@ -6,7 +6,7 @@ const execAsync = util.promisify(exec);
 
 const BUMP_MODE = process.argv.slice(2).includes('--bump');
 if (BUMP_MODE) {
-    throw new Error('Legacy --bump is disabled. Use pnpm release:version -- --version <version> --apply.');
+    throw new Error('Legacy --bump is disabled. Use release:version with --package selectors or explicit --all.');
 }
 const REPORT_PATH = (() => {
     const i = process.argv.indexOf('--report');

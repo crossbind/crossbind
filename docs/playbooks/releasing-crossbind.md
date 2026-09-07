@@ -22,24 +22,32 @@ by that version:
 Unknown prerelease identifiers fail. Stable packages publish directly to `latest`; RC packages on
 `next` are the candidate phase. Publication never moves or removes `beta` or `next` separately.
 
-A package is selected when its committed version is newer than its corresponding npm channel. A
-package already published by the same workflow and release commit is also selected as an
-idempotent partial-run resume. Equal historical versions are skipped. A local version older than
-the registry channel fails instead of moving the channel backwards. A writing run with no selected
-packages fails.
+A package is selected when its committed version is newer than its corresponding npm channel. All
+packages selected for one release use the common version recorded in `releases/npm/VERSION`.
+Unchanged packages keep their older versions and are not republished. This is a locked release
+train, not a requirement that every workspace package always have the same version.
 
-Package versions may move independently. For a synchronized release such as `2.0.0-beta.55`, the
-optional version helper can preview and update all 107 public package manifests together:
+A package already published by the same workflow and release commit is selected for an idempotent
+partial-run resume. A train version partially used by another commit fails; the maintainer must
+prepare the next train version. A local version older than the registry channel also fails rather
+than moving that channel backwards. A writing run with no selected packages fails.
+
+Prepare a train by naming its changed packages explicitly:
 
 ```bash
-pnpm run release:version -- --version 2.0.0-beta.55
-pnpm run release:version -- --version 2.0.0-beta.55 --apply
+pnpm run release:version -- --version 2.0.0-beta.56 \
+  --package crossbind \
+  --package @crossbind/plugin-vite
+pnpm run release:version -- --version 2.0.0-beta.56 \
+  --package crossbind \
+  --package @crossbind/plugin-vite \
+  --apply
 ```
 
-Because this helper touches every public package, its target must be newer than every local public
-package version. It is not required for later releases: maintainers may bump only the packages
-intended for a train. One dispatch still has exactly one semantic channel, so the selected beta, RC
-and stable packages cannot be mixed.
+The first command is a preview. The second updates only those package manifests and the canonical
+train version. Use `--all` instead of `--package` for an intentional repository-wide train such as
+`2.0.0-beta.55`, a new major or a provenance reissue. One dispatch has exactly one semantic channel,
+so selected beta, RC and stable packages cannot be mixed.
 
 The planner verifies every selected package's local runtime, optional and peer workspace
 dependencies. An exact dependency version must already exist on npm or be included in the train.
@@ -155,8 +163,9 @@ overlap.
 
 ## Beta, RC and stable procedure
 
-1. Bump the packages intended for the train. For an intentionally synchronized train, use
-   `pnpm run release:version -- --version <version> --apply`.
+1. Prepare the common train version and changed package set with
+   `pnpm run release:version -- --version <version> --package <name> [--package <name>...] --apply`.
+   Use `--all` only for an intentional repository-wide release.
 2. If `crossbind` is included, add its matching versioned release-note file.
 3. Merge the reviewed release commit to `main` and wait for required checks.
 4. Run the local read-only plan for the desired channel:

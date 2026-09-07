@@ -28,6 +28,8 @@ test('Linux build and assembly preserve one exact pnpm workspace tarball', () =>
         )}\n`,
     );
     fs.writeFileSync(path.join(packageRoot, 'index.js'), 'export const fixture = true;\n');
+    fs.mkdirSync(path.join(fixture, 'releases', 'npm'), { recursive: true });
+    fs.writeFileSync(path.join(fixture, 'releases', 'npm', 'VERSION'), '9.9.9-beta.1\n');
     const candidate = {
         name: '@crossbind/fixture',
         version: '9.9.9-beta.1',
@@ -47,6 +49,7 @@ test('Linux build and assembly preserve one exact pnpm workspace tarball', () =>
         schemaVersion: 1,
         gitCommit: COMMIT,
         channel: 'beta',
+        trainVersion: '9.9.9-beta.1',
         packageCount: 1,
         publishOrder: [candidate.name],
         buildOrderByRunner: { linux: [candidate.name], wasm: [], android: [], wasi: [], macos: [] },
@@ -120,6 +123,8 @@ test('multi-platform assembly merges exact outputs and regenerates one determini
             2,
         )}\n`,
     );
+    fs.mkdirSync(path.join(fixture, 'releases', 'npm'), { recursive: true });
+    fs.writeFileSync(path.join(fixture, 'releases', 'npm', 'VERSION'), '9.9.9-beta.1\n');
     const candidate = {
         name: '@crossbind/example-lib-prebuilt-matrix',
         version: '9.9.9-beta.1',
@@ -139,6 +144,7 @@ test('multi-platform assembly merges exact outputs and regenerates one determini
         schemaVersion: 1,
         gitCommit: COMMIT,
         channel: 'beta',
+        trainVersion: '9.9.9-beta.1',
         packageCount: 1,
         publishOrder: [candidate.name],
         buildOrderByRunner: { linux: [], wasm: [], android: [], wasi: [], macos: [] },
