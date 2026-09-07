@@ -1,0 +1,322 @@
+name: Release npm package train
+
+on:
+    workflow_dispatch:
+        inputs:
+            channel:
+                description: Require every bumped package to use this semantic release channel
+                type: choice
+                options:
+                    - beta
+                    - rc
+                    - stable
+                default: beta
+            dry_run:
+                description: Plan and build without writing to npm, git or GitHub
+                type: boolean
+                default: true
+
+permissions:
+    contents: read
+
+concurrency:
+    group: crossbind-npm-release
+    cancel-in-progress: false
+
+jobs:
+    plan:
+        name: Plan npm package train
+        runs-on: ubuntu-24.04
+        outputs:
+            planBase64: ${{ steps.plan.outputs.planBase64 }}
+            packageCount: ${{ steps.plan.outputs.packageCount }}
+            hasLinux: ${{ steps.plan.outputs.hasLinux }}
+            linuxShards: ${{ steps.plan.outputs.linuxShards }}
+            hasMacos: ${{ steps.plan.outputs.hasMacos }}
+            hasCrossbind: ${{ steps.plan.outputs.hasCrossbind }}
+        steps:
+            - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+              with:
+                  fetch-depth: 0
+            - name: Require main for a writing run
+              if: ${{ !inputs.dry_run }}
+              run: |
+                  set -euo pipefail
+                  [ "${GITHUB_REF}" = refs/heads/main ] || {
+                    echo "Writing releases must be dispatched from main, got ${GITHUB_REF}."
+                    exit 1
+                  }
+            - name: Install pnpm
+              uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
+            - name: Use Node.js
+              uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+              with:
+                  node-version-file: .nvmrc
+                  cache: pnpm
+            - name: Install dependencies
+              run: pnpm install --frozen-lockfile
+            - name: Validate release infrastructure
+              run: pnpm run check:release
+            - name: Verify repository publish hygiene
+              env:
+                  NPM_CONFIG_CACHE: ${{ runner.temp }}/npm-cache
+              run: pnpm run check:publish
+            - name: Select version-bumped packages from public npm state
+              id: plan
+              run: |
+                  args=()
+                  if [ "${{ inputs.dry_run }}" != "true" ]; then args+=(--require-changes); fi
+                  node scripts/release/plan-workspace-release.mjs \
+                    --channel "${{ inputs.channel }}" \
+                    --output "$RUNNER_TEMP/workspace-release-plan.json" \
+                    --github-output "$GITHUB_OUTPUT" \
+                    "${args[@]}"
+            - name: Run canonical crossbind unit tests
+              if: ${{ steps.plan.outputs.hasCrossbind == 'true' }}
+              run: pnpm --filter crossbind test
+            - name: Gate pinned toolchains and a representative Web build
+              if: ${{ steps.plan.outputs.hasCrossbind == 'true' }}
+              run: pnpm run check:release:toolchain
+            - name: Summarize the write-free plan
+              run: |
+                  node -e '
+                    const plan = JSON.parse(require("node:fs").readFileSync(process.argv[1]));
+                    console.log(`### ${plan.channel} npm train: ${plan.packageCount} package(s)`);
+                    for (const name of plan.publishOrder) {
+                      const item = plan.packages.find(candidate => candidate.name === name);
+                      console.log(`- ${item.name}@${item.version} → ${item.npmDistTag}; ${item.buildKind}; ${item.reason}`);
+                    }
+                    if (!plan.packageCount) console.log("- No package version is ahead of its npm channel.");
+                  ' "$RUNNER_TEMP/workspace-release-plan.json" >> "$GITHUB_STEP_SUMMARY"
+
+    build_linux:
+        name: Build ${{ matrix.shard }} artifacts
+        needs: plan
+        if: ${{ needs.plan.outputs.packageCount != '0' && needs.plan.outputs.hasLinux == 'true' }}
+        runs-on: ubuntu-24.04
+        strategy:
+            fail-fast: false
+            matrix:
+                shard: ${{ fromJSON(needs.plan.outputs.linuxShards) }}
+        steps:
+            - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+              with:
+                  ref: ${{ github.sha }}
+                  fetch-depth: 0
+            - name: Install pnpm
+              uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
+            - name: Use Node.js
+              uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+              with:
+                  node-version-file: .nvmrc
+                  cache: pnpm
+            - name: Install dependencies
+              run: pnpm install --frozen-lockfile
+            - name: Restore the approved plan
+              env:
+                  RELEASE_PLAN_BASE64: ${{ needs.plan.outputs.planBase64 }}
+              run: node -e 'require("node:fs").writeFileSync(process.argv[1], Buffer.from(process.env.RELEASE_PLAN_BASE64, "base64"))' "$RUNNER_TEMP/workspace-release-plan.json"
+            - name: Build every selected Linux artifact before publication
+              run: |
+                  node scripts/release/build-workspace-artifacts.mjs \
+                    --runner "${{ matrix.shard }}" \
+                    --plan "$RUNNER_TEMP/workspace-release-plan.json" \
+                    --artifact-dir "$RUNNER_TEMP/workspace-release-${{ matrix.shard }}"
+            - name: Preserve exact Linux artifacts for the coordinator
+              if: ${{ !inputs.dry_run }}
+              uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+              with:
+                  name: workspace-release-linux-${{ matrix.shard }}-${{ github.sha }}
+                  if-no-files-found: error
+                  path: ${{ runner.temp }}/workspace-release-${{ matrix.shard }}
+                  retention-days: 1
+
+    build_macos:
+        name: Build iOS artifacts
+        needs: plan
+        if: ${{ needs.plan.outputs.packageCount != '0' && needs.plan.outputs.hasMacos == 'true' }}
+        runs-on: macos-15
+        steps:
+            - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+              with:
+                  ref: ${{ github.sha }}
+                  fetch-depth: 0
+            - name: Install pnpm
+              uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
+            - name: Use Node.js
+              uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+              with:
+                  node-version-file: .nvmrc
+                  cache: pnpm
+            - name: Install dependencies
+              run: pnpm install --frozen-lockfile
+            - name: Restore the approved plan
+              env:
+                  RELEASE_PLAN_BASE64: ${{ needs.plan.outputs.planBase64 }}
+              run: node -e 'require("node:fs").writeFileSync(process.argv[1], Buffer.from(process.env.RELEASE_PLAN_BASE64, "base64"))' "$RUNNER_TEMP/workspace-release-plan.json"
+            - name: Build every selected iOS artifact before publication
+              run: |
+                  node scripts/release/build-workspace-artifacts.mjs \
+                    --runner macos \
+                    --plan "$RUNNER_TEMP/workspace-release-plan.json" \
+                    --artifact-dir "$RUNNER_TEMP/workspace-release-macos"
+            - name: Preserve exact macOS artifacts for the coordinator
+              if: ${{ !inputs.dry_run }}
+              uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+              with:
+                  name: workspace-release-macos-${{ github.sha }}
+                  if-no-files-found: error
+                  path: ${{ runner.temp }}/workspace-release-macos
+                  retention-days: 1
+
+    assemble:
+        name: Assemble the complete package train
+        needs:
+            - plan
+            - build_linux
+            - build_macos
+        if: >-
+            ${{ always() && !inputs.dry_run && needs.plan.result == 'success' && needs.plan.outputs.packageCount != '0' &&
+            (needs.build_linux.result == 'success' || needs.build_linux.result == 'skipped') &&
+            (needs.build_macos.result == 'success' || needs.build_macos.result == 'skipped') }}
+        runs-on: ubuntu-24.04
+        outputs:
+            crossbindTarball: ${{ steps.assemble.outputs.crossbindTarball }}
+        steps:
+            - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+              with:
+                  ref: ${{ github.sha }}
+                  fetch-depth: 0
+            - name: Install pnpm
+              uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
+            - name: Use Node.js
+              uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+              with:
+                  node-version-file: .nvmrc
+                  cache: pnpm
+            - name: Install dependencies
+              run: pnpm install --frozen-lockfile
+            - name: Restore the approved plan
+              env:
+                  RELEASE_PLAN_BASE64: ${{ needs.plan.outputs.planBase64 }}
+              run: node -e 'require("node:fs").writeFileSync(process.argv[1], Buffer.from(process.env.RELEASE_PLAN_BASE64, "base64"))' "$RUNNER_TEMP/workspace-release-plan.json"
+            - name: Restore Linux artifacts
+              if: ${{ needs.plan.outputs.hasLinux == 'true' }}
+              uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+              with:
+                  pattern: workspace-release-linux-*-${{ github.sha }}
+                  path: ${{ runner.temp }}/workspace-release-input
+            - name: Restore macOS artifacts
+              if: ${{ needs.plan.outputs.hasMacos == 'true' }}
+              uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+              with:
+                  name: workspace-release-macos-${{ github.sha }}
+                  path: ${{ runner.temp }}/workspace-release-input/workspace-release-macos-${{ github.sha }}
+            - name: Refuse incomplete trains and assemble multi-platform tarballs
+              id: assemble
+              run: |
+                  node scripts/release/assemble-workspace-artifacts.mjs \
+                    --plan "$RUNNER_TEMP/workspace-release-plan.json" \
+                    --input-root "$RUNNER_TEMP/workspace-release-input" \
+                    --artifact-dir "$RUNNER_TEMP/workspace-release-artifacts" \
+                    --github-output "$GITHUB_OUTPUT"
+            - name: Smoke-test the exact crossbind tarball
+              if: ${{ needs.plan.outputs.hasCrossbind == 'true' }}
+              run: |
+                  node scripts/release/package-crossbind.mjs \
+                    --tarball "$RUNNER_TEMP/workspace-release-artifacts/tarballs/${{ steps.assemble.outputs.crossbindTarball }}" \
+                    --artifact-dir "$RUNNER_TEMP/crossbind-smoke"
+            - name: Preserve the complete approved train
+              uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+              with:
+                  name: workspace-release-train-${{ github.sha }}
+                  if-no-files-found: error
+                  path: ${{ runner.temp }}/workspace-release-artifacts
+                  retention-days: 1
+
+    publish:
+        name: Publish exact npm tarballs
+        needs:
+            - plan
+            - assemble
+        if: ${{ !inputs.dry_run && needs.plan.outputs.packageCount != '0' }}
+        runs-on: ubuntu-24.04
+        environment: npm-release
+        permissions:
+            contents: write
+            id-token: write
+        outputs:
+            version: ${{ steps.github.outputs.version }}
+            channel: ${{ steps.github.outputs.channel }}
+            prerelease: ${{ steps.github.outputs.prerelease }}
+            npmUrl: ${{ steps.github.outputs.npmUrl }}
+            gitTag: ${{ steps.github.outputs.gitTag }}
+            gitCommit: ${{ steps.github.outputs.gitCommit }}
+            publishedAt: ${{ steps.github.outputs.publishedAt }}
+            releaseManifestAssetUrl: ${{ steps.github.outputs.releaseManifestAssetUrl }}
+            releaseNotesSource: ${{ steps.github.outputs.releaseNotesSource }}
+        steps:
+            - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+              with:
+                  ref: ${{ github.sha }}
+                  fetch-depth: 0
+            - name: Install pnpm
+              uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
+            - name: Use Node.js
+              uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+              with:
+                  node-version-file: .nvmrc
+                  package-manager-cache: false
+            - name: Install the pinned Trusted Publishing npm CLI
+              run: |
+                  npm install --global npm@12.0.2
+                  test "$(npm --version)" = "12.0.2"
+            - name: Install dependencies
+              run: pnpm install --frozen-lockfile
+            - name: Restore the approved plan
+              env:
+                  RELEASE_PLAN_BASE64: ${{ needs.plan.outputs.planBase64 }}
+              run: node -e 'require("node:fs").writeFileSync(process.argv[1], Buffer.from(process.env.RELEASE_PLAN_BASE64, "base64"))' "$RUNNER_TEMP/workspace-release-plan.json"
+            - name: Restore the complete approved train
+              uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+              with:
+                  name: workspace-release-train-${{ github.sha }}
+                  path: ${{ runner.temp }}/workspace-release-artifacts
+            - name: Publish or reuse every tarball, verify provenance, then complete exact tags
+              id: npm
+              env:
+                  GH_TOKEN: ${{ github.token }}
+              run: |
+                  node scripts/release/publish-workspace-release.mjs --apply \
+                    --plan "$RUNNER_TEMP/workspace-release-plan.json" \
+                    --artifact-dir "$RUNNER_TEMP/workspace-release-artifacts" \
+                    --output-dir "$RUNNER_TEMP/workspace-release-results" \
+                    --github-output "$GITHUB_OUTPUT"
+            - name: Generate and validate the crossbind release manifest
+              id: manifest
+              if: ${{ needs.plan.outputs.hasCrossbind == 'true' }}
+              run: |
+                  node scripts/release/prepare-crossbind-release.mjs \
+                    --publish-result "$RUNNER_TEMP/workspace-release-results/npm-publish-result.json" \
+                    --output "$RUNNER_TEMP/workspace-release-results/crossbind-release.json" \
+                    --body-output "$RUNNER_TEMP/workspace-release-results/github-release-body.md" \
+                    --github-output "$GITHUB_OUTPUT"
+                  pnpm run release:manifest \
+                    "$RUNNER_TEMP/workspace-release-results/crossbind-release.json"
+            - name: Create or complete the exact-tag crossbind GitHub Release
+              id: github
+              if: ${{ needs.plan.outputs.hasCrossbind == 'true' }}
+              env:
+                  GH_TOKEN: ${{ github.token }}
+              run: |
+                  node scripts/release/create-github-release.mjs --apply \
+                    --manifest "$RUNNER_TEMP/workspace-release-results/crossbind-release.json" \
+                    --body "$RUNNER_TEMP/workspace-release-results/github-release-body.md" \
+                    --output "$RUNNER_TEMP/workspace-release-results/crossbind-release-output.json" \
+                    --github-output "$GITHUB_OUTPUT"
+            - name: Persist release-train and site-consumer outputs
+              uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+              with:
+                  name: workspace-release-result-${{ github.sha }}
+                  if-no-files-found: error
+                  path: ${{ runner.temp }}/workspace-release-results
