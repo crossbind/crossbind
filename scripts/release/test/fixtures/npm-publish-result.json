@@ -1,0 +1,16 @@
+{
+    "package": "crossbind",
+    "version": "1.0.0-beta.41",
+    "distTag": "beta",
+    "integrity": "sha512-AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQ==",
+    "publishedAt": "2026-09-03T12:00:00Z",
+    "npmUrl": "https://www.npmjs.com/package/crossbind/v/1.0.0-beta.41",
+    "tarball": "https://registry.npmjs.org/crossbind/-/crossbind-1.0.0-beta.41.tgz",
+    "provenance": {
+        "url": "https://registry.npmjs.org/-/npm/v1/attestations/crossbind@1.0.0-beta.41",
+        "predicateType": "https://slsa.dev/provenance/v1"
+    },
+    "action": "fixture",
+    "propagationAttempts": 2,
+    "localTarball": "fixture.tgz"
+}

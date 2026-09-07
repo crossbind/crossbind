@@ -1,0 +1,16 @@
+{
+    "schemaVersion": 1,
+    "packages": [
+        "crossbind",
+        "create-crossbind",
+        "@crossbind/plugin-vite",
+        "@crossbind/plugin-rollup",
+        "@crossbind/plugin-webpack",
+        "@crossbind/plugin-webpack-loader",
+        "@crossbind/plugin-react-native",
+        "@crossbind/plugin-react-native-ios-helper",
+        "@crossbind/plugin-metro",
+        "@crossbind/typescript-config",
+        "@crossbind/example-lib-prebuilt-matrix"
+    ]
+}

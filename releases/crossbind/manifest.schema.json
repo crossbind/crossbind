@@ -1,0 +1,106 @@
+{
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$id": "https://crossbind.dev/schemas/crossbind-release.schema.json",
+    "title": "Crossbind npm release manifest",
+    "type": "object",
+    "additionalProperties": false,
+    "required": ["schemaVersion", "package", "version", "channel", "prerelease", "publishedAt", "npm", "git", "releaseNotes", "toolchainDigestTable"],
+    "properties": {
+        "schemaVersion": {
+            "const": 1
+        },
+        "package": {
+            "const": "crossbind"
+        },
+        "version": {
+            "type": "string",
+            "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)(?:-(?:beta|rc)\\.(?:0|[1-9][0-9]*))?(?:\\+[0-9A-Za-z-]+(?:\\.[0-9A-Za-z-]+)*)?$"
+        },
+        "channel": {
+            "enum": ["beta", "rc", "stable"]
+        },
+        "prerelease": {
+            "type": "boolean"
+        },
+        "publishedAt": {
+            "type": "string",
+            "format": "date-time"
+        },
+        "npm": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["distTag", "url", "tarball", "integrity", "provenance"],
+            "properties": {
+                "distTag": {
+                    "enum": ["beta", "next", "latest"]
+                },
+                "url": {
+                    "type": "string",
+                    "pattern": "^https://www\\.npmjs\\.com/package/crossbind/v/[0-9A-Za-z.+-]+$"
+                },
+                "tarball": {
+                    "type": "string",
+                    "pattern": "^https://registry\\.npmjs\\.org/crossbind/-/crossbind-[0-9A-Za-z.+-]+\\.tgz$"
+                },
+                "integrity": {
+                    "type": "string",
+                    "pattern": "^sha512-[A-Za-z0-9+/]+={0,2}$"
+                },
+                "provenance": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": ["url", "predicateType"],
+                    "properties": {
+                        "url": {
+                            "type": "string",
+                            "pattern": "^https://registry\\.npmjs\\.org/-/npm/v1/attestations/crossbind@[0-9A-Za-z.+-]+$"
+                        },
+                        "predicateType": {
+                            "const": "https://slsa.dev/provenance/v1"
+                        }
+                    }
+                }
+            }
+        },
+        "git": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["tag", "commit"],
+            "properties": {
+                "tag": {
+                    "type": "string",
+                    "pattern": "^crossbind@[0-9A-Za-z.+-]+$"
+                },
+                "commit": {
+                    "type": "string",
+                    "pattern": "^[0-9a-f]{40}$"
+                }
+            }
+        },
+        "releaseNotes": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["source"],
+            "properties": {
+                "source": {
+                    "type": "string",
+                    "pattern": "^releases/crossbind/[0-9A-Za-z.+-]+\\.md$"
+                }
+            }
+        },
+        "toolchainDigestTable": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["source", "sha256"],
+            "properties": {
+                "source": {
+                    "const": "core/crossbind/src/assets/toolchain-digests.json"
+                },
+                "sha256": {
+                    "type": "string",
+                    "pattern": "^[0-9a-f]{64}$"
+                }
+            }
+        }
+    }
+}
