@@ -1,0 +1,81 @@
+version: 2
+
+updates:
+    # One lockfile owns the complete pnpm workspace. Keep routine updates grouped,
+    # while majors remain isolated so their migration cost is visible.
+    - package-ecosystem: npm
+      directory: /
+      schedule:
+          interval: daily
+          time: '02:11'
+          timezone: Europe/Istanbul
+      open-pull-requests-limit: 10
+      versioning-strategy: increase-if-necessary
+      labels:
+          - dependencies
+          - javascript
+      groups:
+          production-minor-patch:
+              applies-to: version-updates
+              dependency-type: production
+              update-types:
+                  - minor
+                  - patch
+          development-minor-patch:
+              applies-to: version-updates
+              dependency-type: development
+              update-types:
+                  - minor
+                  - patch
+          production-security:
+              applies-to: security-updates
+              dependency-type: production
+              patterns:
+                  - '*'
+          development-security:
+              applies-to: security-updates
+              dependency-type: development
+              patterns:
+                  - '*'
+
+    # Actions remain full-SHA pinned. Dependabot moves the SHA and its human-readable
+    # version comment together; repository release tests reject floating references.
+    - package-ecosystem: github-actions
+      directory: /
+      schedule:
+          interval: daily
+          time: '02:23'
+          timezone: Europe/Istanbul
+      open-pull-requests-limit: 5
+      labels:
+          - dependencies
+          - github-actions
+      groups:
+          actions-minor-patch:
+              applies-to: version-updates
+              patterns:
+                  - '*'
+              update-types:
+                  - minor
+                  - patch
+          actions-security:
+              applies-to: security-updates
+              patterns:
+                  - '*'
+
+    # Transactional toolchain images (Node, Rust and Emscripten) are deliberately
+    # excluded here: scripts/dependencies updates their version, digest and related
+    # checksums as one unit. Debian is safe for Dependabot to refresh by digest.
+    - package-ecosystem: docker
+      directory: /tooling/docker
+      schedule:
+          interval: daily
+          time: '02:37'
+          timezone: Europe/Istanbul
+      open-pull-requests-limit: 3
+      labels:
+          - dependencies
+          - toolchain
+          - security
+      allow:
+          - dependency-name: debian

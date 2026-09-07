@@ -236,10 +236,27 @@ To add a new `ports/<X>`: see `docs/playbooks/new-port.md` (uses `ports/zlib` as
 | `check-dist.js` | Verify each package has prebuilt artifacts for expected targets |
 | `check-external-dependencies.js` | npm dep version drift (use `--check`/`--update`); all-`*` ranges report as host-provided, never a strict failure |
 | `check-native-versions.js` | Native lib version drift via GitHub/registry/HTML scrape (use `--check`/`--update`) |
+| `dependencies/plan-dependency-updates.mjs` | Daily native/toolchain drift, digest and exact-commit advisory planner |
+| `dependencies/apply-dependency-update.mjs` | One-unit updater for native families and transactional Docker/toolchain pins |
+| `dependencies/changed-units.mjs` | Derive the exact native-family and toolchain validation matrix from a PR diff |
+| `dependencies/validate-dependency-update.mjs` | Changed-file boundary plus native target/toolchain build gates |
+| `dependencies/validate-native-family.mjs` | Build and pack every existing target in one native family on the appropriate runner |
+| `dependencies/render-dependency-pr.mjs` | Deterministic branch, commit, title and evidence-rich draft PR metadata |
 | `check-beta-status.js` | npm beta tag inventory + `--bump` |
 | `check-publish-hygiene.js` | K1/K4 gates: no executable leaks, provenance + derived license on -bin packages |
 | `generate-third-party.js` | K3 wrapper: `crossbind licenses --notices --sbom --platform` per dist host |
 | `pin-docker-image.js` | Re-pin the digest-locked build image after a docker publish |
+| `release/actionlint.mjs` | Download SHA-pinned actionlint and validate package-release workflows |
+| `release/package-artifact.mjs` | Pack, inspect and hash exact npm tarballs; consumer-smoke the canonical `crossbind` tarball |
+| `release/package-crossbind.mjs` | CLI entrypoint for exact tarball creation and smoke validation |
+| `release/workspace-release.mjs` | Discover public workspaces, select channel bumps and derive platform/dependency order |
+| `release/plan-workspace-release.mjs` | Registry-read-only release-train planner |
+| `release/build-workspace-artifacts.mjs` | Build and pack the Linux or macOS side of an approved train |
+| `release/assemble-workspace-artifacts.mjs` | Refuse incomplete artifact sets and merge the one multi-platform package |
+| `release/publish-workspace-release.mjs` | OIDC publish/reuse in dependency order, provenance verification and exact package tags |
+| `release/prepare-crossbind-release.mjs` | Validate notes/channel inputs and preview or generate `crossbind-release.json` |
+| `release/publish-crossbind.mjs` | Token-free OIDC npm publish/reuse plus integrity, provenance and bounded propagation verification |
+| `release/create-github-release.mjs` | Conflict-safe exact tag and GitHub Release asset creation |
 | `build-agent-context.mjs` | Generate repository instruction files from `agents/contributor-context.md` |
 | `build-agent-skill.mjs` | Generate the installed skill's reference and port-catalog bundle |
 | `check-agent-surface.mjs` | Reject stale generated content and obsolete agent integration surfaces |
@@ -258,6 +275,12 @@ All `check:*` and `clear:*` are exposed as `pnpm run` aliases — see `package.j
 | `build-windows.yml` | `pnpm run ci:windows:build` (wasm + android subset) |
 | `test-android-sample.yml` | RN-cli Android E2E |
 | `test-ios-sample.yml` | RN-cli iOS E2E (uses `ci/crossbind-snapshot/` bridge fixtures) |
+| `check-crossbind-release.yml` | PR/push train tests, actionlint, publish hygiene and installed `crossbind` tarball smoke |
+| `release-crossbind.yml` | Manual Linux/macOS package train; protected OIDC publish after the all-artifacts barrier; exact `crossbind` GitHub Release |
+| `dependency-watch.yml` | Daily read-only discovery, bounded candidate matrix and manual-finding issue lifecycle |
+| `dependency-update-candidate.yml` | Per-candidate Linux/macOS validation and short-lived GitHub App draft-PR creation |
+| `validate-dependency-pr.yml` | Re-run native-family and toolchain gates on bot and human dependency PR heads |
+| `scan-toolchain-images.yml` | Daily immutable GHCR digest vulnerability scan plus idempotent security issue lifecycle |
 
 ## Common recipes
 

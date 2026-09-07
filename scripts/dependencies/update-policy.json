@@ -1,0 +1,67 @@
+{
+    "schemaVersion": 1,
+    "schedule": {
+        "timezone": "Europe/Istanbul",
+        "maximumPullRequestsPerRun": 4
+    },
+    "toolchains": {
+        "node": {
+            "channel": "lts",
+            "dockerImage": "node",
+            "dockerSuffix": "-trixie-slim"
+        },
+        "rust": {
+            "channel": "stable",
+            "bootstrapDockerImage": "rust"
+        },
+        "emscripten": {
+            "upstreamRepository": "emscripten-core/emscripten",
+            "forkRepository": "crossbind/emscripten",
+            "forkTagPrefix": "crossbind-",
+            "dockerImage": "emscripten/emsdk"
+        },
+        "wasiSdk": {
+            "repository": "WebAssembly/wasi-sdk",
+            "tagPrefix": "wasi-sdk-"
+        },
+        "android": {
+            "repositoryXml": "https://dl.google.com/android/repository/repository2-3.xml",
+            "ndkTrackMajor": 27
+        },
+        "swig": {
+            "repository": "crossbind/swig",
+            "branch": "add-embind-support"
+        }
+    },
+    "pullRequests": {
+        "draft": true,
+        "labels": ["dependencies", "automated-dependency-update"]
+    },
+    "nativeSecurity": {
+        "curl": { "repository": "curl/curl", "tag": "curl-{versionUnderscore}" },
+        "expat": { "repository": "libexpat/libexpat", "tag": "R_{versionUnderscore}" },
+        "gdal": { "repository": "OSGeo/gdal", "tag": "v{version}" },
+        "geos": { "repository": "libgeos/geos", "tag": "{version}" },
+        "geotiff": { "repository": "OSGeo/libgeotiff", "tag": "{version}" },
+        "iconv": {
+            "manual": true,
+            "reason": "GNU libiconv has no reviewed canonical Git commit mapping for OSV commit queries."
+        },
+        "jpegturbo": { "repository": "libjpeg-turbo/libjpeg-turbo", "tag": "{version}" },
+        "lerc": { "repository": "Esri/lerc", "tag": "v{version}" },
+        "openssl": { "repository": "openssl/openssl", "tag": "openssl-{version}" },
+        "proj": { "repository": "OSGeo/PROJ", "tag": "{version}" },
+        "spatialite": {
+            "manual": true,
+            "reason": "libspatialite has no reviewed canonical release-tag to Git commit mapping for OSV."
+        },
+        "sqlite3": { "repository": "sqlite/sqlite", "tag": "version-{version}" },
+        "tiff": {
+            "manual": true,
+            "reason": "libtiff's canonical GitLab source has no reviewed GitHub ref mapping for this OSV commit query."
+        },
+        "webp": { "repository": "webmproject/libwebp", "tag": "v{version}" },
+        "zlib": { "repository": "madler/zlib", "tag": "v{version}" },
+        "zstd": { "repository": "facebook/zstd", "tag": "v{version}" }
+    }
+}

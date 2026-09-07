@@ -65,12 +65,25 @@ const ANNOTATIONS = {
     e2e: 'dev + prod + mobile e2e',
 
     // publish
-    'publish:examples': 'npm publish all @crossbind/example-*',
-    'publish:plugins': 'npm publish all @crossbind/plugin-*',
-    'publish:core': 'npm publish crossbind (core)',
-    'publish:all': 'core + plugins + samples',
+    'publish:examples': 'Refuse legacy local publishing; use an approved OIDC release train',
+    'publish:plugins': 'Refuse legacy local publishing; use an approved OIDC release train',
+    'publish:core': 'Refuse direct crossbind publish; use the protected release workflow',
+    'publish:create': 'Refuse legacy local publishing; use an approved OIDC release train',
+    'publish:all': 'Refuse legacy bulk publishing; use an approved OIDC release train',
     'publish:changeset': 'changeset publish',
-    'publish:beta': 'Publish all @crossbind/* under the beta tag',
+    'publish:beta': 'Refuse legacy bulk publishing; use an approved OIDC release train',
+    'release:train:dry-run': 'Plan version-bumped npm packages without external writes (pass --channel beta|rc|stable)',
+
+    // dependencies
+    'dependencies:plan': 'Read-only daily-style native/toolchain update plan',
+    'dependencies:plan:strict': 'Dependency plan that fails on unavailable or ambiguous upstream checks',
+    'test:dependencies': 'Run deterministic dependency automation tests',
+
+    // release
+    'release:dry-run': 'Validate and preview the exact crossbind package release without writes',
+    'release:package': 'Pack and smoke-test crossbind exactly as a registry consumer installs it',
+    'release:manifest': 'Validate a crossbind-release.json against schema and canonical sources',
+    'test:release': 'Run deterministic package-release infrastructure tests',
 
     // check
     'check:dist': 'Verify each package has prebuilt artifacts for expected targets',
@@ -80,6 +93,10 @@ const ANNOTATIONS = {
     'check:native': 'Native library version drift report (GitHub/registry/HTML)',
     'check:native:strict': 'Same as check:native but exits non-zero on outdated/unknown',
     'check:agents': 'Verify the single-skill agent surface and run its deterministic tests',
+    'check:workflows': 'Run pinned actionlint against the package-release workflows',
+    'check:release:toolchain': 'Gate sysroot, Android digest resolution and a representative Web build',
+    'check:release': 'Test, actionlint, lint and format-check package-release infrastructure',
+    'check:dependency-automation': 'Test, actionlint, lint and format-check daily dependency automation',
     check: 'check:dist + dependency/native checks + agent-surface checks (CI-suitable)',
 
     // self
@@ -93,6 +110,8 @@ const GROUPS = [
     { title: 'CI', match: /^ci:/ },
     { title: 'E2E', match: /^e2e/ },
     { title: 'Publish', match: /^publish/ },
+    { title: 'Release', match: /^(release|test:release)/ },
+    { title: 'Dependencies', match: /^(dependencies|test:dependencies)/ },
     { title: 'Check', match: /^check/ },
     { title: 'Other', match: /^/ }, // catch-all
 ];
