@@ -219,7 +219,7 @@ scattered `Box::leak`.
 
 | Path | State |
 |---|---|
-| web: Rust → flat ABI → embind-js (emsdk 5.0.3 & 6.0.2) | ✅ tested, runs (full demo incl. f64 + string) |
+| web: Rust → flat ABI → embind-js (emsdk 5.0.3, 6.0.2 & 6.0.9) | ✅ tested, runs (full demo incl. f64 + string) |
 | mobile: adapter shape vs real embind-jsi signatures | ✅ shape-validated (native mock) |
 | mobile: real Hermes / device smoke (iOS simulator, RN app) | ✅ GREEN 32/32 — ctor, N-arity, bool, enum, string both ways, value object both ways, vector, smart_ptr factory, f64 both ways, delete, app-local .rs, idioms, BigInt, Display, free fns, Option both ways, class params, semver/regex imports |
 | mobile: real Hermes / device smoke (Android emulator, same RN app) | ✅ GREEN 32/32 — same demo, same adapter; cargo dep joins the cmake depends graph, keep-symbol linked; a NEW bare-crate import now links in the FIRST build (rust set busts the CMake configure) |

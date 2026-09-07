@@ -33,7 +33,7 @@ Side-quests:
 
 ## Public API contract
 
-Anything exported from `src/index.js` is consumed by `plugins/*` and a few CLI scripts (`scripts/check-*.js`). Treat its surface as semver-public — additive changes free, breaking changes need a beta bump and a CHANGELOG note.
+Anything exported from `src/index.js` is consumed by `plugins/*` and a few CLI scripts (`scripts/check-*.js`). Treat its surface as semver-public — additive changes free, breaking changes need a beta bump and a human-authored `releases/crossbind/<version>.md` note.
 
 Currently exported (snapshot):
 

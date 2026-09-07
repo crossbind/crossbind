@@ -6,6 +6,7 @@ import state from '../state/index.js';
 import getOsUserAndGroupId from './getOsUserAndGroupId.js';
 import replaceBasePathForDockerUtil, { DOCKER_BASE } from './replaceBasePathForDocker.js';
 import pullDockerImage, { getDockerImage, getDockerContainerName, imageRoleFor } from './pullDockerImage.js';
+import { DOCKER_RUN_SECURITY_ARGS } from './dockerSecurity.js';
 
 // Every cargo invocation crossbind makes goes through here.
 //
@@ -28,14 +29,26 @@ const RUSTFLAGS_SEPARATOR = String.fromCharCode(0x1f);
 // the compiler - RUSTC_WRAPPER, CARGO_BUILD_RUSTC, CARGO_TARGET_<TRIPLE>_LINKER, RUSTFLAGS,
 // RUSTUP_TOOLCHAIN, RUSTC_BOOTSTRAP - cannot reach cargo from the caller's environment.
 const ALLOWED_ENV = [
-    /^PATH$/, /^HOME$/, /^USER$/, /^LOGNAME$/, /^SHELL$/, /^TERM$/,
-    /^TMPDIR$/, /^TEMP$/, /^TMP$/,
-    /^LANG$/, /^LC_[A-Z_]+$/,
+    /^PATH$/,
+    /^HOME$/,
+    /^USER$/,
+    /^LOGNAME$/,
+    /^SHELL$/,
+    /^TERM$/,
+    /^TMPDIR$/,
+    /^TEMP$/,
+    /^TMP$/,
+    /^LANG$/,
+    /^LC_[A-Z_]+$/,
     /^RUSTUP_HOME$/,
     /^SSH_AUTH_SOCK$/, // git dependencies over ssh
-    /^CARGO_NET_/, /^CARGO_REGISTRIES_/, // offline/vendored builds and private registries
+    /^CARGO_NET_/,
+    /^CARGO_REGISTRIES_/, // offline/vendored builds and private registries
     /^(HTTP|HTTPS|ALL|NO)_PROXY$/i,
-    /^SYSTEMROOT$/i, /^WINDIR$/i, /^USERPROFILE$/i, /^PROGRAMDATA$/i, // windows cannot spawn without these
+    /^SYSTEMROOT$/i,
+    /^WINDIR$/i,
+    /^USERPROFILE$/i,
+    /^PROGRAMDATA$/i, // windows cannot spawn without these
 ];
 
 // Recent cargo applies config.toml only, but the extensionless name is still read by older
@@ -76,14 +89,18 @@ export function assertCleanConfigChain(home, cwd) {
     for (const name of CONFIG_NAMES) {
         const file = path.join(home, name);
         if (fs.existsSync(file)) {
-            throw new Error(`crossbind: unexpected cargo config at ${file} - crossbind owns this CARGO_HOME and never writes one. Remove it and build again.`);
+            throw new Error(
+                `crossbind: unexpected cargo config at ${file} - crossbind owns this CARGO_HOME and never writes one. Remove it and build again.`,
+            );
         }
     }
     for (let dir = cwd; ; dir = path.dirname(dir)) {
         for (const name of CONFIG_NAMES) {
             const file = path.join(dir, '.cargo', name);
             if (fs.existsSync(file)) {
-                throw new Error(`crossbind: ${file} would apply to this build - cargo discovers config by walking up from the working directory. crossbind builds from a neutral directory to avoid that; move the file or report this.`);
+                throw new Error(
+                    `crossbind: ${file} would apply to this build - cargo discovers config by walking up from the working directory. crossbind builds from a neutral directory to avoid that; move the file or report this.`,
+                );
             }
         }
         if (path.dirname(dir) === dir) return;
@@ -106,9 +123,7 @@ function allowedEnv() {
     return env;
 }
 
-function cargoEnv({
-    home, rustflags, panic, allowUnstable,
-}) {
+function cargoEnv({ home, rustflags, panic, allowUnstable }) {
     const env = { CARGO_HOME: home };
     // Depth defence: -Z fails with E0554 instead of quietly enabling unstable behaviour. The value
     // -1 disables unstable features on EVERY channel, nightly included, so the one caller that
@@ -131,6 +146,7 @@ function createHint(name, base, home, image) {
     return [
         'Create it with:',
         `  docker run -d --name ${name} \\`,
+        `    ${DOCKER_RUN_SECURITY_ARGS.join(' ')} \\`,
         `    -v ${base}:${DOCKER_BASE} \\`,
         `    -v ${home}:${CONTAINER_CARGO_HOME} \\`,
         `    ${image} sleep infinity`,
@@ -138,7 +154,13 @@ function createHint(name, base, home, image) {
 }
 
 function samePath(a, b) {
-    const real = (p) => { try { return fs.realpathSync(p); } catch { return path.resolve(p); } };
+    const real = (p) => {
+        try {
+            return fs.realpathSync(p);
+        } catch {
+            return path.resolve(p);
+        }
+    };
     return real(a) === real(b);
 }
 
@@ -152,13 +174,20 @@ function assertExecContainer(name, base, home, image) {
         throw new Error(`crossbind: RUNNER=DOCKER_EXEC needs a container named '${name}', which does not exist.\n${hint}`);
     }
     if (!info?.State?.Running) {
-        throw new Error(`crossbind: the container '${name}' exists but is not running. Start it with \`docker start ${name}\`, or recreate it.\n${hint}`);
+        throw new Error(
+            `crossbind: the container '${name}' exists but is not running. Start it with \`docker start ${name}\`, or recreate it.\n${hint}`,
+        );
     }
-    for (const [destination, source] of [[DOCKER_BASE, base], [CONTAINER_CARGO_HOME, home]]) {
+    for (const [destination, source] of [
+        [DOCKER_BASE, base],
+        [CONTAINER_CARGO_HOME, home],
+    ]) {
         const mount = (info.Mounts ?? []).find((m) => m.Destination === destination);
         if (!mount || !samePath(mount.Source, source)) {
             const found = mount ? ` - it mounts ${mount.Source} there` : '';
-            throw new Error(`crossbind: the container '${name}' does not mount ${source} at ${destination}${found}. It predates the cargo mount, so recreate it.\n${hint}`);
+            throw new Error(
+                `crossbind: the container '${name}' does not mount ${source} at ${destination}${found}. It predates the cargo mount, so recreate it.\n${hint}`,
+            );
         }
     }
     // `docker run --workdir` creates the directory; `docker exec --workdir` does not, and cargo
@@ -170,9 +199,7 @@ function assertExecContainer(name, base, home, image) {
     }
 }
 
-export default function runCargo(args, {
-    cwd, rustflags = [], panic, capture = false, maxBuffer, allowUnstable = false, target,
-} = {}) {
+export default function runCargo(args, { cwd, rustflags = [], panic, capture = false, maxBuffer, allowUnstable = false, target } = {}) {
     const home = cargoHome();
     const workdir = cwd ?? neutralCwd();
     fs.mkdirSync(home, { recursive: true });
@@ -200,7 +227,10 @@ export default function runCargo(args, {
     // Only what cargo needs travels in: the image already carries PATH, RUSTUP_HOME and the
     // toolchain, and the host's PATH would be meaningless there.
     const env = cargoEnv({
-        home: CONTAINER_CARGO_HOME, rustflags, panic, allowUnstable,
+        home: CONTAINER_CARGO_HOME,
+        rustflags,
+        panic,
+        allowUnstable,
     });
     const envArgs = Object.entries(env).flatMap(([key, value]) => ['-e', `${key}=${value}`]);
 
@@ -208,20 +238,25 @@ export default function runCargo(args, {
     if (runner === 'DOCKER_EXEC') {
         const name = getDockerContainerName(base, role);
         assertExecContainer(name, base, home, getDockerImage(role, platform));
-        runnerArgs = ['exec', ...envArgs,
-            '--user', getOsUserAndGroupId(),
-            '--workdir', CONTAINER_CWD,
-            name];
+        runnerArgs = ['exec', ...envArgs, '--user', getOsUserAndGroupId(), '--workdir', CONTAINER_CWD, name];
     } else {
         pullDockerImage(role, platform);
-        runnerArgs = ['run', '--rm',
+        runnerArgs = [
+            'run',
+            '--rm',
             ...(platform ? ['--platform', platform] : []),
-            '-v', `${base}:${DOCKER_BASE}`,
-            '-v', `${home}:${CONTAINER_CARGO_HOME}`,
+            ...DOCKER_RUN_SECURITY_ARGS,
+            '-v',
+            `${base}:${DOCKER_BASE}`,
+            '-v',
+            `${home}:${CONTAINER_CARGO_HOME}`,
             ...envArgs,
-            '--user', getOsUserAndGroupId(),
-            '--workdir', CONTAINER_CWD,
-            getDockerImage(role, platform)];
+            '--user',
+            getOsUserAndGroupId(),
+            '--workdir',
+            CONTAINER_CWD,
+            getDockerImage(role, platform),
+        ];
     }
 
     return spawnSync('docker', [...runnerArgs, 'cargo', ...replaceBasePathForDockerUtil(args, base)], options);

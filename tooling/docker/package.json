@@ -4,10 +4,12 @@
     "private": true,
     "scripts": {
         "build:sysroot": "docker build -f rust-sysroot.Dockerfile --target sysroot -t crossbind/rust-sysroot:dev .",
+        "build:sysroot:amd64": "docker build -f rust-sysroot.Dockerfile --target sysroot --platform linux/amd64 -t crossbind/rust-sysroot:dev-amd64 .",
         "build:base": "docker build -f base.Dockerfile --target base -t crossbind/base:dev .",
         "build:base:amd64": "docker build -f base.Dockerfile --target base --platform linux/amd64 -t crossbind/base:dev-amd64 .",
         "build:web": "docker build -f web.Dockerfile --target web -t crossbind/web:dev .",
+        "build:web:amd64": "docker build -f web.Dockerfile --target web --platform linux/amd64 --build-arg BASE_IMAGE=crossbind/base:dev-amd64 --build-arg RUST_SYSROOT_IMAGE=crossbind/rust-sysroot:dev-amd64 -t crossbind/web:dev-amd64 .",
         "build:android": "docker build -f android.Dockerfile --target android --platform linux/amd64 --build-arg BASE_IMAGE=crossbind/base:dev-amd64 -t crossbind/android:dev .",
-        "build:family": "pnpm build:sysroot && pnpm build:base && pnpm build:web && pnpm build:base:amd64 && pnpm build:android"
+        "build:family": "pnpm build:sysroot && pnpm build:base && pnpm build:web && pnpm build:sysroot:amd64 && pnpm build:base:amd64 && pnpm build:web:amd64 && pnpm build:android"
     }
 }

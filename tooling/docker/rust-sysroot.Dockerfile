@@ -4,13 +4,19 @@
 # image COPY --from's it, and the release packages the same tree as a sha256-pinned artifact
 # for RUNNER=LOCAL. Bootstrap lives only in this stage; nothing here reaches a final image.
 #
-# Digest-pinned (multi-arch INDEX): bump via `docker manifest inspect rust:<tag>`.
-ARG RUST_VERSION=1.98.0
-FROM rust:${RUST_VERSION}-slim@sha256:cc0448b41c3b7b7fea44f5dc50eacba729a56db365b65b7bd5e8a82d5b3db078 AS builder
+# The official point-release Docker tag can lag Rust itself. Bootstrap from the last digest-pinned
+# image and let its rustup install the exact stable toolchain without self-updating rustup.
+ARG RUST_VERSION=1.98.1
+FROM rust:1.98.0-slim@sha256:cc0448b41c3b7b7fea44f5dc50eacba729a56db365b65b7bd5e8a82d5b3db078 AS builder
 
 ARG RUST_VERSION
+RUN rustup toolchain install "${RUST_VERSION}" --profile minimal --no-self-update && \
+    rustup default "${RUST_VERSION}" && \
+    rustup toolchain uninstall 1.98.0 && \
+    test "$(rustc -vV | sed -n 's/^release: //p')" = "${RUST_VERSION}"
+
 # Recorded in the manifest so a sysroot can never be paired with the wrong emscripten.
-ARG EMSDK_VERSION=6.0.2
+ARG EMSDK_VERSION=6.0.9
 ARG RUST_TARGET=wasm32-unknown-emscripten
 # The MT contract (crossbind's MT_RUSTFLAGS): shared memory needs std itself rebuilt with these.
 ARG MT_FEATURES=+atomics,+bulk-memory,+mutable-globals
@@ -18,7 +24,8 @@ ARG PANIC=abort
 
 ENV OUT=/opt/crossbind/rust/${RUST_VERSION}
 
-RUN rustup component add rust-src && rustup target add ${RUST_TARGET}
+RUN rustup component add rust-src --toolchain "${RUST_VERSION}" && \
+    rustup target add "${RUST_TARGET}" --toolchain "${RUST_VERSION}"
 
 # ST: the stock target std, copied into the same layout as MT so the CLI can point --sysroot at
 # either one without special-casing.

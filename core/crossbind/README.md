@@ -87,7 +87,7 @@ adapters.
 ## Quick start
 
 Prefer to scaffold and configure the project yourself? You need
-[Node.js 22+](https://nodejs.org/) and
+[Node.js 24+](https://nodejs.org/) and
 [Docker](https://www.docker.com/). Docker carries the browser, Android, and
 WASI toolchains and is pulled automatically on the first build. iOS additionally
 requires macOS, CMake 3.28+, Xcode, and CocoaPods.

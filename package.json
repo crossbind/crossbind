@@ -1,5 +1,8 @@
 {
     "private": true,
+    "engines": {
+        "node": ">=24"
+    },
     "scripts": {
         "build:agents": "node scripts/build-agent-context.mjs && node scripts/build-agent-skill.mjs",
         "build:ports": "pnpm --filter='@crossbind/port-*' run build",

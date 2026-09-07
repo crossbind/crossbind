@@ -12,7 +12,7 @@ Build crossbind artifacts for the Node runtime (`-e node`) and `require`/`import
 
 - Backend service, CLI, script, or Node-native library.
 - No browser, no React Native, no edge runtime.
-- Multithread (`runtime: 'mt'`) is supported via Node's `worker_threads` (Node 22+ recommended).
+- Multithread (`runtime: 'mt'`) is supported via Node's `worker_threads` on the supported Node 24+ runtime.
 
 ## Files involved
 
@@ -106,7 +106,7 @@ Node multithread (`runtime: 'mt'`) uses `worker_threads`. **No COOP/COEP needed*
 
 Caveats:
 
-- Node 22+ recommended (older versions have rough edges with `worker_threads` + WASM SharedArrayBuffer).
+- Node 24+ is required; its `worker_threads` and WASM SharedArrayBuffer behavior is the supported baseline.
 - Worker threads warm up; expect ~50-200ms cold-start overhead the first time you `init`.
 - If you have CPU-bound code, `mt` is a meaningful speedup. For I/O-bound services, stick with `st`.
 
@@ -125,7 +125,7 @@ Caveats:
 - **Hardcoded `dist/crossbind.js` path.** The actual filename includes the target tuple (e.g. `<name>-wasm-wasm32-st-release.node.js`). Use the exact path or read from the build output log.
 - **Async at module top-level (CJS).** CommonJS doesn't allow it. Use `.then()` or wrap in an `async` function.
 - **Forgetting to rebuild after editing `.cpp`.** No bundler watcher here. Re-run `pnpm build` (or wire `chokidar`/`nodemon` to do so).
-- **Running on Node < 20.** crossbind requires Node ≥ 20 (see `engines` in `core/crossbind/package.json`).
+- **Running on Node < 24.** crossbind requires Node ≥ 24 (see `engines` in `core/crossbind/package.json`).
 
 ## Reference examples
 

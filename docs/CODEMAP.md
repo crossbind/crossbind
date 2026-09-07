@@ -171,6 +171,7 @@ Index + template: [`docs/adr/README.md`](./adr/README.md).
 | JS module loading | `src/utils/loadJs.js` |
 | Content-hash for cache keys | `src/utils/hash.js` |
 | Docker image pull (digest-pinned) | `src/utils/pullDockerImage.js` |
+| Canonical toolchain digest table | `src/assets/toolchain-digests.json` |
 | Download + extract sources | `src/utils/downloadAndExtractFile.js` |
 | System config schema | `src/utils/systemKeys.js` |
 | Target inventory single source (TARGETS, targetPathOf) | `src/utils/targets.js` |

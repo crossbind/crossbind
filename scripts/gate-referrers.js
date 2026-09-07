@@ -4,7 +4,7 @@
 // same descriptor set on both registries.
 //
 //   node scripts/gate-referrers.js --tag v1.0.2-staging-42 --primary ghcr.io/crossbind --primary-only
-//   node scripts/gate-referrers.js --tag v1.0.2-staging-42 --primary ghcr.io/crossbind --mirror docker.io/crossbind
+//   node scripts/gate-referrers.js --tag v1.0.2-staging-42 --primary ghcr.io/crossbind --mirror registry.example/crossbind
 //
 // Two different claims, asserted separately because one does not imply the other:
 //
@@ -25,20 +25,34 @@
 
 import { execFileSync } from 'node:child_process';
 
-const arg = (f) => { const i = process.argv.indexOf(f); return i !== -1 ? process.argv[i + 1] : null; };
+const arg = (f) => {
+    const i = process.argv.indexOf(f);
+    return i !== -1 ? process.argv[i + 1] : null;
+};
 const TAG = arg('--tag');
 const PRIMARY = arg('--primary') ?? 'ghcr.io/crossbind';
-const MIRROR = arg('--mirror') ?? 'docker.io/crossbind';
+const MIRROR = arg('--mirror');
 const PRIMARY_ONLY = process.argv.includes('--primary-only');
 // Declared per registry because their capabilities differ; see the note above.
 const PRIMARY_MODE = arg('--primary-mode') ?? 'v1.1-referrers-tag';
 const MIRROR_MODE = arg('--mirror-mode') ?? 'v1.1-referrers-api';
-if (!TAG) { console.error('gate-referrers: --tag is required'); process.exit(1); }
+if (!TAG) {
+    console.error('gate-referrers: --tag is required');
+    process.exit(1);
+}
+if (!PRIMARY_ONLY && !MIRROR) {
+    console.error('gate-referrers: pass --primary-only or name an explicit private registry with --mirror');
+    process.exit(1);
+}
 
 const IMAGES = ['rust-sysroot', 'base', 'web', 'android'];
 let failed = 0;
 const ok = (m) => console.log(`  ok    ${m}`);
-const bad = (m, d = '') => { failed += 1; console.error(`  FAIL  ${m}`); if (d) console.error(`        ${d}`); };
+const bad = (m, d = '') => {
+    failed += 1;
+    console.error(`  FAIL  ${m}`);
+    if (d) console.error(`        ${d}`);
+};
 
 // CROSSBIND_ORAS lets this run against a containerised oras without installing one, which is how
 // it gets exercised against a real registry before a release depends on it. CI leaves it unset.
@@ -55,8 +69,7 @@ const rawIndex = (ref) => JSON.parse(sh(['docker', 'buildx', 'imagetools', 'insp
 
 // Only the fields that must survive a copy, sorted so registry ordering cannot decide the result.
 function discover(repo, digest, mode) {
-    const out = sh(['oras', 'discover', '--distribution-spec', mode,
-        '--format', 'json', '--depth', '1', `${repo}@${digest}`]);
+    const out = sh(['oras', 'discover', '--distribution-spec', mode, '--format', 'json', '--depth', '1', `${repo}@${digest}`]);
     const parsed = JSON.parse(out);
     const list = parsed.referrers ?? parsed.manifests ?? [];
     return list
@@ -71,7 +84,10 @@ function assertSubjects(label, repo, subject, descriptors) {
         try {
             manifest = JSON.parse(sh(['oras', 'manifest', 'fetch', `${repo}@${descriptor.digest}`]));
         } catch (e) {
-            bad(`${label}: cannot fetch referrer ${descriptor.digest.slice(0, 19)}…`, (e.stderr || e.message).toString().trim().split('\n').slice(-1)[0]);
+            bad(
+                `${label}: cannot fetch referrer ${descriptor.digest.slice(0, 19)}…`,
+                (e.stderr || e.message).toString().trim().split('\n').slice(-1)[0],
+            );
             return false;
         }
         const named = manifest.subject?.digest;
@@ -85,7 +101,9 @@ function assertSubjects(label, repo, subject, descriptors) {
 
 function check(label, image, subject) {
     let primary;
-    try { primary = discover(`${PRIMARY}/${image}`, subject, PRIMARY_MODE); } catch (e) {
+    try {
+        primary = discover(`${PRIMARY}/${image}`, subject, PRIMARY_MODE);
+    } catch (e) {
         bad(`${label}: discovery failed on the primary (${PRIMARY_MODE})`, (e.stderr || e.message).toString().trim().split('\n').slice(-2).join(' '));
         return;
     }
@@ -99,7 +117,9 @@ function check(label, image, subject) {
     if (PRIMARY_ONLY) return;
 
     let mirror;
-    try { mirror = discover(`${MIRROR}/${image}`, subject, MIRROR_MODE); } catch (e) {
+    try {
+        mirror = discover(`${MIRROR}/${image}`, subject, MIRROR_MODE);
+    } catch (e) {
         bad(`${label}: discovery failed on the mirror (${MIRROR_MODE})`, (e.stderr || e.message).toString().trim().split('\n').slice(-2).join(' '));
         return;
     }
@@ -115,7 +135,11 @@ function check(label, image, subject) {
 function assertNoLegacySignatureTags(registry) {
     for (const image of IMAGES) {
         let tags;
-        try { tags = sh(['oras', 'repo', 'tags', `${registry}/${image}`]).split('\n'); } catch { continue; }
+        try {
+            tags = sh(['oras', 'repo', 'tags', `${registry}/${image}`]).split('\n');
+        } catch {
+            continue;
+        }
         const legacy = tags.map((t) => t.trim()).filter((t) => t.endsWith('.sig'));
         if (legacy.length) bad(`${registry}/${image}: cosign v2 legacy signature tags present`, legacy.join(', '));
     }
@@ -128,8 +152,9 @@ for (const image of IMAGES) check(`${image} root`, image, indexDigest(`${PRIMARY
 // The android linux/amd64 leaf is a signed subject in its own right: the CLI pins it directly,
 // because a classic image store holds one platform per digest reference.
 const androidRoot = indexDigest(`${PRIMARY}/android:${TAG}`);
-const leaf = (rawIndex(`${PRIMARY}/android@${androidRoot}`).manifests ?? [])
-    .find((m) => m.platform?.os === 'linux' && m.platform?.architecture === 'amd64');
+const leaf = (rawIndex(`${PRIMARY}/android@${androidRoot}`).manifests ?? []).find(
+    (m) => m.platform?.os === 'linux' && m.platform?.architecture === 'amd64',
+);
 if (!leaf) bad('the android index carries no linux/amd64 leaf');
 else check('android linux/amd64 leaf', 'android', leaf.digest);
 

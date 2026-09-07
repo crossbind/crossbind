@@ -1,0 +1,112 @@
+name: Scan published toolchain images
+
+on:
+    workflow_dispatch:
+    schedule:
+        # Digest pins do not move when a new CVE is disclosed, so re-evaluate the published bytes daily.
+        - cron: '17 3 * * *'
+
+permissions:
+    contents: read
+
+concurrency:
+    group: crossbind-toolchain-scan
+    cancel-in-progress: true
+
+jobs:
+    matrix:
+        runs-on: ubuntu-24.04
+        outputs:
+            images: ${{ steps.images.outputs.matrix }}
+        steps:
+            - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+            - id: images
+              name: Resolve the committed platform digests
+              run: |
+                  set -euo pipefail
+                  table=core/crossbind/src/assets/toolchain-digests.json
+                  matrix=$(jq -c '
+                    .registry as $registry |
+                    {include: [.images | to_entries[] as $image |
+                      $image.value.platforms | to_entries[] |
+                      select(.key == "linux/amd64" or .key == "linux/arm64") |
+                      {image: $image.key, platform: .key, ref: ($registry + "/" + $image.key + "@" + .value)}]}
+                  ' "$table")
+                  echo "matrix=${matrix}" >> "$GITHUB_OUTPUT"
+                  echo "${matrix}" | jq .
+
+    scan:
+        needs: matrix
+        strategy:
+            fail-fast: false
+            matrix: ${{ fromJSON(needs.matrix.outputs.images) }}
+        runs-on: ubuntu-24.04
+        permissions:
+            contents: read
+            packages: read
+        steps:
+            - uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4
+              with:
+                  registry: ghcr.io
+                  username: ${{ github.actor }}
+                  password: ${{ github.token }}
+            - name: Scan ${{ matrix.image }} ${{ matrix.platform }} by immutable digest
+              uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+              with:
+                  version: v0.69.0
+                  scan-type: image
+                  scan-ref: ${{ matrix.ref }}
+                  scanners: vuln
+                  vuln-type: os,library
+                  severity: HIGH,CRITICAL
+                  ignore-unfixed: true
+                  exit-code: 1
+                  timeout: 20m
+                  github-pat: ${{ github.token }}
+
+    report:
+        needs: scan
+        if: ${{ always() && (needs.scan.result == 'success' || needs.scan.result == 'failure') }}
+        runs-on: ubuntu-24.04
+        permissions:
+            contents: read
+            issues: write
+        steps:
+            - name: Open or refresh the published-image security issue
+              if: ${{ needs.scan.result == 'failure' }}
+              env:
+                  GH_TOKEN: ${{ github.token }}
+              run: |
+                  set -euo pipefail
+                  title='[security] published toolchain image scan failed'
+                  body="$RUNNER_TEMP/toolchain-scan.md"
+                  cat > "$body" <<EOF
+                  A daily scan of the published, digest-pinned Crossbind toolchain images did not complete cleanly. This can mean that Trivy found a HIGH or CRITICAL vulnerability with a known fix, or that the scanner/registry had an operational failure.
+
+                  Run: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}
+
+                  Inspect the linked job before classifying the finding. When a vulnerable base has a replacement, the dependency automation can propose a validated digest update. Until a reviewed replacement exists, the published digest remains unchanged.
+
+                  <!-- crossbind-published-image-security -->
+                  EOF
+                  for label in dependencies security; do
+                    if ! gh label list --limit 100 --json name --jq '.[].name' | grep -Fxq "$label"; then
+                      gh label create "$label" --color b60205 --description 'Automated dependency security tracking'
+                    fi
+                  done
+                  issue=$(gh issue list --state open --search '"[security] published toolchain image scan failed" in:title' --json number --jq '.[0].number // empty')
+                  if [ -n "$issue" ]; then
+                    gh issue edit "$issue" --body-file "$body"
+                  else
+                    gh issue create --title "$title" --body-file "$body" --label dependencies --label security
+                  fi
+            - name: Close the published-image security issue after recovery
+              if: ${{ needs.scan.result == 'success' }}
+              env:
+                  GH_TOKEN: ${{ github.token }}
+              run: |
+                  set -euo pipefail
+                  issue=$(gh issue list --state open --search '"[security] published toolchain image scan failed" in:title' --json number --jq '.[0].number // empty')
+                  if [ -n "$issue" ]; then
+                    gh issue close "$issue" --comment 'The latest daily scan passed for every committed image digest.'
+                  fi

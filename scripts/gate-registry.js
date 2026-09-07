@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 // Release gate (ADR rev 6.6): the mirror carries the same bytes, all the way down.
 //
-//   node scripts/gate-registry.js                     # compare GHCR against Docker Hub
-//   node scripts/gate-registry.js --table digests.json  # also write the release digest table
+//   node scripts/gate-registry.js --mirror registry.example/crossbind
+//   node scripts/gate-registry.js --mirror registry.example/crossbind --table digests.json
 //
 // Comparing the index digest alone proves only that two registries agree on a pointer. This walks
 // the whole graph from the raw bodies the registry actually serves - index, every linux platform
@@ -23,10 +23,18 @@ const VERSION = fs.readFileSync(new URL('tooling/docker/VERSION', ROOT), 'utf8')
 // The release is built and gated under a staging tag, then promoted; --tag points the gate at it.
 const TAG = (process.argv.includes('--tag') ? process.argv[process.argv.indexOf('--tag') + 1] : null) || VERSION;
 const IMAGES = ['rust-sysroot', 'base', 'web', 'android'];
-const arg = (flag) => { const i = process.argv.indexOf(flag); return i !== -1 ? process.argv[i + 1] : null; };
+const arg = (flag) => {
+    const i = process.argv.indexOf(flag);
+    return i !== -1 ? process.argv[i + 1] : null;
+};
 const PRIMARY = arg('--primary') ?? 'ghcr.io/crossbind';
-const MIRROR = arg('--mirror') ?? 'docker.io/crossbind';
+const MIRROR = arg('--mirror');
 const TABLE = arg('--table');
+
+if (!MIRROR) {
+    console.error('gate-registry: --mirror is required; canonical releases are GHCR-only');
+    process.exit(1);
+}
 
 const digestOf = (body) => `sha256:${crypto.createHash('sha256').update(body).digest('hex')}`;
 
@@ -40,7 +48,10 @@ function raw(ref) {
 
 const problems = [];
 const note = (msg) => console.log(`  ${msg}`);
-const bad = (msg) => { problems.push(msg); console.error(`  FAIL ${msg}`); };
+const bad = (msg) => {
+    problems.push(msg);
+    console.error(`  FAIL ${msg}`);
+};
 
 // One descriptor compared across both registries: same digest means same bytes, by construction.
 function compare(label, primaryRef, mirrorRef) {
@@ -64,7 +75,11 @@ function compare(label, primaryRef, mirrorRef) {
 console.log(`gate-registry: ${PRIMARY} vs ${MIRROR}, version ${TAG}\n`);
 // `registry` is the field the CLI's pinner reads; primary/mirror record what was compared.
 const table = {
-    version: VERSION, registry: PRIMARY, primary: PRIMARY, mirror: MIRROR, images: {},
+    version: VERSION,
+    registry: PRIMARY,
+    primary: PRIMARY,
+    mirror: MIRROR,
+    images: {},
 };
 
 for (const image of IMAGES) {
@@ -78,8 +93,7 @@ for (const image of IMAGES) {
 
     for (const leaf of leaves) {
         const platform = `linux/${leaf.platform.architecture}`;
-        const manifest = compare(`${image} ${platform} manifest`,
-            `${PRIMARY}/${image}@${leaf.digest}`, `${MIRROR}/${image}@${leaf.digest}`);
+        const manifest = compare(`${image} ${platform} manifest`, `${PRIMARY}/${image}@${leaf.digest}`, `${MIRROR}/${image}@${leaf.digest}`);
         if (!manifest) continue;
         if (manifest.digest !== leaf.digest) {
             bad(`${image} ${platform}: the index points at ${leaf.digest}, the body hashes to ${manifest.digest}`);

@@ -1,6 +1,4 @@
-import {
-    describe, test, expect, vi, beforeEach, afterEach,
-} from 'vitest';
+import { describe, test, expect, vi, beforeEach, afterEach } from 'vitest';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -13,9 +11,17 @@ vi.mock('node:child_process', () => ({ spawnSync: vi.fn(), execFileSync: vi.fn()
 // Where cargo runs follows the runner, so the runner belongs in the fixture rather than being read
 // from whatever ~/.crossbind.json happens to say on the machine running the suite.
 const holder = { config: { paths: { base: '/repo' }, system: {} } };
-vi.mock('../src/state/index.js', () => ({ default: { get config() { return holder.config; } } }));
+vi.mock('../src/state/index.js', () => ({
+    default: {
+        get config() {
+            return holder.config;
+        },
+    },
+}));
 
-const setRunner = (RUNNER) => { holder.config = { paths: { base: '/repo' }, system: { RUNNER } }; };
+const setRunner = (RUNNER) => {
+    holder.config = { paths: { base: '/repo' }, system: { RUNNER } };
+};
 
 let work;
 
@@ -106,8 +112,7 @@ describe('runCargo environment', () => {
 
         mod.default(['build'], { rustflags: ['-Ctarget-feature=+atomics', '-Cpanic=abort'] });
 
-        expect(envOf(spawnSync).CARGO_ENCODED_RUSTFLAGS)
-            .toBe(`-Ctarget-feature=+atomics${String.fromCharCode(0x1f)}-Cpanic=abort`);
+        expect(envOf(spawnSync).CARGO_ENCODED_RUSTFLAGS).toBe(`-Ctarget-feature=+atomics${String.fromCharCode(0x1f)}-Cpanic=abort`);
     });
 
     test('forces the panic strategy only when one is asked for', async () => {
@@ -150,6 +155,7 @@ describe('where cargo runs', () => {
         // Project paths are rewritten to where the mount puts them.
         expect(argv).toContain('/tmp/crossbind/live/pkg/Cargo.toml');
         expect(argv.join(' ')).toContain('/repo:/tmp/crossbind/live');
+        expect(argv).toEqual(expect.arrayContaining(['--cap-drop', 'ALL', '--security-opt', 'no-new-privileges=true']));
         // The registry cache is bind-mounted, which is what keeps crate sources readable from the
         // host for bridge generation.
         expect(argv.join(' ')).toContain(`${path.join(work, 'home', '.crossbind', 'cargo')}:/var/cache/crossbind/cargo`);
@@ -216,10 +222,13 @@ describe('where cargo runs', () => {
         setRunner('DOCKER_EXEC');
         const { mod } = await importFresh();
         const { execFileSync } = await import('node:child_process');
-        execFileSync.mockImplementation(() => { throw new Error('No such container'); });
+        execFileSync.mockImplementation(() => {
+            throw new Error('No such container');
+        });
 
-        expect(() => mod.default(['build'], { target: { platform: 'wasm' } }))
-            .toThrow(/does not exist[\s\S]*docker run -d --name crossbind-/);
+        expect(() => mod.default(['build'], { target: { platform: 'wasm' } })).toThrow(
+            /does not exist[\s\S]*docker run -d --name crossbind-[\s\S]*--cap-drop ALL[\s\S]*no-new-privileges=true/,
+        );
     });
 
     test('DOCKER_EXEC fails when the container predates the cargo mount', async () => {
@@ -228,8 +237,7 @@ describe('where cargo runs', () => {
         const { execFileSync } = await import('node:child_process');
         inspectReturning(execFileSync, [{ Destination: '/tmp/crossbind/live', Source: '/repo' }]);
 
-        expect(() => mod.default(['build'], { target: { platform: 'wasm' } }))
-            .toThrow(/does not mount[\s\S]*var\/cache\/crossbind\/cargo/);
+        expect(() => mod.default(['build'], { target: { platform: 'wasm' } })).toThrow(/does not mount[\s\S]*var\/cache\/crossbind\/cargo/);
     });
 
     test('DOCKER_EXEC fails when the container is stopped', async () => {
@@ -238,8 +246,7 @@ describe('where cargo runs', () => {
         const { execFileSync } = await import('node:child_process');
         inspectReturning(execFileSync, bothMounts(), false);
 
-        expect(() => mod.default(['build'], { target: { platform: 'wasm' } }))
-            .toThrow(/not running[\s\S]*docker start/);
+        expect(() => mod.default(['build'], { target: { platform: 'wasm' } })).toThrow(/not running[\s\S]*docker start/);
     });
 
     test('android forces the amd64 platform', async () => {
@@ -302,14 +309,12 @@ describe('toHostPath', () => {
     test('maps the cargo home mount back to the host', async () => {
         const { mod } = await importFresh();
         const hostSrc = path.join(mod.cargoHome(), 'registry', 'src', 'index.crates.io-x', 'semver-1.0.28');
-        expect(mod.toHostPath('/var/cache/crossbind/cargo/registry/src/index.crates.io-x/semver-1.0.28'))
-            .toBe(hostSrc);
+        expect(mod.toHostPath('/var/cache/crossbind/cargo/registry/src/index.crates.io-x/semver-1.0.28')).toBe(hostSrc);
     });
 
     test('maps the project mount back to the host', async () => {
         const { mod } = await importFresh();
-        expect(mod.toHostPath('/tmp/crossbind/live/e2e/web-vite/Cargo.toml'))
-            .toBe(path.join('/repo', 'e2e', 'web-vite', 'Cargo.toml'));
+        expect(mod.toHostPath('/tmp/crossbind/live/e2e/web-vite/Cargo.toml')).toBe(path.join('/repo', 'e2e', 'web-vite', 'Cargo.toml'));
     });
 
     test('leaves a path outside every mount alone', async () => {
