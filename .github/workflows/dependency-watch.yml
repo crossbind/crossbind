@@ -1,0 +1,117 @@
+name: Watch dependency and toolchain updates
+
+on:
+    workflow_dispatch:
+        inputs:
+            dry_run:
+                description: Detect and validate updates without creating branches, PRs or issues
+                type: boolean
+                default: true
+    schedule:
+        - cron: '43 2 * * *'
+
+permissions:
+    contents: read
+
+concurrency:
+    group: crossbind-dependency-watch
+    cancel-in-progress: false
+
+jobs:
+    plan:
+        runs-on: ubuntu-24.04
+        outputs:
+            matrix: ${{ steps.plan.outputs.matrix }}
+            count: ${{ steps.plan.outputs.count }}
+            has_findings: ${{ steps.plan.outputs.has_findings }}
+            report: ${{ steps.plan.outputs.report }}
+        steps:
+            - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+            - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+              with:
+                  node-version-file: .nvmrc
+                  package-manager-cache: false
+            - id: plan
+              name: Resolve upstream versions, source identities and image digests
+              env:
+                  GITHUB_TOKEN: ${{ github.token }}
+              run: node scripts/dependencies/plan-dependency-updates.mjs --output "$RUNNER_TEMP/dependency-plan.json" --github-output
+            - name: Preserve the read-only plan
+              uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+              with:
+                  name: dependency-watch-plan
+                  path: ${{ runner.temp }}/dependency-plan.json
+                  if-no-files-found: error
+                  retention-days: 7
+
+    candidates:
+        needs: plan
+        if: ${{ needs.plan.outputs.count != '0' }}
+        strategy:
+            fail-fast: false
+            max-parallel: 2
+            matrix: ${{ fromJSON(needs.plan.outputs.matrix) }}
+        uses: ./.github/workflows/dependency-update-candidate.yml
+        with:
+            proposal: ${{ matrix.encoded }}
+            proposal_id: ${{ matrix.id }}
+            kind: ${{ matrix.kind }}
+            component: ${{ matrix.component }}
+            requires_macos: ${{ matrix.macos }}
+            dry_run: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run }}
+        secrets:
+            DEPENDENCY_BOT_PRIVATE_KEY: ${{ secrets.DEPENDENCY_BOT_PRIVATE_KEY }}
+
+    report-findings:
+        needs: plan
+        if: ${{ always() && needs.plan.result == 'success' && needs.plan.outputs.has_findings == 'true' && !(github.event_name == 'workflow_dispatch' && inputs.dry_run) }}
+        runs-on: ubuntu-24.04
+        permissions:
+            contents: read
+            issues: write
+        steps:
+            - name: Open or refresh the manual-intervention issue
+              env:
+                  GH_TOKEN: ${{ github.token }}
+                  ENCODED_REPORT: ${{ needs.plan.outputs.report }}
+              run: |
+                  set -euo pipefail
+                  title='[dependency-watch] manual intervention required'
+                  body="$RUNNER_TEMP/dependency-watch.md"
+                  node -e '
+                    const report = JSON.parse(Buffer.from(process.env.ENCODED_REPORT, "base64url").toString("utf8"));
+                    const lines = ["Dependency watch could not safely turn every finding into a pull request.", "", `Run: ${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}`, ""];
+                    for (const blocker of report.blockers) lines.push(`- **${blocker.component}**: ${blocker.current} → ${blocker.target}: ${blocker.reason}`);
+                    for (const error of report.errors) lines.push(`- **${error.component}** check failed: ${error.error}`);
+                    lines.push("", "The bot never accepts changed bytes, unknown versions or an unreconciled Emscripten fork automatically.", "", "<!-- crossbind-dependency-watch -->");
+                    require("node:fs").writeFileSync(process.argv[1], `${lines.join("\n")}\n`);
+                  ' "$body"
+                  for label in dependencies security; do
+                    if ! gh label list --limit 100 --json name --jq '.[].name' | grep -Fxq "$label"; then
+                      gh label create "$label" --color b60205 --description 'Automated dependency security tracking'
+                    fi
+                  done
+                  issue=$(gh issue list --state open --search '"[dependency-watch] manual intervention required" in:title' --json number --jq '.[0].number // empty')
+                  if [ -n "$issue" ]; then
+                    gh issue edit "$issue" --body-file "$body"
+                  else
+                    gh issue create --title "$title" --body-file "$body" --label dependencies --label security
+                  fi
+
+    close-resolved-findings:
+        needs: plan
+        if: ${{ needs.plan.result == 'success' && needs.plan.outputs.has_findings != 'true' && !(github.event_name == 'workflow_dispatch' && inputs.dry_run) }}
+        runs-on: ubuntu-24.04
+        permissions:
+            contents: read
+            issues: write
+        steps:
+            - name: Close the resolved dependency-watch issue
+              env:
+                  GH_TOKEN: ${{ github.token }}
+              run: |
+                  set -euo pipefail
+                  issue=$(gh issue list --state open --search '"[dependency-watch] manual intervention required" in:title' --json number --jq '.[0].number // empty')
+                  if [ -n "$issue" ]; then
+                    gh issue close "$issue" --comment "The latest scheduled dependency scan completed without manual blockers."
+                  fi

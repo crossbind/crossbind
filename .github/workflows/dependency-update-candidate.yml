@@ -1,0 +1,276 @@
+name: Validate one dependency update
+
+on:
+    workflow_call:
+        inputs:
+            proposal:
+                type: string
+                required: true
+            proposal_id:
+                type: string
+                required: true
+            kind:
+                type: string
+                required: true
+            component:
+                type: string
+                required: true
+            requires_macos:
+                type: boolean
+                required: true
+            dry_run:
+                type: boolean
+                required: true
+        secrets:
+            DEPENDENCY_BOT_PRIVATE_KEY:
+                required: false
+
+permissions:
+    contents: read
+
+jobs:
+    prepare:
+        runs-on: ubuntu-24.04
+        steps:
+            - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+              with:
+                  persist-credentials: false
+            - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
+            - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+              with:
+                  node-version-file: .nvmrc
+                  cache: pnpm
+            - run: pnpm install --frozen-lockfile
+            - name: Apply the deterministic update
+              env:
+                  PROPOSAL: ${{ inputs.proposal }}
+              run: node scripts/dependencies/apply-dependency-update.mjs --proposal "$PROPOSAL"
+            - name: Refresh generated agent references
+              run: pnpm build:agents
+            - name: Validate update scope, integrity metadata and workflows
+              env:
+                  PROPOSAL: ${{ inputs.proposal }}
+              run: node scripts/dependencies/validate-dependency-update.mjs --proposal "$PROPOSAL" --platform metadata
+            - name: Materialize the exact reviewed patch
+              env:
+                  PROPOSAL: ${{ inputs.proposal }}
+              run: |
+                  set -euo pipefail
+                  mkdir -p "$RUNNER_TEMP/dependency-update"
+                  git diff --binary --full-index > "$RUNNER_TEMP/dependency-update/update.patch"
+                  test -s "$RUNNER_TEMP/dependency-update/update.patch"
+                  node scripts/dependencies/render-dependency-pr.mjs \
+                    --proposal "$PROPOSAL" \
+                    --output "$RUNNER_TEMP/dependency-update/pull-request.json"
+                  cd "$RUNNER_TEMP/dependency-update"
+                  sha256sum update.patch > update.patch.sha256
+            - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+              with:
+                  name: dependency-update-${{ inputs.proposal_id }}
+                  path: ${{ runner.temp }}/dependency-update
+                  if-no-files-found: error
+                  retention-days: 1
+
+    validate-linux:
+        needs: prepare
+        runs-on: ubuntu-24.04
+        permissions:
+            contents: read
+        steps:
+            - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+              with:
+                  persist-credentials: false
+            - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+              with:
+                  name: dependency-update-${{ inputs.proposal_id }}
+                  path: ${{ runner.temp }}/dependency-update
+            - name: Verify and apply the prepared patch
+              run: |
+                  set -euo pipefail
+                  cd "$RUNNER_TEMP/dependency-update"
+                  sha256sum -c update.patch.sha256
+                  cd "$GITHUB_WORKSPACE"
+                  git apply --index "$RUNNER_TEMP/dependency-update/update.patch"
+            - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
+            - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+              with:
+                  node-version-file: .nvmrc
+                  cache: pnpm
+            - run: pnpm install --frozen-lockfile
+            - name: Run the Linux/native/toolchain gate
+              env:
+                  PROPOSAL: ${{ inputs.proposal }}
+              run: node scripts/dependencies/validate-dependency-update.mjs --proposal "$PROPOSAL" --platform linux
+            - name: Scan the rebuilt base image
+              if: ${{ inputs.kind == 'toolchain' }}
+              uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+              with:
+                  version: v0.69.0
+                  cache: false
+                  scan-type: image
+                  scan-ref: crossbind/base:dev-amd64
+                  scanners: vuln
+                  vuln-type: os,library
+                  severity: HIGH,CRITICAL
+                  ignore-unfixed: true
+                  exit-code: 1
+                  timeout: 20m
+            - name: Scan the rebuilt Web image
+              if: ${{ inputs.kind == 'toolchain' && inputs.component != 'android-command-line-tools' && inputs.component != 'android-ndk' }}
+              uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+              with:
+                  version: v0.69.0
+                  cache: false
+                  scan-type: image
+                  scan-ref: crossbind/web:dev-amd64
+                  scanners: vuln
+                  vuln-type: os,library
+                  severity: HIGH,CRITICAL
+                  ignore-unfixed: true
+                  exit-code: 1
+                  timeout: 20m
+            - name: Scan the rebuilt Android image
+              if: ${{ inputs.kind == 'toolchain' }}
+              uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+              with:
+                  version: v0.69.0
+                  cache: false
+                  scan-type: image
+                  scan-ref: crossbind/android:dev
+                  scanners: vuln
+                  vuln-type: os,library
+                  severity: HIGH,CRITICAL
+                  ignore-unfixed: true
+                  exit-code: 1
+                  timeout: 20m
+
+    validate-macos:
+        needs: prepare
+        if: ${{ inputs.requires_macos }}
+        runs-on: macos-15
+        permissions:
+            contents: read
+        steps:
+            - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+              with:
+                  persist-credentials: false
+            - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+              with:
+                  name: dependency-update-${{ inputs.proposal_id }}
+                  path: ${{ runner.temp }}/dependency-update
+            - name: Verify and apply the prepared patch
+              run: |
+                  set -euo pipefail
+                  cd "$RUNNER_TEMP/dependency-update"
+                  shasum -a 256 -c update.patch.sha256
+                  cd "$GITHUB_WORKSPACE"
+                  git apply --index "$RUNNER_TEMP/dependency-update/update.patch"
+            - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
+            - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+              with:
+                  node-version-file: .nvmrc
+                  cache: pnpm
+            - run: pnpm install --frozen-lockfile
+            - name: Run the macOS/iOS gate
+              env:
+                  PROPOSAL: ${{ inputs.proposal }}
+              run: node scripts/dependencies/validate-dependency-update.mjs --proposal "$PROPOSAL" --platform macos
+
+    open-pr:
+        needs: [prepare, validate-linux, validate-macos]
+        if: ${{ always() && needs.prepare.result == 'success' && needs.validate-linux.result == 'success' && (needs.validate-macos.result == 'success' || needs.validate-macos.result == 'skipped') }}
+        runs-on: ubuntu-24.04
+        permissions:
+            contents: read
+        steps:
+            - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+              with:
+                  persist-credentials: false
+            - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+              with:
+                  name: dependency-update-${{ inputs.proposal_id }}
+                  path: ${{ runner.temp }}/dependency-update
+            - name: Verify and apply the validated patch
+              run: |
+                  set -euo pipefail
+                  cd "$RUNNER_TEMP/dependency-update"
+                  sha256sum -c update.patch.sha256
+                  cd "$GITHUB_WORKSPACE"
+                  git apply --index "$RUNNER_TEMP/dependency-update/update.patch"
+                  git diff --cached --check
+            - name: Report dry run
+              if: ${{ inputs.dry_run }}
+              run: |
+                  echo "Validated ${{ inputs.proposal_id }}; dry run will not create a branch or pull request."
+                  git diff --cached --stat
+            - name: Require the narrowly scoped dependency bot credentials
+              if: ${{ !inputs.dry_run }}
+              env:
+                  CLIENT_ID: ${{ vars.DEPENDENCY_BOT_CLIENT_ID }}
+                  PRIVATE_KEY: ${{ secrets.DEPENDENCY_BOT_PRIVATE_KEY }}
+              run: |
+                  set -euo pipefail
+                  test -n "$CLIENT_ID" || { echo "DEPENDENCY_BOT_CLIENT_ID is not configured."; exit 1; }
+                  test -n "$PRIVATE_KEY" || { echo "DEPENDENCY_BOT_PRIVATE_KEY is not configured."; exit 1; }
+            - id: app-token
+              if: ${{ !inputs.dry_run }}
+              uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+              with:
+                  client-id: ${{ vars.DEPENDENCY_BOT_CLIENT_ID }}
+                  private-key: ${{ secrets.DEPENDENCY_BOT_PRIVATE_KEY }}
+                  owner: ${{ github.repository_owner }}
+                  repositories: ${{ github.event.repository.name }}
+                  permission-contents: write
+                  permission-pull-requests: write
+                  permission-issues: write
+            - id: bot-user
+              if: ${{ !inputs.dry_run }}
+              env:
+                  GH_TOKEN: ${{ steps.app-token.outputs.token }}
+                  APP_SLUG: ${{ steps.app-token.outputs.app-slug }}
+              run: echo "user-id=$(gh api "/users/${APP_SLUG}[bot]" --jq .id)" >> "$GITHUB_OUTPUT"
+            - name: Create the idempotent draft pull request
+              if: ${{ !inputs.dry_run }}
+              env:
+                  GH_TOKEN: ${{ steps.app-token.outputs.token }}
+                  BOT_NAME: ${{ steps.app-token.outputs.app-slug }}[bot]
+                  BOT_EMAIL: ${{ steps.bot-user.outputs.user-id }}+${{ steps.app-token.outputs.app-slug }}[bot]@users.noreply.github.com
+              run: |
+                  set -euo pipefail
+                  metadata="$RUNNER_TEMP/dependency-update/pull-request.json"
+                  branch=$(jq -r .branch "$metadata")
+                  title=$(jq -r .title "$metadata")
+                  commit=$(jq -r .commit "$metadata")
+                  body="$RUNNER_TEMP/dependency-update/body.md"
+                  jq -r .body "$metadata" > "$body"
+
+                  existing=$(gh pr list --state open --head "$branch" --json number --jq '.[0].number // empty')
+                  if [ -n "$existing" ]; then
+                    expected_tree=$(git write-tree)
+                    existing_head=$(gh pr view "$existing" --json headRefOid --jq .headRefOid)
+                    existing_tree=$(gh api "repos/${GITHUB_REPOSITORY}/git/commits/${existing_head}" --jq .tree.sha)
+                    if [ "$existing_tree" = "$expected_tree" ]; then
+                      echo "PR #${existing} already contains the exact validated tree; reusing it."
+                      exit 0
+                    fi
+                    echo "PR #${existing} uses ${branch} but its tree conflicts with the newly validated update; refusing to overwrite it."
+                    exit 1
+                  fi
+                  git remote set-url origin "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+                  if git ls-remote --exit-code --heads origin "refs/heads/${branch}" >/dev/null 2>&1; then
+                    echo "Remote branch ${branch} exists without an open PR; refusing to overwrite it."
+                    exit 1
+                  fi
+
+                  git config user.name "$BOT_NAME"
+                  git config user.email "$BOT_EMAIL"
+                  git checkout -b "$branch"
+                  git commit -m "$commit"
+                  git push origin "HEAD:refs/heads/${branch}"
+                  for label in dependencies automated-dependency-update; do
+                    if ! gh label list --limit 100 --json name --jq '.[].name' | grep -Fxq "$label"; then
+                      gh label create "$label" --color 0366d6 --description 'Automated dependency maintenance'
+                    fi
+                  done
+                  gh pr create --draft --base main --head "$branch" --title "$title" --body-file "$body" \
+                    --label dependencies --label automated-dependency-update

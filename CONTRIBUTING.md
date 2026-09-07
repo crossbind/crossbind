@@ -116,19 +116,48 @@ Bug reports need: crossbind version, package(s) affected, reproducer (smallest p
 
 ## Releases
 
-crossbind uses **manual semver releases**. Beta tag for in-development, latest for stable.
+All public workspace packages use one manual release train. It selects only packages whose
+committed version is newer than the matching npm channel, builds native artifacts on Linux/macOS,
+then publishes in dependency order after every tarball is ready. Beta versions publish to `beta`,
+release candidates to `next`, and stable versions to `latest`. All npm writes use OIDC Trusted
+Publishing; no npm token is stored in GitHub.
 
 ```bash
-pnpm run check                      # full health check
-pnpm run publish:all                # publish core + plugins + samples
-# or piecewise:
-pnpm run publish:core               # crossbind
-pnpm run publish:plugins            # @crossbind/plugin-*
-pnpm run publish:examples            # @crossbind/example-*
-pnpm run publish:beta               # all under @crossbind/* with --tag beta
+pnpm run check:release
+pnpm run release:package
+pnpm run release:dry-run
+pnpm run release:train:dry-run -- --channel beta
+gh workflow run release-crossbind.yml --ref main -f channel=beta -f dry_run=true
 ```
 
-Releases are maintainer-driven. Contributors don't need to bump versions in their PRs — that happens at release time.
+The release check includes SHA-verified actionlint. The package check installs the exact tarball in
+a temporary credentials-free project and verifies its CLI, ESM entry point and committed digest
+table before those bytes can be published.
+
+Every new release of the canonical `crossbind` package needs one human-authored
+`releases/crossbind/<version>.md`; other train packages do not duplicate that product changelog.
+Maintainers use the protected workflow only after the release commit is reviewed and green. The
+full beta, RC, stable, Trusted Publishing and recovery procedure is in
+[`docs/playbooks/releasing-crossbind.md`](docs/playbooks/releasing-crossbind.md).
+
+The older scoped-package and bulk `publish:*` entry points refuse local publication so a stored npm
+token or login session cannot bypass the protected OIDC train.
+
+## Dependency maintenance
+
+Dependabot handles ordinary pnpm, GitHub Actions and Debian image updates. The daily Crossbind
+dependency watcher handles transactional native/toolchain pins, verifies their hashes and builds
+every affected platform before opening a draft PR. It never publishes or auto-merges.
+
+```bash
+pnpm run dependencies:plan
+pnpm run check:dependency-automation
+gh workflow run dependency-watch.yml --ref main -f dry_run=true
+```
+
+The security model, GitHub App permissions, Emscripten fork-tag contract, native advisory coverage
+and recovery procedure are documented in
+[`docs/playbooks/dependency-maintenance.md`](docs/playbooks/dependency-maintenance.md).
 
 ## AI agents are welcome
 

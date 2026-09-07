@@ -12,6 +12,9 @@
  *   node check-native-versions.js --update   # Rewrite `nativeVersion` in every
  *                                            # outdated package.json to the
  *                                            # latest upstream version
+ *   node check-native-versions.js --family zlib --json /tmp/native.json
+ *                                            # Limit the scan and emit a stable,
+ *                                            # machine-readable report
  *
  * Set GITHUB_TOKEN in the environment to avoid GitHub API rate limits.
  */
@@ -25,6 +28,26 @@ const REPORT_PATH = (() => {
     const i = process.argv.indexOf('--report');
     return i !== -1 ? process.argv[i + 1] : null;
 })();
+const JSON_PATH = (() => {
+    const i = process.argv.indexOf('--json');
+    return i !== -1 ? process.argv[i + 1] : null;
+})();
+
+function optionValues(name) {
+    const values = [];
+    for (let i = 0; i < process.argv.length; i += 1) {
+        if (process.argv[i] !== name || !process.argv[i + 1]) continue;
+        values.push(
+            ...process.argv[i + 1]
+                .split(',')
+                .map((value) => value.trim())
+                .filter(Boolean),
+        );
+    }
+    return values;
+}
+
+const FAMILY_FILTER = new Set(optionValues('--family'));
 
 function pad(s, n) {
     return String(s).padEnd(n);
@@ -351,9 +374,9 @@ async function fetchLatestFromSource(source) {
     throw new Error(`Unknown source kind: ${source.kind}`);
 }
 
-// Walks ports/ and dynamic-imports each library's wasm
-// `crossbind.build.js` (every library has a wasm variant, and getURL is
-// platform-agnostic). Returns { libKey -> source } where `source` is
+// Walks ports/ and dynamic-imports each library's canonical base `build.mjs`.
+// This keeps the inventory runnable before pnpm has created workspace links.
+// Returns { libKey -> source } where `source` is
 // consumable by fetchLatestFromSource().
 async function buildLibraryMap() {
     const groups = fs.readdirSync(PACKAGES_DIR, { withFileTypes: true }).filter((e) => e.isDirectory());
@@ -366,7 +389,7 @@ async function buildLibraryMap() {
             continue;
         }
 
-        const buildPath = path.join(PACKAGES_DIR, group.name, 'wasm', 'crossbind.build.js');
+        const buildPath = path.join(PACKAGES_DIR, group.name, 'base', 'build.mjs');
         if (!fs.existsSync(buildPath)) continue;
 
         let getURL;
@@ -374,11 +397,11 @@ async function buildLibraryMap() {
             const mod = await import(pathToFileURL(buildPath).href);
             getURL = mod?.default?.getURL;
         } catch (e) {
-            console.error(`  ${libKey}: failed to import crossbind.build.js (${e.message})`);
+            console.error(`  ${libKey}: failed to import base/build.mjs (${e.message})`);
             continue;
         }
         if (typeof getURL !== 'function') {
-            console.error(`  ${libKey}: crossbind.build.js has no default.getURL function`);
+            console.error(`  ${libKey}: base/build.mjs has no default.getURL function`);
             continue;
         }
 
@@ -433,7 +456,9 @@ function deriveLibraryKey(pkgPath) {
 // formatting (indentation, key order, trailing newline).
 function rewriteNativeVersion(pkgPath, newVersion) {
     const original = fs.readFileSync(pkgPath, 'utf8');
-    const re = /("nativeVersion"\s*:\s*")([^"]*)(")/;
+    // bin-wasi manifests also contain a generated source component entry. Keep
+    // every nativeVersion occurrence in one package internally consistent.
+    const re = /("nativeVersion"\s*:\s*")([^"]*)(")/g;
     if (!re.test(original)) {
         throw new Error(`nativeVersion field not found in ${pkgPath}`);
     }
@@ -457,10 +482,12 @@ async function main() {
         try {
             const json = JSON.parse(fs.readFileSync(p, 'utf8'));
             if (!json.nativeVersion) continue;
+            const library = deriveLibraryKey(p);
+            if (FAMILY_FILTER.size > 0 && !FAMILY_FILTER.has(library)) continue;
             packages.push({
                 name: json.name,
                 nativeVersion: json.nativeVersion,
-                library: deriveLibraryKey(p),
+                library,
                 absPath: p,
                 relativePath: path.relative(ROOT, p),
             });
@@ -470,7 +497,7 @@ async function main() {
     }
 
     const libraryKeys = [...new Set(packages.map((p) => p.library))].sort();
-    console.error(`Found ${packages.length} package(s) across ${libraryKeys.length} libraries. Resolving upstream sources from crossbind.build.js...`);
+    console.error(`Found ${packages.length} package(s) across ${libraryKeys.length} libraries. Resolving upstream sources from base/build.mjs...`);
 
     const sources = await buildLibraryMap();
 
@@ -483,22 +510,23 @@ async function main() {
                 latestByLibrary[key] = {
                     stable: null,
                     any: null,
-                    error: `No upstream source derived for '${key}' (missing or unparseable crossbind.build.js)`,
+                    error: `No upstream source derived for '${key}' (missing or unparseable base/build.mjs)`,
                     homepage: null,
+                    source: null,
                 };
                 return;
             }
             try {
                 const { stable, any } = await fetchLatestFromSource(src);
                 if (!stable && !any) throw new Error('No matching tag/version found');
-                latestByLibrary[key] = { stable, any, error: null, homepage: src.homepage };
+                latestByLibrary[key] = { stable, any, error: null, homepage: src.homepage, source: src };
                 if (stable && any && stable !== any) {
                     console.error(`  ${key}: ${stable} (stable) / ${any} (incl. prerelease)`);
                 } else {
                     console.error(`  ${key}: ${stable || any}`);
                 }
             } catch (e) {
-                latestByLibrary[key] = { stable: null, any: null, error: e.message, homepage: src.homepage };
+                latestByLibrary[key] = { stable: null, any: null, error: e.message, homepage: src.homepage, source: src };
                 console.error(`  ${key}: FAILED (${e.message})`);
             }
         }),
@@ -527,6 +555,7 @@ async function main() {
             status,
             error: info.error || null,
             homepage: info.homepage || null,
+            source: info.source || null,
             absPath: pkg.absPath,
             path: pkg.relativePath,
         };
@@ -631,6 +660,23 @@ async function main() {
         md += `## Up to date (${upToDate.length})\n\n` + renderTable(upToDate) + '\n';
         fs.writeFileSync(REPORT_PATH, md);
         process.stderr.write(`\nReport written to ${REPORT_PATH}\n`);
+    }
+    if (JSON_PATH) {
+        const result = {
+            schemaVersion: 1,
+            generatedAt: new Date().toISOString(),
+            families: libraryKeys,
+            rows: rows.map(({ absPath: _absPath, ...row }) => row),
+            summary: {
+                total: rows.length,
+                upToDate: upToDate.length,
+                outdated: outdated.length,
+                unknown: unknown.length,
+                updated: updated.length,
+            },
+        };
+        fs.writeFileSync(JSON_PATH, `${JSON.stringify(result, null, 2)}\n`);
+        process.stderr.write(`Machine-readable report written to ${JSON_PATH}\n`);
     }
     process.stderr.write(
         `\nSummary: ${upToDate.length} up-to-date, ${outdated.length} outdated, ${unknown.length} unknown${updated.length ? `, ${updated.length} updated` : ''}\n`,

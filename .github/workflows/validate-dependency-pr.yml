@@ -1,0 +1,169 @@
+name: Validate dependency update
+
+on:
+    pull_request:
+        branches:
+            - main
+        paths:
+            - .nvmrc
+            - tooling/docker/**
+            - ports/**
+            - core/crossbind/src/actions/run.js
+            - .github/workflows/build-linux.yml
+            - scripts/dependencies/**
+            - .github/dependabot.yml
+            - .github/workflows/dependency-*.yml
+            - .github/workflows/validate-dependency-pr.yml
+
+permissions:
+    contents: read
+
+concurrency:
+    group: dependency-pr-${{ github.event.pull_request.number }}
+    cancel-in-progress: true
+
+jobs:
+    changes:
+        runs-on: ubuntu-24.04
+        outputs:
+            families: ${{ steps.units.outputs.families }}
+            family_count: ${{ steps.units.outputs.family_count }}
+            toolchain: ${{ steps.units.outputs.toolchain }}
+        steps:
+            - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+              with:
+                  fetch-depth: 0
+                  persist-credentials: false
+            - id: units
+              env:
+                  BASE_SHA: ${{ github.event.pull_request.base.sha }}
+                  HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+              run: node scripts/dependencies/changed-units.mjs --base "$BASE_SHA" --head "$HEAD_SHA"
+
+    automation:
+        runs-on: ubuntu-24.04
+        steps:
+            - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+              with:
+                  persist-credentials: false
+            - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
+            - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+              with:
+                  node-version-file: .nvmrc
+                  cache: pnpm
+            - run: pnpm install --frozen-lockfile
+            - name: Test dependency automation and workflow policy
+              run: pnpm run check:dependency-automation
+
+    native-linux:
+        needs: changes
+        if: ${{ needs.changes.outputs.family_count != '0' }}
+        strategy:
+            fail-fast: false
+            max-parallel: 2
+            matrix: ${{ fromJSON(needs.changes.outputs.families) }}
+        runs-on: ubuntu-24.04
+        steps:
+            - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+              with:
+                  persist-credentials: false
+            - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
+            - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+              with:
+                  node-version-file: .nvmrc
+                  cache: pnpm
+            - run: pnpm install --frozen-lockfile
+            - name: Build and pack every Linux target in the changed native family
+              env:
+                  FAMILY: ${{ matrix.family }}
+              run: node scripts/dependencies/validate-native-family.mjs --family "$FAMILY" --platform linux
+
+    native-macos:
+        needs: changes
+        if: ${{ needs.changes.outputs.family_count != '0' }}
+        strategy:
+            fail-fast: false
+            max-parallel: 2
+            matrix: ${{ fromJSON(needs.changes.outputs.families) }}
+        runs-on: macos-15
+        steps:
+            - if: ${{ matrix.macos }}
+              uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+              with:
+                  persist-credentials: false
+            - if: ${{ matrix.macos }}
+              uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
+            - if: ${{ matrix.macos }}
+              uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+              with:
+                  node-version-file: .nvmrc
+                  cache: pnpm
+            - if: ${{ matrix.macos }}
+              run: pnpm install --frozen-lockfile
+            - if: ${{ matrix.macos }}
+              name: Build and pack the iOS target in the changed native family
+              env:
+                  FAMILY: ${{ matrix.family }}
+              run: node scripts/dependencies/validate-native-family.mjs --family "$FAMILY" --platform macos
+
+    toolchain:
+        needs: changes
+        if: ${{ needs.changes.outputs.toolchain == 'true' }}
+        runs-on: ubuntu-24.04
+        steps:
+            - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+              with:
+                  persist-credentials: false
+            - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
+            - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+              with:
+                  node-version-file: .nvmrc
+                  cache: pnpm
+            - run: pnpm install --frozen-lockfile
+            - name: Build and smoke the image family
+              env:
+                  CROSSBIND_IMAGE_WEB: crossbind/web:dev-amd64
+              run: |
+                  pnpm --dir tooling/docker build:family
+                  node scripts/smoke-images.js base:amd64 web:amd64 android:amd64
+                  pnpm run gate:local-sysroot
+                  pnpm run check:release:web
+            - name: Scan the rebuilt base image
+              uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+              with:
+                  version: v0.69.0
+                  cache: false
+                  scan-type: image
+                  scan-ref: crossbind/base:dev-amd64
+                  scanners: vuln
+                  vuln-type: os,library
+                  severity: HIGH,CRITICAL
+                  ignore-unfixed: true
+                  exit-code: 1
+                  timeout: 20m
+            - name: Scan the rebuilt Web image
+              uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+              with:
+                  version: v0.69.0
+                  cache: false
+                  scan-type: image
+                  scan-ref: crossbind/web:dev-amd64
+                  scanners: vuln
+                  vuln-type: os,library
+                  severity: HIGH,CRITICAL
+                  ignore-unfixed: true
+                  exit-code: 1
+                  timeout: 20m
+            - name: Scan the rebuilt Android image
+              uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+              with:
+                  version: v0.69.0
+                  cache: false
+                  scan-type: image
+                  scan-ref: crossbind/android:dev
+                  scanners: vuln
+                  vuln-type: os,library
+                  severity: HIGH,CRITICAL
+                  ignore-unfixed: true
+                  exit-code: 1
+                  timeout: 20m
