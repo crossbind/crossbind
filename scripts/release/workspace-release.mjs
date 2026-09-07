@@ -95,7 +95,7 @@ export function discoverPublishablePackages(root = process.cwd()) {
     return packages.sort((left, right) => left.name.localeCompare(right.name));
 }
 
-export function fixedWorkspaceVersion(packages) {
+export function commonWorkspaceVersion(packages) {
     const versions = new Map();
     for (const candidate of packages) {
         const names = versions.get(candidate.version) ?? [];
@@ -107,10 +107,7 @@ export function fixedWorkspaceVersion(packages) {
             .sort(([left], [right]) => compareSupportedVersions(left, right))
             .map(([version, names]) => `${version}: ${names.length} package(s) (${names.slice(0, 5).join(', ')}${names.length > 5 ? ', ...' : ''})`)
             .join('\n- ');
-        throw new Error(
-            `Fixed-version policy requires every publishable workspace package to have one version. Found:\n- ${details}\n` +
-                'Choose a version newer than every existing package and run pnpm release:version -- --version <version> --apply.',
-        );
+        throw new Error(`Workspace packages do not share one version:\n- ${details}`);
     }
     return versions.keys().next().value;
 }
@@ -326,13 +323,6 @@ export async function buildWorkspaceReleasePlan({
     if (!/^[0-9a-f]{40}$/.test(gitCommit ?? '')) throw new Error('A full 40-character release commit SHA is required.');
 
     const packages = discoverPublishablePackages(root);
-    const workspaceVersion = fixedWorkspaceVersion(packages);
-    const workspacePolicy = semverChannelPolicy(workspaceVersion);
-    if (workspacePolicy.channel !== channel) {
-        throw new Error(
-            `Fixed workspace version ${workspaceVersion} belongs to ${workspacePolicy.channel}, but this train was dispatched for ${channel}.`,
-        );
-    }
     const statuses = new Map();
     const concurrency = 8;
     let next = 0;
@@ -369,16 +359,6 @@ export async function buildWorkspaceReleasePlan({
             );
         }
         candidates.push({ ...candidate, reason, registry: status });
-    }
-
-    if (candidates.length > 0 && candidates.length !== packages.length) {
-        const selectedNames = new Set(candidates.map((candidate) => candidate.name));
-        const historical = packages.filter((candidate) => !selectedNames.has(candidate.name)).map((candidate) => candidate.name);
-        throw new Error(
-            `Fixed ${workspaceVersion} train would publish only ${candidates.length}/${packages.length} packages. ` +
-                `The same version already belongs to another release commit for: ${historical.slice(0, 8).join(', ')}` +
-                `${historical.length > 8 ? ', ...' : ''}. Bump every public package to a new fixed version.`,
-        );
     }
 
     const candidateNames = new Set(candidates.map((candidate) => candidate.name));
@@ -454,7 +434,6 @@ export async function buildWorkspaceReleasePlan({
         schemaVersion: WORKSPACE_RELEASE_SCHEMA_VERSION,
         gitCommit,
         channel,
-        workspaceVersion,
         packageCount: candidates.length,
         publishOrder,
         buildOrderByRunner,
@@ -471,9 +450,6 @@ export function validateWorkspaceReleasePlan(plan, { root } = {}) {
     if (plan?.schemaVersion !== WORKSPACE_RELEASE_SCHEMA_VERSION) throw new Error('Unsupported workspace release-plan schema.');
     if (!/^[0-9a-f]{40}$/.test(plan.gitCommit ?? '')) throw new Error('Workspace release plan has no full git commit.');
     if (!['beta', 'rc', 'stable'].includes(plan.channel)) throw new Error('Workspace release plan has an invalid channel.');
-    if (semverChannelPolicy(plan.workspaceVersion).channel !== plan.channel) {
-        throw new Error('Workspace release plan fixed version does not match its channel.');
-    }
     if (!Array.isArray(plan.packages) || plan.packageCount !== plan.packages.length)
         throw new Error('Workspace release plan package count conflicts.');
     const names = new Set(plan.packages.map((candidate) => candidate.name));
@@ -489,9 +465,6 @@ export function validateWorkspaceReleasePlan(plan, { root } = {}) {
     }
     if (root) {
         const canonical = discoverPublishablePackages(root);
-        if (fixedWorkspaceVersion(canonical) !== plan.workspaceVersion) {
-            throw new Error('Workspace release plan fixed version does not match the release checkout.');
-        }
         const plannedNames = Object.keys(plan.workspacePackages ?? {}).sort();
         const canonicalNames = canonical.map((candidate) => candidate.name).sort();
         if (JSON.stringify(plannedNames) !== JSON.stringify(canonicalNames)) {

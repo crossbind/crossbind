@@ -6,9 +6,9 @@ import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 import {
     buildWorkspaceReleasePlan,
+    commonWorkspaceVersion,
     compareSupportedVersions,
     discoverPublishablePackages,
-    fixedWorkspaceVersion,
     provenanceCommitFromBundle,
 } from '../workspace-release.mjs';
 import { setWorkspaceVersion } from '../set-workspace-version.mjs';
@@ -53,23 +53,12 @@ function fixtureRepository(packages) {
 test('the real workspace is classified into publishable Linux, macOS and assembled packages', () => {
     const packages = discoverPublishablePackages(ROOT);
     assert.equal(packages.length, 107);
-    assert.equal(fixedWorkspaceVersion(packages), '2.0.0-beta.55');
+    assert.equal(commonWorkspaceVersion(packages), '2.0.0-beta.55');
     assert.ok(packages.filter((candidate) => candidate.buildKind === 'macos').length > 0);
     assert.ok(packages.filter((candidate) => candidate.buildKind === 'linux').length > 0);
     assert.deepEqual(
         packages.filter((candidate) => candidate.buildKind === 'multi-platform').map((candidate) => candidate.name),
         ['@crossbind/example-lib-prebuilt-matrix'],
-    );
-});
-
-test('fixed-version policy rejects a split public workspace before registry access', async () => {
-    const root = fixtureRepository([
-        { path: 'core/base', name: '@crossbind/base', version: '2.0.0-beta.1' },
-        { path: 'plugins/consumer', name: '@crossbind/consumer', version: '2.0.0-beta.2' },
-    ]);
-    await assert.rejects(
-        buildWorkspaceReleasePlan({ root, channel: 'beta', gitCommit: COMMIT, registry: registryWith() }),
-        /Fixed-version policy requires every publishable workspace package to have one version/,
     );
 });
 
@@ -83,7 +72,7 @@ test('workspace version command dry-runs by default and updates every public man
     assert.equal(discoverPublishablePackages(root)[0].version, '2.0.0-beta.1');
     const result = setWorkspaceVersion({ root, version: '2.0.0-beta.3', apply: true });
     assert.equal(result.packageCount, 2);
-    assert.equal(fixedWorkspaceVersion(discoverPublishablePackages(root)), '2.0.0-beta.3');
+    assert.equal(commonWorkspaceVersion(discoverPublishablePackages(root)), '2.0.0-beta.3');
 });
 
 test('workspace version command refuses an already-used local version', () => {
@@ -106,7 +95,7 @@ test('supported versions compare in beta, RC and stable order', () => {
     assert.equal(compareSupportedVersions('2.0.0-beta.53', '2.0.0-beta.53'), 0);
 });
 
-test('a fixed beta train rejects publication of only a subset of public packages', async () => {
+test('a beta train selects only version-bumped packages and keeps dependency order', async () => {
     const root = fixtureRepository([
         { path: 'core/base', name: '@crossbind/base', version: '2.0.0-beta.2' },
         {
@@ -117,34 +106,35 @@ test('a fixed beta train rejects publication of only a subset of public packages
         },
         { path: 'tooling/unchanged', name: '@crossbind/unchanged', version: '2.0.0-beta.2' },
     ]);
-    await assert.rejects(
-        buildWorkspaceReleasePlan({
-            root,
-            channel: 'beta',
-            gitCommit: COMMIT,
-            registry: registryWith({
-                '@crossbind/base': { exactVersion: null, channelVersion: '2.0.0-beta.1', provenanceCommit: null },
-                '@crossbind/consumer': { exactVersion: null, channelVersion: '2.0.0-beta.1', provenanceCommit: null },
-            }),
+    const plan = await buildWorkspaceReleasePlan({
+        root,
+        channel: 'beta',
+        gitCommit: COMMIT,
+        registry: registryWith({
+            '@crossbind/base': { exactVersion: null, channelVersion: '2.0.0-beta.1', provenanceCommit: null },
+            '@crossbind/consumer': { exactVersion: null, channelVersion: '2.0.0-beta.1', provenanceCommit: null },
         }),
-        /would publish only 2\/3 packages/,
-    );
+    });
+    assert.deepEqual(plan.publishOrder, ['@crossbind/base', '@crossbind/consumer']);
+    assert.equal(plan.packageCount, 2);
+    assert.deepEqual(plan.buildOrderByRunner.linux, ['@crossbind/base', '@crossbind/consumer']);
 });
 
-test('a complete fixed train preserves template dependency order', async () => {
+test('create-crossbind publishes after bumped packages embedded in generated templates', async () => {
+    const bumped = new Set(['create-crossbind', '@crossbind/plugin-vite']);
     const registry = {
         status: async (candidate) => ({
-            exactVersion: null,
-            channelVersion: '2.0.0-beta.54',
+            exactVersion: bumped.has(candidate.name) ? null : candidate.version,
+            channelVersion: bumped.has(candidate.name) ? '2.0.0-beta.54' : candidate.version,
             provenanceCommit: null,
         }),
     };
     const plan = await buildWorkspaceReleasePlan({ root: ROOT, channel: 'beta', gitCommit: COMMIT, registry });
-    assert.equal(plan.packageCount, 107);
+    assert.equal(plan.packageCount, 2);
     assert.ok(plan.publishOrder.indexOf('@crossbind/plugin-vite') < plan.publishOrder.indexOf('create-crossbind'));
 });
 
-test('a fully published historical fixed train is a clean no-op', async () => {
+test('a fully published historical train is a clean no-op', async () => {
     const root = fixtureRepository([
         { path: 'core/base', name: '@crossbind/base', version: '2.0.0-beta.2' },
         { path: 'plugins/consumer', name: '@crossbind/consumer', version: '2.0.0-beta.2' },
@@ -217,7 +207,7 @@ test('stable publication rejects prerelease workspace dependency closure', async
                 '@crossbind/consumer': { exactVersion: null, channelVersion: '1.0.0', provenanceCommit: null },
             }),
         }),
-        /Fixed-version policy requires every publishable workspace package to have one version/,
+        /cannot depend on prerelease workspace package/,
     );
 });
 

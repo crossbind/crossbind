@@ -24,24 +24,22 @@ Unknown prerelease identifiers fail. Stable packages publish directly to `latest
 
 A package is selected when its committed version is newer than its corresponding npm channel. A
 package already published by the same workflow and release commit is also selected as an
-idempotent partial-run resume. An entirely published historical train is a clean no-op. A partial
-train containing packages from another release commit fails and requires a new fixed version. A
-local version older than the registry channel fails instead of moving the channel backwards. A
-writing run with no selected packages fails.
+idempotent partial-run resume. Equal historical versions are skipped. A local version older than
+the registry channel fails instead of moving the channel backwards. A writing run with no selected
+packages fails.
 
-All public workspace packages use one fixed version. A release bump therefore updates all 107
-public package manifests, and the workflow refuses a split-version checkout before reading or
-writing registry state. This keeps the supported Crossbind package set identifiable by one version
-while dependency order still controls publication. Preview and apply a new version with:
+Package versions may move independently. For a synchronized release such as `2.0.0-beta.55`, the
+optional version helper can preview and update all 107 public package manifests together:
 
 ```bash
 pnpm run release:version -- --version 2.0.0-beta.55
 pnpm run release:version -- --version 2.0.0-beta.55 --apply
 ```
 
-The target must be newer than every local public package version because npm versions are
-immutable. One dispatch has exactly one semantic channel; beta, RC and stable packages are never
-mixed in a train.
+Because this helper touches every public package, its target must be newer than every local public
+package version. It is not required for later releases: maintainers may bump only the packages
+intended for a train. One dispatch still has exactly one semantic channel, so the selected beta, RC
+and stable packages cannot be mixed.
 
 The planner verifies every selected package's local runtime, optional and peer workspace
 dependencies. An exact dependency version must already exist on npm or be included in the train.
@@ -157,9 +155,9 @@ overlap.
 
 ## Beta, RC and stable procedure
 
-1. Run `pnpm run release:version -- --version <version> --apply` to bump every public package as one
-   fixed train.
-2. Add the matching `crossbind` versioned release-note file.
+1. Bump the packages intended for the train. For an intentionally synchronized train, use
+   `pnpm run release:version -- --version <version> --apply`.
+2. If `crossbind` is included, add its matching versioned release-note file.
 3. Merge the reviewed release commit to `main` and wait for required checks.
 4. Run the local read-only plan for the desired channel:
 

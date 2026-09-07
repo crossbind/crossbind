@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { semverChannelPolicy } from './release-lib.mjs';
-import { compareSupportedVersions, discoverPublishablePackages, fixedWorkspaceVersion } from './workspace-release.mjs';
+import { commonWorkspaceVersion, compareSupportedVersions, discoverPublishablePackages } from './workspace-release.mjs';
 
 const REPOSITORY_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const valueOf = (name) => {
@@ -19,7 +19,7 @@ function replaceTopLevelVersion(source, version, manifestPath) {
 }
 
 export function setWorkspaceVersion({ root = REPOSITORY_ROOT, version, apply = false, log = () => {} } = {}) {
-    if (!version) throw new Error('Pass the exact fixed train version with --version <version>.');
+    if (!version) throw new Error('Pass the exact common train version with --version <version>.');
     const policy = semverChannelPolicy(version);
     const packages = discoverPublishablePackages(root);
     const highestVersion = packages.reduce(
@@ -39,7 +39,7 @@ export function setWorkspaceVersion({ root = REPOSITORY_ROOT, version, apply = f
         from: candidate.version,
         to: version,
     }));
-    log(`${apply ? 'Applying' : 'Would apply'} fixed ${policy.channel} version ${version} to ${changes.length} public packages.`);
+    log(`${apply ? 'Applying' : 'Would apply'} common ${policy.channel} version ${version} to ${changes.length} public packages.`);
     for (const change of changes) log(`- ${change.name}: ${change.from} -> ${change.to}`);
 
     if (apply) {
@@ -49,7 +49,7 @@ export function setWorkspaceVersion({ root = REPOSITORY_ROOT, version, apply = f
             fs.writeFileSync(target, replaceTopLevelVersion(source, version, change.manifestPath));
         }
         const updated = discoverPublishablePackages(root);
-        if (fixedWorkspaceVersion(updated) !== version) throw new Error('Fixed workspace version verification failed after writing manifests.');
+        if (commonWorkspaceVersion(updated) !== version) throw new Error('Common workspace version verification failed after writing manifests.');
     }
     return { version, channel: policy.channel, packageCount: changes.length, applied: apply, changes };
 }
