@@ -5,6 +5,9 @@ const path = require('path');
 const execAsync = util.promisify(exec);
 
 const BUMP_MODE = process.argv.slice(2).includes('--bump');
+if (BUMP_MODE) {
+    throw new Error('Legacy --bump is disabled. Use pnpm release:version -- --version <version> --apply.');
+}
 const REPORT_PATH = (() => {
     const i = process.argv.indexOf('--report');
     return i !== -1 ? process.argv[i + 1] : null;

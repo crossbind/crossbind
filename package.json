@@ -59,6 +59,7 @@
         "publish:all": "node scripts/release/refuse-legacy-npm-publish.mjs",
         "publish:beta": "node scripts/release/refuse-legacy-npm-publish.mjs",
         "release:dry-run": "node scripts/release/prepare-crossbind-release.mjs --dry-run",
+        "release:version": "node scripts/release/set-workspace-version.mjs",
         "release:train:dry-run": "node scripts/release/plan-workspace-release.mjs",
         "release:package": "node scripts/release/package-crossbind.mjs",
         "release:manifest": "node scripts/release/validate-crossbind-manifest.mjs",
