@@ -200,10 +200,36 @@ export function encodeProposal(proposal) {
     return Buffer.from(JSON.stringify(proposal), 'utf8').toString('base64url');
 }
 
+const TOOLCHAIN_COMPONENTS = new Set(['node', 'rust', 'emscripten', 'wasi-sdk', 'android-command-line-tools', 'android-ndk', 'swig']);
+const ANDROID_TOOLS_ARCHIVE_RE = /^commandlinetools-linux-\d+_latest\.zip$/;
+
+// Encoded proposals cross a workflow boundary; this is the single place their shape is trusted.
+function assertProposalFields(value) {
+    if (value.kind === 'native') {
+        if (typeof value.unit !== 'string') throw new Error(`${value.id}: native proposal needs a native family.`);
+        assertSafeId(value.unit, 'native family');
+        return;
+    }
+    if (value.kind !== 'toolchain') throw new Error(`${value.id}: unsupported proposal kind ${JSON.stringify(value.kind)}.`);
+    if (!TOOLCHAIN_COMPONENTS.has(value.component)) {
+        throw new Error(`${value.id}: unsupported toolchain component ${JSON.stringify(value.component)}.`);
+    }
+    if (
+        value.component === 'android-command-line-tools' &&
+        (!ANDROID_TOOLS_ARCHIVE_RE.test(value.archive ?? '') || !SHA1_RE.test(value.sha1 ?? ''))
+    ) {
+        throw new Error(`${value.id}: Android command-line tools proposal has invalid archive metadata.`);
+    }
+    if (value.component === 'emscripten' && (!COMMIT_RE.test(value.forkRevision ?? '') || !SHA256_RE.test(value.embindSha256 ?? ''))) {
+        throw new Error(`${value.id}: Emscripten proposal needs a full fork revision and a libembind SHA-256.`);
+    }
+}
+
 export function decodeProposal(encoded) {
     const value = JSON.parse(Buffer.from(encoded, 'base64url').toString('utf8'));
     assertSafeId(value.id, 'proposal id');
     assertSafeId(value.kind, 'proposal kind');
+    assertProposalFields(value);
     if (value.valueType === 'commit') {
         if (!COMMIT_RE.test(value.current ?? '') || !COMMIT_RE.test(value.target ?? '')) {
             throw new Error(`${value.id}: current and target must be full commit SHAs.`);
