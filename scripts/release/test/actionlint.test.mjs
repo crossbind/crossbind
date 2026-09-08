@@ -50,6 +50,20 @@ test('published sysroot validation selects the compiler recorded beside the immu
     assert.match(fs.readFileSync(path.join(ROOT, 'scripts', 'pin-docker-image.js'), 'utf8'), /toolchains: \{ rust: table\.toolchains\.rust \}/);
 });
 
+test('every Trivy scan uses a real reviewed scanner release', () => {
+    const workflowDirectory = path.join(ROOT, '.github', 'workflows');
+    let scanSteps = 0;
+    let reviewedVersions = 0;
+    for (const workflow of fs.readdirSync(workflowDirectory).filter((name) => name.endsWith('.yml'))) {
+        const source = fs.readFileSync(path.join(workflowDirectory, workflow), 'utf8');
+        scanSteps += source.match(/uses:\s*aquasecurity\/trivy-action@/g)?.length ?? 0;
+        reviewedVersions += source.match(/uses:\s*aquasecurity\/trivy-action@[^\n]+\n\s+with:\n\s+version:\s*v0\.74\.0/g)?.length ?? 0;
+        assert.doesNotMatch(source, /version:\s*v0\.69\.0/);
+    }
+    assert.ok(scanSteps > 0);
+    assert.equal(reviewedVersions, scanSteps);
+});
+
 test('the release workflow uses OIDC without stored npm credentials or post-publish dist-tag writes', () => {
     const source = fs.readFileSync(path.join(ROOT, '.github', 'workflows', 'release-crossbind.yml'), 'utf8');
     assert.match(source, /id-token:\s*write/);

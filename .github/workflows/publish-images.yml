@@ -111,7 +111,7 @@ jobs:
             - name: Scan local base image without writing a shared cache
               uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
               with:
-                  version: v0.69.0
+                  version: v0.74.0
                   cache: false
                   scan-type: image
                   scan-ref: crossbind/base:dev${{ matrix.suffix }}
@@ -124,7 +124,7 @@ jobs:
             - name: Scan local web image without writing a shared cache
               uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
               with:
-                  version: v0.69.0
+                  version: v0.74.0
                   cache: false
                   scan-type: image
                   scan-ref: crossbind/web:dev${{ matrix.suffix }}
@@ -138,7 +138,7 @@ jobs:
               if: ${{ matrix.android }}
               uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
               with:
-                  version: v0.69.0
+                  version: v0.74.0
                   cache: false
                   scan-type: image
                   scan-ref: crossbind/android:dev
@@ -451,7 +451,7 @@ jobs:
             - name: Refuse fixable high or critical vulnerabilities
               uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
               with:
-                  version: v0.69.0
+                  version: v0.74.0
                   scan-type: image
                   scan-ref: ${{ steps.subject.outputs.ref }}
                   scanners: vuln
