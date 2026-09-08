@@ -76,7 +76,15 @@ The writing run emits the digest table the CLI pins against. After the image gat
 package-release asset all consume that one file. The table also records the exact Rust compiler
 that built the published sysroot so host validation does not depend on a runner's moving `stable`
 toolchain. It can intentionally differ from the next, unpublished compiler in the Dockerfiles. The
-image version lives in `VERSION`.
+image version lives in `VERSION`. Between a recipe change and its publish run the committed table still
+describes the previously published version; `scripts/pin-docker-image.js` refuses a table whose
+version does not match `VERSION`, so the two cannot be pinned out of step.
+
+Two gates are manual and run by a maintainer rather than by the publish workflow.
+`pnpm gate:local-promotion` rehearses `scripts/promote-tags.js` against disposable local registries
+and belongs before any writing run that changes promotion logic. `pnpm gate:registry -- --mirror
+<registry>` is for mirror operators: it proves a private copy carries the published bytes all the
+way down to the layer digests.
 
 Published digests are rescanned daily by `.github/workflows/scan-toolchain-images.yml`. Fixable
 high or critical findings fail both the release scan and the recurring scan. An exception must be
