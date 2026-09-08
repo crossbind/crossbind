@@ -181,7 +181,7 @@ For each architecture sub-package (`-wasm`, `-android`, `-ios`), the CLI:
 ```js
 // ports/zlib/wasm/crossbind.build.js
 export default {
-  getURL: (version) => `https://zlib.net/zlib-${version}.tar.gz`,
+  getURL: (version) => `https://github.com/madler/zlib/releases/download/v${version}/zlib-${version}.tar.gz`,
   buildType: 'cmake',
   getBuildParams: () => ['-DZLIB_BUILD_SHARED=OFF', '-DZLIB_BUILD_TESTING=OFF'],
 }

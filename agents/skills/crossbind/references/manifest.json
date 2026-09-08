@@ -29,7 +29,7 @@
     {
       "source": "docs/api/crossbind-build.md",
       "output": "api/crossbind-build.md",
-      "sha256": "1418775f19f4fa97328e6772ffdb4acd2c75e7b19cf4adf04fecc14d05623838"
+      "sha256": "40a259a5d6a47bfc27624a3b7ce18e47a5270274c3fe076dd4bc70fa63539e42"
     },
     {
       "source": "docs/api/crossbind-config.md",
