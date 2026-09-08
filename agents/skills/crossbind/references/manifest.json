@@ -19,7 +19,7 @@
     {
       "source": "docs/api/build-state.md",
       "output": "api/build-state.md",
-      "sha256": "be7bbe9de690ac65871de79b6f3ddd827ab5d5d92e3f601a865c6b9180d76389"
+      "sha256": "39203714c0e1a5bff2bca32960ede5b002fae762dfb921453d1dfe25db1ec295"
     },
     {
       "source": "docs/api/cpp-binding-rules.md",
@@ -29,7 +29,7 @@
     {
       "source": "docs/api/crossbind-build.md",
       "output": "api/crossbind-build.md",
-      "sha256": "850e9f4d3ff3470f78dbb5ec56b1ac6a15b7ccf72c0b128a3dd88cce5e803567"
+      "sha256": "1418775f19f4fa97328e6772ffdb4acd2c75e7b19cf4adf04fecc14d05623838"
     },
     {
       "source": "docs/api/crossbind-config.md",
@@ -54,7 +54,7 @@
     {
       "source": "docs/api/overrides.md",
       "output": "api/overrides.md",
-      "sha256": "1cab343d3c73e75787bfd268b227c44ff52cfae4be6522be22496f232347dc06"
+      "sha256": "bda1dfce9b923f6e631a47add805cb8514836e0ab612fcb793f2bc9eeda216d6"
     },
     {
       "source": "docs/api/performance.md",

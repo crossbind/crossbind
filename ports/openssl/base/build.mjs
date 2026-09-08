@@ -11,6 +11,7 @@ export default {
     sha256: '736b467530f916737b7031310ccb21d8218c6229e61e8e160cd1d3458cd543a8', // openssl-4.0.2.tar.gz
     getURL: (version) => `https://github.com/openssl/openssl/releases/download/openssl-${version}/openssl-${version}.tar.gz`,
     buildType: 'configure',
+    configureProgram: './Configure',
     // Inert outside wasi: Configure reads it only when the wasi-p3 name is requested.
     copyToSource: { 'assets/90-wasi.conf': 'Configurations/90-wasi.conf' },
     getBuildParams: (target) => (target.platform === 'wasi' ? [...WASI_CONFIGURE_FLAGS] : [...CONFIGURE_FLAGS]),

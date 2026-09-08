@@ -203,7 +203,7 @@ export default function createLib(target, fileType, options = {}) {
                 stageWasiStubs();
             }
             run(null, [
-                './configure',
+                state.config.build?.configureProgram || './configure',
                 ...buildParams,
                 `--prefix=${libdir}`,
             ], platformPrefix, target, buildEnv);

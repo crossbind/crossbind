@@ -1,7 +1,7 @@
 import { getContentHash } from './hash.js';
 
 const REPLACE_RECIPE_KEYS = [
-    'buildType', 'getURL', 'env', 'copyToSource', 'copyToDist',
+    'buildType', 'configureProgram', 'getURL', 'env', 'copyToSource', 'copyToDist',
     'beforeRun', 'useIOSCMake', 'sourceReplaceList', 'getExtraLibs',
 ];
 

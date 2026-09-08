@@ -38,6 +38,10 @@ export default {
     // 'configure' — runs `./configure && make` for autotools projects.
     //               See ports/openssl-* for the canonical example.
 
+  configureProgram: './configure',
+    // 'configure' only: explicit configure entrypoint. Defaults to
+    // './configure'; OpenSSL uses the case-sensitive './Configure'.
+
   makePhases: ['all', 'install'],
     // 'configure' only: split the make step into explicit phases when a
     // single `make` is not enough (openssl needs `make all` + `make install`).
@@ -169,7 +173,7 @@ For each architecture sub-package (`-wasm`, `-android`, `-ios`), the CLI:
 3. Runs `prepare(state)` if defined.
 4. Calls `build(state)` if defined; otherwise:
    - `buildType: 'cmake'` → `cmake -S <build> -B <build/build> [getBuildParams flags] && cmake --build`
-   - `buildType: 'configure'` → `./configure [getBuildParams flags] && make && make install`
+   - `buildType: 'configure'` → `[configureProgram || './configure'] [getBuildParams flags] && make && make install`
 5. Collects artifacts (`.a`, `include/`, …) into `state.config.paths.output`.
 
 ## Example: zlib (canonical small example)
@@ -189,6 +193,7 @@ export default {
 export default {
   getURL: (version) => `https://www.openssl.org/source/openssl-${version}.tar.gz`,
   buildType: 'configure',
+  configureProgram: './Configure',
   getBuildParams: (state, target) => {
     const flags = ['no-shared', 'no-tests', 'no-docs']
     if (target.platform === 'wasm') flags.push('linux-generic32')
