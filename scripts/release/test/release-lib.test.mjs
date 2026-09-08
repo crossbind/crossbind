@@ -4,7 +4,14 @@ import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
-import { buildReleasePlan, createReleaseManifest, loadReleaseNotes, releasePolicy, validateReleaseManifest } from '../release-lib.mjs';
+import {
+    appendGitHubOutput,
+    buildReleasePlan,
+    createReleaseManifest,
+    loadReleaseNotes,
+    releasePolicy,
+    validateReleaseManifest,
+} from '../release-lib.mjs';
 
 const TEST_DIRECTORY = path.dirname(fileURLToPath(import.meta.url));
 const FIXTURE_ROOT = path.join(TEST_DIRECTORY, 'fixtures', 'repository');
@@ -128,4 +135,16 @@ test('a valid manifest derives all identities from canonical sources', () => {
     assert.equal(plan.manifest.npm.tarball, NPM_METADATA.tarball);
     assert.equal(plan.manifest.npm.provenance.url, NPM_METADATA.provenance.url);
     assert.match(plan.manifest.toolchainDigestTable.sha256, /^[0-9a-f]{64}$/);
+});
+
+test('GitHub outputs cannot smuggle extra keys through multi-line values', () => {
+    const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'crossbind-output-'));
+    const file = path.join(directory, 'output.txt');
+    appendGitHubOutput(file, { version: '1.2.3', notes: 'first line\ninjected=true\n' });
+    const text = fs.readFileSync(file, 'utf8');
+    assert.match(text, /^version=1\.2\.3\n/);
+    const heredoc = /^notes<<(\S+)\nfirst line\ninjected=true\n\n\1\n$/m.exec(text);
+    assert.ok(heredoc, `expected a delimiter block, got ${JSON.stringify(text)}`);
+    assert.throws(() => appendGitHubOutput(file, { 'bad key': 'x' }), /not a safe GitHub output key/);
+    fs.rmSync(directory, { recursive: true, force: true });
 });

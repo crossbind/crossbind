@@ -316,8 +316,18 @@ export function writeJson(file, value) {
     fs.writeFileSync(file, `${JSON.stringify(value, null, 2)}\n`);
 }
 
+const GITHUB_OUTPUT_KEY_RE = /^[A-Za-z_][A-Za-z0-9_-]*$/;
+
 export function appendGitHubOutput(file, outputs) {
     if (!file) return;
-    const lines = Object.entries(outputs).map(([key, value]) => `${key}=${String(value)}`);
+    const lines = Object.entries(outputs).map(([key, value]) => {
+        if (!GITHUB_OUTPUT_KEY_RE.test(key)) throw new Error(`${JSON.stringify(key)} is not a safe GitHub output key.`);
+        const text = String(value);
+        if (!/[\r\n]/.test(text)) return `${key}=${text}`;
+        // A newline inside a value would otherwise start a second key=value line.
+        let delimiter = `crossbind_${crypto.randomUUID()}`;
+        while (text.includes(delimiter)) delimiter = `crossbind_${crypto.randomUUID()}`;
+        return `${key}<<${delimiter}\n${text}\n${delimiter}`;
+    });
     fs.appendFileSync(file, `${lines.join('\n')}\n`);
 }
