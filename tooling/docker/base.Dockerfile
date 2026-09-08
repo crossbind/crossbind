@@ -16,7 +16,7 @@ RUN rustup toolchain install "${RUST_VERSION}" --profile minimal --no-self-updat
     rustup toolchain uninstall 1.98.0 && \
     test "$(rustc -vV | sed -n 's/^release: //p')" = "${RUST_VERSION}"
 
-FROM debian:trixie-slim@sha256:3a39a0592364683e6bab97937b72cad5a8fa6dcbbee90edb3bb48c7f8e94f258 AS os
+FROM debian:trixie-slim@sha256:d7e12182ce18b85b93007c1dedf31f2d29e01ccf3182cc4017c709b6259bc132 AS os
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
         build-essential \
@@ -67,6 +67,15 @@ COPY --from=node /usr/local/bin/node /usr/local/bin/node
 COPY --from=node /usr/local/lib/node_modules /usr/local/lib/node_modules
 RUN ln -s ../lib/node_modules/npm/bin/npm-cli.js /usr/local/bin/npm && \
     ln -s ../lib/node_modules/npm/bin/npx-cli.js /usr/local/bin/npx
+# The Node image bundles npm 11.19.0, whose vendored tar, brace-expansion and ip-address carry fixable
+# HIGH CVEs; npm 12.0.2 still ships the same set. Replace it with the patched 11.x from a hash-verified tarball.
+ARG NPM_VERSION=11.19.1
+ARG NPM_SHA256=9f58bff01604cb1b14008fef14dceb14d836a49225e45c6c2e37de3be3e707f0
+RUN wget -q "https://registry.npmjs.org/npm/-/npm-${NPM_VERSION}.tgz" -O /tmp/npm.tgz && \
+    echo "${NPM_SHA256}  /tmp/npm.tgz" | sha256sum -c - && \
+    npm install -g --ignore-scripts --no-audit --no-fund /tmp/npm.tgz && \
+    rm -f /tmp/npm.tgz && \
+    test "$(npm -v)" = "${NPM_VERSION}"
 
 # The toolchain tree is read-only image content; CARGO_HOME is the mutable half and lives outside
 # it so a named volume can take it over. 0777 because containers run as the host uid, which has no

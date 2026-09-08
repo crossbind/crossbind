@@ -25,6 +25,9 @@ ENV EMSDK=/emsdk \
     PATH=/emsdk/upstream/emscripten:/usr/local/cargo/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin
 
 COPY --from=emsdk /emsdk/upstream /emsdk/upstream
+# emsdk ships Emscripten's development dependencies (eslint, typescript, vite, webpack, ...). emcc
+# needs only the runtime set, and the dev tree carries most of the image's fixable npm and Go CVEs.
+RUN cd /emsdk/upstream/emscripten && npm prune --omit=dev --offline --no-audit --no-fund
 COPY --from=emsdk /emsdk/LICENSE /opt/licenses/emsdk-LICENSE
 COPY --from=emsdk /emsdk/upstream/emscripten/LICENSE /opt/licenses/emscripten-LICENSE
 

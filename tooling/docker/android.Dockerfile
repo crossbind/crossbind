@@ -34,6 +34,13 @@ RUN wget -q "https://dl.google.com/android/repository/${CMDLINE_TOOLS}" -P /tmp 
     rm -r "/tmp/${CMDLINE_TOOLS}" /tmp/cmdline-tools && \
     mkdir -p /root/.android/ && touch /root/.android/repositories.cfg
 
+# The NDK's bundled Python carries setuptools 65.5.0 with fixable HIGH CVEs; nothing in the NDK
+# imports setuptools or pkg_resources, so drop them rather than ship a patched copy.
+RUN set -eu; \
+    site="$(ls -d "${NDK_ROOT}"/toolchains/llvm/prebuilt/linux-x86_64/python3/lib/python3.*/site-packages)"; \
+    rm -rf "${site}"/setuptools "${site}"/setuptools-*.dist-info "${site}"/pkg_resources "${site}"/_distutils_hack "${site}"/distutils-precedence.pth; \
+    test ! -e "${site}/setuptools"
+
 # Stock stable target stds - no bootstrap, unlike the emscripten MT sysroot.
 RUN rustup target add aarch64-linux-android x86_64-linux-android
 
