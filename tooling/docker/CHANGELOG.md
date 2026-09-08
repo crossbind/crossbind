@@ -19,6 +19,10 @@
 - Images now default to uid/gid `10001:10001`; one-shot Crossbind builds additionally drop every
   Linux capability and set `no-new-privileges`. The default dry run is genuinely registry-write-free
   and scans its locally built image leaves before a writing run is considered.
+- Refreshed the Debian base digest, replaced the Node image's bundled npm with the patched 11.19.1
+  from a hash-verified tarball, pruned Emscripten's development-only npm dependencies and removed
+  the NDK Python's unused setuptools, so the release scan reports no fixable high or critical
+  finding in any image.
 
 ## 2.0.0-beta.50
 
