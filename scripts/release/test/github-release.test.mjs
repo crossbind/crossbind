@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
-import { ensureGitHubRelease, ensureGitTag } from '../github-release.mjs';
+import { ensureGitHubRelease, ensureGitTag, GitHubCliRelease } from '../github-release.mjs';
 
 const TAG = 'crossbind@1.0.0-beta.41';
 const COMMIT = '1234567890abcdef1234567890abcdef12345678';
@@ -116,4 +116,31 @@ test('a conflicting release asset is never overwritten', async () => {
     } finally {
         fs.rmSync(temporary, { recursive: true, force: true });
     }
+});
+
+test('tag lookup and creation call gh with the exact api arguments', async () => {
+    const client = new GitHubCliRelease({ repository: 'crossbind/crossbind' });
+    const calls = [];
+    const responses = [{ object: { type: 'tag', sha: 'annotated-object' } }, { object: { type: 'commit', sha: COMMIT } }, {}];
+    client.run = async (args, options) => {
+        calls.push({ args, options });
+        return { stdout: JSON.stringify(responses[calls.length - 1]) };
+    };
+
+    assert.equal(await client.tagCommit(TAG), COMMIT);
+    await client.createTag(TAG, COMMIT);
+
+    assert.deepEqual(calls[0].args, ['api', 'repos/crossbind/crossbind/git/ref/tags/crossbind%401.0.0-beta.41']);
+    assert.equal(calls[0].options.allowMissing, true);
+    assert.deepEqual(calls[1].args, ['api', 'repos/crossbind/crossbind/git/tags/annotated-object']);
+    assert.deepEqual(calls[2].args, [
+        'api',
+        '--method',
+        'POST',
+        'repos/crossbind/crossbind/git/refs',
+        '-f',
+        `ref=refs/tags/${TAG}`,
+        '-f',
+        `sha=${COMMIT}`,
+    ]);
 });
