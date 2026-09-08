@@ -123,7 +123,7 @@ export default function run(program, params = [], platformPrefix = null, target 
         switch (target.platform) {
             case 'wasm':
                 platformParams = ['-e', 'CXXFLAGS=-fwasm-exceptions', '-e', 'CFLAGS=-fwasm-exceptions'];
-                if (params[0].includes('configure')) dProgram = 'emconfigure';
+                if (params[0].toLowerCase().includes('configure')) dProgram = 'emconfigure';
                 else if (params[0] === 'make') dProgram = 'emmake';
                 else if (params[0] === 'cmake') dProgram = 'emcmake';
                 else if (params[0] === 'cc') dProgram = 'emcc';

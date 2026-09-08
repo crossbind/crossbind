@@ -71,6 +71,7 @@ state.config = {
     build: {                                    // merged from crossbind.build.js (package authors only)
         withBuildConfig:      boolean,           // true if a crossbind.build.js was loaded
         buildType?:           'cmake' | 'configure',
+        configureProgram?:    string,             // configure entrypoint; default './configure'
         setState?:            (state)         => void,
         beforeRun?:           (cmakeDir)      => Array<{program, parameters}>,
         getBuildParams?:      (state, target) => string[],

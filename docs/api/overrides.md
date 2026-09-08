@@ -128,7 +128,7 @@ Custom source acquisition. URL is simplest; `getSource` for `git clone`, monorep
 
 #### 12. `getBuildParams: (state, target) => string[]`
 
-Returns flags appended to `cmake configure` (or `./configure` if `buildType: 'configure'`). Receives full `state` and current `target`.
+Returns flags appended to `cmake configure` (or `configureProgram`, default `./configure`, if `buildType: 'configure'`). Receives full `state` and current `target`.
 
 #### 13. `getExtraLibs: (target) => string[]`
 

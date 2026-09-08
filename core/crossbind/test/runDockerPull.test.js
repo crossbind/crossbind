@@ -74,6 +74,15 @@ describe('run: which image ref reaches docker pull', () => {
         expect(invocation?.[1]).toEqual(expect.arrayContaining(['--cap-drop', 'ALL', '--security-opt', 'no-new-privileges=true']));
     });
 
+    test('wasm wraps case-sensitive Configure entrypoints with emconfigure', async () => {
+        const { run, execFileSync } = await importFresh();
+
+        run(null, ['./Configure', '--prefix=/tmp/install'], null, { platform: 'wasm' });
+
+        const invocation = execFileSync.mock.calls.find(([cmd, args]) => cmd === 'docker' && args?.[0] === 'run');
+        expect(invocation?.[1]).toEqual(expect.arrayContaining(['emconfigure', './Configure']));
+    });
+
     test('android asks for the amd64 leaf, never the index that has no arm64', async () => {
         const { run, images, execFileSync } = await importFresh();
 

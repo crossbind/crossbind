@@ -129,14 +129,16 @@ describe('resolveExcludedNames', () => {
 describe('mergeBuildOverride', () => {
     const recipe = () => ({
         buildType: 'cmake',
+        configureProgram: './configure',
         getURL: (v) => `base/${v}`,
         replaceList: [{ regex: 'a', replacement: 'b', paths: ['x'] }],
         getBuildParams: (target) => [`-DBASE=${target.platform}`],
     });
 
     test('replace-wins for scalar/function recipe fields', () => {
-        const merged = mergeBuildOverride(recipe(), { buildType: 'configure', getURL: (v) => `o/${v}` });
+        const merged = mergeBuildOverride(recipe(), { buildType: 'configure', configureProgram: './Configure', getURL: (v) => `o/${v}` });
         expect(merged.buildType).toBe('configure');
+        expect(merged.configureProgram).toBe('./Configure');
         expect(merged.getURL('1')).toBe('o/1');
     });
 

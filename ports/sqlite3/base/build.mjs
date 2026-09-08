@@ -40,7 +40,7 @@ export default {
         // wires the cross toolchain AND skips the shell binary (which needs
         // getrusage/signal beyond the emulation set).
         ...(target.platform === 'wasi'
-            ? ['--disable-shared', `--with-wasi-sdk=${process.env.CROSSBIND_WASI_SDK_PATH}`]
+            ? ['--disable-shared', `--with-wasi-sdk=${process.env.CROSSBIND_WASI_SDK_PATH || '/opt/wasi-sdk'}`]
             : (platformBuild[target.platform] || platformBuild[`${target.platform}-${target.arch}`] || [])),
         ...(target.runtime === 'mt' ? ['--enable-threadsafe'] : []),
     ],
