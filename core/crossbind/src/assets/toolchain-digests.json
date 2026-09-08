@@ -1,6 +1,9 @@
 {
     "version": "1.0.2",
     "registry": "ghcr.io/crossbind",
+    "toolchains": {
+        "rust": "1.98.0"
+    },
     "images": {
         "rust-sysroot": {
             "index": "sha256:0ab2e522b1b09b2af7f312d4b940ab92ee470e8165df4b563e274a4eb2fdb903",

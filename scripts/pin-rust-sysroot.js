@@ -48,9 +48,15 @@ if (!/^sha256:[0-9a-f]{64}$/.test(entry.index)) fail(`the index digest is malfor
 
 const registry = table.registry ?? table.primary;
 if (!registry) fail('the digest table names no registry');
+if (!/^\d+\.\d+\.\d+$/.test(table.toolchains?.rust ?? '')) fail('the digest table names no exact toolchains.rust version');
 
 const canonical = JSON.parse(fs.readFileSync(TARGET, 'utf8'));
-if (canonical.version !== table.version || canonical.registry !== registry || canonical.images?.['rust-sysroot']?.index !== entry.index) {
+if (
+    canonical.version !== table.version ||
+    canonical.registry !== registry ||
+    canonical.toolchains?.rust !== table.toolchains?.rust ||
+    canonical.images?.['rust-sysroot']?.index !== entry.index
+) {
     fail(`the canonical ${path.relative(ROOT, TARGET)} does not match; run scripts/pin-docker-image.js first`);
 }
 
@@ -58,3 +64,4 @@ console.log(`pin-rust-sysroot: ${path.relative(ROOT, TARGET)} already carries th
 console.log(`  version  ${table.version}`);
 console.log(`  image    ${registry}/rust-sysroot`);
 console.log(`  index    ${entry.index}`);
+console.log(`  rustc    ${canonical.toolchains.rust}`);

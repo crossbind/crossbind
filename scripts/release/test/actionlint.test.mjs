@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
+import { pinnedRustVersion, runPinnedLocalSysrootGate } from '../../gate-pinned-local-sysroot.mjs';
 import { ACTIONLINT_VERSION, actionlintArchive } from '../actionlint.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
@@ -19,6 +20,34 @@ test('actionlint archives are versioned and SHA-256 pinned', () => {
     assert.equal(linux.filename, `actionlint_${ACTIONLINT_VERSION}_linux_amd64.tar.gz`);
     assert.match(linux.sha256, /^[0-9a-f]{64}$/);
     assert.equal(linux.url, `https://github.com/rhysd/actionlint/releases/download/v${ACTIONLINT_VERSION}/${linux.filename}`);
+});
+
+test('published sysroot validation selects the compiler recorded beside the immutable digest', () => {
+    const tablePath = path.join(ROOT, 'core', 'crossbind', 'src', 'assets', 'toolchain-digests.json');
+    const table = JSON.parse(fs.readFileSync(tablePath, 'utf8'));
+    assert.match(pinnedRustVersion(table), /^\d+\.\d+\.\d+$/);
+    assert.throws(() => pinnedRustVersion({ toolchains: { rust: 'stable' } }), /exact toolchains\.rust/);
+
+    const calls = [];
+    const status = runPinnedLocalSysrootGate({
+        tablePath,
+        args: ['--image', 'example.invalid/sysroot', '--index', `sha256:${'a'.repeat(64)}`],
+        spawn(command, args) {
+            calls.push([command, args]);
+            return { status: 0 };
+        },
+    });
+    assert.equal(status, 0);
+    assert.deepEqual(calls[0], ['rustup', ['toolchain', 'install', table.toolchains.rust, '--profile', 'minimal', '--no-self-update']]);
+    assert.equal(calls[1][0], 'rustup');
+    assert.deepEqual(calls[1][1].slice(0, 3), ['run', table.toolchains.rust, 'node']);
+    assert.deepEqual(calls[1][1].slice(-4), ['--image', 'example.invalid/sysroot', '--index', `sha256:${'a'.repeat(64)}`]);
+
+    const rootPackage = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8'));
+    assert.match(rootPackage.scripts['check:release:toolchain'], /^pnpm run gate:pinned-local-sysroot/);
+    assert.match(fs.readFileSync(path.join(ROOT, 'scripts', 'dependencies', 'validate-dependency-update.mjs'), 'utf8'), /gate:pinned-local-sysroot/);
+    assert.match(fs.readFileSync(path.join(ROOT, '.github', 'workflows', 'publish-images.yml'), 'utf8'), /toolchains: \{rust: \$rust\}/);
+    assert.match(fs.readFileSync(path.join(ROOT, 'scripts', 'pin-docker-image.js'), 'utf8'), /toolchains: \{ rust: table\.toolchains\.rust \}/);
 });
 
 test('the release workflow uses OIDC without stored npm credentials or post-publish dist-tag writes', () => {

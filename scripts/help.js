@@ -95,6 +95,7 @@ const ANNOTATIONS = {
     'check:native:strict': 'Same as check:native but exits non-zero on outdated/unknown',
     'check:agents': 'Verify the single-skill agent surface and run its deterministic tests',
     'check:workflows': 'Run pinned actionlint against the package-release workflows',
+    'gate:pinned-local-sysroot': 'Gate the published sysroot with the exact Rust compiler that built it',
     'check:release:toolchain': 'Gate sysroot, Android digest resolution and a representative Web build',
     'check:release': 'Test, actionlint, lint and format-check package-release infrastructure',
     'check:dependency-automation': 'Test, actionlint, lint and format-check daily dependency automation',

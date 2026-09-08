@@ -38,6 +38,9 @@ if (table.version !== declared) {
     fail(`the table is for ${table.version} but tooling/docker/VERSION says ${declared} - publish that version or update the file`);
 }
 if (!table.registry) fail('the table has no registry');
+if (!/^\d+\.\d+\.\d+$/.test(table.toolchains?.rust ?? '')) {
+    fail('the table has no exact toolchains.rust version');
+}
 
 const DIGEST = /^sha256:[0-9a-f]{64}$/;
 ROLES.forEach((role) => {
@@ -50,7 +53,11 @@ ROLES.forEach((role) => {
     if (!DIGEST.test(image.platforms?.['linux/amd64'] ?? '')) fail(`${role}: no linux/amd64 leaf digest`);
 });
 
-const next = `${JSON.stringify({ version: table.version, registry: table.registry, images: table.images }, null, 4)}\n`;
+const next = `${JSON.stringify(
+    { version: table.version, registry: table.registry, toolchains: { rust: table.toolchains.rust }, images: table.images },
+    null,
+    4,
+)}\n`;
 const text = fs.existsSync(TARGET) ? fs.readFileSync(TARGET, 'utf8') : '';
 
 if (next === text) {
