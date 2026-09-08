@@ -256,7 +256,6 @@ To add a new `ports/<X>`: see `docs/playbooks/new-port.md` (uses `ports/zlib` as
 | `release/assemble-workspace-artifacts.mjs` | Refuse incomplete artifact sets and merge the one multi-platform package |
 | `release/publish-workspace-release.mjs` | OIDC publish/reuse in dependency order, provenance verification and exact package tags |
 | `release/prepare-crossbind-release.mjs` | Validate notes/channel inputs and preview or generate `crossbind-release.json` |
-| `release/publish-crossbind.mjs` | Token-free OIDC npm publish/reuse plus integrity, provenance and bounded propagation verification |
 | `release/create-github-release.mjs` | Conflict-safe exact tag and GitHub Release asset creation |
 | `build-agent-context.mjs` | Generate repository instruction files from `agents/contributor-context.md` |
 | `build-agent-skill.mjs` | Generate the installed skill's reference and port-catalog bundle |
