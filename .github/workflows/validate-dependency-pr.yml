@@ -127,12 +127,12 @@ jobs:
               run: |
                   pnpm --dir tooling/docker build:family
                   node scripts/smoke-images.js base:amd64 web:amd64 android:amd64
-                  pnpm run gate:local-sysroot
+                  pnpm run gate:pinned-local-sysroot
                   pnpm run check:release:web
             - name: Scan the rebuilt base image
               uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
               with:
-                  version: v0.69.0
+                  version: v0.74.0
                   cache: false
                   scan-type: image
                   scan-ref: crossbind/base:dev-amd64
@@ -145,7 +145,7 @@ jobs:
             - name: Scan the rebuilt Web image
               uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
               with:
-                  version: v0.69.0
+                  version: v0.74.0
                   cache: false
                   scan-type: image
                   scan-ref: crossbind/web:dev-amd64
@@ -158,7 +158,7 @@ jobs:
             - name: Scan the rebuilt Android image
               uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
               with:
-                  version: v0.69.0
+                  version: v0.74.0
                   cache: false
                   scan-type: image
                   scan-ref: crossbind/android:dev
