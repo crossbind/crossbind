@@ -259,14 +259,27 @@ export async function waitForRegistry({
         await sleep(delay);
     }
 
-    throw new Error(
-        `npm did not expose both ${packageName}@${expectedVersion} and ${expectedDistTag}=${expectedVersion} ` +
-            `with verified provenance within ${maxAttempts} attempts / ${Math.round(maxDurationMs / 1000)} seconds. ` +
-            `Last response: exact=${lastVersion ?? '(absent)'}, ${expectedDistTag}=${lastDistTag ?? '(absent)'}, provenance=${lastProvenance}.`,
+    throw Object.assign(
+        new Error(
+            `npm did not expose both ${packageName}@${expectedVersion} and ${expectedDistTag}=${expectedVersion} ` +
+                `with verified provenance within ${maxAttempts} attempts / ${Math.round(maxDurationMs / 1000)} seconds. ` +
+                `Last response: exact=${lastVersion ?? '(absent)'}, ${expectedDistTag}=${lastDistTag ?? '(absent)'}, provenance=${lastProvenance}.`,
+        ),
+        { lastVersion, lastDistTag, lastProvenance },
     );
 }
 
-export async function ensurePackagePublished({ registry, version, distTag, integrity, tarball, gitCommit, apply = false, log = console.log }) {
+export async function ensurePackagePublished({
+    registry,
+    version,
+    distTag,
+    integrity,
+    tarball,
+    gitCommit,
+    apply = false,
+    log = console.log,
+    wait = {},
+}) {
     const packageName = registry.packageName ?? PACKAGE_NAME;
     const existingVersion = await registry.version(version);
     let action;
@@ -280,16 +293,7 @@ export async function ensurePackagePublished({ registry, version, distTag, integ
             );
         }
         log(`${packageName}@${version} already exists with matching integrity; it will not be republished.`);
-        const currentTag = await registry.distTag(distTag);
-        if (currentTag === version) {
-            action = 'reused';
-        } else {
-            throw new Error(
-                `${packageName}@${version} exists with matching integrity, but npm dist-tag ${distTag} points to ` +
-                    `${currentTag ?? '(absent)'}. Trusted Publishing cannot mutate dist-tags, so this workflow will not ` +
-                    'repair or overwrite that state. Investigate the external tag change without adding an automation token.',
-            );
-        }
+        action = 'reused';
     } else if (existingVersion === null) {
         if (!apply) throw new Error(`${packageName}@${version} is not published; apply mode is required.`);
         await registry.publish(tarball, distTag);
@@ -298,13 +302,29 @@ export async function ensurePackagePublished({ registry, version, distTag, integ
         throw new Error(`npm returned version ${existingVersion} when ${version} was requested.`);
     }
 
-    const verified = await waitForRegistry({
-        registry,
-        expectedVersion: version,
-        expectedDistTag: distTag,
-        expectedGitCommit: gitCommit,
-        log,
-    });
+    let verified;
+    try {
+        verified = await waitForRegistry({
+            registry,
+            expectedVersion: version,
+            expectedDistTag: distTag,
+            expectedGitCommit: gitCommit,
+            log,
+            ...wait,
+        });
+    } catch (error) {
+        // npm's read-after-write lag makes a stale dist-tag on a resumed run indistinguishable from
+        // an external change until the poll is exhausted; only then is it reported as tampering.
+        if (action === 'reused' && error.lastVersion === version && error.lastDistTag !== version) {
+            throw new Error(
+                `${packageName}@${version} exists with matching integrity, but npm dist-tag ${distTag} still points to ` +
+                    `${error.lastDistTag ?? '(absent)'} after polling. Trusted Publishing cannot mutate dist-tags, so this workflow ` +
+                    'will not repair or overwrite that state. Investigate the external tag change without adding an automation token.',
+                { cause: error },
+            );
+        }
+        throw error;
+    }
     if (verified.integrity !== integrity) {
         throw new Error(`Registry integrity changed after publication: expected ${integrity}, received ${verified.integrity ?? '(missing)'}.`);
     }
