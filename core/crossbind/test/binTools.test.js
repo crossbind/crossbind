@@ -1,7 +1,7 @@
 import { describe, test, expect } from 'vitest';
 import {
     validateBinConfig, renderBinJson, renderBinNpmignore, renderDispatcher,
-    renderBinCommands, renderCommandStub,
+    renderBinCommands, renderCommandStub, multitoolWorkRoot,
 } from '../src/utils/binTools.js';
 
 const bin = (overrides = {}) => ({
@@ -94,5 +94,12 @@ describe('renderDispatcher', () => {
         expect(source).toContain('int gdal_multicall_main(int, char**);');
         expect(source).toContain('if (!std::strcmp(tool, "gdalinfo")) return gdalinfo_multicall_main(argc - 1, argv + 1);');
         expect(source.trim().split('\n').at(-2)).toContain('return gdal_multicall_main(argc, argv);');
+    });
+});
+
+describe('multitoolWorkRoot', () => {
+    test('keeps multitool objects inside the mounted build tree instead of the host temp dir', () => {
+        expect(multitoolWorkRoot('/repo/ports/gdal/bin-wasi/.crossbind/build', 'Source-Release', 'wasi-wasm32-st-release'))
+            .toBe('/repo/ports/gdal/bin-wasi/.crossbind/build/Source-Release/wasi-wasm32-st-release');
     });
 });

@@ -74,3 +74,8 @@ export function renderDispatcher(bin) {
         '',
     ].join('\n');
 }
+
+// Under the target build tree, never os.tmpdir(): the containerized compiler only sees paths.base.
+export function multitoolWorkRoot(buildPath, platformPrefix, targetPath) {
+    return `${buildPath}/${platformPrefix}/${targetPath}`;
+}
