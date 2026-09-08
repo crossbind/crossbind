@@ -185,8 +185,12 @@ test('matching npm rerun is idempotent and never republishes', async () => {
 
 test('matching npm bytes with a conflicting dist-tag fail without attempting a repair', async () => {
     let published = 0;
+    let tagReads = 0;
     const registry = registryMetadata({
-        distTag: async () => '1.0.0-beta.40',
+        distTag: async () => {
+            tagReads += 1;
+            return '1.0.0-beta.40';
+        },
         publish: async () => {
             published += 1;
         },
@@ -201,9 +205,37 @@ test('matching npm bytes with a conflicting dist-tag fail without attempting a r
             gitCommit: COMMIT,
             apply: true,
             log: () => {},
+            wait: { maxAttempts: 3, sleep: async () => {} },
         }),
         /Trusted Publishing cannot mutate dist-tags/,
     );
+    assert.equal(published, 0);
+    assert.equal(tagReads, 3);
+});
+
+test('a resumed run polls through dist-tag propagation lag before reusing the package', async () => {
+    let published = 0;
+    const tags = ['1.0.0-beta.40', '1.0.0-beta.40', EXPECTED];
+    let tagReads = 0;
+    const registry = registryMetadata({
+        distTag: async () => tags[Math.min(tagReads++, tags.length - 1)],
+        publish: async () => {
+            published += 1;
+        },
+    });
+    const result = await ensurePackagePublished({
+        registry,
+        version: EXPECTED,
+        distTag: 'beta',
+        integrity: INTEGRITY,
+        tarball: 'unused.tgz',
+        gitCommit: COMMIT,
+        apply: true,
+        log: () => {},
+        wait: { sleep: async () => {} },
+    });
+    assert.equal(result.action, 'reused');
+    assert.equal(result.attempts, 3);
     assert.equal(published, 0);
 });
 

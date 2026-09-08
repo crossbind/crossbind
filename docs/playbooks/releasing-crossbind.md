@@ -202,17 +202,17 @@ reviewed separately from a routine version bump.
 Rerun the same workflow at the same commit. Never delete or overwrite release data just to make a
 rerun pass.
 
-| Existing state                                             | Rerun behavior                                    |
-| ---------------------------------------------------------- | ------------------------------------------------- |
-| npm version absent                                         | Publish the approved tarball once.                |
-| npm version and expected tag have identical integrity      | Verify provenance and reuse it.                   |
-| npm version exists with different integrity                | Fail; npm versions are immutable.                 |
-| matching bytes exist but the expected dist-tag differs     | Fail; OIDC publishing does not repair tags.       |
-| provenance is missing, malformed or identifies other bytes | Poll, then fail before git/GitHub completion.     |
-| exact git tag is absent / matches the commit               | Create it after all npm gates / reuse it.         |
-| exact git tag points elsewhere                             | Fail before npm publication; never move it.       |
-| exact `crossbind` GitHub Release already matches           | Reuse it and upload only missing matching assets. |
-| release body, classification or asset conflicts            | Fail; never overwrite or delete it automatically. |
+| Existing state                                             | Rerun behavior                                                         |
+| ---------------------------------------------------------- | ---------------------------------------------------------------------- |
+| npm version absent                                         | Publish the approved tarball once.                                     |
+| npm version and expected tag have identical integrity      | Verify provenance and reuse it.                                        |
+| npm version exists with different integrity                | Fail; npm versions are immutable.                                      |
+| matching bytes exist but the expected dist-tag differs     | Poll for propagation, then fail; OIDC publishing does not repair tags. |
+| provenance is missing, malformed or identifies other bytes | Poll, then fail before git/GitHub completion.                          |
+| exact git tag is absent / matches the commit               | Create it after all npm gates / reuse it.                              |
+| exact git tag points elsewhere                             | Fail before npm publication; never move it.                            |
+| exact `crossbind` GitHub Release already matches           | Reuse it and upload only missing matching assets.                      |
+| release body, classification or asset conflicts            | Fail; never overwrite or delete it automatically.                      |
 
 An npm-only partial train resumes because npm provenance identifies the same workflow and commit.
 Already completed packages are integrity-checked instead of republished, then remaining packages
