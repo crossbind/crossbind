@@ -95,6 +95,39 @@ test('proposal encoding rejects identities that cannot become branch names', () 
     assert.throws(() => decodeProposal(Buffer.from(JSON.stringify({ ...proposal, id: '../escape' })).toString('base64url')), /not safe/);
 });
 
+test('proposal decoding validates every kind-specific field before any script trusts it', () => {
+    const encode = (value) => Buffer.from(JSON.stringify(value)).toString('base64url');
+    const native = { id: 'native-zlib-1.3.3', kind: 'native', current: '1.3.2', target: '1.3.3' };
+    assert.throws(() => decodeProposal(encode({ ...native, unit: '../escape' })), /native family is not safe/);
+    assert.throws(() => decodeProposal(encode(native)), /native family/);
+    assert.throws(() => decodeProposal(encode({ ...native, kind: 'plugin', unit: 'zlib' })), /unsupported proposal kind/);
+
+    const toolchain = { id: 'toolchain-rust-1.98.1', kind: 'toolchain', component: 'rust', current: '1.98.0', target: '1.98.1' };
+    assert.deepEqual(decodeProposal(encodeProposal(toolchain)), toolchain);
+    assert.throws(() => decodeProposal(encode({ ...toolchain, component: 'android-ndk-major' })), /unsupported toolchain component/);
+    assert.throws(() => decodeProposal(encode({ ...toolchain, component: undefined })), /unsupported toolchain component/);
+
+    const androidTools = {
+        ...toolchain,
+        id: 'toolchain-android-command-line-tools-2',
+        component: 'android-command-line-tools',
+        current: '1',
+        target: '2',
+    };
+    assert.throws(() => decodeProposal(encode({ ...androidTools, archive: 'evil.zip', sha1: 'a'.repeat(40) })), /archive metadata/);
+    assert.throws(
+        () => decodeProposal(encode({ ...androidTools, archive: 'commandlinetools-linux-2_latest.zip', sha1: 'nope' })),
+        /archive metadata/,
+    );
+    const validTools = { ...androidTools, archive: 'commandlinetools-linux-2_latest.zip', sha1: 'a'.repeat(40) };
+    assert.deepEqual(decodeProposal(encodeProposal(validTools)), validTools);
+
+    const emscripten = { ...toolchain, id: 'toolchain-emscripten-6.0.10', component: 'emscripten', current: '6.0.9', target: '6.0.10' };
+    assert.throws(() => decodeProposal(encode({ ...emscripten, forkRevision: 'main', embindSha256: 'b'.repeat(64) })), /fork revision/);
+    const validEmscripten = { ...emscripten, forkRevision: 'c'.repeat(40), embindSha256: 'b'.repeat(64) };
+    assert.deepEqual(decodeProposal(encodeProposal(validEmscripten)), validEmscripten);
+});
+
 test('native tags are derived from a reviewed identity without duplicating versions', () => {
     assert.equal(nativeTag({ tag: 'curl-{versionUnderscore}' }, '8.22.0'), 'curl-8_22_0');
     assert.equal(nativeTag({ tag: 'v{version}' }, '1.3.2'), 'v1.3.2');
