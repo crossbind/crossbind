@@ -95,7 +95,7 @@ function validateToolchain(proposal, platform) {
     }
     run('pnpm', ['build:family'], { cwd: path.join(ROOT, 'tooling/docker') });
     run(process.execPath, ['scripts/smoke-images.js', 'base:amd64', 'web:amd64', 'android:amd64']);
-    run('pnpm', ['run', 'gate:local-sysroot']);
+    run('pnpm', ['run', 'gate:pinned-local-sysroot']);
     run('pnpm', ['run', 'check:release:web'], { environment: { CROSSBIND_IMAGE_WEB: 'crossbind/web:dev-amd64' } });
 }
 

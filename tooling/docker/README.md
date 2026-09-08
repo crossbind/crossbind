@@ -73,7 +73,10 @@ release digest when it changes the registry host.
 The writing run emits the digest table the CLI pins against. After the image gates pass,
 `scripts/pin-docker-image.js` writes that complete table to the canonical
 `core/crossbind/src/assets/toolchain-digests.json`. The CLI, npm release manifests and GitHub
-package-release asset all consume that one file. The image version lives in `VERSION`.
+package-release asset all consume that one file. The table also records the exact Rust compiler
+that built the published sysroot so host validation does not depend on a runner's moving `stable`
+toolchain. It can intentionally differ from the next, unpublished compiler in the Dockerfiles. The
+image version lives in `VERSION`.
 
 Published digests are rescanned daily by `.github/workflows/scan-toolchain-images.yml`. Fixable
 high or critical findings fail both the release scan and the recurring scan. An exception must be

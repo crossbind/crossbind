@@ -11,6 +11,7 @@ on:
             - core/crossbind/src/actions/run.js
             - .github/workflows/build-linux.yml
             - scripts/dependencies/**
+            - scripts/gate-pinned-local-sysroot.mjs
             - .github/dependabot.yml
             - .github/workflows/dependency-*.yml
             - .github/workflows/validate-dependency-pr.yml
