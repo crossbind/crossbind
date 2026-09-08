@@ -11,6 +11,7 @@ import { createDependencyPlan, dockerFrom, nativeTag, parseAndroidRepository, pa
 import { pullRequestMetadata } from '../render-dependency-pr.mjs';
 import { dependencyPathAllowed } from '../validate-dependency-update.mjs';
 import { nativeDependencyBuildOrder } from '../validate-native-family.mjs';
+import gdalBuild from '../../../ports/gdal/base/build.mjs';
 import opensslBuild from '../../../ports/openssl/base/build.mjs';
 import sqliteBuild from '../../../ports/sqlite3/base/build.mjs';
 
@@ -39,6 +40,12 @@ test('native recipes use portable configure entrypoints and the container WASI S
         if (configuredSdk === undefined) delete process.env.CROSSBIND_WASI_SDK_PATH;
         else process.env.CROSSBIND_WASI_SDK_PATH = configuredSdk;
     }
+});
+
+test('the GDAL iOS cross-build does not discover unused host Python bindings', () => {
+    const params = gdalBuild.getBuildParams({ platform: 'ios' }, {});
+    assert.ok(params.includes('-DCMAKE_DISABLE_FIND_PACKAGE_Python=ON'));
+    assert.ok(params.includes('-DBUILD_PYTHON_BINDINGS=OFF'));
 });
 
 test('version comparison orders patch, minor, major and prerelease values', () => {
