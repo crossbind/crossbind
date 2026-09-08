@@ -1,3 +1,5 @@
+const withoutPythonBindings = ['-DCMAKE_DISABLE_FIND_PACKAGE_Python=ON', '-DBUILD_PYTHON_BINDINGS=OFF'];
+
 const platformCmake = {
     'wasm': ['-DBUILD_SHARED_LIBS=OFF'],
     'wasi': [
@@ -14,7 +16,11 @@ const platformCmake = {
         '-DOGR_ENABLE_DRIVER_SQLITE=ON', '-DOGR_ENABLE_DRIVER_GPKG=ON',
         '-DGDAL_USE_ICONV=OFF',
     ],
-    'android': ['-DCMAKE_ANDROID_STL_TYPE=c++_shared', '-DCMAKE_DISABLE_FIND_PACKAGE_Python=ON', '-DBUILD_PYTHON_BINDINGS=OFF'],
+    'android': ['-DCMAKE_ANDROID_STL_TYPE=c++_shared', ...withoutPythonBindings],
+    // GDAL's top-level project probes a host Python interpreter even though this port removes the
+    // SWIG subdirectory and ships no Python bindings. New CMake versions reject that probe while
+    // cross-compiling unless an emulator is configured (CMP0190), so disable the unused package.
+    'ios': withoutPythonBindings,
 };
 
 const ifDep = (dep, params) => (dep ? params(dep) : []);
