@@ -252,6 +252,7 @@ To add a new `ports/<X>`: see `docs/playbooks/new-port.md` (uses `ports/zlib` as
 | `release/package-crossbind.mjs` | CLI entrypoint for exact tarball creation and smoke validation |
 | `release/workspace-release.mjs` | Discover public workspaces, select channel bumps and derive platform/dependency order |
 | `release/plan-workspace-release.mjs` | Registry-read-only release-train planner |
+| `release/restore-workspace-plan.mjs` | Write the compressed plan job output back to a file for build and publish jobs |
 | `release/build-workspace-artifacts.mjs` | Build and pack the Linux or macOS side of an approved train |
 | `release/assemble-workspace-artifacts.mjs` | Refuse incomplete artifact sets and merge the one multi-platform package |
 | `release/publish-workspace-release.mjs` | OIDC publish/reuse in dependency order, provenance verification and exact package tags |
