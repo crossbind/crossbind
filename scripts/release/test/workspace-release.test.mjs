@@ -65,7 +65,7 @@ function fixtureRepository(packages, { trainVersion } = {}) {
 test('the real workspace is classified into publishable Linux, macOS and assembled packages', () => {
     const packages = discoverPublishablePackages(ROOT);
     assert.equal(packages.length, 107);
-    assert.equal(readTrainVersion(ROOT), '2.0.0-beta.55');
+    assert.equal(readTrainVersion(ROOT), '2.0.0-beta.56');
     assert.ok(packages.filter((candidate) => candidate.buildKind === 'macos').length > 0);
     assert.ok(packages.filter((candidate) => candidate.buildKind === 'linux').length > 0);
     assert.deepEqual(
@@ -167,7 +167,7 @@ test('a full common-version train preserves generated-template dependency order'
         }),
     };
     const plan = await buildWorkspaceReleasePlan({ root: ROOT, channel: 'beta', gitCommit: COMMIT, registry });
-    assert.equal(plan.trainVersion, '2.0.0-beta.55');
+    assert.equal(plan.trainVersion, '2.0.0-beta.56');
     assert.equal(plan.packageCount, 107);
     assert.ok(plan.publishOrder.indexOf('@crossbind/plugin-vite') < plan.publishOrder.indexOf('create-crossbind'));
 });
@@ -330,13 +330,13 @@ test('scoped npm provenance resolves only the canonical workflow commit', () => 
 test('the plan travels between jobs compressed and stays far below the Linux environment limit', () => {
     const entry = {
         name: '@crossbind/port-example-android',
-        version: '2.0.0-beta.55',
+        version: '2.0.0-beta.56',
         path: 'ports/example/android',
         manifestPath: 'ports/example/android/package.json',
         channel: 'beta',
         npmDistTag: 'beta',
         prerelease: true,
-        gitTag: '@crossbind/port-example-android@2.0.0-beta.55',
+        gitTag: '@crossbind/port-example-android@2.0.0-beta.56',
         buildKind: 'android',
         prepublishOnly: 'crossbind build -p android',
         localDependencies: { '@crossbind/port-example': 'workspace:^', crossbind: 'workspace:^' },
