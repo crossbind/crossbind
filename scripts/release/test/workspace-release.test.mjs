@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
+import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import {
     buildWorkspaceReleasePlan,
@@ -10,6 +11,8 @@ import {
     discoverPublishablePackages,
     provenanceCommitFromBundle,
     readTrainVersion,
+    decodeWorkspacePlanOutput,
+    encodeWorkspacePlanOutput,
 } from '../workspace-release.mjs';
 import { setWorkspaceVersion } from '../set-workspace-version.mjs';
 
@@ -322,4 +325,57 @@ test('scoped npm provenance resolves only the canonical workflow commit', () => 
     };
     assert.equal(provenanceCommitFromBundle(bundle, '@crossbind/plugin-vite', '2.0.0-beta.54'), COMMIT);
     assert.equal(provenanceCommitFromBundle(bundle, '@crossbind/plugin-rollup', '2.0.0-beta.54'), null);
+});
+
+test('the plan travels between jobs compressed and stays far below the Linux environment limit', () => {
+    const entry = {
+        name: '@crossbind/port-example-android',
+        version: '2.0.0-beta.55',
+        path: 'ports/example/android',
+        manifestPath: 'ports/example/android/package.json',
+        channel: 'beta',
+        npmDistTag: 'beta',
+        prerelease: true,
+        gitTag: '@crossbind/port-example-android@2.0.0-beta.55',
+        buildKind: 'android',
+        prepublishOnly: 'crossbind build -p android',
+        localDependencies: { '@crossbind/port-example': 'workspace:^', crossbind: 'workspace:^' },
+        runtimeLocalDependencies: ['@crossbind/port-example'],
+        publishLocalDependencies: ['@crossbind/port-example', 'crossbind'],
+        reason: 'version-bump',
+    };
+    const packages = Array.from({ length: 250 }, (_, index) => ({ ...entry, name: `${entry.name}-${index}` }));
+    const plan = {
+        schemaVersion: 1,
+        packages,
+        publishOrder: packages.map((item) => item.name),
+        workspacePackages: Object.fromEntries(packages.map((item) => [item.name, item])),
+    };
+    const text = `${JSON.stringify(plan, null, 2)}\n`;
+
+    const encoded = encodeWorkspacePlanOutput(text);
+
+    assert.match(encoded, /^[A-Za-z0-9+/]+=*$/);
+    assert.ok(encoded.length < 65536, `encoded plan is ${encoded.length} bytes`);
+    assert.ok(text.length > 131072, 'the fixture must exceed the raw limit to prove the point');
+    assert.equal(decodeWorkspacePlanOutput(encoded).toString('utf8'), text);
+});
+
+test('the restore script writes the exact plan bytes from the job output environment', () => {
+    const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'crossbind-plan-restore-'));
+    const target = path.join(directory, 'workspace-release-plan.json');
+    const text = '{\n  "schemaVersion": 1\n}\n';
+    execFileSync(process.execPath, [path.join(ROOT, 'scripts', 'release', 'restore-workspace-plan.mjs'), target], {
+        env: { ...process.env, RELEASE_PLAN_GZIP_BASE64: encodeWorkspacePlanOutput(text) },
+    });
+    assert.equal(fs.readFileSync(target, 'utf8'), text);
+    assert.throws(
+        () =>
+            execFileSync(process.execPath, [path.join(ROOT, 'scripts', 'release', 'restore-workspace-plan.mjs'), target], {
+                env: { ...process.env, RELEASE_PLAN_GZIP_BASE64: '' },
+                stdio: 'pipe',
+            }),
+        /RELEASE_PLAN_GZIP_BASE64/,
+    );
+    fs.rmSync(directory, { recursive: true, force: true });
 });

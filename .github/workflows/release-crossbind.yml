@@ -28,7 +28,7 @@ jobs:
         name: Plan npm package train
         runs-on: ubuntu-24.04
         outputs:
-            planBase64: ${{ steps.plan.outputs.planBase64 }}
+            planGzipBase64: ${{ steps.plan.outputs.planGzipBase64 }}
             packageCount: ${{ steps.plan.outputs.packageCount }}
             hasLinux: ${{ steps.plan.outputs.hasLinux }}
             linuxShards: ${{ steps.plan.outputs.linuxShards }}
@@ -114,8 +114,8 @@ jobs:
               run: pnpm install --frozen-lockfile
             - name: Restore the approved plan
               env:
-                  RELEASE_PLAN_BASE64: ${{ needs.plan.outputs.planBase64 }}
-              run: node -e 'require("node:fs").writeFileSync(process.argv[1], Buffer.from(process.env.RELEASE_PLAN_BASE64, "base64"))' "$RUNNER_TEMP/workspace-release-plan.json"
+                  RELEASE_PLAN_GZIP_BASE64: ${{ needs.plan.outputs.planGzipBase64 }}
+              run: node scripts/release/restore-workspace-plan.mjs "$RUNNER_TEMP/workspace-release-plan.json"
             - name: Build every selected Linux artifact before publication
               run: |
                   node scripts/release/build-workspace-artifacts.mjs \
@@ -152,8 +152,8 @@ jobs:
               run: pnpm install --frozen-lockfile
             - name: Restore the approved plan
               env:
-                  RELEASE_PLAN_BASE64: ${{ needs.plan.outputs.planBase64 }}
-              run: node -e 'require("node:fs").writeFileSync(process.argv[1], Buffer.from(process.env.RELEASE_PLAN_BASE64, "base64"))' "$RUNNER_TEMP/workspace-release-plan.json"
+                  RELEASE_PLAN_GZIP_BASE64: ${{ needs.plan.outputs.planGzipBase64 }}
+              run: node scripts/release/restore-workspace-plan.mjs "$RUNNER_TEMP/workspace-release-plan.json"
             - name: Build every selected iOS artifact before publication
               run: |
                   node scripts/release/build-workspace-artifacts.mjs \
@@ -198,8 +198,8 @@ jobs:
               run: pnpm install --frozen-lockfile
             - name: Restore the approved plan
               env:
-                  RELEASE_PLAN_BASE64: ${{ needs.plan.outputs.planBase64 }}
-              run: node -e 'require("node:fs").writeFileSync(process.argv[1], Buffer.from(process.env.RELEASE_PLAN_BASE64, "base64"))' "$RUNNER_TEMP/workspace-release-plan.json"
+                  RELEASE_PLAN_GZIP_BASE64: ${{ needs.plan.outputs.planGzipBase64 }}
+              run: node scripts/release/restore-workspace-plan.mjs "$RUNNER_TEMP/workspace-release-plan.json"
             - name: Restore Linux artifacts
               if: ${{ needs.plan.outputs.hasLinux == 'true' }}
               uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
@@ -275,8 +275,8 @@ jobs:
               run: pnpm install --frozen-lockfile
             - name: Restore the approved plan
               env:
-                  RELEASE_PLAN_BASE64: ${{ needs.plan.outputs.planBase64 }}
-              run: node -e 'require("node:fs").writeFileSync(process.argv[1], Buffer.from(process.env.RELEASE_PLAN_BASE64, "base64"))' "$RUNNER_TEMP/workspace-release-plan.json"
+                  RELEASE_PLAN_GZIP_BASE64: ${{ needs.plan.outputs.planGzipBase64 }}
+              run: node scripts/release/restore-workspace-plan.mjs "$RUNNER_TEMP/workspace-release-plan.json"
             - name: Restore the complete approved train
               uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
               with:

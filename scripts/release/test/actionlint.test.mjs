@@ -178,3 +178,11 @@ test('every external action in every repository workflow is pinned to a full com
         for (const action of actions) assert.match(action, /^[^@\s]+@[0-9a-f]{40}$/, `${workflow}: ${action} is not commit-pinned`);
     }
 });
+
+test('the release workflow hands the plan to every job through the compressed output', () => {
+    const source = fs.readFileSync(path.join(ROOT, '.github', 'workflows', 'release-crossbind.yml'), 'utf8');
+    assert.doesNotMatch(source, /planBase64|RELEASE_PLAN_BASE64/);
+    assert.match(source, /planGzipBase64: \$\{\{ steps\.plan\.outputs\.planGzipBase64 \}\}/);
+    assert.equal(source.match(/RELEASE_PLAN_GZIP_BASE64: \$\{\{ needs\.plan\.outputs\.planGzipBase64 \}\}/g)?.length, 4);
+    assert.equal(source.match(/node scripts\/release\/restore-workspace-plan\.mjs "\$RUNNER_TEMP\/workspace-release-plan\.json"/g)?.length, 4);
+});

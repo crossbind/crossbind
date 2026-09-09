@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import zlib from 'node:zlib';
 import { loadReleaseNotes, semverChannelPolicy } from './release-lib.mjs';
 
 export const WORKSPACE_REPOSITORY = 'https://github.com/crossbind/crossbind.git';
@@ -548,4 +549,15 @@ export function validateWorkspaceReleasePlan(plan, { root } = {}) {
         }
     }
     return plan;
+}
+
+// The plan reaches every build and publish job as one job output injected into an environment
+// variable. Linux refuses a single variable above 128 KiB and a repository-wide train is well past
+// that as plain base64, so the output carries the gzip-compressed bytes instead.
+export function encodeWorkspacePlanOutput(text) {
+    return zlib.gzipSync(Buffer.from(text)).toString('base64');
+}
+
+export function decodeWorkspacePlanOutput(encoded) {
+    return zlib.gunzipSync(Buffer.from(encoded, 'base64'));
 }

@@ -6,7 +6,7 @@ import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { appendGitHubOutput, writeJson } from './release-lib.mjs';
-import { buildWorkspaceReleasePlan } from './workspace-release.mjs';
+import { buildWorkspaceReleasePlan, encodeWorkspacePlanOutput } from './workspace-release.mjs';
 
 const REPOSITORY_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const valueOf = (name) => {
@@ -24,9 +24,9 @@ if (process.argv.includes('--require-changes') && plan.packageCount === 0) {
     throw new Error(`No ${channel} package versions require publication; refusing an empty writing release.`);
 }
 writeJson(output, plan);
-const encoded = fs.readFileSync(output).toString('base64');
+const encoded = encodeWorkspacePlanOutput(fs.readFileSync(output));
 appendGitHubOutput(githubOutput, {
-    planBase64: encoded,
+    planGzipBase64: encoded,
     packageCount: plan.packageCount,
     hasLinux: plan.linuxShards.length > 0,
     linuxShards: JSON.stringify(plan.linuxShards),
