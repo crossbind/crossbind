@@ -37,14 +37,18 @@ export function trustedPublishingEnvironment(environment = process.env) {
     return { ...environment };
 }
 
-function parseNpmJson(stdout) {
+// npm 12 prints every `view <pkg>@<spec> <field> --json` result as an array, even for an exact
+// version; npm 11 printed the scalar. A single match is the value either way.
+export function parseNpmJson(stdout) {
     const value = stdout.trim();
     if (!value) return null;
+    let parsed;
     try {
-        return JSON.parse(value);
+        parsed = JSON.parse(value);
     } catch {
         return value;
     }
+    return Array.isArray(parsed) && parsed.length === 1 ? parsed[0] : parsed;
 }
 
 export class NpmCliRegistry {

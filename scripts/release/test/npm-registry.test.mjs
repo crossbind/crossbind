@@ -4,6 +4,7 @@ import {
     ensurePackagePublished,
     expectedAttestationUrl,
     expectedRegistryTarball,
+    parseNpmJson,
     PROVENANCE_PREDICATE,
     trustedPublishingEnvironment,
     verifyProvenanceAttestation,
@@ -312,4 +313,15 @@ test('scoped package provenance uses the encoded npm package URL subject', () =>
         { url: expectedAttestationUrl(version, packageName), predicateType: PROVENANCE_PREDICATE },
     );
     assert.equal(expectedRegistryTarball(version, packageName), `https://registry.npmjs.org/@crossbind/plugin-vite/-/plugin-vite-${version}.tgz`);
+});
+
+test('npm view output is read the same way from npm 11 scalars and npm 12 single-element arrays', () => {
+    assert.equal(parseNpmJson('"2.0.0-beta.55"\n'), '2.0.0-beta.55');
+    assert.equal(parseNpmJson('[\n  "2.0.0-beta.55"\n]\n'), '2.0.0-beta.55');
+    assert.deepEqual(parseNpmJson('[{"url":"https://registry.npmjs.org/-/npm/v1/attestations/crossbind@2.0.0-beta.55"}]'), {
+        url: 'https://registry.npmjs.org/-/npm/v1/attestations/crossbind@2.0.0-beta.55',
+    });
+    assert.deepEqual(parseNpmJson('["1.0.0", "1.0.1"]'), ['1.0.0', '1.0.1']);
+    assert.equal(parseNpmJson(''), null);
+    assert.equal(parseNpmJson('sha512-abc'), 'sha512-abc');
 });
