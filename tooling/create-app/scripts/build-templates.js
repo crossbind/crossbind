@@ -114,6 +114,13 @@ async function rewriteTemplate(dst, versionMap) {
     }
 }
 
+// pnpm refuses dependency build scripts unless the project's own pnpm-workspace.yaml allows them;
+// a scaffolded project has no workspace, so templates whose tooling needs them (wrangler: workerd,
+// esbuild) ship the allowance. The samples themselves inherit the monorepo's list.
+export function renderPnpmWorkspace(allowBuilds) {
+    return `allowBuilds:\n${allowBuilds.map((name) => `  ${name}: true\n`).join('')}`;
+}
+
 async function buildOne(entry, versionMap) {
     const src = path.join(REPO_ROOT, entry.source);
     const dst = path.join(TEMPLATES_DIR, entry.key);
@@ -121,6 +128,9 @@ async function buildOne(entry, versionMap) {
     await fsp.rm(dst, { recursive: true, force: true });
     await fsp.cp(src, dst, { recursive: true, filter: makeFilter(entry) });
     await rewriteTemplate(dst, versionMap);
+    if (entry.allowBuilds?.length) {
+        await fsp.writeFile(path.join(dst, 'pnpm-workspace.yaml'), renderPnpmWorkspace(entry.allowBuilds));
+    }
 }
 
 async function main() {
@@ -135,7 +145,9 @@ async function main() {
     process.stdout.write(`templates built: ${MANIFEST.length} (${TEMPLATES_DIR})\n`);
 }
 
-main().catch((err) => {
-    process.stderr.write(`build-templates failed: ${err.stack || err}\n`);
-    process.exit(1);
-});
+if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+    main().catch((err) => {
+        process.stderr.write(`build-templates failed: ${err.stack || err}\n`);
+        process.exit(1);
+    });
+}

@@ -1,14 +1,105 @@
 [
-  { "key": "web-vanilla",             "group": "Web",     "framework": null,           "label": "Vanilla",           "kind": "app", "source": "examples/web-vanilla" },
-  { "key": "web-react-rspack",        "group": "Web",     "framework": "React",        "label": "Rspack",            "kind": "app", "source": "examples/web-react-rspack" },
-  { "key": "web-react-vite",          "group": "Web",     "framework": "React",        "label": "Vite",              "kind": "app", "source": "examples/web-react-vite" },
-  { "key": "web-vue-vite",            "group": "Web",     "framework": "Vue",          "label": "Vite",              "kind": "app", "source": "examples/web-vue-vite" },
-  { "key": "web-svelte-vite",         "group": "Web",     "framework": "Svelte",       "label": "Vite",              "kind": "app", "source": "examples/web-svelte-vite" },
-  { "key": "mobile-reactnative-cli",  "group": "Mobile",  "framework": "React Native", "label": "Native CLI",        "kind": "app", "source": "examples/mobile-reactnative-cli", "nativeFolders": true },
-  { "key": "mobile-reactnative-expo", "group": "Mobile",  "framework": "React Native", "label": "Expo",              "kind": "app", "source": "examples/mobile-reactnative-expo", "nativeFolders": false, "keepLockfile": true },
-  { "key": "backend-nodejs-wasm",     "group": "Backend", "framework": "Node.js",      "label": "WebAssembly",       "kind": "app", "source": "examples/backend-nodejs-wasm" },
-  { "key": "cloud-cloudflare-worker", "group": "Cloud",   "framework": null,           "label": "Cloudflare Worker", "kind": "app", "source": "examples/cloud-cloudflare-worker" },
-  { "key": "lib-prebuilt",            "group": "Library", "framework": null,           "label": "Prebuilt",          "kind": "lib", "source": "examples/lib-prebuilt-matrix" },
-  { "key": "lib-source",              "group": "Library", "framework": null,           "label": "Source",            "kind": "lib", "source": "examples/lib-source" },
-  { "key": "lib-cmake",               "group": "Library", "framework": null,           "label": "CMake",             "kind": "lib", "source": "examples/lib-cmake" }
+    {
+        "key": "web-vanilla",
+        "group": "Web",
+        "framework": null,
+        "label": "Vanilla",
+        "kind": "app",
+        "source": "examples/web-vanilla"
+    },
+    {
+        "key": "web-react-rspack",
+        "group": "Web",
+        "framework": "React",
+        "label": "Rspack",
+        "kind": "app",
+        "source": "examples/web-react-rspack"
+    },
+    {
+        "key": "web-react-vite",
+        "group": "Web",
+        "framework": "React",
+        "label": "Vite",
+        "kind": "app",
+        "source": "examples/web-react-vite"
+    },
+    {
+        "key": "web-vue-vite",
+        "group": "Web",
+        "framework": "Vue",
+        "label": "Vite",
+        "kind": "app",
+        "source": "examples/web-vue-vite"
+    },
+    {
+        "key": "web-svelte-vite",
+        "group": "Web",
+        "framework": "Svelte",
+        "label": "Vite",
+        "kind": "app",
+        "source": "examples/web-svelte-vite"
+    },
+    {
+        "key": "mobile-reactnative-cli",
+        "group": "Mobile",
+        "framework": "React Native",
+        "label": "Native CLI",
+        "kind": "app",
+        "source": "examples/mobile-reactnative-cli",
+        "nativeFolders": true
+    },
+    {
+        "key": "mobile-reactnative-expo",
+        "group": "Mobile",
+        "framework": "React Native",
+        "label": "Expo",
+        "kind": "app",
+        "source": "examples/mobile-reactnative-expo",
+        "nativeFolders": false,
+        "keepLockfile": true
+    },
+    {
+        "key": "backend-nodejs-wasm",
+        "group": "Backend",
+        "framework": "Node.js",
+        "label": "WebAssembly",
+        "kind": "app",
+        "source": "examples/backend-nodejs-wasm"
+    },
+    {
+        "key": "cloud-cloudflare-worker",
+        "group": "Cloud",
+        "framework": null,
+        "label": "Cloudflare Worker",
+        "kind": "app",
+        "source": "examples/cloud-cloudflare-worker",
+        "allowBuilds": [
+            "esbuild",
+            "workerd"
+        ]
+    },
+    {
+        "key": "lib-prebuilt",
+        "group": "Library",
+        "framework": null,
+        "label": "Prebuilt",
+        "kind": "lib",
+        "source": "examples/lib-prebuilt-matrix"
+    },
+    {
+        "key": "lib-source",
+        "group": "Library",
+        "framework": null,
+        "label": "Source",
+        "kind": "lib",
+        "source": "examples/lib-source"
+    },
+    {
+        "key": "lib-cmake",
+        "group": "Library",
+        "framework": null,
+        "label": "CMake",
+        "kind": "lib",
+        "source": "examples/lib-cmake"
+    }
 ]

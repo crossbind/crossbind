@@ -17,6 +17,7 @@
     ],
     "scripts": {
         "build-templates": "node scripts/build-templates.js",
+        "test": "node --test test/*.test.js",
         "prepublishOnly": "node scripts/build-templates.js"
     },
     "dependencies": {
