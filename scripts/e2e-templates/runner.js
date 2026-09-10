@@ -134,7 +134,10 @@ async function runTemplate(item, ctx) {
 
         // --ignore-workspace: the scaffolded project lives under the repo's tmp/, so pnpm would
         // otherwise pick up the monorepo workspace. We want a true standalone install from npm.
-        const installArgs = pm === 'pnpm' ? ['install', '--ignore-workspace'] : ['install'];
+        // A template that ships its own pnpm-workspace.yaml (build-script allowances) is already a
+        // standalone root, and the flag would discard that file along with the monorepo's.
+        const ownWorkspace = fs.existsSync(path.join(projectDir, 'pnpm-workspace.yaml'));
+        const installArgs = pm === 'pnpm' && !ownWorkspace ? ['install', '--ignore-workspace'] : ['install'];
         const install = await record('install', pm, installArgs, { cwd: projectDir, timeoutMs: TIMEOUTS.install });
         if (!install.ok) return done('fail', 'install failed');
 
