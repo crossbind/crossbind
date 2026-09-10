@@ -6,6 +6,10 @@ import {
     expectedRegistryTarball,
     parseNpmJson,
     PROVENANCE_PREDICATE,
+    REGISTRY_INITIAL_BACKOFF_MS,
+    REGISTRY_MAX_ATTEMPTS,
+    REGISTRY_MAX_BACKOFF_MS,
+    REGISTRY_MAX_DURATION_MS,
     trustedPublishingEnvironment,
     verifyProvenanceAttestation,
     waitForRegistry,
@@ -324,4 +328,13 @@ test('npm view output is read the same way from npm 11 scalars and npm 12 single
     assert.deepEqual(parseNpmJson('["1.0.0", "1.0.1"]'), ['1.0.0', '1.0.1']);
     assert.equal(parseNpmJson(''), null);
     assert.equal(parseNpmJson('sha512-abc'), 'sha512-abc');
+});
+
+test('the registry poll waits at least ten minutes because npm publishes surface late', () => {
+    let waited = 0;
+    for (let attempt = 1; attempt < REGISTRY_MAX_ATTEMPTS; attempt += 1) {
+        waited += Math.min(REGISTRY_INITIAL_BACKOFF_MS * 2 ** (attempt - 1), REGISTRY_MAX_BACKOFF_MS);
+    }
+    assert.ok(REGISTRY_MAX_DURATION_MS >= 10 * 60 * 1000, `window is ${REGISTRY_MAX_DURATION_MS / 60000} minutes`);
+    assert.ok(waited >= REGISTRY_MAX_DURATION_MS - REGISTRY_MAX_BACKOFF_MS, `attempts only cover ${waited / 1000} seconds`);
 });

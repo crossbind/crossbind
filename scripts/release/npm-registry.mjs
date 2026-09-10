@@ -5,8 +5,10 @@ import path from 'node:path';
 import { promisify } from 'node:util';
 import { PACKAGE_NAME } from './release-lib.mjs';
 
-export const REGISTRY_MAX_ATTEMPTS = 12;
-export const REGISTRY_MAX_DURATION_MS = 5 * 60 * 1000;
+// The beta 56 train saw npm take over five minutes to expose a publish twice; ten minutes with
+// the same five-to-thirty-second backoff covers what was observed with room to spare.
+export const REGISTRY_MAX_ATTEMPTS = 22;
+export const REGISTRY_MAX_DURATION_MS = 10 * 60 * 1000;
 export const REGISTRY_INITIAL_BACKOFF_MS = 5 * 1000;
 export const REGISTRY_MAX_BACKOFF_MS = 30 * 1000;
 export const PROVENANCE_PREDICATE = 'https://slsa.dev/provenance/v1';
