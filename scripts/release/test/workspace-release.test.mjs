@@ -65,7 +65,8 @@ function fixtureRepository(packages, { trainVersion } = {}) {
 test('the real workspace is classified into publishable Linux, macOS and assembled packages', () => {
     const packages = discoverPublishablePackages(ROOT);
     assert.equal(packages.length, 107);
-    assert.equal(readTrainVersion(ROOT), '2.0.0-beta.56');
+    assert.equal(readTrainVersion(ROOT), fs.readFileSync(path.join(ROOT, 'releases', 'npm', 'VERSION'), 'utf8').trim());
+    assert.match(readTrainVersion(ROOT), /^\d+\.\d+\.\d+(?:-(?:beta|rc)\.\d+)?$/);
     assert.ok(packages.filter((candidate) => candidate.buildKind === 'macos').length > 0);
     assert.ok(packages.filter((candidate) => candidate.buildKind === 'linux').length > 0);
     assert.deepEqual(
@@ -158,18 +159,37 @@ test('one train cannot publish packages with different target versions', async (
     );
 });
 
-test('a full common-version train preserves generated-template dependency order', async () => {
-    const registry = {
-        status: async (candidate) => ({
-            exactVersion: null,
-            channelVersion: '2.0.0-beta.54',
-            provenanceCommit: null,
+test('a full common-version train builds generated-template dependencies before create-crossbind', async () => {
+    const root = fixtureRepository([
+        { path: 'plugins/vite', name: '@crossbind/plugin-vite', version: '2.0.0-beta.2' },
+        { path: 'tooling/create-app', name: 'create-crossbind', version: '2.0.0-beta.2' },
+    ]);
+    fs.mkdirSync(path.join(root, 'tooling', 'create-app', 'src'), { recursive: true });
+    fs.writeFileSync(
+        path.join(root, 'tooling', 'create-app', 'src', 'manifest.json'),
+        JSON.stringify([{ key: 'web-react-vite', source: 'examples/web-react-vite' }]),
+    );
+    fs.mkdirSync(path.join(root, 'examples', 'web-react-vite'), { recursive: true });
+    fs.writeFileSync(
+        path.join(root, 'examples', 'web-react-vite', 'package.json'),
+        JSON.stringify({
+            name: '@crossbind/example-web-react-vite',
+            private: true,
+            version: '0.0.0',
+            devDependencies: { '@crossbind/plugin-vite': 'workspace:^' },
         }),
-    };
-    const plan = await buildWorkspaceReleasePlan({ root: ROOT, channel: 'beta', gitCommit: COMMIT, registry });
-    assert.equal(plan.trainVersion, '2.0.0-beta.56');
-    assert.equal(plan.packageCount, 107);
+    );
+    const behind = { exactVersion: null, channelVersion: '2.0.0-beta.1', provenanceCommit: null };
+    const plan = await buildWorkspaceReleasePlan({
+        root,
+        channel: 'beta',
+        gitCommit: COMMIT,
+        registry: registryWith({ '@crossbind/plugin-vite': behind, 'create-crossbind': behind }),
+    });
+    assert.equal(plan.trainVersion, '2.0.0-beta.2');
+    assert.equal(plan.packageCount, 2);
     assert.ok(plan.publishOrder.indexOf('@crossbind/plugin-vite') < plan.publishOrder.indexOf('create-crossbind'));
+    assert.ok(plan.buildOrderByRunner.linux.indexOf('@crossbind/plugin-vite') < plan.buildOrderByRunner.linux.indexOf('create-crossbind'));
 });
 
 test('a train refuses to add packages after the common version belongs to another commit', async () => {
