@@ -347,6 +347,13 @@ test('daily workflows keep write authority after validation and pin every action
     assert.match(dependabot, /package-ecosystem: npm/);
     assert.match(dependabot, /package-ecosystem: github-actions/);
     assert.match(dependabot, /package-ecosystem: docker/);
+    assert.match(dependabot, /groups:\n\s+(#[^\n]*\n\s+)*vitest:\n\s+applies-to: version-updates\n\s+patterns:\n\s+- vitest\n\s+- '@vitest\/\*'/);
+    assert.match(
+        dependabot,
+        /react-native:\n\s+applies-to: version-updates\n\s+patterns:\n\s+- react-native\n\s+- '@react-native\/\*'\n\s+- '@react-native-community\/\*'/,
+    );
+    assert.match(dependabot, /directory: \/examples\/mobile-reactnative-expo\n(?:.*\n){1,6}?\s+open-pull-requests-limit: 0/);
+    assert.match(dependabot, /dependency-name: 'expo-\*'/);
 });
 
 test('native updater changes every nested nativeVersion field together', () => {

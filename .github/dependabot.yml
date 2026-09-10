@@ -15,6 +15,21 @@ updates:
           - dependencies
           - javascript
       groups:
+          # Families that must move together, whatever the update type: a vitest 5 PR without
+          # @vitest/coverage-v8 5, or a react-native bump without its @react-native/* dev
+          # packages, cannot pass CI on its own. Dependabot assigns a dependency to the first
+          # matching group, so these come first.
+          vitest:
+              applies-to: version-updates
+              patterns:
+                  - vitest
+                  - '@vitest/*'
+          react-native:
+              applies-to: version-updates
+              patterns:
+                  - react-native
+                  - '@react-native/*'
+                  - '@react-native-community/*'
           production-minor-patch:
               applies-to: version-updates
               dependency-type: production
@@ -37,6 +52,27 @@ updates:
               dependency-type: development
               patterns:
                   - '*'
+
+    # The Expo sample sits outside the workspace with its own lockfile, so Dependabot's security
+    # scans reach it. Expo SDK packages move together through `npx expo install --fix`; a
+    # per-package major bump desynchronises the SDK, so they are ignored and version updates are
+    # off for this directory.
+    - package-ecosystem: npm
+      directory: /examples/mobile-reactnative-expo
+      schedule:
+          interval: daily
+          time: '02:17'
+          timezone: Europe/Istanbul
+      open-pull-requests-limit: 0
+      labels:
+          - dependencies
+          - javascript
+      ignore:
+          - dependency-name: expo
+          - dependency-name: 'expo-*'
+          - dependency-name: '@expo/*'
+          - dependency-name: react-native
+          - dependency-name: '@react-native/*'
 
     # Actions remain full-SHA pinned. Dependabot moves the SHA and its human-readable
     # version comment together; repository release tests reject floating references.
