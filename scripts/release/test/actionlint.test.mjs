@@ -186,3 +186,18 @@ test('the release workflow hands the plan to every job through the compressed ou
     assert.equal(source.match(/RELEASE_PLAN_GZIP_BASE64: \$\{\{ needs\.plan\.outputs\.planGzipBase64 \}\}/g)?.length, 4);
     assert.equal(source.match(/node scripts\/release\/restore-workspace-plan\.mjs "\$RUNNER_TEMP\/workspace-release-plan\.json"/g)?.length, 4);
 });
+
+test('the macOS sample workflows survive Dependabot runs and refuse React Native source fallbacks', () => {
+    for (const name of ['test-ios-sample.yml', 'build-macos.yml']) {
+        const source = fs.readFileSync(path.join(ROOT, '.github', 'workflows', name), 'utf8');
+        assert.match(source, /HAS_SIGNING_SECRETS: \$\{\{ secrets\.BUILD_CERTIFICATE_BASE64 != '' \}\}/, name);
+        assert.match(
+            source,
+            /name: Install the Apple certificate and provisioning profile\n\s+if: \$\{\{ env\.HAS_SIGNING_SECRETS == 'true' \}\}/,
+            name,
+        );
+    }
+    const ios = fs.readFileSync(path.join(ROOT, '.github', 'workflows', 'test-ios-sample.yml'), 'utf8');
+    assert.match(ios, /MAESTRO_DRIVER_STARTUP_TIMEOUT: '\d{6}'/);
+    assert.match(ios, /No prebuilt artifacts found\|\\\[Hermes\\\] Using the latest commit/);
+});
