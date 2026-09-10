@@ -30,9 +30,14 @@ permissions: {}
 jobs:
     build:
         runs-on: macos-latest
+        env:
+            # Dependabot-triggered runs receive no repository secrets; static library builds do not
+            # need signing, so skip the keychain setup instead of failing on an empty certificate.
+            HAS_SIGNING_SECRETS: ${{ secrets.BUILD_CERTIFICATE_BASE64 != '' }}
         steps:
             - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
             - name: Install the Apple certificate and provisioning profile
+              if: ${{ env.HAS_SIGNING_SECRETS == 'true' }}
               env:
                   BUILD_CERTIFICATE_BASE64: ${{ secrets.BUILD_CERTIFICATE_BASE64 }}
                   P12_PASSWORD: ${{ secrets.P12_PASSWORD }}

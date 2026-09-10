@@ -30,9 +30,14 @@ permissions: {}
 jobs:
     build:
         runs-on: macos-latest
+        env:
+            # Dependabot-triggered runs receive no repository secrets; the simulator build below does
+            # not need signing, so skip the keychain setup instead of failing on an empty certificate.
+            HAS_SIGNING_SECRETS: ${{ secrets.BUILD_CERTIFICATE_BASE64 != '' }}
         steps:
             - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
             - name: Install the Apple certificate and provisioning profile
+              if: ${{ env.HAS_SIGNING_SECRETS == 'true' }}
               env:
                   BUILD_CERTIFICATE_BASE64: ${{ secrets.BUILD_CERTIFICATE_BASE64 }}
                   P12_PASSWORD: ${{ secrets.P12_PASSWORD }}
@@ -88,16 +93,31 @@ jobs:
               # "sometimes". Retrying costs a minute; letting a known flake fail the release path costs a
               # rerun of everything behind it. Three attempts, and the third failure is a real one.
               working-directory: examples/mobile-reactnative-cli/ios
+              # React Native downloads prebuilt core, dependency and Hermes tarballs from Maven Central;
+              # when that fails it silently builds them from source, which does not compile against
+              # this react-native version and burns forty minutes first. Treat the fallback as a failed
+              # attempt so a Maven hiccup gets a retry instead of a doomed build.
               run: |
                   set -euo pipefail
                   for attempt in 1 2 3; do
-                    if pod install; then exit 0; fi
-                    echo "pod install failed (attempt ${attempt}/3)"
-                    sleep 5
+                    log="$RUNNER_TEMP/pod-install-${attempt}.log"
+                    if pod install 2>&1 | tee "$log"; then
+                      if grep -qE 'No prebuilt artifacts found|\[Hermes\] Using the latest commit' "$log"; then
+                        echo "pod install fell back to building React Native or Hermes from source (attempt ${attempt}/3)"
+                      else
+                        exit 0
+                      fi
+                    else
+                      echo "pod install failed (attempt ${attempt}/3)"
+                    fi
+                    sleep 30
                   done
-                  echo "pod install failed three times - this is not a flake"
+                  echo "pod install could not use the prebuilt React Native artifacts three times - check Maven Central, this is not a flake"
                   exit 1
             - name: E2E IOS
               # The playground under e2e/ needs the full port matrix and its own pods; CI builds the
               # sample, the same boundary ci:linux:e2e draws.
+              env:
+                  # Simulator boot on hosted runners regularly exceeds Maestro's default driver timeout.
+                  MAESTRO_DRIVER_STARTUP_TIMEOUT: '180000'
               run: pnpm run ci:ios:e2e
