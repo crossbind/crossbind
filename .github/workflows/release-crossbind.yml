@@ -239,7 +239,11 @@ jobs:
         needs:
             - plan
             - assemble
-        if: ${{ !inputs.dry_run && needs.plan.outputs.packageCount != '0' }}
+        # A train without macOS (or Linux) packages skips that build job; the status function keeps
+        # GitHub from applying success() over the whole chain and silently skipping publication.
+        if: >-
+            ${{ !cancelled() && !inputs.dry_run && needs.plan.result == 'success' && needs.assemble.result == 'success' &&
+            needs.plan.outputs.packageCount != '0' }}
         runs-on: ubuntu-24.04
         environment: npm-release
         permissions:

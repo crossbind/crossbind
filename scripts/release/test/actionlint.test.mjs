@@ -201,3 +201,15 @@ test('the macOS sample workflows survive Dependabot runs and refuse React Native
     assert.match(ios, /MAESTRO_DRIVER_STARTUP_TIMEOUT: '\d{6}'/);
     assert.match(ios, /No prebuilt artifacts found\|\\\[Hermes\\\] Using the latest commit/);
 });
+
+test('the publish job still runs when a platform build was skipped', () => {
+    const source = fs.readFileSync(path.join(ROOT, '.github', 'workflows', 'release-crossbind.yml'), 'utf8');
+    const publish = source.slice(source.indexOf('\n    publish:\n'));
+    const condition = /if: >-\n\s+\$\{\{ (.*?) \}\}/s.exec(publish)?.[1] ?? '';
+    // A single-platform train skips the other platform's build job; without a status function GitHub
+    // applies success() over the whole dependency chain and skips publication silently.
+    assert.match(condition, /^!cancelled\(\) && !inputs\.dry_run/);
+    assert.match(condition, /needs\.plan\.result == 'success'/);
+    assert.match(condition, /needs\.assemble\.result == 'success'/);
+    assert.match(condition, /needs\.plan\.outputs\.packageCount != '0'/);
+});
