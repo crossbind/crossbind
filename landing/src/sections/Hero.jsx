@@ -135,7 +135,7 @@ function UniversalCode({ tokens }) {
 }
 
 // Setting this up is agent work now, so the primary CTA opens the prompt rather than a command.
-function ViewPrompt({ tokens, onOpen }) {
+function AgentSetup({ tokens, onOpen }) {
     return (
         <button
             type="button"
@@ -166,10 +166,9 @@ function ViewPrompt({ tokens, onOpen }) {
                 strokeLinejoin="round"
                 aria-hidden="true"
             >
-                <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z" />
-                <circle cx="12" cy="12" r="3" />
+                <path d="M12 3.5 13.8 10.2 20.5 12 13.8 13.8 12 20.5 10.2 13.8 3.5 12 10.2 10.2Z" />
             </svg>
-            View prompt
+            Set up with an AI agent
         </button>
     );
 }
@@ -201,8 +200,8 @@ export default function Hero({ tokens }) {
             </p>
 
             <div style={{ display: 'flex', gap: 12, justifyContent: 'center', flexWrap: 'wrap', marginBottom: 26 }}>
-                <SecondaryButton tokens={tokens} href={guideHref('quick-start')}>Get started</SecondaryButton>
-                <ViewPrompt tokens={tokens} onOpen={() => setPromptOpen(true)} />
+                <AgentSetup tokens={tokens} onOpen={() => setPromptOpen(true)} />
+                <SecondaryButton tokens={tokens} href={guideHref('quick-start')}>Read the quick start</SecondaryButton>
             </div>
 
             <p style={{ margin: '0 0 32px', fontSize: 13.5, color: tokens.textMuted }}>

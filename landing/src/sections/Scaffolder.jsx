@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import PlatformGlyph from '../components/PlatformGlyph.jsx';
 import { Pill } from '../components/ui.jsx';
 import {
-    AGENT_URL, CREATE_COMMAND, SCAFFOLD_BUNDLERS, SCAFFOLD_FRAMEWORKS, SCAFFOLD_LINES, SCAFFOLD_TARGETS,
+    CREATE_COMMAND, SCAFFOLD_BUNDLERS, SCAFFOLD_FRAMEWORKS, SCAFFOLD_LINES, SCAFFOLD_TARGETS,
 } from '../data.js';
 
 const RESTART_DELAY = 5000;
@@ -190,31 +190,6 @@ export default function Scaffolder({ tokens }) {
                                     </Chip>
                                 ))}
                             </ChoiceGroup>
-                        </div>
-
-                        <div style={{
-                            padding: '14px 18px',
-                            background: tokens.panel,
-                            border: `1px solid ${tokens.border}`,
-                            borderRadius: 12,
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: 14,
-                        }}
-                        >
-                            <span style={{ color: tokens.violet, fontSize: 18, fontWeight: 600 }}>→</span>
-                            <div style={{ flex: 1, fontSize: 13, color: tokens.textDim }}>
-                                <span style={{ color: tokens.text, fontWeight: 500 }}>Already have a project?</span>
-                                {' '}
-                                The AI Agent migrates an existing repo — same five questions, no boilerplate.
-                            </div>
-                            <a
-                                className="tap-target"
-                                href={AGENT_URL}
-                                style={{ color: tokens.violet, fontSize: 12.5, fontWeight: 600, fontFamily: tokens.mono, letterSpacing: 0.5 }}
-                            >
-                                AGENT →
-                            </a>
                         </div>
                     </div>
 

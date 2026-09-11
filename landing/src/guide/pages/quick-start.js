@@ -1,7 +1,10 @@
-import { BRAND, CREATE_COMMAND, SETUP_PROMPT } from '../../data.js';
+import {
+    BRAND, CREATE_COMMAND, SETUP_PROMPT, SKILL_COMMAND,
+} from '../../data.js';
 
-// CREATE_COMMAND and SETUP_PROMPT come from data.js on purpose: the landing's scaffolder terminal
-// and this page have to show the same command. See the TODO(rename) note at the top of data.js.
+// These three come from data.js on purpose: the hero's setup modal, the landing's scaffolder
+// terminal and this page have to show the same commands, and the skill has to outrank the prompt
+// in both places. See the TODO(rename) note at the top of data.js.
 export default {
     slug: 'quick-start',
     title: 'Quick start',
@@ -18,7 +21,7 @@ export default {
             type: 'ul',
             items: [
                 '**Docker** - carries the web, Android and WASI toolchains. Pulled automatically on the first build.',
-                '**Node.js 22+**.',
+                '**Node.js 24+**.',
                 '**CMake 3.28+** - mobile only.',
                 '**Xcode** and **CocoaPods** - iOS only, macOS only.',
                 '**A Rust toolchain** (`cargo` plus the platform targets) - only when you bind Rust. See [Rust](/guide/rust/).',
@@ -42,7 +45,12 @@ docker pull ghcr.io/crossbind/web:1.0.0   # optional: the first build pulls it a
         { type: 'h2', id: 'ai', text: 'Set it up with a coding agent' },
         {
             type: 'p',
-            text: 'Using Claude Code, Cursor, Copilot or similar? Hand it the prompt below - it inspects the repo, installs the right plugin, writes the config and wires your bundler.',
+            text: `Using Claude Code, Cursor, Copilot or similar? Install the skill once - your agent then carries the project inspector, the current port catalog and the per-framework playbooks, and you can ask it to add ${BRAND} without pasting anything.`,
+        },
+        { type: 'code', file: 'shell', code: SKILL_COMMAND },
+        {
+            type: 'p',
+            text: 'Drop `--global` to install it into this project only. For clients that cannot install skills, hand over this prompt instead - it inspects the repo, installs the right plugin, writes the config and wires your bundler:',
         },
         { type: 'code', file: 'prompt', code: SETUP_PROMPT },
         { type: 'p', text: 'Prefer to do it yourself? Keep going.' },

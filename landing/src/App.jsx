@@ -3,7 +3,6 @@ import Nav from './components/Nav.jsx';
 import Guide from './guide/Guide.jsx';
 import { findGuidePage } from './guide/nav.js';
 import Search from './guide/Search.jsx';
-import Agent from './sections/Agent.jsx';
 import Closing from './sections/Closing.jsx';
 import Features from './sections/Features.jsx';
 import Hero from './sections/Hero.jsx';
@@ -45,7 +44,6 @@ export default function App({ url }) {
                     <Hero tokens={tokens} />
                     <Scaffolder tokens={tokens} />
                     <Features tokens={tokens} />
-                    <Agent tokens={tokens} />
                     <Showcase tokens={tokens} />
                 </main>
             )}

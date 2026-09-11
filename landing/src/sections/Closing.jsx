@@ -16,7 +16,13 @@ export default function Closing({ tokens }) {
             fontSize: 12,
         }}
         >
-            <span>crossbind · formerly cpp.js · MIT · Copyright © 2026 Buğra Sarı</span>
+            <span>
+                crossbind · MIT ·
+                {' '}
+                {/* Below 375px this line wraps; nowrap forces the break onto the separator
+                    instead of orphaning the name from the year. */}
+                <span style={{ whiteSpace: 'nowrap' }}>Copyright © 2026 Buğra Sarı</span>
+            </span>
             {/* Also the mobile navigation: the header drops its link row below 860px. */}
             <span style={{ display: 'flex', flexWrap: 'wrap', gap: 18 }}>
                 <a href={guideHref()} className="tap-target" style={{ color: tokens.textDim }}>Guide</a>
