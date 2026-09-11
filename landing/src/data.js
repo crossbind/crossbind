@@ -44,6 +44,10 @@ export const SHOWCASE_URL = `${DOCS_HOST}/docs/package/package/showcase`;
 export const CHANGELOG_URL = `${DOCS_HOST}/docs/changelog/core/crossbind`;
 export const CREATE_COMMAND = 'npm create crossbind';
 
+// The Skills CLI installs straight from the repository tree, so this is derived from REPO_URL
+// rather than restating the host. Dropping --global installs into the current project only.
+export const SKILL_COMMAND = `npx skills add ${REPO_URL}/tree/main/agents/skills --global --yes`;
+
 // Handed to a coding agent rather than typed. Package names follow the crossbind rename, so
 // like CREATE_COMMAND this only resolves once 2.0 publishes - see TODO(rename) above.
 export const SETUP_PROMPT = `Add crossbind to this project so I can call C++ (or Rust) from JavaScript.
@@ -113,7 +117,6 @@ export const RUNTIME_CHIPS = [
 // gdal3.js's landing set the pattern: numbered cards, benefit-first titles, and a spec-style
 // proof tag instead of marketing adjectives. Every figure below is counted from this repo.
 // The hero's tabbed code block already demos "import a header / a crate", so no card repeats it,
-// and the Agent section right below the grid owns the portable-skill pitch on its own.
 //
 // Cards carry the caveat next to the claim - the pthread pool really is capped at two workers,
 // OPFS really is worker-only, Android really is the one platform without dead-code elimination.
@@ -435,9 +438,3 @@ export const SCAFFOLD_LINES = [
     { delay: 200, kind: 'next', text: 'Next:  cd my-crossbind-app && npm install && npm run build' },
 ];
 
-export const AGENT_STEPS = [
-    'Detects your stack (Vite, Webpack, RN, Next…)',
-    'Loads only the relevant API and integration references',
-    'Makes an idempotent, reviewable config change',
-    'Runs your real build and reports the diff',
-];

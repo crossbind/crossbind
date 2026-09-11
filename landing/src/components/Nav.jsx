@@ -113,7 +113,7 @@ export default function Nav({ tokens, onToggleTheme, onOpenSearch }) {
                 >
                     <ThemeIcon isLight={tokens.isLight} />
                 </button>
-                {/* Deliberately not a second "Get started": the hero already owns that call, and
+                {/* Deliberately not a second "Read the quick start": the hero already owns that call, and
                     repeating it on the same screen splits one click two ways. */}
                 <a
                     href={REPO_URL}
