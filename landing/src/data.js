@@ -442,16 +442,6 @@ export const SHOWCASE = Object.entries(SHOWCASE_PITCH)
 
 export const SHOWCASE_COUNT = String(PORTS.length);
 
-// Counts are hand-copied GitHub figures, so they go stale silently - re-read them from
-// api.github.com/repos/crossbind/crossbind when this copy is next touched. Last checked 16 Aug 2026.
-// There is no Discord and no office hours, so the row is what actually exists.
-export const COMMUNITY = [
-    { label: 'GitHub stars', meta: 'crossbind/crossbind', count: '146' },
-    { label: 'GitHub Discussions', meta: 'Ask anything, indexed', count: 'open' },
-    { label: 'Issues', meta: 'Bugs and feature requests', count: '1' },
-    { label: 'Forks', meta: 'Fork it, send a PR', count: '7' },
-];
-
 // Exactly what the twelve templates cover — no Solid template and no Next.js plugin, so
 // neither is listed.
 export const SCAFFOLD_FRAMEWORKS = ['React', 'Vue', 'Svelte', 'Vanilla'];
