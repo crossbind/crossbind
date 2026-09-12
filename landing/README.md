@@ -151,7 +151,7 @@ step. `src/main.jsx` writes each route's `<title>`, description and canonical du
 `TODO(rename)` — the page is written for the **crossbind** name shipping as stable 2.0. `@crossbind/*`
 ships on the npm `beta` tag today, which is why every install command carries the channel suffix
 from the release snapshot; a bare `npm create crossbind` is only right once a stable train has moved
-`latest`. `crossbind.dev` is not registered yet. `REPO_URL` deliberately still points at
+`latest`. `REPO_URL` deliberately still points at
 `crossbind/crossbind` so the GitHub link works.
 The code samples keep today's public API names (`initNative`, `crossbind.config.js`) so the landing
 matches the implementation. Agent guidance is distributed as the portable skill under `agents/`.
