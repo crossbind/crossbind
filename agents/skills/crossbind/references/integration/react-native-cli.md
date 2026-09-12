@@ -72,7 +72,9 @@ module.exports = mergeConfig(defaultConfig, config);
 
 ```js
 import Matrix from '@crossbind/example-lib-prebuilt-matrix/crossbind.config.js';
-// or any other prebuilt: import Gdal from '@crossbind/port-gdal/crossbind.config.js';
+// or any other prebuilt, one variant per platform:
+// import gdalAndroid from '@crossbind/port-gdal-android/crossbind.config.js';
+// import gdalIos from '@crossbind/port-gdal-ios/crossbind.config.js';
 
 export default {
     dependencies: [
