@@ -16,24 +16,27 @@ export default function CommandChip({ tokens, command, label = 'Copy' }) {
     };
 
     return (
-        <div style={{
-            display: 'inline-flex',
-            alignItems: 'stretch',
-            maxWidth: '100%',
-            border: `1px solid ${tokens.borderStrong}`,
-            borderRadius: 10,
-            background: tokens.codeBg,
-            overflow: 'hidden',
-        }}
-        >
-            <code style={{
-                padding: '10px 14px',
-                fontFamily: tokens.mono,
-                fontSize: 13,
-                color: tokens.codeText,
-                overflowWrap: 'anywhere',
-                alignSelf: 'center',
+        <div
+            style={{
+                display: 'flex',
+                alignItems: 'stretch',
+                width: '100%',
+                border: `1px solid ${tokens.borderStrong}`,
+                borderRadius: 10,
+                background: tokens.codeBg,
+                overflow: 'hidden',
             }}
+        >
+            <code
+                style={{
+                    padding: '10px 14px',
+                    fontFamily: tokens.mono,
+                    fontSize: 13,
+                    color: tokens.codeText,
+                    overflowWrap: 'anywhere',
+                    alignSelf: 'center',
+                    flex: 1,
+                }}
             >
                 {command}
             </code>
