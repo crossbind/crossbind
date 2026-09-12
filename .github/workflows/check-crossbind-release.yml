@@ -11,10 +11,12 @@ on:
             - package.json
             - pnpm-lock.yaml
             - scripts/release/**
+            - scripts/site/**
             - scripts/pin-docker-image.js
             - scripts/pin-rust-sysroot.js
             - scripts/gate-pinned-local-sysroot.mjs
             - releases/**
+            - CHANGELOG.md
             - core/**/package.json
             - tooling/**/package.json
             - plugins/**/package.json
@@ -24,6 +26,7 @@ on:
             - core/crossbind/src/utils/pullDockerImage.js
             - core/crossbind/src/utils/rustSysrootPin.js
             - tooling/docker/VERSION
+            - landing/**
     pull_request:
         branches:
             - main
@@ -33,10 +36,12 @@ on:
             - package.json
             - pnpm-lock.yaml
             - scripts/release/**
+            - scripts/site/**
             - scripts/pin-docker-image.js
             - scripts/pin-rust-sysroot.js
             - scripts/gate-pinned-local-sysroot.mjs
             - releases/**
+            - CHANGELOG.md
             - core/**/package.json
             - tooling/**/package.json
             - plugins/**/package.json
@@ -46,6 +51,7 @@ on:
             - core/crossbind/src/utils/pullDockerImage.js
             - core/crossbind/src/utils/rustSysrootPin.js
             - tooling/docker/VERSION
+            - landing/**
 
 permissions:
     contents: read
@@ -66,6 +72,20 @@ jobs:
               run: pnpm install --frozen-lockfile
             - name: Validate release code and workflow semantics
               run: pnpm run check:release
+            - name: Build the site from the offline release fixture
+              env:
+                  CROSSBIND_SITE_RELEASE_FIXTURE: ${{ github.workspace }}/scripts/release/test/fixtures/site-release/beta.json
+              run: pnpm --filter @crossbind/landing build
+            - name: Refuse to deploy a fixture-built site
+              run: |
+                  if node scripts/release/check-site-snapshot.mjs landing/dist/release-snapshot.json; then
+                      echo 'the deploy gate accepted a fixture build' >&2
+                      exit 1
+                  fi
+            - name: Check site links, anchors, redirects and routes
+              run: node scripts/site/check-site-links.mjs landing/dist
+            - name: Validate site scripts
+              run: pnpm run check:site
             - name: Verify repository publish hygiene
               env:
                   NPM_CONFIG_CACHE: ${{ runner.temp }}/npm-cache

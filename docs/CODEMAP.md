@@ -45,7 +45,8 @@ crossbind/
 ├── examples/                         ← reference integrations, published as create-crossbind templates
 ├── e2e/                              ← internal test benches + conformance kit
 ├── agents/                           ← one portable skill, generated references, contributor context
-└── landing/                          ← crossbind.dev site
+├── landing/                          ← crossbind.dev site (guide, /api, /agent, /ports, /examples, /changelog)
+└── scripts/site/                     ← site build helpers: release+catalog+demos prepare step, ports catalog, live example demos, link/redirect check
 ```
 
 ## "What options does the runtime / config accept?" → API reference

@@ -1,21 +1,24 @@
 import { SHOWCASE_COUNT } from '../../data.js';
+import { RELEASE } from '../../release.js';
+
+const DIST_TAG_SUFFIX = RELEASE.distTagSuffix;
 
 export default {
-    slug: 'packages',
-    title: 'Packages',
+    slug: 'libraries',
+    title: 'Libraries',
     description: 'Use a prebuilt C++ library from npm, or publish your own the same way.',
     lede: `Native libraries travel through npm like any other dependency. ${SHOWCASE_COUNT} are already published prebuilt - GDAL, OpenSSL, SQLite, GEOS, PROJ, libTIFF and more - and the same mechanism packages your own C++, whether it ships as binaries, as sources, as a CMake project or as a Rust crate.`,
     blocks: [
         { type: 'h2', id: 'use', text: 'Using a prebuilt library' },
         {
             type: 'p',
-            text: 'Install the package, declare it as a dependency in `crossbind.config.js`, and import its header. Nothing is compiled on your machine - the binaries are in the package.',
+            text: 'Install the variant for the platform you build, declare it as a dependency in `crossbind.config.js`, and import its header. Nothing is compiled on your machine - the binaries are in the package. A project that builds for several platforms lists one variant per platform, for example `-android` and `-ios` in a React Native app.',
         },
-        { type: 'code', file: 'shell', code: 'npm install @crossbind/port-gdal' },
+        { type: 'code', file: 'shell', code: `npm install @crossbind/port-gdal-wasm${DIST_TAG_SUFFIX}` },
         {
             type: 'code',
             file: 'crossbind.config.js',
-            code: `import gdal from '@crossbind/port-gdal/crossbind.config.js';
+            code: `import gdal from '@crossbind/port-gdal-wasm/crossbind.config.js';
 
 export default {
     general: { name: 'my-geo-app' },
@@ -33,19 +36,19 @@ console.log(GDALVersionInfo('RELEASE_NAME'));`,
         },
         {
             type: 'p',
-            text: 'Headers live under the package\'s `dist/prebuilt/<target>/include`, and the import path is relative to that - `@crossbind/port-gdal/gdal.h` is GDAL\'s own `gdal.h`.',
+            text: "Headers live under the package's `dist/prebuilt/<target>/include`, and the import path is relative to that - `@crossbind/port-gdal/gdal.h` is GDAL's own `gdal.h`.",
         },
 
         { type: 'h2', id: 'platform-split', text: 'Meta package, platform variants' },
         {
             type: 'p',
-            text: 'A package family is a thin meta package plus one package per platform, so you only download artifacts for the platforms you build. `@crossbind/port-gdal` depends on `-wasm`, `-android` and `-ios`; a `-wasi` variant carries the WASI prebuilt. Importing the meta package pulls in the right variant for the target.',
+            text: "A package family is a thin meta package plus one package per platform, so you only download artifacts for the platforms you build. Every variant depends on `@crossbind/port-gdal`, which carries the family's shared build metadata and the `@crossbind/port-gdal/<header>.h` alias; you install `-wasm`, `-android`, `-ios` or `-wasi` for the platforms you build and list each one in `dependencies`. Importing the meta package pulls in the right variant for the target.",
         },
         {
             type: 'table',
             head: ['Package', 'Carries'],
             rows: [
-                ['`@crossbind/port-gdal`', 'the meta package - depend on this'],
+                ['`@crossbind/port-gdal`', 'the meta package: shared metadata and the header alias, pulled in by every variant'],
                 ['`@crossbind/port-gdal-wasm`', 'the WebAssembly prebuilt (browser, Node, edge)'],
                 ['`@crossbind/port-gdal-android` / `-ios`', 'the native mobile libraries'],
                 ['`@crossbind/port-gdal-wasi`', 'the `wasm32-wasip3` prebuilt'],
@@ -69,7 +72,7 @@ console.log(GDALVersionInfo('RELEASE_NAME'));`,
             head: ['Type', 'export.type', 'What consumers get'],
             rows: [
                 ['Prebuilt', '`cmake` (default)', 'compiled libraries per platform - nothing to build'],
-                ['Source', '`source`', 'raw C++ compiled during the consumer\'s build'],
+                ['Source', '`source`', "raw C++ compiled during the consumer's build"],
                 ['CMake', '`cmake`', 'sources plus a `CMakeLists.txt` for custom build systems'],
                 ['Cargo', '`cargo`', 'a Rust crate built per platform - see [Rust](/guide/rust/#publish)'],
             ],

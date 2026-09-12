@@ -1,6 +1,6 @@
 import { Pill } from '../components/ui.jsx';
 import {
-    COMMUNITY, REPO_URL, SHOWCASE, SHOWCASE_COUNT, SHOWCASE_URL,
+    COMMUNITY, LIBRARIES_URL, REPO_URL, SHOWCASE, SHOWCASE_COUNT,
 } from '../data.js';
 
 function Libraries({ tokens }) {
@@ -13,7 +13,7 @@ function Libraries({ tokens }) {
                         Drop in real C++ libraries.
                     </h2>
                 </div>
-                <a href={SHOWCASE_URL} className="tap-target" style={{ marginLeft: 'auto', color: tokens.accentText, fontSize: 14 }}>
+                <a href={LIBRARIES_URL} className="tap-target" style={{ marginLeft: 'auto', color: tokens.accentText, fontSize: 14 }}>
                     {`View all ${SHOWCASE_COUNT} →`}
                 </a>
             </div>
@@ -23,7 +23,7 @@ function Libraries({ tokens }) {
                     // The card carries an "install →" affordance, so it has to be a link.
                     <a
                         key={item.name}
-                        href={SHOWCASE_URL}
+                        href={item.href || LIBRARIES_URL}
                         className="tap-target"
                         style={{
                             padding: 18,

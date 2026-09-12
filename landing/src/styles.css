@@ -15,7 +15,9 @@
 
 /* Shared by landing and guide cards. */
 .feat-card {
-    transition: transform 0.18s ease, box-shadow 0.18s ease;
+    transition:
+        transform 0.18s ease,
+        box-shadow 0.18s ease;
 }
 
 .feat-card:hover {
@@ -216,11 +218,45 @@
     align-items: center;
 }
 
-/* The link row needs ~950px before it stops wrapping the header onto a second line. It goes
-   earlier than the rest of the mobile layout because the footer carries the same links. */
+/* The link row needs ~950px before it stops wrapping the header onto a second line. Below that
+   it folds into a menu the header button opens, as a full-width column under the controls. */
+.nav-menu-btn {
+    display: none;
+}
+
+.nav-link:focus-visible,
+.nav-menu-btn:focus-visible,
+.version-item:focus-visible {
+    outline: 2px solid currentColor;
+    outline-offset: 2px;
+}
+
 @media (max-width: 950px) {
     .nav-links {
         display: none !important;
+    }
+
+    .nav-links[data-open='true'] {
+        display: flex !important;
+        flex-basis: 100%;
+        flex-direction: column;
+        align-items: stretch;
+        order: 10;
+        margin-left: 0 !important;
+        padding: 6px 0 2px;
+    }
+
+    .nav-links[data-open='true'] a {
+        justify-content: flex-start !important;
+        margin-left: 0 !important;
+    }
+
+    .version-menu {
+        margin-left: 0 !important;
+    }
+
+    .nav-menu-btn {
+        display: grid !important;
     }
 }
 
@@ -296,7 +332,11 @@ html,
 body {
     margin: 0;
     padding: 0;
-    font-family: 'Geist', -apple-system, BlinkMacSystemFont, sans-serif;
+    font-family:
+        'Geist',
+        -apple-system,
+        BlinkMacSystemFont,
+        sans-serif;
     background: #070b14;
     color: #e7ebf3;
 }
@@ -345,6 +385,90 @@ button {
 
 .skip-link:focus {
     top: 12px;
+}
+
+/* Libraries (/ports/) and its detail pages, and Examples: full-width pages of their own. Grids and
+   breakpoints live here for the same reason as the guide's. */
+.lib-head {
+    display: grid;
+    grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr);
+    gap: 32px;
+    align-items: end;
+}
+
+.lib-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 250px), 1fr));
+    gap: 14px;
+}
+
+.tool-row {
+    display: grid;
+    grid-template-columns: 200px minmax(0, 1fr);
+    gap: 20px;
+    align-items: start;
+}
+
+.port-layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 300px;
+    gap: 40px;
+    align-items: start;
+}
+
+.port-aside {
+    position: sticky;
+    top: 86px;
+}
+
+.example-card {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr);
+    gap: 28px;
+    align-items: start;
+}
+
+.changelog-layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 200px;
+    gap: clamp(20px, 3vw, 44px);
+    align-items: start;
+}
+
+.changelog-rail {
+    position: sticky;
+    top: 86px;
+    max-height: calc(100vh - 110px);
+    overflow-y: auto;
+}
+
+.filter-chip:focus-visible,
+.tab-btn:focus-visible {
+    outline: 2px solid currentColor;
+    outline-offset: 2px;
+}
+
+@media (max-width: 900px) {
+    .lib-head,
+    .tool-row,
+    .port-layout,
+    .example-card,
+    .changelog-layout {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .changelog-rail {
+        display: none;
+    }
+
+    .lib-head {
+        gap: 22px;
+    }
+
+    .port-aside {
+        position: static;
+        order: -1;
+    }
 }
 
 /* Guide (src/guide/): the three-column doc layout. Components style themselves inline from the

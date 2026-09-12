@@ -1,13 +1,17 @@
 import { Fragment, useEffect, useState } from 'react';
 import Article from './Article.jsx';
 import { inline } from './inline.jsx';
-import {
-    getNeighbours, GUIDE_EXTERNAL_LINKS, GUIDE_HOME, GUIDE_SECTIONS,
-} from './nav.js';
+import { getNeighbours, GUIDE_EXTERNAL_LINKS, GUIDE_HOME, GUIDE_SECTIONS } from './nav.js';
 
 // The doc shell: gdal3.js's three-column layout - grouped sidebar, article, "on this page" -
 // rebuilt on this site's tokens so the theme toggle keeps working. The grid columns and every
 // breakpoint live in styles.css, because an inline style cannot carry a media query.
+
+// A section link is active for its index and everything under it, e.g. /ports/gdal under /ports/.
+const isUnder = (path, href) => {
+    const prefix = href.replace(/\/$/, '');
+    return path === prefix || path.startsWith(`${prefix}/`);
+};
 
 // A heading counts as current once it is in the top band of the viewport.
 const SPY_MARGIN = '-15% 0px -70% 0px';
@@ -18,11 +22,14 @@ function useActiveHeading(headings) {
 
     useEffect(() => {
         if (typeof IntersectionObserver === 'undefined' || !ids) return undefined;
-        const observer = new IntersectionObserver((entries) => {
-            entries.forEach((entry) => {
-                if (entry.isIntersecting) setActive(entry.target.id);
-            });
-        }, { rootMargin: SPY_MARGIN });
+        const observer = new IntersectionObserver(
+            (entries) => {
+                entries.forEach((entry) => {
+                    if (entry.isIntersecting) setActive(entry.target.id);
+                });
+            },
+            { rootMargin: SPY_MARGIN },
+        );
         ids.split(',').forEach((id) => {
             const el = document.getElementById(id);
             if (el) observer.observe(el);
@@ -33,9 +40,7 @@ function useActiveHeading(headings) {
     return active;
 }
 
-function SideLink({
-    tokens, href, label, active, external,
-}) {
+function SideLink({ tokens, href, label, active, external }) {
     return (
         <a
             href={href}
@@ -59,13 +64,14 @@ function SideLink({
 
 function SideHeading({ tokens, children }) {
     return (
-        <div style={{
-            fontFamily: tokens.mono,
-            fontSize: 10.5,
-            letterSpacing: 1.5,
-            color: tokens.textMuted,
-            margin: '18px 0 6px',
-        }}
+        <div
+            style={{
+                fontFamily: tokens.mono,
+                fontSize: 10.5,
+                letterSpacing: 1.5,
+                color: tokens.textMuted,
+                margin: '18px 0 6px',
+            }}
         >
             {children.toUpperCase()}
         </div>
@@ -74,29 +80,26 @@ function SideHeading({ tokens, children }) {
 
 function Sidebar({ tokens, page, open }) {
     return (
-        <aside
-            className="doc-side"
-            data-open={open ? 'true' : 'false'}
-            style={{ display: 'flex', flexDirection: 'column', gap: 2 }}
-        >
+        <aside className="doc-side" data-open={open ? 'true' : 'false'} style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
             <SideLink tokens={tokens} href={GUIDE_HOME.href} label="All guides" active={page.path === GUIDE_HOME.path} />
             {GUIDE_SECTIONS.map((section) => (
                 <Fragment key={section.label}>
                     <SideHeading tokens={tokens}>{section.label}</SideHeading>
                     {section.pages.map((item) => (
-                        <SideLink
-                            key={item.path}
-                            tokens={tokens}
-                            href={item.href}
-                            label={item.title}
-                            active={item.path === page.path}
-                        />
+                        <SideLink key={item.path} tokens={tokens} href={item.href} label={item.title} active={item.path === page.path} />
                     ))}
                 </Fragment>
             ))}
             <SideHeading tokens={tokens}>More</SideHeading>
             {GUIDE_EXTERNAL_LINKS.map((link) => (
-                <SideLink key={link.href} tokens={tokens} href={link.href} label={link.label} external />
+                <SideLink
+                    key={link.href}
+                    tokens={tokens}
+                    href={link.href}
+                    label={link.label}
+                    external={link.external}
+                    active={isUnder(page.path, link.href)}
+                />
             ))}
         </aside>
     );
@@ -108,13 +111,7 @@ function Toc({ tokens, headings, active }) {
         <aside className="doc-toc" style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
             <SideHeading tokens={tokens}>On this page</SideHeading>
             {headings.map((heading) => (
-                <SideLink
-                    key={heading.id}
-                    tokens={tokens}
-                    href={`#${heading.id}`}
-                    label={heading.text}
-                    active={heading.id === active}
-                />
+                <SideLink key={heading.id} tokens={tokens} href={`#${heading.id}`} label={heading.text} active={heading.id === active} />
             ))}
         </aside>
     );
@@ -122,8 +119,15 @@ function Toc({ tokens, headings, active }) {
 
 function PrevNext({ tokens, page }) {
     const { prev, next } = getNeighbours(page);
+    // Reference pages sit outside the reading order.
+    if (!prev && !next) return null;
     const label = {
-        fontFamily: tokens.mono, fontSize: 10, letterSpacing: 1.2, color: tokens.textMuted, display: 'block', marginBottom: 4,
+        fontFamily: tokens.mono,
+        fontSize: 10,
+        letterSpacing: 1.2,
+        color: tokens.textMuted,
+        display: 'block',
+        marginBottom: 4,
     };
 
     return (
@@ -144,13 +148,17 @@ function PrevNext({ tokens, page }) {
                     <span style={label}>← PREV</span>
                     {prev.title}
                 </a>
-            ) : <span />}
+            ) : (
+                <span />
+            )}
             {next ? (
                 <a href={next.href} className="tap-target" style={{ color: tokens.accentText, display: 'block', textAlign: 'right' }}>
                     <span style={label}>NEXT →</span>
                     {next.title}
                 </a>
-            ) : <span />}
+            ) : (
+                <span />
+            )}
         </nav>
     );
 }
@@ -159,6 +167,11 @@ export default function Guide({ tokens, page }) {
     const [menuOpen, setMenuOpen] = useState(false);
     const headings = page.blocks.filter((block) => block.type === 'h2' && block.id);
     const active = useActiveHeading(headings);
+    // Pages outside the guide bring their own eyebrow; guide breadcrumbs are shouted.
+    const eyebrow = page.eyebrow ?? {
+        head: `GUIDE · ${page.section || 'INDEX'}`.toUpperCase(),
+        tail: page.section ? ` · ${page.title.toUpperCase()}` : '',
+    };
 
     return (
         <div className="doc-grid" style={{ padding: '32px var(--content-x) 80px' }}>
@@ -187,25 +200,24 @@ export default function Guide({ tokens, page }) {
 
             <main id="content" className="doc-main">
                 <div style={{ fontFamily: tokens.mono, fontSize: 11, letterSpacing: 1.5, color: tokens.textMuted, marginBottom: 14 }}>
-                    {`GUIDE · ${page.section || 'INDEX'}`.toUpperCase()}
-                    {page.section ? <span style={{ color: tokens.accentText }}>{` · ${page.title.toUpperCase()}`}</span> : null}
+                    {eyebrow.head}
+                    {eyebrow.tail ? <span style={{ color: tokens.accentText }}>{eyebrow.tail}</span> : null}
                 </div>
 
-                <h1 style={{
-                    fontSize: 'clamp(30px, 4.5vw, 44px)',
-                    fontWeight: 600,
-                    letterSpacing: -1.5,
-                    lineHeight: 1.1,
-                    margin: '0 0 14px',
-                    color: tokens.text,
-                }}
+                <h1
+                    style={{
+                        fontSize: 'clamp(30px, 4.5vw, 44px)',
+                        fontWeight: 600,
+                        letterSpacing: -1.5,
+                        lineHeight: 1.1,
+                        margin: '0 0 14px',
+                        color: tokens.text,
+                    }}
                 >
                     {page.title}
                 </h1>
 
-                <p style={{ fontSize: 16.5, lineHeight: 1.65, color: tokens.textDim, margin: '0 0 34px' }}>
-                    {inline(page.lede, tokens)}
-                </p>
+                <p style={{ fontSize: 16.5, lineHeight: 1.65, color: tokens.textDim, margin: '0 0 34px' }}>{inline(page.lede, tokens)}</p>
 
                 <Article tokens={tokens} blocks={page.blocks} />
                 <PrevNext tokens={tokens} page={page} />

@@ -8,10 +8,11 @@
     "license": "MIT",
     "type": "module",
     "scripts": {
-        "dev": "vite",
-        "build": "vite build",
+        "dev": "node ../scripts/site/prepare-site.mjs --config ./release.config.js --out-dir ./generated -- vite",
+        "build": "node ../scripts/site/prepare-site.mjs --config ./release.config.js --out-dir ./generated -- vite build",
         "preview": "vite preview",
-        "deploy": "pnpm build && wrangler pages deploy"
+        "deploy": "pnpm run build && node ../scripts/release/check-site-snapshot.mjs dist/release-snapshot.json && wrangler pages deploy",
+        "demos": "node ../scripts/site/build-example-demos.mjs --config ./release.config.js"
     },
     "dependencies": {
         "@fontsource/geist-mono": "5.3.0",

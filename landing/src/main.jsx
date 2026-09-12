@@ -5,7 +5,7 @@ import { StrictMode } from 'react';
 import './fonts.css';
 import App from './App.jsx';
 import { BRAND, SITE, SITE_DESCRIPTION, SITE_TITLE } from './data.js';
-import { findGuidePage, GUIDE_ROUTES } from './guide/nav.js';
+import { findSitePage, SITE_ROUTES } from './site-pages.js';
 import './styles.css';
 
 const tree = (url) => (
@@ -55,8 +55,8 @@ export async function prerender(data) {
 
     return {
         html: renderToString(tree(url)),
-        // Queues every guide page for prerendering; already-rendered routes are skipped.
-        links: new Set(GUIDE_ROUTES),
-        head: headFor(findGuidePage(url)),
+        // Queues every page of the site for prerendering; already-rendered routes are skipped.
+        links: new Set(SITE_ROUTES),
+        head: headFor(findSitePage(url)),
     };
 }

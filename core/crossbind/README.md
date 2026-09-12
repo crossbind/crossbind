@@ -21,7 +21,7 @@
     <a href="#start-with-a-coding-agent">Coding agents</a>
     · <a href="https://crossbind.dev/guide/">Guide</a>
     · <a href="https://crossbind.dev/guide/quick-start/">Quick start</a>
-    · <a href="https://crossbind.dev/guide/packages/">Libraries</a>
+    · <a href="https://crossbind.dev/guide/libraries/">Libraries</a>
     · <a href="https://github.com/crossbind/crossbind/tree/main/examples">Examples</a>
     · <a href="https://github.com/crossbind/crossbind/blob/main/CONTRIBUTING.md">Contributing</a>
   </p>
@@ -275,7 +275,7 @@ export default {
 
 The variant declares its transitive native dependency graph, so link order is
 derived automatically. Install and register every platform variant your
-project actually builds. See the [package guide](https://crossbind.dev/guide/packages/)
+project actually builds. See the [library guide](https://crossbind.dev/guide/libraries/)
 and [`ports/README.md`](https://github.com/crossbind/crossbind/blob/main/ports/README.md)
 for the package and license contracts.
 

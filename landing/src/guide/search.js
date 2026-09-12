@@ -1,7 +1,8 @@
-import { GUIDE_PAGES } from './nav.js';
+import { SITE_PAGES } from '../site-pages.js';
 
-// Search index. The guide's copy is already data in this bundle, so the index is derived from it
-// at load: no crawler, no extra build step, no index to download. gdal3.js reaches for pagefind
+// Search index over every page of the site - guide, reference, Libraries and changelog. The copy
+// is already data in this bundle, so the index is derived from it at load: no crawler, no extra
+// build step, no index to download. gdal3.js reaches for pagefind
 // because its pages are hand-written HTML; here the pages are objects.
 
 const MAX_RESULTS = 8;
@@ -60,7 +61,7 @@ function pageEntries(page) {
     ];
 }
 
-const INDEX = GUIDE_PAGES.flatMap(pageEntries).map((entry) => ({
+const INDEX = SITE_PAGES.flatMap(pageEntries).map((entry) => ({
     ...entry,
     haystack: `${entry.title} ${entry.sub} ${entry.body}`.toLowerCase(),
     lowerTitle: entry.title.toLowerCase(),

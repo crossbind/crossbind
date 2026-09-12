@@ -1,0 +1,69 @@
+# 301s for the old Docusaurus site (deleted from the repository; its routes were /docs/<file>).
+# Each old page goes to the page that now carries the same content; nothing goes to the home
+# page, nothing chains into another rule. scripts/site/check-site-links.mjs verifies targets.
+# More specific rules come first: Cloudflare Pages applies the first match.
+
+# Getting started
+/docs/guide/getting-started/introduction /guide/introduction/ 301
+/docs/guide/getting-started/* /guide/quick-start/ 301
+
+# Integrations: bundlers and runtimes
+/docs/guide/integrate-into-existing-project/react-native /guide/runtimes/ 301
+/docs/guide/integrate-into-existing-project/expo /guide/runtimes/ 301
+/docs/guide/integrate-into-existing-project/nodejs /guide/runtimes/ 301
+/docs/guide/integrate-into-existing-project/cloudflare-worker /guide/runtimes/ 301
+/docs/guide/integrate-into-existing-project/* /guide/bundlers/ 301
+
+# Feature guides
+/docs/guide/features/assets /guide/assets/ 301
+/docs/guide/features/calling-cpp-from-javascript /guide/bindings/ 301
+/docs/guide/features/packages /guide/libraries/ 301
+/guide/packages/* /guide/libraries/ 301
+/docs/guide/features/plugins /guide/bundlers/ 301
+/docs/guide/features/rust /guide/rust/ 301
+/docs/guide/features/wasi /guide/wasi/ 301
+/docs/guide/features/monorepo /guide/configuration/ 301
+/docs/guide/troubleshooting /guide/troubleshooting/ 301
+/docs/guide/* /guide/ 301
+
+# API reference
+/docs/api/cpp-bindings/overview /api/ 301
+/docs/api/cpp-bindings/* /guide/bindings/ 301
+/docs/api/configuration/threading /guide/threading/ 301
+/docs/api/configuration/* /guide/configuration/ 301
+/docs/api/javascript/filesystem /guide/filesystem/ 301
+/docs/api/* /api/ 301
+
+# Packages: the showcase and the per-library pages
+/docs/package/package/showcase /ports/ 301
+/docs/package/package/cppjs-package-curl /ports/curl/ 301
+/docs/package/package/cppjs-package-expat /ports/expat/ 301
+/docs/package/package/cppjs-package-gdal /ports/gdal/ 301
+/docs/package/package/cppjs-package-geos /ports/geos/ 301
+/docs/package/package/cppjs-package-geotiff /ports/geotiff/ 301
+/docs/package/package/cppjs-package-iconv /ports/iconv/ 301
+/docs/package/package/cppjs-package-jpegturbo /ports/jpegturbo/ 301
+/docs/package/package/cppjs-package-lerc /ports/lerc/ 301
+/docs/package/package/cppjs-package-openssl /ports/openssl/ 301
+/docs/package/package/cppjs-package-proj /ports/proj/ 301
+/docs/package/package/cppjs-package-spatialite /ports/spatialite/ 301
+/docs/package/package/cppjs-package-sqlite3 /ports/sqlite3/ 301
+/docs/package/package/cppjs-package-tiff /ports/tiff/ 301
+/docs/package/package/cppjs-package-webp /ports/webp/ 301
+/docs/package/package/cppjs-package-zlib /ports/zlib/ 301
+/docs/package/package/cppjs-package-zstd /ports/zstd/ 301
+/docs/package/package/* /ports/ 301
+
+# Changelog
+/docs/changelog/core/crossbind /changelog/ 301
+/docs/changelog/* /changelog/ 301
+
+# Contributing moved to the repository
+/docs/contribute/* https://github.com/crossbind/crossbind/blob/main/CONTRIBUTING.md 301
+
+# Agent guidance
+/docs/agent/* /agent/ 301
+
+# Anything else under the old docs root
+/docs /guide/ 301
+/docs/* /guide/ 301

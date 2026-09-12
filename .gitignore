@@ -59,3 +59,9 @@ default.profraw
 
 # local README-rewrite research notes (auto-generated, not part of the project)
 docs/research/
+
+# resolved release snapshot, regenerated before every landing dev/build run
+landing/generated/
+
+# live example demos, built from the published packages by `pnpm --filter @crossbind/landing demos`
+landing/public/examples/
