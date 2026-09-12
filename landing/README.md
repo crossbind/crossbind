@@ -11,6 +11,7 @@ pnpm --filter @crossbind/landing dev      # http://localhost:5173
 pnpm --filter @crossbind/landing build    # → landing/dist
 pnpm --filter @crossbind/landing preview
 pnpm --filter @crossbind/landing demos    # build the /examples/ live demos from the published packages
+pnpm --filter @crossbind/landing check:deploy   # everything deploy does except the upload
 pnpm --filter @crossbind/landing deploy   # build, verify the release snapshot and demos, wrangler pages deploy
 ```
 
