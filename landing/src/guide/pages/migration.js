@@ -47,6 +47,13 @@ export default {
             text: `cpp.js 1.0.4, from January 2025, was the last 1.x release. crossbind ${RELEASE.version} is current${suffix ? `, on the npm \`${RELEASE.distTag}\` tag` : ''}; the [changelog](/changelog/) covers both lines.`,
         },
 
+        {
+            type: 'callout',
+            tone: 'note',
+            title: 'Coming from a cpp.js 2.0 beta?',
+            text: 'The 2.0 betas published under the cpp.js name already had the config shape, CLI flags and runtime API described here; what changes for you is the renames in the table: package names, the config file name, the CLI name and the native identifiers. The last cpp.js documentation stays online at [cpp.js.org](https://cpp.js.org/).',
+        },
+
         { type: 'h2', id: 'requirements', text: '1. Requirements' },
         {
             type: 'p',
