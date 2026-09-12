@@ -1,11 +1,18 @@
 # cpp.js.org
 
 The js.org subdomain cpp.js.org serves this branch through GitHub Pages. cpp.js became crossbind;
-this branch keeps the last cpp.js documentation online exactly as it was last published, with a
-notice at the top of every page that links, on the reader's click, to the same path on
+this branch keeps the last cpp.js documentation online, rebuilt once from its source with an
+announcement bar on every page. The bar links, on the reader's click only, to the same path on
 https://crossbind.dev (whose `_redirects` maps the old routes to the new pages), to the migration
-guide and to the archived 1.x documentation at https://v1.crossbind.dev.
+guide and to the archived 1.x documentation at https://v1.crossbind.dev. js.org allows no
+automatic redirects away from its domain and no placeholder pages, so nothing here redirects.
 
-js.org does not allow automatic redirects away from the js.org domain and requires substantive
-content, so there is no meta refresh and no script redirect here, only links. Nothing on this
-branch is rebuilt; the notice was added to the published HTML by a small script.
+## How it was produced
+
+- Source: the `website/` Docusaurus project at commit `3dbdf2e9` (16 August 2026), the commit the
+  previous deployment of this branch was built from.
+- Changes before building, kept in `cppjs-notice.patch`: the announcement bar in
+  `docusaurus.config.js`, its size and colours in `src/css/custom.css`, and `static/notice.js`,
+  which points the bar's first link at the same path on crossbind.dev when it is clicked.
+- Build: `pnpm install --frozen-lockfile --filter ./website` and `pnpm run build` in `website/`,
+  with Node.js 25.8 and pnpm 10, on 12 September 2026. Nothing here is rebuilt afterwards.

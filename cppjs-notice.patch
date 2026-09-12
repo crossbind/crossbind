@@ -1,0 +1,76 @@
+diff --git a/website/docusaurus.config.js b/website/docusaurus.config.js
+index 40e5caff..d9cff50f 100644
+--- a/website/docusaurus.config.js
++++ b/website/docusaurus.config.js
+@@ -77,6 +77,9 @@ const config = {
+         ],
+     ],
+ 
++    // Points the bar's link at the same path on the new site when it is clicked.
++    scripts: [{ src: '/notice.js', defer: true }],
++
+     themeConfig:
+         /** @type {import('@docusaurus/preset-classic').ThemeConfig} */
+         ({
+@@ -84,6 +87,15 @@ const config = {
+             colorMode: {
+                 defaultMode: 'dark',
+             },
++            // cpp.js became crossbind; this site stays online as the last cpp.js documentation. The
++            // bar links out on the reader's click only: js.org allows no automatic redirects.
++            announcementBar: {
++                id: 'cppjs-is-crossbind',
++                content: '&#9888;&#xFE0E; cpp.js is now <b>crossbind</b>. This site is the last cpp.js documentation, kept as it was. <a id="cppjs-new-site" href="https://crossbind.dev/">This page on the new site</a> &middot; <a href="https://crossbind.dev/guide/migration/">Migration guide</a> &middot; <a href="https://v1.crossbind.dev/">cpp.js 1.x docs</a>',
++                backgroundColor: '#f5b524',
++                textColor: '#14110a',
++                isCloseable: false,
++            },
+             image: 'img/cppjs-social-card.png',
+             navbar: {
+                 title: 'Cpp.js',
+diff --git a/website/src/css/custom.css b/website/src/css/custom.css
+index 30066cd8..393193aa 100644
+--- a/website/src/css/custom.css
++++ b/website/src/css/custom.css
+@@ -116,4 +116,26 @@ div.language-shell span.token-line::before {
+     content: '$';
+     padding: 0 10px 0 0;
+     color: orange;
+-}
+\ No newline at end of file
++}
++
++/* Announcement bar: taller and bolder than the theme default so it is read before the page. */
++:root {
++    --docusaurus-announcement-bar-height: 48px;
++}
++
++div[class*='announcementBar_'] {
++    height: auto;
++    padding: 11px 16px;
++    font-size: 16px;
++    line-height: 1.4;
++    font-weight: 600;
++    letter-spacing: 0.1px;
++    border-bottom: 2px solid #c98b00;
++}
++
++div[class*='announcementBar_'] a {
++    color: inherit;
++    font-weight: 800;
++    text-decoration: underline;
++    text-underline-offset: 3px;
++}
+diff --git a/website/static/notice.js b/website/static/notice.js
+new file mode 100644
+index 00000000..171abb99
+--- /dev/null
++++ b/website/static/notice.js
+@@ -0,0 +1,7 @@
++// The announcement bar is one string for every page; this resolves its first link to the same
++// path on crossbind.dev at click time, so it follows the reader through client-side navigation.
++// The trailing slash is dropped because the new site's redirect rules are written without one.
++document.addEventListener('click', (event) => {
++    const link = event.target.closest('#cppjs-new-site');
++    if (link) link.href = `https://crossbind.dev${location.pathname.replace(/\/+$/, '')}`;
++});
