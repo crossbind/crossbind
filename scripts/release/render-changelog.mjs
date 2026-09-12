@@ -85,7 +85,8 @@ export function splitChangelog(markdown) {
     const sections = [];
     let current = null;
     for (const line of markdown.replaceAll('\r\n', '\n').split('\n')) {
-        if (/^<!--.*-->\s*$/.test(line)) continue;
+        const trimmed = line.trimEnd();
+        if (trimmed.startsWith('<!--') && trimmed.endsWith('-->')) continue;
         const heading = HEADING.exec(line);
         if (heading && VERSION.test(heading[1])) {
             current = { version: heading[1], lines: [] };

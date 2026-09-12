@@ -88,7 +88,7 @@ export async function readPortsTree(root = REPOSITORY_ROOT) {
 export function createRegistryClient({ fetchImplementation = fetch, registry = REGISTRY_URL, timeoutMs = REGISTRY_TIMEOUT_MS } = {}) {
     return {
         async distTags(packageName) {
-            const response = await fetchImplementation(`${registry}/${packageName.replace('/', '%2f')}`, {
+            const response = await fetchImplementation(`${registry}/${packageName.replaceAll('/', '%2f')}`, {
                 headers: { accept: 'application/vnd.npm.install-v1+json' },
                 signal: AbortSignal.timeout(timeoutMs),
             });

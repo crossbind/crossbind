@@ -80,6 +80,19 @@ test('the registry client treats 404 as unpublished and other failures as errors
     await assert.rejects(broken.distTags('@crossbind/port-x'), /HTTP 503/);
 });
 
+test('the registry client requests a scoped package by its escaped name', async () => {
+    const requested = [];
+    const client = createRegistryClient({
+        fetchImplementation: async (url) => {
+            requested.push(url);
+            return { ok: true, status: 200, json: async () => ({}) };
+        },
+        registry: 'https://registry.example',
+    });
+    await client.distTags('@crossbind/port-x');
+    assert.deepEqual(requested, ['https://registry.example/@crossbind%2fport-x']);
+});
+
 test('a fixture build is marked as such and renders deterministically', async () => {
     const fixture = { npm: { packages: {} } };
     const catalog = await buildPortsCatalog({ distTag: 'beta', fixture, log: silent });
