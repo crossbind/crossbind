@@ -1,5 +1,5 @@
 diff --git a/website/docusaurus.config.js b/website/docusaurus.config.js
-index 40e5caff..d9cff50f 100644
+index 40e5caff..6eff7b63 100644
 --- a/website/docusaurus.config.js
 +++ b/website/docusaurus.config.js
 @@ -77,6 +77,9 @@ const config = {
@@ -20,7 +20,7 @@ index 40e5caff..d9cff50f 100644
 +            // bar links out on the reader's click only: js.org allows no automatic redirects.
 +            announcementBar: {
 +                id: 'cppjs-is-crossbind',
-+                content: '&#9888;&#xFE0E; cpp.js is now <b>crossbind</b>. This site is the last cpp.js documentation, kept as it was. <a id="cppjs-new-site" href="https://crossbind.dev/">This page on the new site</a> &middot; <a href="https://crossbind.dev/guide/migration/">Migration guide</a> &middot; <a href="https://v1.crossbind.dev/">cpp.js 1.x docs</a>',
++                content: '&#9888;&#xFE0E; cpp.js is now <a href="https://crossbind.dev/"><b>crossbind</b></a>. This site is the last cpp.js documentation, kept as it was. <a id="cppjs-new-site" href="https://crossbind.dev/">This page on the new site</a> &middot; <a href="https://crossbind.dev/guide/migration/">Migration guide</a>',
 +                backgroundColor: '#f5b524',
 +                textColor: '#14110a',
 +                isCloseable: false,

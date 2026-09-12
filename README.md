@@ -2,10 +2,10 @@
 
 The js.org subdomain cpp.js.org serves this branch through GitHub Pages. cpp.js became crossbind;
 this branch keeps the last cpp.js documentation online, rebuilt once from its source with an
-announcement bar on every page. The bar links, on the reader's click only, to the same path on
-https://crossbind.dev (whose `_redirects` maps the old routes to the new pages), to the migration
-guide and to the archived 1.x documentation at https://v1.crossbind.dev. js.org allows no
-automatic redirects away from its domain and no placeholder pages, so nothing here redirects.
+announcement bar on every page. The bar links, on the reader's click only, to crossbind.dev, to the
+same path there (its `_redirects` maps the old routes to the new pages) and to the migration guide.
+js.org allows no automatic redirects away from its domain and no placeholder pages, so nothing
+here redirects. The archived 1.x documentation lives at https://v1.crossbind.dev.
 
 ## How it was produced
 
