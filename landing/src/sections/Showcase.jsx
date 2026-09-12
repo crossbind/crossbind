@@ -1,9 +1,7 @@
 import { Pill } from '../components/ui.jsx';
-import {
-    COMMUNITY, LIBRARIES_URL, REPO_URL, SHOWCASE, SHOWCASE_COUNT,
-} from '../data.js';
+import { LIBRARIES_URL, SHOWCASE, SHOWCASE_COUNT } from '../data.js';
 
-function Libraries({ tokens }) {
+export default function Showcase({ tokens }) {
     return (
         <section style={{ padding: '40px var(--content-x) 80px' }}>
             <div style={{ display: 'flex', alignItems: 'baseline', flexWrap: 'wrap', gap: 16, marginBottom: 30 }}>
@@ -46,68 +44,5 @@ function Libraries({ tokens }) {
                 ))}
             </div>
         </section>
-    );
-}
-
-function Community({ tokens }) {
-    return (
-        <div>
-            <Pill tokens={tokens} style={{ marginBottom: 14 }}>COMMUNITY</Pill>
-            <h2 style={{ fontSize: 32, margin: '0 0 20px', fontWeight: 600, letterSpacing: -1, color: tokens.text }}>
-                Build it together
-            </h2>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                {COMMUNITY.map((item) => {
-                    const tint = tokens.accent;
-                    return (
-                        <a
-                            key={item.label}
-                            href={REPO_URL}
-                            style={{
-                                display: 'flex',
-                                alignItems: 'center',
-                                gap: 14,
-                                padding: '14px 18px',
-                                background: tokens.panel,
-                                border: `1px solid ${tokens.border}`,
-                                borderRadius: 12,
-                                color: tokens.text,
-                            }}
-                        >
-                            <div style={{
-                                width: 36,
-                                height: 36,
-                                borderRadius: 9,
-                                background: `${tint}26`,
-                                display: 'grid',
-                                placeItems: 'center',
-                                color: tint,
-                                fontSize: 14,
-                                fontWeight: 600,
-                            }}
-                            >
-                                {item.label[0]}
-                            </div>
-                            <div style={{ flex: 1 }}>
-                                <div style={{ fontSize: 14, fontWeight: 500 }}>{item.label}</div>
-                                <div style={{ color: tokens.textMuted, fontSize: 12 }}>{item.meta}</div>
-                            </div>
-                            <span style={{ color: tokens.textMuted, fontSize: 12, fontFamily: tokens.mono }}>{item.count}</span>
-                        </a>
-                    );
-                })}
-            </div>
-        </div>
-    );
-}
-
-export default function Showcase({ tokens }) {
-    return (
-        <>
-            <Libraries tokens={tokens} />
-            <section id="community" style={{ padding: '40px var(--content-x) 80px' }}>
-                <Community tokens={tokens} />
-            </section>
-        </>
     );
 }
