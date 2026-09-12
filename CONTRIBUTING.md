@@ -137,7 +137,8 @@ a temporary credentials-free project and verifies its CLI, ESM entry point and c
 table before those bytes can be published.
 
 Every new release of the canonical `crossbind` package needs one human-authored
-`releases/crossbind/<version>.md`; other train packages do not duplicate that product changelog.
+`releases/crossbind/<version>.md`, followed by `pnpm changelog`, which renders it into `CHANGELOG.md`;
+other train packages do not duplicate that product changelog.
 Maintainers use the protected workflow only after the release commit is reviewed and green. The
 full beta, RC, stable, Trusted Publishing and recovery procedure is in
 [`docs/playbooks/releasing-crossbind.md`](docs/playbooks/releasing-crossbind.md).

@@ -1,5 +1,81 @@
 # crossbind
 
+<!-- release-notes:start -->
+<!-- Generated from releases/crossbind/<version>.md by scripts/release/render-changelog.mjs. Edit the note, then run `pnpm changelog`. -->
+
+## 2.0.0-beta.56
+
+Hardens Crossbind's package release chain and refreshes its supported build toolchains.
+
+### Highlights
+
+- Moves the repository and published CLI contract to Node.js 24.
+- Refreshes the supported Rust, Emscripten, WASI SDK and Android build toolchains.
+- Introduces an exact-artifact npm release train with Trusted Publishing, provenance verification
+  and version-specific GitHub Releases for `crossbind`.
+- Adds automated dependency, native-source and published toolchain-image security monitoring.
+
+### Breaking changes
+
+- Node.js 24 or newer is now required by `crossbind` and `create-crossbind`.
+
+### Migration notes
+
+- Upgrade development and CI environments to Node.js 24 before installing this beta.
+- Continue installing prerelease packages through the npm `beta` dist-tag.
+
+### Fixes
+
+- Toolchain image selection now reads one canonical, digest-pinned table shipped with the CLI.
+- Package and image release workflows fail closed on integrity, provenance, tag or asset conflicts.
+
+### Known limitations
+
+- Beta 55 published only the `crossbind` CLI: the train stopped when the pinned npm 12 CLI
+  changed its `view --json` output shape and the registry verification never matched. Beta 56
+  republishes the complete package set; do not pair `crossbind@2.0.0-beta.55` with other
+  packages from that train.
+
+- This remains a prerelease. Stable compatibility guarantees begin with the first `2.0.0` stable
+  train.
+- Native toolchain images remain a separate GHCR release stream and are identified by exact image
+  digests rather than npm package versions.
+
+## 2.0.0-beta.55
+
+Hardens Crossbind's package release chain and refreshes its supported build toolchains.
+
+### Highlights
+
+- Moves the repository and published CLI contract to Node.js 24.
+- Refreshes the supported Rust, Emscripten, WASI SDK and Android build toolchains.
+- Introduces an exact-artifact npm release train with Trusted Publishing, provenance verification
+  and version-specific GitHub Releases for `crossbind`.
+- Adds automated dependency, native-source and published toolchain-image security monitoring.
+
+### Breaking changes
+
+- Node.js 24 or newer is now required by `crossbind` and `create-crossbind`.
+
+### Migration notes
+
+- Upgrade development and CI environments to Node.js 24 before installing this beta.
+- Continue installing prerelease packages through the npm `beta` dist-tag.
+
+### Fixes
+
+- Toolchain image selection now reads one canonical, digest-pinned table shipped with the CLI.
+- Package and image release workflows fail closed on integrity, provenance, tag or asset conflicts.
+
+### Known limitations
+
+- This remains a prerelease. Stable compatibility guarantees begin with the first `2.0.0` stable
+  train.
+- Native toolchain images remain a separate GHCR release stream and are identified by exact image
+  digests rather than npm package versions.
+
+<!-- release-notes:end -->
+
 ## 2.0.0-beta.54
 
 Two packages move: `@crossbind/plugin-react-native` and `create-crossbind`, which scaffolds it.
@@ -115,3 +191,19 @@ move together.
 
 The image family (1.0.2) and the npm packages (2.0.0-beta.50) are versioned separately on purpose:
 the toolchain moves when its compilers move, the packages move when their code does.
+
+## 1.0.4
+
+Published as `cpp.js@1.0.4`, the package's previous name, on 19 January 2025. 1.0.1 and 1.0.2 shipped
+in the two days before it without release notes.
+
+### Patch changes
+
+- Works around a race condition with TurboModules on Android.
+- Includes `prebuilt/*/{config.general.name}/*.h` in the dependency header search paths.
+
+## 1.0.0
+
+🚀 first stable release. Published as `cpp.js@1.0.0` on 17 January 2025, after the 1.0.0 alpha and beta
+series that ran from August 2024 to January 2025; the 0.x line before it, from 0.1.0 in January 2023 to
+0.6.1, was published under the same name.
