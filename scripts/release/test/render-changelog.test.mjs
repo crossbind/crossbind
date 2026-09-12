@@ -96,6 +96,11 @@ test('splitting returns every version section as plain Markdown, markers dropped
     assert.ok(!sections.some((section) => section.body.includes('<!--')));
 });
 
+test('splitting drops whole-line comments and keeps lines that only contain one', () => {
+    const [section] = splitChangelog('## 1.0.0\n<!-- dropped -->   \nkept <!-- inline --> text\n');
+    assert.equal(section.body, 'kept <!-- inline --> text');
+});
+
 test('the check passes on a rendered file and fails once a note changes', () => {
     const directory = notesDirectory(['2.0.0-beta.56']);
     const file = path.join(directory, 'CHANGELOG.md');

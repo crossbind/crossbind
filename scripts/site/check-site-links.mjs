@@ -45,8 +45,10 @@ function routeOf(file) {
     return relative.endsWith('index.html') ? `/${relative.slice(0, -'index.html'.length)}` : `/${relative}`;
 }
 
-function decode(value) {
-    return value.replaceAll('&amp;', '&').replaceAll('&#39;', "'").replaceAll('&quot;', '"');
+const ENTITIES = { '&amp;': '&', '&#39;': "'", '&quot;': '"' };
+
+export function decode(value) {
+    return value.replace(/&(?:amp|#39|quot);/g, (entity) => ENTITIES[entity]);
 }
 
 export function checkSite(dist = DIST, { pageAnchors = new Map() } = {}) {
