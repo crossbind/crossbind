@@ -1,0 +1,51 @@
+name: deploy landing
+on:
+    workflow_dispatch:
+    push:
+        branches:
+            - main
+    # A published release changes what the site shows without touching the repository: the build
+    # resolves its snapshot from live npm and GitHub data, so a release has to redeploy on its own.
+    workflow_run:
+        workflows:
+            - Release npm package train
+        types:
+            - completed
+
+permissions:
+    contents: read
+
+concurrency:
+    # Unlike the release trains, a superseded deploy has nothing to contribute: the run that
+    # replaces it publishes newer content to the same place.
+    group: crossbind-landing-deploy
+    cancel-in-progress: true
+
+jobs:
+    # No path filter: the site reads CHANGELOG.md, releases/, ports metadata, scripts/site and
+    # landing/, and resolves the rest from live npm, so any filter narrow enough to be useful
+    # would miss a source.
+    deploy:
+        # A failed or cancelled release must not reach Cloudflare.
+        if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
+        runs-on: ubuntu-latest
+        environment: pages-deploy
+        steps:
+            - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+            - name: Install pnpm
+              uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
+            - name: Use Node.js
+              uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+              with:
+                  node-version-file: .nvmrc
+                  cache: 'pnpm'
+            - name: Install dependencies
+              run: pnpm install
+            # The demos are gitignored and the deploy gate refuses a snapshot without them.
+            - name: Build the live example demos
+              run: pnpm --filter @crossbind/landing run demos
+            - name: Build, gate and deploy
+              run: pnpm --filter @crossbind/landing run deploy
+              env:
+                  CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+                  CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
