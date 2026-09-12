@@ -46,8 +46,9 @@ export const LLMS_URL = '/llms.txt';
 // Examples is in the navbar because three examples are proof-complete (src/pages/examples.js);
 // set it to null again if that page ever loses an entry.
 export const EXAMPLES_URL = '/examples/';
-// cpp.js 1.x documentation, still online; linked from the version menu and the migration guide.
-export const V1_DOCS_URL = 'https://cpp.js.org';
+// The frozen cpp.js 1.x documentation (branch archive/v1-docs), linked from the version menu and
+// the migration guide.
+export const V1_DOCS_URL = 'https://v1.crossbind.dev';
 // The `@beta` / `@next` suffix follows the resolved release channel, so a beta-era visitor never
 // installs whatever `latest` happens to point at. Stable drops the suffix.
 export const CREATE_COMMAND = `npm create crossbind${RELEASE.distTagSuffix}`;

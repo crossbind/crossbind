@@ -67,3 +67,14 @@
 # Anything else under the old docs root
 /docs /guide/ 301
 /docs/* /guide/ 301
+
+# Sub-pages of the cpp.js.org landing and its sample blog, which redirects here path for path.
+/bind-types /guide/bindings/ 301
+/how-it-works /guide/architecture/ 301
+/integrations /guide/bundlers/ 301
+/react-native /guide/runtimes/ 301
+/web /guide/quick-start/ 301
+/seamless-integration /guide/quick-start/ 301
+/showcase /ports/ 301
+/changelogs /changelog/ 301
+/blog/* / 301
