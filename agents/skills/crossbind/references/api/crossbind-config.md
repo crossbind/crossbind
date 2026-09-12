@@ -25,9 +25,11 @@ export default {
   // Other crossbind packages this project depends on
   // ─────────────────────────────────────────────────────────────
   dependencies: [],
-    // Array of crossbind.config.js values, imported from @crossbind/port-*.
+    // Array of crossbind.config.js values, imported from platform variants such as
+    // @crossbind/port-*-wasm, -android, -ios or -wasi. The meta package (@crossbind/port-*)
+    // carries no config; list one variant per platform you build.
     // Example:
-    //   import gdal from '@crossbind/port-gdal/crossbind.config.js'
+    //   import gdal from '@crossbind/port-gdal-wasm/crossbind.config.js'
     //   dependencies: [gdal]
     //
     // Transitive deps are automatically flattened into config.allDependencies.
@@ -233,7 +235,7 @@ This means: **always set `paths.config: import.meta.url`** at minimum. Without i
 
 ```js
 // crossbind.config.js
-import gdal from '@crossbind/port-gdal/crossbind.config.js'
+import gdal from '@crossbind/port-gdal-wasm/crossbind.config.js'
 
 export default {
   general: { name: 'my-geo-app' },
@@ -245,7 +247,7 @@ export default {
 ### Multithread browser app
 
 ```js
-import gdal from '@crossbind/port-gdal/crossbind.config.js'
+import gdal from '@crossbind/port-gdal-wasm/crossbind.config.js'
 
 export default {
   general: { name: 'my-fast-app' },
