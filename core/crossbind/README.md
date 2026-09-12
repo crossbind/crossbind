@@ -345,4 +345,4 @@ pull-request process.
 crossbind is available under the
 [MIT License](https://github.com/crossbind/crossbind/blob/main/LICENSE).
 
-Copyright © 2026 Buğra Sarı
+Copyright © 2026 Buğra Sarı and crossbind contributors

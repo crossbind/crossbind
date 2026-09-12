@@ -32,11 +32,9 @@ export default function Closing({ tokens }) {
         }}
         >
             <span>
-                crossbind · MIT ·
-                {' '}
-                {/* Below 375px this line wraps; nowrap forces the break onto the separator
-                    instead of orphaning the name from the year. */}
-                <span style={{ whiteSpace: 'nowrap' }}>Copyright © 2026 Buğra Sarı</span>
+                {/* Keeps the name with the year; the line breaks at "and" instead. */}
+                <span style={{ whiteSpace: 'nowrap' }}>© 2026 Buğra Sarı</span>
+                {' and crossbind contributors'}
             </span>
             <nav aria-label="Footer" style={{ display: 'flex', flexWrap: 'wrap', gap: 18 }}>
                 {LINKS.map((link) => (
