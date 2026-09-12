@@ -41,6 +41,10 @@ jobs:
                   cache: 'pnpm'
             - name: Install dependencies
               run: pnpm install
+            # The demo build opens every template in a real browser to check that its WebAssembly
+            # module answers; a runner has no browser until Playwright downloads one.
+            - name: Install the smoke-test browser
+              run: pnpm exec playwright install --with-deps chromium
             # The demos are gitignored and the deploy gate refuses a snapshot without them.
             - name: Build the live example demos
               run: pnpm --filter @crossbind/landing run demos
