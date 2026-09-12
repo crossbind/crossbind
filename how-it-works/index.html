@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="en" dir="ltr" class="mdx-wrapper mdx-page plugin-pages plugin-id-default" data-has-hydrated="false">
+<head>
+<meta charset="UTF-8">
+<meta name="generator" content="Docusaurus v3.7.0">
+<title data-rh="true">How it works? | Cpp.js</title><meta data-rh="true" name="viewport" content="width=device-width,initial-scale=1"><meta data-rh="true" name="twitter:card" content="summary_large_image"><meta data-rh="true" property="og:image" content="https://v1.crossbind.dev/img/cppjs-social-card.png"><meta data-rh="true" name="twitter:image" content="https://v1.crossbind.dev/img/cppjs-social-card.png"><meta data-rh="true" property="og:url" content="https://v1.crossbind.dev/how-it-works"><meta data-rh="true" property="og:locale" content="en"><meta data-rh="true" name="docusaurus_locale" content="en"><meta data-rh="true" name="docusaurus_tag" content="default"><meta data-rh="true" name="docsearch:language" content="en"><meta data-rh="true" name="docsearch:docusaurus_tag" content="default"><meta data-rh="true" name="robots" content="noindex"><meta data-rh="true" property="og:title" content="How it works? | Cpp.js"><meta data-rh="true" name="description" content="Docker Image"><meta data-rh="true" property="og:description" content="Docker Image"><link data-rh="true" rel="icon" href="/img/favicon.ico"><link data-rh="true" rel="canonical" href="https://v1.crossbind.dev/how-it-works"><link data-rh="true" rel="alternate" href="https://v1.crossbind.dev/how-it-works" hreflang="en"><link data-rh="true" rel="alternate" href="https://v1.crossbind.dev/how-it-works" hreflang="x-default"><link rel="alternate" type="application/rss+xml" href="/blog/rss.xml" title="Cpp.js RSS Feed">
+<link rel="alternate" type="application/atom+xml" href="/blog/atom.xml" title="Cpp.js Atom Feed"><link rel="stylesheet" href="/assets/css/styles.ca18faba.css">
+<script src="/assets/js/runtime~main.1ec5ae2b.js" defer="defer"></script>
+<script src="/assets/js/main.e68eb6dc.js" defer="defer"></script>
+</head>
+<body class="navigation-with-keyboard">
+<script>!function(){function t(t){document.documentElement.setAttribute("data-theme",t)}var e=function(){try{return new URLSearchParams(window.location.search).get("docusaurus-theme")}catch(t){}}()||function(){try{return window.localStorage.getItem("theme")}catch(t){}}();t(null!==e?e:"dark")}(),function(){try{const a=new URLSearchParams(window.location.search).entries();for(var[t,e]of a)if(t.startsWith("docusaurus-data-")){var n=t.replace("docusaurus-data-","data-");document.documentElement.setAttribute(n,e)}}catch(t){}}(),document.documentElement.setAttribute("data-announcement-bar-initially-dismissed",function(){try{return"true"===localStorage.getItem("docusaurus.announcement.dismiss")}catch(t){}return!1}())</script><div id="__docusaurus"><link rel="preload" as="image" href="/img/logo.png"><div role="region" aria-label="Skip to main content"><a class="skipToContent_zQjr" href="#__docusaurus_skipToContent_fallback">Skip to main content</a></div><div class="announcementBar_x26b" style="background-color:#f5b524;color:#14110a" role="banner"><div class="content_qAA3 announcementBarContent_QIJB">&#9888;&#xFE0E; <b>Archived documentation of cpp.js 1.x</b>, the previous name of crossbind. Go to the current docs at <a href="https://crossbind.dev/">crossbind.dev</a> or read the <a href="https://crossbind.dev/guide/migration/">migration guide</a>.</div></div><nav aria-label="Main" class="navbar navbar--fixed-top"><div class="navbar__inner"><div class="navbar__items"><button aria-label="Toggle navigation bar" aria-expanded="false" class="navbar__toggle clean-btn" type="button"><svg width="30" height="30" viewBox="0 0 30 30" aria-hidden="true"><path stroke="currentColor" stroke-linecap="round" stroke-miterlimit="10" stroke-width="2" d="M4 7h22M4 15h22M4 23h22"></path></svg></button><a class="navbar__brand" href="/"><div class="navbar__logo"><img src="/img/logo.png" alt="Cpp.js Logo" class="themedComponent_VA0e themedComponent--light_zrzu"><img src="/img/logo.png" alt="Cpp.js Logo" class="themedComponent_VA0e themedComponent--dark_eEdc"></div><b class="navbar__title text--truncate">Cpp.js</b></a><a class="navbar__item navbar__link" href="/docs/guide/getting-started/introduction">Guide</a><a class="navbar__item navbar__link" href="/docs/api/cpp-bindings/overview">API</a><a class="navbar__item navbar__link" href="/docs/package/package/showcase">Showcase &amp; Packages</a></div><div class="navbar__items navbar__items--right"><a class="navbar__item navbar__link" href="/docs/changelog/core/cppjs">Releases</a><a href="https://github.com/bugra9/cpp.js" target="_blank" rel="noopener noreferrer" class="navbar__item navbar__link">GitHub<svg width="13.5" height="13.5" aria-hidden="true" viewBox="0 0 24 24" class="iconExternalLink_do6K"><path fill="currentColor" d="M21 13v10h-21v-19h12v2h-10v15h17v-8h2zm3-12h-10.988l4.035 4-6.977 7.07 2.828 2.828 6.977-7.07 4.125 4.172v-11z"></path></svg></a><div class="toggle_emFt colorModeToggle_uei_"><button class="clean-btn toggleButton_Mhm6 toggleButtonDisabled_c5vJ" type="button" disabled="" title="Switch between dark and light mode (currently dark mode)" aria-label="Switch between dark and light mode (currently dark mode)" aria-live="polite" aria-pressed="true"><svg viewBox="0 0 24 24" width="24" height="24" class="lightToggleIcon_EQRz"><path fill="currentColor" d="M12,9c1.65,0,3,1.35,3,3s-1.35,3-3,3s-3-1.35-3-3S10.35,9,12,9 M12,7c-2.76,0-5,2.24-5,5s2.24,5,5,5s5-2.24,5-5 S14.76,7,12,7L12,7z M2,13l2,0c0.55,0,1-0.45,1-1s-0.45-1-1-1l-2,0c-0.55,0-1,0.45-1,1S1.45,13,2,13z M20,13l2,0c0.55,0,1-0.45,1-1 s-0.45-1-1-1l-2,0c-0.55,0-1,0.45-1,1S19.45,13,20,13z M11,2v2c0,0.55,0.45,1,1,1s1-0.45,1-1V2c0-0.55-0.45-1-1-1S11,1.45,11,2z M11,20v2c0,0.55,0.45,1,1,1s1-0.45,1-1v-2c0-0.55-0.45-1-1-1C11.45,19,11,19.45,11,20z M5.99,4.58c-0.39-0.39-1.03-0.39-1.41,0 c-0.39,0.39-0.39,1.03,0,1.41l1.06,1.06c0.39,0.39,1.03,0.39,1.41,0s0.39-1.03,0-1.41L5.99,4.58z M18.36,16.95 c-0.39-0.39-1.03-0.39-1.41,0c-0.39,0.39-0.39,1.03,0,1.41l1.06,1.06c0.39,0.39,1.03,0.39,1.41,0c0.39-0.39,0.39-1.03,0-1.41 L18.36,16.95z M19.42,5.99c0.39-0.39,0.39-1.03,0-1.41c-0.39-0.39-1.03-0.39-1.41,0l-1.06,1.06c-0.39,0.39-0.39,1.03,0,1.41 s1.03,0.39,1.41,0L19.42,5.99z M7.05,18.36c0.39-0.39,0.39-1.03,0-1.41c-0.39-0.39-1.03-0.39-1.41,0l-1.06,1.06 c-0.39,0.39-0.39,1.03,0,1.41s1.03,0.39,1.41,0L7.05,18.36z"></path></svg><svg viewBox="0 0 24 24" width="24" height="24" class="darkToggleIcon_Ob8a"><path fill="currentColor" d="M9.37,5.51C9.19,6.15,9.1,6.82,9.1,7.5c0,4.08,3.32,7.4,7.4,7.4c0.68,0,1.35-0.09,1.99-0.27C17.45,17.19,14.93,19,12,19 c-3.86,0-7-3.14-7-7C5,9.07,6.81,6.55,9.37,5.51z M12,3c-4.97,0-9,4.03-9,9s4.03,9,9,9s9-4.03,9-9c0-0.46-0.04-0.92-0.1-1.36 c-0.98,1.37-2.58,2.26-4.4,2.26c-2.98,0-5.4-2.42-5.4-5.4c0-1.81,0.89-3.42,2.26-4.4C12.92,3.04,12.46,3,12,3L12,3z"></path></svg></button></div><div class="navbarSearchContainer_YOeh"></div></div></div><div role="presentation" class="navbar-sidebar__backdrop"></div></nav><div id="__docusaurus_skipToContent_fallback" class="main-wrapper mainWrapper_xyaw"><main class="container container--fluid margin-vert--lg"><div class="row mdxPageWrapper_z7wd"><div class="col col--8"><article><header><h1>How it works?</h1></header>
+<h2 class="anchor anchorWithStickyNavbar_jUSz" id="docker-image">Docker Image<a href="#docker-image" class="hash-link" aria-label="Direct link to Docker Image" title="Direct link to Docker Image">​</a></h2>
+<p>Cpp.js downloads the bugra9/cpp.js docker image before running. This docker image contains Emscripten, Swig, Cmake and patches prepared for them.
+Thus, the necessary applications can be accessed through this image.</p>
+<div class="theme-admonition theme-admonition-note admonition_ApWc alert alert--secondary"><div class="admonitionHeading_RorV"><span class="admonitionIcon_fI7c"><svg viewBox="0 0 14 16"><path fill-rule="evenodd" d="M6.3 5.69a.942.942 0 0 1-.28-.7c0-.28.09-.52.28-.7.19-.18.42-.28.7-.28.28 0 .52.09.7.28.18.19.28.42.28.7 0 .28-.09.52-.28.7a1 1 0 0 1-.7.3c-.28 0-.52-.11-.7-.3zM8 7.99c-.02-.25-.11-.48-.31-.69-.2-.19-.42-.3-.69-.31H6c-.27.02-.48.13-.69.31-.2.2-.3.44-.31.69h1v3c.02.27.11.5.31.69.2.2.42.31.69.31h1c.27 0 .48-.11.69-.31.2-.19.3-.42.31-.69H8V7.98v.01zM7 2.3c-3.14 0-5.7 2.54-5.7 5.68 0 3.14 2.56 5.7 5.7 5.7s5.7-2.55 5.7-5.7c0-3.15-2.56-5.69-5.7-5.69v.01zM7 .98c3.86 0 7 3.14 7 7s-3.14 7-7 7-7-3.12-7-7 3.14-7 7-7z"></path></svg></span>Links</div><div class="admonitionContent_V6kd"><ul>
+<li><strong>Docker Image:</strong> <a href="https://hub.docker.com/r/bugra9/cpp.js" target="_blank" rel="noopener noreferrer">https://hub.docker.com/r/bugra9/cpp.js</a></li>
+<li><strong>Dockerfile:</strong> <a href="https://github.com/bugra9/cpp.js/blob/main/packages/cppjs-util-docker/Dockerfile" target="_blank" rel="noopener noreferrer">https://github.com/bugra9/cpp.js/blob/main/packages/cppjs-util-docker/Dockerfile</a></li>
+</ul></div></div>
+<br>
+<br>
+<h2 class="anchor anchorWithStickyNavbar_jUSz" id="browser">Browser<a href="#browser" class="hash-link" aria-label="Direct link to Browser" title="Direct link to Browser">​</a></h2>
+<p>Cpp.js performs the binding process in the browser with bundler plugins. These plugins; webpack (cppjs-webpack-plugin, cppjs-loader), rollup (rollup-plugin-cppjs), vite (vite-plugin-cppjs).</p>
+<p>During import parsing, the plugins create the swig interface for the imported header files and change the import line to import cpp.js.</p>
+<p>During the bundle creation, bridge files are created for the swig interfaces and all codes are compiled to create wasm and js files in the dist directory.</p>
+<p>In development mode, wasm and js files are served from the temp directory.</p>
+<!-- -->
+<br>
+<div class="theme-admonition theme-admonition-note admonition_ApWc alert alert--secondary"><div class="admonitionHeading_RorV"><span class="admonitionIcon_fI7c"><svg viewBox="0 0 14 16"><path fill-rule="evenodd" d="M6.3 5.69a.942.942 0 0 1-.28-.7c0-.28.09-.52.28-.7.19-.18.42-.28.7-.28.28 0 .52.09.7.28.18.19.28.42.28.7 0 .28-.09.52-.28.7a1 1 0 0 1-.7.3c-.28 0-.52-.11-.7-.3zM8 7.99c-.02-.25-.11-.48-.31-.69-.2-.19-.42-.3-.69-.31H6c-.27.02-.48.13-.69.31-.2.2-.3.44-.31.69h1v3c.02.27.11.5.31.69.2.2.42.31.69.31h1c.27 0 .48-.11.69-.31.2-.19.3-.42.31-.69H8V7.98v.01zM7 2.3c-3.14 0-5.7 2.54-5.7 5.68 0 3.14 2.56 5.7 5.7 5.7s5.7-2.55 5.7-5.7c0-3.15-2.56-5.69-5.7-5.69v.01zM7 .98c3.86 0 7 3.14 7 7s-3.14 7-7 7-7-3.12-7-7 3.14-7 7-7z"></path></svg></span>Links</div><div class="admonitionContent_V6kd"><ul>
+<li>
+<p><strong>cppjs-webpack-plugin:</strong> <a href="https://github.com/bugra9/cpp.js/blob/main/packages/cppjs-plugin-webpack/index.js" target="_blank" rel="noopener noreferrer">https://github.com/bugra9/cpp.js/blob/main/packages/cppjs-plugin-webpack/index.js</a></p>
+</li>
+<li>
+<p><strong>cppjs-loader:</strong> <a href="https://github.com/bugra9/cpp.js/blob/main/packages/cppjs-plugin-webpack-loader/index.js" target="_blank" rel="noopener noreferrer">https://github.com/bugra9/cpp.js/blob/main/packages/cppjs-plugin-webpack-loader/index.js</a></p>
+</li>
+<li>
+<p><strong>rollup-plugin-cppjs:</strong> <a href="https://github.com/bugra9/cpp.js/blob/main/packages/cppjs-plugin-rollup/index.js" target="_blank" rel="noopener noreferrer">https://github.com/bugra9/cpp.js/blob/main/packages/cppjs-plugin-rollup/index.js</a></p>
+</li>
+<li>
+<p><strong>vite-plugin-cppjs:</strong> <a href="https://github.com/bugra9/cpp.js/blob/main/packages/cppjs-plugin-vite/index.js" target="_blank" rel="noopener noreferrer">https://github.com/bugra9/cpp.js/blob/main/packages/cppjs-plugin-vite/index.js</a></p>
+</li>
+</ul></div></div>
+<br>
+<br>
+<h2 class="anchor anchorWithStickyNavbar_jUSz" id="react-native">React Native<a href="#react-native" class="hash-link" aria-label="Direct link to React Native" title="Direct link to React Native">​</a></h2>
+<p>Cpp.js is designed to bind the same on all platforms. In browsers, embind is used for bind, so embind is also used on React Native.</p>
+<p>For this, Embind was moved from Emscripten to a separate package called react-native-embind and the webassembly integration was replaced with JSI.</p>
+<p>The react-native-cppjs package was created for easy integration with React native. This package runs a node script on build.gradle to get the cmake parameters in cpp.js and the path to the CMakeLists.txt file. Using these, the compilation process is performed on the android ecosystem.</p>
+<!-- -->
+<br>
+<div class="theme-admonition theme-admonition-note admonition_ApWc alert alert--secondary"><div class="admonitionHeading_RorV"><span class="admonitionIcon_fI7c"><svg viewBox="0 0 14 16"><path fill-rule="evenodd" d="M6.3 5.69a.942.942 0 0 1-.28-.7c0-.28.09-.52.28-.7.19-.18.42-.28.7-.28.28 0 .52.09.7.28.18.19.28.42.28.7 0 .28-.09.52-.28.7a1 1 0 0 1-.7.3c-.28 0-.52-.11-.7-.3zM8 7.99c-.02-.25-.11-.48-.31-.69-.2-.19-.42-.3-.69-.31H6c-.27.02-.48.13-.69.31-.2.2-.3.44-.31.69h1v3c.02.27.11.5.31.69.2.2.42.31.69.31h1c.27 0 .48-.11.69-.31.2-.19.3-.42.31-.69H8V7.98v.01zM7 2.3c-3.14 0-5.7 2.54-5.7 5.68 0 3.14 2.56 5.7 5.7 5.7s5.7-2.55 5.7-5.7c0-3.15-2.56-5.69-5.7-5.69v.01zM7 .98c3.86 0 7 3.14 7 7s-3.14 7-7 7-7-3.12-7-7 3.14-7 7-7z"></path></svg></span>Links</div><div class="admonitionContent_V6kd"><ul>
+<li><strong>react-native-embind:</strong> <a href="https://github.com/bugra9/react-native-embind/tree/main/react-native-embind" target="_blank" rel="noopener noreferrer">https://github.com/bugra9/react-native-embind/tree/main/react-native-embind</a></li>
+<li><strong>react-native-cppjs:</strong> <a href="https://github.com/bugra9/react-native-embind/tree/main/react-native-cppjs" target="_blank" rel="noopener noreferrer">https://github.com/bugra9/react-native-embind/tree/main/react-native-cppjs</a></li>
+<li><strong>react-native-sample:</strong> <a href="https://github.com/bugra9/cpp.js/tree/main/samples/cppjs-sample-mobile-reactnative" target="_blank" rel="noopener noreferrer">https://github.com/bugra9/cpp.js/tree/main/samples/cppjs-sample-mobile-reactnative</a></li>
+</ul></div></div>
+<br>
+<br>
+<h2 class="anchor anchorWithStickyNavbar_jUSz" id="cppjs-build">Cpp.js Build<a href="#cppjs-build" class="hash-link" aria-label="Direct link to Cpp.js Build" title="Direct link to Cpp.js Build">​</a></h2>
+<p>Cpp.js has a config system for customization. Most information such as path of native code, file extensions, dependencies are defined in the cppjs.config.js file in the project directory. If the file does not exist or attributes are not defined, it continues with default values.</p>
+<p>Cpp.js prepares the parameters needed for compilation, such as files to be compiled using the values in config.</p>
+<p>Compilation is done by giving CMakeLists.txt in cpp.js and the previously prepared parameters to cmake.</p>
+<p>As a final step, just for webassembly, the output library is converted into wasm and js files using Emscripten</p>
+<!-- -->
+<br>
+<div class="theme-admonition theme-admonition-note admonition_ApWc alert alert--secondary"><div class="admonitionHeading_RorV"><span class="admonitionIcon_fI7c"><svg viewBox="0 0 14 16"><path fill-rule="evenodd" d="M6.3 5.69a.942.942 0 0 1-.28-.7c0-.28.09-.52.28-.7.19-.18.42-.28.7-.28.28 0 .52.09.7.28.18.19.28.42.28.7 0 .28-.09.52-.28.7a1 1 0 0 1-.7.3c-.28 0-.52-.11-.7-.3zM8 7.99c-.02-.25-.11-.48-.31-.69-.2-.19-.42-.3-.69-.31H6c-.27.02-.48.13-.69.31-.2.2-.3.44-.31.69h1v3c.02.27.11.5.31.69.2.2.42.31.69.31h1c.27 0 .48-.11.69-.31.2-.19.3-.42.31-.69H8V7.98v.01zM7 2.3c-3.14 0-5.7 2.54-5.7 5.68 0 3.14 2.56 5.7 5.7 5.7s5.7-2.55 5.7-5.7c0-3.15-2.56-5.69-5.7-5.69v.01zM7 .98c3.86 0 7 3.14 7 7s-3.14 7-7 7-7-3.12-7-7 3.14-7 7-7z"></path></svg></span>Links</div><div class="admonitionContent_V6kd"><ul>
+<li>
+<p><strong>cpp.js:</strong> <a href="https://github.com/bugra9/cpp.js/tree/main/packages/cppjs-app-cli/src" target="_blank" rel="noopener noreferrer">https://github.com/bugra9/cpp.js/tree/main/packages/cppjs-app-cli/src</a></p>
+</li>
+<li>
+<p><strong>Sample Config:</strong> <a href="https://github.com/bugra9/cpp.js/blob/main/samples/cppjs-sample-web-vue-vite/cppjs.config.js" target="_blank" rel="noopener noreferrer">https://github.com/bugra9/cpp.js/blob/main/samples/cppjs-sample-web-vue-vite/cppjs.config.js</a></p>
+</li>
+<li>
+<p><strong>getConfig:</strong> <a href="https://github.com/bugra9/cpp.js/blob/main/packages/cppjs-app-cli/src/utils/getConfig.js" target="_blank" rel="noopener noreferrer">https://github.com/bugra9/cpp.js/blob/main/packages/cppjs-app-cli/src/utils/getConfig.js</a></p>
+</li>
+<li>
+<p><strong>CMakeLists.txt:</strong> <a href="https://github.com/bugra9/cpp.js/blob/main/packages/cppjs-app-cli/src/assets/CMakeLists.txt" target="_blank" rel="noopener noreferrer">https://github.com/bugra9/cpp.js/blob/main/packages/cppjs-app-cli/src/assets/CMakeLists.txt</a></p>
+</li>
+<li>
+<p><strong>build:</strong> <a href="https://github.com/bugra9/cpp.js/blob/main/packages/cppjs-app-cli/src/functions/createWasm.js" target="_blank" rel="noopener noreferrer">https://github.com/bugra9/cpp.js/blob/main/packages/cppjs-app-cli/src/functions/createWasm.js</a></p>
+</li>
+</ul></div></div>
+<br>
+<div class="theme-admonition theme-admonition-note admonition_ApWc alert alert--secondary"><div class="admonitionHeading_RorV"><span class="admonitionIcon_fI7c"><svg viewBox="0 0 14 16"><path fill-rule="evenodd" d="M6.3 5.69a.942.942 0 0 1-.28-.7c0-.28.09-.52.28-.7.19-.18.42-.28.7-.28.28 0 .52.09.7.28.18.19.28.42.28.7 0 .28-.09.52-.28.7a1 1 0 0 1-.7.3c-.28 0-.52-.11-.7-.3zM8 7.99c-.02-.25-.11-.48-.31-.69-.2-.19-.42-.3-.69-.31H6c-.27.02-.48.13-.69.31-.2.2-.3.44-.31.69h1v3c.02.27.11.5.31.69.2.2.42.31.69.31h1c.27 0 .48-.11.69-.31.2-.19.3-.42.31-.69H8V7.98v.01zM7 2.3c-3.14 0-5.7 2.54-5.7 5.68 0 3.14 2.56 5.7 5.7 5.7s5.7-2.55 5.7-5.7c0-3.15-2.56-5.69-5.7-5.69v.01zM7 .98c3.86 0 7 3.14 7 7s-3.14 7-7 7-7-3.12-7-7 3.14-7 7-7z"></path></svg></span>Samples</div><div class="admonitionContent_V6kd"><ul>
+<li>
+<p><strong>React Native:</strong> <a href="https://github.com/bugra9/cpp.js/tree/main/samples/cppjs-sample-mobile-reactnative" target="_blank" rel="noopener noreferrer">https://github.com/bugra9/cpp.js/tree/main/samples/cppjs-sample-mobile-reactnative</a></p>
+</li>
+<li>
+<p><strong>Vite + Vue:</strong> <a href="https://github.com/bugra9/cpp.js/tree/main/samples/cppjs-sample-web-vue-vite" target="_blank" rel="noopener noreferrer">https://github.com/bugra9/cpp.js/tree/main/samples/cppjs-sample-web-vue-vite</a></p>
+</li>
+<li>
+<p><strong>Webpack + React:</strong> <a href="https://github.com/bugra9/cpp.js/tree/main/samples/cppjs-sample-web-react-cra" target="_blank" rel="noopener noreferrer">https://github.com/bugra9/cpp.js/tree/main/samples/cppjs-sample-web-react-cra</a></p>
+</li>
+<li>
+<p><strong>Basic Lib</strong> <a href="https://github.com/bugra9/cpp.js/tree/main/samples/cppjs-sample-lib-basic" target="_blank" rel="noopener noreferrer">https://github.com/bugra9/cpp.js/tree/main/samples/cppjs-sample-lib-basic</a></p>
+</li>
+<li>
+<p><strong>Complex Lib:</strong> <a href="https://github.com/bugra9/cpp.js/tree/main/samples/cppjs-sample-lib-complex" target="_blank" rel="noopener noreferrer">https://github.com/bugra9/cpp.js/tree/main/samples/cppjs-sample-lib-complex</a></p>
+</li>
+<li>
+<p><strong>Cmake Lib:</strong> <a href="https://github.com/bugra9/cpp.js/tree/main/samples/cppjs-sample-lib-basic-cmake" target="_blank" rel="noopener noreferrer">https://github.com/bugra9/cpp.js/tree/main/samples/cppjs-sample-lib-basic-cmake</a></p>
+</li>
+<li>
+<p><strong>Prebuilt Lib:</strong> <a href="https://github.com/bugra9/cpp.js/tree/main/samples/cppjs-sample-lib-basic-prebuilt" target="_blank" rel="noopener noreferrer">https://github.com/bugra9/cpp.js/tree/main/samples/cppjs-sample-lib-basic-prebuilt</a></p>
+</li>
+</ul></div></div></article></div><div class="col col--2"><div class="tableOfContents_gwV3 thin-scrollbar"><ul class="table-of-contents table-of-contents__left-border"><li><a href="#docker-image" class="table-of-contents__link toc-highlight">Docker Image</a></li><li><a href="#browser" class="table-of-contents__link toc-highlight">Browser</a></li><li><a href="#react-native" class="table-of-contents__link toc-highlight">React Native</a></li><li><a href="#cppjs-build" class="table-of-contents__link toc-highlight">Cpp.js Build</a></li></ul></div></div></div></main></div><footer class="footer"><div class="container container-fluid"><div class="footer__bottom text--center"><div class="footer__copyright">Released under the <a href="https://github.com/bugra9/cpp.js/blob/main/LICENSE" target="_blank">MIT License</a>.<br>Copyright © 2026 <a href="https://github.com/bugra9" target="_blank">Buğra Sarı</a>.</div></div></div></footer></div>
+</body>
+</html>

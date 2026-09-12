@@ -1,0 +1,59 @@
+diff --git a/website/docusaurus.config.js b/website/docusaurus.config.js
+index fbf8808e..0563d517 100644
+--- a/website/docusaurus.config.js
++++ b/website/docusaurus.config.js
+@@ -12,7 +12,7 @@ const config = {
+     favicon: 'img/favicon.ico',
+ 
+     // Set the production url of your site here
+-    url: 'https://cpp.js.org',
++    url: 'https://v1.crossbind.dev',
+     // Set the /<baseUrl>/ pathname under which your site is served
+     // For GitHub pages deployment, it is often '/<projectName>/'
+     baseUrl: '/',
+@@ -84,6 +84,15 @@ const config = {
+         colorMode: {
+             defaultMode: 'dark',
+         },
++        // Frozen archive of the cpp.js 1.x documentation, served at v1.crossbind.dev.
++        announcementBar: {
++            id: 'v1-archive',
++            content: '&#9888;&#xFE0E; <b>Archived documentation of cpp.js 1.x</b>, the previous name of crossbind. Go to the current docs at <a href="https://crossbind.dev/">crossbind.dev</a> or read the <a href="https://crossbind.dev/guide/migration/">migration guide</a>.',
++            backgroundColor: '#f5b524',
++            textColor: '#14110a',
++            isCloseable: false,
++        },
++        metadata: [{ name: 'robots', content: 'noindex' }],
+         image: 'img/cppjs-social-card.png',
+         navbar: {
+             title: 'Cpp.js',
+diff --git a/website/src/css/custom.css b/website/src/css/custom.css
+index cd68fdf3..0f7c1e87 100644
+--- a/website/src/css/custom.css
++++ b/website/src/css/custom.css
+@@ -99,3 +99,25 @@ div.bash span.token-line::before, div.language-shell span.token-line::before {
+     padding: 0 10px 0 0;
+     color: orange;
+ }
++
++/* Archive banner: taller and bolder than the theme default so it is read before the page. */
++:root {
++    --docusaurus-announcement-bar-height: 48px;
++}
++
++div[class*='announcementBar_'] {
++    height: auto;
++    padding: 11px 16px;
++    font-size: 16px;
++    line-height: 1.4;
++    font-weight: 600;
++    letter-spacing: 0.1px;
++    border-bottom: 2px solid #c98b00;
++}
++
++div[class*='announcementBar_'] a {
++    color: inherit;
++    font-weight: 800;
++    text-decoration: underline;
++    text-underline-offset: 3px;
++}
