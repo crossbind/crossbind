@@ -1,7 +1,22 @@
+import { CHANGELOG_PAGE } from '../changelog/page.js';
 import {
-    AGENT_URL, CHANGELOG_URL, REPO_URL, SHOWCASE_URL,
+    AGENT_URL, DISCUSSIONS_URL, LIBRARIES_URL, LICENSE_URL, LLMS_URL, REPO_URL,
 } from '../data.js';
 import { guideHref } from '../guide/nav.js';
+
+// Order agreed for the footer; internal targets are site pages, the rest were checked against
+// the repository (Discussions is enabled, the licence file is MIT). No commercial-support entry:
+// nothing paid is offered.
+const LINKS = [
+    { label: 'Docs', href: guideHref() },
+    { label: 'Libraries', href: LIBRARIES_URL },
+    { label: 'Changelog', href: CHANGELOG_PAGE.href },
+    { label: 'Agent setup', href: AGENT_URL },
+    { label: 'llms.txt', href: LLMS_URL },
+    { label: 'GitHub', href: REPO_URL, external: true },
+    { label: 'Discussions', href: DISCUSSIONS_URL, external: true },
+    { label: 'MIT', href: LICENSE_URL, external: true },
+];
 
 export default function Closing({ tokens }) {
     return (
@@ -23,14 +38,20 @@ export default function Closing({ tokens }) {
                     instead of orphaning the name from the year. */}
                 <span style={{ whiteSpace: 'nowrap' }}>Copyright © 2026 Buğra Sarı</span>
             </span>
-            {/* Also the mobile navigation: the header drops its link row below 860px. */}
-            <span style={{ display: 'flex', flexWrap: 'wrap', gap: 18 }}>
-                <a href={guideHref()} className="tap-target" style={{ color: tokens.textDim }}>Guide</a>
-                <a href={SHOWCASE_URL} className="tap-target" style={{ color: tokens.textDim }}>Showcase</a>
-                <a href={AGENT_URL} className="tap-target" style={{ color: tokens.textDim }}>AI Agent</a>
-                <a href={CHANGELOG_URL} className="tap-target" style={{ color: tokens.textDim }}>Changelog</a>
-                <a href={REPO_URL} className="tap-target" style={{ color: tokens.textDim }}>GitHub</a>
-            </span>
+            <nav aria-label="Footer" style={{ display: 'flex', flexWrap: 'wrap', gap: 18 }}>
+                {LINKS.map((link) => (
+                    <a
+                        key={link.href}
+                        href={link.href}
+                        className="tap-target"
+                        target={link.external ? '_blank' : undefined}
+                        rel={link.external ? 'noreferrer' : undefined}
+                        style={{ color: tokens.textDim }}
+                    >
+                        {link.label}
+                    </a>
+                ))}
+            </nav>
         </footer>
     );
 }

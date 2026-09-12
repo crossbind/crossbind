@@ -54,10 +54,11 @@ export function parseNpmJson(stdout) {
 }
 
 export class NpmCliRegistry {
-    constructor({ cwd = process.cwd(), registry = 'https://registry.npmjs.org', packageName = PACKAGE_NAME } = {}) {
+    constructor({ cwd = process.cwd(), registry = 'https://registry.npmjs.org', packageName = PACKAGE_NAME, timeoutMs } = {}) {
         this.cwd = cwd;
         this.registry = registry;
         this.packageName = packageName;
+        this.timeoutMs = timeoutMs;
     }
 
     async run(args, { allowMissing = false, environment = process.env } = {}) {
@@ -67,6 +68,7 @@ export class NpmCliRegistry {
                 encoding: 'utf8',
                 env: environment,
                 maxBuffer: 8 * 1024 * 1024,
+                timeout: this.timeoutMs,
             });
             return parseNpmJson(result.stdout);
         } catch (error) {
@@ -90,6 +92,15 @@ export class NpmCliRegistry {
 
     tarball(version) {
         return this.run(['view', `${this.packageName}@${version}`, 'dist.tarball', '--json'], { allowMissing: true });
+    }
+
+    // Read-only lookups for packages other than the one this client is bound to.
+    viewVersion(packageName, spec) {
+        return this.run(['view', `${packageName}@${spec}`, 'version', '--json'], { allowMissing: true });
+    }
+
+    viewDependencies(packageName, version) {
+        return this.run(['view', `${packageName}@${version}`, 'dependencies', '--json'], { allowMissing: true });
     }
 
     attestations(version) {

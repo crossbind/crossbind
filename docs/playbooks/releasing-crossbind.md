@@ -118,8 +118,11 @@ releases/crossbind/<version>.md
 ```
 
 Copy `releases/crossbind/TEMPLATE.md`. Its frontmatter version must equal the package version; its
-body is the only source for the exact GitHub Release and future `/changelog/<version>/` page. Do not
-generate it from commits or copy it into another changelog. Historical betas need no backfill.
+body is the only source for the exact GitHub Release, the entry in `CHANGELOG.md` and the site's
+`/changelog/#<version>` section. Do not generate it from commits. `CHANGELOG.md` is rendered from
+these notes: run `pnpm changelog` after writing or editing one (`check:release` and the site build
+refuse a stale file), and never edit its generated region by hand; the entries below that region are
+the hand-written history from before the notes existed and stay as they are.
 
 The release commit supplies the remaining canonical identities:
 
@@ -189,6 +192,15 @@ overlap.
     gh workflow run release-crossbind.yml --ref main -f channel=beta -f dry_run=false
     ```
 
+8. If `crossbind` was in the train, rebuild the live example demos from the published packages and
+   redeploy the site so its version menu, changelog, Quick Start and `/examples/` pick up the new version
+   (see [Site-consumer contract](#site-consumer-contract)):
+
+    ```bash
+    pnpm --filter @crossbind/landing demos
+    pnpm --filter @crossbind/landing deploy
+    ```
+
 Use `channel=rc` for `-rc.N` packages and `channel=stable` for stable packages. The build,
 integrity, provenance and tagging mechanism is identical; only the version policy and npm tag
 differ.
@@ -243,9 +255,33 @@ releaseNotesSource
 ```
 
 It also persists `workspace-release-result.json` containing every exact package, channel, npm URL,
-integrity, provenance endpoint, tag, commit and timestamp. A future site build should resolve its
-configured npm channel to an exact `crossbind` version, fetch the manifest for that exact GitHub
-tag and render the canonical notes. It must not use GitHub's generic latest-release endpoint.
+integrity, provenance endpoint, tag, commit and timestamp.
+
+The site under `landing/` consumes the published data, not these workflow outputs. Every
+`pnpm --filter @crossbind/landing dev|build` first runs `scripts/site/prepare-site.mjs`, which through
+`scripts/release/resolve-site-release.mjs` resolves the npm channel in `landing/release.config.js` (`beta` → `beta`, `rc` → `next`,
+`stable` → `latest`) to one exact `crossbind` version, fetches the GitHub Release of that exact
+`crossbind@<version>` tag with its `crossbind-release.json`, validates the manifest against the
+schema and cross-checks the registry integrity, the tag's commit and the prerelease flag. It then
+reads the canonical release note and the toolchain digest table at the manifest's commit, verifies
+the note's frontmatter and the table's SHA-256, and hands one snapshot to the navbar version menu,
+the `/changelog/` page and the Quick Start install commands. Every earlier published `crossbind@*`
+release that carries a manifest is verified the same way and gets its release row on `/changelog/`,
+so `#<version>` links survive later trains; entries without a manifest are shown from `CHANGELOG.md`
+without a row. The same dist-tag also resolves
+`@crossbind/plugin-vite` and `create-crossbind`, and the plugin's `crossbind` range must admit the
+resolved version, and the `/ports/` catalog marks a port variant as published only when npm serves
+it on that dist-tag. It never uses GitHub's generic latest-release endpoint and never falls back to
+another channel, fixture or older version: a missing or inconsistent piece of metadata fails the
+build, and a failed build never reaches `wrangler pages deploy`.
+
+The site is not deployed by this workflow. After a train that included `crossbind`, run
+`pnpm --filter @crossbind/landing demos` and then `pnpm --filter @crossbind/landing deploy` once:
+the first builds the `/examples/` live demos from the published packages
+(`scripts/site/build-example-demos.mjs`), the second refuses to deploy unless those demos exist and
+carry the version the site resolved. Moving the site from beta to stable is one deliberate change:
+set `channel: 'stable'` in `landing/release.config.js`, rebuild the demos and deploy. An offline
+fixture build (`CROSSBIND_SITE_RELEASE_FIXTURE`) is marked as such and refused by the deploy step.
 
 Toolchain image versions and digests remain canonical only in
 `core/crossbind/src/assets/toolchain-digests.json`; the npm train never republishes Docker images or

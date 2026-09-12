@@ -26,15 +26,24 @@ export default {
             type: 'table',
             head: ['Key', 'What it does'],
             rows: [
-                ['`general.name`', 'the logical name: output binaries (`lib<name>.a`), and the browser filesystem namespace `/opfs/<name>/`. Defaults to your package name.'],
-                ['`dependencies`', 'an array of other packages\' configs, imported from `@crossbind/port-*/crossbind.config.js`. Transitive dependencies are flattened automatically.'],
-                ['`cargoDependencies`', 'crates importable through `cargo:` - keys are crate names, values are Cargo dependency specs. See [Rust](/guide/rust/).'],
+                [
+                    '`general.name`',
+                    'the logical name: output binaries (`lib<name>.a`), and the browser filesystem namespace `/opfs/<name>/`. Defaults to your package name.',
+                ],
+                [
+                    '`dependencies`',
+                    "an array of other packages' configs, imported from a platform variant such as `@crossbind/port-*-wasm/crossbind.config.js`, one per platform you build. Transitive dependencies are flattened automatically.",
+                ],
+                [
+                    '`cargoDependencies`',
+                    'crates importable through `cargo:` - keys are crate names, values are Cargo dependency specs. See [Rust](/guide/rust/).',
+                ],
             ],
         },
         {
             type: 'code',
             file: 'crossbind.config.js',
-            code: `import gdal from '@crossbind/port-gdal/crossbind.config.js';
+            code: `import gdal from '@crossbind/port-gdal-wasm/crossbind.config.js';
 
 export default {
     general: { name: 'my-geo-app' },
@@ -56,7 +65,7 @@ export default {
                 ['`config`', '-', 'always `import.meta.url`'],
                 ['`project`', 'the directory of `config`', 'the project root'],
                 ['`base`', '-', 'an alternative root - use it in a monorepo so Docker can see the whole workspace'],
-                ['`native`', '`[\'src/native\']`', '**an array** of C++ source roots; order sets include precedence'],
+                ['`native`', "`['src/native']`", '**an array** of C++ source roots; order sets include precedence'],
                 ['`cache`', '`.crossbind`', 'build cache'],
                 ['`build`', '`.crossbind/build`', 'staging directory'],
                 ['`output`', 'same as `build`', 'where dist artifacts are written'],
@@ -81,7 +90,7 @@ export default {
         { type: 'h2', id: 'target', text: 'Target' },
         {
             type: 'p',
-            text: '`target` narrows what gets built. `runtime` is the one people set most - `\'st\'` (default) or `\'mt\'`; see [Threading](/guide/threading/) for what `mt` demands from your host.',
+            text: "`target` narrows what gets built. `runtime` is the one people set most - `'st'` (default) or `'mt'`; see [Threading](/guide/threading/) for what `mt` demands from your host.",
         },
         {
             type: 'code',
@@ -127,12 +136,15 @@ export default {
             type: 'table',
             head: ['Key', 'What it does'],
             rows: [
-                ['`type`', '`\'cmake\'` (default, the C/C++ pipeline) or `\'cargo\'` (a Rust crate built per platform)'],
+                ['`type`', "`'cmake'` (default, the C/C++ pipeline) or `'cargo'` (a Rust crate built per platform)"],
                 ['`crate`', '`cargo` only: the directory holding `Cargo.toml`'],
                 ['`libName`', 'the `.a` basenames produced, one per entry'],
                 ['`header`, `libPath`', 'the include and library directory names inside dist'],
                 ['`bindings.vectors`', 'extra `Vec<T>` classes to expose without touching Rust source'],
-                ['`wholeArchive`', 'link every archive wholesale instead of eliminating dead code - only when members self-register from static initialisers'],
+                [
+                    '`wholeArchive`',
+                    'link every archive wholesale instead of eliminating dead code - only when members self-register from static initialisers',
+                ],
             ],
         },
 
@@ -141,8 +153,11 @@ export default {
             type: 'table',
             head: ['Key', 'What it does'],
             rows: [
-                ['`dts`', '`\'sync\'` (default) or `\'promise\'`, which wraps every generated return in `Promise<...>` for worker runtimes'],
-                ['`types`', 'package authors: emit one combined `.d.ts` over the public headers and wire `package.json` so consumers importing `<pkg>/<any>.h` get types'],
+                ['`dts`', "`'sync'` (default) or `'promise'`, which wraps every generated return in `Promise<...>` for worker runtimes"],
+                [
+                    '`types`',
+                    'package authors: emit one combined `.d.ts` over the public headers and wire `package.json` so consumers importing `<pkg>/<any>.h` get types',
+                ],
             ],
         },
 
@@ -153,7 +168,10 @@ export default {
             rows: [
                 ['`ext`', 'which extensions count as headers, sources and SWIG modules'],
                 ['`build`', 'do not set this directly - build hooks live in `crossbind.build.js` and are merged in'],
-                ['`extensions`', 'plugin objects with hooks at config-load and build-step boundaries; for sharing one override across several packages'],
+                [
+                    '`extensions`',
+                    'plugin objects with hooks at config-load and build-step boundaries; for sharing one override across several packages',
+                ],
                 ['`functions.isEnabled`', 'override the "is this target enabled?" check, which by default asks whether the output already exists'],
             ],
         },

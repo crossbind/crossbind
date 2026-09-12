@@ -5,10 +5,11 @@ import { promisify } from 'node:util';
 const execFileAsync = promisify(execFile);
 
 export class GitHubCliRelease {
-    constructor({ repository = process.env.GITHUB_REPOSITORY, cwd = process.cwd() } = {}) {
+    constructor({ repository = process.env.GITHUB_REPOSITORY, cwd = process.cwd(), timeoutMs } = {}) {
         if (!repository) throw new Error('GITHUB_REPOSITORY is required.');
         this.repository = repository;
         this.cwd = cwd;
+        this.timeoutMs = timeoutMs;
     }
 
     async run(args, { allowMissing = false, encoding = 'utf8' } = {}) {
@@ -18,6 +19,7 @@ export class GitHubCliRelease {
                 encoding,
                 env: process.env,
                 maxBuffer: 16 * 1024 * 1024,
+                timeout: this.timeoutMs,
             });
         } catch (error) {
             const detail = `${error.stderr ?? ''}\n${error.stdout ?? ''}`;
@@ -57,6 +59,23 @@ export class GitHubCliRelease {
         else args.push('--latest=false');
         await this.run(args);
         return this.release(tag);
+    }
+
+    // Every release in the repository, all pages. Callers filter by exact tag prefix; this is not
+    // the generic latest-release endpoint and carries no notion of "latest".
+    async listReleases() {
+        const result = await this.run(['api', '--paginate', `repos/${this.repository}/releases?per_page=100`, '--jq', '.[]']);
+        return result.stdout
+            .split('\n')
+            .filter((line) => line.trim())
+            .map((line) => JSON.parse(line));
+    }
+
+    // The raw bytes of one repository file at an exact ref; null when the path is absent there.
+    async rawFile(file, ref) {
+        const endpoint = `repos/${this.repository}/contents/${file}?ref=${encodeURIComponent(ref)}`;
+        const result = await this.run(['api', endpoint, '-H', 'Accept: application/vnd.github.raw+json'], { allowMissing: true, encoding: null });
+        return result === null ? null : result.stdout;
     }
 
     async downloadAsset(asset) {

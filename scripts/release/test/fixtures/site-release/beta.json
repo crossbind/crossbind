@@ -1,0 +1,566 @@
+{
+    "_comment": "Offline fixture for CROSSBIND_SITE_RELEASE_FIXTURE and the site-release tests. A copy of the crossbind@2.0.0-beta.56 release data as published (captured 2026-09-11) plus the companion package tags npm served that day, with the traps a live registry carries: a stale npm latest, an unrelated GitHub latest release and a pre-manifest crossbind release. Builds from it are marked source=fixture and cannot be deployed.",
+    "npm": {
+        "distTags": {
+            "latest": "0.0.1",
+            "beta": "2.0.0-beta.56"
+        },
+        "versions": {
+            "2.0.0-beta.56": {
+                "integrity": "sha512-R4rFZlJN0W8E0imFkCbqg8xSIdC18n9ZHdhrhT/+O724pK5TCwnlximw/wuyopW9endzCHHMYvL3+QBYs2gmvQ==",
+                "tarball": "https://registry.npmjs.org/crossbind/-/crossbind-2.0.0-beta.56.tgz"
+            }
+        },
+        "packages": {
+            "@crossbind/plugin-vite": {
+                "distTags": {
+                    "latest": "2.0.0-beta.50",
+                    "beta": "2.0.0-beta.56"
+                },
+                "versions": {
+                    "2.0.0-beta.56": {
+                        "dependencies": {
+                            "crossbind": "^2.0.0-beta.56"
+                        }
+                    }
+                }
+            },
+            "create-crossbind": {
+                "distTags": {
+                    "latest": "2.0.0-beta.50",
+                    "beta": "2.0.0-beta.57"
+                }
+            },
+            "@crossbind/port-curl": {
+                "distTags": {
+                    "beta": "2.0.0-beta.56"
+                }
+            },
+            "@crossbind/port-curl-wasm": {
+                "distTags": {
+                    "beta": "2.0.0-beta.56"
+                }
+            },
+            "@crossbind/port-curl-wasi": {
+                "distTags": {
+                    "beta": "2.0.0-beta.56"
+                }
+            },
+            "@crossbind/port-curl-bin-wasi": {
+                "distTags": {
+                    "beta": "2.0.0-beta.56"
+                }
+            },
+            "@crossbind/port-curl-android": {
+                "distTags": {
+                    "beta": "2.0.0-beta.56"
+                }
+            },
+            "@crossbind/port-curl-ios": {
+                "distTags": {
+                    "beta": "2.0.0-beta.56"
+                }
+            },
+            "@crossbind/port-expat": {
+                "distTags": {
+                    "beta": "2.0.0-beta.56"
+                }
+            },
+            "@crossbind/port-expat-wasm": {
+                "distTags": {
+                    "beta": "2.0.0-beta.56"
+                }
+            },
+            "@crossbind/port-expat-wasi": {
+                "distTags": {
+                    "beta": "2.0.0-beta.56"
+                }
+            },
+            "@crossbind/port-expat-bin-wasi": {
+                "distTags": {
+                    "beta": "2.0.0-beta.56"
+                }
+            },
+            "@crossbind/port-expat-android": {
+                "distTags": {
+                    "beta": "2.0.0-beta.56"
+                }
+            },
+            "@crossbind/port-expat-ios": {
+                "distTags": {
+                    "beta": "2.0.0-beta.56"
+                }
+            },
+            "@crossbind/port-gdal": {
+                "distTags": {
+                    "beta": "2.0.0-beta.56"
+                }
+            },
+            "@crossbind/port-gdal-wasm": {
+                "distTags": {
+                    "beta": "2.0.0-beta.56"
+                }
+            },
+            "@crossbind/port-gdal-wasi": {
+                "distTags": {
+                    "beta": "2.0.0-beta.56"
+                }
+            },
+            "@crossbind/port-gdal-bin-wasi": {
+                "distTags": {
+                    "beta": "2.0.0-beta.56"
+                }
+            },
+            "@crossbind/port-gdal-android": {
+                "distTags": {
+                    "beta": "2.0.0-beta.56"
+                }
+            },
+            "@crossbind/port-gdal-ios": {
+                "distTags": {
+                    "beta": "2.0.0-beta.56"
+                }
+            },
+            "@crossbind/port-geos": {
+                "distTags": {
+                    "beta": "2.0.0-beta.56"
+                }
+            },
+            "@crossbind/port-geos-wasm": {
+                "distTags": {
+                    "beta": "2.0.0-beta.56"
+                }
+            },
+            "@crossbind/port-geos-wasi": {
+                "distTags": {
+                    "beta": "2.0.0-beta.56"
+                }
+            },
+            "@crossbind/port-geos-bin-wasi": {
+                "distTags": {
+                    "beta": "2.0.0-beta.56"
+                }
+            },
+            "@crossbind/port-geos-android": {
+                "distTags": {
+                    "beta": "2.0.0-beta.56"
+                }
+            },
+            "@crossbind/port-geos-ios": {
+                "distTags": {
+                    "beta": "2.0.0-beta.56"
+                }
+            },
+            "@crossbind/port-geotiff": {
+                "distTags": {
+                    "beta": "2.0.0-beta.56"
+                }
+            },
+            "@crossbind/port-geotiff-wasm": {
+                "distTags": {
+                    "beta": "2.0.0-beta.56"
+                }
+            },
+            "@crossbind/port-geotiff-wasi": {
+                "distTags": {
+                    "beta": "2.0.0-beta.56"
+                }
+            },
+            "@crossbind/port-geotiff-bin-wasi": {
+                "distTags": {
+                    "beta": "2.0.0-beta.56"
+                }
+            },
+            "@crossbind/port-geotiff-android": {
+                "distTags": {
+                    "beta": "2.0.0-beta.56"
+                }
+            },
+            "@crossbind/port-geotiff-ios": {
+                "distTags": {
+                    "beta": "2.0.0-beta.56"
+                }
+            },
+            "@crossbind/port-iconv": {
+                "distTags": {
+                    "beta": "2.0.0-beta.56"
+                }
+            },
+            "@crossbind/port-iconv-wasm": {
+                "distTags": {
+                    "beta": "2.0.0-beta.56"
+                }
+            },
+            "@crossbind/port-iconv-wasi": {
+                "distTags": {
+                    "beta": "2.0.0-beta.56"
+                }
+            },
+            "@crossbind/port-iconv-android": {
+                "distTags": {
+                    "beta": "2.0.0-beta.56"
+                }
+            },
+            "@crossbind/port-iconv-ios": {
+                "distTags": {
+                    "beta": "2.0.0-beta.56"
+                }
+            },
+            "@crossbind/port-jpegturbo": {
+                "distTags": {
+                    "beta": "2.0.0-beta.56"
+                }
+            },
+            "@crossbind/port-jpegturbo-wasm": {
+                "distTags": {
+                    "beta": "2.0.0-beta.56"
+                }
+            },
+            "@crossbind/port-jpegturbo-wasi": {
+                "distTags": {
+                    "beta": "2.0.0-beta.56"
+                }
+            },
+            "@crossbind/port-jpegturbo-bin-wasi": {
+                "distTags": {
+                    "beta": "2.0.0-beta.56"
+                }
+            },
+            "@crossbind/port-jpegturbo-android": {
+                "distTags": {
+                    "beta": "2.0.0-beta.56"
+                }
+            },
+            "@crossbind/port-jpegturbo-ios": {
+                "distTags": {
+                    "beta": "2.0.0-beta.56"
+                }
+            },
+            "@crossbind/port-lerc": {
+                "distTags": {
+                    "beta": "2.0.0-beta.56"
+                }
+            },
+            "@crossbind/port-lerc-wasm": {
+                "distTags": {
+                    "beta": "2.0.0-beta.56"
+                }
+            },
+            "@crossbind/port-lerc-wasi": {
+                "distTags": {
+                    "beta": "2.0.0-beta.56"
+                }
+            },
+            "@crossbind/port-lerc-android": {
+                "distTags": {
+                    "beta": "2.0.0-beta.56"
+                }
+            },
+            "@crossbind/port-lerc-ios": {
+                "distTags": {
+                    "beta": "2.0.0-beta.56"
+                }
+            },
+            "@crossbind/port-openssl": {
+                "distTags": {
+                    "beta": "2.0.0-beta.56"
+                }
+            },
+            "@crossbind/port-openssl-wasm": {
+                "distTags": {
+                    "beta": "2.0.0-beta.56"
+                }
+            },
+            "@crossbind/port-openssl-wasi": {
+                "distTags": {
+                    "beta": "2.0.0-beta.56"
+                }
+            },
+            "@crossbind/port-openssl-bin-wasi": {
+                "distTags": {
+                    "beta": "2.0.0-beta.56"
+                }
+            },
+            "@crossbind/port-openssl-android": {
+                "distTags": {
+                    "beta": "2.0.0-beta.56"
+                }
+            },
+            "@crossbind/port-openssl-ios": {
+                "distTags": {
+                    "beta": "2.0.0-beta.56"
+                }
+            },
+            "@crossbind/port-proj": {
+                "distTags": {
+                    "beta": "2.0.0-beta.56"
+                }
+            },
+            "@crossbind/port-proj-wasm": {
+                "distTags": {
+                    "beta": "2.0.0-beta.56"
+                }
+            },
+            "@crossbind/port-proj-wasi": {
+                "distTags": {
+                    "beta": "2.0.0-beta.56"
+                }
+            },
+            "@crossbind/port-proj-bin-wasi": {
+                "distTags": {
+                    "beta": "2.0.0-beta.56"
+                }
+            },
+            "@crossbind/port-proj-android": {
+                "distTags": {
+                    "beta": "2.0.0-beta.56"
+                }
+            },
+            "@crossbind/port-proj-ios": {
+                "distTags": {
+                    "beta": "2.0.0-beta.56"
+                }
+            },
+            "@crossbind/port-spatialite": {
+                "distTags": {
+                    "beta": "2.0.0-beta.56"
+                }
+            },
+            "@crossbind/port-spatialite-wasm": {
+                "distTags": {
+                    "beta": "2.0.0-beta.56"
+                }
+            },
+            "@crossbind/port-spatialite-wasi": {
+                "distTags": {
+                    "beta": "2.0.0-beta.56"
+                }
+            },
+            "@crossbind/port-spatialite-android": {
+                "distTags": {
+                    "beta": "2.0.0-beta.56"
+                }
+            },
+            "@crossbind/port-spatialite-ios": {
+                "distTags": {
+                    "beta": "2.0.0-beta.56"
+                }
+            },
+            "@crossbind/port-sqlite3": {
+                "distTags": {
+                    "beta": "2.0.0-beta.56"
+                }
+            },
+            "@crossbind/port-sqlite3-wasm": {
+                "distTags": {
+                    "beta": "2.0.0-beta.56"
+                }
+            },
+            "@crossbind/port-sqlite3-wasi": {
+                "distTags": {
+                    "beta": "2.0.0-beta.56"
+                }
+            },
+            "@crossbind/port-sqlite3-bin-wasi": {
+                "distTags": {
+                    "beta": "2.0.0-beta.56"
+                }
+            },
+            "@crossbind/port-sqlite3-android": {
+                "distTags": {
+                    "beta": "2.0.0-beta.56"
+                }
+            },
+            "@crossbind/port-sqlite3-ios": {
+                "distTags": {
+                    "beta": "2.0.0-beta.56"
+                }
+            },
+            "@crossbind/port-tiff": {
+                "distTags": {
+                    "beta": "2.0.0-beta.56"
+                }
+            },
+            "@crossbind/port-tiff-wasm": {
+                "distTags": {
+                    "beta": "2.0.0-beta.56"
+                }
+            },
+            "@crossbind/port-tiff-wasi": {
+                "distTags": {
+                    "beta": "2.0.0-beta.56"
+                }
+            },
+            "@crossbind/port-tiff-bin-wasi": {
+                "distTags": {
+                    "beta": "2.0.0-beta.56"
+                }
+            },
+            "@crossbind/port-tiff-android": {
+                "distTags": {
+                    "beta": "2.0.0-beta.56"
+                }
+            },
+            "@crossbind/port-tiff-ios": {
+                "distTags": {
+                    "beta": "2.0.0-beta.56"
+                }
+            },
+            "@crossbind/port-webp": {
+                "distTags": {
+                    "beta": "2.0.0-beta.56"
+                }
+            },
+            "@crossbind/port-webp-wasm": {
+                "distTags": {
+                    "beta": "2.0.0-beta.56"
+                }
+            },
+            "@crossbind/port-webp-wasi": {
+                "distTags": {
+                    "beta": "2.0.0-beta.56"
+                }
+            },
+            "@crossbind/port-webp-bin-wasi": {
+                "distTags": {
+                    "beta": "2.0.0-beta.56"
+                }
+            },
+            "@crossbind/port-webp-android": {
+                "distTags": {
+                    "beta": "2.0.0-beta.56"
+                }
+            },
+            "@crossbind/port-webp-ios": {
+                "distTags": {
+                    "beta": "2.0.0-beta.56"
+                }
+            },
+            "@crossbind/port-zlib": {
+                "distTags": {
+                    "beta": "2.0.0-beta.56"
+                }
+            },
+            "@crossbind/port-zlib-wasm": {
+                "distTags": {
+                    "beta": "2.0.0-beta.56"
+                }
+            },
+            "@crossbind/port-zlib-wasi": {
+                "distTags": {
+                    "beta": "2.0.0-beta.56"
+                }
+            },
+            "@crossbind/port-zlib-android": {
+                "distTags": {
+                    "beta": "2.0.0-beta.56"
+                }
+            },
+            "@crossbind/port-zlib-ios": {
+                "distTags": {
+                    "beta": "2.0.0-beta.56"
+                }
+            },
+            "@crossbind/port-zstd": {
+                "distTags": {
+                    "beta": "2.0.0-beta.56"
+                }
+            },
+            "@crossbind/port-zstd-wasm": {
+                "distTags": {
+                    "beta": "2.0.0-beta.56"
+                }
+            },
+            "@crossbind/port-zstd-wasi": {
+                "distTags": {
+                    "beta": "2.0.0-beta.56"
+                }
+            },
+            "@crossbind/port-zstd-bin-wasi": {
+                "distTags": {
+                    "beta": "2.0.0-beta.56"
+                }
+            },
+            "@crossbind/port-zstd-android": {
+                "distTags": {
+                    "beta": "2.0.0-beta.56"
+                }
+            },
+            "@crossbind/port-zstd-ios": {
+                "distTags": {
+                    "beta": "2.0.0-beta.56"
+                }
+            }
+        }
+    },
+    "github": {
+        "latestRelease": {
+            "tag_name": "cpp.js@1.0.4",
+            "prerelease": false
+        },
+        "releases": {
+            "crossbind@2.0.0-beta.56": {
+                "tag_name": "crossbind@2.0.0-beta.56",
+                "draft": false,
+                "prerelease": true,
+                "published_at": "2026-09-09T21:39:50Z",
+                "assets": [
+                    {
+                        "name": "crossbind-release.json",
+                        "url": "fixture://crossbind@2.0.0-beta.56/crossbind-release.json",
+                        "content": {
+                            "schemaVersion": 1,
+                            "package": "crossbind",
+                            "version": "2.0.0-beta.56",
+                            "channel": "beta",
+                            "prerelease": true,
+                            "publishedAt": "2026-09-09T19:13:06.492Z",
+                            "npm": {
+                                "distTag": "beta",
+                                "url": "https://www.npmjs.com/package/crossbind/v/2.0.0-beta.56",
+                                "tarball": "https://registry.npmjs.org/crossbind/-/crossbind-2.0.0-beta.56.tgz",
+                                "integrity": "sha512-R4rFZlJN0W8E0imFkCbqg8xSIdC18n9ZHdhrhT/+O724pK5TCwnlximw/wuyopW9endzCHHMYvL3+QBYs2gmvQ==",
+                                "provenance": {
+                                    "url": "https://registry.npmjs.org/-/npm/v1/attestations/crossbind@2.0.0-beta.56",
+                                    "predicateType": "https://slsa.dev/provenance/v1"
+                                }
+                            },
+                            "git": {
+                                "tag": "crossbind@2.0.0-beta.56",
+                                "commit": "0c20e017f479e6f82bb5b635ddf0158403d14a99"
+                            },
+                            "releaseNotes": {
+                                "source": "releases/crossbind/2.0.0-beta.56.md"
+                            },
+                            "toolchainDigestTable": {
+                                "source": "core/crossbind/src/assets/toolchain-digests.json",
+                                "sha256": "2111379c2fbb2162133f4ca173c2aaf573c51dcf8bbd3ddfa29d43487c05d0a3"
+                            }
+                        }
+                    }
+                ]
+            },
+            "cpp.js@1.0.4": {
+                "tag_name": "cpp.js@1.0.4",
+                "draft": false,
+                "prerelease": false,
+                "assets": []
+            },
+            "crossbind@2.0.0-beta.55": {
+                "tag_name": "crossbind@2.0.0-beta.55",
+                "draft": false,
+                "prerelease": true,
+                "assets": []
+            }
+        },
+        "tags": {
+            "crossbind@2.0.0-beta.56": "0c20e017f479e6f82bb5b635ddf0158403d14a99"
+        },
+        "files": {
+            "0c20e017f479e6f82bb5b635ddf0158403d14a99": {
+                "releases/crossbind/2.0.0-beta.56.md": "---\npackage: crossbind\nversion: 2.0.0-beta.56\ntitle: Crossbind 2.0.0 beta 56\nsummary: Hardens Crossbind's package release chain and refreshes its supported build toolchains.\n---\n\n## Highlights\n\n- Moves the repository and published CLI contract to Node.js 24.\n- Refreshes the supported Rust, Emscripten, WASI SDK and Android build toolchains.\n- Introduces an exact-artifact npm release train with Trusted Publishing, provenance verification\n  and version-specific GitHub Releases for `crossbind`.\n- Adds automated dependency, native-source and published toolchain-image security monitoring.\n\n## Breaking changes\n\n- Node.js 24 or newer is now required by `crossbind` and `create-crossbind`.\n\n## Migration notes\n\n- Upgrade development and CI environments to Node.js 24 before installing this beta.\n- Continue installing prerelease packages through the npm `beta` dist-tag.\n\n## Fixes\n\n- Toolchain image selection now reads one canonical, digest-pinned table shipped with the CLI.\n- Package and image release workflows fail closed on integrity, provenance, tag or asset conflicts.\n\n## Known limitations\n\n- Beta 55 published only the `crossbind` CLI: the train stopped when the pinned npm 12 CLI\n  changed its `view --json` output shape and the registry verification never matched. Beta 56\n  republishes the complete package set; do not pair `crossbind@2.0.0-beta.55` with other\n  packages from that train.\n\n- This remains a prerelease. Stable compatibility guarantees begin with the first `2.0.0` stable\n  train.\n- Native toolchain images remain a separate GHCR release stream and are identified by exact image\n  digests rather than npm package versions.\n",
+                "core/crossbind/src/assets/toolchain-digests.json": "{\n    \"version\": \"1.0.3\",\n    \"registry\": \"ghcr.io/crossbind\",\n    \"toolchains\": {\n        \"rust\": \"1.98.1\"\n    },\n    \"images\": {\n        \"rust-sysroot\": {\n            \"index\": \"sha256:6a5db2ecf54398d837fdbbd8c1f2cdaafd14fd486ac3af4206d21bc9fe66e923\",\n            \"platforms\": {\n                \"linux/arm64\": \"sha256:b5dbd8b4f233f5d6c0cfe7554b95b412e0e3396d4d4847facf116c155251b0b7\",\n                \"linux/amd64\": \"sha256:1989d0ab32d2372a2086efe50e33dbb861fa903e451b891f30004e0f172a1a9a\"\n            }\n        },\n        \"base\": {\n            \"index\": \"sha256:c9b501dca53bc2e51dddd1af64ede75220792e66a47ed488ad6172b58bee1b37\",\n            \"platforms\": {\n                \"linux/arm64\": \"sha256:edf01f0c4d7fc551e18775e76b2a6c2b9b54075b59f21f7635ccecaebcc6c282\",\n                \"linux/amd64\": \"sha256:debea6ee164eeba49155ad59365313a9dd291491b3339491a780b46d1b5b96f4\"\n            }\n        },\n        \"web\": {\n            \"index\": \"sha256:633da840658f12f291c17c3305adf265c7d52307b3b61b84156d5f85f3121779\",\n            \"platforms\": {\n                \"linux/arm64\": \"sha256:a5fe9f3693d789f04490963afbe80fa71a8ff0d0cc6e442b76ca37492fbf3221\",\n                \"linux/amd64\": \"sha256:65abff12143740d4557e9cbfd923b6fd6c5d01f25e96a1d27bbad5e083bb9f74\"\n            }\n        },\n        \"android\": {\n            \"index\": \"sha256:1f415db57ccb57c8850ad4498d9fead35f5104099fd355c067208b2e53c25b23\",\n            \"platforms\": {\n                \"linux/amd64\": \"sha256:38d7a10c233cfab13adb110383e386e2a649364a8285d6b3ad0696e1e343b58a\"\n            }\n        }\n    }\n}\n"
+            }
+        }
+    }
+}

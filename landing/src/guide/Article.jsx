@@ -1,4 +1,5 @@
 import DocCode from './DocCode.jsx';
+import ReleaseMeta from '../changelog/ReleaseMeta.jsx';
 import { inline } from './inline.jsx';
 
 // One renderer for every guide page: pages are data (src/guide/pages/*.js), this turns their
@@ -181,6 +182,8 @@ export default function Article({ tokens, blocks }) {
                 return <Table key={key} tokens={tokens} head={block.head} rows={block.rows} />;
             case 'cards':
                 return <Cards key={key} tokens={tokens} items={block.items} />;
+            case 'release':
+                return <ReleaseMeta key={key} tokens={tokens} release={block.release} />;
             default:
                 return null;
         }

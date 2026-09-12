@@ -1,4 +1,5 @@
 import { BRAND, SHOWCASE_COUNT } from '../../data.js';
+import { LIMITS, WHY_POINTS } from '../../why.js';
 
 export default {
     slug: 'introduction',
@@ -55,7 +56,7 @@ console.log(GDALVersionInfo('RELEASE_NAME'));`,
         },
         {
             type: 'p',
-            text: 'One `initNative()` covers every module on the page: each imported header registers its bindings, the call boots the runtime and resolves all of them together. Full details in [Packages](/guide/packages/).',
+            text: 'One `initNative()` covers every module on the page: each imported header registers its bindings, the call boots the runtime and resolves all of them together. Full details in [Libraries](/guide/libraries/); every library is listed under [Libraries](/ports/).',
         },
 
         { type: 'h2', id: 'platforms', text: 'Where the output runs' },
@@ -98,6 +99,20 @@ console.log(GDALVersionInfo('RELEASE_NAME'));`,
         {
             type: 'p',
             text: 'Both paths use the same runtime and the same `initNative()` call, and they mix freely in one project.',
+        },
+
+        { type: 'h2', id: 'why', text: 'Why crossbind' },
+        {
+            type: 'p',
+            text: 'The header import is the front door. Underneath it, crossbind is the native library distribution layer for JavaScript runtimes: versioned packages, target-specific artifacts, transitive dependencies, build recipes and runtime adapters.',
+        },
+        { type: 'ul', items: WHY_POINTS.map(([title, text]) => `**${title}.** ${text.charAt(0).toUpperCase()}${text.slice(1)}`) },
+
+        { type: 'h2', id: 'limits', text: 'Limits worth knowing' },
+        { type: 'ul', items: LIMITS },
+        {
+            type: 'p',
+            text: 'Browse the [Libraries](/ports/) that ship prebuilt, or read the [API reference](/api/) for every option and default.',
         },
 
         { type: 'h2', id: 'next', text: 'Where to next' },

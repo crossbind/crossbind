@@ -67,8 +67,9 @@
         "check:workflows": "node scripts/release/actionlint.mjs",
         "check:release:web": "pnpm --filter @crossbind/example-lib-prebuilt-matrix run build:wasm && pnpm --filter @crossbind/example-web-vanilla run build",
         "check:release:toolchain": "pnpm run gate:pinned-local-sysroot && pnpm --filter crossbind exec vitest run test/pullDockerImage.test.js test/runCargo.test.js && pnpm run check:release:web",
+        "changelog": "node scripts/release/render-changelog.mjs",
         "test:release": "node --test scripts/release/test/*.test.mjs",
-        "check:release": "pnpm run test:release && pnpm run check:workflows && eslint scripts/release scripts/gate-image-attestations.mjs scripts/gate-pinned-local-sysroot.mjs && prettier --check scripts/release scripts/gate-image-attestations.mjs scripts/gate-pinned-local-sysroot.mjs releases .github/workflows/check-crossbind-release.yml .github/workflows/release-crossbind.yml .github/workflows/publish-image.yml .github/workflows/publish-images.yml .github/workflows/scan-toolchain-images.yml docs/playbooks/releasing-crossbind.md tooling/docker/README.md",
+        "check:release": "node scripts/release/render-changelog.mjs --check && pnpm run test:release && pnpm run check:workflows && eslint scripts/release scripts/gate-image-attestations.mjs scripts/gate-pinned-local-sysroot.mjs && prettier --check scripts/release scripts/gate-image-attestations.mjs scripts/gate-pinned-local-sysroot.mjs releases .github/workflows/check-crossbind-release.yml .github/workflows/release-crossbind.yml .github/workflows/publish-image.yml .github/workflows/publish-images.yml .github/workflows/scan-toolchain-images.yml docs/playbooks/releasing-crossbind.md tooling/docker/README.md",
         "check:dist": "node scripts/check-dist.js",
         "check:beta": "node scripts/check-beta-status.js",
         "check:deps": "node scripts/check-external-dependencies.js",
@@ -92,7 +93,9 @@
         "scaffold:port": "node scripts/scaffold-port.mjs",
         "test": "pnpm --filter crossbind test",
         "test:watch": "pnpm --filter crossbind test:watch",
-        "test:coverage": "pnpm --filter crossbind test:coverage"
+        "test:coverage": "pnpm --filter crossbind test:coverage",
+        "test:site": "node --test scripts/site/test/*.test.mjs",
+        "check:site": "pnpm run test:site && eslint scripts/site && prettier --check scripts/site"
     },
     "devDependencies": {
         "crossbind": "workspace:^",

@@ -1,6 +1,11 @@
+import { changelogHref } from '../../changelog/route.js';
 import {
-    BRAND, CREATE_COMMAND, SETUP_PROMPT, SKILL_COMMAND,
+    BRAND, CREATE_COMMAND, installCommand, SETUP_PROMPT, SKILL_COMMAND,
 } from '../../data.js';
+import { RELEASE, WEB_IMAGE } from '../../release.js';
+
+const PLUGIN = RELEASE.companions['@crossbind/plugin-vite'];
+const CREATOR = RELEASE.companions['create-crossbind'];
 
 // These three come from data.js on purpose: the hero's setup modal, the landing's scaffolder
 // terminal and this page have to show the same commands, and the skill has to outrank the prompt
@@ -33,7 +38,7 @@ export default {
             file: 'shell',
             code: `docker --version
 node --version
-docker pull ghcr.io/crossbind/web:1.0.0   # optional: the first build pulls it anyway`,
+docker pull ${WEB_IMAGE}   # optional: the first build pulls it anyway`,
         },
         {
             type: 'callout',
@@ -92,7 +97,21 @@ npm run dev`,
             type: 'p',
             text: 'Already have an app? Install the plugin for your bundler and register it. Vite is shown here; Webpack, Rspack, Rollup and Metro follow the same shape with their own plugin - see [Bundlers](/guide/bundlers/).',
         },
-        { type: 'code', file: 'shell', code: 'npm install -D @crossbind/plugin-vite' },
+        { type: 'code', file: 'shell', code: installCommand('@crossbind/plugin-vite') },
+        {
+            type: 'callout',
+            tone: 'note',
+            title: 'Versions on this page',
+            text: `${RELEASE.distTagSuffix ? `Every install command here follows the npm \`${RELEASE.distTag}\` tag` : 'Every install command here follows the default npm tag'}. `
+                + `When this page was built it resolved to \`${BRAND}@${RELEASE.version}\` ([changelog](${changelogHref(RELEASE.version)})), `
+                + `\`@crossbind/plugin-vite@${PLUGIN.version}\` (which requires \`${BRAND} ${PLUGIN.crossbindRange}\`) and \`create-crossbind@${CREATOR.version}\`. `
+                + 'Each package keeps its own version; for a setup you can reproduce later, pin those exact ones:',
+        },
+        {
+            type: 'code',
+            file: 'shell',
+            code: `npm create crossbind@${CREATOR.version} my-app Web React Vite\nnpm install -D @crossbind/plugin-vite@${PLUGIN.version} ${BRAND}@${RELEASE.version}`,
+        },
         {
             type: 'code',
             file: 'vite.config.js',
@@ -174,7 +193,7 @@ console.log(MySampleClass.sample());`,
             type: 'ul',
             items: [
                 '[C++ bindings](/guide/bindings/) - what the auto-binder accepts, and the C++ ↔ JS type table.',
-                '[Packages](/guide/packages/) - use a prebuilt library instead of compiling one.',
+                '[Libraries](/guide/libraries/) - use a prebuilt library instead of compiling one.',
                 '[Filesystem](/guide/filesystem/) - where files live in the browser, Node and on edge.',
                 '[Troubleshooting](/guide/troubleshooting/) - when the first build does not go to plan.',
             ],

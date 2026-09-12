@@ -1,4 +1,4 @@
-import { AGENT_URL, API_URL, CHANGELOG_URL, REPO_URL, SHOWCASE_URL } from '../data.js';
+import { AGENT_URL, API_URL, REPO_URL } from '../data.js';
 import architecture from './pages/architecture.js';
 import assets from './pages/assets.js';
 import bindings from './pages/bindings.js';
@@ -7,7 +7,8 @@ import configuration from './pages/configuration.js';
 import filesystem from './pages/filesystem.js';
 import home from './pages/index.js';
 import introduction from './pages/introduction.js';
-import packages from './pages/packages.js';
+import libraries from './pages/libraries.js';
+import migration from './pages/migration.js';
 import quickStart from './pages/quick-start.js';
 import runtimes from './pages/runtimes.js';
 import rust from './pages/rust.js';
@@ -30,8 +31,8 @@ export const guideHref = (slug = '') => (slug ? `${GUIDE_BASE}/${slug}/` : `${GU
 
 const SECTIONS = [
     { label: 'Getting started', pages: [introduction, quickStart, bundlers, runtimes] },
-    { label: 'Concepts', pages: [architecture, bindings, rust, packages, filesystem, threading, assets, wasi, configuration] },
-    { label: 'Help', pages: [troubleshooting] },
+    { label: 'Concepts', pages: [architecture, bindings, rust, libraries, filesystem, threading, assets, wasi, configuration] },
+    { label: 'Help', pages: [troubleshooting, migration] },
 ];
 
 const withRoute = (page, section) => ({
@@ -71,13 +72,12 @@ export const GUIDE_PAGES = [GUIDE_HOME, ...GUIDE_SECTIONS.flatMap((section) => s
 
 export const GUIDE_ROUTES = GUIDE_PAGES.map((page) => page.href);
 
-// Reference material the guide deliberately does not duplicate; it still lives on the docs site.
+// Reference pages the guide deliberately does not duplicate. The changelog is not here: it is
+// linked from Guide.jsx with the active state a section link gets.
 export const GUIDE_EXTERNAL_LINKS = [
     { label: 'API reference', href: API_URL },
-    { label: 'Prebuilt libraries', href: SHOWCASE_URL },
-    { label: 'AI agent setup', href: AGENT_URL },
-    { label: 'Changelog', href: CHANGELOG_URL },
-    { label: 'GitHub', href: REPO_URL },
+    { label: 'Agent setup', href: AGENT_URL },
+    { label: 'GitHub', href: REPO_URL, external: true },
 ];
 
 // Both '/guide/quick-start/' (what the browser shows) and '/guide/quick-start' (what the
