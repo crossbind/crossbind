@@ -73,6 +73,7 @@ jobs:
             - name: Open or refresh the manual-intervention issue
               env:
                   GH_TOKEN: ${{ github.token }}
+                  GH_REPO: ${{ github.repository }}
                   ENCODED_REPORT: ${{ needs.plan.outputs.report }}
               run: |
                   set -euo pipefail
@@ -109,6 +110,7 @@ jobs:
             - name: Close the resolved dependency-watch issue
               env:
                   GH_TOKEN: ${{ github.token }}
+                  GH_REPO: ${{ github.repository }}
               run: |
                   set -euo pipefail
                   issue=$(gh issue list --state open --search '"[dependency-watch] manual intervention required" in:title' --json number --jq '.[0].number // empty')
