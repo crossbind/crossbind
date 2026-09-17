@@ -41,8 +41,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Built here rather than fetched: no upstream ships a binary of the fork.
 FROM os AS swig
 
-ARG SWIG_REV=1b6501ab958ac581229f765f30393f6119dd3e0e
-ARG SWIG_SHA256=744d1f3a7cd9db687e642a505b282c46b0f1544bb6395284f217174b68f0aee8
+ARG SWIG_REV=844524ad2562f8f5a5f7ae2c7d4e230dded0b866
+ARG SWIG_SHA256=61365d97b46e00c2d43356e2f7df185666610765c63ab8de9345e0ad89a2f8e5
 
 RUN apt-get update && apt-get install -y --no-install-recommends automake bison libbison-dev libpcre2-dev
 WORKDIR /src

@@ -1,6 +1,14 @@
 # @crossbind/docker
 
-## Unreleased — image family 1.0.3
+## Unreleased — image family 1.0.4
+
+### Patch Changes
+
+- Updated the Crossbind SWIG fork to `844524ad2562f8f5a5f7ae2c7d4e230dded0b866`
+  (Enhance embind C++ binding support), with a verified source archive SHA-256. The `base`,
+  `web` and `android` images inherit the updated binding generator.
+
+## Image family 1.0.3
 
 ### Patch Changes
 
