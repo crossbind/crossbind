@@ -76,6 +76,7 @@ jobs:
               if: ${{ needs.scan.result == 'failure' }}
               env:
                   GH_TOKEN: ${{ github.token }}
+                  GH_REPO: ${{ github.repository }}
               run: |
                   set -euo pipefail
                   title='[security] published toolchain image scan failed'
@@ -104,6 +105,7 @@ jobs:
               if: ${{ needs.scan.result == 'success' }}
               env:
                   GH_TOKEN: ${{ github.token }}
+                  GH_REPO: ${{ github.repository }}
               run: |
                   set -euo pipefail
                   issue=$(gh issue list --state open --search '"[security] published toolchain image scan failed" in:title' --json number --jq '.[0].number // empty')
