@@ -8,17 +8,25 @@
 
 ARG RUST_VERSION=1.98.1
 
-FROM node:24.20.0-trixie-slim@sha256:50c3b2f6988dfc307b86e5301d69611af31f4789bdf232863b07d3b02fe55ae0 AS node
-FROM rust:1.98.0-slim@sha256:cc0448b41c3b7b7fea44f5dc50eacba729a56db365b65b7bd5e8a82d5b3db078 AS rust
+FROM node:24.21.0-trixie-slim@sha256:db3ae80f5d8df06e04dabdf7b44cbf008d32de168205fa0294444aabbc08c590 AS node
+FROM rust:1.98.1-slim@sha256:ce84a5edd80c5f91e05c5533b1e53eb1da54028f33734dc06aa6b49fa190462d AS rust
 ARG RUST_VERSION
-RUN rustup toolchain install "${RUST_VERSION}" --profile minimal --no-self-update && \
-    rustup default "${RUST_VERSION}" && \
-    rustup toolchain uninstall 1.98.0 && \
+# Only the pinned toolchain may survive: /opt/licenses/rust is copied through a toolchains/* glob.
+RUN set -eu; \
+    rustup toolchain install "${RUST_VERSION}" --profile minimal --no-self-update; \
+    rustup default "${RUST_VERSION}"; \
+    rustup toolchain list | cut -d' ' -f1 | while read -r toolchain; do \
+        case "${toolchain}" in "${RUST_VERSION}"-*) continue;; esac; \
+        rustup toolchain uninstall "${toolchain}"; \
+    done; \
+    test "$(rustup toolchain list | wc -l)" -eq 1; \
     test "$(rustc -vV | sed -n 's/^release: //p')" = "${RUST_VERSION}"
 
 FROM debian:trixie-slim@sha256:d7e12182ce18b85b93007c1dedf31f2d29e01ccf3182cc4017c709b6259bc132 AS os
 
-RUN apt-get update && apt-get install -y --no-install-recommends \
+# A digest-pinned base keeps the package versions it shipped with, so patched ones are pulled in
+# explicitly; --with-new-pkgs lets a security fix bring a new dependency without removing anything.
+RUN apt-get update && apt-get upgrade -y --with-new-pkgs && apt-get install -y --no-install-recommends \
         build-essential \
         ca-certificates \
         cmake \
@@ -41,8 +49,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Built here rather than fetched: no upstream ships a binary of the fork.
 FROM os AS swig
 
-ARG SWIG_REV=1b6501ab958ac581229f765f30393f6119dd3e0e
-ARG SWIG_SHA256=744d1f3a7cd9db687e642a505b282c46b0f1544bb6395284f217174b68f0aee8
+ARG SWIG_REV=844524ad2562f8f5a5f7ae2c7d4e230dded0b866
+ARG SWIG_SHA256=61365d97b46e00c2d43356e2f7df185666610765c63ab8de9345e0ad89a2f8e5
 
 RUN apt-get update && apt-get install -y --no-install-recommends automake bison libbison-dev libpcre2-dev
 WORKDIR /src

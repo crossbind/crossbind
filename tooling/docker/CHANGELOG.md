@@ -1,6 +1,25 @@
 # @crossbind/docker
 
-## Unreleased — image family 1.0.3
+## Unreleased — image family 1.0.4
+
+### Patch Changes
+
+- Updated the Crossbind SWIG fork to `844524ad2562f8f5a5f7ae2c7d4e230dded0b866`
+  (Enhance embind C++ binding support), with a verified source archive SHA-256. The `base`,
+  `web` and `android` images inherit the updated binding generator.
+- Updated Node to 24.21.0 and moved the Rust bootstrap onto the now-published `rust:1.98.1-slim`
+  image. The pinned toolchain is unchanged at Rust 1.98.1.
+- The Rust stages now drop whatever toolchain the bootstrap image shipped by comparing it against
+  the pin, instead of naming that version by hand in each Dockerfile, and assert that exactly one
+  toolchain survives. The `base` image copies its Rust license texts through a `toolchains/*` glob,
+  so a surviving second toolchain would have made that copy ambiguous.
+- The `os` stage now applies the available Debian package upgrades before it installs the build
+  tools. A digest-pinned base keeps the package versions it shipped with, so an already-patched
+  package — such as the `gzip` fix for `CVE-2026-41992` — could not reach the images until Debian
+  rebuilt the base tag itself. `--with-new-pkgs` lets a security fix bring a new dependency along
+  without removing anything.
+
+## Image family 1.0.3
 
 ### Patch Changes
 

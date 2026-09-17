@@ -159,7 +159,7 @@ short-lived npm credential and requests provenance explicitly. After the first t
 configure each npm package to require 2FA and disallow long-lived tokens, then revoke obsolete
 automation tokens.
 
-The repository uses the exact Node 24.20.0 LTS pin in `.nvmrc`; npm is pinned separately because it
+The repository uses the exact Node 24.21.0 LTS pin in `.nvmrc`; npm is pinned separately because it
 has no LTS channel. External actions are pinned to full commits. The repository-wide
 `crossbind-npm-release` concurrency group uses `cancel-in-progress: false`, so package trains cannot
 overlap.
