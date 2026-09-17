@@ -7,12 +7,18 @@
 # The official point-release Docker tag can lag Rust itself. Bootstrap from the last digest-pinned
 # image and let its rustup install the exact stable toolchain without self-updating rustup.
 ARG RUST_VERSION=1.98.1
-FROM rust:1.98.0-slim@sha256:cc0448b41c3b7b7fea44f5dc50eacba729a56db365b65b7bd5e8a82d5b3db078 AS builder
+FROM rust:1.98.1-slim@sha256:ce84a5edd80c5f91e05c5533b1e53eb1da54028f33734dc06aa6b49fa190462d AS builder
 
 ARG RUST_VERSION
-RUN rustup toolchain install "${RUST_VERSION}" --profile minimal --no-self-update && \
-    rustup default "${RUST_VERSION}" && \
-    rustup toolchain uninstall 1.98.0 && \
+# Only the pinned toolchain may survive: the sysroots below come from rustc --print sysroot.
+RUN set -eu; \
+    rustup toolchain install "${RUST_VERSION}" --profile minimal --no-self-update; \
+    rustup default "${RUST_VERSION}"; \
+    rustup toolchain list | cut -d' ' -f1 | while read -r toolchain; do \
+        case "${toolchain}" in "${RUST_VERSION}"-*) continue;; esac; \
+        rustup toolchain uninstall "${toolchain}"; \
+    done; \
+    test "$(rustup toolchain list | wc -l)" -eq 1; \
     test "$(rustc -vV | sed -n 's/^release: //p')" = "${RUST_VERSION}"
 
 # Recorded in the manifest so a sysroot can never be paired with the wrong emscripten.
