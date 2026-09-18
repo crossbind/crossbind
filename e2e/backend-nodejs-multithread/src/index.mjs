@@ -1,5 +1,7 @@
 import initNative from '../dist/crossbind-example-backend-nodejs-wasm-wasm-wasm32-mt-release.node.js';
 import { runConformance } from '@crossbind/conformance/spec/run.mjs';
+import { kitExports } from '@crossbind/conformance/spec/bridgeExports.mjs';
+import { trackExports } from '@crossbind/conformance/spec/coverage.mjs';
 
 function wait(ms, fn) {
     return new Promise((resolve) => {
@@ -26,8 +28,10 @@ initNative().then(async (m) => {
     // live in worker_threads, bindings stay synchronous on the main thread), so the full
     // direct surface runs - same shape as the st node leg.
     try {
+        // Every kit export must be touched by a check: the proxy records what the checks read.
+        const { proxy, seen } = trackExports(m);
         const result = await runConformance({
-            cpp: { ConfBox: m.ConfBox, ConfCircle: m.ConfCircle, ConfOps: m.ConfOps },
+            cpp: { ConfBox: proxy.ConfBox, ConfCircle: proxy.ConfCircle, ConfOps: proxy.ConfOps, ConfShape: proxy.ConfShape },
             rustPkg: {
                 RustyCounter: m.RustyCounter,
                 Widget: m.Widget,
@@ -55,6 +59,13 @@ initNative().then(async (m) => {
                 jsStore: m.jsStore,
                 jsFire: m.jsFire,
             },
+            pointers: proxy,
+            callbacks: proxy,
+            strings: proxy,
+            wrappers: proxy,
+            types: proxy,
+            rustKit: proxy,
+            coverage: { exports: kitExports(new URL('../.crossbind/build/bridge/', import.meta.url).pathname), seen },
             caps: {},
         });
         console.log(result.summary);

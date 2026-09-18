@@ -20,10 +20,10 @@
     </script>
     <script type="module">
         // Shared conformance list, no bundler: the build copies the spec next to the glue
-        // (dist/conformance.run.mjs). The browser runtime defaults to useWorker, so worker
+        // (dist/conformance/). The browser runtime defaults to useWorker, so worker
         // contracts apply and live-JS stays a documented skip. initNative reuses the boot
         // started by the classic script above (single-boot promise).
-        import { runConformance } from './dist/conformance.run.mjs';
+        import { runConformance } from './dist/conformance/run.mjs';
 
         const m = await initNative({ path: './dist' });
         try {
@@ -50,6 +50,12 @@
                 rustAppLocal: null,
                 rustCrates: null,
                 jsLive: null,
+                pointers: m,
+                callbacks: m,
+                strings: m,
+                wrappers: m,
+                types: m,
+                rustKit: m,
                 caps: { worker: true },
             });
             const firstBad = result.lines.find((l) => l.startsWith('NO'));

@@ -26,6 +26,7 @@
         "@crossbind/plugin-react-native-ios-helper": "workspace:^",
         "@crossbind/example-lib-prebuilt-matrix": "workspace:^",
         "@crossbind/embind-rust-demo": "workspace:^",
+        "@crossbind/conformance-rust": "workspace:^",
         "@crossbind/port-curl-android": "workspace:^",
         "@crossbind/port-expat-android": "workspace:^",
         "@crossbind/port-gdal-android": "workspace:^",

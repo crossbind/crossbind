@@ -3,6 +3,7 @@ import { ref } from 'vue'
 import { initNative, Native } from './native/native.h'
 // Rust package import: same proxy-module shape as the .h flow, served by the vite plugin.
 import { initNative as initRustDemo, RustyCounter, Gauge, doubleIt, greet, parseEven, tag } from '@crossbind/embind-rust-demo'
+import * as confRust from '@crossbind/conformance-rust'
 // Two more DIRECT crate imports: semver (class-typed param via matches) and regex (throwing ctor).
 import { initNative as initSemver, Version, VersionReq } from 'cargo:semver'
 import { initNative as initRegex, Regex } from 'cargo:regex'
@@ -14,6 +15,17 @@ import { initNative as initHull, Hull } from './native/geo_surface.rs'
 // Conformance kit: every documented C++/Rust feature as one shared data-driven list.
 import { runConformance } from '@crossbind/conformance/spec/run.mjs'
 import { ConfBox, ConfCircle, ConfOps } from '@crossbind/conformance/native/conformance.h'
+// The pointer, callback, string, wrapper and type rules: one namespace per kit header.
+import * as confPointers from '@crossbind/conformance/native/confpointers.h'
+import * as confCallbacks from '@crossbind/conformance/native/confcallbacks.h'
+import * as confText from '@crossbind/conformance/native/conftext.h'
+import * as confWrappers from '@crossbind/conformance/native/confwrappers.h'
+import * as confTypes from '@crossbind/conformance/native/conftypes.h'
+import * as confTypes2 from '@crossbind/conformance/native/conftypes2.h'
+import * as confKindA from '@crossbind/conformance/native/confkinda.h'
+import * as confKindB from '@crossbind/conformance/native/confkindb.h'
+import * as confPrelude from '@crossbind/conformance/native/confprelude.h'
+import * as confPreludeDeps from '@crossbind/conformance/native/confpreludedeps.h'
 import {
     Widget, Mode, RustIntVector, checkedParse,
     jsonEcho, jsonTally, jsonPick, SharedDoc, dupDoc, sharedDropCount,
@@ -55,10 +67,10 @@ initNative().then(async () => {
         // Optional returns: None arrives as undefined, Some as the plain value (worker mode too).
         const ob = await new RustyCounter(42);
         const optOk = (await ob.half()) === 21
-            && (await ob.ratio(0)) === undefined
+            && (await ob.ratio(0)) === null
             && (await ob.maybeLabel()) === 'v42'
             && (await parseEven(' 8 ')) === 8
-            && (await parseEven('7')) === undefined;
+            && (await parseEven('7')) === null;
         await ob.delete();
         // Optional params (undefined/null -> None) and a class-typed param (&RustyCounter).
         const oc2 = await new RustyCounter(10);
@@ -121,6 +133,13 @@ initNative().then(async () => {
             rustAppLocal: { Hull },
             rustCrates: { Uuid, Version, VersionReq, Regex },
             jsLive: null,
+            pointers: confPointers,
+            callbacks: confCallbacks,
+            strings: confText,
+            wrappers: confWrappers,
+            // The type checks reach across headers; the namespaces merge after initNative bound them.
+            types: { ...confTypes, ...confTypes2, ...confKindA, ...confKindB, ...confPrelude, ...confPreludeDeps },
+            rustKit: confRust,
             caps: { worker: true },
         });
         const firstBad = result.lines.find((l) => l.startsWith('NO'));

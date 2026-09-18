@@ -1,6 +1,7 @@
 import matrix from '@crossbind/example-lib-prebuilt-matrix/crossbind.config.js';
 // embind-rust demo: a Rust producer built via buildType 'cargo', consumed as a prebuilt dep.
 import embindRustDemo from '@crossbind/embind-rust-demo/crossbind.config.mjs';
+import conformanceRust from '@crossbind/conformance-rust/crossbind.config.mjs';
 import curlAndroid from '@crossbind/port-curl-android/crossbind.config.js';
 import curlIos from '@crossbind/port-curl-ios/crossbind.config.js';
 import expatAndroid from '@crossbind/port-expat-android/crossbind.config.js';
@@ -27,6 +28,7 @@ import webpAndroid from '@crossbind/port-webp-android/crossbind.config.js';
 import webpIos from '@crossbind/port-webp-ios/crossbind.config.js';
 import zlibAndroid from '@crossbind/port-zlib-android/crossbind.config.js';
 import zlibIos from '@crossbind/port-zlib-ios/crossbind.config.js';
+import { conformanceExport } from '@crossbind/conformance/config.mjs';
 
 export default {
     // Upstream crates available to app-local .rs surfaces (src/native/*.rs) - the Rust
@@ -42,6 +44,7 @@ export default {
     dependencies: [
         matrix,
         embindRustDemo,
+        conformanceRust,
         curlAndroid,
         curlIos,
         expatAndroid,
@@ -69,6 +72,7 @@ export default {
         zlibAndroid,
         zlibIos,
     ],
+    export: conformanceExport,
     paths: {
         config: import.meta.url,
         base: '../..', /* Delete this line for create-crossbind */
