@@ -25,7 +25,7 @@ You're forced into manual `.i` only when one of these is true:
 1. **Custom type mappings** (`%typemap` directives) — e.g. converting an exotic upstream type to a JS-friendly one.
 2. **Selective symbol export** — your header has 100 symbols and you want to expose 10. Auto-generated `.i` exposes everything.
 3. **Renaming** (`%rename`) — your C++ symbol clashes with a JS reserved word, or you want a more idiomatic JS name.
-4. **Ignoring members** (`%ignore`) — a method takes a raw pointer that the auto-binder would choke on, and you can't refactor the upstream header.
+4. **Ignoring members** (`%ignore`) — a declaration the library never defines, or a member you do not want exposed, and you can't refactor the upstream header. For whole names, `export.ignoredDeclarations` in the config does the same without a `.i` file.
 5. **Custom directors** for cross-language polymorphism (rare).
 
 For everything else: write a C++ wrapper instead. Wrappers are easier to reason about and won't drift if SWIG semantics change.

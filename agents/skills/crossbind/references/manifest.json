@@ -14,17 +14,17 @@
     {
       "source": "docs/api/README.md",
       "output": "api/README.md",
-      "sha256": "b16ddfd30970ff2887c2c5afd668d646e35480209c5b9f9b304816a9f2bdd12f"
+      "sha256": "c3218aeaba41f5229413b60cde10fe9cf9ae138021901899607871e4f7fbb3b5"
     },
     {
       "source": "docs/api/build-state.md",
       "output": "api/build-state.md",
-      "sha256": "39203714c0e1a5bff2bca32960ede5b002fae762dfb921453d1dfe25db1ec295"
+      "sha256": "2f2028ebe358322f90660bc5454b8da6eed8e881cc90aa6260da3ea59299e573"
     },
     {
       "source": "docs/api/cpp-binding-rules.md",
       "output": "api/cpp-binding-rules.md",
-      "sha256": "15a39172cecbd8c4cba5e74a3c04c657c93d46712d611157baa75cb67d413071"
+      "sha256": "793883b37851f7f0a919f029c9a6e1f7a2c73383cd88c2bbf605e8c3730929f4"
     },
     {
       "source": "docs/api/crossbind-build.md",
@@ -34,7 +34,7 @@
     {
       "source": "docs/api/crossbind-config.md",
       "output": "api/crossbind-config.md",
-      "sha256": "d523cc841390bfd73b2fb1e0ccc3d23e1b37b50dca65f3c40babb57e40a0de87"
+      "sha256": "5435b32a1176f37a5038597b7781ed6e0bcd8dc8ae901c6330ef83347e03cfb1"
     },
     {
       "source": "docs/api/filesystem.md",
@@ -49,7 +49,7 @@
     {
       "source": "docs/api/lifecycle-and-types.md",
       "output": "api/lifecycle-and-types.md",
-      "sha256": "68d5b4ee641325747df6d281620063dc0a5abf99c1f5bc54b93462bf7ddce879"
+      "sha256": "77d4851e1ec59ddf4aad182d2e2e7bc17099f882b87a391491e427e2296b4127"
     },
     {
       "source": "docs/api/overrides.md",
@@ -59,17 +59,17 @@
     {
       "source": "docs/api/performance.md",
       "output": "api/performance.md",
-      "sha256": "d39a0ea736f6e4595ea634e1c6c3a576d74ed6347ee9af5b8ace175989ec8bf8"
+      "sha256": "55b19dbc0506d210335abb4366aba2ce385c19f0741dba10aeeb36efb6a2d8b0"
     },
     {
       "source": "docs/api/rust.md",
       "output": "api/rust.md",
-      "sha256": "69629536917c766b702c207af40defa87210af02b8e9f632d3d5a75d1fba45ec"
+      "sha256": "d2d18383de3fc02c232b05c060f0fcf39482373808e4638efb101cb53b375c34"
     },
     {
       "source": "docs/api/swig-escape.md",
       "output": "api/swig-escape.md",
-      "sha256": "b0dea488f121a53a96bfe47f3be8c43e7aaa128fac35c2543d2da140959ff0d6"
+      "sha256": "3e7b69c16a57b430c663c70b7dd783a5f372518cca819db9f1191590927caa91"
     },
     {
       "source": "docs/api/threading.md",
@@ -79,7 +79,7 @@
     {
       "source": "docs/api/troubleshooting.md",
       "output": "api/troubleshooting.md",
-      "sha256": "e249a5a70db751b75b919744e42dc8eabadaf03ecfb45cc0a7b92abaa02b5854"
+      "sha256": "e43dae2539a6351fb57c2fb613461a7cf257a305252f036d8876f170c8d39305"
     },
     {
       "source": "docs/api/wasi.md",
@@ -139,7 +139,7 @@
     {
       "source": "ports/catalog.json + ports/*/package.json",
       "output": "ports.json",
-      "sha256": "3ccd0a6d7363433edeee4fc3a9964847d55ea5e9f43205b6f24d62b6ba78867f"
+      "sha256": "6fcb904634280303f976114c655b83ddf64063d93900eeebe8c84067ec1d7e23"
     }
   ]
 }

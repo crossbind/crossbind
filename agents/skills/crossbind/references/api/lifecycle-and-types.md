@@ -6,7 +6,7 @@
 
 ## Memory & object lifecycle: there's nothing to manage in JS
 
-crossbind doesn't expose raw pointers across the JS↔C++ boundary (see [`cpp-binding-rules.md`](./cpp-binding-rules.md) Rule 1). Because of that, **you don't call `m.delete()` or release any C++ object from JS**. The lifecycle is entirely C++-side:
+crossbind hands objects to JS by value or through `shared_ptr`, and raw pointers as `NativePointer` handles (see [`cpp-binding-rules.md`](./cpp-binding-rules.md) Rule 1). In every case, **you don't call `m.delete()` or release any C++ object from JS**. The lifecycle is entirely C++-side:
 
 - Objects passed by value to JS get copied; the C++ original is destroyed normally.
 - Objects returned as `std::shared_ptr<T>` are reference-counted. JS holds a strong reference; when JS-side reference goes out of scope (garbage collected), the shared_ptr count drops, and C++ destructor runs when the count hits zero.

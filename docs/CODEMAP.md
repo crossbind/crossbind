@@ -278,6 +278,7 @@ All `check:*` and `clear:*` are exposed as `pnpm run` aliases — see `package.j
 | `test-android-sample.yml` | RN-cli Android E2E |
 | `test-ios-sample.yml` | RN-cli iOS E2E (uses `ci/crossbind-snapshot/` bridge fixtures) |
 | `check-crossbind-release.yml` | PR/push train tests, actionlint, publish hygiene and installed `crossbind` tarball smoke |
+| `check-port-links.yml` | Links the published C++ ports (gdal, proj, geos) with the pinned image and calls them from Node (`scripts/check-port-links.mjs`); on toolchain-pin and port changes, weekly, and on demand |
 | `release-crossbind.yml` | Manual Linux/macOS package train; protected OIDC publish after the all-artifacts barrier; exact `crossbind` GitHub Release |
 | `dependency-watch.yml` | Daily read-only discovery, bounded candidate matrix and manual-finding issue lifecycle |
 | `dependency-update-candidate.yml` | Per-candidate Linux/macOS validation and short-lived GitHub App draft-PR creation |

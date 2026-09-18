@@ -19,7 +19,7 @@ Cross-cutting topics:
 
 C++ binding & build authoring:
 
-- [`cpp-binding-rules.md`](./cpp-binding-rules.md) — Rules for writing C++ that crossbind can auto-bind (no raw pointers, C++11+, wrapper pattern, JSPI advanced).
+- [`cpp-binding-rules.md`](./cpp-binding-rules.md) — Rules for writing C++ that crossbind can auto-bind (pointer handles and strings, C++11+, wrapper pattern, JSPI advanced).
 - [`rust.md`](./rust.md) — Rust bindings: `cargo:` crate imports, app-local `.rs` sources, `export.type: 'cargo'` packages; idiom table.
 - [`wasi.md`](./wasi.md) — `platform: 'wasi'` single-module command builds, `-wasi` prebuilts, `-bin-wasi` npm CLI tool packages.
 - [`swig-escape.md`](./swig-escape.md) — Manual SWIG `.i` files when auto-generation isn't enough.

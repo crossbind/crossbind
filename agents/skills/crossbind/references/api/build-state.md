@@ -228,7 +228,7 @@ Same shape as wasm32 above, but `arch: 'wasm64'`. Used when you need >4GB linear
 | ios | iphonesimulator | mt | release |
 | ios | iphonesimulator | mt | debug |
 
-> **iOS is always `mt`.** No single-thread variant. iOS deployment target 13.0; bitcode embedded.
+> **iOS is always `mt`.** No single-thread variant. iOS deployment target 15.1 (Xcode 27 accepts nothing below 15.0; React Native's floor is 15.1); bitcode embedded.
 
 ## `targetSpecs[]` — per-target override entries
 
