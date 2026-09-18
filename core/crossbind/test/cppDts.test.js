@@ -17,6 +17,9 @@ public:
     std::shared_ptr<Matrix> multiple(std::shared_ptr<Matrix> b);
     static std::string describe(const std::string& name, bool verbose);
     double* rawPointer(); /* unsupported: skipped with a log line */
+    const char* label(const char* prefix);
+    char* scratch(char* buffer); /* owned or written memory: skipped */
+    const char* title; /* a pointer member is not a property */
     std::vector<int> row(int i);
     std::vector<std::shared_ptr<Matrix>> split(std::vector<std::string> names);
     static void configure(std::string, std::string other);
@@ -41,7 +44,7 @@ describe('parseCppSurface', () => {
     test('finds classes with their public surface only', () => {
         const matrix = model.classes.find((c) => c.name === 'Matrix');
         expect(matrix).toBeTruthy();
-        expect(matrix.methods.map((m) => m.name)).toEqual(['get', 'multiple', 'describe', 'row', 'split', 'configure', 'raw']);
+        expect(matrix.methods.map((m) => m.name)).toEqual(['get', 'multiple', 'describe', 'label', 'row', 'split', 'configure', 'raw']);
         const untouchable = model.classes.find((c) => c.name === 'Untouchable');
         expect(untouchable.methods.map((m) => m.name)).toEqual(['run']);
     });
@@ -88,6 +91,16 @@ describe('parseCppSurface', () => {
         const matrix = model.classes.find((c) => c.name === 'Matrix');
         expect(matrix.methods.find((m) => m.name === 'rawPointer')).toBeUndefined();
         expect(logs.some((l) => l.includes('rawPointer'))).toBe(true);
+    });
+
+    test('types a const char pointer as a string and keeps other char pointers unsupported', () => {
+        const matrix = model.classes.find((c) => c.name === 'Matrix');
+        const label = matrix.methods.find((m) => m.name === 'label');
+        expect(label.args).toEqual([{ name: 'prefix', type: 'string' }]);
+        expect(label.ret).toBe('string | null');
+        expect(matrix.methods.find((m) => m.name === 'scratch')).toBeUndefined();
+        expect(logs.some((l) => l.includes('scratch'))).toBe(true);
+        expect(matrix.fields.find((f) => f.name === 'title')).toBeUndefined();
     });
 });
 

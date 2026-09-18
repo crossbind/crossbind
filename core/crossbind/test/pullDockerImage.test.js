@@ -161,6 +161,40 @@ describe('pullDockerImage', () => {
         );
     });
 
+    test('looks again after a failed pull, which has started a stopped Docker Desktop engine', async () => {
+        // Docker Desktop's Resource Saver stops the engine after a few idle minutes and answers
+        // `image inspect` from a cache with "No such image" meanwhile; only the pull starts the engine.
+        const { mod, execFileSync } = await importFresh();
+        vi.spyOn(console, 'log').mockImplementation(() => {});
+        let lookups = 0;
+        execFileSync.mockImplementation((cmd, args) => {
+            if (args[0] === 'image' && args[1] === 'inspect' && lookups++ === 0) throw new Error('No such image');
+            if (args[0] === 'pull') throw new Error('Command failed: docker pull');
+            return '';
+        });
+
+        expect(() => mod.default()).not.toThrow();
+
+        expect(lookups).toBe(2);
+        expect(console.log).toHaveBeenCalledWith(expect.stringContaining('is present locally'));
+        mod.default();
+        expect(lookups).toBe(2);
+    });
+
+    test('reports the pull failure when the image is still absent afterwards', async () => {
+        const { mod, execFileSync } = await importFresh();
+        vi.spyOn(console, 'log').mockImplementation(() => {});
+        execFileSync.mockClear();
+        execFileSync.mockImplementation((cmd, args) => {
+            if (args[0] === 'image' && args[1] === 'inspect') throw new Error('No such image');
+            if (args[0] === 'pull') throw new Error('Command failed: docker pull');
+            return '';
+        });
+
+        expect(() => mod.default()).toThrow(/docker pull/);
+        expect(execFileSync.mock.calls.filter(([, args]) => args[1] === 'inspect')).toHaveLength(2);
+    });
+
     test('checks availability only once per process', async () => {
         const { mod, execFileSync } = await importFresh();
         execFileSync.mockReturnValue('');

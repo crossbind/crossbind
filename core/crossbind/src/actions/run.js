@@ -102,6 +102,12 @@ const iosParams = [
     '-e', `LDFLAGS="${IOS_HOST_FLAGS}"`,
 ]; */
 
+// The C++ compiler of the image that runs SWIG for the target, so its -dM macro table matches that parse.
+export function cxxPreprocessorFor(target) {
+    if (imageRoleFor(target) !== 'android') return 'em++';
+    return `${t}/${target.arch === 'x86_64' ? CROSSCOMPILER_x86_64 : CROSSCOMPILER_ARM64}-clang++`;
+}
+
 export default function run(program, params = [], platformPrefix = null, target = null, dockerOptions = {}) {
     const buildPath = platformPrefix ? `${state.config.paths.build}/${platformPrefix}/${target.path}` : state.config.paths.build;
     if (!fs.existsSync(buildPath)) {

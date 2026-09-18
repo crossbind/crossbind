@@ -89,7 +89,16 @@ export default function pullDockerImage(role = 'web', platform) {
         console.log('============= Downloading the docker image... =============');
         console.log('===========================================================');
         console.log('');
-        execFileSync('docker', ['pull', ref], { stdio: 'inherit' });
+        try {
+            execFileSync('docker', ['pull', ref], { stdio: 'inherit' });
+        } catch (error) {
+            // Docker Desktop's Resource Saver stops the engine after a few idle minutes and answers
+            // `image inspect` from a cache with "No such image" meanwhile; the pull attempt has started
+            // the engine, so only a second lookup tells whether the image is really missing. A local-only
+            // tag (a dev image override) lands here too: its pull is denied, yet the image is present.
+            if (!isImagePresent(ref)) throw error;
+            console.log(`crossbind: ${ref} is present locally, so the failed pull is ignored.`);
+        }
         console.log('');
         console.log('===========================================================');
         console.log('');
