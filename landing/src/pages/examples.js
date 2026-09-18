@@ -112,7 +112,7 @@ node src/index.mjs`,
         glyph: 'cf',
         tone: '#F6821F',
         title: 'Cloudflare Worker',
-        summary: 'A Worker that answers HTTP requests from C++; the same wasm, single-threaded, in-memory filesystem.',
+        summary: 'A Worker that answers HTTP requests from C++; an edge-targeted wasm build, single-threaded, in-memory filesystem.',
         create: `${creator} -- my-worker Cloud "Cloudflare Worker"`,
         needs: 'Node.js 24+, Docker, and wrangler for the local run.',
         steps: `cd my-worker

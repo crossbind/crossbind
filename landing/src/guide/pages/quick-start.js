@@ -20,12 +20,12 @@ export default {
         { type: 'h2', id: 'prerequisites', text: 'Prerequisites' },
         {
             type: 'p',
-            text: `The cross-toolchain ships as a Docker image, so ${BRAND} needs very little installed on your machine:`,
+            text: `The web, WASI and Android toolchains ship as Docker images, so ${BRAND} needs very little installed on your machine:`,
         },
         {
             type: 'ul',
             items: [
-                '**Docker** - carries the web, Android and WASI toolchains. Pulled automatically on the first build.',
+                '**Docker** - runs the `web` image for WebAssembly and WASI and the `android` image for Android. Both are pulled automatically on the first build.',
                 '**Node.js 24+**.',
                 '**CMake 3.28+** - mobile only.',
                 '**Xcode** and **CocoaPods** - iOS only, macOS only.',
@@ -55,7 +55,7 @@ docker pull ${WEB_IMAGE}   # optional: the first build pulls it anyway`,
         { type: 'code', file: 'shell', code: SKILL_COMMAND },
         {
             type: 'p',
-            text: 'Drop `--global` to install it into this project only. For clients that cannot install skills, hand over this prompt instead - it inspects the repo, installs the right plugin, writes the config and wires your bundler:',
+            text: 'Drop `--global` to install it into this project only. Without the skill, hand over this prompt instead - it sends the agent to the Markdown docs, inspects the repo, installs the right packages, writes the config and wires your bundler or build script:',
         },
         { type: 'code', file: 'prompt', code: SETUP_PROMPT },
         { type: 'p', text: 'Prefer to do it yourself? Keep going.' },

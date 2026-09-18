@@ -103,7 +103,7 @@ console.log(typeof SharedArrayBuffer);  // must be 'function'`,
                 ['`m.FS.writeFile(...)` returns', '`undefined`', 'a promise'],
                 ['Synchronous callbacks into JS', 'work', 'do not - design them as promise round-trips'],
                 ['OPFS storage', 'throws', 'works, when the browser supports it'],
-                ['Shutting down', 'n/a', '`init.terminate()` kills the worker'],
+                ['Shutting down', 'n/a', '`initNative.terminate()` kills the worker'],
             ],
         },
         {

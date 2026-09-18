@@ -32,7 +32,7 @@ export const SITE = 'https://crossbind.dev';
 // (see main.jsx), so keep the two titles in step.
 export const SITE_TITLE = `${BRAND} — import C++ and Rust like JavaScript modules`;
 export const SITE_DESCRIPTION =
-    'No bindings, no glue, no second build system. One import runs in the browser, on iOS and Android, in Node, on Workers, and as a WASI command.';
+    'No bindings, no glue, no second build system. One import runs in the browser, on iOS and Android, in Node and on Workers, and builds to a WASI command too.';
 
 // Every reference page lives on this site now; the old Docusaurus site is gone and its URLs are
 // 301s in public/_redirects. Nothing here may point at a /docs/ path.
@@ -60,21 +60,17 @@ export const SKILL_COMMAND = `npx skills add ${REPO_URL}/tree/main/agents/skills
 
 // Handed to a coding agent rather than typed. The install step carries the release channel's
 // dist-tag suffix for the same reason CREATE_COMMAND does - see TODO(rename) above.
-export const SETUP_PROMPT = `Add crossbind to this project so I can call C++ (or Rust) from JavaScript.
+export const SETUP_PROMPT = `Add crossbind to this project so I can call C++ or Rust from JavaScript/TypeScript. Inspect the repository, implement the integration, and verify it.
 
-First inspect the repo and tell me what you found: package manager, bundler (Vite, Webpack, Rspack, Rollup, Metro), whether it targets the browser, Node, Cloudflare Workers or React Native, and any existing C++/Rust sources or CMake project.
+Start with the crossbind documentation index at ${SITE}/llms.txt and follow the links relevant to this project. If the crossbind skill is already available, use it.
 
-Then:
+1. Identify the package manager, framework or bundler, target runtimes, existing native sources, and any crossbind configuration.
+2. Choose the integration, compatible package versions, release channel, and platform variants from the documentation. Prefer supported prebuilt ports and generated bindings.${RELEASE.distTagSuffix ? ` Install every crossbind package, ports included, from the npm \`${RELEASE.distTag}\` tag; the default tag is older.` : ''}
+3. Reuse existing native code. If none exists, add a minimal C++ example and call it from the application.
+4. Configure the build and runtime initialization for the detected targets. Reuse existing configuration and dependency entries, preserve unrelated behavior, and apply platform requirements where relevant.
+5. Run the relevant build and verify at least one JavaScript-to-native call. Report the changes, commands run, results, and anything you could not verify. Include the Wasm artifact size when one is produced.
 
-1. Install \`crossbind${RELEASE.distTagSuffix}\` and the plugin matching my bundler (\`@crossbind/plugin-vite${RELEASE.distTagSuffix}\`, \`@crossbind/plugin-webpack${RELEASE.distTagSuffix}\` for Webpack or Rspack, \`@crossbind/plugin-rollup${RELEASE.distTagSuffix}\`, \`@crossbind/plugin-metro${RELEASE.distTagSuffix}\`).
-2. Create \`crossbind.config.js\` at the repo root and register the plugin in my bundler config. Keep the change idempotent - do not duplicate an existing entry.
-3. If I already have C++ or Rust sources, wire those up. Otherwise add one small example: a header under \`src/native/\`, imported directly from JavaScript.
-4. Call \`await initNative()\` once at my app's entry point, before the first native call - import it from the header or crate the app already imports, not from a separate runtime package.
-5. Run my build and report what changed, including the size of the generated WebAssembly.
-
-Rules: do not hand-write binding or glue code - crossbind generates it from the header. Do not add a second build system. If I need a prebuilt library (GDAL, OpenSSL, SQLite, GEOS, PROJ and more), install the matching \`@crossbind/port-*\` instead of compiling it from source.${RELEASE.distTagSuffix ? ` Install every crossbind package, ports included, from the npm \`${RELEASE.distTag}\` tag - the default tag is older.` : ''}
-
-Reference: ${SITE}/guide/introduction/`;
+Follow the repository's conventions and make the smallest complete integration. Ask for clarification only when missing information prevents a correct implementation.`;
 
 // Counts in copy are derived from the arrays below so they cannot drift, but they still have to
 // read as prose rather than as data.
@@ -85,7 +81,8 @@ export const spell = (n) => NUMBER_WORDS[n] ?? String(n);
 // header you already import, and one initNative() binds every native module on the page.
 // The port import shows the intended package contract (meta package, header imported from
 // JavaScript). The published beta.56 ports do not bind upstream headers yet; tracked as an
-// open item, not a site concern.
+// open item, not a site concern. The fold only shows this sample - the live proof is the SQLite
+// panel below it, which runs a published port rather than a snippet built for the page.
 export const UNIVERSAL_CODE = `import { initNative, Matrix } from './native/Matrix.h';
 import { GDALVersionInfo } from '@crossbind/port-gdal/gdal.h';
 
@@ -117,7 +114,7 @@ export const RUNTIME_CHIPS = [
     { id: 'browser', label: 'Browser', sub: 'Chrome · Firefox · Safari', tone: '#5ba3e3', glyphs: ['chrome', 'firefox', 'safari'] },
     { id: 'node', label: 'Node.js', sub: 'CJS or ESM', tone: '#5FA04E', glyphs: ['node'] },
     { id: 'rn', label: 'React Native', sub: 'iOS + Android · JSI', tone: '#61DAFB', glyphs: ['ios', 'android'] },
-    { id: 'cf', label: 'CF Workers', sub: 'Edge · same wasm', tone: '#F6821F', glyphs: ['cf'] },
+    { id: 'cf', label: 'CF Workers', sub: 'Edge · single-threaded', tone: '#F6821F', glyphs: ['cf'] },
     { id: 'wasi', label: 'WASI', sub: 'wasmtime 47+ · wasip3', tone: '#a78bfa', glyphs: ['wasi'] },
 ];
 
@@ -262,7 +259,7 @@ export const FEATURES = [
         guide: 'quick-start',
         title: 'No toolchain to install',
         summary:
-            'emscripten, the Android NDK and wasi-sdk arrive together in one digest-pinned Docker image — nothing to set up, identical builds on any machine. iOS still goes through local Xcode, and Rust through your own cargo.',
+            'emscripten and wasi-sdk ship in the digest-pinned web Docker image, the Android NDK in the android one — nothing to set up, identical builds on any machine. iOS still goes through local Xcode, and Rust through your own cargo.',
         tag: ['JUST DOCKER FOR WASM · ANDROID · WASI'],
     },
     {
@@ -282,7 +279,7 @@ export const FEATURES = [
         guide: 'architecture',
         title: 'Only what you use',
         summary:
-            'Dead-code elimination on top of -O3, plus platform-split downloads: you ship what you call and nothing else. Android is the exception — it links the whole library.',
+            'Dead-code elimination on top of -O3, plus platform-split downloads: you ship what you call and what it reaches, not the whole library. Android is the exception — it links the whole library.',
         tag: ['DCE + -O3', 'PLATFORM-SPLIT DOWNLOADS'],
     },
     {
@@ -302,7 +299,7 @@ export const FEATURES = [
         guide: 'runtimes',
         title: 'One codebase, every platform',
         summary:
-            'WebAssembly in the browser, in Node and on the edge. Native machine code on iOS and Android through JSI. A wasip3 command for WASI. One API in front of a 30-target build matrix.',
+            'WebAssembly in the browser, in Node and on the edge. Native machine code on iOS and Android through JSI. A wasip3 command for WASI, with its own entry point instead of initNative. One binding model for the JavaScript targets, in front of a 30-target build matrix.',
         tag: ['4 PLATFORMS', '30 BUILD TARGETS', 'WASM · JSI · WASIP3'],
     },
     {
@@ -321,7 +318,7 @@ export const FEATURES = [
         group: 'run',
         guide: 'threading',
         title: 'Off the main thread',
-        summary: `SIMD is on for every wasm build. runtime: 'mt' adds a warm pool of two pthread workers in the browser — iOS and Android get real OS threads — and useWorker: true moves the module off the main thread entirely, so even new returns a Promise. Production needs the two COOP/COEP headers; the dev server already sends them.`,
+        summary: `SIMD is on for every wasm build. runtime: 'mt' adds a warm pool of two pthread workers by default in the browser — iOS and Android get real OS threads — and useWorker: true moves the module off the main thread entirely, so even new returns a Promise. Production needs the two COOP/COEP headers; the dev server already sends them.`,
         tag: ['SIMD', '2-WORKER WASM POOL', 'NATIVE THREADS ON DEVICE'],
     },
     {
@@ -351,7 +348,7 @@ export const FEATURES = [
         guide: 'libraries',
         title: 'Libraries as npm dependencies',
         summary:
-            'GDAL, OpenSSL, SQLite, GEOS, PROJ and 11 more, precompiled from the real upstream sources at pinned versions. Or publish your own — prebuilt binaries, C++ sources, a CMake project or a Rust crate. Either way the right platform variant installs itself.',
+            'GDAL, OpenSSL, SQLite, GEOS, PROJ and 11 more, precompiled from the real upstream sources at pinned versions. Or publish your own — prebuilt binaries, C++ sources, a CMake project or a Rust crate. Either way you install one variant per platform you build, and the build resolves its native dependencies.',
         tag: ['16 PREBUILT', '4 PACKAGE TYPES'],
     },
     {
@@ -369,9 +366,9 @@ export const FEATURES = [
         num: '23',
         group: 'ship',
         guide: 'wasi',
-        title: 'Ship a CLI, no runtime',
-        summary: `platform: 'wasi' turns C++ into a single .wasm command with no JS glue. 68 classic tools already ship as <tool>-wasi npm commands — gdalinfo, sqlite3, openssl and friends.`,
-        tag: ['68 PREBUILT COMMANDS', 'WASIP3'],
+        title: 'Ship a CLI, no JavaScript',
+        summary: `platform: 'wasi' turns C++ into a single .wasm command with no JS glue. 68 classic tools already ship as <tool>-wasi npm commands — gdalinfo, sqlite3, openssl and friends. They run under wasmtime 47 or newer.`,
+        tag: ['68 PREBUILT COMMANDS', 'WASIP3', 'WASMTIME 47+'],
     },
     {
         id: 'supply',
