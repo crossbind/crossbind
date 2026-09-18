@@ -7,6 +7,8 @@ export default (newConfig = {}) => ({
     export: {
         type: 'cmake',
         bundle: false,
+        // curl/easy.h and its siblings rely on CURL_EXTERN and the types curl/curl.h defines before including them.
+        headerPrelude: ['curl/curl.h'],
         ...(newConfig.export || {}),
     },
     paths: {

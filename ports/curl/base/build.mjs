@@ -15,7 +15,7 @@ const platformBuild = {
 };
 
 export default {
-    sha256: 'd9b327997999045a24cda50f3983e69e51c516bd8be6ef9842fc7f99135e33bb', // curl-8.21.0.tar.gz
+    sha256: 'd54dd598bf05927a726deb38df31c6a255ba83ff1de57c5d1464dac3ed8f44a1', // curl-8.22.0.tar.gz
     getURL: (version) => `https://curl.se/download/curl-${version}.tar.gz`,
     buildType: 'cmake',
     getBuildParams: (target, depPaths) => [

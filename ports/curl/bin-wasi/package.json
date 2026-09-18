@@ -1,7 +1,7 @@
 {
     "name": "@crossbind/port-curl-bin-wasi",
     "version": "2.0.0-beta.56",
-    "nativeVersion": "8.21.0",
+    "nativeVersion": "8.22.0",
     "description": "The curl CLI prebuilt as a WASI (wasm32-wasip3) command component.",
     "homepage": "https://github.com/crossbind/crossbind/tree/main/ports/curl#readme",
     "repository": "https://github.com/crossbind/crossbind.git",
@@ -34,16 +34,16 @@
         "provenance": {
             "recipe": {
                 "name": "@crossbind/port-curl",
-                "version": "2.0.0-beta.53",
-                "nativeVersion": "8.21.0"
+                "version": "2.0.0-beta.56",
+                "nativeVersion": "8.22.0"
             },
             "source": {
-                "url": "https://curl.se/download/curl-8.21.0.tar.gz",
-                "sha256": "d9b327997999045a24cda50f3983e69e51c516bd8be6ef9842fc7f99135e33bb"
+                "url": "https://curl.se/download/curl-8.22.0.tar.gz",
+                "sha256": "d54dd598bf05927a726deb38df31c6a255ba83ff1de57c5d1464dac3ed8f44a1"
             },
             "environment": {
                 "builder": "host",
-                "dockerImage": "ghcr.io/crossbind/web@sha256:c1d1d81a4775871cd90c8ac980e0a5f87cb7890822117f77be1c8345f51b1f47",
+                "dockerImage": "ghcr.io/crossbind/web@sha256:633da840658f12f291c17c3305adf265c7d52307b3b61b84156d5f85f3121779",
                 "hostPlatform": "darwin-arm64",
                 "toolchain": {
                     "name": "wasi-sdk",
