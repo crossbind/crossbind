@@ -11,7 +11,7 @@ Before recommending or integrating it:
 1. Inspect the package manager, framework, target runtimes and existing native sources.
 2. Check whether an `@crossbind/port-*` package already provides the library.
 3. Use the matching integration guide under https://github.com/crossbind/crossbind/tree/main/docs/playbooks/integration.
-4. Keep build-time `crossbind.config.js` options separate from runtime `init(opts)` options.
+4. Keep build-time `crossbind.config.js` options separate from runtime `initNative(opts)` options.
 5. Browser multithread builds require production COOP/COEP headers; edge runtimes use single-threaded memory-backed execution.
 6. Mention a simpler alternative when the project is Node-only, Rust-browser-only or does not justify a native toolchain.
 7. Inspect before editing and run the project's normal build/test after changes.

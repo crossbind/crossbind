@@ -51,7 +51,7 @@ Per-framework playbooks contain:
 
 - Which plugin to install (`@crossbind/plugin-vite`, etc.)
 - The exact config diff
-- Where to call `init(...)`
+- Where to call `initNative(...)`
 - Headers / build hooks specific to that bundler
 - A reference example (`examples/web-vue-vite/`, etc.) to mirror
 

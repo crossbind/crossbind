@@ -1,13 +1,15 @@
 # Threading — `runtime: 'st'` vs `'mt'`, `useWorker`, and edge limits
 
 > Two orthogonal axes: **threading** (single vs multi-thread Wasm) and **`useWorker`** (whether the Wasm module runs in a Web Worker). Don't confuse them.
+>
+> **`useWorker` is on by default in a browser** (the runtime enables it wherever `globalThis.Worker` exists), so browser code awaits its calls, construction included. Pass `useWorker: false` to opt out.
 
 ## The two axes
 
 ```
                     │ runtime: 'st'        │ runtime: 'mt'
 ────────────────────┼──────────────────────┼─────────────────────────
-useWorker: false    │ Default. Main thread │ Wasm runs main-thread,
+useWorker: false    │ Opt-out: main thread │ Wasm runs main-thread,
                     │ Wasm. Smallest setup.│ pthreads via SharedArray-
                     │                      │ Buffer. Needs COOP/COEP.
 ────────────────────┼──────────────────────┼─────────────────────────
@@ -108,7 +110,7 @@ const result = await m.add(2, 3)
 
 You want this when:
 
-- You need OPFS persistent storage (mandatory; OPFS is Worker-scope-only).
+- You need OPFS persistent storage (mandatory: crossbind's OPFS backend runs on synchronous access handles, which only exist in Worker scope).
 - Your C++ is slow and you don't want to block the main thread paint loop.
 - You're using `runtime: 'mt'` and want pthread workers spawned from a non-main scope (cleaner architecture).
 
@@ -125,7 +127,7 @@ You don't need it when:
 | `m.FS.writeFile(...)` returns | `undefined` | `Promise<undefined>` |
 | Synchronous callbacks | Work | Don't work — use returned promises |
 | OPFS storage | Throws | Works (if browser supports) |
-| Termination | n/a | `init.terminate()` kills the worker |
+| Termination | n/a | `initNative.terminate()` kills the worker |
 
 Embind objects (vectors, structs) are auto-proxied via crossbind's custom Comlink transfer handlers. `m.toArray(vec)` and `m.toVector(cls, arr)` work transparently.
 

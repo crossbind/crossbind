@@ -149,7 +149,7 @@ Same root cause as above — COOP/COEP missing.
 
 ### `OPFS is only available inside a Worker scope`
 
-You mounted `/opfs/...` but didn't set `useWorker: true` on `init(opts)`.
+You mounted `/opfs/...` but didn't set `useWorker: true` on `initNative(opts)`.
 
 - **Fix:** `initNative({ useWorker: true })`. See [`filesystem.md`](./filesystem.md).
 
