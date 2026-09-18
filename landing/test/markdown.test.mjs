@@ -69,6 +69,16 @@ test('renders pipe tables and escapes pipes inside cells', () => {
     assert.equal(markdown, ['| Option | Type |', '| --- | --- |', "| `a` | 'st' \\| 'mt' |", '| b | multi line |'].join('\n'));
 });
 
+test('escapes backslashes in table cells so an escaped pipe cannot split the row', () => {
+    const markdown = renderBlocks([{
+        type: 'table',
+        head: ['Input', 'Path'],
+        rows: [[String.raw`a\|b`, String.raw`C:\tmp`]],
+    }]);
+
+    assert.equal(markdown.split('\n').at(-1), String.raw`| a\\\|b | C:\\tmp |`);
+});
+
 test('demotes a page under a prefixed section title without touching code fences', () => {
     const page = [
         '# Quick start',

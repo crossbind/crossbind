@@ -37,7 +37,9 @@ function fence(code, file) {
     return `${codeLabel(file)}${ticks}${fenceLanguage(file)}\n${code}\n${ticks}`;
 }
 
-const cell = (text, resolveLink) => links(text, resolveLink).replace(/\|/g, '\\|').replace(/\s*\n\s*/g, ' ');
+// Backslash first, in the same pass as the pipe: escaping the pipe alone turns a cell's own
+// `\|` into `\\|`, which renders as a backslash and then splits the row at the bare pipe.
+const cell = (text, resolveLink) => links(text, resolveLink).replace(/[\\|]/g, '\\$&').replace(/\s*\n\s*/g, ' ');
 
 function table({ head, rows }, resolveLink) {
     const line = (cells) => `| ${cells.map((text) => cell(text, resolveLink)).join(' | ')} |`;
