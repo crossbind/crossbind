@@ -34,6 +34,7 @@
         "@crossbind/port-webp-wasm": "workspace:^",
         "@crossbind/port-zlib-wasm": "workspace:^",
         "@crossbind/embind-rust-demo": "workspace:^",
+        "@crossbind/conformance-rust": "workspace:^",
         "@crossbind/conformance": "workspace:^"
     },
     "devDependencies": {

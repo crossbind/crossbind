@@ -48,6 +48,12 @@ async function bootNow() {
             jsStore: m.jsStore,
             jsFire: m.jsFire,
         },
+        pointers: m,
+        callbacks: m,
+        strings: m,
+        wrappers: m,
+        types: m,
+        rustKit: m,
         caps: {},
     });
 

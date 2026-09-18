@@ -14,6 +14,7 @@
     "dependencies": {
         "@crossbind/example-lib-prebuilt-matrix": "workspace:^",
         "@crossbind/embind-rust-demo": "workspace:^",
+        "@crossbind/conformance-rust": "workspace:^",
         "@crossbind/conformance": "workspace:^",
         "@crossbind/port-curl-wasm": "workspace:^",
         "@crossbind/port-expat-wasm": "workspace:^",

@@ -17,6 +17,7 @@
         "react": "^19.2.8",
         "react-dom": "^19.2.8",
         "@crossbind/embind-rust-demo": "workspace:^",
+        "@crossbind/conformance-rust": "workspace:^",
         "@crossbind/conformance": "workspace:^",
         "@crossbind/example-lib-prebuilt-matrix": "workspace:^",
         "@crossbind/port-curl-wasm": "workspace:^",

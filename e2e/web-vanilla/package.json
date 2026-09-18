@@ -7,7 +7,7 @@
     "repository": "https://github.com/crossbind/crossbind.git",
     "license": "MIT",
     "scripts": {
-        "build": "crossbind build -p wasm -a wasm32 -r mt -e browser && cp node_modules/@crossbind/conformance/spec/run.mjs dist/conformance.run.mjs",
+        "build": "crossbind build -p wasm -a wasm32 -r mt -e browser && mkdir -p dist/conformance && cp -R node_modules/@crossbind/conformance/spec/. dist/conformance/",
         "preview": "serve -c ./serve.json",
         "e2e:prod": "playwright test --config playwright.prod.config.cjs"
     },
@@ -27,6 +27,7 @@
         "@crossbind/port-webp-wasm": "workspace:^",
         "@crossbind/port-zlib-wasm": "workspace:^",
         "@crossbind/embind-rust-demo": "workspace:^",
+        "@crossbind/conformance-rust": "workspace:^",
         "@crossbind/conformance": "workspace:^"
     },
     "devDependencies": {

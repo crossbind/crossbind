@@ -15,6 +15,27 @@
 //   rustCrates:   { Uuid, Version, VersionReq, Regex }        (bundler legs only)
 //   jsLive:       { jsPass, jsProbe, jsCall, jsStore, jsFire } (synchronous runtimes only -
 //                   on worker-backed legs functions cannot cross and identity dies)
+//   pointers, callbacks, strings, wrappers, types: the module namespace of the matching kit
+//                   header (any leg; the checks that pass JS functions skip on worker legs)
+//   rustKit:      the exports of @crossbind/conformance-rust (any leg - prebuilt package);
+//                   constructs the generator does not carry yet are `todo` entries, reported
+//                   as TODO lines and counted apart from the pass/run figures
+//   coverage:     { exports, seen } from spec/bridgeExports.mjs + spec/coverage.mjs (legs that build the bridges)
+
+import { callbackChecks } from './sections/callbacks.mjs';
+import { pointerChecks } from './sections/pointers.mjs';
+import { stringChecks } from './sections/strings.mjs';
+import { typeChecks } from './sections/types.mjs';
+import { wrapperChecks } from './sections/wrappers.mjs';
+import { untouchedExports } from './coverage.mjs';
+import { rustCollectionChecks } from './sections/rust/collections.mjs';
+import { rustErrorChecks } from './sections/rust/errors.mjs';
+import { rustNumberChecks } from './sections/rust/numbers.mjs';
+import { rustOwnershipChecks } from './sections/rust/ownership.mjs';
+import { rustParityChecks } from './sections/rust/parity.mjs';
+import { rustStringChecks } from './sections/rust/strings.mjs';
+import { rustSurfaceChecks } from './sections/rust/surface.mjs';
+import { rustTypeChecks } from './sections/rust/types.mjs';
 
 function section(list, name, why, fill) {
     if (!fill) {
@@ -27,6 +48,10 @@ function section(list, name, why, fill) {
 export function buildChecks(s) {
     const list = [];
     const add = (name, run, expected) => list.push({ name, run, expected });
+    const skip = (name, why) => list.push({ name, skip: why });
+    // A todo runs like a check but a miss is reported as TODO, not NO: the construct is
+    // wanted and not carried yet, so the leg's gate stays green until the generator learns it.
+    const todo = (name, run, expected) => list.push({ name, run, expected, todo: true });
     // Worker-backed legs proxy every call; the remaining shape differences are contracts,
     // not gaps: vector returns arrive as plain arrays, plain arrays coerce into vector
     // params, and embind enum values cannot be structured-cloned.
@@ -154,10 +179,11 @@ export function buildChecks(s) {
         }, true);
         add('rust:optionalReturns', async () => {
             const b = await new RustyCounter(42);
-            const r = [await b.half(), await b.ratio(2), await b.maybeLabel(), (await b.ratio(0)) ?? 'none'];
+            // None is null on every runtime (never undefined), like a C++ nullptr or empty optional.
+            const r = [await b.half(), await b.ratio(2), await b.maybeLabel(), await b.ratio(0)];
             await b.delete();
             return [...r, await parseEven(' 8 '), (await parseEven('7')) ?? 'odd'];
-        }, [21, 21, 'v42', 'none', 8, 'odd']);
+        }, [21, 21, 'v42', null, 8, 'odd']);
         add('rust:optionalParams', async () => {
             const b = await new RustyCounter(10);
             const r = [await b.bump(5), await b.bump(undefined), await b.bump(null)];
@@ -267,6 +293,25 @@ export function buildChecks(s) {
         add('live:retainedCallback', () => { jsStore((x) => x + 100); return jsFire(7); }, 107);
     }));
 
+    // Worker legs pass handles and instances back through the adapter's object registry; only JS
+    // functions cannot cross, and identity/vector shapes differ as in the cpp section.
+    section(list, 'pointers', 'no pointer surface wired on this leg', s.pointers && (() => pointerChecks({ add }, s.pointers, { worker })));
+    section(list, 'callbacks', 'no callback surface wired on this leg', s.callbacks && (() => callbackChecks({ add, skip }, s.callbacks, { worker })));
+    section(list, 'strings', 'no string surface wired on this leg', s.strings && (() => stringChecks({ add }, s.strings)));
+    section(list, 'wrappers', 'no wrapper surface wired on this leg', s.wrappers && (() => wrapperChecks({ add }, s.wrappers, { worker })));
+    section(list, 'types', 'no type surface wired on this leg', s.types && (() => typeChecks({ add }, s.types, { worker })));
+    section(list, 'rustKit', 'no Rust kit surface wired on this leg', s.rustKit && (() => {
+        rustNumberChecks({ add, todo, skip }, s.rustKit);
+        rustStringChecks({ add, todo }, s.rustKit);
+        rustCollectionChecks({ add, todo }, s.rustKit);
+        rustTypeChecks({ add, todo, skip }, s.rustKit);
+        rustErrorChecks({ add, todo }, s.rustKit);
+        rustOwnershipChecks({ add, todo }, s.rustKit);
+        rustSurfaceChecks({ add, todo, skip }, s.rustKit, { worker });
+        rustParityChecks({ add, todo, skip }, s.rustKit, { worker, jsi: Boolean(s.caps?.jsiNative) });
+    }));
+    // Last on purpose: it reads what every earlier check touched.
+    section(list, 'coverage', 'no export list wired on this leg', s.coverage && (() => add('coverage:everyExportTouched', () => untouchedExports(s.coverage.exports, s.coverage.seen), [])));
     return list;
 }
 
@@ -289,22 +334,33 @@ async function runChecks(surfaces) {
     let pass = 0;
     let run = 0;
     let skipped = 0;
+    let todos = 0;
     for (const check of buildChecks(surfaces)) {
         if (check.skip) {
             skipped += 1;
             lines.push(`SKIP ${check.name} (${check.skip})`);
             continue;
         }
-        run += 1;
+        let got;
+        let error;
         try {
-            const got = await check.run();
-            const ok = check.expected === undefined || encode(got) === encode(check.expected);
-            if (ok) pass += 1;
-            lines.push(`${ok ? 'OK' : 'NO'} ${check.name}=${encode(got)}`);
+            got = await check.run();
         } catch (e) {
-            lines.push(`NO ${check.name} ERR:${e?.message ?? e}`);
+            error = e?.message ?? e;
         }
+        const ok = error === undefined && (check.expected === undefined || encode(got) === encode(check.expected));
+        const detail = error === undefined ? `${check.name}=${encode(got)}` : `${check.name} ERR:${error}`;
+        if (check.todo && !ok) {
+            todos += 1;
+            lines.push(`TODO ${detail}`);
+            continue;
+        }
+        run += 1;
+        if (ok) pass += 1;
+        // A todo that passes is ready to become a plain check.
+        lines.push(`${ok ? 'OK' : 'NO'} ${detail}${check.todo ? ' (todo passes: promote it)' : ''}`);
     }
-    const summary = `CONFORMANCE ${pass}/${run}${skipped ? ` (skipped: ${skipped})` : ''}`;
-    return { pass, run, skipped, summary, lines };
+    const counts = [skipped ? `skipped: ${skipped}` : '', todos ? `todo: ${todos}` : ''].filter(Boolean);
+    const summary = `CONFORMANCE ${pass}/${run}${counts.length ? ` (${counts.join(', ')})` : ''}`;
+    return { pass, run, skipped, todos, summary, lines };
 }

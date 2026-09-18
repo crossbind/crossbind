@@ -1,0 +1,16 @@
+{
+    "name": "@crossbind/conformance-rust",
+    "version": "0.0.0",
+    "nativeVersion": "0.1.0",
+    "private": true,
+    "description": "Conformance kit, Rust half: every Rust construct the bindings should carry, as one plain crate the legs link like any cargo package.",
+    "type": "module",
+    "scripts": {
+        "build:ios": "crossbind build -p ios",
+        "build:android": "crossbind build -p android"
+    },
+    "devDependencies": {
+        "crossbind": "workspace:^",
+        "@crossbind/core-embind-rust": "workspace:^"
+    }
+}

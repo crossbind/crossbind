@@ -34,6 +34,7 @@ import {
     jsStore,
     jsFire,
 } from '@crossbind/embind-rust-demo';
+import * as confRust from '@crossbind/conformance-rust';
 // App-local Rust file, imported like a .h: the toolchain synthesizes and links its bridge crate.
 import { Counter } from './native/counter.rs';
 // App-local surface over an UPSTREAM crate: geo comes from the app config's
@@ -47,6 +48,16 @@ import { Regex } from 'cargo:regex';
 // Conformance kit: every documented C++/Rust feature as one shared data-driven list.
 import { runConformance } from '@crossbind/conformance/spec/run.mjs';
 import { ConfBox, ConfCircle, ConfOps } from '@crossbind/conformance/native/conformance.h';
+import * as confPointers from '@crossbind/conformance/native/confpointers.h';
+import * as confCallbacks from '@crossbind/conformance/native/confcallbacks.h';
+import * as confText from '@crossbind/conformance/native/conftext.h';
+import * as confWrappers from '@crossbind/conformance/native/confwrappers.h';
+import * as confTypes from '@crossbind/conformance/native/conftypes.h';
+import * as confTypes2 from '@crossbind/conformance/native/conftypes2.h';
+import * as confKindA from '@crossbind/conformance/native/confkinda.h';
+import * as confKindB from '@crossbind/conformance/native/confkindb.h';
+import * as confPrelude from '@crossbind/conformance/native/confprelude.h';
+import * as confPreludeDeps from '@crossbind/conformance/native/confpreludedeps.h';
 
 function App() {
     const isDarkMode = useColorScheme() === 'dark';
@@ -238,7 +249,7 @@ function AppContent() {
                 'optNone',
                 () => {
                     const b = new RustyCounter(7);
-                    const r = b.half() === undefined && b.ratio(0) === undefined && parseEven('7') === undefined && parseEven(' 8 ') === 8;
+                    const r = b.half() === null && b.ratio(0) === null && parseEven('7') === null && parseEven(' 8 ') === 8;
                     b.delete();
                     return r;
                 },
@@ -452,6 +463,12 @@ function AppContent() {
                     rustAppLocal: { Counter, Hull },
                     rustCrates: { Uuid, Version, VersionReq, Regex },
                     jsLive: { jsPass, jsProbe, jsCall, jsStore, jsFire },
+                    pointers: confPointers,
+                    callbacks: confCallbacks,
+                    strings: confText,
+                    wrappers: confWrappers,
+                    types: { ...confTypes, ...confTypes2, ...confKindA, ...confKindB, ...confPrelude, ...confPreludeDeps },
+                    rustKit: confRust,
                     caps: { jsiNative: true },
                 });
                 confSummary = conf.summary;
