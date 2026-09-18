@@ -62,6 +62,8 @@ const androidParamsX86_64 = [
     `CFLAGS=--sysroot=${t2}/sysroot`,
 ];
 
+// Xcode 27 refuses deployment targets below 15.0; React Native's own floor is 15.1.
+const IOS_DEPLOYMENT_TARGET = '15.1';
 const IOS_HOST_FLAGS = `-arch arm64 -isysroot ${iosSdkPath} -fembed-bitcode`;
 const IOS_SIM_HOST_FLAGS = `-arch arm64 -isysroot ${iosSimSdkPath} -fembed-bitcode`;
 const IOS_IPHONE_PARAMS = ['-e', `CFLAGS="${IOS_HOST_FLAGS}"`, '-e', `CXXFLAGS="${IOS_HOST_FLAGS}"`, '-e', `LDFLAGS="${IOS_HOST_FLAGS}"`];
@@ -194,7 +196,7 @@ export default function run(program, params = [], platformPrefix = null, target 
                             'Xcode',
                             '-DBUILD_SHARED_LIBS=OFF',
                             '-DFRAMEWORK=TRUE',
-                            '-DCMAKE_OSX_DEPLOYMENT_TARGET=13.0',
+                            `-DCMAKE_OSX_DEPLOYMENT_TARGET=${IOS_DEPLOYMENT_TARGET}`,
                             '-DCMAKE_SYSTEM_NAME=iOS',
                             `-DMACOSX_FRAMEWORK_IDENTIFIER=dev.crossbind.${state.config.general.name}`,
                             `-DCMAKE_XCODE_ATTRIBUTE_PRODUCT_BUNDLE_IDENTIFIER=dev.crossbind.${state.config.general.name}`,
@@ -215,11 +217,12 @@ export default function run(program, params = [], platformPrefix = null, target 
                             ...dParams,
                             `-DCMAKE_TOOLCHAIN_FILE='${state.config.paths.cli}/assets/cmake/ios.toolchain.cmake'`,
                             `-DPLATFORM=${target.arch === 'iphoneos' ? 'OS64' : 'SIMULATORARM64'}`,
+                            `-DDEPLOYMENT_TARGET=${IOS_DEPLOYMENT_TARGET}`,
                             '-DARCHS=arm64',
                             '-DENABLE_BITCODE=TRUE',
                             '-DBUILD_SHARED_LIBS=OFF',
                             '-DFRAMEWORK=TRUE',
-                            '-DCMAKE_OSX_DEPLOYMENT_TARGET=13.0',
+                            `-DCMAKE_OSX_DEPLOYMENT_TARGET=${IOS_DEPLOYMENT_TARGET}`,
                             '-DCMAKE_SYSTEM_NAME=iOS',
                             `-DMACOSX_FRAMEWORK_IDENTIFIER=dev.crossbind.${state.config.general.name}`,
                             `-DCMAKE_XCODE_ATTRIBUTE_PRODUCT_BUNDLE_IDENTIFIER=dev.crossbind.${state.config.general.name}`,
