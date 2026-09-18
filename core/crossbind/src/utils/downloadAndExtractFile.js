@@ -6,13 +6,25 @@ import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 
 export default async function downloadAndExtractFile(url, output, sha256) {
-    if (fs.existsSync(`${output}/source`)) {
+    const archive = path.basename(url);
+    if (fs.existsSync(`${output}/source`) && sourceCameFrom(output, archive)) {
         return false;
     }
+    fs.rmSync(`${output}/source`, { recursive: true, force: true });
     const filePath = await downloadFile(url, output);
     verifyIntegrity(filePath, url, sha256);
     extractArchive(filePath, url, output);
+    fs.writeFileSync(`${output}/source.archive`, archive);
     return true;
+}
+
+// A cached source tree only counts when it came from the archive the recipe names now, or a
+// nativeVersion bump would keep compiling the old tree. Trees from before the marker are judged
+// by the archive that was downloaded next to them.
+function sourceCameFrom(output, archive) {
+    const marker = `${output}/source.archive`;
+    if (fs.existsSync(marker)) return fs.readFileSync(marker, 'utf8').trim() === archive;
+    return fs.existsSync(`${output}/${archive}`);
 }
 
 // Extraction runs through the system tar (GNU tar and bsdtar both detect gzip/bzip2/xz, and

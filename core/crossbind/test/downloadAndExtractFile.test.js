@@ -53,10 +53,36 @@ describe('downloadAndExtractFile', () => {
         fs.rmSync(output, { recursive: true, force: true });
     });
 
-    test('returns false without downloading when output/source already exists', async () => {
+    test('keeps a cached source that came from the requested archive', async () => {
         fs.mkdirSync(path.join(output, 'source'));
+        fs.writeFileSync(path.join(output, 'source.archive'), 'pkg-1.0.tar.gz');
 
-        await expect(downloadAndExtractFile('http://127.0.0.1:1/never', output)).resolves.toBe(false);
+        await expect(downloadAndExtractFile('http://127.0.0.1:1/downloads/pkg-1.0.tar.gz', output)).resolves.toBe(false);
+    });
+
+    test('keeps a cached source from before the marker when its archive sits next to it', async () => {
+        fs.mkdirSync(path.join(output, 'source'));
+        packArchive(path.join(output, 'pkg-1.0.tar.gz'));
+
+        await expect(downloadAndExtractFile('http://127.0.0.1:1/downloads/pkg-1.0.tar.gz', output)).resolves.toBe(false);
+    });
+
+    test('replaces a cached source when the recipe names another archive', async () => {
+        fs.mkdirSync(path.join(output, 'source'));
+        fs.writeFileSync(path.join(output, 'source/lib.c'), 'stale');
+        fs.writeFileSync(path.join(output, 'source.archive'), 'pkg-0.9.tar.gz');
+        const staged = path.join(output, 'staged.tar.gz');
+        const archive = packArchive(staged);
+        fs.rmSync(staged);
+        const { server, port } = await startServer(archive);
+        try {
+            const url = `http://127.0.0.1:${port}/downloads/pkg-1.0.tar.gz`;
+            await expect(downloadAndExtractFile(url, output, sha256Of(archive))).resolves.toBe(true);
+            expect(fs.readFileSync(path.join(output, 'source/lib.c'), 'utf8')).toContain('answer');
+            expect(fs.readFileSync(path.join(output, 'source.archive'), 'utf8')).toBe('pkg-1.0.tar.gz');
+        } finally {
+            server.close();
+        }
     });
 
     test('reuses an already-downloaded archive instead of re-fetching it', async () => {

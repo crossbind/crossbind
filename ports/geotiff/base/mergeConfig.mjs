@@ -7,6 +7,7 @@ export default (newConfig = {}) => ({
     export: {
         type: 'cmake',
         bundle: false,
+        headerPrelude: { 'geo_keyp.h': ['geo_tiffp.h'], 'geonames.h': ['geokeys.h', 'geovalues.h'] },
         ...(newConfig.export || {}),
     },
     paths: {

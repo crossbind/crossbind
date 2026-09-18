@@ -1,7 +1,7 @@
 {
     "name": "@crossbind/port-proj-bin-wasi",
     "version": "2.0.0-beta.56",
-    "nativeVersion": "9.8.1",
+    "nativeVersion": "9.9.0",
     "description": "The PROJ CLIs (proj + cs2cs/cct/geod/gie/projinfo via multicall) as a WASI command component.",
     "homepage": "https://github.com/crossbind/crossbind/tree/main/ports/proj#readme",
     "repository": "https://github.com/crossbind/crossbind.git",
@@ -39,16 +39,16 @@
         "provenance": {
             "recipe": {
                 "name": "@crossbind/port-proj",
-                "version": "2.0.0-beta.53",
-                "nativeVersion": "9.8.1"
+                "version": "2.0.0-beta.56",
+                "nativeVersion": "9.9.0"
             },
             "source": {
-                "url": "https://download.osgeo.org/proj/proj-9.8.1.tar.gz",
-                "sha256": "af5b731c145c1d13c4e3b4eeb7d167e94e845e440f71e3496b4ed8dae0291960"
+                "url": "https://download.osgeo.org/proj/proj-9.9.0.tar.gz",
+                "sha256": "791a0610547eeabb17006cfd49cdbd2034f3240f47ed5e88a1031811f4e2bcf3"
             },
             "environment": {
                 "builder": "host",
-                "dockerImage": "ghcr.io/crossbind/web@sha256:c1d1d81a4775871cd90c8ac980e0a5f87cb7890822117f77be1c8345f51b1f47",
+                "dockerImage": "ghcr.io/crossbind/web@sha256:633da840658f12f291c17c3305adf265c7d52307b3b61b84156d5f85f3121779",
                 "hostPlatform": "darwin-arm64",
                 "toolchain": {
                     "name": "wasi-sdk",

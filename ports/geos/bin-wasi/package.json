@@ -1,7 +1,7 @@
 {
     "name": "@crossbind/port-geos-bin-wasi",
     "version": "2.0.0-beta.56",
-    "nativeVersion": "3.14.1",
+    "nativeVersion": "3.15.0",
     "description": "The geosop CLI prebuilt as a WASI (wasm32-wasip3) command component.",
     "homepage": "https://github.com/crossbind/crossbind/tree/main/ports/geos#readme",
     "repository": "https://github.com/crossbind/crossbind.git",
@@ -34,16 +34,16 @@
         "provenance": {
             "recipe": {
                 "name": "@crossbind/port-geos",
-                "version": "2.0.0-beta.53",
-                "nativeVersion": "3.14.1"
+                "version": "2.0.0-beta.56",
+                "nativeVersion": "3.15.0"
             },
             "source": {
-                "url": "https://download.osgeo.org/geos/geos-3.14.1.tar.bz2",
-                "sha256": "3c20919cda9a505db07b5216baa980bacdaa0702da715b43f176fb07eff7e716"
+                "url": "https://download.osgeo.org/geos/geos-3.15.0.tar.bz2",
+                "sha256": "d5e5192a686d065eaed082de14dd26244c5c8e02bff16b2c6cce3265f648e00e"
             },
             "environment": {
                 "builder": "host",
-                "dockerImage": "ghcr.io/crossbind/web@sha256:c1d1d81a4775871cd90c8ac980e0a5f87cb7890822117f77be1c8345f51b1f47",
+                "dockerImage": "ghcr.io/crossbind/web@sha256:633da840658f12f291c17c3305adf265c7d52307b3b61b84156d5f85f3121779",
                 "hostPlatform": "darwin-arm64",
                 "toolchain": {
                     "name": "wasi-sdk",

@@ -39,8 +39,8 @@ const easyPerformInside = `
             strcpy(method, "HEAD");
             break;
     }
-    if (data->set.str[28]) {
-        strcpy(method, data->set.str[28]);
+    if (CURL_EASY_STR(data, STRING_CUSTOMREQUEST)) {
+        strcpy(method, CURL_EASY_STR(data, STRING_CUSTOMREQUEST));
     }
     emscripten_fetch_attr_t attr;
     emscripten_fetch_attr_init(&attr);

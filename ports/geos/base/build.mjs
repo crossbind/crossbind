@@ -1,5 +1,5 @@
 export default {
-    sha256: '3c20919cda9a505db07b5216baa980bacdaa0702da715b43f176fb07eff7e716', // geos-3.14.1.tar.bz2
+    sha256: 'd5e5192a686d065eaed082de14dd26244c5c8e02bff16b2c6cce3265f648e00e', // geos-3.15.0.tar.bz2
     getURL: (version) => `https://download.osgeo.org/geos/geos-${version}.tar.bz2`,
     // wasi-sdk 34 libc++ include hygiene; a no-op elsewhere - re-check on GEOS bumps.
     replaceList: [
