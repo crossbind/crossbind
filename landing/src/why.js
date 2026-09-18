@@ -12,8 +12,8 @@ export const WHY_POINTS = [
 ];
 
 export const LIMITS = [
-    'Browser OPFS persistence requires `useWorker: true`; the OPFS API only exists in worker scope.',
-    "Browser multithread builds (`runtime: 'mt'`) need COOP/COEP headers in production, and the pthread pool is capped at two workers.",
+    "Browser OPFS persistence requires `useWorker: true`: crossbind's OPFS integration relies on synchronous access handles, which browsers expose only in worker scope.",
+    "Browser multithread builds (`runtime: 'mt'`) need COOP/COEP headers in production, and the pthread pool defaults to two workers; the size and the exhaustion policy are configurable.",
     'Edge runtimes such as Cloudflare Workers run single-threaded with an in-memory filesystem: no workers, no OPFS.',
     'Android builds link whole archives; dead-code elimination is not implemented there.',
     'iOS builds need a local Xcode and CocoaPods, Rust bindings need a local cargo, and WASI commands need wasmtime on PATH.',

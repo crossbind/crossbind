@@ -33,18 +33,23 @@ function packagesTable(port) {
     return { type: 'table', head: ['Target', 'Package', `npm \`${distTag}\``], rows };
 }
 
-function installBlocks(port) {
+// One package per platform, each with its own config; the wasm one is the common case.
+const shownVariant = (port) => {
     const variants = publishedLibraryTargets(port);
-    if (!variants.length || !port.published) return [];
-    // One package per platform, each with its own config; the wasm one is the common case.
-    const shown = variants.find((variant) => variant.target === 'wasm') ?? variants[0];
+    return variants.find((variant) => variant.target === 'wasm') ?? variants[0] ?? null;
+};
+
+function installBlocks(port) {
+    const shown = shownVariant(port);
+    if (!shown || !port.published) return [];
+    const variants = publishedLibraryTargets(port);
     const identifier = `${port.family}${shown.target.charAt(0).toUpperCase()}${shown.target.slice(1)}`;
     const others = variants.filter((variant) => variant !== shown).map((variant) => `\`${variant.package}\``);
     return [
         { type: 'h2', id: 'install', text: 'Install' },
         {
             type: 'p',
-            text: `Install the variant for the platform you build, declare it as a dependency in \`crossbind.config.js\` and import the header from JavaScript. Nothing is compiled on your machine. ${others.length ? `A project that builds for several platforms lists one variant per platform: ${others.join(', ')} ${others.length === 1 ? 'is' : 'are'} published too.` : 'This is the only published variant.'}`,
+            text: `Install the variant for the platform you build, declare it as a dependency in \`crossbind.config.js\` and import the header from JavaScript. The upstream library is precompiled; your own code, the generated bindings and the final link still go through the build toolchain. ${others.length ? `A project that builds for several platforms lists one variant per platform: ${others.join(', ')} ${others.length === 1 ? 'is' : 'are'} published too.` : 'This is the only published variant.'}`,
         },
         { type: 'code', file: 'shell', code: `npm install ${shown.package}${suffix}` },
         {
@@ -106,7 +111,7 @@ function detailPage(port) {
         path: `${PORTS_BASE}/${port.family}`,
         href: portHref(port.family),
         port,
-        install: port.published && publishedLibraryTargets(port).length ? `npm install ${port.npm}${suffix}` : null,
+        install: port.published && shownVariant(port) ? `npm install ${shownVariant(port).package}${suffix}` : null,
         links: [
             { label: 'npm', href: `https://www.npmjs.com/package/${port.npm}`, external: true },
             { label: 'Port recipe and licence files', href: port.repositoryUrl, external: true },
@@ -132,7 +137,7 @@ export const PORTS_INDEX = {
     kind: 'ports-index',
     slug: '',
     title: 'Libraries',
-    description: `${librariesCount} C++ libraries prebuilt for the web, Node.js, iOS, Android and WASI, and ${WASI_TOOL_PORTS.length} of their command-line tools as npm executables.`,
+    description: `${librariesCount} C and C++ libraries prebuilt for the web, Node.js, iOS, Android and WASI, plus the command-line tools of ${WASI_TOOL_PORTS.length} of them as npm executables.`,
     lede: `Every library here is compiled from its pinned upstream source and published as \`@crossbind/port-*\` packages on the npm \`${distTag}\` tag. Pick one, install it, import its header.`,
     section: 'Libraries',
     path: PORTS_BASE,

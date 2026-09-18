@@ -154,7 +154,8 @@ export default function PromptModal({ tokens, open, onClose }) {
                     <Step tokens={tokens} n="1" title="Install the skill" badge="RECOMMENDED">
                         <p style={note}>
                             Your agent gets the project inspector, the current port catalog and the
-                            per-framework playbooks, then wires the project up without being prompted.
+                            per-framework playbooks. Then you ask for crossbind in plain words; there is
+                            nothing to paste.
                         </p>
                         <div style={{
                             display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 10,
@@ -179,7 +180,8 @@ export default function PromptModal({ tokens, open, onClose }) {
 
                     <Step tokens={tokens} n="2" title="Or paste this prompt">
                         <p style={note}>
-                            For clients that cannot install skills. Paste into Claude Code, Cursor, Copilot…
+                            No skill installed? Paste this one-off prompt into Claude Code, Cursor, Copilot or any
+                            other agent; it points them at the Markdown docs and walks through the setup.
                         </p>
                         <pre style={{ ...codeBox, maxHeight: 240, overflow: 'auto' }}>{SETUP_PROMPT}</pre>
                         <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 12 }}>

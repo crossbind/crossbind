@@ -6,7 +6,7 @@ export default {
     title: 'Introduction',
     kicker: 'START HERE',
     description: 'What crossbind does, what one import buys you, and where the output runs.',
-    lede: `${BRAND} compiles C++ and Rust into WebAssembly, native iOS and Android libraries, and WASI commands - then hands the result to JavaScript as an ordinary module. You import a header; the bindings are generated from it.`,
+    lede: `${BRAND} compiles C++ and Rust into WebAssembly and native iOS and Android libraries, then hands the result to JavaScript as an ordinary module; a separate target turns C++ into WASI commands. You import a header; the bindings are generated from it.`,
     blocks: [
         {
             type: 'p',
@@ -44,7 +44,7 @@ console.log(getHelloWorldMessage());`,
         { type: 'h2', id: 'prebuilt', text: 'Libraries you do not have to build' },
         {
             type: 'p',
-            text: `${SHOWCASE_COUNT} C++ libraries ship prebuilt as \`@crossbind/port-*\` - GDAL, OpenSSL, SQLite, GEOS, PROJ and more, compiled from the real upstream sources at pinned versions. Install one and import its header directly; nothing is compiled on your machine.`,
+            text: `${SHOWCASE_COUNT} C and C++ libraries ship prebuilt as \`@crossbind/port-*\` - GDAL, OpenSSL, SQLite, GEOS, PROJ and more, compiled from the real upstream sources at pinned versions. Install the variant for your platform and import its header directly; the upstream library is precompiled, and only your own code, the bindings and the final link go through the build toolchain.`,
         },
         {
             type: 'code',
@@ -73,13 +73,13 @@ console.log(GDALVersionInfo('RELEASE_NAME'));`,
         },
         {
             type: 'p',
-            text: 'The JavaScript you write does not change between them. The build target does.',
+            text: 'The JavaScript you write does not change between the four JavaScript targets; the build target does. WASI commands are a separate path with no JavaScript host.',
         },
 
         { type: 'h2', id: 'bundle', text: 'What ends up in your bundle' },
         {
             type: 'p',
-            text: 'Only the code reachable from the headers you imported is linked in. Dead-code elimination and LTO are on by default, so pulling two functions out of a large library costs two functions, not the library.',
+            text: 'Only the code reachable from the headers you imported is linked in: dead-code elimination on top of -O3 is on by default, so pulling two functions out of a large library costs those functions and what they reach, not the whole library.',
         },
         {
             type: 'callout',

@@ -12,7 +12,7 @@ export default {
         { type: 'h2', id: 'use', text: 'Using a prebuilt library' },
         {
             type: 'p',
-            text: 'Install the variant for the platform you build, declare it as a dependency in `crossbind.config.js`, and import its header. Nothing is compiled on your machine - the binaries are in the package. A project that builds for several platforms lists one variant per platform, for example `-android` and `-ios` in a React Native app.',
+            text: 'Install the variant for the platform you build, declare it as a dependency in `crossbind.config.js`, and import its header. The upstream binaries are in the package; your own code, the generated bindings and the final link still go through the build toolchain. A project that builds for several platforms lists one variant per platform, for example `-android` and `-ios` in a React Native app.',
         },
         { type: 'code', file: 'shell', code: `npm install @crossbind/port-gdal-wasm${DIST_TAG_SUFFIX}` },
         {

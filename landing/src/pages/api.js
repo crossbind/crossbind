@@ -8,8 +8,8 @@ import { guideHref } from '../guide/nav.js';
 
 const doc = (file) => `${REPO_URL}/blob/main/docs/api/${file}`;
 
-const REFERENCE_DOCUMENTS = [
-    ['init.md', '`init(opts)` - the runtime entry point and the module helpers it returns.'],
+export const REFERENCE_DOCUMENTS = [
+    ['init.md', '`initNative(opts)` - the runtime entry point and the module helpers it returns.'],
     ['crossbind-config.md', '`crossbind.config.js` field by field: dependencies, paths, targets, runtime flags.'],
     ['crossbind-build.md', '`crossbind.build.js` lifecycle hooks for package authors.'],
     ['build-state.md', 'the `state` and `target` shapes hooks receive, and the inventory of built-in build targets.'],
@@ -31,7 +31,7 @@ export default {
     title: 'API reference',
     kicker: 'REFERENCE',
     description: 'The two API surfaces every project touches, the third one package authors use, the CLI, and where each option is documented.',
-    lede: 'crossbind has two API surfaces that get confused often: `init(opts)` at runtime and `crossbind.config.js` at build time. Package authors have a third, `crossbind.build.js`. This page keeps them apart and points at the guide and the canonical reference for each.',
+    lede: 'crossbind has two API surfaces that get confused often: `initNative(opts)` at runtime and `crossbind.config.js` at build time. Package authors have a third, `crossbind.build.js`. This page keeps them apart and points at the guide and the canonical reference for each.',
     section: 'Reference',
     path: '/api',
     href: '/api/',
@@ -41,7 +41,7 @@ export default {
             type: 'table',
             head: ['Surface', 'When', 'Written by', 'Guide', 'Reference'],
             rows: [
-                ['`init(opts)`', 'Runtime, the moment your app calls into Wasm', 'Every consumer', `[Runtimes](${guideHref('runtimes')})`, `[init.md](${doc('init.md')})`],
+                ['`initNative(opts)`', 'Runtime, the moment your app calls into Wasm', 'Every consumer', `[Runtimes](${guideHref('runtimes')})`, `[init.md](${doc('init.md')})`],
                 ['`crossbind.config.js`', 'Build time, read once by `crossbind build`', 'Every consumer', `[Configuration](${guideHref('configuration')})`, `[crossbind-config.md](${doc('crossbind-config.md')})`],
                 ['`crossbind.build.js`', "Build time, inside a port's source folder", 'Package authors only', `[Libraries](${guideHref('libraries')})`, `[crossbind-build.md](${doc('crossbind-build.md')})`],
             ],
@@ -66,8 +66,8 @@ export default {
         {
             type: 'ol',
             items: [
-                '`crossbind.config.js` is not runtime configuration. It is read once by the build; putting `useWorker: true` there does nothing, that is an `init(opts)` option.',
-                'OPFS persistent storage in the browser requires `useWorker: true`. The OPFS API only exists in worker scope, so mounting `/opfs/...` from the main thread throws.',
+                '`crossbind.config.js` is not runtime configuration. It is read once by the build; putting `useWorker: true` there does nothing, that is an `initNative(opts)` option.',
+                "OPFS persistent storage in the browser requires `useWorker: true`: crossbind's OPFS integration relies on synchronous access handles, which browsers expose only in worker scope, so mounting `/opfs/...` from the main thread throws.",
                 "`runtime: 'mt'` fails silently in production without COOP/COEP headers. Dev servers inject them; production hosts need explicit configuration.",
                 'Edge runtimes (Cloudflare Workers, Deno Deploy, Vercel Edge) have no Web Workers: no `useWorker`, no OPFS, no multithreading - single-threaded with an in-memory filesystem.',
                 '`paths.native` is an array, never a string.',
