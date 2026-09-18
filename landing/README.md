@@ -88,7 +88,7 @@ switch, and it is deliberately not automatic.
 | `src/ports/` | `/ports/` and `/ports/<name>/` from the generated catalog, each with its own page component (`LibrariesPage.jsx`, `PortPage.jsx`) |
 | `src/changelog/` | `/changelog/`: the page object built from `generated/changelog.js`, its own `ChangelogPage.jsx` with a version rail, the anchor helper and the release row; reached from the navbar's version menu, not the docs sidebar |
 | `src/why.js` | The "why" bullets and the limits, shared by the introduction and llms.txt |
-| `src/llms.js` | Renders `/llms.txt` at build time from the snapshot, the catalog and the page list |
+| `src/llms/` | Renders `/llms.txt`, `/llms-full.txt` and the Markdown twin of every page (its path plus `.md`; the reference documents under `/api/`) at build time from the snapshot, the catalog and the page list; `pnpm test` covers the block renderer and the link rewriting |
 | `public/_redirects` | 301s for the retired Docusaurus routes; checked by `scripts/site/check-site-links.mjs` |
 | `src/theme.js` | Palettes, the light/dark token tables, and the persisted theme hook |
 | `src/components/` | `Nav` and its `VersionMenu` (version, channel, changelog, GitHub and npm links), the `PlatformGlyph` SVG set, and the shared `ui.jsx` primitives |
