@@ -68,8 +68,27 @@ Comlink.transferHandlers.set('proxy', {
     },
 });
 
-// 3. throw (restored)
-Comlink.transferHandlers.set('throw', _throwHandler);
+// 3. throw (extended): comlink's own handler ships only message/name/stack, which drops the
+// properties a binding attaches to an error - `code` above all (Rust's error code, the napi
+// contract). Own enumerable primitives ride along; deserialize assigns them back onto the Error.
+Comlink.transferHandlers.set('throw', {
+    canHandle: _throwHandler.canHandle,
+    serialize(payload) {
+        const [serialized, transferables] = _throwHandler.serialize(payload);
+        const error = payload && payload.value;
+        if (serialized && serialized.isError && error instanceof Error) {
+            for (const key of Object.keys(error)) {
+                const value = error[key];
+                const kind = typeof value;
+                if (value === null || kind === 'string' || kind === 'number' || kind === 'boolean') {
+                    serialized.value[key] = value;
+                }
+            }
+        }
+        return [serialized, transferables];
+    },
+    deserialize: _throwHandler.deserialize,
+});
 
 // 4. embindVector: convert embind vectors to arrays across worker boundary
 Comlink.transferHandlers.set('embindVector', {
