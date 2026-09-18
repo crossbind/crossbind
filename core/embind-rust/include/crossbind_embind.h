@@ -40,6 +40,11 @@ void crossbind_embind_register_smart_ptr(
 void crossbind_embind_register_enum(
     CrossbindTid enum_ty, const char* name, size_t size, bool is_signed, int policy_value);
 void crossbind_embind_register_enum_value(CrossbindTid enum_ty, const char* value_name, int value);
+void crossbind_embind_raise_error_coded(unsigned char* msg, unsigned char* code);
+void crossbind_embind_register_constant(const char* name, const void* ty, double value);
+void crossbind_embind_register_class_property(CrossbindTid cls, const char* name,
+    CrossbindTid getter_ty, const char* getter_sig, CrossbindFn getter, void* getter_ctx,
+    CrossbindTid setter_ty, const char* setter_sig, CrossbindFn setter, void* setter_ctx);
 void crossbind_embind_register_value_object(
     CrossbindTid struct_ty, const char* name,
     const char* ctor_sig, CrossbindFn ctor, const char* dtor_sig, CrossbindFn dtor);

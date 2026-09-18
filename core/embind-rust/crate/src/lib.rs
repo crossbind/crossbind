@@ -36,6 +36,12 @@ extern "C" {
     );
     fn crossbind_embind_register_enum(enum_ty: *const c_void, name: *const c_char, size: usize, is_signed: bool, policy: i32);
     fn crossbind_embind_register_enum_value(enum_ty: *const c_void, name: *const c_char, value: i32);
+    fn crossbind_embind_register_constant(name: *const c_char, ty: *const c_void, value: f64);
+    fn crossbind_embind_register_class_property(
+        cls: *const c_void, name: *const c_char,
+        getter_ty: *const c_void, getter_sig: *const c_char, getter: usize, getter_ctx: *mut c_void,
+        setter_ty: *const c_void, setter_sig: *const c_char, setter: usize, setter_ctx: *mut c_void,
+    );
     fn crossbind_embind_register_value_object(
         struct_ty: *const c_void, name: *const c_char,
         ctor_sig: *const c_char, ctor: usize, dtor_sig: *const c_char, dtor: usize,
@@ -62,6 +68,12 @@ extern "C" {
     fn free(ptr: *mut u8);
     fn crossbind_tid_int64() -> *const c_void;
     fn crossbind_tid_uint64() -> *const c_void;
+    fn crossbind_tid_int8() -> *const c_void;
+    fn crossbind_tid_int16() -> *const c_void;
+    fn crossbind_tid_uint8() -> *const c_void;
+    fn crossbind_tid_uint16() -> *const c_void;
+    fn crossbind_tid_uint32() -> *const c_void;
+    fn crossbind_tid_float() -> *const c_void;
     fn crossbind_embind_register_optional(optional_ty: *const c_void, inner_ty: *const c_void);
     fn crossbind_tid_optional_int() -> *const c_void;
     fn crossbind_tid_optional_double() -> *const c_void;
@@ -71,6 +83,7 @@ extern "C" {
     // Adapter-owned error escape ([u32 len][bytes] wire): web throws a JS Error immediately,
     // native stores the message and throws after the invoker returns.
     fn crossbind_embind_raise_error(wire_msg: *mut u8);
+    fn crossbind_embind_raise_error_coded(msg: *mut u8, code: *mut u8);
 }
 
 // Optional wire helpers exist only on wasm (native optionals are nullable heap cells the jsi
@@ -78,7 +91,7 @@ extern "C" {
 #[cfg(target_family = "wasm")]
 extern "C" {
     fn crossbind_emval_take_value(inner_ty: *const c_void, argv: *const c_void) -> usize;
-    fn crossbind_emval_undefined() -> usize;
+    fn crossbind_emval_null() -> usize;
     fn crossbind_emval_opt_i32(handle: usize, out: *mut i32) -> i32;
     fn crossbind_emval_opt_f64(handle: usize, out: *mut f64) -> i32;
     fn crossbind_emval_opt_bool(handle: usize, out: *mut u8) -> i32;
@@ -94,6 +107,8 @@ struct Registry {
     tids: Vec<Box<u8>>,
     argtypes: Vec<Box<[*const c_void]>>,
     class_tid: HashMap<TypeId, *const c_void>,
+    class_ptr_tid: HashMap<TypeId, *const c_void>,
+    owned_ptr_tid: HashMap<TypeId, *const c_void>,
     shared_ptr_tid: HashMap<TypeId, *const c_void>,
 }
 // Raw pointers are not Send/Sync; the arena is only ever touched under its Mutex.
@@ -103,6 +118,8 @@ fn registry() -> &'static Mutex<Registry> {
     static REG: OnceLock<Mutex<Registry>> = OnceLock::new();
     REG.get_or_init(|| Mutex::new(Registry {
         cstrings: Vec::new(), tids: Vec::new(), argtypes: Vec::new(), class_tid: HashMap::new(),
+        class_ptr_tid: HashMap::new(),
+        owned_ptr_tid: HashMap::new(),
         shared_ptr_tid: HashMap::new(),
     }))
 }
@@ -222,6 +239,98 @@ impl WireType for u64 {
 }
 
 // bool crosses as an int-sized wire (0/1), the way emscripten's ABI passes it.
+// The narrower integers ride the int slot with their own type ids, so the host converter keeps
+// each one's range check instead of silently wrapping a value the Rust type cannot hold.
+macro_rules! int_wire {
+    ($( $ty:ty, $tid:ident ; )*) => {
+        $(
+            impl WireType for $ty {
+                type Wire = i32;
+                const SIG: char = 'i';
+                fn tid() -> *const c_void { unsafe { $tid() } }
+                fn from_wire(w: i32) -> $ty { w as $ty }
+                fn to_wire(self) -> i32 { self as i32 }
+            }
+        )*
+    };
+}
+
+int_wire! {
+    i8, crossbind_tid_int8;
+    i16, crossbind_tid_int16;
+    u8, crossbind_tid_uint8;
+    u16, crossbind_tid_uint16;
+    u32, crossbind_tid_uint32;
+}
+
+// f32 crosses through the double slot: JS has one number type, so the value widens on the way
+// out and narrows on the way in - the Rust signature is what asks for single precision.
+#[cfg(target_family = "wasm")]
+impl WireType for f32 {
+    type Wire = f64;
+    const SIG: char = 'd';
+    fn tid() -> *const c_void { unsafe { crossbind_tid_float() } }
+    fn from_wire(w: f64) -> f32 { w as f32 }
+    fn to_wire(self) -> f64 { self as f64 }
+}
+
+#[cfg(not(target_family = "wasm"))]
+impl WireType for f32 {
+    type Wire = u64;
+    const SIG: char = 'd';
+    fn tid() -> *const c_void { unsafe { crossbind_tid_float() } }
+    fn from_wire(w: u64) -> f32 { f64::from_bits(w) as f32 }
+    fn to_wire(self) -> u64 { (self as f64).to_bits() }
+}
+
+// usize/isize are 32-bit on wasm and 64-bit everywhere else, so each platform rides the slot
+// that carries its full range: a number on wasm, a BigInt on native.
+#[cfg(target_pointer_width = "32")]
+impl WireType for usize {
+    type Wire = i32;
+    const SIG: char = 'i';
+    fn tid() -> *const c_void { unsafe { crossbind_tid_uint32() } }
+    fn from_wire(w: i32) -> usize { w as usize }
+    fn to_wire(self) -> i32 { self as i32 }
+}
+
+#[cfg(target_pointer_width = "32")]
+impl WireType for isize {
+    type Wire = i32;
+    const SIG: char = 'i';
+    fn tid() -> *const c_void { unsafe { crossbind_tid_int() } }
+    fn from_wire(w: i32) -> isize { w as isize }
+    fn to_wire(self) -> i32 { self as i32 }
+}
+
+#[cfg(not(target_pointer_width = "32"))]
+impl WireType for usize {
+    type Wire = u64;
+    const SIG: char = 'u';
+    fn tid() -> *const c_void { unsafe { crossbind_tid_uint64() } }
+    fn from_wire(w: u64) -> usize { w as usize }
+    fn to_wire(self) -> u64 { self as u64 }
+}
+
+#[cfg(not(target_pointer_width = "32"))]
+impl WireType for isize {
+    type Wire = i64;
+    const SIG: char = 'j';
+    fn tid() -> *const c_void { unsafe { crossbind_tid_int64() } }
+    fn from_wire(w: i64) -> isize { w as isize }
+    fn to_wire(self) -> i64 { self as i64 }
+}
+
+// char crosses as a one-character string, the way JS spells a character; an incoming string
+// yields its first character (an empty one is U+FFFD, the replacement character).
+impl WireType for char {
+    type Wire = <String as WireType>::Wire;
+    const SIG: char = 's';
+    fn tid() -> *const c_void { <String as WireType>::tid() }
+    fn from_wire(w: Self::Wire) -> char { String::from_wire(w).chars().next().unwrap_or('\u{fffd}') }
+    fn to_wire(self) -> Self::Wire { self.to_string().to_wire() }
+}
+
 impl WireType for bool {
     type Wire = i32;
     const SIG: char = 'i';
@@ -265,7 +374,7 @@ impl WireType for String {
     }
 }
 
-/// Option<T> both ways: on wasm the wire is an EM_VAL handle (None = undefined; incoming
+/// Option<T> both ways: on wasm the wire is an EM_VAL handle (None = null; incoming
 /// undefined/null both read as None); on native it is a nullable heap cell (0 = None) the jsi
 /// adapter converts, tagged 'I'/'D'/'B'/'S'. Incoming cells stay adapter-owned (read, no free).
 macro_rules! option_wire {
@@ -279,7 +388,7 @@ macro_rules! option_wire {
                 fn from_wire(w: usize) -> Self { <$inner as EmvalOptRead>::emval_opt_read(w) }
                 fn to_wire(self) -> usize {
                     match self {
-                        None => unsafe { crossbind_emval_undefined() },
+                        None => unsafe { crossbind_emval_null() },
                         Some(v) => v.emval_take(),
                     }
                 }
@@ -418,6 +527,29 @@ pub fn register_optional_f64() { unsafe { crossbind_embind_register_optional(cro
 pub fn register_optional_bool() { unsafe { crossbind_embind_register_optional(crossbind_tid_optional_bool(), crossbind_tid_bool()); } }
 pub fn register_optional_string() { unsafe { crossbind_embind_register_optional(crossbind_tid_optional_string(), crossbind_tid_std_string()); } }
 
+/// A module-level constant: the value crosses once at registration, so JS reads a plain value
+/// instead of calling a getter. Only the wire kinds a double carries exactly are offered.
+pub trait ConstantValue: WireType {
+    fn as_constant(self) -> f64;
+}
+impl ConstantValue for i32 { fn as_constant(self) -> f64 { self as f64 } }
+impl ConstantValue for f64 { fn as_constant(self) -> f64 { self } }
+impl ConstantValue for bool { fn as_constant(self) -> f64 { if self { 1.0 } else { 0.0 } } }
+
+/// A string constant: the double the ABI carries is the emval handle of a JS string, which the
+/// emval type reads straight back. The handle is released on purpose - the constant owns it for
+/// the life of the module.
+pub fn constant_str(name: &str, value: &str) {
+    let handle = JsValue::from_str(value).release();
+    let name_ptr = { registry().lock().unwrap().cstr(name) };
+    unsafe { crossbind_embind_register_constant(name_ptr, crossbind_tid_emval(), handle as f64) };
+}
+
+pub fn constant<T: ConstantValue>(name: &str, value: T) {
+    let name_ptr = { registry().lock().unwrap().cstr(name) };
+    unsafe { crossbind_embind_register_constant(name_ptr, T::tid(), value.as_constant()) };
+}
+
 /// Post-raise sentinel returns: only native ever observes them (the adapter throws right after
 /// the invoker returns); on web `crossbind_embind_raise_error` throws into JS and never comes back.
 pub trait ErrSentinel {
@@ -431,11 +563,117 @@ impl ErrSentinel for bool { fn err_sentinel() -> Self { false } }
 impl ErrSentinel for () { fn err_sentinel() -> Self {} }
 impl ErrSentinel for String { fn err_sentinel() -> Self { String::new() } }
 impl<T> ErrSentinel for *mut T { fn err_sentinel() -> Self { std::ptr::null_mut() } }
+// A fallible optional (`Result<Option<T>, E>`) raises and then returns None.
+impl<T> ErrSentinel for Option<T> { fn err_sentinel() -> Self { None } }
+// The narrower integers and the pointer-wide ones share the zero sentinel.
+impl ErrSentinel for i8 { fn err_sentinel() -> Self { 0 } }
+impl ErrSentinel for i16 { fn err_sentinel() -> Self { 0 } }
+impl ErrSentinel for u8 { fn err_sentinel() -> Self { 0 } }
+impl ErrSentinel for u16 { fn err_sentinel() -> Self { 0 } }
+impl ErrSentinel for u32 { fn err_sentinel() -> Self { 0 } }
+impl ErrSentinel for f32 { fn err_sentinel() -> Self { 0.0 } }
+impl ErrSentinel for usize { fn err_sentinel() -> Self { 0 } }
+impl ErrSentinel for isize { fn err_sentinel() -> Self { 0 } }
+impl ErrSentinel for char { fn err_sentinel() -> Self { '\u{fffd}' } }
 
 /// Routes a shim's `Err` to JS as an exception, then returns a dead sentinel value.
+/// Runs a binding body so that a Rust panic reaches JS as an exception instead of tearing the
+/// process down. The panic still means a bug: state is whatever the panic left behind, the same
+/// caveat napi-rs documents for its own catch_unwind.
+///
+/// Two runtimes, two mechanisms. Native targets unwind, so the panic is caught here. The wasm
+/// target's std aborts instead of unwinding, so a panic hook raises the error from inside the
+/// panic itself - the JS throw leaves the call before the abort can run.
+pub fn guard<R: ErrSentinel>(body: impl FnOnce() -> R) -> R {
+    install_panic_hook();
+    #[cfg(target_family = "wasm")]
+    {
+        body()
+    }
+    #[cfg(not(target_family = "wasm"))]
+    {
+        match std::panic::catch_unwind(std::panic::AssertUnwindSafe(body)) {
+            Ok(value) => value,
+            Err(payload) => raise_err(panic_text(&payload)),
+        }
+    }
+}
+
+fn install_panic_hook() {
+    static ONCE: std::sync::Once = std::sync::Once::new();
+    ONCE.call_once(|| {
+        let previous = std::panic::take_hook();
+        std::panic::set_hook(Box::new(move |info| {
+            let text = match info.payload().downcast_ref::<&str>() {
+                Some(text) => (*text).to_string(),
+                None => match info.payload().downcast_ref::<String>() {
+                    Some(text) => text.clone(),
+                    None => String::from("panicked"),
+                },
+            };
+            let text = match info.location() {
+                Some(at) => format!("{text} (panicked at {}:{})", at.file(), at.line()),
+                None => text,
+            };
+            // wasm: this throws into JS and the call never comes back, so the abort below the
+            // hook is skipped. Native: the adapter parks the message and throws once the
+            // invoker returns, so unwinding still reaches the catch in `guard`.
+            #[cfg(target_family = "wasm")]
+            unsafe { crossbind_embind_raise_error(text.to_wire()) };
+            #[cfg(not(target_family = "wasm"))]
+            {
+                let _ = &text;
+                previous(info);
+            }
+        }));
+    });
+}
+
+#[cfg(not(target_family = "wasm"))]
+fn panic_text(payload: &Box<dyn std::any::Any + Send>) -> String {
+    if let Some(text) = payload.downcast_ref::<&str>() { return (*text).to_string(); }
+    if let Some(text) = payload.downcast_ref::<String>() { return text.clone(); }
+    String::from("panicked")
+}
+
 pub fn raise_err<W: ErrSentinel>(msg: String) -> W {
     unsafe { crossbind_embind_raise_error(msg.to_wire()); }
     W::err_sentinel()
+}
+
+/// The same escape carrying a machine-readable code, so JS can branch on `error.code` instead
+/// of matching message text.
+pub fn raise_err_coded<W: ErrSentinel>(msg: String, code: Option<String>) -> W {
+    let code_wire = match code {
+        Some(text) => text.to_wire(),
+        None => core::ptr::null_mut(),
+    };
+    unsafe { crossbind_embind_raise_error_coded(msg.to_wire(), code_wire); }
+    W::err_sentinel()
+}
+
+/// An error type that also implements `AsRef<str>` gives that string as the code, the way
+/// napi-rs reads a code off its error enums. Everything else has no code: the two traits below
+/// are picked apart by autoref, so no specialization feature is needed.
+/// The fallback sits behind one more reference than the specialized impl, so method lookup finds
+/// the coded one first when the bound holds and falls through to None when it does not.
+pub trait CrossbindErrorCode { fn crossbind_code(&self) -> Option<String>; }
+impl<E: AsRef<str>> CrossbindErrorCode for E {
+    fn crossbind_code(&self) -> Option<String> { Some(self.as_ref().to_string()) }
+}
+pub trait CrossbindErrorCodeFallback { fn crossbind_code(&self) -> Option<String>; }
+impl<E> CrossbindErrorCodeFallback for &E {
+    fn crossbind_code(&self) -> Option<String> { None }
+}
+
+extern "C" fn property_getter<T: 'static, F: WireType>(ctx: usize, this: *mut T) -> <F as WireType>::Wire {
+    let getter: fn(&mut T) -> F = unsafe { core::mem::transmute(ctx) };
+    getter(unsafe { &mut *this }).to_wire()
+}
+
+extern "C" fn property_setter<T: 'static, F: WireType>(ctx: usize, this: *mut T, value: <F as WireType>::Wire) {
+    let setter: fn(&mut T, F) = unsafe { core::mem::transmute(ctx) };
+    setter(unsafe { &mut *this }, F::from_wire(value));
 }
 
 extern "C" fn dtor_thunk<T>(p: *mut T) {
@@ -458,6 +696,20 @@ pub fn enum_tid<E: 'static>() -> *const c_void {
 /// The class must be registered before any binding that takes it - declare the struct earlier.
 pub fn class_tid<T: 'static>() -> *const c_void {
     registry().lock().unwrap().class_tid.get(&TypeId::of::<T>()).copied()
+        .expect("class parameter type must be registered before the binding that uses it")
+}
+
+/// The registered smart-pointer typeid of an OWNED class (`.smart_ptr(..)`), for a method or
+/// function that returns a fresh instance by value.
+pub fn owned_ptr_tid<T: 'static>() -> *const c_void {
+    registry().lock().unwrap().owned_ptr_tid.get(&TypeId::of::<T>()).copied()
+        .expect("a class that returns itself by value must register its smart pointer first")
+}
+
+/// The registered POINTER typeid of a class: a pointer parameter takes null (a reference does
+/// not), which is how `Option<&Class>` spells None.
+pub fn class_ptr_tid<T: 'static>() -> *const c_void {
+    registry().lock().unwrap().class_ptr_tid.get(&TypeId::of::<T>()).copied()
         .expect("class parameter type must be registered before the binding that uses it")
 }
 
@@ -503,6 +755,11 @@ extern "C" {
     fn crossbind_v_as_str(h: usize) -> *mut u8;
     fn crossbind_v_call(f: usize, argc: u32, argv: *const usize) -> usize;
     fn crossbind_v_cb_err_take() -> *mut u8;
+    fn crossbind_v_bytes_to_js(data: *const u8, len: u32) -> usize;
+    fn crossbind_v_f64s_to_js(data: *const f64, len: u32) -> usize;
+    fn crossbind_v_typed_len(h: usize) -> u32;
+    fn crossbind_v_bytes_from_js(h: usize, out: *mut u8, len: u32);
+    fn crossbind_v_f64s_from_js(h: usize, out: *mut f64, len: u32);
 }
 
 fn str_wire(s: &str) -> *mut u8 {
@@ -580,6 +837,47 @@ impl Clone for JsValue {
         JsValue { handle: self.handle }
     }
 }
+
+/// Typed arrays: a byte or double sequence crosses as the JS view of the same name, copied once
+/// in each direction (a view into wasm memory would dangle when the heap grows).
+pub struct JsBytes(pub Vec<u8>);
+
+impl WireType for JsBytes {
+    type Wire = usize;
+    const SIG: char = 'i';
+    fn tid() -> *const c_void { unsafe { crossbind_tid_emval() } }
+    fn from_wire(w: usize) -> Self {
+        let len = unsafe { crossbind_v_typed_len(w) } as usize;
+        let mut data = vec![0u8; len];
+        unsafe { crossbind_v_bytes_from_js(w, data.as_mut_ptr(), len as u32) };
+        unsafe { crossbind_v_unref(w) };
+        JsBytes(data)
+    }
+    fn to_wire(self) -> usize {
+        unsafe { crossbind_v_bytes_to_js(self.0.as_ptr(), self.0.len() as u32) }
+    }
+}
+
+pub struct JsF64s(pub Vec<f64>);
+
+impl WireType for JsF64s {
+    type Wire = usize;
+    const SIG: char = 'i';
+    fn tid() -> *const c_void { unsafe { crossbind_tid_emval() } }
+    fn from_wire(w: usize) -> Self {
+        let len = unsafe { crossbind_v_typed_len(w) } as usize;
+        let mut data = vec![0.0f64; len];
+        unsafe { crossbind_v_f64s_from_js(w, data.as_mut_ptr(), len as u32) };
+        unsafe { crossbind_v_unref(w) };
+        JsF64s(data)
+    }
+    fn to_wire(self) -> usize {
+        unsafe { crossbind_v_f64s_to_js(self.0.as_ptr(), self.0.len() as u32) }
+    }
+}
+
+impl ErrSentinel for JsBytes { fn err_sentinel() -> Self { JsBytes(Vec::new()) } }
+impl ErrSentinel for JsF64s { fn err_sentinel() -> Self { JsF64s(Vec::new()) } }
 
 impl Drop for JsValue {
     fn drop(&mut self) {
@@ -790,6 +1088,7 @@ pub fn class_<T: 'static>(name: &str) -> ClassBuilder<T> {
         name_ptr = r.cstr(name);
         dtor_sig = r.cstr("vp");
         r.class_tid.insert(TypeId::of::<T>(), cls);
+        r.class_ptr_tid.insert(TypeId::of::<T>(), ptr_ty);
     }
     unsafe {
         crossbind_embind_register_class(
@@ -804,6 +1103,26 @@ pub fn class_<T: 'static>(name: &str) -> ClassBuilder<T> {
 }
 
 impl<T: 'static> ClassBuilder<T> {
+    /// A field that reads and writes as a JS property. The getter and setter are plain shim
+    /// functions over the instance, so a private field can be exposed through accessors too.
+    pub fn property<F: WireType>(self, name: &str, getter: fn(&mut T) -> F, setter: fn(&mut T, F)) -> Self {
+        let (name_ptr, getter_sig, setter_sig);
+        {
+            let mut r = registry().lock().unwrap();
+            name_ptr = r.cstr(name);
+            getter_sig = r.cstr(&format!("{}pp", F::SIG));
+            setter_sig = r.cstr(&format!("vpp{}", F::SIG));
+        }
+        unsafe {
+            crossbind_embind_register_class_property(
+                self.cls, name_ptr,
+                F::tid(), getter_sig, property_getter::<T, F> as *const () as usize, getter as *mut c_void,
+                F::tid(), setter_sig, property_setter::<T, F> as *const () as usize, setter as *mut c_void,
+            );
+        }
+        self
+    }
+
     /// Registers a smart-pointer type for this class so factory functions can return an
     /// object that JS owns and frees on delete(). Call before `.createN`.
     pub fn smart_ptr(mut self, name: &str) -> Self {
@@ -827,6 +1146,7 @@ impl<T: 'static> ClassBuilder<T> {
             );
         }
         self.smart_ptr_ty = Some(ptr_ty);
+        registry().lock().unwrap().owned_ptr_tid.insert(TypeId::of::<T>(), ptr_ty);
         self
     }
 
@@ -918,6 +1238,10 @@ factories! {
     create0 / factory_invoker0 : ;
     create1 / factory_invoker1 : A0;
     create2 / factory_invoker2 : A0, A1;
+    create3 / factory_invoker3 : A0, A1, A2;
+    create4 / factory_invoker4 : A0, A1, A2, A3;
+    create5 / factory_invoker5 : A0, A1, A2, A3, A4;
+    create6 / factory_invoker6 : A0, A1, A2, A3, A4, A5;
 }
 
 // Arc-allocating factories for shared classes: identical registration shape, but the object
@@ -1006,6 +1330,9 @@ constructors! {
     constructor1 / ctor_invoker1 : A0;
     constructor2 / ctor_invoker2 : A0, A1;
     constructor3 / ctor_invoker3 : A0, A1, A2;
+    constructor4 / ctor_invoker4 : A0, A1, A2, A3;
+    constructor5 / ctor_invoker5 : A0, A1, A2, A3, A4;
+    constructor6 / ctor_invoker6 : A0, A1, A2, A3, A4, A5;
 }
 
 // Raw-pointer ctor variants for fallible `new`: the shim boxes the value itself (or raises and
@@ -1050,6 +1377,9 @@ constructors_ptr! {
     constructor_ptr1 / ctor_ptr_invoker1 : A0;
     constructor_ptr2 / ctor_ptr_invoker2 : A0, A1;
     constructor_ptr3 / ctor_ptr_invoker3 : A0, A1, A2;
+    constructor_ptr4 / ctor_ptr_invoker4 : A0, A1, A2, A3;
+    constructor_ptr5 / ctor_ptr_invoker5 : A0, A1, A2, A3, A4;
+    constructor_ptr6 / ctor_ptr_invoker6 : A0, A1, A2, A3, A4, A5;
 }
 
 // Raw-pointer factory variants: `Result<Self, E>` raises on Err, `Option<Self>` returns null
@@ -1095,6 +1425,10 @@ factories_ptr! {
     create_ptr0 / factory_ptr_invoker0 : ;
     create_ptr1 / factory_ptr_invoker1 : A0;
     create_ptr2 / factory_ptr_invoker2 : A0, A1;
+    create_ptr3 / factory_ptr_invoker3 : A0, A1, A2;
+    create_ptr4 / factory_ptr_invoker4 : A0, A1, A2, A3;
+    create_ptr5 / factory_ptr_invoker5 : A0, A1, A2, A3, A4;
+    create_ptr6 / factory_ptr_invoker6 : A0, A1, A2, A3, A4, A5;
 }
 
 // N-arity instance methods.
@@ -1141,6 +1475,8 @@ functions! {
     function2 / method_invoker2 : A0, A1;
     function3 / method_invoker3 : A0, A1, A2;
     function4 / method_invoker4 : A0, A1, A2, A3;
+    function5 / method_invoker5 : A0, A1, A2, A3, A4;
+    function6 / method_invoker6 : A0, A1, A2, A3, A4, A5;
 }
 
 // N-arity FREE functions (`Module.name(..)` in JS, no class). embind slices the target off
@@ -1183,4 +1519,6 @@ free_functions! {
     fn2 / free_invoker2 : A0, A1;
     fn3 / free_invoker3 : A0, A1, A2;
     fn4 / free_invoker4 : A0, A1, A2, A3;
+    fn5 / free_invoker5 : A0, A1, A2, A3, A4;
+    fn6 / free_invoker6 : A0, A1, A2, A3, A4, A5;
 }
