@@ -190,7 +190,7 @@ Generation rules (`crossbind/src/utils/rustBridgeGen.js`, run by `buildCargo` be
 | `impl Display for C` | `toString()` on the class (so `` `${obj}` `` formats) |
 | `-> Result<T, E>` (ctor, factory, method or free fn; `E: Display`) | Err becomes a **thrown JS exception** |
 | `-> Option<Self>` (factory) | None becomes **JS null** (typed `X \| null`) |
-| `-> Option<i32 / f64 / bool / String>` (method or free fn) | Some -> value, None -> **undefined** (typed `T \| undefined`) |
+| `-> Option<i32 / f64 / bool / String>` (method or free fn) | Some -> value, None -> **null** (typed `T \| null`) |
 | `Option<i32 / f64 / bool / String>` parameter | JS undefined/null -> None (typed `T \| null \| undefined`) |
 | `other: &SomeClass` parameter | pass another bound instance (borrowed for the call) |
 | `export.bindings.vectors: [{ of: 'i32', name: '..' }]` in crossbind.config.mjs | `register_vector` |
@@ -229,7 +229,7 @@ scattered `Box::leak`.
 | Rust idioms: `&str`/`&String` params, `Result` → JS exception, `Option<Self>` → null | ✅ GREEN — e2e (web + jsi-mock legs), worker-mode playwright on 3 browsers, iOS sim + Android emulator (throw message, null, borrowed str all asserted) |
 | i64/u64 → BigInt, `impl Display` → toString(), top-level free functions | ✅ GREEN — same full bar (e2e both legs, 3-browser worker playwright, both devices); u64::MAX round-trips exactly, free `Result` fns throw |
 | DIRECT crate import (`import { Uuid } from 'cargo:uuid'` — untouched crates.io source, multi-file parse, feature-gated modules) | ✅ GREEN — worker-mode playwright on 3 browsers + iOS sim + Android emulator 26/26 (newV4 format, parse roundtrip, Display toString, Err throws) |
-| `Option<i32/f64/bool/String>` returns → value-or-undefined | ✅ GREEN — e2e both legs (mock reads the nullable cell natively), 3-browser worker playwright, both devices |
+| `Option<i32/f64/bool/String>` returns → value-or-null | ✅ GREEN — e2e both legs (mock reads the nullable cell natively), 3-browser worker playwright, both devices |
 | Option params + `&SomeClass` params + re-export following (`semver` matches, `regex` throwing ctor as DIRECT imports) | ✅ GREEN — e2e both legs, 3-browser worker playwright, Android 32/32 + iOS 32/32 — via the explicit cargo: scheme, so npm names never collide |
 | Rust crate → real mobile archives (android/ios arm64) | ✅ compiles; iOS and Android linked+run |
 

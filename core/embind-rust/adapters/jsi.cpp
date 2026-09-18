@@ -22,6 +22,7 @@
 // Compiled ONLY inside the RN native module (jsi + embind-jsi headers exist there via build_ios.js).
 
 #include <jsi/jsi.h>
+#include <cmath>
 #include <cstdint>
 #include <cstdlib>
 #include <cstring>
@@ -55,6 +56,12 @@ const void* crossbind_tid_void() { return &typeid(void); }
 const void* crossbind_tid_std_string() { return &typeid(std::string); }
 const void* crossbind_tid_int64() { return &typeid(int64_t); }
 const void* crossbind_tid_uint64() { return &typeid(uint64_t); }
+const void* crossbind_tid_int8() { return &typeid(int8_t); }
+const void* crossbind_tid_int16() { return &typeid(int16_t); }
+const void* crossbind_tid_uint8() { return &typeid(uint8_t); }
+const void* crossbind_tid_uint16() { return &typeid(uint16_t); }
+const void* crossbind_tid_uint32() { return &typeid(uint32_t); }
+const void* crossbind_tid_float() { return &typeid(float); }
 // Adapter-local identities, NOT &typeid(std::optional<T>): linked C++ bindings may register
 // the real optional typeids themselves, and these types never interop with C++ signatures.
 const void* crossbind_tid_optional_int() { static const char t = 0; return &t; }
@@ -193,6 +200,63 @@ uint8_t* crossbind_v_cb_err_take() {
 static thread_local std::string g_pendingError;
 static thread_local bool g_hasPendingError = false;
 
+static thread_local std::string g_pendingErrorCode;
+
+// Typed arrays on the native runtime: the adapter builds the JS view and hands back its handle,
+// one copy in each direction.
+// jsi::Object carries no index setter, so the elements go into a jsi::Array first and the
+// TypedArray constructor copies them (`new Uint8Array([...])`).
+static jsi::Object typedArrayFrom(jsi::Runtime& rt, const char* ctor, jsi::Array values) {
+    return rt.global().getPropertyAsFunction(rt, ctor)
+        .callAsConstructor(rt, values).asObject(rt);
+}
+
+extern "C" size_t crossbind_v_bytes_to_js(const uint8_t* data, unsigned len) {
+    auto& rt = *jsRuntime;
+    auto values = jsi::Array(rt, (size_t)len);
+    for (unsigned i = 0; i < len; ++i) values.setValueAtIndex(rt, i, jsi::Value((double)data[i]));
+    auto array = typedArrayFrom(rt, "Uint8Array", std::move(values));
+    return (size_t)crossbindHandleOf(crossbindHelper("__crossbind_v_from_value").call(rt, array));
+}
+
+extern "C" size_t crossbind_v_f64s_to_js(const double* data, unsigned len) {
+    auto& rt = *jsRuntime;
+    auto values = jsi::Array(rt, (size_t)len);
+    for (unsigned i = 0; i < len; ++i) values.setValueAtIndex(rt, i, jsi::Value(data[i]));
+    auto array = typedArrayFrom(rt, "Float64Array", std::move(values));
+    return (size_t)crossbindHandleOf(crossbindHelper("__crossbind_v_from_value").call(rt, array));
+}
+
+extern "C" unsigned crossbind_v_typed_len(size_t h) {
+    auto& rt = *jsRuntime;
+    auto value = crossbindHelper("__crossbind_v_get").call(rt, crossbindVHandle(h), jsi::String::createFromAscii(rt, "length"));
+    auto number = crossbindHelper("__crossbind_v_as_num").call(rt, value);
+    return number.isNumber() ? (unsigned)number.getNumber() : 0;
+}
+
+extern "C" void crossbind_v_bytes_from_js(size_t h, uint8_t* out, unsigned len) {
+    auto& rt = *jsRuntime;
+    auto array = crossbindHelper("__crossbind_v_to_array").call(rt, crossbindVHandle(h)).asObject(rt).asArray(rt);
+    for (unsigned i = 0; i < len; ++i) out[i] = (uint8_t)array.getValueAtIndex(rt, i).getNumber();
+}
+
+extern "C" void crossbind_v_f64s_from_js(size_t h, double* out, unsigned len) {
+    auto& rt = *jsRuntime;
+    auto array = crossbindHelper("__crossbind_v_to_array").call(rt, crossbindVHandle(h)).asObject(rt).asArray(rt);
+    for (unsigned i = 0; i < len; ++i) out[i] = array.getValueAtIndex(rt, i).getNumber();
+}
+
+extern "C" void crossbind_embind_raise_error(uint8_t* w);
+
+extern "C" void crossbind_embind_raise_error_coded(uint8_t* w, uint8_t* c) {
+    crossbind_embind_raise_error(w);
+    if (!c) { g_pendingErrorCode.clear(); return; }
+    uint32_t len;
+    std::memcpy(&len, c, 4);
+    g_pendingErrorCode.assign((const char*)(c + 4), (size_t)len);
+    std::free(c);
+}
+
 extern "C" void crossbind_embind_raise_error(uint8_t* w) {
     uint32_t len;
     std::memcpy(&len, w, 4);
@@ -238,7 +302,16 @@ static uint64_t readArg(jsi::Runtime& rt, const jsi::Value& v, char c) {
     }
     // i64/u64 ('j'/'u') arrive as JS BigInt (embind bigint types), Number accepted as a courtesy;
     // both directions are raw 64-bit slots, so the unsigned bit copy is sign-correct either way.
-    if (c == 'j' || c == 'u') return v.isBigInt() ? v.getBigInt(rt).getUint64(rt) : (uint64_t)(int64_t)v.getNumber();
+    if (c == 'j' || c == 'u') {
+        if (v.isBigInt()) return v.getBigInt(rt).getUint64(rt);
+        // A Number is accepted only while it is an exact integer JS can represent; anything
+        // else would be truncated silently, and a 64-bit slot deserves the exact value.
+        double d = v.isNumber() ? v.getNumber() : 0;
+        if (!v.isNumber() || d != std::trunc(d) || std::fabs(d) > 9007199254740991.0) {
+            throw jsi::JSError(rt, "a 64-bit integer parameter takes a BigInt or a safe integer Number");
+        }
+        return (uint64_t)(int64_t)d;
+    }
     // Optional args ('I'/'D'/'B'/'S'): undefined/null -> 0 (None); otherwise a heap cell this
     // adapter owns and frees after dispatch ('S' carries a plain string wire).
     if (c == 'I' || c == 'D' || c == 'B' || c == 'S') {
@@ -250,24 +323,31 @@ static uint64_t readArg(jsi::Runtime& rt, const jsi::Value& v, char c) {
     }
     // Pointers (this/handle/value-object wire) arrive as BigInt, int/bool/enum as Number; accept
     // either kind defensively so a host that boxed a pointer as a Number still dispatches correctly.
-    if (c == 'p') return v.isBigInt() ? v.getBigInt(rt).getUint64(rt) : (uint64_t)(int64_t)v.getNumber();
-    return v.isNumber() ? (uint64_t)(int64_t)v.getNumber() : v.getBigInt(rt).getUint64(rt); // 'i'
+    if (c == 'p') return v.isBigInt() ? v.getBigInt(rt).getUint64(rt) : v.isNumber() ? (uint64_t)(int64_t)v.getNumber() : 0;
+    // 'i': ints and enums arrive as numbers, bools as booleans (the int wire carries 0/1). Reading
+    // a BigInt out of anything else is undefined behaviour (Hermes dies in cloneBigInt), so every
+    // other value is 0.
+    if (v.isBool()) return v.getBool() ? 1 : 0;
+    if (v.isNumber()) return (uint64_t)(int64_t)v.getNumber();
+    return v.isBigInt() ? v.getBigInt(rt).getUint64(rt) : 0;
 }
 
 // Bounded-dispatch: every wire kind is integer-class in the invoker's C signature (pointers and
 // ints natively; doubles as bit patterns in u64 - see WireType for f64), so uint64-slot casts are
 // ABI-correct on every native ABI. No FP registers, no libffi; the only bound is the arity cap.
 static jsi::Value callInvoker(jsi::Runtime& rt, const std::string& sig, void* invoker,
-                              const jsi::Value* a, uint64_t ctx, bool prepend) {
+                              const jsi::Value* a, size_t count, uint64_t ctx, bool prepend) {
     const char ret = sig[0];
     const int total = (int)sig.size() - 1;  // C args the raw invoker takes (sig[1..])
 
     // s[0..total-1] are the raw invoker's C args. When prepend, sig[1] is the baked target pointer
     // (embind sliced it off), so the jsi args a[0..] fill sig[2..]; otherwise a[0..] fill sig[1..].
-    uint64_t s[6] = {0, 0, 0, 0, 0, 0};
+    // Widest call: a baked target + `this` + six declared arguments.
+    uint64_t s[8] = {0, 0, 0, 0, 0, 0, 0, 0};
     int base = 0;
     if (prepend) { s[0] = ctx; base = 1; }
-    for (int j = base; j < total && j < 6; ++j) s[j] = readArg(rt, a[j - base], sig[1 + j]);
+    // A call with fewer JS args than the signature must not read past the argument array.
+    for (int j = base; j < total && j < 8; ++j) s[j] = (size_t)(j - base) < count ? readArg(rt, a[j - base], sig[1 + j]) : 0;
 
     uint64_t r = 0;
     if (ret == 'v') {
@@ -278,7 +358,9 @@ static jsi::Value callInvoker(jsi::Runtime& rt, const std::string& sig, void* in
             case 3: ((void(*)(uint64_t, uint64_t, uint64_t))invoker)(s[0], s[1], s[2]); break;
             case 4: ((void(*)(uint64_t, uint64_t, uint64_t, uint64_t))invoker)(s[0], s[1], s[2], s[3]); break;
             case 5: ((void(*)(uint64_t, uint64_t, uint64_t, uint64_t, uint64_t))invoker)(s[0], s[1], s[2], s[3], s[4]); break;
-            default: ((void(*)(uint64_t, uint64_t, uint64_t, uint64_t, uint64_t, uint64_t))invoker)(s[0], s[1], s[2], s[3], s[4], s[5]); break;
+            case 6: ((void(*)(uint64_t, uint64_t, uint64_t, uint64_t, uint64_t, uint64_t))invoker)(s[0], s[1], s[2], s[3], s[4], s[5]); break;
+            case 7: ((void(*)(uint64_t, uint64_t, uint64_t, uint64_t, uint64_t, uint64_t, uint64_t))invoker)(s[0], s[1], s[2], s[3], s[4], s[5], s[6]); break;
+            default: ((void(*)(uint64_t, uint64_t, uint64_t, uint64_t, uint64_t, uint64_t, uint64_t, uint64_t))invoker)(s[0], s[1], s[2], s[3], s[4], s[5], s[6], s[7]); break;
         }
     } else {
         switch (total) {
@@ -288,30 +370,43 @@ static jsi::Value callInvoker(jsi::Runtime& rt, const std::string& sig, void* in
             case 3: r = ((uint64_t(*)(uint64_t, uint64_t, uint64_t))invoker)(s[0], s[1], s[2]); break;
             case 4: r = ((uint64_t(*)(uint64_t, uint64_t, uint64_t, uint64_t))invoker)(s[0], s[1], s[2], s[3]); break;
             case 5: r = ((uint64_t(*)(uint64_t, uint64_t, uint64_t, uint64_t, uint64_t))invoker)(s[0], s[1], s[2], s[3], s[4]); break;
-            default: r = ((uint64_t(*)(uint64_t, uint64_t, uint64_t, uint64_t, uint64_t, uint64_t))invoker)(s[0], s[1], s[2], s[3], s[4], s[5]); break;
+            case 6: r = ((uint64_t(*)(uint64_t, uint64_t, uint64_t, uint64_t, uint64_t, uint64_t))invoker)(s[0], s[1], s[2], s[3], s[4], s[5]); break;
+            case 7: r = ((uint64_t(*)(uint64_t, uint64_t, uint64_t, uint64_t, uint64_t, uint64_t, uint64_t))invoker)(s[0], s[1], s[2], s[3], s[4], s[5], s[6]); break;
+            default: r = ((uint64_t(*)(uint64_t, uint64_t, uint64_t, uint64_t, uint64_t, uint64_t, uint64_t, uint64_t))invoker)(s[0], s[1], s[2], s[3], s[4], s[5], s[6], s[7]); break;
         }
     }
 
     // The consumer owns each incoming std::string arg buffer and optional arg cell; free them
     // now that the crate has copied.
-    for (int j = base; j < total && j < 6; ++j) {
+    for (int j = base; j < total && j < 8; ++j) {
         const char cj = sig[1 + j];
         if (cj == 's' || cj == 'S' || cj == 'I' || cj == 'D' || cj == 'B') std::free((void*)(uintptr_t)s[j]);
     }
 
     // A shim raised (Result::Err): drop the sentinel return and surface a real JS exception.
+    // The error is BUILT IN JS, not thrown from here: Hermes re-wraps a C++ exception escaping a
+    // host function ("Exception in HostFunction: ..."), which loses both the plain message and the
+    // `code` property. The runtime's dyn-caller rethrows what this parks, so the object JS sees is
+    // a real Error with the binding's own message and code.
     if (g_hasPendingError) {
         g_hasPendingError = false;
         if (ret == 's' && r) std::free((void*)(uintptr_t)r);
-        throw jsi::JSError(rt, std::move(g_pendingError));
+        std::string message = std::move(g_pendingError);
+        std::string code = std::move(g_pendingErrorCode);
+        g_pendingError.clear();
+        g_pendingErrorCode.clear();
+        crossbindHelper("__crossbind_park_error").call(
+            rt, jsi::String::createFromUtf8(rt, message),
+            code.empty() ? jsi::Value::undefined() : jsi::Value(jsi::String::createFromUtf8(rt, code)));
+        return jsi::Value::undefined();
     }
 
     if (ret == 'v') return jsi::Value::undefined();
     if (ret == 's') return wireStringToJsi(rt, r);  // the crate returned a [u32 len][bytes] buffer
-    // Optional returns ('I'/'D'/'B'/'S'): nullable heap cell - 0 is None (undefined), otherwise
+    // Optional returns ('I'/'D'/'B'/'S'): nullable heap cell - 0 is None (null), otherwise
     // the malloc'd inner value ('S' points at a plain string wire); freed here after reading.
     if (ret == 'I' || ret == 'D' || ret == 'B' || ret == 'S') {
-        if (!r) return jsi::Value::undefined();
+        if (!r) return jsi::Value::null();
         if (ret == 'S') return wireStringToJsi(rt, r);
         uint8_t* cell = (uint8_t*)(uintptr_t)r;
         jsi::Value out = jsi::Value::undefined();
@@ -338,8 +433,8 @@ static jsi::Function wrapInvoker(const std::string& name, const char* sigC, void
     unsigned jsArgc = (unsigned)(sig.size() - 1 - (prepend ? 1 : 0)); // args embind actually passes
     return jsi::Function::createFromHostFunction(
         rt, jsi::PropNameID::forAscii(rt, dbg), jsArgc,
-        [sig, invoker, ctx, prepend](jsi::Runtime& rt, const jsi::Value&, const jsi::Value* a, size_t) -> jsi::Value {
-            return callInvoker(rt, sig, invoker, a, ctx, prepend);
+        [sig, invoker, ctx, prepend](jsi::Runtime& rt, const jsi::Value&, const jsi::Value* a, size_t count) -> jsi::Value {
+            return callInvoker(rt, sig, invoker, a, count, ctx, prepend);
         });
 }
 
@@ -413,6 +508,22 @@ void crossbind_embind_register_enum_value(CrossbindTid enum_ty, const char* valu
     _embind_register_enum_value(enum_ty, value_name, value);
 }
 
+void crossbind_embind_register_class_property(CrossbindTid cls, const char* name,
+    CrossbindTid getter_ty, const char* getter_sig, CrossbindFn getter, void* getter_ctx,
+    CrossbindTid setter_ty, const char* setter_sig, CrossbindFn setter, void* setter_ctx) {
+    // Not sliced: the fork's property accessors call `getter(getterContext, ptr)` and
+    // `setter(setterContext, ptr, value)`, so both contexts arrive as ordinary arguments
+    // (unlike a method invoker, where embind slices the target off).
+    auto get = wrapInvoker(std::string(name) + "_get", getter_sig, getter);
+    auto set = wrapInvoker(std::string(name) + "_set", setter_sig, setter);
+    _embind_register_class_property(cls, name, getter_ty, getter_sig, get, getter_ctx,
+        setter_ty, setter_sig, set, setter_ctx);
+}
+void crossbind_embind_register_constant(const char* name, CrossbindTid ty, double value) {
+    // The fork takes the constant as a jsi::Value; every kind we offer (int, float, bool) reads
+    // back through its own fromWireType from a plain number.
+    _embind_register_constant(name, ty, jsi::Value(value));
+}
 void crossbind_embind_register_value_object(CrossbindTid struct_ty, const char* name,
     const char* ctor_sig, CrossbindFn ctor, const char* dtor_sig, CrossbindFn dtor) {
     auto ct = wrapInvoker(std::string(name) + "_ctor", ctor_sig, ctor);

@@ -1411,10 +1411,10 @@ function __embind_register_optional(rawOptionalType, rawInnerType) {
     var inner = innerTypes[0];
     return [{
       name: `std::optional<${inner.name}>`,
-      // No value crosses as undefined (JS may also hand back null); a present value
+      // No value crosses as null (a wire of undefined reads the same); a present value
       // rides the inner type's own converters unchanged.
       'fromWireType': function (wt) {
-        if (wt === undefined || wt === null) return undefined;
+        if (wt === undefined || wt === null) return null;
         return inner['fromWireType'](wt);
       },
       'toWireType': function (destructors, o) {
@@ -1546,6 +1546,11 @@ function __embind_register_bigint(primitiveType, name, size, minRange, maxRange)
       // console.log('__embind_register_bigint - toWireType');
       if (typeof value != "bigint" && typeof value != "number") {
         throw new TypeError(`Cannot convert "${embindRepr(value)}" to ${this.name}`);
+      }
+      // A Number crosses only while it is an exact integer: BigInt(2**53 + 1) would round
+      // silently, and a 64-bit slot deserves the exact value (the wasm glue gets the same rule).
+      if (typeof value == "number" && !Number.isSafeInteger(value)) {
+        throw new TypeError(`a 64-bit integer parameter takes a BigInt or a safe integer Number, got ${embindRepr(value)}`);
       }
       if (value < minRange || value > maxRange) {
         throw new TypeError(`Passing a number "${embindRepr(value)}" from JS side to C/C++ side to an argument of type "${name}", which is outside the valid range [${minRange}, ${maxRange}]!`);
@@ -2143,7 +2148,13 @@ function __crossbind_json_to_handle(text) {
 globalThis.__crossbind_json_to_handle = __crossbind_json_to_handle;
 
 function __crossbind_handle_to_json(handle) {
-  const s = JSON.stringify(Emval.toValue(handle));
+  // A Set or Map has no JSON form of its own: write it as the array or object the Rust side
+  // expects, the same rule the web adapter's replacer follows.
+  const s = JSON.stringify(Emval.toValue(handle), (key, value) => {
+    if (value instanceof Set) return Array.from(value);
+    if (value instanceof Map) return Object.fromEntries(value);
+    return value;
+  });
   __emval_decref(handle);
   return s === undefined ? 'null' : s;
 }
@@ -2165,6 +2176,18 @@ function __crossbind_v_from_num(v) {
   return Emval.toHandle(v);
 }
 globalThis.__crossbind_v_from_num = __crossbind_v_from_num;
+
+// A handle's value as a plain array, so the adapter can copy a typed array element by element.
+function __crossbind_v_to_array(h) {
+  return Array.from(Emval.toValue(h));
+}
+globalThis.__crossbind_v_to_array = __crossbind_v_to_array;
+
+// Any JS value the adapter already built (a typed array, say) gets a handle of its own.
+function __crossbind_v_from_value(v) {
+  return Emval.toHandle(v);
+}
+globalThis.__crossbind_v_from_value = __crossbind_v_from_value;
 
 function __crossbind_v_from_bool(v) {
   return Emval.toHandle(!!v);
@@ -2458,13 +2481,30 @@ function replacePublicSymbol(name, value, numArguments) {
 
 
 
+// A Rust binding cannot throw through Hermes: an exception escaping a host function comes back
+// as "Exception in HostFunction: ...", with the message rewritten and any property (the error
+// `code`) gone. The adapter parks the error here instead, and every invoker rethrows it on the
+// way out, so JS sees an Error this runtime built.
+globalThis.__crossbind_park_error = function (message, code) {
+  var error = new Error(message);
+  if (code !== undefined) error.code = code;
+  globalThis.__crossbindParkedError = error;
+};
+
 function getDynCaller(signature, rawFunction, slice) {
   return (...args) => {
     //console.log('getDynCallerReturn', signature, rawFunction, args.length, ...args);
     if (slice) {
       args = args.slice(1);
     }
-    return rawFunction(...args);
+    globalThis.__crossbindParkedError = null;
+    const result = rawFunction(...args);
+    const parked = globalThis.__crossbindParkedError;
+    if (parked) {
+      globalThis.__crossbindParkedError = null;
+      throw parked;
+    }
+    return result;
   };
 }
 

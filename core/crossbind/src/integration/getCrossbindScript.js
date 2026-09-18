@@ -29,18 +29,21 @@ export function getRustJsScript(target, rsFile) {
     const cargoDeps = state.config.cargoDependencies ?? {};
     if (Object.hasOwn(cargoDeps, crateName)
         && path.dirname(rsReal) === fs.realpathSync(path.join(state.config.paths.cache, 'rust-crates'))) {
-        const { model } = createCrateImportBridge({
+        const { model, namePrefix } = createCrateImportBridge({
             crateName,
             spec: cargoDeps[crateName],
             cacheDir: state.config.paths.cache,
             dtsMode: state.config.dts,
             log: () => {},
         });
+        // A crate import registers its public names prefixed (two crates may export the same
+        // name), so the proxy exports the clean name and reads the prefixed one off the module.
         return buildScript(target, [
             ...model.classes.map((c) => c.name),
             ...model.enums.map((e) => e.name),
             ...model.freeFns.map((f) => f.jsName),
-        ]);
+            ...(model.consts ?? []).map((c) => c.name),
+        ].map((name) => ({ local: name, wire: `${namePrefix}${name}` })));
     }
 
     const pkg = state.config.allDependencies.find((d) => d.export?.type === 'cargo'
@@ -64,6 +67,8 @@ export function getRustJsScript(target, rsFile) {
         ...model.classes.map((c) => c.name),
         ...model.enums.map((e) => e.name),
         ...(model.freeFns ?? []).map((f) => f.jsName),
+        // `pub const`/`pub static` register as module constants, so the proxy exports them too.
+        ...(model.consts ?? []).map((c) => c.name),
         ...vectors.map((v) => v.name),
     ];
     return buildScript(target, symbols);
@@ -79,8 +84,11 @@ function buildScript(target, symbols) {
     let symbolExportDefineString = '';
     let symbolExportAssignString = '';
     if (symbols && Array.isArray(symbols)) {
-        symbolExportDefineString = symbols.map((s) => `export let ${s} = null;`).join('\n');
-        symbolExportAssignString = symbols.map((s) => `${s} = m.${s};`).join('\n');
+        // A symbol is either a plain name or { local, wire }: the second form exports `local`
+        // while reading the differently registered `wire` name off the module.
+        const pairs = symbols.map((s) => (typeof s === 'string' ? { local: s, wire: s } : s));
+        symbolExportDefineString = pairs.map((s) => `export let ${s.local} = null;`).join('\n');
+        symbolExportAssignString = pairs.map((s) => `${s.local} = m.${s.wire};`).join('\n');
     }
 
     return `

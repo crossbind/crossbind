@@ -202,19 +202,19 @@ impl Wide {
     pub fn consuming(self) -> i32 {
         1
     }
-    pub fn too_many(&self, a: i32, b: i32, c: i32, d: i32, e: i32) -> i32 {
+    pub fn too_many(&self, a: i32, b: i32, c: i32, d: i32, e: i32, f: i32, g: i32) -> i32 {
         a
     }
-    pub fn odd_param(&self, other: Vec<String>) -> i32 {
+    pub fn odd_param(&self, other: Vec<Wide>) -> i32 {
         0
     }
-    pub fn odd_return(&self) -> Vec<String> {
-        vec![]
+    pub fn odd_return(&self) -> Box<dyn std::fmt::Debug> {
+        Box::new(1)
     }
-    pub fn odd_option(&self) -> Option<Vec<i32>> {
+    pub fn odd_option(&self) -> Option<Loose> {
         None
     }
-    pub fn factory_wide(a: i32, b: i32, c: i32) -> Self {
+    pub fn factory_wide(a: i32, b: i32, c: i32, d: i32, e: i32, f: i32, g: i32) -> Self {
         Wide
     }
 }
@@ -236,7 +236,7 @@ impl Bare {
         model = parseSurface(OUTSIDE, (line) => logs.push(line));
     });
 
-    test('skips an enum that is not a repr(i32) unit enum, and says so', () => {
+    test('skips an enum whose variants carry data, and says so', () => {
         expect(model.enums).toEqual([]);
         expect(logs.some((l) => l.includes('enum Loose skipped'))).toBe(true);
     });
@@ -251,15 +251,29 @@ impl Bare {
         expect(wide.methods.map((m) => m.name)).toEqual([]);
         expect(logs.some((l) => l.includes('consuming self is not supported'))).toBe(true);
         expect(logs.some((l) => l.includes('too_many'))).toBe(true);
-        expect(logs.some((l) => l.includes('unsupported parameter'))).toBe(true);
-        expect(logs.some((l) => l.includes("unsupported return 'Vec<String>'"))).toBe(true);
-        expect(logs.some((l) => l.includes('Option<Vec<i32>> return is not representable'))).toBe(true);
-        expect(logs.some((l) => l.includes('factories take max 2 args'))).toBe(true);
+        expect(logs.some((l) => l.includes("a struct inside 'Vec<Wide>' must derive Serialize and Deserialize"))).toBe(true);
+        expect(logs.some((l) => l.includes('unsupported return'))).toBe(true);
+        expect(logs.some((l) => l.includes('Option<Loose> return is not representable'))).toBe(true);
+        expect(logs.some((l) => l.includes('factories take max 6 args'))).toBe(true);
     });
 
     test('drops a struct whose surface is entirely private, and says so', () => {
         expect(model.classes.map((c) => c.name)).not.toContain('Bare');
         expect(logs.some((l) => l.includes('struct Bare has no exportable pub fns'))).toBe(true);
+    });
+
+    test('drops a binding that borrows a struct it dropped, and says so', () => {
+        const log = [];
+        const model = parseSurface(`
+pub struct Plain {
+    count: i32,
+}
+pub fn count_of(p: &Plain) -> i32 { 0 }
+pub fn keep(v: i32) -> i32 { v }
+`, (m) => log.push(m));
+        expect(model.classes.map((c) => c.name)).not.toContain('Plain');
+        expect(model.freeFns.map((f) => f.name)).toEqual(['keep']);
+        expect(log).toContainEqual(expect.stringContaining('fn count_of skipped (a parameter borrows a struct that is not registered)'));
     });
 });
 
@@ -480,6 +494,27 @@ pub fn apply(f: JsFunction, x: f64) -> Result<JsValue, String> { f.call1(&JsValu
             const dts = fs.readFileSync(path.join(work, '.crossbind/types/live.rs.d.ts'), 'utf8');
             expect(dts).toContain('pass(v: unknown): unknown;');
             expect(dts).toContain('apply(f: (...args: unknown[]) => unknown, x: number): unknown;');
+        } finally {
+            fs.rmSync(work, { recursive: true, force: true });
+        }
+    });
+
+    test('fixed-size array parameter keeps its length and is borrowed at the call site', () => {
+        const ARR_RS = `
+pub fn checksum(bytes: &[u8; 4]) -> i32 { bytes.iter().map(|b| *b as i32).sum() }
+`;
+        const work = fs.mkdtempSync(path.join(os.tmpdir(), 'crossbind-arr-rs-'));
+        try {
+            const rsFile = path.join(work, 'arr.rs');
+            fs.writeFileSync(rsFile, ARR_RS);
+            const { bridgeDir } = createRustBridgeCrate({
+                rsFile, cacheDir: path.join(work, '.crossbind'), projectPath: work, log: () => {},
+            });
+            const bridge = fs.readFileSync(path.join(bridgeDir, 'src/lib.rs'), 'utf8');
+            expect(bridge).toContain('&__crossbind_from_json::<[u8; 4]>(a0.0)');
+            expect(bridge).not.toContain('Vec<u8; 4>');
+            const dts = fs.readFileSync(path.join(work, '.crossbind/types/arr.rs.d.ts'), 'utf8');
+            expect(dts).toContain('checksum(bytes: number[]): number;');
         } finally {
             fs.rmSync(work, { recursive: true, force: true });
         }

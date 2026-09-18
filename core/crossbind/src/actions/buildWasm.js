@@ -13,6 +13,24 @@ import { getContentHash, getFilesFingerprint } from '../utils/hash.js';
 import { buildLinkLibArgs } from '../utils/linkLayout.js';
 import buildAppRustCrates from '../utils/appRustCrates.js';
 
+// embind's bigint converter turns any Number into a BigInt, so 2^53+1 silently becomes 2^53.
+// A 64-bit parameter takes a BigInt or a Number that is a safe integer instead; the jsi adapter
+// enforces the same rule natively. Each runtimeEnv links its own glue, so each one calls this.
+function guardBigIntArguments(target) {
+    const gluePath = `${state.config.paths.build}/${target.rawJsName}`;
+    replace({
+        regex: 'if\\s*\\(\\s*typeof value\\s*==\\s*"number"\\s*\\)\\s*\\{\\s*value\\s*=\\s*BigInt\\(value\\)\\s*;?\\s*\\}',
+        replacement: 'if(typeof value=="number"){if(!Number.isSafeInteger(value))throw new TypeError("a 64-bit integer parameter takes a BigInt or a safe integer Number, got "+value);value=BigInt(value)}',
+        paths: [gluePath],
+        recursive: false,
+        silent: true,
+    });
+    const glue = fs.readFileSync(gluePath, 'utf8');
+    if (glue.includes('__embind_register_bigint') && !glue.includes('Number.isSafeInteger(value)')) {
+        logger.error('bigint safe-integer rewrite missed (emscripten glue format changed?): 64-bit Number arguments round silently');
+    }
+}
+
 export default async function buildWasm(target, options = {}) {
     const isProd = target.buildType === 'release';
     const buildType = isProd ? 'Release' : 'Debug';
@@ -226,6 +244,7 @@ export default async function buildWasm(target, options = {}) {
             recursive: false,
             silent: true,
         }); */
+        guardBigIntArguments(target);
         await buildJs(target);
         // fs.rmSync(`${state.config.paths.build}/${state.config.general.name}.js`);
         // fs.copyFileSync(`${state.config.paths.build}/${state.config.general.name}.browser.js`, `${state.config.paths.build}/${state.config.general.name}.js`);
@@ -263,6 +282,7 @@ export default async function buildWasm(target, options = {}) {
         const t1 = performance.now();
         logger.doneStep(target, 'wasm');
         logger.startStep(target, 'js');
+        guardBigIntArguments(target);
         await buildJs(target);
         logger.doneStep(target, 'js');
     }
@@ -294,6 +314,7 @@ export default async function buildWasm(target, options = {}) {
         ], null, target);
         logger.doneStep(target, 'wasm');
         logger.startStep(target, 'js');
+        guardBigIntArguments(target);
         await buildJs(target);
         if (emccFlags.includes('FETCH')) {
             fs.appendFileSync(`${state.config.paths.build}/${target.jsName}`, 'var XMLHttpRequest = require(\'xhr2\');\n');
