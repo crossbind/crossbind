@@ -1,0 +1,39 @@
+name: check port links
+on:
+    workflow_dispatch:
+        inputs:
+            tag:
+                description: npm dist-tag of the port packages to link
+                default: beta
+    schedule:
+        - cron: '17 6 * * 1'
+    push:
+        branches:
+            - main
+        paths:
+            - core/crossbind/src/assets/toolchain-digests.json
+            - core/crossbind/src/actions/buildWasm.js
+            - core/crossbind/src/actions/run.js
+            - ports/**
+            - scripts/check-port-links.mjs
+            - .github/workflows/check-port-links.yml
+
+permissions: {}
+jobs:
+    # The published C++ ports (gdal, proj, geos) must link with the pinned image: a toolchain bump that changes the
+    # exception ABI, or a header declaring what the library never defines, only shows when port symbols are referenced.
+    link:
+        runs-on: ubuntu-24.04
+        steps:
+            - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+            - name: Install pnpm
+              uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
+            - name: Use Node.js
+              uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+              with:
+                  node-version-file: .nvmrc
+                  cache: 'pnpm'
+            - name: Install dependencies
+              run: pnpm install --frozen-lockfile
+            - name: Link the published ports with the pinned image
+              run: node scripts/check-port-links.mjs --tag ${{ inputs.tag || 'beta' }}

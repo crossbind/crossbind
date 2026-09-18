@@ -81,6 +81,7 @@
         "test:dependencies": "node --test scripts/dependencies/test/*.test.mjs",
         "check:dependency-automation": "pnpm run test:dependencies && pnpm run check:workflows && eslint scripts/dependencies scripts/check-native-versions.js && prettier --check scripts/dependencies scripts/check-native-versions.js scripts/help.js .github/dependabot.yml .github/workflows/dependency-watch.yml .github/workflows/dependency-update-candidate.yml .github/workflows/validate-dependency-pr.yml .github/workflows/scan-toolchain-images.yml docs/playbooks/dependency-maintenance.md",
         "check:wiring": "node scripts/check-dependency-wiring.js",
+        "check:port-links": "node scripts/check-port-links.mjs",
         "check:wiring:strict": "node scripts/check-dependency-wiring.js --check",
         "check:sources": "node scripts/check-source-hashes.js",
         "check:sources:strict": "node scripts/check-source-hashes.js --check",
