@@ -5,7 +5,7 @@
       "npm": "@crossbind/port-curl",
       "category": "network",
       "summary": "HTTP, HTTPS and file-transfer client library",
-      "nativeVersion": "8.21.0",
+      "nativeVersion": "8.22.0",
       "license": "curl",
       "homepage": "https://github.com/crossbind/crossbind/tree/main/ports/curl#readme",
       "targets": [
@@ -24,7 +24,7 @@
       "npm": "@crossbind/port-expat",
       "category": "text",
       "summary": "Streaming XML parser",
-      "nativeVersion": "2.8.3",
+      "nativeVersion": "2.8.4",
       "license": "MIT",
       "homepage": "https://github.com/crossbind/crossbind/tree/main/ports/expat#readme",
       "targets": [
@@ -90,7 +90,7 @@
       "npm": "@crossbind/port-geos",
       "category": "geo",
       "summary": "Geometry predicates and spatial operations",
-      "nativeVersion": "3.14.1",
+      "nativeVersion": "3.15.0",
       "license": "LGPL-2.1-only",
       "homepage": "https://github.com/crossbind/crossbind/tree/main/ports/geos#readme",
       "targets": [
@@ -202,7 +202,7 @@
       "npm": "@crossbind/port-proj",
       "category": "geo",
       "summary": "Coordinate reference-system transformations",
-      "nativeVersion": "9.8.1",
+      "nativeVersion": "9.9.0",
       "license": "MIT",
       "homepage": "https://github.com/crossbind/crossbind/tree/main/ports/proj#readme",
       "targets": [

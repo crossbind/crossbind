@@ -55,6 +55,12 @@ re-exports and enabled feature gates) and generates the bridge crate from
 what it finds. An undeclared `cargo:` import is a hard error — add the
 crate to `cargoDependencies`.
 
+Two crates may export the same type name (`semver::Version` and
+`uuid::Version` both do). Each crate import registers its bindings under its
+own crate prefix and the generated module maps them back, so the names you
+import stay the crate's own — reach for the `cargo:` import rather than the
+runtime module object, which carries the prefixed spelling.
+
 ### 2. App-local `.rs` source
 
 Write a Rust file next to your other native sources and import it like a
@@ -93,16 +99,33 @@ dirs — they share a triple but not their std features).
 | Rust | JavaScript |
 |------|------------|
 | `struct` + `impl` methods | class with methods (`Type::new` → constructor) |
+| `pub` fields on a class | JS properties (read and write) |
+| a method returning `Self` or another class | a new JS instance the caller owns |
+| a method returning `&mut Self` | the same instance back, for chaining |
+| `fn x(&self) -> T` next to `fn set_x(&mut self, v: T)` | one JS property `x` (the setter must return nothing) |
+| `pub const` / `pub static` of i32, f64, bool or `&str` | module constant |
 | `&str` / `&String` params, `String` returns | JS strings |
+| `&'static str` and `Cow<'_, str>` returns | JS strings (owned on the way out) |
 | `i32` / `f64` / `bool` | number / boolean |
 | `i64` / `u64` | `BigInt` (both directions) |
-| `Option<T>` params and returns | `null`/`undefined` ↔ `None` |
-| `Result<T, E>` returns | throws a JS `Error` on `Err` |
+| `Option<T>` params and returns | `null`/`undefined` → `None` on the way in; `None` → `null` on the way out |
+| `Result<T, E>` returns | throws a JS `Error` on `Err`; an error type that is also `AsRef<str>` puts that string on `error.code` |
 | `impl Display` | `toString()` |
 | free `pub fn` | plain exported function |
 | `&OtherClass` params | pass the other class's instance |
+| `Vec<u8>` / `&[u8]`, `Vec<f64>` / `&[f64]` | `Uint8Array` / `Float64Array` (copied each way) |
+| `Vec<T>`, `&[T]`, `[T; N]`, tuples | JS array (deep copy) |
+| `HashMap`/`BTreeMap` with string keys | JS object (deep copy) |
+| `HashSet`/`BTreeSet` | a JS `Set` is accepted; returns come back as an array |
+| `impl Iterator<Item = T>` return | the collected array |
+| `Option<collection>` | the array/object, or `null` |
+| a struct that derives `Serialize` + `Deserialize` | plain JS object (data, not a class - its methods stay native) |
+| a data-carrying `enum` that derives them | serde's own representation (`{ Variant: value }`), reshaped by serde attributes |
+| `Option<record>` / `Option<value object>` | the object, or `null` |
+| a struct inside a collection | needs `#[derive(Serialize, Deserialize)]`; it travels as JSON |
 | `serde_json::Value` params and returns | real JS values (objects/arrays/primitives), deep-copied at the boundary |
 | `Arc<Class>` factories, params and returns | shared ownership: several JS handles co-own one instance, the last `delete()` frees it (shared classes use `&self` methods and Arc factories) |
+| `impl Fn(..) -> R` / `Box<dyn Fn(..) -> R>` parameter | a JS function; the Rust side calls it back during the call (arguments and result: numbers, booleans, strings) |
 | `embind_rs::JsValue` / `JsFunction` params and returns | live JS values by identity (no copy) and callbacks into JS; a JS throw surfaces as `Err` (import them from `embind_rs` — the one engine import in user code) |
 
 `JsValue`/`JsFunction` need a synchronous runtime (native JSI, wasm `st` on the
@@ -112,6 +135,12 @@ identity does not survive structured cloning — use `serde_json::Value` there.
 
 The full grammar, wire contract and builder API live in
 `core/embind-rust/README.md`.
+
+A Rust panic inside a binding reaches JS as an `Error` carrying the panic message. On the wasm
+runtime the instance is spent afterwards: report the error and start a fresh module rather than
+calling into a panicked one. It is still a
+bug: state is whatever the panic left behind, so treat the error as a crash report, not a
+recoverable failure.
 
 ## Editor types
 

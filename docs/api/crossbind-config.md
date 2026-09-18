@@ -119,6 +119,21 @@ export default {
     libName: ['<general.name>'], // .a basenames; one per item
     binHeaders: [],              // headers to ship as raw binary blobs
 
+    headerPrelude: [],
+      // Headers #included ahead of a public header of this package when one is imported from
+      // JavaScript, for libraries whose headers are not self-contained (spatialite needs sqlite3.h
+      // first). An array applies to every header; an object keys lists by include path, '*'
+      // applying to all: { '*': ['cpl_port.h'], 'gdal_multidim.h': ['gdal_rat.h'] }. SWIG still
+      // wraps only the imported header. The headers defining the classes it holds in
+      // std::unique_ptr are found in the package and included after it automatically, and the
+      // headers defining the classes and enums its declarations use are bound into the same module.
+
+    ignoredDeclarations: [],
+      // Declarations of this package's public headers that JavaScript bindings leave out, for
+      // declarations the library never defines: GDAL declares VRTAverageFilteredSource but never
+      // implements it, so its bindings cannot link. Entries are SWIG %ignore names, in the forms
+      // headerPrelude takes: { 'vrtdataset.h': ['VRTAverageFilteredSource'] }.
+
     bindings: {
       // Rust binding-surface additions (see rust.md).
       vectors: [{ of: 'i32', name: 'RustIntVector' }],

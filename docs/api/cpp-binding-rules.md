@@ -11,24 +11,38 @@ This page covers what the website doesn't: the **rules** an agent must follow wh
 
 ## The hard rules
 
-### 1. No raw pointers in public API
+### 1. Pointers cross as handles, `const char *` as strings
+
+Raw pointers bind. What the generator cannot turn into an object crosses as a `NativePointer` handle: an opaque JS object that carries the address and owns whatever crossbind allocated for it.
+
+| C++ | JS |
+|---|---|
+| `const char *` parameter | `string`, a handle, or `null` |
+| `const char *` return or callback argument | `string` or `null` |
+| `char *`, `unsigned char *`, `void *`, `T **`, pointers to numbers, enums or types the bridge does not know | handle |
+| `T *` returning a class the bridge knows | instance |
+| `T *` parameter of a struct defined in the same header | instance (a handle only for foreign or `extern "C"` structs) |
+| `int &`, `double &`, `std::string &` out-parameters | handle from `allocPointer` / `allocString`, read back afterwards |
+| function pointer parameter | a JS function, or a handle another binding returned |
+| pointer argument inside a callback | always a handle |
+
+Every module that binds a pointer also exports the helpers: `cstring(text)` and `readCString(handle)`, `allocBuffer(bytes)`, `allocPointer()`, `allocString(text)` and `readString(handle)`, `readNumberAt(handle, index, kind)` / `writeNumberAt(handle, index, kind, value)` with kinds `int8` … `uint64`, `float32`, `float64`, `readPointerAt` / `writePointerAt`, `readBytes(handle, length)` / `writeBytes(handle, u16string)`, and `releaseCallback(fn)` to free a callback slot.
 
 ```cpp
-// ❌ Won't bind
-MyClass* getInstance();
-void process(int* data, size_t len);
-char* getName();
-
-// ✅ Bind cleanly
-std::shared_ptr<MyClass> getInstance();
-void process(const std::vector<int>& data);
-std::string getName();
+void process(int* data, size_t len);   // handle in, e.g. from allocBuffer
+char* getName();                       // handle out: read it, then free it the library's way
+int parse(const char* text);           // takes a JS string
 ```
 
-crossbind doesn't expose pointer arithmetic, lifetime, or aliasing semantics to JS. If your library uses raw pointers, you have two options:
+```js
+const data = allocBuffer(3 * 4);
+[7, 8, 9].forEach((n, i) => writeNumberAt(data, i, 'int32', n));
+process(data, 3);
+const name = readCString(getName());
+parse('x=1');
+```
 
-- **Wrap it** (preferred — see [§ Wrapper pattern](#wrapper-pattern) below).
-- **Hide it behind a SWIG `.i` file** (escape hatch — see `swig-escape.md`).
+Only the const form converts: C APIs copy a `const char *` input, while a `char *` result is memory the library handed over, so it stays a handle you read and free explicitly. On worker-backed browser builds handles and instances are proxies, `instanceof NativePointer` holds only on direct runtimes, and JS functions cannot cross into a worker.
 
 ### 2. C++11 minimum, C++17 recommended
 
@@ -93,7 +107,7 @@ The auto-binder needs concrete types. Add `template class Buffer<T>;` declaratio
 
 ### 6. Memory + lifecycle is C++-side
 
-You **don't** call `m.delete()` in JS. crossbind doesn't expose raw pointers, so JS-side manual cleanup isn't required. C++ destructors and `shared_ptr` reference counting handle it. See `lifecycle-and-types.md`.
+You **don't** call `m.delete()` in JS. C++ destructors and `shared_ptr` reference counting handle instances, and a handle releases what crossbind allocated for it (`allocBuffer`, `allocPointer`, `allocString`, `cstring`) when it goes away. Memory a library returns through a raw pointer stays the library's: free it through the library's own function. See `lifecycle-and-types.md`.
 
 ### 7. Exceptions: thrown C++ exceptions become JS exceptions
 
@@ -126,7 +140,7 @@ try {
 
 ## Wrapper pattern
 
-If the upstream library you're using has raw pointers, multiple inheritance, templates, or other unbindable patterns, you wrap it. Two locations work:
+If the upstream library you're using has multiple inheritance, templates, pointer-heavy calls you would rather not drive through handles, or other unbindable patterns, you wrap it. Two locations work:
 
 ### A. App-side wrapper (preferred for one-off integration)
 

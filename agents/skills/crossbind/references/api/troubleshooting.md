@@ -106,7 +106,7 @@ Upstream lib has a tool / utility that's built and signed, but you don't have a 
 Your C++ function violated a binding rule. See [`cpp-binding-rules.md`](./cpp-binding-rules.md).
 
 - Returning `unique_ptr` instead of `shared_ptr`? Switch.
-- Returning a raw pointer (`MyClass*`)? Wrap in `shared_ptr` or write a C++ wrapper.
+- Returning a raw pointer (`MyClass*`)? A class the bridge knows comes back as an instance; anything else is a `NativePointer` handle you read with the pointer helpers.
 - Using multiple inheritance? Refactor to composition.
 - Template not explicitly instantiated? Add `template class X<int>;`.
 - Definition only in `.cpp`, not in `.h`? Move definition (or at least public surface) into the header.

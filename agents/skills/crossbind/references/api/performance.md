@@ -53,7 +53,7 @@ therefore relies on that toolchain default instead of passing the deprecated `WA
 | `-DBUILD_SHARED_LIBS=OFF` | wasm, ios | Inverse of above | 🔒 Don't override |
 | `-DCMAKE_TOOLCHAIN_FILE` | per-platform | toolchain pin | 🔒 Don't override |
 | `-DANDROID_PLATFORM=android-33` | android | NDK API level | ⚠️ Lower if targeting older devices (read § Android API level) |
-| `-DCMAKE_OSX_DEPLOYMENT_TARGET=13.0` | ios | iOS minimum | ⚠️ Lower if targeting older iOS (read § iOS deployment) |
+| `-DCMAKE_OSX_DEPLOYMENT_TARGET=15.1` | ios | iOS minimum | Fixed (read § iOS deployment target) |
 
 ### System defaults
 
@@ -61,7 +61,7 @@ therefore relies on that toolchain default instead of passing the deprecated `WA
 |----------|---------|--------|
 | Android NDK | 27.3.13750724 | Docker image pin |
 | Android API | 33 | CMake flag |
-| iOS deployment | 13.0 | CMake flag |
+| iOS deployment | 15.1 | CMake flag |
 | Bitcode | embedded (release) / marker (debug) | iOS only |
 | Emscripten cache | `~/.crossbind/emscripten/` | Docker volume |
 
@@ -147,16 +147,7 @@ Don't go below 26 unless you absolutely have to — older NDK lacks key APIs (e.
 
 ### iOS deployment target
 
-Default `13.0`. Lower if you support older iOS:
-
-```js
-targetSpecs: [{
-    platform: 'ios',
-    specs: { cmake: ['-DCMAKE_OSX_DEPLOYMENT_TARGET=12.0'] },
-}]
-```
-
-Don't go below 12.0 — older iOS lacks the C++17 standard library features crossbind auto-generated code uses.
+Fixed at `15.1`: Xcode 27 rejects deployment targets below 15.0, and React Native's own floor is 15.1. crossbind passes the value after the project's own cmake flags (as `CMAKE_OSX_DEPLOYMENT_TARGET` and as the bundled toolchain's `DEPLOYMENT_TARGET`), so a `specs.cmake` entry cannot change it.
 
 ### `JSPI` (experimental, Chrome-only)
 
