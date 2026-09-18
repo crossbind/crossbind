@@ -123,8 +123,7 @@ export default function Nav({ tokens, path = '/', onToggleTheme, onOpenSearch })
                 position: 'sticky',
                 top: 0,
                 zIndex: 5,
-                background: tokens.navBg,
-                backdropFilter: 'blur(20px)',
+                background: tokens.bg,
                 borderBottom: `1px solid ${tokens.border}`,
             }}
         >
@@ -204,7 +203,7 @@ export default function Nav({ tokens, path = '/', onToggleTheme, onOpenSearch })
                 >
                     <MenuIcon open={menuOpen} />
                 </button>
-                {/* Deliberately not a second "Read the quick start": the hero already owns that call, and
+                {/* Deliberately not a second "Get started": the hero already owns that call, and
                     repeating it on the same screen splits one click two ways. */}
                 <a
                     href={REPO_URL}

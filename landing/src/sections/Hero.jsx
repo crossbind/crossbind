@@ -2,7 +2,7 @@ import { useState } from 'react';
 import PlatformGlyph from '../components/PlatformGlyph.jsx';
 import PromptModal from '../components/PromptModal.jsx';
 import {
-    CodeWindow, GradientText, highlight, SecondaryButton,
+    CodeWindow, highlight, primaryButtonStyle, secondaryButtonStyle,
 } from '../components/ui.jsx';
 import { LANGUAGE_TABS, RUNTIME_CHIPS, spell } from '../data.js';
 import { guideHref } from '../guide/nav.js';
@@ -30,7 +30,7 @@ function RuntimeStrip({ tokens }) {
             >
                 <span style={{ color: tokens.accent }}>✓</span>
                 {/* Derived, so adding a runtime can never leave the label lying. */}
-                <span style={{ letterSpacing: 0.5 }}>{`SAME CALL · ${spell(RUNTIME_CHIPS.length).toUpperCase()} RUNTIMES`}</span>
+                <span style={{ letterSpacing: 0.5 }}>{`SAME CODE · ${spell(RUNTIME_CHIPS.length).toUpperCase()} RUNTIMES`}</span>
                 <span style={{ flex: 1, height: 1, background: tokens.border, marginLeft: 8 }} />
             </div>
 
@@ -123,7 +123,7 @@ function UniversalCode({ tokens }) {
             <div role="tabpanel" id="language-panel" aria-labelledby={`tab-${active}`} style={{ display: 'grid' }}>
                 {LANGUAGE_TABS.map((tab) => (
                     <div key={tab.id} style={{ gridArea: '1 / 1', display: 'grid', visibility: tab.id === active ? 'visible' : 'hidden' }}>
-                        <CodeWindow tokens={tokens} title={tab.title} accent={tokens.accent}>
+                        <CodeWindow tokens={tokens} title={tab.title}>
                             {highlight(tab.code, tokens)}
                         </CodeWindow>
                     </div>
@@ -134,40 +134,16 @@ function UniversalCode({ tokens }) {
     );
 }
 
-// Setting this up is agent work now, so the primary CTA opens the prompt rather than a command.
+// The docs path is the primary call; the agent prompt stays one click away as the secondary.
 function AgentSetup({ tokens, onOpen }) {
     return (
         <button
             type="button"
+            className="tap-target"
             onClick={onOpen}
             aria-haspopup="dialog"
-            style={{
-                background: tokens.buttonBg,
-                color: tokens.buttonText,
-                border: 'none',
-                padding: '14px 24px',
-                borderRadius: 10,
-                fontWeight: 600,
-                fontSize: 15,
-                cursor: 'pointer',
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: 10,
-            }}
+            style={{ ...secondaryButtonStyle(tokens), cursor: 'pointer' }}
         >
-            <svg
-                width="16"
-                height="16"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                aria-hidden="true"
-            >
-                <path d="M12 3.5 13.8 10.2 20.5 12 13.8 13.8 12 20.5 10.2 13.8 3.5 12 10.2 10.2Z" />
-            </svg>
             Set up with an AI agent
         </button>
     );
@@ -180,18 +156,16 @@ export default function Hero({ tokens }) {
         <section style={{ padding: '64px var(--content-x) 60px', textAlign: 'center', position: 'relative' }}>
             <h1 style={{
                 fontFamily: tokens.sans,
-                fontSize: 'clamp(44px, 7vw, 84px)',
+                fontSize: 'clamp(40px, 5.6vw, 68px)',
                 fontWeight: 600,
                 lineHeight: 1,
-                letterSpacing: -3,
+                letterSpacing: -2,
                 margin: '0 0 24px',
             }}
             >
                 Import C++ and Rust
                 <br />
-                <GradientText gradient={`linear-gradient(110deg, ${tokens.accent} 0%, ${tokens.blue} 60%, ${tokens.violet} 100%)`}>
-                    like JavaScript modules.
-                </GradientText>
+                <span style={{ color: tokens.accentDisplay }}>like JavaScript modules.</span>
             </h1>
 
             <p style={{ fontSize: 19, color: tokens.textDim, maxWidth: 660, margin: '0 auto 36px', lineHeight: 1.55 }}>
@@ -200,8 +174,10 @@ export default function Hero({ tokens }) {
             </p>
 
             <div style={{ display: 'flex', gap: 12, justifyContent: 'center', flexWrap: 'wrap', marginBottom: 26 }}>
+                <a className="tap-target" href={guideHref('quick-start')} style={primaryButtonStyle(tokens)}>
+                    Get started
+                </a>
                 <AgentSetup tokens={tokens} onOpen={() => setPromptOpen(true)} />
-                <SecondaryButton tokens={tokens} href={guideHref('quick-start')}>Read the quick start</SecondaryButton>
             </div>
 
             <p style={{ margin: '0 0 32px', fontSize: 13.5, color: tokens.textMuted }}>

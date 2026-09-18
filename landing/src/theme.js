@@ -15,7 +15,6 @@ const MONO = '"Geist Mono", ui-monospace, monospace';
 function lightTokens() {
     return {
         bg: '#fafaf7',
-        bgGrad: `radial-gradient(ellipse 80% 60% at 50% -10%, ${P.b}1c, transparent 60%), radial-gradient(ellipse 60% 60% at 80% 30%, ${P.a}14, transparent 60%), #fafaf7`,
         panel: '#ffffff',
         panelAlt: '#f4f2ec',
         border: 'rgba(0,0,0,0.08)',
@@ -27,8 +26,8 @@ function lightTokens() {
         textMuted: '#6a6d76',
         // Accent darkens in light mode so `color: tokens.accent` stays readable on white.
         accent: LIGHT_ACCENT,
-        accentBright: P.a,
         accentText: LIGHT_ACCENT,
+        accentDisplay: LIGHT_ACCENT,
         blue: LIGHT_BLUE,
         violet: LIGHT_VIOLET,
         buttonBg: '#0a0a0a',
@@ -49,7 +48,6 @@ function lightTokens() {
         codeStr: '#b8501e',
         codeAccent: LIGHT_ACCENT,
         isLight: true,
-        navBg: 'rgba(250,250,247,0.78)',
         glow: `${P.a}22`,
         sans: SANS,
         mono: MONO,
@@ -58,9 +56,8 @@ function lightTokens() {
 
 function darkTokens() {
     return {
-        bg: '#070b14',
-        bgGrad: `radial-gradient(ellipse 80% 60% at 50% -10%, ${P.b}26, transparent 60%), radial-gradient(ellipse 60% 60% at 80% 30%, ${P.a}14, transparent 60%), #070b14`,
-        panel: '#0d1322',
+        bg: '#0d1117',
+        panel: '#151b26',
         panelAlt: '#121929',
         border: 'rgba(255,255,255,0.07)',
         borderStrong: 'rgba(255,255,255,0.13)',
@@ -68,12 +65,13 @@ function darkTokens() {
         textDim: '#9aa3b5',
         textMuted: '#78829a',
         accent: P.a,
-        accentBright: P.a,
         accentText: P.a,
+        // At headline size the link-bright accent reads as neon on the dark canvas; one step down.
+        accentDisplay: '#4ade80',
         blue: P.b,
         violet: P.c,
         buttonBg: '#e7ebf3',
-        buttonText: '#070b14',
+        buttonText: '#0d1117',
         // `panel` only clears the page by 1.08:1, which reads as a flat block once dimmed by a backdrop.
         panelRaised: '#1c2438',
         borderRaised: 'rgba(255,255,255,0.18)',
@@ -89,7 +87,6 @@ function darkTokens() {
         codeKey: P.c,
         codeStr: '#f4b893',
         isLight: false,
-        navBg: 'rgba(7,11,20,0.7)',
         glow: `${P.a}33`,
         sans: SANS,
         mono: MONO,
@@ -109,7 +106,9 @@ function readStoredTheme() {
     }
 }
 
-export function useTheme(fallback = 'dark') {
+const systemTheme = () => (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+
+export function useTheme(fallback = 'light') {
     // Hydration has to start on the theme the prerender baked in. Preact's hydrate() does not
     // write props onto existing DOM, so if the first client render already used the stored
     // theme, vdom and DOM would disagree with no diff left to reconcile them and the page
@@ -119,26 +118,27 @@ export function useTheme(fallback = 'dark') {
     const [theme, setTheme] = useState(fallback);
 
     useEffect(() => {
-        const stored = readStoredTheme();
-        if (stored) setTheme(stored);
+        setTheme(readStoredTheme() ?? systemTheme());
     }, []);
 
     useEffect(() => {
-        try {
-            localStorage.setItem(THEME_KEY, theme);
-        } catch {
-            // Private-mode browsers reject writes; the in-memory theme still works.
-        }
-        // The canvas comes from <html>; styling only <body> leaves the stylesheet's dark default behind.
+        // The canvas comes from <html>; styling only <body> leaves the stylesheet's light default behind.
         const { bg } = resolveTokens(theme);
         document.documentElement.style.background = bg;
         document.documentElement.style.colorScheme = theme;
         document.body.style.background = bg;
     }, [theme]);
 
+    // Only an explicit toggle is stored, so a visitor who never touched it keeps following the OS.
     const toggleTheme = useCallback(() => {
-        setTheme((current) => (current === 'light' ? 'dark' : 'light'));
-    }, []);
+        const next = theme === 'light' ? 'dark' : 'light';
+        try {
+            localStorage.setItem(THEME_KEY, next);
+        } catch {
+            // Private-mode browsers reject writes; the in-memory theme still works.
+        }
+        setTheme(next);
+    }, [theme]);
 
     return [theme, toggleTheme];
 }

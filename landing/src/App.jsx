@@ -9,6 +9,7 @@ import Search from './guide/Search.jsx';
 import Closing from './sections/Closing.jsx';
 import Features from './sections/Features.jsx';
 import Hero from './sections/Hero.jsx';
+import LibraryDemo from './sections/LibraryDemo.jsx';
 import Scaffolder from './sections/Scaffolder.jsx';
 import Showcase from './sections/Showcase.jsx';
 import { findSitePage } from './site-pages.js';
@@ -47,7 +48,7 @@ export default function App({ url }) {
     return (
         <div
             style={{
-                background: tokens.bgGrad,
+                background: tokens.bg,
                 color: tokens.text,
                 fontFamily: tokens.sans,
                 minHeight: '100vh',
@@ -62,6 +63,7 @@ export default function App({ url }) {
             ) : (
                 <main id="content">
                     <Hero tokens={tokens} />
+                    <LibraryDemo tokens={tokens} />
                     <Scaffolder tokens={tokens} />
                     <Features tokens={tokens} />
                     <Showcase tokens={tokens} />

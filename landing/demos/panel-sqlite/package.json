@@ -1,0 +1,14 @@
+{
+    "name": "crossbind-demo-panel-sqlite",
+    "private": true,
+    "type": "module",
+    "scripts": {
+        "build": "crossbind build -p wasm -a wasm32 -r st -e browser -b release"
+    },
+    "dependencies": {
+        "@crossbind/port-sqlite3-wasm": "beta"
+    },
+    "devDependencies": {
+        "crossbind": "beta"
+    }
+}
