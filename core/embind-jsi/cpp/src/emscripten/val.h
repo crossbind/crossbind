@@ -172,7 +172,7 @@ struct GenericWireTypeConverter {
 template<typename Pointee>
 struct GenericWireTypeConverter<Pointee*> {
   static Pointee* from(facebook::jsi::Value& wt) {
-    return reinterpret_cast<Pointee*>(wt.asBigInt(*jsRuntime).asUint64(*jsRuntime));
+    return reinterpret_cast<Pointee*>(addressFromValue(*jsRuntime, wt));
   }
 };
 

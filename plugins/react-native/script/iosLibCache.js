@@ -15,6 +15,10 @@ function computeStampHash(buildType, extraRoots) {
         ...state.config.allDependencies.map((d) => d.paths.project),
         ...extraRoots,
     ];
+    // Header, native and module roots may sit outside the project (a shared kit dir): inputs too.
+    for (const root of [...state.config.paths.header, ...state.config.paths.native, ...state.config.paths.module]) {
+        if (!roots.some((r) => root === r || root.startsWith(`${r}/`))) roots.push(root);
+    }
     const exts = [...new Set([
         ...SOURCE_EXTS, ...state.config.ext.source, ...state.config.ext.header, ...state.config.ext.module,
     ])];

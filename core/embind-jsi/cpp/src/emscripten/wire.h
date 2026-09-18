@@ -20,6 +20,7 @@
 
 #include <cstdio>
 #include <cstdlib>
+#include <cstdint>
 #include <memory>
 #include <optional>
 #include <string>
@@ -44,6 +45,19 @@ constexpr bool has_unbound_type_names = false;
 #endif
 
 namespace internal {
+
+// JS hands native pointers over as BigInt addresses, but a null pointer arrives as the number 0
+// and enum values as plain numbers: take both spellings.
+inline uint64_t addressFromValue(facebook::jsi::Runtime& rt, const facebook::jsi::Value& v) {
+    if (v.isNumber()) return static_cast<uint64_t>(v.asNumber());
+    if (v.isNull() || v.isUndefined()) return 0;
+    return v.asBigInt(rt).asUint64(rt);
+}
+
+inline int64_t integerFromValue(facebook::jsi::Runtime& rt, const facebook::jsi::Value& v) {
+    if (v.isNumber()) return static_cast<int64_t>(v.asNumber());
+    return v.asBigInt(rt).asInt64(rt);
+}
 
 typedef const void* TYPEID;
 
@@ -369,6 +383,68 @@ struct BindingType<uint64_t> {
         }
     };
 
+// jsi strings cross as UTF-8, so a std::u16string (embind's byte-preserving string) is transcoded; every code unit of
+// well-formed UTF-16 survives the round trip.
+inline std::string utf16ToUtf8(const std::u16string& text) {
+    std::string out;
+    out.reserve(text.size());
+    for (size_t i = 0; i < text.size(); ++i) {
+        char32_t cp = text[i];
+        if (cp >= 0xD800 && cp <= 0xDBFF && i + 1 < text.size() && text[i + 1] >= 0xDC00 && text[i + 1] <= 0xDFFF) {
+            cp = 0x10000 + ((cp - 0xD800) << 10) + (text[++i] - 0xDC00);
+        } else if (cp >= 0xD800 && cp <= 0xDFFF) {
+            cp = 0xFFFD;
+        }
+        if (cp < 0x80) {
+            out.push_back(static_cast<char>(cp));
+        } else if (cp < 0x800) {
+            out.push_back(static_cast<char>(0xC0 | (cp >> 6)));
+            out.push_back(static_cast<char>(0x80 | (cp & 0x3F)));
+        } else if (cp < 0x10000) {
+            out.push_back(static_cast<char>(0xE0 | (cp >> 12)));
+            out.push_back(static_cast<char>(0x80 | ((cp >> 6) & 0x3F)));
+            out.push_back(static_cast<char>(0x80 | (cp & 0x3F)));
+        } else {
+            out.push_back(static_cast<char>(0xF0 | (cp >> 18)));
+            out.push_back(static_cast<char>(0x80 | ((cp >> 12) & 0x3F)));
+            out.push_back(static_cast<char>(0x80 | ((cp >> 6) & 0x3F)));
+            out.push_back(static_cast<char>(0x80 | (cp & 0x3F)));
+        }
+    }
+    return out;
+}
+
+inline std::u16string utf8ToUtf16(const std::string& text) {
+    std::u16string out;
+    out.reserve(text.size());
+    size_t i = 0;
+    while (i < text.size()) {
+        unsigned char lead = static_cast<unsigned char>(text[i]);
+        size_t extra = lead < 0x80 ? 0 : (lead >> 5) == 0x6 ? 1 : (lead >> 4) == 0xE ? 2 : (lead >> 3) == 0x1E ? 3 : 4;
+        char32_t cp = extra == 0 ? lead : extra == 1 ? (lead & 0x1F) : extra == 2 ? (lead & 0x0F) : (lead & 0x07);
+        bool valid = extra < 4 && i + extra < text.size();
+        for (size_t k = 1; valid && k <= extra; ++k) {
+            unsigned char next = static_cast<unsigned char>(text[i + k]);
+            valid = (next >> 6) == 0x2;
+            cp = (cp << 6) | (next & 0x3F);
+        }
+        if (!valid) {
+            out.push_back(0xFFFD);
+            ++i;
+            continue;
+        }
+        i += extra + 1;
+        if (cp >= 0x10000) {
+            cp -= 0x10000;
+            out.push_back(static_cast<char16_t>(0xD800 + (cp >> 10)));
+            out.push_back(static_cast<char16_t>(0xDC00 + (cp & 0x3FF)));
+        } else {
+            out.push_back(static_cast<char16_t>(cp));
+        }
+    }
+    return out;
+}
+
 template<typename T>
 struct BindingType<std::basic_string<T>> {
     using String = std::basic_string<T>;
@@ -389,10 +465,18 @@ struct BindingType<std::basic_string<T>> {
     }
 
     static WireType2 toWireType2(facebook::jsi::Runtime& rt, String v) {
-        return facebook::jsi::String::createFromUtf8(rt, v);
+        if constexpr (std::is_same_v<T, char16_t>) {
+            return facebook::jsi::String::createFromUtf8(rt, utf16ToUtf8(v));
+        } else {
+            return facebook::jsi::String::createFromUtf8(rt, v);
+        }
     }
     static String fromWireType2(facebook::jsi::Runtime& rt, WireType2& v) {
-        return v.getString(rt).utf8(rt);
+        if constexpr (std::is_same_v<T, char16_t>) {
+            return utf8ToUtf16(v.getString(rt).utf8(rt));
+        } else {
+            return v.getString(rt).utf8(rt);
+        }
     }
 };
 
@@ -459,7 +543,7 @@ struct BindingType<T*> {
         return facebook::jsi::BigInt::fromUint64(rt, reinterpret_cast<uint64_t>(b));
     }
     static WireType fromWireType2(facebook::jsi::Runtime& rt, WireType2& wt) {
-        return (WireType) wt.asBigInt(rt).asUint64(rt);
+        return (WireType) addressFromValue(rt, wt);
     }
 };
 
@@ -537,7 +621,7 @@ struct EnumBindingType {
         return WireType2((int) v);
     }
     static Enum fromWireType2(facebook::jsi::Runtime& rt, WireType2& v) {
-        return (WireType) v.asBigInt(rt).asUint64(rt);
+        return (WireType) integerFromValue(rt, v);
     }
 };
 

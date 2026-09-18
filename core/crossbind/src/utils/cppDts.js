@@ -14,7 +14,9 @@ const NUMBER_TYPES = new Set([
     'long long', 'unsigned int', 'unsigned long', 'unsigned short', 'unsigned long long',
 ]);
 
-function tsType(raw, classNames, { nullableSharedPtr = false } = {}) {
+function tsType(raw, classNames, { isReturn = false } = {}) {
+    // A `const char *` crosses as a JS string, null when C++ returns NULL; other pointers stay native memory.
+    if (/^\s*(?:const\s+char|char\s+const)\s*\*\s*$/.test(raw)) return isReturn ? 'string | null' : 'string';
     let t = raw.trim().replace(/\bconst\b/g, '').replace(/&/g, '').trim().replace(/\s+/g, ' ');
     if (t.includes('*')) return null;
     const vector = t.match(/^std::vector<([\s\S]+)>$/);
@@ -26,7 +28,7 @@ function tsType(raw, classNames, { nullableSharedPtr = false } = {}) {
     if (shared) {
         if (!classNames.has(shared[1])) return null;
         // Embind shared_ptr returns can resolve to null; parameters take the plain object.
-        return nullableSharedPtr ? `${shared[1]} | null` : shared[1];
+        return isReturn ? `${shared[1]} | null` : shared[1];
     }
     if (t === 'void') return 'void';
     if (t === 'bool') return 'boolean';
@@ -126,7 +128,8 @@ export function parseCppSurface(source, log = console.log) {
                     : null;
                 if (field) {
                     const type = tsType(field[1], classNames);
-                    if (type !== null && FIELD_TYPES.has(type)) fields.push({ name: field[2], type });
+                    // A reference member has no address a pointer to member could name, and a pointer member is memory.
+                    if (type !== null && FIELD_TYPES.has(type) && !/[&*]/.test(field[1])) fields.push({ name: field[2], type });
                 }
                 continue;
             }
@@ -135,7 +138,7 @@ export function parseCppSurface(source, log = console.log) {
             if (args.includes(null)) { log(`crossbind: dts: skipped ${cls.name}::${name} (unsupported parameter type)`); continue; }
             if (name === cls.name && retRaw.trim() === '') { ctor = { args }; continue; }
             if (name.startsWith('~')) continue;
-            const ret = tsType(retRaw, classNames, { nullableSharedPtr: true });
+            const ret = tsType(retRaw, classNames, { isReturn: true });
             if (ret === null) { log(`crossbind: dts: skipped ${cls.name}::${name} (unsupported return type '${retRaw.trim()}')`); continue; }
             methods.push({ name, isStatic: Boolean(staticKw), args, ret });
         }

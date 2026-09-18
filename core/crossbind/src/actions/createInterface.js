@@ -6,10 +6,19 @@ import { getFileHash } from '../utils/hash.js';
 import guardAsyncBindings from '../utils/bridgeAsyncGuard.js';
 import { writeHeaderDts, parseCppSurface } from '../utils/cppDts.js';
 import { injectFieldBindings } from '../utils/cppFieldBindings.js';
+import {
+    buildInterfaceContent, completingIncludes, findHeaderPrelude, findIgnoredDeclarations, indexTypeDefinitions, interfaceIncludes,
+    interfaceToRetryWithoutMacros, parseMacroDump, referencedTypeHeaders, selectSwigMacros,
+} from '../utils/swigInterface.js';
 import writeIfChanged from '../utils/writeIfChanged.js';
-import run from './run.js';
+import run, { cxxPreprocessorFor } from './run.js';
 
-export default function createBridgeFile(headerOrModuleFilePath, target = state.targets.find((t) => t.platform === 'wasm')) {
+// Part of every interface hash, so interfaces cached by an older generator are rebuilt.
+const INTERFACE_FORMAT = 'swig-macros-1';
+const predefinedMacros = new Map();
+const typeDefinitions = new Map();
+
+export default function createBridgeFile(headerOrModuleFilePath, target = state.targets.find((t) => t.platform === 'wasm'), { withDependencies = true } = {}) {
     const interfaceFilePath = upath.resolve(headerOrModuleFilePath);
     if (!fs.existsSync(`${state.config.paths.build}/interface`)) {
         fs.mkdirSync(`${state.config.paths.build}/interface`, { recursive: true });
@@ -17,10 +26,11 @@ export default function createBridgeFile(headerOrModuleFilePath, target = state.
     if (!fs.existsSync(`${state.config.paths.build}/bridge`)) {
         fs.mkdirSync(`${state.config.paths.build}/bridge`, { recursive: true });
     }
-    const interfaceFile = createInterfaceFile(interfaceFilePath, target);
     // The header may live outside paths.native (e.g. a package-subpath import like
     // '@scope/pkg/native/x.h'), so its own directory must reach swig's include list.
-    const bridgeFile = createBridgeFileFromInterfaceFile(interfaceFile, target, upath.dirname(interfaceFilePath));
+    const sourceDir = upath.dirname(interfaceFilePath);
+    const interfaceFile = createInterfaceFile(interfaceFilePath, target, sourceDir);
+    const bridgeFile = createBridgeFileFromInterfaceFile(interfaceFile, target, sourceDir, getFileHash(interfaceFilePath));
     const moduleRegex = new RegExp(`.(${state.config.ext.module.join('|')})$`);
     if (bridgeFile && !moduleRegex.test(interfaceFilePath)) {
         // SWIG's -embind backend emits no member variables; inject .property lines for the
@@ -41,21 +51,43 @@ export default function createBridgeFile(headerOrModuleFilePath, target = state.
             dtsMode: state.config.dts,
         });
     }
+    if (bridgeFile && withDependencies && !moduleRegex.test(interfaceFilePath)) {
+        // A header's own bindings need the types its declarations use registered, which only their headers' bridges do.
+        const dependencyBridges = dependencyHeadersOf(interfaceFilePath, target).map((header) => {
+            try {
+                return createBridgeFile(header, target, { withDependencies: false });
+            } catch (e) {
+                console.warn(`crossbind: ${upath.basename(interfaceFilePath)} uses types from ${upath.basename(header)}, whose bindings failed (${e.message})`);
+                return null;
+            }
+        }).filter(Boolean);
+        writeIfChanged(`${bridgeFile}.deps`, dependencyBridges.map((dependency) => `${dependency}\n`).join(''));
+    }
     return bridgeFile;
 }
 
-function createInterfaceFile(headerOrModuleFilePath, target) {
+function createInterfaceFile(headerOrModuleFilePath, target, sourceDir) {
     if (!headerOrModuleFilePath) {
         return null;
     }
-    const fileHash = getFileHash(headerOrModuleFilePath);
+    const moduleRegex = new RegExp(`.(${state.config.ext.module.join('|')})$`);
+    const isModule = moduleRegex.test(headerOrModuleFilePath);
+    const { includeRoot, headerPath } = isModule ? {} : includeLocation(headerOrModuleFilePath, target);
+    const packages = [state.config, ...state.config.allDependencies];
+    const prelude = isModule ? [] : findHeaderPrelude(headerOrModuleFilePath, packages, headerPath);
+    const ignored = isModule ? [] : findIgnoredDeclarations(headerOrModuleFilePath, packages, headerPath);
+    const completing = includeRoot ? findCompletingIncludes(headerOrModuleFilePath, includeRoot, headerPath) : [];
+    // A prelude or ignored-declaration change in the owning package, or a completed class moving to another header, must
+    // regenerate the interface as well.
+    const fileHash = [
+        INTERFACE_FORMAT, getFileHash(headerOrModuleFilePath), ...prelude,
+        ...(ignored.length ? [`ignored:${ignored.join(',')}`] : []), ...(completing.length ? [`completing:${completing.join(',')}`] : []),
+    ].join('\n');
     const cachedInterface = state.cache.interfaces[headerOrModuleFilePath];
     if (state.cache.hashes[headerOrModuleFilePath] === fileHash && cachedInterface && fs.existsSync(cachedInterface)) {
         return cachedInterface;
     }
 
-    const moduleRegex = new RegExp(`.(${state.config.ext.module.join('|')})$`);
-    const isModule = moduleRegex.test(headerOrModuleFilePath);
     if (isModule) {
         const newPath = `${state.config.paths.build}/interface/${headerOrModuleFilePath.split('/').pop()}`;
         fs.copyFileSync(headerOrModuleFilePath, newPath);
@@ -64,13 +96,6 @@ function createInterfaceFile(headerOrModuleFilePath, target) {
         saveCache();
         return newPath;
     }
-
-    const headerPaths = (state.config.dependencyParameters?.getCmakeDependsPathAndName(target).pathsOfCmakeDepends || [])
-        .filter((d) => d.startsWith(state.config.paths.base));
-
-    const temp2 = headerPaths
-        .map((p) => headerOrModuleFilePath.match(new RegExp(`^${p}/.*?/include/(.*?)$`, 'i')))
-        .filter((p) => p && p.length === 2);
 
     const temp = headerOrModuleFilePath.match(/^(.*)\..+?$/);
     if (!temp || temp.length < 2) return null;
@@ -89,27 +114,14 @@ function createInterfaceFile(headerOrModuleFilePath, target) {
 
     const fileName = filePathWithoutExt.split('/').at(-1);
 
-    let headerPath = state.config.paths.header.find((path) => headerOrModuleFilePath.startsWith(path));
-    if (headerPath) headerPath = headerOrModuleFilePath.substr(headerPath.length + 1);
-    else if (temp2 && temp2.length > 0) headerPath = temp2[0][1];
-    else headerPath = headerOrModuleFilePath.split('/').at(-1);
-
-    const content = `#ifndef _${fileName.toUpperCase()}_I
-#define _${fileName.toUpperCase()}_I
-
-%module ${fileName.toUpperCase()}
-
-%{
-#include "${headerPath}"
-%}
-
-%feature("shared_ptr");
-%feature("polymorphic_shared_ptr");
-
-%include "${headerPath}"
-
-#endif
-`;
+    const content = buildInterfaceContent({
+        moduleName: fileName.toUpperCase(),
+        headerPath,
+        prelude,
+        completing,
+        swigMacros: collectSwigMacros(headerOrModuleFilePath, interfaceIncludes(headerPath, prelude), fileName, target, sourceDir),
+        ignored,
+    });
     const outputFilePath = `${state.config.paths.build}/interface/${fileName}.i`;
     fs.writeFileSync(outputFilePath, content);
 
@@ -118,6 +130,83 @@ function createInterfaceFile(headerOrModuleFilePath, target) {
     saveCache();
 
     return outputFilePath;
+}
+
+// A header is included by its path under a project header directory or a dependency's include directory; one found only
+// through its own directory has no include root to search.
+function includeLocation(headerFile, target) {
+    const projectRoot = state.config.paths.header.find((path) => headerFile.startsWith(path));
+    if (projectRoot) return { includeRoot: projectRoot, headerPath: headerFile.substr(projectRoot.length + 1) };
+    const dependencyRoots = (state.config.dependencyParameters?.getCmakeDependsPathAndName(target).pathsOfCmakeDepends || [])
+        .filter((d) => d.startsWith(state.config.paths.base));
+    const match = dependencyRoots.map((p) => headerFile.match(new RegExp(`^(${p}/.*?/include)/(.*?)$`, 'i'))).find(Boolean);
+    return match ? { includeRoot: match[1], headerPath: match[2] } : { includeRoot: null, headerPath: headerFile.split('/').at(-1) };
+}
+
+// The headers under an include root are indexed once per build.
+function definitionsUnder(includeRoot) {
+    if (!typeDefinitions.has(includeRoot)) {
+        const extensions = new RegExp(`\\.(${state.config.ext.header.join('|')})$`, 'i');
+        const files = fs.readdirSync(includeRoot, { recursive: true, withFileTypes: true })
+            .filter((entry) => entry.isFile() && extensions.test(entry.name))
+            .map((entry) => upath.relative(includeRoot, upath.join(entry.parentPath, entry.name)))
+            .sort()
+            .map((path) => ({ path, text: fs.readFileSync(upath.join(includeRoot, path), 'utf8') }));
+        typeDefinitions.set(includeRoot, indexTypeDefinitions(files));
+    }
+    return typeDefinitions.get(includeRoot);
+}
+
+function findCompletingIncludes(headerFile, includeRoot, headerPath) {
+    const headerText = fs.readFileSync(headerFile, 'utf8');
+    if (!headerText.includes('unique_ptr')) return [];
+    return completingIncludes({ headerText, headerPath, definitions: definitionsUnder(includeRoot) });
+}
+
+function dependencyHeadersOf(headerFile, target) {
+    const { includeRoot, headerPath } = includeLocation(headerFile, target);
+    if (!includeRoot) return [];
+    const headerText = fs.readFileSync(headerFile, 'utf8');
+    return referencedTypeHeaders({ headerText, headerPath, definitions: definitionsUnder(includeRoot) })
+        .map((header) => upath.join(includeRoot, header));
+}
+
+// A header that does not preprocess on its own, or a host without the image's compiler, keeps the plain interface.
+function collectSwigMacros(headerFile, includes, name, target, sourceDir) {
+    const interfaceDir = `${state.config.paths.build}/interface`;
+    try {
+        if (!predefinedMacros.has(target.path)) {
+            predefinedMacros.set(target.path, dumpMacros(`${interfaceDir}/predefined-${target.path}.macros.h`, [], [], target));
+        }
+        const macros = dumpMacros(`${interfaceDir}/${name}.macros.h`, includes, swigIncludePath(target, sourceDir), target);
+        return selectSwigMacros({ headerText: fs.readFileSync(headerFile, 'utf8'), macros, predefined: predefinedMacros.get(target.path) });
+    } catch (e) {
+        console.warn(`crossbind: SWIG reads ${upath.basename(headerFile)} without the macros of its includes (${e.message})`);
+        return [];
+    }
+}
+
+function dumpMacros(outputFile, includes, includePath, target) {
+    run(cxxPreprocessorFor(target), [
+        '-x', 'c++', '-std=c++17', '-dM', '-E',
+        ...includePath,
+        ...includes.flatMap((header) => ['-include', header]),
+        '-o', outputFile,
+        '/dev/null',
+    ], null, target);
+    return parseMacroDump(fs.readFileSync(outputFile, 'utf8'));
+}
+
+function swigIncludePath(target, sourceDir) {
+    const allHeaders = state.config.dependencyParameters.headerPathWithDepends.split(';');
+    const includePath = [
+        ...state.config.allDependencies.map((d) => `${d.paths.output}/prebuilt/${target.path}/include`),
+        ...state.config.allDependencies.map((d) => `${d.paths.output}/prebuilt/${target.path}/swig`),
+        ...state.config.paths.header,
+        ...allHeaders,
+        ...(sourceDir ? [sourceDir] : []),
+    ].filter((path) => !!path.toString()).map((path) => `-I${path}`);
+    return [...new Set(includePath)];
 }
 
 // Idempotent: wraps every emscripten::async() registration in the generated
@@ -132,40 +221,52 @@ function applyAsyncGuard(bridgeFilePath) {
     }
 }
 
-function createBridgeFileFromInterfaceFile(interfaceFilePath, target, sourceDir = null) {
+// The interface text only names the header, so its hash alone kept a bridge across header edits: the
+// header's own hash is part of the key.
+function createBridgeFileFromInterfaceFile(interfaceFilePath, target, sourceDir = null, sourceHash = '') {
     if (!interfaceFilePath) {
         return null;
     }
 
-    const fileHash = getFileHash(interfaceFilePath);
+    const bridgeHash = () => `${getFileHash(interfaceFilePath)}\n${sourceHash}`;
+    const fileHash = bridgeHash();
     const cachedBridge = state.cache.bridges[interfaceFilePath];
     if (state.cache.hashes[interfaceFilePath] === fileHash && cachedBridge && fs.existsSync(cachedBridge)) {
         applyAsyncGuard(cachedBridge);
         return cachedBridge;
     }
 
-    const allHeaders = state.config.dependencyParameters.headerPathWithDepends.split(';');
-
-    let includePath = [
-        ...state.config.allDependencies.map((d) => `${d.paths.output}/prebuilt/${target.path}/include`),
-        ...state.config.allDependencies.map((d) => `${d.paths.output}/prebuilt/${target.path}/swig`),
-        ...state.config.paths.header,
-        ...allHeaders,
-        ...(sourceDir ? [sourceDir] : []),
-    ].filter((path) => !!path.toString()).map((path) => `-I${path}`);
-    includePath = [...new Set(includePath)];
-
-    run('swig', [
+    const bridgeFilePath = `${state.config.paths.build}/bridge/${interfaceFilePath.split('/').at(-1)}.cpp`;
+    // #error lines guard branches SWIG evaluates without the compiler's predefined macros, so they only warn.
+    const swig = () => run('swig', [
         '-c++',
         '-embind',
-        '-o', `${state.config.paths.build}/bridge/${interfaceFilePath.split('/').at(-1)}.cpp`,
-        ...includePath,
+        '-cpperraswarn',
+        '-o', bridgeFilePath,
+        ...swigIncludePath(target, sourceDir),
         interfaceFilePath,
     ], null, target);
-    applyAsyncGuard(`${state.config.paths.build}/bridge/${interfaceFilePath.split('/').at(-1)}.cpp`);
+    try {
+        swig();
+    } catch (e) {
+        // Known macros can expose declarations SWIG cannot parse and used to skip; without them it parses as before.
+        const content = fs.readFileSync(interfaceFilePath, 'utf8');
+        const plain = interfaceToRetryWithoutMacros(content, e);
+        if (!plain) throw e;
+        console.warn(`crossbind: SWIG cannot parse ${upath.basename(interfaceFilePath)} with the macros of its includes; generating it without them`);
+        fs.writeFileSync(interfaceFilePath, plain);
+        try {
+            swig();
+        } catch (retryError) {
+            // The cached interface keeps its macros, so the next build tries them again.
+            fs.writeFileSync(interfaceFilePath, content);
+            throw retryError;
+        }
+    }
+    applyAsyncGuard(bridgeFilePath);
 
-    state.cache.bridges[interfaceFilePath] = `${state.config.paths.build}/bridge/${interfaceFilePath.split('/').at(-1)}.cpp`;
-    state.cache.hashes[interfaceFilePath] = fileHash;
+    state.cache.bridges[interfaceFilePath] = bridgeFilePath;
+    state.cache.hashes[interfaceFilePath] = bridgeHash();
     saveCache();
 
     return state.cache.bridges[interfaceFilePath];

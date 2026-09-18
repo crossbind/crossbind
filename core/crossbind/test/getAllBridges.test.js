@@ -48,6 +48,7 @@ describe('getAllBridges', () => {
 
     test('prunes a bridge whose recorded header is gone, with its sidecars', async () => {
         const bridge = addBridge('deleted', { source: path.join(work, 'deleted.h') });
+        fs.writeFileSync(`${bridge}.deps`, '');
         const log = vi.fn();
         const getAllBridges = await importFresh();
 
@@ -55,6 +56,7 @@ describe('getAllBridges', () => {
         expect(fs.existsSync(bridge)).toBe(false);
         expect(fs.existsSync(`${bridge}.exports.json`)).toBe(false);
         expect(fs.existsSync(`${bridge}.source`)).toBe(false);
+        expect(fs.existsSync(`${bridge}.deps`)).toBe(false);
         expect(log).toHaveBeenCalledWith(expect.stringContaining('deleted.i.cpp'));
     });
 

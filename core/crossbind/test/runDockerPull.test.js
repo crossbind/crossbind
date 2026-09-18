@@ -103,3 +103,17 @@ describe('run: which image ref reaches docker pull', () => {
         expect(pulled).not.toContain(images.getDockerImage('web', 'linux/amd64'));
     });
 });
+
+describe('cxxPreprocessorFor: the compiler whose macro table SWIG reads', () => {
+    test('android dumps with the NDK clang of the target architecture', async () => {
+        const { cxxPreprocessorFor } = await import('../src/actions/run.js');
+        expect(cxxPreprocessorFor({ platform: 'android', arch: 'arm64-v8a' })).toMatch(/\/aarch64-linux-android\d+-clang\+\+$/);
+        expect(cxxPreprocessorFor({ platform: 'android', arch: 'x86_64' })).toMatch(/\/x86_64-linux-android\d+-clang\+\+$/);
+    });
+
+    test('wasm and ios dump with em++, since their SWIG runs in the web image', async () => {
+        const { cxxPreprocessorFor } = await import('../src/actions/run.js');
+        expect(cxxPreprocessorFor({ platform: 'wasm', arch: 'wasm32' })).toBe('em++');
+        expect(cxxPreprocessorFor({ platform: 'ios', arch: 'iphoneos' })).toBe('em++');
+    });
+});

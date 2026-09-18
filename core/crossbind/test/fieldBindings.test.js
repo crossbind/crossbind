@@ -22,6 +22,12 @@ struct Pair {
     int a;
     int b;
 };
+
+struct Holder {
+    const int &ref;
+    int &&moved;
+    int value;
+};
 `;
 
 describe('parseCppSurface fields', () => {
@@ -44,6 +50,11 @@ describe('parseCppSurface fields', () => {
 
     test('struct members are public by default', () => {
         expect(pair.fields.map((f) => f.name)).toEqual(['a', 'b']);
+    });
+
+    test('skips reference members, which a pointer to member cannot name', () => {
+        const holder = model.classes.find((c) => c.name === 'Holder');
+        expect(holder.fields.map((f) => f.name)).toEqual(['value']);
     });
 });
 

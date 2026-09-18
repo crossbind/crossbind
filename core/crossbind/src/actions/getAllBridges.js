@@ -13,7 +13,7 @@ export default function getAllBridges(log = console.log) {
         if (!fs.existsSync(sidecar)) return true;
         const source = fs.readFileSync(sidecar, 'utf8').trim();
         if (!source || fs.existsSync(source)) return true;
-        [bridge, `${bridge}.exports.json`, sidecar].forEach((f) => fs.rmSync(f, { force: true }));
+        [bridge, `${bridge}.exports.json`, `${bridge}.deps`, sidecar].forEach((f) => fs.rmSync(f, { force: true }));
         log(`crossbind: pruned stale bridge '${path.basename(bridge)}' - its header is gone`);
         return false;
     });

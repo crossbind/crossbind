@@ -11,6 +11,7 @@ import state from '../state/index.js';
 import logger from '../utils/logger.js';
 import { WASI_EMULATION_LIBS, WASI_LINK_LIBS, wasiCFlags, wasiCxxFlags } from '../utils/wasiToolchain.js';
 import { getFilesFingerprint, getContentHash } from '../utils/hash.js';
+import { withDependencyBridges } from '../utils/dependencyBridges.js';
 
 const cpuCount = Math.max(1, os.cpus().length - 1);
 const sharedPlatforms = ['android'];
@@ -31,9 +32,10 @@ export default function createLib(target, fileType, options = {}) {
     // wasi configure tool links need the runtime stubs; compiled below, referenced from LIBS.
     const wasiStubObj = `${buildPath}/crossbind-wasi-stubs.o`;
 
+    const nativeGlob = options.nativeGlob ? withDependencyBridges(options.nativeGlob) : undefined;
     // The lib dir is reused while the bridge list grows, so an early smaller nativeGlob build must not satisfy later sets: fingerprint the glob and miss on mismatch.
     const fingerprintFile = `${libdir}/crossbind-nativeglob.fingerprint`;
-    const fingerprint = options.nativeGlob ? getFilesFingerprint(options.nativeGlob) : null;
+    const fingerprint = nativeGlob ? getFilesFingerprint(nativeGlob) : null;
     const fingerprintChanged = fingerprint !== null
         && (!fs.existsSync(fingerprintFile) || fs.readFileSync(fingerprintFile, { encoding: 'utf8' }) !== fingerprint);
 
@@ -70,7 +72,7 @@ export default function createLib(target, fileType, options = {}) {
     // Bridges guard _JSPI registrations behind CROSSBIND_JSPI (bridgeAsyncGuard); define it only when this target links with -sJSPI.
     const isJspiTarget = target.platform === 'wasm' && configEmccFlags.includes('-sJSPI');
     if (fileType === 'Bridge' && target.platform === 'wasm' && !isJspiTarget
-        && options.nativeGlob?.some((f) => fs.existsSync(f) && fs.readFileSync(f, { encoding: 'utf8' }).includes('emscripten::async()'))) {
+        && nativeGlob?.some((f) => fs.existsSync(f) && fs.readFileSync(f, { encoding: 'utf8' }).includes('emscripten::async()'))) {
         logger.info(`[${target.path}] _JSPI bindings skipped: this target links without -sJSPI (add it to binary.emccFlags to enable them)`);
     }
 
@@ -138,7 +140,7 @@ export default function createLib(target, fileType, options = {}) {
             buildEnv.params.push('-e', e);
         });
     } else {
-        buildParams = getCmakeParameters(target, options);
+        buildParams = getCmakeParameters(target, { ...options, nativeGlob });
 
         triggerExtensions('createLib', 'setFlagWithoutBuildConfig', [buildEnv]);
 
