@@ -112,7 +112,7 @@ function Run({ tokens, entry, tone }) {
                 </Label>
                 <CopyButton tokens={tokens} text={entry.steps} />
             </div>
-            <CodeWindow tokens={tokens} title="shell" accent={tone}>
+            <CodeWindow tokens={tokens} title="shell">
                 {highlight(entry.steps, tokens)}
             </CodeWindow>
             <div

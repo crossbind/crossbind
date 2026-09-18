@@ -1,25 +1,12 @@
 import { FEATURE_EXTRAS, FEATURE_GROUPS, FEATURES } from '../data.js';
 import { guideHref } from '../guide/nav.js';
 
-const GROUP_ACCENTS = {
-    write: 'accent',
-    resolve: 'blue',
-    build: 'violet',
-    run: 'accent',
-    ship: 'blue',
-    trust: 'warn',
-};
-
-function TagMark({ accent }) {
-    return <span aria-hidden="true" style={{ color: accent, marginRight: 8 }}>■</span>;
-}
-
 function CapabilityMatrix({ tokens }) {
     return (
         <section
             className="feature-matrix"
             aria-labelledby="capability-matrix-title"
-            style={{ background: tokens.panel, border: `1px dashed ${tokens.borderStrong}` }}
+            style={{ background: tokens.panel, border: `1px solid ${tokens.borderStrong}` }}
         >
             <header className="feature-matrix-header">
                 <div>
@@ -38,7 +25,6 @@ function CapabilityMatrix({ tokens }) {
 
             <div className="feature-matrix-grid">
                 {FEATURE_GROUPS.map((group) => {
-                    const accent = tokens[GROUP_ACCENTS[group.id]];
                     const items = FEATURES.filter((feature) => feature.group === group.id);
 
                     return (
@@ -46,14 +32,13 @@ function CapabilityMatrix({ tokens }) {
                             <div className="feature-matrix-group-header">
                                 <div>
                                     <h3 className="feature-matrix-group-title" style={{ color: tokens.text }}>
-                                        <TagMark accent={accent} />
                                         {group.label}
                                     </h3>
                                     <p className="feature-matrix-group-hint" style={{ color: tokens.textMuted }}>
                                         {group.hint}
                                     </p>
                                 </div>
-                                <span className="feature-matrix-group-count" style={{ fontFamily: tokens.mono, color: accent }}>
+                                <span className="feature-matrix-group-count" style={{ fontFamily: tokens.mono, color: tokens.textMuted }}>
                                     {String(items.length).padStart(2, '0')}
                                 </span>
                             </div>
@@ -66,15 +51,9 @@ function CapabilityMatrix({ tokens }) {
                                         style={{ borderColor: tokens.border }}
                                     >
                                         <span className="feature-matrix-item-heading">
-                                            <span style={{ fontFamily: tokens.mono, color: accent }}>{feature.num}</span>
+                                            <span style={{ fontFamily: tokens.mono, color: tokens.textMuted }}>{feature.num}</span>
                                             <strong style={{ color: tokens.text }}>{feature.title}</strong>
-                                            <span aria-hidden="true" style={{ color: accent }}>→</span>
-                                        </span>
-                                        <span className="feature-matrix-copy" style={{ color: tokens.textDim }}>
-                                            {feature.summary}
-                                        </span>
-                                        <span className="feature-matrix-tags" style={{ fontFamily: tokens.mono, color: tokens.textMuted }}>
-                                            {feature.tag.join(' · ')}
+                                            <span aria-hidden="true" style={{ color: tokens.textMuted }}>→</span>
                                         </span>
                                     </a>
                                 ))}
@@ -85,15 +64,9 @@ function CapabilityMatrix({ tokens }) {
             </div>
 
             <div className="feature-matrix-extras" style={{ borderColor: tokens.border }}>
-                <h3 style={{ color: tokens.text }}>Platform & tooling details</h3>
-                <ul>
-                    {FEATURE_EXTRAS.map((extra) => (
-                        <li key={extra} style={{ color: tokens.textDim }}>
-                            <TagMark accent={tokens.accent} />
-                            {extra}
-                        </li>
-                    ))}
-                </ul>
+                <p style={{ margin: 0, color: tokens.textMuted, fontSize: 13, lineHeight: 1.6 }}>
+                    {`Also in the box: ${FEATURE_EXTRAS.join(', ')}.`}
+                </p>
             </div>
         </section>
     );

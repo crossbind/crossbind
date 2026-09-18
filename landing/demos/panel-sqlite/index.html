@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8">
+    <title>crossbind - SQLite in the browser</title>
+    <script src="./dist/panelsqlite-wasm-wasm32-st-release.browser.js"></script>
+</head>
+
+<body>
+    <pre id="out">compiling ...</pre>
+    <script>
+        // The home page seeds this database from its own library catalog and renders the rows
+        // itself; this page is what the demo build opens to prove the artifact runs on its own.
+        initNative({ path: './dist' })
+            .then(async (module) => {
+                const db = await new module.Database();
+                await db.exec('create table ports (name text, version text);');
+                await db.exec("insert into ports values ('GDAL','3.13.3'),('SQLite','3.53.4');");
+                const rows = JSON.parse(await db.query('select name, version from ports order by name;'));
+                document.querySelector('#out').textContent = `sqlite ${await db.version()} => ${rows.length} rows, ${rows[0].name} ${rows[0].version}`;
+            })
+            .catch((error) => {
+                document.querySelector('#out').textContent = `failed => ${error && error.message ? error.message : error}`;
+            });
+    </script>
+</body>
+
+</html>

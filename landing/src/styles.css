@@ -104,7 +104,7 @@
 
 .feature-matrix-group-hint {
     max-width: 42ch;
-    margin: 7px 0 0 25px;
+    margin: 7px 0 0;
     font-size: 12px;
     line-height: 1.5;
 }
@@ -121,7 +121,7 @@
 
 .feature-matrix-item {
     display: block;
-    padding: 16px 0;
+    padding: 9px 0;
     border-top: 1px solid;
 }
 
@@ -144,47 +144,9 @@
     outline-offset: 3px;
 }
 
-.feature-matrix-copy,
-.feature-matrix-tags {
-    display: block;
-    margin-left: 38px;
-}
-
-.feature-matrix-copy {
-    margin-top: 8px;
-    font-size: 13.5px;
-    line-height: 1.6;
-}
-
-.feature-matrix-tags {
-    margin-top: 9px;
-    font-size: 11px;
-    line-height: 1.5;
-    letter-spacing: 0.6px;
-}
-
 .feature-matrix-extras {
-    padding: 24px;
+    padding: 20px 24px;
     border-top: 1px solid;
-}
-
-.feature-matrix-extras h3 {
-    margin: 0 0 14px;
-    font-size: 15px;
-}
-
-.feature-matrix-extras ul {
-    display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 10px 24px;
-    margin: 0;
-    padding: 0;
-    list-style: none;
-}
-
-.feature-matrix-extras li {
-    font-size: 13px;
-    line-height: 1.5;
 }
 
 .feature-footer {
@@ -302,29 +264,11 @@
         padding-left: 18px;
     }
 
-    .feature-matrix-copy {
-        font-size: 16px;
-    }
-
-    .feature-matrix-tags {
-        font-size: 12px;
-    }
-
-    .feature-matrix-extras ul {
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-    }
-
     .feature-footer {
         align-items: flex-start;
         flex-direction: column;
         gap: 10px;
         padding-bottom: 18px;
-    }
-}
-
-@media (max-width: 560px) {
-    .feature-matrix-extras ul {
-        grid-template-columns: minmax(0, 1fr);
     }
 }
 
@@ -337,8 +281,8 @@ body {
         -apple-system,
         BlinkMacSystemFont,
         sans-serif;
-    background: #070b14;
-    color: #e7ebf3;
+    background: #fafaf7;
+    color: #0a0a0a;
 }
 
 *,

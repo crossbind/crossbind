@@ -10,7 +10,8 @@
          itself onto all sixteen pages. The title below is the dev-server fallback and mirrors
          SITE_TITLE in src/data.js. -->
     <title>crossbind — import C++ and Rust like JavaScript modules</title>
-    <meta name="theme-color" content="#070b14" />
+    <meta name="theme-color" media="(prefers-color-scheme: light)" content="#fafaf7" />
+    <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#0d1117" />
 
     <meta property="og:type" content="website" />
     <meta property="og:site_name" content="crossbind" />
@@ -23,16 +24,17 @@
     <meta name="twitter:image" content="https://crossbind.dev/og.png" />
 
     <script>
-        // The prerendered markup carries the dark default, so a light-theme visitor would see a
-        // dark flash until hydration. Painting the canvas here, before first paint, avoids it.
-        // Mirrors src/theme.js: THEME_KEY, lightTokens().bg and darkTokens().bg. An inline script
-        // cannot import them, so change all three together (plus <meta name="theme-color"> above).
+        // The prerendered markup carries the light default, so a dark-theme visitor would see a
+        // light flash until hydration. Painting the canvas here, before first paint, softens it.
+        // Mirrors src/theme.js: THEME_KEY, systemTheme(), lightTokens().bg and darkTokens().bg. An
+        // inline script cannot import them, so change them together (plus <meta name="theme-color"> above).
         try {
             var t = localStorage.getItem('crossbind.landing.theme');
-            if (t === 'light' || t === 'dark') {
-                document.documentElement.style.background = t === 'light' ? '#fafaf7' : '#070b14';
-                document.documentElement.style.colorScheme = t;
+            if (t !== 'light' && t !== 'dark') {
+                t = matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
             }
+            document.documentElement.style.background = t === 'light' ? '#fafaf7' : '#0d1117';
+            document.documentElement.style.colorScheme = t;
         } catch (e) { /* private mode blocks storage; the default stands */ }
     </script>
 </head>

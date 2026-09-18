@@ -27,6 +27,11 @@ export const DEMOS = [
     { id: 'web-svelte-vite', args: ['Web', 'Svelte', 'Vite'], kind: 'vite' },
     { id: 'web-vanilla', args: ['Web', 'Vanilla'], kind: 'vanilla' },
     { id: 'web-react-rspack', args: ['Web', 'React', 'Rspack'], kind: 'rspack' },
+    // The home page's own demo. Its source lives in landing/demos/<id> instead of being
+    // scaffolded, and the page loads the built artifact itself rather than framing the page, so
+    // the result is rendered in the site's own markup. It is still verified the same way: its
+    // index.html has to run on its own under the subpath.
+    { id: 'panel-sqlite', kind: 'source', expect: '=> 2 rows' },
 ];
 
 const log = (message) => process.stderr.write(`${message}\n`);
@@ -112,7 +117,38 @@ async function buildVanilla(project, id, out) {
     }
 }
 
-const BUILDERS = { vite: buildVite, vanilla: buildVanilla, rspack: buildRspack };
+// A demo whose source is in the repository: compile it, copy the loader, the wasm and its own
+// page, and report where the artifact landed so the home page can load it directly.
+async function buildSource(project, id, out) {
+    await run('npm', ['run', 'build'], project);
+    fs.mkdirSync(path.join(out, 'dist'), { recursive: true });
+    fs.copyFileSync(path.join(project, 'index.html'), path.join(out, 'index.html'));
+    if (!patchFile(path.join(out, 'index.html'), [["path: './dist'", `path: '/examples/${id}/dist'`]])) {
+        throw new Error(`${id}: index.html no longer passes path: './dist'; the demo changed shape.`);
+    }
+    const build = path.join(project, '.crossbind', 'build');
+    const artifacts = fs.readdirSync(build).filter((name) => /\.browser\.(js|wasm)$/.test(name));
+    for (const name of artifacts) fs.copyFileSync(path.join(build, name), path.join(out, 'dist', name));
+    const script = artifacts.find((name) => name.endsWith('.js'));
+    const wasm = artifacts.find((name) => name.endsWith('.wasm'));
+    if (!script || !wasm) throw new Error(`${id}: the build produced no browser artifact.`);
+    const bytes = [script, wasm].reduce((total, name) => total + fs.statSync(path.join(build, name)).size, 0);
+    return { script: `/examples/${id}/dist/${script}`, path: `/examples/${id}/dist`, bytes };
+}
+
+const BUILDERS = { vite: buildVite, vanilla: buildVanilla, rspack: buildRspack, source: buildSource };
+
+// The demo sources carry `beta` so they install from the prerelease channel by default; a site
+// built from another channel has to install that channel's packages instead.
+function pinDependencies(file, distTag) {
+    const manifest = JSON.parse(fs.readFileSync(file, 'utf8'));
+    for (const field of ['dependencies', 'devDependencies']) {
+        for (const [name, range] of Object.entries(manifest[field] ?? {})) {
+            if (range === 'beta') manifest[field][name] = distTag;
+        }
+    }
+    fs.writeFileSync(file, `${JSON.stringify(manifest, null, 4)}\n`);
+}
 
 // Loads the demo from its subpath on a throwaway static server; a failed request or an empty
 // page fails the build.
@@ -144,7 +180,10 @@ async function verifyDemo(id) {
     });
     await new Promise((resolve) => server.listen(0, resolve));
     const port = server.address().port;
-    const browser = await chromium.launch();
+    // Playwright's own browser download is absent on a machine that never ran `playwright
+    // install`; the system Chrome answers the only question this check asks, which is whether the
+    // demo loads and renders under its subpath.
+    const browser = await chromium.launch().catch(() => chromium.launch({ channel: 'chrome' }));
     try {
         const page = await browser.newPage();
         const failed = [];
@@ -193,8 +232,14 @@ export async function buildExampleDemos({ channel, only = null } = {}) {
     const built = [];
     for (const demo of DEMOS.filter((entry) => !only || only.includes(entry.id))) {
         const project = path.join(workspace, demo.id);
-        log(`${demo.id}: npm create crossbind${suffix} -- ${demo.id} ${demo.args.join(' ')}`);
-        await run('npm', ['create', `crossbind${suffix}`, '--', demo.id, ...demo.args], workspace);
+        if (demo.kind === 'source') {
+            log(`${demo.id}: building landing/demos/${demo.id} against npm ${distTag}`);
+            copyDir(path.join(REPOSITORY_ROOT, 'landing', 'demos', demo.id), project);
+            pinDependencies(path.join(project, 'package.json'), distTag);
+        } else {
+            log(`${demo.id}: npm create crossbind${suffix} -- ${demo.id} ${demo.args.join(' ')}`);
+            await run('npm', ['create', `crossbind${suffix}`, '--', demo.id, ...demo.args], workspace);
+        }
         await run('npm', ['install', '--no-audit', '--no-fund'], project);
         // crossbind is usually a transitive dependency (through the bundler plugin), so read the
         // installed package directly instead of asking npm ls, which exits non-zero for those.
@@ -202,10 +247,13 @@ export async function buildExampleDemos({ channel, only = null } = {}) {
         const crossbindVersion = fs.existsSync(installed) ? JSON.parse(fs.readFileSync(installed, 'utf8')).version : null;
         const out = path.join(DEMOS_ROOT, demo.id);
         fs.rmSync(out, { recursive: true, force: true });
-        await BUILDERS[demo.kind](project, demo.id, out);
+        const artifact = await BUILDERS[demo.kind](project, demo.id, out);
         const onScreen = await verifyDemo(demo.id);
+        if (demo.expect && !onScreen.includes(demo.expect)) {
+            throw new Error(`${demo.id}: expected "${demo.expect}" on the page, saw "${onScreen.slice(0, 120)}"`);
+        }
         log(`${demo.id}: ok - "${onScreen.slice(0, 80)}"`);
-        built.push({ id: demo.id, href: `/examples/${demo.id}/`, crossbind: crossbindVersion, onScreen });
+        built.push({ id: demo.id, href: `/examples/${demo.id}/`, crossbind: crossbindVersion, onScreen, ...(artifact ?? {}) });
     }
     // A partial run (--only) keeps the other demos already on disk in the manifest.
     const manifestFile = path.join(DEMOS_ROOT, MANIFEST_NAME);

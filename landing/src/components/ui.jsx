@@ -27,11 +27,7 @@ export function highlight(raw, tokens) {
     });
 }
 
-const TRAFFIC_LIGHTS = ['#ff5f56', '#ffbd2e', '#27c93f'];
-
-export function CodeWindow({ tokens, title, accent, children, glass, padded = true }) {
-    const bar = accent || tokens.accent;
-
+export function CodeWindow({ tokens, title, children, glass, padded = true }) {
     return (
         <div style={{
             borderRadius: 14,
@@ -42,31 +38,20 @@ export function CodeWindow({ tokens, title, accent, children, glass, padded = tr
             background: glass
                 ? (tokens.isLight ? 'rgba(255,255,255,0.7)' : 'rgba(13,19,34,0.7)')
                 : tokens.codeBg,
-            backdropFilter: 'blur(20px)',
             border: `1px solid ${tokens.borderStrong}`,
-            boxShadow: tokens.isLight
-                ? '0 24px 60px rgba(0,0,0,0.10), 0 0 0 1px rgba(0,0,0,0.02)'
-                : '0 30px 80px rgba(0,0,0,0.45), inset 0 0 0 1px rgba(255,255,255,0.03)',
             color: tokens.codeText,
         }}
         >
             <div style={{
-                display: 'flex',
-                alignItems: 'center',
                 padding: '10px 14px',
                 background: tokens.codeSurface,
                 borderBottom: `1px solid ${tokens.isLight ? 'rgba(0,0,0,0.06)' : 'rgba(255,255,255,0.06)'}`,
+                fontSize: 12,
+                color: tokens.codeMuted,
+                fontFamily: tokens.mono,
             }}
             >
-                <div style={{ display: 'flex', gap: 6 }}>
-                    {TRAFFIC_LIGHTS.map((c) => (
-                        <div key={c} style={{ width: 11, height: 11, borderRadius: 999, background: c, opacity: 0.85 }} />
-                    ))}
-                </div>
-                <div style={{ flex: 1, textAlign: 'center', fontSize: 12, color: tokens.codeMuted, fontFamily: tokens.mono }}>
-                    {title}
-                </div>
-                <span style={{ width: 36, height: 4, background: bar, borderRadius: 2 }} />
+                {title}
             </div>
             <div style={{
                 padding: padded ? 18 : 0,
@@ -80,25 +65,6 @@ export function CodeWindow({ tokens, title, accent, children, glass, padded = tr
                 {children}
             </div>
         </div>
-    );
-}
-
-// The -webkit- prefixed background-clip alone loses the text clip on repaint (a theme switch is
-// enough) and paints the gradient as a solid block. The unprefixed property plus its own box keeps it.
-export function GradientText({ gradient, children, style }) {
-    return (
-        <span style={{
-            display: 'inline-block',
-            backgroundImage: gradient,
-            WebkitBackgroundClip: 'text',
-            backgroundClip: 'text',
-            WebkitTextFillColor: 'transparent',
-            color: 'transparent',
-            ...style,
-        }}
-        >
-            {children}
-        </span>
     );
 }
 
@@ -124,24 +90,24 @@ export function Pill({ tokens, children, color, style }) {
     );
 }
 
-export function SecondaryButton({ tokens, children, href, style }) {
-    return (
-        <a
-            className="tap-target"
-            href={href}
-            style={{
-                background: tokens.pillBg,
-                color: tokens.text,
-                border: `1px solid ${tokens.borderStrong}`,
-                padding: '14px 22px',
-                borderRadius: 10,
-                fontWeight: 500,
-                fontSize: 15,
-                display: 'inline-block',
-                ...style,
-            }}
-        >
-            {children}
-        </a>
-    );
-}
+export const primaryButtonStyle = (tokens) => ({
+    background: tokens.buttonBg,
+    color: tokens.buttonText,
+    border: 'none',
+    padding: '14px 24px',
+    borderRadius: 10,
+    fontWeight: 600,
+    fontSize: 15,
+    display: 'inline-block',
+});
+
+export const secondaryButtonStyle = (tokens) => ({
+    background: tokens.pillBg,
+    color: tokens.text,
+    border: `1px solid ${tokens.borderStrong}`,
+    padding: '14px 22px',
+    borderRadius: 10,
+    fontWeight: 500,
+    fontSize: 15,
+    display: 'inline-block',
+});

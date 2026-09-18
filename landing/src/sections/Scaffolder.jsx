@@ -26,7 +26,6 @@ function ScaffoldTerminal({ tokens }) {
             user: tokens.codeText,
             question: tokens.codeText,
             ok: tokens.accent,
-            next: tokens.violet,
             gap: tokens.codeText,
         })[kind] || tokens.codeText;
 
@@ -40,25 +39,18 @@ function ScaffoldTerminal({ tokens }) {
                 fontFamily: tokens.mono,
                 fontSize: 13,
                 lineHeight: 1.7,
-                boxShadow: tokens.isLight ? '0 24px 60px rgba(0,0,0,0.10)' : '0 30px 80px rgba(0,0,0,0.45)',
             }}
         >
             <div
                 style={{
-                    display: 'flex',
-                    alignItems: 'center',
                     padding: '10px 14px',
                     background: tokens.codeSurface,
                     borderBottom: `1px solid ${tokens.border}`,
+                    fontSize: 12,
+                    color: tokens.codeMuted,
                 }}
             >
-                <div style={{ display: 'flex', gap: 6 }}>
-                    {['#ff5f56', '#ffbd2e', '#27c93f'].map((c) => (
-                        <div key={c} style={{ width: 11, height: 11, borderRadius: 999, background: c, opacity: 0.85 }} />
-                    ))}
-                </div>
-                <div style={{ flex: 1, textAlign: 'center', fontSize: 12, color: tokens.codeMuted }}>terminal · ~/projects</div>
-                <div style={{ width: 6, height: 6, borderRadius: 999, background: done ? tokens.violet : tokens.accent }} />
+                terminal · ~/projects
             </div>
 
             <div style={{ padding: '18px 20px', minHeight: 400, color: tokens.codeText, overflowX: 'auto' }}>
@@ -143,7 +135,7 @@ export default function Scaffolder({ tokens }) {
                     borderRadius: 24,
                     position: 'relative',
                     overflow: 'hidden',
-                    background: `linear-gradient(135deg, ${tokens.accentBright}14, ${tokens.blue}0b 50%, ${tokens.isLight ? 'rgba(255,255,255,0.5)' : 'rgba(7,11,20,0.5)'})`,
+                    background: tokens.panel,
                     border: `1px solid ${tokens.borderStrong}`,
                 }}
             >
