@@ -1,5 +1,5 @@
-import { existsSync, writeFileSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
+import { dirname, resolve } from 'node:path';
 import { defineConfig } from 'vite';
 import preact from '@preact/preset-vite';
 import { vitePrerenderPlugin } from 'vite-prerender-plugin';
@@ -10,7 +10,7 @@ import { assertSnapshotMatchesConfig, BUILD_TOKEN_ENVIRONMENT_VARIABLE } from '.
 import { BUILD_TOKEN } from './generated/release-snapshot.js';
 import releaseConfig from './release.config.js';
 import { SITE } from './src/data.js';
-import { renderLlmsText } from './src/llms.js';
+import { markdownPages, renderLlmsFull, renderLlmsIndex } from './src/llms/index.js';
 import { RELEASE } from './src/release.js';
 import { SITE_ROUTES } from './src/site-pages.js';
 
@@ -79,14 +79,22 @@ function releaseSnapshot() {
     };
 }
 
-// /llms.txt is a real text file next to the pages, generated from the same snapshot and catalog,
-// so agents fetching it never get the HTML fallback.
-function llmsText() {
+// /llms.txt, /llms-full.txt and a Markdown twin of every page (its path plus .md; the reference
+// documents under /api/) are real files next to the HTML, generated from the same snapshot,
+// catalog and page list, so an agent fetching them never gets the HTML fallback.
+function llmsFiles() {
     return {
-        name: 'llms-txt',
+        name: 'llms-files',
         apply: 'build',
         closeBundle() {
-            writeFileSync(resolve(import.meta.dirname, 'dist/llms.txt'), renderLlmsText());
+            const dist = resolve(import.meta.dirname, 'dist');
+            for (const { path, markdown } of markdownPages()) {
+                const file = resolve(dist, `.${path}`);
+                mkdirSync(dirname(file), { recursive: true });
+                writeFileSync(file, markdown);
+            }
+            writeFileSync(resolve(dist, 'llms.txt'), renderLlmsIndex());
+            writeFileSync(resolve(dist, 'llms-full.txt'), renderLlmsFull());
         },
     };
 }
@@ -129,7 +137,7 @@ export default defineConfig(({ isPreview }) => {
         });
     }
     return {
-        plugins: [preact(), vitePrerenderPlugin({ renderTarget: '#root' }), sitemap(), releaseSnapshot(), llmsText(), demoDirectories()],
+        plugins: [preact(), vitePrerenderPlugin({ renderTarget: '#root' }), sitemap(), releaseSnapshot(), llmsFiles(), demoDirectories()],
         build: { outDir: 'dist' },
     };
 });
