@@ -164,6 +164,23 @@
 #endif
 
 #include <emscripten/bind.h>
+#include <set>
+#include <string>
+#include <typeinfo>
+
+namespace crossbind {
+inline bool claimRegistration(const std::string &key) {
+  static std::set<std::string> claimed;
+  return claimed.insert(key).second;
+}
+inline bool claimType(const std::type_info &type, const char *name) {
+  return claimRegistration(std::string("type ") + type.name()) && claimRegistration(std::string("name ") + name);
+}
+inline bool claimFunction(const char *name, int arity) {
+  return claimRegistration(std::string("function ") + name + "/" + std::to_string(arity));
+}
+}
+
 
 #ifdef __cplusplus
 #include <utility>
@@ -215,14 +232,26 @@ template <typename T> T SwigValueInit() {
 
 #include "native.h"
 
+
+#include <memory>
+#include <stdexcept>
+#include <type_traits>
+#include <utility>
+
+namespace crossbind {
+template<typename T, typename... A> std::shared_ptr<T> makeShared(A... args) {
+  if constexpr (std::is_constructible_v<T, A...>) return std::make_shared<T>(std::forward<A>(args)...);
+  else throw std::invalid_argument("crossbind: this class cannot be constructed from these arguments");
+}
+}
 EMSCRIPTEN_BINDINGS(Native) {
-  emscripten::class_<Native>("Native")
+  if (crossbind::claimType(typeid(Native), "Native")) emscripten::class_<Native>("Native")
     .smart_ptr<std::shared_ptr<Native>>("Native")
     .class_function("sample", &Native::sample)
-    .smart_ptr_constructor("Native", &std::make_shared<Native>)
+    .smart_ptr_constructor("Native", &crossbind::makeShared<Native>)
   ;
 }
 
 EMSCRIPTEN_BINDINGS(Functions_NATIVE) {
-    emscripten::register_vector<std::shared_ptr<Native>>("VectorNative");
+    if (crossbind::claimType(typeid(std::vector<std::shared_ptr<Native>>), "VectorNative")) emscripten::register_vector<std::shared_ptr<Native>>("VectorNative");
 }
