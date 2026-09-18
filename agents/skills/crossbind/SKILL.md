@@ -60,7 +60,7 @@ Only load the references needed for the current request. The reference bundle is
 - Show or summarize material configuration changes before applying them when user intent is ambiguous.
 - Do not commit, push, publish or open a pull request unless the user explicitly asks.
 - Do not run destructive cleanup to solve ordinary cache or build failures without explicit approval.
-- Keep `crossbind.config.js` build-time settings separate from `init(opts)` runtime settings.
+- Keep `crossbind.config.js` build-time settings separate from `initNative(opts)` runtime settings.
 - Keep `useWorker` separate from `runtime: 'mt'`; they are independent choices.
 - Prefer canonical examples and exact reference snippets over invented configuration.
 

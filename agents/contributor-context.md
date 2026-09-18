@@ -61,7 +61,7 @@ Do not run the full native matrix when a narrow test proves the changed surface.
 - Browser multithread builds require COOP/COEP headers in production.
 - `useWorker` and `runtime: 'mt'` are independent choices.
 - Edge runtimes use single-threaded memory-backed execution; no OPFS or nested worker mode.
-- `crossbind.config.js` is build-time configuration; `init(opts)` is runtime configuration.
+- `crossbind.config.js` is build-time configuration; `initNative(opts)` is runtime configuration.
 - `paths.native` may contain multiple paths; never treat it as a scalar.
 - Cross-package native dependencies must be declared in package manifests so pnpm order matches link order.
 - Published native sources and binaries require pinned versions, integrity and upstream license metadata.

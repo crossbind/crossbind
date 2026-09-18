@@ -8,7 +8,7 @@ crossbind has **two API surfaces** that get confused often. Keep them straight:
 
 | Surface | When | Authored by | Documented in |
 |---------|------|-------------|---------------|
-| `init(opts)` | **Runtime** — at the moment your app calls into Wasm | Every consumer | [`init.md`](./init.md) |
+| `initNative(opts)` | **Runtime** — at the moment your app calls into Wasm | Every consumer | [`init.md`](./init.md) |
 | `crossbind.config.js` | **Build-time** — read by the `crossbind build` CLI | Every consumer | [`crossbind-config.md`](./crossbind-config.md) |
 | `crossbind.build.js` | **Build-time** — only inside `ports/*` source folders | Package authors only | [`crossbind-build.md`](./crossbind-build.md) |
 
@@ -63,8 +63,8 @@ C++ binding & build authoring:
 
 ## Common pitfalls (read these even if you skip the rest)
 
-1. **`crossbind.config.js` is NOT runtime config.** It's read once by the `crossbind build` CLI. Putting `useWorker: true` here does nothing — that's a runtime option for `init(opts)`.
-2. **OPFS persistent storage in browser requires `useWorker: true`.** OPFS API is only exposed in Worker scope. Mounting `/opfs/...` from the main thread throws.
+1. **`crossbind.config.js` is NOT runtime config.** It's read once by the `crossbind build` CLI. Putting `useWorker: true` here does nothing — that's a runtime option for `initNative(opts)`.
+2. **OPFS persistent storage in browser requires `useWorker: true`.** crossbind's OPFS backend relies on synchronous access handles, which browsers expose only in Worker scope. Mounting `/opfs/...` from the main thread throws.
 3. **`runtime: 'mt'` in production silently fails without COOP/COEP headers.** Dev plugins inject them; prod hosts (Vercel, Netlify, nginx, Cloudflare Pages, …) need explicit configuration.
 4. **Edge runtimes (Cloudflare Workers, Deno Deploy, Vercel Edge) don't support Web Workers.** That means no `useWorker`, no OPFS, no multithread — only single-thread + in-memory fs.
 5. **`paths.native` is an array.** Not a string. `fs.existsSync(paths.native)` is a bug.

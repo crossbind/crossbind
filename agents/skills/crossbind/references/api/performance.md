@@ -99,7 +99,7 @@ The default expression is evaluated by Emscripten at module load (not baked at b
 - Caps the pool at **2 worker threads**, even on 16-core devices.
 - Falls back to **1** if `navigator.hardwareConcurrency` is unavailable (older browsers, Node, edge runtimes).
 
-Why the cap? Each pthread is a Web Worker — non-trivial memory footprint, startup latency, and WASM heap duplication. For typical workloads two workers (main + one) covers parallelism; going past 2 trades memory and load time for diminishing returns. Bump only when you've measured CPU-bound parallelism that scales further.
+Why the cap? Each pthread is a Web Worker with its own startup latency, JavaScript runtime and thread stack; the Wasm heap itself is shared, not duplicated. For typical workloads two workers (main + one) covers parallelism; going past 2 trades memory and load time for diminishing returns. Bump only when you've measured CPU-bound parallelism that scales further.
 
 Paired with `-sPTHREAD_POOL_SIZE_STRICT=2`: if your code requests more pthreads than the pool, the runtime **aborts**. No dynamic growth, no main-thread deadlock risk. If you bump the pool, also relax strictness or keep your spawn count under the new cap.
 
@@ -208,7 +208,7 @@ Your C++ might not throw, but std::vector / std::string / std::map can. Removing
 
 ### "I'll bump `PTHREAD_POOL_SIZE` to 32 for max parallelism"
 
-Each pthread is a Web Worker with its own WASM instance — bumping pool size to 32 inflates memory and module startup time without a matching speedup. The default caps at 2 deliberately: enough to parallelize the hot path, cheap to spin up. Bump only when measurement shows your workload scales (e.g. embarrassingly parallel image / geo / crypto loops), and pair the bump with `-sPTHREAD_POOL_SIZE_STRICT=1` so spawning more than the new cap doesn't trip the strict abort.
+Each pthread is a Web Worker running the same module over shared memory — the heap is not duplicated, but every worker adds startup time, a JavaScript runtime and a thread stack, so bumping the pool to 32 inflates startup and memory without a matching speedup. The default caps at 2 deliberately: enough to parallelize the hot path, cheap to spin up. Bump only when measurement shows your workload scales (e.g. embarrassingly parallel image / geo / crypto loops), and pair the bump with `-sPTHREAD_POOL_SIZE_STRICT=1` so spawning more than the new cap doesn't trip the strict abort.
 
 ## Profiling
 

@@ -14,7 +14,7 @@
     {
       "source": "docs/api/README.md",
       "output": "api/README.md",
-      "sha256": "c3218aeaba41f5229413b60cde10fe9cf9ae138021901899607871e4f7fbb3b5"
+      "sha256": "f3df73cf0e2ac068a4931be42772b0439342bfa10cd0b60afb17b6f54ea56331"
     },
     {
       "source": "docs/api/build-state.md",
@@ -34,17 +34,17 @@
     {
       "source": "docs/api/crossbind-config.md",
       "output": "api/crossbind-config.md",
-      "sha256": "5435b32a1176f37a5038597b7781ed6e0bcd8dc8ae901c6330ef83347e03cfb1"
+      "sha256": "b12aaddababa4209ef4d60a236664b2e09f0a02ba45b60580e534410b5823cf5"
     },
     {
       "source": "docs/api/filesystem.md",
       "output": "api/filesystem.md",
-      "sha256": "50e3a9fd416c413ffb95070645d450080c05690538c8b92a7337462063d42de0"
+      "sha256": "1fc4300088c88602fa724bf687512ac13cd98d6557c73b236ce8f9d0dc308b46"
     },
     {
       "source": "docs/api/init.md",
       "output": "api/init.md",
-      "sha256": "5794a4fa1cbf8ddfe79fbe89ec8945a7be4df91ded8e3b7ebbb27ef40ba8da5b"
+      "sha256": "6a42f25c7fcd2f44cbab84a6fbed311fc3e599d031244cfb9a10f6b8540647ac"
     },
     {
       "source": "docs/api/lifecycle-and-types.md",
@@ -59,7 +59,7 @@
     {
       "source": "docs/api/performance.md",
       "output": "api/performance.md",
-      "sha256": "55b19dbc0506d210335abb4366aba2ce385c19f0741dba10aeeb36efb6a2d8b0"
+      "sha256": "9dda31492a2bc9f868fc9f4d0e710692a76be474fa043bb7661a2aed27e4249a"
     },
     {
       "source": "docs/api/rust.md",
@@ -74,12 +74,12 @@
     {
       "source": "docs/api/threading.md",
       "output": "api/threading.md",
-      "sha256": "dcf3a3f98a1a0d051163fbf06ba016c99cef1b14ace35eccfae1ef5ca0291c60"
+      "sha256": "df43ba0684d3123a54b744751ea71a7376a8590eacf1a02cd70efcd79d12804b"
     },
     {
       "source": "docs/api/troubleshooting.md",
       "output": "api/troubleshooting.md",
-      "sha256": "e43dae2539a6351fb57c2fb613461a7cf257a305252f036d8876f170c8d39305"
+      "sha256": "2c93f8b8e785d834d05e5115c378f0a1e74ad50fd48c8e1b02bc0e59bfecdfc3"
     },
     {
       "source": "docs/api/wasi.md",
@@ -89,7 +89,7 @@
     {
       "source": "docs/playbooks/integration/README.md",
       "output": "integration/README.md",
-      "sha256": "a6b4e23a5a6f94fb7199a1e34794ab1792d2ed982ce55502bf1a9059f95d01e7"
+      "sha256": "171a65a1e5317bb37798095aee16fc19ab2f6fe202ef8d232ae00611d281e268"
     },
     {
       "source": "docs/playbooks/integration/cloudflare-worker.md",

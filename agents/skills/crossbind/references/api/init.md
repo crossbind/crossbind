@@ -1,6 +1,6 @@
 <!-- GENERATED from docs/api/init.md by scripts/build-agent-skill.mjs. Do not edit. -->
 
-# `init(opts)` — Runtime API
+# `initNative(opts)` — Runtime API
 
 The single entry point for calling into your Wasm module from JavaScript. Produced by the crossbind build pipeline; consumed by your application code.
 
@@ -8,7 +8,7 @@ The single entry point for calling into your Wasm module from JavaScript. Produc
 
 ## Where it comes from
 
-With a bundler plugin (Vite, Rollup, Webpack, Rspack, Metro), import it from `crossbind` and everything else from the header, `.rs` file or `cargo:` crate:
+With a bundler plugin (Vite, Rollup, Webpack, Rspack, Metro), import it from the header, `.rs` file or `cargo:` crate you already import; every generated module exports the same function:
 
 ```js
 import { initNative } from './native/native.h';
@@ -18,14 +18,14 @@ import { Uuid } from 'cargo:uuid';
 await initNative();
 ```
 
-One call binds every imported module: each proxy module registers its bindings when it is imported, and `init()` boots the runtime once and then resolves all of them. Proxy modules still export `initNative` — the same function under its old name — so existing code keeps working. Node, Edge and standalone builds have no bundler plugin: there you import the built artifact directly and call its default export.
+One call binds every imported module: each proxy module registers its bindings when it is imported, and `initNative()` boots the runtime once and then resolves all of them. Node, Edge and standalone builds have no bundler plugin: there you import the built artifact directly and call its default export.
 
 ## Signature
 
 ```ts
-init(opts?: InitOptions): Promise<Module>
+initNative(opts?: InitOptions): Promise<Module>
 
-init.terminate(): void   // browser-only when useWorker:true
+initNative.terminate(): void   // browser-only when useWorker:true
 ```
 
 `Module` is the Emscripten runtime module enriched with crossbind helpers (see [§ Module helpers](#module-helpers) below).
@@ -37,13 +37,18 @@ init.terminate(): void   // browser-only when useWorker:true
   // ─────────────────────────────────────────────────────────────
   // Worker bridging (browser-only)
   // ─────────────────────────────────────────────────────────────
-  useWorker: false,
+  useWorker: !!globalThis.Worker,
+    // Defaults to ON wherever the Worker constructor exists, which is every
+    // browser; pass false to keep the module on the calling thread. While it
+    // is on, every call - construction included - resolves through the
+    // bridge, so write `await new X(...)` and await the calls.
+    //
     // When true, the Wasm module is instantiated inside a Web Worker
     // and the main-thread receives a Comlink-bridged proxy.
     //
-    // REQUIRED for OPFS persistent storage (the OPFS API is only
-    // exposed in Worker scope; mounting /opfs/... from the main
-    // thread throws).
+    // REQUIRED for OPFS persistent storage: crossbind's OPFS backend
+    // relies on synchronous access handles, which browsers expose only
+    // in Worker scope; mounting /opfs/... from the main thread throws.
     //
     // Independent from threading: you can use `useWorker: true`
     // with `runtime: 'st'` and still get OPFS.
@@ -161,7 +166,7 @@ When `useWorker: true`, `Module` is a Comlink-wrapped proxy. Behavior is identic
 - Calls are async by nature even when the underlying C++ is synchronous.
 - Returned `vector`s arrive as proxies; treat them the same — `m.toArray(vec)` still works.
 
-Call `init.terminate()` to kill the worker and release resources.
+Call `initNative.terminate()` to kill the worker and release resources.
 
 ## Examples
 
@@ -229,4 +234,4 @@ const m = await initNative({
 
 - [`filesystem.md`](./filesystem.md) — full OPFS / memfs / node-fs decision tree.
 - [`threading.md`](./threading.md) — `runtime: 'mt'` requirements, COOP/COEP, edge limits.
-- [`crossbind-config.md`](./crossbind-config.md) — build-time config that produces what `init` consumes.
+- [`crossbind-config.md`](./crossbind-config.md) — build-time config that produces what `initNative` consumes.

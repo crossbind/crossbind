@@ -53,7 +53,7 @@ crossbind/
 
 Every consumer-facing field, every default, every constraint lives in [`docs/api/`](./api/):
 
-- [`init.md`](./api/init.md) — `init(opts)` runtime API, Module helpers.
+- [`init.md`](./api/init.md) — `initNative(opts)` runtime API, Module helpers.
 - [`crossbind-config.md`](./api/crossbind-config.md) — `crossbind.config.js` field-by-field (build-time, every consumer).
 - [`crossbind-build.md`](./api/crossbind-build.md) — `crossbind.build.js` lifecycle hooks (package authors only).
 - [`filesystem.md`](./api/filesystem.md) — OPFS / memfs / node-fs / edge fs decision tree, including the `useWorker` requirement for OPFS.

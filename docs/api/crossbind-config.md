@@ -305,7 +305,7 @@ export default {
 
 ## See also
 
-- [`init.md`](./init.md) — runtime API. `crossbind.config.js` produces the artifacts that `init(opts)` loads.
+- [`init.md`](./init.md) — runtime API. `crossbind.config.js` produces the artifacts that `initNative(opts)` loads.
 - [`crossbind-build.md`](./crossbind-build.md) — sibling file used by package authors only.
 - [`rust.md`](./rust.md) — Rust bindings: `cargo:` imports, app-local `.rs`, `export.type: 'cargo'` packages.
 - [`wasi.md`](./wasi.md) — `platform: 'wasi'` command builds + `-bin-wasi` tool packages.
