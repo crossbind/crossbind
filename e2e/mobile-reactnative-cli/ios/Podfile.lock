@@ -1,13 +1,14 @@
 PODS:
-  - crossbind-example-lib-prebuilt-matrix (2.0.0-beta.38)
-  - crossbind-port-curl (8.21.0)
-  - crossbind-port-expat (2.8.3)
+  - confrust (0.1.0)
+  - crossbind-example-lib-prebuilt-matrix (2.0.0-beta.56)
+  - crossbind-port-curl (8.22.0)
+  - crossbind-port-expat (2.8.4)
   - crossbind-port-gdal (3.13.3)
-  - crossbind-port-geos (3.14.1)
+  - crossbind-port-geos (3.15.0)
   - crossbind-port-geotiff (1.7.4)
   - crossbind-port-iconv (1.19)
-  - crossbind-port-openssl (4.0.1)
-  - crossbind-port-proj (9.8.1)
+  - crossbind-port-openssl (4.0.2)
+  - crossbind-port-proj (9.9.0)
   - crossbind-port-spatialite (5.1.0)
   - crossbind-port-sqlite3 (3.53.4):
     - crossbind-port-zlib
@@ -1418,8 +1419,8 @@ PODS:
     - ReactCommon/turbomodule/core
     - ReactNativeDependencies
     - Yoga
-  - react-native-crossbind (2.0.0-beta.37)
-  - react-native-crossbind-ios-helper (2.0.0-beta.37):
+  - react-native-crossbind (2.0.0-beta.56)
+  - react-native-crossbind-ios-helper (2.0.0-beta.56):
     - hermes-engine
     - RCTRequired
     - RCTTypeSafety
@@ -1898,6 +1899,7 @@ PODS:
   - Yoga (0.0.0)
 
 DEPENDENCIES:
+  - "confrust (from `../node_modules/@crossbind/conformance-rust`)"
   - "crossbind-example-lib-prebuilt-matrix (from `../node_modules/@crossbind/example-lib-prebuilt-matrix`)"
   - "crossbind-port-curl (from `../node_modules/@crossbind/port-curl-ios`)"
   - "crossbind-port-expat (from `../node_modules/@crossbind/port-expat-ios`)"
@@ -1993,6 +1995,8 @@ DEPENDENCIES:
   - Yoga (from `../node_modules/react-native/ReactCommon/yoga`)
 
 EXTERNAL SOURCES:
+  confrust:
+    :path: "../node_modules/@crossbind/conformance-rust"
   crossbind-example-lib-prebuilt-matrix:
     :path: "../node_modules/@crossbind/example-lib-prebuilt-matrix"
   crossbind-port-curl:
@@ -2180,15 +2184,16 @@ EXTERNAL SOURCES:
     :path: "../node_modules/react-native/ReactCommon/yoga"
 
 SPEC CHECKSUMS:
-  crossbind-example-lib-prebuilt-matrix: 91ebe2c90c89c6dca8f4d5c9a2fcc4a4d811d2ae
-  crossbind-port-curl: 4e3ac254c478e3dfbd9bdc23332a29059d862fe7
-  crossbind-port-expat: cc3292dc570e95a07820dfe6b9332ce8cd0d51da
+  confrust: 5e3a730e1e0a740afb23688864641a779df84498
+  crossbind-example-lib-prebuilt-matrix: a2edd56f9f6de875bac97ac3f0add12aacbce71b
+  crossbind-port-curl: fe9230015f00dbff609e40f59d350e0e1ea57a78
+  crossbind-port-expat: 4dd01816d793d7d3ebb22196c3291f278052f95b
   crossbind-port-gdal: f7906c362a91e493baea07d7ea20c5c0de7bb6ed
-  crossbind-port-geos: f1736aae8b6d767a21e416da89c0e3b5c57ce98b
+  crossbind-port-geos: d86b1e5b371054cae3306784c79dee2c87e571d6
   crossbind-port-geotiff: 4d9f5835ed7caf7e0019f377b834c12cbc001e90
   crossbind-port-iconv: d116487e6e10a12c433344a7bb3951bd224644ef
-  crossbind-port-openssl: a96da8845b40088060bc5f66427d10c68c2cf3c3
-  crossbind-port-proj: 5820d7b4e4c9ac6a116e17771c79a3088f10aee9
+  crossbind-port-openssl: cd3ad8942d915d6306479918928b286c8d7baecd
+  crossbind-port-proj: 4634bad46a3b2611eef9edbb839f62a765947284
   crossbind-port-spatialite: 579f81531852d0809be75f5863bb641e42876a0f
   crossbind-port-sqlite3: faedc70fc6e2eb1e4711fe9c07c8838e6caec05b
   crossbind-port-tiff: 3bd7dce9652c8f9cf5d61d25cd23c0c98b5e416c
@@ -2234,8 +2239,8 @@ SPEC CHECKSUMS:
   React-Mapbuffer: 1aa9126122d4247ffc24bf9d28d50ce923499a71
   React-microtasksnativemodule: d86581169e9bb5bb6f5fc3c5052f890016c1bf21
   React-mutationobservernativemodule: 9a0c4e866f1ef2a57acebc902ebacbdf469ae741
-  react-native-crossbind: 05f1a0dc983036504672bff00216bc6cd407f99d
-  react-native-crossbind-ios-helper: 1668284b47867c27b1261de3b888e38559c378f7
+  react-native-crossbind: bbfce4bed4de80cfb0a697db7adf06d506bba7db
+  react-native-crossbind-ios-helper: f0436b75851506421c13fb3c7b09395892909219
   react-native-safe-area-context: c1eb308f4b36372a4de4b3bdaa8ed695ec3dd461
   React-NativeModulesApple: cc6ec4767844d610e92cc358bd3ea34937438d56
   React-networking: a8ce15641ed7775d5b54a9d0d32defc367c2216e
@@ -2268,7 +2273,7 @@ SPEC CHECKSUMS:
   React-utils: 2851415c698da4b18331f9a445825d260fffa32c
   React-webperformancenativemodule: 9f29ed34f6f6c01dac688b95fd2dfcbccf3aed7a
   ReactAppDependencyProvider: a54c0c9b976766e1b6d5e2bb4d1ad0d15913e9e1
-  ReactCodegen: 4c602dc7726c42897eb34e470fd5ef702837a588
+  ReactCodegen: 3ed6165967bae3550237ffc407f294cef1ff97d0
   ReactCommon: 3ec2a55999d296af90c24beb66c8a77dc660d3ef
   ReactNativeDependencies: fc54410a7007846482fd1a988878df5a359d5db5
   Yoga: 36fee8f1fca3f54a28c3d7f80e69f66d73d3af96
