@@ -30,7 +30,7 @@
         "expo": "^56.0.5",
         "expo-constants": "~56.0.16",
         "expo-device": "~56.0.4",
-        "expo-font": "~56.0.5",
+        "expo-font": "~57.0.3",
         "expo-glass-effect": "~56.0.4",
         "expo-image": "~56.0.9",
         "expo-linking": "~56.0.12",
