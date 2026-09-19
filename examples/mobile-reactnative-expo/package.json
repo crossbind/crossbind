@@ -40,18 +40,18 @@
         "expo-symbols": "~56.0.5",
         "expo-system-ui": "~56.0.5",
         "expo-web-browser": "~56.0.5",
-        "react": "19.2.3",
-        "react-dom": "19.2.3",
-        "react-native": "0.85.3",
+        "react": "19.3.0",
+        "react-dom": "19.3.0",
+        "react-native": "0.87.1",
         "react-native-gesture-handler": "~2.31.2",
-        "react-native-reanimated": "4.3.1",
-        "react-native-safe-area-context": "~5.8.0",
-        "react-native-screens": "4.25.2",
+        "react-native-reanimated": "4.6.0",
+        "react-native-safe-area-context": "~5.9.1",
+        "react-native-screens": "4.28.0",
         "react-native-web": "~0.21.2",
-        "react-native-worklets": "0.8.3"
+        "react-native-worklets": "0.12.2"
     },
     "devDependencies": {
-        "@types/react": "~19.2.18",
+        "@types/react": "~19.3.0",
         "typescript": "~6.0.3",
         "@crossbind/typescript-config": "2.0.0-beta.53",
         "@crossbind/plugin-metro": "2.0.0-beta.53"
