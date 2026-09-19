@@ -5,10 +5,12 @@ import path from 'node:path';
 import { promisify } from 'node:util';
 import { PACKAGE_NAME } from './release-lib.mjs';
 
-// The beta 56 train saw npm take over five minutes to expose a publish twice; ten minutes with
-// the same five-to-thirty-second backoff covers what was observed with room to spare.
-export const REGISTRY_MAX_ATTEMPTS = 22;
-export const REGISTRY_MAX_DURATION_MS = 10 * 60 * 1000;
+// The beta 58 train saw npm hold two publishes past ten minutes and leave one in its staged
+// state for half an hour, so the window is twenty minutes of the same five-to-thirty-second
+// backoff. Publication and verification run as separate phases, so this wait is paid once for
+// the packages npm is still indexing, not once per package.
+export const REGISTRY_MAX_ATTEMPTS = 44;
+export const REGISTRY_MAX_DURATION_MS = 20 * 60 * 1000;
 export const REGISTRY_INITIAL_BACKOFF_MS = 5 * 1000;
 export const REGISTRY_MAX_BACKOFF_MS = 30 * 1000;
 export const PROVENANCE_PREDICATE = 'https://slsa.dev/provenance/v1';
@@ -16,6 +18,21 @@ export const PROVENANCE_REPOSITORY = 'https://github.com/crossbind/crossbind';
 export const PROVENANCE_WORKFLOW = '.github/workflows/release-crossbind.yml';
 
 const execFileAsync = promisify(execFile);
+
+// npm prints a screenful of `npm notice` lines before the one line that says what went wrong, and
+// a truncated tail of that hides the reason (E409 staged version, ENEEDAUTH, ...). Lift npm's own
+// error lines to the front so a failed train names its cause in the job summary.
+export function npmFailureDetail(error) {
+    const output = `${error.stderr ?? ''}\n${error.stdout ?? ''}`;
+    const reported = output
+        .split('\n')
+        .filter((line) => /^\s*npm (error|ERR!)/.test(line))
+        .map((line) => line.trim());
+    if (reported.length) return [...new Set(reported)].join('\n');
+    // A transport failure (a hung socket, a killed process) writes nothing to stderr, so the
+    // command's own message is all there is to report.
+    return (error.stderr ?? '').trim() || (error.message ?? '').trim();
+}
 const FORBIDDEN_PUBLISH_CREDENTIALS = ['NODE_AUTH_TOKEN', 'NPM_TOKEN', 'NPM_AUTH_TOKEN'];
 
 export function trustedPublishingEnvironment(environment = process.env) {
@@ -74,7 +91,7 @@ export class NpmCliRegistry {
         } catch (error) {
             const detail = `${error.stderr ?? ''}\n${error.stdout ?? ''}`;
             if (allowMissing && /E404|404 Not Found|is not in this registry/i.test(detail)) return null;
-            throw new Error(`npm ${args.join(' ')} failed: ${(error.stderr || error.message).trim()}`, { cause: error });
+            throw new Error(`npm ${args.join(' ')} failed: ${npmFailureDetail(error)}`, { cause: error });
         }
     }
 
@@ -286,17 +303,10 @@ export async function waitForRegistry({
     );
 }
 
-export async function ensurePackagePublished({
-    registry,
-    version,
-    distTag,
-    integrity,
-    tarball,
-    gitCommit,
-    apply = false,
-    log = console.log,
-    wait = {},
-}) {
+// Phase one: put the approved bytes on npm, or recognise that a previous attempt already did.
+// No propagation wait here - npm indexes a publish minutes after it accepts it, and waiting for
+// each package in turn is what made a full train take hours.
+export async function publishPackage({ registry, version, distTag, integrity, tarball, apply = false, log = console.log }) {
     const packageName = registry.packageName ?? PACKAGE_NAME;
     const existingVersion = await registry.version(version);
     let action;
@@ -319,6 +329,14 @@ export async function ensurePackagePublished({
         throw new Error(`npm returned version ${existingVersion} when ${version} was requested.`);
     }
 
+    return { action };
+}
+
+// Phase two: the gate. The version, the channel, the exact bytes and a provenance statement that
+// binds this repository, this workflow and this release commit must all be visible before the
+// train may complete its tags and release.
+export async function verifyPublishedPackage({ registry, version, distTag, integrity, gitCommit, action, log = console.log, wait = {} }) {
+    const packageName = registry.packageName ?? PACKAGE_NAME;
     let verified;
     try {
         verified = await waitForRegistry({
@@ -346,4 +364,21 @@ export async function ensurePackagePublished({
         throw new Error(`Registry integrity changed after publication: expected ${integrity}, received ${verified.integrity ?? '(missing)'}.`);
     }
     return { ...verified, action };
+}
+
+// Both phases for one package, which is what a single-package publication (and every test of the
+// contract) wants. The workspace train calls the phases separately.
+export async function ensurePackagePublished({
+    registry,
+    version,
+    distTag,
+    integrity,
+    tarball,
+    gitCommit,
+    apply = false,
+    log = console.log,
+    wait = {},
+}) {
+    const { action } = await publishPackage({ registry, version, distTag, integrity, tarball, apply, log });
+    return verifyPublishedPackage({ registry, version, distTag, integrity, gitCommit, action, log, wait });
 }

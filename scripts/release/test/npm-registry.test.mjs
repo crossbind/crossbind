@@ -2,6 +2,9 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
     ensurePackagePublished,
+    npmFailureDetail,
+    publishPackage,
+    verifyPublishedPackage,
     expectedAttestationUrl,
     expectedRegistryTarball,
     parseNpmJson,
@@ -337,4 +340,97 @@ test('the registry poll waits at least ten minutes because npm publishes surface
     }
     assert.ok(REGISTRY_MAX_DURATION_MS >= 10 * 60 * 1000, `window is ${REGISTRY_MAX_DURATION_MS / 60000} minutes`);
     assert.ok(waited >= REGISTRY_MAX_DURATION_MS - REGISTRY_MAX_BACKOFF_MS, `attempts only cover ${waited / 1000} seconds`);
+});
+
+test('publishing is a phase of its own: it never waits for npm to expose the version', async () => {
+    let published = 0;
+    let propagationReads = 0;
+    const registry = registryMetadata({
+        version: async () => null,
+        publish: async () => {
+            published += 1;
+        },
+        attestations: async () => {
+            propagationReads += 1;
+            return SUMMARY;
+        },
+        tarball: async () => {
+            propagationReads += 1;
+            return TARBALL;
+        },
+    });
+
+    const result = await publishPackage({
+        registry,
+        version: EXPECTED,
+        distTag: 'beta',
+        integrity: INTEGRITY,
+        tarball: 'approved.tgz',
+        apply: true,
+        log: () => {},
+    });
+
+    assert.equal(result.action, 'published');
+    assert.equal(published, 1);
+    assert.equal(propagationReads, 0);
+});
+
+test('publishing recognises the bytes a previous attempt already put on npm', async () => {
+    let published = 0;
+    const registry = registryMetadata({
+        publish: async () => {
+            published += 1;
+        },
+    });
+
+    const result = await publishPackage({
+        registry,
+        version: EXPECTED,
+        distTag: 'beta',
+        integrity: INTEGRITY,
+        tarball: 'approved.tgz',
+        apply: true,
+        log: () => {},
+    });
+
+    assert.equal(result.action, 'reused');
+    assert.equal(published, 0);
+});
+
+test('verification is the gate, and it reports the action publication decided', async () => {
+    const result = await verifyPublishedPackage({
+        registry: registryMetadata(),
+        version: EXPECTED,
+        distTag: 'beta',
+        integrity: INTEGRITY,
+        gitCommit: COMMIT,
+        action: 'published',
+        log: () => {},
+    });
+
+    assert.equal(result.action, 'published');
+    assert.equal(result.integrity, INTEGRITY);
+    assert.equal(result.provenance.url, expectedAttestationUrl(EXPECTED));
+});
+
+test("a failed npm command reports npm's own error lines, not the notices in front of them", () => {
+    const detail = npmFailureDetail({
+        stderr: [
+            'npm notice 📦  @crossbind/port-proj-wasm@2.0.0-beta.58',
+            'npm notice 8.5 MB package size',
+            'npm error code E409',
+            'npm error 409 Conflict - PUT https://registry.npmjs.org/@crossbind%2fport-proj-wasm' +
+                ' - Cannot publish over previously staged version "2.0.0-beta.58".',
+        ].join('\n'),
+        message: 'Command failed',
+    });
+
+    assert.equal(detail.split('\n').length, 2);
+    assert.match(detail, /code E409/);
+    assert.match(detail, /previously staged version/);
+    assert.doesNotMatch(detail, /npm notice/);
+});
+
+test('a failed npm command with no npm error line still reports something', () => {
+    assert.equal(npmFailureDetail({ stderr: '  \n', message: 'socket hang up' }), 'socket hang up');
 });
