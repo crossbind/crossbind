@@ -168,7 +168,9 @@ overlap.
 
 1. Prepare the common train version and changed package set with
    `pnpm run release:version -- --version <version> --package <name> [--package <name>...] --apply`.
-   Use `--all` only for an intentional repository-wide release.
+   Use `--all` only for an intentional repository-wide release. A sample that installs the
+   published packages from npm instead of the workspace (`examples/mobile-reactnative-expo`) has
+   its pins moved with them, but only for the packages this train actually publishes.
 2. If `crossbind` is included, add its matching versioned release-note file.
 3. Merge the reviewed release commit to `main` and wait for required checks.
 4. Run the local read-only plan for the desired channel:
@@ -192,7 +194,10 @@ overlap.
     gh workflow run release-crossbind.yml --ref main -f channel=beta -f dry_run=false
     ```
 
-8. If `crossbind` was in the train, rebuild the live example demos from the published packages and
+8. Refresh the lockfile of every registry-pinned sample the version step reported (`npm install`
+   in that directory) and commit it. The versions it pins only exist once this train has
+   published, so the lockfile cannot be prepared with the version bump.
+9. If `crossbind` was in the train, rebuild the live example demos from the published packages and
    redeploy the site so its version menu, changelog, Quick Start and `/examples/` pick up the new version
    (see [Site-consumer contract](#site-consumer-contract)):
 

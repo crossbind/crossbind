@@ -13,6 +13,42 @@ const valueOf = (name) => {
 };
 const valuesOf = (name) => process.argv.flatMap((argument, index) => (argument === name ? [process.argv[index + 1]] : [])).filter(Boolean);
 
+// A sample that is deliberately outside the pnpm workspace installs the published packages by
+// exact version, which is what makes it a real consumer of a release. Those pins are not package
+// versions, so nothing else in this tool touches them, and they silently fell a train behind.
+const REGISTRY_PINNED_ROOTS = ['examples'];
+const DEPENDENCY_FIELDS = ['dependencies', 'devDependencies', 'optionalDependencies', 'peerDependencies'];
+const EXACT_VERSION = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/;
+
+function registryPinnedManifests(root, workspacePaths) {
+    return REGISTRY_PINNED_ROOTS.flatMap((directory) => {
+        const parent = path.join(root, directory);
+        if (!fs.existsSync(parent)) return [];
+        return fs
+            .readdirSync(parent, { withFileTypes: true })
+            .filter((entry) => entry.isDirectory() && !entry.name.startsWith('.'))
+            .map((entry) => path.join(directory, entry.name, 'package.json').split(path.sep).join('/'))
+            .filter((manifestPath) => fs.existsSync(path.join(root, manifestPath)) && !workspacePaths.has(manifestPath));
+    });
+}
+
+// Only a package this train publishes may be repinned: naming a version npm will never carry
+// would leave the sample uninstallable.
+function registryPinChanges(root, manifestPath, selected, version) {
+    const manifest = JSON.parse(fs.readFileSync(path.join(root, manifestPath), 'utf8'));
+    return DEPENDENCY_FIELDS.flatMap((field) =>
+        Object.entries(manifest[field] ?? {})
+            .filter(([name, spec]) => selected.has(name) && EXACT_VERSION.test(spec) && spec !== version)
+            .map(([name, spec]) => ({ manifestPath, name, from: spec, to: version })),
+    );
+}
+
+function replaceRegistryPin(source, name, version) {
+    const pattern = new RegExp(`("${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}"\\s*:\\s*")[^"]+(")`);
+    if (!pattern.test(source)) throw new Error(`${name}: pinned dependency vanished while rewriting it.`);
+    return source.replace(pattern, `$1${version}$2`);
+}
+
 function replaceTopLevelVersion(source, version, manifestPath) {
     const pattern = /^(\s*"version"\s*:\s*")([^"]+)(")/m;
     if (!pattern.test(source)) throw new Error(`${manifestPath}: top-level version field is missing.`);
@@ -53,16 +89,41 @@ export function setWorkspaceVersion({ root = REPOSITORY_ROOT, version, packageNa
     );
     for (const change of changes) log(`- ${change.name}: ${change.from} -> ${change.to}`);
 
+    const selected = new Set(selectedNames);
+    const workspacePaths = new Set(packages.map((candidate) => candidate.manifestPath));
+    const registryPins = registryPinnedManifests(root, workspacePaths).flatMap((manifestPath) =>
+        registryPinChanges(root, manifestPath, selected, version),
+    );
+    for (const pin of registryPins) log(`- ${pin.manifestPath}: ${pin.name} ${pin.from} -> ${pin.to}`);
+    if (registryPins.length) {
+        log('The lockfile of each sample above resolves the previous train; refresh it once this one is published.');
+    }
+
     if (apply) {
         const writes = changes.map((change) => {
             const target = path.join(root, change.manifestPath);
             const source = fs.readFileSync(target, 'utf8');
             return { target, source: replaceTopLevelVersion(source, version, change.manifestPath) };
         });
+        for (const manifestPath of new Set(registryPins.map((pin) => pin.manifestPath))) {
+            const target = path.join(root, manifestPath);
+            const source = registryPins
+                .filter((pin) => pin.manifestPath === manifestPath)
+                .reduce((text, pin) => replaceRegistryPin(text, pin.name, version), fs.readFileSync(target, 'utf8'));
+            writes.push({ target, source });
+        }
         for (const write of writes) fs.writeFileSync(write.target, write.source);
         fs.writeFileSync(path.join(root, TRAIN_VERSION_SOURCE), `${version}\n`);
     }
-    return { version, previousTrainVersion: currentTrainVersion, channel: policy.channel, packageCount: changes.length, applied: apply, changes };
+    return {
+        version,
+        previousTrainVersion: currentTrainVersion,
+        channel: policy.channel,
+        packageCount: changes.length,
+        applied: apply,
+        changes,
+        registryPins,
+    };
 }
 
 if (path.resolve(process.argv[1] ?? '') === fileURLToPath(import.meta.url)) {

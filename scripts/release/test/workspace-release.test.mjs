@@ -399,3 +399,63 @@ test('the restore script writes the exact plan bytes from the job output environ
     );
     fs.rmSync(directory, { recursive: true, force: true });
 });
+
+test('a registry-pinned sample follows the packages the train publishes, and nothing else', () => {
+    const root = fixtureRepository([
+        { path: 'core/base', name: '@crossbind/base', version: '2.0.0-beta.1' },
+        { path: 'plugins/other', name: '@crossbind/other', version: '2.0.0-beta.1' },
+        {
+            path: 'examples/sample',
+            name: '@crossbind/example-sample',
+            version: '0.0.0',
+            manifest: {
+                private: true,
+                dependencies: {
+                    '@crossbind/base': '2.0.0-beta.1',
+                    '@crossbind/other': '2.0.0-beta.1',
+                    '@crossbind/ranged': '^2.0.0-beta.1',
+                    react: '19.2.3',
+                },
+            },
+        },
+    ]);
+
+    const result = setWorkspaceVersion({
+        root,
+        version: '2.0.0-beta.3',
+        packageNames: ['@crossbind/base'],
+        apply: true,
+        log: () => {},
+    });
+
+    assert.deepEqual(
+        result.registryPins.map((pin) => `${pin.name}:${pin.from}->${pin.to}`),
+        ['@crossbind/base:2.0.0-beta.1->2.0.0-beta.3'],
+    );
+    const sample = JSON.parse(fs.readFileSync(path.join(root, 'examples/sample/package.json'), 'utf8'));
+    // The train published base, so the sample may name it; other stayed behind and must not be
+    // repinned to a version npm will never carry, and a range is not this tool's business.
+    assert.equal(sample.dependencies['@crossbind/base'], '2.0.0-beta.3');
+    assert.equal(sample.dependencies['@crossbind/other'], '2.0.0-beta.1');
+    assert.equal(sample.dependencies['@crossbind/ranged'], '^2.0.0-beta.1');
+    assert.equal(sample.dependencies.react, '19.2.3');
+});
+
+test('a registry-pinned sample is reported before anything is written', () => {
+    const root = fixtureRepository([
+        { path: 'core/base', name: '@crossbind/base', version: '2.0.0-beta.1' },
+        {
+            path: 'examples/sample',
+            name: '@crossbind/example-sample',
+            version: '0.0.0',
+            manifest: { private: true, dependencies: { '@crossbind/base': '2.0.0-beta.1' } },
+        },
+    ]);
+
+    const preview = setWorkspaceVersion({ root, version: '2.0.0-beta.3', all: true, log: () => {} });
+
+    assert.equal(preview.applied, false);
+    assert.equal(preview.registryPins.length, 1);
+    const sample = JSON.parse(fs.readFileSync(path.join(root, 'examples/sample/package.json'), 'utf8'));
+    assert.equal(sample.dependencies['@crossbind/base'], '2.0.0-beta.1');
+});
