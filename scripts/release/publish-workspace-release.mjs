@@ -5,7 +5,7 @@ import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { ensureGitTag, GitHubCliRelease } from './github-release.mjs';
-import { ensurePackagePublished, NpmCliRegistry, trustedPublishingEnvironment } from './npm-registry.mjs';
+import { NpmCliRegistry, publishPackage, trustedPublishingEnvironment, verifyPublishedPackage } from './npm-registry.mjs';
 import { inspectWorkspaceTarball } from './package-artifact.mjs';
 import { appendGitHubOutput, writeJson } from './release-lib.mjs';
 import { validateWorkspaceReleasePlan } from './workspace-release.mjs';
@@ -61,21 +61,41 @@ for (const name of plan.publishOrder) {
 }
 
 const results = [];
-for (const name of plan.publishOrder) {
+const registryFor = (name) => new NpmCliRegistry({ cwd: root, packageName: candidateByName.get(name).name });
+
+// The train publishes in dependency order, then verifies in a second pass. npm accepts a publish
+// minutes before it exposes it, so waiting for each package in turn cost the beta 58 train about
+// a hundred seconds per package; publishing first lets that indexing run while the next tarballs
+// upload. The first package is still published AND verified on its own: a systemic problem (a
+// missing trusted publisher, a provenance mismatch) then stops the train before anything else is
+// exposed, which is the fail-fast the per-package gate used to provide.
+const publishOne = async (name) => {
     const candidate = candidateByName.get(name);
-    const artifact = artifactByName.get(name);
     const inspected = approvedArtifacts.get(name);
-    const registry = new NpmCliRegistry({ cwd: root, packageName: candidate.name });
-    const verified = await ensurePackagePublished({
-        registry,
+    const { action } = await publishPackage({
+        registry: registryFor(name),
         version: candidate.version,
         distTag: candidate.npmDistTag,
         integrity: inspected.integrity,
         tarball: inspected.tarball,
-        gitCommit,
         apply: true,
     });
-    const result = {
+    return action;
+};
+
+const verifyOne = async (name, action) => {
+    const candidate = candidateByName.get(name);
+    const artifact = artifactByName.get(name);
+    const inspected = approvedArtifacts.get(name);
+    const verified = await verifyPublishedPackage({
+        registry: registryFor(name),
+        version: candidate.version,
+        distTag: candidate.npmDistTag,
+        integrity: inspected.integrity,
+        gitCommit,
+        action,
+    });
+    results.push({
         package: candidate.name,
         version: candidate.version,
         channel: candidate.channel,
@@ -90,9 +110,21 @@ for (const name of plan.publishOrder) {
         action: verified.action,
         propagationAttempts: verified.attempts,
         localTarball: `tarballs/${artifact.filename}`,
-    };
-    results.push(result);
+    });
     process.stdout.write(`${candidate.name}@${candidate.version}: ${verified.action}, integrity and provenance verified.\n`);
+};
+
+const [canary, ...rest] = plan.publishOrder;
+const actions = new Map();
+actions.set(canary, await publishOne(canary));
+await verifyOne(canary, actions.get(canary));
+
+for (const name of rest) {
+    actions.set(name, await publishOne(name));
+}
+process.stdout.write(`npm accepted ${rest.length} further package(s); verifying every one of them.\n`);
+for (const name of rest) {
+    await verifyOne(name, actions.get(name));
 }
 
 for (const name of plan.publishOrder) {
