@@ -247,36 +247,32 @@ async function applyWasi(proposal) {
     );
 }
 
-async function applyAndroidTools(proposal) {
-    if (!/^commandlinetools-linux-\d+_latest\.zip$/.test(proposal.archive) || !SHA1_RE.test(proposal.sha1 ?? '')) {
-        throw new Error('Android command-line tools proposal has invalid archive metadata.');
-    }
+async function applyAndroidNdk(proposal) {
     const sha256 = await sha256Url(`https://dl.google.com/android/repository/${proposal.archive}`);
     updateFile('tooling/docker/android.Dockerfile', (text) => {
-        let updated = replaceLiteral(
-            text,
-            `ARG CMDLINE_TOOLS=commandlinetools-linux-${proposal.current}_latest.zip`,
-            `ARG CMDLINE_TOOLS=${proposal.archive}`,
-            'Android command-line tools archive',
+        let updated = replaceLiteral(text, `ENV NDK_VERSION=${proposal.current}`, `ENV NDK_VERSION=${proposal.target}`, 'Android Docker NDK version');
+        const currentArchive = /^ARG NDK_ARCHIVE=(\S+)$/m.exec(updated)?.[1];
+        const currentRoot = /^ARG NDK_ARCHIVE_ROOT=(\S+)$/m.exec(updated)?.[1];
+        const currentSha1 = /^ARG NDK_SHA1=([0-9a-f]{40})$/m.exec(updated)?.[1];
+        const currentSha256 = /^ARG NDK_SHA256=([0-9a-f]{64})$/m.exec(updated)?.[1];
+        if (!currentArchive || !currentRoot || !currentSha1 || !currentSha256) throw new Error('Current Android NDK archive metadata is missing.');
+        updated = replaceLiteral(updated, `ARG NDK_ARCHIVE=${currentArchive}`, `ARG NDK_ARCHIVE=${proposal.archive}`, 'Android NDK archive');
+        updated = replaceLiteral(
+            updated,
+            `ARG NDK_ARCHIVE_ROOT=${currentRoot}`,
+            `ARG NDK_ARCHIVE_ROOT=${proposal.archiveRoot}`,
+            'Android NDK archive root',
         );
-        const currentSha1 = /^ARG CMDLINE_TOOLS_SHA1=([0-9a-f]{40})$/m.exec(updated)?.[1];
-        const currentSha256 = /^ARG CMDLINE_TOOLS_SHA256=([0-9a-f]{64})$/m.exec(updated)?.[1];
-        if (!currentSha1 || !currentSha256) throw new Error('Current Android command-line tools hashes are missing.');
-        updated = replaceLiteral(updated, currentSha1, proposal.sha1, 'Android command-line tools SHA-1');
-        return replaceLiteral(updated, currentSha256, sha256, 'Android command-line tools SHA-256');
+        updated = replaceLiteral(updated, currentSha1, proposal.sha1, 'Android NDK SHA-1');
+        return replaceLiteral(updated, currentSha256, sha256, 'Android NDK SHA-256');
     });
-}
-
-function applyAndroidNdk(proposal) {
-    updateFile('tooling/docker/android.Dockerfile', (text) =>
-        replaceLiteral(text, `ENV NDK_VERSION=${proposal.current}`, `ENV NDK_VERSION=${proposal.target}`, 'Android Docker NDK version'),
-    );
     updateFile('core/crossbind/src/actions/run.js', (text) =>
         replaceLiteral(text, `/opt/android-sdk/ndk/${proposal.current}`, `/opt/android-sdk/ndk/${proposal.target}`, 'CLI Android NDK path'),
     );
     updateFile('docs/api/build-state.md', (text) =>
         replaceLiteral(text, `NDK ${proposal.current}`, `NDK ${proposal.target}`, 'documented Android NDK'),
     );
+    updateFile('docs/api/performance.md', (text) => replaceLiteral(text, proposal.current, proposal.target, 'documented Android NDK image pin'));
 }
 
 async function applySwig(proposal) {
@@ -303,8 +299,6 @@ async function applyToolchain(proposal) {
             return applyEmscripten(proposal);
         case 'wasi-sdk':
             return applyWasi(proposal);
-        case 'android-command-line-tools':
-            return applyAndroidTools(proposal);
         case 'android-ndk':
             return applyAndroidNdk(proposal);
         case 'swig':

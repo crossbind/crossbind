@@ -133,10 +133,19 @@ test('the unpublished toolchain image train uses the reviewed stable versions', 
     assert.doesNotMatch(web, new RegExp(`wasi-sdk-${wasiVersion}-rc|${wasiVersion}\\.0-rc`));
     assert.match(linuxWorkflow, new RegExp(`wasi-sdk-${wasiVersion}(?:/|\\.0-)`));
     assert.doesNotMatch(linuxWorkflow, new RegExp(`wasi-sdk-${wasiVersion}-rc|${wasiVersion}\\.0-rc`));
-    assert.match(android, /^ARG CMDLINE_TOOLS=commandlinetools-linux-\d+_latest\.zip$/m);
-    assert.match(android, /^ARG CMDLINE_TOOLS_SHA1=[0-9a-f]{40}$/m);
-    assert.match(android, /^ARG CMDLINE_TOOLS_SHA256=[0-9a-f]{64}$/m);
-    assert.match(android, /\$\{CMDLINE_TOOLS_SHA256\}.*sha256sum -c -/);
+    assert.match(android, /^ARG NDK_ARCHIVE=android-ndk-r\d+[a-z]?-linux\.zip$/m);
+    assert.match(android, /^ARG NDK_ARCHIVE_ROOT=android-ndk-r\d+[a-z]?$/m);
+    assert.match(android, /^ARG NDK_SHA1=[0-9a-f]{40}$/m);
+    assert.match(android, /^ARG NDK_SHA256=[0-9a-f]{64}$/m);
+    assert.match(android, /\$\{NDK_SHA1\}.*sha1sum -c -/);
+    assert.match(android, /\$\{NDK_SHA256\}.*sha256sum -c -/);
+    // The image provisions the NDK from its own archive; no SDK manager fetches anything at build
+    // time. Comments are dropped so the assertion reads instructions, not the prose explaining them.
+    const androidInstructions = android
+        .split('\n')
+        .filter((line) => !line.trimStart().startsWith('#'))
+        .join('\n');
+    assert.doesNotMatch(androidInstructions, /sdkmanager|cmdline-tools|openjdk/);
     assert.match(
         fs.readFileSync(path.join(ROOT, 'core/crossbind/src/actions/run.js'), 'utf8'),
         new RegExp(`/opt/android-sdk/ndk/${ndkVersion.replaceAll('.', '\\.')}`),

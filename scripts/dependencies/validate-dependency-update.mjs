@@ -44,14 +44,14 @@ export function dependencyPathAllowed(proposal, file) {
             return ['tooling/docker/web.Dockerfile', 'tooling/docker/rust-sysroot.Dockerfile', 'tooling/docker/licenses-README.md'].includes(file);
         case 'wasi-sdk':
             return ['tooling/docker/web.Dockerfile', 'tooling/docker/licenses-README.md', '.github/workflows/build-linux.yml'].includes(file);
-        case 'android-command-line-tools':
-            return file === 'tooling/docker/android.Dockerfile';
         case 'android-ndk':
             return [
                 'tooling/docker/android.Dockerfile',
                 'core/crossbind/src/actions/run.js',
                 'docs/api/build-state.md',
+                'docs/api/performance.md',
                 'agents/skills/crossbind/references/api/build-state.md',
+                'agents/skills/crossbind/references/api/performance.md',
                 'agents/skills/crossbind/references/manifest.json',
             ].includes(file);
         default:
@@ -87,7 +87,7 @@ function validateToolchain(proposal, platform) {
         run('pnpm', ['--filter', 'crossbind', 'test']);
         return;
     }
-    if (proposal.component === 'android-command-line-tools' || proposal.component === 'android-ndk') {
+    if (proposal.component === 'android-ndk') {
         run('pnpm', ['build:base:amd64'], { cwd: path.join(ROOT, 'tooling/docker') });
         run('pnpm', ['build:android'], { cwd: path.join(ROOT, 'tooling/docker') });
         run(process.execPath, ['scripts/smoke-images.js', 'android:amd64']);
