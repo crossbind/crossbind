@@ -200,8 +200,9 @@ export function encodeProposal(proposal) {
     return Buffer.from(JSON.stringify(proposal), 'utf8').toString('base64url');
 }
 
-const TOOLCHAIN_COMPONENTS = new Set(['node', 'rust', 'emscripten', 'wasi-sdk', 'android-command-line-tools', 'android-ndk', 'swig']);
-const ANDROID_TOOLS_ARCHIVE_RE = /^commandlinetools-linux-\d+_latest\.zip$/;
+const TOOLCHAIN_COMPONENTS = new Set(['node', 'rust', 'emscripten', 'wasi-sdk', 'android-ndk', 'swig']);
+const ANDROID_NDK_ARCHIVE_RE = /^android-ndk-r\d+[a-z]?-linux\.zip$/;
+const ANDROID_NDK_ROOT_RE = /^android-ndk-r\d+[a-z]?$/;
 
 // Encoded proposals cross a workflow boundary; this is the single place their shape is trusted.
 function assertProposalFields(value) {
@@ -215,10 +216,10 @@ function assertProposalFields(value) {
         throw new Error(`${value.id}: unsupported toolchain component ${JSON.stringify(value.component)}.`);
     }
     if (
-        value.component === 'android-command-line-tools' &&
-        (!ANDROID_TOOLS_ARCHIVE_RE.test(value.archive ?? '') || !SHA1_RE.test(value.sha1 ?? ''))
+        value.component === 'android-ndk' &&
+        (!ANDROID_NDK_ARCHIVE_RE.test(value.archive ?? '') || !ANDROID_NDK_ROOT_RE.test(value.archiveRoot ?? '') || !SHA1_RE.test(value.sha1 ?? ''))
     ) {
-        throw new Error(`${value.id}: Android command-line tools proposal has invalid archive metadata.`);
+        throw new Error(`${value.id}: Android NDK proposal has invalid archive metadata.`);
     }
     if (value.component === 'emscripten' && (!COMMIT_RE.test(value.forkRevision ?? '') || !SHA256_RE.test(value.embindSha256 ?? ''))) {
         throw new Error(`${value.id}: Emscripten proposal needs a full fork revision and a libembind SHA-256.`);

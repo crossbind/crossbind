@@ -7,32 +7,31 @@ ARG BASE_IMAGE=crossbind/base:dev
 
 FROM ${BASE_IMAGE} AS android
 
-# The base image is non-root by default; SDK installation is an image-build operation only.
+# The base image is non-root by default; NDK installation is an image-build operation only.
 USER root
-
-RUN apt-get update && apt-get install -y --no-install-recommends openjdk-21-jdk-headless \
-    && rm -rf /var/lib/apt/lists/*
 
 ENV NDK_VERSION=27.3.13750724
 ENV ANDROID_SDK_ROOT=/opt/android-sdk
 ENV NDK_ROOT="${ANDROID_SDK_ROOT}/ndk/${NDK_VERSION}"
 
-ARG CMDLINE_TOOLS=commandlinetools-linux-15859902_latest.zip
+ARG NDK_ARCHIVE=android-ndk-r27d-linux.zip
+# The archive unpacks into its release name, which is not NDK_VERSION, so the tree is moved into
+# the version-keyed path the CLI and the smoke tests expect.
+ARG NDK_ARCHIVE_ROOT=android-ndk-r27d
 # Published in Google's repository2-3.xml next to this exact archive.
-ARG CMDLINE_TOOLS_SHA1=040d3996a65543d22ec4bf73e4c37aa37a8d4af4
+ARG NDK_SHA1=22105e410cf29afcf163760cc95522b9fb981121
 # Derived from the byte-identical archive after checking the Google-published SHA-1 above.
-ARG CMDLINE_TOOLS_SHA256=4e4c464f145a7512b57d088ac6c278c03c9eea610886b35a5e0804e74eedf583
-# This cmdline-tools release warns that sdkmanager is deprecated, but Google still documents it
-# for deterministic SDK package installation and recommends a specific cmdline-tools revision in
-# scripts. Android CLI is a separately distributed, independently moving tool.
-RUN wget -q "https://dl.google.com/android/repository/${CMDLINE_TOOLS}" -P /tmp && \
-    echo "${CMDLINE_TOOLS_SHA1}  /tmp/${CMDLINE_TOOLS}" | sha1sum -c - && \
-    echo "${CMDLINE_TOOLS_SHA256}  /tmp/${CMDLINE_TOOLS}" | sha256sum -c - && \
-    unzip -q "/tmp/${CMDLINE_TOOLS}" -d /tmp && \
-    yes | /tmp/cmdline-tools/bin/sdkmanager --sdk_root=${ANDROID_SDK_ROOT} --licenses && \
-    /tmp/cmdline-tools/bin/sdkmanager --sdk_root=${ANDROID_SDK_ROOT} --install "ndk;${NDK_VERSION}" && \
-    rm -r "/tmp/${CMDLINE_TOOLS}" /tmp/cmdline-tools && \
-    mkdir -p /root/.android/ && touch /root/.android/repositories.cfg
+ARG NDK_SHA256=601246087a682d1944e1e16dd85bc6e49560fe8b6d61255be2829178c8ed15d9
+# The NDK ships as one self-contained archive, so this image needs no JDK, no command-line tools
+# and no sdkmanager: what lands here is exactly the reviewed bytes. Installing through sdkmanager
+# would hand the unpacking to a separately versioned tool fetched at build time.
+RUN wget -q "https://dl.google.com/android/repository/${NDK_ARCHIVE}" -P /tmp && \
+    echo "${NDK_SHA1}  /tmp/${NDK_ARCHIVE}" | sha1sum -c - && \
+    echo "${NDK_SHA256}  /tmp/${NDK_ARCHIVE}" | sha256sum -c - && \
+    mkdir -p "${ANDROID_SDK_ROOT}/ndk" && \
+    unzip -q "/tmp/${NDK_ARCHIVE}" -d "${ANDROID_SDK_ROOT}/ndk" && \
+    mv "${ANDROID_SDK_ROOT}/ndk/${NDK_ARCHIVE_ROOT}" "${NDK_ROOT}" && \
+    rm "/tmp/${NDK_ARCHIVE}"
 
 # The NDK's bundled Python carries setuptools 65.5.0 with fixable HIGH CVEs; nothing in the NDK
 # imports setuptools or pkg_resources, so drop them rather than ship a patched copy.

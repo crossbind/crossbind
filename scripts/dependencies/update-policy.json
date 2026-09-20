@@ -33,10 +33,6 @@
             "branch": "add-embind-support"
         }
     },
-    "pullRequests": {
-        "draft": true,
-        "labels": ["dependencies", "automated-dependency-update"]
-    },
     "nativeSecurity": {
         "curl": { "repository": "curl/curl", "tag": "curl-{versionUnderscore}" },
         "expat": { "repository": "libexpat/libexpat", "tag": "R_{versionUnderscore}" },
