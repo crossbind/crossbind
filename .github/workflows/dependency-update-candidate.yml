@@ -31,6 +31,9 @@ permissions:
 jobs:
     prepare:
         runs-on: ubuntu-24.04
+        continue-on-error: true
+        outputs:
+            ready: ${{ steps.verdict.outputs.ready }}
         steps:
             - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
               with:
@@ -70,10 +73,16 @@ jobs:
                   path: ${{ runner.temp }}/dependency-update
                   if-no-files-found: error
                   retention-days: 1
+            - id: verdict
+              run: echo "ready=true" >> "$GITHUB_OUTPUT"
 
     validate-linux:
         needs: prepare
+        if: ${{ needs.prepare.outputs.ready == 'true' }}
         runs-on: ubuntu-24.04
+        continue-on-error: true
+        outputs:
+            passed: ${{ steps.verdict.outputs.passed }}
         permissions:
             contents: read
         steps:
@@ -143,11 +152,16 @@ jobs:
                   ignore-unfixed: true
                   exit-code: 1
                   timeout: 20m
+            - id: verdict
+              run: echo "passed=true" >> "$GITHUB_OUTPUT"
 
     validate-macos:
         needs: prepare
-        if: ${{ inputs.requires_macos }}
+        if: ${{ inputs.requires_macos && needs.prepare.outputs.ready == 'true' }}
         runs-on: macos-15
+        continue-on-error: true
+        outputs:
+            passed: ${{ steps.verdict.outputs.passed }}
         permissions:
             contents: read
         steps:
@@ -175,11 +189,16 @@ jobs:
               env:
                   PROPOSAL: ${{ inputs.proposal }}
               run: node scripts/dependencies/validate-dependency-update.mjs --proposal "$PROPOSAL" --platform macos
+            - id: verdict
+              run: echo "passed=true" >> "$GITHUB_OUTPUT"
 
     open-pr:
         needs: [prepare, validate-linux, validate-macos]
-        if: ${{ always() && needs.prepare.result == 'success' && needs.validate-linux.result == 'success' && (needs.validate-macos.result == 'success' || needs.validate-macos.result == 'skipped') }}
+        if: ${{ always() && needs.validate-linux.outputs.passed == 'true' && (needs.validate-macos.outputs.passed == 'true' || needs.validate-macos.result == 'skipped') }}
         runs-on: ubuntu-24.04
+        continue-on-error: true
+        outputs:
+            opened: ${{ steps.verdict.outputs.opened }}
         permissions:
             contents: read
         steps:
@@ -274,3 +293,41 @@ jobs:
                   done
                   gh pr create --draft --base main --head "$branch" --title "$title" --body-file "$body" \
                     --label dependencies --label automated-dependency-update
+            - id: verdict
+              run: echo "opened=true" >> "$GITHUB_OUTPUT"
+
+    record-rejection:
+        needs: [prepare, validate-linux, validate-macos, open-pr]
+        if: ${{ always() && !inputs.dry_run && needs.open-pr.outputs.opened != 'true' }}
+        runs-on: ubuntu-24.04
+        steps:
+            - name: Record why this candidate did not become a pull request
+              env:
+                  PROPOSAL_ID: ${{ inputs.proposal_id }}
+                  COMPONENT: ${{ inputs.component }}
+                  KIND: ${{ inputs.kind }}
+                  PREPARED: ${{ needs.prepare.outputs.ready }}
+                  LINUX_PASSED: ${{ needs.validate-linux.outputs.passed }}
+                  MACOS_PASSED: ${{ needs.validate-macos.outputs.passed }}
+                  MACOS_REQUIRED: ${{ inputs.requires_macos }}
+              run: |
+                  set -euo pipefail
+                  mkdir -p "$RUNNER_TEMP/rejection"
+                  node -e '
+                    const passed = (value) => value === "true";
+                    const stage = !passed(process.env.PREPARED)
+                      ? "prepare"
+                      : !passed(process.env.LINUX_PASSED)
+                        ? "validate-linux"
+                        : passed(process.env.MACOS_REQUIRED) && !passed(process.env.MACOS_PASSED)
+                          ? "validate-macos"
+                          : "open-pr";
+                    const rejection = { id: process.env.PROPOSAL_ID, component: process.env.COMPONENT, kind: process.env.KIND, stage };
+                    require("node:fs").writeFileSync(process.argv[1], `${JSON.stringify(rejection)}\n`);
+                  ' "$RUNNER_TEMP/rejection/${PROPOSAL_ID}.json"
+            - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+              with:
+                  name: dependency-rejection-${{ inputs.proposal_id }}
+                  path: ${{ runner.temp }}/rejection
+                  if-no-files-found: error
+                  retention-days: 7

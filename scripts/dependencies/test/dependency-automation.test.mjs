@@ -7,7 +7,14 @@ import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { compareVersions, decodeProposal, encodeProposal } from '../dependency-lib.mjs';
 import { changedDependencyUnits } from '../changed-units.mjs';
-import { createDependencyPlan, dockerFrom, nativeTag, parseAndroidRepository, parseRustStableToml } from '../plan-dependency-updates.mjs';
+import {
+    createDependencyPlan,
+    dockerFrom,
+    nativeTag,
+    parseAndroidRepository,
+    parseRustStableToml,
+    planAndroid,
+} from '../plan-dependency-updates.mjs';
 import { pullRequestMetadata } from '../render-dependency-pr.mjs';
 import { dependencyPathAllowed } from '../validate-dependency-update.mjs';
 import { nativeDependencyBuildOrder } from '../validate-native-family.mjs';
@@ -229,7 +236,7 @@ test('native security fails closed when the proposed target commit is also affec
     assert.match(plan.blockers[0].reason, /No checked clean target is available/);
 });
 
-test('native updates with no reviewed commit identity require manual review', async () => {
+test('a reviewed manual library stands as a notice instead of blocking every run', async () => {
     const plan = await createDependencyPlan({
         dependencies: {
             skipToolchains: true,
@@ -249,7 +256,53 @@ test('native updates with no reviewed commit identity require manual review', as
         },
     });
     assert.equal(plan.selected.length, 0);
-    assert.equal(plan.blockers[0].component, 'native-security-iconv');
+    assert.deepEqual(plan.blockers, []);
+    assert.deepEqual(plan.errors, []);
+    assert.equal(plan.notices[0].component, 'native-security-iconv');
+});
+
+test('a library with no reviewed commit identity blocks until one is configured', async () => {
+    const plan = await createDependencyPlan({
+        dependencies: {
+            skipToolchains: true,
+            nativeInventory: {
+                rows: [
+                    {
+                        package: '@crossbind/port-freetype',
+                        library: 'freetype',
+                        nativeVersion: '2.13.3',
+                        latestVersion: '2.14.0',
+                        status: 'outdated',
+                        path: 'ports/freetype/base/package.json',
+                        homepage: 'https://freetype.org/',
+                    },
+                ],
+            },
+        },
+    });
+    assert.equal(plan.selected.length, 0);
+    assert.deepEqual(plan.notices, []);
+    assert.equal(plan.blockers[0].component, 'native-security-freetype');
+});
+
+test('an unreviewed NDK major stands as a notice instead of blocking every run', async () => {
+    const xml = `
+      <remotePackage path="cmdline-tools;19.0">
+        <revision><major>19</major><minor>0</minor><micro>0</micro></revision>
+        <archives><archive><host-os>linux</host-os><complete>
+          <checksum type="sha-1">${'a'.repeat(40)}</checksum>
+          <url>commandlinetools-linux-20000000_latest.zip</url>
+        </complete></archive></archives>
+      </remotePackage>
+      <remotePackage path="ndk;27.3.13750724"><revision><major>27</major><minor>3</minor><micro>13750724</micro></revision></remotePackage>
+      <remotePackage path="ndk;30.0.16248370"><revision><major>30</major><minor>0</minor><micro>16248370</micro></revision></remotePackage>`;
+    const proposals = [];
+    const notices = [];
+    await planAndroid(ROOT, { repositoryXml: 'https://example.invalid/repository2-3.xml', ndkTrackMajor: 27 }, proposals, notices, {
+        fetchText: async () => xml,
+    });
+    assert.equal(notices[0].component, 'android-ndk-major');
+    assert.equal(notices[0].target, '30.0.16248370');
 });
 
 test('proposal changed-file policies reject unrelated files', () => {
@@ -339,6 +392,7 @@ test('daily workflows keep write authority after validation and pin every action
     assert.match(candidate, /existing_tree.*expected_tree/s);
     assert.doesNotMatch(candidate, /npm publish|docker push|gh release create/);
     assert.doesNotMatch(watch, /secrets: inherit/);
+    assert.match(watch, /report\.notices/);
     assert.match(scan, /published toolchain image scan failed/);
     assert.match(pullRequestValidation, /validate-native-family\.mjs/);
     assert.match(pullRequestValidation, /pnpm --dir tooling\/docker build:family/);
@@ -354,6 +408,22 @@ test('daily workflows keep write authority after validation and pin every action
     );
     assert.match(dependabot, /directory: \/examples\/mobile-reactnative-expo\n(?:.*\n){1,6}?\s+open-pull-requests-limit: 0/);
     assert.match(dependabot, /dependency-name: 'expo-\*'/);
+});
+
+test('a rejected candidate becomes a reported finding instead of a failed watch', () => {
+    const watch = fs.readFileSync(path.join(ROOT, '.github/workflows/dependency-watch.yml'), 'utf8');
+    const candidate = fs.readFileSync(path.join(ROOT, '.github/workflows/dependency-update-candidate.yml'), 'utf8');
+    assert.equal(candidate.match(/continue-on-error: true/g).length, 4);
+    assert.match(candidate, /ready: \$\{\{ steps\.verdict\.outputs\.ready \}\}/);
+    assert.match(candidate, /passed: \$\{\{ steps\.verdict\.outputs\.passed \}\}/);
+    assert.match(candidate, /opened: \$\{\{ steps\.verdict\.outputs\.opened \}\}/);
+    // A continue-on-error job reports success through `needs`, so the gate has to be an explicit verdict.
+    assert.match(candidate, /needs\.validate-linux\.outputs\.passed == 'true'/);
+    assert.doesNotMatch(candidate, /needs\.validate-linux\.result == 'success'/);
+    assert.match(candidate, /name: dependency-rejection-/);
+    assert.match(watch, /pattern: dependency-rejection-\*/);
+    assert.match(watch, /process\.stdout\.write\("open"\)/);
+    assert.match(watch, /process\.stdout\.write\("close"\)/);
 });
 
 test('native updater changes every nested nativeVersion field together', () => {
