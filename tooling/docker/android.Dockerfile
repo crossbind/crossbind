@@ -10,18 +10,18 @@ FROM ${BASE_IMAGE} AS android
 # The base image is non-root by default; NDK installation is an image-build operation only.
 USER root
 
-ENV NDK_VERSION=27.3.13750724
+ENV NDK_VERSION=30.0.16248370
 ENV ANDROID_SDK_ROOT=/opt/android-sdk
 ENV NDK_ROOT="${ANDROID_SDK_ROOT}/ndk/${NDK_VERSION}"
 
-ARG NDK_ARCHIVE=android-ndk-r27d-linux.zip
+ARG NDK_ARCHIVE=android-ndk-r30-linux.zip
 # The archive unpacks into its release name, which is not NDK_VERSION, so the tree is moved into
 # the version-keyed path the CLI and the smoke tests expect.
-ARG NDK_ARCHIVE_ROOT=android-ndk-r27d
+ARG NDK_ARCHIVE_ROOT=android-ndk-r30
 # Published in Google's repository2-3.xml next to this exact archive.
-ARG NDK_SHA1=22105e410cf29afcf163760cc95522b9fb981121
+ARG NDK_SHA1=5107f898313790e449e87eee2183d9a20602dee9
 # Derived from the byte-identical archive after checking the Google-published SHA-1 above.
-ARG NDK_SHA256=601246087a682d1944e1e16dd85bc6e49560fe8b6d61255be2829178c8ed15d9
+ARG NDK_SHA256=753611f410d002cfcd3f3dc2ef49aad532089d3180b436c060a90bf0fcb64df2
 # The NDK ships as one self-contained archive, so this image needs no JDK, no command-line tools
 # and no sdkmanager: what lands here is exactly the reviewed bytes. Installing through sdkmanager
 # would hand the unpacking to a separately versioned tool fetched at build time.

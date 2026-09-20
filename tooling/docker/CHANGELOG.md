@@ -4,6 +4,10 @@
 
 ### Patch Changes
 
+- Moved the Android image to NDK r30 LTS (`30.0.16248370`), which carries clang 21 in place of
+  r27d's clang 18. The Docker image, the Android sample workflow, both React Native Gradle projects
+  and the React Native plugin module now name that same NDK; they previously named four different
+  ones, so an app could link objects produced by two toolchains.
 - The Android image installs the NDK from its own published archive, checked against the
   Google-published SHA-1 and a SHA-256 derived from those same bytes. It no longer carries a JDK,
   the Android command-line tools or `sdkmanager`. Command-line tools 16111833 turned `sdkmanager`

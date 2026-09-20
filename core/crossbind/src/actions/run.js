@@ -11,7 +11,7 @@ import { wasiCFlags, wasiCxxFlags, resolveWasiSdkPath, WASI_TARGET_TRIPLE } from
 const EXEC_MAX_BUFFER = 512 * 1024 * 1024;
 const CROSSCOMPILER_ARM64 = 'aarch64-linux-android33';
 const CROSSCOMPILER_x86_64 = 'x86_64-linux-android33';
-const ANDROID_NDK = '/opt/android-sdk/ndk/27.3.13750724';
+const ANDROID_NDK = '/opt/android-sdk/ndk/30.0.16248370';
 const t = `${ANDROID_NDK}/toolchains/llvm/prebuilt/linux-x86_64/bin`;
 const t2 = `${ANDROID_NDK}/toolchains/llvm/prebuilt/linux-x86_64`;
 

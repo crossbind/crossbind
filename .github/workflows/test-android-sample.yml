@@ -47,7 +47,7 @@ jobs:
             - name: Install dependencies
               run: pnpm install
             - name: Install NDK and CMake
-              run: yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "ndk;29.0.14206865" "cmake;4.1.2" > /dev/null
+              run: yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "ndk;30.0.16248370" "cmake;4.1.2" > /dev/null
             - name: Build examples/lib-prebuilt-matrix
               run: pnpm --filter=@crossbind/example-lib-prebuilt-matrix run build:android
             - name: Gradle cache
@@ -94,7 +94,7 @@ jobs:
                   target: default
                   arch: x86_64
                   cmake: 4.1.2
-                  ndk: 29.0.14206865
+                  ndk: 30.0.16248370
                   force-avd-creation: false
                   emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
                   disable-animations: false
@@ -106,7 +106,7 @@ jobs:
                   target: default
                   arch: x86_64
                   cmake: 4.1.2
-                  ndk: 29.0.14206865
+                  ndk: 30.0.16248370
                   force-avd-creation: false
                   emulator-options: -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
                   disable-animations: true
