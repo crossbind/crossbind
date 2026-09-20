@@ -65,31 +65,25 @@ export function parseAndroidRepository(xml) {
         revision: revisionOf(match[2]),
     }));
 
-    const commandLineTools = entries
-        .filter((entry) => /^cmdline-tools;\d/.test(entry.path) && !entry.revision.preview)
+    const ndks = entries
+        .filter((entry) => entry.path.startsWith('ndk;') && !entry.revision.preview)
         .map((entry) => {
             const archives = [...entry.body.matchAll(/<archive>([\s\S]*?)<\/archive>/g)].map((match) => match[1]);
             const linux = archives.find((archive) => xmlValue(archive, 'host-os') === 'linux');
             if (!linux) return null;
-            const url = xmlValue(linux, 'url');
+            const file = xmlValue(linux, 'url');
             const sha1 = /<checksum[^>]*type="sha-?1"[^>]*>([0-9a-f]{40})<\/checksum>/i.exec(linux)?.[1]?.toLowerCase();
-            if (!url || !SHA1_RE.test(sha1 ?? '')) return null;
-            const build = /commandlinetools-linux-(\d+)_latest\.zip/.exec(url)?.[1];
-            if (!build) return null;
-            return { revision: entry.revision.version, build, file: url, sha1 };
+            // The archive unpacks into its release name, which never matches the package version.
+            const archiveRoot = /^(android-ndk-r\d+[a-z]?)-linux\.zip$/.exec(file ?? '')?.[1];
+            if (!archiveRoot || !SHA1_RE.test(sha1 ?? '')) return null;
+            return { version: entry.path.slice(4), revision: entry.revision, file, archiveRoot, sha1 };
         })
         .filter(Boolean)
-        .sort((a, b) => compareVersions(b.revision, a.revision));
-
-    const ndks = entries
-        .filter((entry) => entry.path.startsWith('ndk;') && !entry.revision.preview)
-        .map((entry) => ({ version: entry.path.slice(4), revision: entry.revision }))
         .filter((entry) => /^\d+\.\d+\.\d+$/.test(entry.version))
         .sort((a, b) => compareVersions(b.version, a.version));
 
-    if (!commandLineTools[0]) throw new Error('Android repository XML contained no stable Linux command-line tools archive.');
-    if (!ndks[0]) throw new Error('Android repository XML contained no stable NDK.');
-    return { commandLineTools: commandLineTools[0], ndks };
+    if (!ndks[0]) throw new Error('Android repository XML contained no stable NDK with a published Linux archive.');
+    return { ndks };
 }
 
 function currentArg(text, name, label) {
@@ -237,19 +231,6 @@ export async function planAndroid(root, policy, proposals, notices, dependencies
     const xml = await (dependencies.fetchText ?? ((url) => fetchText(url, {}, dependencies)))(policy.repositoryXml);
     const repository = parseAndroidRepository(xml);
     const android = readText(root, 'tooling/docker/android.Dockerfile');
-    const currentToolsFile = currentArg(android, 'CMDLINE_TOOLS', 'Android command-line tools archive');
-    const currentTools = /commandlinetools-linux-(\d+)_latest\.zip/.exec(currentToolsFile)?.[1];
-    if (!currentTools) throw new Error('Current Android command-line tools archive is not recognized.');
-    addVersionProposal(proposals, {
-        kind: 'toolchain',
-        component: 'android-command-line-tools',
-        current: currentTools,
-        target: repository.commandLineTools.build,
-        archive: repository.commandLineTools.file,
-        sha1: repository.commandLineTools.sha1,
-        sourceUrl: policy.repositoryXml,
-        reason: 'new-stable',
-    });
 
     const currentNdk = currentArg(android, 'NDK_VERSION', 'Android NDK version');
     const sameMajor = repository.ndks.find((entry) => Number(entry.version.split('.')[0]) === policy.ndkTrackMajor);
@@ -259,6 +240,9 @@ export async function planAndroid(root, policy, proposals, notices, dependencies
             component: 'android-ndk',
             current: currentNdk,
             target: sameMajor.version,
+            archive: sameMajor.file,
+            archiveRoot: sameMajor.archiveRoot,
+            sha1: sameMajor.sha1,
             sourceUrl: 'https://developer.android.com/ndk/downloads/revision_history',
             reason: 'new-stable-in-reviewed-major',
         });

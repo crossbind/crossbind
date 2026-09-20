@@ -1,6 +1,20 @@
 # @crossbind/docker
 
-## Unreleased — image family 1.0.4
+## Unreleased — image family 1.0.5
+
+### Patch Changes
+
+- The Android image installs the NDK from its own published archive, checked against the
+  Google-published SHA-1 and a SHA-256 derived from those same bytes. It no longer carries a JDK,
+  the Android command-line tools or `sdkmanager`. Command-line tools 16111833 turned `sdkmanager`
+  into a shim that downloads a separately versioned "Android CLI" at build time and delegates the
+  unpacking to it, which both breaks the pinned-bytes contract and left the NDK mode `0744`, so
+  nothing was executable for the non-root user the image runs as.
+- Refreshed the pinned `node:24.21.0-trixie-slim` and `rust:1.98.1-slim` base digests. Both tags
+  name the same versions as before; upstream rebuilt them, and a digest pin cannot pick that up on
+  its own, so the images carried whatever the distribution shipped when the digest was taken.
+
+## Image family 1.0.4
 
 ### Patch Changes
 

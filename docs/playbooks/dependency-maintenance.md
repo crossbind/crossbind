@@ -17,7 +17,7 @@ the repository-specific dependency units that generic package bots cannot update
 - stable Rust plus the digest-pinned bootstrap image;
 - Emscripten/emsdk plus Crossbind's reviewed `libembind.js` fork revision and source hash;
 - wasi-sdk archives for both Linux architectures, submodule revisions and license hashes;
-- Android command-line tools checksums and patch releases inside the reviewed NDK major;
+- the Android NDK archive, its published checksum and patch releases inside the reviewed NDK major;
 - the Crossbind SWIG fork revision and source archive hash;
 - one complete native port family (`base`, `wasm`, `wasi`, `bin-wasi`, `android`, `ios`) per update.
 
@@ -95,8 +95,12 @@ instead of substituting upstream `libembind.js`.
 The bot automatically proposes releases only inside `ndkTrackMajor` from `update-policy.json`.
 Discovery of a newer NDK major becomes a standing note rather than a blocker because an NDK major
 can change ABI, CMake and compiler behavior and the pin is itself a reviewed decision. After the new
-major passes a deliberate migration, update
-`ndkTrackMajor`; subsequent patch releases become eligible for automated draft PRs.
+major passes a deliberate migration, update `ndkTrackMajor`; subsequent patch releases become
+eligible for automated draft PRs.
+
+The image installs the NDK from its own published archive, checked against the Google-published
+SHA-1 and a SHA-256 derived from those same bytes. It carries no JDK, no command-line tools and no
+SDK manager, so nothing is fetched at build time beyond the reviewed archive.
 
 ## GitHub App setup
 

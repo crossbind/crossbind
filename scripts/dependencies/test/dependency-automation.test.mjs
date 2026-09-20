@@ -76,24 +76,26 @@ test('Rust stable parsing is scoped to pkg.rust instead of another component', (
     assert.equal(parseRustStableToml(toml), '1.98.1');
 });
 
-test('Android repository parsing selects stable Linux tools and orders NDKs', () => {
-    const xml = `
-      <remotePackage path="cmdline-tools;19.0">
-        <revision><major>19</major><minor>0</minor><micro>0</micro></revision>
+test('Android repository parsing keeps each stable NDK beside its published archive and checksum', () => {
+    const ndk = (path, revision, url, sha1) => `
+      <remotePackage path="${path}">
+        <revision><major>${revision[0]}</major><minor>${revision[1]}</minor><micro>${revision[2]}</micro></revision>
         <archives><archive><host-os>linux</host-os><complete>
-          <checksum type="sha-1">${'a'.repeat(40)}</checksum>
-          <url>commandlinetools-linux-20000000_latest.zip</url>
+          <checksum type="sha-1">${sha1}</checksum>
+          <url>${url}</url>
         </complete></archive></archives>
-      </remotePackage>
-      <remotePackage path="ndk;27.3.13750724"><revision><major>27</major><minor>3</minor><micro>13750724</micro></revision></remotePackage>
-      <remotePackage path="ndk;29.0.14206865"><revision><major>29</major><minor>0</minor><micro>14206865</micro></revision></remotePackage>`;
-    const parsed = parseAndroidRepository(xml);
-    assert.equal(parsed.commandLineTools.build, '20000000');
-    assert.equal(parsed.commandLineTools.sha1, 'a'.repeat(40));
+      </remotePackage>`;
+    const parsed = parseAndroidRepository(
+        ndk('ndk;27.3.13750724', [27, 3, 13750724], 'android-ndk-r27d-linux.zip', 'a'.repeat(40)) +
+            ndk('ndk;30.0.16248370', [30, 0, 16248370], 'android-ndk-r30-linux.zip', 'b'.repeat(40)),
+    );
     assert.deepEqual(
         parsed.ndks.map((entry) => entry.version),
-        ['29.0.14206865', '27.3.13750724'],
+        ['30.0.16248370', '27.3.13750724'],
     );
+    assert.equal(parsed.ndks[0].file, 'android-ndk-r30-linux.zip');
+    assert.equal(parsed.ndks[0].archiveRoot, 'android-ndk-r30');
+    assert.equal(parsed.ndks[0].sha1, 'b'.repeat(40));
 });
 
 test('proposal encoding rejects identities that cannot become branch names', () => {
@@ -114,20 +116,24 @@ test('proposal decoding validates every kind-specific field before any script tr
     assert.throws(() => decodeProposal(encode({ ...toolchain, component: 'android-ndk-major' })), /unsupported toolchain component/);
     assert.throws(() => decodeProposal(encode({ ...toolchain, component: undefined })), /unsupported toolchain component/);
 
-    const androidTools = {
+    assert.throws(() => decodeProposal(encode({ ...toolchain, component: 'android-command-line-tools' })), /unsupported toolchain component/);
+
+    const androidNdk = {
         ...toolchain,
-        id: 'toolchain-android-command-line-tools-2',
-        component: 'android-command-line-tools',
-        current: '1',
-        target: '2',
+        id: 'toolchain-android-ndk-30.0.16248370',
+        component: 'android-ndk',
+        current: '27.3.13750724',
+        target: '30.0.16248370',
+        archiveRoot: 'android-ndk-r30',
     };
-    assert.throws(() => decodeProposal(encode({ ...androidTools, archive: 'evil.zip', sha1: 'a'.repeat(40) })), /archive metadata/);
+    assert.throws(() => decodeProposal(encode({ ...androidNdk, archive: 'evil.zip', sha1: 'a'.repeat(40) })), /archive metadata/);
+    assert.throws(() => decodeProposal(encode({ ...androidNdk, archive: 'android-ndk-r30-linux.zip', sha1: 'nope' })), /archive metadata/);
     assert.throws(
-        () => decodeProposal(encode({ ...androidTools, archive: 'commandlinetools-linux-2_latest.zip', sha1: 'nope' })),
+        () => decodeProposal(encode({ ...androidNdk, archive: 'android-ndk-r30-linux.zip', sha1: 'a'.repeat(40), archiveRoot: '../escape' })),
         /archive metadata/,
     );
-    const validTools = { ...androidTools, archive: 'commandlinetools-linux-2_latest.zip', sha1: 'a'.repeat(40) };
-    assert.deepEqual(decodeProposal(encodeProposal(validTools)), validTools);
+    const validNdk = { ...androidNdk, archive: 'android-ndk-r30-linux.zip', sha1: 'a'.repeat(40) };
+    assert.deepEqual(decodeProposal(encodeProposal(validNdk)), validNdk);
 
     const emscripten = { ...toolchain, id: 'toolchain-emscripten-6.0.10', component: 'emscripten', current: '6.0.9', target: '6.0.10' };
     assert.throws(() => decodeProposal(encode({ ...emscripten, forkRevision: 'main', embindSha256: 'b'.repeat(64) })), /fork revision/);
@@ -286,16 +292,17 @@ test('a library with no reviewed commit identity blocks until one is configured'
 });
 
 test('an unreviewed NDK major stands as a notice instead of blocking every run', async () => {
-    const xml = `
-      <remotePackage path="cmdline-tools;19.0">
-        <revision><major>19</major><minor>0</minor><micro>0</micro></revision>
+    const ndk = (path, revision, url, sha1) => `
+      <remotePackage path="${path}">
+        <revision><major>${revision[0]}</major><minor>${revision[1]}</minor><micro>${revision[2]}</micro></revision>
         <archives><archive><host-os>linux</host-os><complete>
-          <checksum type="sha-1">${'a'.repeat(40)}</checksum>
-          <url>commandlinetools-linux-20000000_latest.zip</url>
+          <checksum type="sha-1">${sha1}</checksum>
+          <url>${url}</url>
         </complete></archive></archives>
-      </remotePackage>
-      <remotePackage path="ndk;27.3.13750724"><revision><major>27</major><minor>3</minor><micro>13750724</micro></revision></remotePackage>
-      <remotePackage path="ndk;30.0.16248370"><revision><major>30</major><minor>0</minor><micro>16248370</micro></revision></remotePackage>`;
+      </remotePackage>`;
+    const xml =
+        ndk('ndk;27.3.13750724', [27, 3, 13750724], 'android-ndk-r27d-linux.zip', 'a'.repeat(40)) +
+        ndk('ndk;30.0.16248370', [30, 0, 16248370], 'android-ndk-r30-linux.zip', 'b'.repeat(40));
     const proposals = [];
     const notices = [];
     await planAndroid(ROOT, { repositoryXml: 'https://example.invalid/repository2-3.xml', ndkTrackMajor: 27 }, proposals, notices, {
@@ -303,6 +310,22 @@ test('an unreviewed NDK major stands as a notice instead of blocking every run',
     });
     assert.equal(notices[0].component, 'android-ndk-major');
     assert.equal(notices[0].target, '30.0.16248370');
+});
+
+test('an NDK bump may touch every file that records the NDK version', () => {
+    const ndk = { kind: 'toolchain', component: 'android-ndk', current: '27.3.13750724', target: '30.0.16248370' };
+    for (const file of [
+        'tooling/docker/android.Dockerfile',
+        'core/crossbind/src/actions/run.js',
+        'docs/api/build-state.md',
+        'docs/api/performance.md',
+        'agents/skills/crossbind/references/api/build-state.md',
+        'agents/skills/crossbind/references/api/performance.md',
+        'agents/skills/crossbind/references/manifest.json',
+    ]) {
+        assert.equal(dependencyPathAllowed(ndk, file), true, file);
+    }
+    assert.equal(dependencyPathAllowed(ndk, 'core/crossbind/src/bin.js'), false);
 });
 
 test('proposal changed-file policies reject unrelated files', () => {
@@ -390,6 +413,9 @@ test('daily workflows keep write authority after validation and pin every action
     assert.ok(candidate.indexOf('validate-linux:') < candidate.indexOf('id: app-token'));
     assert.match(candidate, /actions\/create-github-app-token@[0-9a-f]{40}/);
     assert.match(candidate, /existing_tree.*expected_tree/s);
+    // The bot proposes and never merges: draft is the mechanical half of that contract.
+    assert.match(candidate, /gh pr create --draft --base main/);
+    assert.match(candidate, /--label dependencies --label automated-dependency-update/);
     assert.doesNotMatch(candidate, /npm publish|docker push|gh release create/);
     assert.doesNotMatch(watch, /secrets: inherit/);
     assert.match(watch, /report\.notices/);
