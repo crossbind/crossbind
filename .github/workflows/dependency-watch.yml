@@ -62,15 +62,22 @@ jobs:
         secrets:
             DEPENDENCY_BOT_PRIVATE_KEY: ${{ secrets.DEPENDENCY_BOT_PRIVATE_KEY }}
 
-    report-findings:
-        needs: plan
-        if: ${{ always() && needs.plan.result == 'success' && needs.plan.outputs.has_findings == 'true' && !(github.event_name == 'workflow_dispatch' && inputs.dry_run) }}
+    report:
+        needs: [plan, candidates]
+        if: ${{ always() && needs.plan.result == 'success' && !(github.event_name == 'workflow_dispatch' && inputs.dry_run) }}
         runs-on: ubuntu-24.04
         permissions:
             contents: read
             issues: write
         steps:
-            - name: Open or refresh the manual-intervention issue
+            - name: Collect the candidates that did not become pull requests
+              continue-on-error: true
+              uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+              with:
+                  pattern: dependency-rejection-*
+                  merge-multiple: true
+                  path: ${{ runner.temp }}/rejections
+            - name: Open, refresh or close the manual-intervention issue
               env:
                   GH_TOKEN: ${{ github.token }}
                   GH_REPO: ${{ github.repository }}
@@ -79,41 +86,46 @@ jobs:
                   set -euo pipefail
                   title='[dependency-watch] manual intervention required'
                   body="$RUNNER_TEMP/dependency-watch.md"
-                  node -e '
+                  mkdir -p "$RUNNER_TEMP/rejections"
+                  decision=$(node -e '
+                    const fs = require("node:fs");
                     const report = JSON.parse(Buffer.from(process.env.ENCODED_REPORT, "base64url").toString("utf8"));
-                    const lines = ["Dependency watch could not safely turn every finding into a pull request.", "", `Run: ${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}`, ""];
-                    for (const blocker of report.blockers) lines.push(`- **${blocker.component}**: ${blocker.current} → ${blocker.target}: ${blocker.reason}`);
-                    for (const error of report.errors) lines.push(`- **${error.component}** check failed: ${error.error}`);
-                    lines.push("", "The bot never accepts changed bytes, unknown versions or an unreconciled Emscripten fork automatically.", "", "<!-- crossbind-dependency-watch -->");
-                    require("node:fs").writeFileSync(process.argv[1], `${lines.join("\n")}\n`);
-                  ' "$body"
+                    const directory = process.argv[2];
+                    const rejections = fs
+                      .readdirSync(directory)
+                      .filter((name) => name.endsWith(".json"))
+                      .map((name) => JSON.parse(fs.readFileSync(`${directory}/${name}`, "utf8")))
+                      .sort((a, b) => a.id.localeCompare(b.id));
+                    if (report.blockers.length + report.errors.length + rejections.length === 0) {
+                      process.stdout.write("close");
+                    } else {
+                      const lines = ["Dependency watch could not safely turn every finding into a pull request.", "", `Run: ${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}`, ""];
+                      for (const blocker of report.blockers) lines.push(`- **${blocker.component}**: ${blocker.current} → ${blocker.target}: ${blocker.reason}`);
+                      for (const error of report.errors) lines.push(`- **${error.component}** check failed: ${error.error}`);
+                      for (const rejection of rejections) lines.push(`- **${rejection.component}** (${rejection.kind}) stopped at ${rejection.stage}; it was validated, rejected and never pushed.`);
+                      if (report.notices.length > 0) {
+                        lines.push("", "Standing review notes. These are reviewed policy decisions, not blockers, and they never hold this issue open:", "");
+                        for (const notice of report.notices) lines.push(`- **${notice.component}**: ${notice.current} → ${notice.target}: ${notice.reason}`);
+                      }
+                      lines.push("", "The bot never accepts changed bytes, unknown versions or an unreconciled Emscripten fork automatically.", "", "<!-- crossbind-dependency-watch -->");
+                      fs.writeFileSync(process.argv[1], `${lines.join("\n")}\n`);
+                      process.stdout.write("open");
+                    }
+                  ' "$body" "$RUNNER_TEMP/rejections")
+                  issue=$(gh issue list --state open --search '"[dependency-watch] manual intervention required" in:title' --json number --jq '.[0].number // empty')
+                  if [ "$decision" = "close" ]; then
+                    if [ -n "$issue" ]; then
+                      gh issue close "$issue" --comment "The latest scheduled dependency scan completed without manual blockers."
+                    fi
+                    exit 0
+                  fi
                   for label in dependencies security; do
                     if ! gh label list --limit 100 --json name --jq '.[].name' | grep -Fxq "$label"; then
                       gh label create "$label" --color b60205 --description 'Automated dependency security tracking'
                     fi
                   done
-                  issue=$(gh issue list --state open --search '"[dependency-watch] manual intervention required" in:title' --json number --jq '.[0].number // empty')
                   if [ -n "$issue" ]; then
                     gh issue edit "$issue" --body-file "$body"
                   else
                     gh issue create --title "$title" --body-file "$body" --label dependencies --label security
-                  fi
-
-    close-resolved-findings:
-        needs: plan
-        if: ${{ needs.plan.result == 'success' && needs.plan.outputs.has_findings != 'true' && !(github.event_name == 'workflow_dispatch' && inputs.dry_run) }}
-        runs-on: ubuntu-24.04
-        permissions:
-            contents: read
-            issues: write
-        steps:
-            - name: Close the resolved dependency-watch issue
-              env:
-                  GH_TOKEN: ${{ github.token }}
-                  GH_REPO: ${{ github.repository }}
-              run: |
-                  set -euo pipefail
-                  issue=$(gh issue list --state open --search '"[dependency-watch] manual intervention required" in:title' --json number --jq '.[0].number // empty')
-                  if [ -n "$issue" ]; then
-                    gh issue close "$issue" --comment "The latest scheduled dependency scan completed without manual blockers."
                   fi

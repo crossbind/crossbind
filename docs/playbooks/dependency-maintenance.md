@@ -44,6 +44,12 @@ For each proposal the reusable candidate workflow:
 8. hashes the exact patch tested by every runner;
 9. creates one draft PR only after every required gate succeeds.
 
+A candidate that does not reach step 9 is a finding, not a broken watch. Each stage reports its own
+verdict rather than failing the run, records the stage it stopped at and uploads that record, and the
+stopped candidate is then listed in the manual-intervention issue. A red `dependency-watch` run
+therefore means the watch itself failed at planning or at reporting, never that an update was
+correctly refused.
+
 The PR remains draft and is never auto-merged. Merging a dependency PR does not publish anything.
 Public package versions and the release channel are chosen later through the npm release train.
 `validate-dependency-pr.yml` repeats the affected native-family or complete toolchain gate on the
@@ -59,13 +65,16 @@ when a replacement can pass the image build, hardened-runtime smoke tests and Tr
 For native sources the planner resolves the reviewed upstream release tag to a Git commit and asks
 OSV whether that exact commit is affected. When the current commit is affected, a newer version is
 treated as a security update only if its own resolved commit is clean. Changed bytes under the same
-version, an unknown tag or an unavailable advisory identity fail closed and enter the
+version, an unknown tag or a library with no configured advisory identity fail closed and enter the
 manual-intervention issue.
 
 GNU libiconv, libspatialite and libtiff currently require manual advisory review because their
 canonical source does not have a reviewed release-tag-to-Git-commit identity suitable for the OSV
-query. This limitation is explicit in `scripts/dependencies/update-policy.json`. OSV and Trivy
-coverage is evidence, not a guarantee that an upstream has disclosed every vulnerability.
+query. This limitation is explicit in `scripts/dependencies/update-policy.json`. Because that is a
+reviewed decision rather than an open question, the planner records each one as a standing note
+instead of a blocker: the library is still never proposed automatically, but it no longer holds the
+manual-intervention issue open. OSV and Trivy coverage is evidence, not a guarantee that an upstream
+has disclosed every vulnerability.
 
 ## Emscripten fork contract
 
@@ -84,8 +93,9 @@ instead of substituting upstream `libembind.js`.
 ## Android NDK policy
 
 The bot automatically proposes releases only inside `ndkTrackMajor` from `update-policy.json`.
-Discovery of a newer NDK major creates a manual-review finding because an NDK major can change ABI,
-CMake and compiler behavior. After the new major passes a deliberate migration, update
+Discovery of a newer NDK major becomes a standing note rather than a blocker because an NDK major
+can change ABI, CMake and compiler behavior and the pin is itself a reviewed decision. After the new
+major passes a deliberate migration, update
 `ndkTrackMajor`; subsequent patch releases become eligible for automated draft PRs.
 
 ## GitHub App setup
@@ -151,5 +161,7 @@ different tree or a remote branch with no open PR is treated as a conflict and i
 force-pushed. Failed validation creates no branch.
 
 The manual-intervention and published-image security issues carry stable markers and are updated
-instead of duplicated. They close only after a later clean scan. If a bot PR is intentionally
+instead of duplicated. They close only after a later clean scan. Standing notes never open or hold
+open the manual-intervention issue; they are listed in the plan artifact and the run log, and in the
+issue body whenever a real blocker already opened it. If a bot PR is intentionally
 rejected, close it and delete its branch before asking the bot to prepare the same target again.

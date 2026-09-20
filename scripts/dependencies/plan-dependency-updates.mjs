@@ -233,7 +233,7 @@ async function planWasi(root, policy, proposals, dependencies) {
     });
 }
 
-async function planAndroid(root, policy, proposals, blockers, dependencies) {
+export async function planAndroid(root, policy, proposals, notices, dependencies) {
     const xml = await (dependencies.fetchText ?? ((url) => fetchText(url, {}, dependencies)))(policy.repositoryXml);
     const repository = parseAndroidRepository(xml);
     const android = readText(root, 'tooling/docker/android.Dockerfile');
@@ -265,7 +265,7 @@ async function planAndroid(root, policy, proposals, blockers, dependencies) {
     }
     const newest = repository.ndks[0];
     if (Number(newest.version.split('.')[0]) > policy.ndkTrackMajor) {
-        blockers.push({
+        notices.push({
             component: 'android-ndk-major',
             current: currentNdk,
             target: newest.version,
@@ -346,7 +346,7 @@ async function osvCommitVulnerabilities(commit, dependencies) {
     return (result.vulns ?? []).filter((vulnerability) => !vulnerability.withdrawn);
 }
 
-async function planNativeSecurity(inventory, policy, proposals, blockers, errors, dependencies) {
+async function planNativeSecurity(inventory, policy, proposals, blockers, notices, errors, dependencies) {
     const resolveCommit = dependencies.githubCommitForRef ?? githubCommitForRef;
     const queryCommit = dependencies.osvCommitVulnerabilities ?? osvCommitVulnerabilities;
     const removeProposal = (library) => {
@@ -357,13 +357,24 @@ async function planNativeSecurity(inventory, policy, proposals, blockers, errors
     await Promise.all(
         rows.map(async (row) => {
             const identity = policy[row.library];
-            if (!identity || identity.manual) {
+            if (!identity) {
                 removeProposal(row.library);
                 blockers.push({
                     component: `native-security-${row.library}`,
                     current: row.nativeVersion,
                     target: 'manual-review',
-                    reason: identity?.reason ?? 'No reviewed OSV commit identity is configured.',
+                    reason: 'No reviewed OSV commit identity is configured.',
+                    sourceUrl: row.homepage,
+                });
+                return;
+            }
+            if (identity.manual) {
+                removeProposal(row.library);
+                notices.push({
+                    component: `native-security-${row.library}`,
+                    current: row.nativeVersion,
+                    target: 'manual-review',
+                    reason: identity.reason,
                     sourceUrl: row.homepage,
                 });
                 return;
@@ -406,13 +417,14 @@ export async function createDependencyPlan({ root = ROOT, dependencies = {} } = 
     const policy = JSON.parse(fs.readFileSync(POLICY_PATH, 'utf8'));
     const proposals = [];
     const blockers = [];
+    const notices = [];
     const errors = [];
     const inventoryPath = path.join(os.tmpdir(), `crossbind-native-inventory-${process.pid}.json`);
     try {
         const inventory = dependencies.nativeInventory ?? runNativeInventory(root, inventoryPath);
         planNative(inventory, proposals, blockers);
         if (!dependencies.skipNativeSecurity) {
-            await planNativeSecurity(inventory, policy.nativeSecurity, proposals, blockers, errors, dependencies);
+            await planNativeSecurity(inventory, policy.nativeSecurity, proposals, blockers, notices, errors, dependencies);
         }
     } finally {
         fs.rmSync(inventoryPath, { force: true });
@@ -425,7 +437,7 @@ export async function createDependencyPlan({ root = ROOT, dependencies = {} } = 
               ['rust', () => planRust(root, policy.toolchains.rust, proposals, dependencies)],
               ['emscripten', () => planEmscripten(root, policy.toolchains.emscripten, proposals, blockers, dependencies)],
               ['wasi-sdk', () => planWasi(root, policy.toolchains.wasiSdk, proposals, dependencies)],
-              ['android', () => planAndroid(root, policy.toolchains.android, proposals, blockers, dependencies)],
+              ['android', () => planAndroid(root, policy.toolchains.android, proposals, notices, dependencies)],
               ['swig', () => planSwig(root, policy.toolchains.swig, proposals, dependencies)],
           ];
     await Promise.all(
@@ -439,6 +451,7 @@ export async function createDependencyPlan({ root = ROOT, dependencies = {} } = 
     );
 
     blockers.sort((a, b) => a.component.localeCompare(b.component));
+    notices.sort((a, b) => a.component.localeCompare(b.component));
     errors.sort((a, b) => a.component.localeCompare(b.component));
 
     const priority = { security: 0, patch: 1, digest: 2, minor: 3, source: 4, major: 5 };
@@ -451,6 +464,7 @@ export async function createDependencyPlan({ root = ROOT, dependencies = {} } = 
         selected,
         deferred: proposals.slice(selected.length),
         blockers,
+        notices,
         errors,
         matrix: {
             include: selected.map((proposal) => ({
@@ -469,10 +483,11 @@ async function main() {
     const plan = await createDependencyPlan();
     fs.writeFileSync(output, `${JSON.stringify(plan, null, 2)}\n`);
     process.stdout.write(
-        `${output}: ${plan.proposals.length} proposal(s), ${plan.blockers.length} manual blocker(s), ${plan.errors.length} error(s).\n`,
+        `${output}: ${plan.proposals.length} proposal(s), ${plan.blockers.length} manual blocker(s), ${plan.notices.length} standing note(s), ${plan.errors.length} error(s).\n`,
     );
     for (const proposal of plan.selected) process.stdout.write(`  PR ${proposal.id}: ${proposal.current} -> ${proposal.target}\n`);
     for (const blocker of plan.blockers) process.stdout.write(`  REVIEW ${blocker.component}: ${blocker.reason}\n`);
+    for (const notice of plan.notices) process.stdout.write(`  NOTE ${notice.component}: ${notice.reason}\n`);
     for (const error of plan.errors) process.stderr.write(`  ERROR ${error.component}: ${error.error}\n`);
     if (process.argv.includes('--github-output')) {
         if (!process.env.GITHUB_OUTPUT) throw new Error('--github-output requires GITHUB_OUTPUT.');
@@ -481,7 +496,7 @@ async function main() {
         fs.appendFileSync(process.env.GITHUB_OUTPUT, `has_findings=${plan.blockers.length + plan.errors.length > 0}\n`);
         fs.appendFileSync(
             process.env.GITHUB_OUTPUT,
-            `report=${Buffer.from(JSON.stringify({ blockers: plan.blockers, errors: plan.errors })).toString('base64url')}\n`,
+            `report=${Buffer.from(JSON.stringify({ blockers: plan.blockers, notices: plan.notices, errors: plan.errors })).toString('base64url')}\n`,
         );
     }
     if (plan.errors.length > 0 && process.argv.includes('--strict')) process.exitCode = 1;
