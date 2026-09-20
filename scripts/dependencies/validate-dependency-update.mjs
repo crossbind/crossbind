@@ -38,6 +38,8 @@ export function dependencyPathAllowed(proposal, file) {
             );
         case 'rust':
             return ['tooling/docker/base.Dockerfile', 'tooling/docker/rust-sysroot.Dockerfile', 'tooling/docker/licenses-README.md'].includes(file);
+        case 'debian':
+            return file === 'tooling/docker/base.Dockerfile';
         case 'swig':
             return ['tooling/docker/base.Dockerfile', 'tooling/docker/licenses-README.md'].includes(file);
         case 'emscripten':

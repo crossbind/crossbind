@@ -259,6 +259,26 @@ export async function planAndroid(root, policy, proposals, notices, dependencies
     }
 }
 
+export async function planDebian(root, policy, proposals, dependencies) {
+    const from = dockerFrom(readText(root, 'tooling/docker/base.Dockerfile'), 'debian', 'Debian Docker image');
+    const digestFor = dependencies.dockerHubDigest ?? dockerHubDigest;
+    const target = await digestFor(policy.dockerImage, from.tag, dependencies);
+    if (target === from.digest) return;
+    proposals.push({
+        id: proposalId('toolchain', 'debian', target.slice(7, 19)),
+        kind: 'toolchain',
+        component: 'debian',
+        valueType: 'digest',
+        current: from.digest,
+        target,
+        tag: from.tag,
+        sourceUrl: `https://hub.docker.com/_/${policy.dockerImage}`,
+        reason: 'digest-refresh',
+        risk: 'digest',
+        macos: false,
+    });
+}
+
 async function planSwig(root, policy, proposals, dependencies) {
     const base = readText(root, 'tooling/docker/base.Dockerfile');
     const current = currentArg(base, 'SWIG_REV', 'Crossbind SWIG revision');
@@ -423,6 +443,7 @@ export async function createDependencyPlan({ root = ROOT, dependencies = {} } = 
               ['wasi-sdk', () => planWasi(root, policy.toolchains.wasiSdk, proposals, dependencies)],
               ['android', () => planAndroid(root, policy.toolchains.android, proposals, notices, dependencies)],
               ['swig', () => planSwig(root, policy.toolchains.swig, proposals, dependencies)],
+              ['debian', () => planDebian(root, policy.toolchains.debian, proposals, dependencies)],
           ];
     await Promise.all(
         checks.map(async ([component, check]) => {

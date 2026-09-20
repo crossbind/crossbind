@@ -22,7 +22,7 @@ RUN set -eu; \
     test "$(rustup toolchain list | wc -l)" -eq 1; \
     test "$(rustc -vV | sed -n 's/^release: //p')" = "${RUST_VERSION}"
 
-FROM debian:trixie-slim@sha256:d7e12182ce18b85b93007c1dedf31f2d29e01ccf3182cc4017c709b6259bc132 AS os
+FROM debian:trixie-slim@sha256:a99cfc517144bc59b1978475ec53b46ecabec7e43635402ee5b77cc54cd1b20a AS os
 
 # A digest-pinned base keeps the package versions it shipped with, so patched ones are pulled in
 # explicitly; --with-new-pkgs lets a security fix bring a new dependency without removing anything.
