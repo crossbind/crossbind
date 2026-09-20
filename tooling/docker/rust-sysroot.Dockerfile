@@ -7,7 +7,7 @@
 # The official point-release Docker tag can lag Rust itself. Bootstrap from the last digest-pinned
 # image and let its rustup install the exact stable toolchain without self-updating rustup.
 ARG RUST_VERSION=1.98.1
-FROM rust:1.98.1-slim@sha256:ce84a5edd80c5f91e05c5533b1e53eb1da54028f33734dc06aa6b49fa190462d AS builder
+FROM rust:1.98.1-slim@sha256:f47a8de237dcbb0b0ce1099901e60a89728e3d51f24e664b40e947171538ade7 AS builder
 
 ARG RUST_VERSION
 # Only the pinned toolchain may survive: the sysroots below come from rustc --print sysroot.
