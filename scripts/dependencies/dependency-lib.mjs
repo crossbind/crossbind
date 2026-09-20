@@ -5,6 +5,7 @@ import path from 'node:path';
 export const SHA256_RE = /^[0-9a-f]{64}$/;
 export const SHA1_RE = /^[0-9a-f]{40}$/;
 export const COMMIT_RE = /^[0-9a-f]{40}$/;
+export const DIGEST_RE = /^sha256:[0-9a-f]{64}$/;
 export const VERSION_RE = /^\d+(?:\.\d+){0,3}(?:-[0-9A-Za-z.-]+)?$/;
 
 export function assertSafeId(value, label = 'identifier') {
@@ -200,7 +201,7 @@ export function encodeProposal(proposal) {
     return Buffer.from(JSON.stringify(proposal), 'utf8').toString('base64url');
 }
 
-const TOOLCHAIN_COMPONENTS = new Set(['node', 'rust', 'emscripten', 'wasi-sdk', 'android-ndk', 'swig']);
+const TOOLCHAIN_COMPONENTS = new Set(['node', 'rust', 'emscripten', 'wasi-sdk', 'android-ndk', 'swig', 'debian']);
 const ANDROID_NDK_ARCHIVE_RE = /^android-ndk-r\d+[a-z]?-linux\.zip$/;
 const ANDROID_NDK_ROOT_RE = /^android-ndk-r\d+[a-z]?$/;
 
@@ -231,7 +232,11 @@ export function decodeProposal(encoded) {
     assertSafeId(value.id, 'proposal id');
     assertSafeId(value.kind, 'proposal kind');
     assertProposalFields(value);
-    if (value.valueType === 'commit') {
+    if (value.valueType === 'digest') {
+        if (!DIGEST_RE.test(value.current ?? '') || !DIGEST_RE.test(value.target ?? '')) {
+            throw new Error(`${value.id}: current and target must be image digests.`);
+        }
+    } else if (value.valueType === 'commit') {
         if (!COMMIT_RE.test(value.current ?? '') || !COMMIT_RE.test(value.target ?? '')) {
             throw new Error(`${value.id}: current and target must be full commit SHAs.`);
         }

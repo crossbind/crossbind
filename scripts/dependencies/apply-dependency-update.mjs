@@ -275,6 +275,10 @@ async function applyAndroidNdk(proposal) {
     updateFile('docs/api/performance.md', (text) => replaceLiteral(text, proposal.current, proposal.target, 'documented Android NDK image pin'));
 }
 
+function applyDebian(proposal) {
+    updateFile('tooling/docker/base.Dockerfile', (text) => replaceLiteral(text, proposal.current, proposal.target, 'Debian base image digest'));
+}
+
 async function applySwig(proposal) {
     if (!COMMIT_RE.test(proposal.target)) throw new Error('SWIG target is not a full commit SHA.');
     const hash = await sha256Url(`https://github.com/crossbind/swig/archive/${proposal.target}.zip`);
@@ -301,6 +305,8 @@ async function applyToolchain(proposal) {
             return applyWasi(proposal);
         case 'android-ndk':
             return applyAndroidNdk(proposal);
+        case 'debian':
+            return applyDebian(proposal);
         case 'swig':
             return applySwig(proposal);
         default:

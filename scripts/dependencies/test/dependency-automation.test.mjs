@@ -14,6 +14,7 @@ import {
     parseAndroidRepository,
     parseRustStableToml,
     planAndroid,
+    planDebian,
 } from '../plan-dependency-updates.mjs';
 import { pullRequestMetadata } from '../render-dependency-pr.mjs';
 import { dependencyPathAllowed } from '../validate-dependency-update.mjs';
@@ -326,6 +327,46 @@ test('an NDK bump may touch every file that records the NDK version', () => {
         assert.equal(dependencyPathAllowed(ndk, file), true, file);
     }
     assert.equal(dependencyPathAllowed(ndk, 'core/crossbind/src/bin.js'), false);
+});
+
+test('the Debian base moves by digest because its tag never does', async () => {
+    const target = `sha256:${'b'.repeat(64)}`;
+    const proposals = [];
+    await planDebian(ROOT, { dockerImage: 'debian' }, proposals, { dockerHubDigest: async () => target });
+    assert.equal(proposals[0].component, 'debian');
+    assert.equal(proposals[0].valueType, 'digest');
+    assert.equal(proposals[0].target, target);
+    assert.equal(proposals[0].risk, 'digest');
+    assert.match(proposals[0].current, /^sha256:[0-9a-f]{64}$/);
+});
+
+test('an unchanged Debian digest proposes nothing', async () => {
+    const proposals = [];
+    const current = /^FROM debian:[^@]+@(sha256:[0-9a-f]{64})/m.exec(fs.readFileSync(path.join(ROOT, 'tooling/docker/base.Dockerfile'), 'utf8'))[1];
+    await planDebian(ROOT, { dockerImage: 'debian' }, proposals, { dockerHubDigest: async () => current });
+    assert.deepEqual(proposals, []);
+});
+
+test('a digest proposal is rejected unless both ends are real digests', () => {
+    const encode = (value) => Buffer.from(JSON.stringify(value)).toString('base64url');
+    const debian = {
+        id: 'toolchain-debian-abc123',
+        kind: 'toolchain',
+        component: 'debian',
+        valueType: 'digest',
+        current: `sha256:${'a'.repeat(64)}`,
+        target: `sha256:${'b'.repeat(64)}`,
+    };
+    assert.deepEqual(decodeProposal(encodeProposal(debian)), debian);
+    assert.throws(() => decodeProposal(encode({ ...debian, target: 'trixie-slim' })), /image digests/);
+    assert.throws(() => decodeProposal(encode({ ...debian, current: 'latest' })), /image digests/);
+});
+
+test('a Debian refresh may touch only the file that pins it', () => {
+    const debian = { kind: 'toolchain', component: 'debian', current: 'a', target: 'b' };
+    assert.equal(dependencyPathAllowed(debian, 'tooling/docker/base.Dockerfile'), true);
+    assert.equal(dependencyPathAllowed(debian, 'tooling/docker/web.Dockerfile'), false);
+    assert.equal(dependencyPathAllowed(debian, '.nvmrc'), false);
 });
 
 test('proposal changed-file policies reject unrelated files', () => {
