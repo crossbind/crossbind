@@ -44,6 +44,9 @@ const IMAGES = [
 // --user <host uid>, which has no passwd entry and therefore no home of its own.
 const HOST_UID = '1000:1000';
 
+// `set -e` ignores a command that fails anywhere but at the end of an && list, so every check in
+// these scripts stands on its own line. Collapsing one back into `check && echo` silently disarms it.
+
 const BASE_SCRIPT = `set -e
 node -e 'process.exit(process.versions.node === "${NODE_VERSION}" ? 0 : 1)'
 echo "node $(node -v)"
@@ -51,15 +54,20 @@ rustc -vV | sed -n 's/^release: //p' | grep -qx '${RUST_VERSION}'
 echo "rustc $(rustc -vV | sed -n 's/^release: //p') cargo $(cargo --version | cut -d' ' -f2)"
 swig -version | sed -n 's/.*SWIG Version //p' | head -1 | sed 's/^/swig /'
 cmake --version | head -1
-test -f /opt/licenses/README.md && echo "licenses $(ls /opt/licenses | wc -l | tr -d ' ') entries + README"
-test ! -d /usr/local/rustup/toolchains/*/lib/rustlib/src && echo "rust-src absent"
-touch "$CARGO_HOME/.probe" && rm "$CARGO_HOME/.probe" && echo "cargo home writable"
+test -f /opt/licenses/README.md
+echo "licenses $(ls /opt/licenses | wc -l | tr -d ' ') entries + README"
+test ! -d /usr/local/rustup/toolchains/*/lib/rustlib/src
+echo "rust-src absent"
+touch "$CARGO_HOME/.probe"
+rm "$CARGO_HOME/.probe"
+echo "cargo home writable"
 `;
 
 const WEB_SCRIPT = `${BASE_SCRIPT}
 emcc --version | head -1 | grep -F ' ${EMSDK_VERSION} '
 echo "emscripten ${EMSDK_VERSION}"
-test -x /opt/wasi-sdk/bin/clang && echo "wasi-sdk present"
+test -x /opt/wasi-sdk/bin/clang
+echo "wasi-sdk present"
 head -1 /opt/wasi-sdk/VERSION | grep -E '^${WASI_SDK_VERSION}(\\.0)?([+ -]|$)'
 echo "wasi-sdk $(head -1 /opt/wasi-sdk/VERSION)"
 node -e 'const m=require("/opt/crossbind/rust/${RUST_VERSION}/manifest.json");
@@ -67,19 +75,27 @@ node -e 'const m=require("/opt/crossbind/rust/${RUST_VERSION}/manifest.json");
   if (m.emsdk !== "${EMSDK_VERSION}") { console.error("sysroot emsdk " + m.emsdk); process.exit(1) }
   for (const v of ["st","mt"]) if (!m.variants[v]) { console.error("missing variant " + v); process.exit(1) }
   console.log("sysroot " + m.rustc + " emsdk=" + m.emsdk + " " + m.target + " panic=" + m.panic)'
-test -f /opt/crossbind/rust/${RUST_VERSION}/mt/lib/rustlib/wasm32-unknown-emscripten/lib/libstd-*.rlib && echo "mt std present"
-touch "$EM_CACHE/.probe" && rm "$EM_CACHE/.probe" && echo "em cache writable"
+test -f /opt/crossbind/rust/${RUST_VERSION}/mt/lib/rustlib/wasm32-unknown-emscripten/lib/libstd-*.rlib
+echo "mt std present"
+touch "$EM_CACHE/.probe"
+rm "$EM_CACHE/.probe"
+echo "em cache writable"
 cd /tmp && printf '#include <stdio.h>\\nint main(){printf("ok\\\\n");return 0;}\\n' > s.c
-emcc s.c -o s.js && node s.js | grep -qx ok && echo "emcc compile+run ok"
+emcc s.c -o s.js
+node s.js | grep -qx ok
+echo "emcc compile+run ok"
 printf '#include <emscripten/bind.h>\\n#include <string>\\nint pick(int){return 1;} int pick(std::string){return 2;}\\nEMSCRIPTEN_BINDINGS(smoke){emscripten::function("pick", emscripten::select_overload<int(int)>(&pick)); emscripten::function("pick", emscripten::select_overload<int(std::string)>(&pick));}\\n' > overload.cpp
 em++ overload.cpp -lembind -sMODULARIZE=1 -sEXPORT_ES6=1 -o overload.mjs
 printf 'import createModule from "./overload.mjs"; const m=await createModule(); if(m.pick(7)!==1||m.pick("x")!==2) process.exit(1);\\n' > overload-check.mjs
-node overload-check.mjs && echo "embind type overload compile+run ok"
+node overload-check.mjs
+echo "embind type overload compile+run ok"
 `;
 
 const ANDROID_SCRIPT = `${BASE_SCRIPT}
-test -x "$NDK_ROOT/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android33-clang" && echo "ndk arm64 clang present"
-test -x "$NDK_ROOT/toolchains/llvm/prebuilt/linux-x86_64/bin/x86_64-linux-android33-clang" && echo "ndk x86_64 clang present"
+test -x "$NDK_ROOT/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android33-clang"
+echo "ndk arm64 clang present"
+test -x "$NDK_ROOT/toolchains/llvm/prebuilt/linux-x86_64/bin/x86_64-linux-android33-clang"
+echo "ndk x86_64 clang present"
 rustup target list --installed | grep -qx aarch64-linux-android
 rustup target list --installed | grep -qx x86_64-linux-android
 cd /tmp && printf 'extern "C" int crossbind_probe(){return 7;}\n' > android.cpp
@@ -87,7 +103,8 @@ for target in aarch64-linux-android x86_64-linux-android; do
   "$NDK_ROOT/toolchains/llvm/prebuilt/linux-x86_64/bin/\${target}33-clang++" -c android.cpp -o "\${target}.o"
   printf 'pub extern "C" fn crossbind_rust_probe()->i32{7}\n' > android.rs
   rustc --target "\${target}" --crate-type staticlib -C panic=abort android.rs -o "lib\${target}.a"
-  test -s "\${target}.o" && test -s "lib\${target}.a"
+  test -s "\${target}.o"
+  test -s "lib\${target}.a"
 done
 echo "android C++ and Rust targets compile"
 `;
