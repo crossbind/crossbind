@@ -19,7 +19,7 @@
     {
       "source": "docs/api/build-state.md",
       "output": "api/build-state.md",
-      "sha256": "2f2028ebe358322f90660bc5454b8da6eed8e881cc90aa6260da3ea59299e573"
+      "sha256": "0ffde5c98d43cfcef00cedec5f659e78b1d30d9dd5b2946f7b575b496f33c7e8"
     },
     {
       "source": "docs/api/cpp-binding-rules.md",
@@ -59,7 +59,7 @@
     {
       "source": "docs/api/performance.md",
       "output": "api/performance.md",
-      "sha256": "9dda31492a2bc9f868fc9f4d0e710692a76be474fa043bb7661a2aed27e4249a"
+      "sha256": "02f17934c1533f3aa7cd3e3d3b6536ee9fb7ef81a4a59e9eba1422d039ccc6d4"
     },
     {
       "source": "docs/api/rust.md",

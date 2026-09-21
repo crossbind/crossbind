@@ -26,7 +26,7 @@
         },
         "android": {
             "repositoryXml": "https://dl.google.com/android/repository/repository2-3.xml",
-            "ndkTrackMajor": 27
+            "ndkTrackMajor": 30
         },
         "debian": {
             "dockerImage": "debian"

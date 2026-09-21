@@ -49,7 +49,6 @@ export function dependencyPathAllowed(proposal, file) {
         case 'android-ndk':
             return [
                 'tooling/docker/android.Dockerfile',
-                'core/crossbind/src/actions/run.js',
                 'docs/api/build-state.md',
                 'docs/api/performance.md',
                 'agents/skills/crossbind/references/api/build-state.md',
