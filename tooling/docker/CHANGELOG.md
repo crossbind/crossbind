@@ -14,6 +14,9 @@
   into a shim that downloads a separately versioned "Android CLI" at build time and delegates the
   unpacking to it, which both breaks the pinned-bytes contract and left the NDK mode `0744`, so
   nothing was executable for the non-root user the image runs as.
+- Refreshed the pinned `debian:trixie-slim` digest and taught the planner to keep tracking it.
+  Dependabot was configured for it but never opened anything, because the reference carries a tag
+  and a digest together and the tag never moves, so there is no version update to find.
 - Refreshed the pinned `node:24.21.0-trixie-slim` and `rust:1.98.1-slim` base digests. Both tags
   name the same versions as before; upstream rebuilt them, and a digest pin cannot pick that up on
   its own, so the images carried whatever the distribution shipped when the digest was taken.
