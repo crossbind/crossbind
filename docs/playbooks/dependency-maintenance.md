@@ -100,7 +100,10 @@ eligible for automated draft PRs.
 
 The image installs the NDK from its own published archive, checked against the Google-published
 SHA-1 and a SHA-256 derived from those same bytes. It carries no JDK, no command-line tools and no
-SDK manager, so nothing is fetched at build time beyond the reviewed archive.
+SDK manager, so nothing is fetched at build time beyond the reviewed archive. The Docker image, the
+Android sample workflow, the React Native Gradle projects and the React Native plugin module all name
+the same NDK, because an app that links objects from two toolchains is an ABI problem waiting to
+happen.
 
 ## GitHub App setup
 

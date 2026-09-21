@@ -215,7 +215,7 @@ Same shape as wasm32 above, but `arch: 'wasm64'`. Used when you need >4GB linear
 | android | x86_64 | mt | release |
 | android | x86_64 | mt | debug |
 
-> **Android is always `mt`.** No single-thread variant. NDK API 33, NDK 27.3.13750724.
+> **Android is always `mt`.** No single-thread variant. NDK API 33, NDK 30.0.16248370.
 
 ### iOS
 

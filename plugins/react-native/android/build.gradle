@@ -69,6 +69,13 @@ android {
     compileSdkVersion 34
     buildToolsVersion "34.0.0"
 
+    // This module's objects link against prebuilt libraries the crossbind image compiled, so a
+    // different NDK here puts two toolchains in one app. Track the app's choice when it makes one
+    // rather than pinning a version every consumer would then have to install.
+    if (rootProject.ext.has('ndkVersion')) {
+        ndkVersion rootProject.ext.ndkVersion
+    }
+
     buildFeatures {
         prefab true
     }

@@ -1,5 +1,14 @@
 # @crossbind/plugin-react-native
 
+## 2.0.0-beta.60
+
+### Patch Changes
+
+- The Android module now compiles with the `ndkVersion` the app declares in its root
+  `build.gradle`, falling back to the Android Gradle plugin's default when the app declares none.
+  It previously always took that default, so an app that pinned an NDK still linked this module's
+  objects, and the prebuilt libraries they call into, from a second toolchain.
+
 ## 2.0.0-beta.54
 
 ### Patch Changes

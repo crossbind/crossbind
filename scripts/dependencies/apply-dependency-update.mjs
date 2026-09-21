@@ -266,9 +266,6 @@ async function applyAndroidNdk(proposal) {
         updated = replaceLiteral(updated, currentSha1, proposal.sha1, 'Android NDK SHA-1');
         return replaceLiteral(updated, currentSha256, sha256, 'Android NDK SHA-256');
     });
-    updateFile('core/crossbind/src/actions/run.js', (text) =>
-        replaceLiteral(text, `/opt/android-sdk/ndk/${proposal.current}`, `/opt/android-sdk/ndk/${proposal.target}`, 'CLI Android NDK path'),
-    );
     updateFile('docs/api/build-state.md', (text) =>
         replaceLiteral(text, `NDK ${proposal.current}`, `NDK ${proposal.target}`, 'documented Android NDK'),
     );

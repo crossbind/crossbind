@@ -317,7 +317,6 @@ test('an NDK bump may touch every file that records the NDK version', () => {
     const ndk = { kind: 'toolchain', component: 'android-ndk', current: '27.3.13750724', target: '30.0.16248370' };
     for (const file of [
         'tooling/docker/android.Dockerfile',
-        'core/crossbind/src/actions/run.js',
         'docs/api/build-state.md',
         'docs/api/performance.md',
         'agents/skills/crossbind/references/api/build-state.md',
@@ -327,6 +326,8 @@ test('an NDK bump may touch every file that records the NDK version', () => {
         assert.equal(dependencyPathAllowed(ndk, file), true, file);
     }
     assert.equal(dependencyPathAllowed(ndk, 'core/crossbind/src/bin.js'), false);
+    // The CLI names ndk/current, so a bump has no reason to touch it.
+    assert.equal(dependencyPathAllowed(ndk, 'core/crossbind/src/actions/run.js'), false);
 });
 
 test('the Debian base moves by digest because its tag never does', async () => {
