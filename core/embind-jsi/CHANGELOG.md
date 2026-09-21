@@ -1,5 +1,15 @@
 # @crossbind/core-embind-jsi
 
+## 2.0.0-beta.60
+
+### Patch Changes
+
+- Supplied the `std::char_traits<unsigned char>` that embind's raw-byte string binding needs. The
+  standard has never defined one, and libc++ used to instantiate the primary template anyway; from
+  the release NDK r30 ships it static_asserts instead, so naming
+  `std::basic_string<unsigned char>` stopped compiling at all. The binding is unchanged, and the
+  traits cost nothing on the toolchains that did not need them.
+
 ## 2.0.0-beta.53
 
 ### Patch Changes

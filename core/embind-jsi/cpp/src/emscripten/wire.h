@@ -27,6 +27,56 @@
 
 #include <jsi/jsi.h>
 
+// embind registers std::basic_string<unsigned char> as the raw-byte counterpart to UTF-8
+// std::string, but the standard has never defined std::char_traits for unsigned char. libc++ used
+// to instantiate the primary template anyway; from the release NDK r30 ships it static_asserts
+// instead, so merely naming the type stops compiling. Supplying the traits keeps the binding and
+// costs nothing on the toolchains that did not need it.
+namespace std {
+template <>
+struct char_traits<unsigned char> {
+    using char_type = unsigned char;
+    using int_type = int;
+    using off_type = streamoff;
+    using pos_type = streampos;
+    using state_type = mbstate_t;
+
+    static constexpr void assign(char_type& a, const char_type& b) noexcept { a = b; }
+    static constexpr bool eq(char_type a, char_type b) noexcept { return a == b; }
+    static constexpr bool lt(char_type a, char_type b) noexcept { return a < b; }
+
+    static int compare(const char_type* a, const char_type* b, size_t n) {
+        return n == 0 ? 0 : __builtin_memcmp(a, b, n);
+    }
+    static size_t length(const char_type* s) {
+        size_t n = 0;
+        while (s[n]) ++n;
+        return n;
+    }
+    static const char_type* find(const char_type* s, size_t n, const char_type& c) {
+        for (size_t i = 0; i < n; ++i)
+            if (s[i] == c) return s + i;
+        return nullptr;
+    }
+    static char_type* move(char_type* d, const char_type* s, size_t n) {
+        return n == 0 ? d : static_cast<char_type*>(__builtin_memmove(d, s, n));
+    }
+    static char_type* copy(char_type* d, const char_type* s, size_t n) {
+        return n == 0 ? d : static_cast<char_type*>(__builtin_memcpy(d, s, n));
+    }
+    static char_type* assign(char_type* d, size_t n, char_type c) {
+        for (size_t i = 0; i < n; ++i) d[i] = c;
+        return d;
+    }
+
+    static constexpr int_type not_eof(int_type c) noexcept { return eq_int_type(c, eof()) ? ~eof() : c; }
+    static constexpr char_type to_char_type(int_type c) noexcept { return char_type(c); }
+    static constexpr int_type to_int_type(char_type c) noexcept { return int_type(c); }
+    static constexpr bool eq_int_type(int_type a, int_type b) noexcept { return a == b; }
+    static constexpr int_type eof() noexcept { return int_type(EOF); }
+};
+} // namespace std
+
 // #include <android/log.h>
 // #define APPNAME "react-native-crossbind"
 
