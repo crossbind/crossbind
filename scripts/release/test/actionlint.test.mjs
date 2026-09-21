@@ -146,6 +146,8 @@ test('the unpublished toolchain image train uses the reviewed stable versions', 
         .filter((line) => !line.trimStart().startsWith('#'))
         .join('\n');
     assert.doesNotMatch(androidInstructions, /sdkmanager|cmdline-tools|openjdk/);
+    // A stable path lets the CLI survive an NDK bump without moving in the same commit as the image.
+    assert.match(android, /ln -s "\$\{NDK_VERSION\}" "\$\{ANDROID_SDK_ROOT\}\/ndk\/current"/);
     assert.match(
         fs.readFileSync(path.join(ROOT, 'core/crossbind/src/actions/run.js'), 'utf8'),
         new RegExp(`/opt/android-sdk/ndk/${ndkVersion.replaceAll('.', '\\.')}`),
