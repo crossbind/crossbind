@@ -16,7 +16,9 @@ ENV NDK_ROOT="${ANDROID_SDK_ROOT}/ndk/${NDK_VERSION}"
 
 ARG NDK_ARCHIVE=android-ndk-r27d-linux.zip
 # The archive unpacks into its release name, which is not NDK_VERSION, so the tree is moved into
-# the version-keyed path the CLI and the smoke tests expect.
+# the version-keyed path, and `ndk/current` points at it. Callers that name the stable path keep
+# working across an NDK bump; one that names the version has to move in the same commit as the
+# image, which it cannot, because the image is only published from main.
 ARG NDK_ARCHIVE_ROOT=android-ndk-r27d
 # Published in Google's repository2-3.xml next to this exact archive.
 ARG NDK_SHA1=22105e410cf29afcf163760cc95522b9fb981121
@@ -31,6 +33,7 @@ RUN wget -q "https://dl.google.com/android/repository/${NDK_ARCHIVE}" -P /tmp &&
     mkdir -p "${ANDROID_SDK_ROOT}/ndk" && \
     unzip -q "/tmp/${NDK_ARCHIVE}" -d "${ANDROID_SDK_ROOT}/ndk" && \
     mv "${ANDROID_SDK_ROOT}/ndk/${NDK_ARCHIVE_ROOT}" "${NDK_ROOT}" && \
+    ln -s "${NDK_VERSION}" "${ANDROID_SDK_ROOT}/ndk/current" && \
     rm "/tmp/${NDK_ARCHIVE}"
 
 # The NDK's bundled Python carries setuptools 65.5.0 with fixable HIGH CVEs; nothing in the NDK
