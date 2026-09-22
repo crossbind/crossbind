@@ -72,16 +72,16 @@ importers:
     dependencies:
       '@rollup/plugin-commonjs':
         specifier: ^29.0.3
-        version: 29.0.3(rollup@4.62.4)
+        version: 29.0.3(rollup@4.63.4)
       '@rollup/plugin-json':
         specifier: ^6.1.0
-        version: 6.1.0(rollup@4.62.4)
+        version: 6.1.0(rollup@4.63.4)
       '@rollup/plugin-node-resolve':
         specifier: ^16.0.3
-        version: 16.0.3(rollup@4.62.4)
+        version: 16.0.3(rollup@4.63.4)
       '@rollup/plugin-virtual':
         specifier: ^3.0.2
-        version: 3.0.2(rollup@4.62.4)
+        version: 3.0.2(rollup@4.63.4)
       comlink:
         specifier: ^4.4.2
         version: 4.4.2
@@ -102,7 +102,7 @@ importers:
         version: 1.2.2
       rollup:
         specifier: ^4.62.4
-        version: 4.62.4
+        version: 4.63.4
       spdx-expression-parse:
         specifier: ^5.0.0
         version: 5.0.0
@@ -124,7 +124,7 @@ importers:
         version: 7.29.7
       react-native:
         specifier: 0.87.1
-        version: 0.87.1(@babel/core@8.0.6)(@react-native-community/cli@20.2.0(supports-color@10.2.2)(typescript@7.0.2))(@react-native/metro-config@0.87.1(@babel/core@8.0.6)(supports-color@10.2.2))(@types/react@19.2.18)(react@19.2.8)(supports-color@10.2.2)
+        version: 0.87.1(@babel/core@8.0.6)(@react-native-community/cli@20.2.0(supports-color@10.2.2)(typescript@7.0.2))(@react-native/metro-config@0.87.1(@babel/core@8.0.6)(supports-color@10.2.2))(@types/react@19.3.0)(react@19.3.0)(supports-color@10.2.2)
 
   core/embind-rust: {}
 
@@ -440,16 +440,16 @@ importers:
         version: link:../../ports/zlib/ios
       hermes-compiler:
         specifier: '*'
-        version: 250829098.0.10
+        version: 250829098.0.19
       react:
-        specifier: 19.2.3
-        version: 19.2.3
+        specifier: 19.3.0
+        version: 19.3.0
       react-native:
         specifier: 0.87.1
-        version: 0.87.1(@babel/core@8.0.6)(@react-native-community/cli@20.2.0(supports-color@10.2.2)(typescript@5.9.3))(@react-native/metro-config@0.87.1(@babel/core@8.0.6)(supports-color@10.2.2))(@types/react@19.2.18)(react@19.2.3)(supports-color@10.2.2)
+        version: 0.87.1(@babel/core@8.0.6)(@react-native-community/cli@20.2.0(supports-color@10.2.2)(typescript@5.9.3))(@react-native/metro-config@0.87.1(@babel/core@8.0.6)(supports-color@10.2.2))(@types/react@19.3.0)(react@19.3.0)(supports-color@10.2.2)
       react-native-safe-area-context:
         specifier: ^5.8.0
-        version: 5.8.0(react-native@0.87.1(@babel/core@8.0.6)(@react-native-community/cli@20.2.0(supports-color@10.2.2)(typescript@5.9.3))(@react-native/metro-config@0.87.1(@babel/core@8.0.6)(supports-color@10.2.2))(@types/react@19.2.18)(react@19.2.3)(supports-color@10.2.2))(react@19.2.3)
+        version: 5.10.0(react-native@0.87.1(@babel/core@8.0.6)(@react-native-community/cli@20.2.0(supports-color@10.2.2)(typescript@5.9.3))(@react-native/metro-config@0.87.1(@babel/core@8.0.6)(supports-color@10.2.2))(@types/react@19.3.0)(react@19.3.0)(supports-color@10.2.2))(react@19.3.0)
     devDependencies:
       '@babel/core':
         specifier: ^8.0.6
@@ -489,7 +489,7 @@ importers:
         version: 0.87.1
       '@react-native/jest-preset':
         specifier: 0.87.1
-        version: 0.87.1(@babel/core@8.0.6)(react@19.2.3)(supports-color@10.2.2)
+        version: 0.87.1(@babel/core@8.0.6)(react@19.3.0)(supports-color@10.2.2)
       '@react-native/metro-config':
         specifier: 0.87.1
         version: 0.87.1(@babel/core@8.0.6)(supports-color@10.2.2)
@@ -501,7 +501,7 @@ importers:
         version: 29.5.14
       '@types/react':
         specifier: ^19.2.18
-        version: 19.2.18
+        version: 19.3.0
       '@types/react-test-renderer':
         specifier: ^19.1.0
         version: 19.1.0
@@ -516,7 +516,7 @@ importers:
         version: 3.9.8
       react-test-renderer:
         specifier: 19.3.0
-        version: 19.3.0(react@19.2.3)
+        version: 19.3.0(react@19.3.0)
       typescript:
         specifier: ^5.8.3
         version: 5.9.3
@@ -576,10 +576,10 @@ importers:
         version: link:../../ports/zlib/wasm
       react:
         specifier: ^19.2.8
-        version: 19.2.8
+        version: 19.3.0
       react-dom:
         specifier: ^19.2.8
-        version: 19.2.8(react@19.2.8)
+        version: 19.3.0(react@19.3.0)
     devDependencies:
       '@crossbind/plugin-webpack':
         specifier: workspace:^
@@ -604,10 +604,10 @@ importers:
         version: 2.0.2(@rspack/core@2.1.8)(react-refresh@0.19.0)
       '@types/react':
         specifier: ^19.2.18
-        version: 19.2.18
+        version: 19.3.0
       '@types/react-dom':
         specifier: ^19.2.4
-        version: 19.2.4(@types/react@19.2.18)
+        version: 19.3.0(@types/react@19.3.0)
       cross-env:
         specifier: ^10.1.0
         version: 10.1.0
@@ -734,7 +734,7 @@ importers:
         version: link:../../ports/zlib/wasm
       vue:
         specifier: ^3.5.41
-        version: 3.5.41(typescript@7.0.2)
+        version: 3.5.43(typescript@7.0.2)
     devDependencies:
       '@crossbind/plugin-vite':
         specifier: workspace:^
@@ -747,7 +747,7 @@ importers:
         version: 1.62.1
       '@vitejs/plugin-vue':
         specifier: ^6.0.8
-        version: 6.0.8(vite@8.2.1(esbuild@0.28.1)(jiti@2.7.0)(terser@5.37.0)(yaml@2.9.0))(vue@3.5.41(typescript@7.0.2))
+        version: 6.0.8(vite@8.2.1(esbuild@0.28.1)(jiti@2.7.0)(terser@5.37.0)(yaml@2.9.0))(vue@3.5.43(typescript@7.0.2))
       vite:
         specifier: ^8.2.1
         version: 8.2.1(esbuild@0.28.1)(jiti@2.7.0)(terser@5.37.0)(yaml@2.9.0)
@@ -804,7 +804,7 @@ importers:
         version: link:../../ports/zlib/wasm
       vue:
         specifier: ^3.5.41
-        version: 3.5.41(typescript@7.0.2)
+        version: 3.5.43(typescript@7.0.2)
     devDependencies:
       '@crossbind/plugin-vite':
         specifier: workspace:^
@@ -814,7 +814,7 @@ importers:
         version: 1.62.1
       '@vitejs/plugin-vue':
         specifier: ^6.0.8
-        version: 6.0.8(vite@8.2.1(esbuild@0.28.1)(jiti@2.7.0)(terser@5.37.0)(yaml@2.9.0))(vue@3.5.41(typescript@7.0.2))
+        version: 6.0.8(vite@8.2.1(esbuild@0.28.1)(jiti@2.7.0)(terser@5.37.0)(yaml@2.9.0))(vue@3.5.43(typescript@7.0.2))
       vite:
         specifier: ^8.2.1
         version: 8.2.1(esbuild@0.28.1)(jiti@2.7.0)(terser@5.37.0)(yaml@2.9.0)
@@ -869,16 +869,16 @@ importers:
         version: link:../../plugins/react-native-ios-helper
       hermes-compiler:
         specifier: '*'
-        version: 250829098.0.10
+        version: 250829098.0.19
       react:
-        specifier: 19.2.3
-        version: 19.2.3
+        specifier: 19.3.0
+        version: 19.3.0
       react-native:
         specifier: 0.87.1
-        version: 0.87.1(@babel/core@8.0.6)(@react-native-community/cli@20.2.0(supports-color@10.2.2)(typescript@5.9.3))(@react-native/metro-config@0.87.1(@babel/core@8.0.6)(supports-color@10.2.2))(@types/react@19.2.18)(react@19.2.3)(supports-color@10.2.2)
+        version: 0.87.1(@babel/core@8.0.6)(@react-native-community/cli@20.2.0(supports-color@10.2.2)(typescript@5.9.3))(@react-native/metro-config@0.87.1(@babel/core@8.0.6)(supports-color@10.2.2))(@types/react@19.3.0)(react@19.3.0)(supports-color@10.2.2)
       react-native-safe-area-context:
         specifier: ^5.8.0
-        version: 5.8.0(react-native@0.87.1(@babel/core@8.0.6)(@react-native-community/cli@20.2.0(supports-color@10.2.2)(typescript@5.9.3))(@react-native/metro-config@0.87.1(@babel/core@8.0.6)(supports-color@10.2.2))(@types/react@19.2.18)(react@19.2.3)(supports-color@10.2.2))(react@19.2.3)
+        version: 5.10.0(react-native@0.87.1(@babel/core@8.0.6)(@react-native-community/cli@20.2.0(supports-color@10.2.2)(typescript@5.9.3))(@react-native/metro-config@0.87.1(@babel/core@8.0.6)(supports-color@10.2.2))(@types/react@19.3.0)(react@19.3.0)(supports-color@10.2.2))(react@19.3.0)
     devDependencies:
       '@babel/core':
         specifier: ^8.0.6
@@ -915,7 +915,7 @@ importers:
         version: 0.87.1
       '@react-native/jest-preset':
         specifier: 0.87.1
-        version: 0.87.1(@babel/core@8.0.6)(react@19.2.3)(supports-color@10.2.2)
+        version: 0.87.1(@babel/core@8.0.6)(react@19.3.0)(supports-color@10.2.2)
       '@react-native/metro-config':
         specifier: 0.87.1
         version: 0.87.1(@babel/core@8.0.6)(supports-color@10.2.2)
@@ -927,7 +927,7 @@ importers:
         version: 29.5.14
       '@types/react':
         specifier: ^19.2.18
-        version: 19.2.18
+        version: 19.3.0
       '@types/react-test-renderer':
         specifier: ^19.1.0
         version: 19.1.0
@@ -942,7 +942,7 @@ importers:
         version: 3.9.8
       react-test-renderer:
         specifier: 19.3.0
-        version: 19.3.0(react@19.2.3)
+        version: 19.3.0(react@19.3.0)
       typescript:
         specifier: ^5.8.3
         version: 5.9.3
@@ -954,10 +954,10 @@ importers:
         version: link:../lib-prebuilt-matrix
       react:
         specifier: ^19.2.8
-        version: 19.2.8
+        version: 19.3.0
       react-dom:
         specifier: ^19.2.8
-        version: 19.2.8(react@19.2.8)
+        version: 19.3.0(react@19.3.0)
     devDependencies:
       '@crossbind/plugin-webpack':
         specifier: workspace:^
@@ -982,10 +982,10 @@ importers:
         version: 2.0.2(@rspack/core@2.1.8)(react-refresh@0.19.0)
       '@types/react':
         specifier: ^19.2.18
-        version: 19.2.18
+        version: 19.3.0
       '@types/react-dom':
         specifier: ^19.2.4
-        version: 19.2.4(@types/react@19.2.18)
+        version: 19.3.0(@types/react@19.3.0)
       cross-env:
         specifier: ^10.1.0
         version: 10.1.0
@@ -1003,10 +1003,10 @@ importers:
         version: link:../lib-prebuilt-matrix
       react:
         specifier: ^19.2.8
-        version: 19.2.8
+        version: 19.3.0
       react-dom:
         specifier: ^19.2.8
-        version: 19.2.8(react@19.2.8)
+        version: 19.3.0(react@19.3.0)
     devDependencies:
       '@crossbind/plugin-vite':
         specifier: workspace:^
@@ -1019,10 +1019,10 @@ importers:
         version: 1.62.1
       '@types/react':
         specifier: ^19.2.18
-        version: 19.2.18
+        version: 19.3.0
       '@types/react-dom':
         specifier: ^19.2.4
-        version: 19.2.4(@types/react@19.2.18)
+        version: 19.3.0(@types/react@19.3.0)
       '@vitejs/plugin-react':
         specifier: ^6.0.5
         version: 6.0.5(vite@8.2.1(esbuild@0.28.1)(jiti@2.7.0)(terser@5.37.0)(yaml@2.9.0))
@@ -1087,7 +1087,7 @@ importers:
         version: link:../lib-prebuilt-matrix
       vue:
         specifier: ^3.5.41
-        version: 3.5.41(typescript@7.0.2)
+        version: 3.5.43(typescript@7.0.2)
     devDependencies:
       '@crossbind/plugin-vite':
         specifier: workspace:^
@@ -1097,7 +1097,7 @@ importers:
         version: 1.62.1
       '@vitejs/plugin-vue':
         specifier: ^6.0.8
-        version: 6.0.8(vite@8.2.1(esbuild@0.28.1)(jiti@2.7.0)(terser@5.37.0)(yaml@2.9.0))(vue@3.5.41(typescript@7.0.2))
+        version: 6.0.8(vite@8.2.1(esbuild@0.28.1)(jiti@2.7.0)(terser@5.37.0)(yaml@2.9.0))(vue@3.5.43(typescript@7.0.2))
       vite:
         specifier: ^8.2.1
         version: 8.2.1(esbuild@0.28.1)(jiti@2.7.0)(terser@5.37.0)(yaml@2.9.0)
@@ -1119,7 +1119,7 @@ importers:
     devDependencies:
       '@preact/preset-vite':
         specifier: 2.10.6
-        version: 2.10.6(@babel/core@7.29.7(supports-color@10.2.2))(preact@10.29.8)(rollup@4.62.4)(supports-color@10.2.2)(vite@8.3.0(esbuild@0.28.1)(jiti@2.7.0)(terser@5.37.0)(yaml@2.9.0))
+        version: 2.10.6(@babel/core@7.29.7(supports-color@10.2.2))(preact@10.29.8)(rollup@4.63.4)(supports-color@10.2.2)(vite@8.3.0(esbuild@0.28.1)(jiti@2.7.0)(terser@5.37.0)(yaml@2.9.0))
       vite:
         specifier: 8.3.0
         version: 8.3.0(esbuild@0.28.1)(jiti@2.7.0)(terser@5.37.0)(yaml@2.9.0)
@@ -1128,7 +1128,7 @@ importers:
         version: 0.5.13(vite@8.3.0(esbuild@0.28.1)(jiti@2.7.0)(terser@5.37.0)(yaml@2.9.0))
       wrangler:
         specifier: 4.135.0
-        version: 4.135.0
+        version: 4.135.0(@types/node@22.10.2)
 
   plugins/metro:
     dependencies:
@@ -1176,7 +1176,7 @@ importers:
         version: 0.87.1(supports-color@10.2.2)
       react-native:
         specifier: 0.87.1
-        version: 0.87.1(@babel/core@8.0.6)(@react-native-community/cli@20.2.0(supports-color@10.2.2)(typescript@6.0.3))(@react-native/metro-config@0.87.1(@babel/core@8.0.6)(supports-color@10.2.2))(@types/react@19.2.18)(react@19.2.8)(supports-color@10.2.2)
+        version: 0.87.1(@babel/core@8.0.6)(@react-native-community/cli@20.2.0(supports-color@10.2.2)(typescript@6.0.3))(@react-native/metro-config@0.87.1(@babel/core@8.0.6)(supports-color@10.2.2))(@types/react@19.3.0)(react@19.3.0)(supports-color@10.2.2)
       upath:
         specifier: ^3.0.8
         version: 3.0.8
@@ -2393,7 +2393,7 @@ importers:
     dependencies:
       '@clack/prompts':
         specifier: ^1.7.0
-        version: 1.7.0
+        version: 1.8.1
 
   tooling/docker: {}
 
@@ -3135,12 +3135,12 @@ packages:
   '@cacheable/utils@2.5.0':
     resolution: {integrity: sha512-buipgOVDkkPXNR5+xBpDw7Zk2n1EvU7qBJCNUcL7rhQ//kfpOXPAvQ511Os0vpLYJ1pZnvudNytkQt2hst3wqA==}
 
-  '@clack/core@1.4.3':
-    resolution: {integrity: sha512-/kr3UWNtdJfxZtPgDqUOmG2pvwlmcLGheex5yiZKdwbzZJxhV+HMNR9QNmyY5cGwTNV6LrR7Jtp+KjhUAP1qBQ==}
+  '@clack/core@1.5.1':
+    resolution: {integrity: sha512-iHTrHA8MtVuLl2TfZySmcKv1qO2PoyC9Z7pfSDozEuV5vtY3/wcOPKJXlqJ5Oq2Cx5DDGQGAMVx6HZfRRoVEbQ==}
     engines: {node: '>= 20.12.0'}
 
-  '@clack/prompts@1.7.0':
-    resolution: {integrity: sha512-y7/yvZ2TPAnR9+jnc00klvNNLkJiXFFrQA/hlLCcxA9a2A4zQIOimyFQ9XfwYKiGD1fb5GY8vbKIIgO8d5Tb2A==}
+  '@clack/prompts@1.8.1':
+    resolution: {integrity: sha512-dlT1m5e/0yUL0kRNcQn7yGLVThkgbB0Ga/1AmfDDC/8ik6AIiSf2QLQO2zPYvefsHP0aFgxO93cVLCCfDp7kzQ==}
     engines: {node: '>= 20.12.0'}
 
   '@cloudflare/kv-asset-handler@0.5.0':
@@ -4252,8 +4252,18 @@ packages:
     cpu: [arm]
     os: [android]
 
+  '@rollup/rollup-android-arm-eabi@4.63.4':
+    resolution: {integrity: sha512-I+BSHzTAhKN2n7ZwGZsegGcZjDpLqFOMAtJz/u6uFGe0pUFbq56dEHjqJV/ZUdRJtNXNxA+hREUatZBvMR3Oiw==}
+    cpu: [arm]
+    os: [android]
+
   '@rollup/rollup-android-arm64@4.62.4':
     resolution: {integrity: sha512-JKuJc+pnpks2pjy7L/N3v/cAkZxYlnmuZoD840ldbMI5KDbC4iO9NKwPKYdjYFCMAIIlBzYSFHxIJVYzRo2/8A==}
+    cpu: [arm64]
+    os: [android]
+
+  '@rollup/rollup-android-arm64@4.63.4':
+    resolution: {integrity: sha512-pu3BdjS2LtEzRu2elmGzS3fIeWSZy4BMDIaLNwjorO76+k2d0LMluijhsDx3KQyQBQ/lLUZCQA9/s6csvUfuhw==}
     cpu: [arm64]
     os: [android]
 
@@ -4262,8 +4272,18 @@ packages:
     cpu: [arm64]
     os: [darwin]
 
+  '@rollup/rollup-darwin-arm64@4.63.4':
+    resolution: {integrity: sha512-xfSrj9MHnWK9GaSqT9U0ImHtH/N8WZlHLx4cZHiuLcqs640hvZ3hLPd5UR2AZS57FaE8HrRUSpltbZdWRxHiDA==}
+    cpu: [arm64]
+    os: [darwin]
+
   '@rollup/rollup-darwin-x64@4.62.4':
     resolution: {integrity: sha512-wsTxtgApb4PrOsNJIm0FZ1h3WvCC+k9uxLJ4ad75hgoS4NiRes2SoJFlDAyMwiUY8IssDqGcHbXuN0sx1tfF1A==}
+    cpu: [x64]
+    os: [darwin]
+
+  '@rollup/rollup-darwin-x64@4.63.4':
+    resolution: {integrity: sha512-bqU99PLJb/dqb3S0GIMdeuyAEETSUgZBoqXYd3Sd+WCsV+MmPhnN6JrotWyir31+QgH7EvvE5/mwGJlEoci8Fw==}
     cpu: [x64]
     os: [darwin]
 
@@ -4272,13 +4292,29 @@ packages:
     cpu: [arm64]
     os: [freebsd]
 
+  '@rollup/rollup-freebsd-arm64@4.63.4':
+    resolution: {integrity: sha512-JinsFZ5G40oXQb+sUuiA5x689vhr6dDYK0H0NL+rwKdL6CqnmYN8PE4ZwfRSoIjrCxqTQG/SLfTtSvHeGxoVlw==}
+    cpu: [arm64]
+    os: [freebsd]
+
   '@rollup/rollup-freebsd-x64@4.62.4':
     resolution: {integrity: sha512-/Y7f3QuxjzPKsjA/rfEDa3+0vXqyjmJ50Ln8dPpCmWkKTrUoWHG1cWhTqaAMLob2m2nESWuC7yGrREz019Ztqg==}
     cpu: [x64]
     os: [freebsd]
 
+  '@rollup/rollup-freebsd-x64@4.63.4':
+    resolution: {integrity: sha512-GAdA4UxpiNm27cLHr2GqXBpAD0x9FqwYBY7/YSP0Ss0/PNi4k8gbviqpIpYbVSRBaS2ZcegXEzgTQMbRNCwxCw==}
+    cpu: [x64]
+    os: [freebsd]
+
   '@rollup/rollup-linux-arm-gnueabihf@4.62.4':
     resolution: {integrity: sha512-81wiiX3v7aqy+T+bT61TJ78yJjRquqFFTTbAPt08imfQQzkPIW8t6aJbkTagtCCrXMNc9D66+geqlK7ydLPNqA==}
+    cpu: [arm]
+    os: [linux]
+    libc: [glibc]
+
+  '@rollup/rollup-linux-arm-gnueabihf@4.63.4':
+    resolution: {integrity: sha512-qDd6NoA1znaLjp4jR5U/KWCdLAKDJNB8W9ChbbDaKbo0xA+Atln5HK6LFCZ4oJQpemtRZA288DCirFRjrspptw==}
     cpu: [arm]
     os: [linux]
     libc: [glibc]
@@ -4289,8 +4325,20 @@ packages:
     os: [linux]
     libc: [musl]
 
+  '@rollup/rollup-linux-arm-musleabihf@4.63.4':
+    resolution: {integrity: sha512-WtB5Tz5KTNINb8ZA+8sQ7bmjuS1JrRT7YverYIhUGdWWDlpzVWmIwuZE+jidkEXUn1l0zrEkaIMa8dHF3NGcsA==}
+    cpu: [arm]
+    os: [linux]
+    libc: [musl]
+
   '@rollup/rollup-linux-arm64-gnu@4.62.4':
     resolution: {integrity: sha512-CcnXHWnXg69g+DX5VWL3FHts3qMRN2uVEHX+BZvGLdd07/gXkn3ePjYtO1LDJvxkGKVHMclKBRa1QUTH+6toYQ==}
+    cpu: [arm64]
+    os: [linux]
+    libc: [glibc]
+
+  '@rollup/rollup-linux-arm64-gnu@4.63.4':
+    resolution: {integrity: sha512-VcQ3L1tjnkKzWjryAVaFhHEWcqOfICX9uxVVoDzm2t0DpgKRHd2zOpVrJc0xsWeBZcBFyYROCIBdyR/fS174pg==}
     cpu: [arm64]
     os: [linux]
     libc: [glibc]
@@ -4301,8 +4349,20 @@ packages:
     os: [linux]
     libc: [musl]
 
+  '@rollup/rollup-linux-arm64-musl@4.63.4':
+    resolution: {integrity: sha512-6+ZQX6P5s0cMDN2Ypb8Lbm2+/sZYmZjdaYny992ujUU9UKi/4CWoJWsl1pNvjWJHNHGK51m+jKGLlh1ylb2ifQ==}
+    cpu: [arm64]
+    os: [linux]
+    libc: [musl]
+
   '@rollup/rollup-linux-loong64-gnu@4.62.4':
     resolution: {integrity: sha512-XnWYMI7euHlb5a871xPja+Gm7DRCFU+FGRrtS2sMq9N8FvqtpagUy6gD4YOemC5MRk9xbh8+jYMEJbigFQwsgA==}
+    cpu: [loong64]
+    os: [linux]
+    libc: [glibc]
+
+  '@rollup/rollup-linux-loong64-gnu@4.63.4':
+    resolution: {integrity: sha512-D72ZnvkFkBXOfzMMQLcwfPLyGkKb7HZ9/mf97B7v6/P5Lbv4oFOtSY/uHbS8lH6uKUOxoKiuokdb50XZSzzbJw==}
     cpu: [loong64]
     os: [linux]
     libc: [glibc]
@@ -4313,8 +4373,20 @@ packages:
     os: [linux]
     libc: [musl]
 
+  '@rollup/rollup-linux-loong64-musl@4.63.4':
+    resolution: {integrity: sha512-piU6BxeqA3O9KSu3kRCIQQtNqFFaTu21SEV4FwaRZowpnj3bLaWPZHw+xFqCs0XlJ+aOH3PTRWGoglH+mKA/OA==}
+    cpu: [loong64]
+    os: [linux]
+    libc: [musl]
+
   '@rollup/rollup-linux-ppc64-gnu@4.62.4':
     resolution: {integrity: sha512-ru4H6ezD7ysA5EiEK6qkkaEb4modH8CTej6kUy/gQi20u3kB3G7Zn8snXXkeJSCOFKG/rbPPtM/+9Wgas1961w==}
+    cpu: [ppc64]
+    os: [linux]
+    libc: [glibc]
+
+  '@rollup/rollup-linux-ppc64-gnu@4.63.4':
+    resolution: {integrity: sha512-/5PGpHwqt2EEEOUs1XwzubE/ucr0dWDQ+to3zqi4Ds7EWpwtQ79wXc4JBoxqj/OwpawTsKWzJxHfSuBOq3DrWA==}
     cpu: [ppc64]
     os: [linux]
     libc: [glibc]
@@ -4325,8 +4397,20 @@ packages:
     os: [linux]
     libc: [musl]
 
+  '@rollup/rollup-linux-ppc64-musl@4.63.4':
+    resolution: {integrity: sha512-cX3beZDLWt7G2oJF+nhChiT+qtaihs+S2xi7ziGmVB+2pwPng6D0Ed0HmElQOgv2UsUmSJJLGwpBao/3TDx3VA==}
+    cpu: [ppc64]
+    os: [linux]
+    libc: [musl]
+
   '@rollup/rollup-linux-riscv64-gnu@4.62.4':
     resolution: {integrity: sha512-+fxjfuoAmVMCYV5QyjoIpu0cp5DOiOTeqYFk1AVaxGr+/ravWLX89XfQmptsoWcaVy/TGf2hexzbUOrCQIL1CQ==}
+    cpu: [riscv64]
+    os: [linux]
+    libc: [glibc]
+
+  '@rollup/rollup-linux-riscv64-gnu@4.63.4':
+    resolution: {integrity: sha512-1uz2mGWHyptR7DgHHrlbdRAjXK7v7elGZ9lMja910/RP+ZYbX6xAmCiU9UZSX4hqmgtHMv6lr5l3kq1HIOpcag==}
     cpu: [riscv64]
     os: [linux]
     libc: [glibc]
@@ -4337,8 +4421,20 @@ packages:
     os: [linux]
     libc: [musl]
 
+  '@rollup/rollup-linux-riscv64-musl@4.63.4':
+    resolution: {integrity: sha512-nLS8topojxyz7SRpKR2IODRpQ0XPZ+xaOXvT3+hqK/Uy8Lo5HFgkkIBiIrCu5tL5YqzTvgovGw55PwpahTAGig==}
+    cpu: [riscv64]
+    os: [linux]
+    libc: [musl]
+
   '@rollup/rollup-linux-s390x-gnu@4.62.4':
     resolution: {integrity: sha512-oCJCJL4pXsoDcP2QZ+JVlPTIRc6266zsIaeJJsWImmF7HO0W8nb6HuSgZlMWxJwaPf8ehbSw8yo0EUw925hKsA==}
+    cpu: [s390x]
+    os: [linux]
+    libc: [glibc]
+
+  '@rollup/rollup-linux-s390x-gnu@4.63.4':
+    resolution: {integrity: sha512-gs7DRKotr3l3q+jGPQBjH0ng1FjlEDm5ueQrkw5JtQvtLyEIcLASqAEaor56BhkKRzk+IcQzrcanBdb/bBQn8g==}
     cpu: [s390x]
     os: [linux]
     libc: [glibc]
@@ -4349,8 +4445,20 @@ packages:
     os: [linux]
     libc: [glibc]
 
+  '@rollup/rollup-linux-x64-gnu@4.63.4':
+    resolution: {integrity: sha512-791ET7W17NnScOZM7h4dX5hYspxE28htPFsb1awY/NRR8+PRNkS53e475rDdxXXDrP+kwnCcNWg9CX5ztn/Aqw==}
+    cpu: [x64]
+    os: [linux]
+    libc: [glibc]
+
   '@rollup/rollup-linux-x64-musl@4.62.4':
     resolution: {integrity: sha512-qiXbGG2jkjXhzXpsFZSR2Xpb8DN/UaxYsbb/STbuR/6fpaDgRmmaq1B/LmtF2wQFOFOSsK2jdE0RZ3a0zHn4QA==}
+    cpu: [x64]
+    os: [linux]
+    libc: [musl]
+
+  '@rollup/rollup-linux-x64-musl@4.63.4':
+    resolution: {integrity: sha512-iwZQRcmj7g88g3tzefIrQY7qvmuA/cfYwhrDtTBhsmukO4U2huVO5W+86XacUMRvdSFVAc6kZUZy21JaRwiB9w==}
     cpu: [x64]
     os: [linux]
     libc: [musl]
@@ -4360,8 +4468,18 @@ packages:
     cpu: [x64]
     os: [openbsd]
 
+  '@rollup/rollup-openbsd-x64@4.63.4':
+    resolution: {integrity: sha512-dVHFp9gRWrdTpnqQuGfCwd7hOQDatK1VCP2iWhLY/cGrOQs/ucFzJ6A5SRqbXX12ZDI8EUuejSM5kwg+ja7Png==}
+    cpu: [x64]
+    os: [openbsd]
+
   '@rollup/rollup-openharmony-arm64@4.62.4':
     resolution: {integrity: sha512-s62SQ/vgsRSvMwDkOEfTqfgASF0f26ZNaQuTA6Aok5lrikf89yI2W0gFHvZb2Jpgc6N8JnOKZgCK2iciO3CsxQ==}
+    cpu: [arm64]
+    os: [openharmony]
+
+  '@rollup/rollup-openharmony-arm64@4.63.4':
+    resolution: {integrity: sha512-t3NlauOW6gxZVVFcBEnO62Cb4wbyDFL416gTg1uFI/2tgqYQlf69FbSE115Ajre9I+c26Lk4mcmdFUsS/DGifQ==}
     cpu: [arm64]
     os: [openharmony]
 
@@ -4370,8 +4488,18 @@ packages:
     cpu: [arm64]
     os: [win32]
 
+  '@rollup/rollup-win32-arm64-msvc@4.63.4':
+    resolution: {integrity: sha512-xWuIaSye5FWZF8+UYtVEcHtRJDN5kN9Kfgxx3Kq8XIov9KSKbc1fiqQCm90SKrgQbUXZelbnUhnlUJmfSE7P9A==}
+    cpu: [arm64]
+    os: [win32]
+
   '@rollup/rollup-win32-ia32-msvc@4.62.4':
     resolution: {integrity: sha512-zmfrQd/0wu6oJs8Vq8KwY/YtsKSsLtKe/HwAP4Wqy8LhWjeT55fHRAkOhYQ12wI3ayS4Tt12d5CDRD7N96SAYQ==}
+    cpu: [ia32]
+    os: [win32]
+
+  '@rollup/rollup-win32-ia32-msvc@4.63.4':
+    resolution: {integrity: sha512-9ALJJUOg/ZflMJepVo2PlgsGxSaxN7SQ4Z8GoZfVlarWr6r3rkHUNsd/zAio7p4YMtChSMXPionxej4Hkf6CXQ==}
     cpu: [ia32]
     os: [win32]
 
@@ -4380,8 +4508,18 @@ packages:
     cpu: [x64]
     os: [win32]
 
+  '@rollup/rollup-win32-x64-gnu@4.63.4':
+    resolution: {integrity: sha512-blj9z5qx/Pv4WU0W1NMFDB97e0JH5ed+aZGywW8WCvp/NhWX/4PFAq5uu6Q0AebNn+Vo6KzUYDT++JzTT5ojlQ==}
+    cpu: [x64]
+    os: [win32]
+
   '@rollup/rollup-win32-x64-msvc@4.62.4':
     resolution: {integrity: sha512-zD6NdeWEByGE9QF9vCrlJ5YQB4oq9q91kPZS37Jwj5hOkvR1lTBSpsKhKDw4IJtbQ35LsTS1HD9DZYGKIshU1Q==}
+    cpu: [x64]
+    os: [win32]
+
+  '@rollup/rollup-win32-x64-msvc@4.63.4':
+    resolution: {integrity: sha512-Erx822VRBwLa124shbj+wNXe//BOgMEctDV0m1aqTQdNO1S69DgNUCFKC1RCeZfixs1J31l6igk1ziyXErbigQ==}
     cpu: [x64]
     os: [win32]
 
@@ -4597,16 +4735,16 @@ packages:
   '@types/node@22.10.2':
     resolution: {integrity: sha512-Xxr6BBRCAOQixvonOye19wnzyDiUtTeqldOOmj3CkeblonbccA12PFwlufvRdrpjXxqnmUaeiU5EOA+7s5diUQ==}
 
-  '@types/react-dom@19.2.4':
-    resolution: {integrity: sha512-Bsc+QHgp+P/F02XDzNCY9jnZNCUuLki36KT7VKrTXXLdHf+vHMNZnW1rVu5DNW/rCK+fya3DATySbLM4yhtKUw==}
+  '@types/react-dom@19.3.0':
+    resolution: {integrity: sha512-ZI7bU42mZXXKHn/qNLEw2IrbiINU7X5+vfgdixBHkCNpYWXjKgfQ/P+uyGb5CjOLB9UcnTeg3rylQtV2hym44Q==}
     peerDependencies:
-      '@types/react': ^19.2.0
+      '@types/react': ^19.3.0
 
   '@types/react-test-renderer@19.1.0':
     resolution: {integrity: sha512-XD0WZrHqjNrxA/MaR9O22w/RNidWR9YZmBdRGI7wcnWGrv/3dA8wKCJ8m63Sn+tLJhcjmuhOi629N66W6kgWzQ==}
 
-  '@types/react@19.2.18':
-    resolution: {integrity: sha512-AnzbBERsrLKtk2XSfTbYRLjQPdy116Sty4q+T+Bp3IC4l6jNBvreVPAHmpq9qhXQM7CXZPjLVmGMw9sy+hxQ3w==}
+  '@types/react@19.3.0':
+    resolution: {integrity: sha512-N0rFCuH9YoxG9/m61l9MfpJKfmLOVU0em7ipIz6TRgSSkvReLB9vL85GB+yr8Bs5leqpvg96JSwF4ZS1s4viQg==}
 
   '@types/resolve@1.20.2':
     resolution: {integrity: sha512-60BCwRFOZCQhDncwQdxxeOEEkbc5dIMccYLwbxsS4TUNeVECQ/pBJ0j09mrHOl/JJvpRPGwO9SvE4nR2Nb/a4Q==}
@@ -4900,32 +5038,32 @@ packages:
   '@vscode/sudo-prompt@9.3.2':
     resolution: {integrity: sha512-gcXoCN00METUNFeQOFJ+C9xUI0DKB+0EGMVg7wbVYRHBw2Eq3fKisDZOkRdOz3kqXRKOENMfShPOmypw1/8nOw==}
 
-  '@vue/compiler-core@3.5.41':
-    resolution: {integrity: sha512-q0Xtv/F9w2YO/7htQhtiL+Ev2WCJbe5N2hc+XfgyKkEKqWpSxknmT8QOuGdEKNdjPq0c3F7rNpFkTo3Kfrm7pg==}
+  '@vue/compiler-core@3.5.43':
+    resolution: {integrity: sha512-zdiLhnbe1QQqgDT8xZMpNmyqZ3qlI+/Q/FHQco57Kwl/b05HhCzN6eVGN9QU9rbga4CrS0H5SYY8VGHZCt/1Hg==}
 
-  '@vue/compiler-dom@3.5.41':
-    resolution: {integrity: sha512-oKacVfNglLvGjnS6BXOlGL7EyG2h8X03pqXCjzotRZUaXGjbrTJUnVAQjrCqUnS+lyu31nwQjZY/d817GmCnfw==}
+  '@vue/compiler-dom@3.5.43':
+    resolution: {integrity: sha512-PEZoAk3NQmsn/ejMzSOCyTYqwGqczrWm70PuhBKjjv1+TCoQAaO/zOqNwjV+honlNstT5ILxtc+8r8UUfj+iEQ==}
 
-  '@vue/compiler-sfc@3.5.41':
-    resolution: {integrity: sha512-XJhip7R2wy6vX3knCxdZN4KracFaZUef58s1KYewqluedHIJaPIVfXoYT7MF1F8nCvv6k8bWWxDC8opMkg1VTQ==}
+  '@vue/compiler-sfc@3.5.43':
+    resolution: {integrity: sha512-FCbrG3XNCRl+js3huuKx4IVHBLTvMkJhVepjbxSPu1gn4yWLaYtGNQdjJGZaMytXB6qb76qQDDmDSLy/vkmleQ==}
 
-  '@vue/compiler-ssr@3.5.41':
-    resolution: {integrity: sha512-U3v5OejKEGqOI0Wy0+Sz7hGuIFZHA4LSXzrNM3IMIeDyJEBBfTpX26n3SDgToRpP2bLc9FfI2j/kSgcJ8Emq5A==}
+  '@vue/compiler-ssr@3.5.43':
+    resolution: {integrity: sha512-GF62orf7KiJX9RqrHNGrYBudsQGD0OhJ5nDs90O8UiDuS40+YMYomiXu6w6EuvtXuRDc3MSNis3EaaSKAVSWpg==}
 
-  '@vue/reactivity@3.5.41':
-    resolution: {integrity: sha512-rznsqKM0np0x18EjzF8x88MpEhdNsffbvFbckLL5+oUKz1BxAImEmO7J1ArRYSyo6aQaVoBDp7jEkT91OOxydA==}
+  '@vue/reactivity@3.5.43':
+    resolution: {integrity: sha512-G/c9GyOZNI2jVaaS6OX1EF1SSFSv7H0ERqNTl4+DTFMlZmB5eVAB53aLQNam/7NL2NPtaDD7RdVrzf8uJzMuOA==}
 
-  '@vue/runtime-core@3.5.41':
-    resolution: {integrity: sha512-Vcry58hiAKwGen9Z1jUZE0feFsNArPCMOImYI8el48A9Idf6DuQYD0U05zZIF2Iad1hGhPSvcbBbAOhNr55fhg==}
+  '@vue/runtime-core@3.5.43':
+    resolution: {integrity: sha512-hU6U6VnVhBGQDpvlnnDlIB8ZGJBiOcgk2lh/0InltHiz3D8oSkluvuvY+do1G2H3+udeKFsmaBlgVYP7gXQzEw==}
 
-  '@vue/runtime-dom@3.5.41':
-    resolution: {integrity: sha512-3vVBahVBS9+U6cmXBLyb8nE6/yYo4J/CGI9eVFs3KiMc0YHuudwKyShTD65jtJy/L9PUUxNAFu4cj4LiJ0UFbw==}
+  '@vue/runtime-dom@3.5.43':
+    resolution: {integrity: sha512-Bb2Jc0YjjJdMt1SJmb9b2L/IWd3I8lIT9x9eS/xvvP9CiVgna0ffua74xKRmt4/uSJ+0r4iN8ex1jrqkhQGWQw==}
 
-  '@vue/server-renderer@3.5.41':
-    resolution: {integrity: sha512-n6hx/pNFfbD6SuyeuMVkvqox8bwf/ET9JlA/kAz/imw8sw++wkqKe2mHX5KutjPpbKE4Z56yTHszoOjGMI9igQ==}
+  '@vue/server-renderer@3.5.43':
+    resolution: {integrity: sha512-l2Ygjv9NehV94PSBxNWsAHC0j/eIIKbn92mBuWXAPGLnn6HfJ6MH5ubsd+Nk0YoZ5FRuxWI1P2VSoh+dbPQhCQ==}
 
-  '@vue/shared@3.5.41':
-    resolution: {integrity: sha512-IOnwSCma8j+9xJT6b8H0dEYidC80NsYmNMlZxRsukYcSoGaDBohog5hDxzeUXdFeGWFA++vWvxqOmrr96VlqMA==}
+  '@vue/shared@3.5.43':
+    resolution: {integrity: sha512-uksS7YGMR5NZyr4JNq0Rp+QyLns0ueaz20KwzIPW9R0LH1Vnt4E+XUM29PNseEbf1www2gOuhuDi5AKOIXag9Q==}
 
   '@webassemblyjs/ast@1.14.1':
     resolution: {integrity: sha512-nuBEDgQfm1ccRp/8bCQrx1frohyufl4JlbMMZ4P1wpeOfDhF6FQkxZJ1b/e+PLwr6X1Nhw6OLme5usuBWYBvuQ==}
@@ -6152,11 +6290,11 @@ packages:
     resolution: {integrity: sha512-F/1DnUGPopORZi0ni+CvrCgHQ5FyEAHRLSApuYWMmrbSwoN2Mn/7k+Gl38gJnR7yyDZk6WLXwiGod1JOWNDKGw==}
     hasBin: true
 
-  hermes-compiler@250829098.0.10:
-    resolution: {integrity: sha512-TcRlZ0/TlyfJqquRFAWoyElVNnkdYRi/sEp4/Qy8/GYxjg8j2cS9D4MjuaQ+qimkmLN7AmO+44IznRf06mAr0w==}
-
   hermes-compiler@250829098.0.17:
     resolution: {integrity: sha512-qG1PXzTEtriF6oQLZF3vyHhSMxOdW5h2TqqLri0rdpstPustd2fSvRZQMVAPdlhgFwBfYnj3OUZtiO6LjYsEFw==}
+
+  hermes-compiler@250829098.0.19:
+    resolution: {integrity: sha512-qMdHsuntdFVNqx3EPOZyyQd4qHD2g0o3y32SYX2Z7jKG1uF7B2WDBHeZK/6qOnl06BQiXPhBuD6SdZv10ngtyw==}
 
   hermes-estree@0.25.1:
     resolution: {integrity: sha512-0wUoCcLp+5Ev5pDW2OriHC2MJCbwLwuRx+gAqMTOkGKJJiBCLjtrvy4PWUGn6MIVefecRpzoOZ/UV6iGdOr+Cw==}
@@ -7314,10 +7452,10 @@ packages:
   react-devtools-core@6.1.5:
     resolution: {integrity: sha512-ePrwPfxAnB+7hgnEr8vpKxL9cmnp7F322t8oqcPshbIQQhDKgFDW4tjhF2wjVbdXF9O/nyuy3sQWd9JGpiLPvA==}
 
-  react-dom@19.2.8:
-    resolution: {integrity: sha512-rVprimfGBG3DR+Tq0IQG2DT5PxKth1WIGDmj5yPmlzr4YBe7uyE+Du4oVqTDXZSHGGGXRtTJEGSSePyQCMBglQ==}
+  react-dom@19.3.0:
+    resolution: {integrity: sha512-JDk8dgif51OjFoDE70+OT9ICyYr+69HlmihNwp1+Nsfbna3t5sIiCa9ZJktDmQ4/1b/rn26hIAR2uYXDMr5r0Q==}
     peerDependencies:
-      react: ^19.2.8
+      react: ^19.3.0
 
   react-is@16.13.1:
     resolution: {integrity: sha512-24e6ynE2H+OKt4kqsOvNd8kBpV65zoxbA4BVsEOB3ARVWQki/DHzaUoC5KuON/BiccDaCCTZBuOcfZs70kR8bQ==}
@@ -7328,8 +7466,8 @@ packages:
   react-is@19.3.0:
     resolution: {integrity: sha512-UpMYezM4v5/18F28aC66AEsjXIgE02kyEMH6yLdgLXu/UTfa1Ntwck/nNLrbqJsEXW7gPb0coNO9FQse9WTovA==}
 
-  react-native-safe-area-context@5.8.0:
-    resolution: {integrity: sha512-t+ZsAVzY/wWzzx34vqGbo3/as9EEESJdbyZNL7Yg5EYX+toYMtMqFoDDCvqZUi35eeGVsXc6pAaEk4edMwbuCQ==}
+  react-native-safe-area-context@5.10.0:
+    resolution: {integrity: sha512-U655+G0KItefqpTKZenr0aBNulY/49TUKSZkWGVtESlFK5qmML7BejQjPDCRU+GzC24g2KeWFJguWP5LR52dqA==}
     peerDependencies:
       react: '*'
       react-native: 0.87.1
@@ -7358,12 +7496,8 @@ packages:
     peerDependencies:
       react: ^19.3.0
 
-  react@19.2.3:
-    resolution: {integrity: sha512-Ku/hhYbVjOQnXDZFv2+RibmLFGwFdeeKHFcOTlrt7xplBnya5OGn/hIRDsqDiSUcfORsDC7MPxwork8jBwsIWA==}
-    engines: {node: '>=0.10.0'}
-
-  react@19.2.8:
-    resolution: {integrity: sha512-PWaYA1L/q9u2u7xYQi+Y3L3Yfnie7XyLeaJICV1MGD6LprsBxcAqGjYyr0eY3p+QdsA+x/Irkt4Qif8D63+Sbw==}
+  react@19.3.0:
+    resolution: {integrity: sha512-E8LUcbtBWt20bbl2YoHfx4ZDBdxVTfOKtCZn9cDSJ4l6/nuoApcpIBcj47t2wZoVX8g2ZHuMHbiShgCR1T5Sog==}
     engines: {node: '>=0.10.0'}
 
   readable-stream@3.6.2:
@@ -7479,6 +7613,11 @@ packages:
 
   rollup@4.62.4:
     resolution: {integrity: sha512-RXOqwaPsBGjMNMa4sQjDjHieHEZDFoj/Rdr46l2MU5DfEs16wHJPC2RPTPHWhNl+M3aI472LLqFkFKut4SblOg==}
+    engines: {node: '>=18.0.0', npm: '>=8.0.0'}
+    hasBin: true
+
+  rollup@4.63.4:
+    resolution: {integrity: sha512-4U0liVayNIoLp3GFl1FcI8561WepLnZ1rqfraGh7S9B3Ur5F9S283y8Futii7RUU2C/97tOBmBy7nYvhoiOpbQ==}
     engines: {node: '>=18.0.0', npm: '>=8.0.0'}
     hasBin: true
 
@@ -8132,8 +8271,8 @@ packages:
   vlq@1.0.1:
     resolution: {integrity: sha512-gQpnTgkubC6hQgdIcRdYGDSDc+SaujOdyesZQMv6JlfQee/9Mp0Qhnys6WxDWvQnL5WZdT7o2Ul187aSt0Rq+w==}
 
-  vue@3.5.41:
-    resolution: {integrity: sha512-2laE0p+aK+/AOPG/XL/WepOs/GlK755LJ1XECi9kDUrz1FKNw8rb2Xzlw9JS1rqEV55nb0ttsKxVlTCcd+R5cg==}
+  vue@3.5.43:
+    resolution: {integrity: sha512-o5qZoksdnjIKvW1srZ3ab7pcDNYAerBjRe54D0LBLfRdCYFrSgBHVXokMas35czQc0//lmx4/tuY4ZNQ+Rf2Ng==}
     peerDependencies:
       typescript: '*'
     peerDependenciesMeta:
@@ -9650,14 +9789,14 @@ snapshots:
       hashery: 1.5.1
       keyv: 5.6.0
 
-  '@clack/core@1.4.3':
+  '@clack/core@1.5.1':
     dependencies:
       fast-wrap-ansi: 0.2.2
       sisteransi: 1.0.5
 
-  '@clack/prompts@1.7.0':
+  '@clack/prompts@1.8.1':
     dependencies:
-      '@clack/core': 1.4.3
+      '@clack/core': 1.5.1
       fast-string-width: 3.0.2
       fast-wrap-ansi: 0.2.2
       sisteransi: 1.0.5
@@ -10390,13 +10529,13 @@ snapshots:
 
   '@poppinss/exception@1.2.2': {}
 
-  '@preact/preset-vite@2.10.6(@babel/core@7.29.7(supports-color@10.2.2))(preact@10.29.8)(rollup@4.62.4)(supports-color@10.2.2)(vite@8.3.0(esbuild@0.28.1)(jiti@2.7.0)(terser@5.37.0)(yaml@2.9.0))':
+  '@preact/preset-vite@2.10.6(@babel/core@7.29.7(supports-color@10.2.2))(preact@10.29.8)(rollup@4.63.4)(supports-color@10.2.2)(vite@8.3.0(esbuild@0.28.1)(jiti@2.7.0)(terser@5.37.0)(yaml@2.9.0))':
     dependencies:
       '@babel/core': 7.29.7(supports-color@10.2.2)
       '@babel/plugin-transform-react-jsx': 7.29.7(@babel/core@7.29.7(supports-color@10.2.2))(supports-color@10.2.2)
       '@babel/plugin-transform-react-jsx-development': 7.29.7(@babel/core@7.29.7(supports-color@10.2.2))(supports-color@10.2.2)
       '@prefresh/vite': 2.4.12(preact@10.29.8)(supports-color@10.2.2)(vite@8.3.0(esbuild@0.28.1)(jiti@2.7.0)(terser@5.37.0)(yaml@2.9.0))
-      '@rollup/pluginutils': 5.1.4(rollup@4.62.4)
+      '@rollup/pluginutils': 5.1.4(rollup@4.63.4)
       babel-plugin-transform-hook-names: 1.0.2(@babel/core@7.29.7(supports-color@10.2.2))
       debug: 4.4.3(supports-color@10.2.2)
       magic-string: 0.30.21
@@ -10888,13 +11027,13 @@ snapshots:
 
   '@react-native/gradle-plugin@0.87.1': {}
 
-  '@react-native/jest-preset@0.87.1(@babel/core@8.0.6)(react@19.2.3)(supports-color@10.2.2)':
+  '@react-native/jest-preset@0.87.1(@babel/core@8.0.6)(react@19.3.0)(supports-color@10.2.2)':
     dependencies:
       '@jest/create-cache-key-function': 29.7.0
       '@react-native/js-polyfills': 0.87.1
       babel-jest: 29.7.0(@babel/core@8.0.6)(supports-color@10.2.2)
       jest-environment-node: 29.7.0
-      react: 19.2.3
+      react: 19.3.0
       regenerator-runtime: 0.13.11
     transitivePeerDependencies:
       - '@babel/core'
@@ -10936,32 +11075,32 @@ snapshots:
 
   '@react-native/typescript-config@0.87.1': {}
 
-  '@react-native/virtualized-lists@0.87.1(@types/react@19.2.18)(react-native@0.87.1(@babel/core@8.0.6)(@react-native-community/cli@20.2.0(supports-color@10.2.2)(typescript@5.9.3))(@react-native/metro-config@0.87.1(@babel/core@8.0.6)(supports-color@10.2.2))(@types/react@19.2.18)(react@19.2.3)(supports-color@10.2.2))(react@19.2.3)':
+  '@react-native/virtualized-lists@0.87.1(@types/react@19.3.0)(react-native@0.87.1(@babel/core@8.0.6)(@react-native-community/cli@20.2.0(supports-color@10.2.2)(typescript@5.9.3))(@react-native/metro-config@0.87.1(@babel/core@8.0.6)(supports-color@10.2.2))(@types/react@19.3.0)(react@19.3.0)(supports-color@10.2.2))(react@19.3.0)':
     dependencies:
       invariant: 2.2.4
       nullthrows: 1.1.1
-      react: 19.2.3
-      react-native: 0.87.1(@babel/core@8.0.6)(@react-native-community/cli@20.2.0(supports-color@10.2.2)(typescript@5.9.3))(@react-native/metro-config@0.87.1(@babel/core@8.0.6)(supports-color@10.2.2))(@types/react@19.2.18)(react@19.2.3)(supports-color@10.2.2)
+      react: 19.3.0
+      react-native: 0.87.1(@babel/core@8.0.6)(@react-native-community/cli@20.2.0(supports-color@10.2.2)(typescript@5.9.3))(@react-native/metro-config@0.87.1(@babel/core@8.0.6)(supports-color@10.2.2))(@types/react@19.3.0)(react@19.3.0)(supports-color@10.2.2)
     optionalDependencies:
-      '@types/react': 19.2.18
+      '@types/react': 19.3.0
 
-  '@react-native/virtualized-lists@0.87.1(@types/react@19.2.18)(react-native@0.87.1(@babel/core@8.0.6)(@react-native-community/cli@20.2.0(supports-color@10.2.2)(typescript@6.0.3))(@react-native/metro-config@0.87.1(@babel/core@8.0.6)(supports-color@10.2.2))(@types/react@19.2.18)(react@19.2.8)(supports-color@10.2.2))(react@19.2.8)':
+  '@react-native/virtualized-lists@0.87.1(@types/react@19.3.0)(react-native@0.87.1(@babel/core@8.0.6)(@react-native-community/cli@20.2.0(supports-color@10.2.2)(typescript@6.0.3))(@react-native/metro-config@0.87.1(@babel/core@8.0.6)(supports-color@10.2.2))(@types/react@19.3.0)(react@19.3.0)(supports-color@10.2.2))(react@19.3.0)':
     dependencies:
       invariant: 2.2.4
       nullthrows: 1.1.1
-      react: 19.2.8
-      react-native: 0.87.1(@babel/core@8.0.6)(@react-native-community/cli@20.2.0(supports-color@10.2.2)(typescript@6.0.3))(@react-native/metro-config@0.87.1(@babel/core@8.0.6)(supports-color@10.2.2))(@types/react@19.2.18)(react@19.2.8)(supports-color@10.2.2)
+      react: 19.3.0
+      react-native: 0.87.1(@babel/core@8.0.6)(@react-native-community/cli@20.2.0(supports-color@10.2.2)(typescript@6.0.3))(@react-native/metro-config@0.87.1(@babel/core@8.0.6)(supports-color@10.2.2))(@types/react@19.3.0)(react@19.3.0)(supports-color@10.2.2)
     optionalDependencies:
-      '@types/react': 19.2.18
+      '@types/react': 19.3.0
 
-  '@react-native/virtualized-lists@0.87.1(@types/react@19.2.18)(react-native@0.87.1(@babel/core@8.0.6)(@react-native-community/cli@20.2.0(supports-color@10.2.2)(typescript@7.0.2))(@react-native/metro-config@0.87.1(@babel/core@8.0.6)(supports-color@10.2.2))(@types/react@19.2.18)(react@19.2.8)(supports-color@10.2.2))(react@19.2.8)':
+  '@react-native/virtualized-lists@0.87.1(@types/react@19.3.0)(react-native@0.87.1(@babel/core@8.0.6)(@react-native-community/cli@20.2.0(supports-color@10.2.2)(typescript@7.0.2))(@react-native/metro-config@0.87.1(@babel/core@8.0.6)(supports-color@10.2.2))(@types/react@19.3.0)(react@19.3.0)(supports-color@10.2.2))(react@19.3.0)':
     dependencies:
       invariant: 2.2.4
       nullthrows: 1.1.1
-      react: 19.2.8
-      react-native: 0.87.1(@babel/core@8.0.6)(@react-native-community/cli@20.2.0(supports-color@10.2.2)(typescript@7.0.2))(@react-native/metro-config@0.87.1(@babel/core@8.0.6)(supports-color@10.2.2))(@types/react@19.2.18)(react@19.2.8)(supports-color@10.2.2)
+      react: 19.3.0
+      react-native: 0.87.1(@babel/core@8.0.6)(@react-native-community/cli@20.2.0(supports-color@10.2.2)(typescript@7.0.2))(@react-native/metro-config@0.87.1(@babel/core@8.0.6)(supports-color@10.2.2))(@types/react@19.3.0)(react@19.3.0)(supports-color@10.2.2)
     optionalDependencies:
-      '@types/react': 19.2.18
+      '@types/react': 19.3.0
 
   '@rolldown/binding-android-arm-eabi@1.2.9':
     optional: true
@@ -11052,9 +11191,9 @@ snapshots:
 
   '@rolldown/pluginutils@1.0.1': {}
 
-  '@rollup/plugin-commonjs@29.0.3(rollup@4.62.4)':
+  '@rollup/plugin-commonjs@29.0.3(rollup@4.63.4)':
     dependencies:
-      '@rollup/pluginutils': 5.1.4(rollup@4.62.4)
+      '@rollup/pluginutils': 5.1.4(rollup@4.63.4)
       commondir: 1.0.1
       estree-walker: 2.0.2
       fdir: 6.5.0(picomatch@4.0.5)
@@ -11062,114 +11201,189 @@ snapshots:
       magic-string: 0.30.21
       picomatch: 4.0.5
     optionalDependencies:
-      rollup: 4.62.4
+      rollup: 4.63.4
 
-  '@rollup/plugin-json@6.1.0(rollup@4.62.4)':
+  '@rollup/plugin-json@6.1.0(rollup@4.63.4)':
     dependencies:
-      '@rollup/pluginutils': 5.1.4(rollup@4.62.4)
+      '@rollup/pluginutils': 5.1.4(rollup@4.63.4)
     optionalDependencies:
-      rollup: 4.62.4
+      rollup: 4.63.4
 
-  '@rollup/plugin-node-resolve@16.0.3(rollup@4.62.4)':
+  '@rollup/plugin-node-resolve@16.0.3(rollup@4.63.4)':
     dependencies:
-      '@rollup/pluginutils': 5.1.4(rollup@4.62.4)
+      '@rollup/pluginutils': 5.1.4(rollup@4.63.4)
       '@types/resolve': 1.20.2
       deepmerge: 4.3.1
       is-module: 1.0.0
       resolve: 1.22.12
     optionalDependencies:
-      rollup: 4.62.4
+      rollup: 4.63.4
 
-  '@rollup/plugin-virtual@3.0.2(rollup@4.62.4)':
+  '@rollup/plugin-virtual@3.0.2(rollup@4.63.4)':
     optionalDependencies:
-      rollup: 4.62.4
+      rollup: 4.63.4
 
   '@rollup/pluginutils@4.2.1':
     dependencies:
       estree-walker: 2.0.2
       picomatch: 2.3.2
 
-  '@rollup/pluginutils@5.1.4(rollup@4.62.4)':
+  '@rollup/pluginutils@5.1.4(rollup@4.63.4)':
     dependencies:
       '@types/estree': 1.0.9
       estree-walker: 2.0.2
       picomatch: 4.0.5
     optionalDependencies:
-      rollup: 4.62.4
+      rollup: 4.63.4
 
   '@rollup/rollup-android-arm-eabi@4.62.4':
+    optional: true
+
+  '@rollup/rollup-android-arm-eabi@4.63.4':
     optional: true
 
   '@rollup/rollup-android-arm64@4.62.4':
     optional: true
 
+  '@rollup/rollup-android-arm64@4.63.4':
+    optional: true
+
   '@rollup/rollup-darwin-arm64@4.62.4':
+    optional: true
+
+  '@rollup/rollup-darwin-arm64@4.63.4':
     optional: true
 
   '@rollup/rollup-darwin-x64@4.62.4':
     optional: true
 
+  '@rollup/rollup-darwin-x64@4.63.4':
+    optional: true
+
   '@rollup/rollup-freebsd-arm64@4.62.4':
+    optional: true
+
+  '@rollup/rollup-freebsd-arm64@4.63.4':
     optional: true
 
   '@rollup/rollup-freebsd-x64@4.62.4':
     optional: true
 
+  '@rollup/rollup-freebsd-x64@4.63.4':
+    optional: true
+
   '@rollup/rollup-linux-arm-gnueabihf@4.62.4':
+    optional: true
+
+  '@rollup/rollup-linux-arm-gnueabihf@4.63.4':
     optional: true
 
   '@rollup/rollup-linux-arm-musleabihf@4.62.4':
     optional: true
 
+  '@rollup/rollup-linux-arm-musleabihf@4.63.4':
+    optional: true
+
   '@rollup/rollup-linux-arm64-gnu@4.62.4':
+    optional: true
+
+  '@rollup/rollup-linux-arm64-gnu@4.63.4':
     optional: true
 
   '@rollup/rollup-linux-arm64-musl@4.62.4':
     optional: true
 
+  '@rollup/rollup-linux-arm64-musl@4.63.4':
+    optional: true
+
   '@rollup/rollup-linux-loong64-gnu@4.62.4':
+    optional: true
+
+  '@rollup/rollup-linux-loong64-gnu@4.63.4':
     optional: true
 
   '@rollup/rollup-linux-loong64-musl@4.62.4':
     optional: true
 
+  '@rollup/rollup-linux-loong64-musl@4.63.4':
+    optional: true
+
   '@rollup/rollup-linux-ppc64-gnu@4.62.4':
+    optional: true
+
+  '@rollup/rollup-linux-ppc64-gnu@4.63.4':
     optional: true
 
   '@rollup/rollup-linux-ppc64-musl@4.62.4':
     optional: true
 
+  '@rollup/rollup-linux-ppc64-musl@4.63.4':
+    optional: true
+
   '@rollup/rollup-linux-riscv64-gnu@4.62.4':
+    optional: true
+
+  '@rollup/rollup-linux-riscv64-gnu@4.63.4':
     optional: true
 
   '@rollup/rollup-linux-riscv64-musl@4.62.4':
     optional: true
 
+  '@rollup/rollup-linux-riscv64-musl@4.63.4':
+    optional: true
+
   '@rollup/rollup-linux-s390x-gnu@4.62.4':
+    optional: true
+
+  '@rollup/rollup-linux-s390x-gnu@4.63.4':
     optional: true
 
   '@rollup/rollup-linux-x64-gnu@4.62.4':
     optional: true
 
+  '@rollup/rollup-linux-x64-gnu@4.63.4':
+    optional: true
+
   '@rollup/rollup-linux-x64-musl@4.62.4':
+    optional: true
+
+  '@rollup/rollup-linux-x64-musl@4.63.4':
     optional: true
 
   '@rollup/rollup-openbsd-x64@4.62.4':
     optional: true
 
+  '@rollup/rollup-openbsd-x64@4.63.4':
+    optional: true
+
   '@rollup/rollup-openharmony-arm64@4.62.4':
+    optional: true
+
+  '@rollup/rollup-openharmony-arm64@4.63.4':
     optional: true
 
   '@rollup/rollup-win32-arm64-msvc@4.62.4':
     optional: true
 
+  '@rollup/rollup-win32-arm64-msvc@4.63.4':
+    optional: true
+
   '@rollup/rollup-win32-ia32-msvc@4.62.4':
+    optional: true
+
+  '@rollup/rollup-win32-ia32-msvc@4.63.4':
     optional: true
 
   '@rollup/rollup-win32-x64-gnu@4.62.4':
     optional: true
 
+  '@rollup/rollup-win32-x64-gnu@4.63.4':
+    optional: true
+
   '@rollup/rollup-win32-x64-msvc@4.62.4':
+    optional: true
+
+  '@rollup/rollup-win32-x64-msvc@4.63.4':
     optional: true
 
   '@rspack/binding-darwin-arm64@2.1.8':
@@ -11357,15 +11571,15 @@ snapshots:
     dependencies:
       undici-types: 6.20.0
 
-  '@types/react-dom@19.2.4(@types/react@19.2.18)':
+  '@types/react-dom@19.3.0(@types/react@19.3.0)':
     dependencies:
-      '@types/react': 19.2.18
+      '@types/react': 19.3.0
 
   '@types/react-test-renderer@19.1.0':
     dependencies:
-      '@types/react': 19.2.18
+      '@types/react': 19.3.0
 
-  '@types/react@19.2.18':
+  '@types/react@19.3.0':
     dependencies:
       csstype: 3.2.3
 
@@ -11588,11 +11802,11 @@ snapshots:
       '@rolldown/pluginutils': 1.0.1
       vite: 8.2.1(esbuild@0.28.1)(jiti@2.7.0)(terser@5.37.0)(yaml@2.9.0)
 
-  '@vitejs/plugin-vue@6.0.8(vite@8.2.1(esbuild@0.28.1)(jiti@2.7.0)(terser@5.37.0)(yaml@2.9.0))(vue@3.5.41(typescript@7.0.2))':
+  '@vitejs/plugin-vue@6.0.8(vite@8.2.1(esbuild@0.28.1)(jiti@2.7.0)(terser@5.37.0)(yaml@2.9.0))(vue@3.5.43(typescript@7.0.2))':
     dependencies:
       '@rolldown/pluginutils': 1.0.1
       vite: 8.2.1(esbuild@0.28.1)(jiti@2.7.0)(terser@5.37.0)(yaml@2.9.0)
-      vue: 3.5.41(typescript@7.0.2)
+      vue: 3.5.43(typescript@7.0.2)
 
   '@vitest/coverage-v8@4.1.11(vitest@4.1.11)':
     dependencies:
@@ -11651,59 +11865,59 @@ snapshots:
 
   '@vscode/sudo-prompt@9.3.2': {}
 
-  '@vue/compiler-core@3.5.41':
+  '@vue/compiler-core@3.5.43':
     dependencies:
       '@babel/parser': 7.29.8
-      '@vue/shared': 3.5.41
+      '@vue/shared': 3.5.43
       entities: 7.0.1
       estree-walker: 2.0.2
       source-map-js: 1.2.1
 
-  '@vue/compiler-dom@3.5.41':
+  '@vue/compiler-dom@3.5.43':
     dependencies:
-      '@vue/compiler-core': 3.5.41
-      '@vue/shared': 3.5.41
+      '@vue/compiler-core': 3.5.43
+      '@vue/shared': 3.5.43
 
-  '@vue/compiler-sfc@3.5.41':
+  '@vue/compiler-sfc@3.5.43':
     dependencies:
       '@babel/parser': 7.29.8
-      '@vue/compiler-core': 3.5.41
-      '@vue/compiler-dom': 3.5.41
-      '@vue/compiler-ssr': 3.5.41
-      '@vue/shared': 3.5.41
+      '@vue/compiler-core': 3.5.43
+      '@vue/compiler-dom': 3.5.43
+      '@vue/compiler-ssr': 3.5.43
+      '@vue/shared': 3.5.43
       estree-walker: 2.0.2
       magic-string: 0.30.21
       postcss: 8.5.26
       source-map-js: 1.2.1
 
-  '@vue/compiler-ssr@3.5.41':
+  '@vue/compiler-ssr@3.5.43':
     dependencies:
-      '@vue/compiler-dom': 3.5.41
-      '@vue/shared': 3.5.41
+      '@vue/compiler-dom': 3.5.43
+      '@vue/shared': 3.5.43
 
-  '@vue/reactivity@3.5.41':
+  '@vue/reactivity@3.5.43':
     dependencies:
-      '@vue/shared': 3.5.41
+      '@vue/shared': 3.5.43
 
-  '@vue/runtime-core@3.5.41':
+  '@vue/runtime-core@3.5.43':
     dependencies:
-      '@vue/reactivity': 3.5.41
-      '@vue/shared': 3.5.41
+      '@vue/reactivity': 3.5.43
+      '@vue/shared': 3.5.43
 
-  '@vue/runtime-dom@3.5.41':
+  '@vue/runtime-dom@3.5.43':
     dependencies:
-      '@vue/reactivity': 3.5.41
-      '@vue/runtime-core': 3.5.41
-      '@vue/shared': 3.5.41
+      '@vue/reactivity': 3.5.43
+      '@vue/runtime-core': 3.5.43
+      '@vue/shared': 3.5.43
       csstype: 3.2.3
 
-  '@vue/server-renderer@3.5.41':
+  '@vue/server-renderer@3.5.43':
     dependencies:
-      '@vue/compiler-ssr': 3.5.41
-      '@vue/runtime-dom': 3.5.41
-      '@vue/shared': 3.5.41
+      '@vue/compiler-ssr': 3.5.43
+      '@vue/runtime-dom': 3.5.43
+      '@vue/shared': 3.5.43
 
-  '@vue/shared@3.5.41': {}
+  '@vue/shared@3.5.43': {}
 
   '@webassemblyjs/ast@1.14.1':
     dependencies:
@@ -13012,6 +13226,10 @@ snapshots:
     optionalDependencies:
       picomatch: 4.0.5
 
+  fdir@6.5.0(picomatch@4.0.7):
+    optionalDependencies:
+      picomatch: 4.0.7
+
   file-entry-cache@11.1.5:
     dependencies:
       flat-cache: 6.1.23
@@ -13193,9 +13411,9 @@ snapshots:
 
   he@1.2.0: {}
 
-  hermes-compiler@250829098.0.10: {}
-
   hermes-compiler@250829098.0.17: {}
+
+  hermes-compiler@250829098.0.19: {}
 
   hermes-estree@0.25.1: {}
 
@@ -14210,7 +14428,7 @@ snapshots:
       - bufferutil
       - utf-8-validate
 
-  miniflare@5.20260918.0-alpha:
+  miniflare@5.20260918.0-alpha(@types/node@22.10.2):
     dependencies:
       '@cspotcode/source-map-support': 0.8.1
       sharp: 0.35.4(@types/node@22.10.2)
@@ -14570,10 +14788,10 @@ snapshots:
       - bufferutil
       - utf-8-validate
 
-  react-dom@19.2.8(react@19.2.8):
+  react-dom@19.3.0(react@19.3.0):
     dependencies:
-      react: 19.2.8
-      scheduler: 0.27.0
+      react: 19.3.0
+      scheduler: 0.28.0
 
   react-is@16.13.1: {}
 
@@ -14581,19 +14799,19 @@ snapshots:
 
   react-is@19.3.0: {}
 
-  react-native-safe-area-context@5.8.0(react-native@0.87.1(@babel/core@8.0.6)(@react-native-community/cli@20.2.0(supports-color@10.2.2)(typescript@5.9.3))(@react-native/metro-config@0.87.1(@babel/core@8.0.6)(supports-color@10.2.2))(@types/react@19.2.18)(react@19.2.3)(supports-color@10.2.2))(react@19.2.3):
+  react-native-safe-area-context@5.10.0(react-native@0.87.1(@babel/core@8.0.6)(@react-native-community/cli@20.2.0(supports-color@10.2.2)(typescript@5.9.3))(@react-native/metro-config@0.87.1(@babel/core@8.0.6)(supports-color@10.2.2))(@types/react@19.3.0)(react@19.3.0)(supports-color@10.2.2))(react@19.3.0):
     dependencies:
-      react: 19.2.3
-      react-native: 0.87.1(@babel/core@8.0.6)(@react-native-community/cli@20.2.0(supports-color@10.2.2)(typescript@5.9.3))(@react-native/metro-config@0.87.1(@babel/core@8.0.6)(supports-color@10.2.2))(@types/react@19.2.18)(react@19.2.3)(supports-color@10.2.2)
+      react: 19.3.0
+      react-native: 0.87.1(@babel/core@8.0.6)(@react-native-community/cli@20.2.0(supports-color@10.2.2)(typescript@5.9.3))(@react-native/metro-config@0.87.1(@babel/core@8.0.6)(supports-color@10.2.2))(@types/react@19.3.0)(react@19.3.0)(supports-color@10.2.2)
 
-  react-native@0.87.1(@babel/core@8.0.6)(@react-native-community/cli@20.2.0(supports-color@10.2.2)(typescript@5.9.3))(@react-native/metro-config@0.87.1(@babel/core@8.0.6)(supports-color@10.2.2))(@types/react@19.2.18)(react@19.2.3)(supports-color@10.2.2):
+  react-native@0.87.1(@babel/core@8.0.6)(@react-native-community/cli@20.2.0(supports-color@10.2.2)(typescript@5.9.3))(@react-native/metro-config@0.87.1(@babel/core@8.0.6)(supports-color@10.2.2))(@types/react@19.3.0)(react@19.3.0)(supports-color@10.2.2):
     dependencies:
       '@react-native/asset-utils': 0.87.1
       '@react-native/codegen': 0.87.1(@babel/core@8.0.6)
       '@react-native/community-cli-plugin': 0.87.1(@react-native-community/cli@20.2.0(supports-color@10.2.2)(typescript@5.9.3))(@react-native/metro-config@0.87.1(@babel/core@8.0.6)(supports-color@10.2.2))(supports-color@10.2.2)
       '@react-native/gradle-plugin': 0.87.1
       '@react-native/normalize-colors': 0.87.1
-      '@react-native/virtualized-lists': 0.87.1(@types/react@19.2.18)(react-native@0.87.1(@babel/core@8.0.6)(@react-native-community/cli@20.2.0(supports-color@10.2.2)(typescript@5.9.3))(@react-native/metro-config@0.87.1(@babel/core@8.0.6)(supports-color@10.2.2))(@types/react@19.2.18)(react@19.2.3)(supports-color@10.2.2))(react@19.2.3)
+      '@react-native/virtualized-lists': 0.87.1(@types/react@19.3.0)(react-native@0.87.1(@babel/core@8.0.6)(@react-native-community/cli@20.2.0(supports-color@10.2.2)(typescript@5.9.3))(@react-native/metro-config@0.87.1(@babel/core@8.0.6)(supports-color@10.2.2))(@types/react@19.3.0)(react@19.3.0)(supports-color@10.2.2))(react@19.3.0)
       anser: 1.4.10
       ansi-regex: 5.0.1
       babel-plugin-syntax-hermes-parser: 0.36.1
@@ -14608,7 +14826,7 @@ snapshots:
       nullthrows: 1.1.1
       pretty-format: 29.7.0
       promise: 8.3.0
-      react: 19.2.3
+      react: 19.3.0
       react-devtools-core: 6.1.5
       react-refresh: 0.14.2
       regenerator-runtime: 0.13.11
@@ -14620,7 +14838,7 @@ snapshots:
       ws: 7.5.13
       yargs: 17.7.2
     optionalDependencies:
-      '@types/react': 19.2.18
+      '@types/react': 19.3.0
     transitivePeerDependencies:
       - '@babel/core'
       - '@react-native-community/cli'
@@ -14629,14 +14847,14 @@ snapshots:
       - supports-color
       - utf-8-validate
 
-  react-native@0.87.1(@babel/core@8.0.6)(@react-native-community/cli@20.2.0(supports-color@10.2.2)(typescript@6.0.3))(@react-native/metro-config@0.87.1(@babel/core@8.0.6)(supports-color@10.2.2))(@types/react@19.2.18)(react@19.2.8)(supports-color@10.2.2):
+  react-native@0.87.1(@babel/core@8.0.6)(@react-native-community/cli@20.2.0(supports-color@10.2.2)(typescript@6.0.3))(@react-native/metro-config@0.87.1(@babel/core@8.0.6)(supports-color@10.2.2))(@types/react@19.3.0)(react@19.3.0)(supports-color@10.2.2):
     dependencies:
       '@react-native/asset-utils': 0.87.1
       '@react-native/codegen': 0.87.1(@babel/core@8.0.6)
       '@react-native/community-cli-plugin': 0.87.1(@react-native-community/cli@20.2.0(supports-color@10.2.2)(typescript@6.0.3))(@react-native/metro-config@0.87.1(@babel/core@8.0.6)(supports-color@10.2.2))(supports-color@10.2.2)
       '@react-native/gradle-plugin': 0.87.1
       '@react-native/normalize-colors': 0.87.1
-      '@react-native/virtualized-lists': 0.87.1(@types/react@19.2.18)(react-native@0.87.1(@babel/core@8.0.6)(@react-native-community/cli@20.2.0(supports-color@10.2.2)(typescript@6.0.3))(@react-native/metro-config@0.87.1(@babel/core@8.0.6)(supports-color@10.2.2))(@types/react@19.2.18)(react@19.2.8)(supports-color@10.2.2))(react@19.2.8)
+      '@react-native/virtualized-lists': 0.87.1(@types/react@19.3.0)(react-native@0.87.1(@babel/core@8.0.6)(@react-native-community/cli@20.2.0(supports-color@10.2.2)(typescript@6.0.3))(@react-native/metro-config@0.87.1(@babel/core@8.0.6)(supports-color@10.2.2))(@types/react@19.3.0)(react@19.3.0)(supports-color@10.2.2))(react@19.3.0)
       anser: 1.4.10
       ansi-regex: 5.0.1
       babel-plugin-syntax-hermes-parser: 0.36.1
@@ -14651,7 +14869,7 @@ snapshots:
       nullthrows: 1.1.1
       pretty-format: 29.7.0
       promise: 8.3.0
-      react: 19.2.8
+      react: 19.3.0
       react-devtools-core: 6.1.5
       react-refresh: 0.14.2
       regenerator-runtime: 0.13.11
@@ -14663,7 +14881,7 @@ snapshots:
       ws: 7.5.13
       yargs: 17.7.2
     optionalDependencies:
-      '@types/react': 19.2.18
+      '@types/react': 19.3.0
     transitivePeerDependencies:
       - '@babel/core'
       - '@react-native-community/cli'
@@ -14672,14 +14890,14 @@ snapshots:
       - supports-color
       - utf-8-validate
 
-  react-native@0.87.1(@babel/core@8.0.6)(@react-native-community/cli@20.2.0(supports-color@10.2.2)(typescript@7.0.2))(@react-native/metro-config@0.87.1(@babel/core@8.0.6)(supports-color@10.2.2))(@types/react@19.2.18)(react@19.2.8)(supports-color@10.2.2):
+  react-native@0.87.1(@babel/core@8.0.6)(@react-native-community/cli@20.2.0(supports-color@10.2.2)(typescript@7.0.2))(@react-native/metro-config@0.87.1(@babel/core@8.0.6)(supports-color@10.2.2))(@types/react@19.3.0)(react@19.3.0)(supports-color@10.2.2):
     dependencies:
       '@react-native/asset-utils': 0.87.1
       '@react-native/codegen': 0.87.1(@babel/core@8.0.6)
       '@react-native/community-cli-plugin': 0.87.1(@react-native-community/cli@20.2.0(supports-color@10.2.2)(typescript@7.0.2))(@react-native/metro-config@0.87.1(@babel/core@8.0.6)(supports-color@10.2.2))(supports-color@10.2.2)
       '@react-native/gradle-plugin': 0.87.1
       '@react-native/normalize-colors': 0.87.1
-      '@react-native/virtualized-lists': 0.87.1(@types/react@19.2.18)(react-native@0.87.1(@babel/core@8.0.6)(@react-native-community/cli@20.2.0(supports-color@10.2.2)(typescript@7.0.2))(@react-native/metro-config@0.87.1(@babel/core@8.0.6)(supports-color@10.2.2))(@types/react@19.2.18)(react@19.2.8)(supports-color@10.2.2))(react@19.2.8)
+      '@react-native/virtualized-lists': 0.87.1(@types/react@19.3.0)(react-native@0.87.1(@babel/core@8.0.6)(@react-native-community/cli@20.2.0(supports-color@10.2.2)(typescript@7.0.2))(@react-native/metro-config@0.87.1(@babel/core@8.0.6)(supports-color@10.2.2))(@types/react@19.3.0)(react@19.3.0)(supports-color@10.2.2))(react@19.3.0)
       anser: 1.4.10
       ansi-regex: 5.0.1
       babel-plugin-syntax-hermes-parser: 0.36.1
@@ -14694,7 +14912,7 @@ snapshots:
       nullthrows: 1.1.1
       pretty-format: 29.7.0
       promise: 8.3.0
-      react: 19.2.8
+      react: 19.3.0
       react-devtools-core: 6.1.5
       react-refresh: 0.14.2
       regenerator-runtime: 0.13.11
@@ -14706,7 +14924,7 @@ snapshots:
       ws: 7.5.13
       yargs: 17.7.2
     optionalDependencies:
-      '@types/react': 19.2.18
+      '@types/react': 19.3.0
     transitivePeerDependencies:
       - '@babel/core'
       - '@react-native-community/cli'
@@ -14719,15 +14937,13 @@ snapshots:
 
   react-refresh@0.19.0: {}
 
-  react-test-renderer@19.3.0(react@19.2.3):
+  react-test-renderer@19.3.0(react@19.3.0):
     dependencies:
-      react: 19.2.3
+      react: 19.3.0
       react-is: 19.3.0
       scheduler: 0.28.0
 
-  react@19.2.3: {}
-
-  react@19.2.8: {}
+  react@19.3.0: {}
 
   readable-stream@3.6.2:
     dependencies:
@@ -14911,6 +15127,38 @@ snapshots:
       '@rollup/rollup-win32-ia32-msvc': 4.62.4
       '@rollup/rollup-win32-x64-gnu': 4.62.4
       '@rollup/rollup-win32-x64-msvc': 4.62.4
+      fsevents: 2.3.3
+
+  rollup@4.63.4:
+    dependencies:
+      '@types/estree': 1.0.9
+    optionalDependencies:
+      '@napi-rs/lzma-linux-x64-gnu': 1.5.1
+      '@rollup/rollup-android-arm-eabi': 4.63.4
+      '@rollup/rollup-android-arm64': 4.63.4
+      '@rollup/rollup-darwin-arm64': 4.63.4
+      '@rollup/rollup-darwin-x64': 4.63.4
+      '@rollup/rollup-freebsd-arm64': 4.63.4
+      '@rollup/rollup-freebsd-x64': 4.63.4
+      '@rollup/rollup-linux-arm-gnueabihf': 4.63.4
+      '@rollup/rollup-linux-arm-musleabihf': 4.63.4
+      '@rollup/rollup-linux-arm64-gnu': 4.63.4
+      '@rollup/rollup-linux-arm64-musl': 4.63.4
+      '@rollup/rollup-linux-loong64-gnu': 4.63.4
+      '@rollup/rollup-linux-loong64-musl': 4.63.4
+      '@rollup/rollup-linux-ppc64-gnu': 4.63.4
+      '@rollup/rollup-linux-ppc64-musl': 4.63.4
+      '@rollup/rollup-linux-riscv64-gnu': 4.63.4
+      '@rollup/rollup-linux-riscv64-musl': 4.63.4
+      '@rollup/rollup-linux-s390x-gnu': 4.63.4
+      '@rollup/rollup-linux-x64-gnu': 4.63.4
+      '@rollup/rollup-linux-x64-musl': 4.63.4
+      '@rollup/rollup-openbsd-x64': 4.63.4
+      '@rollup/rollup-openharmony-arm64': 4.63.4
+      '@rollup/rollup-win32-arm64-msvc': 4.63.4
+      '@rollup/rollup-win32-ia32-msvc': 4.63.4
+      '@rollup/rollup-win32-x64-gnu': 4.63.4
+      '@rollup/rollup-win32-x64-msvc': 4.63.4
       fsevents: 2.3.3
 
   run-parallel@1.2.0:
@@ -15342,8 +15590,8 @@ snapshots:
 
   tinyglobby@0.2.17:
     dependencies:
-      fdir: 6.5.0(picomatch@4.0.5)
-      picomatch: 4.0.5
+      fdir: 6.5.0(picomatch@4.0.7)
+      picomatch: 4.0.7
 
   tinyrainbow@3.1.0: {}
 
@@ -15584,13 +15832,13 @@ snapshots:
 
   vlq@1.0.1: {}
 
-  vue@3.5.41(typescript@7.0.2):
+  vue@3.5.43(typescript@7.0.2):
     dependencies:
-      '@vue/compiler-dom': 3.5.41
-      '@vue/compiler-sfc': 3.5.41
-      '@vue/runtime-dom': 3.5.41
-      '@vue/server-renderer': 3.5.41
-      '@vue/shared': 3.5.41
+      '@vue/compiler-dom': 3.5.43
+      '@vue/compiler-sfc': 3.5.43
+      '@vue/runtime-dom': 3.5.43
+      '@vue/server-renderer': 3.5.43
+      '@vue/shared': 3.5.43
     optionalDependencies:
       typescript: 7.0.2
 
@@ -15736,13 +15984,13 @@ snapshots:
       - bufferutil
       - utf-8-validate
 
-  wrangler@4.135.0:
+  wrangler@4.135.0(@types/node@22.10.2):
     dependencies:
       '@cloudflare/kv-asset-handler': 0.5.0
       '@cloudflare/unenv-preset': 2.16.1(unenv@2.0.0-rc.24)(workerd@1.20260918.1)
       blake3-wasm: 2.1.5
       esbuild: 0.28.1
-      miniflare: 5.20260918.0-alpha
+      miniflare: 5.20260918.0-alpha(@types/node@22.10.2)
       path-to-regexp: 6.3.0
       unenv: 2.0.0-rc.24
       workerd: 1.20260918.1
