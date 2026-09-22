@@ -25,8 +25,8 @@
     },
     "devDependencies": {
         "crossbind": "workspace:^",
-        "wrangler": "^4.120.0",
-        "@playwright/test": "^1.62.1"
+        "wrangler": "^4.136.3",
+        "@playwright/test": "^1.63.0"
     },
     "keywords": [
         "crossbind-sample",

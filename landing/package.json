@@ -26,6 +26,6 @@
         "@preact/preset-vite": "2.10.6",
         "vite": "8.3.0",
         "vite-prerender-plugin": "0.5.13",
-        "wrangler": "4.135.0"
+        "wrangler": "4.136.3"
     }
 }

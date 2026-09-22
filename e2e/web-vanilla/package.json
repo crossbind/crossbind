@@ -33,7 +33,7 @@
     "devDependencies": {
         "crossbind": "workspace:^",
         "serve": "^14.2.6",
-        "@playwright/test": "^1.62.1"
+        "@playwright/test": "^1.63.0"
     },
     "keywords": [
         "crossbind-sample",
