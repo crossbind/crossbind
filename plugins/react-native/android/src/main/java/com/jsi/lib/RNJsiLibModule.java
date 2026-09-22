@@ -1,13 +1,13 @@
 
 package com.jsi.lib;
 
+import com.facebook.proguard.annotations.DoNotStrip;
 import com.facebook.react.bridge.ReactApplicationContext;
-import com.facebook.react.bridge.ReactContextBaseJavaModule;
-import com.facebook.react.bridge.ReactMethod;
-import com.facebook.react.bridge.Callback;
 import com.facebook.react.bridge.Promise;
+import com.facebook.react.turbomodule.core.interfaces.BindingsInstallerHolder;
+import com.facebook.react.turbomodule.core.interfaces.TurboModuleWithJSIBindings;
 
-public class RNJsiLibModule extends ReactContextBaseJavaModule {
+public class RNJsiLibModule extends NativeRNJsiLibSpec implements TurboModuleWithJSIBindings {
 
   private final ReactApplicationContext reactContext;
 
@@ -17,34 +17,23 @@ public class RNJsiLibModule extends ReactContextBaseJavaModule {
     Utils.copyAssetFolder(reactContext, "crossbind", reactContext.getCacheDir().getAbsolutePath() + "/crossbind");
   }
 
-  @ReactMethod
-  public void start(Promise promise) {
-    // @ReactMethod calls run on RN's native-modules thread, but Hermes is
-    // thread-affine: any JSI access from a non-JS thread is UB. install()
-    // does heavy JSI work (embind class registration) so it must execute on
-    // the JS queue thread. Dispatch via runOnJSQueueThread to make that
-    // explicit instead of relying on a sleep() race.
-    final long jsContextHolder = this.reactContext.getJavaScriptContextHolder().get();
-    final String cachePath = this.reactContext.getCacheDir().getAbsolutePath();
-    this.reactContext.runOnJSQueueThread(new Runnable() {
-      @Override
-      public void run() {
-        try {
-          install(jsContextHolder, cachePath);
-          promise.resolve(true);
-        } catch (Exception e) {
-          promise.reject("RNJSI_INSTALL_FAILED", e);
-        }
-      }
-    });
+  // React Native runs the installer on the JS thread, once per module instance.
+  // That covers both constraints this code used to handle by hand: Hermes is
+  // thread-affine, and registering the embind bindings twice aborts with
+  // "Cannot register public name ... twice".
+  @DoNotStrip
+  @Override
+  public BindingsInstallerHolder getBindingsInstaller() {
+    return createBindingsInstaller(this.reactContext.getCacheDir().getAbsolutePath());
   }
 
   @Override
-  public String getName() {
-    return "RNJsiLib";
+  public void start(Promise promise) {
+    promise.resolve(true);
   }
 
-  public native void install(long jsContextNativePointer, String path);
+  @DoNotStrip
+  private native BindingsInstallerHolder createBindingsInstaller(String path);
 
   static {
     System.loadLibrary("react-native-crossbind");

@@ -1,7 +1,12 @@
 #if ANDROID
 
 #include <jni.h>
+#include <memory>
+#include <string>
+#include <fbjni/fbjni.h>
 #include <jsi/jsi.h>
+#include <ReactCommon/CallInvoker.h>
+#include <ReactCommon/BindingsInstallerHolder.h>
 #include <emscripten/bind.h>
 
 std::string jstring2string(JNIEnv *env, jstring jStr) {
@@ -25,11 +30,23 @@ std::string jstring2string(JNIEnv *env, jstring jStr) {
 
 extern "C"
 {
-  JNIEXPORT void JNICALL
-  Java_com_jsi_lib_RNJsiLibModule_install(JNIEnv* env, jobject thiz, jlong runtimePtr, jstring path)
+  // BindingsInstallerHolder is an fbjni HybridClass, so fbjni has to be
+  // initialised before newObjectCxxArgs can allocate one.
+  JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM* vm, void*)
   {
-      facebook::jsi::Runtime* runtime = (facebook::jsi::Runtime*)runtimePtr;
-      emscripten::internal::_embind_initialize_bindings(*runtime, jstring2string(env, path)+"/crossbind");
+      return facebook::jni::initialize(vm, [] {});
+  }
+
+  JNIEXPORT jobject JNICALL
+  Java_com_jsi_lib_RNJsiLibModule_createBindingsInstaller(JNIEnv* env, jobject thiz, jstring path)
+  {
+      const std::string dataPath = jstring2string(env, path) + "/crossbind";
+      auto holder = facebook::react::BindingsInstallerHolder::newObjectCxxArgs(
+          [dataPath](facebook::jsi::Runtime& runtime,
+                     const std::shared_ptr<facebook::react::CallInvoker>&) {
+              emscripten::internal::_embind_initialize_bindings(runtime, dataPath);
+          });
+      return holder.release();
   }
 }
 #endif

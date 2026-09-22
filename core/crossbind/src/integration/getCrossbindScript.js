@@ -140,10 +140,10 @@ function buildScript(target, symbols) {
 
 function getReactNativeScript(env) {
     return `
-        import { NativeModules } from 'react-native';
+        import { TurboModuleRegistry } from 'react-native';
         import Module from '@crossbind/core-embind-jsi';
 
-        const { RNJsiLib } = NativeModules;
+        const RNJsiLib = TurboModuleRegistry.get('RNJsiLib');
 
         function setEnv() {
             const env = JSON.parse('${env}');

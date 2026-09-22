@@ -1,7 +1,8 @@
 #import "CrossbindModule.h"
 #import <React/RCTLog.h>
-#import <React/RCTBridge+Private.h>
 #import <React/RCTUtils.h>
+#import <ReactCommon/RCTTurboModuleWithJSIBindings.h>
+#import <RNCrossbindSpec/RNCrossbindSpec.h>
 #include <jsi/jsi.h>
 
 namespace emscripten {
@@ -12,22 +13,32 @@ __attribute__((used)) void _embind_initialize_bindings(facebook::jsi::Runtime& r
 
 using namespace facebook;
 
+@interface CrossbindModule () <NativeRNJsiLibSpec, RCTTurboModuleWithJSIBindings>
+@end
+
 @implementation CrossbindModule
-@synthesize bridge = _bridge;
 
 RCT_EXPORT_MODULE(RNJsiLib)
-RCT_EXPORT_BLOCKING_SYNCHRONOUS_METHOD(start)
+
+- (std::shared_ptr<react::TurboModule>)getTurboModule:(const react::ObjCTurboModule::InitParams &)params
 {
-    RCTCxxBridge *cxxBridge = (RCTCxxBridge *)self.bridge;
-    jsi::Runtime* runtime = (jsi::Runtime*)cxxBridge.runtime;
-    NSString *mainBundlePath = [[NSBundle mainBundle] bundlePath];
-    emscripten::internal::_embind_initialize_bindings(*runtime, std::string([mainBundlePath UTF8String]));
-    return @true;
+    return std::make_shared<react::NativeRNJsiLibSpecJSI>(params);
 }
 
-- (void)setBridge:(RCTBridge *)bridge
+// React Native calls this once per module instance, on the JS thread, before JS
+// can reach the module. Registering the embind bindings a second time aborts
+// with "Cannot register public name ... twice", so the one-shot contract has to
+// live here rather than in start:.
+- (void)installJSIBindingsWithRuntime:(jsi::Runtime &)runtime
+                          callInvoker:(const std::shared_ptr<react::CallInvoker> &)callInvoker
 {
-  _bridge = bridge;
+    NSString *bundlePath = [[NSBundle mainBundle] bundlePath];
+    emscripten::internal::_embind_initialize_bindings(runtime, std::string([bundlePath UTF8String]));
+}
+
+- (void)start:(RCTPromiseResolveBlock)resolve reject:(RCTPromiseRejectBlock)reject
+{
+    resolve(@YES);
 }
 
 @end

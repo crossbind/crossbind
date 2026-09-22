@@ -1,6 +1,8 @@
 import type { TurboModule } from 'react-native';
 import { TurboModuleRegistry } from 'react-native';
 
-export interface Spec extends TurboModule {}
+export interface Spec extends TurboModule {
+    start(): Promise<boolean>;
+}
 
-export default TurboModuleRegistry.get<Spec>('RNCrossbind');
+export default TurboModuleRegistry.get<Spec>('RNJsiLib');
