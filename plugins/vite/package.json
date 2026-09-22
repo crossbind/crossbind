@@ -13,7 +13,7 @@
         "@crossbind/core-embind-rust": "workspace:^"
     },
     "peerDependencies": {
-        "vite": ">=8.2.1"
+        "vite": ">=3.0.0"
     },
     "keywords": [
         "crossbind-plugin",

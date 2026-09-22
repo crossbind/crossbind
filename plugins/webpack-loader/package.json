@@ -10,7 +10,7 @@
         "crossbind": "workspace:^"
     },
     "peerDependencies": {
-        "webpack": ">=5.109.2"
+        "webpack": ">=5.0.0"
     },
     "keywords": [
         "crossbind-plugin",

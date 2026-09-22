@@ -63,14 +63,12 @@ const REGISTRY = 'https://registry.npmjs.org';
 const DEP_FIELDS = ['dependencies', 'devDependencies', 'peerDependencies', 'optionalDependencies'];
 
 // Dependencies intentionally pinned for specific packages — never reported as
-// outdated nor auto-bumped to npm "latest". The React Native CLI sample +
-// playground + Expo sample and the two plugins they load must track the React Native
-// 0.85 / Expo SDK 56 toolchain (react 19.2.3, react-native 0.85.3, eslint 8, jest 29,
-// typescript 5.8, the @babel/* + @react-native/* + react-native-* + expo-* families);
-// those versions are dictated by react-native / the Expo SDK, not by npm latest.
-// Bumping them breaks the native build or the React renderer (react and
-// react-native-renderer must be the exact same version); @react-native/babel-preset
-// asserts Babel ^7, so @babel/core 8 fails every Metro transform.
+// outdated nor auto-bumped to npm "latest". The React Native samples, the Expo
+// sample and the two plugins they load take these versions from react-native and
+// the Expo SDK rather than from npm latest, so the numbers are deliberately left
+// out here: naming them only makes this comment go stale a release later. The
+// Expo sample's set is the one its SDK lists in bundledNativeModules.json; the
+// CLI samples' set is the one their react-native release declares as peers.
 const PINNED = [
     {
         packages: [
@@ -82,7 +80,7 @@ const PINNED = [
         ],
         deps: ['react', 'react-dom', 'react-test-renderer', 'react-native', 'eslint', 'jest', '@types/jest', 'typescript'],
         scopes: ['@babel/', '@react-native/', '@react-native-community/', 'react-native-', 'expo'],
-        reason: 'React Native 0.85 / Expo SDK 56 toolchain',
+        reason: 'React Native / Expo SDK toolchain',
     },
 ];
 
@@ -373,7 +371,11 @@ async function main() {
             }
         }
         // Every range being '*'/'x'/'latest' means the host app dictates the version - never a strict failure.
-        const isHostProvided = usages.length > 0 && usages.every((u) => u.parsed.wildcard);
+        // A peer floor ('>=x') says the same thing from the other side: it states the oldest release we
+        // work against, not a version we track, so npm moving past it is not the floor going stale.
+        const isHostDictated = (u) =>
+            u.parsed.wildcard || (u.field === 'peerDependencies' && (u.parsed.prefix === '>=' || u.parsed.prefix === '>'));
+        const isHostProvided = usages.length > 0 && usages.every(isHostDictated);
         let status;
         if (isHostProvided) status = 'host-provided';
         else if (error || !latest) status = 'unknown';
