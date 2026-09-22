@@ -35,8 +35,12 @@ overrides:
   'js-yaml@4': '^4.3.2'
   'launch-editor@2': '^2.14.1'
   'mermaid@11': '^11.16.1'
-  # 0.84.6 dropped the image-size dependency the advisory is against; React Native asks for ^0.84.3.
-  'metro@0.84': '^0.84.6'
+  # The examples decide the React Native line. Both plugins declare `react-native` and `metro` as
+  # `*` peers, and autoInstallPeers then materialises a second copy of each beside the app's, so
+  # the wrong metro ends up serving. Pinning them here keeps this workspace's graph single-valued
+  # without narrowing what the published packages accept.
+  metro: '^0.87.1'
+  react-native: '0.87.1'
   'minimatch@3': '^3.1.4'
   'nanoid@3': '^3.3.18'
   'on-headers@1': '^1.1.0'
