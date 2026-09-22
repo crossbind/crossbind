@@ -12,7 +12,7 @@
         "@crossbind/core-embind-rust": "workspace:^"
     },
     "peerDependencies": {
-        "rollup": ">=4.62.4"
+        "rollup": ">=2.0.0"
     },
     "keywords": [
         "crossbind-plugin",
