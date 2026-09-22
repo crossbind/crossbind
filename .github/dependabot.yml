@@ -73,6 +73,9 @@ updates:
           - dependency-name: '@expo/*'
           - dependency-name: react-native
           - dependency-name: '@react-native/*'
+          - dependency-name: react
+          - dependency-name: react-dom
+          - dependency-name: 'react-native-*'
 
     # Actions remain full-SHA pinned. Dependabot moves the SHA and its human-readable
     # version comment together; repository release tests reject floating references.
