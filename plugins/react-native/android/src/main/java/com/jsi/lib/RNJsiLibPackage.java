@@ -1,23 +1,33 @@
 
 package com.jsi.lib;
 
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.List;
+import java.util.HashMap;
+import java.util.Map;
 
-import com.facebook.react.ReactPackage;
+import com.facebook.react.BaseReactPackage;
 import com.facebook.react.bridge.NativeModule;
 import com.facebook.react.bridge.ReactApplicationContext;
-import com.facebook.react.uimanager.ViewManager;
-import com.facebook.react.bridge.JavaScriptModule;
-public class RNJsiLibPackage implements ReactPackage {
+import com.facebook.react.module.model.ReactModuleInfo;
+import com.facebook.react.module.model.ReactModuleInfoProvider;
+
+public class RNJsiLibPackage extends BaseReactPackage {
     @Override
-    public List<NativeModule> createNativeModules(ReactApplicationContext reactContext) {
-      return Arrays.<NativeModule>asList(new RNJsiLibModule(reactContext));
+    public NativeModule getModule(String name, ReactApplicationContext reactContext) {
+      return NativeRNJsiLibSpec.NAME.equals(name) ? new RNJsiLibModule(reactContext) : null;
     }
 
     @Override
-    public List<ViewManager> createViewManagers(ReactApplicationContext reactContext) {
-      return Collections.emptyList();
+    public ReactModuleInfoProvider getReactModuleInfoProvider() {
+      return () -> {
+        final Map<String, ReactModuleInfo> infos = new HashMap<>();
+        infos.put(NativeRNJsiLibSpec.NAME, new ReactModuleInfo(
+            NativeRNJsiLibSpec.NAME,
+            RNJsiLibModule.class.getName(),
+            false,
+            false,
+            false,
+            true));
+        return infos;
+      };
     }
 }
