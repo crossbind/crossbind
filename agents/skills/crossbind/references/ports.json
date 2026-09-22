@@ -24,7 +24,7 @@
       "npm": "@crossbind/port-expat",
       "category": "text",
       "summary": "Streaming XML parser",
-      "nativeVersion": "2.8.4",
+      "nativeVersion": "2.8.5",
       "license": "MIT",
       "homepage": "https://github.com/crossbind/crossbind/tree/main/ports/expat#readme",
       "targets": [
