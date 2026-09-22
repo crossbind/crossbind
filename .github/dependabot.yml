@@ -10,6 +10,10 @@ updates:
           time: '02:11'
           timezone: Europe/Istanbul
       open-pull-requests-limit: 10
+      # This entry reaches the Expo sample too, and it is the one that opens the grouped
+      # PRs, so the entry below is what governs that directory - not this one.
+      exclude-paths:
+          - examples/mobile-reactnative-expo/**
       versioning-strategy: increase-if-necessary
       labels:
           - dependencies
