@@ -16,6 +16,8 @@ allowBuilds:
   sharp: true
   unrs-resolver: true
   workerd: true
+minimumReleaseAgeExclude:
+  - wrangler@4.136.3
 overrides:
   '@hono/node-server@2': '^2.1.0'
   '@xmldom/xmldom@0.8': '^0.8.15'

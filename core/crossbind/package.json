@@ -19,8 +19,8 @@
         "test:coverage": "vitest run --coverage"
     },
     "devDependencies": {
-        "@vitest/coverage-v8": "^4.1.11",
-        "vitest": "^4.1.11"
+        "@vitest/coverage-v8": "^5.0.1",
+        "vitest": "^5.0.1"
     },
     "dependencies": {
         "@rollup/plugin-commonjs": "^29.0.3",
@@ -33,7 +33,7 @@
         "log-update": "^8.0.0",
         "picocolors": "^1.1.1",
         "replace": "^1.2.2",
-        "rollup": "^4.62.4",
+        "rollup": "^4.63.4",
         "spdx-expression-parse": "^5.0.0",
         "upath": "^3.0.8"
     },

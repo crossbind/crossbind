@@ -16,7 +16,7 @@
         "e2e:prod": "playwright test --config playwright.prod.config.cjs"
     },
     "dependencies": {
-        "vue": "^3.5.41",
+        "vue": "^3.5.43",
         "@crossbind/port-curl-wasm": "workspace:^",
         "@crossbind/port-expat-wasm": "workspace:^",
         "@crossbind/port-gdal-wasm": "workspace:^",
@@ -35,9 +35,9 @@
         "@crossbind/conformance": "workspace:^"
     },
     "devDependencies": {
-        "@vitejs/plugin-vue": "^6.0.8",
+        "@vitejs/plugin-vue": "^6.0.9",
         "vite": "^8.2.1",
-        "@playwright/test": "^1.62.1",
+        "@playwright/test": "^1.63.0",
         "@crossbind/plugin-vite": "workspace:^"
     },
     "keywords": [
