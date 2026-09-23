@@ -20,6 +20,7 @@ crossbind compiles C++ and Rust libraries to WebAssembly, native iOS/Android bin
 - `scripts/` — repository maintenance, validation, scaffolding and generated-agent entrypoints.
 - `docs/api/` — canonical runtime and build API reference.
 - `docs/playbooks/` — integration, package-authoring and contributor workflows.
+- `docs/known-issues.md` — defects that are real but unfixed, each with the check that proves it.
 - `agents/` — the single distributable crossbind skill and contributor context source.
 - `landing/` — crossbind.dev application.
 
