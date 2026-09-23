@@ -176,24 +176,6 @@ that follows the docs and supplies only `getSource` fails with `getURL is not a 
 - Check: `grep -rnw 'LOG_LEVEL\|getSource' core/crossbind/src` returns nothing.
 - Remove when both work or the docs stop describing them.
 
-## The React Native CLI template does not install or build outside the workspace
-
-Dependabot moved `@babel/core` to `^8.0.6` in `examples/mobile-reactnative-cli` and
-`e2e/mobile-reactnative-cli` on 2026-09-22 (ae0af3968), and create-crossbind 2.0.0-beta.60 ships
-it. React Native 0.87 is still on Babel 7: `@react-native/babel-preset` asserts version 7, and
-`@crossbind/plugin-metro` declares `@babel/core ^7.0.0` as a peer. In a scaffolded project
-`npm install` stops on `ERESOLVE` (`peer @babel/core@"^7.0.0-0" from @babel/preset-env@7.29.7`).
-pnpm installs, but the plugin's Metro transformer then resolves the app's Babel 8, and both Release
-builds fail while bundling JS with `Requires Babel "^7.0.0-0", but was loaded with "8.0.6"`. The
-workspace hides it — there the plugin is a workspace package with its own Babel 7 — which is why
-the iOS and Android sample jobs stayed green.
-
-- Seen: 2026-09-23 (`node scripts/e2e-templates.js --only mobile-reactnative-cli`, and
-  `react-native bundle --platform android` in the same scaffold)
-- Check: `node -p "require('./examples/mobile-reactnative-cli/package.json').devDependencies['@babel/core']"`
-  prints a `^8` range while `plugins/metro/package.json` still peers on `^7.0.0`.
-- Remove when a scaffolded project installs with npm and bundles with pnpm.
-
 ## Debug wasm builds skip the 64-bit safe-integer guard
 
 `guardBigIntArguments` in `core/crossbind/src/actions/buildWasm.js` rewrites embind's bigint
@@ -213,8 +195,9 @@ unaffected.
 `scripts/e2e-templates.js` (`pnpm run e2e:templates`) scaffolds every template from the published or
 packed scaffolder, then installs, builds and runs each one's e2e. No workflow calls it. CI runs the
 workspace samples instead, and workspace links hide what a standalone install resolves; the Babel 8
-break above passed both sample jobs. The harness itself runs only `e2e:prod` for the web templates,
-and only one mobile platform — iOS when a simulator and an emulator are both available.
+and ESLint 10 bumps of September 2026 passed both sample jobs. The harness itself runs only
+`e2e:prod` for the web templates, and only one mobile platform — iOS when a simulator and an
+emulator are both available.
 
 - Seen: 2026-09-23
 - Check: `grep -rn 'e2e-templates\|e2e:templates' .github/workflows/` returns nothing.
