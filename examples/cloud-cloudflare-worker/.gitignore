@@ -1,4 +1,6 @@
+node_modules
 .crossbind
+dist
 test-results
 playwright-report
 .wrangler

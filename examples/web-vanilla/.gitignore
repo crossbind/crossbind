@@ -1,3 +1,4 @@
+node_modules
 .crossbind
 dist
 test-results
