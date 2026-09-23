@@ -440,7 +440,7 @@ importers:
         version: link:../../ports/zlib/ios
       hermes-compiler:
         specifier: '*'
-        version: 250829098.0.10
+        version: 250829098.0.19
       react:
         specifier: 19.3.0
         version: 19.3.0
@@ -449,7 +449,7 @@ importers:
         version: 0.87.1(@babel/core@7.29.7(supports-color@10.2.2))(@react-native-community/cli@20.2.0(supports-color@10.2.2)(typescript@5.9.3))(@react-native/metro-config@0.87.1(@babel/core@7.29.7(supports-color@10.2.2))(supports-color@10.2.2))(@types/react@19.3.0)(react@19.3.0)(supports-color@10.2.2)
       react-native-safe-area-context:
         specifier: ^5.8.0
-        version: 5.8.0(react-native@0.87.1(@babel/core@7.29.7(supports-color@10.2.2))(@react-native-community/cli@20.2.0(supports-color@10.2.2)(typescript@5.9.3))(@react-native/metro-config@0.87.1(@babel/core@7.29.7(supports-color@10.2.2))(supports-color@10.2.2))(@types/react@19.3.0)(react@19.3.0)(supports-color@10.2.2))(react@19.3.0)
+        version: 5.10.0(react-native@0.87.1(@babel/core@7.29.7(supports-color@10.2.2))(@react-native-community/cli@20.2.0(supports-color@10.2.2)(typescript@5.9.3))(@react-native/metro-config@0.87.1(@babel/core@7.29.7(supports-color@10.2.2))(supports-color@10.2.2))(@types/react@19.3.0)(react@19.3.0)(supports-color@10.2.2))(react@19.3.0)
     devDependencies:
       '@babel/core':
         specifier: ^7.29.7
@@ -869,7 +869,7 @@ importers:
         version: link:../../plugins/react-native-ios-helper
       hermes-compiler:
         specifier: '*'
-        version: 250829098.0.10
+        version: 250829098.0.19
       react:
         specifier: 19.3.0
         version: 19.3.0
@@ -878,7 +878,7 @@ importers:
         version: 0.87.1(@babel/core@7.29.7(supports-color@10.2.2))(@react-native-community/cli@20.2.0(supports-color@10.2.2)(typescript@5.9.3))(@react-native/metro-config@0.87.1(@babel/core@7.29.7(supports-color@10.2.2))(supports-color@10.2.2))(@types/react@19.3.0)(react@19.3.0)(supports-color@10.2.2)
       react-native-safe-area-context:
         specifier: ^5.8.0
-        version: 5.8.0(react-native@0.87.1(@babel/core@7.29.7(supports-color@10.2.2))(@react-native-community/cli@20.2.0(supports-color@10.2.2)(typescript@5.9.3))(@react-native/metro-config@0.87.1(@babel/core@7.29.7(supports-color@10.2.2))(supports-color@10.2.2))(@types/react@19.3.0)(react@19.3.0)(supports-color@10.2.2))(react@19.3.0)
+        version: 5.10.0(react-native@0.87.1(@babel/core@7.29.7(supports-color@10.2.2))(@react-native-community/cli@20.2.0(supports-color@10.2.2)(typescript@5.9.3))(@react-native/metro-config@0.87.1(@babel/core@7.29.7(supports-color@10.2.2))(supports-color@10.2.2))(@types/react@19.3.0)(react@19.3.0)(supports-color@10.2.2))(react@19.3.0)
     devDependencies:
       '@babel/core':
         specifier: ^7.29.7
@@ -6082,11 +6082,11 @@ packages:
     resolution: {integrity: sha512-F/1DnUGPopORZi0ni+CvrCgHQ5FyEAHRLSApuYWMmrbSwoN2Mn/7k+Gl38gJnR7yyDZk6WLXwiGod1JOWNDKGw==}
     hasBin: true
 
-  hermes-compiler@250829098.0.10:
-    resolution: {integrity: sha512-TcRlZ0/TlyfJqquRFAWoyElVNnkdYRi/sEp4/Qy8/GYxjg8j2cS9D4MjuaQ+qimkmLN7AmO+44IznRf06mAr0w==}
-
   hermes-compiler@250829098.0.17:
     resolution: {integrity: sha512-qG1PXzTEtriF6oQLZF3vyHhSMxOdW5h2TqqLri0rdpstPustd2fSvRZQMVAPdlhgFwBfYnj3OUZtiO6LjYsEFw==}
+
+  hermes-compiler@250829098.0.19:
+    resolution: {integrity: sha512-qMdHsuntdFVNqx3EPOZyyQd4qHD2g0o3y32SYX2Z7jKG1uF7B2WDBHeZK/6qOnl06BQiXPhBuD6SdZv10ngtyw==}
 
   hermes-estree@0.25.1:
     resolution: {integrity: sha512-0wUoCcLp+5Ev5pDW2OriHC2MJCbwLwuRx+gAqMTOkGKJJiBCLjtrvy4PWUGn6MIVefecRpzoOZ/UV6iGdOr+Cw==}
@@ -7269,8 +7269,8 @@ packages:
   react-is@19.3.0:
     resolution: {integrity: sha512-UpMYezM4v5/18F28aC66AEsjXIgE02kyEMH6yLdgLXu/UTfa1Ntwck/nNLrbqJsEXW7gPb0coNO9FQse9WTovA==}
 
-  react-native-safe-area-context@5.8.0:
-    resolution: {integrity: sha512-t+ZsAVzY/wWzzx34vqGbo3/as9EEESJdbyZNL7Yg5EYX+toYMtMqFoDDCvqZUi35eeGVsXc6pAaEk4edMwbuCQ==}
+  react-native-safe-area-context@5.10.0:
+    resolution: {integrity: sha512-U655+G0KItefqpTKZenr0aBNulY/49TUKSZkWGVtESlFK5qmML7BejQjPDCRU+GzC24g2KeWFJguWP5LR52dqA==}
     peerDependencies:
       react: '*'
       react-native: 0.87.1
@@ -13070,9 +13070,9 @@ snapshots:
 
   he@1.2.0: {}
 
-  hermes-compiler@250829098.0.10: {}
-
   hermes-compiler@250829098.0.17: {}
+
+  hermes-compiler@250829098.0.19: {}
 
   hermes-estree@0.25.1: {}
 
@@ -14457,7 +14457,7 @@ snapshots:
 
   react-is@19.3.0: {}
 
-  react-native-safe-area-context@5.8.0(react-native@0.87.1(@babel/core@7.29.7(supports-color@10.2.2))(@react-native-community/cli@20.2.0(supports-color@10.2.2)(typescript@5.9.3))(@react-native/metro-config@0.87.1(@babel/core@7.29.7(supports-color@10.2.2))(supports-color@10.2.2))(@types/react@19.3.0)(react@19.3.0)(supports-color@10.2.2))(react@19.3.0):
+  react-native-safe-area-context@5.10.0(react-native@0.87.1(@babel/core@7.29.7(supports-color@10.2.2))(@react-native-community/cli@20.2.0(supports-color@10.2.2)(typescript@5.9.3))(@react-native/metro-config@0.87.1(@babel/core@7.29.7(supports-color@10.2.2))(supports-color@10.2.2))(@types/react@19.3.0)(react@19.3.0)(supports-color@10.2.2))(react@19.3.0):
     dependencies:
       react: 19.3.0
       react-native: 0.87.1(@babel/core@7.29.7(supports-color@10.2.2))(@react-native-community/cli@20.2.0(supports-color@10.2.2)(typescript@5.9.3))(@react-native/metro-config@0.87.1(@babel/core@7.29.7(supports-color@10.2.2))(supports-color@10.2.2))(@types/react@19.3.0)(react@19.3.0)(supports-color@10.2.2)
