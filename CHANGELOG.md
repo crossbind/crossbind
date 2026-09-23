@@ -3,6 +3,47 @@
 <!-- release-notes:start -->
 <!-- Generated from releases/crossbind/<version>.md by scripts/release/render-changelog.mjs. Edit the note, then run `pnpm changelog`. -->
 
+## 2.0.0-beta.60
+
+Reaches the JavaScript runtime through React Native's TurboModule path, compiles at the 2020 C++ standard, and moves Android onto NDK r30 LTS.
+
+### Highlights
+
+- Installs the React Native bindings the way the framework intends. iOS implements
+  `getTurboModule:` and `RCTTurboModuleWithJSIBindings`; Android implements
+  `TurboModuleWithJSIBindings` and hands back a `BindingsInstallerHolder`. React Native invokes the
+  installer once per module instance, on the JS thread, which is what used to be held together by a
+  `runOnJSQueueThread` dispatch on one side and a JavaScript guard on the other.
+- Leaves two surfaces React Native no longer offers for library use: `RCTCxxBridge`, which 0.87
+  removes outright, and `getJavaScriptContextHolder()`, which is marked unstable and returns a
+  nullable the old code dereferenced unchecked.
+- Moves the Android toolchain to NDK r30 LTS, installed from its own verified archive and reached
+  through a path that does not carry the version, so a consumer is not pinned to the exact release
+  the image happens to ship.
+- Updates the bundled native sources: expat 2.8.5, which carries the fix for CVE-2026-93990.
+- Raises the pinned toolchain images to 1.0.6, with Rust 1.98.1 and Node 24.21.0.
+- Publishes every workspace package on one common version again. beta 59 shipped two packages, so
+  the tree had drifted apart.
+
+### Breaking changes
+
+- C++ sources compile at the 2020 standard instead of 2017. React Native 0.87's `react/bridging`
+  headers need it, and leaving one target on a different standard from the rest of the tree is
+  worse than moving all of them. Code that uses `requires` or `concept` as an identifier no longer
+  compiles.
+- Android builds against NDK r30. A project that pins its own NDK has to move with it.
+- The React Native integration is verified against 0.87. The generated bootstrap now resolves the
+  native module through `TurboModuleRegistry` rather than `NativeModules`.
+
+### Migration notes
+
+- Rename any identifier called `requires` or `concept` in C++ that crossbind compiles. The
+  distribution template that links a published port stays at the 2011 standard, so consuming a
+  prebuilt port is unaffected.
+- Set `ndkVersion` to r30 in an Android project that declares one.
+- Move a React Native app to 0.87. An app that reached `NativeModules.RNJsiLib` directly should use
+  the generated bootstrap instead.
+
 ## 2.0.0-beta.58
 
 Binds C++ pointer surfaces and whole Rust crates, and moves every package onto one train.
