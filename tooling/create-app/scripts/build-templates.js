@@ -6,12 +6,14 @@
 //     stripped from crossbind.config.{js,mjs} and metro.config.js (these are
 //     workspace-only knobs that don't belong in scaffolded projects).
 // Build artifacts (node_modules, .crossbind, dist, native build outputs, lockfiles
-// when not whitelisted) are filtered out during copy.
+// when not whitelisted) are filtered out during copy. Ignore files ship as
+// _gitignore / _npmignore (see src/dotfiles.js).
 
 import fs from 'node:fs';
 import fsp from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { packDotfiles } from '../src/dotfiles.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PKG_DIR = path.resolve(__dirname, '..');
@@ -128,6 +130,7 @@ async function buildOne(entry, versionMap) {
     await fsp.rm(dst, { recursive: true, force: true });
     await fsp.cp(src, dst, { recursive: true, filter: makeFilter(entry) });
     await rewriteTemplate(dst, versionMap);
+    await packDotfiles(dst);
     if (entry.allowBuilds?.length) {
         await fsp.writeFile(path.join(dst, 'pnpm-workspace.yaml'), renderPnpmWorkspace(entry.allowBuilds));
     }

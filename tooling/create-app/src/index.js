@@ -5,6 +5,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { styleText } from 'node:util';
 import * as p from '@clack/prompts';
+import { unpackDotfiles } from './dotfiles.js';
 import { pkgManager } from './utils.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -150,6 +151,7 @@ async function main() {
     spin.start(`Scaffolding ${entry.key}`);
     await fsp.mkdir(cwd, { recursive: true });
     await fsp.cp(src, cwd, { recursive: true });
+    await unpackDotfiles(cwd);
 
     const pjPath = path.join(cwd, 'package.json');
     let scripts = {};
