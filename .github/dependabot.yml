@@ -18,6 +18,19 @@ updates:
       labels:
           - dependencies
           - javascript
+      ignore:
+          # React Native 0.87 compiles with Babel 7. Inside the workspace @crossbind/plugin-metro
+          # keeps its own Babel 7, so a Babel 8 major passes CI while it breaks every React Native
+          # project create-crossbind scaffolds. Lift this once React Native moves to Babel 8.
+          - dependency-name: '@babel/*'
+            update-types:
+                - version-update:semver-major
+          # The React Native samples stay on ESLint 8 like React Native's own template: its
+          # eslint-config accepts ESLint 8 and 9 only, and ESLint 10 no longer reads .eslintrc.js.
+          # The rule covers the whole workspace, so a root ESLint major is now done by hand.
+          - dependency-name: eslint
+            update-types:
+                - version-update:semver-major
       groups:
           # Families that must move together, whatever the update type: a vitest 5 PR without
           # @vitest/coverage-v8 5, or a react-native bump without its @react-native/* dev
