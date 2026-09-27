@@ -3,8 +3,14 @@ export default {
     // zlib.net drops superseded releases and its edge occasionally serves other bytes; the GitHub asset is stable.
     getURL: (version) => `https://github.com/madler/zlib/releases/download/v${version}/zlib-${version}.tar.gz`,
     buildType: 'cmake',
+    // Static on every platform, as OpenSSL is: an Android app process already holds the system libz.so, which would
+    // shadow a shared build of this one. The archive goes into shared libraries there, so it must be PIC, and its
+    // symbols are hidden so that each of those libraries keeps its copy private instead of exporting it.
     getBuildParams: (target) => [
-        target.platform === 'android' ? '-DZLIB_BUILD_STATIC=OFF' : '-DZLIB_BUILD_SHARED=OFF',
+        '-DZLIB_BUILD_SHARED=OFF',
+        ...(target.platform === 'android'
+            ? ['-DCMAKE_POSITION_INDEPENDENT_CODE=ON', '-DCMAKE_C_VISIBILITY_PRESET=hidden']
+            : []),
         '-DZLIB_BUILD_TESTING=OFF',
     ],
 };
