@@ -19,7 +19,7 @@ skips (search `KNOWN ENGINE GAP` in `spec/run.mjs`).
   `conftypes2.h`, `confkinda.h`, `confkindb.h`, `confprelude.h`, `confpreludedeps.h`, `confexport.h`) — the pointer and handle
   rules: number/byte/void*/struct/opaque handles and their helpers, out-parameters, C function
   pointers, `const char *` as a string, smart pointer wrappers, unique_ptr references, enums,
-  virtual bases, registration guards across headers, a header prelude and an ignored
+  every 64-bit integer spelling, virtual bases, registration guards across headers, a header prelude and an ignored
   declaration. Also header-only, and prefixed because the kit directory joins every leg's include path (a
   `strings.h` here shadows the POSIX header). `config.mjs` carries the header options these need
   (`headerPrelude`, `ignoredDeclarations`); spread it into a leg's `export`. They need the
@@ -30,6 +30,11 @@ skips (search `KNOWN ENGINE GAP` in `spec/run.mjs`).
   by contract as in the cpp section. A field written through a worker proxy goes over the
   object's own port, a call over the module's: read the field back before handing the object
   to a call, or the call can overtake the write.
+- `spec/sections/packageFields.mjs` — the fields of C structs in the ports' own headers
+  (`@crossbind/port-zlib/zlib.h`, `@crossbind/port-webp/encode.h`): pointers as handles or
+  instances, a pointer typedef, `char *`, enums as integers, and that the port's zlib 1.3.2 is
+  the one running rather than a device's older copy. The bundler legs that link both ports wire it
+  (Vite, Rspack, Metro); the standalone legs skip it.
 - `../conformance-rust/` — the Rust half: one plain crate (`src/lib.rs`, every construct in
   sections) built as a cargo package like `core/embind-rust/demo`; `spec/sections/rust/*.mjs` hold
   its checks. Constructs the generator does not carry yet are `todo` entries: a miss prints a
