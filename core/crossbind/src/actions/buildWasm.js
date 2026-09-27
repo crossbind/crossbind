@@ -189,12 +189,13 @@ export default async function buildWasm(target, options = {}) {
         const data = Object.entries(getData('data', target)).map(([key, value]) => ['--preload-file', `${key.replaceAll('@', '@@')}@/crossbind/${value}`]).flat();
         run('em++', [
             '-lembind',
+            // The config's emccFlags follow the default level, so its -Oz or -Os wins (the last -O does).
+            ...(isProd ? ['-O3'] : []),
             ...emccFlags,
             // '-lwebsocket.js', '-sPROXY_POSIX_SOCKETS', '-sWEBSOCKET_DEBUG=1', '-sJSPI', '-g', '-sWASMFS',
             '-s', 'FORCE_FILESYSTEM=1',
             '-sEXPORT_NAME=Module2', // '-pthread', '-sPTHREAD_POOL_SIZE=5',
             ...linkLibs, ...rustSources, `${state.config.paths.cli}/assets/cpp-runtime/browser.cpp`,
-            ...(isProd ? ['-O3'] : []),
             '-s', 'WASM=1', '-s', 'MODULARIZE=1', '-s', 'DYNAMIC_EXECUTION=0',
             '-s', 'RESERVED_FUNCTION_POINTERS=200', // '-s', 'FORCE_FILESYSTEM=1',
             '-s', 'ALLOW_MEMORY_GROWTH=1',
@@ -261,12 +262,13 @@ export default async function buildWasm(target, options = {}) {
         const data = Object.entries(getData('data', target)).map(([key, value]) => ['--preload-file', `${key.replaceAll('@', '@@')}@/crossbind/${value}`]).flat();
         run('em++', [
             '-lembind',
+            // The config's emccFlags follow the default level, so its -Oz or -Os wins (the last -O does).
+            ...(isProd ? ['-O3'] : []),
             ...emccFlags,
             '-sEXPORT_NAME=Module2',
             // rustSources carries the embind-rust adapter TU (emval/json/tid hooks); without
             // it any linked Rust package archive fails with undefined crossbind_* symbols.
             ...linkLibs, ...rustSources,
-            ...(isProd ? ['-O3'] : []),
             '-s', 'WASM=1', '-s', 'MODULARIZE=1', '-s', 'DYNAMIC_EXECUTION=0',
             '-s', 'RESERVED_FUNCTION_POINTERS=200', // '-s', 'FORCE_FILESYSTEM=1',
             '-s', 'ALLOW_MEMORY_GROWTH=1',
@@ -294,11 +296,12 @@ export default async function buildWasm(target, options = {}) {
 
         run('em++', [
             '-lembind',
+            // The config's emccFlags follow the default level, so its -Oz or -Os wins (the last -O does).
+            ...(isProd ? ['-O3'] : []),
             ...emccFlags,
             // '-s', 'FETCH', '-sJSPI', '-pthread', '-sPTHREAD_POOL_SIZE=5',
             '-s', 'FORCE_FILESYSTEM=1',
             ...linkLibs, ...rustSources, `${state.config.paths.cli}/assets/cpp-runtime/node.cpp`,
-            ...(isProd ? ['-O3'] : []),
             '-s', 'WASM=1', '-s', 'MODULARIZE=1', '-s', 'DYNAMIC_EXECUTION=0',
             '-s', 'RESERVED_FUNCTION_POINTERS=200', // '-s', 'DISABLE_EXCEPTION_CATCHING=0', '-s', 'FORCE_FILESYSTEM=1',
             '-s', 'ALLOW_MEMORY_GROWTH=1',
