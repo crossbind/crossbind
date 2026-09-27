@@ -76,4 +76,13 @@ describe('buildWasm link step', () => {
         // emsdk 6 links with BigInt support by default; the old explicit flag must not come back.
         expect(args.some((arg) => String(arg).includes('WASM_BIGINT'))).toBe(false);
     });
+
+    // The last -O on an em++ line wins, so a config's `-Oz` or `-Os` has to come after the default.
+    test.each(Object.keys(ENVIRONMENTS))('lets the config\'s emccFlags follow the default -O3 on the %s link line', async (runtimeEnv) => {
+        await buildWasm(makeTarget(runtimeEnv), { force: true });
+
+        const [, args] = run.mock.calls[0];
+        expect(args.indexOf('-O3')).toBeGreaterThan(-1);
+        expect(args.indexOf('-O3')).toBeLessThan(args.indexOf('-sCUSTOM_FLAG=1'));
+    });
 });
