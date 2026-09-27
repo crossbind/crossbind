@@ -22,10 +22,9 @@ Full control over preopens, permissions and env:
 ```bash
 npm i @crossbind/port-zstd-bin-wasi
 
-M=node_modules/@crossbind/package
+M=node_modules/@crossbind/port
 T=wasi-wasm32-st-release
-alias zstdw='wasmtime run --dir=.::/work \
-  $M-zstd-bin-wasi/dist/prebuilt/$T/bin/zstd'
+alias zstdw='wasmtime run --dir=.::/work $M-zstd-bin-wasi/dist/prebuilt/$T/bin/zstd'
 
 zstdw /work/file -o /work/file.zst
 zstdw -d /work/file.zst -o /work/file.out

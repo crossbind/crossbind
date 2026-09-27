@@ -22,14 +22,9 @@ Full control over preopens, permissions and env:
 ```bash
 npm i @crossbind/port-curl-bin-wasi
 
-M=node_modules/@crossbind/package
+M=node_modules/@crossbind/port
 T=wasi-wasm32-st-release
-alias curlw='wasmtime run \
-  -S inherit-network=y -S allow-ip-name-lookup=y -S tcp=y \
-  --dir=.::/work \
-  --dir=$M-openssl-wasi/dist/prebuilt/$T/ssl/certs::/certs \
-  --env CURL_CA_BUNDLE=/certs/cacert.pem \
-  $M-curl-bin-wasi/dist/prebuilt/$T/bin/curl'
+alias curlw='wasmtime run -S inherit-network=y -S allow-ip-name-lookup=y -S tcp=y --dir=.::/work --dir=$M-openssl-wasi/dist/prebuilt/$T/ssl/certs::/certs --env CURL_CA_BUNDLE=/certs/cacert.pem $M-curl-bin-wasi/dist/prebuilt/$T/bin/curl'
 
 curlw --version
 curlw -sS https://example.com -o /work/page.html

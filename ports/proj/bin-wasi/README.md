@@ -23,12 +23,9 @@ Full control over preopens, permissions and env:
 ```bash
 npm i @crossbind/port-proj-bin-wasi
 
-M=node_modules/@crossbind/package
+M=node_modules/@crossbind/port
 T=wasi-wasm32-st-release
-alias projw='wasmtime run --dir=.::/work \
-  --dir=$M-proj-bin-wasi/dist/prebuilt/$T/share/proj::/proj \
-  --env PROJ_DATA=/proj \
-  $M-proj-bin-wasi/dist/prebuilt/$T/bin/proj'
+alias projw='wasmtime run --dir=.::/work --dir=$M-proj-bin-wasi/dist/prebuilt/$T/share/proj::/proj --env PROJ_DATA=/proj $M-proj-bin-wasi/dist/prebuilt/$T/bin/proj'
 
 echo "2 49" | projw +proj=merc +lat_ts=56.5           # plain proj
 echo "2 49" | projw cs2cs +proj=latlong +to +proj=merc +lat_ts=56.5

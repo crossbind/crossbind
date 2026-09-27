@@ -22,10 +22,9 @@ Full control over preopens, permissions and env:
 ```bash
 npm i @crossbind/port-geos-bin-wasi
 
-M=node_modules/@crossbind/package
+M=node_modules/@crossbind/port
 T=wasi-wasm32-st-release
-alias geosopw='wasmtime run --dir=.::/work \
-  $M-geos-bin-wasi/dist/prebuilt/$T/bin/geosop'
+alias geosopw='wasmtime run --dir=.::/work $M-geos-bin-wasi/dist/prebuilt/$T/bin/geosop'
 
 geosopw -a "POLYGON((0 0,10 0,10 10,0 10,0 0))" \
         -b "POLYGON((5 5,15 5,15 15,5 15,5 5))" intersection

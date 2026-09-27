@@ -23,7 +23,7 @@ Full control over preopens, permissions and env:
 ```bash
 npm i @crossbind/port-tiff-bin-wasi
 
-M=node_modules/@crossbind/package
+M=node_modules/@crossbind/port
 T=wasi-wasm32-st-release
 B=$M-tiff-bin-wasi/dist/prebuilt/$T/bin
 alias tiffw='wasmtime run --dir=.::/work'

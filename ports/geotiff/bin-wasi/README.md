@@ -18,15 +18,15 @@ One-off use without installing globally: `npx -p @crossbind/port-geotiff-bin-was
 
 ### Calling wasmtime yourself
 
-Full control over preopens, permissions and env:
+Full control over preopens, permissions and env. The tools look EPSG codes up in PROJ's `proj.db`, which `@crossbind/port-proj-wasi` ships; without it `listgeo` warns `Cannot find proj.db` and reports `PCS = 27700 (name unknown)`:
 
 ```bash
 npm i @crossbind/port-geotiff-bin-wasi
 
-M=node_modules/@crossbind/package
+M=node_modules/@crossbind/port
 T=wasi-wasm32-st-release
 B=$M-geotiff-bin-wasi/dist/prebuilt/$T/bin
-alias geotiffw='wasmtime run --dir=.::/work'
+alias geotiffw='wasmtime run --dir=.::/work --dir=$M-proj-wasi/dist/prebuilt/$T/share/proj::/proj --env PROJ_DATA=/proj'
 
 geotiffw $B/listgeo /work/image.tif
 geotiffw $B/geotifcp -g /work/meta.txt /work/in.tif /work/out.tif

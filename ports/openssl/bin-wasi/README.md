@@ -22,10 +22,9 @@ Full control over preopens, permissions and env:
 ```bash
 npm i @crossbind/port-openssl-bin-wasi
 
-M=node_modules/@crossbind/package
+M=node_modules/@crossbind/port
 T=wasi-wasm32-st-release
-alias opensslw='wasmtime run --dir=.::/work \
-  $M-openssl-bin-wasi/dist/prebuilt/$T/bin/openssl'
+alias opensslw='wasmtime run --dir=.::/work $M-openssl-bin-wasi/dist/prebuilt/$T/bin/openssl'
 
 opensslw version
 opensslw dgst -sha256 /work/file.bin

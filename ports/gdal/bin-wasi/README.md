@@ -24,17 +24,9 @@ Full control over preopens, permissions and env:
 ```bash
 npm i @crossbind/port-gdal-bin-wasi
 
-M=node_modules/@crossbind/package
+M=node_modules/@crossbind/port
 T=wasi-wasm32-st-release
-alias gdalw='wasmtime run \
-  -S inherit-network=y -S allow-ip-name-lookup=y -S tcp=y \
-  --dir=.::/work \
-  --dir=$M-gdal-bin-wasi/dist/prebuilt/$T/share/gdal::/gdal \
-  --dir=$M-proj-wasi/dist/prebuilt/$T/share/proj::/proj \
-  --dir=$M-openssl-wasi/dist/prebuilt/$T/ssl/certs::/certs \
-  --env GDAL_DATA=/gdal --env PROJ_DATA=/proj --env GDAL_CACHEMAX=64 \
-  --env CURL_CA_BUNDLE=/certs/cacert.pem \
-  $M-gdal-bin-wasi/dist/prebuilt/$T/bin/gdal'
+alias gdalw='wasmtime run -S inherit-network=y -S allow-ip-name-lookup=y -S tcp=y --dir=.::/work --dir=$M-gdal-bin-wasi/dist/prebuilt/$T/share/gdal::/gdal --dir=$M-proj-wasi/dist/prebuilt/$T/share/proj::/proj --dir=$M-openssl-wasi/dist/prebuilt/$T/ssl/certs::/certs --env GDAL_DATA=/gdal --env PROJ_DATA=/proj --env GDAL_CACHEMAX=64 --env CURL_CA_BUNDLE=/certs/cacert.pem $M-gdal-bin-wasi/dist/prebuilt/$T/bin/gdal'
 
 gdalw --version
 gdalw raster convert /work/input.tif /work/output.png
