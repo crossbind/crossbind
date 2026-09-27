@@ -420,6 +420,32 @@ struct BindingType<uint64_t> {
     }
 };
 
+// int64_t is long long on Apple platforms and long on Android: the other 64-bit pair crosses as a BigInt too.
+template<typename T>
+constexpr bool isOther64BitInteger = std::is_integral_v<T> && sizeof(T) == 8
+    && !std::is_same_v<T, int64_t> && !std::is_same_v<T, uint64_t>;
+
+template<typename T>
+struct BindingType<T, std::enable_if_t<isOther64BitInteger<T>>> {
+    using Exact = std::conditional_t<std::is_signed_v<T>, int64_t, uint64_t>;
+    typedef T WireType;
+    typedef const facebook::jsi::Value WireType2;
+
+    static WireType toWireType(WireType b) {
+        return b;
+    }
+    static WireType fromWireType(WireType wt) {
+        return wt;
+    }
+
+    static WireType2 toWireType2(facebook::jsi::Runtime& rt, WireType b) {
+        return BindingType<Exact>::toWireType2(rt, static_cast<Exact>(b));
+    }
+    static WireType fromWireType2(facebook::jsi::Runtime& rt, WireType2& wt) {
+        return static_cast<WireType>(BindingType<Exact>::fromWireType2(rt, wt));
+    }
+};
+
     template<>
     struct BindingType<facebook::jsi::Value> {
         typedef const facebook::jsi::Value WireType;
