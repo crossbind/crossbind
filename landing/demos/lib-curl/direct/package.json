@@ -1,0 +1,16 @@
+{
+    "name": "crossbind-demo-lib-curl-direct",
+    "private": true,
+    "type": "module",
+    "scripts": {
+        "build": "vite build"
+    },
+    "dependencies": {
+        "@crossbind/port-curl-wasm": "beta"
+    },
+    "devDependencies": {
+        "@crossbind/plugin-vite": "beta",
+        "crossbind": "beta",
+        "vite": "^8.2.1"
+    }
+}

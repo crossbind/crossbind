@@ -1,0 +1,14 @@
+{
+    "name": "crossbind-demo-lib-expat-wasi",
+    "private": true,
+    "type": "module",
+    "scripts": {
+        "build": "crossbind build -p wasi -b release"
+    },
+    "dependencies": {
+        "@crossbind/port-expat-wasi": "beta"
+    },
+    "devDependencies": {
+        "crossbind": "beta"
+    }
+}

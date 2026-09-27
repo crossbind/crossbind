@@ -14,7 +14,8 @@
         "test": "node --test test/*.test.mjs",
         "check:deploy": "pnpm run build && node ../scripts/release/check-site-snapshot.mjs dist/release-snapshot.json",
         "deploy": "pnpm run check:deploy && wrangler pages deploy --branch main",
-        "demos": "node ../scripts/site/build-example-demos.mjs --config ./release.config.js"
+        "demos": "node ../scripts/site/build-example-demos.mjs --config ./release.config.js",
+        "wasi-examples": "node ../scripts/site/check-wasi-examples.mjs --config ./release.config.js"
     },
     "dependencies": {
         "@fontsource/geist-mono": "5.3.0",

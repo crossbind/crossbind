@@ -1,0 +1,14 @@
+{
+    "name": "crossbind-demo-lib-sqlite3-wasi",
+    "private": true,
+    "type": "module",
+    "scripts": {
+        "build": "crossbind build -p wasi -b release"
+    },
+    "dependencies": {
+        "@crossbind/port-sqlite3-wasi": "beta"
+    },
+    "devDependencies": {
+        "crossbind": "beta"
+    }
+}

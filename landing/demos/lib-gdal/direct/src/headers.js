@@ -1,0 +1,86 @@
+// Every name the examples import, from the header the site says it comes from. The build fails on a
+// name that header does not export, so the import lines on the page are checked here.
+export {
+    GDALAllRegister,
+    GDALClose,
+    GDALComputeRasterMinMax,
+    GDALComputeRasterStatistics,
+    GDALCreate,
+    GDALDataType,
+    GDALDatasetCreateLayer,
+    GDALGetBlockSize,
+    GDALGetDataTypeName,
+    GDALGetDatasetDriver,
+    GDALGetDriverByName,
+    GDALGetDriverShortName,
+    GDALGetGeoTransform,
+    GDALGetMetadataItem,
+    GDALGetOverview,
+    GDALGetOverviewCount,
+    GDALGetProjectionRef,
+    GDALGetRasterBand,
+    GDALGetRasterBandXSize,
+    GDALGetRasterBandYSize,
+    GDALGetRasterCount,
+    GDALGetRasterDataType,
+    GDALGetRasterXSize,
+    GDALGetRasterYSize,
+    GDALGetSpatialRef,
+    GDALOpenEx,
+    GDALRWFlag,
+    GDALRasterIO,
+    GDALSetGeoTransform,
+    GDALSetProjection,
+    allocBuffer,
+    allocPointer,
+    cstring,
+    readCString,
+    readNumberAt,
+    writeBytes,
+    writeNumberAt,
+    writePointerAt,
+} from '@crossbind/port-gdal/gdal.h';
+export {
+    GDALDEMProcessing,
+    GDALDEMProcessingOptionsFree,
+    GDALDEMProcessingOptionsNew,
+    GDALInfo,
+    GDALTranslate,
+    GDALTranslateOptionsFree,
+    GDALTranslateOptionsNew,
+    GDALVectorInfo,
+    GDALVectorInfoOptionsFree,
+    GDALVectorInfoOptionsNew,
+    GDALVectorTranslate,
+    GDALVectorTranslateOptionsFree,
+    GDALVectorTranslateOptionsNew,
+    GDALWarp,
+    GDALWarpAppOptionsFree,
+    GDALWarpAppOptionsNew,
+} from '@crossbind/port-gdal/gdal_utils.h';
+export {
+    VSIFree,
+    VSIUnlink,
+} from '@crossbind/port-gdal/cpl_vsi.h';
+export {
+    CPLGetLastErrorMsg,
+} from '@crossbind/port-gdal/cpl_error.h';
+export {
+    GDALChecksumImage,
+    GDALContourGenerateEx,
+} from '@crossbind/port-gdal/gdal_alg.h';
+export {
+    OGR_F_Destroy,
+    OGR_F_GetFieldAsDouble,
+    OGR_F_GetGeometryRef,
+    OGR_Fld_Create,
+    OGR_Fld_Destroy,
+    OGR_G_Length,
+    OGR_L_CreateField,
+    OGR_L_GetNextFeature,
+    OGR_L_ResetReading,
+} from '@crossbind/port-gdal/ogr_api.h';
+export {
+    OGRFieldType,
+    OGRwkbGeometryType,
+} from '@crossbind/port-gdal/ogr_core.h';

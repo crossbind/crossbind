@@ -4,7 +4,7 @@ import { highlight } from '../components/ui.jsx';
 // Docs code block. Deliberately not ui.jsx's CodeWindow: that one is the hero's product shot -
 // traffic lights, centred filename - and forty of them down a reference page is noise. This is
 // the slim bar gdal3.js uses on its doc pages: what file you are looking at, and a copy button.
-export default function DocCode({ tokens, file, code }) {
+export default function DocCode({ tokens, file, code, maxHeight }) {
     const [copied, setCopied] = useState(false);
 
     const copy = async () => {
@@ -57,6 +57,7 @@ export default function DocCode({ tokens, file, code }) {
                     <span aria-live="polite">{copied ? 'COPIED' : 'COPY'}</span>
                 </button>
             </div>
+            {/* The highlighter emits one div per line, so the indentation only survives with `pre`. */}
             <div style={{
                 padding: '16px 18px',
                 fontFamily: tokens.mono,
@@ -64,6 +65,8 @@ export default function DocCode({ tokens, file, code }) {
                 lineHeight: 1.65,
                 color: tokens.codeText,
                 overflowX: 'auto',
+                whiteSpace: 'pre',
+                ...(maxHeight ? { maxHeight, overflowY: 'auto' } : {}),
             }}
             >
                 {highlight(code, tokens)}

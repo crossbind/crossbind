@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8">
+    <title>crossbind - expat self-check</title>
+    <script src="./dist/expatapps-wasm-wasm32-st-release.browser.js"></script>
+</head>
+
+<body>
+    <pre id="out">compiling ...</pre>
+    <script type="module">
+        // Every usage example and every app on crossbind.dev/ports/expat/ runs on this module. This page
+        // is what the demo build opens to prove them: each example must print exactly what its
+        // `expected` says, and the apps must give the results that pyexpat (CPython 3.14, Expat 2.7.4)
+        // and a host build of Expat 2.8.5 gave on the same generated documents.
+        import * as tree from './examples/01-tree.js';
+        import * as stream from './examples/02-stream.js';
+        import * as namespaces from './examples/03-namespaces.js';
+        import * as limits from './examples/04-limits.js';
+
+        const EXAMPLES = [tree, stream, namespaces, limits];
+        const MIB = 1024 * 1024;
+
+        const out = document.querySelector('#out');
+        const lines = [];
+        const show = (text) => {
+            lines.push(text);
+            out.textContent = lines.join('\n');
+        };
+        const hex = async (bytes) => [...new Uint8Array(await crypto.subtle.digest('SHA-256', bytes))].map((b) => b.toString(16).padStart(2, '0')).join('');
+        const sha = (text) => hex(new TextEncoder().encode(text));
+        // Binary data crosses the binding as a string with one UTF-16 code unit (0-255) per byte.
+        const byteString = (bytes) => {
+            let text = '';
+            for (let at = 0; at < bytes.length; at += 8192) text += String.fromCharCode(...bytes.subarray(at, at + 8192));
+            return text;
+        };
+
+        const checks = [];
+        const check = (name, actual, expected) => {
+            const ok = expected !== null && JSON.stringify(actual) === JSON.stringify(expected);
+            checks.push(ok);
+            show(`${ok ? 'ok  ' : 'FAIL'} ${name}: ${JSON.stringify(actual)}${ok ? '' : ` (expected ${JSON.stringify(expected)})`}`);
+        };
+
+        try {
+            const m = await initNative({ path: './dist' });
+            const version = await m.XmlTree.version();
+
+            // The usage examples, run exactly as the page shows them.
+            for (const example of EXAMPLES) {
+                const printed = [];
+                await example.default(m, { log: (...values) => printed.push(values.map(String).join(' ')) });
+                check(`example "${example.title}"`, printed, example.expected);
+            }
+
+            // Streaming app: the generator writes the reference's bytes, and the counts match pyexpat's on
+            // the same document, whether it is generated in the module or streamed in from a File.
+            check('app firehose sample sha-256', await sha(await m.XmlFirehose.sample(1000)), '9937b2bcac50df7e7ab87a2019bfc1eff05d5ce6474caaf8bdc4689ce10de96a');
+            const counts = (s) => [s.bytes, s.elements, s.attributes, s.textBytes, s.maxDepth, s.line, s.error, s.done, s.top];
+            const expected100k = [8433547, 240001, 470002, 330001, 3, 110004, null, true, [['nd', 100000], ['node', 100000], ['tag', 30000], ['way', 10000], ['osm', 1]]];
+            const hose = await new m.XmlFirehose();
+            const drain = async (bytes) => {
+                let stats;
+                do stats = JSON.parse(await hose.step(bytes));
+                while (!stats.done);
+                return stats;
+            };
+            await hose.generate(100000);
+            check('app firehose 100,000 nodes', counts(await drain(4 * MIB)), expected100k);
+            const streamFile = async (file) => {
+                await hose.begin(file.size);
+                const reader = file.stream().getReader();
+                for (;;) {
+                    const { done, value } = await reader.read();
+                    const stats = JSON.parse(await hose.feed(done ? '' : byteString(value), done));
+                    if (done || stats.done) return stats;
+                }
+            };
+            check('app firehose streamed file', counts(await streamFile(new File([await m.XmlFirehose.sample(100000)], 'sample.osm'))), expected100k);
+            await hose.generate(1000000);
+            const first = JSON.parse(await hose.step(1));
+            const last = await drain(16 * MIB);
+            check('app firehose 1,000,000 nodes, memory flat', [last.bytes, last.elements, last.memory === first.memory], [86433335, 2400001, true]);
+
+            // Attack lab: the documents are the reference's bytes, and each verdict matches pyexpat (default
+            // limits) and the host build of Expat 2.8.5 (other limits).
+            const lab = async (xml, amplification, threshold, depth) => JSON.parse(await m.AttackLab.parse(xml, amplification, threshold, depth));
+            const verdict = (r) => [r.ok, r.code, r.line, r.column, r.textBytes, r.elements, r.maxDepth];
+            const laughs9 = await m.AttackLab.build('laughs', 9);
+            const laughs10 = await m.AttackLab.build('laughs', 10);
+            const laughs5 = await m.AttackLab.build('laughs', 5);
+            const quadratic = await m.AttackLab.build('quadratic', 50000);
+            const external = await m.AttackLab.build('external', 0);
+            const deep = await m.AttackLab.build('deep', 100000);
+            check('app lab documents sha-256', await Promise.all([laughs9, laughs10, quadratic, external, deep].map(sha)), [
+                'd4c05aab285d233837dc5f64f8f5667215ef068527c29d0f420c961d47c7d788',
+                '266fd50a06743ee955dfb544d37816079e56bcdf8c08b54b860957ee45d5eafb',
+                'a346865a216e76140cad54b3111c41d2fe0a43b5a9fcaa3c37f85217a20e74c6',
+                '84724e79b5401df4951e7058a2bd00cfab36f13649a7395815c9e221526c3297',
+                'd17ad568cf82220b69129f9e804a72f40b425b0ca29d6e08abea8bd644573cfa',
+            ]);
+            const blocked = await lab(laughs9, 100, 8 * MIB, 0);
+            check('app lab billion laughs', [...verdict(blocked), blocked.error, blocked.entityCount], [false, 43, 14, 6, 2603109, 1, 1, 'limit on input amplification factor (from DTD and entities) breached', 10]);
+            check('app lab quadratic blowup', verdict(await lab(quadratic, 100, 8 * MIB, 0)), [false, 43, 5, 504, 8300000, 1, 1]);
+            const xxe = await lab(external, 100, 8 * MIB, 0);
+            check('app lab external entity', [xxe.ok, xxe.textBytes, xxe.doctype, xxe.entities, xxe.external], [
+                true,
+                0,
+                { name: 'data', systemId: 'http://attacker.example/evil.dtd' },
+                [{ name: 'secret', systemId: 'file:///etc/passwd' }],
+                [{ entity: 'secret', systemId: 'file:///etc/passwd' }],
+            ]);
+            const nested = await lab(deep, 100, 8 * MIB, 0);
+            check('app lab deep nesting', [nested.ok, nested.elements, nested.maxDepth], [true, 100000, 100000]);
+            const capped = await lab(deep, 100, 8 * MIB, 1000);
+            check('app lab deep nesting, depth limit', [...verdict(capped), capped.stoppedByDepth], [false, 35, 1, 3003, 0, 1001, 1001, true]);
+            check('app lab looser and stricter limits', [verdict(await lab(laughs10, 1000, 64 * MIB, 0)), verdict(await lab(laughs5, 100, 64 * 1024, 0))], [
+                [false, 43, 15, 6, 20826609, 1, 1],
+                [false, 43, 10, 6, 20190, 1, 1],
+            ]);
+
+            // GPX app: the generated ride is the reference's bytes under either prefix, and its summary
+            // matches the one computed from a pyexpat namespace-aware parse of the same file.
+            await m.FS.mkdirTree('/memfs/expatapps');
+            const rides = {};
+            for (const prefix of ['gpxtpx', 'ns3']) {
+                const path = `/memfs/expatapps/ride-${prefix}.gpx`;
+                const size = await m.GpxTrack.writeSample(path, prefix);
+                rides[prefix] = { path, size, digest: await hex(await m.getFileBytes(path)), summary: JSON.parse(await m.GpxTrack.summary(path)) };
+            }
+            check('app gpx sample bytes', [rides.gpxtpx.size, rides.gpxtpx.digest, rides.ns3.size, rides.ns3.digest], [
+                2157824,
+                'ebcbbf800b2a3c28fea1244f27229c8c8176814e7f81ae3fb85871950484b1c1',
+                1993787,
+                '0d7aff1f54b687832506a8e0b772240d35892f1f492444e9f43cb9acbbca2c9f',
+            ]);
+            const track = (t) => [t.points, t.lengthKm, t.gain, t.loss, t.minEle, t.maxEle, t.avgHr, t.maxHr, t.start, t.end, t.seconds];
+            const ride = [9113, 64.043, 803.3, 914.3, 423.4, 586.1, 126.7, 172, '2026-09-20T07:30:00Z', '2026-09-20T10:01:52Z', 9112];
+            const GPX = 'http://www.topografix.com/GPX/1/1';
+            const HR = 'http://www.garmin.com/xmlschemas/TrackPointExtension/v1';
+            check('app gpx summary, gpxtpx prefix', [...track(rides.gpxtpx.summary), rides.gpxtpx.summary.namespaces], [...ride, { '': GPX, gpxtpx: HR }]);
+            check('app gpx summary, ns3 prefix', [...track(rides.ns3.summary), rides.ns3.summary.namespaces], [...ride, { '': GPX, ns3: HR }]);
+            const coordinates = JSON.parse(await m.GpxTrack.geojson(rides.ns3.path)).features[0].geometry.coordinates;
+            check('app gpx geojson', [coordinates.length, coordinates[0], coordinates.at(-1).slice(0, 2)], [9113, [6.6, 46.5, 586.1], [6.6, 46.5]]);
+
+            const passed = checks.filter(Boolean).length;
+            show(`expat ${version} => ${passed}/${checks.length} checks passed`);
+        } catch (error) {
+            show(`failed => ${error && error.message ? error.message : error}`);
+        }
+    </script>
+</body>
+
+</html>

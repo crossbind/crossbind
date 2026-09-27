@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8">
+    <title>crossbind - libjpeg-turbo self-check</title>
+    <script src="./dist/jpegapps-wasm-wasm32-st-release.browser.js"></script>
+</head>
+
+<body>
+    <pre id="out">compiling ...</pre>
+    <script type="module">
+        // Every usage example and every app on crossbind.dev/ports/jpegturbo/ runs on this module. This
+        // page is what the demo build opens to prove them: each example must print exactly what its
+        // `expected` says, and the apps must reproduce files and numbers that native libjpeg-turbo 3.2.0
+        // (cjpeg, djpeg, jpegtran) produced from the same generated pixels.
+        import * as encode from './examples/01-encode.js';
+        import * as decode from './examples/02-decode.js';
+        import * as thumbnail from './examples/03-thumbnail.js';
+        import * as transcode from './examples/04-transcode.js';
+        import * as markers from './examples/05-markers.js';
+
+        const EXAMPLES = [encode, decode, thumbnail, transcode, markers];
+
+        const out = document.querySelector('#out');
+        const lines = [];
+        const show = (text) => {
+            lines.push(text);
+            out.textContent = lines.join('\n');
+        };
+        const sha256 = async (bytes) => [...new Uint8Array(await crypto.subtle.digest('SHA-256', bytes))].map((b) => b.toString(16).padStart(2, '0')).join('');
+
+        const checks = [];
+        const check = (name, actual, expected) => {
+            const ok = expected !== null && JSON.stringify(actual) === JSON.stringify(expected);
+            checks.push(ok);
+            show(`${ok ? 'ok  ' : 'FAIL'} ${name}: ${JSON.stringify(actual)}${ok ? '' : ` (expected ${JSON.stringify(expected)})`}`);
+        };
+
+        try {
+            const m = await initNative({ path: './dist' });
+            const version = await m.JpegEncoder.version();
+
+            // The usage examples, run exactly as the page shows them.
+            for (const example of EXAMPLES) {
+                const printed = [];
+                await example.default(m, { log: (...values) => printed.push(values.map(String).join(' ')) });
+                check(`example "${example.title}"`, printed, example.expected);
+            }
+
+            const dir = '/memfs/jpegapps';
+            await m.FS.mkdirTree(dir);
+
+            // The generated scene every sample starts from, as 960x640 RGBA.
+            const lab = await new m.JpegLab();
+            await lab.useSample(960, 640);
+            await lab.writeSource(`${dir}/source.rgba`);
+            check('scene sha-256', await sha256(await m.getFileBytes(`${dir}/source.rgba`)), '8d21f0bc2ece20a51ba257a2cc1e98c8269aa298e8687ed757d84743de67054c');
+
+            // Encoder lab: the same bytes as cjpeg with the same flags; PSNR as numpy computes it.
+            const encoded = [];
+            for (const settings of [[75, 420, false, false, false], [75, 444, false, false, false], [75, 420, true, true, false], [75, 420, false, false, true]]) {
+                const result = JSON.parse(await lab.encode(...settings, `${dir}/lab.jpg`, ''));
+                encoded.push(`${result.bytes} B, ${result.psnr.toFixed(2)} dB`);
+            }
+            check('app encoder lab: q75 4:2:0, 4:4:4, progressive, arithmetic', encoded, ['59481 B, 31.40 dB', '74930 B, 36.06 dB', '51067 B, 31.40 dB', '40773 B, 31.40 dB']);
+            await lab.encode(75, 420, false, false, false, `${dir}/lab.jpg`, '');
+            const measured = JSON.parse(await lab.measure(`${dir}/lab.jpg`));
+            check('app encoder lab: header read back', [measured.subsampling, measured.progressive, measured.quality], ['4:2:0', false, { quality: 75, exact: true }]);
+
+            // Privacy app: what the sample photo reveals, and the lossless clean copy.
+            const photo = `${dir}/photo.jpg`;
+            const size = await m.JpegScrub.writeSample(photo);
+            const report = JSON.parse(await m.JpegScrub.inspect(photo));
+            check(
+                'app privacy: what the sample reveals',
+                [size, report.segments.map((segment) => `${segment.marker} ${segment.label} ${segment.bytes}`).join(', '), report.exif.make, report.exif.model, report.exif.gps, report.exif.thumbnailBytes, report.preview],
+                [123613, 'APP1 Exif 3818, APP1 XMP 265, COM comment 22', 'crossbind', 'Sample Phone 1', { lat: 41.025631, lon: 28.974156, alt: 62 }, 3336, { width: 200, height: 80 }],
+            );
+            const previewBytes = await m.JpegScrub.extractPreview(photo, `${dir}/preview.jpg`);
+            check('app privacy: the hidden preview', [previewBytes, await sha256(await m.getFileBytes(`${dir}/preview.jpg`))], [3336, 'dd97dad0be82a2241e718503c9b67061104c397d6d7ed0d1c9dbc9e3add3bb37']);
+            const cleaned = JSON.parse(await m.JpegScrub.clean(photo, `${dir}/clean.jpg`, true, true, true, false));
+            const proof = JSON.parse(await m.JpegScrub.compare(photo, `${dir}/clean.jpg`));
+            check(
+                'app privacy: clean copy',
+                [cleaned.before, cleaned.after, cleaned.removed.map((segment) => segment.label).join(', '), proof.samples, proof.differing, await sha256(await m.getFileBytes(`${dir}/clean.jpg`))],
+                [123613, 106361, 'Exif, XMP, comment', 2880000, 0, 'faa3580e857c653ff0fa307a9ca48f788bbfe4b9a57b17d63f825747ff0bc3c9'],
+            );
+
+            // Thumbnail app: a 12 MP sample decoded at each scale; the 1/8 pixels as djpeg -scale 1/8 gives them.
+            const big = `${dir}/big.jpg`;
+            const bigBytes = await m.ThumbnailBench.writeSample(big);
+            const sizes = [];
+            for (const denominator of [1, 2, 4, 8]) {
+                const result = JSON.parse(await m.ThumbnailBench.decode(big, denominator, 1, denominator === 8 ? `${dir}/thumb.rgba` : ''));
+                sizes.push(`${result.width}x${result.height}`);
+            }
+            check('app thumbnails', [bigBytes, sizes.join(', '), await sha256(await m.getFileBytes(`${dir}/thumb.rgba`))], [1289719, '4032x3024, 2016x1512, 1008x756, 504x378', '2f14a51d6e6f19d1e6cbe37aa0e67a0d992ce2690ec7406e95a1d7b394ffdd88']);
+
+            const passed = checks.filter(Boolean).length;
+            show(`jpegturbo ${version} => ${passed}/${checks.length} checks passed`);
+        } catch (error) {
+            show(`failed => ${error && error.message ? error.message : error}`);
+        }
+    </script>
+</body>
+
+</html>

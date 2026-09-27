@@ -12,7 +12,7 @@ import {
     TARGET_LABELS,
     WASI_TOOL_PORTS,
 } from './catalog.js';
-import { portHref } from './pages.js';
+import { platformHref, portHref } from './pages.js';
 
 // /ports/ as its own page: a catalog, not a doc. The header carries the numbers that describe
 // the catalog, the body is the grid with a category filter and the command-tools list. Every
@@ -106,7 +106,7 @@ function ToolRow({ tokens, port }) {
     return (
         <div className="tool-row" style={{ padding: '18px 0', borderTop: `1px solid ${tokens.border}` }}>
             <div>
-                <a href={`${portHref(port.family)}#commands`} style={{ fontSize: 16, fontWeight: 600, color: tokens.text }}>
+                <a href={`${platformHref(port.family, 'wasi')}#commands`} style={{ fontSize: 16, fontWeight: 600, color: tokens.text }}>
                     {port.name}
                 </a>
                 <div style={{ fontFamily: tokens.mono, fontSize: 11, color: tokens.textMuted, marginTop: 4 }}>

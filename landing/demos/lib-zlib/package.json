@@ -1,0 +1,14 @@
+{
+    "name": "crossbind-demo-lib-zlib",
+    "private": true,
+    "type": "module",
+    "scripts": {
+        "build": "crossbind build -p wasm -a wasm32 -r st -e browser -b release"
+    },
+    "dependencies": {
+        "@crossbind/port-zlib-wasm": "beta"
+    },
+    "devDependencies": {
+        "crossbind": "beta"
+    }
+}

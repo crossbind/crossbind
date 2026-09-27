@@ -1,0 +1,16 @@
+{
+    "name": "crossbind-demo-lib-proj-direct",
+    "private": true,
+    "type": "module",
+    "scripts": {
+        "build": "vite build"
+    },
+    "dependencies": {
+        "@crossbind/port-proj-wasm": "beta"
+    },
+    "devDependencies": {
+        "@crossbind/plugin-vite": "beta",
+        "crossbind": "beta",
+        "vite": "^8.2.1"
+    }
+}

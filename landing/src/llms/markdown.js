@@ -64,6 +64,24 @@ function release({ channel, prerelease, publishedAt, npmUrl, githubReleaseUrl })
     return `${label} · published ${formatPublishedAt(publishedAt)} · [npm](${npmUrl}) · [GitHub Release](${githubReleaseUrl})`;
 }
 
+// The same example against the library's own headers with no C++, or why that cannot work.
+function directExample(item, resolveLink) {
+    if (item.direct.impossible) return ['#### JavaScript only', `Not possible from JavaScript alone: ${links(item.direct.impossible, resolveLink)}`];
+    return ['#### JavaScript only', links(item.direct.note, resolveLink), fence(item.direct.usage, 'main.js'), fence(item.direct.expected.join('\n'), 'output')];
+}
+
+// A usage example: what it shows, the header, the JavaScript and the lines it prints when it runs.
+function example({ example: item, direct }, resolveLink) {
+    return [
+        `### ${item.title}`,
+        links(item.summary, resolveLink),
+        fence(item.nativeSource, `src/native/${item.native}`),
+        fence(item.usage, 'main.js'),
+        fence(item.expected.join('\n'), 'output'),
+        ...(direct && item.direct ? directExample(item, resolveLink) : []),
+    ].join('\n\n');
+}
+
 const RENDERERS = {
     h2: (block) => `## ${block.text}`,
     h3: (block) => `### ${block.text}`,
@@ -75,6 +93,9 @@ const RENDERERS = {
     table,
     cards: (block, resolveLink) => cards(block.items, resolveLink),
     release: (block) => release(block.release),
+    example,
+    // Markdown has no tabs: each panel becomes a heading of its own.
+    tabs: (block, resolveLink) => block.tabs.map((tab) => `#### ${tab.label}\n\n${renderBlocks(tab.blocks, resolveLink)}`).join('\n\n'),
 };
 
 // llms-full.txt is one document: a page's H1 becomes a prefixed H2 and every heading under it

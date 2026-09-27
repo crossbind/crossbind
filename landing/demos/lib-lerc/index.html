@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8">
+    <title>crossbind - lerc self-check</title>
+    <script src="./dist/lercapps-wasm-wasm32-st-release.browser.js"></script>
+</head>
+
+<body>
+    <pre id="out">compiling ...</pre>
+    <script type="module">
+        // Every usage example and every app on crossbind.dev/ports/lerc/ runs on this module. This page
+        // is what the demo build opens to prove them: each example must print exactly what its
+        // `expected` says, and the apps must give the numbers that Esri's Python wrapper over a native
+        // build of the same LERC 4.2.0 source, plus numpy, gave on the same generated rasters.
+        import * as compress from './examples/01-compress.js';
+        import * as blobInfo from './examples/02-blob-info.js';
+        import * as lossless from './examples/03-lossless.js';
+        import * as nodata from './examples/04-nodata.js';
+
+        const EXAMPLES = [compress, blobInfo, lossless, nodata];
+        const DIRECTORY = '/memfs/lercapps';
+        const BUDGETS = [0, 0.01, 0.1, 0.5, 1, 5];
+
+        const out = document.querySelector('#out');
+        const lines = [];
+        const show = (text) => {
+            lines.push(text);
+            out.textContent = lines.join('\n');
+        };
+        const hex = async (bytes) => [...new Uint8Array(await crypto.subtle.digest('SHA-256', bytes))].map((b) => b.toString(16).padStart(2, '0')).join('');
+
+        const checks = [];
+        const check = (name, actual, expected) => {
+            const ok = expected !== null && JSON.stringify(actual) === JSON.stringify(expected);
+            checks.push(ok);
+            show(`${ok ? 'ok  ' : 'FAIL'} ${name}: ${JSON.stringify(actual)}${ok ? '' : ` (expected ${JSON.stringify(expected)})`}`);
+        };
+
+        try {
+            const m = await initNative({ path: './dist' });
+            const version = await m.LercCodec.version();
+
+            // The usage examples, run exactly as the page shows them.
+            for (const example of EXAMPLES) {
+                const printed = [];
+                await example.default(m, { log: (...values) => printed.push(values.map(String).join(' ')) });
+                check(`example "${example.title}"`, printed, example.expected);
+            }
+
+            await m.FS.mkdirTree(DIRECTORY);
+
+            // The two generated terrains behind the compression app.
+            const labs = [await new m.TerrainLab(0), await new m.TerrainLab(1)];
+            const terrainHashes = [];
+            for (const lab of labs) {
+                await lab.writeHeights(`${DIRECTORY}/terrain.f32`);
+                terrainHashes.push(await hex(await m.getFileBytes(`${DIRECTORY}/terrain.f32`)));
+            }
+            check('terrain sha-256', terrainHashes, [
+                '4c654d3690dec2886ec555e7a12c1a7d28429b92dcd3d2808ef106d92e1680b5',
+                'c5ad2935a7b9837b75d5e3ea42c33234630d24f0e0e6c319b8487d407ce4d6a6',
+            ]);
+
+            // Compression app: every budget, decoded back and measured against the original heights.
+            const squeeze = async (lab) => {
+                const rows = [];
+                for (const budget of BUDGETS) {
+                    const packed = JSON.parse(await lab.compress(budget, `${DIRECTORY}/squeeze.lerc`));
+                    const unpacked = JSON.parse(await lab.decompress(`${DIRECTORY}/squeeze.lerc`, `${DIRECTORY}/squeeze.f32`));
+                    rows.push({ bytes: packed.bytes, maxError: unpacked.maxError, within: unpacked.maxError <= budget });
+                }
+                return rows;
+            };
+            const mountains = await squeeze(labs[0]);
+            check('app squeeze, mountains: bytes per budget', mountains.map((row) => row.bytes), [576760, 464085, 353373, 277117, 244589, 170085]);
+            check('app squeeze, mountains: largest error per budget', mountains.map((row) => [row.maxError, row.within]), [[0, true], [0.009521484375, true], [0.099609375, true], [0.49951171875, true], [0.99951171875, true], [4.99951171875, true]]);
+            const lowland = await squeeze(labs[1]);
+            check('app squeeze, lowland: bytes per budget', lowland.map((row) => row.bytes), [558020, 257823, 151547, 85693, 61231, 17190]);
+            check('app squeeze, lowland: largest error per budget', lowland.map((row) => [row.maxError, row.within]), [[0, true], [0.0099945068359375, true], [0.09999275207519531, true], [0.49999237060546875, true], [0.9999923706054688, true], [4.999908447265625, true]]);
+            const blobHashes = [];
+            for (const lab of labs) {
+                await lab.compress(0.01, `${DIRECTORY}/squeeze.lerc`);
+                blobHashes.push(await hex(await m.getFileBytes(`${DIRECTORY}/squeeze.lerc`)));
+            }
+            check('app squeeze: 1 cm blobs byte for byte', blobHashes, [
+                'cb053964d47492a4c07a0e2e161e3b063b48b1cf1532dc847b9248b676fd9b8f',
+                '0cdd0ef8ec2155adb7b47e025357fc78c6d45069252be480b1e1fabc1593751e',
+            ]);
+
+            // Blob inspector app, on the sample it writes: the lowland as an island, the sea masked out.
+            const sample = `${DIRECTORY}/island.lerc`;
+            const size = await m.LercInspector.writeSample(sample);
+            const info = JSON.parse(await m.LercInspector.inspect(sample));
+            check('app inspector: sample header', [size, await hex(await m.getFileBytes(sample)), info.codec, info.type, info.width, info.height, info.depth, info.bands, info.validPixels, info.masks, info.blobSize, info.zMin, info.zMax, info.maxZErrorUsed, info.ranges], [
+                176172, '58941fbd9fb547adba9517bbfc8e197e10e269e6f5b3d0f4ae88ba0fc4ccbd52', 'Lerc2 v6', 'float32', 512, 512, 1, 1, 171406, 1, 176172, 56.00001907348633, 105.39602661132812, 0.00999237060546875, [[56.00001907348633, 105.39602661132812]],
+            ]);
+            const band = JSON.parse(await m.LercInspector.decodeBand(sample, 0, `${DIRECTORY}/island.f32`, `${DIRECTORY}/island.mask`));
+            const mask = await m.getFileBytes(`${DIRECTORY}/island.mask`);
+            check('app inspector: decoded band', [band.valid, band.min, band.max, mask.reduce((sum, value) => sum + value, 0)], [171406, 56.00001907348633, 105.39602661132812, 171406]);
+
+            // LERC against gzip app: the four datasets and what LERC makes of them. The gzip side is the
+            // browser's own and is not asserted.
+            const datasets = await new m.DatasetLab();
+            const datasetHashes = [];
+            for (let index = 0; index < 4; index += 1) {
+                await datasets.write(index, `${DIRECTORY}/dataset.f32`);
+                datasetHashes.push(await hex(await m.getFileBytes(`${DIRECTORY}/dataset.f32`)));
+            }
+            check('app datasets sha-256', datasetHashes, [
+                '4c654d3690dec2886ec555e7a12c1a7d28429b92dcd3d2808ef106d92e1680b5',
+                '9f2fa5ef5d021131bcdd506234cd1370b64d1e031900f020bb91853ca904fb04',
+                'e5b38f471c1fc459f98e60e75286759bbbc88c1fa85386dbcaccdb896aa02cd6',
+                'e0208a207255a6ccdc9af086be63f5a226ccb796e6912765258e7d77117cc737',
+            ]);
+            const measured = [];
+            for (const [index, tolerance] of [[0, 0.01], [1, 0.005], [2, null], [3, 0.01]]) {
+                const exact = JSON.parse(await datasets.compress(index, 0));
+                const row = [exact.bytes, exact.identical];
+                if (tolerance !== null) {
+                    const near = JSON.parse(await datasets.compress(index, tolerance));
+                    row.push(near.bytes, near.maxErrorUsed, near.maxError);
+                }
+                measured.push(row);
+            }
+            check('app datasets: lossless, then within the tolerance', measured, [
+                [576760, true, 464085, 0.00951171875, 0.009521484375],
+                [252904, true, 235281, 0.005, 1.9073486328125e-6],
+                [39300, true],
+                [819644, true, 225383, 0.009999940395355225, 0.009999871253967285],
+            ]);
+
+            const passed = checks.filter(Boolean).length;
+            show(`lerc ${version} => ${passed}/${checks.length} checks passed`);
+        } catch (error) {
+            show(`failed => ${error && error.message ? error.message : error}`);
+        }
+    </script>
+</body>
+
+</html>

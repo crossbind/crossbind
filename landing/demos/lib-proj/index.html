@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8">
+    <title>crossbind - PROJ self-check</title>
+    <script src="./dist/projapps-wasm-wasm32-st-release.browser.js"></script>
+</head>
+
+<body>
+    <pre id="out">compiling ...</pre>
+    <script type="module">
+        // Every usage example and every app on crossbind.dev/ports/proj/ runs on this module. This page
+        // is what the demo build opens to prove them: each example must print exactly what its
+        // `expected` says, and the apps must give the values that cs2cs, projinfo and proj of the host's
+        // PROJ 9.8.1 (reading this build's proj.db), pyproj, GeographicLib, SQL on proj.db and
+        // closed-form maths gave for the same inputs.
+        import * as transform from './examples/01-transform.js';
+        import * as formats from './examples/02-formats.js';
+        import * as areaAxes from './examples/03-area-axes.js';
+        import * as geodesic from './examples/04-geodesic.js';
+        import * as identify from './examples/05-identify.js';
+
+        const EXAMPLES = [transform, formats, areaAxes, geodesic, identify];
+
+        const PRJ =
+            'PROJCS["WGS_1984_UTM_Zone_35N",GEOGCS["GCS_WGS_1984",DATUM["D_WGS_1984",SPHEROID["WGS_1984",6378137.0,298.257223563]],PRIMEM["Greenwich",0.0],UNIT["Degree",0.0174532925199433]],PROJECTION["Transverse_Mercator"],PARAMETER["False_Easting",500000.0],PARAMETER["False_Northing",0.0],PARAMETER["Central_Meridian",27.0],PARAMETER["Scale_Factor",0.9996],PARAMETER["Latitude_Of_Origin",0.0],UNIT["Meter",1.0]]';
+        const ISTANBUL = [41.0082, 28.9784];
+        const NEW_YORK = [40.6413, -73.7781];
+        const LONDON = [51.47, -0.4543];
+        const TOKYO = [35.5494, 139.7798];
+        const LOS_ANGELES = [33.9416, -118.4085];
+        const SINGAPORE = [1.3644, 103.9915];
+
+        const out = document.querySelector('#out');
+        const lines = [];
+        const show = (text) => {
+            lines.push(text);
+            out.textContent = lines.join('\n');
+        };
+
+        const checks = [];
+        const check = (name, actual, expected) => {
+            const ok = expected !== null && JSON.stringify(actual) === JSON.stringify(expected);
+            checks.push(ok);
+            show(`${ok ? 'ok  ' : 'FAIL'} ${name}: ${JSON.stringify(actual)}${ok ? '' : ` (expected ${JSON.stringify(expected)})`}`);
+        };
+        const fixed = (digits, ...values) => values.map((value) => value.toFixed(digits));
+        const compass = (azimuth) => ((azimuth + 360) % 360).toFixed(2);
+        // The farthest any point of the runs lies from the line through two points, in metres.
+        const deviation = (runs, [x1, y1], [x2, y2]) => {
+            const length = Math.hypot(x2 - x1, y2 - y1);
+            let farthest = 0;
+            for (const run of runs) {
+                for (let index = 0; index < run.length; index += 2) {
+                    farthest = Math.max(farthest, Math.abs((x2 - x1) * (y1 - run[index + 1]) - (x1 - run[index]) * (y2 - y1)) / length);
+                }
+            }
+            return farthest;
+        };
+
+        try {
+            const m = await initNative({ path: './dist' });
+
+            // The usage examples, run exactly as the page shows them.
+            for (const example of EXAMPLES) {
+                const printed = [];
+                await example.default(m, { log: (...values) => printed.push(values.map(String).join(' ')) });
+                check(`example "${example.title}"`, printed, example.expected);
+            }
+
+            // Projection atlas.
+            const atlas = await new m.ProjectionAtlas();
+            const equalEarth = JSON.parse(await atlas.draw('EPSG:8857'));
+            check('app atlas Equal Earth', [equalEarth.name, equalEarth.method, equalEarth.code, ...fixed(2, ...JSON.parse(await atlas.project(30, 40)))], ['WGS 84 / Equal Earth Greenwich', 'Equal Earth', 'EPSG:8857', '2549249.49', '4921020.06']);
+            const equalArea = JSON.parse(await atlas.distortion(60, 60));
+            check('app atlas Equal Earth distortion at 60E 60N', [...fixed(4, equalArea.areal, equalArea.meridian, equalArea.parallel), equalArea.angular.toFixed(2)], ['1.0000', '0.8639', '1.2948', '36.03']);
+            await atlas.draw('ESRI:54030');
+            check('app atlas Robinson', fixed(2, ...JSON.parse(await atlas.project(0, 45))), ['0.00', '4805073.65']);
+            await atlas.draw('EPSG:3395');
+            const mercator = JSON.parse(await atlas.distortion(0, 60));
+            check('app atlas World Mercator distortion at 60N', [...fixed(5, mercator.areal, mercator.meridian, mercator.parallel), mercator.angular.toFixed(3)], ['3.97992', '1.99497', '1.99497', '0.000']);
+            const laea = JSON.parse(await atlas.draw('EPSG:3035'));
+            check('app atlas LAEA Europe, northing first, drawn easting first', [laea.area.west, laea.area.south, laea.area.east, laea.area.north, ...fixed(2, ...JSON.parse(await atlas.project(10, 52)))], [-35.58, 24.6, 44.83, 84.73, '4321000.00', '3210000.00']);
+            await atlas.draw('EPSG:32635');
+            const utm = JSON.parse(await atlas.distortion(27, 0));
+            check('app atlas UTM 35N scale on its central meridian', fixed(5, utm.meridian, utm.parallel), ['0.99960', '0.99960']);
+            const globe = JSON.parse(await atlas.draw('+proj=ortho +lat_0=30 +lon_0=20 +datum=WGS84 +type=crs'));
+            check('app atlas orthographic horizon', [globe.method, globe.outline.length, Math.round(globe.bounds[0]), Math.round(globe.bounds[2])], ['Orthographic', 1, -6378137, 6378137]);
+
+            // CRS detective.
+            const detective = await new m.CrsDetective();
+            const versions = JSON.parse(await detective.versions());
+            check('app detective registry', [versions.proj, versions.epsg, versions.epsgDate, versions.crs], ['9.9.0', 'v13.102', '2026-08-27', { EPSG: 7468, ESRI: 1642, IAU_2015: 2201, IGNF: 864, NKG: 2, OGC: 4, PROJ: 4 }]);
+            const prj = JSON.parse(await detective.inspect(PRJ));
+            check('app detective .prj', [prj.identified[0].code, prj.identified[0].confidence, prj.areaFrom, prj.area.west, prj.area.south, prj.area.east, prj.area.north, prj.axes.map((axis) => `${axis.abbreviation} ${axis.direction}`).join(', '), prj.datum, prj.ellipsoid.name, prj.ellipsoid.semiMajor, prj.ellipsoid.inverseFlattening.toFixed(9)], ['EPSG:32635', 100, 'EPSG:32635', 24, 0, 30, 84, 'E east, N north', 'World Geodetic System 1984', 'WGS 84', 6378137, '298.257223563']);
+            const nad = JSON.parse(await detective.operations('EPSG:4267', 'EPSG:4269'));
+            check('app detective NAD27 to NAD83', [nad.known.length, nad.known.filter((operation) => operation.usable).length, nad.known.filter((operation) => operation.grids.some((grid) => !grid.available)).length, nad.runnable.length, nad.chosen.name, nad.runnable.find((operation) => operation.name === nad.chosen.name).accuracy, ...fixed(6, ...nad.chosen.result)], [10, 1, 9, 25, 'NAD27 to WGS 84 (6) + Inverse of NAD83 to WGS 84 (1)', 11, '-118.171044', '45.159840']);
+            const british = JSON.parse(await detective.operations('EPSG:27700', 'EPSG:4326'));
+            check('app detective British National Grid to WGS 84', [british.known.length, british.known.filter((operation) => !operation.usable).map((operation) => operation.grids.map((grid) => grid.name).join()).join(), british.runnable.length, british.runnable[0].name, british.runnable[0].accuracy], [9, 'uk_os_OSTN15_NTv2_OSGBtoETRS.tif', 8, 'Inverse of British National Grid + OSGB36 to WGS 84 (6)', 2]);
+            check('app detective search', JSON.parse(await detective.search('british national', 3)).map((crs) => crs.code), ['EPSG:27700', 'EPSG:9920', 'EPSG:7405']);
+
+            // Why flights curve.
+            const flights = await new m.FlightPaths();
+            const atlantic = JSON.parse(await flights.route(...ISTANBUL, ...NEW_YORK));
+            check('app flights Istanbul to New York', [(atlantic.geodesic.meters / 1000).toFixed(3), compass(atlantic.geodesic.azimuth1), compass(atlantic.geodesic.azimuth2), atlantic.geodesic.highest[1].toFixed(2), (atlantic.rhumb.meters / 1000).toFixed(1), atlantic.rhumb.azimuth.toFixed(2)], ['8080.310', '309.12', '230.50', '54.20', '8668.4', '269.73']);
+            const polar = JSON.parse(await flights.route(...LONDON, ...TOKYO));
+            check('app flights London to Tokyo', [(polar.geodesic.meters / 1000).toFixed(3), polar.geodesic.highest[1].toFixed(2), (polar.rhumb.meters / 1000).toFixed(1)], ['9615.155', '71.08', '11374.7']);
+            const centred = JSON.parse(await flights.draw(`+proj=aeqd +lat_0=${ISTANBUL[0]} +lon_0=${ISTANBUL[1]} +datum=WGS84 +type=crs`, ...ISTANBUL, ...NEW_YORK));
+            const [start, end] = centred.ends;
+            check('app flights on a map centred on Istanbul', [(Math.hypot(end[0] - start[0], end[1] - start[1]) / 1000).toFixed(3), deviation(centred.geodesic, start, end) < 10, deviation(centred.rhumb, start, end) > 100000], ['8080.310', true, true]);
+            const pacific = JSON.parse(await flights.draw('EPSG:3395', ...LOS_ANGELES, ...SINGAPORE));
+            check('app flights Los Angeles to Singapore on Mercator, split at 180', [pacific.geodesic.length, pacific.rhumb.length], [2, 2]);
+
+            const passed = checks.filter(Boolean).length;
+            show(`proj ${versions.proj} => ${passed}/${checks.length} checks passed`);
+        } catch (error) {
+            show(`failed => ${error && error.message ? error.message : error}`);
+        }
+    </script>
+</body>
+
+</html>

@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8">
+    <title>crossbind - GEOS self-check</title>
+    <script src="./dist/geosapps-wasm-wasm32-st-release.browser.js"></script>
+</head>
+
+<body>
+    <pre id="out">compiling ...</pre>
+    <script type="module">
+        // Every usage example and every app on crossbind.dev/ports/geos/ runs on this module. This page
+        // is what the demo build opens to prove them: each example must print exactly what its
+        // `expected` says, and the apps must give the values plain Python geometry and the host's
+        // GEOS gave on the same shapes and on the same generated map.
+        import * as overlay from './examples/01-overlay.js';
+        import * as zone from './examples/02-zone.js';
+        import * as measure from './examples/03-measure.js';
+        import * as buffer from './examples/04-buffer.js';
+        import * as validity from './examples/05-validity.js';
+
+        const EXAMPLES = [overlay, zone, measure, buffer, validity];
+
+        const SQUARE = 'POLYGON ((0 0, 10 0, 10 10, 0 10, 0 0))';
+        const SHIFTED = 'POLYGON ((5 5, 15 5, 15 15, 5 15, 5 5))';
+        const PARK = 'POLYGON ((0 0, 60 0, 60 40, 0 40, 0 0), (35 15, 45 15, 45 25, 35 25, 35 15))';
+        const RIVER = 'LINESTRING (-10 30, 20 30, 40 20, 70 20)';
+        const POINTS = 'MULTIPOINT ((12 18), (27 8), (45 14), (62 6), (78 20), (88 40), (70 52), (52 38), (33 42), (15 55), (40 70), (68 78), (22 88))';
+        const COAST = 'POLYGON ((10 30, 18 22, 16 12, 28 8, 36 14, 44 6, 58 10, 62 22, 72 24, 70 36, 60 42, 64 54, 52 60, 42 52, 34 60, 22 56, 20 44, 8 40, 10 30))';
+        const BOWTIE = 'POLYGON ((0 0, 10 10, 10 0, 0 10, 0 0))';
+        const BROKEN = [
+            BOWTIE,
+            'POLYGON ((0 0, 10 0, 10 10, 0 10, 0 0), (5 5, 15 5, 15 15, 5 15, 5 5))',
+            'POLYGON ((0 0, 10 0, 10 10, 0 10, 0 0), (12 2, 18 2, 18 8, 12 8, 12 2))',
+            'POLYGON ((0 0, 10 0, 10 10, 5 10, 7 6, 3 6, 5 10, 0 10, 0 0))',
+            'POLYGON ((0 0, 10 0, 10 10, 5 10, 5 16, 5 10, 0 10, 0 0))',
+            'MULTIPOLYGON (((0 0, 10 0, 10 10, 0 10, 0 0)), ((5 5, 15 5, 15 15, 5 15, 5 5)))',
+            'MULTIPOLYGON (((0 0, 10 0, 10 10, 0 10, 0 0)), ((12 0, 18 0, 15 0, 12 0)))',
+        ];
+
+        const out = document.querySelector('#out');
+        const lines = [];
+        const show = (text) => {
+            lines.push(text);
+            out.textContent = lines.join('\n');
+        };
+        const sha256 = async (text) => [...new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text)))].map((b) => b.toString(16).padStart(2, '0')).join('');
+
+        const checks = [];
+        const check = (name, actual, expected) => {
+            const ok = expected !== null && JSON.stringify(actual) === JSON.stringify(expected);
+            checks.push(ok);
+            show(`${ok ? 'ok  ' : 'FAIL'} ${name}: ${JSON.stringify(actual)}${ok ? '' : ` (expected ${JSON.stringify(expected)})`}`);
+        };
+
+        try {
+            const m = await initNative({ path: './dist' });
+            const version = await m.Overlay.version();
+
+            // The usage examples, run exactly as the page shows them.
+            for (const example of EXAMPLES) {
+                const printed = [];
+                await example.default(m, { log: (...values) => printed.push(values.map(String).join(' ')) });
+                check(`example "${example.title}"`, printed, example.expected);
+            }
+
+            // Geometry lab.
+            const lab = await new m.GeometryLab();
+            const run = async (operation, a, b = '', parameter = 0) => JSON.parse(await lab.run(operation, a, b, parameter));
+            const overlap = await run('intersection', SQUARE, SHIFTED);
+            const squares = JSON.parse(await lab.relate(SQUARE, SHIFTED));
+            check('app lab overlay', [overlap.wkt, overlap.area, (await run('union', SQUARE, SHIFTED)).area, (await run('difference', SQUARE, SHIFTED)).area, (await run('symDifference', SQUARE, SHIFTED)).area, squares.matrix, squares.intersects, squares.overlaps, squares.contains, squares.touches], ['POLYGON ((5 5, 5 10, 10 10, 10 5, 5 5))', 25, 175, 75, 150, '212101212', true, true, false, false]);
+            const river = await run('intersection', PARK, RIVER);
+            const crossing = JSON.parse(await lab.relate(PARK, RIVER));
+            const triangles = await run('constrainedDelaunay', PARK);
+            check('app lab park and river', [river.wkt, river.length.toFixed(4), crossing.matrix, crossing.crosses, triangles.parts, triangles.area], ['MULTILINESTRING ((0 30, 20 30, 35 22.5), (45 20, 60 20))', '51.7705', '1F20F1102', true, 8, 2300]);
+            const cells = await run('voronoi', POINTS);
+            const tin = await run('delaunay', POINTS);
+            check('app lab points', [cells.parts, tin.parts, tin.area, (await run('convexHull', POINTS)).area, (await run('minimumRotatedRectangle', POINTS)).area.toFixed(4), (await run('concaveHull', POINTS, '', 0.3)).area], [13, 16, 4660, 4660, '5754.8067', 3638.5]);
+            const circle = await run('buffer', 'POINT (0 0)', '', 10);
+            const repaired = await run('makeValid', BOWTIE);
+            const inscribed = await run('maximumInscribedCircle', COAST, '', 0.01);
+            check('app lab single shapes', [circle.points, circle.area.toFixed(4), repaired.type, repaired.parts, repaired.area, inscribed.wkt, (await run('simplify', COAST, '', 4)).points], [33, '312.1445', 'MultiPolygon', 2, 50, 'LINESTRING (42.87890625 32.38671875, 36 14)', 18]);
+
+            // Validity doctor: the diagnosis, then both repairs of every sample.
+            const doctor = await new m.ValidityDoctor();
+            const diagnoses = [];
+            const repairs = [];
+            for (const wkt of BROKEN) {
+                const found = JSON.parse(await doctor.check(wkt, false));
+                const esri = JSON.parse(await doctor.check(wkt, true));
+                diagnoses.push(`${found.valid} ${found.reason} ${found.location} ${esri.valid}`);
+                for (const method of ['linework', 'structure']) {
+                    const fixed = JSON.parse(await doctor.repair(wkt, method, false));
+                    repairs.push(`${method} ${fixed.type} ${fixed.parts} ${fixed.area} ${fixed.valid}`);
+                }
+            }
+            check('app doctor diagnoses', diagnoses, [
+                'false Self-intersection 5,5 false',
+                'false Self-intersection 5,10 false',
+                'false Hole lies outside shell 12,2 false',
+                'false Ring Self-intersection 5,10 true',
+                'false Self-intersection 5,16 false',
+                'false Self-intersection 5,10 false',
+                'false Self-intersection 15,0 false',
+            ]);
+            check('app doctor repairs', repairs, [
+                'linework MultiPolygon 2 50 true', 'structure MultiPolygon 2 50 true',
+                'linework MultiPolygon 2 150 true', 'structure Polygon 1 75 true',
+                'linework MultiPolygon 2 136 true', 'structure MultiPolygon 2 136 true',
+                'linework Polygon 1 92 true', 'structure Polygon 1 92 true',
+                'linework GeometryCollection 2 100 true', 'structure Polygon 1 100 true',
+                'linework MultiPolygon 2 150 true', 'structure Polygon 1 175 true',
+                'linework GeometryCollection 2 100 true', 'structure Polygon 1 100 true',
+            ]);
+            // The flattened part survives the structure method only when collapsed parts are kept.
+            // GEOS 3.15.0 merges it into one LineString (NEWS.md, GH-1459); 3.14.1 returned two pieces.
+            const kept = JSON.parse(await doctor.repair(BROKEN.at(-1), 'structure', true));
+            check('app doctor keeps collapsed parts', [kept.type, kept.parts, kept.wkt], ['GeometryCollection', 2, 'GEOMETRYCOLLECTION (POLYGON ((0 0, 0 10, 10 10, 10 0, 0 0)), LINESTRING (12 0, 15 0, 18 0))']);
+
+            // Coverage simplifier: the generated map first, hashed like the Python reference hashes it.
+            const coverage = await new m.CoverageLab(6);
+            check('app coverage map sha-256', await sha256(await coverage.vertexText()), '54745ba6d6edafa67754334b64cae9a53ccec73bf77df21f9e4f0742248cdd51');
+            const original = JSON.parse(await coverage.original());
+            check('app coverage map', [original.regions, original.vertices, original.area.toFixed(6), original.coverageValid], [36, 1908, '10000.000000', true]);
+            const simplified = JSON.parse(await coverage.simplify(2));
+            const each = simplified.separately;
+            const whole = simplified.coverage;
+            check('app coverage at tolerance 2', [each.vertices, each.coverageValid, each.gapArea.toFixed(3), each.overlapArea.toFixed(3), each.slivers, whole.vertices, whole.coverageValid, whole.gapArea, whole.overlapArea, whole.slivers], [430, false, '356.917', '186.433', 155, 506, true, 0, 0, 0]);
+
+            const passed = checks.filter(Boolean).length;
+            show(`geos ${version} => ${passed}/${checks.length} checks passed`);
+        } catch (error) {
+            show(`failed => ${error && error.message ? error.message : error}`);
+        }
+    </script>
+</body>
+
+</html>

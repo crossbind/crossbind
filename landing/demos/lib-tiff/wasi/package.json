@@ -1,0 +1,14 @@
+{
+    "name": "crossbind-demo-lib-tiff-wasi",
+    "private": true,
+    "type": "module",
+    "scripts": {
+        "build": "crossbind build -p wasi -b release"
+    },
+    "dependencies": {
+        "@crossbind/port-tiff-wasi": "beta"
+    },
+    "devDependencies": {
+        "crossbind": "beta"
+    }
+}

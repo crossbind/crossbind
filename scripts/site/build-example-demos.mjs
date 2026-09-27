@@ -32,6 +32,40 @@ export const DEMOS = [
     // the result is rendered in the site's own markup. It is still verified the same way: its
     // index.html has to run on its own under the subpath.
     { id: 'panel-sqlite', kind: 'source', expect: '=> 2 rows' },
+    // One module per library for the apps on /ports/<family>/; its index.html runs every app's core
+    // call against numbers computed independently of the port.
+    { id: 'lib-zstd', kind: 'source', expect: '=> 9/9 checks passed' },
+    // The same examples with no C++: the library's own headers imported from JavaScript and bound by
+    // the Vite plugin. Built from lib-<family>/direct; its page runs the examples that can work so.
+    { id: 'lib-zstd-direct', kind: 'source', source: 'lib-zstd/direct', expect: '=> 3/3 checks passed' },
+    { id: 'lib-geos', kind: 'source', expect: '=> 15/15 checks passed' },
+    { id: 'lib-geos-direct', kind: 'source', source: 'lib-geos/direct', expect: '=> 5/5 checks passed' },
+    { id: 'lib-lerc', kind: 'source', expect: '=> 14/14 checks passed' },
+    { id: 'lib-lerc-direct', kind: 'source', source: 'lib-lerc/direct', expect: '=> 4/4 checks passed' },
+    { id: 'lib-expat', kind: 'source', expect: '=> 19/19 checks passed' },
+    { id: 'lib-expat-direct', kind: 'source', source: 'lib-expat/direct', expect: '=> 4/4 checks passed' },
+    { id: 'lib-sqlite3', kind: 'source', expect: '=> 31/31 checks passed' },
+    { id: 'lib-sqlite3-direct', kind: 'source', source: 'lib-sqlite3/direct', expect: '=> 5/5 checks passed' },
+    { id: 'lib-zlib', kind: 'source', expect: '=> 14/14 checks passed' },
+    { id: 'lib-zlib-direct', kind: 'source', source: 'lib-zlib/direct', expect: '=> 4/4 checks passed' },
+    { id: 'lib-iconv', kind: 'source', expect: '=> 21/21 checks passed' },
+    { id: 'lib-iconv-direct', kind: 'source', source: 'lib-iconv/direct', expect: '=> 4/4 checks passed' },
+    { id: 'lib-jpegturbo', kind: 'source', expect: '=> 12/12 checks passed' },
+    { id: 'lib-webp', kind: 'source', expect: '=> 9/9 checks passed' },
+    { id: 'lib-webp-direct', kind: 'source', source: 'lib-webp/direct', expect: '=> 2/2 checks passed' },
+    { id: 'lib-tiff', kind: 'source', expect: '=> 12/12 checks passed' },
+    { id: 'lib-proj', kind: 'source', expect: '=> 21/21 checks passed' },
+    { id: 'lib-proj-direct', kind: 'source', source: 'lib-proj/direct', expect: '=> 5/5 checks passed' },
+    { id: 'lib-curl', kind: 'source', expect: '=> 11/11 checks passed' },
+    { id: 'lib-curl-direct', kind: 'source', source: 'lib-curl/direct', expect: '=> 5/5 checks passed' },
+    { id: 'lib-spatialite', kind: 'source', expect: '=> 39/39 checks passed' },
+    { id: 'lib-spatialite-direct', kind: 'source', source: 'lib-spatialite/direct', expect: '=> 5/5 checks passed' },
+    { id: 'lib-geotiff', kind: 'source', expect: '=> 19/19 checks passed' },
+    { id: 'lib-geotiff-direct', kind: 'source', source: 'lib-geotiff/direct', expect: '=> 4/4 checks passed' },
+    { id: 'lib-openssl', kind: 'source', expect: '=> 25/25 checks passed' },
+    { id: 'lib-openssl-direct', kind: 'source', source: 'lib-openssl/direct', expect: '=> 5/5 checks passed' },
+    { id: 'lib-gdal', kind: 'source', expect: '=> 21/21 checks passed' },
+    { id: 'lib-gdal-direct', kind: 'source', source: 'lib-gdal/direct', expect: '=> 4/4 checks passed' },
 ];
 
 const log = (message) => process.stderr.write(`${message}\n`);
@@ -126,13 +160,16 @@ async function buildSource(project, id, out) {
     if (!patchFile(path.join(out, 'index.html'), [["path: './dist'", `path: '/examples/${id}/dist'`]])) {
         throw new Error(`${id}: index.html no longer passes path: './dist'; the demo changed shape.`);
     }
+    // A library module's usage examples are ES modules its page imports and checks.
+    if (fs.existsSync(path.join(project, 'examples'))) copyDir(path.join(project, 'examples'), path.join(out, 'examples'));
     const build = path.join(project, '.crossbind', 'build');
-    const artifacts = fs.readdirSync(build).filter((name) => /\.browser\.(js|wasm)$/.test(name));
+    // Libraries with runtime data (PROJ's proj.db, GDAL's tables) preload a `.data.txt` next to the wasm.
+    const artifacts = fs.readdirSync(build).filter((name) => /\.browser\.(js|wasm|data\.txt)$/.test(name));
     for (const name of artifacts) fs.copyFileSync(path.join(build, name), path.join(out, 'dist', name));
     const script = artifacts.find((name) => name.endsWith('.js'));
     const wasm = artifacts.find((name) => name.endsWith('.wasm'));
     if (!script || !wasm) throw new Error(`${id}: the build produced no browser artifact.`);
-    const bytes = [script, wasm].reduce((total, name) => total + fs.statSync(path.join(build, name)).size, 0);
+    const bytes = artifacts.reduce((total, name) => total + fs.statSync(path.join(build, name)).size, 0);
     return { script: `/examples/${id}/dist/${script}`, path: `/examples/${id}/dist`, bytes };
 }
 
@@ -233,8 +270,9 @@ export async function buildExampleDemos({ channel, only = null } = {}) {
     for (const demo of DEMOS.filter((entry) => !only || only.includes(entry.id))) {
         const project = path.join(workspace, demo.id);
         if (demo.kind === 'source') {
-            log(`${demo.id}: building landing/demos/${demo.id} against npm ${distTag}`);
-            copyDir(path.join(REPOSITORY_ROOT, 'landing', 'demos', demo.id), project);
+            const source = demo.source ?? demo.id;
+            log(`${demo.id}: building landing/demos/${source} against npm ${distTag}`);
+            copyDir(path.join(REPOSITORY_ROOT, 'landing', 'demos', source), project);
             pinDependencies(path.join(project, 'package.json'), distTag);
         } else {
             log(`${demo.id}: npm create crossbind${suffix} -- ${demo.id} ${demo.args.join(' ')}`);

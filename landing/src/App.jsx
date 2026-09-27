@@ -29,7 +29,7 @@ function currentPath(url) {
 // in the guide shell.
 function Page({ tokens, page }) {
     if (page.kind === 'ports-index') return <LibrariesPage tokens={tokens} page={page} />;
-    if (page.kind === 'port') return <PortPage tokens={tokens} page={page} />;
+    if (page.kind === 'port' || page.kind === 'port-platform') return <PortPage tokens={tokens} page={page} />;
     if (page.kind === 'examples') return <ExamplesPage tokens={tokens} page={page} />;
     if (page.kind === 'changelog') return <ChangelogPage tokens={tokens} page={page} />;
     return <Guide tokens={tokens} page={page} />;

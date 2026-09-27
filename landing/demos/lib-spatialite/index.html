@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8">
+    <title>crossbind - SpatiaLite self-check</title>
+    <script src="./dist/spatialiteapps-wasm-wasm32-st-release.browser.js"></script>
+</head>
+
+<body>
+    <pre id="out">compiling ...</pre>
+    <script type="module">
+        // Every usage example and every app on crossbind.dev/ports/spatialite/ runs on this module.
+        // This page is what the demo build opens to prove them: each example must print exactly what
+        // its `expected` says, and the apps must give the answers worked out without this package:
+        // the generated points recomputed in plain Python, distances with PROJ's geod, geometry with
+        // shapely and pyproj, shortest paths with a plain Dijkstra, and the GeoPackage checked by
+        // GDAL's validate_gpkg.py and ogrinfo.
+        import * as distances from './examples/01-distances.js';
+        import * as spatialIndex from './examples/02-spatial-index.js';
+        import * as measure from './examples/03-measure.js';
+        import * as transform from './examples/04-transform.js';
+        import * as geojson from './examples/05-geojson.js';
+
+        const EXAMPLES = [distances, spatialIndex, measure, transform, geojson];
+
+        // The playground app's preset queries, exactly as the app runs them.
+        const PRESETS = [
+            {
+                id: 'hexbin',
+                sql: `SELECT h.id, count(*) AS pois, h.geom
+FROM hexagons AS h JOIN pois AS p ON p.ROWID IN (
+    SELECT ROWID FROM SpatialIndex WHERE f_table_name = 'pois' AND search_frame = h.geom)
+AND ST_Contains(h.geom, p.geom)
+GROUP BY h.id ORDER BY pois DESC, h.id`,
+                expected: [53, ['id', 'pois', 'geom'], [[164, 497, 'POLYGON 4326'], [132, 247, 'POLYGON 4326'], [94, 113, 'POLYGON 4326']]],
+            },
+            {
+                id: 'knn',
+                sql: `SELECT k.pos, p.id, p.kind, CAST(Round(k.distance_m) AS INTEGER) AS metres, p.geom
+FROM KNN2 AS k JOIN pois AS p ON p.id = k.fid
+WHERE k.f_table_name = 'pois' AND k.ref_geometry = MakePoint(32.8597, 39.9334, 4326)
+AND k.radius = 0.5 AND k.max_items = 5
+ORDER BY k.pos`,
+                expected: [5, ['pos', 'id', 'kind', 'metres', 'geom'], [[1, 1967, 'school', 353, 'POINT 4326'], [2, 468, 'park', 1018, 'POINT 4326'], [3, 307, 'cafe', 1266, 'POINT 4326'], [4, 629, 'school', 2199, 'POINT 4326'], [5, 888, 'park', 2781, 'POINT 4326']]],
+            },
+            {
+                id: 'within',
+                sql: `SELECT id, kind, CAST(Round(ST_Distance(geom, MakePoint(28.9784, 41.0082, 4326), 1)) AS INTEGER) AS metres, geom
+FROM pois
+WHERE ROWID IN (SELECT ROWID FROM SpatialIndex WHERE f_table_name = 'pois'
+                AND search_frame = BuildCircleMbr(28.9784, 41.0082, 0.4))
+AND ST_Distance(geom, MakePoint(28.9784, 41.0082, 4326), 1) <= 25000
+ORDER BY metres`,
+                expected: [289, ['id', 'kind', 'metres', 'geom'], [[1661, 'school', 1053, 'POINT 4326'], [162, 'park', 1456, 'POINT 4326'], [1806, 'park', 1803, 'POINT 4326']]],
+            },
+            {
+                id: 'dissolve',
+                sql: `SELECT parks, NumGeometries(zones) AS zones, Round(ST_Area(zones) / 1e6, 1) AS km2, ST_Transform(zones, 4326) AS geom
+FROM (SELECT count(*) AS parks, ST_Union(ST_Buffer(ST_Transform(geom, 32635), 5000)) AS zones
+      FROM pois WHERE kind = 'park' AND city = 'Izmir')`,
+                expected: [1, ['parks', 'zones', 'km2', 'geom'], [[66, 6, 3762.5, 'MULTIPOLYGON 4326']]],
+            },
+            {
+                id: 'voronoi',
+                sql: `SELECT schools, NumGeometries(cells) AS cells, cells AS geom
+FROM (SELECT count(*) AS schools, VoronojDiagram(ST_Collect(geom)) AS cells FROM pois WHERE kind = 'school' AND city = 'Ankara')`,
+                expected: [1, ['schools', 'cells', 'geom'], [[100, 100, 'MULTIPOLYGON 4326']]],
+            },
+            {
+                id: 'utm',
+                sql: `SELECT id, kind, X(utm) AS easting, Y(utm) AS northing, utm AS geom
+FROM (SELECT id, kind, ST_Transform(geom, 32635) AS utm FROM pois WHERE city = 'Bursa' ORDER BY id LIMIT 5)`,
+                expected: [5, ['id', 'kind', 'easting', 'northing', 'geom'], [[12, 'park', 665737.85, 4434635.502, 'POINT 32635'], [32, 'school', 670410.372, 4446789.701, 'POINT 32635'], [52, 'cafe', 676221.698, 4408995.919, 'POINT 32635']]],
+            },
+        ];
+
+        // The route after closing the first three streets of one cheapest route from 1 to 400: the only
+        // cheapest route left, as the plain Dijkstra finds it.
+        const DETOUR = [1, 2, 383, 22, 404, 424, 444, 80, 81, 466, 486, 120, 507, 527, 159, 160, 549, 180, 181, 571, 591, 220, 612, 632, 259, 260, 654, 280, 281, 676, 696, 320, 717, 737, 359, 360, 759, 380];
+
+        const out = document.querySelector('#out');
+        const lines = [];
+        const show = (text) => {
+            lines.push(text);
+            out.textContent = lines.join('\n');
+        };
+
+        const checks = [];
+        const check = (name, actual, expected) => {
+            const ok = expected !== null && JSON.stringify(actual) === JSON.stringify(expected);
+            checks.push(ok);
+            show(`${ok ? 'ok  ' : 'FAIL'} ${name}: ${JSON.stringify(actual)}${ok ? '' : ` (expected ${JSON.stringify(expected)})`}`);
+        };
+
+        const refusal = async (work) => {
+            try {
+                await work();
+                return null;
+            } catch (error) {
+                return error.cppMessage ?? error.message;
+            }
+        };
+
+        try {
+            const m = await initNative({ path: './dist' });
+            const version = await m.SpatialDatabase.version();
+
+            // The usage examples, run exactly as the page shows them.
+            for (const example of EXAMPLES) {
+                const printed = [];
+                await example.default(m, { log: (...values) => printed.push(values.map(String).join(' ')) });
+                check(`example "${example.title}"`, printed, example.expected);
+            }
+
+            // Playground app: the generated tables, then every preset. Geometries are summed up as
+            // their type and SRID, coordinates rounded to the millimetre.
+            const playground = await new m.SpatialPlayground();
+            const run = async (sql, limit = 2000) => JSON.parse(await playground.run(sql, limit));
+            const brief = (value) => (value && typeof value === 'object' && value.geometry ? `${value.type} ${value.srid}` : typeof value === 'number' && !Number.isInteger(value) ? Number(value.toFixed(3)) : value);
+            const summary = (result, count) => [result.total, result.columns, result.rows.slice(0, count).map((row) => row.map(brief))];
+            check('app playground tables', (await run('SELECT (SELECT count(*) FROM pois), (SELECT count(*) FROM hexagons), (SELECT count(*) FROM cities), (SELECT count(DISTINCT kind) FROM pois)')).rows, [[2000, 218, 12, 3]]);
+            check('app playground hexagon 164', (await run('SELECT AsText(geom) FROM hexagons WHERE id = 164')).rows, [['POLYGON((28.5 41.136207, 28.75 40.703194, 29.25 40.703194, 29.5 41.136207, 29.25 41.569219, 28.75 41.569219, 28.5 41.136207))']]);
+            for (const preset of PRESETS) check(`app playground ${preset.id}`, summary(await run(preset.sql), preset.expected[2].length), preset.expected);
+            check('app playground statements', (await run("CREATE TEMP TABLE picked AS SELECT id FROM pois WHERE city = 'Konya'; SELECT count(*) FROM picked; DROP TABLE picked")).statements, 3);
+            check('app playground error', await refusal(() => run('SELECT population FROM pois')), 'no such column: population');
+
+            // Routing app: the grid, the cheapest and the shortest route, closures and a cut-off corner.
+            const planner = await new m.RoutePlanner();
+            const streets = JSON.parse(await planner.streets());
+            check('app routing streets', [streets.total, streets.rows.filter((row) => row[4]).length, streets.rows[0], streets.rows.at(-1)], [718, 0, [1, 1, 2, 1, 0], [760, 380, 400, 1, 0]]);
+            const byId = new Map(streets.rows.map((row) => [row[0], row]));
+            // Follows the streets from node 1: the node reached and the travel time on the way.
+            const walk = (ids) => ids.reduce(([node, minutes], id) => {
+                const [, from, to, cost] = byId.get(id);
+                return [from === node ? to : to === node ? from : NaN, minutes + cost];
+            }, [1, 0]);
+            const route = async (from, to, fewest) => {
+                const rows = JSON.parse(await planner.route(from, to, fewest)).rows;
+                const ids = rows.slice(1).map((row) => row[2]);
+                return { role: rows[0][1], cost: rows[0][5], ids };
+            };
+            const fastest = await route(1, 400, false);
+            check('app routing fastest 1-400', [fastest.role, fastest.cost, fastest.ids.length, walk(fastest.ids)], ['Route', 47.5, 38, [400, 47.5]]);
+            const fewest = await route(1, 400, true);
+            check('app routing fewest 1-400', [fewest.role, fewest.cost, fewest.ids.length, walk(fewest.ids)[0]], ['Route', 38, 38, 400]);
+            check('app routing close 381 401 39', await planner.closeStreets('[381, 401, 39]'), 715);
+            const detour = await route(1, 400, false);
+            check('app routing detour', [detour.cost, detour.ids], [47.75, DETOUR]);
+            check('app routing cut off 399 and 400', await planner.closeStreets('[379, 759, 760]'), 715);
+            check('app routing no route', JSON.parse(await planner.route(1, 400, false)).rows, [[null, 'Unreachable NodeTo', null, 1, 400, null]]);
+            check('app routing reopen', await planner.closeStreets('[]'), 718);
+
+            // GeoPackage app: build the file in /memfs, read its header, open it again.
+            const dir = await m.getRandomPath('/memfs');
+            const path = `${dir}/field.gpkg`;
+            const pins = [{ name: 'Meeting point', lon: 29, lat: 41 }, { name: 'Camp', lon: 32.5, lat: 39.5 }];
+            const rounded = (report) => ({ ...report, layers: report.layers.map((layer) => ({ ...layer, extent: layer.extent.map((value) => Number(value.toFixed(6))) })) });
+            const report = {
+                check: 1, applicationId: 1196437808, userVersion: 0,
+                layers: [
+                    { name: 'hexbins', type: 'POLYGON', crs: 'epsg:4326', features: 53, validGeometries: 53, extent: [26.25, 35.940054, 41.5, 42.435245] },
+                    { name: 'pins', type: 'POINT', crs: 'epsg:4326', features: 2, validGeometries: 2, extent: [29, 39.5, 32.5, 41] },
+                    { name: 'pois', type: 'POINT', crs: 'epsg:4326', features: 2000, validGeometries: 2000, extent: [26.561924, 36.49451, 40.724728, 41.694247] },
+                ],
+            };
+            check('app geopackage build', rounded(JSON.parse(await m.GeoPackageBuilder.build(path, true, true, JSON.stringify(pins)))), report);
+            const bytes = await m.getFileBytes(path);
+            const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+            check('app geopackage header', [new TextDecoder().decode(bytes.slice(0, 15)), new TextDecoder().decode(bytes.slice(68, 72)), view.getUint16(16), bytes.length % 4096], ['SQLite format 3', 'GP10', 4096, 0]);
+            check('app geopackage inspect', rounded(JSON.parse(await m.GeoPackageBuilder.inspect(path))), report);
+            check('app geopackage bad pins', await refusal(() => m.GeoPackageBuilder.build(`${dir}/bad.gpkg`, false, false, '[{"name":"x"}]')), 'each pin needs a name, a lon and a lat');
+
+            // KNN2 ranks the rows inside a square of plus or minus `radius` degrees: at 2 degrees the
+            // square around Eskisehir holds Konya (271 km) but not Ankara (201 km), 2.3 degrees east.
+            const places = await new m.PlaceIndex();
+            for (const [name, lon, lat] of [['Istanbul', 28.9784, 41.0082], ['Ankara', 32.8597, 39.9334], ['Izmir', 27.1428, 38.4237], ['Bursa', 29.061, 40.1885], ['Antalya', 30.7133, 36.8969], ['Trabzon', 39.7168, 41.0027], ['Konya', 32.4846, 37.8746], ['Edirne', 26.5557, 41.6771]]) await places.add(name, lon, lat);
+            check('KNN2 with too small a radius', await places.nearest(30.5206, 39.7767, 3, 2), 'Bursa 133 km, Istanbul 189 km, Konya 271 km');
+
+            // What this build compiled in, as the README states it.
+            const db = await new m.SpatialDatabase();
+            check('versions', await db.scalar("SELECT spatialite_version() || ' | ' || geos_version() || ' | ' || proj_version() || ' | ' || sqlite_version()"), '5.1.0 | 3.15.0-CAPI-1.21.0 | Rel. 9.9.0, September 15th, 2026 | 3.53.4');
+            await db.exec('SELECT InitSpatialMetaData(1)');
+            check('EPSG codes', await db.scalar('SELECT count(*) FROM spatial_ref_sys'), '6559');
+            check('trusted_schema', await db.scalar('PRAGMA trusted_schema'), '1');
+            check('no RTTOPO', await db.scalar('SELECT rttopo_version() IS NULL'), '1');
+            check('no ST_MakeValid', await refusal(() => db.scalar("SELECT ST_MakeValid(GeomFromText('POLYGON((0 0, 10 10, 10 0, 0 10, 0 0))'))")), 'no such function: ST_MakeValid');
+            check('GeosMakeValid', await db.scalar("SELECT AsText(GeosMakeValid(GeomFromText('POLYGON((0 0, 10 10, 10 0, 0 10, 0 0))'))) || ' ' || ST_Area(GeosMakeValid(GeomFromText('POLYGON((0 0, 10 10, 10 0, 0 10, 0 0))')))"), 'MULTIPOLYGON(((5 5, 10 10, 10 0, 5 5)), ((0 0, 0 10, 5 5, 0 0))) 50.0');
+            check('no ST_Split', await refusal(() => db.scalar("SELECT ST_Split(GeomFromText('LINESTRING(0 0, 2 0)'), GeomFromText('POINT(1 0)'))")), 'no such function: ST_Split');
+            check('no ST_Subdivide', await refusal(() => db.scalar("SELECT ST_Subdivide(GeomFromText('LINESTRING(0 0, 2 0)'))")), 'no such function: ST_Subdivide');
+            check('no topology', await refusal(() => db.scalar("SELECT CreateTopology('roads', 4326, 0, 0)")), 'no such function: CreateTopology');
+            check('no ellipsoidal area', await refusal(() => db.scalar("SELECT ST_Area(GeomFromText('POLYGON((28 41, 29 41, 29 42, 28 42, 28 41))', 4326), 1)")), 'wrong number of arguments to function ST_Area()');
+            check('no file export by default', await refusal(() => db.scalar("SELECT ExportGeoJSON2('x', 'geom', '/memfs/x.geojson')")), 'no such function: ExportGeoJSON2');
+
+            const passed = checks.filter(Boolean).length;
+            show(`spatialite ${version} => ${passed}/${checks.length} checks passed`);
+        } catch (error) {
+            show(`failed => ${error && error.message ? error.message : error}`);
+        }
+    </script>
+</body>
+
+</html>

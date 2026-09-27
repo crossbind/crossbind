@@ -1,0 +1,14 @@
+{
+    "name": "crossbind-demo-lib-curl-wasi",
+    "private": true,
+    "type": "module",
+    "scripts": {
+        "build": "crossbind build -p wasi -b release"
+    },
+    "dependencies": {
+        "@crossbind/port-curl-wasi": "beta"
+    },
+    "devDependencies": {
+        "crossbind": "beta"
+    }
+}

@@ -1,0 +1,14 @@
+{
+    "name": "crossbind-demo-lib-proj-wasi",
+    "private": true,
+    "type": "module",
+    "scripts": {
+        "build": "crossbind build -p wasi -b release"
+    },
+    "dependencies": {
+        "@crossbind/port-proj-wasi": "beta"
+    },
+    "devDependencies": {
+        "crossbind": "beta"
+    }
+}
