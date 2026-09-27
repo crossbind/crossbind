@@ -59,6 +59,8 @@ afterEach(() => {
 });
 
 const swigRuns = (run) => run.mock.calls.filter(([program]) => program === 'swig');
+// createBridgeFile keys its cache by the header path as upath resolves it: forward slashes on every OS.
+const cachedInterface = (file) => holder.cache.interfaces[upath.resolve(file)];
 
 describe('createBridgeFile', () => {
     test('regenerates the bridge when the header changes but the interface text does not', async () => {
@@ -117,8 +119,8 @@ describe('headers with the same base name', () => {
         const second = createBridgeFile(cpp, target);
 
         expect(second).not.toBe(first);
-        expect(holder.cache.interfaces[plain]).not.toBe(holder.cache.interfaces[cpp]);
-        expect(fs.readFileSync(first, 'utf8')).toContain(holder.cache.interfaces[plain]);
+        expect(cachedInterface(plain)).not.toBe(cachedInterface(cpp));
+        expect(fs.readFileSync(first, 'utf8')).toContain(cachedInterface(plain));
         expect(createBridgeFile(plain, target)).toBe(first);
     });
 
@@ -143,7 +145,7 @@ describe('headers with the same base name', () => {
         const fromAndroid = createBridgeFile(android, { platform: 'android', path: 'android-arm64-v8a-mt-release' });
 
         expect(fromAndroid).toBe(fromIos);
-        expect(holder.cache.interfaces[android]).toBe(holder.cache.interfaces[ios]);
+        expect(cachedInterface(android)).toBe(cachedInterface(ios));
     });
 });
 
