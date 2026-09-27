@@ -2,6 +2,7 @@ import { describe, test, expect, vi, beforeEach, afterEach } from 'vitest';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import upath from 'upath';
 
 // The bridge depends on the header's declarations, but the interface text only names the header:
 // a cache keyed on the interface alone kept stale bindings across header edits.
@@ -149,14 +150,21 @@ describe('headers with the same base name', () => {
 // A dependency's header binds the fields the compiler sees: an #if branch the build leaves out stays out,
 // and a field typed through a typedef of another header still reads as a number.
 describe('fields of a dependency header', () => {
+    // crossbind's state holds paths with forward slashes on every OS (getAbsolutePath resolves them with upath).
+    function dependencyFixture(headerText, root = work) {
+        const base = upath.normalize(root);
+        const include = upath.join(base, 'deps', 'libfixture', 'prebuilt', 'include');
+        fs.mkdirSync(include, { recursive: true });
+        const dependencyHeader = upath.join(include, 'lib.h');
+        fs.writeFileSync(dependencyHeader, headerText);
+        holder.config.paths.base = base;
+        holder.config.dependencyParameters.getCmakeDependsPathAndName = () => ({ pathsOfCmakeDepends: [upath.join(base, 'deps', 'libfixture')] });
+        return { include, dependencyHeader };
+    }
+
     test('come from the preprocessed header', async () => {
         const { run, createBridgeFile } = await importFresh();
-        const include = path.join(work, 'deps', 'libfixture', 'prebuilt', 'include');
-        fs.mkdirSync(include, { recursive: true });
-        const dependencyHeader = path.join(include, 'lib.h');
-        fs.writeFileSync(dependencyHeader, '#include "types.h"\nstruct S {\n#if VERSION >= 70\n  int gone;\n#endif\n  int kept;\n  uInt avail;\n};\n');
-        holder.config.paths.base = work;
-        holder.config.dependencyParameters.getCmakeDependsPathAndName = () => ({ pathsOfCmakeDepends: [path.join(work, 'deps', 'libfixture')] });
+        const { include, dependencyHeader } = dependencyFixture('#include "types.h"\nstruct S {\n#if VERSION >= 70\n  int gone;\n#endif\n  int kept;\n  uInt avail;\n};\n');
         run.mockImplementation((program, args) => {
             const out = args[args.indexOf('-o') + 1];
             if (program === 'swig') fs.writeFileSync(out, 'EMSCRIPTEN_BINDINGS(S) {\n  emscripten::class_<S>("S")\n  ;\n}\n');
@@ -174,12 +182,7 @@ describe('fields of a dependency header', () => {
 
     test('bind pointer fields as handles and enum fields as integers', async () => {
         const { run, createBridgeFile } = await importFresh();
-        const include = path.join(work, 'deps', 'libfixture', 'prebuilt', 'include');
-        fs.mkdirSync(include, { recursive: true });
-        const dependencyHeader = path.join(include, 'lib.h');
-        fs.writeFileSync(dependencyHeader, 'typedef enum { OFF, ON } Mode;\ntypedef struct S *S_ptr;\nstruct S {\n  const void *data;\n  Mode mode;\n  S_ptr next;\n};\n');
-        holder.config.paths.base = work;
-        holder.config.dependencyParameters.getCmakeDependsPathAndName = () => ({ pathsOfCmakeDepends: [path.join(work, 'deps', 'libfixture')] });
+        const { include, dependencyHeader } = dependencyFixture('typedef enum { OFF, ON } Mode;\ntypedef struct S *S_ptr;\nstruct S {\n  const void *data;\n  Mode mode;\n  S_ptr next;\n};\n');
         const prelude = 'namespace crossbind {\ntemplate<typename Q> PointerHandle toHandle(Q *p) { return nullptr; }\n}\n';
         run.mockImplementation((program, args) => {
             const out = args[args.indexOf('-o') + 1];
