@@ -1488,6 +1488,13 @@ function __embind_register_integer(primitiveType, name, size, minRange, maxRange
   }
 
   var isUnsignedType = (name.includes('unsigned'));
+  // As the wasm glue does (embindArgumentGuards.js): an enum member crosses as its value, and a one-letter string
+  // as its code when the integer is a char.
+  var fromJs = (value) => {
+    if (typeof value == "string" && size == 1 && value.length == 1) return value.charCodeAt(0);
+    if (value !== null && typeof value == "object" && typeof value.value == "number") return value.value;
+    return value;
+  };
   var checkAssertions = (value, toTypeName) => {
     if (typeof value != "number" && typeof value != "boolean" && typeof value != "bigint") {
       throw new TypeError(`Cannot convert "${embindRepr(value)}" to ${toTypeName}`);
@@ -1499,11 +1506,13 @@ function __embind_register_integer(primitiveType, name, size, minRange, maxRange
   var toWireType;
   if (isUnsignedType) {
     toWireType = function (destructors, value) {
+      value = fromJs(value);
       checkAssertions(value, this.name);
       return value >>> 0;
     }
   } else {
     toWireType = function (destructors, value) {
+      value = fromJs(value);
       checkAssertions(value, this.name);
       // The VM will perform JS to Wasm value conversion, according to the spec:
       // https://www.w3.org/TR/wasm-js-api-1/#towebassemblyvalue
@@ -4101,8 +4110,11 @@ function __embind_register_enum(rawType, name, size, isSigned) {
       return this.constructor.values[c];
     },
     'toWireType': function (destructors, c) {
-      //console.log('__embind_register_enum, toWireType', ctor, c.value);
-      return c.value;
+      // A number crosses as it is, as the wasm glue takes it; anything but a member or a number throws instead of
+      // crossing as undefined.
+      if (typeof c == "number") return c;
+      if (c !== null && typeof c == "object" && typeof c.value == "number") return c.value;
+      throw new TypeError(`${this.name} takes a member of the enum or its number, got ${embindRepr(c)}`);
     },
     'argPackAdvance': 8n,
     'readValueFromPointer': enumReadValueFromPointer(name, shift, isSigned),

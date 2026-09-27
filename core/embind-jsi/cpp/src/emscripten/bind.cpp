@@ -1095,11 +1095,17 @@ EMSCRIPTEN_BINDINGS(builtin) {
   register_integer<signed int>("int");
   register_integer<unsigned int>("unsigned int");
 
-  // register_bigint<signed long>("long");
-  // register_bigint<unsigned long>("unsigned long");
-
   register_bigint<int64_t>("int64_t");
   register_bigint<uint64_t>("uint64_t");
+  // int64_t is long long on Apple platforms and long on Android: the other 64-bit pair needs its own entry
+  // (wire.h binds it as a BigInt as well).
+  if (!std::is_same_v<long, int64_t> && sizeof(long) == 8) {
+    register_bigint<long>("long");
+    register_bigint<unsigned long>("unsigned long");
+  } else if (!std::is_same_v<long long, int64_t>) {
+    register_bigint<long long>("long long");
+    register_bigint<unsigned long long>("unsigned long long");
+  }
 
   register_float<float>("float");
   register_float<double>("double");
