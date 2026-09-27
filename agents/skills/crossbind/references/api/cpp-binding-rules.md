@@ -23,7 +23,9 @@ Raw pointers bind. What the generator cannot turn into an object crosses as a `N
 | `const char *` return or callback argument | `string` or `null` |
 | `char *`, `unsigned char *`, `void *`, `T **`, pointers to numbers, enums or types the bridge does not know | handle |
 | `T *` returning a class the bridge knows | instance |
-| `T *` parameter of a struct defined in the same header | instance (a handle only for foreign or `extern "C"` structs) |
+| `T *` parameter of a struct the imported header defines, `extern "C"` or not | instance |
+| `T *` parameter of a struct the bridge only sees declared (`sqlite3`, `PJ`) | handle |
+| `T *` field of a struct in a package header | reads as an instance when `T` is a struct the same header binds, otherwise as a handle; takes either, or `null` |
 | `int &`, `double &`, `std::string &` out-parameters | handle from `allocPointer` / `allocString`, read back afterwards |
 | function pointer parameter | a JS function, or a handle another binding returned |
 | pointer argument inside a callback | always a handle |
@@ -45,6 +47,10 @@ parse('x=1');
 ```
 
 Only the const form converts: C APIs copy a `const char *` input, while a `char *` result is memory the library handed over, so it stays a handle you read and free explicitly. On worker-backed browser builds handles and instances are proxies, `instanceof NativePointer` holds only on direct runtimes, and JS functions cannot cross into a worker.
+
+A string passed for a `const char *` is a copy that lives for the call. When C keeps the pointer afterwards (`sqlite3_bind_text` with `SQLITE_STATIC`), pass a `cstring` handle and keep it until C is done with it, or let C take its own copy (`SQLITE_TRANSIENT`).
+
+Integer and enum parameters take numbers. An enum parameter also takes a member (`await Mode.Fast`), an integer parameter takes an enum member as its value, and a `char` parameter takes a one-character string as its code; anything else throws a `TypeError` instead of crossing as 0. A 64-bit integer (`int64_t`, `long long`, and on React Native also `long` and `size_t`) crosses as a BigInt and takes a BigInt or a safe-integer Number; on wasm32 `long` and `size_t` are 32-bit Numbers.
 
 ### 2. C++11 minimum, C++17 recommended
 
@@ -89,6 +95,22 @@ Private members are fine — they just won't appear in JS. Don't try to hide eve
 > them, so `m.rows` reads and writes from JS on node, browser (worker runtimes go through
 > the proxy: `await b.rows`) and React Native alike. Fields of vector, `shared_ptr` or
 > class type still need accessor methods.
+>
+> The same goes for C structs in a package's headers, `typedef struct { ... } Name;` and
+> `typedef struct tag { ... } alias;` included: fields of arithmetic types, directly or
+> through a typedef such as `uInt` or `size_t`, are properties, read as the build's
+> preprocessor sees them. An enum field reads and writes its underlying integer and also
+> takes a member of the enum. A pointer field, `T *` or a pointer typedef such as `voidpf`,
+> reads as an instance when it points to a struct the same header binds (`cinfo.comp_info`,
+> `marker.next`) and as a handle otherwise, read-only for a pointer to const. The instance
+> owns nothing: deleting it leaves the library's memory alone. The field takes a handle,
+> `null` or such an instance, so `stream.next_in = input` points zlib at an `allocBuffer`
+> block; C keeps only the address, so keep that handle while the library uses it. On worker
+> runtimes every instance talks to the worker over its own channel and a field write can
+> land after a later call: read the field back (`await stream.avail_in`) before the call
+> that depends on it. Pointer fields need a header that binds a pointer somewhere else too,
+> which every port header with pointer fields does. Function-pointer fields, arrays and
+> struct fields are not bound, and a project's own header binds only its value fields.
 
 ### 4. Inheritance + virtual works; multiple inheritance doesn't
 
