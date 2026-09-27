@@ -2,13 +2,13 @@
 import fs from 'node:fs';
 import upath from 'upath';
 import state, { saveCache } from '../state/index.js';
-import { getFileHash } from '../utils/hash.js';
+import { getContentHash, getFileHash } from '../utils/hash.js';
 import guardAsyncBindings from '../utils/bridgeAsyncGuard.js';
 import { writeHeaderDts, parseCppSurface } from '../utils/cppDts.js';
 import { injectFieldBindings } from '../utils/cppFieldBindings.js';
 import {
-    buildInterfaceContent, completingIncludes, findHeaderPrelude, findIgnoredDeclarations, indexTypeDefinitions, interfaceIncludes,
-    interfaceToRetryWithoutMacros, parseMacroDump, referencedTypeHeaders, selectSwigMacros,
+    buildInterfaceContent, completingIncludes, enumNames, findHeaderPrelude, findIgnoredDeclarations, indexTypeDefinitions, interfaceIncludes,
+    interfaceToRetryWithoutMacros, ownPreprocessedText, parseMacroDump, pointerTypedefs, referencedTypeHeaders, scalarTypedefs, selectSwigMacros,
 } from '../utils/swigInterface.js';
 import writeIfChanged from '../utils/writeIfChanged.js';
 import run, { cxxPreprocessorFor } from './run.js';
@@ -36,7 +36,7 @@ export default function createBridgeFile(headerOrModuleFilePath, target = state.
         // SWIG's -embind backend emits no member variables; inject .property lines for the
         // header's public value fields. Idempotent, so the cached-bridge path is safe too.
         const bridgeContent = fs.readFileSync(bridgeFile, 'utf8');
-        const injected = injectFieldBindings(bridgeContent, parseCppSurface(fs.readFileSync(interfaceFilePath, 'utf8'), () => {}));
+        const injected = injectFieldBindings(bridgeContent, fieldSurface(interfaceFilePath, interfaceFile, target, sourceDir));
         if (injected !== bridgeContent) fs.writeFileSync(bridgeFile, injected);
     }
     if (bridgeFile) {
@@ -84,7 +84,8 @@ function createInterfaceFile(headerOrModuleFilePath, target, sourceDir) {
         ...(ignored.length ? [`ignored:${ignored.join(',')}`] : []), ...(completing.length ? [`completing:${completing.join(',')}`] : []),
     ].join('\n');
     const cachedInterface = state.cache.interfaces[headerOrModuleFilePath];
-    if (state.cache.hashes[headerOrModuleFilePath] === fileHash && cachedInterface && fs.existsSync(cachedInterface)) {
+    if (state.cache.hashes[headerOrModuleFilePath] === fileHash && cachedInterface && fs.existsSync(cachedInterface)
+        && !sharedInterface(headerOrModuleFilePath, cachedInterface)) {
         return cachedInterface;
     }
 
@@ -112,7 +113,7 @@ function createInterfaceFile(headerOrModuleFilePath, target, sourceDir) {
         return newPath;
     }
 
-    const fileName = filePathWithoutExt.split('/').at(-1);
+    const fileName = interfaceName(headerOrModuleFilePath, filePathWithoutExt.split('/').at(-1));
 
     const content = buildInterfaceContent({
         moduleName: fileName.toUpperCase(),
@@ -124,12 +125,27 @@ function createInterfaceFile(headerOrModuleFilePath, target, sourceDir) {
     });
     const outputFilePath = `${state.config.paths.build}/interface/${fileName}.i`;
     fs.writeFileSync(outputFilePath, content);
+    // The field pass preprocesses a dependency's header again once it has changed.
+    fs.rmSync(preprocessedFileOf(outputFilePath), { force: true });
 
     state.cache.interfaces[headerOrModuleFilePath] = outputFilePath;
     state.cache.hashes[headerOrModuleFilePath] = fileHash;
     saveCache();
 
     return outputFilePath;
+}
+
+const interfacePath = (name) => `${state.config.paths.build}/interface/${name}.i`;
+// Each platform build of a package ships its headers under dist/prebuilt/<target>/include: one header for the interface.
+const headerIdentity = (file) => file.match(/\/dist\/prebuilt\/[^/]+\/include\/(.+)$/)?.[1] ?? file;
+const sharedInterface = (headerFile, interfaceFile) => Object.entries(state.cache.interfaces)
+    .some(([other, file]) => headerIdentity(other) !== headerIdentity(headerFile) && file === interfaceFile);
+
+// An interface is named after its header's file name. A second header with that name (tiffio.h and tiffio.hxx, or one
+// name in two directories) takes its extension, then a hash of its path, so neither replaces the other's bridge.
+function interfaceName(headerFile, base) {
+    const candidates = [base, `${base}_${upath.extname(headerFile).slice(1)}`, `${base}_${getContentHash(headerFile).slice(0, 8)}`];
+    return candidates.find((name) => !sharedInterface(headerFile, interfacePath(name))) ?? candidates.at(-1);
 }
 
 // A header is included by its path under a project header directory or a dependency's include directory; one found only
@@ -178,7 +194,7 @@ function collectSwigMacros(headerFile, includes, name, target, sourceDir) {
         if (!predefinedMacros.has(target.path)) {
             predefinedMacros.set(target.path, dumpMacros(`${interfaceDir}/predefined-${target.path}.macros.h`, [], [], target));
         }
-        const macros = dumpMacros(`${interfaceDir}/${name}.macros.h`, includes, swigIncludePath(target, sourceDir), target);
+        const macros = dumpMacros(`${interfaceDir}/${name}.macros.h`, includes, swigIncludePath(target, sourceDir), target, [RELEASE_DEFINE]);
         return selectSwigMacros({ headerText: fs.readFileSync(headerFile, 'utf8'), macros, predefined: predefinedMacros.get(target.path) });
     } catch (e) {
         console.warn(`crossbind: SWIG reads ${upath.basename(headerFile)} without the macros of its includes (${e.message})`);
@@ -186,15 +202,51 @@ function collectSwigMacros(headerFile, includes, name, target, sourceDir) {
     }
 }
 
-function dumpMacros(outputFile, includes, includePath, target) {
+// Bridges compile in release with NDEBUG defined, so SWIG reads headers the same way: a declaration that exists only
+// without NDEBUG (sqlite3_mutex_held) would otherwise be bound and fail to compile. The predefined dump stays without
+// it, so NDEBUG counts as a macro SWIG needs rather than a compiler predefine.
+const RELEASE_DEFINE = '-DNDEBUG';
+
+function dumpMacros(outputFile, includes, includePath, target, defines = []) {
     run(cxxPreprocessorFor(target), [
-        '-x', 'c++', '-std=c++17', '-dM', '-E',
+        '-x', 'c++', '-std=c++17', '-dM', '-E', ...defines,
         ...includePath,
         ...includes.flatMap((header) => ['-include', header]),
         '-o', outputFile,
         '/dev/null',
     ], null, target);
     return parseMacroDump(fs.readFileSync(outputFile, 'utf8'));
+}
+
+const preprocessedFileOf = (interfaceFile) => interfaceFile.replace(/\.i$/, '.preprocessed.h');
+
+// A dependency's header binds the fields the compiler sees: its #if branches as this build resolves them, and field
+// types that are typedefs of numbers in any header it includes. The project's own headers, a header that does not
+// preprocess, or a host without the image's compiler keep the fields of the header as written.
+function fieldSurface(headerFile, interfaceFile, target, sourceDir) {
+    const asWritten = () => parseCppSurface(fs.readFileSync(headerFile, 'utf8'), () => {});
+    const { includeRoot, headerPath } = includeLocation(headerFile, target);
+    const isProjectHeader = state.config.paths.header.some((root) => headerFile.startsWith(root));
+    if (!includeRoot || isProjectHeader || !interfaceFile?.endsWith('.i')) return asWritten();
+    const preprocessed = preprocessedFileOf(interfaceFile);
+    try {
+        if (!fs.existsSync(preprocessed)) {
+            const prelude = findHeaderPrelude(headerFile, [state.config, ...state.config.allDependencies], headerPath);
+            run(cxxPreprocessorFor(target), [
+                '-x', 'c++', '-std=c++17', '-E', RELEASE_DEFINE,
+                ...swigIncludePath(target, sourceDir),
+                ...interfaceIncludes(headerPath, prelude).flatMap((header) => ['-include', header]),
+                '-o', preprocessed,
+                '/dev/null',
+            ], null, target);
+        }
+        const output = fs.readFileSync(preprocessed, 'utf8');
+        const own = ownPreprocessedText(output, headerPath);
+        const types = { typedefs: scalarTypedefs(output), enums: enumNames(output), pointerTypedefs: pointerTypedefs(output), pointerFields: true };
+        return own.trim() ? parseCppSurface(own, () => {}, types) : asWritten();
+    } catch (e) {
+        return asWritten();
+    }
 }
 
 function swigIncludePath(target, sourceDir) {
