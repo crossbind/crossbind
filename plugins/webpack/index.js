@@ -38,6 +38,12 @@ export default class CrossbindWebpackPlugin {
             const marker = getDependFilePath(resource.request, buildTargetRelease);
             if (marker) resource.request = marker;
         }).apply(compiler);
+        // A dependency's header (`@crossbind/port-zlib/zlib.h`) names the package, not a file: it lives in the
+        // package's prebuilt include directory for the target, as the Vite and Metro plugins resolve it.
+        new compiler.webpack.NormalModuleReplacementPlugin(new RegExp(`\\.(${state.config.ext.header.join('|')})$`), (resource) => {
+            const header = getDependFilePath(resource.request, buildTargetRelease);
+            if (header) resource.request = header;
+        }).apply(compiler);
         // Rust packages ship no JS entry at all (their package.json is just a name), so node
         // resolution can never find them. Each known cargo-type dependency gets an exact-match
         // alias onto its crate root; the loader's .rs branch turns that into the proxy module.
