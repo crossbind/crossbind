@@ -13,4 +13,8 @@ export default (newConfig = {}) => ({
         output: 'dist',
         ...(newConfig.paths || {}),
     },
+    targetSpecs: [
+        { platform: 'android', specs: { libType: 'static' } },
+        ...(newConfig.targetSpecs || []),
+    ],
 });
