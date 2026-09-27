@@ -584,3 +584,21 @@ stays out on size: with GEOS and `-Oz` the JavaScript-only wasm is 26,505,868 by
 - Seen: 2026-09-25
 - Check: `grep -c NOT_IN_THIS_BUILD landing/demos/lib-sqlite3/direct/crossbind.config.js` prints 2.
 - Remove when the demos build against a release with these fixes and the workarounds and texts are updated.
+
+## Configure builds copy their sources without timestamps
+
+`createLib` copies an autotools port's extracted source into its build directory with `fs.cpSync`,
+which gives every file the time of the copy, in the order the filesystem lists them. make compares
+those times, so a generated file can look older than its input. On GitHub's Ubuntu image 20260920,
+libiconv's `po/` looked stale and `make install` tried to rebuild its message catalogs without
+msgfmt, which failed every Linux build of iconv, SpatiaLite and GDAL; image 20260907 listed the files
+in an order that happened to work. The iconv recipe now passes `--disable-nls` and no other port has
+a `po/` directory, but any timestamp-driven rule in a configure build can fire the same way. Passing
+`preserveTimestamps: true` is not a drop-in fix: `createLib` reuses the build directory when flags
+change, so object files from the previous build would look newer than the copied sources and some
+would not be recompiled.
+
+- Seen: 2026-09-27
+- Check: `grep -n 'cpSync(cmakeDir, buildPath' core/crossbind/src/actions/createLib.js` shows the copy
+  without `preserveTimestamps`.
+- Remove when configure builds keep the extracted tree's timestamps without reusing stale objects.
