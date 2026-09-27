@@ -23,10 +23,9 @@ Full control over preopens, permissions and env:
 ```bash
 npm i @crossbind/port-sqlite3-bin-wasi
 
-M=node_modules/@crossbind/package
+M=node_modules/@crossbind/port
 T=wasi-wasm32-st-release
-alias sqlitew='wasmtime run --dir=.::/work \
-  $M-sqlite3-bin-wasi/dist/prebuilt/$T/bin/sqlite3'
+alias sqlitew='wasmtime run --dir=.::/work $M-sqlite3-bin-wasi/dist/prebuilt/$T/bin/sqlite3'
 
 sqlitew :memory: 'select 40+2;'
 sqlitew /work/app.db '.tables'

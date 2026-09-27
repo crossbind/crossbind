@@ -23,7 +23,7 @@ Full control over preopens, permissions and env:
 ```bash
 npm i @crossbind/port-jpegturbo-bin-wasi
 
-M=node_modules/@crossbind/package
+M=node_modules/@crossbind/port
 T=wasi-wasm32-st-release
 B=$M-jpegturbo-bin-wasi/dist/prebuilt/$T/bin
 alias jpegw='wasmtime run --dir=.::/work'

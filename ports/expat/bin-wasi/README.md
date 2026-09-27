@@ -22,10 +22,9 @@ Full control over preopens, permissions and env:
 ```bash
 npm i @crossbind/port-expat-bin-wasi
 
-M=node_modules/@crossbind/package
+M=node_modules/@crossbind/port
 T=wasi-wasm32-st-release
-alias xmlwfw='wasmtime run --dir=.::/work \
-  $M-expat-bin-wasi/dist/prebuilt/$T/bin/xmlwf'
+alias xmlwfw='wasmtime run --dir=.::/work $M-expat-bin-wasi/dist/prebuilt/$T/bin/xmlwf'
 
 xmlwfw /work/doc.xml
 xmlwfw -v
