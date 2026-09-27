@@ -1,25 +1,24 @@
+import LIBRARY_EXAMPLES from '../../generated/library-examples.js';
 import { guideHref } from '../guide/nav.js';
 import { RELEASE } from '../release.js';
-import {
-    BIN_TARGET,
-    CATEGORY_LABELS,
-    PORTS,
-    PORTS_CATALOG,
-    publishedLibraryTargets,
-    publishedTarget,
-    TARGET_LABELS,
-    WASI_TOOL_PORTS,
-} from './catalog.js';
+import { BIN_TARGET, PORTS, PORTS_CATALOG, publishedLibraryTargets, publishedTarget, TARGET_LABELS, WASI_TOOL_PORTS } from './catalog.js';
+import { differences, PLATFORMS, platformFor, setupBlocks } from './platforms.js';
 
-// /ports/ and /ports/<family>/ as guide-shaped pages. Every fact comes from the generated
-// catalog; the prose here only frames it. Must stay importable from Node with no JSX.
+// /ports/, /ports/<family>/ and /ports/<family>/<platform>/ as guide-shaped pages. Every fact comes
+// from the generated catalog and the checked usage examples; the prose here only frames them. Must
+// stay importable from Node with no JSX.
 
 export const PORTS_BASE = '/ports';
 export const PORTS_INDEX_HREF = `${PORTS_BASE}/`;
 export const portHref = (family) => `${PORTS_BASE}/${family}/`;
+export const platformHref = (family, target) => `${PORTS_BASE}/${family}/${target}/`;
 
 const suffix = RELEASE.distTagSuffix;
 const distTag = PORTS_CATALOG.distTag;
+
+// The published variants that have a platform page, in the order the pages list them.
+const platformVariants = (port) =>
+    PLATFORMS.map((platform) => publishedLibraryTargets(port).find((variant) => variant.target === platform.target)).filter(Boolean);
 
 function packagesTable(port) {
     const rows = [['Meta package', `\`${port.npm}\``, port.published ? `\`${port.published}\`` : 'not published']];
@@ -33,38 +32,96 @@ function packagesTable(port) {
     return { type: 'table', head: ['Target', 'Package', `npm \`${distTag}\``], rows };
 }
 
-// One package per platform, each with its own config; the wasm one is the common case.
+// The overview's install chip shows the WebAssembly variant, the common first step.
 const shownVariant = (port) => {
     const variants = publishedLibraryTargets(port);
     return variants.find((variant) => variant.target === 'wasm') ?? variants[0] ?? null;
 };
 
-function installBlocks(port) {
-    const shown = shownVariant(port);
-    if (!shown || !port.published) return [];
-    const variants = publishedLibraryTargets(port);
-    const identifier = `${port.family}${shown.target.charAt(0).toUpperCase()}${shown.target.slice(1)}`;
-    const others = variants.filter((variant) => variant !== shown).map((variant) => `\`${variant.package}\``);
-    return [
-        { type: 'h2', id: 'install', text: 'Install' },
-        {
-            type: 'p',
-            text: `Install the variant for the platform you build, declare it as a dependency in \`crossbind.config.js\` and import the header from JavaScript. The upstream library is precompiled; your own code, the generated bindings and the final link still go through the build toolchain. ${others.length ? `A project that builds for several platforms lists one variant per platform: ${others.join(', ')} ${others.length === 1 ? 'is' : 'are'} published too.` : 'This is the only published variant.'}`,
-        },
-        { type: 'code', file: 'shell', code: `npm install ${shown.package}${suffix}` },
-        {
-            type: 'code',
-            file: 'crossbind.config.js',
-            code: `import ${identifier} from '${shown.package}/crossbind.config.js';
+const examplesOf = (port) => LIBRARY_EXAMPLES[port.family] ?? null;
 
-export default {
-    dependencies: [${identifier}],
-    paths: { config: import.meta.url },
-};`,
-        },
+// How much of the page works with no C++: the examples whose JavaScript-only version runs. Those
+// versions are built and checked in WebAssembly, so only the pages that run examples show them.
+function directSummary(port, library) {
+    const runs = library.examples.filter((example) => example.direct && !example.direct.impossible).length;
+    const total = library.examples.length;
+    const rest = total - runs === 1 ? 'the other says what stops it' : 'the others say what stops them';
+    const tally =
+        runs === total ? `All ${total} work that way.` : runs === 0 ? 'None of them work that way; each tab says what stops it.' : `${runs} of ${total} work that way; ${rest}.`;
+    return `Each example also has a **JavaScript only** tab: the same task with no C++ file, calling ${port.name}'s own headers from \`${port.npm}\` directly. ${tally}`;
+}
+
+const showsDirect = (platform) => !platform || platform.target === 'wasm';
+
+function exampleBlocks(port, { runnable, platform = null }) {
+    const library = examplesOf(port);
+    if (!library) return [];
+    const shown = platform && platform.target !== 'wasm' ? library.examples.filter((example) => !example.webOnly) : library.examples;
+    const left = library.examples.filter((example) => !shown.includes(example));
+    const direct = showsDirect(platform) ? library.direct : null;
+    const config = direct?.config?.length
+        ? [
+              { type: 'p', text: 'Imported straight from JavaScript, the headers need this configuration today; its comments say why.' },
+              ...direct.config.map(({ file, code }) => ({ type: 'code', file, code })),
+          ]
+        : [];
+    return [
+        ...(direct ? [{ type: 'p', text: directSummary(port, library) }, ...config] : []),
+        ...shown.map((example) => ({ type: 'example', demo: library.demo, example, runnable, direct })),
+        ...(left.length
+            ? [
+                  {
+                      type: 'p',
+                      text: `${left.map((example) => `"${example.title}"`).join(', ')} ${left.length === 1 ? 'writes its input' : 'write their input'} with \`m.FS\`, which ${platform.label} does not have; the C++ takes paths, so it works unchanged on files in the app's storage. It runs on [the WebAssembly page](${platformHref(port.family, 'wasm')}).`,
+                  },
+              ]
+            : []),
+    ];
+}
+
+function usageBlocks(port) {
+    const library = examplesOf(port);
+    if (!library) return [];
+    return [
+        { type: 'h2', id: 'usage', text: 'Usage' },
         {
             type: 'p',
-            text: `Header import paths are relative to the package's \`dist/prebuilt/<target>/include\`, so \`${port.npm}/<header>.h\` is upstream's own header. The full flow, including what the meta package is for, is in [the Libraries guide](/guide/libraries/).`,
+            text: `The calls most ${port.name} code makes, each a small C++ header crossbind binds and the JavaScript that uses it. Every example runs here in WebAssembly and prints what the site build checked; the same headers and calls work on [Android](${platformHref(port.family, 'android')}) and [iOS](${platformHref(port.family, 'ios')}).`,
+        },
+        ...exampleBlocks(port, { runnable: true }),
+    ];
+}
+
+function addBlocks(port) {
+    const variants = platformVariants(port);
+    if (!variants.length || !port.published) return [];
+    return [
+        { type: 'h2', id: 'install', text: 'Add it to your project' },
+        {
+            type: 'p',
+            text: `One package per platform: install the ones you build for and list each in \`crossbind.config.js\`; crossbind compiles only the one that matches the build target. Your C++ goes in \`src/native\`, next to the headers it binds. [Libraries](${guideHref('libraries')}) explains the whole flow.`,
+        },
+        {
+            type: 'tabs',
+            tabs: variants.map((variant) => ({ label: platformFor(variant.target).label, blocks: setupBlocks(port, variant, { short: true }) })),
+        },
+    ];
+}
+
+function platformsBlocks(port) {
+    const variants = platformVariants(port);
+    if (!variants.length) return [];
+    const bin = publishedTarget(port, BIN_TARGET);
+    return [
+        { type: 'h2', id: 'platforms', text: 'Platforms' },
+        {
+            type: 'table',
+            head: ['Platform', 'Runs in', 'Builds', 'Page'],
+            rows: variants.map((variant) => {
+                const platform = platformFor(variant.target);
+                const where = variant.target === 'wasi' && bin ? `${platform.where}, plus \`${port.binCommands.join('`, `')}\` as npm commands` : platform.where;
+                return [platform.label, where, platform.builds, `[${port.name} for ${platform.label}](${platformHref(port.family, variant.target)})`];
+            }),
         },
     ];
 }
@@ -73,7 +130,7 @@ function toolBlocks(port) {
     const bin = publishedTarget(port, BIN_TARGET);
     if (!bin) return [];
     return [
-        { type: 'h2', id: 'commands', text: 'WASI command tools' },
+        { type: 'h2', id: 'commands', text: 'Command-line tools' },
         {
             type: 'p',
             text: `${port.binCommands.length === 1 ? 'One upstream command ships' : `${port.binCommands.length} upstream commands ship`} as npm executables built for \`wasm32-wasip3\`. They need \`wasmtime\` on \`PATH\` and no compiler - see [WASI commands](${guideHref('wasi')}).`,
@@ -99,6 +156,9 @@ function licenceBlocks(port) {
     ];
 }
 
+const platformLinks = (port) =>
+    platformVariants(port).map((variant) => ({ target: variant.target, label: platformFor(variant.target).label, href: platformHref(port.family, variant.target) }));
+
 function detailPage(port) {
     const targets = publishedLibraryTargets(port).map((target) => TARGET_LABELS[target.target]);
     return {
@@ -111,6 +171,7 @@ function detailPage(port) {
         path: `${PORTS_BASE}/${port.family}`,
         href: portHref(port.family),
         port,
+        platforms: platformLinks(port),
         install: port.published && shownVariant(port) ? `npm install ${shownVariant(port).package}${suffix}` : null,
         links: [
             { label: 'npm', href: `https://www.npmjs.com/package/${port.npm}`, external: true },
@@ -120,16 +181,83 @@ function detailPage(port) {
             { label: 'WASI commands guide', href: guideHref('wasi') },
         ],
         blocks: [
+            ...usageBlocks(port),
+            ...addBlocks(port),
+            ...platformsBlocks(port),
             { type: 'h2', id: 'packages', text: 'Packages' },
             packagesTable(port),
-            ...installBlocks(port),
-            ...toolBlocks(port),
             ...licenceBlocks(port),
         ],
     };
 }
 
+function wasiProgramBlocks(port) {
+    const wasi = examplesOf(port)?.wasi;
+    if (!wasi) return [];
+    return [
+        { type: 'h2', id: 'program', text: wasi.title },
+        { type: 'p', text: wasi.summary },
+        { type: 'code', file: 'crossbind.config.js', code: wasi.config },
+        { type: 'code', file: wasi.sourceFile, code: wasi.source },
+        { type: 'code', file: 'shell', code: wasi.commands.join('\n') },
+        { type: 'code', file: 'output', code: wasi.expected.join('\n') },
+    ];
+}
+
+function platformUsageBlocks(port, platform) {
+    if (platform.target === 'wasi') return wasiProgramBlocks(port);
+    const library = examplesOf(port);
+    if (!library) return [];
+    const intro =
+        platform.target === 'wasm'
+            ? 'Each example runs here, in this tab, and prints what the site build checked.'
+            : `The examples the [WebAssembly page](${platformHref(port.family, 'wasm')}) runs, as ${platform.label} compiles them: the same headers and the same calls. They are checked on the WebAssembly build.`;
+    return [{ type: 'h2', id: 'usage', text: 'Usage' }, { type: 'p', text: intro }, ...exampleBlocks(port, { runnable: platform.target === 'wasm', platform })];
+}
+
+function platformPage(port, variant) {
+    const platform = platformFor(variant.target);
+    const others = platformVariants(port).filter((other) => other.target !== variant.target);
+    return {
+        kind: 'port-platform',
+        slug: `${port.family}/${variant.target}`,
+        title: `${port.name} for ${platform.label}`,
+        description: `${port.name} ${port.nativeVersion} for ${platform.where}: install, configure and use \`${variant.package}\`.`,
+        lede: `${port.name} ${port.nativeVersion} for ${platform.where}, precompiled for ${platform.builds} as \`${variant.package}\`.`,
+        section: 'Libraries',
+        path: `${PORTS_BASE}/${port.family}/${variant.target}`,
+        href: platformHref(port.family, variant.target),
+        port,
+        platform,
+        platforms: platformLinks(port),
+        install: `npm install ${variant.package}${suffix}`,
+        links: [
+            { label: 'npm', href: `https://www.npmjs.com/package/${variant.package}`, external: true },
+            { label: 'Port recipe and licence files', href: port.repositoryUrl, external: true },
+        ],
+        blocks: [
+            { type: 'h2', id: 'install', text: 'Install' },
+            // A WASI page with a checked program shows that program's config instead of a bare one.
+            ...setupBlocks(port, variant, { config: !(variant.target === 'wasi' && examplesOf(port)?.wasi) }),
+            ...platformUsageBlocks(port, platform),
+            ...(variant.target === 'wasi' ? toolBlocks(port) : []),
+            { type: 'h2', id: 'differences', text: `What is different on ${platform.label}` },
+            { type: 'ul', items: differences(variant.target) },
+            { type: 'h2', id: 'other-platforms', text: 'Other platforms' },
+            {
+                type: 'ul',
+                items: [
+                    `[${port.name} overview](${portHref(port.family)}): the apps, every platform's setup and the packages.`,
+                    ...others.map((other) => `[${port.name} for ${platformFor(other.target).label}](${platformHref(port.family, other.target)}): ${platformFor(other.target).where}.`),
+                ],
+            },
+        ],
+    };
+}
+
 export const PORT_PAGES = PORTS.map(detailPage);
+
+export const PORT_PLATFORM_PAGES = PORTS.flatMap((port) => platformVariants(port).map((variant) => platformPage(port, variant)));
 
 const librariesCount = PORTS.filter((port) => publishedLibraryTargets(port).length).length;
 
@@ -151,4 +279,4 @@ export const PORTS_INDEX = {
     ],
 };
 
-export const PORTS_ROUTES = [PORTS_INDEX.href, ...PORT_PAGES.map((page) => page.href)];
+export const PORTS_ROUTES = [PORTS_INDEX.href, ...PORT_PAGES.map((page) => page.href), ...PORT_PLATFORM_PAGES.map((page) => page.href)];

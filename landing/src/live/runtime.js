@@ -25,8 +25,10 @@ export const liveDemo = (id) => DEMOS.get(id) ?? null;
 export const isLive = (id) => Boolean(DEMOS.get(id)?.script);
 
 // Every generated loader publishes the same global name, so two artifacts must never be in flight
-// together; each load waits for the one before it and keeps its own module afterwards.
-export function loadDemo(id) {
+// together; each load waits for the one before it and keeps its own module afterwards. `options`
+// reach initNative on the first load only (a demo that needs the page's thread passes
+// `useWorker: false`); later loads get the module already booted.
+export function loadDemo(id, options = {}) {
     const demo = liveDemo(id);
     if (!demo?.script) return Promise.reject(new Error('this demo was not built into the site'));
     if (!booted.has(id)) {
@@ -34,7 +36,7 @@ export function loadDemo(id) {
             await injectScript(demo.script);
             const initNative = globalThis.Crossbind?.initNative ?? globalThis.initNative;
             if (typeof initNative !== 'function') throw new Error('the demo loader did not publish initNative');
-            return initNative({ path: demo.path });
+            return initNative({ path: demo.path, ...options });
         });
         queue = ready.then(
             () => undefined,

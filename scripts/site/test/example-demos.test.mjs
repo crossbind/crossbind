@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
-import { assertDemosMatchSnapshot, DEMOS } from '../build-example-demos.mjs';
+import { assertDemosMatchSnapshot, DEMOS, REPOSITORY_ROOT } from '../build-example-demos.mjs';
 
 const snapshot = { version: '2.0.0-beta.56' };
 const manifestFor = (version) => ({
@@ -33,6 +33,21 @@ test('demos built from another crossbind version are refused as stale', () => {
         () => assertDemosMatchSnapshot(manifestFor('2.0.0-beta.55'), snapshot),
         /web-react-vite@2\.0\.0-beta\.55.* resolved 2\.0\.0-beta\.56/,
     );
+});
+
+test('every JavaScript-only module under landing/demos is built, from its own directory', () => {
+    const demosDir = path.join(REPOSITORY_ROOT, 'landing', 'demos');
+    const directDirs = fs
+        .readdirSync(demosDir)
+        .filter((name) => name.startsWith('lib-') && fs.existsSync(path.join(demosDir, name, 'direct', 'index.html')))
+        .map((name) => `${name}/direct`);
+    const built = DEMOS.filter((demo) => demo.source).map((demo) => demo.source);
+    assert.deepEqual(built.toSorted(), directDirs.toSorted());
+    for (const demo of DEMOS.filter((entry) => entry.source)) {
+        assert.equal(demo.id, demo.source.replace('/', '-'));
+        assert.equal(demo.kind, 'source');
+        assert.match(demo.expect, /^=> \d+\/\d+ checks passed$/);
+    }
 });
 
 test('with a dist root, every demo page has to be in the build', () => {

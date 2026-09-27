@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8">
+    <title>crossbind - GDAL self-check</title>
+    <script src="./dist/gdalapps-wasm-wasm32-st-release.browser.js"></script>
+</head>
+
+<body>
+    <pre id="out">compiling ...</pre>
+    <script type="module">
+        // Every usage example and every app on crossbind.dev/ports/gdal/ runs on this module. This page
+        // is what the demo build opens to prove them: each example must print exactly what its
+        // `expected` says, and the apps must give what the host's own GDAL 3.13.0 gives on the same
+        // inputs. The converter's outputs are those of the host's ogr2ogr with the same arguments on the
+        // sample this module writes, and the host's ogrinfo reads every file written here the same way.
+        // The terrain is the one a numpy rebuild of src/support/terrain.h gives bit for bit; gdal_contour
+        // and gdal_viewshed agree exactly, and gdaldem everywhere but three hillshade pixels and one
+        // slope colour, one level apart, which the arm64 host computes with fused multiply-adds. The
+        // traced shapes are gdal_sieve.py's and gdal_polygonize.py's on the same grid.
+        import * as convert from './examples/01-convert.js';
+        import * as rasterInfo from './examples/02-raster-info.js';
+        import * as cog from './examples/03-cog.js';
+        import * as terrain from './examples/04-terrain.js';
+        import * as features from './examples/05-features.js';
+
+        const EXAMPLES = [convert, rasterInfo, cog, terrain, features];
+
+        // The converter's arguments per format, as the app builds them.
+        const WGS84_ONLY = ['GPX', 'KML', 'GeoRSS'];
+        function conversionArguments(format, { crs = '', where = '', layers = [] }) {
+            const args = ['-f', format];
+            if (WGS84_ONLY.includes(format)) args.push('-t_srs', 'EPSG:4326');
+            else if (crs) args.push('-t_srs', crs);
+            if (where) args.push('-where', where);
+            if (format === 'GPX') args.push('-dsco', 'GPX_USE_EXTENSIONS=YES');
+            if (format === 'CSV') args.push('-lco', 'GEOMETRY=AS_WKT');
+            if (format === 'DXF') args.push('-select', '');
+            return [...args, ...layers].join('\n');
+        }
+        const EXTENSIONS = { GeoJSON: 'geojson', GeoJSONSeq: 'geojsonl', 'ESRI Shapefile': 'shp', 'MapInfo File': 'tab', JSONFG: 'json' };
+        // MVT writes a folder of tiles, which PMTiles holds in one file, so it is only read here.
+        const writable = (format) => format.write && format.name !== 'MVT';
+        // DXF reports several layers but holds one layer of entities.
+        const multiLayer = (format) => format.layers && format.name !== 'DXF';
+        const extensionOf = (format) => EXTENSIONS[format.name] ?? format.extensions.split(' ')[0];
+
+        // The pixels-to-polygons sample: a square with a hole, a disc, an L and four specks.
+        function sampleMask(size = 128) {
+            const mask = new Uint8Array(size * size);
+            const set = (x, y) => { mask[y * size + x] = 1; };
+            for (let y = 10; y < 50; y++) for (let x = 10; x < 50; x++) if (!(x >= 25 && x < 35 && y >= 25 && y < 35)) set(x, y);
+            for (let y = 0; y < size; y++) for (let x = 0; x < size; x++) if ((x - 90) ** 2 + (y - 40) ** 2 <= 400) set(x, y);
+            for (let y = 70; y < 110; y++) for (let x = 15; x < 35; x++) set(x, y);
+            for (let y = 90; y < 110; y++) for (let x = 35; x < 65; x++) set(x, y);
+            for (const [x, y] of [[110, 110], [120, 12], [70, 120], [71, 120], [100, 100], [101, 100], [100, 101], [101, 101]]) set(x, y);
+            return mask;
+        }
+
+        const out = document.querySelector('#out');
+        const lines = [];
+        const show = (text) => {
+            lines.push(text);
+            out.textContent = lines.join('\n');
+        };
+        const sha256 = async (bytes) => [...new Uint8Array(await crypto.subtle.digest('SHA-256', bytes))].map((b) => b.toString(16).padStart(2, '0')).join('');
+        const checks = [];
+        const check = (name, actual, expected) => {
+            const ok = expected !== null && expected !== undefined && JSON.stringify(actual) === JSON.stringify(expected);
+            checks.push(ok);
+            show(`${ok ? 'ok  ' : 'FAIL'} ${name}: ${JSON.stringify(actual)}${ok ? '' : ` (expected ${JSON.stringify(expected)})`}`);
+        };
+        const round = (values) => values.map((value) => (Math.abs(value) <= 360 ? value.toFixed(4) : value.toFixed(1)));
+        const layerSummary = (info) => info.layers.map((layer) => {
+            const geometry = layer.geometryFields[0];
+            return `${layer.name} ${layer.featureCount} ${geometry?.type ?? 'none'}${geometry?.extent ? ` ${round(geometry.extent).join(' ')}` : ''}`;
+        });
+
+        try {
+            const m = await initNative({ path: './dist' });
+            const version = await m.VectorStudio.version();
+
+            for (const pass of [1, 2]) {
+                for (const example of EXAMPLES) {
+                    const printed = [];
+                    await example.default(m, { log: (...values) => printed.push(values.map(String).join(' ')) });
+                    check(`example "${example.title}"${pass === 2 ? ' again' : ''}`, printed, example.expected);
+                }
+            }
+
+            // Vector converter: the formats, the sample, then every writable format.
+            await new m.VectorStudio();
+            const formats = JSON.parse(await m.VectorStudio.formats());
+            check('app converter formats', formats.map((f) => `${f.name}${f.write ? ' write' : ''}${f.layers ? ' layers' : ''}`), ["CSV write", "DXF write layers", "ESRI Shapefile write", "ESRIJSON", "FlatGeobuf write", "GML write layers", "GPKG write layers", "GPX write layers", "GeoJSON write", "GeoJSONSeq write", "JSONFG write", "KML write layers", "MVT write", "MapInfo File write", "ODS write layers", "OpenFileGDB write layers", "PMTiles write", "SQLite write layers", "TopoJSON", "XLSX write layers"]);
+            const work = `/memfs/gdalapps/check-${Date.now()}`;
+            await m.FS.mkdirTree(work);
+            const sample = await m.VectorStudio.writeSample(`${work}/sample.gpkg`);
+            check('app converter sample', layerSummary(JSON.parse(await m.VectorStudio.inspect(sample))), ["cities 8 Point 27.1428 36.8969 39.7168 41.0082", "links 8 LineString 27.1428 36.8969 39.7168 41.0082", "regions 2 Polygon 27.1428 36.8969 39.7168 41.0082"]);
+            const converted = [];
+            let folder = 0;
+            for (const format of formats.filter(writable)) {
+                folder += 1;
+                const output = `${work}/${folder}/sample.${extensionOf(format)}`;
+                await m.FS.mkdirTree(`${work}/${folder}`);
+                const layers = format.name === 'GPX' ? ['cities', 'links'] : multiLayer(format) ? [] : ['cities'];
+                const result = JSON.parse(await m.VectorStudio.convert(sample, output, conversionArguments(format.name, { crs: 'EPSG:3857', layers })));
+                const reopened = layerSummary(JSON.parse(await m.VectorStudio.inspect(output)));
+                converted.push(`${format.name}: ${result.files.length} ${result.files.length === 1 ? 'file' : 'files zipped'}; ${reopened.join(', ')}`);
+            }
+            check('app converter outputs', converted, [
+                "CSV: 1 file; sample 8 none",
+                "DXF: 1 file; entities 8 Geometry 3021522.7 4424745.7 4421254.0 5013551.2",
+                "ESRI Shapefile: 4 files zipped; sample 8 Point 3021522.7 4424745.7 4421254.0 5013551.2",
+                "FlatGeobuf: 1 file; cities 8 Point 3021522.7 4424745.7 4421254.0 5013551.2",
+                "GML: 2 files zipped; cities 8 Point 3021522.7 4424745.7 4421254.0 5013551.2, links 8 LineString 3021522.7 4424745.7 4421254.0 5013551.2, regions 2 Polygon 3021522.7 4424745.7 4421254.0 5013551.2",
+                "GPKG: 1 file; cities 8 Point 3021522.7 4424745.7 4421254.0 5013551.2, links 8 LineString 3021522.7 4424745.7 4421254.0 5013551.2, regions 2 Polygon 3021522.7 4424745.7 4421254.0 5013551.2",
+                "GPX: 1 file; waypoints 8 Point 27.1428 36.8969 39.7168 41.0082, routes 8 LineString 27.1428 36.8969 39.7168 41.0082, tracks 0 MultiLineString, route_points 16 Point 27.1428 36.8969 39.7168 41.0082, track_points 0 Point",
+                "GeoJSON: 1 file; cities 8 Point 3021522.7 4424745.7 4421254.0 5013551.2",
+                "GeoJSONSeq: 1 file; sample 8 Point 27.1428 36.8969 39.7168 41.0082",
+                "JSONFG: 1 file; cities 8 Point 3021522.7 4424745.7 4421254.0 5013551.2",
+                "KML: 1 file; cities 8 Point 27.1428 36.8969 39.7168 41.0082, links 8 LineString 27.1428 36.8969 39.7168 41.0082, regions 2 Polygon 27.1428 36.8969 39.7168 41.0082",
+                "MapInfo File: 4 files zipped; sample 8 Point 3021522.7 4424745.7 4421254.0 5013551.2",
+                "ODS: 1 file; cities 8 none, links 8 none, regions 2 none",
+                "OpenFileGDB: 28 files zipped; cities 8 Point 3021522.7 4424745.7 4421254.0 5013551.2, links 8 MultiLineString 3021522.7 4424745.7 4421254.0 5013551.2, regions 2 MultiPolygon 3021522.7 4424745.7 4421254.0 5013551.2",
+                "PMTiles: 1 file; cities 10 MultiPoint 3021522.7 4424745.7 4421254.0 5013551.2",
+                "SQLite: 1 file; cities 8 Point 3021522.7 4424745.7 4421254.0 5013551.2, links 8 LineString 3021522.7 4424745.7 4421254.0 5013551.2, regions 2 Polygon 3021522.7 4424745.7 4421254.0 5013551.2",
+                "XLSX: 1 file; cities 8 none, links 9 none, regions 2 none",
+            ]);
+            const filtered = `${work}/filtered/cities.fgb`;
+            await m.FS.mkdirTree(`${work}/filtered`);
+            await m.VectorStudio.convert(sample, filtered, conversionArguments('FlatGeobuf', { crs: 'EPSG:32635', where: 'plate < 20', layers: ['cities'] }));
+            check('app converter filter', layerSummary(JSON.parse(await m.VectorStudio.inspect(filtered))), ["cities 4 Point 675448.0 4089878.2 1241115.5 4450716.0"]);
+            const preview = JSON.parse(await m.VectorStudio.preview(sample, 'regions', 100));
+            check('app converter preview', preview.features.map((f) => `${f.properties.name} ${f.geometry.coordinates[0].length} ${f.geometry.coordinates[0][0].join(' ')}`), ["west 4 30.7133 36.8969", "east 5 35.3213 37"]);
+
+            // Dropped files: a zipped shapefile, a zipped geodatabase and a folder of shapefile parts.
+            const drops = [];
+            for (const [label, dropped] of [['shapefile zip', `${work}/3.zip`], ['geodatabase zip', `${work}/14.zip`], ['shapefile parts', `${work}/3`]]) {
+                const opened = await m.VectorStudio.resolve(dropped);
+                drops.push(`${label}: ${opened.replace(work, '')} ${layerSummary(JSON.parse(await m.VectorStudio.inspect(opened))).map((l) => l.split(' ').slice(0, 3).join(' ')).join(', ')}`);
+            }
+            check('app converter opens drops', drops, [
+                'shapefile zip: /vsizip//3.zip sample 8 Point',
+                'geodatabase zip: /vsizip//14.zip/sample.gdb cities 8 Point, links 8 MultiLineString, regions 2 MultiPolygon',
+                'shapefile parts: /3 sample 8 Point',
+            ]);
+
+            // Terrain studio on the default landscape.
+            await new m.TerrainStudio();
+            const dem = `${work}/dem.tif`;
+            const made = JSON.parse(await m.TerrainStudio.create(dem, 512, 1));
+            check('app terrain model', [made.size, made.min.toFixed(1), made.max.toFixed(1), made.mean.toFixed(3)], [512, '493.6', '1752.7', '888.118']);
+            const rendered = [];
+            for (const product of ['hillshade', 'relief', 'slope', 'aspect', 'roughness', 'TPI']) {
+                const view = JSON.parse(await m.TerrainStudio.render(dem, product, 315, `${work}/${product}.rgba`));
+                rendered.push(`${product} ${view.min.toFixed(2)} ${view.max.toFixed(2)} ${view.checksum} ${(await sha256(await m.getFileBytes(`${work}/${product}.rgba`))).slice(0, 16)}`);
+            }
+            check('app terrain products', rendered, [
+                "hillshade 1.00 255.00 10563 3571e5fbdccfa7a5",
+                "relief 493.60 1752.70 17965 717f206e0112635a",
+                "slope 0.00 66.30 63567 0b9b9bcb3da4f664",
+                "aspect 0.00 360.00 32781 56420aae61df009c",
+                "roughness 1.00 173.80 31001 6c28f7741b38406f",
+                "TPI -8.54 28.08 57977 b34c514c7f1c942d",
+            ]);
+            const contourCounts = [];
+            for (const interval of [100, 50]) {
+                const found = JSON.parse(await m.TerrainStudio.contours(dem, interval));
+                contourCounts.push(`${interval} m: ${found.features.length} lines, ${found.features.reduce((n, f) => n + f.geometry.coordinates.length, 0)} vertices`);
+            }
+            check('app terrain contours', contourCounts, ["100 m: 346 lines, 34489 vertices", "50 m: 672 lines, 69336 vertices"]);
+            const sights = [];
+            for (const [column, row, height] of [[256, 256, 10], [400, 90, 2]]) {
+                const seen = JSON.parse(await m.TerrainStudio.viewshed(dem, column, row, height, `${work}/seen.bin`));
+                sights.push(`${column} ${row} ${height}: ${seen.visible} of ${seen.cells}, checksum ${seen.checksum}`);
+            }
+            check('app terrain viewshed', sights, ["256 256 10: 3123 of 262144, checksum 38575", "400 90 2: 27332 of 262144, checksum 7726"]);
+
+            // Pixels to polygons on the sample mask.
+            await new m.Vectorizer();
+            const mask = sampleMask();
+            const traced = [];
+            for (const [sieve, simplify] of [[0, 0], [5, 0], [5, 1.5]]) {
+                const path = `${work}/mask-${sieve}-${simplify}.bin`;
+                await m.FS.writeFile(path, mask);
+                const t = JSON.parse(await m.Vectorizer.trace(path, 128, 128, sieve, simplify));
+                traced.push(`sieve ${sieve} simplify ${simplify}: ${t.polygons} polygons, ${t.holes} hole, ${t.vertices} vertices, areas ${t.areas.join('/')}`);
+            }
+            check('app polygons', traced, [
+                "sieve 0 simplify 0: 7 polygons, 1 hole, 138 vertices, areas 1500/1400/1257/4/2/1/1",
+                "sieve 5 simplify 0: 3 polygons, 1 hole, 118 vertices, areas 1500/1400/1257",
+                "sieve 5 simplify 1.5: 3 polygons, 1 hole, 30 vertices, areas 1500/1400/1257",
+            ]);
+
+            const passed = checks.filter(Boolean).length;
+            show(`gdal ${version} => ${passed}/${checks.length} checks passed`);
+        } catch (error) {
+            show(`failed => ${error && error.message ? error.message : error}`);
+        }
+    </script>
+</body>
+
+</html>

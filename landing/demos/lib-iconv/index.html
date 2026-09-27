@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8">
+    <title>crossbind - iconv self-check</title>
+    <script src="./dist/iconvapps-wasm-wasm32-st-release.browser.js"></script>
+</head>
+
+<body>
+    <pre id="out">compiling ...</pre>
+    <script type="module">
+        // Every usage example and every app on crossbind.dev/ports/iconv/ runs on this module. This page
+        // is what the demo build opens to prove them: each example must print exactly what its
+        // `expected` says, and the apps must give the bytes and texts that CPython's codecs, the WHATWG
+        // Encoding Standard's indexes, RFC examples and Unicode's mapping tables give for the same input.
+        import * as convert from './examples/01-convert.js';
+        import * as fallbacks from './examples/02-fallbacks.js';
+        import * as stream from './examples/03-stream.js';
+        import * as encodings from './examples/04-encodings.js';
+
+        const EXAMPLES = [convert, fallbacks, stream, encodings];
+
+        // Mojibake doctor: text saved in one encoding and shown by a browser as another. `bytes` are the
+        // legacy bytes as CPython encodes them; the doctor must repair each garbled text to `original`.
+        const DOCTOR = [
+            { original: 'été', saved: 'UTF-8', opened: 'windows-1252', garbled: 'Ã©tÃ©' },
+            { original: 'Привет', saved: 'UTF-8', opened: 'windows-1252', garbled: 'ÐŸÑ€Ð¸Ð²ÐµÑ‚' },
+            { original: 'İstanbul', saved: 'UTF-8', opened: 'windows-1252', garbled: 'Ä°stanbul' },
+            { original: 'Größe', saved: 'UTF-8', opened: 'windows-1252', garbled: 'GrÃ¶ÃŸe' },
+            { original: 'été', saved: 'UTF-8', opened: 'windows-1252', times: 2, garbled: 'ÃƒÂ©tÃƒÂ©' },
+            { original: '文字化け', saved: 'UTF-8', opened: 'windows-1252', garbled: 'æ–‡å­—åŒ–ã\u0081‘' },
+            { original: 'こんにちは', saved: 'UTF-8', opened: 'shift_jis', garbled: '縺薙ｓ縺ｫ縺｡縺ｯ' },
+            { original: '日本語', saved: 'CP932', bytes: '93 fa 96 7b 8c ea', opened: 'windows-1252', garbled: '“ú–{Œê' },
+            { original: 'Привет', saved: 'CP1251', bytes: 'cf f0 e8 e2 e5 f2', opened: 'windows-1252', garbled: 'Ïðèâåò' },
+            { original: '한국어', saved: 'CP949', bytes: 'c7 d1 b1 b9 be ee', opened: 'windows-1252', garbled: 'ÇÑ±¹¾î' },
+        ];
+        const ICONV_NAME = { 'windows-1252': 'CP1252', shift_jis: 'CP932' };
+
+        // Legacy exporter: a customer list with a Windows-only character (①) and one no Shift_JIS has (€).
+        const CUSTOMERS = '山田太郎,ﾔﾏﾀﾞ ﾀﾛｳ,03-1234-5678,表計算ソフト\n佐藤花子,ｻﾄｳ ﾊﾅｺ,06-9876-5432,①至急 €50\n';
+
+        // Bytes TextDecoder cannot read, each from a source other than libiconv. The Encoding Standard maps
+        // the first three labels to its replacement encoding and has no others; TextDecoder throws a
+        // RangeError for both.
+        const GALLERY = [
+            { encoding: 'ISO-2022-KR', label: 'iso-2022-kr', text: '한국어 메일', hex: '1b 24 29 43 0e 47 51 31 39 3e 6e 0f 20 0e 38 5e 40 4f 0f' },
+            { encoding: 'HZ', label: 'hz-gb-2312', text: '中文邮件', hex: '7e 7b 56 50 4e 44 53 4a 3c 7e 7e 7d' },
+            { encoding: 'ISO-2022-CN', label: 'iso-2022-cn', text: '中文', hex: '1b 24 29 41 0e 56 50 4e 44 0f' },
+            { encoding: 'UTF-7', label: 'utf-7', text: 'Hi Mom -☺-!', hex: '48 69 20 4d 6f 6d 20 2d 2b 4a 6a 6f 2d 2d 21' },
+            { encoding: 'UTF-32LE', label: 'utf-32le', text: 'UTF-32 😀', hex: '55 00 00 00 54 00 00 00 46 00 00 00 2d 00 00 00 33 00 00 00 32 00 00 00 20 00 00 00 00 f6 01 00' },
+            { encoding: 'EUC-TW', label: 'euc-tw', text: '臺灣', hex: 'ea d7 fd a4' },
+            { encoding: 'CP850', label: 'ibm850', text: 'Größe, Übergröße', hex: '47 72 94 e1 65 2c 20 9a 62 65 72 67 72 94 e1 65' },
+            { encoding: 'MACCENTRALEUROPE', label: 'x-mac-ce', text: 'Zażółć gęślą jaźń', hex: '5a 61 fd 97 b8 8d 20 67 ab e6 6c 88 20 6a 61 90 c4' },
+            { encoding: 'VISCII', label: 'viscii', text: 'Tiếng Việt', hex: '54 69 aa 6e 67 20 56 69 ae 74' },
+        ];
+
+        // Legacy file reader: an order list in Windows Shift_JIS, as CPython's cp932 encodes it.
+        const ORDERS = '注文番号,品名\n1001,表計算ソフト\n1002,ノートPC\n';
+        const ORDERS_HEX = '92 8d 95 b6 94 d4 8d 86 2c 95 69 96 bc 0a 31 30 30 31 2c 95 5c 8c 76 8e 5a 83 5c 83 74 83 67 0a 31 30 30 32 2c 83 6d 81 5b 83 67 50 43 0a';
+
+        const out = document.querySelector('#out');
+        const lines = [];
+        const show = (text) => {
+            lines.push(text);
+            out.textContent = lines.join('\n');
+        };
+        const hex = (units) => [...units].map((unit) => unit.charCodeAt(0).toString(16).padStart(2, '0')).join(' ');
+        const units = (hexText) => String.fromCharCode(...hexText.split(' ').map((byte) => parseInt(byte, 16)));
+        const bytes = (hexText) => Uint8Array.from(hexText.split(' '), (byte) => parseInt(byte, 16));
+        const codes = (text) => [...text].map((c) => `U+${c.codePointAt(0).toString(16).toUpperCase().padStart(4, '0')}`).join(' ');
+        const browserReads = (label, data) => {
+            try {
+                return new TextDecoder(label).decode(data);
+            } catch (error) {
+                return error.name;
+            }
+        };
+
+        const checks = [];
+        const check = (name, actual, expected) => {
+            const ok = expected !== null && JSON.stringify(actual) === JSON.stringify(expected);
+            checks.push(ok);
+            show(`${ok ? 'ok  ' : 'FAIL'} ${name}: ${JSON.stringify(actual)}${ok ? '' : ` (expected ${JSON.stringify(expected)})`}`);
+        };
+
+        try {
+            const m = await initNative({ path: './dist' });
+            const version = await m.Encodings.version();
+
+            // The usage examples, run exactly as the page shows them.
+            for (const example of EXAMPLES) {
+                const printed = [];
+                await example.default(m, { log: (...values) => printed.push(values.map(String).join(' ')) });
+                check(`example "${example.title}"`, printed, example.expected);
+            }
+
+            // Mojibake doctor: the garbled texts are what this browser's own decoder shows...
+            const shown = DOCTOR.map((fixture) => {
+                let data = fixture.bytes ? bytes(fixture.bytes) : new TextEncoder().encode(fixture.original);
+                let text = new TextDecoder(fixture.opened).decode(data);
+                for (let round = 1; round < (fixture.times ?? 1); round += 1) text = new TextDecoder(fixture.opened).decode(new TextEncoder().encode(text));
+                return text;
+            });
+            check('app doctor, garbled as this browser shows it', shown, DOCTOR.map((fixture) => fixture.garbled));
+            // ...and what libiconv makes of the same mistakes, with browser-style C1 fallbacks.
+            const garbled = [];
+            for (const fixture of DOCTOR) {
+                let text = fixture.original;
+                for (let round = 0; round < (fixture.times ?? 1); round += 1) text = await m.MojibakeDoctor.garble(text, fixture.saved, ICONV_NAME[fixture.opened]);
+                garbled.push(text);
+            }
+            check('app doctor, garbled by libiconv', garbled, DOCTOR.map((fixture) => fixture.garbled));
+            const legacy = DOCTOR.filter((fixture) => fixture.bytes);
+            check('app doctor, legacy bytes', await Promise.all(legacy.map(async (fixture) => hex(await m.Charset.encode(fixture.original, fixture.saved)))), legacy.map((fixture) => fixture.bytes));
+            const repairs = [];
+            for (const fixture of DOCTOR) repairs.push(JSON.parse(await m.MojibakeDoctor.repair(fixture.garbled, 3))[0]);
+            check('app doctor, top repair', repairs.map((repair) => repair?.text), DOCTOR.map((fixture) => fixture.original));
+            check('app doctor, chains', repairs.map((repair) => repair.steps.map((step) => `${step.saved} as ${step.opened}`).join(', ')), DOCTOR.map((fixture) => Array(fixture.times ?? 1).fill(`${fixture.saved} as ${ICONV_NAME[fixture.opened]}`).join(', ')));
+            check('app doctor, clean text left alone', JSON.parse(await m.MojibakeDoctor.repair('¿Qué tal? Größe, İstanbul, Привет, 日本語', 3)), []);
+
+            // Legacy exporter.
+            const strict = JSON.parse(await m.LegacyExport.report(CUSTOMERS, 'CP932', '', ''));
+            check('app export, CP932 strict', [strict.bytes, strict.utf8Bytes, strict.records, strict.problems, strict.backslashes.map((entry) => `${entry.character} ${entry.line}:${entry.column}`)], [
+                86, 132, 2, [{ line: 2, column: 31, character: '€', code: 'U+20AC' }], ['表 1:28', 'ソ 1:31'],
+            ]);
+            const translit = JSON.parse(await m.LegacyExport.report(CUSTOMERS, 'CP932', 'TRANSLIT', ''));
+            const ignore = JSON.parse(await m.LegacyExport.report(CUSTOMERS, 'CP932', 'IGNORE', ''));
+            check('app export, CP932 TRANSLIT and IGNORE', [translit.bytes, translit.changed, translit.problems.length, ignore.bytes, ignore.changed], [89, 1, 0, 86, 1]);
+            const fixed = await m.LegacyExport.file(CUSTOMERS, 'CP932', 'TRANSLIT', '8,10,12,10');
+            const fixedReport = JSON.parse(await m.LegacyExport.report(CUSTOMERS, 'CP932', 'TRANSLIT', '8,10,12,10'));
+            check('app export, fixed width', [hex(fixed), fixedReport.truncated], [
+                '8e 52 93 63 91 be 98 59 d4 cf c0 de 20 c0 db b3 20 20 30 33 2d 31 32 33 34 2d 35 36 37 38 95 5c 8c 76 8e 5a 83 5c 83 74 0d 0a 8d b2 93 a1 89 d4 8e 71 bb c4 b3 20 ca c5 ba 20 20 20 30 36 2d 39 38 37 36 2d 35 34 33 32 87 40 8e 8a 8b 7d 20 45 55 52 0d 0a',
+                [{ line: 1, field: 4 }, { line: 2, field: 4 }],
+            ]);
+            const jis = JSON.parse(await m.LegacyExport.report(CUSTOMERS, 'SHIFT_JIS', '', ''));
+            check('app export, SHIFT_JIS lacks the Windows extras', jis.problems.map((problem) => problem.code), ['U+2460', 'U+20AC']);
+            const research = [];
+            for (const [text, encoding] of [['日本語', 'SHIFT_JIS'], ['中文', 'GB18030'], ['中文', 'BIG5'], ['한국어', 'EUC-KR'], ['Straße €5', 'CP1252']]) research.push(hex(await m.LegacyExport.file(text, encoding, '', '')));
+            check('app export, five encodings', research, ['93 fa 96 7b 8c ea 0d 0a', 'd6 d0 ce c4 0d 0a', 'a4 a4 a4 e5 0d 0a', 'c7 d1 b1 b9 be ee 0d 0a', '53 74 72 61 df 65 20 80 35 0d 0a']);
+
+            // Legacy decoder: libiconv reads every sample, and this browser's TextDecoder does not.
+            const read = [];
+            for (const sample of GALLERY) read.push(await m.Charset.decode(units(sample.hex), sample.encoding));
+            check('app decoder, libiconv reads the samples', read, GALLERY.map((sample) => sample.text));
+            check('app decoder, TextDecoder on the samples', GALLERY.map((sample) => browserReads(sample.label, bytes(sample.hex))), GALLERY.map(() => 'RangeError'));
+            check('app decoder, the latin1 label', [browserReads('iso-8859-1', bytes('80 93 94')), codes(await m.Charset.decode(units('80 93 94'), 'ISO-8859-1'))], ['€“”', 'U+0080 U+0093 U+0094']);
+
+            // Legacy decoder, files: an order list in Windows Shift_JIS, whole and with byte 20 broken.
+            const folder = '/memfs/iconvapps';
+            await m.FS.mkdirTree(folder);
+            check('app decoder, order list bytes', hex(await m.Charset.encode(ORDERS, 'CP932')), ORDERS_HEX);
+            await m.FS.writeFile(`${folder}/orders.csv`, bytes(ORDERS_HEX));
+            const broken = bytes(ORDERS_HEX);
+            broken[20] = 0xff;
+            await m.FS.writeFile(`${folder}/broken.csv`, broken);
+            const whole = JSON.parse(await m.FileDecoder.decode(`${folder}/orders.csv`, 'CP932', 65536));
+            const cut = JSON.parse(await m.FileDecoder.decode(`${folder}/broken.csv`, 'CP932', 65536));
+            check('app decoder, strict file reads', [whole.text, whole.error, cut.error, cut.at, cut.line, cut.column], [ORDERS, '', 'invalid', 19, 2, 6]);
+            const scan = JSON.parse(await m.FileDecoder.scan(`${folder}/orders.csv`, 65536));
+            const outcome = (name) => {
+                const entry = scan.find((item) => item.encoding === name);
+                return entry.ok ? { ok: true } : { ok: false, at: entry.at };
+            };
+            const scanned = ['UTF-8', 'CP932', 'EUC-JP', 'ISO-8859-1', 'CP1252', 'UTF-16LE', 'EUC-KR', 'BIG5', 'KOI8-R', 'US-ASCII', 'CP949'];
+            check('app decoder, every encoding tried', [scan.length, ...scanned.map(outcome)], [
+                106, { ok: false, at: 0 }, { ok: true }, { ok: false, at: 0 }, { ok: true }, { ok: false, at: 1 }, { ok: true }, { ok: false, at: 0 }, { ok: false, at: 0 }, { ok: true }, { ok: false, at: 0 }, { ok: false, at: 19 },
+            ]);
+
+            const passed = checks.filter(Boolean).length;
+            show(`iconv ${version} => ${passed}/${checks.length} checks passed`);
+        } catch (error) {
+            show(`failed => ${error && error.message ? error.message : error}`);
+        }
+    </script>
+</body>
+
+</html>

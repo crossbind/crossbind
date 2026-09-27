@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8">
+    <title>crossbind - tiff self-check</title>
+    <script src="./dist/tiffapps-wasm-wasm32-st-release.browser.js"></script>
+</head>
+
+<body>
+    <pre id="out">compiling ...</pre>
+    <script type="module">
+        // Every usage example and every app on crossbind.dev/ports/tiff/ runs on this module. This page
+        // is what the demo build opens to prove them: each example must print exactly what its
+        // `expected` says, and the apps must give the numbers that were checked outside the port on the
+        // same generated files: libtiff 4.7.1 built natively, tifffile with imagecodecs, Pillow and numpy.
+        import * as encodeDecode from './examples/01-encode-decode.js';
+        import * as pages from './examples/02-pages.js';
+        import * as samples from './examples/03-samples.js';
+        import * as tiles from './examples/04-tiles.js';
+        import * as openFile from './examples/05-open-file.js';
+
+        const EXAMPLES = [encodeDecode, pages, samples, tiles, openFile];
+
+        // The compression lab's variants: [label, COMPRESSION_*, predictor, LERC max error].
+        const LAB = {
+            cells: [['none', 1, 1, 0], ['PackBits', 32773, 1, 0], ['LZW', 5, 1, 0], ['LZW, predictor 2', 5, 2, 0], ['Deflate', 8, 1, 0], ['Deflate, predictor 2', 8, 2, 0],
+                ['ZSTD', 50000, 1, 0], ['ZSTD, predictor 2', 50000, 2, 0], ['LERC, exact', 34887, 1, 0], ['LERC, error 8', 34887, 1, 8]],
+            elevation: [['none', 1, 1, 0], ['LZW', 5, 1, 0], ['LZW, predictor 3', 5, 3, 0], ['Deflate', 8, 1, 0], ['Deflate, predictor 3', 8, 3, 0], ['ZSTD', 50000, 1, 0],
+                ['ZSTD, predictor 3', 50000, 3, 0], ['LERC, exact', 34887, 1, 0], ['LERC, error 0.1 m', 34887, 1, 0.1], ['LERC, error 1 m', 34887, 1, 1]],
+        };
+
+        const out = document.querySelector('#out');
+        const lines = [];
+        const show = (text) => {
+            lines.push(text);
+            out.textContent = lines.join('\n');
+        };
+        const sha256 = async (bytes) => [...new Uint8Array(await crypto.subtle.digest('SHA-256', bytes))].map((b) => b.toString(16).padStart(2, '0')).join('');
+
+        const checks = [];
+        const check = (name, actual, expected) => {
+            const ok = expected !== null && JSON.stringify(actual) === JSON.stringify(expected);
+            checks.push(ok);
+            show(`${ok ? 'ok  ' : 'FAIL'} ${name}: ${JSON.stringify(actual)}${ok ? '' : ` (expected ${JSON.stringify(expected)})`}`);
+        };
+
+        try {
+            const m = await initNative({ path: './dist' });
+            const version = await m.Tiff.version();
+
+            // The usage examples, run exactly as the page shows them.
+            for (const example of EXAMPLES) {
+                const printed = [];
+                await example.default(m, { log: (...values) => printed.push(values.map(String).join(' ')) });
+                check(`example "${example.title}"`, printed, example.expected);
+            }
+
+            // The codecs compiled into this build.
+            const codecs = JSON.parse(await m.TiffViewer.codecs()).map((codec) => codec.name);
+            check('codecs', codecs, ['None', 'LZW', 'PackBits', 'ThunderScan', 'NeXT', 'JPEG', 'Old-style JPEG', 'CCITT RLE', 'CCITT RLE/W', 'CCITT Group 3', 'CCITT Group 4', 'Deflate',
+                'AdobeDeflate', 'PixarLog', 'SGILog', 'SGILog24', 'ZSTD', 'LERC']);
+
+            // Viewer app: the four-page sample, its pages, and each page drawn at thumbnail size.
+            const dir = '/memfs/tiffapps/check';
+            await m.FS.mkdirTree(dir);
+            const sample = `${dir}/sample.tif`;
+            const size = await m.TiffViewer.writeSample(sample);
+            const listed = JSON.parse(await m.TiffViewer.pages(sample)).pages;
+            check('app viewer pages', [size, ...listed.map((page) => `${page.width}x${page.height} ${page.bitsPerSample}-bit ${page.sampleFormat} ${page.compression}${page.tiled ? ' tiled' : ''}`)],
+                [1317918, '1654x2339 1-bit uint CCITT Group 4', '1200x800 8-bit uint JPEG', '1024x1024 16-bit uint ZSTD tiled', '768x512 32-bit float AdobeDeflate tiled']);
+            const drawn = [];
+            for (const [page, stretch] of [[0, false], [1, false], [2, false], [2, true], [3, true]]) {
+                const shown = JSON.parse(await m.TiffViewer.render(sample, page, 256, stretch, `${dir}/page.rgba`));
+                const digest = await sha256(await m.getFileBytes(`${dir}/page.rgba`));
+                drawn.push(`${shown.width}x${shown.height} ${shown.mode} ${shown.low ?? '-'}..${shown.high ?? '-'} ${digest.slice(0, 16)}`);
+            }
+            check('app viewer thumbnails', drawn, ['181x256 rgba -..- ba16a48ca4ea2d95', '256x170 rgba -..- 42020d9b0d322c6f', '256x256 rgba -..- 51c15d6cce291c7b',
+                '256x256 stretch 145..4095 8f832ae21db8278f', '256x170 stretch 350..745.875 c71b95f00132634b']);
+
+            // Scan archive app: two generated page photos, Otsu's threshold, one CCITT Group 4 file.
+            const scans = [];
+            for (const index of [0, 1]) {
+                await m.ScanArchive.makePage(index, 1240, 1754, `${dir}/scan.rgba`);
+                const cut = JSON.parse(await m.ScanArchive.binarize(`${dir}/scan.rgba`, 1240, 1754, -1, `${dir}/scan-${index}.bits`));
+                const added = JSON.parse(await m.ScanArchive.addPage(`${dir}/scans.tif`, `${dir}/scan-${index}.bits`, 1240, 1754, 150, index, 2));
+                scans.push([cut.threshold, cut.black, added.bytes, added.fileBytes]);
+            }
+            check('app scans', scans, [[151, 66941, 5390, 5390], [149, 129729, 14250, 19640]]);
+            const codecSizes = JSON.parse(await m.ScanArchive.codecSizes(`${dir}/scan-0.bits`, 1240, 1754)).map((codec) => [codec.name, codec.bytes]);
+            check('app scans codecs', codecSizes, [['None', 271992], ['PackBits', 26844], ['LZW', 11072], ['AdobeDeflate', 6564], ['ZSTD', 5252], ['CCITT Group 3', 17030], ['CCITT Group 4', 5314]]);
+
+            // Compression lab app: both rasters with every variant, each read back and compared.
+            const expectedLab = {
+                cells: [524288, [524466, 0], [528560, 0], [202956, 0], [214546, 0], [190934, 0], [196852, 0], [183446, 0], [191268, 0], [178072, 0], [74952, 8]],
+                elevation: [1048576, [1048754, 0], [634642, 0], [363468, 0], [477008, 0], [287494, 0], [457930, 0], [275658, 0], [1049090, 0], [260992, 0.1000061035], [154416, 1]],
+            };
+            for (const [kind, name] of [[0, 'cells'], [1, 'elevation']]) {
+                const lab = await new m.CompressionLab(kind, 512);
+                const results = [await lab.rawBytes()];
+                for (const [, compression, predictor, maxZError] of LAB[name]) {
+                    const run = JSON.parse(await lab.run(compression, predictor, maxZError, `${dir}/lab.tif`));
+                    results.push([run.bytes, run.maxError]);
+                }
+                check(`app lab ${name}`, results, expectedLab[name]);
+            }
+
+            const passed = checks.filter(Boolean).length;
+            show(`tiff ${version} => ${passed}/${checks.length} checks passed`);
+        } catch (error) {
+            show(`failed => ${error && error.message ? error.message : error}`);
+        }
+    </script>
+</body>
+
+</html>

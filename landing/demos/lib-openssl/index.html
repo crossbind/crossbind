@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8">
+    <title>crossbind - OpenSSL self-check</title>
+    <script src="./dist/opensslapps-wasm-wasm32-st-release.browser.js"></script>
+</head>
+
+<body>
+    <pre id="out">compiling ...</pre>
+    <script type="module">
+        // Every usage example and every app on crossbind.dev/ports/openssl/ runs on this module. This
+        // page is what the demo build opens to prove them: each example must print exactly what its
+        // `expected` says, and the apps must give what published test vectors, the host's OpenSSL
+        // 3.6.2, Python's cryptography and this browser's own WebCrypto give on the same input.
+        import * as certificate from './examples/01-certificate.js';
+        import * as hashing from './examples/02-hashing.js';
+        import * as aesGcm from './examples/03-aes-gcm.js';
+        import * as signing from './examples/04-signing.js';
+        import * as selfSigned from './examples/05-self-signed.js';
+
+        const EXAMPLES = [certificate, hashing, aesGcm, signing, selfSigned];
+
+        // RFC 8032 section 7.1, TEST 1: the secret key, and its signature of the empty message.
+        const RFC8032_SEED = '9d61b19deffd5a60ba844af492ec2cc44449c5697b326919703bac031cae7f60';
+        const RFC8032_SIGNATURE = 'e5564300c360ac729086e2cc806e828a84877f1eb8e5d974d873e065224901555fb8821590a33bacc61e39701cf9b46bd25bf5f0595bbe24655141438e7a100b';
+        const RFC8032_PUBLIC_PEM = '-----BEGIN PUBLIC KEY-----\nMCowBQYDK2VwAyEA11qYAYKxCrfVS/7TyWQHOg7hcvPapiMlrwIaaPcHURo=\n-----END PUBLIC KEY-----\n';
+        // The test certificate of the first example and the test CA that issued it, made once with
+        // the host's OpenSSL 3.6.2, and the two .p12 files it made of them with `openssl pkcs12
+        // -export`, without and with -legacy, password "correct horse battery".
+        const SHOP_PEM = `-----BEGIN CERTIFICATE-----
+MIICIjCCAcigAwIBAgICEAEwCgYIKoZIzj0EAwIwQzELMAkGA1UEBhMCVVMxFTAT
+BgNVBAoMDEV4YW1wbGUgU2hvcDEdMBsGA1UEAwwURXhhbXBsZSBTaG9wIFRlc3Qg
+Q0EwHhcNMjYwMzAxMDAwMDAwWhcNMjYwNTMwMDAwMDAwWjA/MQswCQYDVQQGEwJV
+UzEVMBMGA1UECgwMRXhhbXBsZSBTaG9wMRkwFwYDVQQDDBBzaG9wLmV4YW1wbGUu
+Y29tMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEZR6VvLcXeY1MN21YB02ab2Qc
+OzohfHo98QuwSjxUrEEni8Yj0oXx53RyQtlAUlDkddzJOt6ldz90XgKXuWIOGKOB
+rzCBrDAMBgNVHRMBAf8EAjAAMA4GA1UdDwEB/wQEAwIHgDATBgNVHSUEDDAKBggr
+BgEFBQcDATA3BgNVHREEMDAughBzaG9wLmV4YW1wbGUuY29tghR3d3cuc2hvcC5l
+eGFtcGxlLmNvbYcEwAACCjAdBgNVHQ4EFgQU1y3zWDMZI93FAyhp8QnFGfs10k4w
+HwYDVR0jBBgwFoAUPExNl7RaXtxsfW/VdAj+Rlc4gpIwCgYIKoZIzj0EAwIDSAAw
+RQIgZtZXDYEsjrz91CjoZyFE5coj51aR5sZi/wKllD1qYq8CIQCOKkQWCapO2G/A
+p1aRCXKO+JxjPWGnkYe0B8RLljl9Pw==
+-----END CERTIFICATE-----
+`;
+        const CA_PEM = `-----BEGIN CERTIFICATE-----
+MIIBtzCCAV2gAwIBAgIBCjAKBggqhkjOPQQDAjBDMQswCQYDVQQGEwJVUzEVMBMG
+A1UECgwMRXhhbXBsZSBTaG9wMR0wGwYDVQQDDBRFeGFtcGxlIFNob3AgVGVzdCBD
+QTAeFw0yNjAxMDEwMDAwMDBaFw0zNjAxMDEwMDAwMDBaMEMxCzAJBgNVBAYTAlVT
+MRUwEwYDVQQKDAxFeGFtcGxlIFNob3AxHTAbBgNVBAMMFEV4YW1wbGUgU2hvcCBU
+ZXN0IENBMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEDlOGwIFm9XEzrBJY6L6z
+p/ZML7UY7Icxq2zwdMke6AjcDJd0GPdhdZsd+0iBHDjbo6w1dXQwO1Hqb6mul8lq
+/KNCMEAwDwYDVR0TAQH/BAUwAwEB/zAOBgNVHQ8BAf8EBAMCAQYwHQYDVR0OBBYE
+FDxMTZe0Wl7cbH1v1XQI/kZXOIKSMAoGCCqGSM49BAMCA0gAMEUCIQDzZYXzwRwa
+7kUg5H0zLK4xJRb0TFMLjJoJIG+BPWKnPAIgTQx/0iMBosRYrifWc9gq+imldCOh
+SbqKkb0RUXoYBoI=
+-----END CERTIFICATE-----
+`;
+        const MODERN_P12 = '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';
+        const LEGACY_P12 = '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';
+        const P12_PASSWORD = 'correct horse battery';
+
+        const out = document.querySelector('#out');
+        const lines = [];
+        const show = (text) => {
+            lines.push(text);
+            out.textContent = lines.join('\n');
+        };
+        const bytesOf = (hex) => new Uint8Array(hex.match(/../g).map((pair) => parseInt(pair, 16)));
+        const hexOf = (buffer) => [...new Uint8Array(buffer)].map((b) => b.toString(16).padStart(2, '0')).join('');
+        const sha256 = async (text) => hexOf(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text)));
+        const derOf = (pem) => Uint8Array.from(atob(pem.replace(/-----[^-]+-----/g, '').replace(/\s+/g, '')), (c) => c.charCodeAt(0));
+
+        // An ECDSA signature in DER, as OpenSSL writes it, to the r || s form WebCrypto verifies.
+        const rawEcdsa = (der) => {
+            const integer = (at) => {
+                const length = der[at + 1];
+                const value = der.slice(at + 2, at + 2 + length);
+                const trimmed = value[0] === 0 ? value.slice(1) : value;
+                const padded = new Uint8Array(32);
+                padded.set(trimmed, 32 - trimmed.length);
+                return { value: padded, next: at + 2 + length };
+            };
+            const r = integer(2);
+            const s = integer(r.next);
+            return new Uint8Array([...r.value, ...s.value]);
+        };
+
+        const checks = [];
+        const check = (name, actual, expected) => {
+            const ok = expected !== null && JSON.stringify(actual) === JSON.stringify(expected);
+            checks.push(ok);
+            show(`${ok ? 'ok  ' : 'FAIL'} ${name}: ${JSON.stringify(actual)}${ok ? '' : ` (expected ${JSON.stringify(expected)})`}`);
+        };
+
+        try {
+            const m = await initNative({ path: './dist' });
+            const studio = await new m.CertStudio();
+            const version = (await studio.version()).split(' ')[1];
+
+            // The usage examples, run exactly as the page shows them.
+            for (const example of EXAMPLES) {
+                const printed = [];
+                await example.default(m, { log: (...values) => printed.push(values.map(String).join(' ')) });
+                check(`example "${example.title}"`, printed, example.expected);
+            }
+
+            // Two examples against this browser's WebCrypto, an implementation that is not OpenSSL.
+            const gcm = await new m.AesGcm('000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f');
+            const sealed = await gcm.encrypt('000000000000000000000001', 'meet at the north gate at 7', 'message-1');
+            const aesKey = await crypto.subtle.importKey('raw', bytesOf('000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f'), 'AES-GCM', false, ['encrypt', 'decrypt']);
+            const gcmParams = { name: 'AES-GCM', iv: bytesOf('000000000000000000000001'), additionalData: new TextEncoder().encode('message-1') };
+            const opened = new TextDecoder().decode(await crypto.subtle.decrypt(gcmParams, aesKey, bytesOf(sealed)));
+            const webSealed = hexOf(await crypto.subtle.encrypt(gcmParams, aesKey, new TextEncoder().encode('meet at the north gate at 7')));
+            check('webcrypto opens and reproduces the AES-256-GCM example', [opened, webSealed === sealed], ['meet at the north gate at 7', true]);
+            const pair = await new m.KeyPair('P-256');
+            const message = 'release 2.4.0, sha256 3a985da74fe225b2';
+            const ecdsa = await pair.sign(message);
+            const spki = await crypto.subtle.importKey('spki', derOf(await pair.publicKeyPem()), { name: 'ECDSA', namedCurve: 'P-256' }, false, ['verify']);
+            const verifies = (text) => crypto.subtle.verify({ name: 'ECDSA', hash: 'SHA-256' }, spki, rawEcdsa(bytesOf(ecdsa)), new TextEncoder().encode(text));
+            check('webcrypto verifies an ECDSA P-256 signature from the signing example', [await verifies(message), await verifies('release 2.4.1')], [true, false]);
+
+            // Certificate studio.
+            const edKey = await studio.ed25519FromSeed(RFC8032_SEED);
+            check('app studio RFC 8032 TEST 1 signature', await studio.sign(edKey, ''), RFC8032_SIGNATURE);
+            const [edKeyInfo] = JSON.parse(await studio.inspect(edKey));
+            check('app studio private key shows only its public half', [edKeyInfo.kind, edKeyInfo.keyType, edKeyInfo.securityBits, edKeyInfo.publicKeyPem], ['private key', 'ED25519', 128, RFC8032_PUBLIC_PEM]);
+            const localhost = await studio.selfSign(edKey, '/CN=localhost', 'DNS:localhost,IP:127.0.0.1', 0, '20260101000000Z', '20270101000000Z', 1);
+            const [made] = JSON.parse(await studio.inspect(localhost));
+            check('app studio self-signed certificate, byte for byte what the host OpenSSL and Python make', [made.fingerprint, made.subject, made.issuer, made.serial, made.notBefore, made.notAfter, made.altNames, made.keyType, made.signature, made.selfSigned], ['72:F7:5A:B2:DD:81:12:CF:4B:E6:EA:C3:6C:12:DF:B8:8F:52:64:49:ED:3F:2B:1A:17:A9:B3:F0:D2:7E:C7:E3', 'CN=localhost', 'CN=localhost', '01', '2026-01-01 00:00:00Z', '2027-01-01 00:00:00Z', 'DNS:localhost, IP Address:127.0.0.1', 'ED25519', 'ED25519', true]);
+            const [shop] = JSON.parse(await studio.inspect(SHOP_PEM));
+            check('app studio text dump, sha-256 of what openssl x509 -text -noout of OpenSSL 4.0.2 prints', [await sha256(shop.text), shop.text.length], ['928ad5a1641dfa435aa654b60dd81f6a1ab3157bb69353107d184322eab7f82b', 1844]);
+            const chain = JSON.parse(await studio.inspect(SHOP_PEM + CA_PEM));
+            check('app studio chain', chain.map((cert) => [cert.subject, cert.authority, cert.selfSigned]), [['CN=shop.example.com,O=Example Shop,C=US', false, false], ['CN=Example Shop Test CA,O=Example Shop,C=US', true, true]]);
+            const csrKey = await studio.generateKey('P-256');
+            const csr = await studio.makeRequest(csrKey, '/O=Example/CN=csr.example', 'DNS:csr.example,DNS:www.csr.example');
+            const [request] = JSON.parse(await studio.inspect(csr));
+            const otherKey = await studio.generateKey('P-256');
+            check('app studio certificate request', [request.kind, request.subject, request.altNames, request.keyType, request.signature, request.signatureValid, await studio.keyMatches(csr, csrKey), await studio.keyMatches(csr, otherKey)], ['certificate request', 'CN=csr.example,O=Example', 'DNS:csr.example, DNS:www.csr.example', 'EC prime256v1', 'ecdsa-with-SHA256', true, true, false]);
+            const pqKey = await studio.generateKey('ML-DSA-65');
+            const pqCert = await studio.selfSign(pqKey, '/CN=pq.example', 'DNS:pq.example', 30, '', '', 0);
+            const [pq] = JSON.parse(await studio.inspect(pqCert));
+            check('app studio ML-DSA-65 certificate', [pq.keyType, pq.signature, pq.selfSigned, pq.text.includes('Signature Algorithm: ML-DSA-65'), await studio.keyMatches(pqCert, pqKey), (await studio.sign(pqKey, 'x')).length / 2], ['ML-DSA-65', 'ML-DSA-65', true, true, true, 3309]);
+
+            // TLS lab.
+            const tls = await new m.TlsLab();
+            const run = async (...options) => JSON.parse(await tls.handshake(...options));
+            const plain = await run('ED25519', '', false, false, false);
+            check('app tls default handshake, as the host OpenSSL 3.6.2 negotiates it', [plain.ok, plain.version, plain.cipher, plain.group, plain.signature, plain.verify, plain.clientShares, plain.serverGroup, plain.serverShare, plain.serverNames, plain.secretNameOnWire, plain.requestOnWire, plain.response.endsWith('hello, tab!')], [true, 'TLSv1.3', 'TLS_AES_256_GCM_SHA384', 'X25519MLKEM768', 'ed25519', 'ok', [{ group: 'X25519MLKEM768', bytes: 1216 }, { group: 'x25519', bytes: 32 }], 'X25519MLKEM768', 1120, ['secret.example'], 1, 0, true]);
+            check('app tls messages', plain.messages.map((message) => `${message.from} ${message.type}${message.encrypted ? ' encrypted' : ''}`), ['client ClientHello', 'server ServerHello', 'server ChangeCipherSpec', 'server EncryptedExtensions encrypted', 'server Certificate encrypted', 'server CertificateVerify encrypted', 'server Finished encrypted', 'client ChangeCipherSpec', 'client Finished encrypted', 'server NewSessionTicket encrypted', 'server NewSessionTicket encrypted']);
+            const hidden = await run('ED25519', '', false, true, false);
+            check('app tls encrypted client hello', [hidden.ok, hidden.ech.status, hidden.ech.inner, hidden.ech.outer, hidden.echOffered, hidden.serverNames, hidden.secretNameOnWire, hidden.publicNameOnWire, hidden.verify], [true, 'success', 'secret.example', 'public.example', true, ['public.example'], 0, 1, 'ok']);
+            const broken = await run('ED25519', '', false, false, true);
+            check('app tls one flipped bit', [broken.ok, broken.clientError, broken.messages.map((message) => message.type)], [false, 'error:0A000119:SSL routines::decryption failed or bad record mac', ['ClientHello', 'ServerHello', 'ChangeCipherSpec', 'Alert: bad record mac']]);
+            const classic = await run('ED25519', 'X25519', false, false, false);
+            const quantum = await run('ED25519', 'MLKEM768', false, false, false);
+            check('app tls key exchange groups', [classic.group, classic.clientShares, classic.serverShare, quantum.group, quantum.clientShares, quantum.serverShare], ['x25519', [{ group: 'x25519', bytes: 32 }], 32, 'MLKEM768', [{ group: 'MLKEM768', bytes: 1184 }], 1088]);
+            const mldsa = await run('ML-DSA-65', '', false, false, false);
+            check('app tls ML-DSA-65 certificate', [mldsa.ok, mldsa.signature, mldsa.verify, mldsa.certificate, mldsa.messages.find((message) => message.type === 'CertificateVerify').bytes], [true, 'mldsa65', 'ok', 'ML-DSA-65', 3317]);
+            const older = await run('P-256', '', true, false, false);
+            check('app tls 1.2 for comparison', [older.ok, older.version, older.cipher, older.signature, older.secretNameOnWire, older.messages.filter((message) => message.from === 'server' && !message.encrypted).map((message) => message.type)], [true, 'TLSv1.2', 'ECDHE-ECDSA-AES256-GCM-SHA384', 'ecdsa_secp256r1_sha256', 3, ['ServerHello', 'Certificate', 'ServerKeyExchange', 'ServerHelloDone', 'NewSessionTicket', 'ChangeCipherSpec']]);
+
+            // PFX unpacker, on the host's files and on files it packs itself.
+            const pfx = await new m.PfxTool();
+            const modern = JSON.parse(await pfx.unpack(MODERN_P12, P12_PASSWORD));
+            const MODERN_SAFES = ['PKCS7 Encrypted data: PBES2, PBKDF2, AES-256-CBC, Iteration 2048, PRF hmacWithSHA256', 'Certificate bag', 'Certificate bag', 'PKCS7 Data', 'Shrouded Keybag: PBES2, PBKDF2, AES-256-CBC, Iteration 2048, PRF hmacWithSHA256'];
+            check('app pfx host file, as openssl pkcs12 -info describes it', [modern.legacyProvider, modern.mac, modern.safes, modern.friendlyName, modern.keyType, modern.certificate.fingerprint, modern.chain.map((cert) => cert.subject), modern.keyMatches], [false, 'sha256, Iteration 2048', MODERN_SAFES, 'shop.example.com', 'EC prime256v1', shop.fingerprint, ['CN=Example Shop Test CA,O=Example Shop,C=US'], true]);
+            const LEGACY_SAFES = ['PKCS7 Encrypted data: pbeWithSHA1And40BitRC2-CBC, Iteration 2048', 'Certificate bag', 'Certificate bag', 'PKCS7 Data', 'Shrouded Keybag: pbeWithSHA1And3-KeyTripleDES-CBC, Iteration 2048'];
+            const legacy = JSON.parse(await pfx.unpack(LEGACY_P12, P12_PASSWORD));
+            const again = JSON.parse(await pfx.unpack(LEGACY_P12, P12_PASSWORD));
+            check('app pfx legacy host file needs the legacy provider, every time', [legacy.legacyProvider, legacy.withoutLegacy, legacy.mac, legacy.safes, legacy.certificate.fingerprint, legacy.keyMatches, again.legacyProvider], [true, 'error:0308010C:digital envelope routines::unsupported', 'sha1, Iteration 2048', LEGACY_SAFES, shop.fingerprint, true, true]);
+            let refused = '';
+            try {
+                await pfx.unpack(MODERN_P12, 'wrong password');
+            } catch (error) {
+                refused = error.message;
+            }
+            check('app pfx wrong password', refused, 'std::runtime_error: wrong password: the file\'s MAC does not verify');
+            const trips = [];
+            for (const old of [false, true]) {
+                const packed = JSON.parse(await pfx.unpack(await pfx.pack(edKey, localhost, CA_PEM, 'pass', 'localhost', old), 'pass'));
+                trips.push([packed.legacyProvider, packed.mac, packed.safes[0], packed.friendlyName, packed.certificate.fingerprint, packed.chain.length, packed.keyMatches]);
+            }
+            check('app pfx round trips', trips, [
+                [false, 'sha256, Iteration 2048', MODERN_SAFES[0], 'localhost', made.fingerprint, 1, true],
+                [true, 'sha1, Iteration 2048', LEGACY_SAFES[0], 'localhost', made.fingerprint, 1, true],
+            ]);
+
+            const passed = checks.filter(Boolean).length;
+            show(`openssl ${version} => ${passed}/${checks.length} checks passed`);
+        } catch (error) {
+            show(`failed => ${error && error.message ? error.message : error}`);
+        }
+    </script>
+</body>
+
+</html>

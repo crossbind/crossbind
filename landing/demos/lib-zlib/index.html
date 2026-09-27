@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8">
+    <title>crossbind - zlib self-check</title>
+    <script src="./dist/zlibapps-wasm-wasm32-st-release.browser.js"></script>
+</head>
+
+<body>
+    <pre id="out">compiling ...</pre>
+    <script type="module">
+        // Every usage example and every app on crossbind.dev/ports/zlib/ runs on this module. This page
+        // is what the demo build opens to prove them: each example must print exactly what its
+        // `expected` says, and the apps must reproduce what stock zlib 1.3.2 built natively, CPython's
+        // zlib, gzip and zipfile, and zlib's own examples/zran.c gave on the same generated data.
+        import * as compress from './examples/01-compress.js';
+        import * as gzip from './examples/02-gzip.js';
+        import * as stream from './examples/03-stream.js';
+        import * as dictionary from './examples/04-dictionary.js';
+        import * as checksum from './examples/05-checksum.js';
+
+        const EXAMPLES = [compress, gzip, stream, dictionary, checksum];
+
+        const out = document.querySelector('#out');
+        const lines = [];
+        const show = (text) => {
+            lines.push(text);
+            out.textContent = lines.join('\n');
+        };
+
+        const hex = async (bytes) => [...new Uint8Array(await crypto.subtle.digest('SHA-256', bytes))].map((b) => b.toString(16).padStart(2, '0')).join('');
+
+        const checks = [];
+        const check = (name, actual, expected) => {
+            const ok = expected !== null && JSON.stringify(actual) === JSON.stringify(expected);
+            checks.push(ok);
+            show(`${ok ? 'ok  ' : 'FAIL'} ${name}: ${JSON.stringify(actual)}${ok ? '' : ` (expected ${JSON.stringify(expected)})`}`);
+        };
+
+        try {
+            const m = await initNative({ path: './dist' });
+            const version = await m.Zlib.version();
+
+            for (const example of EXAMPLES) {
+                const printed = [];
+                await example.default(m, { log: (...values) => printed.push(values.map(String).join(' ')) });
+                check(`example "${example.title}"`, printed, example.expected);
+            }
+
+            // Seekable gzip app: 250,000 generated log lines, gzipped at level 6, indexed every 1 MiB.
+            await m.FS.mkdirTree('/memfs/zlibapps');
+            const logPath = '/memfs/zlibapps/access.log.gz';
+            const logSize = await m.SeekableGzip.writeLog(logPath, 250000, 6);
+            check('app seekable file', [logSize, await hex(await m.getFileBytes(logPath))], [3001352, 'fcc1cdff0ae1cd5e331b1b4cf6c35ef6cfb33ea47ae205bccf2fa126ab739391']);
+            const seekable = await new m.SeekableGzip(logPath, 1024);
+            const line = await seekable.read((123456 - 1) * 64, 63);
+            const read = [line, await seekable.lastPoint(), await seekable.lastDecoded()];
+            const again = await seekable.readFromStart((123456 - 1) * 64, 63);
+            check('app seekable index', [await seekable.size(), await seekable.accessPoints(), await seekable.points()], [16000000, 14, '[[21,0],[219628,1169595],[440260,2344764],[660371,3518192],[880418,4691159],[1100179,5863194],[1320333,7036410],[1540564,8210042],[1760732,9383961],[1981147,10559154],[2200630,11729084],[2420743,12903793],[2641224,14078449],[2861485,15254193]]']);
+            check('app seekable read', [...read, again === line, await seekable.lastDecoded()], ['0123456 2026-01-01T08:34:23Z GET    /api/items/49264 200 0628ms', 6, 864773, true, 7901183]);
+
+            // PNG squeezer app: a generated chart written as a fast encoder would, then optimized losslessly.
+            const pngPath = '/memfs/zlibapps/sample.png';
+            const squeezedPath = '/memfs/zlibapps/sample.optimized.png';
+            const pngSize = await m.PngSqueezer.writeSample(pngPath);
+            const sample = await m.getFileBytes(pngPath);
+            const inspected = JSON.parse(await m.PngSqueezer.inspect(pngPath));
+            check('app png sample', [pngSize, await hex(sample), inspected.width, inspected.height, inspected.chunks.map((c) => `${c.type} ${c.length} ${c.crcOk}`).join(', '), inspected.filters.join(' '), inspected.zlibLevel], [17191, '7b053159eac24badb765d4efa2dd0f35013e957b3e36d915b939f0577c027b77', 512, 384, 'IHDR 13 true, IDAT 17134 true, IEND 0 true', '384 0 0 0 0', 0]);
+            const squeezed = JSON.parse(await m.PngSqueezer.optimize(pngPath, squeezedPath));
+            const optimized = await m.getFileBytes(squeezedPath);
+            check('app png optimize', [squeezed.original, squeezed.bytes, squeezed.best, await hex(optimized), await m.PngSqueezer.samePixels(pngPath, squeezedPath)], [17191, 4989, { filter: 'up', strategy: 'default', idat: 4932 }, '560ef1f13edef63d9fb90e89cf097496f816f6a9bed40a8ff63da070da3707f0', true]);
+            check('app png trials', squeezed.trials.map((t) => `${t.filter}/${t.strategy} ${t.idat}${t.reused ? ' reused' : ''}`).join(', '), 'as found/default 8768, none/default 8768 reused, sub/default 10768, up/default 4932, paeth/default 5083, adaptive/default 5044, up/filtered 4947');
+            // The browser's own PNG decoder has the last word: both files must give the same pixels.
+            const decode = async (bytes) => {
+                const bitmap = await createImageBitmap(new Blob([bytes], { type: 'image/png' }), { colorSpaceConversion: 'none', premultiplyAlpha: 'none' });
+                const canvas = new OffscreenCanvas(bitmap.width, bitmap.height);
+                const context = canvas.getContext('2d');
+                context.drawImage(bitmap, 0, 0);
+                return context.getImageData(0, 0, bitmap.width, bitmap.height).data;
+            };
+            const [before, after] = [await decode(sample), await decode(optimized)];
+            const disc = ((96 * 512) + 384) * 4;
+            check('app png browser decode', [before.length, before.every((value, i) => value === after[i]), [...after.slice(disc, disc + 4)]], [512 * 384 * 4, true, [245, 158, 11, 255]]);
+
+            // ZIP app: an archive written here, listed from its central directory, one entry read, every CRC tested.
+            const zipPath = '/memfs/zlibapps/sample.zip';
+            const zipSize = await m.ZipReader.writeSample(zipPath);
+            const listing = JSON.parse(await m.ZipReader.list(zipPath));
+            check('app zip sample', [zipSize, await hex(await m.getFileBytes(zipPath)), listing.count, listing.comment, listing.entries.map((e) => `${e.name} ${e.size} ${e.compressed} ${e.method} ${e.crc}`).join(', '), listing.entries[0].modified], [7811, '64911fe4d078759a8863d4656289de51ba6933b04a7c1875d9ebb78ead96e5f5', 4, 'Written with zlib by the crossbind demo.', 'README.txt 201 151 8 41826627, data/ 0 0 0 00000000, data/readings.csv 15916 3106 8 e5757d9c, data/noise.bin 4096 4096 0 e6b594d5', '2026-01-01 00:00:00']);
+            const entry = JSON.parse(await m.ZipReader.read(zipPath, 'data/readings.csv', 64));
+            check('app zip read and test', [entry.size, entry.text, entry.crcOk, JSON.parse(await m.ZipReader.test(zipPath))], [15916, 'reading,sensor,celsius\n1,sensor-0,18\n2,sensor-1,25\n3,sensor-2,23', true, { checked: 3, bytes: 20213, stopped: false, failed: [] }]);
+
+            const passed = checks.filter(Boolean).length;
+            show(`zlib ${version} => ${passed}/${checks.length} checks passed`);
+        } catch (error) {
+            show(`failed => ${error && error.message ? error.message : error}`);
+        }
+    </script>
+</body>
+
+</html>

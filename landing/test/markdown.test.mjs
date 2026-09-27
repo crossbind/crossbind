@@ -137,3 +137,30 @@ test('renders cards and release rows, and skips unknown blocks', () => {
         'Beta · prerelease · published 9 September 2026 · [npm](https://npm.test/p) · [GitHub Release](https://gh.test/r)',
     ].join('\n'));
 });
+
+test('renders a usage example and, where the page has one, its JavaScript-only version', () => {
+    const code = (file, text) => renderBlocks([{ type: 'code', file, code: text }]);
+    const item = {
+        title: 'Compress',
+        summary: 'Two calls.',
+        native: 'codec.h',
+        nativeSource: '#pragma once',
+        usage: "import { initNative, Codec } from './native/codec.h';",
+        expected: ['1.5.7'],
+    };
+    const cpp = ['### Compress', 'Two calls.', code('src/native/codec.h', '#pragma once'), code('main.js', item.usage), code('output', '1.5.7')].join('\n\n');
+    assert.equal(renderBlocks([{ type: 'example', example: item, direct: null }], absolute), cpp);
+
+    const direct = { demo: 'lib-codec-direct', init: null };
+    const usage = "import { initNative, CODEC_version } from '@crossbind/port-codec/codec.h';";
+    const runs = { ...item, direct: { usage, webOnly: false, note: 'No C++.', expected: ['1.5.7'] } };
+    assert.equal(
+        renderBlocks([{ type: 'example', example: runs, direct }], absolute),
+        [cpp, '#### JavaScript only', 'No C++.', code('main.js', usage), code('output', '1.5.7')].join('\n\n'),
+    );
+    const blocked = { ...item, direct: { impossible: 'The struct has no fields.' } };
+    assert.equal(
+        renderBlocks([{ type: 'example', example: blocked, direct }], absolute),
+        [cpp, '#### JavaScript only', 'Not possible from JavaScript alone: The struct has no fields.'].join('\n\n'),
+    );
+});

@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8">
+    <title>crossbind - sqlite3 self-check</title>
+    <script src="./dist/sqliteapps-wasm-wasm32-st-release.browser.js"></script>
+</head>
+
+<body>
+    <pre id="out">compiling ...</pre>
+    <script type="module">
+        // Every usage example and every app on crossbind.dev/ports/sqlite3/ runs on this module. This
+        // page is what the demo build opens to prove them: each example must print exactly what its
+        // `expected` says, and the apps must give the answers the host's own SQLite and plain Python
+        // computed from the same generated data.
+        import * as statements from './examples/01-statements.js';
+        import * as transaction from './examples/02-transaction.js';
+        import * as json from './examples/03-json.js';
+        import * as search from './examples/04-search.js';
+        import * as serialize from './examples/05-serialize.js';
+
+        const EXAMPLES = [statements, transaction, json, search, serialize];
+        const SEED = 2463534242;
+
+        // The search app's check corpus; the Python reference indexes the same six sections.
+        const DOCUMENTS = [
+            { title: 'Filesystem', section: 'Persistence', href: '/guide/filesystem/#persistence', body: 'Files under /opfs persist across page reloads when the module runs in a worker. Files under /memfs live in memory and disappear with the tab.' },
+            { title: 'Threading', section: 'Workers', href: '/guide/threading/#workers', body: 'useWorker runs the module in a web worker so long calls never block the page. Multithreaded builds also need COOP and COEP headers.' },
+            { title: 'Bundlers', section: 'Vite', href: '/guide/bundlers/#vite', body: 'The Vite plugin compiles headers on the fly and reloads the page when a header changes.' },
+            { title: 'WASI', section: 'Running programs', href: '/guide/wasi/#running', body: 'A WASI program reads files through preopened directories: pass --dir=. to wasmtime and the program sees the current directory.' },
+            { title: 'Libraries', section: 'SQLite', href: '/ports/sqlite3/', body: 'SQLite runs inside the page as WebAssembly. Queries, full-text search and spatial indexes never leave the browser.' },
+            { title: 'Filesystem', section: 'Mounting files', href: '/guide/filesystem/#mounting', body: "autoMountFiles copies files from an input element into the module's filesystem, so C++ reads them with fopen like any other file." },
+        ];
+
+        // The explorer app's preset queries over its sample, exactly as the app runs them.
+        const LATENCY = `select path, count(*) as requests, median(ms) as p50, round(percentile(ms, 95), 1) as p95,
+       round(100.0 * avg(status >= 500), 2) as error_pct
+from requests join routes on routes.id = requests.route_id
+group by path order by p95 desc, path`;
+        const SPIKE = `select minute, errors, round(avg(errors) over (order by minute rows 4 preceding), 1) as avg5
+from (select minute, sum(status >= 500) as errors from requests group by minute)
+order by errors desc, minute limit 5`;
+        const REGIONS = `select client ->> 'region' as region, count(*) as requests,
+       round(100.0 * avg(client ->> 'cache' = 'hit'), 1) as cache_hit_pct, round(avg(ms), 1) as avg_ms
+from requests group by region order by region`;
+
+        const out = document.querySelector('#out');
+        const lines = [];
+        const show = (text) => {
+            lines.push(text);
+            out.textContent = lines.join('\n');
+        };
+
+        const checks = [];
+        const check = (name, actual, expected) => {
+            const ok = expected !== null && JSON.stringify(actual) === JSON.stringify(expected);
+            checks.push(ok);
+            show(`${ok ? 'ok  ' : 'FAIL'} ${name}: ${JSON.stringify(actual)}${ok ? '' : ` (expected ${JSON.stringify(expected)})`}`);
+        };
+
+        // The generator the R*Tree app draws its points with; the module generates the same sequence.
+        function xorshift32(seed) {
+            let state = seed >>> 0;
+            return () => {
+                state ^= state << 13;
+                state ^= state >>> 17;
+                state ^= state << 5;
+                state >>>= 0;
+                return state;
+            };
+        }
+
+        const refusal = async (work) => {
+            try {
+                await work();
+                return null;
+            } catch (error) {
+                return error.cppMessage ?? error.message;
+            }
+        };
+
+        try {
+            const m = await initNative({ path: './dist' });
+            const version = await m.DbExplorer.version();
+
+            // The usage examples, run exactly as the page shows them.
+            for (const example of EXAMPLES) {
+                const printed = [];
+                await example.default(m, { log: (...values) => printed.push(values.map(String).join(' ')) });
+                check(`example "${example.title}"`, printed, example.expected);
+            }
+
+            // Search app: FTS4 finds the matches, the C++ bm25() ranks them.
+            const index = await new m.DocSearch();
+            check('search index', await index.addJson(JSON.stringify(DOCUMENTS)), 6);
+            const ranked = async (query) => {
+                const result = JSON.parse(await index.search(query, 10));
+                const best = result.hits[0];
+                return [result.total, result.hits.map((hit) => [hit.title, hit.section, hit.score.toFixed(4)]), best ? best.snippet.replace(/\u0002/g, '[').replace(/\u0003/g, ']') : null];
+            };
+            check('search worker*', await ranked('worker*'), [2, [['Threading', 'Workers', '5.6123'], ['Filesystem', 'Persistence', '0.9552']], 'useWorker runs the module in a web [worker] so long calls never block the…']);
+            check('search files', await ranked('files'), [3, [['Filesystem', 'Mounting files', '4.7771'], ['Filesystem', 'Persistence', '0.9046'], ['WASI', 'Running programs', '0.7212']], "autoMountFiles copies [files] from an input element into the module's filesystem, so C…"]);
+            check('search phrase', await ranked('"page reloads"'), [1, [['Filesystem', 'Persistence', '1.4291']], 'Files under /opfs persist across [page] [reloads] when the module runs in a worker…']);
+            check('search NOT', await ranked('page NOT worker'), [2, [['Bundlers', 'Vite', '0.4895'], ['Libraries', 'SQLite', '0.4693']], '…plugin compiles headers on the fly and reloads the [page] when a header changes.']);
+            check('search NEAR', await ranked('header* NEAR/3 page'), [1, [['Bundlers', 'Vite', '3.4134']], '…plugin compiles headers on the fly and reloads the [page] when a [header] changes.']);
+            check('search OR', await ranked('sqlite OR wasi'), [2, [['Libraries', 'SQLite', '6.2574'], ['WASI', 'Running programs', '5.4395']], '[SQLite] runs inside the page as WebAssembly. Queries, full-text search and spatial indexes…']);
+            check('search malformed query', await refusal(() => index.search('"unbalanced', 10)), 'malformed MATCH expression: ["unbalanced]');
+
+            // R*Tree app: three ways to answer one box query, and the page's own points.
+            const space = await new m.SpatialIndex();
+            check('rtree points', await space.generate(50000, SEED), 50000);
+            const counts = async (box) => [await space.count(...box, 'rtree'), await space.count(...box, 'btree'), await space.count(...box, 'scan')];
+            check('rtree box 0-99', await counts([0, 0, 99, 99]), [504, 504, 504]);
+            check('rtree box 400-599', await counts([400, 400, 599, 599]), [2018, 2018, 2018]);
+            const next = xorshift32(SEED);
+            const points = Array.from({ length: 50000 }, (_, i) => [i + 1, next() % 1000, next() % 1000]);
+            const brute = points.filter(([, x, y]) => x >= 250 && x <= 749 && y >= 100 && y <= 180).map(([id]) => id);
+            const ids = JSON.parse(await space.ids(250, 100, 749, 180, 100000));
+            check('rtree ids match the points the page draws', [ids.length, JSON.stringify(ids) === JSON.stringify(brute)], [2084, true]);
+            check('rtree query plans', [await space.plan('rtree'), await space.plan('btree'), await space.plan('scan')], [
+                'SCAN pts VIRTUAL TABLE INDEX 2:D0B1D2B3',
+                'SEARCH indexed USING INDEX indexed_x (x>? AND x<?)',
+                'SCAN plain',
+            ]);
+            check('rtree timing', (await space.measure(0, 0, 99, 99, 'rtree')) > 0, true);
+
+            // Explorer app: the generated sample, read back through the same calls a dropped file gets.
+            const dir = '/memfs/sqliteapps/sample';
+            await m.FS.mkdirTree(dir);
+            check('explorer sample', await m.DbExplorer.writeSample(`${dir}/api-log.sqlite`, 100000, SEED), 100000);
+            const explorer = await new m.DbExplorer(`${dir}/api-log.sqlite`);
+            const info = JSON.parse(await explorer.info());
+            check('explorer header', [info.bytes, info.pageSize, info.pages, info.journal, info.encoding, info.kind, info.writtenBy], [6443008, 4096, 1573, 'rollback', 'UTF-8', 'SQLite database', '3.53.4']);
+            const schema = JSON.parse(await explorer.tables());
+            check('explorer schema', schema.map((entry) => [entry.type, entry.name, entry.rows ?? null, entry.columns ? entry.columns.map((column) => column.name).join(' ') : null]), [
+                ['table', 'requests', 100000, 'id minute route_id status ms client'],
+                ['table', 'routes', 4, 'id path team'],
+                ['index', 'requests_minute', null, null],
+                ['index', 'sqlite_autoindex_routes_1', null, null],
+            ]);
+            const rows = async (sql) => JSON.parse(await explorer.query(sql, 100)).rows;
+            check('explorer p50 and p95', await rows(LATENCY), [['/search', 24929, 74.0, 1062.6, 0.49], ['/cart', 25280, 69.0, 115.0, 1.49], ['/image', 24937, 70.0, 115.0, 0.52], ['/login', 24854, 69.0, 114.0, 0.6]]);
+            check('explorer error spike', await rows(SPIKE), [[44, 64, 58.2], [42, 63, 36.2], [43, 58, 46.8], [40, 54, 15.2], [41, 52, 24.4]]);
+            check('explorer regions', await rows(REGIONS), [['ap-south', 33094, 25.1, 95.2], ['eu-west', 33377, 24.7, 93.0], ['us-east', 33529, 24.9, 93.5]]);
+            check('explorer csv', (await explorer.csv('select id, path from routes order by id')).split('\r\n'), ['id,path', '1,/search', '2,/login', '3,/cart', '4,/image', '']);
+            check('explorer quick_check', await explorer.check(), 'ok');
+            const copyBytes = await explorer.saveAs(`${dir}/copy.sqlite`);
+            const copy = await new m.DbExplorer(`${dir}/copy.sqlite`);
+            check('explorer VACUUM INTO copy', [copyBytes, JSON.parse(await copy.info()).pages, await copy.check(), JSON.parse(await copy.tables()).length], [6307840, 1540, 'ok', 4]);
+            const walBytes = (await m.getFileBytes(`${dir}/api-log.sqlite`)).slice();
+            walBytes[18] = 2;
+            walBytes[19] = 2;
+            await m.FS.writeFile(`${dir}/wal-mode.sqlite`, walBytes);
+            const wal = await new m.DbExplorer(`${dir}/wal-mode.sqlite`);
+            const walCount = JSON.parse(await wal.query('select count(*) from requests', 1)).rows[0][0];
+            check('explorer WAL-mode file', [JSON.parse(await wal.info()).journal, walCount], ['WAL', 100000]);
+            await m.FS.writeFile(`${dir}/notes.txt`, 'these are notes, not a database; the header check has to say so');
+            check('explorer refuses other files', await refusal(() => new m.DbExplorer(`${dir}/notes.txt`)), 'file is not a database');
+
+            // What this build compiled in, as the README states it.
+            const options = await rows(`select sqlite_compileoption_used('ENABLE_FTS3'), sqlite_compileoption_used('ENABLE_FTS5'),
+                sqlite_compileoption_used('ENABLE_RTREE'), sqlite_compileoption_used('ENABLE_MATH_FUNCTIONS'),
+                sqlite_compileoption_used('ENABLE_PERCENTILE'), sqlite_compileoption_used('ENABLE_SESSION'),
+                sqlite_compileoption_used('ENABLE_GEOPOLY'), sqlite_compileoption_used('ENABLE_DBSTAT_VTAB')`);
+            check('build options fts3 fts5 rtree math percentile session geopoly dbstat', options[0], [1, 0, 1, 1, 1, 0, 0, 0]);
+
+            const passed = checks.filter(Boolean).length;
+            show(`sqlite3 ${version} => ${passed}/${checks.length} checks passed`);
+        } catch (error) {
+            show(`failed => ${error && error.message ? error.message : error}`);
+        }
+    </script>
+</body>
+
+</html>

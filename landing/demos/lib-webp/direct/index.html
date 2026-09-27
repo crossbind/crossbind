@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8">
+    <title>crossbind - webp from JavaScript only</title>
+    <script src="./dist/webpdirect-wasm-wasm32-st-release.browser.js"></script>
+</head>
+
+<body>
+    <pre id="out">compiling ...</pre>
+    <script type="module">
+        // The "JavaScript only" versions of the usage examples on crossbind.dev/ports/webp/: no C++,
+        // only libwebp's own headers as crossbind binds them. The demo build opens this page; every example
+        // that can work this way must print exactly its `expected`. One that cannot says why instead
+        // and has nothing to run.
+        import * as encodeDecode from './examples/01-encode-decode.js';
+        import * as tune from './examples/02-tune.js';
+        import * as transparency from './examples/03-transparency.js';
+        import * as read from './examples/04-read.js';
+
+        const EXAMPLES = [encodeDecode, tune, transparency, read].filter((example) => example.default);
+
+        const out = document.querySelector('#out');
+        const lines = [];
+        const show = (text) => {
+            lines.push(text);
+            out.textContent = lines.join('\n');
+        };
+        const checks = [];
+        const check = (name, actual, expected) => {
+            const ok = JSON.stringify(actual) === JSON.stringify(expected);
+            checks.push(ok);
+            show(`${ok ? 'ok  ' : 'FAIL'} ${name}: ${JSON.stringify(actual)}${ok ? '' : ` (expected ${JSON.stringify(expected)})`}`);
+        };
+
+        try {
+            const m = await initNative({ path: './dist' });
+            for (const example of EXAMPLES) {
+                const printed = [];
+                await example.default(m, { log: (...values) => printed.push(values.map(String).join(' ')) });
+                check(`example "${example.expected[0]}"`, printed, example.expected);
+            }
+            const passed = checks.filter(Boolean).length;
+            const version = await m.WebPGetEncoderVersion();
+            show(`webp ${version >> 16}.${(version >> 8) & 255}.${version & 255} => ${passed}/${checks.length} checks passed`);
+        } catch (error) {
+            show(`failed => ${error?.stack ?? error}`);
+        }
+    </script>
+</body>
+
+</html>

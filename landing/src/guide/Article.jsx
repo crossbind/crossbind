@@ -1,3 +1,5 @@
+import { useState } from 'react';
+import RunnableExample from '../apps/RunnableExample.jsx';
 import DocCode from './DocCode.jsx';
 import ReleaseMeta from '../changelog/ReleaseMeta.jsx';
 import { inline } from './inline.jsx';
@@ -158,6 +160,44 @@ function Cards({ tokens, items }) {
     );
 }
 
+// Platform by platform: every panel is in the markup, so a reader without JavaScript and a crawler
+// see all of them; the buttons only choose which one is visible.
+function Tabs({ tokens, tabs }) {
+    const [active, setActive] = useState(0);
+    return (
+        <div style={{ margin: '14px 0 28px' }}>
+            <div role="tablist" style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                {tabs.map((tab, index) => (
+                    <button
+                        key={tab.label}
+                        type="button"
+                        role="tab"
+                        aria-selected={index === active}
+                        className="tap-target"
+                        onClick={() => setActive(index)}
+                        style={{
+                            padding: '6px 13px',
+                            borderRadius: 999,
+                            fontSize: 13,
+                            cursor: 'pointer',
+                            border: `1px solid ${index === active ? tokens.accentText : tokens.pillBorder}`,
+                            background: index === active ? tokens.pillBg : 'transparent',
+                            color: index === active ? tokens.text : tokens.textDim,
+                        }}
+                    >
+                        {tab.label}
+                    </button>
+                ))}
+            </div>
+            {tabs.map((tab, index) => (
+                <div key={tab.label} role="tabpanel" aria-label={tab.label} hidden={index !== active}>
+                    <Article tokens={tokens} blocks={tab.blocks} />
+                </div>
+            ))}
+        </div>
+    );
+}
+
 export default function Article({ tokens, blocks }) {
     return blocks.map((block, i) => {
         const key = `${i}-${block.type}`;
@@ -184,6 +224,10 @@ export default function Article({ tokens, blocks }) {
                 return <Cards key={key} tokens={tokens} items={block.items} />;
             case 'release':
                 return <ReleaseMeta key={key} tokens={tokens} release={block.release} />;
+            case 'example':
+                return <RunnableExample key={key} tokens={tokens} demo={block.demo} example={block.example} runnable={block.runnable} direct={block.direct} />;
+            case 'tabs':
+                return <Tabs key={key} tokens={tokens} tabs={block.tabs} />;
             default:
                 return null;
         }

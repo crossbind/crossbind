@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8">
+    <title>crossbind - sqlite3 from JavaScript only</title>
+    <script src="./dist/sqlite3direct-wasm-wasm32-st-release.browser.js"></script>
+</head>
+
+<body>
+    <pre id="out">compiling ...</pre>
+    <script type="module">
+        // The "JavaScript only" versions of the usage examples on crossbind.dev/ports/sqlite3/: no C++,
+        // only SQLite's own sqlite3.h as crossbind binds it. The demo build opens this page; every example
+        // that can work this way must print exactly its `expected`. One that cannot says why instead
+        // and has nothing to run.
+        import * as statements from './examples/01-statements.js';
+        import * as transaction from './examples/02-transaction.js';
+        import * as json from './examples/03-json.js';
+        import * as search from './examples/04-search.js';
+        import * as serialize from './examples/05-serialize.js';
+
+        const EXAMPLES = [statements, transaction, json, search, serialize].filter((example) => example.default);
+
+        const out = document.querySelector('#out');
+        const lines = [];
+        const show = (text) => {
+            lines.push(text);
+            out.textContent = lines.join('\n');
+        };
+        const checks = [];
+        const check = (name, actual, expected) => {
+            const ok = JSON.stringify(actual) === JSON.stringify(expected);
+            checks.push(ok);
+            show(`${ok ? 'ok  ' : 'FAIL'} ${name}: ${JSON.stringify(actual)}${ok ? '' : ` (expected ${JSON.stringify(expected)})`}`);
+        };
+
+        try {
+            const m = await initNative({ path: './dist' });
+            for (const example of EXAMPLES) {
+                const printed = [];
+                await example.default(m, { log: (...values) => printed.push(values.map(String).join(' ')) });
+                check(`example "${example.expected[0]}"`, printed, example.expected);
+            }
+            const passed = checks.filter(Boolean).length;
+            show(`sqlite3 ${await m.sqlite3_libversion()} => ${passed}/${checks.length} checks passed`);
+        } catch (error) {
+            show(`failed => ${error?.stack ?? error}`);
+        }
+    </script>
+</body>
+
+</html>

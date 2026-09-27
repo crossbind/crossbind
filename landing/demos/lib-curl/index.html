@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8">
+    <title>crossbind - curl self-check</title>
+    <script src="./dist/curlapps-wasm-wasm32-st-release.browser.js"></script>
+</head>
+
+<body>
+    <pre id="out">compiling ...</pre>
+    <script type="module">
+        // Every usage example and every app on crossbind.dev/ports/curl/ runs on this module. This page
+        // is what the demo build opens to prove them: each example must print exactly what its
+        // `expected` says, and the apps must give the values the host's own libcurl, curl's lib1560
+        // URL tests, Python and the curl 8.22.0 source give for the same inputs. Only libcurl's side
+        // is checked here: the apps set it beside this browser's own parsers, which differ between
+        // browsers. Nothing here opens a connection.
+        import * as parseUrl from './examples/01-parse-url.js';
+        import * as buildUrl from './examples/02-build-url.js';
+        import * as escape from './examples/03-escape.js';
+        import * as dates from './examples/04-dates.js';
+        import * as buildInfo from './examples/05-build-info.js';
+
+        const EXAMPLES = [parseUrl, buildUrl, escape, dates, buildInfo];
+
+        const ALLOWED = 'example.com';
+        const OTHER = 'attacker.example';
+        const TRICKS = [
+            'http://{allowed}\\@{other}/',
+            'http://{allowed}:80\\@{other}/',
+            'ftp://{allowed}\\@{other}/',
+            'http://{allowed}@{other}/',
+            'http://{other}#@{allowed}/',
+            'http://{allowed}?@{other}/',
+            'http://{other}\\@{allowed}/',
+            'http://{allowed}\\.{other}/',
+            'https:{other}/',
+        ];
+        const PRESETS = [
+            'http://example.com\\@attacker.example/',
+            'HTTPS://EXAMPLE.COM:443/',
+            'http://example.com/\\foo',
+            'http://例え.jp/',
+            'http://0x7f.1/',
+            'http://1.2.3.4.5/',
+            'http://a b.com/',
+            'http://[fe80::1%25eth0]:8080/',
+            'https://example.com/a/b/../../c/./d?x=1#top',
+            'ftp.example.com/file',
+        ];
+        const REDIRECTS = [
+            ['https://example.com/a/b/c', '..\\evil'],
+            ['https://example.com/a/b/c', 'd e'],
+            ['https://example.com/a/b/c', '//other.example/x'],
+            ['http://a/b/c/d;p?q', '../../../g'],
+            ['http://a/b/c/d;p?q', 'g?y/./x'],
+        ];
+        const DATES = [
+            'Sun, 06 Nov 1994 08:49:37 GMT',
+            'Sunday, 06-Nov-94 08:49:37 GMT',
+            'Sun Nov  6 08:49:37 1994',
+            'Thu, 01-Jan-70 00:00:01 GMT',
+            'Sun, 06 Nov 1994 08:49:37 CEST',
+            'Sun, 06 Nov 1994 08:49:37 GMT+0100',
+            '1994-11-06T08:49:37Z',
+            'Mon, 30 Feb 2026 12:00:00 GMT',
+        ];
+
+        const out = document.querySelector('#out');
+        const lines = [];
+        const show = (text) => {
+            lines.push(text);
+            out.textContent = lines.join('\n');
+        };
+
+        const checks = [];
+        const check = (name, actual, expected) => {
+            const ok = expected !== null && JSON.stringify(actual) === JSON.stringify(expected);
+            checks.push(ok);
+            show(`${ok ? 'ok  ' : 'FAIL'} ${name}: ${JSON.stringify(actual)}${ok ? '' : ` (expected ${JSON.stringify(expected)})`}`);
+        };
+
+        // What libcurl makes of a URL, in a form short enough to compare.
+        const brief = (json) => {
+            const url = JSON.parse(json);
+            return url.ok ? [url.url, url.host, url.port, url.path, url.zoneid] : url.error;
+        };
+
+        try {
+            const m = await initNative({ path: './dist' });
+            const version = (await m.BuildInfo.version()).match(/^libcurl\/(\S+)/)[1];
+
+            // The usage examples, run exactly as the page shows them.
+            for (const example of EXAMPLES) {
+                const printed = [];
+                await example.default(m, { log: (...values) => printed.push(values.map(String).join(' ')) });
+                check(`example "${example.title}"`, printed, example.expected);
+            }
+
+            // URL filter check: where libcurl connects for each trick.
+            const hosts = [];
+            for (const template of TRICKS) {
+                const url = JSON.parse(await m.UrlLab.parse(template.replace('{allowed}', ALLOWED).replace('{other}', OTHER)));
+                hosts.push(url.ok ? url.host : `refused: ${url.error}`);
+            }
+            check('app filter hosts', hosts, [
+                'attacker.example',
+                'attacker.example',
+                'attacker.example',
+                'attacker.example',
+                'attacker.example',
+                'example.com',
+                'example.com',
+                'refused: Bad hostname',
+                'refused: Port number was not a decimal number between 0 and 65535',
+            ]);
+            const trick = JSON.parse(await m.UrlLab.parse('http://example.com\\@attacker.example/'));
+            check('app filter backslash parts', [trick.user, trick.password, trick.host, trick.connectPort, trick.path], ['example.com\\', null, 'attacker.example', '80', '/']);
+
+            // URL lab: the presets, then redirects.
+            const parsed = [];
+            for (const url of PRESETS) parsed.push(brief(await m.UrlLab.parse(url)));
+            check('app lab presets', parsed, [
+                ['http://example.com\\@attacker.example/', 'attacker.example', null, '/', null],
+                ['https://EXAMPLE.COM:443/', 'EXAMPLE.COM', '443', '/', null],
+                ['http://example.com/\\foo', 'example.com', null, '/\\foo', null],
+                ['http://例え.jp/', '例え.jp', null, '/', null],
+                ['http://127.0.0.1/', '127.0.0.1', null, '/', null],
+                ['http://1.2.3.4.5/', '1.2.3.4.5', null, '/', null],
+                'Malformed input to a URL function',
+                ['http://[fe80::1%25eth0]:8080/', '[fe80::1]', '8080', '/', 'eth0'],
+                ['https://example.com/c/d?x=1#top', 'example.com', null, '/c/d', null],
+                ['ftp://ftp.example.com/file', 'ftp.example.com', null, '/file', null],
+            ]);
+            const followed = [];
+            for (const [url, location] of REDIRECTS) followed.push(brief(await m.UrlLab.follow(url, location)));
+            check('app lab redirects', followed, [
+                ['https://example.com/a/b/..\\evil', 'example.com', null, '/a/b/..\\evil', null],
+                ['https://example.com/a/b/d%20e', 'example.com', null, '/a/b/d%20e', null],
+                ['https://other.example/x', 'other.example', null, '/x', null],
+                ['http://a/g', 'a', null, '/g', null],
+                ['http://a/b/c/g?y/./x', 'a', null, '/b/c/g', null],
+            ]);
+
+            // Date lab: seconds since 1970 in UTC, -1 where curl reads no date.
+            const seconds = [];
+            for (const date of DATES) seconds.push(await m.HttpDates.seconds(date));
+            check('app dates seconds', seconds, [784111777, 784111777, 784111777, 3155760001, 784104577, 784111777, -1, 1772452800]);
+            check('app dates iso', [await m.HttpDates.iso(DATES[3]), await m.HttpDates.iso(DATES[7])], ['2070-01-01T00:00:01Z', '2026-03-02T12:00:00Z']);
+
+            const passed = checks.filter(Boolean).length;
+            show(`curl ${version} => ${passed}/${checks.length} checks passed`);
+        } catch (error) {
+            show(`failed => ${error && error.message ? error.message : error}`);
+        }
+    </script>
+</body>
+
+</html>
