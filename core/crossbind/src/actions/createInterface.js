@@ -148,10 +148,10 @@ function interfaceName(headerFile, base) {
     return candidates.find((name) => !sharedInterface(headerFile, interfacePath(name))) ?? candidates.at(-1);
 }
 
-// A header is included by its path under a project header directory or a dependency's include directory; one found only
-// through its own directory has no include root to search.
 const escapeRegExp = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
+// A header is included by its path under a project header directory or a dependency's include directory; one found only
+// through its own directory has no include root to search.
 function includeLocation(headerFile, target) {
     const projectRoot = state.config.paths.header.find((path) => headerFile.startsWith(path));
     if (projectRoot) return { includeRoot: projectRoot, headerPath: headerFile.substr(projectRoot.length + 1) };
