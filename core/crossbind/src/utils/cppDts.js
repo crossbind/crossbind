@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import { stripComments } from './swigInterface.js';
 import writeIfChanged from './writeIfChanged.js';
 
 // Best-effort .d.ts for `.h` imports, the C++ analog of the Rust emitDts: parse the
@@ -41,16 +42,7 @@ function tsType(raw, classNames, { isReturn = false } = {}) {
 function parseArgs(rawArgs, classNames) {
     const trimmed = rawArgs.trim();
     if (trimmed === '' || trimmed === 'void') return [];
-    const parts = [];
-    let depth = 0;
-    let current = '';
-    for (const ch of trimmed) {
-        if (ch === '<' || ch === '(') depth += 1;
-        if (ch === '>' || ch === ')') depth -= 1;
-        if (ch === ',' && depth === 0) { parts.push(current); current = ''; } else current += ch;
-    }
-    parts.push(current);
-    return parts.map((part, i) => {
+    return splitTopLevel(trimmed).map((part, i) => {
         const noDefault = part.split('=')[0].trim();
         // Declaration-style unnamed parameter: the whole token is a type.
         const unnamed = tsType(noDefault, classNames);
@@ -81,36 +73,114 @@ function bodyStatements(body) {
     return statements.map((s) => s.trim()).filter(Boolean);
 }
 
-export function parseCppSurface(source, log = console.log) {
-    const clean = source
-        .replace(/\/\*[\s\S]*?\*\//g, ' ')
-        .replace(/\/\/[^\n]*/g, ' ')
-        .replace(/^[ \t]*#[^\n]*$/gm, ' ');
+// Splits at commas outside <>, (), [] and {}.
+function splitTopLevel(text) {
+    const parts = [];
+    let depth = 0;
+    let current = '';
+    for (const ch of text) {
+        if ('<([{'.includes(ch)) depth += 1;
+        if ('>)]}'.includes(ch)) depth -= 1;
+        if (ch === ',' && depth === 0) { parts.push(current); current = ''; } else current += ch;
+    }
+    return [...parts, current];
+}
+
+// Value-semantics fields only: these are the types embind's .property can expose
+// without ownership questions (and the worker clone can carry).
+const FIELD_TYPES = new Set(['number', 'boolean', 'string']);
+
+// A scalar typedef of the translation unit (`typedef unsigned int uInt;`) reads as the type it names.
+function resolveTypedef(type, typedefs) {
+    let resolved = type.replace(/\b(?:const|volatile)\b/g, '').replace(/\s+/g, ' ').trim();
+    for (let hops = 0; hops < 8 && typedefs.has(resolved); hops += 1) resolved = typedefs.get(resolved);
+    return resolved;
+}
+
+// `int x, *p, y = 2;` declares the int fields x and y and the pointer p. Arrays and bit-fields have no pointer to
+// member and references are not bound. Pointers (as handles) and enums (as their underlying integer) are bound only
+// when the caller asks: a header read preprocessed names every type its fields use.
+const FIRST_DECLARATOR = /^([\s\S]*?)([*&\s]*)\b([A-Za-z_]\w*)\s*((?:\[[^\]]*\])*|:\s*\w+)$/;
+const NEXT_DECLARATOR = /^([*&\s]*)([A-Za-z_]\w*)\s*((?:\[[^\]]*\])*|:\s*\w+)$/;
+
+const POINTER_FIELD = { type: 'NativePointer | null', kind: 'pointer' };
+
+// A pointer field keeps the struct it points to when that is a plain, non-const name: one the bridge binds makes the
+// field read as an instance.
+function pointerShape(pointeeText) {
+    const pointee = pointeeText?.replace(/\b(?:struct|union|class)\s+/g, '').trim() ?? '';
+    return /^[A-Za-z_]\w*$/.test(pointee) ? { ...POINTER_FIELD, pointee } : POINTER_FIELD;
+}
+
+function valueField(typeText, classNames, { typedefs, enums, pointerTypedefs, pointerFields }) {
+    const resolved = resolveTypedef(typeText, typedefs);
+    const type = tsType(resolved, classNames);
+    if (FIELD_TYPES.has(type)) return { type };
+    // A const member has no setter to bind.
+    if (/\bconst\b/.test(typeText)) return null;
+    if (enums.has(resolved.replace(/^enum\s+/, ''))) return { type: 'number', kind: 'enum' };
+    return pointerFields && pointerTypedefs.has(resolved) ? pointerShape(pointerTypedefs.get(resolved)) : null;
+}
+
+function declaredFields(statement, classNames, types) {
+    const [first, ...rest] = splitTopLevel(statement).map((part) => part.split('=')[0].trim());
+    const head = first.match(FIRST_DECLARATOR);
+    if (!head || !head[1].trim()) return [];
+    const value = valueField(head[1], classNames, types);
+    const declarators = [head.slice(2), ...rest.map((part) => part.match(NEXT_DECLARATOR)?.slice(1) ?? null)];
+    return declarators.flatMap((declarator) => {
+        if (!declarator || declarator[2] || declarator[0].includes('&')) return [];
+        const [marks, name] = declarator;
+        if (!marks.includes('*')) return value ? [{ name, ...value }] : [];
+        if (!types.pointerFields) return [];
+        const isSingle = marks.split('*').length === 2;
+        return [{ name, ...pointerShape(isSingle ? head[1] : null) }];
+    });
+}
+
+// `struct Name {`, `class Name : Base {` and `typedef struct [Tag] { ... } Alias, *Pointer;`, unions too.
+// A class takes its tag, or its first typedef name when it has none, and keeps its other typedef names:
+// SWIG registers a typedef'd struct under the typedef name.
+const CLASS_HEAD = /\b(typedef\s+)?(class|struct|union)\b\s*([A-Za-z_]\w*)?\s*(?::[^{;]*)?\{/g;
+
+function closingBrace(text, from) {
+    let depth = 1;
+    let i = from;
+    while (i < text.length && depth > 0) {
+        if (text[i] === '{') depth += 1;
+        if (text[i] === '}') depth -= 1;
+        i += 1;
+    }
+    return i;
+}
+
+function typedefNamesAfter(text, from) {
+    const tail = text.slice(from).match(/^([^;{}]*);/);
+    return tail ? tail[1].split(',').map((part) => part.trim()).filter((part) => /^[A-Za-z_]\w*$/.test(part)) : [];
+}
+
+export function parseCppSurface(source, log = console.log, {
+    typedefs = new Map(), enums = new Set(), pointerTypedefs = new Map(), pointerFields = false,
+} = {}) {
+    const clean = stripComments(source).replace(/^[ \t]*#[^\n]*$/gm, ' ');
 
     const classes = [];
     const classNames = new Set();
-    const classRe = /\b(class|struct)\s+([A-Za-z_]\w*)\s*(?::[^{]*)?\{/g;
     const found = [];
-    let m = classRe.exec(clean);
-    while (m) {
-        let depth = 1;
-        let i = classRe.lastIndex;
-        while (i < clean.length && depth > 0) {
-            if (clean[i] === '{') depth += 1;
-            if (clean[i] === '}') depth -= 1;
-            i += 1;
-        }
-        found.push({ kind: m[1], name: m[2], body: clean.slice(classRe.lastIndex, i - 1) });
-        classNames.add(m[2]);
-        m = classRe.exec(clean);
+    for (const m of clean.matchAll(CLASS_HEAD)) {
+        const [head, typedefKeyword, kind, tag] = m;
+        const bodyStart = m.index + head.length;
+        const end = closingBrace(clean, bodyStart);
+        const names = typedefKeyword ? typedefNamesAfter(clean, end) : [];
+        const name = tag ?? names[0];
+        if (!name) continue;
+        found.push({ kind, name, aliases: names.filter((alias) => alias !== name), body: clean.slice(bodyStart, end - 1) });
+        classNames.add(name);
+        names.forEach((alias) => classNames.add(alias));
     }
 
-    // Value-semantics fields only: these are the types embind's .property can expose
-    // without ownership questions (and the worker clone can carry).
-    const FIELD_TYPES = new Set(['number', 'boolean', 'string']);
-
     for (const cls of found) {
-        let access = cls.kind === 'struct' ? 'public' : 'private';
+        let access = cls.kind === 'class' ? 'private' : 'public';
         let ctor = null;
         const methods = [];
         const fields = [];
@@ -122,14 +192,8 @@ export function parseCppSurface(source, log = console.log) {
 
             const sig = statement.match(/^(static\s+)?(?:explicit\s+)?([\w:<>,\s*&]*?)\s*\b([A-Za-z_]\w*)\s*\(([\s\S]*)\)$/);
             if (!sig) {
-                const decl = statement.split('=')[0].trim();
-                const field = !statement.includes('(') && !/^(static|using|typedef|friend|enum)\b/.test(decl)
-                    ? decl.match(/^(.*?)\b([A-Za-z_]\w*)$/s)
-                    : null;
-                if (field) {
-                    const type = tsType(field[1], classNames);
-                    // A reference member has no address a pointer to member could name, and a pointer member is memory.
-                    if (type !== null && FIELD_TYPES.has(type) && !/[&*]/.test(field[1])) fields.push({ name: field[2], type });
+                if (!statement.includes('(') && !/^(static|using|typedef|friend|enum)\b/.test(statement)) {
+                    fields.push(...declaredFields(statement, classNames, { typedefs, enums, pointerTypedefs, pointerFields }));
                 }
                 continue;
             }
@@ -142,7 +206,7 @@ export function parseCppSurface(source, log = console.log) {
             if (ret === null) { log(`crossbind: dts: skipped ${cls.name}::${name} (unsupported return type '${retRaw.trim()}')`); continue; }
             methods.push({ name, isStatic: Boolean(staticKw), args, ret });
         }
-        classes.push({ name: cls.name, ctor, methods, fields });
+        classes.push({ name: cls.name, aliases: cls.aliases, ctor, methods, fields });
     }
     return { classes };
 }

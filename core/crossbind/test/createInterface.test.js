@@ -82,4 +82,118 @@ describe('createBridgeFile', () => {
 
         expect(swigRuns(run)).toHaveLength(1);
     });
+
+    test('reads the header with NDEBUG defined, as the release compile does, but not the predefined macros', async () => {
+        const { run, createBridgeFile } = await importFresh();
+        const target = { platform: 'wasm', path: 'wasm-wasm32-st-release' };
+        fs.writeFileSync(header, 'int one();\n');
+        createBridgeFile(header, target);
+
+        const dumps = run.mock.calls.filter(([, args]) => args.includes('-dM'));
+        const [headerDump] = dumps.filter(([, args]) => args.at(-2).endsWith('fixture.macros.h'));
+        const [predefinedDump] = dumps.filter(([, args]) => args.at(-2).includes('predefined-'));
+        expect(headerDump[1]).toContain('-DNDEBUG');
+        expect(predefinedDump[1]).not.toContain('-DNDEBUG');
+    });
 });
+
+// tiffio.h and tiffio.hxx, or one name in two directories: each header keeps its own interface and bridge.
+describe('headers with the same base name', () => {
+    test('get separate interfaces and bridges', async () => {
+        const { run, createBridgeFile } = await importFresh();
+        run.mockImplementation((program, args) => {
+            const out = args[args.indexOf('-o') + 1];
+            fs.writeFileSync(out, program === 'swig' ? `// from ${args.at(-1)}\n` : '');
+            return '';
+        });
+        const target = { platform: 'wasm', path: 'wasm-wasm32-st-release' };
+        const plain = path.join(path.dirname(header), 'tiffio.h');
+        const cpp = path.join(path.dirname(header), 'tiffio.hxx');
+        fs.writeFileSync(plain, 'int TIFFOpen();\n');
+        fs.writeFileSync(cpp, 'int TIFFStreamOpen();\n');
+
+        const first = createBridgeFile(plain, target);
+        const second = createBridgeFile(cpp, target);
+
+        expect(second).not.toBe(first);
+        expect(holder.cache.interfaces[plain]).not.toBe(holder.cache.interfaces[cpp]);
+        expect(fs.readFileSync(first, 'utf8')).toContain(holder.cache.interfaces[plain]);
+        expect(createBridgeFile(plain, target)).toBe(first);
+    });
+
+    // An app built for iOS and Android imports one package header, which each platform's build of the package ships.
+    test('from the platform builds of one package share an interface and a bridge', async () => {
+        const { run, createBridgeFile } = await importFresh();
+        run.mockImplementation((program, args) => {
+            const out = args[args.indexOf('-o') + 1];
+            fs.writeFileSync(out, program === 'swig' ? `// from ${args.at(-1)}\n` : '');
+            return '';
+        });
+        const copy = (platform, target) => {
+            const include = path.join(work, 'deps', 'libfixture', platform, 'dist', 'prebuilt', target, 'include');
+            fs.mkdirSync(include, { recursive: true });
+            fs.writeFileSync(path.join(include, 'lib.h'), 'int libVersion();\n');
+            return path.join(include, 'lib.h');
+        };
+        const ios = copy('ios', 'ios-iphonesimulator-mt-release');
+        const android = copy('android', 'android-arm64-v8a-mt-release');
+
+        const fromIos = createBridgeFile(ios, { platform: 'ios', path: 'ios-iphonesimulator-mt-release' });
+        const fromAndroid = createBridgeFile(android, { platform: 'android', path: 'android-arm64-v8a-mt-release' });
+
+        expect(fromAndroid).toBe(fromIos);
+        expect(holder.cache.interfaces[android]).toBe(holder.cache.interfaces[ios]);
+    });
+});
+
+// A dependency's header binds the fields the compiler sees: an #if branch the build leaves out stays out,
+// and a field typed through a typedef of another header still reads as a number.
+describe('fields of a dependency header', () => {
+    test('come from the preprocessed header', async () => {
+        const { run, createBridgeFile } = await importFresh();
+        const include = path.join(work, 'deps', 'libfixture', 'prebuilt', 'include');
+        fs.mkdirSync(include, { recursive: true });
+        const dependencyHeader = path.join(include, 'lib.h');
+        fs.writeFileSync(dependencyHeader, '#include "types.h"\nstruct S {\n#if VERSION >= 70\n  int gone;\n#endif\n  int kept;\n  uInt avail;\n};\n');
+        holder.config.paths.base = work;
+        holder.config.dependencyParameters.getCmakeDependsPathAndName = () => ({ pathsOfCmakeDepends: [path.join(work, 'deps', 'libfixture')] });
+        run.mockImplementation((program, args) => {
+            const out = args[args.indexOf('-o') + 1];
+            if (program === 'swig') fs.writeFileSync(out, 'EMSCRIPTEN_BINDINGS(S) {\n  emscripten::class_<S>("S")\n  ;\n}\n');
+            else if (args.includes('-dM')) fs.writeFileSync(out, '');
+            else fs.writeFileSync(out, `# 1 "${include}/types.h" 1\ntypedef unsigned int uInt;\n# 2 "${include}/lib.h" 2\nstruct S {\n  int kept;\n  uInt avail;\n};\n`);
+            return '';
+        });
+
+        const bridge = fs.readFileSync(createBridgeFile(dependencyHeader, { platform: 'wasm', path: 'wasm-wasm32-st-release' }), 'utf8');
+
+        expect(bridge).toContain('.property("kept", &S::kept)');
+        expect(bridge).toContain('.property("avail", &S::avail)');
+        expect(bridge).not.toContain('"gone"');
+    });
+
+    test('bind pointer fields as handles and enum fields as integers', async () => {
+        const { run, createBridgeFile } = await importFresh();
+        const include = path.join(work, 'deps', 'libfixture', 'prebuilt', 'include');
+        fs.mkdirSync(include, { recursive: true });
+        const dependencyHeader = path.join(include, 'lib.h');
+        fs.writeFileSync(dependencyHeader, 'typedef enum { OFF, ON } Mode;\ntypedef struct S *S_ptr;\nstruct S {\n  const void *data;\n  Mode mode;\n  S_ptr next;\n};\n');
+        holder.config.paths.base = work;
+        holder.config.dependencyParameters.getCmakeDependsPathAndName = () => ({ pathsOfCmakeDepends: [path.join(work, 'deps', 'libfixture')] });
+        const prelude = 'namespace crossbind {\ntemplate<typename Q> PointerHandle toHandle(Q *p) { return nullptr; }\n}\n';
+        run.mockImplementation((program, args) => {
+            const out = args[args.indexOf('-o') + 1];
+            if (program === 'swig') fs.writeFileSync(out, `${prelude}EMSCRIPTEN_BINDINGS(S) {\n  emscripten::class_<S>("S")\n  ;\n}\n`);
+            else if (args.includes('-dM')) fs.writeFileSync(out, '');
+            else fs.writeFileSync(out, `# 1 "${include}/lib.h" 1\ntypedef enum { OFF, ON } Mode;\ntypedef struct S *S_ptr;\nstruct S {\n  const void *data;\n  Mode mode;\n  S_ptr next;\n};\n`);
+            return '';
+        });
+
+        const bridge = fs.readFileSync(createBridgeFile(dependencyHeader, { platform: 'wasm', path: 'wasm-wasm32-st-release' }), 'utf8');
+
+        expect(bridge).toContain('crossbind_fields::set<decltype(S::data)>(v)');
+        expect(bridge).toContain('std::underlying_type_t<decltype(S::mode)>');
+        expect(bridge).toContain('crossbind_fields::set<decltype(S::next)>(v)');
+    });
+});
+

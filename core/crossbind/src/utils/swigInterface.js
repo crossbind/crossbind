@@ -111,9 +111,77 @@ const tokenize = (text) => text.match(TOKEN) ?? [];
 const identifiers = (text) => tokenize(text).filter((token) => IDENTIFIER.test(token));
 // Lines are spliced before comments go, as in the compiler, and a comment marker inside a literal is text.
 const LITERAL_OR_COMMENT = /"(?:[^"\\\n]|\\.)*"|'(?:[^'\\\n]|\\.)*'|\/\*[\s\S]*?\*\/|\/\/[^\n]*/g;
-const stripComments = (text) => text
+export const stripComments = (text) => text
     .replace(/\\\r?\n/g, ' ')
     .replace(LITERAL_OR_COMMENT, (match) => (match.startsWith('/') ? ' ' : match));
+
+// `cc -E` marks where each file's lines begin (`# 12 "/include/jpeglib.h" 2`). The lines under the header's own
+// markers are the header as the compiler saw it: #if branches resolved, comments gone.
+const LINE_MARKER = /^#\s*(?:line\s+)?\d+\s+"([^"]*)"/;
+
+export function ownPreprocessedText(output, headerPath) {
+    let current = null;
+    const own = [];
+    for (const line of output.split('\n')) {
+        const marker = line.match(LINE_MARKER);
+        if (marker) current = marker[1];
+        else if (current === headerPath || current?.endsWith(`/${headerPath}`)) own.push(line);
+    }
+    return own.join('\n');
+}
+
+// Arithmetic spellings reduce to one name each, so `long unsigned int` reads as `unsigned long`.
+function canonicalScalar(type) {
+    const words = type.split(' ');
+    const count = (word) => words.filter((each) => each === word).length;
+    const unsigned = count('unsigned') ? 'unsigned ' : '';
+    if (count('char')) return count('unsigned') ? 'unsigned char' : count('signed') ? 'signed char' : 'char';
+    if (count('bool') || count('_Bool')) return 'bool';
+    if (count('float')) return 'float';
+    if (count('double')) return count('long') ? 'long double' : 'double';
+    if (count('short')) return `${unsigned}short`;
+    if (count('long') === 2) return `${unsigned}long long`;
+    if (count('long') === 1) return `${unsigned}long`;
+    return `${unsigned}int`;
+}
+
+const SCALAR_WORDS = /^(?:(?:signed|unsigned|short|long|int|char|float|double|bool|_Bool)\b\s*)+$/;
+
+// name -> arithmetic type, for every `typedef <arithmetic type> name;` of a translation unit (a typedef of a typedef
+// resolves through the first): what a field declared as `uInt` or `JDIMENSION` really holds.
+export function scalarTypedefs(output) {
+    const typedefs = new Map();
+    for (const [, type, name] of output.matchAll(/\btypedef\s+((?:[A-Za-z_]\w*\s+)+?)([A-Za-z_]\w*)\s*;/g)) {
+        const clean = type.replace(/\b(?:const|volatile)\b/g, '').replace(/\s+/g, ' ').trim();
+        if (SCALAR_WORDS.test(clean)) typedefs.set(name, canonicalScalar(clean));
+        else if (typedefs.has(clean)) typedefs.set(name, typedefs.get(clean));
+    }
+    return typedefs;
+}
+
+const ENUM_DEFINITIONS = [
+    /\benum\s+(?:class\s+|struct\s+)?([A-Za-z_]\w*)\s*(?::[^{;]*)?\{/g,
+    /\btypedef\s+enum\b[^{;]*\{[^}]*\}\s*([A-Za-z_]\w*)/g,
+    /\btypedef\s+enum\s+[A-Za-z_]\w*\s+([A-Za-z_]\w*)\s*;/g,
+];
+
+// The enum types a translation unit defines or typedefs: what a field declared as `J_COLOR_SPACE` really holds.
+export function enumNames(output) {
+    return new Set(ENUM_DEFINITIONS.flatMap((pattern) => [...output.matchAll(pattern)].map(([, name]) => name)));
+}
+
+// name -> the type it points to, for every `typedef <type> *name;` of a translation unit and every typedef of one of
+// those: a field declared as `jpeg_saved_marker_ptr` or `voidpf` holds a pointer. Function-pointer and array typedefs
+// do not match.
+export function pointerTypedefs(output) {
+    const pointees = new Map();
+    for (const [, type, name] of output.matchAll(/\btypedef\s+([^;{}()]*?)\s*\b([A-Za-z_]\w*)\s*;/g)) {
+        const base = type.replace(/\s+/g, ' ').trim();
+        if (base.endsWith('*')) pointees.set(name, base.slice(0, -1).trim());
+        else if (pointees.has(base)) pointees.set(name, pointees.get(base));
+    }
+    return pointees;
+}
 
 export function parseMacroDump(text) {
     const macros = new Map();
