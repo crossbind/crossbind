@@ -150,12 +150,14 @@ function interfaceName(headerFile, base) {
 
 // A header is included by its path under a project header directory or a dependency's include directory; one found only
 // through its own directory has no include root to search.
+const escapeRegExp = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
 function includeLocation(headerFile, target) {
     const projectRoot = state.config.paths.header.find((path) => headerFile.startsWith(path));
     if (projectRoot) return { includeRoot: projectRoot, headerPath: headerFile.substr(projectRoot.length + 1) };
     const dependencyRoots = (state.config.dependencyParameters?.getCmakeDependsPathAndName(target).pathsOfCmakeDepends || [])
         .filter((d) => d.startsWith(state.config.paths.base));
-    const match = dependencyRoots.map((p) => headerFile.match(new RegExp(`^(${p}/.*?/include)/(.*?)$`, 'i'))).find(Boolean);
+    const match = dependencyRoots.map((p) => headerFile.match(new RegExp(`^(${escapeRegExp(p)}/.*?/include)/(.*?)$`, 'i'))).find(Boolean);
     return match ? { includeRoot: match[1], headerPath: match[2] } : { includeRoot: null, headerPath: headerFile.split('/').at(-1) };
 }
 

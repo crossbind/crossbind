@@ -198,5 +198,22 @@ describe('fields of a dependency header', () => {
         expect(bridge).toContain('std::underlying_type_t<decltype(S::mode)>');
         expect(bridge).toContain('crossbind_fields::set<decltype(S::next)>(v)');
     });
+
+    // A dependency root is matched as text: a project path can hold regex characters.
+    test.each(['c++', 'Work (old)'])('come from the preprocessed header under a path with %s in it', async (dir) => {
+        const { run, createBridgeFile } = await importFresh();
+        const { include, dependencyHeader } = dependencyFixture('struct S {\n  int kept;\n};\n', upath.join(work, dir));
+        run.mockImplementation((program, args) => {
+            const out = args[args.indexOf('-o') + 1];
+            if (program === 'swig') fs.writeFileSync(out, 'EMSCRIPTEN_BINDINGS(S) {\n  emscripten::class_<S>("S")\n  ;\n}\n');
+            else if (args.includes('-dM')) fs.writeFileSync(out, '');
+            else fs.writeFileSync(out, `# 1 "${include}/lib.h" 1\nstruct S {\n  int kept;\n  int avail;\n};\n`);
+            return '';
+        });
+
+        const bridge = fs.readFileSync(createBridgeFile(dependencyHeader, { platform: 'wasm', path: 'wasm-wasm32-st-release' }), 'utf8');
+
+        expect(bridge).toContain('.property("avail", &S::avail)');
+    });
 });
 
