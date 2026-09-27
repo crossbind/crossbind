@@ -175,7 +175,7 @@ export default {
       // Overrides (apply when filter matches)
       specs: {
         cmake:         ['-DSOMETHING=ON'],         // -D flags appended to cmake configure
-        emccFlags:     ['-sINITIAL_MEMORY=64MB'],  // -s/-O flags appended to emcc (wasm only)
+        emccFlags:     ['-sINITIAL_MEMORY=64MB'],  // -s/-O flags for emcc (wasm only); they follow the default -O3, so -Oz or -Os wins
         env:           { GDAL_NUM_THREADS: '0' },  // env vars passed to running Wasm + build env
         data:          { 'share/myapp': 'myapp/data' },  // bundle data files into .data preload
           // On platform 'wasi', env/data double as the runtime contract for the
