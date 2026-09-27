@@ -58,6 +58,9 @@ import * as confKindA from '@crossbind/conformance/native/confkinda.h';
 import * as confKindB from '@crossbind/conformance/native/confkindb.h';
 import * as confPrelude from '@crossbind/conformance/native/confprelude.h';
 import * as confPreludeDeps from '@crossbind/conformance/native/confpreludedeps.h';
+// Package headers as the ports ship them: their C structs' fields are the packageFields section.
+import * as zlibHeader from '@crossbind/port-zlib/zlib.h';
+import * as webpEncode from '@crossbind/port-webp/encode.h';
 
 function App() {
     const isDarkMode = useColorScheme() === 'dark';
@@ -468,6 +471,7 @@ function AppContent() {
                     strings: confText,
                     wrappers: confWrappers,
                     types: { ...confTypes, ...confTypes2, ...confKindA, ...confKindB, ...confPrelude, ...confPreludeDeps },
+                    packageFields: { zlib: zlibHeader, webp: webpEncode },
                     rustKit: confRust,
                     caps: { jsiNative: true },
                 });

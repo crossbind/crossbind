@@ -4,8 +4,9 @@
 #include "confexport.h"
 
 // Enums plain and scoped, a class-scoped enum whose name another class reuses, a virtual base
-// that needs a dynamic_cast downcast, an export macro from another header, and a declaration the
-// library never defines (listed in the kit's ignoredDeclarations).
+// that needs a dynamic_cast downcast, an export macro from another header, a declaration the
+// library never defines (listed in the kit's ignoredDeclarations), and every spelling of a 64-bit
+// integer: int64_t is long long on Apple platforms and long on Android, and wasm32's long is 32-bit.
 
 enum ConfColor { CONF_RED = 1, CONF_GREEN = 2, CONF_BLUE = 4 };
 enum class ConfMode { Fast = 3, Safe = 4 };
@@ -43,6 +44,11 @@ public:
     enum class Convention { PROJ5 = 5 };
     static int use(Convention convention) { return static_cast<int>(convention); }
 };
+
+inline long confTypeLong(long value) { return value - 1; }
+inline unsigned long confTypeULong(unsigned long value) { return value + 1; }
+inline long long confTypeLongLong(long long value) { return value - 2; }
+inline unsigned long long confTypeULongLong(unsigned long long value) { return value + 2; }
 
 inline CONF_API int confTypeMarked() { return 42; }
 int confTypeDeclaredOnly(int value);

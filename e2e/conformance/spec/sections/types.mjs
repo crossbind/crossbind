@@ -17,4 +17,9 @@ export function typeChecks({ add }, t, { worker }) {
     add('type:duplicateDeclarationOnce', async () => t.confTypeSides(await t.confTypeMakeQuad()), 4);
     add('type:sameEnumNameTwice', async () => [await t.confKindA(await t.ConfKind.Dashed), await t.confKindB(await t.ConfKind.Dashed)], [20, 200]);
     add('type:headerPrelude', async () => [await t.confPreludeTwice(5), await t.confPreludeBase()], [110, 100]);
+    // wasm32's long crosses as a Number and the 64-bit spellings as BigInt, so the results compare as Numbers.
+    add('type:integerSpellings', async () => [
+        Number(await t.confTypeLong(-7)), Number(await t.confTypeULong(7)),
+        Number(await t.confTypeLongLong(-9)), Number(await t.confTypeULongLong(9)),
+    ], [-8, 8, -11, 11]);
 }

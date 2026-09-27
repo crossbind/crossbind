@@ -17,12 +17,15 @@
 //                   on worker-backed legs functions cannot cross and identity dies)
 //   pointers, callbacks, strings, wrappers, types: the module namespace of the matching kit
 //                   header (any leg; the checks that pass JS functions skip on worker legs)
+//   packageFields: { zlib, webp }, the namespaces of @crossbind/port-zlib/zlib.h and
+//                   @crossbind/port-webp/encode.h (bundler legs that link both ports)
 //   rustKit:      the exports of @crossbind/conformance-rust (any leg - prebuilt package);
 //                   constructs the generator does not carry yet are `todo` entries, reported
 //                   as TODO lines and counted apart from the pass/run figures
 //   coverage:     { exports, seen } from spec/bridgeExports.mjs + spec/coverage.mjs (legs that build the bridges)
 
 import { callbackChecks } from './sections/callbacks.mjs';
+import { packageFieldChecks } from './sections/packageFields.mjs';
 import { pointerChecks } from './sections/pointers.mjs';
 import { stringChecks } from './sections/strings.mjs';
 import { typeChecks } from './sections/types.mjs';
@@ -300,6 +303,7 @@ export function buildChecks(s) {
     section(list, 'strings', 'no string surface wired on this leg', s.strings && (() => stringChecks({ add }, s.strings)));
     section(list, 'wrappers', 'no wrapper surface wired on this leg', s.wrappers && (() => wrapperChecks({ add }, s.wrappers, { worker })));
     section(list, 'types', 'no type surface wired on this leg', s.types && (() => typeChecks({ add }, s.types, { worker })));
+    section(list, 'packageFields', 'no package header surface wired on this leg (standalone builds bridge only paths.header)', s.packageFields && (() => packageFieldChecks({ add }, s.packageFields, { worker })));
     section(list, 'rustKit', 'no Rust kit surface wired on this leg', s.rustKit && (() => {
         rustNumberChecks({ add, todo, skip }, s.rustKit);
         rustStringChecks({ add, todo }, s.rustKit);
