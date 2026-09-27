@@ -210,9 +210,13 @@ Comlink.transferHandlers.set('embindObject', {
             && typeof obj.isDeleted === 'function';
     },
     serialize(obj) {
-        const id = registerEmbindObject(obj);
+        // An object a property returns comes wrapped by its owner's coercion proxy. Registering and exposing
+        // the raw object, as the proxy handler does, keeps objects read from it one wrapper deep, which an
+        // argument's unwrapping undoes.
+        const raw = unwrapCoercionProxy(obj);
+        const id = registerEmbindObject(raw);
         const { port1, port2 } = new MessageChannel();
-        Comlink.expose(wrapWithVectorCoercion(obj), port1);
+        Comlink.expose(wrapWithVectorCoercion(raw), port1);
         return [{ __embindId: id, port: port2 }, [port2]];
     },
     deserialize(data) {

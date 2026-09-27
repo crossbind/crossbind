@@ -322,3 +322,42 @@ describe('Comlink CONSTRUCT end to end (worker construct path)', () => {
         }
     });
 });
+
+describe('Comlink returned objects end to end (worker property path)', () => {
+    test('an object read from an object a property returned goes back to C++ as itself', async () => {
+        // A struct field that points to another struct reads as an instance, and that instance's pointer field
+        // as a handle: `(await (await cinfo.marker_list).data)`. Each hop is an embind object the worker returns
+        // through the embindObject handler, and the last one must reach the next call unwrapped.
+        const handles = [];
+        function Embind(fields) {
+            Object.assign(this, fields);
+            handles.push(this);
+        }
+        Embind.prototype.delete = function del() {};
+        Embind.prototype.isDeleted = function isDeleted() { return false; };
+        const data = new Embind({});
+        const marker = new Embind({ data });
+        function Decoder() {
+            this.marker = marker;
+        }
+        Decoder.prototype = Object.create(Embind.prototype);
+        const m = { Decoder, isData: (value) => value === data };
+        setCoercionModule(m);
+
+        const { port1, port2 } = new MessageChannel();
+        try {
+            Comlink.expose(wrapWithVectorCoercion(m), port1);
+            const remote = Comlink.wrap(port2);
+
+            const decoder = await new remote.Decoder();
+            const first = await decoder.marker;
+            const handle = await first.data;
+
+            expect(await remote.isData(handle)).toBe(true);
+        } finally {
+            port1.close();
+            port2.close();
+            setCoercionModule(null);
+        }
+    });
+});
