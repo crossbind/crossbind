@@ -19,6 +19,19 @@ the log and then swallowed, so the error surfaces eight minutes later in the app
   `|| raise` and nothing inspects its return value.
 - Remove when a non-zero exit from `build_ios.js` aborts `pod install`.
 
+## The React Native Android release bundle keeps embind-jsi's old JavaScript
+
+Gradle decides `createBundleReleaseJsAndAssets` is up to date from the app's own files, so a change
+to `core/embind-jsi/js/embind.js` alone, reached through the workspace link, leaves the previous
+bundle in the APK while the native libraries are rebuilt. A conformance run then tests new C++
+against old glue and passes on what it did not load. iOS rebuilds its bundle on every build.
+
+- Seen: 2026-09-25
+- Check: after changing only `core/embind-jsi/js/embind.js`, `pnpm run run:android` in
+  `e2e/mobile-reactnative-cli` prints `Task :app:createBundleReleaseJsAndAssets UP-TO-DATE`.
+- Workaround: move `android/app/build/generated/assets/react/release` aside before building.
+- Remove when a JavaScript-only change to a workspace package rebuilds the bundle.
+
 ## Upstream source downloads have no retry
 
 `downloadFile` makes a single `fetch`. Every port build therefore depends on one uncached request to
@@ -164,31 +177,17 @@ live demos work only because `scripts/site/build-example-demos.mjs` rewrites bot
 - Remove when the plugins honour the bundler's base (`base` in Vite, `output.publicPath` in Rspack)
   and the demo builder's rewrites can go.
 
-## The docs describe a setting and a recipe hook that nothing reads
+## The docs describe two recipe hooks that nothing reads
 
-`LOG_LEVEL` in `~/.crossbind.json` (`docs/api/troubleshooting.md`, `docs/api/overrides.md`,
-`docs/api/build-state.md`, `docs/ARCHITECTURE.md`) has no reader, so setting it changes nothing.
-The `getSource` recipe hook (`docs/api/crossbind-build.md`, `docs/api/overrides.md`,
-`docs/ARCHITECTURE.md`) has none either: `buildExternal` calls `getURL` unconditionally, so a recipe
-that follows the docs and supplies only `getSource` fails with `getURL is not a function`.
+`prepare(state)` and `build(state)` appear in the recipe shape, pipeline, hook table and a
+`prepare` example of `docs/api/crossbind-build.md`, and in `docs/api/overrides.md`,
+`docs/api/build-state.md`, `docs/playbooks/code-review.md` and `docs/ARCHITECTURE.md`. No code calls
+either: a recipe that patches its source in `prepare` builds the unpatched source, and one that
+replaces the build in `build` gets the default build. No port defines them.
 
 - Seen: 2026-09-13
-- Check: `grep -rnw 'LOG_LEVEL\|getSource' core/crossbind/src` returns nothing.
+- Check: `grep -rnwE '(prepare|build)\(state\)' core/crossbind/src` returns nothing.
 - Remove when both work or the docs stop describing them.
-
-## Debug wasm builds skip the 64-bit safe-integer guard
-
-`guardBigIntArguments` in `core/crossbind/src/actions/buildWasm.js` rewrites embind's bigint
-`toWireType` so a 64-bit parameter rejects an unsafe Number. Its pattern matches only
-`typeof value=="number"`, the form of the minified release glue; emscripten's debug glue writes
-`typeof value == 'number'`. Debug builds, which the Vite and Rspack dev servers use, therefore still
-round 64-bit Numbers silently and log `bigint safe-integer rewrite missed`. Release builds are
-unaffected.
-
-- Seen: 2026-09-23 (the dev servers of all four bundler templates)
-- Check: `grep -n 'typeof value' core/crossbind/src/actions/buildWasm.js` — the pattern spells
-  `"number"` with double quotes only.
-- Remove when a debug build's glue contains `Number.isSafeInteger(value)`.
 
 ## No CI job scaffolds the create-crossbind templates
 
@@ -227,19 +226,6 @@ builds each demo in a fresh temporary copy.
   warning in the branch that skips the rebuild.
 - Remove when a newer native source rebuilds the library.
 
-## The docs put `emccFlags` where the build does not read it
-
-`docs/api/crossbind-config.md`, `docs/api/cpp-binding-rules.md` (the `-sJSPI` opt-in) and
-`docs/api/build-state.md` show `targetSpecs[].specs.emccFlags`. `buildWasm.js`, `createLib.js` and
-`buildWasiCommand.js` read `getData('binary', target)`, which is `targetSpecs[].specs.binary`, so
-flags written the documented way are dropped without a message; `createLib.js`'s own log line says
-`binary.emccFlags`.
-
-- Seen: 2026-09-13 (the /features/ audit), 2026-09-23
-- Check: `grep -n "getData('binary'" core/crossbind/src/actions/buildWasm.js` and
-  `grep -n 'specs: { emccFlags' docs/api/cpp-binding-rules.md docs/api/build-state.md` both match.
-- Remove when the docs and the reader name the same key.
-
 ## `docs/api/wasi.md` runs the program from `dist/`
 
 `crossbind build -p wasi` writes the command to
@@ -251,17 +237,6 @@ flags written the documented way are dropped without a message; `createLib.js`'s
 - Seen: 2026-09-23
 - Check: `grep -n 'dist/<name>-wasi\|dist/data/' docs/api/wasi.md` matches.
 - Remove when the doc names the real paths or the build copies to `dist/`.
-
-## The wasm stack is 64 KB and nothing says so
-
-crossbind sets no `STACK_SIZE`, so Emscripten's default 64 KB stack applies. A wrapper with a 64 KB
-local array overflowed it in a release build without any diagnostic; later, unrelated calls failed
-with `unreachable` or `memory access out of bounds`. No doc mentions the limit or how to raise it
-(`-sSTACK_SIZE` through `specs.binary.emccFlags`).
-
-- Seen: 2026-09-23
-- Check: `grep -rn 'STACK_SIZE' core/crossbind/src docs/api` returns nothing.
-- Remove when the docs state the limit and the way to raise it.
 
 ## curl's browser fetch patch corrupts memory and reports failures as success
 
@@ -287,19 +262,6 @@ The wasm build replaces `curl_easy_perform` with `emscripten_fetch` (`easyPerfor
   shows the buffer, and the close sits before the last `fetch->status` read.
 - Remove when the patch sizes the method, reads status before closing, maps fetch failures to a curl
   error, and the e2e requires a response.
-
-## A static method named `length` cannot be called
-
-embind attaches static methods to the class constructor, and a function already owns `length` (and
-`name`), so a static `length()` never replaces the number. In the browser's Worker mode the call
-then fails with `rawValue.apply is not a function`
-(`core/crossbind/src/assets/js-runtime/adapters/vector-coercion.js` hands Comlink the number).
-Nothing warns at build time. The GEOS module renames its method to `lengthOf` for this reason.
-
-- Seen: 2026-09-24 (landing/demos/lib-geos)
-- Check: bind `class C { public: static int length() { return 1; } };` in a browser build and call
-  `await C.length()`: it throws `rawValue.apply is not a function`.
-- Remove when such a name binds and is callable, or the build rejects it with a message.
 
 ## GEOS's npm licence says "or later"; its recipe says "only"
 
@@ -482,27 +444,16 @@ landing/demos/lib-gdal runs pool jobs in place (`-Wl,--wrap` of `CPLJobQueue::Su
   without those wraps; it does not return.
 - Remove when the port's single-threaded build runs pool jobs inline.
 
-## A project's own header still binds fields inside `#if`
-
-The field pass reads a dependency's header as the build's preprocessor sees it, but a header under
-`paths.header` as written: a field inside an `#if` branch the build leaves out still gets a
-`.property` line, and the bridge fails with "no member named ...".
-
-- Seen: 2026-09-25
-- Check: `grep -n "isProjectHeader" core/crossbind/src/actions/createInterface.js` shows `fieldSurface`
-  returning the header as written for project headers.
-- Remove when project headers are read preprocessed as well.
-
 ## Function-pointer fields of C structs have no binding
 
-The field pass binds data pointers as handles or instances but leaves function pointers out, declared
+Bridges bind data pointer fields as handles or instances but leave function pointers out, declared
 directly or through a typedef. `WebPPicture.writer` stays unset, so the advanced WebP encoder, which
 needs it pointed at `WebPMemoryWrite`, still takes C++. libjpeg's error manager keeps its default
 `error_exit`, which ends the program on a corrupt file instead of throwing.
 
 - Seen: 2026-09-26
-- Check: `node --input-type=module -e "import { parseCppSurface } from './core/crossbind/src/utils/cppDts.js'; console.log(JSON.stringify(parseCppSurface('struct P { int (*writer)(int); void *custom_ptr; };', () => {}, { pointerFields: true }).classes[0].fields.map((f) => f.name)))"`
-  prints `["custom_ptr"]`.
+- Check: after a web-vite build, `grep -c 'is_function_v<std::remove_pointer_t<U>>' e2e/web-vite/.crossbind/build/bridge/encode.i.cpp`
+  prints 1: `crossbind::bindField` binds no function pointer.
 - Remove when a function-pointer field takes a JavaScript function or a C function's handle.
 
 ## A field written on a worker instance can arrive after the next call
@@ -530,19 +481,17 @@ reports, and for an entity such as `&amp;` bytes past Expat's one-character buff
   `landing/demos/lib-expat/direct/examples/01-tree.js`; the string is longer than `len` bytes.
 - Remove when such arguments arrive cut to their length, or as handles.
 
-## Constants, macros and global variables have no binding
+## Function-like macros, renaming macros and mutable globals have no binding
 
-Only functions, enums and structs cross. `#define` values (`SQLITE_OK`, `Z_FINISH`, `CURLU_URLDECODE`,
-`EVP_CTRL_AEAD_GET_TAG`, `GDAL_OF_VECTOR`), version macros (`LERC_VERSION_MAJOR`, `LIBGEOTIFF_VERSION`),
-function-like macros (`OPENSSL_free`, `BIO_get_mem_data`, `deflateInit2`) and globals
-(`_libiconv_version`) are missing, and a macro that renames a function (`iconv_open` to
-`libiconv_open`) binds only the target name. Every JavaScript-only example writes such values out as
-numbers, and LERC, libiconv and libgeotiff cannot report their version.
+Constants bind when the app imports them (`docs/api/cpp-binding-rules.md`, rule 8), but a function-like
+macro (`OPENSSL_free`, `BIO_get_mem_data`, `deflateInit2`) has no binding, a macro that renames a
+function (`iconv_open` to `libiconv_open`) binds only the target name, and a global that is not const
+(`_libiconv_version`) stays out. The JavaScript-only examples call the functions behind the macros.
 
 - Seen: 2026-09-25
-- Check: add `LERC_VERSION_MAJOR` to the export list in a copy of
-  `landing/demos/lib-lerc/direct/src/headers.js`; `npx vite build` fails with `MISSING_EXPORT`.
-- Remove when object-like macros with constant values are exported.
+- Check: add `deflateInit2` to the export list in a copy of `landing/demos/lib-zlib/direct/src/headers.js`;
+  `npx vite build` fails with `MISSING_EXPORT`.
+- Remove when function-like macros, renaming macros and mutable globals bind.
 
 ## Variadic C functions have no binding
 
@@ -571,13 +520,13 @@ as remote calls.
 
 `landing/demos/lib-*/direct` builds against the published `beta`, which predates what this tree fixed:
 the sqlite3 and SpatiaLite ports' `ignoredDeclarations`, Expat's `headerPrelude`, NDEBUG for SWIG, the
-field pass (typedef'd structs, typedef'd numbers, `#if` in dependency headers, enum and pointer fields),
+struct field bindings (typedef'd structs, typedef'd numbers, `#if` in dependency headers, enum and pointer fields),
 the worker's handling of objects a property returns, the integer and enum argument checks, `emccFlags`
-after `-O3` and same-named headers. Until a release carries them,
+after `-O3`, same-named headers and imported constants. Until a release carries them,
 `lib-sqlite3/direct/crossbind.config.js` and `lib-spatialite/direct/crossbind.overrides.js` carry the
-ignore lists, Expat's limits example prints three of its four lines, the GEOS and Expat examples pass
+ignore lists, the examples write constants out as numbers, Expat's limits example prints three of its four lines, the GEOS and Expat examples pass
 enum members, `.value` and `'|'.charCodeAt(0)`, and the reasons in zstd 02, zlib 04, WebP 02 and 03,
-libjpeg-turbo, libgeotiff 04 and PROJ 05 describe the older field pass. Built with this tree, zstd 02,
+libjpeg-turbo, libgeotiff 04 and PROJ 05 describe the older field bindings. Built with this tree, zstd 02,
 zlib 04 and libjpeg-turbo 01 and 05 ran from JavaScript alone with the C++ versions' output. GDAL 05
 stays out on size: with GEOS and `-Oz` the JavaScript-only wasm is 26,505,868 bytes.
 

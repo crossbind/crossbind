@@ -13,7 +13,7 @@ const SUPPRESSED_WARN_CODES = new Set([
     'MIXED_EXPORTS',
 ]);
 
-function suppressNodeBuiltinWarnings(warning, defaultHandler) {
+export function suppressNodeBuiltinWarnings(warning, defaultHandler) {
     if (SUPPRESSED_WARN_CODES.has(warning.code)) return;
     if (warning.code === 'UNRESOLVED_IMPORT' && /^node:/.test(warning.exporter || warning.source || warning.id || '')) return;
     defaultHandler(warning);

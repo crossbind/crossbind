@@ -15,11 +15,11 @@ vi.mock('../src/state/loadConfig.js', () => ({
 
 let tmpDir;
 
-const loadStateModule = async (cargoDependencies) => {
+const loadStateModule = async (cargoDependencies, project = undefined) => {
     h.config = {
         system: {},
         general: { name: 'app' },
-        paths: { cache: tmpDir },
+        paths: { cache: tmpDir, project },
         cargoDependencies,
         allDependencies: [],
     };
@@ -60,5 +60,23 @@ describe('cargo crate import markers', () => {
         await loadStateModule(undefined);
 
         expect(fs.existsSync(path.join(tmpDir, 'rust-crates'))).toBe(false);
+    });
+
+    test('writes a marker for each module import of a declared crate in the app sources', async () => {
+        const project = path.join(tmpDir, 'app');
+        const write = (file, text) => {
+            fs.mkdirSync(path.dirname(path.join(project, file)), { recursive: true });
+            fs.writeFileSync(path.join(project, file), text);
+        };
+        write('src/App.tsx', "import { xxh364 } from 'cargo:xxhash-rust/xxh3';\nimport { Other } from 'cargo:undeclared/part';\n");
+        write('node_modules/dep/index.js', "import 'cargo:xxhash-rust/xxh64';\n");
+        write('.crossbind/old.js', "import 'cargo:xxhash-rust/const_xxh3';\n");
+
+        await loadStateModule({ 'xxhash-rust': '0.8' }, project);
+
+        expect(fs.existsSync(markerPath('xxhash-rust.xxh3'))).toBe(true);
+        expect(fs.existsSync(markerPath('undeclared.part'))).toBe(false);
+        expect(fs.existsSync(markerPath('xxhash-rust.xxh64'))).toBe(false);
+        expect(fs.existsSync(markerPath('xxhash-rust.const_xxh3'))).toBe(false);
     });
 });

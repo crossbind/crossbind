@@ -50,6 +50,8 @@ export default {
 };
 ```
 
+A native Node.js addon links the build of its platform: `crossbind build -p darwin`, `-p linux` or `-p win32` takes `@crossbind/port-lerc-darwin`, `-linux` or `-win32`. Install it and import its `crossbind.config.js` the same way.
+
 ## Usage
 crossbind binds your C++ headers to JavaScript, so the usual pattern is a small wrapper around the library. This one stores one band of float32 heights within the error you allow and reads them back. Put it in your project's native folder (`src/native/` by default):
 
@@ -190,7 +192,7 @@ Each one runs in your browser on [crossbind.dev/ports/lerc](https://crossbind.de
 - [Keep integer data exact](https://crossbind.dev/ports/lerc/#03-lossless): lossless LERC for any of its eight data types, here a 12-bit sensor band in `uint16`.
 - [Leave out pixels that have no data](https://crossbind.dev/ports/lerc/#04-nodata): a NoData value goes into LERC's validity mask instead of the heights, through `lerc_encode` and `lerc_decode`.
 
-Setup and differences per platform: [WebAssembly](https://crossbind.dev/ports/lerc/wasm/) · [Android](https://crossbind.dev/ports/lerc/android/) · [iOS](https://crossbind.dev/ports/lerc/ios/) · [WASI](https://crossbind.dev/ports/lerc/wasi/), which also has a command-line program built with `crossbind build -p wasi`.
+Setup and differences per platform: [WebAssembly](https://crossbind.dev/ports/lerc/wasm/) · [Android](https://crossbind.dev/ports/lerc/android/) · [iOS](https://crossbind.dev/ports/lerc/ios/) · [macOS](https://crossbind.dev/ports/lerc/darwin/) · [Linux](https://crossbind.dev/ports/lerc/linux/) · [Windows](https://crossbind.dev/ports/lerc/win32/) · [WASI](https://crossbind.dev/ports/lerc/wasi/), which also has a command-line program built with `crossbind build -p wasi`.
 
 ## What this build includes
 - LERC 4.2.0 with all 12 functions of `Lerc_c_api.h`: encoding as well as decoding, the `_4D` variants with NoData values, and `lerc_encodeForVersion` for older decoders.
@@ -207,6 +209,9 @@ This is the main package; the precompiled binaries are shipped per platform:
 | WebAssembly | [`@crossbind/port-lerc-wasm`](https://www.npmjs.com/package/@crossbind/port-lerc-wasm) | `wasm32` — single-threaded & multi-threaded |
 | Android | [`@crossbind/port-lerc-android`](https://www.npmjs.com/package/@crossbind/port-lerc-android) | `arm64-v8a` (64-bit ARM), `x86_64` (emulator) |
 | iOS | [`@crossbind/port-lerc-ios`](https://www.npmjs.com/package/@crossbind/port-lerc-ios) | device (`arm64`), simulator (`arm64`) |
+| macOS | [`@crossbind/port-lerc-darwin`](https://www.npmjs.com/package/@crossbind/port-lerc-darwin) | `arm64` (Apple silicon), `x64` (Intel) — native Node.js addons |
+| Linux | [`@crossbind/port-lerc-linux`](https://www.npmjs.com/package/@crossbind/port-lerc-linux) | `x64`, `arm64` — glibc 2.28 or later, native Node.js addons |
+| Windows | [`@crossbind/port-lerc-win32`](https://www.npmjs.com/package/@crossbind/port-lerc-win32) | `x64`, `arm64` — Windows 10 or later, native Node.js addons |
 | WASI library | [`@crossbind/port-lerc-wasi`](https://www.npmjs.com/package/@crossbind/port-lerc-wasi) | `wasm32-wasip3` — single-threaded |
 
 ## License

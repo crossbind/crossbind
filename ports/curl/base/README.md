@@ -48,6 +48,8 @@ export default {
 };
 ```
 
+A native Node.js addon links the build of its platform: `crossbind build -p darwin`, `-p linux` or `-p win32` takes `@crossbind/port-curl-darwin`, `-linux` or `-win32`. Install it and import its `crossbind.config.js` the same way.
+
 ## Usage
 crossbind binds your C++ headers to JavaScript, so the usual pattern is a small wrapper around the library. This one parses URLs with libcurl's URL API, the parser curl runs on a URL before every transfer. Put it in your project's native folder (`src/native/` by default):
 
@@ -122,15 +124,15 @@ Each one runs in your browser on [crossbind.dev/ports/curl](https://crossbind.de
 - [Read the dates in HTTP headers](https://crossbind.dev/ports/curl/#04-dates): `curl_getdate` on the three date formats HTTP allows.
 - [Check what this libcurl was built with](https://crossbind.dev/ports/curl/#05-build-info): `curl_version_info`, with the protocols and features of this build.
 
-Setup and differences per platform: [WebAssembly](https://crossbind.dev/ports/curl/wasm/) · [Android](https://crossbind.dev/ports/curl/android/) · [iOS](https://crossbind.dev/ports/curl/ios/) · [WASI](https://crossbind.dev/ports/curl/wasi/), which also has a command-line program built with `crossbind build -p wasi`.
+Setup and differences per platform: [WebAssembly](https://crossbind.dev/ports/curl/wasm/) · [Android](https://crossbind.dev/ports/curl/android/) · [iOS](https://crossbind.dev/ports/curl/ios/) · [macOS](https://crossbind.dev/ports/curl/darwin/) · [Linux](https://crossbind.dev/ports/curl/linux/) · [Windows](https://crossbind.dev/ports/curl/win32/) · [WASI](https://crossbind.dev/ports/curl/wasi/), which also has a command-line program built with `crossbind build -p wasi`.
 
 ## What this build includes
-- libcurl 8.22.0 with OpenSSL 4.0.2 for TLS (`curl_version()` reports `libcurl/8.22.0 OpenSSL/4.0.2`): a static library for WebAssembly, iOS and WASI, a shared one for Android.
+- libcurl 8.22.0 with OpenSSL 4.0.2 for TLS (`curl_version()` reports `libcurl/8.22.0 OpenSSL/4.0.2`): a static library for WebAssembly, iOS, macOS, Linux, Windows and WASI, a shared one for Android.
 - WebAssembly, Android and iOS: the protocols dict, file, ftp, ftps, gopher, gophers, http, https, imap, imaps, mqtt, mqtts, pop3, pop3s, rtsp, smtp, smtps, telnet, tftp, ws and wss, and the features alt-svc, AsynchDNS, HSTS, HTTPS-proxy, Largefile, SSL, threadsafe and UnixSockets. Android and iOS add libz, for gzip and deflate.
 - WASI: HTTP and HTTPS only, with alt-svc, HSTS, HTTPS-proxy, Largefile, SSL and threadsafe. No CA bundle is built in; point `CURLOPT_CAINFO` at one.
 - None of the builds has HTTP/2, HTTP/3, brotli, zstd, IDN (host names in other scripts stay in UTF-8), the public suffix list or IPv6.
 - **In a browser, libcurl does not run its own transfers.** The WebAssembly package replaces `curl_easy_perform` with a call to the browser's fetch, which waits with `emscripten_sleep`: link with `-sJSPI` (`targetSpecs: [{ platform: 'wasm', specs: { binary: { emccFlags: ['-sJSPI'] } } }]`) and call it from a method whose name ends in `_JSPI`. Otherwise the request is still sent, and then the call fails. CORS applies, TLS is the browser's, and the browser follows redirects whatever `CURLOPT_FOLLOWLOCATION` says. Response headers never reach `CURLOPT_HEADERFUNCTION`, a request body stops at its first NUL byte whatever `CURLOPT_POSTFIELDSIZE` says, a `CURLOPT_CUSTOMREQUEST` method may be nine characters at most, and a request that fails or that CORS blocks returns `CURLE_OK` with response code 0. Node.js builds use the same fetch path through the `xhr2` package, which the app has to install.
-- The Android, iOS and WASI packages are built from unpatched curl and run libcurl's own transfers. `@crossbind/port-curl-bin-wasi` ships the curl command built from it: `npx -p @crossbind/port-curl-bin-wasi@beta curl-wasi -sS https://example.com -o page.html` fetches over `wasi:sockets` with certificate verification.
+- The Android, iOS, macOS, Linux, Windows and WASI packages are built from unpatched curl and run libcurl's own transfers. `@crossbind/port-curl-bin-wasi` ships the curl command built from it: `npx -p @crossbind/port-curl-bin-wasi@beta curl-wasi -sS https://example.com -o page.html` fetches over `wasi:sockets` with certificate verification.
 - The module behind the five examples and three apps is 4,410,936 bytes of WebAssembly and 138,977 bytes of JavaScript.
 
 ## Supported platforms
@@ -141,6 +143,9 @@ This is the main package; the precompiled binaries are shipped per platform:
 | WebAssembly | [`@crossbind/port-curl-wasm`](https://www.npmjs.com/package/@crossbind/port-curl-wasm) | `wasm32` — single-threaded & multi-threaded |
 | Android | [`@crossbind/port-curl-android`](https://www.npmjs.com/package/@crossbind/port-curl-android) | `arm64-v8a` (64-bit ARM), `x86_64` (emulator) |
 | iOS | [`@crossbind/port-curl-ios`](https://www.npmjs.com/package/@crossbind/port-curl-ios) | device (`arm64`), simulator (`arm64`) |
+| macOS | [`@crossbind/port-curl-darwin`](https://www.npmjs.com/package/@crossbind/port-curl-darwin) | `arm64` (Apple silicon), `x64` (Intel) — native Node.js addons |
+| Linux | [`@crossbind/port-curl-linux`](https://www.npmjs.com/package/@crossbind/port-curl-linux) | `x64`, `arm64` — glibc 2.28 or later, native Node.js addons |
+| Windows | [`@crossbind/port-curl-win32`](https://www.npmjs.com/package/@crossbind/port-curl-win32) | `x64`, `arm64` — Windows 10 or later, native Node.js addons |
 | WASI library | [`@crossbind/port-curl-wasi`](https://www.npmjs.com/package/@crossbind/port-curl-wasi) | `wasm32-wasip3` — single-threaded |
 | WASI command | [`@crossbind/port-curl-bin-wasi`](https://www.npmjs.com/package/@crossbind/port-curl-bin-wasi) | the upstream `curl` CLI as a `curl-wasi` command (wasmtime 47+) |
 

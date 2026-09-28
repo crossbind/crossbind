@@ -3,7 +3,9 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import upath from 'upath';
-import { collectInputFiles, computeInputStamp } from '../src/utils/inputStamp.js';
+import {
+    collectInputFiles, collectRustBridgeFiles, collectRustSources, computeInputStamp,
+} from '../src/utils/inputStamp.js';
 
 describe('inputStamp', () => {
     let root;
@@ -90,6 +92,34 @@ describe('inputStamp', () => {
             write('src/b.js');
 
             expect(computeInputStamp([root], ['js'], [], 's')).not.toBe(before);
+        });
+    });
+
+    describe('Rust inputs', () => {
+        test('collectRustSources finds .rs files and skips cargo target and build dirs', () => {
+            const surface = write('src/native/counter.rs');
+            const nested = write('src/native/geo/mod.rs');
+            write('target/release/build/x/out/generated.rs');
+            write('crate/target/debug/build/y/out/generated.rs');
+            write('node_modules/dep/src/lib.rs');
+            write('.crossbind/rust-bridges/counter/src/lib.rs');
+            write('ios/Pods/x.rs');
+
+            expect(collectRustSources([root, root])).toEqual([nested, surface].sort());
+        });
+
+        test('collectRustBridgeFiles lists the generated bridge crates and cargo: markers', () => {
+            const manifest = write('.crossbind/rust-bridges/counter/Cargo.toml');
+            const lib = write('.crossbind/rust-bridges/counter/src/lib.rs');
+            const marker = write('.crossbind/rust-crates/uuid.rs');
+            write('.crossbind/rust-bridges/counter/target/release/libcounter.a');
+            write('.crossbind/rust-crates/types/uuid.d.ts');
+
+            expect(collectRustBridgeFiles(path.join(root, '.crossbind'))).toEqual([manifest, lib, marker].sort());
+        });
+
+        test('collectRustBridgeFiles is empty before any bridge exists', () => {
+            expect(collectRustBridgeFiles(path.join(root, '.crossbind'))).toEqual([]);
         });
     });
 });

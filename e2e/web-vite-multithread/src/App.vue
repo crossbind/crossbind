@@ -15,6 +15,11 @@ import * as confKindA from '@crossbind/conformance/native/confkinda.h'
 import * as confKindB from '@crossbind/conformance/native/confkindb.h'
 import * as confPrelude from '@crossbind/conformance/native/confprelude.h'
 import * as confPreludeDeps from '@crossbind/conformance/native/confpreludedeps.h'
+// Constants bind only for the names imported here; the header also defines one no leg imports.
+import {
+    AllSymbols as confConstantsModule, CONF_BASE, CONF_BASE_NAME, CONF_CHAR, CONF_DOUBLE, CONF_EXPRESSION, CONF_HEX, CONF_INT,
+    CONF_NEGATIVE, CONF_PLATFORM, CONF_STRING, CONF_TRUE, CONF_WIDE, confGlobal, confGlobalName,
+} from '@crossbind/conformance/native/confconstants.h'
 import {
     initNative as initRustDemo,
     RustyCounter, Widget, Gauge, Mode, RustIntVector,
@@ -72,6 +77,10 @@ initNative({ useWorker: true }).then(async (A) => {
             wrappers: confWrappers,
             // The type checks reach across headers; the namespaces merge after initNative bound them.
             types: { ...confTypes, ...confTypes2, ...confKindA, ...confKindB, ...confPrelude, ...confPreludeDeps },
+            constants: {
+                CONF_BASE, CONF_BASE_NAME, CONF_CHAR, CONF_DOUBLE, CONF_EXPRESSION, CONF_HEX, CONF_INT, CONF_NEGATIVE,
+                CONF_PLATFORM, CONF_STRING, CONF_TRUE, CONF_WIDE, confGlobal, confGlobalName, module: confConstantsModule,
+            },
             rustKit: confRust,
             caps: { worker: true },
         });

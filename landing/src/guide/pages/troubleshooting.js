@@ -45,7 +45,7 @@ export default {
         { type: 'h3', text: 'RuntimeError: index out of bounds during the build' },
         {
             type: 'p',
-            text: 'Emscripten itself ran out of memory while linking. Raise it with `targetSpecs[].specs.emccFlags: [\'-sINITIAL_MEMORY=512MB\']`.',
+            text: 'Emscripten itself ran out of memory while linking. Raise it with `targetSpecs[].specs.binary.emccFlags: [\'-sINITIAL_MEMORY=512MB\']`.',
         },
 
         { type: 'h2', id: 'binding', text: 'Binding errors' },
@@ -132,7 +132,7 @@ export default {
             type: 'ol',
             items: [
                 'Run the doctor script - most "weird" build failures are a missing toolchain (Node, Docker, Android SDK/NDK, Xcode).',
-                'Set `LOG_LEVEL: \'DEBUG\'` in `~/.crossbind.json` for verbose tracing; it usually names the failing step.',
+                'Rerun the `crossbind` command with `DEBUG=1`: a failure prints its full error, stack and cause chain, which usually names the failing step.',
                 'Reduce to the smallest reproducer: a fresh project with only the failing dependency.',
                 'Search the error text in the source - error messages are unique enough to find where they are thrown.',
                 'File an issue when the error comes from the toolchain itself rather than from your configuration or the upstream library.',

@@ -1,0 +1,22 @@
+{
+    "name": "@crossbind/e2e-backend-nodejs-native",
+    "version": "0.0.0",
+    "private": true,
+    "description": "crossbind - conformance leg for native Node.js addons",
+    "license": "MIT",
+    "scripts": {
+        "build": "crossbind build -p darwin -a arm64 -b release",
+        "start": "node src/index.mjs",
+        "e2e:prod": "node e2e/run.mjs"
+    },
+    "dependencies": {
+        "@crossbind/conformance": "workspace:^",
+        "@crossbind/conformance-rust": "workspace:^",
+        "@crossbind/embind-rust-demo": "workspace:^"
+    },
+    "devDependencies": {
+        "@crossbind/core-embind-napi": "workspace:^",
+        "@crossbind/core-embind-rust": "workspace:^",
+        "crossbind": "workspace:^"
+    }
+}

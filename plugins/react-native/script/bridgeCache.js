@@ -1,6 +1,8 @@
 import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { state, findFiles, computeInputStamp } from 'crossbind';
+import {
+    state, findFiles, computeInputStamp, collectRustSources,
+} from 'crossbind';
 
 const SOURCE_EXTS = ['js', 'jsx', 'ts', 'tsx', 'mjs', 'cjs'];
 
@@ -18,9 +20,11 @@ function computeStampHash(platform) {
         if (!roots.some((r) => root === r || root.startsWith(`${r}/`))) roots.push(root);
     }
     const exts = [...new Set([...SOURCE_EXTS, ...state.config.ext.header, ...state.config.ext.module])];
+    // An imported .rs file's surface is read on import, so a Rust edit regenerates its bridge too.
     const extraFiles = [
         `${state.config.paths.cli}/../package.json`,
         fileURLToPath(new URL('../package.json', import.meta.url)),
+        ...collectRustSources(roots),
     ];
     return computeInputStamp(roots, exts, extraFiles, `platform:${platform}`);
 }

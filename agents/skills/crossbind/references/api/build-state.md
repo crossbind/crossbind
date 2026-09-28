@@ -2,7 +2,7 @@
 
 # `state` and `target` shapes — what build hooks receive
 
-> When you write a `crossbind.build.js` hook (`prepare(state)`, `build(state)`, `getBuildParams(state, target)`, etc.), or an `extensions[]` plugin, you receive a `state` object and a `target` object. This doc enumerates every key on both. Source: `core/crossbind/src/state/index.js`.
+> When you write a `crossbind.build.js` hook (`prepare(state)`, `build(state)`, `getBuildParams(target, depPaths, ext, buildPath)`, etc.), or an `extensions[]` plugin, you receive a `state` object and a `target` object. This doc enumerates every key on both. Source: `core/crossbind/src/state/index.js`.
 
 ## `state` — top-level keys
 
@@ -74,7 +74,7 @@ state.config = {
         configureProgram?:    string,             // configure entrypoint; default './configure'
         setState?:            (state)         => void,
         beforeRun?:           (cmakeDir)      => Array<{program, parameters}>,
-        getBuildParams?:      (state, target) => string[],
+        getBuildParams?:      (target, depPaths, ext, buildPath) => string[],
         getExtraLibs?:        (target)        => string[],
         sourceReplaceList?:   (target, depPaths) => Array<{regex, replacement, paths}>,
         env?:                 ((target) => string[]) | string[],
@@ -143,7 +143,6 @@ Loaded from `~/.crossbind.json`, merged with defaults from `core/crossbind/src/u
 state.system = {
     XCODE_DEVELOPMENT_TEAM:  string,            // default ''  (required for iOS device builds)
     RUNNER:                  'DOCKER_RUN' | 'DOCKER_EXEC' | 'LOCAL',  // default 'DOCKER_RUN'
-    LOG_LEVEL:               'DEBUG' | 'INFO' | 'WARN' | 'ERROR',     // default 'INFO'
     DOCKER_REGISTRY_MIRROR:  string,            // default ''  (registry prefix; crossbind appends the release digest)
     DOCKER_IMAGE_WEB:        string,            // default ''  (image for wasm and wasi builds)
     DOCKER_IMAGE_ANDROID:    string,            // default ''  (image for android builds)
@@ -245,12 +244,16 @@ type TargetSpec = {
 
     // Overrides
     specs: {
-        cmake?:         string[],                // extra -D flags appended to cmake configure
-        emccFlags?:     string[],                // extra -s/-O flags appended to emcc command
+        cmake?: {
+            compileOptions?: string[],           // compiler flags for the sources crossbind compiles itself (see overrides.md)
+        },
+        binary?: {
+            emccFlags?: string[],                // extra -s/-O flags appended to emcc command
+            wasiFlags?: string[],                // extra link flags for wasi command builds (see wasi.md)
+        },
         env?:           Record<string, string>,  // env vars passed to Wasm process at runtime (or via CFLAGS/LDFLAGS at build)
         data?:          Record<string, string>,  // bundle data files: { 'src-dir': 'dest-dir' }
         ignoreLibName?: string[],                // suppress specific .a names from being linked
-        wasiFlags?:     string[],                // extra link flags for wasi command builds (see wasi.md)
     },
 }
 ```
@@ -260,7 +263,7 @@ Example (wasm-only SIMD, all archs):
 ```js
 targetSpecs: [{
     platform: 'wasm',
-    specs: { emccFlags: ['-msimd128', '-DUSE_SIMD'] },
+    specs: { binary: { emccFlags: ['-msimd128', '-DUSE_SIMD'] } },
 }]
 ```
 
@@ -304,8 +307,9 @@ Used internally by built-in extensions (e.g. for OpenSSL Android cert injection)
 | Find where source code is | `state.config.paths.build` (extracted upstream sources land here) |
 | Find where artifacts go | `state.config.paths.output` |
 | Find a dep's installed headers/libs | `state.allDependencyPaths[target.path][libName].header` / `.lib` |
-| Add a CMake flag | `targetSpecs[].specs.cmake` (preferred) or `getBuildParams` return value |
-| Add an emcc flag | `targetSpecs[].specs.emccFlags` |
+| Add a CMake configure flag (`-D…`) to a recipe build | `getBuildParams` return value |
+| Add a compiler flag to the sources crossbind compiles itself | `targetSpecs[].specs.cmake.compileOptions` |
+| Add an emcc flag | `targetSpecs[].specs.binary.emccFlags` |
 | Inject env to the running Wasm | `targetSpecs[].specs.env` or `crossbind.config.js` `env: {}` |
 | Patch upstream source | `crossbind.build.js` `replaceList` or `sourceReplaceList(target, depPaths)` hook |
 | Bundle data files into the .data preload | `targetSpecs[].specs.data` or platform-variant `data: {}` |

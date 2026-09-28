@@ -48,6 +48,8 @@ export default {
 };
 ```
 
+A native Node.js addon links the build of its platform: `crossbind build -p darwin`, `-p linux` or `-p win32` takes `@crossbind/port-openssl-darwin`, `-linux` or `-win32`. Install it and import its `crossbind.config.js` the same way.
+
 ## Usage
 crossbind binds your C++ headers to JavaScript, so the usual pattern is a small wrapper around the library. This one reads a certificate from PEM text and answers what people open certificates for: whom it is for, who issued it, when it expires, which host names it covers and its fingerprint. Put it in your project's native folder (`src/native/` by default):
 
@@ -218,13 +220,13 @@ Each one runs in your browser on [crossbind.dev/ports/openssl](https://crossbind
 - [Generate a key, sign and verify](https://crossbind.dev/ports/openssl/#04-signing): `EVP_PKEY_Q_keygen`, `EVP_DigestSign` and `EVP_DigestVerify` with ECDSA P-256, Ed25519 and the post-quantum ML-DSA-65 of FIPS 204.
 - [Make a self-signed certificate for localhost](https://crossbind.dev/ports/openssl/#05-self-signed): `X509_sign` with a random serial and the `subjectAltName` browsers match, read back with the certificate example.
 
-Setup and differences per platform: [WebAssembly](https://crossbind.dev/ports/openssl/wasm/) · [Android](https://crossbind.dev/ports/openssl/android/) · [iOS](https://crossbind.dev/ports/openssl/ios/) · [WASI](https://crossbind.dev/ports/openssl/wasi/), which also has a command-line program built with `crossbind build -p wasi`: file digests in `sha256sum`'s format, a `sha256sum -c` style check and webhook HMACs.
+Setup and differences per platform: [WebAssembly](https://crossbind.dev/ports/openssl/wasm/) · [Android](https://crossbind.dev/ports/openssl/android/) · [iOS](https://crossbind.dev/ports/openssl/ios/) · [macOS](https://crossbind.dev/ports/openssl/darwin/) · [Linux](https://crossbind.dev/ports/openssl/linux/) · [Windows](https://crossbind.dev/ports/openssl/win32/) · [WASI](https://crossbind.dev/ports/openssl/wasi/), which also has a command-line program built with `crossbind build -p wasi`: file digests in `sha256sum`'s format, a `sha256sum -c` style check and webhook HMACs.
 
 ## What this build includes
 - OpenSSL 4.0.2 as two static libraries, `libssl` and `libcrypto`, built with OpenSSL's own `Configure` and `no-apps no-docs no-tests no-shared`.
 - What the apps and examples above run in the browser, checked on every site build: TLS 1.3 and TLS 1.2; the key exchange groups `X25519MLKEM768` (OpenSSL's default), `MLKEM768`, `X25519` and P-256; Encrypted Client Hello; Ed25519, ECDSA, RSA and ML-DSA-65 keys, signatures and certificates; X.509 certificates, certificate requests and PKCS#12; AES-256-GCM; SHA-2, SHA-3, BLAKE2 and HMAC.
 - The legacy provider, which has RC2, the cipher of old PKCS#12 files, is compiled in and off until `OSSL_PROVIDER_load(NULL, "legacy")`. Loading any provider by name stops OpenSSL from loading its default provider on its own, so load `"default"` explicitly as well.
-- No CA certificates in the browser: the WebAssembly package carries Mozilla's bundle as of 15 July 2025 (143 roots, `ssl/certs/cacert.pem`), but only the Android, iOS and WASI builds declare it as runtime data. A browser app that verifies public certificates brings its own roots.
+- No CA certificates in the browser: the WebAssembly package carries Mozilla's bundle as of 15 July 2025 (143 roots, `ssl/certs/cacert.pem`), but only the Android, iOS, macOS, Linux, Windows and WASI builds declare it as runtime data. A browser app that verifies public certificates brings its own roots.
 - No `openssl.cnf` either: OpenSSL runs on its built-in defaults. Keys and nonces draw on the browser's `crypto.getRandomValues`.
 - The module behind the five examples and three apps is 4,037,192 bytes of WebAssembly and 137,522 bytes of JavaScript. Most of it is libcrypto with its default provider, which any use of EVP brings in: a module that only hashed and encrypted measured 2,761,152 bytes, one that only read the version 224,494, and libssl adds about 0.9 MB.
 - OpenSSL 4 changes met on the way: `X509_get_subject_name` returns a `const X509_NAME*`, so build a name with `X509_NAME_new` and set it with `X509_set_subject_name`; and `-text` output now wraps hex dumps at 16 bytes, 24 for signatures, and gives an EC key's size as `256 bit field, 128 bit security level`.
@@ -238,6 +240,9 @@ This is the main package; the precompiled binaries are shipped per platform:
 | WebAssembly | [`@crossbind/port-openssl-wasm`](https://www.npmjs.com/package/@crossbind/port-openssl-wasm) | `wasm32` — single-threaded & multi-threaded |
 | Android | [`@crossbind/port-openssl-android`](https://www.npmjs.com/package/@crossbind/port-openssl-android) | `arm64-v8a` (64-bit ARM), `x86_64` (emulator) |
 | iOS | [`@crossbind/port-openssl-ios`](https://www.npmjs.com/package/@crossbind/port-openssl-ios) | device (`arm64`), simulator (`arm64`) |
+| macOS | [`@crossbind/port-openssl-darwin`](https://www.npmjs.com/package/@crossbind/port-openssl-darwin) | `arm64` (Apple silicon), `x64` (Intel) — native Node.js addons |
+| Linux | [`@crossbind/port-openssl-linux`](https://www.npmjs.com/package/@crossbind/port-openssl-linux) | `x64`, `arm64` — glibc 2.28 or later, native Node.js addons |
+| Windows | [`@crossbind/port-openssl-win32`](https://www.npmjs.com/package/@crossbind/port-openssl-win32) | `x64`, `arm64` — Windows 10 or later, native Node.js addons |
 | WASI library | [`@crossbind/port-openssl-wasi`](https://www.npmjs.com/package/@crossbind/port-openssl-wasi) | `wasm32-wasip3` — single-threaded |
 | WASI command | [`@crossbind/port-openssl-bin-wasi`](https://www.npmjs.com/package/@crossbind/port-openssl-bin-wasi) | the upstream `openssl` CLI as an `openssl-wasi` command (wasmtime 47+) |
 

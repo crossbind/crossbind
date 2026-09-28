@@ -5,6 +5,12 @@ const platformBuild = {
     'android-x86_64': ['--enable-static=no', '--host=x86_64-linux-android'],
     'ios-iphoneos': ['--enable-shared=no', '--host=arm-apple-darwin'],
     'ios-iphonesimulator': ['--enable-shared=no', '--host=x86_64-apple-darwin'],
+    'darwin-arm64': ['--enable-shared=no', '--host=aarch64-apple-darwin'],
+    'darwin-x64': ['--enable-shared=no', '--host=x86_64-apple-darwin'],
+    'linux-arm64': ['--enable-shared=no', '--host=aarch64-linux-gnu'],
+    'linux-x64': ['--enable-shared=no', '--host=x86_64-linux-gnu'],
+    'win32-arm64': ['--enable-shared=no', '--host=aarch64-w64-mingw32'],
+    'win32-x64': ['--enable-shared=no', '--host=x86_64-w64-mingw32'],
 };
 
 const MOBILE_LIBS = ['-lstdc++', '-lsqlite3', '-lm', '-ltiff', '-lgeos'];
@@ -16,6 +22,10 @@ const platformLibs = {
     'wasi': ['-fwasm-exceptions', '-lc++', '-lc++abi', '-lunwind', '-lsqlite3'],
     'android': MOBILE_LIBS,
     'ios': MOBILE_LIBS,
+    'darwin': MOBILE_LIBS,
+    // The linux sysroot has libc++ only; it and proj need what glibc 2.28 still keeps in separate libraries.
+    'linux': ['-lc++', '-lpthread', '-ldl', '-lsqlite3', '-lm', '-ltiff', '-lgeos'],
+    'win32': ['-lc++', '-lsqlite3', '-ltiff', '-lgeos'],
 };
 
 const platformSourceReplaceList = {

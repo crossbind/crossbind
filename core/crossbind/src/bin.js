@@ -9,12 +9,15 @@ import createBridgeFile from './actions/createInterface.js';
 import createLib from './actions/createLib.js';
 import buildWasm from './actions/buildWasm.js';
 import buildWasiCommand from './actions/buildWasiCommand.js';
+import buildNode, { publishNodeData } from './actions/buildNode.js';
 import buildExternal from './actions/buildExternal.js';
 import buildPackageTypes from './actions/buildTypes.js';
 import buildLib from './actions/buildLib.js';
 import buildDependencies from './actions/buildDependencies.js';
 import runCrossbindApp from './actions/run.js';
-import { getFilteredBuildTargets } from './actions/target.js';
+import { getBuildTargets, getFilteredBuildTargets } from './actions/target.js';
+import { OPT_IN_PLATFORMS } from './utils/targets.js';
+import resolveEmbindNapiRoot, { resolveEmbindJsiRoot } from './utils/resolveEmbindNapi.js';
 
 import writeJson from './utils/writeJson.js';
 import flattenConfigForTable from './utils/flattenConfigForTable.js';
@@ -77,7 +80,7 @@ program.command('build')
             targetParams.buildType = ['release'];
         }
 
-        targetParams.platform = targetParams.platform || platforms;
+        targetParams.platform = targetParams.platform || platforms.filter((item) => !OPT_IN_PLATFORMS.includes(item));
         targetParams.arch = targetParams.arch || archs;
         targetParams.runtime = targetParams.runtime || runtimes;
         targetParams.buildType = targetParams.buildType || buildTypes;
@@ -162,7 +165,7 @@ program.command('clean-deps')
     });
 
 // A container belongs to one image: the web container carries no NDK, and android runs a forced platform.
-const IMAGE_ROLES = ['web', 'android'];
+const IMAGE_ROLES = ['web', 'android', 'linux', 'windows'];
 const dockerContainerName = (role) => {
     if (!IMAGE_ROLES.includes(role)) {
         console.error(`crossbind: unknown image "${role}" - expected one of ${IMAGE_ROLES.join(', ')}.`);
@@ -322,7 +325,8 @@ function run(programName, params) {
 async function build(targetParams, rebuildOption) {
     await buildDependencies({ targetParams, rebuildOption });
     buildLib(targetParams);
-    createWasmJs(targetParams);
+    await createWasmJs(targetParams);
+    await createNodeAddons(targetParams);
     await createWasiCommands(targetParams);
     buildPackageTypes();
 }
@@ -348,14 +352,7 @@ async function createWasiCommands(targetParams) {
     }
 }
 
-async function createWasmJs(targetParams) {
-    if (state.config.export.bundle === false) {
-        return;
-    }
-    const targets = getFilteredBuildTargets(targetParams, { platform: 'wasm' });
-    if (targets.length === 0) {
-        return;
-    }
+function createBridges() {
     let headers = [];
     state.config.paths.header.forEach((headerPath) => {
         headers.push(findFiles('**/*.h', { cwd: headerPath }));
@@ -367,12 +364,61 @@ async function createWasmJs(targetParams) {
         const bridgePath = createBridgeFile(header);
         bridges.push(bridgePath);
     });
+    return bridges;
+}
 
+async function createNodeAddons(targetParams) {
+    if (state.config.export.bundle === false) {
+        return;
+    }
+    const targets = getBuildTargets(targetParams)
+        .filter((target) => target.runtimeEnv === 'node' && target.platform !== 'wasm');
+    if (targets.length === 0) {
+        return;
+    }
+    // The bridges compile against the embind runtime, which speaks JSI.
+    const headerDirs = [
+        `${resolveEmbindJsiRoot()}/cpp/src`,
+        `${resolveEmbindNapiRoot()}/third_party/node-api-jsi/jsi`,
+    ];
     const opt = {
         buildSource: false,
         nativeGlob: [
             `${state.config.paths.cli}/assets/cpp-runtime/commonBridges.cpp`,
-            ...bridges,
+            ...createBridges(),
+        ],
+        headerDirs,
+        inputs: headerDirs.flatMap((dir) => findFiles('**/*.h', { cwd: dir })),
+    };
+
+    for (const target of targets) {
+        const distComplete = fs.existsSync(`${state.config.paths.output}/${target.addonName}`)
+            && fs.existsSync(`${state.config.paths.output}/${target.jsName}`);
+        createLib(target, 'Bridge', opt);
+        const built = await buildNode(target, { force: !distComplete });
+        publishNodeData(target, { refresh: built });
+        if (!built) {
+            continue;
+        }
+        fs.mkdirSync(state.config.paths.output, { recursive: true });
+        fs.copyFileSync(`${state.config.paths.build}/${target.addonName}`, `${state.config.paths.output}/${target.addonName}`);
+        fs.copyFileSync(`${state.config.paths.build}/${target.jsName}`, `${state.config.paths.output}/${target.jsName}`);
+    }
+}
+
+async function createWasmJs(targetParams) {
+    if (state.config.export.bundle === false) {
+        return;
+    }
+    const targets = getFilteredBuildTargets(targetParams, { platform: 'wasm' });
+    if (targets.length === 0) {
+        return;
+    }
+    const opt = {
+        buildSource: false,
+        nativeGlob: [
+            `${state.config.paths.cli}/assets/cpp-runtime/commonBridges.cpp`,
+            ...createBridges(),
         ],
     };
 

@@ -1,5 +1,5 @@
 import { describe, test, expect } from 'vitest';
-import { guardEmbindArguments } from '../src/utils/embindArgumentGuards.js';
+import { guardBigIntArguments, guardEmbindArguments } from '../src/utils/embindArgumentGuards.js';
 
 // The two registrations as emscripten 6.0.9 writes them into a release glue file.
 const INTEGER = 'var __embind_register_integer=(primitiveType,name,size,minRange,maxRange)=>{name=AsciiToString(name);const isUnsignedType=minRange===0;let fromWireType=value=>value;if(isUnsignedType){var bitshift=32-8*size;fromWireType=value=>value<<bitshift>>>bitshift;maxRange=fromWireType(maxRange);}registerType(primitiveType,{name,fromWireType,toWireType:(destructors,value)=>value,readValueFromPointer:integerReadValueFromPointer(name,size,minRange!==0),destructorFunction:null});};';
@@ -47,5 +47,25 @@ describe('guardEmbindArguments', () => {
         const changed = INTEGER.replace('toWireType:(destructors,value)=>value', 'toWireType:(d,v)=>v');
         expect(guardEmbindArguments(`${changed}${ENUM}`).missed).toEqual(['_embind_register_integer']);
         expect(guardEmbindArguments('var unrelated=1;').missed).toEqual([]);
+    });
+});
+
+// The bigint conversion as emscripten writes it minified into a release glue, and spread over lines with single quotes
+// into the debug glue the dev servers load.
+const BIGINT_RELEASE = 'toWireType:(destructors,value)=>{if(typeof value=="number"){value=BigInt(value)}else if(typeof value!="bigint"){throw new TypeError("x")}return value}';
+const BIGINT_DEBUG = "toWireType: (destructors, value) => {\n  if (typeof value == 'number') {\n    value = BigInt(value);\n  }\n  else if (typeof value != 'bigint') {\n    throw new TypeError('x');\n  }\n  return value;\n}";
+
+describe('guardBigIntArguments', () => {
+    test.each([['release', BIGINT_RELEASE], ['debug', BIGINT_DEBUG]])('a 64-bit parameter of a %s glue refuses an unsafe Number', (_, glue) => {
+        const { text } = guardBigIntArguments(`var __embind_register_bigint=1;${glue}`);
+        const toWireType = new Function(`return (${text.slice(text.indexOf('toWireType:') + 'toWireType:'.length)})`)();
+
+        expect(toWireType([], 3)).toBe(3n);
+        expect(() => toWireType([], 2 ** 53 + 2)).toThrow(/safe integer/);
+    });
+
+    test('reports a bigint registration whose conversion no longer matches', () => {
+        expect(guardBigIntArguments('var __embind_register_bigint=1;').missed).toBe(true);
+        expect(guardBigIntArguments('var unrelated=1;').missed).toBe(false);
     });
 });

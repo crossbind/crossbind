@@ -17,6 +17,7 @@
 #include <climits>
 #include "./wire.h"
 #include <cstdint> // uintptr_t
+#include <stdexcept>
 #include <vector>
 
 // #include <android/log.h>
@@ -48,15 +49,14 @@ enum {
   _EMVAL_FALSE = 4
 };
 
-typedef struct _EM_DESTRUCTORS* EM_DESTRUCTORS;
 typedef struct _EM_METHOD_CALLER* EM_METHOD_CALLER;
 typedef facebook::jsi::Value EM_GENERIC_WIRE_TYPE;
-typedef const void* EM_VAR_ARGS;
 
 void _emval_incref(EM_VAL value);
 void _emval_decref(EM_VAL value);
 
-void _emval_run_destructors(EM_DESTRUCTORS handle);
+// Runs the destructors the latest _emval_as or _emval_call_method conversion queued.
+void _emval_run_destructors();
 
 EM_VAL _emval_new_array();
 EM_VAL _emval_new_array_from_memory_view(EM_VAL mv);
@@ -65,19 +65,19 @@ EM_VAL _emval_new_cstring(const char*);
 EM_VAL _emval_new_u8string(const char*);
 EM_VAL _emval_new_u16string(const char16_t*);
 
-EM_VAL _emval_take_value(TYPEID type, EM_VAR_ARGS argv);
+EM_VAL _emval_take_value(TYPEID type, const facebook::jsi::Value& value);
 
 EM_VAL _emval_new(
     EM_VAL value,
     unsigned argCount,
     const TYPEID argTypes[],
-    EM_VAR_ARGS argv);
+    facebook::jsi::Value* argv);
 
 EM_VAL _emval_get_global(const char* name);
 EM_VAL _emval_get_module_property(const char* name);
 EM_VAL _emval_get_property(EM_VAL object, EM_VAL key);
 void _emval_set_property(EM_VAL object, EM_VAL key, EM_VAL value);
-EM_GENERIC_WIRE_TYPE _emval_as(EM_VAL value, TYPEID returnType, EM_DESTRUCTORS* destructors);
+EM_GENERIC_WIRE_TYPE _emval_as(EM_VAL value, TYPEID returnType);
 int64_t _emval_as_int64(EM_VAL value, TYPEID returnType);
 uint64_t _emval_as_uint64(EM_VAL value, TYPEID returnType);
 
@@ -91,7 +91,7 @@ EM_VAL _emval_call(
     EM_VAL value,
     unsigned argCount,
     const TYPEID argTypes[],
-    EM_VAR_ARGS argv);
+    facebook::jsi::Value* argv);
 
 // DO NOT call this more than once per signature. It will
 // leak generated function objects!
@@ -102,13 +102,14 @@ EM_GENERIC_WIRE_TYPE _emval_call_method(
     EM_METHOD_CALLER caller,
     EM_VAL handle,
     const char* methodName,
-    EM_DESTRUCTORS* destructors,
-    EM_VAR_ARGS argv);
+    unsigned argCount,
+    facebook::jsi::Value* argv);
 void _emval_call_void_method(
     EM_METHOD_CALLER caller,
     EM_VAL handle,
     const char* methodName,
-    EM_VAR_ARGS argv);
+    unsigned argCount,
+    facebook::jsi::Value* argv);
 EM_VAL _emval_typeof(EM_VAL value);
 bool _emval_instanceof(EM_VAL object, EM_VAL constructor);
 bool _emval_is_number(EM_VAL object);
@@ -146,20 +147,17 @@ struct Signature {
   }
 };
 
+// Scoped to one conversion: every _emval_as / _emval_call_method that returns queues exactly one
+// destructor list in JS, and this runs it once the C++ side has read the value.
 struct DestructorsRunner {
 public:
-  explicit DestructorsRunner(EM_DESTRUCTORS d)
-      : destructors(d)
-  {}
+  DestructorsRunner() = default;
   ~DestructorsRunner() {
-    _emval_run_destructors(destructors);
+    _emval_run_destructors();
   }
 
   DestructorsRunner(const DestructorsRunner&) = delete;
   void operator=(const DestructorsRunner&) = delete;
-
-private:
-  EM_DESTRUCTORS destructors;
 };
 
 template<typename WireType>
@@ -178,115 +176,27 @@ struct GenericWireTypeConverter<Pointee*> {
 
 template<typename T>
 T fromGenericWireType(facebook::jsi::Value& g) {
-    if constexpr (std::is_same<T, std::string>::value) {
-        return g.getString(*jsRuntime).utf8(*jsRuntime);
-    }
-  typedef typename BindingType<T>::WireType WireType;
-  WireType wt = GenericWireTypeConverter<WireType>::from(g);
-  return BindingType<T>::fromWireType(wt);
+  if constexpr (std::is_same<T, std::string>::value) {
+    return g.asString(*jsRuntime).utf8(*jsRuntime);
+  } else if constexpr (std::is_same<T, facebook::jsi::Value>::value) {
+    return std::move(g);
+  } else {
+    typedef typename BindingType<T>::WireType WireType;
+    WireType wt = GenericWireTypeConverter<WireType>::from(g);
+    return BindingType<T>::fromWireType(wt);
+  }
 }
 
+// Arguments cross as the values embind's JS types accept (toWireType2), the same way bound
+// functions return them, never as bytes JS would have to read out of native memory.
+// jsi::Value has no copy constructor: each toWireType2 prvalue initializes its element directly,
+// so routing one through a named const Value first would stop this from compiling.
 template<typename... Args>
-struct PackSize;
+struct WireValues {
+  explicit WireValues(Args&&... args)
+      : values{{BindingType<Args>::toWireType2(*jsRuntime, std::forward<Args>(args))...}} {}
 
-template<>
-struct PackSize<> {
-  static constexpr size_t value = 0;
-};
-
-template<typename Arg, typename... Args>
-struct PackSize<Arg, Args...> {
-  static constexpr size_t value = (sizeof(typename BindingType<Arg>::WireType) + 7) / 8 + PackSize<Args...>::value;
-};
-
-union GenericWireType {
-  union {
-    unsigned u;
-    float f;
-    // Use uint32_t for pointer values.  This limits us, for now, to 32-bit
-    // address ranges even on wasm64.  This is enforced by assertions below.
-    // TODO(sbc): Allow full 64-bit address range here under wasm64, most
-    // likely by increasing the size of GenericWireType on wasm64.
-    uint32_t p;
-  } w[2];
-    double d;
-    uint64_t u;
-};
-static_assert(sizeof(GenericWireType) == 8, "GenericWireType must be 8 bytes");
-static_assert(alignof(GenericWireType) == 8, "GenericWireType must be 8-byte-aligned");
-
-inline void writeGenericWireType(GenericWireType*& cursor, float wt) {
-  cursor->w[0].f = wt;
-  ++cursor;
-}
-
-inline void writeGenericWireType(GenericWireType*& cursor, double wt) {
-  cursor->d = wt;
-  ++cursor;
-}
-
-inline void writeGenericWireType(GenericWireType*& cursor, int64_t wt) {
-  cursor->u = wt;
-  ++cursor;
-}
-
-inline void writeGenericWireType(GenericWireType*& cursor, uint64_t wt) {
-  cursor->u = wt;
-  ++cursor;
-}
-
-template<typename T>
-void writeGenericWireType(GenericWireType*& cursor, T* wt) {
-  uint64_t short_ptr = reinterpret_cast<uint64_t>(wt);
-  // assert(short_ptr <= UINT32_MAX);
-  cursor->u = short_ptr;
-  ++cursor;
-}
-
-template<typename ElementType>
-inline void writeGenericWireType(GenericWireType*& cursor, const memory_view<ElementType>& wt) {
-  uintptr_t short_ptr = reinterpret_cast<uintptr_t>(wt.data);
-  // This wire slot stores the data pointer in 32 bits (upstream wasm32 layout). On 64-bit
-  // native a pointer above 4 GiB cannot fit; abort loudly rather than silently truncating to
-  // a bogus address (release builds compile out the assert). Full 64-bit memory_view support
-  // needs a wider wire encoding on both the writer and the reader.
-  assert(short_ptr <= UINT32_MAX);
-  if (short_ptr > UINT32_MAX) {
-    abort();
-  }
-  cursor->w[0].u = wt.size;
-  cursor->w[1].p = static_cast<uint32_t>(short_ptr);
-  ++cursor;
-}
-
-template<typename T>
-void writeGenericWireType(GenericWireType*& cursor, T wt) {
-  cursor->w[0].u = static_cast<unsigned>(wt);
-  ++cursor;
-}
-
-inline void writeGenericWireTypes(GenericWireType*&) {
-}
-
-template<typename First, typename... Rest>
-EMSCRIPTEN_ALWAYS_INLINE void writeGenericWireTypes(GenericWireType*& cursor, First&& first, Rest&&... rest) {
-  writeGenericWireType(cursor, BindingType<First>::toWireType(std::forward<First>(first)));
-  writeGenericWireTypes(cursor, std::forward<Rest>(rest)...);
-}
-
-template<typename... Args>
-struct WireTypePack {
-  WireTypePack(Args&&... args) {
-    GenericWireType* cursor = elements.data();
-    writeGenericWireTypes(cursor, std::forward<Args>(args)...);
-  }
-
-  operator EM_VAR_ARGS() const {
-    return elements.data();
-  }
-
-private:
-  std::array<GenericWireType, PackSize<Args...>::value> elements;
+  std::array<facebook::jsi::Value, sizeof...(Args)> values;
 };
 
 template<typename ReturnType, typename... Args>
@@ -294,15 +204,14 @@ struct MethodCaller {
   static ReturnType call(EM_VAL handle, const char* methodName, Args&&... args) {
     auto caller = Signature<ReturnType, Args...>::get_method_caller();
 
-    WireTypePack<Args...> argv(std::forward<Args>(args)...);
-    EM_DESTRUCTORS destructors;
+    WireValues<Args...> argv(std::forward<Args>(args)...);
     EM_GENERIC_WIRE_TYPE result = _emval_call_method(
       caller,
       handle,
       methodName,
-      &destructors,
-      argv);
-    DestructorsRunner rd(destructors);
+      sizeof...(Args),
+      argv.values.data());
+    DestructorsRunner rd;
     return fromGenericWireType<ReturnType>(result);
   }
 };
@@ -312,12 +221,13 @@ struct MethodCaller<void, Args...> {
   static void call(EM_VAL handle, const char* methodName, Args&&... args) {
     auto caller = Signature<void, Args...>::get_method_caller();
 
-    WireTypePack<Args...> argv(std::forward<Args>(args)...);
+    WireValues<Args...> argv(std::forward<Args>(args)...);
     _emval_call_void_method(
       caller,
       handle,
       methodName,
-      argv);
+      sizeof...(Args),
+      argv.values.data());
   }
 };
 
@@ -410,9 +320,9 @@ public:
   explicit val(T&& value) {
     using namespace internal;
 
-    typedef internal::BindingType<T> BT;
-    WireTypePack<T> argv(std::forward<T>(value));
-    handle = _emval_take_value(internal::TypeID<T>::get(), argv);
+    handle = _emval_take_value(
+        internal::TypeID<T>::get(),
+        BindingType<T>::toWireType2(*jsRuntime, std::forward<T>(value)));
   }
 
   val() : handle(EM_VAL(internal::_EMVAL_UNDEFINED)) {}
@@ -555,15 +465,10 @@ public:
   T as(Policies...) const {
     using namespace internal;
 
-    typedef BindingType<T> BT;
     typename WithPolicies<Policies...>::template ArgTypeList<T> targetType;
 
-    EM_DESTRUCTORS destructors;
-    EM_GENERIC_WIRE_TYPE result = _emval_as(
-        handle,
-        targetType.getTypes()[0],
-        &destructors);
-    DestructorsRunner dr(destructors);
+    EM_GENERIC_WIRE_TYPE result = _emval_as(handle, targetType.getTypes()[0]);
+    DestructorsRunner dr;
     return fromGenericWireType<T>(result);
   }
 
@@ -629,8 +534,8 @@ private:
     using namespace internal;
 
     WithPolicies<>::ArgTypeList<Args...> argList;
-    WireTypePack<Args...> argv(std::forward<Args>(args)...);
-    return val(impl(handle, argList.getCount(), argList.getTypes(), argv));
+    WireValues<Args...> argv(std::forward<Args>(args)...);
+    return val(impl(handle, argList.getCount(), argList.getTypes(), argv.values.data()));
   }
 
   template<typename T>
@@ -669,7 +574,7 @@ struct BindingType<val> {
     static val fromWireType2(facebook::jsi::Runtime& rt, WireType2& v) {
       // return val::undefined();
         // return val::take_ownership(reinterpret_cast<EM_VAL>((int) v.getNumber()));
-        return val::take_ownership(reinterpret_cast<EM_VAL>(v.asBigInt(rt).asUint64(rt)));
+        return val::take_ownership(reinterpret_cast<EM_VAL>(bigIntUint64(rt, v)));
     }
 };
 
@@ -690,17 +595,23 @@ std::vector<T> vecFromJSArray(const val& v, Policies... policies) {
 
 template <typename T>
 std::vector<T> convertJSArrayToNumberVector(const val& v) {
-  const size_t l = v["length"].as<size_t>();
+  // size_t is not a registered embind type on every 64-bit ABI; the length is a Number anyway.
+  const double l = v["length"].as<double>();
+  if (!(l >= 0 && l <= static_cast<double>(std::vector<T>().max_size()))) {
+    throw std::length_error("crossbind: the array length is not a valid size");
+  }
 
   std::vector<T> rv;
-  rv.resize(l);
+  rv.resize(static_cast<size_t>(l));
 
   // Copy the array into our vector through the use of typed arrays.
   // It will try to convert each element through Number().
   // See https://www.ecma-international.org/ecma-262/6.0/#sec-%typedarray%.prototype.set-array-offset
   // and https://www.ecma-international.org/ecma-262/6.0/#sec-tonumber
-  val memoryView{ typed_memory_view(l, rv.data()) };
-  memoryView.call<void>("set", v);
+  // The typed array is JS-owned and copied out: one aliasing rv would need external memory.
+  val typedArray = val::global(internal::typedArrayNameOf<T>()).new_(l);
+  typedArray.call<void>("set", v);
+  internal::copyFromTypedArray(*jsRuntime, typedArray.as<facebook::jsi::Value>(), rv.data(), rv.size() * sizeof(T));
 
   return rv;
 }

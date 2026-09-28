@@ -7,8 +7,11 @@ import { getContentHash } from './hash.js';
 const table = createRequire(import.meta.url)('../assets/toolchain-digests.json');
 const REGISTRY = table.registry;
 const IMAGE_VERSION = table.version;
+const OVERRIDE_KEYS = {
+    web: 'CROSSBIND_IMAGE_WEB', android: 'CROSSBIND_IMAGE_ANDROID', linux: 'CROSSBIND_IMAGE_LINUX', windows: 'CROSSBIND_IMAGE_WINDOWS',
+};
 const IMAGES = Object.fromEntries(
-    ['web', 'android'].map((role) => [
+    Object.keys(OVERRIDE_KEYS).map((role) => [
         role,
         {
             ref: `${REGISTRY}/${role}@${table.images[role].index}`,
@@ -17,11 +20,11 @@ const IMAGES = Object.fromEntries(
     ]),
 );
 
-const OVERRIDE_KEYS = { web: 'CROSSBIND_IMAGE_WEB', android: 'CROSSBIND_IMAGE_ANDROID' };
-
-// Which image a target compiles in: wasm and wasi share the web image, ios never reaches docker.
+// Which image a target compiles in: wasm and wasi share the web image, ios and darwin never reach docker.
 export function imageRoleFor(target) {
-    return target?.platform === 'android' ? 'android' : 'web';
+    if (target?.platform === 'android' || target?.platform === 'linux') return target.platform;
+    if (target?.platform === 'win32') return 'windows';
+    return 'web';
 }
 
 const warned = new Set();

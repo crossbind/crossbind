@@ -90,6 +90,39 @@ function wasiToolchainRows() {
     ];
 }
 
+// A Linux or Windows addon carries its C++ runtime; a Windows one also carries parts of the
+// mingw-w64 runtime and winpthreads, whose licenses ask for their notices in binary distributions.
+// A macOS addon uses the system's C++ runtime.
+function addonToolchainRows(platform) {
+    const shared = {
+        npmName: null, version: null, nativeVersion: null, sha256: null, licenseSelected: null, licenseText: null, isCopyleft: false,
+    };
+    const llvmLicense = 'Apache-2.0 WITH LLVM-exception';
+    const llvmRuntimes = {
+        ...shared,
+        name: 'llvm-runtimes',
+        license: llvmLicense,
+        licenseDeclared: llvmLicense,
+        sourceUrl: 'https://github.com/llvm/llvm-project',
+    };
+    const llvmText = 'license text: https://github.com/llvm/llvm-project/blob/main/LICENSE.TXT';
+    if (platform === 'linux') {
+        return [{ ...llvmRuntimes, licenseNotes: `libc++ and libc++abi of the linux toolchain image, statically linked into the addon; ${llvmText}` }];
+    }
+    const mingwLicense = 'LicenseRef-MinGW-w64-runtime';
+    return [
+        { ...llvmRuntimes, licenseNotes: `libc++, libc++abi, libunwind and compiler-rt of the windows toolchain image (llvm-mingw), statically linked into the addon; ${llvmText}` },
+        {
+            ...shared,
+            name: 'mingw-w64-runtime',
+            license: mingwLicense,
+            licenseDeclared: mingwLicense,
+            sourceUrl: 'https://github.com/mingw-w64/mingw-w64',
+            licenseNotes: 'the mingw-w64 startup code and winpthreads, statically linked into the addon; a binary distribution includes their notices: https://github.com/mingw-w64/mingw-w64/blob/master/COPYING.MinGW-w64-runtime/COPYING.MinGW-w64-runtime.txt and https://github.com/mingw-w64/mingw-w64/blob/master/mingw-w64-libraries/winpthreads/COPYING (the windows image carries both in /opt/licenses/llvm-mingw)',
+        },
+    ];
+}
+
 async function buildRow(node) {
     const recipe = await loadJs(node.paths.project, 'crossbind.build');
     const manifest = node.package || null;
@@ -152,5 +185,6 @@ export default async function collectLicenseRows(platform = null) {
         if (platform) rows.push(...await bundledRowsOf(node, platform));
     }
     if (platform === 'wasi') rows.push(...wasiToolchainRows());
+    if (platform === 'linux' || platform === 'win32') rows.push(...addonToolchainRows(platform));
     return rows.sort((a, b) => a.name.localeCompare(b.name));
 }

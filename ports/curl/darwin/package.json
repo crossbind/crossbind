@@ -1,0 +1,33 @@
+{
+    "name": "@crossbind/port-curl-darwin",
+    "version": "2.0.0-beta.62",
+    "nativeVersion": "8.22.0",
+    "description": "macOS build of the precompiled libcurl (CURL) library, built with crossbind. Use it together with the main package @crossbind/port-curl.",
+    "homepage": "https://github.com/crossbind/crossbind/tree/main/ports/curl#readme",
+    "repository": "https://github.com/crossbind/crossbind.git",
+    "type": "module",
+    "license": "curl",
+    "keywords": [
+        "curl",
+        "libcurl",
+        "http",
+        "networking",
+        "crossbind",
+        "crossbind-port",
+        "macos",
+        "node",
+        "node-api"
+    ],
+    "scripts": {
+        "build": "crossbind build -p darwin",
+        "clear": "rm -rf .crossbind dist",
+        "prepublishOnly": "crossbind build -p darwin"
+    },
+    "dependencies": {
+        "@crossbind/port-curl": "workspace:^",
+        "@crossbind/port-openssl-darwin": "workspace:^"
+    },
+    "devDependencies": {
+        "crossbind": "workspace:^"
+    }
+}

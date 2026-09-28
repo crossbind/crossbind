@@ -50,6 +50,14 @@ describe('buildLinkLibArgs', () => {
         expect(buildLinkLibArgs([bridge], {})).toEqual([W, bridge, N]);
     });
 
+    it('forceLoad names each kept archive for ld64, which has no whole-archive groups', () => {
+        const F = (lib) => `-Wl,-force_load,${lib}`;
+        expect(buildLinkLibArgs(libs, { forceLoad: true })).toEqual([...deps, source, F(bridge)]);
+        expect(buildLinkLibArgs(libs, { forceLoad: true, wholeArchiveNames: new Set(['proj']) }))
+            .toEqual([F('/p/libproj.a'), '/p/libgdal.a', source, F(bridge)]);
+        expect(buildLinkLibArgs(libs, { forceLoad: true, wholeArchiveAll: true })).toEqual(libs.map(F));
+    });
+
     it('wrapLast:false wraps nothing by default (wasi command links)', () => {
         expect(buildLinkLibArgs(libs, { wrapLast: false })).toEqual(libs);
         expect(buildLinkLibArgs(libs, { wrapLast: false, wholeArchiveNames: new Set(['gdal']) }))

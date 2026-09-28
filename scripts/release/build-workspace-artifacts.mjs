@@ -5,7 +5,7 @@ import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { packCrossbind, packWorkspacePackage, smokeTestCrossbindTarball } from './package-artifact.mjs';
-import { validateWorkspaceReleasePlan } from './workspace-release.mjs';
+import { RUNNERS, validateWorkspaceReleasePlan } from './workspace-release.mjs';
 import { writeJson } from './release-lib.mjs';
 
 const REPOSITORY_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
@@ -15,8 +15,8 @@ const valueOf = (name) => {
 };
 const root = path.resolve(valueOf('--root') ?? REPOSITORY_ROOT);
 const runner = valueOf('--runner');
-if (!['linux', 'wasm', 'android', 'wasi', 'macos'].includes(runner)) {
-    throw new Error('--runner must be linux, wasm, android, wasi or macos.');
+if (!RUNNERS.includes(runner)) {
+    throw new Error(`--runner must be one of ${RUNNERS.join(', ')}.`);
 }
 const planPath = path.resolve(valueOf('--plan') ?? 'workspace-release-plan.json');
 const artifactRoot = path.resolve(valueOf('--artifact-dir') ?? path.join(root, `workspace-release-${runner}`));
@@ -38,7 +38,7 @@ for (const name of buildOrder) {
 
 for (const name of plan.multiPlatform) {
     const candidate = workspace[name];
-    const platforms = { wasm: ['wasm'], android: ['android'], wasi: ['wasi'], macos: ['ios'], linux: [] }[runner];
+    const platforms = { wasm: ['wasm'], android: ['android'], wasi: ['wasi'], macos: ['ios'] }[runner] ?? [];
     for (const platform of platforms) {
         process.stdout.write(`[${runner}] build ${name}@${candidate.version} for ${platform}\n`);
         execFileSync('pnpm', ['--dir', path.join(root, candidate.path), 'exec', 'crossbind', 'build', '-p', platform], {

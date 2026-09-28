@@ -68,8 +68,9 @@ target-specific artifacts, transitive dependencies, build recipes, and runtime
 adapters.
 
 - **Target-aware distribution.** A package family can carry WebAssembly, iOS,
-  Android, and WASI variants; each build consumes only the artifact valid for
-  its platform, architecture, runtime, environment, and build type.
+  Android, macOS, Linux, Windows, and WASI variants; each build consumes only the
+  artifact valid for its platform, architecture, runtime, environment, and build
+  type.
 - **Native dependency resolution.** Package manifests and crossbind configs
   carry the transitive native graph, so prerequisites are built and linked in
   the correct order.
@@ -253,9 +254,10 @@ The repository contains 16 port families:
 OpenSSL · PROJ · SpatiaLite · SQLite · libTIFF · WebP · zlib · Zstandard**
 
 Each family has target-specific packages. For example, a browser or Node.js
-project uses `@crossbind/port-gdal-wasm`, while mobile and WASI builds use the
-matching `-android`, `-ios`, or `-wasi` variant. Import the variant's
-`crossbind.config.js` into the application's dependency list:
+project uses `@crossbind/port-gdal-wasm`, while mobile, native Node.js addon and
+WASI builds use the matching `-android`, `-ios`, `-darwin`, `-linux`, `-win32`,
+or `-wasi` variant. Import the variant's `crossbind.config.js` into the
+application's dependency list:
 
 ```bash
 npm install @crossbind/port-gdal-wasm@beta

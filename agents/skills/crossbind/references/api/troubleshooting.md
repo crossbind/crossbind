@@ -82,7 +82,7 @@ Upstream library uses CPU-specific code that doesn't compile for Wasm.
 Emscripten itself ran out of memory during compilation.
 
 - **Cause:** linker working set exceeded default heap.
-- **Fix:** rare; usually fixed in newer Emscripten. If hitting it: `targetSpecs[].specs.emccFlags: ['-sINITIAL_MEMORY=512MB']`.
+- **Fix:** rare; usually fixed in newer Emscripten. If hitting it: `targetSpecs[].specs.binary.emccFlags: ['-sINITIAL_MEMORY=512MB']`.
 
 ### iOS: `pipe2 was misdetected as available`
 
@@ -95,7 +95,7 @@ curl-ios SDK 26+ specific.
 
 Upstream lib has a tool / utility that's built and signed, but you don't have a dev cert.
 
-- **Fix:** `targetSpecs[].specs.cmake: ['-DCMAKE_XCODE_ATTRIBUTE_CODE_SIGNING_ALLOWED=NO']`. Real example: jpegturbo-ios for SIMD coverage tool.
+- **Fix:** return `'-DCMAKE_XCODE_ATTRIBUTE_CODE_SIGNING_ALLOWED=NO'` and `'-DCMAKE_XCODE_ATTRIBUTE_CODE_SIGNING_REQUIRED=NO'` from the recipe's `getBuildParams` for iOS targets. Real example: `ports/jpegturbo/base/build.mjs`, for libjpeg-turbo's SIMD coverage tool.
 
 ---
 
@@ -164,8 +164,8 @@ You explicitly set `fs: { opfs: false }` and then tried to use `/opfs/...`.
 Wasm process exhausted its allocated heap.
 
 - **Note:** `-sALLOW_MEMORY_GROWTH=1` is on by default — runtime should grow memory automatically up to host limits.
-- **Fix A — initial allocation:** `targetSpecs[].specs.emccFlags: ['-sINITIAL_MEMORY=128MB']`. Bump default starting size.
-- **Fix B — maximum allocation:** `targetSpecs[].specs.emccFlags: ['-sMAXIMUM_MEMORY=4GB']`. Browser cap is ~4GB on wasm32; use wasm64 target if you need more.
+- **Fix A — initial allocation:** `targetSpecs[].specs.binary.emccFlags: ['-sINITIAL_MEMORY=128MB']`. Bump default starting size.
+- **Fix B — maximum allocation:** `targetSpecs[].specs.binary.emccFlags: ['-sMAXIMUM_MEMORY=4GB']`. Browser cap is ~4GB on wasm32; use wasm64 target if you need more.
 - **Fix C — algorithmic:** stream the input instead of loading all into memory. Split the workload. Most "out of memory" cases mean your design holds too much state at once.
 
 ### `Function is not a function` / `m.someFunc is undefined`
@@ -243,7 +243,7 @@ On iOS SDK 26+, autoconf misdetects `pipe2` due to a cache mismatch. curl-ios us
 When the error doesn't match anything above:
 
 1. **`pnpm run doctor`** — verifies Node, pnpm, Docker, Android SDK/NDK, Xcode. Most "weird" build failures are missing toolchains.
-2. **Check `~/.crossbind.json` `LOG_LEVEL: 'DEBUG'`** — turns on verbose tracing in crossbind itself. Often shows which step failed.
+2. **Rerun the `crossbind` command with `DEBUG=1`** — a failure prints its full error, stack and `cause` chain instead of one line. Often shows which step failed.
 3. **Reduce to smallest reproducer** — create a fresh project with just the failing dep. Apply the bug-fix playbook (`docs/playbooks/bug-fix.md`).
 4. **Search for the error literal** in `core/crossbind/src/`. Most crossbind error messages are unique enough to find the throwing site.
 5. **File an issue** if the error originates from crossbind itself, not from your config or upstream.

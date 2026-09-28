@@ -7,6 +7,7 @@ import getOsUserAndGroupId from './getOsUserAndGroupId.js';
 import replaceBasePathForDockerUtil, { DOCKER_BASE } from './replaceBasePathForDocker.js';
 import pullDockerImage, { getDockerImage, getDockerContainerName, imageRoleFor } from './pullDockerImage.js';
 import { DOCKER_RUN_SECURITY_ARGS } from './dockerSecurity.js';
+import { HOST_BUILT_PLATFORMS } from './targets.js';
 
 // Every cargo invocation crossbind makes goes through here.
 //
@@ -107,10 +108,10 @@ export function assertCleanConfigChain(home, cwd) {
     }
 }
 
-// iOS links with Xcode, which is in no image, so its Rust stays on the host - as does every build
-// under RUNNER=LOCAL.
+// Apple targets link with Xcode, which is in no image, so their Rust stays on the host - as does
+// every build under RUNNER=LOCAL.
 export function cargoRunner(target) {
-    if (target?.platform === 'ios') return 'LOCAL';
+    if (HOST_BUILT_PLATFORMS.includes(target?.platform)) return 'LOCAL';
     const runner = state.config?.system?.RUNNER;
     return runner === 'DOCKER_RUN' || runner === 'DOCKER_EXEC' ? runner : 'LOCAL';
 }

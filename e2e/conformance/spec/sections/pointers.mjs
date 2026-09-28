@@ -31,6 +31,31 @@ export function pointerChecks({ add }, p, { worker }) {
         await p.writeBytes(b, 'AB');
         return [await p.confPtrByteAt(b, 1), await p.readBytes(b, 2)];
     }, [66, 'AB']);
+    add('ptr:bufferOut', async () => {
+        const b = await p.allocBuffer(3);
+        await p.writeBytes(b, 'A\xfaC');
+        const bytes = await p.readBuffer(b, 3);
+        return [bytes instanceof Uint8Array, ...bytes];
+    }, [true, 65, 250, 67]);
+    add('ptr:bufferIn', async () => {
+        const b = await p.allocBuffer(4);
+        await p.writeBuffer(b, new Uint8Array([9, 1, 250, 3, 7]).subarray(1, 4));
+        return [await p.confPtrByteAt(b, 0), await p.confPtrByteAt(b, 1), await p.confPtrByteAt(b, 2), await p.confPtrByteAt(b, 3)];
+    }, [1, 250, 3, 0]);
+    add('ptr:bufferFromArrayBuffer', async () => {
+        const b = await p.allocBuffer(2);
+        await p.writeBuffer(b, new Uint8Array([4, 5]).buffer);
+        return [await p.confPtrByteAt(b, 0), await p.confPtrByteAt(b, 1)];
+    }, [4, 5]);
+    add('ptr:bufferIsACopy', async () => {
+        const b = await p.allocBuffer(1);
+        const bytes = await p.readBuffer(b, 1);
+        bytes[0] = 9;
+        return p.confPtrByteAt(b, 0);
+    }, 0);
+    rejects('ptr:bufferOutOfBounds', async () => p.readBuffer(await p.allocBuffer(2), 3), /out of bounds/);
+    rejects('ptr:bufferRejectsString', async () => p.writeBuffer(await p.allocBuffer(2), 'ab'), /ArrayBuffer/);
+    rejects('ptr:bufferReadOnly', async () => p.writeBuffer(await p.confPtrPrimes(), new Uint8Array(1)), /read-only/);
     add('ptr:readOnlyView', async () => i32(await p.confPtrPrimes(), 2), 5);
     rejects('ptr:readOnlyRejected', async () => p.confPtrFill(await p.confPtrPrimes(), 1, 0), /read-only/);
     add('ptr:nullPointers', async () => [await p.confPtrSum(null, 0), await p.confPtrPointSum(null)], [0, -1]);

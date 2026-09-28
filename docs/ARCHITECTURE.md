@@ -13,6 +13,7 @@ flowchart TD
     XCFwk["actions/createXCFramework.js<br/>(combine iOS slices, darwin only)"]
     BuildWasm["actions/buildWasm.js<br/>(emcc link → .wasm + .js)"]
     BuildWasi["actions/buildWasiCommand.js<br/>(wasi-sdk link → single .wasm component)"]
+    BuildNode["actions/buildNode.js<br/>(Node-API link → .node addon + .native.cjs loader)"]
     BuildCargo["actions/buildCargo.js<br/>(cargo build → staged .a, export.type 'cargo')"]
     BuildJs["actions/buildJs.js<br/>(rollup, runtime adapter selection)"]
     Run["actions/run.js<br/>(Docker or host shell-out per target)"]
@@ -28,6 +29,7 @@ flowchart TD
     BuildLib --> XCFwk
     BuildLib --> BuildWasm
     BuildLib --> BuildWasi
+    BuildLib --> BuildNode
     BuildLib --> BuildCargo
     BuildWasm --> BuildJs
     Run --> Cmake
@@ -39,6 +41,7 @@ flowchart TD
     XCFwk --> Dist
     BuildJs --> Dist
     BuildWasi --> Dist
+    BuildNode --> Dist
     BuildCargo --> Dist
 ```
 
@@ -46,7 +49,7 @@ flowchart TD
 
 ### Targets (the unit of build work)
 
-A **target** is a `{platform, arch, runtime, runtimeEnv, buildType}` tuple — e.g. `wasm-wasm32-mt-release-browser`, `wasi-wasm32-st-release` or `ios-iphoneos-mt-release`. The inventory's single source is `core/crossbind/src/utils/targets.js` (state and the wasi command runner both read it). CLI flags (`-p`, `-a`, `-r`, `-e`, `-b`) filter which targets actually build; defaults try the full matrix that the host can support.
+A **target** is a `{platform, arch, runtime, runtimeEnv, buildType}` tuple — e.g. `wasm-wasm32-mt-release-browser`, `wasi-wasm32-st-release` or `ios-iphoneos-mt-release`. The inventory's single source is `core/crossbind/src/utils/targets.js` (state and the wasi command runner both read it). CLI flags (`-p`, `-a`, `-r`, `-e`, `-b`) filter which targets actually build; defaults try the full matrix that the host can support, except opt-in platforms (`darwin`, `linux` and `win32`, the Node-API addons of ADR-0011), which build only when named with `-p`.
 
 ### Runtime adapters (JS layer)
 
@@ -92,6 +95,9 @@ ports/zlib/
 ├── wasm/       ← per-platform prebuilt + crossbind.config.js + crossbind.build.js
 ├── android/
 ├── ios/
+├── darwin/     ← macOS arm64 + x64 archives for native Node.js addons
+├── linux/      ← Linux (glibc 2.28) arm64 + x64 archives for native Node.js addons
+├── win32/      ← Windows arm64 + x64 archives for native Node.js addons
 └── wasi/       ← wasi (wasm32-wasip3) prebuilt
 ```
 
@@ -114,7 +120,7 @@ Force semantics: `actions/isSourceNewer.js` compares native source mtimes agains
 
 ## Execution boundaries (Docker, Xcode, Emscripten)
 
-`actions/run.js` shells out to host tools. WASM and Android targets run inside a digest-pinned Docker image (`getDockerImage()`); iOS targets need a darwin host with Xcode installed. WASI is dual-mode: host-run when a local wasi-sdk is configured (`WASI_SDK_PATH` in `~/.crossbind.json` or `CROSSBIND_WASI_SDK_PATH`), otherwise the docker image carries the sdk at `/opt/wasi-sdk`. Cargo builds (`export.type: 'cargo'`) run on the host toolchain. The wasm/android/wasi branches are CI-friendly on Linux runners; iOS branches early-return on non-darwin (`createLib.js:18`, `createXCFramework.js:13`).
+`actions/run.js` shells out to host tools. WASM, Android, Linux and Windows targets run inside digest-pinned Docker images (`getDockerImage()` with the `web`, `android`, `linux` and `windows` roles); iOS and darwin (macOS Node.js addon) targets need a darwin host with Xcode installed. The `linux` image compiles with clang against glibc 2.28 sysroots and a static libc++, the `windows` image with llvm-mingw against the Universal C Runtime, so Linux and Windows addons build on any Docker host. A darwin build runs with a PATH of Apple's tools only and ignores the Homebrew and MacPorts prefixes, so no package of the build machine ends up in the archives. WASI is dual-mode: host-run when a local wasi-sdk is configured (`WASI_SDK_PATH` in `~/.crossbind.json` or `CROSSBIND_WASI_SDK_PATH`), otherwise the docker image carries the sdk at `/opt/wasi-sdk`. Cargo builds (`export.type: 'cargo'`) run on the host toolchain. The wasm/android/wasi/linux/win32 branches are CI-friendly on Linux runners; iOS branches early-return on non-darwin (`createLib.js:18`, `createXCFramework.js:13`).
 
 ## Logger + diagnostics
 
@@ -127,11 +133,11 @@ flowchart TD
     Q["Want to change a build behavior"] --> Filter{"Targets only?"}
     Filter -->|"Just narrow which targets build"| L1["Layer 1: target.{platform,arch,runtime,buildType}"]
     Filter -->|"Change defaults too"| Spec{"Per-target tweak?"}
-    Spec -->|"Yes, declarative"| L2["Layer 2: targetSpecs[].specs.{cmake,emccFlags,env,data,ignoreLibName}"]
+    Spec -->|"Yes, declarative"| L2["Layer 2: targetSpecs[].specs.{cmake,binary.emccFlags,env,data,ignoreLibName}"]
     Spec -->|"Project-wide"| L3a["Layer 3: crossbind.config.js env / functions.isEnabled / dependencies"]
     Spec -->|"Authoring a package?"| L4["Layer 4: crossbind.build.js hooks (getURL, getBuildParams, replaceList, prepare, build, env, copyToSource, copyToDist, beforeRun, getExtraLibs, setState)"]
     Spec -->|"Cross-package plugin"| L5["Layer 5: extensions[] (loadConfig.after, buildWasm.beforeBuild*, createLib.setFlag*)"]
-    Spec -->|"Machine-wide"| L6["Layer 6: ~/.crossbind.json (RUNNER, XCODE_DEVELOPMENT_TEAM, LOG_LEVEL)"]
+    Spec -->|"Machine-wide"| L6["Layer 6: ~/.crossbind.json (RUNNER, XCODE_DEVELOPMENT_TEAM)"]
     L1 --> Done[Use this]
     L2 --> Done
     L3a --> Done
@@ -155,8 +161,8 @@ sequenceDiagram
     State->>State: merge crossbind.config.js + crossbind.build.js + system
     State->>Hook: setState(state)?
     loop For each target in state.targets
-        CLI->>Hook: getURL(version) or getSource(state)
-        Hook-->>Build: download / copy / clone source → state.config.paths.build
+        CLI->>Hook: getURL(version)
+        Hook-->>Build: download source → state.config.paths.build
         CLI->>Hook: replaceList / sourceReplaceList(target, depPaths)?
         Hook-->>Build: regex-patch upstream sources
         CLI->>Hook: copyToSource?
@@ -164,7 +170,7 @@ sequenceDiagram
         CLI->>Hook: prepare(state)?
         CLI->>Hook: beforeRun(cmakeDir)?
         Hook-->>Build: run pre-cmake commands (autoreconf, etc.)
-        CLI->>Hook: getBuildParams(state, target)
+        CLI->>Hook: getBuildParams(target, depPaths, ext, buildPath)
         Hook-->>Build: extra cmake -D / configure flags
         CLI->>Build: cmake configure + build (or ./configure && make)
         CLI->>Hook: getExtraLibs(target)?

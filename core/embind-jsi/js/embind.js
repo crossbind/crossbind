@@ -4,6 +4,11 @@ function warnOnce(msg) {
 
 function callRuntimeCallbacks() { }
 
+// Upstream's helper, left out of this fork. Pointers arrive as BigInt or Number.
+function ptrToString(ptr) {
+  return '0x' + ptr.toString(16).padStart(8, '0');
+}
+
 // include: shell.js
 /**
  * @license
@@ -323,7 +328,9 @@ if (ENVIRONMENT_IS_SHELL) {
     }
 
     setWindowTitle = (title) => document.title = title;
-  } else {
+  } else if (!ENVIRONMENT_IS_NODE) {
+    // Node is not an error: it hosts this runtime inside a Node-API addon, which uses none of the
+    // file-loading hooks above.
     throw new Error('environment detection error');
   }
 
@@ -421,205 +428,6 @@ function _free() {
   // Show a helpful error since we used to include free by default in the past.
   // console.warn("free() called but not included in the build - add '_free' to EXPORTED_FUNCTIONS");
 }
-
-// Memory management
-
-var HEAP = [],
-  /** @type {!Int8Array} */
-  HEAP8 = [],
-  /** @type {!Uint8Array} */
-  HEAPU8 = [],
-  /** @type {!Int16Array} */
-  HEAP16 = [],
-  /** @type {!Uint16Array} */
-  HEAPU16 = [],
-  /** @type {!Int32Array} */
-  HEAP32 = [],
-  /** @type {!Uint32Array} */
-  HEAPU32 = [],
-  /** @type {!Float32Array} */
-  HEAPF32 = [],
-  /* BigInt64Array type is not correctly defined in closure
-  /** not-@type {!BigInt64Array} */
-  HEAP64 = [],
-  /* BigUInt64Array type is not correctly defined in closure
-  /** not-t@type {!BigUint64Array} */
-  HEAPU64 = [],
-  /** @type {!Float64Array} */
-  HEAPF64 = [],
-
-  DATA_VIEW = [];
-
-
-var HEAP_OFFSET = [];
-
-function updateMemoryViews(offset, offset2, offset3, offset4) {
-  // var b = wasmMemory.buffer;
-  var b = globalThis.jsiArrayBuffer;
-  var b2 = globalThis.jsiArrayBuffer2;
-  var b3 = globalThis.jsiArrayBuffer3;
-  var b4 = globalThis.jsiArrayBuffer4;
-
-  // console.log('length: ' + b.byteLength + ', offset 1: ' + offset + ', offset 2: ' + offset2 + ', offset 3: ' + offset3 + ', offset 4: ' + offset4);
-
-  HEAP_OFFSET = [offset, offset2, offset3, offset4];
-
-  HEAP8.push(new Int8Array(b));
-  HEAP8.push(new Int8Array(b2));
-  HEAP8.push(new Int8Array(b3));
-  HEAP8.push(new Int8Array(b4));
-
-  HEAPU8.push(new Uint8Array(b));
-  HEAPU8.push(new Uint8Array(b2));
-  HEAPU8.push(new Uint8Array(b3));
-  HEAPU8.push(new Uint8Array(b4));
-
-  DATA_VIEW.push(new DataView(b));
-  DATA_VIEW.push(new DataView(b2));
-  DATA_VIEW.push(new DataView(b3));
-  DATA_VIEW.push(new DataView(b4));
-}
-
-function __crossbind_register_heap_window(offset, arrayBuffer) {
-  for (let i = 0; i < HEAP_OFFSET.length; i++) {
-    if (HEAP_OFFSET[i] === offset) return;
-  }
-  HEAP_OFFSET.push(offset);
-  HEAP8.push(new Int8Array(arrayBuffer));
-  HEAPU8.push(new Uint8Array(arrayBuffer));
-  DATA_VIEW.push(new DataView(arrayBuffer));
-}
-globalThis.__crossbind_register_heap_window = __crossbind_register_heap_window;
-
-const UINT32_MAX_BIGINT = 4294967295n;
-
-function findHeapIndex(ptr) {
-  let bestIdx = -1;
-  let bestDelta = UINT32_MAX_BIGINT;
-  for (let i = 0; i < HEAP_OFFSET.length; i++) {
-    const offset = HEAP_OFFSET[i];
-    if (ptr >= offset) {
-      const delta = ptr - offset;
-      if (delta < bestDelta) {
-        bestDelta = delta;
-        bestIdx = i;
-      }
-    }
-  }
-  return bestIdx;
-}
-
-function getHeapIndex(ptr) {
-  let bestIdx = findHeapIndex(ptr);
-
-  // Self-healing: a pointer can land outside every window (fresh heap regions from
-  // by-value returns, allocator arenas, ...). Ask native to register a covering
-  // window and retry once before giving up.
-  if (bestIdx === -1 && typeof globalThis.__crossbind_ensure_heap_window === 'function') {
-    globalThis.__crossbind_ensure_heap_window(ptr);
-    bestIdx = findHeapIndex(ptr);
-  }
-
-  if (bestIdx === -1) {
-    throw (`Heap error !!! pointer: ${ptr}, no covering window in: ${HEAP_OFFSET}`);
-  }
-
-  return bestIdx;
-}
-
-function writeToMemoryUsingShift(pointer, signed, shift, value) {
-  // console.log(`writeToMemory, pointer: ${pointer}`);
-  const pi = getHeapIndex(pointer);
-  const offset = Number(pointer - HEAP_OFFSET[pi]);
-  const shiftAsInt = Number(shift);
-  // console.log(`writeToMemory, pi: ${pi}, shift: ${shiftAsInt}, signed: ${signed}, value: ${value}, pointer: ${pointer}`);
-
-  switch (shiftAsInt) {
-    case 0: result = signed ? DATA_VIEW[pi].setInt8(offset, value, true) : DATA_VIEW[pi].setUint8(offset, value, true);
-      break;
-    case 1: result = signed ? DATA_VIEW[pi].setInt16(offset, value, true) : DATA_VIEW[pi].setUint16(offset, value, true);
-      break;
-    case 2: result = signed ? DATA_VIEW[pi].setInt32(offset, value, true) : DATA_VIEW[pi].setUint32(offset, value, true);
-      break;
-    case 3: result = signed ? DATA_VIEW[pi].setBigInt64(offset, value, true) : DATA_VIEW[pi].setBigUint64(offset, value, true);
-      break;
-    default:
-      throw new TypeError("Unknown heap type");
-  }
-}
-
-function readFromMemoryUsingShift(pointer, signed, shift, isFloat = false) {
-  // console.log(`readFromMemory, pointer: ${pointer}`);
-  const pi = getHeapIndex(pointer);
-  const offset = Number(pointer - HEAP_OFFSET[pi]);
-  // console.log(`readFromMemory, pi: ${pi}, shift: ${shift}, signed: ${signed}, pointer: ${pointer}, offset: ${offset}`);
-  const shiftAsInt = Number(shift);
-
-  let result = null;
-  if (isFloat) {
-    switch (shiftAsInt) {
-      case 2: result = DATA_VIEW[pi].getFloat32(offset, true);
-        break;
-      case 3: result = DATA_VIEW[pi].getFloat64(offset, true);
-        break;
-      default:
-        throw new TypeError("Unknown heap type");
-    }
-  } else {
-    switch (shiftAsInt) {
-      case 0: result = signed ? DATA_VIEW[pi].getInt8(offset, true) : DATA_VIEW[pi].getUint8(offset, true);
-        break;
-      case 1: result = signed ? DATA_VIEW[pi].getInt16(offset, true) : DATA_VIEW[pi].getUint16(offset, true);
-        break;
-      case 2: result = signed ? DATA_VIEW[pi].getInt32(offset, true) : DATA_VIEW[pi].getUint32(offset, true);
-        break;
-      case 3: result = signed ? DATA_VIEW[pi].getBigInt64(offset, true) : DATA_VIEW[pi].getBigUint64(offset, true);
-        break;
-      default:
-        throw new TypeError("Unknown heap type");
-    }
-  }
-
-  // console.log(`readFromMemory, result 1: ${result}`);
-
-  return result;
-}
-
-function readFromMemoryUsingBit(pointer, signed, bit) {
-  let shift = 0;
-  switch (bit) {
-    case 8: shift = 0;
-      break;
-    case 16: shift = 1;
-      break;
-    case 32: shift = 2;
-      break;
-    case 64: shift = 3;
-      break;
-    default:
-      throw new TypeError("Unknown bit");
-  }
-
-  return readFromMemoryUsingShift(pointer, signed, shift);
-}
-
-function readFromMemoryUsingSize(pointer, signed, bit) {
-  let shift = 0;
-  switch (bit) {
-    case 1: shift = 0;
-      break;
-    case 2: shift = 1;
-      break;
-    case 4: shift = 2;
-      break;
-    default:
-      throw new TypeError("Unknown size");
-  }
-
-  return readFromMemoryUsingShift(pointer, signed, shift);
-}
-
-globalThis.updateMemoryViews = updateMemoryViews;
 
 assert(!Module['STACK_SIZE'], 'STACK_SIZE can no longer be set at runtime.  Use -sSTACK_SIZE at link time')
 
@@ -1036,7 +844,6 @@ function createWasm() {
     // mode.
     // TODO(sbc): Read INITIAL_MEMORY out of the wasm file in post-link mode.
     //assert(wasmMemory.buffer.byteLength === 16777216);
-    updateMemoryViews();
 
     wasmTable = Module['asm']['__indirect_function_table'];
     assert(wasmTable, "table not found in wasm exports");
@@ -1365,6 +1172,29 @@ function __embind_register_jsiValue(rawType, name) {
 }
 globalThis.__embind_register_jsiValue = __embind_register_jsiValue;
 
+// A Rust byte or double slice argument: the view itself reaches the adapter, which reads its
+// elements in place. Another typed array or a plain array is copied into a new view first, and so is
+// a view over a SharedArrayBuffer, which another thread could write during the call.
+function __crossbind_register_typed_arg(rawType, name, isDoubles, isOptional) {
+  const View = isDoubles ? Float64Array : Uint8Array;
+  const isLent = isDoubles
+    ? (value) => value instanceof Float64Array
+    : (value) => value instanceof Uint8Array || value instanceof Uint8ClampedArray || value instanceof Int8Array;
+  const Shared = typeof SharedArrayBuffer === 'undefined' ? null : SharedArrayBuffer;
+  registerType(rawType, {
+    name,
+    'argPackAdvance': 0n,
+    'toWireType': function (destructors, value) {
+      if (isOptional && (value === null || value === undefined)) return null;
+      if (isLent(value) && !(Shared && value.buffer instanceof Shared)) return value;
+      if (Array.isArray(value) || (ArrayBuffer.isView(value) && !(value instanceof DataView))) return View.from(value);
+      throwBindingError(`Cannot pass ${embindRepr(value)} as a ${name}`);
+    },
+    destructorFunction: null,
+  });
+}
+globalThis.__crossbind_register_typed_arg = __crossbind_register_typed_arg;
+
 function getShiftFromSize(size) {
   switch (size) {
     case 1: return 0;
@@ -1397,10 +1227,6 @@ function __embind_register_bool(rawType, name, size, trueValue, falseValue) {
       return o ? trueValue : falseValue;
     },
     'argPackAdvance': 8n,
-    'readValueFromPointer': function (pointer) {
-      // console.log('__embind_register_bool readValueFromPointer', pointer);
-      return this['fromWireType'](readFromMemoryUsingSize(pointer, true, size));
-    },
     destructorFunction: null, // This type does not need a destructor
   });
 }
@@ -1422,9 +1248,6 @@ function __embind_register_optional(rawOptionalType, rawInnerType) {
         return inner['toWireType'](destructors, o);
       },
       'argPackAdvance': 8n,
-      'readValueFromPointer': function (pointer) {
-        throw new Error(`std::optional<${inner.name}> cannot be read from raw memory`);
-      },
       destructorFunction: null,
     }];
   });
@@ -1440,31 +1263,6 @@ function embindRepr(v) {
     return v.toString();
   } else {
     return '' + v;
-  }
-}
-
-
-function integerReadValueFromPointer(name, shift, signed) {
-  // integers are quite common, so generate very specialized functions
-  switch (shift) {
-    case 0:
-    case 0n: return signed ?
-      function readS8FromPointer(pointer) { return readFromMemoryUsingShift(pointer, true, 0); } :
-      function readU8FromPointer(pointer) { return readFromMemoryUsingShift(pointer, false, 0); };
-    case 1:
-    case 1n: return signed ?
-      function readS16FromPointer(pointer) { return readFromMemoryUsingShift(pointer, true, 1); } :
-      function readU16FromPointer(pointer) { return readFromMemoryUsingShift(pointer, false, 1); };
-    case 2:
-    case 2n: return signed ?
-      function readS32FromPointer(pointer) { return readFromMemoryUsingShift(pointer, true, 2); } :
-      function readU32FromPointer(pointer) { return readFromMemoryUsingShift(pointer, false, 2); };
-    case 3:
-    case 3n: return signed ?
-      function readS64FromPointer(pointer) { return readFromMemoryUsingShift(pointer, true, 3); } :
-      function readU64FromPointer(pointer) { return readFromMemoryUsingShift(pointer, false, 3); };
-    default:
-      throw new TypeError("Unknown integer type: " + name);
   }
 }
 
@@ -1524,7 +1322,6 @@ function __embind_register_integer(primitiveType, name, size, minRange, maxRange
     'fromWireType': fromWireType,
     'toWireType': toWireType,
     'argPackAdvance': 8n,
-    'readValueFromPointer': integerReadValueFromPointer(name, shift, minRange !== 0),
     destructorFunction: null, // This type does not need a destructor
   });
 }
@@ -1536,8 +1333,6 @@ globalThis.__embind_register_integer = __embind_register_integer;
 function __embind_register_bigint(primitiveType, name, size, minRange, maxRange) {
   // console.log('bigint', name, primitiveType, size, minRange, maxRange);
   name = readLatin1String(name);
-
-  var shift = getShiftFromSize(size);
 
   var isUnsignedType = (name.indexOf('u') != -1);
 
@@ -1567,7 +1362,6 @@ function __embind_register_bigint(primitiveType, name, size, minRange, maxRange)
       return BigInt(value);
     },
     'argPackAdvance': 8n,
-    'readValueFromPointer': integerReadValueFromPointer(name, shift, !isUnsignedType),
     destructorFunction: null, // This type does not need a destructor
   });
 }
@@ -1575,28 +1369,8 @@ function __embind_register_bigint(primitiveType, name, size, minRange, maxRange)
 globalThis.__embind_register_bigint = __embind_register_bigint;
 
 
-function floatReadValueFromPointer(name, shift) {
-  switch (shift) {
-    case 2:
-    case 2n:
-      return function (pointer) {
-        return readFromMemoryUsingShift(pointer, true, 2, true);
-      };
-    case 3:
-    case 3n:
-      return function (pointer) {
-        return readFromMemoryUsingShift(pointer, true, 3, true);
-      };
-    default:
-      throw new TypeError("Unknown float type: " + name);
-  }
-}
-
-
-
 function __embind_register_float(rawType, name, size) {
   // console.log('float', name, rawType, size);
-  var shift = getShiftFromSize(size);
   name = readLatin1String(name);
   registerType(rawType, {
     name: name,
@@ -1612,7 +1386,6 @@ function __embind_register_float(rawType, name, size) {
       return value;
     },
     'argPackAdvance': 8n,
-    'readValueFromPointer': floatReadValueFromPointer(name, shift),
     destructorFunction: null, // This type does not need a destructor
   });
 }
@@ -1620,219 +1393,14 @@ function __embind_register_float(rawType, name, size) {
 globalThis.__embind_register_float = __embind_register_float;
 
 
-function simpleReadValueFromPointer(pointer) {
-  /* console.log(
-    'simpleReadValueFromPointer :',
-    this.name, JSON.stringify(pointer, null, 2),
-    readFromMemoryUsingShift(pointer, true, 2)
-  ); */
-  return this['fromWireType'](readFromMemoryUsingShift(pointer, true, 2));
-}
-
-function simpleReadValueFromPointer64(pointer) {
-  /* console.log(
-    'simpleReadValueFromPointer :',
-    this.name, JSON.stringify(pointer, null, 3),
-    readFromMemoryUsingShift(pointer, true, 3)
-  ); */
-  return this['fromWireType'](readFromMemoryUsingShift(pointer, false, 3));
-}
-
-
-function stringToUTF8Array(str, heap, outIdx, maxBytesToWrite) {
-  // console.log('stringToUTF8Array');
-  assert(typeof str === 'string');
-  // Parameter maxBytesToWrite is not optional. Negative values, 0, null,
-  // undefined and false each don't write out any bytes.
-  if (!(maxBytesToWrite > 0))
-    return 0;
-
-  var startIdx = outIdx;
-  var endIdx = outIdx + maxBytesToWrite - 1; // -1 for string null terminator.
-  for (var i = 0; i < str.length; ++i) {
-    // Gotcha: charCodeAt returns a 16-bit word that is a UTF-16 encoded code
-    // unit, not a Unicode code point of the character! So decode
-    // UTF16->UTF32->UTF8.
-    // See http://unicode.org/faq/utf_bom.html#utf16-3
-    // For UTF8 byte structure, see http://en.wikipedia.org/wiki/UTF-8#Description
-    // and https://www.ietf.org/rfc/rfc2279.txt
-    // and https://tools.ietf.org/html/rfc3629
-    var u = str.charCodeAt(i); // possibly a lead surrogate
-    if (u >= 0xD800 && u <= 0xDFFF) {
-      var u1 = str.charCodeAt(++i);
-      u = 0x10000 + ((u & 0x3FF) << 10) | (u1 & 0x3FF);
-    }
-    if (u <= 0x7F) {
-      if (outIdx >= endIdx) break;
-      heap[outIdx++] = u;
-    } else if (u <= 0x7FF) {
-      if (outIdx + 1 >= endIdx) break;
-      heap[outIdx++] = 0xC0 | (u >> 6);
-      heap[outIdx++] = 0x80 | (u & 63);
-    } else if (u <= 0xFFFF) {
-      if (outIdx + 2 >= endIdx) break;
-      heap[outIdx++] = 0xE0 | (u >> 12);
-      heap[outIdx++] = 0x80 | ((u >> 6) & 63);
-      heap[outIdx++] = 0x80 | (u & 63);
-    } else {
-      if (outIdx + 3 >= endIdx) break;
-      if (u > 0x10FFFF) warnOnce('Invalid Unicode code point ' + ptrToString(u) + ' encountered when serializing a JS string to a UTF-8 string in wasm memory! (Valid unicode code points should be in range 0-0x10FFFF).');
-      heap[outIdx++] = 0xF0 | (u >> 18);
-      heap[outIdx++] = 0x80 | ((u >> 12) & 63);
-      heap[outIdx++] = 0x80 | ((u >> 6) & 63);
-      heap[outIdx++] = 0x80 | (u & 63);
-    }
-  }
-  // Null-terminate the pointer to the buffer.
-  heap[outIdx] = 0;
-  return outIdx - startIdx;
-}
-function stringToUTF8(str, outPtr, maxBytesToWrite) {
-  assert(typeof maxBytesToWrite == 'number', 'stringToUTF8(str, outPtr, maxBytesToWrite) is missing the third parameter that specifies the length of the output buffer!');
-
-  const index = getHeapIndex(outPtr);
-  return stringToUTF8Array(str, HEAPU8[index], outPtr - HEAP_OFFSET[index], maxBytesToWrite);
-}
-
-function lengthBytesUTF8(str) {
-  var len = 0;
-  for (var i = 0; i < str.length; ++i) {
-    // Gotcha: charCodeAt returns a 16-bit word that is a UTF-16 encoded code
-    // unit, not a Unicode code point of the character! So decode
-    // UTF16->UTF32->UTF8.
-    // See http://unicode.org/faq/utf_bom.html#utf16-3
-    var c = str.charCodeAt(i); // possibly a lead surrogate
-    if (c <= 0x7F) {
-      len++;
-    } else if (c <= 0x7FF) {
-      len += 2;
-    } else if (c >= 0xD800 && c <= 0xDFFF) {
-      len += 4; ++i;
-    } else {
-      len += 3;
-    }
-  }
-  return len;
-}
-
-var UTF8Decoder = typeof TextDecoder != 'undefined' ? new TextDecoder('utf8') : undefined;
-
-/**
- * Given a pointer 'idx' to a null-terminated UTF8-encoded string in the given
- * array that contains uint8 values, returns a copy of that string as a
- * Javascript String object.
- * heapOrArray is either a regular array, or a JavaScript typed array view.
- * @param {number} idx
- * @param {number=} maxBytesToRead
- * @return {string}
- */
-function UTF8ArrayToString(heapOrArray, idx, maxBytesToRead) {
-  var endIdx = idx + maxBytesToRead;
-  var endPtr = idx;
-  // TextDecoder needs to know the byte length in advance, it doesn't stop on
-  // null terminator by itself.  Also, use the length info to avoid running tiny
-  // strings through TextDecoder, since .subarray() allocates garbage.
-  // (As a tiny code save trick, compare endPtr against endIdx using a negation,
-  // so that undefined means Infinity)
-  while (heapOrArray[endPtr] && !(endPtr >= endIdx)) ++endPtr;
-
-  if (endPtr - idx > 16 && heapOrArray.buffer && UTF8Decoder) {
-    return UTF8Decoder.decode(heapOrArray.subarray(idx, endPtr));
-  }
-  var str = '';
-  // If building with TextDecoder, we have already computed the string length
-  // above, so test loop end condition against that
-  while (idx < endPtr) {
-    // For UTF8 byte structure, see:
-    // http://en.wikipedia.org/wiki/UTF-8#Description
-    // https://www.ietf.org/rfc/rfc2279.txt
-    // https://tools.ietf.org/html/rfc3629
-    var u0 = heapOrArray[idx++];
-    if (!(u0 & 0x80)) { str += String.fromCharCode(u0); continue; }
-    var u1 = heapOrArray[idx++] & 63;
-    if ((u0 & 0xE0) == 0xC0) { str += String.fromCharCode(((u0 & 31) << 6) | u1); continue; }
-    var u2 = heapOrArray[idx++] & 63;
-    if ((u0 & 0xF0) == 0xE0) {
-      u0 = ((u0 & 15) << 12) | (u1 << 6) | u2;
-    } else {
-      if ((u0 & 0xF8) != 0xF0) warnOnce('Invalid UTF-8 leading byte ' + ptrToString(u0) + ' encountered when deserializing a UTF-8 string in wasm memory to a JS string!');
-      u0 = ((u0 & 7) << 18) | (u1 << 12) | (u2 << 6) | (heapOrArray[idx++] & 63);
-    }
-
-    if (u0 < 0x10000) {
-      str += String.fromCharCode(u0);
-    } else {
-      var ch = u0 - 0x10000;
-      str += String.fromCharCode(0xD800 | (ch >> 10), 0xDC00 | (ch & 0x3FF));
-    }
-  }
-  return str;
-}
-
-
-/**
- * Given a pointer 'ptr' to a null-terminated UTF8-encoded string in the
- * emscripten HEAP, returns a copy of that string as a Javascript String object.
- *
- * @param {number} ptr
- * @param {number=} maxBytesToRead - An optional length that specifies the
- *   maximum number of bytes to read. You can omit this parameter to scan the
- *   string until the first 0 byte. If maxBytesToRead is passed, and the string
- *   at [ptr, ptr+maxBytesToReadr[ contains a null byte in the middle, then the
- *   string will cut short at that byte index (i.e. maxBytesToRead will not
- *   produce a string of exact length [ptr, ptr+maxBytesToRead[) N.B. mixing
- *   frequent uses of UTF8ToString() with and without maxBytesToRead may throw
- *   JS JIT optimizations off, so it is worth to consider consistently using one
- * @return {string}
- */
-function UTF8ToString(ptr, maxBytesToRead) {
-  assert(typeof ptr === 'bigint' || typeof ptr === 'number');
-  const index = getHeapIndex(ptr);
-
-  return ptr ? UTF8ArrayToString(HEAPU8[index], ptr - HEAP_OFFSET[index], maxBytesToRead) : '';
-}
 function __embind_register_std_string(rawType, name) {
   name = readLatin1String(name);
-  var stdStringIsUTF8
-    //process only std::string bindings with UTF8 support, in contrast to e.g. std::basic_string<unsigned char>
-    = (name === "std::string");
 
   registerType(rawType, {
     name: name,
+    // The C++ BindingType has already turned the std::string into a JS string (wire.h).
     'fromWireType': function (value) {
-      if (typeof value !== 'bigint') {
-        return value;
-      }
-
-      var length = readFromMemoryUsingShift(value, false, 2) //HEAPU32[value >> 2];
-      var payload = value + 8n;
-      var str;
-      if (stdStringIsUTF8) {
-        var decodeStartPtr = payload;
-        for (var i = 0n; i <= length; ++i) {
-          var currentBytePtr = payload + i;
-          const heapIndex = getHeapIndex(currentBytePtr);
-          if (i == length || HEAPU8[heapIndex][currentBytePtr - HEAP_OFFSET[heapIndex]] == 0) {
-            var maxRead = currentBytePtr - decodeStartPtr;
-            var stringSegment = UTF8ToString(decodeStartPtr, maxRead);
-            if (str === undefined) {
-              str = stringSegment
-            } else {
-              str += String.fromCharCode(0);
-              str += stringSegment
-            }
-            decodeStartPtr = currentBytePtr + 1n
-          }
-        }
-      } else {
-        /* var a = new Array(length);
-        for (var i = 0; i < length; ++i) {
-          a[i] = String.fromCharCode(HEAPU8[payload + i])
-        }
-        str = a.join("") */
-      }
-      _free(value);
-      return str;
+      return value;
     },
     'toWireType': function (destructors, value, usePointer = false) {
       return value;
@@ -1881,7 +1449,6 @@ function __embind_register_std_string(rawType, name) {
       return base; */
     },
     'argPackAdvance': 8n,
-    'readValueFromPointer': simpleReadValueFromPointer64,
     destructorFunction: function (ptr) { _free(ptr); },
   });
 }
@@ -1889,135 +1456,6 @@ function __embind_register_std_string(rawType, name) {
 globalThis.__embind_register_std_string = __embind_register_std_string;
 
 
-var UTF16Decoder = (function () {
-  try {
-    return typeof TextDecoder !== 'undefined' ? new TextDecoder('utf-16le') : undefined;
-  } catch (e) {
-    return undefined;
-  }
-})();
-function UTF16ToString(ptr, maxBytesToRead) {
-  assert(ptr % 2 == 0, 'Pointer passed to UTF16ToString must be aligned to two bytes!');
-  var endPtr = ptr;
-  // TextDecoder needs to know the byte length in advance, it doesn't stop on
-  // null terminator by itself.
-  // Also, use the length info to avoid running tiny strings through
-  // TextDecoder, since .subarray() allocates garbage.
-  var idx = endPtr >> 1;
-  var maxIdx = idx + maxBytesToRead / 2;
-  // If maxBytesToRead is not passed explicitly, it will be undefined, and this
-  // will always evaluate to true. This saves on code size.
-  while (!(idx >= maxIdx) && HEAPU16[idx]) ++idx;
-  endPtr = idx << 1;
-
-  if (endPtr - ptr > 32 && UTF16Decoder)
-    return UTF16Decoder.decode(HEAPU8.subarray(ptr, endPtr));
-
-  // Fallback: decode without UTF16Decoder
-  var str = '';
-
-  // If maxBytesToRead is not passed explicitly, it will be undefined, and the
-  // for-loop's condition will always evaluate to true. The loop is then
-  // terminated on the first null char.
-  for (var i = 0; !(i >= maxBytesToRead / 2); ++i) {
-    var codeUnit = HEAP16[(((ptr) + (i * 2)) >> 1)];
-    if (codeUnit == 0) break;
-    // fromCharCode constructs a character from a UTF-16 code unit, so we can
-    // pass the UTF16 string right through.
-    str += String.fromCharCode(codeUnit);
-  }
-
-  return str;
-}
-
-function stringToUTF16(str, outPtr, maxBytesToWrite) {
-  assert(outPtr % 2 == 0, 'Pointer passed to stringToUTF16 must be aligned to two bytes!');
-  assert(typeof maxBytesToWrite == 'number', 'stringToUTF16(str, outPtr, maxBytesToWrite) is missing the third parameter that specifies the length of the output buffer!');
-  // Backwards compatibility: if max bytes is not specified, assume unsafe unbounded write is allowed.
-  if (maxBytesToWrite === undefined) {
-    maxBytesToWrite = 0x7FFFFFFF;
-  }
-  if (maxBytesToWrite < 2) return 0;
-  maxBytesToWrite -= 2; // Null terminator.
-  var startPtr = outPtr;
-  var numCharsToWrite = (maxBytesToWrite < str.length * 2) ? (maxBytesToWrite / 2) : str.length;
-  for (var i = 0; i < numCharsToWrite; ++i) {
-    // charCodeAt returns a UTF-16 encoded code unit, so it can be directly written to the HEAP.
-    var codeUnit = str.charCodeAt(i); // possibly a lead surrogate
-    HEAP16[((outPtr) >> 1)] = codeUnit;
-    outPtr += 2;
-  }
-  // Null-terminate the pointer to the HEAP.
-  HEAP16[((outPtr) >> 1)] = 0;
-  return outPtr - startPtr;
-}
-
-function lengthBytesUTF16(str) {
-  return str.length * 2;
-}
-
-function UTF32ToString(ptr, maxBytesToRead) {
-  assert(ptr % 4 == 0, 'Pointer passed to UTF32ToString must be aligned to four bytes!');
-  var i = 0;
-
-  var str = '';
-  // If maxBytesToRead is not passed explicitly, it will be undefined, and this
-  // will always evaluate to true. This saves on code size.
-  while (!(i >= maxBytesToRead / 4)) {
-    var utf32 = HEAP32[(((ptr) + (i * 4)) >> 2)];
-    if (utf32 == 0) break;
-    ++i;
-    // Gotcha: fromCharCode constructs a character from a UTF-16 encoded code (pair), not from a Unicode code point! So encode the code point to UTF-16 for constructing.
-    // See http://unicode.org/faq/utf_bom.html#utf16-3
-    if (utf32 >= 0x10000) {
-      var ch = utf32 - 0x10000;
-      str += String.fromCharCode(0xD800 | (ch >> 10), 0xDC00 | (ch & 0x3FF));
-    } else {
-      str += String.fromCharCode(utf32);
-    }
-  }
-  return str;
-}
-
-function stringToUTF32(str, outPtr, maxBytesToWrite) {
-  assert(outPtr % 4 == 0, 'Pointer passed to stringToUTF32 must be aligned to four bytes!');
-  assert(typeof maxBytesToWrite == 'number', 'stringToUTF32(str, outPtr, maxBytesToWrite) is missing the third parameter that specifies the length of the output buffer!');
-  // Backwards compatibility: if max bytes is not specified, assume unsafe unbounded write is allowed.
-  if (maxBytesToWrite === undefined) {
-    maxBytesToWrite = 0x7FFFFFFF;
-  }
-  if (maxBytesToWrite < 4) return 0;
-  var startPtr = outPtr;
-  var endPtr = startPtr + maxBytesToWrite - 4;
-  for (var i = 0; i < str.length; ++i) {
-    // Gotcha: charCodeAt returns a 16-bit word that is a UTF-16 encoded code unit, not a Unicode code point of the character! We must decode the string to UTF-32 to the heap.
-    // See http://unicode.org/faq/utf_bom.html#utf16-3
-    var codeUnit = str.charCodeAt(i); // possibly a lead surrogate
-    if (codeUnit >= 0xD800 && codeUnit <= 0xDFFF) {
-      var trailSurrogate = str.charCodeAt(++i);
-      codeUnit = 0x10000 + ((codeUnit & 0x3FF) << 10) | (trailSurrogate & 0x3FF);
-    }
-    HEAP32[((outPtr) >> 2)] = codeUnit;
-    outPtr += 4;
-    if (outPtr + 4 > endPtr) break;
-  }
-  // Null-terminate the pointer to the HEAP.
-  HEAP32[((outPtr) >> 2)] = 0;
-  return outPtr - startPtr;
-}
-
-function lengthBytesUTF32(str) {
-  var len = 0;
-  for (var i = 0; i < str.length; ++i) {
-    // Gotcha: charCodeAt returns a 16-bit word that is a UTF-16 encoded code unit, not a Unicode code point of the character! We must decode the string to UTF-32 to the heap.
-    // See http://unicode.org/faq/utf_bom.html#utf16-3
-    var codeUnit = str.charCodeAt(i);
-    if (codeUnit >= 0xD800 && codeUnit <= 0xDFFF) ++i; // possibly a lead surrogate, so skip over the tail surrogate.
-    len += 4;
-  }
-
-  return len;
-}
 function __embind_register_std_wstring(rawType, charSize, name) {
   name = readLatin1String(name);
   registerType(rawType, {
@@ -2033,7 +1471,6 @@ function __embind_register_std_wstring(rawType, charSize, name) {
       return value;
     },
     'argPackAdvance': 8n,
-    'readValueFromPointer': simpleReadValueFromPointer,
     destructorFunction: function (ptr) { _free(ptr); },
   });
 }
@@ -2139,7 +1576,6 @@ function __embind_register_emval(rawType, name) {
       return Emval.toHandle(value);
     },
     'argPackAdvance': 8n,
-    'readValueFromPointer': simpleReadValueFromPointer,
     destructorFunction: null, // This type does not need a destructor
 
     // TODO: do we need a deleteObject here?  write a test where
@@ -2192,6 +1628,19 @@ function __crossbind_v_to_array(h) {
 }
 globalThis.__crossbind_v_to_array = __crossbind_v_to_array;
 
+// A handle's own value, so the adapter can copy a typed array straight from its backing store.
+function __crossbind_v_value(h) {
+  return Emval.toValue(h);
+}
+globalThis.__crossbind_v_value = __crossbind_v_value;
+
+// A typed array's length read here, so no handle is made for the number (web.cpp reads it alike).
+function __crossbind_v_length(h) {
+  const value = Emval.toValue(h);
+  return value && value.length !== undefined ? value.length : 0;
+}
+globalThis.__crossbind_v_length = __crossbind_v_length;
+
 // Any JS value the adapter already built (a typed array, say) gets a handle of its own.
 function __crossbind_v_from_value(v) {
   return Emval.toHandle(v);
@@ -2242,35 +1691,14 @@ function __crossbind_v_call(f, args) {
 globalThis.__crossbind_v_call = __crossbind_v_call;
 
 function __embind_register_memory_view(rawType, dataTypeIndex, name) {
-  var typeMapping = [
-    Int8Array,
-    Uint8Array,
-    Int16Array,
-    Uint16Array,
-    Int32Array,
-    Uint32Array,
-    Float32Array,
-    Float64Array,
-    BigInt64Array,
-    BigUint64Array,
-  ];
-
-  var TA = typeMapping[dataTypeIndex];
-
-  function decodeMemoryView(handle) {
-    handle = handle >>> 2;
-    var heap = HEAPU32;
-    var size = heap[handle]; // in elements
-    var data = heap[handle + 1]; // byte offset into emscripten heap
-    return new TA(heap.buffer, data, size);
-  }
-
   name = readLatin1String(name);
   registerType(rawType, {
     name: name,
-    'fromWireType': decodeMemoryView,
+    // C++ copies the elements into a typed array of the right kind (wire.h copyToTypedArray).
+    'fromWireType': function (typedArray) {
+      return typedArray;
+    },
     'argPackAdvance': 8n,
-    'readValueFromPointer': decodeMemoryView,
   }, {
     ignoreDuplicateRegistrations: true,
   });
@@ -2382,8 +1810,19 @@ function craftInvokerFunction(humanName, argTypes, classType, cppInvokerFunc, cp
     argsListWired = "thisWired" + (argsListWired.length > 0 ? ", " : "") + argsListWired;
   }
 
-  invokerFnBody +=
-    (returns || isAsync ? "var rv = " : "") + "invoker(fn" + (argsListWired.length > 0 ? ", " : "") + argsListWired + ");\n";
+  if (cppInvokerFunc.rawFunction) {
+    // Call the host function with a fixed argument list: going through the dyn caller cost a
+    // rest array, a slice and a spread call on every call.
+    args1.push("raw", "throwParked");
+    args2.push(cppInvokerFunc.rawFunction, throwParkedError);
+    invokerFnBody +=
+      "globalThis.__crossbindParkedError = null;\n" +
+      (returns || isAsync ? "var rv = " : "") + "raw(" + argsListWired + ");\n" +
+      "if (globalThis.__crossbindParkedError) throwParked();\n";
+  } else {
+    invokerFnBody +=
+      (returns || isAsync ? "var rv = " : "") + "invoker(fn" + (argsListWired.length > 0 ? ", " : "") + argsListWired + ");\n";
+  }
 
   if (needsDestructorStack) {
     invokerFnBody += "runDestructors(destructors);\n";
@@ -2500,8 +1939,14 @@ globalThis.__crossbind_park_error = function (message, code) {
   globalThis.__crossbindParkedError = error;
 };
 
+function throwParkedError() {
+  const parked = globalThis.__crossbindParkedError;
+  globalThis.__crossbindParkedError = null;
+  throw parked;
+}
+
 function getDynCaller(signature, rawFunction, slice) {
-  return (...args) => {
+  const caller = (...args) => {
     //console.log('getDynCallerReturn', signature, rawFunction, args.length, ...args);
     if (slice) {
       args = args.slice(1);
@@ -2515,6 +1960,9 @@ function getDynCaller(signature, rawFunction, slice) {
     }
     return result;
   };
+  // craftInvokerFunction calls a sliced function directly, without the fn argument this drops.
+  if (slice) caller.rawFunction = rawFunction;
+  return caller;
 }
 
 function getWasmTableEntry(rawFunction) { return (a, b, c) => { console.log('getWasmTableEntry', rawFunction, a, b, c); }; }
@@ -2701,7 +2149,6 @@ function __embind_finalize_value_array(rawTupleType) {
         return ptr;
       },
       'argPackAdvance': 8n,
-      'readValueFromPointer': simpleReadValueFromPointer,
       destructorFunction: rawDestructor,
     }];
   });
@@ -2819,7 +2266,6 @@ function __embind_finalize_value_object(structType) {
         return ptr;
       },
       'argPackAdvance': 8n,
-      'readValueFromPointer': simpleReadValueFromPointer,
       destructorFunction: rawDestructor,
     }];
   });
@@ -3384,7 +2830,6 @@ function init_RegisteredPointer() {
   RegisteredPointer.prototype.getPointee = RegisteredPointer_getPointee;
   RegisteredPointer.prototype.destructor = RegisteredPointer_destructor;
   RegisteredPointer.prototype['argPackAdvance'] = 8n;
-  RegisteredPointer.prototype['readValueFromPointer'] = simpleReadValueFromPointer64;
   RegisteredPointer.prototype['deleteObject'] = RegisteredPointer_deleteObject;
   RegisteredPointer.prototype['fromWireType'] = RegisteredPointer_fromWireType;
 }
@@ -4087,16 +3532,7 @@ globalThis.__embind_register_smart_ptr = __embind_register_smart_ptr;
 
 
 
-function enumReadValueFromPointer(name, shift, signed) {
-  //console.log('enumReadValueFromPointer');
-  return (pointer) => {
-    return this['fromWireType'](readFromMemoryUsingShift(pointer, signed, shift));
-  }
-}
-
-
 function __embind_register_enum(rawType, name, size, isSigned) {
-  var shift = getShiftFromSize(size);
   name = readLatin1String(name);
 
   function ctor() { }
@@ -4117,7 +3553,6 @@ function __embind_register_enum(rawType, name, size, isSigned) {
       throw new TypeError(`${this.name} takes a member of the enum or its number, got ${embindRepr(c)}`);
     },
     'argPackAdvance': 8n,
-    'readValueFromPointer': enumReadValueFromPointer(name, shift, isSigned),
     destructorFunction: null,
   });
   exposePublicSymbol(name, ctor);
@@ -4171,11 +3606,15 @@ globalThis.__emval_incref = __emval_incref;
 
 
 
-function __emval_run_destructors(handle) {
-  // console.log('__emval_run_destructors');
-  var destructors = Emval.toValue(handle);
-  runDestructors(destructors);
-  __emval_decref(handle);
+// __emval_as and __emval_call_method queue one list each; C++ runs it once it has read the
+// converted value (DestructorsRunner in val.h), so nesting unwinds in order. Called from a C++
+// destructor, so it must not throw.
+var emval_destructorsStack = [];
+function __emval_run_destructors() {
+  var destructors = emval_destructorsStack.pop();
+  if (destructors) {
+    runDestructors(destructors);
+  }
 }
 globalThis.__emval_run_destructors = __emval_run_destructors;
 
@@ -4218,86 +3657,28 @@ function __emval_new_cstring(v) {
 globalThis.__emval_new_cstring = __emval_new_cstring;
 
 
+// C++ decodes both into a JS string before calling (bind.cpp).
 function __emval_new_u8string(v) {
-  // console.log('__emval_new_u8string');
-  return Emval.toHandle(UTF8ToString(v));
+  return Emval.toHandle(v);
 }
 globalThis.__emval_new_u8string = __emval_new_u8string;
 
 function __emval_new_u16string(v) {
-  // console.log('__emval_new_u16string');
-  return Emval.toHandle(UTF16ToString(v));
+  return Emval.toHandle(v);
 }
 globalThis.__emval_new_u16string = __emval_new_u16string;
 
 BigInt.prototype.toJSON = function () { return this.toString() }
-function __emval_take_value(type, arg) {
-  //console.log('__emval_take_value', JSON.stringify({type, arg}, null, 2));
+function __emval_take_value(type, value) {
   type = requireRegisteredType(type, '_emval_take_value');
-  //console.log('************** 2:', JSON.stringify({type, arg}, null, 2));
-  //console.log('************** 2.5:', type['readValueFromPointer']);
-  var v = type['readValueFromPointer'](arg);
-  //console.log('************** 3:', v);
-  const f = Emval.toHandle(v);
-  //console.log('************** 4:', f);
-  return f;
+  return Emval.toHandle(type['fromWireType'](value));
 }
 globalThis.__emval_take_value = __emval_take_value;
 
 
-function craftEmvalAllocator(argCount) {
-  /*This function returns a new function that looks like this:
-  function emval_allocator_3(constructor, argTypes, args) {
-      var argType0 = requireRegisteredType(HEAP32[(argTypes >> 2)], "parameter 0");
-      var arg0 = argType0['readValueFromPointer'](args);
-      var argType1 = requireRegisteredType(HEAP32[(argTypes >> 2) + 1], "parameter 1");
-      var arg1 = argType1['readValueFromPointer'](args + 8);
-      var argType2 = requireRegisteredType(HEAP32[(argTypes >> 2) + 2], "parameter 2");
-      var arg2 = argType2['readValueFromPointer'](args + 16);
-      var obj = new constructor(arg0, arg1, arg2);
-      return Emval.toHandle(obj);
-  } */
-  var argsList = "";
-  for (var i = 0; i < argCount; ++i) {
-    argsList += (i !== 0 ? ", " : "") + "arg" + i; // 'arg0, arg1, ..., argn'
-  }
-
-  var functionBody =
-    "return function emval_allocator_" + argCount + "(constructor, argTypes, args) {\n";
-
-  for (var i = 0; i < argCount; ++i) {
-    functionBody +=
-      "var argType" + i + " = requireRegisteredType(argTypes[" + i + "], 'parameter " + i + "');\n" +
-      "var arg" + i + " = argType" + i + ".readValueFromPointer(args);\n" +
-      "args += argType" + i + "['argPackAdvance'];\n";
-  }
-  functionBody +=
-    "var obj = new constructor(" + argsList + ");\n" +
-    "return valueToHandle(obj);\n" +
-    "}\n";
-
-  /*jshint evil:true*/
-  return (new Function("requireRegisteredType", "Module", "valueToHandle", "readFromMemoryUsingShift", functionBody))(
-    requireRegisteredType, Module, Emval.toHandle, readFromMemoryUsingShift);
-}
-
-var emval_newers = {};
-
-function __emval_new(handle, argCount, argTypes, args) {
-  argCount = Number(argCount);
-  //console.log('__emval_new', handle, argCount, argTypes.length, argTypes, args);
-  handle = Emval.toValue(handle);
-
-  var newer = emval_newers[argCount];
-  if (!newer) {
-    newer = craftEmvalAllocator(argCount);
-    emval_newers[argCount] = newer;
-  }
-
-  //console.log('__emval_new response2');
-  const a = newer(handle, argTypes, args);;
-  //console.log('__emval_new response: ', a);
-  return a;
+function __emval_new(handle, argCount, argTypes, ...wires) {
+  var constructor = Emval.toValue(handle);
+  return Emval.toHandle(new constructor(...emval_fromWireTypes(argCount, argTypes, wires)));
 }
 globalThis.__emval_new = __emval_new;
 
@@ -4365,18 +3746,12 @@ function __emval_set_property(handle, key, value) {
 globalThis.__emval_set_property = __emval_set_property;
 
 
-function __emval_as(handle, returnType, destructorsRef) {
-  //console.log('__emval_as');
+function __emval_as(handle, returnType) {
   handle = Emval.toValue(handle);
-  //console.log('__emval_as 2');
   returnType = requireRegisteredType(returnType, 'emval::as');
-  //console.log('__emval_as 3');
   var destructors = [];
-  var rd = Emval.toHandle(destructors);
-  //console.log('__emval_as 4', Number(rd));
-  writeToMemoryUsingShift(destructorsRef, false, 3, rd);
   const output = returnType['toWireType'](destructors, handle);
-  //console.log('__emval_as 5', Number(output));
+  emval_destructorsStack.push(destructors);
   return output;
 }
 globalThis.__emval_as = __emval_as;
@@ -4448,21 +3823,14 @@ function emval_lookupTypes(argCount, argTypes) {
   return a;
 }
 
-function __emval_call(handle, argCount, argTypes, argv) {
-  //console.log('__emval_call', handle, argCount, argTypes, argv);
+function emval_fromWireTypes(argCount, argTypes, wires) {
+  var types = emval_lookupTypes(Number(argCount), argTypes);
+  return types.map((type, i) => type['fromWireType'](wires[i]));
+}
+
+function __emval_call(handle, argCount, argTypes, ...wires) {
   handle = Emval.toValue(handle);
-  var types = emval_lookupTypes(argCount, argTypes);
-  //console.log('ooooo', types);
-  var args = new Array(argCount);
-  for (var i = 0; i < argCount; ++i) {
-    var type = types[i];
-    args[i] = type['readValueFromPointer'](argv);
-    //console.log(args[i]);
-    argv += type['argPackAdvance'];
-  }
-  //console.log('ooooo3');
-  var rv = handle.apply(undefined, args);
-  //console.log('ooooo2');
+  var rv = handle.apply(undefined, emval_fromWireTypes(argCount, argTypes, wires));
   return Emval.toHandle(rv);
 }
 globalThis.__emval_call = __emval_call;
@@ -4493,19 +3861,19 @@ function __emval_get_method_caller(argCount, argTypes) {
   var args = [retType];
 
   var argsList = ""; // 'arg0, arg1, arg2, ... , argN'
+  var wiresList = ""; // ', wire0, wire1, ... , wireN'
   for (var i = 0; i < argCount - 1; ++i) {
     argsList += (i !== 0 ? ", " : "") + "arg" + i;
+    wiresList += ", wire" + i;
     params.push("argType" + i);
     args.push(types[1 + i]);
   }
   var functionName = makeLegalFunctionName("methodCaller_" + signatureName);
   var functionBody =
-    "return function " + functionName + "(handle, name, destructors, args) {\n";
-  var offset = 0n;
+    "return function " + functionName + "(handle, name, destructors" + wiresList + ") {\n";
   for (var i = 0; i < argCount - 1; ++i) {
     functionBody +=
-      "    var arg" + i + " = argType" + i + ".readValueFromPointer(args" + (offset ? ("+" + offset + "n") : "") + ");\n";
-    offset += types[i + 1]['argPackAdvance'];
+      "    var arg" + i + " = argType" + i + ".fromWireType(wire" + i + ");\n";
   }
   functionBody +=
     "    var rv = handle[name](" + argsList + ");\n";
@@ -4529,34 +3897,22 @@ function __emval_get_method_caller(argCount, argTypes) {
 }
 globalThis.__emval_get_method_caller = __emval_get_method_caller;
 
-function emval_allocateDestructors(destructorsRef) {
-  //console.log('emval_allocateDestructors');
-  var destructors = [];
-  writeToMemoryUsingShift(destructorsRef, false, 3, Emval.toHandle(destructors));
-  //console.log('emval_allocateDestructors 2');
-  return destructors;
-}
-
-
-
-function __emval_call_method(caller, handle, methodName, destructorsRef, args) {
-  //console.log('__emval_call_method');
+function __emval_call_method(caller, handle, methodName, ...wires) {
   caller = emval_methodCallers[caller];
   handle = Emval.toValue(handle);
   methodName = getStringOrSymbol(methodName);
-  return caller(handle, methodName, emval_allocateDestructors(destructorsRef), args);
+  var destructors = [];
+  var rv = caller(handle, methodName, destructors, ...wires);
+  emval_destructorsStack.push(destructors);
+  return rv;
 }
 globalThis.__emval_call_method = __emval_call_method;
 
-
-
-
-function __emval_call_void_method(caller, handle, methodName, args) {
-  //console.log('__emval_call_void_method');
+function __emval_call_void_method(caller, handle, methodName, ...wires) {
   caller = emval_methodCallers[caller];
   handle = Emval.toValue(handle);
   methodName = getStringOrSymbol(methodName);
-  caller(handle, methodName, null, args);
+  caller(handle, methodName, null, ...wires);
 }
 globalThis.__emval_call_void_method = __emval_call_void_method;
 

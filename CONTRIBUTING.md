@@ -49,8 +49,9 @@ Directories carry no brand prefix; the npm name does.
 | `ports/<lib>/<target>` | `@crossbind/port-<lib>-<target>` |
 
 `base/` is the brand package of a port family; the sibling directories are its platform targets
-(`wasm`, `wasi`, `bin-wasi`, `android`, `ios`). `examples/` holds the user-facing samples that
-create-crossbind publishes as templates; `e2e/` holds the internal test benches.
+(`wasm`, `wasi`, `bin-wasi`, `android`, `ios`, `darwin`, `linux`, `win32`). `examples/` holds the
+user-facing samples that create-crossbind publishes as templates; `e2e/` holds the internal test
+benches.
 
 ## Branch and commit naming
 

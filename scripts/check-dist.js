@@ -10,8 +10,11 @@
  *        wasm    → wasm-wasm32-mt-release, wasm-wasm32-st-release
  *        ios     → ios-iphoneos-mt-release, ios-iphonesimulator-mt-release
  *        android → android-arm64-v8a-mt-release, android-x86_64-mt-release
+ *        darwin  → darwin-arm64-mt-release, darwin-x64-mt-release
+ *        linux   → linux-arm64-mt-release, linux-x64-mt-release
+ *        win32   → win32-arm64-mt-release, win32-x64-mt-release
  *   3. Verifies each target contains:
- *        - lib/lib<libName>.<ext>   (.a for wasm/ios, .so for android)
+ *        - lib/lib<libName>.<ext>   (.a for wasm/ios/darwin/linux/win32, .so for android)
  *        - include/  (non-empty)
  *   4. Verifies dist/prebuilt/CMakeLists.txt exists.
  *
@@ -33,12 +36,18 @@ const PLATFORM_TARGETS = {
     wasm: ['wasm-wasm32-mt-release', 'wasm-wasm32-st-release'],
     ios: ['ios-iphoneos-mt-release', 'ios-iphonesimulator-mt-release'],
     android: ['android-arm64-v8a-mt-release', 'android-x86_64-mt-release'],
+    darwin: ['darwin-arm64-mt-release', 'darwin-x64-mt-release'],
+    linux: ['linux-arm64-mt-release', 'linux-x64-mt-release'],
+    win32: ['win32-arm64-mt-release', 'win32-x64-mt-release'],
 };
 
 const PLATFORM_LIB_EXT = {
     wasm: '.a',
     ios: '.a',
     android: '.so',
+    darwin: '.a',
+    linux: '.a',
+    win32: '.a',
 };
 
 // ports/<family>/<target>: the directory name is the target itself.
@@ -64,7 +73,10 @@ async function loadConfigMeta(configPath, platform) {
 }
 
 function findPlatformPackages() {
-    const families = fs.readdirSync(PACKAGES_DIR, { withFileTypes: true }).filter((e) => e.isDirectory()).map((e) => e.name);
+    const families = fs
+        .readdirSync(PACKAGES_DIR, { withFileTypes: true })
+        .filter((e) => e.isDirectory())
+        .map((e) => e.name);
 
     const out = [];
     for (const family of families) {

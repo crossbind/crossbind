@@ -26,8 +26,8 @@ export default {
   // ─────────────────────────────────────────────────────────────
   dependencies: [],
     // Array of crossbind.config.js values, imported from platform variants such as
-    // @crossbind/port-*-wasm, -android, -ios or -wasi. The meta package (@crossbind/port-*)
-    // carries no config; list one variant per platform you build.
+    // @crossbind/port-*-wasm, -android, -ios, -darwin, -linux, -win32 or -wasi. The meta package
+    // (@crossbind/port-*) carries no config; list one variant per platform you build.
     // Example:
     //   import gdal from '@crossbind/port-gdal-wasm/crossbind.config.js'
     //   dependencies: [gdal]
@@ -43,10 +43,10 @@ export default {
     uuid: '{ version = "1", features = ["v4"] }',
     semver: '1',
   },
-    // Crates importable via the `cargo:` scheme (`import { Uuid } from 'cargo:uuid'`)
-    // or used by app-local .rs sources. Keys are crate names, values are
-    // Cargo.toml dependency specs as strings. Undeclared `cargo:` imports are
-    // a hard error. See rust.md.
+    // Crates importable via the `cargo:` scheme (`import { Uuid } from 'cargo:uuid'`,
+    // or one public module: 'cargo:xxhash-rust/xxh3') or used by app-local .rs
+    // sources. Keys are crate names, values are Cargo.toml dependency specs as
+    // strings. Undeclared `cargo:` imports are a hard error. See rust.md.
 
   // ─────────────────────────────────────────────────────────────
   // Generated .d.ts flavor
@@ -166,23 +166,28 @@ export default {
   targetSpecs: [
     {
       // Filter (any combination — entry matches if all set fields match)
-      platform:   'wasm' | 'wasi' | 'android' | 'ios',     // optional
-      arch:       'wasm32' | 'wasm64' | 'arm64-v8a' | 'x86_64' | 'iphoneos' | 'iphonesimulator',
+      platform:   'wasm' | 'wasi' | 'android' | 'ios' | 'darwin' | 'linux' | 'win32',     // optional
+      arch:       'wasm32' | 'wasm64' | 'arm64-v8a' | 'x86_64' | 'iphoneos' | 'iphonesimulator' | 'arm64' | 'x64',
       runtime:    'st' | 'mt',
       buildType:  'release' | 'debug',
       runtimeEnv: 'browser' | 'node' | 'edge',
 
       // Overrides (apply when filter matches)
       specs: {
-        cmake:         ['-DSOMETHING=ON'],         // -D flags appended to cmake configure
-        emccFlags:     ['-sINITIAL_MEMORY=64MB'],  // -s/-O flags for emcc (wasm only); they follow the default -O3, so -Oz or -Os wins
+        cmake: {
+          compileOptions: ['-DMYAPP_NO_LOGGING=1'], // compiler flags for the sources crossbind compiles itself (see overrides.md)
+        },
+        binary: {
+          emccFlags:   ['-sINITIAL_MEMORY=64MB'],  // -s/-O flags for emcc (wasm only); they follow the default -O3, so -Oz or -Os wins
+          wasiFlags:   ['-Wl,--stack-first'],      // flags appended to the wasi command link (platform 'wasi' only; see wasi.md)
+          addonFlags:  ['-lxml2'],                 // system libraries a native Node.js addon link needs (platforms 'darwin', 'linux', 'win32'); dependencies' flags add up
+        },
         env:           { GDAL_NUM_THREADS: '0' },  // env vars passed to running Wasm + build env
         data:          { 'share/myapp': 'myapp/data' },  // bundle data files into .data preload
           // On platform 'wasi', env/data double as the runtime contract for the
           // -bin command runner: data dirs become --dir preopens, env becomes
           // guest env (`_CROSSBIND_DATA_PATH_` placeholder → the mounted /data).
         ignoreLibName: ['libtiff_legacy'],         // suppress these .a names from link line
-    wasiFlags:     ['-Wl,--stack-first'],      // flags appended to the wasi command link (platform 'wasi' only; see wasi.md)
       },
     },
   ],

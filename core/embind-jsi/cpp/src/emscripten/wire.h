@@ -21,11 +21,13 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstdint>
+#include <cstring>
 #include <memory>
 #include <optional>
 #include <string>
 
 #include <jsi/jsi.h>
+#include "../crossbind/direct_reads.h"
 
 // embind registers std::basic_string<unsigned char> as the raw-byte counterpart to UTF-8
 // std::string, but the standard has never defined std::char_traits for unsigned char. libc++ used
@@ -96,24 +98,39 @@ constexpr bool has_unbound_type_names = false;
 
 namespace internal {
 
+// A BigInt read straight from the engine where the runtime offers crossbind::IDirectReads, instead
+// of cloning it into a jsi::BigInt first; `this` arrives this way on every method call. Anything
+// that is not a BigInt, or does not fit, takes the jsi path and throws as it did.
+inline uint64_t bigIntUint64(facebook::jsi::Runtime& rt, const facebook::jsi::Value& v) {
+    auto* reads = static_cast<crossbind::IDirectReads*>(rt.castInterface(crossbind::IDirectReads::uuid));
+    uint64_t bits = 0;
+    bool lossless = false;
+    if (reads != nullptr && reads->bigIntToUint64(v, bits, lossless) && lossless) return bits;
+    return v.asBigInt(rt).asUint64(rt);
+}
+
+inline int64_t bigIntInt64(facebook::jsi::Runtime& rt, const facebook::jsi::Value& v) {
+    auto* reads = static_cast<crossbind::IDirectReads*>(rt.castInterface(crossbind::IDirectReads::uuid));
+    int64_t bits = 0;
+    bool lossless = false;
+    if (reads != nullptr && reads->bigIntToInt64(v, bits, lossless) && lossless) return bits;
+    return v.asBigInt(rt).asInt64(rt);
+}
+
 // JS hands native pointers over as BigInt addresses, but a null pointer arrives as the number 0
 // and enum values as plain numbers: take both spellings.
 inline uint64_t addressFromValue(facebook::jsi::Runtime& rt, const facebook::jsi::Value& v) {
     if (v.isNumber()) return static_cast<uint64_t>(v.asNumber());
     if (v.isNull() || v.isUndefined()) return 0;
-    return v.asBigInt(rt).asUint64(rt);
+    return bigIntUint64(rt, v);
 }
 
 inline int64_t integerFromValue(facebook::jsi::Runtime& rt, const facebook::jsi::Value& v) {
     if (v.isNumber()) return static_cast<int64_t>(v.asNumber());
-    return v.asBigInt(rt).asInt64(rt);
+    return bigIntInt64(rt, v);
 }
 
 typedef const void* TYPEID;
-
-// Defined in bind.cpp: registers a JS-side ArrayBuffer window covering `ptr` so
-// heap reads on values we hand out by pointer cannot miss every window.
-void ensureWindowFor(uint64_t ptr);
 
 // We don't need the full std::type_info implementation.  We
 // just need a unique identifier per type and polymorphic type
@@ -396,7 +413,7 @@ struct BindingType<int64_t> {
         return facebook::jsi::BigInt::fromInt64(rt, b);
     }
     static WireType fromWireType2(facebook::jsi::Runtime& rt, WireType2& wt) {
-        return wt.asBigInt(rt).asInt64(rt);
+        return bigIntInt64(rt, wt);
     }
 };
 
@@ -416,7 +433,7 @@ struct BindingType<uint64_t> {
         return facebook::jsi::BigInt::fromUint64(rt, b);
     }
     static WireType fromWireType2(facebook::jsi::Runtime& rt, WireType2& wt) {
-        return wt.asBigInt(rt).asUint64(rt);
+        return bigIntUint64(rt, wt);
     }
 };
 
@@ -460,64 +477,80 @@ struct BindingType<T, std::enable_if_t<isOther64BitInteger<T>>> {
     };
 
 // jsi strings cross as UTF-8, so a std::u16string (embind's byte-preserving string) is transcoded; every code unit of
-// well-formed UTF-16 survives the round trip.
+// well-formed UTF-16 survives the round trip. Both directions size their output once and write through a pointer:
+// a push_back per unit was most of the cost of moving bytes (readBytes) across.
 inline std::string utf16ToUtf8(const std::u16string& text) {
-    std::string out;
-    out.reserve(text.size());
-    for (size_t i = 0; i < text.size(); ++i) {
+    // At most three bytes per code unit; a surrogate pair takes four for two.
+    std::string out(text.size() * 3, '\0');
+    char* o = out.data();
+    const size_t n = text.size();
+    for (size_t i = 0; i < n; ++i) {
         char32_t cp = text[i];
-        if (cp >= 0xD800 && cp <= 0xDBFF && i + 1 < text.size() && text[i + 1] >= 0xDC00 && text[i + 1] <= 0xDFFF) {
+        if (cp < 0x800) {
+            // One byte or two, chosen without a branch: in byte data half the units are above 0x7F
+            // at random. The spare second byte stays inside the three reserved per unit.
+            const bool isTwoBytes = cp >= 0x80;
+            o[0] = static_cast<char>(isTwoBytes ? 0xC0 | (cp >> 6) : cp);
+            o[1] = static_cast<char>(0x80 | (cp & 0x3F));
+            o += 1 + isTwoBytes;
+            continue;
+        }
+        if (cp >= 0xD800 && cp <= 0xDBFF && i + 1 < n && text[i + 1] >= 0xDC00 && text[i + 1] <= 0xDFFF) {
             cp = 0x10000 + ((cp - 0xD800) << 10) + (text[++i] - 0xDC00);
         } else if (cp >= 0xD800 && cp <= 0xDFFF) {
             cp = 0xFFFD;
         }
-        if (cp < 0x80) {
-            out.push_back(static_cast<char>(cp));
-        } else if (cp < 0x800) {
-            out.push_back(static_cast<char>(0xC0 | (cp >> 6)));
-            out.push_back(static_cast<char>(0x80 | (cp & 0x3F)));
-        } else if (cp < 0x10000) {
-            out.push_back(static_cast<char>(0xE0 | (cp >> 12)));
-            out.push_back(static_cast<char>(0x80 | ((cp >> 6) & 0x3F)));
-            out.push_back(static_cast<char>(0x80 | (cp & 0x3F)));
+        if (cp < 0x10000) {
+            *o++ = static_cast<char>(0xE0 | (cp >> 12));
+            *o++ = static_cast<char>(0x80 | ((cp >> 6) & 0x3F));
+            *o++ = static_cast<char>(0x80 | (cp & 0x3F));
         } else {
-            out.push_back(static_cast<char>(0xF0 | (cp >> 18)));
-            out.push_back(static_cast<char>(0x80 | ((cp >> 12) & 0x3F)));
-            out.push_back(static_cast<char>(0x80 | ((cp >> 6) & 0x3F)));
-            out.push_back(static_cast<char>(0x80 | (cp & 0x3F)));
+            *o++ = static_cast<char>(0xF0 | (cp >> 18));
+            *o++ = static_cast<char>(0x80 | ((cp >> 12) & 0x3F));
+            *o++ = static_cast<char>(0x80 | ((cp >> 6) & 0x3F));
+            *o++ = static_cast<char>(0x80 | (cp & 0x3F));
         }
     }
+    out.resize(static_cast<size_t>(o - out.data()));
     return out;
 }
 
 inline std::u16string utf8ToUtf16(const std::string& text) {
-    std::u16string out;
-    out.reserve(text.size());
+    // Never more code units than bytes.
+    std::u16string out(text.size(), u'\0');
+    char16_t* o = out.data();
+    const size_t n = text.size();
     size_t i = 0;
-    while (i < text.size()) {
+    while (i < n) {
         unsigned char lead = static_cast<unsigned char>(text[i]);
-        size_t extra = lead < 0x80 ? 0 : (lead >> 5) == 0x6 ? 1 : (lead >> 4) == 0xE ? 2 : (lead >> 3) == 0x1E ? 3 : 4;
-        char32_t cp = extra == 0 ? lead : extra == 1 ? (lead & 0x1F) : extra == 2 ? (lead & 0x0F) : (lead & 0x07);
-        bool valid = extra < 4 && i + extra < text.size();
+        if (lead < 0x80) {
+            *o++ = lead;
+            ++i;
+            continue;
+        }
+        size_t extra = (lead >> 5) == 0x6 ? 1 : (lead >> 4) == 0xE ? 2 : (lead >> 3) == 0x1E ? 3 : 4;
+        char32_t cp = extra == 1 ? (lead & 0x1F) : extra == 2 ? (lead & 0x0F) : (lead & 0x07);
+        bool valid = extra < 4 && i + extra < n;
         for (size_t k = 1; valid && k <= extra; ++k) {
             unsigned char next = static_cast<unsigned char>(text[i + k]);
             valid = (next >> 6) == 0x2;
             cp = (cp << 6) | (next & 0x3F);
         }
         if (!valid) {
-            out.push_back(0xFFFD);
+            *o++ = 0xFFFD;
             ++i;
             continue;
         }
         i += extra + 1;
         if (cp >= 0x10000) {
             cp -= 0x10000;
-            out.push_back(static_cast<char16_t>(0xD800 + (cp >> 10)));
-            out.push_back(static_cast<char16_t>(0xDC00 + (cp & 0x3FF)));
+            *o++ = static_cast<char16_t>(0xD800 + (cp >> 10));
+            *o++ = static_cast<char16_t>(0xDC00 + (cp & 0x3FF));
         } else {
-            out.push_back(static_cast<char16_t>(cp));
+            *o++ = static_cast<char16_t>(cp);
         }
     }
+    out.resize(static_cast<size_t>(o - out.data()));
     return out;
 }
 
@@ -547,11 +580,12 @@ struct BindingType<std::basic_string<T>> {
             return facebook::jsi::String::createFromUtf8(rt, v);
         }
     }
+    // asString, not getString: a non-string argument then throws into JS instead of being read as one.
     static String fromWireType2(facebook::jsi::Runtime& rt, WireType2& v) {
         if constexpr (std::is_same_v<T, char16_t>) {
-            return utf8ToUtf16(v.getString(rt).utf8(rt));
+            return utf8ToUtf16(v.asString(rt).utf8(rt));
         } else {
-            return v.getString(rt).utf8(rt);
+            return v.asString(rt).utf8(rt);
         }
     }
 };
@@ -642,20 +676,14 @@ struct GenericBindingType {
     }
 
     static WireType2 toWireType2(facebook::jsi::Runtime& rt, const T& v) {
-        // By-value returns allocate fresh heap blocks; without a covering window JS-side
-        // memory reads on the new object die with "Heap error ... no covering window".
-        uint64_t ptr = reinterpret_cast<uint64_t>(new T(v));
-        ensureWindowFor(ptr);
-        return facebook::jsi::BigInt::fromUint64(rt, ptr);
+        return facebook::jsi::BigInt::fromUint64(rt, reinterpret_cast<uint64_t>(new T(v)));
     }
     static WireType2 toWireType2(facebook::jsi::Runtime& rt, T&& v) {
-        uint64_t ptr = reinterpret_cast<uint64_t>(new T(std::forward<T>(v)));
-        ensureWindowFor(ptr);
-        return facebook::jsi::BigInt::fromUint64(rt, ptr);
+        return facebook::jsi::BigInt::fromUint64(rt, reinterpret_cast<uint64_t>(new T(std::forward<T>(v))));
     }
 
     static ActualT& fromWireType2(facebook::jsi::Runtime& rt, WireType2& wt) {
-        return *reinterpret_cast<WireType>(wt.getBigInt(rt).getUint64(rt));
+        return *reinterpret_cast<WireType>(bigIntUint64(rt, wt));
     }
 };
 
@@ -723,6 +751,46 @@ constexpr bool typeSupportsMemoryView() {
                  sizeof(T) == 4 || sizeof(T) == 8));
 }
 
+template<typename T>
+constexpr const char* typedArrayNameOf() {
+    static_assert(typeSupportsMemoryView<T>(), "type does not map to a typed array");
+    if constexpr (std::is_floating_point<T>::value) {
+        return sizeof(T) == 4 ? "Float32Array" : "Float64Array";
+    } else if constexpr (sizeof(T) == 1) {
+        return std::is_signed<T>::value ? "Int8Array" : "Uint8Array";
+    } else if constexpr (sizeof(T) == 2) {
+        return std::is_signed<T>::value ? "Int16Array" : "Uint16Array";
+    } else if constexpr (sizeof(T) == 4) {
+        return std::is_signed<T>::value ? "Int32Array" : "Uint32Array";
+    } else {
+        return std::is_signed<T>::value ? "BigInt64Array" : "BigUint64Array";
+    }
+}
+
+// Native memory reaches JS only as a copy in an ArrayBuffer JS allocated: Electron's V8 memory
+// cage refuses ArrayBuffers over external memory.
+inline facebook::jsi::Value copyToTypedArray(
+    facebook::jsi::Runtime& rt, const char* arrayName, const void* data, size_t count, size_t bytes) {
+    facebook::jsi::Object array = rt.global().getPropertyAsFunction(rt, arrayName)
+        .callAsConstructor(rt, static_cast<double>(count)).asObject(rt);
+    if (bytes > 0) {
+        facebook::jsi::ArrayBuffer buffer = array.getProperty(rt, "buffer").asObject(rt).getArrayBuffer(rt);
+        memcpy(buffer.data(rt), data, bytes);
+    }
+    return facebook::jsi::Value(std::move(array));
+}
+
+inline void copyFromTypedArray(facebook::jsi::Runtime& rt, const facebook::jsi::Value& typedArray, void* data, size_t bytes) {
+    if (bytes == 0) return;
+    facebook::jsi::Object view = typedArray.asObject(rt);
+    size_t offset = static_cast<size_t>(view.getProperty(rt, "byteOffset").asNumber());
+    facebook::jsi::ArrayBuffer buffer = view.getProperty(rt, "buffer").asObject(rt).getArrayBuffer(rt);
+    if (offset > buffer.size(rt) || bytes > buffer.size(rt) - offset) {
+        throw facebook::jsi::JSINativeException("crossbind: the typed array is smaller than the native buffer it fills");
+    }
+    memcpy(data, buffer.data(rt) + offset, bytes);
+}
+
 } // namespace internal
 
 template<typename ElementType>
@@ -760,8 +828,12 @@ struct BindingType<memory_view<ElementType>> {
     // on the C++ side, nor is toWireType implemented in
     // JavaScript.)
     typedef memory_view<ElementType> WireType;
+    typedef const facebook::jsi::Value WireType2;
     static WireType toWireType(const memory_view<ElementType>& mv) {
         return mv;
+    }
+    static WireType2 toWireType2(facebook::jsi::Runtime& rt, const memory_view<ElementType>& mv) {
+        return copyToTypedArray(rt, typedArrayNameOf<ElementType>(), mv.data, mv.size, mv.size * sizeof(ElementType));
     }
 };
 

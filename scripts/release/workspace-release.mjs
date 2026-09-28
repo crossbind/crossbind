@@ -105,11 +105,20 @@ export function readTrainVersion(root = process.cwd()) {
     return version;
 }
 
+// The runners a release builds on. Every one but macos is a shard of the Linux build job;
+// linux-native and win32-native build the Node.js addon packages in the linux and windows images.
+export const RUNNERS = ['linux', 'wasm', 'android', 'wasi', 'linux-native', 'win32-native', 'macos'];
+const LINUX_RUNNERS = RUNNERS.filter((runner) => runner !== 'macos');
+// The runners that build part of the multi-platform package.
+export const MULTI_PLATFORM_RUNNERS = ['wasm', 'android', 'wasi', 'macos'];
+
 export function classifyBuild(candidate) {
     const lifecycle = candidate.manifest.scripts?.prepublishOnly;
     if (!lifecycle) return 'linux';
     if (candidate.path === 'examples/lib-prebuilt-matrix' && lifecycle.trim() === 'crossbind build') return 'multi-platform';
-    if (/\bcrossbind\s+build\b[^\n]*\s-p\s+ios(?:\s|$)/.test(lifecycle)) return 'macos';
+    if (/\bcrossbind\s+build\b[^\n]*\s-p\s+(?:ios|darwin)(?:\s|$)/.test(lifecycle)) return 'macos';
+    if (/\bcrossbind\s+build\b[^\n]*\s-p\s+linux(?:\s|$)/.test(lifecycle)) return 'linux-native';
+    if (/\bcrossbind\s+build\b[^\n]*\s-p\s+win32(?:\s|$)/.test(lifecycle)) return 'win32-native';
     if (/\bcrossbind\s+build\b[^\n]*\s-p\s+android(?:\s|$)/.test(lifecycle)) return 'android';
     if (/\bcrossbind\s+build\b[^\n]*\s-p\s+wasi(?:\s|$)/.test(lifecycle)) return 'wasi';
     if (/\bcrossbind\s+build\b[^\n]*\s-p\s+wasm(?:\s|$)/.test(lifecycle)) return 'wasm';
@@ -439,7 +448,7 @@ export async function buildWorkspaceReleasePlan({
     const orderedClosure = topologicalOrder(packages, buildClosure);
     const byName = new Map(packages.map((candidate) => [candidate.name, candidate]));
     const buildOrderByRunner = Object.fromEntries(
-        ['linux', 'wasm', 'android', 'wasi', 'macos'].map((runner) => [
+        RUNNERS.map((runner) => [
             runner,
             orderedClosure.filter(
                 (name) => byName.get(name).buildKind === runner && (candidateNames.has(name) || byName.get(name).manifest.scripts?.prepublishOnly),
@@ -464,8 +473,8 @@ export async function buildWorkspaceReleasePlan({
         packageCount: candidates.length,
         publishOrder,
         buildOrderByRunner,
-        linuxShards: ['linux', 'wasm', 'android', 'wasi'].filter(
-            (runner) => buildOrderByRunner[runner].length > 0 || (runner !== 'linux' && multiPlatform.length > 0),
+        linuxShards: LINUX_RUNNERS.filter(
+            (runner) => buildOrderByRunner[runner].length > 0 || (MULTI_PLATFORM_RUNNERS.includes(runner) && multiPlatform.length > 0),
         ),
         multiPlatform,
         packages: candidates.map(publicPackage),
@@ -487,7 +496,7 @@ export function validateWorkspaceReleasePlan(plan, { root } = {}) {
     if (plan.publishOrder.length !== names.size || !plan.publishOrder.every((name) => names.has(name))) {
         throw new Error('Workspace release plan publish order does not exactly cover the candidate packages.');
     }
-    for (const runner of ['linux', 'wasm', 'android', 'wasi', 'macos']) {
+    for (const runner of RUNNERS) {
         if (!Array.isArray(plan.buildOrderByRunner?.[runner])) throw new Error(`Workspace release plan has no ${runner} build order.`);
     }
     if (!Array.isArray(plan.linuxShards) || !Array.isArray(plan.multiPlatform)) {
@@ -528,7 +537,7 @@ export function validateWorkspaceReleasePlan(plan, { root } = {}) {
         const expectedClosure = topologicalOrder(canonical, closure);
         const byName = new Map(canonical.map((candidate) => [candidate.name, candidate]));
         const expectedBuildOrder = Object.fromEntries(
-            ['linux', 'wasm', 'android', 'wasi', 'macos'].map((runner) => [
+            RUNNERS.map((runner) => [
                 runner,
                 expectedClosure.filter(
                     (name) => byName.get(name).buildKind === runner && (names.has(name) || byName.get(name).manifest.scripts?.prepublishOnly),
@@ -536,8 +545,8 @@ export function validateWorkspaceReleasePlan(plan, { root } = {}) {
             ]),
         );
         const expectedMulti = expectedClosure.filter((name) => byName.get(name).buildKind === 'multi-platform');
-        const expectedLinuxShards = ['linux', 'wasm', 'android', 'wasi'].filter(
-            (runner) => expectedBuildOrder[runner].length > 0 || (runner !== 'linux' && expectedMulti.length > 0),
+        const expectedLinuxShards = LINUX_RUNNERS.filter(
+            (runner) => expectedBuildOrder[runner].length > 0 || (MULTI_PLATFORM_RUNNERS.includes(runner) && expectedMulti.length > 0),
         );
         if (
             JSON.stringify(plan.publishOrder) !== JSON.stringify(expectedPublishOrder) ||

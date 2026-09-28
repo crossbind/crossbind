@@ -7,6 +7,7 @@ import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import {
     buildWorkspaceReleasePlan,
+    classifyBuild,
     compareSupportedVersions,
     discoverPublishablePackages,
     provenanceCommitFromBundle,
@@ -64,7 +65,10 @@ function fixtureRepository(packages, { trainVersion } = {}) {
 
 test('the real workspace is classified into publishable Linux, macOS and assembled packages', () => {
     const packages = discoverPublishablePackages(ROOT);
-    assert.equal(packages.length, 107);
+    assert.equal(packages.length, 156);
+    assert.equal(packages.find((candidate) => candidate.name === '@crossbind/port-zlib-darwin').buildKind, 'macos');
+    assert.equal(packages.find((candidate) => candidate.name === '@crossbind/port-zlib-linux').buildKind, 'linux-native');
+    assert.equal(packages.find((candidate) => candidate.name === '@crossbind/port-zlib-win32').buildKind, 'win32-native');
     assert.equal(readTrainVersion(ROOT), fs.readFileSync(path.join(ROOT, 'releases', 'npm', 'VERSION'), 'utf8').trim());
     assert.match(readTrainVersion(ROOT), /^\d+\.\d+\.\d+(?:-(?:beta|rc)\.\d+)?$/);
     assert.ok(packages.filter((candidate) => candidate.buildKind === 'macos').length > 0);
@@ -73,6 +77,22 @@ test('the real workspace is classified into publishable Linux, macOS and assembl
         packages.filter((candidate) => candidate.buildKind === 'multi-platform').map((candidate) => candidate.name),
         ['@crossbind/example-lib-prebuilt-matrix'],
     );
+});
+
+test('Apple targets build on the macOS runner: iOS packages and macOS Node addon packages alike', () => {
+    const lifecycle = (prepublishOnly) => ({ manifestPath: 'package.json', path: 'ports/x/y', manifest: { scripts: { prepublishOnly } } });
+
+    assert.equal(classifyBuild(lifecycle('crossbind build -p ios')), 'macos');
+    assert.equal(classifyBuild(lifecycle('crossbind build -p darwin')), 'macos');
+    assert.equal(classifyBuild(lifecycle('crossbind build -p android')), 'android');
+});
+
+test('Linux and Windows Node addon packages build in shards of their own in the Linux job', () => {
+    const lifecycle = (prepublishOnly) => ({ manifestPath: 'package.json', path: 'ports/x/y', manifest: { scripts: { prepublishOnly } } });
+
+    assert.equal(classifyBuild(lifecycle('crossbind build -p linux')), 'linux-native');
+    assert.equal(classifyBuild(lifecycle('crossbind build -p win32')), 'win32-native');
+    assert.equal(classifyBuild(lifecycle('node build.mjs')), 'linux');
 });
 
 test('workspace version command updates only selected packages to one new train version', () => {

@@ -17,7 +17,7 @@ export default {
     // 2) Recipe override (this is also an implicit rebuild):
     '@crossbind/port-proj': {
         nativeVersion: '9.4.0',
-        getBuildParams: (base, target) => [...base(target), '-DENABLE_TIFF=OFF'],
+        getBuildParams: (base, ...args) => [...base(...args), '-DENABLE_TIFF=OFF'],
     },
 
     // 3) Exclude a dependency entirely:
@@ -28,7 +28,7 @@ export default {
 };
 ```
 
-Overridable recipe keys: `nativeVersion`, `getURL`, `buildType`, `env`, `copyToSource`, `copyToDist`, `beforeRun`, `useIOSCMake`, `sourceReplaceList`, `getExtraLibs`, `replaceList` (append by default; `{ set: [...] }` to replace), `getBuildParams` (chained: receives the base recipe function first), `targetSpecs`, `export`.
+Overridable recipe keys: `nativeVersion`, `getURL`, `buildType`, `env`, `copyToSource`, `copyToDist`, `beforeRun`, `useIOSCMake`, `sourceReplaceList`, `getExtraLibs`, `replaceList` (append by default; `{ set: [...] }` to replace), `getBuildParams` (chained: receives the base recipe function first, then the recipe's own arguments, which it must pass on to `base`), `targetSpecs`, `export`.
 
 One-off rebuilds without a file: `CROSSBIND_REBUILD_DEPS=all` (or a comma-separated name list) as an environment variable, or `crossbind build --rebuild-deps <names>`.
 

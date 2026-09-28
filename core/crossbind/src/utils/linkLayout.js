@@ -13,7 +13,9 @@ export function libNameOf(libPath) {
     return match ? match[1] : base;
 }
 
-export function buildLinkLibArgs(libs, { wholeArchiveAll = false, wholeArchiveNames = new Set(), wrapLast = true } = {}) {
+export function buildLinkLibArgs(libs, {
+    wholeArchiveAll = false, wholeArchiveNames = new Set(), wrapLast = true, forceLoad = false,
+} = {}) {
     const args = [];
     let wrapped = false;
     libs.forEach((lib, index) => {
@@ -21,6 +23,11 @@ export function buildLinkLibArgs(libs, { wholeArchiveAll = false, wholeArchiveNa
         // have no bridge (main() is the GC root), so they pass false.
         const isBridge = wrapLast && index === libs.length - 1;
         const wantWrap = wholeArchiveAll || isBridge || wholeArchiveNames.has(libNameOf(lib));
+        // Apple's ld64 has no --whole-archive groups; it keeps archives one at a time.
+        if (forceLoad) {
+            args.push(wantWrap ? `-Wl,-force_load,${lib}` : lib);
+            return;
+        }
         if (wantWrap !== wrapped) {
             args.push(wantWrap ? '-Wl,--whole-archive' : '-Wl,--no-whole-archive');
             wrapped = wantWrap;

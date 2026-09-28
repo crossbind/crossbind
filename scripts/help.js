@@ -54,7 +54,8 @@ const ANNOTATIONS = {
     'ci:linux:build': 'CI linux: build all samples + zlib package',
     'ci:windows:build': 'CI windows: build wasm + android sample-lib + zlib',
     'ci:ios:build:port': 'CI macos: build zlib for iOS',
-    'ci:macos:build': 'CI macos: build sample-lib for iOS + zlib for iOS',
+    'ci:darwin:build:port': 'CI macos: build zlib for macOS Node addons',
+    'ci:macos:build': 'CI macos: build sample-lib for iOS + zlib for iOS and macOS',
 
     // e2e
     'e2e:dev': 'Playwright e2e against dev servers (workspace-concurrency=1)',

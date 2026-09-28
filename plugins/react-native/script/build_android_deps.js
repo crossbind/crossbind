@@ -1,8 +1,10 @@
-import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { createRequire } from 'node:module';
-import { state, buildDependencies, getDependenciesStamp, getTargetParams } from 'crossbind';
+import {
+    state, buildDependencies, getDependenciesStamp, getTargetParams,
+    computeInputStamp, collectRustSources, collectRustBridgeFiles,
+} from 'crossbind';
 
 const buildType = (process.argv[2] || 'Release').toLowerCase();
 const archs = (process.argv[3] || '').split(',').map((s) => s.trim()).filter(Boolean);
@@ -18,26 +20,16 @@ await buildDependencies({
 
 // App-local Rust surfaces feed the configure-time super-staticlib (build_android.js), so their
 // membership AND content must bust the configure too: a NEW bare-crate import used to link a
-// super without its bridge until a manual .cxx wipe. embind-rs is the cargo-side runtime dep.
+// super without its bridge until a manual .cxx wipe, and a body edit to an app-local .rs changes
+// only the source its bridge includes. embind-rs is the cargo-side runtime dep.
 function appRustStamp() {
-    const parts = [];
-    for (const root of ['rust-bridges', 'rust-crates']) {
-        const dir = `${state.config.paths.cache}/${root}`;
-        if (!fs.existsSync(dir)) continue;
-        for (const e of fs.readdirSync(dir, { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name))) {
-            const files = e.isDirectory()
-                ? [`${dir}/${e.name}/Cargo.toml`, `${dir}/${e.name}/src/lib.rs`]
-                : [`${dir}/${e.name}`];
-            for (const f of files.filter((file) => fs.existsSync(file))) {
-                parts.push(`${root}/${e.name}:${crypto.createHash('sha1').update(fs.readFileSync(f)).digest('hex')}`);
-            }
-        }
-    }
-    const embindRs = path.join(path.dirname(fs.realpathSync(
+    const embindRsCrate = path.join(path.dirname(fs.realpathSync(
         createRequire(import.meta.url).resolve('@crossbind/core-embind-rust/package.json'),
-    )), 'crate/src/lib.rs');
-    if (fs.existsSync(embindRs)) parts.push(`embind-rs:${crypto.createHash('sha1').update(fs.readFileSync(embindRs)).digest('hex')}`);
-    return crypto.createHash('sha1').update(parts.join('\n')).digest('hex');
+    )), 'crate');
+    return computeInputStamp([], [], [
+        ...collectRustSources([state.config.paths.project, ...state.config.paths.native, embindRsCrate]),
+        ...collectRustBridgeFiles(state.config.paths.cache),
+    ], 'app-rust');
 }
 
 // CMakeLists registers this file as CMAKE_CONFIGURE_DEPENDS: when the consumed

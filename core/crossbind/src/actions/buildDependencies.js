@@ -14,6 +14,11 @@ import {
 } from '../utils/dependencyRebuild.js';
 import withDirLock from '../utils/dirLock.js';
 import { prepareRustSysroot } from '../utils/rustSysroot.js';
+import getAbsolutePath from '../utils/getAbsolutePath.js';
+import getCMakeListsFilePath from '../utils/getCMakeListsFilePath.js';
+import getParentPath from '../utils/getParentPath.js';
+import calculateDependencyParameters from '../state/calculateDependencyParameters.js';
+import { getEmbindRsFingerprint, isEmbindRsFingerprintStale } from '../utils/embindRsFingerprint.js';
 
 export default async function buildDependencies({ targetParams, rebuildOption }) {
     // Before the early returns below: this is the one async step every build path awaits, and the
@@ -64,17 +69,23 @@ export default async function buildDependencies({ targetParams, rebuildOption })
 async function buildMissingCargoDependencies(targets, targetParams) {
     if (targets.length === 0) return;
     const appConfig = state.config;
-    const missing = (appConfig.allDependencies ?? []).filter((dep) => dep !== appConfig
-        && dep.export?.type === 'cargo'
-        && targets.some((target) => !dep.functions.isEnabled(target)));
+    const cargoDependencies = (appConfig.allDependencies ?? []).filter((dep) => dep !== appConfig && dep.export?.type === 'cargo');
+    if (cargoDependencies.length === 0) return;
+    // A prebuilt from another embind-rs counts as missing: linked, it carries stale glue or clashes with the others.
+    const fingerprint = getEmbindRsFingerprint();
+    const prebuiltOf = (dep, target) => [target.path, target.releasePath]
+        .map((targetPath) => `${dep.paths.output}/prebuilt/${targetPath}`)
+        .find((dir) => fs.existsSync(dir)) ?? `${dep.paths.output}/prebuilt/${target.path}`;
+    const isBuilt = (dep, target) => dep.functions.isEnabled(target) && !isEmbindRsFingerprintStale(prebuiltOf(dep, target), fingerprint);
+    const missing = cargoDependencies.filter((dep) => targets.some((target) => !isBuilt(dep, target)));
 
     for (const dep of missing) {
         const name = dep.general.name;
         // isEnabled reads the filesystem on every call, so a build that lands while this one waits
         // for the lock is picked up without any state to refresh.
         await withDirLock(`${dep.paths.output}.autobuild.lock`, async () => {
-            if (targets.every((target) => dep.functions.isEnabled(target))) return;
-            logger.info(`crossbind: building cargo dependency "${name}" - it has no prebuilt for this target yet…`);
+            if (targets.every((target) => isBuilt(dep, target))) return;
+            logger.info(`crossbind: building cargo dependency "${name}" - it has no prebuilt from this embind-rs for this target yet…`);
             const scoped = await loadConfig(dep.paths.project);
             const prev = state.config;
             state.config = scoped;
@@ -84,17 +95,21 @@ async function buildMissingCargoDependencies(targets, targetParams) {
                 state.config = prev;
             }
         });
+        // loadConfig resolved a never-built package's CMakeLists to the CLI's own, and isEnabled and the link read it.
+        dep.paths.cmake = getAbsolutePath(dep.paths.project, getCMakeListsFilePath(dep.paths.output));
+        dep.paths.cmakeDir = getParentPath(dep.paths.cmake);
     }
+    if (missing.length > 0) appConfig.dependencyParameters = calculateDependencyParameters(appConfig);
 
     // The build above is the fix; this is the guard behind it. assertDependsBuilt only runs while
     // the cmake link is being configured, so a cached native build skips the check and a missing
     // cargo dependency reaches the app anyway - measured on wasm as a clean BUILD=0 whose module
     // then failed 22 of 43 conformance features at init. Here the answer is known either way.
-    const unresolved = missing.filter((dep) => targets.some((target) => !dep.functions.isEnabled(target)));
+    const unresolved = missing.filter((dep) => targets.some((target) => !isBuilt(dep, target)));
     if (unresolved.length > 0) {
         const names = unresolved.map((dep) => `"${dep.general.name}"`).join(', ');
         throw new Error(`crossbind: cargo ${unresolved.length > 1 ? 'dependencies' : 'dependency'} ${names} still `
-            + `${unresolved.length > 1 ? 'have' : 'has'} no prebuilt for ${targets.map((t) => t.path).join(', ')} `
+            + `${unresolved.length > 1 ? 'have' : 'has'} no prebuilt built from the current embind-rs for ${targets.map((t) => t.path).join(', ')} `
             + 'after building. Linking without it produces a module that builds clean and dies at init.');
     }
 }

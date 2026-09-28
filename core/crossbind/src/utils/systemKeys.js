@@ -24,6 +24,14 @@ const systemKeys = {
         description: 'Image reference used for android builds instead of the pinned one. A reference without the release digest disables the reproducibility guarantee. The CROSSBIND_IMAGE_ANDROID environment variable overrides it.',
         default: '',
     },
+    DOCKER_IMAGE_LINUX: {
+        description: 'Image reference used for linux (Node.js addon) builds instead of the pinned one. A reference without the release digest disables the reproducibility guarantee. The CROSSBIND_IMAGE_LINUX environment variable overrides it.',
+        default: '',
+    },
+    DOCKER_IMAGE_WINDOWS: {
+        description: 'Image reference used for win32 (Node.js addon) builds instead of the pinned one. A reference without the release digest disables the reproducibility guarantee. The CROSSBIND_IMAGE_WINDOWS environment variable overrides it.',
+        default: '',
+    },
 };
 
 export default systemKeys;

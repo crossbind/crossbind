@@ -418,6 +418,65 @@ option_wire! {
     String, crossbind_tid_optional_string, 'S';
 }
 
+extern "C" {
+    fn crossbind_tid_optional_int64() -> *const c_void;
+    fn crossbind_tid_optional_uint64() -> *const c_void;
+}
+#[cfg(target_family = "wasm")]
+extern "C" {
+    fn crossbind_emval_opt_bits64(handle: usize, out: *mut u64, signed: i32) -> i32;
+}
+
+mod sealed {
+    pub trait Sealed {}
+    impl Sealed for i64 {}
+    impl Sealed for u64 {}
+}
+
+#[doc(hidden)]
+pub trait BigIntElement: sealed::Sealed + Copy + 'static {
+    const SIGNED: bool;
+}
+impl BigIntElement for i64 { const SIGNED: bool = true; }
+impl BigIntElement for u64 { const SIGNED: bool = false; }
+
+/// An `Option<i64>` / `Option<u64>` parameter: a BigInt or a safe-integer Number, null or undefined
+/// for `None`. Generic, so it is compiled into the crate that uses it and a cargo archive built
+/// before it existed still links next to one built after.
+pub struct JsBigIntOptArg<T>(pub Option<T>);
+
+impl<T: BigIntElement> WireType for JsBigIntOptArg<T> {
+    #[cfg(target_family = "wasm")]
+    type Wire = usize;
+    #[cfg(not(target_family = "wasm"))]
+    type Wire = *mut u8;
+    #[cfg(target_family = "wasm")]
+    const SIG: char = 'i';
+    #[cfg(not(target_family = "wasm"))]
+    const SIG: char = if T::SIGNED { 'J' } else { 'U' };
+    fn tid() -> *const c_void {
+        unsafe { if T::SIGNED { crossbind_tid_optional_int64() } else { crossbind_tid_optional_uint64() } }
+    }
+    #[cfg(target_family = "wasm")]
+    fn from_wire(w: usize) -> Self {
+        let mut bits: u64 = 0;
+        if unsafe { crossbind_emval_opt_bits64(w, &mut bits, T::SIGNED as i32) } == 0 { return JsBigIntOptArg(None); }
+        JsBigIntOptArg(Some(unsafe { core::mem::transmute_copy::<u64, T>(&bits) }))
+    }
+    #[cfg(not(target_family = "wasm"))]
+    fn from_wire(w: *mut u8) -> Self {
+        if w.is_null() { return JsBigIntOptArg(None); }
+        JsBigIntOptArg(Some(unsafe { core::ptr::read_unaligned(w as *const T) }))
+    }
+    fn to_wire(self) -> Self::Wire { unreachable!("an optional 64-bit integer is only a parameter") }
+}
+
+/// Registers the optional type a `JsBigIntOptArg<T>` parameter names (adapter-idempotent).
+pub fn register_optional_bigint<T: BigIntElement>() {
+    let inner = unsafe { if T::SIGNED { crossbind_tid_int64() } else { crossbind_tid_uint64() } };
+    unsafe { crossbind_embind_register_optional(<JsBigIntOptArg<T> as WireType>::tid(), inner) };
+}
+
 // wasm Some-path: hand the inner's in-memory repr to _emval_take_value. JS copies the value
 // synchronously, so stack temporaries suffice; the string wire is freed by embind itself.
 #[cfg(target_family = "wasm")]
@@ -879,6 +938,102 @@ impl WireType for JsF64s {
 impl ErrSentinel for JsBytes { fn err_sentinel() -> Self { JsBytes(Vec::new()) } }
 impl ErrSentinel for JsF64s { fn err_sentinel() -> Self { JsF64s(Vec::new()) } }
 
+extern "C" {
+    fn crossbind_tid_bytes_arg() -> *const c_void;
+    fn crossbind_tid_f64s_arg() -> *const c_void;
+}
+
+// A typed array argument reaches the adapter as the JS view itself, and the adapter says where its
+// elements are: in the view's own backing store on the native runtime, in a copy in wasm memory on
+// the web. Either stays valid until the call returns.
+#[repr(C)]
+struct ViewWire {
+    data: *const c_void,
+    length: usize,
+}
+
+#[doc(hidden)]
+pub trait ViewElement: Copy + 'static {
+    const NATIVE_SIG: char;
+    fn tid() -> *const c_void;
+}
+
+impl ViewElement for u8 {
+    const NATIVE_SIG: char = 'y';
+    fn tid() -> *const c_void { unsafe { crossbind_tid_bytes_arg() } }
+}
+
+impl ViewElement for f64 {
+    const NATIVE_SIG: char = 'z';
+    fn tid() -> *const c_void { unsafe { crossbind_tid_f64s_arg() } }
+}
+
+/// A byte or double parameter: `&[T]` reads the caller's view in place, `Vec<T>` copies it once.
+pub struct JsViewArg<T> {
+    data: *const T,
+    length: usize,
+}
+
+pub type JsBytesArg = JsViewArg<u8>;
+pub type JsF64sArg = JsViewArg<f64>;
+
+impl<T: ViewElement> JsViewArg<T> {
+    pub fn as_slice(&self) -> &[T] {
+        if self.length == 0 { &[] } else { unsafe { std::slice::from_raw_parts(self.data, self.length) } }
+    }
+    pub fn to_vec(&self) -> Vec<T> {
+        self.as_slice().to_vec()
+    }
+}
+
+impl<T: ViewElement> WireType for JsViewArg<T> {
+    type Wire = usize;
+    #[cfg(target_family = "wasm")]
+    const SIG: char = 'p';
+    #[cfg(not(target_family = "wasm"))]
+    const SIG: char = T::NATIVE_SIG;
+    fn tid() -> *const c_void { T::tid() }
+    fn from_wire(w: usize) -> Self {
+        if w == 0 { return JsViewArg { data: core::ptr::null(), length: 0 }; }
+        let view = unsafe { &*(w as *const ViewWire) };
+        JsViewArg { data: view.data as *const T, length: view.length }
+    }
+    fn to_wire(self) -> usize { unreachable!("a typed array argument is never returned") }
+}
+
+extern "C" {
+    fn crossbind_tid_bytes_opt_arg() -> *const c_void;
+    fn crossbind_tid_f64s_opt_arg() -> *const c_void;
+}
+
+/// An `Option<&[T]>` parameter: null or undefined is `None`, a view is read as for `JsViewArg`.
+/// Generic like `JsBigIntOptArg`, for the same reason.
+pub struct JsViewOptArg<T>(Option<JsViewArg<T>>);
+
+pub type JsBytesOptArg = JsViewOptArg<u8>;
+pub type JsF64sOptArg = JsViewOptArg<f64>;
+
+impl<T: ViewElement> JsViewOptArg<T> {
+    pub fn as_slice(&self) -> Option<&[T]> {
+        self.0.as_ref().map(|view| view.as_slice())
+    }
+}
+
+impl<T: ViewElement> WireType for JsViewOptArg<T> {
+    type Wire = usize;
+    #[cfg(target_family = "wasm")]
+    const SIG: char = 'p';
+    #[cfg(not(target_family = "wasm"))]
+    const SIG: char = if T::NATIVE_SIG == 'y' { 'Y' } else { 'Z' };
+    fn tid() -> *const c_void {
+        unsafe { if T::NATIVE_SIG == 'y' { crossbind_tid_bytes_opt_arg() } else { crossbind_tid_f64s_opt_arg() } }
+    }
+    fn from_wire(w: usize) -> Self {
+        JsViewOptArg(if w == 0 { None } else { Some(JsViewArg::from_wire(w)) })
+    }
+    fn to_wire(self) -> usize { unreachable!("a typed array argument is never returned") }
+}
+
 impl Drop for JsValue {
     fn drop(&mut self) {
         unsafe { crossbind_v_unref(self.handle) };
@@ -1287,6 +1442,10 @@ arc_factories! {
     create_arc0 / arc_factory_invoker0 : ;
     create_arc1 / arc_factory_invoker1 : A0;
     create_arc2 / arc_factory_invoker2 : A0, A1;
+    create_arc3 / arc_factory_invoker3 : A0, A1, A2;
+    create_arc4 / arc_factory_invoker4 : A0, A1, A2, A3;
+    create_arc5 / arc_factory_invoker5 : A0, A1, A2, A3, A4;
+    create_arc6 / arc_factory_invoker6 : A0, A1, A2, A3, A4, A5;
 }
 
 // N-arity constructors: one monomorphized invoker + builder method per argument count.
@@ -1380,6 +1539,7 @@ constructors_ptr! {
     constructor_ptr4 / ctor_ptr_invoker4 : A0, A1, A2, A3;
     constructor_ptr5 / ctor_ptr_invoker5 : A0, A1, A2, A3, A4;
     constructor_ptr6 / ctor_ptr_invoker6 : A0, A1, A2, A3, A4, A5;
+    constructor_ptr7 / ctor_ptr_invoker7 : A0, A1, A2, A3, A4, A5, A6;
 }
 
 // Raw-pointer factory variants: `Result<Self, E>` raises on Err, `Option<Self>` returns null
@@ -1521,4 +1681,46 @@ free_functions! {
     fn4 / free_invoker4 : A0, A1, A2, A3;
     fn5 / free_invoker5 : A0, A1, A2, A3, A4;
     fn6 / free_invoker6 : A0, A1, A2, A3, A4, A5;
+}
+
+// N-arity STATIC functions (`Class.name(..)` in JS): a free function registered on its class,
+// so it rides the free-function invokers. Generic only, so a cargo archive built before these
+// existed still links next to one built after.
+macro_rules! static_functions {
+    ($( $method:ident / $invoker:ident : $($arg:ident),* ; )*) => {
+        impl<T: 'static> ClassBuilder<T> {
+            $(
+                pub fn $method<$($arg: WireType,)* R: WireType>(self, name: &str, f: fn($($arg),*) -> R) -> Self {
+                    let mut sig = String::new();
+                    sig.push(R::SIG); sig.push('p');
+                    let mut args = vec![R::tid()];
+                    $( sig.push(<$arg as WireType>::SIG); args.push(<$arg as WireType>::tid()); )*
+                    let (argc, arg_ptr, name_ptr, sig_ptr);
+                    {
+                        let mut r = registry().lock().unwrap();
+                        argc = args.len() as u32;
+                        arg_ptr = r.argtypes(args);
+                        name_ptr = r.cstr(name);
+                        sig_ptr = r.cstr(&sig);
+                    }
+                    unsafe {
+                        crossbind_embind_register_class_class_function(
+                            self.cls, name_ptr, argc, arg_ptr, sig_ptr,
+                            $invoker::<$($arg,)* R> as *const () as usize, f as *const () as usize, false, false,
+                        );
+                    }
+                    self
+                }
+            )*
+        }
+    };
+}
+static_functions! {
+    static_function0 / free_invoker0 : ;
+    static_function1 / free_invoker1 : A0;
+    static_function2 / free_invoker2 : A0, A1;
+    static_function3 / free_invoker3 : A0, A1, A2;
+    static_function4 / free_invoker4 : A0, A1, A2, A3;
+    static_function5 / free_invoker5 : A0, A1, A2, A3, A4;
+    static_function6 / free_invoker6 : A0, A1, A2, A3, A4, A5;
 }

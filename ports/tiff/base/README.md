@@ -48,6 +48,8 @@ export default {
 };
 ```
 
+A native Node.js addon links the build of its platform: `crossbind build -p darwin`, `-p linux` or `-p win32` takes `@crossbind/port-tiff-darwin`, `-linux` or `-win32`. Install it and import its `crossbind.config.js` the same way.
+
 ## Usage
 crossbind binds your C++ headers to JavaScript, so the usual pattern is a small wrapper around the library. This one writes pixels as a TIFF and reads them back, in memory. Put it in your project's native folder (`src/native/` by default):
 
@@ -204,10 +206,10 @@ Each one runs in your browser on [crossbind.dev/ports/tiff](https://crossbind.de
 - [Read one tile of a big image](https://crossbind.dev/ports/tiff/#04-tiles): `TIFFWriteTile`, `TIFFComputeTile` and `TIFFReadTile`.
 - [Open a TIFF file and print its tags](https://crossbind.dev/ports/tiff/#05-open-file): `m.autoMountFiles`, `TIFFOpen` and `TIFFPrintDirectory`, on WebAssembly.
 
-Setup and differences per platform: [WebAssembly](https://crossbind.dev/ports/tiff/wasm/) · [Android](https://crossbind.dev/ports/tiff/android/) · [iOS](https://crossbind.dev/ports/tiff/ios/) · [WASI](https://crossbind.dev/ports/tiff/wasi/), which also has a command-line program built with `crossbind build -p wasi`.
+Setup and differences per platform: [WebAssembly](https://crossbind.dev/ports/tiff/wasm/) · [Android](https://crossbind.dev/ports/tiff/android/) · [iOS](https://crossbind.dev/ports/tiff/ios/) · [macOS](https://crossbind.dev/ports/tiff/darwin/) · [Linux](https://crossbind.dev/ports/tiff/linux/) · [Windows](https://crossbind.dev/ports/tiff/win32/) · [WASI](https://crossbind.dev/ports/tiff/wasi/), which also has a command-line program built with `crossbind build -p wasi`.
 
 ## What this build includes
-- libtiff 4.7.2 with libtiffxx, the C++ stream API (`TIFFStreamOpen`): static libraries on WebAssembly, iOS and WASI, shared ones (`libtiff.so`, `libtiffxx.so`) on Android.
+- libtiff 4.7.2 with libtiffxx, the C++ stream API (`TIFFStreamOpen`): static libraries on WebAssembly, iOS, macOS, Linux, Windows and WASI, shared ones (`libtiff.so`, `libtiffxx.so`) on Android.
 - Codecs on WebAssembly, as `TIFFGetConfiguredCODECs` lists them: None, LZW, PackBits, ThunderScan, NeXT, JPEG, Old-style JPEG, CCITT RLE, CCITT RLE/W, CCITT Group 3, CCITT Group 4, Deflate, AdobeDeflate, PixarLog, SGILog, SGILog24, ZSTD and LERC. Android and iOS are built from the same recipe with the same four codec libraries: zlib, libjpeg-turbo, zstd and LERC.
 - No WebP, LZMA or JBIG: files that use them open and list their tags, but their pixels cannot be decoded.
 - The WASI build links zlib only, so it has None, LZW, PackBits, ThunderScan, NeXT, the CCITT codecs, Deflate, PixarLog and SGILog: no JPEG, ZSTD or LERC. The `-bin-wasi` tools have the same set.
@@ -221,6 +223,9 @@ This is the main package; the precompiled binaries are shipped per platform:
 | WebAssembly | [`@crossbind/port-tiff-wasm`](https://www.npmjs.com/package/@crossbind/port-tiff-wasm) | `wasm32` — single-threaded & multi-threaded |
 | Android | [`@crossbind/port-tiff-android`](https://www.npmjs.com/package/@crossbind/port-tiff-android) | `arm64-v8a` (64-bit ARM), `x86_64` (emulator) |
 | iOS | [`@crossbind/port-tiff-ios`](https://www.npmjs.com/package/@crossbind/port-tiff-ios) | device (`arm64`), simulator (`arm64`) |
+| macOS | [`@crossbind/port-tiff-darwin`](https://www.npmjs.com/package/@crossbind/port-tiff-darwin) | `arm64` (Apple silicon), `x64` (Intel) — native Node.js addons |
+| Linux | [`@crossbind/port-tiff-linux`](https://www.npmjs.com/package/@crossbind/port-tiff-linux) | `x64`, `arm64` — glibc 2.28 or later, native Node.js addons |
+| Windows | [`@crossbind/port-tiff-win32`](https://www.npmjs.com/package/@crossbind/port-tiff-win32) | `x64`, `arm64` — Windows 10 or later, native Node.js addons |
 | WASI library | [`@crossbind/port-tiff-wasi`](https://www.npmjs.com/package/@crossbind/port-tiff-wasi) | `wasm32-wasip3` — single-threaded |
 | WASI command | [`@crossbind/port-tiff-bin-wasi`](https://www.npmjs.com/package/@crossbind/port-tiff-bin-wasi) | the 18 tools libtiff installs, from `tiffinfo` to `tiff2pdf`, as `<tool>-wasi` commands (wasmtime 47+) |
 

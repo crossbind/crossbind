@@ -30,7 +30,7 @@ if(ANDROID)
     set(EXTRA_LINK_LIBRARIES "log")
 endif()
 
-if (NOT ${COMPILE_OPTIONS} STREQUAL "")
+if (NOT "${COMPILE_OPTIONS}" STREQUAL "")
     target_compile_options("${PROJECT_NAME}" PUBLIC "${COMPILE_OPTIONS}")
 endif()
 

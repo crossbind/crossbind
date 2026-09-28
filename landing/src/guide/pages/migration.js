@@ -86,7 +86,7 @@ npm install @crossbind/port-gdal-wasm${suffix}`,
             type: 'ul',
             items: [
                 '**Dependency imports point at a platform variant.** `@cpp.js/package-proj/cppjs.config.js` becomes `@crossbind/port-proj-wasm/crossbind.config.js`, one import per platform you build.',
-                "**`platform` becomes `targetSpecs`.** The 1.x keys `Emscripten-x86_64`, `Android-arm64-v8a` and `iOS-iphoneos` are now filters - `platform: 'wasm' | 'android' | 'ios' | 'wasi'` with optional `arch`, `runtime`, `buildType` and `runtimeEnv` - and `data`, `env` and `ignoreLibName` move under `specs`, next to the new `cmake` and `emccFlags` lists.",
+                "**`platform` becomes `targetSpecs`.** The 1.x keys `Emscripten-x86_64`, `Android-arm64-v8a` and `iOS-iphoneos` are now filters - `platform: 'wasm' | 'android' | 'ios' | 'wasi'` with optional `arch`, `runtime`, `buildType` and `runtimeEnv` - and `data`, `env` and `ignoreLibName` move under `specs`, next to the new `cmake.compileOptions` and `binary.emccFlags` lists.",
             ],
         },
         {

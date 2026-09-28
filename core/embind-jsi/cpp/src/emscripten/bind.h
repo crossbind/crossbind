@@ -1183,7 +1183,7 @@ public:
                 facebook::jsi::PropNameID::forAscii(*jsRuntime, std::string(name)+"_constructor"),
                 1,
                 [destructor](facebook::jsi::Runtime& rt, const facebook::jsi::Value& thisVal, const facebook::jsi::Value* args, size_t count) {
-                    ClassType* t = reinterpret_cast<ClassType*>(args[0].asBigInt(rt).asUint64(rt));
+                    ClassType* t = reinterpret_cast<ClassType*>(internal::bigIntUint64(rt, args[0]));
                     destructor(t);
                     return facebook::jsi::Value::undefined();
                 });
@@ -1216,7 +1216,7 @@ public:
                 facebook::jsi::PropNameID::forAscii(*jsRuntime, "value_array_element_gter1"),
                 2,
                 [getter, field](facebook::jsi::Runtime& rt, const facebook::jsi::Value& thisVal, const facebook::jsi::Value* args, size_t count) {
-                    ClassType* t2 = reinterpret_cast<ClassType*>(args[1].asBigInt(rt).asUint64(rt));
+                    ClassType* t2 = reinterpret_cast<ClassType*>(internal::bigIntUint64(rt, args[1]));
                     return getter(field, *t2);
                 });
 
@@ -1225,7 +1225,7 @@ public:
                 facebook::jsi::PropNameID::forAscii(*jsRuntime, "value_array_element_ster1"),
                 3,
                 [setter, field](facebook::jsi::Runtime& rt, const facebook::jsi::Value& thisVal, const facebook::jsi::Value* args, size_t count) {
-                    ClassType* t2 = reinterpret_cast<ClassType*>(args[1].asBigInt(rt).asUint64(rt));
+                    ClassType* t2 = reinterpret_cast<ClassType*>(internal::bigIntUint64(rt, args[1]));
                     setter(field, *t2, args[2]);
                     return facebook::jsi::Value::undefined();
                 });
@@ -1257,8 +1257,8 @@ public:
                 facebook::jsi::PropNameID::forAscii(*jsRuntime, "value_array_element_gter2"),
                 2,
                 [g, getter](facebook::jsi::Runtime& rt, const facebook::jsi::Value& thisVal, const facebook::jsi::Value* args, size_t count) {
-                    Getter* t = reinterpret_cast<Getter*>(args[0].asBigInt(rt).asUint64(rt));
-                    ClassType* t2 = reinterpret_cast<ClassType*>(args[1].asBigInt(rt).asUint64(rt));
+                    Getter* t = reinterpret_cast<Getter*>(internal::bigIntUint64(rt, args[0]));
+                    ClassType* t2 = reinterpret_cast<ClassType*>(internal::bigIntUint64(rt, args[1]));
                     return g(getter, *t2);
                 });
 
@@ -1267,8 +1267,8 @@ public:
                 facebook::jsi::PropNameID::forAscii(*jsRuntime, "value_array_element_ster2"),
                 3,
                 [s](facebook::jsi::Runtime& rt, const facebook::jsi::Value& thisVal, const facebook::jsi::Value* args, size_t count) {
-                    Setter* t = reinterpret_cast<Setter*>(args[0].asBigInt(rt).asUint64(rt));
-                    ClassType* t2 = reinterpret_cast<ClassType*>(args[1].asBigInt(rt).asUint64(rt));
+                    Setter* t = reinterpret_cast<Setter*>(internal::bigIntUint64(rt, args[0]));
+                    ClassType* t2 = reinterpret_cast<ClassType*>(internal::bigIntUint64(rt, args[1]));
                     s(*t, *t2, args[2]);
                     return facebook::jsi::Value::undefined();
                 });
@@ -1299,8 +1299,8 @@ public:
                 facebook::jsi::PropNameID::forAscii(*jsRuntime, "value_array_element_gter3"),
                 2,
                 [getter](facebook::jsi::Runtime& rt, const facebook::jsi::Value& thisVal, const facebook::jsi::Value* args, size_t count) {
-                    int t1 = static_cast<int>(args[0].asBigInt(rt).asUint64(rt));
-                    ClassType* t2 = reinterpret_cast<ClassType*>(args[1].asBigInt(rt).asUint64(rt));
+                    int t1 = static_cast<int>(internal::bigIntUint64(rt, args[0]));
+                    ClassType* t2 = reinterpret_cast<ClassType*>(internal::bigIntUint64(rt, args[1]));
                     return getter(t1, *t2);
                 });
 
@@ -1310,8 +1310,8 @@ public:
                 facebook::jsi::PropNameID::forAscii(*jsRuntime, "value_array_element_ster3"),
                 3,
                 [setter](facebook::jsi::Runtime& rt, const facebook::jsi::Value& thisVal, const facebook::jsi::Value* args, size_t count) {
-                    int t1 = static_cast<int>(args[0].asBigInt(rt).asUint64(rt));
-                    ClassType* t2 = reinterpret_cast<ClassType*>(args[1].asBigInt(rt).asUint64(rt));
+                    int t1 = static_cast<int>(internal::bigIntUint64(rt, args[0]));
+                    ClassType* t2 = reinterpret_cast<ClassType*>(internal::bigIntUint64(rt, args[1]));
                     setter(t1, *t2, args[2]);
                     return facebook::jsi::Value::undefined();
                 });
@@ -1359,7 +1359,7 @@ public:
                 facebook::jsi::PropNameID::forAscii(*jsRuntime, std::string(name)+"_constructor"),
                 1,
                 [dtor](facebook::jsi::Runtime& rt, const facebook::jsi::Value& thisVal, const facebook::jsi::Value* args, size_t count) {
-                    ClassType* t = reinterpret_cast<ClassType*>(args[0].asBigInt(rt).asUint64(rt));
+                    ClassType* t = reinterpret_cast<ClassType*>(internal::bigIntUint64(rt, args[0]));
                     dtor(t);
                     return facebook::jsi::Value::undefined();
                 });
@@ -1392,7 +1392,7 @@ public:
                 facebook::jsi::PropNameID::forAscii(*jsRuntime, "value_object_element_gter1"),
                 2,
                 [getter, field](facebook::jsi::Runtime& rt, const facebook::jsi::Value& thisVal, const facebook::jsi::Value* args, size_t count) {
-                    ClassType* t2 = reinterpret_cast<ClassType*>(args[1].asBigInt(rt).asUint64(rt));
+                    ClassType* t2 = reinterpret_cast<ClassType*>(internal::bigIntUint64(rt, args[1]));
                     return getter(field, *t2);
                 });
 
@@ -1401,7 +1401,7 @@ public:
                 facebook::jsi::PropNameID::forAscii(*jsRuntime, "value_object_element_ster1"),
                 3,
                 [setter, field](facebook::jsi::Runtime& rt, const facebook::jsi::Value& thisVal, const facebook::jsi::Value* args, size_t count) {
-                    ClassType* t2 = reinterpret_cast<ClassType*>(args[1].asBigInt(rt).asUint64(rt));
+                    ClassType* t2 = reinterpret_cast<ClassType*>(internal::bigIntUint64(rt, args[1]));
                     setter(field, *t2, args[2]);
                     return facebook::jsi::Value::undefined();
                 });
@@ -1439,8 +1439,8 @@ public:
                 facebook::jsi::PropNameID::forAscii(*jsRuntime, "value_object_element_gter1"),
                 2,
                 [getter, field](facebook::jsi::Runtime& rt, const facebook::jsi::Value& thisVal, const facebook::jsi::Value* args, size_t count) {
-                    const MemberPointer* t1 = reinterpret_cast<MemberPointer*>(args[0].asBigInt(rt).asUint64(rt));
-                    ClassType* t2 = reinterpret_cast<ClassType*>(args[1].asBigInt(rt).asUint64(rt));
+                    const MemberPointer* t1 = reinterpret_cast<MemberPointer*>(internal::bigIntUint64(rt, args[0]));
+                    ClassType* t2 = reinterpret_cast<ClassType*>(internal::bigIntUint64(rt, args[1]));
                     return getter(*t1, *t2);
                 });
 
@@ -1449,8 +1449,8 @@ public:
                 facebook::jsi::PropNameID::forAscii(*jsRuntime, "value_object_element_ster1"),
                 3,
                 [setter, field](facebook::jsi::Runtime& rt, const facebook::jsi::Value& thisVal, const facebook::jsi::Value* args, size_t count) {
-                    const MemberPointer* t1 = reinterpret_cast<MemberPointer*>(args[0].asBigInt(rt).asUint64(rt));
-                    ClassType* t2 = reinterpret_cast<ClassType*>(args[1].asBigInt(rt).asUint64(rt));
+                    const MemberPointer* t1 = reinterpret_cast<MemberPointer*>(internal::bigIntUint64(rt, args[0]));
+                    ClassType* t2 = reinterpret_cast<ClassType*>(internal::bigIntUint64(rt, args[1]));
                     setter(*t1, *t2, args[2]);
                     return facebook::jsi::Value::undefined();
                 });
@@ -1487,8 +1487,8 @@ public:
                 facebook::jsi::PropNameID::forAscii(*jsRuntime, "value_object_element_gter2"),
                 2,
                 [g, getter](facebook::jsi::Runtime& rt, const facebook::jsi::Value& thisVal, const facebook::jsi::Value* args, size_t count) {
-                    Getter* t = reinterpret_cast<Getter*>(args[0].asBigInt(rt).asUint64(rt));
-                    ClassType* t2 = reinterpret_cast<ClassType*>(args[1].asBigInt(rt).asUint64(rt));
+                    Getter* t = reinterpret_cast<Getter*>(internal::bigIntUint64(rt, args[0]));
+                    ClassType* t2 = reinterpret_cast<ClassType*>(internal::bigIntUint64(rt, args[1]));
                     return g(getter, *t2);
                 });
 
@@ -1497,8 +1497,8 @@ public:
                 facebook::jsi::PropNameID::forAscii(*jsRuntime, "value_object_element_ster2"),
                 3,
                 [s](facebook::jsi::Runtime& rt, const facebook::jsi::Value& thisVal, const facebook::jsi::Value* args, size_t count) {
-                    Setter* t = reinterpret_cast<Setter*>(args[0].asBigInt(rt).asUint64(rt));
-                    ClassType* t2 = reinterpret_cast<ClassType*>(args[1].asBigInt(rt).asUint64(rt));
+                    Setter* t = reinterpret_cast<Setter*>(internal::bigIntUint64(rt, args[0]));
+                    ClassType* t2 = reinterpret_cast<ClassType*>(internal::bigIntUint64(rt, args[1]));
                     s(*t, *t2, args[2]);
                     return facebook::jsi::Value::undefined();
                 });
@@ -1531,8 +1531,8 @@ public:
                 facebook::jsi::PropNameID::forAscii(*jsRuntime, "value_object_element_gter3"),
                 2,
                 [getter](facebook::jsi::Runtime& rt, const facebook::jsi::Value& thisVal, const facebook::jsi::Value* args, size_t count) {
-                    int t1 = static_cast<int>(args[0].asBigInt(rt).asUint64(rt));
-                    ClassType* t2 = reinterpret_cast<ClassType*>(args[1].asBigInt(rt).asUint64(rt));
+                    int t1 = static_cast<int>(internal::bigIntUint64(rt, args[0]));
+                    ClassType* t2 = reinterpret_cast<ClassType*>(internal::bigIntUint64(rt, args[1]));
                     return getter(t1, *t2);
                 });
 
@@ -1541,8 +1541,8 @@ public:
                 facebook::jsi::PropNameID::forAscii(*jsRuntime, "value_object_element_ster3"),
                 3,
                 [setter](facebook::jsi::Runtime& rt, const facebook::jsi::Value& thisVal, const facebook::jsi::Value* args, size_t count) {
-                    int t1 = static_cast<int>(args[0].asBigInt(rt).asUint64(rt));
-                    ClassType* t2 = reinterpret_cast<ClassType*>(args[1].asBigInt(rt).asUint64(rt));
+                    int t1 = static_cast<int>(internal::bigIntUint64(rt, args[0]));
+                    ClassType* t2 = reinterpret_cast<ClassType*>(internal::bigIntUint64(rt, args[1]));
                     setter(t1, *t2, args[2]);
                     return facebook::jsi::Value::undefined();
                 });
@@ -2159,7 +2159,7 @@ public:
                 facebook::jsi::PropNameID::forAscii(*jsRuntime, std::string(name)+"__getActualType"),
                 1,
                 [_getActualType](facebook::jsi::Runtime& rt, const facebook::jsi::Value& thisVal, const facebook::jsi::Value* args, size_t count) {
-                    auto returnValue = _getActualType(reinterpret_cast<ClassType*>(args[0].asBigInt(rt).asUint64(rt)));
+                    auto returnValue = _getActualType(reinterpret_cast<ClassType*>(internal::bigIntUint64(rt, args[0])));
                     return facebook::jsi::BigInt::fromUint64(rt, reinterpret_cast<uint64_t>(returnValue));
                 });
 
@@ -2168,7 +2168,7 @@ public:
                 facebook::jsi::PropNameID::forAscii(*jsRuntime, std::string(name)+"_upcast"),
                 1,
                 [upcast](facebook::jsi::Runtime& rt, const facebook::jsi::Value& thisVal, const facebook::jsi::Value* args, size_t count) {
-                    ClassType* t = reinterpret_cast<ClassType*>(args[0].asBigInt(rt).asUint64(rt));
+                    ClassType* t = reinterpret_cast<ClassType*>(internal::bigIntUint64(rt, args[0]));
                     BaseSpecifier* a = nullptr;
                     return dsadsa<ClassType, BaseSpecifier>(rt, t, a);
                 });
@@ -2178,7 +2178,7 @@ public:
                 facebook::jsi::PropNameID::forAscii(*jsRuntime, std::string(name)+"_downcast"),
                 1,
                 [downcast](facebook::jsi::Runtime& rt, const facebook::jsi::Value& thisVal, const facebook::jsi::Value* args, size_t count) {
-                    ClassType* t = reinterpret_cast<ClassType*>(args[0].asBigInt(rt).asUint64(rt));
+                    ClassType* t = reinterpret_cast<ClassType*>(internal::bigIntUint64(rt, args[0]));
                     BaseSpecifier* a = nullptr;
                     return downcastHelper<ClassType, BaseSpecifier>(rt, t, a);
                 });
@@ -2188,7 +2188,7 @@ public:
                 facebook::jsi::PropNameID::forAscii(*jsRuntime, std::string(name)+"_destructor"),
                 1,
                 [destructor](facebook::jsi::Runtime& rt, const facebook::jsi::Value& thisVal, const facebook::jsi::Value* args, size_t count) {
-                    destructor(reinterpret_cast<ClassType*>(args[0].asBigInt(rt).asUint64(rt)));
+                    destructor(reinterpret_cast<ClassType*>(internal::bigIntUint64(rt, args[0])));
                     return facebook::jsi::Value::undefined();
                 });
 
@@ -2227,7 +2227,7 @@ public:
                 facebook::jsi::PropNameID::forAscii(*jsRuntime, std::string(name)+"_get"),
                 1,
                 [get](facebook::jsi::Runtime& rt, const facebook::jsi::Value& thisVal, const facebook::jsi::Value* args, size_t count) {
-                    uint64_t ptrNumber = args[0].asBigInt(rt).asUint64(rt);
+                    uint64_t ptrNumber = internal::bigIntUint64(rt, args[0]);
                     auto b = *reinterpret_cast<PointerType*>(ptrNumber);
                     auto a = get(b);
                     return facebook::jsi::BigInt::fromUint64(rt, reinterpret_cast<uint64_t>(a));
@@ -2247,10 +2247,10 @@ public:
                 facebook::jsi::PropNameID::forAscii(*jsRuntime, std::string(name)+"_share"),
                 2,
                 [share](facebook::jsi::Runtime& rt, const facebook::jsi::Value& thisVal, const facebook::jsi::Value* args, size_t count) {
-                    uint64_t pNumber = args[0].asBigInt(rt).asUint64(rt);
+                    uint64_t pNumber = internal::bigIntUint64(rt, args[0]);
                     auto p = reinterpret_cast<PointeeType*>(pNumber);
                     // uint64_t vNumber = (uint64_t) args[1].getNumber();
-                    uint64_t vNumber = args[1].asBigInt(rt).asUint64(rt);
+                    uint64_t vNumber = internal::bigIntUint64(rt, args[1]);
                     EM_VAL v = reinterpret_cast<EM_VAL>(vNumber);
                     auto a = share(p, v);
                     auto e = facebook::jsi::BigInt::fromUint64(rt, reinterpret_cast<uint64_t>(a));
@@ -2262,7 +2262,7 @@ public:
                 facebook::jsi::PropNameID::forAscii(*jsRuntime, std::string(name)+"_destructor"),
                 1,
                 [destructor](facebook::jsi::Runtime& rt, const facebook::jsi::Value& thisVal, const facebook::jsi::Value* args, size_t count) {
-                    uint64_t ptrNumber = args[0].asBigInt(rt).asUint64(rt);
+                    uint64_t ptrNumber = internal::bigIntUint64(rt, args[0]);
                     auto b = reinterpret_cast<PointerType*>(ptrNumber);
                     destructor(b);
                     return facebook::jsi::Value::undefined();
@@ -2403,7 +2403,7 @@ public:
                 facebook::jsi::PropNameID::forAscii(*jsRuntime, std::string(fieldName)+"_gter"),
                 2,
                 [getter, a](facebook::jsi::Runtime& rt, const facebook::jsi::Value& thisVal, const facebook::jsi::Value* args, size_t count) {
-                    ClassType* t2 = reinterpret_cast<ClassType*>(args[1].asBigInt(rt).asUint64(rt));
+                    ClassType* t2 = reinterpret_cast<ClassType*>(internal::bigIntUint64(rt, args[1]));
                     return getter(a, *t2);
                 });
 
@@ -2441,8 +2441,8 @@ public:
                 facebook::jsi::PropNameID::forAscii(*jsRuntime, std::string(fieldName)+"_gter"),
                 2,
                 [getter, field](facebook::jsi::Runtime& rt, const facebook::jsi::Value& thisVal, const facebook::jsi::Value* args, size_t count) {
-                    FieldType* t = reinterpret_cast<FieldType*>(args[0].asBigInt(rt).asUint64(rt));
-                    ClassType* t2 = reinterpret_cast<ClassType*>(args[1].asBigInt(rt).asUint64(rt));
+                    FieldType* t = reinterpret_cast<FieldType*>(internal::bigIntUint64(rt, args[0]));
+                    ClassType* t2 = reinterpret_cast<ClassType*>(internal::bigIntUint64(rt, args[1]));
                     return getter(field, *t2);
                 });
 
@@ -2451,8 +2451,8 @@ public:
                 facebook::jsi::PropNameID::forAscii(*jsRuntime, std::string(fieldName)+"_ster"),
                 3,
                 [setter, field](facebook::jsi::Runtime& rt, const facebook::jsi::Value& thisVal, const facebook::jsi::Value* args, size_t count) {
-                    FieldType* t = reinterpret_cast<FieldType*>(args[0].asBigInt(rt).asUint64(rt));
-                    ClassType* t2 = reinterpret_cast<ClassType*>(args[1].asBigInt(rt).asUint64(rt));
+                    FieldType* t = reinterpret_cast<FieldType*>(internal::bigIntUint64(rt, args[0]));
+                    ClassType* t2 = reinterpret_cast<ClassType*>(internal::bigIntUint64(rt, args[1]));
                     setter(field, *t2, args[2]);
                     return facebook::jsi::Value::undefined();
                 });
@@ -2487,8 +2487,8 @@ public:
                 facebook::jsi::PropNameID::forAscii(*jsRuntime, std::string(fieldName) + "_gter"),
                 2,
                 [gter](facebook::jsi::Runtime& rt, const facebook::jsi::Value& thisVal, const facebook::jsi::Value* args, size_t count) {
-                    Getter* t = reinterpret_cast<Getter*>(args[0].asBigInt(rt).asUint64(rt));
-                    ClassType* t2 = reinterpret_cast<ClassType*>(args[1].asBigInt(rt).asUint64(rt));
+                    Getter* t = reinterpret_cast<Getter*>(internal::bigIntUint64(rt, args[0]));
+                    ClassType* t2 = reinterpret_cast<ClassType*>(internal::bigIntUint64(rt, args[1]));
                     return gter(*t, *t2);
                 });
 
@@ -2536,8 +2536,8 @@ public:
                 facebook::jsi::PropNameID::forAscii(*jsRuntime, std::string(fieldName)+"_gter"),
                 2,
                 [gter](facebook::jsi::Runtime& rt, const facebook::jsi::Value& thisVal, const facebook::jsi::Value* args, size_t count) {
-                    Getter* t = reinterpret_cast<Getter*>(args[0].asBigInt(rt).asUint64(rt));
-                    ClassType* t2 = reinterpret_cast<ClassType*>(args[1].asBigInt(rt).asUint64(rt));
+                    Getter* t = reinterpret_cast<Getter*>(internal::bigIntUint64(rt, args[0]));
+                    ClassType* t2 = reinterpret_cast<ClassType*>(internal::bigIntUint64(rt, args[1]));
                     return gter(*t, *t2);
                 });
 
@@ -2546,8 +2546,8 @@ public:
                 facebook::jsi::PropNameID::forAscii(*jsRuntime, std::string(fieldName)+"_ster"),
                 3,
                 [ster](facebook::jsi::Runtime& rt, const facebook::jsi::Value& thisVal, const facebook::jsi::Value* args, size_t count) {
-                    Setter* t = reinterpret_cast<Setter*>(args[0].asBigInt(rt).asUint64(rt));
-                    ClassType* t2 = reinterpret_cast<ClassType*>(args[1].asBigInt(rt).asUint64(rt));
+                    Setter* t = reinterpret_cast<Setter*>(internal::bigIntUint64(rt, args[0]));
+                    ClassType* t2 = reinterpret_cast<ClassType*>(internal::bigIntUint64(rt, args[1]));
                     ster(*t, *t2, args[2]);
                     return facebook::jsi::Value::undefined();
                 });

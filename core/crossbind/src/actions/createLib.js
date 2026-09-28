@@ -21,7 +21,7 @@ export default function createLib(target, fileType, options = {}) {
         throw new Error('invalid target or options');
     }
 
-    if (target.platform === 'ios' && process.platform !== 'darwin') {
+    if ((target.platform === 'ios' || target.platform === 'darwin') && process.platform !== 'darwin') {
         return;
     }
 
@@ -35,7 +35,8 @@ export default function createLib(target, fileType, options = {}) {
     const nativeGlob = options.nativeGlob ? withDependencyBridges(options.nativeGlob) : undefined;
     // The lib dir is reused while the bridge list grows, so an early smaller nativeGlob build must not satisfy later sets: fingerprint the glob and miss on mismatch.
     const fingerprintFile = `${libdir}/crossbind-nativeglob.fingerprint`;
-    const fingerprint = nativeGlob ? getFilesFingerprint(nativeGlob) : null;
+    // options.inputs lists what the sources compile against (a binding runtime's headers), so a change there rebuilds too.
+    const fingerprint = nativeGlob ? getFilesFingerprint([...nativeGlob, ...(options.inputs ?? [])]) : null;
     const fingerprintChanged = fingerprint !== null
         && (!fs.existsSync(fingerprintFile) || fs.readFileSync(fingerprintFile, { encoding: 'utf8' }) !== fingerprint);
 

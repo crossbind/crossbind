@@ -33,6 +33,8 @@ CrossbindTid crossbind_tid_optional_int(void);
 CrossbindTid crossbind_tid_optional_double(void);
 CrossbindTid crossbind_tid_optional_bool(void);
 CrossbindTid crossbind_tid_optional_string(void);
+CrossbindTid crossbind_tid_optional_int64(void);
+CrossbindTid crossbind_tid_optional_uint64(void);
 void crossbind_embind_register_smart_ptr(
     CrossbindTid ptr_ty, CrossbindTid pointee_ty, const char* name, int sharing_policy,
     const char* gp_sig, CrossbindFn get_pointee, const char* ctor_sig, CrossbindFn constructor,

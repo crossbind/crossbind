@@ -21,6 +21,7 @@ crossbind/
 ├── core/                             ← what ships into a consumer's build
 │   ├── crossbind/                    ← the CLI + build orchestration (most-touched)
 │   ├── embind-jsi/                   ← Embind/JSI helper used by RN bridge
+│   ├── embind-napi/                  ← Node-API host for embind-jsi: native Node.js addons (ADR-0011)
 │   └── embind-rust/                  ← Rust producer crate + per-host adapters (see docs/api/rust.md)
 ├── tooling/                          ← dev-time helpers, not part of a consumer build
 │   ├── create-app/                   ← create-crossbind scaffolder (templates built from examples/)
@@ -40,6 +41,9 @@ crossbind/
 │       ├── wasm/                     ← per-platform variants
 │       ├── android/
 │       ├── ios/
+│       ├── darwin/                   ← macOS arm64 + x64 archives for native Node.js addons
+│       ├── linux/                    ← Linux (glibc 2.28) arm64 + x64 archives for native Node.js addons
+│       ├── win32/                    ← Windows arm64 + x64 archives for native Node.js addons
 │       ├── wasi/                     ← wasi prebuilt (wasm32-wasip3)
 │       └── bin-wasi/                 ← upstream CLI as npm commands (where upstream ships one)
 ├── examples/                         ← reference integrations, published as create-crossbind templates
@@ -102,6 +106,8 @@ Index + template: [`docs/adr/README.md`](./adr/README.md).
 | CLI entry, command parsing | `src/bin.js` |
 | Per-target static lib build | `src/actions/createLib.js` |
 | Wasm linking + JS loader gen | `src/actions/buildWasm.js` |
+| Node-API addon link (`.node`) + CommonJS loader | `src/actions/buildNode.js` |
+| Archives of a final link and what stays whole (wasm and addon) | `src/actions/getLinkInputs.js` |
 | WASI command link (single .wasm) | `src/actions/buildWasiCommand.js` |
 | Rust crate build (`export.type: 'cargo'`) | `src/actions/buildCargo.js` |
 | -bin tool derivations (commands, multicall, provenance, license) | `src/actions/buildBinTools.js` |
@@ -183,7 +189,9 @@ Index + template: [`docs/adr/README.md`](./adr/README.md).
 | NOTICE/SBOM formatting + derived license expression | `src/utils/licenseReport.js` |
 | crossbind target → cargo triple | `src/utils/cargoTarget.js` |
 | Rust bridge generation (crate surface parsing, dts) | `src/utils/rustBridgeGen.js` |
+| `cargo:` specifiers, import markers, app-source scan for module imports | `src/utils/cargoImport.js` |
 | @crossbind/core-embind-rust resolution (consumer-declared) | `src/utils/resolveEmbindRust.js` |
+| @crossbind/core-embind-napi resolution (consumer-declared) | `src/utils/resolveEmbindNapi.js` |
 | wasi bin command runner (npm shims import this) | `src/runtime/wasiRun.mjs` |
 
 ## Plugins (`plugins/`)
@@ -224,6 +232,7 @@ To add a new `ports/<X>`: see `docs/playbooks/new-port.md` (uses `ports/zlib` as
 | `examples/web-react-rspack` | Rspack/Webpack + React |
 | `examples/web-vanilla` | Plain HTML + bundler-less |
 | `examples/backend-nodejs-wasm` | Node.js consumer |
+| `examples/backend-nodejs-native` | Node.js consumer of the native addon (`-p darwin`; CI uses `ci/` bridge snapshots) |
 | `examples/cloud-cloudflare-worker` | Cloudflare Worker / edge |
 | `examples/mobile-reactnative-cli` | RN-cli (canonical mobile reference; CI uses `ci/crossbind-snapshot/`) |
 | `examples/mobile-reactnative-expo` | RN with Expo |

@@ -35,12 +35,6 @@ namespace emscripten {
     facebook::jsi::Runtime* jsRuntime = nullptr;
     namespace internal {
 
-        // Dynamic heap window registration. JS side keeps multiple ArrayBuffer
-        // windows over native memory; this ensures every pointer we hand to JS
-        // is covered by at least one window before being read/written there.
-        void ensureWindowFor(uint64_t ptr);
-        void registerHeapWindow(uint64_t offset);
-
         template<typename T>
         struct Bugra {
             static jsi::Value toValue(T rawValue);
@@ -58,21 +52,17 @@ namespace emscripten {
 
         template<typename T>
         jsi::Value Bugra<T>::toValue(T* rawValue) {
-            uint64_t ptr = reinterpret_cast<uint64_t>(rawValue);
-            ensureWindowFor(ptr);
-            return jsi::BigInt::fromUint64(*jsRuntime, ptr);
+            return jsi::BigInt::fromUint64(*jsRuntime, reinterpret_cast<uint64_t>(rawValue));
         }
 
         template<typename T>
         jsi::Value Bugra<T>::toValue(T** rawValue) {
-            uint64_t ptr = reinterpret_cast<uint64_t>(rawValue);
-            ensureWindowFor(ptr);
-            return jsi::BigInt::fromUint64(*jsRuntime, ptr);
+            return jsi::BigInt::fromUint64(*jsRuntime, reinterpret_cast<uint64_t>(rawValue));
         }
 
         template<typename T>
         T Bugra<T>::fromValue(jsi::Value& rawValue) {
-            return reinterpret_cast<T>(rawValue.asBigInt(*jsRuntime).asUint64(*jsRuntime));
+            return reinterpret_cast<T>(bigIntUint64(*jsRuntime, rawValue));
         }
 
         template<> inline jsi::Value Bugra<bool>::toValue(bool rawValue) {
@@ -100,14 +90,14 @@ namespace emscripten {
             return jsi::BigInt::fromInt64(*jsRuntime, rawValue);
         }
         template<> inline int64_t Bugra<int64_t>::fromValue(jsi::Value& rawValue) {
-            return rawValue.getBigInt(*jsRuntime).asInt64(*jsRuntime);
+            return bigIntInt64(*jsRuntime, rawValue);
         }
 
         template<> inline jsi::Value Bugra<uint64_t>::toValue(uint64_t rawValue) {
             return jsi::BigInt::fromUint64(*jsRuntime, rawValue);
         }
         template<> inline uint64_t Bugra<uint64_t>::fromValue(jsi::Value& rawValue) {
-            return rawValue.getBigInt(*jsRuntime).asUint64(*jsRuntime);
+            return bigIntUint64(*jsRuntime, rawValue);
         }
 
         template<> inline jsi::Value Bugra<std::string>::toValue(std::string rawValue) {
@@ -143,7 +133,7 @@ namespace emscripten {
         }
 
         template<> inline EM_VAL Bugra<EM_VAL>::fromValue(jsi::Value& rawValue) {
-            return reinterpret_cast<EM_VAL>(rawValue.asBigInt(*jsRuntime).asUint64(*jsRuntime));
+            return reinterpret_cast<EM_VAL>(bigIntUint64(*jsRuntime, rawValue));
             // return reinterpret_cast<EM_VAL>((uint32_t) rawValue.getNumber());
         }
 
@@ -151,111 +141,155 @@ namespace emscripten {
             return jsi::BigInt::fromUint64(*jsRuntime, reinterpret_cast<uint64_t>(rawValue));
         }
 
-        template<> inline jsi::Value Bugra<EM_DESTRUCTORS>::toValue(EM_DESTRUCTORS rawValue) {
-            return jsi::BigInt::fromUint64(*jsRuntime, reinterpret_cast<uint64_t>(rawValue));
+        // JS helpers and argument type arrays, looked up once per runtime. Every new runtime gets
+        // a new cache and the old one is dropped without being destroyed: it holds JSI values, and
+        // the runtime they belong to may already be gone.
+        struct RuntimeCache {
+            std::unordered_map<const char*, jsi::Function> helpers;
+            std::unordered_map<const TYPEID*, jsi::Array> typeLists;
+        };
+        static RuntimeCache* runtimeCache = new RuntimeCache();
+
+        // The name must be a string literal: the cache is keyed by its address.
+        static jsi::Function& helper(const char* name) {
+            auto found = runtimeCache->helpers.find(name);
+            if (found != runtimeCache->helpers.end()) {
+                return found->second;
+            }
+            return runtimeCache->helpers.emplace(name, jsRuntime->global().getPropertyAsFunction(*jsRuntime, name)).first->second;
         }
 
-        template<> inline jsi::Value Bugra<EM_DESTRUCTORS*>::toValue(EM_DESTRUCTORS* rawValue) {
-            uint64_t ptr = reinterpret_cast<uint64_t>(rawValue);
-            ensureWindowFor(ptr);
-            return jsi::BigInt::fromUint64(*jsRuntime, ptr);
+        // An argument type list is a static array per signature, so its address identifies it.
+        static jsi::Value typeList(const TYPEID argTypes[], unsigned argCount) {
+            auto found = runtimeCache->typeLists.find(argTypes);
+            if (found == runtimeCache->typeLists.end()) {
+                found = runtimeCache->typeLists.emplace(argTypes, Bugra<TYPEID>::toArrayValue(std::vector<TYPEID>(argTypes, argTypes + argCount))).first;
+            }
+            return jsi::Value(*jsRuntime, found->second);
         }
 
+        // Handles up to _EMVAL_FALSE are fixed in JS (0 is a moved-from val) and never counted.
+        static bool isCounted(EM_VAL value) {
+            return reinterpret_cast<uintptr_t>(value) > _EMVAL_FALSE;
+        }
 
 
         void _emval_register_symbol(const char* value) {
-            jsRuntime->global().getPropertyAsFunction(*jsRuntime, "__emval_register_symbol").call(
+            helper("__emval_register_symbol").call(
                     *jsRuntime,
                     Bugra<const char*>::toValue(value)
             );
         }
 
+        // A val can outlive its runtime (the host clears jsRuntime when it goes away, and
+        // thread-local vals are destroyed inside exit()); its handle then has nothing to release.
         void _emval_incref(EM_VAL value) {
-            jsRuntime->global().getPropertyAsFunction(*jsRuntime, "__emval_incref").call(
+            if (jsRuntime == nullptr || !isCounted(value)) return;
+            helper("__emval_incref").call(
                     *jsRuntime,
                     Bugra<EM_VAL>::toValue(value)
             );
         }
         void _emval_decref(EM_VAL value) {
-            jsRuntime->global().getPropertyAsFunction(*jsRuntime, "__emval_decref").call(
+            if (jsRuntime == nullptr || !isCounted(value)) return;
+            helper("__emval_decref").call(
                     *jsRuntime,
                     Bugra<EM_VAL>::toValue(value)
             );
         }
-        void _emval_run_destructors(EM_DESTRUCTORS handle) {
-            jsRuntime->global().getPropertyAsFunction(*jsRuntime, "__emval_run_destructors").call(
-                    *jsRuntime,
-                    Bugra<EM_DESTRUCTORS>::toValue(handle)
-            );
+        // Runs from DestructorsRunner's destructor, where a thrown exception would end the process.
+        void _emval_run_destructors() {
+            if (jsRuntime == nullptr) return;
+            try {
+                helper("__emval_run_destructors").call(*jsRuntime);
+            } catch (const std::exception& error) {
+                fprintf(stderr, "crossbind: releasing a converted value failed: %s\n", error.what());
+            }
         }
         EM_VAL _emval_new_array() {
-            auto response = jsRuntime->global().getPropertyAsFunction(*jsRuntime, "__emval_new_array").call(
+            auto response = helper("__emval_new_array").call(
                     *jsRuntime
             );
             return Bugra<EM_VAL>::fromValue(response);
         }
         EM_VAL _emval_new_array_from_memory_view(EM_VAL mv) {
-            auto response = jsRuntime->global().getPropertyAsFunction(*jsRuntime, "__emval_new_array_from_memory_view").call(
+            auto response = helper("__emval_new_array_from_memory_view").call(
                     *jsRuntime,
                     Bugra<EM_VAL>::toValue(mv)
             );
             return Bugra<EM_VAL>::fromValue(response);
         }
         EM_VAL _emval_new_object() {
-            auto response = jsRuntime->global().getPropertyAsFunction(*jsRuntime, "__emval_new_object").call(
+            auto response = helper("__emval_new_object").call(
                     *jsRuntime
             );
             return Bugra<EM_VAL>::fromValue(response);
         }
         EM_VAL _emval_new_cstring(const char* value) {
-            auto response = jsRuntime->global().getPropertyAsFunction(*jsRuntime, "__emval_new_cstring").call(
+            auto response = helper("__emval_new_cstring").call(
                     *jsRuntime,
                     Bugra<const char*>::toValue(value)
             );
             return Bugra<EM_VAL>::fromValue(response);
         }
         EM_VAL _emval_new_u8string(const char* value) {
-            auto response = jsRuntime->global().getPropertyAsFunction(*jsRuntime, "__emval_new_u8string").call(
+            auto response = helper("__emval_new_u8string").call(
                     *jsRuntime,
                     Bugra<const char*>::toValue(value)
             );
             return Bugra<EM_VAL>::fromValue(response);
         }
-        // EM_VAL _emval_new_u16string(const char16_t*) {}
-        EM_VAL _emval_take_value(TYPEID type, EM_VAR_ARGS argv) {
-            auto response = jsRuntime->global().getPropertyAsFunction(*jsRuntime, "__emval_take_value").call(
+        EM_VAL _emval_new_u16string(const char16_t* value) {
+            auto response = helper("__emval_new_u16string").call(
                     *jsRuntime,
-                    Bugra<TYPEID>::toValue(type),
-                    Bugra<EM_VAR_ARGS>::toValue(argv)
+                    jsi::String::createFromUtf8(*jsRuntime, utf16ToUtf8(value))
             );
             return Bugra<EM_VAL>::fromValue(response);
         }
-        EM_VAL _emval_new(EM_VAL value, unsigned argCount, const TYPEID argTypes[], EM_VAR_ARGS argv) {
-            auto response = jsRuntime->global().getPropertyAsFunction(*jsRuntime, "__emval_new").call(
+        EM_VAL _emval_take_value(TYPEID type, const jsi::Value& value) {
+            auto response = helper("__emval_take_value").call(
                     *jsRuntime,
+                    Bugra<TYPEID>::toValue(type),
+                    value
+            );
+            return Bugra<EM_VAL>::fromValue(response);
+        }
+
+        // The JS half receives its fixed arguments first, then each argument's wire value.
+        template<typename... Leading>
+        jsi::Value callWithWireValues(const char* name, unsigned argCount, jsi::Value* argv, Leading&&... leading) {
+            std::vector<jsi::Value> args;
+            args.reserve(sizeof...(Leading) + argCount);
+            (args.emplace_back(std::forward<Leading>(leading)), ...);
+            for (unsigned i = 0; i < argCount; ++i) {
+                args.push_back(std::move(argv[i]));
+            }
+            return helper(name).call(*jsRuntime, static_cast<const jsi::Value*>(args.data()), args.size());
+        }
+
+        EM_VAL _emval_new(EM_VAL value, unsigned argCount, const TYPEID argTypes[], jsi::Value* argv) {
+            auto response = callWithWireValues("__emval_new", argCount, argv,
                     Bugra<EM_VAL>::toValue(value),
                     Bugra<unsigned>::toValue(argCount),
-                    Bugra<TYPEID>::toArrayValue(std::vector<TYPEID>(argTypes, argTypes + argCount)),
-                    Bugra<EM_VAR_ARGS>::toValue(argv)
-            );
+                    typeList(argTypes, argCount));
             return Bugra<EM_VAL>::fromValue(response);
         }
         EM_VAL _emval_get_global(const char* name) {
-            auto response = jsRuntime->global().getPropertyAsFunction(*jsRuntime, "__emval_get_global").call(
+            auto response = helper("__emval_get_global").call(
                     *jsRuntime,
                     Bugra<const char*>::toValue(name)
             );
             return Bugra<EM_VAL>::fromValue(response);
         }
         EM_VAL _emval_get_module_property(const char* name) {
-            auto response = jsRuntime->global().getPropertyAsFunction(*jsRuntime, "__emval_get_module_property").call(
+            auto response = helper("__emval_get_module_property").call(
                     *jsRuntime,
                     Bugra<const char*>::toValue(name)
             );
             return Bugra<EM_VAL>::fromValue(response);
         }
         EM_VAL _emval_get_property(EM_VAL object, EM_VAL key) {
-            auto response = jsRuntime->global().getPropertyAsFunction(*jsRuntime, "__emval_get_property").call(
+            auto response = helper("__emval_get_property").call(
                     *jsRuntime,
                     Bugra<EM_VAL>::toValue(object),
                     Bugra<EM_VAL>::toValue(key)
@@ -263,24 +297,22 @@ namespace emscripten {
             return Bugra<EM_VAL>::fromValue(response);
         }
         void _emval_set_property(EM_VAL object, EM_VAL key, EM_VAL value) {
-            jsRuntime->global().getPropertyAsFunction(*jsRuntime, "__emval_set_property").call(
+            helper("__emval_set_property").call(
                     *jsRuntime,
                     Bugra<EM_VAL>::toValue(object),
                     Bugra<EM_VAL>::toValue(key),
                     Bugra<EM_VAL>::toValue(value)
             );
         }
-        EM_GENERIC_WIRE_TYPE _emval_as(EM_VAL value, TYPEID returnType, EM_DESTRUCTORS* destructors) {
-            auto response = jsRuntime->global().getPropertyAsFunction(*jsRuntime, "__emval_as").call(
+        EM_GENERIC_WIRE_TYPE _emval_as(EM_VAL value, TYPEID returnType) {
+            return helper("__emval_as").call(
                     *jsRuntime,
                     Bugra<EM_VAL>::toValue(value),
-                    Bugra<TYPEID>::toValue(returnType),
-                    Bugra<EM_DESTRUCTORS*>::toValue(destructors)
+                    Bugra<TYPEID>::toValue(returnType)
             );
-            return response;
         }
         int64_t _emval_as_int64(EM_VAL value, TYPEID returnType) {
-            auto response = jsRuntime->global().getPropertyAsFunction(*jsRuntime, "__emval_as_int64").call(
+            auto response = helper("__emval_as_int64").call(
                     *jsRuntime,
                     Bugra<EM_VAL>::toValue(value),
                     Bugra<TYPEID>::toValue(returnType)
@@ -288,7 +320,7 @@ namespace emscripten {
             return Bugra<int64_t>::fromValue(response);
         }
         uint64_t _emval_as_uint64(EM_VAL value, TYPEID returnType) {
-            auto response = jsRuntime->global().getPropertyAsFunction(*jsRuntime, "__emval_as_uint64").call(
+            auto response = helper("__emval_as_uint64").call(
                     *jsRuntime,
                     Bugra<EM_VAL>::toValue(value),
                     Bugra<TYPEID>::toValue(returnType)
@@ -296,7 +328,7 @@ namespace emscripten {
             return Bugra<uint64_t>::fromValue(response);
         }
         bool _emval_equals(EM_VAL first, EM_VAL second) {
-            auto response = jsRuntime->global().getPropertyAsFunction(*jsRuntime, "__emval_equals").call(
+            auto response = helper("__emval_equals").call(
                     *jsRuntime,
                     Bugra<EM_VAL>::toValue(first),
                     Bugra<EM_VAL>::toValue(second)
@@ -304,7 +336,7 @@ namespace emscripten {
             return Bugra<bool>::fromValue(response);
         }
         bool _emval_strictly_equals(EM_VAL first, EM_VAL second) {
-            auto response = jsRuntime->global().getPropertyAsFunction(*jsRuntime, "__emval_strictly_equals").call(
+            auto response = helper("__emval_strictly_equals").call(
                     *jsRuntime,
                     Bugra<EM_VAL>::toValue(first),
                     Bugra<EM_VAL>::toValue(second)
@@ -312,7 +344,7 @@ namespace emscripten {
             return Bugra<bool>::fromValue(response);
         }
         bool _emval_greater_than(EM_VAL first, EM_VAL second) {
-            auto response = jsRuntime->global().getPropertyAsFunction(*jsRuntime, "__emval_greater_than").call(
+            auto response = helper("__emval_greater_than").call(
                     *jsRuntime,
                     Bugra<EM_VAL>::toValue(first),
                     Bugra<EM_VAL>::toValue(second)
@@ -320,7 +352,7 @@ namespace emscripten {
             return Bugra<bool>::fromValue(response);
         }
         bool _emval_less_than(EM_VAL first, EM_VAL second) {
-            auto response = jsRuntime->global().getPropertyAsFunction(*jsRuntime, "__emval_less_than").call(
+            auto response = helper("__emval_less_than").call(
                     *jsRuntime,
                     Bugra<EM_VAL>::toValue(first),
                     Bugra<EM_VAL>::toValue(second)
@@ -328,59 +360,48 @@ namespace emscripten {
             return Bugra<bool>::fromValue(response);
         }
         bool _emval_not(EM_VAL object) {
-            auto response = jsRuntime->global().getPropertyAsFunction(*jsRuntime, "__emval_not").call(
+            auto response = helper("__emval_not").call(
                     *jsRuntime,
                     Bugra<EM_VAL>::toValue(object)
             );
             return Bugra<bool>::fromValue(response);
         }
-        EM_VAL _emval_call(EM_VAL value, unsigned argCount, const TYPEID argTypes[], EM_VAR_ARGS argv) {
-            auto response = jsRuntime->global().getPropertyAsFunction(*jsRuntime, "__emval_call").call(
-                    *jsRuntime,
+        EM_VAL _emval_call(EM_VAL value, unsigned argCount, const TYPEID argTypes[], jsi::Value* argv) {
+            auto response = callWithWireValues("__emval_call", argCount, argv,
                     Bugra<EM_VAL>::toValue(value),
                     Bugra<unsigned>::toValue(argCount),
-                    Bugra<TYPEID>::toArrayValue(std::vector<TYPEID>(argTypes, argTypes + argCount)),
-                    Bugra<EM_VAR_ARGS>::toValue(argv)
-            );
+                    typeList(argTypes, argCount));
             return Bugra<EM_VAL>::fromValue(response);
         }
         EM_METHOD_CALLER _emval_get_method_caller(unsigned argCount, const TYPEID argTypes[]) {
-            auto response = jsRuntime->global().getPropertyAsFunction(*jsRuntime, "__emval_get_method_caller").call(
+            auto response = helper("__emval_get_method_caller").call(
                     *jsRuntime,
                     Bugra<unsigned>::toValue(argCount),
-                    Bugra<TYPEID>::toArrayValue(std::vector<TYPEID>(argTypes, argTypes + argCount))
+                    typeList(argTypes, argCount)
             );
             return Bugra<EM_METHOD_CALLER>::fromValue(response);
         }
-        EM_GENERIC_WIRE_TYPE _emval_call_method(EM_METHOD_CALLER caller, EM_VAL handle, const char* methodName, EM_DESTRUCTORS* destructors, EM_VAR_ARGS argv) {
-            auto response = jsRuntime->global().getPropertyAsFunction(*jsRuntime, "__emval_call_method").call(
-                    *jsRuntime,
+        EM_GENERIC_WIRE_TYPE _emval_call_method(EM_METHOD_CALLER caller, EM_VAL handle, const char* methodName, unsigned argCount, jsi::Value* argv) {
+            return callWithWireValues("__emval_call_method", argCount, argv,
                     Bugra<EM_METHOD_CALLER>::toValue(caller),
                     Bugra<EM_VAL>::toValue(handle),
-                    Bugra<const char*>::toValue(methodName),
-                    Bugra<EM_DESTRUCTORS*>::toValue(destructors),
-                    Bugra<EM_VAR_ARGS>::toValue(argv)
-            );
-            return response;
+                    Bugra<const char*>::toValue(methodName));
         }
-        void _emval_call_void_method(EM_METHOD_CALLER caller, EM_VAL handle, const char* methodName, EM_VAR_ARGS argv) {
-            jsRuntime->global().getPropertyAsFunction(*jsRuntime, "__emval_call_void_method").call(
-                    *jsRuntime,
+        void _emval_call_void_method(EM_METHOD_CALLER caller, EM_VAL handle, const char* methodName, unsigned argCount, jsi::Value* argv) {
+            callWithWireValues("__emval_call_void_method", argCount, argv,
                     Bugra<EM_METHOD_CALLER>::toValue(caller),
                     Bugra<EM_VAL>::toValue(handle),
-                    Bugra<const char*>::toValue(methodName),
-                    Bugra<EM_VAR_ARGS>::toValue(argv)
-            );
+                    Bugra<const char*>::toValue(methodName));
         }
         EM_VAL _emval_typeof(EM_VAL value) {
-            auto response = jsRuntime->global().getPropertyAsFunction(*jsRuntime, "__emval_typeof").call(
+            auto response = helper("__emval_typeof").call(
                     *jsRuntime,
                     Bugra<EM_VAL>::toValue(value)
             );
             return Bugra<EM_VAL>::fromValue(response);
         }
         bool _emval_instanceof(EM_VAL object, EM_VAL constructor) {
-            auto response = jsRuntime->global().getPropertyAsFunction(*jsRuntime, "__emval_instanceof").call(
+            auto response = helper("__emval_instanceof").call(
                     *jsRuntime,
                     Bugra<EM_VAL>::toValue(object),
                     Bugra<EM_VAL>::toValue(constructor)
@@ -388,21 +409,21 @@ namespace emscripten {
             return Bugra<bool>::fromValue(response);
         }
         bool _emval_is_number(EM_VAL object) {
-            auto response = jsRuntime->global().getPropertyAsFunction(*jsRuntime, "__emval_is_number").call(
+            auto response = helper("__emval_is_number").call(
                     *jsRuntime,
                     Bugra<EM_VAL>::toValue(object)
             );
             return Bugra<bool>::fromValue(response);
         }
         bool _emval_is_string(EM_VAL object) {
-            auto response = jsRuntime->global().getPropertyAsFunction(*jsRuntime, "__emval_is_string").call(
+            auto response = helper("__emval_is_string").call(
                     *jsRuntime,
                     Bugra<EM_VAL>::toValue(object)
             );
             return Bugra<bool>::fromValue(response);
         }
         bool _emval_in(EM_VAL item, EM_VAL object) {
-            auto response = jsRuntime->global().getPropertyAsFunction(*jsRuntime, "__emval_in").call(
+            auto response = helper("__emval_in").call(
                     *jsRuntime,
                     Bugra<EM_VAL>::toValue(item),
                     Bugra<EM_VAL>::toValue(object)
@@ -410,7 +431,7 @@ namespace emscripten {
             return Bugra<bool>::fromValue(response);
         }
         bool _emval_delete(EM_VAL object, EM_VAL property) {
-            auto response = jsRuntime->global().getPropertyAsFunction(*jsRuntime, "__emval_delete").call(
+            auto response = helper("__emval_delete").call(
                     *jsRuntime,
                     Bugra<EM_VAL>::toValue(object),
                     Bugra<EM_VAL>::toValue(property)
@@ -418,7 +439,7 @@ namespace emscripten {
             return Bugra<bool>::fromValue(response);
         }
         bool _emval_throw(EM_VAL object) {
-            jsRuntime->global().getPropertyAsFunction(*jsRuntime, "__emval_throw").call(
+            helper("__emval_throw").call(
                     *jsRuntime,
                     Bugra<EM_VAL>::toValue(object)
             );
@@ -920,92 +941,13 @@ namespace emscripten {
 
         static InitFunc *init_funcs = nullptr;
 
-
-        struct FixedBuffer : facebook::jsi::MutableBuffer {
-            FixedBuffer(uint64_t offset) : offset(offset) {}
-
-            size_t size() const override {
-                return UINT32_MAX;
-            }
-            uint8_t *data() override {
-                return reinterpret_cast<uint8_t *>(offset);
-            }
-
-            int r = 3;
-            uint64_t offset;
-        };
-
-        // Tracks every heap window currently exposed to JS. Single-threaded
-        // access assumed (all JSI traffic flows through the JS thread today).
-        static std::vector<uint64_t> registeredOffsets;
-
-        void registerHeapWindow(uint64_t offset) {
-            auto buf = std::make_shared<FixedBuffer>(offset);
-            auto arrayBuffer = facebook::jsi::ArrayBuffer(*jsRuntime, buf);
-            jsRuntime->global()
-                .getPropertyAsFunction(*jsRuntime, "__crossbind_register_heap_window")
-                .call(*jsRuntime,
-                      jsi::BigInt::fromUint64(*jsRuntime, offset),
-                      arrayBuffer);
-            registeredOffsets.push_back(offset);
-        }
-
-        void ensureWindowFor(uint64_t ptr) {
-            for (uint64_t offset : registeredOffsets) {
-                if (ptr >= offset && (ptr - offset) < UINT32_MAX) return;
-            }
-            // Center the new window on `ptr` so nearby allocations also land in it.
-            uint64_t newOffset = (ptr > UINT32_MAX / 2)
-                ? (ptr - UINT32_MAX / 2)
-                : 0;
-            registerHeapWindow(newOffset);
-        }
-
-
+        // Values cross already converted (toWireType2 / fromWireType2), so JS never reads native
+        // memory and no ArrayBuffer over it exists: Electron's V8 memory cage refuses those.
         EMSCRIPTEN_KEEPALIVE void _embind_initialize_bindings(jsi::Runtime& rt, std::string path) {
             CROSSBIND_DATA_PATH = path;
             Crossbind::setEnv("CROSSBIND_DATA_PATH", path, false);
             jsRuntime = &rt;
-
-
-            // Initial seed windows: anchored around .rodata (string literals)
-            // and the C++ heap. Additional windows are registered on demand
-            // by ensureWindowFor() as new pointer regions are exposed to JS.
-            const char* name = "M";
-            uint64_t namePtrNumber = reinterpret_cast<uint64_t>(name);
-
-            // Reference allocation to discover the heap region.
-            auto heapProbe = std::make_shared<FixedBuffer>(0);
-            uint64_t heapPtrNumber = reinterpret_cast<uint64_t>(heapProbe.get());
-
-            uint64_t offsetRodataLow = (namePtrNumber > UINT32_MAX)
-                ? (namePtrNumber - UINT32_MAX) : 0;
-            uint64_t offsetHeapLow = (heapPtrNumber > UINT32_MAX)
-                ? (heapPtrNumber - UINT32_MAX) : 0;
-            uint64_t offsetRodataLowest = (offsetRodataLow > UINT32_MAX)
-                ? (offsetRodataLow - UINT32_MAX) : 0;
-            uint64_t offsetRodataHigh = namePtrNumber;
-
-            registerHeapWindow(offsetRodataLow);
-            registerHeapWindow(offsetHeapLow);
-            registerHeapWindow(offsetRodataLowest);
-            registerHeapWindow(offsetRodataHigh);
-
-            // Self-healing fallback: when a JS-side heap read misses every window, JS calls
-            // this to open one centered on the pointer. Unconditional on purpose - JS is the
-            // source of truth about its own windows, so no native covered-check here.
-            auto ensureFn = facebook::jsi::Function::createFromHostFunction(
-                    rt,
-                    facebook::jsi::PropNameID::forAscii(rt, "__crossbind_ensure_heap_window"),
-                    1,
-                    [](facebook::jsi::Runtime& rt2, const facebook::jsi::Value&,
-                       const facebook::jsi::Value* args, size_t) -> facebook::jsi::Value {
-                        uint64_t p = args[0].asBigInt(rt2).asUint64(rt2);
-                        uint64_t newOffset = (p > UINT32_MAX / 2) ? (p - UINT32_MAX / 2) : 0;
-                        registerHeapWindow(newOffset);
-                        return facebook::jsi::Value::undefined();
-                    });
-            rt.global().setProperty(rt, "__crossbind_ensure_heap_window", ensureFn);
+            runtimeCache = new RuntimeCache();
 
             for (auto *f = init_funcs; f; f = f->next) {
                 f->init_func();
@@ -1071,7 +1013,13 @@ template <typename T> static void register_memory_view(const char* name) {
 } // namespace
 
 int Crossbind::setEnv(std::string key, std::string value, bool overwrite) {
+#ifdef _WIN32
+    // The Windows CRT has no setenv; _putenv_s always replaces, so a value to keep is checked first.
+    if (!overwrite && getenv(key.c_str()) != nullptr) return 0;
+    return _putenv_s(key.c_str(), value.c_str());
+#else
     return setenv(key.c_str(), value.c_str(), overwrite);
+#endif
 }
 std::string Crossbind::getEnv(std::string key) {
     const char* value = getenv(key.c_str());

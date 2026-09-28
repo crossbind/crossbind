@@ -1,0 +1,27 @@
+{
+    "name": "@crossbind/example-backend-nodejs-native",
+    "private": true,
+    "version": "0.0.0",
+    "description": "crossbind - Node.js native addon sample",
+    "homepage": "https://github.com/crossbind/crossbind/tree/main/examples/backend-nodejs-native#readme",
+    "repository": "https://github.com/crossbind/crossbind.git",
+    "license": "MIT",
+    "scripts": {
+        "build": "crossbind build -p darwin -b release"
+    },
+    "dependencies": {
+        "@crossbind/example-lib-prebuilt-matrix": "workspace:^"
+    },
+    "devDependencies": {
+        "@crossbind/core-embind-napi": "workspace:^",
+        "crossbind": "workspace:^"
+    },
+    "keywords": [
+        "crossbind-sample",
+        "node",
+        "node-api",
+        "addon",
+        "bind",
+        "c++"
+    ]
+}

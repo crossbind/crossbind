@@ -1,9 +1,28 @@
 import { describe, test, expect } from 'vitest';
-import { TARGETS, targetPathOf, filterTargetSpecs } from '../src/utils/targets.js';
+import {
+    TARGETS, OPT_IN_PLATFORMS, targetPathOf, filterTargetSpecs, nodeAddonNamesOf,
+} from '../src/utils/targets.js';
 
 describe('TARGETS', () => {
     test('covers every supported platform', () => {
-        expect([...new Set(TARGETS.map((t) => t.platform))].sort()).toEqual(['android', 'ios', 'wasi', 'wasm']);
+        expect([...new Set(TARGETS.map((t) => t.platform))].sort()).toEqual(['android', 'darwin', 'ios', 'linux', 'wasi', 'wasm', 'win32']);
+    });
+
+    test.each(['darwin', 'linux', 'win32'])('%s builds Node-API addons for x64 and arm64', (platform) => {
+        const desktop = TARGETS.filter((t) => t.platform === platform);
+        expect(desktop.map((t) => `${t.arch}-${t.buildType}`).sort()).toEqual(['arm64-debug', 'arm64-release', 'x64-debug', 'x64-release']);
+        for (const target of desktop) {
+            expect(target.runtime).toBe('mt');
+            expect(target.runtimeEnv).toBe('node');
+        }
+    });
+
+    test('Node-API addon platforms build only when named, so a plain build keeps its output', () => {
+        const platforms = new Set(TARGETS.map((t) => t.platform));
+        expect(OPT_IN_PLATFORMS).toEqual(['darwin', 'linux', 'win32']);
+        for (const platform of OPT_IN_PLATFORMS) {
+            expect(platforms.has(platform)).toBe(true);
+        }
     });
 
     test('every entry carries the four fields the target path is built from', () => {
@@ -35,6 +54,27 @@ describe('targetPathOf', () => {
         expect(targetPathOf({
             platform: 'wasi', arch: 'wasm32', runtime: 'st', buildType: 'release',
         })).toBe('wasi-wasm32-st-release');
+    });
+});
+
+describe('nodeAddonNamesOf', () => {
+    const darwin = (arch, buildType) => TARGETS.find((t) => (
+        t.platform === 'darwin' && t.arch === arch && t.buildType === buildType));
+
+    test('names one binary per platform and arch next to one loader per build type', () => {
+        expect(nodeAddonNamesOf(darwin('arm64', 'release'), 'matrix')).toEqual({
+            addonPattern: 'matrix.{platform}-{arch}.node',
+            addonName: 'matrix.darwin-arm64.node',
+            jsName: 'matrix.native.cjs',
+        });
+    });
+
+    test('keeps debug output apart from release output', () => {
+        expect(nodeAddonNamesOf(darwin('x64', 'debug'), 'matrix')).toEqual({
+            addonPattern: 'matrix.{platform}-{arch}.debug.node',
+            addonName: 'matrix.darwin-x64.debug.node',
+            jsName: 'matrix.native.debug.cjs',
+        });
     });
 });
 

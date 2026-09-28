@@ -324,3 +324,15 @@ describe('toHostPath', () => {
         expect(mod.toHostPath('/tmp/crossbind/live-other/x')).toBe('/tmp/crossbind/live-other/x');
     });
 });
+
+describe('cargoRunner', () => {
+    // Apple's linker and SDKs exist only on a macOS host, so no image can build these crates.
+    test('keeps Apple targets on the host while other targets follow the runner', async () => {
+        setRunner('DOCKER_RUN');
+        const { mod } = await importFresh();
+
+        expect(mod.cargoRunner({ platform: 'ios', arch: 'iphoneos' })).toBe('LOCAL');
+        expect(mod.cargoRunner({ platform: 'darwin', arch: 'arm64' })).toBe('LOCAL');
+        expect(mod.cargoRunner({ platform: 'android', arch: 'x86_64' })).toBe('DOCKER_RUN');
+    });
+});

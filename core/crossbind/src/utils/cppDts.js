@@ -90,51 +90,25 @@ function splitTopLevel(text) {
 // without ownership questions (and the worker clone can carry).
 const FIELD_TYPES = new Set(['number', 'boolean', 'string']);
 
-// A scalar typedef of the translation unit (`typedef unsigned int uInt;`) reads as the type it names.
-function resolveTypedef(type, typedefs) {
-    let resolved = type.replace(/\b(?:const|volatile)\b/g, '').replace(/\s+/g, ' ').trim();
-    for (let hops = 0; hops < 8 && typedefs.has(resolved); hops += 1) resolved = typedefs.get(resolved);
-    return resolved;
-}
-
-// `int x, *p, y = 2;` declares the int fields x and y and the pointer p. Arrays and bit-fields have no pointer to
-// member and references are not bound. Pointers (as handles) and enums (as their underlying integer) are bound only
-// when the caller asks: a header read preprocessed names every type its fields use.
+// `int x, *p, y = 2;` declares the int fields x and y and the pointer p. The types cover the value fields: pointers,
+// arrays, bit-fields and references are left out.
 const FIRST_DECLARATOR = /^([\s\S]*?)([*&\s]*)\b([A-Za-z_]\w*)\s*((?:\[[^\]]*\])*|:\s*\w+)$/;
 const NEXT_DECLARATOR = /^([*&\s]*)([A-Za-z_]\w*)\s*((?:\[[^\]]*\])*|:\s*\w+)$/;
 
-const POINTER_FIELD = { type: 'NativePointer | null', kind: 'pointer' };
-
-// A pointer field keeps the struct it points to when that is a plain, non-const name: one the bridge binds makes the
-// field read as an instance.
-function pointerShape(pointeeText) {
-    const pointee = pointeeText?.replace(/\b(?:struct|union|class)\s+/g, '').trim() ?? '';
-    return /^[A-Za-z_]\w*$/.test(pointee) ? { ...POINTER_FIELD, pointee } : POINTER_FIELD;
+function valueField(typeText, classNames) {
+    const type = tsType(typeText.replace(/\b(?:const|volatile)\b/g, '').replace(/\s+/g, ' ').trim(), classNames);
+    return FIELD_TYPES.has(type) ? { type } : null;
 }
 
-function valueField(typeText, classNames, { typedefs, enums, pointerTypedefs, pointerFields }) {
-    const resolved = resolveTypedef(typeText, typedefs);
-    const type = tsType(resolved, classNames);
-    if (FIELD_TYPES.has(type)) return { type };
-    // A const member has no setter to bind.
-    if (/\bconst\b/.test(typeText)) return null;
-    if (enums.has(resolved.replace(/^enum\s+/, ''))) return { type: 'number', kind: 'enum' };
-    return pointerFields && pointerTypedefs.has(resolved) ? pointerShape(pointerTypedefs.get(resolved)) : null;
-}
-
-function declaredFields(statement, classNames, types) {
+function declaredFields(statement, classNames) {
     const [first, ...rest] = splitTopLevel(statement).map((part) => part.split('=')[0].trim());
     const head = first.match(FIRST_DECLARATOR);
     if (!head || !head[1].trim()) return [];
-    const value = valueField(head[1], classNames, types);
+    const value = valueField(head[1], classNames);
     const declarators = [head.slice(2), ...rest.map((part) => part.match(NEXT_DECLARATOR)?.slice(1) ?? null)];
     return declarators.flatMap((declarator) => {
-        if (!declarator || declarator[2] || declarator[0].includes('&')) return [];
-        const [marks, name] = declarator;
-        if (!marks.includes('*')) return value ? [{ name, ...value }] : [];
-        if (!types.pointerFields) return [];
-        const isSingle = marks.split('*').length === 2;
-        return [{ name, ...pointerShape(isSingle ? head[1] : null) }];
+        if (!value || !declarator || declarator[2] || /[*&]/.test(declarator[0])) return [];
+        return [{ name: declarator[1], ...value }];
     });
 }
 
@@ -159,9 +133,7 @@ function typedefNamesAfter(text, from) {
     return tail ? tail[1].split(',').map((part) => part.trim()).filter((part) => /^[A-Za-z_]\w*$/.test(part)) : [];
 }
 
-export function parseCppSurface(source, log = console.log, {
-    typedefs = new Map(), enums = new Set(), pointerTypedefs = new Map(), pointerFields = false,
-} = {}) {
+export function parseCppSurface(source, log = console.log) {
     const clean = stripComments(source).replace(/^[ \t]*#[^\n]*$/gm, ' ');
 
     const classes = [];
@@ -193,7 +165,7 @@ export function parseCppSurface(source, log = console.log, {
             const sig = statement.match(/^(static\s+)?(?:explicit\s+)?([\w:<>,\s*&]*?)\s*\b([A-Za-z_]\w*)\s*\(([\s\S]*)\)$/);
             if (!sig) {
                 if (!statement.includes('(') && !/^(static|using|typedef|friend|enum)\b/.test(statement)) {
-                    fields.push(...declaredFields(statement, classNames, { typedefs, enums, pointerTypedefs, pointerFields }));
+                    fields.push(...declaredFields(statement, classNames));
                 }
                 continue;
             }

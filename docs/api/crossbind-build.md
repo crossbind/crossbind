@@ -9,7 +9,7 @@
 ```js
 export default {
   // ─────────────────────────────────────────────────────────────
-  // Source acquisition (pick ONE)
+  // Source acquisition
   // ─────────────────────────────────────────────────────────────
   getURL: (version) => 'https://example.com/upstream-${version}.tar.gz',
     // Simplest path: return a tarball URL. The CLI fetches + extracts
@@ -20,15 +20,6 @@ export default {
     // Checksum of the tarball getURL returns. Verified on download, and the
     // single source for license/SBOM rows and the -bin provenance block
     // (contract K4) — required for packages that publish binaries.
-
-  // OR
-
-  getSource: async (state) => {
-    // Custom: clone, copy from another dep, generate, etc.
-    // state.config.paths.build is your staging dir.
-    // For autotools projects without a CMake fork, this is where
-    // you'd run `git clone` or `cp -R` from a sibling.
-  },
 
   // ─────────────────────────────────────────────────────────────
   // Build system selector
@@ -64,13 +55,16 @@ export default {
   // ─────────────────────────────────────────────────────────────
   // Configure-step parameters
   // ─────────────────────────────────────────────────────────────
-  getBuildParams: (state, target) => [
+  getBuildParams: (target) => [
     '-DBUILD_SHARED_LIBS=OFF',
     '-DBUILD_TESTING=OFF',
   ],
-    // Extra cmake -D flags (or autotools args). Receives:
-    //   state  — full resolved config + state object
-    //   target — current build target ({ platform, arch, runtime, … })
+    // Extra cmake -D flags (or autotools args). Called as
+    // getBuildParams(target, depPaths, ext, buildPath):
+    //   target    — current build target ({ platform, arch, runtime, … })
+    //   depPaths  — this target's dependency paths (depPaths.<libName>.header / .lib)
+    //   ext       — 'so' on android, 'a' elsewhere
+    //   buildPath — this target's build directory
     //
     // Use `target` to branch on per-arch needs:
     //   target.platform === 'wasm' | 'android' | 'ios'
@@ -149,7 +143,7 @@ export default {
     // regenerate configure scripts after `replaceList` patches.
 
   prepare: async (state) => {
-    // Pre-configure step (after `getSource`/`getURL` extracts the
+    // Pre-configure step (after the CLI extracts the `getURL`
     // tarball, before cmake configure runs). Patch source, generate
     // headers, fetch sub-deps. Default: no-op.
   },
@@ -169,7 +163,7 @@ export default {
 For each architecture sub-package (`-wasm`, `-android`, `-ios`), the CLI:
 
 1. Reads the package's `nativeVersion` from `package.json`.
-2. Calls `getURL(version)` (or `getSource(state)`) to populate `state.config.paths.build`.
+2. Calls `getURL(version)` to populate `state.config.paths.build`.
 3. Runs `prepare(state)` if defined.
 4. Calls `build(state)` if defined; otherwise:
    - `buildType: 'cmake'` → `cmake -S <build> -B <build/build> [getBuildParams flags] && cmake --build`
@@ -194,7 +188,7 @@ export default {
   getURL: (version) => `https://www.openssl.org/source/openssl-${version}.tar.gz`,
   buildType: 'configure',
   configureProgram: './Configure',
-  getBuildParams: (state, target) => {
+  getBuildParams: (target) => {
     const flags = ['no-shared', 'no-tests', 'no-docs']
     if (target.platform === 'wasm') flags.push('linux-generic32')
     if (target.platform === 'ios')  flags.push('iphoneos-cross')
@@ -228,7 +222,6 @@ export default {
 | You need to | Use |
 |-------------|-----|
 | Download an upstream tarball | `getURL` |
-| Use a git checkout, monorepo dep, or generated source | `getSource` |
 | Inject CMake / configure flags | `getBuildParams` |
 | Patch source files between fetch and build | `prepare` |
 | Replace the build runner entirely | `build` |

@@ -48,6 +48,8 @@ export default {
 };
 ```
 
+A native Node.js addon links the build of its platform: `crossbind build -p darwin`, `-p linux` or `-p win32` takes `@crossbind/port-iconv-darwin`, `-linux` or `-win32`. Install it and import its `crossbind.config.js` the same way.
+
 ## Usage
 crossbind binds your C++ headers to JavaScript, so the usual pattern is a small wrapper around the library. This one converts strictly between UTF-8 and any encoding libiconv knows. Put it in your project's native folder (`src/native/` by default), and don't call it `iconv.h`, which would hide the library's own header:
 
@@ -158,7 +160,7 @@ Each one runs in your browser on [crossbind.dev/ports/iconv](https://crossbind.d
 - [Decode a stream that cuts characters in two](https://crossbind.dev/ports/iconv/#03-stream): `EINVAL` at a cut character, whose bytes wait for the next piece.
 - [List the encodings and check a name](https://crossbind.dev/ports/iconv/#04-encodings): `iconvlist`, `iconv_canonicalize`, and `iconv_open` as the real test.
 
-Setup and differences per platform: [WebAssembly](https://crossbind.dev/ports/iconv/wasm/) · [Android](https://crossbind.dev/ports/iconv/android/) · [iOS](https://crossbind.dev/ports/iconv/ios/) · [WASI](https://crossbind.dev/ports/iconv/wasi/), which also has an iconv-style command-line program built with `crossbind build -p wasi`.
+Setup and differences per platform: [WebAssembly](https://crossbind.dev/ports/iconv/wasm/) · [Android](https://crossbind.dev/ports/iconv/android/) · [iOS](https://crossbind.dev/ports/iconv/ios/) · [macOS](https://crossbind.dev/ports/iconv/darwin/) · [Linux](https://crossbind.dev/ports/iconv/linux/) · [Windows](https://crossbind.dev/ports/iconv/win32/) · [WASI](https://crossbind.dev/ports/iconv/wasi/), which also has an iconv-style command-line program built with `crossbind build -p wasi`.
 
 ## What this build includes
 - GNU libiconv 1.19 as a static library. The GPL `iconv` program and its gnulib support are not built.
@@ -187,6 +189,9 @@ This is the main package; the precompiled binaries are shipped per platform:
 | WebAssembly | [`@crossbind/port-iconv-wasm`](https://www.npmjs.com/package/@crossbind/port-iconv-wasm) | `wasm32` — single-threaded & multi-threaded |
 | Android | [`@crossbind/port-iconv-android`](https://www.npmjs.com/package/@crossbind/port-iconv-android) | `arm64-v8a` (64-bit ARM), `x86_64` (emulator) |
 | iOS | [`@crossbind/port-iconv-ios`](https://www.npmjs.com/package/@crossbind/port-iconv-ios) | device (`arm64`), simulator (`arm64`) |
+| macOS | [`@crossbind/port-iconv-darwin`](https://www.npmjs.com/package/@crossbind/port-iconv-darwin) | `arm64` (Apple silicon), `x64` (Intel) — native Node.js addons |
+| Linux | [`@crossbind/port-iconv-linux`](https://www.npmjs.com/package/@crossbind/port-iconv-linux) | `x64`, `arm64` — glibc 2.28 or later, native Node.js addons |
+| Windows | [`@crossbind/port-iconv-win32`](https://www.npmjs.com/package/@crossbind/port-iconv-win32) | `x64`, `arm64` — Windows 10 or later, native Node.js addons |
 | WASI | [`@crossbind/port-iconv-wasi`](https://www.npmjs.com/package/@crossbind/port-iconv-wasi) | `wasm32-wasip3` — single-threaded |
 
 ## License

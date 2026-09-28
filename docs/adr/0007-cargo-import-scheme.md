@@ -34,6 +34,24 @@ Crate imports carry an explicit store prefix: `import { Uuid } from
   through our plugins; version choice lives in config rather than the
   specifier (a `cargo:x@1` form stays open for later).
 
+## Amendment (2026-09-26): module paths
+
+`cargo:<crate>/<module>[/<submodule>…]` imports one public module of a
+declared crate, for crates that keep their API in modules (xxhash-rust
+exports nothing from its root). Each segment must be a Rust identifier, so a
+specifier cannot name a path outside the marker directory. All imports of a
+crate share one bridge (`crate_<crate>`): an item registers once, under a
+name taken from the module that defines it, so a type reached through the
+root and through a module is the same JS class; each import's JS module maps
+its own names onto those registrations, and its `declare module` imports the
+types it names from the import that exports them. The bridge serves the root
+and every module import a marker names; a module that no longer resolves is
+left out rather than failing the other imports. Its marker name joins the
+path with dots, which crate and module names cannot contain. Metro only sees
+markers that exist when it starts, so crossbind scans the app's sources for
+module specifiers as it loads; bare crates keep their markers from
+`cargoDependencies`.
+
 ## Alternatives considered
 
 - **Bare names + shadowing guard** — implemented first, rejected: collision

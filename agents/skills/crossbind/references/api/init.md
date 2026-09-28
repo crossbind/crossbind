@@ -211,6 +211,20 @@ const m = await initNative({
 })
 ```
 
+### Native Node.js addon
+
+```js
+const initNative = require('./dist/my-app.native.cjs');
+
+const m = await initNative({
+  env: { TMPDIR: '_CROSSBIND_DATA_PATH_/scratch' },
+  // addonPath: '/opt/my-app/my-app.darwin-arm64.node',   // default: next to the loader
+  // dataPath: '/opt/my-app/data',                        // default: data/ next to the loader
+})
+```
+
+The Node-API build (`crossbind build -p darwin`, `linux` or `win32`) takes only `env`, `addonPath` and `dataPath`: there is no Emscripten runtime, so no worker, virtual filesystem or log redirection. `m` holds the bound classes and functions plus `toArray`/`toVector`. `initNative.terminate()` forgets the booted module, but Node cannot unload an addon, so the next `initNative()` resolves the same one with its native state intact.
+
 ### Cloudflare Worker
 
 ```js

@@ -165,6 +165,18 @@ describe('buildAppRustCrates', () => {
         expect(fs.existsSync(path.join(cacheDir, 'rust-bridges/crate_old_dep'))).toBe(false);
     });
 
+    test('prunes a per-module bridge: every import of a crate now shares the crate bridge', async () => {
+        addCrate('crate_xxhash_rust');
+        addCrate('crate_xxhash_rust__xxh3');
+        const { buildAppRustCrates, spawnSync } = await importFresh();
+        spawnSync.mockImplementation(() => { fakeCargoOutput(); return { status: 0 }; });
+
+        buildAppRustCrates(WASM, cacheDir, { 'xxhash-rust': '0.8' });
+
+        expect(fs.existsSync(path.join(cacheDir, 'rust-bridges/crate_xxhash_rust'))).toBe(true);
+        expect(fs.existsSync(path.join(cacheDir, 'rust-bridges/crate_xxhash_rust__xxh3'))).toBe(false);
+    });
+
     test('leaves crate_ bridges alone when no cargoDependencies are passed', async () => {
         addCrate('crate_uuid');
         const { buildAppRustCrates, spawnSync } = await importFresh();

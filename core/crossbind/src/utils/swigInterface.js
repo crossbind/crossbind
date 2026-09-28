@@ -1,4 +1,5 @@
 import upath from 'upath';
+import { ALL_NAMES } from './headerImports.js';
 
 // Libraries whose headers are not self-contained (spatialite expects sqlite3.h first) list the
 // prerequisites in export.headerPrelude of the package that ships the header: its output or project
@@ -39,7 +40,7 @@ export function interfaceIncludes(headerPath, prelude = []) {
 
 // The prelude and the completing includes reach only the compiled wrapper and swigMacros only SWIG's parse: SWIG still
 // wraps just the imported header. The ignored declarations follow the macros, so the retry without macros keeps them.
-export function buildInterfaceContent({ moduleName, headerPath, prelude = [], completing = [], swigMacros = [], ignored = [] }) {
+export function buildInterfaceContent({ moduleName, headerPath, prelude = [], completing = [], swigMacros = [], ignored = [], constants = [] }) {
     const includes = [...new Set([...interfaceIncludes(headerPath, prelude), ...completing])]
         .map((header) => `#include "${header}"`)
         .join('\n');
@@ -55,13 +56,19 @@ export function buildInterfaceContent({ moduleName, headerPath, prelude = [], co
 ${includes}
 %}
 
-%feature("shared_ptr");
+${constantRequests(constants)}%feature("shared_ptr");
 %feature("polymorphic_shared_ptr");
 
 ${macros}${ignores}%include "${headerPath}"
 
 #endif
 `;
+}
+
+// SWIG binds a constant only on request, so a header's thousands of macros cost nothing until the app imports one.
+function constantRequests(constants) {
+    if (constants === ALL_NAMES) return '%feature("embind:constant");\n\n';
+    return constants.length ? `${constants.map((name) => `%feature("embind:constant") ${name};`).join('\n')}\n\n` : '';
 }
 
 export function withoutSwigMacros(content) {
@@ -115,74 +122,6 @@ export const stripComments = (text) => text
     .replace(/\\\r?\n/g, ' ')
     .replace(LITERAL_OR_COMMENT, (match) => (match.startsWith('/') ? ' ' : match));
 
-// `cc -E` marks where each file's lines begin (`# 12 "/include/jpeglib.h" 2`). The lines under the header's own
-// markers are the header as the compiler saw it: #if branches resolved, comments gone.
-const LINE_MARKER = /^#\s*(?:line\s+)?\d+\s+"([^"]*)"/;
-
-export function ownPreprocessedText(output, headerPath) {
-    let current = null;
-    const own = [];
-    for (const line of output.split('\n')) {
-        const marker = line.match(LINE_MARKER);
-        if (marker) current = marker[1];
-        else if (current === headerPath || current?.endsWith(`/${headerPath}`)) own.push(line);
-    }
-    return own.join('\n');
-}
-
-// Arithmetic spellings reduce to one name each, so `long unsigned int` reads as `unsigned long`.
-function canonicalScalar(type) {
-    const words = type.split(' ');
-    const count = (word) => words.filter((each) => each === word).length;
-    const unsigned = count('unsigned') ? 'unsigned ' : '';
-    if (count('char')) return count('unsigned') ? 'unsigned char' : count('signed') ? 'signed char' : 'char';
-    if (count('bool') || count('_Bool')) return 'bool';
-    if (count('float')) return 'float';
-    if (count('double')) return count('long') ? 'long double' : 'double';
-    if (count('short')) return `${unsigned}short`;
-    if (count('long') === 2) return `${unsigned}long long`;
-    if (count('long') === 1) return `${unsigned}long`;
-    return `${unsigned}int`;
-}
-
-const SCALAR_WORDS = /^(?:(?:signed|unsigned|short|long|int|char|float|double|bool|_Bool)\b\s*)+$/;
-
-// name -> arithmetic type, for every `typedef <arithmetic type> name;` of a translation unit (a typedef of a typedef
-// resolves through the first): what a field declared as `uInt` or `JDIMENSION` really holds.
-export function scalarTypedefs(output) {
-    const typedefs = new Map();
-    for (const [, type, name] of output.matchAll(/\btypedef\s+((?:[A-Za-z_]\w*\s+)+?)([A-Za-z_]\w*)\s*;/g)) {
-        const clean = type.replace(/\b(?:const|volatile)\b/g, '').replace(/\s+/g, ' ').trim();
-        if (SCALAR_WORDS.test(clean)) typedefs.set(name, canonicalScalar(clean));
-        else if (typedefs.has(clean)) typedefs.set(name, typedefs.get(clean));
-    }
-    return typedefs;
-}
-
-const ENUM_DEFINITIONS = [
-    /\benum\s+(?:class\s+|struct\s+)?([A-Za-z_]\w*)\s*(?::[^{;]*)?\{/g,
-    /\btypedef\s+enum\b[^{;]*\{[^}]*\}\s*([A-Za-z_]\w*)/g,
-    /\btypedef\s+enum\s+[A-Za-z_]\w*\s+([A-Za-z_]\w*)\s*;/g,
-];
-
-// The enum types a translation unit defines or typedefs: what a field declared as `J_COLOR_SPACE` really holds.
-export function enumNames(output) {
-    return new Set(ENUM_DEFINITIONS.flatMap((pattern) => [...output.matchAll(pattern)].map(([, name]) => name)));
-}
-
-// name -> the type it points to, for every `typedef <type> *name;` of a translation unit and every typedef of one of
-// those: a field declared as `jpeg_saved_marker_ptr` or `voidpf` holds a pointer. Function-pointer and array typedefs
-// do not match.
-export function pointerTypedefs(output) {
-    const pointees = new Map();
-    for (const [, type, name] of output.matchAll(/\btypedef\s+([^;{}()]*?)\s*\b([A-Za-z_]\w*)\s*;/g)) {
-        const base = type.replace(/\s+/g, ' ').trim();
-        if (base.endsWith('*')) pointees.set(name, base.slice(0, -1).trim());
-        else if (pointees.has(base)) pointees.set(name, pointees.get(base));
-    }
-    return pointees;
-}
-
 export function parseMacroDump(text) {
     const macros = new Map();
     for (const line of text.split('\n')) {
@@ -222,7 +161,7 @@ function headerReferences(headerText) {
 // SWIG parses only the imported header, so export, linkage and attribute macros from its #includes read as syntax
 // errors. Those come from the compiler's macro table, with the flags and versions its #if lines test; type and value
 // macros stay undefined so every platform's compiler resolves them.
-export function selectSwigMacros({ headerText, macros, predefined }) {
+export function selectSwigMacros({ headerText, macros, predefined, constants = [] }) {
     const memoize = (classify) => {
         const results = new Map();
         const check = (name) => {
@@ -258,6 +197,14 @@ export function selectSwigMacros({ headerText, macros, predefined }) {
     };
     declarations.forEach((name) => forward(name, isSyntax));
     conditions.forEach((name) => forward(name, isConstant));
+    // An imported constant reaches SWIG with the macros its value uses, so SWIG can type it: SWIG reads no #include, and
+    // drops a constant whose value uses a macro it has not seen.
+    const isObjectConstant = (name) => !macros.get(name).params && isConstant(name);
+    const imported = constants === ALL_NAMES ? [...defined] : constants;
+    imported.forEach((name) => {
+        if (!defined.has(name)) forward(name, isObjectConstant);
+        else identifiers(macros.get(name)?.body ?? '').forEach((token) => forward(token, isObjectConstant));
+    });
 
     const visible = new Set([
         ...tokenize(stripComments(headerText)),

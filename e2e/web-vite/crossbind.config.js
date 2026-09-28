@@ -27,6 +27,9 @@ export default {
         wkt: '0.11',
         semver: '1',
         regex: '1',
+        'xxhash-rust': '{ version = "0.8", features = ["xxh3", "xxh64", "xxh32"] }',
+        'argon2-rust': '1.1',
+        'lzma-rust2': '0.16',
     },
     dependencies: [
         matrix,

@@ -6,7 +6,7 @@
 
 Create a `ports/<name>/` family that:
 
-- Builds the supported `wasm`, `android`, `ios` and `wasi` platform variants from one shared recipe.
+- Builds the supported `wasm`, `android`, `ios`, `darwin`, `linux`, `win32` and `wasi` platform variants from one shared recipe. `darwin`, `linux` and `win32` are the macOS, Linux and Windows builds that native Node.js addons link.
 - Optionally publishes an upstream command-line program through `bin-wasi/`.
 - Exposes the library through Embind or SWIG bridges.
 - Pins the upstream source version and digest.
@@ -45,6 +45,9 @@ ports/<name>/
 │   └── .npmignore
 ├── android/                  # same platform-variant shape
 ├── ios/                      # same shape; add a podspec when the port needs one
+├── darwin/                   # same shape; macOS arm64 + x64 archives for Node.js addons
+├── linux/                    # same shape; Linux arm64 + x64 archives, built in the linux image
+├── win32/                    # same shape; Windows arm64 + x64 archives, built in the windows image
 ├── wasi/                     # WASI library variant
 └── bin-wasi/                 # optional npm bin surface for an upstream CLI
 ```
@@ -132,7 +135,9 @@ Add or update an `e2e/` fixture that consumes the port through the same public s
 
 ## Validation
 
-- [ ] Every claimed platform variant builds on a compatible host: wasm, Android, iOS and WASI.
+- [ ] Every claimed platform variant builds on a compatible host: wasm, Android, iOS, macOS, Linux, Windows and WASI.
+- [ ] The macOS, Linux and Windows archives link only the port family and the system: no Homebrew or MacPorts library appears among the CMake `Found` lines or in the installed `*Targets.cmake`, an optional system feature the other platforms lack stays off, and any system library a consumer must link is declared as `binary.addonFlags`.
+- [ ] On Windows, a header that expects a DLL unless told otherwise gets its static-library define from the port as `cmake.compileOptions` (curl's `CURL_STATICLIB`), or the consumer's link fails on `__imp_` symbols.
 - [ ] Optional `bin-wasi/` E2E executes every published command entry.
 - [ ] `pnpm run check:dist` finds the expected artifacts.
 - [ ] Platform variants have the required README, upstream LICENSE and `.npmignore` files.

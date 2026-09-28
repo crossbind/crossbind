@@ -196,3 +196,18 @@ describe('raw config isolation', () => {
         expect(fill(app).allDependencies[0].paths.project).toBe(upath.resolve('/pkg/zlib-wasm'));
     });
 });
+
+describe('specs.cmake shape', () => {
+    const fill = (specs) => getFilledConfig(
+        { general: { name: 'app' }, paths: { project: '/app' }, targetSpecs: [{ platform: 'wasm', specs }] },
+        { isDepend: false, exclude: [], seen: new Set() },
+    );
+
+    test('rejects an array of configure flags and points to getBuildParams', () => {
+        expect(() => fill({ cmake: ['-DFOO=ON'] })).toThrow(/specs\.cmake.*compileOptions.*getBuildParams/);
+    });
+
+    test('accepts the compileOptions object', () => {
+        expect(() => fill({ cmake: { compileOptions: ['-O3', '-DFOO=1'] } })).not.toThrow();
+    });
+});

@@ -25,17 +25,18 @@ Raw pointers bind. What the generator cannot turn into an object crosses as a `N
 | `T *` returning a class the bridge knows | instance |
 | `T *` parameter of a struct the imported header defines, `extern "C"` or not | instance |
 | `T *` parameter of a struct the bridge only sees declared (`sqlite3`, `PJ`) | handle |
-| `T *` field of a struct in a package header | reads as an instance when `T` is a struct the same header binds, otherwise as a handle; takes either, or `null` |
+| `T *` field of a struct | reads as an instance when `T` is a struct the same header binds, otherwise as a handle; takes either, or `null` |
 | `int &`, `double &`, `std::string &` out-parameters | handle from `allocPointer` / `allocString`, read back afterwards |
 | function pointer parameter | a JS function, or a handle another binding returned |
 | pointer argument inside a callback | always a handle |
 
-Every module that binds a pointer also exports the helpers: `cstring(text)` and `readCString(handle)`, `allocBuffer(bytes)`, `allocPointer()`, `allocString(text)` and `readString(handle)`, `readNumberAt(handle, index, kind)` / `writeNumberAt(handle, index, kind, value)` with kinds `int8` … `uint64`, `float32`, `float64`, `readPointerAt` / `writePointerAt`, `readBytes(handle, length)` / `writeBytes(handle, u16string)`, and `releaseCallback(fn)` to free a callback slot.
+Every module that binds a pointer also exports the helpers: `cstring(text)` and `readCString(handle)`, `allocBuffer(bytes)`, `allocPointer()`, `allocString(text)` and `readString(handle)`, `readNumberAt(handle, index, kind)` / `writeNumberAt(handle, index, kind, value)` with kinds `int8` … `uint64`, `float32`, `float64`, `readPointerAt` / `writePointerAt`, `readBytes(handle, length)` / `writeBytes(handle, u16string)` with one byte per character, `readBuffer(handle, length)` returning a `Uint8Array` copy / `writeBuffer(handle, bytes)` copying any `ArrayBuffer` or view of one (a `Uint8Array`, a Node `Buffer`), and `releaseCallback(fn)` to free a callback slot.
 
 ```cpp
-void process(int* data, size_t len);   // handle in, e.g. from allocBuffer
-char* getName();                       // handle out: read it, then free it the library's way
-int parse(const char* text);           // takes a JS string
+void process(int* data, size_t len);            // handle in, e.g. from allocBuffer
+char* getName();                                // handle out: read it, then free it the library's way
+int parse(const char* text);                    // takes a JS string
+size_t encode(unsigned char* out, size_t cap);  // bytes out through a buffer
 ```
 
 ```js
@@ -44,6 +45,8 @@ const data = allocBuffer(3 * 4);
 process(data, 3);
 const name = readCString(getName());
 parse('x=1');
+const out = allocBuffer(1024);
+const bytes = readBuffer(out, encode(out, 1024)); // Uint8Array
 ```
 
 Only the const form converts: C APIs copy a `const char *` input, while a `char *` result is memory the library handed over, so it stays a handle you read and free explicitly. On worker-backed browser builds handles and instances are proxies, `instanceof NativePointer` holds only on direct runtimes, and JS functions cannot cross into a worker.
@@ -91,26 +94,25 @@ class Matrix {
 Private members are fine — they just won't appear in JS. Don't try to hide everything `private` and expect JS to call into your class.
 
 > Reality check (cross-runtime conformance suite): public VALUE fields (numbers, `bool`,
-> `std::string`) are bound on every leg — the pipeline injects embind `.property` lines for
-> them, so `m.rows` reads and writes from JS on node, browser (worker runtimes go through
+> `std::string`) are bound on every leg — the generated bridge registers them as embind
+> properties, so `m.rows` reads and writes from JS on node, browser (worker runtimes go through
 > the proxy: `await b.rows`) and React Native alike. Fields of vector, `shared_ptr` or
 > class type still need accessor methods.
 >
-> The same goes for C structs in a package's headers, `typedef struct { ... } Name;` and
+> The same goes for C structs, `typedef struct { ... } Name;` and
 > `typedef struct tag { ... } alias;` included: fields of arithmetic types, directly or
 > through a typedef such as `uInt` or `size_t`, are properties, read as the build's
 > preprocessor sees them. An enum field reads and writes its underlying integer and also
 > takes a member of the enum. A pointer field, `T *` or a pointer typedef such as `voidpf`,
 > reads as an instance when it points to a struct the same header binds (`cinfo.comp_info`,
-> `marker.next`) and as a handle otherwise, read-only for a pointer to const. The instance
+> `marker.next`) and as a handle otherwise (a pointer typedef declared in another header
+> reads as a handle), read-only for a pointer to const. The instance
 > owns nothing: deleting it leaves the library's memory alone. The field takes a handle,
 > `null` or such an instance, so `stream.next_in = input` points zlib at an `allocBuffer`
 > block; C keeps only the address, so keep that handle while the library uses it. On worker
 > runtimes every instance talks to the worker over its own channel and a field write can
 > land after a later call: read the field back (`await stream.avail_in`) before the call
-> that depends on it. Pointer fields need a header that binds a pointer somewhere else too,
-> which every port header with pointer fields does. Function-pointer fields, arrays and
-> struct fields are not bound, and a project's own header binds only its value fields.
+> that depends on it. Function-pointer fields, arrays and struct fields are not bound.
 
 ### 4. Inheritance + virtual works; multiple inheritance doesn't
 
@@ -162,6 +164,22 @@ try {
 > Native) path the fork rethrows `std::exception` as a `JSError`, so `.message` is the
 > plain `what()` text.
 
+### 8. Constants bind when the app imports them
+
+A `#define` whose value is a number, a character, a string or a boolean, and a `const` or `constexpr` global of those types, bind as module constants. Only the names the app imports from the header bind, so a header with thousands of macros costs nothing until one is used:
+
+```js
+import { deflateInit2_, Z_DEFLATED, MAX_WBITS, ZLIB_VERSION } from '@crossbind/port-zlib/zlib.h';
+```
+
+- Numbers of every width arrive as Numbers, exact up to 2^53; a `char` arrives as its code (`'A'` is 65), a string as a string, `true` and `false` as booleans.
+- A macro the header takes from another header imports through it, as in C: zlib's `MAX_WBITS` comes from `zconf.h`.
+- Each platform's compiler reads the macro itself, so a value inside `#if` follows the target.
+- `import * as zlib from '@crossbind/port-zlib/zlib.h'` binds every constant SWIG sees in the header.
+- Function-like macros, macros whose value is a pointer, arrays other than a single string, and globals that are not `const` stay unbound: Vite and Rollup reject the import as a missing export, and elsewhere the name is `undefined`. The build prints a line for each global it skips.
+- `crossbind build` output for Node.js, a plain browser page or an edge runtime binds no constant: those apps import no header.
+- A constant first imported while a dev server runs binds after the server restarts; a React Native app needs a native rebuild, as for a new header import.
+
 ## Wrapper pattern
 
 If the upstream library you're using has multiple inheritance, templates, pointer-heavy calls you would rather not drive through handles, or other unbindable patterns, you wrap it. Two locations work:
@@ -211,12 +229,12 @@ App-side wrapper is the default; lib-side only when you're publishing a package.
 
 The Emscripten `-sJSPI` flag enables JavaScript Promise Integration — letting C++ code call into JS-promising code synchronously (the C++ stack suspends on `await`). The living demos are `e2e/backend-nodejs` and `e2e/backend-nodejs-multithread` (Node, run with `--experimental-wasm-jspi`), where a `_JSPI` method performs a curl request over the network.
 
-You'd opt in via `targetSpecs[].specs.emccFlags` in `crossbind.config.js`:
+You'd opt in via `targetSpecs[].specs.binary.emccFlags` in `crossbind.config.js`:
 
 ```js
 targetSpecs: [{
     platform: 'wasm',
-    specs: { emccFlags: ['-sJSPI'] },
+    specs: { binary: { emccFlags: ['-sJSPI'] } },
 }]
 ```
 
@@ -272,6 +290,7 @@ Use cases: callbacks into JS that fetch network data, awaiting JS promises mid-C
 3. **Anonymous namespaces wrapping the public API** → not exposed. Public API stays in named or no namespace.
 4. **`extern "C"` decoration on C++ class methods** → invalid. Only use `extern "C"` for C-style free functions.
 5. **Returning a reference or pointer to a stack object** → undefined behavior; binder doesn't catch it. Always return by value or by `shared_ptr`.
+6. **A static method named `length`, `name` or `prototype`** → a JS class is a function that already owns those names, so the binder skips the method and the build prints `Static method length cannot become a property of a JavaScript class, skipped.` Give it another name in a wrapper (the GEOS example uses `lengthOf`).
 
 ## When the rules don't fit
 

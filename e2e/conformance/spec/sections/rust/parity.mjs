@@ -1,3 +1,5 @@
+import { rejecting } from '../expect.mjs';
+
 // napi.rs parity: shapes that binder carries (docs/concepts/type-conversions, class, enum,
 // error-handling, iterators, function) and ours does not yet. Expected JS shapes follow
 // napi.rs where we have no rule of our own: Set for HashSet/BTreeSet, Record for BTreeMap,
@@ -31,7 +33,31 @@ export function rustParityChecks({ add, todo, skip }, s, { worker, jsi }) {
     add('rs:napi:getterSetterPair', async () => { const a = await new s.ConfRsAccount('me', 10); a.limit = 40; const r = [await a.limit, await a.balance]; await a.delete(); return r; }, [40, 20]);
     add('rs:napi:byteSliceIn', () => s.confRsBytesView(new Uint8Array([1, 2, 3])), 3);
     add('rs:napi:floatSliceIn', () => s.confRsFloatsSum(new Float64Array([1.5, 2.5])), 4);
+    // A typed array argument is read where it is: a subarray keeps its offset, another view or a
+    // plain array is converted, a view over shared memory is copied, anything else is refused.
+    add('rs:napi:byteSubarrayIn', () => s.confRsBytesSum(new Uint8Array([9, 1, 2, 3, 9]).subarray(1, 4)), 6);
+    add('rs:napi:floatSubarrayIn', () => s.confRsFloatsSum(new Float64Array([100, 1.5, 2.5, 100]).subarray(1, 3)), 4);
+    add('rs:napi:emptyBytesIn', () => s.confRsBytesSum(new Uint8Array(0)), 0);
+    add('rs:napi:signedBytesIn', () => s.confRsBytesSum(new Int8Array([-1, 1])), 256);
+    add('rs:napi:plainArrayBytesIn', () => s.confRsBytesSum([1, 2, 3]), 6);
+    if (typeof SharedArrayBuffer !== 'function') skip('rs:napi:sharedBytesIn', 'no SharedArrayBuffer in this runtime');
+    else add('rs:napi:sharedBytesIn', () => s.confRsBytesSum(new Uint8Array(new SharedArrayBuffer(3)).fill(2)), 6);
+    rejecting(add)('rs:napi:bytesRejectString', () => s.confRsBytesSum('abc'), /Uint8Array/);
     add('rs:napi:bytesOutTyped', async () => (await s.confRsBytesOwned(2)) instanceof Uint8Array, true);
+    // Reading a typed array's length used to leave an emval handle behind on every jsi call.
+    if (!jsi || typeof s.count_emval_handles !== 'function') skip('rs:napi:typedArraysNoLeak', 'needs count_emval_handles on the module, which only the Node addon loader exposes');
+    else add('rs:napi:typedArraysNoLeak', async () => {
+        const bytes = new Uint8Array([1, 2, 3]);
+        const floats = new Float64Array([1.5]);
+        await s.confRsBytesView(bytes);
+        await s.confRsFloatsSum(floats);
+        const before = s.count_emval_handles();
+        for (let i = 0; i < 50; i++) {
+            await s.confRsBytesView(bytes);
+            await s.confRsFloatsSum(floats);
+        }
+        return s.count_emval_handles() - before;
+    }, 0);
     add('rs:napi:errorCode', async () => { try { await s.confRsCodedErr(); return 'no-throw'; } catch (e) { return [e instanceof Error, e.message, e.code]; } }, [true, 'coded failure', 'E_CONF']);
     // Held back on the native runtime until an RN run proves the unwinding path; on wasm the
     // panic hook already raises it as a JS Error.

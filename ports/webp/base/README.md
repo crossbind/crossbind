@@ -48,6 +48,8 @@ export default {
 };
 ```
 
+A native Node.js addon links the build of its platform: `crossbind build -p darwin`, `-p linux` or `-p win32` takes `@crossbind/port-webp-darwin`, `-linux` or `-win32`. Install it and import its `crossbind.config.js` the same way.
+
 ## Usage
 crossbind binds your C++ headers to JavaScript, so the usual pattern is a small wrapper around the library. This one exposes libwebp's simple API: encode RGBA pixels at a quality or losslessly, read the size from a file's header, and decode it back. Put it in your project's native folder (`src/native/` by default):
 
@@ -170,10 +172,10 @@ Each one runs in your browser on [crossbind.dev/ports/webp](https://crossbind.de
 - [Keep transparency, and decide what happens under it](https://crossbind.dev/ports/webp/#03-transparency): `alpha_quality` for lossy files and `exact` for lossless ones.
 - [Inspect a WebP, then decode only what you need](https://crossbind.dev/ports/webp/#04-read): `WebPGetFeatures`, and `WebPDecode` scaling to a thumbnail or cropping a region.
 
-Setup and differences per platform: [WebAssembly](https://crossbind.dev/ports/webp/wasm/) · [Android](https://crossbind.dev/ports/webp/android/) · [iOS](https://crossbind.dev/ports/webp/ios/) · [WASI](https://crossbind.dev/ports/webp/wasi/), which also has a command-line program built with `crossbind build -p wasi`.
+Setup and differences per platform: [WebAssembly](https://crossbind.dev/ports/webp/wasm/) · [Android](https://crossbind.dev/ports/webp/android/) · [iOS](https://crossbind.dev/ports/webp/ios/) · [macOS](https://crossbind.dev/ports/webp/darwin/) · [Linux](https://crossbind.dev/ports/webp/linux/) · [Windows](https://crossbind.dev/ports/webp/win32/) · [WASI](https://crossbind.dev/ports/webp/wasi/), which also has a command-line program built with `crossbind build -p wasi`.
 
 ## What this build includes
-- libwebp 1.6.0: static libraries for WebAssembly, iOS and WASI, shared libraries for Android.
+- libwebp 1.6.0: static libraries for WebAssembly, iOS, macOS, Linux, Windows and WASI, shared libraries for Android.
 - Linked into your code: `libwebp`, the whole encoder and decoder (the simple and advanced APIs, incremental decoding, `WebPPictureRescale` and `WebPPictureCrop`, `WebPPictureDistortion` and `WebPPlaneDistortion`), and `libsharpyuv` for sharp YUV conversion.
 - No animation and no ICC, EXIF or XMP chunks. `mux.h` and `demux.h` are installed and the mux and demux libraries ship in the packages, but the port links only `webp` and `sharpyuv`, so `WebPAnimEncoder*`, `WebPAnimDecoder*`, `WebPMux*` and `WebPDemux*` calls fail to link with `undefined symbol` (checked with 2.0.0-beta.60 on WebAssembly). `WebPGetFeatures` still reports whether a file is animated.
 - On WebAssembly, every file the demo checks is byte for byte what the native `cwebp` 1.6.0 writes from the same pixels and settings.
@@ -186,6 +188,9 @@ This is the main package; the precompiled binaries are shipped per platform:
 | WebAssembly | [`@crossbind/port-webp-wasm`](https://www.npmjs.com/package/@crossbind/port-webp-wasm) | `wasm32` — single-threaded & multi-threaded |
 | Android | [`@crossbind/port-webp-android`](https://www.npmjs.com/package/@crossbind/port-webp-android) | `arm64-v8a` (64-bit ARM), `x86_64` (emulator) |
 | iOS | [`@crossbind/port-webp-ios`](https://www.npmjs.com/package/@crossbind/port-webp-ios) | device (`arm64`), simulator (`arm64`) |
+| macOS | [`@crossbind/port-webp-darwin`](https://www.npmjs.com/package/@crossbind/port-webp-darwin) | `arm64` (Apple silicon), `x64` (Intel) — native Node.js addons |
+| Linux | [`@crossbind/port-webp-linux`](https://www.npmjs.com/package/@crossbind/port-webp-linux) | `x64`, `arm64` — glibc 2.28 or later, native Node.js addons |
+| Windows | [`@crossbind/port-webp-win32`](https://www.npmjs.com/package/@crossbind/port-webp-win32) | `x64`, `arm64` — Windows 10 or later, native Node.js addons |
 | WASI library | [`@crossbind/port-webp-wasi`](https://www.npmjs.com/package/@crossbind/port-webp-wasi) | `wasm32-wasip3` — single-threaded |
 | WASI command | [`@crossbind/port-webp-bin-wasi`](https://www.npmjs.com/package/@crossbind/port-webp-bin-wasi) | the upstream `cwebp`, `dwebp` and `webpinfo` as `cwebp-wasi`, `dwebp-wasi` and `webpinfo-wasi` commands (wasmtime 47+) |
 

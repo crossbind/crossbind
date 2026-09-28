@@ -1,0 +1,11 @@
+dist/prebuilt/ios-iphoneos-mt-release/lib
+dist/prebuilt/ios-iphonesimulator-mt-release/lib
+*.xcframework.zip
+*.tgz
+.crossbind
+*.dylib
+dist/prebuilt/android-arm64-v8a-mt-release/lib/*.a
+dist/prebuilt/android-x86_64-mt-release/lib/*.a
+dist/prebuilt/**/bin
+dist/prebuilt/**/share/bash-completion
+dist/prebuilt/**/share/man

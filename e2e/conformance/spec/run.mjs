@@ -12,19 +12,25 @@
 //                   checkedParse, parseEven, tag, jsonEcho, jsonTally, jsonPick,
 //                   SharedDoc, dupDoc, sharedDropCount }      (any leg - prebuilt package)
 //   rustAppLocal: { Counter, Hull }                           (bundler legs only)
-//   rustCrates:   { Uuid, Version, VersionReq, Regex }        (bundler legs only)
+//   rustCrates:   { Uuid, Version, VersionReq, Regex, xxh364, Xxh3, xxh64, Xxh64, xxh32, Xxh32,
+//                   Argon2, Argon2Params, Argon2Algorithm, Argon2Version, Argon2ModuleParams,
+//                   Argon2Memory, XzOptions, XzWriter, XzReader, LzmaOptions, LzmaWriter,
+//                   Lzma2Reader, LzmaReader } (bundler legs only)
 //   jsLive:       { jsPass, jsProbe, jsCall, jsStore, jsFire } (synchronous runtimes only -
 //                   on worker-backed legs functions cannot cross and identity dies)
 //   pointers, callbacks, strings, wrappers, types: the module namespace of the matching kit
 //                   header (any leg; the checks that pass JS functions skip on worker legs)
 //   packageFields: { zlib, webp }, the namespaces of @crossbind/port-zlib/zlib.h and
 //                   @crossbind/port-webp/encode.h (bundler legs that link both ports)
+//   constants:    the names a leg imports from native/confconstants.h, plus `module` (its AllSymbols);
+//                   constants bind only for header imports, so standalone builds have none
 //   rustKit:      the exports of @crossbind/conformance-rust (any leg - prebuilt package);
 //                   constructs the generator does not carry yet are `todo` entries, reported
 //                   as TODO lines and counted apart from the pass/run figures
 //   coverage:     { exports, seen } from spec/bridgeExports.mjs + spec/coverage.mjs (legs that build the bridges)
 
 import { callbackChecks } from './sections/callbacks.mjs';
+import { constantChecks } from './sections/constants.mjs';
 import { packageFieldChecks } from './sections/packageFields.mjs';
 import { pointerChecks } from './sections/pointers.mjs';
 import { stringChecks } from './sections/strings.mjs';
@@ -256,7 +262,11 @@ export function buildChecks(s) {
     }));
 
     section(list, 'rustCrates', 'cargo: crate imports need a bundler (vite/webpack/metro) leg', s.rustCrates && (() => {
-        const { Uuid, Version, VersionReq, Regex } = s.rustCrates;
+        const {
+            Uuid, Version, VersionReq, Regex, xxh364, Xxh3, xxh64, Xxh64, xxh32, Xxh32,
+            Argon2, Argon2Params, Argon2Algorithm, Argon2Version, Argon2ModuleParams, Argon2Memory,
+            XzOptions, XzWriter, XzReader, LzmaOptions, LzmaWriter, Lzma2Reader, LzmaReader,
+        } = s.rustCrates;
         add('crate:uuid', async () => {
             const u = await Uuid.newV4();
             const t = await u.toString();
@@ -277,6 +287,187 @@ export function buildChecks(s) {
             await re.delete();
             return r;
         }, true);
+        // `cargo:xxhash-rust/xxh3`: one module of a crate whose root exports nothing. The
+        // expected hash is the reference C xxHash's XXH3-64 of the same bytes.
+        add('crate:submodule', async () => {
+            const bytes = Uint8Array.from('crossbind', (c) => c.charCodeAt(0));
+            const h = await new Xxh3();
+            await h.update(bytes.subarray(0, 5));
+            await h.update(bytes.subarray(5));
+            const streamed = await h.digest();
+            await h.delete();
+            return [await xxh364(bytes), streamed];
+        }, [0x2edc9101d5f4ce96n, 0x2edc9101d5f4ce96n]);
+        // xxh64 and Xxh64::update take `mut input: &[u8]`; the expected hash is the reference
+        // C xxHash's XXH64 (seed 0) of the same bytes.
+        add('crate:mutParam', async () => {
+            const bytes = Uint8Array.from('crossbind', (c) => c.charCodeAt(0));
+            const h = await new Xxh64(0n);
+            await h.update(bytes);
+            const streamed = await h.digest();
+            await h.delete();
+            return [await xxh64(bytes, 0n), streamed];
+        }, [0x43a59ffc3189a5dcn, 0x43a59ffc3189a5dcn]);
+        // xxh32 returns a u32: the reference XXH32 of these bytes is above 2^31, so a signed read
+        // would come back negative.
+        add('crate:xxh32', async () => {
+            const bytes = Uint8Array.from('crossbind', (c) => c.charCodeAt(0));
+            const h = await new Xxh32(0);
+            await h.update(bytes);
+            const streamed = await h.digest();
+            await h.delete();
+            return [await xxh32(bytes, 0), streamed];
+        }, [0x841c676a, 0x841c676a]);
+        // argon2-rust with no wrapper: modules declared inside a macro, a hex-valued enum, `impl
+        // Default`, a Copy struct passed by value and a static function. The expected tag is
+        // OpenSSL's Argon2id of the same input with the crate's defaults (m=19456, t=2, p=1).
+        add('crate:argon2', async () => {
+            const bytes = (text) => Uint8Array.from(text, (c) => c.charCodeAt(0));
+            const argon2id = await Argon2Algorithm.Argon2id;
+            const params = await new Argon2Params();
+            const argon2 = await new Argon2(argon2id, await Argon2Version.V0x13, params);
+            const tag = await argon2.hash(bytes('crossbind'), bytes('conformance-salt'));
+            const encoded = await argon2.hashEncoded(bytes('crossbind'), bytes('conformance-salt'));
+            await Argon2.verifyPassword(encoded, bytes('crossbind'), argon2id);
+            let rejected = false;
+            try { await Argon2.verifyPassword(encoded, bytes('wrong'), argon2id); } catch { rejected = true; }
+            await argon2.delete();
+            await params.delete();
+            return [Array.from(tag, (b) => b.toString(16).padStart(2, '0')).join(''), encoded.startsWith('$argon2id$v=19$m=19456,t=2,p=1$'), rejected];
+        }, ['8002e385972b1dec0c1fc20e4b2fde506e82acca7cde6620b6da05400b710196', true, true]);
+        // All imports of one crate share its bridge: Params built through the `params` module's
+        // builder is the root's Params, so the root's Argon2 takes it. The expected tag is
+        // OpenSSL's Argon2id with those parameters (m=8192, t=1, p=1).
+        add('crate:argon2Builder', async () => {
+            const bytes = (text) => Uint8Array.from(text, (c) => c.charCodeAt(0));
+            const memory = await Argon2Memory.kib(8192n);
+            const steps = [await Argon2ModuleParams.builder()];
+            steps.push(await steps.at(-1).memory(memory));
+            steps.push(await steps.at(-1).passes(1));
+            steps.push(await steps.at(-1).lanes(1));
+            const params = await steps.at(-1).build();
+            const argon2 = await new Argon2(await Argon2Algorithm.Argon2id, await Argon2Version.V0x13, params);
+            const tag = await argon2.hash(bytes('crossbind'), bytes('conformance-salt'));
+            const encoded = await argon2.hashEncoded(bytes('crossbind'), bytes('conformance-salt'));
+            for (const handle of [argon2, params, memory, ...steps]) await handle.delete();
+            return [Array.from(tag, (b) => b.toString(16).padStart(2, '0')).join(''), encoded.startsWith('$argon2id$v=19$m=8192,t=1,p=1$')];
+        }, ['9a8811bfd0c7a2af216940b7bfe5d293eebc8d054999f7e735e91ea70ceadaa2', true]);
+        // lzma-rust2's XzWriter<W: Write> and XzReader<R: Read> with no wrapper: each writer call
+        // returns the bytes it produced, and a reader reads the bytes it was built with. The fixture
+        // is `xz -6` (XZ Utils 5.8.3) of the same text, so the reader is checked against an
+        // independent encoder and the writer through that reader.
+        add('crate:xzStreams', async () => {
+            const text = 'crossbind '.repeat(64);
+            const bytes = Uint8Array.from(text, (c) => c.charCodeAt(0));
+            const fixture = Uint8Array.from('fd377a585a000004e6d6b44604c01c80052101160000000000000000807372bfe0027f00145d00319c8a2301640a4db63433829d7cde304546e00000c957f093758601780001388005000000bd1144adb1c467fb020000000004595a'.match(/../g), (h) => parseInt(h, 16));
+            const ascii = (data) => String.fromCharCode(...data);
+            const decode = async (input) => {
+                const reader = await new XzReader(input, false);
+                const head = await reader.read(16);
+                const rest = await reader.readAll();
+                await reader.delete();
+                return head.length === 16 && ascii(head) + ascii(rest) === text;
+            };
+            const options = await XzOptions.withPreset(6);
+            const writer = await new XzWriter(options);
+            const parts = [await writer.write(bytes.subarray(0, 100)), await writer.write(bytes.subarray(100)), await writer.finish()];
+            let finished = false;
+            try { await writer.finish(); } catch (e) { finished = /XzWriter is finished/.test(String(e?.message ?? e)); }
+            for (const handle of [writer, options]) await handle.delete();
+            const xz = Uint8Array.from(parts.flatMap((part) => Array.from(part)));
+            return [Array.from(xz.subarray(0, 6), (b) => b.toString(16).padStart(2, '0')).join(''), await decode(xz), await decode(fixture), finished];
+        }, ['fd377a585a00', true, true, true]);
+        // Option<u64> and Option<&[u8]> parameters through lzma-rust2. LzmaWriter writes its
+        // expected size into the .lzma header; the expected bytes are lzma-rust2's own output run
+        // natively, and the xz CLI decodes them. Lzma2Reader reads raw LZMA2 that liblzma 5.8.3
+        // encoded against a preset dictionary: it decodes with that dictionary and is rejected
+        // without one.
+        add('crate:lzmaOptional', async () => {
+            const bytes = (text) => Uint8Array.from(text, (c) => c.charCodeAt(0));
+            const fromHex = (hex) => Uint8Array.from(hex.match(/../g), (h) => parseInt(h, 16));
+            const toHex = (data) => Array.from(data, (b) => b.toString(16).padStart(2, '0')).join('');
+            const body = bytes('crossbind '.repeat(64));
+            const lzma = async (endMarker, size) => {
+                const options = await LzmaOptions.withPreset(6);
+                const writer = await new LzmaWriter(options, true, endMarker, size);
+                const parts = [await writer.write(body.subarray(0, 100)), await writer.write(body.subarray(100)), await writer.finish()];
+                for (const handle of [writer, options]) await handle.delete();
+                return toHex(Uint8Array.from(parts.flatMap((part) => Array.from(part))));
+            };
+            const decode = async (hex, dict) => {
+                const reader = await new Lzma2Reader(fromHex(hex), 1 << 16, dict);
+                try { return String.fromCharCode(...await reader.readAll()); } catch { return 'rejected'; } finally { await reader.delete(); }
+            };
+            const dict = bytes('crossbind preset dictionary: the quick brown fox jumps over the lazy dog. ');
+            const withDict = 'c0005e000b5d00b1b28ac4bbf3289cf6000000';
+            const noDict = 'e0005e004d5d003a1a08ce76c7e5e9d60734c3d10ebfce55e1aabde0e48f9801dd8de507549e65255f273a6a7eb4d3490389c12cfaedd637886688ba7a8f787cc7208778cd2389d725621aaf083665fa321cb80000';
+            return [await lzma(false, 640n), await lzma(true, null), await decode(withDict, dict), await decode(withDict, null), await decode(noDict, null)];
+        }, [
+            '5d00008000800200000000000000319c8a2301640a4db63433829d7cde304546e000',
+            '5d00008000ffffffffffffffff00319c8a2301640a4db63433829d7cde30516d3bfffffa1d8000',
+            'the quick brown fox jumps over the lazy dog. crossbind preset dictionary: the quick brown fox. ',
+            'rejected',
+            'the quick brown fox jumps over the lazy dog. crossbind preset dictionary: the quick brown fox. ',
+        ]);
+        // An Option<NonZeroU64> parameter: XzOptions.setBlockSize. The writer raises the block size
+        // to the dictionary size, 256 KiB at preset 0, so 600 000 bytes make three blocks at 256 KiB
+        // and one without a size (as `xz -lvv` counts lzma-rust2's native output). The count is read
+        // from the stream's own index; 0 is rejected before the call.
+        add('crate:nonZero', async () => {
+            const unit = Uint8Array.from('crossbind ', (c) => c.charCodeAt(0));
+            const input = new Uint8Array(600000);
+            for (let i = 0; i < input.length; i += unit.length) input.set(unit.subarray(0, input.length - i), i);
+            const blocks = (xz) => {
+                const backward = new DataView(xz.buffer, xz.byteOffset, xz.byteLength).getUint32(xz.length - 8, true);
+                let at = xz.length - 12 - (backward + 1) * 4 + 1;
+                let count = 0;
+                for (let shift = 0; ; shift += 7) {
+                    const b = xz[at++];
+                    count += (b & 0x7f) * 2 ** shift;
+                    if (b < 0x80) return count;
+                }
+            };
+            const compress = async (blockSize) => {
+                const options = await XzOptions.withPreset(0);
+                await options.setBlockSize(blockSize);
+                const writer = await new XzWriter(options);
+                const parts = [await writer.write(input), await writer.finish()];
+                for (const handle of [writer, options]) await handle.delete();
+                return Uint8Array.from(parts.flatMap((part) => Array.from(part)));
+            };
+            const split = await compress(262144n);
+            const reader = await new XzReader(split, false);
+            const back = await reader.readAll();
+            await reader.delete();
+            const options = await XzOptions.withPreset(0);
+            let zero = 'accepted';
+            try { await options.setBlockSize(0n); } catch (e) { zero = String(e?.message ?? e); }
+            await options.delete();
+            return [blocks(split), blocks(await compress(null)), back.length === input.length && back.every((b, i) => b === input[i]), zero.includes('NonZeroU64 cannot be 0')];
+        }, [3, 1, true, true]);
+        // A 7-argument constructor: LzmaReader::new(reader, uncomp_size, lc, lp, pb, dict_size,
+        // preset_dict). The .lzma fixture is the xz CLI's (XZ Utils 5.8.3); its 13-byte header gives
+        // the arguments, read here per the format, and swapping lc and pb breaks the decode.
+        add('crate:lzmaReader', async () => {
+            const lzma = Uint8Array.from('5d00008000ffffffffffffffff00319c8a2301640a4db63433829d7cde30516d3bfffffa1d8000'.match(/../g), (h) => parseInt(h, 16));
+            const header = new DataView(lzma.buffer, lzma.byteOffset, 13);
+            const props = header.getUint8(0);
+            const [lc, lp, pb] = [props % 9, Math.floor(props / 9) % 5, Math.floor(props / 45)];
+            const dictSize = header.getUint32(1, true);
+            const size = header.getBigUint64(5, true);
+            const decode = async (lcArg, pbArg) => {
+                let reader;
+                try {
+                    reader = await new LzmaReader(lzma.subarray(13), size, lcArg, lp, pbArg, dictSize, null);
+                    return String.fromCharCode(...await reader.readAll());
+                } catch {
+                    return 'rejected';
+                } finally {
+                    await reader?.delete();
+                }
+            };
+            return [size, await decode(lc, pb) === 'crossbind '.repeat(64), await decode(pb, lc)];
+        }, [18446744073709551615n, true, 'rejected']);
     }));
 
     section(list, 'jsLive', 'JsValue/JsFunction need a synchronous runtime (worker-backed legs cannot pass functions or keep identity)', s.jsLive && (() => {
@@ -304,6 +495,7 @@ export function buildChecks(s) {
     section(list, 'wrappers', 'no wrapper surface wired on this leg', s.wrappers && (() => wrapperChecks({ add }, s.wrappers, { worker })));
     section(list, 'types', 'no type surface wired on this leg', s.types && (() => typeChecks({ add }, s.types, { worker })));
     section(list, 'packageFields', 'no package header surface wired on this leg (standalone builds bridge only paths.header)', s.packageFields && (() => packageFieldChecks({ add }, s.packageFields, { worker })));
+    section(list, 'constants', 'no header import on this leg (constants bind only for the names an app imports)', s.constants && (() => constantChecks({ add }, s.constants, { native: Boolean(s.caps?.jsiNative) })));
     section(list, 'rustKit', 'no Rust kit surface wired on this leg', s.rustKit && (() => {
         rustNumberChecks({ add, todo, skip }, s.rustKit);
         rustStringChecks({ add, todo }, s.rustKit);

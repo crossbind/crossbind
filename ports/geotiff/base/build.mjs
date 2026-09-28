@@ -7,12 +7,22 @@ const platformBuild = {
     'android-x86_64': ['--enable-static=no', '--host=x86_64-linux-android'],
     'ios-iphoneos': ['--enable-shared=no', '--host=arm-apple-darwin'],
     'ios-iphonesimulator': ['--enable-shared=no', '--host=x86_64-apple-darwin'],
+    'darwin-arm64': ['--enable-shared=no', '--host=aarch64-apple-darwin'],
+    'darwin-x64': ['--enable-shared=no', '--host=x86_64-apple-darwin'],
+    'linux-arm64': ['--enable-shared=no', '--host=aarch64-linux-gnu'],
+    'linux-x64': ['--enable-shared=no', '--host=x86_64-linux-gnu'],
+    'win32-arm64': ['--enable-shared=no', '--host=aarch64-w64-mingw32'],
+    'win32-x64': ['--enable-shared=no', '--host=x86_64-w64-mingw32'],
 };
 
 const platformExtraLibs = {
     'wasm': ['-lsqlite3'],
     'android': ['-lstdc++'],
     'ios': ['-lc++'],
+    'darwin': ['-lc++'],
+    // Static libc++ and proj need what glibc 2.28 still keeps in separate libraries.
+    'linux': ['-lc++', '-lpthread', '-ldl', '-lm'],
+    'win32': ['-lc++'],
     // The bundled tools (geotifcp/listgeo) link C++ archives (proj) through
     // the C driver; wasi-clang needs the C++/EH runtime spelled out, and
     // -fwasm-exceptions at link selects the eh/ sysroot variant that has

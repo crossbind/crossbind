@@ -9,6 +9,8 @@ export function cargoTripleFor(target) {
             return target.arch === 'iphonesimulator' ? 'aarch64-apple-ios-sim' : 'aarch64-apple-ios';
         case 'android':
             return target.arch === 'x86_64' ? 'x86_64-linux-android' : 'aarch64-linux-android';
+        case 'darwin':
+            return target.arch === 'x64' ? 'x86_64-apple-darwin' : 'aarch64-apple-darwin';
         default:
             return null; // wasi (no rust wasip3 target yet) and anything else: unsupported
     }

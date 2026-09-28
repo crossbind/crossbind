@@ -31,7 +31,7 @@ Rust  (this package)   ──┼── crossbind_embind_register_* ─┤
 - `adapters/web.cpp` - passthrough to emscripten's `_embind_*` (10-param, identical).
 - `adapters/jsi.cpp` - wraps the raw invokers into `jsi::Function` (via
   `createFromHostFunction`) and drops `isNonnullReturn` for embind-jsi's 9-param API.
-  Compiled inside the React Native native module; shape-validated by `e2e/jsi-shape-check.cpp`.
+  Compiled inside the React Native native module and native Node.js addons.
 
 ## Demo: plain Rust in, JS classes out
 
@@ -181,17 +181,20 @@ Generation rules (`crossbind/src/utils/rustBridgeGen.js`, run by `buildCargo` be
 |---|---|
 | `#[repr(i32)] pub enum Mode { Slow = 0, .. }` | embind enum |
 | `#[repr(C)] #[derive(..Default, Copy..)] pub struct Point { pub x: i32, .. }` | value object `{x, ..}` |
-| `pub fn new(..) -> Self` | constructor (max 3 args) |
-| other `pub fn ..(..) -> Self` | `smart_ptr` + static factory (max 2 args) |
-| `pub fn m(&mut self / &self, ..) -> R` | method (max 4 args), JS name camelCased |
+| `pub fn new(..) -> Self` | constructor (max 7 args) |
+| other `pub fn ..(..) -> Self` | `smart_ptr` + static factory (max 6 args) |
+| `pub fn m(&mut self / &self, ..) -> R` | method (max 6 args), JS name camelCased |
 | `text: &str` / `text: &String` parameter | `string` on the wire, borrowed at the call site |
 | `i64` / `u64` param, return or field | JS **BigInt** (full 64-bit range, sign-correct) |
-| top-level `pub fn f(..) -> R` | module-level free function (max 4 args), camelCased |
+| top-level `pub fn f(..) -> R` | module-level free function (max 6 args), camelCased |
 | `impl Display for C` | `toString()` on the class (so `` `${obj}` `` formats) |
 | `-> Result<T, E>` (ctor, factory, method or free fn; `E: Display`) | Err becomes a **thrown JS exception** |
 | `-> Option<Self>` (factory) | None becomes **JS null** (typed `X \| null`) |
 | `-> Option<i32 / f64 / bool / String>` (method or free fn) | Some -> value, None -> **null** (typed `T \| null`) |
 | `Option<i32 / f64 / bool / String>` parameter | JS undefined/null -> None (typed `T \| null \| undefined`) |
+| `Option<i64 / u64>` parameter (`JsBigIntOptArg<T>`) | a BigInt or safe-integer Number; undefined/null -> None (typed `bigint \| null \| undefined`) |
+| `Option<&[u8] / &[f64]>` parameter (`JsViewOptArg<T>`) | the typed array, read as for `&[T]`; undefined/null -> None |
+| `NonZeroU64` (and the other `NonZero` integers) parameter, also in `Option` where the integer's `Option` crosses | the integer; 0 is a thrown JS exception before the call |
 | `other: &SomeClass` parameter | pass another bound instance (borrowed for the call) |
 | `export.bindings.vectors: [{ of: 'i32', name: '..' }]` in crossbind.config.mjs | `register_vector` |
 
@@ -207,30 +210,26 @@ scattered `Box::leak`.
 
 ## Test
 
-`pnpm e2e:prod` runs two legs (needs Rust + the emscripten target + a local emsdk):
-
-1. **web** - `demo` crate → wasm, linked with `adapters/web.cpp` + `-lembind`, called from
-   node. The class is materialized by **unmodified embind-js**.
-2. **mobile-shape** - same crate compiled native, run against a jsi-*shaped* mock consumer
-   that mirrors embind-jsi's real signatures. Validates the adapter's wrapping /
-   marshalling / param-dropping.
+The conformance kit calls the `demo` crate's classes and functions (the `rust:` checks in
+`e2e/conformance/spec/run.mjs`) on every leg listed in `e2e/conformance/README.md`: through
+`adapters/web.cpp` and **unmodified embind-js** on the wasm legs, through `adapters/jsi.cpp` on
+React Native and native Node.js. `e2e/conformance-rust` checks each Rust construct in more depth.
 
 ## Status matrix
 
 | Path | State |
 |---|---|
 | web: Rust → flat ABI → embind-js (emsdk 5.0.3, 6.0.2 & 6.0.9) | ✅ tested, runs (full demo incl. f64 + string) |
-| mobile: adapter shape vs real embind-jsi signatures | ✅ shape-validated (native mock) |
 | mobile: real Hermes / device smoke (iOS simulator, RN app) | ✅ GREEN 32/32 — ctor, N-arity, bool, enum, string both ways, value object both ways, vector, smart_ptr factory, f64 both ways, delete, app-local .rs, idioms, BigInt, Display, free fns, Option both ways, class params, semver/regex imports |
 | mobile: real Hermes / device smoke (Android emulator, same RN app) | ✅ GREEN 32/32 — same demo, same adapter; cargo dep joins the cmake depends graph, keep-symbol linked; a NEW bare-crate import now links in the FIRST build (rust set busts the CMake configure) |
 | app-local `.rs` import (`./native/counter.rs`, both mobile platforms) | ✅ GREEN — synthesized bridge crate + app super staticlib + typed `counter.rs.d.ts` |
 | typed package import (`import { X } from '@crossbind/embind-rust-demo'`) | ✅ GREEN on iOS, Android AND web (vite) — resolver + proxy module + generated d.ts; web verified by playwright on chromium/firefox/webkit |
 | real-world upstream crate, packageless (`geo` via `cargoDependencies` + app-local surface) | ✅ GREEN — Hull (ConvexHull) on iOS + Android (26/26 smoke) AND in the browser (worker-mode playwright, 3 browsers): the same surface .rs serves all three platforms — a wasm output upstream geo never shipped |
-| Rust idioms: `&str`/`&String` params, `Result` → JS exception, `Option<Self>` → null | ✅ GREEN — e2e (web + jsi-mock legs), worker-mode playwright on 3 browsers, iOS sim + Android emulator (throw message, null, borrowed str all asserted) |
-| i64/u64 → BigInt, `impl Display` → toString(), top-level free functions | ✅ GREEN — same full bar (e2e both legs, 3-browser worker playwright, both devices); u64::MAX round-trips exactly, free `Result` fns throw |
+| Rust idioms: `&str`/`&String` params, `Result` → JS exception, `Option<Self>` → null | ✅ GREEN — conformance kit on every leg, worker-mode playwright on 3 browsers, iOS sim + Android emulator (throw message, null, borrowed str all asserted) |
+| i64/u64 → BigInt, `impl Display` → toString(), top-level free functions | ✅ GREEN — same full bar (conformance kit on every leg, 3-browser worker playwright, both devices); u64::MAX round-trips exactly, free `Result` fns throw |
 | DIRECT crate import (`import { Uuid } from 'cargo:uuid'` — untouched crates.io source, multi-file parse, feature-gated modules) | ✅ GREEN — worker-mode playwright on 3 browsers + iOS sim + Android emulator 26/26 (newV4 format, parse roundtrip, Display toString, Err throws) |
-| `Option<i32/f64/bool/String>` returns → value-or-null | ✅ GREEN — e2e both legs (mock reads the nullable cell natively), 3-browser worker playwright, both devices |
-| Option params + `&SomeClass` params + re-export following (`semver` matches, `regex` throwing ctor as DIRECT imports) | ✅ GREEN — e2e both legs, 3-browser worker playwright, Android 32/32 + iOS 32/32 — via the explicit cargo: scheme, so npm names never collide |
+| `Option<i32/f64/bool/String>` returns → value-or-null | ✅ GREEN — conformance kit on every leg, 3-browser worker playwright, both devices |
+| Option params + `&SomeClass` params + re-export following (`semver` matches, `regex` throwing ctor as DIRECT imports) | ✅ GREEN — conformance kit on every leg, 3-browser worker playwright, Android 32/32 + iOS 32/32 — via the explicit cargo: scheme, so npm names never collide |
 | Rust crate → real mobile archives (android/ios arm64) | ✅ compiles; iOS and Android linked+run |
 
 ### Wire contract notes (native vs wasm)

@@ -48,6 +48,8 @@ export default {
 };
 ```
 
+A native Node.js addon links the build of its platform: `crossbind build -p darwin`, `-p linux` or `-p win32` takes `@crossbind/port-jpegturbo-darwin`, `-linux` or `-win32`. Install it and import its `crossbind.config.js` the same way.
+
 ## Usage
 crossbind binds your C++ headers to JavaScript, so the usual pattern is a small wrapper around the library. This one encodes RGBA pixels to a JPEG in memory with a chosen quality and chroma subsampling. Put it in your project's native folder (`src/native/` by default):
 
@@ -167,7 +169,7 @@ Each one runs in your browser on [crossbind.dev/ports/jpegturbo](https://crossbi
 - [Make a JPEG smaller without re-encoding it](https://crossbind.dev/ports/jpegturbo/#04-transcode): `jpeg_read_coefficients` and `jpeg_write_coefficients` with optimised or progressive Huffman coding, byte for byte what `jpegtran -copy all` writes.
 - [Read and write EXIF and comments](https://crossbind.dev/ports/jpegturbo/#05-markers): `jpeg_save_markers` and `jpeg_write_marker`.
 
-Setup and differences per platform: [WebAssembly](https://crossbind.dev/ports/jpegturbo/wasm/) · [Android](https://crossbind.dev/ports/jpegturbo/android/) · [iOS](https://crossbind.dev/ports/jpegturbo/ios/) · [WASI](https://crossbind.dev/ports/jpegturbo/wasi/), which also has a command-line program built with `crossbind build -p wasi`.
+Setup and differences per platform: [WebAssembly](https://crossbind.dev/ports/jpegturbo/wasm/) · [Android](https://crossbind.dev/ports/jpegturbo/android/) · [iOS](https://crossbind.dev/ports/jpegturbo/ios/) · [macOS](https://crossbind.dev/ports/jpegturbo/darwin/) · [Linux](https://crossbind.dev/ports/jpegturbo/linux/) · [Windows](https://crossbind.dev/ports/jpegturbo/win32/) · [WASI](https://crossbind.dev/ports/jpegturbo/wasi/), which also has a command-line program built with `crossbind build -p wasi`.
 
 ## What this build includes
 - libjpeg-turbo 3.2.0's libjpeg API (`jpeglib.h`): a static `libjpeg.a` for WebAssembly, WASI and iOS, and a shared `libjpeg.so` for Android.
@@ -175,7 +177,7 @@ Setup and differences per platform: [WebAssembly](https://crossbind.dev/ports/jp
 - The 12-bit and lossless entry points (`jpeg12_*`, `jpeg16_*`, `jpeg_enable_lossless`) and the ICC profile helpers (`jpeg_read_icc_profile`, `jpeg_write_icc_profile`) are exported too; nothing here exercises them yet.
 - No TurboJPEG API: the recipe builds with `WITH_TURBOJPEG=OFF`, so there is no `turbojpeg.h` and no `tj3*` function.
 - No lossless transforms: `transupp` (`jtransform_*`: `jpegtran`'s rotate, flip and crop) is not part of `libjpeg.a`. For those, `@crossbind/port-jpegturbo-bin-wasi` runs the upstream `jpegtran` as a WASI command.
-- SIMD is compiled into the iOS and Android builds (`WITH_SIMD` in their `jconfig.h`) but not into the WebAssembly and WASI builds, which run libjpeg-turbo's portable C code.
+- SIMD is compiled into the iOS, Android, Linux, Windows and Apple silicon macOS builds (`WITH_SIMD` in their `jconfig.h`) but not into the WebAssembly and WASI builds, which run libjpeg-turbo's portable C code, nor into the Intel macOS build: it is built with Apple's tools alone, which have no assembler for libjpeg-turbo's x86 SIMD code.
 
 ## Supported platforms
 This is the main package; the precompiled binaries are shipped per platform:
@@ -185,6 +187,9 @@ This is the main package; the precompiled binaries are shipped per platform:
 | WebAssembly | [`@crossbind/port-jpegturbo-wasm`](https://www.npmjs.com/package/@crossbind/port-jpegturbo-wasm) | `wasm32` — single-threaded & multi-threaded |
 | Android | [`@crossbind/port-jpegturbo-android`](https://www.npmjs.com/package/@crossbind/port-jpegturbo-android) | `arm64-v8a` (64-bit ARM), `x86_64` (emulator) |
 | iOS | [`@crossbind/port-jpegturbo-ios`](https://www.npmjs.com/package/@crossbind/port-jpegturbo-ios) | device (`arm64`), simulator (`arm64`) |
+| macOS | [`@crossbind/port-jpegturbo-darwin`](https://www.npmjs.com/package/@crossbind/port-jpegturbo-darwin) | `arm64` (Apple silicon), `x64` (Intel) — native Node.js addons |
+| Linux | [`@crossbind/port-jpegturbo-linux`](https://www.npmjs.com/package/@crossbind/port-jpegturbo-linux) | `x64`, `arm64` — glibc 2.28 or later, native Node.js addons |
+| Windows | [`@crossbind/port-jpegturbo-win32`](https://www.npmjs.com/package/@crossbind/port-jpegturbo-win32) | `x64`, `arm64` — Windows 10 or later, native Node.js addons |
 | WASI library | [`@crossbind/port-jpegturbo-wasi`](https://www.npmjs.com/package/@crossbind/port-jpegturbo-wasi) | `wasm32-wasip3` — single-threaded |
 | WASI command | [`@crossbind/port-jpegturbo-bin-wasi`](https://www.npmjs.com/package/@crossbind/port-jpegturbo-bin-wasi) | the upstream `cjpeg`, `djpeg` and `jpegtran` as `cjpeg-wasi`, `djpeg-wasi` and `jpegtran-wasi` commands (wasmtime 47+) |
 

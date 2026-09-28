@@ -7,6 +7,8 @@
 #include "native.h"
 %}
 
+%feature("embind:constant") Native;
+
 %feature("shared_ptr");
 %feature("polymorphic_shared_ptr");
 
