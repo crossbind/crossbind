@@ -45,7 +45,7 @@ if (!PRIMARY_ONLY && !MIRROR) {
     process.exit(1);
 }
 
-const IMAGES = ['rust-sysroot', 'base', 'web', 'android'];
+const IMAGES = ['rust-sysroot', 'base', 'web', 'android', 'linux', 'windows'];
 let failed = 0;
 const ok = (m) => console.log(`  ok    ${m}`);
 const bad = (m, d = '') => {

@@ -38,6 +38,10 @@ const IMAGES = [
     { name: 'web', ref: refFor('web', 'crossbind/web:dev'), arch: 'arm64' },
     { name: 'web', ref: refFor('web', 'crossbind/web:dev-amd64'), arch: 'amd64' },
     { name: 'android', ref: refFor('android', 'crossbind/android:dev'), arch: 'amd64' },
+    { name: 'linux', ref: refFor('linux', 'crossbind/linux:dev'), arch: 'arm64' },
+    { name: 'linux', ref: refFor('linux', 'crossbind/linux:dev-amd64'), arch: 'amd64' },
+    { name: 'windows', ref: refFor('windows', 'crossbind/windows:dev'), arch: 'arm64' },
+    { name: 'windows', ref: refFor('windows', 'crossbind/windows:dev-amd64'), arch: 'amd64' },
 ];
 
 // A container that cannot write these is a container that cannot build: crossbind runs docker with
@@ -109,7 +113,54 @@ done
 echo "android C++ and Rust targets compile"
 `;
 
-const SCRIPTS = { base: BASE_SCRIPT, web: WEB_SCRIPT, android: ANDROID_SCRIPT };
+// An addon the image builds must load on any glibc from 2.28 on and bring its own C++ runtime.
+const LINUX_SCRIPT = `${BASE_SCRIPT}
+nasm -v
+test -f /opt/licenses/linux-sysroot/libcxx-LICENSE.TXT
+cd /tmp && printf '#include <string>\nextern "C" int crossbind_probe(){return static_cast<int>(std::string("ok").size());}\n' > addon.cpp
+for triple in x86_64-linux-gnu aarch64-linux-gnu; do
+  test -f "/opt/crossbind/linux/\${triple}.cmake"
+  "/opt/crossbind/linux/bin/\${triple}-clang++" -shared -fPIC addon.cpp -o "\${triple}.so"
+  test -z "$(/usr/lib/llvm-19/bin/llvm-readelf --dynamic "\${triple}.so" | grep -e 'libstdc++' -e 'libc++')"
+  newest=$(/usr/lib/llvm-19/bin/llvm-objdump -T "\${triple}.so" | grep -o 'GLIBC_[0-9.]*' | sort -uV | tail -1)
+  test "$(printf '%s\\nGLIBC_2.28\\n' "\${newest}" | sort -V | tail -1)" = GLIBC_2.28
+  echo "\${triple} addon: no shared C++ runtime, newest symbol \${newest}"
+done
+printf '#include <iostream>\nint main(){std::cout << "ok" << std::endl;return 0;}\n' > main.cpp
+"/opt/crossbind/linux/bin/$(uname -m)-linux-gnu-clang++" main.cpp -o main
+./main | grep -qx ok
+echo "$(uname -m) program compile+run ok"
+install -m 0644 addon.cpp installed.cpp
+test -f installed.cpp
+echo "install shim ok"
+`;
+
+// An addon the image builds may import only what every Windows 10 carries.
+const WINDOWS_SCRIPT = `${BASE_SCRIPT}
+nasm -v
+test -f /opt/licenses/llvm-mingw/COPYING.MinGW-w64-runtime.txt
+cd /tmp && printf '#include <string>\nextern "C" __declspec(dllexport) int crossbind_probe(){return static_cast<int>(std::string("ok").size());}\n' > addon.cpp
+for triple in x86_64-w64-mingw32 aarch64-w64-mingw32; do
+  test -f "/opt/crossbind/windows/\${triple}.cmake"
+  test -x "/opt/llvm-mingw/bin/\${triple}-windres"
+  "/opt/llvm-mingw/bin/\${triple}-clang++" -shared -static addon.cpp -o "\${triple}.dll"
+  imports=$(/opt/llvm-mingw/bin/llvm-objdump -p "\${triple}.dll" | sed -n 's/^ *DLL Name: //p')
+  test -n "\${imports}"
+  test -z "$(echo "\${imports}" | grep -v -i -e '^api-ms-win-crt-' -e '^kernel32\\.dll$')"
+  echo "\${triple} addon imports only the UCRT and KERNEL32"
+done
+install -m 0644 addon.cpp installed.cpp
+test -f installed.cpp
+echo "install shim ok"
+`;
+
+const SCRIPTS = {
+    base: BASE_SCRIPT,
+    web: WEB_SCRIPT,
+    android: ANDROID_SCRIPT,
+    linux: LINUX_SCRIPT,
+    windows: WINDOWS_SCRIPT,
+};
 
 function inspect(ref, format) {
     return execFileSync('docker', ['image', 'inspect', ref, '--format', format], { encoding: 'utf8' }).trim();

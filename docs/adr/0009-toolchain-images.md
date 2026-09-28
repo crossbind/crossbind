@@ -23,11 +23,14 @@ libraries are only consumable by the exact compiler that produced them.
 Publish a family of images we own, and make the pinned toolchain inside them the
 only one a build uses.
 
-- `base` (Debian + Node + Rust + swig) with `web` and `android` built `FROM` it.
-  Node, Rust and Emscripten are copied out of digest-pinned upstream images
-  rather than installed, so upstream keeps its build recipes and we keep the
-  runtime layout: PATH, Node version, `CARGO_HOME`, cache permissions.
-- `android` is declared `linux/amd64` only. `web` and `base` are multi-arch.
+- `base` (Debian + Node + Rust + swig) with `web`, `android`, `linux` and
+  `windows` built `FROM` it. Node, Rust and Emscripten are copied out of
+  digest-pinned upstream images rather than installed, so upstream keeps its
+  build recipes and we keep the runtime layout: PATH, Node version,
+  `CARGO_HOME`, cache permissions. `linux` and `windows` carry the toolchains of
+  native Node.js addons (ADR-0011).
+- `android` is declared `linux/amd64` only. `web`, `base`, `linux` and
+  `windows` are multi-arch.
 - One exact-version stable Rust toolchain, everywhere. The MT sysroot is built
   once in a disposable builder stage; `RUSTC_BOOTSTRAP` and `-Zbuild-std` exist
   only there and never reach a published image.

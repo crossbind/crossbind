@@ -22,7 +22,7 @@ const STAGING = arg('--staging');
 const PRIMARY = arg('--primary') ?? 'ghcr.io/crossbind';
 const MIRROR = arg('--mirror');
 const DRY = process.argv.includes('--dry-run');
-const IMAGES = (arg('--images') ?? 'rust-sysroot,base,web,android').split(',');
+const IMAGES = (arg('--images') ?? 'rust-sysroot,base,web,android,linux,windows').split(',');
 // Resolving and tagging both go through oras, so promotion needs exactly one tool and the same
 // code path can be driven against disposable registries. CROSSBIND_ORAS lets the local gate point
 // at a containerised oras without installing anything; CI leaves it as the binary on PATH.

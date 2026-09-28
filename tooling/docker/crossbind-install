@@ -1,0 +1,50 @@
+#!/usr/bin/python3
+# Installed as /usr/local/bin/install, first on the PATH and so the one configure picks. Docker
+# Desktop's macOS file sharing now and then refuses the chmod that coreutils' install issues on a
+# file it has just written, which fails `make install` of a large archive. This copies first and
+# changes the mode afterwards; any form it does not reproduce goes to the real install.
+import os
+import shutil
+import sys
+
+
+def real():
+    os.execv('/usr/bin/install', ['install', *sys.argv[1:]])
+
+
+paths, mode, index = [], 0o755, 1
+try:
+    while index < len(sys.argv):
+        arg = sys.argv[index]
+        if arg in ('-c', '-C', '-p', '--compare', '--preserve-timestamps'):
+            pass
+        elif arg == '-m':
+            index += 1
+            mode = int(sys.argv[index], 8)
+        elif arg.startswith('-m'):
+            mode = int(arg[2:], 8)
+        elif arg.startswith('--mode='):
+            mode = int(arg[len('--mode='):], 8)
+        elif arg == '--':
+            paths += sys.argv[index + 1:]
+            break
+        elif arg.startswith('-'):
+            real()
+        else:
+            paths.append(arg)
+        index += 1
+except (IndexError, ValueError):
+    real()
+
+if len(paths) < 2:
+    real()
+*sources, destination = paths
+into = os.path.isdir(destination)
+if len(sources) > 1 and not into:
+    real()
+for source in sources:
+    target = os.path.join(destination, os.path.basename(source)) if into else destination
+    if os.path.lexists(target):
+        os.remove(target)
+    shutil.copyfile(source, target)
+    os.chmod(target, mode)

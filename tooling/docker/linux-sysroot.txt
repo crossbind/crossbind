@@ -1,0 +1,16 @@
+# The Debian 10 "buster" packages that make the glibc 2.28 sysroots of linux.Dockerfile:
+# <debian architecture> <path under the archive> <SHA-256 from the signed Packages index>
+amd64 pool/main/g/glibc/libc6_2.28-10+deb10u1_amd64.deb 0ee0f0bfcd7b59ffda1dbc76ef58fa79512913204f2a336206467bfbf45bc69f
+amd64 pool/main/g/glibc/libc6-dev_2.28-10+deb10u1_amd64.deb 76b8413920d91a9a4289f99839933d0d30095e0ec12b05bb4f1a7f27e5ef4a55
+amd64 pool/main/l/linux/linux-libc-dev_4.19.249-2_amd64.deb c512f30f5abe413464b79ed23b54958df8cc104446c3ae93d83d28e23728a571
+amd64 pool/main/g/gcc-8/gcc-8-base_8.3.0-6_amd64.deb 1b00f7cef567645a7e695caf6c1ad395577e7d2e903820097ebd3496ddcfcc84
+amd64 pool/main/g/gcc-8/libgcc-8-dev_8.3.0-6_amd64.deb a52d5216858c7185bc245e52ad95a6ad515d087bc25e8556df06c5626b41a837
+amd64 pool/main/g/gcc-8/libgcc1_8.3.0-6_amd64.deb b1bb7611f3372732889d502cb1d09fe572b5fbb5288a4a8b1ed0363fecc3555a
+amd64 pool/main/g/gcc-8/libatomic1_8.3.0-6_amd64.deb f3aed76145c49f0b6be3eb6840abc4245eebf24448b55c8ed0736fc1d45e5f8a
+arm64 pool/main/g/glibc/libc6_2.28-10+deb10u1_arm64.deb 09f5e92b1527cdc06b757499bb4d97ddf1b064fc3d163f978e5de18b131cd330
+arm64 pool/main/g/glibc/libc6-dev_2.28-10+deb10u1_arm64.deb 04097716018288cef8b82339faa1a9847838b89f39574b5b169f4657da8bf269
+arm64 pool/main/l/linux/linux-libc-dev_4.19.249-2_arm64.deb e9a92d71d62655f673433c345a03fecaa4292f93c6572b28fd3d16dcfd1cc7f6
+arm64 pool/main/g/gcc-8/gcc-8-base_8.3.0-6_arm64.deb 41456860e929beec8ead5282cf6891db8fe213af86d46967e77f9b13b1c44bf2
+arm64 pool/main/g/gcc-8/libgcc-8-dev_8.3.0-6_arm64.deb d8385c0106d4ac559ada75b162aecb9d507a67da3ac8742eb32258f501d07c7e
+arm64 pool/main/g/gcc-8/libgcc1_8.3.0-6_arm64.deb 2851ac25d12958586c035de5ec4f2fc17272dec48f776dd0dd24c62f62674fd9
+arm64 pool/main/g/gcc-8/libatomic1_8.3.0-6_arm64.deb 1cef699ebc0bb80b1d1c7a27218bef0ec9d379eceddfacdf887fb25db73ed9e5

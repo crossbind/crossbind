@@ -10,7 +10,7 @@ on:
     workflow_call:
         inputs:
             image:
-                description: Image name under the registry namespace (base, web, android, rust-sysroot)
+                description: Image name under the registry namespace (base, web, android, linux, windows, rust-sysroot)
                 required: true
                 type: string
             dockerfile:
