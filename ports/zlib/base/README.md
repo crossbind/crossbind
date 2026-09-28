@@ -48,6 +48,8 @@ export default {
 };
 ```
 
+A native Node.js addon links the build of its platform: `crossbind build -p darwin`, `-p linux` or `-p win32` takes `@crossbind/port-zlib-darwin`, `-linux` or `-win32`. Install it and import its `crossbind.config.js` the same way.
+
 ## Usage
 crossbind binds your C++ headers to JavaScript, so the usual pattern is a small wrapper around the library. This one compresses and decompresses in one call. Put it in your project's native folder (`src/native/` by default):
 
@@ -121,7 +123,7 @@ Each one runs in your browser on [crossbind.dev/ports/zlib](https://crossbind.de
 - [Compress small messages with a preset dictionary](https://crossbind.dev/ports/zlib/#04-dictionary): raw deflate with `deflateSetDictionary` and `inflateSetDictionary`; a 59-byte message goes from 59 B to 11 B.
 - [Checksum data in pieces](https://crossbind.dev/ports/zlib/#05-checksum): `crc32` and `adler32` as running values, and `crc32_combine` and `adler32_combine` to join pieces checksummed separately.
 
-Setup and differences per platform: [WebAssembly](https://crossbind.dev/ports/zlib/wasm/) · [Android](https://crossbind.dev/ports/zlib/android/) · [iOS](https://crossbind.dev/ports/zlib/ios/) · [WASI](https://crossbind.dev/ports/zlib/wasi/), which also has a gzip command-line program built with `crossbind build -p wasi`.
+Setup and differences per platform: [WebAssembly](https://crossbind.dev/ports/zlib/wasm/) · [Android](https://crossbind.dev/ports/zlib/android/) · [iOS](https://crossbind.dev/ports/zlib/ios/) · [macOS](https://crossbind.dev/ports/zlib/darwin/) · [Linux](https://crossbind.dev/ports/zlib/linux/) · [Windows](https://crossbind.dev/ports/zlib/win32/) · [WASI](https://crossbind.dev/ports/zlib/wasi/), which also has a gzip command-line program built with `crossbind build -p wasi`.
 
 ## What this build includes
 - zlib 1.3.2 from the release tarball, pinned by SHA-256, built with zlib's own CMake options at their defaults apart from `ZLIB_BUILD_TESTING=OFF` and the library type: static on every platform. On Android the archive is position-independent and goes into the libraries that use it, because the app process already holds the system's own `libz.so`, which would shadow a shared build. Its symbols are hidden there, so every library that links it keeps its copy private and calls its own.
@@ -137,6 +139,9 @@ This is the main package; the precompiled binaries are shipped per platform:
 | WebAssembly | [`@crossbind/port-zlib-wasm`](https://www.npmjs.com/package/@crossbind/port-zlib-wasm) | `wasm32` — single-threaded & multi-threaded |
 | Android | [`@crossbind/port-zlib-android`](https://www.npmjs.com/package/@crossbind/port-zlib-android) | `arm64-v8a` (64-bit ARM), `x86_64` (emulator) |
 | iOS | [`@crossbind/port-zlib-ios`](https://www.npmjs.com/package/@crossbind/port-zlib-ios) | device (`arm64`), simulator (`arm64`) |
+| macOS | [`@crossbind/port-zlib-darwin`](https://www.npmjs.com/package/@crossbind/port-zlib-darwin) | `arm64` (Apple silicon), `x64` (Intel) — native Node.js addons |
+| Linux | [`@crossbind/port-zlib-linux`](https://www.npmjs.com/package/@crossbind/port-zlib-linux) | `x64`, `arm64` — glibc 2.28 or later, native Node.js addons |
+| Windows | [`@crossbind/port-zlib-win32`](https://www.npmjs.com/package/@crossbind/port-zlib-win32) | `x64`, `arm64` — Windows 10 or later, native Node.js addons |
 | WASI library | [`@crossbind/port-zlib-wasi`](https://www.npmjs.com/package/@crossbind/port-zlib-wasi) | `wasm32-wasip3` — single-threaded |
 
 ## License

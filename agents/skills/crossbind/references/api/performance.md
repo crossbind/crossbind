@@ -16,6 +16,7 @@ The rule: **if your build runs and your app works, the defaults are fine**. Only
 | `-O0` | (debug) | No optimization | ✅ Already debug — fine |
 | `-msimd128` | wasm | SIMD128 instruction set | 🔒 Already optimal |
 | `-sMEMORY64=1` | wasm64 only | 64-bit memory | 🔒 Set by target.arch, not flag override |
+| `-sSTACK_SIZE=1MB` (+ `-sSTACK_OVERFLOW_CHECK=1` in debug) | links with Rust | Stack for Rust code; a C++ build keeps Emscripten's 64KB | ✅ A size in the config wins (read § `STACK_SIZE`) |
 | `-pthread` + `-sPTHREAD_POOL_SIZE=Math.min(navigator.hardwareConcurrency \|\| 1, 2)` | mt only | Thread pool capped at 2 workers (1 if `hardwareConcurrency` is unavailable) | ✅ `PTHREAD_POOL_SIZE` is tunable (see below) |
 | `-sPTHREAD_POOL_SIZE_STRICT=2` | mt only | Abort if more pthreads requested than pool (no dynamic growth) | ⚠️ Drop to `1` (warn + grow) or `0` (silent grow) only if your code spawns unbounded threads |
 | `-lembind` | always | Embind binding lib | 🔒 Required |
@@ -75,7 +76,7 @@ If you allocate large objects on startup (loading a model, opening a large geo d
 // crossbind.config.js
 targetSpecs: [{
     platform: 'wasm',
-    specs: { emccFlags: ['-sINITIAL_MEMORY=64MB'] },
+    specs: { binary: { emccFlags: ['-sINITIAL_MEMORY=64MB'] } },
 }]
 ```
 
@@ -109,14 +110,14 @@ Override scenarios:
   ```js
   targetSpecs: [{
       platform: 'wasm', runtime: 'mt',
-      specs: { emccFlags: ['-sPTHREAD_POOL_SIZE=8', '-sPTHREAD_POOL_SIZE_STRICT=1'] },
+      specs: { binary: { emccFlags: ['-sPTHREAD_POOL_SIZE=8', '-sPTHREAD_POOL_SIZE_STRICT=1'] } },
   }]
   ```
 - **Want even less memory pressure** — pin to one worker:
   ```js
   targetSpecs: [{
       platform: 'wasm', runtime: 'mt',
-      specs: { emccFlags: ['-sPTHREAD_POOL_SIZE=1'] },
+      specs: { binary: { emccFlags: ['-sPTHREAD_POOL_SIZE=1'] } },
   }]
   ```
 
@@ -127,27 +128,28 @@ Past `hardwareConcurrency` real cores, context-switching costs dominate anyway.
 If you see `Cannot enlarge function table` at runtime, bump this:
 
 ```js
-targetSpecs: [{ specs: { emccFlags: ['-sRESERVED_FUNCTION_POINTERS=1024'] } }]
+targetSpecs: [{ specs: { binary: { emccFlags: ['-sRESERVED_FUNCTION_POINTERS=1024'] } } }]
 ```
 
 Most apps never hit this. Function pointers are used by virtual methods, std::function captures, and JS callbacks into C++.
 
-### Android API level
+### `STACK_SIZE` (default: 64KB; 1MB when the link includes Rust)
 
-Default `android-33` (Android 13). Lower if you support older devices:
+A C++ build keeps Emscripten's 64KB stack; only a link that includes Rust gets 1MB (read [rust.md](rust.md)). The stack cannot grow and has no guard page: in a release build an overflow overwrites static data without an error, and later, unrelated calls fail with `unreachable` or `memory access out of bounds`. Large local arrays and deep recursion need a bigger stack:
 
 ```js
-targetSpecs: [{
-    platform: 'android',
-    specs: { cmake: ['-DANDROID_PLATFORM=android-26'] },  // Android 8.0
-}]
+targetSpecs: [{ platform: 'wasm', specs: { binary: { emccFlags: ['-sSTACK_SIZE=1MB'] } } }]
 ```
 
-Don't go below 26 unless you absolutely have to — older NDK lacks key APIs (e.g. `aligned_alloc`, modern `<filesystem>`).
+To find the function that overflows, add `-sSTACK_OVERFLOW_CHECK=2` to the same list: every stack pointer change is checked, and the call aborts with `stack overflow (Attempt to set SP to …)`.
+
+### Android API level
+
+Fixed at `android-33` (Android 13) for the libraries crossbind builds itself: crossbind passes `-DANDROID_PLATFORM=android-33` after the project's own cmake flags, so a recipe's `getBuildParams` cannot change it. In a React Native app, the plugin's Gradle build compiles the app's own native code at the app's `minSdkVersion` (24 when the app sets none).
 
 ### iOS deployment target
 
-Fixed at `15.1`: Xcode 27 rejects deployment targets below 15.0, and React Native's own floor is 15.1. crossbind passes the value after the project's own cmake flags (as `CMAKE_OSX_DEPLOYMENT_TARGET` and as the bundled toolchain's `DEPLOYMENT_TARGET`), so a `specs.cmake` entry cannot change it.
+Fixed at `15.1`: Xcode 27 rejects deployment targets below 15.0, and React Native's own floor is 15.1. crossbind passes the value after the project's own cmake flags (as `CMAKE_OSX_DEPLOYMENT_TARGET` and as the bundled toolchain's `DEPLOYMENT_TARGET`), so a recipe's `getBuildParams` cannot change it.
 
 ### `JSPI` (experimental, Chrome-only)
 
@@ -156,7 +158,7 @@ Lets C++ code synchronously await JS promises. Use only when you have a specific
 ```js
 targetSpecs: [{
     platform: 'wasm',
-    specs: { emccFlags: ['-sJSPI'] },
+    specs: { binary: { emccFlags: ['-sJSPI'] } },
 }]
 ```
 

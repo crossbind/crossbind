@@ -34,6 +34,12 @@ describe('imageRoleFor', () => {
         expect(mod.imageRoleFor({ platform: 'wasi' })).toBe('web');
         expect(mod.imageRoleFor(null)).toBe('web');
     });
+
+    test('sends linux and Windows Node-API addons to images of their own', async () => {
+        const { mod } = await importFresh();
+        expect(mod.imageRoleFor({ platform: 'linux' })).toBe('linux');
+        expect(mod.imageRoleFor({ platform: 'win32' })).toBe('windows');
+    });
 });
 
 describe('getDockerImage', () => {
@@ -41,6 +47,8 @@ describe('getDockerImage', () => {
         const { mod } = await importFresh();
         expect(mod.getDockerImage()).toMatch(/^ghcr\.io\/crossbind\/web@sha256:[0-9a-f]{64}$/);
         expect(mod.getDockerImage('android')).toMatch(/^ghcr\.io\/crossbind\/android@sha256:[0-9a-f]{64}$/);
+        expect(mod.getDockerImage('linux')).toMatch(/^ghcr\.io\/crossbind\/linux@sha256:[0-9a-f]{64}$/);
+        expect(mod.getDockerImage('windows')).toMatch(/^ghcr\.io\/crossbind\/windows@sha256:[0-9a-f]{64}$/);
     });
 
     test('returns a distinct digest-pinned amd64 leaf for linux/amd64', async () => {
@@ -73,6 +81,16 @@ describe('image overrides', () => {
         vi.stubEnv('CROSSBIND_IMAGE_WEB', 'crossbind/web:dev');
 
         expect(mod.getDockerImage('web')).toBe('crossbind/web:dev');
+    });
+
+    test('the addon images take overrides of their own', async () => {
+        const { mod } = await importFresh();
+        vi.stubEnv('CROSSBIND_IMAGE_LINUX', 'crossbind/linux:dev');
+        vi.stubEnv('CROSSBIND_IMAGE_WINDOWS', 'crossbind/windows:dev');
+
+        expect(mod.getDockerImage('linux')).toBe('crossbind/linux:dev');
+        expect(mod.getDockerImage('windows')).toBe('crossbind/windows:dev');
+        expect(mod.getDockerImage('web')).toMatch(/^ghcr\.io\/crossbind\/web@sha256:/);
     });
 
     test('a tag override says the reproducibility guarantee is gone', async () => {

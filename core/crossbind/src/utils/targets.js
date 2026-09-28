@@ -92,10 +92,66 @@ export const TARGETS = [
     {
         platform: 'ios', arch: 'iphonesimulator', runtime: 'mt', buildType: 'debug',
     },
+    {
+        platform: 'darwin', arch: 'arm64', runtime: 'mt', buildType: 'release', runtimeEnv: 'node',
+    },
+    {
+        platform: 'darwin', arch: 'arm64', runtime: 'mt', buildType: 'debug', runtimeEnv: 'node',
+    },
+    {
+        platform: 'darwin', arch: 'x64', runtime: 'mt', buildType: 'release', runtimeEnv: 'node',
+    },
+    {
+        platform: 'darwin', arch: 'x64', runtime: 'mt', buildType: 'debug', runtimeEnv: 'node',
+    },
+    {
+        platform: 'linux', arch: 'arm64', runtime: 'mt', buildType: 'release', runtimeEnv: 'node',
+    },
+    {
+        platform: 'linux', arch: 'arm64', runtime: 'mt', buildType: 'debug', runtimeEnv: 'node',
+    },
+    {
+        platform: 'linux', arch: 'x64', runtime: 'mt', buildType: 'release', runtimeEnv: 'node',
+    },
+    {
+        platform: 'linux', arch: 'x64', runtime: 'mt', buildType: 'debug', runtimeEnv: 'node',
+    },
+    {
+        platform: 'win32', arch: 'arm64', runtime: 'mt', buildType: 'release', runtimeEnv: 'node',
+    },
+    {
+        platform: 'win32', arch: 'arm64', runtime: 'mt', buildType: 'debug', runtimeEnv: 'node',
+    },
+    {
+        platform: 'win32', arch: 'x64', runtime: 'mt', buildType: 'release', runtimeEnv: 'node',
+    },
+    {
+        platform: 'win32', arch: 'x64', runtime: 'mt', buildType: 'debug', runtimeEnv: 'node',
+    },
 ];
+
+// Built only when named with -p: a plain `crossbind build` keeps producing what it did before
+// native Node.js addons existed.
+export const OPT_IN_PLATFORMS = ['darwin', 'linux', 'win32'];
+
+// Built on the host itself: Apple's linker and SDKs exist in no toolchain image.
+export const HOST_BUILT_PLATFORMS = ['ios', 'darwin'];
 
 export function targetPathOf(target) {
     return `${target.platform}-${target.arch}-${target.runtime}-${target.buildType}`;
+}
+
+// Every platform/arch addon of one build type sits next to a single loader, which fills in
+// {platform} and {arch} from the running process. The loader is CommonJS whatever the package
+// "type" says, since it needs __dirname and process.dlopen.
+export function nodeAddonNamesOf(target, projectName) {
+    const suffix = target.buildType === 'debug' ? '.debug' : '';
+    const addonPattern = `${projectName}.{platform}-{arch}${suffix}.node`;
+    return {
+        addonPattern,
+        addonName: addonPattern.replace('{platform}', target.platform).replace('{arch}', target.arch),
+        jsName: `${projectName}.native${suffix}.cjs`,
+    };
 }
 
 export function filterTargetSpecs(targetSpecs, target) {

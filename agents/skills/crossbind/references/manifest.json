@@ -9,7 +9,7 @@
     {
       "source": "docs/playbooks/new-port.md",
       "output": "port.md",
-      "sha256": "7e3efc9e93dcd90100a556402e9c33ee02eafdc643bb7fb07f5362d1259badc7"
+      "sha256": "e16ff836ed92c35eb07c89e4a62d4475331cc852690a416a31f1948b3b0cd46d"
     },
     {
       "source": "docs/api/README.md",
@@ -19,22 +19,22 @@
     {
       "source": "docs/api/build-state.md",
       "output": "api/build-state.md",
-      "sha256": "0ffde5c98d43cfcef00cedec5f659e78b1d30d9dd5b2946f7b575b496f33c7e8"
+      "sha256": "1af6fb9becf2d33da3b2260ecbb01a5450fa6936b27740a99f2c39db50f7989d"
     },
     {
       "source": "docs/api/cpp-binding-rules.md",
       "output": "api/cpp-binding-rules.md",
-      "sha256": "f0a0adb6db4fabecc5d3f0eb99be42b7081fc7c1ebd42983c7a117f3c5b5f22a"
+      "sha256": "11671063476616630c110e56ce33da13e47e546e64bf4a49dbeac095a6ae26bb"
     },
     {
       "source": "docs/api/crossbind-build.md",
       "output": "api/crossbind-build.md",
-      "sha256": "40a259a5d6a47bfc27624a3b7ce18e47a5270274c3fe076dd4bc70fa63539e42"
+      "sha256": "620579a279a68898ffd2889a2d2ac26b95bca2f62f5774665c35599a063f78d0"
     },
     {
       "source": "docs/api/crossbind-config.md",
       "output": "api/crossbind-config.md",
-      "sha256": "34d6744bc171f1fdf4c547204f087c268f191bd6afcee990add6835911ed0903"
+      "sha256": "702bbb2860d884b875a770447f7280aed5f28cee8f07b87e76a5f63ea2870549"
     },
     {
       "source": "docs/api/filesystem.md",
@@ -44,7 +44,7 @@
     {
       "source": "docs/api/init.md",
       "output": "api/init.md",
-      "sha256": "6a42f25c7fcd2f44cbab84a6fbed311fc3e599d031244cfb9a10f6b8540647ac"
+      "sha256": "5b9b52c9821b19d876234ef8167f7c804e6c83facd2a369a558668a6c45ce36f"
     },
     {
       "source": "docs/api/lifecycle-and-types.md",
@@ -54,17 +54,17 @@
     {
       "source": "docs/api/overrides.md",
       "output": "api/overrides.md",
-      "sha256": "bda1dfce9b923f6e631a47add805cb8514836e0ab612fcb793f2bc9eeda216d6"
+      "sha256": "d3d6a553e2aba5842537dc95f03a90a8da066556fe80b2f483fb7a6f0fd25483"
     },
     {
       "source": "docs/api/performance.md",
       "output": "api/performance.md",
-      "sha256": "02f17934c1533f3aa7cd3e3d3b6536ee9fb7ef81a4a59e9eba1422d039ccc6d4"
+      "sha256": "30572177676f7b2ae2bd8ac8e936ca83075244647d1fbbb300de491466488b70"
     },
     {
       "source": "docs/api/rust.md",
       "output": "api/rust.md",
-      "sha256": "d2d18383de3fc02c232b05c060f0fcf39482373808e4638efb101cb53b375c34"
+      "sha256": "b9f2409b038a78dd79d4196d696d0d6912327573a0682c02868b0a0669ef7332"
     },
     {
       "source": "docs/api/swig-escape.md",
@@ -79,12 +79,12 @@
     {
       "source": "docs/api/troubleshooting.md",
       "output": "api/troubleshooting.md",
-      "sha256": "2c93f8b8e785d834d05e5115c378f0a1e74ad50fd48c8e1b02bc0e59bfecdfc3"
+      "sha256": "822bcdc16cb68c40dd7bb061df3971394b59b420f79a24eabba1d40068858209"
     },
     {
       "source": "docs/api/wasi.md",
       "output": "api/wasi.md",
-      "sha256": "9d686516b0d7aab95733b89b8f4fcb190676aaa61597c8708787f25ac5897d18"
+      "sha256": "bea02a240c1844aa9eb9b6aab52f36f56c747febd0719f2a0552ac9c9e0782e4"
     },
     {
       "source": "docs/playbooks/integration/README.md",
@@ -104,17 +104,17 @@
     {
       "source": "docs/playbooks/integration/nodejs.md",
       "output": "integration/nodejs.md",
-      "sha256": "f46c72dcec47c991c741b2449c728e989fd238b0675a03091a3a41ac0ecb3475"
+      "sha256": "08bf11224fb7af082cfcd81fed91060edf6b1231cc6a74b47db4596e2a4b2bd9"
     },
     {
       "source": "docs/playbooks/integration/react-native-cli.md",
       "output": "integration/react-native-cli.md",
-      "sha256": "628485bb03af2567b46a49c3e34658cecc96599938ba35f038881d3a3a340025"
+      "sha256": "4464f36dfda0e5bc218907124adf930a2fd1eb4227aeb06e9799e296e4552ae7"
     },
     {
       "source": "docs/playbooks/integration/react-native-expo.md",
       "output": "integration/react-native-expo.md",
-      "sha256": "e26a367ebfd27e390a5d72ee0a953033416792aa55c7c69694d8e186d549b667"
+      "sha256": "56e03481ae3e440615b42c18dbe766aef95db486d7c5ecf6c01add36410e4484"
     },
     {
       "source": "docs/playbooks/integration/rollup.md",
@@ -139,7 +139,7 @@
     {
       "source": "ports/catalog.json + ports/*/package.json",
       "output": "ports.json",
-      "sha256": "0ba04faa3c056c626008b0495c67e76e22862b16468862726863bf26783831d7"
+      "sha256": "9dac0f6f36788a9a34f5361845d7fe0244e469ecae1d8f0330b55e759f0a6d81"
     }
   ]
 }

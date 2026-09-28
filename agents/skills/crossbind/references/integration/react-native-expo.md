@@ -15,6 +15,7 @@ Add crossbind to an Expo RN app so:
 ## When to use
 
 - `expo` or `@expo/cli` in deps **and** `react-native` in deps.
+- React Native 0.81 or newer: the bindings keep the JS functions passed as C callbacks in JSI runtime data, which React Native added in 0.81.
 - `app.json` (or `app.config.{js,ts}`) at root.
 - Bare RN (no Expo) → `docs/playbooks/integration/react-native-cli.md`.
 
@@ -121,6 +122,7 @@ If the user also targets `expo-router` web build (RN Web), then they're effectiv
 ## Common pitfalls
 
 - **Trying to use Expo Go.** Won't work — crossbind needs native compilation. Run `expo prebuild` first.
+- **React Native older than 0.81.** The generated bridges stop compiling with errors about `facebook::jsi::UUID` or `getRuntimeData`; move to an Expo SDK that ships React Native 0.81 or newer.
 - **Forgetting to re-run `expo prebuild`** after adding native deps. Stale `ios/` / `android/` won't have the plugin's hooks.
 - **Mixing Expo's `expo/metro-config` with bare `@react-native/metro-config`.** Use `expo/metro-config` for Expo projects (see canonical above).
 - **`package.json` has both `expo` and stale RN-cli scripts.** Clean up: `expo run:android` replaces `react-native run-android` in Expo workflow.

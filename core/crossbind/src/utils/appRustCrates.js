@@ -36,6 +36,8 @@ export default function buildAppRustCrates(target, cacheDir, cargoDependencies =
             // perfectly live bridge.
             stale = !fs.existsSync(path.resolve(path.dirname(libRs), pathMod[1]));
         } else if (cargoDependencies && name.startsWith('crate_')) {
+            // One bridge per crate; a `crate_<crate>__<module>` left by an older build would
+            // register the crate's types a second time.
             stale = !Object.keys(cargoDependencies)
                 .some((c) => `crate_${c.replace(/[^a-zA-Z0-9_]/g, '_').toLowerCase()}` === name);
         }

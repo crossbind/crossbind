@@ -7,6 +7,7 @@ import state from '../state/index.js';
 import logger from '../utils/logger.js';
 import findFiles from '../utils/findFiles.js';
 import { getSourceFingerprint, isSourceFingerprintStale, staleTargetDirectories, writeSourceFingerprint } from '../utils/sourceFingerprint.js';
+import { getEmbindRsFingerprint, writeEmbindRsFingerprint } from '../utils/embindRsFingerprint.js';
 
 export default function buildLib(targetParams, options = {}) {
     let isChanged = false;
@@ -48,6 +49,7 @@ export default function buildLib(targetParams, options = {}) {
                 fs.copyFileSync(modulePath, `${state.config.paths.output}/prebuilt/${target.path}/swig/${fileName}`);
             });
             writeSourceFingerprint(libdir, sourceFingerprint);
+            if (isCargo) writeEmbindRsFingerprint(libdir, getEmbindRsFingerprint());
             isChanged = true;
         } else {
             // The skip is existence-only; without this warning a source edit is served stale silently.

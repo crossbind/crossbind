@@ -1,0 +1,32 @@
+{
+    "name": "@crossbind/port-jpegturbo-win32",
+    "version": "2.0.0-beta.62",
+    "nativeVersion": "3.2.0",
+    "description": "Windows build of the precompiled libjpeg-turbo (JPEG) library, built with crossbind. Use it together with the main package @crossbind/port-jpegturbo.",
+    "homepage": "https://github.com/crossbind/crossbind/tree/main/ports/jpegturbo#readme",
+    "repository": "https://github.com/crossbind/crossbind.git",
+    "type": "module",
+    "license": "(IJG AND BSD-3-Clause AND Zlib)",
+    "keywords": [
+        "jpegturbo",
+        "libjpeg-turbo",
+        "jpeg",
+        "image",
+        "crossbind",
+        "crossbind-port",
+        "windows",
+        "node",
+        "node-api"
+    ],
+    "scripts": {
+        "build": "crossbind build -p win32",
+        "clear": "rm -rf .crossbind dist",
+        "prepublishOnly": "crossbind build -p win32"
+    },
+    "dependencies": {
+        "@crossbind/port-jpegturbo": "workspace:^"
+    },
+    "devDependencies": {
+        "crossbind": "workspace:^"
+    }
+}

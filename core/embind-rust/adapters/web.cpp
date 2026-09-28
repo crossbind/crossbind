@@ -72,7 +72,55 @@ const void* crossbind_tid_optional_int() { static const char t = 0; return &t; }
 const void* crossbind_tid_optional_double() { static const char t = 0; return &t; }
 const void* crossbind_tid_optional_bool() { static const char t = 0; return &t; }
 const void* crossbind_tid_optional_string() { static const char t = 0; return &t; }
+const void* crossbind_tid_optional_int64() { static const char t = 0; return &t; }
+const void* crossbind_tid_optional_uint64() { static const char t = 0; return &t; }
+const void* crossbind_tid_bytes_arg() { static const char t = 0; return &t; }
+const void* crossbind_tid_f64s_arg() { static const char t = 0; return &t; }
+const void* crossbind_tid_bytes_opt_arg() { static const char t = 0; return &t; }
+const void* crossbind_tid_f64s_opt_arg() { static const char t = 0; return &t; }
 
+}
+
+// Typed array arguments: the view is copied once into wasm memory behind a { data, length } header
+// (the crate's ViewWire) and freed after the call. Another typed array or a plain array is converted
+// element by element first. An optional one passes null or undefined as a null pointer.
+EM_JS_DEPS(crossbind_typed_arg_deps, "$registerType,$throwBindingError,$embindRepr");
+EM_JS(void, crossbind_register_typed_arg, (const void* rawType, const char* name, int isDoubles, int isOptional), {
+    const typeName = UTF8ToString(name);
+    const View = isDoubles ? Float64Array : Uint8Array;
+    const isLent = isDoubles
+        ? (value) => value instanceof Float64Array
+        : (value) => value instanceof Uint8Array || value instanceof Uint8ClampedArray || value instanceof Int8Array;
+    registerType(rawType, {
+        name: typeName,
+        toWireType(destructors, value) {
+            if (isOptional && (value === null || value === undefined)) return 0;
+            if (!isLent(value)) {
+                if (!Array.isArray(value) && !(ArrayBuffer.isView(value) && !(value instanceof DataView))) {
+                    throwBindingError(`Cannot pass ${embindRepr(value)} as a ${typeName}`);
+                }
+                value = View.from(value);
+            }
+            const base = _malloc(8 + value.byteLength);
+            if (!base) throwBindingError(`Cannot copy ${value.byteLength} bytes into wasm memory`);
+            HEAPU32[base >> 2] = base + 8;
+            HEAPU32[(base >> 2) + 1] = value.length;
+            if (isDoubles) HEAPF64.set(value, (base + 8) >> 3);
+            else HEAPU8.set(value, base + 8);
+            if (destructors !== null) destructors.push(_free, base);
+            return base;
+        },
+        destructorFunction(ptr) {
+            _free(ptr);
+        },
+    });
+});
+
+EMSCRIPTEN_BINDINGS(crossbind_typed_args) {
+    crossbind_register_typed_arg(crossbind_tid_bytes_arg(), "Uint8Array", 0, 0);
+    crossbind_register_typed_arg(crossbind_tid_f64s_arg(), "Float64Array", 1, 0);
+    crossbind_register_typed_arg(crossbind_tid_bytes_opt_arg(), "Uint8Array | null", 0, 1);
+    crossbind_register_typed_arg(crossbind_tid_f64s_opt_arg(), "Float64Array | null", 1, 1);
 }
 
 // Optional wire on wasm is an EM_VAL handle (None = the reserved null constant from
@@ -116,6 +164,14 @@ int crossbind_emval_opt_bool(void* h, uint8_t* out) {
     emscripten::val v = emscripten::val::take_ownership((emscripten::EM_VAL)h);
     if (v.isUndefined() || v.isNull()) return 0;
     *out = v.as<bool>() ? 1 : 0;
+    return 1;
+}
+// A 64-bit optional reads through the registered bigint type, so it takes what a plain 64-bit
+// parameter takes: a BigInt or a safe-integer Number.
+int crossbind_emval_opt_bits64(void* h, uint64_t* out, int isSigned) {
+    emscripten::val v = emscripten::val::take_ownership((emscripten::EM_VAL)h);
+    if (v.isUndefined() || v.isNull()) return 0;
+    *out = isSigned ? (uint64_t)v.as<int64_t>() : v.as<uint64_t>();
     return 1;
 }
 int crossbind_emval_opt_string(void* h, uint8_t** out) {

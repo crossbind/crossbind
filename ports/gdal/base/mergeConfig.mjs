@@ -48,6 +48,10 @@ export default (newConfig = {}) => ({
                 env: { GDAL_CACHEMAX: '64' },
             },
         },
+        // GDAL reads XML through the libxml2 of the macOS SDK, as the iOS pod does.
+        { platform: 'darwin', specs: { binary: { addonFlags: ['-lxml2'] } } },
+        // Process memory queries on Windows.
+        { platform: 'win32', specs: { binary: { addonFlags: ['-lpsapi'] } } },
         ...(newConfig.targetSpecs || []),
     ],
 });

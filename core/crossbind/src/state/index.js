@@ -1,8 +1,7 @@
-import fs from 'node:fs';
-import path from 'node:path';
 import loadJson from '../utils/loadJson.js';
 import writeJson from '../utils/writeJson.js';
-import { TARGETS, targetPathOf } from '../utils/targets.js';
+import { TARGETS, targetPathOf, nodeAddonNamesOf } from '../utils/targets.js';
+import { findCargoModuleImportsIn, writeCargoMarker } from '../utils/cargoImport.js';
 import loadConfig from './loadConfig.js';
 
 const cacheDir = `${process.cwd()}/.crossbind`;
@@ -34,6 +33,8 @@ async function initProcessState() {
         DOCKER_REGISTRY_MIRROR: 'CROSSBIND_REGISTRY_MIRROR',
         DOCKER_IMAGE_WEB: 'CROSSBIND_IMAGE_WEB',
         DOCKER_IMAGE_ANDROID: 'CROSSBIND_IMAGE_ANDROID',
+        DOCKER_IMAGE_LINUX: 'CROSSBIND_IMAGE_LINUX',
+        DOCKER_IMAGE_WINDOWS: 'CROSSBIND_IMAGE_WINDOWS',
     }).forEach(([key, envKey]) => {
         if (state.config.system[key] && !process.env[envKey]) {
             process.env[envKey] = state.config.system[key];
@@ -54,21 +55,23 @@ async function initProcessState() {
             // A wasi build is a single command module - no JS glue, no preload.
             target.wasmName = `${state.config.general.name}-${target.path}.wasm`;
         }
+        if (target.runtimeEnv === 'node' && target.platform !== 'wasm') {
+            Object.assign(target, nodeAddonNamesOf(target, state.config.general.name));
+        }
     });
 
     setAllDependecyPaths();
 
-    // Bare cargo-crate import markers must exist BEFORE any bundler starts: metro resolves
-    // against its startup file map, so a marker first created mid-resolution is invisible
-    // to that very build.
+    // Cargo-crate import markers must exist BEFORE any bundler starts: metro resolves against
+    // its startup file map, so a marker first created mid-resolution is invisible to that very
+    // build. Bare crates come from the config, module imports from the app's own sources.
     const cargoDeps = state.config.cargoDependencies ?? {};
-    for (const name of Object.keys(cargoDeps)) {
-        const marker = `${state.config.paths.cache}/rust-crates/${name}.rs`;
-        if (!fs.existsSync(marker)) {
-            fs.mkdirSync(path.dirname(marker), { recursive: true });
-            fs.writeFileSync(marker, `// crossbind cargo crate import marker: ${name}\n`);
-        }
-    }
+    const crateNames = Object.keys(cargoDeps);
+    const moduleImports = crateNames.length && state.config.paths.project
+        ? findCargoModuleImportsIn(state.config.paths.project).filter((i) => Object.hasOwn(cargoDeps, i.crateName))
+        : [];
+    [...crateNames.map((crateName) => ({ crateName, modulePath: [] })), ...moduleImports]
+        .forEach((cargoImport) => writeCargoMarker(state.config.paths.cache, cargoImport));
 
     if (state.config.build?.setState) {
         state.config.build.setState(state);

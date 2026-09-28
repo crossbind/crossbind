@@ -104,9 +104,9 @@ export default {
             type: 'table',
             head: ['Key', 'Effect'],
             rows: [
-                ['`cmake`', 'extra `-D` flags for the cmake configure step'],
-                ['`emccFlags`', 'extra flags for the emscripten link (wasm only)'],
-                ['`wasiFlags`', 'extra flags for the wasi command link'],
+                ['`cmake.compileOptions`', 'extra compiler flags for the sources crossbind compiles itself'],
+                ['`binary.emccFlags`', 'extra flags for the emscripten link (wasm only)'],
+                ['`binary.wasiFlags`', 'extra flags for the wasi command link'],
                 ['`env`', 'environment variables for the build and the running module'],
                 ['`data`', 'data files to ship, as described above'],
                 ['`ignoreLibName`', 'drop a specific `.a` from the link line'],

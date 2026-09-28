@@ -24,6 +24,9 @@ export const TARGET_LABELS = {
     wasi: 'WASI library',
     android: 'Android',
     ios: 'iOS',
+    darwin: 'macOS',
+    linux: 'Linux',
+    win32: 'Windows',
     'bin-wasi': 'WASI commands',
 };
 

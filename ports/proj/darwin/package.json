@@ -1,0 +1,34 @@
+{
+    "name": "@crossbind/port-proj-darwin",
+    "version": "2.0.0-beta.62",
+    "nativeVersion": "9.9.0",
+    "description": "macOS build of the precompiled PROJ coordinate-transformation library, built with crossbind. Use it together with the main package @crossbind/port-proj.",
+    "homepage": "https://github.com/crossbind/crossbind/tree/main/ports/proj#readme",
+    "repository": "https://github.com/crossbind/crossbind.git",
+    "type": "module",
+    "license": "MIT",
+    "keywords": [
+        "proj",
+        "libproj",
+        "projection",
+        "gis",
+        "crossbind",
+        "crossbind-port",
+        "macos",
+        "node",
+        "node-api"
+    ],
+    "scripts": {
+        "build": "crossbind build -p darwin",
+        "clear": "rm -rf .crossbind dist",
+        "prepublishOnly": "crossbind build -p darwin"
+    },
+    "dependencies": {
+        "@crossbind/port-proj": "workspace:^",
+        "@crossbind/port-tiff-darwin": "workspace:^",
+        "@crossbind/port-sqlite3-darwin": "workspace:^"
+    },
+    "devDependencies": {
+        "crossbind": "workspace:^"
+    }
+}

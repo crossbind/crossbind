@@ -1,0 +1,32 @@
+{
+    "name": "@crossbind/port-iconv-linux",
+    "version": "2.0.0-beta.62",
+    "nativeVersion": "1.19",
+    "description": "Linux build of the precompiled libiconv character-encoding library, built with crossbind. Use it together with the main package @crossbind/port-iconv.",
+    "homepage": "https://github.com/crossbind/crossbind/tree/main/ports/iconv#readme",
+    "repository": "https://github.com/crossbind/crossbind.git",
+    "type": "module",
+    "license": "LGPL-2.1-or-later",
+    "keywords": [
+        "iconv",
+        "libiconv",
+        "charset",
+        "encoding",
+        "crossbind",
+        "crossbind-port",
+        "linux",
+        "node",
+        "node-api"
+    ],
+    "scripts": {
+        "build": "crossbind build -p linux",
+        "clear": "rm -rf .crossbind dist",
+        "prepublishOnly": "crossbind build -p linux"
+    },
+    "dependencies": {
+        "@crossbind/port-iconv": "workspace:^"
+    },
+    "devDependencies": {
+        "crossbind": "workspace:^"
+    }
+}

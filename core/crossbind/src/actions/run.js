@@ -6,6 +6,7 @@ import replaceBasePathForDockerUtil from '../utils/replaceBasePathForDocker.js';
 import { DOCKER_RUN_SECURITY_ARGS } from '../utils/dockerSecurity.js';
 import state from '../state/index.js';
 import { wasiCFlags, wasiCxxFlags, resolveWasiSdkPath, WASI_TARGET_TRIPLE } from '../utils/wasiToolchain.js';
+import { HOST_BUILT_PLATFORMS } from '../utils/targets.js';
 
 // Native builds can outrun Node's 1 MiB default pipe buffer; without a raised cap a successful build dies with ENOBUFS.
 const EXEC_MAX_BUFFER = 512 * 1024 * 1024;
@@ -64,6 +65,18 @@ const androidParamsX86_64 = [
 
 // Xcode 27 refuses deployment targets below 15.0; React Native's own floor is 15.1.
 const IOS_DEPLOYMENT_TARGET = '15.1';
+// Node 22, the oldest supported line, needs macOS 11.
+const DARWIN_DEPLOYMENT_TARGET = '11.0';
+const DARWIN_HOST_ARCH = process.arch === 'x64' ? 'x86_64' : 'arm64';
+const DARWIN_HOST_PACKAGE_PREFIXES = ['/opt/homebrew', '/usr/local', '/opt/local'];
+// Apple's own tools only, which find the SDK through xcrun. A GNU ar earlier on the PATH (Homebrew's
+// binutils) writes archives that Apple's linker rejects.
+const DARWIN_BUILD_PATH = '/usr/bin:/bin:/usr/sbin:/sbin';
+// The linux image's clang wrappers and CMake toolchain files, one per target triple.
+const LINUX_TOOLCHAIN = '/opt/crossbind/linux';
+// The windows image's llvm-mingw and its CMake toolchain files, one per target triple.
+const LLVM_MINGW = '/opt/llvm-mingw';
+const WINDOWS_TOOLCHAIN = '/opt/crossbind/windows';
 const IOS_HOST_FLAGS = `-arch arm64 -isysroot ${iosSdkPath} -fembed-bitcode`;
 const IOS_SIM_HOST_FLAGS = `-arch arm64 -isysroot ${iosSimSdkPath} -fembed-bitcode`;
 const IOS_IPHONE_PARAMS = ['-e', `CFLAGS="${IOS_HOST_FLAGS}"`, '-e', `CXXFLAGS="${IOS_HOST_FLAGS}"`, '-e', `LDFLAGS="${IOS_HOST_FLAGS}"`];
@@ -118,7 +131,7 @@ export default function run(program, params = [], platformPrefix = null, target 
 
     // wasi is host-run only with a locally configured wasi-sdk; otherwise docker carries it.
     const wasiHostSdk = target?.platform === 'wasi' ? resolveWasiSdkPath(state.config.system) : null;
-    if ((target?.platform !== 'ios' && !(target?.platform === 'wasi' && wasiHostSdk)) || program !== null) {
+    if ((!HOST_BUILT_PLATFORMS.includes(target?.platform) && !(target?.platform === 'wasi' && wasiHostSdk)) || program !== null) {
         // Google ships the linux NDK for x86_64 only, so the android index carries no arm64 leaf;
         // pull its amd64 leaf by ref or an arm64 host finds no matching manifest.
         pullDockerImage(imageRoleFor(target), target?.platform === 'android' ? 'linux/amd64' : undefined);
@@ -237,6 +250,71 @@ export default function run(program, params = [], platformPrefix = null, target 
                     }
                 }
                 break;
+            case 'linux': {
+                [dProgram, ...dParams] = params;
+                const triple = target.arch === 'x64' ? 'x86_64-linux-gnu' : 'aarch64-linux-gnu';
+                const tool = (name) => `${LINUX_TOOLCHAIN}/bin/${triple}-${name}`;
+                // The image's own .pc files describe its libraries, not the sysroot's. Every archive
+                // ends up inside a loadable .node module, so -fPIC holds even where a project turns
+                // position-independent code off for static builds, as GDAL does.
+                platformParams = [
+                    '-e', `CC=${tool('clang')}`, '-e', `CXX=${tool('clang++')}`,
+                    '-e', `AR=${tool('ar')}`, '-e', `RANLIB=${tool('ranlib')}`,
+                    '-e', `NM=${tool('nm')}`, '-e', `STRIP=${tool('strip')}`,
+                    '-e', 'PKG_CONFIG_LIBDIR=',
+                    '-e', 'CFLAGS=-fPIC', '-e', 'CXXFLAGS=-fPIC',
+                ];
+                if (dProgram === 'cmake' && dParams[0] !== '--build' && dParams[0] !== '--install') {
+                    dParams = [...dParams, `-DCMAKE_TOOLCHAIN_FILE=${LINUX_TOOLCHAIN}/${triple}.cmake`];
+                }
+                break;
+            }
+            case 'win32': {
+                [dProgram, ...dParams] = params;
+                const triple = target.arch === 'x64' ? 'x86_64-w64-mingw32' : 'aarch64-w64-mingw32';
+                const tool = (name) => `${LLVM_MINGW}/bin/${triple}-${name}`;
+                platformParams = [
+                    '-e', `CC=${tool('clang')}`, '-e', `CXX=${tool('clang++')}`,
+                    '-e', `AR=${tool('ar')}`, '-e', `RANLIB=${tool('ranlib')}`,
+                    '-e', `NM=${tool('nm')}`, '-e', `STRIP=${tool('strip')}`,
+                    '-e', `RC=${tool('windres')}`, '-e', `WINDRES=${tool('windres')}`,
+                    '-e', 'PKG_CONFIG_LIBDIR=',
+                ];
+                if (dProgram === 'cmake' && dParams[0] !== '--build' && dParams[0] !== '--install') {
+                    dParams = [...dParams, `-DCMAKE_TOOLCHAIN_FILE=${WINDOWS_TOOLCHAIN}/${triple}.cmake`];
+                }
+                break;
+            }
+            case 'darwin': {
+                [dProgram, ...dParams] = params;
+                const appleArch = target.arch === 'x64' ? 'x86_64' : 'arm64';
+                // Homebrew and MacPorts packages exist on the build machine only: an archive compiled
+                // against one fails to link, or to load, anywhere else. The SDK's libraries stay visible.
+                platformParams = ['-e', 'PKG_CONFIG_LIBDIR='];
+                if (dProgram === 'cmake') {
+                    if (dParams[0] !== '--build' && dParams[0] !== '--install') {
+                        dParams = [
+                            ...dParams,
+                            `-DCMAKE_OSX_ARCHITECTURES=${appleArch}`,
+                            `-DCMAKE_OSX_DEPLOYMENT_TARGET=${DARWIN_DEPLOYMENT_TARGET}`,
+                            // Every archive ends up inside a loadable .node module.
+                            '-DCMAKE_POSITION_INDEPENDENT_CODE=ON',
+                            `-DCMAKE_IGNORE_PREFIX_PATH=${DARWIN_HOST_PACKAGE_PREFIXES.join(';')}`,
+                            // The other architecture's probes cannot run here, so CMake has to know it cross-compiles.
+                            ...(appleArch === DARWIN_HOST_ARCH ? [] : ['-DCMAKE_SYSTEM_NAME=Darwin', `-DCMAKE_SYSTEM_PROCESSOR=${appleArch}`]),
+                        ];
+                    }
+                } else {
+                    const flags = `-arch ${appleArch} -mmacosx-version-min=${DARWIN_DEPLOYMENT_TARGET}`;
+                    // A --host triple sends configure after prefixed compilers (aarch64-apple-darwin-cc) that
+                    // Xcode does not ship, and SQLite's autosetup has no fallback to the plain names.
+                    platformParams.push(
+                        '-e', 'CC=/usr/bin/clang', '-e', 'CXX=/usr/bin/clang++',
+                        '-e', `CFLAGS=${flags}`, '-e', `CXXFLAGS=${flags}`, '-e', `LDFLAGS=${flags}`,
+                    );
+                }
+                break;
+            }
             default:
         }
     }
@@ -244,7 +322,7 @@ export default function run(program, params = [], platformPrefix = null, target 
     const env = {};
     let runner = 'DOCKER';
     if (
-        ((target?.platform === 'ios' || (target?.platform === 'wasi' && wasiHostSdk)) && program === null) ||
+        ((HOST_BUILT_PLATFORMS.includes(target?.platform) || (target?.platform === 'wasi' && wasiHostSdk)) && program === null) ||
         state.config.system.RUNNER === 'LOCAL'
     ) {
         runner = 'LOCAL';
@@ -291,6 +369,12 @@ export default function run(program, params = [], platformPrefix = null, target 
     let fileExecParams;
     if (runner === 'LOCAL') {
         env.PATH = `/opt/homebrew/bin:${env.PATH}`;
+        // A package's *-config script on the PATH (nc-config, sfcgal-config, ...) would compile that
+        // package into the archives. cmake is the one host tool a darwin build takes from the PATH.
+        if (target?.platform === 'darwin') {
+            if (dProgram === 'cmake') dProgram = findExecutable('cmake', env.PATH) ?? dProgram;
+            env.PATH = DARWIN_BUILD_PATH;
+        }
 
         const options = {
             cwd: dockerOptions.workdir || buildPath,
@@ -349,6 +433,17 @@ export default function run(program, params = [], platformPrefix = null, target 
         if (e?.stderr?.length) console.error(e.stderr.toString());
         throw new Error(`crossbind: command failed${dProgram ? ` (${dProgram})` : ''} with exit code ${e?.status ?? 'unknown'}`, { cause: e });
     }
+}
+
+function findExecutable(name, searchPath) {
+    return searchPath.split(':').map((dir) => `${dir}/${name}`).find((file) => {
+        try {
+            fs.accessSync(file, fs.constants.X_OK);
+            return true;
+        } catch {
+            return false;
+        }
+    });
 }
 
 function replaceBasePathForDocker(data) {

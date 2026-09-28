@@ -48,6 +48,8 @@ export default {
 };
 ```
 
+A native Node.js addon links the build of its platform: `crossbind build -p darwin`, `-p linux` or `-p win32` takes `@crossbind/port-geotiff-darwin`, `-linux` or `-win32`. Install it and import its `crossbind.config.js` the same way.
+
 > In a web build, list only `geotiffWasm` for now: with the Android or iOS config beside it, the build also tries to preload their PROJ data and fails. See [known issues](https://github.com/crossbind/crossbind/blob/main/docs/known-issues.md).
 
 ## Usage
@@ -183,7 +185,7 @@ Each one runs in your browser on [crossbind.dev/ports/geotiff](https://crossbind
 - [Expand an EPSG code into a full definition](https://crossbind.dev/ports/geotiff/#04-definition): `GTIFGetDefn`, the EPSG name functions and `GTIFGetProj4Defn`.
 - [Convert between pixels and longitude, latitude](https://crossbind.dev/ports/geotiff/#05-pixels): `GTIFProj4FromLatLong` and `GTIFPCSToImage` one way, `GTIFImageToPCS` and `GTIFProj4ToLatLong` the other.
 
-Setup and differences per platform: [WebAssembly](https://crossbind.dev/ports/geotiff/wasm/) · [Android](https://crossbind.dev/ports/geotiff/android/) · [iOS](https://crossbind.dev/ports/geotiff/ios/) · [WASI](https://crossbind.dev/ports/geotiff/wasi/), which also has a command-line program built with `crossbind build -p wasi`.
+Setup and differences per platform: [WebAssembly](https://crossbind.dev/ports/geotiff/wasm/) · [Android](https://crossbind.dev/ports/geotiff/android/) · [iOS](https://crossbind.dev/ports/geotiff/ios/) · [macOS](https://crossbind.dev/ports/geotiff/darwin/) · [Linux](https://crossbind.dev/ports/geotiff/linux/) · [Windows](https://crossbind.dev/ports/geotiff/win32/) · [WASI](https://crossbind.dev/ports/geotiff/wasi/), which also has a command-line program built with `crossbind build -p wasi`.
 
 ## What this build includes
 - libgeotiff 1.7.4 as the static library `libgeotiff`, linked against libtiff 4.7.2 and PROJ 9.9.0 from their own crossbind packages. libtiff's C++ stream API, which the examples use, ships as `libtiffxx`.
@@ -199,6 +201,9 @@ This is the main package; the precompiled binaries are shipped per platform:
 | WebAssembly | [`@crossbind/port-geotiff-wasm`](https://www.npmjs.com/package/@crossbind/port-geotiff-wasm) | `wasm32` — single-threaded & multi-threaded |
 | Android | [`@crossbind/port-geotiff-android`](https://www.npmjs.com/package/@crossbind/port-geotiff-android) | `arm64-v8a` (64-bit ARM), `x86_64` (emulator) |
 | iOS | [`@crossbind/port-geotiff-ios`](https://www.npmjs.com/package/@crossbind/port-geotiff-ios) | device (`arm64`), simulator (`arm64`) |
+| macOS | [`@crossbind/port-geotiff-darwin`](https://www.npmjs.com/package/@crossbind/port-geotiff-darwin) | `arm64` (Apple silicon), `x64` (Intel) — native Node.js addons |
+| Linux | [`@crossbind/port-geotiff-linux`](https://www.npmjs.com/package/@crossbind/port-geotiff-linux) | `x64`, `arm64` — glibc 2.28 or later, native Node.js addons |
+| Windows | [`@crossbind/port-geotiff-win32`](https://www.npmjs.com/package/@crossbind/port-geotiff-win32) | `x64`, `arm64` — Windows 10 or later, native Node.js addons |
 | WASI library | [`@crossbind/port-geotiff-wasi`](https://www.npmjs.com/package/@crossbind/port-geotiff-wasi) | `wasm32-wasip3` — single-threaded |
 | WASI command | [`@crossbind/port-geotiff-bin-wasi`](https://www.npmjs.com/package/@crossbind/port-geotiff-bin-wasi) | the upstream `listgeo`, `geotifcp` and `applygeo` CLIs as `listgeo-wasi`, `geotifcp-wasi` and `applygeo-wasi` commands (wasmtime 47+) |
 

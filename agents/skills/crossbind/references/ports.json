@@ -13,7 +13,10 @@
         "android",
         "ios",
         "wasi",
-        "bin-wasi"
+        "bin-wasi",
+        "darwin",
+        "linux",
+        "win32"
       ],
       "binCommands": [
         "curl-wasi"
@@ -32,7 +35,10 @@
         "android",
         "ios",
         "wasi",
-        "bin-wasi"
+        "bin-wasi",
+        "darwin",
+        "linux",
+        "win32"
       ],
       "binCommands": [
         "xmlwf-wasi"
@@ -51,7 +57,10 @@
         "android",
         "ios",
         "wasi",
-        "bin-wasi"
+        "bin-wasi",
+        "darwin",
+        "linux",
+        "win32"
       ],
       "binCommands": [
         "gdal-wasi",
@@ -98,7 +107,10 @@
         "android",
         "ios",
         "wasi",
-        "bin-wasi"
+        "bin-wasi",
+        "darwin",
+        "linux",
+        "win32"
       ],
       "binCommands": [
         "geosop-wasi"
@@ -117,7 +129,10 @@
         "android",
         "ios",
         "wasi",
-        "bin-wasi"
+        "bin-wasi",
+        "darwin",
+        "linux",
+        "win32"
       ],
       "binCommands": [
         "applygeo-wasi",
@@ -137,7 +152,10 @@
         "wasm",
         "android",
         "ios",
-        "wasi"
+        "wasi",
+        "darwin",
+        "linux",
+        "win32"
       ],
       "binCommands": []
     },
@@ -154,7 +172,10 @@
         "android",
         "ios",
         "wasi",
-        "bin-wasi"
+        "bin-wasi",
+        "darwin",
+        "linux",
+        "win32"
       ],
       "binCommands": [
         "cjpeg-wasi",
@@ -174,7 +195,10 @@
         "wasm",
         "android",
         "ios",
-        "wasi"
+        "wasi",
+        "darwin",
+        "linux",
+        "win32"
       ],
       "binCommands": []
     },
@@ -191,7 +215,10 @@
         "android",
         "ios",
         "wasi",
-        "bin-wasi"
+        "bin-wasi",
+        "darwin",
+        "linux",
+        "win32"
       ],
       "binCommands": [
         "openssl-wasi"
@@ -210,7 +237,10 @@
         "android",
         "ios",
         "wasi",
-        "bin-wasi"
+        "bin-wasi",
+        "darwin",
+        "linux",
+        "win32"
       ],
       "binCommands": [
         "cct-wasi",
@@ -233,7 +263,10 @@
         "wasm",
         "android",
         "ios",
-        "wasi"
+        "wasi",
+        "darwin",
+        "linux",
+        "win32"
       ],
       "binCommands": []
     },
@@ -250,7 +283,10 @@
         "android",
         "ios",
         "wasi",
-        "bin-wasi"
+        "bin-wasi",
+        "darwin",
+        "linux",
+        "win32"
       ],
       "binCommands": [
         "sqlite3-wasi"
@@ -269,7 +305,10 @@
         "android",
         "ios",
         "wasi",
-        "bin-wasi"
+        "bin-wasi",
+        "darwin",
+        "linux",
+        "win32"
       ],
       "binCommands": [
         "fax2ps-wasi",
@@ -305,7 +344,10 @@
         "android",
         "ios",
         "wasi",
-        "bin-wasi"
+        "bin-wasi",
+        "darwin",
+        "linux",
+        "win32"
       ],
       "binCommands": [
         "cwebp-wasi",
@@ -325,7 +367,10 @@
         "wasm",
         "android",
         "ios",
-        "wasi"
+        "wasi",
+        "darwin",
+        "linux",
+        "win32"
       ],
       "binCommands": []
     },
@@ -342,7 +387,10 @@
         "android",
         "ios",
         "wasi",
-        "bin-wasi"
+        "bin-wasi",
+        "darwin",
+        "linux",
+        "win32"
       ],
       "binCommands": [
         "zstd-wasi"

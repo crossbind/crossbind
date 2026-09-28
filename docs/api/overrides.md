@@ -4,7 +4,7 @@
 
 ## Why "least invasive first"
 
-Every override point exists for a reason — but each adds a layer of "this build differs from the default in a non-obvious way". Reaching for `extensions[]` to override what `targetSpecs[].specs.emccFlags` could do makes the project harder to maintain and harder for AI agents (or future-you) to reason about.
+Every override point exists for a reason — but each adds a layer of "this build differs from the default in a non-obvious way". Reaching for `extensions[]` to override what `targetSpecs[].specs.binary.emccFlags` could do makes the project harder to maintain and harder for AI agents (or future-you) to reason about.
 
 Order of preference, from least to most invasive:
 
@@ -31,25 +31,25 @@ When to reach for this **first**: shipping faster (don't build iOS for an intern
 
 ### Layer 2 — Per-target declarative overrides
 
-#### 2. `targetSpecs[].specs.cmake`
+#### 2. `targetSpecs[].specs.cmake.compileOptions`
 
-Append `-D` flags to cmake configure for matching targets.
+Add compiler flags to the sources crossbind compiles with its own CMakeLists (your native sources and the generated bindings) for matching targets. Entries from dependencies are added too. CMake configure flags (`-D…`) for an upstream library belong in its recipe's `getBuildParams` (#12); an array under `specs.cmake` is rejected.
 
 ```js
 targetSpecs: [{
     platform: 'ios',
-    specs: { cmake: ['-DBUILD_WITHOUT_64BIT_ATOMICS=ON'] },
+    specs: { cmake: { compileOptions: ['-DMYAPP_NO_LOGGING=1'] } },
 }]
 ```
 
-#### 3. `targetSpecs[].specs.emccFlags`
+#### 3. `targetSpecs[].specs.binary.emccFlags`
 
 Append `-s` / `-O` flags to emcc command. Wasm only.
 
 ```js
 targetSpecs: [{
     platform: 'wasm',
-    specs: { emccFlags: ['-sINITIAL_MEMORY=64MB', '-sJSPI'] },
+    specs: { binary: { emccFlags: ['-sINITIAL_MEMORY=64MB', '-sJSPI'] } },
 }]
 ```
 
@@ -122,13 +122,13 @@ Point at a custom `CMakeLists.txt` instead of the project default. Rare — cros
 
 > These are for `ports/*` authors wrapping an upstream library. Consumer apps don't write `crossbind.build.js`.
 
-#### 11. `getURL: (version) => string` or `getSource: async (state) => void`
+#### 11. `getURL: (version) => string`
 
-Custom source acquisition. URL is simplest; `getSource` for `git clone`, monorepo dep copy, generated source.
+Source acquisition: the CLI downloads the tarball at this URL and extracts it.
 
-#### 12. `getBuildParams: (state, target) => string[]`
+#### 12. `getBuildParams: (target, depPaths, ext, buildPath) => string[]`
 
-Returns flags appended to `cmake configure` (or `configureProgram`, default `./configure`, if `buildType: 'configure'`). Receives full `state` and current `target`.
+Returns flags appended to `cmake configure` (or `configureProgram`, default `./configure`, if `buildType: 'configure'`). Receives the current `target`, this target's dependency paths (`depPaths.<libName>.header`, `.lib`), the library extension (`'so'` on Android, `'a'` elsewhere) and the target's build directory.
 
 #### 13. `getExtraLibs: (target) => string[]`
 
@@ -203,7 +203,6 @@ Use when you need to share an override across **multiple crossbind packages**. I
 |-----|---------|-------|
 | `XCODE_DEVELOPMENT_TEAM` | `''` | Required for iOS device (not simulator) builds |
 | `RUNNER` | `'DOCKER_RUN'` | `'DOCKER_EXEC'` reuses a long-lived container that you create yourself — crossbind never creates one, and tells you the exact `docker run` command (name and both mounts) if it is missing or wrong; `'LOCAL'` skips Docker entirely (only works if you have all toolchains installed) |
-| `LOG_LEVEL` | `'INFO'` | `'DEBUG'` for verbose tracing during build issues |
 | `DOCKER_REGISTRY_MIRROR` | `''` | Registry prefix to pull the build images from, e.g. `registry.example.dev/crossbind`. crossbind appends the release digest itself, so builds stay reproducible. Env: `CROSSBIND_REGISTRY_MIRROR` |
 | `DOCKER_IMAGE_WEB` | `''` | Image used for wasm and wasi builds instead of the pinned one. A reference without the release digest disables the reproducibility guarantee. Env: `CROSSBIND_IMAGE_WEB` |
 | `DOCKER_IMAGE_ANDROID` | `''` | Same, for android builds. Env: `CROSSBIND_IMAGE_ANDROID` |
@@ -237,8 +236,8 @@ Need to set XCODE team or pick a non-Docker runner?
 1. **Reaching for `build: async (state)` when `getBuildParams` would do.** Replacing the build runner means you re-implement what crossbind already does. Override flags first.
 2. **Copying patterns from `extensions[]` into a single package's config.** If only one package needs the override, `targetSpecs` or `crossbind.build.js` keeps it local.
 3. **Using `~/.crossbind.json` for project-specific things.** It's machine-wide; CI won't have your overrides. Project-specific config goes in `crossbind.config.js`.
-4. **Stacking emccFlags / cmake flags in `targetSpecs` AND in `getBuildParams`.** Confusing. Pick one location.
-5. **Editing the upstream source directly in `getSource` instead of `replaceList`.** `replaceList` patches are reproducible across version bumps; manual edits aren't.
+4. **Stacking emccFlags in `targetSpecs` AND in `getBuildParams`.** Confusing. Pick one location.
+5. **Editing the extracted upstream source by hand instead of through `replaceList`.** `replaceList` patches are reproducible across version bumps; manual edits aren't.
 
 ## See also
 

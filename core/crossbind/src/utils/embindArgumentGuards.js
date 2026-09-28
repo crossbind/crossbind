@@ -26,6 +26,16 @@ const GUARDS = [
     },
 ];
 
+// The release glue spells the bigint conversion `typeof value=="number"`, the debug glue `typeof value == 'number'`.
+const BIGINT_FROM_NUMBER = /if\s*\(\s*typeof value\s*==\s*["']number["']\s*\)\s*\{\s*value\s*=\s*BigInt\(value\)\s*;?\s*\}/g;
+const SAFE_BIGINT_FROM_NUMBER = 'if(typeof value=="number"){if(!Number.isSafeInteger(value))throw new TypeError("a 64-bit integer parameter takes a BigInt or a safe integer Number, got "+value);value=BigInt(value)}';
+
+// Returns the rewritten glue and whether a bigint registration kept a conversion this rewrite does not recognise.
+export function guardBigIntArguments(glue) {
+    const text = glue.replace(BIGINT_FROM_NUMBER, SAFE_BIGINT_FROM_NUMBER);
+    return { text, missed: text.includes('_embind_register_bigint') && !text.includes('Number.isSafeInteger(value)') };
+}
+
 // Returns the rewritten glue and the registrations whose code no longer looks the way these rewrites expect.
 export function guardEmbindArguments(glue) {
     const missed = GUARDS.filter(({ registration, from, to }) => glue.includes(`${registration}=`) && !glue.includes(from) && !glue.includes(to))

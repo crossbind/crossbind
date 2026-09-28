@@ -5,6 +5,12 @@ const platformBuild = {
     'android-x86_64': ['--disable-static', '--host=x86_64-linux-android', '--disable-rpath'],
     'ios-iphoneos': ['--disable-shared', '--host=arm-apple-darwin'],
     'ios-iphonesimulator': ['--disable-shared', '--host=x86_64-apple-darwin'],
+    'darwin-arm64': ['--disable-shared', '--host=aarch64-apple-darwin'],
+    'darwin-x64': ['--disable-shared', '--host=x86_64-apple-darwin'],
+    'linux-arm64': ['--disable-shared', '--host=aarch64-linux-gnu'],
+    'linux-x64': ['--disable-shared', '--host=x86_64-linux-gnu'],
+    'win32-arm64': ['--disable-shared', '--host=aarch64-w64-mingw32'],
+    'win32-x64': ['--disable-shared', '--host=x86_64-w64-mingw32'],
 };
 
 const SQLITE_DEFINES = '-DSQLITE_NOHAVE_SYSTEM -DSQLITE_DISABLE_LFS -DSQLITE_ENABLE_FTS3 -DSQLITE_ENABLE_FTS3_PARENTHESIS -DSQLITE_ENABLE_JSON1 -DSQLITE_ENABLE_NORMALIZE -DSQLITE_ENABLE_COLUMN_METADATA -DHAVE_GETHOSTUUID=0 -DSQLITE_ENABLE_RTREE=1';

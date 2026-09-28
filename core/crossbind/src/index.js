@@ -15,5 +15,7 @@ export { default as getDependFilePath } from './integration/getDependFilePath.js
 export { default as buildDependencies, getDependenciesStamp } from './actions/buildDependencies.js';
 export { default as findFiles } from './utils/findFiles.js';
 export { getContentHash, getFileHash } from './utils/hash.js';
-export { collectInputFiles, computeInputStamp } from './utils/inputStamp.js';
+export {
+    collectInputFiles, collectRustBridgeFiles, collectRustSources, computeInputStamp,
+} from './utils/inputStamp.js';
 export { default as buildAppRustCrates } from './utils/appRustCrates.js';

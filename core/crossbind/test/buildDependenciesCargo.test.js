@@ -1,6 +1,9 @@
 import {
-    describe, test, expect, vi, beforeEach,
+    describe, test, expect, vi, beforeEach, afterEach,
 } from 'vitest';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 
 // A cargo dependency carries every target in one package, so a missing prebuilt always means it
 // was never built - never "this sibling is for another platform". Nothing else builds these, and
@@ -24,24 +27,40 @@ vi.mock('../src/actions/buildLib.js', () => ({
     default: (params) => { built.push(params); holder.onBuild?.(); },
 }));
 vi.mock('../src/state/loadConfig.js', () => ({ default: async () => ({ scoped: true }) }));
+vi.mock('../src/state/calculateDependencyParameters.js', () => ({ default: () => ({ recalculated: true }) }));
 vi.mock('../src/utils/dirLock.js', () => ({ default: async (_lock, fn) => fn() }));
 vi.mock('../src/actions/target.js', () => ({ getBuildTargets: () => holder.targets }));
 vi.mock('../src/utils/rustSysroot.js', () => ({ prepareRustSysroot: async () => null }));
 vi.mock('../src/actions/buildExternal.js', () => ({ default: vi.fn() }));
 vi.mock('../src/actions/createXCFramework.js', () => ({ default: vi.fn() }));
 vi.mock('../src/utils/logger.js', () => ({ default: { info: vi.fn(), doneStep: vi.fn() } }));
+vi.mock('../src/utils/embindRsFingerprint.js', async (importOriginal) => ({
+    ...(await importOriginal()),
+    getEmbindRsFingerprint: () => 'current',
+}));
 
 const TARGET = { path: 'wasm-wasm32-mt-release', platform: 'wasm' };
 
-function cargoDep(name, { enabled = false } = {}) {
+let work;
+
+// A built target's prebuilt, stamped with the embind-rs it was built from.
+function writePrebuilt(dep, fingerprint = 'current') {
+    const dir = `${dep.paths.output}/prebuilt/${TARGET.path}`;
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(`${dir}/crossbind-embind-rs.fingerprint`, fingerprint);
+}
+
+function cargoDep(name, { enabled = false, fingerprint = 'current' } = {}) {
     const own = { enabled };
-    return {
+    const dep = {
         general: { name },
         export: { type: 'cargo', libName: [name] },
-        paths: { project: `/pkgs/${name}`, output: `/pkgs/${name}/dist` },
+        paths: { project: `${work}/${name}`, output: `${work}/${name}/dist` },
         functions: { isEnabled: () => own.enabled },
-        markBuilt: () => { own.enabled = true; },
+        markBuilt: () => { own.enabled = true; writePrebuilt(dep); },
     };
+    if (enabled) writePrebuilt(dep, fingerprint);
+    return dep;
 }
 
 async function run(deps) {
@@ -53,7 +72,14 @@ async function run(deps) {
     return buildDependencies({ targetParams: {} });
 }
 
-beforeEach(() => { holder.onBuild = null; });
+beforeEach(() => {
+    holder.onBuild = null;
+    work = fs.mkdtempSync(path.join(os.tmpdir(), 'crossbind-cargo-deps-'));
+});
+
+afterEach(() => {
+    fs.rmSync(work, { recursive: true, force: true });
+});
 
 describe('cargo dependencies build themselves', () => {
     test('builds a cargo dependency that has no prebuilt for this target', async () => {
@@ -92,5 +118,42 @@ describe('cargo dependencies build themselves', () => {
 
         await expect(run([dep])).rejects.toThrow(/"demo" still has no prebuilt[\s\S]*dies at init/);
         expect(built.length).toBe(1);
+    });
+
+    // An archive from another embind-rs carries its old glue, and next to one built after it every embind_rs
+    // symbol is defined twice.
+    test('rebuilds a cargo dependency built from another embind-rs', async () => {
+        const dep = cargoDep('demo', { enabled: true, fingerprint: 'older' });
+        holder.onBuild = () => dep.markBuilt();
+
+        await expect(run([dep])).resolves.toBeUndefined();
+
+        expect(built.length).toBe(1);
+    });
+
+    test('refuses a cargo dependency still built from another embind-rs after building', async () => {
+        const dep = cargoDep('demo', { enabled: true, fingerprint: 'older' });
+
+        await expect(run([dep])).rejects.toThrow(/"demo" still has no prebuilt built from the current embind-rs/);
+    });
+
+    // loadConfig resolves a package's CMakeLists before its first build, when only the CLI's own exists.
+    test('reads a never-built cargo dependency from the prebuilt its build writes', async () => {
+        const cli = `${work}/cli/assets/cmake`;
+        const dep = {
+            general: { name: 'demo' },
+            export: { type: 'cargo', libName: ['demo'] },
+            paths: { project: `${work}/demo`, output: `${work}/demo/dist`, cmake: `${cli}/CMakeLists.txt`, cmakeDir: cli },
+            functions: { isEnabled: (target) => fs.existsSync(`${dep.paths.cmakeDir}/${target.path}`) },
+        };
+        holder.onBuild = () => {
+            writePrebuilt(dep);
+            fs.writeFileSync(`${dep.paths.output}/prebuilt/CMakeLists.txt`, '');
+        };
+
+        await expect(run([dep])).resolves.toBeUndefined();
+
+        expect(dep.paths.cmakeDir.endsWith('/demo/dist/prebuilt')).toBe(true);
+        expect(holder.config.dependencyParameters).toEqual({ recalculated: true });
     });
 });

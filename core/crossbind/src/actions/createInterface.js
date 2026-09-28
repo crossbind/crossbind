@@ -1,20 +1,25 @@
 
 import fs from 'node:fs';
+import { createRequire } from 'node:module';
 import upath from 'upath';
 import state, { saveCache } from '../state/index.js';
 import { getContentHash, getFileHash } from '../utils/hash.js';
 import guardAsyncBindings from '../utils/bridgeAsyncGuard.js';
-import { writeHeaderDts, parseCppSurface } from '../utils/cppDts.js';
-import { injectFieldBindings } from '../utils/cppFieldBindings.js';
+import getDependFilePath from '../integration/getDependFilePath.js';
+import { writeHeaderDts } from '../utils/cppDts.js';
+import { ALL_NAMES, findHeaderImportsIn } from '../utils/headerImports.js';
 import {
-    buildInterfaceContent, completingIncludes, enumNames, findHeaderPrelude, findIgnoredDeclarations, indexTypeDefinitions, interfaceIncludes,
-    interfaceToRetryWithoutMacros, ownPreprocessedText, parseMacroDump, pointerTypedefs, referencedTypeHeaders, scalarTypedefs, selectSwigMacros,
+    buildInterfaceContent, completingIncludes, findHeaderPrelude, findIgnoredDeclarations, indexTypeDefinitions, interfaceIncludes,
+    interfaceToRetryWithoutMacros, parseMacroDump, referencedTypeHeaders, selectSwigMacros,
 } from '../utils/swigInterface.js';
 import writeIfChanged from '../utils/writeIfChanged.js';
 import run, { cxxPreprocessorFor } from './run.js';
 
 // Part of every interface hash, so interfaces cached by an older generator are rebuilt.
 const INTERFACE_FORMAT = 'swig-macros-1';
+// Part of every bridge hash: each bridge carries the SWIG fork's runtime and all bridges of a module must share it, so
+// bridges from a fork before field bindings and constants are rebuilt.
+const BRIDGE_FORMAT = 'swig-constants-1';
 const predefinedMacros = new Map();
 const typeDefinitions = new Map();
 
@@ -32,13 +37,6 @@ export default function createBridgeFile(headerOrModuleFilePath, target = state.
     const interfaceFile = createInterfaceFile(interfaceFilePath, target, sourceDir);
     const bridgeFile = createBridgeFileFromInterfaceFile(interfaceFile, target, sourceDir, getFileHash(interfaceFilePath));
     const moduleRegex = new RegExp(`.(${state.config.ext.module.join('|')})$`);
-    if (bridgeFile && !moduleRegex.test(interfaceFilePath)) {
-        // SWIG's -embind backend emits no member variables; inject .property lines for the
-        // header's public value fields. Idempotent, so the cached-bridge path is safe too.
-        const bridgeContent = fs.readFileSync(bridgeFile, 'utf8');
-        const injected = injectFieldBindings(bridgeContent, fieldSurface(interfaceFilePath, interfaceFile, target, sourceDir));
-        if (injected !== bridgeContent) fs.writeFileSync(bridgeFile, injected);
-    }
     if (bridgeFile) {
         // Records which header this bridge came from, so directory-driven consumers
         // (getAllBridges) can prune bridges whose header no longer exists.
@@ -77,11 +75,17 @@ function createInterfaceFile(headerOrModuleFilePath, target, sourceDir) {
     const prelude = isModule ? [] : findHeaderPrelude(headerOrModuleFilePath, packages, headerPath);
     const ignored = isModule ? [] : findIgnoredDeclarations(headerOrModuleFilePath, packages, headerPath);
     const completing = includeRoot ? findCompletingIncludes(headerOrModuleFilePath, includeRoot, headerPath) : [];
-    // A prelude or ignored-declaration change in the owning package, or a completed class moving to another header, must
-    // regenerate the interface as well.
+    const filePathWithoutExt = headerOrModuleFilePath.match(/^(.*)\..+?$/)?.[1];
+    const interfaceFile = !isModule && filePathWithoutExt ? `${filePathWithoutExt}.i` : null;
+    const constants = isModule ? [] : importedNames(headerOrModuleFilePath, target);
+    // A prelude or ignored-declaration change in the owning package, a completed class moving to another header, an
+    // interface the package ships beside the header changing or going away, or another imported name must regenerate
+    // the interface as well.
     const fileHash = [
         INTERFACE_FORMAT, getFileHash(headerOrModuleFilePath), ...prelude,
         ...(ignored.length ? [`ignored:${ignored.join(',')}`] : []), ...(completing.length ? [`completing:${completing.join(',')}`] : []),
+        ...(interfaceFile && fs.existsSync(interfaceFile) ? [`shipped:${getFileHash(interfaceFile)}`] : []),
+        ...(constants.length ? [`constants:${constants === ALL_NAMES ? ALL_NAMES : constants.join(',')}`] : []),
     ].join('\n');
     const cachedInterface = state.cache.interfaces[headerOrModuleFilePath];
     if (state.cache.hashes[headerOrModuleFilePath] === fileHash && cachedInterface && fs.existsSync(cachedInterface)
@@ -98,11 +102,7 @@ function createInterfaceFile(headerOrModuleFilePath, target, sourceDir) {
         return newPath;
     }
 
-    const temp = headerOrModuleFilePath.match(/^(.*)\..+?$/);
-    if (!temp || temp.length < 2) return null;
-
-    const filePathWithoutExt = temp[1];
-    const interfaceFile = `${filePathWithoutExt}.i`;
+    if (!filePathWithoutExt) return null;
 
     if (fs.existsSync(interfaceFile)) {
         const newPath = `${state.config.paths.build}/interface/${interfaceFile.split('/').at(-1)}`;
@@ -120,13 +120,12 @@ function createInterfaceFile(headerOrModuleFilePath, target, sourceDir) {
         headerPath,
         prelude,
         completing,
-        swigMacros: collectSwigMacros(headerOrModuleFilePath, interfaceIncludes(headerPath, prelude), fileName, target, sourceDir),
+        swigMacros: collectSwigMacros(headerOrModuleFilePath, interfaceIncludes(headerPath, prelude), fileName, target, sourceDir, constants),
         ignored,
+        constants,
     });
     const outputFilePath = `${state.config.paths.build}/interface/${fileName}.i`;
     fs.writeFileSync(outputFilePath, content);
-    // The field pass preprocesses a dependency's header again once it has changed.
-    fs.rmSync(preprocessedFileOf(outputFilePath), { force: true });
 
     state.cache.interfaces[headerOrModuleFilePath] = outputFilePath;
     state.cache.hashes[headerOrModuleFilePath] = fileHash;
@@ -189,15 +188,56 @@ function dependencyHeadersOf(headerFile, target) {
         .map((header) => upath.join(includeRoot, header));
 }
 
+// The proxy module's own exports, never names of the header.
+const PROXY_NAMES = new Set(['initNative', 'AllSymbols']);
+const C_IDENTIFIER = /^[A-Za-z_]\w*$/;
+
+// A package header resolves under the target's prebuilt directory, and the bundler may resolve it for another target.
+const targetNeutral = (file) => file?.replace(/\/dist\/prebuilt\/[^/]+\/include\//, '/dist/prebuilt/*/include/');
+
+function realPath(file) {
+    if (!file) return null;
+    try {
+        return upath.normalize(fs.realpathSync(file));
+    } catch (e) {
+        return upath.resolve(file);
+    }
+}
+
+// A package that is not a crossbind dependency (the conformance kit) resolves the way the bundler finds it.
+function resolveHeaderImport(specifier, importer, target) {
+    if (specifier.startsWith('.')) return upath.resolve(upath.dirname(importer), specifier);
+    if (upath.isAbsolute(specifier)) return specifier;
+    try {
+        return getDependFilePath(specifier, target) ?? createRequire(importer).resolve(specifier);
+    } catch (e) {
+        return null;
+    }
+}
+
+// The names the app's own sources import from this header, or every name for `import * as`.
+function importedNames(headerFile, target) {
+    const projectDir = state.config.paths.project;
+    if (!projectDir || !fs.existsSync(projectDir)) return [];
+    const header = targetNeutral(realPath(headerFile));
+    const names = new Set();
+    for (const { importer, specifier, names: imported } of findHeaderImportsIn(projectDir, state.config.ext.header)) {
+        if (targetNeutral(realPath(resolveHeaderImport(specifier, importer, target))) !== header) continue;
+        if (imported === ALL_NAMES) return ALL_NAMES;
+        imported.filter((name) => C_IDENTIFIER.test(name) && !PROXY_NAMES.has(name)).forEach((name) => names.add(name));
+    }
+    return [...names].sort();
+}
+
 // A header that does not preprocess on its own, or a host without the image's compiler, keeps the plain interface.
-function collectSwigMacros(headerFile, includes, name, target, sourceDir) {
+function collectSwigMacros(headerFile, includes, name, target, sourceDir, constants) {
     const interfaceDir = `${state.config.paths.build}/interface`;
     try {
         if (!predefinedMacros.has(target.path)) {
             predefinedMacros.set(target.path, dumpMacros(`${interfaceDir}/predefined-${target.path}.macros.h`, [], [], target));
         }
         const macros = dumpMacros(`${interfaceDir}/${name}.macros.h`, includes, swigIncludePath(target, sourceDir), target, [RELEASE_DEFINE]);
-        return selectSwigMacros({ headerText: fs.readFileSync(headerFile, 'utf8'), macros, predefined: predefinedMacros.get(target.path) });
+        return selectSwigMacros({ headerText: fs.readFileSync(headerFile, 'utf8'), macros, predefined: predefinedMacros.get(target.path), constants });
     } catch (e) {
         console.warn(`crossbind: SWIG reads ${upath.basename(headerFile)} without the macros of its includes (${e.message})`);
         return [];
@@ -218,37 +258,6 @@ function dumpMacros(outputFile, includes, includePath, target, defines = []) {
         '/dev/null',
     ], null, target);
     return parseMacroDump(fs.readFileSync(outputFile, 'utf8'));
-}
-
-const preprocessedFileOf = (interfaceFile) => interfaceFile.replace(/\.i$/, '.preprocessed.h');
-
-// A dependency's header binds the fields the compiler sees: its #if branches as this build resolves them, and field
-// types that are typedefs of numbers in any header it includes. The project's own headers, a header that does not
-// preprocess, or a host without the image's compiler keep the fields of the header as written.
-function fieldSurface(headerFile, interfaceFile, target, sourceDir) {
-    const asWritten = () => parseCppSurface(fs.readFileSync(headerFile, 'utf8'), () => {});
-    const { includeRoot, headerPath } = includeLocation(headerFile, target);
-    const isProjectHeader = state.config.paths.header.some((root) => headerFile.startsWith(root));
-    if (!includeRoot || isProjectHeader || !interfaceFile?.endsWith('.i')) return asWritten();
-    const preprocessed = preprocessedFileOf(interfaceFile);
-    try {
-        if (!fs.existsSync(preprocessed)) {
-            const prelude = findHeaderPrelude(headerFile, [state.config, ...state.config.allDependencies], headerPath);
-            run(cxxPreprocessorFor(target), [
-                '-x', 'c++', '-std=c++17', '-E', RELEASE_DEFINE,
-                ...swigIncludePath(target, sourceDir),
-                ...interfaceIncludes(headerPath, prelude).flatMap((header) => ['-include', header]),
-                '-o', preprocessed,
-                '/dev/null',
-            ], null, target);
-        }
-        const output = fs.readFileSync(preprocessed, 'utf8');
-        const own = ownPreprocessedText(output, headerPath);
-        const types = { typedefs: scalarTypedefs(output), enums: enumNames(output), pointerTypedefs: pointerTypedefs(output), pointerFields: true };
-        return own.trim() ? parseCppSurface(own, () => {}, types) : asWritten();
-    } catch (e) {
-        return asWritten();
-    }
 }
 
 function swigIncludePath(target, sourceDir) {
@@ -275,6 +284,16 @@ function applyAsyncGuard(bridgeFilePath) {
     }
 }
 
+// A build hides SWIG's output, so the SWIG fork writes each binding it skipped beside the bridge, under the path SWIG saw.
+function reportSkippedBindings(bridgeFilePath) {
+    const warningsFile = `${bridgeFilePath}.warnings`;
+    if (!fs.existsSync(warningsFile)) return;
+    fs.readFileSync(warningsFile, 'utf8').split('\n').filter(Boolean).forEach((line) => {
+        const [, file, lineNumber, message] = line.match(/^(.*):(\d+): (.*)$/) ?? [];
+        console.warn(`crossbind: ${file ? `${upath.basename(file)}:${lineNumber}: ${message}` : line}`);
+    });
+}
+
 // The interface text only names the header, so its hash alone kept a bridge across header edits: the
 // header's own hash is part of the key.
 function createBridgeFileFromInterfaceFile(interfaceFilePath, target, sourceDir = null, sourceHash = '') {
@@ -282,7 +301,7 @@ function createBridgeFileFromInterfaceFile(interfaceFilePath, target, sourceDir 
         return null;
     }
 
-    const bridgeHash = () => `${getFileHash(interfaceFilePath)}\n${sourceHash}`;
+    const bridgeHash = () => `${BRIDGE_FORMAT}\n${getFileHash(interfaceFilePath)}\n${sourceHash}`;
     const fileHash = bridgeHash();
     const cachedBridge = state.cache.bridges[interfaceFilePath];
     if (state.cache.hashes[interfaceFilePath] === fileHash && cachedBridge && fs.existsSync(cachedBridge)) {
@@ -318,6 +337,7 @@ function createBridgeFileFromInterfaceFile(interfaceFilePath, target, sourceDir 
         }
     }
     applyAsyncGuard(bridgeFilePath);
+    reportSkippedBindings(bridgeFilePath);
 
     state.cache.bridges[interfaceFilePath] = bridgeFilePath;
     state.cache.hashes[interfaceFilePath] = bridgeHash();

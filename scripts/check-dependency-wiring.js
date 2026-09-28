@@ -24,6 +24,9 @@ const PLATFORMS = [
     { platform: 'wasm', arch: 'wasm32', runtime: 'st', buildType: 'release' },
     { platform: 'ios', arch: 'iphoneos', runtime: 'mt', buildType: 'release' },
     { platform: 'android', arch: 'arm64-v8a', runtime: 'mt', buildType: 'release' },
+    { platform: 'darwin', arch: 'arm64', runtime: 'mt', buildType: 'release' },
+    { platform: 'linux', arch: 'arm64', runtime: 'mt', buildType: 'release' },
+    { platform: 'win32', arch: 'x64', runtime: 'mt', buildType: 'release' },
 ];
 
 // Dependencies intentionally NOT wired explicitly in build.mjs. A `configure` recipe gets every

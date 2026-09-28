@@ -9,13 +9,33 @@ import { RELEASE } from '../release.js';
 
 const suffix = RELEASE.distTagSuffix;
 const RN_PLAYBOOK = `${REPO_URL}/blob/main/docs/playbooks/integration/react-native-cli.md`;
+const NODE_ADDON_PLAYBOOK = `${REPO_URL}/blob/main/docs/playbooks/integration/nodejs.md#native-addon-node-api`;
 
 export const PLATFORMS = [
     { target: 'wasm', label: 'WebAssembly', where: 'browsers, Node.js and edge runtimes', builds: '`wasm32`, single-threaded and multi-threaded' },
     { target: 'android', label: 'Android', where: 'React Native apps on Android', builds: '`arm64-v8a` devices and the `x86_64` emulator' },
     { target: 'ios', label: 'iOS', where: 'React Native apps on iOS', builds: '`arm64` devices and simulators' },
+    { target: 'darwin', label: 'macOS', where: 'native Node.js addons and Electron on macOS', builds: '`arm64` and `x64`, macOS 11 or later' },
+    { target: 'linux', label: 'Linux', where: 'native Node.js addons on Linux', builds: '`x64` and `arm64`, glibc 2.28 or later' },
+    { target: 'win32', label: 'Windows', where: 'native Node.js addons on Windows', builds: '`x64` and `arm64`, Windows 10 or later' },
     { target: 'wasi', label: 'WASI', where: 'command-line programs under wasmtime', builds: '`wasm32-wasip3`, single-threaded' },
 ];
+
+// The platforms of native Node.js addons differ only in what the addon needs and where it builds.
+const ADDON_HOSTS = {
+    darwin: {
+        linking: 'The library is linked into the addon statically; only libraries that ship with macOS stay dynamic.',
+        build: "The build runs on a Mac with Xcode's command line tools and needs Docker for the SWIG bridges.",
+    },
+    linux: {
+        linking: 'The library and the C++ runtime are linked into the addon statically. It runs on glibc 2.28 or later (RHEL 8, Debian 10, Ubuntu 20.04 and newer), not on musl distributions such as Alpine.',
+        build: 'The build runs in Docker on any host, a Mac included.',
+    },
+    win32: {
+        linking: 'The library and the C++ runtime are linked into the addon statically; it needs Windows 10 or later and only DLLs that ship with Windows.',
+        build: 'The build runs in Docker on any host, a Mac included.',
+    },
+};
 
 export const platformFor = (target) => PLATFORMS.find((platform) => platform.target === target) ?? null;
 
@@ -74,6 +94,19 @@ npm install --save-dev @crossbind/plugin-metro${suffix}${variant.target === 'ios
             ...(short ? [] : [{ type: 'p', text: `The whole flow, including Expo, is in the [React Native playbook](${RN_PLAYBOOK}).` }]),
         ];
     }
+    if (ADDON_HOSTS[variant.target]) {
+        return [
+            {
+                type: 'code',
+                file: 'shell',
+                code: `npm install ${variant.package}${suffix}
+npm install --save-dev crossbind${suffix} @crossbind/core-embind-napi${suffix}`,
+            },
+            config,
+            { type: 'code', file: 'shell', code: `npx crossbind build -p ${variant.target}` },
+            ...(short ? [] : [{ type: 'p', text: `The addons and their loader land in \`dist\`; the [Node.js playbook](${NODE_ADDON_PLAYBOOK}) has the whole flow.` }]),
+        ];
+    }
     return [{ type: 'code', file: 'shell', code: `npm install ${variant.package}${suffix} crossbind${suffix}` }, ...(withConfig ? [config] : [])];
 }
 
@@ -96,6 +129,16 @@ export function differences(target) {
                 'Named imports from `./native/<header>.h` work as on the web: `await initNative()` once, then call the classes.',
                 "There is no `m.FS` and no `/memfs`: files live in the app's own storage, and your C++ takes their paths.",
                 "No Worker and no COOP or COEP: `runtime: 'mt'` uses pthreads directly.",
+            ];
+        case 'darwin':
+        case 'linux':
+        case 'win32':
+            return [
+                `\`crossbind build -p ${target}\` links one \`.node\` addon per architecture into \`dist\`, next to a loader, \`dist/<name>.native.cjs\`, that \`require\` and \`import\` both load. A plain \`crossbind build\` skips it.`,
+                '`await initNative()` once, then call the classes: calls are synchronous, and no Worker is involved.',
+                ADDON_HOSTS[target].linking,
+                'There is no `m.FS`: the C++ reads real paths, and data such as `GDAL_DATA` or `proj.db` is copied to `dist/data`.',
+                `${ADDON_HOSTS[target].build} \`worker_threads\` are not supported yet.`,
             ];
         case 'wasi':
             return [

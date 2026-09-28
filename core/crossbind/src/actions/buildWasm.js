@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import replace from 'replace';
 import run from './run.js';
-import getDependLibs from './getDependLibs.js';
+import getLinkInputs from './getLinkInputs.js';
 import getData from './getData.js';
 import buildJs from './buildJs.js';
 import triggerExtensions from './extensions.js';
@@ -11,23 +11,16 @@ import resolveEmbindRustRoot from '../utils/resolveEmbindRust.js';
 import logger from '../utils/logger.js';
 import { getContentHash, getFilesFingerprint } from '../utils/hash.js';
 import { buildLinkLibArgs } from '../utils/linkLayout.js';
-import buildAppRustCrates from '../utils/appRustCrates.js';
-import { guardEmbindArguments } from '../utils/embindArgumentGuards.js';
+import { guardBigIntArguments, guardEmbindArguments } from '../utils/embindArgumentGuards.js';
 
 // embind's bigint converter turns any Number into a BigInt, so 2^53+1 silently becomes 2^53.
 // A 64-bit parameter takes a BigInt or a Number that is a safe integer instead; the jsi adapter
 // enforces the same rule natively. Each runtimeEnv links its own glue, so each one calls this.
-function guardBigIntArguments(target) {
+function guardBigIntConversions(target) {
     const gluePath = `${state.config.paths.build}/${target.rawJsName}`;
-    replace({
-        regex: 'if\\s*\\(\\s*typeof value\\s*==\\s*"number"\\s*\\)\\s*\\{\\s*value\\s*=\\s*BigInt\\(value\\)\\s*;?\\s*\\}',
-        replacement: 'if(typeof value=="number"){if(!Number.isSafeInteger(value))throw new TypeError("a 64-bit integer parameter takes a BigInt or a safe integer Number, got "+value);value=BigInt(value)}',
-        paths: [gluePath],
-        recursive: false,
-        silent: true,
-    });
-    const glue = fs.readFileSync(gluePath, 'utf8');
-    if (glue.includes('__embind_register_bigint') && !glue.includes('Number.isSafeInteger(value)')) {
+    const { text, missed } = guardBigIntArguments(fs.readFileSync(gluePath, 'utf8'));
+    fs.writeFileSync(gluePath, text);
+    if (missed) {
         logger.error('bigint safe-integer rewrite missed (emscripten glue format changed?): 64-bit Number arguments round silently');
     }
 }
@@ -45,7 +38,6 @@ function guardArgumentConversions(target) {
 
 export default async function buildWasm(target, options = {}) {
     const isProd = target.buildType === 'release';
-    const buildType = isProd ? 'Release' : 'Debug';
 
     // Caller can opt out of the final emcc link entirely (e.g. when the
     // package is consumed only as a static library by downstream builds).
@@ -59,51 +51,12 @@ export default async function buildWasm(target, options = {}) {
         return false;
     }
 
-    // buildLib's cache is keyed on paths.output/prebuilt; after a cache clean the
-    // build-dir copy can be gone while the output artifact is still valid — link it then.
-    const sourceLibCandidates = [
-        `${state.config.paths.build}/Source-${buildType}/${target.path}/lib${state.config.general.name}.a`,
-        `${state.config.paths.output}/prebuilt/${target.path}/lib/lib${state.config.general.name}.a`,
-    ];
-    // App-local Rust surfaces (imported .rs files) arrive as ONE super staticlib; it is the
-    // single fully-loaded Rust archive of the link (see the libstd rule below).
-    const appRustLibs = buildAppRustCrates(target, state.config.paths.cache, state.config.cargoDependencies ?? {});
-    const libs = [
-        ...getDependLibs(target),
-        ...appRustLibs,
-        sourceLibCandidates.find((lib) => fs.existsSync(lib)) ?? sourceLibCandidates[0],
-        `${state.config.paths.build}/Bridge-${buildType}/${target.path}/lib${state.config.general.name}.a`,
-    ];
-
-    // By default only the Bridge archive is --whole-archive'd (see
-    // linkLayout.js) so wasm-ld dead-code-eliminates everything unreferenced.
-    // Two escape hatches, both `export.wholeArchive: true`: on the APP it
-    // restores the legacy layout (every archive wholesale); on a LIBRARY's
-    // own config it keeps that library's archives whole in every consumer
-    // link (for members that self-register from static initializers).
-    const wholeArchiveAll = state.config.export.wholeArchive === true;
-    const wholeArchiveNames = new Set();
-    // Rust libstd rule: every Rust staticlib bundles its own libstd, so at most ONE Rust archive
-    // may be fully loaded (the app super staticlib). Generated cargo bridges are linked lazily
-    // with their keep symbol pinned (-u pulls just the registration object); manual-bindings
-    // crates have no keep symbol and fall back to whole-archive - safe only while they are the
-    // single loaded Rust archive.
-    const rustKeepFlags = [];
-    if (appRustLibs.length > 0) wholeArchiveNames.add('crossbind_app_super');
-    state.config.dependencyParameters.getCmakeDepends(target).forEach((dep) => {
-        if (dep.export.wholeArchive === true) {
-            (dep.export.libName || []).forEach((name) => wholeArchiveNames.add(name));
-        }
-        if (dep.export.type === 'cargo') {
-            const crateLibRs = `${dep.paths.project}/${dep.export.crate ?? 'crate'}/src/lib.rs`.replace('/./', '/');
-            const isManual = fs.existsSync(crateLibRs) && fs.readFileSync(crateLibRs, 'utf8').includes('bindings!');
-            (dep.export.libName || []).forEach((name) => {
-                // wasm-ld's -u does NOT pull archive members (it just leaves an import);
-                // --export forces the symbol to resolve, dragging the registration object in.
-                if (isManual) wholeArchiveNames.add(name);
-                else rustKeepFlags.push(`-Wl,--export=crossbind_keep_${name}`);
-            });
-        }
+    const {
+        libs, appRustLibs, wholeArchiveAll, wholeArchiveNames, rustKeepFlags, hasRust,
+    } = getLinkInputs(target, {
+        // wasm-ld's -u does NOT pull archive members (it just leaves an import);
+        // --export forces the symbol to resolve, dragging the registration object in.
+        keepFlag: (name) => `-Wl,--export=crossbind_keep_${name}`,
     });
     // The whole-archived app super-staticlib and a lazily-pulled package bridge object each
     // carry rustc's allocator/panic shims (codegen-units=1 places them in the same object as
@@ -116,13 +69,19 @@ export default async function buildWasm(target, options = {}) {
 
     // Any Rust archive in the link needs the web adapter TU: it provides the flat
     // crossbind_embind_* C-ABI (typeid getters + passthroughs to emscripten's embind).
-    const hasRust = rustKeepFlags.length > 0 || appRustLibs.length > 0
-        || state.config.dependencyParameters.getCmakeDepends(target).some((dep) => dep.export.type === 'cargo');
     // The adapter ships in @crossbind/core-embind-rust (declared by the consumer, resolved here).
     const rustSources = hasRust ? [`${resolveEmbindRustRoot()}/adapters/web.cpp`] : [];
 
     const binary = getData('binary', target);
     const emccFlags = [...(binary?.emccFlags || []), ...rustKeepFlags];
+    // Rust code expects a native-sized stack (rustc's own wasm targets reserve 1 MiB) where
+    // emscripten reserves 64 KiB, and a wasm stack has no guard page: an overflow overwrites static
+    // data without a trap. A size set in the config stays; a debug build also checks for overflow.
+    if (hasRust) {
+        const set = emccFlags.join(' ');
+        if (!/-s\s*(?:STACK_SIZE|TOTAL_STACK)=/.test(set)) emccFlags.push('-sSTACK_SIZE=1MB');
+        if (!isProd && !/-s\s*STACK_OVERFLOW_CHECK=/.test(set)) emccFlags.push('-sSTACK_OVERFLOW_CHECK=1');
+    }
 
     triggerExtensions('buildWasm', 'beforeBuild', [emccFlags]);
 
@@ -257,7 +216,7 @@ export default async function buildWasm(target, options = {}) {
             recursive: false,
             silent: true,
         }); */
-        guardBigIntArguments(target);
+        guardBigIntConversions(target);
         guardArgumentConversions(target);
         await buildJs(target);
         // fs.rmSync(`${state.config.paths.build}/${state.config.general.name}.js`);
@@ -297,7 +256,7 @@ export default async function buildWasm(target, options = {}) {
         const t1 = performance.now();
         logger.doneStep(target, 'wasm');
         logger.startStep(target, 'js');
-        guardBigIntArguments(target);
+        guardBigIntConversions(target);
         guardArgumentConversions(target);
         await buildJs(target);
         logger.doneStep(target, 'js');
@@ -331,7 +290,7 @@ export default async function buildWasm(target, options = {}) {
         ], null, target);
         logger.doneStep(target, 'wasm');
         logger.startStep(target, 'js');
-        guardBigIntArguments(target);
+        guardBigIntConversions(target);
         guardArgumentConversions(target);
         await buildJs(target);
         if (emccFlags.includes('FETCH')) {

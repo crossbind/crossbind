@@ -48,6 +48,8 @@ export default {
 };
 ```
 
+A native Node.js addon links the build of its platform: `crossbind build -p darwin`, `-p linux` or `-p win32` takes `@crossbind/port-proj-darwin`, `-linux` or `-win32`. Install it and import its `crossbind.config.js` the same way.
+
 > In a web build, list only `projWasm` for now: with the Android or iOS config beside it, the build also tries to preload their `share/proj` data and fails. See [known issues](https://github.com/crossbind/crossbind/blob/main/docs/known-issues.md).
 
 ## Usage
@@ -152,7 +154,7 @@ Each one runs in your browser on [crossbind.dev/ports/proj](https://crossbind.de
 - [Measure distances, headings and areas on the ellipsoid](https://crossbind.dev/ports/proj/#04-geodesic): `geod_inverse`, `geod_direct` and `geod_polygonarea` from `geodesic.h`.
 - [Find the EPSG code of a .prj, and the UTM zone of a point](https://crossbind.dev/ports/proj/#05-identify): `proj_identify` and `proj_get_crs_info_list_from_database`.
 
-Setup and differences per platform: [WebAssembly](https://crossbind.dev/ports/proj/wasm/) · [Android](https://crossbind.dev/ports/proj/android/) · [iOS](https://crossbind.dev/ports/proj/ios/) · [WASI](https://crossbind.dev/ports/proj/wasi/), which also has a command-line program built with `crossbind build -p wasi`.
+Setup and differences per platform: [WebAssembly](https://crossbind.dev/ports/proj/wasm/) · [Android](https://crossbind.dev/ports/proj/android/) · [iOS](https://crossbind.dev/ports/proj/ios/) · [macOS](https://crossbind.dev/ports/proj/darwin/) · [Linux](https://crossbind.dev/ports/proj/linux/) · [Windows](https://crossbind.dev/ports/proj/win32/) · [WASI](https://crossbind.dev/ports/proj/wasi/), which also has a command-line program built with `crossbind build -p wasi`.
 
 ## What this build includes
 - PROJ 9.9.0 as a static library, `libproj`, with its C API (`proj.h`), the geodesic library (`geodesic.h`) and the C++ API headers. SQLite 3.53.4 reads its database and libtiff 4.7.2 its GeoTIFF grid files.
@@ -169,6 +171,9 @@ This is the main package; the precompiled binaries are shipped per platform:
 | WebAssembly | [`@crossbind/port-proj-wasm`](https://www.npmjs.com/package/@crossbind/port-proj-wasm) | `wasm32` — single-threaded & multi-threaded |
 | Android | [`@crossbind/port-proj-android`](https://www.npmjs.com/package/@crossbind/port-proj-android) | `arm64-v8a` (64-bit ARM), `x86_64` (emulator) |
 | iOS | [`@crossbind/port-proj-ios`](https://www.npmjs.com/package/@crossbind/port-proj-ios) | device (`arm64`), simulator (`arm64`) |
+| macOS | [`@crossbind/port-proj-darwin`](https://www.npmjs.com/package/@crossbind/port-proj-darwin) | `arm64` (Apple silicon), `x64` (Intel) — native Node.js addons |
+| Linux | [`@crossbind/port-proj-linux`](https://www.npmjs.com/package/@crossbind/port-proj-linux) | `x64`, `arm64` — glibc 2.28 or later, native Node.js addons |
+| Windows | [`@crossbind/port-proj-win32`](https://www.npmjs.com/package/@crossbind/port-proj-win32) | `x64`, `arm64` — Windows 10 or later, native Node.js addons |
 | WASI library | [`@crossbind/port-proj-wasi`](https://www.npmjs.com/package/@crossbind/port-proj-wasi) | `wasm32-wasip3` — single-threaded |
 | WASI command | [`@crossbind/port-proj-bin-wasi`](https://www.npmjs.com/package/@crossbind/port-proj-bin-wasi) | the upstream `proj`, `cct`, `cs2cs`, `geod`, `gie` and `projinfo` as `-wasi` commands (wasmtime 47+) |
 

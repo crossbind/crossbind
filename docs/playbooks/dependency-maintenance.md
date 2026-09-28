@@ -19,7 +19,7 @@ the repository-specific dependency units that generic package bots cannot update
 - wasi-sdk archives for both Linux architectures, submodule revisions and license hashes;
 - the Android NDK archive, its published checksum and patch releases inside the reviewed NDK major;
 - the Crossbind SWIG fork revision and source archive hash;
-- one complete native port family (`base`, `wasm`, `wasi`, `bin-wasi`, `android`, `ios`) per update.
+- one complete native port family (`base`, `wasm`, `wasi`, `bin-wasi`, `android`, `ios`, `darwin`, `linux`, `win32`) per update.
 
 Canonical current versions remain in `.nvmrc`, the Dockerfiles and `ports/*/*/package.json`. The
 bot's `update-policy.json` stores upstream identity and policy only; it does not copy current
@@ -38,8 +38,8 @@ For each proposal the reusable candidate workflow:
 2. checks that no file outside that unit changed;
 3. refreshes generated agent references when canonical documentation changed;
 4. validates source pins and dependency wiring;
-5. builds and packs every existing Linux/Web/WASI/Android target;
-6. builds and packs iOS on macOS when the family has an iOS package;
+5. builds and packs every existing Web, WASI, Android, Linux and Windows target on Linux;
+6. builds and packs the iOS and macOS packages on macOS when the family has them;
 7. rebuilds, smoke-tests and Trivy-scans the complete image family for toolchain changes;
 8. hashes the exact patch tested by every runner;
 9. creates one draft PR only after every required gate succeeds.

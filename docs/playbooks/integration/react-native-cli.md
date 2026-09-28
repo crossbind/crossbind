@@ -13,6 +13,7 @@ Add crossbind to a React Native CLI app so:
 ## When to use
 
 - `react-native` in deps; **no** `expo`/`@expo/cli` in deps.
+- React Native 0.81 or newer: the bindings keep the JS functions passed as C callbacks in JSI runtime data, which React Native added in 0.81.
 - `metro.config.js` at root.
 - `android/` and/or `ios/` native project directories present.
 - Expo users → see `docs/playbooks/integration/react-native-expo.md`.
@@ -129,6 +130,7 @@ Don't name the snapshot dir `.crossbind` — `clear:cache:examples`-style globs 
 ## Common pitfalls
 
 - **Mixing Expo and bare RN.** If `expo` is in deps, this playbook doesn't apply — switch to `react-native-expo.md`.
+- **React Native older than 0.81.** The generated bridges stop compiling with errors about `facebook::jsi::UUID` or `getRuntimeData`; upgrade React Native.
 - **Skipping `pod install`** after adding the plugin. iOS will fail to find the xcframeworks at link time.
 - **Deleting `ci/.crossbind` directly with the older `find`-based clear scripts.** Use the `crossbind-snapshot/` rename pattern (see "CI bridge cache" above) so future clear globs don't wipe it.
 - **arm64e / x86_64 simulator slices.** `@crossbind/port-*-ios` podspecs already exclude `x86_64` for iphonesimulator (Apple Silicon-only). If a custom user package's podspec is missing `EXCLUDED_ARCHS[sdk=iphonesimulator*] = x86_64`, Apple Silicon Macs running the iOS simulator will fail to link.

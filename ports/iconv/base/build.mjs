@@ -6,6 +6,12 @@ const platformBuild = {
     'android-x86_64': ['--enable-static=no', '--host=x86_64-linux-android'],
     'ios-iphoneos': ['--enable-shared=no', '--host=arm-apple-darwin'],
     'ios-iphonesimulator': ['--enable-shared=no', '--host=x86_64-apple-darwin'],
+    'darwin-arm64': ['--enable-shared=no', '--host=aarch64-apple-darwin'],
+    'darwin-x64': ['--enable-shared=no', '--host=x86_64-apple-darwin'],
+    'linux-arm64': ['--enable-shared=no', '--host=aarch64-linux-gnu'],
+    'linux-x64': ['--enable-shared=no', '--host=x86_64-linux-gnu'],
+    'win32-arm64': ['--enable-shared=no', '--host=aarch64-w64-mingw32'],
+    'win32-x64': ['--enable-shared=no', '--host=x86_64-w64-mingw32'],
 };
 
 // Library packages ship archives only: drop the bundled CLI (src) and its gnulib rider (srclib) on every platform.

@@ -16,6 +16,11 @@ describe('cargoTripleFor', () => {
         expect(cargoTripleFor({ platform: 'android', arch: 'x86_64' })).toBe('x86_64-linux-android');
     });
 
+    test('maps both macOS architectures of the Node-API addons', () => {
+        expect(cargoTripleFor({ platform: 'darwin', arch: 'arm64' })).toBe('aarch64-apple-darwin');
+        expect(cargoTripleFor({ platform: 'darwin', arch: 'x64' })).toBe('x86_64-apple-darwin');
+    });
+
     test('returns null for platforms rust cannot target yet', () => {
         expect(cargoTripleFor({ platform: 'wasi', arch: 'wasm32' })).toBeNull();
         expect(cargoTripleFor({ platform: 'unknown', arch: 'x86_64' })).toBeNull();

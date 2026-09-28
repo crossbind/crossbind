@@ -1,14 +1,13 @@
 {
     "name": "@crossbind/core-embind-rust",
-    "version": "2.0.0-beta.60",
+    "version": "2.0.0-beta.62",
     "description": "Rust producer for the crossbind embind registration protocol - bind Rust structs as classes reachable from JS on web (embind) and mobile (embind-jsi). Research/spike stage.",
     "homepage": "https://github.com/crossbind/crossbind/tree/main/core/embind-rust#readme",
     "repository": "https://github.com/crossbind/crossbind.git",
     "license": "MIT",
     "type": "module",
     "scripts": {
-        "e2e:prod": "node e2e/run.mjs",
-        "clear": "rm -rf crate/target demo/target e2e/demo.mjs e2e/demo.wasm e2e/jsi-shape-check"
+        "clear": "rm -rf crate/target demo/target"
     },
     "keywords": [
         "embind",

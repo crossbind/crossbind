@@ -35,6 +35,11 @@ skips (search `KNOWN ENGINE GAP` in `spec/run.mjs`).
   instances, a pointer typedef, `char *`, enums as integers, and that the port's zlib 1.3.2 is
   the one running rather than a device's older copy. The bundler legs that link both ports wire it
   (Vite, Rspack, Metro); the standalone legs skip it.
+- `native/confconstants.h` (+ `confconstantsbase.h`) and `spec/sections/constants.mjs` — constants
+  bind only for the names an app imports, so the bundler and React Native legs import them by name:
+  numbers, a string, a character, a boolean, a macro from an included header, one inside a platform
+  `#if`, and const globals; one macro no leg imports and a mutable global stay unbound. The standalone
+  legs import no header and skip the section.
 - `../conformance-rust/` — the Rust half: one plain crate (`src/lib.rs`, every construct in
   sections) built as a cargo package like `core/embind-rust/demo`; `spec/sections/rust/*.mjs` hold
   its checks. Constructs the generator does not carry yet are `todo` entries: a miss prints a
@@ -53,6 +58,7 @@ skips (search `KNOWN ENGINE GAP` in `spec/run.mjs`).
 |-----|-----|-----|
 | node st (direct module) | `crossbind-e2e-backend-nodejs` | `pnpm build && pnpm e2e:prod` |
 | node mt (direct module, pthreads) | `crossbind-e2e-backend-nodejs-multithread` | `pnpm build && pnpm e2e:prod` |
+| node native (Node-API addon, jsi, macOS arm64) | `@crossbind/e2e-backend-nodejs-native` | `pnpm build && pnpm e2e:prod` |
 | browser ×3 (vite plugin, worker-backed) | `crossbind-e2e-web-vite` | `pnpm build && playwright test --config playwright.prod.config.cjs` |
 | browser ×3 (vite plugin, mt + worker) | `crossbind-e2e-web-vite-multithread` | `pnpm build && playwright test --config playwright.prod.config.cjs` |
 | browser ×3 (webpack plugin via rspack, mt, worker-backed) | `crossbind-e2e-web-rspack` | `pnpm build && pnpm e2e:prod` |

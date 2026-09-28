@@ -1,8 +1,9 @@
 import { describe, test, expect } from 'vitest';
 import {
     buildInterfaceContent, completingIncludes, findHeaderPrelude, findIgnoredDeclarations, indexTypeDefinitions, interfaceToRetryWithoutMacros,
-    enumNames, ownPreprocessedText, parseMacroDump, pointerTypedefs, referencedTypeHeaders, scalarTypedefs, selectSwigMacros, withoutSwigMacros,
+    parseMacroDump, referencedTypeHeaders, selectSwigMacros, withoutSwigMacros,
 } from '../src/utils/swigInterface.js';
+import { ALL_NAMES } from '../src/utils/headerImports.js';
 
 describe('header-specific prelude', () => {
     const gdal = {
@@ -229,6 +230,25 @@ describe('buildInterfaceContent', () => {
         const options = { moduleName: 'VRTDATASET', headerPath: 'vrtdataset.h', ignored: ['VRTAverageFilteredSource'] };
         expect(withoutSwigMacros(buildInterfaceContent({ ...options, swigMacros: ['#define CPL_DLL'] }))).toBe(buildInterfaceContent(options));
     });
+
+    // A feature applies to what SWIG reads after it, so the requests come before the macros that may define a constant.
+    test('asks SWIG to bind the constants the app imports, ahead of the macro definitions', () => {
+        const content = buildInterfaceContent({
+            moduleName: 'ZLIB', headerPath: 'zlib.h', swigMacros: ['#define MAX_WBITS 15'], constants: ['MAX_WBITS', 'Z_FINISH'],
+        });
+        expect(content).toContain('%}\n\n%feature("embind:constant") MAX_WBITS;\n%feature("embind:constant") Z_FINISH;\n\n%feature("shared_ptr");');
+        expect(content.indexOf('embind:constant')).toBeLessThan(content.indexOf('#define MAX_WBITS'));
+    });
+
+    test('asks for every constant when the app imports every name of the header', () => {
+        const content = buildInterfaceContent({ moduleName: 'ZLIB', headerPath: 'zlib.h', constants: ALL_NAMES });
+        expect(content).toContain('%}\n\n%feature("embind:constant");\n\n%feature("shared_ptr");');
+    });
+
+    test('keeps the constant requests when the SWIG-only macro block is dropped', () => {
+        const options = { moduleName: 'ZLIB', headerPath: 'zlib.h', constants: ['Z_FINISH'] };
+        expect(withoutSwigMacros(buildInterfaceContent({ ...options, swigMacros: ['#define ZEXPORT'] }))).toBe(buildInterfaceContent(options));
+    });
 });
 
 describe('interfaceToRetryWithoutMacros', () => {
@@ -357,6 +377,38 @@ describe('selectSwigMacros', () => {
         const header = '__extension__ typedef long long ll_t;\nstatic __inline int twice(int *restrict p) { return *p * 2; }\n';
         expect(select(header, '')).toEqual(['#define __extension__', '#define restrict', '#define __inline inline']);
     });
+
+    // zlib.h's callers pass MAX_WBITS, which zconf.h defines: C code sees it through zlib.h, and so does an import.
+    test('defines an imported constant that an included header provides, with the macros its value uses', () => {
+        const library = '#define MAX_WBITS 15\n#define DEF_WBITS MAX_WBITS\n';
+        expect(selectSwigMacros({
+            headerText: 'int deflateInit2(int level, int windowBits);\n',
+            macros: parseMacroDump(PREDEFINED + library),
+            predefined: parseMacroDump(PREDEFINED),
+            constants: ['DEF_WBITS'],
+        })).toEqual(['#define DEF_WBITS MAX_WBITS', '#define MAX_WBITS 15']);
+    });
+
+    // SWIG drops a constant whose value uses a macro it has not seen, and it reads no #include.
+    test.each([[['CONF_EXPRESSION']], [ALL_NAMES]])('defines the included macros a header constant uses when the app imports %s', (constants) => {
+        const header = '#include "confconstantsbase.h"\n#define CONF_INT 42\n#define CONF_EXPRESSION (CONF_INT * 2 + CONF_BASE)\n';
+        expect(selectSwigMacros({
+            headerText: header,
+            macros: parseMacroDump(`${PREDEFINED}#define CONF_BASE 3\n#define CONF_INT 42\n#define CONF_EXPRESSION (CONF_INT * 2 + CONF_BASE)\n`),
+            predefined: parseMacroDump(PREDEFINED),
+            constants,
+        })).toEqual(['#define CONF_BASE 3']);
+    });
+
+    test('leaves an imported name to the header that defines it, and forwards no function-like or type macro as a constant', () => {
+        const library = '#define Z_FINISH 4\n#define OF(args) args\n#define z_const const\n';
+        expect(selectSwigMacros({
+            headerText: '#define Z_FINISH 4\nint deflate(int flush);\n',
+            macros: parseMacroDump(PREDEFINED + library),
+            predefined: parseMacroDump(PREDEFINED),
+            constants: ['Z_FINISH', 'OF', 'z_const'],
+        })).toEqual([]);
+    });
 });
 
 describe('findHeaderPrelude', () => {
@@ -394,55 +446,4 @@ describe('findHeaderPrelude', () => {
         const header = '/work/app/node_modules/pkg/dist/prebuilt/wasm-wasm32-st-release/include/lib.h';
         expect(findHeaderPrelude(header, [app, nested])).toEqual(['pre.h']);
     });
-});
-
-// What the compiler saw of a dependency's header: `cc -E` resolves its #if branches, and the typedefs of
-// everything it includes tell which field types are plain numbers.
-describe('preprocessed header text', () => {
-    const output = [
-        '# 1 "/dev/null"',
-        '# 1 "<built-in>" 1',
-        '# 1 "/work/include/jconfig.h" 1',
-        'typedef unsigned int JDIMENSION;',
-        'typedef int boolean;',
-        'typedef JDIMENSION dimension_t;',
-        'typedef unsigned char *JSAMPROW;',
-        'typedef struct jpeg_error_mgr jpeg_error_mgr;',
-        '# 2 "/work/include/jpeglib.h" 2',
-        'struct jpeg_compress_struct {',
-        '  JDIMENSION image_width;',
-        '  int kept;',
-        '};',
-        '# 1 "/work/include/jmorecfg.h" 1',
-        'typedef short INT16;',
-        '# 5 "/work/include/jpeglib.h" 2',
-        'int after;',
-    ].join('\n');
-
-    test('keeps only the lines the header contributes itself', () => {
-        expect(ownPreprocessedText(output, 'jpeglib.h').split('\n')).toEqual(['struct jpeg_compress_struct {', '  JDIMENSION image_width;', '  int kept;', '};', 'int after;']);
-    });
-
-    test('matches a header by its path under the include directory', () => {
-        expect(ownPreprocessedText('# 1 "/work/include/curl/curl.h" 1\nint a;\n# 1 "/work/include/curl.h" 1\nint b;', 'curl/curl.h')).toBe('int a;');
-    });
-
-    test('collects the scalar typedefs of the whole translation unit, through chains', () => {
-        expect([...scalarTypedefs(output)]).toEqual([
-            ['JDIMENSION', 'unsigned int'],
-            ['boolean', 'int'],
-            ['dimension_t', 'unsigned int'],
-            ['INT16', 'short'],
-        ]);
-    });
-});
-
-test('collects the enum names of a translation unit', () => {
-    const text = 'enum A { X };\ntypedef enum { Y } B;\ntypedef enum C_tag { Z } C;\ntypedef enum A AA;\nenum class D : int { W };\nenum E e_variable;';
-    expect([...enumNames(text)].sort()).toEqual(['A', 'AA', 'B', 'C', 'C_tag', 'D']);
-});
-
-test('collects the pointer typedefs of a translation unit, through typedef chains', () => {
-    const text = 'typedef struct marker *marker_ptr;\ntypedef void *voidpf;\ntypedef voidpf opaque_t;\ntypedef void (*alloc_func)(void *);\ntypedef int count;\ntypedef struct { int a; } plain;\ntypedef char *names[4];';
-    expect([...pointerTypedefs(text)].sort()).toEqual([['marker_ptr', 'struct marker'], ['opaque_t', 'void'], ['voidpf', 'void']]);
 });

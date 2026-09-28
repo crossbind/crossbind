@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import {
-    state, findFiles, computeInputStamp, getDependenciesStamp,
+    state, findFiles, computeInputStamp, getDependenciesStamp, collectRustSources, collectRustBridgeFiles,
 } from 'crossbind';
 
 const SOURCE_EXTS = ['js', 'jsx', 'ts', 'tsx', 'mjs', 'cjs'];
@@ -22,9 +22,12 @@ function computeStampHash(buildType, extraRoots) {
     const exts = [...new Set([
         ...SOURCE_EXTS, ...state.config.ext.source, ...state.config.ext.header, ...state.config.ext.module,
     ])];
+    // The Rust bridge crates cargo builds into the Full libs, and the .rs sources they include.
     const extraFiles = [
         `${state.config.paths.cli}/../package.json`,
         fileURLToPath(new URL('../package.json', import.meta.url)),
+        ...collectRustSources(roots),
+        ...collectRustBridgeFiles(state.config.paths.cache),
     ];
     return computeInputStamp(roots, exts, extraFiles, `ios-libs:${buildType}:${getDependenciesStamp()}`);
 }

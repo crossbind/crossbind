@@ -20,7 +20,7 @@ For PRs touching `ports/`:
 
 ### Structure
 
-- [ ] The family uses `ports/<name>/{base,wasm,android,ios,wasi}`; add `bin-wasi/` only when an upstream CLI is published.
+- [ ] The family uses `ports/<name>/{base,wasm,android,ios,darwin,linux,win32,wasi}`; add `bin-wasi/` only when an upstream CLI is published.
 - [ ] `base/` contains `package.json`, `build.mjs`, `mergeConfig.mjs`, `README.md` and `.npmignore`.
 - [ ] Each platform variant has `package.json`, `crossbind.config.js`, `crossbind.build.js`, `README.md`, upstream `LICENSE` and `.npmignore`.
 - [ ] The iOS variant has any required `crossbind-port-<name>.podspec`, including `EXCLUDED_ARCHS[sdk=iphonesimulator*] = x86_64` when its prebuilt slices require that exclusion.
@@ -28,10 +28,10 @@ For PRs touching `ports/`:
 
 ### `crossbind.build.js`
 
-- [ ] `getURL(version)` returns a stable URL pattern (or `getSource` is justified by a comment).
+- [ ] `getURL(version)` returns a stable URL pattern.
 - [ ] `buildType` is `'cmake'` (preferred) or `'configure'` (autotools only).
 - [ ] `getBuildParams` disables tests, examples, docs (`-DBUILD_TESTING=OFF`, `-DBUILD_EXAMPLES=OFF`, etc.).
-- [ ] Per-platform branches (wasm/android/ios) are minimal — only the actual differences.
+- [ ] Per-platform branches (wasm/android/ios/darwin/linux/win32) are minimal — only the actual differences.
 - [ ] If `replaceList` patches upstream source: each entry has a comment explaining **why** the patch is needed (often: CPU intrinsics, raw pointers, platform-specific assembly).
 - [ ] If `prepare` or `build` hook is used: justified by the upstream's specific build system. Not used as a "I want more control" shortcut.
 

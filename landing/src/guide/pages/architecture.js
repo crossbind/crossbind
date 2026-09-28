@@ -88,11 +88,11 @@ export default {
             type: 'ol',
             items: [
                 'Narrow which targets build: `target.{platform, arch, runtime, buildType}`.',
-                'Per-target flags and data, declaratively: `targetSpecs[].specs.{cmake, emccFlags, env, data, ignoreLibName, wasiFlags}`.',
+                'Per-target flags and data, declaratively: `targetSpecs[].specs.{cmake.compileOptions, binary.emccFlags, env, data, ignoreLibName, binary.wasiFlags}`.',
                 'Project-wide: `dependencies`, `env`, `functions.isEnabled`.',
                 'Package authoring: `crossbind.build.js` hooks - source fetch, patches, build parameters, extra libs.',
                 'Cross-package plugins: `extensions[]` hooks at config-load and build-step boundaries.',
-                'Machine-wide: `~/.crossbind.json` (runner, Xcode team, log level, local wasi-sdk).',
+                'Machine-wide: `~/.crossbind.json` (runner, Xcode team, local wasi-sdk).',
             ],
         },
         {

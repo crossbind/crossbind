@@ -3,6 +3,17 @@ const platformBuild = {
     'android': ['-DBUILD_SHARED_LIBS=ON', '-DBUILD_STATIC_LIBS=OFF'],
     // _CURL_PREFILL=ON loads unix-cache.cmake (HAVE_PIPE2=0); iPhoneSimulator SDK 26+ misdetects pipe2 otherwise.
     'ios': ['-DBUILD_SHARED_LIBS=OFF', '-DBUILD_STATIC_LIBS=ON', '-D_CURL_PREFILL=ON'],
+    // The SDK is newer than the deployment target, so its declarations cannot tell what the oldest macOS has.
+    // LDAP stays off as on every other platform, although the macOS SDK would provide it.
+    'darwin': ['-DBUILD_SHARED_LIBS=OFF', '-DBUILD_STATIC_LIBS=ON', '-D_CURL_PREFILL=ON', '-DCURL_DISABLE_LDAP=ON'],
+    'linux': ['-DBUILD_SHARED_LIBS=OFF', '-DBUILD_STATIC_LIBS=ON'],
+    // TLS through OpenSSL, as everywhere else, rather than Windows' own Schannel: curl leaves both
+    // off on Windows unless asked. LDAP off as on every other platform, although Windows would
+    // provide it.
+    'win32': [
+        '-DBUILD_SHARED_LIBS=OFF', '-DBUILD_STATIC_LIBS=ON',
+        '-DCURL_USE_SCHANNEL=OFF', '-DCURL_USE_OPENSSL=ON', '-DCURL_DISABLE_LDAP=ON',
+    ],
     // wasi: HTTP(S)-only over wasi:sockets; no threads/socketpair/UNIX sockets; CA via CURLOPT_CAINFO.
     'wasi': [
         '-DBUILD_SHARED_LIBS=OFF', '-DBUILD_STATIC_LIBS=ON',
@@ -25,6 +36,8 @@ export default {
                 `-DOPENSSL_INCLUDE_DIR=${depPaths.ssl.header}`,
                 `-DOPENSSL_SSL_LIBRARY=${depPaths.ssl.lib}`,
                 `-DOPENSSL_CRYPTO_LIBRARY=${depPaths.crypto.lib}`,
+                // CMake's FindOpenSSL takes the MinGW libraries from these instead.
+                ...(target.platform === 'win32' ? [`-DSSL_EAY=${depPaths.ssl.lib}`, `-DLIB_EAY=${depPaths.crypto.lib}`] : []),
             ]
             : []),
         '-DBUILD_EXAMPLES=OFF', '-DBUILD_CURL_EXE=OFF', '-DBUILD_LIBCURL_DOCS=OFF',

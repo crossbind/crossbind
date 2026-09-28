@@ -5,7 +5,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { inspectWorkspaceTarball, packWorkspacePackage } from './package-artifact.mjs';
-import { validateWorkspaceReleasePlan } from './workspace-release.mjs';
+import { MULTI_PLATFORM_RUNNERS, RUNNERS, validateWorkspaceReleasePlan } from './workspace-release.mjs';
 import { appendGitHubOutput, writeJson } from './release-lib.mjs';
 
 const REPOSITORY_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
@@ -32,7 +32,7 @@ function findBuildInputs(directory) {
     for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
         const target = path.join(directory, entry.name);
         if (entry.isDirectory()) manifests.push(...findBuildInputs(target));
-        else if (/^build-(linux|wasm|android|wasi|macos)\.json$/.test(entry.name)) {
+        else if (new RegExp(`^build-(${RUNNERS.join('|')})\\.json$`).test(entry.name)) {
             manifests.push({ runner: /^build-(.+)\.json$/.exec(entry.name)[1], directory });
         }
     }
@@ -47,7 +47,7 @@ const requiredRunners = new Set(
         .filter(([, order]) => order.length > 0)
         .map(([runner]) => runner),
 );
-if (plan.multiPlatform.length) for (const runner of ['wasm', 'android', 'wasi', 'macos']) requiredRunners.add(runner);
+if (plan.multiPlatform.length) for (const runner of MULTI_PLATFORM_RUNNERS) requiredRunners.add(runner);
 const missingRunners = [...requiredRunners].filter((runner) => !inputs.some((input) => input.runner === runner));
 if (missingRunners.length) throw new Error(`Missing required platform build manifest(s): ${missingRunners.join(', ')}.`);
 
@@ -123,7 +123,7 @@ for (const name of plan.multiPlatform) {
     const candidate = workspace[name];
     const packageRoot = path.join(root, candidate.path);
     const aggregateCMakeFiles = [];
-    for (const runner of ['wasm', 'android', 'wasi', 'macos']) {
+    for (const runner of MULTI_PLATFORM_RUNNERS) {
         const input = inputs.find((candidateInput) => candidateInput.runner === runner);
         const source = path.join(input.directory, 'multi', input.runner, candidate.path);
         if (!fs.existsSync(source)) throw new Error(`${candidate.name}: ${runner} build did not stage its multi-platform output.`);

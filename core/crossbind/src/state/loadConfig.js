@@ -126,6 +126,9 @@ export function getFilledConfig(config, options = { isDepend: false }) {
     if (typeof newConfig.types !== 'boolean') {
         throw new Error(`crossbind: "types" must be true or false (got '${newConfig.types}').`);
     }
+    if (newConfig.targetSpecs.some((t) => Array.isArray(t?.specs?.cmake))) {
+        throw new Error('crossbind: "targetSpecs[].specs.cmake" must be an object such as { compileOptions: [\'-O3\'] } (got an array). CMake configure flags (-D...) belong in a recipe\'s getBuildParams.');
+    }
 
     if (newConfig.paths.config && !newConfig.paths.project) {
         newConfig.paths.project = getParentPath(newConfig.paths.config);

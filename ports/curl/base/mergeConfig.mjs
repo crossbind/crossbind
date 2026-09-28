@@ -18,6 +18,17 @@ export default (newConfig = {}) => ({
     },
     targetSpecs: [
         { platform: 'wasm', specs: { binary: { emccFlags: ['-s', 'FETCH'] } } },
+        // curl compresses with the zlib of the macOS SDK.
+        { platform: 'darwin', specs: { binary: { addonFlags: ['-lz'] } } },
+        // On Windows a consumer compiles against the static library, or curl.h expects a DLL; and it
+        // links Winsock, the CNG random source, the certificate store and the adapter list curl uses.
+        {
+            platform: 'win32',
+            specs: {
+                cmake: { compileOptions: ['-DCURL_STATICLIB'] },
+                binary: { addonFlags: ['-lws2_32', '-lbcrypt', '-ladvapi32', '-lcrypt32', '-liphlpapi'] },
+            },
+        },
         ...(newConfig.targetSpecs || []),
     ],
 });

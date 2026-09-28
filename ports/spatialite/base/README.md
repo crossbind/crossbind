@@ -48,6 +48,8 @@ export default {
 };
 ```
 
+A native Node.js addon links the build of its platform: `crossbind build -p darwin`, `-p linux` or `-p win32` takes `@crossbind/port-spatialite-darwin`, `-linux` or `-win32`. Install it and import its `crossbind.config.js` the same way.
+
 > In a web build, list only `spatialiteWasm` for now: with the Android or iOS config beside it, the build also tries to preload their PROJ data and fails. See [known issues](https://github.com/crossbind/crossbind/blob/main/docs/known-issues.md).
 
 ## Usage
@@ -142,7 +144,7 @@ Each one runs in your browser on [crossbind.dev/ports/spatialite](https://crossb
 - [Reproject coordinates between EPSG codes](https://crossbind.dev/ports/spatialite/#04-transform): `ST_Transform` through PROJ, and the reference systems' names in `spatial_ref_sys`.
 - [Read GeoJSON in and write a FeatureCollection out](https://crossbind.dev/ports/spatialite/#05-geojson): `GeomFromGeoJSON`, `AsGeoJSON` and SQLite's JSON functions.
 
-Setup and differences per platform: [WebAssembly](https://crossbind.dev/ports/spatialite/wasm/) · [Android](https://crossbind.dev/ports/spatialite/android/) · [iOS](https://crossbind.dev/ports/spatialite/ios/) · [WASI](https://crossbind.dev/ports/spatialite/wasi/), which also has a command-line program built with `crossbind build -p wasi`.
+Setup and differences per platform: [WebAssembly](https://crossbind.dev/ports/spatialite/wasm/) · [Android](https://crossbind.dev/ports/spatialite/android/) · [iOS](https://crossbind.dev/ports/spatialite/ios/) · [macOS](https://crossbind.dev/ports/spatialite/darwin/) · [Linux](https://crossbind.dev/ports/spatialite/linux/) · [Windows](https://crossbind.dev/ports/spatialite/win32/) · [WASI](https://crossbind.dev/ports/spatialite/wasi/), which also has a command-line program built with `crossbind build -p wasi`.
 
 ## What this build includes
 - SpatiaLite 5.1.0 with GEOS 3.15.0, PROJ 9.9.0 and SQLite 3.53.4, as `spatialite_version()`, `geos_version()`, `proj_version()` and `sqlite_version()` report them in the WebAssembly build.
@@ -162,6 +164,9 @@ This is the main package; the precompiled binaries are shipped per platform:
 | WebAssembly | [`@crossbind/port-spatialite-wasm`](https://www.npmjs.com/package/@crossbind/port-spatialite-wasm) | `wasm32` — single-threaded & multi-threaded |
 | Android | [`@crossbind/port-spatialite-android`](https://www.npmjs.com/package/@crossbind/port-spatialite-android) | `arm64-v8a` (64-bit ARM), `x86_64` (emulator) |
 | iOS | [`@crossbind/port-spatialite-ios`](https://www.npmjs.com/package/@crossbind/port-spatialite-ios) | device (`arm64`), simulator (`arm64`) |
+| macOS | [`@crossbind/port-spatialite-darwin`](https://www.npmjs.com/package/@crossbind/port-spatialite-darwin) | `arm64` (Apple silicon), `x64` (Intel) — native Node.js addons |
+| Linux | [`@crossbind/port-spatialite-linux`](https://www.npmjs.com/package/@crossbind/port-spatialite-linux) | `x64`, `arm64` — glibc 2.28 or later, native Node.js addons |
+| Windows | [`@crossbind/port-spatialite-win32`](https://www.npmjs.com/package/@crossbind/port-spatialite-win32) | `x64`, `arm64` — Windows 10 or later, native Node.js addons |
 | WASI library | [`@crossbind/port-spatialite-wasi`](https://www.npmjs.com/package/@crossbind/port-spatialite-wasi) | `wasm32-wasip3` — single-threaded |
 
 ## License

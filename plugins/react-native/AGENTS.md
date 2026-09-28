@@ -13,9 +13,9 @@
 - `script/build_android_deps.js` — source-rebuilds dependencies flagged via `crossbind.overrides.js` / `CROSSBIND_REBUILD_DEPS`; prints `CROSSBIND_DEPS_STAMP=` for `build.gradle`.
 - `script/resolveBuildTarget.js` — shared Android buildTarget resolution used by the two scripts above.
 - `script/build_ios.js` — runs `crossbind build -p ios` + `createXCFramework`. Skips the native build when inputs are unchanged (see `iosLibCache.js`); force with `CROSSBIND_NO_IOS_CACHE=1`.
-- `script/iosLibCache.js` — content-hash stamp (`.crossbind/build/ios-libs-stamp-<buildType>.json`) plus mtime-pinned xcframework outputs (plugin dir can be shared between apps) deciding whether `build_ios.js` can skip.
+- `script/iosLibCache.js` — content-hash stamp (`.crossbind/build/ios-libs-stamp-<buildType>.json`) over app, dependency and `.rs` sources plus the generated Rust bridges, and mtime-pinned xcframework outputs (plugin dir can be shared between apps), deciding whether `build_ios.js` can skip.
 - `script/build_js.js` — generates the JS-side bridge module Metro bundles. Skips Metro when inputs are unchanged (see `bridgeCache.js`); force with `CROSSBIND_NO_BRIDGE_CACHE=1`.
-- `script/bridgeCache.js` — content-hash stamp (`.crossbind/build/bridge-stamp-<platform>.json`) over app + dependency sources deciding whether `build_js.js` can skip Metro.
+- `script/bridgeCache.js` — content-hash stamp (`.crossbind/build/bridge-stamp-<platform>.json`) over app + dependency sources, `.rs` included, deciding whether `build_js.js` can skip Metro.
 - `script/getCliPath.js` — resolves the crossbind CLI path inside Gradle's CMake context. Deliberately state-free: CMake parses its stdout, so it must never load crossbind config (which can log to stdout).
 - `cpp/` — C++ glue used by the JSI bridge.
 - `js/` — JS-side runtime that user code imports.

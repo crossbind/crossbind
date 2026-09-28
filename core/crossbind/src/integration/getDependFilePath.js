@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import state from '../state/index.js';
+import { parseCargoImport, writeCargoMarker } from '../utils/cargoImport.js';
 
 const LAYOUT = { header: 'include', module: 'swig', source: '' };
 
@@ -76,21 +77,17 @@ function getFolderCandidates(pkg, alias) {
 }
 
 export default function getDependFilePath(source, target) {
-    // `cargo:<crate>` imports (the node:/npm: convention for a non-npm store) resolve to a
-    // generated marker .rs; the transformer turns it into the crate-import bridge (no surface
-    // file, no package). The scheme is unambiguous, so npm names never collide and an
-    // undeclared crate is a hard, actionable error instead of a silent npm fallthrough.
+    // `cargo:<crate>[/<module>...]` imports (the node:/npm: convention for a non-npm store)
+    // resolve to a generated marker .rs; the transformer turns it into the crate-import bridge
+    // (no surface file, no package). The scheme is unambiguous, so npm names never collide and
+    // an undeclared crate is a hard, actionable error instead of a silent npm fallthrough.
     if (source.startsWith('cargo:')) {
-        const crateName = source.slice('cargo:'.length);
+        const cargoImport = parseCargoImport(source);
         const cargoDeps = state.config.cargoDependencies ?? {};
-        if (!Object.hasOwn(cargoDeps, crateName)) {
-            throw new Error(`crossbind: '${source}' is not declared - add '${crateName}' to cargoDependencies in crossbind.config.`);
+        if (!Object.hasOwn(cargoDeps, cargoImport.crateName)) {
+            throw new Error(`crossbind: '${source}' is not declared - add '${cargoImport.crateName}' to cargoDependencies in crossbind.config.`);
         }
-        const marker = path.join(state.config.paths.cache, 'rust-crates', `${crateName}.rs`);
-        if (!fs.existsSync(marker)) {
-            fs.mkdirSync(path.dirname(marker), { recursive: true });
-            fs.writeFileSync(marker, `// crossbind cargo crate import marker: ${crateName}\n`);
-        }
+        const marker = writeCargoMarker(state.config.paths.cache, cargoImport);
         existsCache.set(marker, true);
         return marker;
     }

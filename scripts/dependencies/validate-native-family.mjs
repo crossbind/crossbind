@@ -75,7 +75,7 @@ export function validateNativeFamily(family, platform, root = ROOT) {
     if (!fs.existsSync(familyRoot)) throw new Error(`${family}: native family does not exist.`);
     const packages = nativeWorkspacePackages(root);
     const built = new Set();
-    const targets = platform === 'macos' ? ['ios'] : ['base', 'wasm', 'wasi', 'bin-wasi', 'android'];
+    const targets = platform === 'macos' ? ['ios', 'darwin'] : ['base', 'wasm', 'wasi', 'bin-wasi', 'android', 'linux', 'win32'];
     let packed = 0;
     for (const target of targets) {
         const directory = path.join(familyRoot, target);

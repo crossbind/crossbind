@@ -3,16 +3,16 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 
-const { run, state } = vi.hoisted(() => ({ run: vi.fn(), state: { config: {} } }));
+const { run, state, link } = vi.hoisted(() => ({ run: vi.fn(), state: { config: {} }, link: { rustLibs: [], emccFlags: [] } }));
 
 vi.mock('replace', () => ({ default: vi.fn() }));
 vi.mock('../src/actions/run.js', () => ({ default: run }));
 vi.mock('../src/actions/getDependLibs.js', () => ({ default: () => [] }));
-vi.mock('../src/actions/getData.js', () => ({ default: (kind) => (kind === 'binary' ? { emccFlags: ['-sCUSTOM_FLAG=1'] } : {}) }));
+vi.mock('../src/actions/getData.js', () => ({ default: (kind) => (kind === 'binary' ? { emccFlags: [...link.emccFlags] } : {}) }));
 vi.mock('../src/actions/buildJs.js', () => ({ default: async () => {} }));
 vi.mock('../src/actions/extensions.js', () => ({ default: () => {} }));
 vi.mock('../src/utils/resolveEmbindRust.js', () => ({ default: () => '/embind-rust' }));
-vi.mock('../src/utils/appRustCrates.js', () => ({ default: () => [] }));
+vi.mock('../src/utils/appRustCrates.js', () => ({ default: () => link.rustLibs }));
 vi.mock('../src/utils/logger.js', () => ({
     default: { info() {}, error() {}, startStep() {}, doneStep() {}, cachedStep() {} },
 }));
@@ -53,6 +53,8 @@ describe('buildWasm link step', () => {
         };
         for (const env of Object.keys(ENVIRONMENTS)) fs.writeFileSync(`${work}/demo.raw.${env}.js`, '');
         run.mockReset();
+        link.rustLibs = [];
+        link.emccFlags = ['-sCUSTOM_FLAG=1'];
     });
 
     afterEach(() => {
@@ -84,5 +86,32 @@ describe('buildWasm link step', () => {
         const [, args] = run.mock.calls[0];
         expect(args.indexOf('-O3')).toBeGreaterThan(-1);
         expect(args.indexOf('-O3')).toBeLessThan(args.indexOf('-sCUSTOM_FLAG=1'));
+    });
+
+    test('a Rust link gets a 1 MB stack, and a debug one a stack overflow check', async () => {
+        link.rustLibs = [`${work}/libcrossbind_app_super.a`];
+
+        await buildWasm(makeTarget('browser'), { force: true });
+        await buildWasm({ ...makeTarget('browser'), buildType: 'debug', path: 'wasm-wasm32-st-debug' }, { force: true });
+
+        const [releaseArgs, debugArgs] = run.mock.calls.map((call) => call[1]);
+        expect(releaseArgs).toContain('-sSTACK_SIZE=1MB');
+        expect(releaseArgs).not.toContain('-sSTACK_OVERFLOW_CHECK=1');
+        expect(debugArgs).toEqual(expect.arrayContaining(['-sSTACK_SIZE=1MB', '-sSTACK_OVERFLOW_CHECK=1']));
+    });
+
+    test('a stack size from the config wins over the Rust default', async () => {
+        link.rustLibs = [`${work}/libcrossbind_app_super.a`];
+        link.emccFlags = ['-sSTACK_SIZE=4MB'];
+
+        await buildWasm(makeTarget('browser'), { force: true });
+
+        expect(run.mock.calls[0][1].filter((arg) => String(arg).includes('STACK_SIZE'))).toEqual(['-sSTACK_SIZE=4MB']);
+    });
+
+    test('a link without Rust keeps emscripten\'s own stack', async () => {
+        await buildWasm({ ...makeTarget('browser'), buildType: 'debug', path: 'wasm-wasm32-st-debug' }, { force: true });
+
+        expect(run.mock.calls[0][1].some((arg) => String(arg).includes('STACK_'))).toBe(false);
     });
 });

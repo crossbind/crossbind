@@ -126,6 +126,12 @@ importers:
         specifier: 0.87.1
         version: 0.87.1(@babel/core@8.0.6)(@react-native-community/cli@20.2.0(supports-color@10.2.2)(typescript@7.0.2))(@react-native/metro-config@0.87.1(@babel/core@8.0.6)(supports-color@10.2.2))(@types/react@19.3.0)(react@19.3.0)(supports-color@10.2.2)
 
+  core/embind-napi:
+    dependencies:
+      '@crossbind/core-embind-jsi':
+        specifier: workspace:^
+        version: link:../embind-jsi
+
   core/embind-rust: {}
 
   core/embind-rust/demo:
@@ -258,6 +264,28 @@ importers:
         specifier: ^0.2.1
         version: 0.2.1
     devDependencies:
+      crossbind:
+        specifier: workspace:^
+        version: link:../../core/crossbind
+
+  e2e/backend-nodejs-native:
+    dependencies:
+      '@crossbind/conformance':
+        specifier: workspace:^
+        version: link:../conformance
+      '@crossbind/conformance-rust':
+        specifier: workspace:^
+        version: link:../conformance-rust
+      '@crossbind/embind-rust-demo':
+        specifier: workspace:^
+        version: link:../../core/embind-rust/demo
+    devDependencies:
+      '@crossbind/core-embind-napi':
+        specifier: workspace:^
+        version: link:../../core/embind-napi
+      '@crossbind/core-embind-rust':
+        specifier: workspace:^
+        version: link:../../core/embind-rust
       crossbind:
         specifier: workspace:^
         version: link:../../core/crossbind
@@ -819,6 +847,19 @@ importers:
         specifier: ^8.2.1
         version: 8.3.0(esbuild@0.28.1)(jiti@2.7.0)(terser@5.37.0)(yaml@2.9.0)
 
+  examples/backend-nodejs-native:
+    dependencies:
+      '@crossbind/example-lib-prebuilt-matrix':
+        specifier: workspace:^
+        version: link:../lib-prebuilt-matrix
+    devDependencies:
+      '@crossbind/core-embind-napi':
+        specifier: workspace:^
+        version: link:../../core/embind-napi
+      crossbind:
+        specifier: workspace:^
+        version: link:../../core/crossbind
+
   examples/backend-nodejs-wasm:
     dependencies:
       '@crossbind/example-lib-prebuilt-matrix':
@@ -1258,6 +1299,19 @@ importers:
         specifier: workspace:^
         version: link:../../../core/crossbind
 
+  ports/curl/darwin:
+    dependencies:
+      '@crossbind/port-curl':
+        specifier: workspace:^
+        version: link:../base
+      '@crossbind/port-openssl-darwin':
+        specifier: workspace:^
+        version: link:../../openssl/darwin
+    devDependencies:
+      crossbind:
+        specifier: workspace:^
+        version: link:../../../core/crossbind
+
   ports/curl/ios:
     dependencies:
       '@crossbind/port-curl':
@@ -1266,6 +1320,19 @@ importers:
       '@crossbind/port-openssl-ios':
         specifier: workspace:^
         version: link:../../openssl/ios
+    devDependencies:
+      crossbind:
+        specifier: workspace:^
+        version: link:../../../core/crossbind
+
+  ports/curl/linux:
+    dependencies:
+      '@crossbind/port-curl':
+        specifier: workspace:^
+        version: link:../base
+      '@crossbind/port-openssl-linux':
+        specifier: workspace:^
+        version: link:../../openssl/linux
     devDependencies:
       crossbind:
         specifier: workspace:^
@@ -1297,6 +1364,19 @@ importers:
         specifier: workspace:^
         version: link:../../../core/crossbind
 
+  ports/curl/win32:
+    dependencies:
+      '@crossbind/port-curl':
+        specifier: workspace:^
+        version: link:../base
+      '@crossbind/port-openssl-win32':
+        specifier: workspace:^
+        version: link:../../openssl/win32
+    devDependencies:
+      crossbind:
+        specifier: workspace:^
+        version: link:../../../core/crossbind
+
   ports/expat/android:
     dependencies:
       '@crossbind/port-expat':
@@ -1321,7 +1401,27 @@ importers:
         specifier: workspace:^
         version: link:../../../core/crossbind
 
+  ports/expat/darwin:
+    dependencies:
+      '@crossbind/port-expat':
+        specifier: workspace:^
+        version: link:../base
+    devDependencies:
+      crossbind:
+        specifier: workspace:^
+        version: link:../../../core/crossbind
+
   ports/expat/ios:
+    dependencies:
+      '@crossbind/port-expat':
+        specifier: workspace:^
+        version: link:../base
+    devDependencies:
+      crossbind:
+        specifier: workspace:^
+        version: link:../../../core/crossbind
+
+  ports/expat/linux:
     dependencies:
       '@crossbind/port-expat':
         specifier: workspace:^
@@ -1342,6 +1442,16 @@ importers:
         version: link:../../../core/crossbind
 
   ports/expat/wasm:
+    dependencies:
+      '@crossbind/port-expat':
+        specifier: workspace:^
+        version: link:../base
+    devDependencies:
+      crossbind:
+        specifier: workspace:^
+        version: link:../../../core/crossbind
+
+  ports/expat/win32:
     dependencies:
       '@crossbind/port-expat':
         specifier: workspace:^
@@ -1435,6 +1545,58 @@ importers:
         specifier: workspace:^
         version: link:../../../core/crossbind
 
+  ports/gdal/darwin:
+    dependencies:
+      '@crossbind/port-curl-darwin':
+        specifier: workspace:^
+        version: link:../../curl/darwin
+      '@crossbind/port-expat-darwin':
+        specifier: workspace:^
+        version: link:../../expat/darwin
+      '@crossbind/port-gdal':
+        specifier: workspace:^
+        version: link:../base
+      '@crossbind/port-geos-darwin':
+        specifier: workspace:^
+        version: link:../../geos/darwin
+      '@crossbind/port-geotiff-darwin':
+        specifier: workspace:^
+        version: link:../../geotiff/darwin
+      '@crossbind/port-iconv-darwin':
+        specifier: workspace:^
+        version: link:../../iconv/darwin
+      '@crossbind/port-jpegturbo-darwin':
+        specifier: workspace:^
+        version: link:../../jpegturbo/darwin
+      '@crossbind/port-lerc-darwin':
+        specifier: workspace:^
+        version: link:../../lerc/darwin
+      '@crossbind/port-proj-darwin':
+        specifier: workspace:^
+        version: link:../../proj/darwin
+      '@crossbind/port-spatialite-darwin':
+        specifier: workspace:^
+        version: link:../../spatialite/darwin
+      '@crossbind/port-sqlite3-darwin':
+        specifier: workspace:^
+        version: link:../../sqlite3/darwin
+      '@crossbind/port-tiff-darwin':
+        specifier: workspace:^
+        version: link:../../tiff/darwin
+      '@crossbind/port-webp-darwin':
+        specifier: workspace:^
+        version: link:../../webp/darwin
+      '@crossbind/port-zlib-darwin':
+        specifier: workspace:^
+        version: link:../../zlib/darwin
+      '@crossbind/port-zstd-darwin':
+        specifier: workspace:^
+        version: link:../../zstd/darwin
+    devDependencies:
+      crossbind:
+        specifier: workspace:^
+        version: link:../../../core/crossbind
+
   ports/gdal/ios:
     dependencies:
       '@crossbind/port-curl-ios':
@@ -1482,6 +1644,58 @@ importers:
       '@crossbind/port-zstd-ios':
         specifier: workspace:^
         version: link:../../zstd/ios
+    devDependencies:
+      crossbind:
+        specifier: workspace:^
+        version: link:../../../core/crossbind
+
+  ports/gdal/linux:
+    dependencies:
+      '@crossbind/port-curl-linux':
+        specifier: workspace:^
+        version: link:../../curl/linux
+      '@crossbind/port-expat-linux':
+        specifier: workspace:^
+        version: link:../../expat/linux
+      '@crossbind/port-gdal':
+        specifier: workspace:^
+        version: link:../base
+      '@crossbind/port-geos-linux':
+        specifier: workspace:^
+        version: link:../../geos/linux
+      '@crossbind/port-geotiff-linux':
+        specifier: workspace:^
+        version: link:../../geotiff/linux
+      '@crossbind/port-iconv-linux':
+        specifier: workspace:^
+        version: link:../../iconv/linux
+      '@crossbind/port-jpegturbo-linux':
+        specifier: workspace:^
+        version: link:../../jpegturbo/linux
+      '@crossbind/port-lerc-linux':
+        specifier: workspace:^
+        version: link:../../lerc/linux
+      '@crossbind/port-proj-linux':
+        specifier: workspace:^
+        version: link:../../proj/linux
+      '@crossbind/port-spatialite-linux':
+        specifier: workspace:^
+        version: link:../../spatialite/linux
+      '@crossbind/port-sqlite3-linux':
+        specifier: workspace:^
+        version: link:../../sqlite3/linux
+      '@crossbind/port-tiff-linux':
+        specifier: workspace:^
+        version: link:../../tiff/linux
+      '@crossbind/port-webp-linux':
+        specifier: workspace:^
+        version: link:../../webp/linux
+      '@crossbind/port-zlib-linux':
+        specifier: workspace:^
+        version: link:../../zlib/linux
+      '@crossbind/port-zstd-linux':
+        specifier: workspace:^
+        version: link:../../zstd/linux
     devDependencies:
       crossbind:
         specifier: workspace:^
@@ -1567,6 +1781,58 @@ importers:
         specifier: workspace:^
         version: link:../../../core/crossbind
 
+  ports/gdal/win32:
+    dependencies:
+      '@crossbind/port-curl-win32':
+        specifier: workspace:^
+        version: link:../../curl/win32
+      '@crossbind/port-expat-win32':
+        specifier: workspace:^
+        version: link:../../expat/win32
+      '@crossbind/port-gdal':
+        specifier: workspace:^
+        version: link:../base
+      '@crossbind/port-geos-win32':
+        specifier: workspace:^
+        version: link:../../geos/win32
+      '@crossbind/port-geotiff-win32':
+        specifier: workspace:^
+        version: link:../../geotiff/win32
+      '@crossbind/port-iconv-win32':
+        specifier: workspace:^
+        version: link:../../iconv/win32
+      '@crossbind/port-jpegturbo-win32':
+        specifier: workspace:^
+        version: link:../../jpegturbo/win32
+      '@crossbind/port-lerc-win32':
+        specifier: workspace:^
+        version: link:../../lerc/win32
+      '@crossbind/port-proj-win32':
+        specifier: workspace:^
+        version: link:../../proj/win32
+      '@crossbind/port-spatialite-win32':
+        specifier: workspace:^
+        version: link:../../spatialite/win32
+      '@crossbind/port-sqlite3-win32':
+        specifier: workspace:^
+        version: link:../../sqlite3/win32
+      '@crossbind/port-tiff-win32':
+        specifier: workspace:^
+        version: link:../../tiff/win32
+      '@crossbind/port-webp-win32':
+        specifier: workspace:^
+        version: link:../../webp/win32
+      '@crossbind/port-zlib-win32':
+        specifier: workspace:^
+        version: link:../../zlib/win32
+      '@crossbind/port-zstd-win32':
+        specifier: workspace:^
+        version: link:../../zstd/win32
+    devDependencies:
+      crossbind:
+        specifier: workspace:^
+        version: link:../../../core/crossbind
+
   ports/geos/android:
     dependencies:
       '@crossbind/port-geos':
@@ -1591,7 +1857,27 @@ importers:
         specifier: workspace:^
         version: link:../../../core/crossbind
 
+  ports/geos/darwin:
+    dependencies:
+      '@crossbind/port-geos':
+        specifier: workspace:^
+        version: link:../base
+    devDependencies:
+      crossbind:
+        specifier: workspace:^
+        version: link:../../../core/crossbind
+
   ports/geos/ios:
+    dependencies:
+      '@crossbind/port-geos':
+        specifier: workspace:^
+        version: link:../base
+    devDependencies:
+      crossbind:
+        specifier: workspace:^
+        version: link:../../../core/crossbind
+
+  ports/geos/linux:
     dependencies:
       '@crossbind/port-geos':
         specifier: workspace:^
@@ -1612,6 +1898,16 @@ importers:
         version: link:../../../core/crossbind
 
   ports/geos/wasm:
+    dependencies:
+      '@crossbind/port-geos':
+        specifier: workspace:^
+        version: link:../base
+    devDependencies:
+      crossbind:
+        specifier: workspace:^
+        version: link:../../../core/crossbind
+
+  ports/geos/win32:
     dependencies:
       '@crossbind/port-geos':
         specifier: workspace:^
@@ -1657,6 +1953,28 @@ importers:
         specifier: workspace:^
         version: link:../../../core/crossbind
 
+  ports/geotiff/darwin:
+    dependencies:
+      '@crossbind/port-geotiff':
+        specifier: workspace:^
+        version: link:../base
+      '@crossbind/port-jpegturbo-darwin':
+        specifier: workspace:^
+        version: link:../../jpegturbo/darwin
+      '@crossbind/port-proj-darwin':
+        specifier: workspace:^
+        version: link:../../proj/darwin
+      '@crossbind/port-tiff-darwin':
+        specifier: workspace:^
+        version: link:../../tiff/darwin
+      '@crossbind/port-zlib-darwin':
+        specifier: workspace:^
+        version: link:../../zlib/darwin
+    devDependencies:
+      crossbind:
+        specifier: workspace:^
+        version: link:../../../core/crossbind
+
   ports/geotiff/ios:
     dependencies:
       '@crossbind/port-geotiff':
@@ -1674,6 +1992,28 @@ importers:
       '@crossbind/port-zlib-ios':
         specifier: workspace:^
         version: link:../../zlib/ios
+    devDependencies:
+      crossbind:
+        specifier: workspace:^
+        version: link:../../../core/crossbind
+
+  ports/geotiff/linux:
+    dependencies:
+      '@crossbind/port-geotiff':
+        specifier: workspace:^
+        version: link:../base
+      '@crossbind/port-jpegturbo-linux':
+        specifier: workspace:^
+        version: link:../../jpegturbo/linux
+      '@crossbind/port-proj-linux':
+        specifier: workspace:^
+        version: link:../../proj/linux
+      '@crossbind/port-tiff-linux':
+        specifier: workspace:^
+        version: link:../../tiff/linux
+      '@crossbind/port-zlib-linux':
+        specifier: workspace:^
+        version: link:../../zlib/linux
     devDependencies:
       crossbind:
         specifier: workspace:^
@@ -1720,6 +2060,28 @@ importers:
         specifier: workspace:^
         version: link:../../../core/crossbind
 
+  ports/geotiff/win32:
+    dependencies:
+      '@crossbind/port-geotiff':
+        specifier: workspace:^
+        version: link:../base
+      '@crossbind/port-jpegturbo-win32':
+        specifier: workspace:^
+        version: link:../../jpegturbo/win32
+      '@crossbind/port-proj-win32':
+        specifier: workspace:^
+        version: link:../../proj/win32
+      '@crossbind/port-tiff-win32':
+        specifier: workspace:^
+        version: link:../../tiff/win32
+      '@crossbind/port-zlib-win32':
+        specifier: workspace:^
+        version: link:../../zlib/win32
+    devDependencies:
+      crossbind:
+        specifier: workspace:^
+        version: link:../../../core/crossbind
+
   ports/iconv/android:
     dependencies:
       '@crossbind/port-iconv':
@@ -1732,7 +2094,27 @@ importers:
 
   ports/iconv/base: {}
 
+  ports/iconv/darwin:
+    dependencies:
+      '@crossbind/port-iconv':
+        specifier: workspace:^
+        version: link:../base
+    devDependencies:
+      crossbind:
+        specifier: workspace:^
+        version: link:../../../core/crossbind
+
   ports/iconv/ios:
+    dependencies:
+      '@crossbind/port-iconv':
+        specifier: workspace:^
+        version: link:../base
+    devDependencies:
+      crossbind:
+        specifier: workspace:^
+        version: link:../../../core/crossbind
+
+  ports/iconv/linux:
     dependencies:
       '@crossbind/port-iconv':
         specifier: workspace:^
@@ -1753,6 +2135,16 @@ importers:
         version: link:../../../core/crossbind
 
   ports/iconv/wasm:
+    dependencies:
+      '@crossbind/port-iconv':
+        specifier: workspace:^
+        version: link:../base
+    devDependencies:
+      crossbind:
+        specifier: workspace:^
+        version: link:../../../core/crossbind
+
+  ports/iconv/win32:
     dependencies:
       '@crossbind/port-iconv':
         specifier: workspace:^
@@ -1786,7 +2178,27 @@ importers:
         specifier: workspace:^
         version: link:../../../core/crossbind
 
+  ports/jpegturbo/darwin:
+    dependencies:
+      '@crossbind/port-jpegturbo':
+        specifier: workspace:^
+        version: link:../base
+    devDependencies:
+      crossbind:
+        specifier: workspace:^
+        version: link:../../../core/crossbind
+
   ports/jpegturbo/ios:
+    dependencies:
+      '@crossbind/port-jpegturbo':
+        specifier: workspace:^
+        version: link:../base
+    devDependencies:
+      crossbind:
+        specifier: workspace:^
+        version: link:../../../core/crossbind
+
+  ports/jpegturbo/linux:
     dependencies:
       '@crossbind/port-jpegturbo':
         specifier: workspace:^
@@ -1816,6 +2228,16 @@ importers:
         specifier: workspace:^
         version: link:../../../core/crossbind
 
+  ports/jpegturbo/win32:
+    dependencies:
+      '@crossbind/port-jpegturbo':
+        specifier: workspace:^
+        version: link:../base
+    devDependencies:
+      crossbind:
+        specifier: workspace:^
+        version: link:../../../core/crossbind
+
   ports/lerc/android:
     dependencies:
       '@crossbind/port-lerc':
@@ -1828,7 +2250,27 @@ importers:
 
   ports/lerc/base: {}
 
+  ports/lerc/darwin:
+    dependencies:
+      '@crossbind/port-lerc':
+        specifier: workspace:^
+        version: link:../base
+    devDependencies:
+      crossbind:
+        specifier: workspace:^
+        version: link:../../../core/crossbind
+
   ports/lerc/ios:
+    dependencies:
+      '@crossbind/port-lerc':
+        specifier: workspace:^
+        version: link:../base
+    devDependencies:
+      crossbind:
+        specifier: workspace:^
+        version: link:../../../core/crossbind
+
+  ports/lerc/linux:
     dependencies:
       '@crossbind/port-lerc':
         specifier: workspace:^
@@ -1849,6 +2291,16 @@ importers:
         version: link:../../../core/crossbind
 
   ports/lerc/wasm:
+    dependencies:
+      '@crossbind/port-lerc':
+        specifier: workspace:^
+        version: link:../base
+    devDependencies:
+      crossbind:
+        specifier: workspace:^
+        version: link:../../../core/crossbind
+
+  ports/lerc/win32:
     dependencies:
       '@crossbind/port-lerc':
         specifier: workspace:^
@@ -1882,7 +2334,27 @@ importers:
         specifier: workspace:^
         version: link:../../../core/crossbind
 
+  ports/openssl/darwin:
+    dependencies:
+      '@crossbind/port-openssl':
+        specifier: workspace:^
+        version: link:../base
+    devDependencies:
+      crossbind:
+        specifier: workspace:^
+        version: link:../../../core/crossbind
+
   ports/openssl/ios:
+    dependencies:
+      '@crossbind/port-openssl':
+        specifier: workspace:^
+        version: link:../base
+    devDependencies:
+      crossbind:
+        specifier: workspace:^
+        version: link:../../../core/crossbind
+
+  ports/openssl/linux:
     dependencies:
       '@crossbind/port-openssl':
         specifier: workspace:^
@@ -1903,6 +2375,16 @@ importers:
         version: link:../../../core/crossbind
 
   ports/openssl/wasm:
+    dependencies:
+      '@crossbind/port-openssl':
+        specifier: workspace:^
+        version: link:../base
+    devDependencies:
+      crossbind:
+        specifier: workspace:^
+        version: link:../../../core/crossbind
+
+  ports/openssl/win32:
     dependencies:
       '@crossbind/port-openssl':
         specifier: workspace:^
@@ -1942,6 +2424,22 @@ importers:
         specifier: workspace:^
         version: link:../../../core/crossbind
 
+  ports/proj/darwin:
+    dependencies:
+      '@crossbind/port-proj':
+        specifier: workspace:^
+        version: link:../base
+      '@crossbind/port-sqlite3-darwin':
+        specifier: workspace:^
+        version: link:../../sqlite3/darwin
+      '@crossbind/port-tiff-darwin':
+        specifier: workspace:^
+        version: link:../../tiff/darwin
+    devDependencies:
+      crossbind:
+        specifier: workspace:^
+        version: link:../../../core/crossbind
+
   ports/proj/ios:
     dependencies:
       '@crossbind/port-proj':
@@ -1953,6 +2451,22 @@ importers:
       '@crossbind/port-tiff-ios':
         specifier: workspace:^
         version: link:../../tiff/ios
+    devDependencies:
+      crossbind:
+        specifier: workspace:^
+        version: link:../../../core/crossbind
+
+  ports/proj/linux:
+    dependencies:
+      '@crossbind/port-proj':
+        specifier: workspace:^
+        version: link:../base
+      '@crossbind/port-sqlite3-linux':
+        specifier: workspace:^
+        version: link:../../sqlite3/linux
+      '@crossbind/port-tiff-linux':
+        specifier: workspace:^
+        version: link:../../tiff/linux
     devDependencies:
       crossbind:
         specifier: workspace:^
@@ -1990,6 +2504,22 @@ importers:
         specifier: workspace:^
         version: link:../../../core/crossbind
 
+  ports/proj/win32:
+    dependencies:
+      '@crossbind/port-proj':
+        specifier: workspace:^
+        version: link:../base
+      '@crossbind/port-sqlite3-win32':
+        specifier: workspace:^
+        version: link:../../sqlite3/win32
+      '@crossbind/port-tiff-win32':
+        specifier: workspace:^
+        version: link:../../tiff/win32
+    devDependencies:
+      crossbind:
+        specifier: workspace:^
+        version: link:../../../core/crossbind
+
   ports/spatialite/android:
     dependencies:
       '@crossbind/port-geos-android':
@@ -2017,6 +2547,31 @@ importers:
 
   ports/spatialite/base: {}
 
+  ports/spatialite/darwin:
+    dependencies:
+      '@crossbind/port-geos-darwin':
+        specifier: workspace:^
+        version: link:../../geos/darwin
+      '@crossbind/port-iconv-darwin':
+        specifier: workspace:^
+        version: link:../../iconv/darwin
+      '@crossbind/port-proj-darwin':
+        specifier: workspace:^
+        version: link:../../proj/darwin
+      '@crossbind/port-spatialite':
+        specifier: workspace:^
+        version: link:../base
+      '@crossbind/port-sqlite3-darwin':
+        specifier: workspace:^
+        version: link:../../sqlite3/darwin
+      '@crossbind/port-zlib-darwin':
+        specifier: workspace:^
+        version: link:../../zlib/darwin
+    devDependencies:
+      crossbind:
+        specifier: workspace:^
+        version: link:../../../core/crossbind
+
   ports/spatialite/ios:
     dependencies:
       '@crossbind/port-geos-ios':
@@ -2037,6 +2592,31 @@ importers:
       '@crossbind/port-zlib-ios':
         specifier: workspace:^
         version: link:../../zlib/ios
+    devDependencies:
+      crossbind:
+        specifier: workspace:^
+        version: link:../../../core/crossbind
+
+  ports/spatialite/linux:
+    dependencies:
+      '@crossbind/port-geos-linux':
+        specifier: workspace:^
+        version: link:../../geos/linux
+      '@crossbind/port-iconv-linux':
+        specifier: workspace:^
+        version: link:../../iconv/linux
+      '@crossbind/port-proj-linux':
+        specifier: workspace:^
+        version: link:../../proj/linux
+      '@crossbind/port-spatialite':
+        specifier: workspace:^
+        version: link:../base
+      '@crossbind/port-sqlite3-linux':
+        specifier: workspace:^
+        version: link:../../sqlite3/linux
+      '@crossbind/port-zlib-linux':
+        specifier: workspace:^
+        version: link:../../zlib/linux
     devDependencies:
       crossbind:
         specifier: workspace:^
@@ -2092,6 +2672,31 @@ importers:
         specifier: workspace:^
         version: link:../../../core/crossbind
 
+  ports/spatialite/win32:
+    dependencies:
+      '@crossbind/port-geos-win32':
+        specifier: workspace:^
+        version: link:../../geos/win32
+      '@crossbind/port-iconv-win32':
+        specifier: workspace:^
+        version: link:../../iconv/win32
+      '@crossbind/port-proj-win32':
+        specifier: workspace:^
+        version: link:../../proj/win32
+      '@crossbind/port-spatialite':
+        specifier: workspace:^
+        version: link:../base
+      '@crossbind/port-sqlite3-win32':
+        specifier: workspace:^
+        version: link:../../sqlite3/win32
+      '@crossbind/port-zlib-win32':
+        specifier: workspace:^
+        version: link:../../zlib/win32
+    devDependencies:
+      crossbind:
+        specifier: workspace:^
+        version: link:../../../core/crossbind
+
   ports/sqlite3/android:
     dependencies:
       '@crossbind/port-sqlite3':
@@ -2116,7 +2721,27 @@ importers:
         specifier: workspace:^
         version: link:../../../core/crossbind
 
+  ports/sqlite3/darwin:
+    dependencies:
+      '@crossbind/port-sqlite3':
+        specifier: workspace:^
+        version: link:../base
+    devDependencies:
+      crossbind:
+        specifier: workspace:^
+        version: link:../../../core/crossbind
+
   ports/sqlite3/ios:
+    dependencies:
+      '@crossbind/port-sqlite3':
+        specifier: workspace:^
+        version: link:../base
+    devDependencies:
+      crossbind:
+        specifier: workspace:^
+        version: link:../../../core/crossbind
+
+  ports/sqlite3/linux:
     dependencies:
       '@crossbind/port-sqlite3':
         specifier: workspace:^
@@ -2137,6 +2762,16 @@ importers:
         version: link:../../../core/crossbind
 
   ports/sqlite3/wasm:
+    dependencies:
+      '@crossbind/port-sqlite3':
+        specifier: workspace:^
+        version: link:../base
+    devDependencies:
+      crossbind:
+        specifier: workspace:^
+        version: link:../../../core/crossbind
+
+  ports/sqlite3/win32:
     dependencies:
       '@crossbind/port-sqlite3':
         specifier: workspace:^
@@ -2182,6 +2817,28 @@ importers:
         specifier: workspace:^
         version: link:../../../core/crossbind
 
+  ports/tiff/darwin:
+    dependencies:
+      '@crossbind/port-jpegturbo-darwin':
+        specifier: workspace:^
+        version: link:../../jpegturbo/darwin
+      '@crossbind/port-lerc-darwin':
+        specifier: workspace:^
+        version: link:../../lerc/darwin
+      '@crossbind/port-tiff':
+        specifier: workspace:^
+        version: link:../base
+      '@crossbind/port-zlib-darwin':
+        specifier: workspace:^
+        version: link:../../zlib/darwin
+      '@crossbind/port-zstd-darwin':
+        specifier: workspace:^
+        version: link:../../zstd/darwin
+    devDependencies:
+      crossbind:
+        specifier: workspace:^
+        version: link:../../../core/crossbind
+
   ports/tiff/ios:
     dependencies:
       '@crossbind/port-jpegturbo-ios':
@@ -2199,6 +2856,28 @@ importers:
       '@crossbind/port-zstd-ios':
         specifier: workspace:^
         version: link:../../zstd/ios
+    devDependencies:
+      crossbind:
+        specifier: workspace:^
+        version: link:../../../core/crossbind
+
+  ports/tiff/linux:
+    dependencies:
+      '@crossbind/port-jpegturbo-linux':
+        specifier: workspace:^
+        version: link:../../jpegturbo/linux
+      '@crossbind/port-lerc-linux':
+        specifier: workspace:^
+        version: link:../../lerc/linux
+      '@crossbind/port-tiff':
+        specifier: workspace:^
+        version: link:../base
+      '@crossbind/port-zlib-linux':
+        specifier: workspace:^
+        version: link:../../zlib/linux
+      '@crossbind/port-zstd-linux':
+        specifier: workspace:^
+        version: link:../../zstd/linux
     devDependencies:
       crossbind:
         specifier: workspace:^
@@ -2239,6 +2918,28 @@ importers:
         specifier: workspace:^
         version: link:../../../core/crossbind
 
+  ports/tiff/win32:
+    dependencies:
+      '@crossbind/port-jpegturbo-win32':
+        specifier: workspace:^
+        version: link:../../jpegturbo/win32
+      '@crossbind/port-lerc-win32':
+        specifier: workspace:^
+        version: link:../../lerc/win32
+      '@crossbind/port-tiff':
+        specifier: workspace:^
+        version: link:../base
+      '@crossbind/port-zlib-win32':
+        specifier: workspace:^
+        version: link:../../zlib/win32
+      '@crossbind/port-zstd-win32':
+        specifier: workspace:^
+        version: link:../../zstd/win32
+    devDependencies:
+      crossbind:
+        specifier: workspace:^
+        version: link:../../../core/crossbind
+
   ports/webp/android:
     dependencies:
       '@crossbind/port-webp':
@@ -2263,7 +2964,27 @@ importers:
         specifier: workspace:^
         version: link:../../../core/crossbind
 
+  ports/webp/darwin:
+    dependencies:
+      '@crossbind/port-webp':
+        specifier: workspace:^
+        version: link:../base
+    devDependencies:
+      crossbind:
+        specifier: workspace:^
+        version: link:../../../core/crossbind
+
   ports/webp/ios:
+    dependencies:
+      '@crossbind/port-webp':
+        specifier: workspace:^
+        version: link:../base
+    devDependencies:
+      crossbind:
+        specifier: workspace:^
+        version: link:../../../core/crossbind
+
+  ports/webp/linux:
     dependencies:
       '@crossbind/port-webp':
         specifier: workspace:^
@@ -2293,6 +3014,16 @@ importers:
         specifier: workspace:^
         version: link:../../../core/crossbind
 
+  ports/webp/win32:
+    dependencies:
+      '@crossbind/port-webp':
+        specifier: workspace:^
+        version: link:../base
+    devDependencies:
+      crossbind:
+        specifier: workspace:^
+        version: link:../../../core/crossbind
+
   ports/zlib/android:
     dependencies:
       '@crossbind/port-zlib':
@@ -2305,7 +3036,27 @@ importers:
 
   ports/zlib/base: {}
 
+  ports/zlib/darwin:
+    dependencies:
+      '@crossbind/port-zlib':
+        specifier: workspace:^
+        version: link:../base
+    devDependencies:
+      crossbind:
+        specifier: workspace:^
+        version: link:../../../core/crossbind
+
   ports/zlib/ios:
+    dependencies:
+      '@crossbind/port-zlib':
+        specifier: workspace:^
+        version: link:../base
+    devDependencies:
+      crossbind:
+        specifier: workspace:^
+        version: link:../../../core/crossbind
+
+  ports/zlib/linux:
     dependencies:
       '@crossbind/port-zlib':
         specifier: workspace:^
@@ -2326,6 +3077,16 @@ importers:
         version: link:../../../core/crossbind
 
   ports/zlib/wasm:
+    dependencies:
+      '@crossbind/port-zlib':
+        specifier: workspace:^
+        version: link:../base
+    devDependencies:
+      crossbind:
+        specifier: workspace:^
+        version: link:../../../core/crossbind
+
+  ports/zlib/win32:
     dependencies:
       '@crossbind/port-zlib':
         specifier: workspace:^
@@ -2359,7 +3120,27 @@ importers:
         specifier: workspace:^
         version: link:../../../core/crossbind
 
+  ports/zstd/darwin:
+    dependencies:
+      '@crossbind/port-zstd':
+        specifier: workspace:^
+        version: link:../base
+    devDependencies:
+      crossbind:
+        specifier: workspace:^
+        version: link:../../../core/crossbind
+
   ports/zstd/ios:
+    dependencies:
+      '@crossbind/port-zstd':
+        specifier: workspace:^
+        version: link:../base
+    devDependencies:
+      crossbind:
+        specifier: workspace:^
+        version: link:../../../core/crossbind
+
+  ports/zstd/linux:
     dependencies:
       '@crossbind/port-zstd':
         specifier: workspace:^
@@ -2380,6 +3161,16 @@ importers:
         version: link:../../../core/crossbind
 
   ports/zstd/wasm:
+    dependencies:
+      '@crossbind/port-zstd':
+        specifier: workspace:^
+        version: link:../base
+    devDependencies:
+      crossbind:
+        specifier: workspace:^
+        version: link:../../../core/crossbind
+
+  ports/zstd/win32:
     dependencies:
       '@crossbind/port-zstd':
         specifier: workspace:^

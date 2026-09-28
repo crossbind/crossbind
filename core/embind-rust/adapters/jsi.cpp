@@ -29,11 +29,13 @@
 #include <optional>
 #include <string>
 #include <typeinfo>
+#include <unordered_map>
 #include <unordered_set>
 // Real embind-jsi declarations (correct namespaces/linkage/signatures): jsRuntime lives in
 // `emscripten`, the _embind_register_* functions and InitFunc in `emscripten::internal` with C++
 // linkage and jsi::Function& slots. Including its header avoids any hand-declaration mismatch.
 #include <emscripten/bind.h>
+#include <crossbind/direct_reads.h>
 #include "../include/crossbind_embind.h"
 
 namespace jsi = facebook::jsi;
@@ -68,6 +70,12 @@ const void* crossbind_tid_optional_int() { static const char t = 0; return &t; }
 const void* crossbind_tid_optional_double() { static const char t = 0; return &t; }
 const void* crossbind_tid_optional_bool() { static const char t = 0; return &t; }
 const void* crossbind_tid_optional_string() { static const char t = 0; return &t; }
+const void* crossbind_tid_optional_int64() { static const char t = 0; return &t; }
+const void* crossbind_tid_optional_uint64() { static const char t = 0; return &t; }
+const void* crossbind_tid_bytes_arg() { static const char t = 0; return &t; }
+const void* crossbind_tid_f64s_arg() { static const char t = 0; return &t; }
+const void* crossbind_tid_bytes_opt_arg() { static const char t = 0; return &t; }
+const void* crossbind_tid_f64s_opt_arg() { static const char t = 0; return &t; }
 
 // Idempotent: every Rust archive in the app may ask for the same optional type.
 void crossbind_embind_register_optional(const void* opt, const void* /*inner: adapter converts*/) {
@@ -129,17 +137,62 @@ static uint8_t* crossbindWireFromString(const std::string& s) {
     std::memcpy(w + 4, s.data(), s.size());
     return w;
 }
-static jsi::Function crossbindHelper(const char* name) {
-    return jsRuntime->global().getPropertyAsFunction(*jsRuntime, name);
+// Helpers and constructors are looked up once per runtime: a global lookup on every call cost more
+// than the call. Each bindings initialisation starts a new cache; the old one is leaked on purpose,
+// because the runtime its functions belong to may already be gone.
+static std::unordered_map<const char*, jsi::Function>* g_helpers = new std::unordered_map<const char*, jsi::Function>();
+struct ViewNames {
+    jsi::PropNameID buffer;
+    jsi::PropNameID byteOffset;
+    jsi::PropNameID length;
+};
+static ViewNames* g_viewNames = nullptr;
+static void resetHelpers() {
+    g_helpers = new std::unordered_map<const char*, jsi::Function>();
+    g_viewNames = nullptr;
+}
+static InitFunc g_resetHelpersOnInit(resetHelpers);
+
+static ViewNames& viewNames(jsi::Runtime& rt) {
+    if (g_viewNames == nullptr) {
+        g_viewNames = new ViewNames{jsi::PropNameID::forAscii(rt, "buffer"), jsi::PropNameID::forAscii(rt, "byteOffset"),
+                                    jsi::PropNameID::forAscii(rt, "length")};
+    }
+    return *g_viewNames;
+}
+
+// Typed array arguments ('y' bytes, 'z' doubles; 'Y'/'Z' when optional): embind-jsi hands the
+// invoker the view itself, or null for a missing optional one.
+static void registerTypedArgs() {
+    auto& rt = *jsRuntime;
+    auto registerTypedArg = rt.global().getPropertyAsFunction(rt, "__crossbind_register_typed_arg");
+    registerTypedArg.call(rt, jsi::BigInt::fromUint64(rt, (uint64_t)(uintptr_t)crossbind_tid_bytes_arg()), "Uint8Array", false, false);
+    registerTypedArg.call(rt, jsi::BigInt::fromUint64(rt, (uint64_t)(uintptr_t)crossbind_tid_f64s_arg()), "Float64Array", true, false);
+    registerTypedArg.call(rt, jsi::BigInt::fromUint64(rt, (uint64_t)(uintptr_t)crossbind_tid_bytes_opt_arg()), "Uint8Array | null", false, true);
+    registerTypedArg.call(rt, jsi::BigInt::fromUint64(rt, (uint64_t)(uintptr_t)crossbind_tid_f64s_opt_arg()), "Float64Array | null", true, true);
+}
+static InitFunc g_registerTypedArgsOnInit(registerTypedArgs);
+
+// `name` must be a string literal: the cache is keyed by its address.
+static jsi::Function& crossbindHelper(const char* name) {
+    auto found = g_helpers->find(name);
+    if (found == g_helpers->end()) {
+        found = g_helpers->emplace(name, jsRuntime->global().getPropertyAsFunction(*jsRuntime, name)).first;
+    }
+    return found->second;
 }
 static thread_local std::string g_cbError;
 static thread_local bool g_hasCbError = false;
 
 extern "C" {
+// Rust values holding JS handles can outlive the runtime (thread-local ones drop inside exit(),
+// after the host cleared jsRuntime); their handles then have nothing left to release.
 void crossbind_v_ref(size_t h) {
+    if (jsRuntime == nullptr) return;
     crossbindHelper("__emval_incref").call(*jsRuntime, crossbindVHandle(h));
 }
 void crossbind_v_unref(size_t h) {
+    if (jsRuntime == nullptr) return;
     crossbindHelper("__emval_decref").call(*jsRuntime, crossbindVHandle(h));
 }
 // Fork emval constants: undefined = 1n (init_emval seeds 1..4, reserved = 5).
@@ -202,46 +255,54 @@ static thread_local bool g_hasPendingError = false;
 
 static thread_local std::string g_pendingErrorCode;
 
-// Typed arrays on the native runtime: the adapter builds the JS view and hands back its handle,
-// one copy in each direction.
-// jsi::Object carries no index setter, so the elements go into a jsi::Array first and the
-// TypedArray constructor copies them (`new Uint8Array([...])`).
-static jsi::Object typedArrayFrom(jsi::Runtime& rt, const char* ctor, jsi::Array values) {
-    return rt.global().getPropertyAsFunction(rt, ctor)
-        .callAsConstructor(rt, values).asObject(rt);
+// Typed arrays on the native runtime: one copy in each direction, through the backing store of an
+// array JavaScript allocated, so no ArrayBuffer ever wraps native memory. Copying element by element
+// through jsi cost about 100 ns a byte.
+static size_t typedArrayToJs(jsi::Runtime& rt, const char* ctor, const void* data, size_t length, size_t bytes) {
+    auto array = crossbindHelper(ctor).callAsConstructor(rt, (double)length).asObject(rt);
+    if (bytes) std::memcpy(array.getPropertyAsObject(rt, "buffer").getArrayBuffer(rt).data(rt), data, bytes);
+    return (size_t)crossbindHandleOf(crossbindHelper("__crossbind_v_from_value").call(rt, array));
+}
+
+// A view of one of `kinds` is copied straight out of its backing store; false leaves a plain array
+// or another view to the element-by-element path.
+static bool typedArrayFromJs(jsi::Runtime& rt, size_t h, std::initializer_list<const char*> kinds, void* out, size_t bytes) {
+    auto value = crossbindHelper("__crossbind_v_value").call(rt, crossbindVHandle(h));
+    if (!value.isObject()) return false;
+    auto view = value.getObject(rt);
+    bool isKind = false;
+    for (const char* kind : kinds) isKind = isKind || view.instanceOf(rt, crossbindHelper(kind));
+    if (!isKind) return false;
+    auto buffer = view.getPropertyAsObject(rt, "buffer");
+    if (!buffer.isArrayBuffer(rt)) return false;
+    auto offset = (size_t)view.getProperty(rt, "byteOffset").getNumber();
+    if (bytes) std::memcpy(out, buffer.getArrayBuffer(rt).data(rt) + offset, bytes);
+    return true;
 }
 
 extern "C" size_t crossbind_v_bytes_to_js(const uint8_t* data, unsigned len) {
-    auto& rt = *jsRuntime;
-    auto values = jsi::Array(rt, (size_t)len);
-    for (unsigned i = 0; i < len; ++i) values.setValueAtIndex(rt, i, jsi::Value((double)data[i]));
-    auto array = typedArrayFrom(rt, "Uint8Array", std::move(values));
-    return (size_t)crossbindHandleOf(crossbindHelper("__crossbind_v_from_value").call(rt, array));
+    return typedArrayToJs(*jsRuntime, "Uint8Array", data, len, len);
 }
 
 extern "C" size_t crossbind_v_f64s_to_js(const double* data, unsigned len) {
-    auto& rt = *jsRuntime;
-    auto values = jsi::Array(rt, (size_t)len);
-    for (unsigned i = 0; i < len; ++i) values.setValueAtIndex(rt, i, jsi::Value(data[i]));
-    auto array = typedArrayFrom(rt, "Float64Array", std::move(values));
-    return (size_t)crossbindHandleOf(crossbindHelper("__crossbind_v_from_value").call(rt, array));
+    return typedArrayToJs(*jsRuntime, "Float64Array", data, len, (size_t)len * sizeof(double));
 }
 
 extern "C" unsigned crossbind_v_typed_len(size_t h) {
-    auto& rt = *jsRuntime;
-    auto value = crossbindHelper("__crossbind_v_get").call(rt, crossbindVHandle(h), jsi::String::createFromAscii(rt, "length"));
-    auto number = crossbindHelper("__crossbind_v_as_num").call(rt, value);
+    auto number = crossbindHelper("__crossbind_v_length").call(*jsRuntime, crossbindVHandle(h));
     return number.isNumber() ? (unsigned)number.getNumber() : 0;
 }
 
 extern "C" void crossbind_v_bytes_from_js(size_t h, uint8_t* out, unsigned len) {
     auto& rt = *jsRuntime;
+    if (typedArrayFromJs(rt, h, {"Uint8Array", "Uint8ClampedArray", "Int8Array"}, out, len)) return;
     auto array = crossbindHelper("__crossbind_v_to_array").call(rt, crossbindVHandle(h)).asObject(rt).asArray(rt);
     for (unsigned i = 0; i < len; ++i) out[i] = (uint8_t)array.getValueAtIndex(rt, i).getNumber();
 }
 
 extern "C" void crossbind_v_f64s_from_js(size_t h, double* out, unsigned len) {
     auto& rt = *jsRuntime;
+    if (typedArrayFromJs(rt, h, {"Float64Array"}, out, (size_t)len * sizeof(double))) return;
     auto array = crossbindHelper("__crossbind_v_to_array").call(rt, crossbindVHandle(h)).asObject(rt).asArray(rt);
     for (unsigned i = 0; i < len; ++i) out[i] = array.getValueAtIndex(rt, i).getNumber();
 }
@@ -280,7 +341,49 @@ static jsi::Value wireStringToJsi(jsi::Runtime& rt, uint64_t w) {
     return jsi::Value(jsi::String::createFromUtf8(rt, str));
 }
 
-static uint64_t readArg(jsi::Runtime& rt, const jsi::Value& v, char c) {
+// Where a typed array argument's elements are: the crate's ViewWire.
+struct ViewWire {
+    const void* data;
+    size_t length;
+};
+
+static crossbind::IDirectReads* directReads(jsi::Runtime& rt) {
+    return static_cast<crossbind::IDirectReads*>(rt.castInterface(crossbind::IDirectReads::uuid));
+}
+
+// embind-jsi's toWireType already made the argument a view of the element kind over an ArrayBuffer,
+// so its elements are lent in place for the call. Reading its properties through the Node-API
+// runtime cost about 440 ns, which the runtime's own interface does in one call.
+static uint64_t readView(jsi::Runtime& rt, const jsi::Value& v, ViewWire& view) {
+    auto* reads = directReads(rt);
+    void* data = nullptr;
+    size_t length = 0;
+    if (reads != nullptr && reads->typedArrayElements(v, data, length)) {
+        view.data = data;
+        view.length = length;
+        return (uint64_t)(uintptr_t)&view;
+    }
+    auto& names = viewNames(rt);
+    auto object = v.asObject(rt);
+    auto buffer = object.getProperty(rt, names.buffer).asObject(rt);
+    if (!buffer.isArrayBuffer(rt)) throw jsi::JSError(rt, "a typed array argument needs an ArrayBuffer");
+    view.length = (size_t)object.getProperty(rt, names.length).asNumber();
+    view.data = view.length == 0 ? nullptr
+        : buffer.getArrayBuffer(rt).data(rt) + (size_t)object.getProperty(rt, names.byteOffset).asNumber();
+    return (uint64_t)(uintptr_t)&view;
+}
+
+static uint64_t readArg(jsi::Runtime& rt, const jsi::Value& v, char c, ViewWire& view) {
+    if (c == 'y' || c == 'z') return readView(rt, v, view);
+    if (c == 'Y' || c == 'Z') return v.isUndefined() || v.isNull() ? 0 : readView(rt, v, view);
+    // Optional 64-bit args ('J'/'U'): the value a plain 'j'/'u' takes, in a cell this adapter frees.
+    if (c == 'J' || c == 'U') {
+        if (v.isUndefined() || v.isNull()) return 0;
+        uint64_t bits = readArg(rt, v, c == 'J' ? 'j' : 'u', view);
+        void* cell = std::malloc(8);
+        std::memcpy(cell, &bits, 8);
+        return (uint64_t)(uintptr_t)cell;
+    }
     if (c == 's') {
         // embind-jsi passes std::string args as a jsi::String; build the crate's [u32 len][bytes]
         // wire buffer here (freed by the caller after dispatch - the crate's from_wire only copies).
@@ -303,7 +406,12 @@ static uint64_t readArg(jsi::Runtime& rt, const jsi::Value& v, char c) {
     // i64/u64 ('j'/'u') arrive as JS BigInt (embind bigint types), Number accepted as a courtesy;
     // both directions are raw 64-bit slots, so the unsigned bit copy is sign-correct either way.
     if (c == 'j' || c == 'u') {
-        if (v.isBigInt()) return v.getBigInt(rt).getUint64(rt);
+        if (v.isBigInt()) {
+            auto* reads = directReads(rt);
+            uint64_t bits = 0;
+            bool lossless = false;
+            return reads != nullptr && reads->bigIntToUint64(v, bits, lossless) ? bits : v.getBigInt(rt).getUint64(rt);
+        }
         // A Number is accepted only while it is an exact integer JS can represent; anything
         // else would be truncated silently, and a 64-bit slot deserves the exact value.
         double d = v.isNumber() ? v.getNumber() : 0;
@@ -316,7 +424,7 @@ static uint64_t readArg(jsi::Runtime& rt, const jsi::Value& v, char c) {
     // adapter owns and frees after dispatch ('S' carries a plain string wire).
     if (c == 'I' || c == 'D' || c == 'B' || c == 'S') {
         if (v.isUndefined() || v.isNull()) return 0;
-        if (c == 'S') return readArg(rt, v, 's');
+        if (c == 'S') return readArg(rt, v, 's', view);
         if (c == 'I') { int32_t x = (int32_t)v.getNumber(); void* p = std::malloc(4); std::memcpy(p, &x, 4); return (uint64_t)(uintptr_t)p; }
         if (c == 'D') { double x = v.getNumber(); void* p = std::malloc(8); std::memcpy(p, &x, 8); return (uint64_t)(uintptr_t)p; }
         uint8_t b = v.getBool() ? 1 : 0; void* p = std::malloc(1); std::memcpy(p, &b, 1); return (uint64_t)(uintptr_t)p;
@@ -344,10 +452,11 @@ static jsi::Value callInvoker(jsi::Runtime& rt, const std::string& sig, void* in
     // (embind sliced it off), so the jsi args a[0..] fill sig[2..]; otherwise a[0..] fill sig[1..].
     // Widest call: a baked target + `this` + six declared arguments.
     uint64_t s[8] = {0, 0, 0, 0, 0, 0, 0, 0};
+    ViewWire views[8];
     int base = 0;
     if (prepend) { s[0] = ctx; base = 1; }
     // A call with fewer JS args than the signature must not read past the argument array.
-    for (int j = base; j < total && j < 8; ++j) s[j] = (size_t)(j - base) < count ? readArg(rt, a[j - base], sig[1 + j]) : 0;
+    for (int j = base; j < total && j < 8; ++j) s[j] = (size_t)(j - base) < count ? readArg(rt, a[j - base], sig[1 + j], views[j]) : 0;
 
     uint64_t r = 0;
     if (ret == 'v') {
@@ -380,7 +489,7 @@ static jsi::Value callInvoker(jsi::Runtime& rt, const std::string& sig, void* in
     // now that the crate has copied.
     for (int j = base; j < total && j < 8; ++j) {
         const char cj = sig[1 + j];
-        if (cj == 's' || cj == 'S' || cj == 'I' || cj == 'D' || cj == 'B') std::free((void*)(uintptr_t)s[j]);
+        if (cj == 's' || cj == 'S' || cj == 'I' || cj == 'D' || cj == 'B' || cj == 'J' || cj == 'U') std::free((void*)(uintptr_t)s[j]);
     }
 
     // A shim raised (Result::Err): drop the sentinel return and surface a real JS exception.

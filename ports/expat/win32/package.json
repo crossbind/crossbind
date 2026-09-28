@@ -1,0 +1,31 @@
+{
+    "name": "@crossbind/port-expat-win32",
+    "version": "2.0.0-beta.62",
+    "nativeVersion": "2.8.5",
+    "description": "Windows build of the precompiled Expat XML parser library, built with crossbind. Use it together with the main package @crossbind/port-expat.",
+    "homepage": "https://github.com/crossbind/crossbind/tree/main/ports/expat#readme",
+    "repository": "https://github.com/crossbind/crossbind.git",
+    "type": "module",
+    "license": "MIT",
+    "keywords": [
+        "expat",
+        "libexpat",
+        "xml",
+        "crossbind",
+        "crossbind-port",
+        "windows",
+        "node",
+        "node-api"
+    ],
+    "scripts": {
+        "build": "crossbind build -p win32",
+        "clear": "rm -rf .crossbind dist",
+        "prepublishOnly": "crossbind build -p win32"
+    },
+    "dependencies": {
+        "@crossbind/port-expat": "workspace:^"
+    },
+    "devDependencies": {
+        "crossbind": "workspace:^"
+    }
+}

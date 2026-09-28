@@ -32,7 +32,8 @@ test('every port family in the tree yields a catalog entry with canonical facts'
     const gdal = entries.find((entry) => entry.family === 'gdal');
     assert.equal(gdal.name, 'GDAL');
     assert.ok(gdal.binCommands.includes('gdalinfo-wasi'));
-    assert.deepEqual(LIBRARY_TARGETS, ['wasm', 'wasi', 'android', 'ios']);
+    assert.deepEqual(LIBRARY_TARGETS, ['wasm', 'wasi', 'android', 'ios', 'darwin', 'linux', 'win32']);
+    assert.ok(['darwin', 'linux', 'win32'].every((platform) => gdal.targets.some((target) => target.target === platform)));
 });
 
 test('publication comes from the dist-tag npm serves, not from the directory existing', async () => {

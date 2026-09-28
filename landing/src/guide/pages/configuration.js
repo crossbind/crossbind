@@ -113,8 +113,8 @@ export default {
     {
         platform: 'wasm',
         specs: {
-            cmake: ['-DSOMETHING=ON'],
-            emccFlags: ['-sINITIAL_MEMORY=128MB'],
+            cmake: { compileOptions: ['-DMYAPP_NO_LOGGING=1'] },
+            binary: { emccFlags: ['-sINITIAL_MEMORY=128MB'] },
             env: { GDAL_NUM_THREADS: '0' },
             data: { 'share/myapp': 'myapp/data' },
             ignoreLibName: ['libtiff_legacy'],
@@ -177,7 +177,7 @@ export default {
         },
         {
             type: 'p',
-            text: 'Reach for the highest layer that solves your problem - see the [override hierarchy](/guide/architecture/#overrides). Machine-wide settings (runner, Xcode team, log level, local wasi-sdk) live in `~/.crossbind.json` and never belong in the project config.',
+            text: 'Reach for the highest layer that solves your problem - see the [override hierarchy](/guide/architecture/#overrides). Machine-wide settings (runner, Xcode team, local wasi-sdk) live in `~/.crossbind.json` and never belong in the project config.',
         },
 
         { type: 'h2', id: 'runtime', text: 'Not in this file: runtime options' },

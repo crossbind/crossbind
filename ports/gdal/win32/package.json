@@ -1,0 +1,48 @@
+{
+    "name": "@crossbind/port-gdal-win32",
+    "version": "2.0.0-beta.62",
+    "nativeVersion": "3.13.3",
+    "description": "Windows build of the precompiled GDAL geospatial library, built with crossbind. Use it together with the main package @crossbind/port-gdal.",
+    "homepage": "https://github.com/crossbind/crossbind/tree/main/ports/gdal#readme",
+    "repository": "https://github.com/crossbind/crossbind.git",
+    "type": "module",
+    "license": "MIT",
+    "keywords": [
+        "gdal",
+        "libgdal",
+        "gis",
+        "geospatial",
+        "raster",
+        "vector",
+        "crossbind",
+        "crossbind-port",
+        "windows",
+        "node",
+        "node-api"
+    ],
+    "scripts": {
+        "build": "crossbind build -p win32",
+        "clear": "rm -rf .crossbind dist",
+        "prepublishOnly": "crossbind build -p win32"
+    },
+    "dependencies": {
+        "@crossbind/port-gdal": "workspace:^",
+        "@crossbind/port-curl-win32": "workspace:^",
+        "@crossbind/port-expat-win32": "workspace:^",
+        "@crossbind/port-geos-win32": "workspace:^",
+        "@crossbind/port-geotiff-win32": "workspace:^",
+        "@crossbind/port-iconv-win32": "workspace:^",
+        "@crossbind/port-jpegturbo-win32": "workspace:^",
+        "@crossbind/port-proj-win32": "workspace:^",
+        "@crossbind/port-spatialite-win32": "workspace:^",
+        "@crossbind/port-sqlite3-win32": "workspace:^",
+        "@crossbind/port-tiff-win32": "workspace:^",
+        "@crossbind/port-webp-win32": "workspace:^",
+        "@crossbind/port-zlib-win32": "workspace:^",
+        "@crossbind/port-zstd-win32": "workspace:^",
+        "@crossbind/port-lerc-win32": "workspace:^"
+    },
+    "devDependencies": {
+        "crossbind": "workspace:^"
+    }
+}

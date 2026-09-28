@@ -51,7 +51,7 @@ if(NOT PACKAGE_HOST_INDEX EQUAL -1)
         target_link_libraries("${PROJECT_NAME}" INTERFACE "${PROJECT_LIBS_DIR}")
     endif()
 
-    if(NOT APPLE)
+    if(NOT (APPLE AND CMAKE_SYSTEM_NAME STREQUAL "iOS"))
         target_include_directories("${PROJECT_NAME}" INTERFACE "${PROJECT_SOURCE_DIR}/${PROJECT_TARGET_HOST}/include")
     endif()
 endif()

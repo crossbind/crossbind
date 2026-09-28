@@ -21,6 +21,10 @@ const platformCmake = {
     // SWIG subdirectory and ships no Python bindings. New CMake versions reject that probe while
     // cross-compiling unless an emulator is configured (CMP0190), so disable the unused package.
     'ios': withoutPythonBindings,
+    'darwin': withoutPythonBindings,
+    'linux': withoutPythonBindings,
+    // ODBC stays off as on every other platform, although Windows would provide it.
+    'win32': [...withoutPythonBindings, '-DGDAL_USE_ODBC=OFF'],
 };
 
 const ifDep = (dep, params) => (dep ? params(dep) : []);
@@ -40,6 +44,9 @@ export default {
         wasm: [internalPng, internalGif],
         android: [internalPng, internalGif],
         ios: [internalPng, internalGif],
+        darwin: [internalPng, internalGif],
+        linux: [internalPng, internalGif],
+        win32: [internalPng, internalGif],
     },
     replaceList: [
         {
@@ -138,6 +145,13 @@ export default {
             replacement: '#include <atomic>\n#include <limits>',
             paths: ['apps/gdalalg_raster_tile.h'],
         },
+        // MinGW's sys/stat.h includes <io.h>, which libopencad's dwg directory would shadow. Its sources
+        // reach dwg/io.h without that include path.
+        {
+            regex: ' \\$\\{CMAKE_CURRENT_SOURCE_DIR\\}/dwg\\)',
+            replacement: ')',
+            paths: ['ogr/ogrsf_frmts/cad/libopencad/CMakeLists.txt'],
+        },
     ],
     buildType: 'cmake',
     getBuildParams: (target, depPaths) => [
@@ -160,8 +174,16 @@ export default {
             : []),
         ...ifDep(depPaths.webp, (d) => [`-DWEBP_INCLUDE_DIR=${d.header}`, `-DWEBP_LIBRARY=${d.lib}`]),
         ...ifDep(depPaths.expat, (d) => [`-DEXPAT_INCLUDE_DIR=${d.header}`, `-DEXPAT_LIBRARY=${d.lib}`]),
-        ...ifDep(depPaths.iconv, (d) => [`-DIconv_INCLUDE_DIR=${d.header}`, `-DIconv_LIBRARY=${d.lib}`]),
-        ...ifDep(depPaths.curl, (d) => ['-DGDAL_USE_CURL=ON', `-DCURL_INCLUDE_DIR=${d.header}`, `-DCURL_LIBRARY=${d.lib}`]),
+        ...ifDep(depPaths.iconv, (d) => [
+            `-DIconv_INCLUDE_DIR=${d.header}`, `-DIconv_LIBRARY=${d.lib}`,
+            // On Windows GDAL finds no iconv without libiconv's separate libcharset.
+            ...(target.platform === 'win32' ? [`-DIconv_CHARSET_LIBRARY=${depPaths.charset.lib}`] : []),
+        ]),
+        ...ifDep(depPaths.curl, (d) => [
+            '-DGDAL_USE_CURL=ON', `-DCURL_INCLUDE_DIR=${d.header}`, `-DCURL_LIBRARY=${d.lib}`,
+            // A static curl must be compiled against as one on Windows, or its calls expect a DLL.
+            ...(target.platform === 'win32' ? ['-DCURL_USE_STATIC_LIBS=ON'] : []),
+        ]),
     ],
     env: [
         'CFLAGS="-DRENAME_INTERNAL_LIBTIFF_SYMBOLS"',
