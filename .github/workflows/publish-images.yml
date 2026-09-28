@@ -5,7 +5,7 @@
 # builds and smoke-tests the family on native runners without writing to any registry. A writing
 # run publishes hidden staging tags and promotes the same digests only after every gate passes.
 #
-# The order is forced, not stylistic: web and android are FROM base, and buildx resolves that
+# The order is forced, not stylistic: web, android, linux and windows are FROM base, and buildx resolves that
 # reference from the registry, so base must exist there before they can build. Each stage consumes
 # the previous one by DIGEST, so an image can never be built on top of a tag that moved underneath.
 
@@ -98,6 +98,11 @@ jobs:
                     --build-arg "BASE_IMAGE=crossbind/base:dev${SUFFIX}" \
                     --build-arg "RUST_SYSROOT_IMAGE=crossbind/rust-sysroot:dev${SUFFIX}" \
                     -t "crossbind/web:dev${SUFFIX}" .
+                  for image in linux windows; do
+                    docker build --platform "linux/${ARCH}" -f "${image}.Dockerfile" --target "${image}" \
+                      --build-arg "BASE_IMAGE=crossbind/base:dev${SUFFIX}" \
+                      -t "crossbind/${image}:dev${SUFFIX}" .
+                  done
                   if [ "${BUILD_ANDROID}" = true ]; then
                     docker build --platform linux/amd64 -f android.Dockerfile --target android \
                       --build-arg "BASE_IMAGE=crossbind/base:dev-amd64" \
@@ -105,7 +110,7 @@ jobs:
                   fi
             - name: Smoke-test the locally built images under the hardened runtime profile
               run: |
-                  targets=("base:${{ matrix.arch }}" "web:${{ matrix.arch }}")
+                  targets=("base:${{ matrix.arch }}" "web:${{ matrix.arch }}" "linux:${{ matrix.arch }}" "windows:${{ matrix.arch }}")
                   if [ "${{ matrix.android }}" = true ]; then targets+=(android:amd64); fi
                   node scripts/smoke-images.js "${targets[@]}"
             - name: Scan local base image without writing a shared cache
@@ -128,6 +133,32 @@ jobs:
                   cache: false
                   scan-type: image
                   scan-ref: crossbind/web:dev${{ matrix.suffix }}
+                  scanners: vuln
+                  vuln-type: os,library
+                  severity: HIGH,CRITICAL
+                  ignore-unfixed: true
+                  exit-code: 1
+                  timeout: 20m
+            - name: Scan local Linux image without writing a shared cache
+              uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+              with:
+                  version: v0.74.0
+                  cache: false
+                  scan-type: image
+                  scan-ref: crossbind/linux:dev${{ matrix.suffix }}
+                  scanners: vuln
+                  vuln-type: os,library
+                  severity: HIGH,CRITICAL
+                  ignore-unfixed: true
+                  exit-code: 1
+                  timeout: 20m
+            - name: Scan local Windows image without writing a shared cache
+              uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+              with:
+                  version: v0.74.0
+                  cache: false
+                  scan-type: image
+                  scan-ref: crossbind/windows:dev${{ matrix.suffix }}
                   scanners: vuln
                   vuln-type: os,library
                   severity: HIGH,CRITICAL
@@ -212,6 +243,38 @@ jobs:
             build-args: |
                 BASE_IMAGE=${{ needs.setup.outputs.registry }}/base@${{ needs.base.outputs.digest }}
 
+    linux:
+        needs: [setup, base]
+        uses: ./.github/workflows/publish-image.yml
+        permissions:
+            contents: read
+            packages: write
+        with:
+            image: linux
+            dockerfile: linux.Dockerfile
+            target: linux
+            tag: ${{ needs.setup.outputs.tag }}
+            release-version: ${{ needs.setup.outputs.version }}
+            runners: ${{ needs.setup.outputs.both }}
+            build-args: |
+                BASE_IMAGE=${{ needs.setup.outputs.registry }}/base@${{ needs.base.outputs.digest }}
+
+    windows:
+        needs: [setup, base]
+        uses: ./.github/workflows/publish-image.yml
+        permissions:
+            contents: read
+            packages: write
+        with:
+            image: windows
+            dockerfile: windows.Dockerfile
+            target: windows
+            tag: ${{ needs.setup.outputs.tag }}
+            release-version: ${{ needs.setup.outputs.version }}
+            runners: ${{ needs.setup.outputs.both }}
+            build-args: |
+                BASE_IMAGE=${{ needs.setup.outputs.registry }}/base@${{ needs.base.outputs.digest }}
+
     # The release digest is signed on canonical GHCR. Keyless: the identity is this workflow, proved
     # by the GitHub OIDC token, and no stored signing key or registry credential is involved.
     #
@@ -228,7 +291,7 @@ jobs:
     # STORAGE: GHCR's OCI 1.1 referrers TAG SCHEMA, pinned rather than negotiated. The cosign v2
     # `.sig` layout is a different scheme and is asserted absent.
     sign:
-        needs: [setup, sysroot, base, web, android]
+        needs: [setup, sysroot, base, web, android, linux, windows]
         if: ${{ !inputs.dry_run }}
         runs-on: ubuntu-24.04
         permissions:
@@ -278,7 +341,7 @@ jobs:
                   set -euo pipefail
                   digest_of() { docker buildx imagetools inspect "$1" --raw | sha256sum | cut -d' ' -f1; }
 
-                  for image in rust-sysroot base web android; do
+                  for image in rust-sysroot base web android linux windows; do
                     root="sha256:$(digest_of "${GHCR}/${image}:${V}")"
                     cosign sign "${GHCR}/${image}@${root}"
                     echo "signed ${image} root ${root}"
@@ -316,7 +379,7 @@ jobs:
                     --primary "${{ needs.setup.outputs.registry }}"
 
     digests:
-        needs: [setup, sysroot, base, web, android]
+        needs: [setup, sysroot, base, web, android, linux, windows]
         if: ${{ !inputs.dry_run }}
         runs-on: ubuntu-24.04
         permissions:
@@ -352,7 +415,7 @@ jobs:
                   }
                   jq -n --arg version "$RELEASE" --arg registry "$GHCR" --arg rust "$rust" \
                     '{version: $version, registry: $registry, toolchains: {rust: $rust}, images: {}}' > digests.json
-                  for image in rust-sysroot base web android; do
+                  for image in rust-sysroot base web android linux windows; do
                     docker buildx imagetools inspect "${GHCR}/${image}:${V}" --raw > "raw-${image}.json"
                     index="sha256:$(sha256sum "raw-${image}.json" | cut -d' ' -f1)"
                     jq --arg i "$image" --arg d "$index" --slurpfile m "raw-${image}.json" \
@@ -370,7 +433,7 @@ jobs:
                       raw-*.json
 
     gate-attestations:
-        needs: [setup, sysroot, base, web, android]
+        needs: [setup, sysroot, base, web, android, linux, windows]
         if: ${{ !inputs.dry_run }}
         runs-on: ubuntu-24.04
         permissions:
@@ -397,7 +460,7 @@ jobs:
                     --registry "${{ needs.setup.outputs.registry }}"
 
     scan:
-        needs: [setup, sysroot, base, web, android]
+        needs: [setup, sysroot, base, web, android, linux, windows]
         if: ${{ !inputs.dry_run }}
         strategy:
             fail-fast: false
@@ -410,6 +473,10 @@ jobs:
                     - { image: web, platform: linux/amd64 }
                     - { image: web, platform: linux/arm64 }
                     - { image: android, platform: linux/amd64 }
+                    - { image: linux, platform: linux/amd64 }
+                    - { image: linux, platform: linux/arm64 }
+                    - { image: windows, platform: linux/amd64 }
+                    - { image: windows, platform: linux/arm64 }
         runs-on: ubuntu-24.04
         permissions:
             contents: read
@@ -434,6 +501,8 @@ jobs:
                   BASE_ROOT: ${{ needs.base.outputs.digest }}
                   WEB_ROOT: ${{ needs.web.outputs.digest }}
                   ANDROID_ROOT: ${{ needs.android.outputs.digest }}
+                  LINUX_ROOT: ${{ needs.linux.outputs.digest }}
+                  WINDOWS_ROOT: ${{ needs.windows.outputs.digest }}
               run: |
                   set -euo pipefail
                   case "${IMAGE}" in
@@ -441,6 +510,8 @@ jobs:
                     base) root="${BASE_ROOT}" ;;
                     web) root="${WEB_ROOT}" ;;
                     android) root="${ANDROID_ROOT}" ;;
+                    linux) root="${LINUX_ROOT}" ;;
+                    windows) root="${WINDOWS_ROOT}" ;;
                     *) echo "unknown image ${IMAGE}"; exit 1 ;;
                   esac
                   arch="${PLATFORM#linux/}"
@@ -589,7 +660,7 @@ jobs:
                     jq -r '.[0].optional.Subject // "(no subject)"' /tmp/v.json
                   }
 
-                  for image in rust-sysroot base web android; do
+                  for image in rust-sysroot base web android linux windows; do
                     root="sha256:$(docker buildx imagetools inspect "${GHCR}/${image}:${V}" --raw | sha256sum | cut -d' ' -f1)"
                     subject=$(verify "${GHCR}/${image}@${root}")
                     echo "ok  ${GHCR}/${image} root ${root}  signer=${subject}"

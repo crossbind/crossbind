@@ -274,6 +274,9 @@ async function applyAndroidNdk(proposal) {
 
 function applyDebian(proposal) {
     updateFile('tooling/docker/base.Dockerfile', (text) => replaceLiteral(text, proposal.current, proposal.target, 'Debian base image digest'));
+    updateFile('tooling/docker/linux.Dockerfile', (text) =>
+        replaceLiteral(text, proposal.current, proposal.target, 'Linux sysroot stage Debian digest'),
+    );
 }
 
 async function applySwig(proposal) {

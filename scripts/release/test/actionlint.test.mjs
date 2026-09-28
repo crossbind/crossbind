@@ -155,6 +155,25 @@ test('the unpublished toolchain image train uses the reviewed stable versions', 
     assert.match(base, /^USER 10001:10001$/m);
     assert.match(web, /^USER 10001:10001$/m);
     assert.match(android, /^USER 10001:10001$/m);
+
+    // The addon toolchains download nothing they do not check against a pinned digest.
+    const linux = fs.readFileSync(path.join(dockerDirectory, 'linux.Dockerfile'), 'utf8');
+    const windows = fs.readFileSync(path.join(dockerDirectory, 'windows.Dockerfile'), 'utf8');
+    const sysrootPackages = fs
+        .readFileSync(path.join(dockerDirectory, 'linux-sysroot.txt'), 'utf8')
+        .split('\n')
+        .filter((line) => line && !line.startsWith('#'));
+    assert.ok(sysrootPackages.length > 0);
+    for (const line of sysrootPackages) assert.match(line, /^(amd64|arm64) pool\/\S+\.deb [0-9a-f]{64}$/);
+    assert.match(linux, /^FROM --platform=\$BUILDPLATFORM debian:trixie-slim@sha256:[0-9a-f]{64} AS sysroots$/m);
+    assert.match(linux, /^ARG LLVM_SHA256=[0-9a-f]{64}$/m);
+    assert.match(linux, /\$\{LLVM_SHA256\}.*sha256sum -c -/);
+    assert.match(linux, /\$\{sha256\}.*sha256sum -c -/);
+    assert.match(windows, /^ARG LLVM_MINGW_SHA256_AMD64=[0-9a-f]{64}$/m);
+    assert.match(windows, /^ARG LLVM_MINGW_SHA256_ARM64=[0-9a-f]{64}$/m);
+    assert.match(windows, /\$\{sha256\}.*sha256sum -c -/);
+    assert.match(linux, /^USER 10001:10001$/m);
+    assert.match(windows, /^USER 10001:10001$/m);
 });
 
 test('legacy package scripts cannot publish with a stored npm credential', () => {

@@ -16,7 +16,7 @@ import { fileURLToPath } from 'node:url';
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const TARGET = path.join(ROOT, 'core', 'crossbind', 'src', 'assets', 'toolchain-digests.json');
 const VERSION_FILE = path.join(ROOT, 'tooling', 'docker', 'VERSION');
-const ROLES = ['rust-sysroot', 'base', 'web', 'android'];
+const ROLES = ['rust-sysroot', 'base', 'web', 'android', 'linux', 'windows'];
 
 const fail = (message) => {
     console.error(`pin-docker-image: ${message}`);

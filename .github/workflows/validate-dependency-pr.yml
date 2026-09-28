@@ -126,7 +126,7 @@ jobs:
                   CROSSBIND_IMAGE_WEB: crossbind/web:dev-amd64
               run: |
                   pnpm --dir tooling/docker build:family
-                  node scripts/smoke-images.js base:amd64 web:amd64 android:amd64
+                  node scripts/smoke-images.js base:amd64 web:amd64 android:amd64 linux:amd64 windows:amd64
                   pnpm run gate:pinned-local-sysroot
                   pnpm run check:release:web
             - name: Scan the rebuilt base image
@@ -149,6 +149,32 @@ jobs:
                   cache: false
                   scan-type: image
                   scan-ref: crossbind/web:dev-amd64
+                  scanners: vuln
+                  vuln-type: os,library
+                  severity: HIGH,CRITICAL
+                  ignore-unfixed: true
+                  exit-code: 1
+                  timeout: 20m
+            - name: Scan the rebuilt Linux image
+              uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+              with:
+                  version: v0.74.0
+                  cache: false
+                  scan-type: image
+                  scan-ref: crossbind/linux:dev-amd64
+                  scanners: vuln
+                  vuln-type: os,library
+                  severity: HIGH,CRITICAL
+                  ignore-unfixed: true
+                  exit-code: 1
+                  timeout: 20m
+            - name: Scan the rebuilt Windows image
+              uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+              with:
+                  version: v0.74.0
+                  cache: false
+                  scan-type: image
+                  scan-ref: crossbind/windows:dev-amd64
                   scanners: vuln
                   vuln-type: os,library
                   severity: HIGH,CRITICAL

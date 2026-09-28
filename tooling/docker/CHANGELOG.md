@@ -1,6 +1,18 @@
 # @crossbind/docker
 
-## Unreleased — image family 1.0.7
+## Unreleased — image family 1.0.8
+
+### Patch Changes
+
+- Added the `linux` and `windows` images, which build native Node.js addons for x64 and arm64 from
+  either host architecture. `linux` compiles with clang 19 against glibc 2.28 sysroots made of
+  sha256-checked Debian 10 packages and links libc++ 19.1.7, built against those sysroots, into
+  every addon, so an addon loads on any distribution with glibc 2.28 or newer. `windows` carries
+  llvm-mingw 20260922, whose addons import only the Universal C Runtime and system DLLs every
+  Windows 10 installation has. Both install a `/usr/local/bin/install` that copies and then sets
+  the mode, because coreutils' `install` now and then fails on Docker Desktop's macOS file sharing.
+
+## Image family 1.0.7
 
 ### Patch Changes
 

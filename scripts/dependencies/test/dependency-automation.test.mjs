@@ -363,11 +363,45 @@ test('a digest proposal is rejected unless both ends are real digests', () => {
     assert.throws(() => decodeProposal(encode({ ...debian, current: 'latest' })), /image digests/);
 });
 
-test('a Debian refresh may touch only the file that pins it', () => {
+test('a Debian refresh may touch only the files that pin it', () => {
     const debian = { kind: 'toolchain', component: 'debian', current: 'a', target: 'b' };
     assert.equal(dependencyPathAllowed(debian, 'tooling/docker/base.Dockerfile'), true);
+    assert.equal(dependencyPathAllowed(debian, 'tooling/docker/linux.Dockerfile'), true);
     assert.equal(dependencyPathAllowed(debian, 'tooling/docker/web.Dockerfile'), false);
     assert.equal(dependencyPathAllowed(debian, '.nvmrc'), false);
+});
+
+test('a Debian refresh moves every Dockerfile that pins the digest', () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'crossbind-debian-digest-'));
+    const currentDigest = `sha256:${'a'.repeat(64)}`;
+    const targetDigest = `sha256:${'b'.repeat(64)}`;
+    try {
+        fs.mkdirSync(path.join(root, 'tooling/docker'), { recursive: true });
+        fs.writeFileSync(path.join(root, 'tooling/docker/base.Dockerfile'), `FROM debian:trixie-slim@${currentDigest} AS os\n`);
+        fs.writeFileSync(
+            path.join(root, 'tooling/docker/linux.Dockerfile'),
+            `FROM --platform=$BUILDPLATFORM debian:trixie-slim@${currentDigest} AS sysroots\n`,
+        );
+        const proposal = encodeProposal({
+            id: 'toolchain-debian-bbbbbbbbbbbb',
+            kind: 'toolchain',
+            component: 'debian',
+            valueType: 'digest',
+            current: currentDigest,
+            target: targetDigest,
+        });
+        execFileSync(process.execPath, [path.join(ROOT, 'scripts/dependencies/apply-dependency-update.mjs'), '--proposal', proposal], {
+            cwd: root,
+            env: { ...process.env, CROSSBIND_DEPENDENCY_ROOT: root },
+        });
+        for (const file of ['base.Dockerfile', 'linux.Dockerfile']) {
+            const text = fs.readFileSync(path.join(root, 'tooling/docker', file), 'utf8');
+            assert.match(text, new RegExp(targetDigest), file);
+            assert.doesNotMatch(text, new RegExp(currentDigest), file);
+        }
+    } finally {
+        fs.rmSync(root, { recursive: true, force: true });
+    }
 });
 
 test('proposal changed-file policies reject unrelated files', () => {

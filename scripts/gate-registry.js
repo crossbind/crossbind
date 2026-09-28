@@ -22,7 +22,7 @@ const ROOT = new URL('..', import.meta.url);
 const VERSION = fs.readFileSync(new URL('tooling/docker/VERSION', ROOT), 'utf8').trim();
 // The release is built and gated under a staging tag, then promoted; --tag points the gate at it.
 const TAG = (process.argv.includes('--tag') ? process.argv[process.argv.indexOf('--tag') + 1] : null) || VERSION;
-const IMAGES = ['rust-sysroot', 'base', 'web', 'android'];
+const IMAGES = ['rust-sysroot', 'base', 'web', 'android', 'linux', 'windows'];
 const arg = (flag) => {
     const i = process.argv.indexOf(flag);
     return i !== -1 ? process.argv[i + 1] : null;

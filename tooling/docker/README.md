@@ -17,13 +17,16 @@ and Node and nothing else.
 | `base`         | Debian, Node, the pinned Rust toolchain, swig, cmake    | amd64, arm64 |
 | `web`          | base + Emscripten, wasi-sdk, the prebuilt Rust sysroots | amd64, arm64 |
 | `android`      | base + the NDK and the android Rust targets             | amd64 only   |
+| `linux`        | base + clang, glibc 2.28 sysroots and libc++ for addons | amd64, arm64 |
+| `windows`      | base + llvm-mingw for addons on the Windows UCRT        | amd64, arm64 |
 | `rust-sysroot` | just the ST/MT Rust sysroots and their manifest         | amd64, arm64 |
 
-`web` and `android` are built `FROM base`, so all three share one toolchain layer. Nothing above
-Debian is inherited here: Node and Emscripten are copied out of digest-pinned upstream images;
-Rust is installed as an exact release by the rustup from a digest-pinned bootstrap image. This
-keeps the upstream distributions authoritative while the runtime layout — PATH, Node version,
-`CARGO_HOME`, cache permissions — stays ours to guarantee.
+`web`, `android`, `linux` and `windows` are built `FROM base`, so all five share one toolchain
+layer. `linux` and `windows` each cross-compile Node.js addons for both x64 and arm64, whichever
+architecture they run on. Nothing above Debian is inherited here: Node and Emscripten are copied
+out of digest-pinned upstream images; Rust is installed as an exact release by the rustup from a
+digest-pinned bootstrap image. This keeps the upstream distributions authoritative while the
+runtime layout — PATH, Node version, `CARGO_HOME`, cache permissions — stays ours to guarantee.
 
 `android` is amd64-only because Google ships the Linux NDK host tools for x86_64 alone; the CLI
 pins android builds to that platform even on an arm64 host.
