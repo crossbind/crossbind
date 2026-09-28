@@ -49,8 +49,8 @@ RUN apt-get update && apt-get upgrade -y --with-new-pkgs && apt-get install -y -
 # Built here rather than fetched: no upstream ships a binary of the fork.
 FROM os AS swig
 
-ARG SWIG_REV=844524ad2562f8f5a5f7ae2c7d4e230dded0b866
-ARG SWIG_SHA256=61365d97b46e00c2d43356e2f7df185666610765c63ab8de9345e0ad89a2f8e5
+ARG SWIG_REV=9aa62a1eb401c1f29f92804aa018fa1e9b11a73c
+ARG SWIG_SHA256=480c2f2bc1fc7a246bf7e9f82fe8ef1e3b577ee130409376ccc915b5370d7a0c
 
 RUN apt-get update && apt-get install -y --no-install-recommends automake bison libbison-dev libpcre2-dev
 WORKDIR /src
