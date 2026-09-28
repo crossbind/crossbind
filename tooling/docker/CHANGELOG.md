@@ -1,6 +1,15 @@
 # @crossbind/docker
 
-## Unreleased — image family 1.0.6
+## Unreleased — image family 1.0.7
+
+### Patch Changes
+
+- Moved swig to crossbind/swig `9aa62a1e`. Struct fields bind by their C++ type, the constants an app
+  imports from a header bind as module constants, `readBuffer` and `writeBuffer` copy bytes to a
+  `Uint8Array` and from any `ArrayBuffer` or view, and each binding embind skips is written beside
+  the bridge, where crossbind prints it.
+
+## Image family 1.0.6
 
 ### Patch Changes
 
