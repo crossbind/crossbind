@@ -29,7 +29,7 @@
         "@crossbind/port-tiff-wasm": "workspace:^",
         "@crossbind/port-webp-wasm": "workspace:^",
         "@crossbind/port-zlib-wasm": "workspace:^",
-        "ws": "8.21.3",
+        "ws": "8.22.0",
         "xhr2": "^0.2.1"
     },
     "devDependencies": {
