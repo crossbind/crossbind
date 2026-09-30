@@ -109,6 +109,19 @@ describe('buildWasm link step', () => {
         expect(run.mock.calls[0][1].filter((arg) => String(arg).includes('STACK_SIZE'))).toEqual(['-sSTACK_SIZE=4MB']);
     });
 
+    // Without dynamic execution, embind's invoker shares its argument slots between calls
+    // (utils/embindCallArguments.js).
+    test.each(Object.keys(ENVIRONMENTS))('gives every embind call in the %s glue its own arguments', async (runtimeEnv) => {
+        const target = makeTarget(runtimeEnv);
+        fs.writeFileSync(`${work}/${target.rawJsName}`, 'var argsWired=new Array(expectedArgCount);var invokerFuncArgs=[];'
+            + 'var destructors=[];var invokerFn=function(...args){destructors.length=0;var thisWired;');
+
+        await buildWasm(target, { force: true });
+
+        expect(fs.readFileSync(`${work}/${target.rawJsName}`, 'utf8')).toBe('var invokerFn=function(...args){'
+            + 'var argsWired=new Array(expectedArgCount);var invokerFuncArgs=[];var destructors=[];var thisWired;');
+    });
+
     test('a link without Rust keeps emscripten\'s own stack', async () => {
         await buildWasm({ ...makeTarget('browser'), buildType: 'debug', path: 'wasm-wasm32-st-debug' }, { force: true });
 
