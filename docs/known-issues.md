@@ -238,31 +238,6 @@ builds each demo in a fresh temporary copy.
 - Check: `grep -n 'dist/<name>-wasi\|dist/data/' docs/api/wasi.md` matches.
 - Remove when the doc names the real paths or the build copies to `dist/`.
 
-## curl's browser fetch patch corrupts memory and reports failures as success
-
-The wasm build replaces `curl_easy_perform` with `emscripten_fetch` (`easyPerformInside` in
-`ports/curl/wasm/crossbind.build.js`):
-
-- `char method[10]` receives `strcpy` of any `CURLOPT_CUSTOMREQUEST`, so a method of ten or more
-  characters overflows the stack buffer.
-- `fetch->status` is read after `emscripten_fetch_close(fetch)`.
-- With `CURLOPT_FAILONERROR` and `CURLOPT_ERRORBUFFER` set, a 4xx body is written through
-  `fwrite_func` into the error buffer as if it were a stream.
-- A network or CORS failure leaves status 0 and returns `CURLE_OK`.
-- Request bodies are measured with `strlen(postfields)`: `CURLOPT_POSTFIELDSIZE` is ignored and a
-  body stops at its first NUL byte.
-- Response headers never reach `CURLOPT_HEADERFUNCTION`, and the browser follows redirects whether or
-  not `CURLOPT_FOLLOWLOCATION` is set.
-
-`e2e/backend-nodejs/e2e/run.mjs` accepts `error:` as well as `response:`, so no test notices.
-
-- Seen: 2026-09-23 (read); 2026-09-24 (run in Chromium against local servers, all but the two
-  memory errors)
-- Check: `grep -n 'char method\[10\]\|emscripten_fetch_close(fetch)' ports/curl/wasm/crossbind.build.js`
-  shows the buffer, and the close sits before the last `fetch->status` read.
-- Remove when the patch sizes the method, reads status before closing, maps fetch failures to a curl
-  error, and the e2e requires a response.
-
 ## GEOS's npm licence says "or later"; its recipe says "only"
 
 The `license` field of `@crossbind/port-geos` and its wasm, android, ios and wasi packages is
@@ -551,3 +526,22 @@ would not be recompiled.
 - Check: `grep -n 'cpSync(cmakeDir, buildPath' core/crossbind/src/actions/createLib.js` shows the copy
   without `preserveTimestamps`.
 - Remove when configure builds keep the extracted tree's timestamps without reusing stale objects.
+
+## Suspended `_JSPI` calls that resume out of order overwrite each other's C stack
+
+JSPI suspends a call's wasm frames, but its C stack frames stay on the one linear-memory stack all
+calls share, and neither crossbind nor Emscripten 6.0.9 gives a suspended call a stack of its own. A
+call that starts while another is suspended puts its frames below the first one's. If the first call
+resumes while the second is still suspended, the functions it calls next write over the second
+call's frames. Three integer-only `_JSPI` calls that slept and resumed first in, first out had all
+64 checked stack slots of the second and third call overwritten and left the stack pointer 512 bytes
+low; resuming last in, first out they came back clean. A `_JSPI` call that returns without
+suspending is nested inside the suspended one and safe. curl's fetch transport refuses a second
+transfer while one waits for this reason, but any two `_JSPI` methods that suspend can meet it.
+
+- Seen: 2026-09-30
+- Check: in an app linked with `-sJSPI`, bind `int probe_JSPI(int seed, int ms)` that fills a
+  `volatile int[64]` from `seed`, calls `emscripten_sleep(ms)`, then a function with a 2 KB local
+  buffer, and returns how many of the 64 changed;
+  `await Promise.all([1, 2, 3].map((seed) => probe_JSPI(seed, 200)))` gives `[0, 64, 64]`.
+- Remove when each suspended call runs on a stack of its own, or crossbind queues `_JSPI` calls.

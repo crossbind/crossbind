@@ -15,13 +15,21 @@ initNative().then(async (m) => {
     const { Native } = m;
     try {
         Native.runOnThread();
-        await Native.ops_JSPI();
-        const z = Native.sample();
         const threadResult = await wait(5000, () => Native.getThreadResult());
 
-        console.log(`${z} - ${threadResult}`);
+        console.log(threadResult);
     } catch (e) {
         console.error(e, e.message, e.stack);
+    }
+
+    // e2e/run.mjs starts the server the curl cases talk to; a plain `pnpm start` has none.
+    if (process.env.CURL_PROBE_URL) {
+        try {
+            const report = await m.CurlProbe.run_JSPI(process.env.CURL_PROBE_URL, process.env.CURL_PROBE_DEAD_URL);
+            console.log(`CURLPROBE ${JSON.stringify(report)}`);
+        } catch (e) {
+            console.error('CURLPROBE ERR:', e?.message ?? e);
+        }
     }
 
     // Shared conformance list. The mt node runtime is still the direct module (pthreads

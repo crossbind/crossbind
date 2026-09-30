@@ -50,6 +50,6 @@ export default {
     },
     // No -sJSPI here: this playground builds the mt (pthreads) browser runtime,
     // and JSPI cannot ride along (pthread-mailbox suspends throw SuspendError in
-    // Chromium; Playwright's Firefox has no JSPI API). The shared ops_JSPI demo
-    // is guarded out of non-JSPI builds by the bridge generator.
+    // Chromium; Playwright's Firefox has no JSPI API). The bridge generator guards
+    // the shared CurlProbe.run_JSPI out; the e2e calls CurlProbe.run in the worker.
 };

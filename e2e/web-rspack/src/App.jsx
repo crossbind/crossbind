@@ -53,9 +53,9 @@ function App() {
 	const [threadResult, setThreadResult] = useState("...");
 	const [conf, setConf] = useState("conformance: running ...");
 
-    // No ops_JSPI here: this playground builds the mt (pthreads) browser
-    // runtime, which cannot carry -sJSPI, so the JSPI demo binding is guarded
-    // out of the build. The mt demo is the thread roundtrip below.
+    // No _JSPI calls here: this playground builds the mt (pthreads) browser
+    // runtime, which cannot carry -sJSPI, so _JSPI bindings are guarded out
+    // of the build. The mt demo is the thread roundtrip below.
     // useEffect, not render-body: re-renders must not start concurrent init chains
     // (two interleaved conformance runs race the shared drop counter). An empty dep list is
     // not enough - StrictMode deliberately double-invokes effects in dev - so the guard lives

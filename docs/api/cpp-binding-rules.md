@@ -225,7 +225,7 @@ App-side wrapper is the default; lib-side only when you're publishing a package.
 
 ## Advanced: JSPI flag (experimental)
 
-The Emscripten `-sJSPI` flag enables JavaScript Promise Integration — letting C++ code call into JS-promising code synchronously (the C++ stack suspends on `await`). The living demos are `e2e/backend-nodejs` and `e2e/backend-nodejs-multithread` (Node, run with `--experimental-wasm-jspi`), where a `_JSPI` method performs a curl request over the network.
+The Emscripten `-sJSPI` flag enables JavaScript Promise Integration — letting C++ code call into JS-promising code synchronously (the C++ stack suspends on `await`). The living demos are `e2e/backend-nodejs` and `e2e/backend-nodejs-multithread` (Node, run with `--experimental-wasm-jspi`), where `CurlProbe.run_JSPI` runs curl transfers against a local server.
 
 You'd opt in via `targetSpecs[].specs.binary.emccFlags` in `crossbind.config.js`:
 
