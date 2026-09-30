@@ -7,9 +7,9 @@
     <title>crossbind Vanilla playground</title>
     <script src="./dist/crossbind-e2e-web-vanilla-wasm-wasm32-mt-release.browser.js"></script>
     <script>
-        // No ops_JSPI here: this playground builds the mt (pthreads) browser
-        // runtime, which cannot carry -sJSPI, so the JSPI demo binding is
-        // guarded out of the build. The mt demo is the thread roundtrip below.
+        // No _JSPI calls here: this playground builds the mt (pthreads) browser
+        // runtime, which cannot carry -sJSPI, so _JSPI bindings are guarded
+        // out of the build. The mt demo is the thread roundtrip below.
         // await keeps the calls correct in both modes: the browser runtime
         // defaults to useWorker, where every binding returns a Promise.
         initNative({ path: './dist' }).then(async ({ Native }) => {

@@ -17,7 +17,8 @@ export default (newConfig = {}) => ({
         ...(newConfig.paths || {}),
     },
     targetSpecs: [
-        { platform: 'wasm', specs: { binary: { emccFlags: ['-s', 'FETCH'] } } },
+        // Without IndexedDB support the fetch library opens no database while the module starts.
+        { platform: 'wasm', specs: { binary: { emccFlags: ['-s', 'FETCH', '-sFETCH_SUPPORT_INDEXEDDB=0'] } } },
         // curl compresses with the zlib of the macOS SDK.
         { platform: 'darwin', specs: { binary: { addonFlags: ['-lz'] } } },
         // On Windows a consumer compiles against the static library, or curl.h expects a DLL; and it
