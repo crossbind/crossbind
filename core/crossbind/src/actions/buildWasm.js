@@ -12,6 +12,10 @@ import logger from '../utils/logger.js';
 import { getContentHash, getFilesFingerprint } from '../utils/hash.js';
 import { buildLinkLibArgs } from '../utils/linkLayout.js';
 import { guardBigIntArguments, guardEmbindArguments } from '../utils/embindArgumentGuards.js';
+import { separateCallArguments } from '../utils/embindCallArguments.js';
+
+const GLUE_REWRITES = ['../utils/embindArgumentGuards.js', '../utils/embindCallArguments.js']
+    .map((file) => fileURLToPath(new URL(file, import.meta.url)));
 
 // embind's bigint converter turns any Number into a BigInt, so 2^53+1 silently becomes 2^53.
 // A 64-bit parameter takes a BigInt or a Number that is a safe integer instead; the jsi adapter
@@ -33,6 +37,17 @@ function guardArgumentConversions(target) {
     fs.writeFileSync(gluePath, text);
     if (missed.length) {
         logger.error(`embind argument rewrite missed ${missed.join(', ')} (emscripten glue format changed?): wrong-typed arguments cross as 0`);
+    }
+}
+
+// Overlapping calls of one embind function free each other's arguments (utils/embindCallArguments.js);
+// each runtimeEnv links its own glue, so each one calls this after its link.
+function separateEmbindCalls(target) {
+    const gluePath = `${state.config.paths.build}/${target.rawJsName}`;
+    const { text, missed } = separateCallArguments(fs.readFileSync(gluePath, 'utf8'));
+    fs.writeFileSync(gluePath, text);
+    if (missed) {
+        logger.error('embind per-call argument rewrite missed (emscripten glue format changed?): overlapping calls of one function free each other\'s arguments');
     }
 }
 
@@ -131,7 +146,8 @@ export default async function buildWasm(target, options = {}) {
         // The emcc arg tail is hardcoded per environment in this file, invisible to the
         // emccFlags entry below - hashing the builder itself makes any inline-arg edit
         // (a new -s flag, an EXPORTED_RUNTIME_METHODS change) a guaranteed cache miss.
-        builder: getFilesFingerprint([fileURLToPath(import.meta.url)]),
+        // The glue rewrites applied after the link count as the builder too.
+        builder: getFilesFingerprint([fileURLToPath(import.meta.url), ...GLUE_REWRITES]),
         wholeArchiveAll,
         wholeArchiveNames: [...wholeArchiveNames].sort(),
         emccFlags,
@@ -218,6 +234,7 @@ export default async function buildWasm(target, options = {}) {
         }); */
         guardBigIntConversions(target);
         guardArgumentConversions(target);
+        separateEmbindCalls(target);
         await buildJs(target);
         // fs.rmSync(`${state.config.paths.build}/${state.config.general.name}.js`);
         // fs.copyFileSync(`${state.config.paths.build}/${state.config.general.name}.browser.js`, `${state.config.paths.build}/${state.config.general.name}.js`);
@@ -258,6 +275,7 @@ export default async function buildWasm(target, options = {}) {
         logger.startStep(target, 'js');
         guardBigIntConversions(target);
         guardArgumentConversions(target);
+        separateEmbindCalls(target);
         await buildJs(target);
         logger.doneStep(target, 'js');
     }
@@ -292,6 +310,7 @@ export default async function buildWasm(target, options = {}) {
         logger.startStep(target, 'js');
         guardBigIntConversions(target);
         guardArgumentConversions(target);
+        separateEmbindCalls(target);
         await buildJs(target);
         if (emccFlags.includes('FETCH')) {
             fs.appendFileSync(`${state.config.paths.build}/${target.jsName}`, 'var XMLHttpRequest = require(\'xhr2\');\n');
