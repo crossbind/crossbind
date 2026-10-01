@@ -6,7 +6,8 @@
 //     stripped from crossbind.config.{js,mjs} and metro.config.js (these are
 //     workspace-only knobs that don't belong in scaffolded projects).
 // Build artifacts (node_modules, .crossbind, dist, native build outputs, lockfiles
-// when not whitelisted) are filtered out during copy. Ignore files ship as
+// when not whitelisted) and the files an entry lists as workspaceOnly are
+// filtered out during copy. Ignore files ship as
 // _gitignore / _npmignore (see src/dotfiles.js).
 
 import fs from 'node:fs';
@@ -67,7 +68,9 @@ function rewriteWorkspaceDeps(deps, versionMap) {
     return out;
 }
 
-function makeFilter(entry) {
+export function makeFilter(entry) {
+    // Files a sample needs only inside this repository, such as a config that keeps the monorepo's own out
+    const workspaceOnly = new Set((entry.workspaceOnly ?? []).map((file) => path.join(REPO_ROOT, entry.source, file)));
     const skipDirs = new Set([
         'node_modules', '.crossbind', 'dist', '.gradle', '.cxx', 'Pods', 'build',
         '.expo', '.wrangler', '.next', '.svelte-kit', 'playwright-report', 'test-results', 'coverage',
@@ -80,6 +83,7 @@ function makeFilter(entry) {
     const skipFiles = new Set(['.DS_Store', '.xcode.env.local', 'pnpm-lock.yaml', 'Podfile.lock']);
     if (!entry.keepLockfile) skipFiles.add('package-lock.json');
     return (src) => {
+        if (workspaceOnly.has(src)) return false;
         const base = path.basename(src);
         if (skipDirs.has(base)) return false;
         if (skipFiles.has(base)) return false;

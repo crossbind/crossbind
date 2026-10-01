@@ -31,6 +31,13 @@ updates:
           - dependency-name: eslint
             update-types:
                 - version-update:semver-major
+          # The React Native CLI samples, the only workspace packages on TypeScript, take the one
+          # React Native's own template pins. TypeScript 7 ships no compiler API, and the
+          # @typescript-eslint behind its eslint-config accepts TypeScript below 6.1 only. Lift this
+          # once React Native's template moves to TypeScript 7.
+          - dependency-name: typescript
+            update-types:
+                - version-update:semver-major
       groups:
           # Families that must move together, whatever the update type: a vitest 5 PR without
           # @vitest/coverage-v8 5, or a react-native bump without its @react-native/* dev
