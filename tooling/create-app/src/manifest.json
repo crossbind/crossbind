@@ -46,7 +46,8 @@
         "label": "Native CLI",
         "kind": "app",
         "source": "examples/mobile-reactnative-cli",
-        "nativeFolders": true
+        "nativeFolders": true,
+        "workspaceOnly": ["eslint.config.mjs"]
     },
     {
         "key": "mobile-reactnative-expo",
