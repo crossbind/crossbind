@@ -155,6 +155,10 @@ test('the unpublished toolchain image train uses the reviewed stable versions', 
     assert.match(base, /^USER 10001:10001$/m);
     assert.match(web, /^USER 10001:10001$/m);
     assert.match(android, /^USER 10001:10001$/m);
+    // The copies patched into npm come from tarballs checked against a pinned digest.
+    assert.match(base, /^ARG BRACE_EXPANSION_SHA256=[0-9a-f]{64}$/m);
+    assert.match(base, /^ARG UNDICI_SHA256=[0-9a-f]{64}$/m);
+    assert.match(base, /\$3 {2}\/tmp\/package\.tgz" \| sha256sum -c -/);
 
     // The addon toolchains download nothing they do not check against a pinned digest.
     const linux = fs.readFileSync(path.join(dockerDirectory, 'linux.Dockerfile'), 'utf8');
