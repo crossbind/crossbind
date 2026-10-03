@@ -26,8 +26,12 @@ function changedFiles() {
         .filter(Boolean);
 }
 
+// pnpm build:agents runs before this check, and the port catalog it writes carries every family's
+// nativeVersion; the bundle manifest hashes that catalog.
+const PORT_CATALOG_FILES = ['agents/skills/crossbind/references/ports.json', 'agents/skills/crossbind/references/manifest.json'];
+
 export function dependencyPathAllowed(proposal, file) {
-    if (proposal.kind === 'native') return file.startsWith(`ports/${proposal.unit}/`);
+    if (proposal.kind === 'native') return file.startsWith(`ports/${proposal.unit}/`) || PORT_CATALOG_FILES.includes(file);
     switch (proposal.component) {
         case 'node':
             return (

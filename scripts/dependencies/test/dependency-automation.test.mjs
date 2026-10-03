@@ -416,6 +416,9 @@ test('proposal changed-file policies reject unrelated files', () => {
 
     assert.equal(dependencyPathAllowed({ kind: 'native', unit: 'zlib' }, 'ports/zlib/ios/package.json'), true);
     assert.equal(dependencyPathAllowed({ kind: 'native', unit: 'zlib' }, 'ports/curl/base/package.json'), false);
+    assert.equal(dependencyPathAllowed({ kind: 'native', unit: 'zlib' }, 'agents/skills/crossbind/references/ports.json'), true);
+    assert.equal(dependencyPathAllowed({ kind: 'native', unit: 'zlib' }, 'agents/skills/crossbind/references/manifest.json'), true);
+    assert.equal(dependencyPathAllowed({ kind: 'native', unit: 'zlib' }, 'agents/skills/crossbind/references/api/build-state.md'), false);
 });
 
 test('a Node digest-only proposal updates only the exact Docker base reference', () => {
