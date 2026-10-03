@@ -12,9 +12,10 @@
  *        android → android-arm64-v8a-mt-release, android-x86_64-mt-release
  *        darwin  → darwin-arm64-mt-release, darwin-x64-mt-release
  *        linux   → linux-arm64-mt-release, linux-x64-mt-release
+ *        linuxmusl → linuxmusl-arm64-mt-release, linuxmusl-x64-mt-release
  *        win32   → win32-arm64-mt-release, win32-x64-mt-release
  *   3. Verifies each target contains:
- *        - lib/lib<libName>.<ext>   (.a for wasm/ios/darwin/linux/win32, .so for android)
+ *        - lib/lib<libName>.<ext>   (.a for wasm/ios/darwin/linux/linuxmusl/win32, .so for android)
  *        - include/  (non-empty)
  *   4. Verifies dist/prebuilt/CMakeLists.txt exists.
  *
@@ -38,6 +39,7 @@ const PLATFORM_TARGETS = {
     android: ['android-arm64-v8a-mt-release', 'android-x86_64-mt-release'],
     darwin: ['darwin-arm64-mt-release', 'darwin-x64-mt-release'],
     linux: ['linux-arm64-mt-release', 'linux-x64-mt-release'],
+    linuxmusl: ['linuxmusl-arm64-mt-release', 'linuxmusl-x64-mt-release'],
     win32: ['win32-arm64-mt-release', 'win32-x64-mt-release'],
 };
 
@@ -47,6 +49,7 @@ const PLATFORM_LIB_EXT = {
     android: '.so',
     darwin: '.a',
     linux: '.a',
+    linuxmusl: '.a',
     win32: '.a',
 };
 

@@ -106,7 +106,7 @@ function addonToolchainRows(platform) {
         sourceUrl: 'https://github.com/llvm/llvm-project',
     };
     const llvmText = 'license text: https://github.com/llvm/llvm-project/blob/main/LICENSE.TXT';
-    if (platform === 'linux') {
+    if (platform === 'linux' || platform === 'linuxmusl') {
         return [{ ...llvmRuntimes, licenseNotes: `libc++ and libc++abi of the linux toolchain image, statically linked into the addon; ${llvmText}` }];
     }
     const mingwLicense = 'LicenseRef-MinGW-w64-runtime';
@@ -185,6 +185,6 @@ export default async function collectLicenseRows(platform = null) {
         if (platform) rows.push(...await bundledRowsOf(node, platform));
     }
     if (platform === 'wasi') rows.push(...wasiToolchainRows());
-    if (platform === 'linux' || platform === 'win32') rows.push(...addonToolchainRows(platform));
+    if (['linux', 'linuxmusl', 'win32'].includes(platform)) rows.push(...addonToolchainRows(platform));
     return rows.sort((a, b) => a.name.localeCompare(b.name));
 }

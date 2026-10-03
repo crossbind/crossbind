@@ -1,0 +1,40 @@
+{
+    "name": "@crossbind/port-spatialite-linuxmusl",
+    "version": "2.0.0-beta.62",
+    "nativeVersion": "5.1.0",
+    "description": "Linux (musl) build of the precompiled SpatiaLite (spatial SQLite extension) library, built with crossbind. Use it together with the main package @crossbind/port-spatialite.",
+    "homepage": "https://github.com/crossbind/crossbind/tree/main/ports/spatialite#readme",
+    "repository": "https://github.com/crossbind/crossbind.git",
+    "type": "module",
+    "license": "MPL-1.1 OR GPL-2.0-or-later OR LGPL-2.1-or-later",
+    "keywords": [
+        "spatialite",
+        "libspatialite",
+        "sqlite",
+        "spatial",
+        "gis",
+        "crossbind",
+        "crossbind-port",
+        "linux",
+        "musl",
+        "alpine",
+        "node",
+        "node-api"
+    ],
+    "scripts": {
+        "build": "crossbind build -p linuxmusl",
+        "clear": "rm -rf .crossbind dist",
+        "prepublishOnly": "crossbind build -p linuxmusl"
+    },
+    "dependencies": {
+        "@crossbind/port-spatialite": "workspace:^",
+        "@crossbind/port-geos-linuxmusl": "workspace:^",
+        "@crossbind/port-proj-linuxmusl": "workspace:^",
+        "@crossbind/port-sqlite3-linuxmusl": "workspace:^",
+        "@crossbind/port-zlib-linuxmusl": "workspace:^",
+        "@crossbind/port-iconv-linuxmusl": "workspace:^"
+    },
+    "devDependencies": {
+        "crossbind": "workspace:^"
+    }
+}

@@ -223,7 +223,7 @@ const m = await initNative({
 })
 ```
 
-The Node-API build (`crossbind build -p darwin`, `linux` or `win32`) takes only `env`, `addonPath` and `dataPath`: there is no Emscripten runtime, so no worker, virtual filesystem or log redirection. `m` holds the bound classes and functions plus `toArray`/`toVector`. `initNative.terminate()` forgets the booted module, but Node cannot unload an addon, so the next `initNative()` resolves the same one with its native state intact.
+The Node-API build (`crossbind build -p darwin`, `linux`, `linuxmusl` or `win32`) takes only `env`, `addonPath` and `dataPath`: there is no Emscripten runtime, so no worker, virtual filesystem or log redirection. `m` holds the bound classes and functions plus `toArray`/`toVector`. `initNative.terminate()` forgets the booted module, but Node cannot unload an addon, so the next `initNative()` resolves the same one with its native state intact.
 
 ### Cloudflare Worker
 

@@ -8,7 +8,7 @@
 
 Create a `ports/<name>/` family that:
 
-- Builds the supported `wasm`, `android`, `ios`, `darwin`, `linux`, `win32` and `wasi` platform variants from one shared recipe. `darwin`, `linux` and `win32` are the macOS, Linux and Windows builds that native Node.js addons link.
+- Builds the supported `wasm`, `android`, `ios`, `darwin`, `linux`, `linuxmusl`, `win32` and `wasi` platform variants from one shared recipe. `darwin`, `linux`, `linuxmusl` and `win32` are the macOS, Linux (glibc), Linux (musl) and Windows builds that native Node.js addons link.
 - Optionally publishes an upstream command-line program through `bin-wasi/`.
 - Exposes the library through Embind or SWIG bridges.
 - Pins the upstream source version and digest.

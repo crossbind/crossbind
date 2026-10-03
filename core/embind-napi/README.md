@@ -36,6 +36,7 @@ requirements and current limits (macOS only, no `worker_threads` yet).
 
 - `cpp/` — the addon's CMake project and its Node-API entry point.
 - `js/loader.js` — the loader crossbind bundles into `dist/<name>.native.cjs`.
+- `js/addonPlatform.js` — tells glibc and musl Linux apart, so the loader picks the `linux` or `linuxmusl` addon.
 - `third_party/node-api-jsi/` — Microsoft's JSI implementation over Node-API (MIT), vendored at a
   pinned commit; provenance and local patches are in its README.
 

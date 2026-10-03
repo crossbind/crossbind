@@ -43,6 +43,7 @@ crossbind/
 │       ├── ios/
 │       ├── darwin/                   ← macOS arm64 + x64 archives for native Node.js addons
 │       ├── linux/                    ← Linux (glibc 2.28) arm64 + x64 archives for native Node.js addons
+│       ├── linuxmusl/                ← Linux (musl 1.2.5) arm64 + x64 archives for native Node.js addons
 │       ├── win32/                    ← Windows arm64 + x64 archives for native Node.js addons
 │       ├── wasi/                     ← wasi prebuilt (wasm32-wasip3)
 │       └── bin-wasi/                 ← upstream CLI as npm commands (where upstream ships one)

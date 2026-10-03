@@ -1,0 +1,50 @@
+{
+    "name": "@crossbind/port-gdal-linuxmusl",
+    "version": "2.0.0-beta.62",
+    "nativeVersion": "3.13.3",
+    "description": "Linux (musl) build of the precompiled GDAL geospatial library, built with crossbind. Use it together with the main package @crossbind/port-gdal.",
+    "homepage": "https://github.com/crossbind/crossbind/tree/main/ports/gdal#readme",
+    "repository": "https://github.com/crossbind/crossbind.git",
+    "type": "module",
+    "license": "MIT",
+    "keywords": [
+        "gdal",
+        "libgdal",
+        "gis",
+        "geospatial",
+        "raster",
+        "vector",
+        "crossbind",
+        "crossbind-port",
+        "linux",
+        "musl",
+        "alpine",
+        "node",
+        "node-api"
+    ],
+    "scripts": {
+        "build": "crossbind build -p linuxmusl",
+        "clear": "rm -rf .crossbind dist",
+        "prepublishOnly": "crossbind build -p linuxmusl"
+    },
+    "dependencies": {
+        "@crossbind/port-gdal": "workspace:^",
+        "@crossbind/port-curl-linuxmusl": "workspace:^",
+        "@crossbind/port-expat-linuxmusl": "workspace:^",
+        "@crossbind/port-geos-linuxmusl": "workspace:^",
+        "@crossbind/port-geotiff-linuxmusl": "workspace:^",
+        "@crossbind/port-iconv-linuxmusl": "workspace:^",
+        "@crossbind/port-jpegturbo-linuxmusl": "workspace:^",
+        "@crossbind/port-proj-linuxmusl": "workspace:^",
+        "@crossbind/port-spatialite-linuxmusl": "workspace:^",
+        "@crossbind/port-sqlite3-linuxmusl": "workspace:^",
+        "@crossbind/port-tiff-linuxmusl": "workspace:^",
+        "@crossbind/port-webp-linuxmusl": "workspace:^",
+        "@crossbind/port-zlib-linuxmusl": "workspace:^",
+        "@crossbind/port-zstd-linuxmusl": "workspace:^",
+        "@crossbind/port-lerc-linuxmusl": "workspace:^"
+    },
+    "devDependencies": {
+        "crossbind": "workspace:^"
+    }
+}

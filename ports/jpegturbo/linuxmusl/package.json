@@ -1,0 +1,34 @@
+{
+    "name": "@crossbind/port-jpegturbo-linuxmusl",
+    "version": "2.0.0-beta.62",
+    "nativeVersion": "3.2.0",
+    "description": "Linux (musl) build of the precompiled libjpeg-turbo (JPEG) library, built with crossbind. Use it together with the main package @crossbind/port-jpegturbo.",
+    "homepage": "https://github.com/crossbind/crossbind/tree/main/ports/jpegturbo#readme",
+    "repository": "https://github.com/crossbind/crossbind.git",
+    "type": "module",
+    "license": "(IJG AND BSD-3-Clause AND Zlib)",
+    "keywords": [
+        "jpegturbo",
+        "libjpeg-turbo",
+        "jpeg",
+        "image",
+        "crossbind",
+        "crossbind-port",
+        "linux",
+        "musl",
+        "alpine",
+        "node",
+        "node-api"
+    ],
+    "scripts": {
+        "build": "crossbind build -p linuxmusl",
+        "clear": "rm -rf .crossbind dist",
+        "prepublishOnly": "crossbind build -p linuxmusl"
+    },
+    "dependencies": {
+        "@crossbind/port-jpegturbo": "workspace:^"
+    },
+    "devDependencies": {
+        "crossbind": "workspace:^"
+    }
+}

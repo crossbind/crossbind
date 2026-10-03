@@ -532,5 +532,5 @@ test('native updater changes every nested nativeVersion field together', () => {
     const source = fs.readFileSync(path.join(ROOT, 'scripts/check-native-versions.js'), 'utf8');
     assert.match(source, /nativeVersion.*\)\(\[\^"\]\*\)\(.*\/g/);
     const validator = fs.readFileSync(path.join(ROOT, 'scripts/dependencies/validate-native-family.mjs'), 'utf8');
-    assert.match(validator, /\['base', 'wasm', 'wasi', 'bin-wasi', 'android', 'linux', 'win32'\]/);
+    assert.match(validator, /\['base', 'wasm', 'wasi', 'bin-wasi', 'android', 'linux', 'linuxmusl', 'win32'\]/);
 });

@@ -48,7 +48,7 @@ export default {
 };
 ```
 
-A native Node.js addon links the build of its platform: `crossbind build -p darwin`, `-p linux` or `-p win32` takes `@crossbind/port-geotiff-darwin`, `-linux` or `-win32`. Install it and import its `crossbind.config.js` the same way.
+A native Node.js addon links the build of its platform: `crossbind build -p darwin`, `-p linux`, `-p linuxmusl` or `-p win32` takes `@crossbind/port-geotiff-darwin`, `-linux`, `-linuxmusl` or `-win32`; `-linuxmusl` is the one for Alpine and other musl distributions. Install it and import its `crossbind.config.js` the same way.
 
 > In a web build, list only `geotiffWasm` for now: with the Android or iOS config beside it, the build also tries to preload their PROJ data and fails. See [known issues](https://github.com/crossbind/crossbind/blob/main/docs/known-issues.md).
 

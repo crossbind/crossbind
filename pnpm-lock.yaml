@@ -1338,6 +1338,19 @@ importers:
         specifier: workspace:^
         version: link:../../../core/crossbind
 
+  ports/curl/linuxmusl:
+    dependencies:
+      '@crossbind/port-curl':
+        specifier: workspace:^
+        version: link:../base
+      '@crossbind/port-openssl-linuxmusl':
+        specifier: workspace:^
+        version: link:../../openssl/linuxmusl
+    devDependencies:
+      crossbind:
+        specifier: workspace:^
+        version: link:../../../core/crossbind
+
   ports/curl/wasi:
     dependencies:
       '@crossbind/port-curl':
@@ -1422,6 +1435,16 @@ importers:
         version: link:../../../core/crossbind
 
   ports/expat/linux:
+    dependencies:
+      '@crossbind/port-expat':
+        specifier: workspace:^
+        version: link:../base
+    devDependencies:
+      crossbind:
+        specifier: workspace:^
+        version: link:../../../core/crossbind
+
+  ports/expat/linuxmusl:
     dependencies:
       '@crossbind/port-expat':
         specifier: workspace:^
@@ -1701,6 +1724,58 @@ importers:
         specifier: workspace:^
         version: link:../../../core/crossbind
 
+  ports/gdal/linuxmusl:
+    dependencies:
+      '@crossbind/port-curl-linuxmusl':
+        specifier: workspace:^
+        version: link:../../curl/linuxmusl
+      '@crossbind/port-expat-linuxmusl':
+        specifier: workspace:^
+        version: link:../../expat/linuxmusl
+      '@crossbind/port-gdal':
+        specifier: workspace:^
+        version: link:../base
+      '@crossbind/port-geos-linuxmusl':
+        specifier: workspace:^
+        version: link:../../geos/linuxmusl
+      '@crossbind/port-geotiff-linuxmusl':
+        specifier: workspace:^
+        version: link:../../geotiff/linuxmusl
+      '@crossbind/port-iconv-linuxmusl':
+        specifier: workspace:^
+        version: link:../../iconv/linuxmusl
+      '@crossbind/port-jpegturbo-linuxmusl':
+        specifier: workspace:^
+        version: link:../../jpegturbo/linuxmusl
+      '@crossbind/port-lerc-linuxmusl':
+        specifier: workspace:^
+        version: link:../../lerc/linuxmusl
+      '@crossbind/port-proj-linuxmusl':
+        specifier: workspace:^
+        version: link:../../proj/linuxmusl
+      '@crossbind/port-spatialite-linuxmusl':
+        specifier: workspace:^
+        version: link:../../spatialite/linuxmusl
+      '@crossbind/port-sqlite3-linuxmusl':
+        specifier: workspace:^
+        version: link:../../sqlite3/linuxmusl
+      '@crossbind/port-tiff-linuxmusl':
+        specifier: workspace:^
+        version: link:../../tiff/linuxmusl
+      '@crossbind/port-webp-linuxmusl':
+        specifier: workspace:^
+        version: link:../../webp/linuxmusl
+      '@crossbind/port-zlib-linuxmusl':
+        specifier: workspace:^
+        version: link:../../zlib/linuxmusl
+      '@crossbind/port-zstd-linuxmusl':
+        specifier: workspace:^
+        version: link:../../zstd/linuxmusl
+    devDependencies:
+      crossbind:
+        specifier: workspace:^
+        version: link:../../../core/crossbind
+
   ports/gdal/wasi:
     dependencies:
       '@crossbind/port-curl-wasi':
@@ -1887,6 +1962,16 @@ importers:
         specifier: workspace:^
         version: link:../../../core/crossbind
 
+  ports/geos/linuxmusl:
+    dependencies:
+      '@crossbind/port-geos':
+        specifier: workspace:^
+        version: link:../base
+    devDependencies:
+      crossbind:
+        specifier: workspace:^
+        version: link:../../../core/crossbind
+
   ports/geos/wasi:
     dependencies:
       '@crossbind/port-geos':
@@ -2019,6 +2104,28 @@ importers:
         specifier: workspace:^
         version: link:../../../core/crossbind
 
+  ports/geotiff/linuxmusl:
+    dependencies:
+      '@crossbind/port-geotiff':
+        specifier: workspace:^
+        version: link:../base
+      '@crossbind/port-jpegturbo-linuxmusl':
+        specifier: workspace:^
+        version: link:../../jpegturbo/linuxmusl
+      '@crossbind/port-proj-linuxmusl':
+        specifier: workspace:^
+        version: link:../../proj/linuxmusl
+      '@crossbind/port-tiff-linuxmusl':
+        specifier: workspace:^
+        version: link:../../tiff/linuxmusl
+      '@crossbind/port-zlib-linuxmusl':
+        specifier: workspace:^
+        version: link:../../zlib/linuxmusl
+    devDependencies:
+      crossbind:
+        specifier: workspace:^
+        version: link:../../../core/crossbind
+
   ports/geotiff/wasi:
     dependencies:
       '@crossbind/port-geotiff':
@@ -2124,6 +2231,16 @@ importers:
         specifier: workspace:^
         version: link:../../../core/crossbind
 
+  ports/iconv/linuxmusl:
+    dependencies:
+      '@crossbind/port-iconv':
+        specifier: workspace:^
+        version: link:../base
+    devDependencies:
+      crossbind:
+        specifier: workspace:^
+        version: link:../../../core/crossbind
+
   ports/iconv/wasi:
     dependencies:
       '@crossbind/port-iconv':
@@ -2208,6 +2325,16 @@ importers:
         specifier: workspace:^
         version: link:../../../core/crossbind
 
+  ports/jpegturbo/linuxmusl:
+    dependencies:
+      '@crossbind/port-jpegturbo':
+        specifier: workspace:^
+        version: link:../base
+    devDependencies:
+      crossbind:
+        specifier: workspace:^
+        version: link:../../../core/crossbind
+
   ports/jpegturbo/wasi:
     dependencies:
       '@crossbind/port-jpegturbo':
@@ -2271,6 +2398,16 @@ importers:
         version: link:../../../core/crossbind
 
   ports/lerc/linux:
+    dependencies:
+      '@crossbind/port-lerc':
+        specifier: workspace:^
+        version: link:../base
+    devDependencies:
+      crossbind:
+        specifier: workspace:^
+        version: link:../../../core/crossbind
+
+  ports/lerc/linuxmusl:
     dependencies:
       '@crossbind/port-lerc':
         specifier: workspace:^
@@ -2355,6 +2492,16 @@ importers:
         version: link:../../../core/crossbind
 
   ports/openssl/linux:
+    dependencies:
+      '@crossbind/port-openssl':
+        specifier: workspace:^
+        version: link:../base
+    devDependencies:
+      crossbind:
+        specifier: workspace:^
+        version: link:../../../core/crossbind
+
+  ports/openssl/linuxmusl:
     dependencies:
       '@crossbind/port-openssl':
         specifier: workspace:^
@@ -2467,6 +2614,22 @@ importers:
       '@crossbind/port-tiff-linux':
         specifier: workspace:^
         version: link:../../tiff/linux
+    devDependencies:
+      crossbind:
+        specifier: workspace:^
+        version: link:../../../core/crossbind
+
+  ports/proj/linuxmusl:
+    dependencies:
+      '@crossbind/port-proj':
+        specifier: workspace:^
+        version: link:../base
+      '@crossbind/port-sqlite3-linuxmusl':
+        specifier: workspace:^
+        version: link:../../sqlite3/linuxmusl
+      '@crossbind/port-tiff-linuxmusl':
+        specifier: workspace:^
+        version: link:../../tiff/linuxmusl
     devDependencies:
       crossbind:
         specifier: workspace:^
@@ -2622,6 +2785,31 @@ importers:
         specifier: workspace:^
         version: link:../../../core/crossbind
 
+  ports/spatialite/linuxmusl:
+    dependencies:
+      '@crossbind/port-geos-linuxmusl':
+        specifier: workspace:^
+        version: link:../../geos/linuxmusl
+      '@crossbind/port-iconv-linuxmusl':
+        specifier: workspace:^
+        version: link:../../iconv/linuxmusl
+      '@crossbind/port-proj-linuxmusl':
+        specifier: workspace:^
+        version: link:../../proj/linuxmusl
+      '@crossbind/port-spatialite':
+        specifier: workspace:^
+        version: link:../base
+      '@crossbind/port-sqlite3-linuxmusl':
+        specifier: workspace:^
+        version: link:../../sqlite3/linuxmusl
+      '@crossbind/port-zlib-linuxmusl':
+        specifier: workspace:^
+        version: link:../../zlib/linuxmusl
+    devDependencies:
+      crossbind:
+        specifier: workspace:^
+        version: link:../../../core/crossbind
+
   ports/spatialite/wasi:
     dependencies:
       '@crossbind/port-geos-wasi':
@@ -2742,6 +2930,16 @@ importers:
         version: link:../../../core/crossbind
 
   ports/sqlite3/linux:
+    dependencies:
+      '@crossbind/port-sqlite3':
+        specifier: workspace:^
+        version: link:../base
+    devDependencies:
+      crossbind:
+        specifier: workspace:^
+        version: link:../../../core/crossbind
+
+  ports/sqlite3/linuxmusl:
     dependencies:
       '@crossbind/port-sqlite3':
         specifier: workspace:^
@@ -2883,6 +3081,28 @@ importers:
         specifier: workspace:^
         version: link:../../../core/crossbind
 
+  ports/tiff/linuxmusl:
+    dependencies:
+      '@crossbind/port-jpegturbo-linuxmusl':
+        specifier: workspace:^
+        version: link:../../jpegturbo/linuxmusl
+      '@crossbind/port-lerc-linuxmusl':
+        specifier: workspace:^
+        version: link:../../lerc/linuxmusl
+      '@crossbind/port-tiff':
+        specifier: workspace:^
+        version: link:../base
+      '@crossbind/port-zlib-linuxmusl':
+        specifier: workspace:^
+        version: link:../../zlib/linuxmusl
+      '@crossbind/port-zstd-linuxmusl':
+        specifier: workspace:^
+        version: link:../../zstd/linuxmusl
+    devDependencies:
+      crossbind:
+        specifier: workspace:^
+        version: link:../../../core/crossbind
+
   ports/tiff/wasi:
     dependencies:
       '@crossbind/port-tiff':
@@ -2994,6 +3214,16 @@ importers:
         specifier: workspace:^
         version: link:../../../core/crossbind
 
+  ports/webp/linuxmusl:
+    dependencies:
+      '@crossbind/port-webp':
+        specifier: workspace:^
+        version: link:../base
+    devDependencies:
+      crossbind:
+        specifier: workspace:^
+        version: link:../../../core/crossbind
+
   ports/webp/wasi:
     dependencies:
       '@crossbind/port-webp':
@@ -3057,6 +3287,16 @@ importers:
         version: link:../../../core/crossbind
 
   ports/zlib/linux:
+    dependencies:
+      '@crossbind/port-zlib':
+        specifier: workspace:^
+        version: link:../base
+    devDependencies:
+      crossbind:
+        specifier: workspace:^
+        version: link:../../../core/crossbind
+
+  ports/zlib/linuxmusl:
     dependencies:
       '@crossbind/port-zlib':
         specifier: workspace:^
@@ -3141,6 +3381,16 @@ importers:
         version: link:../../../core/crossbind
 
   ports/zstd/linux:
+    dependencies:
+      '@crossbind/port-zstd':
+        specifier: workspace:^
+        version: link:../base
+    devDependencies:
+      crossbind:
+        specifier: workspace:^
+        version: link:../../../core/crossbind
+
+  ports/zstd/linuxmusl:
     dependencies:
       '@crossbind/port-zstd':
         specifier: workspace:^

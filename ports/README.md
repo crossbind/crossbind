@@ -7,9 +7,9 @@ npm packages. Each family directory contains:
   (`build.mjs`), the upstream pin and the license metadata; it distributes no
   upstream code itself,
 - **platform variants** — `-wasm`, `-wasi`, `-android`, `-ios`, `-darwin`,
-  `-linux`, `-win32`: prebuilt archives for one platform each (`-darwin`,
-  `-linux` and `-win32` are macOS, Linux and Windows, for native Node.js
-  addons),
+  `-linux`, `-linuxmusl`, `-win32`: prebuilt archives for one platform each
+  (`-darwin`, `-linux`, `-linuxmusl` and `-win32` are macOS, Linux on glibc,
+  Linux on musl and Windows, for native Node.js addons),
 - optionally a **`-bin-wasi` tool package**: the upstream CLI built as a WASI
   component, installable from npm with per-tool commands.
 
@@ -219,7 +219,7 @@ recipe-declared vendored copies (§D `bundled`) and, for wasi, the toolchain
 runtime — wasi-libc (triple-licensed) and the LLVM runtimes
 (libc++/libc++abi/compiler-rt/libunwind, Apache-2.0 WITH LLVM-exception),
 with source links pinned to the commits recorded in the actual wasi-sdk's
-VERSION file. For linux and win32 it rows up what a native Node.js addon links
+VERSION file. For linux, linuxmusl and win32 it rows up what a native Node.js addon links
 statically: the LLVM C++ runtime and, on Windows, the mingw-w64 startup code
 and winpthreads, whose licenses ask for their notices in a binary
 distribution. The emscripten runtime equivalent for wasm targets is a known

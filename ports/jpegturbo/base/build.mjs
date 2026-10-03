@@ -24,7 +24,7 @@ export default {
                 '-DCMAKE_XCODE_ATTRIBUTE_CODE_SIGNING_REQUIRED=NO',
             ];
         }
-        if (['wasi', 'darwin', 'linux', 'win32'].includes(target.platform)) {
+        if (['wasi', 'darwin', 'linux', 'linuxmusl', 'win32'].includes(target.platform)) {
             // The package ships the library only; on wasi the bundled
             // tools/tests would not even link as wasi commands.
             return [
