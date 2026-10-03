@@ -1,6 +1,14 @@
 # @crossbind/docker
 
-## Unreleased — image family 1.0.9
+## Unreleased — image family 1.0.10
+
+### Patch Changes
+
+- Updated Rust to 1.99.0 in the `base` and `rust-sysroot` images. The bootstrap image stays
+  `rust:1.98.1-slim` at a refreshed digest; its rustup installs exactly 1.99.0, and only that
+  toolchain survives in the images.
+
+## Image family 1.0.9
 
 ### Patch Changes
 
