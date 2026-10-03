@@ -215,7 +215,7 @@
       "npm": "@crossbind/port-openssl",
       "category": "crypto",
       "summary": "TLS and cryptographic primitives",
-      "nativeVersion": "4.0.2",
+      "nativeVersion": "4.0.3",
       "license": "Apache-2.0",
       "homepage": "https://github.com/crossbind/crossbind/tree/main/ports/openssl#readme",
       "targets": [
