@@ -6,7 +6,6 @@ export default (newConfig = {}) => ({
     },
     export: {
         type: 'cmake',
-        bundle: false,
         libName: ['Lerc'],
         ...(newConfig.export || {}),
     },

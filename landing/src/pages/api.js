@@ -84,7 +84,7 @@ export default {
             type: 'table',
             head: ['Command', 'What it does'],
             rows: [
-                ['`crossbind build`', 'Compiles the project set up with crossbind. `--platform`, `--arch`, `--runtime`, `--build-type` and `--runtime-env` select targets; `--rebuild-deps [list]` rebuilds dependencies from source instead of using prebuilts.'],
+                ['`crossbind build`', 'Compiles the project set up with crossbind. `--platform`, `--arch`, `--runtime` and `--build-type` select targets, and `--runtime-env` the binaries to make (without it, only the archives); `--rebuild-deps [list]` rebuilds dependencies from source instead of using prebuilts.'],
                 ['`crossbind licenses`', 'Lists bundled native dependencies with SPDX licence, version and source URL. `--notices` writes THIRD-PARTY-NOTICES.md, `--sbom` a CycloneDX file, `--check` fails on a missing or invalid licence, `--platform` adds what that artifact statically links.'],
                 ['`crossbind clean-deps [names...]`', 'Removes the source-rebuilt dependency cache, for all dependencies or only the named ones.'],
                 ['`crossbind docker run|create|start|stop|delete`', 'Manages the toolchain container.'],

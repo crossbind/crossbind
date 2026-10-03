@@ -12,7 +12,20 @@ import fixPackageName from '../utils/fixPackageName.js';
 import getCMakeListsFilePath from '../utils/getCMakeListsFilePath.js';
 import calculateDependencyParameters from './calculateDependencyParameters.js';
 import logger from '../utils/logger.js';
+import { RUNTIME_ENVS } from '../utils/targets.js';
 // import getCmakeParameters from './getCmakeParameters.js';
+
+// For the project being built only: dependency builds load published configs that may still set
+// export.bundle.
+export function assertBinarySelection(config) {
+    if ('bundle' in config.export) {
+        throw new Error('crossbind: export.bundle was removed. A build makes binaries only for the runtime environments it is asked for: -e on the command line, target.runtimeEnv in crossbind.config.js, or a bundler plugin. Remove export.bundle.');
+    }
+    const { runtimeEnv } = config.target;
+    if (runtimeEnv !== undefined && runtimeEnv !== null && !RUNTIME_ENVS.includes(runtimeEnv)) {
+        throw new Error(`crossbind: target.runtimeEnv must be one of ${RUNTIME_ENVS.join(', ')} (got ${JSON.stringify(runtimeEnv)}).`);
+    }
+}
 
 export default async function loadConfig(configDir = process.cwd(), configName = 'crossbind.config') {
     const config = await loadJs(configDir, configName) || {};
@@ -176,7 +189,6 @@ export function getFilledConfig(config, options = { isDepend: false }) {
     newConfig.export.libPath = getPath(newConfig.export.libPath || 'lib');
     newConfig.export.libName = newConfig.export.libName || [newConfig.general.name];
     newConfig.export.binHeaders = newConfig.export.binHeaders || [];
-    newConfig.export.bundle = newConfig.export.bundle ?? true;
 
     newConfig.allDependencies = (() => {
         const output = {};

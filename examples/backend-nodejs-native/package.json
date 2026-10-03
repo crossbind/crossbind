@@ -7,7 +7,7 @@
     "repository": "https://github.com/crossbind/crossbind.git",
     "license": "MIT",
     "scripts": {
-        "build": "crossbind build -p darwin -b release"
+        "build": "crossbind build -p darwin -e node -b release"
     },
     "dependencies": {
         "@crossbind/example-lib-prebuilt-matrix": "workspace:^"

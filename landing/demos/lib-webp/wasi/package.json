@@ -3,7 +3,7 @@
     "private": true,
     "type": "module",
     "scripts": {
-        "build": "crossbind build -p wasi -b release"
+        "build": "crossbind build -p wasi -e wasi -b release"
     },
     "dependencies": {
         "@crossbind/port-webp-wasi": "beta"

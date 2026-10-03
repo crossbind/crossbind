@@ -4,7 +4,7 @@
     "private": true,
     "description": "Dependency-free WASI command playground: one main.cpp compiled to a single .wasm and executed under wasmtime.",
     "scripts": {
-        "build": "crossbind build -p wasi -b release",
+        "build": "crossbind build -p wasi -e wasi -b release",
         "e2e:prod": "node e2e/run.mjs",
         "clear": "rm -rf .crossbind dist"
     },

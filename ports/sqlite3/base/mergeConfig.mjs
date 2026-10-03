@@ -6,7 +6,6 @@ export default (newConfig = {}) => ({
     },
     export: {
         type: 'cmake',
-        bundle: false,
         // Declared in sqlite3.h but not in this build of the library, so bindings of the header
         // would not link: debug-only mutex checks, Windows-only calls, and features behind
         // SQLITE_ENABLE_* options the port leaves off.

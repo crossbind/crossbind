@@ -2,7 +2,7 @@ import loadJson from '../utils/loadJson.js';
 import writeJson from '../utils/writeJson.js';
 import { TARGETS, targetPathOf, nodeAddonNamesOf } from '../utils/targets.js';
 import { findCargoModuleImportsIn, writeCargoMarker } from '../utils/cargoImport.js';
-import loadConfig from './loadConfig.js';
+import loadConfig, { assertBinarySelection } from './loadConfig.js';
 
 const cacheDir = `${process.cwd()}/.crossbind`;
 
@@ -21,6 +21,7 @@ await initProcessState();
 async function initProcessState() {
     state.cache = loadCacheState();
     state.config = await loadConfig();
+    assertBinarySelection(state.config);
     // Recipes read the wasi-sdk location from the environment (lazily, in
     // getBuildParams); mirror the system-config value there so both sources
     // behave the same.

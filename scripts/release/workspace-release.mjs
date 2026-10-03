@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import zlib from 'node:zlib';
 import { loadReleaseNotes, semverChannelPolicy } from './release-lib.mjs';
+import { runtimeEnvsOf } from '../../core/crossbind/src/utils/targets.js';
 
 export const WORKSPACE_REPOSITORY = 'https://github.com/crossbind/crossbind.git';
 export const WORKSPACE_RELEASE_WORKFLOW = '.github/workflows/release-crossbind.yml';
@@ -112,6 +113,13 @@ export const RUNNERS = ['linux', 'wasm', 'android', 'wasi', 'linux-native', 'win
 const LINUX_RUNNERS = RUNNERS.filter((runner) => runner !== 'macos');
 // The runners that build part of the multi-platform package.
 export const MULTI_PLATFORM_RUNNERS = ['wasm', 'android', 'wasi', 'macos'];
+
+// A build makes binaries only for the runtime environments it names, and the multi-platform
+// package publishes every binary its platform has.
+export function multiPlatformBuildArgs(platform) {
+    const runtimeEnvs = runtimeEnvsOf(platform);
+    return ['build', '-p', platform, ...(runtimeEnvs.length ? ['-e', runtimeEnvs.join(',')] : [])];
+}
 
 export function classifyBuild(candidate) {
     const lifecycle = candidate.manifest.scripts?.prepublishOnly;

@@ -159,6 +159,14 @@ export default {
       // See threading.md for the full requirements.
       //
       // Auto-promotes to 'mt' if any item in `dependencies` is 'mt'.
+
+    runtimeEnv: undefined,
+      // The binary a build makes: 'browser' | 'edge' | 'node' | 'wasi'. Usually
+      // left unset - bundler plugins pick their own, and on the command line
+      // -e picks one or more and wins over this. With neither, `crossbind build`
+      // makes only the static archives in <paths.output>/prebuilt/<target>/.
+      // 'node' is a wasm module under -p wasm and a Node-API addon under -p
+      // darwin, linux, linuxmusl or win32.
   },
 
   targetSpecs: [

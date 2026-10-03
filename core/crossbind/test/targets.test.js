@@ -1,6 +1,6 @@
 import { describe, test, expect } from 'vitest';
 import {
-    TARGETS, OPT_IN_PLATFORMS, targetPathOf, filterTargetSpecs, nodeAddonNamesOf,
+    TARGETS, OPT_IN_PLATFORMS, RUNTIME_ENVS, runtimeEnvsOf, selectRuntimeEnvs, targetPathOf, filterTargetSpecs, nodeAddonNamesOf,
 } from '../src/utils/targets.js';
 
 describe('TARGETS', () => {
@@ -46,6 +46,32 @@ describe('TARGETS', () => {
             expect(target.arch).toBe('wasm32');
             expect(target.runtime).toBe('st');
         }
+    });
+
+    // The runtime environment names the binary a build makes, so a wasi command needs one too.
+    test('a wasi command is asked for with the wasi runtime environment', () => {
+        for (const target of TARGETS.filter((t) => t.platform === 'wasi')) {
+            expect(target.runtimeEnv).toBe('wasi');
+        }
+    });
+});
+
+describe('runtime environments', () => {
+    test('RUNTIME_ENVS lists every binary a build can make', () => {
+        expect([...RUNTIME_ENVS].sort()).toEqual(['browser', 'edge', 'node', 'wasi']);
+    });
+
+    test('selectRuntimeEnvs takes -e first, then target.runtimeEnv, then nothing', () => {
+        expect(selectRuntimeEnvs(['node', 'wasi'], 'browser')).toEqual(['node', 'wasi']);
+        expect(selectRuntimeEnvs(undefined, 'edge')).toEqual(['edge']);
+        expect(selectRuntimeEnvs(undefined, undefined)).toEqual([]);
+    });
+
+    test('runtimeEnvsOf lists the binaries of one platform', () => {
+        expect(runtimeEnvsOf('wasm').sort()).toEqual(['browser', 'edge', 'node']);
+        expect(runtimeEnvsOf('wasi')).toEqual(['wasi']);
+        expect(runtimeEnvsOf('linux')).toEqual(['node']);
+        expect(runtimeEnvsOf('android')).toEqual([]);
     });
 });
 
