@@ -112,7 +112,7 @@ Caveats:
 
 ## Native addon (Node-API)
 
-The same bindings can build a native Node-API addon instead of WebAssembly: for Electron's main process, native memory or system access. macOS, Linux (glibc and musl) and Windows, each for arm64 and x64.
+The same bindings can build a native Node-API addon instead of WebAssembly: for Electron's main process, native memory or system access. macOS, Linux (glibc and musl) and Windows, each for arm64 and x64. For a standalone executable from `main()` instead, build with `-e native` (see [`native.md`](../../api/native.md)).
 
 ```bash
 pnpm add -D crossbind @crossbind/core-embind-napi

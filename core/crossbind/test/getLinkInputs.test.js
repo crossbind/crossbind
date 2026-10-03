@@ -58,6 +58,16 @@ describe('getLinkInputs', () => {
         expect(inputs.hasRust).toBe(false);
     });
 
+    // A native executable binds nothing, so there is no bridge archive to link.
+    test('can end with the project archive alone', () => {
+        const inputs = getLinkInputs(target, { keepFlag, withBridge: false });
+
+        expect(inputs.libs).toEqual([
+            '/deps/libz.a',
+            `${work}/Source-Release/darwin-arm64-mt-release/libdemo.a`,
+        ]);
+    });
+
     test('links the installed project archive when the build tree was cleaned', () => {
         const installed = `${work}/out/prebuilt/darwin-arm64-mt-release/lib/libdemo.a`;
         fs.mkdirSync(path.dirname(installed), { recursive: true });

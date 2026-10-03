@@ -163,12 +163,13 @@ export default {
       // Auto-promotes to 'mt' if any item in `dependencies` is 'mt'.
 
     runtimeEnv: undefined,
-      // The binary a build makes: 'browser' | 'edge' | 'node' | 'wasi'. Usually
-      // left unset - bundler plugins pick their own, and on the command line
-      // -e picks one or more and wins over this. With neither, `crossbind build`
-      // makes only the static archives in <paths.output>/prebuilt/<target>/.
+      // The binary a build makes: 'browser' | 'edge' | 'node' | 'native' | 'wasi'.
+      // Usually left unset - bundler plugins pick their own, and on the command
+      // line -e picks one or more and wins over this. With neither, `crossbind
+      // build` makes only the static archives in <paths.output>/prebuilt/<target>/.
       // 'node' is a wasm module under -p wasm and a Node-API addon under -p
-      // darwin, linux, linuxmusl or win32.
+      // darwin, linux, linuxmusl or win32; 'native' is an executable on those
+      // four (see native.md).
   },
 
   targetSpecs: [
@@ -188,7 +189,7 @@ export default {
         binary: {
           emccFlags:   ['-sINITIAL_MEMORY=64MB'],  // -s/-O flags for emcc (wasm only); they follow the default -O3, so -Oz or -Os wins
           wasiFlags:   ['-Wl,--stack-first'],      // flags appended to the wasi command link (platform 'wasi' only; see wasi.md)
-          addonFlags:  ['-lxml2'],                 // system libraries a native Node.js addon link needs (platforms 'darwin', 'linux', 'linuxmusl', 'win32'); dependencies' flags add up
+          addonFlags:  ['-lxml2'],                 // system libraries a native addon or executable link needs (platforms 'darwin', 'linux', 'linuxmusl', 'win32'); dependencies' flags add up
         },
         env:           { GDAL_NUM_THREADS: '0' },  // env vars passed to running Wasm + build env
         data:          { 'share/myapp': 'myapp/data' },  // bundle data files into .data preload

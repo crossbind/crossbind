@@ -1,6 +1,6 @@
 import loadJson from '../utils/loadJson.js';
 import writeJson from '../utils/writeJson.js';
-import { TARGETS, targetPathOf, nodeAddonNamesOf } from '../utils/targets.js';
+import { TARGETS, targetPathOf, nodeAddonNamesOf, nativeCommandNamesOf } from '../utils/targets.js';
 import { findCargoModuleImportsIn, writeCargoMarker } from '../utils/cargoImport.js';
 import loadConfig, { assertBinarySelection } from './loadConfig.js';
 
@@ -58,6 +58,9 @@ async function initProcessState() {
         }
         if (target.runtimeEnv === 'node' && target.platform !== 'wasm') {
             Object.assign(target, nodeAddonNamesOf(target, state.config.general.name));
+        }
+        if (target.runtimeEnv === 'native') {
+            Object.assign(target, nativeCommandNamesOf(target, state.config.general.name));
         }
     });
 

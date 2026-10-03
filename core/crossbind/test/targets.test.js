@@ -1,6 +1,7 @@
 import { describe, test, expect } from 'vitest';
 import {
     TARGETS, OPT_IN_PLATFORMS, RUNTIME_ENVS, runtimeEnvsOf, selectRuntimeEnvs, targetPathOf, filterTargetSpecs, nodeAddonNamesOf,
+    nativeCommandNamesOf,
 } from '../src/utils/targets.js';
 
 describe('TARGETS', () => {
@@ -9,12 +10,19 @@ describe('TARGETS', () => {
     });
 
     test.each(['darwin', 'linux', 'linuxmusl', 'win32'])('%s builds Node-API addons for x64 and arm64', (platform) => {
-        const desktop = TARGETS.filter((t) => t.platform === platform);
+        const desktop = TARGETS.filter((t) => t.platform === platform && t.runtimeEnv === 'node');
         expect(desktop.map((t) => `${t.arch}-${t.buildType}`).sort()).toEqual(['arm64-debug', 'arm64-release', 'x64-debug', 'x64-release']);
         for (const target of desktop) {
             expect(target.runtime).toBe('mt');
-            expect(target.runtimeEnv).toBe('node');
         }
+    });
+
+    // Same paths, so an executable links the very archives the addon of its platform links.
+    test.each(['darwin', 'linux', 'linuxmusl', 'win32'])('%s builds native executables from the addon targets', (platform) => {
+        const pathsOf = (runtimeEnv) => TARGETS
+            .filter((t) => t.platform === platform && t.runtimeEnv === runtimeEnv).map(targetPathOf).sort();
+        expect(pathsOf('native')).toEqual(pathsOf('node'));
+        expect(pathsOf('native')).toHaveLength(4);
     });
 
     test('Node-API addon platforms build only when named, so a plain build keeps its output', () => {
@@ -58,7 +66,7 @@ describe('TARGETS', () => {
 
 describe('runtime environments', () => {
     test('RUNTIME_ENVS lists every binary a build can make', () => {
-        expect([...RUNTIME_ENVS].sort()).toEqual(['browser', 'edge', 'node', 'wasi']);
+        expect([...RUNTIME_ENVS].sort()).toEqual(['browser', 'edge', 'native', 'node', 'wasi']);
     });
 
     test('selectRuntimeEnvs takes -e first, then target.runtimeEnv, then nothing', () => {
@@ -70,8 +78,23 @@ describe('runtime environments', () => {
     test('runtimeEnvsOf lists the binaries of one platform', () => {
         expect(runtimeEnvsOf('wasm').sort()).toEqual(['browser', 'edge', 'node']);
         expect(runtimeEnvsOf('wasi')).toEqual(['wasi']);
-        expect(runtimeEnvsOf('linux')).toEqual(['node']);
+        expect(runtimeEnvsOf('linux')).toEqual(['node', 'native']);
         expect(runtimeEnvsOf('android')).toEqual([]);
+    });
+});
+
+describe('nativeCommandNamesOf', () => {
+    const native = (platform, buildType) => ({
+        platform, arch: 'x64', runtime: 'mt', buildType, runtimeEnv: 'native',
+    });
+
+    test('names the executable after the project, platform and arch', () => {
+        expect(nativeCommandNamesOf(native('linux', 'release'), 'demo')).toEqual({ commandName: 'demo.linux-x64' });
+    });
+
+    test('gives Windows executables their extension and keeps debug builds apart', () => {
+        expect(nativeCommandNamesOf(native('win32', 'release'), 'demo').commandName).toBe('demo.win32-x64.exe');
+        expect(nativeCommandNamesOf(native('linuxmusl', 'debug'), 'demo').commandName).toBe('demo.linuxmusl-x64.debug');
     });
 });
 

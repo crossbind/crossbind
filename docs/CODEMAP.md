@@ -65,7 +65,7 @@ Every consumer-facing field, every default, every constraint lives in [`docs/api
 - [`threading.md`](./api/threading.md) — `runtime: 'st' | 'mt'`, `useWorker`, COOP/COEP, edge-runtime limits.
 - [`cpp-binding-rules.md`](./api/cpp-binding-rules.md) — what auto-binding handles + wrapper / SWIG escape patterns.
 - [`rust.md`](./api/rust.md) — Rust bindings: `cargo:` imports, app-local `.rs`, cargo-type packages.
-- [`native.md`](./api/native.md) — desktop platforms beyond Node.js addons: prebuilt archives in your own C/C++ build.
+- [`native.md`](./api/native.md) — desktop platforms beyond Node.js addons: native executables and prebuilt archives in your own C/C++ build.
 - [`wasi.md`](./api/wasi.md) — `platform: 'wasi'` command builds + `-bin-wasi` npm tool packages.
 - [`swig-escape.md`](./api/swig-escape.md) — manual `.i` files for the rare cases auto-gen doesn't fit.
 - [`build-state.md`](./api/build-state.md) — `state` and `target` shapes + 30 built-in target inventory.
