@@ -1,49 +1,49 @@
 {
-    "version": "1.0.9",
+    "version": "1.0.10",
     "registry": "ghcr.io/crossbind",
     "toolchains": {
-        "rust": "1.98.1"
+        "rust": "1.99.0"
     },
     "images": {
         "rust-sysroot": {
-            "index": "sha256:39f8dd642831b9d41a14f2d251b4e75585dc037dbc07c421bbe8473747e63b66",
+            "index": "sha256:6373dcc1d835cb8a120d4d978baeef554297ae5e7915df4e3ced6ed8eb207bb1",
             "platforms": {
-                "linux/amd64": "sha256:eaecd263835d93a95c3903d9c21072a5618f639aafe20d319dcbfcc93dce6b12",
-                "linux/arm64": "sha256:662271d6113aa3e90bfb2f80c76342b32b73c3729e3398f8d46b2c1d9a6b513c"
+                "linux/amd64": "sha256:f319b8d7cc62bf51afecfa089c2b17d4344d220e41d646123b169496de511ab5",
+                "linux/arm64": "sha256:2df57b89321b65b6fa817a104986998aa60f268c738cd0bba26f2299b636e33b"
             }
         },
         "base": {
-            "index": "sha256:4114533f0b2d65550e59726193eb9243927c580b8c5fbf739b669e5bda62c021",
+            "index": "sha256:0e4d879d50ae72cb8558ad43902f267265f8bcf276bf46089e87ff8d50abf079",
             "platforms": {
-                "linux/amd64": "sha256:66e33cad5f51c2d2b2a699f176d1d259179ac9a86f3859177da882910b3f7bd8",
-                "linux/arm64": "sha256:beddc04f1cc80ef96d288839763ae5af783a3aebe34042c411035e9ac9f84d1f"
+                "linux/amd64": "sha256:60d7884d6c9751d4896150eb50d41db50ba166b49c10bf01c8f4763b056b0df6",
+                "linux/arm64": "sha256:968ab1bf4b7830eac88ef9d1e1609d2b1d0348b7b321e6263c1b0d6a43431abf"
             }
         },
         "web": {
-            "index": "sha256:d2e2b8b068add8fed1d8459609ee10af6d11da71e8a166b116fd3170d595acea",
+            "index": "sha256:9b540371ec7628e4cb659d3ce6459d6515dce950ca37070a15bc77d6d6d66962",
             "platforms": {
-                "linux/amd64": "sha256:06dbb3df29d4979bcdc6c44633c423ce8c872abad6631128585a7be53b24d37a",
-                "linux/arm64": "sha256:9e036b96918d63f9721711cdc606d585260d3de52d273ec0e2d0b4ebfde744d8"
+                "linux/amd64": "sha256:3e94b48166c24386105950532090a6225bffb584c8103252c5e1bfd7dc343564",
+                "linux/arm64": "sha256:3bfc4a4fd7ed78d434f09417ca12c9b33c66aa48c9121e943591e8edc182702d"
             }
         },
         "android": {
-            "index": "sha256:40a5f26616fda76c7c0d942d7a673d59266b33e1a684eff8dc4d9c1250a077bb",
+            "index": "sha256:629c730a4a910ab63e366d6c8effa977a557a173cc08b8b611562190947a8b04",
             "platforms": {
-                "linux/amd64": "sha256:4122a505bef58b6ff4e9dcf9e83bdee05c9cbc28c590012b2031df15821954c0"
+                "linux/amd64": "sha256:3cce763e5674e10103725b037e3179ad0898a721f5a9a223b3447c62cdf33f54"
             }
         },
         "linux": {
-            "index": "sha256:83e3bb6d807a266a7c0a4834410a86b363a0e321ab3788f85634ecb3ed5665c8",
+            "index": "sha256:6b7527c19a0ff24e6507b35847903a615835f5dc9dedfd23acb404174798ec77",
             "platforms": {
-                "linux/amd64": "sha256:3678982266b1cdb30d65d348117b18b2c53492bb8b062f98eedc83dc6538bb64",
-                "linux/arm64": "sha256:27acc2a6dd85c2895d2c8c565bb742ee1cd54f30ba6625f18c1b9a47c6c7e138"
+                "linux/amd64": "sha256:ff14b345d4bdd667444119ef7c2f99c01368801efc9441b5fab3fa4cf528bf15",
+                "linux/arm64": "sha256:ee181f853c6d2efff89dee2511c570236d5521250e81849d96f35f45f546276b"
             }
         },
         "windows": {
-            "index": "sha256:4045e89018d0fafb94d9304f0f9dfbbdf3e0900addd2c1263851f0cdbfd1d78f",
+            "index": "sha256:0898fbfd52615a52caa10d471c9b3aa54875a8352a2c07dff220bfd8c5c587d5",
             "platforms": {
-                "linux/amd64": "sha256:25c65092050bb21aa8370244ec914be14bf621ce7b8edf8ca5a6b4b28620dc11",
-                "linux/arm64": "sha256:28910502313672451663e8ed8853de92ed1ca5afe689358c87b961671715b6f3"
+                "linux/amd64": "sha256:3c7cfbde595b1843cf6f973c1e91bd817df6c8c08a006fb0d0c795b5be4db033",
+                "linux/arm64": "sha256:06aeb7f314e6d85c8ef05cc1f45d89a993d72cf2fdaf64aefc0351b65f892258"
             }
         }
     }
