@@ -54,6 +54,10 @@ const HOST_UID = '1000:1000';
 const BASE_SCRIPT = `set -e
 node -e 'process.exit(process.versions.node === "${NODE_VERSION}" ? 0 : 1)'
 echo "node $(node -v)"
+mkdir -p /tmp/npm-probe
+printf '{"name":"npm-probe","version":"1.0.0"}\n' > /tmp/npm-probe/package.json
+(cd /tmp/npm-probe && npm_config_cache=/tmp/npm-cache npm pack --dry-run --json > /dev/null)
+echo "npm $(npm -v) packs with its patched copies"
 rustc -vV | sed -n 's/^release: //p' | grep -qx '${RUST_VERSION}'
 echo "rustc $(rustc -vV | sed -n 's/^release: //p') cargo $(cargo --version | cut -d' ' -f2)"
 swig -version | sed -n 's/.*SWIG Version //p' | head -1 | sed 's/^/swig /'

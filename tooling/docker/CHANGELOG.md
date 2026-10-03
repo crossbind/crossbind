@@ -10,6 +10,11 @@
   recorded), and a libc++ 19.1.7 built against each. A musl addon needs only musl's libc and
   `libgcc_s`, so it loads on Alpine 3.21 and newer. libc++abi keeps its own
   `__cxa_thread_atexit`, which musl does not provide.
+- npm 11.19.1 vendors brace-expansion 5.0.9 and undici 6.28.0, whose HIGH CVEs (CVE-2026-102276,
+  CVE-2026-102278, CVE-2026-19534) are fixed upstream but in no npm release yet. The base image
+  replaces those two copies with brace-expansion 5.0.12 and undici 6.28.1 from hash-verified
+  tarballs. Rebuilding also brings the Debian packages up to date, which the scan of the published
+  1.0.8 images has been flagging since 30 September.
 
 ## Image family 1.0.8
 
