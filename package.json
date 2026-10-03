@@ -52,6 +52,7 @@
         "e2e:android": "pnpm -r --workspace-concurrency=1 e2e:android",
         "e2e:mobile": "pnpm run e2e:ios && pnpm run e2e:android",
         "e2e:wasi": "pnpm -r --workspace-concurrency=1 --filter='@crossbind/port-*-wasi' e2e",
+        "e2e:linux": "pnpm -r --workspace-concurrency=1 --filter='@crossbind/port-*-linux' e2e",
         "e2e": "pnpm run e2e:dev && pnpm run e2e:prod && pnpm run e2e:mobile",
         "e2e:templates": "node scripts/e2e-templates.js",
         "publish:examples": "node scripts/release/refuse-legacy-npm-publish.mjs",

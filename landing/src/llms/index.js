@@ -25,6 +25,7 @@ const API_DOC_TITLES = {
     'cpp-binding-rules.md': 'C++ binding rules',
     'rust.md': 'Rust bindings',
     'wasi.md': 'WASI commands',
+    'native.md': 'Native platforms',
     'swig-escape.md': 'Custom SWIG interfaces',
     'overrides.md': 'Build overrides',
     'performance.md': 'Performance',
