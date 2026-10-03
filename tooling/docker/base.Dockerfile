@@ -64,6 +64,25 @@ RUN wget -q "https://github.com/crossbind/swig/archive/${SWIG_REV}.zip" -O swig.
     mkdir -p /out/licenses && \
     cp LICENSE LICENSE-GPL LICENSE-UNIVERSITIES /out/licenses/
 
+# Conan runs on Debian's Python from a venv of the wheels conan-requirements.txt pins by hash. pip
+# is removed once they are in, so only Conan and the packages it imports ship, each with its texts.
+FROM os AS conan
+
+RUN apt-get update && apt-get install -y --no-install-recommends python3-venv
+COPY conan-requirements.txt /tmp/conan-requirements.txt
+RUN set -eu; \
+    python3 -m venv /opt/conan; \
+    /opt/conan/bin/pip install --no-cache-dir --disable-pip-version-check --require-hashes --only-binary :all: --no-deps -r /tmp/conan-requirements.txt; \
+    /opt/conan/bin/pip check; \
+    /opt/conan/bin/pip uninstall --yes pip; \
+    /opt/conan/bin/conan --version; \
+    for info in /opt/conan/lib/python3*/site-packages/*.dist-info; do \
+      name="$(basename "${info}" .dist-info)"; \
+      mkdir -p "/out/licenses/${name}"; \
+      find "${info}" -type f \( -iname 'LICEN[CS]E*' -o -iname 'COPYING*' -o -iname 'NOTICE*' \) -exec cp {} "/out/licenses/${name}/" \; ; \
+      [ -n "$(ls -A "/out/licenses/${name}")" ] || { echo "no license text in ${info}" >&2; exit 1; }; \
+    done
+
 FROM os AS base
 
 # Safe default for direct consumers. The CLI still overrides this with the host uid:gid so bind
@@ -104,15 +123,19 @@ RUN set -eu; \
         test "$(node -p "require('${vendored}/$1/package.json').version")" = "$2"; \
     done
 
-# The toolchain tree is read-only image content; CARGO_HOME is the mutable half and lives outside
-# it so a named volume can take it over. 0777 because containers run as the host uid, which has no
-# passwd entry and therefore no writable HOME of its own.
+# The toolchain trees are read-only image content; CARGO_HOME and CONAN_HOME are the mutable halves
+# and live outside them so a named volume can take them over. 0777 because containers run as the
+# host uid, which has no passwd entry and therefore no writable HOME of its own.
 ENV RUSTUP_HOME=/usr/local/rustup \
     CARGO_HOME=/var/cache/crossbind/cargo \
+    CONAN_HOME=/var/cache/crossbind/conan \
     PATH=/usr/local/cargo/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin
 COPY --from=rust /usr/local/rustup /usr/local/rustup
 COPY --from=rust /usr/local/cargo /usr/local/cargo
 RUN rm -rf /usr/local/cargo/registry && mkdir -p "${CARGO_HOME}" && chmod 0777 "${CARGO_HOME}"
+
+COPY --from=conan /opt/conan /opt/conan
+RUN ln -s /opt/conan/bin/conan /usr/local/bin/conan && mkdir -p "${CONAN_HOME}" && chmod 0777 "${CONAN_HOME}"
 
 COPY --from=swig /out/usr/local/bin/swig /usr/local/bin/swig
 COPY --from=swig /out/usr/local/share/swig /usr/local/share/swig
@@ -123,6 +146,7 @@ COPY --from=rust /usr/local/rustup/toolchains/*/share/doc/rust /opt/licenses/rus
 COPY --from=swig /out/licenses/LICENSE /opt/licenses/swig-LICENSE
 COPY --from=swig /out/licenses/LICENSE-GPL /opt/licenses/swig-LICENSE-GPL
 COPY --from=swig /out/licenses/LICENSE-UNIVERSITIES /opt/licenses/swig-LICENSE-UNIVERSITIES
+COPY --from=conan /out/licenses /opt/licenses/conan/
 COPY licenses-README.md /opt/licenses/README.md
 
 WORKDIR /
