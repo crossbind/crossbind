@@ -16,7 +16,7 @@ const WASI_CONFIGURE_FLAGS = [
 ];
 
 export default {
-    sha256: '736b467530f916737b7031310ccb21d8218c6229e61e8e160cd1d3458cd543a8', // openssl-4.0.2.tar.gz
+    sha256: '325b5c806167c13b40b1ffeadfe0248197c00eccc4cf123ec1e28d2d2fd216d9', // openssl-4.0.3.tar.gz
     getURL: (version) => `https://github.com/openssl/openssl/releases/download/openssl-${version}/openssl-${version}.tar.gz`,
     buildType: 'configure',
     configureProgram: './Configure',
