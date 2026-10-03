@@ -1,6 +1,17 @@
 # @crossbind/docker
 
-## Unreleased — image family 1.0.10
+## Unreleased — image family 1.0.11
+
+### Patch Changes
+
+- Added Conan 2.33.0 to the `base` image, so every image of the family can build C and C++
+  packages from ConanCenter with its own toolchain. Conan runs on Debian's Python 3.13 from a venv
+  in `/opt/conan`, installed with `--require-hashes --only-binary :all:` from the wheels that
+  `conan-requirements.txt` pins, and pip is removed afterwards. `CONAN_HOME` is
+  `/var/cache/crossbind/conan`, writable by any uid like `CARGO_HOME`; the texts of the 16 Python
+  packages are in `/opt/licenses/conan/`.
+
+## Image family 1.0.10
 
 ### Patch Changes
 

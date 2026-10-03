@@ -7,8 +7,8 @@
 //   node scripts/smoke-images.js --published     # what the registry actually serves
 //
 // Asserts what the images promise: the pinned toolchain versions, a compile that actually runs,
-// the caches a container running as the host uid must be able to write, and the two things that
-// must NOT be there - rust-src and RUSTC_BOOTSTRAP.
+// the caches a container running as the host uid must be able to write, and the things that must
+// NOT be there - rust-src, RUSTC_BOOTSTRAP and the pip that installed Conan.
 
 import fs from 'node:fs';
 import { execFileSync } from 'node:child_process';
@@ -25,6 +25,8 @@ const EMSDK_VERSION = WEB_DOCKERFILE.match(/^ARG EMSDK_VERSION=(.+)$/m)?.[1]?.tr
 const WASI_SDK_VERSION = WEB_DOCKERFILE.match(/^ARG WASI_SDK_VERSION=(.+)$/m)?.[1]?.trim();
 if (!EMSDK_VERSION || !WASI_SDK_VERSION) throw new Error('cannot read web toolchain versions from tooling/docker/web.Dockerfile');
 const NODE_VERSION = fs.readFileSync(new URL('../.nvmrc', import.meta.url), 'utf8').trim();
+const CONAN_VERSION = fs.readFileSync(new URL('../tooling/docker/conan-requirements.txt', import.meta.url), 'utf8').match(/^conan==(\S+)/m)?.[1];
+if (!CONAN_VERSION) throw new Error('cannot read the conan pin from tooling/docker/conan-requirements.txt');
 
 // Local builds carry one tag per architecture, because `docker build --load` cannot produce a
 // multi-arch index; a published image is a single index that resolves per platform on pull.
@@ -69,6 +71,15 @@ echo "rust-src absent"
 touch "$CARGO_HOME/.probe"
 rm "$CARGO_HOME/.probe"
 echo "cargo home writable"
+conan --version | grep -qx 'Conan version ${CONAN_VERSION}'
+echo "conan ${CONAN_VERSION}"
+test ! -e /opt/conan/bin/pip
+echo "pip absent from the conan venv"
+test -n "$(ls /opt/licenses/conan)"
+echo "conan licenses $(ls /opt/licenses/conan | wc -l | tr -d ' ') packages"
+touch "$CONAN_HOME/.probe"
+rm "$CONAN_HOME/.probe"
+echo "conan home writable"
 `;
 
 const WEB_SCRIPT = `${BASE_SCRIPT}
@@ -97,6 +108,15 @@ em++ overload.cpp -lembind -sMODULARIZE=1 -sEXPORT_ES6=1 -o overload.mjs
 printf 'import createModule from "./overload.mjs"; const m=await createModule(); if(m.pick(7)!==1||m.pick("x")!==2) process.exit(1);\\n' > overload-check.mjs
 node overload-check.mjs
 echo "embind type overload compile+run ok"
+export CONAN_HOME=/tmp/conan-home
+conan profile detect > /dev/null 2>&1
+printf '[settings]\\nos=Emscripten\\narch=wasm\\ncompiler=emcc\\ncompiler.version=${EMSDK_VERSION}\\ncompiler.libcxx=libc++\\nbuild_type=Release\\n[conf]\\ntools.cmake.cmaketoolchain:user_toolchain=["/emsdk/upstream/emscripten/cmake/Modules/Platform/Emscripten.cmake"]\\n' > /tmp/wasm.profile
+mkdir /tmp/conan-probe
+cd /tmp/conan-probe
+conan new cmake_lib -d name=probe -d version=0.1 > /dev/null
+conan create . -pr:h /tmp/wasm.profile -pr:b default --build=missing --no-remote > /tmp/conan-create.log 2>&1 || { tail -20 /tmp/conan-create.log >&2; exit 1; }
+test -n "$(find "$CONAN_HOME/p" -name libprobe.a)"
+echo "conan create with emcc ok"
 `;
 
 const ANDROID_SCRIPT = `${BASE_SCRIPT}

@@ -1,0 +1,2 @@
+# Conan for base.Dockerfile, which installs the hash-pinned conan-requirements.txt compiled from this.
+conan==2.33.0
