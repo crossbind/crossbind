@@ -20,9 +20,11 @@ const IMAGES = Object.fromEntries(
     ]),
 );
 
-// Which image a target compiles in: wasm and wasi share the web image, ios and darwin never reach docker.
+// Which image a target compiles in: wasm and wasi share the web image, linux and linuxmusl the linux
+// image, ios and darwin never reach docker.
 export function imageRoleFor(target) {
     if (target?.platform === 'android' || target?.platform === 'linux') return target.platform;
+    if (target?.platform === 'linuxmusl') return 'linux';
     if (target?.platform === 'win32') return 'windows';
     return 'web';
 }

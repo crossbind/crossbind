@@ -5,10 +5,10 @@ import {
 
 describe('TARGETS', () => {
     test('covers every supported platform', () => {
-        expect([...new Set(TARGETS.map((t) => t.platform))].sort()).toEqual(['android', 'darwin', 'ios', 'linux', 'wasi', 'wasm', 'win32']);
+        expect([...new Set(TARGETS.map((t) => t.platform))].sort()).toEqual(['android', 'darwin', 'ios', 'linux', 'linuxmusl', 'wasi', 'wasm', 'win32']);
     });
 
-    test.each(['darwin', 'linux', 'win32'])('%s builds Node-API addons for x64 and arm64', (platform) => {
+    test.each(['darwin', 'linux', 'linuxmusl', 'win32'])('%s builds Node-API addons for x64 and arm64', (platform) => {
         const desktop = TARGETS.filter((t) => t.platform === platform);
         expect(desktop.map((t) => `${t.arch}-${t.buildType}`).sort()).toEqual(['arm64-debug', 'arm64-release', 'x64-debug', 'x64-release']);
         for (const target of desktop) {
@@ -19,7 +19,7 @@ describe('TARGETS', () => {
 
     test('Node-API addon platforms build only when named, so a plain build keeps its output', () => {
         const platforms = new Set(TARGETS.map((t) => t.platform));
-        expect(OPT_IN_PLATFORMS).toEqual(['darwin', 'linux', 'win32']);
+        expect(OPT_IN_PLATFORMS).toEqual(['darwin', 'linux', 'linuxmusl', 'win32']);
         for (const platform of OPT_IN_PLATFORMS) {
             expect(platforms.has(platform)).toBe(true);
         }

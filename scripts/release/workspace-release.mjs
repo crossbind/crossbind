@@ -106,7 +106,8 @@ export function readTrainVersion(root = process.cwd()) {
 }
 
 // The runners a release builds on. Every one but macos is a shard of the Linux build job;
-// linux-native and win32-native build the Node.js addon packages in the linux and windows images.
+// linux-native and win32-native build the Node.js addon packages in the linux and windows images,
+// linux-native both the glibc and the musl ones.
 export const RUNNERS = ['linux', 'wasm', 'android', 'wasi', 'linux-native', 'win32-native', 'macos'];
 const LINUX_RUNNERS = RUNNERS.filter((runner) => runner !== 'macos');
 // The runners that build part of the multi-platform package.
@@ -117,7 +118,7 @@ export function classifyBuild(candidate) {
     if (!lifecycle) return 'linux';
     if (candidate.path === 'examples/lib-prebuilt-matrix' && lifecycle.trim() === 'crossbind build') return 'multi-platform';
     if (/\bcrossbind\s+build\b[^\n]*\s-p\s+(?:ios|darwin)(?:\s|$)/.test(lifecycle)) return 'macos';
-    if (/\bcrossbind\s+build\b[^\n]*\s-p\s+linux(?:\s|$)/.test(lifecycle)) return 'linux-native';
+    if (/\bcrossbind\s+build\b[^\n]*\s-p\s+linux(?:musl)?(?:\s|$)/.test(lifecycle)) return 'linux-native';
     if (/\bcrossbind\s+build\b[^\n]*\s-p\s+win32(?:\s|$)/.test(lifecycle)) return 'win32-native';
     if (/\bcrossbind\s+build\b[^\n]*\s-p\s+android(?:\s|$)/.test(lifecycle)) return 'android';
     if (/\bcrossbind\s+build\b[^\n]*\s-p\s+wasi(?:\s|$)/.test(lifecycle)) return 'wasi';

@@ -7,6 +7,7 @@ const platformBuild = {
     // LDAP stays off as on every other platform, although the macOS SDK would provide it.
     'darwin': ['-DBUILD_SHARED_LIBS=OFF', '-DBUILD_STATIC_LIBS=ON', '-D_CURL_PREFILL=ON', '-DCURL_DISABLE_LDAP=ON'],
     'linux': ['-DBUILD_SHARED_LIBS=OFF', '-DBUILD_STATIC_LIBS=ON'],
+    'linuxmusl': ['-DBUILD_SHARED_LIBS=OFF', '-DBUILD_STATIC_LIBS=ON'],
     // TLS through OpenSSL, as everywhere else, rather than Windows' own Schannel: curl leaves both
     // off on Windows unless asked. LDAP off as on every other platform, although Windows would
     // provide it.

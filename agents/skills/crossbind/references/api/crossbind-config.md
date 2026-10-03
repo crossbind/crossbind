@@ -26,7 +26,7 @@ export default {
   // ─────────────────────────────────────────────────────────────
   dependencies: [],
     // Array of crossbind.config.js values, imported from platform variants such as
-    // @crossbind/port-*-wasm, -android, -ios, -darwin, -linux, -win32 or -wasi. The meta package
+    // @crossbind/port-*-wasm, -android, -ios, -darwin, -linux, -linuxmusl, -win32 or -wasi. The meta package
     // (@crossbind/port-*) carries no config; list one variant per platform you build.
     // Example:
     //   import gdal from '@crossbind/port-gdal-wasm/crossbind.config.js'
@@ -166,7 +166,7 @@ export default {
   targetSpecs: [
     {
       // Filter (any combination — entry matches if all set fields match)
-      platform:   'wasm' | 'wasi' | 'android' | 'ios' | 'darwin' | 'linux' | 'win32',     // optional
+      platform:   'wasm' | 'wasi' | 'android' | 'ios' | 'darwin' | 'linux' | 'linuxmusl' | 'win32',     // optional
       arch:       'wasm32' | 'wasm64' | 'arm64-v8a' | 'x86_64' | 'iphoneos' | 'iphonesimulator' | 'arm64' | 'x64',
       runtime:    'st' | 'mt',
       buildType:  'release' | 'debug',
@@ -180,7 +180,7 @@ export default {
         binary: {
           emccFlags:   ['-sINITIAL_MEMORY=64MB'],  // -s/-O flags for emcc (wasm only); they follow the default -O3, so -Oz or -Os wins
           wasiFlags:   ['-Wl,--stack-first'],      // flags appended to the wasi command link (platform 'wasi' only; see wasi.md)
-          addonFlags:  ['-lxml2'],                 // system libraries a native Node.js addon link needs (platforms 'darwin', 'linux', 'win32'); dependencies' flags add up
+          addonFlags:  ['-lxml2'],                 // system libraries a native Node.js addon link needs (platforms 'darwin', 'linux', 'linuxmusl', 'win32'); dependencies' flags add up
         },
         env:           { GDAL_NUM_THREADS: '0' },  // env vars passed to running Wasm + build env
         data:          { 'share/myapp': 'myapp/data' },  // bundle data files into .data preload

@@ -40,6 +40,11 @@ describe('imageRoleFor', () => {
         expect(mod.imageRoleFor({ platform: 'linux' })).toBe('linux');
         expect(mod.imageRoleFor({ platform: 'win32' })).toBe('windows');
     });
+
+    test('builds musl addons in the linux image, which carries their sysroots', async () => {
+        const { mod } = await importFresh();
+        expect(mod.imageRoleFor({ platform: 'linuxmusl' })).toBe('linux');
+    });
 });
 
 describe('getDockerImage', () => {

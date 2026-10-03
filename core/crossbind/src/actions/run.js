@@ -74,6 +74,10 @@ const DARWIN_HOST_PACKAGE_PREFIXES = ['/opt/homebrew', '/usr/local', '/opt/local
 const DARWIN_BUILD_PATH = '/usr/bin:/bin:/usr/sbin:/sbin';
 // The linux image's clang wrappers and CMake toolchain files, one per target triple.
 const LINUX_TOOLCHAIN = '/opt/crossbind/linux';
+const LINUX_TRIPLES = {
+    linux: { x64: 'x86_64-linux-gnu', arm64: 'aarch64-linux-gnu' },
+    linuxmusl: { x64: 'x86_64-alpine-linux-musl', arm64: 'aarch64-alpine-linux-musl' },
+};
 // The windows image's llvm-mingw and its CMake toolchain files, one per target triple.
 const LLVM_MINGW = '/opt/llvm-mingw';
 const WINDOWS_TOOLCHAIN = '/opt/crossbind/windows';
@@ -250,9 +254,10 @@ export default function run(program, params = [], platformPrefix = null, target 
                     }
                 }
                 break;
-            case 'linux': {
+            case 'linux':
+            case 'linuxmusl': {
                 [dProgram, ...dParams] = params;
-                const triple = target.arch === 'x64' ? 'x86_64-linux-gnu' : 'aarch64-linux-gnu';
+                const triple = LINUX_TRIPLES[target.platform][target.arch];
                 const tool = (name) => `${LINUX_TOOLCHAIN}/bin/${triple}-${name}`;
                 // The image's own .pc files describe its libraries, not the sysroot's. Every archive
                 // ends up inside a loadable .node module, so -fPIC holds even where a project turns

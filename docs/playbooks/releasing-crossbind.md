@@ -67,7 +67,7 @@ No package is published while another selected artifact is still building:
 
 1. The Ubuntu planner records the release commit, package set and dependency order.
 2. Ubuntu builds Web, Android, WASI and ordinary JS/metadata packages, and in shards of their own
-   the Linux and Windows (`-linux`, `-win32`) packages of native Node.js addons.
+   the Linux and Windows (`-linux`, `-linuxmusl`, `-win32`) packages of native Node.js addons.
 3. macOS builds the iOS packages and the macOS (`-darwin`) packages of native Node.js addons.
 4. `@crossbind/example-lib-prebuilt-matrix` is deliberately split across both runners; the
    coordinator merges Web/Android/WASI and iOS outputs and refuses conflicting files.

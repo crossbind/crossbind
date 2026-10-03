@@ -4,6 +4,7 @@ const CONFIGURE_FLAGS = ['--cross-compile-prefix=', '--libdir=lib', 'no-apps', '
 const CONFIGURE_TARGETS = {
     darwin: { arm64: 'darwin64-arm64-cc', x64: 'darwin64-x86_64-cc' },
     linux: { arm64: 'linux-aarch64', x64: 'linux-x86_64-clang' },
+    linuxmusl: { arm64: 'linux-aarch64', x64: 'linux-x86_64-clang' },
     win32: { arm64: 'mingwarm64', x64: 'mingw64' },
 };
 

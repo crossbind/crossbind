@@ -110,17 +110,17 @@ Caveats:
 
 ## Native addon (Node-API)
 
-The same bindings can build a native Node-API addon instead of WebAssembly: for Electron's main process, native memory or system access. macOS, Linux and Windows, each for arm64 and x64.
+The same bindings can build a native Node-API addon instead of WebAssembly: for Electron's main process, native memory or system access. macOS, Linux (glibc and musl) and Windows, each for arm64 and x64.
 
 ```bash
 pnpm add -D crossbind @crossbind/core-embind-napi
-pnpm crossbind build -p darwin,linux,win32 -b release   # opt-in: a plain `crossbind build` skips them
+pnpm crossbind build -p darwin,linux,linuxmusl,win32 -b release   # opt-in: a plain `crossbind build` skips them
 ```
 
 | Output | Role |
 |--------|------|
-| `dist/<name>.<platform>-<arch>.node`, e.g. `<name>.darwin-arm64.node`, `<name>.linux-x64.node`, `<name>.win32-x64.node` | One addon per platform and architecture |
-| `dist/<name>.native.cjs` | Loader: picks the addon for `process.platform`/`process.arch`. CommonJS on purpose, so `require` and `import` both load it whatever the package `type` is |
+| `dist/<name>.<platform>-<arch>.node`, e.g. `<name>.darwin-arm64.node`, `<name>.linux-x64.node`, `<name>.linuxmusl-x64.node`, `<name>.win32-x64.node` | One addon per platform and architecture |
+| `dist/<name>.native.cjs` | Loader: picks the addon for `process.platform`/`process.arch`, and on Linux for the C library the process runs on (`linuxmusl` under musl). CommonJS on purpose, so `require` and `import` both load it whatever the package `type` is |
 
 ```js
 const initNative = require('./dist/<name>.native.cjs');
@@ -133,15 +133,18 @@ initNative().then(({ Native }) => console.log(Native.sample()));
 | Platform | Built on | Runs on |
 |----------|----------|---------|
 | `darwin` | a macOS host with Xcode's command line tools; skipped elsewhere | macOS 11 or later |
-| `linux` | any host with Docker, in the `linux` toolchain image | glibc 2.28 or later (RHEL 8, Debian 10, Ubuntu 20.04 and newer); not musl, so not Alpine. The addon needs libc, libm, libdl, libpthread, librt and libgcc_s only |
+| `linux` | any host with Docker, in the `linux` toolchain image | glibc 2.28 or later (RHEL 8, Debian 10, Ubuntu 20.04 and newer). The addon needs libc, libm, libdl, libpthread, librt and libgcc_s only |
+| `linuxmusl` | any host with Docker, in the `linux` toolchain image | musl 1.2.5 or later (Alpine 3.21 and newer). The addon needs musl's libc and libgcc_s only, both of which Node.js on Alpine already has |
 | `win32` | any host with Docker, in the `windows` toolchain image | Windows 10 or later, through the Universal C Runtime. The addon finds Node-API in the process that loads it, so `node.exe` and `electron.exe` load the same file |
+
+A Linux addon loads only on the C library it was built for, so ship both when the app may run on Alpine: the loader picks between them, while a glibc addon loaded under musl by hand crashes the process instead of failing with an error.
 
 A Linux or Windows addon carries its C++ runtime; a macOS addon uses the system's. A Windows addon also carries parts of the mingw-w64 runtime and winpthreads, whose licenses ask for their notices when you distribute it: `crossbind licenses --platform win32 --notices` lists them, with links to the texts, next to the licenses of your dependencies.
 
 Requirements:
 
 - Docker, on macOS too: the SWIG bridges are generated in the same image the wasm build uses.
-- Every C++ dependency needs prebuilts for the platform (`crossbind build -p <platform>` in the library). Each `@crossbind/port-*` family publishes them as `@crossbind/port-<name>-darwin`, `-linux` and `-win32`: install the ones you build for and import their `crossbind.config.js` next to the other platform variants. The addon links the archives statically; the few system libraries a port uses (libxml2 and zlib of the macOS SDK, Winsock and the certificate store on Windows) come from the port's `binary.addonFlags`, and data such as `GDAL_DATA` and `proj.db` lands in `dist/data`.
+- Every C++ dependency needs prebuilts for the platform (`crossbind build -p <platform>` in the library). Each `@crossbind/port-*` family publishes them as `@crossbind/port-<name>-darwin`, `-linux`, `-linuxmusl` and `-win32`: install the ones you build for and import their `crossbind.config.js` next to the other platform variants. The addon links the archives statically; the few system libraries a port uses (libxml2 and zlib of the macOS SDK, Winsock and the certificate store on Windows) come from the port's `binary.addonFlags`, and data such as `GDAL_DATA` and `proj.db` lands in `dist/data`.
 - Rust packages build for macOS only, with the cargo target of each architecture, e.g. `rustup target add x86_64-apple-darwin` on an arm64 Mac.
 
 Not supported yet: `worker_threads` (one addon runtime per process; a second environment's `initNative()` rejects with a clear error), Rust packages on Linux and Windows.

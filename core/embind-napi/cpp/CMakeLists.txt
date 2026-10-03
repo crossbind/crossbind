@@ -45,8 +45,10 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
     find_package(Threads REQUIRED)
     target_link_libraries(addon PRIVATE Threads::Threads ${CMAKE_DL_LIBS})
     target_link_options(addon PRIVATE "LINKER:--exclude-libs,ALL")
+    file(GLOB MUSL_LIBC "${CMAKE_SYSROOT}/lib/ld-musl-*.so.1")
     add_custom_command(TARGET addon POST_BUILD
         COMMAND "${CMAKE_COMMAND}" "-DNM=${CMAKE_NM}" "-DADDON=$<TARGET_FILE:addon>"
+            "-DUNVERSIONED_LIBRARIES=${MUSL_LIBC}"
             -P "${CMAKE_CURRENT_SOURCE_DIR}/check-undefined.cmake"
         VERBATIM)
 endif()

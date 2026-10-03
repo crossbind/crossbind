@@ -48,7 +48,7 @@ export default {
 };
 ```
 
-A native Node.js addon links the build of its platform: `crossbind build -p darwin`, `-p linux` or `-p win32` takes `@crossbind/port-openssl-darwin`, `-linux` or `-win32`. Install it and import its `crossbind.config.js` the same way.
+A native Node.js addon links the build of its platform: `crossbind build -p darwin`, `-p linux`, `-p linuxmusl` or `-p win32` takes `@crossbind/port-openssl-darwin`, `-linux`, `-linuxmusl` or `-win32`; `-linuxmusl` is the one for Alpine and other musl distributions. Install it and import its `crossbind.config.js` the same way.
 
 ## Usage
 crossbind binds your C++ headers to JavaScript, so the usual pattern is a small wrapper around the library. This one reads a certificate from PEM text and answers what people open certificates for: whom it is for, who issued it, when it expires, which host names it covers and its fingerprint. Put it in your project's native folder (`src/native/` by default):

@@ -117,6 +117,18 @@ export const TARGETS = [
         platform: 'linux', arch: 'x64', runtime: 'mt', buildType: 'debug', runtimeEnv: 'node',
     },
     {
+        platform: 'linuxmusl', arch: 'arm64', runtime: 'mt', buildType: 'release', runtimeEnv: 'node',
+    },
+    {
+        platform: 'linuxmusl', arch: 'arm64', runtime: 'mt', buildType: 'debug', runtimeEnv: 'node',
+    },
+    {
+        platform: 'linuxmusl', arch: 'x64', runtime: 'mt', buildType: 'release', runtimeEnv: 'node',
+    },
+    {
+        platform: 'linuxmusl', arch: 'x64', runtime: 'mt', buildType: 'debug', runtimeEnv: 'node',
+    },
+    {
         platform: 'win32', arch: 'arm64', runtime: 'mt', buildType: 'release', runtimeEnv: 'node',
     },
     {
@@ -132,7 +144,7 @@ export const TARGETS = [
 
 // Built only when named with -p: a plain `crossbind build` keeps producing what it did before
 // native Node.js addons existed.
-export const OPT_IN_PLATFORMS = ['darwin', 'linux', 'win32'];
+export const OPT_IN_PLATFORMS = ['darwin', 'linux', 'linuxmusl', 'win32'];
 
 // Built on the host itself: Apple's linker and SDKs exist in no toolchain image.
 export const HOST_BUILT_PLATFORMS = ['ios', 'darwin'];

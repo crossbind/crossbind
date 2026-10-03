@@ -20,6 +20,7 @@ export default (newConfig = {}) => ({
         { platform: 'ios', specs: { data: { 'ssl/certs': 'certs' } } },
         { platform: 'darwin', specs: { data: { 'ssl/certs': 'certs' } } },
         { platform: 'linux', specs: { data: { 'ssl/certs': 'certs' } } },
+        { platform: 'linuxmusl', specs: { data: { 'ssl/certs': 'certs' } } },
         // The Winsock, GDI and CryptoAPI libraries OpenSSL's MinGW targets link.
         { platform: 'win32', specs: { data: { 'ssl/certs': 'certs' }, binary: { addonFlags: ['-lws2_32', '-lgdi32', '-lcrypt32'] } } },
         ...(newConfig.targetSpecs || []),

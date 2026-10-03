@@ -19,6 +19,7 @@ ADRs are **immutable**. When a decision is overturned, write a new ADR that supe
 | [0009](./0009-toolchain-images.md) | Own the toolchain images, and run cargo where the build runs | Accepted | `tooling/docker/`, `pullDockerImage.js`, `runCargo.js`, publish workflows |
 | [0010](./0010-skills-first-agent-architecture.md) | Use one portable skill and normal project tools for agent support | Accepted | `agents/`, docs, contributor context |
 | [0011](./0011-native-node-addons.md) | Build native Node.js addons from the same bindings, on embind-jsi over Node-API | Proposed | `core/embind-napi/`, `core/embind-jsi/`, `buildNode.js`, darwin targets |
+| [0012](./0012-musl-node-addons.md) | Build musl Linux addons as their own platform, `linuxmusl`, in the `linux` image | Proposed | `targets.js`, `addonPlatform.js`, `linux.Dockerfile`, `ports/*/linuxmusl` |
 
 ## Writing a new ADR
 

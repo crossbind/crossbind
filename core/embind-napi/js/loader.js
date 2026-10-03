@@ -4,9 +4,12 @@
 import path from 'node:path';
 import Module from '@crossbind/core-embind-jsi';
 import systemConfig from 'crossbind/systemConfig';
+import addonPlatform from './addonPlatform.js';
+
+const platform = addonPlatform();
 
 function addonFileName() {
-    return systemConfig.paths.addon.replace('{platform}', process.platform).replace('{arch}', process.arch);
+    return systemConfig.paths.addon.replace('{platform}', platform).replace('{arch}', process.arch);
 }
 
 function loadAddon(file) {
@@ -15,7 +18,7 @@ function loadAddon(file) {
         process.dlopen(addon, file);
     } catch (error) {
         throw new Error(
-            `crossbind: cannot load ${file} - build it with \`crossbind build -p ${process.platform} -a ${process.arch}\`.`,
+            `crossbind: cannot load ${file} - build it with \`crossbind build -p ${platform} -a ${process.arch}\`.`,
             { cause: error },
         );
     }
@@ -25,7 +28,7 @@ function loadAddon(file) {
 function setEnv(dataPath, runtimeEnv) {
     // Build-time values are keyed by addon: a target-scoped value must not leak from one arch's
     // build into another's. Values passed to initNative() win, as in the wasm runtime.
-    const env = { ...systemConfig.env[`${process.platform}-${process.arch}`], ...runtimeEnv };
+    const env = { ...systemConfig.env[`${platform}-${process.arch}`], ...runtimeEnv };
     Object.entries(env).forEach(([key, value]) => {
         Module.Crossbind.setEnv(key, String(value).replace('_CROSSBIND_DATA_PATH_', dataPath), false);
     });

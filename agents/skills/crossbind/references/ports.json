@@ -16,6 +16,7 @@
         "bin-wasi",
         "darwin",
         "linux",
+        "linuxmusl",
         "win32"
       ],
       "binCommands": [
@@ -38,6 +39,7 @@
         "bin-wasi",
         "darwin",
         "linux",
+        "linuxmusl",
         "win32"
       ],
       "binCommands": [
@@ -60,6 +62,7 @@
         "bin-wasi",
         "darwin",
         "linux",
+        "linuxmusl",
         "win32"
       ],
       "binCommands": [
@@ -110,6 +113,7 @@
         "bin-wasi",
         "darwin",
         "linux",
+        "linuxmusl",
         "win32"
       ],
       "binCommands": [
@@ -132,6 +136,7 @@
         "bin-wasi",
         "darwin",
         "linux",
+        "linuxmusl",
         "win32"
       ],
       "binCommands": [
@@ -155,6 +160,7 @@
         "wasi",
         "darwin",
         "linux",
+        "linuxmusl",
         "win32"
       ],
       "binCommands": []
@@ -175,6 +181,7 @@
         "bin-wasi",
         "darwin",
         "linux",
+        "linuxmusl",
         "win32"
       ],
       "binCommands": [
@@ -198,6 +205,7 @@
         "wasi",
         "darwin",
         "linux",
+        "linuxmusl",
         "win32"
       ],
       "binCommands": []
@@ -218,6 +226,7 @@
         "bin-wasi",
         "darwin",
         "linux",
+        "linuxmusl",
         "win32"
       ],
       "binCommands": [
@@ -240,6 +249,7 @@
         "bin-wasi",
         "darwin",
         "linux",
+        "linuxmusl",
         "win32"
       ],
       "binCommands": [
@@ -266,6 +276,7 @@
         "wasi",
         "darwin",
         "linux",
+        "linuxmusl",
         "win32"
       ],
       "binCommands": []
@@ -286,6 +297,7 @@
         "bin-wasi",
         "darwin",
         "linux",
+        "linuxmusl",
         "win32"
       ],
       "binCommands": [
@@ -308,6 +320,7 @@
         "bin-wasi",
         "darwin",
         "linux",
+        "linuxmusl",
         "win32"
       ],
       "binCommands": [
@@ -347,6 +360,7 @@
         "bin-wasi",
         "darwin",
         "linux",
+        "linuxmusl",
         "win32"
       ],
       "binCommands": [
@@ -370,6 +384,7 @@
         "wasi",
         "darwin",
         "linux",
+        "linuxmusl",
         "win32"
       ],
       "binCommands": []
@@ -390,6 +405,7 @@
         "bin-wasi",
         "darwin",
         "linux",
+        "linuxmusl",
         "win32"
       ],
       "binCommands": [

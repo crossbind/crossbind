@@ -255,7 +255,7 @@ OpenSSL · PROJ · SpatiaLite · SQLite · libTIFF · WebP · zlib · Zstandard*
 
 Each family has target-specific packages. For example, a browser or Node.js
 project uses `@crossbind/port-gdal-wasm`, while mobile, native Node.js addon and
-WASI builds use the matching `-android`, `-ios`, `-darwin`, `-linux`, `-win32`,
+WASI builds use the matching `-android`, `-ios`, `-darwin`, `-linux`, `-linuxmusl`, `-win32`,
 or `-wasi` variant. Import the variant's `crossbind.config.js` into the
 application's dependency list:
 

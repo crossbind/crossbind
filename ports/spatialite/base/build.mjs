@@ -9,6 +9,8 @@ const platformBuild = {
     'darwin-x64': ['--enable-shared=no', '--host=x86_64-apple-darwin'],
     'linux-arm64': ['--enable-shared=no', '--host=aarch64-linux-gnu'],
     'linux-x64': ['--enable-shared=no', '--host=x86_64-linux-gnu'],
+    'linuxmusl-arm64': ['--enable-shared=no', '--host=aarch64-linux-musl'],
+    'linuxmusl-x64': ['--enable-shared=no', '--host=x86_64-linux-musl'],
     'win32-arm64': ['--enable-shared=no', '--host=aarch64-w64-mingw32'],
     'win32-x64': ['--enable-shared=no', '--host=x86_64-w64-mingw32'],
 };
@@ -25,6 +27,7 @@ const platformLibs = {
     'darwin': MOBILE_LIBS,
     // The linux sysroot has libc++ only; it and proj need what glibc 2.28 still keeps in separate libraries.
     'linux': ['-lc++', '-lpthread', '-ldl', '-lsqlite3', '-lm', '-ltiff', '-lgeos'],
+    'linuxmusl': ['-lc++', '-lsqlite3', '-lm', '-ltiff', '-lgeos'],
     'win32': ['-lc++', '-lsqlite3', '-ltiff', '-lgeos'],
 };
 

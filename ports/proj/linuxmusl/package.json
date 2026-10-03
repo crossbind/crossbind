@@ -1,0 +1,36 @@
+{
+    "name": "@crossbind/port-proj-linuxmusl",
+    "version": "2.0.0-beta.62",
+    "nativeVersion": "9.9.0",
+    "description": "Linux (musl) build of the precompiled PROJ coordinate-transformation library, built with crossbind. Use it together with the main package @crossbind/port-proj.",
+    "homepage": "https://github.com/crossbind/crossbind/tree/main/ports/proj#readme",
+    "repository": "https://github.com/crossbind/crossbind.git",
+    "type": "module",
+    "license": "MIT",
+    "keywords": [
+        "proj",
+        "libproj",
+        "projection",
+        "gis",
+        "crossbind",
+        "crossbind-port",
+        "linux",
+        "musl",
+        "alpine",
+        "node",
+        "node-api"
+    ],
+    "scripts": {
+        "build": "crossbind build -p linuxmusl",
+        "clear": "rm -rf .crossbind dist",
+        "prepublishOnly": "crossbind build -p linuxmusl"
+    },
+    "dependencies": {
+        "@crossbind/port-proj": "workspace:^",
+        "@crossbind/port-tiff-linuxmusl": "workspace:^",
+        "@crossbind/port-sqlite3-linuxmusl": "workspace:^"
+    },
+    "devDependencies": {
+        "crossbind": "workspace:^"
+    }
+}

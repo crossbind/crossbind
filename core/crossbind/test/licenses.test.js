@@ -15,8 +15,8 @@ describe('collectLicenseRows', () => {
         expect(await collectLicenseRows()).toEqual([]);
     });
 
-    test('lists the C++ runtime a Linux addon links statically', async () => {
-        const rows = await collectLicenseRows('linux');
+    test.each(['linux', 'linuxmusl'])('lists the C++ runtime a %s addon links statically', async (platform) => {
+        const rows = await collectLicenseRows(platform);
 
         expect(rows.map((row) => row.name)).toEqual(['llvm-runtimes']);
         expect(rows[0].license).toBe('Apache-2.0 WITH LLVM-exception');

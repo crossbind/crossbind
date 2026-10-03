@@ -23,6 +23,7 @@ const platformCmake = {
     'ios': withoutPythonBindings,
     'darwin': withoutPythonBindings,
     'linux': withoutPythonBindings,
+    'linuxmusl': withoutPythonBindings,
     // ODBC stays off as on every other platform, although Windows would provide it.
     'win32': [...withoutPythonBindings, '-DGDAL_USE_ODBC=OFF'],
 };
@@ -46,6 +47,7 @@ export default {
         ios: [internalPng, internalGif],
         darwin: [internalPng, internalGif],
         linux: [internalPng, internalGif],
+        linuxmusl: [internalPng, internalGif],
         win32: [internalPng, internalGif],
     },
     replaceList: [

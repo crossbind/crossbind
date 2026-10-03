@@ -26,6 +26,7 @@ const PLATFORMS = [
     { platform: 'android', arch: 'arm64-v8a', runtime: 'mt', buildType: 'release' },
     { platform: 'darwin', arch: 'arm64', runtime: 'mt', buildType: 'release' },
     { platform: 'linux', arch: 'arm64', runtime: 'mt', buildType: 'release' },
+    { platform: 'linuxmusl', arch: 'x64', runtime: 'mt', buildType: 'release' },
     { platform: 'win32', arch: 'x64', runtime: 'mt', buildType: 'release' },
 ];
 

@@ -17,6 +17,7 @@ export const PLATFORMS = [
     { target: 'ios', label: 'iOS', where: 'React Native apps on iOS', builds: '`arm64` devices and simulators' },
     { target: 'darwin', label: 'macOS', where: 'native Node.js addons and Electron on macOS', builds: '`arm64` and `x64`, macOS 11 or later' },
     { target: 'linux', label: 'Linux', where: 'native Node.js addons on Linux', builds: '`x64` and `arm64`, glibc 2.28 or later' },
+    { target: 'linuxmusl', label: 'Linux (musl)', where: 'native Node.js addons on Alpine and other musl distributions', builds: '`x64` and `arm64`, musl 1.2.5 or later' },
     { target: 'win32', label: 'Windows', where: 'native Node.js addons on Windows', builds: '`x64` and `arm64`, Windows 10 or later' },
     { target: 'wasi', label: 'WASI', where: 'command-line programs under wasmtime', builds: '`wasm32-wasip3`, single-threaded' },
 ];
@@ -28,7 +29,11 @@ const ADDON_HOSTS = {
         build: "The build runs on a Mac with Xcode's command line tools and needs Docker for the SWIG bridges.",
     },
     linux: {
-        linking: 'The library and the C++ runtime are linked into the addon statically. It runs on glibc 2.28 or later (RHEL 8, Debian 10, Ubuntu 20.04 and newer), not on musl distributions such as Alpine.',
+        linking: 'The library and the C++ runtime are linked into the addon statically. It runs on glibc 2.28 or later (RHEL 8, Debian 10, Ubuntu 20.04 and newer); Alpine and other musl distributions take the Linux (musl) build.',
+        build: 'The build runs in Docker on any host, a Mac included.',
+    },
+    linuxmusl: {
+        linking: 'The library and the C++ runtime are linked into the addon statically. It runs on musl 1.2.5 or later (Alpine 3.21 and newer) and loads `libgcc_s`, which Node.js on Alpine already brings.',
         build: 'The build runs in Docker on any host, a Mac included.',
     },
     win32: {
@@ -132,6 +137,7 @@ export function differences(target) {
             ];
         case 'darwin':
         case 'linux':
+        case 'linuxmusl':
         case 'win32':
             return [
                 `\`crossbind build -p ${target}\` links one \`.node\` addon per architecture into \`dist\`, next to a loader, \`dist/<name>.native.cjs\`, that \`require\` and \`import\` both load. A plain \`crossbind build\` skips it.`,

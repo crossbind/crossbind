@@ -52,7 +52,7 @@ function portCatalog() {
         throw new Error(`ports/catalog.json mismatch; missing=[${missing.join(', ')}] stale=[${stale.join(', ')}]`);
     }
 
-    const targets = ['wasm', 'android', 'ios', 'wasi', 'bin-wasi', 'darwin', 'linux', 'win32'];
+    const targets = ['wasm', 'android', 'ios', 'wasi', 'bin-wasi', 'darwin', 'linux', 'linuxmusl', 'win32'];
     return portDirectories.map((name) => {
         const familyRoot = path.join(ROOT, 'ports', name);
         const pkg = JSON.parse(fs.readFileSync(path.join(familyRoot, 'base', 'package.json'), 'utf8'));

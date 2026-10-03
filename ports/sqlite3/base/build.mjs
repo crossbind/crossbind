@@ -9,6 +9,8 @@ const platformBuild = {
     'darwin-x64': ['--disable-shared', '--host=x86_64-apple-darwin'],
     'linux-arm64': ['--disable-shared', '--host=aarch64-linux-gnu'],
     'linux-x64': ['--disable-shared', '--host=x86_64-linux-gnu'],
+    'linuxmusl-arm64': ['--disable-shared', '--host=aarch64-linux-musl'],
+    'linuxmusl-x64': ['--disable-shared', '--host=x86_64-linux-musl'],
     'win32-arm64': ['--disable-shared', '--host=aarch64-w64-mingw32'],
     'win32-x64': ['--disable-shared', '--host=x86_64-w64-mingw32'],
 };

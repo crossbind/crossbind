@@ -1,0 +1,34 @@
+{
+    "name": "@crossbind/port-geos-linuxmusl",
+    "version": "2.0.0-beta.62",
+    "nativeVersion": "3.15.0",
+    "description": "Linux (musl) build of the precompiled GEOS geometry library, built with crossbind. Use it together with the main package @crossbind/port-geos.",
+    "homepage": "https://github.com/crossbind/crossbind/tree/main/ports/geos#readme",
+    "repository": "https://github.com/crossbind/crossbind.git",
+    "type": "module",
+    "license": "LGPL-2.1-or-later",
+    "keywords": [
+        "geos",
+        "libgeos",
+        "geometry",
+        "gis",
+        "crossbind",
+        "crossbind-port",
+        "linux",
+        "musl",
+        "alpine",
+        "node",
+        "node-api"
+    ],
+    "scripts": {
+        "build": "crossbind build -p linuxmusl",
+        "clear": "rm -rf .crossbind dist",
+        "prepublishOnly": "crossbind build -p linuxmusl"
+    },
+    "dependencies": {
+        "@crossbind/port-geos": "workspace:^"
+    },
+    "devDependencies": {
+        "crossbind": "workspace:^"
+    }
+}

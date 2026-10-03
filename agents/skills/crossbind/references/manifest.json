@@ -9,7 +9,7 @@
     {
       "source": "docs/playbooks/new-port.md",
       "output": "port.md",
-      "sha256": "e16ff836ed92c35eb07c89e4a62d4475331cc852690a416a31f1948b3b0cd46d"
+      "sha256": "0390030e9024acd8f947336ab38a4da824ae8acbd8b34316deaa7b6339a459b1"
     },
     {
       "source": "docs/api/README.md",
@@ -34,7 +34,7 @@
     {
       "source": "docs/api/crossbind-config.md",
       "output": "api/crossbind-config.md",
-      "sha256": "702bbb2860d884b875a770447f7280aed5f28cee8f07b87e76a5f63ea2870549"
+      "sha256": "21cae2cf8845d5f9fd30c306d3c10e9e144628960e1b3f79ea8b19bd6c8fdfdc"
     },
     {
       "source": "docs/api/filesystem.md",
@@ -44,7 +44,7 @@
     {
       "source": "docs/api/init.md",
       "output": "api/init.md",
-      "sha256": "5b9b52c9821b19d876234ef8167f7c804e6c83facd2a369a558668a6c45ce36f"
+      "sha256": "ef9e6daa6db23efa169603bdb98e85b36ede757c0e8b3df191c436d8a0f9866d"
     },
     {
       "source": "docs/api/lifecycle-and-types.md",
@@ -104,7 +104,7 @@
     {
       "source": "docs/playbooks/integration/nodejs.md",
       "output": "integration/nodejs.md",
-      "sha256": "08bf11224fb7af082cfcd81fed91060edf6b1231cc6a74b47db4596e2a4b2bd9"
+      "sha256": "c925bba0a826137aada524344df38f2dd969c68decb6f0c8392c6d9dd470b4aa"
     },
     {
       "source": "docs/playbooks/integration/react-native-cli.md",
@@ -139,7 +139,7 @@
     {
       "source": "ports/catalog.json + ports/*/package.json",
       "output": "ports.json",
-      "sha256": "9dac0f6f36788a9a34f5361845d7fe0244e469ecae1d8f0330b55e759f0a6d81"
+      "sha256": "3420178f229eda32bc2c4c22d8bc83aacda18f88fce76354daa0a4c777430fc4"
     }
   ]
 }
