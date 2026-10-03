@@ -1,0 +1,17 @@
+# The Alpine 3.23 packages that make the musl 1.2.5 sysroots of linux.Dockerfile. Each SHA-256 was
+# recorded once the package verified: Alpine's signing key (alpinelinux.org and the aports mirror
+# agree) -> the APKINDEX signature -> the package's control segment (the index's Q1 checksum) ->
+# its data segment (the control segment's datahash).
+# <alpine architecture> <path under the mirror> <SHA-256 of the .apk>
+x86_64 v3.23/main/x86_64/musl-1.2.5-r23.apk 4f3c4a7bf9f51d2c91007e333b17459362ffd881b4a343e8da07b6c50c4f4a0d
+x86_64 v3.23/main/x86_64/musl-dev-1.2.5-r23.apk 2ea566b665ebaea4f84cee1e4b7ef093b0aa67356006e84deb26d9bd7a716c6b
+x86_64 v3.23/main/x86_64/linux-headers-6.16.12-r0.apk fc83eea0ee6c438b6ca5fd5ee67a64728a6f23580584b19c522fcbff550af80b
+x86_64 v3.23/main/x86_64/libgcc-15.2.0-r2.apk 4279d14cbf43311312d3a7d43619f4c15ede2e46d5608ba421ed157ded57c700
+x86_64 v3.23/main/x86_64/gcc-15.2.0-r2.apk 039886b6ad6e36a040a18db0ffa898f8ad1d0fc69eadd49d3c77270eafdc5e7e
+x86_64 v3.23/main/x86_64/libatomic-15.2.0-r2.apk 81fe3f7d9935ba883bc84f4622b2738a4e9a646d0ae7c1f944fd4b799bc768f2
+aarch64 v3.23/main/aarch64/musl-1.2.5-r23.apk 6a3edd924ead1fad88a69e28c5775809af3026b322f58428001cd02fedc5299e
+aarch64 v3.23/main/aarch64/musl-dev-1.2.5-r23.apk 19032a762b8c6967d3789de1bf540754a0121e517402022eebd3ae6f1c9965a4
+aarch64 v3.23/main/aarch64/linux-headers-6.16.12-r0.apk 955f0df4b10c2bbeda03ba366bf4aef7d5113d35a943e355dc89e006d28b0d66
+aarch64 v3.23/main/aarch64/libgcc-15.2.0-r2.apk eaaafda78fde1c904e1741680ddea91649f051e29a343152c8a4327605704b0f
+aarch64 v3.23/main/aarch64/gcc-15.2.0-r2.apk a06f4242b1e12a2449c1525a0e750c1503774de9e79db34f554b31241783ce48
+aarch64 v3.23/main/aarch64/libatomic-15.2.0-r2.apk 1a44d408b77d92f1b3f002e1045399fad81c1d58409b895eeaba0bb5c3fe4402

@@ -113,11 +113,14 @@ done
 echo "android C++ and Rust targets compile"
 `;
 
-// An addon the image builds must load on any glibc from 2.28 on and bring its own C++ runtime.
+// An addon the image builds must load on any glibc from 2.28 on, or any musl from 1.2.5 on, and bring
+// its own C++ runtime. musl has no __cxa_thread_atexit_impl, so a musl addon must not need one.
 const LINUX_SCRIPT = `${BASE_SCRIPT}
 nasm -v
 test -f /opt/licenses/linux-sysroot/libcxx-LICENSE.TXT
+test -f /opt/licenses/linux-sysroot/musl/musl-COPYRIGHT
 cd /tmp && printf '#include <string>\nextern "C" int crossbind_probe(){return static_cast<int>(std::string("ok").size());}\n' > addon.cpp
+printf '#include <string>\nextern "C" int crossbind_probe(){thread_local std::string value("ok");return static_cast<int>(value.size());}\n' > tls.cpp
 for triple in x86_64-linux-gnu aarch64-linux-gnu; do
   test -f "/opt/crossbind/linux/\${triple}.cmake"
   "/opt/crossbind/linux/bin/\${triple}-clang++" -shared -fPIC addon.cpp -o "\${triple}.so"
@@ -126,10 +129,22 @@ for triple in x86_64-linux-gnu aarch64-linux-gnu; do
   test "$(printf '%s\\nGLIBC_2.28\\n' "\${newest}" | sort -V | tail -1)" = GLIBC_2.28
   echo "\${triple} addon: no shared C++ runtime, newest symbol \${newest}"
 done
+for triple in x86_64-alpine-linux-musl aarch64-alpine-linux-musl; do
+  test -f "/opt/crossbind/linux/\${triple}.cmake"
+  "/opt/crossbind/linux/bin/\${triple}-clang++" -shared -fPIC tls.cpp -o "\${triple}.so"
+  needed=$(/usr/lib/llvm-19/bin/llvm-readelf --dynamic "\${triple}.so" | sed -n 's/.*Shared library: \\[\\(.*\\)\\]/\\1/p')
+  test -z "$(echo "\${needed}" | grep -v -e '^libc\\.musl-' -e '^libgcc_s\\.so\\.1$')"
+  test -z "$(/usr/lib/llvm-19/bin/llvm-nm -D --undefined-only "\${triple}.so" | grep ' U __cxa_thread_atexit_impl$')"
+  echo "\${triple} addon: needs only musl and libgcc_s"
+done
 printf '#include <iostream>\nint main(){std::cout << "ok" << std::endl;return 0;}\n' > main.cpp
 "/opt/crossbind/linux/bin/$(uname -m)-linux-gnu-clang++" main.cpp -o main
 ./main | grep -qx ok
 echo "$(uname -m) program compile+run ok"
+root="/opt/crossbind/sysroots/$(uname -m)-alpine-linux-musl"
+"/opt/crossbind/linux/bin/$(uname -m)-alpine-linux-musl-clang++" main.cpp -o main-musl
+"\${root}/lib/ld-musl-$(uname -m).so.1" --library-path "\${root}/usr/lib" ./main-musl | grep -qx ok
+echo "$(uname -m) musl program compile+run ok"
 install -m 0644 addon.cpp installed.cpp
 test -f installed.cpp
 echo "install shim ok"
