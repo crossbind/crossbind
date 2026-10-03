@@ -66,3 +66,6 @@ jobs:
               env:
                   CROSSBIND_WASI_SDK_PATH: ${{ runner.temp }}/wasi-sdk-34.0-x86_64-linux
               run: pnpm run ci:linux:e2e:wasi
+            - name: Run native e2e
+              # Links the zlib archive with a stock toolchain, then runs the native executables on Debian 10, Alpine and Debian 13.
+              run: pnpm run ci:linux:e2e:native

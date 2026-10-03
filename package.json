@@ -42,6 +42,7 @@
         "ci:ios:e2e": "pnpm --filter=@crossbind/example-mobile-reactnative-cli run e2e:ios",
         "ci:android:e2e": "pnpm --filter=@crossbind/example-mobile-reactnative-cli run e2e:android",
         "ci:linux:e2e:wasi": "pnpm --filter=@crossbind/port-zlib-wasi e2e",
+        "ci:linux:e2e:native": "pnpm --filter=@crossbind/port-zlib-linux e2e && pnpm --filter=@crossbind/e2e-cli-native run build && pnpm --filter=@crossbind/e2e-cli-native run e2e:prod",
         "ci:windows:build": "pnpm run build:examples:lib:wasm && pnpm run build:examples:lib:android && pnpm run ci:linux:build:port",
         "ci:ios:build:port": "pnpm --filter=@crossbind/port-zlib-ios run build",
         "ci:darwin:build:port": "pnpm --filter=@crossbind/port-zlib-darwin run build",
