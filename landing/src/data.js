@@ -239,7 +239,7 @@ export const FEATURES = [
         guide: 'configuration',
         title: 'One command, the full build matrix',
         summary:
-            'crossbind build spans every valid target by default, with wasm64 kept opt-in. Platform, architecture, runtime, release/debug and runtime-environment filters compose — each accepts comma-separated values when a release needs only part of the matrix.',
+            'crossbind build spans every valid target by default, with wasm64 kept opt-in, and makes binaries only for the runtime environments it is given. Platform, architecture, runtime, release/debug and runtime-environment options compose — each accepts comma-separated values when a release needs only part of the matrix.',
         tag: ['5 COMPOSABLE FILTERS', '30 BUILD TARGETS'],
     },
     {

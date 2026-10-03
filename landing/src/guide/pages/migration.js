@@ -180,7 +180,7 @@ console.log(MyClass.sample());`,
             rows: [
                 [
                     '`cppjs build -p WebAssembly|Android|iOS|All`',
-                    '`crossbind build -p wasm|android|ios|wasi`, with `-a` arch, `-r` runtime (`st`, `mt`), `-e` runtime env (`browser`, `node`, `edge`) and `-b` build type',
+                    '`crossbind build -p wasm|android|ios|wasi`, with `-a` arch, `-r` runtime (`st`, `mt`), `-e` runtime env (`browser`, `node`, `edge`, `wasi`: the binary to make) and `-b` build type',
                 ],
                 ['`cppjs config get|set|delete|list|keys`', '`crossbind config ...`, the same subcommands'],
                 ['`cppjs docker run|create|start|stop|delete`', '`crossbind docker ...`, the same subcommands'],

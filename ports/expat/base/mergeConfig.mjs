@@ -6,7 +6,6 @@ export default (newConfig = {}) => ({
     },
     export: {
         type: 'cmake',
-        bundle: false,
         // expat.h declares its limit setters (XML_SetBillionLaughsAttackProtection*,
         // XML_SetAllocTracker*) only when XML_DTD or XML_GE is set, which expat_config.h does.
         headerPrelude: ['expat_config.h'],

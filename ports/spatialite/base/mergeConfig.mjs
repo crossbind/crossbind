@@ -6,7 +6,6 @@ export default (newConfig = {}) => ({
     },
     export: {
         type: 'cmake',
-        bundle: false,
         // Spatialite's public headers use sqlite3 and gaia types without including their headers.
         headerPrelude: ['sqlite3.h', 'spatialite/gaiageo.h', 'spatialite.h'],
         // Declared but not in this build of the library, so bindings of the headers would not

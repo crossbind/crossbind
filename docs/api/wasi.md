@@ -7,11 +7,11 @@
 ```bash
 # fastest: point crossbind at a local wasi-sdk (>= 34 - the wasm32-wasip3 sysroot is required)
 #   ~/.crossbind.json →  { "WASI_SDK_PATH": "/opt/wasi-sdk" }
-#   or per-run:      CROSSBIND_WASI_SDK_PATH=/opt/wasi-sdk crossbind build -p wasi
+#   or per-run:      CROSSBIND_WASI_SDK_PATH=/opt/wasi-sdk crossbind build -p wasi -e wasi
 # zero-config otherwise: with no WASI_SDK_PATH set, the build runs inside the
 # crossbind docker image (>= 0.3.4), which ships the sdk at /opt/wasi-sdk
 
-crossbind build -p wasi -b release
+crossbind build -p wasi -e wasi -b release
 wasmtime run --dir=. dist/<name>-wasi-wasm32-st-release.wasm arg1
 ```
 

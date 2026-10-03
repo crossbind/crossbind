@@ -114,7 +114,7 @@ The same bindings can build a native Node-API addon instead of WebAssembly: for 
 
 ```bash
 pnpm add -D crossbind @crossbind/core-embind-napi
-pnpm crossbind build -p darwin,linux,linuxmusl,win32 -b release   # opt-in: a plain `crossbind build` skips them
+pnpm crossbind build -p darwin,linux,linuxmusl,win32 -e node -b release   # opt-in: a plain `crossbind build` skips them
 ```
 
 | Output | Role |

@@ -63,10 +63,10 @@ export const TARGETS = [
         platform: 'wasm', arch: 'wasm64', runtime: 'mt', buildType: 'debug', runtimeEnv: 'node',
     },
     {
-        platform: 'wasi', arch: 'wasm32', runtime: 'st', buildType: 'release',
+        platform: 'wasi', arch: 'wasm32', runtime: 'st', buildType: 'release', runtimeEnv: 'wasi',
     },
     {
-        platform: 'wasi', arch: 'wasm32', runtime: 'st', buildType: 'debug',
+        platform: 'wasi', arch: 'wasm32', runtime: 'st', buildType: 'debug', runtimeEnv: 'wasi',
     },
     {
         platform: 'android', arch: 'arm64-v8a', runtime: 'mt', buildType: 'release',
@@ -148,6 +148,21 @@ export const OPT_IN_PLATFORMS = ['darwin', 'linux', 'linuxmusl', 'win32'];
 
 // Built on the host itself: Apple's linker and SDKs exist in no toolchain image.
 export const HOST_BUILT_PLATFORMS = ['ios', 'darwin'];
+
+// The runtime environment names the binary a build makes; android and ios have none, since
+// React Native links them.
+export const runtimeEnvsOf = (platform) => [
+    ...new Set(TARGETS.filter((target) => target.platform === platform && target.runtimeEnv).map((target) => target.runtimeEnv)),
+];
+
+export const RUNTIME_ENVS = [...new Set(TARGETS.map((target) => target.runtimeEnv).filter(Boolean))];
+
+// A build makes only the binaries it is asked for: -e first, then the config's target.runtimeEnv.
+// Bundler plugins ask through getTargetParams instead.
+export function selectRuntimeEnvs(cliRuntimeEnvs, configRuntimeEnv) {
+    if (cliRuntimeEnvs?.length) return cliRuntimeEnvs;
+    return configRuntimeEnv ? [configRuntimeEnv] : [];
+}
 
 export function targetPathOf(target) {
     return `${target.platform}-${target.arch}-${target.runtime}-${target.buildType}`;

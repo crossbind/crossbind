@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import upath from 'upath';
-import loadConfig, { getFilledConfig } from '../src/state/loadConfig.js';
+import loadConfig, { getFilledConfig, assertBinarySelection } from '../src/state/loadConfig.js';
 
 describe('excludedDependencies', () => {
     let tmpDir;
@@ -194,6 +194,50 @@ describe('raw config isolation', () => {
 
         expect(rawDep.paths.project).toBe('/pkg/zlib-wasm');
         expect(fill(app).allDependencies[0].paths.project).toBe(upath.resolve('/pkg/zlib-wasm'));
+    });
+});
+
+describe('binary selection', () => {
+    let tmpDir;
+
+    beforeEach(() => {
+        tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'crossbind-binary-selection-'));
+    });
+
+    afterEach(() => {
+        fs.rmSync(tmpDir, { recursive: true, force: true });
+    });
+
+    const writeConfig = (fields) => {
+        const config = { general: { name: 'app' }, paths: { project: tmpDir }, ...fields };
+        fs.writeFileSync(path.join(tmpDir, 'crossbind.config.mjs'), `export default ${JSON.stringify(config)};\n`);
+    };
+
+    // Published port packages still carry it, and dependency builds load their configs as well.
+    test('loadConfig keeps loading a config that sets export.bundle', async () => {
+        const depDir = path.join(tmpDir, 'dep');
+        fs.mkdirSync(depDir);
+        writeConfig({ dependencies: [{ general: { name: 'dep' }, paths: { project: depDir }, export: { bundle: false } }] });
+        await expect(loadConfig(tmpDir)).resolves.toBeTruthy();
+    });
+
+    test('the project being built may not set export.bundle, which a build no longer reads', async () => {
+        writeConfig({ export: { bundle: false } });
+        const config = await loadConfig(tmpDir);
+        expect(() => assertBinarySelection(config)).toThrow(/export\.bundle.*-e.*target\.runtimeEnv/);
+    });
+
+    test('accepts one known target.runtimeEnv, or none', () => {
+        expect(() => assertBinarySelection({ export: {}, target: { runtimeEnv: 'node' } })).not.toThrow();
+        expect(() => assertBinarySelection({ export: {}, target: { runtimeEnv: null } })).not.toThrow();
+        expect(() => assertBinarySelection({ export: {}, target: {} })).not.toThrow();
+    });
+
+    test('rejects an unknown or list-valued target.runtimeEnv', () => {
+        expect(() => assertBinarySelection({ export: {}, target: { runtimeEnv: ['node'] } }))
+            .toThrow(/target\.runtimeEnv must be one of browser, edge, node/);
+        expect(() => assertBinarySelection({ export: {}, target: { runtimeEnv: 'deno' } }))
+            .toThrow(/target\.runtimeEnv must be one of/);
     });
 });
 

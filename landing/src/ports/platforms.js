@@ -140,7 +140,7 @@ export function differences(target) {
         case 'linuxmusl':
         case 'win32':
             return [
-                `\`crossbind build -p ${target}\` links one \`.node\` addon per architecture into \`dist\`, next to a loader, \`dist/<name>.native.cjs\`, that \`require\` and \`import\` both load. A plain \`crossbind build\` skips it.`,
+                `\`crossbind build -p ${target} -e node\` links one \`.node\` addon per architecture into \`dist\`, next to a loader, \`dist/<name>.native.cjs\`, that \`require\` and \`import\` both load. A plain \`crossbind build\` skips it.`,
                 '`await initNative()` once, then call the classes: calls are synchronous, and no Worker is involved.',
                 ADDON_HOSTS[target].linking,
                 'There is no `m.FS`: the C++ reads real paths, and data such as `GDAL_DATA` or `proj.db` is copied to `dist/data`.',
@@ -150,7 +150,7 @@ export function differences(target) {
             return [
                 'There are no JavaScript bindings: `src/native` provides `main(int, char**)`, and the build is a single `.wasm`.',
                 'Files come from the host through `--dir` preopens; `--dir=.` gives the program the current directory.',
-                '`crossbind build -p wasi -b release` writes the program to `.crossbind/build/<name>-wasi-wasm32-st-release.wasm`.',
+                '`crossbind build -p wasi -e wasi -b release` writes the program to `.crossbind/build/<name>-wasi-wasm32-st-release.wasm`.',
                 "WASI 0.3's `wasi:cli/exit` carries success or failure only, so any non-zero return from `main` reaches the shell as exit code 1.",
                 `The build needs wasi-sdk 34 or newer (\`WASI_SDK_PATH\`) or the crossbind Docker image; running needs wasmtime 47 or newer. See [WASI](${guideHref('wasi')}).`,
             ];

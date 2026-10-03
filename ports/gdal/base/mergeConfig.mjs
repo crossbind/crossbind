@@ -6,7 +6,6 @@ export default (newConfig = {}) => ({
     },
     export: {
         type: 'cmake',
-        bundle: false,
         // Declared but never defined by GDAL (OGRStrdup, VRTAverageFilteredSource), or a name that only a
         // header macro maps onto the real symbol (GDALExtractRPCInfoV1 -> GDALExtractRPCInfoV2): their
         // bindings cannot link.

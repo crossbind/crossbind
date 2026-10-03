@@ -12,7 +12,7 @@ export default {
         {
             type: 'code',
             file: 'shell',
-            code: `crossbind build -p wasi -b release
+            code: `crossbind build -p wasi -e wasi -b release
 wasmtime run --dir=. dist/myapp-wasi-wasm32-st-release.wasm input.txt`,
         },
         {

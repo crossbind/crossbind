@@ -13,10 +13,6 @@ export default async function buildWasiCommand(target, options = {}) {
     const isProd = target.buildType === 'release';
     const buildType = isProd ? 'Release' : 'Debug';
 
-    if (state.config.export.bundle === false) {
-        logger.info(`[${target.path}] wasi command skipped (export.bundle = false)`);
-        return false;
-    }
     if (state.config.export?.type === 'cargo') {
         logger.info(`[${target.path}] wasi command skipped (cargo packages have no cargo wasi triple)`);
         return false;

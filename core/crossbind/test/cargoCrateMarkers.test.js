@@ -11,6 +11,7 @@ const h = vi.hoisted(() => ({ config: null }));
 vi.mock('../src/state/loadConfig.js', () => ({
     default: async () => h.config,
     getFilledConfig: (c) => c,
+    assertBinarySelection: () => {},
 }));
 
 let tmpDir;

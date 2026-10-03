@@ -16,7 +16,7 @@ import buildLib from './actions/buildLib.js';
 import buildDependencies from './actions/buildDependencies.js';
 import runCrossbindApp from './actions/run.js';
 import { getBuildTargets, getFilteredBuildTargets } from './actions/target.js';
-import { OPT_IN_PLATFORMS } from './utils/targets.js';
+import { OPT_IN_PLATFORMS, selectRuntimeEnvs } from './utils/targets.js';
 import resolveEmbindNapiRoot, { resolveEmbindJsiRoot } from './utils/resolveEmbindNapi.js';
 
 import writeJson from './utils/writeJson.js';
@@ -67,7 +67,7 @@ program.command('build')
     .addOption(new Option('-a, --arch <arch>', 'target architecture').argParser(createListParser(archs)))
     .addOption(new Option('-r, --runtime <runtime>', 'target runtime').argParser(createListParser(runtimes)))
     .addOption(new Option('-b, --build-type <buildType>', 'target build type').argParser(createListParser(buildTypes)))
-    .addOption(new Option('-e, --runtime-env <runtimeEnv>', 'target runtime environment').argParser(createListParser(runtimeEnvs)))
+    .addOption(new Option('-e, --runtime-env <runtimeEnv>', 'binaries to make, by runtime environment (without it, only the archives are built)').argParser(createListParser(runtimeEnvs)))
     .option('--rebuild-deps [list]', 'rebuild dependencies from source instead of using prebuilt (all, or a comma-separated list of names)')
     .action((options) => {
         const { rebuildDeps, ...rest } = options;
@@ -84,12 +84,14 @@ program.command('build')
         targetParams.arch = targetParams.arch || archs;
         targetParams.runtime = targetParams.runtime || runtimes;
         targetParams.buildType = targetParams.buildType || buildTypes;
-        targetParams.runtimeEnv = targetParams.runtimeEnv || runtimeEnvs;
+        const binaryRuntimeEnvs = selectRuntimeEnvs(targetParams.runtimeEnv, state.config.target.runtimeEnv);
+        // The archives do not depend on the runtime environment; only the binaries do.
+        targetParams.runtimeEnv = runtimeEnvs;
 
         if (state.config.build.withBuildConfig) {
             buildExternal(targetParams);
         } else {
-            build(targetParams, rebuildDeps);
+            build(targetParams, rebuildDeps, binaryRuntimeEnvs);
         }
     });
 
@@ -322,12 +324,17 @@ function run(programName, params) {
     runCrossbindApp(programName, params, null, null, { console: true });
 }
 
-async function build(targetParams, rebuildOption) {
+async function build(targetParams, rebuildOption, binaryRuntimeEnvs) {
     await buildDependencies({ targetParams, rebuildOption });
     buildLib(targetParams);
-    await createWasmJs(targetParams);
-    await createNodeAddons(targetParams);
-    await createWasiCommands(targetParams);
+    if (binaryRuntimeEnvs.length === 0) {
+        logger.info(`crossbind: no runtime environment was selected, so only the archives were built - pass -e (${runtimeEnvs.join(', ')}) for a binary.`);
+    } else {
+        const binaryParams = { ...targetParams, runtimeEnv: binaryRuntimeEnvs };
+        await createWasmJs(binaryParams);
+        await createNodeAddons(binaryParams);
+        await createWasiCommands(binaryParams);
+    }
     buildPackageTypes();
 }
 
@@ -368,9 +375,6 @@ function createBridges() {
 }
 
 async function createNodeAddons(targetParams) {
-    if (state.config.export.bundle === false) {
-        return;
-    }
     const targets = getBuildTargets(targetParams)
         .filter((target) => target.runtimeEnv === 'node' && target.platform !== 'wasm');
     if (targets.length === 0) {
@@ -407,9 +411,6 @@ async function createNodeAddons(targetParams) {
 }
 
 async function createWasmJs(targetParams) {
-    if (state.config.export.bundle === false) {
-        return;
-    }
     const targets = getFilteredBuildTargets(targetParams, { platform: 'wasm' });
     if (targets.length === 0) {
         return;

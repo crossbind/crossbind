@@ -5,7 +5,7 @@ import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { packCrossbind, packWorkspacePackage, smokeTestCrossbindTarball } from './package-artifact.mjs';
-import { RUNNERS, validateWorkspaceReleasePlan } from './workspace-release.mjs';
+import { RUNNERS, multiPlatformBuildArgs, validateWorkspaceReleasePlan } from './workspace-release.mjs';
 import { writeJson } from './release-lib.mjs';
 
 const REPOSITORY_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
@@ -41,7 +41,7 @@ for (const name of plan.multiPlatform) {
     const platforms = { wasm: ['wasm'], android: ['android'], wasi: ['wasi'], macos: ['ios'] }[runner] ?? [];
     for (const platform of platforms) {
         process.stdout.write(`[${runner}] build ${name}@${candidate.version} for ${platform}\n`);
-        execFileSync('pnpm', ['--dir', path.join(root, candidate.path), 'exec', 'crossbind', 'build', '-p', platform], {
+        execFileSync('pnpm', ['--dir', path.join(root, candidate.path), 'exec', 'crossbind', ...multiPlatformBuildArgs(platform)], {
             cwd: root,
             stdio: 'inherit',
         });

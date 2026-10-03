@@ -6,7 +6,6 @@ export default (newConfig = {}) => ({
     },
     export: {
         type: 'cmake',
-        bundle: false,
         libName: ['geos', 'geos_c'],
         // GEOS C++ headers forward-declare the geometry classes their signatures use; bindings need them complete.
         // These are the headers geos/geom.h includes: geos/geom.h itself adds `using namespace geos::geom` globally.

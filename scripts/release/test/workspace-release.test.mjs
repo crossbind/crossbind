@@ -14,6 +14,7 @@ import {
     readTrainVersion,
     decodeWorkspacePlanOutput,
     encodeWorkspacePlanOutput,
+    multiPlatformBuildArgs,
 } from '../workspace-release.mjs';
 import { setWorkspaceVersion } from '../set-workspace-version.mjs';
 
@@ -95,6 +96,14 @@ test('Linux and Windows Node addon packages build in shards of their own in the 
     assert.equal(classifyBuild(lifecycle('crossbind build -p linuxmusl')), 'linux-native');
     assert.equal(classifyBuild(lifecycle('crossbind build -p win32')), 'win32-native');
     assert.equal(classifyBuild(lifecycle('node build.mjs')), 'linux');
+});
+
+// A build makes binaries only for the runtime environments it names, and the multi-platform
+// package publishes every binary its platform has.
+test('a multi-platform build names every runtime environment of its platform', () => {
+    assert.deepEqual(multiPlatformBuildArgs('wasm'), ['build', '-p', 'wasm', '-e', 'browser,edge,node']);
+    assert.deepEqual(multiPlatformBuildArgs('wasi'), ['build', '-p', 'wasi', '-e', 'wasi']);
+    assert.deepEqual(multiPlatformBuildArgs('ios'), ['build', '-p', 'ios']);
 });
 
 test('workspace version command updates only selected packages to one new train version', () => {

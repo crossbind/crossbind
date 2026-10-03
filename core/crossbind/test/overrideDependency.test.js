@@ -82,7 +82,7 @@ describe('restampIdentity', () => {
     const newNode = () => ({
         general: { name: 'aaagdal', alias: { package: 'aaa-gdal' } },
         package: { name: 'aaa-gdal', nativeVersion: '9.9.9' },
-        export: { type: 'cmake', libName: ['aaagdal'], bundle: false },
+        export: { type: 'cmake', libName: ['aaagdal'], wholeArchive: true },
         paths: { project: '/new', output: '/new/dist' },
         dependencies: [{ general: { name: 'sub' } }],
         build: { withBuildConfig: true },
@@ -94,7 +94,7 @@ describe('restampIdentity', () => {
         expect(r.package.name).toBe('@crossbind/port-gdal-wasm');
         expect(r.package.nativeVersion).toBe('9.9.9');
         expect(r.export.libName).toEqual(['gdal']);
-        expect(r.export.bundle).toBe(false);
+        expect(r.export.wholeArchive).toBe(true);
         expect(r.paths).toEqual({ project: '/new', output: '/new/dist' });
         expect(r.dependencies).toHaveLength(1);
         expect(r.build).toEqual({ withBuildConfig: true });
