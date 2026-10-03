@@ -8,6 +8,8 @@ import logger from '../utils/logger.js';
 import findFiles from '../utils/findFiles.js';
 import { getSourceFingerprint, isSourceFingerprintStale, staleTargetDirectories, writeSourceFingerprint } from '../utils/sourceFingerprint.js';
 import { getEmbindRsFingerprint, writeEmbindRsFingerprint } from '../utils/embindRsFingerprint.js';
+import relocatePrebuilt from '../utils/relocatePrebuilt.js';
+import replaceBasePathForDocker, { DOCKER_BASE } from '../utils/replaceBasePathForDocker.js';
 
 export default function buildLib(targetParams, options = {}) {
     let isChanged = false;
@@ -66,6 +68,8 @@ export default function buildLib(targetParams, options = {}) {
     if (isChanged && fs.existsSync(`${state.config.paths.build}/Source-Debug/prebuilt`)) {
         fs.cpSync(`${state.config.paths.build}/Source-Debug/prebuilt`, `${state.config.paths.output}/prebuilt`, { recursive: true, dereference: true });
     }
+    // Cached trees too, so a rebuild fixes a prebuilt made before relocation existed.
+    targets.forEach(relocateTargetPrebuilt);
 
     if (!options.skipXcframework) {
         createXCFramework();
@@ -128,4 +132,15 @@ export default function buildLib(targetParams, options = {}) {
             })());
         fs.writeFileSync(`${state.config.paths.output}/prebuilt/CMakeLists.txt`, distCmakeContent);
     }
+}
+
+function relocateTargetPrebuilt(target) {
+    const { base, build, output } = state.config.paths;
+    const prefixDir = `${output}/prebuilt/${target.path}`;
+    if (!fs.existsSync(prefixDir)) return;
+    const installPrefix = `${build}/Source-${target.buildType === 'release' ? 'Release' : 'Debug'}/prebuilt/${target.path}`;
+    relocatePrebuilt(prefixDir, {
+        installPrefixes: [installPrefix, replaceBasePathForDocker(installPrefix, base)],
+        buildBases: [base, DOCKER_BASE],
+    });
 }

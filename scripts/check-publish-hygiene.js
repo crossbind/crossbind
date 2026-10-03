@@ -8,6 +8,9 @@
 // block (recipe, source hash, build environment) and ship the SBOM it points to.
 // K4 needs a built dist; where there is none (fresh checkout, CI) it is reported as
 // not evaluated, so the gate stays honest instead of failing on absent build output.
+// K5 gate: shipped build metadata (pkg-config, CMake configs, -config scripts) must not name
+// paths of the machine that built it, and libtool archives must not ship at all; the build
+// relocates them (core/crossbind/src/utils/relocatePrebuilt.js) and this reports what it missed.
 //
 //   node scripts/check-publish-hygiene.js
 
@@ -16,9 +19,12 @@ import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { portsRoot } from './lib/ports.js';
+import { DOCKER_BASE } from '../core/crossbind/src/utils/replaceBasePathForDocker.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const PACKAGES_DIR = portsRoot(ROOT);
+const BUILD_METADATA = /^dist\/prebuilt\/.+(\.pc|\.cmake|\.la|\/bin\/[^/]+-config)$/;
+const BUILD_PATHS = [DOCKER_BASE, ROOT];
 
 const packageDirs = [];
 for (const family of fs.readdirSync(PACKAGES_DIR)) {
@@ -82,6 +88,17 @@ for (const pkgDir of packageDirs) {
         for (const leak of leaks) console.error(`  ${leak}`);
     }
 
+    const unrelocated = files.filter(
+        (f) =>
+            BUILD_METADATA.test(f) &&
+            (f.endsWith('.la') || BUILD_PATHS.some((buildPath) => fs.readFileSync(path.join(pkgDir, f), 'utf8').includes(buildPath))),
+    );
+    if (unrelocated.length > 0) {
+        failures += 1;
+        console.error(`K5 violation in ${manifest.name}: tarball ships build metadata that names the build machine:`);
+        for (const file of unrelocated) console.error(`  ${file}`);
+    }
+
     // Provenance and the SBOM are build outputs: a fresh checkout has no dist to judge, so
     // K4 reports as not evaluated instead of failing (the real gate is the pre-publish build).
     const hasDist = files.some((f) => f.startsWith('dist/prebuilt/'));
@@ -115,10 +132,10 @@ for (const pkgDir of packageDirs) {
 }
 
 if (failures > 0) {
-    console.error(`check-publish-hygiene: ${failures} package(s) violate the bin contract (K1/K4).`);
+    console.error(`check-publish-hygiene: ${failures} package(s) violate the publish contract (K1/K4/K5).`);
     process.exit(1);
 }
 console.log(
-    `check-publish-hygiene: ${packageDirs.length} packages checked, no K1/K4 violations` +
+    `check-publish-hygiene: ${packageDirs.length} packages checked, no K1/K4/K5 violations` +
         `${notEvaluated > 0 ? ` (${notEvaluated} K4 gate(s) not evaluated - no dist)` : ''}.`,
 );

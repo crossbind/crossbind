@@ -14,7 +14,7 @@
     {
       "source": "docs/api/README.md",
       "output": "api/README.md",
-      "sha256": "f3df73cf0e2ac068a4931be42772b0439342bfa10cd0b60afb17b6f54ea56331"
+      "sha256": "9f3f6761b7d05240713ba22e6c7521e630a42e47c40e4d93aac5ee1c37ab53e4"
     },
     {
       "source": "docs/api/build-state.md",
@@ -50,6 +50,11 @@
       "source": "docs/api/lifecycle-and-types.md",
       "output": "api/lifecycle-and-types.md",
       "sha256": "77d4851e1ec59ddf4aad182d2e2e7bc17099f882b87a391491e427e2296b4127"
+    },
+    {
+      "source": "docs/api/native.md",
+      "output": "api/native.md",
+      "sha256": "bd18511e58c4794fd0fc6a8880d88c4d84616288101af9b641c9c2f5e6f7a12a"
     },
     {
       "source": "docs/api/overrides.md",
