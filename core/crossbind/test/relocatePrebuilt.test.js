@@ -193,6 +193,26 @@ describe('relocatePrebuilt', () => {
         expect(read('lib/cmake/CURL/CURLConfig.cmake')).toBe('set(CURL_LIBRARIES_PRIVATE "ssl;crypto;dl;ssl")\n');
     });
 
+    // iOS dependencies come out of an xcframework, whose archives sit in a slice directory.
+    test('reduces dependency archives outside a lib directory to library names', () => {
+        const ssl = upath.join(work, 'ports/openssl/ios/ssl.xcframework/ios-arm64/libssl.a');
+        put('lib/cmake/CURL/CURLConfig.cmake', `set(CURL_LIBRARIES_PRIVATE "${ssl};dl")\n`);
+
+        relocate();
+
+        expect(read('lib/cmake/CURL/CURLConfig.cmake')).toBe('set(CURL_LIBRARIES_PRIVATE "ssl;dl")\n');
+    });
+
+    // A configure build for WASI links crossbind's runtime stubs through LIBS, which the .pc records.
+    test('drops object files of the build tree from pkg-config files', () => {
+        const stubs = upath.join(work, 'ports/spatialite/wasi/.crossbind/build/Source-Release/wasi-wasm32-st-release/crossbind-wasi-stubs.o');
+        put('lib/pkgconfig/spatialite.pc', `prefix=${DOCKER_PREFIX}\nLibs: -L\${libdir} -lspatialite ${stubs} -lm\n`);
+
+        relocate();
+
+        expect(read('lib/pkgconfig/spatialite.pc')).toBe('prefix=${pcfiledir}/../..\nLibs: -L${libdir} -lspatialite -lm\n');
+    });
+
     test('leaves headers alone: their paths are compiled into the archives anyway', () => {
         put('include/cpl_config.h', `#define GDAL_PREFIX "${DOCKER_PREFIX}"\n`);
 

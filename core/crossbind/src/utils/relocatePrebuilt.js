@@ -41,26 +41,34 @@ function filesUnder(dir) {
 
 const isUnder = (path, prefixes) => prefixes.some((prefix) => path.startsWith(prefix));
 
-// Another package's files are only known by name once the tree leaves the build machine.
+// Another package's files are only known by name once the tree leaves the build machine. Its
+// archive may sit in a lib directory or, from an xcframework, in a slice directory.
 function nameForeignArchives(text, { installPrefixes, buildBases }, spell) {
     return buildBases.reduce((result, base) => result.replace(
-        new RegExp(`${escapeRegExp(base)}/[^\\s'";]*?/lib/lib([\\w+.-]+)\\.a`, 'g'),
+        new RegExp(`${escapeRegExp(base)}/[^\\s'";]*?/lib([\\w+.-]+)\\.a`, 'g'),
         (archive, name) => (isUnder(archive, installPrefixes) ? archive : spell(name)),
     ), text);
 }
 
-function dropForeignSearchPaths(text, { installPrefixes, buildBases }) {
-    return buildBases.reduce((result, base) => result.replace(
-        new RegExp(`\\s-[LI]${escapeRegExp(base)}/[^\\s'";]*`, 'g'),
-        (flag) => (isUnder(flag.trim().slice(2), installPrefixes) ? flag : ''),
-    ), text);
+// Search paths into other packages, and object files of the build tree such as the WASI runtime
+// stubs a configure build links through LIBS.
+function dropForeignPaths(text, { installPrefixes, buildBases }) {
+    return buildBases.reduce((result, base) => result
+        .replace(
+            new RegExp(`\\s-[LI]${escapeRegExp(base)}/[^\\s'";]*`, 'g'),
+            (flag) => (isUnder(flag.trim().slice(2), installPrefixes) ? flag : ''),
+        )
+        .replace(
+            new RegExp(`\\s${escapeRegExp(base)}/[^\\s'";]*\\.o(?=[\\s'";]|$)`, 'gm'),
+            (object) => (isUnder(object.trim(), installPrefixes) ? object : ''),
+        ), text);
 }
 
 function relocatePkgConfig(file, prefixDir, paths) {
     const toPrefix = upath.relative(upath.dirname(file), prefixDir);
     const before = fs.readFileSync(file, 'utf8');
     const own = replaceEach(before, paths.installPrefixes, `\${pcfiledir}/${toPrefix}`);
-    const foreign = nameForeignArchives(dropForeignSearchPaths(own, paths), paths, (name) => `-l${name}`);
+    const foreign = nameForeignArchives(dropForeignPaths(own, paths), paths, (name) => `-l${name}`);
     rewrite(file, before, nameLibcxx(foreign));
 }
 
