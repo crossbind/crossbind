@@ -1,6 +1,17 @@
 # @crossbind/docker
 
-## Unreleased — image family 1.0.8
+## Unreleased — image family 1.0.9
+
+### Patch Changes
+
+- The `linux` image also builds native Node.js addons for musl. Next to the glibc 2.28 sysroots it
+  carries musl 1.2.5 sysroots for x86_64 and aarch64, made of the Alpine 3.23 packages listed with
+  their SHA-256 in `linuxmusl-sysroot.txt` (each verified against the signed APKINDEX when it was
+  recorded), and a libc++ 19.1.7 built against each. A musl addon needs only musl's libc and
+  `libgcc_s`, so it loads on Alpine 3.21 and newer. libc++abi keeps its own
+  `__cxa_thread_atexit`, which musl does not provide.
+
+## Image family 1.0.8
 
 ### Patch Changes
 

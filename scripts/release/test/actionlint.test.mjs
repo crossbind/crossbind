@@ -165,6 +165,12 @@ test('the unpublished toolchain image train uses the reviewed stable versions', 
         .filter((line) => line && !line.startsWith('#'));
     assert.ok(sysrootPackages.length > 0);
     for (const line of sysrootPackages) assert.match(line, /^(amd64|arm64) pool\/\S+\.deb [0-9a-f]{64}$/);
+    const muslSysrootPackages = fs
+        .readFileSync(path.join(dockerDirectory, 'linuxmusl-sysroot.txt'), 'utf8')
+        .split('\n')
+        .filter((line) => line && !line.startsWith('#'));
+    assert.ok(muslSysrootPackages.length > 0);
+    for (const line of muslSysrootPackages) assert.match(line, /^(x86_64|aarch64) v[0-9.]+\/main\/\1\/\S+\.apk [0-9a-f]{64}$/);
     assert.match(linux, /^FROM --platform=\$BUILDPLATFORM debian:trixie-slim@sha256:[0-9a-f]{64} AS sysroots$/m);
     assert.match(linux, /^ARG LLVM_SHA256=[0-9a-f]{64}$/m);
     assert.match(linux, /\$\{LLVM_SHA256\}.*sha256sum -c -/);

@@ -1,9 +1,11 @@
 # syntax=docker/dockerfile:1
 
-# Linux targets: native Node.js addons for x86_64 and aarch64. clang cross-compiles both from either
-# host against glibc 2.28 sysroots made of Debian 10 packages - the baseline Node's own Linux builds
-# require - and links LLVM's libc++, built here against the same sysroots. An addon built in this
-# image therefore loads wherever glibc 2.28 or newer does, whichever distribution runs it.
+# Linux targets: native Node.js addons for x86_64 and aarch64, on glibc and on musl. clang
+# cross-compiles all four from either host: against glibc 2.28 sysroots made of Debian 10 packages -
+# the baseline Node's own Linux builds require - and against musl 1.2.5 sysroots made of Alpine 3.23
+# packages, the release Node's own musl builds are made on. Each target links LLVM's libc++, built
+# here against its own sysroot. An addon built in this image therefore loads wherever glibc 2.28 or
+# newer does, or musl 1.2.5 or newer, whichever distribution runs it.
 
 ARG BASE_IMAGE=crossbind/base:dev
 
@@ -52,7 +54,43 @@ RUN set -eu; \
         done; \
     done
 
-# libc++ against the glibc 2.28 headers, not Debian's own build of it: that one follows trixie's
+# Alpine keeps every release on its mirrors. Every package is checked against the SHA-256 recorded
+# in linuxmusl-sysroot.txt; gcc gives up only its startup files and runtime libraries. The packages
+# carry no license texts, so those come from the exact upstream revisions.
+ARG ALPINE_MIRROR=https://dl-cdn.alpinelinux.org/alpine
+COPY linuxmusl-sysroot.txt /tmp/linuxmusl-sysroot.txt
+RUN set -eu; \
+    grep -v -e '^#' -e '^$' /tmp/linuxmusl-sysroot.txt | while read -r arch path sha256; do \
+        root="/opt/crossbind/sysroots/${arch}-alpine-linux-musl"; \
+        apk="/tmp/$(basename "${path}")"; \
+        wget -q "${ALPINE_MIRROR}/${path}" -O "${apk}"; \
+        echo "${sha256}  ${apk}" | sha256sum -c -; \
+        mkdir -p "${root}"; \
+        case "$(basename "${path}")" in \
+            gcc-*) tar -xzf "${apk}" -C "${root}" --warning=no-unknown-keyword --wildcards \
+                'usr/lib/gcc/*/*/crt*.o' 'usr/lib/gcc/*/*/libgcc*.a' usr/lib/libgcc_s.so usr/lib/libatomic.so;; \
+            *) tar -xzf "${apk}" -C "${root}" --warning=no-unknown-keyword --exclude='.*';; \
+        esac; \
+        rm "${apk}"; \
+    done; \
+    mkdir -p /opt/licenses/linux-sysroot/musl; \
+    cd /opt/licenses/linux-sysroot/musl; \
+    wget -q "https://git.musl-libc.org/cgit/musl/plain/COPYRIGHT?h=v1.2.5" -O musl-COPYRIGHT; \
+    wget -q "https://raw.githubusercontent.com/gcc-mirror/gcc/releases/gcc-15.2.0/COPYING3" -O gcc-COPYING3; \
+    wget -q "https://raw.githubusercontent.com/gcc-mirror/gcc/releases/gcc-15.2.0/COPYING.RUNTIME" -O gcc-COPYING.RUNTIME; \
+    wget -q "https://raw.githubusercontent.com/torvalds/linux/v6.16/COPYING" -O linux-COPYING; \
+    wget -q "https://raw.githubusercontent.com/torvalds/linux/v6.16/LICENSES/preferred/GPL-2.0" -O linux-GPL-2.0; \
+    wget -q "https://raw.githubusercontent.com/torvalds/linux/v6.16/LICENSES/exceptions/Linux-syscall-note" -O linux-Linux-syscall-note; \
+    printf '%s\n' \
+        "f9bc4423732350eb0b3f7ed7e91d530298476f8fec0c6c427a1c04ade22655af  musl-COPYRIGHT" \
+        "8ceb4b9ee5adedde47b31e975c1d90c73ad27b6b165a1dcd80c7c545eb65b903  gcc-COPYING3" \
+        "9d6b43ce4d8de0c878bf16b54d8e7a10d9bd42b75178153e3af6a815bdc90f74  gcc-COPYING.RUNTIME" \
+        "fb5a425bd3b3cd6071a3a9aff9909a859e7c1158d54d32e07658398cd67eb6a0  linux-COPYING" \
+        "f6b78c087c3ebdf0f3c13415070dd480a3f35d8fc76f3d02180a407c1c812f79  linux-GPL-2.0" \
+        "8e378ab93586eb55135d3bc119cce787f7324f48394777d00c34fa3d0be3303f  linux-Linux-syscall-note" \
+        | sha256sum -c -
+
+# libc++ against each sysroot's own C library, not Debian's build of it: that one follows trixie's
 # glibc and references symbols a glibc 2.28 system does not have. Static and hermetic, so the
 # addon keeps its copy private instead of exporting it into the node process.
 ARG LLVM_VERSION=19.1.7
@@ -65,8 +103,14 @@ RUN set -eu; \
     tar -xf /tmp/llvm.tar.xz -C /src --strip-components=1 --wildcards \
         '*/runtimes' '*/libcxx' '*/libcxxabi' '*/libc' '*/llvm/cmake' '*/llvm/utils' '*/cmake' '*/third-party'; \
     rm /tmp/llvm.tar.xz; \
-    for triple in x86_64-linux-gnu aarch64-linux-gnu; do \
+    for triple in x86_64-linux-gnu aarch64-linux-gnu x86_64-alpine-linux-musl aarch64-alpine-linux-musl; do \
         root="/opt/crossbind/sysroots/${triple}"; \
+        # musl has no __cxa_thread_atexit_impl, and no library check can tell when nothing links
+        # here, so libc++abi keeps its own implementation.
+        case "${triple}" in \
+            *-musl) libc_flags='-DLIBCXX_HAS_MUSL_LIBC=ON -DLIBCXXABI_HAS_CXA_THREAD_ATEXIT_IMPL=OFF';; \
+            *) libc_flags=;; \
+        esac; \
         cmake -G Ninja -S /src/runtimes -B "/build/${triple}" \
             -DLLVM_ENABLE_RUNTIMES='libcxx;libcxxabi' \
             -DCMAKE_BUILD_TYPE=Release \
@@ -83,6 +127,7 @@ RUN set -eu; \
             -DCMAKE_POSITION_INDEPENDENT_CODE=ON \
             -DCMAKE_INSTALL_PREFIX="${root}/usr" \
             -DLLVM_ENABLE_PER_TARGET_RUNTIME_DIR=OFF \
+            ${libc_flags} \
             -DLIBCXX_ENABLE_SHARED=OFF \
             -DLIBCXXABI_ENABLE_SHARED=OFF \
             -DLIBCXX_ENABLE_STATIC_ABI_LIBRARY=ON \
@@ -103,7 +148,7 @@ FROM ${BASE_IMAGE} AS linux
 # The base image is non-root by default; toolchain installation is an image-build operation only.
 USER root
 
-# Debian's clang drives both targets; nasm assembles libjpeg-turbo's x86_64 SIMD code.
+# Debian's clang drives every target; nasm assembles libjpeg-turbo's x86_64 SIMD code.
 RUN apt-get update && apt-get install -y --no-install-recommends clang-19 lld-19 llvm-19 nasm \
     && rm -rf /var/lib/apt/lists/*
 
@@ -113,7 +158,7 @@ COPY --from=sysroots /opt/licenses/linux-sysroot /opt/licenses/linux-sysroot
 # One compiler pair and one CMake toolchain file per target. Every C++ link takes libc++ statically.
 RUN set -eu; \
     mkdir -p /opt/crossbind/linux/bin; \
-    for triple in x86_64-linux-gnu aarch64-linux-gnu; do \
+    for triple in x86_64-linux-gnu aarch64-linux-gnu x86_64-alpine-linux-musl aarch64-alpine-linux-musl; do \
         root="/opt/crossbind/sysroots/${triple}"; \
         bin="/opt/crossbind/linux/bin/${triple}"; \
         flags="--target=${triple} --sysroot=${root} -fuse-ld=lld -Wno-unused-command-line-argument"; \
