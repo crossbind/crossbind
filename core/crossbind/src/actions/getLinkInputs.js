@@ -3,9 +3,10 @@ import getDependLibs from './getDependLibs.js';
 import state from '../state/index.js';
 import buildAppRustCrates from '../utils/appRustCrates.js';
 
-// The archives of a final link (wasm or Node-API addon) and which of them must survive whole.
-// keepFlag spells "keep this symbol" for the target's linker.
-export default function getLinkInputs(target, { keepFlag }) {
+// The archives of a final link (wasm, Node-API addon or native executable) and which of them must
+// survive whole. keepFlag spells "keep this symbol" for the target's linker; a native executable
+// binds nothing, so it links no bridge.
+export default function getLinkInputs(target, { keepFlag, withBridge = true }) {
     const buildType = target.buildType === 'release' ? 'Release' : 'Debug';
     const { build, output, cache } = state.config.paths;
     const { name } = state.config.general;
@@ -23,7 +24,7 @@ export default function getLinkInputs(target, { keepFlag }) {
         ...getDependLibs(target),
         ...appRustLibs,
         sourceLibCandidates.find((lib) => fs.existsSync(lib)) ?? sourceLibCandidates[0],
-        `${build}/Bridge-${buildType}/${target.path}/lib${name}.a`,
+        ...(withBridge ? [`${build}/Bridge-${buildType}/${target.path}/lib${name}.a`] : []),
     ];
 
     // By default only the Bridge archive is kept whole (see linkLayout.js) so the linker

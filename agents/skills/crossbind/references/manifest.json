@@ -14,7 +14,7 @@
     {
       "source": "docs/api/README.md",
       "output": "api/README.md",
-      "sha256": "9f3f6761b7d05240713ba22e6c7521e630a42e47c40e4d93aac5ee1c37ab53e4"
+      "sha256": "abfd7aa6df7d8a54b286f4b4b338669513fa460aaf78bcc0f203cbe7bfd4e56b"
     },
     {
       "source": "docs/api/build-state.md",
@@ -34,7 +34,7 @@
     {
       "source": "docs/api/crossbind-config.md",
       "output": "api/crossbind-config.md",
-      "sha256": "b8c879d036060529378981abefb7ca1a005bc0e84208e9057a8e957096985d71"
+      "sha256": "522170db3835de8b205c075de279bc00bf1773599cbb6e8771db90dafc3afeff"
     },
     {
       "source": "docs/api/filesystem.md",
@@ -54,7 +54,7 @@
     {
       "source": "docs/api/native.md",
       "output": "api/native.md",
-      "sha256": "bd18511e58c4794fd0fc6a8880d88c4d84616288101af9b641c9c2f5e6f7a12a"
+      "sha256": "871e83791e09ea243ca6edaadf456cd09d590a5e3b5c2895f6848a17453d6488"
     },
     {
       "source": "docs/api/overrides.md",
@@ -109,7 +109,7 @@
     {
       "source": "docs/playbooks/integration/nodejs.md",
       "output": "integration/nodejs.md",
-      "sha256": "ad1ff2d5521d8a30be488bb68cd2301cce2a02db139eb8de9ec1ba5e028f3dbe"
+      "sha256": "39c3b856a0d373e671f214d0d647930a7fcdfd413e379d80dd46cb642d9e37cb"
     },
     {
       "source": "docs/playbooks/integration/react-native-cli.md",

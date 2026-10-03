@@ -1,7 +1,7 @@
 // Single source for the build-target matrix and its naming; state/ copies (and then
 // decorates) these entries, and consumer runtimes read them without touching CLI state.
 
-export const TARGETS = [
+const BASE_TARGETS = [
     {
         platform: 'wasm', arch: 'wasm32', runtime: 'st', buildType: 'release', runtimeEnv: 'browser',
     },
@@ -142,6 +142,14 @@ export const TARGETS = [
     },
 ];
 
+// A native executable links the same archives as the Node-API addon of its platform and arch.
+export const TARGETS = [
+    ...BASE_TARGETS,
+    ...BASE_TARGETS
+        .filter((target) => target.runtimeEnv === 'node' && target.platform !== 'wasm')
+        .map((target) => ({ ...target, runtimeEnv: 'native' })),
+];
+
 // Built only when named with -p: a plain `crossbind build` keeps producing what it did before
 // native Node.js addons existed.
 export const OPT_IN_PLATFORMS = ['darwin', 'linux', 'linuxmusl', 'win32'];
@@ -179,6 +187,13 @@ export function nodeAddonNamesOf(target, projectName) {
         addonName: addonPattern.replace('{platform}', target.platform).replace('{arch}', target.arch),
         jsName: `${projectName}.native${suffix}.cjs`,
     };
+}
+
+// One executable per platform, arch and build type, named like the addons it replaces.
+export function nativeCommandNamesOf(target, projectName) {
+    const suffix = target.buildType === 'debug' ? '.debug' : '';
+    const extension = target.platform === 'win32' ? '.exe' : '';
+    return { commandName: `${projectName}.${target.platform}-${target.arch}${suffix}${extension}` };
 }
 
 export function filterTargetSpecs(targetSpecs, target) {

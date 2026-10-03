@@ -290,6 +290,25 @@ importers:
         specifier: workspace:^
         version: link:../../core/crossbind
 
+  e2e/cli-native:
+    dependencies:
+      '@crossbind/port-zlib-darwin':
+        specifier: workspace:^
+        version: link:../../ports/zlib/darwin
+      '@crossbind/port-zlib-linux':
+        specifier: workspace:^
+        version: link:../../ports/zlib/linux
+      '@crossbind/port-zlib-linuxmusl':
+        specifier: workspace:^
+        version: link:../../ports/zlib/linuxmusl
+      '@crossbind/port-zlib-win32':
+        specifier: workspace:^
+        version: link:../../ports/zlib/win32
+    devDependencies:
+      crossbind:
+        specifier: workspace:^
+        version: link:../../core/crossbind
+
   e2e/cli-wasi:
     devDependencies:
       crossbind:

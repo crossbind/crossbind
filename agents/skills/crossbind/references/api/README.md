@@ -22,7 +22,7 @@ C++ binding & build authoring:
 - [`cpp-binding-rules.md`](./cpp-binding-rules.md) — Rules for writing C++ that crossbind can auto-bind (pointer handles and strings, C++11+, wrapper pattern, JSPI advanced).
 - [`rust.md`](./rust.md) — Rust bindings: `cargo:` crate imports, app-local `.rs` sources, `export.type: 'cargo'` packages; idiom table.
 - [`wasi.md`](./wasi.md) — `platform: 'wasi'` single-module command builds, `-wasi` prebuilts, `-bin-wasi` npm CLI tool packages.
-- [`native.md`](./native.md) — Desktop platforms beyond Node.js addons: the `darwin`, `linux`, `linuxmusl` and `win32` prebuilt archives in your own C or C++ build.
+- [`native.md`](./native.md) — Desktop platforms beyond Node.js addons: native executables (`-e native`) and the `darwin`, `linux`, `linuxmusl` and `win32` prebuilt archives in your own C or C++ build.
 - [`swig-escape.md`](./swig-escape.md) — Manual SWIG `.i` files when auto-generation isn't enough.
 - [`build-state.md`](./build-state.md) — `state` and `target` object shapes passed to `crossbind.build.js` hooks; full inventory of 30 built-in build targets.
 - [`overrides.md`](./overrides.md) — Catalog of 20 override mechanisms ordered least → most invasive.

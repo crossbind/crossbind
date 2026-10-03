@@ -10,6 +10,7 @@ import createLib from './actions/createLib.js';
 import buildWasm from './actions/buildWasm.js';
 import buildWasiCommand from './actions/buildWasiCommand.js';
 import buildNode, { publishNodeData } from './actions/buildNode.js';
+import buildNativeCommand from './actions/buildNativeCommand.js';
 import buildExternal from './actions/buildExternal.js';
 import buildPackageTypes from './actions/buildTypes.js';
 import buildLib from './actions/buildLib.js';
@@ -333,9 +334,24 @@ async function build(targetParams, rebuildOption, binaryRuntimeEnvs) {
         const binaryParams = { ...targetParams, runtimeEnv: binaryRuntimeEnvs };
         await createWasmJs(binaryParams);
         await createNodeAddons(binaryParams);
+        await createNativeCommands(binaryParams);
         await createWasiCommands(binaryParams);
     }
     buildPackageTypes();
+}
+
+async function createNativeCommands(targetParams) {
+    const targets = getBuildTargets(targetParams).filter((target) => target.runtimeEnv === 'native');
+    for (const target of targets) {
+        const distCommand = `${state.config.paths.output}/${target.commandName}`;
+        const built = await buildNativeCommand(target, { force: !fs.existsSync(distCommand) });
+        publishNodeData(target, { refresh: built });
+        if (!built) {
+            continue;
+        }
+        fs.mkdirSync(state.config.paths.output, { recursive: true });
+        fs.copyFileSync(`${state.config.paths.build}/${target.commandName}`, distCommand);
+    }
 }
 
 async function createWasiCommands(targetParams) {

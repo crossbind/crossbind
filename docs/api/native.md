@@ -1,6 +1,31 @@
 # Native platforms — `darwin`, `linux`, `linuxmusl`, `win32`
 
-> The desktop platforms build Node.js addons (see [`nodejs.md`](../playbooks/integration/nodejs.md)). This page covers what else their output is good for, starting with the prebuilt archives of every `@crossbind/port-*` package in a C or C++ build that is not crossbind.
+> The desktop platforms build Node.js addons (see [`nodejs.md`](../playbooks/integration/nodejs.md)). This page covers what else their output is good for: native executables, and the prebuilt archives of every `@crossbind/port-*` package in a C or C++ build that is not crossbind.
+
+## Native executables
+
+`-e native` links the project's `main()` into an executable where `-e node` would link an addon:
+
+```bash
+crossbind build -p linux,linuxmusl,darwin,win32 -e native -b release
+./dist/<name>.linux-x64 arg1
+```
+
+| Platform | Output | Runs on |
+|---|---|---|
+| `linux` | `dist/<name>.linux-<arch>` | glibc 2.28 or later; it needs libc, libm, libdl, libpthread and libgcc_s only |
+| `linuxmusl` | `dist/<name>.linuxmusl-<arch>` | any Linux, musl or glibc: the executable is fully static |
+| `darwin` | `dist/<name>.darwin-<arch>` | macOS 11 or later |
+| `win32` | `dist/<name>.win32-<arch>.exe` | Windows 10 or later, with the C++ runtime linked in |
+
+A debug build (`-b debug`) adds `.debug` before the extension.
+
+- `src/native` provides `main(int, char**)`. The project's own archive is linked whole; dependency archives keep only what `main` reaches. `binary.addonFlags` adds the system libraries a package needs, as it does for the addon.
+- There are no bindings, so no SWIG bridge: a macOS executable builds with Xcode alone, while Linux and Windows executables build in the same toolchain images as the addons.
+- A port's data, such as `GDAL_DATA` and `proj.db`, is copied to `dist/data`, but nothing points the executable at it: set `GDAL_DATA` and `PROJ_DATA` before running it.
+- `-e node,native` makes the addon and the executable from the same archives. Rust packages (`export.type: 'cargo'`) make no executable.
+
+`pnpm --filter @crossbind/e2e-cli-native e2e:prod` runs the fixture's executable on Debian 10, its static musl build on Alpine and on Debian 13, and its macOS build on the host; the Windows build is checked for the machine it targets, not run.
 
 ## Prebuilt archives in your own build
 
