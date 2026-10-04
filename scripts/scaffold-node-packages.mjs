@@ -9,6 +9,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { familyDir, portDir, portName } from './lib/ports.js';
+import { SBOM_FILE } from './release/node-packages.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 // The platform packages the addons link, in the order crossbind builds them.
@@ -25,6 +26,10 @@ const ADDON_TARGETS = [
 ];
 const PLATFORM_KEYWORDS = new Set(['webassembly', 'wasm', 'android', 'ios', 'react-native']);
 const NODE_TARGET = 'node';
+// Refuses to pack a package the build did not fill.
+const PREPACK = 'node ../../../scripts/check-node-package.mjs';
+// The oldest Node.js major the release train verifies the packages with (releases/npm/node-22.version).
+const NODE_ENGINE = '>=22';
 
 const targetOf = ({ platform, arch }) => `${NODE_TARGET}-${platform}-${arch}`;
 const addonFileOf = (family, { platform, arch }) => `${family}-node.${platform}-${arch}.node`;
@@ -45,19 +50,19 @@ function nodeManifest(family, base) {
     return {
         name,
         ...common(base),
-        description: `${family} ${base.nativeVersion} for Node.js with nothing to build: prebuilt Node-API addons for macOS, Linux and Windows, built with crossbind.`,
-        // Kept out of the release train until its packages are bootstrapped on npm.
-        private: true,
+        description: `${family} for Node.js with nothing to build: prebuilt Node-API addons for macOS, Linux and Windows, built with crossbind.`,
         type: 'module',
+        engines: { node: NODE_ENGINE },
         exports: {
             './*.h': { types: './dist/*.h.d.cts', default: './dist/*.h.cjs' },
             './package.json': './package.json',
         },
-        files: ['dist/**/*.cjs', 'dist/**/*.d.cts', 'dist/data'],
+        files: ['dist/**/*.cjs', 'dist/**/*.d.cts', 'dist/data', SBOM_FILE],
         scripts: {
             build: 'crossbind build -p darwin,linux,linuxmusl,win32 -e node -b release && node ../../../scripts/stage-node-addons.mjs',
             clear: 'rm -rf .crossbind dist',
             e2e: 'node ../../../scripts/e2e-node-package.mjs',
+            prepack: PREPACK,
         },
         optionalDependencies: Object.fromEntries(ADDON_TARGETS.map((target) => [portName(family, targetOf(target)), 'workspace:*'])),
         devDependencies: {
@@ -74,12 +79,12 @@ function addonManifest(family, base, target) {
         name: portName(family, targetOf(target)),
         ...common(base),
         description: `${target.label} addon of ${portName(family, NODE_TARGET)}, which npm installs on a matching machine.`,
-        private: true,
         os: [target.os],
         cpu: [target.arch],
         ...(target.libc ? { libc: [target.libc] } : {}),
         main,
-        files: [main],
+        files: [main, SBOM_FILE],
+        scripts: { prepack: PREPACK },
     };
 }
 
@@ -107,7 +112,7 @@ function nodeReadme(family, base, headers) {
     const [first] = headers;
     return `# ${name}
 
-${family} ${base.nativeVersion} for Node.js with nothing to build: prebuilt Node-API addons for macOS, Linux (glibc and musl) and Windows, on arm64 and x64. npm installs only the addon for your machine.
+${family} for Node.js with nothing to build: prebuilt Node-API addons for macOS, Linux (glibc and musl) and Windows, on arm64 and x64. npm installs only the addon for your machine.
 
 \`\`\`bash
 npm install ${name}
@@ -144,17 +149,15 @@ function writePackage(dir, files, force) {
 export async function scaffoldNodePackages(family, { force = false } = {}) {
     if (!fs.existsSync(familyDir(ROOT, family))) throw new Error(`unknown port family: ${family}`);
     const base = JSON.parse(fs.readFileSync(path.join(portDir(ROOT, family), 'package.json'), 'utf8'));
-    const license = fs.readFileSync(path.join(portDir(ROOT, family, 'linux'), 'LICENSE'), 'utf8');
     const headers = await publicHeadersOf(family);
+    // LICENSE and the SBOM come from the build: scripts/stage-node-addons.mjs derives them.
     writePackage(portDir(ROOT, family, NODE_TARGET), {
         'package.json': nodeManifest(family, base),
         'crossbind.config.js': nodeConfig(family),
         'README.md': nodeReadme(family, base, headers),
-        LICENSE: license,
     }, force);
     ADDON_TARGETS.forEach((target) => writePackage(portDir(ROOT, family, targetOf(target)), {
         'package.json': addonManifest(family, base, target),
-        LICENSE: license,
     }, force));
 }
 

@@ -4,9 +4,8 @@
     "nativeVersion": "8.22.0",
     "homepage": "https://github.com/crossbind/crossbind/tree/main/ports/curl#readme",
     "repository": "https://github.com/crossbind/crossbind.git",
-    "license": "curl",
+    "license": "(MIT OR NCSA) AND Apache-2.0 AND curl AND MIT",
     "description": "macOS arm64 addon of @crossbind/port-curl-node, which npm installs on a matching machine.",
-    "private": true,
     "os": [
         "darwin"
     ],
@@ -15,6 +14,10 @@
     ],
     "main": "curl-node.darwin-arm64.node",
     "files": [
-        "curl-node.darwin-arm64.node"
-    ]
+        "curl-node.darwin-arm64.node",
+        "sbom.cdx.json"
+    ],
+    "scripts": {
+        "prepack": "node ../../../scripts/check-node-package.mjs"
+    }
 }

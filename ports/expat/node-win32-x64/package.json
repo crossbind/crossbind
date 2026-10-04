@@ -4,9 +4,8 @@
     "nativeVersion": "2.8.5",
     "homepage": "https://github.com/crossbind/crossbind/tree/main/ports/expat#readme",
     "repository": "https://github.com/crossbind/crossbind.git",
-    "license": "MIT",
+    "license": "(Apache-2.0 WITH LLVM-exception) AND (MIT OR NCSA) AND LicenseRef-MinGW-w64-runtime AND MIT",
     "description": "Windows x64 addon of @crossbind/port-expat-node, which npm installs on a matching machine.",
-    "private": true,
     "os": [
         "win32"
     ],
@@ -15,6 +14,10 @@
     ],
     "main": "expat-node.win32-x64.node",
     "files": [
-        "expat-node.win32-x64.node"
-    ]
+        "expat-node.win32-x64.node",
+        "sbom.cdx.json"
+    ],
+    "scripts": {
+        "prepack": "node ../../../scripts/check-node-package.mjs"
+    }
 }

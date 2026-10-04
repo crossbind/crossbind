@@ -5,6 +5,7 @@ import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { pinnedRustVersion, runPinnedLocalSysrootGate } from '../../gate-pinned-local-sysroot.mjs';
 import { ACTIONLINT_VERSION, actionlintArchive } from '../actionlint.mjs';
+import { VERIFY_NODE_VERSION_FILES } from '../node-packages.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
 const NODE_ENGINE_PACKAGES = [
@@ -90,11 +91,23 @@ test('every GitHub Actions Node job uses the exact repository pin', () => {
     for (const workflow of fs.readdirSync(workflowDirectory).filter((name) => name.endsWith('.yml'))) {
         const source = fs.readFileSync(path.join(workflowDirectory, workflow), 'utf8');
         const setupNodeSteps = source.match(/uses:\s*actions\/setup-node@/g)?.length ?? 0;
-        const repositoryPins = source.match(/node-version-file:\s*\.nvmrc/g)?.length ?? 0;
+        const repositoryPins = source.match(/node-version-file:\s*(?:\.nvmrc|\$\{\{ matrix\.node-version-file \}\})/g)?.length ?? 0;
 
         assert.equal(repositoryPins, setupNodeSteps, `${workflow} must read every Node version from .nvmrc`);
         assert.doesNotMatch(source, /\bnode-version:/, `${workflow} must not carry a second Node version`);
+        if (workflow !== 'release-crossbind.yml') assert.doesNotMatch(source, /matrix\.node-version-file/, workflow);
     }
+});
+
+test('the train verifies ready-made Node packages with exact Node.js pins only', () => {
+    const source = fs.readFileSync(path.join(ROOT, '.github', 'workflows', 'release-crossbind.yml'), 'utf8');
+    const matrix = /\n\s+node-version-file: \[([^\]]+)\]/
+        .exec(source)?.[1]
+        .split(',')
+        .map((file) => file.trim());
+
+    assert.deepEqual(matrix, VERIFY_NODE_VERSION_FILES);
+    for (const file of VERIFY_NODE_VERSION_FILES) assert.match(fs.readFileSync(path.join(ROOT, file), 'utf8').trim(), /^\d+\.\d+\.\d+$/, file);
 });
 
 test('repository and Node-facing package engines match the exact Node LTS major', () => {
@@ -223,8 +236,8 @@ test('the release workflow hands the plan to every job through the compressed ou
     const source = fs.readFileSync(path.join(ROOT, '.github', 'workflows', 'release-crossbind.yml'), 'utf8');
     assert.doesNotMatch(source, /planBase64|RELEASE_PLAN_BASE64/);
     assert.match(source, /planGzipBase64: \$\{\{ steps\.plan\.outputs\.planGzipBase64 \}\}/);
-    assert.equal(source.match(/RELEASE_PLAN_GZIP_BASE64: \$\{\{ needs\.plan\.outputs\.planGzipBase64 \}\}/g)?.length, 4);
-    assert.equal(source.match(/node scripts\/release\/restore-workspace-plan\.mjs "\$RUNNER_TEMP\/workspace-release-plan\.json"/g)?.length, 4);
+    assert.equal(source.match(/RELEASE_PLAN_GZIP_BASE64: \$\{\{ needs\.plan\.outputs\.planGzipBase64 \}\}/g)?.length, 6);
+    assert.equal(source.match(/node scripts\/release\/restore-workspace-plan\.mjs "\$RUNNER_TEMP\/workspace-release-plan\.json"/g)?.length, 6);
 });
 
 test('the macOS sample workflows survive Dependabot runs and refuse React Native source fallbacks', () => {
@@ -252,4 +265,6 @@ test('the publish job still runs when a platform build was skipped', () => {
     assert.match(condition, /needs\.plan\.result == 'success'/);
     assert.match(condition, /needs\.assemble\.result == 'success'/);
     assert.match(condition, /needs\.plan\.outputs\.packageCount != '0'/);
+    assert.match(condition, /needs\.verify_node\.result == 'success' \|\| needs\.verify_node\.result == 'skipped'/);
+    assert.match(condition, /needs\.verify_node_musl\.result == 'success' \|\| needs\.verify_node_musl\.result == 'skipped'/);
 });

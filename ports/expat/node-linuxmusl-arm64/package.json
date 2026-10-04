@@ -4,9 +4,8 @@
     "nativeVersion": "2.8.5",
     "homepage": "https://github.com/crossbind/crossbind/tree/main/ports/expat#readme",
     "repository": "https://github.com/crossbind/crossbind.git",
-    "license": "MIT",
+    "license": "(Apache-2.0 WITH LLVM-exception) AND (MIT OR NCSA) AND MIT",
     "description": "Linux arm64 (musl) addon of @crossbind/port-expat-node, which npm installs on a matching machine.",
-    "private": true,
     "os": [
         "linux"
     ],
@@ -18,6 +17,10 @@
     ],
     "main": "expat-node.linuxmusl-arm64.node",
     "files": [
-        "expat-node.linuxmusl-arm64.node"
-    ]
+        "expat-node.linuxmusl-arm64.node",
+        "sbom.cdx.json"
+    ],
+    "scripts": {
+        "prepack": "node ../../../scripts/check-node-package.mjs"
+    }
 }

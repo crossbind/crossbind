@@ -5,7 +5,18 @@ import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { packCrossbind, packWorkspacePackage, smokeTestCrossbindTarball } from './package-artifact.mjs';
-import { RUNNERS, multiPlatformBuildArgs, validateWorkspaceReleasePlan } from './workspace-release.mjs';
+import { RUNNERS, findBuildManifests, multiPlatformBuildArgs, validateWorkspaceReleasePlan } from './workspace-release.mjs';
+import {
+    NODE_RUNNER_BUILDS,
+    bridgeStateDigest,
+    changedBridgeState,
+    missingDists,
+    nodeProjectPaths,
+    packBridgeState,
+    restoreBridgeState,
+    unpackDists,
+    variantTarballs,
+} from './node-packages.mjs';
 import { writeJson } from './release-lib.mjs';
 
 const REPOSITORY_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
@@ -54,6 +65,39 @@ for (const name of plan.multiPlatform) {
             fs.cpSync(path.join(packageRoot, entry.name), path.join(stagingRoot, entry.name), { recursive: true });
         }
     }
+}
+
+const nodeBuild = NODE_RUNNER_BUILDS[runner];
+if (nodeBuild) {
+    const inputRoot = valueOf('--input-root');
+    const inputs = (inputRoot ? findBuildManifests(path.resolve(inputRoot)) : []).map(({ runner: from, directory }) => ({
+        directory,
+        artifacts: JSON.parse(fs.readFileSync(path.join(directory, `build-${from}.json`), 'utf8')).artifacts,
+    }));
+    const projectPaths = nodeProjectPaths(buildOrder, workspace);
+    unpackDists({ root, tarballs: variantTarballs(inputs, workspace, nodeBuild.dists) });
+    const missing = missingDists(root, projectPaths, nodeBuild.dists);
+    if (missing.length) throw new Error(`[${runner}] no tarball of this train brought the dist of ${missing.join(', ')}.`);
+    if (valueOf('--bridges')) restoreBridgeState({ root, inputDir: path.resolve(valueOf('--bridges')) });
+    const handedOver = valueOf('--bridges') ? bridgeStateDigest(root, projectPaths) : null;
+    for (const projectPath of projectPaths) {
+        const projectDir = path.join(root, projectPath);
+        process.stdout.write(`[${runner}] build ${projectPath} for ${nodeBuild.platforms.join(', ')}\n`);
+        execFileSync(
+            'pnpm',
+            ['--dir', projectDir, 'exec', 'crossbind', 'build', '-p', nodeBuild.platforms.join(','), '-e', 'node', '-b', 'release'],
+            {
+                cwd: root,
+                stdio: 'inherit',
+            },
+        );
+        execFileSync(process.execPath, [path.join(root, 'scripts', 'stage-node-addons.mjs')], { cwd: projectDir, stdio: 'inherit' });
+    }
+    // A dependency bridge crossbind cannot generate is only warned about and left out, so any change shows a
+    // bridge this runner did not take from the Linux job.
+    const changed = handedOver ? changedBridgeState(handedOver, bridgeStateDigest(root, projectPaths)) : [];
+    if (changed.length) throw new Error(`[${runner}] the build changed bridges handed over by the Linux job: ${changed.slice(0, 5).join(', ')}`);
+    if (valueOf('--bridges-out')) packBridgeState({ root, projectPaths, outputDir: path.resolve(valueOf('--bridges-out')) });
 }
 
 const artifacts = [];

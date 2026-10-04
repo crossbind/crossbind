@@ -66,7 +66,10 @@ function fixtureRepository(packages, { trainVersion } = {}) {
 
 test('the real workspace is classified into publishable Linux, macOS and assembled packages', () => {
     const packages = discoverPublishablePackages(ROOT);
-    assert.equal(packages.length, 172);
+    assert.equal(packages.length, 316);
+    assert.equal(packages.find((candidate) => candidate.name === '@crossbind/port-zlib-node').buildKind, 'node');
+    assert.equal(packages.find((candidate) => candidate.name === '@crossbind/port-zlib-node-linuxmusl-x64').buildKind, 'node');
+    assert.equal(packages.find((candidate) => candidate.name === '@crossbind/port-zlib-node-darwin-arm64').buildKind, 'node-macos');
     assert.equal(packages.find((candidate) => candidate.name === '@crossbind/port-zlib-darwin').buildKind, 'macos');
     assert.equal(packages.find((candidate) => candidate.name === '@crossbind/port-zlib-linux').buildKind, 'linux-native');
     assert.equal(packages.find((candidate) => candidate.name === '@crossbind/port-zlib-linuxmusl').buildKind, 'linux-native');
@@ -96,6 +99,108 @@ test('Linux and Windows Node addon packages build in shards of their own in the 
     assert.equal(classifyBuild(lifecycle('crossbind build -p linuxmusl')), 'linux-native');
     assert.equal(classifyBuild(lifecycle('crossbind build -p win32')), 'win32-native');
     assert.equal(classifyBuild(lifecycle('node build.mjs')), 'linux');
+});
+
+// A port family's platform packages and its ready-made Node packages, which link them.
+const nodeFamily = (family, { variantVersion, nodeVersion }) => {
+    const variants = ['darwin', 'linux', 'linuxmusl', 'win32'].map((platform) => ({
+        name: `@crossbind/port-${family}-${platform}`,
+        version: variantVersion,
+        path: `ports/${family}/${platform}`,
+        manifest: { scripts: { prepublishOnly: `crossbind build -p ${platform}` } },
+    }));
+    const name = `@crossbind/port-${family}-node`;
+    const addon = (platform, arch, os, libc) => ({
+        name: `${name}-${platform}-${arch}`,
+        version: nodeVersion,
+        path: `ports/${family}/node-${platform}-${arch}`,
+        manifest: { os: [os], cpu: [arch], ...(libc ? { libc: [libc] } : {}), main: `${family}-node.${platform}-${arch}.node` },
+    });
+    const addons = [
+        addon('darwin', 'arm64', 'darwin'),
+        addon('linux', 'x64', 'linux', 'glibc'),
+        addon('linuxmusl', 'x64', 'linux', 'musl'),
+        addon('win32', 'x64', 'win32'),
+    ];
+    const bindings = {
+        name,
+        version: nodeVersion,
+        path: `ports/${family}/node`,
+        manifest: {
+            optionalDependencies: Object.fromEntries(addons.map((entry) => [entry.name, 'workspace:*'])),
+            devDependencies: Object.fromEntries(variants.map((entry) => [entry.name, 'workspace:^'])),
+        },
+    };
+    return { variants, node: [bindings, ...addons] };
+};
+
+test('a ready-made Node package builds after the Linux job, and its macOS addons on the macOS runner after that', () => {
+    const [bindings, darwin, linux, linuxmusl, win32] = nodeFamily('zlib', { variantVersion: '1.0.0', nodeVersion: '1.0.0' }).node;
+    const classify = (candidate) => classifyBuild({ ...candidate, manifestPath: `${candidate.path}/package.json` });
+
+    assert.equal(classify(bindings), 'node');
+    assert.equal(classify(linux), 'node');
+    assert.equal(classify(linuxmusl), 'node');
+    assert.equal(classify(win32), 'node');
+    assert.equal(classify(darwin), 'node-macos');
+});
+
+test('a train with ready-made Node packages builds the platform packages they link in the same train', async () => {
+    const { variants, node } = nodeFamily('zlib', { variantVersion: '2.0.0-beta.2', nodeVersion: '2.0.0-beta.2' });
+    const root = fixtureRepository([...variants, ...node]);
+
+    const plan = await buildWorkspaceReleasePlan({
+        root,
+        channel: 'beta',
+        gitCommit: COMMIT,
+        registry: registryWith(Object.fromEntries([...variants, ...node].map((candidate) => [candidate.name, { channelVersion: '2.0.0-beta.1' }]))),
+    });
+
+    assert.deepEqual(plan.buildOrderByRunner.node.sort(), [
+        '@crossbind/port-zlib-node',
+        '@crossbind/port-zlib-node-linux-x64',
+        '@crossbind/port-zlib-node-linuxmusl-x64',
+        '@crossbind/port-zlib-node-win32-x64',
+    ]);
+    assert.deepEqual(plan.buildOrderByRunner['node-macos'], ['@crossbind/port-zlib-node-darwin-arm64']);
+    assert.deepEqual(plan.linuxShards, ['linux-native', 'win32-native']);
+    assert.deepEqual(plan.buildOrderByRunner.macos, ['@crossbind/port-zlib-darwin']);
+    fs.rmSync(root, { recursive: true, force: true });
+});
+
+test('a train refuses ready-made Node packages without the platform packages they link from its tarballs', async () => {
+    const { variants, node } = nodeFamily('zlib', { variantVersion: '2.0.0-beta.1', nodeVersion: '2.0.0-beta.2' });
+    const root = fixtureRepository([...variants, ...node], { trainVersion: '2.0.0-beta.2' });
+    const published = { channelVersion: '2.0.0-beta.1', exactVersion: '2.0.0-beta.1' };
+
+    await assert.rejects(
+        buildWorkspaceReleasePlan({
+            root,
+            channel: 'beta',
+            gitCommit: COMMIT,
+            registry: registryWith({
+                ...Object.fromEntries(variants.map((candidate) => [candidate.name, published])),
+                ...Object.fromEntries(node.map((candidate) => [candidate.name, { channelVersion: '2.0.0-beta.1' }])),
+            }),
+        }),
+        /@crossbind\/port-zlib-node links @crossbind\/port-zlib-darwin, @crossbind\/port-zlib-linux, @crossbind\/port-zlib-linuxmusl, @crossbind\/port-zlib-win32/,
+    );
+    fs.rmSync(root, { recursive: true, force: true });
+});
+
+test('a writing train refuses a package name npm has never seen, and a dry run lists it', async () => {
+    const root = fixtureRepository([{ name: '@crossbind/fixture-new', version: '2.0.0-beta.2', path: 'core/fixture-new', manifest: {} }]);
+    const registry = registryWith({ '@crossbind/fixture-new': { exists: false, exactVersion: null, channelVersion: null, provenanceCommit: null } });
+
+    await assert.rejects(
+        buildWorkspaceReleasePlan({ root, channel: 'beta', gitCommit: COMMIT, registry, refuseUnpublishedNames: true }),
+        /@crossbind\/fixture-new[\s\S]*bootstrap-npm-packages\.mjs --apply/,
+    );
+    const logs = [];
+    const plan = await buildWorkspaceReleasePlan({ root, channel: 'beta', gitCommit: COMMIT, registry, log: (message) => logs.push(message) });
+    assert.equal(plan.packageCount, 1);
+    assert.match(logs.join('\n'), /npm has never published[\s\S]*@crossbind\/fixture-new/);
+    fs.rmSync(root, { recursive: true, force: true });
 });
 
 // A build makes binaries only for the runtime environments it names, and the multi-platform

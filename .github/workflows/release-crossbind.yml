@@ -33,6 +33,9 @@ jobs:
             hasLinux: ${{ steps.plan.outputs.hasLinux }}
             linuxShards: ${{ steps.plan.outputs.linuxShards }}
             hasMacos: ${{ steps.plan.outputs.hasMacos }}
+            hasNode: ${{ steps.plan.outputs.hasNode }}
+            hasNodeMacos: ${{ steps.plan.outputs.hasNodeMacos }}
+            verifyNodeVersions: ${{ steps.plan.outputs.verifyNodeVersions }}
             hasCrossbind: ${{ steps.plan.outputs.hasCrossbind }}
         steps:
             - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -65,7 +68,7 @@ jobs:
               id: plan
               run: |
                   args=()
-                  if [ "${{ inputs.dry_run }}" != "true" ]; then args+=(--require-changes); fi
+                  if [ "${{ inputs.dry_run }}" != "true" ]; then args+=(--require-changes --require-bootstrapped); fi
                   node scripts/release/plan-workspace-release.mjs \
                     --channel "${{ inputs.channel }}" \
                     --output "$RUNNER_TEMP/workspace-release-plan.json" \
@@ -122,8 +125,9 @@ jobs:
                     --runner "${{ matrix.shard }}" \
                     --plan "$RUNNER_TEMP/workspace-release-plan.json" \
                     --artifact-dir "$RUNNER_TEMP/workspace-release-${{ matrix.shard }}"
+            # A dry run keeps them too: the ready-made Node packages build from them, and the train is
+            # assembled and verified before only the publish job is skipped.
             - name: Preserve exact Linux artifacts for the coordinator
-              if: ${{ !inputs.dry_run }}
               uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
               with:
                   name: workspace-release-linux-${{ matrix.shard }}-${{ github.sha }}
@@ -161,12 +165,131 @@ jobs:
                     --plan "$RUNNER_TEMP/workspace-release-plan.json" \
                     --artifact-dir "$RUNNER_TEMP/workspace-release-macos"
             - name: Preserve exact macOS artifacts for the coordinator
-              if: ${{ !inputs.dry_run }}
               uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
               with:
                   name: workspace-release-macos-${{ github.sha }}
                   if-no-files-found: error
                   path: ${{ runner.temp }}/workspace-release-macos
+                  retention-days: 1
+
+    build_node:
+        name: Build ready-made Node packages
+        needs:
+            - plan
+            - build_linux
+        # The plan refuses a train with ready-made Node packages but not the platform packages they link, so
+        # the Linux job must have run.
+        if: >-
+            ${{ !cancelled() && needs.plan.result == 'success' && needs.plan.outputs.packageCount != '0' &&
+            needs.plan.outputs.hasNode == 'true' && needs.build_linux.result == 'success' }}
+        runs-on: ubuntu-24.04
+        steps:
+            - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+              with:
+                  ref: ${{ github.sha }}
+                  fetch-depth: 0
+            - name: Install pnpm
+              uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+            - name: Use Node.js
+              uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+              with:
+                  node-version-file: .nvmrc
+                  cache: pnpm
+            - name: Install dependencies
+              run: pnpm install --frozen-lockfile
+            - name: Restore the approved plan
+              env:
+                  RELEASE_PLAN_GZIP_BASE64: ${{ needs.plan.outputs.planGzipBase64 }}
+              run: node scripts/release/restore-workspace-plan.mjs "$RUNNER_TEMP/workspace-release-plan.json"
+            - name: Restore the Linux and Windows packages the addons link
+              uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+              with:
+                  pattern: workspace-release-linux-*-native-${{ github.sha }}
+                  path: ${{ runner.temp }}/workspace-release-input
+            - name: Build the Linux and Windows addons and the packages of the bindings
+              run: |
+                  node scripts/release/build-workspace-artifacts.mjs \
+                    --runner node \
+                    --plan "$RUNNER_TEMP/workspace-release-plan.json" \
+                    --input-root "$RUNNER_TEMP/workspace-release-input" \
+                    --bridges-out "$RUNNER_TEMP/workspace-release-node-bridges" \
+                    --artifact-dir "$RUNNER_TEMP/workspace-release-node"
+            - name: Preserve exact Node artifacts for the coordinator
+              uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+              with:
+                  name: workspace-release-node-${{ github.sha }}
+                  if-no-files-found: error
+                  path: ${{ runner.temp }}/workspace-release-node
+                  retention-days: 1
+            # The macOS runner has no Docker for SWIG, so its addons compile these bridges (crossbind state
+            # lives in .crossbind directories).
+            - name: Hand the bridges to the macOS addons
+              if: ${{ needs.plan.outputs.hasNodeMacos == 'true' }}
+              uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+              with:
+                  name: workspace-release-node-bridges-${{ github.sha }}
+                  if-no-files-found: error
+                  include-hidden-files: true
+                  path: ${{ runner.temp }}/workspace-release-node-bridges
+                  retention-days: 1
+
+    build_node_macos:
+        name: Build the macOS addons of ready-made Node packages
+        needs:
+            - plan
+            - build_macos
+            - build_node
+        if: >-
+            ${{ !cancelled() && needs.plan.result == 'success' && needs.plan.outputs.packageCount != '0' &&
+            needs.plan.outputs.hasNodeMacos == 'true' && needs.build_macos.result == 'success' && needs.build_node.result == 'success' }}
+        runs-on: macos-15
+        steps:
+            - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+              with:
+                  ref: ${{ github.sha }}
+                  fetch-depth: 0
+            - name: Install pnpm
+              uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+            - name: Use Node.js
+              uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+              with:
+                  node-version-file: .nvmrc
+                  cache: pnpm
+            - name: Install dependencies
+              run: pnpm install --frozen-lockfile
+            - name: Restore the approved plan
+              env:
+                  RELEASE_PLAN_GZIP_BASE64: ${{ needs.plan.outputs.planGzipBase64 }}
+              run: node scripts/release/restore-workspace-plan.mjs "$RUNNER_TEMP/workspace-release-plan.json"
+            - name: Restore the macOS packages the addons link
+              uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+              with:
+                  name: workspace-release-macos-${{ github.sha }}
+                  path: ${{ runner.temp }}/workspace-release-input/workspace-release-macos-${{ github.sha }}
+            - name: Restore the Linux packages whose headers the bridges were read from
+              uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+              with:
+                  name: workspace-release-linux-linux-native-${{ github.sha }}
+                  path: ${{ runner.temp }}/workspace-release-input/workspace-release-linux-linux-native-${{ github.sha }}
+            - name: Restore the bridges the Linux job generated
+              uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+              with:
+                  name: workspace-release-node-bridges-${{ github.sha }}
+                  path: ${{ runner.temp }}/workspace-release-node-bridges
+            - name: Build the macOS addons
+              run: |
+                  node scripts/release/build-workspace-artifacts.mjs \
+                    --runner node-macos \
+                    --plan "$RUNNER_TEMP/workspace-release-plan.json" \
+                    --input-root "$RUNNER_TEMP/workspace-release-input" \
+                    --bridges "$RUNNER_TEMP/workspace-release-node-bridges" \
+                    --artifact-dir "$RUNNER_TEMP/workspace-release-node-macos"
+            - name: Preserve exact macOS Node artifacts for the coordinator
+              uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+              with:
+                  name: workspace-release-node-macos-${{ github.sha }}
+                  if-no-files-found: error
+                  path: ${{ runner.temp }}/workspace-release-node-macos
                   retention-days: 1
 
     assemble:
@@ -175,10 +298,14 @@ jobs:
             - plan
             - build_linux
             - build_macos
+            - build_node
+            - build_node_macos
         if: >-
-            ${{ always() && !inputs.dry_run && needs.plan.result == 'success' && needs.plan.outputs.packageCount != '0' &&
+            ${{ always() && needs.plan.result == 'success' && needs.plan.outputs.packageCount != '0' &&
             (needs.build_linux.result == 'success' || needs.build_linux.result == 'skipped') &&
-            (needs.build_macos.result == 'success' || needs.build_macos.result == 'skipped') }}
+            (needs.build_macos.result == 'success' || needs.build_macos.result == 'skipped') &&
+            (needs.build_node.result == 'success' || needs.build_node.result == 'skipped') &&
+            (needs.build_node_macos.result == 'success' || needs.build_node_macos.result == 'skipped') }}
         runs-on: ubuntu-24.04
         outputs:
             crossbindTarball: ${{ steps.assemble.outputs.crossbindTarball }}
@@ -212,6 +339,18 @@ jobs:
               with:
                   name: workspace-release-macos-${{ github.sha }}
                   path: ${{ runner.temp }}/workspace-release-input/workspace-release-macos-${{ github.sha }}
+            - name: Restore ready-made Node artifacts
+              if: ${{ needs.plan.outputs.hasNode == 'true' }}
+              uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+              with:
+                  name: workspace-release-node-${{ github.sha }}
+                  path: ${{ runner.temp }}/workspace-release-input/workspace-release-node-${{ github.sha }}
+            - name: Restore the macOS addons of ready-made Node packages
+              if: ${{ needs.plan.outputs.hasNodeMacos == 'true' }}
+              uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+              with:
+                  name: workspace-release-node-macos-${{ github.sha }}
+                  path: ${{ runner.temp }}/workspace-release-input/workspace-release-node-macos-${{ github.sha }}
             - name: Refuse incomplete trains and assemble multi-platform tarballs
               id: assemble
               run: |
@@ -234,16 +373,99 @@ jobs:
                   path: ${{ runner.temp }}/workspace-release-artifacts
                   retention-days: 1
 
+    # The exact tarballs installed from a local registry on every platform an addon targets, with each
+    # Node.js version of releases/npm and .nvmrc (VERIFY_NODE_VERSION_FILES), before anything is published.
+    verify_node:
+        name: Verify ready-made Node packages on ${{ matrix.target }} (${{ matrix.node-version-file }})
+        needs:
+            - plan
+            - assemble
+        if: ${{ !cancelled() && needs.plan.outputs.hasNode == 'true' && needs.assemble.result == 'success' }}
+        strategy:
+            fail-fast: false
+            matrix:
+                node-version-file: [.nvmrc, releases/npm/node-22.version]
+                target: [linux-x64, linux-arm64, darwin-arm64, darwin-x64, win32-x64, win32-arm64]
+                include:
+                    - target: linux-x64
+                      runner: ubuntu-24.04
+                    - target: linux-arm64
+                      runner: ubuntu-24.04-arm
+                    - target: darwin-arm64
+                      runner: macos-15
+                    - target: darwin-x64
+                      runner: macos-15-intel
+                    - target: win32-x64
+                      runner: windows-2025
+                    - target: win32-arm64
+                      runner: windows-11-arm
+        runs-on: ${{ matrix.runner }}
+        steps:
+            - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+              with:
+                  ref: ${{ github.sha }}
+            - name: Use Node.js
+              uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+              with:
+                  node-version-file: ${{ matrix.node-version-file }}
+            - name: Restore the complete approved train
+              uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+              with:
+                  name: workspace-release-train-${{ github.sha }}
+                  path: ${{ runner.temp }}/workspace-release-artifacts
+            - name: Install every package from its tarball and run its checks
+              shell: bash
+              run: node scripts/release/verify-node-packages.mjs --artifact-dir "$RUNNER_TEMP/workspace-release-artifacts"
+
+    # musl Linux runs in the official Node.js Alpine image of each verified version.
+    verify_node_musl:
+        name: Verify ready-made Node packages on ${{ matrix.target }} (Node.js ${{ matrix.node }})
+        needs:
+            - plan
+            - assemble
+        if: ${{ !cancelled() && needs.plan.outputs.hasNode == 'true' && needs.assemble.result == 'success' }}
+        strategy:
+            fail-fast: false
+            matrix:
+                node: ${{ fromJSON(needs.plan.outputs.verifyNodeVersions) }}
+                target: [linuxmusl-x64, linuxmusl-arm64]
+                include:
+                    - target: linuxmusl-x64
+                      runner: ubuntu-24.04
+                    - target: linuxmusl-arm64
+                      runner: ubuntu-24.04-arm
+        runs-on: ${{ matrix.runner }}
+        steps:
+            - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+              with:
+                  ref: ${{ github.sha }}
+            - name: Restore the complete approved train
+              uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+              with:
+                  name: workspace-release-train-${{ github.sha }}
+                  path: ${{ runner.temp }}/workspace-release-artifacts
+            - name: Install every package from its tarball and run its checks in Alpine
+              run: |
+                  docker run --rm \
+                    -v "$GITHUB_WORKSPACE:/repository:ro" \
+                    -v "$RUNNER_TEMP/workspace-release-artifacts:/artifacts:ro" \
+                    "node:${{ matrix.node }}-alpine" \
+                    node /repository/scripts/release/verify-node-packages.mjs --artifact-dir /artifacts
+
     publish:
         name: Publish exact npm tarballs
         needs:
             - plan
             - assemble
+            - verify_node
+            - verify_node_musl
         # A train without macOS (or Linux) packages skips that build job; the status function keeps
         # GitHub from applying success() over the whole chain and silently skipping publication.
         if: >-
             ${{ !cancelled() && !inputs.dry_run && needs.plan.result == 'success' && needs.assemble.result == 'success' &&
-            needs.plan.outputs.packageCount != '0' }}
+            needs.plan.outputs.packageCount != '0' &&
+            (needs.verify_node.result == 'success' || needs.verify_node.result == 'skipped') &&
+            (needs.verify_node_musl.result == 'success' || needs.verify_node_musl.result == 'skipped') }}
         runs-on: ubuntu-24.04
         environment: npm-release
         permissions:

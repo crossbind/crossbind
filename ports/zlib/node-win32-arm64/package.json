@@ -4,9 +4,8 @@
     "nativeVersion": "1.3.2",
     "homepage": "https://github.com/crossbind/crossbind/tree/main/ports/zlib#readme",
     "repository": "https://github.com/crossbind/crossbind.git",
-    "license": "Zlib",
+    "license": "(Apache-2.0 WITH LLVM-exception) AND (MIT OR NCSA) AND LicenseRef-MinGW-w64-runtime AND MIT AND Zlib",
     "description": "Windows arm64 addon of @crossbind/port-zlib-node, which npm installs on a matching machine.",
-    "private": true,
     "os": [
         "win32"
     ],
@@ -15,6 +14,10 @@
     ],
     "main": "zlib-node.win32-arm64.node",
     "files": [
-        "zlib-node.win32-arm64.node"
-    ]
+        "zlib-node.win32-arm64.node",
+        "sbom.cdx.json"
+    ],
+    "scripts": {
+        "prepack": "node ../../../scripts/check-node-package.mjs"
+    }
 }

@@ -56,7 +56,8 @@ for (const pkgDir of packageDirs) {
 
     let files;
     try {
-        const raw = execFileSync('npm', ['pack', '--dry-run', '--json'], {
+        // npm runs prepack even for a dry run, and a ready-made Node package's prepack refuses a fresh checkout.
+        const raw = execFileSync('npm', ['pack', '--dry-run', '--json', '--ignore-scripts'], {
             cwd: pkgDir,
             encoding: 'utf8',
             stdio: ['ignore', 'pipe', 'ignore'],
@@ -97,6 +98,19 @@ for (const pkgDir of packageDirs) {
         failures += 1;
         console.error(`K5 violation in ${manifest.name}: tarball ships build metadata that names the build machine:`);
         for (const file of unrelocated) console.error(`  ${file}`);
+    }
+
+    // A ready-made Node package ships addons that link every component statically, so its license is
+    // the compound expression scripts/stage-node-addons.mjs derives; its LICENSE and SBOM are build
+    // outputs, which scripts/check-node-package.mjs checks when the train packs it.
+    const isNodePackage =
+        (manifest.os && manifest.main?.endsWith('.node')) ||
+        Object.keys(manifest.optionalDependencies ?? {}).some((dependency) => dependency.startsWith(`${manifest.name}-`));
+    if (isNodePackage && !manifest.license?.includes(' AND ')) {
+        failures += 1;
+        console.error(
+            `K4 violation in ${manifest.name}: license is not the derived compound expression (run scripts/stage-node-addons.mjs in its node package)`,
+        );
     }
 
     // Provenance and the SBOM are build outputs: a fresh checkout has no dist to judge, so

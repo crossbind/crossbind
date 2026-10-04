@@ -4,9 +4,8 @@
     "nativeVersion": "4.2.0",
     "homepage": "https://github.com/crossbind/crossbind/tree/main/ports/lerc#readme",
     "repository": "https://github.com/crossbind/crossbind.git",
-    "license": "Apache-2.0",
+    "license": "(Apache-2.0 WITH LLVM-exception) AND (MIT OR NCSA) AND Apache-2.0 AND MIT",
     "description": "Linux arm64 (glibc) addon of @crossbind/port-lerc-node, which npm installs on a matching machine.",
-    "private": true,
     "os": [
         "linux"
     ],
@@ -18,6 +17,10 @@
     ],
     "main": "lerc-node.linux-arm64.node",
     "files": [
-        "lerc-node.linux-arm64.node"
-    ]
+        "lerc-node.linux-arm64.node",
+        "sbom.cdx.json"
+    ],
+    "scripts": {
+        "prepack": "node ../../../scripts/check-node-package.mjs"
+    }
 }
