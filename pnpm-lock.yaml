@@ -290,6 +290,15 @@ importers:
         specifier: workspace:^
         version: link:../../core/crossbind
 
+  e2e/backend-nodejs-native-conan:
+    devDependencies:
+      '@crossbind/core-embind-napi':
+        specifier: workspace:^
+        version: link:../../core/embind-napi
+      crossbind:
+        specifier: workspace:^
+        version: link:../../core/crossbind
+
   e2e/cli-native:
     dependencies:
       '@crossbind/port-zlib-darwin':

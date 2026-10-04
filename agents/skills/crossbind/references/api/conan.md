@@ -102,6 +102,11 @@ glibc and musl builds share every Conan setting, so crossbind keeps them apart a
 own. A package's symbols stay inside the addon, as a port's do: Node.js exports its own zlib and
 OpenSSL, and the addon's copies do not trade calls with them.
 
+`pnpm --filter @crossbind/e2e-backend-nodejs-native-conan e2e:prod` runs the fixture's glibc addon
+on Debian, its musl addon on Alpine and its macOS addon on the host (after `build:darwin`), and
+reads each Windows addon for the DLLs it loads and the symbols it exports; CI also runs the Windows
+addons on x64 and arm64 Windows.
+
 ## What a build does
 
 1. When a build starts (`buildStart` in Vite and Rollup, `beforeRun` and `watchRun` in Webpack and
