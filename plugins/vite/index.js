@@ -92,7 +92,8 @@ const viteCrossbindPlugin = (options) => {
                 });
             },
             async handleHotUpdate({ file, server }) {
-                if (file.startsWith(state.config.paths.build)) {
+                // The cache holds what crossbind writes itself, staged Conan headers among it.
+                if (file.startsWith(state.config.paths.build) || file.startsWith(state.config.paths.cache)) {
                     return;
                 }
                 if (headerRegex.test(file)) {

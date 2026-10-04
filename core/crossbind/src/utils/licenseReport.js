@@ -18,6 +18,12 @@ export function validateSpdx(expression) {
     }
 }
 
+// Longer than any run of backticks in the text, which would otherwise close the block early.
+function fenceFor(text) {
+    const longest = [...text.matchAll(/`+/g)].reduce((most, [run]) => Math.max(most, run.length), 0);
+    return '`'.repeat(Math.max(3, longest + 1));
+}
+
 export function formatNoticeSections(rows) {
     return [...rows]
         .sort((a, b) => a.name.localeCompare(b.name))
@@ -29,7 +35,10 @@ export function formatNoticeSections(rows) {
             if (row.licenseSelected) lines.push(`- license election: ${row.licenseSelected} (declared: ${row.licenseDeclared})`);
             else if (/\bOR\b/.test(row.license || '')) lines.push(`- no license election recorded; the declared expression applies${row.licenseText ? ' and all texts are included' : ' (texts linked above)'}`);
             if (row.licenseNotes) lines.push(`- note: ${row.licenseNotes}`);
-            if (row.licenseText) lines.push('', '```', row.licenseText.trim(), '```');
+            if (row.licenseText) {
+                const fence = fenceFor(row.licenseText);
+                lines.push('', fence, row.licenseText.trim(), fence);
+            }
             return lines.join('\n');
         });
 }
@@ -84,7 +93,7 @@ export function formatCycloneDxSbom(rows, target = {}) {
                 type: 'library',
                 name: row.name,
                 ...(row.nativeVersion ? { version: row.nativeVersion } : {}),
-                ...(row.nativeVersion ? { purl: `pkg:generic/${row.name}@${row.nativeVersion}` } : {}),
+                ...(row.nativeVersion ? { purl: row.purl ?? `pkg:generic/${row.name}@${row.nativeVersion}` } : {}),
                 ...(row.license ? { licenses: [{ expression: row.license }] } : {}),
                 ...(row.sha256 ? { hashes: [{ alg: 'SHA-256', content: row.sha256 }] } : {}),
                 ...(row.sourceUrl ? { externalReferences: [{ type: 'distribution', url: row.sourceUrl }] } : {}),

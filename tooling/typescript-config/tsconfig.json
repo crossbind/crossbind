@@ -2,10 +2,10 @@
 // Extend from your tsconfig (TS 5.5+; array form when you already extend another config):
 //   { "extends": "@crossbind/typescript-config" }
 // ${configDir} resolves against YOUR config's directory, not this package.
-// Note: a project-defined "include" overrides the one below - keep the glob in yours then.
+// Note: a project-defined "include" overrides the one below - keep the globs in yours then.
 {
     "compilerOptions": {
         "rootDirs": ["${configDir}", "${configDir}/.crossbind/types"]
     },
-    "include": ["${configDir}/.crossbind/rust-crates/types/**/*.d.ts"]
+    "include": ["${configDir}/.crossbind/rust-crates/types/**/*.d.ts", "${configDir}/.crossbind/conan/types/**/*.d.ts"]
 }

@@ -26,6 +26,7 @@ import systemKeys from './utils/systemKeys.js';
 import logger from './utils/logger.js';
 import { getDockerImage, getDockerContainerName } from './utils/pullDockerImage.js';
 import { cargoHome } from './utils/runCargo.js';
+import { conanRoot } from './utils/runConan.js';
 import { cleanDepsCache } from './utils/dependencyRebuild.js';
 import collectLicenseRows from './actions/licenses.js';
 import { formatNoticesMarkdown, formatCycloneDxSbom, validateSpdx } from './utils/licenseReport.js';
@@ -200,13 +201,17 @@ imageArgument(commandDocker.command('create').description('create docker contain
     .action((image) => {
         // Google ships the linux NDK for x86_64 only, so an android container is always amd64.
         const platform = image === 'android' ? 'linux/amd64' : undefined;
+        // Docker on Linux makes a missing mount source owned by root, which the user's builds cannot write.
+        [cargoHome(), conanRoot()].forEach((dir) => fs.mkdirSync(dir, { recursive: true }));
         dockerExec([
             'run', '-dit',
             ...(platform ? ['--platform', platform] : []),
             '--name', dockerContainerName(image),
             '-v', `${state.config.paths.base}:/tmp/crossbind/live`,
-            // Cargo's registry cache, shared with host builds and with every other project.
+            // Cargo's registry cache, shared with host builds and with every other project, and the
+            // Conan store and work directories every other container build uses.
             '-v', `${cargoHome()}:/var/cache/crossbind/cargo`,
+            '-v', `${conanRoot()}:/var/cache/crossbind/conan`,
             getDockerImage(image, platform),
             'bash',
         ]);

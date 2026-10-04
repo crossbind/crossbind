@@ -1,0 +1,95 @@
+# ADR-0013: Build ConanCenter packages behind a `conan:` header scheme
+
+- **Status:** Proposed
+- **Date:** 2026-10-03
+- **Affects:** `getDependFilePath.js`, bundler plugins (vite/rollup/webpack), the top-level `conanDependencies` map, `.crossbind/conan/`, `tooling/docker/base.Dockerfile`, `runConan.js`
+
+## Context
+
+crossbind ships 16 ports, each a curated recipe with platform variants published to npm.
+ConanCenter has about 1,950 recipes for C and C++ packages, each with pinned sources (URL and
+SHA-256), a license and its own build logic, and Conan 2.18 and later cross-build for Emscripten
+(`compiler=emcc`). `cargo:` (ADR-0007) already lets an app import a crates.io crate directly. A C
+or C++ package needs no generated bridge: its headers bind through the same SWIG path as a port's.
+What was missing is the store: building the package with crossbind's toolchain, and laying it out
+where the dependency machinery looks.
+
+The constraints:
+
+- Every archive linked into one wasm module must share exception handling, SIMD, thread and
+  memory64 flags, and emcc promises no ABI between versions.
+- ConanCenter publishes no WebAssembly binaries, so every package builds from source once.
+- Conan takes its home from `CONAN_HOME` or a `.conanrc` above the working directory, and its cache
+  takes one writer at a time.
+- A Conan home holds code Conan runs (plugins, hooks) and the settings and remotes every recipe
+  obeys, and the recipes it builds can write to it. Everything `conan install` reports — names,
+  folders, libraries, licenses — is computed by recipe code.
+- SWIG reads a header's includes when it binds it, and caches an interface made without them.
+
+## Decision
+
+A top-level `conanDependencies` map declares packages, and `conan:<package>/<header>` imports a
+header of a declared package. Rules:
+
+- The scheme follows ADR-0007: an undeclared import fails, and only declared packages are
+  importable; a package another one requires still links.
+- crossbind writes the Conan host profile from its own toolchain: the emcc version read from the
+  emcc that runs Conan, `compiler.threads=posix` on `mt`, the flags of `archiveFlags.js` (the list
+  port and app archives use) in every flag conf and in the package id, and `*:shared=False`.
+- Conan runs where the build runs: in the toolchain image, which carries Conan 2.33 in a venv of
+  hash-pinned wheels, behind an allowlisted environment and a lock around every install.
+- Every install gets a fresh work directory holding its inputs, its outputs and a Conan home of its
+  own, pinned by a `.conanrc` in the working directory and deleted with it. Only the package store
+  persists: `~/.crossbind/conan/store`, the one directory a run container mounts besides its work
+  directory. The project is not mounted. `RUNNER=LOCAL` keeps a store of its own, since conan runs
+  the recipes it finds in its store and containers write to theirs.
+- Everything the graph reports is checked before use: names, versions and library names must be
+  plain names, every path must resolve inside the package's own folder in the store, and links are
+  followed only within it. The manifest is checked again when state reads it.
+- Each package is staged as a port prebuilt under
+  `.crossbind/conan/packages/<package>/dist/prebuilt/<target>/` with a generated
+  `dist/prebuilt/CMakeLists.txt`, and joins the config as a dependency through a manifest that
+  state reads at load without running anything. The link, `isEnabled`, SWIG's target-neutral header
+  identity and the license rows then work unchanged.
+- Packages are installed when a build starts, before any header is bound, for release targets. A
+  stamp per target records the inputs (stage format, dependencies, profile, toolchain, `conan.lock`),
+  so an unchanged build runs no Conan.
+- `conan.lock` next to the config pins versions and recipe revisions; a new requirement extends it.
+- Web builds only, for now.
+
+## Consequences
+
+- **Positive** — about 1,950 recipes are reachable without writing a port. Pinned sources, licenses
+  and recipe revisions reach the SBOM. The binding layer serves C APIs directly and C++ through the
+  app's own headers, exceptions included.
+- **Negative** — a first build compiles every package from source, which takes seconds to minutes
+  per package. Recipes support Emscripten unevenly. Recipes run Python and build systems, which is
+  why they run in the image. The store they share is writable by every one of them, so a hostile
+  recipe can change packages other projects take from it later — the exposure cargo's shared
+  registry cache already has; a store per project would close it at the cost of rebuilding every
+  package per project. The images carry one more pinned toolchain (a 19 MB venv). WASI is out
+  of reach, since Conan has no WASI target; Android, iOS, Node.js addons and Metro are still to wire.
+
+## Alternatives considered
+
+- **Users run Conan and point crossbind at the output** — rejected: flags and toolchain versions
+  drift apart, which brings back the wasm exception-handling mismatch the shared flag list prevents.
+- **A bare `conan:<package>` with the headers listed in config** — rejected: a header in the
+  specifier mirrors the port header import and names its own origin.
+- **Conan's standalone executable instead of a venv in the image** — rejected: 70 MB with its own
+  Python, and without the license texts of most of what it bundles.
+- **Installing at state load** — rejected: commands that never build (`crossbind config`) would
+  start Docker. Build start reaches every bundler and the CLI.
+- **One shared home, or a read-only one baked into the image** — rejected: a shared home carries
+  whatever a recipe writes into it to every later install, and Conan opens its login store
+  (`<home>/.conan.db`) for writing on every run, so it cannot be mounted read-only. A home per run
+  needs no image change.
+- **Generating a port from a Conan recipe** — a different decision: ports stay the curated,
+  published packages.
+
+## See also
+
+- Related ADRs: ADR-0007 (cargo scheme), ADR-0009 (toolchain images)
+- Related code: `core/crossbind/src/utils/conan*.js`, `core/crossbind/src/utils/runConan.js`,
+  `core/crossbind/src/state/attachConanDependencies.js`, `core/crossbind/src/actions/prepareConanDependencies.js`,
+  `docs/api/conan.md`, `e2e/web-vite-conan`

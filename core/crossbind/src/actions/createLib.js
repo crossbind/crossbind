@@ -12,6 +12,7 @@ import logger from '../utils/logger.js';
 import { WASI_EMULATION_LIBS, WASI_LINK_LIBS, wasiCFlags, wasiCxxFlags } from '../utils/wasiToolchain.js';
 import { getFilesFingerprint, getContentHash } from '../utils/hash.js';
 import { withDependencyBridges } from '../utils/dependencyBridges.js';
+import { targetArchiveFlags } from '../utils/archiveFlags.js';
 
 const cpuCount = Math.max(1, os.cpus().length - 1);
 const sharedPlatforms = ['android'];
@@ -43,7 +44,12 @@ export default function createLib(target, fileType, options = {}) {
     // Config emccFlags feed compile-time state too (CROSSBIND_JSPI below), so a flag change must miss this cache.
     const configEmccFlags = getData('binary', target)?.emccFlags || [];
     const flagsFingerprintFile = `${libdir}/crossbind-emccflags.fingerprint`;
-    const flagsFingerprint = getContentHash(JSON.stringify(configEmccFlags));
+    // Conan packages are restaged in place, so the headers the sources compiled against change with them.
+    const conanInputs = Object.keys(state.config.conanDependencies ?? {}).length > 0 ? {
+        dependencies: state.config.conanDependencies,
+        refs: state.config.allDependencies.filter((d) => d.general.conan).map((d) => d.general.conan.ref),
+    } : null;
+    const flagsFingerprint = getContentHash(JSON.stringify(conanInputs ? [configEmccFlags, conanInputs] : configEmccFlags));
     const flagsChanged = !fs.existsSync(flagsFingerprintFile)
         || fs.readFileSync(flagsFingerprintFile, { encoding: 'utf8' }) !== flagsFingerprint;
 
@@ -106,23 +112,12 @@ export default function createLib(target, fileType, options = {}) {
         const extraLibs = getExtraLibs ? getExtraLibs(target) : [];
 
         triggerExtensions('createLib', 'setFlagWithBuildConfig', [buildEnv, cFlags, ldFlags]);
-        if (target.runtime === 'mt') {
-            cFlags.push('-pthread');
-            ldFlags.push('-pthread');
-        }
-
-        if (target.platform === 'wasm') {
-            cFlags.push('-msimd128');
-            ldFlags.push('-msimd128');
-        }
+        const archiveFlags = targetArchiveFlags(target);
+        cFlags.push(...archiveFlags);
+        ldFlags.push(...archiveFlags);
 
         if (isJspiTarget) {
             cFlags.push('-DCROSSBIND_JSPI');
-        }
-
-        if (target.platform === 'wasm' && target.arch === 'wasm64') {
-            cFlags.push('-sMEMORY64=1');
-            ldFlags.push('-sMEMORY64=1');
         }
 
         buildEnv.params.push('-e', `CFLAGS=${cFlags.join(' ')}`);
@@ -145,22 +140,11 @@ export default function createLib(target, fileType, options = {}) {
 
         triggerExtensions('createLib', 'setFlagWithoutBuildConfig', [buildEnv]);
 
-        if (target.runtime === 'mt') {
-            buildEnv.params.push('-e', `CFLAGS=-pthread`);
-            buildEnv.params.push('-e', `CXXFLAGS=-pthread`);
-            buildEnv.params.push('-e', `LDFLAGS=-pthread`);
-        }
-
-        if (target.platform === 'wasm') {
-            buildEnv.params.push('-e', `CFLAGS=-msimd128`);
-            buildEnv.params.push('-e', `CXXFLAGS=-msimd128`);
-            buildEnv.params.push('-e', `LDFLAGS=-msimd128`);
-        }
-
-        if (target.platform === 'wasm' && target.arch === 'wasm64') {
-            buildEnv.params.push('-e', `CFLAGS=-sMEMORY64=1`);
-            buildEnv.params.push('-e', `CXXFLAGS=-sMEMORY64=1`);
-            buildEnv.params.push('-e', `LDFLAGS=-sMEMORY64=1`);
+        const archiveFlags = targetArchiveFlags(target).join(' ');
+        if (archiveFlags) {
+            buildEnv.params.push('-e', `CFLAGS=${archiveFlags}`);
+            buildEnv.params.push('-e', `CXXFLAGS=${archiveFlags}`);
+            buildEnv.params.push('-e', `LDFLAGS=${archiveFlags}`);
         }
 
         if (isJspiTarget) {

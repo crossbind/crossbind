@@ -8,12 +8,13 @@ The single entry point for calling into your Wasm module from JavaScript. Produc
 
 ## Where it comes from
 
-With a bundler plugin (Vite, Rollup, Webpack, Rspack, Metro), import it from the header, `.rs` file or `cargo:` crate you already import; every generated module exports the same function:
+With a bundler plugin (Vite, Rollup, Webpack, Rspack, Metro), import it from the header, `.rs` file, `cargo:` crate or `conan:` header you already import; every generated module exports the same function:
 
 ```js
 import { initNative } from './native/native.h';
 import { initNative, Matrix } from './native/Matrix.h';
 import { Uuid } from 'cargo:uuid';
+import { zlibVersion } from 'conan:zlib/zlib.h';
 
 await initNative();
 ```

@@ -1,0 +1,7 @@
+# crossbind
+.crossbind
+test-results
+playwright-report
+
+node_modules
+dist

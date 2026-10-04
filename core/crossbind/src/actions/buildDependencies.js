@@ -14,6 +14,7 @@ import {
 } from '../utils/dependencyRebuild.js';
 import withDirLock from '../utils/dirLock.js';
 import { prepareRustSysroot } from '../utils/rustSysroot.js';
+import prepareConanDependencies from './prepareConanDependencies.js';
 import getAbsolutePath from '../utils/getAbsolutePath.js';
 import getCMakeListsFilePath from '../utils/getCMakeListsFilePath.js';
 import getParentPath from '../utils/getParentPath.js';
@@ -25,6 +26,7 @@ export default async function buildDependencies({ targetParams, rebuildOption })
     // sync cargo work downstream reads what it resolves. A project with nothing to rebuild still
     // needs its sysroot.
     await prepareRustSysroot(getBuildTargets(targetParams));
+    await prepareConanDependencies(getBuildTargets(targetParams));
     await buildMissingCargoDependencies(getBuildTargets(targetParams), targetParams);
 
     const rebuildDeps = getRebuildDeps(state.config.allDependencies, rebuildOption);

@@ -2,7 +2,7 @@
 
 import {
     state, createLib, createBridgeFile, buildWasm, getCrossbindScript, getRustJsScript, buildDependencies,
-    getDependFilePath, getTargetParams, getFilteredBuildTargets, isSourceNewer,
+    getDependFilePath, getTargetParams, getFilteredBuildTargets, isSourceNewer, prepareConanDependencies,
 } from 'crossbind';
 
 import fs from 'node:fs';
@@ -53,7 +53,8 @@ const rollupCrossbindPlugin = (options, bridges = []) => {
 
             return getCrossbindScript(buildTargetRelease, bridgeFile);
         },
-        buildStart() {
+        async buildStart() {
+            await prepareConanDependencies([buildTargetRelease]);
             const watch = (dirs) => {
                 dirs.forEach((dir) => {
                     const filesToWatch = fs.readdirSync(dir);

@@ -14,12 +14,17 @@
     {
       "source": "docs/api/README.md",
       "output": "api/README.md",
-      "sha256": "abfd7aa6df7d8a54b286f4b4b338669513fa460aaf78bcc0f203cbe7bfd4e56b"
+      "sha256": "7b424119160af0c815096db3d28068b40ee18abce64626cbdb4080239e4d3815"
     },
     {
       "source": "docs/api/build-state.md",
       "output": "api/build-state.md",
       "sha256": "1af6fb9becf2d33da3b2260ecbb01a5450fa6936b27740a99f2c39db50f7989d"
+    },
+    {
+      "source": "docs/api/conan.md",
+      "output": "api/conan.md",
+      "sha256": "c1228eea2ddb350412810c34cbcc9b3d63ef7bd3d7ee6a6a3343e1f650ce1394"
     },
     {
       "source": "docs/api/cpp-binding-rules.md",
@@ -34,7 +39,7 @@
     {
       "source": "docs/api/crossbind-config.md",
       "output": "api/crossbind-config.md",
-      "sha256": "522170db3835de8b205c075de279bc00bf1773599cbb6e8771db90dafc3afeff"
+      "sha256": "d102c96bacb78a64085c37d7905a8602d8fa99c109111d113af7d83d5db887cf"
     },
     {
       "source": "docs/api/filesystem.md",
@@ -44,12 +49,12 @@
     {
       "source": "docs/api/init.md",
       "output": "api/init.md",
-      "sha256": "dcb09824166e6d4e0f8fa9e652b1bc37dbd563a926daaf30ccb58f5bc8cc61e0"
+      "sha256": "cf87f687c4aa327ec85de69ed22ce776214e1a3cb8fcf1c78cd18a3030e41590"
     },
     {
       "source": "docs/api/lifecycle-and-types.md",
       "output": "api/lifecycle-and-types.md",
-      "sha256": "77d4851e1ec59ddf4aad182d2e2e7bc17099f882b87a391491e427e2296b4127"
+      "sha256": "1447553ee38e8c987d58e5bdb20d30fdd03df0b888d3d9346bc1006d705a2393"
     },
     {
       "source": "docs/api/native.md",
@@ -139,7 +144,7 @@
     {
       "source": "docs/playbooks/integration/webpack-rspack.md",
       "output": "integration/webpack-rspack.md",
-      "sha256": "3857c0e49a86b01d507b5cc00460566fdbcbde871abd681003680f0251a4eb8d"
+      "sha256": "b8378dfa293907401c31dc1ae9012b0b40fe67bcb2cc4d9473c823675cc350a9"
     },
     {
       "source": "ports/catalog.json + ports/*/package.json",
