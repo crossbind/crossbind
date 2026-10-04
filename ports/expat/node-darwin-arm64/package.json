@@ -4,9 +4,8 @@
     "nativeVersion": "2.8.5",
     "homepage": "https://github.com/crossbind/crossbind/tree/main/ports/expat#readme",
     "repository": "https://github.com/crossbind/crossbind.git",
-    "license": "MIT",
+    "license": "(MIT OR NCSA) AND MIT",
     "description": "macOS arm64 addon of @crossbind/port-expat-node, which npm installs on a matching machine.",
-    "private": true,
     "os": [
         "darwin"
     ],
@@ -15,6 +14,10 @@
     ],
     "main": "expat-node.darwin-arm64.node",
     "files": [
-        "expat-node.darwin-arm64.node"
-    ]
+        "expat-node.darwin-arm64.node",
+        "sbom.cdx.json"
+    ],
+    "scripts": {
+        "prepack": "node ../../../scripts/check-node-package.mjs"
+    }
 }

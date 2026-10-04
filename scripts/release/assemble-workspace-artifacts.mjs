@@ -5,7 +5,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { inspectWorkspaceTarball, packWorkspacePackage } from './package-artifact.mjs';
-import { MULTI_PLATFORM_RUNNERS, RUNNERS, validateWorkspaceReleasePlan } from './workspace-release.mjs';
+import { MULTI_PLATFORM_RUNNERS, findBuildManifests, validateWorkspaceReleasePlan } from './workspace-release.mjs';
 import { appendGitHubOutput, writeJson } from './release-lib.mjs';
 
 const REPOSITORY_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
@@ -26,20 +26,7 @@ const inputRoot = valueOf('--input-root');
 const workspace = plan.workspacePackages;
 fs.mkdirSync(path.join(artifactRoot, 'tarballs'), { recursive: true });
 
-function findBuildInputs(directory) {
-    if (!fs.existsSync(directory)) return [];
-    const manifests = [];
-    for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
-        const target = path.join(directory, entry.name);
-        if (entry.isDirectory()) manifests.push(...findBuildInputs(target));
-        else if (new RegExp(`^build-(${RUNNERS.join('|')})\\.json$`).test(entry.name)) {
-            manifests.push({ runner: /^build-(.+)\.json$/.exec(entry.name)[1], directory });
-        }
-    }
-    return manifests;
-}
-
-const inputs = [...explicitInputs, ...(inputRoot ? findBuildInputs(path.resolve(inputRoot)) : [])];
+const inputs = [...explicitInputs, ...(inputRoot ? findBuildManifests(path.resolve(inputRoot)) : [])];
 const duplicateRunners = inputs.map((input) => input.runner).filter((runner, index, all) => all.indexOf(runner) !== index);
 if (duplicateRunners.length) throw new Error(`Duplicate build manifests for runner(s): ${[...new Set(duplicateRunners)].join(', ')}.`);
 const requiredRunners = new Set(

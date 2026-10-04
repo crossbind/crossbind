@@ -56,7 +56,9 @@ artifacts; their upstream license identity lives in the manifest's
 `crossbind.upstream.license` block (§D).
 Machinery: `crossbind licenses --notices --sbom` (core: `actions/licenses.js` reads
 the §D upstream layer, walks the resolved graph including the root package and
-pulls license texts from the family's extracted source tree) plus the thin
+pulls license texts from the family's extracted source tree, or in a package
+installed without one from the `LICENSE` it ships and the vendored copies' texts
+the build keeps in `dist/licenses/<name>/`) plus the thin
 wrapper `scripts/generate-third-party.js` (writes next to
 `dist/prebuilt/<host>/`). The outputs ship in the npm tarball.
 
@@ -85,6 +87,16 @@ expression, followed by EVERY component's license section with its full text
 (the same rows the NOTICE and SBOM are built from, so the four artifacts can
 never tell different stories). A hand-typed single license on an aggregate
 binary - or a missing/out-of-sync LICENSE file - is a K4 violation.
+Ready-made Node packages (`@crossbind/port-<family>-node` and its
+`-node-<platform>-<arch>` packages) are aggregate binaries too, and
+`scripts/stage-node-addons.mjs` derives the same three things for each from
+`crossbind licenses --platform <platform> --runtime-env node`, whose rows add the
+crossbind runtime, the embind it adapts from Emscripten and node-api-jsi: the
+compound `license` field, a `LICENSE` with every text (plus the source tag and
+relinking steps when an LGPL library is linked) and `sbom.cdx.json`. The field
+is committed; `LICENSE` and the SBOM are build outputs, since their texts come
+from the build (vendored copies, the windows image's mingw-w64 notices), and
+`scripts/check-node-package.mjs` checks them when the train packs a package.
 
 **Cleanup precedent (K1 applied).** The decision principle is *don't build*
 rather than "build but don't publish": build time is saved and no licensed

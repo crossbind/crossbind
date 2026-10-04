@@ -4,9 +4,8 @@
     "nativeVersion": "3.15.0",
     "homepage": "https://github.com/crossbind/crossbind/tree/main/ports/geos#readme",
     "repository": "https://github.com/crossbind/crossbind.git",
-    "license": "LGPL-2.1-or-later",
+    "license": "(Apache-2.0 WITH LLVM-exception) AND (MIT OR NCSA) AND LGPL-2.1-only AND MIT",
     "description": "Linux arm64 (musl) addon of @crossbind/port-geos-node, which npm installs on a matching machine.",
-    "private": true,
     "os": [
         "linux"
     ],
@@ -18,6 +17,10 @@
     ],
     "main": "geos-node.linuxmusl-arm64.node",
     "files": [
-        "geos-node.linuxmusl-arm64.node"
-    ]
+        "geos-node.linuxmusl-arm64.node",
+        "sbom.cdx.json"
+    ],
+    "scripts": {
+        "prepack": "node ../../../scripts/check-node-package.mjs"
+    }
 }

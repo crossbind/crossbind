@@ -3,6 +3,7 @@ import path from 'node:path';
 import zlib from 'node:zlib';
 import { loadReleaseNotes, semverChannelPolicy } from './release-lib.mjs';
 import { runtimeEnvsOf } from '../../core/crossbind/src/utils/targets.js';
+import { nodePackageKind } from '../lib/node-registry.mjs';
 
 export const WORKSPACE_REPOSITORY = 'https://github.com/crossbind/crossbind.git';
 export const WORKSPACE_RELEASE_WORKFLOW = '.github/workflows/release-crossbind.yml';
@@ -106,11 +107,26 @@ export function readTrainVersion(root = process.cwd()) {
     return version;
 }
 
-// The runners a release builds on. Every one but macos is a shard of the Linux build job;
-// linux-native and win32-native build the Node.js addon packages in the linux and windows images,
-// linux-native both the glibc and the musl ones.
-export const RUNNERS = ['linux', 'wasm', 'android', 'wasi', 'linux-native', 'win32-native', 'macos'];
-const LINUX_RUNNERS = RUNNERS.filter((runner) => runner !== 'macos');
+// The runners a release builds on. Every one but macos, node and node-macos is a shard of the Linux
+// build job; linux-native and win32-native build the Node.js addon packages in the linux and windows
+// images, linux-native both the glibc and the musl ones. node and node-macos build the ready-made Node
+// packages from what those runners made (scripts/release/node-packages.mjs).
+export const RUNNERS = ['linux', 'wasm', 'android', 'wasi', 'linux-native', 'win32-native', 'macos', 'node', 'node-macos'];
+const LINUX_RUNNERS = RUNNERS.filter((runner) => !['macos', 'node', 'node-macos'].includes(runner));
+// The build-<runner>.json manifests under a directory of downloaded artifacts, with the directory of each.
+export function findBuildManifests(directory) {
+    if (!fs.existsSync(directory)) return [];
+    const manifests = [];
+    for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
+        const target = path.join(directory, entry.name);
+        if (entry.isDirectory()) manifests.push(...findBuildManifests(target));
+        else if (new RegExp(`^build-(${RUNNERS.join('|')})\\.json$`).test(entry.name)) {
+            manifests.push({ runner: /^build-(.+)\.json$/.exec(entry.name)[1], directory });
+        }
+    }
+    return manifests;
+}
+
 // The runners that build part of the multi-platform package.
 export const MULTI_PLATFORM_RUNNERS = ['wasm', 'android', 'wasi', 'macos'];
 
@@ -122,6 +138,8 @@ export function multiPlatformBuildArgs(platform) {
 }
 
 export function classifyBuild(candidate) {
+    const nodeKind = nodePackageKind(candidate);
+    if (nodeKind) return nodeKind;
     const lifecycle = candidate.manifest.scripts?.prepublishOnly;
     if (!lifecycle) return 'linux';
     if (candidate.path === 'examples/lib-prebuilt-matrix' && lifecycle.trim() === 'crossbind build') return 'multi-platform';
@@ -211,6 +229,25 @@ function dependencyClosure(packages, candidateNames, { publish = false } = {}) {
     return closure;
 }
 
+// A ready-made Node package links its family's platform packages, and theirs, from the tarballs its own train
+// packs (scripts/release/node-packages.mjs), so a train that publishes it publishes that closure too.
+const PLATFORM_BUILD_KINDS = ['linux-native', 'win32-native', 'macos'];
+function assertNodeLinksInTrain(packages, candidates) {
+    const byName = new Map(packages.map((candidate) => [candidate.name, candidate]));
+    const selected = new Set(candidates.map((candidate) => candidate.name));
+    const isPlatformPackage = (name) => PLATFORM_BUILD_KINDS.includes(byName.get(name)?.buildKind);
+    for (const candidate of candidates.filter((entry) => entry.buildKind === 'node' && !entry.manifest.os)) {
+        const linked = Object.keys(candidate.manifest.devDependencies ?? {}).filter(isPlatformPackage);
+        const missing = [...dependencyClosure(packages, linked)].filter((name) => isPlatformPackage(name) && !selected.has(name)).sort();
+        if (missing.length) {
+            throw new Error(
+                `${candidate.name} links ${missing.join(', ')} from the tarballs of its own train, but this train does not ` +
+                    'publish them. Select them too: pnpm release:version --package <name>.',
+            );
+        }
+    }
+}
+
 function walkFiles(directory, predicate) {
     if (!fs.existsSync(directory)) return [];
     const files = [];
@@ -295,6 +332,7 @@ export class PublicNpmWorkspaceRegistry {
             else if (response.status !== 404) throw new Error(`Cannot read npm attestation for ${candidate.name}: HTTP ${response.status}.`);
         }
         return {
+            exists: document !== null,
             exactVersion: version ? candidate.version : null,
             channelVersion,
             provenanceCommit,
@@ -329,6 +367,7 @@ export async function buildWorkspaceReleasePlan({
     gitCommit,
     registry = new PublicNpmWorkspaceRegistry(),
     log = () => {},
+    refuseUnpublishedNames = false,
 } = {}) {
     if (!['beta', 'rc', 'stable'].includes(channel)) throw new Error(`Release channel must be beta, rc or stable; got ${channel ?? '(missing)'}.`);
     if (!/^[0-9a-f]{40}$/.test(gitCommit ?? '')) throw new Error('A full 40-character release commit SHA is required.');
@@ -424,6 +463,19 @@ export async function buildWorkspaceReleasePlan({
                 );
             }
         }
+    }
+
+    assertNodeLinksInTrain(packages, candidates);
+
+    // npm configures a Trusted Publisher only on a package that exists, so a name it has never seen fails at
+    // publication, after every build; a writing run stops here instead.
+    const unpublished = candidates.filter((candidate) => candidate.registry.exists === false).map((candidate) => candidate.name);
+    if (unpublished.length) {
+        const message =
+            `npm has never published ${unpublished.length} package(s) of this train: ${unpublished.join(', ')}. ` +
+            'A maintainer bootstraps them first: node scripts/release/bootstrap-npm-packages.mjs --apply.';
+        if (refuseUnpublishedNames) throw new Error(message);
+        log(message);
     }
 
     if (channel === 'stable' && candidates.length) {

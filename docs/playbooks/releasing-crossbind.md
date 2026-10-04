@@ -71,8 +71,18 @@ No package is published while another selected artifact is still building:
 3. macOS builds the iOS packages and the macOS (`-darwin`) packages of native Node.js addons.
 4. `@crossbind/example-lib-prebuilt-matrix` is deliberately split across both runners; the
    coordinator merges Web/Android/WASI and iOS outputs and refuses conflicting files.
-5. The coordinator verifies that exactly one tarball exists for every selected package.
-6. Only then can the protected `npm-release` job start.
+5. The ready-made Node packages (ADR-0014) build after the Linux shards, from the platform
+   packages those shards packed: Ubuntu builds their Linux and Windows addons and hands the
+   bridges it generated to macOS, which builds their macOS addons without running SWIG. A train
+   that publishes them publishes the platform packages they link too; the plan refuses one that
+   does not.
+6. The coordinator verifies that exactly one tarball exists for every selected package.
+7. The ready-made Node packages are installed from those exact tarballs on all eight addon
+   targets with every Node.js version in `.nvmrc` and `releases/npm/node-22.version`, and each
+   family's `e2e/check.mjs` runs, alone and together with the others.
+8. Only then can the protected `npm-release` job start.
+
+A dry run builds, assembles and verifies the same way and skips only the publish job.
 
 Build commands come from each package's committed `prepublishOnly` script. Packages are built in
 workspace dependency order, including build dependencies that are not themselves being published.
@@ -159,6 +169,17 @@ must not contain `NPM_TOKEN`, `NODE_AUTH_TOKEN` or `NPM_AUTH_TOKEN`. Only the fi
 short-lived npm credential and requests provenance explicitly. After the first train succeeds,
 configure each npm package to require 2FA and disallow long-lived tokens, then revoke obsolete
 automation tokens.
+
+npm configures a Trusted Publisher only on a package that already exists, so a package npm has
+never published, such as a new port variant, needs its name first. `node
+scripts/release/bootstrap-npm-packages.mjs` lists those packages. With `--apply`, run by a
+maintainer logged in to npm, it publishes a code-free placeholder `0.0.0-bootstrap.0` of each under
+the `bootstrap` dist-tag and configures the trust above with npm 12.0.2. npm confirms the writes
+with 2FA, and its website offers to skip 2FA for five minutes, which covers about 80 packages. A
+run that stops prints the command that continues it. Afterwards, check `npm view <package>
+dist-tags`: if npm pointed `latest` at the placeholder, move it once the train has published. A
+writing train refuses a package npm has never published and names this command; a dry run lists
+those packages.
 
 The repository uses the exact Node 24.21.0 LTS pin in `.nvmrc`; npm is pinned separately because it
 has no LTS channel. External actions are pinned to full commits. The repository-wide

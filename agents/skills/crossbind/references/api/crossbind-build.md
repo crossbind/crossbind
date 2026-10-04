@@ -52,7 +52,9 @@ export default {
   bundled: { wasi: [{ name: 'libpng', version: '1.6.43', license: 'libpng-2.0', files: ['frmts/png/libpng/LICENSE'] }] },
     // Third-party copies the upstream compiles INTO the artifact, per
     // platform (e.g. GDAL's internal codecs). `crossbind licenses` turns these
-    // into notice/SBOM rows with texts pulled from the source tree.
+    // into notice/SBOM rows with texts pulled from the source tree. The build
+    // copies those texts to dist/licenses/<name>/, where a package installed
+    // from npm still has them.
 
   // ─────────────────────────────────────────────────────────────
   // Configure-step parameters

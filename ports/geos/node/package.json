@@ -4,10 +4,12 @@
     "nativeVersion": "3.15.0",
     "homepage": "https://github.com/crossbind/crossbind/tree/main/ports/geos#readme",
     "repository": "https://github.com/crossbind/crossbind.git",
-    "license": "LGPL-2.1-or-later",
-    "description": "geos 3.15.0 for Node.js with nothing to build: prebuilt Node-API addons for macOS, Linux and Windows, built with crossbind.",
-    "private": true,
+    "license": "(MIT OR NCSA) AND LGPL-2.1-only AND MIT",
+    "description": "geos for Node.js with nothing to build: prebuilt Node-API addons for macOS, Linux and Windows, built with crossbind.",
     "type": "module",
+    "engines": {
+        "node": ">=22"
+    },
     "exports": {
         "./*.h": {
             "types": "./dist/*.h.d.cts",
@@ -18,12 +20,14 @@
     "files": [
         "dist/**/*.cjs",
         "dist/**/*.d.cts",
-        "dist/data"
+        "dist/data",
+        "sbom.cdx.json"
     ],
     "scripts": {
         "build": "crossbind build -p darwin,linux,linuxmusl,win32 -e node -b release && node ../../../scripts/stage-node-addons.mjs",
         "clear": "rm -rf .crossbind dist",
-        "e2e": "node ../../../scripts/e2e-node-package.mjs"
+        "e2e": "node ../../../scripts/e2e-node-package.mjs",
+        "prepack": "node ../../../scripts/check-node-package.mjs"
     },
     "optionalDependencies": {
         "@crossbind/port-geos-node-darwin-arm64": "workspace:*",

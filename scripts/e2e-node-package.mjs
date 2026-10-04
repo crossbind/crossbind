@@ -5,22 +5,16 @@
 // does from npmjs.org. Addons for machines nothing here runs are checked for the machine they target.
 // Runs in ports/<family>/node after its build.
 
-import { execFile, execFileSync } from 'node:child_process';
-import crypto from 'node:crypto';
+import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
-import http from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
+import { run, serveRegistry, tarballEntry } from './lib/node-registry.mjs';
+import { FORMAT_OF_OS, binaryIdentity } from './release/node-packages.mjs';
 
-const INSTALL_TIMEOUT_MS = 600000;
-const OUTPUT_LIMIT = 64 * 1024 * 1024;
 const CONTAINER_IMAGES = { glibc: 'node:24-bookworm-slim', musl: 'node:24-alpine' };
 const CONTAINERS = [['glibc', 'arm64'], ['glibc', 'x64'], ['musl', 'arm64'], ['musl', 'x64']];
 const DOCKER_ARCH = { arm64: 'arm64', x64: 'amd64' };
-const PE_HEADER_OFFSET = 0x3c;
-const PE_MACHINE = { x64: 0x8664, arm64: 0xaa64 };
-const MACHO_MAGIC = 0xfeedfacf;
-const MACHO_CPU = { x64: 0x01000007, arm64: 0x0100000c };
 
 const root = process.cwd();
 const readManifest = (dir) => JSON.parse(fs.readFileSync(path.join(dir, 'package.json'), 'utf8'));
@@ -36,56 +30,11 @@ function fail(message) {
     process.exit(1);
 }
 
-// The registry answers from this process, so its clients run without blocking it.
-function run(command, args, options = {}) {
-    return new Promise((resolve, reject) => {
-        execFile(command, args, { encoding: 'utf8', maxBuffer: OUTPUT_LIMIT, timeout: INSTALL_TIMEOUT_MS, ...options }, (error, stdout, stderr) => {
-            process.stdout.write(stdout);
-            process.stderr.write(stderr);
-            if (error) reject(error);
-            else resolve(stdout);
-        });
-    });
-}
-
 function pack(dir, destination) {
     const before = new Set(fs.readdirSync(destination));
-    execFileSync('pnpm', ['pack', '--pack-destination', destination], { cwd: dir, stdio: 'ignore' });
-    const file = fs.readdirSync(destination).find((entry) => !before.has(entry));
-    const packed = JSON.parse(execFileSync('tar', ['-xzOf', path.join(destination, file), 'package/package.json'], { encoding: 'utf8' }));
-    const bytes = fs.readFileSync(path.join(destination, file));
-    return { file, manifest: packed, integrity: `sha512-${crypto.createHash('sha512').update(bytes).digest('base64')}` };
-}
-
-// A packument per package, its tarball addressed through the host the client asked for.
-function serve(packed, tarballDir) {
-    const byName = new Map(packed.map((entry) => [entry.manifest.name, entry]));
-    const server = http.createServer((request, response) => {
-        const url = decodeURIComponent(request.url.split('?')[0]).slice(1);
-        if (url.startsWith('-/tarballs/')) {
-            const file = path.join(tarballDir, path.basename(url));
-            if (!fs.existsSync(file)) return response.writeHead(404).end();
-            response.writeHead(200, { 'content-type': 'application/octet-stream' });
-            return fs.createReadStream(file).pipe(response);
-        }
-        const entry = byName.get(url);
-        if (!entry) return response.writeHead(404, { 'content-type': 'application/json' }).end('{}');
-        const { version } = entry.manifest;
-        response.writeHead(200, { 'content-type': 'application/json' });
-        return response.end(JSON.stringify({
-            name: url,
-            'dist-tags': { latest: version },
-            versions: {
-                [version]: {
-                    ...entry.manifest,
-                    dist: { tarball: `http://${request.headers.host}/-/tarballs/${entry.file}`, integrity: entry.integrity },
-                },
-            },
-        }));
-    });
-    return new Promise((resolve) => {
-        server.listen(0, '0.0.0.0', () => resolve(server));
-    });
+    // stderr carries the reason the prepack guard refuses a package.
+    execFileSync('pnpm', ['pack', '--pack-destination', destination], { cwd: dir, stdio: ['ignore', 'ignore', 'inherit'] });
+    return tarballEntry(path.join(destination, fs.readdirSync(destination).find((entry) => !before.has(entry))));
 }
 
 // The one addon package npm installed must be the one for the machine.
@@ -132,21 +81,13 @@ async function runContainer(port, checkDir, libc, arch) {
     checkInstalled(`${platform}-${arch} in ${CONTAINER_IMAGES[libc]}`, output, `${baseName}-${platform}-${arch}`);
 }
 
-function targetOf(file) {
-    const bytes = fs.readFileSync(file);
-    if (bytes.readUInt32LE(0) === MACHO_MAGIC) return { format: 'Mach-O', cpu: bytes.readUInt32LE(4) };
-    if (bytes.toString('latin1', 0, 2) === 'MZ') return { format: 'PE', cpu: bytes.readUInt16LE(bytes.readUInt32LE(PE_HEADER_OFFSET) + 4) };
-    return { format: 'other' };
-}
-
 // The macOS and Windows addons of machines neither the host nor a container runs.
 function checkUnrun() {
     addonPackages
         .filter(({ os: [system], cpu: [arch] }) => system !== 'linux' && `${system}-${arch}` !== `${process.platform}-${process.arch}`)
         .forEach(({ name, dir, main, os: [system], cpu: [arch] }) => {
-            const expected = system === 'win32' ? { format: 'PE', cpu: PE_MACHINE[arch] } : { format: 'Mach-O', cpu: MACHO_CPU[arch] };
-            const actual = targetOf(path.join(dir, main));
-            if (actual.format !== expected.format || actual.cpu !== expected.cpu) fail(`${name} does not target ${system}-${arch}`);
+            const { format, arch: actual } = binaryIdentity(fs.readFileSync(path.join(dir, main)));
+            if (format !== FORMAT_OF_OS[system] || actual !== arch) fail(`${name} does not target ${system}-${arch}`);
             console.log(`ok: ${name} targets ${system}-${arch}, not run`);
         });
 }
@@ -155,7 +96,7 @@ const missing = addonPackages.filter(({ dir, main }) => !fs.existsSync(path.join
 if (missing.length) fail(`not built: ${missing.join(', ')}`);
 
 const work = fs.mkdtempSync(path.join(os.tmpdir(), 'crossbind-node-registry-'));
-const server = await serve([root, ...addonPackages.map(({ dir }) => dir)].map((dir) => pack(dir, work)), work);
+const server = await serveRegistry([root, ...addonPackages.map(({ dir }) => dir)].map((dir) => pack(dir, work)), work);
 try {
     const { port } = server.address();
     const checkDir = path.join(root, 'e2e');

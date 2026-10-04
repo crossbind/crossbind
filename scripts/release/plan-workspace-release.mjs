@@ -7,6 +7,7 @@ import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { appendGitHubOutput, writeJson } from './release-lib.mjs';
 import { buildWorkspaceReleasePlan, encodeWorkspacePlanOutput } from './workspace-release.mjs';
+import { VERIFY_NODE_VERSION_FILES } from './node-packages.mjs';
 
 const REPOSITORY_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const valueOf = (name) => {
@@ -19,7 +20,13 @@ const output = path.resolve(valueOf('--output') ?? path.join(os.tmpdir(), 'cross
 const githubOutput = valueOf('--github-output') ?? process.env.GITHUB_OUTPUT;
 const gitCommit = valueOf('--commit') ?? execFileSync('git', ['rev-parse', 'HEAD'], { cwd: root, encoding: 'utf8' }).trim();
 
-const plan = await buildWorkspaceReleasePlan({ root, channel, gitCommit, log: (message) => process.stdout.write(`${message}\n`) });
+const plan = await buildWorkspaceReleasePlan({
+    root,
+    channel,
+    gitCommit,
+    log: (message) => process.stdout.write(`${message}\n`),
+    refuseUnpublishedNames: process.argv.includes('--require-bootstrapped'),
+});
 if (process.argv.includes('--require-changes') && plan.packageCount === 0) {
     throw new Error(`No ${channel} package versions require publication; refusing an empty writing release.`);
 }
@@ -31,6 +38,9 @@ appendGitHubOutput(githubOutput, {
     hasLinux: plan.linuxShards.length > 0,
     linuxShards: JSON.stringify(plan.linuxShards),
     hasMacos: plan.buildOrderByRunner.macos.length > 0 || plan.multiPlatform.length > 0,
+    hasNode: plan.buildOrderByRunner.node.length > 0,
+    hasNodeMacos: plan.buildOrderByRunner['node-macos'].length > 0,
+    verifyNodeVersions: JSON.stringify(VERIFY_NODE_VERSION_FILES.map((file) => fs.readFileSync(path.join(root, file), 'utf8').trim())),
     hasCrossbind: plan.packages.some((candidate) => candidate.name === 'crossbind'),
 });
 process.stdout.write(`${output}: ${plan.packageCount} package(s), publish order: ${plan.publishOrder.join(' -> ') || '(none)'}\n`);

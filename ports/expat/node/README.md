@@ -1,6 +1,6 @@
 # @crossbind/port-expat-node
 
-expat 2.8.5 for Node.js with nothing to build: prebuilt Node-API addons for macOS, Linux (glibc and musl) and Windows, on arm64 and x64. npm installs only the addon for your machine.
+expat for Node.js with nothing to build: prebuilt Node-API addons for macOS, Linux (glibc and musl) and Windows, on arm64 and x64. npm installs only the addon for your machine.
 
 ```bash
 npm install @crossbind/port-expat-node
