@@ -12,7 +12,7 @@
 - `script/build_android_assets.js` — copies dependency data assets into the app's `android/app/src/main/assets/crossbind` (gradle config phase).
 - `script/build_android_deps.js` — source-rebuilds dependencies flagged via `crossbind.overrides.js` / `CROSSBIND_REBUILD_DEPS`; prints `CROSSBIND_DEPS_STAMP=` for `build.gradle`.
 - `script/resolveBuildTarget.js` — shared Android buildTarget resolution used by the two scripts above.
-- `script/build_ios.js` — runs `crossbind build -p ios` + `createXCFramework`. Skips the native build when inputs are unchanged (see `iosLibCache.js`); force with `CROSSBIND_NO_IOS_CACHE=1`.
+- `script/build_ios.js` — runs `crossbind build -p ios` + `createXCFramework`. Skips the native build when inputs are unchanged (see `iosLibCache.js`); force with `CROSSBIND_NO_IOS_CACHE=1`. Copies the app's Conan xcframeworks into `conan/` every run, for the podspec to vendor.
 - `script/iosLibCache.js` — content-hash stamp (`.crossbind/build/ios-libs-stamp-<buildType>.json`) over app, dependency and `.rs` sources plus the generated Rust bridges, and mtime-pinned xcframework outputs (plugin dir can be shared between apps), deciding whether `build_ios.js` can skip.
 - `script/build_js.js` — generates the JS-side bridge module Metro bundles. First stages the `conanDependencies` packages for the platform's first target, which Metro resolves `conan:` imports and reads headers for. Skips Metro when inputs are unchanged (see `bridgeCache.js`); force with `CROSSBIND_NO_BRIDGE_CACHE=1`.
 - `script/bridgeCache.js` — content-hash stamp (`.crossbind/build/bridge-stamp-<platform>.json`) over app + dependency sources, `.rs` included, deciding whether `build_js.js` can skip Metro.
@@ -39,7 +39,7 @@ Sibling packages:
 1. User runs `cd ios && pod install && cd ..`.
 2. CocoaPods discovers `react-native-crossbind.podspec`; the podspec's `prepare_command` runs `node script/build_js.js ios && node script/build_ios.js Debug`.
 3. `build_ios.js` invokes `createLib` + `createXCFramework` for both `iphoneos` and `iphonesimulator`.
-4. The xcframework is vendored into the app via the podspec's `vendored_frameworks`.
+4. The xcframework is vendored into the app via the podspec's `vendored_frameworks`, with the Conan xcframeworks in `conan/`; a changed `conanDependencies` needs another `pod install`.
 5. Subsequent `pnpm ios` builds use the cached xcframeworks; rerun `pod install` to refresh.
 
 ## Build flow on JS side

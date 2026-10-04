@@ -9,7 +9,7 @@ import { getDockerImage, imageRoleFor } from './pullDockerImage.js';
 import runConan, {
     clearConanWork, conanRoot, conanRunner, createConanWork, localToolchainIdentity, removeConanWork, toHostPath,
 } from './runConan.js';
-import { hostProfile, BUILD_PROFILE } from './conanProfile.js';
+import { hostProfile, settingsUser, BUILD_PROFILE } from './conanProfile.js';
 import { conanRequires, conanOptionArgs, conanDependenciesKey } from './conanDependencies.js';
 import {
     conanPackagesOf, stageConanPackage, writeConanManifest, readConanManifest, isControlCharacter,
@@ -26,9 +26,9 @@ const stampFileOf = (stageDir, target) => upath.join(stageDir, 'stamps', `${targ
 const logFileOf = (stageDir, target) => upath.join(stageDir, 'logs', `${target.path}.log`);
 const printable = (text) => [...text].filter((char) => char === '\n' || char === '\t' || !isControlCharacter(char)).join('');
 
-// What a staged target was made from. The toolchain is the image, or the host's emcc and conan under
-// RUNNER=LOCAL: the profile asks that toolchain for its emcc version, so a new one is a new package id
-// and must restage.
+// What a staged target was made from. The toolchain is the image, or the host's compiler and conan where
+// conan runs on the host (RUNNER=LOCAL, and iOS always): the profile asks that compiler for its version,
+// so a new one is a new package id and must restage.
 function stampKey(config, target) {
     const lock = lockFileOf(config);
     return getContentHash(JSON.stringify({
@@ -36,7 +36,7 @@ function stampKey(config, target) {
         dependencies: config.conanDependencies,
         host: hostProfile(target),
         build: BUILD_PROFILE,
-        toolchain: conanRunner(config) === 'LOCAL' ? localToolchainIdentity() : getDockerImage(imageRoleFor(target)),
+        toolchain: conanRunner(config, target) === 'LOCAL' ? localToolchainIdentity(target) : getDockerImage(imageRoleFor(target)),
         lock: fs.existsSync(lock) ? fs.readFileSync(lock, 'utf8') : null,
     }));
 }
@@ -82,12 +82,14 @@ function installTarget(config, stageDir, target) {
     const logFile = logFileOf(stageDir, target);
     // A restage that stops halfway must not pass for a finished one.
     fs.rmSync(stampFile, { force: true });
-    const work = createConanWork(conanRunner(config));
+    const work = createConanWork(conanRunner(config, target));
     const label = `conan ${target.path}`;
     logger.startTask(label);
     try {
         fs.writeFileSync(upath.join(work.dir, 'host.profile'), hostProfile(target));
         fs.writeFileSync(upath.join(work.dir, 'build.profile'), BUILD_PROFILE);
+        const settings = settingsUser(target);
+        if (settings) fs.writeFileSync(upath.join(work.dir, 'home', 'settings_user.yml'), settings);
         if (hasLock) fs.copyFileSync(lock, upath.join(work.dir, 'input.lock'));
         const result = runConan([
             'install',
@@ -140,11 +142,13 @@ export default async function installConanPackages(config, targets) {
     const stageDir = conanStageDir(config.paths.cache);
     const pending = targets.filter((target) => !isStaged(config, stageDir, target));
     if (pending.length === 0) return false;
-    const runner = conanRunner(config);
-    // A conan store takes one writer at a time, and every project on the machine shares it.
-    await withDirLock(`${conanRoot(runner)}-install.lock`, async () => {
-        clearConanWork(runner);
-        pending.filter((target) => !isStaged(config, stageDir, target)).forEach((target) => installTarget(config, stageDir, target));
-    });
+    for (const runner of new Set(pending.map((target) => conanRunner(config, target)))) {
+        // A conan store takes one writer at a time, and every project on the machine shares it.
+        await withDirLock(`${conanRoot(runner)}-install.lock`, async () => {
+            clearConanWork(runner);
+            pending.filter((target) => conanRunner(config, target) === runner && !isStaged(config, stageDir, target))
+                .forEach((target) => installTarget(config, stageDir, target));
+        });
+    }
     return true;
 }

@@ -51,7 +51,8 @@ if(NOT PACKAGE_HOST_INDEX EQUAL -1)
         target_link_libraries("${PROJECT_NAME}" INTERFACE "${PROJECT_LIBS_DIR}")
     endif()
 
-    if(NOT (APPLE AND CMAKE_SYSTEM_NAME STREQUAL "iOS"))
+    # On iOS each library's xcframework carries the headers, so only a header-only package needs them here.
+    if(NOT (APPLE AND CMAKE_SYSTEM_NAME STREQUAL "iOS") OR PROJECT_LIBS STREQUAL "")
         target_include_directories("${PROJECT_NAME}" INTERFACE "${PROJECT_SOURCE_DIR}/${PROJECT_TARGET_HOST}/include")
     endif()
 endif()

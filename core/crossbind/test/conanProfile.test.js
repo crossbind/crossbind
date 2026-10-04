@@ -41,7 +41,7 @@ describe('conan host profile', () => {
     });
 
     test('other platforms are refused for now', () => {
-        expect(() => hostProfile({ platform: 'ios', arch: 'iphoneos', runtime: 'mt', buildType: 'release' })).toThrow(/wasm and android so far; ios/);
+        expect(() => hostProfile({ platform: 'linux', arch: 'x64', runtime: 'mt', buildType: 'release' })).toThrow(/wasm, android and ios so far; linux/);
     });
 });
 
@@ -75,6 +75,45 @@ describe('conan host profile for android', () => {
         expect(profile).not.toContain('emcc');
         expect(profile).not.toContain('[buildenv]');
         expect(profile).not.toContain('user_toolchain');
+    });
+});
+
+describe('conan host profile for ios', () => {
+    const ios = (arch) => ({
+        platform: 'ios', arch, runtime: 'mt', buildType: 'release',
+    });
+
+    test('builds static packages with Xcode for the deployment target the ports use', () => {
+        const profile = hostProfile(ios('iphoneos'));
+        expect(line(profile, 'os')).toBe('iOS');
+        expect(line(profile, 'os.version')).toBe('15.1');
+        expect(line(profile, 'os.sdk')).toBe('iphoneos');
+        expect(line(profile, 'arch')).toBe('armv8');
+        expect(line(profile, 'compiler')).toBe('apple-clang');
+        expect(line(profile, 'compiler.libcxx')).toBe('libc++');
+        expect(line(profile, '*:shared')).toBe('False');
+        expect(line(profile, 'tools.build:cflags')).toBe('["-pthread"]');
+    });
+
+    test('the simulator takes its own SDK and stays arm64, like every crossbind simulator slice', () => {
+        const profile = hostProfile(ios('iphonesimulator'));
+        expect(line(profile, 'os.sdk')).toBe('iphonesimulator');
+        expect(line(profile, 'arch')).toBe('armv8');
+    });
+
+    test("Xcode's clang names the compiler version", () => {
+        expect(line(hostProfile(ios('iphoneos')), 'compiler.version')).toContain("['xcrun', 'clang', '-dumpversion']");
+    });
+
+    test('passes no bitcode flag: Xcode 27 ld takes the "marker" of -fembed-bitcode-marker for a file when CMake links its compiler check', () => {
+        expect(hostProfile(ios('iphonesimulator'))).not.toContain('bitcode');
+    });
+
+    test('carries nothing of the emscripten or NDK toolchains', () => {
+        const profile = hostProfile(ios('iphoneos'));
+        expect(profile).not.toContain('emcc');
+        expect(profile).not.toContain('ndk');
+        expect(profile).not.toContain('[buildenv]');
     });
 });
 

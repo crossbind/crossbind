@@ -9,6 +9,7 @@ import { wasiCFlags, wasiCxxFlags, resolveWasiSdkPath, WASI_TARGET_TRIPLE } from
 import { HOST_BUILT_PLATFORMS } from '../utils/targets.js';
 import { WASM_EXCEPTION_FLAGS } from '../utils/archiveFlags.js';
 import { ANDROID_NDK, ANDROID_API_LEVEL } from '../utils/androidToolchain.js';
+import { IOS_DEVELOPER_DIR, IOS_DEPLOYMENT_TARGET } from '../utils/iosToolchain.js';
 
 // Native builds can outrun Node's 1 MiB default pipe buffer; without a raised cap a successful build dies with ENOBUFS.
 const EXEC_MAX_BUFFER = 512 * 1024 * 1024;
@@ -17,10 +18,9 @@ const CROSSCOMPILER_x86_64 = `x86_64-linux-android${ANDROID_API_LEVEL}`;
 const t = `${ANDROID_NDK}/toolchains/llvm/prebuilt/linux-x86_64/bin`;
 const t2 = `${ANDROID_NDK}/toolchains/llvm/prebuilt/linux-x86_64`;
 
-const iOSDevPath = '/Applications/Xcode.app/Contents/Developer';
-const iosBinPath = `${iOSDevPath}/Toolchains/XcodeDefault.xctoolchain/usr/bin`;
-const iosSdkPath = `${iOSDevPath}/Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS.sdk`;
-const iosSimSdkPath = `${iOSDevPath}/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator.sdk`;
+const iosBinPath = `${IOS_DEVELOPER_DIR}/Toolchains/XcodeDefault.xctoolchain/usr/bin`;
+const iosSdkPath = `${IOS_DEVELOPER_DIR}/Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS.sdk`;
+const iosSimSdkPath = `${IOS_DEVELOPER_DIR}/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator.sdk`;
 
 const androidParamsArm64 = [
     '-e',
@@ -64,8 +64,6 @@ const androidParamsX86_64 = [
     `CFLAGS=--sysroot=${t2}/sysroot`,
 ];
 
-// Xcode 27 refuses deployment targets below 15.0; React Native's own floor is 15.1.
-const IOS_DEPLOYMENT_TARGET = '15.1';
 // Node 22, the oldest supported line, needs macOS 11.
 const DARWIN_DEPLOYMENT_TARGET = '11.0';
 const DARWIN_HOST_ARCH = process.arch === 'x64' ? 'x86_64' : 'arm64';

@@ -8,6 +8,8 @@ import path from 'node:path';
 vi.mock('node:child_process', () => ({ spawnSync: vi.fn(), execFileSync: vi.fn() }));
 
 const wasm = { platform: 'wasm', arch: 'wasm32', runtime: 'st' };
+const ios = { platform: 'ios', arch: 'iphoneos', runtime: 'mt' };
+const hostPlatform = Object.getOwnPropertyDescriptor(process, 'platform');
 const configWith = (RUNNER) => ({ paths: { base: '/repo' }, system: { RUNNER } });
 
 let scratch;
@@ -46,6 +48,7 @@ beforeEach(() => {
 afterEach(() => {
     vi.restoreAllMocks();
     vi.unstubAllEnvs();
+    Object.defineProperty(process, 'platform', hostPlatform);
     fs.rmSync(scratch, { recursive: true, force: true });
 });
 
@@ -63,6 +66,14 @@ describe('the runner conan runs under', () => {
         ['docker_run', 'DOCKER_RUN ', 'podman', ''].forEach((runner) => {
             expect(() => mod.conanRunner(configWith(runner))).toThrow(/the runner .* is invalid/);
         });
+    });
+
+    test('is the host for iOS packages, which build with Xcode', async () => {
+        const { mod } = await importFresh();
+
+        expect(mod.conanRunner(configWith('DOCKER_RUN'), ios)).toBe('LOCAL');
+        expect(mod.conanRunner(configWith('DOCKER_EXEC'), ios)).toBe('LOCAL');
+        expect(mod.conanRunner(configWith('DOCKER_RUN'), wasm)).toBe('DOCKER_RUN');
     });
 });
 
@@ -196,6 +207,57 @@ describe('runConan on the host', () => {
         mod.localToolchainIdentity();
 
         expect(spawnSync).toHaveBeenCalledTimes(2);
+    });
+
+    test("asks conan its version in a home of crossbind's, since conan migrates the home it starts in", async () => {
+        const { mod, spawnSync } = await importFresh();
+
+        mod.localToolchainIdentity();
+
+        const [, , { cwd }] = spawnSync.mock.calls.find(([program]) => program === 'conan');
+        expect(cwd).toBe(path.join(crossbindDir(), 'conan-local', 'probe'));
+        expect(fs.readFileSync(path.join(cwd, '.conanrc'), 'utf8')).toBe('conan_home=./home\n');
+    });
+
+    test('names the Xcode clang and conan an iOS package builds with', async () => {
+        const { mod, spawnSync } = await importFresh();
+        spawnSync.mockImplementation((program, args, { env }) => ({ status: 0, stdout: `${[program, ...args].join(' ')} ${env.DEVELOPER_DIR ?? ''}\nmore\n`, stderr: '' }));
+
+        expect(mod.localToolchainIdentity(ios)).toBe('xcrun clang --version /Applications/Xcode.app/Contents/Developer\nconan --version');
+    });
+
+    test('runs iOS installs with the Xcode every crossbind iOS archive builds with', async () => {
+        Object.defineProperty(process, 'platform', { ...hostPlatform, value: 'darwin' });
+        vi.stubEnv('DEVELOPER_DIR', '/Applications/Xcode-beta.app/Contents/Developer');
+        const { mod, spawnSync } = await importFresh();
+        const work = mod.createConanWork('LOCAL');
+
+        mod.default(['install'], { config: configWith('DOCKER_RUN'), target: ios, work });
+
+        const [program, , { env, cwd }] = installCall(spawnSync);
+        expect(program).toBe('conan');
+        expect(env.DEVELOPER_DIR).toBe('/Applications/Xcode.app/Contents/Developer');
+        expect(env.CONAN_HOME).toBe(path.join(work.dir, 'home'));
+        expect(cwd).toBe(work.dir);
+    });
+
+    test('says where a Conan new enough comes from when iOS packages find none', async () => {
+        Object.defineProperty(process, 'platform', { ...hostPlatform, value: 'darwin' });
+        const { mod, spawnSync } = await importFresh();
+        spawnSync.mockImplementation(toolsAt('Conan version 2.17.0\n'));
+
+        expect(() => mod.default(['install'], { config: configWith('DOCKER_RUN'), target: ios, work: mod.createConanWork('LOCAL') }))
+            .toThrow(/Conan packages for iOS build on this Mac[\s\S]*Conan 2\.19 or later; found Conan version 2\.17\.0[\s\S]*brew install conan/);
+        expect(installCall(spawnSync)).toBeUndefined();
+    });
+
+    test('refuses iOS packages anywhere but a Mac', async () => {
+        Object.defineProperty(process, 'platform', { ...hostPlatform, value: 'linux' });
+        const { mod, spawnSync } = await importFresh();
+
+        expect(() => mod.default(['install'], { config: configWith('DOCKER_RUN'), target: ios, work: mod.createConanWork('LOCAL') }))
+            .toThrow(/Conan packages for iOS build with Xcode, on a Mac/);
+        expect(installCall(spawnSync)).toBeUndefined();
     });
 });
 
