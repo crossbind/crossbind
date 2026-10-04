@@ -16,17 +16,19 @@ afterEach(() => {
 
 describe('replaceFile', () => {
     // macOS keeps a loaded binary's signature per inode, so a rebuilt addon copied over the old one gets its loader killed.
+    // A second link to the old file shows whether it was written: inode numbers cannot, as Linux reuses a freed one.
     test('gives the copy a new file instead of writing over the one in place', () => {
         const source = upath.join(work, 'built.node');
         const destination = upath.join(work, 'dist.node');
+        const loaded = upath.join(work, 'loaded.node');
         fs.writeFileSync(source, 'rebuilt');
         fs.writeFileSync(destination, 'loaded before');
-        const before = fs.statSync(destination).ino;
+        fs.linkSync(destination, loaded);
 
         replaceFile(source, destination);
 
         expect(fs.readFileSync(destination, 'utf8')).toBe('rebuilt');
-        expect(fs.statSync(destination).ino).not.toBe(before);
+        expect(fs.readFileSync(loaded, 'utf8')).toBe('loaded before');
     });
 
     test('copies to a destination that does not exist yet', () => {
