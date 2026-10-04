@@ -12,17 +12,21 @@ const isBuiltHere = (target) => process.platform === 'darwin' || !HOST_BUILT_PLA
 // iOS headers and archives come out of an xcframework per library with a slice per SDK (state/index.js).
 // One older than an archive it wraps was made before the package was staged again.
 function makeConanXCFrameworks(iosTargets) {
+    const archiveOf = (dependency, target, name) => `${dependency.paths.output}/prebuilt/${target.path}/lib/lib${name}.a`;
     const isFresh = (dependency, name) => mtimeOf(`${dependency.paths.project}/${name}.xcframework/Info.plist`)
-        >= Math.max(...iosTargets.map((target) => mtimeOf(`${dependency.paths.output}/prebuilt/${target.path}/lib/lib${name}.a`)));
-    state.config.allDependencies
-        .filter((dependency) => dependency.general.conan && !dependency.export.libName.every((name) => isFresh(dependency, name)))
-        .forEach((dependency) => createXCFramework({
+        >= Math.max(...iosTargets.map((target) => mtimeOf(archiveOf(dependency, target, name))));
+    state.config.allDependencies.filter((dependency) => dependency.general.conan).forEach((dependency) => {
+        // A library its recipe names on another platform only has no slice here.
+        const libName = dependency.export.libName.filter((name) => iosTargets.every((target) => fs.existsSync(archiveOf(dependency, target, name))));
+        if (libName.every((name) => isFresh(dependency, name))) return;
+        createXCFramework({
             paths: { project: dependency.paths.project, output: dependency.paths.output },
-            export: { libName: dependency.export.libName },
+            export: { libName },
             targetParams: {
                 platform: ['ios'], arch: iosTargets.map((target) => target.arch), runtime: ['mt'], buildType: ['release'],
             },
-        }));
+        });
+    });
 }
 
 // Conan packages are staged before any header is read: SWIG parses headers that include theirs, and an

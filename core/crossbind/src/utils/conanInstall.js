@@ -17,7 +17,7 @@ import {
 import { conanStageDir } from './conanImport.js';
 
 // Bumped when the stage changes shape, so a stage an older crossbind made is made again.
-const CONAN_STAGE_FORMAT = 3;
+const CONAN_STAGE_FORMAT = 4;
 // Enough of a failed build's log to reach the error conan ends it with.
 const LOG_TAIL_LINES = 60;
 

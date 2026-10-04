@@ -73,27 +73,59 @@ describe('attaching the staged Conan packages', () => {
         expect(conanNames(config.allDependencies)).toEqual(['conan_libpng', 'conan_zlib']);
     });
 
-    test('a package links the system libraries and frameworks its recipe declares for each target', () => {
+    // libcurl staged for each target with what its recipe declares there.
+    function stageCurl(fieldsByTarget) {
         const key = conanDependenciesKey(normalizeConanDependencies({ libcurl: '8.22.0' }));
-        const curl = (link) => ({
-            name: 'libcurl', version: '8.22.0', ref: 'libcurl/8.22.0#0123456789abcdef0123456789abcdef', license: 'curl', libs: ['curl'], requires: [], ...link,
-        });
-        writeConanManifest(stageDir(), 'darwin-arm64-mt-release', { key, packages: [curl({ systemLibs: [], frameworks: ['CoreFoundation', 'SystemConfiguration'] })] });
-        writeConanManifest(stageDir(), 'linux-x64-mt-release', { key, packages: [curl({ systemLibs: ['rt', 'pthread'], frameworks: [] })] });
+        Object.entries(fieldsByTarget).forEach(([targetPath, fields]) => writeConanManifest(stageDir(), targetPath, {
+            key,
+            packages: [{
+                name: 'libcurl', version: '8.22.0', ref: 'libcurl/8.22.0#0123456789abcdef0123456789abcdef', license: 'curl', libs: ['curl'], requires: [], ...fields,
+            }],
+        }));
         const dir = upath.join(stageDir(), 'packages', 'libcurl');
         fs.mkdirSync(upath.join(dir, 'dist', 'prebuilt'), { recursive: true });
         fs.writeFileSync(upath.join(dir, 'dist', 'prebuilt', 'CMakeLists.txt'), '');
         fs.writeFileSync(upath.join(dir, 'package.json'), JSON.stringify({ name: 'conan:libcurl', version: '8.22.0' }));
         const config = appConfig({ libcurl: '8.22.0' });
-
         attachConanDependencies(config);
+        return config.dependencies.find((d) => d.general.name === 'conan_libcurl');
+    }
 
-        const { targetSpecs } = config.dependencies.find((d) => d.general.name === 'conan_libcurl');
+    // A target links the archives staged for it, so a name it lacks drops out there.
+    test('a library a recipe names differently on another platform joins the libraries the package links', () => {
+        const curl = stageCurl({
+            'darwin-arm64-mt-release': { libs: ['curl'] },
+            'win32-x64-mt-release': { libs: ['libcurl'] },
+        });
+
+        expect(curl.export.libName).toEqual(['curl', 'libcurl']);
+    });
+
+    test('a package links the system libraries and frameworks its recipe declares for each target', () => {
+        const { targetSpecs } = stageCurl({
+            'darwin-arm64-mt-release': { systemLibs: [], frameworks: ['CoreFoundation', 'SystemConfiguration'] },
+            'linux-x64-mt-release': { systemLibs: ['rt', 'pthread'], frameworks: [] },
+        });
+
         const flagsFor = (target) => filterTargetSpecs(targetSpecs, target).flatMap((specs) => specs.binary?.addonFlags ?? []);
         // A framework goes as one linker argument: CMake collapses a repeated -framework.
         expect(flagsFor({ platform: 'darwin', arch: 'arm64', runtime: 'mt', buildType: 'debug' })).toEqual(['-Wl,-framework,CoreFoundation', '-Wl,-framework,SystemConfiguration']);
         expect(flagsFor({ platform: 'linux', arch: 'x64', runtime: 'mt', buildType: 'release', runtimeEnv: 'node' })).toEqual(['-lrt', '-lpthread']);
         expect(flagsFor({ platform: 'darwin', arch: 'x64', runtime: 'mt', buildType: 'release' })).toEqual([]);
+    });
+
+    test('your code compiles with the defines a recipe declares on every target, beside its link flags', () => {
+        const { targetSpecs } = stageCurl({
+            'wasm-wasm32-st-release': { defines: ['CURL_STATICLIB=1'] },
+            'win32-x64-mt-release': { defines: ['CURL_STATICLIB=1'], systemLibs: ['ws2_32'] },
+        });
+
+        // getData takes the specs of one dependency that match a target as one object.
+        const specsFor = (target) => Object.assign({}, ...filterTargetSpecs(targetSpecs, target));
+        expect(specsFor({ platform: 'wasm', arch: 'wasm32', runtime: 'st', buildType: 'release' })).toEqual({ cmake: { compileOptions: ['-DCURL_STATICLIB=1'] } });
+        expect(specsFor({ platform: 'win32', arch: 'x64', runtime: 'mt', buildType: 'debug' })).toEqual({
+            cmake: { compileOptions: ['-DCURL_STATICLIB=1'] }, binary: { addonFlags: ['-lws2_32'] },
+        });
     });
 
     test('packages staged for other conanDependencies are left out', () => {

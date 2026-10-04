@@ -4,17 +4,24 @@ import upath from 'upath';
 import loadJson from './loadJson.js';
 import writeIfChanged from './writeIfChanged.js';
 import makeTreeWritable from './makeTreeWritable.js';
+import logger from './logger.js';
+import { libNameOf } from './linkLayout.js';
 import { CONAN_NAME, conanPackageDir } from './conanImport.js';
 import { CONAN_VERSION } from './conanDependencies.js';
 
 const MANIFESTS = 'manifests';
 const LIB_NAME = /^[A-Za-z0-9_][A-Za-z0-9_.+-]*$/;
+// A macro name with a plain value, if any (a path or a list too): one compiler argument, in a list CMake
+// splits on ';'.
+const DEFINE = /^[A-Za-z_]\w*(=[\w.+/,:-]*)?$/;
 // What may follow name/version in a reference: a user/channel and a recipe revision.
 const REFERENCE_TAIL = /^(@[A-Za-z0-9_][A-Za-z0-9_.+-]*\/[A-Za-z0-9_][A-Za-z0-9_.+-]*)?(#[0-9a-f]+)?$/;
 const URL = /^https?:\/\/[^\s"'<>`\\]+$/;
 const SHA256 = /^[0-9a-f]{64}$/;
 const MAX_TEXT = 1000;
 const TARGET_PATH = /^[A-Za-z0-9_-]+$/;
+// The prefix of the variables a package's CMakeLists names each target's libraries by.
+const HOST_LIBS = 'CROSSBIND_CONAN_LIBS_';
 
 // The CMake target of a package; Conan names may carry '.', '+' and '-'.
 export const conanTargetName = (name) => `conan_${name.replace(/[^A-Za-z0-9_]/g, '_')}`;
@@ -48,11 +55,13 @@ export function conanPackageEntry(entry) {
     if (typeof entry.ref !== 'string' || !entry.ref.startsWith(reference) || !REFERENCE_TAIL.test(entry.ref.slice(reference.length))) fail('ref');
     if (!isListOf(LIB_NAME, entry.libs)) fail('libs');
     if (!isListOf(CONAN_NAME, entry.requires)) fail('requires');
-    // They become linker arguments. A manifest an older crossbind wrote has neither.
+    // They become linker and compiler arguments. A manifest an older crossbind wrote has none of them.
     const systemLibs = entry.systemLibs ?? [];
     const frameworks = entry.frameworks ?? [];
+    const defines = entry.defines ?? [];
     if (!isListOf(LIB_NAME, systemLibs)) fail('systemLibs');
     if (!isListOf(LIB_NAME, frameworks)) fail('frameworks');
+    if (!isListOf(DEFINE, defines)) fail('defines');
     const url = urlOf(entry.source?.url);
     return {
         name: entry.name,
@@ -65,6 +74,7 @@ export function conanPackageEntry(entry) {
         requires: [...entry.requires],
         systemLibs: [...systemLibs],
         frameworks: [...frameworks],
+        defines: [...defines],
     };
 }
 
@@ -72,6 +82,16 @@ function sourceOf(entry) {
     const source = Array.isArray(entry) ? entry[0] : entry;
     if (!source?.url) return null;
     return { url: Array.isArray(source.url) ? source.url[0] : source.url, sha256: source.sha256 ?? null };
+}
+
+// A define crossbind cannot pass as one plain argument was left out before crossbind took defines at all,
+// so it stays out, with a notice, instead of stopping the build.
+function plainDefinesOf(node, defines) {
+    return defines.filter((define) => {
+        if (matches(DEFINE, define)) return true;
+        logger.info(`crossbind: ${shown(node.ref)} asks the code that uses it to compile with ${shown(define)}, which crossbind leaves out: a define passes as a plain name with a plain value.`);
+        return false;
+    });
 }
 
 function packageOf(node, requires) {
@@ -99,6 +119,7 @@ function packageOf(node, requires) {
             requires,
             systemLibs: collect('system_libs'),
             frameworks: collect('frameworks'),
+            defines: plainDefinesOf(node, collect('defines')),
         }),
         packageFolder: node.package_folder,
         includedirs: folders('includedirs'),
@@ -219,11 +240,21 @@ export function stageConanPackage(pkg, {
 
     const hosts = fs.readdirSync(prebuilt, { withFileTypes: true })
         .filter((entry) => entry.isDirectory() && TARGET_PATH.test(entry.name)).map((entry) => entry.name).sort();
-    writeIfChanged(upath.join(prebuilt, 'CMakeLists.txt'), distCmake
-        .replace('___PROJECT_NAME___', () => conanTargetName(pkg.name))
-        .replace('___PROJECT_HOST___', () => hosts.join(';'))
-        .replace('___PROJECT_LIBS___', () => pkg.libs.join(';'))
-        .replace('___PROJECT_WHOLE_ARCHIVE___', () => ''));
+    // A recipe can name its libraries otherwise on another platform (libpng is png16 on Windows), so each
+    // target links the archives staged for it.
+    const archivesOf = (host) => {
+        const libdir = upath.join(prebuilt, host, 'lib');
+        if (!fs.existsSync(libdir)) return [];
+        return fs.readdirSync(libdir).filter((file) => file.endsWith('.a')).map(libNameOf).filter((name) => matches(LIB_NAME, name)).sort();
+    };
+    writeIfChanged(upath.join(prebuilt, 'CMakeLists.txt'), [
+        ...hosts.map((host) => `set(${HOST_LIBS}${host} "${archivesOf(host).join(';')}")`),
+        distCmake
+            .replace('___PROJECT_NAME___', () => conanTargetName(pkg.name))
+            .replace('___PROJECT_HOST___', () => hosts.join(';'))
+            .replace('___PROJECT_LIBS___', () => `\${${HOST_LIBS}\${PROJECT_TARGET_HOST}}`)
+            .replace('___PROJECT_WHOLE_ARCHIVE___', () => ''),
+    ].join('\n'));
 }
 
 const manifestsOf = (stageDir) => upath.join(stageDir, MANIFESTS);

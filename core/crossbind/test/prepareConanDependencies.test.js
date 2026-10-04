@@ -148,6 +148,19 @@ describe('the xcframeworks an iOS build links', () => {
         expect(createXCFramework).not.toHaveBeenCalled();
     });
 
+    // A recipe can name a library on another platform only, as libpng is png16 on Windows.
+    test('wrap only the libraries staged for every SDK', async () => {
+        const png = conanDependency('libpng', ['png', 'png16']);
+        h.state.config.allDependencies = [png];
+        [IPHONE, SIMULATOR].forEach((t) => touch(archive(png, t, 'png'), 1000));
+        touch(archive(png, IPHONE, 'png16'), 1000);
+
+        await prepareConanDependencies([IPHONE]);
+
+        expect(createXCFramework).toHaveBeenCalledTimes(1);
+        expect(createXCFramework.mock.calls[0][0].export.libName).toEqual(['png']);
+    });
+
     test('a build without iOS targets makes none', async () => {
         const zlib = conanDependency('zlib', ['z']);
         h.state.config.allDependencies = [zlib];

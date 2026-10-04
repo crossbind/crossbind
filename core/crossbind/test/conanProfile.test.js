@@ -41,7 +41,7 @@ describe('conan host profile', () => {
     });
 
     test('other platforms are refused for now', () => {
-        expect(() => hostProfile({ platform: 'win32', arch: 'x64', runtime: 'mt', buildType: 'release' })).toThrow(/wasm, android, ios, linux, linuxmusl and darwin so far; win32/);
+        expect(() => hostProfile({ platform: 'wasi', arch: 'wasm32', runtime: 'st', buildType: 'release' })).toThrow(/linuxmusl, darwin and win32 so far; wasi/);
     });
 });
 
@@ -209,9 +209,48 @@ describe('conan host profile for macOS', () => {
         expect(line(profile, 'PKG_CONFIG_LIBDIR')).toBe('');
     });
 
-    test('lets a Conan older than the Xcode take its clang, which no other platform builds with', () => {
+    test('lets a Conan older than the Xcode take its clang', () => {
         expect(settingsUser(darwin('arm64'))).toBe('compiler:\n  apple-clang:\n    version: ["ANY"]\n');
-        expect(settingsUser({ platform: 'linux', arch: 'arm64', runtime: 'mt' })).toBeNull();
+        expect(settingsUser({ platform: 'wasm', arch: 'wasm32', runtime: 'st' })).toBeNull();
+    });
+});
+
+describe('conan host profile for windows', () => {
+    const win32 = (arch) => ({
+        platform: 'win32', arch, runtime: 'mt', buildType: 'release',
+    });
+
+    test("builds static packages with the windows image's llvm-mingw for the triple, as the ports are built", () => {
+        const profile = hostProfile(win32('x64'));
+        const tool = (name) => `/opt/llvm-mingw/bin/x86_64-w64-mingw32-${name}`;
+        expect(line(profile, 'os')).toBe('Windows');
+        expect(line(profile, 'arch')).toBe('x86_64');
+        expect(line(profile, 'compiler')).toBe('clang');
+        expect(line(profile, 'compiler.version')).toContain(`['${tool('clang')}', '-dumpversion']`);
+        expect(line(profile, 'compiler.libcxx')).toBe('libc++');
+        expect(line(profile, 'tools.cmake.cmaketoolchain:user_toolchain')).toBe('["/opt/crossbind/windows/x86_64-w64-mingw32.cmake"]');
+        expect(line(profile, 'tools.build:compiler_executables')).toBe(`{'c': '${tool('clang')}', 'cpp': '${tool('clang++')}', 'rc': '${tool('windres')}'}`);
+        expect(line(profile, 'tools.gnu:host_triplet')).toBe('x86_64-w64-mingw32');
+        expect(line(profile, '*:shared')).toBe('False');
+        expect(line(profile, 'tools.build:cflags')).toBe('["-pthread"]');
+        expect(line(profile, 'RC')).toBe(tool('windres'));
+        expect(line(profile, 'PKG_CONFIG_LIBDIR')).toBe('');
+    });
+
+    // A runtime would make it a clang that stands in for MSVC, with its ABI and its library names.
+    test('names no MSVC runtime: llvm-mingw links the GNU way', () => {
+        expect(line(hostProfile(win32('x64')), 'compiler.runtime')).toBeUndefined();
+    });
+
+    test('arm64 is armv8, with its own triple', () => {
+        const profile = hostProfile(win32('arm64'));
+        expect(line(profile, 'arch')).toBe('armv8');
+        expect(line(profile, 'tools.gnu:host_triplet')).toBe('aarch64-w64-mingw32');
+    });
+
+    // Conan 2.33 lists clang up to 23, the image's llvm-mingw; the next toolchain bump would be refused.
+    test('lets the Conan in the image take a clang newer than it lists', () => {
+        expect(settingsUser(win32('x64'))).toBe('compiler:\n  clang:\n    version: ["ANY"]\n');
     });
 });
 

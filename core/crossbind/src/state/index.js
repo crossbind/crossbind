@@ -1,3 +1,4 @@
+import fs from 'node:fs';
 import loadJson from '../utils/loadJson.js';
 import writeJson from '../utils/writeJson.js';
 import { TARGETS, targetPathOf, nodeAddonNamesOf, nativeCommandNamesOf } from '../utils/targets.js';
@@ -95,7 +96,12 @@ export function setAllDependecyPaths() {
         state.config.allDependencyPaths[target.path] = { cmake: {} };
         state.config.allDependencies.forEach((d) => {
             state.config.allDependencyPaths[target.path].cmake[d.general.name] = `${d.paths.output}/prebuilt`;
-            d.export.libName.forEach((name) => {
+            // A Conan recipe can name a library on another platform only (libpng is png16 on Windows).
+            const libNames = d.general.conan
+                ? d.export.libName.filter((name) => [target.path, target.releasePath]
+                    .some((targetPath) => fs.existsSync(`${d.paths.output}/prebuilt/${targetPath}/lib/lib${name}.a`)))
+                : d.export.libName;
+            libNames.forEach((name) => {
                 state.config.allDependencyPaths[target.path][name] = {
                     root: `${d.paths.output}/prebuilt/${target.path}`,
                 };

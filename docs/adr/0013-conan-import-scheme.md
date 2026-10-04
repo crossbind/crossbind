@@ -61,8 +61,9 @@ header of a declared package. Rules:
   followed only within it. The manifests are checked again when state reads them.
 - Each package is staged as a port prebuilt under
   `.crossbind/conan/packages/<package>/dist/prebuilt/<target>/` with a generated
-  `dist/prebuilt/CMakeLists.txt`, and joins the config as a dependency through a manifest per
-  target, since a recipe can require other packages on another platform. State reads them at load
+  `dist/prebuilt/CMakeLists.txt` that lists each target's own archives, and joins the config as a
+  dependency through a manifest per target, since a recipe can require other packages, and name its
+  libraries otherwise (libpng is png16 on Windows), on another platform. State reads them at load
   without running anything, and again when a build has staged more since. The link, `isEnabled`,
   SWIG's target-neutral header identity and the license rows then work unchanged. For iOS, where
   state reads a dependency's headers and archive out of an xcframework, both SDKs are staged
@@ -71,21 +72,25 @@ header of a declared package. Rules:
   stamp per target records the inputs (stage format, dependencies, profile, toolchain, `conan.lock`),
   so an unchanged build runs no Conan.
 - `conan.lock` next to the config pins versions and recipe revisions; a new requirement extends it.
-- Web, Android, iOS, Linux addon and macOS addon builds, for now. A React Native build installs the
-  packages before Metro bundles the bridges, for the target Metro reads headers with; a Metro server
-  that loaded state before them attaches them on its next `conan:` import or bridge. On iOS the
-  React Native plugin copies the xcframeworks into its own `conan/` directory, which its podspec
+- Web, Android, iOS and Node.js addon (Linux, macOS, Windows) builds. A React Native build installs
+  the packages before Metro bundles the bridges, for the target Metro reads headers with; a Metro
+  server that loaded state before them attaches them on its next `conan:` import or bridge. On iOS
+  the React Native plugin copies the xcframeworks into its own `conan/` directory, which its podspec
   vendors, so they link with plain `-l` flags. CocoaPods links what it finds at `pod install`, so a
   changed `conanDependencies` needs another `pod install`; the pod's script phase refreshes the
   archives a new package version restages. Linux addons build in the linux image with the ports'
   clang wrappers; glibc and musl builds share every Conan setting, so a profile conf naming the C
   library takes part in the package id, and a musl build is a cross build even on a machine of the
   same arch, since the image runs no musl program. macOS packages build on the Mac, as iOS ones do,
-  with the clang xcode-select picks, as the macOS ports are built. A Node build reads the app's
-  headers for its first desktop target, Linux before macOS, which it stages anyway, instead of the
-  first wasm target, which it would have to build every package for. An addon links the system
-  libraries and frameworks each recipe declares for its target; a framework goes as one
-  `-Wl,-framework,<name>` argument, since CMake collapses a repeated `-framework`.
+  with the clang xcode-select picks, as the macOS ports are built. Windows packages build in the
+  windows image with its llvm-mingw, a clang that links the GNU way, so the profile names no MSVC
+  runtime. A Node build reads the app's headers for its first desktop target, Linux first, which it
+  stages anyway, instead of the first wasm target, which it would have to build every package for.
+  An addon links the system libraries and frameworks each recipe declares for its target; a
+  framework goes as one `-Wl,-framework,<name>` argument, since CMake collapses a repeated
+  `-framework`. On every target the app's code compiles with the defines each recipe declares for
+  its consumers, as Conan's own consumers do: without libcurl's `CURL_STATICLIB`, `curl.h` declares
+  its functions as DLL imports on Windows.
 
 ## Consequences
 
@@ -99,7 +104,7 @@ header of a declared package. Rules:
   registry cache already has; a store per project would close it at the cost of rebuilding every
   package per project. The images carry one more pinned toolchain (a 19 MB venv). iOS and macOS
   take the user's own Conan, outside the pinned images. WASI is out of reach, since Conan has no
-  WASI target; Windows Node.js addons are still to wire.
+  WASI target.
 
 ## Alternatives considered
 

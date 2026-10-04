@@ -480,8 +480,9 @@ test('pull-request validation derives native families and toolchain impact from 
     assert.equal(units.families.include[0].macos, true);
 });
 
-test("the linux image's toolchain paths the CLI names are a toolchain change", () => {
+test("the linux and windows images' toolchain paths the CLI names are a toolchain change", () => {
     assert.equal(changedDependencyUnits(['core/crossbind/src/utils/linuxToolchain.js']).toolchain, true);
+    assert.equal(changedDependencyUnits(['core/crossbind/src/utils/windowsToolchain.js']).toolchain, true);
 });
 
 test('daily workflows keep write authority after validation and pin every action', () => {

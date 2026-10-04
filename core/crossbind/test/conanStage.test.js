@@ -1,5 +1,5 @@
 import {
-    describe, test, expect, beforeEach, afterEach,
+    describe, test, expect, vi, beforeEach, afterEach,
 } from 'vitest';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -8,6 +8,7 @@ import {
     conanPackagesOf, stageConanPackage, writeConanManifest, readConanManifest, conanManifestsStamp,
 } from '../src/utils/conanStage.js';
 import makeTreeWritable from '../src/utils/makeTreeWritable.js';
+import logger from '../src/utils/logger.js';
 
 const CONTAINER = '/var/cache/crossbind/conan/store/p';
 const edge = (overrides = {}) => ({ build: false, test: false, ...overrides });
@@ -101,6 +102,50 @@ describe('the packages of a conan graph', () => {
         expect(curl.frameworks).toEqual(['CoreFoundation', 'SystemConfiguration']);
     });
 
+    test('collects the defines every component asks its consumers to compile with', () => {
+        const graph = graphOf({
+            1: packageNode({
+                name: 'libcurl',
+                version: '8.22.0',
+                cppInfo: {
+                    root: { includedirs: [], libdirs: [], libs: [] },
+                    curl: {
+                        includedirs: [`${CONTAINER}/libcurl/p/include`], libdirs: [`${CONTAINER}/libcurl/p/lib`], libs: ['curl'], defines: ['CURL_STATICLIB=1', 'NOMINMAX'],
+                    },
+                },
+            }),
+        });
+        expect(conanPackagesOf(graph)[0].defines).toEqual(['CURL_STATICLIB=1', 'NOMINMAX']);
+    });
+
+    // A define becomes one compiler argument, in a list CMake splits on ';'. One that cannot was left out
+    // before crossbind took defines at all, so it stays out instead of stopping the build.
+    test('a define that is no plain name with a plain value is left out, with a notice', () => {
+        const info = vi.spyOn(logger, 'info').mockImplementation(() => {});
+        const asking = (defines) => conanPackagesOf(graphOf({
+            1: packageNode({
+                name: 'zlib', version: '1.3.2', cppInfo: { root: { includedirs: [], libdirs: [], libs: ['z'], defines } },
+            }),
+        }))[0].defines;
+
+        const defines = asking(['X;-fplugin=/tmp/evil.so', 'X=a b', 'FOO="x"', '1X', 'KEPT']);
+        const notices = info.mock.calls.map(([text]) => text);
+        info.mockRestore();
+
+        expect(defines).toEqual(['KEPT']);
+        expect(notices).toHaveLength(4);
+        expect(notices[0]).toMatch(/zlib\/1\.3\.2.*"X;-fplugin=\/tmp\/evil\.so"/);
+    });
+
+    test('a define may carry a path or a list as its value', () => {
+        const graph = graphOf({
+            1: packageNode({
+                name: 'boost', version: '1.90.0', libs: [], cppInfo: { root: { includedirs: [], libdirs: [], libs: [], defines: ['BOOST_STACKTRACE_ADDR2LINE_LOCATION=/usr/bin/addr2line', 'X=a,b:c'] } },
+            }),
+        });
+        expect(conanPackagesOf(graph)[0].defines).toEqual(['BOOST_STACKTRACE_ADDR2LINE_LOCATION=/usr/bin/addr2line', 'X=a,b:c']);
+    });
+
     // They become linker arguments.
     test('a system library or framework that is no plain name is refused', () => {
         const asking = (field, value) => graphOf({
@@ -175,6 +220,7 @@ describe('staging a conan package as a crossbind prebuilt', () => {
     const packageDir = (name) => path.join(stageDir(), 'packages', name);
     const toHost = (p) => p.replace('/var/cache/crossbind/conan/store', store());
     const distCmake = 'hosts=___PROJECT_HOST___ name=___PROJECT_NAME___ libs=___PROJECT_LIBS___ keep=___PROJECT_WHOLE_ARCHIVE___';
+    const HOST_LIBS = `\${CROSSBIND_CONAN_LIBS_\${PROJECT_TARGET_HOST}}`;
     const options = (targetPath = 'wasm-wasm32-st-release') => ({
         stageDir: stageDir(), targetPath, toHost, store: store(), distCmake,
     });
@@ -212,15 +258,36 @@ describe('staging a conan package as a crossbind prebuilt', () => {
             name: 'conan:zlib', version: '1.3.2', nativeVersion: '1.3.2', license: 'Zlib',
         });
         expect(fs.readFileSync(path.join(dir, 'dist/prebuilt/CMakeLists.txt'), 'utf8'))
-            .toBe('hosts=wasm-wasm32-st-release name=conan_zlib libs=z keep=');
+            .toBe(`set(CROSSBIND_CONAN_LIBS_wasm-wasm32-st-release "z")\nhosts=wasm-wasm32-st-release name=conan_zlib libs=${HOST_LIBS} keep=`);
     });
 
     test('a second target joins the targets the package already serves', () => {
         stageConanPackage(zlibWith(), options('wasm-wasm32-st-release'));
         stageConanPackage(zlibWith(), options('wasm-wasm32-mt-release'));
 
-        expect(fs.readFileSync(path.join(packageDir('zlib'), 'dist/prebuilt/CMakeLists.txt'), 'utf8'))
-            .toBe('hosts=wasm-wasm32-mt-release;wasm-wasm32-st-release name=conan_zlib libs=z keep=');
+        expect(fs.readFileSync(path.join(packageDir('zlib'), 'dist/prebuilt/CMakeLists.txt'), 'utf8')).toBe([
+            'set(CROSSBIND_CONAN_LIBS_wasm-wasm32-mt-release "z")',
+            'set(CROSSBIND_CONAN_LIBS_wasm-wasm32-st-release "z")',
+            `hosts=wasm-wasm32-mt-release;wasm-wasm32-st-release name=conan_zlib libs=${HOST_LIBS} keep=`,
+        ].join('\n'));
+    });
+
+    // The generated list is named by the host dist.cmake settles on, so it has to be read after the fallback.
+    test("dist.cmake reads a host's libraries only after a debug host falls back to its release one", () => {
+        const template = fs.readFileSync(new URL('../src/assets/cmake/dist.cmake', import.meta.url), 'utf8');
+
+        expect(template.indexOf('___PROJECT_LIBS___')).toBeGreaterThan(template.indexOf(`set(PROJECT_TARGET_HOST "\${PROJECT_TARGET_HOST_RELEASE}")`));
+    });
+
+    // libpng is png16 on Windows.
+    test('each target links the archives staged for it, as its recipe names them there', () => {
+        writeConanPackage('zlib', { 'lib/libzlibstatic.a': 'archive' });
+        stageConanPackage(zlibWith(), options('darwin-arm64-mt-release'));
+        stageConanPackage(zlibWith({ libs: ['zlibstatic'] }), options('win32-x64-mt-release'));
+
+        const cmake = fs.readFileSync(path.join(packageDir('zlib'), 'dist/prebuilt/CMakeLists.txt'), 'utf8');
+        expect(cmake).toContain('set(CROSSBIND_CONAN_LIBS_darwin-arm64-mt-release "z")');
+        expect(cmake).toContain('set(CROSSBIND_CONAN_LIBS_win32-x64-mt-release "zlibstatic")');
     });
 
     test('a library the recipe declares but did not package fails the staging', () => {
@@ -379,7 +446,7 @@ describe('the stage manifest', () => {
         writeConanManifest(scratch, WASM, { key: 'one', packages: [entry] });
 
         expect(readConanManifest(scratch, 'one').packages).toEqual([{
-            ...entry, homepage: null, source: null, systemLibs: [], frameworks: [],
+            ...entry, homepage: null, source: null, systemLibs: [], frameworks: [], defines: [],
         }]);
         expect(readConanManifest(scratch, 'two')).toBeNull();
     });
