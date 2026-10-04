@@ -56,6 +56,12 @@ describe('run: a Linux addon build', () => {
         expect(args).toContain(`-DCMAKE_TOOLCHAIN_FILE=/opt/crossbind/linux/${triple}.cmake`);
     });
 
+    test('compiles position-independent code without the image pkg-config files', async () => {
+        const { args } = await runLinux('linux', 'x64', ['make']);
+
+        expect(args).toEqual(expect.arrayContaining(['PKG_CONFIG_LIBDIR=', 'CFLAGS=-fPIC', 'CXXFLAGS=-fPIC']));
+    });
+
     test('a musl build runs in the linux image', async () => {
         const { args } = await runLinux('linuxmusl', 'x64', ['cmake', '/src']);
 

@@ -1,6 +1,7 @@
 import { describe, test, expect } from 'vitest';
 import {
-    boundHeaderSpecifiers, bridgeTargetOrder, bridgeTargets, resolveBoundHeaders, headerAliases, headerEntryPath, headerEntryModule,
+    boundHeaderSpecifiers, bridgeTargetOrder, bridgeTargets, nodeBridgeTarget, resolveBoundHeaders,
+    headerAliases, headerEntryPath, headerEntryModule,
 } from '../src/utils/boundHeaders.js';
 
 const ext = { header: ['h', 'hpp', 'hxx', 'hh'] };
@@ -72,6 +73,18 @@ describe('bridgeTargets', () => {
 
     test('keeps a built target ahead of an unbuilt one of its platform', () => {
         expect(names(bridgeTargets([linuxX64], all))).toEqual(['linux-x64-node', 'linux-arm64-node', 'darwin-arm64-node']);
+    });
+});
+
+describe('nodeBridgeTarget', () => {
+    const target = (platform, arch, buildType) => ({
+        platform, arch, runtime: 'mt', buildType, path: `${platform}-${arch}-mt-${buildType}`, releasePath: `${platform}-${arch}-mt-release`,
+    });
+
+    // Conan packages are staged for release targets only, as Metro's bridges read the platform's release target.
+    test("reads the app's headers for the first target in bridge order, as a release one", () => {
+        expect(nodeBridgeTarget([target('darwin', 'arm64', 'debug'), target('linuxmusl', 'x64', 'debug')]))
+            .toEqual(expect.objectContaining({ platform: 'linuxmusl', arch: 'x64', buildType: 'release', path: 'linuxmusl-x64-mt-release' }));
     });
 });
 

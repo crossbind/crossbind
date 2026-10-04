@@ -480,6 +480,10 @@ test('pull-request validation derives native families and toolchain impact from 
     assert.equal(units.families.include[0].macos, true);
 });
 
+test("the linux image's toolchain paths the CLI names are a toolchain change", () => {
+    assert.equal(changedDependencyUnits(['core/crossbind/src/utils/linuxToolchain.js']).toolchain, true);
+});
+
 test('daily workflows keep write authority after validation and pin every action', () => {
     const watch = fs.readFileSync(path.join(ROOT, '.github/workflows/dependency-watch.yml'), 'utf8');
     const candidate = fs.readFileSync(path.join(ROOT, '.github/workflows/dependency-update-candidate.yml'), 'utf8');

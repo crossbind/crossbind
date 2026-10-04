@@ -308,6 +308,17 @@ describe('runConan in docker', () => {
         expect(argv[argv.indexOf('conan') - 1]).toMatch(/^ghcr\.io\/crossbind\/android@sha256:[0-9a-f]{64}$/);
     });
 
+    test('glibc and musl packages build in the linux image of the machine', async () => {
+        vi.stubEnv('CROSSBIND_IMAGE_LINUX', '');
+        const { mod, spawnSync } = await importFresh();
+
+        mod.default(['install'], { config: configWith('DOCKER_RUN'), target: { platform: 'linuxmusl', arch: 'x64', runtime: 'mt' }, work: mod.createConanWork('DOCKER_RUN') });
+
+        const argv = installCall(spawnSync)[1];
+        expect(argv).not.toContain('--platform');
+        expect(argv[argv.indexOf('conan') - 1]).toMatch(/^ghcr\.io\/crossbind\/linux@sha256:[0-9a-f]{64}$/);
+    });
+
     test('a wasm install passes no platform', async () => {
         const { mod, spawnSync } = await importFresh();
 

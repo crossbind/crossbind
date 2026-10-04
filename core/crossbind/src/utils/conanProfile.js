@@ -1,21 +1,51 @@
 import { WASM_EXCEPTION_FLAGS, targetArchiveFlags } from './archiveFlags.js';
 import { ANDROID_NDK, ANDROID_API_LEVEL } from './androidToolchain.js';
 import { IOS_DEPLOYMENT_TARGET } from './iosToolchain.js';
+import {
+    LINUX_ARCHIVE_FLAGS, linuxBuildEnv, linuxTool, linuxToolchainFile, linuxTriple,
+} from './linuxToolchain.js';
 
 // The app's own sources compile as C++20 (assets/cmake/CMakeLists.txt), so C++ packages do too.
 const CPP_STANDARD = '20';
-// The flags change the ABI without changing a setting, so they have to change the package id.
-const PACKAGE_ID_CONFS = ['tools.build:cflags', 'tools.build:cxxflags', 'tools.build:exelinkflags', 'tools.build:sharedlinkflags'];
+// The flags change the ABI without changing a setting, and glibc and musl builds share every setting,
+// so these have to change the package id. A conf the profile leaves unset adds nothing to it.
+const PACKAGE_ID_CONFS = ['tools.build:cflags', 'tools.build:cxxflags', 'tools.build:exelinkflags', 'tools.build:sharedlinkflags', 'user.crossbind:libc'];
 
 // Conan renders profiles as Jinja templates: these read the toolchain of whatever runs Conan, the image
 // or the host (under RUNNER=LOCAL, and for iOS).
 const EMCC_VERSION = "{{ subprocess.check_output(['emcc', '-dumpversion'], text=True).strip() }}";
 const EMSCRIPTEN_TOOLCHAIN = "{{ subprocess.check_output(['em-config', 'EMSCRIPTEN_ROOT'], text=True).strip() }}/cmake/Modules/Platform/Emscripten.cmake";
-const NDK_CLANG_VERSION = `{{ subprocess.check_output(['${ANDROID_NDK}/toolchains/llvm/prebuilt/linux-x86_64/bin/clang', '-dumpversion'], text=True).split('.')[0] }}`;
+const clangMajorVersion = (clang) => `{{ subprocess.check_output(['${clang}', '-dumpversion'], text=True).split('.')[0] }}`;
+const NDK_CLANG_VERSION = clangMajorVersion(`${ANDROID_NDK}/toolchains/llvm/prebuilt/linux-x86_64/bin/clang`);
 const XCODE_CLANG_VERSION = "{{ subprocess.check_output(['xcrun', 'clang', '-dumpversion'], text=True).split('.')[0] }}";
 const CMAKE_VERSION = "{{ subprocess.check_output(['cmake', '--version'], text=True).split()[2] }}";
 
 const ANDROID_ARCHS = { 'arm64-v8a': 'armv8', x86_64: 'x86_64' };
+const LINUX_ARCHS = { x64: 'x86_64', arm64: 'armv8' };
+const LINUX_LIBCS = { linux: 'glibc', linuxmusl: 'musl' };
+
+// The image's clang wrappers through its CMake toolchain file for the triple, as a port archive for an
+// addon is built. The image runs no musl program, so a musl build is a cross build even on a machine of
+// the same arch, which Conan would take for a native one; configure is told the triple itself.
+const LINUX = {
+    settings: (target) => [
+        'os=Linux',
+        `arch=${LINUX_ARCHS[target.arch]}`,
+        'compiler=clang',
+        `compiler.version=${clangMajorVersion(linuxTool(target, 'clang'))}`,
+        'compiler.libcxx=libc++',
+        `compiler.cppstd=${CPP_STANDARD}`,
+    ],
+    conf: (target) => [
+        `tools.build:compiler_executables={'c': '${linuxTool(target, 'clang')}', 'cpp': '${linuxTool(target, 'clang++')}'}`,
+        `tools.cmake.cmaketoolchain:user_toolchain=["${linuxToolchainFile(target)}"]`,
+        `tools.gnu:host_triplet=${linuxTriple(target)}`,
+        ...(target.platform === 'linuxmusl' ? ['tools.build.cross_building:cross_build=True'] : []),
+        `user.crossbind:libc=${LINUX_LIBCS[target.platform]}`,
+    ],
+    buildenv: (target) => Object.entries(linuxBuildEnv(target)).map(([variable, value]) => `${variable}=${value}`),
+    flags: LINUX_ARCHIVE_FLAGS,
+};
 
 // What differs per platform; the rest of the host profile is shared.
 const PLATFORMS = {
@@ -29,11 +59,12 @@ const PLATFORMS = {
             `compiler.cppstd=${CPP_STANDARD}`,
             ...(target.runtime === 'mt' ? ['compiler.threads=posix'] : []),
         ],
-        conf: [
+        conf: () => [
             "tools.build:compiler_executables={'c': 'emcc', 'cpp': 'em++'}",
             `tools.cmake.cmaketoolchain:user_toolchain=["${EMSCRIPTEN_TOOLCHAIN}"]`,
         ],
-        buildenv: ['CC=emcc', 'CXX=em++', 'AR=emar', 'NM=emnm', 'RANLIB=emranlib', 'STRIP=emstrip'],
+        buildenv: () => ['CC=emcc', 'CXX=em++', 'AR=emar', 'NM=emnm', 'RANLIB=emranlib', 'STRIP=emstrip'],
+        flags: WASM_EXCEPTION_FLAGS,
     },
     // The image's NDK through its own CMake toolchain and default STL, as a port archive is built.
     android: {
@@ -46,8 +77,9 @@ const PLATFORMS = {
             'compiler.libcxx=c++_static',
             `compiler.cppstd=${CPP_STANDARD}`,
         ],
-        conf: [`tools.android:ndk_path=${ANDROID_NDK}`],
-        buildenv: [],
+        conf: () => [`tools.android:ndk_path=${ANDROID_NDK}`],
+        buildenv: () => [],
+        flags: [],
     },
     // Xcode's clang for the target's SDK, arm64 only like every crossbind iOS slice. No bitcode flag:
     // Xcode 27 ld takes the "marker" of -fembed-bitcode-marker for a file when CMake links its check.
@@ -62,9 +94,12 @@ const PLATFORMS = {
             'compiler.libcxx=libc++',
             `compiler.cppstd=${CPP_STANDARD}`,
         ],
-        conf: [],
-        buildenv: [],
+        conf: () => [],
+        buildenv: () => [],
+        flags: [],
     },
+    linux: LINUX,
+    linuxmusl: LINUX,
 };
 
 export const BUILD_PROFILE = [
@@ -89,9 +124,11 @@ export const settingsUser = (target) => (target.platform === 'ios' ? 'compiler:\
 export function hostProfile(target) {
     const platform = PLATFORMS[target.platform];
     if (!platform) {
-        throw new Error(`crossbind: conan: imports build for wasm, android and ios so far; ${target.platform} is not supported yet, so its build cannot use conanDependencies.`);
+        const names = Object.keys(PLATFORMS);
+        throw new Error(`crossbind: conan: imports build for ${names.slice(0, -1).join(', ')} and ${names.at(-1)} so far; ${target.platform} is not supported yet, so its build cannot use conanDependencies.`);
     }
-    const flags = list([...(target.platform === 'wasm' ? WASM_EXCEPTION_FLAGS : []), ...targetArchiveFlags(target)]);
+    const flags = list([...platform.flags, ...targetArchiveFlags(target)]);
+    const buildenv = platform.buildenv(target);
     return [
         '[settings]',
         ...platform.settings(target),
@@ -101,14 +138,14 @@ export function hostProfile(target) {
         '*:shared=False',
         '',
         '[conf]',
-        ...platform.conf,
+        ...platform.conf(target),
         `tools.build:cflags=${flags}`,
         `tools.build:cxxflags=${flags}`,
         `tools.build:exelinkflags=${flags}`,
         `tools.build:sharedlinkflags=${flags}`,
         `tools.info.package_id:confs=${list(PACKAGE_ID_CONFS)}`,
         '',
-        ...(platform.buildenv.length > 0 ? ['[buildenv]', ...platform.buildenv, ''] : []),
+        ...(buildenv.length > 0 ? ['[buildenv]', ...buildenv, ''] : []),
         '[platform_tool_requires]',
         `cmake/${CMAKE_VERSION}`,
         '',

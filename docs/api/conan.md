@@ -3,19 +3,19 @@
 > Import a C or C++ library from [ConanCenter](https://conan.io/center) the way you import a
 > crate with `cargo:`: declare it, then name one of its headers. crossbind builds the package with
 > its own toolchain, links it like a port and binds the header like any other. Web builds (wasm32
-> and wasm64, `st` and `mt`) and React Native on Android (arm64-v8a and x86_64) and iOS (arm64
-> devices and simulators) for now.
+> and wasm64, `st` and `mt`), React Native on Android (arm64-v8a and x86_64) and iOS (arm64
+> devices and simulators), and Node.js addons for Linux (glibc and musl, x64 and arm64) for now.
 
 ## Requirement
 
-Nothing to install for web and Android builds with the default Docker runner: the toolchain
-images carry Conan 2.33 from image family 1.0.11 on. iOS packages build on your Mac with Xcode
-whatever the runner, so an iOS build needs Conan 2.19 or later and CMake on the `PATH`
+Nothing to install for web, Android and Linux addon builds with the default Docker runner: the
+toolchain images carry Conan 2.33 from image family 1.0.11 on. iOS packages build on your Mac with
+Xcode whatever the runner, so an iOS build needs Conan 2.19 or later and CMake on the `PATH`
 (`brew install conan` or `brew upgrade conan`, or `pipx install conan`); a Conan release older
 than your Xcode still takes its clang. The first build of a package needs the network,
 to reach ConanCenter and the sources its recipe downloads. Under `RUNNER=LOCAL`, web builds need
-Conan 2.19 or later, Emscripten and CMake on the `PATH`, and Android packages are refused: they
-need the android image's NDK.
+Conan 2.19 or later, Emscripten and CMake on the `PATH`, and Android and Linux packages are
+refused: they need the android image's NDK and the linux image's sysroots.
 
 ## Declare, then import
 
@@ -84,6 +84,14 @@ and each library becomes an xcframework that the `react-native-crossbind` pod ve
 links what it finds at `pod install`, so run `pod install` again after you change
 `conanDependencies`.
 
+## Node.js addons
+
+A Node.js addon for Linux (`crossbind build -p linux -p linuxmusl -e node`) links the packages too,
+and your own headers reach them as [above](#through-your-own-header). Each addon links the packages
+built for its own target; glibc and musl builds share every Conan setting, so crossbind keeps them
+apart as packages of their own. A package's symbols stay inside the addon, as a port's do: Node.js
+exports its own zlib and OpenSSL, and the addon's copies do not trade calls with them.
+
 ## What a build does
 
 1. When a build starts (`buildStart` in Vite and Rollup, `beforeRun` and `watchRun` in Webpack and
@@ -97,10 +105,13 @@ links what it finds at `pod install`, so run `pod install` again after you chang
    - iOS, on your Mac: the clang and archive tools of `/Applications/Xcode.app` for the device and
      the simulator SDK, arm64, deployment target 15.1 and `libc++`, as the ports' iOS archives are
      built. Conan finds Xcode's `ar`, `nm`, `ranlib` and `strip` ahead of any on your `PATH`, such
-     as Homebrew's binutils, whose GNU archives Apple's linker cannot read.
+     as Homebrew's binutils, whose GNU archives Apple's linker cannot read;
+   - Linux addons, in the linux image: its clang wrappers through its CMake toolchain file for each
+     triple, against the glibc 2.28 or musl sysroot, with `libc++`, `-fPIC` and `-pthread`, as the
+     ports' Linux archives are built.
 
    Every package is a static library.
-2. ConanCenter publishes no WebAssembly, Android or iOS binaries, so each package builds from
+2. ConanCenter publishes no binaries built with these toolchains, so each package builds from
    source the first time; zlib, libpng and fmt take seconds, or about half a minute in the android
    image, which runs emulated on Apple silicon. Built packages stay in `~/.crossbind/conan/store`,
    shared by every project, and any build with the same profile reuses them. Under `RUNNER=LOCAL`,
@@ -116,8 +127,8 @@ links what it finds at `pod install`, so run `pod install` again after you chang
 Each install writes Conan's whole log to `.crossbind/conan/logs/<target>.log`; a failed one also
 prints the end of it.
 
-A `crossbind build` that would also build for WASI or a Node.js addon fails while
-`conanDependencies` is declared; leave those platforms out with `-p`.
+A `crossbind build` that would also build for WASI, or a Node.js addon for macOS or Windows, fails
+while `conanDependencies` is declared; leave those platforms out with `-p`.
 
 ## What a recipe can reach
 
@@ -161,13 +172,13 @@ checkout build first; until then it stops with an error instead of leaving the p
 
 ## Limits
 
-- Web, Android and iOS builds only. Conan has no WASI target at all; Node.js addons are not wired
-  yet.
-- A recipe that does not build for Emscripten, the NDK or iOS fails the build with Conan's own
-  error. The recipe's options can often switch the failing part off.
+- Web, Android, iOS and Linux addon builds only. Conan has no WASI target at all; Node.js addons
+  for macOS and Windows are not wired yet.
+- A recipe that does not build for Emscripten, the NDK, iOS or a Linux sysroot fails the build with
+  Conan's own error. The recipe's options can often switch the failing part off.
 - Only a package's own archives link. The system libraries and Apple frameworks its recipe asks
-  for (`system_libs`, `frameworks`) are not added, so a package that needs one stops the link at
-  its symbols.
+  for (`system_libs`, `frameworks`) are not added, so a package that needs one stops the build at
+  its symbols; a Linux addon links `pthread` and `dl` anyway.
 - A header binds as far as a port's headers do ([`cpp-binding-rules.md`](./cpp-binding-rules.md)):
   C APIs bind; templates and variadic functions (`gzprintf`) do not.
 - Packages come from ConanCenter only; another remote or a login to one is not supported.

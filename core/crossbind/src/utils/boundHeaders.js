@@ -3,6 +3,8 @@
 // importing them. An entry is a header path, or a package name standing for every header the package
 // lists in export.publicHeaders.
 
+import { releaseTargetOf } from './targets.js';
+
 const isName = (entry) => typeof entry === 'string' && entry.length > 0;
 
 function publicHeadersOf(packageName, dependencies) {
@@ -51,6 +53,10 @@ export const bridgeTargets = (buildTargets, allTargets) => bridgeTargetOrder([
     ...allTargets.filter((target) => target.platform !== 'wasm' && !buildTargets.includes(target)
         && buildTargets.some((built) => built.runtimeEnv === target.runtimeEnv)),
 ]);
+
+// A Node build reads the app's headers for the first of its own targets, in its release form, since Conan
+// packages are staged for release targets only.
+export const nodeBridgeTarget = (targets) => releaseTargetOf(bridgeTargetOrder(targets)[0]);
 
 function resolveOrNull(resolve, specifier, target) {
     try {
