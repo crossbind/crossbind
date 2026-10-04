@@ -17,7 +17,7 @@ import buildLib from './actions/buildLib.js';
 import buildDependencies from './actions/buildDependencies.js';
 import writeHeaderEntries from './actions/writeHeaderEntries.js';
 import getDependFilePath from './integration/getDependFilePath.js';
-import { boundHeaderSpecifiers, bridgeTargetOrder, resolveBoundHeaders } from './utils/boundHeaders.js';
+import { boundHeaderSpecifiers, bridgeTargets, resolveBoundHeaders } from './utils/boundHeaders.js';
 import replaceFile from './utils/replaceFile.js';
 import runCrossbindApp from './actions/run.js';
 import { getBuildTargets, getFilteredBuildTargets } from './actions/target.js';
@@ -118,8 +118,10 @@ program.command('licenses')
     .option('--sbom [file]', 'write a CycloneDX SBOM json file (default: sbom.cdx.json)')
     .option('--check', 'exit non-zero when a license field is missing or not valid SPDX')
     .option('--platform <platform>', "also list what this platform's artifact statically links beyond the package graph (vendored copies, toolchain runtime)")
+    .addOption(new Option('-e, --runtime-env <runtimeEnv>', 'also list the crossbind runtime an addon of --platform compiles in, or without --platform the one its loader bundles').choices(['node']))
+    .option('--json [file]', 'write the rows, license texts included, as JSON (default: licenses.json)')
     .action(async (options) => {
-        const rows = await collectLicenseRows(options.platform || null);
+        const rows = await collectLicenseRows(options.platform || null, { runtimeEnv: options.runtimeEnv || null });
         rows.forEach((row) => {
             console.log(`${row.isCopyleft ? '! ' : '  '}${(row.name || '').padEnd(14)} ${String(row.license || '(missing)').padEnd(48)} native ${String(row.nativeVersion || '-').padEnd(10)} ${row.sourceUrl || ''}`);
         });
@@ -142,6 +144,11 @@ program.command('licenses')
                 : `${state.config.paths.project}/${declaredSbomPath(state.config.paths.project) ?? 'sbom.cdx.json'}`;
             const target = { name: state.config.package?.name, version: state.config.package?.version };
             fs.writeFileSync(file, formatCycloneDxSbom(rows, target));
+            logger.info(`crossbind: wrote ${file}`);
+        }
+        if (options.json) {
+            const file = typeof options.json === 'string' ? options.json : `${state.config.paths.project}/licenses.json`;
+            fs.writeFileSync(file, `${JSON.stringify(rows, null, 2)}\n`);
             logger.info(`crossbind: wrote ${file}`);
         }
         if (options.check) {
@@ -401,7 +408,7 @@ function createBridges() {
 
 // The dependency headers the config binds whole, each read where one of the targets' packages ships it.
 function createBoundBridges(targets) {
-    const headers = resolveBoundHeaders(boundHeaderSpecifiers(state.config), bridgeTargetOrder(targets), getDependFilePath);
+    const headers = resolveBoundHeaders(boundHeaderSpecifiers(state.config), bridgeTargets(targets, state.targets), getDependFilePath);
     const wholeHeaders = headers.map((header) => header.file);
     return headers.map((header) => ({ ...header, bridge: createBridgeFile(header.file, header.target, { wholeHeaders }) }));
 }

@@ -249,19 +249,6 @@ ships the LGPL 2.1 text as `COPYING` and names no version in its headers.
 - Check: `grep -n '"license"\|"declared"' ports/geos/base/package.json` shows the two values.
 - Remove when both name the same licence.
 
-## `crossbind licenses --notices` has no licence text for installed packages
-
-`readLicenseTexts` in `core/crossbind/src/actions/licenses.js` reads the upstream licence from the
-family's extracted source under `.crossbind/build/source`, which exists only in a checkout that
-built the port. In a project that installed the packages from npm, every text reads `(missing:
-build the package once to extract the upstream source)`, although each package ships the text as
-`LICENSE`. The LGPL playbook asks apps to ship these notices.
-
-- Seen: 2026-09-24 (a project installed from npm with `@crossbind/port-geos-wasm`)
-- Check: `grep -n 'build the package once' core/crossbind/src/actions/licenses.js` finds the
-  fallback, and `npx crossbind licenses --notices` in such a project prints it.
-- Remove when the notices fall back to the package's own `LICENSE`.
-
 ## `m.FS.writeFile` appends to a file that already exists in the browser
 
 Browser builds use WASMFS, whose `_wasmfs_write_file` (emsdk `system/lib/wasmfs/js_api.cpp`) writes

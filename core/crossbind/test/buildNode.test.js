@@ -154,6 +154,31 @@ describe('buildNode', () => {
         expect(linkArgs.some((arg) => arg.includes('force_load'))).toBe(false);
     });
 
+    test('keeps the runtime notices a Windows addon takes from its toolchain image', async () => {
+        const win32 = {
+            ...target, platform: 'win32', arch: 'x64', path: 'win32-x64-mt-release', addonName: 'demo.win32-x64.node',
+        };
+        state.targets = [win32];
+
+        await buildNode(win32, { force: true });
+
+        const copy = run.mock.calls.find(([, args]) => args.join(' ').includes('/opt/licenses/llvm-mingw'));
+        expect(copy[1].join(' ')).toContain('toolchain-licenses/win32');
+        expect(copy[2]).toBeNull();
+        expect(copy[3]).toBe(win32);
+    });
+
+    test('copies no toolchain notices for a Linux addon, whose LLVM runtime needs none', async () => {
+        const linux = {
+            ...target, platform: 'linux', arch: 'x64', path: 'linux-x64-mt-release', addonName: 'demo.linux-x64.node',
+        };
+        state.targets = [linux];
+
+        await buildNode(linux, { force: true });
+
+        expect(run.mock.calls.some(([, args]) => args.join(' ').includes('/opt/licenses'))).toBe(false);
+    });
+
     test('links the system libraries the dependencies declare for addons', async () => {
         getData.mockImplementation((kind) => (kind === 'binary' ? { addonFlags: ['-lxml2'] } : {}));
 
