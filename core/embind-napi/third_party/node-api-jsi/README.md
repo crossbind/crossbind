@@ -53,3 +53,7 @@ no `jsi-version.h` is needed.
   it. A string return went from 75 to 69 ns and a string argument from 95 to 84 ns; together with
   the direct BigInt read, a Rust `xxh64` call on 32 bytes with a BigInt seed and result went from
   141 to 110 ns. A million callbacks in one call peak at the same 70 MB.
+- `makeNodeApiJsiRuntime` takes an optional object that `global()` returns in place of the
+  global object. Each addon's loader bundles its own embind runtime, which keeps its `Module` and
+  the functions the addon calls by name on such an object, so addons of several packages run in
+  one process. The runtime's own lookups (`Error`, `Proxy`, `Symbol`) still use the global object.

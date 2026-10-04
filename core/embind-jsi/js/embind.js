@@ -1813,12 +1813,14 @@ function craftInvokerFunction(humanName, argTypes, classType, cppInvokerFunc, cp
   if (cppInvokerFunc.rawFunction) {
     // Call the host function with a fixed argument list: going through the dyn caller cost a
     // rest array, a slice and a spread call on every call.
-    args1.push("raw", "throwParked");
-    args2.push(cppInvokerFunc.rawFunction, throwParkedError);
+    // The generated code runs in the global scope, so it reaches the parked error through the object this
+    // module calls globalThis: a Node loader bundle gives each runtime its own.
+    args1.push("raw", "throwParked", "crossbindScope");
+    args2.push(cppInvokerFunc.rawFunction, throwParkedError, globalThis);
     invokerFnBody +=
-      "globalThis.__crossbindParkedError = null;\n" +
+      "crossbindScope.__crossbindParkedError = null;\n" +
       (returns || isAsync ? "var rv = " : "") + "raw(" + argsListWired + ");\n" +
-      "if (globalThis.__crossbindParkedError) throwParked();\n";
+      "if (crossbindScope.__crossbindParkedError) throwParked();\n";
   } else {
     invokerFnBody +=
       (returns || isAsync ? "var rv = " : "") + "invoker(fn" + (argsListWired.length > 0 ? ", " : "") + argsListWired + ");\n";
@@ -3698,9 +3700,10 @@ const globalIgnoreList = [
 function emval_get_global() {
   if (typeof globalThis == 'object') {
     const global = {};
-    Object.keys(globalThis).filter(key => !key.startsWith('_') && !globalIgnoreList.includes(key)).forEach(key => {
-      global[key] = globalThis[key];
-    });
+    // for...in: a Node loader bundle's globalThis inherits the global's properties.
+    for (const key in globalThis) {
+      if (!key.startsWith('_') && !globalIgnoreList.includes(key)) global[key] = globalThis[key];
+    }
 
     return global;
   }

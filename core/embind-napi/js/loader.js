@@ -2,9 +2,10 @@
 // (dist/<name>.native.cjs). It keeps the wasm build's initNative() contract, so the same app code
 // runs on either build.
 import path from 'node:path';
-import Module from '@crossbind/core-embind-jsi';
+import Module, { crossbindScope } from '@crossbind/core-embind-jsi';
 import systemConfig from 'crossbind/systemConfig';
 import addonPlatform from './addonPlatform.js';
+import stopOnExit from './stopOnExit.js';
 
 const platform = addonPlatform();
 
@@ -42,10 +43,11 @@ function boot(config) {
     // fresh environment whose start() would register every binding twice.
     if (!addon) {
         const loaded = loadAddon(config.addonPath ?? path.join(__dirname, addonFileName()));
-        loaded.start(dataPath);
+        // The embind runtime this bundle carries keeps its state on crossbindScope (crossbind's utils/scopedEmbind.js).
+        loaded.start(dataPath, crossbindScope);
         // Native values released after this (thread-local ones die inside exit()) must not call
         // back into the runtime.
-        process.once('exit', () => loaded.stop());
+        stopOnExit(() => loaded.stop());
         addon = loaded;
     }
     setEnv(dataPath, config.env);

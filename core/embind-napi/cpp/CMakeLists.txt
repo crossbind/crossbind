@@ -68,4 +68,9 @@ if(APPLE)
         string(REGEX REPLACE "^NODE_API_FUNC\\(([A-Za-z0-9_]+)\\).*" "\\1" func "${line}")
         target_link_options(addon PRIVATE "LINKER:-U,_${func}")
     endforeach()
+    # Only Node-API's entry points leave the addon: dyld merges exported weak definitions across the
+    # images of a process, so two addons would share inline state such as embind's registration guards.
+    target_link_options(addon PRIVATE
+        "LINKER:-exported_symbol,_napi_register_module_v1"
+        "LINKER:-exported_symbol,_node_api_module_get_api_version_v1")
 endif()

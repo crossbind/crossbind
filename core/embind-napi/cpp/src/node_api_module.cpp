@@ -82,9 +82,10 @@ std::string readString(napi_env env, napi_value value) {
     return result;
 }
 
-// start(dataPath) registers every EMSCRIPTEN_BINDINGS block of the addon into this environment's
-// embind runtime, so embind.js must already be loaded. A second call in the same environment is a
-// no-op: registering twice fails with "Cannot register public name ... twice".
+// start(dataPath, scope) registers every EMSCRIPTEN_BINDINGS block of the addon into this
+// environment's embind runtime, so embind.js must already be loaded. scope is the object that
+// runtime keeps its state on, which this addon's global() returns. A second call in the same
+// environment is a no-op: registering twice fails with "Cannot register public name ... twice".
 napi_value Start(napi_env env, napi_callback_info info) {
     void *existing = nullptr;
     NODE_API(napi_get_instance_data)(env, &existing);
@@ -100,17 +101,20 @@ napi_value Start(napi_env env, napi_callback_info info) {
         return nullptr;
     }
 
-    size_t argc = 1;
-    napi_value argv[1];
+    size_t argc = 2;
+    napi_value argv[2];
     NODE_API(napi_get_cb_info)(env, info, &argc, argv, nullptr, nullptr);
     const std::string dataPath = argc > 0 ? readString(env, argv[0]) : std::string();
+    napi_valuetype scopeType = napi_undefined;
+    if (argc > 1) NODE_API(napi_typeof)(env, argv[1], &scopeType);
+    napi_value scope = scopeType == napi_object ? argv[1] : nullptr;
 
     // An exception must not unwind through Node-API, which would end the process.
     try {
         auto state = std::make_unique<EnvState>();
         state->env = env;
         JSRuntimeApi::setCurrent(&state->api);
-        state->runtime = Microsoft::NodeApiJsi::makeNodeApiJsiRuntime(env, &state->api, [] {});
+        state->runtime = Microsoft::NodeApiJsi::makeNodeApiJsiRuntime(env, &state->api, [] {}, scope);
         // The environment owns it before any binding registers: registered functions point into it,
         // so it has to outlive a registration that fails halfway.
         EnvState *owned = state.release();
