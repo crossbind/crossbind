@@ -1,0 +1,23 @@
+{
+    "name": "@crossbind/port-iconv-node-linuxmusl-x64",
+    "version": "2.0.0-beta.62",
+    "nativeVersion": "1.19",
+    "homepage": "https://github.com/crossbind/crossbind/tree/main/ports/iconv#readme",
+    "repository": "https://github.com/crossbind/crossbind.git",
+    "license": "LGPL-2.1-or-later",
+    "description": "Linux x64 (musl) addon of @crossbind/port-iconv-node, which npm installs on a matching machine.",
+    "private": true,
+    "os": [
+        "linux"
+    ],
+    "cpu": [
+        "x64"
+    ],
+    "libc": [
+        "musl"
+    ],
+    "main": "iconv-node.linuxmusl-x64.node",
+    "files": [
+        "iconv-node.linuxmusl-x64.node"
+    ]
+}

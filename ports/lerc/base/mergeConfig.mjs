@@ -6,6 +6,7 @@ export default (newConfig = {}) => ({
     },
     export: {
         type: 'cmake',
+        publicHeaders: ['Lerc_c_api.h', 'Lerc_types.h'],
         libName: ['Lerc'],
         ...(newConfig.export || {}),
     },
@@ -14,4 +15,9 @@ export default (newConfig = {}) => ({
         base: '../..',
         ...(newConfig.paths || {}),
     },
+    targetSpecs: [
+        // On Windows Lerc_c_api.h imports its functions from a DLL unless told the library is static.
+        { platform: 'win32', specs: { cmake: { compileOptions: ['-DLERC_STATIC'] } } },
+        ...(newConfig.targetSpecs || []),
+    ],
 });

@@ -114,6 +114,9 @@ export function buildChecks(s) {
         add('cpp:noThrow', () => ConfOps.checkedSqrt(9), 3);
         add('cpp:optionalSome', () => ConfOps.half(42), 21);
         add('cpp:optionalNone', async () => (await ConfOps.half(7)) ?? 'empty', 'empty');
+        // The jsi dispatch stopped at 15 arguments, a method's receiver counting as one; GDAL calls take up to 19.
+        add('cpp:manyArgsStatic', () => ConfOps.sumOfSixteen(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16), 136);
+        add('cpp:manyArgsMethod', async () => (await new ConfBox(6, 4)).areaPlusFifteen(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15), 144);
     }));
 
     section(list, 'rustPkg', 'no Rust package surface wired on this leg', s.rustPkg && (() => {

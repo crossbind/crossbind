@@ -1382,6 +1382,65 @@ importers:
         specifier: workspace:^
         version: link:../../../core/crossbind
 
+  ports/curl/node:
+    devDependencies:
+      '@crossbind/port-curl-darwin':
+        specifier: workspace:^
+        version: link:../darwin
+      '@crossbind/port-curl-linux':
+        specifier: workspace:^
+        version: link:../linux
+      '@crossbind/port-curl-linuxmusl':
+        specifier: workspace:^
+        version: link:../linuxmusl
+      '@crossbind/port-curl-win32':
+        specifier: workspace:^
+        version: link:../win32
+      crossbind:
+        specifier: workspace:^
+        version: link:../../../core/crossbind
+    optionalDependencies:
+      '@crossbind/port-curl-node-darwin-arm64':
+        specifier: workspace:*
+        version: link:../node-darwin-arm64
+      '@crossbind/port-curl-node-darwin-x64':
+        specifier: workspace:*
+        version: link:../node-darwin-x64
+      '@crossbind/port-curl-node-linux-arm64':
+        specifier: workspace:*
+        version: link:../node-linux-arm64
+      '@crossbind/port-curl-node-linux-x64':
+        specifier: workspace:*
+        version: link:../node-linux-x64
+      '@crossbind/port-curl-node-linuxmusl-arm64':
+        specifier: workspace:*
+        version: link:../node-linuxmusl-arm64
+      '@crossbind/port-curl-node-linuxmusl-x64':
+        specifier: workspace:*
+        version: link:../node-linuxmusl-x64
+      '@crossbind/port-curl-node-win32-arm64':
+        specifier: workspace:*
+        version: link:../node-win32-arm64
+      '@crossbind/port-curl-node-win32-x64':
+        specifier: workspace:*
+        version: link:../node-win32-x64
+
+  ports/curl/node-darwin-arm64: {}
+
+  ports/curl/node-darwin-x64: {}
+
+  ports/curl/node-linux-arm64: {}
+
+  ports/curl/node-linux-x64: {}
+
+  ports/curl/node-linuxmusl-arm64: {}
+
+  ports/curl/node-linuxmusl-x64: {}
+
+  ports/curl/node-win32-arm64: {}
+
+  ports/curl/node-win32-x64: {}
+
   ports/curl/wasi:
     dependencies:
       '@crossbind/port-curl':
@@ -1484,6 +1543,65 @@ importers:
       crossbind:
         specifier: workspace:^
         version: link:../../../core/crossbind
+
+  ports/expat/node:
+    devDependencies:
+      '@crossbind/port-expat-darwin':
+        specifier: workspace:^
+        version: link:../darwin
+      '@crossbind/port-expat-linux':
+        specifier: workspace:^
+        version: link:../linux
+      '@crossbind/port-expat-linuxmusl':
+        specifier: workspace:^
+        version: link:../linuxmusl
+      '@crossbind/port-expat-win32':
+        specifier: workspace:^
+        version: link:../win32
+      crossbind:
+        specifier: workspace:^
+        version: link:../../../core/crossbind
+    optionalDependencies:
+      '@crossbind/port-expat-node-darwin-arm64':
+        specifier: workspace:*
+        version: link:../node-darwin-arm64
+      '@crossbind/port-expat-node-darwin-x64':
+        specifier: workspace:*
+        version: link:../node-darwin-x64
+      '@crossbind/port-expat-node-linux-arm64':
+        specifier: workspace:*
+        version: link:../node-linux-arm64
+      '@crossbind/port-expat-node-linux-x64':
+        specifier: workspace:*
+        version: link:../node-linux-x64
+      '@crossbind/port-expat-node-linuxmusl-arm64':
+        specifier: workspace:*
+        version: link:../node-linuxmusl-arm64
+      '@crossbind/port-expat-node-linuxmusl-x64':
+        specifier: workspace:*
+        version: link:../node-linuxmusl-x64
+      '@crossbind/port-expat-node-win32-arm64':
+        specifier: workspace:*
+        version: link:../node-win32-arm64
+      '@crossbind/port-expat-node-win32-x64':
+        specifier: workspace:*
+        version: link:../node-win32-x64
+
+  ports/expat/node-darwin-arm64: {}
+
+  ports/expat/node-darwin-x64: {}
+
+  ports/expat/node-linux-arm64: {}
+
+  ports/expat/node-linux-x64: {}
+
+  ports/expat/node-linuxmusl-arm64: {}
+
+  ports/expat/node-linuxmusl-x64: {}
+
+  ports/expat/node-win32-arm64: {}
+
+  ports/expat/node-win32-x64: {}
 
   ports/expat/wasi:
     dependencies:
@@ -1807,6 +1925,65 @@ importers:
         specifier: workspace:^
         version: link:../../../core/crossbind
 
+  ports/gdal/node:
+    devDependencies:
+      '@crossbind/port-gdal-darwin':
+        specifier: workspace:^
+        version: link:../darwin
+      '@crossbind/port-gdal-linux':
+        specifier: workspace:^
+        version: link:../linux
+      '@crossbind/port-gdal-linuxmusl':
+        specifier: workspace:^
+        version: link:../linuxmusl
+      '@crossbind/port-gdal-win32':
+        specifier: workspace:^
+        version: link:../win32
+      crossbind:
+        specifier: workspace:^
+        version: link:../../../core/crossbind
+    optionalDependencies:
+      '@crossbind/port-gdal-node-darwin-arm64':
+        specifier: workspace:*
+        version: link:../node-darwin-arm64
+      '@crossbind/port-gdal-node-darwin-x64':
+        specifier: workspace:*
+        version: link:../node-darwin-x64
+      '@crossbind/port-gdal-node-linux-arm64':
+        specifier: workspace:*
+        version: link:../node-linux-arm64
+      '@crossbind/port-gdal-node-linux-x64':
+        specifier: workspace:*
+        version: link:../node-linux-x64
+      '@crossbind/port-gdal-node-linuxmusl-arm64':
+        specifier: workspace:*
+        version: link:../node-linuxmusl-arm64
+      '@crossbind/port-gdal-node-linuxmusl-x64':
+        specifier: workspace:*
+        version: link:../node-linuxmusl-x64
+      '@crossbind/port-gdal-node-win32-arm64':
+        specifier: workspace:*
+        version: link:../node-win32-arm64
+      '@crossbind/port-gdal-node-win32-x64':
+        specifier: workspace:*
+        version: link:../node-win32-x64
+
+  ports/gdal/node-darwin-arm64: {}
+
+  ports/gdal/node-darwin-x64: {}
+
+  ports/gdal/node-linux-arm64: {}
+
+  ports/gdal/node-linux-x64: {}
+
+  ports/gdal/node-linuxmusl-arm64: {}
+
+  ports/gdal/node-linuxmusl-x64: {}
+
+  ports/gdal/node-win32-arm64: {}
+
+  ports/gdal/node-win32-x64: {}
+
   ports/gdal/wasi:
     dependencies:
       '@crossbind/port-curl-wasi':
@@ -2003,6 +2180,65 @@ importers:
         specifier: workspace:^
         version: link:../../../core/crossbind
 
+  ports/geos/node:
+    devDependencies:
+      '@crossbind/port-geos-darwin':
+        specifier: workspace:^
+        version: link:../darwin
+      '@crossbind/port-geos-linux':
+        specifier: workspace:^
+        version: link:../linux
+      '@crossbind/port-geos-linuxmusl':
+        specifier: workspace:^
+        version: link:../linuxmusl
+      '@crossbind/port-geos-win32':
+        specifier: workspace:^
+        version: link:../win32
+      crossbind:
+        specifier: workspace:^
+        version: link:../../../core/crossbind
+    optionalDependencies:
+      '@crossbind/port-geos-node-darwin-arm64':
+        specifier: workspace:*
+        version: link:../node-darwin-arm64
+      '@crossbind/port-geos-node-darwin-x64':
+        specifier: workspace:*
+        version: link:../node-darwin-x64
+      '@crossbind/port-geos-node-linux-arm64':
+        specifier: workspace:*
+        version: link:../node-linux-arm64
+      '@crossbind/port-geos-node-linux-x64':
+        specifier: workspace:*
+        version: link:../node-linux-x64
+      '@crossbind/port-geos-node-linuxmusl-arm64':
+        specifier: workspace:*
+        version: link:../node-linuxmusl-arm64
+      '@crossbind/port-geos-node-linuxmusl-x64':
+        specifier: workspace:*
+        version: link:../node-linuxmusl-x64
+      '@crossbind/port-geos-node-win32-arm64':
+        specifier: workspace:*
+        version: link:../node-win32-arm64
+      '@crossbind/port-geos-node-win32-x64':
+        specifier: workspace:*
+        version: link:../node-win32-x64
+
+  ports/geos/node-darwin-arm64: {}
+
+  ports/geos/node-darwin-x64: {}
+
+  ports/geos/node-linux-arm64: {}
+
+  ports/geos/node-linux-x64: {}
+
+  ports/geos/node-linuxmusl-arm64: {}
+
+  ports/geos/node-linuxmusl-x64: {}
+
+  ports/geos/node-win32-arm64: {}
+
+  ports/geos/node-win32-x64: {}
+
   ports/geos/wasi:
     dependencies:
       '@crossbind/port-geos':
@@ -2157,6 +2393,65 @@ importers:
         specifier: workspace:^
         version: link:../../../core/crossbind
 
+  ports/geotiff/node:
+    devDependencies:
+      '@crossbind/port-geotiff-darwin':
+        specifier: workspace:^
+        version: link:../darwin
+      '@crossbind/port-geotiff-linux':
+        specifier: workspace:^
+        version: link:../linux
+      '@crossbind/port-geotiff-linuxmusl':
+        specifier: workspace:^
+        version: link:../linuxmusl
+      '@crossbind/port-geotiff-win32':
+        specifier: workspace:^
+        version: link:../win32
+      crossbind:
+        specifier: workspace:^
+        version: link:../../../core/crossbind
+    optionalDependencies:
+      '@crossbind/port-geotiff-node-darwin-arm64':
+        specifier: workspace:*
+        version: link:../node-darwin-arm64
+      '@crossbind/port-geotiff-node-darwin-x64':
+        specifier: workspace:*
+        version: link:../node-darwin-x64
+      '@crossbind/port-geotiff-node-linux-arm64':
+        specifier: workspace:*
+        version: link:../node-linux-arm64
+      '@crossbind/port-geotiff-node-linux-x64':
+        specifier: workspace:*
+        version: link:../node-linux-x64
+      '@crossbind/port-geotiff-node-linuxmusl-arm64':
+        specifier: workspace:*
+        version: link:../node-linuxmusl-arm64
+      '@crossbind/port-geotiff-node-linuxmusl-x64':
+        specifier: workspace:*
+        version: link:../node-linuxmusl-x64
+      '@crossbind/port-geotiff-node-win32-arm64':
+        specifier: workspace:*
+        version: link:../node-win32-arm64
+      '@crossbind/port-geotiff-node-win32-x64':
+        specifier: workspace:*
+        version: link:../node-win32-x64
+
+  ports/geotiff/node-darwin-arm64: {}
+
+  ports/geotiff/node-darwin-x64: {}
+
+  ports/geotiff/node-linux-arm64: {}
+
+  ports/geotiff/node-linux-x64: {}
+
+  ports/geotiff/node-linuxmusl-arm64: {}
+
+  ports/geotiff/node-linuxmusl-x64: {}
+
+  ports/geotiff/node-win32-arm64: {}
+
+  ports/geotiff/node-win32-x64: {}
+
   ports/geotiff/wasi:
     dependencies:
       '@crossbind/port-geotiff':
@@ -2272,6 +2567,65 @@ importers:
         specifier: workspace:^
         version: link:../../../core/crossbind
 
+  ports/iconv/node:
+    devDependencies:
+      '@crossbind/port-iconv-darwin':
+        specifier: workspace:^
+        version: link:../darwin
+      '@crossbind/port-iconv-linux':
+        specifier: workspace:^
+        version: link:../linux
+      '@crossbind/port-iconv-linuxmusl':
+        specifier: workspace:^
+        version: link:../linuxmusl
+      '@crossbind/port-iconv-win32':
+        specifier: workspace:^
+        version: link:../win32
+      crossbind:
+        specifier: workspace:^
+        version: link:../../../core/crossbind
+    optionalDependencies:
+      '@crossbind/port-iconv-node-darwin-arm64':
+        specifier: workspace:*
+        version: link:../node-darwin-arm64
+      '@crossbind/port-iconv-node-darwin-x64':
+        specifier: workspace:*
+        version: link:../node-darwin-x64
+      '@crossbind/port-iconv-node-linux-arm64':
+        specifier: workspace:*
+        version: link:../node-linux-arm64
+      '@crossbind/port-iconv-node-linux-x64':
+        specifier: workspace:*
+        version: link:../node-linux-x64
+      '@crossbind/port-iconv-node-linuxmusl-arm64':
+        specifier: workspace:*
+        version: link:../node-linuxmusl-arm64
+      '@crossbind/port-iconv-node-linuxmusl-x64':
+        specifier: workspace:*
+        version: link:../node-linuxmusl-x64
+      '@crossbind/port-iconv-node-win32-arm64':
+        specifier: workspace:*
+        version: link:../node-win32-arm64
+      '@crossbind/port-iconv-node-win32-x64':
+        specifier: workspace:*
+        version: link:../node-win32-x64
+
+  ports/iconv/node-darwin-arm64: {}
+
+  ports/iconv/node-darwin-x64: {}
+
+  ports/iconv/node-linux-arm64: {}
+
+  ports/iconv/node-linux-x64: {}
+
+  ports/iconv/node-linuxmusl-arm64: {}
+
+  ports/iconv/node-linuxmusl-x64: {}
+
+  ports/iconv/node-win32-arm64: {}
+
+  ports/iconv/node-win32-x64: {}
+
   ports/iconv/wasi:
     dependencies:
       '@crossbind/port-iconv':
@@ -2366,6 +2720,65 @@ importers:
         specifier: workspace:^
         version: link:../../../core/crossbind
 
+  ports/jpegturbo/node:
+    devDependencies:
+      '@crossbind/port-jpegturbo-darwin':
+        specifier: workspace:^
+        version: link:../darwin
+      '@crossbind/port-jpegturbo-linux':
+        specifier: workspace:^
+        version: link:../linux
+      '@crossbind/port-jpegturbo-linuxmusl':
+        specifier: workspace:^
+        version: link:../linuxmusl
+      '@crossbind/port-jpegturbo-win32':
+        specifier: workspace:^
+        version: link:../win32
+      crossbind:
+        specifier: workspace:^
+        version: link:../../../core/crossbind
+    optionalDependencies:
+      '@crossbind/port-jpegturbo-node-darwin-arm64':
+        specifier: workspace:*
+        version: link:../node-darwin-arm64
+      '@crossbind/port-jpegturbo-node-darwin-x64':
+        specifier: workspace:*
+        version: link:../node-darwin-x64
+      '@crossbind/port-jpegturbo-node-linux-arm64':
+        specifier: workspace:*
+        version: link:../node-linux-arm64
+      '@crossbind/port-jpegturbo-node-linux-x64':
+        specifier: workspace:*
+        version: link:../node-linux-x64
+      '@crossbind/port-jpegturbo-node-linuxmusl-arm64':
+        specifier: workspace:*
+        version: link:../node-linuxmusl-arm64
+      '@crossbind/port-jpegturbo-node-linuxmusl-x64':
+        specifier: workspace:*
+        version: link:../node-linuxmusl-x64
+      '@crossbind/port-jpegturbo-node-win32-arm64':
+        specifier: workspace:*
+        version: link:../node-win32-arm64
+      '@crossbind/port-jpegturbo-node-win32-x64':
+        specifier: workspace:*
+        version: link:../node-win32-x64
+
+  ports/jpegturbo/node-darwin-arm64: {}
+
+  ports/jpegturbo/node-darwin-x64: {}
+
+  ports/jpegturbo/node-linux-arm64: {}
+
+  ports/jpegturbo/node-linux-x64: {}
+
+  ports/jpegturbo/node-linuxmusl-arm64: {}
+
+  ports/jpegturbo/node-linuxmusl-x64: {}
+
+  ports/jpegturbo/node-win32-arm64: {}
+
+  ports/jpegturbo/node-win32-x64: {}
+
   ports/jpegturbo/wasi:
     dependencies:
       '@crossbind/port-jpegturbo':
@@ -2447,6 +2860,65 @@ importers:
       crossbind:
         specifier: workspace:^
         version: link:../../../core/crossbind
+
+  ports/lerc/node:
+    devDependencies:
+      '@crossbind/port-lerc-darwin':
+        specifier: workspace:^
+        version: link:../darwin
+      '@crossbind/port-lerc-linux':
+        specifier: workspace:^
+        version: link:../linux
+      '@crossbind/port-lerc-linuxmusl':
+        specifier: workspace:^
+        version: link:../linuxmusl
+      '@crossbind/port-lerc-win32':
+        specifier: workspace:^
+        version: link:../win32
+      crossbind:
+        specifier: workspace:^
+        version: link:../../../core/crossbind
+    optionalDependencies:
+      '@crossbind/port-lerc-node-darwin-arm64':
+        specifier: workspace:*
+        version: link:../node-darwin-arm64
+      '@crossbind/port-lerc-node-darwin-x64':
+        specifier: workspace:*
+        version: link:../node-darwin-x64
+      '@crossbind/port-lerc-node-linux-arm64':
+        specifier: workspace:*
+        version: link:../node-linux-arm64
+      '@crossbind/port-lerc-node-linux-x64':
+        specifier: workspace:*
+        version: link:../node-linux-x64
+      '@crossbind/port-lerc-node-linuxmusl-arm64':
+        specifier: workspace:*
+        version: link:../node-linuxmusl-arm64
+      '@crossbind/port-lerc-node-linuxmusl-x64':
+        specifier: workspace:*
+        version: link:../node-linuxmusl-x64
+      '@crossbind/port-lerc-node-win32-arm64':
+        specifier: workspace:*
+        version: link:../node-win32-arm64
+      '@crossbind/port-lerc-node-win32-x64':
+        specifier: workspace:*
+        version: link:../node-win32-x64
+
+  ports/lerc/node-darwin-arm64: {}
+
+  ports/lerc/node-darwin-x64: {}
+
+  ports/lerc/node-linux-arm64: {}
+
+  ports/lerc/node-linux-x64: {}
+
+  ports/lerc/node-linuxmusl-arm64: {}
+
+  ports/lerc/node-linuxmusl-x64: {}
+
+  ports/lerc/node-win32-arm64: {}
+
+  ports/lerc/node-win32-x64: {}
 
   ports/lerc/wasi:
     dependencies:
@@ -2541,6 +3013,65 @@ importers:
       crossbind:
         specifier: workspace:^
         version: link:../../../core/crossbind
+
+  ports/openssl/node:
+    devDependencies:
+      '@crossbind/port-openssl-darwin':
+        specifier: workspace:^
+        version: link:../darwin
+      '@crossbind/port-openssl-linux':
+        specifier: workspace:^
+        version: link:../linux
+      '@crossbind/port-openssl-linuxmusl':
+        specifier: workspace:^
+        version: link:../linuxmusl
+      '@crossbind/port-openssl-win32':
+        specifier: workspace:^
+        version: link:../win32
+      crossbind:
+        specifier: workspace:^
+        version: link:../../../core/crossbind
+    optionalDependencies:
+      '@crossbind/port-openssl-node-darwin-arm64':
+        specifier: workspace:*
+        version: link:../node-darwin-arm64
+      '@crossbind/port-openssl-node-darwin-x64':
+        specifier: workspace:*
+        version: link:../node-darwin-x64
+      '@crossbind/port-openssl-node-linux-arm64':
+        specifier: workspace:*
+        version: link:../node-linux-arm64
+      '@crossbind/port-openssl-node-linux-x64':
+        specifier: workspace:*
+        version: link:../node-linux-x64
+      '@crossbind/port-openssl-node-linuxmusl-arm64':
+        specifier: workspace:*
+        version: link:../node-linuxmusl-arm64
+      '@crossbind/port-openssl-node-linuxmusl-x64':
+        specifier: workspace:*
+        version: link:../node-linuxmusl-x64
+      '@crossbind/port-openssl-node-win32-arm64':
+        specifier: workspace:*
+        version: link:../node-win32-arm64
+      '@crossbind/port-openssl-node-win32-x64':
+        specifier: workspace:*
+        version: link:../node-win32-x64
+
+  ports/openssl/node-darwin-arm64: {}
+
+  ports/openssl/node-darwin-x64: {}
+
+  ports/openssl/node-linux-arm64: {}
+
+  ports/openssl/node-linux-x64: {}
+
+  ports/openssl/node-linuxmusl-arm64: {}
+
+  ports/openssl/node-linuxmusl-x64: {}
+
+  ports/openssl/node-win32-arm64: {}
+
+  ports/openssl/node-win32-x64: {}
 
   ports/openssl/wasi:
     dependencies:
@@ -2665,6 +3196,65 @@ importers:
       crossbind:
         specifier: workspace:^
         version: link:../../../core/crossbind
+
+  ports/proj/node:
+    devDependencies:
+      '@crossbind/port-proj-darwin':
+        specifier: workspace:^
+        version: link:../darwin
+      '@crossbind/port-proj-linux':
+        specifier: workspace:^
+        version: link:../linux
+      '@crossbind/port-proj-linuxmusl':
+        specifier: workspace:^
+        version: link:../linuxmusl
+      '@crossbind/port-proj-win32':
+        specifier: workspace:^
+        version: link:../win32
+      crossbind:
+        specifier: workspace:^
+        version: link:../../../core/crossbind
+    optionalDependencies:
+      '@crossbind/port-proj-node-darwin-arm64':
+        specifier: workspace:*
+        version: link:../node-darwin-arm64
+      '@crossbind/port-proj-node-darwin-x64':
+        specifier: workspace:*
+        version: link:../node-darwin-x64
+      '@crossbind/port-proj-node-linux-arm64':
+        specifier: workspace:*
+        version: link:../node-linux-arm64
+      '@crossbind/port-proj-node-linux-x64':
+        specifier: workspace:*
+        version: link:../node-linux-x64
+      '@crossbind/port-proj-node-linuxmusl-arm64':
+        specifier: workspace:*
+        version: link:../node-linuxmusl-arm64
+      '@crossbind/port-proj-node-linuxmusl-x64':
+        specifier: workspace:*
+        version: link:../node-linuxmusl-x64
+      '@crossbind/port-proj-node-win32-arm64':
+        specifier: workspace:*
+        version: link:../node-win32-arm64
+      '@crossbind/port-proj-node-win32-x64':
+        specifier: workspace:*
+        version: link:../node-win32-x64
+
+  ports/proj/node-darwin-arm64: {}
+
+  ports/proj/node-darwin-x64: {}
+
+  ports/proj/node-linux-arm64: {}
+
+  ports/proj/node-linux-x64: {}
+
+  ports/proj/node-linuxmusl-arm64: {}
+
+  ports/proj/node-linuxmusl-x64: {}
+
+  ports/proj/node-win32-arm64: {}
+
+  ports/proj/node-win32-x64: {}
 
   ports/proj/wasi:
     dependencies:
@@ -2841,6 +3431,65 @@ importers:
         specifier: workspace:^
         version: link:../../../core/crossbind
 
+  ports/spatialite/node:
+    devDependencies:
+      '@crossbind/port-spatialite-darwin':
+        specifier: workspace:^
+        version: link:../darwin
+      '@crossbind/port-spatialite-linux':
+        specifier: workspace:^
+        version: link:../linux
+      '@crossbind/port-spatialite-linuxmusl':
+        specifier: workspace:^
+        version: link:../linuxmusl
+      '@crossbind/port-spatialite-win32':
+        specifier: workspace:^
+        version: link:../win32
+      crossbind:
+        specifier: workspace:^
+        version: link:../../../core/crossbind
+    optionalDependencies:
+      '@crossbind/port-spatialite-node-darwin-arm64':
+        specifier: workspace:*
+        version: link:../node-darwin-arm64
+      '@crossbind/port-spatialite-node-darwin-x64':
+        specifier: workspace:*
+        version: link:../node-darwin-x64
+      '@crossbind/port-spatialite-node-linux-arm64':
+        specifier: workspace:*
+        version: link:../node-linux-arm64
+      '@crossbind/port-spatialite-node-linux-x64':
+        specifier: workspace:*
+        version: link:../node-linux-x64
+      '@crossbind/port-spatialite-node-linuxmusl-arm64':
+        specifier: workspace:*
+        version: link:../node-linuxmusl-arm64
+      '@crossbind/port-spatialite-node-linuxmusl-x64':
+        specifier: workspace:*
+        version: link:../node-linuxmusl-x64
+      '@crossbind/port-spatialite-node-win32-arm64':
+        specifier: workspace:*
+        version: link:../node-win32-arm64
+      '@crossbind/port-spatialite-node-win32-x64':
+        specifier: workspace:*
+        version: link:../node-win32-x64
+
+  ports/spatialite/node-darwin-arm64: {}
+
+  ports/spatialite/node-darwin-x64: {}
+
+  ports/spatialite/node-linux-arm64: {}
+
+  ports/spatialite/node-linux-x64: {}
+
+  ports/spatialite/node-linuxmusl-arm64: {}
+
+  ports/spatialite/node-linuxmusl-x64: {}
+
+  ports/spatialite/node-win32-arm64: {}
+
+  ports/spatialite/node-win32-x64: {}
+
   ports/spatialite/wasi:
     dependencies:
       '@crossbind/port-geos-wasi':
@@ -2979,6 +3628,65 @@ importers:
       crossbind:
         specifier: workspace:^
         version: link:../../../core/crossbind
+
+  ports/sqlite3/node:
+    devDependencies:
+      '@crossbind/port-sqlite3-darwin':
+        specifier: workspace:^
+        version: link:../darwin
+      '@crossbind/port-sqlite3-linux':
+        specifier: workspace:^
+        version: link:../linux
+      '@crossbind/port-sqlite3-linuxmusl':
+        specifier: workspace:^
+        version: link:../linuxmusl
+      '@crossbind/port-sqlite3-win32':
+        specifier: workspace:^
+        version: link:../win32
+      crossbind:
+        specifier: workspace:^
+        version: link:../../../core/crossbind
+    optionalDependencies:
+      '@crossbind/port-sqlite3-node-darwin-arm64':
+        specifier: workspace:*
+        version: link:../node-darwin-arm64
+      '@crossbind/port-sqlite3-node-darwin-x64':
+        specifier: workspace:*
+        version: link:../node-darwin-x64
+      '@crossbind/port-sqlite3-node-linux-arm64':
+        specifier: workspace:*
+        version: link:../node-linux-arm64
+      '@crossbind/port-sqlite3-node-linux-x64':
+        specifier: workspace:*
+        version: link:../node-linux-x64
+      '@crossbind/port-sqlite3-node-linuxmusl-arm64':
+        specifier: workspace:*
+        version: link:../node-linuxmusl-arm64
+      '@crossbind/port-sqlite3-node-linuxmusl-x64':
+        specifier: workspace:*
+        version: link:../node-linuxmusl-x64
+      '@crossbind/port-sqlite3-node-win32-arm64':
+        specifier: workspace:*
+        version: link:../node-win32-arm64
+      '@crossbind/port-sqlite3-node-win32-x64':
+        specifier: workspace:*
+        version: link:../node-win32-x64
+
+  ports/sqlite3/node-darwin-arm64: {}
+
+  ports/sqlite3/node-darwin-x64: {}
+
+  ports/sqlite3/node-linux-arm64: {}
+
+  ports/sqlite3/node-linux-x64: {}
+
+  ports/sqlite3/node-linuxmusl-arm64: {}
+
+  ports/sqlite3/node-linuxmusl-x64: {}
+
+  ports/sqlite3/node-win32-arm64: {}
+
+  ports/sqlite3/node-win32-x64: {}
 
   ports/sqlite3/wasi:
     dependencies:
@@ -3134,6 +3842,65 @@ importers:
         specifier: workspace:^
         version: link:../../../core/crossbind
 
+  ports/tiff/node:
+    devDependencies:
+      '@crossbind/port-tiff-darwin':
+        specifier: workspace:^
+        version: link:../darwin
+      '@crossbind/port-tiff-linux':
+        specifier: workspace:^
+        version: link:../linux
+      '@crossbind/port-tiff-linuxmusl':
+        specifier: workspace:^
+        version: link:../linuxmusl
+      '@crossbind/port-tiff-win32':
+        specifier: workspace:^
+        version: link:../win32
+      crossbind:
+        specifier: workspace:^
+        version: link:../../../core/crossbind
+    optionalDependencies:
+      '@crossbind/port-tiff-node-darwin-arm64':
+        specifier: workspace:*
+        version: link:../node-darwin-arm64
+      '@crossbind/port-tiff-node-darwin-x64':
+        specifier: workspace:*
+        version: link:../node-darwin-x64
+      '@crossbind/port-tiff-node-linux-arm64':
+        specifier: workspace:*
+        version: link:../node-linux-arm64
+      '@crossbind/port-tiff-node-linux-x64':
+        specifier: workspace:*
+        version: link:../node-linux-x64
+      '@crossbind/port-tiff-node-linuxmusl-arm64':
+        specifier: workspace:*
+        version: link:../node-linuxmusl-arm64
+      '@crossbind/port-tiff-node-linuxmusl-x64':
+        specifier: workspace:*
+        version: link:../node-linuxmusl-x64
+      '@crossbind/port-tiff-node-win32-arm64':
+        specifier: workspace:*
+        version: link:../node-win32-arm64
+      '@crossbind/port-tiff-node-win32-x64':
+        specifier: workspace:*
+        version: link:../node-win32-x64
+
+  ports/tiff/node-darwin-arm64: {}
+
+  ports/tiff/node-darwin-x64: {}
+
+  ports/tiff/node-linux-arm64: {}
+
+  ports/tiff/node-linux-x64: {}
+
+  ports/tiff/node-linuxmusl-arm64: {}
+
+  ports/tiff/node-linuxmusl-x64: {}
+
+  ports/tiff/node-win32-arm64: {}
+
+  ports/tiff/node-win32-x64: {}
+
   ports/tiff/wasi:
     dependencies:
       '@crossbind/port-tiff':
@@ -3255,6 +4022,65 @@ importers:
         specifier: workspace:^
         version: link:../../../core/crossbind
 
+  ports/webp/node:
+    devDependencies:
+      '@crossbind/port-webp-darwin':
+        specifier: workspace:^
+        version: link:../darwin
+      '@crossbind/port-webp-linux':
+        specifier: workspace:^
+        version: link:../linux
+      '@crossbind/port-webp-linuxmusl':
+        specifier: workspace:^
+        version: link:../linuxmusl
+      '@crossbind/port-webp-win32':
+        specifier: workspace:^
+        version: link:../win32
+      crossbind:
+        specifier: workspace:^
+        version: link:../../../core/crossbind
+    optionalDependencies:
+      '@crossbind/port-webp-node-darwin-arm64':
+        specifier: workspace:*
+        version: link:../node-darwin-arm64
+      '@crossbind/port-webp-node-darwin-x64':
+        specifier: workspace:*
+        version: link:../node-darwin-x64
+      '@crossbind/port-webp-node-linux-arm64':
+        specifier: workspace:*
+        version: link:../node-linux-arm64
+      '@crossbind/port-webp-node-linux-x64':
+        specifier: workspace:*
+        version: link:../node-linux-x64
+      '@crossbind/port-webp-node-linuxmusl-arm64':
+        specifier: workspace:*
+        version: link:../node-linuxmusl-arm64
+      '@crossbind/port-webp-node-linuxmusl-x64':
+        specifier: workspace:*
+        version: link:../node-linuxmusl-x64
+      '@crossbind/port-webp-node-win32-arm64':
+        specifier: workspace:*
+        version: link:../node-win32-arm64
+      '@crossbind/port-webp-node-win32-x64':
+        specifier: workspace:*
+        version: link:../node-win32-x64
+
+  ports/webp/node-darwin-arm64: {}
+
+  ports/webp/node-darwin-x64: {}
+
+  ports/webp/node-linux-arm64: {}
+
+  ports/webp/node-linux-x64: {}
+
+  ports/webp/node-linuxmusl-arm64: {}
+
+  ports/webp/node-linuxmusl-x64: {}
+
+  ports/webp/node-win32-arm64: {}
+
+  ports/webp/node-win32-x64: {}
+
   ports/webp/wasi:
     dependencies:
       '@crossbind/port-webp':
@@ -3336,6 +4162,65 @@ importers:
       crossbind:
         specifier: workspace:^
         version: link:../../../core/crossbind
+
+  ports/zlib/node:
+    devDependencies:
+      '@crossbind/port-zlib-darwin':
+        specifier: workspace:^
+        version: link:../darwin
+      '@crossbind/port-zlib-linux':
+        specifier: workspace:^
+        version: link:../linux
+      '@crossbind/port-zlib-linuxmusl':
+        specifier: workspace:^
+        version: link:../linuxmusl
+      '@crossbind/port-zlib-win32':
+        specifier: workspace:^
+        version: link:../win32
+      crossbind:
+        specifier: workspace:^
+        version: link:../../../core/crossbind
+    optionalDependencies:
+      '@crossbind/port-zlib-node-darwin-arm64':
+        specifier: workspace:*
+        version: link:../node-darwin-arm64
+      '@crossbind/port-zlib-node-darwin-x64':
+        specifier: workspace:*
+        version: link:../node-darwin-x64
+      '@crossbind/port-zlib-node-linux-arm64':
+        specifier: workspace:*
+        version: link:../node-linux-arm64
+      '@crossbind/port-zlib-node-linux-x64':
+        specifier: workspace:*
+        version: link:../node-linux-x64
+      '@crossbind/port-zlib-node-linuxmusl-arm64':
+        specifier: workspace:*
+        version: link:../node-linuxmusl-arm64
+      '@crossbind/port-zlib-node-linuxmusl-x64':
+        specifier: workspace:*
+        version: link:../node-linuxmusl-x64
+      '@crossbind/port-zlib-node-win32-arm64':
+        specifier: workspace:*
+        version: link:../node-win32-arm64
+      '@crossbind/port-zlib-node-win32-x64':
+        specifier: workspace:*
+        version: link:../node-win32-x64
+
+  ports/zlib/node-darwin-arm64: {}
+
+  ports/zlib/node-darwin-x64: {}
+
+  ports/zlib/node-linux-arm64: {}
+
+  ports/zlib/node-linux-x64: {}
+
+  ports/zlib/node-linuxmusl-arm64: {}
+
+  ports/zlib/node-linuxmusl-x64: {}
+
+  ports/zlib/node-win32-arm64: {}
+
+  ports/zlib/node-win32-x64: {}
 
   ports/zlib/wasi:
     dependencies:
@@ -3430,6 +4315,65 @@ importers:
       crossbind:
         specifier: workspace:^
         version: link:../../../core/crossbind
+
+  ports/zstd/node:
+    devDependencies:
+      '@crossbind/port-zstd-darwin':
+        specifier: workspace:^
+        version: link:../darwin
+      '@crossbind/port-zstd-linux':
+        specifier: workspace:^
+        version: link:../linux
+      '@crossbind/port-zstd-linuxmusl':
+        specifier: workspace:^
+        version: link:../linuxmusl
+      '@crossbind/port-zstd-win32':
+        specifier: workspace:^
+        version: link:../win32
+      crossbind:
+        specifier: workspace:^
+        version: link:../../../core/crossbind
+    optionalDependencies:
+      '@crossbind/port-zstd-node-darwin-arm64':
+        specifier: workspace:*
+        version: link:../node-darwin-arm64
+      '@crossbind/port-zstd-node-darwin-x64':
+        specifier: workspace:*
+        version: link:../node-darwin-x64
+      '@crossbind/port-zstd-node-linux-arm64':
+        specifier: workspace:*
+        version: link:../node-linux-arm64
+      '@crossbind/port-zstd-node-linux-x64':
+        specifier: workspace:*
+        version: link:../node-linux-x64
+      '@crossbind/port-zstd-node-linuxmusl-arm64':
+        specifier: workspace:*
+        version: link:../node-linuxmusl-arm64
+      '@crossbind/port-zstd-node-linuxmusl-x64':
+        specifier: workspace:*
+        version: link:../node-linuxmusl-x64
+      '@crossbind/port-zstd-node-win32-arm64':
+        specifier: workspace:*
+        version: link:../node-win32-arm64
+      '@crossbind/port-zstd-node-win32-x64':
+        specifier: workspace:*
+        version: link:../node-win32-x64
+
+  ports/zstd/node-darwin-arm64: {}
+
+  ports/zstd/node-darwin-x64: {}
+
+  ports/zstd/node-linux-arm64: {}
+
+  ports/zstd/node-linux-x64: {}
+
+  ports/zstd/node-linuxmusl-arm64: {}
+
+  ports/zstd/node-linuxmusl-x64: {}
+
+  ports/zstd/node-win32-arm64: {}
+
+  ports/zstd/node-win32-x64: {}
 
   ports/zstd/wasi:
     dependencies:

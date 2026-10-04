@@ -7,6 +7,8 @@ export default (newConfig = {}) => ({
     export: {
         type: 'cmake',
         libName: ['geos', 'geos_c'],
+        // The C API is the stable one; GEOS makes no compatibility promise for its C++ headers.
+        publicHeaders: ['geos_c.h'],
         // GEOS C++ headers forward-declare the geometry classes their signatures use; bindings need them complete.
         // These are the headers geos/geom.h includes: geos/geom.h itself adds `using namespace geos::geom` globally.
         headerPrelude: [

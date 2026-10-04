@@ -48,6 +48,10 @@ export default {
     sha256: 'c598d04fdf2ba25c4352844dafa81dde3f7fd968daa7ad131228cd91e9d3dc47', // libgeotiff-1.7.4.tar.gz
     getURL: (version) => `https://download.osgeo.org/geotiff/libgeotiff/libgeotiff-${version}.tar.gz`,
     buildType: 'configure',
+    // The typed forms of variadic calls crossbind adds (see the header), shipped beside the upstream headers.
+    copyToDist: {
+        'node_modules/@crossbind/port-geotiff/include/geotiff_crossbind.h': 'include/geotiff_crossbind.h',
+    },
     sourceReplaceList: () => noToolsReplaceList,
     getBuildParams: (target, depPaths) => [
         ...(platformBuild[target.platform] || platformBuild[`${target.platform}-${target.arch}`] || []),

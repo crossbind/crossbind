@@ -1,0 +1,20 @@
+{
+    "name": "@crossbind/port-spatialite-node-darwin-x64",
+    "version": "2.0.0-beta.62",
+    "nativeVersion": "5.1.0",
+    "homepage": "https://github.com/crossbind/crossbind/tree/main/ports/spatialite#readme",
+    "repository": "https://github.com/crossbind/crossbind.git",
+    "license": "MPL-1.1 OR GPL-2.0-or-later OR LGPL-2.1-or-later",
+    "description": "macOS x64 addon of @crossbind/port-spatialite-node, which npm installs on a matching machine.",
+    "private": true,
+    "os": [
+        "darwin"
+    ],
+    "cpu": [
+        "x64"
+    ],
+    "main": "spatialite-node.darwin-x64.node",
+    "files": [
+        "spatialite-node.darwin-x64.node"
+    ]
+}

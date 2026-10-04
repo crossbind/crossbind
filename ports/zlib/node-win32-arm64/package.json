@@ -1,0 +1,20 @@
+{
+    "name": "@crossbind/port-zlib-node-win32-arm64",
+    "version": "2.0.0-beta.62",
+    "nativeVersion": "1.3.2",
+    "homepage": "https://github.com/crossbind/crossbind/tree/main/ports/zlib#readme",
+    "repository": "https://github.com/crossbind/crossbind.git",
+    "license": "Zlib",
+    "description": "Windows arm64 addon of @crossbind/port-zlib-node, which npm installs on a matching machine.",
+    "private": true,
+    "os": [
+        "win32"
+    ],
+    "cpu": [
+        "arm64"
+    ],
+    "main": "zlib-node.win32-arm64.node",
+    "files": [
+        "zlib-node.win32-arm64.node"
+    ]
+}

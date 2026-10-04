@@ -1,0 +1,57 @@
+{
+    "name": "@crossbind/port-spatialite-node",
+    "version": "2.0.0-beta.62",
+    "nativeVersion": "5.1.0",
+    "homepage": "https://github.com/crossbind/crossbind/tree/main/ports/spatialite#readme",
+    "repository": "https://github.com/crossbind/crossbind.git",
+    "license": "MPL-1.1 OR GPL-2.0-or-later OR LGPL-2.1-or-later",
+    "description": "spatialite 5.1.0 for Node.js with nothing to build: prebuilt Node-API addons for macOS, Linux and Windows, built with crossbind.",
+    "private": true,
+    "type": "module",
+    "exports": {
+        "./*.h": {
+            "types": "./dist/*.h.d.cts",
+            "default": "./dist/*.h.cjs"
+        },
+        "./package.json": "./package.json"
+    },
+    "files": [
+        "dist/**/*.cjs",
+        "dist/**/*.d.cts",
+        "dist/data"
+    ],
+    "scripts": {
+        "build": "crossbind build -p darwin,linux,linuxmusl,win32 -e node -b release && node ../../../scripts/stage-node-addons.mjs",
+        "clear": "rm -rf .crossbind dist",
+        "e2e": "node ../../../scripts/e2e-node-package.mjs"
+    },
+    "optionalDependencies": {
+        "@crossbind/port-spatialite-node-darwin-arm64": "workspace:*",
+        "@crossbind/port-spatialite-node-darwin-x64": "workspace:*",
+        "@crossbind/port-spatialite-node-linux-arm64": "workspace:*",
+        "@crossbind/port-spatialite-node-linux-x64": "workspace:*",
+        "@crossbind/port-spatialite-node-linuxmusl-arm64": "workspace:*",
+        "@crossbind/port-spatialite-node-linuxmusl-x64": "workspace:*",
+        "@crossbind/port-spatialite-node-win32-arm64": "workspace:*",
+        "@crossbind/port-spatialite-node-win32-x64": "workspace:*"
+    },
+    "devDependencies": {
+        "crossbind": "workspace:^",
+        "@crossbind/port-spatialite-darwin": "workspace:^",
+        "@crossbind/port-spatialite-linux": "workspace:^",
+        "@crossbind/port-spatialite-linuxmusl": "workspace:^",
+        "@crossbind/port-spatialite-win32": "workspace:^"
+    },
+    "keywords": [
+        "spatialite",
+        "libspatialite",
+        "sqlite",
+        "spatial",
+        "gis",
+        "crossbind",
+        "crossbind-port",
+        "node",
+        "node-api",
+        "prebuilt"
+    ]
+}

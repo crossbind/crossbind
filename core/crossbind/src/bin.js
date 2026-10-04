@@ -15,6 +15,10 @@ import buildExternal from './actions/buildExternal.js';
 import buildPackageTypes from './actions/buildTypes.js';
 import buildLib from './actions/buildLib.js';
 import buildDependencies from './actions/buildDependencies.js';
+import writeHeaderEntries from './actions/writeHeaderEntries.js';
+import getDependFilePath from './integration/getDependFilePath.js';
+import { boundHeaderSpecifiers, bridgeTargetOrder, resolveBoundHeaders } from './utils/boundHeaders.js';
+import replaceFile from './utils/replaceFile.js';
 import runCrossbindApp from './actions/run.js';
 import { getBuildTargets, getFilteredBuildTargets } from './actions/target.js';
 import { OPT_IN_PLATFORMS, selectRuntimeEnvs } from './utils/targets.js';
@@ -355,7 +359,7 @@ async function createNativeCommands(targetParams) {
             continue;
         }
         fs.mkdirSync(state.config.paths.output, { recursive: true });
-        fs.copyFileSync(`${state.config.paths.build}/${target.commandName}`, distCommand);
+        replaceFile(`${state.config.paths.build}/${target.commandName}`, distCommand);
     }
 }
 
@@ -395,6 +399,13 @@ function createBridges() {
     return bridges;
 }
 
+// The dependency headers the config binds whole, each read where one of the targets' packages ships it.
+function createBoundBridges(targets) {
+    const headers = resolveBoundHeaders(boundHeaderSpecifiers(state.config), bridgeTargetOrder(targets), getDependFilePath);
+    const wholeHeaders = headers.map((header) => header.file);
+    return headers.map((header) => ({ ...header, bridge: createBridgeFile(header.file, header.target, { wholeHeaders }) }));
+}
+
 async function createNodeAddons(targetParams) {
     const targets = getBuildTargets(targetParams)
         .filter((target) => target.runtimeEnv === 'node' && target.platform !== 'wasm');
@@ -406,11 +417,13 @@ async function createNodeAddons(targetParams) {
         `${resolveEmbindJsiRoot()}/cpp/src`,
         `${resolveEmbindNapiRoot()}/third_party/node-api-jsi/jsi`,
     ];
+    const boundHeaders = createBoundBridges(targets);
     const opt = {
         buildSource: false,
         nativeGlob: [
             `${state.config.paths.cli}/assets/cpp-runtime/commonBridges.cpp`,
             ...createBridges(),
+            ...boundHeaders.map((header) => header.bridge),
         ],
         headerDirs,
         inputs: headerDirs.flatMap((dir) => findFiles('**/*.h', { cwd: dir })),
@@ -426,9 +439,11 @@ async function createNodeAddons(targetParams) {
             continue;
         }
         fs.mkdirSync(state.config.paths.output, { recursive: true });
-        fs.copyFileSync(`${state.config.paths.build}/${target.addonName}`, `${state.config.paths.output}/${target.addonName}`);
+        replaceFile(`${state.config.paths.build}/${target.addonName}`, `${state.config.paths.output}/${target.addonName}`);
         fs.copyFileSync(`${state.config.paths.build}/${target.jsName}`, `${state.config.paths.output}/${target.jsName}`);
     }
+    const loaderTarget = targets.find((target) => target.buildType === 'release') ?? targets[0];
+    writeHeaderEntries(boundHeaders, { outputDir: state.config.paths.output, loaderName: loaderTarget.jsName });
 }
 
 async function createWasmJs(targetParams) {

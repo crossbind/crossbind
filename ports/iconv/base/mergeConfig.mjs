@@ -6,6 +6,7 @@ export default (newConfig = {}) => ({
     },
     export: {
         type: 'cmake',
+        publicHeaders: ['iconv.h', 'localcharset.h'],
         libName: ['iconv', 'charset'],
         ...(newConfig.export || {}),
     },

@@ -3,11 +3,11 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 
-const { run, state } = vi.hoisted(() => ({ run: vi.fn(), state: { config: {} } }));
+const { run, state, getData } = vi.hoisted(() => ({ run: vi.fn(), state: { config: {} }, getData: vi.fn() }));
 
 vi.mock('../src/actions/run.js', () => ({ default: run }));
 vi.mock('../src/actions/getCmakeParameters.js', () => ({ default: () => [] }));
-vi.mock('../src/actions/getData.js', () => ({ default: () => ({}) }));
+vi.mock('../src/actions/getData.js', () => ({ default: getData }));
 vi.mock('../src/actions/extensions.js', () => ({ default: () => {} }));
 vi.mock('../src/utils/dependencyBridges.js', () => ({ withDependencyBridges: (glob) => glob }));
 vi.mock('../src/utils/logger.js', () => ({
@@ -40,6 +40,8 @@ describe('createLib cache', () => {
         header = `${work}/val.h`;
         fs.writeFileSync(bridge, '// bridge');
         fs.writeFileSync(header, '// runtime v1');
+        getData.mockReset();
+        getData.mockReturnValue({});
         state.config = {
             paths: { build: `${work}/build`, cmakeDir: `${work}/cmake` },
             build: {},
@@ -56,6 +58,14 @@ describe('createLib cache', () => {
         expect(build()).toBe(true);
 
         expect(build()).toBe(false);
+    });
+
+    // A dependency's compile options (Lerc's LERC_STATIC on Windows) change how the same sources compile.
+    test('rebuilds when the compile options the dependencies declare change', () => {
+        build();
+        getData.mockImplementation((kind) => (kind === 'cmake' ? { compileOptions: ['-DLERC_STATIC'] } : {}));
+
+        expect(build()).toBe(true);
     });
 
     test('rebuilds when a header the sources compile against changes', () => {

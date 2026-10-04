@@ -1,0 +1,23 @@
+{
+    "name": "@crossbind/port-jpegturbo-node-linuxmusl-arm64",
+    "version": "2.0.0-beta.62",
+    "nativeVersion": "3.2.0",
+    "homepage": "https://github.com/crossbind/crossbind/tree/main/ports/jpegturbo#readme",
+    "repository": "https://github.com/crossbind/crossbind.git",
+    "license": "(IJG AND BSD-3-Clause AND Zlib)",
+    "description": "Linux arm64 (musl) addon of @crossbind/port-jpegturbo-node, which npm installs on a matching machine.",
+    "private": true,
+    "os": [
+        "linux"
+    ],
+    "cpu": [
+        "arm64"
+    ],
+    "libc": [
+        "musl"
+    ],
+    "main": "jpegturbo-node.linuxmusl-arm64.node",
+    "files": [
+        "jpegturbo-node.linuxmusl-arm64.node"
+    ]
+}

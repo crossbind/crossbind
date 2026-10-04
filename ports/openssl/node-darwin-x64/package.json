@@ -1,0 +1,20 @@
+{
+    "name": "@crossbind/port-openssl-node-darwin-x64",
+    "version": "2.0.0-beta.62",
+    "nativeVersion": "4.0.2",
+    "homepage": "https://github.com/crossbind/crossbind/tree/main/ports/openssl#readme",
+    "repository": "https://github.com/crossbind/crossbind.git",
+    "license": "Apache-2.0",
+    "description": "macOS x64 addon of @crossbind/port-openssl-node, which npm installs on a matching machine.",
+    "private": true,
+    "os": [
+        "darwin"
+    ],
+    "cpu": [
+        "x64"
+    ],
+    "main": "openssl-node.darwin-x64.node",
+    "files": [
+        "openssl-node.darwin-x64.node"
+    ]
+}

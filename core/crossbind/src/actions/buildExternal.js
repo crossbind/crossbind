@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import replace from 'replace';
 import downloadAndExtractFile from '../utils/downloadAndExtractFile.js';
+import copyToDistSource from '../utils/copyToDistSource.js';
 import { getBuildTargets } from './target.js';
 import state from '../state/index.js';
 import buildLib from './buildLib.js';
@@ -48,7 +49,7 @@ export default async function buildExternal(targetParams, options = {}) {
                 targets.forEach(target => {
                     const assetPath = `${state.config.paths.output}/prebuilt/${target.path}/${v}`;
                     if (!fs.existsSync(assetPath)) {
-                        fs.copyFileSync(`${state.config.paths.project}/${key}`, assetPath);
+                        fs.copyFileSync(copyToDistSource(state.config.paths.project, key), assetPath);
                     }
                 });
             });

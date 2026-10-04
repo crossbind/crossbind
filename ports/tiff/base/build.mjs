@@ -4,6 +4,10 @@ export default {
     getURL: (version) => `https://download.osgeo.org/libtiff/tiff-${version}.tar.gz`,
     sha256: '672bd7d10aee4606171afb864f3570b83340f6a33e2c186dc0512f7145ffdf6a', // tiff-4.7.2.tar.gz
     buildType: 'cmake',
+    // The typed forms of variadic calls crossbind adds (see the header), shipped beside the upstream headers.
+    copyToDist: {
+        'node_modules/@crossbind/port-tiff/include/tiffio_crossbind.h': 'include/tiffio_crossbind.h',
+    },
     getBuildParams: (target, depPaths) => [
         '-Dtiff-tools=OFF', '-Dtiff-tests=OFF', '-Dtiff-contrib=OFF',
         '-Dtiff-docs=OFF', '-Dld-version-script=OFF',

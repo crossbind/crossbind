@@ -99,10 +99,13 @@ function placeholderLicense({ name, license }) {
     return `TODO: replace this file with the complete upstream ${name} license text (${license}).\n`;
 }
 
+// A family's Node packages come from its own public headers (scaffold-node-packages.mjs), not from zlib's.
+const isNodePackage = (source, entry, options) => source === options.templateRoot && /^node(-|$)/.test(entry.name);
+
 function copyTemplate(source, destination, options) {
     fs.mkdirSync(destination, { recursive: true });
     for (const entry of fs.readdirSync(source, { withFileTypes: true })) {
-        if (entry.isDirectory() && (SKIP_DIRECTORIES.has(entry.name) || entry.name.endsWith('.xcframework'))) continue;
+        if (entry.isDirectory() && (SKIP_DIRECTORIES.has(entry.name) || entry.name.endsWith('.xcframework') || isNodePackage(source, entry, options))) continue;
         const sourcePath = path.join(source, entry.name);
         const destinationName = entry.name.replaceAll('port-zlib', `port-${options.name}`);
         const destinationPath = path.join(destination, destinationName);

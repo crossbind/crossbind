@@ -1,0 +1,23 @@
+{
+    "name": "@crossbind/port-lerc-node-linuxmusl-x64",
+    "version": "2.0.0-beta.62",
+    "nativeVersion": "4.2.0",
+    "homepage": "https://github.com/crossbind/crossbind/tree/main/ports/lerc#readme",
+    "repository": "https://github.com/crossbind/crossbind.git",
+    "license": "Apache-2.0",
+    "description": "Linux x64 (musl) addon of @crossbind/port-lerc-node, which npm installs on a matching machine.",
+    "private": true,
+    "os": [
+        "linux"
+    ],
+    "cpu": [
+        "x64"
+    ],
+    "libc": [
+        "musl"
+    ],
+    "main": "lerc-node.linuxmusl-x64.node",
+    "files": [
+        "lerc-node.linuxmusl-x64.node"
+    ]
+}

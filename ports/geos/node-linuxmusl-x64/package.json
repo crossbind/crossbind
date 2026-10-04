@@ -1,0 +1,23 @@
+{
+    "name": "@crossbind/port-geos-node-linuxmusl-x64",
+    "version": "2.0.0-beta.62",
+    "nativeVersion": "3.15.0",
+    "homepage": "https://github.com/crossbind/crossbind/tree/main/ports/geos#readme",
+    "repository": "https://github.com/crossbind/crossbind.git",
+    "license": "LGPL-2.1-or-later",
+    "description": "Linux x64 (musl) addon of @crossbind/port-geos-node, which npm installs on a matching machine.",
+    "private": true,
+    "os": [
+        "linux"
+    ],
+    "cpu": [
+        "x64"
+    ],
+    "libc": [
+        "musl"
+    ],
+    "main": "geos-node.linuxmusl-x64.node",
+    "files": [
+        "geos-node.linuxmusl-x64.node"
+    ]
+}

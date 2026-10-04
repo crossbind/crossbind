@@ -1,0 +1,23 @@
+{
+    "name": "@crossbind/port-zlib-node-linuxmusl-arm64",
+    "version": "2.0.0-beta.62",
+    "nativeVersion": "1.3.2",
+    "homepage": "https://github.com/crossbind/crossbind/tree/main/ports/zlib#readme",
+    "repository": "https://github.com/crossbind/crossbind.git",
+    "license": "Zlib",
+    "description": "Linux arm64 (musl) addon of @crossbind/port-zlib-node, which npm installs on a matching machine.",
+    "private": true,
+    "os": [
+        "linux"
+    ],
+    "cpu": [
+        "arm64"
+    ],
+    "libc": [
+        "musl"
+    ],
+    "main": "zlib-node.linuxmusl-arm64.node",
+    "files": [
+        "zlib-node.linuxmusl-arm64.node"
+    ]
+}

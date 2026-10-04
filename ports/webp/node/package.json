@@ -1,0 +1,55 @@
+{
+    "name": "@crossbind/port-webp-node",
+    "version": "2.0.0-beta.62",
+    "nativeVersion": "1.6.0",
+    "homepage": "https://github.com/crossbind/crossbind/tree/main/ports/webp#readme",
+    "repository": "https://github.com/crossbind/crossbind.git",
+    "license": "BSD-3-Clause",
+    "description": "webp 1.6.0 for Node.js with nothing to build: prebuilt Node-API addons for macOS, Linux and Windows, built with crossbind.",
+    "private": true,
+    "type": "module",
+    "exports": {
+        "./*.h": {
+            "types": "./dist/*.h.d.cts",
+            "default": "./dist/*.h.cjs"
+        },
+        "./package.json": "./package.json"
+    },
+    "files": [
+        "dist/**/*.cjs",
+        "dist/**/*.d.cts",
+        "dist/data"
+    ],
+    "scripts": {
+        "build": "crossbind build -p darwin,linux,linuxmusl,win32 -e node -b release && node ../../../scripts/stage-node-addons.mjs",
+        "clear": "rm -rf .crossbind dist",
+        "e2e": "node ../../../scripts/e2e-node-package.mjs"
+    },
+    "optionalDependencies": {
+        "@crossbind/port-webp-node-darwin-arm64": "workspace:*",
+        "@crossbind/port-webp-node-darwin-x64": "workspace:*",
+        "@crossbind/port-webp-node-linux-arm64": "workspace:*",
+        "@crossbind/port-webp-node-linux-x64": "workspace:*",
+        "@crossbind/port-webp-node-linuxmusl-arm64": "workspace:*",
+        "@crossbind/port-webp-node-linuxmusl-x64": "workspace:*",
+        "@crossbind/port-webp-node-win32-arm64": "workspace:*",
+        "@crossbind/port-webp-node-win32-x64": "workspace:*"
+    },
+    "devDependencies": {
+        "crossbind": "workspace:^",
+        "@crossbind/port-webp-darwin": "workspace:^",
+        "@crossbind/port-webp-linux": "workspace:^",
+        "@crossbind/port-webp-linuxmusl": "workspace:^",
+        "@crossbind/port-webp-win32": "workspace:^"
+    },
+    "keywords": [
+        "webp",
+        "libwebp",
+        "image",
+        "crossbind",
+        "crossbind-port",
+        "node",
+        "node-api",
+        "prebuilt"
+    ]
+}

@@ -1,0 +1,23 @@
+{
+    "name": "@crossbind/port-curl-node-linux-x64",
+    "version": "2.0.0-beta.62",
+    "nativeVersion": "8.22.0",
+    "homepage": "https://github.com/crossbind/crossbind/tree/main/ports/curl#readme",
+    "repository": "https://github.com/crossbind/crossbind.git",
+    "license": "curl",
+    "description": "Linux x64 (glibc) addon of @crossbind/port-curl-node, which npm installs on a matching machine.",
+    "private": true,
+    "os": [
+        "linux"
+    ],
+    "cpu": [
+        "x64"
+    ],
+    "libc": [
+        "glibc"
+    ],
+    "main": "curl-node.linux-x64.node",
+    "files": [
+        "curl-node.linux-x64.node"
+    ]
+}

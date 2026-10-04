@@ -1,0 +1,20 @@
+{
+    "name": "@crossbind/port-sqlite3-node-win32-arm64",
+    "version": "2.0.0-beta.62",
+    "nativeVersion": "3.53.4",
+    "homepage": "https://github.com/crossbind/crossbind/tree/main/ports/sqlite3#readme",
+    "repository": "https://github.com/crossbind/crossbind.git",
+    "license": "blessing",
+    "description": "Windows arm64 addon of @crossbind/port-sqlite3-node, which npm installs on a matching machine.",
+    "private": true,
+    "os": [
+        "win32"
+    ],
+    "cpu": [
+        "arm64"
+    ],
+    "main": "sqlite3-node.win32-arm64.node",
+    "files": [
+        "sqlite3-node.win32-arm64.node"
+    ]
+}

@@ -4,11 +4,6 @@ function warnOnce(msg) {
 
 function callRuntimeCallbacks() { }
 
-// Upstream's helper, left out of this fork. Pointers arrive as BigInt or Number.
-function ptrToString(ptr) {
-  return '0x' + ptr.toString(16).padStart(8, '0');
-}
-
 // include: shell.js
 /**
  * @license
@@ -2536,8 +2531,9 @@ function attachFinalizer(handle) {
   // https://github.com/tc39/proposal-weakrefs), then attach finalizers
   // for class handles.  We check for the presence of FinalizationRegistry
   // at run-time, not build-time.
+  // A collected handle is released without the warning upstream prints under ASSERTIONS, as a release wasm build
+  // does: JavaScript never has to call .delete() on what crossbind hands it.
   finalizationRegistry = new FinalizationRegistry((info) => {
-    console.warn(info.leakWarning.stack.replace(/^Error: /, ''));
     releaseClassHandle(info.$$);
   });
   attachFinalizer = (handle) => {
@@ -2545,20 +2541,7 @@ function attachFinalizer(handle) {
     var hasSmartPtr = !!$$.smartPtr;
     if (hasSmartPtr) {
       // We should not call the destructor on raw pointers in case other code expects the pointee to live
-      var info = { $$: $$ };
-      // Create a warning as an Error instance in advance so that we can store
-      // the current stacktrace and point to it when / if a leak is detected.
-      // This is more useful than the empty stacktrace of `FinalizationRegistry`
-      // callback.
-      var cls = $$.ptrType.registeredClass;
-      info.leakWarning = new Error(`Embind found a leaked C++ instance ${cls.name} <${ptrToString($$.ptr)}>.\n` +
-        "We'll free it automatically in this case, but this functionality is not reliable across various environments.\n" +
-        "Make sure to invoke .delete() manually once you're done with the instance instead.\n" +
-        "Originally allocated"); // `.stack` will add "at ..." after this sentence
-      if ('captureStackTrace' in Error) {
-        Error.captureStackTrace(info.leakWarning, RegisteredPointer_fromWireType);
-      }
-      finalizationRegistry.register(handle, info, handle);
+      finalizationRegistry.register(handle, { $$: $$ }, handle);
     }
     return handle;
   };

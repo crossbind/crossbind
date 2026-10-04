@@ -191,6 +191,25 @@ describe('buildNode', () => {
         });
     });
 
+    test('points the loader at the platform packages a package lists as optional dependencies', () => {
+        state.config.package = {
+            name: '@crossbind/port-zlib-node',
+            optionalDependencies: { '@crossbind/port-zlib-node-darwin-arm64': '2.0.0' },
+        };
+
+        expect(nodeLoaderConfig(target).paths).toEqual({
+            addon: 'demo.{platform}-{arch}.node',
+            addonPackage: '@crossbind/port-zlib-node-{platform}-{arch}',
+        });
+    });
+
+    // An app that has not built its addon yet must not be told to install a package that does not exist.
+    test('keeps the loader to the addon beside it when no platform package is listed', () => {
+        state.config.package = { name: 'demo-app', optionalDependencies: { fsevents: '2.3.3' } };
+
+        expect(nodeLoaderConfig(target).paths).toEqual({ addon: 'demo.{platform}-{arch}.node' });
+    });
+
     test('serves the cached addon while its link inputs are unchanged', async () => {
         await buildNode(target, { force: true });
         run.mockClear();

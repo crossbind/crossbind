@@ -1,0 +1,20 @@
+{
+    "name": "@crossbind/port-gdal-node-darwin-arm64",
+    "version": "2.0.0-beta.62",
+    "nativeVersion": "3.13.3",
+    "homepage": "https://github.com/crossbind/crossbind/tree/main/ports/gdal#readme",
+    "repository": "https://github.com/crossbind/crossbind.git",
+    "license": "MIT",
+    "description": "macOS arm64 addon of @crossbind/port-gdal-node, which npm installs on a matching machine.",
+    "private": true,
+    "os": [
+        "darwin"
+    ],
+    "cpu": [
+        "arm64"
+    ],
+    "main": "gdal-node.darwin-arm64.node",
+    "files": [
+        "gdal-node.darwin-arm64.node"
+    ]
+}

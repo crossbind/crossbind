@@ -1,0 +1,55 @@
+{
+    "name": "@crossbind/port-tiff-node",
+    "version": "2.0.0-beta.62",
+    "nativeVersion": "4.7.2",
+    "homepage": "https://github.com/crossbind/crossbind/tree/main/ports/tiff#readme",
+    "repository": "https://github.com/crossbind/crossbind.git",
+    "license": "libtiff",
+    "description": "tiff 4.7.2 for Node.js with nothing to build: prebuilt Node-API addons for macOS, Linux and Windows, built with crossbind.",
+    "private": true,
+    "type": "module",
+    "exports": {
+        "./*.h": {
+            "types": "./dist/*.h.d.cts",
+            "default": "./dist/*.h.cjs"
+        },
+        "./package.json": "./package.json"
+    },
+    "files": [
+        "dist/**/*.cjs",
+        "dist/**/*.d.cts",
+        "dist/data"
+    ],
+    "scripts": {
+        "build": "crossbind build -p darwin,linux,linuxmusl,win32 -e node -b release && node ../../../scripts/stage-node-addons.mjs",
+        "clear": "rm -rf .crossbind dist",
+        "e2e": "node ../../../scripts/e2e-node-package.mjs"
+    },
+    "optionalDependencies": {
+        "@crossbind/port-tiff-node-darwin-arm64": "workspace:*",
+        "@crossbind/port-tiff-node-darwin-x64": "workspace:*",
+        "@crossbind/port-tiff-node-linux-arm64": "workspace:*",
+        "@crossbind/port-tiff-node-linux-x64": "workspace:*",
+        "@crossbind/port-tiff-node-linuxmusl-arm64": "workspace:*",
+        "@crossbind/port-tiff-node-linuxmusl-x64": "workspace:*",
+        "@crossbind/port-tiff-node-win32-arm64": "workspace:*",
+        "@crossbind/port-tiff-node-win32-x64": "workspace:*"
+    },
+    "devDependencies": {
+        "crossbind": "workspace:^",
+        "@crossbind/port-tiff-darwin": "workspace:^",
+        "@crossbind/port-tiff-linux": "workspace:^",
+        "@crossbind/port-tiff-linuxmusl": "workspace:^",
+        "@crossbind/port-tiff-win32": "workspace:^"
+    },
+    "keywords": [
+        "tiff",
+        "libtiff",
+        "image",
+        "crossbind",
+        "crossbind-port",
+        "node",
+        "node-api",
+        "prebuilt"
+    ]
+}

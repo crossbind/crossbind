@@ -28,7 +28,7 @@ Raw pointers bind. What the generator cannot turn into an object crosses as a `N
 | function pointer parameter | a JS function, or a handle another binding returned |
 | pointer argument inside a callback | always a handle |
 
-Every module that binds a pointer also exports the helpers: `cstring(text)` and `readCString(handle)`, `allocBuffer(bytes)`, `allocPointer()`, `allocString(text)` and `readString(handle)`, `readNumberAt(handle, index, kind)` / `writeNumberAt(handle, index, kind, value)` with kinds `int8` … `uint64`, `float32`, `float64`, `readPointerAt` / `writePointerAt`, `readBytes(handle, length)` / `writeBytes(handle, u16string)` with one byte per character, `readBuffer(handle, length)` returning a `Uint8Array` copy / `writeBuffer(handle, bytes)` copying any `ArrayBuffer` or view of one (a `Uint8Array`, a Node `Buffer`), and `releaseCallback(fn)` to free a callback slot.
+Every module that binds a pointer also exports the helpers: `cstring(text)` and `readCString(handle)`, `allocBuffer(bytes)`, `allocPointer(count)` (both zero-filled), `allocString(text)` and `readString(handle)`, `readNumberAt(handle, index, kind)` / `writeNumberAt(handle, index, kind, value)` with kinds `int8` … `uint64`, `float32`, `float64`, `readPointerAt` / `writePointerAt`, `readBytes(handle, length)` / `writeBytes(handle, u16string)` with one byte per character, `readBuffer(handle, length)` returning a `Uint8Array` copy / `writeBuffer(handle, bytes)` copying any `ArrayBuffer` or view of one (a `Uint8Array`, a Node `Buffer`), and `releaseCallback(fn)` to free a callback slot.
 
 ```cpp
 void process(int* data, size_t len);            // handle in, e.g. from allocBuffer

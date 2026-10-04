@@ -1,0 +1,56 @@
+{
+    "name": "@crossbind/port-proj-node",
+    "version": "2.0.0-beta.62",
+    "nativeVersion": "9.9.0",
+    "homepage": "https://github.com/crossbind/crossbind/tree/main/ports/proj#readme",
+    "repository": "https://github.com/crossbind/crossbind.git",
+    "license": "MIT",
+    "description": "proj 9.9.0 for Node.js with nothing to build: prebuilt Node-API addons for macOS, Linux and Windows, built with crossbind.",
+    "private": true,
+    "type": "module",
+    "exports": {
+        "./*.h": {
+            "types": "./dist/*.h.d.cts",
+            "default": "./dist/*.h.cjs"
+        },
+        "./package.json": "./package.json"
+    },
+    "files": [
+        "dist/**/*.cjs",
+        "dist/**/*.d.cts",
+        "dist/data"
+    ],
+    "scripts": {
+        "build": "crossbind build -p darwin,linux,linuxmusl,win32 -e node -b release && node ../../../scripts/stage-node-addons.mjs",
+        "clear": "rm -rf .crossbind dist",
+        "e2e": "node ../../../scripts/e2e-node-package.mjs"
+    },
+    "optionalDependencies": {
+        "@crossbind/port-proj-node-darwin-arm64": "workspace:*",
+        "@crossbind/port-proj-node-darwin-x64": "workspace:*",
+        "@crossbind/port-proj-node-linux-arm64": "workspace:*",
+        "@crossbind/port-proj-node-linux-x64": "workspace:*",
+        "@crossbind/port-proj-node-linuxmusl-arm64": "workspace:*",
+        "@crossbind/port-proj-node-linuxmusl-x64": "workspace:*",
+        "@crossbind/port-proj-node-win32-arm64": "workspace:*",
+        "@crossbind/port-proj-node-win32-x64": "workspace:*"
+    },
+    "devDependencies": {
+        "crossbind": "workspace:^",
+        "@crossbind/port-proj-darwin": "workspace:^",
+        "@crossbind/port-proj-linux": "workspace:^",
+        "@crossbind/port-proj-linuxmusl": "workspace:^",
+        "@crossbind/port-proj-win32": "workspace:^"
+    },
+    "keywords": [
+        "proj",
+        "libproj",
+        "projection",
+        "gis",
+        "crossbind",
+        "crossbind-port",
+        "node",
+        "node-api",
+        "prebuilt"
+    ]
+}

@@ -30,6 +30,10 @@ export default {
     sha256: 'd54dd598bf05927a726deb38df31c6a255ba83ff1de57c5d1464dac3ed8f44a1', // curl-8.22.0.tar.gz
     getURL: (version) => `https://curl.se/download/curl-${version}.tar.gz`,
     buildType: 'cmake',
+    // The typed forms of variadic calls crossbind adds (see the header), shipped beside the upstream headers.
+    copyToDist: {
+        'node_modules/@crossbind/port-curl/include/curl/curl_crossbind.h': 'include/curl/curl_crossbind.h',
+    },
     getBuildParams: (target, depPaths) => [
         ...(platformBuild[target.platform] || []),
         ...(depPaths.ssl && depPaths.crypto
