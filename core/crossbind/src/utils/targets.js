@@ -176,6 +176,9 @@ export function targetPathOf(target) {
     return `${target.platform}-${target.arch}-${target.runtime}-${target.buildType}`;
 }
 
+// The release build of a target, whose prebuilts a debug build of it falls back to.
+export const releaseTargetOf = (target) => ({ ...target, buildType: 'release', path: target.releasePath });
+
 // Every platform/arch addon of one build type sits next to a single loader, which fills in
 // {platform} and {arch} from the running process. The loader is CommonJS whatever the package
 // "type" says, since it needs __dirname and process.dlopen.

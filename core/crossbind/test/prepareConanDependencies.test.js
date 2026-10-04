@@ -14,6 +14,7 @@ vi.mock('../src/actions/createXCFramework.js', () => ({ default: vi.fn() }));
 const { default: prepareConanDependencies } = await import('../src/actions/prepareConanDependencies.js');
 const { default: installConanPackages } = await import('../src/utils/conanInstall.js');
 const { default: createXCFramework } = await import('../src/actions/createXCFramework.js');
+const { nodeBridgeTarget } = await import('../src/utils/boundHeaders.js');
 
 const target = (platform, arch, runtime, buildType = 'release') => ({
     platform, arch, runtime, buildType, path: `${platform}-${arch}-${runtime}-${buildType}`, releasePath: `${platform}-${arch}-${runtime}-release`,
@@ -44,6 +45,15 @@ test('an android build stages only its own targets, as release ones', async () =
     await prepareConanDependencies([target('android', 'x86_64', 'mt', 'debug')]);
 
     expect(installed()).toEqual(['android-x86_64-mt-release']);
+});
+
+test('a Node addon build stages its own targets as release ones, the one its bridges read headers for among them', async () => {
+    const targets = [target('linuxmusl', 'arm64', 'mt', 'debug'), target('linux', 'x64', 'mt', 'debug')];
+
+    await prepareConanDependencies(targets);
+
+    expect(installed()).toEqual(['linuxmusl-arm64-mt-release', 'linux-x64-mt-release']);
+    expect(installed()).toContain(nodeBridgeTarget(targets).path);
 });
 
 test('a project without conanDependencies installs nothing', async () => {

@@ -21,6 +21,7 @@ export function changedDependencyUnits(files, root = ROOT) {
                 file === '.nvmrc' ||
                 file.startsWith('tooling/docker/') ||
                 file === 'core/crossbind/src/actions/run.js' ||
+                file === 'core/crossbind/src/utils/linuxToolchain.js' ||
                 file === '.github/workflows/build-linux.yml',
         ),
         families: {

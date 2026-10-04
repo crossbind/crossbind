@@ -41,7 +41,7 @@ describe('conan host profile', () => {
     });
 
     test('other platforms are refused for now', () => {
-        expect(() => hostProfile({ platform: 'linux', arch: 'x64', runtime: 'mt', buildType: 'release' })).toThrow(/wasm, android and ios so far; linux/);
+        expect(() => hostProfile({ platform: 'darwin', arch: 'arm64', runtime: 'mt', buildType: 'release' })).toThrow(/wasm, android, ios, linux and linuxmusl so far; darwin/);
     });
 });
 
@@ -114,6 +114,69 @@ describe('conan host profile for ios', () => {
         expect(profile).not.toContain('emcc');
         expect(profile).not.toContain('ndk');
         expect(profile).not.toContain('[buildenv]');
+    });
+});
+
+describe('conan host profile for linux', () => {
+    const linux = (platform, arch) => ({
+        platform, arch, runtime: 'mt', buildType: 'release',
+    });
+
+    test("builds static packages with the linux image's clang wrappers for the triple, as the ports are built", () => {
+        const profile = hostProfile(linux('linux', 'x64'));
+        expect(line(profile, 'os')).toBe('Linux');
+        expect(line(profile, 'arch')).toBe('x86_64');
+        expect(line(profile, 'compiler')).toBe('clang');
+        expect(line(profile, 'compiler.libcxx')).toBe('libc++');
+        expect(line(profile, '*:shared')).toBe('False');
+        expect(line(profile, 'tools.cmake.cmaketoolchain:user_toolchain')).toBe('["/opt/crossbind/linux/x86_64-linux-gnu.cmake"]');
+        expect(line(profile, 'tools.build:compiler_executables'))
+            .toBe("{'c': '/opt/crossbind/linux/bin/x86_64-linux-gnu-clang', 'cpp': '/opt/crossbind/linux/bin/x86_64-linux-gnu-clang++'}");
+        expect(line(profile, 'tools.build:cflags')).toBe('["-fPIC","-pthread"]');
+    });
+
+    test('arm64 is armv8, with its own triple', () => {
+        const profile = hostProfile(linux('linux', 'arm64'));
+        expect(line(profile, 'arch')).toBe('armv8');
+        expect(line(profile, 'tools.gnu:host_triplet')).toBe('aarch64-linux-gnu');
+    });
+
+    test('the clang wrapper names the compiler version', () => {
+        expect(line(hostProfile(linux('linux', 'x64')), 'compiler.version')).toContain("['/opt/crossbind/linux/bin/x86_64-linux-gnu-clang', '-dumpversion']");
+    });
+
+    // Conan takes a musl build on a machine of the same arch for a native one, and the image runs no musl
+    // program: configure, Meson's sanity check and a recipe's can_run() would run what they compile.
+    test('a musl build is a cross build on any machine, and configure is told its triple', () => {
+        const musl = hostProfile(linux('linuxmusl', 'arm64'));
+        expect(line(musl, 'tools.build.cross_building:cross_build')).toBe('True');
+        expect(line(musl, 'tools.gnu:host_triplet')).toBe('aarch64-alpine-linux-musl');
+        expect(line(hostProfile(linux('linux', 'arm64')), 'tools.build.cross_building:cross_build')).toBeUndefined();
+    });
+
+    test('glibc and musl differ in the triple, the cross build and the C library alone, which takes part in the package id', () => {
+        const neutral = (profile, triple) => profile.replaceAll(triple, '<triple>')
+            .replace(/^user\.crossbind:libc=.*\n/m, '').replace(/^tools\.build\.cross_building:cross_build=.*\n/m, '');
+        const glibc = hostProfile(linux('linux', 'x64'));
+        const musl = hostProfile(linux('linuxmusl', 'x64'));
+        expect(line(glibc, 'user.crossbind:libc')).toBe('glibc');
+        expect(line(musl, 'user.crossbind:libc')).toBe('musl');
+        expect(line(musl, 'tools.info.package_id:confs')).toContain('"user.crossbind:libc"');
+        expect(neutral(musl, 'x86_64-alpine-linux-musl')).toBe(neutral(glibc, 'x86_64-linux-gnu'));
+    });
+
+    test("builds with the triple's own archive tools and none of the image's pkg-config files", () => {
+        const profile = hostProfile(linux('linuxmusl', 'x64'));
+        expect(line(profile, 'CC')).toBe('/opt/crossbind/linux/bin/x86_64-alpine-linux-musl-clang');
+        expect(line(profile, 'AR')).toBe('/opt/crossbind/linux/bin/x86_64-alpine-linux-musl-ar');
+        expect(line(profile, 'RANLIB')).toBe('/opt/crossbind/linux/bin/x86_64-alpine-linux-musl-ranlib');
+        expect(line(profile, 'PKG_CONFIG_LIBDIR')).toBe('');
+    });
+
+    test('carries nothing of the emscripten or NDK toolchains', () => {
+        const profile = hostProfile(linux('linux', 'arm64'));
+        expect(profile).not.toContain('emcc');
+        expect(profile).not.toContain('ndk');
     });
 });
 

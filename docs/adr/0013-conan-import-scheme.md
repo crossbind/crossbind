@@ -71,13 +71,18 @@ header of a declared package. Rules:
   stamp per target records the inputs (stage format, dependencies, profile, toolchain, `conan.lock`),
   so an unchanged build runs no Conan.
 - `conan.lock` next to the config pins versions and recipe revisions; a new requirement extends it.
-- Web, Android and iOS builds, for now. A React Native build installs the packages before Metro
-  bundles the bridges, for the target Metro reads headers with; a Metro server that loaded state
-  before them attaches them on its next `conan:` import or bridge. On iOS the React Native plugin
-  copies the xcframeworks into its own `conan/` directory, which its podspec vendors, so they link
-  with plain `-l` flags. CocoaPods links what it finds at `pod install`, so a changed
+- Web, Android, iOS and Linux addon builds, for now. A React Native build installs the packages
+  before Metro bundles the bridges, for the target Metro reads headers with; a Metro server that
+  loaded state before them attaches them on its next `conan:` import or bridge. On iOS the React
+  Native plugin copies the xcframeworks into its own `conan/` directory, which its podspec vendors,
+  so they link with plain `-l` flags. CocoaPods links what it finds at `pod install`, so a changed
   `conanDependencies` needs another `pod install`; the pod's script phase refreshes the archives a
-  new package version restages.
+  new package version restages. Linux addons build in the linux image with the ports' clang
+  wrappers; glibc and musl builds share every Conan setting, so a profile conf naming the C library
+  takes part in the package id, and a musl build is a cross build even on a machine of the same
+  arch, since the image runs no musl program. A Node build reads the app's headers for its first
+  Linux target, which it stages anyway, instead of the first wasm target, which it would have to
+  build every package for.
 
 ## Consequences
 
@@ -91,7 +96,7 @@ header of a declared package. Rules:
   registry cache already has; a store per project would close it at the cost of rebuilding every
   package per project. The images carry one more pinned toolchain (a 19 MB venv). iOS takes the
   user's own Conan, outside the pinned images. WASI is out of reach, since Conan has no WASI
-  target; Node.js addons are still to wire.
+  target; macOS and Windows Node.js addons are still to wire.
 
 ## Alternatives considered
 

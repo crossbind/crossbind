@@ -17,7 +17,7 @@ import buildLib from './actions/buildLib.js';
 import buildDependencies from './actions/buildDependencies.js';
 import writeHeaderEntries from './actions/writeHeaderEntries.js';
 import getDependFilePath from './integration/getDependFilePath.js';
-import { boundHeaderSpecifiers, bridgeTargets, resolveBoundHeaders } from './utils/boundHeaders.js';
+import { boundHeaderSpecifiers, bridgeTargets, nodeBridgeTarget, resolveBoundHeaders } from './utils/boundHeaders.js';
 import replaceFile from './utils/replaceFile.js';
 import runCrossbindApp from './actions/run.js';
 import { getBuildTargets, getFilteredBuildTargets } from './actions/target.js';
@@ -391,7 +391,7 @@ async function createWasiCommands(targetParams) {
     }
 }
 
-function createBridges() {
+function createBridges(target) {
     let headers = [];
     state.config.paths.header.forEach((headerPath) => {
         headers.push(findFiles('**/*.h', { cwd: headerPath }));
@@ -400,7 +400,7 @@ function createBridges() {
 
     const bridges = [];
     headers.forEach((header) => {
-        const bridgePath = createBridgeFile(header);
+        const bridgePath = createBridgeFile(header, target);
         bridges.push(bridgePath);
     });
     return bridges;
@@ -429,7 +429,7 @@ async function createNodeAddons(targetParams) {
         buildSource: false,
         nativeGlob: [
             `${state.config.paths.cli}/assets/cpp-runtime/commonBridges.cpp`,
-            ...createBridges(),
+            ...createBridges(nodeBridgeTarget(targets)),
             ...boundHeaders.map((header) => header.bridge),
         ],
         headerDirs,

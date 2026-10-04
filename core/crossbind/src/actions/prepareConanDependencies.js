@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import state, { setAllDependecyPaths } from '../state/index.js';
 import refreshConanDependencies from '../state/refreshConanDependencies.js';
 import installConanPackages from '../utils/conanInstall.js';
+import { releaseTargetOf } from '../utils/targets.js';
 import createXCFramework from './createXCFramework.js';
 
 const mtimeOf = (file) => fs.statSync(file, { throwIfNoEntry: false })?.mtimeMs ?? -Infinity;
@@ -28,12 +29,13 @@ function makeConanXCFrameworks(iosTargets) {
 export default async function prepareConanDependencies(targets) {
     if (Object.keys(state.config.conanDependencies ?? {}).length === 0) return;
     // createBridgeFile reads every header for the first wasm target unless it is told otherwise, as it
-    // is by Metro, which builds the React Native bridges for the platform's own target.
+    // is by Metro, which builds the React Native bridges for the platform's own target, and by a Node
+    // build, which reads them for one of its own (nodeBridgeTarget).
     const bridgeTarget = targets.some((target) => target.platform === 'wasm') && state.targets.find((target) => target.platform === 'wasm');
     // One xcframework holds both SDKs, so an iOS build stages both.
     const iosTargets = targets.some((target) => target.platform === 'ios') ? state.targets.filter((target) => target.platform === 'ios') : [];
     const releaseTargets = [...new Map([...targets, bridgeTarget, ...iosTargets].filter(Boolean).map((target) => [
-        target.releasePath, { ...target, buildType: 'release', path: target.releasePath },
+        target.releasePath, releaseTargetOf(target),
     ])).values()];
     await installConanPackages(state.config, releaseTargets);
     // Also when another process did the staging: this one may have loaded before the manifests existed.

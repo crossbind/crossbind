@@ -10,6 +10,7 @@ import { HOST_BUILT_PLATFORMS } from '../utils/targets.js';
 import { WASM_EXCEPTION_FLAGS } from '../utils/archiveFlags.js';
 import { ANDROID_NDK, ANDROID_API_LEVEL } from '../utils/androidToolchain.js';
 import { IOS_DEVELOPER_DIR, IOS_DEPLOYMENT_TARGET, XCODE_TOOLCHAIN_BIN } from '../utils/iosToolchain.js';
+import { LINUX_ARCHIVE_FLAGS, linuxBuildEnv, linuxToolchainFile } from '../utils/linuxToolchain.js';
 
 // Native builds can outrun Node's 1 MiB default pipe buffer; without a raised cap a successful build dies with ENOBUFS.
 const EXEC_MAX_BUFFER = 512 * 1024 * 1024;
@@ -71,12 +72,6 @@ const DARWIN_HOST_PACKAGE_PREFIXES = ['/opt/homebrew', '/usr/local', '/opt/local
 // Apple's own tools only, which find the SDK through xcrun. A GNU ar earlier on the PATH (Homebrew's
 // binutils) writes archives that Apple's linker rejects.
 const DARWIN_BUILD_PATH = '/usr/bin:/bin:/usr/sbin:/sbin';
-// The linux image's clang wrappers and CMake toolchain files, one per target triple.
-const LINUX_TOOLCHAIN = '/opt/crossbind/linux';
-const LINUX_TRIPLES = {
-    linux: { x64: 'x86_64-linux-gnu', arm64: 'aarch64-linux-gnu' },
-    linuxmusl: { x64: 'x86_64-alpine-linux-musl', arm64: 'aarch64-alpine-linux-musl' },
-};
 // The windows image's llvm-mingw and its CMake toolchain files, one per target triple.
 const LLVM_MINGW = '/opt/llvm-mingw';
 const WINDOWS_TOOLCHAIN = '/opt/crossbind/windows';
@@ -256,20 +251,13 @@ export default function run(program, params = [], platformPrefix = null, target 
             case 'linux':
             case 'linuxmusl': {
                 [dProgram, ...dParams] = params;
-                const triple = LINUX_TRIPLES[target.platform][target.arch];
-                const tool = (name) => `${LINUX_TOOLCHAIN}/bin/${triple}-${name}`;
-                // The image's own .pc files describe its libraries, not the sysroot's. Every archive
-                // ends up inside a loadable .node module, so -fPIC holds even where a project turns
-                // position-independent code off for static builds, as GDAL does.
+                const archiveFlags = LINUX_ARCHIVE_FLAGS.join(' ');
                 platformParams = [
-                    '-e', `CC=${tool('clang')}`, '-e', `CXX=${tool('clang++')}`,
-                    '-e', `AR=${tool('ar')}`, '-e', `RANLIB=${tool('ranlib')}`,
-                    '-e', `NM=${tool('nm')}`, '-e', `STRIP=${tool('strip')}`,
-                    '-e', 'PKG_CONFIG_LIBDIR=',
-                    '-e', 'CFLAGS=-fPIC', '-e', 'CXXFLAGS=-fPIC',
+                    ...Object.entries(linuxBuildEnv(target)).flatMap(([variable, value]) => ['-e', `${variable}=${value}`]),
+                    '-e', `CFLAGS=${archiveFlags}`, '-e', `CXXFLAGS=${archiveFlags}`,
                 ];
                 if (dProgram === 'cmake' && dParams[0] !== '--build' && dParams[0] !== '--install') {
-                    dParams = [...dParams, `-DCMAKE_TOOLCHAIN_FILE=${LINUX_TOOLCHAIN}/${triple}.cmake`];
+                    dParams = [...dParams, `-DCMAKE_TOOLCHAIN_FILE=${linuxToolchainFile(target)}`];
                 }
                 break;
             }
