@@ -3,7 +3,7 @@ import writeJson from '../utils/writeJson.js';
 import { TARGETS, targetPathOf, nodeAddonNamesOf, nativeCommandNamesOf } from '../utils/targets.js';
 import { findCargoModuleImportsIn, writeCargoMarker } from '../utils/cargoImport.js';
 import loadConfig, { assertBinarySelection } from './loadConfig.js';
-import attachConanDependencies from './attachConanDependencies.js';
+import refreshConanDependencies from './refreshConanDependencies.js';
 
 const cacheDir = `${process.cwd()}/.crossbind`;
 
@@ -23,7 +23,7 @@ async function initProcessState() {
     state.cache = loadCacheState();
     state.config = await loadConfig();
     assertBinarySelection(state.config);
-    attachConanDependencies(state.config);
+    refreshConanDependencies(state.config);
     // Recipes read the wasi-sdk location from the environment (lazily, in
     // getBuildParams); mirror the system-config value there so both sources
     // behave the same.

@@ -3,6 +3,7 @@ import path from 'node:path';
 import state from '../state/index.js';
 import { parseCargoImport, writeCargoMarker } from '../utils/cargoImport.js';
 import { CONAN_PREFIX, resolveConanHeader } from '../utils/conanImport.js';
+import refreshConanDependencies from '../state/refreshConanDependencies.js';
 
 const LAYOUT = { header: 'include', module: 'swig', source: '' };
 
@@ -96,6 +97,7 @@ export default function getDependFilePath(source, target) {
     // `conan:<package>/<header>` names a header of a declared Conan package, staged per target like a
     // port's prebuilt; from there the header takes the same path as any other.
     if (source.startsWith(CONAN_PREFIX)) {
+        refreshConanDependencies(state.config);
         return resolveConanHeader(state.config, source, target ?? state.targets.find((t) => t.platform === 'wasm'));
     }
 

@@ -128,7 +128,7 @@ describe('installing the declared Conan packages', () => {
         expect(fs.existsSync(h.seen[0].work)).toBe(false);
         expect(fs.existsSync(upath.join(stageDir(), 'packages', 'libpng', 'dist', 'prebuilt', TARGET.path, 'lib', 'libpng.a'))).toBe(true);
         expect(fs.existsSync(upath.join(stageDir(), 'packages', 'zlib', 'dist', 'prebuilt', TARGET.path, 'include', 'zlib.h'))).toBe(true);
-        const manifest = JSON.parse(fs.readFileSync(upath.join(stageDir(), 'manifest.json'), 'utf8'));
+        const manifest = JSON.parse(fs.readFileSync(upath.join(stageDir(), 'manifests', `${TARGET.path}.json`), 'utf8'));
         expect(manifest.packages.map((p) => p.name)).toEqual(['libpng', 'zlib']);
         expect(manifest.packages[0]).not.toHaveProperty('packageFolder');
         expect(fs.readFileSync(upath.join(stageDir(), 'logs', `${TARGET.path}.log`), 'utf8')).toBe('built libpng\n');
@@ -185,7 +185,7 @@ describe('installing the declared Conan packages', () => {
         const { installConanPackages, runConan } = await importFresh();
         const config = configWith({ libpng: '1.6.58' });
         await installConanPackages(config, [TARGET]);
-        fs.writeFileSync(upath.join(stageDir(), 'manifest.json'), JSON.stringify({ key: 'other dependencies', packages: [] }));
+        fs.writeFileSync(upath.join(stageDir(), 'manifests', `${TARGET.path}.json`), JSON.stringify({ key: 'other dependencies', packages: [] }));
 
         expect(await installConanPackages(config, [TARGET])).toBe(true);
         expect(runConan).toHaveBeenCalledTimes(2);

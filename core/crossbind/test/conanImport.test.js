@@ -6,6 +6,10 @@ import os from 'node:os';
 import path from 'node:path';
 import upath from 'upath';
 import { parseConanImport, conanImportOfHeader } from '../src/utils/conanImport.js';
+import { writeConanManifest } from '../src/utils/conanStage.js';
+import { conanDependenciesKey } from '../src/utils/conanDependencies.js';
+import { getFilledConfig } from '../src/state/loadConfig.js';
+import refreshConanDependencies from '../src/state/refreshConanDependencies.js';
 
 const HEADERS = ['h', 'hpp', 'hxx', 'hh'];
 
@@ -54,18 +58,26 @@ describe('conan import specifiers', () => {
 describe('getDependFilePath for conan imports', () => {
     const TARGET = { platform: 'wasm', path: 'wasm-wasm32-st-release', releasePath: 'wasm-wasm32-st-release' };
     let work;
-    const output = () => upath.join(work, 'conan', 'packages', 'zlib', 'dist');
-    const configWith = (allDependencies) => ({
-        conanDependencies: { zlib: { version: '1.3.2', options: {} } },
-        ext: { header: HEADERS },
-        allDependencies,
-    });
-    const zlib = () => ({ general: { name: 'conan_zlib', conan: { name: 'zlib' } }, paths: { output: output() } });
+    const stage = () => upath.join(work, 'app', '.crossbind', 'conan');
+    const header = () => upath.join(stage(), 'packages', 'zlib', 'dist', 'prebuilt', TARGET.path, 'include', 'zlib.h');
+    const loadConfig = () => getFilledConfig({ paths: { project: upath.join(work, 'app') }, conanDependencies: { zlib: '1.3.2' } });
+
+    function stageZlib(config) {
+        fs.mkdirSync(upath.dirname(header()), { recursive: true });
+        fs.writeFileSync(header(), '');
+        fs.writeFileSync(upath.join(stage(), 'packages', 'zlib', 'dist', 'prebuilt', 'CMakeLists.txt'), '');
+        writeConanManifest(stage(), TARGET.path, {
+            key: conanDependenciesKey(config.conanDependencies),
+            packages: [{
+                name: 'zlib', version: '1.3.2', ref: 'zlib/1.3.2', license: 'Zlib', libs: ['z'], requires: [],
+            }],
+        });
+    }
 
     beforeEach(() => {
         work = upath.normalize(fs.mkdtempSync(path.join(os.tmpdir(), 'crossbind-conan-import-')));
-        fs.mkdirSync(upath.join(output(), 'prebuilt', TARGET.path, 'include'), { recursive: true });
-        fs.writeFileSync(upath.join(output(), 'prebuilt', TARGET.path, 'include', 'zlib.h'), '');
+        fs.mkdirSync(upath.join(work, 'app'), { recursive: true });
+        fs.writeFileSync(upath.join(work, 'app', 'package.json'), JSON.stringify({ name: 'conan-import-app', version: '0.0.0' }));
     });
 
     afterEach(() => {
@@ -73,28 +85,40 @@ describe('getDependFilePath for conan imports', () => {
     });
 
     test('a declared package resolves to its header staged for the target', async () => {
-        h.config = configWith([zlib()]);
+        h.config = loadConfig();
+        stageZlib(h.config);
         const { default: getDependFilePath } = await import('../src/integration/getDependFilePath.js');
 
-        expect(getDependFilePath('conan:zlib/zlib.h', TARGET)).toBe(upath.join(output(), 'prebuilt', TARGET.path, 'include', 'zlib.h'));
+        expect(getDependFilePath('conan:zlib/zlib.h', TARGET)).toBe(header());
     });
 
     test('an undeclared package is refused with the key to add', async () => {
-        h.config = configWith([zlib()]);
+        h.config = loadConfig();
         const { default: getDependFilePath } = await import('../src/integration/getDependFilePath.js');
 
         expect(() => getDependFilePath('conan:libpng/png.h', TARGET)).toThrow(/add 'libpng' to conanDependencies/);
     });
 
     test('a declared package that is not staged yet says when crossbind installs it', async () => {
-        h.config = configWith([]);
+        h.config = loadConfig();
         const { default: getDependFilePath } = await import('../src/integration/getDependFilePath.js');
 
         expect(() => getDependFilePath('conan:zlib/zlib.h', TARGET)).toThrow(/installs Conan packages when a build starts/);
     });
 
+    test('packages staged after state loaded are picked up, as a Metro server needs', async () => {
+        h.config = loadConfig();
+        // What state does when it loads, before any build staged a package.
+        refreshConanDependencies(h.config);
+        stageZlib(h.config);
+        const { default: getDependFilePath } = await import('../src/integration/getDependFilePath.js');
+
+        expect(getDependFilePath('conan:zlib/zlib.h', TARGET)).toBe(header());
+    });
+
     test('a header the package does not have lists where it looked', async () => {
-        h.config = configWith([zlib()]);
+        h.config = loadConfig();
+        stageZlib(h.config);
         const { default: getDependFilePath } = await import('../src/integration/getDependFilePath.js');
 
         expect(() => getDependFilePath('conan:zlib/zconf.h', TARGET)).toThrow(/has no zconf\.h[\s\S]*prebuilt\/wasm-wasm32-st-release\/include\/zconf\.h/);

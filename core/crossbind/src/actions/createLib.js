@@ -13,6 +13,7 @@ import { WASI_EMULATION_LIBS, WASI_LINK_LIBS, wasiCFlags, wasiCxxFlags } from '.
 import { getFilesFingerprint, getContentHash } from '../utils/hash.js';
 import { withDependencyBridges } from '../utils/dependencyBridges.js';
 import { targetArchiveFlags } from '../utils/archiveFlags.js';
+import { conanInputsOf } from '../utils/conanDependencies.js';
 
 const cpuCount = Math.max(1, os.cpus().length - 1);
 const sharedPlatforms = ['android'];
@@ -44,11 +45,7 @@ export default function createLib(target, fileType, options = {}) {
     // Config emccFlags feed compile-time state too (CROSSBIND_JSPI below), so a flag change must miss this cache.
     const configEmccFlags = getData('binary', target)?.emccFlags || [];
     const flagsFingerprintFile = `${libdir}/crossbind-emccflags.fingerprint`;
-    // Conan packages are restaged in place, so the headers the sources compiled against change with them.
-    const conanInputs = Object.keys(state.config.conanDependencies ?? {}).length > 0 ? {
-        dependencies: state.config.conanDependencies,
-        refs: state.config.allDependencies.filter((d) => d.general.conan).map((d) => d.general.conan.ref),
-    } : null;
+    const conanInputs = conanInputsOf(state.config);
     const flagsFingerprint = getContentHash(JSON.stringify(conanInputs ? [configEmccFlags, conanInputs] : configEmccFlags));
     const flagsChanged = !fs.existsSync(flagsFingerprintFile)
         || fs.readFileSync(flagsFingerprintFile, { encoding: 'utf8' }) !== flagsFingerprint;

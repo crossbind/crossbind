@@ -7,7 +7,7 @@ import makeTreeWritable from './makeTreeWritable.js';
 import { CONAN_NAME, conanPackageDir } from './conanImport.js';
 import { CONAN_VERSION } from './conanDependencies.js';
 
-const MANIFEST = 'manifest.json';
+const MANIFESTS = 'manifests';
 const LIB_NAME = /^[A-Za-z0-9_][A-Za-z0-9_.+-]*$/;
 // What may follow name/version in a reference: a user/channel and a recipe revision.
 const REFERENCE_TAIL = /^(@[A-Za-z0-9_][A-Za-z0-9_.+-]*\/[A-Za-z0-9_][A-Za-z0-9_.+-]*)?(#[0-9a-f]+)?$/;
@@ -97,9 +97,24 @@ function packageOf(node, requires) {
     };
 }
 
-// Host packages of a `conan install --format=json` graph, each before the packages it requires: the
-// order a static link takes them in. Left out are the consumer, build tools, test requirements and
-// packages conan skipped because the consumer needs nothing of them.
+// One entry per package name, each before the packages it requires: the order a static link takes
+// them in.
+function linkOrder(packages) {
+    const byName = new Map(packages.map((pkg) => [pkg.name, pkg]));
+    const order = [];
+    const visited = new Set();
+    const visit = (name) => {
+        if (visited.has(name) || !byName.has(name)) return;
+        visited.add(name);
+        byName.get(name).requires.forEach(visit);
+        order.push(byName.get(name));
+    };
+    byName.forEach((pkg, name) => visit(name));
+    return order.reverse();
+}
+
+// Host packages of a `conan install --format=json` graph in link order. Left out are the consumer,
+// build tools, test requirements and packages conan skipped because the consumer needs nothing of them.
 export function conanPackagesOf(graph) {
     const nodes = graph?.nodes;
     if (!nodes || typeof nodes !== 'object' || !graph.root) {
@@ -110,17 +125,8 @@ export function conanPackagesOf(graph) {
     const ids = Object.keys(nodes).filter(isPackage);
     const requiresOf = (id) => Object.entries(nodes[id].dependencies ?? {})
         .filter(([dependency, edge]) => !edge?.build && !edge?.test && ids.includes(dependency))
-        .map(([dependency]) => dependency);
-    const order = [];
-    const visited = new Set();
-    const visit = (id) => {
-        if (visited.has(id)) return;
-        visited.add(id);
-        requiresOf(id).forEach(visit);
-        order.push(id);
-    };
-    ids.forEach(visit);
-    return order.reverse().map((id) => packageOf(nodes[id], requiresOf(id).map((dependency) => nodes[dependency].name)));
+        .map(([dependency]) => nodes[dependency].name);
+    return linkOrder(ids.map((id) => packageOf(nodes[id], requiresOf(id))));
 }
 
 // The real path of a file conan reported, or null when there is none; refused when it resolves
@@ -211,18 +217,33 @@ export function stageConanPackage(pkg, {
         .replace('___PROJECT_WHOLE_ARCHIVE___', () => ''));
 }
 
-export function writeConanManifest(stageDir, manifest) {
-    writeIfChanged(upath.join(stageDir, MANIFEST), `${JSON.stringify(manifest, null, 4)}\n`);
+const manifestsOf = (stageDir) => upath.join(stageDir, MANIFESTS);
+const manifestFileOf = (stageDir, targetPath) => upath.join(manifestsOf(stageDir), `${targetPath}.json`);
+
+// One manifest per target: a recipe can require other packages on another platform.
+export function writeConanManifest(stageDir, targetPath, manifest) {
+    writeIfChanged(manifestFileOf(stageDir, targetPath), `${JSON.stringify(manifest, null, 4)}\n`);
 }
 
-// A manifest staged for other conanDependencies describes packages the config no longer asks for.
-export function readConanManifest(stageDir, key) {
-    const file = upath.join(stageDir, MANIFEST);
-    const manifest = loadJson(file);
-    if (manifest?.key !== key) return null;
+// The packages staged for one target, or for every target staged so far, in link order. A manifest
+// staged for other conanDependencies describes packages the config no longer asks for.
+export function readConanManifest(stageDir, key, targetPath = null) {
+    const dir = manifestsOf(stageDir);
+    let files = [];
+    if (targetPath) files = [manifestFileOf(stageDir, targetPath)];
+    else if (fs.existsSync(dir)) files = fs.readdirSync(dir).filter((name) => name.endsWith('.json')).sort().map((name) => upath.join(dir, name));
+    const manifests = files.map((file) => loadJson(file)).filter((manifest) => manifest?.key === key);
+    if (manifests.length === 0) return null;
     try {
-        return { key, packages: manifest.packages.map(conanPackageEntry) };
+        return { key, packages: linkOrder(manifests.flatMap((manifest) => manifest.packages.map(conanPackageEntry))) };
     } catch (e) {
-        throw new Error(`crossbind: ${file} cannot be used - delete ${stageDir} and build again. ${e.message}`, { cause: e });
+        throw new Error(`crossbind: ${dir} lists a package crossbind will not use - delete ${stageDir} and build again. ${e.message}`, { cause: e });
     }
+}
+
+// Changes whenever a build stages packages, so a process that attached before can tell.
+export function conanManifestsStamp(stageDir) {
+    const dir = manifestsOf(stageDir);
+    if (!fs.existsSync(dir)) return '';
+    return fs.readdirSync(dir).sort().map((name) => `${name}@${fs.statSync(upath.join(dir, name)).mtimeMs}`).join('|');
 }

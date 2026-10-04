@@ -171,6 +171,15 @@ describe('runConan on the host', () => {
         expect(installCall(spawnSync)).toBeUndefined();
     });
 
+    test('refuses android packages, which need the NDK of the android image', async () => {
+        const { mod, spawnSync } = await importFresh();
+
+        expect(() => mod.default(['install'], {
+            config: configWith('LOCAL'), target: { platform: 'android', arch: 'arm64-v8a', runtime: 'mt' }, work: mod.createConanWork('LOCAL'),
+        })).toThrow(/for android build in the android image, which RUNNER=LOCAL does not use/);
+        expect(installCall(spawnSync)).toBeUndefined();
+    });
+
     test('says so when there is no conan on the PATH', async () => {
         const { mod, spawnSync } = await importFresh();
         spawnSync.mockImplementation(toolsAt(''));
@@ -207,6 +216,25 @@ describe('runConan in docker', () => {
         const conanAt = argv.indexOf('conan');
         expect(argv[conanAt - 1]).toMatch(/^ghcr\.io\/crossbind\/web@sha256:[0-9a-f]{64}$/);
         expect(argv.slice(conanAt)).toEqual(['conan', 'install', '-pr:h', `${work.conanDir}/host.profile`]);
+    });
+
+    test('android packages build in the amd64 android image, the only one the NDK ships for', async () => {
+        const { mod, spawnSync } = await importFresh();
+        const work = mod.createConanWork('DOCKER_RUN');
+
+        mod.default(['install'], { config: configWith('DOCKER_RUN'), target: { platform: 'android', arch: 'arm64-v8a', runtime: 'mt' }, work });
+
+        const argv = installCall(spawnSync)[1];
+        expect(argv[argv.indexOf('--platform') + 1]).toBe('linux/amd64');
+        expect(argv[argv.indexOf('conan') - 1]).toMatch(/^ghcr\.io\/crossbind\/android@sha256:[0-9a-f]{64}$/);
+    });
+
+    test('a wasm install passes no platform', async () => {
+        const { mod, spawnSync } = await importFresh();
+
+        mod.default(['install'], { config: configWith('DOCKER_RUN'), target: wasm, work: mod.createConanWork('DOCKER_RUN') });
+
+        expect(installCall(spawnSync)[1]).not.toContain('--platform');
     });
 
     test('DOCKER_EXEC runs conan in the container that mounts the Conan root', async () => {

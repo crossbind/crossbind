@@ -8,12 +8,12 @@ import state from '../state/index.js';
 import { wasiCFlags, wasiCxxFlags, resolveWasiSdkPath, WASI_TARGET_TRIPLE } from '../utils/wasiToolchain.js';
 import { HOST_BUILT_PLATFORMS } from '../utils/targets.js';
 import { WASM_EXCEPTION_FLAGS } from '../utils/archiveFlags.js';
+import { ANDROID_NDK, ANDROID_API_LEVEL } from '../utils/androidToolchain.js';
 
 // Native builds can outrun Node's 1 MiB default pipe buffer; without a raised cap a successful build dies with ENOBUFS.
 const EXEC_MAX_BUFFER = 512 * 1024 * 1024;
-const CROSSCOMPILER_ARM64 = 'aarch64-linux-android33';
-const CROSSCOMPILER_x86_64 = 'x86_64-linux-android33';
-const ANDROID_NDK = '/opt/android-sdk/ndk/current';
+const CROSSCOMPILER_ARM64 = `aarch64-linux-android${ANDROID_API_LEVEL}`;
+const CROSSCOMPILER_x86_64 = `x86_64-linux-android${ANDROID_API_LEVEL}`;
 const t = `${ANDROID_NDK}/toolchains/llvm/prebuilt/linux-x86_64/bin`;
 const t2 = `${ANDROID_NDK}/toolchains/llvm/prebuilt/linux-x86_64`;
 
@@ -197,7 +197,7 @@ export default function run(program, params = [], platformPrefix = null, target 
                         ...dParams,
                         `-DCMAKE_TOOLCHAIN_FILE=${ANDROID_NDK}/build/cmake/android.toolchain.cmake`,
                         `-DANDROID_ABI=${target.arch === 'x86_64' ? 'x86_64' : 'arm64-v8a'}`,
-                        '-DANDROID_PLATFORM=android-33',
+                        `-DANDROID_PLATFORM=android-${ANDROID_API_LEVEL}`,
                         `-DANDROID_NDK=${ANDROID_NDK}`,
                     ];
                 }
