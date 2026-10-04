@@ -64,18 +64,20 @@ hand.
 - Check: `grep -rl 'mobile-reactnative-expo' .github/workflows/` returns nothing.
 - Remove when a job installs it.
 
-## No e2e fixture runs in CI
+## Most e2e fixtures never run in CI
 
-The CI e2e legs run the `@crossbind/example-*` apps and the `port-zlib-wasi` e2e. None of the nine
-`@crossbind/e2e-*` fixtures is built or run — the React Native one included — so the conformance
-suites they carry never run either; the root `pnpm install` is the only step that touches them. All
-but the WASI fixture depend on twelve or more ports while CI builds only zlib, and adding them was
-measured and deferred on 2026-08-23. The `build-linux.yml` comment that explains the exclusion
-points to AGENTS.md, which no longer says anything about it.
+The CI e2e legs run the `@crossbind/example-*` apps, the `port-zlib-wasi` and `port-zlib-linux`
+e2e, and two of the thirteen `@crossbind/e2e-*` fixtures: `e2e-cli-native` and
+`e2e-backend-nodejs-native-conan`. The other eleven are not built or run — the React Native one
+included — so the conformance suites they carry never run either; besides the root `pnpm install`,
+CI touches only `e2e-web-vanilla`, where `test-core.yml` runs `crossbind licenses --check`. Eight of
+them depend on twelve or more ports while CI builds only zlib, and adding them was measured and
+deferred on 2026-08-23. The `build-linux.yml` comment that explains the exclusion points to
+AGENTS.md, which no longer says anything about it.
 
 - Seen: 2026-08-22
-- Check: `grep -rn 'e2e-' .github/workflows/` returns nothing, and `node -p "Object.entries(require('./package.json').scripts).filter(([k, v]) => k.startsWith('ci:') && v.includes('e2e-')).length"` prints 0.
-- Remove when the fixtures run in CI.
+- Check: `node -p "[...new Set(Object.entries(require('./package.json').scripts).filter(([k]) => k.startsWith('ci:')).flatMap(([, v]) => v.match(/e2e-[a-z-]+/g) ?? []))].join(' ')"` prints `e2e-cli-native e2e-backend-nodejs-native-conan`.
+- Remove when every fixture runs in CI.
 
 ## Six of the nine gates in `pnpm run check` never run in CI
 
