@@ -169,6 +169,7 @@ describe('buildNode', () => {
         expect(written).toHaveLength(1);
         const [{ options, output }] = written;
         expect(options.input).toBe('/napi/js/loader.js');
+        expect(options.plugins.map((plugin) => plugin.name)).toContain('crossbind-scoped-embind');
         expect(output).toMatchObject({ file: `${work}/demo.native.cjs`, format: 'cjs', exports: 'default' });
     });
 

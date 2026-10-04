@@ -200,7 +200,8 @@ class NodeApiJsiRuntime : public jsi::Runtime, public crossbind::IDirectReads {
   NodeApiJsiRuntime(
       napi_env env,
       JSRuntimeApi *jsrApi,
-      std::function<void()> onDelete) noexcept;
+      std::function<void()> onDelete,
+      napi_value globalScope) noexcept;
   ~NodeApiJsiRuntime() override;
 
   jsi::ICast *castInterface(const jsi::UUID &interfaceUUID) override;
@@ -1116,6 +1117,7 @@ class NodeApiJsiRuntime : public jsi::Runtime, public crossbind::IDirectReads {
   struct CachedValue {
     NodeApiRefHolder Error;
     NodeApiRefHolder Global;
+    NodeApiRefHolder GlobalScope;
     NodeApiRefHolder HostObjectProxyHandler;
     NodeApiRefHolder ProxyConstructor;
     NodeApiRefHolder SymbolToString;
@@ -1214,7 +1216,8 @@ bool StringKey::EqualTo::operator()(
 NodeApiJsiRuntime::NodeApiJsiRuntime(
     napi_env env,
     JSRuntimeApi *jsrApi,
-    std::function<void()> onDelete) noexcept
+    std::function<void()> onDelete,
+    napi_value globalScope) noexcept
     : env_(env), jsrApi_(jsrApi), onDelete_(std::move(onDelete)) {
   NodeApiScope scope{*this};
   propertyId_.Error = makeNodeApiRef(
@@ -1266,6 +1269,10 @@ NodeApiJsiRuntime::NodeApiJsiRuntime(
 
   cachedValue_.Global =
       makeNodeApiRef(getGlobal(), NodeApiPointerValueKind::Object);
+  if (globalScope) {
+    cachedValue_.GlobalScope =
+        makeNodeApiRef(globalScope, NodeApiPointerValueKind::Object);
+  }
   cachedValue_.Error = makeNodeApiRef(
       getProperty(
           getNodeApiValue(cachedValue_.Global),
@@ -1337,7 +1344,9 @@ bool NodeApiJsiRuntime::drainMicrotasks(int maxMicrotasksHint) {
 #endif
 
 jsi::Object NodeApiJsiRuntime::global() {
-  return make<jsi::Object>(cachedValue_.Global->clone(*this));
+  const NodeApiRefHolder &global =
+      cachedValue_.GlobalScope ? cachedValue_.GlobalScope : cachedValue_.Global;
+  return make<jsi::Object>(global->clone(*this));
 }
 
 std::string NodeApiJsiRuntime::description() {
@@ -3737,8 +3746,10 @@ void NodeApiJsiRuntime::popPointerValueScope() noexcept {
 std::unique_ptr<jsi::Runtime> makeNodeApiJsiRuntime(
     napi_env env,
     JSRuntimeApi *jsrApi,
-    std::function<void()> onDelete) noexcept {
-  return std::make_unique<NodeApiJsiRuntime>(env, jsrApi, std::move(onDelete));
+    std::function<void()> onDelete,
+    napi_value globalScope) noexcept {
+  return std::make_unique<NodeApiJsiRuntime>(
+      env, jsrApi, std::move(onDelete), globalScope);
 }
 
 } // namespace Microsoft::NodeApiJsi

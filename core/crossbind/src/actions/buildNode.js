@@ -14,6 +14,7 @@ import logger from '../utils/logger.js';
 import { getContentHash, getFilesFingerprint } from '../utils/hash.js';
 import { buildLinkLibArgs } from '../utils/linkLayout.js';
 import resolveEmbindNapiRoot, { resolveEmbindJsiRoot } from '../utils/resolveEmbindNapi.js';
+import scopedEmbind from '../utils/scopedEmbind.js';
 import resolveEmbindRustRoot from '../utils/resolveEmbindRust.js';
 
 const cpuCount = Math.max(1, os.cpus().length - 1);
@@ -77,7 +78,9 @@ async function bundleLoader(target, napiRoot, loaderConfig) {
     const systemConfig = `export default ${JSON.stringify(loaderConfig)};`;
     const bundle = await rollup({
         input: `${napiRoot}/js/loader.js`,
-        plugins: [virtual({ 'crossbind/systemConfig': systemConfig }), nodeResolve(), commonjs()],
+        plugins: [
+            virtual({ 'crossbind/systemConfig': systemConfig }), scopedEmbind(`${resolveEmbindJsiRoot()}/js/embind.js`), nodeResolve(), commonjs(),
+        ],
         onwarn: suppressNodeBuiltinWarnings,
     });
     await bundle.write({ file: `${state.config.paths.build}/${target.jsName}`, format: 'cjs', exports: 'default' });

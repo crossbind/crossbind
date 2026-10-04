@@ -15,7 +15,8 @@ namespace Microsoft::NodeApiJsi {
 std::unique_ptr<facebook::jsi::Runtime> makeNodeApiJsiRuntime(
     napi_env env,
     JSRuntimeApi *jsrApi,
-    std::function<void()> onDelete) noexcept;
+    std::function<void()> onDelete,
+    napi_value globalScope = nullptr) noexcept;
 
 struct NodeApiEnvScope {
   NodeApiEnvScope(napi_env env) : env_(env) {
