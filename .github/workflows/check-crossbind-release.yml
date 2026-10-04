@@ -23,8 +23,10 @@ on:
             - ports/**/package.json
             - examples/**/package.json
             - core/crossbind/src/assets/toolchain-digests.json
+            - core/crossbind/src/utils/androidToolchain.js
             - core/crossbind/src/utils/pullDockerImage.js
             - core/crossbind/src/utils/rustSysrootPin.js
+            - tooling/docker/*.Dockerfile
             - tooling/docker/VERSION
             - landing/**
     pull_request:
@@ -48,8 +50,10 @@ on:
             - ports/**/package.json
             - examples/**/package.json
             - core/crossbind/src/assets/toolchain-digests.json
+            - core/crossbind/src/utils/androidToolchain.js
             - core/crossbind/src/utils/pullDockerImage.js
             - core/crossbind/src/utils/rustSysrootPin.js
+            - tooling/docker/*.Dockerfile
             - tooling/docker/VERSION
             - landing/**
 
