@@ -13,6 +13,7 @@ import getCMakeListsFilePath from '../utils/getCMakeListsFilePath.js';
 import calculateDependencyParameters from './calculateDependencyParameters.js';
 import logger from '../utils/logger.js';
 import { RUNTIME_ENVS } from '../utils/targets.js';
+import { normalizeConanDependencies } from '../utils/conanDependencies.js';
 // import getCmakeParameters from './getCmakeParameters.js';
 
 // For the project being built only: dependency builds load published configs that may still set
@@ -93,6 +94,15 @@ export default async function loadConfig(configDir = process.cwd(), configName =
     return output;
 }
 
+// Direct and transitive dependencies, one entry per package directory.
+export function flattenDependencies(dependencies) {
+    const output = {};
+    [...dependencies, ...dependencies.map((d) => d.allDependencies).flat()].forEach((d) => {
+        output[d.paths.project] = d;
+    });
+    return Object.values(output);
+}
+
 export function getFilledConfig(config, options = { isDepend: false }) {
     const exclude = options.exclude || [];
     const { seen, replaces } = options;
@@ -114,6 +124,7 @@ export function getFilledConfig(config, options = { isDepend: false }) {
         general: config.general || {},
         dependencies,
         cargoDependencies: config.cargoDependencies || {},
+        conanDependencies: normalizeConanDependencies(config.conanDependencies),
         // 'sync' types the direct surface; 'promise' wraps every generated method return
         // for useWorker-style runtimes (constructors stay sync-typed: await new X()).
         dts: config.dts || 'sync',
@@ -190,13 +201,7 @@ export function getFilledConfig(config, options = { isDepend: false }) {
     newConfig.export.libName = newConfig.export.libName || [newConfig.general.name];
     newConfig.export.binHeaders = newConfig.export.binHeaders || [];
 
-    newConfig.allDependencies = (() => {
-        const output = {};
-        [...newConfig.dependencies, ...newConfig.dependencies.map((d) => d.allDependencies).flat()].forEach((d) => {
-            output[d.paths.project] = d;
-        });
-        return Object.values(output);
-    })();
+    newConfig.allDependencies = flattenDependencies(newConfig.dependencies);
 
     newConfig.extensions?.forEach(e => {
         e?.loadConfig?.after(newConfig);

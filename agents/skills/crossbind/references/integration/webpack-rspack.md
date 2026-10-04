@@ -8,7 +8,7 @@
 
 ## Goal
 
-Wire `@crossbind/plugin-webpack` into the bundler config so dev-server serves wasm with COOP/COEP, the loader handles `.h` and `.rs` files (plus `cargo:` crate imports and bare Rust package imports), and prod build emits `crossbind.js` + `crossbind.wasm` artifacts.
+Wire `@crossbind/plugin-webpack` into the bundler config so dev-server serves wasm with COOP/COEP, the loader handles `.h` and `.rs` files (plus `cargo:` crate imports, `conan:` header imports and bare Rust package imports), and prod build emits `crossbind.js` + `crossbind.wasm` artifacts.
 
 ## When to use
 

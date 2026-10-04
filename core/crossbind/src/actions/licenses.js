@@ -168,21 +168,58 @@ async function buildRow(node) {
     };
 }
 
+// A Conan package's facts come from its recipe, and its texts from the licenses/ its package ships.
+function conanRow(node) {
+    const { conan } = node.general;
+    const licenseDir = `${node.paths.project}/licenses`;
+    const files = fs.existsSync(licenseDir)
+        ? fs.readdirSync(licenseDir, { recursive: true, withFileTypes: true }).filter((entry) => entry.isFile())
+        : [];
+    const texts = files.map((entry) => path.join(entry.parentPath, entry.name)).sort()
+        .map((file) => `=== ${path.relative(licenseDir, file)} ===\n\n${fs.readFileSync(file, 'utf8').trim()}`);
+    return {
+        name: conan.name,
+        npmName: null,
+        version: null,
+        nativeVersion: conan.version,
+        license: conan.license,
+        licenseDeclared: null,
+        licenseSelected: null,
+        licenseNotes: `built from the ConanCenter recipe ${conan.ref}`,
+        sha256: conan.source?.sha256 ?? null,
+        sourceUrl: conan.source?.url ?? conan.homepage ?? null,
+        licenseText: texts.length > 0 ? texts.join('\n\n') : null,
+        isCopyleft: isCopyleft(conan.license),
+        purl: `pkg:conan/${conan.name}@${conan.version}`,
+    };
+}
+
+// Conan packages join the graph from the stage a build makes; without it they would be left out unseen.
+function assertConanStaged() {
+    const attached = new Set(state.config.allDependencies.filter((d) => d.general.conan).map((d) => d.general.conan.name));
+    const missing = Object.keys(state.config.conanDependencies ?? {}).filter((name) => !attached.has(name));
+    if (missing.length > 0) {
+        throw new Error(`crossbind: the Conan packages ${missing.join(', ')} are not installed for the current conanDependencies, so their rows would be missing. Build the wasm targets first (crossbind build -p wasm).`);
+    }
+}
+
 // platform (optional, e.g. 'wasi') additionally includes what that platform's
 // artifact statically links beyond the package graph: recipe-declared vendored
 // copies and the toolchain runtime.
 export default async function collectLicenseRows(platform = null) {
+    assertConanStaged();
     // The root package is a component too: leaf -wasi packages have no deps but ship their own upstream.
     const nodes = [state.config, ...state.config.allDependencies]
-        .filter((node) => node?.general?.alias?.package && node.paths?.project);
+        .filter((node) => (node?.general?.alias?.package || node?.general?.conan) && node.paths?.project);
     const rows = [];
     const seen = new Set();
     for (const node of nodes) {
-        const key = node.general.alias.package;
+        const key = node.general.conan ? `conan:${node.general.conan.name}` : node.general.alias.package;
         if (seen.has(key)) continue;
         seen.add(key);
-        rows.push(await buildRow(node));
-        if (platform) rows.push(...await bundledRowsOf(node, platform));
+        rows.push(node.general.conan ? conanRow(node) : await buildRow(node));
+        // A Conan package's folder is written from what its recipe produced: nothing there is run.
+        if (platform && !node.general.conan) rows.push(...await bundledRowsOf(node, platform));
     }
     if (platform === 'wasi') rows.push(...wasiToolchainRows());
     if (['linux', 'linuxmusl', 'win32'].includes(platform)) rows.push(...addonToolchainRows(platform));

@@ -24,6 +24,7 @@ const API_DOC_TITLES = {
     'threading.md': 'Threading',
     'cpp-binding-rules.md': 'C++ binding rules',
     'rust.md': 'Rust bindings',
+    'conan.md': 'Conan packages',
     'wasi.md': 'WASI commands',
     'native.md': 'Native platforms',
     'swig-escape.md': 'Custom SWIG interfaces',

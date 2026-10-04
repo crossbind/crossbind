@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { stripComments } from './swigInterface.js';
 import writeIfChanged from './writeIfChanged.js';
+import { conanImportOfHeader, conanStageDir } from './conanImport.js';
 
 // Best-effort .d.ts for `.h` imports, the C++ analog of the Rust emitDts: parse the
 // binding-rules surface (classes, public methods, primitives/string/shared_ptr), skip
@@ -221,20 +222,46 @@ export function emitCppDts(model, exportNames, mode = 'sync') {
     return out.join('\n');
 }
 
-// Mirror the declaration under <cache>/types/<project-relative>.d.ts - never next to the
-// user's header. Package headers are skipped: their types ship with the package itself.
-export function writeHeaderDts({ headerFile, exportsFile, projectPath, cacheDir, dtsMode = 'sync', log = () => {} }) {
-    if (!fs.existsSync(exportsFile)) return;
-    const relative = path.relative(projectPath, headerFile);
-    if (relative.startsWith('..')) return;
-    let exportNames;
+function readExportNames(exportsFile, log) {
+    if (!fs.existsSync(exportsFile)) return null;
     try {
-        exportNames = JSON.parse(fs.readFileSync(exportsFile, 'utf8'));
+        const exportNames = JSON.parse(fs.readFileSync(exportsFile, 'utf8'));
+        return Array.isArray(exportNames) ? exportNames : null;
     } catch (e) {
         log(`crossbind: dts: unreadable exports file ${exportsFile} (${e.message})`);
-        return;
+        return null;
     }
-    if (!Array.isArray(exportNames)) return;
+}
+
+function declarationsOf(headerFile, exportNames, dtsMode, log) {
     const model = headerFile.endsWith('.i') ? { classes: [] } : parseCppSurface(fs.readFileSync(headerFile, 'utf8'), log);
-    writeIfChanged(`${cacheDir}/types/${relative}.d.ts`, emitCppDts(model, exportNames, dtsMode));
+    return emitCppDts(model, exportNames, dtsMode);
+}
+
+// Mirror the declaration under <cache>/types/<project-relative>.d.ts - never next to the
+// user's header. Package headers are skipped: their types ship with the package itself, and a
+// header staged from Conan is typed by its conan: module instead.
+export function writeHeaderDts({ headerFile, exportsFile, projectPath, cacheDir, dtsMode = 'sync', log = () => {} }) {
+    const relative = path.relative(projectPath, headerFile);
+    if (relative.startsWith('..') || headerFile.startsWith(`${conanStageDir(cacheDir)}/`)) return;
+    const exportNames = readExportNames(exportsFile, log);
+    if (!exportNames) return;
+    writeIfChanged(`${cacheDir}/types/${relative}.d.ts`, declarationsOf(headerFile, exportNames, dtsMode, log));
+}
+
+// A conan: specifier names no file the editor could map, so it is typed by an ambient module that
+// @crossbind/typescript-config includes. `declare` is an error inside one (TS1038).
+export function writeConanImportDts({ headerFile, exportsFile, cacheDir, dtsMode = 'sync', log = () => {} }) {
+    const conanImport = conanImportOfHeader(headerFile, cacheDir);
+    const exportNames = conanImport && readExportNames(exportsFile, log);
+    if (!exportNames) return;
+    const body = declarationsOf(headerFile, exportNames, dtsMode, log)
+        .replaceAll('export declare ', 'export ')
+        .split('\n')
+        .map((line) => (line ? `    ${line}` : line))
+        .join('\n');
+    writeIfChanged(
+        `${conanStageDir(cacheDir)}/types/${conanImport.name}/${conanImport.header}.d.ts`,
+        `declare module 'conan:${conanImport.name}/${conanImport.header}' {\n${body}\n}\n`,
+    );
 }

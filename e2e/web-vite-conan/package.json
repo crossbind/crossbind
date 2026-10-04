@@ -1,0 +1,28 @@
+{
+    "name": "@crossbind/e2e-web-vite-conan",
+    "version": "0.0.0",
+    "private": true,
+    "description": "crossbind Vite playground for Conan packages: zlib and libpng through conan: imports, fmt through an app header",
+    "homepage": "https://github.com/crossbind/crossbind/tree/main/e2e/web-vite-conan#readme",
+    "repository": "https://github.com/crossbind/crossbind.git",
+    "license": "MIT",
+    "type": "module",
+    "scripts": {
+        "dev": "vite",
+        "build": "vite build",
+        "preview": "vite preview --port 4180 --strictPort",
+        "e2e:prod": "playwright test --config playwright.prod.config.cjs",
+        "clear": "rm -rf .crossbind dist"
+    },
+    "devDependencies": {
+        "@crossbind/plugin-vite": "workspace:^",
+        "@playwright/test": "^1.63.0",
+        "vite": "^8.2.1"
+    },
+    "keywords": [
+        "crossbind-sample",
+        "webassembly",
+        "conan",
+        "vite"
+    ]
+}

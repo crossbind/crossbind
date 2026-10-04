@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import {
     state, createLib, buildWasm, createBridgeFile, getData, getCrossbindScript, getRustJsScript, getDependFilePath, buildDependencies, getTargetParams, getFilteredBuildTargets, isSourceNewer,
+    prepareConanDependencies,
 } from 'crossbind';
 
 const targetParams = getTargetParams({ platform: ['wasm'], arch: ['wasm32'], runtime: ['st'], runtimeEnv: ['browser'] }, true);
@@ -54,6 +55,10 @@ export default class CrossbindWebpackPlugin {
                 compiler.options.resolve.alias[`${dep.package.name}$`] = libRs;
             }
         }
+        // Conan packages are staged before the first header import resolves against them.
+        const prepareConan = () => prepareConanDependencies([buildTargetRelease]);
+        compiler.hooks.beforeRun.tapPromise(pluginName, prepareConan);
+        compiler.hooks.watchRun.tapPromise(pluginName, prepareConan);
         // tapPromise (not tap) so webpack awaits the native C++/wasm build and a build
         // failure surfaces as a compilation error instead of an unhandled rejection.
         compiler.hooks.done.tapPromise(pluginName, this.onDone.bind(this));

@@ -6,7 +6,7 @@ import state, { saveCache } from '../state/index.js';
 import { getContentHash, getFileHash } from '../utils/hash.js';
 import guardAsyncBindings from '../utils/bridgeAsyncGuard.js';
 import getDependFilePath from '../integration/getDependFilePath.js';
-import { writeHeaderDts } from '../utils/cppDts.js';
+import { writeHeaderDts, writeConanImportDts } from '../utils/cppDts.js';
 import { ALL_NAMES, findHeaderImportsIn } from '../utils/headerImports.js';
 import {
     buildInterfaceContent, completingIncludes, findHeaderPrelude, findIgnoredDeclarations, indexTypeDefinitions, interfaceIncludes,
@@ -41,13 +41,15 @@ export default function createBridgeFile(headerOrModuleFilePath, target = state.
         // Records which header this bridge came from, so directory-driven consumers
         // (getAllBridges) can prune bridges whose header no longer exists.
         writeIfChanged(`${bridgeFile}.source`, `${interfaceFilePath}\n`);
-        writeHeaderDts({
+        const dtsOptions = {
             headerFile: interfaceFilePath,
             exportsFile: `${bridgeFile}.exports.json`,
             projectPath: state.config.paths.project,
             cacheDir: state.config.paths.cache,
             dtsMode: state.config.dts,
-        });
+        };
+        writeHeaderDts(dtsOptions);
+        writeConanImportDts(dtsOptions);
     }
     if (bridgeFile && withDependencies && !moduleRegex.test(interfaceFilePath)) {
         // A header's own bindings need the types its declarations use registered, which only their headers' bridges do.

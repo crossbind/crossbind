@@ -55,9 +55,9 @@ Standard JS rules apply. If a JS proxy of a C++ shared_ptr captures a closure th
 ## TypeScript: `.d.ts` is generated for your imports
 
 crossbind emits declaration files for the native modules you import — C++ headers
-(`./native/native.h`), app-local Rust files (`./native/x.rs`) and `cargo:`
-crate imports — under `.crossbind/types/` and `.crossbind/rust-crates/types/`, never
-next to your sources. Wire them once by extending the shared config
+(`./native/native.h`), app-local Rust files (`./native/x.rs`), `cargo:` crate
+imports and `conan:` header imports — under `.crossbind/types/`,
+`.crossbind/rust-crates/types/` and `.crossbind/conan/types/`, never next to your sources. Wire them once by extending the shared config
 (`npm i -D @crossbind/typescript-config`, TS 5.5+):
 
 ```jsonc

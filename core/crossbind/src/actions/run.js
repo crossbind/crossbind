@@ -7,6 +7,7 @@ import { DOCKER_RUN_SECURITY_ARGS } from '../utils/dockerSecurity.js';
 import state from '../state/index.js';
 import { wasiCFlags, wasiCxxFlags, resolveWasiSdkPath, WASI_TARGET_TRIPLE } from '../utils/wasiToolchain.js';
 import { HOST_BUILT_PLATFORMS } from '../utils/targets.js';
+import { WASM_EXCEPTION_FLAGS } from '../utils/archiveFlags.js';
 
 // Native builds can outrun Node's 1 MiB default pipe buffer; without a raised cap a successful build dies with ENOBUFS.
 const EXEC_MAX_BUFFER = 512 * 1024 * 1024;
@@ -147,7 +148,7 @@ export default function run(program, params = [], platformPrefix = null, target 
     if (program === null) {
         switch (target.platform) {
             case 'wasm':
-                platformParams = ['-e', 'CXXFLAGS=-fwasm-exceptions', '-e', 'CFLAGS=-fwasm-exceptions'];
+                platformParams = ['-e', `CXXFLAGS=${WASM_EXCEPTION_FLAGS.join(' ')}`, '-e', `CFLAGS=${WASM_EXCEPTION_FLAGS.join(' ')}`];
                 if (params[0].toLowerCase().includes('configure')) dProgram = 'emconfigure';
                 else if (params[0] === 'make') dProgram = 'emmake';
                 else if (params[0] === 'cmake') dProgram = 'emcmake';

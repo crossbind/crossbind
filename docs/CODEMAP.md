@@ -65,6 +65,7 @@ Every consumer-facing field, every default, every constraint lives in [`docs/api
 - [`threading.md`](./api/threading.md) — `runtime: 'st' | 'mt'`, `useWorker`, COOP/COEP, edge-runtime limits.
 - [`cpp-binding-rules.md`](./api/cpp-binding-rules.md) — what auto-binding handles + wrapper / SWIG escape patterns.
 - [`rust.md`](./api/rust.md) — Rust bindings: `cargo:` imports, app-local `.rs`, cargo-type packages.
+- [`conan.md`](./api/conan.md) — C/C++ packages from ConanCenter: `conan:` imports, `conanDependencies`, `conan.lock`.
 - [`native.md`](./api/native.md) — desktop platforms beyond Node.js addons: native executables and prebuilt archives in your own C/C++ build.
 - [`wasi.md`](./api/wasi.md) — `platform: 'wasi'` command builds + `-bin-wasi` npm tool packages.
 - [`swig-escape.md`](./api/swig-escape.md) — manual `.i` files for the rare cases auto-gen doesn't fit.
@@ -112,6 +113,7 @@ Index + template: [`docs/adr/README.md`](./adr/README.md).
 | Archives of a final link and what stays whole (wasm and addon) | `src/actions/getLinkInputs.js` |
 | WASI command link (single .wasm) | `src/actions/buildWasiCommand.js` |
 | Rust crate build (`export.type: 'cargo'`) | `src/actions/buildCargo.js` |
+| Install and attach `conanDependencies` when a build starts | `src/actions/prepareConanDependencies.js` |
 | -bin tool derivations (commands, multicall, provenance, license) | `src/actions/buildBinTools.js` |
 | License/SBOM row collection (`crossbind licenses`) | `src/actions/licenses.js` |
 | Rollup config for runtime adapters | `src/actions/buildJs.js` |
@@ -132,6 +134,7 @@ Index + template: [`docs/adr/README.md`](./adr/README.md).
 | Merge `crossbind.config.*` + defaults | `src/state/loadConfig.js` |
 | Runtime config singleton | `src/state/index.js` |
 | Default ext lists, paths.\*, dependency graph | `src/state/loadConfig.js` |
+| Staged Conan packages joining the dependencies | `src/state/attachConanDependencies.js` |
 
 ### Runtime (JS) layer
 
@@ -192,6 +195,14 @@ Index + template: [`docs/adr/README.md`](./adr/README.md).
 | crossbind target → cargo triple | `src/utils/cargoTarget.js` |
 | Rust bridge generation (crate surface parsing, dts) | `src/utils/rustBridgeGen.js` |
 | `cargo:` specifiers, import markers, app-source scan for module imports | `src/utils/cargoImport.js` |
+| Flags every wasm archive shares (exceptions, SIMD, threads, memory64) | `src/utils/archiveFlags.js` |
+| `conan:` specifiers and staged header resolution | `src/utils/conanImport.js` |
+| `conanDependencies` validation, install requirements and options | `src/utils/conanDependencies.js` |
+| Conan host and build profiles from crossbind's toolchain | `src/utils/conanProfile.js` |
+| `conan install` per target: stamps, lock, `conan.lock` | `src/utils/conanInstall.js` |
+| Conan graph → checked, staged prebuilt packages and manifest | `src/utils/conanStage.js` |
+| Every conan invocation (allowlisted env, a home per run, store and docker mounts) | `src/utils/runConan.js` |
+| `RUNNER=DOCKER_EXEC` container mount check (cargo and conan) | `src/utils/execContainer.js` |
 | @crossbind/core-embind-rust resolution (consumer-declared) | `src/utils/resolveEmbindRust.js` |
 | @crossbind/core-embind-napi resolution (consumer-declared) | `src/utils/resolveEmbindNapi.js` |
 | wasi bin command runner (npm shims import this) | `src/runtime/wasiRun.mjs` |

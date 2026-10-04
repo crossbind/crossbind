@@ -17,6 +17,7 @@ export const REFERENCE_DOCUMENTS = [
     ['threading.md', "`runtime: 'st' | 'mt'`, `useWorker`, COOP/COEP and edge-runtime limits."],
     ['cpp-binding-rules.md', 'what the auto-binder accepts and the wrapper pattern for the rest.'],
     ['rust.md', '`cargo:` crate imports, app-local `.rs` sources and `export.type: \'cargo\'` packages.'],
+    ['conan.md', '`conan:` imports of C and C++ packages from ConanCenter, `conanDependencies` and `conan.lock`.'],
     ['wasi.md', "`platform: 'wasi'` command builds, `-wasi` prebuilts and `-bin-wasi` tool packages."],
     ['native.md', 'desktop platforms beyond Node.js addons: native executables and the prebuilt archives in your own C or C++ build.'],
     ['swig-escape.md', 'hand-written SWIG `.i` files when generation is not enough.'],

@@ -90,6 +90,12 @@ describe('formatNoticesMarkdown', () => {
 
         expect(markdown).toContain('no license election recorded');
     });
+
+    test('a license text with a fence of its own stays inside its block', () => {
+        const markdown = formatNoticesMarkdown([row({ licenseText: 'text\n```\n## Injected section\n```' })]);
+
+        expect(markdown).toContain('````\ntext\n```\n## Injected section\n```\n````');
+    });
 });
 
 describe('formatCycloneDxSbom', () => {
@@ -124,5 +130,11 @@ describe('formatCycloneDxSbom', () => {
         expect(sbom.components.map((c) => c.name)).toEqual(['geos', 'z']);
         expect(sbom.components[0].hashes).toBeUndefined();
         expect(sbom.components[0].purl).toBeUndefined();
+    });
+
+    test('a row that knows its package URL keeps it', () => {
+        const sbom = JSON.parse(formatCycloneDxSbom([row({ name: 'zlib', purl: 'pkg:conan/zlib@1.3.2' })], {}));
+
+        expect(sbom.components[0].purl).toBe('pkg:conan/zlib@1.3.2');
     });
 });

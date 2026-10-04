@@ -49,6 +49,19 @@ export default {
     // strings. Undeclared `cargo:` imports are a hard error. See rust.md.
 
   // ─────────────────────────────────────────────────────────────
+  // C and C++ packages this project takes from ConanCenter
+  // ─────────────────────────────────────────────────────────────
+  conanDependencies: {
+    zlib: '1.3.2',
+    sqlite3: { version: '3.53.4', options: { enable_fts5: true } },
+  },
+    // Packages whose headers are importable via the `conan:` scheme
+    // (`import { zlibVersion } from 'conan:zlib/zlib.h'`) and usable from your
+    // own headers. Keys are Conan package names; values are a version, a Conan
+    // range ('[>=1.3 <2]') or { version, options }. Web builds only for now.
+    // Undeclared `conan:` imports are a hard error. See conan.md.
+
+  // ─────────────────────────────────────────────────────────────
   // Generated .d.ts flavor
   // ─────────────────────────────────────────────────────────────
   dts: 'sync',
@@ -324,6 +337,7 @@ export default {
 - [`init.md`](./init.md) — runtime API. `crossbind.config.js` produces the artifacts that `initNative(opts)` loads.
 - [`crossbind-build.md`](./crossbind-build.md) — sibling file used by package authors only.
 - [`rust.md`](./rust.md) — Rust bindings: `cargo:` imports, app-local `.rs`, `export.type: 'cargo'` packages.
+- [`conan.md`](./conan.md) — C and C++ packages from ConanCenter: `conan:` imports and `conan.lock`.
 - [`wasi.md`](./wasi.md) — `platform: 'wasi'` command builds + `-bin-wasi` tool packages.
 - [`threading.md`](./threading.md) — `target.runtime: 'mt'` requirements.
 - ADR-0002 — pnpm topological build order via `dependencies`.

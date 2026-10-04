@@ -13,6 +13,7 @@ export { getTargetParams, getBuildTargets, getFilteredBuildTargets, getFilteredT
 export { default as getCrossbindScript, getRustJsScript } from './integration/getCrossbindScript.js';
 export { default as getDependFilePath } from './integration/getDependFilePath.js';
 export { default as buildDependencies, getDependenciesStamp } from './actions/buildDependencies.js';
+export { default as prepareConanDependencies } from './actions/prepareConanDependencies.js';
 export { default as findFiles } from './utils/findFiles.js';
 export { getContentHash, getFileHash } from './utils/hash.js';
 export {
