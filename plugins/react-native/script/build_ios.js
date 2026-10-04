@@ -79,6 +79,15 @@ const iosTargetParams = {
 
 await buildDependencies({ targetParams: iosTargetParams });
 
+// The podspec vendors every xcframework in conan/, so it holds the app's Conan libraries and nothing else.
+// A package that only another platform's recipes require was never staged for iOS and has none.
+const conanDir = path.join(projectPath, 'conan');
+fs.rmSync(conanDir, { recursive: true, force: true });
+state.config.allDependencies.filter((d) => d.general.conan).forEach((d) => d.export.libName.forEach((name) => {
+    const xcframework = `${d.paths.project}/${name}.xcframework`;
+    if (fs.existsSync(xcframework)) fs.cpSync(xcframework, path.join(conanDir, `${name}.xcframework`), { recursive: true });
+}));
+
 const cacheKeyArgs = [buildType, projectPath, [projectPath, RNEmbindProjectPath, RNEmbindRustPath]];
 if (isIosLibsFresh(...cacheKeyArgs)) {
     console.log(`crossbind: iOS libs (${buildType}) up to date — skipping native build.`);

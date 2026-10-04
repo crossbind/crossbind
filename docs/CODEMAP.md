@@ -197,6 +197,7 @@ Index + template: [`docs/adr/README.md`](./adr/README.md).
 | `cargo:` specifiers, import markers, app-source scan for module imports | `src/utils/cargoImport.js` |
 | Flags every wasm archive shares (exceptions, SIMD, threads, memory64) | `src/utils/archiveFlags.js` |
 | The android image's NDK and the API level every Android archive is built against | `src/utils/androidToolchain.js` |
+| The Xcode and the deployment target every iOS archive is built with | `src/utils/iosToolchain.js` |
 | `conan:` specifiers and staged header resolution | `src/utils/conanImport.js` |
 | `conanDependencies` validation, install requirements and options | `src/utils/conanDependencies.js` |
 | Conan host and build profiles from crossbind's toolchain | `src/utils/conanProfile.js` |

@@ -14,14 +14,17 @@ Pod::Spec.new do |s|
   s.platforms    = { :ios => min_ios_version_supported }
   s.source       = { :http => "https://crossbind.dev" }
 
-  s.vendored_frameworks = 'react-native-crossbind.xcframework'
+  # conan/ holds the app's Conan libraries, which build_ios.js copies there. CocoaPods links what it
+  # finds at pod install, so a changed conanDependencies needs another pod install.
+  s.vendored_frameworks = ['react-native-crossbind.xcframework', 'conan/*.xcframework']
 
   s.script_phase = {
     :name => 'crossbind',
     # The Pods `[CP] Copy XCFrameworks` phase extracts the vendored xcframework slice into
     # PODS_XCFRAMEWORKS_BUILD_DIR before this script runs, so even though build_ios.js
     # rebuilds the xcframework with the user's bridge symbols, the linker would still see
-    # the stale extracted .a unless we overwrite it here.
+    # the stale extracted .a unless we overwrite it here. The same goes for a Conan archive that a new
+    # package version restaged.
     :script => 'set -e
 cd "${PODS_ROOT}/../.."
 node "${PODS_TARGET_SRCROOT}/script/build_js.js" ios
@@ -35,7 +38,13 @@ DST="${PODS_XCFRAMEWORKS_BUILD_DIR}/react-native-crossbind/libreact-native-cross
 if [ -f "${SRC}" ]; then
   mkdir -p "$(dirname "${DST}")"
   cp -f "${SRC}" "${DST}"
-fi',
+fi
+for XC in "${PODS_TARGET_SRCROOT}"/conan/*.xcframework; do
+  if [ -d "${XC}/${SLICE}" ]; then
+    mkdir -p "$(dirname "${DST}")"
+    cp -f "${XC}/${SLICE}"/*.a "$(dirname "${DST}")/"
+  fi
+done',
     :execution_position => :before_compile,
     :output_files => ['$(PODS_XCFRAMEWORKS_BUILD_DIR)/react-native-crossbind/libreact-native-crossbind.a']
   }

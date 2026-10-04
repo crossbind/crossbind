@@ -1,5 +1,6 @@
 import { WASM_EXCEPTION_FLAGS, targetArchiveFlags } from './archiveFlags.js';
 import { ANDROID_NDK, ANDROID_API_LEVEL } from './androidToolchain.js';
+import { IOS_DEPLOYMENT_TARGET } from './iosToolchain.js';
 
 // The app's own sources compile as C++20 (assets/cmake/CMakeLists.txt), so C++ packages do too.
 const CPP_STANDARD = '20';
@@ -7,10 +8,11 @@ const CPP_STANDARD = '20';
 const PACKAGE_ID_CONFS = ['tools.build:cflags', 'tools.build:cxxflags', 'tools.build:exelinkflags', 'tools.build:sharedlinkflags'];
 
 // Conan renders profiles as Jinja templates: these read the toolchain of whatever runs Conan, the image
-// or the host under RUNNER=LOCAL.
+// or the host (under RUNNER=LOCAL, and for iOS).
 const EMCC_VERSION = "{{ subprocess.check_output(['emcc', '-dumpversion'], text=True).strip() }}";
 const EMSCRIPTEN_TOOLCHAIN = "{{ subprocess.check_output(['em-config', 'EMSCRIPTEN_ROOT'], text=True).strip() }}/cmake/Modules/Platform/Emscripten.cmake";
 const NDK_CLANG_VERSION = `{{ subprocess.check_output(['${ANDROID_NDK}/toolchains/llvm/prebuilt/linux-x86_64/bin/clang', '-dumpversion'], text=True).split('.')[0] }}`;
+const XCODE_CLANG_VERSION = "{{ subprocess.check_output(['xcrun', 'clang', '-dumpversion'], text=True).split('.')[0] }}";
 const CMAKE_VERSION = "{{ subprocess.check_output(['cmake', '--version'], text=True).split()[2] }}";
 
 const ANDROID_ARCHS = { 'arm64-v8a': 'armv8', x86_64: 'x86_64' };
@@ -47,6 +49,22 @@ const PLATFORMS = {
         conf: [`tools.android:ndk_path=${ANDROID_NDK}`],
         buildenv: [],
     },
+    // Xcode's clang for the target's SDK, arm64 only like every crossbind iOS slice. No bitcode flag:
+    // Xcode 27 ld takes the "marker" of -fembed-bitcode-marker for a file when CMake links its check.
+    ios: {
+        settings: (target) => [
+            'os=iOS',
+            `os.version=${IOS_DEPLOYMENT_TARGET}`,
+            `os.sdk=${target.arch}`,
+            'arch=armv8',
+            'compiler=apple-clang',
+            `compiler.version=${XCODE_CLANG_VERSION}`,
+            'compiler.libcxx=libc++',
+            `compiler.cppstd=${CPP_STANDARD}`,
+        ],
+        conf: [],
+        buildenv: [],
+    },
 };
 
 export const BUILD_PROFILE = [
@@ -64,10 +82,14 @@ export const BUILD_PROFILE = [
 
 const list = (values) => JSON.stringify(values);
 
+// Conan checks compiler.version against the versions its own release lists, and a Conan older than the
+// Xcode lists none for its clang. Added to the run's home, this lets any version through on iOS.
+export const settingsUser = (target) => (target.platform === 'ios' ? 'compiler:\n  apple-clang:\n    version: ["ANY"]\n' : null);
+
 export function hostProfile(target) {
     const platform = PLATFORMS[target.platform];
     if (!platform) {
-        throw new Error(`crossbind: conan: imports build for wasm and android so far; ${target.platform} is not supported yet, so its build cannot use conanDependencies.`);
+        throw new Error(`crossbind: conan: imports build for wasm, android and ios so far; ${target.platform} is not supported yet, so its build cannot use conanDependencies.`);
     }
     const flags = list([...(target.platform === 'wasm' ? WASM_EXCEPTION_FLAGS : []), ...targetArchiveFlags(target)]);
     return [
