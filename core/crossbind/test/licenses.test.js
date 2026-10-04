@@ -102,6 +102,6 @@ describe('collectLicenseRows', () => {
     test('a declared Conan package that is not staged stops the listing instead of going missing from it', async () => {
         state.config = { conanDependencies: { zlib: { version: '1.3.2', options: {} } }, allDependencies: [] };
 
-        await expect(collectLicenseRows()).rejects.toThrow(/zlib are not installed[\s\S]*crossbind build -p wasm/);
+        await expect(collectLicenseRows()).rejects.toThrow(/zlib are not installed[\s\S]*Build the project first/);
     });
 });

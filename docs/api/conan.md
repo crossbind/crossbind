@@ -2,15 +2,15 @@
 
 > Import a C or C++ library from [ConanCenter](https://conan.io/center) the way you import a
 > crate with `cargo:`: declare it, then name one of its headers. crossbind builds the package with
-> its own toolchain, links it like a port and binds the header like any other. Web builds only for
-> now (wasm32 and wasm64, `st` and `mt`).
+> its own toolchain, links it like a port and binds the header like any other. Web builds (wasm32
+> and wasm64, `st` and `mt`) and React Native on Android (arm64-v8a and x86_64) for now.
 
 ## Requirement
 
 Nothing to install with the default Docker runner: the toolchain images carry Conan 2.33 from
 image family 1.0.11 on. The first build of a package needs the network, to reach ConanCenter and
 the sources its recipe downloads. Under `RUNNER=LOCAL`, Conan 2.19 or later, Emscripten and CMake
-have to be on the `PATH`.
+have to be on the `PATH`, and only web builds work: Android packages need the android image's NDK.
 
 ## Declare, then import
 
@@ -64,17 +64,34 @@ import { initNative, Text } from './native/text.h';
 C++ exceptions cross between your code and a Conan package: an `fmt::format_error` thrown inside
 libfmt reaches your `catch`.
 
+## React Native
+
+On Android the same imports work in a React Native app, from JavaScript and from your own headers.
+The Gradle build installs the packages before Metro bundles the bridges, and a Metro server started
+before that first build picks them up once they are staged. Metro reads headers for arm64-v8a, so
+its packages are built even when the app builds x86_64 only. iOS is not wired yet: an app that
+declares `conanDependencies` stops its iOS build with an error.
+
+Android packages are built for API level 33, as the ports are. In an app whose `minSdkVersion` is
+lower, a package that calls a newer libc function fails to link, as such a port would.
+
 ## What a build does
 
 1. When a build starts (`buildStart` in Vite and Rollup, `beforeRun` and `watchRun` in Webpack and
-   Rspack, `crossbind build`), crossbind runs `conan install` for every release target the build
-   needs. It runs in the web image, with a profile crossbind writes from its own toolchain: the
-   image's `emcc`, `-fwasm-exceptions -msimd128`, `-pthread` on `mt`, `-sMEMORY64=1` on wasm64,
-   static libraries.
-2. ConanCenter publishes no WebAssembly binaries, so each package builds from source the first
-   time; zlib, libpng and fmt take seconds. Built packages stay in `~/.crossbind/conan/store`,
-   shared by every project, and any build with the same profile reuses them. Under `RUNNER=LOCAL`
-   the store is `~/.crossbind/conan-local/store`, apart from the one containers write to.
+   Rspack, `crossbind build`, the Gradle build of a React Native app), crossbind runs
+   `conan install` for every release target the build needs, with a profile crossbind writes from
+   its own toolchain:
+   - wasm, in the web image: the image's `emcc`, `-fwasm-exceptions -msimd128`, `-pthread` on
+     `mt`, `-sMEMORY64=1` on wasm64;
+   - Android, in the android image: its NDK through the NDK's own CMake toolchain, API level 33 and
+     `c++_static`, as the ports' Android archives are built.
+
+   Every package is a static library.
+2. ConanCenter publishes no WebAssembly or Android binaries, so each package builds from source the
+   first time; zlib, libpng and fmt take seconds, or about half a minute in the android image, which
+   runs emulated on Apple silicon. Built packages stay in `~/.crossbind/conan/store`, shared by
+   every project, and any build with the same profile reuses them. Under `RUNNER=LOCAL` the store is
+   `~/.crossbind/conan-local/store`, apart from the one containers write to.
 3. crossbind copies each package to `.crossbind/conan/packages/<package>/dist/prebuilt/<target>/`,
    the layout a port ships, and links it like one. A debug build links the release archives.
 4. A target is installed again only when its inputs change: `conanDependencies`, the toolchain
@@ -84,8 +101,8 @@ libfmt reaches your `catch`.
 Each install writes Conan's whole log to `.crossbind/conan/logs/<target>.log`; a failed one also
 prints the end of it.
 
-A `crossbind build` that would also build for Android, iOS, WASI or a Node.js addon fails while
-`conanDependencies` is declared; pass `-p wasm`.
+A `crossbind build` that would also build for iOS, WASI or a Node.js addon fails while
+`conanDependencies` is declared; pass `-p wasm` or `-p android`.
 
 ## What a recipe can reach
 
@@ -125,16 +142,14 @@ Each `conan:` import is typed by an ambient module, `declare module 'conan:zlib/
 (a recipe's list as all of them, joined with `AND`), the source URL and SHA-256 the recipe
 downloads, and the license texts the package ships. The SBOM
 names it `pkg:conan/<package>@<version>`. It reads what the last build installed, so on a fresh
-checkout build first (`crossbind build -p wasm`); until then it stops with an error instead of
-leaving the packages out.
+checkout build first; until then it stops with an error instead of leaving the packages out.
 
 ## Limits
 
-- Web builds only. Conan has no WASI target at all; Android, iOS and Node.js addons are not wired
-  yet.
-- Metro does not resolve `conan:` imports yet.
-- A recipe that does not build for Emscripten fails the build with Conan's own error. The recipe's
-  options can often switch the failing part off.
+- Web and Android builds only. Conan has no WASI target at all; iOS and Node.js addons are not
+  wired yet.
+- A recipe that does not build for Emscripten or the NDK fails the build with Conan's own error.
+  The recipe's options can often switch the failing part off.
 - A header binds as far as a port's headers do ([`cpp-binding-rules.md`](./cpp-binding-rules.md)):
   C APIs bind; templates and variadic functions (`gzprintf`) do not.
 - Packages come from ConanCenter only; another remote or a login to one is not supported.

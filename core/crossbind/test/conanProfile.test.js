@@ -41,7 +41,40 @@ describe('conan host profile', () => {
     });
 
     test('other platforms are refused for now', () => {
-        expect(() => hostProfile({ platform: 'android', arch: 'arm64-v8a', runtime: 'mt', buildType: 'release' })).toThrow(/wasm/);
+        expect(() => hostProfile({ platform: 'ios', arch: 'iphoneos', runtime: 'mt', buildType: 'release' })).toThrow(/wasm and android so far; ios/);
+    });
+});
+
+describe('conan host profile for android', () => {
+    const android = (arch) => ({
+        platform: 'android', arch, runtime: 'mt', buildType: 'release',
+    });
+
+    test('builds static packages with the image NDK for the API level the ports use', () => {
+        const profile = hostProfile(android('arm64-v8a'));
+        expect(line(profile, 'os')).toBe('Android');
+        expect(line(profile, 'os.api_level')).toBe('33');
+        expect(line(profile, 'arch')).toBe('armv8');
+        expect(line(profile, 'compiler')).toBe('clang');
+        expect(line(profile, 'compiler.libcxx')).toBe('c++_static');
+        expect(line(profile, 'tools.android:ndk_path')).toBe('/opt/android-sdk/ndk/current');
+        expect(line(profile, '*:shared')).toBe('False');
+        expect(line(profile, 'tools.build:cflags')).toBe('["-pthread"]');
+    });
+
+    test('x86_64 keeps its own name', () => {
+        expect(line(hostProfile(android('x86_64')), 'arch')).toBe('x86_64');
+    });
+
+    test('the image NDK clang names the compiler version', () => {
+        expect(line(hostProfile(android('arm64-v8a')), 'compiler.version')).toContain('/opt/android-sdk/ndk/current/toolchains/llvm/prebuilt/linux-x86_64/bin/clang');
+    });
+
+    test('carries nothing of the emscripten toolchain', () => {
+        const profile = hostProfile(android('arm64-v8a'));
+        expect(profile).not.toContain('emcc');
+        expect(profile).not.toContain('[buildenv]');
+        expect(profile).not.toContain('user_toolchain');
     });
 });
 

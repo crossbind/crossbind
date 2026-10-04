@@ -5,7 +5,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import {
-    conanPackagesOf, stageConanPackage, writeConanManifest, readConanManifest,
+    conanPackagesOf, stageConanPackage, writeConanManifest, readConanManifest, conanManifestsStamp,
 } from '../src/utils/conanStage.js';
 import makeTreeWritable from '../src/utils/makeTreeWritable.js';
 
@@ -336,8 +336,14 @@ describe('the stage manifest', () => {
         fs.rmSync(scratch, { recursive: true, force: true });
     });
 
+    const WASM = 'wasm-wasm32-st-release';
+    const ANDROID = 'android-arm64-v8a-mt-release';
+    const pkg = (name, requires = []) => ({
+        ...entry, name, ref: `${name}/1.0`, version: '1.0', requires,
+    });
+
     test('a manifest made for other dependencies is not read', () => {
-        writeConanManifest(scratch, { key: 'one', packages: [entry] });
+        writeConanManifest(scratch, WASM, { key: 'one', packages: [entry] });
 
         expect(readConanManifest(scratch, 'one').packages).toEqual([{
             ...entry, homepage: null, source: null,
@@ -345,9 +351,40 @@ describe('the stage manifest', () => {
         expect(readConanManifest(scratch, 'two')).toBeNull();
     });
 
-    test('a manifest whose packages crossbind would not stage is refused, with the way out', () => {
-        writeConanManifest(scratch, { key: 'one', packages: [{ ...entry, name: '../../x' }] });
+    test('each target keeps its own list, and together they hold every package in link order', () => {
+        // A recipe can require other packages on another platform.
+        writeConanManifest(scratch, WASM, { key: 'one', packages: [pkg('png', ['zlib']), pkg('zlib')] });
+        writeConanManifest(scratch, ANDROID, { key: 'one', packages: [pkg('curl', ['zlib']), pkg('zlib')] });
 
-        expect(() => readConanManifest(scratch, 'one')).toThrow(/cannot be used - delete .* and build again/);
+        expect(readConanManifest(scratch, 'one', WASM).packages.map((p) => p.name)).toEqual(['png', 'zlib']);
+        expect(readConanManifest(scratch, 'one', ANDROID).packages.map((p) => p.name)).toEqual(['curl', 'zlib']);
+        const all = readConanManifest(scratch, 'one').packages.map((p) => p.name);
+        expect([...all].sort()).toEqual(['curl', 'png', 'zlib']);
+        expect(all.at(-1)).toBe('zlib');
+    });
+
+    test('a target not staged yet has no manifest', () => {
+        writeConanManifest(scratch, WASM, { key: 'one', packages: [entry] });
+
+        expect(readConanManifest(scratch, 'one', ANDROID)).toBeNull();
+    });
+
+    test('the stamp changes when a build stages a target', () => {
+        const before = conanManifestsStamp(scratch);
+        writeConanManifest(scratch, WASM, { key: 'one', packages: [entry] });
+
+        expect(conanManifestsStamp(scratch)).not.toBe(before);
+    });
+
+    test('a manifest whose packages crossbind would not stage is refused, with the way out', () => {
+        writeConanManifest(scratch, WASM, { key: 'one', packages: [{ ...entry, name: '../../x' }] });
+
+        expect(() => readConanManifest(scratch, 'one')).toThrow(/will not use - delete .* and build again/);
+    });
+
+    test('requirements that loop do not hang the reading', () => {
+        writeConanManifest(scratch, WASM, { key: 'one', packages: [pkg('a', ['b']), pkg('b', ['a'])] });
+
+        expect(readConanManifest(scratch, 'one').packages.map((p) => p.name).sort()).toEqual(['a', 'b']);
     });
 });

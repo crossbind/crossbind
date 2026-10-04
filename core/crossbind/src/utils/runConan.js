@@ -138,12 +138,17 @@ function assertLocalConan() {
 
 export default function runConan(args, { config, target, work }) {
     const options = { stdio: ['ignore', 'pipe', 'pipe'], encoding: 'utf8', maxBuffer: MAX_BUFFER };
+    const role = imageRoleFor(target);
     if (work.runner === 'LOCAL') {
+        if (target.platform !== 'wasm') {
+            throw new Error(`crossbind: Conan packages for ${target.platform} build in the ${role} image, which RUNNER=LOCAL does not use.`);
+        }
         assertLocalConan();
         return spawnSync('conan', args, { ...options, cwd: work.dir, env: { ...allowedEnv(), CONAN_HOME: path.join(work.dir, 'home') } });
     }
 
-    const role = imageRoleFor(target);
+    // Google ships the linux NDK for x86_64 only.
+    const platform = target.platform === 'android' ? 'linux/amd64' : undefined;
     const env = ['-e', `CONAN_HOME=${work.conanPath('home')}`];
     let runnerArgs;
     if (work.runner === 'DOCKER_EXEC') {
@@ -157,10 +162,11 @@ export default function runConan(args, { config, target, work }) {
         });
         runnerArgs = ['exec', ...env, '--user', getOsUserAndGroupId(), '--workdir', work.conanDir, name];
     } else {
-        pullDockerImage(role);
+        pullDockerImage(role, platform);
         runnerArgs = [
             'run',
             '--rm',
+            ...(platform ? ['--platform', platform] : []),
             ...DOCKER_RUN_SECURITY_ARGS,
             '-v',
             `${work.store}:${CONTAINER_ROOT}/store`,
@@ -171,7 +177,7 @@ export default function runConan(args, { config, target, work }) {
             getOsUserAndGroupId(),
             '--workdir',
             work.conanDir,
-            getDockerImage(role),
+            getDockerImage(role, platform),
         ];
     }
     return spawnSync('docker', [...runnerArgs, 'conan', ...args], options);

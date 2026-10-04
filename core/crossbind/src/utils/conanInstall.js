@@ -17,7 +17,7 @@ import {
 import { conanStageDir } from './conanImport.js';
 
 // Bumped when the stage changes shape, so a stage an older crossbind made is made again.
-const CONAN_STAGE_FORMAT = 1;
+const CONAN_STAGE_FORMAT = 2;
 // Enough of a failed build's log to reach the error conan ends it with.
 const LOG_TAIL_LINES = 60;
 
@@ -41,9 +41,9 @@ function stampKey(config, target) {
     }));
 }
 
-// The manifest is shared by the targets and names the dependencies it was staged for.
+// The target's manifest names the dependencies it was staged for.
 const isStaged = (config, stageDir, target) => loadJson(stampFileOf(stageDir, target))?.key === stampKey(config, target)
-    && readConanManifest(stageDir, conanDependenciesKey(config.conanDependencies)) !== null;
+    && readConanManifest(stageDir, conanDependenciesKey(config.conanDependencies), target.path) !== null;
 
 function conanFailure(target, result, logFile) {
     if (result.error && result.error.code !== 'ENOBUFS') {
@@ -114,7 +114,7 @@ function installTarget(config, stageDir, target) {
         packages.forEach((pkg) => stageConanPackage(pkg, {
             stageDir, targetPath: target.path, toHost: (reported) => toHostPath(reported, work), store: work.store, distCmake,
         }));
-        writeConanManifest(stageDir, {
+        writeConanManifest(stageDir, target.path, {
             key: conanDependenciesKey(dependencies),
             packages: packages.map(({
                 packageFolder, includedirs, libdirs, ...entry

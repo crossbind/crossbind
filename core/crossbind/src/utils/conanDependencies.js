@@ -43,6 +43,16 @@ function normalizeSpec(name, spec) {
 // What staged packages were installed for; a change to conanDependencies makes them stale.
 export const conanDependenciesKey = (dependencies) => getContentHash(JSON.stringify(dependencies));
 
+// What an app's headers and sources see of its Conan packages: the packages are staged after a header
+// may already be bound, and restaged in place when one moves to another version. Null without any.
+export function conanInputsOf(config) {
+    if (Object.keys(config.conanDependencies ?? {}).length === 0) return null;
+    return {
+        dependencies: config.conanDependencies,
+        refs: config.allDependencies.filter((d) => d.general.conan).map((d) => d.general.conan.ref),
+    };
+}
+
 export const conanRequires = (dependencies) => Object.entries(dependencies).map(([name, { version }]) => `${name}/${version}`);
 
 function optionValue(value) {

@@ -24,7 +24,7 @@ let project;
 const stageDir = () => upath.join(project, '.crossbind', 'conan');
 
 function stage(conanDependencies, packages = PACKAGES) {
-    writeConanManifest(stageDir(), { key: conanDependenciesKey(normalizeConanDependencies(conanDependencies)), packages });
+    writeConanManifest(stageDir(), TARGET.path, { key: conanDependenciesKey(normalizeConanDependencies(conanDependencies)), packages });
     packages.forEach((pkg) => {
         const dir = upath.join(stageDir(), 'packages', pkg.name);
         fs.mkdirSync(upath.join(dir, 'dist', 'prebuilt', TARGET.path, 'lib'), { recursive: true });

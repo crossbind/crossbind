@@ -199,7 +199,7 @@ function assertConanStaged() {
     const attached = new Set(state.config.allDependencies.filter((d) => d.general.conan).map((d) => d.general.conan.name));
     const missing = Object.keys(state.config.conanDependencies ?? {}).filter((name) => !attached.has(name));
     if (missing.length > 0) {
-        throw new Error(`crossbind: the Conan packages ${missing.join(', ')} are not installed for the current conanDependencies, so their rows would be missing. Build the wasm targets first (crossbind build -p wasm).`);
+        throw new Error(`crossbind: the Conan packages ${missing.join(', ')} are not installed for the current conanDependencies, so their rows would be missing. Build the project first.`);
     }
 }
 

@@ -3,6 +3,8 @@ import fs from 'node:fs';
 import { createRequire } from 'node:module';
 import upath from 'upath';
 import state, { saveCache } from '../state/index.js';
+import refreshConanDependencies from '../state/refreshConanDependencies.js';
+import { conanInputsOf } from '../utils/conanDependencies.js';
 import { getContentHash, getFileHash } from '../utils/hash.js';
 import guardAsyncBindings from '../utils/bridgeAsyncGuard.js';
 import getDependFilePath from '../integration/getDependFilePath.js';
@@ -24,6 +26,8 @@ const predefinedMacros = new Map();
 const typeDefinitions = new Map();
 
 export default function createBridgeFile(headerOrModuleFilePath, target = state.targets.find((t) => t.platform === 'wasm'), { withDependencies = true } = {}) {
+    // A header can include a Conan package's headers that a build staged after this process loaded.
+    refreshConanDependencies(state.config);
     const interfaceFilePath = upath.resolve(headerOrModuleFilePath);
     if (!fs.existsSync(`${state.config.paths.build}/interface`)) {
         fs.mkdirSync(`${state.config.paths.build}/interface`, { recursive: true });
@@ -35,7 +39,8 @@ export default function createBridgeFile(headerOrModuleFilePath, target = state.
     // '@scope/pkg/native/x.h'), so its own directory must reach swig's include list.
     const sourceDir = upath.dirname(interfaceFilePath);
     const interfaceFile = createInterfaceFile(interfaceFilePath, target, sourceDir);
-    const bridgeFile = createBridgeFileFromInterfaceFile(interfaceFile, target, sourceDir, getFileHash(interfaceFilePath));
+    const sourceHash = [getFileHash(interfaceFilePath), ...conanInputsHash()].join('\n');
+    const bridgeFile = createBridgeFileFromInterfaceFile(interfaceFile, target, sourceDir, sourceHash);
     const moduleRegex = new RegExp(`.(${state.config.ext.module.join('|')})$`);
     if (bridgeFile) {
         // Records which header this bridge came from, so directory-driven consumers
@@ -66,6 +71,13 @@ export default function createBridgeFile(headerOrModuleFilePath, target = state.
     return bridgeFile;
 }
 
+// The Conan packages a header's includes may reach, for the interface and bridge caches: they are
+// staged after a header may already be bound, and restaged in place for another version.
+function conanInputsHash() {
+    const conan = conanInputsOf(state.config);
+    return conan ? [`conan:${getContentHash(JSON.stringify(conan))}`] : [];
+}
+
 function createInterfaceFile(headerOrModuleFilePath, target, sourceDir) {
     if (!headerOrModuleFilePath) {
         return null;
@@ -81,13 +93,14 @@ function createInterfaceFile(headerOrModuleFilePath, target, sourceDir) {
     const interfaceFile = !isModule && filePathWithoutExt ? `${filePathWithoutExt}.i` : null;
     const constants = isModule ? [] : importedNames(headerOrModuleFilePath, target);
     // A prelude or ignored-declaration change in the owning package, a completed class moving to another header, an
-    // interface the package ships beside the header changing or going away, or another imported name must regenerate
-    // the interface as well.
+    // interface the package ships beside the header changing or going away, another imported name, or Conan packages
+    // its includes may reach being staged or moving to another version must regenerate the interface as well.
     const fileHash = [
         INTERFACE_FORMAT, getFileHash(headerOrModuleFilePath), ...prelude,
         ...(ignored.length ? [`ignored:${ignored.join(',')}`] : []), ...(completing.length ? [`completing:${completing.join(',')}`] : []),
         ...(interfaceFile && fs.existsSync(interfaceFile) ? [`shipped:${getFileHash(interfaceFile)}`] : []),
         ...(constants.length ? [`constants:${constants === ALL_NAMES ? ALL_NAMES : constants.join(',')}`] : []),
+        ...conanInputsHash(),
     ].join('\n');
     const cachedInterface = state.cache.interfaces[headerOrModuleFilePath];
     if (state.cache.hashes[headerOrModuleFilePath] === fileHash && cachedInterface && fs.existsSync(cachedInterface)

@@ -2,7 +2,7 @@
 
 - **Status:** Proposed
 - **Date:** 2026-10-03
-- **Affects:** `getDependFilePath.js`, bundler plugins (vite/rollup/webpack), the top-level `conanDependencies` map, `.crossbind/conan/`, `tooling/docker/base.Dockerfile`, `runConan.js`
+- **Affects:** `getDependFilePath.js`, bundler plugins (vite/rollup/webpack), the React Native bridge script, the top-level `conanDependencies` map, `.crossbind/conan/`, `tooling/docker/base.Dockerfile`, `runConan.js`
 
 ## Context
 
@@ -35,7 +35,9 @@ header of a declared package. Rules:
   importable; a package another one requires still links.
 - crossbind writes the Conan host profile from its own toolchain: the emcc version read from the
   emcc that runs Conan, `compiler.threads=posix` on `mt`, the flags of `archiveFlags.js` (the list
-  port and app archives use) in every flag conf and in the package id, and `*:shared=False`.
+  port and app archives use) in every flag conf and in the package id, and `*:shared=False`. For
+  Android it is the android image's NDK, read for its clang version, with the API level of
+  `androidToolchain.js` and the NDK's default `c++_static`, as the ports' Android archives are built.
 - Conan runs where the build runs: in the toolchain image, which carries Conan 2.33 in a venv of
   hash-pinned wheels, behind an allowlisted environment and a lock around every install.
 - Every install gets a fresh work directory holding its inputs, its outputs and a Conan home of its
@@ -45,17 +47,20 @@ header of a declared package. Rules:
   the recipes it finds in its store and containers write to theirs.
 - Everything the graph reports is checked before use: names, versions and library names must be
   plain names, every path must resolve inside the package's own folder in the store, and links are
-  followed only within it. The manifest is checked again when state reads it.
+  followed only within it. The manifests are checked again when state reads them.
 - Each package is staged as a port prebuilt under
   `.crossbind/conan/packages/<package>/dist/prebuilt/<target>/` with a generated
-  `dist/prebuilt/CMakeLists.txt`, and joins the config as a dependency through a manifest that
-  state reads at load without running anything. The link, `isEnabled`, SWIG's target-neutral header
-  identity and the license rows then work unchanged.
+  `dist/prebuilt/CMakeLists.txt`, and joins the config as a dependency through a manifest per
+  target, since a recipe can require other packages on another platform. State reads them at load
+  without running anything, and again when a build has staged more since. The link, `isEnabled`,
+  SWIG's target-neutral header identity and the license rows then work unchanged.
 - Packages are installed when a build starts, before any header is bound, for release targets. A
   stamp per target records the inputs (stage format, dependencies, profile, toolchain, `conan.lock`),
   so an unchanged build runs no Conan.
 - `conan.lock` next to the config pins versions and recipe revisions; a new requirement extends it.
-- Web builds only, for now.
+- Web and Android builds, for now. A React Native build installs the packages before Metro bundles
+  the bridges, for the target Metro reads headers with; a Metro server that loaded state before them
+  attaches them on its next `conan:` import or bridge.
 
 ## Consequences
 
@@ -68,7 +73,7 @@ header of a declared package. Rules:
   recipe can change packages other projects take from it later — the exposure cargo's shared
   registry cache already has; a store per project would close it at the cost of rebuilding every
   package per project. The images carry one more pinned toolchain (a 19 MB venv). WASI is out
-  of reach, since Conan has no WASI target; Android, iOS, Node.js addons and Metro are still to wire.
+  of reach, since Conan has no WASI target; iOS and Node.js addons are still to wire.
 
 ## Alternatives considered
 
