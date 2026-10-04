@@ -287,19 +287,23 @@ function assertConanStaged() {
 // addon of that platform compiles in, or without a platform the one its loader bundles.
 export default async function collectLicenseRows(platform = null, { runtimeEnv = null } = {}) {
     assertConanStaged();
-    // The root package is a component too: leaf -wasi packages have no deps but ship their own upstream.
+    // The root package is a component too when it is a port: leaf -wasi packages have no deps but ship
+    // their own upstream. A dependency that is no port, such as a library a project publishes, is one by
+    // its package name; a private package is the project's own code, like the app.
+    const keyOf = (node) => (node.general.conan ? `conan:${node.general.conan.name}` : node.general.alias?.package ?? node.package?.name);
     const nodes = [state.config, ...state.config.allDependencies]
-        .filter((node) => (node?.general?.alias?.package || node?.general?.conan) && node.paths?.project);
+        .filter((node, index) => node?.paths?.project
+            && (node.general?.alias?.package || node.general?.conan || (index > 0 && node.package?.name && !node.package.private)));
     const rows = [];
     const seen = new Set();
     for (const node of nodes) {
-        const key = node.general.conan ? `conan:${node.general.conan.name}` : node.general.alias.package;
+        const key = keyOf(node);
         if (seen.has(key)) continue;
         seen.add(key);
         rows.push(node.general.conan ? conanRow(node) : await buildRow(node));
         // A Conan package's folder is written from what its recipe produced: nothing there is run.
         if (platform && !node.general.conan) {
-            const familyProjects = nodes.filter((other) => other.general.alias?.package === key).map((other) => other.paths.project);
+            const familyProjects = nodes.filter((other) => keyOf(other) === key).map((other) => other.paths.project);
             rows.push(...await bundledRowsOf(node, platform, familyProjects));
         }
     }

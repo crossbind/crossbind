@@ -143,6 +143,32 @@ describe('collectLicenseRows', () => {
         fs.rmSync(project, { recursive: true, force: true });
     });
 
+    test('lists a dependency that is no port by its package, with the license it ships, but not the app or a private package', async () => {
+        const project = fs.mkdtempSync(path.join(os.tmpdir(), 'crossbind-library-license-'));
+        fs.writeFileSync(path.join(project, 'LICENSE'), 'matrix license text');
+        state.config = {
+            general: { name: 'app' },
+            package: { name: 'app', license: 'UNLICENSED' },
+            paths: { project: os.tmpdir() },
+            allDependencies: [{
+                general: { name: 'crossbind-example-lib-prebuilt-matrix' },
+                paths: { project },
+                package: { name: '@crossbind/example-lib-prebuilt-matrix', version: '1.0.0', license: 'MIT' },
+            }, {
+                general: { name: 'confrust' },
+                paths: { project },
+                package: { name: '@crossbind/conformance-rust', private: true },
+            }],
+        };
+
+        const rows = await collectLicenseRows();
+
+        expect(rows.map((row) => row.name)).toEqual(['crossbind-example-lib-prebuilt-matrix']);
+        expect(rows[0]).toMatchObject({ npmName: '@crossbind/example-lib-prebuilt-matrix', license: 'MIT' });
+        expect(rows[0].licenseText).toContain('matrix license text');
+        fs.rmSync(project, { recursive: true, force: true });
+    });
+
     test('reads the license a package ships when the extracted source names no license file', async () => {
         const project = fs.mkdtempSync(path.join(os.tmpdir(), 'crossbind-unnamed-license-'));
         const familyDir = path.join(project, 'node_modules', '@crossbind', 'port-demo');
