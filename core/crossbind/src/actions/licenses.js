@@ -1,14 +1,24 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import state from '../state/index.js';
 import loadJs from '../utils/loadJs.js';
 import { isCopyleft } from '../utils/licenseReport.js';
 import familyManifestOf from '../utils/familyManifest.js';
 import { wasiToolchainIdentity } from '../utils/provenance.js';
 import { resolveWasiSdkPath } from '../utils/wasiToolchain.js';
+import resolveEmbindNapiRoot, { resolveEmbindJsiRoot } from '../utils/resolveEmbindNapi.js';
+import { shippedBundledLicense } from '../utils/bundledLicenses.js';
+import toolchainNoticesDir from '../utils/toolchainNotices.js';
 
 const LEGACY_LICENSE_FILES = ['LICENSE', 'LICENSE.md', 'LICENSE.txt', 'COPYING'];
 const WASI_LIBC_LICENSE = 'Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT';
+const CROSSBIND_ROOT = fileURLToPath(new URL('../..', import.meta.url));
+const MISSING_TEXT = '(missing: build the package once to extract the upstream source)';
+
+function packageLicenseFile(dir) {
+    return LEGACY_LICENSE_FILES.map((name) => path.join(dir, name)).find((file) => fs.existsSync(file));
+}
 
 // License texts come from any extracted upstream source tree of the family (variants share the tarball).
 function findSourceDir(familyDir) {
@@ -20,20 +30,21 @@ function findSourceDir(familyDir) {
     return null;
 }
 
-function readLicenseTexts(sourceDir, files) {
+function readLicenseTexts(files, locate) {
     const texts = (files || []).map((file) => {
-        const filePath = sourceDir ? path.join(sourceDir, file) : null;
+        const filePath = locate(file);
         const body = filePath && fs.existsSync(filePath)
             ? fs.readFileSync(filePath, 'utf8').trim()
-            : '(missing: build the package once to extract the upstream source)';
+            : MISSING_TEXT;
         return `=== ${file} ===\n\n${body}`;
     });
     return texts.length > 0 ? texts.join('\n\n') : null;
 }
 
 // Vendored copies compiled into the artifact (recipe `bundled` map, keyed by platform)
-// become first-class notice/SBOM rows with texts from the family source tree.
-async function bundledRowsOf(node, platform) {
+// become first-class notice/SBOM rows with texts from the family source tree, or from the dist
+// of whichever package of the family shipped them.
+async function bundledRowsOf(node, platform, familyProjects) {
     const recipe = await loadJs(node.paths.project, 'crossbind.build');
     const entries = recipe?.bundled?.[platform];
     if (!entries || entries.length === 0) return [];
@@ -50,7 +61,9 @@ async function bundledRowsOf(node, platform) {
         licenseNotes: `${entry.notes ? `${entry.notes}; ` : ''}vendored inside ${node.general.name} ${node.package?.nativeVersion || ''}`.trim(),
         sha256: null,
         sourceUrl: null,
-        licenseText: readLicenseTexts(sourceDir, entry.files),
+        licenseText: readLicenseTexts(entry.files, (file) => (sourceDir
+            ? path.join(sourceDir, file)
+            : shippedBundledLicense(familyProjects, entry.name, file))),
         isCopyleft: isCopyleft(entry.license),
     }));
 }
@@ -90,6 +103,16 @@ function wasiToolchainRows() {
     ];
 }
 
+// The notices a build copied out of its toolchain image (buildNode does it for Windows addons).
+function toolchainNoticeTexts(platform) {
+    const build = state.config?.paths?.build;
+    const dir = build ? path.join(build, toolchainNoticesDir(platform)) : null;
+    if (!dir || !fs.existsSync(dir)) return null;
+    const texts = fs.readdirSync(dir).sort()
+        .map((file) => `=== ${file} ===\n\n${fs.readFileSync(path.join(dir, file), 'utf8').trim()}`);
+    return texts.length > 0 ? texts.join('\n\n') : null;
+}
+
 // A Linux or Windows addon carries its C++ runtime; a Windows one also carries parts of the
 // mingw-w64 runtime and winpthreads, whose licenses ask for their notices in binary distributions.
 // A macOS addon uses the system's C++ runtime.
@@ -119,8 +142,57 @@ function addonToolchainRows(platform) {
             licenseDeclared: mingwLicense,
             sourceUrl: 'https://github.com/mingw-w64/mingw-w64',
             licenseNotes: 'the mingw-w64 startup code and winpthreads, statically linked into the addon; a binary distribution includes their notices: https://github.com/mingw-w64/mingw-w64/blob/master/COPYING.MinGW-w64-runtime/COPYING.MinGW-w64-runtime.txt and https://github.com/mingw-w64/mingw-w64/blob/master/mingw-w64-libraries/winpthreads/COPYING (the windows image carries both in /opt/licenses/llvm-mingw)',
+            licenseText: toolchainNoticeTexts('win32'),
         },
     ];
+}
+
+// A Node-API addon compiles in crossbind's runtime: embind-jsi, which adapts Emscripten's embind,
+// and node-api-jsi. The loader bundles the JavaScript half of the same runtime.
+function nodeRuntimeRows({ isAddon }) {
+    const versionOf = (dir) => JSON.parse(fs.readFileSync(path.join(dir, 'package.json'), 'utf8')).version;
+    const textOf = (file) => fs.readFileSync(file, 'utf8').trim();
+    const shared = {
+        nativeVersion: null, sha256: null, licenseSelected: null, isCopyleft: false,
+    };
+    const jsiRoot = resolveEmbindJsiRoot();
+    const rows = [
+        {
+            ...shared,
+            name: 'crossbind',
+            npmName: 'crossbind',
+            version: versionOf(CROSSBIND_ROOT),
+            license: 'MIT',
+            licenseDeclared: 'MIT',
+            sourceUrl: 'https://github.com/crossbind/crossbind',
+            licenseNotes: 'the embind-jsi and embind-napi runtime and the bindings crossbind generates',
+            licenseText: textOf(path.join(CROSSBIND_ROOT, 'LICENSE')),
+        },
+        {
+            ...shared,
+            name: 'emscripten-embind',
+            npmName: '@crossbind/core-embind-jsi',
+            version: versionOf(jsiRoot),
+            license: 'MIT OR NCSA',
+            licenseDeclared: 'MIT OR NCSA',
+            sourceUrl: 'https://github.com/emscripten-core/emscripten',
+            licenseNotes: "Emscripten's embind, adapted by @crossbind/core-embind-jsi",
+            licenseText: textOf(path.join(jsiRoot, 'LICENSE')),
+        },
+    ];
+    if (!isAddon) return rows;
+    const napiRoot = resolveEmbindNapiRoot();
+    return [...rows, {
+        ...shared,
+        name: 'node-api-jsi',
+        npmName: '@crossbind/core-embind-napi',
+        version: versionOf(napiRoot),
+        license: 'MIT',
+        licenseDeclared: 'MIT',
+        sourceUrl: 'https://github.com/microsoft/node-api-jsi',
+        licenseNotes: 'JSI over Node-API, with the local patches @crossbind/core-embind-napi lists',
+        licenseText: textOf(path.join(napiRoot, 'third_party', 'node-api-jsi', 'LICENSE')),
+    }];
 }
 
 async function buildRow(node) {
@@ -143,12 +215,18 @@ async function buildRow(node) {
     let licenseText;
     if (upstream) {
         license = upstream.selected || upstream.declared;
-        licenseText = readLicenseTexts(findSourceDir(family.dir), upstream.files);
+        const sourceDir = findSourceDir(family.dir);
+        const fromSource = sourceDir ? readLicenseTexts(upstream.files, (file) => path.join(sourceDir, file)) : null;
+        const isComplete = Boolean(fromSource) && !fromSource.includes(MISSING_TEXT);
+        // An installed package has no extracted source, and some upstreams name no license file; the package
+        // ships the upstream text as its LICENSE either way.
+        const shipped = isComplete ? null : packageLicenseFile(node.paths.project);
+        if (isComplete) licenseText = fromSource;
+        else if (shipped) licenseText = `=== ${path.basename(shipped)} ===\n\n${fs.readFileSync(shipped, 'utf8').trim()}`;
+        else licenseText = readLicenseTexts(upstream.files, () => null);
     } else {
         license = manifest?.license || null;
-        const legacy = LEGACY_LICENSE_FILES
-            .map((name) => `${node.paths.project}/${name}`)
-            .find((file) => fs.existsSync(file));
+        const legacy = packageLicenseFile(node.paths.project);
         licenseText = legacy ? fs.readFileSync(legacy, 'utf8') : null;
     }
 
@@ -205,8 +283,9 @@ function assertConanStaged() {
 
 // platform (optional, e.g. 'wasi') additionally includes what that platform's
 // artifact statically links beyond the package graph: recipe-declared vendored
-// copies and the toolchain runtime.
-export default async function collectLicenseRows(platform = null) {
+// copies and the toolchain runtime. runtimeEnv 'node' adds the crossbind runtime an
+// addon of that platform compiles in, or without a platform the one its loader bundles.
+export default async function collectLicenseRows(platform = null, { runtimeEnv = null } = {}) {
     assertConanStaged();
     // The root package is a component too: leaf -wasi packages have no deps but ship their own upstream.
     const nodes = [state.config, ...state.config.allDependencies]
@@ -219,9 +298,13 @@ export default async function collectLicenseRows(platform = null) {
         seen.add(key);
         rows.push(node.general.conan ? conanRow(node) : await buildRow(node));
         // A Conan package's folder is written from what its recipe produced: nothing there is run.
-        if (platform && !node.general.conan) rows.push(...await bundledRowsOf(node, platform));
+        if (platform && !node.general.conan) {
+            const familyProjects = nodes.filter((other) => other.general.alias?.package === key).map((other) => other.paths.project);
+            rows.push(...await bundledRowsOf(node, platform, familyProjects));
+        }
     }
     if (platform === 'wasi') rows.push(...wasiToolchainRows());
     if (['linux', 'linuxmusl', 'win32'].includes(platform)) rows.push(...addonToolchainRows(platform));
+    if (runtimeEnv === 'node') rows.push(...nodeRuntimeRows({ isAddon: platform !== null }));
     return rows.sort((a, b) => a.name.localeCompare(b.name));
 }

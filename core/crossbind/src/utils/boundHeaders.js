@@ -44,6 +44,14 @@ const bridgeRank = ({ platform }) => {
 };
 export const bridgeTargetOrder = (targets) => [...targets].sort((a, b) => bridgeRank(a) - bridgeRank(b));
 
+// A macOS host without Docker builds no linux addon, so the targets of the runtime environment it does not
+// build are candidates too: a linux package installed beside it gives the same bridges a linux build made.
+export const bridgeTargets = (buildTargets, allTargets) => bridgeTargetOrder([
+    ...buildTargets,
+    ...allTargets.filter((target) => target.platform !== 'wasm' && !buildTargets.includes(target)
+        && buildTargets.some((built) => built.runtimeEnv === target.runtimeEnv)),
+]);
+
 function resolveOrNull(resolve, specifier, target) {
     try {
         return resolve(specifier, target);

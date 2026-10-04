@@ -16,8 +16,10 @@ import { buildLinkLibArgs } from '../utils/linkLayout.js';
 import resolveEmbindNapiRoot, { resolveEmbindJsiRoot } from '../utils/resolveEmbindNapi.js';
 import scopedEmbind from '../utils/scopedEmbind.js';
 import resolveEmbindRustRoot from '../utils/resolveEmbindRust.js';
+import toolchainNoticesDir from '../utils/toolchainNotices.js';
 
 const cpuCount = Math.max(1, os.cpus().length - 1);
+const WINDOWS_IMAGE_NOTICES = '/opt/licenses/llvm-mingw';
 
 function filesUnder(dirs) {
     return dirs.flatMap((dir) => (fs.existsSync(dir)
@@ -150,6 +152,12 @@ export default async function buildNode(target, options = {}) {
         `-DCROSSBIND_LINK_DEPENDS=${libs.join(';')}`,
     ], platformPrefix, target);
     run(null, ['cmake', '--build', '.', '-j', String(cpuCount)], platformPrefix, target);
+    if (target.platform === 'win32') {
+        // The mingw-w64 runtime and winpthreads in the addon ask for their notices in binary
+        // distributions. The windows image carries them; a host toolchain may not.
+        const notices = toolchainNoticesDir('win32');
+        run(null, ['sh', '-c', `if [ -d ${WINDOWS_IMAGE_NOTICES} ]; then mkdir -p ${notices} && cp ${WINDOWS_IMAGE_NOTICES}/* ${notices}/; fi`], null, target);
+    }
     fs.copyFileSync(`${build}/${platformPrefix}/${target.path}/${target.addonName}`, `${build}/${target.addonName}`);
     logger.doneStep(target, 'addon');
 

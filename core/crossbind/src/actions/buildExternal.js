@@ -6,6 +6,7 @@ import { getBuildTargets } from './target.js';
 import state from '../state/index.js';
 import buildLib from './buildLib.js';
 import buildBinTools from './buildBinTools.js';
+import { copyBundledLicenses } from '../utils/bundledLicenses.js';
 
 export default async function buildExternal(targetParams, options = {}) {
     const version = state.config.package.nativeVersion;
@@ -31,6 +32,12 @@ export default async function buildExternal(targetParams, options = {}) {
     }
 
     buildLib(targetParams, options);
+
+    const { bundled } = state.config.build;
+    if (bundled) {
+        new Set(getBuildTargets(targetParams).map((target) => target.platform))
+            .forEach((platform) => copyBundledLicenses(bundled[platform], sourcePath, state.config.paths.output));
+    }
 
     if (state.config.build.bin) {
         await buildBinTools(targetParams);

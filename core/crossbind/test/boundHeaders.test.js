@@ -1,6 +1,6 @@
 import { describe, test, expect } from 'vitest';
 import {
-    boundHeaderSpecifiers, bridgeTargetOrder, resolveBoundHeaders, headerAliases, headerEntryPath, headerEntryModule,
+    boundHeaderSpecifiers, bridgeTargetOrder, bridgeTargets, resolveBoundHeaders, headerAliases, headerEntryPath, headerEntryModule,
 } from '../src/utils/boundHeaders.js';
 
 const ext = { header: ['h', 'hpp', 'hxx', 'hh'] };
@@ -54,6 +54,24 @@ describe('bridgeTargetOrder', () => {
 
         expect(bridgeTargetOrder(targets).map(({ platform, arch }) => `${platform}-${arch}`))
             .toEqual(['linux-arm64', 'linux-x64', 'linuxmusl-arm64', 'win32-arm64', 'darwin-arm64']);
+    });
+});
+
+describe('bridgeTargets', () => {
+    const target = (platform, arch, runtimeEnv = 'node') => ({ platform, arch, runtimeEnv });
+    const darwinArm = target('darwin', 'arm64');
+    const linuxArm = target('linux', 'arm64');
+    const linuxX64 = target('linux', 'x64');
+    const all = [darwinArm, linuxArm, linuxX64, target('wasm', 'wasm32', 'node'), target('linux', 'x64', 'native')];
+    const names = (targets) => targets.map(({ platform, arch, runtimeEnv }) => `${platform}-${arch}-${runtimeEnv}`);
+
+    // A macOS host without Docker builds no linux addon, yet reads the bridges a linux build made.
+    test('puts the linux targets of the runtime environment first when the build makes only macOS addons', () => {
+        expect(names(bridgeTargets([darwinArm], all))).toEqual(['linux-arm64-node', 'linux-x64-node', 'darwin-arm64-node']);
+    });
+
+    test('keeps a built target ahead of an unbuilt one of its platform', () => {
+        expect(names(bridgeTargets([linuxX64], all))).toEqual(['linux-x64-node', 'linux-arm64-node', 'darwin-arm64-node']);
     });
 });
 
