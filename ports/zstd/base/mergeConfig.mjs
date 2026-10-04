@@ -6,6 +6,7 @@ export default (newConfig = {}) => ({
     },
     export: {
         type: 'cmake',
+        publicHeaders: ['zstd.h', 'zdict.h', 'zstd_errors.h'],
         libName: ['zstd'],
         ...(newConfig.export || {}),
     },

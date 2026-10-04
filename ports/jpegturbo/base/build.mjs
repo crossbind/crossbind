@@ -2,6 +2,10 @@ export default {
     sha256: '6f30092cef9fb839779646608f4ee14ae3cbac989c47fa05e841b0841f09878e', // libjpeg-turbo-3.2.0.tar.gz
     getURL: (version) => `https://github.com/libjpeg-turbo/libjpeg-turbo/releases/download/${version}/libjpeg-turbo-${version}.tar.gz`,
     buildType: 'cmake',
+    // The typed forms of variadic calls crossbind adds (see the header), shipped beside the upstream headers.
+    copyToDist: {
+        'node_modules/@crossbind/port-jpegturbo/include/jpeglib_crossbind.h': 'include/jpeglib_crossbind.h',
+    },
     getBuildParams: (target) => {
         if (target.platform === 'android') {
             return [

@@ -1,7 +1,7 @@
 import { describe, test, expect } from 'vitest';
 import {
-    buildInterfaceContent, completingIncludes, findHeaderPrelude, findIgnoredDeclarations, indexTypeDefinitions, interfaceToRetryWithoutMacros,
-    parseMacroDump, referencedTypeHeaders, selectSwigMacros, withoutSwigMacros,
+    buildInterfaceContent, completingIncludes, findHeaderPrelude, findIgnoredDeclarations, findSwigInlineIncludes, findSwigPreamble,
+    indexTypeDefinitions, inlineIncludes, interfaceToRetryWithoutMacros, parseMacroDump, referencedTypeHeaders, selectSwigMacros, withoutSwigMacros,
 } from '../src/utils/swigInterface.js';
 import { ALL_NAMES } from '../src/utils/headerImports.js';
 
@@ -42,6 +42,20 @@ describe('findIgnoredDeclarations', () => {
         expect(findIgnoredDeclarations(`${include}/gdal_priv.h`, [legacy], 'gdal_priv.h')).toEqual(['LegacyOnly']);
     });
 
+    // GDAL hides its C SRS API behind `#ifndef SWIG`, written for its own bindings.
+    test('returns the SWIG lines a package puts before one header', () => {
+        const srs = { ...gdal, export: { swigPreamble: { 'ogr_srs_api.h': ['#undef SWIG'] } } };
+        expect(findSwigPreamble(`${include}/ogr_srs_api.h`, [srs], 'ogr_srs_api.h')).toEqual(['#undef SWIG']);
+        expect(findSwigPreamble(`${include}/gdal.h`, [srs], 'gdal.h')).toEqual([]);
+    });
+
+    // libgeotiff fills geokey_t from geokeys.inc, included inside the enum body.
+    test('returns the includes a package has SWIG read inlined in one header', () => {
+        const geotiff = { ...gdal, export: { swigInlineIncludes: { 'geokeys.h': ['geokeys.inc'] } } };
+        expect(findSwigInlineIncludes(`${include}/geokeys.h`, [geotiff], 'geokeys.h')).toEqual(['geokeys.inc']);
+        expect(findSwigInlineIncludes(`${include}/geotiff.h`, [geotiff], 'geotiff.h')).toEqual([]);
+    });
+
     test('a project owns the headers it lists under paths.header, wherever they live', () => {
         // The conformance kit's headers sit in a sibling workspace package that the leg bridges.
         const leg = {
@@ -51,6 +65,21 @@ describe('findIgnoredDeclarations', () => {
         expect(findHeaderPrelude('/work/e2e/conformance/native/confprelude.h', [leg], 'confprelude.h')).toEqual(['confpreludedeps.h']);
         expect(findIgnoredDeclarations('/work/e2e/conformance/native/conftypes.h', [leg], 'conftypes.h')).toEqual(['confTypeDeclaredOnly']);
         expect(findIgnoredDeclarations('/work/e2e/conformance/native/confprelude.h', [leg], 'confprelude.h')).toEqual([]);
+    });
+});
+
+describe('inlineIncludes', () => {
+    const header = 'typedef enum {\n   BaseKey = 1,\n#  include "keys.inc"\n#include "other.inc"\n   EndKey = 9\n} key_t;\n';
+    const files = { 'keys.inc': 'ValuePair(ModelKey, 2)\nValuePair(RasterKey, 3)\n' };
+
+    test('puts the text of a listed include in place of its #include line', () => {
+        expect(inlineIncludes(header, ['keys.inc'], (name) => files[name])).toBe(
+            'typedef enum {\n   BaseKey = 1,\nValuePair(ModelKey, 2)\nValuePair(RasterKey, 3)\n\n#include "other.inc"\n   EndKey = 9\n} key_t;\n',
+        );
+    });
+
+    test('rejects a listed include the header does not have', () => {
+        expect(() => inlineIncludes(header, ['missing.inc'], (name) => files[name])).toThrow(/missing\.inc/);
     });
 });
 
@@ -231,6 +260,24 @@ describe('buildInterfaceContent', () => {
         expect(withoutSwigMacros(buildInterfaceContent({ ...options, swigMacros: ['#define CPL_DLL'] }))).toBe(buildInterfaceContent(options));
     });
 
+    // SWIG binds the #define lines of the interface itself, and the prelude carries another header's values for the parse:
+    // openssl/crypto.h needs PTHREAD_ONCE_INIT, 0 where SWIG reads it and a struct where the bindings compile.
+    test('asks for every constant after the macro prelude, so the header binds only its own', () => {
+        const content = buildInterfaceContent({
+            moduleName: 'CRYPTO', headerPath: 'openssl/crypto.h', swigMacros: ['#define PTHREAD_ONCE_INIT 0'], constants: ALL_NAMES,
+        });
+        expect(content).toContain('#define PTHREAD_ONCE_INIT 0\n\n%feature("embind:constant");\n\n%include "openssl/crypto.h"');
+    });
+
+    // A macro defined as itself picks the branch it guards and still reaches each platform's compiler as a name.
+    test('puts the package preamble right before the header, and keeps it on the retry without macros', () => {
+        const options = { moduleName: 'CPL_VSI', headerPath: 'cpl_vsi.h', preamble: ['#define VSI_STAT64_T VSI_STAT64_T'] };
+        const content = buildInterfaceContent({ ...options, swigMacros: ['#define CPL_DLL'] });
+        expect(content).toContain('#define VSI_STAT64_T VSI_STAT64_T\n\n%include "cpl_vsi.h"');
+        expect(withoutSwigMacros(content)).toBe(buildInterfaceContent(options));
+        expect(withoutSwigMacros(buildInterfaceContent(options))).toBe(buildInterfaceContent(options));
+    });
+
     // A feature applies to what SWIG reads after it, so the requests come before the macros that may define a constant.
     test('asks SWIG to bind the constants the app imports, ahead of the macro definitions', () => {
         const content = buildInterfaceContent({
@@ -242,7 +289,7 @@ describe('buildInterfaceContent', () => {
 
     test('asks for every constant when the app imports every name of the header', () => {
         const content = buildInterfaceContent({ moduleName: 'ZLIB', headerPath: 'zlib.h', constants: ALL_NAMES });
-        expect(content).toContain('%}\n\n%feature("embind:constant");\n\n%feature("shared_ptr");');
+        expect(content).toContain('%feature("polymorphic_shared_ptr");\n\n%feature("embind:constant");\n\n%include "zlib.h"');
     });
 
     test('keeps the constant requests when the SWIG-only macro block is dropped', () => {

@@ -16,6 +16,29 @@ export function findIgnoredDeclarations(headerFile, configs, headerPath) {
     return findHeaderOption('ignoredDeclarations', headerFile, configs, headerPath);
 }
 
+// SWIG preprocessor lines a package puts right before one of its public headers, in export.swigPreamble: GDAL hides
+// its C SRS API behind `#ifndef SWIG` for its own bindings, and picks VSIStatBufL's typedef by whether VSI_STAT64_T is
+// defined, which a macro defined as itself answers while each platform's compiler still resolves the name.
+export function findSwigPreamble(headerFile, configs, headerPath) {
+    return findHeaderOption('swigPreamble', headerFile, configs, headerPath);
+}
+
+// Includes SWIG reads inlined into one of a package's headers, in export.swigInlineIncludes. SWIG reads no #include, and
+// libgeotiff fills its key and code enums from .inc files included inside the enum bodies, where the file markers
+// -includeall wraps around an included file do not parse.
+export function findSwigInlineIncludes(headerFile, configs, headerPath) {
+    return findHeaderOption('swigInlineIncludes', headerFile, configs, headerPath);
+}
+
+const INCLUDE_LINE = /^[ \t]*#[ \t]*include[ \t]*"([^"]+)"[^\n]*$/gm;
+
+export function inlineIncludes(headerText, names, readInclude) {
+    const included = new Set([...headerText.matchAll(INCLUDE_LINE)].map(([, name]) => name));
+    const missing = names.filter((name) => !included.has(name));
+    if (missing.length) throw new Error(`crossbind: swigInlineIncludes lists ${missing.join(', ')}, which the header does not include.`);
+    return headerText.replace(INCLUDE_LINE, (line, name) => (names.includes(name) ? readInclude(name) : line));
+}
+
 function findHeaderOption(option, headerFile, configs, headerPath) {
     const file = upath.normalize(headerFile);
     let owner = null;
@@ -40,12 +63,19 @@ export function interfaceIncludes(headerPath, prelude = []) {
 
 // The prelude and the completing includes reach only the compiled wrapper and swigMacros only SWIG's parse: SWIG still
 // wraps just the imported header. The ignored declarations follow the macros, so the retry without macros keeps them.
-export function buildInterfaceContent({ moduleName, headerPath, prelude = [], completing = [], swigMacros = [], ignored = [], constants = [] }) {
+export function buildInterfaceContent({
+    moduleName, headerPath, prelude = [], completing = [], swigMacros = [], ignored = [], constants = [], preamble = [],
+}) {
     const includes = [...new Set([...interfaceIncludes(headerPath, prelude), ...completing])]
         .map((header) => `#include "${header}"`)
         .join('\n');
     const macros = swigMacros.length ? `${swigMacros.join('\n')}\n\n` : '';
     const ignores = ignored.length ? `${ignored.map((name) => `%ignore ${name};`).join('\n')}\n\n` : '';
+    // The marker keeps a preamble that starts with #define apart from the macro block the retry drops.
+    const preambleBlock = preamble.length ? `// package preamble\n${preamble.join('\n')}\n\n` : '';
+    // Named constants are asked for ahead of the macros, which may define one. Every constant is asked for after them:
+    // SWIG binds an interface's own #define lines, and the prelude only carries other headers' values for the parse.
+    const everyConstant = constants === ALL_NAMES;
     const module = moduleName.replace(/\W/g, '_');
     return `#ifndef _${module}_I
 #define _${module}_I
@@ -56,10 +86,10 @@ export function buildInterfaceContent({ moduleName, headerPath, prelude = [], co
 ${includes}
 %}
 
-${constantRequests(constants)}%feature("shared_ptr");
+${everyConstant ? '' : constantRequests(constants)}%feature("shared_ptr");
 %feature("polymorphic_shared_ptr");
 
-${macros}${ignores}%include "${headerPath}"
+${macros}${ignores}${preambleBlock}${everyConstant ? constantRequests(constants) : ''}%include "${headerPath}"
 
 #endif
 `;

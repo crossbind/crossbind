@@ -42,11 +42,14 @@ export default function createLib(target, fileType, options = {}) {
     const fingerprintChanged = fingerprint !== null
         && (!fs.existsSync(fingerprintFile) || fs.readFileSync(fingerprintFile, { encoding: 'utf8' }) !== fingerprint);
 
-    // Config emccFlags feed compile-time state too (CROSSBIND_JSPI below), so a flag change must miss this cache.
+    // Config emccFlags feed compile-time state too (CROSSBIND_JSPI below), so a flag change must miss this cache, and so
+    // does a compile option a dependency declares (Lerc's LERC_STATIC on Windows). Without one the hash stays as it was.
     const configEmccFlags = getData('binary', target)?.emccFlags || [];
+    const compileOptions = getData('cmake', target)?.compileOptions || [];
     const flagsFingerprintFile = `${libdir}/crossbind-emccflags.fingerprint`;
     const conanInputs = conanInputsOf(state.config);
-    const flagsFingerprint = getContentHash(JSON.stringify(conanInputs ? [configEmccFlags, conanInputs] : configEmccFlags));
+    const flagsInputs = compileOptions.length ? { emccFlags: configEmccFlags, compileOptions } : configEmccFlags;
+    const flagsFingerprint = getContentHash(JSON.stringify(conanInputs ? [flagsInputs, conanInputs] : flagsInputs));
     const flagsChanged = !fs.existsSync(flagsFingerprintFile)
         || fs.readFileSync(flagsFingerprintFile, { encoding: 'utf8' }) !== flagsFingerprint;
 

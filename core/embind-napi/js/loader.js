@@ -1,16 +1,33 @@
 // Entry of the per-project loader crossbind bundles next to the native addons
 // (dist/<name>.native.cjs). It keeps the wasm build's initNative() contract, so the same app code
 // runs on either build.
+import fs from 'node:fs';
+import { createRequire } from 'node:module';
 import path from 'node:path';
 import Module, { crossbindScope } from '@crossbind/core-embind-jsi';
 import systemConfig from 'crossbind/systemConfig';
 import addonPlatform from './addonPlatform.js';
+import addonLocation from './addonLocation.js';
 import stopOnExit from './stopOnExit.js';
 
 const platform = addonPlatform();
+const fill = (pattern) => pattern.replace('{platform}', platform).replace('{arch}', process.arch);
+const addonPackage = systemConfig.paths.addonPackage ? fill(systemConfig.paths.addonPackage) : null;
 
-function addonFileName() {
-    return systemConfig.paths.addon.replace('{platform}', platform).replace('{arch}', process.arch);
+function addonFile(config) {
+    return config.addonPath ?? addonLocation({
+        dir: __dirname,
+        fileName: fill(systemConfig.paths.addon),
+        packageName: addonPackage,
+        exists: fs.existsSync,
+        resolve: createRequire(__filename).resolve,
+    });
+}
+
+function missingAddonRemedy() {
+    return addonPackage
+        ? `install ${addonPackage}, which npm leaves out with --omit=optional; addons exist for ${Object.keys(systemConfig.env).join(', ')}`
+        : `build it with \`crossbind build -p ${platform} -a ${process.arch}\``;
 }
 
 function loadAddon(file) {
@@ -18,39 +35,43 @@ function loadAddon(file) {
     try {
         process.dlopen(addon, file);
     } catch (error) {
-        throw new Error(
-            `crossbind: cannot load ${file} - build it with \`crossbind build -p ${platform} -a ${process.arch}\`.`,
-            { cause: error },
-        );
+        throw new Error(`crossbind: cannot load ${file} - ${fs.existsSync(file) ? error.message : missingAddonRemedy()}.`, { cause: error });
     }
     return addon.exports;
 }
 
-function setEnv(dataPath, runtimeEnv) {
+function setEnv(dataPath, runtimeEnv = {}) {
+    const fillDataPath = (value) => String(value).replace('_CROSSBIND_DATA_PATH_', dataPath);
     // Build-time values are keyed by addon: a target-scoped value must not leak from one arch's
-    // build into another's. Values passed to initNative() win, as in the wasm runtime.
-    const env = { ...systemConfig.env[`${platform}-${process.arch}`], ...runtimeEnv };
-    Object.entries(env).forEach(([key, value]) => {
-        Module.Crossbind.setEnv(key, String(value).replace('_CROSSBIND_DATA_PATH_', dataPath), false);
+    // build into another's. They never replace a variable the process already has; values passed to
+    // initNative() do, as in the wasm runtime, even after a package entry booted the addon.
+    Object.entries(systemConfig.env[`${platform}-${process.arch}`] ?? {}).forEach(([key, value]) => {
+        Module.Crossbind.setEnv(key, fillDataPath(value), false);
+    });
+    Object.entries(runtimeEnv).forEach(([key, value]) => {
+        Module.Crossbind.setEnv(key, fillDataPath(value), true);
     });
 }
 
 let addon = null;
+let addonDataPath = null;
 
 function boot(config) {
-    const dataPath = config.dataPath ?? path.join(__dirname, 'data');
     // Loaded and started once per process: Node cannot unload an addon, and a second dlopen gets a
     // fresh environment whose start() would register every binding twice.
     if (!addon) {
-        const loaded = loadAddon(config.addonPath ?? path.join(__dirname, addonFileName()));
+        addonDataPath = config.dataPath ?? path.join(__dirname, 'data');
+        const loaded = loadAddon(addonFile(config));
         // The embind runtime this bundle carries keeps its state on crossbindScope (crossbind's utils/scopedEmbind.js).
-        loaded.start(dataPath, crossbindScope);
+        loaded.start(addonDataPath, crossbindScope);
         // Native values released after this (thread-local ones die inside exit()) must not call
         // back into the runtime.
         stopOnExit(() => loaded.stop());
         addon = loaded;
+    } else if (config.dataPath && config.dataPath !== addonDataPath) {
+        throw new Error(`crossbind: the addon started with its data at ${addonDataPath}; a process cannot move it to ${config.dataPath}.`);
     }
-    setEnv(dataPath, config.env);
+    setEnv(addonDataPath, config.env);
     return Module;
 }
 
@@ -67,6 +88,11 @@ export default function initNative(config = {}) {
     }
     return booted;
 }
+
+// Loading an addon is synchronous, so a package entry boots it on require.
+initNative.sync = function sync(config = {}) {
+    return boot(config);
+};
 
 // The wasm runtime's contract: forget the booted module so the next call boots again. Native state
 // cannot be reset (Node cannot unload an addon), so that call resolves the same module.

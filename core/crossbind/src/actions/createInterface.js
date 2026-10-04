@@ -11,21 +11,23 @@ import getDependFilePath from '../integration/getDependFilePath.js';
 import { writeHeaderDts, writeConanImportDts } from '../utils/cppDts.js';
 import { ALL_NAMES, findHeaderImportsIn } from '../utils/headerImports.js';
 import {
-    buildInterfaceContent, completingIncludes, findHeaderPrelude, findIgnoredDeclarations, indexTypeDefinitions, interfaceIncludes,
-    interfaceToRetryWithoutMacros, parseMacroDump, referencedTypeHeaders, selectSwigMacros,
+    buildInterfaceContent, completingIncludes, findHeaderPrelude, findIgnoredDeclarations, findSwigInlineIncludes, findSwigPreamble,
+    indexTypeDefinitions, inlineIncludes, interfaceIncludes, interfaceToRetryWithoutMacros, parseMacroDump, referencedTypeHeaders,
+    selectSwigMacros,
 } from '../utils/swigInterface.js';
 import writeIfChanged from '../utils/writeIfChanged.js';
+import { imageRoleFor } from '../utils/pullDockerImage.js';
 import run, { cxxPreprocessorFor } from './run.js';
 
 // Part of every interface hash, so interfaces cached by an older generator are rebuilt.
-const INTERFACE_FORMAT = 'swig-macros-1';
+const INTERFACE_FORMAT = 'swig-macros-2';
 // Part of every bridge hash: each bridge carries the SWIG fork's runtime and all bridges of a module must share it, so
 // bridges from a fork before field bindings and constants are rebuilt.
 const BRIDGE_FORMAT = 'swig-constants-1';
 const predefinedMacros = new Map();
 const typeDefinitions = new Map();
 
-export default function createBridgeFile(headerOrModuleFilePath, target = state.targets.find((t) => t.platform === 'wasm'), { withDependencies = true } = {}) {
+export default function createBridgeFile(headerOrModuleFilePath, target = state.targets.find((t) => t.platform === 'wasm'), { withDependencies = true, wholeHeaders = [] } = {}) {
     // A header can include a Conan package's headers that a build staged after this process loaded.
     refreshConanDependencies(state.config);
     const interfaceFilePath = upath.resolve(headerOrModuleFilePath);
@@ -38,9 +40,13 @@ export default function createBridgeFile(headerOrModuleFilePath, target = state.
     // The header may live outside paths.native (e.g. a package-subpath import like
     // '@scope/pkg/native/x.h'), so its own directory must reach swig's include list.
     const sourceDir = upath.dirname(interfaceFilePath);
-    const interfaceFile = createInterfaceFile(interfaceFilePath, target, sourceDir);
+    const allNames = wholeHeaders.some((file) => upath.resolve(file) === interfaceFilePath);
+    const interfaceFile = createInterfaceFile(interfaceFilePath, target, sourceDir, allNames);
+    const { headerPath } = includeLocation(interfaceFilePath, target);
+    const inlined = findSwigInlineIncludes(interfaceFilePath, [state.config, ...state.config.allDependencies], headerPath);
+    const swigView = inlined.length ? writeSwigView(interfaceFilePath, headerPath, inlined) : null;
     const sourceHash = [getFileHash(interfaceFilePath), ...conanInputsHash()].join('\n');
-    const bridgeFile = createBridgeFileFromInterfaceFile(interfaceFile, target, sourceDir, sourceHash);
+    const bridgeFile = createBridgeFileFromInterfaceFile(interfaceFile, target, sourceDir, sourceHash, swigView);
     const moduleRegex = new RegExp(`.(${state.config.ext.module.join('|')})$`);
     if (bridgeFile) {
         // Records which header this bridge came from, so directory-driven consumers
@@ -58,9 +64,10 @@ export default function createBridgeFile(headerOrModuleFilePath, target = state.
     }
     if (bridgeFile && withDependencies && !moduleRegex.test(interfaceFilePath)) {
         // A header's own bindings need the types its declarations use registered, which only their headers' bridges do.
+        // Such a bridge replaces the header's own, so a header bound whole keeps every constant here too.
         const dependencyBridges = dependencyHeadersOf(interfaceFilePath, target).map((header) => {
             try {
-                return createBridgeFile(header, target, { withDependencies: false });
+                return createBridgeFile(header, target, { withDependencies: false, wholeHeaders });
             } catch (e) {
                 console.warn(`crossbind: ${upath.basename(interfaceFilePath)} uses types from ${upath.basename(header)}, whose bindings failed (${e.message})`);
                 return null;
@@ -78,7 +85,7 @@ function conanInputsHash() {
     return conan ? [`conan:${getContentHash(JSON.stringify(conan))}`] : [];
 }
 
-function createInterfaceFile(headerOrModuleFilePath, target, sourceDir) {
+function createInterfaceFile(headerOrModuleFilePath, target, sourceDir, allNames) {
     if (!headerOrModuleFilePath) {
         return null;
     }
@@ -88,16 +95,18 @@ function createInterfaceFile(headerOrModuleFilePath, target, sourceDir) {
     const packages = [state.config, ...state.config.allDependencies];
     const prelude = isModule ? [] : findHeaderPrelude(headerOrModuleFilePath, packages, headerPath);
     const ignored = isModule ? [] : findIgnoredDeclarations(headerOrModuleFilePath, packages, headerPath);
+    const preamble = isModule ? [] : findSwigPreamble(headerOrModuleFilePath, packages, headerPath);
     const completing = includeRoot ? findCompletingIncludes(headerOrModuleFilePath, includeRoot, headerPath) : [];
     const filePathWithoutExt = headerOrModuleFilePath.match(/^(.*)\..+?$/)?.[1];
     const interfaceFile = !isModule && filePathWithoutExt ? `${filePathWithoutExt}.i` : null;
-    const constants = isModule ? [] : importedNames(headerOrModuleFilePath, target);
+    const constants = isModule ? [] : (allNames ? ALL_NAMES : importedNames(headerOrModuleFilePath, target));
     // A prelude or ignored-declaration change in the owning package, a completed class moving to another header, an
     // interface the package ships beside the header changing or going away, another imported name, or Conan packages
     // its includes may reach being staged or moving to another version must regenerate the interface as well.
     const fileHash = [
         INTERFACE_FORMAT, getFileHash(headerOrModuleFilePath), ...prelude,
         ...(ignored.length ? [`ignored:${ignored.join(',')}`] : []), ...(completing.length ? [`completing:${completing.join(',')}`] : []),
+        ...(preamble.length ? [`preamble:${preamble.join('\n')}`] : []),
         ...(interfaceFile && fs.existsSync(interfaceFile) ? [`shipped:${getFileHash(interfaceFile)}`] : []),
         ...(constants.length ? [`constants:${constants === ALL_NAMES ? ALL_NAMES : constants.join(',')}`] : []),
         ...conanInputsHash(),
@@ -138,6 +147,7 @@ function createInterfaceFile(headerOrModuleFilePath, target, sourceDir) {
         swigMacros: collectSwigMacros(headerOrModuleFilePath, interfaceIncludes(headerPath, prelude), fileName, target, sourceDir, constants),
         ignored,
         constants,
+        preamble,
     });
     const outputFilePath = `${state.config.paths.build}/interface/${fileName}.i`;
     fs.writeFileSync(outputFilePath, content);
@@ -264,14 +274,20 @@ function collectSwigMacros(headerFile, includes, name, target, sourceDir, consta
 // it, so NDEBUG counts as a macro SWIG needs rather than a compiler predefine.
 const RELEASE_DEFINE = '-DNDEBUG';
 
+// One bridge serves every desktop target, so SWIG and the macro table it reads come from the web image's em++,
+// which defines no operating system; an android bridge is read with the NDK it compiles with. The headers
+// still come from the target's own packages.
+const toolTargetFor = (target) => (imageRoleFor(target) === 'android' ? target : { ...target, platform: 'wasm' });
+
 function dumpMacros(outputFile, includes, includePath, target, defines = []) {
-    run(cxxPreprocessorFor(target), [
+    const tool = toolTargetFor(target);
+    run(cxxPreprocessorFor(tool), [
         '-x', 'c++', '-std=c++17', '-dM', '-E', ...defines,
         ...includePath,
         ...includes.flatMap((header) => ['-include', header]),
         '-o', outputFile,
         '/dev/null',
-    ], null, target);
+    ], null, tool);
     return parseMacroDump(fs.readFileSync(outputFile, 'utf8'));
 }
 
@@ -309,14 +325,28 @@ function reportSkippedBindings(bridgeFilePath) {
     });
 }
 
+// SWIG looks in its working directory and the interface's before its include path, and neither holds the header, so
+// it reads this copy, put first on that path: the includes its package lists are inlined there, while the compiler
+// still includes the real header.
+function writeSwigView(headerFile, headerPath, names) {
+    const dir = `${state.config.paths.build}/swigview`;
+    const viewFile = upath.join(dir, headerPath);
+    fs.mkdirSync(upath.dirname(viewFile), { recursive: true });
+    const readInclude = (name) => fs.readFileSync(upath.join(upath.dirname(headerFile), name), 'utf8');
+    writeIfChanged(viewFile, inlineIncludes(fs.readFileSync(headerFile, 'utf8'), names, readInclude));
+    return { dir, hash: getFileHash(viewFile) };
+}
+
 // The interface text only names the header, so its hash alone kept a bridge across header edits: the
-// header's own hash is part of the key.
-function createBridgeFileFromInterfaceFile(interfaceFilePath, target, sourceDir = null, sourceHash = '') {
+// header's own hash, and the inlined copy's when SWIG reads one, are part of the key.
+function createBridgeFileFromInterfaceFile(interfaceFilePath, target, sourceDir = null, sourceHash = '', swigView = null) {
     if (!interfaceFilePath) {
         return null;
     }
 
-    const bridgeHash = () => `${BRIDGE_FORMAT}\n${getFileHash(interfaceFilePath)}\n${sourceHash}`;
+    const bridgeHash = () => [
+        BRIDGE_FORMAT, getFileHash(interfaceFilePath), sourceHash, ...(swigView ? [`view:${swigView.hash}`] : []),
+    ].join('\n');
     const fileHash = bridgeHash();
     const cachedBridge = state.cache.bridges[interfaceFilePath];
     if (state.cache.hashes[interfaceFilePath] === fileHash && cachedBridge && fs.existsSync(cachedBridge)) {
@@ -331,9 +361,10 @@ function createBridgeFileFromInterfaceFile(interfaceFilePath, target, sourceDir 
         '-embind',
         '-cpperraswarn',
         '-o', bridgeFilePath,
+        ...(swigView ? [`-I${swigView.dir}`] : []),
         ...swigIncludePath(target, sourceDir),
         interfaceFilePath,
-    ], null, target);
+    ], null, toolTargetFor(target));
     try {
         swig();
     } catch (e) {

@@ -50,14 +50,24 @@ function envOf(target) {
         .map(([key, value]) => [key, typeof value === 'function' ? value(state, target) : value]));
 }
 
+// A package publishes its addons in <package>-<platform>-<arch> by listing them as optional
+// dependencies, which is also how npm learns to install only the one for its machine.
+function addonPackagePattern(served) {
+    const { name, optionalDependencies = {} } = state.config.package ?? {};
+    return name && served.some((t) => Object.hasOwn(optionalDependencies, `${name}-${t.platform}-${t.arch}`))
+        ? `${name}-{platform}-{arch}`
+        : null;
+}
+
 // One loader serves every addon of a build type, so each addon's env is keyed the way the loader
 // looks it up at runtime rather than taken from whichever arch happened to build last.
 export function nodeLoaderConfig(target) {
     const served = state.targets.filter((t) => t.addonPattern && t.jsName === target.jsName);
+    const addonPackage = addonPackagePattern(served);
     return {
         env: Object.fromEntries(served.map((t) => [`${t.platform}-${t.arch}`, envOf(t)])),
         general: { name: state.config.general.name },
-        paths: { addon: target.addonPattern },
+        paths: { addon: target.addonPattern, ...(addonPackage ? { addonPackage } : {}) },
     };
 }
 

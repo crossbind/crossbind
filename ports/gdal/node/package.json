@@ -1,0 +1,58 @@
+{
+    "name": "@crossbind/port-gdal-node",
+    "version": "2.0.0-beta.62",
+    "nativeVersion": "3.13.3",
+    "homepage": "https://github.com/crossbind/crossbind/tree/main/ports/gdal#readme",
+    "repository": "https://github.com/crossbind/crossbind.git",
+    "license": "MIT",
+    "description": "gdal 3.13.3 for Node.js with nothing to build: prebuilt Node-API addons for macOS, Linux and Windows, built with crossbind.",
+    "private": true,
+    "type": "module",
+    "exports": {
+        "./*.h": {
+            "types": "./dist/*.h.d.cts",
+            "default": "./dist/*.h.cjs"
+        },
+        "./package.json": "./package.json"
+    },
+    "files": [
+        "dist/**/*.cjs",
+        "dist/**/*.d.cts",
+        "dist/data"
+    ],
+    "scripts": {
+        "build": "crossbind build -p darwin,linux,linuxmusl,win32 -e node -b release && node ../../../scripts/stage-node-addons.mjs",
+        "clear": "rm -rf .crossbind dist",
+        "e2e": "node ../../../scripts/e2e-node-package.mjs"
+    },
+    "optionalDependencies": {
+        "@crossbind/port-gdal-node-darwin-arm64": "workspace:*",
+        "@crossbind/port-gdal-node-darwin-x64": "workspace:*",
+        "@crossbind/port-gdal-node-linux-arm64": "workspace:*",
+        "@crossbind/port-gdal-node-linux-x64": "workspace:*",
+        "@crossbind/port-gdal-node-linuxmusl-arm64": "workspace:*",
+        "@crossbind/port-gdal-node-linuxmusl-x64": "workspace:*",
+        "@crossbind/port-gdal-node-win32-arm64": "workspace:*",
+        "@crossbind/port-gdal-node-win32-x64": "workspace:*"
+    },
+    "devDependencies": {
+        "crossbind": "workspace:^",
+        "@crossbind/port-gdal-darwin": "workspace:^",
+        "@crossbind/port-gdal-linux": "workspace:^",
+        "@crossbind/port-gdal-linuxmusl": "workspace:^",
+        "@crossbind/port-gdal-win32": "workspace:^"
+    },
+    "keywords": [
+        "gdal",
+        "libgdal",
+        "gis",
+        "geospatial",
+        "raster",
+        "vector",
+        "crossbind",
+        "crossbind-port",
+        "node",
+        "node-api",
+        "prebuilt"
+    ]
+}

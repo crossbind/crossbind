@@ -8,6 +8,10 @@ export default (newConfig = {}) => ({
         type: 'cmake',
         // curl/easy.h and its siblings rely on CURL_EXTERN and the types curl/curl.h defines before including them.
         headerPrelude: ['curl/curl.h'],
+        publicHeaders: [
+            'curl/curl.h', 'curl/curlver.h', 'curl/easy.h', 'curl/multi.h', 'curl/urlapi.h', 'curl/options.h', 'curl/header.h',
+            'curl/websockets.h', 'curl/curl_crossbind.h',
+        ],
         ...(newConfig.export || {}),
     },
     paths: {

@@ -17,6 +17,7 @@
 #include <map>
 #include <string>
 #include <type_traits>
+#include <utility>
 #include <vector>
 
 #include "./em_macros.h"
@@ -630,42 +631,21 @@ struct SignatureTranslator<ReturnType (*)(Args...)> { using type = void*; };
 #define call_invoke_4 ({return invoke(fn, args[0], args[1], args[2], args[3]);})
 #define call_invoke(count) (call_invoke_##count)
 
+    namespace internal {
+        // Every JS argument of a call, however many parameters the bound function has.
+        template<typename Invoke, typename Fn, std::size_t... I>
+        EMSCRIPTEN_ALWAYS_INLINE decltype(auto) invokeWithArgs(facebook::jsi::Runtime& rt, Invoke&& invoke, Fn&& fn,
+                const facebook::jsi::Value* args, std::index_sequence<I...>) {
+            return invoke(rt, std::forward<Fn>(fn), args[I]...);
+        }
+    } // end namespace internal
+
 #define callInvoke(count, invokeVar, fnVar) ({ \
-    if constexpr (count == 1) { return invokeVar(rt, fnVar, args[0]); }\
-    else if constexpr (count == 2) { return invokeVar(rt, fnVar, args[0], args[1]); }\
-    else if constexpr (count == 3) { return invokeVar(rt, fnVar, args[0], args[1], args[2]); }\
-    else if constexpr (count == 4) { return invokeVar(rt, fnVar, args[0], args[1], args[2], args[3]); }\
-    else if constexpr (count == 5) { return invokeVar(rt, fnVar, args[0], args[1], args[2], args[3], args[4]); }\
-    else if constexpr (count == 6) { return invokeVar(rt, fnVar, args[0], args[1], args[2], args[3], args[4], args[5]); }\
-    else if constexpr (count == 7) { return invokeVar(rt, fnVar, args[0], args[1], args[2], args[3], args[4], args[5], args[6]); }\
-    else if constexpr (count == 8) { return invokeVar(rt, fnVar, args[0], args[1], args[2], args[3], args[4], args[5], args[6], args[7]); }\
-    else if constexpr (count == 9) { return invokeVar(rt, fnVar, args[0], args[1], args[2], args[3], args[4], args[5], args[6], args[7], args[8]); }\
-    else if constexpr (count == 10) { return invokeVar(rt, fnVar, args[0], args[1], args[2], args[3], args[4], args[5], args[6], args[7], args[8], args[9]); }\
-    else if constexpr (count == 11) { return invokeVar(rt, fnVar, args[0], args[1], args[2], args[3], args[4], args[5], args[6], args[7], args[8], args[9], args[10]); }\
-    else if constexpr (count == 12) { return invokeVar(rt, fnVar, args[0], args[1], args[2], args[3], args[4], args[5], args[6], args[7], args[8], args[9], args[10], args[11]); }\
-    else if constexpr (count == 13) { return invokeVar(rt, fnVar, args[0], args[1], args[2], args[3], args[4], args[5], args[6], args[7], args[8], args[9], args[10], args[11], args[12]); }\
-    else if constexpr (count == 14) { return invokeVar(rt, fnVar, args[0], args[1], args[2], args[3], args[4], args[5], args[6], args[7], args[8], args[9], args[10], args[11], args[12], args[13]); }\
-    else if constexpr (count == 15) { return invokeVar(rt, fnVar, args[0], args[1], args[2], args[3], args[4], args[5], args[6], args[7], args[8], args[9], args[10], args[11], args[12], args[13], args[14]); }\
-    else { return invokeVar(rt, fnVar); }                                              \
+    return ::emscripten::internal::invokeWithArgs(rt, invokeVar, fnVar, args, std::make_index_sequence<(count)>{}); \
 })
 
 #define callInvokeVoid(count, invokeVar, fnVar) ({ \
-    if constexpr (count == 1) { invokeVar(rt, fnVar, args[0]); }\
-    else if constexpr (count == 2) { invokeVar(rt, fnVar, args[0], args[1]); }\
-    else if constexpr (count == 3) { invokeVar(rt, fnVar, args[0], args[1], args[2]); }\
-    else if constexpr (count == 4) { invokeVar(rt, fnVar, args[0], args[1], args[2], args[3]); }\
-    else if constexpr (count == 5) { invokeVar(rt, fnVar, args[0], args[1], args[2], args[3], args[4]); }\
-    else if constexpr (count == 6) { invokeVar(rt, fnVar, args[0], args[1], args[2], args[3], args[4], args[5]); }\
-    else if constexpr (count == 7) { invokeVar(rt, fnVar, args[0], args[1], args[2], args[3], args[4], args[5], args[6]); }\
-    else if constexpr (count == 8) { invokeVar(rt, fnVar, args[0], args[1], args[2], args[3], args[4], args[5], args[6], args[7]); }\
-    else if constexpr (count == 9) { invokeVar(rt, fnVar, args[0], args[1], args[2], args[3], args[4], args[5], args[6], args[7], args[8]); }\
-    else if constexpr (count == 10) { invokeVar(rt, fnVar, args[0], args[1], args[2], args[3], args[4], args[5], args[6], args[7], args[8], args[9]); }\
-    else if constexpr (count == 11) { invokeVar(rt, fnVar, args[0], args[1], args[2], args[3], args[4], args[5], args[6], args[7], args[8], args[9], args[10]); }\
-    else if constexpr (count == 12) { invokeVar(rt, fnVar, args[0], args[1], args[2], args[3], args[4], args[5], args[6], args[7], args[8], args[9], args[10], args[11]); }\
-    else if constexpr (count == 13) { invokeVar(rt, fnVar, args[0], args[1], args[2], args[3], args[4], args[5], args[6], args[7], args[8], args[9], args[10], args[11], args[12]); }\
-    else if constexpr (count == 14) { invokeVar(rt, fnVar, args[0], args[1], args[2], args[3], args[4], args[5], args[6], args[7], args[8], args[9], args[10], args[11], args[12], args[13]); }\
-    else if constexpr (count == 15) { invokeVar(rt, fnVar, args[0], args[1], args[2], args[3], args[4], args[5], args[6], args[7], args[8], args[9], args[10], args[11], args[12], args[13], args[14]); }\
-    else { invokeVar(rt, fnVar); }                                              \
+    ::emscripten::internal::invokeWithArgs(rt, invokeVar, fnVar, args, std::make_index_sequence<(count)>{}); \
 })
 
     template<typename ReturnType, typename... Args, typename... Policies>

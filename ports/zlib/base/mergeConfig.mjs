@@ -6,6 +6,7 @@ export default (newConfig = {}) => ({
     },
     export: {
         type: 'cmake',
+        publicHeaders: ['zlib.h'],
         ...(newConfig.export || {}),
     },
     paths: {

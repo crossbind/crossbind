@@ -1,0 +1,23 @@
+{
+    "name": "@crossbind/port-geotiff-node-linux-arm64",
+    "version": "2.0.0-beta.62",
+    "nativeVersion": "1.7.4",
+    "homepage": "https://github.com/crossbind/crossbind/tree/main/ports/geotiff#readme",
+    "repository": "https://github.com/crossbind/crossbind.git",
+    "license": "MIT",
+    "description": "Linux arm64 (glibc) addon of @crossbind/port-geotiff-node, which npm installs on a matching machine.",
+    "private": true,
+    "os": [
+        "linux"
+    ],
+    "cpu": [
+        "arm64"
+    ],
+    "libc": [
+        "glibc"
+    ],
+    "main": "geotiff-node.linux-arm64.node",
+    "files": [
+        "geotiff-node.linux-arm64.node"
+    ]
+}

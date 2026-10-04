@@ -6,6 +6,7 @@ export default (newConfig = {}) => ({
     },
     export: {
         type: 'cmake',
+        publicHeaders: ['proj.h', 'geodesic.h'],
         ...(newConfig.export || {}),
     },
     paths: {

@@ -298,6 +298,71 @@ describe('constants the app imports', () => {
         expect(interfaceText()).toContain('%feature("embind:constant");\n');
     });
 
+    test('puts the SWIG lines its package lists in swigPreamble before the header', async () => {
+        const { createBridgeFile } = await importFresh();
+        holder.config.export = { swigPreamble: { 'fixture.h': ['#undef SWIG'] } };
+
+        createBridgeFile(header, target);
+
+        expect(interfaceText()).toContain('#undef SWIG\n\n%include "fixture.h"');
+    });
+
+    describe('with includes its package lists in swigInlineIncludes', () => {
+        const values = () => path.join(path.dirname(header), 'values.inc');
+
+        beforeEach(() => {
+            fs.writeFileSync(values(), 'ValuePair(Two, 2)\n');
+            fs.writeFileSync(header, '#define ValuePair(name, value) name = value,\ntypedef enum {\n#include "values.inc"\n  End = 9\n} value_t;\n');
+            holder.config.export = { swigInlineIncludes: { 'fixture.h': ['values.inc'] } };
+        });
+
+        test('has SWIG read the header with those includes inlined, ahead of the real one', async () => {
+            const { run, createBridgeFile } = await importFresh();
+
+            createBridgeFile(header, target);
+
+            const view = swigRuns(run).at(-1)[1].find((arg) => arg.startsWith('-I')).slice(2);
+            expect(fs.readFileSync(upath.join(view, 'fixture.h'), 'utf8')).toContain('typedef enum {\nValuePair(Two, 2)\n');
+        });
+
+        test('regenerates the bridge when an inlined include changes', async () => {
+            const { run, createBridgeFile } = await importFresh();
+            createBridgeFile(header, target);
+            fs.writeFileSync(values(), 'ValuePair(Two, 2)\nValuePair(Three, 3)\n');
+
+            createBridgeFile(header, target);
+
+            expect(swigRuns(run)).toHaveLength(2);
+        });
+    });
+
+    // A package that ships a dependency header's bindings has no app importing it.
+    test('asks for every constant of a header the build binds whole', async () => {
+        const { createBridgeFile } = await importFresh();
+
+        createBridgeFile(header, target, { wholeHeaders: [header] });
+
+        expect(interfaceText()).toContain('%feature("embind:constant");\n');
+    });
+
+    // A header the build binds whole is generated again as the dependency of a later one that uses its types.
+    test('keeps every constant of a header the build binds whole when another one uses its types', async () => {
+        const { createBridgeFile } = await importFresh();
+        // The include root is matched against the header as text, so both take upath's slashes on every OS.
+        const root = upath.normalize(path.dirname(header));
+        holder.config.paths.header = [root];
+        const box = upath.join(root, 'box.h');
+        fs.writeFileSync(box, '#define BOX_SIDES 4\nstruct Box {\n  int side;\n};\n');
+        fs.writeFileSync(header, '#include "box.h"\nint area(struct Box *box);\n');
+
+        const wholeHeaders = [box, header];
+
+        const [boxBridge, bridge] = wholeHeaders.map((file) => createBridgeFile(file, target, { wholeHeaders }));
+
+        expect(fs.readFileSync(`${bridge}.deps`, 'utf8')).toContain(boxBridge);
+        expect(fs.readFileSync(cachedInterface(box), 'utf8')).toContain('%feature("embind:constant");\n');
+    });
+
     test('defines an imported constant that a header the header includes provides', async () => {
         const { run, createBridgeFile } = await importFresh();
         run.mockImplementation((program, args) => {
@@ -311,6 +376,30 @@ describe('constants the app imports', () => {
 
         expect(interfaceText()).toContain('%feature("embind:constant") MAX_WBITS;');
         expect(interfaceText()).toContain('#define MAX_WBITS 15\n');
+    });
+});
+
+// One bridge serves every desktop target, so SWIG reads a header in the web image's em++, which defines no
+// operating system; an android bridge must match the NDK it compiles with.
+describe('the image SWIG reads a header in', () => {
+    const toolPlatforms = (run) => new Set(run.mock.calls.map(([, , , target]) => target.platform));
+
+    test('is the web image for a desktop target', async () => {
+        const { run, createBridgeFile } = await importFresh();
+        fs.writeFileSync(header, 'int one();\n');
+
+        createBridgeFile(header, { platform: 'linux', arch: 'x64', path: 'linux-x64-mt-release' });
+
+        expect(toolPlatforms(run)).toEqual(new Set(['wasm']));
+    });
+
+    test('is the android image for an android target', async () => {
+        const { run, createBridgeFile } = await importFresh();
+        fs.writeFileSync(header, 'int one();\n');
+
+        createBridgeFile(header, { platform: 'android', arch: 'arm64-v8a', path: 'android-arm64-v8a-mt-release' });
+
+        expect(toolPlatforms(run)).toEqual(new Set(['android']));
     });
 });
 

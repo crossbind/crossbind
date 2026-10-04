@@ -149,7 +149,36 @@ export default {
       // implements it, so its bindings cannot link. Entries are SWIG %ignore names, in the forms
       // headerPrelude takes: { 'vrtdataset.h': ['VRTAverageFilteredSource'] }.
 
+    swigPreamble: {},
+      // SWIG preprocessor lines put right before a public header of this package, in the forms
+      // headerPrelude takes. GDAL keeps its C SRS API behind `#ifndef SWIG` for its own bindings
+      // ('ogr_srs_api.h': ['#undef SWIG']), and makes VSIStatBufL a typedef or a macro by whether
+      // the platform defines VSI_STAT64_T: defining it as itself ('cpl_vsi.h':
+      // ['#define VSI_STAT64_T VSI_STAT64_T']) keeps the name, so each platform's compiler resolves it.
+
+    swigInlineIncludes: {},
+      // Includes SWIG reads inlined into a public header of this package, keyed by the header's
+      // include path. SWIG reads no #include, so libgeotiff, which fills its key and code enums from
+      // .inc files included inside the enum bodies, lists
+      // { 'geokeys.h': ['geokeys.inc', 'geokeys_v1_1.inc'] }. SWIG reads a copy with each listed
+      // #include line replaced by that file's text, so its warnings give the copy's line numbers; the
+      // compiler still includes the real header. A listed name the header does not include fails the
+      // build.
+
+    publicHeaders: [],
+      // The headers of this package's public API, by include path: ['zlib.h']. A package that names
+      // this one in bindings.headers binds these.
+
     bindings: {
+      headers: [],
+        // Dependency headers bound into this package's Node.js addons with every function and constant,
+        // as `import * as` binds them in an app: a header path ('@crossbind/port-zlib/zlib.h'), or a
+        // package name standing for the headers it lists in publicHeaders. Each header gets an entry
+        // module, <output>/<include path>.cjs, that loads the addon on require, with its declarations in
+        // .d.cts beside it; a package exports them as './*.h', as the @crossbind/port-<name>-node
+        // packages do. Addons in <package>-<platform>-<arch> packages listed as optionalDependencies
+        // are found there.
+
       // Rust binding-surface additions (see rust.md).
       vectors: [{ of: 'i32', name: 'RustIntVector' }],
         // Standalone Vec<T> classes to expose without touching Rust source.
