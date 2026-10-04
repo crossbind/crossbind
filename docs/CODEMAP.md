@@ -200,6 +200,7 @@ Index + template: [`docs/adr/README.md`](./adr/README.md).
 | The Xcode and the deployment target every iOS archive is built with | `src/utils/iosToolchain.js` |
 | The linux image's clang wrappers, CMake toolchain files and flags every Linux archive is built with | `src/utils/linuxToolchain.js` |
 | The clang and the macOS every macOS archive is built for, and the host package prefixes it ignores | `src/utils/darwinToolchain.js` |
+| The windows image's llvm-mingw and CMake toolchain files every Windows archive is built with | `src/utils/windowsToolchain.js` |
 | `conan:` specifiers and staged header resolution | `src/utils/conanImport.js` |
 | `conanDependencies` validation, install requirements and options | `src/utils/conanDependencies.js` |
 | Conan host and build profiles from crossbind's toolchain | `src/utils/conanProfile.js` |

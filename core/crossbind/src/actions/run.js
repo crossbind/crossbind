@@ -11,12 +11,14 @@ import { WASM_EXCEPTION_FLAGS } from '../utils/archiveFlags.js';
 import { ANDROID_NDK, ANDROID_API_LEVEL } from '../utils/androidToolchain.js';
 import { IOS_DEVELOPER_DIR, IOS_DEPLOYMENT_TARGET, XCODE_TOOLCHAIN_BIN } from '../utils/iosToolchain.js';
 import { LINUX_ARCHIVE_FLAGS, linuxBuildEnv, linuxToolchainFile } from '../utils/linuxToolchain.js';
+import { windowsBuildEnv, windowsToolchainFile } from '../utils/windowsToolchain.js';
 import {
     DARWIN_CC, DARWIN_CXX, DARWIN_DEPLOYMENT_TARGET, DARWIN_HOST_PACKAGE_PREFIXES, DARWIN_TOOLS_BIN,
 } from '../utils/darwinToolchain.js';
 
 // Native builds can outrun Node's 1 MiB default pipe buffer; without a raised cap a successful build dies with ENOBUFS.
 const EXEC_MAX_BUFFER = 512 * 1024 * 1024;
+const envParams = (env) => Object.entries(env).flatMap(([variable, value]) => ['-e', `${variable}=${value}`]);
 const CROSSCOMPILER_ARM64 = `aarch64-linux-android${ANDROID_API_LEVEL}`;
 const CROSSCOMPILER_x86_64 = `x86_64-linux-android${ANDROID_API_LEVEL}`;
 const t = `${ANDROID_NDK}/toolchains/llvm/prebuilt/linux-x86_64/bin`;
@@ -72,9 +74,6 @@ const DARWIN_HOST_ARCH = process.arch === 'x64' ? 'x86_64' : 'arm64';
 // Apple's own tools only, which find the SDK through xcrun. A GNU ar earlier on the PATH (Homebrew's
 // binutils) writes archives that Apple's linker rejects.
 const DARWIN_BUILD_PATH = [DARWIN_TOOLS_BIN, '/bin', '/usr/sbin', '/sbin'].join(':');
-// The windows image's llvm-mingw and its CMake toolchain files, one per target triple.
-const LLVM_MINGW = '/opt/llvm-mingw';
-const WINDOWS_TOOLCHAIN = '/opt/crossbind/windows';
 const IOS_HOST_FLAGS = `-arch arm64 -isysroot ${iosSdkPath} -fembed-bitcode`;
 const IOS_SIM_HOST_FLAGS = `-arch arm64 -isysroot ${iosSimSdkPath} -fembed-bitcode`;
 const IOS_IPHONE_PARAMS = ['-e', `CFLAGS="${IOS_HOST_FLAGS}"`, '-e', `CXXFLAGS="${IOS_HOST_FLAGS}"`, '-e', `LDFLAGS="${IOS_HOST_FLAGS}"`];
@@ -253,7 +252,7 @@ export default function run(program, params = [], platformPrefix = null, target 
                 [dProgram, ...dParams] = params;
                 const archiveFlags = LINUX_ARCHIVE_FLAGS.join(' ');
                 platformParams = [
-                    ...Object.entries(linuxBuildEnv(target)).flatMap(([variable, value]) => ['-e', `${variable}=${value}`]),
+                    ...envParams(linuxBuildEnv(target)),
                     '-e', `CFLAGS=${archiveFlags}`, '-e', `CXXFLAGS=${archiveFlags}`,
                 ];
                 if (dProgram === 'cmake' && dParams[0] !== '--build' && dParams[0] !== '--install') {
@@ -263,17 +262,9 @@ export default function run(program, params = [], platformPrefix = null, target 
             }
             case 'win32': {
                 [dProgram, ...dParams] = params;
-                const triple = target.arch === 'x64' ? 'x86_64-w64-mingw32' : 'aarch64-w64-mingw32';
-                const tool = (name) => `${LLVM_MINGW}/bin/${triple}-${name}`;
-                platformParams = [
-                    '-e', `CC=${tool('clang')}`, '-e', `CXX=${tool('clang++')}`,
-                    '-e', `AR=${tool('ar')}`, '-e', `RANLIB=${tool('ranlib')}`,
-                    '-e', `NM=${tool('nm')}`, '-e', `STRIP=${tool('strip')}`,
-                    '-e', `RC=${tool('windres')}`, '-e', `WINDRES=${tool('windres')}`,
-                    '-e', 'PKG_CONFIG_LIBDIR=',
-                ];
+                platformParams = envParams(windowsBuildEnv(target));
                 if (dProgram === 'cmake' && dParams[0] !== '--build' && dParams[0] !== '--install') {
-                    dParams = [...dParams, `-DCMAKE_TOOLCHAIN_FILE=${WINDOWS_TOOLCHAIN}/${triple}.cmake`];
+                    dParams = [...dParams, `-DCMAKE_TOOLCHAIN_FILE=${windowsToolchainFile(target)}`];
                 }
                 break;
             }

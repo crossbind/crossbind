@@ -22,6 +22,7 @@ export function changedDependencyUnits(files, root = ROOT) {
                 file.startsWith('tooling/docker/') ||
                 file === 'core/crossbind/src/actions/run.js' ||
                 file === 'core/crossbind/src/utils/linuxToolchain.js' ||
+                file === 'core/crossbind/src/utils/windowsToolchain.js' ||
                 file === '.github/workflows/build-linux.yml',
         ),
         families: {

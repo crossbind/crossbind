@@ -4,19 +4,20 @@
 > crate with `cargo:`: declare it, then name one of its headers. crossbind builds the package with
 > its own toolchain, links it like a port and binds the header like any other. Web builds (wasm32
 > and wasm64, `st` and `mt`), React Native on Android (arm64-v8a and x86_64) and iOS (arm64
-> devices and simulators), and Node.js addons for Linux (glibc and musl) and macOS, x64 and arm64,
-> for now.
+> devices and simulators), and Node.js addons for Linux (glibc and musl), macOS and Windows, x64 and
+> arm64.
 
 ## Requirement
 
-Nothing to install for web, Android and Linux addon builds with the default Docker runner: the
-toolchain images carry Conan 2.33 from image family 1.0.11 on. iOS and macOS packages build on
-your Mac with Xcode whatever the runner, so those builds need Conan 2.19 or later and CMake on the
-`PATH` (`brew install conan` or `brew upgrade conan`, or `pipx install conan`); a Conan release
-older than your Xcode still takes its clang. The first build of a package needs the network,
-to reach ConanCenter and the sources its recipe downloads. Under `RUNNER=LOCAL`, web builds need
-Conan 2.19 or later, Emscripten and CMake on the `PATH`, and Android and Linux packages are
-refused: they need the android image's NDK and the linux image's sysroots.
+Nothing to install for web, Android, Linux addon and Windows addon builds with the default Docker
+runner: the toolchain images carry Conan 2.33 from image family 1.0.11 on. iOS and macOS packages
+build on your Mac with Xcode whatever the runner, so those builds need Conan 2.19 or later and
+CMake on the `PATH` (`brew install conan` or `brew upgrade conan`, or `pipx install conan`); a
+Conan release older than your Xcode still takes its clang. The first build of a package needs the
+network, to reach ConanCenter and the sources its recipe downloads. Under `RUNNER=LOCAL`, web
+builds need Conan 2.19 or later, Emscripten and CMake on the `PATH`, and Android, Linux and Windows
+packages are refused: they need the android image's NDK, the linux image's sysroots and the
+windows image's llvm-mingw.
 
 ## Declare, then import
 
@@ -70,6 +71,10 @@ import { initNative, Text } from './native/text.h';
 C++ exceptions cross between your code and a Conan package: an `fmt::format_error` thrown inside
 libfmt reaches your `catch`.
 
+Your sources and their bridges compile with the defines a recipe declares for the code that uses
+it (`cpp_info.defines`), on every target. libcurl's `CURL_STATICLIB`, for one, tells `curl.h` on
+Windows that the library is linked in, not loaded from a DLL.
+
 ## React Native
 
 The same imports work in a React Native app on Android and iOS, from JavaScript and from your own
@@ -87,13 +92,13 @@ links what it finds at `pod install`, so run `pod install` again after you chang
 
 ## Node.js addons
 
-A Node.js addon for Linux or macOS (`crossbind build -p linux -p linuxmusl -p darwin -e node`) links
-the packages too, and your own headers reach them as [above](#through-your-own-header). Each addon
-links the packages built for its own target, with the system libraries and Apple frameworks their
-recipes ask for (`system_libs`, `frameworks`); glibc and musl builds share every Conan setting, so
-crossbind keeps them apart as packages of their own. A package's symbols stay inside the addon, as a
-port's do: Node.js exports its own zlib and OpenSSL, and the addon's copies do not trade calls with
-them.
+A Node.js addon for Linux, macOS or Windows (`crossbind build -p linux -p linuxmusl -p darwin
+-p win32 -e node`) links the packages too, and your own headers reach them as
+[above](#through-your-own-header). Each addon links the packages built for its own target, with
+the system libraries and Apple frameworks their recipes ask for (`system_libs`, `frameworks`);
+glibc and musl builds share every Conan setting, so crossbind keeps them apart as packages of their
+own. A package's symbols stay inside the addon, as a port's do: Node.js exports its own zlib and
+OpenSSL, and the addon's copies do not trade calls with them.
 
 ## What a build does
 
@@ -115,7 +120,9 @@ them.
    - macOS addons, on your Mac: the clang `xcode-select` picks, for macOS 11.0, with `libc++` and
      `-pthread`, as the ports' macOS archives are built. CMake and pkg-config leave out the packages
      Homebrew and MacPorts installed, and the archive tools `xcode-select` picks come first on the
-     `PATH`.
+     `PATH`;
+   - Windows addons, in the windows image: its llvm-mingw clang through its CMake toolchain file for
+     each triple, with `libc++` and `-pthread`, as the ports' Windows archives are built.
 
    Every package is a static library.
 2. ConanCenter publishes no binaries built with these toolchains, so each package builds from
@@ -134,8 +141,8 @@ them.
 Each install writes Conan's whole log to `.crossbind/conan/logs/<target>.log`; a failed one also
 prints the end of it.
 
-A `crossbind build` that would also build for WASI, or a Node.js addon for Windows, fails while
-`conanDependencies` is declared; leave those platforms out with `-p`.
+A `crossbind build` that would also build for WASI fails while `conanDependencies` is declared;
+leave it out with `-p`.
 
 ## What a recipe can reach
 
@@ -149,6 +156,9 @@ everything else:
   directory, not your project. What it reports back is checked before anything is copied: names
   and library names must be plain names, and every path, links followed, must stay inside the
   package's own folder in the store.
+- A define a recipe declares for the code that uses it reaches your compile as one argument, and
+  only as a plain name with a plain value (letters, digits and `_`, and `. + - / , :` in the value);
+  any other is left out, with a notice.
 - The store itself is shared and writable: a recipe built for one project can change what another
   project later takes from it, as a crate's build script can change cargo's registry cache. Delete
   `~/.crossbind/conan/store` to build every package again.
@@ -179,10 +189,9 @@ checkout build first; until then it stops with an error instead of leaving the p
 
 ## Limits
 
-- Web, Android, iOS, Linux addon and macOS addon builds only. Conan has no WASI target at all;
-  Node.js addons for Windows are not wired yet.
-- A recipe that does not build for Emscripten, the NDK, iOS, macOS or a Linux sysroot fails the
-  build with Conan's own error. The recipe's options can often switch the failing part off.
+- No WASI builds: Conan has no WASI target at all.
+- A recipe that does not build for Emscripten, the NDK, iOS, macOS, a Linux sysroot or llvm-mingw
+  fails the build with Conan's own error. The recipe's options can often switch the failing part off.
 - Web and React Native builds link a package's own archives only: the system libraries and Apple
   frameworks its recipe asks for are not added, so a package that needs one there stops the build
   at its symbols.

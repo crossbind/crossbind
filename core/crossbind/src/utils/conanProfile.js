@@ -7,6 +7,9 @@ import {
 import {
     DARWIN_CC, DARWIN_CXX, DARWIN_DEPLOYMENT_TARGET, DARWIN_HOST_PACKAGE_PREFIXES,
 } from './darwinToolchain.js';
+import {
+    windowsBuildEnv, windowsTool, windowsToolchainFile, windowsTriple,
+} from './windowsToolchain.js';
 
 // The app's own sources compile as C++20 (assets/cmake/CMakeLists.txt), so C++ packages do too.
 const CPP_STANDARD = '20';
@@ -27,6 +30,7 @@ const ANDROID_ARCHS = { 'arm64-v8a': 'armv8', x86_64: 'x86_64' };
 // Node's names for the desktop arches, in Conan's spelling.
 const NODE_ARCHS = { x64: 'x86_64', arm64: 'armv8' };
 const LINUX_LIBCS = { linux: 'glibc', linuxmusl: 'musl' };
+const envLines = (env) => Object.entries(env).map(([variable, value]) => `${variable}=${value}`);
 
 // The image's clang wrappers through its CMake toolchain file for the triple, as a port archive for an
 // addon is built. The image runs no musl program, so a musl build is a cross build even on a machine of
@@ -47,7 +51,7 @@ const LINUX = {
         ...(target.platform === 'linuxmusl' ? ['tools.build.cross_building:cross_build=True'] : []),
         `user.crossbind:libc=${LINUX_LIBCS[target.platform]}`,
     ],
-    buildenv: (target) => Object.entries(linuxBuildEnv(target)).map(([variable, value]) => `${variable}=${value}`),
+    buildenv: (target) => envLines(linuxBuildEnv(target)),
     flags: LINUX_ARCHIVE_FLAGS,
 };
 
@@ -123,6 +127,25 @@ const PLATFORMS = {
         buildenv: () => ['PKG_CONFIG_LIBDIR='],
         flags: [],
     },
+    // The windows image's llvm-mingw through its CMake toolchain file for the triple, as a port archive for
+    // an addon is built. No compiler.runtime: that would make it a clang standing in for MSVC.
+    win32: {
+        settings: (target) => [
+            'os=Windows',
+            `arch=${NODE_ARCHS[target.arch]}`,
+            'compiler=clang',
+            `compiler.version=${clangMajorVersion(windowsTool(target, 'clang'))}`,
+            'compiler.libcxx=libc++',
+            `compiler.cppstd=${CPP_STANDARD}`,
+        ],
+        conf: (target) => [
+            `tools.build:compiler_executables={'c': '${windowsTool(target, 'clang')}', 'cpp': '${windowsTool(target, 'clang++')}', 'rc': '${windowsTool(target, 'windres')}'}`,
+            `tools.cmake.cmaketoolchain:user_toolchain=["${windowsToolchainFile(target)}"]`,
+            `tools.gnu:host_triplet=${windowsTriple(target)}`,
+        ],
+        buildenv: (target) => envLines(windowsBuildEnv(target)),
+        flags: [],
+    },
 };
 
 export const BUILD_PROFILE = [
@@ -140,11 +163,13 @@ export const BUILD_PROFILE = [
 
 const list = (values) => JSON.stringify(values);
 
-// Conan checks compiler.version against the versions its own release lists, and a Conan older than the
-// Xcode lists none for its clang. Added to the run's home, this lets any apple-clang version through.
-export const settingsUser = (target) => (PLATFORMS[target.platform]?.settings(target).includes('compiler=apple-clang')
-    ? 'compiler:\n  apple-clang:\n    version: ["ANY"]\n'
-    : null);
+// Conan checks compiler.version against the versions its own release lists, and a compiler newer than the
+// Conan release lists none for it: Xcode's on the host, or an image's after a toolchain bump. Added to the
+// run's home, this lets any version of the profile's clang through.
+export function settingsUser(target) {
+    const compiler = PLATFORMS[target.platform]?.settings(target).find((setting) => setting.startsWith('compiler='))?.slice('compiler='.length);
+    return ['clang', 'apple-clang'].includes(compiler) ? `compiler:\n  ${compiler}:\n    version: ["ANY"]\n` : null;
+}
 
 export function hostProfile(target) {
     const platform = PLATFORMS[target.platform];

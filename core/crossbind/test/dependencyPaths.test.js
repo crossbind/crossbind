@@ -1,4 +1,7 @@
 import { describe, test, expect, afterEach } from 'vitest';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import state, { setAllDependecyPaths } from '../src/state/index.js';
 
 // These strings become the -I / -L / -l flags and the --with-<lib>config arguments a build
@@ -40,6 +43,23 @@ describe('setAllDependecyPaths', () => {
             lib: '/pkg/zlib/dist/prebuilt/wasm-wasm32-st-release/lib/libz.a',
             bin: '/pkg/zlib/dist/prebuilt/wasm-wasm32-st-release/bin',
         });
+    });
+
+    // libpng is png16 on Windows; a configure build would take -lpng16 on every platform otherwise.
+    test('leaves out a library a Conan package has no archive of for the target', () => {
+        const output = fs.mkdtempSync(path.join(os.tmpdir(), 'crossbind-deppaths-'));
+        fs.mkdirSync(path.join(output, 'prebuilt', 'darwin-arm64-mt-release', 'lib'), { recursive: true });
+        fs.writeFileSync(path.join(output, 'prebuilt', 'darwin-arm64-mt-release', 'lib', 'libpng.a'), '');
+        const libpng = { ...dep('conan_libpng', { libName: ['png', 'png16'] }), paths: { output, project: output } };
+        libpng.general.conan = { name: 'libpng' };
+
+        const darwin = target({
+            platform: 'darwin', arch: 'arm64', runtime: 'mt', buildType: 'debug', path: 'darwin-arm64-mt-debug', releasePath: 'darwin-arm64-mt-release',
+        });
+        const paths = run([darwin], [libpng]);
+        fs.rmSync(output, { recursive: true, force: true });
+
+        expect(Object.keys(paths['darwin-arm64-mt-debug'])).toEqual(['cmake', 'png']);
     });
 
     test('points CMake at the package prebuilt root by dependency name', () => {

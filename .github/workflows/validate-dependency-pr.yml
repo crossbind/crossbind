@@ -10,6 +10,7 @@ on:
             - ports/**
             - core/crossbind/src/actions/run.js
             - core/crossbind/src/utils/linuxToolchain.js
+            - core/crossbind/src/utils/windowsToolchain.js
             - .github/workflows/build-linux.yml
             - scripts/dependencies/**
             - scripts/gate-pinned-local-sysroot.mjs
