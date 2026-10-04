@@ -1,5 +1,5 @@
 import { describe, test, expect } from 'vitest';
-import { hostProfile, BUILD_PROFILE } from '../src/utils/conanProfile.js';
+import { hostProfile, settingsUser, BUILD_PROFILE } from '../src/utils/conanProfile.js';
 
 const wasm = (overrides = {}) => ({
     platform: 'wasm', arch: 'wasm32', runtime: 'st', buildType: 'release', ...overrides,
@@ -41,7 +41,7 @@ describe('conan host profile', () => {
     });
 
     test('other platforms are refused for now', () => {
-        expect(() => hostProfile({ platform: 'darwin', arch: 'arm64', runtime: 'mt', buildType: 'release' })).toThrow(/wasm, android, ios, linux and linuxmusl so far; darwin/);
+        expect(() => hostProfile({ platform: 'win32', arch: 'x64', runtime: 'mt', buildType: 'release' })).toThrow(/wasm, android, ios, linux, linuxmusl and darwin so far; win32/);
     });
 });
 
@@ -177,6 +177,41 @@ describe('conan host profile for linux', () => {
         const profile = hostProfile(linux('linux', 'arm64'));
         expect(profile).not.toContain('emcc');
         expect(profile).not.toContain('ndk');
+    });
+});
+
+describe('conan host profile for macOS', () => {
+    const darwin = (arch) => ({
+        platform: 'darwin', arch, runtime: 'mt', buildType: 'release',
+    });
+
+    test('builds static packages with the clang xcode-select names, for the macOS the addons support', () => {
+        const profile = hostProfile(darwin('arm64'));
+        expect(line(profile, 'os')).toBe('Macos');
+        expect(line(profile, 'os.version')).toBe('11.0');
+        expect(line(profile, 'arch')).toBe('armv8');
+        expect(line(profile, 'compiler')).toBe('apple-clang');
+        expect(line(profile, 'compiler.version')).toContain("['/usr/bin/clang', '-dumpversion']");
+        expect(line(profile, 'compiler.libcxx')).toBe('libc++');
+        expect(line(profile, 'tools.build:compiler_executables')).toBe("{'c': '/usr/bin/clang', 'cpp': '/usr/bin/clang++'}");
+        expect(line(profile, '*:shared')).toBe('False');
+        expect(line(profile, 'tools.build:cflags')).toBe('["-pthread"]');
+    });
+
+    test('x64 is x86_64', () => {
+        expect(line(hostProfile(darwin('x64')), 'arch')).toBe('x86_64');
+    });
+
+    // Homebrew and MacPorts packages exist on the build machine only.
+    test("finds none of the machine's own packages", () => {
+        const profile = hostProfile(darwin('arm64'));
+        expect(line(profile, 'tools.cmake.cmaketoolchain:extra_variables')).toBe("{'CMAKE_IGNORE_PREFIX_PATH': '/opt/homebrew;/usr/local;/opt/local'}");
+        expect(line(profile, 'PKG_CONFIG_LIBDIR')).toBe('');
+    });
+
+    test('lets a Conan older than the Xcode take its clang, which no other platform builds with', () => {
+        expect(settingsUser(darwin('arm64'))).toBe('compiler:\n  apple-clang:\n    version: ["ANY"]\n');
+        expect(settingsUser({ platform: 'linux', arch: 'arm64', runtime: 'mt' })).toBeNull();
     });
 });
 

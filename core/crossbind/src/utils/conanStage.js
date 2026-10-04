@@ -48,6 +48,11 @@ export function conanPackageEntry(entry) {
     if (typeof entry.ref !== 'string' || !entry.ref.startsWith(reference) || !REFERENCE_TAIL.test(entry.ref.slice(reference.length))) fail('ref');
     if (!isListOf(LIB_NAME, entry.libs)) fail('libs');
     if (!isListOf(CONAN_NAME, entry.requires)) fail('requires');
+    // They become linker arguments. A manifest an older crossbind wrote has neither.
+    const systemLibs = entry.systemLibs ?? [];
+    const frameworks = entry.frameworks ?? [];
+    if (!isListOf(LIB_NAME, systemLibs)) fail('systemLibs');
+    if (!isListOf(LIB_NAME, frameworks)) fail('frameworks');
     const url = urlOf(entry.source?.url);
     return {
         name: entry.name,
@@ -58,6 +63,8 @@ export function conanPackageEntry(entry) {
         source: url ? { url, sha256: matches(SHA256, entry.source.sha256) ? entry.source.sha256 : null } : null,
         libs: [...entry.libs],
         requires: [...entry.requires],
+        systemLibs: [...systemLibs],
+        frameworks: [...frameworks],
     };
 }
 
@@ -90,6 +97,8 @@ function packageOf(node, requires) {
             source: sourceOf(node.conandata?.sources?.[node.version]),
             libs: collect('libs'),
             requires,
+            systemLibs: collect('system_libs'),
+            frameworks: collect('frameworks'),
         }),
         packageFolder: node.package_folder,
         includedirs: folders('includedirs'),
@@ -225,17 +234,20 @@ export function writeConanManifest(stageDir, targetPath, manifest) {
     writeIfChanged(manifestFileOf(stageDir, targetPath), `${JSON.stringify(manifest, null, 4)}\n`);
 }
 
-// The packages staged for one target, or for every target staged so far, in link order. A manifest
-// staged for other conanDependencies describes packages the config no longer asks for.
+// The packages staged for one target, or for every target staged so far, in link order, and each
+// target's own list. A manifest staged for other conanDependencies describes packages the config no
+// longer asks for.
 export function readConanManifest(stageDir, key, targetPath = null) {
     const dir = manifestsOf(stageDir);
     let files = [];
     if (targetPath) files = [manifestFileOf(stageDir, targetPath)];
     else if (fs.existsSync(dir)) files = fs.readdirSync(dir).filter((name) => name.endsWith('.json')).sort().map((name) => upath.join(dir, name));
-    const manifests = files.map((file) => loadJson(file)).filter((manifest) => manifest?.key === key);
+    const manifests = files.map((file) => ({ target: upath.basename(file, '.json'), manifest: loadJson(file) }))
+        .filter(({ manifest }) => manifest?.key === key);
     if (manifests.length === 0) return null;
     try {
-        return { key, packages: linkOrder(manifests.flatMap((manifest) => manifest.packages.map(conanPackageEntry))) };
+        const targets = Object.fromEntries(manifests.map(({ target, manifest }) => [target, manifest.packages.map(conanPackageEntry)]));
+        return { key, packages: linkOrder(Object.values(targets).flat()), targets };
     } catch (e) {
         throw new Error(`crossbind: ${dir} lists a package crossbind will not use - delete ${stageDir} and build again. ${e.message}`, { cause: e });
     }

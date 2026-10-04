@@ -4,6 +4,9 @@ import { IOS_DEPLOYMENT_TARGET } from './iosToolchain.js';
 import {
     LINUX_ARCHIVE_FLAGS, linuxBuildEnv, linuxTool, linuxToolchainFile, linuxTriple,
 } from './linuxToolchain.js';
+import {
+    DARWIN_CC, DARWIN_CXX, DARWIN_DEPLOYMENT_TARGET, DARWIN_HOST_PACKAGE_PREFIXES,
+} from './darwinToolchain.js';
 
 // The app's own sources compile as C++20 (assets/cmake/CMakeLists.txt), so C++ packages do too.
 const CPP_STANDARD = '20';
@@ -12,7 +15,7 @@ const CPP_STANDARD = '20';
 const PACKAGE_ID_CONFS = ['tools.build:cflags', 'tools.build:cxxflags', 'tools.build:exelinkflags', 'tools.build:sharedlinkflags', 'user.crossbind:libc'];
 
 // Conan renders profiles as Jinja templates: these read the toolchain of whatever runs Conan, the image
-// or the host (under RUNNER=LOCAL, and for iOS).
+// or the host (under RUNNER=LOCAL, and for iOS and macOS).
 const EMCC_VERSION = "{{ subprocess.check_output(['emcc', '-dumpversion'], text=True).strip() }}";
 const EMSCRIPTEN_TOOLCHAIN = "{{ subprocess.check_output(['em-config', 'EMSCRIPTEN_ROOT'], text=True).strip() }}/cmake/Modules/Platform/Emscripten.cmake";
 const clangMajorVersion = (clang) => `{{ subprocess.check_output(['${clang}', '-dumpversion'], text=True).split('.')[0] }}`;
@@ -21,7 +24,8 @@ const XCODE_CLANG_VERSION = "{{ subprocess.check_output(['xcrun', 'clang', '-dum
 const CMAKE_VERSION = "{{ subprocess.check_output(['cmake', '--version'], text=True).split()[2] }}";
 
 const ANDROID_ARCHS = { 'arm64-v8a': 'armv8', x86_64: 'x86_64' };
-const LINUX_ARCHS = { x64: 'x86_64', arm64: 'armv8' };
+// Node's names for the desktop arches, in Conan's spelling.
+const NODE_ARCHS = { x64: 'x86_64', arm64: 'armv8' };
 const LINUX_LIBCS = { linux: 'glibc', linuxmusl: 'musl' };
 
 // The image's clang wrappers through its CMake toolchain file for the triple, as a port archive for an
@@ -30,7 +34,7 @@ const LINUX_LIBCS = { linux: 'glibc', linuxmusl: 'musl' };
 const LINUX = {
     settings: (target) => [
         'os=Linux',
-        `arch=${LINUX_ARCHS[target.arch]}`,
+        `arch=${NODE_ARCHS[target.arch]}`,
         'compiler=clang',
         `compiler.version=${clangMajorVersion(linuxTool(target, 'clang'))}`,
         'compiler.libcxx=libc++',
@@ -100,6 +104,25 @@ const PLATFORMS = {
     },
     linux: LINUX,
     linuxmusl: LINUX,
+    // The clang xcode-select picks, for the macOS the addons support, as a port archive for a macOS addon
+    // is built; the machine's own packages stay out of reach.
+    darwin: {
+        settings: (target) => [
+            'os=Macos',
+            `os.version=${DARWIN_DEPLOYMENT_TARGET}`,
+            `arch=${NODE_ARCHS[target.arch]}`,
+            'compiler=apple-clang',
+            `compiler.version=${clangMajorVersion(DARWIN_CC)}`,
+            'compiler.libcxx=libc++',
+            `compiler.cppstd=${CPP_STANDARD}`,
+        ],
+        conf: () => [
+            `tools.build:compiler_executables={'c': '${DARWIN_CC}', 'cpp': '${DARWIN_CXX}'}`,
+            `tools.cmake.cmaketoolchain:extra_variables={'CMAKE_IGNORE_PREFIX_PATH': '${DARWIN_HOST_PACKAGE_PREFIXES.join(';')}'}`,
+        ],
+        buildenv: () => ['PKG_CONFIG_LIBDIR='],
+        flags: [],
+    },
 };
 
 export const BUILD_PROFILE = [
@@ -118,8 +141,10 @@ export const BUILD_PROFILE = [
 const list = (values) => JSON.stringify(values);
 
 // Conan checks compiler.version against the versions its own release lists, and a Conan older than the
-// Xcode lists none for its clang. Added to the run's home, this lets any version through on iOS.
-export const settingsUser = (target) => (target.platform === 'ios' ? 'compiler:\n  apple-clang:\n    version: ["ANY"]\n' : null);
+// Xcode lists none for its clang. Added to the run's home, this lets any apple-clang version through.
+export const settingsUser = (target) => (PLATFORMS[target.platform]?.settings(target).includes('compiler=apple-clang')
+    ? 'compiler:\n  apple-clang:\n    version: ["ANY"]\n'
+    : null);
 
 export function hostProfile(target) {
     const platform = PLATFORMS[target.platform];

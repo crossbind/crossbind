@@ -9,6 +9,7 @@ vi.mock('node:child_process', () => ({ spawnSync: vi.fn(), execFileSync: vi.fn()
 
 const wasm = { platform: 'wasm', arch: 'wasm32', runtime: 'st' };
 const ios = { platform: 'ios', arch: 'iphoneos', runtime: 'mt' };
+const darwin = { platform: 'darwin', arch: 'arm64', runtime: 'mt' };
 const hostPlatform = Object.getOwnPropertyDescriptor(process, 'platform');
 const configWith = (RUNNER) => ({ paths: { base: '/repo' }, system: { RUNNER } });
 
@@ -68,11 +69,12 @@ describe('the runner conan runs under', () => {
         });
     });
 
-    test('is the host for iOS packages, which build with Xcode', async () => {
+    test('is the host for iOS and macOS packages, which build with Xcode', async () => {
         const { mod } = await importFresh();
 
         expect(mod.conanRunner(configWith('DOCKER_RUN'), ios)).toBe('LOCAL');
         expect(mod.conanRunner(configWith('DOCKER_EXEC'), ios)).toBe('LOCAL');
+        expect(mod.conanRunner(configWith('DOCKER_RUN'), darwin)).toBe('LOCAL');
         expect(mod.conanRunner(configWith('DOCKER_RUN'), wasm)).toBe('DOCKER_RUN');
     });
 });
@@ -176,6 +178,19 @@ describe('runConan on the host', () => {
         });
     });
 
+    test.skipIf(process.platform === 'win32')('a macOS package takes the archive tools xcode-select picks, which the Command Line Tools alone also provide', async () => {
+        Object.defineProperty(process, 'platform', { ...hostPlatform, value: 'darwin' });
+        const { mod } = await importFresh();
+        const work = mod.createConanWork('LOCAL');
+
+        mod.default(['install'], { config: configWith('DOCKER_RUN'), target: darwin, work });
+
+        const tools = path.join(work.dir, 'apple-tools');
+        expect(Object.fromEntries(fs.readdirSync(tools).map((name) => [name, fs.readlinkSync(path.join(tools, name))]))).toEqual({
+            ar: '/usr/bin/ar', as: '/usr/bin/as', nm: '/usr/bin/nm', ranlib: '/usr/bin/ranlib', strip: '/usr/bin/strip',
+        });
+    });
+
     test('keeps the proxy, certificate and Emscripten settings a build needs', async () => {
         vi.stubEnv('HTTPS_PROXY', 'http://proxy:3128');
         vi.stubEnv('SSL_CERT_FILE', '/etc/company-ca.pem');
@@ -243,6 +258,28 @@ describe('runConan on the host', () => {
         expect(mod.localToolchainIdentity(ios)).toBe('xcrun clang --version /Applications/Xcode.app/Contents/Developer\nconan --version');
     });
 
+    test('names the clang and conan a macOS package builds with: the clang xcode-select picks', async () => {
+        const { mod, spawnSync } = await importFresh();
+        spawnSync.mockImplementation((program, args, { env }) => ({ status: 0, stdout: `${[program, ...args].join(' ')} ${env.DEVELOPER_DIR ?? ''}\nmore\n`, stderr: '' }));
+
+        expect(mod.localToolchainIdentity(darwin)).toBe('/usr/bin/clang --version\nconan --version');
+    });
+
+    test('runs macOS installs with the Xcode xcode-select picks, as the macOS ports are built', async () => {
+        Object.defineProperty(process, 'platform', { ...hostPlatform, value: 'darwin' });
+        vi.stubEnv('DEVELOPER_DIR', '/Applications/Xcode-beta.app/Contents/Developer');
+        const { mod, spawnSync } = await importFresh();
+        const work = mod.createConanWork('LOCAL');
+
+        mod.default(['install'], { config: configWith('DOCKER_RUN'), target: darwin, work });
+
+        const [program, , { env, cwd }] = installCall(spawnSync);
+        expect(program).toBe('conan');
+        expect(env.DEVELOPER_DIR).toBeUndefined();
+        expect(env.CONAN_HOME).toBe(path.join(work.dir, 'home'));
+        expect(cwd).toBe(work.dir);
+    });
+
     test('runs iOS installs with the Xcode every crossbind iOS archive builds with', async () => {
         Object.defineProperty(process, 'platform', { ...hostPlatform, value: 'darwin' });
         vi.stubEnv('DEVELOPER_DIR', '/Applications/Xcode-beta.app/Contents/Developer');
@@ -274,6 +311,19 @@ describe('runConan on the host', () => {
 
         expect(() => mod.default(['install'], { config: configWith('DOCKER_RUN'), target: ios, work: mod.createConanWork('LOCAL') }))
             .toThrow(/Conan packages for iOS build with Xcode, on a Mac/);
+        expect(installCall(spawnSync)).toBeUndefined();
+    });
+
+    test('says where a Conan new enough comes from when macOS packages find none, and refuses them anywhere but a Mac', async () => {
+        Object.defineProperty(process, 'platform', { ...hostPlatform, value: 'darwin' });
+        const { mod, spawnSync } = await importFresh();
+        spawnSync.mockImplementation(toolsAt('Conan version 2.17.0\n'));
+
+        expect(() => mod.default(['install'], { config: configWith('DOCKER_RUN'), target: darwin, work: mod.createConanWork('LOCAL') }))
+            .toThrow(/Conan packages for macOS build on this Mac[\s\S]*Conan 2\.19 or later; found Conan version 2\.17\.0[\s\S]*brew install conan/);
+        Object.defineProperty(process, 'platform', { ...hostPlatform, value: 'linux' });
+        expect(() => mod.default(['install'], { config: configWith('DOCKER_RUN'), target: darwin, work: mod.createConanWork('LOCAL') }))
+            .toThrow(/Conan packages for macOS build with Xcode, on a Mac/);
         expect(installCall(spawnSync)).toBeUndefined();
     });
 });

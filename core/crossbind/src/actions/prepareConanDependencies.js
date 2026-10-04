@@ -2,10 +2,12 @@ import fs from 'node:fs';
 import state, { setAllDependecyPaths } from '../state/index.js';
 import refreshConanDependencies from '../state/refreshConanDependencies.js';
 import installConanPackages from '../utils/conanInstall.js';
-import { releaseTargetOf } from '../utils/targets.js';
+import { releaseTargetOf, HOST_BUILT_PLATFORMS } from '../utils/targets.js';
 import createXCFramework from './createXCFramework.js';
 
 const mtimeOf = (file) => fs.statSync(file, { throwIfNoEntry: false })?.mtimeMs ?? -Infinity;
+// iOS and macOS build on a Mac alone: elsewhere the build leaves them out, and so does the staging.
+const isBuiltHere = (target) => process.platform === 'darwin' || !HOST_BUILT_PLATFORMS.includes(target.platform);
 
 // iOS headers and archives come out of an xcframework per library with a slice per SDK (state/index.js).
 // One older than an archive it wraps was made before the package was staged again.
@@ -36,7 +38,7 @@ export default async function prepareConanDependencies(targets) {
     const iosTargets = targets.some((target) => target.platform === 'ios') ? state.targets.filter((target) => target.platform === 'ios') : [];
     const releaseTargets = [...new Map([...targets, bridgeTarget, ...iosTargets].filter(Boolean).map((target) => [
         target.releasePath, releaseTargetOf(target),
-    ])).values()];
+    ])).values()].filter(isBuiltHere);
     await installConanPackages(state.config, releaseTargets);
     // Also when another process did the staging: this one may have loaded before the manifests existed.
     refreshConanDependencies(state.config);

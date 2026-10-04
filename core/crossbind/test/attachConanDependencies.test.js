@@ -9,6 +9,7 @@ import { getFilledConfig } from '../src/state/loadConfig.js';
 import attachConanDependencies from '../src/state/attachConanDependencies.js';
 import { conanDependenciesKey, normalizeConanDependencies } from '../src/utils/conanDependencies.js';
 import { writeConanManifest } from '../src/utils/conanStage.js';
+import { filterTargetSpecs } from '../src/utils/targets.js';
 
 const TARGET = { platform: 'wasm', path: 'wasm-wasm32-st-release', releasePath: 'wasm-wasm32-st-release' };
 const PACKAGES = [
@@ -70,6 +71,29 @@ describe('attaching the staged Conan packages', () => {
         attachConanDependencies(config);
 
         expect(conanNames(config.allDependencies)).toEqual(['conan_libpng', 'conan_zlib']);
+    });
+
+    test('a package links the system libraries and frameworks its recipe declares for each target', () => {
+        const key = conanDependenciesKey(normalizeConanDependencies({ libcurl: '8.22.0' }));
+        const curl = (link) => ({
+            name: 'libcurl', version: '8.22.0', ref: 'libcurl/8.22.0#0123456789abcdef0123456789abcdef', license: 'curl', libs: ['curl'], requires: [], ...link,
+        });
+        writeConanManifest(stageDir(), 'darwin-arm64-mt-release', { key, packages: [curl({ systemLibs: [], frameworks: ['CoreFoundation', 'SystemConfiguration'] })] });
+        writeConanManifest(stageDir(), 'linux-x64-mt-release', { key, packages: [curl({ systemLibs: ['rt', 'pthread'], frameworks: [] })] });
+        const dir = upath.join(stageDir(), 'packages', 'libcurl');
+        fs.mkdirSync(upath.join(dir, 'dist', 'prebuilt'), { recursive: true });
+        fs.writeFileSync(upath.join(dir, 'dist', 'prebuilt', 'CMakeLists.txt'), '');
+        fs.writeFileSync(upath.join(dir, 'package.json'), JSON.stringify({ name: 'conan:libcurl', version: '8.22.0' }));
+        const config = appConfig({ libcurl: '8.22.0' });
+
+        attachConanDependencies(config);
+
+        const { targetSpecs } = config.dependencies.find((d) => d.general.name === 'conan_libcurl');
+        const flagsFor = (target) => filterTargetSpecs(targetSpecs, target).flatMap((specs) => specs.binary?.addonFlags ?? []);
+        // A framework goes as one linker argument: CMake collapses a repeated -framework.
+        expect(flagsFor({ platform: 'darwin', arch: 'arm64', runtime: 'mt', buildType: 'debug' })).toEqual(['-Wl,-framework,CoreFoundation', '-Wl,-framework,SystemConfiguration']);
+        expect(flagsFor({ platform: 'linux', arch: 'x64', runtime: 'mt', buildType: 'release', runtimeEnv: 'node' })).toEqual(['-lrt', '-lpthread']);
+        expect(flagsFor({ platform: 'darwin', arch: 'x64', runtime: 'mt', buildType: 'release' })).toEqual([]);
     });
 
     test('packages staged for other conanDependencies are left out', () => {

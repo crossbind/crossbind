@@ -199,6 +199,7 @@ Index + template: [`docs/adr/README.md`](./adr/README.md).
 | The android image's NDK and the API level every Android archive is built against | `src/utils/androidToolchain.js` |
 | The Xcode and the deployment target every iOS archive is built with | `src/utils/iosToolchain.js` |
 | The linux image's clang wrappers, CMake toolchain files and flags every Linux archive is built with | `src/utils/linuxToolchain.js` |
+| The clang and the macOS every macOS archive is built for, and the host package prefixes it ignores | `src/utils/darwinToolchain.js` |
 | `conan:` specifiers and staged header resolution | `src/utils/conanImport.js` |
 | `conanDependencies` validation, install requirements and options | `src/utils/conanDependencies.js` |
 | Conan host and build profiles from crossbind's toolchain | `src/utils/conanProfile.js` |
