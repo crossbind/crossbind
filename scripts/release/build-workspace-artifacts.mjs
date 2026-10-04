@@ -5,11 +5,12 @@ import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { packCrossbind, packWorkspacePackage, smokeTestCrossbindTarball } from './package-artifact.mjs';
-import { RUNNERS, findBuildManifests, multiPlatformBuildArgs, validateWorkspaceReleasePlan } from './workspace-release.mjs';
+import { MULTI_PLATFORM_BUILDS, RUNNERS, findBuildManifests, multiPlatformBuildArgs, validateWorkspaceReleasePlan } from './workspace-release.mjs';
 import {
     NODE_RUNNER_BUILDS,
     bridgeStateDigest,
     changedBridgeState,
+    mergeStagedMulti,
     missingDists,
     nodeProjectPaths,
     packBridgeState,
@@ -49,7 +50,7 @@ for (const name of buildOrder) {
 
 for (const name of plan.multiPlatform) {
     const candidate = workspace[name];
-    const platforms = { wasm: ['wasm'], android: ['android'], wasi: ['wasi'], macos: ['ios'] }[runner] ?? [];
+    const platforms = MULTI_PLATFORM_BUILDS[runner] ?? [];
     for (const platform of platforms) {
         process.stdout.write(`[${runner}] build ${name}@${candidate.version} for ${platform}\n`);
         execFileSync('pnpm', ['--dir', path.join(root, candidate.path), 'exec', 'crossbind', ...multiPlatformBuildArgs(platform)], {
@@ -70,14 +71,15 @@ for (const name of plan.multiPlatform) {
 const nodeBuild = NODE_RUNNER_BUILDS[runner];
 if (nodeBuild) {
     const inputRoot = valueOf('--input-root');
-    const inputs = (inputRoot ? findBuildManifests(path.resolve(inputRoot)) : []).map(({ runner: from, directory }) => ({
-        directory,
-        artifacts: JSON.parse(fs.readFileSync(path.join(directory, `build-${from}.json`), 'utf8')).artifacts,
-    }));
+    const inputs = (inputRoot ? findBuildManifests(path.resolve(inputRoot)) : []).map(({ runner: from, directory }) => {
+        const { artifacts, stagedMultiPlatform } = JSON.parse(fs.readFileSync(path.join(directory, `build-${from}.json`), 'utf8'));
+        return { directory, runner: from, artifacts, stagedMultiPlatform };
+    });
     const projectPaths = nodeProjectPaths(buildOrder, workspace);
     unpackDists({ root, tarballs: variantTarballs(inputs, workspace, nodeBuild.dists) });
-    const missing = missingDists(root, projectPaths, nodeBuild.dists);
-    if (missing.length) throw new Error(`[${runner}] no tarball of this train brought the dist of ${missing.join(', ')}.`);
+    mergeStagedMulti({ root, inputs, workspace });
+    const missing = missingDists(root, projectPaths, nodeBuild.dists, (name) => workspace[name]?.path);
+    if (missing.length) throw new Error(`[${runner}] no package of this train brought the archives for ${missing.join(', ')}.`);
     if (valueOf('--bridges')) restoreBridgeState({ root, inputDir: path.resolve(valueOf('--bridges')) });
     const handedOver = valueOf('--bridges') ? bridgeStateDigest(root, projectPaths) : null;
     for (const projectPath of projectPaths) {

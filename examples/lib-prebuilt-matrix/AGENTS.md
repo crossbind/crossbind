@@ -41,7 +41,10 @@ pnpm --filter=@crossbind/example-lib-prebuilt-matrix run build
 pnpm --filter=@crossbind/example-lib-prebuilt-matrix run build:wasm
 pnpm --filter=@crossbind/example-lib-prebuilt-matrix run build:android
 pnpm --filter=@crossbind/example-lib-prebuilt-matrix run build:ios          # macOS only
+pnpm --filter=@crossbind/example-lib-prebuilt-matrix run build:desktop      # darwin on macOS; linux, linuxmusl, win32 in Docker
 ```
+
+The desktop archives are what `examples/backend-nodejs-native`, `examples/native-executable` and the ready-made Node package `examples/lib-prebuilt-matrix-node` link; the release train builds them on the runners of their platforms.
 
 `prepublishOnly` runs `crossbind build` so `pnpm publish` always ships fresh artifacts.
 

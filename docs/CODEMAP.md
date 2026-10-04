@@ -250,11 +250,14 @@ To add a new `ports/<X>`: see `docs/playbooks/new-port.md` (uses `ports/zlib` as
 | `examples/web-react-rspack` | Rspack/Webpack + React |
 | `examples/web-vanilla` | Plain HTML + bundler-less |
 | `examples/backend-nodejs-wasm` | Node.js consumer |
-| `examples/backend-nodejs-native` | Node.js consumer of the native addon (`-p darwin`; CI uses `ci/` bridge snapshots) |
+| `examples/backend-nodejs-native` | Node.js app that builds its own addon (`-p darwin,linux,linuxmusl,win32 -e node`; the macOS CI job uses `ci/` bridge snapshots) |
+| `examples/backend-nodejs-prebuilt` | Node.js app on a ready-made Node package (`@crossbind/example-lib-prebuilt-matrix-node`), nothing to build |
+| `examples/native-executable` | Native executable from `main()` (`-e native`); the `Native Executable` template |
 | `examples/cloud-cloudflare-worker` | Cloudflare Worker / edge |
 | `examples/mobile-reactnative-cli` | RN-cli (canonical mobile reference; CI uses `ci/crossbind-snapshot/`) |
 | `examples/mobile-reactnative-expo` | RN with Expo |
 | `examples/lib-prebuilt-matrix` | Minimal C++ library packaging (no UI) — canonical for Persona 3 |
+| `examples/lib-prebuilt-matrix-node*` | The matrix library as a ready-made Node package and its eight addon packages, made like `ports/*/node*` |
 | `e2e/*` | Internal test benches: bigger demos against multiple `@crossbind/port-*` (curl, gdal, geos, …) + the conformance kit |
 
 ## Repo-level scripts (`scripts/`)

@@ -18,6 +18,7 @@ on:
             - core/embind-napi/**
             - examples/lib-prebuilt-matrix/**
             - examples/backend-nodejs-native/**
+            - examples/native-executable/**
             - .nvmrc
             - .github/workflows/test-node-native-sample.yml
 
@@ -46,13 +47,11 @@ jobs:
             - name: Build examples/lib-prebuilt-matrix
               run: pnpm --filter=@crossbind/example-lib-prebuilt-matrix run build:darwin
             - name: Build examples/backend-nodejs-native
-              run: pnpm --filter=@crossbind/example-backend-nodejs-native run build
+              run: pnpm --filter=@crossbind/example-backend-nodejs-native run build:darwin
             - name: Run the addon from CommonJS and ESM
-              working-directory: examples/backend-nodejs-native
+              run: pnpm --filter=@crossbind/example-backend-nodejs-native run e2e:prod
+            # An executable has no bindings, so it builds with Xcode alone.
+            - name: Build and run examples/native-executable
               run: |
-                  set -euo pipefail
-                  for entry in src/index.js src/index.mjs; do
-                    out="$(node "$entry")"
-                    echo "$out"
-                    grep -qF '= 6*J₃' <<< "$out"
-                  done
+                  pnpm --filter=@crossbind/example-native-executable run build:darwin
+                  pnpm --filter=@crossbind/example-native-executable run e2e:prod

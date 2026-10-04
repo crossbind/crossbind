@@ -168,7 +168,7 @@ test('multi-platform assembly merges exact outputs and regenerates one determini
             node: [],
             'node-macos': [],
         },
-        linuxShards: ['wasm', 'android', 'wasi'],
+        linuxShards: ['wasm', 'android', 'wasi', 'linux-native', 'win32-native'],
         multiPlatform: [candidate.name],
         packages: [candidate],
         workspacePackages: { [candidate.name]: { ...candidate, reason: null } },
@@ -177,12 +177,14 @@ test('multi-platform assembly merges exact outputs and regenerates one determini
     fs.writeFileSync(planPath, `${JSON.stringify(plan, null, 2)}\n`);
     const inputs = path.join(fixture, 'inputs');
     const targets = {
-        wasm: 'wasm-wasm32-st-release',
-        android: 'android-arm64-v8a-mt-release',
-        wasi: 'wasi-wasm32-st-release',
-        macos: 'ios-iphoneos-mt-release',
+        wasm: ['wasm-wasm32-st-release'],
+        android: ['android-arm64-v8a-mt-release'],
+        wasi: ['wasi-wasm32-st-release'],
+        macos: ['ios-iphoneos-mt-release', 'darwin-arm64-mt-release'],
+        'linux-native': ['linux-x64-mt-release', 'linuxmusl-x64-mt-release'],
+        'win32-native': ['win32-x64-mt-release'],
     };
-    for (const [runner, target] of Object.entries(targets)) {
+    for (const [runner, runnerTargets] of Object.entries(targets)) {
         const runnerRoot = path.join(inputs, runner);
         fs.mkdirSync(runnerRoot, { recursive: true });
         fs.writeFileSync(
@@ -190,9 +192,11 @@ test('multi-platform assembly merges exact outputs and regenerates one determini
             `${JSON.stringify({ schemaVersion: 1, runner, gitCommit: COMMIT, artifacts: [], stagedMultiPlatform: [candidate.name] })}\n`,
         );
         const prebuilt = path.join(runnerRoot, 'multi', runner, packagePath, 'dist', 'prebuilt');
-        fs.mkdirSync(path.join(prebuilt, target, 'lib'), { recursive: true });
-        fs.writeFileSync(path.join(prebuilt, target, 'lib', 'libfixture.a'), runner);
-        fs.writeFileSync(path.join(prebuilt, 'CMakeLists.txt'), `set(MY_LIST "${target}")\nset(FIXTURE true)\n`);
+        for (const target of runnerTargets) {
+            fs.mkdirSync(path.join(prebuilt, target, 'lib'), { recursive: true });
+            fs.writeFileSync(path.join(prebuilt, target, 'lib', 'libfixture.a'), `${runner} ${target}`);
+        }
+        fs.writeFileSync(path.join(prebuilt, 'CMakeLists.txt'), `set(MY_LIST "${runnerTargets.join(';')}")\nset(FIXTURE true)\n`);
     }
     const assembled = path.join(fixture, 'assembled');
     execFileSync(
@@ -215,6 +219,7 @@ test('multi-platform assembly merges exact outputs and regenerates one determini
     const cmake = execFileSync('tar', ['-xOf', tarball, 'package/dist/prebuilt/CMakeLists.txt'], { encoding: 'utf8' });
     assert.equal(
         cmake.split('\n')[0],
-        'set(MY_LIST "android-arm64-v8a-mt-release;ios-iphoneos-mt-release;wasi-wasm32-st-release;wasm-wasm32-st-release")',
+        'set(MY_LIST "android-arm64-v8a-mt-release;darwin-arm64-mt-release;ios-iphoneos-mt-release;linux-x64-mt-release;' +
+            'linuxmusl-x64-mt-release;wasi-wasm32-st-release;wasm-wasm32-st-release;win32-x64-mt-release")',
     );
 });

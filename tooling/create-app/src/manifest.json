@@ -80,12 +80,21 @@
         ]
     },
     {
+        "key": "native-executable",
+        "group": "Native",
+        "framework": null,
+        "label": "Executable",
+        "kind": "app",
+        "source": "examples/native-executable"
+    },
+    {
         "key": "lib-prebuilt",
         "group": "Library",
         "framework": null,
         "label": "Prebuilt",
         "kind": "lib",
-        "source": "examples/lib-prebuilt-matrix"
+        "source": "examples/lib-prebuilt-matrix",
+        "workspaceOnly": ["LICENSE"]
     },
     {
         "key": "lib-source",
