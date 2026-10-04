@@ -114,6 +114,8 @@ Caveats:
 
 The same bindings can build a native Node-API addon instead of WebAssembly: for Electron's main process, native memory or system access. macOS, Linux (glibc and musl) and Windows, each for arm64 and x64. For a standalone executable from `main()` instead, build with `-e native` (see [`native.md`](../../api/native.md)).
 
+A library that is published as a ready-made Node package (`@crossbind/port-<name>-node`) needs no build at all: install it and import its headers, e.g. `import { crc32 } from '@crossbind/port-zlib-node/zlib.h'`; npm installs only the addon package of the machine (`examples/backend-nodejs-prebuilt/`). Build an addon of your own when the app has C++ code of its own or needs a library built differently.
+
 ```bash
 pnpm add -D crossbind @crossbind/core-embind-napi
 pnpm crossbind build -p darwin,linux,linuxmusl,win32 -e node -b release   # opt-in: a plain `crossbind build` skips them
@@ -177,7 +179,8 @@ Native is not automatically faster. On an M-series Mac a call returning or takin
 - `examples/backend-nodejs-wasm/` — minimal Node + crossbind (single-thread), canonical
 - `e2e/backend-nodejs/` — playground with prebuilt packages
 - `e2e/backend-nodejs-multithread/` — multithread reference (`-r mt`)
-- `examples/backend-nodejs-native/` — the native addon build (`-p darwin`)
+- `examples/backend-nodejs-native/` — an app that builds its own addon (`-p darwin,linux,linuxmusl,win32 -e node`)
+- `examples/backend-nodejs-prebuilt/` — an app on a ready-made Node package, nothing to build
 - `e2e/backend-nodejs-native/` — the conformance kit on the native addon
 
 Node runtime adapter: `core/crossbind/src/assets/js-runtime/node.js`. Native addon loader: `core/embind-napi/js/loader.js`.

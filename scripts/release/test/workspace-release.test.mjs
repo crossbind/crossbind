@@ -14,6 +14,7 @@ import {
     readTrainVersion,
     decodeWorkspacePlanOutput,
     encodeWorkspacePlanOutput,
+    MULTI_PLATFORM_BUILDS,
     multiPlatformBuildArgs,
 } from '../workspace-release.mjs';
 import { setWorkspaceVersion } from '../set-workspace-version.mjs';
@@ -66,8 +67,10 @@ function fixtureRepository(packages, { trainVersion } = {}) {
 
 test('the real workspace is classified into publishable Linux, macOS and assembled packages', () => {
     const packages = discoverPublishablePackages(ROOT);
-    assert.equal(packages.length, 316);
+    assert.equal(packages.length, 325);
     assert.equal(packages.find((candidate) => candidate.name === '@crossbind/port-zlib-node').buildKind, 'node');
+    assert.equal(packages.find((candidate) => candidate.name === '@crossbind/example-lib-prebuilt-matrix-node').buildKind, 'node');
+    assert.equal(packages.find((candidate) => candidate.name === '@crossbind/example-lib-prebuilt-matrix-node-darwin-x64').buildKind, 'node-macos');
     assert.equal(packages.find((candidate) => candidate.name === '@crossbind/port-zlib-node-linuxmusl-x64').buildKind, 'node');
     assert.equal(packages.find((candidate) => candidate.name === '@crossbind/port-zlib-node-darwin-arm64').buildKind, 'node-macos');
     assert.equal(packages.find((candidate) => candidate.name === '@crossbind/port-zlib-darwin').buildKind, 'macos');
@@ -188,6 +191,71 @@ test('a train refuses ready-made Node packages without the platform packages the
     fs.rmSync(root, { recursive: true, force: true });
 });
 
+// The example library and its ready-made Node package, whose addons link the archives the train builds of it.
+const matrixFamily = (libraryVersion, nodeVersion) => {
+    const library = '@crossbind/example-lib-prebuilt-matrix';
+    const name = `${library}-node`;
+    const addon = {
+        name: `${name}-linux-x64`,
+        version: nodeVersion,
+        path: 'examples/lib-prebuilt-matrix-node-linux-x64',
+        manifest: { os: ['linux'], cpu: ['x64'], libc: ['glibc'], main: 'crossbind-example-lib-prebuilt-matrix-node.linux-x64.node' },
+    };
+    return {
+        library: {
+            name: library,
+            version: libraryVersion,
+            path: 'examples/lib-prebuilt-matrix',
+            manifest: { scripts: { prepublishOnly: 'crossbind build' } },
+        },
+        node: [
+            {
+                name,
+                version: nodeVersion,
+                path: 'examples/lib-prebuilt-matrix-node',
+                manifest: { optionalDependencies: { [addon.name]: 'workspace:*' }, devDependencies: { [library]: 'workspace:^' } },
+            },
+            addon,
+        ],
+    };
+};
+
+test('a train with the example Node package builds the multi-platform library it links in the same train', async () => {
+    const { library, node } = matrixFamily('2.0.0-beta.2', '2.0.0-beta.2');
+    const root = fixtureRepository([library, ...node]);
+
+    const plan = await buildWorkspaceReleasePlan({
+        root,
+        channel: 'beta',
+        gitCommit: COMMIT,
+        registry: registryWith(Object.fromEntries([library, ...node].map((candidate) => [candidate.name, { channelVersion: '2.0.0-beta.1' }]))),
+    });
+
+    assert.deepEqual(plan.multiPlatform, [library.name]);
+    assert.deepEqual(plan.buildOrderByRunner.node.sort(), node.map((candidate) => candidate.name).sort());
+    assert.deepEqual(plan.linuxShards, ['wasm', 'android', 'wasi', 'linux-native', 'win32-native']);
+    fs.rmSync(root, { recursive: true, force: true });
+});
+
+test('a train refuses the example Node package without the multi-platform library it links', async () => {
+    const { library, node } = matrixFamily('2.0.0-beta.1', '2.0.0-beta.2');
+    const root = fixtureRepository([library, ...node], { trainVersion: '2.0.0-beta.2' });
+
+    await assert.rejects(
+        buildWorkspaceReleasePlan({
+            root,
+            channel: 'beta',
+            gitCommit: COMMIT,
+            registry: registryWith({
+                [library.name]: { channelVersion: '2.0.0-beta.1', exactVersion: '2.0.0-beta.1' },
+                ...Object.fromEntries(node.map((candidate) => [candidate.name, { channelVersion: '2.0.0-beta.1' }])),
+            }),
+        }),
+        /@crossbind\/example-lib-prebuilt-matrix-node links @crossbind\/example-lib-prebuilt-matrix from the tarballs/,
+    );
+    fs.rmSync(root, { recursive: true, force: true });
+});
+
 test('a writing train refuses a package name npm has never seen, and a dry run lists it', async () => {
     const root = fixtureRepository([{ name: '@crossbind/fixture-new', version: '2.0.0-beta.2', path: 'core/fixture-new', manifest: {} }]);
     const registry = registryWith({ '@crossbind/fixture-new': { exists: false, exactVersion: null, channelVersion: null, provenanceCommit: null } });
@@ -209,6 +277,20 @@ test('a multi-platform build names every runtime environment of its platform', (
     assert.deepEqual(multiPlatformBuildArgs('wasm'), ['build', '-p', 'wasm', '-e', 'browser,edge,node']);
     assert.deepEqual(multiPlatformBuildArgs('wasi'), ['build', '-p', 'wasi', '-e', 'wasi']);
     assert.deepEqual(multiPlatformBuildArgs('ios'), ['build', '-p', 'ios']);
+});
+
+// On the desktop platforms a library publishes its archives, which apps link into their own
+// Node.js addons and executables.
+test('a multi-platform library builds only archives for the desktop platforms, on their runners', () => {
+    for (const platform of ['darwin', 'linux', 'linuxmusl', 'win32']) assert.deepEqual(multiPlatformBuildArgs(platform), ['build', '-p', platform]);
+    assert.deepEqual(MULTI_PLATFORM_BUILDS, {
+        wasm: ['wasm'],
+        android: ['android'],
+        wasi: ['wasi'],
+        macos: ['ios', 'darwin'],
+        'linux-native': ['linux', 'linuxmusl'],
+        'win32-native': ['win32'],
+    });
 });
 
 test('workspace version command updates only selected packages to one new train version', () => {

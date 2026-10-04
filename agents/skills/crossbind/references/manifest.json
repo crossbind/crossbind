@@ -59,7 +59,7 @@
     {
       "source": "docs/api/native.md",
       "output": "api/native.md",
-      "sha256": "871e83791e09ea243ca6edaadf456cd09d590a5e3b5c2895f6848a17453d6488"
+      "sha256": "ce2414d887d44c6d96fde7fc8f8a27bb32ddba256d06df65db458d936e14ba3e"
     },
     {
       "source": "docs/api/overrides.md",
@@ -114,7 +114,7 @@
     {
       "source": "docs/playbooks/integration/nodejs.md",
       "output": "integration/nodejs.md",
-      "sha256": "39c3b856a0d373e671f214d0d647930a7fcdfd413e379d80dd46cb642d9e37cb"
+      "sha256": "3e798ccd818dc4d81af72018653ea608884c91126a52b3de76f46bc57e52789f"
     },
     {
       "source": "docs/playbooks/integration/react-native-cli.md",

@@ -5,6 +5,7 @@ import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { deriveLicenseExpression, formatCycloneDxSbom, formatNoticeSections } from '../../core/crossbind/src/utils/licenseReport.js';
 import { nodePackageKind } from '../lib/node-registry.mjs';
+import { writeAggregateDistCMake } from './workspace-release.mjs';
 
 export const SBOM_FILE = 'sbom.cdx.json';
 const RULE = '-'.repeat(70);
@@ -102,21 +103,54 @@ export const NODE_RUNNER_BUILDS = {
 };
 const NODE_RUNNERS = Object.keys(NODE_RUNNER_BUILDS);
 
-// A ready-made Node package builds from the directory of its bindings package, ports/<family>/node,
-// which makes the addons its platform packages ship.
+// A ready-made Node package builds from the directory of its bindings package (ports/<family>/node,
+// examples/lib-prebuilt-matrix-node), which makes the addons its platform packages ship.
 export function nodeProjectPaths(buildOrder, workspace) {
+    const isBindings = (name) => (workspace[name].runtimeLocalDependencies ?? []).some((dependency) => dependency.startsWith(`${name}-`));
+    const bindingsOf = (name) =>
+        isBindings(name) ? workspace[name] : Object.values(workspace).find((entry) => (entry.runtimeLocalDependencies ?? []).includes(name));
     const paths = buildOrder
-        .map((name) => workspace[name])
-        .filter((candidate) => NODE_RUNNERS.includes(candidate.buildKind))
-        .map((candidate) => path.posix.join(path.posix.dirname(candidate.path), 'node'));
+        .filter((name) => NODE_RUNNERS.includes(workspace[name]?.buildKind))
+        .map((name) => bindingsOf(name)?.path)
+        .filter(Boolean);
     return [...new Set(paths)];
 }
 
-// The platform packages of each family a runner links that arrived without a dist.
-export function missingDists(root, projectPaths, platforms) {
-    return projectPaths
-        .flatMap((projectPath) => platforms.map((platform) => path.posix.join(path.posix.dirname(projectPath), platform)))
-        .filter((packagePath) => !fs.existsSync(path.join(root, packagePath, 'dist')));
+// The platforms a runner builds addons for that no package a family links brought a dist of: a port's
+// platform package carries one platform, a multi-platform library all of them.
+export function missingDists(root, projectPaths, platforms, pathOf) {
+    const prebuiltTargets = (packagePath) => {
+        const dir = path.join(root, packagePath, 'dist', 'prebuilt');
+        return fs.existsSync(dir) ? fs.readdirSync(dir) : [];
+    };
+    return projectPaths.flatMap((projectPath) => {
+        const { devDependencies = {} } = JSON.parse(fs.readFileSync(path.join(root, projectPath, 'package.json'), 'utf8'));
+        const linked = Object.keys(devDependencies).map(pathOf).filter(Boolean).flatMap(prebuiltTargets);
+        return platforms
+            .filter((platform) => !linked.some((target) => target.startsWith(`${platform}-`)))
+            .map((platform) => `${projectPath}: ${platform}`);
+    });
+}
+
+// A multi-platform package is assembled only after every build, so the node runners take what the other
+// runners staged of it (multi/<runner>/<path>) instead of a tarball.
+export function mergeStagedMulti({ root, inputs, workspace }) {
+    const staged = inputs.flatMap(({ directory, runner, stagedMultiPlatform = [] }) =>
+        stagedMultiPlatform
+            .map((name) => workspace[name]?.path)
+            .filter((packagePath) => packagePath && fs.existsSync(path.join(directory, 'multi', runner, packagePath)))
+            .map((packagePath) => ({ packagePath, source: path.join(directory, 'multi', runner, packagePath) })),
+    );
+    staged.forEach(({ packagePath, source }) => fs.cpSync(source, path.join(root, packagePath), { recursive: true }));
+    new Set(staged.map(({ packagePath }) => packagePath)).forEach((packagePath) =>
+        writeAggregateDistCMake(
+            path.join(root, packagePath),
+            staged
+                .filter((entry) => entry.packagePath === packagePath)
+                .map(({ source }) => path.join(source, 'dist', 'prebuilt', 'CMakeLists.txt'))
+                .filter((file) => fs.existsSync(file)),
+        ),
+    );
 }
 
 // inputs: the build manifests other runners wrote, each with the directory its tarballs/ is in.

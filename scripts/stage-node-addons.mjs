@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Copies each addon a ready-made Node package built into the platform package npm installs it from,
-// ports/<family>/node-<platform>-<arch>, whose main names the file, and derives the license files of
+// <name>-<platform>-<arch>, whose main names the file, and derives the license files of
 // every package from `crossbind licenses`. Runs in the package directory after `crossbind build -e
 // node`; a macOS addon builds only on a macOS host, so one may be missing, and a package whose
 // addon was not built here only gets its license field.
@@ -14,11 +14,12 @@ import { deriveLicenseExpression } from '../core/crossbind/src/utils/licenseRepo
 import { setManifestLicense, writeNodePackageLicense } from './release/node-packages.mjs';
 
 const root = process.cwd();
+const requireFromRoot = createRequire(path.join(root, 'package.json'));
 const readManifest = (dir) => JSON.parse(fs.readFileSync(path.join(dir, 'package.json'), 'utf8'));
 const { name, version, repository, optionalDependencies = {} } = readManifest(root);
-const meta = { version, repository, projectPath: path.relative(path.resolve(root, '../../..'), root).split(path.sep).join('/') };
+const meta = { version, repository, projectPath: path.relative(path.resolve(import.meta.dirname, '..'), root).split(path.sep).join('/') };
 
-const crossbindManifest = createRequire(path.join(root, 'package.json')).resolve('crossbind/package.json');
+const crossbindManifest = requireFromRoot.resolve('crossbind/package.json');
 const crossbindBin = path.join(path.dirname(crossbindManifest), JSON.parse(fs.readFileSync(crossbindManifest, 'utf8')).bin.crossbind);
 
 const rowsByPlatform = new Map();
@@ -37,7 +38,7 @@ function licenseRows(platform) {
 const addonPackages = Object.keys(optionalDependencies).filter((dependency) => dependency.startsWith(`${name}-`));
 const staged = addonPackages.flatMap((dependency) => {
     const suffix = dependency.slice(name.length + 1);
-    const dir = path.join(root, '..', `node-${suffix}`);
+    const dir = path.dirname(requireFromRoot.resolve(`${dependency}/package.json`));
     const { main } = readManifest(dir);
     const rows = licenseRows(suffix.slice(0, suffix.lastIndexOf('-')));
     const built = path.join(root, 'dist', main);

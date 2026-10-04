@@ -900,6 +900,12 @@ importers:
         specifier: workspace:^
         version: link:../../core/crossbind
 
+  examples/backend-nodejs-prebuilt:
+    dependencies:
+      '@crossbind/example-lib-prebuilt-matrix-node':
+        specifier: workspace:^
+        version: link:../lib-prebuilt-matrix-node
+
   examples/backend-nodejs-wasm:
     dependencies:
       '@crossbind/example-lib-prebuilt-matrix':
@@ -931,6 +937,56 @@ importers:
       crossbind:
         specifier: workspace:^
         version: link:../../core/crossbind
+
+  examples/lib-prebuilt-matrix-node:
+    devDependencies:
+      '@crossbind/example-lib-prebuilt-matrix':
+        specifier: workspace:^
+        version: link:../lib-prebuilt-matrix
+      crossbind:
+        specifier: workspace:^
+        version: link:../../core/crossbind
+    optionalDependencies:
+      '@crossbind/example-lib-prebuilt-matrix-node-darwin-arm64':
+        specifier: workspace:*
+        version: link:../lib-prebuilt-matrix-node-darwin-arm64
+      '@crossbind/example-lib-prebuilt-matrix-node-darwin-x64':
+        specifier: workspace:*
+        version: link:../lib-prebuilt-matrix-node-darwin-x64
+      '@crossbind/example-lib-prebuilt-matrix-node-linux-arm64':
+        specifier: workspace:*
+        version: link:../lib-prebuilt-matrix-node-linux-arm64
+      '@crossbind/example-lib-prebuilt-matrix-node-linux-x64':
+        specifier: workspace:*
+        version: link:../lib-prebuilt-matrix-node-linux-x64
+      '@crossbind/example-lib-prebuilt-matrix-node-linuxmusl-arm64':
+        specifier: workspace:*
+        version: link:../lib-prebuilt-matrix-node-linuxmusl-arm64
+      '@crossbind/example-lib-prebuilt-matrix-node-linuxmusl-x64':
+        specifier: workspace:*
+        version: link:../lib-prebuilt-matrix-node-linuxmusl-x64
+      '@crossbind/example-lib-prebuilt-matrix-node-win32-arm64':
+        specifier: workspace:*
+        version: link:../lib-prebuilt-matrix-node-win32-arm64
+      '@crossbind/example-lib-prebuilt-matrix-node-win32-x64':
+        specifier: workspace:*
+        version: link:../lib-prebuilt-matrix-node-win32-x64
+
+  examples/lib-prebuilt-matrix-node-darwin-arm64: {}
+
+  examples/lib-prebuilt-matrix-node-darwin-x64: {}
+
+  examples/lib-prebuilt-matrix-node-linux-arm64: {}
+
+  examples/lib-prebuilt-matrix-node-linux-x64: {}
+
+  examples/lib-prebuilt-matrix-node-linuxmusl-arm64: {}
+
+  examples/lib-prebuilt-matrix-node-linuxmusl-x64: {}
+
+  examples/lib-prebuilt-matrix-node-win32-arm64: {}
+
+  examples/lib-prebuilt-matrix-node-win32-x64: {}
 
   examples/lib-source: {}
 
@@ -1027,6 +1083,16 @@ importers:
       typescript:
         specifier: ^6.0.3
         version: 6.0.3
+
+  examples/native-executable:
+    dependencies:
+      '@crossbind/example-lib-prebuilt-matrix':
+        specifier: workspace:^
+        version: link:../lib-prebuilt-matrix
+    devDependencies:
+      crossbind:
+        specifier: workspace:^
+        version: link:../../core/crossbind
 
   examples/web-react-rspack:
     dependencies:

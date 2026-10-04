@@ -13,6 +13,7 @@
         "build:android": "crossbind build -p android",
         "build:ios": "crossbind build -p ios",
         "build:darwin": "crossbind build -p darwin",
+        "build:desktop": "crossbind build -p darwin,linux,linuxmusl,win32",
         "clear": "rm -rf .crossbind dist *.xcframework",
         "prepublishOnly": "crossbind build"
     },

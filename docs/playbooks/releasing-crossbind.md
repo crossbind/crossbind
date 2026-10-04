@@ -69,13 +69,14 @@ No package is published while another selected artifact is still building:
 2. Ubuntu builds Web, Android, WASI and ordinary JS/metadata packages, and in shards of their own
    the Linux and Windows (`-linux`, `-linuxmusl`, `-win32`) packages of native Node.js addons.
 3. macOS builds the iOS packages and the macOS (`-darwin`) packages of native Node.js addons.
-4. `@crossbind/example-lib-prebuilt-matrix` is deliberately split across both runners; the
-   coordinator merges Web/Android/WASI and iOS outputs and refuses conflicting files.
+4. `@crossbind/example-lib-prebuilt-matrix` is deliberately split across both runners: Ubuntu
+   builds its Web, Android and WASI outputs and its Linux and Windows archives, macOS its iOS
+   outputs and macOS archives. The coordinator merges them and refuses conflicting files.
 5. The ready-made Node packages (ADR-0014) build after the Linux shards, from the platform
-   packages those shards packed: Ubuntu builds their Linux and Windows addons and hands the
-   bridges it generated to macOS, which builds their macOS addons without running SWIG. A train
-   that publishes them publishes the platform packages they link too; the plan refuses one that
-   does not.
+   packages those shards packed, and the example library's from the archives they staged of it:
+   Ubuntu builds their Linux and Windows addons and hands the bridges it generated to macOS,
+   which builds their macOS addons without running SWIG. A train that publishes them publishes
+   the packages they link too; the plan refuses one that does not.
 6. The coordinator verifies that exactly one tarball exists for every selected package.
 7. The ready-made Node packages are installed from those exact tarballs on all eight addon
    targets with every Node.js version in `.nvmrc` and `releases/npm/node-22.version`, and each

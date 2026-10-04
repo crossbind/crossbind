@@ -2,7 +2,7 @@
 
 - **Status:** Proposed
 - **Date:** 2026-10-04
-- **Affects:** `ports/*/node` and `ports/*/node-<platform>-<arch>`, `scripts/scaffold-node-packages.mjs`,
+- **Affects:** `ports/*/node` and `ports/*/node-<platform>-<arch>`, `examples/lib-prebuilt-matrix-node*`, `scripts/scaffold-node-packages.mjs`,
   `scripts/stage-node-addons.mjs`, `scripts/check-node-package.mjs`, `scripts/release/node-packages.mjs`,
   `scripts/release/verify-node-packages.mjs`, `scripts/lib/node-registry.mjs`, `.github/workflows/release-crossbind.yml`,
   `core/crossbind/src/actions/licenses.js`, `core/crossbind/src/utils/boundHeaders.js`
@@ -44,6 +44,9 @@ linux, linuxmusl and win32 on arm64 and x64.
   installed (`bridgeTargets`), so the macOS runner compiles the bridges the Linux job generated.
 - **One process, several packages.** Each addon keeps its embind state in its own scope, exports
   only its Node-API entry points on macOS, and shares one ordered exit listener.
+- **The example library.** `@crossbind/example-lib-prebuilt-matrix-node` and its addon packages are
+  made the same way from the multi-platform example library, whose desktop archives the train
+  builds on the runners of their platforms; `examples/backend-nodejs-prebuilt` uses it.
 - **Licenses (ADR-0008, K4).** Each package's `license` is the compound expression
   `crossbind licenses --platform <platform> --runtime-env node` derives, and its `LICENSE` carries
   every component's text and its `sbom.cdx.json` the inventory. LGPL libraries stay statically

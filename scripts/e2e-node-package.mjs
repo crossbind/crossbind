@@ -3,10 +3,11 @@
 // on this machine, then in glibc and musl containers of both architectures. The packages are packed
 // and served by a registry this script runs, so npm picks the addon package by os, cpu and libc as it
 // does from npmjs.org. Addons for machines nothing here runs are checked for the machine they target.
-// Runs in ports/<family>/node after its build.
+// Runs in the directory of the package after its build.
 
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
+import { createRequire } from 'node:module';
 import os from 'node:os';
 import path from 'node:path';
 import { run, serveRegistry, tarballEntry } from './lib/node-registry.mjs';
@@ -20,7 +21,7 @@ const root = process.cwd();
 const readManifest = (dir) => JSON.parse(fs.readFileSync(path.join(dir, 'package.json'), 'utf8'));
 const manifest = readManifest(root);
 const [scope, baseName] = manifest.name.split('/');
-const addonDirOf = (name) => path.join(root, '..', `node-${name.slice(manifest.name.length + 1)}`);
+const addonDirOf = (name) => path.dirname(createRequire(path.join(root, 'package.json')).resolve(`${name}/package.json`));
 const addonPackages = Object.keys(manifest.optionalDependencies ?? {})
     .filter((name) => name.startsWith(`${manifest.name}-`))
     .map((name) => ({ name, dir: addonDirOf(name), ...readManifest(addonDirOf(name)) }));

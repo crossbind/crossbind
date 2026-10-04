@@ -51,6 +51,7 @@ Every prompt can be preselected positionally, which is what CI and scripted setu
 
 ```bash
 npm create crossbind@beta -- my-app Web React Vite
+npm create crossbind@beta -- my-tool Native Executable
 npm create crossbind@beta -- my-lib Library Prebuilt
 ```
 

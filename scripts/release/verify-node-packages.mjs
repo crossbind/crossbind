@@ -30,7 +30,7 @@ const npm = (args, options) => run(NPM[0], [...NPM.slice(1), ...args], options);
 
 const { artifacts } = JSON.parse(fs.readFileSync(path.join(artifactDir, 'workspace-release-artifacts.json'), 'utf8'));
 const entries = artifacts
-    .filter((artifact) => /^@crossbind\/port-.+-node(?:-(?:darwin|linux|linuxmusl|win32)-(?:arm64|x64))?$/.test(artifact.package))
+    .filter((artifact) => /^@crossbind\/.+-node(?:-(?:darwin|linux|linuxmusl|win32)-(?:arm64|x64))?$/.test(artifact.package))
     .map((artifact) => tarballEntry(path.join(tarballDir, artifact.filename)))
     .filter((entry) => nodePackageKind({ name: entry.manifest.name, manifest: entry.manifest }));
 const bindings = entries.map((entry) => entry.manifest).filter((manifest) => !manifest.os);
@@ -38,10 +38,13 @@ const target = hostAddonTarget(process.report.getReport(), process.platform, pro
 
 if (bindings.length === 0) throw new Error(`verify-node-packages: ${artifactDir} holds no ready-made Node package.`);
 
+// A port's package is ports/<family>/node, an example's examples/<name>.
 function checkOf(manifest) {
     const family = /^@crossbind\/port-(.+)-node$/.exec(manifest.name)?.[1];
-    const file = path.join(ROOT, 'ports', family ?? '', 'node', 'e2e', 'check.mjs');
-    if (!family || !fs.existsSync(file)) throw new Error(`${manifest.name} has no e2e/check.mjs to verify it with.`);
+    const example = /^@crossbind\/example-(.+)$/.exec(manifest.name)?.[1];
+    const dir = family ? path.join(ROOT, 'ports', family, 'node') : example && path.join(ROOT, 'examples', example);
+    const file = dir && path.join(dir, 'e2e', 'check.mjs');
+    if (!file || !fs.existsSync(file)) throw new Error(`${manifest.name} has no e2e/check.mjs to verify it with.`);
     return file;
 }
 

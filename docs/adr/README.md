@@ -21,7 +21,7 @@ ADRs are **immutable**. When a decision is overturned, write a new ADR that supe
 | [0011](./0011-native-node-addons.md) | Build native Node.js addons from the same bindings, on embind-jsi over Node-API | Proposed | `core/embind-napi/`, `core/embind-jsi/`, `buildNode.js`, darwin targets |
 | [0012](./0012-musl-node-addons.md) | Build musl Linux addons as their own platform, `linuxmusl`, in the `linux` image | Proposed | `targets.js`, `addonPlatform.js`, `linux.Dockerfile`, `ports/*/linuxmusl` |
 | [0013](./0013-conan-import-scheme.md) | Build ConanCenter packages behind a `conan:` header scheme | Proposed | `getDependFilePath.js`, bundler plugins, `conanDependencies`, `base.Dockerfile`, `runConan.js` |
-| [0014](./0014-ready-made-node-packages.md) | Publish each port as a ready-made Node package with an addon package per platform | Proposed | `ports/*/node*`, `stage-node-addons.mjs`, `check-node-package.mjs`, `scripts/release/node-packages.mjs`, `release-crossbind.yml` |
+| [0014](./0014-ready-made-node-packages.md) | Publish each port as a ready-made Node package with an addon package per platform | Proposed | `ports/*/node*`, `examples/lib-prebuilt-matrix-node*`, `stage-node-addons.mjs`, `check-node-package.mjs`, `scripts/release/node-packages.mjs`, `release-crossbind.yml` |
 
 ## Writing a new ADR
 

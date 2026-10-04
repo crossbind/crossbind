@@ -9,6 +9,7 @@ import {
     bridgeStateDigest,
     changedBridgeState,
     lgplRows,
+    mergeStagedMulti,
     missingDists,
     nodePackageLicense,
     nodePackageProblems,
@@ -219,29 +220,96 @@ test('a package the node runner links comes from the dist of the tarball another
 });
 
 const workspace = {
-    '@crossbind/port-zlib-node': { path: 'ports/zlib/node', buildKind: 'node' },
-    '@crossbind/port-zlib-node-linux-x64': { path: 'ports/zlib/node-linux-x64', buildKind: 'node' },
-    '@crossbind/port-geos-node-darwin-arm64': { path: 'ports/geos/node-darwin-arm64', buildKind: 'node-macos' },
+    '@crossbind/port-zlib-node': {
+        path: 'ports/zlib/node',
+        buildKind: 'node',
+        runtimeLocalDependencies: ['@crossbind/port-zlib-node-linux-x64'],
+    },
+    '@crossbind/port-zlib-node-linux-x64': { path: 'ports/zlib/node-linux-x64', buildKind: 'node', runtimeLocalDependencies: [] },
+    '@crossbind/port-geos-node': {
+        path: 'ports/geos/node',
+        buildKind: 'node',
+        runtimeLocalDependencies: ['@crossbind/port-geos-node-darwin-arm64'],
+    },
+    '@crossbind/port-geos-node-darwin-arm64': { path: 'ports/geos/node-darwin-arm64', buildKind: 'node-macos', runtimeLocalDependencies: [] },
+    '@crossbind/example-lib-prebuilt-matrix-node': {
+        path: 'examples/lib-prebuilt-matrix-node',
+        buildKind: 'node',
+        runtimeLocalDependencies: ['@crossbind/example-lib-prebuilt-matrix-node-darwin-arm64'],
+    },
+    '@crossbind/example-lib-prebuilt-matrix-node-darwin-arm64': {
+        path: 'examples/lib-prebuilt-matrix-node-darwin-arm64',
+        buildKind: 'node-macos',
+        runtimeLocalDependencies: [],
+    },
+    '@crossbind/example-lib-prebuilt-matrix': { path: 'examples/lib-prebuilt-matrix', buildKind: 'multi-platform', runtimeLocalDependencies: [] },
     '@crossbind/port-zlib-linux': { path: 'ports/zlib/linux', buildKind: 'linux-native' },
     '@crossbind/port-zlib-darwin': { path: 'ports/zlib/darwin', buildKind: 'macos' },
     '@crossbind/port-zlib-win32': { path: 'ports/zlib/win32', buildKind: 'win32-native' },
     '@crossbind/port-zlib-wasm': { path: 'ports/zlib/wasm', buildKind: 'wasm' },
 };
+const pathOf = (name) => workspace[name]?.path;
 
-test('names the platform packages of a family that arrived without a dist', () => {
+function prebuilt(root, packagePath, ...targets) {
+    targets.forEach((target) => fs.mkdirSync(path.join(root, packagePath, 'dist/prebuilt', target, 'lib'), { recursive: true }));
+}
+
+test('names the platforms a family needs that no package it links brought a dist for', () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'crossbind-missing-dists-'));
-    fs.mkdirSync(path.join(root, 'ports/zlib/linux/dist'), { recursive: true });
+    fs.mkdirSync(path.join(root, 'ports/zlib/node'), { recursive: true });
+    fs.writeFileSync(
+        path.join(root, 'ports/zlib/node/package.json'),
+        JSON.stringify({ devDependencies: { '@crossbind/port-zlib-linux': '*', '@crossbind/port-zlib-win32': '*', crossbind: '*' } }),
+    );
+    prebuilt(root, 'ports/zlib/linux', 'linux-x64-mt-release', 'linux-arm64-mt-release');
+    fs.mkdirSync(path.join(root, 'examples/lib-prebuilt-matrix-node'), { recursive: true });
+    fs.writeFileSync(
+        path.join(root, 'examples/lib-prebuilt-matrix-node/package.json'),
+        JSON.stringify({ devDependencies: { '@crossbind/example-lib-prebuilt-matrix': '*' } }),
+    );
+    prebuilt(root, 'examples/lib-prebuilt-matrix', 'linux-x64-mt-release', 'linuxmusl-x64-mt-release', 'win32-x64-mt-release');
 
-    assert.deepEqual(missingDists(root, ['ports/zlib/node'], ['linux', 'win32']), ['ports/zlib/win32']);
+    assert.deepEqual(missingDists(root, ['ports/zlib/node'], ['linux', 'win32'], pathOf), ['ports/zlib/node: win32']);
+    assert.deepEqual(missingDists(root, ['examples/lib-prebuilt-matrix-node'], ['linux', 'linuxmusl', 'win32'], pathOf), []);
+    assert.deepEqual(missingDists(root, ['examples/lib-prebuilt-matrix-node'], ['darwin'], pathOf), ['examples/lib-prebuilt-matrix-node: darwin']);
     fs.rmSync(root, { recursive: true, force: true });
 });
 
-test('a runner builds each ready-made Node package once, from the package of its bindings', () => {
+test('a runner builds each ready-made Node package once, from the package of its bindings, wherever it lives', () => {
     assert.deepEqual(
         nodeProjectPaths(['@crossbind/port-zlib-node', '@crossbind/port-zlib-node-linux-x64', '@crossbind/port-zlib-linux'], workspace),
         ['ports/zlib/node'],
     );
     assert.deepEqual(nodeProjectPaths(['@crossbind/port-geos-node-darwin-arm64'], workspace), ['ports/geos/node']);
+    assert.deepEqual(nodeProjectPaths(['@crossbind/example-lib-prebuilt-matrix-node-darwin-arm64'], workspace), [
+        'examples/lib-prebuilt-matrix-node',
+    ]);
+});
+
+test('merges what other runners staged of a multi-platform package, with one host list for every platform', () => {
+    const work = fs.mkdtempSync(path.join(os.tmpdir(), 'crossbind-staged-multi-'));
+    // Each runner's CMake names only the hosts it built.
+    const stage = (runner, targets) => {
+        const dist = path.join(work, 'in', runner, 'multi', runner, 'examples/lib-prebuilt-matrix/dist/prebuilt');
+        targets.forEach((target) => {
+            fs.mkdirSync(path.join(dist, target, 'lib'), { recursive: true });
+            fs.writeFileSync(path.join(dist, target, 'lib/libmatrix.a'), `${target} archive`);
+        });
+        fs.writeFileSync(path.join(dist, 'CMakeLists.txt'), `set(MY_LIST "${targets.join(';')}")\nset(FIXTURE true)\n`);
+        return { directory: path.join(work, 'in', runner), runner, artifacts: [], stagedMultiPlatform: ['@crossbind/example-lib-prebuilt-matrix'] };
+    };
+    const inputs = [stage('linux-native', ['linux-x64-mt-release', 'linuxmusl-x64-mt-release']), stage('win32-native', ['win32-x64-mt-release'])];
+
+    mergeStagedMulti({ root: path.join(work, 'root'), inputs, workspace });
+
+    const dist = path.join(work, 'root/examples/lib-prebuilt-matrix/dist/prebuilt');
+    assert.equal(fs.readFileSync(path.join(dist, 'linux-x64-mt-release/lib/libmatrix.a'), 'utf8'), 'linux-x64-mt-release archive');
+    assert.equal(fs.readFileSync(path.join(dist, 'win32-x64-mt-release/lib/libmatrix.a'), 'utf8'), 'win32-x64-mt-release archive');
+    assert.equal(
+        fs.readFileSync(path.join(dist, 'CMakeLists.txt'), 'utf8'),
+        'set(MY_LIST "linux-x64-mt-release;linuxmusl-x64-mt-release;win32-x64-mt-release")\nset(FIXTURE true)\n',
+    );
+    fs.rmSync(work, { recursive: true, force: true });
 });
 
 test('picks the tarballs of the platform packages a runner links, from every build manifest it received', () => {

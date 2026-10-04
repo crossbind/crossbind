@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import zlib from 'node:zlib';
 import { loadReleaseNotes, semverChannelPolicy } from './release-lib.mjs';
-import { runtimeEnvsOf } from '../../core/crossbind/src/utils/targets.js';
+import { OPT_IN_PLATFORMS, runtimeEnvsOf } from '../../core/crossbind/src/utils/targets.js';
 import { nodePackageKind } from '../lib/node-registry.mjs';
 
 export const WORKSPACE_REPOSITORY = 'https://github.com/crossbind/crossbind.git';
@@ -127,14 +127,47 @@ export function findBuildManifests(directory) {
     return manifests;
 }
 
-// The runners that build part of the multi-platform package.
-export const MULTI_PLATFORM_RUNNERS = ['wasm', 'android', 'wasi', 'macos'];
+// The platforms each runner builds of the multi-platform package.
+export const MULTI_PLATFORM_BUILDS = {
+    wasm: ['wasm'],
+    android: ['android'],
+    wasi: ['wasi'],
+    macos: ['ios', 'darwin'],
+    'linux-native': ['linux', 'linuxmusl'],
+    'win32-native': ['win32'],
+};
+export const MULTI_PLATFORM_RUNNERS = Object.keys(MULTI_PLATFORM_BUILDS);
 
 // A build makes binaries only for the runtime environments it names, and the multi-platform
-// package publishes every binary its platform has.
+// package publishes every binary its platform has. On the desktop platforms a library publishes
+// its archives, which apps link into their own Node.js addons and executables.
 export function multiPlatformBuildArgs(platform) {
-    const runtimeEnvs = runtimeEnvsOf(platform);
+    const runtimeEnvs = OPT_IN_PLATFORMS.includes(platform) ? [] : runtimeEnvsOf(platform);
     return ['build', '-p', platform, ...(runtimeEnvs.length ? ['-e', runtimeEnvs.join(',')] : [])];
+}
+
+// Each runner's dist/prebuilt/CMakeLists.txt names only the hosts it built, so a merged package needs one
+// that names every host on disk.
+export function writeAggregateDistCMake(packageRoot, sources) {
+    if (!sources.length) throw new Error(`${packageRoot}: platform builds did not produce dist/prebuilt/CMakeLists.txt.`);
+    const hostPattern = /^set\(MY_LIST "[^"]*"\)$/m;
+    const canonical = fs.readFileSync(sources[0], 'utf8');
+    if (!hostPattern.test(canonical)) throw new Error(`${sources[0]}: cannot locate the generated host list.`);
+    const normalized = canonical.replace(hostPattern, 'set(MY_LIST "<assembled-hosts>")');
+    for (const source of sources.slice(1)) {
+        const candidate = fs.readFileSync(source, 'utf8');
+        if (!hostPattern.test(candidate) || candidate.replace(hostPattern, 'set(MY_LIST "<assembled-hosts>")') !== normalized) {
+            throw new Error(`${source}: generated CMake content conflicts beyond its platform host list.`);
+        }
+    }
+    const prebuilt = path.join(packageRoot, 'dist', 'prebuilt');
+    const hosts = fs
+        .readdirSync(prebuilt, { withFileTypes: true })
+        .filter((entry) => entry.isDirectory() && fs.existsSync(path.join(prebuilt, entry.name, 'lib')))
+        .map((entry) => entry.name)
+        .sort();
+    if (!hosts.length) throw new Error(`${prebuilt}: assembled package has no native library targets.`);
+    fs.writeFileSync(path.join(prebuilt, 'CMakeLists.txt'), canonical.replace(hostPattern, `set(MY_LIST "${hosts.join(';')}")`));
 }
 
 export function classifyBuild(candidate) {
@@ -230,8 +263,9 @@ function dependencyClosure(packages, candidateNames, { publish = false } = {}) {
 }
 
 // A ready-made Node package links its family's platform packages, and theirs, from the tarballs its own train
-// packs (scripts/release/node-packages.mjs), so a train that publishes it publishes that closure too.
-const PLATFORM_BUILD_KINDS = ['linux-native', 'win32-native', 'macos'];
+// packs (scripts/release/node-packages.mjs), so a train that publishes it publishes that closure too. The
+// example library's Node package links the archives the train builds of the multi-platform library.
+const PLATFORM_BUILD_KINDS = ['linux-native', 'win32-native', 'macos', 'multi-platform'];
 function assertNodeLinksInTrain(packages, candidates) {
     const byName = new Map(packages.map((candidate) => [candidate.name, candidate]));
     const selected = new Set(candidates.map((candidate) => candidate.name));

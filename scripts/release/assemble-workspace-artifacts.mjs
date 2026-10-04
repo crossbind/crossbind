@@ -5,7 +5,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { inspectWorkspaceTarball, packWorkspacePackage } from './package-artifact.mjs';
-import { MULTI_PLATFORM_RUNNERS, findBuildManifests, validateWorkspaceReleasePlan } from './workspace-release.mjs';
+import { MULTI_PLATFORM_RUNNERS, findBuildManifests, validateWorkspaceReleasePlan, writeAggregateDistCMake } from './workspace-release.mjs';
 import { appendGitHubOutput, writeJson } from './release-lib.mjs';
 
 const REPOSITORY_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
@@ -59,28 +59,6 @@ function mergeTree(source, target, aggregateCMakeFiles = []) {
             if (!fs.existsSync(to)) fs.copyFileSync(from, to);
         }
     }
-}
-
-function writeAggregateDistCMake(packageRoot, sources) {
-    if (!sources.length) throw new Error(`${packageRoot}: platform builds did not produce dist/prebuilt/CMakeLists.txt.`);
-    const hostPattern = /^set\(MY_LIST "[^"]*"\)$/m;
-    const canonical = fs.readFileSync(sources[0], 'utf8');
-    if (!hostPattern.test(canonical)) throw new Error(`${sources[0]}: cannot locate the generated host list.`);
-    const normalized = canonical.replace(hostPattern, 'set(MY_LIST "<assembled-hosts>")');
-    for (const source of sources.slice(1)) {
-        const candidate = fs.readFileSync(source, 'utf8');
-        if (!hostPattern.test(candidate) || candidate.replace(hostPattern, 'set(MY_LIST "<assembled-hosts>")') !== normalized) {
-            throw new Error(`${source}: generated CMake content conflicts beyond its platform host list.`);
-        }
-    }
-    const prebuilt = path.join(packageRoot, 'dist', 'prebuilt');
-    const hosts = fs
-        .readdirSync(prebuilt, { withFileTypes: true })
-        .filter((entry) => entry.isDirectory() && fs.existsSync(path.join(prebuilt, entry.name, 'lib')))
-        .map((entry) => entry.name)
-        .sort();
-    if (!hosts.length) throw new Error(`${prebuilt}: assembled package has no native library targets.`);
-    fs.writeFileSync(path.join(prebuilt, 'CMakeLists.txt'), canonical.replace(hostPattern, `set(MY_LIST "${hosts.join(';')}")`));
 }
 
 const artifacts = [];
