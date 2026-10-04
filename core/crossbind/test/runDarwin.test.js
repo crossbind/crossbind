@@ -49,6 +49,15 @@ describe('run: a macOS build', () => {
         expect(env.PATH).toBe('/usr/bin:/bin:/usr/sbin:/sbin');
     });
 
+    test("builds for the macOS the addons support, without the machine's own packages", async () => {
+        const cmake = await runDarwin(['cmake', '/src']);
+        const configure = await runDarwin(['./configure']);
+
+        expect(cmake.args).toEqual(expect.arrayContaining(['-DCMAKE_OSX_DEPLOYMENT_TARGET=11.0', '-DCMAKE_IGNORE_PREFIX_PATH=/opt/homebrew;/usr/local;/opt/local']));
+        expect(configure.env.CFLAGS).toContain('-mmacosx-version-min=11.0');
+        expect(configure.env.PKG_CONFIG_LIBDIR).toBe('');
+    });
+
     test('a CMake build leaves the compilers to CMake', async () => {
         const { args, env } = await runDarwin(['cmake', '/src'], 'x64');
 

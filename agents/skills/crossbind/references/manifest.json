@@ -14,7 +14,7 @@
     {
       "source": "docs/api/README.md",
       "output": "api/README.md",
-      "sha256": "2f408ef4cfd232d9a02b9cf789ba9e903ce2eda49ebf7e1b7e92897da0d4eee1"
+      "sha256": "779b4778253413377052c9f82e551bce617199b46bce1df459bfdfc2fd76e4a1"
     },
     {
       "source": "docs/api/build-state.md",
@@ -24,7 +24,7 @@
     {
       "source": "docs/api/conan.md",
       "output": "api/conan.md",
-      "sha256": "9c936b5d9e5777068f83dfd35649385a8c42fb6d62b76902826cec6883e9c1db"
+      "sha256": "163123d8d5ee1c065b32831ec77a4d388fac59cc847240a8b5b811f9caab1562"
     },
     {
       "source": "docs/api/cpp-binding-rules.md",

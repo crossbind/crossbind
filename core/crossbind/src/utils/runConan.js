@@ -8,6 +8,8 @@ import pullDockerImage, { getDockerImage, getDockerContainerName, imageRoleFor }
 import { DOCKER_RUN_SECURITY_ARGS } from './dockerSecurity.js';
 import assertExecContainer from './execContainer.js';
 import { IOS_DEVELOPER_DIR, XCODE_TOOLCHAIN_BIN } from './iosToolchain.js';
+import { DARWIN_CC, DARWIN_TOOLS_BIN } from './darwinToolchain.js';
+import { HOST_BUILT_PLATFORMS } from './targets.js';
 
 // Every conan invocation crossbind makes goes through here. The config is passed in instead of read
 // from state, because state attaches the staged Conan packages while it is still being built.
@@ -42,8 +44,9 @@ const ALLOWED_ENV = [
 ];
 
 const RUNNERS = ['DOCKER_RUN', 'DOCKER_EXEC', 'LOCAL'];
-// What conan can build on the host: wasm with a host Emscripten, iOS with Xcode.
-const HOST_PLATFORMS = ['wasm', 'ios'];
+// What conan can build on the host: wasm with a host Emscripten, iOS and macOS with Xcode.
+const HOST_PLATFORMS = ['wasm', 'ios', 'darwin'];
+const APPLE_PLATFORM_NAMES = { ios: 'iOS', darwin: 'macOS' };
 // Where a container sees conanRoot(): an exec container mounts all of it here, a run container only
 // the store and its own work directory, at the same places.
 const CONTAINER_ROOT = '/var/cache/crossbind/conan';
@@ -57,8 +60,8 @@ export function conanRunner(config, target) {
     if (!RUNNERS.includes(runner)) {
         throw new Error(`crossbind: the runner ${runner} is invalid; RUNNER is one of ${RUNNERS.join(', ')}.`);
     }
-    // Xcode runs on the Mac alone, so iOS packages build there whatever runner the rest use.
-    return target?.platform === 'ios' ? 'LOCAL' : runner;
+    // Xcode runs on the Mac alone, so iOS and macOS packages build there whatever runner the rest use.
+    return HOST_BUILT_PLATFORMS.includes(target?.platform) ? 'LOCAL' : runner;
 }
 
 // Machine-wide like the cargo cache: built packages are reused by every project, and `pnpm run clear`
@@ -124,17 +127,21 @@ const iosEnv = () => ({ ...allowedEnv(), DEVELOPER_DIR: IOS_DEVELOPER_DIR });
 
 // A GNU ar or nm ahead of Apple's on a Mac's PATH (Homebrew's binutils) writes archives Apple's linker
 // cannot read, and recipes, the build tools they build and Meson all take these tools by name. So the
-// run gets links to Xcode's first on its PATH.
+// run gets links to Xcode's first on its PATH; for macOS to the ones xcode-select picks, as the macOS
+// ports are built with.
 const APPLE_TOOLS = {
     ar: 'ar', as: 'as', nm: 'llvm-nm', ranlib: 'ranlib', strip: 'strip',
 };
+const appleToolOf = (target, name) => (target.platform === 'darwin'
+    ? path.join(DARWIN_TOOLS_BIN, name)
+    : path.join(XCODE_TOOLCHAIN_BIN, APPLE_TOOLS[name]));
 
-function withAppleTools(work, env) {
+function withAppleTools(work, env, target) {
     if (process.platform !== 'darwin') return env;
     const dir = path.join(work.dir, 'apple-tools');
     if (!fs.existsSync(dir)) {
         fs.mkdirSync(dir);
-        Object.entries(APPLE_TOOLS).forEach(([name, tool]) => fs.symlinkSync(path.join(XCODE_TOOLCHAIN_BIN, tool), path.join(dir, name)));
+        Object.keys(APPLE_TOOLS).forEach((name) => fs.symlinkSync(appleToolOf(target, name), path.join(dir, name)));
     }
     return { ...env, PATH: [dir, env.PATH].filter(Boolean).join(path.delimiter) };
 }
@@ -160,10 +167,15 @@ function conanVersion() {
     return toolVersion(['conan'], allowedEnv(), dir);
 }
 
+function compilerIdentity(target) {
+    if (target?.platform === 'ios') return toolVersion(['xcrun', 'clang'], iosEnv());
+    if (target?.platform === 'darwin') return toolVersion([DARWIN_CC]);
+    return toolVersion(['emcc']);
+}
+
 // What a host conan builds with; for a container the image digest says the same.
 export function localToolchainIdentity(target) {
-    const compiler = target?.platform === 'ios' ? toolVersion(['xcrun', 'clang'], iosEnv()) : toolVersion(['emcc']);
-    return `${compiler}\n${conanVersion()}`;
+    return `${compilerIdentity(target)}\n${conanVersion()}`;
 }
 
 function assertLocalConan(target) {
@@ -172,8 +184,8 @@ function assertLocalConan(target) {
     const [needMajor, needMinor] = MIN_CONAN_VERSION;
     if (major > needMajor || (major === needMajor && minor >= needMinor)) return;
     const need = `Conan ${MIN_CONAN_VERSION.join('.')} or later; found ${conan || 'none'}.`;
-    throw new Error(target.platform === 'ios'
-        ? `crossbind: Conan packages for iOS build on this Mac, with the conan on the PATH, which must be ${need} Install or upgrade it with \`brew install conan\` (\`brew upgrade conan\`) or \`pipx install conan\`.`
+    throw new Error(HOST_BUILT_PLATFORMS.includes(target.platform)
+        ? `crossbind: Conan packages for ${APPLE_PLATFORM_NAMES[target.platform]} build on this Mac, with the conan on the PATH, which must be ${need} Install or upgrade it with \`brew install conan\` (\`brew upgrade conan\`) or \`pipx install conan\`.`
         : `crossbind: RUNNER=LOCAL runs conan from the PATH and needs ${need}`);
 }
 
@@ -184,11 +196,11 @@ export default function runConan(args, { config, target, work }) {
         if (!HOST_PLATFORMS.includes(target.platform)) {
             throw new Error(`crossbind: Conan packages for ${target.platform} build in the ${role} image, which RUNNER=LOCAL does not use.`);
         }
-        if (target.platform === 'ios' && process.platform !== 'darwin') {
-            throw new Error('crossbind: Conan packages for iOS build with Xcode, on a Mac.');
+        if (HOST_BUILT_PLATFORMS.includes(target.platform) && process.platform !== 'darwin') {
+            throw new Error(`crossbind: Conan packages for ${APPLE_PLATFORM_NAMES[target.platform]} build with Xcode, on a Mac.`);
         }
         assertLocalConan(target);
-        const env = withAppleTools(work, { ...(target.platform === 'ios' ? iosEnv() : allowedEnv()), CONAN_HOME: path.join(work.dir, 'home') });
+        const env = withAppleTools(work, { ...(target.platform === 'ios' ? iosEnv() : allowedEnv()), CONAN_HOME: path.join(work.dir, 'home') }, target);
         return spawnSync('conan', args, { ...options, cwd: work.dir, env });
     }
 

@@ -134,21 +134,25 @@ describe('installing the declared Conan packages', () => {
         expect(fs.readFileSync(upath.join(stageDir(), 'logs', `${TARGET.path}.log`), 'utf8')).toBe('built libpng\n');
     });
 
-    test('iOS packages build with the host conan and its store whatever runner the project uses', async () => {
-        const { installConanPackages, runConan } = await importFresh();
-        const ios = {
+    test.each([
+        ['iOS', {
             platform: 'ios', arch: 'iphoneos', runtime: 'mt', buildType: 'release', path: 'ios-iphoneos-mt-release',
-        };
+        }],
+        ['macOS', {
+            platform: 'darwin', arch: 'arm64', runtime: 'mt', buildType: 'release', path: 'darwin-arm64-mt-release',
+        }],
+    ])('%s packages build with the host conan and its store whatever runner the project uses', async (name, target) => {
+        const { installConanPackages, runConan } = await importFresh();
 
         let settingsUser;
         h.onRun = (work) => {
             settingsUser = fs.readFileSync(path.join(work.dir, 'home', 'settings_user.yml'), 'utf8');
         };
 
-        await installConanPackages({ ...configWith({ libpng: '1.6.58' }), system: { RUNNER: 'DOCKER_RUN' } }, [ios]);
+        await installConanPackages({ ...configWith({ libpng: '1.6.58' }), system: { RUNNER: 'DOCKER_RUN' } }, [target]);
 
         expect(runConan.mock.calls[0][1].work.runner).toBe('LOCAL');
-        expect(fs.existsSync(upath.join(stageDir(), 'packages', 'zlib', 'dist', 'prebuilt', ios.path, 'lib', 'libz.a'))).toBe(true);
+        expect(fs.existsSync(upath.join(stageDir(), 'packages', 'zlib', 'dist', 'prebuilt', target.path, 'lib', 'libz.a'))).toBe(true);
         expect(settingsUser).toBe('compiler:\n  apple-clang:\n    version: ["ANY"]\n');
     });
 

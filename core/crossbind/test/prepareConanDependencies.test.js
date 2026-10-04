@@ -27,12 +27,26 @@ const SIMULATOR = target('ios', 'iphonesimulator', 'mt');
 const IOS = [IPHONE, SIMULATOR, target('ios', 'iphoneos', 'mt', 'debug'), target('ios', 'iphonesimulator', 'mt', 'debug')];
 
 const installed = () => installConanPackages.mock.calls[0][1].map((t) => t.path);
+const hostPlatform = Object.getOwnPropertyDescriptor(process, 'platform');
+const runningOn = (platform) => Object.defineProperty(process, 'platform', { ...hostPlatform, value: platform });
 
 beforeEach(() => {
     h.state.config = { conanDependencies: { zlib: { version: '1.3.2', options: {} } }, allDependencies: [] };
     h.state.targets = [WASM32, WASM64, ANDROID];
     installConanPackages.mockClear();
     createXCFramework.mockClear();
+    // iOS and macOS packages build on a Mac alone.
+    runningOn('darwin');
+});
+
+afterEach(() => Object.defineProperty(process, 'platform', hostPlatform));
+
+test('a build on another machine leaves the iOS and macOS targets out, as the rest of the build does', async () => {
+    runningOn('linux');
+
+    await prepareConanDependencies([target('linux', 'x64', 'mt'), target('darwin', 'arm64', 'mt'), IPHONE]);
+
+    expect(installed()).toEqual(['linux-x64-mt-release']);
 });
 
 test('a wasm build also stages the first wasm target, which bridges read headers for', async () => {

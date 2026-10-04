@@ -11,6 +11,9 @@ import { WASM_EXCEPTION_FLAGS } from '../utils/archiveFlags.js';
 import { ANDROID_NDK, ANDROID_API_LEVEL } from '../utils/androidToolchain.js';
 import { IOS_DEVELOPER_DIR, IOS_DEPLOYMENT_TARGET, XCODE_TOOLCHAIN_BIN } from '../utils/iosToolchain.js';
 import { LINUX_ARCHIVE_FLAGS, linuxBuildEnv, linuxToolchainFile } from '../utils/linuxToolchain.js';
+import {
+    DARWIN_CC, DARWIN_CXX, DARWIN_DEPLOYMENT_TARGET, DARWIN_HOST_PACKAGE_PREFIXES, DARWIN_TOOLS_BIN,
+} from '../utils/darwinToolchain.js';
 
 // Native builds can outrun Node's 1 MiB default pipe buffer; without a raised cap a successful build dies with ENOBUFS.
 const EXEC_MAX_BUFFER = 512 * 1024 * 1024;
@@ -65,13 +68,10 @@ const androidParamsX86_64 = [
     `CFLAGS=--sysroot=${t2}/sysroot`,
 ];
 
-// Node 22, the oldest supported line, needs macOS 11.
-const DARWIN_DEPLOYMENT_TARGET = '11.0';
 const DARWIN_HOST_ARCH = process.arch === 'x64' ? 'x86_64' : 'arm64';
-const DARWIN_HOST_PACKAGE_PREFIXES = ['/opt/homebrew', '/usr/local', '/opt/local'];
 // Apple's own tools only, which find the SDK through xcrun. A GNU ar earlier on the PATH (Homebrew's
 // binutils) writes archives that Apple's linker rejects.
-const DARWIN_BUILD_PATH = '/usr/bin:/bin:/usr/sbin:/sbin';
+const DARWIN_BUILD_PATH = [DARWIN_TOOLS_BIN, '/bin', '/usr/sbin', '/sbin'].join(':');
 // The windows image's llvm-mingw and its CMake toolchain files, one per target triple.
 const LLVM_MINGW = '/opt/llvm-mingw';
 const WINDOWS_TOOLCHAIN = '/opt/crossbind/windows';
@@ -280,8 +280,7 @@ export default function run(program, params = [], platformPrefix = null, target 
             case 'darwin': {
                 [dProgram, ...dParams] = params;
                 const appleArch = target.arch === 'x64' ? 'x86_64' : 'arm64';
-                // Homebrew and MacPorts packages exist on the build machine only: an archive compiled
-                // against one fails to link, or to load, anywhere else. The SDK's libraries stay visible.
+                // None of the machine's own packages (DARWIN_HOST_PACKAGE_PREFIXES); the SDK's libraries stay visible.
                 platformParams = ['-e', 'PKG_CONFIG_LIBDIR='];
                 if (dProgram === 'cmake') {
                     if (dParams[0] !== '--build' && dParams[0] !== '--install') {
@@ -301,7 +300,7 @@ export default function run(program, params = [], platformPrefix = null, target 
                     // A --host triple sends configure after prefixed compilers (aarch64-apple-darwin-cc) that
                     // Xcode does not ship, and SQLite's autosetup has no fallback to the plain names.
                     platformParams.push(
-                        '-e', 'CC=/usr/bin/clang', '-e', 'CXX=/usr/bin/clang++',
+                        '-e', `CC=${DARWIN_CC}`, '-e', `CXX=${DARWIN_CXX}`,
                         '-e', `CFLAGS=${flags}`, '-e', `CXXFLAGS=${flags}`, '-e', `LDFLAGS=${flags}`,
                     );
                 }

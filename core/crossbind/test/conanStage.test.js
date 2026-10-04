@@ -79,6 +79,39 @@ describe('the packages of a conan graph', () => {
         expect(openssl.includedirs).toEqual([`${CONTAINER}/openssl/p/include`]);
     });
 
+    test('collects the system libraries and frameworks every component asks the link for', () => {
+        const graph = graphOf({
+            1: packageNode({
+                name: 'libcurl',
+                version: '8.22.0',
+                cppInfo: {
+                    root: { includedirs: [], libdirs: [], libs: [] },
+                    curl: {
+                        includedirs: [`${CONTAINER}/libcurl/p/include`],
+                        libdirs: [`${CONTAINER}/libcurl/p/lib`],
+                        libs: ['curl'],
+                        system_libs: ['rt', 'pthread'],
+                        frameworks: ['CoreFoundation', 'SystemConfiguration'],
+                    },
+                },
+            }),
+        });
+        const [curl] = conanPackagesOf(graph);
+        expect(curl.systemLibs).toEqual(['rt', 'pthread']);
+        expect(curl.frameworks).toEqual(['CoreFoundation', 'SystemConfiguration']);
+    });
+
+    // They become linker arguments.
+    test('a system library or framework that is no plain name is refused', () => {
+        const asking = (field, value) => graphOf({
+            1: packageNode({
+                name: 'zlib', version: '1.3.2', cppInfo: { root: { includedirs: [], libdirs: [], libs: ['z'], [field]: [value] } },
+            }),
+        });
+        expect(() => conanPackagesOf(asking('system_libs', '-Wl,--wrap=open'))).toThrow(/invalid systemLibs/);
+        expect(() => conanPackagesOf(asking('frameworks', '../Evil'))).toThrow(/invalid frameworks/);
+    });
+
     test('leaves out what conan skipped and test requirements', () => {
         // A header-only requirement of a static library that is already built: the consumer needs none of it.
         const graph = graphOf({
@@ -346,7 +379,7 @@ describe('the stage manifest', () => {
         writeConanManifest(scratch, WASM, { key: 'one', packages: [entry] });
 
         expect(readConanManifest(scratch, 'one').packages).toEqual([{
-            ...entry, homepage: null, source: null,
+            ...entry, homepage: null, source: null, systemLibs: [], frameworks: [],
         }]);
         expect(readConanManifest(scratch, 'two')).toBeNull();
     });
@@ -361,6 +394,9 @@ describe('the stage manifest', () => {
         const all = readConanManifest(scratch, 'one').packages.map((p) => p.name);
         expect([...all].sort()).toEqual(['curl', 'png', 'zlib']);
         expect(all.at(-1)).toBe('zlib');
+        const { targets } = readConanManifest(scratch, 'one');
+        expect(Object.keys(targets).sort()).toEqual([ANDROID, WASM]);
+        expect(targets[ANDROID].map((p) => p.name)).toEqual(['curl', 'zlib']);
     });
 
     test('a target not staged yet has no manifest', () => {
