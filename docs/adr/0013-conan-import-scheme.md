@@ -47,7 +47,10 @@ header of a declared package. Rules:
   hash-pinned wheels, behind an allowlisted environment and a lock around every install. iOS
   packages build on the Mac whatever the runner, since Xcode runs nowhere else, with the conan on
   the `PATH` (2.19 or later) and the `RUNNER=LOCAL` store. crossbind asks that conan its version
-  from a home of its own, since conan migrates the home it starts in.
+  from a home of its own, since conan migrates the home it starts in. On a Mac a run puts links to
+  Xcode's `ar`, `as`, `nm` (`llvm-nm`), `ranlib` and `strip` first on its `PATH`: a GNU `ar` ahead
+  of Apple's (Homebrew's binutils) writes archives Apple's linker cannot read, and recipes, the build
+  tools they build and Meson all take these tools by name.
 - Every install gets a fresh work directory holding its inputs, its outputs and a Conan home of its
   own, pinned by a `.conanrc` in the working directory and deleted with it. Only the package store
   persists: `~/.crossbind/conan/store`, the one directory a run container mounts besides its work
