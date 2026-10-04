@@ -94,8 +94,10 @@ links what it finds at `pod install`, so run `pod install` again after you chang
      `mt`, `-sMEMORY64=1` on wasm64;
    - Android, in the android image: its NDK through the NDK's own CMake toolchain, API level 33 and
      `c++_static`, as the ports' Android archives are built;
-   - iOS, on your Mac: the clang of `/Applications/Xcode.app` for the device and the simulator SDK,
-     arm64, deployment target 15.1 and `libc++`, as the ports' iOS archives are built.
+   - iOS, on your Mac: the clang and archive tools of `/Applications/Xcode.app` for the device and
+     the simulator SDK, arm64, deployment target 15.1 and `libc++`, as the ports' iOS archives are
+     built. Conan finds Xcode's `ar`, `nm`, `ranlib` and `strip` ahead of any on your `PATH`, such
+     as Homebrew's binutils, whose GNU archives Apple's linker cannot read.
 
    Every package is a static library.
 2. ConanCenter publishes no WebAssembly, Android or iOS binaries, so each package builds from

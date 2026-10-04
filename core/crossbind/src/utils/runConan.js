@@ -7,7 +7,7 @@ import makeTreeWritable from './makeTreeWritable.js';
 import pullDockerImage, { getDockerImage, getDockerContainerName, imageRoleFor } from './pullDockerImage.js';
 import { DOCKER_RUN_SECURITY_ARGS } from './dockerSecurity.js';
 import assertExecContainer from './execContainer.js';
-import { IOS_DEVELOPER_DIR } from './iosToolchain.js';
+import { IOS_DEVELOPER_DIR, XCODE_TOOLCHAIN_BIN } from './iosToolchain.js';
 
 // Every conan invocation crossbind makes goes through here. The config is passed in instead of read
 // from state, because state attaches the staged Conan packages while it is still being built.
@@ -122,6 +122,23 @@ function allowedEnv() {
 // The Xcode every crossbind iOS archive builds with, whichever one xcode-select points at.
 const iosEnv = () => ({ ...allowedEnv(), DEVELOPER_DIR: IOS_DEVELOPER_DIR });
 
+// A GNU ar or nm ahead of Apple's on a Mac's PATH (Homebrew's binutils) writes archives Apple's linker
+// cannot read, and recipes, the build tools they build and Meson all take these tools by name. So the
+// run gets links to Xcode's first on its PATH.
+const APPLE_TOOLS = {
+    ar: 'ar', as: 'as', nm: 'llvm-nm', ranlib: 'ranlib', strip: 'strip',
+};
+
+function withAppleTools(work, env) {
+    if (process.platform !== 'darwin') return env;
+    const dir = path.join(work.dir, 'apple-tools');
+    if (!fs.existsSync(dir)) {
+        fs.mkdirSync(dir);
+        Object.entries(APPLE_TOOLS).forEach(([name, tool]) => fs.symlinkSync(path.join(XCODE_TOOLCHAIN_BIN, tool), path.join(dir, name)));
+    }
+    return { ...env, PATH: [dir, env.PATH].filter(Boolean).join(path.delimiter) };
+}
+
 const toolVersions = new Map();
 // The first line a tool prints for --version, asked once.
 function toolVersion(command, env = allowedEnv(), cwd = undefined) {
@@ -171,7 +188,7 @@ export default function runConan(args, { config, target, work }) {
             throw new Error('crossbind: Conan packages for iOS build with Xcode, on a Mac.');
         }
         assertLocalConan(target);
-        const env = { ...(target.platform === 'ios' ? iosEnv() : allowedEnv()), CONAN_HOME: path.join(work.dir, 'home') };
+        const env = withAppleTools(work, { ...(target.platform === 'ios' ? iosEnv() : allowedEnv()), CONAN_HOME: path.join(work.dir, 'home') });
         return spawnSync('conan', args, { ...options, cwd: work.dir, env });
     }
 

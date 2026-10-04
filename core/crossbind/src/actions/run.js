@@ -9,7 +9,7 @@ import { wasiCFlags, wasiCxxFlags, resolveWasiSdkPath, WASI_TARGET_TRIPLE } from
 import { HOST_BUILT_PLATFORMS } from '../utils/targets.js';
 import { WASM_EXCEPTION_FLAGS } from '../utils/archiveFlags.js';
 import { ANDROID_NDK, ANDROID_API_LEVEL } from '../utils/androidToolchain.js';
-import { IOS_DEVELOPER_DIR, IOS_DEPLOYMENT_TARGET } from '../utils/iosToolchain.js';
+import { IOS_DEVELOPER_DIR, IOS_DEPLOYMENT_TARGET, XCODE_TOOLCHAIN_BIN } from '../utils/iosToolchain.js';
 
 // Native builds can outrun Node's 1 MiB default pipe buffer; without a raised cap a successful build dies with ENOBUFS.
 const EXEC_MAX_BUFFER = 512 * 1024 * 1024;
@@ -18,7 +18,7 @@ const CROSSCOMPILER_x86_64 = `x86_64-linux-android${ANDROID_API_LEVEL}`;
 const t = `${ANDROID_NDK}/toolchains/llvm/prebuilt/linux-x86_64/bin`;
 const t2 = `${ANDROID_NDK}/toolchains/llvm/prebuilt/linux-x86_64`;
 
-const iosBinPath = `${IOS_DEVELOPER_DIR}/Toolchains/XcodeDefault.xctoolchain/usr/bin`;
+const iosBinPath = XCODE_TOOLCHAIN_BIN;
 const iosSdkPath = `${IOS_DEVELOPER_DIR}/Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS.sdk`;
 const iosSimSdkPath = `${IOS_DEVELOPER_DIR}/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator.sdk`;
 

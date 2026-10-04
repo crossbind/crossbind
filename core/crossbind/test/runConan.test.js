@@ -136,6 +136,7 @@ describe('a conan work directory', () => {
 
 describe('runConan on the host', () => {
     test('drops every variable that picks a profile, a compiler or a remote login', async () => {
+        Object.defineProperty(process, 'platform', { ...hostPlatform, value: 'linux' });
         vi.stubEnv('CONAN_HOME', '/elsewhere');
         vi.stubEnv('CONAN_DEFAULT_PROFILE', 'other');
         vi.stubEnv('CONAN_LOGIN_USERNAME', 'someone');
@@ -157,6 +158,22 @@ describe('runConan on the host', () => {
         expect(env.CFLAGS).toBeUndefined();
         expect(env.PATH).toBe(process.env.PATH);
         expect(cwd).toBe(work.dir);
+    });
+
+    test.skipIf(process.platform === 'win32')("on a Mac, puts Xcode's archive tools ahead of a GNU ar on the PATH, for every package conan builds", async () => {
+        Object.defineProperty(process, 'platform', { ...hostPlatform, value: 'darwin' });
+        const { mod, spawnSync } = await importFresh();
+        const work = mod.createConanWork('LOCAL');
+
+        mod.default(['install'], { config: configWith('LOCAL'), target: wasm, work });
+
+        const { env } = installCall(spawnSync)[2];
+        const tools = path.join(work.dir, 'apple-tools');
+        const bin = '/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin';
+        expect(env.PATH).toBe(`${tools}${path.delimiter}${process.env.PATH}`);
+        expect(Object.fromEntries(fs.readdirSync(tools).map((name) => [name, fs.readlinkSync(path.join(tools, name))]))).toEqual({
+            ar: `${bin}/ar`, as: `${bin}/as`, nm: `${bin}/llvm-nm`, ranlib: `${bin}/ranlib`, strip: `${bin}/strip`,
+        });
     });
 
     test('keeps the proxy, certificate and Emscripten settings a build needs', async () => {
