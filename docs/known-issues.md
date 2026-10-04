@@ -588,3 +588,24 @@ says so. `run()` throws for the same value, and so does `conanRunner`.
 - Seen: 2026-10-03 (the security review of `conan:` imports; read from `runCargo.js`)
 - Check: `grep -n "'DOCKER_EXEC' ? runner : 'LOCAL'" core/crossbind/src/utils/runCargo.js` matches.
 - Remove when `cargoRunner` throws for a value that is not a runner.
+
+## An Android app can ship without a dependency's shared library
+
+The React Native plugin asks for CMake `3.25.0+` (`plugins/react-native/android/build.gradle`). On a
+machine whose Android SDK had CMake 3.22.1, 3.31.1, 4.1.0 and 4.1.2, the Android Gradle plugin
+built with 3.31.1, and the release APK of `examples/mobile-reactnative-cli` left out
+`libcrossbind-example-lib-prebuilt-matrix.so`, which `libreact-native-crossbind.so` needs: the app
+died at start with `dlopen failed: library "libcrossbind-example-lib-prebuilt-matrix.so" not found`.
+With `cmake.dir` set to the 4.1.2 that CI installs, the same build packaged it. Only zlib and
+openssl build static archives on Android (`libType: 'static'`); curl, webp, tiff and the ports that
+keep the default ship shared libraries there, so they are exposed the same way (not tried). Why AGP
+packages the library with one CMake and not the other was not traced.
+
+- Seen: 2026-10-04 (macOS; ninja ran from `sdk/cmake/3.31.1`)
+- Check: with no `android/local.properties` in `examples/mobile-reactnative-cli` and CMake 3.31.1
+  installed, run `pnpm --filter @crossbind/example-lib-prebuilt-matrix run build:android`, then
+  `pnpm exec react-native run-android --no-packager --mode Release --active-arch-only` in the
+  example; `unzip -l android/app/build/outputs/apk/release/app-release.apk | grep -c prebuilt-matrix`
+  prints 0.
+- Remove when the APK carries the dependency's `.so` whichever CMake the plugin's range lets AGP
+  pick.
