@@ -20,7 +20,7 @@ For PRs touching `ports/`:
 
 ### Structure
 
-- [ ] The family uses `ports/<name>/{base,wasm,android,ios,darwin,linux,linuxmusl,win32,wasi}`; add `bin-wasi/` only when an upstream CLI is published.
+- [ ] The family uses `ports/<name>/{base,wasm,android,ios,darwin,linux,linuxmusl,win32,wasi}`; add `standalone-wasi/` only when an upstream CLI is published.
 - [ ] `base/` contains `package.json`, `build.mjs`, `mergeConfig.mjs`, `README.md` and `.npmignore`.
 - [ ] Each platform variant has `package.json`, `crossbind.config.js`, `crossbind.build.js`, `README.md`, upstream `LICENSE` and `.npmignore`.
 - [ ] The iOS variant has any required `crossbind-port-<name>.podspec`, including `EXCLUDED_ARCHS[sdk=iphonesimulator*] = x86_64` when its prebuilt slices require that exclusion.
@@ -52,7 +52,7 @@ For PRs touching `ports/`:
 ### Validation
 
 - [ ] Every claimed platform variant builds clean: `pnpm --filter '@crossbind/port-<name>*' run build`.
-- [ ] An isolated `e2e/` fixture exercises the public port surface; an optional `bin-wasi/` package executes its published commands.
+- [ ] An isolated `e2e/` fixture exercises the public port surface; an optional `standalone-wasi/` package executes its published commands.
 - [ ] e2e: `pnpm run e2e:dev && pnpm run e2e:prod` pass.
 
 ## Fix / feature PRs (everything else)

@@ -100,6 +100,17 @@ console.log(`Result: ${Native.sample()}`);
 
 The exact output filename is `<general.name>-<target.path>.<runtimeEnv>.{js,wasm}`. For st-release: `<name>-wasm-wasm32-st-release.node.js`. For mt-release: `<name>-wasm-wasm32-mt-release.node.js`.
 
+The st-release build also writes `dist/node/wasm.mjs` and its `.d.mts`: one ES module that exports every bound class, function and constant, filled when `initNative()` resolves, so init options still reach the runtime:
+
+```js
+import { initNative, Native } from './dist/node/wasm.mjs';
+
+await initNative();
+console.log(`Result: ${Native.sample()}`);
+```
+
+A library publishes that module under a path of its own, as `@crossbind/example-lib-prebuilt-matrix/node/wasm` does. The loader is CommonJS with a `.js` extension, so the build writes `dist/package.json` with `"type": "commonjs"` when the output directory has none; it keeps loading as CommonJS inside a `"type": "module"` package.
+
 ## Multithread
 
 Node multithread (`runtime: 'mt'`) uses `worker_threads`. **No COOP/COEP needed** — that's a browser concern. Just build with `-r mt`. The loader fans out work across worker threads transparently.
@@ -114,7 +125,7 @@ Caveats:
 
 The same bindings can build a native Node-API addon instead of WebAssembly: for Electron's main process, native memory or system access. macOS, Linux (glibc and musl) and Windows, each for arm64 and x64. For a standalone executable from `main()` instead, build with `-e native` (see [`native.md`](../../api/native.md)).
 
-A library that is published as a ready-made Node package (`@crossbind/port-<name>-node`) needs no build at all: install it and import its headers, e.g. `import { crc32 } from '@crossbind/port-zlib-node/zlib.h'`; npm installs only the addon package of the machine (`examples/backend-nodejs-prebuilt/`). Build an addon of your own when the app has C++ code of its own or needs a library built differently.
+A library that is published as a standalone Node-API package (`@crossbind/port-<name>-standalone-napi`) needs no build at all: install it, import from its root and call `initNative()` once, e.g. `import { initNative, crc32 } from '@crossbind/port-zlib-standalone-napi'`; npm installs only the addon package of the machine. A library can also ship its addons itself, as `@crossbind/example-lib-prebuilt-matrix/node/napi` does (`examples/backend-nodejs-prebuilt/`). Build an addon of your own when the app has C++ code of its own or needs a library built differently.
 
 ```bash
 pnpm add -D crossbind @crossbind/core-embind-napi
@@ -125,6 +136,7 @@ pnpm crossbind build -p darwin,linux,linuxmusl,win32 -e node -b release   # opt-
 |--------|------|
 | `dist/<name>.<platform>-<arch>.node`, e.g. `<name>.darwin-arm64.node`, `<name>.linux-x64.node`, `<name>.linuxmusl-x64.node`, `<name>.win32-x64.node` | One addon per platform and architecture |
 | `dist/<name>.native.cjs` | Loader: picks the addon for `process.platform`/`process.arch`, and on Linux for the C library the process runs on (`linuxmusl` under musl). CommonJS on purpose, so `require` and `import` both load it whatever the package `type` is |
+| `dist/node/napi.mjs`, `dist/node/napi.d.mts` | Entry: every bound class, function and constant as an export that `initNative()` fills; a package publishes it as its root or under a path of its own. `require()` of it needs Node.js 22.12 or later |
 
 ```js
 const initNative = require('./dist/<name>.native.cjs');
@@ -157,6 +169,15 @@ Electron loads the same addon in its main process (verified on Electron 44 on ma
 
 Native is not automatically faster. On an M-series Mac a call returning or taking a short `std::string` took about 70 and 85 ns natively against 160 and 155 ns on wasm, but a `const char*` argument took about 1.2 µs against 0.33 µs, a callback into JavaScript about 2.1 µs against 0.5 µs, and compute-bound runs went either way; measure the real workload before switching.
 
+### Publishing the addons as packages
+
+To publish a library so that npm installs only the addon a machine needs, split it the way the `@crossbind/port-<name>-standalone-napi` packages are:
+
+- One package per platform you publish for, named `<package>-<platform>-<arch>`, e.g. `my-lib-linux-x64`. It sets `os`, `cpu` and on Linux `libc`, points `main` at its addon in `dist`, and builds it itself: `crossbind build -p linux -a x64 -e node -b release`. Its `crossbind.config` binds what the package users install binds; the ports spread `../standalone-napi/crossbind.config.js`.
+- The package users install lists those packages in `optionalDependencies`. Its build, `crossbind build -p <platforms> -e node -b release`, then links no addon: it writes the loader, `dist/node/napi.mjs` with its types, and the data.
+
+The packages it lists are the platforms it publishes for, three as well as eight. On a machine none of them covers, `initNative()` rejects with the platforms the package has addons for. `crossbind licenses [--platform <platform>] -e node --package` writes each package's `LICENSE`, `sbom.cdx.json` and `license` field.
+
 ## Validation
 
 - [ ] `pnpm install` succeeds.
@@ -180,7 +201,7 @@ Native is not automatically faster. On an M-series Mac a call returning or takin
 - `e2e/backend-nodejs/` — playground with prebuilt packages
 - `e2e/backend-nodejs-multithread/` — multithread reference (`-r mt`)
 - `examples/backend-nodejs-native/` — an app that builds its own addon (`-p darwin,linux,linuxmusl,win32 -e node`)
-- `examples/backend-nodejs-prebuilt/` — an app on a ready-made Node package, nothing to build
+- `examples/backend-nodejs-prebuilt/` — an app on a standalone Node-API package, nothing to build
 - `e2e/backend-nodejs-native/` — the conformance kit on the native addon
 
 Node runtime adapter: `core/crossbind/src/assets/js-runtime/node.js`. Native addon loader: `core/embind-napi/js/loader.js`.

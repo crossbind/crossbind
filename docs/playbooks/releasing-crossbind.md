@@ -71,14 +71,16 @@ No package is published while another selected artifact is still building:
 3. macOS builds the iOS packages and the macOS (`-darwin`) packages of native Node.js addons.
 4. `@crossbind/example-lib-prebuilt-matrix` is deliberately split across both runners: Ubuntu
    builds its Web, Android and WASI outputs and its Linux and Windows archives, macOS its iOS
-   outputs and macOS archives. The coordinator merges them and refuses conflicting files.
-5. The ready-made Node packages (ADR-0014) build after the Linux shards, from the platform
-   packages those shards packed, and the example library's from the archives they staged of it:
-   Ubuntu builds their Linux and Windows addons and hands the bridges it generated to macOS,
-   which builds their macOS addons without running SWIG. A train that publishes them publishes
+   outputs and macOS archives, and the node jobs of step 5 its Node-API addons. The coordinator
+   merges them and refuses conflicting files.
+5. The standalone Node-API packages (ADR-0014) build after the Linux shards, from the platform
+   packages those shards packed, and the example library's addons from its own sources:
+   Ubuntu builds the Linux and Windows addon packages and the packages of the bindings, each
+   with its own build, and generates the bridges of the macOS addon packages, which macOS
+   builds without running SWIG. A train that publishes them publishes
    the packages they link too; the plan refuses one that does not.
 6. The coordinator verifies that exactly one tarball exists for every selected package.
-7. The ready-made Node packages are installed from those exact tarballs on all eight addon
+7. The standalone Node-API packages are installed from those exact tarballs on all eight addon
    targets with every Node.js version in `.nvmrc` and `releases/npm/node-22.version`, and each
    family's `e2e/check.mjs` runs, alone and together with the others.
 8. Only then can the protected `npm-release` job start.

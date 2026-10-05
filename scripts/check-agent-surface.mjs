@@ -72,7 +72,7 @@ const excludedDirectories = new Set(['docs/adr', 'docs/research']);
 const excludedDirectoryNames = new Set(['node_modules', 'dist', '.crossbind']);
 const forbiddenContent = /@crossbind\/mcp|mcpServers|crossbind_(?:recommend|list_ports|detect_framework|get_api_reference|scaffold_port|build_port|check_native_versions|doctor|cloud_build_port)|9 MCP tools/i;
 const removedDocumentationRoutes = /crossbind\.dev\/docs\/agent|crossbind\.dev\/llms/i;
-const obsoleteRepositoryLanguage = /crossbind-package|sub-arches?|coming via MCP|Sprint \d+|build:(?:packages|samples|playgrounds)|ports\/<[^>]+>-(?:wasm|android|ios|wasi|bin-wasi)/i;
+const obsoleteRepositoryLanguage = /crossbind-package|sub-arches?|coming via MCP|Sprint \d+|build:(?:packages|samples|playgrounds)|ports\/<[^>]+>-(?:wasm|android|ios|wasi|standalone-wasi)/i;
 
 function textFiles(target) {
     if (!fs.existsSync(target)) return [];

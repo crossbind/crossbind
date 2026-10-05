@@ -456,7 +456,7 @@ function deriveLibraryKey(pkgPath) {
 // formatting (indentation, key order, trailing newline).
 function rewriteNativeVersion(pkgPath, newVersion) {
     const original = fs.readFileSync(pkgPath, 'utf8');
-    // bin-wasi manifests also contain a generated source component entry. Keep
+    // standalone-wasi manifests also contain a generated source component entry. Keep
     // every nativeVersion occurrence in one package internally consistent.
     const re = /("nativeVersion"\s*:\s*")([^"]*)(")/g;
     if (!re.test(original)) {

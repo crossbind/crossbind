@@ -12,7 +12,7 @@ ADRs are **immutable**. When a decision is overturned, write a new ADR that supe
 | [0002](./0002-pnpm-topological-build-order.md) | Use pnpm workspace dependencies for transitive C++ build order | Accepted | All `ports/*/*/package.json` |
 | [0003](./0003-function-typed-env-values.md) | Allow env values in `crossbind.config.js` to be functions of `(state, target)` | Accepted | `core/crossbind/src/state/`, plugin authors |
 | [0004](./0004-three-layer-agent-distribution.md) | Distribute agent integration in three layers | Superseded by ADR-0010 | Historical agent distribution architecture |
-| [0005](./0005-wasi-platform.md) | Add `platform: 'wasi'` as a first-class build platform (wasm32-wasip3 command components) | Accepted | `buildWasiCommand.js`, `-wasi`/`-bin-wasi` packages, CI |
+| [0005](./0005-wasi-platform.md) | Add `platform: 'wasi'` as a first-class build platform (wasm32-wasip3 command components) | Accepted | `buildWasiCommand.js`, `-wasi`/`-standalone-wasi` packages, CI |
 | [0006](./0006-rust-bindings.md) | Bind plain Rust through a flat C ABI; the engine never depends on the binding layer | Accepted | `core-embind-rust/`, `rustBridgeGen.js`, bundler plugins |
 | [0007](./0007-cargo-import-scheme.md) | Prefix direct crate imports with `cargo:` | Accepted | `getDependFilePath.js`, bundler plugins, `cargoDependencies` |
 | [0008](./0008-bin-license-contract.md) | Govern published binaries with a derived Bin & License Contract (K1-K4) | Accepted | `ports/README.md`, `buildBinTools.js`, `check-publish-hygiene.js` |
@@ -21,7 +21,7 @@ ADRs are **immutable**. When a decision is overturned, write a new ADR that supe
 | [0011](./0011-native-node-addons.md) | Build native Node.js addons from the same bindings, on embind-jsi over Node-API | Proposed | `core/embind-napi/`, `core/embind-jsi/`, `buildNode.js`, darwin targets |
 | [0012](./0012-musl-node-addons.md) | Build musl Linux addons as their own platform, `linuxmusl`, in the `linux` image | Proposed | `targets.js`, `addonPlatform.js`, `linux.Dockerfile`, `ports/*/linuxmusl` |
 | [0013](./0013-conan-import-scheme.md) | Build ConanCenter packages behind a `conan:` header scheme | Proposed | `getDependFilePath.js`, bundler plugins, `conanDependencies`, `base.Dockerfile`, `runConan.js` |
-| [0014](./0014-ready-made-node-packages.md) | Publish each port as a ready-made Node package with an addon package per platform | Proposed | `ports/*/node*`, `examples/lib-prebuilt-matrix-node*`, `stage-node-addons.mjs`, `check-node-package.mjs`, `scripts/release/node-packages.mjs`, `release-crossbind.yml` |
+| [0014](./0014-ready-made-node-packages.md) | Publish each port as a standalone Node-API package with an addon package per platform | Proposed | `ports/*/standalone-napi*`, `check-node-package.mjs`, `scripts/release/node-packages.mjs`, `release-crossbind.yml` |
 
 ## Writing a new ADR
 

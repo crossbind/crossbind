@@ -99,7 +99,7 @@ test('every GitHub Actions Node job uses the exact repository pin', () => {
     }
 });
 
-test('the train verifies ready-made Node packages with exact Node.js pins only', () => {
+test('the train verifies standalone Node-API packages with exact Node.js pins only', () => {
     const source = fs.readFileSync(path.join(ROOT, '.github', 'workflows', 'release-crossbind.yml'), 'utf8');
     const matrix = /\n\s+node-version-file: \[([^\]]+)\]/
         .exec(source)?.[1]

@@ -176,7 +176,7 @@ This is the main package; the precompiled binaries are shipped per platform:
 | Linux | [`@crossbind/port-sqlite3-linux`](https://www.npmjs.com/package/@crossbind/port-sqlite3-linux) | `x64`, `arm64` — glibc 2.28 or later, native Node.js addons |
 | Windows | [`@crossbind/port-sqlite3-win32`](https://www.npmjs.com/package/@crossbind/port-sqlite3-win32) | `x64`, `arm64` — Windows 10 or later, native Node.js addons |
 | WASI library | [`@crossbind/port-sqlite3-wasi`](https://www.npmjs.com/package/@crossbind/port-sqlite3-wasi) | `wasm32-wasip3` — single-threaded |
-| WASI command | [`@crossbind/port-sqlite3-bin-wasi`](https://www.npmjs.com/package/@crossbind/port-sqlite3-bin-wasi) | the upstream `sqlite3` shell as a `sqlite3-wasi` command (wasmtime 47+), marked experimental |
+| WASI command | [`@crossbind/port-sqlite3-standalone-wasi`](https://www.npmjs.com/package/@crossbind/port-sqlite3-standalone-wasi) | the upstream `sqlite3` shell as a `sqlite3-wasi` command (wasmtime 47+), marked experimental |
 
 ## License
 This project includes the precompiled SQLite3 library, which is released into the [public domain](https://www.sqlite.org/copyright.html).

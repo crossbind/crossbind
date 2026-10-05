@@ -19,7 +19,7 @@ function setState({ withSha256 = true } = {}) {
     // The sdk path resolver reads the environment first; pin it so a developer's real sdk cannot leak in.
     vi.stubEnv('CROSSBIND_WASI_SDK_PATH', sdkDir);
     state.config = {
-        package: { name: '@demo/family-bin-wasi', nativeVersion: '3.13.2' },
+        package: { name: '@demo/family-standalone-wasi', nativeVersion: '3.13.2' },
         general: { alias: { package: '@demo/family' } },
         paths: { project: variantDir },
         system: { WASI_SDK_PATH: sdkDir },
@@ -32,10 +32,10 @@ function setState({ withSha256 = true } = {}) {
 
 beforeAll(() => {
     work = fs.mkdtempSync(path.join(os.tmpdir(), 'crossbind-provenance-'));
-    variantDir = path.join(work, 'demo-bin-wasi');
+    variantDir = path.join(work, 'demo-standalone-wasi');
     const familyDir = path.join(variantDir, 'node_modules/@demo/family');
     fs.mkdirSync(familyDir, { recursive: true });
-    fs.writeFileSync(path.join(variantDir, 'package.json'), JSON.stringify({ name: '@demo/family-bin-wasi' }));
+    fs.writeFileSync(path.join(variantDir, 'package.json'), JSON.stringify({ name: '@demo/family-standalone-wasi' }));
     fs.writeFileSync(path.join(familyDir, 'package.json'), JSON.stringify({ name: '@demo/family', version: '2.0.0-beta.33' }));
 
     sdkDir = path.join(work, 'wasi-sdk');

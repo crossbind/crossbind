@@ -109,8 +109,9 @@ export function readTrainVersion(root = process.cwd()) {
 
 // The runners a release builds on. Every one but macos, node and node-macos is a shard of the Linux
 // build job; linux-native and win32-native build the Node.js addon packages in the linux and windows
-// images, linux-native both the glibc and the musl ones. node and node-macos build the ready-made Node
-// packages from what those runners made (scripts/release/node-packages.mjs).
+// images, linux-native both the glibc and the musl ones. node and node-macos build the standalone Node-API
+// packages and the multi-platform library's addons from what those runners made
+// (scripts/release/node-packages.mjs).
 export const RUNNERS = ['linux', 'wasm', 'android', 'wasi', 'linux-native', 'win32-native', 'macos', 'node', 'node-macos'];
 const LINUX_RUNNERS = RUNNERS.filter((runner) => !['macos', 'node', 'node-macos'].includes(runner));
 // The build-<runner>.json manifests under a directory of downloaded artifacts, with the directory of each.
@@ -127,7 +128,8 @@ export function findBuildManifests(directory) {
     return manifests;
 }
 
-// The platforms each runner builds of the multi-platform package.
+// The platforms each runner builds of the multi-platform package. The node runners build its Node-API addons
+// too (scripts/release/node-packages.mjs), so they stage part of it as well.
 export const MULTI_PLATFORM_BUILDS = {
     wasm: ['wasm'],
     android: ['android'],
@@ -136,7 +138,7 @@ export const MULTI_PLATFORM_BUILDS = {
     'linux-native': ['linux', 'linuxmusl'],
     'win32-native': ['win32'],
 };
-export const MULTI_PLATFORM_RUNNERS = Object.keys(MULTI_PLATFORM_BUILDS);
+export const MULTI_PLATFORM_RUNNERS = [...Object.keys(MULTI_PLATFORM_BUILDS), 'node', 'node-macos'];
 
 // A build makes binaries only for the runtime environments it names, and the multi-platform
 // package publishes every binary its platform has. On the desktop platforms a library publishes
@@ -262,15 +264,14 @@ function dependencyClosure(packages, candidateNames, { publish = false } = {}) {
     return closure;
 }
 
-// A ready-made Node package links its family's platform packages, and theirs, from the tarballs its own train
-// packs (scripts/release/node-packages.mjs), so a train that publishes it publishes that closure too. The
-// example library's Node package links the archives the train builds of the multi-platform library.
-const PLATFORM_BUILD_KINDS = ['linux-native', 'win32-native', 'macos', 'multi-platform'];
+// A standalone Node-API package reads its family's platform packages, and theirs, from the tarballs its own train
+// packs (scripts/release/node-packages.mjs), so a train that publishes it publishes that closure too.
+const PLATFORM_BUILD_KINDS = ['linux-native', 'win32-native', 'macos'];
 function assertNodeLinksInTrain(packages, candidates) {
     const byName = new Map(packages.map((candidate) => [candidate.name, candidate]));
     const selected = new Set(candidates.map((candidate) => candidate.name));
     const isPlatformPackage = (name) => PLATFORM_BUILD_KINDS.includes(byName.get(name)?.buildKind);
-    for (const candidate of candidates.filter((entry) => entry.buildKind === 'node' && !entry.manifest.os)) {
+    for (const candidate of candidates.filter((entry) => ['node', 'node-macos'].includes(entry.buildKind))) {
         const linked = Object.keys(candidate.manifest.devDependencies ?? {}).filter(isPlatformPackage);
         const missing = [...dependencyClosure(packages, linked)].filter((name) => isPlatformPackage(name) && !selected.has(name)).sort();
         if (missing.length) {

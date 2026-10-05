@@ -1,0 +1,32 @@
+{
+    "name": "@crossbind/port-zstd-standalone-napi-darwin-arm64",
+    "version": "2.0.0-beta.62",
+    "nativeVersion": "1.5.7",
+    "homepage": "https://github.com/crossbind/crossbind/tree/main/ports/zstd#readme",
+    "repository": "https://github.com/crossbind/crossbind.git",
+    "license": "(BSD-3-Clause OR GPL-2.0-only) AND (MIT OR NCSA) AND MIT",
+    "description": "macOS arm64 addon of @crossbind/port-zstd-standalone-napi, which npm installs on a matching machine.",
+    "os": [
+        "darwin"
+    ],
+    "cpu": [
+        "arm64"
+    ],
+    "main": "dist/zstd-standalone-napi.darwin-arm64.node",
+    "files": [
+        "dist/zstd-standalone-napi.darwin-arm64.node",
+        "sbom.cdx.json"
+    ],
+    "scripts": {
+        "build": "crossbind build -p darwin -a arm64 -e node -b release && crossbind licenses --platform darwin -e node --package",
+        "clear": "rm -rf .crossbind dist",
+        "prepack": "node ../../../scripts/check-node-package.mjs"
+    },
+    "devDependencies": {
+        "crossbind": "workspace:^",
+        "@crossbind/port-zstd-darwin": "workspace:^",
+        "@crossbind/port-zstd-linux": "workspace:^",
+        "@crossbind/port-zstd-linuxmusl": "workspace:^",
+        "@crossbind/port-zstd-win32": "workspace:^"
+    }
+}

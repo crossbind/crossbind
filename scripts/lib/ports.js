@@ -2,9 +2,9 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 // Layout: ports/<family>/<target>, where target is "base" (the brand package,
-// @crossbind/port-<family>) or a platform (wasm, wasi, bin-wasi, android, ios, darwin, linux, linuxmusl, win32).
+// @crossbind/port-<family>) or a platform (wasm, wasi, standalone-wasi, android, ios, darwin, linux, linuxmusl, win32).
 export const BASE = 'base';
-export const PLATFORMS = ['wasm', 'wasi', 'bin-wasi', 'android', 'ios', 'darwin', 'linux', 'linuxmusl', 'win32'];
+export const PLATFORMS = ['wasm', 'wasi', 'standalone-wasi', 'android', 'ios', 'darwin', 'linux', 'linuxmusl', 'win32'];
 
 export const portsRoot = (root) => path.join(root, 'ports');
 export const familyDir = (root, family) => path.join(portsRoot(root), family);

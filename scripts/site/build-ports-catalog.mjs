@@ -14,9 +14,9 @@ export const REPOSITORY_URL = 'https://github.com/crossbind/crossbind';
 export const REGISTRY_URL = 'https://registry.npmjs.org';
 export const REGISTRY_TIMEOUT_MS = 30 * 1000;
 export const REGISTRY_CONCURRENCY = 8;
-// WASI command tools are the `-bin-wasi` packages and nothing else; an Emscripten web build or a
+// WASI command tools are the `-standalone-wasi` packages and nothing else; an Emscripten web build or a
 // `-wasi` library package is never listed as a command tool.
-export const BIN_TARGET = 'bin-wasi';
+export const BIN_TARGET = 'standalone-wasi';
 export const LIBRARY_TARGETS = PLATFORMS.filter((target) => target !== BIN_TARGET);
 
 // How upstream spells its own name; the family slug is the fallback for a port not listed here.

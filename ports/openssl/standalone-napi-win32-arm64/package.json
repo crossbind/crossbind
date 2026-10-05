@@ -1,0 +1,32 @@
+{
+    "name": "@crossbind/port-openssl-standalone-napi-win32-arm64",
+    "version": "2.0.0-beta.62",
+    "nativeVersion": "4.0.2",
+    "homepage": "https://github.com/crossbind/crossbind/tree/main/ports/openssl#readme",
+    "repository": "https://github.com/crossbind/crossbind.git",
+    "license": "(Apache-2.0 WITH LLVM-exception) AND (MIT OR NCSA) AND Apache-2.0 AND LicenseRef-MinGW-w64-runtime AND MIT",
+    "description": "Windows arm64 addon of @crossbind/port-openssl-standalone-napi, which npm installs on a matching machine.",
+    "os": [
+        "win32"
+    ],
+    "cpu": [
+        "arm64"
+    ],
+    "main": "dist/openssl-standalone-napi.win32-arm64.node",
+    "files": [
+        "dist/openssl-standalone-napi.win32-arm64.node",
+        "sbom.cdx.json"
+    ],
+    "scripts": {
+        "build": "crossbind build -p win32 -a arm64 -e node -b release && crossbind licenses --platform win32 -e node --package",
+        "clear": "rm -rf .crossbind dist",
+        "prepack": "node ../../../scripts/check-node-package.mjs"
+    },
+    "devDependencies": {
+        "crossbind": "workspace:^",
+        "@crossbind/port-openssl-darwin": "workspace:^",
+        "@crossbind/port-openssl-linux": "workspace:^",
+        "@crossbind/port-openssl-linuxmusl": "workspace:^",
+        "@crossbind/port-openssl-win32": "workspace:^"
+    }
+}

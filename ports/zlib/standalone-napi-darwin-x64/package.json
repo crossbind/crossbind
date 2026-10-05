@@ -1,0 +1,32 @@
+{
+    "name": "@crossbind/port-zlib-standalone-napi-darwin-x64",
+    "version": "2.0.0-beta.62",
+    "nativeVersion": "1.3.2",
+    "homepage": "https://github.com/crossbind/crossbind/tree/main/ports/zlib#readme",
+    "repository": "https://github.com/crossbind/crossbind.git",
+    "license": "(MIT OR NCSA) AND MIT AND Zlib",
+    "description": "macOS x64 addon of @crossbind/port-zlib-standalone-napi, which npm installs on a matching machine.",
+    "os": [
+        "darwin"
+    ],
+    "cpu": [
+        "x64"
+    ],
+    "main": "dist/zlib-standalone-napi.darwin-x64.node",
+    "files": [
+        "dist/zlib-standalone-napi.darwin-x64.node",
+        "sbom.cdx.json"
+    ],
+    "scripts": {
+        "build": "crossbind build -p darwin -a x64 -e node -b release && crossbind licenses --platform darwin -e node --package",
+        "clear": "rm -rf .crossbind dist",
+        "prepack": "node ../../../scripts/check-node-package.mjs"
+    },
+    "devDependencies": {
+        "crossbind": "workspace:^",
+        "@crossbind/port-zlib-darwin": "workspace:^",
+        "@crossbind/port-zlib-linux": "workspace:^",
+        "@crossbind/port-zlib-linuxmusl": "workspace:^",
+        "@crossbind/port-zlib-win32": "workspace:^"
+    }
+}

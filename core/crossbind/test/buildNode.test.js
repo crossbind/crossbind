@@ -27,7 +27,9 @@ vi.mock('../src/utils/logger.js', () => ({
 }));
 vi.mock('../src/state/index.js', () => ({ default: state }));
 
-const { default: buildNode, nodeLoaderConfig, publishNodeData } = await import('../src/actions/buildNode.js');
+const {
+    default: buildNode, addonsInPackages, bundleNodeLoader, nodeLoaderConfig, publishNodeData,
+} = await import('../src/actions/buildNode.js');
 
 const target = {
     platform: 'darwin',
@@ -218,13 +220,13 @@ describe('buildNode', () => {
 
     test('points the loader at the platform packages a package lists as optional dependencies', () => {
         state.config.package = {
-            name: '@crossbind/port-zlib-node',
-            optionalDependencies: { '@crossbind/port-zlib-node-darwin-arm64': '2.0.0' },
+            name: '@crossbind/port-zlib-standalone-napi',
+            optionalDependencies: { '@crossbind/port-zlib-standalone-napi-darwin-arm64': '2.0.0' },
         };
 
         expect(nodeLoaderConfig(target).paths).toEqual({
             addon: 'demo.{platform}-{arch}.node',
-            addonPackage: '@crossbind/port-zlib-node-{platform}-{arch}',
+            addonPackage: '@crossbind/port-zlib-standalone-napi-{platform}-{arch}',
         });
     });
 
@@ -233,6 +235,41 @@ describe('buildNode', () => {
         state.config.package = { name: 'demo-app', optionalDependencies: { fsevents: '2.3.3' } };
 
         expect(nodeLoaderConfig(target).paths).toEqual({ addon: 'demo.{platform}-{arch}.node' });
+    });
+
+    // Each listed platform package links its own addon, so the package that lists any builds none; the
+    // packages it lists are the platforms it publishes for.
+    test('finds addons in packages when the package lists any', () => {
+        state.targets = [target, { ...target, arch: 'x64' }, { ...target, platform: 'linux', arch: 'x64' }];
+        state.config.package = {
+            name: '@crossbind/port-zlib-standalone-napi',
+            optionalDependencies: { '@crossbind/port-zlib-standalone-napi-linux-x64': '2.0.0' },
+        };
+
+        expect(addonsInPackages()).toBe(true);
+        state.config.package = { name: 'demo-app', optionalDependencies: { fsevents: '2.3.3' } };
+        expect(addonsInPackages()).toBe(false);
+    });
+
+    test('tells the loader only about the platforms the package publishes addons for', () => {
+        const linux = { ...target, platform: 'linux', arch: 'x64' };
+        state.targets = [target, { ...target, arch: 'x64' }, linux];
+        state.config.package = {
+            name: '@crossbind/port-zlib-standalone-napi',
+            optionalDependencies: {
+                '@crossbind/port-zlib-standalone-napi-darwin-arm64': '2.0.0',
+                '@crossbind/port-zlib-standalone-napi-linux-x64': '2.0.0',
+            },
+        };
+
+        expect(Object.keys(nodeLoaderConfig(linux).env)).toEqual(['darwin-arm64', 'linux-x64']);
+    });
+
+    test('bundles the loader alone, linking no addon', async () => {
+        await bundleNodeLoader(target);
+
+        expect(run).not.toHaveBeenCalled();
+        expect(written.map(({ output }) => output.file)).toEqual([`${work}/demo.native.cjs`]);
     });
 
     test('serves the cached addon while its link inputs are unchanged', async () => {

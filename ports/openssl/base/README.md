@@ -230,7 +230,7 @@ Setup and differences per platform: [WebAssembly](https://crossbind.dev/ports/op
 - No `openssl.cnf` either: OpenSSL runs on its built-in defaults. Keys and nonces draw on the browser's `crypto.getRandomValues`.
 - The module behind the five examples and three apps is 4,037,192 bytes of WebAssembly and 137,522 bytes of JavaScript. Most of it is libcrypto with its default provider, which any use of EVP brings in: a module that only hashed and encrypted measured 2,761,152 bytes, one that only read the version 224,494, and libssl adds about 0.9 MB.
 - OpenSSL 4 changes met on the way: `X509_get_subject_name` returns a `const X509_NAME*`, so build a name with `X509_NAME_new` and set it with `X509_set_subject_name`; and `-text` output now wraps hex dumps at 16 bytes, 24 for signatures, and gives an EC key's size as `256 bit field, 128 bit security level`.
-- The `openssl` command is not in the library packages; `@crossbind/port-openssl-bin-wasi` ships it as an `openssl-wasi` command for offline work, without `s_client` and `s_server`.
+- The `openssl` command is not in the library packages; `@crossbind/port-openssl-standalone-wasi` ships it as an `openssl-wasi` command for offline work, without `s_client` and `s_server`.
 
 ## Supported platforms
 This is the main package; the precompiled binaries are shipped per platform:
@@ -244,7 +244,7 @@ This is the main package; the precompiled binaries are shipped per platform:
 | Linux | [`@crossbind/port-openssl-linux`](https://www.npmjs.com/package/@crossbind/port-openssl-linux) | `x64`, `arm64` — glibc 2.28 or later, native Node.js addons |
 | Windows | [`@crossbind/port-openssl-win32`](https://www.npmjs.com/package/@crossbind/port-openssl-win32) | `x64`, `arm64` — Windows 10 or later, native Node.js addons |
 | WASI library | [`@crossbind/port-openssl-wasi`](https://www.npmjs.com/package/@crossbind/port-openssl-wasi) | `wasm32-wasip3` — single-threaded |
-| WASI command | [`@crossbind/port-openssl-bin-wasi`](https://www.npmjs.com/package/@crossbind/port-openssl-bin-wasi) | the upstream `openssl` CLI as an `openssl-wasi` command (wasmtime 47+) |
+| WASI command | [`@crossbind/port-openssl-standalone-wasi`](https://www.npmjs.com/package/@crossbind/port-openssl-standalone-wasi) | the upstream `openssl` CLI as an `openssl-wasi` command (wasmtime 47+) |
 
 ## License
 This project includes the precompiled OpenSSL library, which is distributed under the [Apache License 2.0](https://github.com/openssl/openssl/blob/master/LICENSE.txt).

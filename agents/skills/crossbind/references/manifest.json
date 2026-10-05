@@ -9,12 +9,12 @@
     {
       "source": "docs/playbooks/new-port.md",
       "output": "port.md",
-      "sha256": "0390030e9024acd8f947336ab38a4da824ae8acbd8b34316deaa7b6339a459b1"
+      "sha256": "78c331f357b4987201f4e68c714428999325da9a4a67febd096a5ab4a5fe7770"
     },
     {
       "source": "docs/api/README.md",
       "output": "api/README.md",
-      "sha256": "62feca452703986c573bd98d3bf73b1dac53e20dcb904711e2e4e89d051d93d4"
+      "sha256": "062c143b83eed669287874403a94dd9e324135bd0476c78cfef856cb7e80bdd6"
     },
     {
       "source": "docs/api/build-state.md",
@@ -39,7 +39,7 @@
     {
       "source": "docs/api/crossbind-config.md",
       "output": "api/crossbind-config.md",
-      "sha256": "e1610c264cc3e342f638e28d78e3772240ee4b7af0b31331de5602a5995ba03a"
+      "sha256": "b03c554488c4c6515b2993a4a6fabbbcc44170374b0c5c212728f2fb027fa758"
     },
     {
       "source": "docs/api/filesystem.md",
@@ -49,7 +49,7 @@
     {
       "source": "docs/api/init.md",
       "output": "api/init.md",
-      "sha256": "cf87f687c4aa327ec85de69ed22ce776214e1a3cb8fcf1c78cd18a3030e41590"
+      "sha256": "fa6fbd42685748cf5867dc28c225572e16a33aaae3e674f82530ba8304f7ce1d"
     },
     {
       "source": "docs/api/lifecycle-and-types.md",
@@ -94,7 +94,7 @@
     {
       "source": "docs/api/wasi.md",
       "output": "api/wasi.md",
-      "sha256": "4612b55db528a0a669bc417df215377829b9ee8a22c17e06e3a774df5de2f360"
+      "sha256": "d408bc9d653573a1cf89fc9b6715a69361759c476d341d6c59731ee4ffae330d"
     },
     {
       "source": "docs/playbooks/integration/README.md",
@@ -114,7 +114,7 @@
     {
       "source": "docs/playbooks/integration/nodejs.md",
       "output": "integration/nodejs.md",
-      "sha256": "3e798ccd818dc4d81af72018653ea608884c91126a52b3de76f46bc57e52789f"
+      "sha256": "f5a96e023abe579c90f57a129d2783fee0d527528694c2568b6dcea1c383d8bf"
     },
     {
       "source": "docs/playbooks/integration/react-native-cli.md",
@@ -149,7 +149,7 @@
     {
       "source": "ports/catalog.json + ports/*/package.json",
       "output": "ports.json",
-      "sha256": "3420178f229eda32bc2c4c22d8bc83aacda18f88fce76354daa0a4c777430fc4"
+      "sha256": "976343d15741c1a6df58a816b8bea8eb3130f00d82289123e2614e2a92344334"
     }
   ]
 }

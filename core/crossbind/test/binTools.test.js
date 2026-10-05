@@ -99,7 +99,7 @@ describe('renderDispatcher', () => {
 
 describe('multitoolWorkRoot', () => {
     test('keeps multitool objects inside the mounted build tree instead of the host temp dir', () => {
-        expect(multitoolWorkRoot('/repo/ports/gdal/bin-wasi/.crossbind/build', 'Source-Release', 'wasi-wasm32-st-release'))
-            .toBe('/repo/ports/gdal/bin-wasi/.crossbind/build/Source-Release/wasi-wasm32-st-release');
+        expect(multitoolWorkRoot('/repo/ports/gdal/standalone-wasi/.crossbind/build', 'Source-Release', 'wasi-wasm32-st-release'))
+            .toBe('/repo/ports/gdal/standalone-wasi/.crossbind/build/Source-Release/wasi-wasm32-st-release');
     });
 });

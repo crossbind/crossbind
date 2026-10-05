@@ -1,0 +1,32 @@
+{
+    "name": "@crossbind/port-lerc-standalone-napi-darwin-arm64",
+    "version": "2.0.0-beta.62",
+    "nativeVersion": "4.2.0",
+    "homepage": "https://github.com/crossbind/crossbind/tree/main/ports/lerc#readme",
+    "repository": "https://github.com/crossbind/crossbind.git",
+    "license": "(MIT OR NCSA) AND Apache-2.0 AND MIT",
+    "description": "macOS arm64 addon of @crossbind/port-lerc-standalone-napi, which npm installs on a matching machine.",
+    "os": [
+        "darwin"
+    ],
+    "cpu": [
+        "arm64"
+    ],
+    "main": "dist/lerc-standalone-napi.darwin-arm64.node",
+    "files": [
+        "dist/lerc-standalone-napi.darwin-arm64.node",
+        "sbom.cdx.json"
+    ],
+    "scripts": {
+        "build": "crossbind build -p darwin -a arm64 -e node -b release && crossbind licenses --platform darwin -e node --package",
+        "clear": "rm -rf .crossbind dist",
+        "prepack": "node ../../../scripts/check-node-package.mjs"
+    },
+    "devDependencies": {
+        "crossbind": "workspace:^",
+        "@crossbind/port-lerc-darwin": "workspace:^",
+        "@crossbind/port-lerc-linux": "workspace:^",
+        "@crossbind/port-lerc-linuxmusl": "workspace:^",
+        "@crossbind/port-lerc-win32": "workspace:^"
+    }
+}

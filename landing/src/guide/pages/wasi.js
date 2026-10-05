@@ -49,12 +49,12 @@ wasmtime run --dir=. dist/myapp-wasi-wasm32-st-release.wasm input.txt`,
         { type: 'h2', id: 'tools', text: 'CLI tools from npm' },
         {
             type: 'p',
-            text: 'Where an upstream project ships command-line tools, a `-bin-wasi` package publishes them prebuilt. Install and run - no compiler involved, only wasmtime on your PATH:',
+            text: 'Where an upstream project ships command-line tools, a `-standalone-wasi` package publishes them prebuilt. Install and run - no compiler involved, only wasmtime on your PATH:',
         },
         {
             type: 'code',
             file: 'shell',
-            code: `npm i -g @crossbind/port-gdal-bin-wasi
+            code: `npm i -g @crossbind/port-gdal-standalone-wasi
 gdalinfo-wasi --version
 ogr2ogr-wasi out.gpkg in.geojson`,
         },

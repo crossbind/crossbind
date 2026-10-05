@@ -9,7 +9,7 @@
 Create a `ports/<name>/` family that:
 
 - Builds the supported `wasm`, `android`, `ios`, `darwin`, `linux`, `linuxmusl`, `win32` and `wasi` platform variants from one shared recipe. `darwin`, `linux`, `linuxmusl` and `win32` are the macOS, Linux (glibc), Linux (musl) and Windows builds that native Node.js addons link.
-- Optionally publishes an upstream command-line program through `bin-wasi/`.
+- Optionally publishes an upstream command-line program through `standalone-wasi/`.
 - Exposes the library through Embind or SWIG bridges.
 - Pins the upstream source version and digest.
 - Declares upstream license metadata in `base/package.json` so `crossbind licenses` can derive NOTICE and SBOM output.
@@ -51,7 +51,7 @@ ports/<name>/
 ├── linux/                    # same shape; Linux arm64 + x64 archives, built in the linux image
 ├── win32/                    # same shape; Windows arm64 + x64 archives, built in the windows image
 ├── wasi/                     # WASI library variant
-└── bin-wasi/                 # optional npm bin surface for an upstream CLI
+└── standalone-wasi/          # optional npm bin surface for an upstream CLI
 ```
 
 The family recipe lives once in `base/build.mjs`. Each platform variant reuses it through `crossbind.build.js`; target-specific differences belong in that variant's config or build overlay.
@@ -80,7 +80,7 @@ These dependencies are load-bearing: pnpm's package graph determines native buil
 - `base/mergeConfig.mjs` applies family defaults without erasing variant-specific target data.
 - `<platform>/crossbind.build.js` re-exports or extends the base recipe.
 - `<platform>/crossbind.config.js` declares the relevant target specs, exported libraries, data and environment.
-- `bin-wasi/package.json` owns the npm `bin` map; its E2E must execute the published command surface.
+- `standalone-wasi/package.json` owns the npm `bin` map; its E2E must execute the published command surface.
 
 ### Published files
 
@@ -140,7 +140,7 @@ Add or update an `e2e/` fixture that consumes the port through the same public s
 - [ ] Every claimed platform variant builds on a compatible host: wasm, Android, iOS, macOS, Linux, Windows and WASI.
 - [ ] The macOS, Linux and Windows archives link only the port family and the system: no Homebrew or MacPorts library appears among the CMake `Found` lines or in the installed `*Targets.cmake`, an optional system feature the other platforms lack stays off, and any system library a consumer must link is declared as `binary.addonFlags`.
 - [ ] On Windows, a header that expects a DLL unless told otherwise gets its static-library define from the port as `cmake.compileOptions` (curl's `CURL_STATICLIB`), or the consumer's link fails on `__imp_` symbols.
-- [ ] Optional `bin-wasi/` E2E executes every published command entry.
+- [ ] Optional `standalone-wasi/` E2E executes every published command entry.
 - [ ] `pnpm run check:dist` finds the expected artifacts.
 - [ ] Platform variants have the required README, upstream LICENSE and `.npmignore` files.
 - [ ] The iOS package includes any required podspec and simulator exclusions.
@@ -156,7 +156,7 @@ Add or update an `e2e/` fixture that consumes the port through the same public s
 - Treating `base/` as an aggregate package that depends on its variants; dependency direction goes from a platform variant to its base recipe.
 - Depending on `@crossbind/port-zlib` where the linker needs `@crossbind/port-zlib-wasm` or another matching platform variant.
 - Omitting `wasi/` from a library family merely because the first consumer is a browser.
-- Adding `bin-wasi/` without a real npm `bin` map and command-level E2E coverage.
+- Adding `standalone-wasi/` without a real npm `bin` map and command-level E2E coverage.
 - Publishing without an upstream version pin, digest or license metadata.
 - Editing `dist/` or `.crossbind/` by hand instead of fixing the recipe.
 

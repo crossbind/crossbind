@@ -2,7 +2,7 @@
     "name": "@crossbind/example-backend-nodejs-prebuilt",
     "private": true,
     "version": "0.0.0",
-    "description": "crossbind - Node.js sample on a ready-made Node package",
+    "description": "crossbind - Node.js sample on the Node-API addons a prebuilt library ships",
     "homepage": "https://github.com/crossbind/crossbind/tree/main/examples/backend-nodejs-prebuilt#readme",
     "repository": "https://github.com/crossbind/crossbind.git",
     "license": "MIT",
@@ -11,7 +11,7 @@
         "e2e:prod": "node e2e/run.mjs"
     },
     "dependencies": {
-        "@crossbind/example-lib-prebuilt-matrix-node": "workspace:^"
+        "@crossbind/example-lib-prebuilt-matrix": "workspace:^"
     },
     "keywords": [
         "crossbind-sample",

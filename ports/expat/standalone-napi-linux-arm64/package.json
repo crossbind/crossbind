@@ -1,0 +1,35 @@
+{
+    "name": "@crossbind/port-expat-standalone-napi-linux-arm64",
+    "version": "2.0.0-beta.62",
+    "nativeVersion": "2.8.5",
+    "homepage": "https://github.com/crossbind/crossbind/tree/main/ports/expat#readme",
+    "repository": "https://github.com/crossbind/crossbind.git",
+    "license": "(Apache-2.0 WITH LLVM-exception) AND (MIT OR NCSA) AND MIT",
+    "description": "Linux arm64 (glibc) addon of @crossbind/port-expat-standalone-napi, which npm installs on a matching machine.",
+    "os": [
+        "linux"
+    ],
+    "cpu": [
+        "arm64"
+    ],
+    "libc": [
+        "glibc"
+    ],
+    "main": "dist/expat-standalone-napi.linux-arm64.node",
+    "files": [
+        "dist/expat-standalone-napi.linux-arm64.node",
+        "sbom.cdx.json"
+    ],
+    "scripts": {
+        "build": "crossbind build -p linux -a arm64 -e node -b release && crossbind licenses --platform linux -e node --package",
+        "clear": "rm -rf .crossbind dist",
+        "prepack": "node ../../../scripts/check-node-package.mjs"
+    },
+    "devDependencies": {
+        "crossbind": "workspace:^",
+        "@crossbind/port-expat-darwin": "workspace:^",
+        "@crossbind/port-expat-linux": "workspace:^",
+        "@crossbind/port-expat-linuxmusl": "workspace:^",
+        "@crossbind/port-expat-win32": "workspace:^"
+    }
+}

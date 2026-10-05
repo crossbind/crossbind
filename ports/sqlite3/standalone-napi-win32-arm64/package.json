@@ -1,0 +1,32 @@
+{
+    "name": "@crossbind/port-sqlite3-standalone-napi-win32-arm64",
+    "version": "2.0.0-beta.62",
+    "nativeVersion": "3.53.4",
+    "homepage": "https://github.com/crossbind/crossbind/tree/main/ports/sqlite3#readme",
+    "repository": "https://github.com/crossbind/crossbind.git",
+    "license": "(Apache-2.0 WITH LLVM-exception) AND (MIT OR NCSA) AND blessing AND LicenseRef-MinGW-w64-runtime AND MIT",
+    "description": "Windows arm64 addon of @crossbind/port-sqlite3-standalone-napi, which npm installs on a matching machine.",
+    "os": [
+        "win32"
+    ],
+    "cpu": [
+        "arm64"
+    ],
+    "main": "dist/sqlite3-standalone-napi.win32-arm64.node",
+    "files": [
+        "dist/sqlite3-standalone-napi.win32-arm64.node",
+        "sbom.cdx.json"
+    ],
+    "scripts": {
+        "build": "crossbind build -p win32 -a arm64 -e node -b release && crossbind licenses --platform win32 -e node --package",
+        "clear": "rm -rf .crossbind dist",
+        "prepack": "node ../../../scripts/check-node-package.mjs"
+    },
+    "devDependencies": {
+        "crossbind": "workspace:^",
+        "@crossbind/port-sqlite3-darwin": "workspace:^",
+        "@crossbind/port-sqlite3-linux": "workspace:^",
+        "@crossbind/port-sqlite3-linuxmusl": "workspace:^",
+        "@crossbind/port-sqlite3-win32": "workspace:^"
+    }
+}

@@ -54,20 +54,30 @@ function envOf(target) {
 
 // A package publishes its addons in <package>-<platform>-<arch> by listing them as optional
 // dependencies, which is also how npm learns to install only the one for its machine.
-function addonPackagePattern(served) {
+function listsAddonPackage(target) {
     const { name, optionalDependencies = {} } = state.config.package ?? {};
-    return name && served.some((t) => Object.hasOwn(optionalDependencies, `${name}-${t.platform}-${t.arch}`))
-        ? `${name}-{platform}-{arch}`
-        : null;
+    return Boolean(name) && Object.hasOwn(optionalDependencies, `${name}-${target.platform}-${target.arch}`);
+}
+
+function addonPackagePattern(served) {
+    return served.some(listsAddonPackage) ? `${state.config.package.name}-{platform}-{arch}` : null;
+}
+
+// Each of those packages links its own addon, so a package that lists any links none. The ones it lists are
+// the platforms it publishes for.
+export function addonsInPackages() {
+    return state.targets.some(listsAddonPackage);
 }
 
 // One loader serves every addon of a build type, so each addon's env is keyed the way the loader
-// looks it up at runtime rather than taken from whichever arch happened to build last.
+// looks it up at runtime rather than taken from whichever arch happened to build last. With its addons in
+// packages, it knows the addons the package publishes.
 export function nodeLoaderConfig(target) {
     const served = state.targets.filter((t) => t.addonPattern && t.jsName === target.jsName);
     const addonPackage = addonPackagePattern(served);
+    const loaded = addonPackage ? served.filter(listsAddonPackage) : served;
     return {
-        env: Object.fromEntries(served.map((t) => [`${t.platform}-${t.arch}`, envOf(t)])),
+        env: Object.fromEntries(loaded.map((t) => [`${t.platform}-${t.arch}`, envOf(t)])),
         general: { name: state.config.general.name },
         paths: { addon: target.addonPattern, ...(addonPackage ? { addonPackage } : {}) },
     };
@@ -97,6 +107,11 @@ async function bundleLoader(target, napiRoot, loaderConfig) {
     });
     await bundle.write({ file: `${state.config.paths.build}/${target.jsName}`, format: 'cjs', exports: 'default' });
     await bundle.close();
+}
+
+// The loader alone, for a package whose platform packages link its addons.
+export function bundleNodeLoader(target) {
+    return bundleLoader(target, resolveEmbindNapiRoot(), nodeLoaderConfig(target));
 }
 
 // Links one Node-API addon from the project's archives and bundles the loader that picks the

@@ -171,11 +171,11 @@ export default {
       headers: [],
         // Dependency headers bound into this package's Node.js addons with every function and constant,
         // as `import * as` binds them in an app: a header path ('@crossbind/port-zlib/zlib.h'), or a
-        // package name standing for the headers it lists in publicHeaders. Each header gets an entry
-        // module, <output>/<include path>.cjs, that loads the addon on require, with its declarations in
-        // .d.cts beside it; a package exports them as './*.h', as the @crossbind/port-<name>-node
-        // packages do. Addons in <package>-<platform>-<arch> packages listed as optionalDependencies
-        // are found there.
+        // package name standing for the headers it lists in publicHeaders. Their names join the
+        // project's own in <output>/node/napi.mjs, the entry that exports each one once initNative()
+        // resolves, with its declarations in napi.d.mts; the @crossbind/port-<name>-standalone-napi
+        // packages export it as their root. Addons in <package>-<platform>-<arch> packages listed as
+        // optionalDependencies are found there.
 
       // Rust binding-surface additions (see rust.md).
       vectors: [{ of: 'i32', name: 'RustIntVector' }],
@@ -365,7 +365,7 @@ export default {
 - [`crossbind-build.md`](./crossbind-build.md) — sibling file used by package authors only.
 - [`rust.md`](./rust.md) — Rust bindings: `cargo:` imports, app-local `.rs`, `export.type: 'cargo'` packages.
 - [`conan.md`](./conan.md) — C and C++ packages from ConanCenter: `conan:` imports and `conan.lock`.
-- [`wasi.md`](./wasi.md) — `platform: 'wasi'` command builds + `-bin-wasi` tool packages.
+- [`wasi.md`](./wasi.md) — `platform: 'wasi'` command builds + `-standalone-wasi` tool packages.
 - [`threading.md`](./threading.md) — `target.runtime: 'mt'` requirements.
 - ADR-0002 — pnpm topological build order via `dependencies`.
 - ADR-0003 — function-typed env values.

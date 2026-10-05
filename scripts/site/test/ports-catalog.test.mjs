@@ -24,9 +24,9 @@ test('every port family in the tree yields a catalog entry with canonical facts'
         assert.match(entry.upstreamSource ?? '', /^https:\/\//, `${entry.family} lacks an upstream source URL`);
         assert.equal(entry.repositoryUrl, `https://github.com/crossbind/crossbind/tree/main/ports/${entry.family}`);
         for (const target of entry.targets) assert.equal(target.package, `${entry.npm}-${target.target}`);
-        // Command tools come only from the bin-wasi package, never from a web or wasi library build.
+        // Command tools come only from the standalone-wasi package, never from a web or wasi library build.
         const hasBin = entry.targets.some((target) => target.target === BIN_TARGET);
-        assert.equal(entry.binCommands.length > 0, hasBin, `${entry.family}: binCommands must follow the bin-wasi package`);
+        assert.equal(entry.binCommands.length > 0, hasBin, `${entry.family}: binCommands must follow the standalone-wasi package`);
         for (const command of entry.binCommands) assert.match(command, /-wasi$/);
     }
     const gdal = entries.find((entry) => entry.family === 'gdal');

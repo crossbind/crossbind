@@ -11,7 +11,7 @@ crossbind compiles C++ and Rust libraries to WebAssembly, native iOS/Android bin
 - `core/crossbind/` — CLI, build orchestration, runtime adapters and shared build utilities.
 - `core/embind-jsi/`, `core/embind-rust/` — native binding layers.
 - `plugins/` — Vite, Webpack/Rspack, Rollup, Metro and React Native integrations.
-- `ports/<name>/base` — the `@crossbind/port-<name>` family recipe and shared metadata; sibling `wasm/`, `android/`, `ios/`, `darwin/`, `linux/`, `linuxmusl/`, `win32/` and `wasi/` directories are platform variants, with optional `bin-wasi/` CLI packages.
+- `ports/<name>/base` — the `@crossbind/port-<name>` family recipe and shared metadata; sibling `wasm/`, `android/`, `ios/`, `darwin/`, `linux/`, `linuxmusl/`, `win32/` and `wasi/` directories are platform variants, with optional `standalone-wasi/` CLI packages.
 - `examples/` — published `@crossbind/example-*` reference integrations and create-crossbind template sources.
 - `e2e/` — isolated `@crossbind/e2e-*` conformance and regression fixtures.
 - `tooling/` — the create-app generator, owned Docker/toolchain packaging and shared TypeScript configuration.

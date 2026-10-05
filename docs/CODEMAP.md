@@ -46,7 +46,9 @@ crossbind/
 │       ├── linuxmusl/                ← Linux (musl 1.2.5) arm64 + x64 archives for native Node.js addons
 │       ├── win32/                    ← Windows arm64 + x64 archives for native Node.js addons
 │       ├── wasi/                     ← wasi prebuilt (wasm32-wasip3)
-│       └── bin-wasi/                 ← upstream CLI as npm commands (where upstream ships one)
+│       ├── standalone-napi/          ← Node-API addons with nothing to build, every public header exported from its root
+│       ├── standalone-napi-<platform>-<arch>/ ← the addon npm installs on a matching machine
+│       └── standalone-wasi/          ← upstream CLI as npm commands (where upstream ships one)
 ├── examples/                         ← reference integrations, published as create-crossbind templates
 ├── e2e/                              ← internal test benches + conformance kit
 ├── agents/                           ← one portable skill, generated references, contributor context
@@ -67,7 +69,7 @@ Every consumer-facing field, every default, every constraint lives in [`docs/api
 - [`rust.md`](./api/rust.md) — Rust bindings: `cargo:` imports, app-local `.rs`, cargo-type packages.
 - [`conan.md`](./api/conan.md) — C/C++ packages from ConanCenter: `conan:` imports, `conanDependencies`, `conan.lock`.
 - [`native.md`](./api/native.md) — desktop platforms beyond Node.js addons: native executables and prebuilt archives in your own C/C++ build.
-- [`wasi.md`](./api/wasi.md) — `platform: 'wasi'` command builds + `-bin-wasi` npm tool packages.
+- [`wasi.md`](./api/wasi.md) — `platform: 'wasi'` command builds + `-standalone-wasi` npm tool packages.
 - [`swig-escape.md`](./api/swig-escape.md) — manual `.i` files for the rare cases auto-gen doesn't fit.
 - [`build-state.md`](./api/build-state.md) — `state` and `target` shapes + 30 built-in target inventory.
 - [`overrides.md`](./api/overrides.md) — 20 override mechanisms (least → most invasive).
@@ -251,13 +253,12 @@ To add a new `ports/<X>`: see `docs/playbooks/new-port.md` (uses `ports/zlib` as
 | `examples/web-vanilla` | Plain HTML + bundler-less |
 | `examples/backend-nodejs-wasm` | Node.js consumer |
 | `examples/backend-nodejs-native` | Node.js app that builds its own addon (`-p darwin,linux,linuxmusl,win32 -e node`; the macOS CI job uses `ci/` bridge snapshots) |
-| `examples/backend-nodejs-prebuilt` | Node.js app on a ready-made Node package (`@crossbind/example-lib-prebuilt-matrix-node`), nothing to build |
+| `examples/backend-nodejs-prebuilt` | Node.js app on the Node-API addons `@crossbind/example-lib-prebuilt-matrix` ships (`/node/napi`), nothing to build |
 | `examples/native-executable` | Native executable from `main()` (`-e native`); the `Native Executable` template |
 | `examples/cloud-cloudflare-worker` | Cloudflare Worker / edge |
 | `examples/mobile-reactnative-cli` | RN-cli (canonical mobile reference; CI uses `ci/crossbind-snapshot/`) |
 | `examples/mobile-reactnative-expo` | RN with Expo |
-| `examples/lib-prebuilt-matrix` | Minimal C++ library packaging (no UI) — canonical for Persona 3 |
-| `examples/lib-prebuilt-matrix-node*` | The matrix library as a ready-made Node package and its eight addon packages, made like `ports/*/node*` |
+| `examples/lib-prebuilt-matrix` | Minimal C++ library packaging (no UI) — canonical for Persona 3; ships its Node-API addons and the `node/napi`, `node/wasm` and `edge/wasm` entries |
 | `e2e/*` | Internal test benches: bigger demos against multiple `@crossbind/port-*` (curl, gdal, geos, …) + the conformance kit |
 
 ## Repo-level scripts (`scripts/`)

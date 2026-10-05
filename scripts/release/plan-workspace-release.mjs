@@ -38,8 +38,10 @@ appendGitHubOutput(githubOutput, {
     hasLinux: plan.linuxShards.length > 0,
     linuxShards: JSON.stringify(plan.linuxShards),
     hasMacos: plan.buildOrderByRunner.macos.length > 0 || plan.multiPlatform.length > 0,
-    hasNode: plan.buildOrderByRunner.node.length > 0,
-    hasNodeMacos: plan.buildOrderByRunner['node-macos'].length > 0,
+    // The node runners also build the addons the multi-platform library ships; only standalone packages are verified.
+    hasNode: plan.buildOrderByRunner.node.length > 0 || plan.multiPlatform.length > 0,
+    hasNodeMacos: plan.buildOrderByRunner['node-macos'].length > 0 || plan.multiPlatform.length > 0,
+    hasNodePackages: plan.buildOrderByRunner.node.length > 0,
     verifyNodeVersions: JSON.stringify(VERIFY_NODE_VERSION_FILES.map((file) => fs.readFileSync(path.join(root, file), 'utf8').trim())),
     hasCrossbind: plan.packages.some((candidate) => candidate.name === 'crossbind'),
 });

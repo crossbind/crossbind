@@ -1,0 +1,59 @@
+{
+    "name": "@crossbind/port-webp-standalone-napi",
+    "version": "2.0.0-beta.62",
+    "nativeVersion": "1.6.0",
+    "homepage": "https://github.com/crossbind/crossbind/tree/main/ports/webp#readme",
+    "repository": "https://github.com/crossbind/crossbind.git",
+    "license": "(MIT OR NCSA) AND BSD-3-Clause AND MIT",
+    "description": "webp for Node.js with nothing to build: prebuilt Node-API addons for macOS, Linux and Windows, built with crossbind.",
+    "type": "module",
+    "engines": {
+        "node": ">=22.12"
+    },
+    "exports": {
+        ".": {
+            "types": "./dist/node/napi.d.mts",
+            "default": "./dist/node/napi.mjs"
+        },
+        "./package.json": "./package.json"
+    },
+    "files": [
+        "dist/**/*.cjs",
+        "dist/node",
+        "dist/data",
+        "sbom.cdx.json"
+    ],
+    "scripts": {
+        "build": "crossbind build -p darwin,linux,linuxmusl,win32 -e node -b release && crossbind licenses -e node --package",
+        "clear": "rm -rf .crossbind dist",
+        "e2e": "node ../../../scripts/e2e-node-package.mjs",
+        "prepack": "node ../../../scripts/check-node-package.mjs"
+    },
+    "optionalDependencies": {
+        "@crossbind/port-webp-standalone-napi-darwin-arm64": "workspace:*",
+        "@crossbind/port-webp-standalone-napi-darwin-x64": "workspace:*",
+        "@crossbind/port-webp-standalone-napi-linux-arm64": "workspace:*",
+        "@crossbind/port-webp-standalone-napi-linux-x64": "workspace:*",
+        "@crossbind/port-webp-standalone-napi-linuxmusl-arm64": "workspace:*",
+        "@crossbind/port-webp-standalone-napi-linuxmusl-x64": "workspace:*",
+        "@crossbind/port-webp-standalone-napi-win32-arm64": "workspace:*",
+        "@crossbind/port-webp-standalone-napi-win32-x64": "workspace:*"
+    },
+    "devDependencies": {
+        "crossbind": "workspace:^",
+        "@crossbind/port-webp-darwin": "workspace:^",
+        "@crossbind/port-webp-linux": "workspace:^",
+        "@crossbind/port-webp-linuxmusl": "workspace:^",
+        "@crossbind/port-webp-win32": "workspace:^"
+    },
+    "keywords": [
+        "webp",
+        "libwebp",
+        "image",
+        "crossbind",
+        "crossbind-port",
+        "node",
+        "node-api",
+        "prebuilt"
+    ]
+}

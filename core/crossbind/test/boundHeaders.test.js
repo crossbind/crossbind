@@ -1,7 +1,6 @@
 import { describe, test, expect } from 'vitest';
 import {
-    boundHeaderSpecifiers, bridgeTargetOrder, bridgeTargets, nodeBridgeTarget, resolveBoundHeaders,
-    headerAliases, headerEntryPath, headerEntryModule,
+    boundHeaderSpecifiers, bridgeTargetOrder, bridgeTargets, nodeBridgeTarget, resolveBoundHeaders, headerAliases,
 } from '../src/utils/boundHeaders.js';
 
 const ext = { header: ['h', 'hpp', 'hxx', 'hh'] };
@@ -38,10 +37,10 @@ describe('boundHeaderSpecifiers', () => {
         expect(() => boundHeaderSpecifiers(configOf([42]))).toThrow(/export\.bindings\.headers/);
     });
 
-    // Each header's entry module sits at its include path, which two packages can share.
-    test('rejects two headers that would share an entry module', () => {
-        expect(() => boundHeaderSpecifiers(configOf(['@crossbind/port-a/types.h', '@crossbind/port-b/types.h'])))
-            .toThrow(/@crossbind\/port-a\/types\.h and @crossbind\/port-b\/types\.h/);
+    // Every header binds into one entry module per runtime, so two packages may ship the same include path.
+    test('keeps headers of two packages at the same include path', () => {
+        expect(boundHeaderSpecifiers(configOf(['@crossbind/port-a/types.h', '@crossbind/port-b/types.h'])))
+            .toEqual(['@crossbind/port-a/types.h', '@crossbind/port-b/types.h']);
     });
 });
 
@@ -109,41 +108,6 @@ describe('resolveBoundHeaders', () => {
     test('fails when no target ships the header', () => {
         expect(() => resolveBoundHeaders(['@crossbind/port-zlib/zlib.h'], [darwin, linux], () => null))
             .toThrow(/@crossbind\/port-zlib\/zlib\.h.*darwin-arm64-mt-release, linux-x64-mt-release/);
-    });
-});
-
-describe('headerEntryPath', () => {
-    test('is the include path under the package that owns the header', () => {
-        expect(headerEntryPath('@crossbind/port-zlib/zlib.h')).toBe('zlib.h');
-        expect(headerEntryPath('@crossbind/port-curl/curl/curl.h')).toBe('curl/curl.h');
-        expect(headerEntryPath('plainpkg/include/x.h')).toBe('include/x.h');
-    });
-});
-
-describe('headerEntryModule', () => {
-    test('boots the addon when loaded and exports the names the header binds', () => {
-        const text = headerEntryModule(['compress', 'Z_OK'], '../demo.native.cjs');
-        const loaded = { compress: () => 'compressed', Z_OK: 0 };
-        const initNative = Object.assign(() => Promise.resolve(loaded), { sync: () => loaded });
-        const exports = {};
-        const require = (id) => (id === '../demo.native.cjs' ? initNative : null);
-
-        new Function('exports', 'require', text)(exports, require);
-
-        expect(exports.compress()).toBe('compressed');
-        expect(exports.Z_OK).toBe(0);
-        expect(exports.AllSymbols).toBe(loaded);
-        expect(exports.initNative).toBe(initNative);
-    });
-
-    // Node finds the named exports of a CommonJS module for `import { x }` only in plain assignments.
-    test('assigns each export on its own line', () => {
-        expect(headerEntryModule(['compress'], './demo.native.cjs')).toContain('\nexports.compress = Module.compress;\n');
-    });
-
-    test('exports a name under the alias the header gives it', () => {
-        expect(headerEntryModule([{ local: 'iconv_open', wire: 'libiconv_open' }], './demo.native.cjs'))
-            .toContain('\nexports.iconv_open = Module.libiconv_open;\n');
     });
 });
 

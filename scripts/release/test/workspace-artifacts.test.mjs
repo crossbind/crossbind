@@ -198,6 +198,21 @@ test('multi-platform assembly merges exact outputs and regenerates one determini
         }
         fs.writeFileSync(path.join(prebuilt, 'CMakeLists.txt'), `set(MY_LIST "${runnerTargets.join(';')}")\nset(FIXTURE true)\n`);
     }
+    // The node runners stage the library's addons, and one of them their loader and entry.
+    const nodeStaged = { node: ['m.linux-x64.node', 'm.native.cjs', 'node/napi.mjs'], 'node-macos': ['m.darwin-arm64.node'] };
+    for (const [runner, files] of Object.entries(nodeStaged)) {
+        const runnerRoot = path.join(inputs, runner);
+        fs.mkdirSync(runnerRoot, { recursive: true });
+        fs.writeFileSync(
+            path.join(runnerRoot, `build-${runner}.json`),
+            `${JSON.stringify({ schemaVersion: 1, runner, gitCommit: COMMIT, artifacts: [], stagedMultiPlatform: [candidate.name] })}\n`,
+        );
+        for (const file of files) {
+            const staged = path.join(runnerRoot, 'multi', runner, packagePath, 'dist', file);
+            fs.mkdirSync(path.dirname(staged), { recursive: true });
+            fs.writeFileSync(staged, `${runner} ${file}`);
+        }
+    }
     const assembled = path.join(fixture, 'assembled');
     execFileSync(
         process.execPath,
@@ -222,4 +237,8 @@ test('multi-platform assembly merges exact outputs and regenerates one determini
         'set(MY_LIST "android-arm64-v8a-mt-release;darwin-arm64-mt-release;ios-iphoneos-mt-release;linux-x64-mt-release;' +
             'linuxmusl-x64-mt-release;wasi-wasm32-st-release;wasm-wasm32-st-release;win32-x64-mt-release")',
     );
+    const packed = execFileSync('tar', ['-tzf', tarball], { encoding: 'utf8' }).split('\n');
+    for (const file of ['dist/m.darwin-arm64.node', 'dist/m.linux-x64.node', 'dist/m.native.cjs', 'dist/node/napi.mjs']) {
+        assert.ok(packed.includes(`package/${file}`), `${file} is in the assembled package`);
+    }
 });

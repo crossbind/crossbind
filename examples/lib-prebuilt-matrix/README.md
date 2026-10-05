@@ -68,14 +68,26 @@ initNative({ path: 'node_modules/@crossbind/example-lib-prebuilt-matrix/dist' })
 });
 ```
 
-### Usage in JavaScript Code (node.js)
+### Usage in JavaScript Code (Node.js)
+The package ships prebuilt Node-API addons for macOS, Linux (glibc and musl) and Windows, and a WebAssembly build for Node.js. Each entry exports `Matrix` once `initNative()` resolves; `require()` of an entry needs Node.js 22.12 or later.
 ```js
-import 'node_modules/@crossbind/example-lib-prebuilt-matrix/dist/crossbind-example-lib-prebuilt-matrix.node.js';
+import { initNative, Matrix } from '@crossbind/example-lib-prebuilt-matrix/node/napi'; // or '/node/wasm'
 
-initNative().then(({ Matrix }) => {
-    const a = new Matrix(1210000, 1);
-    const b = new Matrix(1210000, 2);
-    const result = a.multiple(b);
-    console.log(result.get(0));
-});
+await initNative();
+const a = new Matrix(1210000, 1);
+const b = new Matrix(1210000, 2);
+console.log(a.multiple(b).get(0));
+```
+
+### Usage in JavaScript Code (Cloudflare Workers)
+Wrangler bundles the WebAssembly module the entry imports.
+```js
+import { initNative, Matrix } from '@crossbind/example-lib-prebuilt-matrix/edge/wasm';
+
+export default {
+    async fetch() {
+        await initNative();
+        return new Response(String(new Matrix(4, 2).get(0)));
+    },
+};
 ```

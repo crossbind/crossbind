@@ -19,6 +19,15 @@ await initNative();
 
 One call binds every imported module: each proxy module registers its bindings when it is imported, and `initNative()` boots the runtime once and then resolves all of them. Node, Edge and standalone builds have no bundler plugin: there you import the built artifact directly and call its default export.
 
+Those builds also write one ES module per runtime, `dist/node/napi.mjs` (`-e node` on darwin, linux, linuxmusl or win32), `dist/node/wasm.mjs` and `dist/edge/wasm.mjs` (the st-release wasm32 builds), that exports `initNative` and every bound name the same way. A package publishes them under paths of its own, and a standalone package as its root:
+
+```js
+import { initNative, Matrix } from '@crossbind/example-lib-prebuilt-matrix/node/napi';
+import { initNative as initZlib, crc32 } from '@crossbind/port-zlib-standalone-napi';
+
+await Promise.all([initNative(), initZlib()]);
+```
+
 ## Signature
 
 ```ts

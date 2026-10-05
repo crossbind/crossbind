@@ -211,7 +211,7 @@ console.log(MyClass.sample());`,
             type: 'ul',
             items: [
                 "[Rust](/guide/rust/): `export.type: 'cargo'` and `cargoDependencies`.",
-                "[WASI](/guide/wasi/): `platform: 'wasi'` builds and the `-bin-wasi` command tools.",
+                "[WASI](/guide/wasi/): `platform: 'wasi'` builds and the `-standalone-wasi` command tools.",
                 "[Threading](/guide/threading/): `target.runtime: 'mt'` and worker mode.",
                 '[Filesystem](/guide/filesystem/): persistent OPFS storage in the browser.',
                 'Generated TypeScript types through `dts`, see [Configuration](/guide/configuration/).',

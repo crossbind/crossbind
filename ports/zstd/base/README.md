@@ -139,7 +139,7 @@ This is the main package; the precompiled binaries are shipped per platform:
 | Linux | [`@crossbind/port-zstd-linux`](https://www.npmjs.com/package/@crossbind/port-zstd-linux) | `x64`, `arm64` — glibc 2.28 or later, native Node.js addons |
 | Windows | [`@crossbind/port-zstd-win32`](https://www.npmjs.com/package/@crossbind/port-zstd-win32) | `x64`, `arm64` — Windows 10 or later, native Node.js addons |
 | WASI library | [`@crossbind/port-zstd-wasi`](https://www.npmjs.com/package/@crossbind/port-zstd-wasi) | `wasm32-wasip3` — single-threaded |
-| WASI command | [`@crossbind/port-zstd-bin-wasi`](https://www.npmjs.com/package/@crossbind/port-zstd-bin-wasi) | the upstream `zstd` CLI as a `zstd-wasi` command (wasmtime 47+) |
+| WASI command | [`@crossbind/port-zstd-standalone-wasi`](https://www.npmjs.com/package/@crossbind/port-zstd-standalone-wasi) | the upstream `zstd` CLI as a `zstd-wasi` command (wasmtime 47+) |
 
 ## License
 This project includes the precompiled zstd library, which is distributed under the [zstd License](https://github.com/facebook/zstd/blob/dev/LICENSE).
