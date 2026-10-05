@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Installs the ready-made Node packages of an assembled train from its exact tarballs, as a user does from
+// Installs the standalone Node-API packages of an assembled train from its exact tarballs, as a user does from
 // npm, and runs the e2e/check.mjs of each package on this machine: one package per app, then all of them in
 // one process. The release workflow runs it on every platform an addon targets, with each supported Node.js
 // major, before anything is published. Node.js built-ins only: it also runs in a bare Alpine container.
@@ -30,20 +30,18 @@ const npm = (args, options) => run(NPM[0], [...NPM.slice(1), ...args], options);
 
 const { artifacts } = JSON.parse(fs.readFileSync(path.join(artifactDir, 'workspace-release-artifacts.json'), 'utf8'));
 const entries = artifacts
-    .filter((artifact) => /^@crossbind\/.+-node(?:-(?:darwin|linux|linuxmusl|win32)-(?:arm64|x64))?$/.test(artifact.package))
+    .filter((artifact) => /^@crossbind\/.+-standalone-napi(?:-(?:darwin|linux|linuxmusl|win32)-(?:arm64|x64))?$/.test(artifact.package))
     .map((artifact) => tarballEntry(path.join(tarballDir, artifact.filename)))
     .filter((entry) => nodePackageKind({ name: entry.manifest.name, manifest: entry.manifest }));
 const bindings = entries.map((entry) => entry.manifest).filter((manifest) => !manifest.os);
 const target = hostAddonTarget(process.report.getReport(), process.platform, process.arch);
 
-if (bindings.length === 0) throw new Error(`verify-node-packages: ${artifactDir} holds no ready-made Node package.`);
+if (bindings.length === 0) throw new Error(`verify-node-packages: ${artifactDir} holds no standalone Node-API package.`);
 
-// A port's package is ports/<family>/node, an example's examples/<name>.
+// A port's package is ports/<family>/standalone-napi.
 function checkOf(manifest) {
-    const family = /^@crossbind\/port-(.+)-node$/.exec(manifest.name)?.[1];
-    const example = /^@crossbind\/example-(.+)$/.exec(manifest.name)?.[1];
-    const dir = family ? path.join(ROOT, 'ports', family, 'node') : example && path.join(ROOT, 'examples', example);
-    const file = dir && path.join(dir, 'e2e', 'check.mjs');
+    const family = /^@crossbind\/port-(.+)-standalone-napi$/.exec(manifest.name)?.[1];
+    const file = family && path.join(ROOT, 'ports', family, 'standalone-napi', 'e2e', 'check.mjs');
     if (!file || !fs.existsSync(file)) throw new Error(`${manifest.name} has no e2e/check.mjs to verify it with.`);
     return file;
 }

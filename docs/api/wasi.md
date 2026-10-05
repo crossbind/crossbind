@@ -66,14 +66,14 @@ curl fetch against a local HTTP server (hermetic - the only e2e that needs
 the wasmtime socket grants). The scripts SKIP politely when the wasi-sdk
 (>= 34, wasm32-wasip3), wasmtime or the prebuilt is absent.
 
-## Prebuilt CLI tools (`-bin-wasi` packages)
+## Prebuilt CLI tools (`-standalone-wasi` packages)
 
 Where the upstream ships command-line tools, a separate
-`@crossbind/port-<name>-bin-wasi` package carries them prebuilt — install
+`@crossbind/port-<name>-standalone-wasi` package carries them prebuilt — install
 from npm and run, no compiler involved:
 
 ```bash
-npm i -g @crossbind/port-gdal-bin-wasi   # or npx/pnpm dlx
+npm i -g @crossbind/port-gdal-standalone-wasi   # or npx/pnpm dlx
 gdalinfo-wasi --version                  # wasmtime must be on PATH
 ```
 

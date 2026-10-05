@@ -19,7 +19,7 @@ the repository-specific dependency units that generic package bots cannot update
 - wasi-sdk archives for both Linux architectures, submodule revisions and license hashes;
 - the Android NDK archive, its published checksum and patch releases inside the reviewed NDK major;
 - the Crossbind SWIG fork revision and source archive hash;
-- one complete native port family (`base`, `wasm`, `wasi`, `bin-wasi`, `android`, `ios`, `darwin`, `linux`, `linuxmusl`, `win32`) per update.
+- one complete native port family (`base`, `wasm`, `wasi`, `standalone-wasi`, `android`, `ios`, `darwin`, `linux`, `linuxmusl`, `win32`) per update.
 
 Canonical current versions remain in `.nvmrc`, the Dockerfiles and `ports/*/*/package.json`. The
 bot's `update-policy.json` stores upstream identity and policy only; it does not copy current

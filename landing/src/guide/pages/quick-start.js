@@ -30,7 +30,7 @@ export default {
                 '**CMake 3.28+** - mobile only.',
                 '**Xcode** and **CocoaPods** - iOS only, macOS only.',
                 '**A Rust toolchain** (`cargo` plus the platform targets) - only when you bind Rust. See [Rust](/guide/rust/).',
-                '**wasmtime** - only to run `platform: \'wasi\'` output and the prebuilt `-bin-wasi` tools.',
+                '**wasmtime** - only to run `platform: \'wasi\'` output and the prebuilt `-standalone-wasi` tools.',
             ],
         },
         {

@@ -7,7 +7,7 @@ export const PORTS_CATALOG = catalog;
 
 export const PORTS = [...catalog.ports].sort((left, right) => left.name.localeCompare(right.name, 'en'));
 
-export const BIN_TARGET = 'bin-wasi';
+export const BIN_TARGET = 'standalone-wasi';
 
 export const CATEGORY_LABELS = {
     geo: 'Geospatial',
@@ -28,12 +28,12 @@ export const TARGET_LABELS = {
     linux: 'Linux',
     linuxmusl: 'Linux (musl)',
     win32: 'Windows',
-    'bin-wasi': 'WASI commands',
+    'standalone-wasi': 'WASI commands',
 };
 
 export const publishedTarget = (port, target) => port.targets.find((entry) => entry.target === target && entry.published) ?? null;
 
 export const publishedLibraryTargets = (port) => port.targets.filter((entry) => entry.target !== BIN_TARGET && entry.published);
 
-// Command tools are the published -bin-wasi packages only; a web or library build never counts.
+// Command tools are the published -standalone-wasi packages only; a web or library build never counts.
 export const WASI_TOOL_PORTS = PORTS.filter((port) => port.binCommands.length > 0 && publishedTarget(port, BIN_TARGET));

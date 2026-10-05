@@ -1,0 +1,32 @@
+{
+    "name": "@crossbind/port-spatialite-standalone-napi-darwin-x64",
+    "version": "2.0.0-beta.62",
+    "nativeVersion": "5.1.0",
+    "homepage": "https://github.com/crossbind/crossbind/tree/main/ports/spatialite#readme",
+    "repository": "https://github.com/crossbind/crossbind.git",
+    "license": "(BSD-3-Clause OR GPL-2.0-only) AND (IJG AND BSD-3-Clause AND Zlib) AND (MIT OR NCSA) AND (MPL-1.1 OR GPL-2.0-or-later OR LGPL-2.1-or-later) AND Apache-2.0 AND blessing AND LGPL-2.1-only AND LGPL-2.1-or-later AND libtiff AND MIT AND Zlib",
+    "description": "macOS x64 addon of @crossbind/port-spatialite-standalone-napi, which npm installs on a matching machine.",
+    "os": [
+        "darwin"
+    ],
+    "cpu": [
+        "x64"
+    ],
+    "main": "dist/spatialite-standalone-napi.darwin-x64.node",
+    "files": [
+        "dist/spatialite-standalone-napi.darwin-x64.node",
+        "sbom.cdx.json"
+    ],
+    "scripts": {
+        "build": "crossbind build -p darwin -a x64 -e node -b release && crossbind licenses --platform darwin -e node --package",
+        "clear": "rm -rf .crossbind dist",
+        "prepack": "node ../../../scripts/check-node-package.mjs"
+    },
+    "devDependencies": {
+        "crossbind": "workspace:^",
+        "@crossbind/port-spatialite-darwin": "workspace:^",
+        "@crossbind/port-spatialite-linux": "workspace:^",
+        "@crossbind/port-spatialite-linuxmusl": "workspace:^",
+        "@crossbind/port-spatialite-win32": "workspace:^"
+    }
+}

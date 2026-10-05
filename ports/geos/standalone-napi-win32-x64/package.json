@@ -1,0 +1,32 @@
+{
+    "name": "@crossbind/port-geos-standalone-napi-win32-x64",
+    "version": "2.0.0-beta.62",
+    "nativeVersion": "3.15.0",
+    "homepage": "https://github.com/crossbind/crossbind/tree/main/ports/geos#readme",
+    "repository": "https://github.com/crossbind/crossbind.git",
+    "license": "(Apache-2.0 WITH LLVM-exception) AND (MIT OR NCSA) AND LGPL-2.1-only AND LicenseRef-MinGW-w64-runtime AND MIT",
+    "description": "Windows x64 addon of @crossbind/port-geos-standalone-napi, which npm installs on a matching machine.",
+    "os": [
+        "win32"
+    ],
+    "cpu": [
+        "x64"
+    ],
+    "main": "dist/geos-standalone-napi.win32-x64.node",
+    "files": [
+        "dist/geos-standalone-napi.win32-x64.node",
+        "sbom.cdx.json"
+    ],
+    "scripts": {
+        "build": "crossbind build -p win32 -a x64 -e node -b release && crossbind licenses --platform win32 -e node --package",
+        "clear": "rm -rf .crossbind dist",
+        "prepack": "node ../../../scripts/check-node-package.mjs"
+    },
+    "devDependencies": {
+        "crossbind": "workspace:^",
+        "@crossbind/port-geos-darwin": "workspace:^",
+        "@crossbind/port-geos-linux": "workspace:^",
+        "@crossbind/port-geos-linuxmusl": "workspace:^",
+        "@crossbind/port-geos-win32": "workspace:^"
+    }
+}

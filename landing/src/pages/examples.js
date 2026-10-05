@@ -163,7 +163,7 @@ npm run run:android`,
         tone: '#a78bfa',
         title: 'WASI tools',
         summary: 'Upstream GDAL command-line tools as npm executables, run by wasmtime: no compiler, no toolchain image, nothing to build.',
-        create: `npm install --global @crossbind/port-gdal-bin-wasi${suffix}`,
+        create: `npm install --global @crossbind/port-gdal-standalone-wasi${suffix}`,
         needs: 'wasmtime 47+ on PATH; Node.js only for npm itself.',
         steps: `gdalinfo-wasi --version
 ogrinfo-wasi --formats`,

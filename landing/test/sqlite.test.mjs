@@ -9,7 +9,7 @@ const port = (overrides) => ({
     license: 'MIT',
     targets: [
         { target: 'wasm', published: '2.0.0-beta.56' },
-        { target: 'bin-wasi', published: '2.0.0-beta.56' },
+        { target: 'standalone-wasi', published: '2.0.0-beta.56' },
         { target: 'ios', published: null },
     ],
     ...overrides,

@@ -102,7 +102,7 @@ ports/zlib/
 └── wasi/       ← wasi (wasm32-wasip3) prebuilt
 ```
 
-Sub-packages declare workspace deps to other `@crossbind/port-*-<arch>` they need (e.g. `gdal-wasm` lists `proj-wasm`, `tiff-wasm`, …); pnpm derives topological build order from this. Where the upstream ships CLI tools, a `bin-wasi/` sibling publishes them as npm commands; everything those packages ship (tool map, NOTICE/SBOM, provenance, license field) is derived under the Bin & License Contract — `ports/README.md`.
+Sub-packages declare workspace deps to other `@crossbind/port-*-<arch>` they need (e.g. `gdal-wasm` lists `proj-wasm`, `tiff-wasm`, …); pnpm derives topological build order from this. Where the upstream ships CLI tools, a `standalone-wasi/` sibling publishes them as npm commands; everything those packages ship (tool map, NOTICE/SBOM, provenance, license field) is derived under the Bin & License Contract — `ports/README.md`.
 
 ### Samples (canonical integrations)
 

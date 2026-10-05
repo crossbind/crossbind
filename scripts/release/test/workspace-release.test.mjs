@@ -67,12 +67,11 @@ function fixtureRepository(packages, { trainVersion } = {}) {
 
 test('the real workspace is classified into publishable Linux, macOS and assembled packages', () => {
     const packages = discoverPublishablePackages(ROOT);
-    assert.equal(packages.length, 325);
-    assert.equal(packages.find((candidate) => candidate.name === '@crossbind/port-zlib-node').buildKind, 'node');
-    assert.equal(packages.find((candidate) => candidate.name === '@crossbind/example-lib-prebuilt-matrix-node').buildKind, 'node');
-    assert.equal(packages.find((candidate) => candidate.name === '@crossbind/example-lib-prebuilt-matrix-node-darwin-x64').buildKind, 'node-macos');
-    assert.equal(packages.find((candidate) => candidate.name === '@crossbind/port-zlib-node-linuxmusl-x64').buildKind, 'node');
-    assert.equal(packages.find((candidate) => candidate.name === '@crossbind/port-zlib-node-darwin-arm64').buildKind, 'node-macos');
+    assert.equal(packages.length, 316);
+    assert.equal(packages.find((candidate) => candidate.name === '@crossbind/port-zlib-standalone-napi').buildKind, 'node');
+    assert.equal(packages.find((candidate) => candidate.name === '@crossbind/example-lib-prebuilt-matrix').buildKind, 'multi-platform');
+    assert.equal(packages.find((candidate) => candidate.name === '@crossbind/port-zlib-standalone-napi-linuxmusl-x64').buildKind, 'node');
+    assert.equal(packages.find((candidate) => candidate.name === '@crossbind/port-zlib-standalone-napi-darwin-arm64').buildKind, 'node-macos');
     assert.equal(packages.find((candidate) => candidate.name === '@crossbind/port-zlib-darwin').buildKind, 'macos');
     assert.equal(packages.find((candidate) => candidate.name === '@crossbind/port-zlib-linux').buildKind, 'linux-native');
     assert.equal(packages.find((candidate) => candidate.name === '@crossbind/port-zlib-linuxmusl').buildKind, 'linux-native');
@@ -104,7 +103,7 @@ test('Linux and Windows Node addon packages build in shards of their own in the 
     assert.equal(classifyBuild(lifecycle('node build.mjs')), 'linux');
 });
 
-// A port family's platform packages and its ready-made Node packages, which link them.
+// A port family's platform packages and its standalone Node-API packages, which link them.
 const nodeFamily = (family, { variantVersion, nodeVersion }) => {
     const variants = ['darwin', 'linux', 'linuxmusl', 'win32'].map((platform) => ({
         name: `@crossbind/port-${family}-${platform}`,
@@ -112,12 +111,18 @@ const nodeFamily = (family, { variantVersion, nodeVersion }) => {
         path: `ports/${family}/${platform}`,
         manifest: { scripts: { prepublishOnly: `crossbind build -p ${platform}` } },
     }));
-    const name = `@crossbind/port-${family}-node`;
+    const name = `@crossbind/port-${family}-standalone-napi`;
     const addon = (platform, arch, os, libc) => ({
         name: `${name}-${platform}-${arch}`,
         version: nodeVersion,
-        path: `ports/${family}/node-${platform}-${arch}`,
-        manifest: { os: [os], cpu: [arch], ...(libc ? { libc: [libc] } : {}), main: `${family}-node.${platform}-${arch}.node` },
+        path: `ports/${family}/standalone-napi-${platform}-${arch}`,
+        manifest: {
+            os: [os],
+            cpu: [arch],
+            ...(libc ? { libc: [libc] } : {}),
+            main: `dist/${family}-standalone-napi.${platform}-${arch}.node`,
+            devDependencies: Object.fromEntries(variants.map((entry) => [entry.name, 'workspace:^'])),
+        },
     });
     const addons = [
         addon('darwin', 'arm64', 'darwin'),
@@ -128,7 +133,7 @@ const nodeFamily = (family, { variantVersion, nodeVersion }) => {
     const bindings = {
         name,
         version: nodeVersion,
-        path: `ports/${family}/node`,
+        path: `ports/${family}/standalone-napi`,
         manifest: {
             optionalDependencies: Object.fromEntries(addons.map((entry) => [entry.name, 'workspace:*'])),
             devDependencies: Object.fromEntries(variants.map((entry) => [entry.name, 'workspace:^'])),
@@ -137,7 +142,7 @@ const nodeFamily = (family, { variantVersion, nodeVersion }) => {
     return { variants, node: [bindings, ...addons] };
 };
 
-test('a ready-made Node package builds after the Linux job, and its macOS addons on the macOS runner after that', () => {
+test('a standalone Node-API package builds after the Linux job, and its macOS addons on the macOS runner after that', () => {
     const [bindings, darwin, linux, linuxmusl, win32] = nodeFamily('zlib', { variantVersion: '1.0.0', nodeVersion: '1.0.0' }).node;
     const classify = (candidate) => classifyBuild({ ...candidate, manifestPath: `${candidate.path}/package.json` });
 
@@ -148,7 +153,7 @@ test('a ready-made Node package builds after the Linux job, and its macOS addons
     assert.equal(classify(darwin), 'node-macos');
 });
 
-test('a train with ready-made Node packages builds the platform packages they link in the same train', async () => {
+test('a train with standalone Node-API packages builds the platform packages they link in the same train', async () => {
     const { variants, node } = nodeFamily('zlib', { variantVersion: '2.0.0-beta.2', nodeVersion: '2.0.0-beta.2' });
     const root = fixtureRepository([...variants, ...node]);
 
@@ -160,18 +165,18 @@ test('a train with ready-made Node packages builds the platform packages they li
     });
 
     assert.deepEqual(plan.buildOrderByRunner.node.sort(), [
-        '@crossbind/port-zlib-node',
-        '@crossbind/port-zlib-node-linux-x64',
-        '@crossbind/port-zlib-node-linuxmusl-x64',
-        '@crossbind/port-zlib-node-win32-x64',
+        '@crossbind/port-zlib-standalone-napi',
+        '@crossbind/port-zlib-standalone-napi-linux-x64',
+        '@crossbind/port-zlib-standalone-napi-linuxmusl-x64',
+        '@crossbind/port-zlib-standalone-napi-win32-x64',
     ]);
-    assert.deepEqual(plan.buildOrderByRunner['node-macos'], ['@crossbind/port-zlib-node-darwin-arm64']);
+    assert.deepEqual(plan.buildOrderByRunner['node-macos'], ['@crossbind/port-zlib-standalone-napi-darwin-arm64']);
     assert.deepEqual(plan.linuxShards, ['linux-native', 'win32-native']);
     assert.deepEqual(plan.buildOrderByRunner.macos, ['@crossbind/port-zlib-darwin']);
     fs.rmSync(root, { recursive: true, force: true });
 });
 
-test('a train refuses ready-made Node packages without the platform packages they link from its tarballs', async () => {
+test('a train refuses standalone Node-API packages without the platform packages they link from its tarballs', async () => {
     const { variants, node } = nodeFamily('zlib', { variantVersion: '2.0.0-beta.1', nodeVersion: '2.0.0-beta.2' });
     const root = fixtureRepository([...variants, ...node], { trainVersion: '2.0.0-beta.2' });
     const published = { channelVersion: '2.0.0-beta.1', exactVersion: '2.0.0-beta.1' };
@@ -186,73 +191,52 @@ test('a train refuses ready-made Node packages without the platform packages the
                 ...Object.fromEntries(node.map((candidate) => [candidate.name, { channelVersion: '2.0.0-beta.1' }])),
             }),
         }),
-        /@crossbind\/port-zlib-node links @crossbind\/port-zlib-darwin, @crossbind\/port-zlib-linux, @crossbind\/port-zlib-linuxmusl, @crossbind\/port-zlib-win32/,
+        /@crossbind\/port-zlib-standalone-napi links @crossbind\/port-zlib-darwin, @crossbind\/port-zlib-linux, @crossbind\/port-zlib-linuxmusl, @crossbind\/port-zlib-win32/,
     );
     fs.rmSync(root, { recursive: true, force: true });
 });
 
-// The example library and its ready-made Node package, whose addons link the archives the train builds of it.
-const matrixFamily = (libraryVersion, nodeVersion) => {
-    const library = '@crossbind/example-lib-prebuilt-matrix';
-    const name = `${library}-node`;
-    const addon = {
-        name: `${name}-linux-x64`,
-        version: nodeVersion,
-        path: 'examples/lib-prebuilt-matrix-node-linux-x64',
-        manifest: { os: ['linux'], cpu: ['x64'], libc: ['glibc'], main: 'crossbind-example-lib-prebuilt-matrix-node.linux-x64.node' },
-    };
-    return {
-        library: {
-            name: library,
-            version: libraryVersion,
-            path: 'examples/lib-prebuilt-matrix',
-            manifest: { scripts: { prepublishOnly: 'crossbind build' } },
-        },
-        node: [
-            {
-                name,
-                version: nodeVersion,
-                path: 'examples/lib-prebuilt-matrix-node',
-                manifest: { optionalDependencies: { [addon.name]: 'workspace:*' }, devDependencies: { [library]: 'workspace:^' } },
-            },
-            addon,
-        ],
-    };
-};
-
-test('a train with the example Node package builds the multi-platform library it links in the same train', async () => {
-    const { library, node } = matrixFamily('2.0.0-beta.2', '2.0.0-beta.2');
-    const root = fixtureRepository([library, ...node]);
-
-    const plan = await buildWorkspaceReleasePlan({
-        root,
-        channel: 'beta',
-        gitCommit: COMMIT,
-        registry: registryWith(Object.fromEntries([library, ...node].map((candidate) => [candidate.name, { channelVersion: '2.0.0-beta.1' }]))),
+// An addon package links its own addon, so it needs the platform packages as the package of the bindings does.
+test('a train refuses an addon package without the platform packages it links from its tarballs', async () => {
+    const { variants, node } = nodeFamily('zlib', { variantVersion: '2.0.0-beta.1', nodeVersion: '2.0.0-beta.1' });
+    const addon = node.find((candidate) => candidate.name.endsWith('-linux-x64'));
+    const root = fixtureRepository([...variants, ...node.filter((candidate) => candidate !== addon), { ...addon, version: '2.0.0-beta.2' }], {
+        trainVersion: '2.0.0-beta.2',
     });
-
-    assert.deepEqual(plan.multiPlatform, [library.name]);
-    assert.deepEqual(plan.buildOrderByRunner.node.sort(), node.map((candidate) => candidate.name).sort());
-    assert.deepEqual(plan.linuxShards, ['wasm', 'android', 'wasi', 'linux-native', 'win32-native']);
-    fs.rmSync(root, { recursive: true, force: true });
-});
-
-test('a train refuses the example Node package without the multi-platform library it links', async () => {
-    const { library, node } = matrixFamily('2.0.0-beta.1', '2.0.0-beta.2');
-    const root = fixtureRepository([library, ...node], { trainVersion: '2.0.0-beta.2' });
+    const published = { channelVersion: '2.0.0-beta.1', exactVersion: '2.0.0-beta.1' };
 
     await assert.rejects(
         buildWorkspaceReleasePlan({
             root,
             channel: 'beta',
             gitCommit: COMMIT,
-            registry: registryWith({
-                [library.name]: { channelVersion: '2.0.0-beta.1', exactVersion: '2.0.0-beta.1' },
-                ...Object.fromEntries(node.map((candidate) => [candidate.name, { channelVersion: '2.0.0-beta.1' }])),
-            }),
+            registry: registryWith(Object.fromEntries([...variants, ...node].map((candidate) => [candidate.name, published]))),
         }),
-        /@crossbind\/example-lib-prebuilt-matrix-node links @crossbind\/example-lib-prebuilt-matrix from the tarballs/,
+        /@crossbind\/port-zlib-standalone-napi-linux-x64 links @crossbind\/port-zlib-darwin, @crossbind\/port-zlib-linux, @crossbind\/port-zlib-linuxmusl, @crossbind\/port-zlib-win32/,
     );
+    fs.rmSync(root, { recursive: true, force: true });
+});
+
+// The example library ships its own Node-API addons; the node runners build them, so they are not Linux shards.
+test('a train with the multi-platform library builds it on every platform runner', async () => {
+    const library = {
+        name: '@crossbind/example-lib-prebuilt-matrix',
+        version: '2.0.0-beta.2',
+        path: 'examples/lib-prebuilt-matrix',
+        manifest: { scripts: { prepublishOnly: 'crossbind build' } },
+    };
+    const root = fixtureRepository([library]);
+
+    const plan = await buildWorkspaceReleasePlan({
+        root,
+        channel: 'beta',
+        gitCommit: COMMIT,
+        registry: registryWith({ [library.name]: { channelVersion: '2.0.0-beta.1' } }),
+    });
+
+    assert.deepEqual(plan.multiPlatform, [library.name]);
+    assert.deepEqual(plan.buildOrderByRunner.node, []);
+    assert.deepEqual(plan.linuxShards, ['wasm', 'android', 'wasi', 'linux-native', 'win32-native']);
     fs.rmSync(root, { recursive: true, force: true });
 });
 

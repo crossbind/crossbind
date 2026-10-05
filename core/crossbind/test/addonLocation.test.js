@@ -2,9 +2,9 @@ import { describe, test, expect } from 'vitest';
 import path from 'node:path';
 import addonLocation from '../../embind-napi/js/addonLocation.js';
 
-const dir = '/app/node_modules/@crossbind/port-zlib-node/dist';
+const dir = '/app/node_modules/@crossbind/port-zlib-standalone-napi/dist';
 const fileName = 'zlib-node.linux-x64.node';
-const packageName = '@crossbind/port-zlib-node-linux-x64';
+const packageName = '@crossbind/port-zlib-standalone-napi-linux-x64';
 const installed = `/app/node_modules/${packageName}/${fileName}`;
 const beside = path.join(dir, fileName);
 

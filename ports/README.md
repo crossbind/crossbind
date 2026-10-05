@@ -10,7 +10,7 @@ npm packages. Each family directory contains:
   `-linux`, `-linuxmusl`, `-win32`: prebuilt archives for one platform each
   (`-darwin`, `-linux`, `-linuxmusl` and `-win32` are macOS, Linux on glibc,
   Linux on musl and Windows, for native Node.js addons),
-- optionally a **`-bin-wasi` tool package**: the upstream CLI built as a WASI
+- optionally a **`-standalone-wasi` tool package**: the upstream CLI built as a WASI
   component, installable from npm with per-tool commands.
 
 The rest of this document is the **Bin & License Contract (v1)** — the rules
@@ -87,10 +87,10 @@ expression, followed by EVERY component's license section with its full text
 (the same rows the NOTICE and SBOM are built from, so the four artifacts can
 never tell different stories). A hand-typed single license on an aggregate
 binary - or a missing/out-of-sync LICENSE file - is a K4 violation.
-Ready-made Node packages (`@crossbind/port-<family>-node` and its
-`-node-<platform>-<arch>` packages) are aggregate binaries too, and
-`scripts/stage-node-addons.mjs` derives the same three things for each from
-`crossbind licenses --platform <platform> --runtime-env node`, whose rows add the
+Standalone Node-API packages (`@crossbind/port-<family>-standalone-napi` and its
+`-standalone-napi-<platform>-<arch>` packages) are aggregate binaries too, and
+each one's build derives the same three things for itself with
+`crossbind licenses [--platform <platform>] -e node --package`, whose rows add the
 crossbind runtime, the embind it adapts from Emscripten and node-api-jsi: the
 compound `license` field, a `LICENSE` with every text (plus the source tag and
 relinking steps when an LGPL library is linked) and `sbom.cdx.json`. The field
@@ -252,6 +252,6 @@ open item.
    wasm-tools.
 
 **Placement (decided).** The distribution's home is crossbind: users install the
-`-bin` package directly (e.g. `@crossbind/port-gdal-bin-wasi`); no
+`-bin` package directly (e.g. `@crossbind/port-gdal-standalone-wasi`); no
 product-package wrapper will be opened. The contract is placement-independent —
 if this ever changes, K1-K4 travel with the binaries.

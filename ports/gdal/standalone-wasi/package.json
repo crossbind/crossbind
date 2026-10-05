@@ -1,0 +1,99 @@
+{
+    "name": "@crossbind/port-gdal-standalone-wasi",
+    "version": "2.0.0-beta.62",
+    "nativeVersion": "3.13.3",
+    "description": "The upstream `gdal` command-line interface prebuilt as a single WASI (wasm32-wasip3) command component. Install, point wasmtime at the shipped .wasm and data folder, and run - no compiler involved.",
+    "homepage": "https://github.com/crossbind/crossbind/tree/main/ports/gdal#readme",
+    "repository": "https://github.com/crossbind/crossbind.git",
+    "type": "module",
+    "license": "(Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT) AND (Apache-2.0 WITH LLVM-exception) AND Apache-2.0 AND blessing AND curl AND IJG AND libpng-2.0 AND libtiff AND MIT AND Zlib",
+    "keywords": [
+        "gdal",
+        "gdal-cli",
+        "gis",
+        "geospatial",
+        "raster",
+        "vector",
+        "crossbind",
+        "crossbind-port",
+        "webassembly",
+        "wasi",
+        "wasmtime"
+    ],
+    "scripts": {
+        "build": "crossbind build -p wasi -b release",
+        "e2e": "node e2e/run.mjs",
+        "clear": "rm -rf .crossbind dist",
+        "prepublishOnly": "crossbind build -p wasi -b release && crossbind licenses --sbom"
+    },
+    "dependencies": {
+        "@crossbind/port-gdal": "workspace:^",
+        "@crossbind/port-geotiff-wasi": "workspace:^",
+        "@crossbind/port-proj-wasi": "workspace:^",
+        "@crossbind/port-tiff-wasi": "workspace:^",
+        "@crossbind/port-sqlite3-wasi": "workspace:^",
+        "@crossbind/port-zlib-wasi": "workspace:^",
+        "@crossbind/port-curl-wasi": "workspace:^",
+        "@crossbind/port-openssl-wasi": "workspace:^",
+        "crossbind": "workspace:^"
+    },
+    "bin": {
+        "gdal-wasi": "bin/gdal-wasi.mjs",
+        "gdal_contour-wasi": "bin/gdal_contour-wasi.mjs",
+        "gdal_create-wasi": "bin/gdal_create-wasi.mjs",
+        "gdal_footprint-wasi": "bin/gdal_footprint-wasi.mjs",
+        "gdal_grid-wasi": "bin/gdal_grid-wasi.mjs",
+        "gdal_rasterize-wasi": "bin/gdal_rasterize-wasi.mjs",
+        "gdal_translate-wasi": "bin/gdal_translate-wasi.mjs",
+        "gdal_viewshed-wasi": "bin/gdal_viewshed-wasi.mjs",
+        "gdaladdo-wasi": "bin/gdaladdo-wasi.mjs",
+        "gdalbuildvrt-wasi": "bin/gdalbuildvrt-wasi.mjs",
+        "gdaldem-wasi": "bin/gdaldem-wasi.mjs",
+        "gdalenhance-wasi": "bin/gdalenhance-wasi.mjs",
+        "gdalinfo-wasi": "bin/gdalinfo-wasi.mjs",
+        "gdallocationinfo-wasi": "bin/gdallocationinfo-wasi.mjs",
+        "gdalmanage-wasi": "bin/gdalmanage-wasi.mjs",
+        "gdalmdiminfo-wasi": "bin/gdalmdiminfo-wasi.mjs",
+        "gdalmdimtranslate-wasi": "bin/gdalmdimtranslate-wasi.mjs",
+        "gdalsrsinfo-wasi": "bin/gdalsrsinfo-wasi.mjs",
+        "gdaltindex-wasi": "bin/gdaltindex-wasi.mjs",
+        "gdaltransform-wasi": "bin/gdaltransform-wasi.mjs",
+        "gdalwarp-wasi": "bin/gdalwarp-wasi.mjs",
+        "gnmanalyse-wasi": "bin/gnmanalyse-wasi.mjs",
+        "gnmmanage-wasi": "bin/gnmmanage-wasi.mjs",
+        "nearblack-wasi": "bin/nearblack-wasi.mjs",
+        "ogr2ogr-wasi": "bin/ogr2ogr-wasi.mjs",
+        "ogrinfo-wasi": "bin/ogrinfo-wasi.mjs",
+        "ogrlineref-wasi": "bin/ogrlineref-wasi.mjs",
+        "ogrtindex-wasi": "bin/ogrtindex-wasi.mjs",
+        "sozip-wasi": "bin/sozip-wasi.mjs"
+    },
+    "crossbind": {
+        "provenance": {
+            "recipe": {
+                "name": "@crossbind/port-gdal",
+                "version": "2.0.0-beta.53",
+                "nativeVersion": "3.13.3"
+            },
+            "source": {
+                "url": "https://github.com/OSGeo/gdal/releases/download/v3.13.3/gdal-3.13.3.tar.gz",
+                "sha256": "5e0c388d83da2d686cc00a40272882432cdb54edff43d4af173e532844a0a0ea"
+            },
+            "environment": {
+                "builder": "host",
+                "dockerImage": "ghcr.io/crossbind/web@sha256:c1d1d81a4775871cd90c8ac980e0a5f87cb7890822117f77be1c8345f51b1f47",
+                "hostPlatform": "darwin-arm64",
+                "toolchain": {
+                    "name": "wasi-sdk",
+                    "version": "34.0-rc.3+m",
+                    "wasi-libc": "2e6fb9d8ee0c",
+                    "llvm": "7196f931f212",
+                    "llvm-version": "23.1.0",
+                    "config": "f992bcc08219",
+                    "clangSha256": "82a4a3fa013d14978f98452bb76213a3212ee4f5d7937e493ab40724061be570"
+                }
+            },
+            "sbom": "dist/prebuilt/wasi-wasm32-st-release/sbom.cdx.json"
+        }
+    }
+}

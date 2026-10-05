@@ -244,7 +244,7 @@ builds each demo in a fresh temporary copy.
 
 The `license` field of `@crossbind/port-geos` and its wasm, android, ios and wasi packages is
 `LGPL-2.1-or-later`, while the same `package.json` declares the upstream licence as
-`LGPL-2.1-only`, and `crossbind licenses` and the bin-wasi package derive `LGPL-2.1-only`. GEOS
+`LGPL-2.1-only`, and `crossbind licenses` and the standalone-wasi package derive `LGPL-2.1-only`. GEOS
 ships the LGPL 2.1 text as `COPYING` and names no version in its headers.
 
 - Seen: 2026-09-24
@@ -301,7 +301,7 @@ decoding is unaffected. A native build with `MallocScribble` shows the bytes as 
 
 `ports/jpegturbo/base/build.mjs` configures every platform with `-DWITH_TURBOJPEG=OFF`, so there is
 no `turbojpeg.h` (`tj3*`), and `transupp` is not built, so lossless rotate, flip and crop exist only
-in the `jpegtran-wasi` command of the bin-wasi package. Only the libjpeg API is available.
+in the `jpegtran-wasi` command of the standalone-wasi package. Only the libjpeg API is available.
 
 - Seen: 2026-09-24
 - Check: `grep -c 'WITH_TURBOJPEG=OFF' ports/jpegturbo/base/build.mjs` prints 4.
@@ -335,7 +335,7 @@ Built for `wasm32-wasip3` (or `-wasip2`) with wasi-sdk 34.0-rc.3 and run by wasm
 `write()` after `lseek(fd, 0, SEEK_END)` lands at the descriptor's previous position, although `lseek`
 returns the right offset. `wasm32-wasip1` and native builds are correct. libtiff seeks this way
 before every page after the first, so multi-page TIFFs written through `TIFFOpen` come out corrupt,
-including those from the published `tiffcp` in `@crossbind/port-tiff-bin-wasi`, which still exits 0.
+including those from the published `tiffcp` in `@crossbind/port-tiff-standalone-wasi`, which still exits 0.
 
 - Seen: 2026-09-24
 - Check: compile a program that writes `AAAA`, seeks to 0, writes `B`, seeks to the end and writes

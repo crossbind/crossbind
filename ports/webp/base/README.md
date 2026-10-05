@@ -192,7 +192,7 @@ This is the main package; the precompiled binaries are shipped per platform:
 | Linux | [`@crossbind/port-webp-linux`](https://www.npmjs.com/package/@crossbind/port-webp-linux) | `x64`, `arm64` — glibc 2.28 or later, native Node.js addons |
 | Windows | [`@crossbind/port-webp-win32`](https://www.npmjs.com/package/@crossbind/port-webp-win32) | `x64`, `arm64` — Windows 10 or later, native Node.js addons |
 | WASI library | [`@crossbind/port-webp-wasi`](https://www.npmjs.com/package/@crossbind/port-webp-wasi) | `wasm32-wasip3` — single-threaded |
-| WASI command | [`@crossbind/port-webp-bin-wasi`](https://www.npmjs.com/package/@crossbind/port-webp-bin-wasi) | the upstream `cwebp`, `dwebp` and `webpinfo` as `cwebp-wasi`, `dwebp-wasi` and `webpinfo-wasi` commands (wasmtime 47+) |
+| WASI command | [`@crossbind/port-webp-standalone-wasi`](https://www.npmjs.com/package/@crossbind/port-webp-standalone-wasi) | the upstream `cwebp`, `dwebp` and `webpinfo` as `cwebp-wasi`, `dwebp-wasi` and `webpinfo-wasi` commands (wasmtime 47+) |
 
 ## License
 This project includes the precompiled WebP library, which is distributed under the [BSD 3-Clause License](https://chromium.googlesource.com/webm/libwebp/+/refs/heads/main/COPYING).

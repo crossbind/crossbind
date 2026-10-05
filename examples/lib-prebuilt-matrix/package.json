@@ -13,7 +13,7 @@
         "build:android": "crossbind build -p android",
         "build:ios": "crossbind build -p ios",
         "build:darwin": "crossbind build -p darwin",
-        "build:desktop": "crossbind build -p darwin,linux,linuxmusl,win32",
+        "build:desktop": "crossbind build -p darwin,linux,linuxmusl,win32 -e node",
         "clear": "rm -rf .crossbind dist *.xcframework",
         "prepublishOnly": "crossbind build"
     },
@@ -25,11 +25,22 @@
         "matrix",
         "crossbind-sample",
         "webassembly",
-        "react-native"
+        "react-native",
+        "node",
+        "node-api"
     ],
     "types": "./dist/types/index.d.ts",
     "typesVersions": {
         "*": {
+            "node/napi": [
+                "./node/napi.d.ts"
+            ],
+            "node/wasm": [
+                "./node/wasm.d.ts"
+            ],
+            "edge/wasm": [
+                "./edge/wasm.d.ts"
+            ],
             "*.h": [
                 "./dist/types/index.d.ts"
             ]

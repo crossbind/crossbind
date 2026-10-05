@@ -146,7 +146,7 @@ function licenceBlocks(port) {
         items.push(`Upstream declares \`${port.upstreamLicense}\`; the npm field normalises it to SPDX.`);
     if (publishedTarget(port, BIN_TARGET)) {
         items.push(
-            'The `-bin-wasi` package lists every statically linked component in its own `license` field, which is longer than the library licence above.',
+            'The `-standalone-wasi` package lists every statically linked component in its own `license` field, which is longer than the library licence above.',
         );
     }
     items.push(`The licence files that ship with the package, and the port recipe, are in [the port directory](${port.repositoryUrl}).`);

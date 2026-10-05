@@ -12,9 +12,9 @@ import {
     changedBridgeState,
     mergeStagedMulti,
     missingDists,
-    nodeProjectPaths,
     packBridgeState,
     restoreBridgeState,
+    stageNodeOutputs,
     unpackDists,
     variantTarballs,
 } from './node-packages.mjs';
@@ -75,31 +75,41 @@ if (nodeBuild) {
         const { artifacts, stagedMultiPlatform } = JSON.parse(fs.readFileSync(path.join(directory, `build-${from}.json`), 'utf8'));
         return { directory, runner: from, artifacts, stagedMultiPlatform };
     });
-    const projectPaths = nodeProjectPaths(buildOrder, workspace);
+    // Each standalone package builds itself: an addon package its addon, the package of the bindings their loader.
+    const packagePaths = buildOrder.map((name) => workspace[name].path);
+    // A macOS addon package compiles the bridges the Linux job generates, which a darwin build there does without linking.
+    const bridgeOnlyPaths = runner === 'node' ? plan.buildOrderByRunner['node-macos'].map((name) => workspace[name].path) : [];
+    // The multi-platform library ships its own addons, whose bridges travel to the macOS runner like a package's.
+    const multiPaths = plan.multiPlatform.map((name) => workspace[name].path);
+    const bridgePaths = [...packagePaths, ...bridgeOnlyPaths, ...multiPaths];
     unpackDists({ root, tarballs: variantTarballs(inputs, workspace, nodeBuild.dists) });
     mergeStagedMulti({ root, inputs, workspace });
-    const missing = missingDists(root, projectPaths, nodeBuild.dists, (name) => workspace[name]?.path);
+    const missing = missingDists(root, packagePaths, nodeBuild.dists, (name) => workspace[name]?.path);
     if (missing.length) throw new Error(`[${runner}] no package of this train brought the archives for ${missing.join(', ')}.`);
     if (valueOf('--bridges')) restoreBridgeState({ root, inputDir: path.resolve(valueOf('--bridges')) });
-    const handedOver = valueOf('--bridges') ? bridgeStateDigest(root, projectPaths) : null;
-    for (const projectPath of projectPaths) {
-        const projectDir = path.join(root, projectPath);
-        process.stdout.write(`[${runner}] build ${projectPath} for ${nodeBuild.platforms.join(', ')}\n`);
-        execFileSync(
-            'pnpm',
-            ['--dir', projectDir, 'exec', 'crossbind', 'build', '-p', nodeBuild.platforms.join(','), '-e', 'node', '-b', 'release'],
-            {
-                cwd: root,
-                stdio: 'inherit',
-            },
-        );
-        execFileSync(process.execPath, [path.join(root, 'scripts', 'stage-node-addons.mjs')], { cwd: projectDir, stdio: 'inherit' });
+    const handedOver = valueOf('--bridges') ? bridgeStateDigest(root, bridgePaths) : null;
+    const run = (dir, args) => {
+        process.stdout.write(`[${runner}] ${path.relative(root, dir)}: ${args.join(' ')}\n`);
+        execFileSync('pnpm', ['--dir', dir, ...args], { cwd: root, stdio: 'inherit' });
+    };
+    for (const packagePath of packagePaths) run(path.join(root, packagePath), ['run', 'build']);
+    for (const packagePath of bridgeOnlyPaths) {
+        const { cpu } = JSON.parse(fs.readFileSync(path.join(root, packagePath, 'package.json'), 'utf8'));
+        run(path.join(root, packagePath), ['exec', 'crossbind', 'build', '-p', 'darwin', '-a', cpu[0], '-e', 'node', '-b', 'release']);
+    }
+    for (const packagePath of multiPaths) {
+        run(path.join(root, packagePath), ['exec', 'crossbind', 'build', '-p', nodeBuild.platforms.join(','), '-e', 'node', '-b', 'release']);
+        stageNodeOutputs({
+            packageRoot: path.join(root, packagePath),
+            stagingRoot: path.join(artifactRoot, 'multi', runner, packagePath),
+            withEntry: runner === 'node',
+        });
     }
     // A dependency bridge crossbind cannot generate is only warned about and left out, so any change shows a
     // bridge this runner did not take from the Linux job.
-    const changed = handedOver ? changedBridgeState(handedOver, bridgeStateDigest(root, projectPaths)) : [];
+    const changed = handedOver ? changedBridgeState(handedOver, bridgeStateDigest(root, bridgePaths)) : [];
     if (changed.length) throw new Error(`[${runner}] the build changed bridges handed over by the Linux job: ${changed.slice(0, 5).join(', ')}`);
-    if (valueOf('--bridges-out')) packBridgeState({ root, projectPaths, outputDir: path.resolve(valueOf('--bridges-out')) });
+    if (valueOf('--bridges-out')) packBridgeState({ root, projectPaths: bridgePaths, outputDir: path.resolve(valueOf('--bridges-out')) });
 }
 
 const artifacts = [];

@@ -174,7 +174,7 @@ Setup and differences per platform: [WebAssembly](https://crossbind.dev/ports/ge
 - GEOS 3.15.0 (C API 1.21.0) as two static libraries: `libgeos_c`, the stable C API the examples use, and `libgeos`, the C++ library behind it.
 - The C API the apps above run: overlays, prepared predicates and DE-9IM, buffers and offset curves, validity checks and both repair methods, coverage simplification and validation, Delaunay and Voronoi, hulls, and WKT and GeoJSON output.
 - No data files: a GEOS module is its `.wasm` and loader alone. The module behind the five examples and three apps is 1,612,592 bytes of WebAssembly and 138,052 bytes of JavaScript.
-- GEOS's own `geosop` tool is not in the library packages; `@crossbind/port-geos-bin-wasi` ships it as a WASI command.
+- GEOS's own `geosop` tool is not in the library packages; `@crossbind/port-geos-standalone-wasi` ships it as a WASI command.
 
 ## Supported platforms
 This is the main package; the precompiled binaries are shipped per platform:
@@ -188,7 +188,7 @@ This is the main package; the precompiled binaries are shipped per platform:
 | Linux | [`@crossbind/port-geos-linux`](https://www.npmjs.com/package/@crossbind/port-geos-linux) | `x64`, `arm64` — glibc 2.28 or later, native Node.js addons |
 | Windows | [`@crossbind/port-geos-win32`](https://www.npmjs.com/package/@crossbind/port-geos-win32) | `x64`, `arm64` — Windows 10 or later, native Node.js addons |
 | WASI library | [`@crossbind/port-geos-wasi`](https://www.npmjs.com/package/@crossbind/port-geos-wasi) | `wasm32-wasip3` — single-threaded |
-| WASI command | [`@crossbind/port-geos-bin-wasi`](https://www.npmjs.com/package/@crossbind/port-geos-bin-wasi) | the upstream `geosop` CLI as a `geosop-wasi` command (wasmtime 47+) |
+| WASI command | [`@crossbind/port-geos-standalone-wasi`](https://www.npmjs.com/package/@crossbind/port-geos-standalone-wasi) | the upstream `geosop` CLI as a `geosop-wasi` command (wasmtime 47+) |
 
 ## License
 This project includes the precompiled GEOS library, which is distributed under the [GNU LGPL 2.1](https://github.com/libgeos/geos/blob/main/COPYING).

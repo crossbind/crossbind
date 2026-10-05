@@ -1,0 +1,72 @@
+import { execFileSync } from 'node:child_process';
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join, resolve } from 'node:path';
+
+const P = 'wasi-wasm32-st-release';
+const pkgDir = resolve(import.meta.dirname, '..');
+const own = join(pkgDir, 'dist/prebuilt', P);
+const binJson = join(own, 'crossbind-bin.json');
+
+try {
+    execFileSync('wasmtime', ['--version'], { stdio: 'ignore' });
+} catch {
+    console.log('SKIP: wasmtime not installed (brew install wasmtime).');
+    process.exit(0);
+}
+if (!existsSync(binJson)) {
+    console.log('SKIP: prebuilt missing - run \`pnpm build\` first.');
+    process.exit(0);
+}
+const { tools } = JSON.parse(readFileSync(binJson, 'utf8'));
+const hostTool = Object.keys(tools).find((name) => tools[name].kind === 'binary');
+
+const work = mkdtempSync(join(tmpdir(), 'crossbind-bin-e2e-'));
+const runWasm = (name, args, { input } = {}) => {
+    const entry = tools[name];
+    const file = join(own, 'bin', entry?.kind === 'multicall-entry' ? hostTool : name);
+    const prefix = entry?.kind === 'multicall-entry' ? [name] : [];
+    return execFileSync('wasmtime', [
+        'run',
+        `--dir=${work}::/work`,
+        ...(existsSync(join(own, 'share/proj')) ? [`--dir=${join(own, 'share/proj')}::/proj`, '--env', 'PROJ_DATA=/proj'] : []),
+        file, ...prefix, ...args,
+    ], { encoding: 'utf8', timeout: 120000, input });
+};
+const tool = (name, args) => runWasm(name, args);
+const toolIn = (name, args, input) => runWasm(name, args, { input });
+const toolFail = (name, args) => {
+    try {
+        runWasm(name, args);
+        console.error('FAIL: expected non-zero exit for', name, args.join(' '));
+        process.exit(1);
+    } catch (e) {
+        return `${e.stdout || ''}${e.stderr || ''}`;
+    }
+};
+const toolAny = (name, args) => {
+    try { return runWasm(name, args); } catch (e) { return `${e.stdout || ''}${e.stderr || ''}`; }
+};
+const expect = (cond, label, detail) => {
+    if (!cond) {
+        console.error('FAIL:', label, '\n', String(detail).slice(0, 400));
+        process.exit(1);
+    }
+};
+const ppm = (w, h) => {
+    const header = Buffer.from(`P6\n${w} ${h}\n255\n`);
+    const pixels = Buffer.alloc(w * h * 3);
+    for (let i = 0; i < pixels.length; i += 1) pixels[i] = (i * 37) % 256;
+    return Buffer.concat([header, pixels]);
+};
+
+try {
+    writeFileSync(join(work, 'in.ppm'), ppm(32, 32));
+    tool('cjpeg', ['-quality', '90', '-outfile', '/work/out.jpg', '/work/in.ppm']);
+    tool('jpegtran', ['-rotate', '90', '-outfile', '/work/rot.jpg', '/work/out.jpg']);
+    tool('djpeg', ['-ppm', '-outfile', '/work/back.ppm', '/work/rot.jpg']);
+    expect(readFileSync(join(work, 'back.ppm')).length > 0, 'djpeg output non-empty', '');
+    console.log('jpegturbo-standalone-wasi: PASS (ppm -> jpg -> rotate -> ppm)');
+    } finally {
+    rmSync(work, { recursive: true, force: true });
+}

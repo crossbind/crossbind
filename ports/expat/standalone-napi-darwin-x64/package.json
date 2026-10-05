@@ -1,0 +1,32 @@
+{
+    "name": "@crossbind/port-expat-standalone-napi-darwin-x64",
+    "version": "2.0.0-beta.62",
+    "nativeVersion": "2.8.5",
+    "homepage": "https://github.com/crossbind/crossbind/tree/main/ports/expat#readme",
+    "repository": "https://github.com/crossbind/crossbind.git",
+    "license": "(MIT OR NCSA) AND MIT",
+    "description": "macOS x64 addon of @crossbind/port-expat-standalone-napi, which npm installs on a matching machine.",
+    "os": [
+        "darwin"
+    ],
+    "cpu": [
+        "x64"
+    ],
+    "main": "dist/expat-standalone-napi.darwin-x64.node",
+    "files": [
+        "dist/expat-standalone-napi.darwin-x64.node",
+        "sbom.cdx.json"
+    ],
+    "scripts": {
+        "build": "crossbind build -p darwin -a x64 -e node -b release && crossbind licenses --platform darwin -e node --package",
+        "clear": "rm -rf .crossbind dist",
+        "prepack": "node ../../../scripts/check-node-package.mjs"
+    },
+    "devDependencies": {
+        "crossbind": "workspace:^",
+        "@crossbind/port-expat-darwin": "workspace:^",
+        "@crossbind/port-expat-linux": "workspace:^",
+        "@crossbind/port-expat-linuxmusl": "workspace:^",
+        "@crossbind/port-expat-win32": "workspace:^"
+    }
+}

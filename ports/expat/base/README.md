@@ -208,7 +208,7 @@ This is the main package; the precompiled binaries are shipped per platform:
 | Linux | [`@crossbind/port-expat-linux`](https://www.npmjs.com/package/@crossbind/port-expat-linux) | `x64`, `arm64` — glibc 2.28 or later, native Node.js addons |
 | Windows | [`@crossbind/port-expat-win32`](https://www.npmjs.com/package/@crossbind/port-expat-win32) | `x64`, `arm64` — Windows 10 or later, native Node.js addons |
 | WASI library | [`@crossbind/port-expat-wasi`](https://www.npmjs.com/package/@crossbind/port-expat-wasi) | `wasm32-wasip3` — single-threaded |
-| WASI command | [`@crossbind/port-expat-bin-wasi`](https://www.npmjs.com/package/@crossbind/port-expat-bin-wasi) | the upstream `xmlwf` well-formedness checker as an `xmlwf-wasi` command (wasmtime 47+) |
+| WASI command | [`@crossbind/port-expat-standalone-wasi`](https://www.npmjs.com/package/@crossbind/port-expat-standalone-wasi) | the upstream `xmlwf` well-formedness checker as an `xmlwf-wasi` command (wasmtime 47+) |
 
 ## License
 This project includes the precompiled Expat library, which is distributed under the [MIT License](https://github.com/libexpat/libexpat/blob/master/COPYING).

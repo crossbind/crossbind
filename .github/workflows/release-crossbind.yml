@@ -35,6 +35,7 @@ jobs:
             hasMacos: ${{ steps.plan.outputs.hasMacos }}
             hasNode: ${{ steps.plan.outputs.hasNode }}
             hasNodeMacos: ${{ steps.plan.outputs.hasNodeMacos }}
+            hasNodePackages: ${{ steps.plan.outputs.hasNodePackages }}
             verifyNodeVersions: ${{ steps.plan.outputs.verifyNodeVersions }}
             hasCrossbind: ${{ steps.plan.outputs.hasCrossbind }}
         steps:
@@ -376,11 +377,11 @@ jobs:
     # The exact tarballs installed from a local registry on every platform an addon targets, with each
     # Node.js version of releases/npm and .nvmrc (VERIFY_NODE_VERSION_FILES), before anything is published.
     verify_node:
-        name: Verify ready-made Node packages on ${{ matrix.target }} (${{ matrix.node-version-file }})
+        name: Verify standalone Node-API packages on ${{ matrix.target }} (${{ matrix.node-version-file }})
         needs:
             - plan
             - assemble
-        if: ${{ !cancelled() && needs.plan.outputs.hasNode == 'true' && needs.assemble.result == 'success' }}
+        if: ${{ !cancelled() && needs.plan.outputs.hasNodePackages == 'true' && needs.assemble.result == 'success' }}
         strategy:
             fail-fast: false
             matrix:
@@ -419,11 +420,11 @@ jobs:
 
     # musl Linux runs in the official Node.js Alpine image of each verified version.
     verify_node_musl:
-        name: Verify ready-made Node packages on ${{ matrix.target }} (Node.js ${{ matrix.node }})
+        name: Verify standalone Node-API packages on ${{ matrix.target }} (Node.js ${{ matrix.node }})
         needs:
             - plan
             - assemble
-        if: ${{ !cancelled() && needs.plan.outputs.hasNode == 'true' && needs.assemble.result == 'success' }}
+        if: ${{ !cancelled() && needs.plan.outputs.hasNodePackages == 'true' && needs.assemble.result == 'success' }}
         strategy:
             fail-fast: false
             matrix:

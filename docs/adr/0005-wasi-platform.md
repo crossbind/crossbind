@@ -2,7 +2,7 @@
 
 - **Status:** Accepted
 - **Date:** 2026-07-14 (wasip1), moved to wasm32-wasip3 2026-07-21
-- **Affects:** `core/crossbind/src/actions/buildWasiCommand.js`, `src/utils/{targets,wasiToolchain}.js`, `src/assets/wasi-runtime/stubs.c`, `src/runtime/wasiRun.mjs`, every `ports/*/wasi` / `ports/*/bin-wasi`, CI (`build-linux.yml`)
+- **Affects:** `core/crossbind/src/actions/buildWasiCommand.js`, `src/utils/{targets,wasiToolchain}.js`, `src/assets/wasi-runtime/stubs.c`, `src/runtime/wasiRun.mjs`, every `ports/*/wasi` / `ports/*/standalone-wasi`, CI (`build-linux.yml`)
 
 ## Context
 
@@ -36,7 +36,7 @@ no bridge, no JS glue. Concrete rules:
 
 ## Consequences
 
-- **Positive** — upstream CLI tools run unmodified in sandboxes; the `-bin-wasi`
+- **Positive** — upstream CLI tools run unmodified in sandboxes; the `-standalone-wasi`
   npm distribution becomes possible; no JS host to maintain for this class of
   consumers.
 - **Negative** — a fifth platform in the matrix (2 more targets, separate

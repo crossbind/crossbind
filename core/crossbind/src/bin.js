@@ -9,15 +9,16 @@ import createBridgeFile from './actions/createInterface.js';
 import createLib from './actions/createLib.js';
 import buildWasm from './actions/buildWasm.js';
 import buildWasiCommand from './actions/buildWasiCommand.js';
-import buildNode, { publishNodeData } from './actions/buildNode.js';
+import buildNode, { addonsInPackages, bundleNodeLoader, publishNodeData } from './actions/buildNode.js';
 import buildNativeCommand from './actions/buildNativeCommand.js';
 import buildExternal from './actions/buildExternal.js';
 import buildPackageTypes from './actions/buildTypes.js';
 import buildLib from './actions/buildLib.js';
 import buildDependencies from './actions/buildDependencies.js';
-import writeHeaderEntries from './actions/writeHeaderEntries.js';
+import writeRuntimeEntry from './actions/writeRuntimeEntry.js';
 import getDependFilePath from './integration/getDependFilePath.js';
 import { boundHeaderSpecifiers, bridgeTargets, nodeBridgeTarget, resolveBoundHeaders } from './utils/boundHeaders.js';
+import { ENTRY_RUNTIMES } from './utils/runtimeEntries.js';
 import replaceFile from './utils/replaceFile.js';
 import runCrossbindApp from './actions/run.js';
 import { getBuildTargets, getFilteredBuildTargets } from './actions/target.js';
@@ -34,6 +35,7 @@ import { conanRoot } from './utils/runConan.js';
 import { cleanDepsCache } from './utils/dependencyRebuild.js';
 import collectLicenseRows from './actions/licenses.js';
 import { formatNoticesMarkdown, formatCycloneDxSbom, validateSpdx } from './utils/licenseReport.js';
+import { SBOM_FILE, nodePackageMeta, writeNodePackageLicense } from './utils/packageLicense.js';
 import findFiles from './utils/findFiles.js';
 
 const packageJSON = JSON.parse(fs.readFileSync(new URL('../package.json', import.meta.url)));
@@ -120,7 +122,11 @@ program.command('licenses')
     .option('--platform <platform>', "also list what this platform's artifact statically links beyond the package graph (vendored copies, toolchain runtime)")
     .addOption(new Option('-e, --runtime-env <runtimeEnv>', 'also list the crossbind runtime an addon of --platform compiles in, or without --platform the one its loader bundles').choices(['node']))
     .option('--json [file]', 'write the rows, license texts included, as JSON (default: licenses.json)')
+    .option('--package', "write this Node-API package's LICENSE, sbom.cdx.json and package.json license field (with -e node)")
     .action(async (options) => {
+        if (options.package && options.runtimeEnv !== 'node') {
+            throw new Error('crossbind licenses --package writes the license files of a Node-API package; pass -e node.');
+        }
         const rows = await collectLicenseRows(options.platform || null, { runtimeEnv: options.runtimeEnv || null });
         rows.forEach((row) => {
             console.log(`${row.isCopyleft ? '! ' : '  '}${(row.name || '').padEnd(14)} ${String(row.license || '(missing)').padEnd(48)} native ${String(row.nativeVersion || '-').padEnd(10)} ${row.sourceUrl || ''}`);
@@ -150,6 +156,10 @@ program.command('licenses')
             const file = typeof options.json === 'string' ? options.json : `${state.config.paths.project}/licenses.json`;
             fs.writeFileSync(file, `${JSON.stringify(rows, null, 2)}\n`);
             logger.info(`crossbind: wrote ${file}`);
+        }
+        if (options.package) {
+            const expression = writeNodePackageLicense(state.config.paths.project, { ...nodePackageMeta(state.config), rows });
+            logger.info(`crossbind: wrote LICENSE and ${SBOM_FILE} (${expression})`);
         }
         if (options.check) {
             const invalid = rows
@@ -341,13 +351,23 @@ function run(programName, params) {
     runCrossbindApp(programName, params, null, null, { console: true });
 }
 
+// A package whose platform packages link its addons, building nothing else, has no archive of its own that
+// anything links.
+function onlyLoadsPackagedAddons(binaryParams) {
+    if (binaryParams.runtimeEnv.length === 0) return false;
+    const targets = getBuildTargets(binaryParams);
+    return targets.every((target) => target.runtimeEnv === 'node' && target.platform !== 'wasm') && addonsInPackages();
+}
+
 async function build(targetParams, rebuildOption, binaryRuntimeEnvs) {
     await buildDependencies({ targetParams, rebuildOption });
-    buildLib(targetParams);
+    const binaryParams = { ...targetParams, runtimeEnv: binaryRuntimeEnvs };
+    if (!onlyLoadsPackagedAddons(binaryParams)) {
+        buildLib(targetParams);
+    }
     if (binaryRuntimeEnvs.length === 0) {
         logger.info(`crossbind: no runtime environment was selected, so only the archives were built - pass -e (${runtimeEnvs.join(', ')}) for a binary.`);
     } else {
-        const binaryParams = { ...targetParams, runtimeEnv: binaryRuntimeEnvs };
         await createWasmJs(binaryParams);
         await createNodeAddons(binaryParams);
         await createNativeCommands(binaryParams);
@@ -398,12 +418,7 @@ function createBridges(target) {
     });
     headers = headers.filter((path) => !!path.toString()).flat();
 
-    const bridges = [];
-    headers.forEach((header) => {
-        const bridgePath = createBridgeFile(header, target);
-        bridges.push(bridgePath);
-    });
-    return bridges;
+    return headers.map((header) => ({ file: header, bridge: createBridgeFile(header, target) }));
 }
 
 // The dependency headers the config binds whole, each read where one of the targets' packages ships it.
@@ -411,6 +426,16 @@ function createBoundBridges(targets) {
     const headers = resolveBoundHeaders(boundHeaderSpecifiers(state.config), bridgeTargets(targets, state.targets), getDependFilePath);
     const wholeHeaders = headers.map((header) => header.file);
     return headers.map((header) => ({ ...header, bridge: createBridgeFile(header.file, header.target, { wholeHeaders }) }));
+}
+
+// A package whose platform packages link its addons ships what loads them: the loader and the data.
+async function publishLoaders(targets) {
+    fs.mkdirSync(state.config.paths.output, { recursive: true });
+    targets.forEach((target) => publishNodeData(target, { refresh: true }));
+    for (const target of new Map(targets.map((t) => [t.jsName, t])).values()) {
+        await bundleNodeLoader(target);
+        fs.copyFileSync(`${state.config.paths.build}/${target.jsName}`, `${state.config.paths.output}/${target.jsName}`);
+    }
 }
 
 async function createNodeAddons(targetParams) {
@@ -425,32 +450,49 @@ async function createNodeAddons(targetParams) {
         `${resolveEmbindNapiRoot()}/third_party/node-api-jsi/jsi`,
     ];
     const boundHeaders = createBoundBridges(targets);
+    const headers = [...createBridges(nodeBridgeTarget(targets)), ...boundHeaders];
     const opt = {
         buildSource: false,
         nativeGlob: [
             `${state.config.paths.cli}/assets/cpp-runtime/commonBridges.cpp`,
-            ...createBridges(nodeBridgeTarget(targets)),
-            ...boundHeaders.map((header) => header.bridge),
+            ...headers.map((header) => header.bridge),
         ],
         headerDirs,
         inputs: headerDirs.flatMap((dir) => findFiles('**/*.h', { cwd: dir })),
     };
 
-    for (const target of targets) {
-        const distComplete = fs.existsSync(`${state.config.paths.output}/${target.addonName}`)
-            && fs.existsSync(`${state.config.paths.output}/${target.jsName}`);
-        createLib(target, 'Bridge', opt);
-        const built = await buildNode(target, { force: !distComplete });
-        publishNodeData(target, { refresh: built });
-        if (!built) {
-            continue;
+    if (addonsInPackages()) {
+        await publishLoaders(targets);
+    } else {
+        for (const target of targets) {
+            const distComplete = fs.existsSync(`${state.config.paths.output}/${target.addonName}`)
+                && fs.existsSync(`${state.config.paths.output}/${target.jsName}`);
+            createLib(target, 'Bridge', opt);
+            const built = await buildNode(target, { force: !distComplete });
+            publishNodeData(target, { refresh: built });
+            if (!built) {
+                continue;
+            }
+            fs.mkdirSync(state.config.paths.output, { recursive: true });
+            replaceFile(`${state.config.paths.build}/${target.addonName}`, `${state.config.paths.output}/${target.addonName}`);
+            fs.copyFileSync(`${state.config.paths.build}/${target.jsName}`, `${state.config.paths.output}/${target.jsName}`);
         }
-        fs.mkdirSync(state.config.paths.output, { recursive: true });
-        replaceFile(`${state.config.paths.build}/${target.addonName}`, `${state.config.paths.output}/${target.addonName}`);
-        fs.copyFileSync(`${state.config.paths.build}/${target.jsName}`, `${state.config.paths.output}/${target.jsName}`);
     }
     const loaderTarget = targets.find((target) => target.buildType === 'release') ?? targets[0];
-    writeHeaderEntries(boundHeaders, { outputDir: state.config.paths.output, loaderName: loaderTarget.jsName });
+    if (headers.length && fs.existsSync(`${state.config.paths.output}/${loaderTarget.jsName}`)) {
+        writeRuntimeEntry(`${state.config.paths.output}/node/napi.mjs`, headers, ENTRY_RUNTIMES.node(loaderTarget.jsName));
+    }
+}
+
+// The Node and edge wasm builds are CommonJS with a .js extension, which a "type": "module" package loads as
+// ESM. A package.json of the output's own scopes them back, unless the output is a package root.
+const OUTPUT_SCOPE = '{\n    "type": "commonjs"\n}\n';
+function scopeOutputToCommonJs() {
+    const file = `${state.config.paths.output}/package.json`;
+    if (!fs.existsSync(file)) {
+        fs.mkdirSync(state.config.paths.output, { recursive: true });
+        fs.writeFileSync(file, OUTPUT_SCOPE);
+    }
 }
 
 async function createWasmJs(targetParams) {
@@ -458,11 +500,12 @@ async function createWasmJs(targetParams) {
     if (targets.length === 0) {
         return;
     }
+    const headers = createBridges();
     const opt = {
         buildSource: false,
         nativeGlob: [
             `${state.config.paths.cli}/assets/cpp-runtime/commonBridges.cpp`,
-            ...createBridges(),
+            ...headers.map((header) => header.bridge),
         ],
     };
 
@@ -490,6 +533,21 @@ async function createWasmJs(targetParams) {
         if (fs.existsSync(`${state.config.paths.build}/${target.dataTxtName}`)) {
             fs.copyFileSync(`${state.config.paths.build}/${target.dataTxtName}`, `${state.config.paths.output}/${target.dataTxtName}`);
         }
+    }
+
+    if (targets.some((target) => ['node', 'edge'].includes(target.runtimeEnv))) {
+        scopeOutputToCommonJs();
+    }
+    // A runtime's entry loads its single-thread wasm32 release build.
+    const entryTargetOf = (runtimeEnv) => targets.find((target) => target.runtimeEnv === runtimeEnv && target.arch === 'wasm32'
+        && target.runtime === 'st' && target.buildType === 'release' && fs.existsSync(`${state.config.paths.output}/${target.jsName}`));
+    const nodeTarget = entryTargetOf('node');
+    const edgeTarget = entryTargetOf('edge');
+    if (headers.length && nodeTarget) {
+        writeRuntimeEntry(`${state.config.paths.output}/node/wasm.mjs`, headers, ENTRY_RUNTIMES.node(nodeTarget.jsName));
+    }
+    if (headers.length && edgeTarget) {
+        writeRuntimeEntry(`${state.config.paths.output}/edge/wasm.mjs`, headers, ENTRY_RUNTIMES.edge(edgeTarget.jsName, edgeTarget.wasmName));
     }
 }
 

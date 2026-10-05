@@ -13,6 +13,9 @@ crossbind licenses                 # what is bundled, under which SPDX license, 
 crossbind licenses --notices       # generate THIRD-PARTY-NOTICES.md for your app
 crossbind licenses --sbom          # CycloneDX SBOM (component list with source hashes)
 crossbind licenses --check         # CI guard: every license field must be valid SPDX
+crossbind licenses --platform linux -e node --package
+                                   # a Node-API package's LICENSE, SBOM and license field,
+                                   # with the relinking steps when it links an LGPL library
 # --platform wasi additionally rows up vendored copies + the statically linked
 # toolchain runtime (what the artifact contains beyond the package graph)
 ```
@@ -49,5 +52,5 @@ The package recipes make the "corresponding source + build scripts" obligation c
 
 - [`override-dependencies.md`](./override-dependencies.md) — how a user rebuilds a dependency with modified version/flags.
 - `crossbind licenses --check` in CI keeps SPDX metadata trustworthy (package policy: the npm package's `license` field mirrors the wrapped native library's license).
-- Ready-made Node packages (`@crossbind/port-<family>-node`) ship the addon prebuilt: each `-node-<platform>-<arch>` package's addon links every component statically, so the package carries the derived `license` field, a `LICENSE` with every component's text and `sbom.cdx.json`. When the addon links an LGPL library (GEOS, libiconv, spatialite's LGPL option), its `LICENSE` also names the exact source tag and the steps to relink it with a modified library. The addon stays a separate file the app loads at runtime, which keeps it replaceable (rule 2 above).
-- `-bin-wasi` tool packages are a different distribution shape: the published binary statically links every component, so their `license` field is DERIVED as the AND of all effective component licenses (e.g. `@crossbind/port-geos-bin-wasi` declares `… AND LGPL-2.1-only`), the NOTICE/SBOM ship in the tarball, `crossbind.provenance` records the reproducible recipe, and the from-source path (`pnpm --dir <pkg> build`) is a first-class mode. Rules: `ports/README.md` (the Bin & License Contract).
+- Standalone Node-API packages (`@crossbind/port-<family>-standalone-napi`) ship the addon prebuilt: each `-standalone-napi-<platform>-<arch>` package's addon links every component statically, so the package carries the derived `license` field, a `LICENSE` with every component's text and `sbom.cdx.json`. When the addon links an LGPL library (GEOS, libiconv, spatialite's LGPL option), its `LICENSE` also names the exact source tag and the steps to relink it with a modified library. The addon stays a separate file the app loads at runtime, which keeps it replaceable (rule 2 above).
+- `-standalone-wasi` tool packages are a different distribution shape: the published binary statically links every component, so their `license` field is DERIVED as the AND of all effective component licenses (e.g. `@crossbind/port-geos-standalone-wasi` declares `… AND LGPL-2.1-only`), the NOTICE/SBOM ship in the tarball, `crossbind.provenance` records the reproducible recipe, and the from-source path (`pnpm --dir <pkg> build`) is a first-class mode. Rules: `ports/README.md` (the Bin & License Contract).

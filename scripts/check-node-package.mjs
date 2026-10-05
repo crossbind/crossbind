@@ -1,7 +1,7 @@
 #!/usr/bin/env node
-// The prepack script of every ready-made Node package: refuses a package a build did not fill, such
+// The prepack script of every standalone Node-API package: refuses a package a build did not fill, such
 // as an addon package without the addon of its platform or a package without the license files
-// scripts/stage-node-addons.mjs derives, so npm never publishes one hollow.
+// `crossbind licenses --package` derives at the end of its build, so npm never publishes one hollow.
 
 import { nodePackageProblems } from './release/node-packages.mjs';
 

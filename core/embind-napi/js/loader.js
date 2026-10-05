@@ -8,6 +8,7 @@ import Module, { crossbindScope } from '@crossbind/core-embind-jsi';
 import systemConfig from 'crossbind/systemConfig';
 import addonPlatform from './addonPlatform.js';
 import addonLocation from './addonLocation.js';
+import missingAddonRemedy from './missingAddon.js';
 import stopOnExit from './stopOnExit.js';
 
 const platform = addonPlatform();
@@ -24,18 +25,12 @@ function addonFile(config) {
     });
 }
 
-function missingAddonRemedy() {
-    return addonPackage
-        ? `install ${addonPackage}, which npm leaves out with --omit=optional; addons exist for ${Object.keys(systemConfig.env).join(', ')}`
-        : `build it with \`crossbind build -p ${platform} -a ${process.arch}\``;
-}
-
 function loadAddon(file) {
     const addon = { exports: {} };
     try {
         process.dlopen(addon, file);
     } catch (error) {
-        throw new Error(`crossbind: cannot load ${file} - ${fs.existsSync(file) ? error.message : missingAddonRemedy()}.`, { cause: error });
+        throw new Error(`crossbind: cannot load ${file} - ${fs.existsSync(file) ? error.message : missingAddonRemedy({ platform, arch: process.arch, addonPackage, published: Object.keys(systemConfig.env) })}.`, { cause: error });
     }
     return addon.exports;
 }

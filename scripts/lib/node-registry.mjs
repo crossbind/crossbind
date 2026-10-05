@@ -1,4 +1,4 @@
-// Dependency-free helpers for ready-made Node packages, safe to run in a bare Node.js container: what
+// Dependency-free helpers for standalone Node-API packages, safe to run in a bare Node.js container: what
 // kind a package is, which addon package a machine installs, and an in-process registry for tarballs, so
 // npm installs them the way it does from npmjs.org, picking each addon package by os, cpu and libc.
 
@@ -72,7 +72,7 @@ export function serveRegistry(entries, tarballDir) {
     });
 }
 
-// The runner that builds a ready-made Node package, or null for any other package. Its addons link the
+// The runner that builds a standalone Node-API package, or null for any other package. Its addons link the
 // platform packages the Linux job built, so they build after it; the macOS addons build on a macOS
 // runner, which has no Docker for SWIG, from the bridges the node runner generated.
 export function nodePackageKind({ name, manifest }) {

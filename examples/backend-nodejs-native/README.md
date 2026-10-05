@@ -6,8 +6,8 @@ instead of WebAssembly. `initNative()` resolves the same module shape on both bu
 
 The app builds its own addon: crossbind generates the bindings of `src/native/native.h` and links
 the matrix library's archives into one addon per platform. To use a library without building
-anything, see [backend-nodejs-prebuilt](../backend-nodejs-prebuilt), which installs the same
-library as a ready-made Node package.
+anything, see [backend-nodejs-prebuilt](../backend-nodejs-prebuilt), which loads the addons the
+same library ships prebuilt.
 
 # Getting Started
 

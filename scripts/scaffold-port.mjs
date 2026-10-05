@@ -99,8 +99,8 @@ function placeholderLicense({ name, license }) {
     return `TODO: replace this file with the complete upstream ${name} license text (${license}).\n`;
 }
 
-// A family's Node packages come from its own public headers (scaffold-node-packages.mjs), not from zlib's.
-const isNodePackage = (source, entry, options) => source === options.templateRoot && /^node(-|$)/.test(entry.name);
+// A family's standalone Node-API packages come from its own public headers (scaffold-node-packages.mjs), not from zlib's.
+const isNodePackage = (source, entry, options) => source === options.templateRoot && /^standalone-napi(-|$)/.test(entry.name);
 
 function copyTemplate(source, destination, options) {
     fs.mkdirSync(destination, { recursive: true });

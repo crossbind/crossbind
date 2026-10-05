@@ -176,7 +176,7 @@ Setup and differences per platform: [WebAssembly](https://crossbind.dev/ports/jp
 - Baseline, progressive and arithmetic coding in both directions, in-memory I/O (`jpeg_mem_src`, `jpeg_mem_dest`), decoding straight to a reduced size (`scale_num`, `scale_denom`), the coefficient API for lossless transcoding and marker handling (`jpeg_save_markers`, `jpeg_write_marker`). The examples and apps above use each of these, and their output matches native libjpeg-turbo 3.2.0 byte for byte.
 - The 12-bit and lossless entry points (`jpeg12_*`, `jpeg16_*`, `jpeg_enable_lossless`) and the ICC profile helpers (`jpeg_read_icc_profile`, `jpeg_write_icc_profile`) are exported too; nothing here exercises them yet.
 - No TurboJPEG API: the recipe builds with `WITH_TURBOJPEG=OFF`, so there is no `turbojpeg.h` and no `tj3*` function.
-- No lossless transforms: `transupp` (`jtransform_*`: `jpegtran`'s rotate, flip and crop) is not part of `libjpeg.a`. For those, `@crossbind/port-jpegturbo-bin-wasi` runs the upstream `jpegtran` as a WASI command.
+- No lossless transforms: `transupp` (`jtransform_*`: `jpegtran`'s rotate, flip and crop) is not part of `libjpeg.a`. For those, `@crossbind/port-jpegturbo-standalone-wasi` runs the upstream `jpegtran` as a WASI command.
 - SIMD is compiled into the iOS, Android, Linux, Windows and Apple silicon macOS builds (`WITH_SIMD` in their `jconfig.h`) but not into the WebAssembly and WASI builds, which run libjpeg-turbo's portable C code, nor into the Intel macOS build: it is built with Apple's tools alone, which have no assembler for libjpeg-turbo's x86 SIMD code.
 
 ## Supported platforms
@@ -191,7 +191,7 @@ This is the main package; the precompiled binaries are shipped per platform:
 | Linux | [`@crossbind/port-jpegturbo-linux`](https://www.npmjs.com/package/@crossbind/port-jpegturbo-linux) | `x64`, `arm64` — glibc 2.28 or later, native Node.js addons |
 | Windows | [`@crossbind/port-jpegturbo-win32`](https://www.npmjs.com/package/@crossbind/port-jpegturbo-win32) | `x64`, `arm64` — Windows 10 or later, native Node.js addons |
 | WASI library | [`@crossbind/port-jpegturbo-wasi`](https://www.npmjs.com/package/@crossbind/port-jpegturbo-wasi) | `wasm32-wasip3` — single-threaded |
-| WASI command | [`@crossbind/port-jpegturbo-bin-wasi`](https://www.npmjs.com/package/@crossbind/port-jpegturbo-bin-wasi) | the upstream `cjpeg`, `djpeg` and `jpegtran` as `cjpeg-wasi`, `djpeg-wasi` and `jpegtran-wasi` commands (wasmtime 47+) |
+| WASI command | [`@crossbind/port-jpegturbo-standalone-wasi`](https://www.npmjs.com/package/@crossbind/port-jpegturbo-standalone-wasi) | the upstream `cjpeg`, `djpeg` and `jpegtran` as `cjpeg-wasi`, `djpeg-wasi` and `jpegtran-wasi` commands (wasmtime 47+) |
 
 ## License
 This project includes the precompiled libjpeg-turbo library, which is distributed under the [libjpeg-turbo licenses](https://github.com/libjpeg-turbo/libjpeg-turbo/blob/3.2.0/LICENSE.md) (IJG AND BSD-3-Clause AND Zlib): the [IJG License](https://github.com/libjpeg-turbo/libjpeg-turbo/blob/3.2.0/README.ijg) for the libjpeg API library, the [Modified (3-clause) BSD License](https://spdx.org/licenses/BSD-3-Clause.html) for its build system, and the [zlib License](https://spdx.org/licenses/Zlib.html) for the SIMD code in the iOS and Android builds.

@@ -285,7 +285,7 @@ Some upstream command-line tools are also published as WASI-powered npm
 commands. They require `wasmtime` on `PATH`, but no compiler:
 
 ```bash
-npm install --global @crossbind/port-gdal-bin-wasi@beta
+npm install --global @crossbind/port-gdal-standalone-wasi@beta
 gdalinfo-wasi --version
 ```
 

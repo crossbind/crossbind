@@ -212,7 +212,7 @@ Setup and differences per platform: [WebAssembly](https://crossbind.dev/ports/ti
 - libtiff 4.7.2 with libtiffxx, the C++ stream API (`TIFFStreamOpen`): static libraries on WebAssembly, iOS, macOS, Linux, Windows and WASI, shared ones (`libtiff.so`, `libtiffxx.so`) on Android.
 - Codecs on WebAssembly, as `TIFFGetConfiguredCODECs` lists them: None, LZW, PackBits, ThunderScan, NeXT, JPEG, Old-style JPEG, CCITT RLE, CCITT RLE/W, CCITT Group 3, CCITT Group 4, Deflate, AdobeDeflate, PixarLog, SGILog, SGILog24, ZSTD and LERC. Android and iOS are built from the same recipe with the same four codec libraries: zlib, libjpeg-turbo, zstd and LERC.
 - No WebP, LZMA or JBIG: files that use them open and list their tags, but their pixels cannot be decoded.
-- The WASI build links zlib only, so it has None, LZW, PackBits, ThunderScan, NeXT, the CCITT codecs, Deflate, PixarLog and SGILog: no JPEG, ZSTD or LERC. The `-bin-wasi` tools have the same set.
+- The WASI build links zlib only, so it has None, LZW, PackBits, ThunderScan, NeXT, the CCITT codecs, Deflate, PixarLog and SGILog: no JPEG, ZSTD or LERC. The `-standalone-wasi` tools have the same set.
 - On WASI, a multi-page TIFF written straight to a file with `TIFFOpen` comes out corrupt: with wasi-sdk 34's `wasm32-wasip2` and `-wasip3` libc, a write after `lseek(fd, 0, SEEK_END)` lands at the previous position, and libtiff seeks that way before each page after the first. One-page files are not affected, and neither is a file built in memory with `TIFFClientOpen` and saved in one write, as the [WASI program](https://crossbind.dev/ports/tiff/wasi/) does.
 
 ## Supported platforms
@@ -227,7 +227,7 @@ This is the main package; the precompiled binaries are shipped per platform:
 | Linux | [`@crossbind/port-tiff-linux`](https://www.npmjs.com/package/@crossbind/port-tiff-linux) | `x64`, `arm64` — glibc 2.28 or later, native Node.js addons |
 | Windows | [`@crossbind/port-tiff-win32`](https://www.npmjs.com/package/@crossbind/port-tiff-win32) | `x64`, `arm64` — Windows 10 or later, native Node.js addons |
 | WASI library | [`@crossbind/port-tiff-wasi`](https://www.npmjs.com/package/@crossbind/port-tiff-wasi) | `wasm32-wasip3` — single-threaded |
-| WASI command | [`@crossbind/port-tiff-bin-wasi`](https://www.npmjs.com/package/@crossbind/port-tiff-bin-wasi) | the 18 tools libtiff installs, from `tiffinfo` to `tiff2pdf`, as `<tool>-wasi` commands (wasmtime 47+) |
+| WASI command | [`@crossbind/port-tiff-standalone-wasi`](https://www.npmjs.com/package/@crossbind/port-tiff-standalone-wasi) | the 18 tools libtiff installs, from `tiffinfo` to `tiff2pdf`, as `<tool>-wasi` commands (wasmtime 47+) |
 
 ## License
 This project includes the precompiled libtiff library, which is distributed under the [libtiff License](https://libtiff.gitlab.io/libtiff/project/license.html).

@@ -306,7 +306,7 @@ export default function LibrariesPage({ tokens, page }) {
                     ) : (
                         <p style={{ fontSize: 14.5, lineHeight: 1.7, color: tokens.textDim }}>
                             {inline(
-                                `No WASI command tool is published on the npm \`${PORTS_CATALOG.distTag}\` tag yet. The repository defines \`-bin-wasi\` packages for ${PORTS.filter((port) => port.binCommands.length > 0).length} libraries; they appear here once a release train publishes them.`,
+                                `No WASI command tool is published on the npm \`${PORTS_CATALOG.distTag}\` tag yet. The repository defines \`-standalone-wasi\` packages for ${PORTS.filter((port) => port.binCommands.length > 0).length} libraries; they appear here once a release train publishes them.`,
                                 tokens,
                             )}
                         </p>

@@ -191,7 +191,7 @@ Setup and differences per platform: [WebAssembly](https://crossbind.dev/ports/ge
 - libgeotiff 1.7.4 as the static library `libgeotiff`, linked against libtiff 4.7.2 and PROJ 9.9.0 from their own crossbind packages. libtiff's C++ stream API, which the examples use, ships as `libtiffxx`.
 - In the WebAssembly build, libtiff writes and reads Deflate, LZW, JPEG, ZSTD and LERC: the apps above use all five, and GDAL, or tifffile for LERC, reads their files back.
 - PROJ's data: `GTIFGetDefn` and the EPSG name lookups read `proj.db`, so every WebAssembly build that uses this package preloads PROJ's `share/proj`, 16 files and 10,690,537 bytes of which `proj.db` is 10,551,296, as a `.data.txt` file next to the module. The module behind the five examples and three apps is 6,139,509 bytes of WebAssembly, 144,658 bytes of JavaScript and that data file.
-- libgeotiff's own `listgeo`, `geotifcp` and `applygeo` tools are not in the library packages; `@crossbind/port-geotiff-bin-wasi` ships them as WASI commands.
+- libgeotiff's own `listgeo`, `geotifcp` and `applygeo` tools are not in the library packages; `@crossbind/port-geotiff-standalone-wasi` ships them as WASI commands.
 
 ## Supported platforms
 This is the main package; the precompiled binaries are shipped per platform:
@@ -205,7 +205,7 @@ This is the main package; the precompiled binaries are shipped per platform:
 | Linux | [`@crossbind/port-geotiff-linux`](https://www.npmjs.com/package/@crossbind/port-geotiff-linux) | `x64`, `arm64` — glibc 2.28 or later, native Node.js addons |
 | Windows | [`@crossbind/port-geotiff-win32`](https://www.npmjs.com/package/@crossbind/port-geotiff-win32) | `x64`, `arm64` — Windows 10 or later, native Node.js addons |
 | WASI library | [`@crossbind/port-geotiff-wasi`](https://www.npmjs.com/package/@crossbind/port-geotiff-wasi) | `wasm32-wasip3` — single-threaded |
-| WASI command | [`@crossbind/port-geotiff-bin-wasi`](https://www.npmjs.com/package/@crossbind/port-geotiff-bin-wasi) | the upstream `listgeo`, `geotifcp` and `applygeo` CLIs as `listgeo-wasi`, `geotifcp-wasi` and `applygeo-wasi` commands (wasmtime 47+) |
+| WASI command | [`@crossbind/port-geotiff-standalone-wasi`](https://www.npmjs.com/package/@crossbind/port-geotiff-standalone-wasi) | the upstream `listgeo`, `geotifcp` and `applygeo` CLIs as `listgeo-wasi`, `geotifcp-wasi` and `applygeo-wasi` commands (wasmtime 47+) |
 
 ## License
 This project includes the precompiled libgeotiff library, which is distributed under the [MIT License](https://github.com/OSGeo/libgeotiff/blob/master/libgeotiff/LICENSE). It links libtiff (libtiff licence) and PROJ (MIT) from their own packages, and through them SQLite, zlib, libjpeg-turbo, zstd and LERC, each under its own licence.

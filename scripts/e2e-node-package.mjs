@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Installs a ready-made Node package the way a user does, from a registry, and runs its e2e/check.mjs:
+// Installs a standalone Node-API package the way a user does, from a registry, and runs its e2e/check.mjs:
 // on this machine, then in glibc and musl containers of both architectures. The packages are packed
 // and served by a registry this script runs, so npm picks the addon package by os, cpu and libc as it
 // does from npmjs.org. Addons for machines nothing here runs are checked for the machine they target.

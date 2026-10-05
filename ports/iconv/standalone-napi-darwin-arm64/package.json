@@ -1,0 +1,32 @@
+{
+    "name": "@crossbind/port-iconv-standalone-napi-darwin-arm64",
+    "version": "2.0.0-beta.62",
+    "nativeVersion": "1.19",
+    "homepage": "https://github.com/crossbind/crossbind/tree/main/ports/iconv#readme",
+    "repository": "https://github.com/crossbind/crossbind.git",
+    "license": "(MIT OR NCSA) AND LGPL-2.1-or-later AND MIT",
+    "description": "macOS arm64 addon of @crossbind/port-iconv-standalone-napi, which npm installs on a matching machine.",
+    "os": [
+        "darwin"
+    ],
+    "cpu": [
+        "arm64"
+    ],
+    "main": "dist/iconv-standalone-napi.darwin-arm64.node",
+    "files": [
+        "dist/iconv-standalone-napi.darwin-arm64.node",
+        "sbom.cdx.json"
+    ],
+    "scripts": {
+        "build": "crossbind build -p darwin -a arm64 -e node -b release && crossbind licenses --platform darwin -e node --package",
+        "clear": "rm -rf .crossbind dist",
+        "prepack": "node ../../../scripts/check-node-package.mjs"
+    },
+    "devDependencies": {
+        "crossbind": "workspace:^",
+        "@crossbind/port-iconv-darwin": "workspace:^",
+        "@crossbind/port-iconv-linux": "workspace:^",
+        "@crossbind/port-iconv-linuxmusl": "workspace:^",
+        "@crossbind/port-iconv-win32": "workspace:^"
+    }
+}

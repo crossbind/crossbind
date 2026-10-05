@@ -174,7 +174,7 @@ Setup and differences per platform: [WebAssembly](https://crossbind.dev/ports/gd
   | also without WebP, LERC and JPEG | 16,451,235 B |
 
 - Single-threaded WebAssembly has no threads, and two parts of GDAL expect them: `GDALViewshedGenerate` waits forever on its job queue, and ogr2ogr's Arrow path fails on GeoPackage input. The module above runs thread-pool jobs in place and sets `OGR2OGR_USE_ARROW_API=NO`.
-- The GDAL command-line tools are not in the library packages; `@crossbind/port-gdal-bin-wasi` ships the `gdal` program with the classic tools, `gdalinfo` and `ogr2ogr` among them, as WASI commands.
+- The GDAL command-line tools are not in the library packages; `@crossbind/port-gdal-standalone-wasi` ships the `gdal` program with the classic tools, `gdalinfo` and `ogr2ogr` among them, as WASI commands.
 
 ## Supported platforms
 This is the main package; the precompiled binaries are shipped per platform:
@@ -188,7 +188,7 @@ This is the main package; the precompiled binaries are shipped per platform:
 | Linux | [`@crossbind/port-gdal-linux`](https://www.npmjs.com/package/@crossbind/port-gdal-linux) | `x64`, `arm64` — glibc 2.28 or later, native Node.js addons |
 | Windows | [`@crossbind/port-gdal-win32`](https://www.npmjs.com/package/@crossbind/port-gdal-win32) | `x64`, `arm64` — Windows 10 or later, native Node.js addons |
 | WASI library | [`@crossbind/port-gdal-wasi`](https://www.npmjs.com/package/@crossbind/port-gdal-wasi) | `wasm32-wasip3` — single-threaded |
-| WASI command | [`@crossbind/port-gdal-bin-wasi`](https://www.npmjs.com/package/@crossbind/port-gdal-bin-wasi) | the upstream `gdal` CLI and its classic tools as `<tool>-wasi` commands (wasmtime 47+) |
+| WASI command | [`@crossbind/port-gdal-standalone-wasi`](https://www.npmjs.com/package/@crossbind/port-gdal-standalone-wasi) | the upstream `gdal` CLI and its classic tools as `<tool>-wasi` commands (wasmtime 47+) |
 
 ## License
 This project includes the precompiled GDAL library, which is distributed under the [MIT License](https://github.com/OSGeo/gdal/blob/master/LICENSE.TXT).

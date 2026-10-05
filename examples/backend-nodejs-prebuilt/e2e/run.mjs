@@ -1,7 +1,7 @@
 import { execFileSync } from 'node:child_process';
 import { resolve } from 'node:path';
 
-// npm installed the addon of this machine; it loads from CommonJS and from ESM alike.
+// The library's addon for this machine loads from CommonJS and from ESM alike.
 const EXPECTED = '= 6*J₃';
 
 for (const entry of ['src/index.js', 'src/index.mjs']) {

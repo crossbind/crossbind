@@ -161,7 +161,7 @@ Setup and differences per platform: [WebAssembly](https://crossbind.dev/ports/pr
 - PROJ's data, `share/proj`: 16 files, 10,690,537 bytes. `proj.db` is 10,551,296 of them: EPSG v13.102 of 2026-08-27, ESRI (ArcGIS Pro 3.6), IGNF 3.1.0 and NKG 1.0.w, with 7,468 current EPSG CRSs and 4,717 from other authorities. The WebAssembly build preloads all 16 files with the module.
 - No transformation grids and no network: grid files do not ship, and downloading them from cdn.proj.org is compiled out (`-DENABLE_CURL=OFF`). A datum shift that needs a grid falls back to a less accurate path. From NAD27 to NAD83, 9 of the 10 operations EPSG knows need a grid; at 118.2°W 45.2°N PROJ runs NAD27 to WGS 84 (6) + Inverse of NAD83 to WGS 84 (1), accurate to 11 m by EPSG's figures, where the CONUS grid gives 0.15 m. Helmert shifts, such as ETRS89 and CH1903+ to WGS 84, are unaffected.
 - The module behind the five examples and three apps is 6,036,834 bytes of WebAssembly and 144,595 bytes of JavaScript, plus the data.
-- PROJ's own tools are not in the library packages; `@crossbind/port-proj-bin-wasi` ships them as WASI commands.
+- PROJ's own tools are not in the library packages; `@crossbind/port-proj-standalone-wasi` ships them as WASI commands.
 
 ## Supported platforms
 This is the main package; the precompiled binaries are shipped per platform:
@@ -175,7 +175,7 @@ This is the main package; the precompiled binaries are shipped per platform:
 | Linux | [`@crossbind/port-proj-linux`](https://www.npmjs.com/package/@crossbind/port-proj-linux) | `x64`, `arm64` — glibc 2.28 or later, native Node.js addons |
 | Windows | [`@crossbind/port-proj-win32`](https://www.npmjs.com/package/@crossbind/port-proj-win32) | `x64`, `arm64` — Windows 10 or later, native Node.js addons |
 | WASI library | [`@crossbind/port-proj-wasi`](https://www.npmjs.com/package/@crossbind/port-proj-wasi) | `wasm32-wasip3` — single-threaded |
-| WASI command | [`@crossbind/port-proj-bin-wasi`](https://www.npmjs.com/package/@crossbind/port-proj-bin-wasi) | the upstream `proj`, `cct`, `cs2cs`, `geod`, `gie` and `projinfo` as `-wasi` commands (wasmtime 47+) |
+| WASI command | [`@crossbind/port-proj-standalone-wasi`](https://www.npmjs.com/package/@crossbind/port-proj-standalone-wasi) | the upstream `proj`, `cct`, `cs2cs`, `geod`, `gie` and `projinfo` as `-wasi` commands (wasmtime 47+) |
 
 ## License
 This project includes the precompiled PROJ library, which is distributed under the [MIT License](https://github.com/OSGeo/PROJ/blob/master/COPYING). The libraries it links ship in their own packages under their own licences: SQLite, which is in the public domain, and libtiff.
