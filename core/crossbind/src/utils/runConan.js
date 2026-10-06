@@ -10,6 +10,7 @@ import assertExecContainer from './execContainer.js';
 import { IOS_DEVELOPER_DIR, XCODE_TOOLCHAIN_BIN } from './iosToolchain.js';
 import { DARWIN_CC, DARWIN_TOOLS_BIN } from './darwinToolchain.js';
 import { HOST_BUILT_PLATFORMS } from './targets.js';
+import { assertRunner } from './systemKeys.js';
 
 // Every conan invocation crossbind makes goes through here. The config is passed in instead of read
 // from state, because state attaches the staged Conan packages while it is still being built.
@@ -43,7 +44,6 @@ const ALLOWED_ENV = [
     /^PROGRAMDATA$/i,
 ];
 
-const RUNNERS = ['DOCKER_RUN', 'DOCKER_EXEC', 'LOCAL'];
 // What conan can build on the host: wasm with a host Emscripten, iOS and macOS with Xcode.
 const HOST_PLATFORMS = ['wasm', 'ios', 'darwin'];
 const APPLE_PLATFORM_NAMES = { ios: 'iOS', darwin: 'macOS' };
@@ -56,10 +56,7 @@ const MAX_BUFFER = 256 * 1024 * 1024;
 const MIN_CONAN_VERSION = [2, 19];
 
 export function conanRunner(config, target) {
-    const runner = config.system?.RUNNER ?? 'DOCKER_RUN';
-    if (!RUNNERS.includes(runner)) {
-        throw new Error(`crossbind: the runner ${runner} is invalid; RUNNER is one of ${RUNNERS.join(', ')}.`);
-    }
+    const runner = assertRunner(config.system?.RUNNER ?? 'DOCKER_RUN');
     // Xcode runs on the Mac alone, so iOS and macOS packages build there whatever runner the rest use.
     return HOST_BUILT_PLATFORMS.includes(target?.platform) ? 'LOCAL' : runner;
 }

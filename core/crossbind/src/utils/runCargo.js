@@ -8,6 +8,7 @@ import replaceBasePathForDockerUtil, { DOCKER_BASE } from './replaceBasePathForD
 import pullDockerImage, { getDockerImage, getDockerContainerName, imageRoleFor } from './pullDockerImage.js';
 import { DOCKER_RUN_SECURITY_ARGS } from './dockerSecurity.js';
 import { HOST_BUILT_PLATFORMS } from './targets.js';
+import { assertRunner } from './systemKeys.js';
 import assertExecContainer from './execContainer.js';
 
 // Every cargo invocation crossbind makes goes through here.
@@ -112,8 +113,9 @@ export function assertCleanConfigChain(home, cwd) {
 // Apple targets link with Xcode, which is in no image, so their Rust stays on the host - as does
 // every build under RUNNER=LOCAL.
 export function cargoRunner(target) {
-    if (HOST_BUILT_PLATFORMS.includes(target?.platform)) return 'LOCAL';
     const runner = state.config?.system?.RUNNER;
+    if (runner !== undefined) assertRunner(runner);
+    if (HOST_BUILT_PLATFORMS.includes(target?.platform)) return 'LOCAL';
     return runner === 'DOCKER_RUN' || runner === 'DOCKER_EXEC' ? runner : 'LOCAL';
 }
 

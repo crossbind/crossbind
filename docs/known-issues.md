@@ -446,17 +446,6 @@ win32 and android toolchains `run.js` points at (`/opt/crossbind/linux`, `/opt/l
   shows the pull guarded by the platform and the program, not by `RUNNER`.
 - Remove when a build under `RUNNER: 'LOCAL'` makes no docker call.
 
-## A misspelled `RUNNER` runs cargo on the host
-
-`cargoRunner` in `runCargo.js` takes any value other than `DOCKER_RUN` and `DOCKER_EXEC` for
-`LOCAL`. A `docker_run`, a trailing space or `podman` in `~/.crossbind.json` builds crates and runs
-their build scripts on the host with the user's permissions instead of in the image, and nothing
-says so. `run()` throws for the same value, and so does `conanRunner`.
-
-- Seen: 2026-10-03 (the security review of `conan:` imports; read from `runCargo.js`)
-- Check: `grep -n "'DOCKER_EXEC' ? runner : 'LOCAL'" core/crossbind/src/utils/runCargo.js` matches.
-- Remove when `cargoRunner` throws for a value that is not a runner.
-
 ## An Android app can ship without a dependency's shared library
 
 The React Native plugin asks for CMake `3.25.0+` (`plugins/react-native/android/build.gradle`). On a

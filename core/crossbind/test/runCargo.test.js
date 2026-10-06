@@ -335,4 +335,20 @@ describe('cargoRunner', () => {
         expect(mod.cargoRunner({ platform: 'darwin', arch: 'arm64' })).toBe('LOCAL');
         expect(mod.cargoRunner({ platform: 'android', arch: 'x86_64' })).toBe('DOCKER_RUN');
     });
+
+    // Taken for LOCAL, a typo would build crates and run their build scripts on the host, with the user's rights.
+    test('refuses a runner it does not know', async () => {
+        setRunner('docker_run');
+        const { mod } = await importFresh();
+
+        expect(() => mod.cargoRunner({ platform: 'android', arch: 'x86_64' })).toThrow(/the runner docker_run is invalid/);
+        expect(() => mod.cargoRunner({ platform: 'ios', arch: 'iphoneos' })).toThrow(/the runner docker_run is invalid/);
+    });
+
+    test('keeps every target on the host under LOCAL', async () => {
+        setRunner('LOCAL');
+        const { mod } = await importFresh();
+
+        expect(mod.cargoRunner({ platform: 'android', arch: 'x86_64' })).toBe('LOCAL');
+    });
 });
