@@ -2,7 +2,7 @@
 
 import {
     state, createLib, createBridgeFile, buildWasm, getCrossbindScript, getRustJsScript, buildDependencies,
-    getDependFilePath, getTargetParams, getFilteredBuildTargets, isSourceNewer, prepareConanDependencies,
+    getDependFilePath, getTargetParams, getFilteredBuildTargets, isSourceNewer,
 } from 'crossbind';
 
 import fs from 'node:fs';
@@ -54,7 +54,9 @@ const rollupCrossbindPlugin = (options, bridges = []) => {
             return getCrossbindScript(buildTargetRelease, bridgeFile);
         },
         async buildStart() {
-            await prepareConanDependencies([buildTargetRelease]);
+            // Before any transform: a header's bridge reads the include roots of every dependency, and a cargo
+            // dependency built for another target only is there but lacks this one until the build makes it.
+            await buildDependencies({ targetParams: { ...targetParams, buildType: [buildTargetRelease.buildType] } });
             const watch = (dirs) => {
                 dirs.forEach((dir) => {
                     const filesToWatch = fs.readdirSync(dir);
@@ -79,7 +81,6 @@ const rollupCrossbindPlugin = (options, bridges = []) => {
             });
         },
         async generateBundle() {
-            await buildDependencies({ targetParams: { ...targetParams, buildType: [buildTargetRelease.buildType] } });
             const force = isSourceNewer(buildTargetRelease);
             const sourceBuilt = createLib(buildTargetRelease, 'Source', { force, buildSource: true });
             // Bridge cache is keyed on the nativeGlob fingerprint: adding or

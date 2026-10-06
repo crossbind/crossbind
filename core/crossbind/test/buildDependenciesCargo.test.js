@@ -24,12 +24,12 @@ vi.mock('../src/state/index.js', () => ({
 const built = [];
 // The real buildLib is what puts the prebuilt on disk, which is what flips isEnabled.
 vi.mock('../src/actions/buildLib.js', () => ({
-    default: (params) => { built.push(params); holder.onBuild?.(); },
+    default: (params) => { built.push(params); holder.onBuild?.(params); },
 }));
 vi.mock('../src/state/loadConfig.js', () => ({ default: async () => ({ scoped: true }) }));
 vi.mock('../src/state/calculateDependencyParameters.js', () => ({ default: () => ({ recalculated: true }) }));
 vi.mock('../src/utils/dirLock.js', () => ({ default: async (_lock, fn) => fn() }));
-vi.mock('../src/actions/target.js', () => ({ getBuildTargets: () => holder.targets }));
+vi.mock('../src/actions/target.js', () => ({ getBuildTargets: () => holder.buildTargets }));
 vi.mock('../src/utils/rustSysroot.js', () => ({ prepareRustSysroot: async () => null }));
 vi.mock('../src/actions/buildExternal.js', () => ({ default: vi.fn() }));
 vi.mock('../src/actions/createXCFramework.js', () => ({ default: vi.fn() }));
@@ -63,10 +63,11 @@ function cargoDep(name, { enabled = false, fingerprint = 'current' } = {}) {
     return dep;
 }
 
-async function run(deps) {
+async function run(deps, { targets = [TARGET], buildTargets = targets } = {}) {
     vi.resetModules();
     built.length = 0;
-    holder.targets = [TARGET];
+    holder.targets = targets;
+    holder.buildTargets = buildTargets;
     holder.config = { paths: { base: '/app', cache: '/app/.crossbind' }, allDependencies: deps, system: {} };
     const { default: buildDependencies } = await import('../src/actions/buildDependencies.js');
     return buildDependencies({ targetParams: {} });
@@ -135,6 +136,45 @@ describe('cargo dependencies build themselves', () => {
         const dep = cargoDep('demo', { enabled: true, fingerprint: 'older' });
 
         await expect(run([dep])).rejects.toThrow(/"demo" still has no prebuilt built from the current embind-rs/);
+    });
+
+    // Bridges read every header for the first wasm target, which an app configured for another runtime does not
+    // build; a cargo dependency built for the app's runtime alone then fails them as half built.
+    test('builds a cargo dependency for the target bridges read, too', async () => {
+        const st = {
+            path: 'wasm-wasm32-st-release', platform: 'wasm', arch: 'wasm32', runtime: 'st', buildType: 'release', runtimeEnv: 'browser',
+        };
+        const mt = { ...st, path: 'wasm-wasm32-mt-release', runtime: 'mt' };
+        const output = `${work}/demo/dist`;
+        const isBuiltFor = (target) => fs.existsSync(`${output}/prebuilt/${target.path}/crossbind-embind-rs.fingerprint`);
+        const markBuilt = (target) => {
+            fs.mkdirSync(`${output}/prebuilt/${target.path}`, { recursive: true });
+            fs.writeFileSync(`${output}/prebuilt/${target.path}/crossbind-embind-rs.fingerprint`, 'current');
+        };
+        const dep = {
+            general: { name: 'demo' },
+            export: { type: 'cargo', libName: ['demo'] },
+            paths: { project: `${work}/demo`, output },
+            functions: { isEnabled: isBuiltFor },
+        };
+        markBuilt(mt);
+        holder.onBuild = (params) => [st, mt].filter((target) => params.runtime?.includes(target.runtime)).forEach(markBuilt);
+
+        await expect(run([dep], { targets: [st, mt], buildTargets: [mt] })).resolves.toBeUndefined();
+
+        expect(built).toContainEqual({
+            platform: ['wasm'], arch: ['wasm32'], runtime: ['st'], buildType: ['release'], runtimeEnv: ['browser'],
+        });
+        expect(isBuiltFor(st)).toBe(true);
+    });
+
+    test('adds no target for bridges an app already builds', async () => {
+        const dep = cargoDep('demo');
+        holder.onBuild = () => dep.markBuilt();
+
+        await run([dep], { targets: [TARGET, { ...TARGET, path: 'wasm-wasm32-st-release' }], buildTargets: [TARGET] });
+
+        expect(built).toEqual([{}]);
     });
 
     // loadConfig resolves a package's CMakeLists before its first build, when only the CLI's own exists.

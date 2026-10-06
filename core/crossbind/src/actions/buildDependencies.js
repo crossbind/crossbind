@@ -61,6 +61,11 @@ export default async function buildDependencies({ targetParams, rebuildOption })
     }
 }
 
+const isWasm = (target) => target.platform === 'wasm';
+const paramsOf = (target) => ({
+    platform: [target.platform], arch: [target.arch], runtime: [target.runtime], buildType: [target.buildType], runtimeEnv: [target.runtimeEnv],
+});
+
 // A cargo dependency carries every target in ONE package, so unlike a platform-split port there
 // is no "this sibling isn't for this target" case: a missing prebuilt means it was never built.
 // Nothing else builds these packages - buildDependencies only rebuilds deps that carry a source
@@ -68,11 +73,16 @@ export default async function buildDependencies({ targetParams, rebuildOption })
 // pre-build step nobody had written down. Worse, only the cmake link asserts the dependency is
 // there: on wasm a missing one silently drops out and the module builds clean, then dies at init.
 // Build it here instead, in the dependency's own package, where its prebuilt belongs.
-async function buildMissingCargoDependencies(targets, targetParams) {
-    if (targets.length === 0) return;
+async function buildMissingCargoDependencies(buildTargets, targetParams) {
+    if (buildTargets.length === 0) return;
     const appConfig = state.config;
     const cargoDependencies = (appConfig.allDependencies ?? []).filter((dep) => dep !== appConfig && dep.export?.type === 'cargo');
     if (cargoDependencies.length === 0) return;
+    // Bridges read every header for the first wasm target (see prepareConanDependencies), which an app configured for
+    // another wasm runtime does not build: there a dependency built for the app's runtime alone counts as half built.
+    const bridgeTarget = buildTargets.some(isWasm) ? state.targets.find(isWasm) : undefined;
+    const extraTarget = bridgeTarget && !buildTargets.some((target) => target.path === bridgeTarget.path) ? bridgeTarget : undefined;
+    const targets = extraTarget ? [...buildTargets, extraTarget] : buildTargets;
     // A prebuilt from another embind-rs counts as missing: linked, it carries stale glue or clashes with the others.
     const fingerprint = getEmbindRsFingerprint();
     const prebuiltOf = (dep, target) => [target.path, target.releasePath]
@@ -93,6 +103,7 @@ async function buildMissingCargoDependencies(targets, targetParams) {
             state.config = scoped;
             try {
                 buildLib(targetParams);
+                if (extraTarget) buildLib(paramsOf(extraTarget));
             } finally {
                 state.config = prev;
             }

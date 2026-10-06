@@ -3,7 +3,6 @@ import fs from 'node:fs';
 import path from 'node:path';
 import {
     state, createLib, buildWasm, createBridgeFile, getData, getCrossbindScript, getRustJsScript, getDependFilePath, buildDependencies, getTargetParams, getFilteredBuildTargets, isSourceNewer,
-    prepareConanDependencies,
 } from 'crossbind';
 
 const targetParams = getTargetParams({ platform: ['wasm'], arch: ['wasm32'], runtime: ['st'], runtimeEnv: ['browser'] }, true);
@@ -19,6 +18,8 @@ if (!buildTargetDebug) {
 } else if (!buildTargetRelease) {
     buildTargetRelease = buildTargetDebug;
 }
+
+const buildTargetFor = (mode) => (mode === 'development' ? buildTargetDebug : buildTargetRelease);
 
 export default class CrossbindWebpackPlugin {
     static defaultOptions = {};
@@ -55,10 +56,12 @@ export default class CrossbindWebpackPlugin {
                 compiler.options.resolve.alias[`${dep.package.name}$`] = libRs;
             }
         }
-        // Conan packages are staged before the first header import resolves against them.
-        const prepareConan = () => prepareConanDependencies([buildTargetRelease]);
-        compiler.hooks.beforeRun.tapPromise(pluginName, prepareConan);
-        compiler.hooks.watchRun.tapPromise(pluginName, prepareConan);
+        // Before any loader runs: a header's bridge reads the include roots of every dependency, conan's staged
+        // packages included, and a cargo dependency built for another target only is there but lacks this one
+        // until the build makes it.
+        const buildDeps = () => buildDependencies({ targetParams: { ...targetParams, buildType: [buildTargetFor(compiler.options.mode).buildType] } });
+        compiler.hooks.beforeRun.tapPromise(pluginName, buildDeps);
+        compiler.hooks.watchRun.tapPromise(pluginName, buildDeps);
         // tapPromise (not tap) so webpack awaits the native C++/wasm build and a build
         // failure surfaces as a compilation error instead of an unhandled rejection.
         compiler.hooks.done.tapPromise(pluginName, this.onDone.bind(this));
@@ -72,8 +75,7 @@ export default class CrossbindWebpackPlugin {
 
     async onDone({ compilation }) {
         const isDev = compilation.options.mode === 'development';
-        const buildTarget = isDev ? buildTargetDebug : buildTargetRelease;
-        await buildDependencies({ targetParams: { ...targetParams, buildType: [buildTarget.buildType] } });
+        const buildTarget = buildTargetFor(compilation.options.mode);
         const force = isSourceNewer(buildTarget);
         const sourceBuilt = createLib(buildTarget, 'Source', { force, buildSource: true });
         // Bridge cache is keyed on the nativeGlob fingerprint: a changed bridge
