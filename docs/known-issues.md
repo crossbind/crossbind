@@ -23,19 +23,6 @@ AGENTS.md, which no longer says anything about it.
 - Check: `node -p "[...new Set(Object.entries(require('./package.json').scripts).filter(([k]) => k.startsWith('ci:')).flatMap(([, v]) => v.match(/e2e-[a-z-]+/g) ?? []))].join(' ')"` prints `e2e-cli-native e2e-backend-nodejs-native-conan`.
 - Remove when every fixture runs in CI.
 
-## No CI job scaffolds the create-crossbind templates
-
-`scripts/e2e-templates.js` (`pnpm run e2e:templates`) scaffolds every template from the published or
-packed scaffolder, then installs, builds and runs each one's e2e. No workflow calls it. CI runs the
-workspace samples instead, and workspace links hide what a standalone install resolves; the Babel 8
-and ESLint 10 bumps of September 2026 passed both sample jobs. The harness itself runs only
-`e2e:prod` for the web templates, and only one mobile platform — iOS when a simulator and an
-emulator are both available.
-
-- Seen: 2026-09-23
-- Check: `grep -rn 'e2e-templates\|e2e:templates' .github/workflows/` returns nothing.
-- Remove when a workflow runs the harness.
-
 ## LERC 4.2.0 writes four uninitialised bytes into lossless float blobs
 
 Upstream `EncodeHuffman` (`fpl_EsriHuffman.cpp`) leaves a trailing read-ahead `uint32` of its
