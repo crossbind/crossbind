@@ -26,7 +26,7 @@ Their C++ wrappers, and the self-check the site build runs against answers compu
 Install the main package together with the platform builds:
 
 ```sh
-npm install @crossbind/port-sqlite3 @crossbind/port-sqlite3-wasm @crossbind/port-sqlite3-android @crossbind/port-sqlite3-ios
+npm install @crossbind/port-sqlite3@beta @crossbind/port-sqlite3-wasm@beta @crossbind/port-sqlite3-android@beta @crossbind/port-sqlite3-ios@beta
 ```
 
 Then import all three platforms in `crossbind.config.js` — crossbind compiles only the one matching each build target:

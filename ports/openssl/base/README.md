@@ -26,7 +26,7 @@ Their C++ wrappers, and the self-check the site build runs against published tes
 Install the main package together with the platform builds:
 
 ```sh
-npm install @crossbind/port-openssl @crossbind/port-openssl-wasm @crossbind/port-openssl-android @crossbind/port-openssl-ios
+npm install @crossbind/port-openssl@beta @crossbind/port-openssl-wasm@beta @crossbind/port-openssl-android@beta @crossbind/port-openssl-ios@beta
 ```
 
 Then import all three platforms in `crossbind.config.js` — crossbind compiles only the one matching each build target:

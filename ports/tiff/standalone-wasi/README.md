@@ -7,21 +7,21 @@ The upstream **libtiff tools** - all 18 that libtiff installs, from `tiffinfo` t
 No compiler, no build step - every tool installs as a `<tool>-wasi` command (generated shims that run wasmtime with the right flags and mounts, so relative paths just work):
 
 ```bash
-npm i -g @crossbind/port-tiff-standalone-wasi
+npm i -g @crossbind/port-tiff-standalone-wasi@beta
 
 ppm2tiff-wasi in.ppm out.tif
 tiffinfo-wasi out.tif
 tiffcp-wasi out.tif copy.tif
 ```
 
-One-off use without installing globally: `npx -p @crossbind/port-tiff-standalone-wasi tiffinfo-wasi photo.tif`. Requires a WASI 0.3 runtime with Wasm 3.0 exception support (wasmtime 47+).
+One-off use without installing globally: `npx -p @crossbind/port-tiff-standalone-wasi@beta tiffinfo-wasi photo.tif`. Requires a WASI 0.3 runtime with Wasm 3.0 exception support (wasmtime 47+).
 
 ### Calling wasmtime yourself
 
 Full control over preopens, permissions and env:
 
 ```bash
-npm i @crossbind/port-tiff-standalone-wasi
+npm i @crossbind/port-tiff-standalone-wasi@beta
 
 M=node_modules/@crossbind/port
 T=wasi-wasm32-st-release

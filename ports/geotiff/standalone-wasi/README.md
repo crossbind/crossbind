@@ -7,21 +7,21 @@ The upstream **libgeotiff tools** (`listgeo`, `geotifcp`, `applygeo`), built by 
 No compiler, no build step - every tool installs as a `<tool>-wasi` command (generated shims that run wasmtime with the right flags, so relative paths just work):
 
 ```bash
-npm i -g @crossbind/port-geotiff-standalone-wasi
+npm i -g @crossbind/port-geotiff-standalone-wasi@beta
 
 listgeo-wasi image.tif            # dump GeoTIFF metadata
 geotifcp-wasi -g meta.txt in.tif out.tif
 applygeo-wasi geo.txt image.tif
 ```
 
-One-off use without installing globally: `npx -p @crossbind/port-geotiff-standalone-wasi listgeo-wasi image.tif`. Requires a WASI 0.3 runtime with Wasm 3.0 exception support (wasmtime 47+).
+One-off use without installing globally: `npx -p @crossbind/port-geotiff-standalone-wasi@beta listgeo-wasi image.tif`. Requires a WASI 0.3 runtime with Wasm 3.0 exception support (wasmtime 47+).
 
 ### Calling wasmtime yourself
 
 Full control over preopens, permissions and env. The tools look EPSG codes up in PROJ's `proj.db`, which `@crossbind/port-proj-wasi` ships; without it `listgeo` warns `Cannot find proj.db` and reports `PCS = 27700 (name unknown)`:
 
 ```bash
-npm i @crossbind/port-geotiff-standalone-wasi
+npm i @crossbind/port-geotiff-standalone-wasi@beta
 
 M=node_modules/@crossbind/port
 T=wasi-wasm32-st-release

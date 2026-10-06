@@ -26,7 +26,7 @@ Their C++ wrappers, and the self-check the site build runs against values comput
 Install the main package together with the platform builds:
 
 ```sh
-npm install @crossbind/port-geotiff @crossbind/port-geotiff-wasm @crossbind/port-geotiff-android @crossbind/port-geotiff-ios
+npm install @crossbind/port-geotiff@beta @crossbind/port-geotiff-wasm@beta @crossbind/port-geotiff-android@beta @crossbind/port-geotiff-ios@beta
 ```
 
 Then import all three platforms in `crossbind.config.js` — crossbind compiles only the one matching each build target:

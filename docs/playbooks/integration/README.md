@@ -89,7 +89,7 @@ Does the user need a library crossbind already prebuilds?
 │   gdal, openssl, geos, geotiff, proj, sqlite3, tiff, lerc, zstd, jpegturbo,
 │   webp, iconv, expat, curl, zlib, spatialite
 │
-├─ YES → pnpm add @crossbind/port-<name> + matching plugin.
+├─ YES → pnpm add @crossbind/port-<name>@beta + matching plugin.
 │         Skip to Step 4.
 │
 └─ NO → User has their own .cpp / a library not yet packaged.

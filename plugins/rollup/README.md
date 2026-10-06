@@ -16,7 +16,7 @@ A tool for seamless C++ integration with the Rollup bundler.
 To integrate crossbind into your project using Rollup as a bundler, you can utilize the @crossbind/plugin-rollup plugin. Start by installing these package with the following command:
 
 ```sh
-npm install @crossbind/plugin-rollup --save-dev
+npm install @crossbind/plugin-rollup@beta --save-dev
 ```
 
 To enable the plugin, modify the `vite.config.js` file as shown below.

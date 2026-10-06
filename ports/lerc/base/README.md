@@ -28,7 +28,7 @@ Their C++ wrappers, and the self-check the site build runs against numbers compu
 Install the main package together with the platform builds:
 
 ```sh
-npm install @crossbind/port-lerc @crossbind/port-lerc-wasm @crossbind/port-lerc-android @crossbind/port-lerc-ios
+npm install @crossbind/port-lerc@beta @crossbind/port-lerc-wasm@beta @crossbind/port-lerc-android@beta @crossbind/port-lerc-ios@beta
 ```
 
 Then import all three platforms in `crossbind.config.js` — crossbind compiles only the one matching each build target:

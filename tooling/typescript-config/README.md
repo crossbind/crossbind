@@ -19,7 +19,7 @@ Install it as a direct devDependency (package-name `extends` resolves through
 Node resolution, so a transitive copy is not enough under strict pnpm):
 
 ```sh
-npm install -D @crossbind/typescript-config
+npm install -D @crossbind/typescript-config@beta
 ```
 
 ## What it wires

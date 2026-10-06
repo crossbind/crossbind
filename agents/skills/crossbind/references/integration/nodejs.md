@@ -27,8 +27,8 @@ Build crossbind artifacts for the Node runtime (`-e node`) and `require`/`import
 ## Commands
 
 ```bash
-pnpm add -D crossbind
-pnpm add @crossbind/port-<name>     # optional
+pnpm add -D crossbind@beta
+pnpm add @crossbind/port-<name>@beta     # optional
 
 # Single-thread build
 pnpm crossbind build -p wasm -a wasm32 -r st -e node -b release
@@ -128,7 +128,7 @@ The same bindings can build a native Node-API addon instead of WebAssembly: for 
 A library that is published as a standalone Node-API package (`@crossbind/port-<name>-standalone-napi`) needs no build at all: install it, import from its root and call `initNative()` once, e.g. `import { initNative, crc32 } from '@crossbind/port-zlib-standalone-napi'`; npm installs only the addon package of the machine. A library can also ship its addons itself, as `@crossbind/example-lib-prebuilt-matrix/node/napi` does (`examples/backend-nodejs-prebuilt/`). Build an addon of your own when the app has C++ code of its own or needs a library built differently.
 
 ```bash
-pnpm add -D crossbind @crossbind/core-embind-napi
+pnpm add -D crossbind@beta @crossbind/core-embind-napi@beta
 pnpm crossbind build -p darwin,linux,linuxmusl,win32 -e node -b release   # opt-in: a plain `crossbind build` skips them
 ```
 

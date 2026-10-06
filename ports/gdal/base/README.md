@@ -26,7 +26,7 @@ Their C++ wrappers, and the self-check the site build runs against values from t
 Install the main package together with the platform builds:
 
 ```sh
-npm install @crossbind/port-gdal @crossbind/port-gdal-wasm @crossbind/port-gdal-android @crossbind/port-gdal-ios
+npm install @crossbind/port-gdal@beta @crossbind/port-gdal-wasm@beta @crossbind/port-gdal-android@beta @crossbind/port-gdal-ios@beta
 ```
 
 Then import all three platforms in `crossbind.config.js` — crossbind compiles only the one matching each build target:

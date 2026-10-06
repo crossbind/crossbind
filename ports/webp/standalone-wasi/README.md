@@ -7,21 +7,21 @@ The upstream **WebP tools** (`cwebp`, `dwebp`, `webpinfo`), built by libwebp's o
 No compiler, no build step - every tool installs as a `<tool>-wasi` command (generated shims that run wasmtime with the right flags, so relative paths just work):
 
 ```bash
-npm i -g @crossbind/port-webp-standalone-wasi
+npm i -g @crossbind/port-webp-standalone-wasi@beta
 
 cwebp-wasi -quiet in.ppm -o out.webp
 webpinfo-wasi out.webp
 dwebp-wasi out.webp -quiet -ppm -o back.ppm
 ```
 
-One-off use without installing globally: `npx -p @crossbind/port-webp-standalone-wasi webpinfo-wasi out.webp`. Requires a WASI 0.3 runtime with Wasm 3.0 exception support (wasmtime 47+).
+One-off use without installing globally: `npx -p @crossbind/port-webp-standalone-wasi@beta webpinfo-wasi out.webp`. Requires a WASI 0.3 runtime with Wasm 3.0 exception support (wasmtime 47+).
 
 ### Calling wasmtime yourself
 
 Full control over preopens, permissions and env:
 
 ```bash
-npm i @crossbind/port-webp-standalone-wasi
+npm i @crossbind/port-webp-standalone-wasi@beta
 
 M=node_modules/@crossbind/port
 T=wasi-wasm32-st-release

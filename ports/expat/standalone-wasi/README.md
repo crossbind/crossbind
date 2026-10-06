@@ -7,20 +7,20 @@ The upstream **`xmlwf`** well-formedness checker, built by Expat's own build sys
 No compiler, no build step - the tool installs as an `xmlwf-wasi` command (a generated shim that runs wasmtime with the right flags, so relative paths just work):
 
 ```bash
-npm i -g @crossbind/port-expat-standalone-wasi
+npm i -g @crossbind/port-expat-standalone-wasi@beta
 
 xmlwf-wasi doc.xml        # silent when well-formed
 xmlwf-wasi -v
 ```
 
-One-off use without installing globally: `npx -p @crossbind/port-expat-standalone-wasi xmlwf-wasi doc.xml`. Requires a WASI 0.3 runtime with Wasm 3.0 exception support (wasmtime 47+).
+One-off use without installing globally: `npx -p @crossbind/port-expat-standalone-wasi@beta xmlwf-wasi doc.xml`. Requires a WASI 0.3 runtime with Wasm 3.0 exception support (wasmtime 47+).
 
 ### Calling wasmtime yourself
 
 Full control over preopens, permissions and env:
 
 ```bash
-npm i @crossbind/port-expat-standalone-wasi
+npm i @crossbind/port-expat-standalone-wasi@beta
 
 M=node_modules/@crossbind/port
 T=wasi-wasm32-st-release

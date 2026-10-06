@@ -32,9 +32,9 @@ Add crossbind to a Vite project so:
 
 ```bash
 # Install
-pnpm add -D @crossbind/plugin-vite
+pnpm add -D @crossbind/plugin-vite@beta
 # Plus any prebuilt package the user wants to consume:
-pnpm add @crossbind/port-<name>
+pnpm add @crossbind/port-<name>@beta
 
 # Dev (HMR rebuilds wasm; COOP/COEP set automatically)
 pnpm dev

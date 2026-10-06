@@ -29,8 +29,8 @@ Wire `@crossbind/plugin-webpack` into the bundler config so dev-server serves wa
 ## Commands
 
 ```bash
-pnpm add -D @crossbind/plugin-webpack @crossbind/plugin-webpack-loader
-pnpm add @crossbind/port-<name>     # optional, for prebuilt libraries
+pnpm add -D @crossbind/plugin-webpack@beta @crossbind/plugin-webpack-loader@beta
+pnpm add @crossbind/port-<name>@beta     # optional, for prebuilt libraries
 
 # Dev (Rspack)
 pnpm dev    # or `pnpm rspack serve`

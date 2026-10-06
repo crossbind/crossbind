@@ -20,15 +20,15 @@ To integrate crossbind into your project using Metro as a bundler, you can utili
 
 NPM
 ```sh
-npm install @crossbind/plugin-metro --save-dev
+npm install @crossbind/plugin-metro@beta --save-dev
 ```
 or YARN
 ```sh
-yarn add @crossbind/plugin-metro --dev
+yarn add @crossbind/plugin-metro@beta --dev
 ```
 or PNPM
 ```sh
-pnpm add @crossbind/plugin-metro --save-dev
+pnpm add @crossbind/plugin-metro@beta --save-dev
 ```
 or BUN
 ```sh

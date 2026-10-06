@@ -56,7 +56,7 @@ Link them with a toolchain of the same kind. Three rules cover the rest:
 - **Data has to be pointed at.** GDAL and PROJ read their data from `GDAL_DATA` and `PROJ_DATA`; set them to the `share/gdal` and `share/proj` directories of their packages. The data path compiled into the archives belongs to the machine that built them.
 
 ```bash
-npm install @crossbind/port-geos-linux
+npm install @crossbind/port-geos-linux@beta
 GEOS=node_modules/@crossbind/port-geos-linux/dist/prebuilt/linux-x64-mt-release
 export PKG_CONFIG_PATH=$GEOS/lib/pkgconfig
 clang -c app.c $(pkg-config --cflags geos)

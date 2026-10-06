@@ -26,7 +26,7 @@ Their C++ wrappers, and the self-check the site build runs against numbers compu
 Install the main package together with the platform builds:
 
 ```sh
-npm install @crossbind/port-webp @crossbind/port-webp-wasm @crossbind/port-webp-android @crossbind/port-webp-ios
+npm install @crossbind/port-webp@beta @crossbind/port-webp-wasm@beta @crossbind/port-webp-android@beta @crossbind/port-webp-ios@beta
 ```
 
 Then import all three platforms in `crossbind.config.js` — crossbind compiles only the one matching each build target:

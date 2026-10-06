@@ -26,7 +26,7 @@ Their C++ wrappers, and the self-check the site build runs against files that na
 Install the main package together with the platform builds:
 
 ```sh
-npm install @crossbind/port-jpegturbo @crossbind/port-jpegturbo-wasm @crossbind/port-jpegturbo-android @crossbind/port-jpegturbo-ios
+npm install @crossbind/port-jpegturbo@beta @crossbind/port-jpegturbo-wasm@beta @crossbind/port-jpegturbo-android@beta @crossbind/port-jpegturbo-ios@beta
 ```
 
 Then import all three platforms in `crossbind.config.js` — crossbind compiles only the one matching each build target:

@@ -16,7 +16,7 @@
 The engine does not depend on the Rust layer — the consumer declares it:
 
 ```bash
-pnpm add -D @crossbind/core-embind-rust
+pnpm add -D @crossbind/core-embind-rust@beta
 ```
 
 Bundler plugins (`@crossbind/plugin-vite`, `-rollup`, `-webpack`, `-react-native`) already

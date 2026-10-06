@@ -7,20 +7,20 @@ The upstream **`curl` CLI**, built by curl's own build system, shipped as a **WA
 No compiler, no build step - the tool installs as a `curl-wasi` command (a generated shim that runs wasmtime with the socket grants, the CA bundle mount and the right flags, so https and relative paths just work):
 
 ```bash
-npm i -g @crossbind/port-curl-standalone-wasi
+npm i -g @crossbind/port-curl-standalone-wasi@beta
 
 curl-wasi --version
 curl-wasi -sS https://example.com -o page.html
 ```
 
-One-off use without installing globally: `npx -p @crossbind/port-curl-standalone-wasi curl-wasi --version`. Requires a WASI 0.3 runtime with Wasm 3.0 exception support (wasmtime 47+). Network access runs over `wasi:sockets` - verified fetching https with full certificate verification.
+One-off use without installing globally: `npx -p @crossbind/port-curl-standalone-wasi@beta curl-wasi --version`. Requires a WASI 0.3 runtime with Wasm 3.0 exception support (wasmtime 47+). Network access runs over `wasi:sockets` - verified fetching https with full certificate verification.
 
 ### Calling wasmtime yourself
 
 Full control over preopens, permissions and env:
 
 ```bash
-npm i @crossbind/port-curl-standalone-wasi
+npm i @crossbind/port-curl-standalone-wasi@beta
 
 M=node_modules/@crossbind/port
 T=wasi-wasm32-st-release

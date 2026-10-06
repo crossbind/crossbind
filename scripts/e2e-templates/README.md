@@ -1,7 +1,7 @@
 # e2e-templates
 
 Scaffolds **every `create-crossbind` template** and runs its real build + e2e suite,
-exactly as an end user would after `npm create crossbind`. It catches the failures the
+exactly as an end user would after `npm create crossbind@beta`. It catches the failures the
 monorepo hides: unpublished `@crossbind/*` versions, workspace-only config that leaks
 into scaffolds, and templates that don't build/run standalone.
 

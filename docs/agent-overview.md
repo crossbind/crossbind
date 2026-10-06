@@ -23,7 +23,7 @@ For clients without skill installation support, copy the minimal rule from `docs
 The skill uses normal project tools:
 
 - `crossbind build` and `crossbind licenses`
-- `npm create crossbind` for applications and standalone libraries
+- `npm create crossbind@beta` for applications and standalone libraries
 - `pnpm scaffold:port` inside this monorepo
 - Package-manager install/build/test commands
 - Repository scripts such as `pnpm doctor` and `pnpm check:native`

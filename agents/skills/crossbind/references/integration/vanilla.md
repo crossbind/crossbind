@@ -28,8 +28,8 @@ Build crossbind artifacts for the browser, ship them as static files, and load v
 ## Commands
 
 ```bash
-pnpm add -D crossbind
-pnpm add @crossbind/port-<name>     # optional
+pnpm add -D crossbind@beta
+pnpm add @crossbind/port-<name>@beta     # optional
 pnpm add -D serve                   # optional, for local preview
 
 # Build

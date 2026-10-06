@@ -26,7 +26,7 @@ Their C++ wrappers, and the self-check the site build runs against numbers verif
 Install the main package together with the platform builds:
 
 ```sh
-npm install @crossbind/port-tiff @crossbind/port-tiff-wasm @crossbind/port-tiff-android @crossbind/port-tiff-ios
+npm install @crossbind/port-tiff@beta @crossbind/port-tiff-wasm@beta @crossbind/port-tiff-android@beta @crossbind/port-tiff-ios@beta
 ```
 
 Then import all three platforms in `crossbind.config.js` — crossbind compiles only the one matching each build target:
