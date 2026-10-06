@@ -102,6 +102,18 @@ export default {
             replacement: '//! @endcond\n\n#endif /* !__wasi__ */',
             paths: ['apps/gdalalg_external.cpp'],
         },
+        // Emscripten's single-threaded build cannot start the worker a pool job waits for, yet the pool queued the
+        // job anyway, so GDALViewshedGenerate never returned: there a job runs where it is submitted.
+        {
+            regex: /^(bool CPLWorkerThreadPool::SubmitJob\(std::function<void\(\)> task\)\n\{\n)/m,
+            replacement: '$1#if defined(__EMSCRIPTEN__) && !defined(__EMSCRIPTEN_PTHREADS__)\n    task();\n    return true;\n#endif\n',
+            paths: ['port/cpl_worker_thread_pool.cpp'],
+        },
+        {
+            regex: /^(bool CPLWorkerThreadPool::SubmitJobs\(CPLThreadFunc pfnFunc,\n\s+const std::vector<void \*> &apData\)\n\{\n)/m,
+            replacement: '$1#if defined(__EMSCRIPTEN__) && !defined(__EMSCRIPTEN_PTHREADS__)\n    for (void *pData : apData)\n        pfnFunc(pData);\n    return !apData.empty();\n#endif\n',
+            paths: ['port/cpl_worker_thread_pool.cpp'],
+        },
         // wasi-sdk 34's libc++ no longer surfaces std::strtoull here; the global name is portable.
         {
             regex: 'std::strtoull',

@@ -173,7 +173,7 @@ Setup and differences per platform: [WebAssembly](https://crossbind.dev/ports/gd
   | also without SpatiaLite, with `SPATIALITE_LOAD=FALSE` | 17,296,769 B |
   | also without WebP, LERC and JPEG | 16,451,235 B |
 
-- Single-threaded WebAssembly has no threads, and two parts of GDAL expect them: `GDALViewshedGenerate` waits forever on its job queue, and ogr2ogr's Arrow path fails on GeoPackage input. The module above runs thread-pool jobs in place and sets `OGR2OGR_USE_ARROW_API=NO`.
+- Single-threaded WebAssembly has no threads. The single-threaded build runs a job of GDAL's thread pool where it is submitted, so `GDALViewshedGenerate` returns, but the GeoPackage driver starts threads of its own: ogr2ogr's Arrow path fails on GeoPackage input unless `OGR2OGR_USE_ARROW_API=NO` is set, as the module above does.
 - The GDAL command-line tools are not in the library packages; `@crossbind/port-gdal-standalone-wasi` ships the `gdal` program with the classic tools, `gdalinfo` and `ogr2ogr` among them, as WASI commands.
 
 ## Supported platforms
