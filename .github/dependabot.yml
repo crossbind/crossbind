@@ -38,6 +38,10 @@ updates:
           - dependency-name: typescript
             update-types:
                 - version-update:semver-major
+          # The React Native samples compile their Android bundle with the hermes-compiler they declare, and it
+          # must be the version react-native depends on, or the app crashes at launch on the bytecode version.
+          # It moves with a react-native bump instead; scripts/check-hermes-compiler.mjs fails until it does.
+          - dependency-name: hermes-compiler
       groups:
           # Families that must move together, whatever the update type: a vitest 5 PR without
           # @vitest/coverage-v8 5, or a react-native bump without its @react-native/* dev

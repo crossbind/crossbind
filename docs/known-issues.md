@@ -88,25 +88,6 @@ than the one crossbind pins now.
 - Check: `npm view @crossbind/port-gdal-wasm dist-tags` shows `latest` behind `beta`.
 - Remove when `latest` follows the trains or no install instruction depends on it.
 
-## The React Native samples' `hermes-compiler` does not follow react-native's pin
-
-All three React Native samples declare `hermes-compiler: "*"`, and on Android the declaration is
-load-bearing. react-native no longer ships `sdks/hermesc`; its gradle plugin looks for the compiler
-at `<app>/node_modules/hermes-compiler/hermesc/<os>-bin/hermesc` (`detectOSAwareHermesCommand`), and
-pnpm links only direct dependencies there. Dropping the declaration would end that lookup in
-`Couldn't determine Hermesc location` on every Android Release build. iOS takes hermesc from the
-`hermes-engine` pod instead.
-
-The `*` range resolves on its own, though. The two pnpm samples carry 250829098.0.10, while
-react-native 0.87.1 depends on 250829098.0.17 and runs that Hermes version on Android.
-react-native's own `react-native-xcode.sh` warns that a compiler and VM on different bytecode
-versions crash at launch with `Wrong bytecode version`. Today's pair still passes the Android e2e,
-but `*` lets Dependabot propose any Hermes release.
-
-- Seen: 2026-09-23
-- Check: `pnpm --filter @crossbind/example-mobile-reactnative-cli exec node -p "require('react-native/package.json').dependencies['hermes-compiler'] + ' vs ' + require('hermes-compiler/package.json').version"` prints two different versions.
-- Remove when the samples pin the version react-native depends on.
-
 ## No CI job scaffolds the create-crossbind templates
 
 `scripts/e2e-templates.js` (`pnpm run e2e:templates`) scaffolds every template from the published or

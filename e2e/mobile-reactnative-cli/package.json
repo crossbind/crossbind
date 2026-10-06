@@ -56,7 +56,7 @@
         "react": "19.3.0",
         "react-native": "0.87.1",
         "react-native-safe-area-context": "^5.8.0",
-        "hermes-compiler": "*"
+        "hermes-compiler": "250829098.0.17"
     },
     "devDependencies": {
         "@babel/core": "^7.29.7",

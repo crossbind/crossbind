@@ -46,6 +46,8 @@ jobs:
                   cache: 'pnpm'
             - name: Install dependencies
               run: pnpm install
+            - name: Check that hermes-compiler is the version react-native depends on
+              run: node scripts/check-hermes-compiler.mjs
             - name: Install NDK and CMake
               run: yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "ndk;30.0.16248370" "cmake;4.1.2" > /dev/null
             - name: Build examples/lib-prebuilt-matrix
