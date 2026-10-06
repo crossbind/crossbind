@@ -26,7 +26,8 @@ export default function buildLib(targetParams, options = {}) {
         const libdir = `${state.config.paths.output}/prebuilt/${target.path}`;
         const sourceFingerprint = getSourceFingerprint(state.config);
         const sourceChanged = isSourceFingerprintStale(libdir, sourceFingerprint);
-        if (isCargo || sourceChanged || !fs.existsSync(`${libdir}/lib`)) {
+        const nativeChanged = isNativeSourceNewerThan(`${libdir}/lib`);
+        if (isCargo || sourceChanged || nativeChanged || !fs.existsSync(`${libdir}/lib`)) {
             if (sourceChanged) {
                 for (const stale of staleTargetDirectories({
                     buildPath: state.config.paths.build,
@@ -35,8 +36,9 @@ export default function buildLib(targetParams, options = {}) {
                 })) fs.rmSync(stale, { recursive: true, force: true });
             }
             // createLib caches on existence too, so re-entering is not enough: a stale stamp means
-            // the lib on disk came from a different upstream release and has to be rebuilt.
-            createLib(target, 'Source', { buildSource: true, force: sourceChanged });
+            // the lib on disk came from a different upstream release, and a newer native source means
+            // it predates an edit; either way it has to be rebuilt.
+            createLib(target, 'Source', { buildSource: true, force: sourceChanged || nativeChanged });
 
             const modules = [];
             state.config.paths.module.forEach((modulePath) => {
@@ -54,10 +56,6 @@ export default function buildLib(targetParams, options = {}) {
             if (isCargo) writeEmbindRsFingerprint(libdir, getEmbindRsFingerprint());
             isChanged = true;
         } else {
-            // The skip is existence-only; without this warning a source edit is served stale silently.
-            if (isNativeSourceNewerThan(`${state.config.paths.output}/prebuilt/${target.path}/lib`)) {
-                logger.info(`[${target.path}] lib cached but native sources are newer - delete the prebuilt output (rm -rf dist .crossbind) and rebuild to pick them up`);
-            }
             logger.cachedStep(target, 'lib');
         }
     });

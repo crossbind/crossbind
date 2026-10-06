@@ -181,19 +181,6 @@ and install them. `lib-source` is also the only package with `export.type: 'sour
   lists only the two packages' own manifests.
 - Remove when an app or fixture builds against both.
 
-## An edited native header keeps the old build
-
-`buildLib` skips a target's own library whenever `.crossbind/prebuilt/<target>/lib` exists. After an
-edit to the body of a function in a `src/native` header, `crossbind build` logs `lib cached but
-native sources are newer`, reports every step as cached, exits 0, and the app keeps running the old
-code until `.crossbind` and `dist` are deleted. The site's demo builder is unaffected because it
-builds each demo in a fresh temporary copy.
-
-- Seen: 2026-09-23 (a wasm build of a `landing/demos` module)
-- Check: `grep -n 'native sources are newer' core/crossbind/src/actions/buildLib.js` finds the
-  warning in the branch that skips the rebuild.
-- Remove when a newer native source rebuilds the library.
-
 ## `m.FS.writeFile` appends to a file that already exists in the browser
 
 Browser builds use WASMFS, whose `_wasmfs_write_file` (emsdk `system/lib/wasmfs/js_api.cpp`) writes
