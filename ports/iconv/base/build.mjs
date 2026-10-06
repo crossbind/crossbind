@@ -49,5 +49,6 @@ export default {
         ...(platformBuild[target.platform] || platformBuild[`${target.platform}-${target.arch}`] || []),
         // The translations are the dropped CLI's, and the toolchain images have no msgfmt.
         '--disable-nls',
+        '--enable-extra-encodings',
     ],
 };
