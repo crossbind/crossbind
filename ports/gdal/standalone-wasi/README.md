@@ -7,7 +7,7 @@ The upstream **`gdal` CLI**, built by GDAL's own build system (`BUILD_APPS=ON` -
 No compiler, no build step - every tool installs as a `<tool>-wasi` command (generated shims that run wasmtime with the right flags; GDAL/PROJ data and the CA bundle are discovered and mounted from the config graph automatically, so relative paths and `/vsicurl` just work):
 
 ```bash
-npm i -g @crossbind/port-gdal-standalone-wasi
+npm i -g @crossbind/port-gdal-standalone-wasi@beta
 
 gdal-wasi --version
 gdal-wasi raster convert input.tif output.png
@@ -15,14 +15,14 @@ ogr2ogr-wasi out.gpkg in.geojson
 gdalinfo-wasi /vsicurl/https://raw.githubusercontent.com/OSGeo/gdal/master/autotest/gcore/data/byte.tif
 ```
 
-One-off use without installing globally: `npx -p @crossbind/port-gdal-standalone-wasi gdal-wasi --version`. Requires a WASI 0.3 runtime with Wasm 3.0 exception support (wasmtime 47+).
+One-off use without installing globally: `npx -p @crossbind/port-gdal-standalone-wasi@beta gdal-wasi --version`. Requires a WASI 0.3 runtime with Wasm 3.0 exception support (wasmtime 47+).
 
 ### Calling wasmtime yourself
 
 Full control over preopens, permissions and env:
 
 ```bash
-npm i @crossbind/port-gdal-standalone-wasi
+npm i @crossbind/port-gdal-standalone-wasi@beta
 
 M=node_modules/@crossbind/port
 T=wasi-wasm32-st-release

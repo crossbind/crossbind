@@ -35,9 +35,9 @@ Add crossbind to a React Native CLI app so:
 ## Commands
 
 ```bash
-pnpm add @crossbind/plugin-react-native @crossbind/plugin-react-native-ios-helper
-pnpm add -D @crossbind/plugin-metro     # bundling only; the RN plugin brings the toolchain
-pnpm add @crossbind/port-<name>     # optional
+pnpm add @crossbind/plugin-react-native@beta @crossbind/plugin-react-native-ios-helper@beta
+pnpm add -D @crossbind/plugin-metro@beta     # bundling only; the RN plugin brings the toolchain
+pnpm add @crossbind/port-<name>@beta     # optional
 
 # iOS — install pods (regenerates Podfile.lock + xcframeworks)
 cd ios && pod install && cd ..

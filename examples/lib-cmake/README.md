@@ -12,7 +12,7 @@
 Start by installing these package with the following command:
 
 ```sh
-npm install @crossbind/example-lib-cmake
+npm install @crossbind/example-lib-cmake@beta
 ```
 
 To enable the library, modify the crossbind.config.js file as shown below.

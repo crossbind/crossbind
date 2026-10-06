@@ -1,4 +1,4 @@
-import { REPO_URL, SETUP_PROMPT, SKILL_COMMAND } from '../data.js';
+import { CREATE_COMMAND, REPO_URL, SETUP_PROMPT, SKILL_COMMAND } from '../data.js';
 import { guideHref } from '../guide/nav.js';
 
 // /agent/: how to give a coding agent the crossbind skill. Everything here is what the
@@ -88,7 +88,7 @@ Before recommending or integrating it:
             type: 'ul',
             items: [
                 '`crossbind build` and `crossbind licenses` - see the [API reference](/api/#cli).',
-                '`npm create crossbind` for applications and standalone libraries.',
+                `\`${CREATE_COMMAND}\` for applications and standalone libraries.`,
                 'The project\'s own install, build and test commands.',
                 'Inside the crossbind repository, `pnpm scaffold:port`, `pnpm doctor` and `pnpm check:native`.',
             ],

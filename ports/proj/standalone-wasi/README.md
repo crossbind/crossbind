@@ -7,21 +7,21 @@ The upstream **PROJ apps** - `proj`, `cct`, `cs2cs`, `geod`, `gie`, `projinfo` -
 No compiler, no build step - every tool installs as a `<tool>-wasi` command (generated shims that run wasmtime with the right flags, mounts and env; `proj.db` is discovered and mounted automatically, multicall dispatch included):
 
 ```bash
-npm i -g @crossbind/port-proj-standalone-wasi
+npm i -g @crossbind/port-proj-standalone-wasi@beta
 
 echo "2 49" | proj-wasi +proj=merc +lat_ts=56.5
 echo "2 49" | cs2cs-wasi +proj=latlong +to +proj=merc +lat_ts=56.5
 projinfo-wasi EPSG:4326
 ```
 
-One-off use without installing globally: `npx -p @crossbind/port-proj-standalone-wasi projinfo-wasi EPSG:4326`. Requires a WASI 0.3 runtime with Wasm 3.0 exception support (wasmtime 47+).
+One-off use without installing globally: `npx -p @crossbind/port-proj-standalone-wasi@beta projinfo-wasi EPSG:4326`. Requires a WASI 0.3 runtime with Wasm 3.0 exception support (wasmtime 47+).
 
 ### Calling wasmtime yourself
 
 Full control over preopens, permissions and env:
 
 ```bash
-npm i @crossbind/port-proj-standalone-wasi
+npm i @crossbind/port-proj-standalone-wasi@beta
 
 M=node_modules/@crossbind/port
 T=wasi-wasm32-st-release

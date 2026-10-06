@@ -26,7 +26,7 @@ Their C++ wrappers, and the self-check the site build runs against values comput
 Install the main package together with the platform builds:
 
 ```sh
-npm install @crossbind/port-geos @crossbind/port-geos-wasm @crossbind/port-geos-android @crossbind/port-geos-ios
+npm install @crossbind/port-geos@beta @crossbind/port-geos-wasm@beta @crossbind/port-geos-android@beta @crossbind/port-geos-ios@beta
 ```
 
 Then import all three platforms in `crossbind.config.js` — crossbind compiles only the one matching each build target:

@@ -26,7 +26,7 @@ Their C++ wrappers, and the self-check the site build runs against values comput
 Install the main package together with the platform builds:
 
 ```sh
-npm install @crossbind/port-spatialite @crossbind/port-spatialite-wasm @crossbind/port-spatialite-android @crossbind/port-spatialite-ios
+npm install @crossbind/port-spatialite@beta @crossbind/port-spatialite-wasm@beta @crossbind/port-spatialite-android@beta @crossbind/port-spatialite-ios@beta
 ```
 
 Then import all three platforms in `crossbind.config.js` — crossbind compiles only the one matching each build target:

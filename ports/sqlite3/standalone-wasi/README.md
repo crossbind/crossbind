@@ -7,21 +7,21 @@ The upstream **`sqlite3` shell**, built by SQLite's own build system, shipped as
 No compiler, no build step - the shell installs as a `sqlite3-wasi` command (a generated shim that runs wasmtime with the cwd preopened, so relative database paths just work):
 
 ```bash
-npm i -g @crossbind/port-sqlite3-standalone-wasi
+npm i -g @crossbind/port-sqlite3-standalone-wasi@beta
 
 sqlite3-wasi :memory: 'select 40+2;'
 sqlite3-wasi app.db '.tables'
 sqlite3-wasi app.db 'create table t(x); insert into t values(1); select * from t;'
 ```
 
-One-off use without installing globally: `npx -p @crossbind/port-sqlite3-standalone-wasi sqlite3-wasi ':memory:' 'select 40+2;'`. Requires a WASI 0.3 runtime with Wasm 3.0 exception support (wasmtime 47+).
+One-off use without installing globally: `npx -p @crossbind/port-sqlite3-standalone-wasi@beta sqlite3-wasi ':memory:' 'select 40+2;'`. Requires a WASI 0.3 runtime with Wasm 3.0 exception support (wasmtime 47+).
 
 ### Calling wasmtime yourself
 
 Full control over preopens, permissions and env:
 
 ```bash
-npm i @crossbind/port-sqlite3-standalone-wasi
+npm i @crossbind/port-sqlite3-standalone-wasi@beta
 
 M=node_modules/@crossbind/port
 T=wasi-wasm32-st-release

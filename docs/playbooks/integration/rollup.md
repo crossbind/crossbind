@@ -30,8 +30,8 @@ Add `@crossbind/plugin-rollup` to a Rollup config so:
 ## Commands
 
 ```bash
-pnpm add -D @crossbind/plugin-rollup
-pnpm add @crossbind/port-<name>     # optional
+pnpm add -D @crossbind/plugin-rollup@beta
+pnpm add @crossbind/port-<name>@beta     # optional
 
 # Build
 pnpm rollup -c

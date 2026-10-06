@@ -7,20 +7,20 @@ The upstream **`geosop`** geometry operation CLI, built by GEOS's own build syst
 No compiler, no build step - the tool installs as a `geosop-wasi` command (a generated shim that runs wasmtime with the right flags, so relative paths just work):
 
 ```bash
-npm i -g @crossbind/port-geos-standalone-wasi
+npm i -g @crossbind/port-geos-standalone-wasi@beta
 
 geosop-wasi -a "POLYGON((0 0,10 0,10 10,0 10,0 0))" \
             -b "POLYGON((5 5,15 5,15 15,5 15,5 5))" intersection
 ```
 
-One-off use without installing globally: `npx -p @crossbind/port-geos-standalone-wasi geosop-wasi ...`. Requires a WASI 0.3 runtime with Wasm 3.0 exception support (wasmtime 47+).
+One-off use without installing globally: `npx -p @crossbind/port-geos-standalone-wasi@beta geosop-wasi ...`. Requires a WASI 0.3 runtime with Wasm 3.0 exception support (wasmtime 47+).
 
 ### Calling wasmtime yourself
 
 Full control over preopens, permissions and env:
 
 ```bash
-npm i @crossbind/port-geos-standalone-wasi
+npm i @crossbind/port-geos-standalone-wasi@beta
 
 M=node_modules/@crossbind/port
 T=wasi-wasm32-st-release

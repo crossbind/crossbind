@@ -26,7 +26,7 @@ Their C++ wrappers are in [`landing/demos/lib-iconv`](https://github.com/crossbi
 Install the main package together with the platform builds:
 
 ```sh
-npm install @crossbind/port-iconv @crossbind/port-iconv-wasm @crossbind/port-iconv-android @crossbind/port-iconv-ios
+npm install @crossbind/port-iconv@beta @crossbind/port-iconv-wasm@beta @crossbind/port-iconv-android@beta @crossbind/port-iconv-ios@beta
 ```
 
 Then import all three platforms in `crossbind.config.js` — crossbind compiles only the one matching each build target:

@@ -16,7 +16,7 @@ A tool for seamless C++ integration with the Webpack bundler.
 To integrate crossbind into your project using Webpack as a bundler, you can utilize the @crossbind/plugin-webpack-loader plugin. Start by installing these package with the following command:
 
 ```sh
-npm install @crossbind/plugin-webpack @crossbind/plugin-webpack-loader --save-dev
+npm install @crossbind/plugin-webpack@beta @crossbind/plugin-webpack-loader@beta --save-dev
 ```
 
 **Webpack**  

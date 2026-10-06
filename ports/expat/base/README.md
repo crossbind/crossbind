@@ -26,7 +26,7 @@ Their C++ wrappers, and the self-check the site build runs against results compu
 Install the main package together with the platform builds:
 
 ```sh
-npm install @crossbind/port-expat @crossbind/port-expat-wasm @crossbind/port-expat-android @crossbind/port-expat-ios
+npm install @crossbind/port-expat@beta @crossbind/port-expat-wasm@beta @crossbind/port-expat-android@beta @crossbind/port-expat-ios@beta
 ```
 
 Then import all three platforms in `crossbind.config.js` — crossbind compiles only the one matching each build target:

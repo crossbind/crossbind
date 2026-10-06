@@ -7,20 +7,20 @@ The upstream **`zstd` CLI**, built by zstd's own build system, shipped as a **WA
 No compiler, no build step - the tool installs as a `zstd-wasi` command (a generated shim that runs wasmtime with the right flags, so relative paths just work):
 
 ```bash
-npm i -g @crossbind/port-zstd-standalone-wasi
+npm i -g @crossbind/port-zstd-standalone-wasi@beta
 
 zstd-wasi file -o file.zst
 zstd-wasi -d file.zst -o file.out
 ```
 
-One-off use without installing globally: `npx -p @crossbind/port-zstd-standalone-wasi zstd-wasi -d file.zst -o file`. Requires a WASI 0.3 runtime with Wasm 3.0 exception support (wasmtime 47+).
+One-off use without installing globally: `npx -p @crossbind/port-zstd-standalone-wasi@beta zstd-wasi -d file.zst -o file`. Requires a WASI 0.3 runtime with Wasm 3.0 exception support (wasmtime 47+).
 
 ### Calling wasmtime yourself
 
 Full control over preopens, permissions and env:
 
 ```bash
-npm i @crossbind/port-zstd-standalone-wasi
+npm i @crossbind/port-zstd-standalone-wasi@beta
 
 M=node_modules/@crossbind/port
 T=wasi-wasm32-st-release

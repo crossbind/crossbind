@@ -77,7 +77,7 @@ Where the upstream ships command-line tools, a separate
 from npm and run, no compiler involved:
 
 ```bash
-npm i -g @crossbind/port-gdal-standalone-wasi   # or npx/pnpm dlx
+npm i -g @crossbind/port-gdal-standalone-wasi@beta   # or npx/pnpm dlx
 gdalinfo-wasi --version                  # wasmtime must be on PATH
 ```
 

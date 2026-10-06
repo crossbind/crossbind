@@ -7,21 +7,21 @@ The upstream **libjpeg-turbo tools** (`cjpeg`, `djpeg`, `jpegtran`), built by li
 No compiler, no build step - every tool installs as a `<tool>-wasi` command (generated shims that run wasmtime with the right flags, so relative paths just work):
 
 ```bash
-npm i -g @crossbind/port-jpegturbo-standalone-wasi
+npm i -g @crossbind/port-jpegturbo-standalone-wasi@beta
 
 cjpeg-wasi -quality 90 -outfile out.jpg in.ppm
 jpegtran-wasi -rotate 90 -outfile rot.jpg out.jpg
 djpeg-wasi -ppm -outfile back.ppm rot.jpg
 ```
 
-One-off use without installing globally: `npx -p @crossbind/port-jpegturbo-standalone-wasi cjpeg-wasi ...`. Requires a WASI 0.3 runtime with Wasm 3.0 exception support (wasmtime 47+).
+One-off use without installing globally: `npx -p @crossbind/port-jpegturbo-standalone-wasi@beta cjpeg-wasi ...`. Requires a WASI 0.3 runtime with Wasm 3.0 exception support (wasmtime 47+).
 
 ### Calling wasmtime yourself
 
 Full control over preopens, permissions and env:
 
 ```bash
-npm i @crossbind/port-jpegturbo-standalone-wasi
+npm i @crossbind/port-jpegturbo-standalone-wasi@beta
 
 M=node_modules/@crossbind/port
 T=wasi-wasm32-st-release

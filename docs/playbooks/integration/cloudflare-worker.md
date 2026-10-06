@@ -25,8 +25,8 @@ Compile crossbind for the **edge** runtime so it loads inside a Worker (limited 
 ## Commands
 
 ```bash
-pnpm add -D crossbind
-pnpm add @crossbind/port-<name>     # optional
+pnpm add -D crossbind@beta
+pnpm add @crossbind/port-<name>@beta     # optional
 
 # Build (target: edge)
 pnpm crossbind build -p wasm -a wasm32 -r st -e edge -b release

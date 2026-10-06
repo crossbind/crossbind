@@ -34,8 +34,8 @@ Add crossbind to a Next.js app so:
 ## Commands
 
 ```bash
-pnpm add -D crossbind @crossbind/plugin-webpack @crossbind/plugin-webpack-loader
-pnpm add @crossbind/port-<name>     # optional
+pnpm add -D crossbind@beta @crossbind/plugin-webpack@beta @crossbind/plugin-webpack-loader@beta
+pnpm add @crossbind/port-<name>@beta     # optional
 
 # Dev
 pnpm dev      # next dev

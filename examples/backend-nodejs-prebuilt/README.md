@@ -17,7 +17,7 @@ const product = new Matrix(9, 1).multiple(new Matrix(9, 2));
 Every name the library binds is ready once `initNative()` resolves, and the same import from
 `/node/wasm` runs its WebAssembly build instead. A `@crossbind/port-<name>-standalone-napi` package
 works the same way from its package root, e.g. `@crossbind/port-zlib-standalone-napi`. In an app of
-your own, `npm install @crossbind/example-lib-prebuilt-matrix` is the whole setup.
+your own, `npm install @crossbind/example-lib-prebuilt-matrix@beta` is the whole setup.
 
 # Getting Started
 

@@ -23,20 +23,6 @@ AGENTS.md, which no longer says anything about it.
 - Check: `node -p "[...new Set(Object.entries(require('./package.json').scripts).filter(([k]) => k.startsWith('ci:')).flatMap(([, v]) => v.match(/e2e-[a-z-]+/g) ?? []))].join(' ')"` prints `e2e-cli-native e2e-backend-nodejs-native-conan`.
 - Remove when every fixture runs in CI.
 
-## npm's `latest` tag serves a placeholder and beta.50
-
-Beta trains publish to `beta`, and only a stable train moves `latest`. An install without a tag thus
-gets `crossbind@0.0.1`, the name-reservation placeholder, and 2.0.0-beta.50 of `create-crossbind`
-and the `@crossbind/*` packages, while `beta` is on 2.0.0-beta.60. Most docs say `@beta`;
-`docs/api/wasi.md`, `docs/api/rust.md` and `docs/api/lifecycle-and-types.md` do not. On 2026-09-16
-`node scripts/check-port-links.mjs --tag latest`, which links GDAL, PROJ and GEOS from npm, failed
-with `undefined symbol: _Unwind_CallPersonality`: beta.50 was compiled with an older toolchain image
-than the one crossbind pins now.
-
-- Seen: 2026-09-16
-- Check: `npm view @crossbind/port-gdal-wasm dist-tags` shows `latest` behind `beta`.
-- Remove when `latest` follows the trains or no install instruction depends on it.
-
 ## No CI job scaffolds the create-crossbind templates
 
 `scripts/e2e-templates.js` (`pnpm run e2e:templates`) scaffolds every template from the published or

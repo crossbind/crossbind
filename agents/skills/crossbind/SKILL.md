@@ -42,7 +42,7 @@ Only load the references needed for the current request. The reference bundle is
 ## Port-authoring workflow
 
 - Inside the crossbind repository, use `pnpm scaffold:port <name>` and follow the in-repo port playbook.
-- Outside the repository, use `npm create crossbind -- <dir> Library Prebuilt` for a reusable library project.
+- Outside the repository, use `npm create crossbind@beta -- <dir> Library Prebuilt` for a reusable library project.
 - Pin the upstream version and source integrity, preserve the upstream license, wire transitive native dependencies, and validate every claimed target.
 - Never claim a platform is supported merely because its directory exists; require a successful target build or committed prebuilt contract.
 

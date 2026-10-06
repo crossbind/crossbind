@@ -58,7 +58,7 @@ crossbind emits declaration files for the native modules you import — C++ head
 (`./native/native.h`), app-local Rust files (`./native/x.rs`), `cargo:` crate
 imports and `conan:` header imports — under `.crossbind/types/`,
 `.crossbind/rust-crates/types/` and `.crossbind/conan/types/`, never next to your sources. Wire them once by extending the shared config
-(`npm i -D @crossbind/typescript-config`, TS 5.5+):
+(`npm i -D @crossbind/typescript-config@beta`, TS 5.5+):
 
 ```jsonc
 // tsconfig.json

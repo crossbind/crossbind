@@ -15,7 +15,7 @@ WebAssembly and React Native also build `.node` addons for Node.js and Electron.
 Add it next to `crossbind` and build the native platform:
 
 ```bash
-pnpm add -D crossbind @crossbind/core-embind-napi
+pnpm add -D crossbind@beta @crossbind/core-embind-napi@beta
 pnpm crossbind build -p darwin
 ```
 

@@ -26,7 +26,7 @@ Their C++ wrappers, and the self-check the site build runs against values comput
 Install the main package together with the platform builds:
 
 ```sh
-npm install @crossbind/port-zlib @crossbind/port-zlib-wasm @crossbind/port-zlib-android @crossbind/port-zlib-ios
+npm install @crossbind/port-zlib@beta @crossbind/port-zlib-wasm@beta @crossbind/port-zlib-android@beta @crossbind/port-zlib-ios@beta
 ```
 
 Then import all three platforms in `crossbind.config.js` — crossbind compiles only the one matching each build target:

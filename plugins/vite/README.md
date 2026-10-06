@@ -16,7 +16,7 @@ A tool for seamless C++ integration with the Vite.
 To integrate crossbind into your project using Vite, you can utilize the @crossbind/plugin-vite plugin. Start by installing these package with the following command:
 
 ```sh
-npm install @crossbind/plugin-vite --save-dev
+npm install @crossbind/plugin-vite@beta --save-dev
 ```
 
 To enable the plugin, modify the `vite.config.js` file as shown below.

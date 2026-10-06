@@ -20,15 +20,15 @@ To integrate crossbind into your project using React Native or Expo, you can uti
 
 NPM
 ```sh
-npm install @crossbind/plugin-react-native-ios-helper --save-dev
+npm install @crossbind/plugin-react-native-ios-helper@beta --save-dev
 ```
 or YARN
 ```sh
-yarn add @crossbind/plugin-react-native-ios-helper --dev
+yarn add @crossbind/plugin-react-native-ios-helper@beta --dev
 ```
 or PNPM
 ```sh
-pnpm add @crossbind/plugin-react-native-ios-helper --save-dev
+pnpm add @crossbind/plugin-react-native-ios-helper@beta --save-dev
 ```
 or BUN
 ```sh
