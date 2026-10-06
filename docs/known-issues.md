@@ -218,21 +218,6 @@ including those from the published `tiffcp` in `@crossbind/port-tiff-standalone-
   `wasmtime run --dir=.`: the file reads `BCCA` instead of `BAAACC`.
 - Remove when the same program writes `BAAACC`.
 
-## Listing every platform of a data-carrying port breaks the web build
-
-The README of each port tells apps to import its wasm, Android and iOS configs together. PROJ's
-`mergeConfig` declares `data: { 'share/proj': 'proj' }` in a target spec with no platform filter, and
-`getData` in `core/crossbind/src/actions/getData.js` applies it to every dependency without checking
-that the directory exists, so a web build of such an app preloads
-`port-proj-android/dist/prebuilt/wasm-wasm32-st-release/share/proj` and the file packager fails. The
-same holds for every port that carries or inherits data: PROJ, libgeotiff, SpatiaLite and GDAL. A
-config that lists only the wasm package builds.
-
-- Seen: 2026-09-24 (a `create-crossbind` React Vite app with PROJ, on beta.50 and beta.60)
-- Check: `grep -n -A3 'targetSpecs' ports/proj/base/mergeConfig.mjs` shows the data spec without a
-  `platform`, and a web build with `projWasm, projAndroid, projIos` fails in the file packager.
-- Remove when the data spec is filtered by platform or missing directories are skipped.
-
 ## GDAL's thread pools hang or fail in single-threaded wasm
 
 `GDALViewshedGenerate` hands its work to a fixed pool of four threads, which a single-threaded wasm
