@@ -36,10 +36,49 @@ export function guardBigIntArguments(glue) {
     return { text, missed: text.includes('_embind_register_bigint') && !text.includes('Number.isSafeInteger(value)') };
 }
 
+// The debug glue the dev servers load spells both registrations over lines, and its integer conversion already
+// throws for anything but a number or a boolean, so the member and character conversions go ahead of that check.
+// Each applies inside its own registration only: the debug float conversion reads the same as the integer one.
+const DEBUG_GUARDS = [
+    {
+        registration: '__embind_register_integer',
+        end: 'readValueFromPointer: integerReadValueFromPointer(',
+        from: /toWireType: \(destructors, value\) => \{(\s*)(?=if \(typeof value != "number")/,
+        to: 'toWireType: (destructors, value) => {$1'
+            + 'if (typeof value == "string" && size == 1 && value.length == 1) value = value.charCodeAt(0);$1'
+            + 'if (value !== null && typeof value == "object" && typeof value.value == "number") value = value.value;$1',
+        applied: 'value = value.charCodeAt(0);',
+    },
+    {
+        registration: '__embind_register_enum',
+        end: 'readValueFromPointer: enumReadValueFromPointer(',
+        from: /toWireType: \(destructors, c\) => c\.value,/,
+        to: 'toWireType: (destructors, c) => {'
+            + 'if (typeof c == "number") return c;'
+            + 'if (c !== null && typeof c == "object" && typeof c.value == "number") return c.value;'
+            + 'throw new TypeError(name + " takes a member of the enum or its number, got " + (typeof c == "string" ? JSON.stringify(c) : c === null ? "null" : typeof c))'
+            + '},',
+        applied: 'takes a member of the enum or its number',
+    },
+];
+
+function guardDebugRegistration(glue, { registration, end, from, to, applied }) {
+    const start = glue.indexOf(`var ${registration} = `);
+    const stop = start < 0 ? -1 : glue.indexOf(end, start);
+    if (stop < 0) return { text: glue, missed: false };
+    const code = glue.slice(start, stop);
+    if (code.includes(applied)) return { text: glue, missed: false };
+    const rewritten = code.replace(from, to);
+    return { text: glue.slice(0, start) + rewritten + glue.slice(stop), missed: rewritten === code };
+}
+
 // Returns the rewritten glue and the registrations whose code no longer looks the way these rewrites expect.
 export function guardEmbindArguments(glue) {
     const missed = GUARDS.filter(({ registration, from, to }) => glue.includes(`${registration}=`) && !glue.includes(from) && !glue.includes(to))
         .map(({ registration }) => registration);
-    const text = GUARDS.reduce((current, { from, to }) => current.split(from).join(to), glue);
-    return { text, missed };
+    const released = GUARDS.reduce((current, { from, to }) => current.split(from).join(to), glue);
+    return DEBUG_GUARDS.reduce(({ text, missed: names }, guard) => {
+        const result = guardDebugRegistration(text, guard);
+        return { text: result.text, missed: result.missed ? [...names, guard.registration] : names };
+    }, { text: released, missed });
 }
