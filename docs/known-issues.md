@@ -8,19 +8,6 @@ than no entry. Scope each check so it cannot match this file, which quotes what 
 
 Fixing something here is not a prerequisite for anything else; this is a list, not a queue.
 
-## The React Native Android release bundle keeps embind-jsi's old JavaScript
-
-Gradle decides `createBundleReleaseJsAndAssets` is up to date from the app's own files, so a change
-to `core/embind-jsi/js/embind.js` alone, reached through the workspace link, leaves the previous
-bundle in the APK while the native libraries are rebuilt. A conformance run then tests new C++
-against old glue and passes on what it did not load. iOS rebuilds its bundle on every build.
-
-- Seen: 2026-09-25
-- Check: after changing only `core/embind-jsi/js/embind.js`, `pnpm run run:android` in
-  `e2e/mobile-reactnative-cli` prints `Task :app:createBundleReleaseJsAndAssets UP-TO-DATE`.
-- Workaround: move `android/app/build/generated/assets/react/release` aside before building.
-- Remove when a JavaScript-only change to a workspace package rebuilds the bundle.
-
 ## Most e2e fixtures never run in CI
 
 The CI e2e legs run the `@crossbind/example-*` apps, the `port-zlib-wasi` and `port-zlib-linux`
