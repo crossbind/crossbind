@@ -66,7 +66,8 @@ async function exec(call, body) {
     };
 }
 
-describe('runner server', () => {
+// The runner serves only inside the Linux toolchain image.
+describe.skipIf(process.platform === 'win32')('runner server', () => {
     test('refuses to start without a token, or with one too short to resist guessing', () => {
         const blobDir = fs.mkdtempSync(path.join(os.tmpdir(), 'crossbind-runner-blobs-'));
 
