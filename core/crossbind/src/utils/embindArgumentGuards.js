@@ -43,7 +43,7 @@ const DEBUG_GUARDS = [
     {
         registration: '__embind_register_integer',
         end: 'readValueFromPointer: integerReadValueFromPointer(',
-        from: /toWireType: \(destructors, value\) => \{(\s*)(?=if \(typeof value != "number")/,
+        from: /toWireType: \(destructors, value\) => \{(\s*)(?=if \(typeof value != ["']number["'])/,
         to: 'toWireType: (destructors, value) => {$1'
             + 'if (typeof value == "string" && size == 1 && value.length == 1) value = value.charCodeAt(0);$1'
             + 'if (value !== null && typeof value == "object" && typeof value.value == "number") value = value.value;$1',

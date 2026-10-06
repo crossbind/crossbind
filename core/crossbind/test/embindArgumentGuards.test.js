@@ -53,35 +53,55 @@ describe('guardEmbindArguments', () => {
     });
 });
 
-// The same two registrations in the debug glue the dev servers load, whose integer conversion throws for any object.
+// The integer and float registrations as emscripten 6.0.9 writes them into the debug glue the dev servers load, with
+// single quotes; the integer conversion throws for any object.
 const DEBUG_INTEGER = [
-    'var __embind_register_integer = (primitiveType, name, size, minRange, maxRange) => {',
-    '  name = AsciiToString(name);',
-    '  registerType(primitiveType, {',
-    '    name,',
-    '    fromWireType: value => value,',
-    '    toWireType: (destructors, value) => {',
-    '      if (typeof value != "number" && typeof value != "boolean") {',
-    '        throw new TypeError(`Cannot convert "${embindRepr(value)}" to ${name}`);',
+    '  var __embind_register_integer = (primitiveType, name, size, minRange, maxRange) => {',
+    '      name = AsciiToString(name);',
+    '  ',
+    '      const isUnsignedType = minRange === 0;',
+    '  ',
+    '      let fromWireType = (value) => value;',
+    '      if (isUnsignedType) {',
+    '        var bitshift = 32 - 8*size;',
+    '        fromWireType = (value) => (value << bitshift) >>> bitshift;',
+    '        maxRange = fromWireType(maxRange);',
     '      }',
-    '      assertIntegerRange(name, value, minRange, maxRange);',
-    '      return value;',
-    '    },',
-    '    readValueFromPointer: integerReadValueFromPointer(name, size, minRange !== 0),',
-    '    destructorFunction: null',
-    '  });',
-    '};',
+    '  ',
+    '      registerType(primitiveType, {',
+    '        name,',
+    '        fromWireType: fromWireType,',
+    '        toWireType: (destructors, value) => {',
+    "          if (typeof value != 'number' && typeof value != 'boolean') {",
+    '            throw new TypeError(`Cannot convert "${embindRepr(value)}" to ${name}`);',
+    '          }',
+    '          assertIntegerRange(name, value, minRange, maxRange);',
+    '          // The VM will perform JS to Wasm value conversion, according to the spec:',
+    '          // https://www.w3.org/TR/wasm-js-api-1/#towebassemblyvalue',
+    '          return value;',
+    '        },',
+    '        readValueFromPointer: integerReadValueFromPointer(name, size, minRange !== 0),',
+    '        destructorFunction: null, // This type does not need a destructor',
+    '      });',
+    '    };',
     // The float conversion reads the same, and an enum member means nothing to a float.
-    'var __embind_register_float = (rawType, name, size) => {',
-    '  registerType(rawType, {',
-    '    toWireType: (destructors, value) => {',
-    '      if (typeof value != "number" && typeof value != "boolean") {',
-    '        throw new TypeError(`Cannot convert ${embindRepr(value)} to ${this.name}`);',
-    '      }',
-    '      return value;',
-    '    },',
-    '  });',
-    '};',
+    '  var __embind_register_float = (rawType, name, size) => {',
+    '      name = AsciiToString(name);',
+    '      registerType(rawType, {',
+    '        name,',
+    '        fromWireType: (value) => value,',
+    '        toWireType: (destructors, value) => {',
+    "          if (typeof value != 'number' && typeof value != 'boolean') {",
+    '            throw new TypeError(`Cannot convert ${embindRepr(value)} to ${name}`);',
+    '          }',
+    '          // The VM will perform JS to Wasm value conversion, according to the spec:',
+    '          // https://www.w3.org/TR/wasm-js-api-1/#towebassemblyvalue',
+    '          return value;',
+    '        },',
+    '        readValueFromPointer: floatReadValueFromPointer(name, size),',
+    '        destructorFunction: null, // This type does not need a destructor',
+    '      });',
+    '    };',
 ].join('\n');
 const DEBUG_ENUM = [
     'var __embind_register_enum = (rawType, name, size, isSigned, rawValueType) => {',
@@ -124,6 +144,7 @@ describe('guardEmbindArguments on a debug glue', () => {
     test('reports a debug registration whose code no longer matches', () => {
         const changed = DEBUG_INTEGER.replace('toWireType: (destructors, value) => {', 'toWireType: (d, v) => {');
 
+        expect(guardEmbindArguments(`${DEBUG_INTEGER}\n${DEBUG_ENUM}`).missed).toEqual([]);
         expect(guardEmbindArguments(changed).missed).toEqual(['__embind_register_integer']);
     });
 });
