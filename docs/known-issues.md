@@ -85,19 +85,6 @@ rate-limits and reports most packages as `unknown`, which fails `--check`.
   returns nothing.
 - Remove when each gate either runs in CI or leaves `pnpm run check`.
 
-## `check:deps` answers "is any usage current" rather than "is every usage current"
-
-The status of a dependency comes from the highest version in use anywhere in the tree, so one
-manifest on the current release marks the whole dependency up to date while another still resolves
-an older copy. Observed on 2026-09-23 with `prettier`, which read up to date while the lockfile
-carried both 3.9.6 and 3.9.8; that pair has since been collapsed, so reproducing it needs a tree
-where two manifests disagree.
-
-- Seen: 2026-09-23
-- Check: `grep -n 'highestInUse' scripts/check-external-dependencies.js` — the status line compares
-  one aggregated version against npm, not each usage.
-- Remove when the gate reports per-usage.
-
 ## The release verifier gives up before npm finishes indexing
 
 The publish step waits 44 attempts over 1200 seconds for each package to appear with provenance. On
