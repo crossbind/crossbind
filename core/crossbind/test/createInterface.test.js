@@ -422,3 +422,38 @@ describe('a dependency header under a path with regex characters', () => {
     });
 });
 
+// libpng installs its headers in include/ and again in include/libpng16/.
+describe('a dependency header installed twice under one include root', () => {
+    const target = { platform: 'wasm', path: 'wasm-wasm32-st-release' };
+    let include;
+
+    beforeEach(() => {
+        const base = upath.normalize(work);
+        include = upath.join(base, 'deps', 'libpng', 'prebuilt', 'include');
+        fs.mkdirSync(upath.join(include, 'libpng16'), { recursive: true });
+        for (const dir of [include, upath.join(include, 'libpng16')]) {
+            fs.writeFileSync(upath.join(dir, 'png.h'), 'typedef struct png_color_struct {\n  int red;\n} png_color;\nint png_count(png_color *color);\n');
+        }
+        fs.writeFileSync(upath.join(include, 'pngextra.h'), '#include "png.h"\nint png_extra(png_color *color);\n');
+        holder.config.paths.base = base;
+        holder.config.dependencyParameters.getCmakeDependsPathAndName = () => ({ pathsOfCmakeDepends: [upath.join(base, 'deps', 'libpng')] });
+    });
+
+    test.each(['png.h', 'libpng16/png.h'])('binds %s without its copy', async (headerPath) => {
+        const { createBridgeFile } = await importFresh();
+
+        const bridge = createBridgeFile(upath.join(include, headerPath), target);
+
+        expect(fs.readFileSync(`${bridge}.deps`, 'utf8')).toBe('');
+    });
+
+    test('gives a header using its types one dependency bridge', async () => {
+        const { createBridgeFile } = await importFresh();
+
+        const bridge = createBridgeFile(upath.join(include, 'pngextra.h'), target);
+
+        const dependencies = fs.readFileSync(`${bridge}.deps`, 'utf8').split('\n').filter(Boolean);
+        expect(dependencies.map((file) => fs.readFileSync(`${file}.source`, 'utf8'))).toEqual([`${upath.join(include, 'png.h')}\n`]);
+    });
+});
+

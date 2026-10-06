@@ -185,7 +185,8 @@ function includeLocation(headerFile, target) {
     return match ? { includeRoot: match[1], headerPath: match[2] } : { includeRoot: null, headerPath: headerFile.split('/').at(-1) };
 }
 
-// The headers under an include root are indexed once per build.
+// The headers under an include root are indexed once per build. A copy of a header is that header, and the copy nearest
+// the root stands for it (libpng installs its headers in include/ and include/libpng16/).
 function definitionsUnder(includeRoot) {
     if (!typeDefinitions.has(includeRoot)) {
         const extensions = new RegExp(`\\.(${state.config.ext.header.join('|')})$`, 'i');
@@ -194,22 +195,35 @@ function definitionsUnder(includeRoot) {
             .map((entry) => upath.relative(includeRoot, upath.join(entry.parentPath, entry.name)))
             .sort()
             .map((path) => ({ path, text: fs.readFileSync(upath.join(includeRoot, path), 'utf8') }));
-        typeDefinitions.set(includeRoot, indexTypeDefinitions(files));
+        const depth = (path) => path.split('/').length;
+        const nearest = new Map();
+        files.forEach(({ path, text }) => {
+            if (!nearest.has(text) || depth(path) < depth(nearest.get(text))) nearest.set(text, path);
+        });
+        typeDefinitions.set(includeRoot, {
+            definitions: indexTypeDefinitions(files.filter(({ path, text }) => nearest.get(text) === path)),
+            copyOf: new Map(files.map(({ path, text }) => [path, nearest.get(text)])),
+        });
     }
     return typeDefinitions.get(includeRoot);
+}
+
+function lookupContext(includeRoot, headerPath, headerText) {
+    const { definitions, copyOf } = definitionsUnder(includeRoot);
+    return { headerText, headerPath: copyOf.get(headerPath) ?? headerPath, definitions };
 }
 
 function findCompletingIncludes(headerFile, includeRoot, headerPath) {
     const headerText = fs.readFileSync(headerFile, 'utf8');
     if (!headerText.includes('unique_ptr')) return [];
-    return completingIncludes({ headerText, headerPath, definitions: definitionsUnder(includeRoot) });
+    return completingIncludes(lookupContext(includeRoot, headerPath, headerText));
 }
 
 function dependencyHeadersOf(headerFile, target) {
     const { includeRoot, headerPath } = includeLocation(headerFile, target);
     if (!includeRoot) return [];
     const headerText = fs.readFileSync(headerFile, 'utf8');
-    return referencedTypeHeaders({ headerText, headerPath, definitions: definitionsUnder(includeRoot) })
+    return referencedTypeHeaders(lookupContext(includeRoot, headerPath, headerText))
         .map((header) => upath.join(includeRoot, header));
 }
 

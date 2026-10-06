@@ -292,19 +292,6 @@ be given a URL. Only a C++ wrapper reaches them.
   `landing/demos/lib-curl/direct/src/headers.js`; `npx vite build` fails with `MISSING_EXPORT`.
 - Remove when variadic functions get typed entry points.
 
-## A package that installs a header twice binds it twice
-
-libpng installs its headers both in `include/` and in `include/libpng16/`. A header's dependency
-bridges come from the headers under its include root that define the types it uses, and the copy
-defines the same types, so binding `png.h` also binds `libpng16/png.h`: a second bridge with the same
-292 names is compiled into the module. The registration guards keep the second set from clashing, so
-it costs build time and module size, not behaviour.
-
-- Seen: 2026-10-03
-- Check: in `e2e/web-vite-conan`, after `pnpm run build`, `ls .crossbind/build/bridge/ | grep -c '^png.*\.i\.cpp$'`
-  prints 2.
-- Remove when a header's copy elsewhere under the same include root is not bound a second time.
-
 ## A worker handle breaks `JSON.stringify` and `String()`
 
 On worker-backed runtimes, `JSON.stringify(handle)` returns `{}` and `String(handle)` throws "Cannot
