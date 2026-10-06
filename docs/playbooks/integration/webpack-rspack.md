@@ -68,6 +68,7 @@ What the plugin gives you:
 
 - `getRule()` — webpack module rule for `.h` files (delegates to `@crossbind/plugin-webpack-loader`).
 - `getDevServerConfig()` — devServer config with `headers` (COOP/COEP) and middleware that serves `/crossbind.js`, `/crossbind.wasm`, `/crossbind.data.txt` from the build output.
+- The runtime loads from `output.publicPath` as webpack resolves it, `auto` included, so an app served from `/app/` finds it there.
 - `getLoaderOptions()` — escape hatch when you need crossbind state inside the config (target filtering, etc.).
 
 For Webpack (CommonJS-style):

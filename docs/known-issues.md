@@ -144,19 +144,6 @@ but `*` lets Dependabot propose any Hermes release.
 - Check: `pnpm --filter @crossbind/example-mobile-reactnative-cli exec node -p "require('react-native/package.json').dependencies['hermes-compiler'] + ' vs ' + require('hermes-compiler/package.json').version"` prints two different versions.
 - Remove when the samples pin the version react-native depends on.
 
-## Apps served from a subpath cannot find their loader
-
-The boot code every bundler plugin injects (`getCrossbindScript`) imports a root-absolute
-`/crossbind.js`, and the worker runtime's `resolveScriptUrl` turns a relative `path` into a root
-one. An app served from `/app/` therefore asks the site root for its loader and wasm. The site's
-live demos work only because `scripts/site/build-example-demos.mjs` rewrites both after the build.
-
-- Seen: 2026-09-11
-- Check: `grep -n "'/crossbind.js'" core/crossbind/src/integration/getCrossbindScript.js` finds the
-  absolute import.
-- Remove when the plugins honour the bundler's base (`base` in Vite, `output.publicPath` in Rspack)
-  and the demo builder's rewrites can go.
-
 ## No CI job scaffolds the create-crossbind templates
 
 `scripts/e2e-templates.js` (`pnpm run e2e:templates`) scaffolds every template from the published or
@@ -266,6 +253,19 @@ be given a URL. Only a C++ wrapper reaches them.
 - Check: add `curl_easy_setopt` to the `curl/easy.h` export list in a copy of
   `landing/demos/lib-curl/direct/src/headers.js`; `npx vite build` fails with `MISSING_EXPORT`.
 - Remove when variadic functions get typed entry points.
+
+## The site's demo builder rewrites a loader the next release no longer emits
+
+`scripts/site/build-example-demos.mjs` builds the live demos from the published packages, whose boot code
+imports a root-absolute `/crossbind.js`, so `patchBundles` rewrites that import and the runtime `path` to
+each demo's subpath. The plugins in this tree load the runtime from Vite's `base` and webpack's public
+path instead, and a relative `path` resolves against the page. Once a release carries them, the Vite and
+Rspack demos have nothing to rewrite and `patchBundles` throws "no bundle needed the subpath patch".
+
+- Seen: 2026-10-06
+- Check: `grep -n "patchBundles(out, id)" scripts/site/build-example-demos.mjs` finds the rewrites.
+- Remove when the demos build against a release with the base-aware plugins and the rewrites are gone,
+  `verifyDemo` still loading each demo from its subpath.
 
 ## The JavaScript-only demos work around fixes that are not released yet
 

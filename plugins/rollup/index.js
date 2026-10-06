@@ -23,9 +23,14 @@ if (!buildTargetRelease) {
 const rollupCrossbindPlugin = (options, bridges = []) => {
     const headerRegex = new RegExp(`\\.(${state.config.ext.header.join('|')})$`);
     const moduleRegex = new RegExp(`\\.(${state.config.ext.module.join('|')})$`);
+    // Vite gives the base it serves the app from; plain Rollup has none.
+    let base = '/';
 
     return {
         name: 'rollup-plugin-crossbind',
+        configResolved(config) {
+            base = config.base;
+        },
         resolveId(source) {
             if (source === '/crossbind.js') {
                 return { id: source, external: true };
@@ -42,7 +47,7 @@ const rollupCrossbindPlugin = (options, bridges = []) => {
             // generated companion crate (or the app-local synthesized crate); this only emits
             // the JS proxy module - the same shape as the .h flow.
             if (path.endsWith('.rs')) {
-                return getRustJsScript(buildTargetRelease, path);
+                return getRustJsScript(buildTargetRelease, path, { base });
             }
             if (!headerRegex.test(path) && !moduleRegex.test(path)) {
                 return null;
@@ -51,7 +56,7 @@ const rollupCrossbindPlugin = (options, bridges = []) => {
             const bridgeFile = createBridgeFile(path);
             bridges.push(bridgeFile);
 
-            return getCrossbindScript(buildTargetRelease, bridgeFile);
+            return getCrossbindScript(buildTargetRelease, bridgeFile, { base });
         },
         async buildStart() {
             // Before any transform: a header's bridge reads the include roots of every dependency, and a cargo

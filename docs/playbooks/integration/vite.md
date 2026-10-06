@@ -66,6 +66,7 @@ The plugin handles:
 - Setting `Cross-Origin-Opener-Policy` + `Cross-Origin-Embedder-Policy` in **dev** AND **preview** server (multithread WASM works without manual server config).
 - Watching native source files (`paths.native`, default `src/native/`) — saving a `.cpp`/`.h`/`.rs` triggers a rebuild + HMR.
 - Routing `/crossbind.js`, `/crossbind.wasm`, `/crossbind.data.txt` to the freshly built artifacts.
+- Loading the runtime from Vite's `base`, so an app built with `--base /app/` runs from `/app/`.
 
 `crossbind.config.js` at project root (only needed if wrapping own C++):
 
