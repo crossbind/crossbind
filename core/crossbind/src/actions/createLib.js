@@ -187,7 +187,10 @@ export default function createLib(target, fileType, options = {}) {
 
     if (!options.bypassCmake) {
         if (state.config.build?.buildType === 'configure') {
-            fs.cpSync(cmakeDir, buildPath, { recursive: true });
+            // make compares times, so the tree starts afresh with the extracted times: no source then looks newer
+            // than what it generates, and no object of an earlier build looks newer than its source.
+            fs.rmSync(buildPath, { recursive: true, force: true });
+            fs.cpSync(cmakeDir, buildPath, { recursive: true, preserveTimestamps: true });
             if (state.config.build?.sourceReplaceList) {
                 state.config.build.sourceReplaceList(target, depPaths)?.forEach(({ regex, replacement, paths }) => {
                     replace({

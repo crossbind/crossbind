@@ -47,8 +47,7 @@ export default {
     buildType: 'configure',
     getBuildParams: (target) => [
         ...(platformBuild[target.platform] || platformBuild[`${target.platform}-${target.arch}`] || []),
-        // The translations are the dropped CLI's. With NLS on, `make install` rebuilds them whenever the copied tree's
-        // timestamps make po/ look stale, and the toolchain images have no msgfmt.
+        // The translations are the dropped CLI's, and the toolchain images have no msgfmt.
         '--disable-nls',
     ],
 };
