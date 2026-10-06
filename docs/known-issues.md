@@ -140,3 +140,20 @@ When it started is not known: the check arrived on 28 Sep, and no later iOS run 
 - Check: in `e2e/mobile-reactnative-cli`, run `pod install` in `ios/`, `pnpm run run:ios`, then
   `maestro --device <udid> hierarchy`; the report holds `NO rs:napi:bytesRejectString`.
 - Remove when the iOS leg's report has no `NO` line.
+
+## Deleting a native source does not rebuild
+
+Whether a build reuses its archives is decided by modification times: the bundler plugins rebuild
+when a file under `paths.native` is newer than the built loader (`isSourceNewer.js`), and the
+library cache of `crossbind build` likewise reacts only to a newer source. Deleting a file makes
+nothing newer, so the archive keeps the deleted file's object, and a call that should now fail to
+link still resolves to the old code.
+
+- Seen: 2026-10-06 (with the local Docker and with a remote runner alike)
+- Check: in `examples/web-react-vite`, add `src/native/known-issue-probe.cpp` holding
+  `int knownIssueProbe() { return 7; }`, run `pnpm exec vite build`, delete the file and run
+  `pnpm exec vite build` again: the second build compiles nothing, and
+  `grep -c known-issue-probe .crossbind/build/Source-Release/wasm-wasm32-st-release/*.a` still
+  prints 1.
+- Workaround: move `.crossbind` (and a library's `dist/prebuilt`) aside after deleting a source.
+- Remove when deleting a native source triggers a rebuild.
