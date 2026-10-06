@@ -2,7 +2,7 @@
 
 # Override mechanisms catalog
 
-> crossbind picks sane defaults for every build flag, env var, path, and toolchain. When a default doesn't fit your case, there are **20 documented override points**. This doc lists them in order of preference: **start with the least invasive that solves your problem**.
+> crossbind picks sane defaults for every build flag, env var, path, and toolchain. When a default doesn't fit your case, there are **18 documented override points**. This doc lists them in order of preference: **start with the least invasive that solves your problem**.
 
 ## Why "least invasive first"
 
@@ -17,7 +17,7 @@ Order of preference, from least to most invasive:
 5. `extensions[]` for cross-cutting plugin behavior.
 6. `~/.crossbind.json` for system-wide environment defaults.
 
-## The 20 override points
+## The 18 override points
 
 ### Layer 1 — Target filter (narrow the build matrix)
 
@@ -161,19 +161,13 @@ replaceList: [{
 
 Real example: gdal-wasm uses this to gate CPU intrinsics; curl-wasm uses it to swap socket calls for `emscripten_fetch`.
 
-#### 16. `prepare: async (state) => void`
+`replaceList` patches the extracted source once, for every target. `sourceReplaceList` runs per target in a `configure` build, on the target's copy of the source.
 
-Pre-configure step. Generate headers, write extra source files, fetch sub-deps.
-
-#### 17. `build: async (state) => void`
-
-Replace the entire build step. Use only when neither cmake nor configure can run the upstream's build system.
-
-#### 18. `beforeRun: (cmakeDir) => Array<{program, parameters}>`
+#### 16. `beforeRun: (cmakeDir) => Array<{program, parameters}>`
 
 Run shell commands before cmake configure (e.g. `autoreconf -fi` for autotools projects).
 
-#### 19. `copyToSource` / `copyToDist: { 'src': ['dest', ...] }`
+#### 17. `copyToSource` / `copyToDist: { 'src': ['dest', ...] }`
 
 `copyToSource` injects files into the build dir before configure (gdal's empty.cpp linker hint). `copyToDist` ships extra files alongside artifacts (openssl's cacert.pem).
 
@@ -183,7 +177,7 @@ copyToDist: { 'assets/cacert.pem': ['ssl/certs/cacert.pem'] }
 
 ### Layer 5 — Cross-cutting plugin
 
-#### 20. `extensions: [Extension]`
+#### 18. `extensions: [Extension]`
 
 Plugin objects with hooks at config-load and build-step boundaries:
 
@@ -224,10 +218,10 @@ Need an env var passed to the running Wasm?
 └── env: {} in crossbind.config.js. Use function form if it depends on state. (Layer 3)
 
 Are you wrapping an upstream library that needs source patching?
-└── crossbind.build.js replaceList (Layer 4 #15) or prepare hook (#16).
+└── crossbind.build.js replaceList or sourceReplaceList (Layer 4 #15).
 
 Need to share an override across packages?
-└── extensions[] (Layer 5 #20).
+└── extensions[] (Layer 5 #18).
 
 Need to set XCODE team or pick a non-Docker runner?
 └── ~/.crossbind.json (Layer 6).

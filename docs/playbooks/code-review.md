@@ -33,7 +33,6 @@ For PRs touching `ports/`:
 - [ ] `getBuildParams` disables tests, examples, docs (`-DBUILD_TESTING=OFF`, `-DBUILD_EXAMPLES=OFF`, etc.).
 - [ ] Per-platform branches (wasm/android/ios/darwin/linux/linuxmusl/win32) are minimal — only the actual differences.
 - [ ] If `replaceList` patches upstream source: each entry has a comment explaining **why** the patch is needed (often: CPU intrinsics, raw pointers, platform-specific assembly).
-- [ ] If `prepare` or `build` hook is used: justified by the upstream's specific build system. Not used as a "I want more control" shortcut.
 
 ### `crossbind.config.js`
 

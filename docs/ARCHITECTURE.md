@@ -136,7 +136,7 @@ flowchart TD
     Filter -->|"Change defaults too"| Spec{"Per-target tweak?"}
     Spec -->|"Yes, declarative"| L2["Layer 2: targetSpecs[].specs.{cmake,binary.emccFlags,env,data,ignoreLibName}"]
     Spec -->|"Project-wide"| L3a["Layer 3: crossbind.config.js env / functions.isEnabled / dependencies"]
-    Spec -->|"Authoring a package?"| L4["Layer 4: crossbind.build.js hooks (getURL, getBuildParams, replaceList, prepare, build, env, copyToSource, copyToDist, beforeRun, getExtraLibs, setState)"]
+    Spec -->|"Authoring a package?"| L4["Layer 4: crossbind.build.js hooks (getURL, getBuildParams, replaceList, env, copyToSource, copyToDist, beforeRun, getExtraLibs, setState)"]
     Spec -->|"Cross-package plugin"| L5["Layer 5: extensions[] (loadConfig.after, buildWasm.beforeBuild*, createLib.setFlag*)"]
     Spec -->|"Machine-wide"| L6["Layer 6: ~/.crossbind.json (RUNNER, XCODE_DEVELOPMENT_TEAM)"]
     L1 --> Done[Use this]
@@ -168,7 +168,6 @@ sequenceDiagram
         Hook-->>Build: regex-patch upstream sources
         CLI->>Hook: copyToSource?
         Hook-->>Build: inject extra files into source dir
-        CLI->>Hook: prepare(state)?
         CLI->>Hook: beforeRun(cmakeDir)?
         Hook-->>Build: run pre-cmake commands (autoreconf, etc.)
         CLI->>Hook: getBuildParams(target, depPaths, ext, buildPath)

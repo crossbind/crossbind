@@ -157,18 +157,6 @@ live demos work only because `scripts/site/build-example-demos.mjs` rewrites bot
 - Remove when the plugins honour the bundler's base (`base` in Vite, `output.publicPath` in Rspack)
   and the demo builder's rewrites can go.
 
-## The docs describe two recipe hooks that nothing reads
-
-`prepare(state)` and `build(state)` appear in the recipe shape, pipeline, hook table and a
-`prepare` example of `docs/api/crossbind-build.md`, and in `docs/api/overrides.md`,
-`docs/api/build-state.md`, `docs/playbooks/code-review.md` and `docs/ARCHITECTURE.md`. No code calls
-either: a recipe that patches its source in `prepare` builds the unpatched source, and one that
-replaces the build in `build` gets the default build. No port defines them.
-
-- Seen: 2026-09-13
-- Check: `grep -rnwE '(prepare|build)\(state\)' core/crossbind/src` returns nothing.
-- Remove when both work or the docs stop describing them.
-
 ## No CI job scaffolds the create-crossbind templates
 
 `scripts/e2e-templates.js` (`pnpm run e2e:templates`) scaffolds every template from the published or
