@@ -94,7 +94,7 @@
     {
       "source": "docs/api/wasi.md",
       "output": "api/wasi.md",
-      "sha256": "d408bc9d653573a1cf89fc9b6715a69361759c476d341d6c59731ee4ffae330d"
+      "sha256": "40b322f429302b5cd5bde057346a2644e25ac9adeaeee0275c1deb752995f946"
     },
     {
       "source": "docs/playbooks/integration/README.md",

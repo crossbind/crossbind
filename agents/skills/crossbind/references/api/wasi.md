@@ -14,8 +14,12 @@
 # crossbind docker image (>= 0.3.4), which ships the sdk at /opt/wasi-sdk
 
 crossbind build -p wasi -e wasi -b release
-wasmtime run --dir=. dist/<name>-wasi-wasm32-st-release.wasm arg1
+wasmtime run --dir=. .crossbind/build/<name>-wasi-wasm32-st-release.wasm arg1
 ```
+
+The command and the `data/` folder of its dependencies land in `paths.output`, which is
+`.crossbind/build` unless the config sets it; with `paths: { output: 'dist' }` they are copied to
+`dist/`.
 
 Your `src/native` must provide `main(int, char**)` — it is the entry point.
 The source archive is linked whole (its code is the root set); dependency
@@ -29,7 +33,7 @@ archives are dead-code-eliminated down to what `main` reaches, and the
 | Output | wasm + JS glue + runtime | single `.wasm` |
 | Bindings | embind bridge (swig) | none — `main()` only |
 | Filesystem | WASMFS / OPFS / preload | host dirs via `--dir` preopens |
-| Data files | `.data.txt` preload | real `dist/data/` folder to preopen |
+| Data files | `.data.txt` preload | real `data/` folder beside the command, to preopen |
 | Threads | `runtime: 'mt'` (workers) | not yet (the wasi threads ABI is still in flux) |
 | Network | FETCH / websocket bridges | `wasi:sockets` — grant with `-S inherit-network=y -S allow-ip-name-lookup=y -S tcp=y` |
 | Prebuilt ABI | emscripten sysroot | **incompatible** — packages need `wasi-wasm32-*` prebuilt variants |

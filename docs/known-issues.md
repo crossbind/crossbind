@@ -194,18 +194,6 @@ builds each demo in a fresh temporary copy.
   warning in the branch that skips the rebuild.
 - Remove when a newer native source rebuilds the library.
 
-## `docs/api/wasi.md` runs the program from `dist/`
-
-`crossbind build -p wasi` writes the command to
-`.crossbind/build/<name>-wasi-wasm32-st-release.wasm` and its data to `.crossbind/build/data/`
-(`buildWasiCommand.js`, `paths.build`), and copies them to `dist/` only when the app sets
-`paths.output: 'dist'`. The quick start runs `dist/<name>-wasi-…wasm` and the table preopens
-`dist/data/` without saying so, so both fail for an app with the default paths.
-
-- Seen: 2026-09-23
-- Check: `grep -n 'dist/<name>-wasi\|dist/data/' docs/api/wasi.md` matches.
-- Remove when the doc names the real paths or the build copies to `dist/`.
-
 ## GEOS's npm licence says "or later"; its recipe says "only"
 
 The `license` field of `@crossbind/port-geos` and its wasm, android, ios and wasi packages is
