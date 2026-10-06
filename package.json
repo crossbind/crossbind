@@ -93,7 +93,7 @@
         "check:publish": "node scripts/check-publish-hygiene.js",
         "test:agents": "node --test agents/test/*.test.mjs",
         "check:agents": "node scripts/build-agent-context.mjs --check && node scripts/build-agent-skill.mjs --check && node scripts/check-agent-surface.mjs && pnpm run test:agents",
-        "check": "pnpm run lint && pnpm run check:agents && pnpm run check:dependency-automation && pnpm run check:dist && pnpm run check:deps:strict && pnpm run check:native:strict && pnpm run check:wiring:strict && pnpm run check:sources:strict && pnpm run check:publish",
+        "check": "pnpm run lint && pnpm run check:agents && pnpm run check:dependency-automation && pnpm run check:wiring:strict && pnpm run check:sources:strict && pnpm run check:publish",
         "help": "node scripts/help.js",
         "doctor": "bash scripts/doctor.sh",
         "scaffold:port": "node scripts/scaffold-port.mjs",

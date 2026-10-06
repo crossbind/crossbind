@@ -109,7 +109,7 @@ pnpm run ci:linux:build && pnpm run e2e:dev && pnpm run e2e:prod
 - [ ] Bug reproduces deterministically before the fix.
 - [ ] Fix is minimal (no opportunistic refactors). If you found other issues, file separate issues / PRs.
 - [ ] The matching validation gate from the matrix above passes.
-- [ ] `pnpm run check` shows no new outdated entries you didn't intend.
+- [ ] `pnpm run check` passes, and `pnpm run check:deps` and `pnpm run check:native` show no new outdated entries you didn't intend.
 - [ ] If you touched a public API in `crossbind` exports, search consumers (`rg "from ['\"]crossbind['\"]" plugins examples e2e scripts`) and confirm none break.
 - [ ] If the bug had a CI signal (workflow failure), the same workflow now passes locally via the same command sequence.
 

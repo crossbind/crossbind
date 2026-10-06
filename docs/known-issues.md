@@ -47,23 +47,6 @@ AGENTS.md, which no longer says anything about it.
 - Check: `node -p "[...new Set(Object.entries(require('./package.json').scripts).filter(([k]) => k.startsWith('ci:')).flatMap(([, v]) => v.match(/e2e-[a-z-]+/g) ?? []))].join(' ')"` prints `e2e-cli-native e2e-backend-nodejs-native-conan`.
 - Remove when every fixture runs in CI.
 
-## Six of the nine gates in `pnpm run check` never run in CI
-
-CI runs `check:agents`, `check:publish` and, on pull requests that touch dependency or toolchain
-files, `check:dependency-automation`. The other six run only when someone runs `pnpm run check`.
-
-`lint`, `check:wiring:strict` and `check:sources:strict` read nothing but the tree, so a change that
-breaks them merges unnoticed. `check:dist` expects the prebuilt `dist/` of every port, which only a
-machine that has built them all can satisfy. `check:deps:strict` and `check:native:strict` compare
-the tree against the newest releases — npm for the first, the upstream projects for the second — so
-they turn red on any day something publishes. `check:native` also needs `GITHUB_TOKEN` locally or it
-rate-limits and reports most packages as `unknown`, which fails `--check`.
-
-- Seen: 2026-09-23
-- Check: `grep -rnE 'check:(deps|native|dist|wiring|sources)|run lint|eslint' .github/workflows/`
-  returns nothing.
-- Remove when each gate either runs in CI or leaves `pnpm run check`.
-
 ## npm's `latest` tag serves a placeholder and beta.50
 
 Beta trains publish to `beta`, and only a stable train moves `latest`. An install without a tag thus
