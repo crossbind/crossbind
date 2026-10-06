@@ -63,6 +63,22 @@ describe('createLib make phases', () => {
         expect(makeOptions).toEqual([{ console: true, exclusive: true }, { console: true, exclusive: true }]);
     });
 
+    // make compares times: a source copied at the time of the copy can look newer than what it generates, and an
+    // object left by an earlier build newer than the source it came from.
+    test('configure builds start from the extracted tree, its times kept', () => {
+        const buildPath = `${work}/build/Source-Release/${target.path}`;
+        fs.mkdirSync(buildPath, { recursive: true });
+        fs.writeFileSync(`${buildPath}/stale.o`, '');
+        fs.writeFileSync(`${work}/build/source/configure.ac`, '');
+        const extracted = new Date('2020-01-02T03:04:05Z');
+        fs.utimesSync(`${work}/build/source/configure.ac`, extracted, extracted);
+
+        createLib(target, 'Source', { buildSource: true });
+
+        expect(fs.existsSync(`${buildPath}/stale.o`)).toBe(false);
+        expect(fs.statSync(`${buildPath}/configure.ac`).mtime).toEqual(extracted);
+    });
+
     test('cmake builds keep the install rules cmake generated', () => {
         state.config.build = {};
 
