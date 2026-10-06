@@ -233,18 +233,6 @@ config that lists only the wasm package builds.
   `platform`, and a web build with `projWasm, projAndroid, projIos` fails in the file packager.
 - Remove when the data spec is filtered by platform or missing directories are skipped.
 
-## SpatiaLite programs for WASI do not link
-
-The WASI build of SQLite leaves extension loading out, but `libspatialite.a` (`stored_procedures.o`)
-calls `sqlite3_enable_load_extension`, and `core/crossbind/src/assets/wasi-runtime/stubs.c` does not
-provide it. Every WASI program that links `@crossbind/port-spatialite-wasi` fails in `wasm-ld` with
-`undefined symbol: sqlite3_enable_load_extension` until it defines the function itself.
-
-- Seen: 2026-09-25 (landing/demos/lib-spatialite/wasi, which defines it returning `SQLITE_ERROR`)
-- Check: `grep -c sqlite3_enable_load_extension core/crossbind/src/assets/wasi-runtime/stubs.c`
-  prints 0, and a `main` that calls `spatialite_init_ex` fails to link for `-p wasi`.
-- Remove when the WASI SQLite or the stubs provide the symbol.
-
 ## GDAL's thread pools hang or fail in single-threaded wasm
 
 `GDALViewshedGenerate` hands its work to a fixed pool of four threads, which a single-threaded wasm

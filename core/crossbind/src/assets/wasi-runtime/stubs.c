@@ -79,6 +79,15 @@ int getpeername(int fd, struct sockaddr *addr, socklen_t *len)
     return crossbind_zeroed_inet(addr, len);
 }
 
+/* The WASI SQLite leaves extension loading out, yet SpatiaLite's stored procedures switch it off; this answers
+   SQLITE_ERROR as such a build does. Weak, so a SQLite that has the function keeps its own. */
+__attribute__((weak)) int sqlite3_enable_load_extension(void *db, int onoff)
+{
+    (void)db;
+    (void)onoff;
+    return 1;
+}
+
 #ifdef __cplusplus
 }
 #endif
