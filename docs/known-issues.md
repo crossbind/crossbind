@@ -251,16 +251,6 @@ decoding is unaffected. A native build with `MallocScribble` shows the bytes as 
 - Check: encode the same float32 raster losslessly twice with `lerc_encode` and compare the blobs.
 - Remove when upstream initialises the word and the port picks the release up.
 
-## The libjpeg-turbo port ships neither TurboJPEG nor lossless transforms
-
-`ports/jpegturbo/base/build.mjs` configures every platform with `-DWITH_TURBOJPEG=OFF`, so there is
-no `turbojpeg.h` (`tj3*`), and `transupp` is not built, so lossless rotate, flip and crop exist only
-in the `jpegtran-wasi` command of the standalone-wasi package. Only the libjpeg API is available.
-
-- Seen: 2026-09-24
-- Check: `grep -c 'WITH_TURBOJPEG=OFF' ports/jpegturbo/base/build.mjs` prints 4.
-- Remove when the library packages ship TurboJPEG, or the port README says it is left out on purpose.
-
 ## The WebP port ships mux and demux but never links them
 
 `ports/webp/base/mergeConfig.mjs` sets `libName: ['webp', 'sharpyuv']`, so a consumer's link line

@@ -11,7 +11,7 @@ export default {
             return [
                 '-DENABLE_SHARED=ON',
                 '-DENABLE_STATIC=OFF',
-                '-DWITH_TURBOJPEG=OFF',
+                '-DWITH_TURBOJPEG=ON',
                 '-DWITH_TOOLS=OFF',
                 '-DWITH_TESTS=OFF',
             ];
@@ -20,7 +20,7 @@ export default {
             return [
                 '-DENABLE_SHARED=OFF',
                 '-DENABLE_STATIC=ON',
-                '-DWITH_TURBOJPEG=OFF',
+                '-DWITH_TURBOJPEG=ON',
                 '-DWITH_TOOLS=OFF',
                 '-DWITH_TESTS=OFF',
                 // simdcoverage executable is gated only by WITH_SIMD AND ENABLE_STATIC; disable signing so it builds without a development certificate.
@@ -34,7 +34,7 @@ export default {
             return [
                 '-DENABLE_SHARED=OFF',
                 '-DENABLE_STATIC=ON',
-                '-DWITH_TURBOJPEG=OFF',
+                '-DWITH_TURBOJPEG=ON',
                 '-DWITH_TOOLS=OFF',
                 '-DWITH_TESTS=OFF',
             ];
@@ -43,7 +43,7 @@ export default {
         return [
             '-DENABLE_SHARED=OFF',
             '-DENABLE_STATIC=ON',
-            '-DWITH_TURBOJPEG=OFF',
+            '-DWITH_TURBOJPEG=ON',
         ];
     },
 };

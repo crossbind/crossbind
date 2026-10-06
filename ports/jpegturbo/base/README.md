@@ -172,11 +172,10 @@ Each one runs in your browser on [crossbind.dev/ports/jpegturbo](https://crossbi
 Setup and differences per platform: [WebAssembly](https://crossbind.dev/ports/jpegturbo/wasm/) · [Android](https://crossbind.dev/ports/jpegturbo/android/) · [iOS](https://crossbind.dev/ports/jpegturbo/ios/) · [macOS](https://crossbind.dev/ports/jpegturbo/darwin/) · [Linux](https://crossbind.dev/ports/jpegturbo/linux/) · [Windows](https://crossbind.dev/ports/jpegturbo/win32/) · [WASI](https://crossbind.dev/ports/jpegturbo/wasi/), which also has a command-line program built with `crossbind build -p wasi`.
 
 ## What this build includes
-- libjpeg-turbo 3.2.0's libjpeg API (`jpeglib.h`): a static `libjpeg.a` for WebAssembly, WASI and iOS, and a shared `libjpeg.so` for Android.
+- libjpeg-turbo 3.2.0's libjpeg API (`jpeglib.h`) and TurboJPEG API (`turbojpeg.h`): static `libjpeg.a` and `libturbojpeg.a` for WebAssembly, WASI, iOS, macOS, Linux and Windows, and shared `libjpeg.so` and `libturbojpeg.so` for Android.
 - Baseline, progressive and arithmetic coding in both directions, in-memory I/O (`jpeg_mem_src`, `jpeg_mem_dest`), decoding straight to a reduced size (`scale_num`, `scale_denom`), the coefficient API for lossless transcoding and marker handling (`jpeg_save_markers`, `jpeg_write_marker`). The examples and apps above use each of these, and their output matches native libjpeg-turbo 3.2.0 byte for byte.
 - The 12-bit and lossless entry points (`jpeg12_*`, `jpeg16_*`, `jpeg_enable_lossless`) and the ICC profile helpers (`jpeg_read_icc_profile`, `jpeg_write_icc_profile`) are exported too; nothing here exercises them yet.
-- No TurboJPEG API: the recipe builds with `WITH_TURBOJPEG=OFF`, so there is no `turbojpeg.h` and no `tj3*` function.
-- No lossless transforms: `transupp` (`jtransform_*`: `jpegtran`'s rotate, flip and crop) is not part of `libjpeg.a`. For those, `@crossbind/port-jpegturbo-standalone-wasi` runs the upstream `jpegtran` as a WASI command.
+- The TurboJPEG API (`tj3*`): compression and decompression in one call, YUV planes, and `tj3Transform`'s lossless transforms (rotation, flipping, transposition, cropping and conversion to grayscale).
 - SIMD is compiled into the iOS, Android, Linux, Windows and Apple silicon macOS builds (`WITH_SIMD` in their `jconfig.h`) but not into the WebAssembly and WASI builds, which run libjpeg-turbo's portable C code, nor into the Intel macOS build: it is built with Apple's tools alone, which have no assembler for libjpeg-turbo's x86 SIMD code.
 
 ## Supported platforms
