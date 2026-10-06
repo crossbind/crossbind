@@ -147,6 +147,35 @@ describe('crossbind runner init fly', () => {
         expect(fs.readFileSync(path.join(dir, 'Dockerfile'), 'utf8')).toContain(`FROM ${getDockerImage('web')}`);
     });
 
+    test('sizes a cloudflare container by its vCPUs, with the least memory and the most disk Cloudflare allows them', () => {
+        initRunner({
+            platform: 'cloudflare', role: 'web', dir, vcpu: 1,
+        });
+
+        expect(fs.readFileSync(path.join(dir, 'wrangler.jsonc'), 'utf8')).toContain('"instance_type": { "vcpu": 1, "memory_mib": 3072, "disk_mb": 6000 },');
+    });
+
+    test('caps the disk of a 4-vCPU cloudflare container at the 20 GB Cloudflare allows', () => {
+        initRunner({
+            platform: 'cloudflare', role: 'web', dir, vcpu: 4,
+        });
+
+        expect(fs.readFileSync(path.join(dir, 'wrangler.jsonc'), 'utf8')).toContain('"instance_type": { "vcpu": 4, "memory_mib": 12288, "disk_mb": 20000 },');
+    });
+
+    test('refuses a vCPU count cloudflare does not offer, and a vCPU count for fly, before writing anything', () => {
+        expect(() => initRunner({
+            platform: 'cloudflare', role: 'web', dir, vcpu: 5,
+        })).toThrow(/1 to 4 vCPUs/);
+        expect(() => initRunner({
+            platform: 'cloudflare', role: 'web', dir, vcpu: 1.5,
+        })).toThrow(/1 to 4 vCPUs/);
+        expect(() => initRunner({
+            platform: 'fly', role: 'web', dir, vcpu: 2,
+        })).toThrow(/--vcpu sizes a cloudflare container/);
+        expect(fs.existsSync(dir)).toBe(false);
+    });
+
     test('refuses to write into a folder that already has files', () => {
         fs.mkdirSync(dir, { recursive: true });
         fs.writeFileSync(path.join(dir, 'keep.txt'), 'x');

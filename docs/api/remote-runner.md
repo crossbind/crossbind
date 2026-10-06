@@ -30,6 +30,8 @@ crossbind runner init fly             # or cloudflare; --role android|linux|wind
 
 Both keep one machine: a runner holds one build tree on its own disk. Then build with the pair of variables the steps end with.
 
+`runner init cloudflare --vcpu <1-4>` sizes the container by its vCPUs, with the least memory Cloudflare allows them (3 GiB each) and the most disk (2 GB per GiB, up to 20 GB); without it the container is a `standard-4`. Memory is most of the price while a container runs, and CPU is billed only while it is used. Measured on 6 October 2026, a 1-vCPU runner built zlib and SQLite as fast as a 4-vCPU one at a quarter of the memory price, peaking below 500 MB, while a parallel C++ build (LERC) took 1.8 times as long. A large port such as GDAL wants more cores and memory.
+
 Fly app names are global, so the generated name carries a random part, which also keeps the address hard to guess. That matters: Fly starts the machine for any request that reaches the app, one without the token too, and bills it until it stops when idle, so keep the address private. The Cloudflare Worker refuses such a request before the container starts.
 
 ## Addresses and tokens

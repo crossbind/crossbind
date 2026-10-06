@@ -287,8 +287,14 @@ commandRunner.command('init')
     .argument('<platform>', `hosting platform (${RUNNER_PLATFORMS.join(', ')})`)
     .addOption(roleOption())
     .option('--dir <dir>', 'folder to write (default: crossbind-runner-<platform>-<role>)')
+    .option('--vcpu <count>', 'cloudflare: vCPUs of the container (1-4), with the least memory Cloudflare allows them (default: standard-4)')
     .action(runnerAction((platform, options) => {
-        const { dir, url } = initRunner({ platform, role: options.role, dir: options.dir ?? `crossbind-runner-${platform}-${options.role}` });
+        const { dir, url } = initRunner({
+            platform,
+            role: options.role,
+            dir: options.dir ?? `crossbind-runner-${platform}-${options.role}`,
+            vcpu: options.vcpu === undefined ? undefined : Number(options.vcpu),
+        });
         console.log(`crossbind: wrote ${dir}. Deploy it:`);
         deploySteps(platform, dir, newRunnerToken(), options.role, url).forEach((step) => console.log(`  ${step}`));
     }));
