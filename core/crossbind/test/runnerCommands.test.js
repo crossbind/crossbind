@@ -131,6 +131,18 @@ describe('crossbind runner init fly', () => {
         expect(worker).toContain('enableInternet: true');
         expect(worker.indexOf('invalid token')).toBeLessThan(worker.indexOf("getByName('runner')"));
         expect(worker).toContain('crypto.subtle.timingSafeEqual');
+        // The container port takes plain http, while a deployed Worker receives its requests over https.
+        expect(worker).toContain("url.protocol = 'http:'");
+        expect(worker).not.toContain('getTcpPort(RUNNER_PORT).fetch(request)');
+        // Work inside a container is no activity for its Durable Object: an alarm keeps both up while a step streams.
+        expect(worker).toContain('async alarm()');
+        expect(worker).toContain('this.ctx.storage.setAlarm(');
+        const idleAfterMs = Number(worker.match(/IDLE_AFTER_MS = (\d+)/)[1]);
+        expect(idleAfterMs).toBeGreaterThanOrEqual(30_000);
+        expect(Number(worker.match(/KEEPALIVE_MS = (\d+)/)[1])).toBeLessThan(idleAfterMs);
+        const startWaitMs = Number(worker.match(/READY_ATTEMPTS = (\d+)/)[1]) * Number(worker.match(/READY_WAIT_MS = (\d+)/)[1]);
+        expect(startWaitMs).toBeGreaterThanOrEqual(120_000);
+        expect(startWaitMs).toBeLessThan(300_000);
         expect(worker).not.toMatch(/!==\s*'Bearer '/);
         expect(fs.readFileSync(path.join(dir, 'Dockerfile'), 'utf8')).toContain(`FROM ${getDockerImage('web')}`);
     });
