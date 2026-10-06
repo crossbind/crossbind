@@ -19,7 +19,7 @@ import writeRuntimeEntry from './actions/writeRuntimeEntry.js';
 import getDependFilePath from './integration/getDependFilePath.js';
 import { boundHeaderSpecifiers, bridgeTargets, nodeBridgeTarget, resolveBoundHeaders } from './utils/boundHeaders.js';
 import { ENTRY_RUNTIMES } from './utils/runtimeEntries.js';
-import replaceFile from './utils/replaceFile.js';
+import { publishNativeCommand, publishNodeAddon, publishWasiCommand } from './actions/publishBinary.js';
 import runCrossbindApp from './actions/run.js';
 import { getBuildTargets, getFilteredBuildTargets } from './actions/target.js';
 import { OPT_IN_PLATFORMS, selectRuntimeEnvs } from './utils/targets.js';
@@ -385,8 +385,7 @@ async function createNativeCommands(targetParams) {
         if (!built) {
             continue;
         }
-        fs.mkdirSync(state.config.paths.output, { recursive: true });
-        replaceFile(`${state.config.paths.build}/${target.commandName}`, distCommand);
+        publishNativeCommand(target);
     }
 }
 
@@ -401,13 +400,7 @@ async function createWasiCommands(targetParams) {
         if (!built) {
             continue;
         }
-        fs.copyFileSync(`${state.config.paths.build}/${target.wasmName}`, distWasm);
-        // Copied (not renamed) so a later fingerprint cache-hit still has the
-        // build-dir tree to serve from.
-        if (fs.existsSync(`${state.config.paths.build}/data`)) {
-            fs.rmSync(`${state.config.paths.output}/data`, { recursive: true, force: true });
-            fs.cpSync(`${state.config.paths.build}/data`, `${state.config.paths.output}/data`, { recursive: true });
-        }
+        publishWasiCommand(target);
     }
 }
 
@@ -473,9 +466,7 @@ async function createNodeAddons(targetParams) {
             if (!built) {
                 continue;
             }
-            fs.mkdirSync(state.config.paths.output, { recursive: true });
-            replaceFile(`${state.config.paths.build}/${target.addonName}`, `${state.config.paths.output}/${target.addonName}`);
-            fs.copyFileSync(`${state.config.paths.build}/${target.jsName}`, `${state.config.paths.output}/${target.jsName}`);
+            publishNodeAddon(target);
         }
     }
     const loaderTarget = targets.find((target) => target.buildType === 'release') ?? targets[0];
