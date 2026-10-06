@@ -175,6 +175,16 @@ export default function createLib(target, fileType, options = {}) {
         ], platformPrefix, target, { console: buildEnv.console });
     };
 
+    // A configure build's make install runs coreutils install, whose chmod on a file it has just written
+    // Docker Desktop's file sharing now and then refuses; the wrapper finishes it by path. Staged like stubs.c.
+    const stageInstall = () => {
+        const staged = `${buildPath}/crossbind-install.sh`;
+        fs.mkdirSync(buildPath, { recursive: true });
+        fs.copyFileSync(`${state.config.paths.cli}/assets/configure/install.sh`, staged);
+        fs.chmodSync(staged, 0o755);
+        return staged;
+    };
+
     if (!options.bypassCmake) {
         if (state.config.build?.buildType === 'configure') {
             fs.cpSync(cmakeDir, buildPath, { recursive: true });
@@ -216,8 +226,10 @@ export default function createLib(target, fileType, options = {}) {
         // Some upstream makefiles race when one -j invocation carries multiple goals (openssl's
         // install builds apps twice); recipes can split phases via build.makePhases.
         const makePhases = state.config.build?.makePhases || [['install']];
+        // A make command-line variable beats the Makefile's own INSTALL, autosetup's (sqlite3) included.
+        const installParams = state.config.build?.buildType === 'configure' ? [`INSTALL=${stageInstall()}`] : [];
         makePhases.forEach((phase) => {
-            run(null, ['make', `-j${cpuCount}`, ...phase], platformPrefix, target, { console: buildEnv.console });
+            run(null, ['make', `-j${cpuCount}`, ...installParams, ...phase], platformPrefix, target, { console: buildEnv.console });
         });
     }
     const t2 = performance.now();
