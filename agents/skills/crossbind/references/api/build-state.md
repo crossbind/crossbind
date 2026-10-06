@@ -2,7 +2,7 @@
 
 # `state` and `target` shapes — what build hooks receive
 
-> When you write a `crossbind.build.js` hook (`prepare(state)`, `build(state)`, `getBuildParams(target, depPaths, ext, buildPath)`, etc.), or an `extensions[]` plugin, you receive a `state` object and a `target` object. This doc enumerates every key on both. Source: `core/crossbind/src/state/index.js`.
+> When you write a `crossbind.build.js` hook (`getBuildParams(target, depPaths, ext, buildPath)`, `sourceReplaceList(target, depPaths)`, etc.), or an `extensions[]` plugin, you receive a `state` object and a `target` object. This doc enumerates every key on both. Source: `core/crossbind/src/state/index.js`.
 
 ## `state` — top-level keys
 
@@ -319,5 +319,5 @@ Used internally by built-in extensions (e.g. for OpenSSL Android cert injection)
 
 - [`overrides.md`](./overrides.md) — full catalog of override mechanisms with priority order.
 - [`crossbind-config.md`](./crossbind-config.md) — consumer-side config field-by-field.
-- [`crossbind-build.md`](./crossbind-build.md) — package-author hooks (setState, beforeRun, getExtraLibs, sourceReplaceList, env, copyToSource, copyToDist, prepare, build).
+- [`crossbind-build.md`](./crossbind-build.md) — package-author hooks (setState, beforeRun, getExtraLibs, sourceReplaceList, env, copyToSource, copyToDist).
 - Source: `core/crossbind/src/state/index.js`, `loadConfig.js`, `actions/target.js`.

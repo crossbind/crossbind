@@ -145,20 +145,6 @@ export default {
     // Run shell commands before cmake configure. Returns array of
     // {program, parameters}. Used by autotools projects to
     // regenerate configure scripts after `replaceList` patches.
-
-  prepare: async (state) => {
-    // Pre-configure step (after the CLI extracts the `getURL`
-    // tarball, before cmake configure runs). Patch source, generate
-    // headers, fetch sub-deps. Default: no-op.
-  },
-
-  build: async (state) => {
-    // Override the entire build step. Default: cmake configure +
-    // build, or `./configure && make` if buildType === 'configure'.
-    //
-    // Only override when the upstream's build system can't be
-    // shoehorned into one of those two. Heavy lift; rare.
-  },
 }
 ```
 
@@ -168,11 +154,10 @@ For each architecture sub-package (`-wasm`, `-android`, `-ios`), the CLI:
 
 1. Reads the package's `nativeVersion` from `package.json`.
 2. Calls `getURL(version)` to populate `state.config.paths.build`.
-3. Runs `prepare(state)` if defined.
-4. Calls `build(state)` if defined; otherwise:
+3. Builds it:
    - `buildType: 'cmake'` → `cmake -S <build> -B <build/build> [getBuildParams flags] && cmake --build`
    - `buildType: 'configure'` → `[configureProgram || './configure'] [getBuildParams flags] && make && make install`
-5. Collects artifacts (`.a`, `include/`, …) into `state.config.paths.output`.
+4. Collects artifacts (`.a`, `include/`, …) into `state.config.paths.output`.
 
 ## Example: zlib (canonical small example)
 
@@ -201,23 +186,23 @@ export default {
 }
 ```
 
-## Example: per-target source patching
+## Example: source patching
+
+`replaceList` patches the extracted source once, for every target. A `configure` build can also patch
+each target's copy: `sourceReplaceList(target, depPaths)` runs after the source is copied into the
+target's build directory, and its `paths` are relative to that directory.
 
 ```js
 export default {
-  getURL: (version) => `https://github.com/upstream/proj/archive/refs/tags/${version}.tar.gz`,
-  buildType: 'cmake',
-  prepare: async (state) => {
-    // Patch a header to disable a problematic feature on iOS.
-    if (state.target.platform === 'ios') {
-      const fs = await import('node:fs/promises')
-      const file = `${state.config.paths.build}/src/proj_internal.h`
-      let content = await fs.readFile(file, 'utf8')
-      content = content.replace('#define HAVE_LOCALECONV 1', '')
-      await fs.writeFile(file, content)
-    }
-  },
-  getBuildParams: () => ['-DBUILD_TESTING=OFF', '-DENABLE_CURL=OFF'],
+  getURL: (version) => `https://example.org/upstream/upstream-${version}.tar.gz`,
+  buildType: 'configure',
+  replaceList: [
+    { regex: /#define HAVE_LOCALECONV 1/, replacement: '', paths: ['src/internal.h'] },
+  ],
+  sourceReplaceList: (target) => (target.platform === 'wasm'
+    ? [{ regex: /-lpthread/g, replacement: '', paths: ['Makefile.in'] }]
+    : []),
+  getBuildParams: () => ['--disable-shared'],
 }
 ```
 
@@ -227,8 +212,7 @@ export default {
 |-------------|-----|
 | Download an upstream tarball | `getURL` |
 | Inject CMake / configure flags | `getBuildParams` |
-| Patch source files between fetch and build | `prepare` |
-| Replace the build runner entirely | `build` |
+| Patch source files between fetch and build | `replaceList`, or `sourceReplaceList` per target in a `configure` build |
 
 Start with the simplest hook that works. Most packages need only `getURL` + `buildType` + `getBuildParams`.
 
