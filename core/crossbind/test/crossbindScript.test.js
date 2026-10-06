@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { pathToFileURL } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { describe, test, expect, vi, afterAll, afterEach, beforeEach } from 'vitest';
 
 vi.mock('../src/actions/getData.js', () => ({ default: () => ({}) }));
@@ -108,12 +108,13 @@ describe('generated proxy modules', () => {
 // Vite's base and Rspack's publicPath name where the app is served; the plugins hand it to the boot code.
 describe('the browser boot', () => {
     let apps = 0;
+    let app;
     let appUrl;
 
     // Each test serves its own app: a module imported once is not run again.
     beforeEach(() => {
         apps += 1;
-        const app = path.join(dir, 'site', `app${apps}`);
+        app = path.join(dir, 'site', `app${apps}`);
         appUrl = `${pathToFileURL(app).href}/`;
         fs.mkdirSync(app, { recursive: true });
         fs.writeFileSync(path.join(app, 'crossbind.js'), 'globalThis.crossbindLoadedFrom = import.meta.url;\n');
@@ -137,7 +138,7 @@ describe('the browser boot', () => {
 
         const m = await proxy.initNative();
 
-        expect(globalThis.crossbindLoadedFrom).toBe(`${appUrl}crossbind.js`);
+        expect(fileURLToPath(globalThis.crossbindLoadedFrom)).toBe(path.join(app, 'crossbind.js'));
         expect(m.config.path).toBe(appUrl);
     });
 
@@ -149,7 +150,7 @@ describe('the browser boot', () => {
 
             const m = await proxy.initNative();
 
-            expect(globalThis.crossbindLoadedFrom).toBe(`${appUrl}crossbind.js`);
+            expect(fileURLToPath(globalThis.crossbindLoadedFrom)).toBe(path.join(app, 'crossbind.js'));
             expect(m.config.path).toBe(appUrl);
         } finally {
             delete globalThis.__webpack_public_path__;
