@@ -42,7 +42,7 @@ const noCliReplaceList = [
 
 export default {
     sha256: '88dd96a8c0464eca144fc791ae60cd31cd8ee78321e67397e25fc095c4a19aa6', // libiconv-1.19.tar.gz
-    getURL: (version) => `https://ftp.gnu.org/pub/gnu/libiconv/libiconv-${version}.tar.gz`,
+    getURL: (version) => `https://mirrors.kernel.org/gnu/libiconv/libiconv-${version}.tar.gz`,
     sourceReplaceList: () => noCliReplaceList,
     buildType: 'configure',
     getBuildParams: (target) => [
