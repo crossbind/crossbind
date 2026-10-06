@@ -1,7 +1,9 @@
 import { describe, test, expect, beforeEach, afterEach } from 'vitest';
 import * as Comlink from 'comlink';
 import {
+    adoptModule,
     callWithVectorCoercion,
+    moduleRoot,
     wrapWithVectorCoercion,
     setCoercionModule,
 } from '../src/assets/js-runtime/adapters/worker-comlink.js';
@@ -309,8 +311,8 @@ describe('Comlink CONSTRUCT end to end (worker construct path)', () => {
 
         const { port1, port2 } = new MessageChannel();
         try {
-            Comlink.expose(wrapWithVectorCoercion(m), port1);
-            const remote = Comlink.wrap(port2);
+            Comlink.expose(moduleRoot(m), port1);
+            const remote = adoptModule(Comlink.wrap(port2));
 
             const counter = await new remote.PlainCounter(40);
             expect(await counter.increment(2)).toBe(42);
@@ -346,8 +348,8 @@ describe('Comlink returned objects end to end (worker property path)', () => {
 
         const { port1, port2 } = new MessageChannel();
         try {
-            Comlink.expose(wrapWithVectorCoercion(m), port1);
-            const remote = Comlink.wrap(port2);
+            Comlink.expose(moduleRoot(m), port1);
+            const remote = adoptModule(Comlink.wrap(port2));
 
             const decoder = await new remote.Decoder();
             const first = await decoder.marker;

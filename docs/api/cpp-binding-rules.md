@@ -108,9 +108,8 @@ Private members are fine — they just won't appear in JS. Don't try to hide eve
 > owns nothing: deleting it leaves the library's memory alone. The field takes a handle,
 > `null` or such an instance, so `stream.next_in = input` points zlib at an `allocBuffer`
 > block; C keeps only the address, so keep that handle while the library uses it. On worker
-> runtimes every instance talks to the worker over its own channel and a field write can
-> land after a later call: read the field back (`await stream.avail_in`) before the call
-> that depends on it. Function-pointer fields, arrays and struct fields are not bound.
+> runtimes a field write reaches the worker ahead of the calls made after it. Function-pointer
+> fields, arrays and struct fields are not bound.
 
 ### 4. Inheritance + virtual works; multiple inheritance doesn't
 

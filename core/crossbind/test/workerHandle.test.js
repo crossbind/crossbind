@@ -1,28 +1,69 @@
-import { describe, test, expect } from 'vitest';
+import { describe, test, expect, beforeEach, afterEach } from 'vitest';
 import * as Comlink from 'comlink';
-import '../src/assets/js-runtime/adapters/worker-comlink.js';
+import { adoptModule, moduleRoot, setCoercionModule } from '../src/assets/js-runtime/adapters/worker-comlink.js';
 
-const embindObject = () => ({ delete() {}, isDeleted: () => false, area: () => 4 });
-const roundTrip = (name, value) => {
-    const handler = Comlink.transferHandlers.get(name);
-    return handler.deserialize(handler.serialize(value)[0]);
+function Box() {
+    this.width = 1;
+}
+Box.prototype.delete = function del() {};
+Box.prototype.isDeleted = () => false;
+Box.prototype.area = function area() {
+    return this.width * 4;
 };
 
-// The three ways a worker hands an embind object to the main thread.
+let channel;
+let remote;
+let moduleMessages;
+
+// The worker's module on one end of a channel, as initWithWorker gets it on the other.
+beforeEach(() => {
+    const m = {
+        Box,
+        makeBox: () => new Box(),
+        boxes: () => ({ size: () => 1, get: () => new Box(), delete() {} }),
+        widthOf: (box) => box.width,
+    };
+    setCoercionModule(m);
+    channel = new MessageChannel();
+    moduleMessages = [];
+    channel.port1.addEventListener('message', ({ data }) => moduleMessages.push(`${data.type} ${data.path.at(-1)}`));
+    Comlink.expose(moduleRoot(m), channel.port1);
+    remote = adoptModule(Comlink.wrap(channel.port2));
+});
+
+afterEach(() => {
+    channel.port1.close();
+    channel.port2.close();
+    setCoercionModule(null);
+});
+
+// The three ways the worker hands an embind object to the main thread.
 const arrivals = {
-    'returned by a call': () => roundTrip('embindObject', embindObject()),
-    constructed: () => roundTrip('proxy', Comlink.proxy(embindObject())),
-    'an element of a vector': () => roundTrip('embindVector', { size: () => 1, get: embindObject, delete() {} })[0],
+    'returned by a call': () => remote.makeBox(),
+    constructed: () => new remote.Box(),
+    'read from a vector': async () => (await remote.boxes())[0],
 };
 
 describe('a worker handle', () => {
     test.each(Object.keys(arrivals))('%s converts to JSON and to a string as a direct-mode object does', async (arrival) => {
-        const handle = arrivals[arrival]();
+        const handle = await arrivals[arrival]();
 
         expect(JSON.stringify(handle)).toBe('{}');
         expect(String(handle)).toBe('[object Object]');
         expect(`${handle}`).toBe('[object Object]');
         expect(await handle.area()).toBe(4);
-        expect(Comlink.transferHandlers.get('embindProxy').canHandle(handle)).toBe(true);
+        expect(await remote.widthOf(handle)).toBe(1);
+    });
+
+    // Messages on different channels keep no order, so a write over a channel of its own could arrive after the call.
+    test.each(Object.keys(arrivals))('%s takes a field write ahead of the next call on the module channel', async (arrival) => {
+        const handle = await arrivals[arrival]();
+        moduleMessages.length = 0;
+
+        handle.width = 7;
+        const width = await remote.widthOf(handle);
+
+        expect(moduleMessages).toEqual(['SET width', 'APPLY widthOf']);
+        expect(width).toBe(7);
     });
 });
