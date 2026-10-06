@@ -4,14 +4,23 @@ import crypto from 'node:crypto';
 import { spawnSync } from 'node:child_process';
 import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
+import logger from './logger.js';
 
-export default async function downloadAndExtractFile(url, output, sha256) {
+// Upstream hosts drop a request now and then (ftp.gnu.org refused eight parallel libiconv fetches at once), so a
+// request that failed for a passing reason is tried again after these pauses. Any other 4xx is the server's answer.
+const RETRY_DELAYS_MS = [1000, 2000, 4000];
+const RETRYABLE_STATUS = new Set([408, 429]);
+
+const sleep = (ms) => new Promise((resolve) => { setTimeout(resolve, ms); });
+const retryable = (error) => Object.assign(error, { retryable: true });
+
+export default async function downloadAndExtractFile(url, output, sha256, options = {}) {
     const archive = path.basename(url);
     if (fs.existsSync(`${output}/source`) && sourceCameFrom(output, archive)) {
         return false;
     }
     fs.rmSync(`${output}/source`, { recursive: true, force: true });
-    const filePath = await downloadFile(url, output);
+    const filePath = await downloadFile(url, output, options);
     verifyIntegrity(filePath, url, sha256);
     extractArchive(filePath, url, output);
     fs.writeFileSync(`${output}/source.archive`, archive);
@@ -86,29 +95,47 @@ export function assertHttps(target, context = target) {
 
 // fetch follows redirects itself, which release downloads rely on (github and the osgeo
 // mirrors both bounce), so the download needs no redirect library of its own.
-export async function downloadFile(url, folder) {
+export async function downloadFile(url, folder, { retryDelaysMs = RETRY_DELAYS_MS } = {}) {
     mkdirSync(folder, { recursive: true });
     const dest = `${folder}/${path.basename(url)}`;
     if (fs.existsSync(dest)) return dest;
 
     assertHttps(url);
+    for (let attempt = 1; ; attempt += 1) {
+        try {
+            await fetchTo(url, dest);
+            return dest;
+        } catch (err) {
+            if (!err.retryable) throw err;
+            if (attempt > retryDelaysMs.length) {
+                throw new Error(`${err.message} (after ${attempt} attempts)`, { cause: err });
+            }
+            const delay = retryDelaysMs[attempt - 1];
+            logger.info(`${err.message} Trying again in ${delay / 1000}s…`);
+            await sleep(delay);
+        }
+    }
+}
+
+async function fetchTo(url, dest) {
     let response;
     try {
         response = await fetch(url, { headers: { 'User-Agent': 'curl/8.7.1' }, redirect: 'follow' });
     } catch (err) {
-        throw new Error(`crossbind: cannot reach ${url}: ${err.message}`, { cause: err });
+        throw retryable(new Error(`crossbind: cannot reach ${url}: ${err.message}`, { cause: err }));
     }
     // A redirect chain must not be able to downgrade the transport on its last hop.
     if (response.url) assertHttps(response.url, `${url} (redirected to ${response.url})`);
     if (!response.ok) {
-        throw new Error(`crossbind: download failed for ${url} — HTTP ${response.status}.`);
+        await response.body?.cancel();
+        const error = new Error(`crossbind: download failed for ${url} — HTTP ${response.status}.`);
+        throw response.status >= 500 || RETRYABLE_STATUS.has(response.status) ? retryable(error) : error;
     }
     try {
         await pipeline(Readable.fromWeb(response.body), fs.createWriteStream(dest));
     } catch (err) {
         // A half-written archive would fail its hash check later with a confusing message.
         fs.rmSync(dest, { force: true });
-        throw new Error(`crossbind: download failed for ${url}: ${err.message}`, { cause: err });
+        throw retryable(new Error(`crossbind: download failed for ${url}: ${err.message}`, { cause: err }));
     }
-    return dest;
 }

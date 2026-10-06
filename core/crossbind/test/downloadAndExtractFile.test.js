@@ -42,6 +42,29 @@ function startServer(archive) {
     });
 }
 
+// Answers 503 to the first `failures` requests for the archive, then serves it; anything else is a 404.
+function startFlakyServer(archive, failures) {
+    let count = 0;
+    const server = http.createServer((req, res) => {
+        count += 1;
+        if (req.url !== '/downloads/pkg-1.0.tar.gz') {
+            res.writeHead(404);
+            res.end('nope');
+        } else if (count <= failures) {
+            res.writeHead(503);
+            res.end('busy');
+        } else {
+            res.writeHead(200, { 'Content-Type': 'application/gzip' });
+            res.end(archive);
+        }
+    });
+    return new Promise((resolve) => {
+        server.listen(0, '127.0.0.1', () => resolve({ server, port: server.address().port, requests: () => count }));
+    });
+}
+
+const NO_WAIT = { retryDelaysMs: [0, 0, 0] };
+
 describe('downloadAndExtractFile', () => {
     let output;
 
@@ -175,8 +198,32 @@ describe('downloadAndExtractFile', () => {
     });
 
     test('rejects when the host cannot be reached', async () => {
-        await expect(downloadAndExtractFile('http://127.0.0.1:1/pkg-1.0.tar.gz', output))
-            .rejects.toThrow(/cannot reach/);
+        await expect(downloadAndExtractFile('http://127.0.0.1:1/pkg-1.0.tar.gz', output, undefined, NO_WAIT))
+            .rejects.toThrow(/cannot reach .* \(after 4 attempts\)/);
+    });
+
+    test('tries a request the server failed again, and downloads on a later attempt', async () => {
+        const archive = packArchive(path.join(output, 'fixture.tar.gz'));
+        const { server, port, requests } = await startFlakyServer(archive, 2);
+        try {
+            await expect(downloadAndExtractFile(`http://127.0.0.1:${port}/downloads/pkg-1.0.tar.gz`, output, sha256Of(archive), NO_WAIT))
+                .resolves.toBe(true);
+            expect(requests()).toBe(3);
+            expect(fs.existsSync(path.join(output, 'source', 'lib.c'))).toBe(true);
+        } finally {
+            server.close();
+        }
+    });
+
+    test('takes a 404 as the final answer', async () => {
+        const { server, port, requests } = await startFlakyServer(Buffer.alloc(0), 0);
+        try {
+            await expect(downloadAndExtractFile(`http://127.0.0.1:${port}/missing.tar.gz`, output, undefined, NO_WAIT))
+                .rejects.toThrow(/HTTP 404/);
+            expect(requests()).toBe(1);
+        } finally {
+            server.close();
+        }
     });
 
     test('refuses a remote source served over plain http, before any request goes out', async () => {
