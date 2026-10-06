@@ -1,11 +1,23 @@
-import { describe, test, expect, vi } from 'vitest';
+import { describe, test, expect, vi, afterEach } from 'vitest';
 import pathUrl from '../src/assets/js-runtime/adapters/path-url.js';
 import pathFs from '../src/assets/js-runtime/adapters/path-fs.js';
 import fsNode from '../src/assets/js-runtime/adapters/fs-node.js';
 
 describe('path-url', () => {
-    test('makes a bare asset name server-absolute', () => {
-        expect(pathUrl.finalizePath('crossbind.wasm')).toBe('/crossbind.wasm');
+    afterEach(() => {
+        delete globalThis.document;
+    });
+
+    test('serves assets from the site root when the app gives no path', () => {
+        expect(pathUrl.getDefaultPathPrefix()).toBe('/');
+    });
+
+    // An app served from /app/ passes `path: './dist'` for /app/dist/, as the vanilla template does.
+    test('resolves a relative path against the page', () => {
+        globalThis.document = { baseURI: 'https://site.example/app/index.html' };
+
+        expect(pathUrl.finalizePath('./dist/crossbind.wasm')).toBe('https://site.example/app/dist/crossbind.wasm');
+        expect(pathUrl.finalizePath('dist/crossbind.wasm')).toBe('https://site.example/app/dist/crossbind.wasm');
     });
 
     test('leaves an absolute path and an http(s) URL alone', () => {

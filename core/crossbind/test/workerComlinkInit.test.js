@@ -64,6 +64,19 @@ describe('initWithWorker', () => {
         expect(h.workerApi.init).toHaveBeenCalledWith({ env: { KEY: 'value' } });
     });
 
+    // A worker resolves a relative URL against its own script, not the page.
+    test('resolves a relative path against the page and hands the worker the result', async () => {
+        globalThis.document = { baseURI: 'https://site.example/app/index.html' };
+        try {
+            await workerAdapter.initWithWorker({ path: './dist', paths: { js: 'crossbind.js' } }, { path: './dist' });
+
+            expect(created).toEqual(['https://site.example/app/dist/crossbind.js']);
+            expect(h.workerApi.init).toHaveBeenCalledWith({ path: 'https://site.example/app/dist' });
+        } finally {
+            delete globalThis.document;
+        }
+    });
+
     test('toArray passes a plain array through instead of round-tripping it', async () => {
         const module = await workerAdapter.initWithWorker({ paths: { js: 'w.js' } }, {});
 

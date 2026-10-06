@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { describe, test, expect, vi, afterAll } from 'vitest';
+import { describe, test, expect, vi, afterAll, afterEach, beforeEach } from 'vitest';
 
 vi.mock('../src/actions/getData.js', () => ({ default: () => ({}) }));
 vi.mock('../src/utils/loadJson.js', () => ({ default: () => ['VectorMatrix', 'Matrix'] }));
@@ -102,5 +102,65 @@ describe('generated proxy modules', () => {
         proxy.initNative.terminate();
         expect(globalThis.__crossbindBootPromise).toBeNull();
         expect(globalThis.__crossbindModule).toBeNull();
+    });
+});
+
+// Vite's base and Rspack's publicPath name where the app is served; the plugins hand it to the boot code.
+describe('the browser boot', () => {
+    let apps = 0;
+    let appUrl;
+
+    // Each test serves its own app: a module imported once is not run again.
+    beforeEach(() => {
+        apps += 1;
+        const app = path.join(dir, 'site', `app${apps}`);
+        appUrl = `${pathToFileURL(app).href}/`;
+        fs.mkdirSync(app, { recursive: true });
+        fs.writeFileSync(path.join(app, 'crossbind.js'), 'globalThis.crossbindLoadedFrom = import.meta.url;\n');
+        globalThis.window = globalThis;
+        globalThis.Crossbind = { initNative: (config) => ({ config }) };
+        globalThis.document = { baseURI: `${appUrl}index.html` };
+        globalThis.__crossbindBinders = undefined;
+        globalThis.__crossbindModule = undefined;
+        globalThis.__crossbindBootPromise = undefined;
+    });
+
+    afterEach(() => {
+        delete globalThis.window;
+        delete globalThis.Crossbind;
+        delete globalThis.document;
+        delete globalThis.crossbindLoadedFrom;
+    });
+
+    test.each([['relative to the page', () => './'], ['a URL', () => appUrl]])('loads crossbind.js from a base %s and serves its assets from there', async (_, base) => {
+        const proxy = await loadModule(`proxy-base-${apps}`, getCrossbindScript(TARGET, '/nonexistent/bridge', { base: base() }));
+
+        const m = await proxy.initNative();
+
+        expect(globalThis.crossbindLoadedFrom).toBe(`${appUrl}crossbind.js`);
+        expect(m.config.path).toBe(appUrl);
+    });
+
+    // Webpack and Rspack put their public path there at run time, 'auto' included.
+    test("takes webpack's public path in a webpack bundle", async () => {
+        globalThis.__webpack_public_path__ = appUrl;
+        try {
+            const proxy = await loadModule(`proxy-base-${apps}`, getCrossbindScript(TARGET, '/nonexistent/bridge'));
+
+            const m = await proxy.initNative();
+
+            expect(globalThis.crossbindLoadedFrom).toBe(`${appUrl}crossbind.js`);
+            expect(m.config.path).toBe(appUrl);
+        } finally {
+            delete globalThis.__webpack_public_path__;
+        }
+    });
+
+    test('lets the path the app passes win over the base', async () => {
+        const proxy = await loadModule(`proxy-base-${apps}`, getCrossbindScript(TARGET, '/nonexistent/bridge', { base: './' }));
+
+        const m = await proxy.initNative({ path: '/assets' });
+
+        expect(m.config.path).toBe('/assets');
     });
 });

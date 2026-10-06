@@ -140,7 +140,8 @@ initNative.terminate(): void   // browser-only when useWorker:true
     js:     undefined,  // override main script URL
     worker: undefined,  // override worker script URL
   },
-  path: '',             // global URL prefix prepended to every asset
+  path: '',             // where the assets are: a URL, a root path or a path relative to the page;
+                        // the bundler plugins pass the base they serve the app from
 }
 ```
 

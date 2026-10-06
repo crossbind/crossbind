@@ -49,7 +49,7 @@
     {
       "source": "docs/api/init.md",
       "output": "api/init.md",
-      "sha256": "fa6fbd42685748cf5867dc28c225572e16a33aaae3e674f82530ba8304f7ce1d"
+      "sha256": "cace955603962914e130c292343123b7863d0f4a0d3405102005de1680769220"
     },
     {
       "source": "docs/api/lifecycle-and-types.md",
@@ -139,12 +139,12 @@
     {
       "source": "docs/playbooks/integration/vite.md",
       "output": "integration/vite.md",
-      "sha256": "28a43d6806a3fedc347855060d5137dd38da298f80537be770af80fb114175b8"
+      "sha256": "54089043a10e3c1806e76de8a1cbd76ccaeebbe39e586ea3bfcb216df7b355db"
     },
     {
       "source": "docs/playbooks/integration/webpack-rspack.md",
       "output": "integration/webpack-rspack.md",
-      "sha256": "b8378dfa293907401c31dc1ae9012b0b40fe67bcb2cc4d9473c823675cc350a9"
+      "sha256": "b4ba9bad95a91622be27bc21f9c58246f72b544102b5345f8777859bbfe88876"
     },
     {
       "source": "ports/catalog.json + ports/*/package.json",

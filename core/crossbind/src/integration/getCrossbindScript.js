@@ -6,17 +6,18 @@ import state from '../state/index.js';
 import { parseSurface, createRustBridgeCrate, createCrateImportBridge } from '../utils/rustBridgeGen.js';
 import { parseCargoMarkerName } from '../utils/cargoImport.js';
 
-export default function getCrossbindScript(target, bridgePath) {
+// `base` is where the bundler serves the app from, as Vite's `base` names it; webpack's public path wins at run time.
+export default function getCrossbindScript(target, bridgePath, { base = '/' } = {}) {
     if (!bridgePath) {
         throw new Error('getCrossbindScript needs the bridge file of the imported header');
     }
-    return buildScript(target, loadJson(`${bridgePath}.exports.json`));
+    return buildScript(target, loadJson(`${bridgePath}.exports.json`), base);
 }
 
 // The Rust analog of a .h import: parse the crate surface and emit the same proxy module
 // (per-symbol lets assigned inside this module's initNative). Vectors come from the owning
 // cargo package's config; classes/enums come from the parsed source.
-export function getRustJsScript(target, rsFile) {
+export function getRustJsScript(target, rsFile, { base = '/' } = {}) {
     // Compare real paths: dependency paths go through node_modules symlinks (pnpm workspaces)
     // while bundlers hand the transformer the resolved real file.
     const realCrateDir = (d) => {
@@ -40,7 +41,7 @@ export function getRustJsScript(target, rsFile) {
         });
         // A crate registers its public names under per-crate names (two crates may export the
         // same name), so the proxy exports the clean name and reads the registered one off the module.
-        return buildScript(target, exports);
+        return buildScript(target, exports, base);
     }
 
     const pkg = state.config.allDependencies.find((d) => d.export?.type === 'cargo'
@@ -69,10 +70,10 @@ export function getRustJsScript(target, rsFile) {
         ...(model.consts ?? []).map((c) => c.name),
         ...vectors.map((v) => v.name),
     ];
-    return buildScript(target, symbols);
+    return buildScript(target, symbols, base);
 }
 
-function buildScript(target, symbols) {
+function buildScript(target, symbols, base) {
     if (!target) {
         throw new Error('The target is not available!');
     }
@@ -90,7 +91,7 @@ function buildScript(target, symbols) {
     }
 
     return `
-        ${getPlatformScript(env)}
+        ${getPlatformScript(env, base)}
 
         export let AllSymbols = {};
         ${symbolExportDefineString}
@@ -165,8 +166,9 @@ function getReactNativeScript(env) {
     `;
 }
 
-function getWebScript(env) {
+function getWebScript(env, base) {
     const params = `{
+        path: base,
         ...config,
         env: {...${env}, ...config.env},
         paths: {
@@ -179,7 +181,8 @@ function getWebScript(env) {
 
     return `
         function __crossbindBoot(config) {
-            return import(/* webpackIgnore: true */ '/crossbind.js')
+            const base = new URL((typeof __webpack_public_path__ === 'string' ? __webpack_public_path__ : ${JSON.stringify(base)}) || './', document.baseURI).href;
+            return import(/* webpackIgnore: true */ /* @vite-ignore */ base + 'crossbind.js')
                 .then(n => window.Crossbind.initNative(${params}));
         }
     `;

@@ -129,10 +129,16 @@ export default class CrossbindWebpackPlugin {
             throw new Error('devServer is not defined');
         }
 
+        // The boot code asks under webpack's public path, which need not be the root.
+        const asksFor = (req, name) => req.url.split('?')[0].endsWith(`/${name}`);
+
         middlewares.unshift({
             name: '/crossbind.js',
-            path: '/crossbind.js',
-            middleware: (req, res) => {
+            middleware: (req, res, next) => {
+                if (!asksFor(req, 'crossbind.js')) {
+                    next();
+                    return;
+                }
                 const filePath = `${state.config.paths.build}/${buildTargetDebug.jsName}`;
                 res.setHeader('Content-Type', 'application/javascript');
                 res.setHeader('Cross-Origin-Opener-Policy', 'same-origin');
@@ -143,8 +149,11 @@ export default class CrossbindWebpackPlugin {
 
         middlewares.unshift({
             name: '/crossbind.wasm',
-            path: '/crossbind.wasm',
-            middleware: (req, res) => {
+            middleware: (req, res, next) => {
+                if (!asksFor(req, 'crossbind.wasm')) {
+                    next();
+                    return;
+                }
                 const filePath = `${state.config.paths.build}/${buildTargetDebug.wasmName}`;
                 res.setHeader('Content-Type', 'application/wasm');
                 res.setHeader('Cross-Origin-Opener-Policy', 'same-origin');
@@ -155,8 +164,11 @@ export default class CrossbindWebpackPlugin {
 
         middlewares.unshift({
             name: '/crossbind.data.txt',
-            path: '/crossbind.data.txt',
-            middleware: (req, res) => {
+            middleware: (req, res, next) => {
+                if (!asksFor(req, 'crossbind.data.txt')) {
+                    next();
+                    return;
+                }
                 const filePath = `${state.config.paths.build}/${buildTargetDebug.dataTxtName}`;
                 res.setHeader('Cross-Origin-Opener-Policy', 'same-origin');
                 res.setHeader('Cross-Origin-Embedder-Policy', 'require-corp');

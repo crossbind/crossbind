@@ -20,6 +20,7 @@ if (!buildTargetDebug) {
 
 const viteCrossbindPlugin = (options) => {
     let isServe = false;
+    let base = '/';
     // The middleware invalidates /crossbind.js on every request so a request that raced ahead
     // of the .h transforms heals itself. With parallel test workers that means N requests enter
     // load() at once, and without this each one would run its own full dependency + source +
@@ -59,6 +60,7 @@ const viteCrossbindPlugin = (options) => {
             },
             configResolved(config) {
                 isServe = config.command === 'serve';
+                base = config.base;
                 if (isServe) {
                     config.server.fs.allow.push(state.config.paths.build);
                 }
@@ -68,7 +70,9 @@ const viteCrossbindPlugin = (options) => {
                     server.middlewares.use((req, res, next) => {
                         res.setHeader("Cross-Origin-Opener-Policy", "same-origin");
                         res.setHeader("Cross-Origin-Embedder-Policy", "require-corp");
-                        if (req.url === '/crossbind.js') {
+                        // The app asks under its base, which vite strips only after this middleware.
+                        const url = req.url.startsWith(base) ? `/${req.url.slice(base.length)}` : req.url;
+                        if (url === '/crossbind.js') {
                             // The glue depends on the bridge set, which grows as .h
                             // imports are transformed; vite would otherwise serve the
                             // cached load() result forever. Invalidate so the load
@@ -77,8 +81,8 @@ const viteCrossbindPlugin = (options) => {
                             const mod = server.moduleGraph.getModuleById('/crossbind.js');
                             if (mod) server.moduleGraph.invalidateModule(mod);
                         }
-                        if (req.url === '/crossbind.wasm') req.url = `/@fs/${state.config.paths.build}/${buildTargetDebug.wasmName}`;
-                        else if (req.url === '/crossbind.data.txt') req.url = `/@fs/${state.config.paths.build}/${buildTargetDebug.dataTxtName}`;
+                        if (url === '/crossbind.wasm') req.url = `${base}@fs/${state.config.paths.build}/${buildTargetDebug.wasmName}`;
+                        else if (url === '/crossbind.data.txt') req.url = `${base}@fs/${state.config.paths.build}/${buildTargetDebug.dataTxtName}`;
                         // else if (req.url === '/cpp.worker.js') req.url = `/@fs/${state.config.paths.build}/${state.config.general.name}.js`;
                         next();
                     });

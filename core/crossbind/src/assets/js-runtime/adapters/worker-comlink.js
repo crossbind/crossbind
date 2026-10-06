@@ -5,6 +5,7 @@ import {
     callWithVectorCoercion, wrapWithVectorCoercion, setCoercionModule, unwrapCoercionProxy,
 } from './vector-coercion.js';
 import { patchModuleForExceptionDecode } from './exception-decode.js';
+import urlPath from './path-url.js';
 
 const isWorkerScope = typeof WorkerGlobalScope !== 'undefined'
     && typeof self !== 'undefined'
@@ -254,14 +255,12 @@ export function adoptModule(remote) {
 
 function resolveScriptUrl(config) {
     const fileName = config.paths.js || config.paths.worker;
-    let prefix = '';
+    let prefix = urlPath.getDefaultPathPrefix();
     if (config.path) {
         prefix = config.path;
         if (prefix.slice(-1) !== '/') prefix += '/';
     }
-    let output = prefix + fileName;
-    if (output.substring(0, 4) !== 'http' && output[0] !== '/') output = `/${output}`;
-    return output;
+    return urlPath.finalizePath(prefix + fileName);
 }
 
 function exposeWorker(systemConfig, createModule) {
@@ -289,7 +288,9 @@ async function initWithWorker(config, userConfig) {
         logHandler, errorHandler, onRuntimeInitialized, getWasmFunction, useWorker, workerUrl,
         ...serializableConfig
     } = userConfig;
-    const module = adoptModule(await workerApi.init(serializableConfig));
+    // The worker resolves a relative URL against its own script, so it gets the path resolved against the page.
+    const workerConfig = config.path ? { ...serializableConfig, path: urlPath.finalizePath(config.path) } : serializableConfig;
+    const module = adoptModule(await workerApi.init(workerConfig));
 
     return new Proxy(module, {
         get(target, prop) {
