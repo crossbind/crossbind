@@ -93,6 +93,17 @@ describe('run: which image ref reaches docker pull', () => {
         expect(pulled).not.toContain(images.getDockerImage('android'));
     });
 
+    // Under LOCAL every step runs on the host, so a pulled image would only be downloaded, never run.
+    test('makes no docker call when the runner is LOCAL', async () => {
+        holder.config.system.RUNNER = 'LOCAL';
+        const { run, execFileSync } = await importFresh();
+
+        run(null, ['make', '-j4', 'install'], null, { platform: 'wasm' });
+        run('swig', ['-version'], null, { platform: 'android' });
+
+        expect(execFileSync.mock.calls.filter(([cmd]) => cmd === 'docker')).toEqual([]);
+    });
+
     test('wasm keeps asking for the index so each host resolves its own leaf', async () => {
         const { run, images, execFileSync } = await importFresh();
 

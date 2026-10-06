@@ -134,7 +134,9 @@ export default function run(program, params = [], platformPrefix = null, target 
 
     // wasi is host-run only with a locally configured wasi-sdk; otherwise docker carries it.
     const wasiHostSdk = target?.platform === 'wasi' ? resolveWasiSdkPath(state.config.system) : null;
-    if ((!HOST_BUILT_PLATFORMS.includes(target?.platform) && !(target?.platform === 'wasi' && wasiHostSdk)) || program !== null) {
+    const isHostBuilt = HOST_BUILT_PLATFORMS.includes(target?.platform) || (target?.platform === 'wasi' && wasiHostSdk);
+    const runner = (isHostBuilt && program === null) || state.config.system.RUNNER === 'LOCAL' ? 'LOCAL' : 'DOCKER';
+    if (runner === 'DOCKER') {
         // Google ships the linux NDK for x86_64 only, so the android index carries no arm64 leaf;
         // pull its amd64 leaf by ref or an arm64 host finds no matching manifest.
         pullDockerImage(imageRoleFor(target), target?.platform === 'android' ? 'linux/amd64' : undefined);
@@ -308,14 +310,6 @@ export default function run(program, params = [], platformPrefix = null, target 
     }
 
     const env = {};
-    let runner = 'DOCKER';
-    if (
-        ((HOST_BUILT_PLATFORMS.includes(target?.platform) || (target?.platform === 'wasi' && wasiHostSdk)) && program === null) ||
-        state.config.system.RUNNER === 'LOCAL'
-    ) {
-        runner = 'LOCAL';
-    }
-
     if (runner === 'LOCAL') {
         const allowedEnv = [
             '^PWD$',
