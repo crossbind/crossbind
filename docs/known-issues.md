@@ -155,17 +155,6 @@ but `*` lets Dependabot propose any Hermes release.
 - Check: `pnpm --filter @crossbind/example-mobile-reactnative-cli exec node -p "require('react-native/package.json').dependencies['hermes-compiler'] + ' vs ' + require('hermes-compiler/package.json').version"` prints two different versions.
 - Remove when the samples pin the version react-native depends on.
 
-## `plugins/react-native/cpp/CMakeLists.txt` is dead
-
-Nothing references it — Android builds through `plugins/react-native/script/CMakeLists.txt` — and
-two of the paths it compiles no longer exist (`plugins/react-native-embind`,
-`plugins/react-native/ReactCommon`). Only the file is dead: `cpp/src/JSI_module.cpp` next to it is
-compiled by `script/build_android.js`.
-
-- Seen: 2026-09-23
-- Check: `grep -rn 'cpp/CMakeLists\|\.\./cpp' plugins/react-native --exclude-dir=node_modules --exclude-dir=cpp` returns nothing.
-- Remove when the file is deleted.
-
 ## Apps served from a subpath cannot find their loader
 
 The boot code every bundler plugin injects (`getCrossbindScript`) imports a root-absolute
