@@ -11,7 +11,7 @@ ARG BASE_IMAGE=crossbind/base:dev
 
 # The sysroots and libc++ are the same bytes for both image leaves, so they are assembled once on
 # the build platform.
-FROM --platform=$BUILDPLATFORM debian:trixie-slim@sha256:a99cfc517144bc59b1978475ec53b46ecabec7e43635402ee5b77cc54cd1b20a AS sysroots
+FROM --platform=$BUILDPLATFORM debian:trixie-slim@sha256:a29215f6a35e51e22adffa17f89e9d2ef06214e64a2bad10d765c46aea49f11f AS sysroots
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
         ca-certificates \
