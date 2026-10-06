@@ -13,8 +13,9 @@ import { getContentHash, getFilesFingerprint } from '../utils/hash.js';
 import { buildLinkLibArgs } from '../utils/linkLayout.js';
 import { guardBigIntArguments, guardEmbindArguments } from '../utils/embindArgumentGuards.js';
 import { separateCallArguments } from '../utils/embindCallArguments.js';
+import { queueJspiCalls } from '../utils/embindJspiQueue.js';
 
-const GLUE_REWRITES = ['../utils/embindArgumentGuards.js', '../utils/embindCallArguments.js']
+const GLUE_REWRITES = ['../utils/embindArgumentGuards.js', '../utils/embindCallArguments.js', '../utils/embindJspiQueue.js']
     .map((file) => fileURLToPath(new URL(file, import.meta.url)));
 
 // embind's bigint converter turns any Number into a BigInt, so 2^53+1 silently becomes 2^53.
@@ -48,6 +49,17 @@ function separateEmbindCalls(target) {
     fs.writeFileSync(gluePath, text);
     if (missed) {
         logger.error('embind per-call argument rewrite missed (emscripten glue format changed?): overlapping calls of one function free each other\'s arguments');
+    }
+}
+
+// Suspended _JSPI calls that resume out of order overwrite each other's C stack (utils/embindJspiQueue.js);
+// each runtimeEnv links its own glue, so each one calls this after its link.
+function queueJspiEmbindCalls(target) {
+    const gluePath = `${state.config.paths.build}/${target.rawJsName}`;
+    const { text, missed } = queueJspiCalls(fs.readFileSync(gluePath, 'utf8'));
+    fs.writeFileSync(gluePath, text);
+    if (missed) {
+        logger.error('embind _JSPI queue rewrite missed (emscripten glue format changed?): suspended _JSPI calls can overwrite each other\'s C stack');
     }
 }
 
@@ -229,6 +241,7 @@ export default async function buildWasm(target, options = {}) {
         guardBigIntConversions(target);
         guardArgumentConversions(target);
         separateEmbindCalls(target);
+        queueJspiEmbindCalls(target);
         await buildJs(target);
         // fs.rmSync(`${state.config.paths.build}/${state.config.general.name}.js`);
         // fs.copyFileSync(`${state.config.paths.build}/${state.config.general.name}.browser.js`, `${state.config.paths.build}/${state.config.general.name}.js`);
@@ -270,6 +283,7 @@ export default async function buildWasm(target, options = {}) {
         guardBigIntConversions(target);
         guardArgumentConversions(target);
         separateEmbindCalls(target);
+        queueJspiEmbindCalls(target);
         await buildJs(target);
         logger.doneStep(target, 'js');
     }
@@ -305,6 +319,7 @@ export default async function buildWasm(target, options = {}) {
         guardBigIntConversions(target);
         guardArgumentConversions(target);
         separateEmbindCalls(target);
+        queueJspiEmbindCalls(target);
         await buildJs(target);
         if (emccFlags.includes('FETCH')) {
             fs.appendFileSync(`${state.config.paths.build}/${target.jsName}`, 'var XMLHttpRequest = require(\'xhr2\');\n');
