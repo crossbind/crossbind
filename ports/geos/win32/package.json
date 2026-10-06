@@ -6,7 +6,7 @@
     "homepage": "https://github.com/crossbind/crossbind/tree/main/ports/geos#readme",
     "repository": "https://github.com/crossbind/crossbind.git",
     "type": "module",
-    "license": "LGPL-2.1-or-later",
+    "license": "LGPL-2.1-only",
     "keywords": [
         "geos",
         "libgeos",
