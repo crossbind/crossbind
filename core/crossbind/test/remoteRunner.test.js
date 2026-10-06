@@ -57,10 +57,14 @@ describe('remoteRoots', () => {
         expect(roots.outputRoots).not.toContain('core/embind-rust/adapters/web.cpp');
     });
 
-    test('refuses a folder outside the base, because the runner only receives the base', () => {
-        const outside = { ...config, paths: { ...config.paths, native: ['/elsewhere/src'] } };
+    test('leaves out a folder outside the base, which a local docker run does not mount either', () => {
+        // A port's base is its own package folder, while crossbind's assets live in the CLI package.
+        const port = { ...config, paths: { ...config.paths, cli: '/elsewhere/crossbind/src' } };
 
-        expect(() => remoteRoots(outside)).toThrow(/\/elsewhere\/src is outside \/w/);
+        const roots = remoteRoots(port, { extraInputs: ['/elsewhere/include/x.h'], extraOutputs: ['/elsewhere/crate'] });
+
+        expect([...roots.inputRoots].sort()).toEqual(['app/.crossbind', 'app/src/native', 'lib/dist', 'lib/src/native']);
+        expect(roots.outputRoots).toEqual(['app/.crossbind']);
     });
 });
 
