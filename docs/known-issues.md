@@ -285,25 +285,6 @@ stays out on size: with GEOS and `-Oz` the JavaScript-only wasm is 26,505,868 by
 - Check: `grep -c NOT_IN_THIS_BUILD landing/demos/lib-sqlite3/direct/crossbind.config.js` prints 2.
 - Remove when the demos build against a release with these fixes and the workarounds and texts are updated.
 
-## Suspended `_JSPI` calls that resume out of order overwrite each other's C stack
-
-JSPI suspends a call's wasm frames, but its C stack frames stay on the one linear-memory stack all
-calls share, and neither crossbind nor Emscripten 6.0.9 gives a suspended call a stack of its own. A
-call that starts while another is suspended puts its frames below the first one's. If the first call
-resumes while the second is still suspended, the functions it calls next write over the second
-call's frames. Three integer-only `_JSPI` calls that slept and resumed first in, first out had all
-64 checked stack slots of the second and third call overwritten and left the stack pointer 512 bytes
-low; resuming last in, first out they came back clean. A `_JSPI` call that returns without
-suspending is nested inside the suspended one and safe. curl's fetch transport refuses a second
-transfer while one waits for this reason, but any two `_JSPI` methods that suspend can meet it.
-
-- Seen: 2026-09-30
-- Check: in an app linked with `-sJSPI`, bind `int probe_JSPI(int seed, int ms)` that fills a
-  `volatile int[64]` from `seed`, calls `emscripten_sleep(ms)`, then a function with a 2 KB local
-  buffer, and returns how many of the 64 changed;
-  `await Promise.all([1, 2, 3].map((seed) => probe_JSPI(seed, 200)))` gives `[0, 64, 64]`.
-- Remove when each suspended call runs on a stack of its own, or crossbind queues `_JSPI` calls.
-
 ## An Android app can ship without a dependency's shared library
 
 The React Native plugin asks for CMake `3.25.0+` (`plugins/react-native/android/build.gradle`). On a

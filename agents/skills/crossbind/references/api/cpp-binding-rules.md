@@ -274,6 +274,8 @@ const files = await m.Native.listVirtualFiles_JSPI();
 
 If you forget the suffix, the binding stays synchronous; calls into JS promises from inside that C++ function will then crash with `Cannot suspend without JSPI` at runtime.
 
+A module runs its `_JSPI` calls one at a time: a call made while another is pending starts once that one settles. Suspended calls share the module's C stack, so two that resumed out of order would overwrite each other's frames. A `_JSPI` call that a callback of another one starts therefore waits for the outer call to end, and the outer call must not wait for it.
+
 Where JSPI actually works (verified against the playgrounds):
 
 - **Node (st and mt)**: works behind `node --experimental-wasm-jspi`; without the flag a JSPI-linked module aborts at boot ("JSPI not supported by current environment").
