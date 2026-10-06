@@ -6,12 +6,12 @@ export default (newConfig = {}) => ({
     },
     export: {
         type: 'cmake',
-        publicHeaders: ['jpeglib.h', 'jerror.h', 'jconfig.h', 'jpeglib_crossbind.h'],
+        publicHeaders: ['jpeglib.h', 'jerror.h', 'jconfig.h', 'jpeglib_crossbind.h', 'turbojpeg.h'],
         // jpeglib.h takes FILE and size_t from headers its users include first.
         headerPrelude: { 'jpeglib.h': ['stdio.h'] },
         // The Intel macOS build has no SIMD, so one binding of jconfig.h cannot carry WITH_SIMD for every platform.
         ignoredDeclarations: { 'jconfig.h': ['WITH_SIMD'] },
-        libName: ['jpeg'],
+        libName: ['jpeg', 'turbojpeg'],
         ...(newConfig.export || {}),
     },
     paths: {
