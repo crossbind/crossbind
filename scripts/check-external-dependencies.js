@@ -166,6 +166,36 @@ function parseRange(spec) {
     return { prefix, version, raw: spec, resolvable: true };
 }
 
+// Every range being '*'/'x'/'latest' means the host app dictates the version - never a strict failure.
+// A peer floor ('>=x') says the same thing from the other side: it states the oldest release we
+// work against, not a version we track, so npm moving past it is not the floor going stale.
+function isHostDictated(u) {
+    return u.parsed.wildcard || (u.field === 'peerDependencies' && (u.parsed.prefix === '>=' || u.parsed.prefix === '>'));
+}
+
+function isTracked(u) {
+    return u.parsed.resolvable && Boolean(u.parsed.version) && !isHostDictated(u);
+}
+
+// A dep is "outdated" if any version it tracks is older than the latest npm
+// version: one manifest on the latest says nothing of another still holding an
+// older copy. Unresolvable specs (git, file, etc.) yield status 'unknown'.
+function dependencyStatus(usages, latest, error) {
+    let lowestInUse = null;
+    for (const u of usages) {
+        if (!isTracked(u)) continue;
+        if (!lowestInUse || compareVersions(u.parsed.version, lowestInUse) < 0) {
+            lowestInUse = u.parsed.version;
+        }
+    }
+    let status;
+    if (usages.length > 0 && usages.every(isHostDictated)) status = 'host-provided';
+    else if (error || !latest) status = 'unknown';
+    else if (!lowestInUse) status = 'unknown';
+    else status = compareVersions(lowestInUse, latest) >= 0 ? 'up-to-date' : 'outdated';
+    return { status, lowestInUse };
+}
+
 // ---------------------------------------------------------------------------
 // Filesystem walk
 // ---------------------------------------------------------------------------
@@ -360,32 +390,12 @@ async function main() {
         const { usages } = depsByName.get(name);
         const { latest, error } = latestByName.get(name) || {};
         const uniqueRanges = [...new Set(usages.map((u) => u.spec))].sort();
-        // A dep is "outdated" if the highest in-use version is older than the
-        // latest npm version. Unresolvable specs (git, file, etc.) yield
-        // status 'unknown'.
-        let highestInUse = null;
-        for (const u of usages) {
-            if (!u.parsed.resolvable || !u.parsed.version) continue;
-            if (!highestInUse || compareVersions(u.parsed.version, highestInUse) > 0) {
-                highestInUse = u.parsed.version;
-            }
-        }
-        // Every range being '*'/'x'/'latest' means the host app dictates the version - never a strict failure.
-        // A peer floor ('>=x') says the same thing from the other side: it states the oldest release we
-        // work against, not a version we track, so npm moving past it is not the floor going stale.
-        const isHostDictated = (u) =>
-            u.parsed.wildcard || (u.field === 'peerDependencies' && (u.parsed.prefix === '>=' || u.parsed.prefix === '>'));
-        const isHostProvided = usages.length > 0 && usages.every(isHostDictated);
-        let status;
-        if (isHostProvided) status = 'host-provided';
-        else if (error || !latest) status = 'unknown';
-        else if (!highestInUse) status = 'unknown';
-        else status = compareVersions(highestInUse, latest) >= 0 ? 'up-to-date' : 'outdated';
+        const { status, lowestInUse } = dependencyStatus(usages, latest, error);
         return {
             name,
             usages,
             uniqueRanges,
-            highestInUse,
+            lowestInUse,
             latest: latest || null,
             status,
             error: error || null,
@@ -403,7 +413,7 @@ async function main() {
             for (const row of outdated) {
                 let updatesForThisDep = 0;
                 for (const u of row.usages) {
-                    if (!u.parsed.resolvable || !u.parsed.version) continue;
+                    if (!isTracked(u)) continue;
                     if (compareVersions(u.parsed.version, row.latest) >= 0) continue;
                     const newSpec = `${u.parsed.prefix}${row.latest}`;
                     try {
@@ -417,9 +427,9 @@ async function main() {
                     }
                 }
                 if (updatesForThisDep > 0) {
-                    console.error(`  ${row.name}: ${row.highestInUse} -> ${row.latest} (${updatesForThisDep} file(s))`);
-                    row.previousHighestInUse = row.highestInUse;
-                    row.highestInUse = row.latest;
+                    console.error(`  ${row.name}: ${row.lowestInUse} -> ${row.latest} (${updatesForThisDep} file(s))`);
+                    row.previousLowestInUse = row.lowestInUse;
+                    row.lowestInUse = row.latest;
                     row.uniqueRanges = [...new Set(row.usages.map((u) => u.spec))].sort();
                     row.status = 'updated';
                 }
@@ -445,7 +455,7 @@ async function main() {
             const latest = r.latest || '—';
             const usedBy = r.usages.length;
             let statusCell;
-            if (r.status === 'updated') statusCell = `updated (was ${r.previousHighestInUse})`;
+            if (r.status === 'updated') statusCell = `updated (was ${r.previousLowestInUse})`;
             else if (r.status === 'unknown' && r.error) statusCell = `unknown (${escapePipe(r.error)})`;
             else statusCell = r.status;
             s += `| [${r.name}](https://www.npmjs.com/package/${r.name}) | ${ranges} | ${latest} | ${usedBy} | ${statusCell} |\n`;
@@ -457,7 +467,7 @@ async function main() {
         const ranges = r.uniqueRanges.length ? r.uniqueRanges.join(', ') : '—';
         const latest = r.latest || '—';
         let statusCell;
-        if (r.status === 'updated') statusCell = `updated (was ${r.previousHighestInUse})`;
+        if (r.status === 'updated') statusCell = `updated (was ${r.previousLowestInUse})`;
         else if (r.status === 'unknown' && r.error) statusCell = `unknown (${r.error})`;
         else statusCell = r.status;
         return [r.name, ranges, latest, String(r.usages.length), statusCell];
@@ -477,7 +487,7 @@ async function main() {
         const detailRows = [];
         for (const r of outdated) {
             for (const u of r.usages) {
-                if (!u.parsed.resolvable || !u.parsed.version) continue;
+                if (!isTracked(u)) continue;
                 if (compareVersions(u.parsed.version, r.latest) >= 0) continue;
                 detailRows.push([r.name, u.pkgName, u.field, u.spec, r.latest]);
             }
@@ -516,7 +526,7 @@ async function main() {
             md += '| Dependency | Package | Field | Current | Latest |\n|---|---|---|---|---|\n';
             for (const r of outdated) {
                 for (const u of r.usages) {
-                    if (!u.parsed.resolvable || !u.parsed.version) continue;
+                    if (!isTracked(u)) continue;
                     if (compareVersions(u.parsed.version, r.latest) >= 0) continue;
                     md += `| ${r.name} | ${u.pkgName} | ${u.field} | ${escapePipe(u.spec)} | ${r.latest} |\n`;
                 }
@@ -554,7 +564,7 @@ async function main() {
         if (outdated.length > 0) {
             console.error(`\n${outdated.length} dependency name(s) are outdated:`);
             for (const r of outdated) {
-                console.error(`  - ${r.name}: ${r.highestInUse} -> ${r.latest}`);
+                console.error(`  - ${r.name}: ${r.lowestInUse} -> ${r.latest}`);
             }
             process.exit(1);
         }
@@ -572,7 +582,11 @@ async function main() {
     }
 }
 
-main().catch((e) => {
-    console.error(e);
-    process.exit(1);
-});
+if (require.main === module) {
+    main().catch((e) => {
+        console.error(e);
+        process.exit(1);
+    });
+}
+
+module.exports = { dependencyStatus, parseRange };
