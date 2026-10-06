@@ -1,6 +1,5 @@
 import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import replace from 'replace';
 import run from './run.js';
 import getLinkInputs from './getLinkInputs.js';
 import getData from './getData.js';
@@ -14,8 +13,9 @@ import { buildLinkLibArgs } from '../utils/linkLayout.js';
 import { guardBigIntArguments, guardEmbindArguments } from '../utils/embindArgumentGuards.js';
 import { separateCallArguments } from '../utils/embindCallArguments.js';
 import { queueJspiCalls } from '../utils/embindJspiQueue.js';
+import { spawnPthreadsFromMainScript } from '../utils/pthreadMainScript.js';
 
-const GLUE_REWRITES = ['../utils/embindArgumentGuards.js', '../utils/embindCallArguments.js', '../utils/embindJspiQueue.js']
+const GLUE_REWRITES = ['../utils/embindArgumentGuards.js', '../utils/embindCallArguments.js', '../utils/embindJspiQueue.js', '../utils/pthreadMainScript.js']
     .map((file) => fileURLToPath(new URL(file, import.meta.url)));
 
 // embind's bigint converter turns any Number into a BigInt, so 2^53+1 silently becomes 2^53.
@@ -60,6 +60,16 @@ function queueJspiEmbindCalls(target) {
     fs.writeFileSync(gluePath, text);
     if (missed) {
         logger.error('embind _JSPI queue rewrite missed (emscripten glue format changed?): suspended _JSPI calls can overwrite each other\'s C stack');
+    }
+}
+
+// A direct-mode mt init in a browser spawns its pthreads from "/undefined" (utils/pthreadMainScript.js).
+function pointPthreadSpawn(target) {
+    const gluePath = `${state.config.paths.build}/${target.rawJsName}`;
+    const { text, missed } = spawnPthreadsFromMainScript(fs.readFileSync(gluePath, 'utf8'));
+    fs.writeFileSync(gluePath, text);
+    if (missed) {
+        logger.error('pthread spawn rewrite missed (emscripten glue format changed?): mt builds may fetch /undefined workers');
     }
 }
 
@@ -210,27 +220,7 @@ export default async function buildWasm(target, options = {}) {
         const t1 = performance.now();
         logger.doneStep(target, 'wasm');
         logger.startStep(target, 'js');
-        // The pthread bootstrap spawns workers from _scriptName, captured from
-        // document.currentScript at LOAD time - undefined when the bridge is
-        // loaded as a module script, so workers would fetch "/undefined" and
-        // direct-mode mt init hangs. Inject Module.crossbindMainScript (set by the
-        // browser adapter from paths.worker/paths.js; a crossbind-specific key, as
-        // emscripten's own mainScriptUrlOrBlob trips emsdk 6 debug assertions
-        // on st targets) at SPAWN time instead. The previous spaced
-        // 'var _scriptName = ' rewrite no longer matched the minified glue and
-        // silently no-opped; the guard below turns any future format drift
-        // into a visible error instead.
-        replace({
-            regex: 'pthreadMainJs=_scriptName',
-            replacement: 'pthreadMainJs=Module["crossbindMainScript"]||_scriptName',
-            paths: [`${state.config.paths.build}/${target.rawJsName}`],
-            recursive: false,
-            silent: true,
-        });
-        const glue = fs.readFileSync(`${state.config.paths.build}/${target.rawJsName}`, 'utf8');
-        if (glue.includes('pthreadMainJs') && !glue.includes('Module["crossbindMainScript"]||_scriptName')) {
-            logger.error('pthread spawn rewrite missed (emscripten glue format changed?): mt builds may fetch /undefined workers');
-        }
+        pointPthreadSpawn(target);
         /* replace({
             regex: 'val === 10',
             replacement: 'false',
