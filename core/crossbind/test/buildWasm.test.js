@@ -5,7 +5,6 @@ import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 
 const { run, state, link } = vi.hoisted(() => ({ run: vi.fn(), state: { config: {} }, link: { rustLibs: [], emccFlags: [] } }));
 
-vi.mock('replace', () => ({ default: vi.fn() }));
 vi.mock('../src/actions/run.js', () => ({ default: run }));
 vi.mock('../src/actions/getDependLibs.js', () => ({ default: () => [] }));
 vi.mock('../src/actions/getData.js', () => ({ default: (kind) => (kind === 'binary' ? { emccFlags: [...link.emccFlags] } : {}) }));
