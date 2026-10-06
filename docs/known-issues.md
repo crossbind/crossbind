@@ -85,19 +85,6 @@ rate-limits and reports most packages as `unknown`, which fails `--check`.
   returns nothing.
 - Remove when each gate either runs in CI or leaves `pnpm run check`.
 
-## The release verifier gives up before npm finishes indexing
-
-The publish step waits 44 attempts over 1200 seconds for each package to appear with provenance. On
-2026-09-23 `@crossbind/port-geos-wasm@2.0.0-beta.60` was published but not yet exposed, so the train
-failed on verification; a re-run of the same job passed and all 107 packages were already there.
-Until this is fixed, recover the same way — `gh run rerun <id> --failed` at the same commit, as
-"Recovery and idempotency" in `docs/playbooks/releasing-crossbind.md` describes.
-
-- Seen: 2026-09-23
-- Check: `grep -n 'REGISTRY_MAX_DURATION_MS =' scripts/release/npm-registry.mjs` still shows the
-  twenty-minute window that beta.60 outlasted.
-- Remove when a publish that succeeded stops failing its own verification.
-
 ## npm's `latest` tag serves a placeholder and beta.50
 
 Beta trains publish to `beta`, and only a stable train moves `latest`. An install without a tag thus
