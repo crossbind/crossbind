@@ -324,20 +324,6 @@ config that lists only the wasm package builds.
   `platform`, and a web build with `projWasm, projAndroid, projIos` fails in the file packager.
 - Remove when the data spec is filtered by platform or missing directories are skipped.
 
-## `crossbind build -p wasi` deletes its own data before copying it
-
-`paths.output` defaults to `paths.build` (`core/crossbind/src/state/loadConfig.js`), and
-`createWasiCommands` in `core/crossbind/src/bin.js` removes `<output>/data` and then copies
-`<build>/data` into it. With the default paths that deletes the source first, so a WASI build of any
-app whose dependencies ship data (PROJ, OpenSSL's certificates through curl, GDAL) exits 1 with
-`ENOENT … .crossbind/build/data`; a second run exits 0 without the data. Setting
-`paths.output: 'dist'` avoids it.
-
-- Seen: 2026-09-24 (landing/demos/lib-proj/wasi, lib-curl/wasi)
-- Check: `grep -n 'paths.output}/data' core/crossbind/src/bin.js` shows the `rmSync` of the output
-  directory before the `cpSync` from the build directory, with no check that the two differ.
-- Remove when the copy is skipped for identical directories.
-
 ## Generated types make classes with an implicit constructor unconstructible
 
 `emitCppDts` in `core/crossbind/src/utils/cppDts.js` writes `private constructor();` for any class
