@@ -18,6 +18,7 @@ import {
 import writeIfChanged from '../utils/writeIfChanged.js';
 import { imageRoleFor } from '../utils/pullDockerImage.js';
 import run, { cxxPreprocessorFor } from './run.js';
+import isSourceCmakePackage from '../utils/isSourceCmakePackage.js';
 
 // Part of every interface hash, so interfaces cached by an older generator are rebuilt.
 const INTERFACE_FORMAT = 'swig-macros-2';
@@ -312,6 +313,9 @@ function swigIncludePath(target, sourceDir) {
         ...state.config.allDependencies.map((d) => `${d.paths.output}/prebuilt/${target.path}/swig`),
         ...state.config.paths.header,
         ...allHeaders,
+        // A package that ships its sources has no prebuilt include directory: the app reaches its headers through
+        // the package's own CMakeLists.
+        ...state.config.allDependencies.filter(isSourceCmakePackage).flatMap((d) => d.paths.header),
         ...(sourceDir ? [sourceDir] : []),
     ].filter((path) => !!path.toString()).map((path) => `-I${path}`);
     return [...new Set(includePath)];

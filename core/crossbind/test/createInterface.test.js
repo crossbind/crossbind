@@ -457,3 +457,24 @@ describe('a dependency header installed twice under one include root', () => {
     });
 });
 
+
+// The lib-cmake template ships its sources: the app compiles them through the package's own CMakeLists, which
+// no prebuilt include directory stands for.
+describe('a cmake package that ships its sources', () => {
+    test('lends SWIG its header directory', async () => {
+        const { run, createBridgeFile } = await importFresh();
+        const lib = path.join(work, 'deps', 'lib-cmake');
+        const libHeaders = path.join(lib, 'src', 'native');
+        fs.mkdirSync(libHeaders, { recursive: true });
+        fs.writeFileSync(path.join(lib, 'CMakeLists.txt'), 'add_library(lib STATIC src/native/lib.cpp)\n');
+        holder.config.allDependencies = [{
+            export: { type: 'cmake' },
+            paths: { output: lib, header: [libHeaders], cmake: path.join(lib, 'CMakeLists.txt'), cmakeDir: lib, cliCMakeListsTxt: '/cli/assets/cmake/CMakeLists.txt' },
+        }];
+        fs.writeFileSync(header, '#include <lib/lib.h>\nint one();\n');
+
+        createBridgeFile(header, { platform: 'wasm', path: 'wasm-wasm32-st-release' });
+
+        expect(swigRuns(run)[0][1]).toContain(`-I${libHeaders}`);
+    });
+});
