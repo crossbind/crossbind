@@ -1,5 +1,6 @@
 import http from 'node:http';
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import readline from 'node:readline';
@@ -125,7 +126,15 @@ const commandEnv = (env) => ({
     ...env,
 });
 
-function runCommand({ argv, cwd, env }, line) {
+// The job count a client wrote for its own machine means nothing here: a step runs as many jobs as this
+// runner has cores.
+const withJobs = (argv, jobs) => argv.map((arg, i) => {
+    if (/^-j\d+$/.test(arg)) return `-j${jobs}`;
+    return /^\d+$/.test(arg) && argv[i - 1] === '-j' ? String(jobs) : arg;
+});
+
+function runCommand({ argv: given, cwd, env }, line, jobs) {
+    const argv = withJobs(given, jobs);
     return new Promise((resolve) => {
         const child = spawn(argv[0], argv.slice(1), { cwd, env: commandEnv(env) });
         child.stdout.on('data', (data) => line({ stdout: data.toString() }));
@@ -140,6 +149,7 @@ function runCommand({ argv, cwd, env }, line) {
 
 export function createRunnerServer({
     mountPrefixes = DEFAULT_MOUNT_PREFIXES, scratchDirs = DEFAULT_SCRATCH_DIRS, blobDir, token, image, role, heartbeatMs = HEARTBEAT_MS,
+    jobs = os.availableParallelism(),
 }) {
     if (!token) throw new Error('crossbind runner: a token is required - the runner runs build commands for whoever holds it.');
     if (token.length < MIN_TOKEN_LENGTH) throw new Error(`crossbind runner: the token needs at least ${MIN_TOKEN_LENGTH} characters.`);
@@ -175,7 +185,7 @@ export function createRunnerServer({
         };
         const before = body.mounts.map(outputsOf);
         fs.mkdirSync(body.cwd, { recursive: true });
-        const exit = await runCommand(body, line);
+        const exit = await runCommand(body, line, jobs);
 
         const outputs = {};
         const removed = [];
