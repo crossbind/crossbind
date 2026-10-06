@@ -166,7 +166,7 @@ export default async function buildNode(target, options = {}) {
         `-DCROSSBIND_LINK_ARGS=${linkArgs.join(';')}`,
         `-DCROSSBIND_LINK_DEPENDS=${libs.join(';')}`,
     ], platformPrefix, target);
-    run(null, ['cmake', '--build', '.', '-j', String(cpuCount)], platformPrefix, target);
+    run(null, ['cmake', '--build', '.', '-j', String(cpuCount)], platformPrefix, target, { exclusive: true });
     if (target.platform === 'win32') {
         // The mingw-w64 runtime and winpthreads in the addon ask for their notices in binary
         // distributions. The windows image carries them; a host toolchain may not.

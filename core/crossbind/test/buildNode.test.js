@@ -116,6 +116,14 @@ describe('buildNode', () => {
         expect(fs.readFileSync(`${work}/demo.darwin-arm64.node`, 'utf8')).toBe('addon');
     });
 
+    test('compiles the addon in turn with other builds, configuring it freely', async () => {
+        await buildNode(target, { force: true });
+
+        const optionsOf = (isStep) => run.mock.calls.find(([, args]) => isStep(args))?.[4];
+        expect(optionsOf((args) => args[1] === '--build')).toEqual({ exclusive: true });
+        expect(optionsOf((args) => args[1] !== '--build')).toBeUndefined();
+    });
+
     test('makes the addon link depend on every archive, force-loaded ones included', async () => {
         await buildNode(target, { force: true });
 
