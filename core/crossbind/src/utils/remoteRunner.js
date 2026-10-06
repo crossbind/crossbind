@@ -66,7 +66,7 @@ function foldNested(roots) {
 // package.json. Its JavaScript stays behind, as everywhere else.
 function packageOf(base, configured, file) {
     if (configured.some((root) => isInside(relativeToBase(base, file), root))) return file;
-    for (let dir = path.dirname(file); dir.startsWith(`${base}${path.sep}`); dir = path.dirname(dir)) {
+    for (let dir = path.dirname(file); ![null, '.'].includes(relativeToBase(base, dir)); dir = path.dirname(dir)) {
         if (fs.existsSync(path.join(dir, 'package.json'))) return dir;
     }
     return file;
