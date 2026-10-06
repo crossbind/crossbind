@@ -35,3 +35,11 @@ const systemKeys = {
 };
 
 export default systemKeys;
+
+// Read as LOCAL, a runner crossbind does not know would run recipes and build scripts on the host.
+export function assertRunner(runner) {
+    if (!systemKeys.RUNNER.options.includes(runner)) {
+        throw new Error(`crossbind: the runner ${runner} is invalid; RUNNER is one of ${systemKeys.RUNNER.options.join(', ')}.`);
+    }
+    return runner;
+}
