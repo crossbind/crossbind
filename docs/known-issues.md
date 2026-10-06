@@ -231,19 +231,6 @@ needs it pointed at `WebPMemoryWrite`, still takes C++. libjpeg's error manager 
   prints 1: `crossbind::bindField` binds no function pointer.
 - Remove when a function-pointer field takes a JavaScript function or a C function's handle.
 
-## A field written on a worker instance can arrive after the next call
-
-On worker runtimes the worker exposes every embind object it hands out over its own `MessageChannel`,
-while module functions go over the worker's own port. Messages on different ports keep no order, so
-`luma.h_samp_factor = 1` followed by `jpeg_start_compress(cinfo, 1)` can run the call first: the
-libjpeg-turbo encoder wrote a 3221-byte 4:4:4 file instead of 2791 bytes once in a run. Reading the
-field back (`await luma.h_samp_factor`) before the call orders them.
-
-- Seen: 2026-09-26
-- Check: `grep -n "new MessageChannel" core/crossbind/src/assets/js-runtime/adapters/worker-comlink.js`
-  shows the channel each returned object gets.
-- Remove when a call waits for the field writes before it, or instances share the module's channel.
-
 ## A C string that comes with a length is read up to a NUL byte
 
 A callback argument `const char *s, int len` crosses as a string built with `toJsCString`, which

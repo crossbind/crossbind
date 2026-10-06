@@ -12,10 +12,15 @@ const isWorkerScope = typeof WorkerGlobalScope !== 'undefined'
 
 // === Embind <-> Comlink Bridge ===
 // Worker-side registry: id -> original embind object
-// Main-thread registry: Comlink proxy -> id
+// Main-thread registry: handle -> id
 const embindRegistry = new Map();
 const embindProxyIds = new WeakMap();
 let nextEmbindId = 1;
+
+// The objects the worker hands out are reached through the module's channel, so writes to them keep their order
+// with the calls after them; messages on different channels keep none.
+const HANDLES = '__crossbindHandles';
+let remoteModule = null;
 
 function registerEmbindObject(obj) {
     const id = nextEmbindId++;
@@ -23,15 +28,17 @@ function registerEmbindObject(obj) {
     return id;
 }
 
-// Comlink answers every member with a remote one, so JSON.stringify and String() called toJSON and
-// Symbol.toPrimitive on the worker's object, which has neither. A handle answers them as a direct-mode object does.
+// Comlink answers every member with a remote one: JSON.stringify and String() called toJSON and Symbol.toPrimitive
+// on the worker's object, which has neither, and a member below the module is thenable. A handle answers them as a
+// direct-mode object does.
 const LOCAL_MEMBERS = {
+    then: undefined,
     toJSON: () => ({}),
     [Symbol.toPrimitive]: (hint) => (hint === 'number' ? NaN : '[object Object]'),
 };
 
-function handleFor(proxy, id) {
-    const handle = new Proxy(proxy, {
+function handleFor(id) {
+    const handle = new Proxy(remoteModule[HANDLES][id], {
         get: (target, prop) => (Object.hasOwn(LOCAL_MEMBERS, prop) ? LOCAL_MEMBERS[prop] : target[prop]),
     });
     embindProxyIds.set(handle, id);
@@ -62,20 +69,16 @@ Comlink.transferHandlers.set('proxy', {
     canHandle: _proxyHandler.canHandle,
     serialize(obj) {
         if (typeof obj.delete === 'function' && typeof obj.isDeleted === 'function') {
-            // CONSTRUCT results (Comlink marks them with proxy()) are exposed through
-            // the same coercion wrapper as method-returned objects (embindObject
-            // handler), and the registry keeps the RAW object so arguments resolve
-            // back to real embind identities.
-            const raw = unwrapCoercionProxy(obj);
-            const [port, transferables] = _proxyHandler.serialize(wrapWithVectorCoercion(raw));
-            const id = registerEmbindObject(raw);
-            return [{ __embindId: id, __port: port }, transferables];
+            // CONSTRUCT results (Comlink marks them with proxy()) are handed out as
+            // method-returned objects are (embindObject handler), and the registry keeps
+            // the RAW object so arguments resolve back to real embind identities.
+            return [{ __embindId: registerEmbindObject(unwrapCoercionProxy(obj)) }, []];
         }
         return _proxyHandler.serialize(obj);
     },
     deserialize(data) {
         if (data != null && typeof data === 'object' && '__embindId' in data) {
-            return handleFor(_proxyHandler.deserialize(data.__port), data.__embindId);
+            return handleFor(data.__embindId);
         }
         return _proxyHandler.deserialize(data);
     },
@@ -115,38 +118,18 @@ Comlink.transferHandlers.set('embindVector', {
     serialize(obj) {
         const len = obj.size();
         const elements = new Array(len);
-        let hasObjects = false;
         for (let i = 0; i < len; i++) {
             const elem = obj.get(i);
-            elements[i] = elem;
-            if (!hasObjects && elem !== null && typeof elem === 'object') {
-                hasObjects = true;
-            }
+            elements[i] = elem !== null && typeof elem === 'object'
+                ? { __comlinkProxy: true, __embindId: registerEmbindObject(elem) }
+                : elem;
         }
-        if (!hasObjects) {
-            return [elements, []];
-        }
-        const transferables = [];
-        for (let i = 0; i < len; i++) {
-            const elem = elements[i];
-            if (elem !== null && typeof elem === 'object') {
-                const id = registerEmbindObject(elem);
-                const { port1, port2 } = new MessageChannel();
-                Comlink.expose(wrapWithVectorCoercion(elem), port1);
-                transferables.push(port2);
-                elements[i] = { __comlinkProxy: true, __embindId: id, port: port2 };
-            }
-        }
-        return [elements, transferables];
+        return [elements, []];
     },
     deserialize(elements) {
-        return elements.map((elem) => {
-            if (elem && typeof elem === 'object' && elem.__comlinkProxy) {
-                elem.port.start();
-                return handleFor(Comlink.wrap(elem.port), elem.__embindId);
-            }
-            return elem;
-        });
+        return elements.map((elem) => (elem && typeof elem === 'object' && elem.__comlinkProxy
+            ? handleFor(elem.__embindId)
+            : elem));
     },
 });
 
@@ -221,18 +204,13 @@ Comlink.transferHandlers.set('embindObject', {
             && typeof obj.isDeleted === 'function';
     },
     serialize(obj) {
-        // An object a property returns comes wrapped by its owner's coercion proxy. Registering and exposing
-        // the raw object, as the proxy handler does, keeps objects read from it one wrapper deep, which an
-        // argument's unwrapping undoes.
-        const raw = unwrapCoercionProxy(obj);
-        const id = registerEmbindObject(raw);
-        const { port1, port2 } = new MessageChannel();
-        Comlink.expose(wrapWithVectorCoercion(raw), port1);
-        return [{ __embindId: id, port: port2 }, [port2]];
+        // An object a property returns comes wrapped by its owner's coercion proxy. Registering the raw object,
+        // as the proxy handler does, keeps objects read from it one wrapper deep, which an argument's unwrapping
+        // undoes.
+        return [{ __embindId: registerEmbindObject(unwrapCoercionProxy(obj)) }, []];
     },
     deserialize(data) {
-        data.port.start();
-        return handleFor(Comlink.wrap(data.port), data.__embindId);
+        return handleFor(data.__embindId);
     },
 });
 
@@ -260,6 +238,20 @@ Comlink.transferHandlers.set('embindProxyArray', {
 
 let _worker = null;
 
+// Configurable, so the coercion wrapper wraps the objects read through it as it does every other member.
+export function moduleRoot(m) {
+    Object.defineProperty(m, HANDLES, {
+        value: new Proxy({}, { get: (_, id) => embindRegistry.get(Number(id)) }),
+        configurable: true,
+    });
+    return wrapWithVectorCoercion(m);
+}
+
+export function adoptModule(remote) {
+    remoteModule = remote;
+    return remote;
+}
+
 function resolveScriptUrl(config) {
     const fileName = config.paths.js || config.paths.worker;
     let prefix = '';
@@ -282,7 +274,7 @@ function exposeWorker(systemConfig, createModule) {
             // comlink throw handler, a raw WebAssembly.Exception does not.
             patchModuleForExceptionDecode(m);
             registerModuleEnums(m);
-            return Comlink.proxy(wrapWithVectorCoercion(m));
+            return Comlink.proxy(moduleRoot(m));
         },
     };
     Comlink.expose(workerApi);
@@ -297,7 +289,7 @@ async function initWithWorker(config, userConfig) {
         logHandler, errorHandler, onRuntimeInitialized, getWasmFunction, useWorker, workerUrl,
         ...serializableConfig
     } = userConfig;
-    const module = await workerApi.init(serializableConfig);
+    const module = adoptModule(await workerApi.init(serializableConfig));
 
     return new Proxy(module, {
         get(target, prop) {
