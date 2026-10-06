@@ -427,25 +427,6 @@ transfer while one waits for this reason, but any two `_JSPI` methods that suspe
   `await Promise.all([1, 2, 3].map((seed) => probe_JSPI(seed, 200)))` gives `[0, 64, 64]`.
 - Remove when each suspended call runs on a stack of its own, or crossbind queues `_JSPI` calls.
 
-## `RUNNER: 'LOCAL'` still pulls the Docker images
-
-`run()` pulls the target's image before it picks a runner, and the pull does not read `RUNNER`. A
-build under `"RUNNER": "LOCAL"` in `~/.crossbind.json` therefore still runs `docker image inspect`
-and `docker pull` before every wasm, android, linux, linuxmusl and win32 step, and before every
-`swig` and `em++` call, darwin and ios builds included. Without Docker the build fails on the
-missing `docker` binary; with Docker it downloads images it never runs. `runCargo` already keeps
-everything on the host under `LOCAL`.
-
-Fixing the pull alone does not make a build Docker-free. `swig -embind` exists only in the crossbind
-fork the images carry, the port archives are built with the image's emsdk 6.0.9, and the linux,
-win32 and android toolchains `run.js` points at (`/opt/crossbind/linux`, `/opt/llvm-mingw`,
-`/opt/android-sdk/ndk/current`) exist only inside the images.
-
-- Seen: 2026-10-03 (read from `run.js`; no build was run without Docker)
-- Check: `grep -n -B3 'pullDockerImage(imageRoleFor(target)' core/crossbind/src/actions/run.js`
-  shows the pull guarded by the platform and the program, not by `RUNNER`.
-- Remove when a build under `RUNNER: 'LOCAL'` makes no docker call.
-
 ## An Android app can ship without a dependency's shared library
 
 The React Native plugin asks for CMake `3.25.0+` (`plugins/react-native/android/build.gradle`). On a
