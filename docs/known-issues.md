@@ -120,17 +120,6 @@ emulator are both available.
 - Check: `grep -rn 'e2e-templates\|e2e:templates' .github/workflows/` returns nothing.
 - Remove when a workflow runs the harness.
 
-## Two templates are never built
-
-Nothing depends on `@crossbind/example-lib-source` or `@crossbind/example-lib-cmake`, and neither
-has a build script, so no sample, fixture or harness run builds them; the harness can only scaffold
-and install them. `lib-source` is also the only package with `export.type: 'source'`.
-
-- Seen: 2026-09-23
-- Check: `grep -rl --include=package.json --exclude-dir=node_modules -e '"@crossbind/example-lib-source"' -e '"@crossbind/example-lib-cmake"' examples e2e plugins core ports landing`
-  lists only the two packages' own manifests.
-- Remove when an app or fixture builds against both.
-
 ## LERC 4.2.0 writes four uninitialised bytes into lossless float blobs
 
 Upstream `EncodeHuffman` (`fpl_EsriHuffman.cpp`) leaves a trailing read-ahead `uint32` of its

@@ -154,9 +154,15 @@ importers:
       '@crossbind/embind-rust-demo':
         specifier: workspace:^
         version: link:../../core/embind-rust/demo
+      '@crossbind/example-lib-cmake':
+        specifier: workspace:^
+        version: link:../../examples/lib-cmake
       '@crossbind/example-lib-prebuilt-matrix':
         specifier: workspace:^
         version: link:../../examples/lib-prebuilt-matrix
+      '@crossbind/example-lib-source':
+        specifier: workspace:^
+        version: link:../../examples/lib-source
       '@crossbind/port-curl-wasm':
         specifier: workspace:^
         version: link:../../ports/curl/wasm

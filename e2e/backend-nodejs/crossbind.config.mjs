@@ -1,4 +1,6 @@
 import matrix from '@crossbind/example-lib-prebuilt-matrix/crossbind.config.js';
+import sourceSample from '@crossbind/example-lib-source/crossbind.config.js';
+import cmakeSample from '@crossbind/example-lib-cmake/crossbind.config.js';
 import { conformanceExport } from '@crossbind/conformance/config.mjs';
 import embindRustDemo from '@crossbind/embind-rust-demo/crossbind.config.mjs';
 import conformanceRust from '@crossbind/conformance-rust/crossbind.config.mjs';
@@ -22,6 +24,7 @@ export default {
     },
     dependencies: [
         matrix,
+        sourceSample, cmakeSample,
         embindRustDemo, conformanceRust,
         curl,
         expat,
@@ -44,7 +47,9 @@ export default {
         base: '../..', /* Delete this line for create-crossbind */
         // Standalone builds bridge every header on this list; the conformance kit's C++
         // surface rides along from its own workspace package.
-        header: ['src/native', '../conformance/native'],
+        // The lib-source and lib-cmake templates are called from a header of this fixture's own:
+        // src/native is shared with fixtures that do not depend on them.
+        header: ['src/native', 'src/templates', '../conformance/native'],
         output: 'dist',
     },
     targetSpecs: [
