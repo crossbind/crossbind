@@ -267,6 +267,19 @@ Rspack demos have nothing to rewrite and `patchBundles` throws "no bundle needed
 - Remove when the demos build against a release with the base-aware plugins and the rewrites are gone,
   `verifyDemo` still loading each demo from its subpath.
 
+## A debug build does not take an enum member for an integer
+
+`core/crossbind/src/utils/embindArgumentGuards.js` rewrites embind's integer and enum conversions in the
+release glue only. In the debug glue, which the dev servers load, embind's own integer conversion throws a
+TypeError for any object, an enum member included, where a release build takes the member's number. On a
+worker runtime the rejected write goes unnoticed: `config.image_hint = WebPImageHint.WEBP_HINT_PHOTO`
+leaves the field at 0. Measured the same on the tree this branch started from.
+
+- Seen: 2026-10-06
+- Check: in `e2e/web-rspack`, `npx playwright test --config playwright.dev.config.cjs --project chromium`
+  ends the conformance line with `NO pkgField:enumMember=0`.
+- Remove when a debug build takes an enum member, a Number and a one-letter string as a release build does.
+
 ## The JavaScript-only demos work around fixes that are not released yet
 
 `landing/demos/lib-*/direct` builds against the published `beta`, which predates what this tree fixed:
