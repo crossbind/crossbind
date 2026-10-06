@@ -75,19 +75,6 @@ including those from the published `tiffcp` in `@crossbind/port-tiff-standalone-
   `wasmtime run --dir=.`: the file reads `BCCA` instead of `BAAACC`.
 - Remove when the same program writes `BAAACC`.
 
-## GDAL's thread pools hang or fail in single-threaded wasm
-
-`GDALViewshedGenerate` hands its work to a fixed pool of four threads, which a single-threaded wasm
-build cannot create, so the call never returns. ogr2ogr's Arrow path on GeoPackage input fails with
-`Cannot start worker thread`, and the GeoPackage R-tree build logs thread errors before falling back.
-landing/demos/lib-gdal runs pool jobs in place (`-Wl,--wrap` of `CPLJobQueue::SubmitJob` and
-`CPLWorkerThreadPool::SubmitJob`) and sets `OGR2OGR_USE_ARROW_API=NO` and `OGR_GPKG_NUM_THREADS=1`.
-
-- Seen: 2026-09-25
-- Check: call `GDALViewshedGenerate` from a `-r st` browser build of `@crossbind/port-gdal-wasm`
-  without those wraps; it does not return.
-- Remove when the port's single-threaded build runs pool jobs inline.
-
 ## Function-pointer fields of C structs have no binding
 
 Bridges bind data pointer fields as handles or instances but leave function pointers out, declared
