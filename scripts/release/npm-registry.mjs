@@ -6,11 +6,12 @@ import { promisify } from 'node:util';
 import { PACKAGE_NAME } from './release-lib.mjs';
 
 // The beta 58 train saw npm hold two publishes past ten minutes and leave one in its staged
-// state for half an hour, so the window is twenty minutes of the same five-to-thirty-second
-// backoff. Publication and verification run as separate phases, so this wait is paid once for
-// the packages npm is still indexing, not once per package.
-export const REGISTRY_MAX_ATTEMPTS = 44;
-export const REGISTRY_MAX_DURATION_MS = 20 * 60 * 1000;
+// state for half an hour, and a beta 60 package was still absent after twenty minutes, so the
+// window is an hour of the same five-to-thirty-second backoff. Publication and verification run
+// as separate phases, so this wait is paid once for the packages npm is still indexing, not once
+// per package.
+export const REGISTRY_MAX_ATTEMPTS = 122;
+export const REGISTRY_MAX_DURATION_MS = 60 * 60 * 1000;
 export const REGISTRY_INITIAL_BACKOFF_MS = 5 * 1000;
 export const REGISTRY_MAX_BACKOFF_MS = 30 * 1000;
 export const PROVENANCE_PREDICATE = 'https://slsa.dev/provenance/v1';

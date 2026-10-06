@@ -333,12 +333,14 @@ test('npm view output is read the same way from npm 11 scalars and npm 12 single
     assert.equal(parseNpmJson('sha512-abc'), 'sha512-abc');
 });
 
-test('the registry poll waits at least ten minutes because npm publishes surface late', () => {
+// npm held a beta 58 version staged for half an hour, and a beta 60 package was still absent after twenty minutes.
+test('the registry poll waits twice the longest npm lag seen', () => {
+    const longestLagSeenMs = 30 * 60 * 1000;
     let waited = 0;
     for (let attempt = 1; attempt < REGISTRY_MAX_ATTEMPTS; attempt += 1) {
         waited += Math.min(REGISTRY_INITIAL_BACKOFF_MS * 2 ** (attempt - 1), REGISTRY_MAX_BACKOFF_MS);
     }
-    assert.ok(REGISTRY_MAX_DURATION_MS >= 10 * 60 * 1000, `window is ${REGISTRY_MAX_DURATION_MS / 60000} minutes`);
+    assert.ok(REGISTRY_MAX_DURATION_MS >= 2 * longestLagSeenMs, `window is ${REGISTRY_MAX_DURATION_MS / 60000} minutes`);
     assert.ok(waited >= REGISTRY_MAX_DURATION_MS - REGISTRY_MAX_BACKOFF_MS, `attempts only cover ${waited / 1000} seconds`);
 });
 

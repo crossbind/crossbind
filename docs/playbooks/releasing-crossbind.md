@@ -104,10 +104,10 @@ npm publish <exact-tarball.tgz> --tag <beta|next|latest> --access public --prove
 
 It publishes in dependency order. `crossbind` has no local runtime dependencies and receives
 explicit first priority whenever it is part of the train, so packages depending on it never race
-ahead. After each package, the workflow polls the exact version and expected dist-tag, checks the
-registry SHA-512 and validates the signed SLSA provenance subject, repository, workflow and release
-commit. There are at most 22 attempts over at most ten minutes, with backoff from five to 30
-seconds. A previous beta/RC does not count as success.
+ahead. Once the packages are published, the workflow polls each one's exact version and expected
+dist-tag, checks the registry SHA-512 and validates the signed SLSA provenance subject, repository,
+workflow and release commit. There are at most 122 attempts over at most an hour per package, with
+backoff from five to 30 seconds. A previous beta/RC does not count as success.
 
 Only after every npm artifact and provenance statement verifies does the workflow create missing
 exact package tags such as:
