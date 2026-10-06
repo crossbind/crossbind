@@ -10,9 +10,12 @@ function wireOf(code, register) {
     const registered = {};
     const load = new Function(
         'registerType', 'AsciiToString', 'integerReadValueFromPointer', 'enumReadValueFromPointer', 'getEnumValueType', 'exposePublicSymbol',
+        'embindRepr', 'assertIntegerRange',
         `${code}; return typeof __embind_register_integer !== 'undefined' ? __embind_register_integer : __embind_register_enum;`,
     );
-    const registerFn = load((raw, type) => { registered[raw] = type; }, (name) => name, () => null, () => null, () => 'object', () => {});
+    const registerFn = load(
+        (raw, type) => { registered[raw] = type; }, (name) => name, () => null, () => null, () => 'object', () => {}, String, () => {},
+    );
     register(registerFn);
     const [type] = Object.values(registered);
     return (value) => type.toWireType([], value);
@@ -47,6 +50,81 @@ describe('guardEmbindArguments', () => {
         const changed = INTEGER.replace('toWireType:(destructors,value)=>value', 'toWireType:(d,v)=>v');
         expect(guardEmbindArguments(`${changed}${ENUM}`).missed).toEqual(['_embind_register_integer']);
         expect(guardEmbindArguments('var unrelated=1;').missed).toEqual([]);
+    });
+});
+
+// The same two registrations in the debug glue the dev servers load, whose integer conversion throws for any object.
+const DEBUG_INTEGER = [
+    'var __embind_register_integer = (primitiveType, name, size, minRange, maxRange) => {',
+    '  name = AsciiToString(name);',
+    '  registerType(primitiveType, {',
+    '    name,',
+    '    fromWireType: value => value,',
+    '    toWireType: (destructors, value) => {',
+    '      if (typeof value != "number" && typeof value != "boolean") {',
+    '        throw new TypeError(`Cannot convert "${embindRepr(value)}" to ${name}`);',
+    '      }',
+    '      assertIntegerRange(name, value, minRange, maxRange);',
+    '      return value;',
+    '    },',
+    '    readValueFromPointer: integerReadValueFromPointer(name, size, minRange !== 0),',
+    '    destructorFunction: null',
+    '  });',
+    '};',
+    // The float conversion reads the same, and an enum member means nothing to a float.
+    'var __embind_register_float = (rawType, name, size) => {',
+    '  registerType(rawType, {',
+    '    toWireType: (destructors, value) => {',
+    '      if (typeof value != "number" && typeof value != "boolean") {',
+    '        throw new TypeError(`Cannot convert ${embindRepr(value)} to ${this.name}`);',
+    '      }',
+    '      return value;',
+    '    },',
+    '  });',
+    '};',
+].join('\n');
+const DEBUG_ENUM = [
+    'var __embind_register_enum = (rawType, name, size, isSigned, rawValueType) => {',
+    '  name = AsciiToString(name);',
+    '  function ctor() {}',
+    '  registerType(rawType, {',
+    '    name,',
+    '    constructor: ctor,',
+    '    toWireType: (destructors, c) => c.value,',
+    '    readValueFromPointer: enumReadValueFromPointer(name, size, isSigned),',
+    '    destructorFunction: null',
+    '  });',
+    '  exposePublicSymbol(name, ctor);',
+    '};',
+].join('\n');
+
+// Measured on e2e/web-rspack's dev server: pkgField:enumMember read 0 and pkgField:enumNumberParam took the default preset.
+describe('guardEmbindArguments on a debug glue', () => {
+    test('an integer parameter takes an enum member as its value and a char a one-character string', () => {
+        const toInt = wireOf(guardEmbindArguments(DEBUG_INTEGER).text, (register) => register('i32', 'int', 4, -2147483648, 2147483647));
+        const toChar = wireOf(guardEmbindArguments(DEBUG_INTEGER).text, (register) => register('c', 'char', 1, -128, 127));
+
+        expect([toInt(7), toInt(true), toInt({ value: 2 }), toChar('|')]).toEqual([7, true, 2, 124]);
+        expect(() => toInt({})).toThrow(/Cannot convert/);
+    });
+
+    test('a float conversion is left as it is', () => {
+        const float = (glue) => glue.slice(glue.indexOf('var __embind_register_float'));
+
+        expect(float(guardEmbindArguments(DEBUG_INTEGER).text)).toBe(float(DEBUG_INTEGER));
+    });
+
+    test('an enum parameter takes a member or its number, and nothing else', () => {
+        const toWire = wireOf(guardEmbindArguments(DEBUG_ENUM).text, (register) => register('e', 'Style', 4, true, 0));
+
+        expect([toWire({ value: 2 }), toWire(3)]).toEqual([2, 3]);
+        expect(() => toWire('flat')).toThrow(/Style takes a member/);
+    });
+
+    test('reports a debug registration whose code no longer matches', () => {
+        const changed = DEBUG_INTEGER.replace('toWireType: (destructors, value) => {', 'toWireType: (d, v) => {');
+
+        expect(guardEmbindArguments(changed).missed).toEqual(['__embind_register_integer']);
     });
 });
 
