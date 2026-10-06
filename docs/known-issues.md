@@ -32,17 +32,6 @@ against old glue and passes on what it did not load. iOS rebuilds its bundle on 
 - Workaround: move `android/app/build/generated/assets/react/release` aside before building.
 - Remove when a JavaScript-only change to a workspace package rebuilds the bundle.
 
-## The React Native CLI sample's jest suite does not run
-
-`@react-native/jest-preset` is not transformed, so the suite fails to start. It fails on `main` as
-well, so this predates the 0.87 move, and no workflow runs it — the sample is only reached for the
-iOS and Android e2e builds.
-
-- Seen: 2026-09-22
-- Check: `pnpm --filter @crossbind/example-mobile-reactnative-cli test` fails with
-  `Jest encountered an unexpected token` at `@react-native/jest-preset/jest/setup.js`.
-- Remove when the suite runs.
-
 ## The Expo sample is never installed in CI
 
 `examples/mobile-reactnative-expo` keeps its own npm lockfile outside the pnpm workspace and no job
