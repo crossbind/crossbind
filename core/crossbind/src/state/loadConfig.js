@@ -14,6 +14,7 @@ import calculateDependencyParameters from './calculateDependencyParameters.js';
 import logger from '../utils/logger.js';
 import { RUNTIME_ENVS } from '../utils/targets.js';
 import { normalizeConanDependencies } from '../utils/conanDependencies.js';
+import isSourceCmakePackage from '../utils/isSourceCmakePackage.js';
 // import getCmakeParameters from './getCmakeParameters.js';
 
 // For the project being built only: dependency builds load published configs that may still set
@@ -211,22 +212,13 @@ export function getFilledConfig(config, options = { isDepend: false }) {
         newConfig.target.runtime = 'mt';
     }
 
-    newConfig.functions.isEnabled = newConfig.functions.isEnabled || ((target) => {
-        // Source-cmake packages ship no prebuilt at all: their own CMakeLists (at the
-        // package root, not a generated dist/prebuilt one) is compiled into the consuming
-        // build via add_subdirectory, so they serve every target.
-        const isSourceCmakePackage = newConfig.export?.type === 'cmake'
-            && newConfig.paths.cmake !== newConfig.paths.cliCMakeListsTxt
-            && !newConfig.paths.cmakeDir.endsWith('/prebuilt')
-            && fs.existsSync(newConfig.paths.cmake);
-
-        return (
-            isSourceCmakePackage
-            || fs.existsSync(`${newConfig.paths.cmakeDir}/${target.path}`)
-            || fs.existsSync(`${newConfig.paths.cmakeDir}/${target.releasePath}`)
-            || (target.platform === 'ios' && fs.existsSync(`${newConfig.paths.cmakeDir}/../../${newConfig.general.name}-${target.runtime}.xcframework`))
-        );
-    });
+    // A package that ships its sources serves every target.
+    newConfig.functions.isEnabled = newConfig.functions.isEnabled || ((target) => (
+        isSourceCmakePackage(newConfig)
+        || fs.existsSync(`${newConfig.paths.cmakeDir}/${target.path}`)
+        || fs.existsSync(`${newConfig.paths.cmakeDir}/${target.releasePath}`)
+        || (target.platform === 'ios' && fs.existsSync(`${newConfig.paths.cmakeDir}/../../${newConfig.general.name}-${target.runtime}.xcframework`))
+    ));
 
     newConfig.dependencyParameters = calculateDependencyParameters(newConfig);
     // newConfig.cmakeParameters = getCmakeParameters(newConfig);
