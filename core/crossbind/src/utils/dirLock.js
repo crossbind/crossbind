@@ -6,8 +6,10 @@ import logger from './logger.js';
 // is assumed to be a crashed process whose lock must be broken.
 const DEFAULT_STALE_MS = 60 * 60 * 1000;
 const DEFAULT_POLL_MS = 2000;
+const DEFAULT_HELD_BY = 'another build is working on this dependency';
 
 const sleep = (ms) => new Promise((resolve) => { setTimeout(resolve, ms); });
+const sleepSync = (ms) => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
 
 // Reads the PID recorded in the lock file and reports whether that process is
 // still running: 'alive' (signal delivered, or owned by another user), 'dead'
@@ -30,7 +32,8 @@ export function lockHolderStatus(lockPath) {
     }
 }
 
-export default async function withDirLock(lockPath, fn, options = {}) {
+// Takes the lock, yielding each wait so the async and the sync lock share one procedure.
+function* acquire(lockPath, options) {
     const staleMs = options.staleMs ?? DEFAULT_STALE_MS;
     const pollMs = options.pollMs ?? DEFAULT_POLL_MS;
     fs.mkdirSync(path.dirname(lockPath), { recursive: true });
@@ -41,7 +44,7 @@ export default async function withDirLock(lockPath, fn, options = {}) {
             const fd = fs.openSync(lockPath, 'wx');
             fs.writeSync(fd, String(process.pid));
             fs.closeSync(fd);
-            break;
+            return;
         } catch (e) {
             if (e.code !== 'EEXIST') throw e;
             const status = lockHolderStatus(lockPath);
@@ -56,15 +59,28 @@ export default async function withDirLock(lockPath, fn, options = {}) {
                 continue;
             }
             if (!hasWarned) {
-                logger.info(`crossbind: waiting for ${lockPath} (another build is working on this dependency)…`);
+                logger.info(`crossbind: waiting for ${lockPath} (${options.heldBy ?? DEFAULT_HELD_BY})…`);
                 hasWarned = true;
             }
-            await sleep(pollMs);
+            yield pollMs;
         }
     }
+}
 
+export default async function withDirLock(lockPath, fn, options = {}) {
+    for (const ms of acquire(lockPath, options)) await sleep(ms);
     try {
         return await fn();
+    } finally {
+        fs.rmSync(lockPath, { force: true });
+    }
+}
+
+// For a caller that holds the lock across execFileSync, where the event loop cannot run anyway.
+export function withDirLockSync(lockPath, fn, options = {}) {
+    for (const ms of acquire(lockPath, options)) sleepSync(ms);
+    try {
+        return fn();
     } finally {
         fs.rmSync(lockPath, { force: true });
     }

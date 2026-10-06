@@ -75,7 +75,7 @@ export default async function buildNativeCommand(target, options = {}) {
         `-DCROSSBIND_LINK_DEPENDS=${libs.join(';')}`,
         `-DCROSSBIND_STATIC=${isStatic ? 'ON' : 'OFF'}`,
     ], platformPrefix, target);
-    run(null, ['cmake', '--build', '.', '-j', String(cpuCount)], platformPrefix, target);
+    run(null, ['cmake', '--build', '.', '-j', String(cpuCount)], platformPrefix, target, { exclusive: true });
     fs.copyFileSync(`${build}/${platformPrefix}/${target.path}/${target.commandName}`, `${build}/${target.commandName}`);
     logger.doneStep(target, 'native command');
 

@@ -81,6 +81,14 @@ describe('buildNativeCommand', () => {
         expect(fs.readFileSync(`${work}/demo.linux-x64`, 'utf8')).toBe('executable');
     });
 
+    test('compiles the command in turn with other builds, configuring it freely', async () => {
+        await buildNativeCommand(targetOf('linux'), { force: true });
+
+        const optionsOf = (isStep) => run.mock.calls.find(([, args]) => isStep(args))?.[4];
+        expect(optionsOf((args) => args[1] === '--build')).toEqual({ exclusive: true });
+        expect(optionsOf((args) => args[1] !== '--build')).toBeUndefined();
+    });
+
     test('links a musl executable statically, so one binary runs on every Linux', async () => {
         await buildNativeCommand(targetOf('linuxmusl'), { force: true });
 

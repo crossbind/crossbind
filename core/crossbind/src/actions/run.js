@@ -1,5 +1,8 @@
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { withDirLockSync } from '../utils/dirLock.js';
 import pullDockerImage, { getDockerImage, getDockerContainerName, imageRoleFor } from '../utils/pullDockerImage.js';
 import getOsUserAndGroupId from '../utils/getOsUserAndGroupId.js';
 import replaceBasePathForDockerUtil from '../utils/replaceBasePathForDocker.js';
@@ -18,6 +21,9 @@ import {
 
 // Native builds can outrun Node's 1 MiB default pipe buffer; without a raised cap a successful build dies with ENOBUFS.
 const EXEC_MAX_BUFFER = 512 * 1024 * 1024;
+// Containers share the memory of Docker's VM, and one compile at full -j can take most of a desktop VM
+// (GDAL's bindings peak at 7.5 of 7.7 GiB), so the exclusive steps of parallel builds take turns.
+const DOCKER_COMPILE_LOCK = path.join(os.homedir(), '.crossbind', 'docker-compile.lock');
 const envParams = (env) => Object.entries(env).flatMap(([variable, value]) => ['-e', `${variable}=${value}`]);
 const CROSSCOMPILER_ARM64 = `aarch64-linux-android${ANDROID_API_LEVEL}`;
 const CROSSCOMPILER_x86_64 = `x86_64-linux-android${ANDROID_API_LEVEL}`;
@@ -409,7 +415,11 @@ export default function run(program, params = [], platformPrefix = null, target 
     }
 
     try {
-        execFileSync(...fileExecParams);
+        if (runner === 'DOCKER' && dockerOptions.exclusive) {
+            withDirLockSync(DOCKER_COMPILE_LOCK, () => execFileSync(...fileExecParams), { heldBy: 'another build is compiling in Docker' });
+        } else {
+            execFileSync(...fileExecParams);
+        }
     } catch (e) {
         if (e?.stdout?.length) console.log(e.stdout.toString());
         if (e?.stderr?.length) console.error(e.stderr.toString());

@@ -56,6 +56,13 @@ describe('createLib make phases', () => {
         if (process.platform !== 'win32') expect(fs.statSync(staged).mode & 0o111).not.toBe(0);
     });
 
+    test('every make phase compiles in turn with other builds', () => {
+        createLib(target, 'Source', { buildSource: true });
+
+        const makeOptions = run.mock.calls.filter(([, params]) => params[0] === 'make').map(([, , , , options]) => options);
+        expect(makeOptions).toEqual([{ console: true, exclusive: true }, { console: true, exclusive: true }]);
+    });
+
     test('cmake builds keep the install rules cmake generated', () => {
         state.config.build = {};
 

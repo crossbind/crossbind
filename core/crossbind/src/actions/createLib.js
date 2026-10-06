@@ -229,7 +229,7 @@ export default function createLib(target, fileType, options = {}) {
         // A make command-line variable beats the Makefile's own INSTALL, autosetup's (sqlite3) included.
         const installParams = state.config.build?.buildType === 'configure' ? [`INSTALL=${stageInstall()}`] : [];
         makePhases.forEach((phase) => {
-            run(null, ['make', `-j${cpuCount}`, ...installParams, ...phase], platformPrefix, target, { console: buildEnv.console });
+            run(null, ['make', `-j${cpuCount}`, ...installParams, ...phase], platformPrefix, target, { console: buildEnv.console, exclusive: true });
         });
     }
     const t2 = performance.now();
