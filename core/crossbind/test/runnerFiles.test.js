@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import {
-    isExcluded, matchesPattern, walk, snapshot, hashIndex, expandRoots, presentUnits, planSync, diffSnapshots, hostPathOf,
+    isExcluded, matchesPattern, walk, snapshot, hashIndex, expandRoots, presentUnits, planSync, diffSnapshots, hostPathOf, isDeclaredOutput,
 } from '../src/runner/files.js';
 import { REMOTE_EXCLUDE_RULES } from '../src/utils/remoteRunner.js';
 
@@ -29,6 +29,34 @@ describe('runner file sync', () => {
         expect(isExcluded('app/src/main.jsx', REMOTE_EXCLUDE_RULES)).toBe(true);
         expect(isExcluded('app/src/native/native.cpp', REMOTE_EXCLUDE_RULES)).toBe(false);
         expect(isExcluded('app/.crossbind/build/Source-Release/CMakeCache.txt', REMOTE_EXCLUDE_RULES)).toBe(false);
+    });
+
+    test('keeps credential files such as .env and .npmrc on the machine', () => {
+        expect(isExcluded('pkg/.env', REMOTE_EXCLUDE_RULES)).toBe(true);
+        expect(isExcluded('pkg/.env.local', REMOTE_EXCLUDE_RULES)).toBe(true);
+        expect(isExcluded('pkg/.npmrc', REMOTE_EXCLUDE_RULES)).toBe(true);
+        expect(isExcluded('pkg/environment.h', REMOTE_EXCLUDE_RULES)).toBe(false);
+    });
+
+    test.skipIf(process.platform === 'win32')('follows a link that stays inside the base and skips one that leads out, which a local container would see dangle', () => {
+        const outside = fs.mkdtempSync(path.join(os.tmpdir(), 'crossbind-outside-'));
+        fs.writeFileSync(path.join(outside, 'id_rsa'), 'key');
+        write('src/real.h', 'inside');
+        fs.symlinkSync(path.join(base, 'src/real.h'), path.join(base, 'src/alias.h'));
+        fs.symlinkSync(path.join(outside, 'id_rsa'), path.join(base, 'src/key'));
+        fs.symlinkSync(outside, path.join(base, 'src/ssh'));
+
+        const files = snapshot(base, ['src'], REMOTE_EXCLUDE_RULES);
+
+        expect([...files.keys()].sort()).toEqual(['src/alias.h', 'src/real.h']);
+        fs.rmSync(outside, { recursive: true, force: true });
+    });
+
+    test.skipIf(process.platform === 'win32')('does not loop through a link back to a folder it is already inside', () => {
+        write('src/a/x.h', 'x');
+        fs.symlinkSync(path.join(base, 'src'), path.join(base, 'src/a/up'));
+
+        expect([...snapshot(base, ['src'], REMOTE_EXCLUDE_RULES).keys()]).toEqual(['src/a/x.h']);
     });
 
     test('keeps native files and drops JavaScript and dependency folders below a root', () => {
@@ -148,5 +176,35 @@ describe('hostPathOf', () => {
     test('refuses a path no mount holds, so a runner cannot write anywhere else on the machine', () => {
         expect(() => hostPathOf(mounts, '/etc/passwd')).toThrow(/outside the mounts/);
         expect(() => hostPathOf(mounts, '/tmp/crossbind/live/../../etc/passwd')).toThrow(/outside the mounts/);
+    });
+
+    test('refuses a backslash or NUL, which Windows would read as a separator and climb out with', () => {
+        expect(() => hostPathOf(mounts, '/tmp/crossbind/live/out/..\\..\\..\\Users\\me\\x.bat')).toThrow(/outside the mounts/);
+        expect(() => hostPathOf(mounts, '/tmp/crossbind/live/out/a\0b')).toThrow(/outside the mounts/);
+    });
+
+    test.runIf(process.platform === 'win32')('refuses a colon on Windows, where it names a drive or a stream', () => {
+        expect(() => hostPathOf(mounts, '/tmp/crossbind/live/out/x.o:hidden')).toThrow(/outside the mounts/);
+    });
+});
+
+describe('isDeclaredOutput', () => {
+    test('accepts a file below an output root of the step and nothing else, a git hook least of all', () => {
+        const roots = ['app/.crossbind', 'ports/x/crate/Cargo.lock'];
+
+        expect(isDeclaredOutput('app/.crossbind/build/x.o', roots)).toBe(true);
+        expect(isDeclaredOutput('ports/x/crate/Cargo.lock', roots)).toBe(true);
+        expect(isDeclaredOutput('app/package.json', roots)).toBe(false);
+        expect(isDeclaredOutput('.git/hooks/pre-commit', roots)).toBe(false);
+        expect(isDeclaredOutput('app/.crossbind-old/x.o', roots)).toBe(false);
+    });
+
+    test('accepts a file of a store unit this machine lacks and refuses one of a unit it already holds', () => {
+        const roots = ['registry/src/*/*'];
+        const unit = 'registry/src/index.crates.io-1949cf8c6b5b557f/semver-1.0.26';
+
+        expect(isDeclaredOutput(`${unit}/src/lib.rs`, roots, [])).toBe(true);
+        expect(isDeclaredOutput(`${unit}/src/lib.rs`, roots, [unit])).toBe(false);
+        expect(isDeclaredOutput('registry/cache/index/semver-1.0.26.crate', roots, [])).toBe(false);
     });
 });

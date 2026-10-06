@@ -5,10 +5,11 @@ import { DOCKER_BASE } from './replaceBasePathForDocker.js';
 
 const CLIENT = fileURLToPath(new URL('./remoteClient.js', import.meta.url));
 
-// Only native inputs travel to the runner; the application's JavaScript stays on the machine. A cargo
-// target folder stays on the runner, and only the static libraries crossbind links come back from it.
+// Only native inputs travel to the runner; the application's JavaScript and credential files stay on the
+// machine. A cargo target folder stays on the runner, and only the static libraries crossbind links come back from it.
 export const REMOTE_EXCLUDE_RULES = Object.freeze({
     dirs: Object.freeze(['node_modules', '.git']),
+    files: Object.freeze(['.env', '.env.*', '.npmrc', '.yarnrc', '.yarnrc.yml', '.netrc']),
     extensions: Object.freeze(['.js', '.mjs', '.cjs', '.ts', '.mts', '.cts', '.jsx', '.tsx']),
     serverOnly: Object.freeze({ names: Object.freeze(['target', 'target-mt']), marker: 'Cargo.toml', keep: Object.freeze(['*/release/*.a']) }),
 });
@@ -22,8 +23,28 @@ export const remoteVariables = (role) => ({
     token: `${TOKEN_VARIABLE}_${role.toUpperCase()}`,
 });
 
+// A token goes only to the address it was set with: CROSSBIND_TOKEN_LINUX with CROSSBIND_REMOTE_URL_LINUX,
+// CROSSBIND_TOKEN with CROSSBIND_REMOTE_URL.
+function remoteRunner(role, env = process.env) {
+    const own = remoteVariables(role);
+    if (env[own.url]) return { url: env[own.url], token: env[own.token], tokenVariable: own.token };
+    if (env[URL_VARIABLE]) return { url: env[URL_VARIABLE], token: env[TOKEN_VARIABLE], tokenVariable: TOKEN_VARIABLE };
+    return null;
+}
+
 export function remoteRunnerUrl(role, env = process.env) {
-    return env[remoteVariables(role).url] || env[URL_VARIABLE] || null;
+    return remoteRunner(role, env)?.url ?? null;
+}
+
+const LOOPBACK = /^(localhost|127(\.\d{1,3}){3}|\[::1\])$/;
+const warnedUrls = new Set();
+
+// Plain http to another machine carries the token and the sources unencrypted.
+function warnIfPlainHttp(url) {
+    const { protocol, hostname } = new URL(url);
+    if (protocol !== 'http:' || LOOPBACK.test(hostname) || warnedUrls.has(url)) return;
+    warnedUrls.add(url);
+    console.warn(`crossbind: ${url} is plain http to another machine - the token and your sources travel unencrypted; put TLS in front of the runner.`);
 }
 
 const isInside = (rel, root) => root === '.' || rel === root || rel.startsWith(`${root}/`);
@@ -82,10 +103,10 @@ export function referencedPaths(base, values) {
 
 // Arguments for execFileSync/spawnSync: the client runs as its own process, so the caller stays
 // synchronous as it is with docker. The token reaches it through its environment, never its command line.
-export function remoteExecParams({ url, role, image, mounts, cwd, argv, env }, options) {
-    const variables = remoteVariables(role);
-    const token = process.env[variables.token] || process.env[TOKEN_VARIABLE];
-    if (!token) throw new Error(`crossbind: the ${role} runner at ${url} needs a token - set ${variables.token} or ${TOKEN_VARIABLE}.`);
+export function remoteExecParams({ role, image, mounts, cwd, argv, env }, options) {
+    const { url, token, tokenVariable } = remoteRunner(role);
+    if (!token) throw new Error(`crossbind: the ${role} runner at ${url} needs a token - set ${tokenVariable}.`);
+    warnIfPlainHttp(url);
     const payload = { url, role, image, mounts, cwd, argv, env, rules: REMOTE_EXCLUDE_RULES };
     return [process.execPath, [CLIENT, JSON.stringify(payload)], { ...options, env: { ...process.env, [TOKEN_VARIABLE]: token } }];
 }

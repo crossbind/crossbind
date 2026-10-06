@@ -371,7 +371,6 @@ export default function run(program, params = [], platformPrefix = null, target 
     } else if (runner === 'DOCKER' && remoteUrl) {
         const role = imageRoleFor(target);
         fileExecParams = remoteExecParams({
-            url: remoteUrl,
             mounts: [baseMount(state.config, { extraInputs: referencedPaths(state.config.paths.base, [dProgram, ...dParams, ...Object.values(env)]) })],
             role,
             image: getDockerImage(role, target?.platform === 'android' ? 'linux/amd64' : undefined),

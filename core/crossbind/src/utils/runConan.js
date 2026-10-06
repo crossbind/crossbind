@@ -210,7 +210,6 @@ export default function runConan(args, { config, target, work }) {
     const remoteUrl = remoteRunnerUrl(role);
     if (remoteUrl) {
         return spawnSync(...remoteExecParams({
-            url: remoteUrl,
             role,
             image: getDockerImage(role, platform),
             mounts: [

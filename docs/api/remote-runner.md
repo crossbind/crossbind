@@ -25,14 +25,16 @@ crossbind runner init fly             # or cloudflare; --role android|linux|wind
 
 | Platform | `runner init` writes | Deploy | URL |
 |---|---|---|---|
-| Fly.io | `Dockerfile`, `fly.toml`: one `performance-4x` machine with 16 GB that stops when idle and starts on the next request | `fly launch --copy-config --no-deploy --ha=false`, `fly secrets set CROSSBIND_RUNNER_TOKEN=<token>`, `fly deploy --ha=false` | `https://<app>.fly.dev` |
+| Fly.io | `Dockerfile`, `fly.toml`: one `performance-4x` machine with 16 GB that stops when idle and starts on the next request | `fly launch --copy-config --no-deploy --ha=false`, `fly secrets set CROSSBIND_RUNNER_TOKEN=<token>`, `fly deploy --ha=false` | `https://crossbind-runner-<role>-<random>.fly.dev` |
 | Cloudflare Containers | `Dockerfile`, `wrangler.jsonc`: one `standard-4` container, `src/worker.js`: a Worker that checks the token, starts the container and forwards to it | `npx wrangler deploy` (builds the image with the local Docker), `npx wrangler secret put CROSSBIND_RUNNER_TOKEN` | `https://crossbind-runner-<role>.<account>.workers.dev` |
 
 Both keep one machine: a runner holds one build tree on its own disk. Then build with the pair of variables the steps end with.
 
+Fly app names are global, so the generated name carries a random part, which also keeps the address hard to guess. That matters: Fly starts the machine for any request that reaches the app, one without the token too, and bills it until it stops when idle, so keep the address private. The Cloudflare Worker refuses such a request before the container starts.
+
 ## Addresses and tokens
 
-Each image has its own pair of variables, and a step's own pair wins over the shared one:
+Each image has its own pair of variables, and a step's own pair wins over the shared one. A token goes only with the address it is paired with, so a shared token never reaches the runner of another image:
 
 | Variables | Steps they send |
 |---|---|
@@ -51,7 +53,7 @@ Each image has its own pair of variables, and a step's own pair wins over the sh
   crossbind build -p linux
   ```
 
-- A step whose runner has no token stops before anything travels and names the variables to set. A step that reaches the runner of another image stops with `this runner serves the web toolchain, not android`.
+- A step whose address comes without its paired token stops before anything travels and names the variable to set. A step that reaches the runner of another image stops with `this runner serves the web toolchain, not android`.
 - iOS and macOS builds compile on the Mac with Xcode; their bridge steps go to the web runner when it has an address.
 - `RUNNER=LOCAL` ignores every runner address: each step runs on the host.
 
@@ -59,9 +61,9 @@ Each image has its own pair of variables, and a step's own pair wins over the sh
 
 Each step is its own request, made only when crossbind runs the step; a step it skips because nothing changed sends nothing.
 
-- **Up:** the folders the step reads below `paths.base`: native sources and headers, the build cache (`.crossbind`), the output folder, the dependencies' prebuilt and header folders, crossbind's assets, and any file the command line names (with the package that holds it). JavaScript and TypeScript files, `node_modules` and `.git` inside those folders stay behind.
+- **Up:** the folders the step reads below `paths.base`: native sources and headers, the build cache (`.crossbind`), the output folder, the dependencies' prebuilt and header folders, crossbind's assets, and any file the command line names (with the package that holds it). JavaScript and TypeScript files, credential files (`.env`, `.env.*`, `.npmrc`, `.yarnrc`, `.yarnrc.yml`, `.netrc`), `node_modules` and `.git` inside those folders stay behind, and so does a link that leads out of the base, which a local container would see dangle.
 - **Content-addressed:** the runner keeps every file it receives under its SHA-256 and asks only for what it lacks; an unchanged file never travels twice.
-- **Down:** what the step created or changed in the cache and output folders, checked against its hash; files the step deleted are deleted locally too. Cargo `target` folders stay on the runner, and only the release static libraries come back; crate sources and built Conan packages come back into the local cargo home and Conan store, which crossbind reads on the host.
+- **Down:** what the step created or changed in the cache and output folders, checked against its hash; files the step deleted are deleted locally too. Nothing else is written: not outside the output folders the step declared, not into a cargo or Conan store unit the machine already holds, and not through a link that leads out of the project. Cargo `target` folders stay on the runner, and only the release static libraries come back; crate sources and built Conan packages come back into the local cargo home and Conan store, which crossbind reads on the host.
 - The client keeps a hash index per folder under `~/.crossbind/remote-index/`, so unchanged files are not rehashed. Deleting it costs one rehash.
 
 ## Versions
@@ -71,16 +73,18 @@ A runner serves the image digest pinned by the crossbind that started or generat
 ## Security
 
 - A runner runs any command a token holder sends, inside the toolchain image and with internet access (crates, Conan packages, library sources). Treat the token like a deploy key and give a runner to one person or a team that trusts each other: a build can read what earlier builds left on it.
-- The runner refuses to start without `CROSSBIND_RUNNER_TOKEN`, checks the token on every request except `GET /v1/health`, and syncs files only inside its mount folders.
-- The Cloudflare Worker checks the token before it wakes the container.
-- `runner start` listens on `127.0.0.1`, hands the token to Docker through the environment rather than the command line, and runs the container with crossbind's Docker hardening (all capabilities dropped, `no-new-privileges`). It speaks plain HTTP: with `--host 0.0.0.0`, keep it on a network you trust or put TLS in front of it. Fly and Cloudflare serve HTTPS.
+- A runner lives on between builds, so it is only as trustworthy as everything it has built. Build steps run as the same unprivileged user as the runner: they cannot change the toolchain, but a malicious build script can change the emscripten cache and the files the runner keeps for later builds, and read the token from the runner process, although it is not in the steps' environment. Restart the runner (`runner stop` and `runner start`, or redeploy) after building something you do not trust. `RUNNER=DOCKER_EXEC` shares this; `RUNNER=DOCKER_RUN` starts every step in a fresh container.
+- The runner refuses to start without a `CROSSBIND_RUNNER_TOKEN` of at least 16 characters, checks it in constant time on every request except `GET /v1/health`, and syncs files only inside its mount folders.
+- The Cloudflare Worker checks the token, in constant time, before it wakes the container.
+- The client follows no redirect, and warns once when an address is plain http to another machine, where the token and the sources travel unencrypted. It refuses a returned path holding `\`, and on Windows one holding `:`.
+- `runner start` listens on `127.0.0.1`, hands the token to Docker through the environment rather than the command line, prints a token taken from `$CROSSBIND_RUNNER_TOKEN` by that name, and runs the container with crossbind's Docker hardening (all capabilities dropped, `no-new-privileges`). It speaks plain HTTP: with `--host 0.0.0.0`, keep it on a network you trust or put TLS in front of it. Fly and Cloudflare serve HTTPS.
 
 ## Limits
 
 - A runner runs one step at a time; concurrent builds queue.
 - Its disk is a cache. When the platform starts the container fresh from its image, the next step uploads its inputs again.
 - Cloudflare Workers accept request bodies up to 100 MB on the Free and Pro plans. Uploads travel base64-encoded, so a single input file over about 75 MB cannot reach a Cloudflare runner. Results are not limited.
-- During a quiet step the runner sends a heartbeat every 15 seconds, so proxies keep the response open.
+- A step answers at once, and heartbeats every 15 seconds while it waits behind another one or runs quietly, so proxies keep the response open.
 
 ## Protocol (v1)
 

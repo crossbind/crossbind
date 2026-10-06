@@ -36,13 +36,13 @@ describe('crossbind runner start', () => {
     });
 
     test('hands docker the token through the environment and makes one when none is given', () => {
-        const given = startRunner({ role: 'web', token: 'given-token' });
+        const given = startRunner({ role: 'web', token: 'given-token-for-tests' });
         const made = startRunner({ role: 'web' });
 
-        expect(given.token).toBe('given-token');
-        expect(execFileSync.mock.calls[0][2].env.CROSSBIND_RUNNER_TOKEN).toBe('given-token');
+        expect(given.token).toBe('given-token-for-tests');
+        expect(execFileSync.mock.calls[0][2].env.CROSSBIND_RUNNER_TOKEN).toBe('given-token-for-tests');
         expect(made.token).toMatch(/^[\w-]{32}$/);
-        expect(execFileSync.mock.calls.flatMap((call) => call[1])).not.toContain('given-token');
+        expect(execFileSync.mock.calls.flatMap((call) => call[1])).not.toContain('given-token-for-tests');
     });
 
     test('refuses an image role crossbind does not have', () => {
@@ -50,8 +50,8 @@ describe('crossbind runner start', () => {
     });
 
     test('gives each role its own host port, so the runners of one build can share a machine', () => {
-        const web = startRunner({ role: 'web', token: 't' });
-        const linux = startRunner({ role: 'linux', token: 't' });
+        const web = startRunner({ role: 'web', token: 'token-for-the-port-test' });
+        const linux = startRunner({ role: 'linux', token: 'token-for-the-port-test' });
 
         expect(web.url).toBe('http://127.0.0.1:8787');
         expect(linux.url).toBe('http://127.0.0.1:8789');
@@ -60,8 +60,23 @@ describe('crossbind runner start', () => {
 
     test('names the address and token variables of the runner\'s own image', () => {
         expect(runnerEnv('linux', 'http://127.0.0.1:8789', 't')).toBe('CROSSBIND_REMOTE_URL_LINUX=http://127.0.0.1:8789 CROSSBIND_TOKEN_LINUX=t');
-        expect(deploySteps('fly', 'deploy', 't', 'android').at(-1)).toContain('CROSSBIND_REMOTE_URL_ANDROID=https://<app>.fly.dev CROSSBIND_TOKEN_ANDROID=t');
-        expect(deploySteps('cloudflare', 'deploy', 't', 'web').at(-1)).toContain('CROSSBIND_REMOTE_URL_WEB=https://crossbind-runner-web.<account>.workers.dev CROSSBIND_TOKEN_WEB=t');
+        expect(deploySteps('cloudflare', 'deploy', 't', 'web', 'https://crossbind-runner-web.<account>.workers.dev').at(-1))
+            .toContain('CROSSBIND_REMOTE_URL_WEB=https://crossbind-runner-web.<account>.workers.dev CROSSBIND_TOKEN_WEB=t');
+    });
+
+    test('refuses a token too short to resist guessing before it starts anything', () => {
+        expect(() => startRunner({ role: 'web', token: 'short' })).toThrow(/at least 16 characters/);
+        expect(execFileSync).not.toHaveBeenCalled();
+    });
+
+    test('shows a token taken from the environment by its variable, so the line it prints carries no secret into a log', () => {
+        vi.stubEnv('CROSSBIND_RUNNER_TOKEN', 'token-from-the-environment');
+
+        const runner = startRunner({ role: 'web' });
+
+        expect(runner.token).toBe('token-from-the-environment');
+        expect(runner.displayToken).toBe('$CROSSBIND_RUNNER_TOKEN');
+        expect(startRunner({ role: 'web', token: 'token-given-on-the-line' }).displayToken).toBe('token-given-on-the-line');
     });
 
     test('stop removes the runner container of that role', () => {
@@ -83,7 +98,7 @@ describe('crossbind runner init fly', () => {
     });
 
     test('writes a folder fly deploy builds: the pinned image plus the runner, and a single machine that stops when idle', () => {
-        initRunner({ platform: 'fly', role: 'web', dir });
+        const { url } = initRunner({ platform: 'fly', role: 'web', dir });
 
         const dockerfile = fs.readFileSync(path.join(dir, 'Dockerfile'), 'utf8');
         const flyToml = fs.readFileSync(path.join(dir, 'fly.toml'), 'utf8');
@@ -93,6 +108,9 @@ describe('crossbind runner init fly', () => {
         expect(flyToml).toContain('internal_port = 8787');
         expect(flyToml).toContain('auto_stop_machines = "stop"');
         expect(fs.readdirSync(path.join(dir, 'runner')).sort()).toEqual(['blobs.js', 'files.js', 'server.js']);
+        const app = flyToml.match(/^app = "(crossbind-runner-web-[0-9a-f]{6})"$/m)[1];
+        expect(url).toBe(`https://${app}.fly.dev`);
+        expect(deploySteps('fly', dir, 't', 'web', url).at(-1)).toContain(`CROSSBIND_REMOTE_URL_WEB=https://${app}.fly.dev CROSSBIND_TOKEN_WEB=t`);
     });
 
     test('pins the amd64 image for an android runner', () => {
@@ -112,6 +130,8 @@ describe('crossbind runner init fly', () => {
         expect(worker).toContain("import { DurableObject } from 'cloudflare:workers'");
         expect(worker).toContain('enableInternet: true');
         expect(worker.indexOf('invalid token')).toBeLessThan(worker.indexOf("getByName('runner')"));
+        expect(worker).toContain('crypto.subtle.timingSafeEqual');
+        expect(worker).not.toMatch(/!==\s*'Bearer '/);
         expect(fs.readFileSync(path.join(dir, 'Dockerfile'), 'utf8')).toContain(`FROM ${getDockerImage('web')}`);
     });
 
