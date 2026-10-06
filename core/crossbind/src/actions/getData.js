@@ -3,7 +3,10 @@ import state from '../state/index.js';
 import { getFilteredTargetSpec, getBuildTargets } from './target.js';
 
 function getRecursiveData(obj, config, dependency, field, target) {
-    const entryArray = getFilteredTargetSpec(dependency?.targetSpecs, target).map(s => s[field]);
+    // An app may list a port's wasm, Android and iOS packages together. One with no prebuilt for the target
+    // drops out of the link, and its data stays out with it.
+    const skipsTarget = field === 'data' && dependency !== config && dependency.functions?.isEnabled && !dependency.functions.isEnabled(target);
+    const entryArray = skipsTarget ? [] : getFilteredTargetSpec(dependency?.targetSpecs, target).map(s => s[field]);
     const entries = Object.assign({}, ...entryArray);
     Object.entries(entries).forEach(([dKey, value]) => {
         if (field === 'data') {
