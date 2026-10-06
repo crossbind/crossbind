@@ -49,11 +49,10 @@ function warnIfPlainHttp(url) {
 
 const isInside = (rel, root) => root === '.' || rel === root || rel.startsWith(`${root}/`);
 
+// Null for a folder outside the base: a local docker run mounts only the base, so it never sees one either.
 function relativeToBase(base, folder) {
     const rel = path.relative(base, folder);
-    if (rel.startsWith('..') || path.isAbsolute(rel)) {
-        throw new Error(`crossbind: the remote runner only receives the project base; ${folder} is outside ${base}.`);
-    }
+    if (rel.startsWith('..') || path.isAbsolute(rel)) return null;
     return rel.split(path.sep).join('/') || '.';
 }
 
@@ -79,11 +78,13 @@ function packageOf(base, configured, file) {
 export function remoteRoots(config, { extraInputs = [], extraOutputs = [] } = {}) {
     const { paths, allDependencies = [] } = config;
     const relOf = (folder) => relativeToBase(paths.base, folder);
+    const isBelowBase = (folder) => Boolean(folder) && relOf(folder) !== null;
     const dependencyFolders = allDependencies.flatMap((d) => [d.paths.output, ...(d.paths.native ?? []), ...(d.paths.header ?? [])]);
-    const configured = [...paths.native, ...paths.header, paths.cache, paths.output, `${paths.cli}/assets`, ...dependencyFolders].filter(Boolean).map(relOf);
+    const configured = [...paths.native, ...paths.header, paths.cache, paths.output, `${paths.cli}/assets`, ...dependencyFolders].filter(isBelowBase).map(relOf);
+    const outputs = [paths.cache, paths.output, ...extraOutputs].filter(isBelowBase).map(relOf);
     return {
-        inputRoots: foldNested([...configured, ...extraInputs.map((file) => relOf(packageOf(paths.base, configured, file))), ...extraOutputs.map(relOf)]),
-        outputRoots: foldNested([paths.cache, paths.output, ...extraOutputs].filter(Boolean).map(relOf)),
+        inputRoots: foldNested([...configured, ...extraInputs.filter(isBelowBase).map((file) => relOf(packageOf(paths.base, configured, file))), ...outputs]),
+        outputRoots: foldNested(outputs),
     };
 }
 
