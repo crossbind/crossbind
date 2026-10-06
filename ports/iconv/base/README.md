@@ -164,13 +164,14 @@ Setup and differences per platform: [WebAssembly](https://crossbind.dev/ports/ic
 
 ## What this build includes
 - GNU libiconv 1.19 as a static library. The GPL `iconv` program and its gnulib support are not built.
-- 112 encodings under 349 names, as `iconvlist` reports them, each usable in both directions, plus the locale-dependent `char` and `wchar_t`:
+- 198 encodings under 736 names, as `iconvlist` reports them, each usable in both directions, plus the locale-dependent `char` and `wchar_t`:
   - European and Semitic: ASCII, ISO-8859-1 to -16, KOI8-R, KOI8-U, KOI8-RU, Windows-1250 to -1258, DOS 850, 862, 866 and 1131, eleven Mac code pages, HP-ROMAN8 and NEXTSTEP.
   - Japanese: EUC-JP, SHIFT_JIS, CP932, ISO-2022-JP, -JP-1, -JP-2 and -JP-MS.
   - Chinese: EUC-CN, HZ, GBK, CP936, GB18030, GB18030:2022, EUC-TW, BIG5, CP950, BIG5-HKSCS (1999, 2001, 2004 and 2008 editions), ISO-2022-CN and ISO-2022-CN-EXT.
   - Korean: EUC-KR, CP949, ISO-2022-KR and JOHAB.
   - Other scripts: ARMSCII-8, Georgian-Academy, Georgian-PS, KOI8-T, PT154, RK1048, TIS-620, CP874, MacThai, MuleLao-1, CP1133, VISCII and TCVN.
   - Unicode: UTF-8, UTF-16, UTF-32, UCS-2, UCS-4 (each with BE and LE forms), UTF-7, C99 and JAVA escapes, and the machine-order UCS-2-INTERNAL and UCS-4-INTERNAL with their byte-swapped forms.
+  - libiconv's extra encodings, which the recipe enables with `--enable-extra-encodings`: the DOS code pages 437, 737, 775, 852, 853, 855 to 858, 860, 861, 863 to 865, 869 and 1125; EBCDIC code pages such as IBM037, IBM500 and IBM1047, and the euro forms IBM1140 to IBM1149; EUC-JIS-2004, SHIFT_JIS-2004 (SHIFT_JISX0213), ISO-2022-JP-2004, CP943, DEC-KANJI, BIG5-2003 and DEC-HANYU; TDS565, ATARIST and RISCOS-LATIN1.
   - Character sets on their own: JIS X 0201, JIS X 0208, JIS X 0212, ISO646-JP, GB 2312, ISO-IR-165, ISO646-CN and KS C 5601.
 - **Not included.** The library is configured without `--enable-extra-encodings`, so `iconv_open` fails for:
   - CP437 and the other DOS code pages: CP737, 775, 852, 853, 855, 857, 858, 860, 861, 863, 864, 865, 869 and 1125;

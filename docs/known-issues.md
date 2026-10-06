@@ -261,16 +261,6 @@ in the `jpegtran-wasi` command of the standalone-wasi package. Only the libjpeg 
 - Check: `grep -c 'WITH_TURBOJPEG=OFF' ports/jpegturbo/base/build.mjs` prints 4.
 - Remove when the library packages ship TurboJPEG, or the port README says it is left out on purpose.
 
-## libiconv is built without its extra encodings
-
-`ports/iconv/base/build.mjs` does not pass `--enable-extra-encodings`, so `iconv_open` fails for
-CP437 and most other DOS code pages (CP737, CP775, CP852 and more), the EBCDIC code pages (IBM037,
-IBM-1047, IBM500), SHIFT_JISX0213 and BIG5-2003, among others. 112 encodings under 349 names remain.
-
-- Seen: 2026-09-24
-- Check: `grep -c 'extra-encodings' ports/iconv/base/build.mjs` prints 0.
-- Remove when the recipe enables them or the README states the choice.
-
 ## The WebP port ships mux and demux but never links them
 
 `ports/webp/base/mergeConfig.mjs` sets `libName: ['webp', 'sharpyuv']`, so a consumer's link line
