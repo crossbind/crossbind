@@ -35,7 +35,7 @@ function tsType(raw, classNames, { isReturn = false } = {}) {
     if (t === 'void') return 'void';
     if (t === 'bool') return 'boolean';
     if (NUMBER_TYPES.has(t)) return 'number';
-    if (t === 'std::string') return 'string';
+    if (t === 'std::string' || t === 'std::u16string') return 'string';
     if (classNames.has(t)) return t;
     return null;
 }
@@ -134,8 +134,12 @@ function typedefNamesAfter(text, from) {
     return tail ? tail[1].split(',').map((part) => part.trim()).filter((part) => /^[A-Za-z_]\w*$/.test(part)) : [];
 }
 
+// A brace inside a string or character literal is text; the model needs no literal's contents.
+const LITERAL = /"(?:[^"\\\n]|\\.)*"|'(?:[^'\\\n]|\\.)*'/g;
+const blankLiterals = (text) => text.replace(LITERAL, (literal) => `${literal[0]}${' '.repeat(literal.length - 2)}${literal[0]}`);
+
 export function parseCppSurface(source, log = console.log) {
-    const clean = stripComments(source).replace(/^[ \t]*#[^\n]*$/gm, ' ');
+    const clean = blankLiterals(stripComments(source)).replace(/^[ \t]*#[^\n]*$/gm, ' ');
 
     const classes = [];
     const classNames = new Set();
@@ -155,13 +159,18 @@ export function parseCppSurface(source, log = console.log) {
     for (const cls of found) {
         let access = cls.kind === 'class' ? 'private' : 'public';
         let ctor = null;
+        let declaresCtor = false;
+        let isAbstract = false;
         const methods = [];
         const fields = [];
         for (let statement of bodyStatements(cls.body)) {
             const sections = statement.match(/\b(public|private|protected)\s*:\s*([\s\S]*)$/);
             if (sections) { access = sections[1]; statement = sections[2].trim(); }
+            if (new RegExp(`^(?:explicit\\s+)?${cls.name}\\s*\\(`).test(statement)) declaresCtor = true;
+            if (/\)\s*(?:const\s*)?(?:override\s*)?=\s*0$/.test(statement)) isAbstract = true;
             if (!statement || access !== 'public') continue;
-            statement = statement.replace(/\)\s*:\s*[\s\S]*$/, ')').replace(/\)\s*const$/, ')').trim();
+            const isDeleted = /=\s*delete$/.test(statement);
+            statement = statement.replace(/\s*=\s*(?:default|delete)$/, '').replace(/\)\s*:\s*[\s\S]*$/, ')').replace(/\)\s*const$/, ')').trim();
 
             const sig = statement.match(/^(static\s+)?(?:explicit\s+)?([\w:<>,\s*&]*?)\s*\b([A-Za-z_]\w*)\s*\(([\s\S]*)\)$/);
             if (!sig) {
@@ -173,12 +182,17 @@ export function parseCppSurface(source, log = console.log) {
             const [, staticKw, retRaw, name, argsRaw] = sig;
             const args = parseArgs(argsRaw, classNames);
             if (args.includes(null)) { log(`crossbind: dts: skipped ${cls.name}::${name} (unsupported parameter type)`); continue; }
-            if (name === cls.name && retRaw.trim() === '') { ctor = { args }; continue; }
+            if (name === cls.name && retRaw.trim() === '') {
+                if (!isDeleted) ctor = { args };
+                continue;
+            }
             if (name.startsWith('~')) continue;
             const ret = tsType(retRaw, classNames, { isReturn: true });
             if (ret === null) { log(`crossbind: dts: skipped ${cls.name}::${name} (unsupported return type '${retRaw.trim()}')`); continue; }
             methods.push({ name, isStatic: Boolean(staticKw), args, ret });
         }
+        // The bridge binds the implicit default constructor of a class that declares none, unless it is abstract.
+        if (!declaresCtor && !isAbstract) ctor = { args: [] };
         classes.push({ name: cls.name, aliases: cls.aliases, ctor, methods, fields });
     }
     return { classes };

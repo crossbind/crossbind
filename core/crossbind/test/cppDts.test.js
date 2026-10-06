@@ -104,6 +104,59 @@ describe('parseCppSurface', () => {
     });
 });
 
+describe('parseCppSurface: constructors, byte strings and literals', () => {
+    // The bridge binds a default constructor for a class that declares none, a C struct included.
+    test('gives a class that declares no constructor its implicit one', () => {
+        const model = parseCppSurface('struct Point { int x; int y; };', () => {});
+
+        expect(model.classes[0].ctor).toEqual({ args: [] });
+    });
+
+    test('reads a defaulted constructor and leaves a deleted one out', () => {
+        const model = parseCppSurface('class A { public: A() = default; int id(); }; class B { public: B() = delete; static int make(); };', () => {});
+
+        expect(model.classes.find((c) => c.name === 'A').ctor).toEqual({ args: [] });
+        expect(model.classes.find((c) => c.name === 'B').ctor).toBeNull();
+    });
+
+    test('gives no constructor to a class whose constructors are private, nor to an abstract one', () => {
+        const model = parseCppSurface('class P { P(); public: static int make(); }; class Q { public: virtual int area() = 0; };', () => {});
+
+        expect(model.classes.find((c) => c.name === 'P').ctor).toBeNull();
+        expect(model.classes.find((c) => c.name === 'Q').ctor).toBeNull();
+    });
+
+    test('emits the implicit constructor as a public one', () => {
+        const dts = emitCppDts(parseCppSurface('struct Point { int x; };', () => {}), ['Point']);
+
+        expect(dts).toContain('    constructor();');
+        expect(dts).not.toContain('private constructor');
+    });
+
+    test('maps std::u16string, which carries bytes, to string', () => {
+        const model = parseCppSurface('class F { public: void feed(const std::u16string& bytes); std::u16string drain(); };', () => {});
+
+        const [feed, drain] = model.classes[0].methods;
+        expect(feed.args).toEqual([{ name: 'bytes', type: 'string' }]);
+        expect(drain.ret).toBe('string');
+    });
+
+    // Measured on landing/demos/lib-expat: a "}" in an inline method moved the depth, and locals became fields.
+    test('reads braces and comment markers inside literals as text', () => {
+        const model = parseCppSurface(`
+class XmlNames {
+public:
+    std::string close() { return "}"; }
+    std::string site() { std::string url = "https://example.org/{x}"; return url; }
+    bool open() { return '{' != 0; }
+    int count;
+};`, () => {});
+
+        expect(model.classes[0].methods.map((m) => m.name)).toEqual(['close', 'site', 'open']);
+        expect(model.classes[0].fields).toEqual([{ name: 'count', type: 'number' }]);
+    });
+});
+
 describe('emitCppDts', () => {
     test('emits typed classes, any-fallbacks for unparsed exports, and the module tail', () => {
         const model = parseCppSurface(HEADER, () => {});

@@ -193,29 +193,6 @@ printed 5,075,156 B instead of 2,537,578 B on a second run until each run got it
   `await m.FS.writeFile(p, 'bye')`; `m.getFileBytes(p)` decodes to `hello worldbye`.
 - Remove when the second write replaces the file.
 
-## The header scanner reads braces and `//` inside string literals
-
-`parseCppSurface` in `core/crossbind/src/utils/cppDts.js` strips `//` to the end of the line and
-`bodyStatements` counts every `{` and `}`, both without skipping string and character literals. An
-inline method that contains `"}"` or a URL shifts the brace depth, so later locals are read as public
-fields. `createInterface.js` injects field bindings from that model, and the bridge fails to compile
-(`no member named 'json' in 'XmlNames'`).
-
-- Seen: 2026-09-24 (landing/demos/lib-expat)
-- Check: `grep -n "if (ch === '{')" core/crossbind/src/utils/cppDts.js` — the loop keeps no
-  string-literal state.
-- Remove when literals and comments are told apart.
-
-## Byte-string methods are missing from the generated types
-
-`tsType` in `core/crossbind/src/utils/cppDts.js` maps `std::string` but not `std::u16string`, so a
-method that takes or returns bytes the way the binding docs describe is left out of the `.d.ts`
-(`crossbind: dts: skipped XmlFirehose::feed (unsupported parameter type)`). The binding itself works.
-
-- Seen: 2026-09-24
-- Check: `grep -c 'u16string' core/crossbind/src/utils/cppDts.js` prints 0.
-- Remove when `std::u16string` maps to `string`.
-
 ## LERC 4.2.0 writes four uninitialised bytes into lossless float blobs
 
 Upstream `EncodeHuffman` (`fpl_EsriHuffman.cpp`) leaves a trailing read-ahead `uint32` of its
@@ -255,17 +232,6 @@ config that lists only the wasm package builds.
 - Check: `grep -n -A3 'targetSpecs' ports/proj/base/mergeConfig.mjs` shows the data spec without a
   `platform`, and a web build with `projWasm, projAndroid, projIos` fails in the file packager.
 - Remove when the data spec is filtered by platform or missing directories are skipped.
-
-## Generated types make classes with an implicit constructor unconstructible
-
-`emitCppDts` in `core/crossbind/src/utils/cppDts.js` writes `private constructor();` for any class
-without a parsed constructor. A class that relies on the implicit default constructor, or declares
-`X() = default;`, which the parser does not recognise either, is constructible from JavaScript but
-rejected by TypeScript.
-
-- Seen: 2026-09-24 (landing/demos/lib-proj)
-- Check: `grep -n "private constructor" core/crossbind/src/utils/cppDts.js` shows the fallback.
-- Remove when implicit and defaulted constructors produce a public one.
 
 ## SpatiaLite programs for WASI do not link
 
