@@ -264,6 +264,14 @@ describe('runner server', () => {
         expect(run.result.exit).toBe(0);
     });
 
+    test('runs a step with as many jobs as the runner has cores, whatever count the client wrote for its own machine', async () => {
+        const runner = await start({ jobs: 3 });
+
+        const run = await exec(runner.call, { mounts: [mount(runner.live)], cwd: runner.live, argv: ['echo', 'make', '-j15', 'all', '-j', '15', '-jx'] });
+
+        expect(run.stdout).toBe('make -j3 all -j 3 -jx\n');
+    });
+
     test('passes the exit code of a failing command through', async () => {
         const runner = await start();
         const run = await exec(runner.call, { mounts: [mount(runner.live)], cwd: runner.live, argv: ['sh', '-c', 'exit 3'] });

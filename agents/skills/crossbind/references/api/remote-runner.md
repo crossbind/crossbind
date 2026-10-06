@@ -84,6 +84,7 @@ A runner serves the image digest pinned by the crossbind that started or generat
 ## Limits
 
 - A runner runs one step at a time; concurrent builds queue.
+- A step's `make -jN` and `cmake --build -j N` run as many jobs as the runner has cores: the runner replaces the count the client computed for its own machine.
 - Its disk is a cache. When the platform starts the container fresh from its image, the next step uploads its inputs again.
 - Cloudflare Workers accept request bodies up to 100 MB on the Free and Pro plans. Uploads travel base64-encoded, so a single input file over about 75 MB cannot reach a Cloudflare runner. Results are not limited.
 - A step answers at once, and heartbeats every 15 seconds while it waits behind another one or runs quietly, so proxies keep the response open.
