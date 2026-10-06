@@ -13,6 +13,8 @@ import { kitExports } from '@crossbind/conformance/spec/bridgeExports.mjs';
 import { trackExports } from '@crossbind/conformance/spec/coverage.mjs';
 
 initNative().then(async (m) => {
+    console.log(`TEMPLATES ${m.TemplateLibs.source()} | ${m.TemplateLibs.cmake()}`);
+
     // e2e/run.mjs starts the server the curl cases talk to; a plain `pnpm start` has none.
     if (process.env.CURL_PROBE_URL) {
         try {

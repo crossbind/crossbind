@@ -13,6 +13,8 @@
     },
     "dependencies": {
         "@crossbind/example-lib-prebuilt-matrix": "workspace:^",
+        "@crossbind/example-lib-cmake": "workspace:^",
+        "@crossbind/example-lib-source": "workspace:^",
         "@crossbind/embind-rust-demo": "workspace:^",
         "@crossbind/conformance-rust": "workspace:^",
         "@crossbind/conformance": "workspace:^",
