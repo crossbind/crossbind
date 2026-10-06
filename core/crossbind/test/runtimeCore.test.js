@@ -145,6 +145,26 @@ describe('createInitCrossbind', () => {
         expect(vector).toBeInstanceOf(captured.VectorInt);
     });
 
+    // WASMFS (emsdk 6.0.9) writes FS.writeFile at the end of a file that exists; the classic FS replaces the file.
+    test('FS.writeFile replaces a file that exists', async () => {
+        const files = new Map();
+        const FS = {
+            open: (path, flags) => {
+                if (flags === 'w') files.set(path, '');
+                return { path };
+            },
+            close: () => {},
+            writeFile: (path, data) => files.set(path, (files.get(path) ?? '') + data),
+        };
+        const initNative = createInitCrossbind({ Module: vi.fn(async () => ({ FS })), systemConfig: { useWorker: false }, adapter: {}, worker: workerStub() });
+        const m = await initNative();
+
+        m.FS.writeFile('/memfs/app/note.txt', 'hello world');
+        m.FS.writeFile('/memfs/app/note.txt', 'bye');
+
+        expect(files.get('/memfs/app/note.txt')).toBe('bye');
+    });
+
     test('does not delegate to a worker from inside the worker scope', async () => {
         const Module = moduleFactory();
         const worker = workerStub({ isWorkerScope: true });

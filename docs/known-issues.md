@@ -181,18 +181,6 @@ and install them. `lib-source` is also the only package with `export.type: 'sour
   lists only the two packages' own manifests.
 - Remove when an app or fixture builds against both.
 
-## `m.FS.writeFile` appends to a file that already exists in the browser
-
-Browser builds use WASMFS, whose `_wasmfs_write_file` (emsdk `system/lib/wasmfs/js_api.cpp`) writes
-at the file's current size instead of truncating it. Writing a path twice therefore concatenates the
-two contents, where Emscripten's classic FS and Node replace the file. The site's streaming examples
-printed 5,075,156 B instead of 2,537,578 B on a second run until each run got its own directory.
-
-- Seen: 2026-09-24 (landing/demos/lib-zstd `02-stream`, lib-zlib, lib-expat, run twice on one page)
-- Check: in a browser build, `await m.FS.writeFile(p, 'hello world')` and then
-  `await m.FS.writeFile(p, 'bye')`; `m.getFileBytes(p)` decodes to `hello worldbye`.
-- Remove when the second write replaces the file.
-
 ## LERC 4.2.0 writes four uninitialised bytes into lossless float blobs
 
 Upstream `EncodeHuffman` (`fpl_EsriHuffman.cpp`) leaves a trailing read-ahead `uint32` of its

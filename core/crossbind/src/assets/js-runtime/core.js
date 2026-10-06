@@ -73,6 +73,16 @@ function buildLocateFile(config, adapter) {
     };
 }
 
+// WASMFS's FS.writeFile writes at the end of a file that exists (emsdk 6.0.9 js_api.cpp), where the classic FS
+// replaces it; opening the file for writing empties it first.
+function replaceOnWriteFile(FS) {
+    const { writeFile } = FS;
+    FS.writeFile = (path, data) => {
+        FS.close(FS.open(path, 'w'));
+        return writeFile(path, data);
+    };
+}
+
 export function createBaseModule(Module, config, adapter) {
     return new Promise((resolve, reject) => {
         const locateFile = buildLocateFile(config, adapter);
@@ -137,6 +147,7 @@ export function createBaseModule(Module, config, adapter) {
         // fs-browser), which emscripten's onRuntimeInitialized callback cannot, so
         // both hooks run after the factory settles - adapter first, then the user's.
         Module(m).then(async (mod) => {
+            if (mod.FS) replaceOnWriteFile(mod.FS);
             if (adapter.onModuleReady) await adapter.onModuleReady(mod, config);
             if (config.onRuntimeInitialized) config.onRuntimeInitialized(mod);
             return mod;
