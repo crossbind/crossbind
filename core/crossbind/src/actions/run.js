@@ -7,6 +7,7 @@ import pullDockerImage, { getDockerImage, getDockerContainerName, imageRoleFor }
 import getOsUserAndGroupId from '../utils/getOsUserAndGroupId.js';
 import replaceBasePathForDockerUtil from '../utils/replaceBasePathForDocker.js';
 import { DOCKER_RUN_SECURITY_ARGS } from '../utils/dockerSecurity.js';
+import { remoteRunnerUrl, remoteExecParams, baseMount, referencedPaths } from '../utils/remoteRunner.js';
 import state from '../state/index.js';
 import { wasiCFlags, wasiCxxFlags, resolveWasiSdkPath, WASI_TARGET_TRIPLE } from '../utils/wasiToolchain.js';
 import { HOST_BUILT_PLATFORMS } from '../utils/targets.js';
@@ -136,7 +137,8 @@ export default function run(program, params = [], platformPrefix = null, target 
     const wasiHostSdk = target?.platform === 'wasi' ? resolveWasiSdkPath(state.config.system) : null;
     const isHostBuilt = HOST_BUILT_PLATFORMS.includes(target?.platform) || (target?.platform === 'wasi' && wasiHostSdk);
     const runner = (isHostBuilt && program === null) || state.config.system.RUNNER === 'LOCAL' ? 'LOCAL' : 'DOCKER';
-    if (runner === 'DOCKER') {
+    const remoteUrl = remoteRunnerUrl(imageRoleFor(target));
+    if (runner === 'DOCKER' && !remoteUrl) {
         // Google ships the linux NDK for x86_64 only, so the android index carries no arm64 leaf;
         // pull its amd64 leaf by ref or an arm64 host finds no matching manifest.
         pullDockerImage(imageRoleFor(target), target?.platform === 'android' ? 'linux/amd64' : undefined);
@@ -348,6 +350,7 @@ export default function run(program, params = [], platformPrefix = null, target 
         }
     }
 
+    const containerOptions = { cwd: buildPath, stdio: dockerOptions.console ? 'inherit' : ['ignore', 'pipe', 'pipe'], maxBuffer: EXEC_MAX_BUFFER };
     let fileExecParams;
     if (runner === 'LOCAL') {
         env.PATH = `/opt/homebrew/bin:${env.PATH}`;
@@ -365,12 +368,23 @@ export default function run(program, params = [], platformPrefix = null, target 
             maxBuffer: EXEC_MAX_BUFFER,
         };
         fileExecParams = [dProgram, dParams, options];
+    } else if (runner === 'DOCKER' && remoteUrl) {
+        const role = imageRoleFor(target);
+        fileExecParams = remoteExecParams({
+            url: remoteUrl,
+            mounts: [baseMount(state.config, { extraInputs: referencedPaths(state.config.paths.base, [dProgram, ...dParams, ...Object.values(env)]) })],
+            role,
+            image: getDockerImage(role, target?.platform === 'android' ? 'linux/amd64' : undefined),
+            cwd: replaceBasePathForDocker(dockerOptions.workdir || buildPath),
+            argv: [replaceBasePathForDocker(dProgram), ...replaceBasePathForDocker(dParams)],
+            env: replaceBasePathForDocker(env),
+        }, containerOptions);
     } else if (runner === 'DOCKER') {
         const dockerEnv = [];
         Object.entries(env).forEach(([key, value]) => {
             dockerEnv.push('-e', `${key}=${value}`);
         });
-        const options = { cwd: buildPath, stdio: dockerOptions.console ? 'inherit' : ['ignore', 'pipe', 'pipe'], maxBuffer: EXEC_MAX_BUFFER };
+        const options = containerOptions;
 
         let runnerParams;
         let imageOrContainer;
@@ -409,7 +423,8 @@ export default function run(program, params = [], platformPrefix = null, target 
     }
 
     try {
-        if (runner === 'DOCKER' && dockerOptions.exclusive) {
+        // A remote step takes no share of the local Docker VM, and its runner runs one step at a time.
+        if (runner === 'DOCKER' && !remoteUrl && dockerOptions.exclusive) {
             withDirLockSync(DOCKER_COMPILE_LOCK, () => execFileSync(...fileExecParams), { heldBy: 'another build is compiling in Docker' });
         } else {
             execFileSync(...fileExecParams);
