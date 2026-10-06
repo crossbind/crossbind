@@ -14,6 +14,7 @@ import {
 // toolchain steps a client would otherwise `docker run`, against folders it keeps in sync with the client.
 
 export const PROTOCOL_VERSION = 1;
+export const MIN_TOKEN_LENGTH = 16;
 const MAX_JSON_BYTES = 16 * 1024 * 1024;
 const INLINE_OUTPUT_BYTES = 8 * 1024 * 1024;
 const MAX_MOUNTS = 8;
@@ -34,6 +35,7 @@ const isCleanAbsolute = (value) => typeof value === 'string' && path.posix.isAbs
 const isWithin = (child, parent) => child === parent || child.startsWith(`${parent}/`);
 const isUnderRoot = (rel, root) => root === '.' || isWithin(rel, root);
 const isPlainName = (value) => typeof value === 'string' && /^[\w.-]+$/.test(value) && value !== '.' && value !== '..';
+const isNamePattern = (value) => isPlainName(typeof value === 'string' && value.endsWith('*') ? value.slice(0, -1) : value);
 // A build and a runner name one toolchain by digest even when they pull it from different registries (a mirror).
 const digestOf = (ref) => (typeof ref === 'string' && ref.includes('@') ? ref.slice(ref.indexOf('@') + 1) : ref);
 
@@ -73,6 +75,9 @@ function tokenMatches(header, token) {
 
 function validateRules(rules) {
     if (!rules || !isStringArray(rules.dirs) || !isStringArray(rules.extensions)) throw new RequestError(400, 'rules must list dirs and extensions');
+    if (rules.files !== undefined && !(isStringArray(rules.files) && rules.files.every(isNamePattern))) {
+        throw new RequestError(400, 'rules.files must list file names, each optionally ending in *');
+    }
     const { serverOnly } = rules;
     if (serverOnly === undefined) return;
     if (!isStringArray(serverOnly.names) || !serverOnly.names.every(isPlainName) || !isPlainName(serverOnly.marker) || !isStringArray(serverOnly.keep)) {
@@ -114,21 +119,22 @@ function validateExec(body, { mountPrefixes, scratchDirs, image, role }) {
     if (!env || typeof env !== 'object' || !Object.values(env).every((value) => typeof value === 'string')) throw new RequestError(400, 'env must map names to strings');
 }
 
-function runCommand({ argv, cwd, env }, line, heartbeatMs) {
+// A command never sees the runner's own settings, its token above all.
+const commandEnv = (env) => ({
+    ...Object.fromEntries(Object.entries(process.env).filter(([name]) => !name.startsWith('CROSSBIND_RUNNER_'))),
+    ...env,
+});
+
+function runCommand({ argv, cwd, env }, line) {
     return new Promise((resolve) => {
-        const child = spawn(argv[0], argv.slice(1), { cwd, env: { ...process.env, ...env } });
-        const heartbeat = setInterval(() => line({ heartbeat: true }), heartbeatMs);
-        const finish = (code) => {
-            clearInterval(heartbeat);
-            resolve(code);
-        };
+        const child = spawn(argv[0], argv.slice(1), { cwd, env: commandEnv(env) });
         child.stdout.on('data', (data) => line({ stdout: data.toString() }));
         child.stderr.on('data', (data) => line({ stderr: data.toString() }));
         child.on('error', (error) => {
             line({ stderr: `crossbind runner: ${error.message}\n` });
-            finish(127);
+            resolve(127);
         });
-        child.on('close', (code) => finish(code ?? 1));
+        child.on('close', (code) => resolve(code ?? 1));
     });
 }
 
@@ -136,6 +142,7 @@ export function createRunnerServer({
     mountPrefixes = DEFAULT_MOUNT_PREFIXES, scratchDirs = DEFAULT_SCRATCH_DIRS, blobDir, token, image, role, heartbeatMs = HEARTBEAT_MS,
 }) {
     if (!token) throw new Error('crossbind runner: a token is required - the runner runs build commands for whoever holds it.');
+    if (token.length < MIN_TOKEN_LENGTH) throw new Error(`crossbind runner: the token needs at least ${MIN_TOKEN_LENGTH} characters.`);
     const blobs = createBlobStore(blobDir);
     const indexes = new Map();
     const indexFor = (mountPath) => {
@@ -153,7 +160,7 @@ export function createRunnerServer({
     }
 
     // One command at a time: each mount is a single tree, as with a local docker run.
-    async function execute(body, res) {
+    async function execute(body, line) {
         body.mounts.forEach((mount) => syncMount(mount, body.rules));
         // Outputs come back whatever their type: the glue JavaScript a link writes is the build's product.
         const outputRules = { ...body.rules, extensions: [] };
@@ -168,10 +175,7 @@ export function createRunnerServer({
         };
         const before = body.mounts.map(outputsOf);
         fs.mkdirSync(body.cwd, { recursive: true });
-
-        res.writeHead(200, { 'content-type': 'application/x-ndjson' });
-        const line = (record) => res.write(`${JSON.stringify(record)}\n`);
-        const exit = await runCommand(body, line, heartbeatMs);
+        const exit = await runCommand(body, line);
 
         const outputs = {};
         const removed = [];
@@ -190,7 +194,7 @@ export function createRunnerServer({
             });
             removed.push(...diff.removed.map((rel) => `${mount.path}/${rel}`));
         });
-        res.end(`${JSON.stringify({ exit, outputs, removed })}\n`);
+        return { exit, outputs, removed };
     }
 
     async function handleExec(req, res) {
@@ -201,9 +205,19 @@ export function createRunnerServer({
         const hashes = body.mounts.flatMap((mount) => Object.values(mount.manifest).map((entry) => entry.sha256));
         const missing = [...new Set(hashes)].filter((hash) => !blobs.has(hash));
         if (missing.length > 0) throw new RequestError(409, 'missing blobs', { missing });
-        const run = queue.then(() => execute(body, res));
-        queue = run.catch(() => {});
-        await run;
+        // The answer starts at once and heartbeats until the end: a step can wait behind another one longer than
+        // a proxy, or the client's fetch, waits for a response.
+        res.writeHead(200, { 'content-type': 'application/x-ndjson' });
+        res.flushHeaders();
+        const line = (record) => res.write(`${JSON.stringify(record)}\n`);
+        const heartbeat = setInterval(() => line({ heartbeat: true }), heartbeatMs);
+        try {
+            const run = queue.then(() => execute(body, line));
+            queue = run.catch(() => {});
+            res.end(`${JSON.stringify(await run)}\n`);
+        } finally {
+            clearInterval(heartbeat);
+        }
     }
 
     // One JSON line per blob ({sha256, data: base64}), so a cold start uploads its inputs in a few requests.
@@ -263,8 +277,9 @@ const listFromEnv = (value, fallback) => (value ? value.split(',').map((item) =>
 
 if (import.meta.url === pathToFileURL(process.argv[1] ?? '').href) {
     const token = process.env.CROSSBIND_RUNNER_TOKEN;
-    if (!token) {
-        process.stderr.write('crossbind runner: set CROSSBIND_RUNNER_TOKEN - the runner runs build commands for whoever holds it.\n');
+    delete process.env.CROSSBIND_RUNNER_TOKEN;
+    if (!token || token.length < MIN_TOKEN_LENGTH) {
+        process.stderr.write(`crossbind runner: set CROSSBIND_RUNNER_TOKEN to at least ${MIN_TOKEN_LENGTH} characters - the runner runs build commands for whoever holds it.\n`);
         process.exit(1);
     }
     const server = createRunnerServer({

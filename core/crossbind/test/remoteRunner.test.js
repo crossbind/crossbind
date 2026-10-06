@@ -109,12 +109,16 @@ describe('baseMount', () => {
 
 describe('remoteExecParams', () => {
     const step = {
-        url: 'https://runner.example', role: 'web', image: 'ghcr.io/crossbind/web@sha256:1',
+        role: 'web', image: 'ghcr.io/crossbind/web@sha256:1',
         mounts: [baseMount(config)], cwd: '/tmp/crossbind/live/app/.crossbind/build', argv: ['emcmake', 'cmake', '..'], env: { CFLAGS: '-O2' },
     };
+    const runners = (env) => ['', '_WEB', '_LINUX'].forEach((suffix) => {
+        vi.stubEnv(`CROSSBIND_REMOTE_URL${suffix}`, env[`url${suffix}`] ?? '');
+        vi.stubEnv(`CROSSBIND_TOKEN${suffix}`, env[`token${suffix}`] ?? '');
+    });
 
     test('runs the remote client with the step, its mounts and the exclusion rules, and hands it the token only through its environment', () => {
-        vi.stubEnv('CROSSBIND_TOKEN', 'secret-token');
+        runners({ url: 'https://runner.example', token: 'secret-token' });
         const options = { cwd: '/w/app/.crossbind/build', stdio: 'inherit' };
 
         const [program, args, passedOptions] = remoteExecParams(step, options);
@@ -123,26 +127,39 @@ describe('remoteExecParams', () => {
         expect(program).toBe(process.execPath);
         expect(args[0]).toMatch(/remoteClient\.js$/);
         expect(passedOptions).toEqual({ ...options, env: expect.objectContaining({ CROSSBIND_TOKEN: 'secret-token' }) });
-        expect(payload).toEqual({ ...step, rules: JSON.parse(JSON.stringify(REMOTE_EXCLUDE_RULES)) });
+        expect(payload).toEqual({ ...step, url: 'https://runner.example', rules: JSON.parse(JSON.stringify(REMOTE_EXCLUDE_RULES)) });
         expect(args[1]).not.toContain('secret-token');
     });
 
-    test('hands the client the token of the step\'s runner, its own image\'s first', () => {
-        vi.stubEnv('CROSSBIND_TOKEN', 'shared-token');
-        vi.stubEnv('CROSSBIND_TOKEN_LINUX', 'linux-token');
+    test('pairs each token with the address it was set with, so a shared token never reaches another image\'s runner', () => {
+        runners({
+            url: 'https://shared.example', token: 'shared-token', url_LINUX: 'https://linux.example', token_LINUX: 'linux-token',
+        });
 
-        const [, , linuxOptions] = remoteExecParams({ ...step, role: 'linux' }, {});
-        const [, , webOptions] = remoteExecParams(step, {});
+        const [, [, linuxPayload], linuxOptions] = remoteExecParams({ ...step, role: 'linux' }, {});
+        const [, [, webPayload], webOptions] = remoteExecParams(step, {});
 
-        expect(linuxOptions.env.CROSSBIND_TOKEN).toBe('linux-token');
-        expect(webOptions.env.CROSSBIND_TOKEN).toBe('shared-token');
+        expect([JSON.parse(linuxPayload).url, linuxOptions.env.CROSSBIND_TOKEN]).toEqual(['https://linux.example', 'linux-token']);
+        expect([JSON.parse(webPayload).url, webOptions.env.CROSSBIND_TOKEN]).toEqual(['https://shared.example', 'shared-token']);
     });
 
-    test('stops before the step when its runner has no token, naming the variables that set one', () => {
-        vi.stubEnv('CROSSBIND_TOKEN', '');
-        vi.stubEnv('CROSSBIND_TOKEN_LINUX', '');
+    test('stops before the step when the runner\'s own address comes without its own token, naming the variable to set', () => {
+        runners({ url: 'https://shared.example', token: 'shared-token', url_LINUX: 'https://linux.example' });
 
-        expect(() => remoteExecParams({ ...step, role: 'linux' }, {})).toThrow(/CROSSBIND_TOKEN_LINUX or CROSSBIND_TOKEN/);
+        expect(() => remoteExecParams({ ...step, role: 'linux' }, {})).toThrow(/https:\/\/linux\.example needs a token - set CROSSBIND_TOKEN_LINUX\./);
+    });
+
+    test('warns once per address when the token would cross the network in plain http, and not for this machine', () => {
+        const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+        runners({ url: 'http://192.168.1.20:8787', token: 'shared-token', url_WEB: 'http://127.0.0.1:8787', token_WEB: 'web-token' });
+
+        remoteExecParams({ ...step, role: 'linux' }, {});
+        remoteExecParams({ ...step, role: 'linux' }, {});
+        remoteExecParams(step, {});
+
+        expect(warn).toHaveBeenCalledTimes(1);
+        expect(warn.mock.calls[0][0]).toMatch(/http:\/\/192\.168\.1\.20:8787 is plain http/);
+        warn.mockRestore();
     });
 
     test('keeps JavaScript sources on the machine and cargo target folders on the runner', () => {

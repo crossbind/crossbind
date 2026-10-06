@@ -214,7 +214,6 @@ export default function runCargo(args, { cwd, rustflags = [], panic, capture = f
     const remoteUrl = remoteRunnerUrl(role);
     if (remoteUrl) {
         return spawnSync(...remoteExecParams({
-            url: remoteUrl,
             role,
             image: getDockerImage(role, platform),
             mounts: [

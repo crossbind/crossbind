@@ -3,10 +3,10 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import {
-    walk, hashIndex, hostPathOf, presentUnits,
-} from '../runner/files.js';
+import { walk, hashIndex, presentUnits } from '../runner/files.js';
+import { isHash } from '../runner/blobs.js';
 import { getContentHash } from './hash.js';
+import { outputTarget, writeOutputFile, removeOutputFile } from './remoteOutputs.js';
 
 const INDEX_DIR = path.join(os.homedir(), '.crossbind', 'remote-index');
 // Raw bytes per upload request; a larger file still travels, alone.
@@ -31,7 +31,8 @@ async function request(url, route, init = {}) {
     const token = process.env.CROSSBIND_TOKEN;
     const headers = { ...(token ? { authorization: `Bearer ${token}` } : {}), ...init.headers };
     try {
-        return await fetch(`${url}${route}`, { ...init, headers });
+        // A redirect would send the request, sources included, to an address nobody configured.
+        return await fetch(`${url}${route}`, { ...init, headers, redirect: 'error' });
     } catch (error) {
         throw new Error(`crossbind: the remote runner at ${url} is unreachable (${error.cause?.code ?? error.message}).`, { cause: error });
     }
@@ -75,14 +76,12 @@ async function uploadMissing(url, sources) {
 
 function writeOutput(target, entry, data, indexes) {
     if (getContentHash(data) !== entry.sha256) throw new Error(`crossbind: ${target.file} arrived from the remote runner with the wrong content.`);
-    fs.mkdirSync(path.dirname(target.file), { recursive: true });
-    fs.writeFileSync(target.file, data);
-    fs.chmodSync(target.file, entry.mode);
+    writeOutputFile(target, data, entry.mode);
     const { size, mtimeMs } = fs.statSync(target.file);
     indexes.get(target.mount).set(target.rel, { size, mtimeMs, sha256: entry.sha256 });
 }
 
-async function runStep(payload, described, indexes, received) {
+async function runStep(payload, described, present, indexes, received) {
     const body = {
         role: payload.role,
         image: payload.image,
@@ -96,7 +95,7 @@ async function runStep(payload, described, indexes, received) {
             outputRoots: mount.outputRoots,
             manifest: described[i].manifest,
             dirs: described[i].dirs,
-            present: presentUnits(mount.host, mount.outputRoots),
+            present: present[i],
         })),
     };
     const response = await request(payload.url, '/v1/exec', { method: 'POST', body: JSON.stringify(body) });
@@ -110,7 +109,7 @@ async function runStep(payload, described, indexes, received) {
         if (record.stdout) process.stdout.write(record.stdout);
         if (record.stderr) process.stderr.write(record.stderr);
         if (record.file) {
-            writeOutput(hostPathOf(payload.mounts, record.file), record, Buffer.from(record.data, 'base64'), indexes);
+            writeOutput(outputTarget(payload.mounts, present, record.file), record, Buffer.from(record.data, 'base64'), indexes);
             received.add(record.file);
         }
     };
@@ -129,15 +128,17 @@ async function runStep(payload, described, indexes, received) {
 }
 
 // Outputs too large for the stream are fetched by hash.
-async function writeOutputs(payload, result, indexes, received) {
+async function writeOutputs(payload, result, present, indexes, received) {
     for (const [file, entry] of Object.entries(result.outputs).filter(([name]) => !received.has(name))) {
+        const target = outputTarget(payload.mounts, present, file);
+        if (!isHash(entry.sha256)) throw new Error(`crossbind: the remote runner named ${file} without a sha256 digest.`);
         const response = await request(payload.url, `/v1/blobs/${entry.sha256}`);
         if (response.status !== 200) throw new Error(`crossbind: could not download ${file} from the remote runner (${response.status}).`);
-        writeOutput(hostPathOf(payload.mounts, file), entry, Buffer.from(await response.arrayBuffer()), indexes);
+        writeOutput(target, entry, Buffer.from(await response.arrayBuffer()), indexes);
     }
     result.removed.forEach((file) => {
-        const target = hostPathOf(payload.mounts, file);
-        fs.rmSync(target.file, { force: true });
+        const target = outputTarget(payload.mounts, present, file);
+        removeOutputFile(target);
         indexes.get(target.mount).delete(target.rel);
     });
 }
@@ -148,9 +149,11 @@ async function main() {
     const described = payload.mounts.map((mount) => describeMount(mount, payload.rules, indexes.get(mount)));
     await uploadMissing(payload.url, new Map(described.flatMap((d) => d.sources)));
 
+    // The store units this machine holds before the step: the runner sends only the others, and may write only those.
+    const present = payload.mounts.map((mount) => presentUnits(mount.host, mount.outputRoots));
     const received = new Set();
-    const result = await runStep(payload, described, indexes, received);
-    await writeOutputs(payload, result, indexes, received);
+    const result = await runStep(payload, described, present, indexes, received);
+    await writeOutputs(payload, result, present, indexes, received);
     indexes.forEach((index, mount) => saveIndex(mount, index));
     return result.exit;
 }

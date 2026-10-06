@@ -1,9 +1,13 @@
-import { describe, test, expect, afterEach } from 'vitest';
+import {
+    describe, test, expect, afterEach, vi,
+} from 'vitest';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import crypto from 'node:crypto';
+import { Readable } from 'node:stream';
 import { createRunnerServer, PROTOCOL_VERSION } from '../src/runner/server.js';
+import { createBlobStore } from '../src/runner/blobs.js';
 
 const RULES = {
     dirs: ['node_modules', '.git'],
@@ -11,6 +15,7 @@ const RULES = {
     serverOnly: { names: ['target', 'target-mt'], marker: 'Cargo.toml', keep: ['*/release/*.a'] },
 };
 const IMAGE = 'ghcr.io/crossbind/web@sha256:1111';
+const TOKEN = 'secret-token-for-tests';
 const sha = (text) => crypto.createHash('sha256').update(text).digest('hex');
 const servers = [];
 
@@ -22,12 +27,12 @@ async function start(options = {}) {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'crossbind-runner-root-'));
     const blobDir = fs.mkdtempSync(path.join(os.tmpdir(), 'crossbind-runner-blobs-'));
     const server = createRunnerServer({
-        mountPrefixes: [root], scratchDirs: [`${root}/scratch`], blobDir, token: 'secret', image: IMAGE, role: 'web', ...options,
+        mountPrefixes: [root], scratchDirs: [`${root}/scratch`], blobDir, token: TOKEN, image: IMAGE, role: 'web', ...options,
     });
     servers.push(server);
     await new Promise((resolve) => { server.listen(0, '127.0.0.1', resolve); });
     const url = `http://127.0.0.1:${server.address().port}`;
-    const call = (route, init = {}) => fetch(`${url}${route}`, { ...init, headers: { authorization: 'Bearer secret', ...init.headers } });
+    const call = (route, init = {}) => fetch(`${url}${route}`, { ...init, headers: { authorization: `Bearer ${TOKEN}`, ...init.headers } });
     return {
         url, root, live: `${root}/live`, call,
     };
@@ -62,8 +67,43 @@ async function exec(call, body) {
 }
 
 describe('runner server', () => {
-    test('refuses to start without a token', () => {
-        expect(() => createRunnerServer({ blobDir: fs.mkdtempSync(path.join(os.tmpdir(), 'crossbind-runner-blobs-')), role: 'web' })).toThrow(/token is required/);
+    test('refuses to start without a token, or with one too short to resist guessing', () => {
+        const blobDir = fs.mkdtempSync(path.join(os.tmpdir(), 'crossbind-runner-blobs-'));
+
+        expect(() => createRunnerServer({ blobDir, role: 'web' })).toThrow(/token is required/);
+        expect(() => createRunnerServer({ blobDir, role: 'web', token: 'short' })).toThrow(/at least 16 characters/);
+    });
+
+    test('keeps the runner\'s own settings, its token above all, out of the commands it runs', async () => {
+        vi.stubEnv('CROSSBIND_RUNNER_TOKEN', TOKEN);
+        const runner = await start();
+
+        const run = await exec(runner.call, { mounts: [mount(runner.live)], cwd: runner.live, argv: ['sh', '-c', 'echo "[$CROSSBIND_RUNNER_TOKEN]"'] });
+
+        expect(run.stdout).toBe('[]\n');
+        vi.unstubAllEnvs();
+    });
+
+    test('answers a step that waits behind another at once and keeps it alive until its turn', async () => {
+        const runner = await start({ heartbeatMs: 20 });
+        const first = exec(runner.call, { mounts: [mount(runner.live)], cwd: runner.live, argv: ['sh', '-c', 'sleep 1'] });
+        await new Promise((resolve) => { setTimeout(resolve, 100); });
+
+        const sent = Date.now();
+        const second = await runner.call('/v1/exec', {
+            method: 'POST',
+            body: JSON.stringify({
+                role: 'web', image: IMAGE, rules: RULES, env: {}, mounts: [mount(runner.live)], cwd: runner.live, argv: ['true'],
+            }),
+        });
+        const answeredAfter = Date.now() - sent;
+        const records = (await second.text()).trim().split('\n').map((text) => JSON.parse(text));
+
+        expect(second.status).toBe(200);
+        expect(answeredAfter).toBeLessThan(500);
+        expect(records.some((record) => record.heartbeat)).toBe(true);
+        expect(records.at(-1).exit).toBe(0);
+        expect((await first).result.exit).toBe(0);
     });
 
     test('answers health without the token and everything else only with it', async () => {
@@ -256,9 +296,25 @@ describe('runner server', () => {
             exec(runner.call, withLive({ manifest: { 'other/x.cpp': { sha256: sha('x'), mode: 0o644 } } })),
             exec(runner.call, withLive({ dirs: ['../outside'] })),
             exec(runner.call, { ...ok, cwd: '/etc' }),
+            exec(runner.call, { ...ok, rules: { ...RULES, files: '.env' } }),
             exec(runner.call, { ...ok, cwd: `${runner.root}/scratch` }),
         ]).then((runs) => runs.map((run) => run.status));
 
-        expect(statuses).toEqual([400, 400, 400, 400, 400, 400, 400, 200]);
+        expect(statuses).toEqual([400, 400, 400, 400, 400, 400, 400, 400, 200]);
+    });
+});
+
+describe('blob store', () => {
+    test('leaves no temporary file behind when an upload breaks off', async () => {
+        const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'crossbind-runner-blobs-'));
+        const broken = new Readable({
+            read() {
+                this.push('partial');
+                this.destroy(new Error('connection reset'));
+            },
+        });
+
+        await expect(createBlobStore(dir).putStream(sha('whole'), broken)).rejects.toThrow(/connection reset/);
+        expect(fs.readdirSync(dir)).toEqual([]);
     });
 });

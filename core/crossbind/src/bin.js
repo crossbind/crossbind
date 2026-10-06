@@ -274,7 +274,7 @@ commandRunner.command('start')
             role: options.role, port: options.port && Number(options.port), host: options.host, token: options.token,
         });
         console.log(`crossbind: ${runner.name} is running. Build against it with:`);
-        console.log(`  ${runnerEnv(options.role, runner.url, runner.token)}`);
+        console.log(`  ${runnerEnv(options.role, runner.url, runner.displayToken)}`);
     }));
 
 commandRunner.command('stop')
@@ -288,9 +288,9 @@ commandRunner.command('init')
     .addOption(roleOption())
     .option('--dir <dir>', 'folder to write (default: crossbind-runner-<platform>-<role>)')
     .action(runnerAction((platform, options) => {
-        const { dir } = initRunner({ platform, role: options.role, dir: options.dir ?? `crossbind-runner-${platform}-${options.role}` });
+        const { dir, url } = initRunner({ platform, role: options.role, dir: options.dir ?? `crossbind-runner-${platform}-${options.role}` });
         console.log(`crossbind: wrote ${dir}. Deploy it:`);
-        deploySteps(platform, dir, newRunnerToken(), options.role).forEach((step) => console.log(`  ${step}`));
+        deploySteps(platform, dir, newRunnerToken(), options.role, url).forEach((step) => console.log(`  ${step}`));
     }));
 
 const commandConfig = program.command('config')

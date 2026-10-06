@@ -7,9 +7,14 @@ import crypto from 'node:crypto';
 
 export const sha256Of = (data) => crypto.createHash('sha256').update(data).digest('hex');
 
+// `name` against a file name pattern: a trailing `*` matches any rest (`.env.*`).
+const matchesName = (name, pattern) => (pattern.endsWith('*') ? name.startsWith(pattern.slice(0, -1)) : name === pattern);
+
 // `rel` is relative to the root being walked, so a root that itself sits in node_modules (an installed port) still counts.
 export function isExcluded(rel, rules) {
-    if (rel.split('/').some((segment) => rules.dirs.includes(segment))) return true;
+    const segments = rel.split('/');
+    if (segments.some((segment) => rules.dirs.includes(segment))) return true;
+    if (rules.files?.some((pattern) => matchesName(segments.at(-1), pattern))) return true;
     return rules.extensions.includes(path.posix.extname(rel));
 }
 
@@ -29,18 +34,38 @@ function isServerOnly(base, rel, rules) {
     return fs.existsSync(path.join(base, path.posix.dirname(rel), serverOnly.marker));
 }
 
+const isWithinReal = (real, parent) => real === parent || real.startsWith(`${parent}${path.sep}`);
+
+// A link is followed only while it stays inside the base: one that leads out would dangle in a local container,
+// and following it would send what it points at. A link back to a folder the walk is already inside never ends.
+function statInside(full, realBase) {
+    const stat = fs.lstatSync(full);
+    if (!stat.isSymbolicLink()) return stat;
+    const real = fs.realpathSync(full);
+    if (!isWithinReal(real, realBase)) return null;
+    const target = fs.statSync(full);
+    return target.isDirectory() && isWithinReal(fs.realpathSync(path.dirname(full)), real) ? null : target;
+}
+
 // Every file below the roots that the rules keep, keyed by its path relative to base, and every folder:
 // the host creates folders before a step writes into them, empty ones included.
 export function walk(base, roots, rules, { outputs = false } = {}) {
     const files = new Map();
     const dirs = [];
+    let realBase;
+    try {
+        realBase = fs.realpathSync(base);
+    } catch {
+        return { files, dirs };
+    }
     const visit = (rel, inRoot, serverOnlyRoot) => {
         let stat;
         try {
-            stat = fs.statSync(path.join(base, rel));
+            stat = statInside(path.join(base, rel), realBase);
         } catch {
             return;
         }
+        if (!stat) return;
         if (stat.isFile()) {
             const kept = serverOnlyRoot === null
                 || rules.serverOnly.keep.some((pattern) => matchesPattern(rel.slice(serverOnlyRoot.length + 1), pattern));
@@ -106,6 +131,9 @@ export function presentUnits(base, outputRoots) {
     });
 }
 
+// Permission bits only: a synced file never becomes setuid, setgid or sticky.
+export const modeOf = (mode) => (Number.isInteger(mode) ? mode & 0o777 : 0o644);
+
 export function planSync(current, manifest) {
     const write = Object.entries(manifest).filter(([rel, entry]) => current.get(rel) !== entry.sha256).map(([rel]) => rel);
     const remove = [...current.keys()].filter((rel) => !(rel in manifest));
@@ -120,7 +148,7 @@ export function applySync(base, plan, manifest, blobPathOf) {
         fs.mkdirSync(path.dirname(dest), { recursive: true });
         fs.rmSync(dest, { force: true });
         fs.copyFileSync(blobPathOf(manifest[rel].sha256), dest);
-        fs.chmodSync(dest, manifest[rel].mode ?? 0o644);
+        fs.chmodSync(dest, modeOf(manifest[rel].mode));
     });
 }
 
@@ -133,12 +161,33 @@ export function diffSnapshots(before, after) {
     return { changed, removed };
 }
 
+// Characters a host path would read as structure: a backslash is a separator on Windows, where a colon
+// names a drive or a stream, and NUL ends a path anywhere.
+const UNSAFE_PATH = process.platform === 'win32' ? /[\\:\0]/ : /[\\\0]/;
+
 // The runner names files by container path; only a path inside one of the step's mounts maps back,
 // so the runner cannot make the client write anywhere else.
 export function hostPathOf(mounts, containerPath) {
-    const isClean = path.posix.normalize(containerPath) === containerPath;
+    const outside = () => new Error(`crossbind: the remote runner returned ${containerPath}, outside the mounts it was given.`);
+    const isClean = typeof containerPath === 'string' && !UNSAFE_PATH.test(containerPath)
+        && path.posix.normalize(containerPath) === containerPath;
     const mount = isClean && mounts.find((m) => containerPath.startsWith(`${m.container}/`));
-    if (!mount) throw new Error(`crossbind: the remote runner returned ${containerPath}, outside the mounts it was given.`);
+    if (!mount) throw outside();
     const rel = containerPath.slice(mount.container.length + 1);
-    return { mount, rel, file: path.join(mount.host, rel) };
+    const file = path.join(mount.host, rel);
+    const back = path.relative(mount.host, file);
+    if (back === '..' || back.startsWith(`..${path.sep}`) || path.isAbsolute(back)) throw outside();
+    return { mount, rel, file };
+}
+
+// Whether a step may hand this file back: it lies below one of the step's output roots, and below a store
+// root (`registry/src/*/*`) only inside a unit the machine does not hold yet, as those never change.
+export function isDeclaredOutput(rel, outputRoots, present = []) {
+    const parts = rel.split('/');
+    return outputRoots.some((root) => {
+        if (!root.includes('*')) return root === '.' || rel === root || rel.startsWith(`${root}/`);
+        const depth = root.split('/').length;
+        const unit = parts.slice(0, depth).join('/');
+        return parts.length > depth && matchesPattern(unit, root) && !present.includes(unit);
+    });
 }
