@@ -177,7 +177,7 @@ Setup and differences per platform: [WebAssembly](https://crossbind.dev/ports/we
 ## What this build includes
 - libwebp 1.6.0: static libraries for WebAssembly, iOS, macOS, Linux, Windows and WASI, shared libraries for Android.
 - Linked into your code: `libwebp`, the whole encoder and decoder (the simple and advanced APIs, incremental decoding, `WebPPictureRescale` and `WebPPictureCrop`, `WebPPictureDistortion` and `WebPPlaneDistortion`), and `libsharpyuv` for sharp YUV conversion.
-- No animation and no ICC, EXIF or XMP chunks. `mux.h` and `demux.h` are installed and the mux and demux libraries ship in the packages, but the port links only `webp` and `sharpyuv`, so `WebPAnimEncoder*`, `WebPAnimDecoder*`, `WebPMux*` and `WebPDemux*` calls fail to link with `undefined symbol` (checked with 2.0.0-beta.60 on WebAssembly). `WebPGetFeatures` still reports whether a file is animated.
+- `libwebpmux` and `libwebpdemux` (`mux.h`, `demux.h`), linked as well: animation (`WebPAnimEncoder*`, `WebPAnimDecoder*`) and ICC, EXIF and XMP chunks (`WebPMux*`, `WebPDemux*`).
 - On WebAssembly, every file the demo checks is byte for byte what the native `cwebp` 1.6.0 writes from the same pixels and settings.
 
 ## Supported platforms

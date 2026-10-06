@@ -6,9 +6,8 @@ export default (newConfig = {}) => ({
     },
     export: {
         type: 'cmake',
-        // demux.h and mux.h stay out until libName links webpdemux and webpmux.
-        publicHeaders: ['webp/decode.h', 'webp/encode.h', 'webp/types.h'],
-        libName: ['webp', 'sharpyuv'],
+        publicHeaders: ['webp/decode.h', 'webp/encode.h', 'webp/types.h', 'webp/demux.h', 'webp/mux.h'],
+        libName: ['webpmux', 'webpdemux', 'webp', 'sharpyuv'],
         ...(newConfig.export || {}),
     },
     paths: {

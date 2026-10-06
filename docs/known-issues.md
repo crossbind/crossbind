@@ -251,18 +251,6 @@ decoding is unaffected. A native build with `MallocScribble` shows the bytes as 
 - Check: encode the same float32 raster losslessly twice with `lerc_encode` and compare the blobs.
 - Remove when upstream initialises the word and the port picks the release up.
 
-## The WebP port ships mux and demux but never links them
-
-`ports/webp/base/mergeConfig.mjs` sets `libName: ['webp', 'sharpyuv']`, so a consumer's link line
-leaves out `libwebpmux` and `libwebpdemux` although every platform package ships their headers and
-archives. Animated WebP (`WebPAnimEncoder`, `WebPAnimDecoder`) and ICC, EXIF and XMP chunks
-(`WebPMux*`, `WebPDemux*`) fail at `wasm-ld` with 17 undefined symbols. Adding both names to
-`libName` in a consumer override links and runs.
-
-- Seen: 2026-09-24
-- Check: `grep -n "libName" ports/webp/base/mergeConfig.mjs` lists only `webp` and `sharpyuv`.
-- Remove when `libName` includes `webpmux` and `webpdemux`.
-
 ## WASI programs write at the wrong offset after seeking to the end
 
 Built for `wasm32-wasip3` (or `-wasip2`) with wasi-sdk 34.0-rc.3 and run by wasmtime 47.0.2, a
