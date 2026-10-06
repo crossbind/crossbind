@@ -1,7 +1,9 @@
 require "json"
 
 package = JSON.parse(File.read(File.join(__dir__, "package.json")))
-system("cd \"#{Pod::Config.instance.installation_root}/..\" && node \"#{__dir__}/script/build_js.js\" ios && node \"#{__dir__}/script/build_ios.js\" Debug", :out => File::NULL)
+# system returns false on a non-zero exit instead of raising; a failed build would surface minutes later in the app build.
+system("cd \"#{Pod::Config.instance.installation_root}/..\" && node \"#{__dir__}/script/build_js.js\" ios && node \"#{__dir__}/script/build_ios.js\" Debug", :out => File::NULL) or
+  raise "crossbind: the native build for iOS failed; its errors are above"
 
 Pod::Spec.new do |s|
   s.name         = "react-native-crossbind"

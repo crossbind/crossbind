@@ -8,17 +8,6 @@ than no entry. Scope each check so it cannot match this file, which quotes what 
 
 Fixing something here is not a prerequisite for anything else; this is a list, not a queue.
 
-## A failed native build does not fail `pod install`
-
-`react-native-crossbind.podspec` runs the iOS build through Ruby's `system(...)`, which returns
-false instead of raising, and the podspec does not read the result. A cmake failure is reported in
-the log and then swallowed, so the error surfaces eight minutes later in the app build instead.
-
-- Seen: 2026-09-22
-- Check: `grep -n 'system(' plugins/react-native/react-native-crossbind.podspec` — the call has no
-  `|| raise` and nothing inspects its return value.
-- Remove when a non-zero exit from `build_ios.js` aborts `pod install`.
-
 ## The React Native Android release bundle keeps embind-jsi's old JavaScript
 
 Gradle decides `createBundleReleaseJsAndAssets` is up to date from the app's own files, so a change
