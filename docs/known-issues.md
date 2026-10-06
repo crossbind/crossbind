@@ -194,17 +194,6 @@ builds each demo in a fresh temporary copy.
   warning in the branch that skips the rebuild.
 - Remove when a newer native source rebuilds the library.
 
-## GEOS's npm licence says "or later"; its recipe says "only"
-
-The `license` field of `@crossbind/port-geos` and its wasm, android, ios and wasi packages is
-`LGPL-2.1-or-later`, while the same `package.json` declares the upstream licence as
-`LGPL-2.1-only`, and `crossbind licenses` and the standalone-wasi package derive `LGPL-2.1-only`. GEOS
-ships the LGPL 2.1 text as `COPYING` and names no version in its headers.
-
-- Seen: 2026-09-24
-- Check: `grep -n '"license"\|"declared"' ports/geos/base/package.json` shows the two values.
-- Remove when both name the same licence.
-
 ## `m.FS.writeFile` appends to a file that already exists in the browser
 
 Browser builds use WASMFS, whose `_wasmfs_write_file` (emsdk `system/lib/wasmfs/js_api.cpp`) writes
