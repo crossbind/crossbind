@@ -85,6 +85,8 @@ A runner serves the image digest pinned by the crossbind that started or generat
 - Its disk is a cache. When the platform starts the container fresh from its image, the next step uploads its inputs again.
 - Cloudflare Workers accept request bodies up to 100 MB on the Free and Pro plans. Uploads travel base64-encoded, so a single input file over about 75 MB cannot reach a Cloudflare runner. Results are not limited.
 - A step answers at once, and heartbeats every 15 seconds while it waits behind another one or runs quietly, so proxies keep the response open.
+- Cloudflare stops a container whose Durable Object is idle, and the work inside a container does not count as activity. The generated Worker therefore keeps both up with an alarm while a step streams, and lets the container sleep a minute after the last one. A container woken from sleep answered in about 2 seconds; the first start after `wrangler deploy` took over four minutes while the image spread, so a step that waits longer than four minutes fails and the next one finds the runner up.
+- Rust archives built on an amd64 runner (Cloudflare, Fly) differ in bytes from ones built on arm64 (Docker on an Apple-silicon Mac), because a crate's metadata hash includes the machine that compiled it. C and C++ outputs match byte for byte.
 
 ## Protocol (v1)
 
