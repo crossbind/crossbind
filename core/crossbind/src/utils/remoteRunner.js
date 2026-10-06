@@ -1,0 +1,91 @@
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { DOCKER_BASE } from './replaceBasePathForDocker.js';
+
+const CLIENT = fileURLToPath(new URL('./remoteClient.js', import.meta.url));
+
+// Only native inputs travel to the runner; the application's JavaScript stays on the machine. A cargo
+// target folder stays on the runner, and only the static libraries crossbind links come back from it.
+export const REMOTE_EXCLUDE_RULES = Object.freeze({
+    dirs: Object.freeze(['node_modules', '.git']),
+    extensions: Object.freeze(['.js', '.mjs', '.cjs', '.ts', '.mts', '.cts', '.jsx', '.tsx']),
+    serverOnly: Object.freeze({ names: Object.freeze(['target', 'target-mt']), marker: 'Cargo.toml', keep: Object.freeze(['*/release/*.a']) }),
+});
+
+const URL_VARIABLE = 'CROSSBIND_REMOTE_URL';
+const TOKEN_VARIABLE = 'CROSSBIND_TOKEN';
+
+// The runner of a step's own image (CROSSBIND_REMOTE_URL_LINUX, ...) wins over the one every image shares.
+export const remoteVariables = (role) => ({
+    url: `${URL_VARIABLE}_${role.toUpperCase()}`,
+    token: `${TOKEN_VARIABLE}_${role.toUpperCase()}`,
+});
+
+export function remoteRunnerUrl(role, env = process.env) {
+    return env[remoteVariables(role).url] || env[URL_VARIABLE] || null;
+}
+
+const isInside = (rel, root) => root === '.' || rel === root || rel.startsWith(`${root}/`);
+
+function relativeToBase(base, folder) {
+    const rel = path.relative(base, folder);
+    if (rel.startsWith('..') || path.isAbsolute(rel)) {
+        throw new Error(`crossbind: the remote runner only receives the project base; ${folder} is outside ${base}.`);
+    }
+    return rel.split(path.sep).join('/') || '.';
+}
+
+function foldNested(roots) {
+    const unique = [...new Set(roots)].sort((a, b) => a.length - b.length);
+    return unique.filter((root, i) => !unique.slice(0, i).some((outer) => isInside(root, outer)));
+}
+
+// A file the command line names may include its neighbours (`#include "../include/x.h"`), so unless a
+// configured folder holds it, the package that holds it travels: the nearest folder below the base with a
+// package.json. Its JavaScript stays behind, as everywhere else.
+function packageOf(base, configured, file) {
+    if (configured.some((root) => isInside(relativeToBase(base, file), root))) return file;
+    for (let dir = path.dirname(file); dir.startsWith(`${base}${path.sep}`); dir = path.dirname(dir)) {
+        if (fs.existsSync(path.join(dir, 'package.json'))) return dir;
+    }
+    return file;
+}
+
+// What a toolchain step may read (inputRoots) and where it writes (outputRoots), relative to paths.base,
+// the folder a local docker run mounts. `extraInputs` are only read (a file the link names);
+// `extraOutputs` are read and written, like a crate's folder and its Cargo.lock.
+export function remoteRoots(config, { extraInputs = [], extraOutputs = [] } = {}) {
+    const { paths, allDependencies = [] } = config;
+    const relOf = (folder) => relativeToBase(paths.base, folder);
+    const dependencyFolders = allDependencies.flatMap((d) => [d.paths.output, ...(d.paths.native ?? []), ...(d.paths.header ?? [])]);
+    const configured = [...paths.native, ...paths.header, paths.cache, paths.output, `${paths.cli}/assets`, ...dependencyFolders].filter(Boolean).map(relOf);
+    return {
+        inputRoots: foldNested([...configured, ...extraInputs.map((file) => relOf(packageOf(paths.base, configured, file))), ...extraOutputs.map(relOf)]),
+        outputRoots: foldNested([paths.cache, paths.output, ...extraOutputs].filter(Boolean).map(relOf)),
+    };
+}
+
+export function baseMount(config, extra = {}) {
+    return { host: config.paths.base, container: DOCKER_BASE, ...remoteRoots(config, extra) };
+}
+
+const escapeRegExp = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+// Paths a command line names below the base (a source the link adds, an include folder, a preload file)
+// travel even when no configured folder holds them. The base itself is never one: it would send everything.
+export function referencedPaths(base, values) {
+    const pattern = new RegExp(`${escapeRegExp(base)}(?:/[^@=;:,'"\\s]*)?`, 'g');
+    const found = values.flatMap((value) => String(value).match(pattern) ?? []);
+    return [...new Set(found)].filter((candidate) => candidate !== base && fs.existsSync(candidate));
+}
+
+// Arguments for execFileSync/spawnSync: the client runs as its own process, so the caller stays
+// synchronous as it is with docker. The token reaches it through its environment, never its command line.
+export function remoteExecParams({ url, role, image, mounts, cwd, argv, env }, options) {
+    const variables = remoteVariables(role);
+    const token = process.env[variables.token] || process.env[TOKEN_VARIABLE];
+    if (!token) throw new Error(`crossbind: the ${role} runner at ${url} needs a token - set ${variables.token} or ${TOKEN_VARIABLE}.`);
+    const payload = { url, role, image, mounts, cwd, argv, env, rules: REMOTE_EXCLUDE_RULES };
+    return [process.execPath, [CLIENT, JSON.stringify(payload)], { ...options, env: { ...process.env, [TOKEN_VARIABLE]: token } }];
+}

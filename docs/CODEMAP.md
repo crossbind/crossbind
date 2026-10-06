@@ -65,6 +65,7 @@ Every consumer-facing field, every default, every constraint lives in [`docs/api
 - [`crossbind-build.md`](./api/crossbind-build.md) — `crossbind.build.js` lifecycle hooks (package authors only).
 - [`filesystem.md`](./api/filesystem.md) — OPFS / memfs / node-fs / edge fs decision tree, including the `useWorker` requirement for OPFS.
 - [`threading.md`](./api/threading.md) — `runtime: 'st' | 'mt'`, `useWorker`, COOP/COEP, edge-runtime limits.
+- [`remote-runner.md`](./api/remote-runner.md) — `CROSSBIND_REMOTE_URL_<ROLE>` / `CROSSBIND_REMOTE_URL` builds on remote runners; `crossbind runner start`, `runner init fly|cloudflare`.
 - [`cpp-binding-rules.md`](./api/cpp-binding-rules.md) — what auto-binding handles + wrapper / SWIG escape patterns.
 - [`rust.md`](./api/rust.md) — Rust bindings: `cargo:` imports, app-local `.rs`, cargo-type packages.
 - [`conan.md`](./api/conan.md) — C/C++ packages from ConanCenter: `conan:` imports, `conanDependencies`, `conan.lock`.
@@ -122,6 +123,8 @@ Index + template: [`docs/adr/README.md`](./adr/README.md).
 | iOS xcframework assembly | `src/actions/createXCFramework.js` |
 | CMake parameter generation | `src/actions/getCmakeParameters.js` |
 | Docker / Xcode shell-out | `src/actions/run.js` |
+| `crossbind runner` start/stop and the deploy folders `runner init` writes (Fly, Cloudflare) | `src/actions/runnerCommands.js` |
+| Remote runner server (`/v1` protocol), its blob store and the file sync it shares with the client | `src/runner/{server,blobs,files}.js` |
 | Bridge file generation (SWIG) | `src/actions/createInterface.js` |
 | Native version mtime check (force trigger) | `src/actions/isSourceNewer.js` |
 | Resolve transitive C++ deps | `src/actions/getDependLibs.js` |
@@ -210,6 +213,8 @@ Index + template: [`docs/adr/README.md`](./adr/README.md).
 | Conan graph → checked, staged prebuilt packages and manifest | `src/utils/conanStage.js` |
 | Every conan invocation (allowlisted env, a home per run, store and docker mounts) | `src/utils/runConan.js` |
 | `RUNNER=DOCKER_EXEC` container mount check (cargo and conan) | `src/utils/execContainer.js` |
+| What a remote step sends and gets back (roots, files that stay behind) | `src/utils/remoteRunner.js` |
+| One remote step's client process (upload, streamed exec, write-back) | `src/utils/remoteClient.js` |
 | @crossbind/core-embind-rust resolution (consumer-declared) | `src/utils/resolveEmbindRust.js` |
 | @crossbind/core-embind-napi resolution (consumer-declared) | `src/utils/resolveEmbindNapi.js` |
 | wasi bin command runner (npm shims import this) | `src/runtime/wasiRun.mjs` |

@@ -259,6 +259,52 @@ describe('where cargo runs', () => {
     });
 });
 
+describe('on a remote runner', () => {
+    const toml = (dependencies) => `[package]\nname = "x"\n\n[dependencies]\n${dependencies}\n`;
+
+    test('sends cargo to the runner with the project base, every crate its path dependencies reach, and the cargo home', async () => {
+        const base = path.join(work, 'repo');
+        const write = (rel, text) => {
+            fs.mkdirSync(path.dirname(path.join(base, rel)), { recursive: true });
+            fs.writeFileSync(path.join(base, rel), text);
+        };
+        const superDir = `${base}/app/.crossbind/rust-bridges/_app_super`;
+        write('app/.crossbind/rust-bridges/_app_super/Cargo.toml', toml('embind-rs = { path = "../../../../core/embind-rust/crate" }\ncrate_semver = { path = "../crate_semver" }'));
+        write('app/.crossbind/rust-bridges/crate_semver/Cargo.toml', toml('embind-rs = { path = "../../../../core/embind-rust/crate" }\nsemver = "1"'));
+        write('core/embind-rust/crate/Cargo.toml', toml(''));
+        holder.config = {
+            paths: {
+                base, native: [`${base}/app/src/native`], header: [`${base}/app/src/native`], cache: `${base}/app/.crossbind`, output: `${base}/app/.crossbind/build`, cli: `${base}/core/crossbind/src`,
+            },
+            allDependencies: [],
+            system: { RUNNER: 'DOCKER_RUN' },
+        };
+        vi.stubEnv('CROSSBIND_REMOTE_URL_WEB', 'http://runner.example');
+        vi.stubEnv('CROSSBIND_TOKEN_WEB', 'web-token');
+        const { mod, spawnSync } = await importFresh();
+
+        mod.default(['build', '--manifest-path', `${superDir}/Cargo.toml`, '--target-dir', `${superDir}/target`], { target: { platform: 'wasm' } });
+
+        const [program, [client, payloadText], options] = spawnSync.mock.calls[0];
+        const payload = JSON.parse(payloadText);
+        expect(program).toBe(process.execPath);
+        expect(client).toMatch(/remoteClient\.js$/);
+        expect(payload.url).toBe('http://runner.example');
+        expect(options.env.CROSSBIND_TOKEN).toBe('web-token');
+        expect(payload.mounts[0].inputRoots).toEqual(expect.arrayContaining(['app/.crossbind', 'core/embind-rust/crate']));
+        expect(payload.mounts[1]).toEqual({
+            host: path.join(work, 'home', '.crossbind', 'cargo'), container: '/var/cache/crossbind/cargo', inputRoots: [], outputRoots: ['registry/src/*/*', 'git/checkouts/*/*'],
+        });
+        expect(payload.cwd).toBe('/tmp/crossbind-cargo');
+        expect(payload.argv).toEqual([
+            'cargo', 'build',
+            '--manifest-path', '/tmp/crossbind/live/app/.crossbind/rust-bridges/_app_super/Cargo.toml',
+            '--target-dir', '/tmp/crossbind/live/app/.crossbind/rust-bridges/_app_super/target',
+        ]);
+        expect(payload.env.CARGO_HOME).toBe('/var/cache/crossbind/cargo');
+    });
+});
+
 describe('assertCleanConfigChain', () => {
     test('rejects a config planted in the crossbind CARGO_HOME', async () => {
         // The cache is a writable, long-lived directory: a dependency build script could drop a

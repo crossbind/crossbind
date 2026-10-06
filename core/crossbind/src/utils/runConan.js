@@ -11,6 +11,7 @@ import { IOS_DEVELOPER_DIR, XCODE_TOOLCHAIN_BIN } from './iosToolchain.js';
 import { DARWIN_CC, DARWIN_TOOLS_BIN } from './darwinToolchain.js';
 import { HOST_BUILT_PLATFORMS } from './targets.js';
 import { assertRunner } from './systemKeys.js';
+import { remoteRunnerUrl, remoteExecParams } from './remoteRunner.js';
 
 // Every conan invocation crossbind makes goes through here. The config is passed in instead of read
 // from state, because state attaches the staged Conan packages while it is still being built.
@@ -50,6 +51,9 @@ const APPLE_PLATFORM_NAMES = { ios: 'iOS', darwin: 'macOS' };
 // Where a container sees conanRoot(): an exec container mounts all of it here, a run container only
 // the store and its own work directory, at the same places.
 const CONTAINER_ROOT = '/var/cache/crossbind/conan';
+// The package folders conan reports, which the host stages from: downloaded binaries sit in p/<ref>/p, ones
+// conan built in b/<ref>/p. Sources and build folders stay on a remote runner.
+const REMOTE_STORE_OUTPUTS = ['p/*/p', 'b/*/p'];
 // A recipe's build log is the whole compiler output of a library.
 const MAX_BUFFER = 256 * 1024 * 1024;
 // The JSON graph carries conandata, the source URL and SHA-256 of the license rows, from 2.19 on.
@@ -203,6 +207,22 @@ export default function runConan(args, { config, target, work }) {
 
     // Google ships the linux NDK for x86_64 only.
     const platform = target.platform === 'android' ? 'linux/amd64' : undefined;
+    const remoteUrl = remoteRunnerUrl(role);
+    if (remoteUrl) {
+        return spawnSync(...remoteExecParams({
+            url: remoteUrl,
+            role,
+            image: getDockerImage(role, platform),
+            mounts: [
+                { host: work.store, container: `${CONTAINER_ROOT}/store`, inputRoots: [], outputRoots: REMOTE_STORE_OUTPUTS },
+                { host: work.dir, container: work.conanDir, inputRoots: ['.'], outputRoots: ['.'] },
+            ],
+            cwd: work.conanDir,
+            argv: ['conan', ...args],
+            env: { CONAN_HOME: work.conanPath('home') },
+        }, options));
+    }
+
     const env = ['-e', `CONAN_HOME=${work.conanPath('home')}`];
     let runnerArgs;
     if (work.runner === 'DOCKER_EXEC') {

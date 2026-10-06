@@ -30,6 +30,9 @@ import flattenConfigForTable from './utils/flattenConfigForTable.js';
 import systemKeys from './utils/systemKeys.js';
 import logger from './utils/logger.js';
 import { getDockerImage, getDockerContainerName } from './utils/pullDockerImage.js';
+import {
+    RUNNER_PLATFORMS, RUNNER_ROLES, deploySteps, initRunner, newRunnerToken, runnerEnv, runnerHostPort, startRunner, stopRunner,
+} from './actions/runnerCommands.js';
 import { cargoHome } from './utils/runCargo.js';
 import { conanRoot } from './utils/runConan.js';
 import { cleanDepsCache } from './utils/dependencyRebuild.js';
@@ -246,6 +249,49 @@ imageArgument(commandDocker.command('stop').description('stop docker container')
 
 imageArgument(commandDocker.command('delete').description('delete docker container'))
     .action((image) => dockerExec(['rm', dockerContainerName(image)]));
+
+const runnerAction = (fn) => (...args) => {
+    try {
+        fn(...args);
+    } catch (e) {
+        console.error(e.message);
+        process.exit(1);
+    }
+};
+const roleOption = () => new Option('--role <role>', 'toolchain image the runner serves').choices(RUNNER_ROLES).default('web');
+
+const commandRunner = program.command('runner')
+    .description('run the remote build runner that CROSSBIND_REMOTE_URL sends builds to');
+
+commandRunner.command('start')
+    .description('start a runner in local docker, from the toolchain image this CLI pins')
+    .addOption(roleOption())
+    .option('--port <port>', `host port (default: ${RUNNER_ROLES.map((role) => `${runnerHostPort(role)} for ${role}`).join(', ')})`)
+    .option('--host <address>', 'host address to listen on', '127.0.0.1')
+    .option('--token <token>', 'token builds must send (default: $CROSSBIND_RUNNER_TOKEN, else a new one)')
+    .action(runnerAction((options) => {
+        const runner = startRunner({
+            role: options.role, port: options.port && Number(options.port), host: options.host, token: options.token,
+        });
+        console.log(`crossbind: ${runner.name} is running. Build against it with:`);
+        console.log(`  ${runnerEnv(options.role, runner.url, runner.token)}`);
+    }));
+
+commandRunner.command('stop')
+    .description('stop and remove the local runner')
+    .addOption(roleOption())
+    .action(runnerAction((options) => stopRunner({ role: options.role })));
+
+commandRunner.command('init')
+    .description('write a folder that deploys a runner to a hosting platform')
+    .argument('<platform>', `hosting platform (${RUNNER_PLATFORMS.join(', ')})`)
+    .addOption(roleOption())
+    .option('--dir <dir>', 'folder to write (default: crossbind-runner-<platform>-<role>)')
+    .action(runnerAction((platform, options) => {
+        const { dir } = initRunner({ platform, role: options.role, dir: options.dir ?? `crossbind-runner-${platform}-${options.role}` });
+        console.log(`crossbind: wrote ${dir}. Deploy it:`);
+        deploySteps(platform, dir, newRunnerToken(), options.role).forEach((step) => console.log(`  ${step}`));
+    }));
 
 const commandConfig = program.command('config')
     .description('manage the crossbind configuration files');

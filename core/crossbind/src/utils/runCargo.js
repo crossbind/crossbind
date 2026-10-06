@@ -10,6 +10,7 @@ import { DOCKER_RUN_SECURITY_ARGS } from './dockerSecurity.js';
 import { HOST_BUILT_PLATFORMS } from './targets.js';
 import { assertRunner } from './systemKeys.js';
 import assertExecContainer from './execContainer.js';
+import { remoteRunnerUrl, remoteExecParams, baseMount } from './remoteRunner.js';
 
 // Every cargo invocation crossbind makes goes through here.
 //
@@ -62,6 +63,26 @@ const CONFIG_NAMES = ['config.toml', 'config'];
 // cargo's upward config search finds nothing.
 const CONTAINER_CARGO_HOME = '/var/cache/crossbind/cargo';
 const CONTAINER_CWD = '/tmp/crossbind-cargo';
+// What the host reads out of the registry a remote runner keeps: crate sources, for bridge generation, one
+// folder per crate version or git revision.
+const REMOTE_CARGO_HOME_OUTPUTS = ['registry/src/*/*', 'git/checkouts/*/*'];
+
+// The crate a cargo call names travels whole, with every crate its `path =` dependencies reach (embind-rs,
+// the generated bridges); their target folders stay on a remote runner. A `path` naming a file ([lib]
+// path) holds no Cargo.toml and is skipped.
+function crateFolders(args) {
+    const at = args.indexOf('--manifest-path');
+    if (at === -1) return [];
+    const folders = new Set();
+    const visit = (dir) => {
+        const manifest = path.join(dir, 'Cargo.toml');
+        if (folders.has(dir) || !fs.existsSync(manifest)) return;
+        folders.add(dir);
+        for (const [, rel] of fs.readFileSync(manifest, 'utf8').matchAll(/\bpath\s*=\s*"([^"]+)"/g)) visit(path.resolve(dir, rel));
+    };
+    visit(path.dirname(path.resolve(args[at + 1])));
+    return [...folders];
+}
 
 // Crossbind-owned and machine-wide: $CARGO_HOME/config.toml is one of the discovery legs, so the
 // registry cache lives somewhere we can assert is clean instead of in the user's ~/.cargo. It is
@@ -190,6 +211,22 @@ export default function runCargo(args, { cwd, rustflags = [], panic, capture = f
         panic,
         allowUnstable,
     });
+    const remoteUrl = remoteRunnerUrl(role);
+    if (remoteUrl) {
+        return spawnSync(...remoteExecParams({
+            url: remoteUrl,
+            role,
+            image: getDockerImage(role, platform),
+            mounts: [
+                baseMount(state.config, { extraOutputs: crateFolders(args) }),
+                { host: home, container: CONTAINER_CARGO_HOME, inputRoots: [], outputRoots: REMOTE_CARGO_HOME_OUTPUTS },
+            ],
+            cwd: CONTAINER_CWD,
+            argv: ['cargo', ...replaceBasePathForDockerUtil(args, base)],
+            env,
+        }, options));
+    }
+
     const envArgs = Object.entries(env).flatMap(([key, value]) => ['-e', `${key}=${value}`]);
 
     let runnerArgs;
