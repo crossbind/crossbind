@@ -501,8 +501,8 @@ importers:
         specifier: workspace:^
         version: link:../../ports/zlib/ios
       hermes-compiler:
-        specifier: '*'
-        version: 250829098.0.19
+        specifier: 250829098.0.17
+        version: 250829098.0.17
       react:
         specifier: 19.3.0
         version: 19.3.0
@@ -961,8 +961,8 @@ importers:
         specifier: workspace:^
         version: link:../../plugins/react-native-ios-helper
       hermes-compiler:
-        specifier: '*'
-        version: 250829098.0.19
+        specifier: 250829098.0.17
+        version: 250829098.0.17
       react:
         specifier: 19.3.0
         version: 19.3.0
@@ -10318,9 +10318,6 @@ packages:
   hermes-compiler@250829098.0.17:
     resolution: {integrity: sha512-qG1PXzTEtriF6oQLZF3vyHhSMxOdW5h2TqqLri0rdpstPustd2fSvRZQMVAPdlhgFwBfYnj3OUZtiO6LjYsEFw==}
 
-  hermes-compiler@250829098.0.19:
-    resolution: {integrity: sha512-qMdHsuntdFVNqx3EPOZyyQd4qHD2g0o3y32SYX2Z7jKG1uF7B2WDBHeZK/6qOnl06BQiXPhBuD6SdZv10ngtyw==}
-
   hermes-estree@0.25.1:
     resolution: {integrity: sha512-0wUoCcLp+5Ev5pDW2OriHC2MJCbwLwuRx+gAqMTOkGKJJiBCLjtrvy4PWUGn6MIVefecRpzoOZ/UV6iGdOr+Cw==}
 
@@ -17343,8 +17340,6 @@ snapshots:
   he@1.2.0: {}
 
   hermes-compiler@250829098.0.17: {}
-
-  hermes-compiler@250829098.0.19: {}
 
   hermes-estree@0.25.1: {}
 

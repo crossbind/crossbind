@@ -26,7 +26,7 @@
         "@crossbind/plugin-react-native": "2.0.0-beta.62",
         "@crossbind/plugin-react-native-ios-helper": "2.0.0-beta.62",
         "@crossbind/example-lib-prebuilt-matrix": "2.0.0-beta.62",
-        "hermes-compiler": "*",
+        "hermes-compiler": "250829098.0.17",
         "expo": "~57.0.24",
         "expo-constants": "~57.0.19",
         "expo-device": "~57.0.2",
