@@ -23,7 +23,7 @@ describe('crossbind runner start', () => {
 
         expect(args).toEqual(expect.arrayContaining(['--cap-drop', 'ALL', '--security-opt', 'no-new-privileges=true', '-p', '127.0.0.1:9000:8787']));
         expect(args).toContain(getDockerImage('web'));
-        expect(args.find((arg) => arg.endsWith(':/opt/crossbind/runner:ro'))).toMatch(/src\/runner:\/opt\/crossbind\/runner:ro$/);
+        expect(args.find((arg) => arg.endsWith(':/opt/crossbind/runner:ro'))).toMatch(/src[\\/]runner:\/opt\/crossbind\/runner:ro$/);
         expect(args).toContain(`CROSSBIND_RUNNER_IMAGE=${getDockerImage('web')}`);
         expect(args.slice(-2)).toEqual([getDockerImage('web'), '/opt/crossbind/runner/server.js']);
         expect(args[args.indexOf('CROSSBIND_RUNNER_TOKEN') - 1]).toBe('-e');
