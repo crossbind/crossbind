@@ -23,6 +23,21 @@ function registerEmbindObject(obj) {
     return id;
 }
 
+// Comlink answers every member with a remote one, so JSON.stringify and String() called toJSON and
+// Symbol.toPrimitive on the worker's object, which has neither. A handle answers them as a direct-mode object does.
+const LOCAL_MEMBERS = {
+    toJSON: () => ({}),
+    [Symbol.toPrimitive]: (hint) => (hint === 'number' ? NaN : '[object Object]'),
+};
+
+function handleFor(proxy, id) {
+    const handle = new Proxy(proxy, {
+        get: (target, prop) => (Object.hasOwn(LOCAL_MEMBERS, prop) ? LOCAL_MEMBERS[prop] : target[prop]),
+    });
+    embindProxyIds.set(handle, id);
+    return handle;
+}
+
 // Reorder transfer handlers for correct priority
 const _proxyHandler = Comlink.transferHandlers.get('proxy');
 const _throwHandler = Comlink.transferHandlers.get('throw');
@@ -60,9 +75,7 @@ Comlink.transferHandlers.set('proxy', {
     },
     deserialize(data) {
         if (data != null && typeof data === 'object' && '__embindId' in data) {
-            const proxy = _proxyHandler.deserialize(data.__port);
-            embindProxyIds.set(proxy, data.__embindId);
-            return proxy;
+            return handleFor(_proxyHandler.deserialize(data.__port), data.__embindId);
         }
         return _proxyHandler.deserialize(data);
     },
@@ -130,9 +143,7 @@ Comlink.transferHandlers.set('embindVector', {
         return elements.map((elem) => {
             if (elem && typeof elem === 'object' && elem.__comlinkProxy) {
                 elem.port.start();
-                const proxy = Comlink.wrap(elem.port);
-                embindProxyIds.set(proxy, elem.__embindId);
-                return proxy;
+                return handleFor(Comlink.wrap(elem.port), elem.__embindId);
             }
             return elem;
         });
@@ -221,9 +232,7 @@ Comlink.transferHandlers.set('embindObject', {
     },
     deserialize(data) {
         data.port.start();
-        const proxy = Comlink.wrap(data.port);
-        embindProxyIds.set(proxy, data.__embindId);
-        return proxy;
+        return handleFor(Comlink.wrap(data.port), data.__embindId);
     },
 });
 

@@ -280,17 +280,6 @@ be given a URL. Only a C++ wrapper reaches them.
   `landing/demos/lib-curl/direct/src/headers.js`; `npx vite build` fails with `MISSING_EXPORT`.
 - Remove when variadic functions get typed entry points.
 
-## A worker handle breaks `JSON.stringify` and `String()`
-
-On worker-backed runtimes, `JSON.stringify(handle)` returns `{}` and `String(handle)` throws "Cannot
-convert object to primitive value"; each also logs an uncaught "Cannot read properties of undefined
-(reading 'apply')". The cause is not verified; the proxy may answer `toJSON` and `Symbol.toPrimitive`
-as remote calls.
-
-- Seen: 2026-09-25
-- Check: in a worker-backed page, `JSON.stringify(await m.allocBuffer(4))` logs the page error.
-- Remove when handles stringify without a page error.
-
 ## The JavaScript-only demos work around fixes that are not released yet
 
 `landing/demos/lib-*/direct` builds against the published `beta`, which predates what this tree fixed:
