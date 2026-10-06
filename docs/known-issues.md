@@ -32,16 +32,6 @@ against old glue and passes on what it did not load. iOS rebuilds its bundle on 
 - Workaround: move `android/app/build/generated/assets/react/release` aside before building.
 - Remove when a JavaScript-only change to a workspace package rebuilds the bundle.
 
-## The Expo sample is never installed in CI
-
-`examples/mobile-reactnative-expo` keeps its own npm lockfile outside the pnpm workspace and no job
-installs it, which is how its manifest and lockfile disagreed for months until `npm ci` was run by
-hand.
-
-- Seen: 2026-09-22
-- Check: `grep -rl 'mobile-reactnative-expo' .github/workflows/` returns nothing.
-- Remove when a job installs it.
-
 ## Most e2e fixtures never run in CI
 
 The CI e2e legs run the `@crossbind/example-*` apps, the `port-zlib-wasi` and `port-zlib-linux`

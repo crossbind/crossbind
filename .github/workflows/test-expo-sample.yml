@@ -1,0 +1,33 @@
+name: test expo sample
+on:
+    workflow_dispatch:
+    push:
+        branches:
+            - main
+        paths:
+            - examples/mobile-reactnative-expo/**
+            - .nvmrc
+            - .github/workflows/test-expo-sample.yml
+    pull_request:
+        branches:
+            - main
+        paths:
+            - examples/mobile-reactnative-expo/**
+            - .nvmrc
+            - .github/workflows/test-expo-sample.yml
+
+permissions: {}
+jobs:
+    # The sample keeps its own npm lockfile outside the pnpm workspace, so no other job installs it; npm ci
+    # fails when its manifest and lockfile disagree, as they once did for months.
+    install:
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+            - name: Use Node.js
+              uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+              with:
+                  node-version-file: .nvmrc
+            - name: Install the sample
+              working-directory: examples/mobile-reactnative-expo
+              run: npm ci
