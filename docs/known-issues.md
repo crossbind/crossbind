@@ -32,17 +32,6 @@ against old glue and passes on what it did not load. iOS rebuilds its bundle on 
 - Workaround: move `android/app/build/generated/assets/react/release` aside before building.
 - Remove when a JavaScript-only change to a workspace package rebuilds the bundle.
 
-## Upstream source downloads have no retry
-
-`downloadFile` makes a single `fetch`. Every port build therefore depends on one uncached request to
-an upstream host, and a momentary network failure on a runner fails the whole job. It failed the
-curl family on 2026-09-23 while the same tarball fetched fine locally and on the macOS runner.
-
-- Seen: 2026-09-23
-- Check: `grep -ci 'retry\|attempt\|backoff' core/crossbind/src/utils/downloadAndExtractFile.js`
-  prints 0.
-- Remove when the fetch retries with backoff.
-
 ## The React Native CLI sample's jest suite does not run
 
 `@react-native/jest-preset` is not transformed, so the suite fails to start. It fails on `main` as
