@@ -1,7 +1,7 @@
 {
     "name": "@crossbind/port-openssl-standalone-napi-linux-arm64",
     "version": "2.0.0-beta.62",
-    "nativeVersion": "4.0.2",
+    "nativeVersion": "4.0.3",
     "homepage": "https://github.com/crossbind/crossbind/tree/main/ports/openssl#readme",
     "repository": "https://github.com/crossbind/crossbind.git",
     "license": "(Apache-2.0 WITH LLVM-exception) AND (MIT OR NCSA) AND Apache-2.0 AND MIT",
