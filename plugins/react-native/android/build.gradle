@@ -65,6 +65,17 @@ gradle.projectsEvaluated {
     }
 }
 
+// The app's JavaScript bundle takes in this plugin's runtime, which a workspace link changes without any of the
+// app's own files changing, and those are all the bundle task's up-to-date check read.
+def crossbindRuntimeJs = new File(__crossbindAppRoot, 'node_modules/@crossbind/core-embind-jsi/js')
+gradle.projectsEvaluated {
+    rootProject.allprojects { p ->
+        p.tasks.matching { it.name ==~ /createBundle.+JsAndAssets/ }.configureEach {
+            inputs.dir(crossbindRuntimeJs).withPropertyName('crossbindRuntimeJs').optional()
+        }
+    }
+}
+
 android {
     compileSdkVersion 34
     buildToolsVersion "34.0.0"
