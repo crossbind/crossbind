@@ -161,6 +161,28 @@ for triple in x86_64-alpine-linux-musl aarch64-alpine-linux-musl; do
   test -z "$(/usr/lib/llvm-19/bin/llvm-nm -D --undefined-only "\${triple}.so" | grep ' U __cxa_thread_atexit_impl$')"
   echo "\${triple} addon: needs only musl and libgcc_s"
 done
+printf '#[no_mangle]\npub extern "C" fn crossbind_rust_probe() -> i32 { std::thread::spawn(|| 7).join().unwrap() }\n' > probe.rs
+printf 'extern "C" int crossbind_rust_probe();\nextern "C" int crossbind_probe(){return crossbind_rust_probe();}\n' > rust.cpp
+for pair in x86_64-unknown-linux-gnu:x86_64-linux-gnu aarch64-unknown-linux-gnu:aarch64-linux-gnu; do
+  rust="\${pair%%:*}"
+  triple="\${pair#*:}"
+  rustup target list --installed | grep -qx "\${rust}"
+  rustc --target "\${rust}" --crate-type staticlib -O probe.rs -o "lib\${rust}.a"
+  "/opt/crossbind/linux/bin/\${triple}-clang++" -shared -fPIC -Wl,-z,defs rust.cpp "lib\${rust}.a" -lgcc_s -lutil -lrt -lpthread -lm -ldl -o "\${rust}.so"
+  newest=$(/usr/lib/llvm-19/bin/llvm-objdump -T "\${rust}.so" | grep -o 'GLIBC_[0-9.]*' | sort -uV | tail -1)
+  test "$(printf '%s\\nGLIBC_2.28\\n' "\${newest}" | sort -V | tail -1)" = GLIBC_2.28
+  echo "\${rust} std links into an addon, newest symbol \${newest}"
+done
+for pair in x86_64-unknown-linux-musl:x86_64-alpine-linux-musl aarch64-unknown-linux-musl:aarch64-alpine-linux-musl; do
+  rust="\${pair%%:*}"
+  triple="\${pair#*:}"
+  rustup target list --installed | grep -qx "\${rust}"
+  rustc --target "\${rust}" --crate-type staticlib -O -C target-feature=-crt-static probe.rs -o "lib\${rust}.a"
+  "/opt/crossbind/linux/bin/\${triple}-clang++" -shared -fPIC -Wl,-z,defs rust.cpp "lib\${rust}.a" -lgcc_s -o "\${rust}.so"
+  needed=$(/usr/lib/llvm-19/bin/llvm-readelf --dynamic "\${rust}.so" | sed -n 's/.*Shared library: \\[\\(.*\\)\\]/\\1/p')
+  test -z "$(echo "\${needed}" | grep -v -e '^libc\\.musl-' -e '^libgcc_s\\.so\\.1$')"
+  echo "\${rust} std links into an addon that needs only musl and libgcc_s"
+done
 printf '#include <iostream>\nint main(){std::cout << "ok" << std::endl;return 0;}\n' > main.cpp
 "/opt/crossbind/linux/bin/$(uname -m)-linux-gnu-clang++" main.cpp -o main
 ./main | grep -qx ok
@@ -187,6 +209,18 @@ for triple in x86_64-w64-mingw32 aarch64-w64-mingw32; do
   test -n "\${imports}"
   test -z "$(echo "\${imports}" | grep -v -i -e '^api-ms-win-crt-' -e '^kernel32\\.dll$')"
   echo "\${triple} addon imports only the UCRT and KERNEL32"
+done
+printf '#[no_mangle]\npub extern "C" fn crossbind_rust_probe() -> i32 { std::thread::spawn(|| 7).join().unwrap() }\n' > probe.rs
+printf 'extern "C" int crossbind_rust_probe();\nextern "C" __declspec(dllexport) int crossbind_probe(){return crossbind_rust_probe();}\n' > rust.cpp
+for pair in x86_64-pc-windows-gnullvm:x86_64-w64-mingw32 aarch64-pc-windows-gnullvm:aarch64-w64-mingw32; do
+  rust="\${pair%%:*}"
+  triple="\${pair#*:}"
+  rustup target list --installed | grep -qx "\${rust}"
+  rustc --target "\${rust}" --crate-type staticlib -O probe.rs -o "lib\${rust}.a"
+  "/opt/llvm-mingw/bin/\${triple}-clang++" -shared -static rust.cpp "lib\${rust}.a" -lkernel32 -lntdll -luserenv -lws2_32 -ldbghelp -lunwind -o "\${rust}.dll"
+  imports=$(/opt/llvm-mingw/bin/llvm-objdump -p "\${rust}.dll" | sed -n 's/^ *DLL Name: //p')
+  test -z "$(echo "\${imports}" | grep -v -i -e '^api-ms-win-' -e '^kernel32\\.dll$' -e '^ntdll\\.dll$' -e '^userenv\\.dll$' -e '^ws2_32\\.dll$' -e '^dbghelp\\.dll$' -e '^bcryptprimitives\\.dll$')"
+  echo "\${rust} std links into an addon that imports only system DLLs"
 done
 install -m 0644 addon.cpp installed.cpp
 test -f installed.cpp

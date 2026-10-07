@@ -1,6 +1,16 @@
 # @crossbind/docker
 
-## Unreleased — image family 1.0.11
+## Unreleased — image family 1.0.12
+
+### Patch Changes
+
+- The `linux` and `windows` images carry Rust's stock std for every Node.js addon target they
+  build, so Rust packages and app-local Rust link into Linux and Windows addons as they do into
+  macOS ones: `x86_64` and `aarch64` of `unknown-linux-gnu` and `unknown-linux-musl` in `linux`, and
+  of `pc-windows-gnullvm`, the targets built for llvm-mingw, in `windows`. rustup adds them to the
+  pinned toolchain, as it adds the Android targets to `android`.
+
+## Image family 1.0.11
 
 ### Patch Changes
 
