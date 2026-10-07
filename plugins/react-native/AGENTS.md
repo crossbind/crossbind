@@ -48,6 +48,7 @@ Sibling packages:
 
 - Treat `.h` files as importable JS bridge modules.
 - Watch native source dirs and trigger Metro reloads when bridge code regenerates.
+- On Expo's web platform, build the wasm and serve it from the dev server; `crossbind-metro prepare-web` stages the web dependencies before Metro starts and `crossbind-metro export-web` links the wasm into an export.
 
 ## Invariants
 

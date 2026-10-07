@@ -6,6 +6,9 @@
     "repository": "https://github.com/crossbind/crossbind.git",
     "license": "MIT",
     "main": "src/metro-plugin.cjs",
+    "bin": {
+        "crossbind-metro": "src/cli.cjs"
+    },
     "peerDependencies": {
         "metro": "*",
         "@babel/core": "^7.0.0"

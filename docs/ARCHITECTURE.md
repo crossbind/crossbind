@@ -83,7 +83,7 @@ Each `plugins/*` adapts crossbind's outputs to one bundler. They share a small c
 - Pipe `/crossbind.js`, `/crossbind.wasm`, `/crossbind.data.txt` requests to dev-server middleware.
 - Set COOP/COEP headers when multithread is in use.
 
-`plugins/rollup` is the inner kernel; `plugins/vite` wraps it; `plugins/webpack` is parallel; `plugins/react-native` + `plugins/metro` handle RN.
+`plugins/rollup` is the inner kernel; `plugins/vite` wraps it; `plugins/webpack` is parallel; `plugins/react-native` + `plugins/metro` handle RN, and `plugins/metro` alone builds the wasm for Expo's web platform.
 
 ### Packages (prebuilt C++ libs)
 

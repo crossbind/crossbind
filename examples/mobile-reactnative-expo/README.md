@@ -32,3 +32,15 @@
    ```bash
     npm run android
    ```
+
+4. Start the web app (the C++ runs as WebAssembly)
+
+   ```bash
+    npm run web
+   ```
+
+5. Export the web app to `dist`
+
+   ```bash
+    npm run export:web
+   ```

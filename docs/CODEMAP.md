@@ -228,7 +228,7 @@ Index + template: [`docs/adr/README.md`](./adr/README.md).
 | `plugins/webpack` | `index.js` | Webpack/Rspack equivalent; dev-server middleware + COOP/COEP |
 | `plugins/react-native` | `index.js`, `script/build_{android,ios,js}.js`, `cpp/CMakeLists.txt` | RN integration: Gradle CMake hook, podspec hook |
 | `plugins/react-native-ios-helper` | (small helper) | iOS-side RN glue |
-| `plugins/metro` | (small bundler hook) | Metro bundler integration |
+| `plugins/metro` | `src/metro-plugin.cjs`, `src/metro-transformer.cjs`, `src/web.cjs`, `src/cli.cjs` | Metro bundler integration; on Expo's web platform it builds the wasm, serves it from the dev server and links it into an export (`crossbind-metro prepare-web`, `export-web`) |
 
 ## Packages (`ports/`)
 

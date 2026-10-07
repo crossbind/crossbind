@@ -73,3 +73,25 @@ const config = getDefaultConfig(__dirname);
 -module.exports = config;
 +module.exports = mergeConfig(config, newConfig);
 ```
+
+## Web
+On Expo's web platform the plugin compiles the C++ to WebAssembly, the build the Vite plugin makes: single-threaded unless `crossbind.config.js` sets `target.runtime: 'mt'`.
+
+Metro resolves imports against the files it found when it started, so the Conan packages and cargo builds the web build needs are staged first:
+```sh
+npx crossbind-metro prepare-web
+npx expo start --web
+```
+
+`expo start --web` builds the wasm when the page first loads and serves it from the dev server. A multithreaded build also gets the `Cross-Origin-Opener-Policy` and `Cross-Origin-Embedder-Policy` headers it needs there. Metro does not watch the C++ sources; reload the page after an edit to rebuild.
+
+`expo export` runs nothing after the bundle, so a web export takes a last command, which links the release wasm into the export:
+```sh
+npx crossbind-metro prepare-web
+npx expo export -p web --clear
+npx crossbind-metro export-web dist
+```
+
+Host `dist` as any static site (with `web.output: 'server'`, pass `dist/client`). A multithreaded build also needs `Cross-Origin-Opener-Policy: same-origin` and `Cross-Origin-Embedder-Policy: require-corp` from the host.
+
+If your Metro config sets `server.enhanceMiddleware`, set it before passing the config to `CrossbindMetroPlugin`, which chains it.
