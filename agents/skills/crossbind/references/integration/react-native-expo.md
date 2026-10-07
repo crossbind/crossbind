@@ -11,6 +11,7 @@ Add crossbind to an Expo RN app so:
 - iOS + Android native C++ compiles and links via Expo's prebuild system.
 - Metro picks up the crossbind loader.
 - Both managed-prebuild and bare workflows are supported.
+- The web build (`expo start --web`, `expo export -p web`) runs the same imports as WebAssembly.
 
 ## When to use
 
@@ -29,6 +30,8 @@ crossbind needs **native** code to ship with the app, so it requires:
 
 If the user is on Expo Go, you must walk them through `expo prebuild` first.
 
+The web build needs neither: Metro compiles the C++ to WebAssembly in crossbind's Docker toolchain, as the Vite plugin does.
+
 ## Files involved
 
 | File | Role |
@@ -44,7 +47,7 @@ If the user is on Expo Go, you must walk them through `expo prebuild` first.
 
 ```bash
 pnpm add @crossbind/plugin-react-native@beta @crossbind/plugin-react-native-ios-helper@beta
-pnpm add -D @crossbind/plugin-metro@beta     # bundling only; the RN plugin brings the toolchain
+pnpm add -D @crossbind/plugin-metro@beta     # bundling; the RN plugin brings the native toolchain, Metro builds the web wasm
 pnpm add @crossbind/port-<name>@beta     # optional
 
 # Add "@crossbind/plugin-react-native" to expo.plugins in app.json before prebuilding
@@ -58,6 +61,12 @@ cd ios && pod install && cd ..
 # Run
 pnpm expo run:android
 pnpm expo run:ios
+
+# Web: stage the web dependencies, then the dev server builds the wasm on the first page load
+pnpm crossbind-metro prepare-web && pnpm expo start --web
+
+# Web export: link the release wasm next to the exported bundle
+pnpm crossbind-metro prepare-web && pnpm expo export -p web --clear && pnpm crossbind-metro export-web dist
 ```
 
 For EAS:
@@ -104,11 +113,26 @@ export default {
 };
 ```
 
+## Web
+
+The web bundle loads the browser build the Vite and webpack plugins make: wasm32, single-threaded unless
+`crossbind.config.js` or one of its dependencies sets `target.runtime: 'mt'`.
+
+- `crossbind-metro prepare-web` stages the Conan packages and builds the cargo dependencies the web build needs. It runs before Metro starts, because Metro resolves a `conan:` import against the files it found at startup; the example's `web` and `export:web` scripts run it first.
+- `expo start --web`: the dev server builds the wasm (debug) when the page first asks for `crossbind.js`, and serves `crossbind.js`, `crossbind.wasm` and `crossbind.data.txt`. The build runs inside the dev server, so a cold one holds up every client of that server until it ends. Metro does not watch the C++ sources: after an edit, reload the page, and its request for `crossbind.js` rebuilds what changed.
+- `expo export -p web`: Expo runs nothing after the bundle, so `crossbind-metro export-web <dir>` links the release wasm and copies the same files into the export. Give the export `--clear`: it re-runs the `.h` transforms that write the bridges, which a warm Metro cache skips. With `web.output: 'server'`, Expo writes the client files to `dist/client`; pass that directory.
+- `experiments.baseUrl` is honoured: the bundle asks for the files under it.
+
 ## Multithread → COOP/COEP
 
 **Not applicable for native RN.** RN runs JS on Hermes/JSC; multithread (`runtime: 'mt'`) uses pthreads via JSI. No browser headers required.
 
-If the user also targets `expo-router` web build (RN Web), then they're effectively in a browser context and standard COOP/COEP rules apply — see `docs/playbooks/integration/vite.md` for headers.
+On the web, `runtime: 'mt'` needs a cross-origin isolated page:
+
+- The dev server sends `Cross-Origin-Opener-Policy: same-origin` and `Cross-Origin-Embedder-Policy: require-corp` itself, on every response.
+- The production host must send them too (see `docs/playbooks/integration/vite.md`); a host that cannot set headers cannot serve a multithreaded build.
+- Both headers reach the whole app: COOP `same-origin` severs the opener link that popup sign-in flows use, and COEP `require-corp` blocks cross-origin images and fonts served without `Cross-Origin-Resource-Policy`. This is why the web build stays single-threaded unless asked.
+- The native builds are multithreaded either way; setting `target.runtime: 'mt'` is what makes the web build multithreaded too.
 
 ## Validation
 
@@ -118,6 +142,8 @@ If the user also targets `expo-router` web build (RN Web), then they're effectiv
 - [ ] `pnpm expo run:ios` and `pnpm expo run:android` build + launch.
 - [ ] App calls into C++: `import { initNative } from './native/native.h'; await initNative(); Module.fn(...)` returns expected result.
 - [ ] EAS build (if used) produces a valid binary.
+- [ ] `pnpm crossbind-metro prepare-web && pnpm expo start --web` shows the C++ result in the browser (the first load builds the wasm).
+- [ ] `pnpm crossbind-metro prepare-web && pnpm expo export -p web --clear && pnpm crossbind-metro export-web dist`, served as a static site, shows it too; with `runtime: 'mt'`, `self.crossOriginIsolated` is `true` there.
 
 ## Common pitfalls
 
@@ -128,6 +154,9 @@ If the user also targets `expo-router` web build (RN Web), then they're effectiv
 - **`package.json` has both `expo` and stale RN-cli scripts.** Clean up: `expo run:android` replaces `react-native run-android` in Expo workflow.
 - **EAS managed credentials prompt blocks CI.** When automating EAS, use `EAS_NO_VCS=1` or pre-set credentials.
 - **arm64e / x86_64 simulator.** `@crossbind/port-*-ios` podspecs already exclude `x86_64` for simulators. Custom packages must include the exclusion (see `react-native-cli.md` "Common pitfalls").
+- **A web binding is `undefined` after `.crossbind` was deleted.** A warm Metro cache skips the `.h` transforms that write the bridges, so the wasm links without them. Restart with `expo start --web --clear`. The bridges are shared with the native builds, so a header whose declarations differ on Android needs the same restart after an Android build.
+- **`'conan:<pkg>/<header>' - <pkg> is declared in conanDependencies but not installed` on the web.** Metro started before the web build's Conan packages were staged. Run `crossbind-metro prepare-web`, then start Metro again.
+- **The wasm requests 404 although the app runs.** A `server.enhanceMiddleware` set on the config after `CrossbindMetroPlugin(...)` replaces the one that serves the wasm. Set it before passing the config to the plugin, which chains it.
 - **TypeScript paths broken.** `crossbind.config.{js,mjs,cjs}` is JS; ensure `tsconfig.json` includes it or excludes via `allowJs: true` if you want type checking.
 
 ## Reference examples

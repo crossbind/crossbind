@@ -35,8 +35,7 @@ export default function HomeScreen() {
   const [message, setMessage] = useState('compiling ...');
 
   useEffect(() => {
-    initNative().then((a) => {
-      console.log(a, a.Crossbind);
+    initNative().then(() => {
       setMessage(Native.sample());
     });
   }, []);

@@ -28,7 +28,7 @@ useWorker: true     │ Wasm in 1 Web Worker.│ Wasm in 1 Web Worker;
 | CPU-bound parallelism (image / geo / crypto) | `runtime: 'mt'` |
 | Both: persistent storage AND parallelism | `runtime: 'mt'`, `useWorker: true` |
 | Cloudflare Worker / Deno Deploy / Vercel Edge | `runtime: 'st'` only — `mt` and `useWorker` not supported |
-| React Native | `runtime: 'mt'` if perf-sensitive (pthreads via JSI; no COOP/COEP needed) |
+| React Native | `runtime: 'mt'` if perf-sensitive (pthreads via JSI; no COOP/COEP needed, except on an Expo app's web build) |
 
 ## Setting `runtime: 'mt'`
 
@@ -145,6 +145,8 @@ If your use case demands persistence on edge, you need an external service (R2, 
 ## React Native
 
 Pthreads are routed through JSI (no `SharedArrayBuffer`, no COOP/COEP). `runtime: 'mt'` works without any host configuration. `useWorker` is a no-op (n/a — no Web Worker API in RN).
+
+An Expo app that also runs on the web gets the same `runtime` on its web build, which is a browser build: with `mt` it needs COOP/COEP there (`docs/playbooks/integration/react-native-expo.md`).
 
 ## Common pitfalls
 

@@ -157,3 +157,20 @@ link still resolves to the old code.
   prints 1.
 - Workaround: move `.crossbind` (and a library's `dist/prebuilt`) aside after deleting a source.
 - Remove when deleting a native source triggers a rebuild.
+
+## Logging the module in Expo's web dev server raises an uncaught error
+
+In a browser `initNative()` runs the module in a worker (`useWorker` defaults to `!!globalThis.Worker`),
+and the module it resolves to is a Comlink proxy that answers every member with a remote one;
+`worker-comlink.js` answers `then`, `toJSON` and `Symbol.toPrimitive` locally only for object
+handles. Expo's dev server forwards `console.log` arguments to the terminal through `pretty-format`
+(`expo/src/async-require/hmr.ts`), whose coercion reaches the worker as a call on a path that does
+not exist, so the page shows LogBox's full-screen "Uncaught Error: Cannot read properties of
+undefined (reading 'Symbol(Symbol.toPrimitive)')". A production export logs the same values without
+an error.
+
+- Seen: 2026-10-07 (`examples/mobile-reactnative-expo`, which logged the module until then)
+- Check: in `examples/mobile-reactnative-expo/src/app/index.tsx`, log the module in the
+  `initNative().then(...)` callback with `console.log(a, a.Crossbind)`, run `npx expo start --web`
+  and open the page: LogBox shows the error.
+- Remove when the page loads without it.
