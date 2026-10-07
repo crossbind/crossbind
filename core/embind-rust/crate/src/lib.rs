@@ -173,7 +173,9 @@ macro_rules! bindings {
             }
             #[used]
             #[cfg_attr(target_vendor = "apple", link_section = "__DATA,__mod_init_func")]
-            #[cfg_attr(not(target_vendor = "apple"), link_section = ".init_array")]
+            // The Windows CRT runs no .init_array; it calls what .CRT$XCU holds when the DLL loads.
+            #[cfg_attr(windows, link_section = ".CRT$XCU")]
+            #[cfg_attr(not(any(target_vendor = "apple", windows)), link_section = ".init_array")]
             static __CROSSBIND_EMBIND_CTOR: extern "C" fn() = __crossbind_embind_ctor;
         };
     };
