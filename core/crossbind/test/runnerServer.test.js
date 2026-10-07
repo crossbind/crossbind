@@ -322,8 +322,19 @@ describe('blob store', () => {
                 this.destroy(new Error('connection reset'));
             },
         });
+        // On a loaded machine the temporary file opens only after the upload has already failed.
+        const OPEN_DELAY_MS = 50;
+        const open = fs.open;
+        const delayedOpen = vi.spyOn(fs, 'open').mockImplementation((...args) => {
+            setTimeout(() => open(...args), OPEN_DELAY_MS);
+        });
 
-        await expect(createBlobStore(dir).putStream(sha('whole'), broken)).rejects.toThrow(/connection reset/);
+        try {
+            await expect(createBlobStore(dir).putStream(sha('whole'), broken)).rejects.toThrow(/connection reset/);
+        } finally {
+            delayedOpen.mockRestore();
+        }
+        await new Promise((resolve) => { setTimeout(resolve, OPEN_DELAY_MS * 2); });
         expect(fs.readdirSync(dir)).toEqual([]);
     });
 });
