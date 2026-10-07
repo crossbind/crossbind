@@ -12,15 +12,17 @@ WebAssembly and React Native also build `.node` addons for Node.js and Electron.
 
 ## Use
 
-Add it next to `crossbind` and build the native platform:
+Add it next to `crossbind` and build the addons of this machine's platform, or of every desktop
+platform:
 
 ```bash
 pnpm add -D crossbind@beta @crossbind/core-embind-napi@beta
-pnpm crossbind build -p darwin
+pnpm crossbind build -p host -e node -b release
+pnpm crossbind build -p darwin,linux,linuxmusl,win32 -e node -b release
 ```
 
-`dist/` then holds one addon per platform and architecture (`<name>.darwin-arm64.node`,
-`<name>.darwin-x64.node`) and the loader that picks one at runtime:
+`dist/` then holds one addon per platform and architecture (e.g. `<name>.darwin-arm64.node`,
+`<name>.linux-x64.node`, `<name>.win32-x64.node`) and the loader that picks one at runtime:
 
 ```js
 const initNative = require('./dist/<name>.native.cjs');
@@ -30,7 +32,7 @@ const { Native } = await initNative();
 
 crossbind resolves this package from your project; you never import it yourself. See the
 [Node.js integration guide](https://github.com/crossbind/crossbind/blob/main/docs/playbooks/integration/nodejs.md#native-addon-node-api) for
-requirements and current limits (macOS only, no `worker_threads` yet).
+requirements, Electron and current limits (no `worker_threads` yet).
 
 ## Contents
 

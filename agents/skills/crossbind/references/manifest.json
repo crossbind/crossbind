@@ -119,7 +119,7 @@
     {
       "source": "docs/playbooks/integration/nodejs.md",
       "output": "integration/nodejs.md",
-      "sha256": "7934a1cab084f47049878992848c10058fb12d18dae5bcef98070f4dd50926be"
+      "sha256": "fe42967a87380547551a4d4970d58ed3eeb0e7bb18d41bb33ead6e8393532612"
     },
     {
       "source": "docs/playbooks/integration/react-native-cli.md",
