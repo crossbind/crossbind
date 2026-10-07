@@ -128,20 +128,6 @@ stays out on size: with GEOS and `-Oz` the JavaScript-only wasm is 26,505,868 by
 - Check: `grep -c NOT_IN_THIS_BUILD landing/demos/lib-sqlite3/direct/crossbind.config.js` prints 2.
 - Remove when the demos build against a release with these fixes and the workarounds and texts are updated.
 
-## iOS accepts a string for a Rust byte-slice parameter
-
-In the React Native conformance leg, `confRsBytesSum('abc')` returns on the iOS simulator instead
-of throwing, so `rs:napi:bytesRejectString` fails there (`CONFORMANCE 303/304`). Android and the
-Node addon leg throw "Cannot pass "abc" as a Uint8Array" from the same embind.js and Rust sources.
-The iOS app carried Rust archives built that day and a bundle with the current runtime, and the
-typed-argument ids sat at distinct addresses, so the difference lies elsewhere in the iOS build.
-When it started is not known: the check arrived on 28 Sep, and no later iOS run is recorded.
-
-- Seen: 2026-10-04 (iPhone 16 Pro simulator, iOS 27, Xcode 27, RN 0.87)
-- Check: in `e2e/mobile-reactnative-cli`, run `pod install` in `ios/`, `pnpm run run:ios`, then
-  `maestro --device <udid> hierarchy`; the report holds `NO rs:napi:bytesRejectString`.
-- Remove when the iOS leg's report has no `NO` line.
-
 ## Deleting a native source does not rebuild
 
 Whether a build reuses its archives is decided by modification times: the bundler plugins rebuild
