@@ -142,7 +142,9 @@ Loaded from `~/.crossbind.json`, merged with defaults from `core/crossbind/src/u
 ```ts
 state.system = {
     XCODE_DEVELOPMENT_TEAM:  string,            // default ''  (required for iOS device builds)
-    RUNNER:                  'DOCKER_RUN' | 'DOCKER_EXEC' | 'LOCAL',  // default 'DOCKER_RUN'
+    RUNNER:                  'DOCKER_RUN' | 'DOCKER_EXEC' | 'LOCAL' | 'REMOTE',  // default 'DOCKER_RUN'; env CROSSBIND_RUNNER wins
+    REMOTE_URL:              string,            // default ''  (RUNNER=REMOTE: runner of every image without its own address)
+    REMOTE_URL_WEB:          string,            // default ''  (also _ANDROID, _LINUX, _WINDOWS: that image's runner)
     DOCKER_REGISTRY_MIRROR:  string,            // default ''  (registry prefix; crossbind appends the release digest)
     DOCKER_IMAGE_WEB:        string,            // default ''  (image for wasm and wasi builds)
     DOCKER_IMAGE_ANDROID:    string,            // default ''  (image for android builds)

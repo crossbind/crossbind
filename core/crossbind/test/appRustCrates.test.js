@@ -7,9 +7,9 @@ import path from 'node:path';
 
 // cargo runs on the host; the test asserts what the engine hands it, not the compile itself.
 vi.mock('node:child_process', () => ({ spawnSync: vi.fn(), execFileSync: vi.fn() }));
-// These cases are about staging and pruning, not about where cargo runs: with no configured
-// runner runCargo stays on the host, so the assertions can read the argv directly.
-vi.mock('../src/state/index.js', () => ({ default: { config: { paths: {}, system: {} } } }));
+// These cases are about staging and pruning, not about where cargo runs: under RUNNER=LOCAL
+// runCargo stays on the host, so the assertions can read the argv directly.
+vi.mock('../src/state/index.js', () => ({ default: { config: { paths: {}, system: { RUNNER: 'LOCAL' } } } }));
 
 const WASM = { platform: 'wasm', arch: 'wasm32' };
 const TRIPLE = 'wasm32-unknown-emscripten';

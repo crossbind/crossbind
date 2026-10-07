@@ -1,6 +1,6 @@
 # ADR-0005: Add `platform: 'wasi'` as a first-class build platform
 
-- **Status:** Accepted
+- **Status:** Accepted; the dual-mode toolchain rule is superseded by ADR-0015
 - **Date:** 2026-07-14 (wasip1), moved to wasm32-wasip3 2026-07-21
 - **Affects:** `core/crossbind/src/actions/buildWasiCommand.js`, `src/utils/{targets,wasiToolchain}.js`, `src/assets/wasi-runtime/stubs.c`, `src/runtime/wasiRun.mjs`, every `ports/*/wasi` / `ports/*/standalone-wasi`, CI (`build-linux.yml`)
 

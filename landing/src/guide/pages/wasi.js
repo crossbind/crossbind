@@ -17,12 +17,12 @@ wasmtime run --dir=. dist/myapp-wasi-wasm32-st-release.wasm input.txt`,
         },
         {
             type: 'p',
-            text: 'There is nothing to configure to get started: with no local wasi-sdk, the build runs inside the Docker image, which ships one. For native-speed builds, point at a local sdk (34 or newer, with the `wasm32-wasip3` sysroot):',
+            text: 'There is nothing to configure to get started: the build runs inside the Docker image, which ships a wasi-sdk. For native-speed builds, build on the host with your own sdk (34 or newer, with the `wasm32-wasip3` sysroot):',
         },
         {
             type: 'code',
-            file: '~/.crossbind.json',
-            code: '{ "WASI_SDK_PATH": "/opt/wasi-sdk" }',
+            file: 'shell',
+            code: 'CROSSBIND_RUNNER=LOCAL CROSSBIND_WASI_SDK_PATH=/opt/wasi-sdk crossbind build -p wasi -e wasi -b release',
         },
 
         { type: 'h2', id: 'io', text: 'Files and network' },

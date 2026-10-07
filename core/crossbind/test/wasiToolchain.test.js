@@ -1,6 +1,6 @@
 import { describe, test, expect } from 'vitest';
 import {
-    wasiCFlags, wasiCxxFlags, resolveWasiSdkPath, WASI_LINK_LIBS,
+    wasiCFlags, wasiCxxFlags, resolveWasiSdkPath, exportWasiSdkPath, WASI_LINK_LIBS,
 } from '../src/utils/wasiToolchain.js';
 
 describe('wasi flag composition', () => {
@@ -29,13 +29,42 @@ describe('wasi flag composition', () => {
 });
 
 describe('resolveWasiSdkPath', () => {
-    test('env override wins over system config', () => {
-        expect(resolveWasiSdkPath({ WASI_SDK_PATH: '/sys' }, { CROSSBIND_WASI_SDK_PATH: '/env' })).toBe('/env');
+    test('env override wins over system config under RUNNER=LOCAL', () => {
+        expect(resolveWasiSdkPath({ RUNNER: 'LOCAL', WASI_SDK_PATH: '/sys' }, { CROSSBIND_WASI_SDK_PATH: '/env' })).toBe('/env');
+        expect(resolveWasiSdkPath({ WASI_SDK_PATH: '/sys' }, { CROSSBIND_RUNNER: 'LOCAL', CROSSBIND_WASI_SDK_PATH: '/env' })).toBe('/env');
     });
 
     test('falls back to system config, then null', () => {
-        expect(resolveWasiSdkPath({ WASI_SDK_PATH: '/sys' }, {})).toBe('/sys');
-        expect(resolveWasiSdkPath({ WASI_SDK_PATH: '' }, {})).toBeNull();
+        expect(resolveWasiSdkPath({ RUNNER: 'LOCAL', WASI_SDK_PATH: '/sys' }, {})).toBe('/sys');
+        expect(resolveWasiSdkPath({ RUNNER: 'LOCAL', WASI_SDK_PATH: '' }, {})).toBeNull();
         expect(resolveWasiSdkPath(undefined, {})).toBeNull();
+    });
+
+    test('is null under every other runner: their builds use the sdk in the image', () => {
+        ['DOCKER_RUN', 'DOCKER_EXEC', 'REMOTE'].forEach((RUNNER) => {
+            expect(resolveWasiSdkPath({ RUNNER, WASI_SDK_PATH: '/sys' }, { CROSSBIND_WASI_SDK_PATH: '/env' })).toBeNull();
+        });
+    });
+
+    test('leaves an invalid runner to the step that uses it, so `crossbind config set` can still repair it', () => {
+        expect(resolveWasiSdkPath({ RUNNER: 'remote', WASI_SDK_PATH: '/sys' }, {})).toBeNull();
+    });
+});
+
+describe('exportWasiSdkPath', () => {
+    test('hands recipes the host sdk under RUNNER=LOCAL, from the system config too', () => {
+        const env = { CROSSBIND_RUNNER: 'LOCAL' };
+
+        exportWasiSdkPath({ WASI_SDK_PATH: '/sys' }, env);
+
+        expect(env.CROSSBIND_WASI_SDK_PATH).toBe('/sys');
+    });
+
+    test('takes a host sdk away from recipes under the other runners, so no host path reaches the image', () => {
+        const env = { CROSSBIND_WASI_SDK_PATH: '/env' };
+
+        exportWasiSdkPath({ RUNNER: 'DOCKER_RUN', WASI_SDK_PATH: '/sys' }, env);
+
+        expect(env).not.toHaveProperty('CROSSBIND_WASI_SDK_PATH');
     });
 });

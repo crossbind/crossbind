@@ -3,6 +3,7 @@ import loadJson from '../utils/loadJson.js';
 import writeJson from '../utils/writeJson.js';
 import { TARGETS, targetPathOf, nodeAddonNamesOf, nativeCommandNamesOf } from '../utils/targets.js';
 import { findCargoModuleImportsIn, writeCargoMarker } from '../utils/cargoImport.js';
+import { exportWasiSdkPath } from '../utils/wasiToolchain.js';
 import loadConfig, { assertBinarySelection } from './loadConfig.js';
 import refreshConanDependencies from './refreshConanDependencies.js';
 
@@ -25,12 +26,7 @@ async function initProcessState() {
     state.config = await loadConfig();
     assertBinarySelection(state.config);
     refreshConanDependencies(state.config);
-    // Recipes read the wasi-sdk location from the environment (lazily, in
-    // getBuildParams); mirror the system-config value there so both sources
-    // behave the same.
-    if (state.config.system.WASI_SDK_PATH && !process.env.CROSSBIND_WASI_SDK_PATH) {
-        process.env.CROSSBIND_WASI_SDK_PATH = state.config.system.WASI_SDK_PATH;
-    }
+    exportWasiSdkPath(state.config.system);
     // Same idea for the docker image overrides: pullDockerImage.js resolves them from the
     // environment alone, so it stays free of a state import (and of the cycle that would create).
     Object.entries({

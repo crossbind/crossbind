@@ -1,11 +1,11 @@
 import {
-    describe, test, expect, vi, afterEach,
+    describe, test, expect, vi,
 } from 'vitest';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import {
-    remoteRunnerUrl, remoteRoots, baseMount, remoteExecParams, referencedPaths, REMOTE_EXCLUDE_RULES,
+    remoteRoots, baseMount, remoteExecParams, referencedPaths, REMOTE_EXCLUDE_RULES,
 } from '../src/utils/remoteRunner.js';
 
 const config = {
@@ -21,25 +21,6 @@ const config = {
         { paths: { output: '/w/lib/dist', native: ['/w/lib/src/native'], header: ['/w/lib/src/native'] } },
     ],
 };
-
-afterEach(() => {
-    vi.unstubAllEnvs();
-});
-
-describe('remoteRunnerUrl', () => {
-    test('reads the runner address from CROSSBIND_REMOTE_URL', () => {
-        expect(remoteRunnerUrl('web', { CROSSBIND_REMOTE_URL: 'https://runner.example' })).toBe('https://runner.example');
-        expect(remoteRunnerUrl('web', {})).toBeNull();
-    });
-
-    test('prefers the runner of the step\'s own image, so the images of one build can live on different runners', () => {
-        const env = { CROSSBIND_REMOTE_URL: 'https://web.example', CROSSBIND_REMOTE_URL_LINUX: 'https://linux.example' };
-
-        expect(remoteRunnerUrl('linux', env)).toBe('https://linux.example');
-        expect(remoteRunnerUrl('web', env)).toBe('https://web.example');
-        expect(remoteRunnerUrl('android', { CROSSBIND_REMOTE_URL_LINUX: 'https://linux.example' })).toBeNull();
-    });
-});
 
 describe('remoteRoots', () => {
     test('lists native, header, cache, cli asset and dependency folders relative to the base, nested ones folded', () => {
@@ -116,16 +97,14 @@ describe('remoteExecParams', () => {
         role: 'web', image: 'ghcr.io/crossbind/web@sha256:1',
         mounts: [baseMount(config)], cwd: '/tmp/crossbind/live/app/.crossbind/build', argv: ['emcmake', 'cmake', '..'], env: { CFLAGS: '-O2' },
     };
-    const runners = (env) => ['', '_WEB', '_LINUX'].forEach((suffix) => {
-        vi.stubEnv(`CROSSBIND_REMOTE_URL${suffix}`, env[`url${suffix}`] ?? '');
-        vi.stubEnv(`CROSSBIND_TOKEN${suffix}`, env[`token${suffix}`] ?? '');
+    const remoteAt = (url, token = 'secret-token', tokenVariable = 'CROSSBIND_TOKEN_WEB') => ({
+        url, from: '$CROSSBIND_REMOTE_URL_WEB', token, tokenVariable,
     });
 
     test('runs the remote client with the step, its mounts and the exclusion rules, and hands it the token only through its environment', () => {
-        runners({ url: 'https://runner.example', token: 'secret-token' });
         const options = { cwd: '/w/app/.crossbind/build', stdio: 'inherit' };
 
-        const [program, args, passedOptions] = remoteExecParams(step, options);
+        const [program, args, passedOptions] = remoteExecParams({ ...step, remote: remoteAt('https://runner.example') }, options);
         const payload = JSON.parse(args[1]);
 
         expect(program).toBe(process.execPath);
@@ -135,31 +114,23 @@ describe('remoteExecParams', () => {
         expect(args[1]).not.toContain('secret-token');
     });
 
-    test('pairs each token with the address it was set with, so a shared token never reaches another image\'s runner', () => {
-        runners({
-            url: 'https://shared.example', token: 'shared-token', url_LINUX: 'https://linux.example', token_LINUX: 'linux-token',
-        });
-
-        const [, [, linuxPayload], linuxOptions] = remoteExecParams({ ...step, role: 'linux' }, {});
-        const [, [, webPayload], webOptions] = remoteExecParams(step, {});
-
-        expect([JSON.parse(linuxPayload).url, linuxOptions.env.CROSSBIND_TOKEN]).toEqual(['https://linux.example', 'linux-token']);
-        expect([JSON.parse(webPayload).url, webOptions.env.CROSSBIND_TOKEN]).toEqual(['https://shared.example', 'shared-token']);
+    test('stops a step whose image has no runner address, naming the settings that would give it one', () => {
+        expect(() => remoteExecParams({ ...step, role: 'android', remote: null }, {}))
+            .toThrow('crossbind: RUNNER=REMOTE, but the android image has no runner address - set REMOTE_URL_ANDROID (or REMOTE_URL), or build with CROSSBIND_RUNNER=DOCKER_RUN.');
     });
 
-    test('stops before the step when the runner\'s own address comes without its own token, naming the variable to set', () => {
-        runners({ url: 'https://shared.example', token: 'shared-token', url_LINUX: 'https://linux.example' });
+    test('stops before the step when the runner\'s address comes without its own token, naming the variable to set', () => {
+        const remote = { url: 'https://linux.example', from: '$CROSSBIND_REMOTE_URL_LINUX', token: undefined, tokenVariable: 'CROSSBIND_TOKEN_LINUX' };
 
-        expect(() => remoteExecParams({ ...step, role: 'linux' }, {})).toThrow(/https:\/\/linux\.example needs a token - set CROSSBIND_TOKEN_LINUX\./);
+        expect(() => remoteExecParams({ ...step, role: 'linux', remote }, {})).toThrow(/https:\/\/linux\.example needs a token - set CROSSBIND_TOKEN_LINUX\./);
     });
 
     test('warns once per address when the token would cross the network in plain http, and not for this machine', () => {
         const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-        runners({ url: 'http://192.168.1.20:8787', token: 'shared-token', url_WEB: 'http://127.0.0.1:8787', token_WEB: 'web-token' });
 
-        remoteExecParams({ ...step, role: 'linux' }, {});
-        remoteExecParams({ ...step, role: 'linux' }, {});
-        remoteExecParams(step, {});
+        remoteExecParams({ ...step, role: 'linux', remote: remoteAt('http://192.168.1.20:8787') }, {});
+        remoteExecParams({ ...step, role: 'linux', remote: remoteAt('http://192.168.1.20:8787') }, {});
+        remoteExecParams({ ...step, remote: remoteAt('http://127.0.0.1:8787') }, {});
 
         expect(warn).toHaveBeenCalledTimes(1);
         expect(warn.mock.calls[0][0]).toMatch(/http:\/\/192\.168\.1\.20:8787 is plain http/);

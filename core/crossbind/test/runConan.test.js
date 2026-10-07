@@ -6,6 +6,7 @@ import os from 'node:os';
 import path from 'node:path';
 
 vi.mock('node:child_process', () => ({ spawnSync: vi.fn(), execFileSync: vi.fn() }));
+vi.mock('../src/utils/logger.js', () => ({ default: { info: vi.fn() } }));
 
 const wasm = { platform: 'wasm', arch: 'wasm32', runtime: 'st' };
 const ios = { platform: 'ios', arch: 'iphoneos', runtime: 'mt' };
@@ -77,6 +78,15 @@ describe('the runner conan runs under', () => {
         expect(mod.conanRunner(configWith('DOCKER_RUN'), darwin)).toBe('LOCAL');
         expect(mod.conanRunner(configWith('DOCKER_RUN'), wasm)).toBe('DOCKER_RUN');
     });
+
+    test('follows RUNNER=REMOTE for every package but the Apple ones, whatever addresses are set', async () => {
+        const { mod } = await importFresh();
+        const config = { paths: { base: '/repo' }, system: { RUNNER: 'REMOTE', REMOTE_URL_WEB: 'https://web.example' } };
+
+        expect(mod.conanRunner(config, wasm)).toBe('REMOTE');
+        expect(mod.conanRunner(config, { platform: 'android', arch: 'x86_64', runtime: 'st' })).toBe('REMOTE');
+        expect(mod.conanRunner(config, ios)).toBe('LOCAL');
+    });
 });
 
 describe('a conan work directory', () => {
@@ -122,6 +132,15 @@ describe('a conan work directory', () => {
 
         expect(fs.existsSync(leftover.dir)).toBe(false);
         expect(fs.existsSync(leftover.store)).toBe(true);
+    });
+
+    test('a remote run shares the store and the paths of the containers, whose image the runner carries', async () => {
+        const { mod } = await importFresh();
+
+        const work = mod.createConanWork('REMOTE');
+
+        expect(work.store).toBe(mod.createConanWork('DOCKER_RUN').store);
+        expect(work.conanPath('host.profile')).toBe(`/var/cache/crossbind/conan/work/${path.basename(work.dir)}/host.profile`);
     });
 
     test('on the host it keeps a store apart from the one containers write to', async () => {
@@ -410,6 +429,47 @@ describe('runConan in docker', () => {
 
         expect(() => mod.default(['install'], { config: configWith('DOCKER_EXEC'), target: wasm, work: mod.createConanWork('DOCKER_EXEC') }))
             .toThrow(/does not mount[\s\S]*var\/cache\/crossbind\/conan[\s\S]*crossbind docker stop web[\s\S]*crossbind docker create web/);
+    });
+});
+
+describe('runConan on a remote runner', () => {
+    test('sends the install to the runner of the package\'s image with the store and its work directory, and nothing of the project', async () => {
+        vi.stubEnv('CROSSBIND_TOKEN_WEB', 'web-token');
+        const { mod, spawnSync } = await importFresh();
+        const config = { paths: { base: '/repo' }, system: { RUNNER: 'REMOTE', REMOTE_URL_WEB: 'https://web.example' } };
+        const work = mod.createConanWork('REMOTE');
+
+        mod.default(['install'], { config, target: wasm, work });
+
+        const [program, [client, payloadText], options] = spawnSync.mock.calls[0];
+        const payload = JSON.parse(payloadText);
+        expect(program).toBe(process.execPath);
+        expect(client).toMatch(/remoteClient\.js$/);
+        expect(payload.url).toBe('https://web.example');
+        expect(options.env.CROSSBIND_TOKEN).toBe('web-token');
+        expect(payload.mounts.map(({ host, container }) => [host, container]))
+            .toEqual([[work.store, '/var/cache/crossbind/conan/store'], [work.dir, work.conanDir]]);
+        expect(payload.argv).toEqual(['conan', 'install']);
+    });
+
+    test('stops the install before it starts when the package\'s image has no runner address', async () => {
+        const { mod, spawnSync } = await importFresh();
+        const config = { paths: { base: '/repo' }, system: { RUNNER: 'REMOTE', REMOTE_URL_WEB: 'https://web.example' } };
+        const android = { platform: 'android', arch: 'x86_64', runtime: 'st' };
+
+        expect(() => mod.default(['install'], { config, target: android, work: mod.createConanWork('REMOTE') }))
+            .toThrow(/the android image has no runner address - set REMOTE_URL_ANDROID/);
+        expect(spawnSync).not.toHaveBeenCalled();
+    });
+
+    test('a runner address alone keeps conan in the local Docker', async () => {
+        vi.stubEnv('CROSSBIND_REMOTE_URL_WEB', 'https://web.example');
+        vi.stubEnv('CROSSBIND_TOKEN_WEB', 'web-token');
+        const { mod, spawnSync } = await importFresh();
+
+        mod.default(['install'], { config: configWith('DOCKER_RUN'), target: wasm, work: mod.createConanWork('DOCKER_RUN') });
+
+        expect(spawnSync.mock.calls[0][0]).toBe('docker');
     });
 });
 

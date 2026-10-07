@@ -6,7 +6,7 @@ import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import pullDockerImage, { getDockerImage } from '../utils/pullDockerImage.js';
 import { DOCKER_RUN_SECURITY_ARGS } from '../utils/dockerSecurity.js';
-import { remoteVariables } from '../utils/remoteRunner.js';
+import { remoteVariables } from '../utils/selectRunner.js';
 import { MIN_TOKEN_LENGTH } from '../runner/server.js';
 
 // `crossbind runner`: a runner is the toolchain image this CLI pins plus the server in src/runner, which
@@ -50,9 +50,9 @@ export const newRunnerToken = () => crypto.randomBytes(TOKEN_BYTES).toString('ba
 // Each image has its own host port, so the runners one build needs can share a machine.
 export const runnerHostPort = (role) => RUNNER_PORT + RUNNER_ROLES.indexOf(role);
 
-export function runnerEnv(role, url, token) {
+export function connectCommands(role, url, token) {
     const variables = remoteVariables(role);
-    return `${variables.url}=${url} ${variables.token}=${token}`;
+    return ['crossbind config set RUNNER REMOTE', `crossbind config set ${variables.key} ${url}`, `export ${variables.token}=${token}`];
 }
 
 function assertRole(role) {
@@ -337,7 +337,8 @@ export const RUNNER_PLATFORMS = Object.keys(PLATFORMS);
 
 export const deploySteps = (platform, dir, token, role, url) => [
     ...PLATFORMS[platform].steps(dir, token, role),
-    `then build with ${runnerEnv(role, url, token)}`,
+    'then build against it:',
+    ...connectCommands(role, url, token),
 ];
 
 export function initRunner({

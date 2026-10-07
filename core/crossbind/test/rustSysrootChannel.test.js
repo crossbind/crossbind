@@ -26,7 +26,7 @@ async function importFresh() {
 }
 
 beforeEach(() => {
-    holder.config = { paths: { base: '/repo' }, system: {} };
+    holder.config = { paths: { base: '/repo' }, system: { RUNNER: 'LOCAL' } };
     pin.current = null;
     ensure.mockReset();
 });

@@ -169,6 +169,9 @@ everything else:
   `~/.crossbind/conan/store` to build every package again.
 - With `RUNNER=DOCKER_EXEC`, conan runs in the long-lived container `crossbind docker create`
   made, which mounts your project for the other build steps.
+- With `RUNNER=REMOTE`, conan runs on the runner of the package's image: the work directory
+  travels, sources and build folders stay on the runner, and the built packages come back into
+  the local store ([`remote-runner.md`](./remote-runner.md)).
 - With `RUNNER=LOCAL`, and for iOS and macOS whatever the runner, recipes run on your machine with
   your permissions, like any other host build.
 

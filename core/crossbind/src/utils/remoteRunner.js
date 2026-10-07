@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { DOCKER_BASE } from './replaceBasePathForDocker.js';
+import { remoteVariables } from './selectRunner.js';
 
 const CLIENT = fileURLToPath(new URL('./remoteClient.js', import.meta.url));
 
@@ -14,27 +15,7 @@ export const REMOTE_EXCLUDE_RULES = Object.freeze({
     serverOnly: Object.freeze({ names: Object.freeze(['target', 'target-mt']), marker: 'Cargo.toml', keep: Object.freeze(['*/release/*.a']) }),
 });
 
-const URL_VARIABLE = 'CROSSBIND_REMOTE_URL';
 const TOKEN_VARIABLE = 'CROSSBIND_TOKEN';
-
-// The runner of a step's own image (CROSSBIND_REMOTE_URL_LINUX, ...) wins over the one every image shares.
-export const remoteVariables = (role) => ({
-    url: `${URL_VARIABLE}_${role.toUpperCase()}`,
-    token: `${TOKEN_VARIABLE}_${role.toUpperCase()}`,
-});
-
-// A token goes only to the address it was set with: CROSSBIND_TOKEN_LINUX with CROSSBIND_REMOTE_URL_LINUX,
-// CROSSBIND_TOKEN with CROSSBIND_REMOTE_URL.
-function remoteRunner(role, env = process.env) {
-    const own = remoteVariables(role);
-    if (env[own.url]) return { url: env[own.url], token: env[own.token], tokenVariable: own.token };
-    if (env[URL_VARIABLE]) return { url: env[URL_VARIABLE], token: env[TOKEN_VARIABLE], tokenVariable: TOKEN_VARIABLE };
-    return null;
-}
-
-export function remoteRunnerUrl(role, env = process.env) {
-    return remoteRunner(role, env)?.url ?? null;
-}
 
 const LOOPBACK = /^(localhost|127(\.\d{1,3}){3}|\[::1\])$/;
 const warnedUrls = new Set();
@@ -104,8 +85,11 @@ export function referencedPaths(base, values) {
 
 // Arguments for execFileSync/spawnSync: the client runs as its own process, so the caller stays
 // synchronous as it is with docker. The token reaches it through its environment, never its command line.
-export function remoteExecParams({ role, image, mounts, cwd, argv, env }, options) {
-    const { url, token, tokenVariable } = remoteRunner(role);
+export function remoteExecParams({ remote, role, image, mounts, cwd, argv, env }, options) {
+    if (!remote) {
+        throw new Error(`crossbind: RUNNER=REMOTE, but the ${role} image has no runner address - set ${remoteVariables(role).key} (or REMOTE_URL), or build with CROSSBIND_RUNNER=DOCKER_RUN.`);
+    }
+    const { url, token, tokenVariable } = remote;
     if (!token) throw new Error(`crossbind: the ${role} runner at ${url} needs a token - set ${tokenVariable}.`);
     warnIfPlainHttp(url);
     const payload = { url, role, image, mounts, cwd, argv, env, rules: REMOTE_EXCLUDE_RULES };

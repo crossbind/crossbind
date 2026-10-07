@@ -22,7 +22,7 @@ function setState({ withSha256 = true } = {}) {
         package: { name: '@demo/family-standalone-wasi', nativeVersion: '3.13.2' },
         general: { alias: { package: '@demo/family' } },
         paths: { project: variantDir },
-        system: { WASI_SDK_PATH: sdkDir },
+        system: { RUNNER: 'LOCAL', WASI_SDK_PATH: sdkDir },
         build: {
             getURL: (version) => `https://example.invalid/demo-${version}.tar.gz`,
             ...(withSha256 ? { sha256: 'a'.repeat(64) } : {}),
@@ -85,6 +85,15 @@ describe('buildProvenance', () => {
         expect(provenance.environment.hostPlatform).toBe(`${os.platform()}-${os.arch()}`);
         expect(provenance.environment.toolchain.version).toBe('34.0');
         expect(provenance.sbom).toBe('dist/prebuilt/wasi-wasm32-st-release/sbom.cdx.json');
+    });
+
+    test('records the docker builder for a wasi build under any runner but LOCAL, whatever WASI_SDK_PATH says', async () => {
+        setState();
+        state.config = { ...state.config, system: { ...state.config.system, RUNNER: 'DOCKER_RUN' } };
+        const { default: buildProvenance } = await import('../src/utils/provenance.js');
+        const provenance = buildProvenance({ platform: 'wasi', path: 'wasi-wasm32-st-release' });
+        expect(provenance.environment.builder).toBe('docker');
+        expect(provenance.environment.toolchain).toBeUndefined();
     });
 
     test('records the docker builder for non-wasi targets and omits the host toolchain', async () => {

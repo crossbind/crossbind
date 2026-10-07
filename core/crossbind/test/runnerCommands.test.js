@@ -11,7 +11,7 @@ const { execFileSync } = await import('node:child_process');
 const { spawnSync } = await vi.importActual('node:child_process');
 const { getDockerImage } = await import('../src/utils/pullDockerImage.js');
 const {
-    runnerStartArgs, startRunner, stopRunner, initRunner, runnerEnv, deploySteps,
+    runnerStartArgs, startRunner, stopRunner, initRunner, connectCommands, deploySteps,
 } = await import('../src/actions/runnerCommands.js');
 
 describe('crossbind runner start', () => {
@@ -60,10 +60,14 @@ describe('crossbind runner start', () => {
         expect(execFileSync.mock.calls[1][1]).toContain('127.0.0.1:8789:8787');
     });
 
-    test('names the address and token variables of the runner\'s own image', () => {
-        expect(runnerEnv('linux', 'http://127.0.0.1:8789', 't')).toBe('CROSSBIND_REMOTE_URL_LINUX=http://127.0.0.1:8789 CROSSBIND_TOKEN_LINUX=t');
-        expect(deploySteps('cloudflare', 'deploy', 't', 'web', 'https://crossbind-runner-web.<account>.workers.dev').at(-1))
-            .toContain('CROSSBIND_REMOTE_URL_WEB=https://crossbind-runner-web.<account>.workers.dev CROSSBIND_TOKEN_WEB=t');
+    test('says how builds pick the runner: RUNNER and the address of the runner\'s own image in the system config, its token in the environment', () => {
+        expect(connectCommands('linux', 'http://127.0.0.1:8789', 't')).toEqual([
+            'crossbind config set RUNNER REMOTE',
+            'crossbind config set REMOTE_URL_LINUX http://127.0.0.1:8789',
+            'export CROSSBIND_TOKEN_LINUX=t',
+        ]);
+        expect(deploySteps('cloudflare', 'deploy', 't', 'web', 'https://crossbind-runner-web.<account>.workers.dev').slice(-3))
+            .toEqual(connectCommands('web', 'https://crossbind-runner-web.<account>.workers.dev', 't'));
     });
 
     test('refuses a token too short to resist guessing before it starts anything', () => {
@@ -117,7 +121,7 @@ describe('crossbind runner init fly', () => {
         expect(fs.readdirSync(path.join(dir, 'runner')).sort()).toEqual(['blobs.js', 'files.js', 'server.js']);
         const app = flyToml.match(/^app = "(crossbind-runner-web-[0-9a-f]{6})"$/m)[1];
         expect(url).toBe(`https://${app}.fly.dev`);
-        expect(deploySteps('fly', dir, 't', 'web', url).at(-1)).toContain(`CROSSBIND_REMOTE_URL_WEB=https://${app}.fly.dev CROSSBIND_TOKEN_WEB=t`);
+        expect(deploySteps('fly', dir, 't', 'web', url)).toContain(`crossbind config set REMOTE_URL_WEB https://${app}.fly.dev`);
     });
 
     test('pins the amd64 image for an android runner', () => {
@@ -221,7 +225,7 @@ describe('crossbind runner init fly', () => {
         expect(deploy).toContain('--service-account crossbind-runner-android@$PROJECT.iam.gserviceaccount.com');
         expect(deploy).toContain('--set-secrets CROSSBIND_RUNNER_TOKEN=crossbind-runner-android-token:latest');
         expect(deploy).toContain('--env-vars-file env.yaml --command sh --args=\'-c,eval "$CROSSBIND_RUNNER_BOOT"\'');
-        expect(steps.at(-1)).toContain('CROSSBIND_REMOTE_URL_ANDROID=https://crossbind-runner-android-<project-number>.<region>.run.app');
+        expect(steps).toContain('crossbind config set REMOTE_URL_ANDROID https://crossbind-runner-android-<project-number>.<region>.run.app');
     });
 
     test('refuses a vCPU count cloudflare does not offer, and a vCPU count for fly or cloud run, before writing anything', () => {

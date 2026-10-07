@@ -32,7 +32,7 @@ import systemKeys from './utils/systemKeys.js';
 import logger from './utils/logger.js';
 import { getDockerImage, getDockerContainerName } from './utils/pullDockerImage.js';
 import {
-    RUNNER_PLATFORMS, RUNNER_ROLES, deploySteps, initRunner, newRunnerToken, runnerEnv, runnerHostPort, startRunner, stopRunner,
+    RUNNER_PLATFORMS, RUNNER_ROLES, connectCommands, deploySteps, initRunner, newRunnerToken, runnerHostPort, startRunner, stopRunner,
 } from './actions/runnerCommands.js';
 import { cargoHome } from './utils/runCargo.js';
 import { conanRoot } from './utils/runConan.js';
@@ -262,7 +262,7 @@ const runnerAction = (fn) => (...args) => {
 const roleOption = () => new Option('--role <role>', 'toolchain image the runner serves').choices(RUNNER_ROLES).default('web');
 
 const commandRunner = program.command('runner')
-    .description('run the remote build runner that CROSSBIND_REMOTE_URL sends builds to');
+    .description('run the remote build runner that RUNNER=REMOTE sends builds to');
 
 commandRunner.command('start')
     .description('start a runner in local docker, from the toolchain image this CLI pins')
@@ -275,7 +275,7 @@ commandRunner.command('start')
             role: options.role, port: options.port && Number(options.port), host: options.host, token: options.token,
         });
         console.log(`crossbind: ${runner.name} is running. Build against it with:`);
-        console.log(`  ${runnerEnv(options.role, runner.url, runner.displayToken)}`);
+        connectCommands(options.role, runner.url, runner.displayToken).forEach((line) => console.log(`  ${line}`));
     }));
 
 commandRunner.command('stop')

@@ -11,7 +11,7 @@ import {
     snapshot, hashIndex, planSync, applySync, diffSnapshots, expandRoots, sha256Of,
 } from './files.js';
 
-// The runner side of `CROSSBIND_REMOTE_URL`: it runs inside a crossbind toolchain image and executes the
+// The runner side of `RUNNER=REMOTE`: it runs inside a crossbind toolchain image and executes the
 // toolchain steps a client would otherwise `docker run`, against folders it keeps in sync with the client.
 
 export const PROTOCOL_VERSION = 1;
