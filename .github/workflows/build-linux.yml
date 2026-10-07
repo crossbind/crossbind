@@ -49,7 +49,8 @@ jobs:
               run: pnpm exec playwright install --with-deps
             - name: Run Playwright tests
               # Playgrounds are excluded: their prebuilt trees exist only on dev machines (see AGENTS.md).
-              run: pnpm run ci:linux:e2e
+              # The Electron sample opens a window, which needs a display even when it shows nothing.
+              run: xvfb-run -a pnpm run ci:linux:e2e
             - name: Install wasi-sdk (wasi e2e toolchain)
               run: |
                   curl -sSfL https://github.com/WebAssembly/wasi-sdk/releases/download/wasi-sdk-34/wasi-sdk-34.0-x86_64-linux.tar.gz -o "$RUNNER_TEMP/wasi-sdk.tar.gz"

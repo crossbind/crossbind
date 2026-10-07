@@ -257,8 +257,9 @@ To add a new `ports/<X>`: see `docs/playbooks/new-port.md` (uses `ports/zlib` as
 | `examples/web-react-rspack` | Rspack/Webpack + React |
 | `examples/web-vanilla` | Plain HTML + bundler-less |
 | `examples/backend-nodejs-wasm` | Node.js consumer |
-| `examples/backend-nodejs-native` | Node.js app that builds its own addon (`-p darwin,linux,linuxmusl,win32 -e node`; the macOS CI job uses `ci/` bridge snapshots) |
-| `examples/backend-nodejs-prebuilt` | Node.js app on the Node-API addons `@crossbind/example-lib-prebuilt-matrix` ships (`/node/napi`), nothing to build |
+| `examples/backend-nodejs-native` | Node.js app that builds its own addon (`-p host -e node`, `build:desktop` for every desktop platform; the macOS CI job uses `ci/` bridge snapshots) |
+| `examples/backend-nodejs-standalone` | Node.js app on the Node-API addons `@crossbind/example-lib-prebuilt-matrix` ships (`/node/napi`), nothing to build |
+| `examples/desktop-electron` | Electron app with its own addon in the main process, packaged with electron-builder (`dist/` stays outside the asar archive); takes the `backend-nodejs-native` bridge snapshot in the macOS CI job |
 | `examples/native-executable` | Native executable from `main()` (`-e native`); the `Native Executable` template |
 | `examples/cloud-cloudflare-worker` | Cloudflare Worker / edge |
 | `examples/mobile-reactnative-cli` | RN-cli (canonical mobile reference; CI uses `ci/crossbind-snapshot/`) |

@@ -60,6 +60,17 @@
         "keepLockfile": true
     },
     {
+        "key": "desktop-electron",
+        "group": "Desktop",
+        "framework": null,
+        "label": "Electron",
+        "kind": "app",
+        "source": "examples/desktop-electron",
+        "allowBuilds": {
+            "electron-winstaller": false
+        }
+    },
+    {
         "key": "backend-nodejs-wasm",
         "group": "Backend",
         "framework": "Node.js",
@@ -68,16 +79,33 @@
         "source": "examples/backend-nodejs-wasm"
     },
     {
+        "key": "backend-nodejs-native",
+        "group": "Backend",
+        "framework": "Node.js",
+        "label": "Node-API",
+        "kind": "app",
+        "source": "examples/backend-nodejs-native",
+        "workspaceOnly": ["ci"]
+    },
+    {
+        "key": "backend-nodejs-standalone",
+        "group": "Backend",
+        "framework": "Node.js",
+        "label": "Standalone",
+        "kind": "app",
+        "source": "examples/backend-nodejs-standalone"
+    },
+    {
         "key": "cloud-cloudflare-worker",
         "group": "Cloud",
         "framework": null,
         "label": "Cloudflare Worker",
         "kind": "app",
         "source": "examples/cloud-cloudflare-worker",
-        "allowBuilds": [
-            "esbuild",
-            "workerd"
-        ]
+        "allowBuilds": {
+            "esbuild": true,
+            "workerd": true
+        }
     },
     {
         "key": "native-executable",

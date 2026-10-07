@@ -11,6 +11,8 @@ crossbind build -p linux,linuxmusl,darwin,win32 -e native -b release
 ./dist/<name>.linux-x64 arg1
 ```
 
+`-p host` builds only this machine's platform: `darwin` on macOS, `win32` on Windows, and on Linux `linux` or `linuxmusl` by the C library Node.js runs on.
+
 | Platform | Output | Runs on |
 |---|---|---|
 | `linux` | `dist/<name>.linux-<arch>` | glibc 2.28 or later; it needs libc, libm, libdl, libpthread and libgcc_s only |

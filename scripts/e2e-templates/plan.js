@@ -45,7 +45,7 @@ function scaffoldArgs(entry, manifest, name) {
 // Capabilities required to attempt the build step. The Wasm/native build runs
 // inside the crossbind Docker image; lib-source/lib-cmake ship no build script.
 function buildCaps(klass, entry) {
-    if (klass === 'web' || klass === 'cloud' || klass === 'backend' || klass === 'native') return ['docker'];
+    if (['web', 'cloud', 'backend', 'native', 'desktop'].includes(klass)) return ['docker'];
     if (klass === 'lib') return entry.key === 'lib-prebuilt' ? ['docker'] : [];
     return []; // mobile builds are driven by the e2e:* scripts themselves
 }

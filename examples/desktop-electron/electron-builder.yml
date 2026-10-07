@@ -1,0 +1,11 @@
+# crossbind's output stays outside the asar archive: Electron loads the addon from there as it is,
+# and native code cannot read files inside the archive.
+productName: crossbind Electron sample
+directories:
+  output: out
+files:
+  - src/**
+  - dist/**
+  - '!dist/prebuilt'
+asarUnpack:
+  - dist/**

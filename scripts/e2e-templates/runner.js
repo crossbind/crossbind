@@ -9,9 +9,12 @@
  *     emulator), both gated on Maestro and run WITHOUT CI (so `expo run:ios`
  *     exits instead of attaching to Metro); with no device/Maestro, Expo falls
  *     back to an `expo prebuild` smoke
- *   - native runs `e2e:prod`, which runs the executables the host can run
- *   - backend / lib-source / lib-cmake have no e2e; their build (or just a clean
- *     scaffold+install) is the assertion
+ *   - native runs `e2e:prod`, which runs the executables the host can run, and a
+ *     backend template with an `e2e:prod` runs it the same way
+ *   - desktop runs `e2e:prod`, which packages the Electron app and opens it; a
+ *     Linux without a display skips it
+ *   - lib-source / lib-cmake and a backend template without `e2e:prod` have no
+ *     e2e; their build (or just a clean scaffold+install) is the assertion
  *
  * Missing capabilities produce a SKIP (with reason), never a hard failure, so
  * the same harness is meaningful on a laptop and on CI.
@@ -59,7 +62,8 @@ function pickE2e(scripts, klass, caps) {
         if (scripts['e2e:dev']) return { script: 'e2e:dev', needs: ['docker'] };
         return null;
     }
-    if (klass === 'native') return scripts['e2e:prod'] ? { script: 'e2e:prod', needs: [] } : null;
+    if (klass === 'native' || klass === 'backend') return scripts['e2e:prod'] ? { script: 'e2e:prod', needs: [] } : null;
+    if (klass === 'desktop') return scripts['e2e:prod'] ? { script: 'e2e:prod', needs: ['display'] } : null;
     if (klass === 'mobile') {
         if (caps.ios && caps.maestro && scripts['e2e:ios']) return { script: 'e2e:ios', needs: ['ios', 'maestro', 'cocoapods'] };
         if (caps.androidDevice && caps.maestro && scripts['e2e:android']) return { script: 'e2e:android', needs: ['androidDevice', 'maestro'] };

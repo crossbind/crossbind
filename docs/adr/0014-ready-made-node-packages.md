@@ -61,7 +61,7 @@ for darwin, linux, linuxmusl and win32 on arm64 and x64.
 - **The example library.** `@crossbind/example-lib-prebuilt-matrix` ships its eight addons inside
   the package, next to its wasm and mobile builds, with `node/napi`, `node/wasm` and `edge/wasm`
   entries; its addons are small, so one package is the simpler shape. The train's node runners build
-  them into the multi-platform assembly; `examples/backend-nodejs-prebuilt` uses it.
+  them into the multi-platform assembly; `examples/backend-nodejs-standalone` uses it.
 - **Licenses (ADR-0008, K4).** Each package's `license` is the compound expression
   `crossbind licenses [--platform <platform>] -e node --package` derives for it, and its `LICENSE` carries
   every component's text and its `sbom.cdx.json` the inventory. LGPL libraries stay statically

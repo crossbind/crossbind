@@ -36,8 +36,9 @@ Start with `node scripts/e2e-templates.js --list` to see what your machine can r
 | --- | --- | --- | --- |
 | web (vanilla, react-rspack/vite, vue, svelte) | `crossbind build` / bundler (Docker) | Playwright `e2e:prod`→`e2e:dev` | Docker |
 | cloud (cloudflare-worker) | `crossbind build` (Docker) | Playwright + `wrangler dev` | Docker |
-| backend (nodejs-wasm) | `crossbind build` (Docker) | none → build is the assertion | Docker |
-| native (executable) | `crossbind build -e native` (Docker; macOS executables on a Mac) | `e2e:prod` runs the host's executables | Docker |
+| backend (nodejs-wasm, nodejs-native, nodejs-standalone) | `crossbind build` (Docker); standalone builds nothing | `e2e:prod` where the template has one (native, standalone); otherwise the build is the assertion | Docker |
+| native (executable) | `crossbind build -p host -e native` (Docker; macOS executables on a Mac) | `e2e:prod` runs the host's executables | Docker |
+| desktop (electron) | `crossbind build -p host -e node` (Docker; macOS addons on a Mac) | `e2e:prod` packages the app with electron-builder and opens it with Playwright | Docker, a display (Linux: `DISPLAY`, e.g. `xvfb-run`) |
 | lib-prebuilt | `crossbind build` (Docker) | none | Docker |
 | lib-source, lib-cmake | none | none | — (scaffold+install only) |
 | mobile-reactnative-cli | via `e2e:*` | Maestro `e2e:ios` / `e2e:android` | iOS sim or Android emulator + Maestro |

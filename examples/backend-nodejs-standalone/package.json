@@ -1,9 +1,9 @@
 {
-    "name": "@crossbind/example-backend-nodejs-prebuilt",
+    "name": "@crossbind/example-backend-nodejs-standalone",
     "private": true,
     "version": "0.0.0",
-    "description": "crossbind - Node.js sample on the Node-API addons a prebuilt library ships",
-    "homepage": "https://github.com/crossbind/crossbind/tree/main/examples/backend-nodejs-prebuilt#readme",
+    "description": "crossbind - Node.js sample on a standalone Node-API package, nothing to build",
+    "homepage": "https://github.com/crossbind/crossbind/tree/main/examples/backend-nodejs-standalone#readme",
     "repository": "https://github.com/crossbind/crossbind.git",
     "license": "MIT",
     "scripts": {
@@ -17,7 +17,7 @@
         "crossbind-sample",
         "node",
         "node-api",
-        "prebuilt",
+        "standalone",
         "c++"
     ]
 }

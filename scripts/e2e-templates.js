@@ -139,13 +139,13 @@ function previewAction(item, caps, flags) {
         return item.key === 'mobile-reactnative-expo' ? 'install + expo prebuild (no device)' : 'SKIP e2e (no device/maestro)';
     }
     const buildMiss = item.buildCaps.length ? missingCaps(item.buildCaps, caps) : [];
-    const hasE2e = ['web', 'cloud', 'native'].includes(item.klass);
+    const hasE2e = ['web', 'cloud', 'native', 'desktop'].includes(item.klass);
     if (buildMiss.length && hasE2e) {
         return `SKIP (missing ${buildMiss.join(', ')})`;
     }
     const parts = ['install'];
     if (!flags.skipBuild && item.buildCaps.length) parts.push(buildMiss.length ? 'build:SKIP' : 'build');
-    if (!flags.skipE2e && hasE2e) parts.push('e2e');
+    if (!flags.skipE2e && hasE2e) parts.push(item.klass === 'desktop' && !caps.display ? 'e2e:SKIP' : 'e2e');
     return parts.join(' + ');
 }
 

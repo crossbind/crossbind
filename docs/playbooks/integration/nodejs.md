@@ -123,12 +123,15 @@ Caveats:
 
 The same bindings can build a native Node-API addon instead of WebAssembly: for Electron's main process, native memory or system access. macOS, Linux (glibc and musl) and Windows, each for arm64 and x64. For a standalone executable from `main()` instead, build with `-e native` (see [`native.md`](../../api/native.md)).
 
-A library that is published as a standalone Node-API package (`@crossbind/port-<name>-standalone-napi`) needs no build at all: install it, import from its root and call `initNative()` once, e.g. `import { initNative, crc32 } from '@crossbind/port-zlib-standalone-napi'`; npm installs only the addon package of the machine. A library can also ship its addons itself, as `@crossbind/example-lib-prebuilt-matrix/node/napi` does (`examples/backend-nodejs-prebuilt/`). Build an addon of your own when the app has C++ code of its own or needs a library built differently.
+A library that is published as a standalone Node-API package (`@crossbind/port-<name>-standalone-napi`) needs no build at all: install it, import from its root and call `initNative()` once, e.g. `import { initNative, crc32 } from '@crossbind/port-zlib-standalone-napi'`; npm installs only the addon package of the machine. A library can also ship its addons itself, as `@crossbind/example-lib-prebuilt-matrix/node/napi` does (`examples/backend-nodejs-standalone/`). Build an addon of your own when the app has C++ code of its own or needs a library built differently.
 
 ```bash
 pnpm add -D crossbind@beta @crossbind/core-embind-napi@beta
-pnpm crossbind build -p darwin,linux,linuxmusl,win32 -e node -b release   # opt-in: a plain `crossbind build` skips them
+pnpm crossbind build -p host -e node -b release                           # this machine's platform
+pnpm crossbind build -p darwin,linux,linuxmusl,win32 -e node -b release   # every desktop platform
 ```
+
+The desktop platforms are opt-in: a plain `crossbind build` skips them. `-p host` names the one of this machine: `darwin` on macOS, `win32` on Windows, and on Linux `linux` or `linuxmusl` by the C library Node.js runs on.
 
 | Output | Role |
 |--------|------|
@@ -163,9 +166,15 @@ Requirements:
 
 Not supported yet: `worker_threads` (one addon runtime per process; a second environment's `initNative()` rejects with a clear error), Rust packages on Linux and Windows.
 
-Electron loads the same addon in its main process (verified on Electron 44 on macOS); Node-API is ABI-stable, so there is no per-Electron-version rebuild.
-
 Native is not automatically faster. On an M-series Mac a call returning or taking a short `std::string` took about 70 and 85 ns natively against 160 and 155 ns on wasm, but a `const char*` argument took about 1.2 µs against 0.33 µs, a callback into JavaScript about 2.1 µs against 0.5 µs, and compute-bound runs went either way; measure the real workload before switching.
+
+### Electron
+
+Electron's main process loads the same addon: Node-API is ABI-stable, so no Electron version needs a rebuild of its own and `electron-rebuild` has nothing to do. Load it in the main process and hand the window its results over IPC; the window has no Node.js. Verified with Electron 44 on macOS and Linux, run from the sources and packaged.
+
+A packaged app keeps crossbind's output outside its asar archive: Electron loads an addon from there as it is, and an addon reads its data, such as `proj.db`, with native code, which cannot open a file inside the archive. electron-builder unpacks it with `asarUnpack: ['dist/**']`, Electron Forge with `packagerConfig.asar.unpackDir: 'dist'` (under pnpm, Forge also wants `node-linker=hoisted`); the loader then reads the data from `app.asar.unpacked`. A standalone Node-API package keeps its data in its own `dist/data`, so unpack `node_modules/@crossbind/**` as well.
+
+`examples/desktop-electron/` is a whole app: the addon in the main process, a preload that exposes it to the window, electron-builder packaging, and a Playwright test that opens the app from its sources and packaged.
 
 ### Publishing the addons as packages
 
@@ -198,8 +207,9 @@ The packages it lists are the platforms it publishes for, three as well as eight
 - `examples/backend-nodejs-wasm/` — minimal Node + crossbind (single-thread), canonical
 - `e2e/backend-nodejs/` — playground with prebuilt packages
 - `e2e/backend-nodejs-multithread/` — multithread reference (`-r mt`)
-- `examples/backend-nodejs-native/` — an app that builds its own addon (`-p darwin,linux,linuxmusl,win32 -e node`)
-- `examples/backend-nodejs-prebuilt/` — an app on a standalone Node-API package, nothing to build
+- `examples/backend-nodejs-native/` — an app that builds its own addon (`-p host -e node`; `build:desktop` for every desktop platform)
+- `examples/backend-nodejs-standalone/` — an app on a standalone Node-API package, nothing to build
+- `examples/desktop-electron/` — an Electron app with its own addon in the main process, packaged with electron-builder
 - `e2e/backend-nodejs-native/` — the conformance kit on the native addon
 
 Node runtime adapter: `core/crossbind/src/assets/js-runtime/node.js`. Native addon loader: `core/embind-napi/js/loader.js`.

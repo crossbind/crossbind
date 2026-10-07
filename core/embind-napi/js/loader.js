@@ -10,6 +10,7 @@ import addonPlatform from './addonPlatform.js';
 import addonLocation from './addonLocation.js';
 import missingAddonRemedy from './missingAddon.js';
 import stopOnExit from './stopOnExit.js';
+import unpackedPath from './unpackedPath.js';
 
 const platform = addonPlatform();
 const fill = (pattern) => pattern.replace('{platform}', platform).replace('{arch}', process.arch);
@@ -55,7 +56,7 @@ function boot(config) {
     // Loaded and started once per process: Node cannot unload an addon, and a second dlopen gets a
     // fresh environment whose start() would register every binding twice.
     if (!addon) {
-        addonDataPath = config.dataPath ?? path.join(__dirname, 'data');
+        addonDataPath = config.dataPath ?? unpackedPath(path.join(__dirname, 'data'));
         const loaded = loadAddon(addonFile(config));
         // The embind runtime this bundle carries keeps its state on crossbindScope (crossbind's utils/scopedEmbind.js).
         loaded.start(addonDataPath, crossbindScope);

@@ -23,6 +23,7 @@ import { publishNativeCommand, publishNodeAddon, publishWasiCommand } from './ac
 import runCrossbindApp from './actions/run.js';
 import { getBuildTargets, getFilteredBuildTargets } from './actions/target.js';
 import { OPT_IN_PLATFORMS, selectRuntimeEnvs } from './utils/targets.js';
+import { resolveHostPlatform } from './utils/hostPlatform.js';
 import resolveEmbindNapiRoot, { resolveEmbindJsiRoot } from './utils/resolveEmbindNapi.js';
 
 import writeJson from './utils/writeJson.js';
@@ -74,7 +75,7 @@ program
 
 program.command('build')
     .description('compile the project that was set up using crossbind')
-    .addOption(new Option('-p, --platform <platform>', 'target platform').argParser(createListParser(platforms)))
+    .addOption(new Option('-p, --platform <platform>', 'target platform (host: the one of this machine)').argParser(createListParser(platforms, resolveHostPlatform)))
     .addOption(new Option('-a, --arch <arch>', 'target architecture').argParser(createListParser(archs)))
     .addOption(new Option('-r, --runtime <runtime>', 'target runtime').argParser(createListParser(runtimes)))
     .addOption(new Option('-b, --build-type <buildType>', 'target build type').argParser(createListParser(buildTypes)))
@@ -594,9 +595,9 @@ async function createWasmJs(targetParams) {
     }
 }
 
-function createListParser(validList) {
+function createListParser(validList, resolve = (items) => items) {
     return (value, previous) => {
-        const items = value.split(',').map(item => item.trim());
+        const items = resolve(value.split(',').map(item => item.trim()));
         for (const item of items) {
             if (!validList.includes(item)) {
                 throw new Error(`Invalid value: "${item}". Allowed values: ${validList.join(', ')}`);
