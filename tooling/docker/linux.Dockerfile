@@ -187,6 +187,10 @@ RUN set -eu; \
             > "/opt/crossbind/linux/${triple}.cmake"; \
     done
 
+# The stock stable std of every addon target, for Rust packages and app-local Rust; addons link
+# them against the sysroots above.
+RUN rustup target add x86_64-unknown-linux-gnu aarch64-unknown-linux-gnu x86_64-unknown-linux-musl aarch64-unknown-linux-musl
+
 # Docker Desktop on macOS now and then fails coreutils' install; crossbind-install says how.
 COPY --chmod=0755 crossbind-install /usr/local/bin/install
 

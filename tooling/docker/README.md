@@ -17,8 +17,8 @@ and Node and nothing else.
 | `base`         | Debian, Node, the pinned Rust toolchain, swig, cmake, Conan | amd64, arm64 |
 | `web`          | base + Emscripten, wasi-sdk, the prebuilt Rust sysroots     | amd64, arm64 |
 | `android`      | base + the NDK and the android Rust targets                 | amd64 only   |
-| `linux`        | base + clang, glibc/musl sysroots and libc++ for addons     | amd64, arm64 |
-| `windows`      | base + llvm-mingw for addons on the Windows UCRT            | amd64, arm64 |
+| `linux`        | base + clang, glibc/musl sysroots, libc++, Rust targets     | amd64, arm64 |
+| `windows`      | base + llvm-mingw and Rust targets for Windows UCRT addons  | amd64, arm64 |
 | `rust-sysroot` | just the ST/MT Rust sysroots and their manifest             | amd64, arm64 |
 
 `web`, `android`, `linux` and `windows` are built `FROM base`, so all five share one toolchain

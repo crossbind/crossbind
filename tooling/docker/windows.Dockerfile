@@ -64,6 +64,10 @@ RUN set -eu; \
             > "/opt/crossbind/windows/${triple}.cmake"; \
     done
 
+# The stock stable std of both addon targets, for Rust packages and app-local Rust; the gnullvm
+# targets are the ones built for llvm-mingw.
+RUN rustup target add x86_64-pc-windows-gnullvm aarch64-pc-windows-gnullvm
+
 # Docker Desktop on macOS now and then fails coreutils' install; crossbind-install says how.
 COPY --chmod=0755 crossbind-install /usr/local/bin/install
 
