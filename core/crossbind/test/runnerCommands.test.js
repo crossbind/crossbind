@@ -228,6 +228,35 @@ describe('crossbind runner init fly', () => {
         expect(steps).toContain('crossbind config set REMOTE_URL_ANDROID https://crossbind-runner-android-<project-number>.<region>.run.app');
     });
 
+    test('writes an azure folder: one container app from the pinned image, with the runner in containerapp.yaml and no token in it', () => {
+        const { url } = initRunner({ platform: 'azure', role: 'web', dir });
+
+        const yaml = fs.readFileSync(path.join(dir, 'containerapp.yaml'), 'utf8');
+        const bundle = JSON.parse(yaml.match(/- name: CROSSBIND_RUNNER_BUNDLE\n\s+value: (".*")/)[1]);
+        const files = JSON.parse(zlib.gunzipSync(Buffer.from(bundle, 'base64')).toString('utf8'));
+        expect(fs.existsSync(path.join(dir, 'Dockerfile'))).toBe(false);
+        expect(yaml).toContain(`image: ${JSON.stringify(getDockerImage('web'))}`);
+        expect(yaml).toContain('command: ["sh", "-c", "eval \\"$CROSSBIND_RUNNER_BOOT\\""]');
+        // Left unset, it makes Azure refuse the app with an error that names no field.
+        expect(yaml).toContain('allowInsecure: false');
+        expect(yaml).toContain('targetPort: 8787');
+        expect(yaml).toMatch(/minReplicas: 0\n\s+maxReplicas: 1\n/);
+        expect(yaml).toContain('value: "<token>"');
+        expect(files['server.js']).toBe(fs.readFileSync(path.join(dir, 'runner', 'server.js'), 'utf8'));
+        expect(url).toBe('https://crossbind-runner-web.<environment-domain>');
+    });
+
+    test('prints azure deploy steps that put the token in only as the container app is created', () => {
+        const { url } = initRunner({ platform: 'azure', role: 'linux', dir });
+
+        const steps = deploySteps('azure', dir, 'token-for-the-test', 'linux', url);
+        const text = steps.join('\n');
+        expect(text).toContain('az provider register -n Microsoft.App --wait');
+        expect(text).toContain('az containerapp env create -n crossbind-runner -g $RG -l $LOCATION --logs-destination none');
+        expect(text).toContain("sed 's/<token>/token-for-the-test/' containerapp.yaml | az containerapp create -n crossbind-runner-linux -g $RG --environment crossbind-runner --yaml /dev/stdin");
+        expect(steps).toContain('crossbind config set REMOTE_URL_LINUX https://crossbind-runner-linux.<environment-domain>');
+    });
+
     test('refuses a vCPU count cloudflare does not offer, and a vCPU count for fly or cloud run, before writing anything', () => {
         expect(() => initRunner({
             platform: 'cloudflare', role: 'web', dir, vcpu: 5,
@@ -240,6 +269,9 @@ describe('crossbind runner init fly', () => {
         })).toThrow(/--vcpu sizes a cloudflare container/);
         expect(() => initRunner({
             platform: 'cloudrun', role: 'web', dir, vcpu: 2,
+        })).toThrow(/--vcpu sizes a cloudflare container/);
+        expect(() => initRunner({
+            platform: 'azure', role: 'web', dir, vcpu: 2,
         })).toThrow(/--vcpu sizes a cloudflare container/);
         expect(fs.existsSync(dir)).toBe(false);
     });
