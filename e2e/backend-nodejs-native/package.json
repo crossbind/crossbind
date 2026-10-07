@@ -5,7 +5,8 @@
     "description": "crossbind - conformance leg for native Node.js addons",
     "license": "MIT",
     "scripts": {
-        "build": "crossbind build -p darwin -a arm64 -e node -b release",
+        "build": "crossbind build -p linux,linuxmusl,win32 -e node -b release",
+        "build:darwin": "crossbind build -p darwin -a arm64 -e node -b release",
         "start": "node src/index.mjs",
         "e2e:prod": "node e2e/run.mjs"
     },

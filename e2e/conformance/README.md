@@ -58,7 +58,7 @@ skips (search `KNOWN ENGINE GAP` in `spec/run.mjs`).
 |-----|-----|-----|
 | node st (direct module) | `crossbind-e2e-backend-nodejs` | `pnpm build && pnpm e2e:prod` |
 | node mt (direct module, pthreads) | `crossbind-e2e-backend-nodejs-multithread` | `pnpm build && pnpm e2e:prod` |
-| node native (Node-API addon, jsi, macOS arm64) | `@crossbind/e2e-backend-nodejs-native` | `pnpm build && pnpm e2e:prod` |
+| node native (Node-API addon, jsi; Linux glibc and musl, Windows, macOS arm64) | `@crossbind/e2e-backend-nodejs-native` | `pnpm build && pnpm e2e:prod` (Linux, Windows; the Linux addons run in Docker), `pnpm build:darwin && pnpm e2e:prod` on a Mac |
 | browser ×3 (vite plugin, worker-backed) | `crossbind-e2e-web-vite` | `pnpm build && playwright test --config playwright.prod.config.cjs` |
 | browser ×3 (vite plugin, mt + worker) | `crossbind-e2e-web-vite-multithread` | `pnpm build && playwright test --config playwright.prod.config.cjs` |
 | browser ×3 (webpack plugin via rspack, mt, worker-backed) | `crossbind-e2e-web-rspack` | `pnpm build && pnpm e2e:prod` |

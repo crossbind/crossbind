@@ -1,0 +1,95 @@
+name: test node addon conformance
+on:
+    workflow_dispatch:
+    push:
+        branches:
+            - main
+        paths:
+            - core/crossbind/**
+            - core/embind-jsi/**
+            - core/embind-napi/**
+            - core/embind-rust/**
+            - e2e/backend-nodejs-native/**
+            - e2e/conformance/**
+            - e2e/conformance-rust/**
+            - .nvmrc
+            - .github/workflows/test-node-addon-conformance.yml
+    pull_request:
+        branches:
+            - main
+        paths:
+            - core/crossbind/**
+            - core/embind-jsi/**
+            - core/embind-napi/**
+            - core/embind-rust/**
+            - e2e/backend-nodejs-native/**
+            - e2e/conformance/**
+            - e2e/conformance-rust/**
+            - .nvmrc
+            - .github/workflows/test-node-addon-conformance.yml
+
+permissions: {}
+jobs:
+    build:
+        runs-on: ubuntu-latest
+        timeout-minutes: 60
+        steps:
+            - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+            - name: Install pnpm
+              uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+            - name: Use Node.js
+              uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+              with:
+                  node-version-file: .nvmrc
+                  cache: 'pnpm'
+            - name: Install dependencies
+              run: pnpm install
+            - name: Build the Linux and Windows addons
+              # C++ and Rust alike: the kit's Rust packages build in the linux and windows images too.
+              run: pnpm run ci:linux:build:conformance
+            - name: Keep the addons for the runners that load them
+              uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+              with:
+                  name: node-addon-conformance
+                  if-no-files-found: error
+                  # A re-run of this job uploads under the same name again.
+                  overwrite: true
+                  # The suite checks that every kit export it reaches was bound, from the build's bridge exports.
+                  include-hidden-files: true
+                  path: |
+                      e2e/backend-nodejs-native/dist/*.node
+                      e2e/backend-nodejs-native/dist/*.cjs
+                      e2e/backend-nodejs-native/.crossbind/build/bridge/*.exports.json
+                  retention-days: 1
+    run:
+        # Linux runs the glibc and musl addons in containers; a hosted Windows runner cannot run the
+        # Linux images, so each Windows runner loads the addon built for it.
+        needs: build
+        strategy:
+            fail-fast: false
+            matrix:
+                include:
+                    - { runner: ubuntu-latest, arch: x64 }
+                    - { runner: windows-latest, arch: x64 }
+                    - { runner: windows-11-arm, arch: arm64 }
+        runs-on: ${{ matrix.runner }}
+        steps:
+            - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+            - name: Install pnpm
+              uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+            - name: Use Node.js
+              uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+              with:
+                  node-version-file: .nvmrc
+                  # An emulated x64 Node.js would load the x64 addon on the arm64 runner.
+                  architecture: ${{ matrix.arch }}
+            - name: Install the conformance kit
+              # The suite imports the kit; nothing is built on these runners.
+              run: pnpm install --frozen-lockfile --prod --filter "@crossbind/e2e-backend-nodejs-native..."
+            - name: Restore the addons
+              uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+              with:
+                  name: node-addon-conformance
+                  path: e2e/backend-nodejs-native
+            - name: Run the conformance suite
+              run: node e2e/backend-nodejs-native/e2e/run.mjs

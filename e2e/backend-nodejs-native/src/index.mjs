@@ -1,3 +1,4 @@
+import { fileURLToPath } from 'node:url';
 import initNative from '../dist/crossbind-e2e-backend-nodejs-native.native.cjs';
 import { runConformance } from '@crossbind/conformance/spec/run.mjs';
 import { kitExports } from '@crossbind/conformance/spec/bridgeExports.mjs';
@@ -44,7 +45,7 @@ initNative().then(async (m) => {
             wrappers: proxy,
             types: proxy,
             rustKit: proxy,
-            coverage: { exports: kitExports(new URL('../.crossbind/build/bridge/', import.meta.url).pathname), seen },
+            coverage: { exports: kitExports(fileURLToPath(new URL('../.crossbind/build/bridge/', import.meta.url))), seen },
             caps: { jsiNative: true },
         });
         console.log(result.summary);
