@@ -47,7 +47,7 @@ export function loadNotes(directory = NOTES_DIRECTORY) {
         const source = `${RELEASE_NOTES_DIRECTORY}/${name}`;
         const { metadata, body } = parseReleaseNotes(fs.readFileSync(path.join(directory, name), 'utf8'), source);
         if (`${metadata.version}.md` !== name) throw new Error(`${source}: frontmatter version "${metadata.version}" does not match the file name.`);
-        return { version: metadata.version, title: metadata.title, summary: metadata.summary, body, source };
+        return { version: metadata.version, summary: metadata.summary, body, source };
     });
     return notes.sort((a, b) => compareVersionsDesc(a.version, b.version));
 }

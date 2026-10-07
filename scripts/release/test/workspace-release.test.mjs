@@ -446,7 +446,7 @@ test('crossbind receives first priority among independent packages', async () =>
     fs.mkdirSync(notesDirectory, { recursive: true });
     fs.writeFileSync(
         path.join(notesDirectory, '9.9.9-beta.2.md'),
-        '---\npackage: crossbind\nversion: 9.9.9-beta.2\ntitle: Fixture\nsummary: Fixture release.\n---\n\n## Fixes\n\n- Fixture.\n',
+        '---\npackage: crossbind\nversion: 9.9.9-beta.2\nsummary: Fixture release.\n---\n\n## Fixes\n\n- Fixture.\n',
     );
     const plan = await buildWorkspaceReleasePlan({
         root,

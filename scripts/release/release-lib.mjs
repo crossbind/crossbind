@@ -58,7 +58,7 @@ export function semverChannelPolicy(version) {
 }
 
 export function releasePolicy(version) {
-    return { ...semverChannelPolicy(version), gitTag: `${PACKAGE_NAME}@${version}` };
+    return { ...semverChannelPolicy(version), gitTag: `${PACKAGE_NAME}@${version}`, title: `v${version}` };
 }
 
 export function releaseNotesSource(version) {
@@ -79,7 +79,7 @@ export function parseReleaseNotes(markdown, source = 'release notes') {
         metadata[field[1]] = field[2].trim();
     }
 
-    const required = ['package', 'version', 'title', 'summary'];
+    const required = ['package', 'version', 'summary'];
     for (const field of required) {
         if (!metadata[field]) throw new Error(`${source}: missing frontmatter field "${field}".`);
     }

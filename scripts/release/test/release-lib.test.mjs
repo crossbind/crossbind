@@ -36,6 +36,7 @@ test('1.0.0-beta.41 selects beta and a GitHub prerelease', () => {
         githubRelease: 'prerelease',
         promotionRequired: false,
         gitTag: 'crossbind@1.0.0-beta.41',
+        title: 'v1.0.0-beta.41',
     });
 });
 
@@ -45,6 +46,7 @@ test('1.0.0-rc.1 selects next and a GitHub prerelease', () => {
     assert.equal(policy.npmDistTag, 'next');
     assert.equal(policy.prerelease, true);
     assert.equal(policy.githubRelease, 'prerelease');
+    assert.equal(policy.title, 'v1.0.0-rc.1');
 });
 
 test('1.0.0 selects latest and a normal GitHub release', () => {
@@ -54,6 +56,7 @@ test('1.0.0 selects latest and a normal GitHub release', () => {
     assert.equal(policy.prerelease, false);
     assert.equal(policy.githubRelease, 'release');
     assert.equal(policy.promotionRequired, false);
+    assert.equal(policy.title, 'v1.0.0');
 });
 
 test('a stable manifest validates with latest as its publish-time dist-tag', () => {

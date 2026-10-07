@@ -61,7 +61,7 @@ const output = {
     gitCommit,
     publishedAt: publishedAt ?? '',
     releaseNotesSource: plan.notes.source,
-    releaseTitle: plan.notes.metadata.title,
+    releaseTitle: plan.policy.title,
     digestTableSource: plan.manifest.toolchainDigestTable.source,
     digestTableSha256: plan.digestSha256,
     promotionRequired: plan.policy.promotionRequired,

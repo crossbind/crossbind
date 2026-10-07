@@ -1,7 +1,6 @@
 ---
 package: crossbind
 version: 0.0.0-beta.0
-title: Crossbind 0.0.0 beta 0
 summary: Replace this line with a short human-written summary of the release.
 ---
 

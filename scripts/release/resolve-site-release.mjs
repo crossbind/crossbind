@@ -209,7 +209,7 @@ async function verifyRelease({ release, registry, github, root, call }) {
         gitCommit: commit,
         releaseNotes: {
             source: notesSource,
-            title: notes.metadata.title,
+            title: policy.title,
             summary: notes.metadata.summary,
             blocks: releaseNotesBlocks(notes.body, notesSource),
         },

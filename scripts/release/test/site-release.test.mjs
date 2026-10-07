@@ -189,7 +189,7 @@ test('the beta channel resolves to the exact beta tag, commit and badge', async 
     assert.equal(snapshot.npmUrl, 'https://www.npmjs.com/package/crossbind/v/2.0.0-beta.56');
     assert.equal(snapshot.githubReleaseUrl, 'https://github.com/crossbind/crossbind/releases/tag/crossbind%402.0.0-beta.56');
     assert.equal(snapshot.publishedAt, '2026-09-09T19:13:06.492Z');
-    assert.equal(snapshot.releaseNotes.title, 'Crossbind 2.0.0-beta.56');
+    assert.equal(snapshot.releaseNotes.title, 'v2.0.0-beta.56');
     assert.equal(snapshot.releaseNotes.summary, 'Fixture summary for 2.0.0-beta.56.');
     assert.deepEqual(snapshot.releaseNotes.blocks[0], { type: 'h2', id: 'highlights', text: 'Highlights' });
     assert.equal(snapshot.toolchainDigestTable.version, '1.0.3');

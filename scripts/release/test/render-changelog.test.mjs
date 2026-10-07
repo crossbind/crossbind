@@ -17,7 +17,6 @@ import {
 const note = (version, extra = '') => `---
 package: crossbind
 version: ${version}
-title: Crossbind ${version}
 summary: Summary for ${version}.
 ---
 
