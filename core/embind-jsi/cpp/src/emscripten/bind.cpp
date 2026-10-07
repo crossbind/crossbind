@@ -1054,6 +1054,10 @@ EMSCRIPTEN_BINDINGS(builtin) {
     register_bigint<long long>("long long");
     register_bigint<unsigned long long>("unsigned long long");
   }
+  if constexpr (sizeof(long) == 4) {
+    register_integer<long>("long");
+    register_integer<unsigned long>("unsigned long");
+  }
 
   register_float<float>("float");
   register_float<double>("double");

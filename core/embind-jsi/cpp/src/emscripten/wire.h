@@ -463,6 +463,30 @@ struct BindingType<T, std::enable_if_t<isOther64BitInteger<T>>> {
     }
 };
 
+// Windows keeps long at 32 bits, still a type apart from int: it crosses as a Number like int does.
+template<typename T>
+constexpr bool isNarrowLong = (std::is_same_v<T, long> || std::is_same_v<T, unsigned long>) && sizeof(T) == 4;
+
+template<typename T>
+struct BindingType<T, std::enable_if_t<isNarrowLong<T>>> {
+    typedef T WireType;
+    typedef const facebook::jsi::Value WireType2;
+
+    static WireType toWireType(WireType b) {
+        return b;
+    }
+    static WireType fromWireType(WireType wt) {
+        return wt;
+    }
+
+    static WireType2 toWireType2(facebook::jsi::Runtime& rt, WireType b) {
+        return WireType2((double) b);
+    }
+    static WireType fromWireType2(facebook::jsi::Runtime& rt, WireType2& wt) {
+        return (WireType) wt.getNumber();
+    }
+};
+
     template<>
     struct BindingType<facebook::jsi::Value> {
         typedef const facebook::jsi::Value WireType;
