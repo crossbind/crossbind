@@ -12,6 +12,7 @@ packages:
 allowBuilds:
   '@swc/core': true
   core-js: false
+  electron-winstaller: false
   esbuild: true
   sharp: true
   unrs-resolver: true

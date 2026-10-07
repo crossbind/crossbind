@@ -1,0 +1,33 @@
+{
+    "name": "@crossbind/example-desktop-electron",
+    "private": true,
+    "version": "0.0.0",
+    "description": "crossbind - Electron desktop app sample",
+    "homepage": "https://github.com/crossbind/crossbind/tree/main/examples/desktop-electron#readme",
+    "repository": "https://github.com/crossbind/crossbind.git",
+    "license": "MIT",
+    "main": "src/main.js",
+    "scripts": {
+        "build": "crossbind build -p host -e node -b release",
+        "build:desktop": "crossbind build -p darwin,linux,win32 -e node -b release",
+        "start": "electron .",
+        "package": "electron-builder --dir",
+        "e2e:dev": "playwright test --project=dev",
+        "e2e:prod": "electron-builder --dir && playwright test --project=packaged"
+    },
+    "devDependencies": {
+        "@crossbind/core-embind-napi": "workspace:^",
+        "@crossbind/example-lib-prebuilt-matrix": "workspace:^",
+        "@playwright/test": "^1.63.0",
+        "crossbind": "workspace:^",
+        "electron": "^44.5.1",
+        "electron-builder": "^26.15.3"
+    },
+    "keywords": [
+        "crossbind-sample",
+        "electron",
+        "desktop",
+        "node-api",
+        "c++"
+    ]
+}

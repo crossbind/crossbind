@@ -74,7 +74,7 @@ export function makeFilter(entry) {
     const skipDirs = new Set([
         'node_modules', '.crossbind', 'dist', '.gradle', '.cxx', 'Pods', 'build',
         '.expo', '.wrangler', '.next', '.svelte-kit', 'playwright-report', 'test-results', 'coverage',
-        'xcuserdata',
+        'xcuserdata', 'out',
     ]);
     // Podfile.lock is a generated lock pinned to a specific react-native version; shipping it makes
     // a fresh `pod install` fail when it drifts. The official RN template ships only the Podfile.
@@ -120,11 +120,12 @@ async function rewriteTemplate(dst, versionMap) {
     }
 }
 
-// pnpm refuses dependency build scripts unless the project's own pnpm-workspace.yaml allows them;
-// a scaffolded project has no workspace, so templates whose tooling needs them (wrangler: workerd,
-// esbuild) ship the allowance. The samples themselves inherit the monorepo's list.
+// pnpm refuses dependency build scripts unless the project's own pnpm-workspace.yaml allows them,
+// and fails the install on one nobody decided on; a scaffolded project has no workspace, so templates
+// ship the decision: true where their tooling needs the script (wrangler: workerd, esbuild), false
+// where nothing does (electron-builder: electron-winstaller). The samples inherit the monorepo's list.
 export function renderPnpmWorkspace(allowBuilds) {
-    return `allowBuilds:\n${allowBuilds.map((name) => `  ${name}: true\n`).join('')}`;
+    return `allowBuilds:\n${Object.entries(allowBuilds).map(([name, allowed]) => `  ${name}: ${allowed}\n`).join('')}`;
 }
 
 async function buildOne(entry, versionMap) {
@@ -135,7 +136,7 @@ async function buildOne(entry, versionMap) {
     await fsp.cp(src, dst, { recursive: true, filter: makeFilter(entry) });
     await rewriteTemplate(dst, versionMap);
     await packDotfiles(dst);
-    if (entry.allowBuilds?.length) {
+    if (entry.allowBuilds) {
         await fsp.writeFile(path.join(dst, 'pnpm-workspace.yaml'), renderPnpmWorkspace(entry.allowBuilds));
     }
 }

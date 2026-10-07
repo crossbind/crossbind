@@ -31,13 +31,13 @@ Inside the crossbind repository, build the library's archives for the desktop pl
 
 ## Get Started
 
-Build the executables:
+Build the executables of this machine's platform, for arm64 and x64:
 
 ```bash
 pnpm run build
 ```
 
-`pnpm run build:darwin` builds only the macOS ones.
+`pnpm run build:desktop` builds them for every desktop platform instead.
 
 Run it:
 

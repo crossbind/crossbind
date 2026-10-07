@@ -9,6 +9,7 @@
  *   maestro        - mobile e2e flows (maestro.yaml)
  *   androidDevice  - an Android emulator/device is attached
  *   ios            - macOS + xcrun simctl (iOS simulator can boot)
+ *   display        - a window can open (Electron e2e); Linux needs DISPLAY or WAYLAND_DISPLAY
  */
 
 const { commandOk, commandOutput } = require('./exec');
@@ -44,6 +45,7 @@ function detectEnv() {
         androidSdk: hasAndroidSdk(),
         androidDevice: hasAndroidDevice(),
         ios: isDarwin && commandOk('xcrun', ['simctl', 'help']),
+        display: platform !== 'linux' || Boolean(process.env.DISPLAY || process.env.WAYLAND_DISPLAY),
     };
     return Object.freeze(caps);
 }

@@ -7,8 +7,8 @@
     "repository": "https://github.com/crossbind/crossbind.git",
     "license": "MIT",
     "scripts": {
-        "build": "crossbind build -p darwin,linux,linuxmusl,win32 -e node -b release",
-        "build:darwin": "crossbind build -p darwin -e node -b release",
+        "build": "crossbind build -p host -e node -b release",
+        "build:desktop": "crossbind build -p darwin,linux,linuxmusl,win32 -e node -b release",
         "e2e:prod": "node e2e/run.mjs"
     },
     "dependencies": {

@@ -80,7 +80,7 @@ function runSteps(entry, scripts, pm) {
     }
     if (entry.kind === 'lib') return [`${pm} run build`];
     if (has('dev')) return [`${pm} run dev`];
-    if (has('start')) return [`${pm} start`];
+    if (has('start')) return has('build') ? [`${pm} run build`, `${pm} start`] : [`${pm} start`];
     if (has('preview')) return [`${pm} run build`, `${pm} run preview`];
     if (has('build')) return [`${pm} run build`];
     return [];

@@ -27,16 +27,34 @@ test('every workspace-only file exists in its sample', () => {
 });
 
 test('templates that need dependency build scripts ship a pnpm allowBuilds file', () => {
-    const cloud = MANIFEST.find((entry) => entry.key === 'cloud-cloudflare-worker');
-    assert.deepEqual(cloud.allowBuilds, ['esbuild', 'workerd']);
+    const cloud = entryOf('cloud-cloudflare-worker');
+    assert.deepEqual(cloud.allowBuilds, { esbuild: true, workerd: true });
     const rendered = renderPnpmWorkspace(cloud.allowBuilds);
     assert.match(rendered, /^allowBuilds:\n {2}esbuild: true\n {2}workerd: true\n$/m);
     assert.doesNotMatch(rendered, /packages:/);
 });
 
+test('a build script no template step needs is declined, so pnpm does not stop on it', () => {
+    assert.equal(renderPnpmWorkspace(entryOf('desktop-electron').allowBuilds), 'allowBuilds:\n  electron-winstaller: false\n');
+});
+
 test('templates without build-script needs declare nothing', () => {
+    const declaring = new Set(['cloud-cloudflare-worker', 'desktop-electron']);
     for (const entry of MANIFEST) {
-        if (entry.key === 'cloud-cloudflare-worker') continue;
+        if (declaring.has(entry.key)) continue;
         assert.equal(entry.allowBuilds, undefined, `${entry.key} should not list allowBuilds`);
     }
+});
+
+test('every example is a template', () => {
+    const sources = new Set(MANIFEST.map((entry) => entry.source));
+    const examples = fs.readdirSync(path.join(REPO_ROOT, 'examples'), { withFileTypes: true })
+        .filter((dirent) => dirent.isDirectory())
+        .map((dirent) => `examples/${dirent.name}`);
+    assert.deepEqual(examples.filter((example) => !sources.has(example)), []);
+});
+
+test('a packaged app stays out of its template', () => {
+    const electron = entryOf('desktop-electron');
+    assert.equal(makeFilter(electron)(path.join(REPO_ROOT, electron.source, 'out')), false);
 });

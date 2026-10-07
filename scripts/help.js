@@ -25,6 +25,7 @@ const ANNOTATIONS = {
     // build
     'build:ports': 'Build every @crossbind/port-* (pnpm topological order)',
     'build:examples': 'Build every @crossbind/example-*',
+    'build:examples:desktop': "Build the desktop samples' binaries for every desktop platform, not just this machine's",
     'build:examples:lib': 'Build sample-lib-* packages (the C++ library samples)',
     'build:examples:lib:wasm': 'Build sample-lib-* for wasm only',
     'build:examples:lib:android': 'Build sample-lib-* for android only',
@@ -51,7 +52,7 @@ const ANNOTATIONS = {
 
     // ci
     'ci:linux:build:port': 'CI linux: build the zlib package as a smoke test',
-    'ci:linux:build': 'CI linux: build all samples + zlib package',
+    'ci:linux:build': "CI linux: build all samples, the desktop samples' binaries for every platform + zlib package",
     'ci:windows:build': 'CI windows: build wasm + android sample-lib + zlib',
     'ci:ios:build:port': 'CI macos: build zlib for iOS',
     'ci:darwin:build:port': 'CI macos: build zlib for macOS Node addons',
