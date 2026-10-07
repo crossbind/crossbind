@@ -22,14 +22,17 @@ export function createBlobStore(dir) {
     async function putStream(hash, stream) {
         const temp = path.join(dir, `.${hash}.${process.pid}.${crypto.randomUUID()}`);
         const digest = crypto.createHash('sha256');
+        const output = fs.createWriteStream(temp);
         try {
             await pipeline(stream, async function* hashing(source) {
                 for await (const chunk of source) {
                     digest.update(chunk);
                     yield chunk;
                 }
-            }, fs.createWriteStream(temp));
+            }, output);
         } catch (error) {
+            // pipeline settles before a file that is still opening closes; removed earlier, it would come back.
+            if (!output.closed) await new Promise((resolve) => { output.once('close', resolve); });
             fs.rmSync(temp, { force: true });
             throw error;
         }
