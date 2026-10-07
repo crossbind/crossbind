@@ -120,7 +120,7 @@ export async function ensureGitHubRelease({ github, tag, title, body, bodyFile, 
         if (Boolean(release.prerelease) !== prerelease) {
             throw new Error(`${tag} prerelease=${release.prerelease}, expected ${prerelease}; refusing to rewrite its classification.`);
         }
-        if (release.name !== title) throw new Error(`${tag} title conflicts with the canonical release-note title.`);
+        if (release.name !== title) throw new Error(`${tag} title conflicts with the canonical release title.`);
         if (normalizeMarkdown(release.body) !== normalizeMarkdown(body)) {
             throw new Error(`${tag} body conflicts with the canonical release notes; refusing to overwrite it.`);
         }

@@ -46,7 +46,7 @@ await ensureGitTag({ github, tag: manifest.git.tag, commit: manifest.git.commit,
 const completed = await ensureGitHubRelease({
     github,
     tag: manifest.git.tag,
-    title: plan.notes.metadata.title,
+    title: plan.policy.title,
     body: expectedBody,
     bodyFile: bodyPath,
     prerelease: manifest.prerelease,

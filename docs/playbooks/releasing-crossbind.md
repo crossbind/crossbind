@@ -143,6 +143,7 @@ The release commit supplies the remaining canonical identities:
 - Package/version: `core/crossbind/package.json`.
 - Toolchain image digests: `core/crossbind/src/assets/toolchain-digests.json`.
 - Git tag: `crossbind@<version>`.
+- GitHub Release title: `v<version>`.
 - Manifest schema: `releases/crossbind/manifest.schema.json`.
 
 After npm verification, `crossbind-release.json` records the exact npm URL, registry tarball,
