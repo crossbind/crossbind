@@ -161,3 +161,16 @@ an error.
   `initNative().then(...)` callback with `console.log(a, a.Crossbind)`, run `npx expo start --web`
   and open the page: LogBox shows the error.
 - Remove when the page loads without it.
+
+## A remote web runner fails the React Native iOS bridge pass
+
+With `CROSSBIND_REMOTE_URL_WEB` and `CROSSBIND_TOKEN_WEB` pointing at the Cloudflare web runner,
+`pod install` in `e2e/mobile-reactnative-cli/ios` stops in the Metro bridge pass with "crossbind:
+command failed (swig) with exit code 1" and no SWIG output. With both variables unset, so that SWIG
+runs in the local Docker, the same `pod install` passes. Node.js addon builds bridged through the
+same runner the same day, so the failure belongs to this path; its cause is not known.
+
+- Seen: 2026-10-07
+- Check: with a web runner in those two variables, run `pod install` in
+  `e2e/mobile-reactnative-cli/ios`; it fails at swig.
+- Remove when that `pod install` passes through a web runner.
