@@ -164,6 +164,33 @@ describe('buildNode', () => {
         expect(linkArgs.some((arg) => arg.includes('force_load'))).toBe(false);
     });
 
+    test('links the system libraries Rust std needs after everything else', async () => {
+        const linux = {
+            ...target, platform: 'linux', arch: 'x64', path: 'linux-x64-mt-release', addonName: 'demo.linux-x64.node',
+        };
+        state.targets = [linux];
+        state.config.dependencyParameters = {
+            getCmakeDepends: () => [{ export: { type: 'cargo', libName: ['demo_rs'] }, paths: { project: work } }],
+        };
+        getData.mockImplementation((kind) => (kind === 'binary' ? { addonFlags: ['-lxml2'] } : {}));
+
+        await buildNode(linux, { force: true });
+
+        const linkArgs = defineOf(cmakeCalls()[0], 'CROSSBIND_LINK_ARGS').split(';');
+        expect(linkArgs.slice(-7)).toEqual(['-lxml2', '-lgcc_s', '-lutil', '-lrt', '-lpthread', '-lm', '-ldl']);
+    });
+
+    test('links no Rust std libraries into an addon that carries no Rust', async () => {
+        const linux = {
+            ...target, platform: 'linux', arch: 'x64', path: 'linux-x64-mt-release', addonName: 'demo.linux-x64.node',
+        };
+        state.targets = [linux];
+
+        await buildNode(linux, { force: true });
+
+        expect(defineOf(cmakeCalls()[0], 'CROSSBIND_LINK_ARGS').split(';')).not.toContain('-lgcc_s');
+    });
+
     test('keeps the runtime notices a Windows addon takes from its toolchain image', async () => {
         const win32 = {
             ...target, platform: 'win32', arch: 'x64', path: 'win32-x64-mt-release', addonName: 'demo.win32-x64.node',

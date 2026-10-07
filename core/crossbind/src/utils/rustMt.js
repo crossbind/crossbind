@@ -4,6 +4,9 @@ import path from 'node:path';
 // One argv per flag: runCargo joins these with cargo's 0x1F separator, so a flag must not
 // contain a space of its own.
 const MT_RUSTFLAGS = ['-Ctarget-feature=+atomics,+bulk-memory,+mutable-globals'];
+// A musl std links Rust's own static libunwind under crt-static, its default; the addon's C++ already
+// unwinds through libgcc_s, and one module must not carry two unwinders.
+const MUSL_RUSTFLAGS = ['-Ctarget-feature=-crt-static'];
 
 // mt (shared-memory) wasm needs every Rust object built with the atomics/bulk-memory features,
 // std included - and rustup ships only a featureless std. The nightly-only -Zbuild-std rebuild
@@ -66,6 +69,7 @@ export function cargoBuildInvocation({
         rustflags: [
             ...(wasmSysroot ? ['--sysroot', wasmSysroot] : []),
             ...(isMt ? MT_RUSTFLAGS : []),
+            ...(target.platform === 'linuxmusl' ? MUSL_RUSTFLAGS : []),
         ],
         panic: target.platform === 'wasm' ? 'abort' : undefined,
         // Only the nightly build-std rebuild needs unstable flags; where a sysroot answers, stable

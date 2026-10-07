@@ -4,9 +4,9 @@
 
 > Import plain Rust into JavaScript the same way you import a C++ header:
 > classes, methods, free functions — one import line, no proc-macros, no
-> hand-written glue. Works on web (emscripten embind), iOS and Android
-> (embind-jsi) with the same JS code; `platform: 'wasi'` skips Rust (no
-> wasm32-wasip3 Rust target yet). The wasm `mt` runtime works too but needs
+> hand-written glue. Works on web (emscripten embind), and on iOS, Android and
+> Node.js addons for macOS, Linux (glibc and musl) and Windows (embind-jsi), with
+> the same JS code; `platform: 'wasi'` skips Rust (no wasm32-wasip3 Rust target yet). The wasm `mt` runtime works too but needs
 > nightly Rust: crossbind rebuilds std with the atomics/bulk-memory features via
 > `-Zbuild-std` (run `rustup toolchain install nightly --component rust-src`
 > once; without it the build fails with that exact instruction).
@@ -20,9 +20,11 @@ pnpm add -D @crossbind/core-embind-rust@beta
 ```
 
 Bundler plugins (`@crossbind/plugin-vite`, `-rollup`, `-webpack`, `-react-native`) already
-carry it as a dependency, so plugin users usually get it transitively. A
-Rust toolchain (`cargo` + the platform targets) must be installed; cargo
-itself is the incremental cache — rebuilds are no-ops when nothing changed.
+carry it as a dependency, so plugin users usually get it transitively. Builds in
+the toolchain images need no Rust on your machine: each image carries the pinned
+toolchain and the std of every target it builds. iOS and macOS builds, and every
+build under `RUNNER=LOCAL`, use your own Rust toolchain (`cargo` + the platform
+targets). cargo itself is the incremental cache — rebuilds are no-ops when nothing changed.
 
 ## Three import models
 
@@ -124,6 +126,9 @@ missing or was built from another embind-rs: each prebuilt records its embind-rs
 link together. The wasm `mt` prebuilt builds through the same nightly `-Zbuild-std`
 path described above (st and mt cargo outputs are kept in separate target
 dirs — they share a triple but not their std features).
+
+This is the model a Node.js addon (`crossbind build -e node`) links: an addon build has no
+bundler, so it sees no app-local `.rs` imports and no `cargo:` imports.
 
 ## What plain Rust maps to
 
