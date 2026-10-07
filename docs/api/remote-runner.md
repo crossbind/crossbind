@@ -32,26 +32,29 @@ CROSSBIND_RUNNER=REMOTE CROSSBIND_REMOTE_URL_WEB=http://127.0.0.1:8787 CROSSBIND
 ## Deploy a runner
 
 ```bash
-crossbind runner init fly             # or cloudflare, cloudrun; --role android|linux|windows; --dir <folder>
+crossbind runner init fly             # or cloudflare, cloudrun, azure; --role android|linux|windows; --dir <folder>
 ```
 
-`runner init` writes a folder and prints its deploy steps with a new token. For Fly and Cloudflare its `Dockerfile` starts `FROM` the image this crossbind pins and copies the runner in; Cloud Run deploys that image straight from GHCR and takes the runner from `env.yaml`. No runner image is published either way.
+`runner init` writes a folder and prints its deploy steps with a new token. For Fly and Cloudflare its `Dockerfile` starts `FROM` the image this crossbind pins and copies the runner in; Cloud Run and Azure deploy that image straight from GHCR and take the runner from `env.yaml` or `containerapp.yaml`. No runner image is published either way.
 
 | Platform | `runner init` writes | Deploy | URL |
 |---|---|---|---|
 | Fly.io | `Dockerfile`, `fly.toml`: one `performance-4x` machine with 16 GB that stops when idle and starts on the next request | `fly launch --copy-config --no-deploy --ha=false`, `fly secrets set CROSSBIND_RUNNER_TOKEN=<token>`, `fly deploy --ha=false` | `https://crossbind-runner-<role>-<random>.fly.dev` |
 | Cloudflare Containers | `Dockerfile`, `wrangler.jsonc`: one `standard-4` container, `src/worker.js`: a Worker that checks the token, starts the container and forwards to it | `npx wrangler deploy` (builds the image with the local Docker), `npx wrangler secret put CROSSBIND_RUNNER_TOKEN` | `https://crossbind-runner-<role>.<account>.workers.dev` |
 | Google Cloud Run | `env.yaml`: the runner, gzipped into one variable, and a boot script that unpacks and starts it | `gcloud`: a service account, a Secret Manager secret only that account may read, then `gcloud run deploy` of the pinned image from GHCR: one instance, 4 vCPU, 8 GiB, an hour per step | `https://crossbind-runner-<role>-<project-number>.<region>.run.app` |
+| Azure Container Apps | `containerapp.yaml`: one container app of the pinned image from GHCR, 4 vCPU and 8 GiB, at most one replica and none when idle, with the runner in its variables and a `<token>` placeholder | `az`: register `Microsoft.App`, create a resource group and a Container Apps environment, then `az containerapp create` from the YAML with the token filled in | `https://crossbind-runner-<role>.<environment-domain>` |
 
-All three keep one machine: a runner holds one build tree on its own disk. The printed steps end with the commands that point builds at the runner.
+All four keep one machine: a runner holds one build tree on its own disk. The printed steps end with the commands that point builds at the runner.
 
 `runner init cloudflare --vcpu <1-4>` sizes the container by its vCPUs, with the least memory Cloudflare allows them (3 GiB each) and the most disk (2 GB per GiB, up to 20 GB); without it the container is a `standard-4`. Memory is most of the price while a container runs, and CPU is billed only while it is used. Measured on 6 October 2026, a 1-vCPU runner built zlib and SQLite as fast as a 4-vCPU one at a quarter of the memory price, peaking below 500 MB, while a parallel C++ build (LERC) took 1.8 times as long. A large port such as GDAL wants more cores and memory.
 
 On Cloud Run nothing is built or pushed: the deploy pulls the pinned image from GHCR (about 95 seconds the first time), and the container unpacks the runner from `env.yaml` when it starts. Instances scale to zero and are billed only while a request runs; a runner woken from zero answered in 2.5 seconds. `--max 1` is the service's own instance limit, which the project's regional CPU quota is checked against: without it a new project's quota (20 vCPU) refuses an 8-vCPU service. Measured on 7 October 2026, a 4-vCPU service built zlib in 34–42 s, SQLite in 70–85 s and the example app in 21–23 s, about as fast as Cloudflare's `standard-4`; 8 vCPUs built them no faster, and the CPU an instance lands on varies. Change `--cpu` and `--memory` in the deploy command to size it.
 
-On Fly, the first `fly deploy` took six minutes on 7 October 2026 while Fly's builder pulled the toolchain image. The `performance-4x` machine then built zlib in 31 s, SQLite in 85 s and LERC in 27 s, as fast as the other two platforms, stopped within five minutes of its last request and woke in about 2 seconds.
+On Fly, the first `fly deploy` took six minutes on 7 October 2026 while Fly's builder pulled the toolchain image. The `performance-4x` machine then built zlib in 31 s, SQLite in 85 s and LERC in 27 s, as fast as the other platforms, stopped within five minutes of its last request and woke in about 2 seconds.
 
-Fly app names are global, so the generated name carries a random part, which also keeps the address hard to guess. That matters: Fly starts the machine for any request that reaches the app, one without the token too, and bills it until it stops when idle, so keep the address private. Cloud Run, too, starts an instance for any request, but bills only while one runs. The Cloudflare Worker refuses such a request before the container starts.
+On Azure, too, nothing is built or pushed. On 7 October 2026 the first Container Apps environment took 17 minutes to create, West Europe took no new customers, and the app itself took 17 seconds; a 4-vCPU app built zlib in 30 s, SQLite in 72 s and LERC in 27 s, as fast as the other platforms. It scaled to zero about five minutes after its last request, and the next request then waited 33 seconds for a replica. The consumption plan caps an app at 4 vCPU and 8 GiB. Container Apps documents a 240-second request timeout, yet a 15-minute step finished: the runner answers at once and heartbeats every 15 seconds. Keep `allowInsecure: false` in `containerapp.yaml`: without it Azure refuses the app with an error that names no field.
+
+Fly app names are global, so the generated name carries a random part, which also keeps the address hard to guess. That matters: Fly starts the machine for any request that reaches the app, one without the token too, and bills it until it stops when idle, so keep the address private. Cloud Run and Azure, too, start an instance for any request, but bill only while one runs. The Cloudflare Worker refuses such a request before the container starts.
 
 ## Choosing the runner
 
@@ -102,8 +105,9 @@ Releases from before `RUNNER=REMOTE` read the same `~/.crossbind.json` and stop 
 - The runner refuses to start without a `CROSSBIND_RUNNER_TOKEN` of at least 16 characters, checks it in constant time on every request except `GET /v1/health`, and syncs files only inside its mount folders.
 - The Cloudflare Worker checks the token, in constant time, before it wakes the container.
 - A Cloud Run runner gets a service account of its own that may read only its token secret. A build step can ask the metadata server for the token of the instance's account, and the project's default compute account often holds broad roles.
+- An Azure runner gets no managed identity, so its build steps hold no Azure credentials; its token lives in the app's secrets.
 - The client follows no redirect, and warns once when an address is plain http to another machine, where the token and the sources travel unencrypted. It refuses a returned path holding `\`, and on Windows one holding `:`.
-- `runner start` listens on `127.0.0.1`, hands the token to Docker through the environment rather than the command line, prints a token taken from `$CROSSBIND_RUNNER_TOKEN` by that name, and runs the container with crossbind's Docker hardening (all capabilities dropped, `no-new-privileges`). It speaks plain HTTP: with `--host 0.0.0.0`, keep it on a network you trust or put TLS in front of it. Fly, Cloudflare and Cloud Run serve HTTPS.
+- `runner start` listens on `127.0.0.1`, hands the token to Docker through the environment rather than the command line, prints a token taken from `$CROSSBIND_RUNNER_TOKEN` by that name, and runs the container with crossbind's Docker hardening (all capabilities dropped, `no-new-privileges`). It speaks plain HTTP: with `--host 0.0.0.0`, keep it on a network you trust or put TLS in front of it. Fly, Cloudflare, Cloud Run and Azure serve HTTPS.
 
 ## Limits
 
@@ -113,7 +117,7 @@ Releases from before `RUNNER=REMOTE` read the same `~/.crossbind.json` and stop 
 - Cloudflare Workers accept request bodies up to 100 MB on the Free and Pro plans. Uploads travel base64-encoded, so a single input file over about 75 MB cannot reach a Cloudflare runner. Cloud Run accepts up to 32 MiB per HTTP/1 request, about 24 MB of file. Results are not limited.
 - A step answers at once, and heartbeats every 15 seconds while it waits behind another one or runs quietly, so proxies keep the response open.
 - Cloudflare stops a container whose Durable Object is idle, and the work inside a container does not count as activity. The generated Worker therefore keeps both up with an alarm while a step streams, and lets the container sleep a minute after the last one. A container woken from sleep answered in about 2 seconds; the first start after `wrangler deploy` took over four minutes while the image spread, so a step that waits longer than four minutes fails and the next one finds the runner up.
-- Rust archives built on an amd64 runner (Cloudflare, Fly, Cloud Run) differ in bytes from ones built on arm64 (Docker on an Apple-silicon Mac), because a crate's metadata hash includes the machine that compiled it. C and C++ outputs match byte for byte.
+- Rust archives built on an amd64 runner (Cloudflare, Fly, Cloud Run, Azure) differ in bytes from ones built on arm64 (Docker on an Apple-silicon Mac), because a crate's metadata hash includes the machine that compiled it. C and C++ outputs match byte for byte.
 
 ## Protocol (v1)
 

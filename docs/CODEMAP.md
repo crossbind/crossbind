@@ -65,7 +65,7 @@ Every consumer-facing field, every default, every constraint lives in [`docs/api
 - [`crossbind-build.md`](./api/crossbind-build.md) — `crossbind.build.js` lifecycle hooks (package authors only).
 - [`filesystem.md`](./api/filesystem.md) — OPFS / memfs / node-fs / edge fs decision tree, including the `useWorker` requirement for OPFS.
 - [`threading.md`](./api/threading.md) — `runtime: 'st' | 'mt'`, `useWorker`, COOP/COEP, edge-runtime limits.
-- [`remote-runner.md`](./api/remote-runner.md) — `RUNNER=REMOTE` builds on remote runners at `REMOTE_URL_<IMAGE>` / `REMOTE_URL`; `crossbind runner start`, `runner init fly|cloudflare|cloudrun`.
+- [`remote-runner.md`](./api/remote-runner.md) — `RUNNER=REMOTE` builds on remote runners at `REMOTE_URL_<IMAGE>` / `REMOTE_URL`; `crossbind runner start`, `runner init fly|cloudflare|cloudrun|azure`.
 - [`cpp-binding-rules.md`](./api/cpp-binding-rules.md) — what auto-binding handles + wrapper / SWIG escape patterns.
 - [`rust.md`](./api/rust.md) — Rust bindings: `cargo:` imports, app-local `.rs`, cargo-type packages.
 - [`conan.md`](./api/conan.md) — C/C++ packages from ConanCenter: `conan:` imports, `conanDependencies`, `conan.lock`.
