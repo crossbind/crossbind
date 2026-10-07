@@ -7,6 +7,7 @@ import path from 'node:path';
 // found by walking up from the working directory. These tests pin what the caller's environment
 // and the filesystem are allowed to contribute - a leak here is a different compiler, silently.
 vi.mock('node:child_process', () => ({ spawnSync: vi.fn(), execFileSync: vi.fn() }));
+vi.mock('../src/utils/logger.js', () => ({ default: { info: vi.fn() } }));
 
 // Where cargo runs follows the runner, so the runner belongs in the fixture rather than being read
 // from whatever ~/.crossbind.json happens to say on the machine running the suite.
@@ -38,8 +39,8 @@ async function importFresh() {
 const envOf = (spawnSync) => spawnSync.mock.calls[0][2].env;
 
 beforeEach(() => {
-    setRunner(undefined);
-    work = fs.mkdtempSync(path.join(os.tmpdir(), 'crossbind-runcargo-'));
+    setRunner('LOCAL');
+    work =fs.mkdtempSync(path.join(os.tmpdir(), 'crossbind-runcargo-'));
     vi.spyOn(os, 'homedir').mockReturnValue(path.join(work, 'home'));
     vi.spyOn(os, 'tmpdir').mockReturnValue(path.join(work, 'tmp'));
 });
@@ -277,7 +278,7 @@ describe('on a remote runner', () => {
                 base, native: [`${base}/app/src/native`], header: [`${base}/app/src/native`], cache: `${base}/app/.crossbind`, output: `${base}/app/.crossbind/build`, cli: `${base}/core/crossbind/src`,
             },
             allDependencies: [],
-            system: { RUNNER: 'DOCKER_RUN' },
+            system: { RUNNER: 'REMOTE' },
         };
         vi.stubEnv('CROSSBIND_REMOTE_URL_WEB', 'http://runner.example');
         vi.stubEnv('CROSSBIND_TOKEN_WEB', 'web-token');
@@ -302,6 +303,34 @@ describe('on a remote runner', () => {
             '--target-dir', '/tmp/crossbind/live/app/.crossbind/rust-bridges/_app_super/target',
         ]);
         expect(payload.env.CARGO_HOME).toBe('/var/cache/crossbind/cargo');
+    });
+
+    test('stops cargo before it starts when the target\'s image has no runner address', async () => {
+        const base = path.join(work, 'repo');
+        holder.config = {
+            paths: {
+                base, native: [`${base}/app/src/native`], header: [`${base}/app/src/native`], cache: `${base}/app/.crossbind`, output: `${base}/app/.crossbind/build`, cli: `${base}/core/crossbind/src`,
+            },
+            allDependencies: [],
+            system: { RUNNER: 'REMOTE', REMOTE_URL_WEB: 'http://runner.example' },
+        };
+        const { mod, spawnSync } = await importFresh();
+
+        expect(() => mod.default(['build'], { target: { platform: 'android', arch: 'x86_64' } })).toThrow(/the android image has no runner address - set REMOTE_URL_ANDROID/);
+        expect(spawnSync).not.toHaveBeenCalled();
+    });
+
+    test('a runner address alone keeps cargo in the local Docker', async () => {
+        setRunner('DOCKER_RUN');
+        vi.stubEnv('CROSSBIND_REMOTE_URL_WEB', 'http://runner.example');
+        vi.stubEnv('CROSSBIND_TOKEN_WEB', 'web-token');
+        const { mod, spawnSync } = await importFresh();
+
+        mod.default(['build'], { target: { platform: 'wasm' } });
+
+        const [program, argv] = spawnSync.mock.calls[0];
+        expect(program).toBe('docker');
+        expect(argv[0]).toBe('run');
     });
 });
 
@@ -396,5 +425,14 @@ describe('cargoRunner', () => {
         const { mod } = await importFresh();
 
         expect(mod.cargoRunner({ platform: 'android', arch: 'x86_64' })).toBe('LOCAL');
+    });
+
+    test('follows RUNNER=REMOTE for every target but the Apple ones, whatever addresses are set', async () => {
+        holder.config = { paths: { base: '/repo' }, system: { RUNNER: 'REMOTE', REMOTE_URL_WEB: 'https://web.example' } };
+        const { mod } = await importFresh();
+
+        expect(mod.cargoRunner({ platform: 'wasm', arch: 'wasm32' })).toBe('REMOTE');
+        expect(mod.cargoRunner({ platform: 'android', arch: 'x86_64' })).toBe('REMOTE');
+        expect(mod.cargoRunner({ platform: 'ios', arch: 'iphoneos' })).toBe('LOCAL');
     });
 });

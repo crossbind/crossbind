@@ -152,7 +152,7 @@ export function differences(target) {
                 'Files come from the host through `--dir` preopens; `--dir=.` gives the program the current directory.',
                 '`crossbind build -p wasi -e wasi -b release` writes the program to `.crossbind/build/<name>-wasi-wasm32-st-release.wasm`.',
                 "WASI 0.3's `wasi:cli/exit` carries success or failure only, so any non-zero return from `main` reaches the shell as exit code 1.",
-                `The build needs wasi-sdk 34 or newer (\`WASI_SDK_PATH\`) or the crossbind Docker image; running needs wasmtime 47 or newer. See [WASI](${guideHref('wasi')}).`,
+                `The build runs in the crossbind Docker image, or under \`RUNNER=LOCAL\` with wasi-sdk 34 or newer (\`WASI_SDK_PATH\`); running needs wasmtime 47 or newer. See [WASI](${guideHref('wasi')}).`,
             ];
         default:
             return [];

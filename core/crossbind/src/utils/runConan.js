@@ -10,8 +10,8 @@ import assertExecContainer from './execContainer.js';
 import { IOS_DEVELOPER_DIR, XCODE_TOOLCHAIN_BIN } from './iosToolchain.js';
 import { DARWIN_CC, DARWIN_TOOLS_BIN } from './darwinToolchain.js';
 import { HOST_BUILT_PLATFORMS } from './targets.js';
-import { assertRunner } from './systemKeys.js';
-import { remoteRunnerUrl, remoteExecParams } from './remoteRunner.js';
+import { remoteExecParams } from './remoteRunner.js';
+import { runnerFor } from './selectRunner.js';
 
 // Every conan invocation crossbind makes goes through here. The config is passed in instead of read
 // from state, because state attaches the staged Conan packages while it is still being built.
@@ -60,7 +60,7 @@ const MAX_BUFFER = 256 * 1024 * 1024;
 const MIN_CONAN_VERSION = [2, 19];
 
 export function conanRunner(config, target) {
-    const runner = assertRunner(config.system?.RUNNER ?? 'DOCKER_RUN');
+    const { runner } = runnerFor(imageRoleFor(target), config.system);
     // Xcode runs on the Mac alone, so iOS and macOS packages build there whatever runner the rest use.
     return HOST_BUILT_PLATFORMS.includes(target?.platform) ? 'LOCAL' : runner;
 }
@@ -207,9 +207,9 @@ export default function runConan(args, { config, target, work }) {
 
     // Google ships the linux NDK for x86_64 only.
     const platform = target.platform === 'android' ? 'linux/amd64' : undefined;
-    const remoteUrl = remoteRunnerUrl(role);
-    if (remoteUrl) {
+    if (work.runner === 'REMOTE') {
         return spawnSync(...remoteExecParams({
+            remote: runnerFor(role, config.system).remote,
             role,
             image: getDockerImage(role, platform),
             mounts: [

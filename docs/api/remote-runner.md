@@ -1,16 +1,30 @@
-# Remote runner — `CROSSBIND_REMOTE_URL`
+# Remote runner — `RUNNER=REMOTE`
 
-> Builds without a local Docker. A **runner** is one toolchain image this crossbind pins plus a small server that ships inside the CLI. With a runner's address and token set, every toolchain step bound for its image (compilers, CMake, SWIG, the linker, cargo, conan) runs on the runner instead of a local container; crossbind neither pulls that image nor starts containers. Your JavaScript never leaves the machine.
+> Builds without a local Docker. A **runner** is one toolchain image this crossbind pins plus a small server that ships inside the CLI. With `RUNNER=REMOTE` and a runner's address and token set, every toolchain step bound for its image (compilers, CMake, SWIG, the linker, cargo, conan) runs on the runner instead of a local container; crossbind neither pulls that image nor starts containers. Your JavaScript never leaves the machine.
 
 ## Quick start
 
 ```bash
 crossbind runner start                # the web image on port 8787
 # crossbind: crossbind-runner-web is running. Build against it with:
-#   CROSSBIND_REMOTE_URL_WEB=http://127.0.0.1:8787 CROSSBIND_TOKEN_WEB=<token>
+#   crossbind config set RUNNER REMOTE
+#   crossbind config set REMOTE_URL_WEB http://127.0.0.1:8787
+#   export CROSSBIND_TOKEN_WEB=<token>
 
-CROSSBIND_REMOTE_URL_WEB=http://127.0.0.1:8787 CROSSBIND_TOKEN_WEB=<token> crossbind build -p wasm
+crossbind config set RUNNER REMOTE
+crossbind config set REMOTE_URL_WEB http://127.0.0.1:8787
+export CROSSBIND_TOKEN_WEB=<token>
+crossbind build -p wasm
+# crossbind: web steps run on the runner at http://127.0.0.1:8787 (RUNNER=REMOTE from ~/.crossbind.json, address from REMOTE_URL_WEB in ~/.crossbind.json).
+
+crossbind config set RUNNER DOCKER_RUN   # back to the local Docker
 crossbind runner stop
+```
+
+For a single build, the environment does the same without changing `~/.crossbind.json`:
+
+```bash
+CROSSBIND_RUNNER=REMOTE CROSSBIND_REMOTE_URL_WEB=http://127.0.0.1:8787 CROSSBIND_TOKEN_WEB=<token> crossbind build -p wasm
 ```
 
 `runner start` runs the runner in the local Docker, which is how you try it out or turn one machine into the build machine of others (`--host 0.0.0.0`, `--port`, `--token`; the token defaults to `$CROSSBIND_RUNNER_TOKEN`, else a new one). `--role android|linux|windows` starts the other images, on ports 8788, 8789 and 8790, so the runners one build needs fit on one machine. To run a runner elsewhere, deploy it.
@@ -29,7 +43,7 @@ crossbind runner init fly             # or cloudflare, cloudrun; --role android|
 | Cloudflare Containers | `Dockerfile`, `wrangler.jsonc`: one `standard-4` container, `src/worker.js`: a Worker that checks the token, starts the container and forwards to it | `npx wrangler deploy` (builds the image with the local Docker), `npx wrangler secret put CROSSBIND_RUNNER_TOKEN` | `https://crossbind-runner-<role>.<account>.workers.dev` |
 | Google Cloud Run | `env.yaml`: the runner, gzipped into one variable, and a boot script that unpacks and starts it | `gcloud`: a service account, a Secret Manager secret only that account may read, then `gcloud run deploy` of the pinned image from GHCR: one instance, 4 vCPU, 8 GiB, an hour per step | `https://crossbind-runner-<role>-<project-number>.<region>.run.app` |
 
-All three keep one machine: a runner holds one build tree on its own disk. Then build with the pair of variables the steps end with.
+All three keep one machine: a runner holds one build tree on its own disk. The printed steps end with the commands that point builds at the runner.
 
 `runner init cloudflare --vcpu <1-4>` sizes the container by its vCPUs, with the least memory Cloudflare allows them (3 GiB each) and the most disk (2 GB per GiB, up to 20 GB); without it the container is a `standard-4`. Memory is most of the price while a container runs, and CPU is billed only while it is used. Measured on 6 October 2026, a 1-vCPU runner built zlib and SQLite as fast as a 4-vCPU one at a quarter of the memory price, peaking below 500 MB, while a parallel C++ build (LERC) took 1.8 times as long. A large port such as GDAL wants more cores and memory.
 
@@ -39,30 +53,32 @@ On Fly, the first `fly deploy` took six minutes on 7 October 2026 while Fly's bu
 
 Fly app names are global, so the generated name carries a random part, which also keeps the address hard to guess. That matters: Fly starts the machine for any request that reaches the app, one without the token too, and bills it until it stops when idle, so keep the address private. Cloud Run, too, starts an instance for any request, but bills only while one runs. The Cloudflare Worker refuses such a request before the container starts.
 
-## Addresses and tokens
+## Choosing the runner
 
-Each image has its own pair of variables, and a step's own pair wins over the shared one. A token goes only with the address it is paired with, so a shared token never reaches the runner of another image:
+`RUNNER` in `~/.crossbind.json` decides where every toolchain step runs: `DOCKER_RUN` (the default), `DOCKER_EXEC`, `LOCAL` or `REMOTE`. The `CROSSBIND_RUNNER` environment variable overrides it, for CI and single builds. Only `REMOTE` sends steps to a runner; under the other three, runner addresses are ignored.
 
-| Variables | Steps they send |
-|---|---|
-| `CROSSBIND_REMOTE_URL_WEB`, `CROSSBIND_TOKEN_WEB` | wasm builds, wasi builds without a host wasi-sdk, and the bridge (SWIG) steps of every platform but android |
-| `CROSSBIND_REMOTE_URL_ANDROID`, `CROSSBIND_TOKEN_ANDROID` | android builds and their bridge steps (the image is amd64 only) |
-| `CROSSBIND_REMOTE_URL_LINUX`, `CROSSBIND_TOKEN_LINUX` | linux and linuxmusl builds |
-| `CROSSBIND_REMOTE_URL_WINDOWS`, `CROSSBIND_TOKEN_WINDOWS` | win32 builds |
-| `CROSSBIND_REMOTE_URL`, `CROSSBIND_TOKEN` | the steps of every image without a pair of its own |
+Under `REMOTE`, each image has its own address, and an image's own address wins over the shared one. Addresses are keys of `~/.crossbind.json` (`crossbind config set`), each overridden by the variable of the same name with a `CROSSBIND_` prefix (`CROSSBIND_REMOTE_URL_WEB`). Tokens are secrets and stay out of the file: each comes only from the variable paired with its address, so a shared token never reaches the runner of another image:
 
-- An image with no address runs in the local Docker, as it does without runners.
+| Address | Token | Steps it sends |
+|---|---|---|
+| `REMOTE_URL_WEB` | `CROSSBIND_TOKEN_WEB` | wasm and wasi builds, and the bridge (SWIG) steps of every platform but android |
+| `REMOTE_URL_ANDROID` | `CROSSBIND_TOKEN_ANDROID` | android builds and their bridge steps (the image is amd64 only) |
+| `REMOTE_URL_LINUX` | `CROSSBIND_TOKEN_LINUX` | linux and linuxmusl builds |
+| `REMOTE_URL_WINDOWS` | `CROSSBIND_TOKEN_WINDOWS` | win32 builds |
+| `REMOTE_URL` | `CROSSBIND_TOKEN` | the steps of every image without an address of its own |
+
+- A step whose image has no address stops before anything runs and names the setting to add; it never falls back to the local Docker, where the build would only seem to run on a runner. `CROSSBIND_RUNNER=DOCKER_RUN` runs that build in the local Docker instead. Once per image, the build says which runner its steps go to and which settings chose it.
 - A desktop build takes its bridges from the web image, so it needs two runners:
 
   ```bash
-  CROSSBIND_REMOTE_URL_WEB=https://web.example CROSSBIND_TOKEN_WEB=<token> \
-  CROSSBIND_REMOTE_URL_LINUX=https://linux.example CROSSBIND_TOKEN_LINUX=<token> \
-  crossbind build -p linux
+  crossbind config set RUNNER REMOTE
+  crossbind config set REMOTE_URL_WEB https://web.example
+  crossbind config set REMOTE_URL_LINUX https://linux.example
+  CROSSBIND_TOKEN_WEB=<token> CROSSBIND_TOKEN_LINUX=<token> crossbind build -p linux
   ```
 
-- A step whose address comes without its paired token stops before anything travels and names the variable to set. A step that reaches the runner of another image stops with `this runner serves the web toolchain, not android`.
-- iOS and macOS builds compile on the Mac with Xcode; their bridge steps go to the web runner when it has an address.
-- `RUNNER=LOCAL` ignores every runner address: each step runs on the host.
+- A step whose address comes without its paired token stops before anything travels and names the variable to set. An address that is not http or https stops the build and names the setting it came from. A step that reaches the runner of another image stops with `this runner serves the web toolchain, not android`.
+- iOS and macOS builds compile on the Mac with Xcode under every runner; their bridge steps go to the web runner, so they need its address.
 
 ## What travels
 
@@ -76,6 +92,8 @@ Each step is its own request, made only when crossbind runs the step; a step it 
 ## Versions
 
 A runner serves the image digest pinned by the crossbind that started or generated it. A build whose crossbind pins another digest stops with `toolchain mismatch: runner has <image>, build pins <image>`: after upgrading crossbind, `runner stop` and `runner start` again, or rerun `runner init` and redeploy. Images are compared by digest, so a runner pulled through a registry mirror serves builds that pin the release digest.
+
+Releases from before `RUNNER=REMOTE` read the same `~/.crossbind.json` and stop with `The runner REMOTE is invalid`. While the machine still builds projects with one of them, choose the runner per build with `CROSSBIND_RUNNER=REMOTE` and keep `RUNNER` out of the file.
 
 ## Security
 

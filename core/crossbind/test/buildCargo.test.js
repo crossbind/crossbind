@@ -55,6 +55,7 @@ beforeEach(() => {
         paths: { project: work },
         export: { type: 'cargo', libName: ['demo'] },
         general: { name: 'demo' },
+        system: { RUNNER: 'LOCAL' },
     };
 });
 

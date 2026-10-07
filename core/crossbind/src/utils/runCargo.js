@@ -8,9 +8,9 @@ import replaceBasePathForDockerUtil, { DOCKER_BASE } from './replaceBasePathForD
 import pullDockerImage, { getDockerImage, getDockerContainerName, imageRoleFor } from './pullDockerImage.js';
 import { DOCKER_RUN_SECURITY_ARGS } from './dockerSecurity.js';
 import { HOST_BUILT_PLATFORMS } from './targets.js';
-import { assertRunner } from './systemKeys.js';
 import assertExecContainer from './execContainer.js';
-import { remoteRunnerUrl, remoteExecParams, baseMount } from './remoteRunner.js';
+import { remoteExecParams, baseMount } from './remoteRunner.js';
+import { runnerFor } from './selectRunner.js';
 
 // Every cargo invocation crossbind makes goes through here.
 //
@@ -134,10 +134,8 @@ export function assertCleanConfigChain(home, cwd) {
 // Apple targets link with Xcode, which is in no image, so their Rust stays on the host - as does
 // every build under RUNNER=LOCAL.
 export function cargoRunner(target) {
-    const runner = state.config?.system?.RUNNER;
-    if (runner !== undefined) assertRunner(runner);
-    if (HOST_BUILT_PLATFORMS.includes(target?.platform)) return 'LOCAL';
-    return runner === 'DOCKER_RUN' || runner === 'DOCKER_EXEC' ? runner : 'LOCAL';
+    const { runner } = runnerFor(imageRoleFor(target), state.config?.system);
+    return HOST_BUILT_PLATFORMS.includes(target?.platform) ? 'LOCAL' : runner;
 }
 
 function allowedEnv() {
@@ -211,9 +209,9 @@ export default function runCargo(args, { cwd, rustflags = [], panic, capture = f
         panic,
         allowUnstable,
     });
-    const remoteUrl = remoteRunnerUrl(role);
-    if (remoteUrl) {
+    if (runner === 'REMOTE') {
         return spawnSync(...remoteExecParams({
+            remote: runnerFor(role, state.config.system).remote,
             role,
             image: getDockerImage(role, platform),
             mounts: [

@@ -12,6 +12,15 @@ export default defineConfig({
     test: {
         include: ['test/**/*.test.js'],
         environment: 'node',
+        // A developer's own runner settings must not decide where the tested steps run.
+        env: {
+            CROSSBIND_RUNNER: '',
+            CROSSBIND_REMOTE_URL: '',
+            CROSSBIND_REMOTE_URL_WEB: '',
+            CROSSBIND_REMOTE_URL_ANDROID: '',
+            CROSSBIND_REMOTE_URL_LINUX: '',
+            CROSSBIND_REMOTE_URL_WINDOWS: '',
+        },
         coverage: {
             provider: 'v8',
             reporter: ['text', 'html'],

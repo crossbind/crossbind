@@ -9,7 +9,7 @@ import { channelDistTag } from '../release/resolve-site-release.mjs';
 // scratch directory, installed from npm on the site's channel (the published -wasi package and
 // crossbind), given the input files it declares and run command by command; what its wasmtime
 // commands print must match the example's `expected`. Needs wasmtime on PATH; the build itself uses
-// WASI_SDK_PATH or the crossbind Docker image.
+// the crossbind Docker image, or WASI_SDK_PATH under RUNNER=LOCAL.
 
 const REPOSITORY_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const DEMOS_DIR = path.join(REPOSITORY_ROOT, 'landing', 'demos');
