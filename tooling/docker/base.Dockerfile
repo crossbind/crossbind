@@ -8,7 +8,7 @@
 
 ARG RUST_VERSION=1.99.0
 
-FROM node:24.21.0-trixie-slim@sha256:8ec5d7557396cfe32d21c3f9c13072355ceab22b584578ca4bb28af31120cffe AS node
+FROM node:24.21.0-trixie-slim@sha256:173f125896c3b47ddf056734c7ea789d04595a6a08769a8f78e0df642781fb66 AS node
 FROM rust:1.98.1-slim@sha256:4cd829461bd5c4d511c32e269da9cb8929223b666519d8004e35fc8d1d771ab7 AS rust
 ARG RUST_VERSION
 # Only the pinned toolchain may survive: /opt/licenses/rust is copied through a toolchains/* glob.
