@@ -172,7 +172,7 @@ Native is not automatically faster. On an M-series Mac a call returning or takin
 
 ### Electron
 
-Electron's main process loads the same addon: Node-API is ABI-stable, so no Electron version needs a rebuild of its own and `electron-rebuild` has nothing to do. Load it in the main process and hand the window its results over IPC; the window has no Node.js. Verified with Electron 44 on macOS and Linux, run from the sources and packaged.
+Electron's main process loads the same addon: Node-API is ABI-stable, so no Electron version needs a rebuild of its own and `electron-rebuild` has nothing to do. Load it in the main process and hand the window its results over IPC; the window has no Node.js. Verified with Electron 44 on macOS (arm64), Linux and Windows (x64 and arm64), from the sources and packaged; CI runs the sample on all three.
 
 A packaged app keeps crossbind's output outside its asar archive: Electron loads an addon from there as it is, and an addon reads its data, such as `proj.db`, with native code, which cannot open a file inside the archive. electron-builder unpacks it with `asarUnpack: ['dist/**']`, Electron Forge with `packagerConfig.asar.unpackDir: 'dist'` (under pnpm, Forge also wants `node-linker=hoisted`); the loader then reads the data from `app.asar.unpacked`. A standalone Node-API package keeps its data in its own `dist/data`, so unpack `node_modules/@crossbind/**` as well.
 
