@@ -9,6 +9,9 @@
   macOS ones: `x86_64` and `aarch64` of `unknown-linux-gnu` and `unknown-linux-musl` in `linux`, and
   of `pc-windows-gnullvm`, the targets built for llvm-mingw, in `windows`. rustup adds them to the
   pinned toolchain, as it adds the Android targets to `android`.
+- Refreshed the pinned `debian:trixie-slim` digest, the starting point of `base` (and so of
+  every image built on it) and of the stage that assembles the `linux` sysroots. The tag is the
+  same; upstream rebuilt it.
 
 ## Image family 1.0.11
 
