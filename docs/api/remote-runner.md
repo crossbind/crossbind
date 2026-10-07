@@ -35,6 +35,8 @@ All three keep one machine: a runner holds one build tree on its own disk. Then 
 
 On Cloud Run nothing is built or pushed: the deploy pulls the pinned image from GHCR (about 95 seconds the first time), and the container unpacks the runner from `env.yaml` when it starts. Instances scale to zero and are billed only while a request runs; a runner woken from zero answered in 2.5 seconds. `--max 1` is the service's own instance limit, which the project's regional CPU quota is checked against: without it a new project's quota (20 vCPU) refuses an 8-vCPU service. Measured on 7 October 2026, a 4-vCPU service built zlib in 34–42 s, SQLite in 70–85 s and the example app in 21–23 s, about as fast as Cloudflare's `standard-4`; 8 vCPUs built them no faster, and the CPU an instance lands on varies. Change `--cpu` and `--memory` in the deploy command to size it.
 
+On Fly, the first `fly deploy` took six minutes on 7 October 2026 while Fly's builder pulled the toolchain image. The `performance-4x` machine then built zlib in 31 s, SQLite in 85 s and LERC in 27 s, as fast as the other two platforms, stopped within five minutes of its last request and woke in about 2 seconds.
+
 Fly app names are global, so the generated name carries a random part, which also keeps the address hard to guess. That matters: Fly starts the machine for any request that reaches the app, one without the token too, and bills it until it stops when idle, so keep the address private. Cloud Run, too, starts an instance for any request, but bills only while one runs. The Cloudflare Worker refuses such a request before the container starts.
 
 ## Addresses and tokens
