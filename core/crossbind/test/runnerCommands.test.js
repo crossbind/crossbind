@@ -2,11 +2,13 @@ import { describe, test, expect, vi, beforeEach, afterEach } from 'vitest';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import zlib from 'node:zlib';
 
 vi.mock('node:child_process', () => ({ execFileSync: vi.fn() }));
 vi.mock('../src/utils/pullDockerImage.js', async (importOriginal) => ({ ...(await importOriginal()), default: vi.fn() }));
 
 const { execFileSync } = await import('node:child_process');
+const { spawnSync } = await vi.importActual('node:child_process');
 const { getDockerImage } = await import('../src/utils/pullDockerImage.js');
 const {
     runnerStartArgs, startRunner, stopRunner, initRunner, runnerEnv, deploySteps,
@@ -86,6 +88,11 @@ describe('crossbind runner start', () => {
     });
 });
 
+// env.yaml holds one `NAME: "JSON-quoted value"` line per variable, under a comment.
+const readEnvYaml = (dir) => Object.fromEntries(fs.readFileSync(path.join(dir, 'env.yaml'), 'utf8').split('\n')
+    .filter((line) => line && !line.startsWith('#'))
+    .map((line) => [line.slice(0, line.indexOf(': ')), JSON.parse(line.slice(line.indexOf(': ') + 2))]));
+
 describe('crossbind runner init fly', () => {
     let dir;
 
@@ -163,7 +170,61 @@ describe('crossbind runner init fly', () => {
         expect(fs.readFileSync(path.join(dir, 'wrangler.jsonc'), 'utf8')).toContain('"instance_type": { "vcpu": 4, "memory_mib": 12288, "disk_mb": 20000 },');
     });
 
-    test('refuses a vCPU count cloudflare does not offer, and a vCPU count for fly, before writing anything', () => {
+    test('writes a cloud run folder: the pinned image deploys straight from its registry and the runner rides in env.yaml', () => {
+        const { url } = initRunner({ platform: 'cloudrun', role: 'web', dir });
+
+        const env = readEnvYaml(dir);
+        const files = JSON.parse(zlib.gunzipSync(Buffer.from(env.CROSSBIND_RUNNER_BUNDLE, 'base64')).toString('utf8'));
+        expect(fs.existsSync(path.join(dir, 'Dockerfile'))).toBe(false);
+        expect(env.CROSSBIND_RUNNER_IMAGE).toBe(getDockerImage('web'));
+        expect(env.CROSSBIND_RUNNER_ROLE).toBe('web');
+        expect(Object.keys(files).sort()).toEqual(['blobs.js', 'files.js', 'server.js']);
+        expect(files['server.js']).toBe(fs.readFileSync(path.join(dir, 'runner', 'server.js'), 'utf8'));
+        // Cloud Run caps one environment variable at 32 KB.
+        expect(env.CROSSBIND_RUNNER_BUNDLE.length).toBeLessThan(32 * 1024);
+        expect(url).toBe('https://crossbind-runner-web-<project-number>.<region>.run.app');
+    });
+
+    test.skipIf(process.platform === 'win32')('boots a cloud run runner from env.yaml alone: the script unpacks the runner and starts it', () => {
+        initRunner({ platform: 'cloudrun', role: 'web', dir });
+        const env = readEnvYaml(dir);
+        // The server starts only when run by its real path; macOS's temp folder is reached through a link.
+        const unpacked = path.join(fs.realpathSync(path.dirname(dir)), 'unpacked');
+
+        const run = spawnSync('sh', ['-c', env.CROSSBIND_RUNNER_BOOT.replace('/tmp/crossbind-runner-src', unpacked)], {
+            encoding: 'utf8',
+            env: { PATH: process.env.PATH, CROSSBIND_RUNNER_BUNDLE: env.CROSSBIND_RUNNER_BUNDLE },
+        });
+
+        expect(fs.readFileSync(path.join(unpacked, 'files.js'), 'utf8')).toBe(fs.readFileSync(path.join(dir, 'runner', 'files.js'), 'utf8'));
+        // Without a token the unpacked server refuses to start, which shows it ran.
+        expect(run.status).toBe(1);
+        expect(run.stderr).toContain('set CROSSBIND_RUNNER_TOKEN');
+    });
+
+    test('prints cloud run deploy steps: one instance, an hour per step, the token read from Secret Manager by an account of its own', () => {
+        const { url } = initRunner({ platform: 'cloudrun', role: 'android', dir });
+
+        const steps = deploySteps('cloudrun', dir, 'token-for-the-test', 'android', url);
+        const deploy = steps.find((line) => line.startsWith('gcloud run deploy'));
+        const text = steps.join('\n');
+        expect(text).toContain('printf %s token-for-the-test | gcloud secrets create crossbind-runner-android-token --data-file=-');
+        // A new service account takes a few seconds to appear, so the secret is created between it and its binding.
+        expect(text.indexOf('gcloud iam service-accounts create crossbind-runner-android')).toBeLessThan(text.indexOf('gcloud secrets create'));
+        expect(text).toContain('--member=serviceAccount:crossbind-runner-android@$PROJECT.iam.gserviceaccount.com --role=roles/secretmanager.secretAccessor');
+        expect(deploy).toContain(`--image ${getDockerImage('android', 'linux/amd64')}`);
+        // --max is the service's limit, which the regional CPU quota is checked against; --max-instances the revision's.
+        expect(deploy).toContain('--max 1 --max-instances 1');
+        expect(deploy).toContain('--timeout 3600');
+        expect(deploy).toContain('--port 8787');
+        expect(deploy).toContain('--execution-environment gen2');
+        expect(deploy).toContain('--service-account crossbind-runner-android@$PROJECT.iam.gserviceaccount.com');
+        expect(deploy).toContain('--set-secrets CROSSBIND_RUNNER_TOKEN=crossbind-runner-android-token:latest');
+        expect(deploy).toContain('--env-vars-file env.yaml --command sh --args=\'-c,eval "$CROSSBIND_RUNNER_BOOT"\'');
+        expect(steps.at(-1)).toContain('CROSSBIND_REMOTE_URL_ANDROID=https://crossbind-runner-android-<project-number>.<region>.run.app');
+    });
+
+    test('refuses a vCPU count cloudflare does not offer, and a vCPU count for fly or cloud run, before writing anything', () => {
         expect(() => initRunner({
             platform: 'cloudflare', role: 'web', dir, vcpu: 5,
         })).toThrow(/1 to 4 vCPUs/);
@@ -172,6 +233,9 @@ describe('crossbind runner init fly', () => {
         })).toThrow(/1 to 4 vCPUs/);
         expect(() => initRunner({
             platform: 'fly', role: 'web', dir, vcpu: 2,
+        })).toThrow(/--vcpu sizes a cloudflare container/);
+        expect(() => initRunner({
+            platform: 'cloudrun', role: 'web', dir, vcpu: 2,
         })).toThrow(/--vcpu sizes a cloudflare container/);
         expect(fs.existsSync(dir)).toBe(false);
     });
