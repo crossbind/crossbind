@@ -156,4 +156,17 @@ describe('rustMt', () => {
         expect(call(MT)).toBe('abort');
         expect(call({ platform: 'android', arch: 'arm64-v8a', runtime: 'mt' })).toBeUndefined();
     });
+
+    test('cargoBuildInvocation unwinds a musl std through libgcc_s, as the addon C++ does', async () => {
+        // crt-static, the musl default, would bring Rust's own static libunwind into the same addon.
+        const { cargoBuildInvocation } = await importFresh();
+        const { rustflags } = cargoBuildInvocation({
+            target: { platform: 'linuxmusl', arch: 'x64', runtime: 'mt' },
+            triple: 'x86_64-unknown-linux-musl',
+            targetDir: '/x/target',
+            manifestPath: '/x/Cargo.toml',
+            sysroot: true,
+        });
+        expect(rustflags).toEqual(['-Ctarget-feature=-crt-static']);
+    });
 });

@@ -16,6 +16,7 @@ import { buildLinkLibArgs } from '../utils/linkLayout.js';
 import resolveEmbindNapiRoot, { resolveEmbindJsiRoot } from '../utils/resolveEmbindNapi.js';
 import scopedEmbind from '../utils/scopedEmbind.js';
 import resolveEmbindRustRoot from '../utils/resolveEmbindRust.js';
+import { rustStdLibsFor } from '../utils/cargoTarget.js';
 import toolchainNoticesDir from '../utils/toolchainNotices.js';
 
 const cpuCount = Math.max(1, os.cpus().length - 1);
@@ -41,6 +42,7 @@ function linkInputs(target) {
         ...rustKeepFlags,
         // The system libraries the archives need, declared by the packages that bring them in.
         ...(getData('binary', target)?.addonFlags ?? []),
+        ...(hasRust ? rustStdLibsFor(target) : []),
     ];
     // The addon runs embind-jsi, so Rust packages bind through the adapter React Native links.
     const extraSources = hasRust ? [`${resolveEmbindRustRoot()}/adapters/jsi.cpp`] : [];

@@ -79,7 +79,7 @@
     {
       "source": "docs/api/rust.md",
       "output": "api/rust.md",
-      "sha256": "12ebcf7cd0b503e294aeb30cdff8b98a38b71ae005d56aa06f6a1f98bbbe8ce6"
+      "sha256": "fba903d358d07f65997dfd6db5c8d01e29c0bf93be0e4bbea763da6e5fc16fc6"
     },
     {
       "source": "docs/api/swig-escape.md",
