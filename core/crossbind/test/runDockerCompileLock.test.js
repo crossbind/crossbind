@@ -27,7 +27,7 @@ async function importRun() {
     execFileSync.mockReset();
     execFileSync.mockImplementation((cmd, args) => {
         if (cmd === 'docker' && args?.[0] === 'image') return '';
-        holders.push(fs.existsSync(lock) ? fs.readFileSync(lock, 'utf8') : null);
+        holders.push(fs.existsSync(lock) ? fs.readFileSync(lock, 'utf8').split('\n')[0] : null);
         return '';
     });
     const run = (await import('../src/actions/run.js')).default;

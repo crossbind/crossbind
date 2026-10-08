@@ -1,6 +1,8 @@
 import { describe, test, expect, beforeEach, afterEach } from 'vitest';
 import * as Comlink from 'comlink';
-import { adoptModule, moduleRoot, setCoercionModule } from '../src/assets/js-runtime/adapters/worker-comlink.js';
+import {
+    adoptModule, moduleOnMainThread, moduleRoot, setCoercionModule,
+} from '../src/assets/js-runtime/adapters/worker-comlink.js';
 
 function Box() {
     this.width = 1;
@@ -22,6 +24,9 @@ beforeEach(() => {
         makeBox: () => new Box(),
         boxes: () => ({ size: () => 1, get: () => new Box(), delete() {} }),
         widthOf: (box) => box.width,
+        fail: () => {
+            throw new Error('native failure');
+        },
     };
     setCoercionModule(m);
     channel = new MessageChannel();
@@ -65,5 +70,24 @@ describe('a worker handle', () => {
 
         expect(moduleMessages).toEqual(['SET width', 'APPLY widthOf']);
         expect(width).toBe(7);
+    });
+});
+
+// The worker fails such a call with a TypeError from inside comlink that names nothing.
+describe('a function the module does not bind', () => {
+    test('fails a call with an error that names it', async () => {
+        await expect(moduleOnMainThread(remote).zlibVersion()).rejects.toThrow('crossbind: zlibVersion is not bound');
+    });
+
+    test('still reads as undefined', async () => {
+        expect(await moduleOnMainThread(remote).zlibVersion).toBeUndefined();
+    });
+
+    test('leaves the error of a bound function as it is', async () => {
+        await expect(moduleOnMainThread(remote).fail()).rejects.toThrow('native failure');
+    });
+
+    test('leaves a bound call alone', async () => {
+        expect(await moduleOnMainThread(remote).widthOf(await remote.makeBox())).toBe(1);
     });
 });

@@ -1,5 +1,6 @@
 // Every name the examples import, from the header the site says it comes from. The build fails on a
-// name that header does not export, so the import lines on the page are checked here.
+// name that header does not export, so the import lines on the page are checked here. The page's own
+// calls through the module are here too: a header binds only the functions an import names.
 export {
     allocBuffer,
     allocPointer,
@@ -77,4 +78,4 @@ export { PEM_read_bio_PUBKEY, PEM_read_bio_X509, PEM_write_bio_PUBKEY, PEM_write
 export { BIO_ctrl_pending, BIO_free, BIO_new, BIO_puts, BIO_read, BIO_s_mem } from '@crossbind/port-openssl/openssl/bio.h';
 export { ASN1_TIME_print_ex, ASN1_TIME_set_string_X509, BN_to_ASN1_INTEGER } from '@crossbind/port-openssl/openssl/asn1.h';
 export { BN_free, BN_new, BN_rand } from '@crossbind/port-openssl/openssl/bn.h';
-export { OPENSSL_cleanse } from '@crossbind/port-openssl/openssl/crypto.h';
+export { OPENSSL_cleanse, OpenSSL_version } from '@crossbind/port-openssl/openssl/crypto.h';

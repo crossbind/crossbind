@@ -172,10 +172,26 @@ import { deflateInit2_, Z_DEFLATED, MAX_WBITS, ZLIB_VERSION } from '@crossbind/p
 - Numbers of every width arrive as Numbers, exact up to 2^53; a `char` arrives as its code (`'A'` is 65), a string as a string, `true` and `false` as booleans.
 - A macro the header takes from another header imports through it, as in C: zlib's `MAX_WBITS` comes from `zconf.h`.
 - Each platform's compiler reads the macro itself, so a value inside `#if` follows the target.
-- `import * as zlib from '@crossbind/port-zlib/zlib.h'` binds every constant SWIG sees in the header.
+- `import * as zlib from '@crossbind/port-zlib/zlib.h'` binds every constant SWIG sees in the header, as do `import()`, `import 'x.h'` and `require`, which hand the app the whole module too.
 - Function-like macros, macros whose value is a pointer, arrays other than a single string, and globals that are not `const` stay unbound: Vite and Rollup reject the import as a missing export, and elsewhere the name is `undefined`. The build prints a line for each global it skips.
 - `crossbind build` output for a plain browser page or an edge runtime binds no constant: those apps import no header. A Node.js app imports headers through the hooks the build writes, so its constants bind as in a bundler app ([Node.js](../playbooks/integration/nodejs.md#importing-headers-and-rust-directly)).
-- A constant first imported while a dev server runs binds after the server restarts; a React Native app needs a native rebuild and a Node.js app another `crossbind build`, as for a new header import.
+- A constant first imported while a dev server runs binds the way rule 9 describes for a function.
+
+### 9. A dependency's functions bind when the app imports them
+
+A header of a dependency (a port or a `conan:` package) binds the free functions the app imports from it, along with all its classes and enums and the constants rule 8 binds. A function the app never names is left out, and so is the library code only that function reaches:
+
+```js
+import { GDALAllRegister, GDALOpenEx, GDALClose } from '@crossbind/port-gdal/gdal.h';
+```
+
+- The project's own headers bind every function, as do the headers a package binds whole (`export.bindings.headers`).
+- `import * as`, `export *`, `import()`, `import 'x.h'`, `require` and an import of `AllSymbols` hand the app the whole module, so the header binds every function. So does a header whose only imports take `initNative` alone. Its constants still follow rule 8.
+- A function the app reaches only through the module object (`const m = await initNative(); m.GDALVersionInfo()`) needs a named import too. Without one the call fails with `crossbind: GDALVersionInfo is not bound in the native module` in a worker, and with `m.GDALVersionInfo is not a function` on the page thread.
+- A header bound only for the types another one uses (`cpl_error.h` for the `CPLErr` of `gdal.h`) registers its classes and enums but none of its functions.
+- A Vite or webpack/Rspack dev server binds a newly imported function when the file is saved, and Rollup's watch mode on its next rebuild. Metro binds it when the file is saved too, but the running app gets it only from its next native build (React Native) or a page reload (Expo web), with Metro left running; until then a call fails with `crossbind: compressBound is not bound in the native module`.
+- A Node.js app binds it on its next `crossbind build`, which `node --import crossbind/node/dev` runs before the app starts once its imports changed; until then Node stops at the import with `does not provide an export named 'compressBound'`.
+- The build warns when something imports a header that no source of the app imports a name from, such as a package in `node_modules`: the app has to import the functions it calls.
 
 ## Wrapper pattern
 

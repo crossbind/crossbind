@@ -6,6 +6,7 @@ import {
 } from './vector-coercion.js';
 import { patchModuleForExceptionDecode } from './exception-decode.js';
 import urlPath from './path-url.js';
+import { UNBOUND_MESSAGE } from './unboundMessage.js';
 
 const isWorkerScope = typeof WorkerGlobalScope !== 'undefined'
     && typeof self !== 'undefined'
@@ -290,8 +291,22 @@ async function initWithWorker(config, userConfig) {
     } = userConfig;
     // The worker resolves a relative URL against its own script, so it gets the path resolved against the page.
     const workerConfig = config.path ? { ...serializableConfig, path: urlPath.finalizePath(config.path) } : serializableConfig;
-    const module = adoptModule(await workerApi.init(workerConfig));
+    return moduleOnMainThread(adoptModule(await workerApi.init(workerConfig)));
+}
 
+// A call the worker cannot make, because the module lacks the function, fails there with a TypeError from inside comlink
+// that names nothing: the failed call asks for the member, and names it when the module has none.
+function namedCall(member, name, module) {
+    return new Proxy(member, {
+        apply: (call, thisArg, args) => Reflect.apply(call, thisArg, args).catch(async (error) => {
+            const isBound = await Promise.resolve(module[name]).then((value) => value !== undefined, () => true);
+            if (isBound) throw error;
+            throw new Error(`crossbind: ${name} ${UNBOUND_MESSAGE}`);
+        }),
+    });
+}
+
+export function moduleOnMainThread(module) {
     return new Proxy(module, {
         get(target, prop) {
             if (prop === 'toArray') {
@@ -308,7 +323,8 @@ async function initWithWorker(config, userConfig) {
                     return target.toVector(classOrName, array);
                 };
             }
-            return target[prop];
+            const member = target[prop];
+            return typeof prop === 'string' && typeof member === 'function' ? namedCall(member, prop, target) : member;
         },
     });
 }

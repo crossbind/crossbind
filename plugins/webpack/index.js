@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import {
     state, createLib, buildWasm, createBridgeFile, getData, getCrossbindScript, getRustJsScript, getDependFilePath, buildDependencies, getTargetParams, getFilteredBuildTargets, isSourceNewer,
+    appSourceFiles,
 } from 'crossbind';
 
 const targetParams = getTargetParams({ platform: ['wasm'], arch: ['wasm32'], runtime: ['st'], runtimeEnv: ['browser'] }, true);
@@ -105,6 +106,7 @@ export default class CrossbindWebpackPlugin {
     getLoaderOptions() {
         return {
             bridges: this.bridges,
+            appSourceFiles,
             createBridgeFile,
             getData,
             state,

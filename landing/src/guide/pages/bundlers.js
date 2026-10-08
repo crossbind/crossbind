@@ -171,7 +171,7 @@ module.exports = mergeConfig(getDefaultConfig(__dirname), config);`,
         { type: 'h2', id: 'own-plugin', text: 'Writing your own plugin' },
         {
             type: 'p',
-            text: 'The contract is small enough to port to another build tool: resolve header imports to bridge files (`resolveId` / `load`), generate a bridge per header and hand back the loader (`createBridgeFile`, `getCrossbindScript`), compile in the bundle step (`createLib`, `buildWasm`), and in dev serve `/crossbind` and `/crossbind.wasm` from the build directory while watching `paths.native` for changes.',
+            text: 'The contract is small enough to port to another build tool: resolve header imports to bridge files (`resolveId` / `load`), generate a bridge per header and hand back the loader (`createBridgeFile`, `getCrossbindScript`), compile in the bundle step (`createLib`, `buildWasm`), and in dev serve `/crossbind` and `/crossbind.wasm` from the build directory while watching `paths.native` and the app\'s own sources (`appSourceFiles`) for changes: the names the app imports decide which functions of a dependency\'s header bind.',
         },
         {
             type: 'code',

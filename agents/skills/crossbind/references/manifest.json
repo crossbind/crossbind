@@ -29,7 +29,7 @@
     {
       "source": "docs/api/cpp-binding-rules.md",
       "output": "api/cpp-binding-rules.md",
-      "sha256": "ab68e0e3774c8abd19f920a74d775b9edd2106c5b84e319dea5351290e24562f"
+      "sha256": "a0df5e8fbfe0ca94eb34e8ed9cc95750e5808f884409cb00bac0cf570c9024a2"
     },
     {
       "source": "docs/api/crossbind-build.md",
@@ -119,17 +119,17 @@
     {
       "source": "docs/playbooks/integration/nodejs.md",
       "output": "integration/nodejs.md",
-      "sha256": "f2b81c6e8333a1de44f7fb6aea5442ba0d48f698f4bf2c462523c3fab4ed3574"
+      "sha256": "7c2c34ead4c912246eed4fdeb30f36fbe27fcbdfd32a015c09a620c49f8fcb09"
     },
     {
       "source": "docs/playbooks/integration/react-native-cli.md",
       "output": "integration/react-native-cli.md",
-      "sha256": "09554daf7254b3c5228b649386f84a2c1e15982683d527c4cdf9665d396bb29f"
+      "sha256": "9613b75fa881403ad8206ceee1c5dd96e715753dad3dcf9db87ebed54d10ae71"
     },
     {
       "source": "docs/playbooks/integration/react-native-expo.md",
       "output": "integration/react-native-expo.md",
-      "sha256": "7ad781755f450dc7f5e6fafb7077738056268efda31b6dbb8e7a3e342f47d3bf"
+      "sha256": "671428968a59d92c3b56548a63987a40e748b54ffdd8d734e49b5f68f252789f"
     },
     {
       "source": "docs/playbooks/integration/rollup.md",

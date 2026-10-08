@@ -2,7 +2,7 @@
 
 import {
     state, createLib, createBridgeFile, buildWasm, getCrossbindScript, getRustJsScript, buildDependencies,
-    getDependFilePath, getTargetParams, getFilteredBuildTargets, isSourceNewer,
+    getDependFilePath, getTargetParams, getFilteredBuildTargets, isSourceNewer, appSourceFiles,
 } from 'crossbind';
 
 import fs from 'node:fs';
@@ -54,7 +54,10 @@ const rollupCrossbindPlugin = (options, bridges = []) => {
             }
 
             const bridgeFile = createBridgeFile(path);
-            bridges.push(bridgeFile);
+            // A header transforms again after each source edit; a repeated entry would change the bridge lib's fingerprint.
+            if (!bridges.includes(bridgeFile)) bridges.push(bridgeFile);
+            // The names the app imports decide what a header binds, so watch mode transforms it again after any source edit.
+            appSourceFiles(state.config.paths.project).forEach((file) => this.addWatchFile(file));
 
             return getCrossbindScript(buildTargetRelease, bridgeFile, { base });
         },

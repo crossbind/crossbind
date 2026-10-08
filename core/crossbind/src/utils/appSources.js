@@ -16,6 +16,16 @@ export default function appSourceFiles(projectDir) {
             else if (entry.isFile() && SOURCE_EXTENSIONS.has(path.extname(entry.name))) files.push(full);
         }
     };
-    walk(projectDir);
+    if (projectDir && fs.existsSync(projectDir)) walk(projectDir);
     return files;
+}
+
+// Whether a changed file is one of those sources.
+export function isAppSource(projectDir, file) {
+    const relative = path.relative(projectDir, file);
+    if (!relative || relative.startsWith('..') || path.isAbsolute(relative)) return false;
+    const parts = relative.split(path.sep);
+    return SOURCE_EXTENSIONS.has(path.extname(file))
+        && parts.every((part) => !part.startsWith('.'))
+        && !parts.slice(0, -1).some((dir) => SKIPPED_DIRECTORIES.has(dir));
 }

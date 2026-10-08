@@ -2,13 +2,14 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import vm from 'node:vm';
 import { describe, test, expect, vi, afterAll, afterEach, beforeEach } from 'vitest';
 
 vi.mock('../src/actions/getData.js', () => ({ default: () => ({}) }));
 vi.mock('../src/utils/loadJson.js', () => ({ default: () => ['VectorMatrix', 'Matrix'] }));
 vi.mock('../src/state/index.js', () => ({ default: { config: { paths: {}, ext: {} } } }));
 
-const { default: getCrossbindScript } = await import('../src/integration/getCrossbindScript.js');
+const { default: getCrossbindScript, liveExports } = await import('../src/integration/getCrossbindScript.js');
 
 const TARGET = { platform: 'wasm' };
 const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'crossbind-script-'));
@@ -102,6 +103,67 @@ describe('generated proxy modules', () => {
         proxy.initNative.terminate();
         expect(globalThis.__crossbindBootPromise).toBeNull();
         expect(globalThis.__crossbindModule).toBeNull();
+    });
+});
+
+// Metro keeps a header's module as it first transformed it while the app's imports change.
+describe('a module Metro transformed for an earlier import list', () => {
+    afterEach(() => {
+        delete globalThis.__crossbindModule;
+    });
+
+    test('reads a name it does not export off the booted module', () => {
+        globalThis.__crossbindModule = { compressBound: () => 42 };
+
+        expect(liveExports({ __esModule: true, zlibVersion: null }, 'unbound').compressBound()).toBe(42);
+    });
+
+    test('leaves such a name undefined before initNative', () => {
+        expect(liveExports({ __esModule: true }, 'unbound').compressBound).toBeUndefined();
+    });
+
+    test('hands out a function that names a binding the loaded module lacks', () => {
+        globalThis.__crossbindModule = {};
+
+        expect(() => liveExports({ __esModule: true }, 'is missing').compressBound(1)).toThrow('crossbind: compressBound is missing');
+    });
+
+    // Metro started again after the import, but the app was not rebuilt.
+    test('names a binding it exports that the loaded module lacks', () => {
+        globalThis.__crossbindModule = {};
+
+        expect(() => liveExports({ __esModule: true, compressBound: undefined }, 'is missing').compressBound(1)).toThrow('crossbind: compressBound is missing');
+    });
+
+    test('names the binding when the app constructs it', () => {
+        globalThis.__crossbindModule = {};
+        const { Deflater } = liveExports({ __esModule: true }, 'is missing');
+
+        expect(() => new Deflater()).toThrow('crossbind: Deflater is missing');
+    });
+
+    test('runs from its source alone, as the generated module carries it', () => {
+        const context = vm.createContext({});
+        const serialized = vm.runInContext(`globalThis.__crossbindModule = { zlibVersion: () => '1.3' }; (${liveExports.toString()})`, context);
+        const exported = serialized({ __esModule: true }, 'is missing');
+
+        expect(exported.zlibVersion()).toBe('1.3');
+        expect(() => exported.compressBound(1)).toThrow('crossbind: compressBound is missing');
+    });
+
+    test('keeps then, default and symbols undefined, so the module is no thenable', () => {
+        globalThis.__crossbindModule = {};
+        const exported = liveExports({ __esModule: true }, 'unbound');
+
+        expect([exported.then, exported.default, exported[Symbol.iterator]]).toEqual([undefined, undefined, undefined]);
+    });
+
+    test('is part of the module Metro gets, which still loads as an ES module', async () => {
+        const source = getCrossbindScript(TARGET, '/nonexistent/bridge', { liveExports: true });
+
+        expect(source).toContain('module.exports = __crossbindLiveExports(module.exports');
+        expect(getCrossbindScript(TARGET, '/nonexistent/bridge')).not.toContain('__crossbindLiveExports');
+        expect(typeof (await loadModule('proxy-live', source)).initNative).toBe('function');
     });
 });
 

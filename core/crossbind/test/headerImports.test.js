@@ -46,8 +46,47 @@ describe('findHeaderImports', () => {
         expect(findHeaderImports(source, HEADER_EXTENSIONS)).toEqual([{ specifier: './a.h', names: ['Z_OK', 'Z_STREAM_END'] }]);
     });
 
-    test('finds no names in dynamic, side-effect or default-only imports', () => {
-        const source = "const m = await import('./a.h');\nimport './b.h';\nimport c from './c.h';\n";
+    // Each of these hands the app the whole module, whose members it reaches by name.
+    test('takes every name through a dynamic import, a side-effect import or a require', () => {
+        const source = "const m = await import('./a.h');\nimport './b.h';\nconst c = require(\"./c.h\");\n";
+
+        expect(findHeaderImports(source, HEADER_EXTENSIONS)).toEqual([
+            { specifier: './a.h', names: ALL_NAMES },
+            { specifier: './b.h', names: ALL_NAMES },
+            { specifier: './c.h', names: ALL_NAMES },
+        ]);
+    });
+
+    test('takes every name through a lazy import with a bundler comment or a template literal', () => {
+        const source = "import(/* webpackChunkName: \"gdal\" */ './a.h');\nimport(/* @vite-ignore */ \"./b.h\");\nimport(`./c.h`);\n";
+
+        expect(findHeaderImports(source, HEADER_EXTENSIONS).map(({ specifier, names }) => [specifier, names])).toEqual([
+            ['./a.h', ALL_NAMES],
+            ['./b.h', ALL_NAMES],
+            ['./c.h', ALL_NAMES],
+        ]);
+    });
+
+    // Every source of the app is read on each transform, so the comments before a lazy import's argument must not be
+    // tried in every grouping.
+    test('reads a lazy import after many comments in linear time', () => {
+        const source = `import(${'/* chunk */ '.repeat(28)}name)`;
+        const started = performance.now();
+
+        expect(findHeaderImports(source, HEADER_EXTENSIONS)).toEqual([]);
+        expect(performance.now() - started).toBeLessThan(100);
+    });
+
+    test('reads an import list with a run of comments that never close in linear time', () => {
+        const source = `import { a, ${'/*a'.repeat(64000)} } from './x.h';`;
+        const started = performance.now();
+
+        expect(findHeaderImports(source, HEADER_EXTENSIONS)).toEqual([{ specifier: './x.h', names: ['a'] }]);
+        expect(performance.now() - started).toBeLessThan(100);
+    });
+
+    test('finds no names in a default-only import or a specifier built at run time', () => {
+        const source = "import c from './c.h';\nconst d = await import(`./${name}.h`);\n";
 
         expect(findHeaderImports(source, HEADER_EXTENSIONS)).toEqual([]);
     });

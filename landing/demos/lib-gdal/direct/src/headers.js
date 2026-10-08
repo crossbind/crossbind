@@ -1,5 +1,6 @@
 // Every name the examples import, from the header the site says it comes from. The build fails on a
-// name that header does not export, so the import lines on the page are checked here.
+// name that header does not export, so the import lines on the page are checked here. The page's own
+// calls through the module are here too: a header binds only the functions an import names.
 export {
     GDALAllRegister,
     GDALClose,
@@ -31,6 +32,7 @@ export {
     GDALRasterIO,
     GDALSetGeoTransform,
     GDALSetProjection,
+    GDALVersionInfo,
     allocBuffer,
     allocPointer,
     cstring,
