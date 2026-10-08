@@ -45,7 +45,8 @@ jobs:
             - name: Install dependencies
               run: pnpm install
             - name: Build the Linux and Windows addons
-              # C++ and Rust alike: the kit's Rust packages build in the linux and windows images too.
+              # C++ and Rust alike: the kit's Rust packages and the crates the suite imports build in the
+              # linux and windows images too.
               run: pnpm run ci:linux:build:conformance
             - name: Keep the addons for the runners that load them
               uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
@@ -56,9 +57,11 @@ jobs:
                   overwrite: true
                   # The suite checks that every kit export it reaches was bound, from the build's bridge exports.
                   include-hidden-files: true
+                  # dist/node holds the addon's entry and the import hooks the suite runs under.
                   path: |
                       e2e/backend-nodejs-native/dist/*.node
                       e2e/backend-nodejs-native/dist/*.cjs
+                      e2e/backend-nodejs-native/dist/node/
                       e2e/backend-nodejs-native/.crossbind/build/bridge/*.exports.json
                   retention-days: 1
     run:

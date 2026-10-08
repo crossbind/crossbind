@@ -7,7 +7,7 @@
     "scripts": {
         "build": "crossbind build -p linux,linuxmusl,win32 -e node -b release",
         "build:darwin": "crossbind build -p darwin -a arm64 -e node -b release",
-        "start": "node src/index.mjs",
+        "start": "node --import ./dist/node/napi.register.mjs src/index.mjs",
         "e2e:prod": "node e2e/run.mjs"
     },
     "dependencies": {
