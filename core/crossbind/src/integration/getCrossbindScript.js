@@ -18,6 +18,12 @@ export default function getCrossbindScript(target, bridgePath, { base = '/' } = 
 // (per-symbol lets assigned inside this module's initNative). Vectors come from the owning
 // cargo package's config; classes/enums come from the parsed source.
 export function getRustJsScript(target, rsFile, { base = '/' } = {}) {
+    return buildScript(target, getRustSymbols(rsFile), base);
+}
+
+// The names a Rust import exports. An app-local file or a cargo: crate gets its bridge crate here, the way a header
+// gets its bridge from createBridgeFile.
+export function getRustSymbols(rsFile) {
     // Compare real paths: dependency paths go through node_modules symlinks (pnpm workspaces)
     // while bundlers hand the transformer the resolved real file.
     const realCrateDir = (d) => {
@@ -41,7 +47,7 @@ export function getRustJsScript(target, rsFile, { base = '/' } = {}) {
         });
         // A crate registers its public names under per-crate names (two crates may export the
         // same name), so the proxy exports the clean name and reads the registered one off the module.
-        return buildScript(target, exports, base);
+        return exports;
     }
 
     const pkg = state.config.allDependencies.find((d) => d.export?.type === 'cargo'
@@ -61,7 +67,7 @@ export function getRustJsScript(target, rsFile, { base = '/' } = {}) {
             log: () => {},
         });
     }
-    const symbols = [
+    return [
         ...model.classes.map((c) => c.name),
         ...(model.streams ?? []).map((s) => s.name),
         ...model.enums.map((e) => e.name),
@@ -70,7 +76,6 @@ export function getRustJsScript(target, rsFile, { base = '/' } = {}) {
         ...(model.consts ?? []).map((c) => c.name),
         ...vectors.map((v) => v.name),
     ];
-    return buildScript(target, symbols, base);
 }
 
 function buildScript(target, symbols, base) {

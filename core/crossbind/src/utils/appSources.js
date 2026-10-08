@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
-const SOURCE_EXTENSIONS = new Set(['.js', '.jsx', '.ts', '.tsx', '.mjs', '.cjs', '.vue', '.svelte']);
+const SOURCE_EXTENSIONS = new Set(['.js', '.jsx', '.ts', '.tsx', '.mjs', '.cjs', '.mts', '.cts', '.vue', '.svelte']);
 // Native projects and build outputs: large, and never the app's JavaScript.
 const SKIPPED_DIRECTORIES = new Set(['node_modules', 'dist', 'build', 'ios', 'android', 'Pods', 'target']);
 

@@ -15,7 +15,9 @@ import buildExternal from './actions/buildExternal.js';
 import buildPackageTypes from './actions/buildTypes.js';
 import buildLib from './actions/buildLib.js';
 import buildDependencies from './actions/buildDependencies.js';
-import writeRuntimeEntry from './actions/writeRuntimeEntry.js';
+import writeRuntimeEntry, { removeImportHooks, writeImportHooks } from './actions/writeRuntimeEntry.js';
+import { createImportedBridges, findAppNativeImports } from './actions/createImportedBridges.js';
+import { nativeExtensions } from './utils/nativeImports.js';
 import getDependFilePath from './integration/getDependFilePath.js';
 import { boundHeaderSpecifiers, bridgeTargets, nodeBridgeTarget, resolveBoundHeaders } from './utils/boundHeaders.js';
 import { ENTRY_RUNTIMES } from './utils/runtimeEntries.js';
@@ -496,12 +498,14 @@ async function createNodeAddons(targetParams) {
         `${resolveEmbindNapiRoot()}/third_party/node-api-jsi/jsi`,
     ];
     const boundHeaders = createBoundBridges(targets);
-    const headers = [...createBridges(nodeBridgeTarget(targets)), ...boundHeaders];
+    const ownHeaders = [...createBridges(nodeBridgeTarget(targets)), ...boundHeaders];
+    const imports = findAppNativeImports(bridgeTargets(targets, state.targets));
+    const headers = [...ownHeaders, ...createImportedBridges(ownHeaders, imports)];
     const opt = {
         buildSource: false,
         nativeGlob: [
             `${state.config.paths.cli}/assets/cpp-runtime/commonBridges.cpp`,
-            ...headers.map((header) => header.bridge),
+            ...headers.flatMap((header) => header.bridge ?? []),
         ],
         headerDirs,
         inputs: headerDirs.flatMap((dir) => findFiles('**/*.h', { cwd: dir })),
@@ -524,7 +528,10 @@ async function createNodeAddons(targetParams) {
     }
     const loaderTarget = targets.find((target) => target.buildType === 'release') ?? targets[0];
     if (headers.length && fs.existsSync(`${state.config.paths.output}/${loaderTarget.jsName}`)) {
-        writeRuntimeEntry(`${state.config.paths.output}/node/napi.mjs`, headers, ENTRY_RUNTIMES.node(loaderTarget.jsName));
+        const entry = `${state.config.paths.output}/node/napi.mjs`;
+        writeRuntimeEntry(entry, headers, ENTRY_RUNTIMES.node(loaderTarget.jsName));
+        if (imports.size) writeImportHooks(entry, headers, imports, nativeExtensions(state.config.ext));
+        else removeImportHooks(entry);
     }
 }
 
@@ -545,13 +552,17 @@ async function createWasmJs(targetParams) {
         return;
     }
     const headers = createBridges();
-    const opt = {
+    // A Node app imports what it uses through the module hooks, so a Node binary binds those imports too.
+    const isNode = (target) => target.runtimeEnv === 'node';
+    const imports = targets.some(isNode) ? findAppNativeImports([state.targets.find((t) => t.platform === 'wasm')]) : new Map();
+    const nodeHeaders = [...headers, ...createImportedBridges(headers, imports)];
+    const optOf = (bridged) => ({
         buildSource: false,
         nativeGlob: [
             `${state.config.paths.cli}/assets/cpp-runtime/commonBridges.cpp`,
-            ...headers.map((header) => header.bridge),
+            ...bridged.flatMap((header) => header.bridge ?? []),
         ],
-    };
+    });
 
     for (const target of targets) {
         // An artifact merely existing in dist used to short-circuit this whole
@@ -561,7 +572,7 @@ async function createWasmJs(targetParams) {
         // link and the copy step below moved build/data away on the last run.
         const distComplete = fs.existsSync(`${state.config.paths.output}/${target.jsName}`)
             && fs.existsSync(`${state.config.paths.output}/${target.wasmName}`);
-        createLib(target, 'Bridge', opt);
+        createLib(target, 'Bridge', optOf(isNode(target) ? nodeHeaders : headers));
         const built = await buildWasm(target, { force: !distComplete });
         if (!built) {
             continue;
@@ -587,8 +598,11 @@ async function createWasmJs(targetParams) {
         && target.runtime === 'st' && target.buildType === 'release' && fs.existsSync(`${state.config.paths.output}/${target.jsName}`));
     const nodeTarget = entryTargetOf('node');
     const edgeTarget = entryTargetOf('edge');
-    if (headers.length && nodeTarget) {
-        writeRuntimeEntry(`${state.config.paths.output}/node/wasm.mjs`, headers, ENTRY_RUNTIMES.node(nodeTarget.jsName));
+    if (nodeHeaders.length && nodeTarget) {
+        const entry = `${state.config.paths.output}/node/wasm.mjs`;
+        writeRuntimeEntry(entry, nodeHeaders, ENTRY_RUNTIMES.node(nodeTarget.jsName));
+        if (imports.size) writeImportHooks(entry, nodeHeaders, imports, nativeExtensions(state.config.ext));
+        else removeImportHooks(entry);
     }
     if (headers.length && edgeTarget) {
         writeRuntimeEntry(`${state.config.paths.output}/edge/wasm.mjs`, headers, ENTRY_RUNTIMES.edge(edgeTarget.jsName, edgeTarget.wasmName));

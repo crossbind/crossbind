@@ -213,6 +213,19 @@ importers:
         specifier: workspace:^
         version: link:../../core/crossbind
 
+  e2e/backend-nodejs-import-hooks:
+    dependencies:
+      '@crossbind/example-lib-prebuilt-matrix':
+        specifier: workspace:^
+        version: link:../../examples/lib-prebuilt-matrix
+    devDependencies:
+      '@crossbind/core-embind-napi':
+        specifier: workspace:^
+        version: link:../../core/embind-napi
+      crossbind:
+        specifier: workspace:^
+        version: link:../../core/crossbind
+
   e2e/backend-nodejs-multithread:
     dependencies:
       '@crossbind/conformance':

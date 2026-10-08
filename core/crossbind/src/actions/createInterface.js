@@ -1,13 +1,12 @@
 
 import fs from 'node:fs';
-import { createRequire } from 'node:module';
 import upath from 'upath';
 import state, { saveCache } from '../state/index.js';
 import refreshConanDependencies from '../state/refreshConanDependencies.js';
 import { conanInputsOf } from '../utils/conanDependencies.js';
 import { getContentHash, getFileHash } from '../utils/hash.js';
 import guardAsyncBindings from '../utils/bridgeAsyncGuard.js';
-import getDependFilePath from '../integration/getDependFilePath.js';
+import resolveNativeImport from '../integration/resolveNativeImport.js';
 import { writeHeaderDts, writeConanImportDts } from '../utils/cppDts.js';
 import { ALL_NAMES, findHeaderImportsIn } from '../utils/headerImports.js';
 import {
@@ -244,17 +243,6 @@ function realPath(file) {
     }
 }
 
-// A package that is not a crossbind dependency (the conformance kit) resolves the way the bundler finds it.
-function resolveHeaderImport(specifier, importer, target) {
-    if (specifier.startsWith('.')) return upath.resolve(upath.dirname(importer), specifier);
-    if (upath.isAbsolute(specifier)) return specifier;
-    try {
-        return getDependFilePath(specifier, target) ?? createRequire(importer).resolve(specifier);
-    } catch (e) {
-        return null;
-    }
-}
-
 // The names the app's own sources import from this header, or every name for `import * as`.
 function importedNames(headerFile, target) {
     const projectDir = state.config.paths.project;
@@ -262,7 +250,7 @@ function importedNames(headerFile, target) {
     const header = targetNeutral(realPath(headerFile));
     const names = new Set();
     for (const { importer, specifier, names: imported } of findHeaderImportsIn(projectDir, state.config.ext.header)) {
-        if (targetNeutral(realPath(resolveHeaderImport(specifier, importer, target))) !== header) continue;
+        if (targetNeutral(realPath(resolveNativeImport(specifier, importer, target))) !== header) continue;
         if (imported === ALL_NAMES) return ALL_NAMES;
         imported.filter((name) => C_IDENTIFIER.test(name) && !PROXY_NAMES.has(name)).forEach((name) => names.add(name));
     }
