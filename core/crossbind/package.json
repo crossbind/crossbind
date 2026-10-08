@@ -13,6 +13,11 @@
         "crossbind": "./src/bin.js"
     },
     "main": "src/index.js",
+    "exports": {
+        ".": "./src/index.js",
+        "./node/dev": "./src/node/dev.mjs",
+        "./*": "./*"
+    },
     "scripts": {
         "test": "vitest run",
         "test:watch": "vitest",
