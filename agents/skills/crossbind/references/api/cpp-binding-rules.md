@@ -176,8 +176,8 @@ import { deflateInit2_, Z_DEFLATED, MAX_WBITS, ZLIB_VERSION } from '@crossbind/p
 - Each platform's compiler reads the macro itself, so a value inside `#if` follows the target.
 - `import * as zlib from '@crossbind/port-zlib/zlib.h'` binds every constant SWIG sees in the header.
 - Function-like macros, macros whose value is a pointer, arrays other than a single string, and globals that are not `const` stay unbound: Vite and Rollup reject the import as a missing export, and elsewhere the name is `undefined`. The build prints a line for each global it skips.
-- `crossbind build` output for Node.js, a plain browser page or an edge runtime binds no constant: those apps import no header.
-- A constant first imported while a dev server runs binds after the server restarts; a React Native app needs a native rebuild, as for a new header import.
+- `crossbind build` output for a plain browser page or an edge runtime binds no constant: those apps import no header. A Node.js app imports headers through the hooks the build writes, so its constants bind as in a bundler app ([Node.js](../playbooks/integration/nodejs.md#importing-headers-and-rust-directly)).
+- A constant first imported while a dev server runs binds after the server restarts; a React Native app needs a native rebuild and a Node.js app another `crossbind build`, as for a new header import.
 
 ## Wrapper pattern
 

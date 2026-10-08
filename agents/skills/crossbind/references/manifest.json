@@ -29,7 +29,7 @@
     {
       "source": "docs/api/cpp-binding-rules.md",
       "output": "api/cpp-binding-rules.md",
-      "sha256": "1511e74981ffb9479e8119bc86e86b79ea0cf63ac3c6c785a0a61d3b5b3a312a"
+      "sha256": "ab68e0e3774c8abd19f920a74d775b9edd2106c5b84e319dea5351290e24562f"
     },
     {
       "source": "docs/api/crossbind-build.md",
@@ -79,7 +79,7 @@
     {
       "source": "docs/api/rust.md",
       "output": "api/rust.md",
-      "sha256": "fba903d358d07f65997dfd6db5c8d01e29c0bf93be0e4bbea763da6e5fc16fc6"
+      "sha256": "3e1b6f93baadacb09883ec1d9e9553cf9f89460780d48a2152efbf24dc954806"
     },
     {
       "source": "docs/api/swig-escape.md",
@@ -119,7 +119,7 @@
     {
       "source": "docs/playbooks/integration/nodejs.md",
       "output": "integration/nodejs.md",
-      "sha256": "fe42967a87380547551a4d4970d58ed3eeb0e7bb18d41bb33ead6e8393532612"
+      "sha256": "f2b81c6e8333a1de44f7fb6aea5442ba0d48f698f4bf2c462523c3fab4ed3574"
     },
     {
       "source": "docs/playbooks/integration/react-native-cli.md",

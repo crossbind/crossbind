@@ -125,8 +125,9 @@ link together. The wasm `mt` prebuilt builds through the same nightly `-Zbuild-s
 path described above (st and mt cargo outputs are kept in separate target
 dirs — they share a triple but not their std features).
 
-This is the model a Node.js addon (`crossbind build -e node`) links: an addon build has no
-bundler, so it sees no app-local `.rs` imports and no `cargo:` imports.
+A Node.js app built with `crossbind build -e node` links its Rust packages this way and binds
+its own `.rs` and `cargo:` imports through the import hooks the build writes
+([Node.js](../playbooks/integration/nodejs.md#importing-headers-and-rust-directly)).
 
 ## What plain Rust maps to
 
