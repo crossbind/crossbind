@@ -24,12 +24,12 @@
     {
       "source": "docs/api/conan.md",
       "output": "api/conan.md",
-      "sha256": "c4208f4c6d03d7627e52ef9e5bca0237926869561a29ffdb59200502bd360e7f"
+      "sha256": "253b5c1fbbe214d0a605168e8cfaa3f5382eeddaf40e90d1ff2fe0d438ad34b4"
     },
     {
       "source": "docs/api/cpp-binding-rules.md",
       "output": "api/cpp-binding-rules.md",
-      "sha256": "a0df5e8fbfe0ca94eb34e8ed9cc95750e5808f884409cb00bac0cf570c9024a2"
+      "sha256": "05b2731430928a23244704c5a3b6c7254c2d913be0e51b5d47f2a3198ac6971a"
     },
     {
       "source": "docs/api/crossbind-build.md",
@@ -99,7 +99,7 @@
     {
       "source": "docs/api/wasi.md",
       "output": "api/wasi.md",
-      "sha256": "e9f044f4db6e21bed1c24895c8d9fd6bbec49d964ee79bf718613579f79b54c1"
+      "sha256": "be069185259f986e522436e93190ac06903767db7a8722a513e8919b945b3161"
     },
     {
       "source": "docs/playbooks/integration/README.md",

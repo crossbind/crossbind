@@ -7,11 +7,31 @@
 
 #include <netinet/in.h>
 #include <sys/socket.h>
+#include <sys/stat.h>
+#include <unistd.h>
 
 /* Compiled by the C++ driver at the command link; keep C linkage. */
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+/* wasi-libc p2/p3 leaves its output stream at the old offset after SEEK_END. SEEK_SET resets
+   that stream, so resolve the end offset through fstat and perform an absolute seek instead. */
+off_t __real_lseek(int fd, off_t offset, int whence);
+off_t __wrap_lseek(int fd, off_t offset, int whence)
+{
+    if (whence == SEEK_END) {
+        struct stat status;
+        if (fstat(fd, &status) != 0) return (off_t)-1;
+        off_t absolute;
+        if (__builtin_add_overflow(status.st_size, offset, &absolute)) {
+            errno = EOVERFLOW;
+            return (off_t)-1;
+        }
+        return __real_lseek(fd, absolute, SEEK_SET);
+    }
+    return __real_lseek(fd, offset, whence);
+}
 
 /* No dynamic loading on WASI; loaders treat NULL as "plugin unavailable". */
 void *dlopen(const char *file, int mode)

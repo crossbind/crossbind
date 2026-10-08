@@ -1,4 +1,5 @@
 import fs from 'node:fs';
+import { writeNativeSourceStamp } from '../utils/nativeSourceStamp.js';
 import { fileURLToPath } from 'node:url';
 import run from './run.js';
 import getLinkInputs from './getLinkInputs.js';
@@ -333,5 +334,6 @@ export default async function buildWasm(target, options = {}) {
     }
 
     fs.writeFileSync(linkFingerprintFile, linkFingerprint);
+    writeNativeSourceStamp(`${state.config.paths.build}/${target.jsName}`, state.config.paths.native);
     return true;
 }

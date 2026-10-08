@@ -21,7 +21,7 @@ try {
         { cwd, encoding: 'utf8', timeout: 60000 },
     );
     process.stdout.write(out);
-    const expectations = ['argv[1]=merhaba', 'fs roundtrip: PASS', 'exceptions: PASS'];
+    const expectations = ['argv[1]=merhaba', 'fs roundtrip: PASS', 'seek roundtrip: PASS', 'exceptions: PASS'];
     for (const marker of expectations) {
         if (!out.includes(marker)) {
             console.error(`FAIL: missing "${marker}"`);

@@ -6,12 +6,13 @@ import { getContentHash } from './hash.js';
 // version, with provenance and licence metadata already claiming the new one.
 export const SOURCE_FINGERPRINT_FILE = 'crossbind-source.fingerprint';
 
-export function getSourceFingerprint(config) {
+export function getSourceFingerprint(config, target) {
     const nativeVersion = config?.package?.nativeVersion || null;
     const sha256 = config?.build?.sha256 || null;
-    // Packages that build from local sources pin neither; they keep the existence-only behaviour.
+    // Local-source packages pin neither; buildLib checks their native source inventory instead.
     if (!nativeVersion && !sha256) return null;
-    return getContentHash(JSON.stringify({ nativeVersion, sha256 }));
+    const sourceReplacements = target ? config?.build?.sourceReplaceList?.(target, config.allDependencyPaths?.[target.path] ?? {}) : undefined;
+    return getContentHash(JSON.stringify({ nativeVersion, sha256, ...(sourceReplacements?.length ? { sourceReplacements } : {}) }));
 }
 
 export function isSourceFingerprintStale(libdir, fingerprint) {

@@ -18,15 +18,16 @@ Raw pointers bind. What the generator cannot turn into an object crosses as a `N
 | C++ | JS |
 |---|---|
 | `const char *` parameter | `string`, a handle, or `null` |
-| `const char *` return or callback argument | `string` or `null` |
+| `const char *` return or callback argument without a following integer | `string` or `null` |
+| `const char *` callback argument immediately followed by an integer | handle or `null`; read with `readBuffer(pointer, length)` |
 | `char *`, `unsigned char *`, `void *`, `T **`, pointers to numbers, enums or types the bridge does not know | handle |
 | `T *` returning a class the bridge knows | instance |
 | `T *` parameter of a struct the imported header defines, `extern "C"` or not | instance |
 | `T *` parameter of a struct the bridge only sees declared (`sqlite3`, `PJ`) | handle |
 | `T *` field of a struct | reads as an instance when `T` is a struct the same header binds, otherwise as a handle; takes either, or `null` |
 | `int &`, `double &`, `std::string &` out-parameters | handle from `allocPointer` / `allocString`, read back afterwards |
-| function pointer parameter | a JS function, or a handle another binding returned |
-| pointer argument inside a callback | always a handle |
+| function pointer parameter or field | a JS function, a handle another binding returned, or `null`; a field reads as a handle |
+| other pointer argument inside a callback | always a handle |
 
 Every module that binds a pointer also exports the helpers: `cstring(text)` and `readCString(handle)`, `allocBuffer(bytes)`, `allocPointer(count)` (both zero-filled), `allocString(text)` and `readString(handle)`, `readNumberAt(handle, index, kind)` / `writeNumberAt(handle, index, kind, value)` with kinds `int8` … `uint64`, `float32`, `float64`, `readPointerAt` / `writePointerAt`, `readBytes(handle, length)` / `writeBytes(handle, u16string)` with one byte per character, `readBuffer(handle, length)` returning a `Uint8Array` copy / `writeBuffer(handle, bytes)` copying any `ArrayBuffer` or view of one (a `Uint8Array`, a Node `Buffer`), and `releaseCallback(fn)` to free a callback slot.
 
@@ -50,6 +51,8 @@ const bytes = readBuffer(out, encode(out, 1024)); // Uint8Array
 Only the const form converts: C APIs copy a `const char *` input, while a `char *` result is memory the library handed over, so it stays a handle you read and free explicitly. On worker-backed browser builds handles and instances are proxies, `instanceof NativePointer` holds only on direct runtimes, and JS functions cannot cross into a worker.
 
 A string passed for a `const char *` is a copy that lives for the call. When C keeps the pointer afterwards (`sqlite3_bind_text` with `SQLITE_STATIC`), pass a `cstring` handle and keep it until C is done with it, or let C take its own copy (`SQLITE_TRANSIENT`).
+
+A callback's `const char *` followed by an integer may describe bytes with embedded NULs or no terminator. It stays a handle, so Expat's character-data handler can read exactly `readBuffer(text, length)`. If that integer is a status rather than a length and the library guarantees a terminated string, use `readCString(text)`. Read the data while the callback runs; the handle does not keep the library's buffer alive.
 
 Integer and enum parameters take numbers. An enum parameter also takes a member (`await Mode.Fast`), an integer parameter takes an enum member as its value, and a `char` parameter takes a one-character string as its code; anything else throws a `TypeError` instead of crossing as 0. A 64-bit integer (`int64_t`, `long long`, and on React Native also `long` and `size_t`) crosses as a BigInt and takes a BigInt or a safe-integer Number; on wasm32 `long` and `size_t` are 32-bit Numbers.
 
@@ -108,8 +111,10 @@ Private members are fine — they just won't appear in JS. Don't try to hide eve
 > owns nothing: deleting it leaves the library's memory alone. The field takes a handle,
 > `null` or such an instance, so `stream.next_in = input` points zlib at an `allocBuffer`
 > block; C keeps only the address, so keep that handle while the library uses it. On worker
-> runtimes a field write reaches the worker ahead of the calls made after it. Function-pointer
-> fields, arrays and struct fields are not bound.
+> runtimes a field write reaches the worker ahead of the calls made after it. A function-pointer
+> field, directly declared or through a typedef, reads as a handle and takes a C function handle,
+> a JavaScript function on direct runtimes, or `null`. Clear a retained JavaScript callback from
+> the field before calling `releaseCallback(fn)`. Arrays and struct fields are not bound.
 
 ### 4. Inheritance + virtual works; multiple inheritance doesn't
 
@@ -191,7 +196,8 @@ import { GDALAllRegister, GDALOpenEx, GDALClose } from '@crossbind/port-gdal/gda
 - A header bound only for the types another one uses (`cpl_error.h` for the `CPLErr` of `gdal.h`) registers its classes and enums but none of its functions.
 - A Vite or webpack/Rspack dev server binds a newly imported function when the file is saved, and Rollup's watch mode on its next rebuild. Metro binds it when the file is saved too, but the running app gets it only from its next native build (React Native) or a page reload (Expo web), with Metro left running; until then a call fails with `crossbind: compressBound is not bound in the native module`.
 - A Node.js app binds it on its next `crossbind build`, which `node --import crossbind/node/dev` runs before the app starts once its imports changed; until then Node stops at the import with `does not provide an export named 'compressBound'`.
-- The build warns when something imports a header that no source of the app imports a name from, such as a package in `node_modules`: the app has to import the functions it calls.
+- The scan reads JavaScript, TypeScript, Vue, Svelte, HTML scripts, Astro and MDX sources, including nested source folders named `build`, `ios` or `android`. It also follows imports and re-exports through the app's declared dependencies, including their import and browser entry points; it does not scan unrelated installed packages. Root build outputs stay excluded.
+- The build warns when a header has no name requested by those sources. An import constructed dynamically from variables cannot be discovered by the scan; import its required functions explicitly or bind the header whole.
 
 ## Wrapper pattern
 

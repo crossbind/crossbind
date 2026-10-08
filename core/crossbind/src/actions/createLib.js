@@ -14,6 +14,7 @@ import { getFilesFingerprint, getContentHash } from '../utils/hash.js';
 import { withDependencyBridges } from '../utils/dependencyBridges.js';
 import { targetArchiveFlags } from '../utils/archiveFlags.js';
 import { conanInputsOf } from '../utils/conanDependencies.js';
+import { nativeSourceStampChanged, writeNativeSourceStamp } from '../utils/nativeSourceStamp.js';
 
 const cpuCount = Math.max(1, os.cpus().length - 1);
 const sharedPlatforms = ['android'];
@@ -31,6 +32,11 @@ export default function createLib(target, fileType, options = {}) {
     const platformPrefix = `${fileType ? `${fileType}-` : ''}${buildType}`;
     const libdir = `${state.config.paths.build}/${platformPrefix}/prebuilt/${target.path}`;
     const buildPath = `${state.config.paths.build}/${platformPrefix}/${target.path}`;
+    const sourceDirs = options.buildSource ? state.config.paths.native : [];
+    const sourcesChanged = nativeSourceStampChanged(`${libdir}/lib`, sourceDirs);
+    // Automatically loaded cargo packages have no CMake dependency paths.
+    const depPaths = state.config.allDependencyPaths?.[target.path];
+    const sourceReplacements = state.config.build?.sourceReplaceList?.(target, depPaths) ?? [];
     // wasi configure tool links need the runtime stubs; compiled below, referenced from LIBS.
     const wasiStubObj = `${buildPath}/crossbind-wasi-stubs.o`;
 
@@ -48,7 +54,8 @@ export default function createLib(target, fileType, options = {}) {
     const compileOptions = getData('cmake', target)?.compileOptions || [];
     const flagsFingerprintFile = `${libdir}/crossbind-emccflags.fingerprint`;
     const conanInputs = conanInputsOf(state.config);
-    const flagsInputs = compileOptions.length ? { emccFlags: configEmccFlags, compileOptions } : configEmccFlags;
+    const compileInputs = compileOptions.length ? { emccFlags: configEmccFlags, compileOptions } : configEmccFlags;
+    const flagsInputs = sourceReplacements.length ? { compileInputs, sourceReplacements } : compileInputs;
     const flagsFingerprint = getContentHash(JSON.stringify(conanInputs ? [flagsInputs, conanInputs] : flagsInputs));
     const flagsChanged = !fs.existsSync(flagsFingerprintFile)
         || fs.readFileSync(flagsFingerprintFile, { encoding: 'utf8' }) !== flagsFingerprint;
@@ -71,7 +78,7 @@ export default function createLib(target, fileType, options = {}) {
         return changed;
     }
 
-    if (!options.force && !fingerprintChanged && !flagsChanged && fs.existsSync(`${libdir}/lib`)) {
+    if (!options.force && !sourcesChanged && !fingerprintChanged && !flagsChanged && fs.existsSync(`${libdir}/lib`)) {
         logger.cachedStep(target, fileType);
         return false;
     }
@@ -85,7 +92,6 @@ export default function createLib(target, fileType, options = {}) {
 
     const buildEnv = { params: [] };
     let buildParams;
-    const depPaths = state.config.allDependencyPaths[target.path];
     if (state.config.build.withBuildConfig) {
         const { getBuildParams, getExtraLibs } = state.config.build;
         buildEnv.console = true;
@@ -125,7 +131,7 @@ export default function createLib(target, fileType, options = {}) {
         buildEnv.params.push('-e', `LDFLAGS=${ldFlags.join(' ')} ${extraLibs.join(' ')}`);
         // Emulation archives must land in LIBS (after the objects), not LDFLAGS.
         const wasiStubLib = state.config.build?.buildType === 'configure' ? `${wasiStubObj} ` : '';
-        const wasiLibs = target.platform === 'wasi' ? ` ${wasiStubLib}${WASI_EMULATION_LIBS.join(' ')}` : '';
+        const wasiLibs = target.platform === 'wasi' ? ` ${wasiStubLib}${WASI_EMULATION_LIBS.join(' ')} -Wl,--wrap=lseek` : '';
         buildEnv.params.push('-e', `LIBS=${dependLibs} ${extraLibs.join(' ')}${wasiLibs}`);
 
         let configBuildEnv = state.config.build.env;
@@ -155,7 +161,17 @@ export default function createLib(target, fileType, options = {}) {
 
     logger.startStep(target, fileType);
     const t0 = performance.now();
-    const cmakeDir = state.config.build.withBuildConfig ? `${state.config.paths.build}/source` : state.config.paths.cmakeDir;
+    let cmakeDir = state.config.build.withBuildConfig ? `${state.config.paths.build}/source` : state.config.paths.cmakeDir;
+    if (state.config.build?.buildType !== 'configure' && sourceReplacements.length) {
+        // Patches belong to a target's copy: a platform-specific change must not alter another target's inputs.
+        const patchedSource = `${buildPath}/crossbind-source`;
+        fs.mkdirSync(buildPath, { recursive: true });
+        fs.cpSync(cmakeDir, patchedSource, { recursive: true, preserveTimestamps: true });
+        sourceReplacements.forEach(({ regex, replacement, paths }) => {
+            replace({ regex, replacement, paths: paths.map((p) => `${patchedSource}/${p}`), recursive: false, silent: true });
+        });
+        cmakeDir = patchedSource;
+    }
 
     if (state.config.build?.beforeRun) {
         const dataList = state.config.build?.beforeRun(cmakeDir);
@@ -185,14 +201,14 @@ export default function createLib(target, fileType, options = {}) {
         return staged;
     };
 
-    if (!options.bypassCmake) {
+    if (!options.bypassCmake || sourcesChanged) {
         if (state.config.build?.buildType === 'configure') {
             // make compares times, so the tree starts afresh with the extracted times: no source then looks newer
             // than what it generates, and no object of an earlier build looks newer than its source.
             fs.rmSync(buildPath, { recursive: true, force: true });
             fs.cpSync(cmakeDir, buildPath, { recursive: true, preserveTimestamps: true });
-            if (state.config.build?.sourceReplaceList) {
-                state.config.build.sourceReplaceList(target, depPaths)?.forEach(({ regex, replacement, paths }) => {
+            if (sourceReplacements.length) {
+                sourceReplacements.forEach(({ regex, replacement, paths }) => {
                     replace({
                         regex, replacement, paths: paths.map((p) => `${buildPath}/${p}`), recursive: false, silent: true,
                     });
@@ -246,6 +262,7 @@ export default function createLib(target, fileType, options = {}) {
         fs.writeFileSync(fingerprintFile, fingerprint);
     }
     fs.writeFileSync(flagsFingerprintFile, flagsFingerprint);
+    writeNativeSourceStamp(`${libdir}/lib`, sourceDirs);
     // Callers can force the final link when a lib actually rebuilt.
     return true;
 }

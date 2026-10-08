@@ -18,6 +18,16 @@ export function callbackChecks({ add, skip }, c, { worker }) {
         }, [true, 5, 5]);
     }
     add('cb:nullFunction', () => c.confCbApply(null, 1, 2), -1);
+    add('cb:nativeFunctionField', async () => {
+        const fields = await new c.ConfCbFields();
+        fields.binary = await c.confCbNative();
+        const result = await c.confCbFieldApply(fields, 2, 3);
+        const copy = await new c.ConfCbFields();
+        copy.binary = await fields.binary;
+        const copied = await c.confCbFieldApply(copy, 4, 5);
+        fields.binary = null;
+        return [result, copied, await c.confCbFieldApply(fields, 1, 2)];
+    }, [5, 9, -1]);
     // Awaited on purpose: a worker proxy hands out a stub for any name, only a GET shows absence.
     add('cb:variadicNotBound', async () => typeof (await c.confCbVariadic), 'undefined');
     rejects('cb:numberRejected', () => c.confCbApply(42, 1, 2), /./);
@@ -26,9 +36,18 @@ export function callbackChecks({ add, skip }, c, { worker }) {
         return;
     }
     add('cb:jsFunction', () => c.confCbApply((a, b) => a * 10 + b, 3, 4), 34);
+    add('cb:jsFunctionFields', async () => {
+        const fields = await new c.ConfCbFields();
+        const binary = (a, b) => a * 10 + b;
+        const unary = (value) => value * 3;
+        fields.binary = binary;
+        fields.unary = unary;
+        try { return [await c.confCbFieldApply(fields, 2, 3), await c.confCbFieldUnary(fields, 4)]; }
+        finally { fields.binary = null; fields.unary = null; c.releaseCallback(binary); c.releaseCallback(unary); }
+    }, [23, 12]);
     add('cb:stringArgument', async () => {
         let got;
-        const doubled = await c.confCbNotify((message, level) => { got = [message, level]; }, 'hi', 2);
+        const doubled = await c.confCbNotify((message, level) => { got = [c.readCString(message), level]; }, 'hi', 2);
         return [got, doubled];
     }, [['hi', 2], 4]);
     add('cb:nullStringArgument', async () => {
@@ -36,6 +55,12 @@ export function callbackChecks({ add, skip }, c, { worker }) {
         await c.confCbNotify((message) => { got = message; }, null, 1);
         return got;
     }, null);
+    add('cb:byteSpan', async () => {
+        let bytes;
+        const fn = (pointer, length) => { bytes = Array.from(c.readBuffer(pointer, length)); };
+        try { await c.confCbBytes(fn); return bytes; }
+        finally { c.releaseCallback(fn); }
+    }, [65, 0, 66]);
     add('cb:doubleRoundTrip', () => c.confCbScaleTwice((v) => v * 2, 1.5), 6);
     // A pointer argument reaches the JS function as a handle: read it through the helpers.
     add('cb:pointerArgument', async () => {

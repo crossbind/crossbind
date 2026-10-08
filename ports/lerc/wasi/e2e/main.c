@@ -12,6 +12,18 @@ int main(void)
     if (lerc_decode(blob, written, 0, NULL, 1, 8, 8, 1, 6, back) != 0) return 2;
     if (memcmp(data, back, sizeof data) != 0) return 3;
     printf("Lerc: PASS (8x8 float lossless roundtrip, %u B blob)\n", written);
+
+    // Exercise Huffman-coded float planes, including the trailing decoder read-ahead word.
+    static float raster[64 * 64], decoded[64 * 64];
+    for (int i = 0; i < 64 * 64; ++i) raster[i] = (float)((i % 97) * 0.125 + (i / 97) * 0.0001);
+    static unsigned char first[32768], second[32768];
+    unsigned int n1 = 0, n2 = 0;
+    if (lerc_encode(raster, 6, 1, 64, 64, 1, 0, NULL, 0, first, sizeof first, &n1) != 0) return 4;
+    if (lerc_encode(raster, 6, 1, 64, 64, 1, 0, NULL, 0, second, sizeof second, &n2) != 0) return 5;
+    if (n1 != n2 || memcmp(first, second, n1) != 0) return 6;
+    if (lerc_decode(first, n1, 0, NULL, 1, 64, 64, 1, 6, decoded) != 0) return 7;
+    if (memcmp(raster, decoded, sizeof raster) != 0) return 8;
+    printf("Lerc: PASS (deterministic 64x64 float lossless roundtrip, %u B blob)\n", n1);
     return 0;
 }
 

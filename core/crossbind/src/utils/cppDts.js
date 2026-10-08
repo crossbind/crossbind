@@ -265,9 +265,9 @@ export function writeHeaderDts({ headerFile, exportsFile, projectPath, cacheDir,
 
 // A conan: specifier names no file the editor could map, so it is typed by an ambient module that
 // @crossbind/typescript-config includes. `declare` is an error inside one (TS1038).
-export function writeConanImportDts({ headerFile, exportsFile, cacheDir, dtsMode = 'sync', log = () => {} }) {
+export function writeConanImportDts({ headerFile, exportsFile, declarationsFile = exportsFile, cacheDir, dtsMode = 'sync', log = () => {} }) {
     const conanImport = conanImportOfHeader(headerFile, cacheDir);
-    const exportNames = conanImport && readExportNames(exportsFile, log);
+    const exportNames = conanImport && readExportNames(declarationsFile, log);
     if (!exportNames) return;
     const body = declarationsOf(headerFile, exportNames, dtsMode, log)
         .replaceAll('export declare ', 'export ')

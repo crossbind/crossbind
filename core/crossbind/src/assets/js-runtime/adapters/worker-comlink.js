@@ -298,6 +298,13 @@ async function initWithWorker(config, userConfig) {
 // that names nothing: the failed call asks for the member, and names it when the module has none.
 function namedCall(member, name, module) {
     return new Proxy(member, {
+        // A member still needs Comlink's then to read its value (including an absent export).
+        get(target, prop) {
+            // Console formatters inspect function names and constructors synchronously.
+            if (prop === 'name') return name;
+            if (prop === 'constructor') return Function;
+            return prop !== 'then' && Object.hasOwn(LOCAL_MEMBERS, prop) ? LOCAL_MEMBERS[prop] : target[prop];
+        },
         apply: (call, thisArg, args) => Reflect.apply(call, thisArg, args).catch(async (error) => {
             const isBound = await Promise.resolve(module[name]).then((value) => value !== undefined, () => true);
             if (isBound) throw error;
@@ -309,6 +316,8 @@ function namedCall(member, name, module) {
 export function moduleOnMainThread(module) {
     return new Proxy(module, {
         get(target, prop) {
+            if (Object.hasOwn(LOCAL_MEMBERS, prop)) return LOCAL_MEMBERS[prop];
+            if (prop === 'constructor') return Object;
             if (prop === 'toArray') {
                 return function toArray(vector) {
                     if (Array.isArray(vector)) return vector;

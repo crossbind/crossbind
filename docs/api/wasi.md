@@ -41,6 +41,7 @@ archives are dead-code-eliminated down to what `main` reaches, and the
 
 - Compile (C and C++): `--target=wasm32-wasip3 -D_WASI_EMULATED_SIGNAL -D_WASI_EMULATED_PROCESS_CLOCKS -D_WASI_EMULATED_MMAN -D_WASI_EMULATED_GETPID -mexception-handling -mllvm -wasm-enable-sjlj -mllvm -wasm-use-legacy-eh=false` (+ `-fwasm-exceptions` for C++). The explicit `--target` matters: the sdk's clang still defaults to wasip1. The `-mexception-handling` target feature is what unlocks wasi-libc's `setjmp.h`; engines only run the standard EH format, hence the legacy toggle.
 - Link (after every archive — order matters): `-lunwind -lsetjmp -lwasi-emulated-*`, plus `assets/wasi-runtime/stubs.c` (clean-failing `dlopen` family, no-op `pthread_atfork`).
+- `-Wl,--wrap=lseek` routes `SEEK_END` through `fstat` and an absolute `SEEK_SET`. This keeps subsequent writes at the returned position with wasi-sdk 34's p3 libc, including negative end-relative offsets.
 - Extra flags per target: `targetSpecs[].specs.binary.wasiFlags`.
 
 ## Prebuilt packages

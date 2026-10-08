@@ -109,6 +109,11 @@ function functionRequests(functions) {
     return `%rename($ignore, %$isfunction, %$isglobal) "";\n${names.map((name) => `%rename("%s") ${name};\n`).join('')}\n`;
 }
 
+// Editor declarations need the whole header even when the compiled bridge selects functions by import.
+export function interfaceWithAllFunctions(content) {
+    return content.replace(/%rename\(\$ignore, %\$isfunction, %\$isglobal\) "";\n(?:%rename\("%s"\) [A-Za-z_]\w*;\n)*\n/g, '');
+}
+
 export function withoutSwigMacros(content) {
     return content.replace(/(%feature\("polymorphic_shared_ptr"\);\n\n)(?:#define [^\n]*\n)+\n/, '$1');
 }

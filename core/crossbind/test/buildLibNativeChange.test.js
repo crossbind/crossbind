@@ -6,6 +6,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import upath from 'upath';
+import { writeNativeSourceStamp } from '../src/utils/nativeSourceStamp.js';
 
 const TARGET = {
     path: 'wasm-wasm32-st-release', releasePath: 'wasm-wasm32-st-release', platform: 'wasm', buildType: 'release',
@@ -62,9 +63,21 @@ describe('buildLib and the project\'s own native sources', () => {
 
     test('serves the built library while every native source is older', () => {
         age(header(), 60);
+        writeNativeSourceStamp(path.dirname(lib()), holder.config.paths.native);
 
         buildLib({}, { skipXcframework: true });
 
+        expect(createLib).not.toHaveBeenCalled();
+    });
+
+    test('rebuilds after removing a native source, and caches the new inventory', () => {
+        writeNativeSourceStamp(path.dirname(lib()), holder.config.paths.native);
+        fs.unlinkSync(header());
+
+        buildLib({}, { skipXcframework: true });
+        expect(createLib).toHaveBeenCalledWith(TARGET, 'Source', expect.objectContaining({ force: true }));
+        createLib.mockClear();
+        buildLib({}, { skipXcframework: true });
         expect(createLib).not.toHaveBeenCalled();
     });
 });

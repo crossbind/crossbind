@@ -33,6 +33,7 @@ export const WASI_LINK_LIBS = [
     '-lunwind',
     '-lsetjmp',
     ...WASI_EMULATION_LIBS,
+    '-Wl,--wrap=lseek',
 ];
 
 export function wasiCFlags() {

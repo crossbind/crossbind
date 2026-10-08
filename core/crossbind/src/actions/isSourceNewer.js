@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import p from 'node:path';
 import state from '../state/index.js';
+import { nativeSourceStampChanged } from '../utils/nativeSourceStamp.js';
 
 function newestMtimeInDir(dir) {
     let newest = 0;
@@ -22,6 +23,7 @@ function newestMtimeInDir(dir) {
 // (bundler plugins: the built js) or a directory (CLI lib cache: the staged prebuilt dir).
 export function isNativeSourceNewerThan(artifactPath) {
     if (!fs.existsSync(artifactPath)) return false;
+    if (nativeSourceStampChanged(artifactPath, state.config.paths.native)) return true;
     const stat = fs.statSync(artifactPath);
     const artifactMtime = stat.isDirectory() ? newestMtimeInDir(artifactPath) : stat.mtimeMs;
     for (const dir of state.config.paths.native) {
