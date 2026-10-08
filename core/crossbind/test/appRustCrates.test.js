@@ -90,6 +90,25 @@ describe('buildAppRustCrates', () => {
         expect(args).toContain(TRIPLE);
     });
 
+    test('pins every bridge that has a keep symbol from its own, each built as one object', async () => {
+        addCrate('counter');
+        fs.appendFileSync(path.join(cacheDir, 'rust-bridges/counter/src/lib.rs'), '#[no_mangle]\npub extern "C" fn crossbind_keep_counter_crossbind_app() {}\n');
+        addCrate('older');
+        const { buildAppRustCrates, spawnSync } = await importFresh();
+        spawnSync.mockImplementation(() => { fakeCargoOutput(); return { status: 0 }; });
+
+        buildAppRustCrates(WASM, cacheDir);
+
+        const superDir = path.join(cacheDir, 'rust-bridges/_app_super');
+        const manifest = fs.readFileSync(path.join(superDir, 'Cargo.toml'), 'utf8');
+        const lib = fs.readFileSync(path.join(superDir, 'src/lib.rs'), 'utf8');
+        expect(manifest).toContain('[profile.release.package.counter-crossbind-app]\ncodegen-units = 1');
+        expect(manifest).toContain('[profile.release.package.older-crossbind-app]\ncodegen-units = 1');
+        expect(lib).toContain('pub extern "C" fn crossbind_keep_crossbind_app_super() {');
+        expect(lib).toContain('let keep: [extern "C" fn(); 1] = [counter_crossbind_app::crossbind_keep_counter_crossbind_app];');
+        expect(lib).not.toContain('older_crossbind_app::crossbind_keep');
+    });
+
     test('rejects platforms rust cannot target', async () => {
         addCrate('counter');
         const { buildAppRustCrates } = await importFresh();

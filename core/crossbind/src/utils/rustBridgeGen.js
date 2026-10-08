@@ -179,6 +179,10 @@ function matchFnSignature(line) {
     return [line, head[1], params, ret];
 }
 
+// What a lazy link pins to pull a bridge's registrations: the consumer's -u names `crossbind_keep_<lib>`.
+export const keepSymbolName = (libName) => `crossbind_keep_${libName}`;
+const keepSymbol = (libName) => `\n#[no_mangle]\npub extern "C" fn ${keepSymbolName(libName)}() {}\n`;
+
 export default function generateRustBridge({ crateDir, vectors = [], dtsFile = null, keepName = null, dtsMode = 'sync', log = console.log }) {
     const libRsPath = `${crateDir}/src/lib.rs`;
     if (!fs.existsSync(libRsPath)) throw new Error(`crossbind: rust bridge: ${libRsPath} not found`);
@@ -192,7 +196,7 @@ export default function generateRustBridge({ crateDir, vectors = [], dtsFile = n
     // own libstd, and fully loading two of them duplicates thousands of std symbols). Instead the
     // consumer pins this keep symbol (-u/--undefined); codegen-units=1 puts it in the same object
     // as the init-array constructor, so pulling it pulls the registrations - and only them.
-    if (keepName) bridge += `\n#[no_mangle]\npub extern "C" fn crossbind_keep_${keepName}() {}\n`;
+    if (keepName) bridge += keepSymbol(keepName);
     if (dtsFile) writeIfChanged(dtsFile, emitDts(model, vectors, dtsMode));
 
     const bridgeDir = `${crateDir}/.crossbind/bridge-crate`;
@@ -234,7 +238,8 @@ export default function generateRustBridge({ crateDir, vectors = [], dtsFile = n
 // crate: the user file is embedded via `#[path] mod user;` (no copy) and the bridge lives in the
 // same crate, so registrations reference `user::Type` directly. The bundler transformer calls
 // this on import (like createBridgeFile for C++); the native builds compile every crate under
-// <project>/.crossbind/rust-bridges/ and link the staticlibs whole-archive.
+// <project>/.crossbind/rust-bridges/ into one staticlib and link it whole-archive, or on Windows
+// through the keep symbol each bridge exports.
 export function createRustBridgeCrate({ rsFile, cacheDir, projectPath, vectors = [], cargoDependencies = {}, dtsMode = 'sync', log = console.log }) {
     const stem = path.basename(rsFile, '.rs').replace(/[^a-zA-Z0-9_]/g, '_').toLowerCase();
     const dir = `${cacheDir}/rust-bridges/${stem}`;
@@ -280,7 +285,7 @@ export function createRustBridgeCrate({ rsFile, cacheDir, projectPath, vectors =
     ].join('\n');
 
     writeIfChanged(`${dir}/Cargo.toml`, manifest);
-    writeIfChanged(`${dir}/src/lib.rs`, bridge);
+    writeIfChanged(`${dir}/src/lib.rs`, bridge + keepSymbol(`${stem}_crossbind_app`));
     // Relative `./x.rs` imports are typed by path resolution (ambient declarations only work
     // for non-relative names like `cargo:x`), so the declaration mirrors the project-relative
     // path under the language-neutral <cache>/types/ overlay (same home as .h declarations);
@@ -367,7 +372,7 @@ export function createCrateImportBridge({ crateName, modulePath = [], spec, cach
     writeIfChanged(`${dir}/Cargo.toml`, manifestWith(shared.model.usesJson ? jsonDeps : []));
     writeIfChanged(`${dir}/src/lib.rs`, emitBridge(shared.model, {
         userCrate: crateIdent, vectors: [], log, rustPaths: shared.rustPaths, wireNames: shared.wireNames,
-    }));
+    }) + keepSymbol(`${stem}_crossbind_app`));
     for (const { modulePath: importPath } of imports) {
         writeImportDts({ cacheDir, crateName, modulePath: importPath, shared, dtsMode });
     }

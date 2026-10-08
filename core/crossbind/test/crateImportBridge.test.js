@@ -82,6 +82,7 @@ describe('createCrateImportBridge', () => {
         expect(bridgeDir).toBe(`${cacheDir}/rust-bridges/crate_fixture`);
         expect(exports).toEqual([{ local: 'rootValue', wire: 'fixture_rootValue' }]);
         expect(fs.readFileSync(`${bridgeDir}/src/lib.rs`, 'utf8')).toContain('fixture::root_value(');
+        expect(fs.readFileSync(`${bridgeDir}/src/lib.rs`, 'utf8')).toContain('pub extern "C" fn crossbind_keep_crate_fixture_crossbind_app() {}');
         expect(fs.readFileSync(`${bridgeDir}/Cargo.toml`, 'utf8')).not.toContain('[lints.rust]');
         expect(fs.readFileSync(`${cacheDir}/rust-crates/types/fixture.d.ts`, 'utf8')).toContain("declare module 'cargo:fixture'");
     });

@@ -92,7 +92,8 @@ On import the toolchain synthesizes a self-contained bridge crate under
 `<project>/.crossbind/rust-bridges/<name>/` (the user file is embedded via `#[path] mod user;` -
 no copy) plus a `counter.rs.d.ts` next to the source for full editor typing. The native builds
 bundle every app-local surface into ONE super staticlib (`rust-bridges/_app_super`) and link it
-into the app lib (iOS: merged into the force_loaded react-native-crossbind.a; Android: whole-archive).
+into the app lib (iOS: merged into the force_loaded react-native-crossbind.a; Android and Node.js
+addons: whole-archive, on Windows through its keep symbol).
 
 App-local surfaces can use UPSTREAM crates directly - the C++-style model where the app writes
 its own thin surface over a linked library and no crossbind package is involved. Declare the crates
@@ -165,7 +166,10 @@ constructor share one object), and is linked lazily with that symbol pinned
 (iOS `-Wl,-u,_crossbind_keep_<lib>`, Android `-Wl,--undefined=crossbind_keep_<lib>`) - the registration
 object is pulled, libstd stays lazy and deduplicates. Manual-bindings crates (no keep symbol)
 still fall back to force_load/whole-archive and are therefore safe only as the app's single
-Rust archive.
+Rust archive. On Windows the super staticlib links lazily too: two crates in it may import one
+DLL through raw-dylib (std and getrandom both import `ProcessPrng`), and lld cannot load the
+repeated import tables whole. There the link pins `crossbind_keep_crossbind_app_super()`, which
+reaches the keep symbol each app bridge exports; the super builds every bridge as one object.
 
 Web specifics: wasm-ld's `-u` does NOT pull archive members, so the wasm link pins keep symbols
 with `-Wl,--export=crossbind_keep_<lib>` instead; and any Rust archive in the link makes `buildWasm`

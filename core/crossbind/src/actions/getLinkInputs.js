@@ -39,8 +39,14 @@ export default function getLinkInputs(target, { keepFlag, withBridge = true }) {
     // with their keep symbol pinned (keepFlag pulls just the registration object); manual-bindings
     // crates have no keep symbol and fall back to whole-archive - safe only while they are the
     // single loaded Rust archive.
+    // A COFF link cannot load the super whole either: two crates in it may import one DLL through raw-dylib (std
+    // and getrandom both take ProcessPrng from bcryptprimitives.dll), and lld fails on the repeated import tables.
+    // There it links like a package bridge, through its keep symbol.
     const rustKeepFlags = [];
-    if (appRustLibs.length > 0) wholeArchiveNames.add('crossbind_app_super');
+    if (appRustLibs.length > 0) {
+        if (target.platform === 'win32') rustKeepFlags.push(keepFlag('crossbind_app_super'));
+        else wholeArchiveNames.add('crossbind_app_super');
+    }
     const depends = state.config.dependencyParameters.getCmakeDepends(target);
     depends.forEach((dep) => {
         if (dep.export.wholeArchive === true) {
