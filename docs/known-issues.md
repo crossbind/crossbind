@@ -11,9 +11,9 @@ Fixing something here is not a prerequisite for anything else; this is a list, n
 ## Most e2e fixtures never run in CI
 
 The CI e2e legs run the `@crossbind/example-*` apps, the `port-zlib-wasi` and `port-zlib-linux`
-e2e, and three of the thirteen `@crossbind/e2e-*` fixtures: `e2e-cli-native`,
+e2e, and three of the fourteen `@crossbind/e2e-*` fixtures: `e2e-cli-native`,
 `e2e-backend-nodejs-native-conan` and `e2e-backend-nodejs-native`, the last one's conformance suite
-on Linux and Windows only. The other ten are not built or run — the React Native one
+on Linux and Windows only. The other eleven are not built or run — the React Native one
 included — so the conformance suites they carry never run either; besides the root `pnpm install`,
 CI touches only `e2e-web-vanilla`, where `test-core.yml` runs `crossbind licenses --check`. Eight of
 them depend on twelve or more ports while CI builds only zlib, and adding them was measured and
