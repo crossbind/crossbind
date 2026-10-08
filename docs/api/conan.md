@@ -187,6 +187,10 @@ Each `conan:` import is typed by an ambient module, `declare module 'conan:zlib/
 `.crossbind/conan/types/`, which `@crossbind/typescript-config` includes (see
 [`lifecycle-and-types.md`](./lifecycle-and-types.md)).
 
+The declarations list every bindable function in the header, even before the app imports it.
+Only the requested functions enter the compiled bridge; generating the editor's full catalog
+does not add them to the runtime binary. Package `ignoredDeclarations` still apply.
+
 ## Licenses
 
 `crossbind licenses` lists every Conan package of the build with the license its recipe declares

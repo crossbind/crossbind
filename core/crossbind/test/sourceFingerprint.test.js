@@ -42,6 +42,14 @@ describe('getSourceFingerprint', () => {
         const after = getSourceFingerprint(configFor('4.0.2', 'b'.repeat(64)));
         expect(before).not.toBe(after);
     });
+
+    test('invalidates an upstream archive when a target source patch changes', () => {
+        const config = configFor('4.2.0', 'a'.repeat(64));
+        const target = { path: 'wasm', platform: 'wasm' };
+        const before = getSourceFingerprint(config, target);
+        config.build.sourceReplaceList = () => [{ regex: 'malloc', replacement: 'calloc', paths: ['codec.cpp'] }];
+        expect(getSourceFingerprint(config, target)).not.toBe(before);
+    });
 });
 
 describe('isSourceFingerprintStale', () => {
@@ -62,7 +70,7 @@ describe('isSourceFingerprintStale', () => {
         expect(isSourceFingerprintStale(libdir, current)).toBe(true);
     });
 
-    test('leaves local-source packages on the existence-only behaviour', () => {
+    test('leaves local-source invalidation to the native source inventory', () => {
         expect(isSourceFingerprintStale(libdir, null)).toBe(false);
     });
 });

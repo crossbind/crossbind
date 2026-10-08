@@ -3,7 +3,7 @@
 
 // C function pointers take a JS function (or a native function pointer handed back as a handle),
 // keep it in a slot until releaseCallback, and pass their arguments by the same rules as direct
-// calls: const char* as a string, numbers as numbers, pointers as handles.
+// calls: NUL-terminated const char* as a string, byte spans and other pointers as handles.
 
 struct ConfCbPair {
     int left;
@@ -14,6 +14,11 @@ typedef int (*ConfCbBinary)(int a, int b);
 typedef void (*ConfCbNotify)(const char *message, int level);
 typedef double (*ConfCbScale)(double value);
 typedef int (*ConfCbPairFn)(const ConfCbPair *pair);
+
+struct ConfCbFields {
+    ConfCbBinary binary;
+    int (*unary)(int value);
+};
 
 extern "C" {
 inline int confCbPairSum(const ConfCbPair *pair) { return pair ? pair->left * 10 + pair->right : -1; }
@@ -31,6 +36,16 @@ inline int confCbWithPair(ConfCbPairFn fn, int left, int right) {
 }
 inline int confCbAdd(int a, int b) { return a + b; }
 inline ConfCbBinary confCbNative() { return &confCbAdd; }
+inline int confCbFieldApply(const ConfCbFields *fields, int a, int b) {
+    return fields && fields->binary ? fields->binary(a, b) : -1;
+}
+inline int confCbFieldUnary(const ConfCbFields *fields, int value) {
+    return fields && fields->unary ? fields->unary(value) : -1;
+}
+inline void confCbBytes(ConfCbNotify fn) {
+    const char bytes[3] = {'A', '\0', 'B'};
+    if (fn) fn(bytes, 3);
+}
 
 #ifndef SWIG
 inline ConfCbBinary &confCbSlot() {

@@ -4,6 +4,7 @@ import {
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { writeNativeSourceStamp } from '../src/utils/nativeSourceStamp.js';
 
 // state resolves the project config at import time; feed paths through a holder instead.
 const holder = { native: [], build: '' };
@@ -56,7 +57,28 @@ describe('isSourceNewer', () => {
         const { isSourceNewer } = await importFresh();
         writeAt(path.join(work, 'native/a.cpp'), OLD);
         writeAt(path.join(work, 'build/out.js'), NEW);
+        writeNativeSourceStamp(path.join(work, 'build/out.js'), holder.native);
         expect(isSourceNewer({ jsName: 'out.js' })).toBe(false);
+    });
+
+    test('rebuilds after a source is deleted, even though the remaining files are older', async () => {
+        const { isSourceNewer } = await importFresh();
+        const source = path.join(work, 'native/removed.cpp');
+        const artifact = path.join(work, 'build/out.js');
+        writeAt(source, OLD);
+        writeAt(artifact, NEW);
+        writeNativeSourceStamp(artifact, holder.native);
+        fs.unlinkSync(source);
+
+        expect(isSourceNewer({ jsName: 'out.js' })).toBe(true);
+    });
+
+    test('rebuilds once when an older build has no source inventory', async () => {
+        const { isSourceNewer } = await importFresh();
+        writeAt(path.join(work, 'native/a.cpp'), OLD);
+        writeAt(path.join(work, 'build/out.js'), NEW);
+
+        expect(isSourceNewer({ jsName: 'out.js' })).toBe(true);
     });
 });
 
@@ -74,6 +96,7 @@ describe('isNativeSourceNewerThan (directory artifact)', () => {
         const libDir = path.join(work, 'dist/prebuilt/wasm/lib');
         writeAt(path.join(work, 'native/a.cpp'), OLD);
         writeAt(path.join(libDir, 'libx.a'), NEW);
+        writeNativeSourceStamp(libDir, holder.native);
         expect(isNativeSourceNewerThan(libDir)).toBe(false);
     });
 

@@ -44,6 +44,17 @@ describe('editor types of a conan: import', () => {
         expect(fs.existsSync(upath.join(cacheDir(), 'types'))).toBe(false);
     });
 
+    test('offers unimported functions from the full declaration catalog', () => {
+        const declarationsFile = upath.join(project, 'zlib.declarations.json');
+        fs.writeFileSync(writeOptions().exportsFile, JSON.stringify(['zlibVersion']));
+        fs.writeFileSync(declarationsFile, JSON.stringify(['zlibVersion', 'compressBound']));
+
+        writeConanImportDts({ ...writeOptions(), declarationsFile });
+
+        const dts = fs.readFileSync(upath.join(cacheDir(), 'conan/types/zlib/zlib.h.d.ts'), 'utf8');
+        expect(dts).toContain('export const compressBound: any;');
+    });
+
     test('a header that is not staged by Conan gets no ambient module', () => {
         const header = upath.join(project, 'src', 'native', 'zlib.h');
         fs.mkdirSync(path.dirname(header), { recursive: true });

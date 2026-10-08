@@ -1,8 +1,16 @@
 import { describe, test, expect, beforeEach, afterEach } from 'vitest';
+import { createRequire } from 'node:module';
 import * as Comlink from 'comlink';
 import {
     adoptModule, moduleOnMainThread, moduleRoot, setCoercionModule,
 } from '../src/assets/js-runtime/adapters/worker-comlink.js';
+
+// Exercise the console formatter's actual function-name and constructor inspection, as Expo does.
+const require = createRequire(import.meta.url);
+const formatterRequire = createRequire(require.resolve('vitest/package.json'));
+let format;
+try { ({ format } = formatterRequire('@vitest/pretty-format')); }
+catch { ({ format } = formatterRequire('pretty-format')); }
 
 function Box() {
     this.width = 1;
@@ -50,6 +58,23 @@ const arrivals = {
 };
 
 describe('a worker handle', () => {
+    test('the module and its classes can be logged or coerced without remote calls', async () => {
+        const module = moduleOnMainThread(remote);
+        moduleMessages.length = 0;
+
+        expect(String(module)).toBe('[object Object]');
+        expect(JSON.stringify(module)).toBe('{}');
+        expect(String(module.Box)).toBe('[object Object]');
+        expect(JSON.stringify(module.Box)).toBe('{}');
+        expect(module.constructor.name).toBe('Object');
+        expect(module.Box.name).toBe('Box');
+        expect(module.Box.constructor.name).toBe('Function');
+        expect(format(module)).toContain('[Function');
+        expect(format(module.Box)).toBe('[Function Box]');
+        expect(moduleMessages).toEqual([]);
+        const box = await new module.Box();
+        expect(await box.area()).toBe(4);
+    });
     test.each(Object.keys(arrivals))('%s converts to JSON and to a string as a direct-mode object does', async (arrival) => {
         const handle = await arrivals[arrival]();
 

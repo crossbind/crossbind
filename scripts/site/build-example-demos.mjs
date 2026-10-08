@@ -18,8 +18,8 @@ export const DEMOS_ROOT = path.join(REPOSITORY_ROOT, 'landing', 'public', 'examp
 export const MANIFEST_NAME = 'demos.json';
 
 // The web templates and how each one hosts under /examples/<id>/. `vite` builds with --base and
-// `rspack` already emits relative asset URLs; both get the two patches the generated loader needs
-// (its script import and its worker/wasm path are root-absolute). `vanilla` loads everything
+// `rspack` already emits relative asset URLs. Older releases need a compatibility patch for
+// root-absolute loader URLs; current plugins respect the base. `vanilla` loads everything
 // relative to its own index.html.
 export const DEMOS = [
     { id: 'web-react-vite', args: ['Web', 'React', 'Vite'], kind: 'vite' },
@@ -85,8 +85,7 @@ function copyDir(from, to) {
     fs.cpSync(from, to, { recursive: true });
 }
 
-// Replaces every occurrence and refuses to continue when a patch finds nothing: a silent miss
-// would ship a demo that requests /crossbind.js from the site root.
+// Replace legacy URLs when present. verifyDemo checks the resulting page under its real subpath.
 function patchFile(file, replacements) {
     let text = fs.readFileSync(file, 'utf8');
     let changed = false;
@@ -110,7 +109,7 @@ function listJs(directory) {
 // The generated boot code imports `/crossbind.js` and lets the runtime default `path` to the
 // site root; both are rewritten to the demo's subpath. Vite emits a template literal, Rspack a
 // plain string.
-function patchBundles(out, id) {
+export function patchBundles(out, id) {
     const base = `/examples/${id}/`;
     const patched = listJs(out)
         .map((file) =>
@@ -121,7 +120,7 @@ function patchBundles(out, id) {
             ]),
         )
         .filter(Boolean).length;
-    if (!patched) throw new Error(`${id}: no bundle needed the subpath patch; the generated loader changed shape.`);
+    return patched;
 }
 
 async function buildVite(project, id, out) {

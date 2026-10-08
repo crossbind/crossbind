@@ -7,17 +7,19 @@ import refreshBuiltDependencies from '../state/refreshBuiltDependencies.js';
 import { conanInputsOf } from '../utils/conanDependencies.js';
 import { getContentHash, getFileHash } from '../utils/hash.js';
 import guardAsyncBindings from '../utils/bridgeAsyncGuard.js';
+import fixBridgeRuntime from '../utils/bridgeRuntimeFixes.js';
 import resolveNativeImport from '../integration/resolveNativeImport.js';
 import { writeHeaderDts, writeConanImportDts } from '../utils/cppDts.js';
 import { ALL_NAMES, findHeaderImportsIn } from '../utils/headerImports.js';
 import {
     buildInterfaceContent, completingIncludes, findHeaderPrelude, findIgnoredDeclarations, findSwigInlineIncludes, findSwigPreamble,
-    indexTypeDefinitions, inlineIncludes, interfaceIncludes, interfaceToRetryWithoutMacros, parseMacroDump, referencedTypeHeaders,
+    indexTypeDefinitions, inlineIncludes, interfaceIncludes, interfaceToRetryWithoutMacros, interfaceWithAllFunctions, parseMacroDump, referencedTypeHeaders,
     selectSwigMacros,
 } from '../utils/swigInterface.js';
 import writeIfChanged from '../utils/writeIfChanged.js';
 import { withDirLockSync } from '../utils/dirLock.js';
 import { imageRoleFor } from '../utils/pullDockerImage.js';
+import { conanImportOfHeader } from '../utils/conanImport.js';
 import run, { cxxPreprocessorFor } from './run.js';
 import isSourceCmakePackage from '../utils/isSourceCmakePackage.js';
 
@@ -25,7 +27,7 @@ import isSourceCmakePackage from '../utils/isSourceCmakePackage.js';
 const INTERFACE_FORMAT = 'swig-macros-2';
 // Part of every bridge hash: each bridge carries the SWIG fork's runtime and all bridges of a module must share it, so
 // bridges from a fork before field bindings and constants are rebuilt.
-const BRIDGE_FORMAT = 'swig-constants-1';
+const BRIDGE_FORMAT = 'swig-callback-fields-1';
 const predefinedMacros = new Map();
 const typeDefinitions = new Map();
 
@@ -82,6 +84,9 @@ function bindHeader(headerOrModuleFilePath, target, { withDependencies = true, w
             dtsMode: state.config.dts,
         };
         writeHeaderDts(dtsOptions);
+        if (conanImportOfHeader(interfaceFilePath, state.config.paths.cache)) {
+            dtsOptions.declarationsFile = createConanDeclarations(interfaceFile, target, sourceDir, sourceHash, swigView);
+        }
         writeConanImportDts(dtsOptions);
     }
     if (bridgeFile && withDependencies && !moduleRegex.test(interfaceFilePath)) {
@@ -364,7 +369,7 @@ function swigIncludePath(target, sourceDir) {
 // next time they are picked up.
 function applyAsyncGuard(bridgeFilePath) {
     const bridgeText = fs.readFileSync(bridgeFilePath, { encoding: 'utf8' });
-    const guarded = guardAsyncBindings(bridgeText);
+    const guarded = guardAsyncBindings(fixBridgeRuntime(bridgeText));
     if (guarded !== bridgeText) {
         fs.writeFileSync(bridgeFilePath, guarded);
     }
@@ -448,4 +453,21 @@ function createBridgeFileFromInterfaceFile(interfaceFilePath, target, sourceDir 
     saveCache();
 
     return state.cache.bridges[interfaceFilePath];
+}
+
+// Generate a full export catalog for the editor, without compiling or linking these extra functions.
+function createConanDeclarations(interfaceFile, target, sourceDir, sourceHash, swigView) {
+    const dir = `${state.config.paths.build}/declarations`;
+    fs.mkdirSync(dir, { recursive: true });
+    const file = `${dir}/${upath.basename(interfaceFile)}`;
+    writeIfChanged(file, interfaceWithAllFunctions(fs.readFileSync(interfaceFile, 'utf8')));
+    const bridge = `${file}.cpp`;
+    const hash = getContentHash([BRIDGE_FORMAT, getFileHash(file), sourceHash, swigView?.hash ?? ''].join('\n'));
+    if (!fs.existsSync(`${bridge}.exports.json`) || !fs.existsSync(keyOf(bridge)) || fs.readFileSync(keyOf(bridge), 'utf8') !== hash) {
+        fs.writeFileSync(keyOf(bridge), '');
+        run('swig', ['-c++', '-embind', '-cpperraswarn', '-o', bridge,
+            ...(swigView ? [`-I${swigView.dir}`] : []), ...swigIncludePath(target, sourceDir), file], null, toolTargetFor(target));
+        fs.writeFileSync(keyOf(bridge), hash);
+    }
+    return `${bridge}.exports.json`;
 }

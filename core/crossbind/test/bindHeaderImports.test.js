@@ -70,9 +70,9 @@ describe('bindHeaderImports', () => {
         expect(boundHeaders()).toEqual([]);
     });
 
-    test('binds nothing for a file outside the app sources', () => {
+    test('binds headers imported by a transformed dependency module', () => {
         bindHeaderImports("import { one } from '../../src/native/native.h';\n", `${work}/node_modules/lib/index.js`, target);
 
-        expect(boundHeaders()).toEqual([]);
+        expect(boundHeaders()).toEqual([`${work}/src/native/native.h`]);
     });
 });

@@ -48,7 +48,7 @@ jobs:
             - name: Install Playwright Browsers
               run: pnpm exec playwright install --with-deps
             - name: Run Playwright tests
-              # Playgrounds are excluded: their prebuilt trees exist only on dev machines (see AGENTS.md).
+              # The full fixtures and their port dependencies run in test-e2e-fixtures.yml.
               # The Electron sample opens a window, which needs a display even when it shows nothing.
               run: xvfb-run -a pnpm run ci:linux:e2e
             - name: Install wasi-sdk (wasi e2e toolchain)

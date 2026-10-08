@@ -3,13 +3,41 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
-import { assertDemosMatchSnapshot, DEMOS, REPOSITORY_ROOT } from '../build-example-demos.mjs';
+import { assertDemosMatchSnapshot, DEMOS, REPOSITORY_ROOT, patchBundles } from '../build-example-demos.mjs';
 
 const snapshot = { version: '2.0.0-beta.56' };
 const manifestFor = (version) => ({
     builtAt: '2026-09-11T15:28:51.897Z',
     distTag: 'beta',
     demos: DEMOS.map((demo) => ({ id: demo.id, href: `/examples/${demo.id}/`, crossbind: version })),
+});
+
+test('base-aware demo bundles build without needing a compatibility patch', () => {
+    const out = fs.mkdtempSync(path.join(os.tmpdir(), 'crossbind-demo-base-'));
+    try {
+        const file = path.join(out, 'app.js');
+        const source = 'import("/examples/web-vue-vite/crossbind.js");';
+        fs.writeFileSync(file, source);
+        assert.equal(patchBundles(out, 'web-vue-vite'), 0);
+        assert.equal(fs.readFileSync(file, 'utf8'), source);
+    } finally {
+        fs.rmSync(out, { recursive: true, force: true });
+    }
+});
+
+test('legacy demo bundles still resolve their loader and runtime from the demo subpath', () => {
+    const out = fs.mkdtempSync(path.join(os.tmpdir(), 'crossbind-demo-legacy-'));
+    try {
+        const file = path.join(out, 'app.js');
+        fs.writeFileSync(file, 'import(`/crossbind.js`);window.Crossbind.initNative({...e,useWorker:true});');
+        assert.equal(patchBundles(out, 'web-react-vite'), 1);
+        const result = fs.readFileSync(file, 'utf8');
+        assert.match(result, /import\(`\/examples\/web-react-vite\/crossbind.js`\)/);
+        assert.match(result, /path:'\/examples\/web-react-vite'/);
+        assert.equal(patchBundles(out, 'web-react-vite'), 0);
+    } finally {
+        fs.rmSync(out, { recursive: true, force: true });
+    }
 });
 
 test('a manifest with every demo at the snapshot version passes', () => {

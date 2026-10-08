@@ -10,6 +10,7 @@ import { getSourceFingerprint, isSourceFingerprintStale, staleTargetDirectories,
 import { getEmbindRsFingerprint, writeEmbindRsFingerprint } from '../utils/embindRsFingerprint.js';
 import relocatePrebuilt from '../utils/relocatePrebuilt.js';
 import replaceBasePathForDocker, { DOCKER_BASE } from '../utils/replaceBasePathForDocker.js';
+import { writeNativeSourceStamp } from '../utils/nativeSourceStamp.js';
 
 export default function buildLib(targetParams, options = {}) {
     let isChanged = false;
@@ -24,7 +25,7 @@ export default function buildLib(targetParams, options = {}) {
         // existence-only skip below would keep serving a stale staged staticlib after source edits.
         const isCargo = state.config.export?.type === 'cargo';
         const libdir = `${state.config.paths.output}/prebuilt/${target.path}`;
-        const sourceFingerprint = getSourceFingerprint(state.config);
+        const sourceFingerprint = getSourceFingerprint(state.config, target);
         const sourceChanged = isSourceFingerprintStale(libdir, sourceFingerprint);
         const nativeChanged = isNativeSourceNewerThan(`${libdir}/lib`);
         if (isCargo || sourceChanged || nativeChanged || !fs.existsSync(`${libdir}/lib`)) {
@@ -66,6 +67,9 @@ export default function buildLib(targetParams, options = {}) {
     if (isChanged && fs.existsSync(`${state.config.paths.build}/Source-Debug/prebuilt`)) {
         fs.cpSync(`${state.config.paths.build}/Source-Debug/prebuilt`, `${state.config.paths.output}/prebuilt`, { recursive: true, dereference: true });
     }
+    if (isChanged) targets.forEach((target) => {
+        writeNativeSourceStamp(`${state.config.paths.output}/prebuilt/${target.path}/lib`, state.config.paths.native);
+    });
     // Cached trees too, so a rebuild fixes a prebuilt made before relocation existed.
     targets.forEach(relocateTargetPrebuilt);
 
