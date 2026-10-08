@@ -1,5 +1,6 @@
  
-const { requireWebTargets } = require('./web.cjs');
+const path = require('node:path');
+const { getWebTargets, requireWebTargets } = require('./web.cjs');
 
 const upstreamTransformer = (() => {
     try {
@@ -18,10 +19,10 @@ const getCompilerClass = () => {
     if (compilerClassPromise) return compilerClassPromise;
     compilerClassPromise = new Promise((resolve, reject) => {
         import('crossbind').then(({
-            state, getCrossbindScript, getRustJsScript, createBridgeFile, getTargetParams, getFilteredBuildTargets,
+            state, getCrossbindScript, getRustJsScript, createBridgeFile, getTargetParams, getFilteredBuildTargets, bindHeaderImports,
         }) => {
             resolve({
-                state, getCrossbindScript, getRustJsScript, createBridgeFile, getTargetParams, getFilteredBuildTargets,
+                state, getCrossbindScript, getRustJsScript, createBridgeFile, getTargetParams, getFilteredBuildTargets, bindHeaderImports,
             });
         }).catch((e) => reject(e));
     });
@@ -31,6 +32,7 @@ const getCompilerClass = () => {
 module.exports.transform = async ({ src, filename, ...rest }) => {
     const crossbind = await getCompilerClass();
     const { state, getCrossbindScript, getRustJsScript, createBridgeFile } = crossbind;
+    const file = path.resolve(rest.options.projectRoot ?? '', filename);
     const headerRegex = new RegExp(`\\.(${state.config.ext.header.join('|')})$`);
     const moduleRegex = new RegExp(`\\.(${state.config.ext.module.join('|')})$`);
     if (headerRegex.test(filename) || moduleRegex.test(filename) || filename.endsWith('.rs')) {
@@ -47,10 +49,17 @@ module.exports.transform = async ({ src, filename, ...rest }) => {
             return upstreamTransformer.transform({ src: getRustJsScript(target, filename, { base }), filename, ...rest });
         }
 
-        const bridgeFile = createBridgeFile(filename, target);
+        const bridgeFile = createBridgeFile(file, target);
 
-        return upstreamTransformer.transform({ src: getCrossbindScript(target, bridgeFile, { base }), filename, ...rest });
+        // Only a dev server keeps a header's module while the app's imports change: Xcode and Gradle bundle a release
+        // from a cleared cache.
+        return upstreamTransformer.transform({ src: getCrossbindScript(target, bridgeFile, { base, liveExports: rest.options.dev }), filename, ...rest });
     }
+
+    const appTarget = ['ios', 'android'].includes(rest.options.platform)
+        ? state.targets.find((t) => t.platform === rest.options.platform)
+        : getWebTargets(crossbind)?.release;
+    if (appTarget) crossbind.bindHeaderImports(src, file, appTarget);
 
     return upstreamTransformer.transform({ src, filename, ...rest });
 };

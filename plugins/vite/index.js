@@ -1,6 +1,7 @@
 
 import {
     state, createLib, createBridgeFile, buildWasm, buildDependencies, getTargetParams, getFilteredBuildTargets, isSourceNewer, getRustJsScript,
+    isAppSource, getFileHash,
 } from 'crossbind';
 import rollupCrossbindPlugin from '@crossbind/plugin-rollup';
 
@@ -41,6 +42,26 @@ const viteCrossbindPlugin = (options) => {
         // the final link or the wasm keeps the stale registrations.
         const bridgeBuilt = createLib(buildTargetDebug, 'Bridge', { force, buildSource: false, nativeGlob: [`${state.config.paths.cli}/assets/cpp-runtime/commonBridges.cpp`, ...bridges] });
         await buildWasm(buildTargetDebug, { force: force || Boolean(sourceBuilt) || Boolean(bridgeBuilt) });
+    }
+
+    // The names the app imports decide what a dependency's header binds: after a source edit each imported header binds
+    // again, and a changed bridge reloads the page, whose request for /crossbind.js links the wasm anew.
+    function rebindImports(server) {
+        const bridgeDir = `${state.config.paths.build}/bridge`;
+        const stamp = () => (fs.existsSync(bridgeDir) ? fs.readdirSync(bridgeDir)
+            .filter((name) => name.endsWith('.i.cpp'))
+            .map((name) => `${name}:${getFileHash(`${bridgeDir}/${name}`)}`)
+            .join('\n') : '');
+        const headers = [...new Set(bridges)].filter((bridge) => bridge && fs.existsSync(`${bridge}.source`))
+            .map((bridge) => fs.readFileSync(`${bridge}.source`, 'utf8').trim())
+            .filter((header) => fs.existsSync(header));
+        const before = stamp();
+        headers.forEach((header) => createBridgeFile(header));
+        if (stamp() === before) return false;
+        headers.flatMap((header) => [...(server.moduleGraph.getModulesByFile(header) ?? [])])
+            .forEach((mod) => server.moduleGraph.invalidateModule(mod));
+        server.ws.send({ type: 'full-reload' });
+        return true;
     }
 
     const headerRegex = new RegExp(`\\.(${state.config.ext.header.join('|')})$`);
@@ -102,7 +123,7 @@ const viteCrossbindPlugin = (options) => {
                 }
                 if (headerRegex.test(file)) {
                     const bridgeFile = createBridgeFile(file);
-                    bridges.push(bridgeFile);
+                    if (!bridges.includes(bridgeFile)) bridges.push(bridgeFile);
                     createLib(buildTargetDebug, 'Bridge', { force: true, buildSource: false, nativeGlob: [`${state.config.paths.cli}/assets/cpp-runtime/commonBridges.cpp`, ...bridges] });
                     await buildWasm(buildTargetDebug, { force: true });
                     server.ws.send({ type: 'full-reload' });
@@ -118,7 +139,10 @@ const viteCrossbindPlugin = (options) => {
                     getRustJsScript(buildTargetDebug, file);
                     await buildWasm(buildTargetDebug, { force: true });
                     server.ws.send({ type: 'full-reload' });
+                } else if (isAppSource(state.config.paths.project, file) && rebindImports(server)) {
+                    return [];
                 }
+                return undefined;
             },
         },
     ];

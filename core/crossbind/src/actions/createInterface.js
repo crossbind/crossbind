@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import upath from 'upath';
 import state, { saveCache } from '../state/index.js';
 import refreshConanDependencies from '../state/refreshConanDependencies.js';
+import refreshBuiltDependencies from '../state/refreshBuiltDependencies.js';
 import { conanInputsOf } from '../utils/conanDependencies.js';
 import { getContentHash, getFileHash } from '../utils/hash.js';
 import guardAsyncBindings from '../utils/bridgeAsyncGuard.js';
@@ -15,6 +16,7 @@ import {
     selectSwigMacros,
 } from '../utils/swigInterface.js';
 import writeIfChanged from '../utils/writeIfChanged.js';
+import { withDirLockSync } from '../utils/dirLock.js';
 import { imageRoleFor } from '../utils/pullDockerImage.js';
 import run, { cxxPreprocessorFor } from './run.js';
 import isSourceCmakePackage from '../utils/isSourceCmakePackage.js';
@@ -27,9 +29,27 @@ const BRIDGE_FORMAT = 'swig-constants-1';
 const predefinedMacros = new Map();
 const typeDefinitions = new Map();
 
-export default function createBridgeFile(headerOrModuleFilePath, target = state.targets.find((t) => t.platform === 'wasm'), { withDependencies = true, wholeHeaders = [] } = {}) {
-    // A header can include a Conan package's headers that a build staged after this process loaded.
+// Each process keeps the cache it loaded, so an interface or bridge another one has rebuilt since must not pass for
+// this one's: beside each file is the hash of what it was made from, blank while the file is written. A file without one
+// comes from an older crossbind or a cache CI restores, and its cache record holds.
+const keyOf = (file) => `${file}.key`;
+const isMadeFrom = (file, hash) => !fs.existsSync(keyOf(file)) || fs.readFileSync(keyOf(file), 'utf8') === getContentHash(hash);
+
+// Metro binds headers in worker processes, so two of them can generate one bridge at once. The headers a header's types
+// come from are bound in its turn.
+export default function createBridgeFile(headerOrModuleFilePath, target = state.targets.find((t) => t.platform === 'wasm'), options = {}) {
+    if (options.withDependencies === false) return bindHeader(headerOrModuleFilePath, target, options);
+    return withDirLockSync(`${state.config.paths.build}/bridge.lock`, () => bindHeader(headerOrModuleFilePath, target, options), {
+        pollMs: 50,
+        heldBy: 'another process is binding a header',
+    });
+}
+
+function bindHeader(headerOrModuleFilePath, target, { withDependencies = true, wholeHeaders = [] } = {}) {
+    // A header can include a Conan package's headers that a build staged after this process loaded, or belong to a
+    // dependency built since.
     refreshConanDependencies(state.config);
+    refreshBuiltDependencies(state.config);
     const interfaceFilePath = upath.resolve(headerOrModuleFilePath);
     if (!fs.existsSync(`${state.config.paths.build}/interface`)) {
         fs.mkdirSync(`${state.config.paths.build}/interface`, { recursive: true });
@@ -41,7 +61,9 @@ export default function createBridgeFile(headerOrModuleFilePath, target = state.
     // '@scope/pkg/native/x.h'), so its own directory must reach swig's include list.
     const sourceDir = upath.dirname(interfaceFilePath);
     const allNames = wholeHeaders.some((file) => upath.resolve(file) === interfaceFilePath);
-    const interfaceFile = createInterfaceFile(interfaceFilePath, target, sourceDir, allNames);
+    const names = bindingNames(interfaceFilePath, target, allNames);
+    if (withDependencies) warnUnimported(interfaceFilePath, names.functions);
+    const interfaceFile = createInterfaceFile(interfaceFilePath, target, sourceDir, names);
     const { headerPath } = includeLocation(interfaceFilePath, target);
     const inlined = findSwigInlineIncludes(interfaceFilePath, [state.config, ...state.config.allDependencies], headerPath);
     const swigView = inlined.length ? writeSwigView(interfaceFilePath, headerPath, inlined) : null;
@@ -85,7 +107,29 @@ function conanInputsHash() {
     return conan ? [`conan:${getContentHash(JSON.stringify(conan))}`] : [];
 }
 
-function createInterfaceFile(headerOrModuleFilePath, target, sourceDir, allNames) {
+// A header binds the constants the app imports from it, and so the free functions of a dependency's header: the project's
+// own headers and .i modules bind every function.
+function bindingNames(headerOrModuleFilePath, target, allNames) {
+    if (new RegExp(`.(${state.config.ext.module.join('|')})$`).test(headerOrModuleFilePath)) return { constants: [], functions: ALL_NAMES };
+    if (allNames) return { constants: ALL_NAMES, functions: ALL_NAMES };
+    const { names, takesModule } = headerUse(headerOrModuleFilePath, target);
+    // A package's own .i says what the header binds.
+    const shipsInterface = fs.existsSync(headerOrModuleFilePath.replace(/\.[^./]+$/, '.i'));
+    const bindsEveryFunction = takesModule || shipsInterface || !includeLocation(headerOrModuleFilePath, target).isDependency;
+    return { constants: names, functions: bindsEveryFunction ? ALL_NAMES : names };
+}
+
+const warnedUnimported = new Set();
+
+// A bundler transforms the header because something imports it, but no source the scan reads names it: a package in
+// node_modules, say.
+function warnUnimported(header, functions) {
+    if (functions === ALL_NAMES || functions.length || warnedUnimported.has(header)) return;
+    warnedUnimported.add(header);
+    console.warn(`crossbind: ${upath.basename(header)} binds none of its functions, since no source of the app imports a name from it. Import the functions you call by name, or the whole header with import * as.`);
+}
+
+function createInterfaceFile(headerOrModuleFilePath, target, sourceDir, { constants, functions }) {
     if (!headerOrModuleFilePath) {
         return null;
     }
@@ -99,7 +143,6 @@ function createInterfaceFile(headerOrModuleFilePath, target, sourceDir, allNames
     const completing = includeRoot ? findCompletingIncludes(headerOrModuleFilePath, includeRoot, headerPath) : [];
     const filePathWithoutExt = headerOrModuleFilePath.match(/^(.*)\..+?$/)?.[1];
     const interfaceFile = !isModule && filePathWithoutExt ? `${filePathWithoutExt}.i` : null;
-    const constants = isModule ? [] : (allNames ? ALL_NAMES : importedNames(headerOrModuleFilePath, target));
     // A prelude or ignored-declaration change in the owning package, a completed class moving to another header, an
     // interface the package ships beside the header changing or going away, another imported name, or Conan packages
     // its includes may reach being staged or moving to another version must regenerate the interface as well.
@@ -109,32 +152,25 @@ function createInterfaceFile(headerOrModuleFilePath, target, sourceDir, allNames
         ...(preamble.length ? [`preamble:${preamble.join('\n')}`] : []),
         ...(interfaceFile && fs.existsSync(interfaceFile) ? [`shipped:${getFileHash(interfaceFile)}`] : []),
         ...(constants.length ? [`constants:${constants === ALL_NAMES ? ALL_NAMES : constants.join(',')}`] : []),
+        ...(functions === ALL_NAMES ? [] : [`functions:${functions.join(',')}`]),
         ...conanInputsHash(),
     ].join('\n');
     const cachedInterface = state.cache.interfaces[headerOrModuleFilePath];
     if (state.cache.hashes[headerOrModuleFilePath] === fileHash && cachedInterface && fs.existsSync(cachedInterface)
-        && !sharedInterface(headerOrModuleFilePath, cachedInterface)) {
+        && isMadeFrom(cachedInterface, fileHash) && !sharedInterface(headerOrModuleFilePath, cachedInterface)) {
         return cachedInterface;
     }
 
     if (isModule) {
         const newPath = `${state.config.paths.build}/interface/${headerOrModuleFilePath.split('/').pop()}`;
-        fs.copyFileSync(headerOrModuleFilePath, newPath);
-        state.cache.interfaces[headerOrModuleFilePath] = newPath;
-        state.cache.hashes[headerOrModuleFilePath] = fileHash;
-        saveCache();
-        return newPath;
+        return recordInterface(headerOrModuleFilePath, newPath, fileHash, () => fs.copyFileSync(headerOrModuleFilePath, newPath));
     }
 
     if (!filePathWithoutExt) return null;
 
     if (fs.existsSync(interfaceFile)) {
         const newPath = `${state.config.paths.build}/interface/${interfaceFile.split('/').at(-1)}`;
-        fs.copyFileSync(interfaceFile, newPath);
-        state.cache.interfaces[headerOrModuleFilePath] = newPath;
-        state.cache.hashes[headerOrModuleFilePath] = fileHash;
-        saveCache();
-        return newPath;
+        return recordInterface(headerOrModuleFilePath, newPath, fileHash, () => fs.copyFileSync(interfaceFile, newPath));
     }
 
     const fileName = interfaceName(headerOrModuleFilePath, filePathWithoutExt.split('/').at(-1));
@@ -148,15 +184,21 @@ function createInterfaceFile(headerOrModuleFilePath, target, sourceDir, allNames
         ignored,
         constants,
         preamble,
+        functions,
     });
     const outputFilePath = `${state.config.paths.build}/interface/${fileName}.i`;
-    fs.writeFileSync(outputFilePath, content);
+    return recordInterface(headerOrModuleFilePath, outputFilePath, fileHash, () => fs.writeFileSync(outputFilePath, content));
+}
 
-    state.cache.interfaces[headerOrModuleFilePath] = outputFilePath;
-    state.cache.hashes[headerOrModuleFilePath] = fileHash;
+// The key is blank while the file is written, so a process that dies in between leaves no file passing for another hash.
+function recordInterface(headerFile, interfaceFile, fileHash, write) {
+    fs.writeFileSync(keyOf(interfaceFile), '');
+    write();
+    fs.writeFileSync(keyOf(interfaceFile), getContentHash(fileHash));
+    state.cache.interfaces[headerFile] = interfaceFile;
+    state.cache.hashes[headerFile] = fileHash;
     saveCache();
-
-    return outputFilePath;
+    return interfaceFile;
 }
 
 const interfacePath = (name) => `${state.config.paths.build}/interface/${name}.i`;
@@ -182,7 +224,7 @@ function includeLocation(headerFile, target) {
     const dependencyRoots = (state.config.dependencyParameters?.getCmakeDependsPathAndName(target).pathsOfCmakeDepends || [])
         .filter((d) => d.startsWith(state.config.paths.base));
     const match = dependencyRoots.map((p) => headerFile.match(new RegExp(`^(${escapeRegExp(p)}/.*?/include)/(.*?)$`, 'i'))).find(Boolean);
-    return match ? { includeRoot: match[1], headerPath: match[2] } : { includeRoot: null, headerPath: headerFile.split('/').at(-1) };
+    return match ? { includeRoot: match[1], headerPath: match[2], isDependency: true } : { includeRoot: null, headerPath: headerFile.split('/').at(-1) };
 }
 
 // The headers under an include root are indexed once per build. A copy of a header is that header, and the copy nearest
@@ -243,18 +285,25 @@ function realPath(file) {
     }
 }
 
-// The names the app's own sources import from this header, or every name for `import * as`.
-function importedNames(headerFile, target) {
+// The names the app's own sources import from this header, or every name for `import * as` and the other whole-module
+// imports. The app also takes the module, and reaches its functions by name, when it imports AllSymbols or when its only
+// imports of the header take initNative alone.
+function headerUse(headerFile, target) {
     const projectDir = state.config.paths.project;
-    if (!projectDir || !fs.existsSync(projectDir)) return [];
+    if (!projectDir || !fs.existsSync(projectDir)) return { names: [], takesModule: false };
     const header = targetNeutral(realPath(headerFile));
     const names = new Set();
+    let isImported = false;
+    let takesAllSymbols = false;
     for (const { importer, specifier, names: imported } of findHeaderImportsIn(projectDir, state.config.ext.header)) {
         if (targetNeutral(realPath(resolveNativeImport(specifier, importer, target))) !== header) continue;
-        if (imported === ALL_NAMES) return ALL_NAMES;
-        imported.filter((name) => C_IDENTIFIER.test(name) && !PROXY_NAMES.has(name)).forEach((name) => names.add(name));
+        if (imported === ALL_NAMES) return { names: ALL_NAMES, takesModule: true };
+        isImported = true;
+        const listed = imported.filter((name) => C_IDENTIFIER.test(name));
+        takesAllSymbols ||= listed.includes('AllSymbols');
+        listed.filter((name) => !PROXY_NAMES.has(name)).forEach((name) => names.add(name));
     }
-    return [...names].sort();
+    return { names: [...names].sort(), takesModule: takesAllSymbols || (isImported && names.size === 0) };
 }
 
 // A header that does not preprocess on its own, or a host without the image's compiler, keeps the plain interface.
@@ -355,12 +404,13 @@ function createBridgeFileFromInterfaceFile(interfaceFilePath, target, sourceDir 
     ].join('\n');
     const fileHash = bridgeHash();
     const cachedBridge = state.cache.bridges[interfaceFilePath];
-    if (state.cache.hashes[interfaceFilePath] === fileHash && cachedBridge && fs.existsSync(cachedBridge)) {
+    if (state.cache.hashes[interfaceFilePath] === fileHash && cachedBridge && fs.existsSync(cachedBridge) && isMadeFrom(cachedBridge, fileHash)) {
         applyAsyncGuard(cachedBridge);
         return cachedBridge;
     }
 
     const bridgeFilePath = `${state.config.paths.build}/bridge/${interfaceFilePath.split('/').at(-1)}.cpp`;
+    fs.writeFileSync(keyOf(bridgeFilePath), '');
     // #error lines guard branches SWIG evaluates without the compiler's predefined macros, so they only warn.
     const swig = () => run('swig', [
         '-c++',
@@ -391,8 +441,10 @@ function createBridgeFileFromInterfaceFile(interfaceFilePath, target, sourceDir 
     applyAsyncGuard(bridgeFilePath);
     reportSkippedBindings(bridgeFilePath);
 
+    const madeFrom = bridgeHash();
+    fs.writeFileSync(keyOf(bridgeFilePath), getContentHash(madeFrom));
     state.cache.bridges[interfaceFilePath] = bridgeFilePath;
-    state.cache.hashes[interfaceFilePath] = bridgeHash();
+    state.cache.hashes[interfaceFilePath] = madeFrom;
     saveCache();
 
     return state.cache.bridges[interfaceFilePath];

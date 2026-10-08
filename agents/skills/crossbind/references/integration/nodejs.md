@@ -136,7 +136,7 @@ node --watch --watch-path=src/native --import crossbind/node/dev src/index.mjs  
 - It builds the addon when the project installs `@crossbind/core-embind-napi` and the wasm build otherwise, with the build's output on stderr. A build that fails stops the app with its error.
 - It builds before anything loads because a running process cannot swap the binary it loaded: a native import added while the app runs takes a restart, which `--watch` does. A dependency rebuilt in place, which leaves `package.json` as it was, takes a `crossbind build`.
 
-`crossbind build -e node` itself finds these imports in the app's sources and binds them, constants only by the names imported, as a bundler does. It writes the hooks that serve them, `dist/node/<format>.register.mjs` beside the entry, where `<format>` is `wasm` for the st-release wasm build and `napi` for an addon build. A deployed app starts with those, since `crossbind` is a dev dependency it may not have; they need nothing but `dist` and never build:
+`crossbind build -e node` itself finds these imports in the app's sources and binds them, constants and a dependency's functions only by the names imported, as a bundler does ([binding rule 9](../../api/cpp-binding-rules.md)). It writes the hooks that serve them, `dist/node/<format>.register.mjs` beside the entry, where `<format>` is `wasm` for the st-release wasm build and `napi` for an addon build. A deployed app starts with those, since `crossbind` is a dev dependency it may not have; they need nothing but `dist` and never build:
 
 ```bash
 node --import ./dist/node/napi.register.mjs src/index.mjs
@@ -144,9 +144,9 @@ node --import ./dist/node/napi.register.mjs src/index.mjs
 
 `NODE_OPTIONS="--import=./dist/node/napi.register.mjs"` does the same for a command that starts Node itself.
 
-- The build reads `import`, `export … from`, `import()` and `require()` with a string literal, in the app's own `.js`, `.mjs`, `.cjs`, `.ts`, `.mts` and `.cts` files, outside `node_modules`, `dist`, `build`, `target`, `ios`, `android`, `Pods` and dot directories. An import it did not see, such as a specifier computed at run time or one added since the build, fails with an error that says to build again. A `cargo:` or `conan:` import the config does not declare fails the build.
+- The build reads `import`, `export … from`, `import()` and `require()` with a string literal, in the app's own `.js`, `.mjs`, `.cjs`, `.ts`, `.mts` and `.cts` files, outside `node_modules`, `dist`, `build`, `target`, `ios`, `android`, `Pods` and dot directories. An import it did not see, such as a specifier computed at run time or one added since the build, fails with an error that says to build again. A name first imported since the build, a constant or a dependency's function, stops Node at the import with `does not provide an export named` until the next build. A `cargo:` or `conan:` import the config does not declare fails the build.
 - A relative import needs its file on disk when the app runs, because Node checks that it exists; a package, `conan:` or `cargo:` import does not.
-- `require()` returns the same module. Read its names after `initNative()` resolves: destructuring at `require` time keeps the `null` they hold until then. A constant binds only for a name an `import { … }` lists, so one a CommonJS app needs is imported by name in an ES module of the app. On Node.js 24.9, a CommonJS app started with `--import` cannot `require()` a header (`ERR_VM_MODULE_LINK_FAILURE`); `--require ./dist/node/<format>.register.mjs` works there, and both work on 24.20.
+- `require()` returns the same module. Read its names after `initNative()` resolves: destructuring at `require` time keeps the `null` they hold until then. `require()` takes the whole module, so the header binds every constant and function it has. On Node.js 24.9, a CommonJS app started with `--import` cannot `require()` a header (`ERR_VM_MODULE_LINK_FAILURE`); `--require ./dist/node/<format>.register.mjs` works there, and both work on 24.20.
 - A build whose sources import nothing native writes no hooks, and removes the ones an earlier build wrote.
 
 ## Multithread

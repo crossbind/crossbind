@@ -1,6 +1,7 @@
 // Every name the examples import, from the header the site says it comes from. The build fails on a
 // name that header does not export, so the import lines on the page are checked here. A helper that
-// both headers export is re-exported from geodesic.h under an alias: a module exports a name once.
+// both headers export is re-exported from geodesic.h under an alias: a module exports a name once. The
+// page's own calls through the module are here too: a header binds only the functions an import names.
 export {
     allocBuffer,
     allocPointer,
@@ -28,6 +29,7 @@ export {
     proj_get_id_code,
     proj_get_name,
     proj_identify,
+    proj_info,
     proj_int_list_destroy,
     proj_is_deprecated,
     proj_list_destroy,

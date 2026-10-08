@@ -296,6 +296,33 @@ describe('buildInterfaceContent', () => {
         const options = { moduleName: 'ZLIB', headerPath: 'zlib.h', constants: ['Z_FINISH'] };
         expect(withoutSwigMacros(buildInterfaceContent({ ...options, swigMacros: ['#define ZEXPORT'] }))).toBe(buildInterfaceContent(options));
     });
+
+    // Class members, enums and constants are untouched: only declarations of free functions are ignored.
+    test('binds only the listed free functions, right before the header', () => {
+        const content = buildInterfaceContent({ moduleName: 'ZLIB', headerPath: 'zlib.h', functions: ['deflate', 'crc32'] });
+        expect(content).toContain('%rename($ignore, %$isfunction, %$isglobal) "";\n%rename("%s") crc32;\n%rename("%s") deflate;\n\n%include "zlib.h"');
+    });
+
+    test('binds no free function when the list is empty', () => {
+        const content = buildInterfaceContent({ moduleName: 'ZCONF', headerPath: 'zconf.h', functions: [] });
+        expect(content).toContain('%rename($ignore, %$isfunction, %$isglobal) "";\n\n%include "zconf.h"');
+        expect(content).not.toContain('%rename("%s")');
+    });
+
+    test('binds every free function when the app takes every name of the header', () => {
+        expect(buildInterfaceContent({ moduleName: 'ZLIB', headerPath: 'zlib.h', functions: ALL_NAMES })).not.toContain('%rename');
+    });
+
+    // SWIG applies the later of two renames of a name, and %ignore is one: a declaration the library never defines stays out.
+    test('keeps a declaration its package ignores out, even when the app imports it', () => {
+        const content = buildInterfaceContent({ moduleName: 'GDAL', headerPath: 'gdal.h', functions: ['GDALExtractRPCInfoV1'], ignored: ['GDALExtractRPCInfoV1'] });
+        expect(content.indexOf('%ignore GDALExtractRPCInfoV1;')).toBeGreaterThan(content.indexOf('%rename("%s") GDALExtractRPCInfoV1;'));
+    });
+
+    test('keeps the function list when the SWIG-only macro block is dropped', () => {
+        const options = { moduleName: 'ZLIB', headerPath: 'zlib.h', functions: ['deflate'], ignored: ['gzprintf'] };
+        expect(withoutSwigMacros(buildInterfaceContent({ ...options, swigMacros: ['#define ZEXPORT'] }))).toBe(buildInterfaceContent(options));
+    });
 });
 
 describe('interfaceToRetryWithoutMacros', () => {

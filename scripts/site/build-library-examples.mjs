@@ -231,6 +231,14 @@ function sharedInit(demo, runnable) {
     return asked.length ? JSON.parse(asked[0]) : null;
 }
 
+// The names the page calls through the module itself, such as the library's version: a dependency's header binds only the
+// functions an import names, so src/headers.js imports these too.
+function pageCalls(directory) {
+    const page = path.join(directory, 'direct', 'index.html');
+    if (!fs.existsSync(page)) return [];
+    return [...new Set([...fs.readFileSync(page, 'utf8').matchAll(/\bm\.([A-Za-z_]\w*)\(/g)].map(([, name]) => name))];
+}
+
 function checkHeaders(directory, demo, runnable) {
     const exported = headerExports(path.join(directory, 'direct', 'src', 'headers.js'));
     const imported = runnable.flatMap((entry) =>
@@ -241,8 +249,17 @@ function checkHeaders(directory, demo, runnable) {
         const [specifier, name] = missing[0];
         throw new Error(`${demo}: ${name} from '${specifier}' is not re-exported by direct/src/headers.js, so the build never proves it.`);
     }
+    const called = pageCalls(directory);
+    const reexported = new Set([...exported.values()].flatMap((names) => [...names]));
+    const unbound = called.filter((name) => !reexported.has(name));
+    if (unbound.length)
+        throw new Error(
+            `${demo}: index.html calls m.${unbound[0]}, which direct/src/headers.js does not re-export, so the build binds no such function.`,
+        );
     const unused = [...exported].flatMap(([specifier, names]) =>
-        [...names].filter((name) => !imported.some(([s, n]) => s === specifier && n === name)).map((name) => [specifier, name]),
+        [...names]
+            .filter((name) => !called.includes(name) && !imported.some(([s, n]) => s === specifier && n === name))
+            .map((name) => [specifier, name]),
     );
     if (unused.length) throw new Error(`${demo}: direct/src/headers.js re-exports ${unused[0][1]} from '${unused[0][0]}' but no example imports it.`);
 }

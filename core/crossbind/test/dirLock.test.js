@@ -1,4 +1,4 @@
-import { describe, test, expect, beforeEach, afterEach } from 'vitest';
+import { describe, test, expect, vi, beforeEach, afterEach } from 'vitest';
 import { spawn } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -96,7 +96,7 @@ describe('withDirLockSync', () => {
     });
 
     test('runs the function under this process\'s lock, returns its value and removes the lock file', () => {
-        const result = withDirLockSync(lockPath, () => fs.readFileSync(lockPath, 'utf8'));
+        const result = withDirLockSync(lockPath, () => fs.readFileSync(lockPath, 'utf8').split('\n')[0]);
 
         expect(result).toBe(String(process.pid));
         expect(fs.existsSync(lockPath)).toBe(false);
@@ -129,12 +129,160 @@ describe('withDirLockSync', () => {
         expect(fs.existsSync(lockPath)).toBe(false);
     });
 
+    // Metro's workers all find the lock a killed one left: each that saw the dead holder must not remove the lock another
+    // has taken since.
+    test('lets one process at a time in when many find a dead holder at once', async () => {
+        fs.writeFileSync(lockPath, DEAD_PID);
+        const go = path.join(tmpDir, 'go');
+        const inside = path.join(tmpDir, 'inside');
+        const dirLock = pathToFileURL(path.resolve(import.meta.dirname, '../src/utils/dirLock.js')).href;
+        const contenders = Array.from({ length: 12 }, () => spawn(process.execPath, ['--input-type=module', '-e', `
+            import fs from 'node:fs';
+            import { withDirLockSync } from ${JSON.stringify(dirLock)};
+            while (!fs.existsSync(${JSON.stringify(go)})) Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 1);
+            withDirLockSync(${JSON.stringify(lockPath)}, () => {
+                try {
+                    fs.closeSync(fs.openSync(${JSON.stringify(inside)}, 'wx'));
+                } catch {
+                    process.stdout.write('overlap');
+                    return;
+                }
+                Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 20);
+                fs.rmSync(${JSON.stringify(inside)});
+            }, { pollMs: 5 });
+        `]));
+        const outputs = contenders.map((contender) => new Promise((resolve) => {
+            let output = '';
+            contender.stdout.on('data', (chunk) => { output += chunk; });
+            contender.on('exit', () => resolve(output));
+        }));
+        await sleep(300);
+        fs.writeFileSync(go, '');
+
+        expect((await Promise.all(outputs)).join('')).not.toContain('overlap');
+        expect(fs.existsSync(lockPath)).toBe(false);
+    });
+
     test('releases the lock when the function throws', () => {
         expect(() => withDirLockSync(lockPath, () => {
             throw new Error('boom');
         })).toThrow('boom');
 
         expect(fs.existsSync(lockPath)).toBe(false);
+    });
+});
+
+// A PID outlives its process: Windows and a restarted container hand it to the next one.
+describe('a holder known by more than its PID', () => {
+    const dirLock = pathToFileURL(path.resolve(import.meta.dirname, '../src/utils/dirLock.js')).href;
+    let tmpDir;
+    let lockPath;
+
+    beforeEach(() => {
+        tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'crossbind-lockheld-'));
+        lockPath = path.join(tmpDir, 'bridge.lock');
+    });
+
+    afterEach(() => {
+        fs.rmSync(tmpDir, { recursive: true, force: true });
+    });
+
+    const backdate = (file) => {
+        const past = (Date.now() - 60 * 1000) / 1000;
+        fs.utimesSync(file, past, past);
+    };
+
+    test('keeps the lock while its holder is blocked past the stale window', async () => {
+        const options = { staleMs: 200, pollMs: 10 };
+        const inside = path.join(tmpDir, 'inside');
+        const holder = spawn(process.execPath, ['--input-type=module', '-e', `
+            import fs from 'node:fs';
+            import { withDirLockSync } from ${JSON.stringify(dirLock)};
+            withDirLockSync(${JSON.stringify(lockPath)}, () => {
+                fs.writeFileSync(${JSON.stringify(inside)}, '');
+                Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 1000);
+                fs.rmSync(${JSON.stringify(inside)});
+            }, ${JSON.stringify(options)});
+        `], { stdio: 'ignore' });
+        const exited = new Promise((resolve) => { holder.on('exit', resolve); });
+        while (!fs.existsSync(inside) && holder.exitCode === null) await sleep(10);
+
+        const sawHolderInside = await withDirLock(lockPath, async () => fs.existsSync(inside), options);
+
+        expect(await exited).toBe(0);
+        expect(sawHolderInside).toBe(false);
+    });
+
+    test('breaks a lock nobody refreshes, though a process runs under its PID', async () => {
+        fs.writeFileSync(lockPath, `${process.pid}\nleft-by-a-crash\n`);
+        backdate(lockPath);
+
+        expect(await withDirLock(lockPath, async () => 'ran', { staleMs: 200, pollMs: 10 })).toBe('ran');
+    });
+
+    test('waits for an older crossbind\'s lock while its holder runs', async () => {
+        fs.writeFileSync(lockPath, String(process.pid));
+        backdate(lockPath);
+
+        const ran = withDirLock(lockPath, async () => 'ran', { staleMs: 50, pollMs: 10 });
+        await sleep(400);
+
+        expect(fs.readFileSync(lockPath, 'utf8')).toBe(String(process.pid));
+        fs.rmSync(lockPath);
+        expect(await ran).toBe('ran');
+    });
+
+    test('leaves the lock to the process that took it over', async () => {
+        await withDirLock(lockPath, async () => {
+            fs.writeFileSync(lockPath, `${process.pid}\nanother-holder\n`);
+        });
+
+        expect(fs.readFileSync(lockPath, 'utf8')).toBe(`${process.pid}\nanother-holder\n`);
+    });
+});
+
+// Windows refuses to create a file whose deletion another handle still holds open.
+describe('a lock file being deleted', () => {
+    let tmpDir;
+    let lockPath;
+    let platform;
+
+    beforeEach(() => {
+        tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'crossbind-lockdelete-'));
+        lockPath = path.join(tmpDir, 'bridge.lock');
+        platform = Object.getOwnPropertyDescriptor(process, 'platform');
+    });
+
+    afterEach(() => {
+        vi.restoreAllMocks();
+        Object.defineProperty(process, 'platform', platform);
+        fs.rmSync(tmpDir, { recursive: true, force: true });
+    });
+
+    const refuseLockFile = (times) => {
+        const { openSync } = fs;
+        let refusals = times;
+        vi.spyOn(fs, 'openSync').mockImplementation((file, ...rest) => {
+            if (file === lockPath && refusals > 0) {
+                refusals -= 1;
+                throw Object.assign(new Error(`EPERM: operation not permitted, open '${file}'`), { code: 'EPERM' });
+            }
+            return openSync(file, ...rest);
+        });
+    };
+
+    test('is taken once Windows has deleted it', () => {
+        Object.defineProperty(process, 'platform', { value: 'win32' });
+        refuseLockFile(3);
+
+        expect(withDirLockSync(lockPath, () => 'ran', { pollMs: 1 })).toBe('ran');
+    });
+
+    test('fails at once when the directory refuses it elsewhere', () => {
+        Object.defineProperty(process, 'platform', { value: 'linux' });
+        refuseLockFile(1);
+
+        expect(() => withDirLockSync(lockPath, () => 'ran', { pollMs: 1 })).toThrow('EPERM');
     });
 });
 

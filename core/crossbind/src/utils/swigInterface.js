@@ -64,7 +64,7 @@ export function interfaceIncludes(headerPath, prelude = []) {
 // The prelude and the completing includes reach only the compiled wrapper and swigMacros only SWIG's parse: SWIG still
 // wraps just the imported header. The ignored declarations follow the macros, so the retry without macros keeps them.
 export function buildInterfaceContent({
-    moduleName, headerPath, prelude = [], completing = [], swigMacros = [], ignored = [], constants = [], preamble = [],
+    moduleName, headerPath, prelude = [], completing = [], swigMacros = [], ignored = [], constants = [], preamble = [], functions = ALL_NAMES,
 }) {
     const includes = [...new Set([...interfaceIncludes(headerPath, prelude), ...completing])]
         .map((header) => `#include "${header}"`)
@@ -89,7 +89,7 @@ ${includes}
 ${everyConstant ? '' : constantRequests(constants)}%feature("shared_ptr");
 %feature("polymorphic_shared_ptr");
 
-${macros}${ignores}${preambleBlock}${everyConstant ? constantRequests(constants) : ''}%include "${headerPath}"
+${macros}${functionRequests(functions)}${ignores}${preambleBlock}${everyConstant ? constantRequests(constants) : ''}%include "${headerPath}"
 
 #endif
 `;
@@ -99,6 +99,14 @@ ${macros}${ignores}${preambleBlock}${everyConstant ? constantRequests(constants)
 function constantRequests(constants) {
     if (constants === ALL_NAMES) return '%feature("embind:constant");\n\n';
     return constants.length ? `${constants.map((name) => `%feature("embind:constant") ${name};`).join('\n')}\n\n` : '';
+}
+
+// SWIG ignores every global function, then wraps the listed names again: class members, enums and constants stay. The
+// package's own ignores come after, since SWIG applies the later of two renames of a name.
+function functionRequests(functions) {
+    if (functions === ALL_NAMES) return '';
+    const names = [...new Set(functions)].sort();
+    return `%rename($ignore, %$isfunction, %$isglobal) "";\n${names.map((name) => `%rename("%s") ${name};\n`).join('')}\n`;
 }
 
 export function withoutSwigMacros(content) {

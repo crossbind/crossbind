@@ -5,13 +5,41 @@ import loadJson from '../utils/loadJson.js';
 import state from '../state/index.js';
 import { parseSurface, createRustBridgeCrate, createCrateImportBridge } from '../utils/rustBridgeGen.js';
 import { parseCargoMarkerName } from '../utils/cargoImport.js';
+import { UNBOUND_MESSAGE } from '../assets/js-runtime/adapters/unboundMessage.js';
 
 // `base` is where the bundler serves the app from, as Vite's `base` names it; webpack's public path wins at run time.
-export default function getCrossbindScript(target, bridgePath, { base = '/' } = {}) {
+// Metro asks for `liveExports`: it keeps a header's module as it first transformed it while the app's imports change.
+export default function getCrossbindScript(target, bridgePath, { base = '/', liveExports: isLive = false } = {}) {
     if (!bridgePath) {
         throw new Error('getCrossbindScript needs the bridge file of the imported header');
     }
-    return buildScript(target, loadJson(`${bridgePath}.exports.json`), base);
+    const script = buildScript(target, loadJson(`${bridgePath}.exports.json`), base);
+    return isLive ? `${script}${liveExportsScript()}` : script;
+}
+
+// A name the module does not export comes off the booted module: undefined before initNative. A name the module the page
+// or app loaded lacks, exported or not, is a function that says why. Serialized into the generated module, so it
+// references nothing outside itself.
+export function liveExports(exportsObject, unbound) {
+    return new Proxy(exportsObject, {
+        get(target, name, receiver) {
+            const value = Reflect.get(target, name, receiver);
+            const bound = globalThis.__crossbindModule;
+            if (value != null || !bound || typeof name !== 'string' || ['then', 'default', 'toJSON'].includes(name)) return value;
+            if (bound[name] !== undefined) return bound[name];
+            if (!/^[A-Za-z_]\w*$/.test(name)) return value;
+            return function notBound() {
+                throw new Error(`crossbind: ${name} ${unbound}`);
+            };
+        },
+    });
+}
+
+function liveExportsScript() {
+    return `
+        const __crossbindLiveExports = ${liveExports.toString()};
+        if (typeof module === 'object' && module) module.exports = __crossbindLiveExports(module.exports, ${JSON.stringify(UNBOUND_MESSAGE)});
+    `;
 }
 
 // The Rust analog of a .h import: parse the crate surface and emit the same proxy module

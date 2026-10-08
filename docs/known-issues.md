@@ -174,3 +174,29 @@ same runner the same day, so the failure belongs to this path; its cause is not 
 - Check: with `CROSSBIND_RUNNER=REMOTE` and a web runner in `CROSSBIND_REMOTE_URL_WEB` and
   `CROSSBIND_TOKEN_WEB`, run `pod install` in `e2e/mobile-reactnative-cli/ios`; it fails at swig.
 - Remove when that `pod install` passes through a web runner.
+
+## A dependency's functions stay unbound for imports the scan cannot see
+
+A dependency's header binds the free functions the app's own sources import from it, and the scan
+that finds them reads only `.js`, `.jsx`, `.ts`, `.tsx`, `.mjs`, `.cjs`, `.mts`, `.cts`, `.vue` and
+`.svelte` files of the project, skipping `node_modules` and every directory named `dist`, `build`,
+`ios`, `android`, `Pods` or `target`. An import in a package under `node_modules`, in an inline
+`<script>` of an HTML page, in an `.astro` or `.mdx` file, or in a source under such a directory
+binds nothing, and the call then fails at run time. The build warns only when no source names the
+header at all.
+
+- Seen: 2026-10-08 (review of the import-driven bindings)
+- Check: `node --input-type=module -e "import { isAppSource } from './core/crossbind/src/utils/appSources.js'; console.log(['src/a.astro', 'src/build/a.js'].map((f) => isAppSource('/app', '/app/' + f)))"` prints `[ false, false ]`.
+- Remove when those imports bind, by a wider scan or by reading the imports the bundler resolves.
+
+## The types of a `conan:` import list only the functions the app imports
+
+`writeConanImportDts` writes the `declare module 'conan:<package>/<header>'` block from the names the
+header's bridge exports, and the bridge binds only the free functions the app imports. An editor
+therefore offers none of the header's other functions, and TypeScript reports a newly typed import
+as missing until the build or the dev server binds it.
+
+- Seen: 2026-10-08 (review of the import-driven bindings)
+- Check: `grep -n "readExportNames(exportsFile" core/crossbind/src/utils/cppDts.js` still finds the
+  `conan:` declarations read from the bridge's `exports.json`.
+- Remove when the declarations come from every function the header declares.

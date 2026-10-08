@@ -339,6 +339,14 @@ test('src/headers.js must re-export exactly what the examples import', async () 
     await withLibrary({ headers: '' }, (demos) => assert.rejects(buildLibraryExamples({ demosDir: demos }), /Demo_version.*not re-exported/));
 });
 
+// A dependency's header binds only the functions the app imports, so the page's own calls are imported here too.
+test('src/headers.js re-exports what the page calls through the module as well', async () => {
+    const page = "const m = await initNative({ path: './dist' });\nshow(`demo ${await m.Demo_release()}`);";
+    const both = "export { Demo_version, Demo_release } from '@crossbind/port-demo/demo.h';\n";
+    await withLibrary({ indexHtml: page, headers: both }, (demos) => buildLibraryExamples({ demosDir: demos }));
+    await withLibrary({ indexHtml: page }, (demos) => assert.rejects(buildLibraryExamples({ demosDir: demos }), /index\.html calls m\.Demo_release/));
+});
+
 test('an init option is shared by the module and booted the same way by its self-check', async () => {
     const needsPageThread =
         "export const imports = { '@crossbind/port-demo/demo.h': ['Demo_version'] };\nexport const note = 'n';\nexport const expected = ['1'];\nexport const init = { useWorker: false };\n\nexport default async function example({ Demo_version }, console) {\n    console.log(await Demo_version());\n}\n";

@@ -4,6 +4,8 @@ import os from 'node:os';
 import path from 'node:path';
 import upath from 'upath';
 import { getFileHash } from '../src/utils/hash.js';
+import calculateDependencyParameters from '../src/state/calculateDependencyParameters.js';
+import { getCliCMakeListsFile } from '../src/utils/getCMakeListsFilePath.js';
 
 // The bridge depends on the header's declarations, but the interface text only names the header:
 // a cache keyed on the interface alone kept stale bindings across header edits.
@@ -289,6 +291,26 @@ describe('constants the app imports', () => {
         expect(fs.readFileSync(cachedInterface(kitHeader), 'utf8')).toContain('%feature("embind:constant") KIT_ANSWER;');
     });
 
+    // The conformance kit reads a constant it did not import through AllSymbols and expects it unbound.
+    test('asks only for the named constants when the app also imports AllSymbols', async () => {
+        const { createBridgeFile } = await importFresh();
+        writeApp("import { AllSymbols, initNative, ANSWER } from './native/fixture.h';\n");
+
+        createBridgeFile(header, target);
+
+        expect(interfaceText()).toContain('%feature("embind:constant") ANSWER;\n');
+        expect(interfaceText()).not.toContain('%feature("embind:constant");');
+    });
+
+    test('asks for no constant when the app imports only initNative', async () => {
+        const { createBridgeFile } = await importFresh();
+        writeApp("import { initNative } from './native/fixture.h';\n");
+
+        createBridgeFile(header, target);
+
+        expect(interfaceText()).not.toContain('embind:constant');
+    });
+
     test('asks for every constant when the app imports the whole header', async () => {
         const { createBridgeFile } = await importFresh();
         writeApp("import * as fixture from './native/fixture.h';\n");
@@ -457,6 +479,237 @@ describe('a dependency header installed twice under one include root', () => {
     });
 });
 
+
+// A dependency's header binds the free functions the app imports from it: binding them all links code the app never calls.
+describe('free functions of a dependency header', () => {
+    const target = { platform: 'wasm', path: 'wasm-wasm32-st-release' };
+    const IGNORE_FUNCTIONS = '%rename($ignore, %$isfunction, %$isglobal) "";';
+    const SPECIFIER = '../deps/libfixture/prebuilt/include/lib.h';
+    const writeApp = (text) => fs.writeFileSync(path.join(work, 'src', 'main.js'), text);
+    const interfaceOf = (file) => fs.readFileSync(cachedInterface(file), 'utf8');
+    let include;
+    let libHeader;
+
+    beforeEach(() => {
+        const base = upath.normalize(work);
+        include = upath.join(base, 'deps', 'libfixture', 'prebuilt', 'include');
+        fs.mkdirSync(include, { recursive: true });
+        libHeader = upath.join(include, 'lib.h');
+        fs.writeFileSync(libHeader, 'int one();\nint two();\n');
+        holder.config.paths.base = base;
+        holder.config.dependencyParameters.getCmakeDependsPathAndName = () => ({ pathsOfCmakeDepends: [upath.join(base, 'deps', 'libfixture')] });
+    });
+
+    test('binds the functions the app imports and no other', async () => {
+        const { createBridgeFile } = await importFresh();
+        writeApp(`import { one } from '${SPECIFIER}';\n`);
+
+        createBridgeFile(libHeader, target);
+
+        expect(interfaceOf(libHeader)).toContain(`${IGNORE_FUNCTIONS}\n%rename("%s") one;\n\n%include "lib.h"`);
+    });
+
+    test.each([
+        ['a namespace import', `import * as lib from '${SPECIFIER}';`],
+        ['a dynamic import', `const lib = await import('${SPECIFIER}');`],
+        ['initNative alone', `import { initNative } from '${SPECIFIER}';`],
+        ['AllSymbols', `import { AllSymbols, one } from '${SPECIFIER}';`],
+    ])('binds every function when the app takes the whole module through %s', async (_, line) => {
+        const { createBridgeFile } = await importFresh();
+        writeApp(`${line}\n`);
+
+        createBridgeFile(libHeader, target);
+
+        expect(interfaceOf(libHeader)).not.toContain('%rename');
+    });
+
+    // A boot file takes initNative, the features import what they call.
+    test('binds the named functions when another source imports only initNative', async () => {
+        const { createBridgeFile } = await importFresh();
+        fs.writeFileSync(path.join(work, 'src', 'boot.js'), `import { initNative } from '${SPECIFIER}';\n`);
+        writeApp(`import { one } from '${SPECIFIER}';\n`);
+
+        createBridgeFile(libHeader, target);
+
+        expect(interfaceOf(libHeader)).toContain(`${IGNORE_FUNCTIONS}\n%rename("%s") one;\n\n%include "lib.h"`);
+    });
+
+    // A package's own .i says what the header binds.
+    test('leaves a header that ships its own interface to that file, without a warning', async () => {
+        const { createBridgeFile } = await importFresh();
+        const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+        fs.writeFileSync(upath.join(include, 'lib.i'), '%module LIB\n%{\n#include "lib.h"\n%}\n%include "lib.h"\n');
+
+        createBridgeFile(libHeader, target);
+
+        expect(warn.mock.calls.filter(([message]) => message.includes('lib.h'))).toHaveLength(0);
+    });
+
+    test('binds every function of a header the build binds whole', async () => {
+        const { createBridgeFile } = await importFresh();
+        writeApp(`import { one } from '${SPECIFIER}';\n`);
+
+        createBridgeFile(libHeader, target, { wholeHeaders: [libHeader] });
+
+        expect(interfaceOf(libHeader)).not.toContain('%rename');
+    });
+
+    test('binds every function of the project\'s own headers, whatever the app imports', async () => {
+        const { createBridgeFile } = await importFresh();
+        fs.writeFileSync(header, 'int one();\nint two();\n');
+        writeApp("import { one } from './native/fixture.h';\n");
+
+        createBridgeFile(header, target);
+
+        expect(interfaceOf(header)).not.toContain('%rename');
+    });
+
+    test('regenerates the bridge when the app imports another function', async () => {
+        const { run, createBridgeFile } = await importFresh();
+        writeApp(`import { one } from '${SPECIFIER}';\n`);
+        createBridgeFile(libHeader, target);
+
+        writeApp(`import { one, two } from '${SPECIFIER}';\n`);
+        createBridgeFile(libHeader, target);
+
+        expect(swigRuns(run)).toHaveLength(2);
+        expect(interfaceOf(libHeader)).toContain('%rename("%s") one;\n%rename("%s") two;\n');
+    });
+
+    // The header bound for the types another one uses registers them; its functions wait for an import of their own.
+    test('binds no function of a header bound only for the types another one uses', async () => {
+        const { createBridgeFile } = await importFresh();
+        const boxHeader = upath.join(include, 'box.h');
+        fs.writeFileSync(boxHeader, 'struct Box {\n  int side;\n};\nstruct Box *box_new();\n');
+        fs.writeFileSync(libHeader, '#include "box.h"\nint area(struct Box *box);\n');
+        writeApp(`import { area } from '${SPECIFIER}';\n`);
+
+        const bridge = createBridgeFile(libHeader, target);
+
+        expect(fs.readFileSync(`${bridge}.deps`, 'utf8')).toContain('box.i.cpp');
+        expect(interfaceOf(boxHeader)).toContain(`${IGNORE_FUNCTIONS}\n\n%include "box.h"`);
+    });
+
+    // A package that imports the header in its own JavaScript sits in node_modules, which the scan of the app skips.
+    test('warns once when nothing the app imports names the header', async () => {
+        const { createBridgeFile } = await importFresh();
+        const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+        createBridgeFile(libHeader, target);
+        createBridgeFile(libHeader, target);
+
+        expect(warn.mock.calls.filter(([message]) => message.includes('lib.h'))).toHaveLength(1);
+        expect(interfaceOf(libHeader)).toContain(`${IGNORE_FUNCTIONS}\n\n%include "lib.h"`);
+    });
+});
+
+// A Metro server started before the port was built for its platform.
+describe('a dependency built after the process loaded', () => {
+    test('binds the functions the app imports from its header', async () => {
+        const { createBridgeFile } = await importFresh();
+        const target = { platform: 'wasm', path: 'wasm-wasm32-st-release' };
+        const output = upath.join(upath.normalize(work), 'deps', 'libfixture', 'dist');
+        const lib = {
+            general: { name: 'libfixture' },
+            export: { type: 'cmake' },
+            paths: {
+                project: upath.dirname(output), output, header: [], cmake: getCliCMakeListsFile(), cmakeDir: upath.dirname(getCliCMakeListsFile()), cliCMakeListsTxt: getCliCMakeListsFile(),
+            },
+            dependencies: [],
+            functions: { isEnabled: (t) => fs.existsSync(`${lib.paths.cmakeDir}/${t.path}`) },
+        };
+        Object.assign(holder.config, {
+            dependencies: [lib], allDependencies: [lib], ext: { ...holder.config.ext, source: ['cpp'] },
+        });
+        holder.config.paths.base = upath.normalize(work);
+        holder.config.paths.cliCMakeListsTxt = getCliCMakeListsFile();
+        holder.config.dependencyParameters = calculateDependencyParameters(holder.config);
+        const include = upath.join(output, 'prebuilt', target.path, 'include');
+        fs.mkdirSync(include, { recursive: true });
+        fs.writeFileSync(upath.join(output, 'prebuilt', 'CMakeLists.txt'), '');
+        const libHeader = upath.join(include, 'lib.h');
+        fs.writeFileSync(libHeader, 'int one();\nint two();\n');
+        fs.writeFileSync(path.join(work, 'src', 'main.js'), `import { one } from '../deps/libfixture/dist/prebuilt/${target.path}/include/lib.h';\n`);
+
+        createBridgeFile(libHeader, target);
+
+        expect(fs.readFileSync(cachedInterface(libHeader), 'utf8')).toContain('%rename("%s") one;\n\n%include "lib.h"');
+    });
+});
+
+// Metro transforms in worker processes, so two of them can bind one header at once.
+describe('binding a header from parallel processes', () => {
+    const target = { platform: 'wasm', path: 'wasm-wasm32-st-release' };
+    const lockFile = () => path.join(holder.config.paths.build, 'bridge.lock');
+
+    test('holds a lock in the build directory while SWIG runs, and leaves none behind', async () => {
+        const { run, createBridgeFile } = await importFresh();
+        let isHeldDuringSwig = false;
+        run.mockImplementation((program, args) => {
+            if (program === 'swig') isHeldDuringSwig = fs.existsSync(lockFile());
+            fs.writeFileSync(args[args.indexOf('-o') + 1], program === 'swig' ? 'EMSCRIPTEN_BINDINGS(fixture) {}\n' : '');
+            return '';
+        });
+        fs.writeFileSync(header, 'int one();\n');
+
+        createBridgeFile(header, target);
+
+        expect(isHeldDuringSwig).toBe(true);
+        expect(fs.existsSync(lockFile())).toBe(false);
+    });
+
+    test('takes over a lock whose holder died', async () => {
+        const { createBridgeFile } = await importFresh();
+        fs.mkdirSync(path.dirname(lockFile()), { recursive: true });
+        fs.writeFileSync(lockFile(), '999999999');
+        fs.writeFileSync(header, 'int one();\n');
+
+        expect(createBridgeFile(header, target)).toBeTruthy();
+        expect(fs.existsSync(lockFile())).toBe(false);
+    });
+
+    // CI restores a committed cache on runners that have no Docker for SWIG.
+    test('reuses the interface and bridge a cache from before the keys holds', async () => {
+        const { run, createBridgeFile } = await importFresh();
+        fs.writeFileSync(header, 'int one();\n');
+        const bridge = createBridgeFile(header, target);
+        fs.rmSync(`${cachedInterface(header)}.key`);
+        fs.rmSync(`${bridge}.key`);
+
+        createBridgeFile(header, target);
+
+        expect(swigRuns(run)).toHaveLength(1);
+    });
+
+    // Each process keeps the cache it loaded: the one that bound the header first must not take the interface and bridge
+    // another process has rebuilt since for other imports as its own.
+    test('rebuilds an interface and bridge another process replaced', async () => {
+        const { run, createBridgeFile } = await importFresh();
+        run.mockImplementation((program, args) => {
+            fs.writeFileSync(args[args.indexOf('-o') + 1], program === 'swig' ? fs.readFileSync(args.at(-1), 'utf8') : '');
+            return '';
+        });
+        const include = upath.join(upath.normalize(work), 'deps', 'libfixture', 'prebuilt', 'include');
+        fs.mkdirSync(include, { recursive: true });
+        const libHeader = upath.join(include, 'lib.h');
+        fs.writeFileSync(libHeader, 'int one();\nint two();\n');
+        holder.config.paths.base = upath.normalize(work);
+        holder.config.dependencyParameters.getCmakeDependsPathAndName = () => ({ pathsOfCmakeDepends: [upath.join(upath.normalize(work), 'deps', 'libfixture')] });
+        const writeApp = (names) => fs.writeFileSync(path.join(work, 'src', 'main.js'), `import { ${names} } from '../deps/libfixture/prebuilt/include/lib.h';\n`);
+        writeApp('one, two');
+        createBridgeFile(libHeader, target);
+        const firstProcess = holder.cache;
+        holder.cache = structuredClone(firstProcess);
+        writeApp('one');
+        createBridgeFile(libHeader, target);
+        holder.cache = firstProcess;
+
+        writeApp('one, two');
+        const bridge = createBridgeFile(libHeader, target);
+
+        expect(fs.readFileSync(bridge, 'utf8')).toContain('%rename("%s") two;');
+    });
+});
 
 // The lib-cmake template ships its sources: the app compiles them through the package's own CMakeLists, which
 // no prebuilt include directory stands for.
