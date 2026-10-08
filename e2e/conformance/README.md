@@ -36,10 +36,10 @@ skips (search `KNOWN ENGINE GAP` in `spec/run.mjs`).
   the one running rather than a device's older copy. The bundler legs that link both ports wire it
   (Vite, Rspack, Metro); the standalone legs skip it.
 - `native/confconstants.h` (+ `confconstantsbase.h`) and `spec/sections/constants.mjs` — constants
-  bind only for the names an app imports, so the bundler and React Native legs import them by name:
-  numbers, a string, a character, a boolean, a macro from an included header, one inside a platform
-  `#if`, and const globals; one macro no leg imports and a mutable global stay unbound. The standalone
-  legs import no header and skip the section.
+  bind only for the names an app imports, so the bundler and React Native legs, and the Node-API leg
+  through the import hooks, import them by name: numbers, a string, a character, a boolean, a macro
+  from an included header, one inside a platform `#if`, and const globals; one macro no leg imports
+  and a mutable global stay unbound. The other standalone legs import no header and skip the section.
 - `../conformance-rust/` — the Rust half: one plain crate (`src/lib.rs`, every construct in
   sections) built as a cargo package like `core/embind-rust/demo`; `spec/sections/rust/*.mjs` hold
   its checks. Constructs the generator does not carry yet are `todo` entries: a miss prints a
@@ -48,7 +48,8 @@ skips (search `KNOWN ENGINE GAP` in `spec/run.mjs`).
   `spec/sections/rust/parity.mjs` holds the napi.rs parity list (what napi-rs binds and ours
   does not yet), with the JS shapes napi.rs documents as the expected values.
 - `spec/coverage.mjs` — `trackExports(module)` records what the checks touch, so the
-  `coverage` section fails when a kit export goes untested; `spec/bridgeExports.mjs` reads the
+  `coverage` section fails when a kit export goes untested (a leg that hands a section the names
+  of a header import tracks them into the same set, `trackExports(names, seen)`); `spec/bridgeExports.mjs` reads the
   bridges' export lists (node only, so run.mjs stays loadable in browsers and on the edge).
   Wired by legs that build the bridges themselves (node).
 

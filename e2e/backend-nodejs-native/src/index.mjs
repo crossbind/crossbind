@@ -1,15 +1,36 @@
 import { fileURLToPath } from 'node:url';
-import initNative from '../dist/crossbind-e2e-backend-nodejs-native.native.cjs';
 import { runConformance } from '@crossbind/conformance/spec/run.mjs';
 import { kitExports } from '@crossbind/conformance/spec/bridgeExports.mjs';
 import { trackExports } from '@crossbind/conformance/spec/coverage.mjs';
+// The hooks the build writes (node --import ./dist/node/napi.register.mjs) serve these imports from the
+// addon, and the build binds what they name, as a bundler does.
+// Constants bind only for the names imported here; the header also defines one no leg imports.
+import {
+    initNative, AllSymbols as confConstantsModule, CONF_BASE, CONF_BASE_NAME, CONF_CHAR, CONF_DOUBLE, CONF_EXPRESSION,
+    CONF_HEX, CONF_INT, CONF_NEGATIVE, CONF_PLATFORM, CONF_STRING, CONF_TRUE, CONF_WIDE, confGlobal, confGlobalName,
+} from '@crossbind/conformance/native/confconstants.h';
+import { Counter } from './native/counter.rs';
+// Direct crate imports: bridged from the crates' own sources, no surface file.
+import { Uuid } from 'cargo:uuid';
+import { Version, VersionReq } from 'cargo:semver';
+import { Regex } from 'cargo:regex';
+import { xxh364, Xxh3 } from 'cargo:xxhash-rust/xxh3';
+import { xxh64, Xxh64 } from 'cargo:xxhash-rust/xxh64';
+import { xxh32, Xxh32 } from 'cargo:xxhash-rust/xxh32';
+import { Argon2, Params as Argon2Params, Algorithm as Argon2Algorithm, Version as Argon2Version } from 'cargo:argon2-rust';
+import { Params as Argon2ModuleParams, Memory as Argon2Memory } from 'cargo:argon2-rust/params';
+import { XzOptions, XzWriter, XzReader, LzmaOptions, LzmaWriter, Lzma2Reader, LzmaReader } from 'cargo:lzma-rust2';
 
 // The addon runs embind-jsi like React Native does: a synchronous runtime, so every section runs
-// with the jsi expectations. Bundler-only surfaces (app-local .rs, cargo: imports) report as skips.
+// with the jsi expectations.
 initNative().then(async (m) => {
     try {
-        // Every kit export must be touched by a check: the proxy records what the checks read.
+        // Every kit export must be touched by a check: the proxies record what the checks read.
         const { proxy, seen } = trackExports(m);
+        const constants = trackExports({
+            CONF_BASE, CONF_BASE_NAME, CONF_CHAR, CONF_DOUBLE, CONF_EXPRESSION, CONF_HEX, CONF_INT, CONF_NEGATIVE,
+            CONF_PLATFORM, CONF_STRING, CONF_TRUE, CONF_WIDE, confGlobal, confGlobalName, module: confConstantsModule,
+        }, seen).proxy;
         const result = await runConformance({
             cpp: { ConfBox: proxy.ConfBox, ConfCircle: proxy.ConfCircle, ConfOps: proxy.ConfOps, ConfShape: proxy.ConfShape },
             rustPkg: {
@@ -30,8 +51,12 @@ initNative().then(async (m) => {
                 dupDoc: m.dupDoc,
                 sharedDropCount: m.sharedDropCount,
             },
-            rustAppLocal: null,
-            rustCrates: null,
+            rustAppLocal: { Counter },
+            rustCrates: {
+                Uuid, Version, VersionReq, Regex, xxh364, Xxh3, xxh64, Xxh64, xxh32, Xxh32,
+                Argon2, Argon2Params, Argon2Algorithm, Argon2Version, Argon2ModuleParams, Argon2Memory,
+                XzOptions, XzWriter, XzReader, LzmaOptions, LzmaWriter, Lzma2Reader, LzmaReader,
+            },
             jsLive: {
                 jsPass: m.jsPass,
                 jsProbe: m.jsProbe,
@@ -44,6 +69,7 @@ initNative().then(async (m) => {
             strings: proxy,
             wrappers: proxy,
             types: proxy,
+            constants,
             rustKit: proxy,
             coverage: { exports: kitExports(fileURLToPath(new URL('../.crossbind/build/bridge/', import.meta.url))), seen },
             caps: { jsiNative: true },

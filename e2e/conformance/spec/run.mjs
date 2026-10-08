@@ -11,11 +11,11 @@
 //   rustPkg:      { RustyCounter, Widget, Gauge, Mode, RustIntVector, doubleIt, greet,
 //                   checkedParse, parseEven, tag, jsonEcho, jsonTally, jsonPick,
 //                   SharedDoc, dupDoc, sharedDropCount }      (any leg - prebuilt package)
-//   rustAppLocal: { Counter, Hull }                           (bundler legs only)
+//   rustAppLocal: { Counter, Hull }                           (bundler legs; Node legs through the import hooks)
 //   rustCrates:   { Uuid, Version, VersionReq, Regex, xxh364, Xxh3, xxh64, Xxh64, xxh32, Xxh32,
 //                   Argon2, Argon2Params, Argon2Algorithm, Argon2Version, Argon2ModuleParams,
 //                   Argon2Memory, XzOptions, XzWriter, XzReader, LzmaOptions, LzmaWriter,
-//                   Lzma2Reader, LzmaReader } (bundler legs only)
+//                   Lzma2Reader, LzmaReader } (bundler legs; Node legs through the import hooks)
 //   jsLive:       { jsPass, jsProbe, jsCall, jsStore, jsFire } (synchronous runtimes only -
 //                   on worker-backed legs functions cannot cross and identity dies)
 //   pointers, callbacks, strings, wrappers, types: the module namespace of the matching kit
@@ -23,7 +23,7 @@
 //   packageFields: { zlib, webp }, the namespaces of @crossbind/port-zlib/zlib.h and
 //                   @crossbind/port-webp/encode.h (bundler legs that link both ports)
 //   constants:    the names a leg imports from native/confconstants.h, plus `module` (its AllSymbols);
-//                   constants bind only for header imports, so standalone builds have none
+//                   constants bind only for header imports, so a leg that imports no header has none
 //   rustKit:      the exports of @crossbind/conformance-rust (any leg - prebuilt package);
 //                   constructs the generator does not carry yet are `todo` entries, reported
 //                   as TODO lines and counted apart from the pass/run figures
@@ -231,7 +231,7 @@ export function buildChecks(s) {
         }, [true, 'conf', 0, 1]);
     }));
 
-    section(list, 'rustAppLocal', 'app-local .rs surfaces need a bundler (vite/webpack/metro) leg', s.rustAppLocal && (() => {
+    section(list, 'rustAppLocal', 'app-local .rs surfaces need a bundler (vite/webpack/metro) leg or the Node import hooks', s.rustAppLocal && (() => {
         const { Counter, Hull } = s.rustAppLocal;
         if (Counter) {
             add('rustLocal:class', async () => {
@@ -264,7 +264,7 @@ export function buildChecks(s) {
         }
     }));
 
-    section(list, 'rustCrates', 'cargo: crate imports need a bundler (vite/webpack/metro) leg', s.rustCrates && (() => {
+    section(list, 'rustCrates', 'cargo: crate imports need a bundler (vite/webpack/metro) leg or the Node import hooks', s.rustCrates && (() => {
         const {
             Uuid, Version, VersionReq, Regex, xxh364, Xxh3, xxh64, Xxh64, xxh32, Xxh32,
             Argon2, Argon2Params, Argon2Algorithm, Argon2Version, Argon2ModuleParams, Argon2Memory,

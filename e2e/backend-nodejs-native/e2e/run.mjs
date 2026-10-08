@@ -10,6 +10,8 @@ const GLIBC_IMAGE = 'node:24-bookworm-slim';
 const MUSL_IMAGE = 'node:24-alpine';
 // Shared conformance list: pass must equal run (backreference); skips are explicit lines.
 const CONFORMANCE = /^CONFORMANCE (\d+)\/\1\b.*$/m;
+// The suite imports its headers and crates through the hooks the build writes beside the addon's entry.
+const APP = ['--import', './dist/node/napi.register.mjs', 'src/index.mjs'];
 
 const root = resolve(import.meta.dirname, '..');
 // The suite imports the workspace's conformance kit, so a container sees the whole repository.
@@ -48,11 +50,11 @@ function isDockerAvailable() {
 // The image variant must match the addon, whichever one an earlier pull left under the tag.
 const inContainer = (image) => [
     'run', '--rm', '--platform', `linux/${arch === 'arm64' ? 'arm64' : 'amd64'}`,
-    '-v', `${repo}:${repo}:ro`, '-w', root, image, 'node', 'src/index.mjs',
+    '-v', `${repo}:${repo}:ro`, '-w', root, image, 'node', ...APP,
 ];
 
 if ((process.platform === 'win32' || process.platform === 'darwin') && hasAddon(process.platform)) {
-    check(`${process.platform}-${arch} on this host`, process.execPath, ['src/index.mjs']);
+    check(`${process.platform}-${arch} on this host`, process.execPath, APP);
 }
 if (process.platform !== 'win32' && (hasAddon('linux') || hasAddon('linuxmusl'))) {
     if (isDockerAvailable()) {
