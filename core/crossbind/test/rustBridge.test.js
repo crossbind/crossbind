@@ -439,6 +439,10 @@ describe('createRustBridgeCrate', () => {
         expect(bridge).toContain('class_::<user::Counter>("Counter")');
     });
 
+    test('exports the keep symbol of its lib, which pulls its registrations into a lazy link', () => {
+        expect(bridge).toContain('#[no_mangle]\npub extern "C" fn crossbind_keep_counter_crossbind_app() {}');
+    });
+
     test('renders declared cargo dependencies, both plain versions and verbatim specs', () => {
         expect(manifest).toContain('uuid = "1.11.0"');
         expect(manifest).toContain('geo = { version = "0.29", default-features = false }');

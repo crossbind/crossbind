@@ -109,4 +109,14 @@ describe('getLinkInputs', () => {
         expect([...inputs.wholeArchiveNames]).toEqual(['crossbind_app_super']);
         expect(inputs.hasRust).toBe(true);
     });
+
+    test('pins the app super-crate by symbol on Windows, where lld cannot load it whole', () => {
+        appRustLibs.current = [`${work}/cache/libcrossbind_app_super.a`];
+
+        const inputs = getLinkInputs({ ...target, platform: 'win32', path: 'win32-x64-mt-release' }, { keepFlag });
+
+        expect(inputs.rustKeepFlags).toEqual(['KEEP:crossbind_app_super']);
+        expect([...inputs.wholeArchiveNames]).toEqual([]);
+        expect(inputs.hasRust).toBe(true);
+    });
 });

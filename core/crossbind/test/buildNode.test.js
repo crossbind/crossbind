@@ -4,12 +4,13 @@ import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 
 const {
-    run, state, rollup, getData,
+    run, state, rollup, getData, appRustCrates,
 } = vi.hoisted(() => ({
     run: vi.fn(),
     state: { config: {}, targets: [] },
     rollup: vi.fn(),
     getData: vi.fn(),
+    appRustCrates: vi.fn(),
 }));
 
 vi.mock('rollup', () => ({ rollup }));
@@ -21,7 +22,7 @@ vi.mock('../src/utils/resolveEmbindNapi.js', () => ({
     resolveEmbindJsiRoot: () => '/jsi',
 }));
 vi.mock('../src/utils/resolveEmbindRust.js', () => ({ default: () => '/embind-rust' }));
-vi.mock('../src/utils/appRustCrates.js', () => ({ default: () => [] }));
+vi.mock('../src/utils/appRustCrates.js', () => ({ default: appRustCrates }));
 vi.mock('../src/utils/logger.js', () => ({
     default: { info() {}, error() {}, startStep() {}, doneStep() {}, cachedStep() {} },
 }));
@@ -64,6 +65,8 @@ describe('buildNode', () => {
         state.targets = [target];
         getData.mockReset();
         getData.mockReturnValue({});
+        appRustCrates.mockReset();
+        appRustCrates.mockReturnValue([]);
         written = [];
         run.mockReset();
         run.mockImplementation((program, args, prefix, calledTarget) => {
@@ -162,6 +165,23 @@ describe('buildNode', () => {
         expect(linkArgs).toContain('-Wl,--whole-archive');
         expect(linkArgs).toContain('-Wl,-u,crossbind_keep_demo_rs');
         expect(linkArgs.some((arg) => arg.includes('force_load'))).toBe(false);
+    });
+
+    test('links the app\'s Rust ahead of the packages, so their kept members find its std already there', async () => {
+        const linux = {
+            ...target, platform: 'linux', arch: 'x64', path: 'linux-x64-mt-release', addonName: 'demo.linux-x64.node',
+        };
+        state.targets = [linux];
+        state.config.dependencyParameters = {
+            getCmakeDepends: () => [{ export: { type: 'cargo', libName: ['demo_rs'] }, paths: { project: work } }],
+        };
+        appRustCrates.mockReturnValue([`${work}/libcrossbind_app_super.a`]);
+
+        await buildNode(linux, { force: true });
+
+        const linkArgs = defineOf(cmakeCalls()[0], 'CROSSBIND_LINK_ARGS').split(';');
+        expect(linkArgs.indexOf(`${work}/libcrossbind_app_super.a`)).toBeLessThan(linkArgs.indexOf('/deps/libproj.a'));
+        expect(linkArgs).not.toContain('-Wl,--allow-multiple-definition');
     });
 
     test('links the system libraries Rust std needs after everything else', async () => {
