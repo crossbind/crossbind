@@ -7,10 +7,9 @@ import { walk, hashIndex, presentUnits } from '../runner/files.js';
 import { isHash } from '../runner/blobs.js';
 import { getContentHash } from './hash.js';
 import { outputTarget, writeOutputFile, removeOutputFile } from './remoteOutputs.js';
+import { request, expectOk, uploadMissing } from './remoteUpload.js';
 
 const INDEX_DIR = path.join(os.homedir(), '.crossbind', 'remote-index');
-// Raw bytes per upload request; a larger file still travels, alone.
-const UPLOAD_BATCH_BYTES = 16 * 1024 * 1024;
 
 const indexFileOf = (mount) => path.join(INDEX_DIR, `${getContentHash(`${mount.host}\n${mount.container}`).slice(0, 16)}.json`);
 
@@ -27,51 +26,12 @@ function saveIndex(mount, index) {
     fs.writeFileSync(indexFileOf(mount), JSON.stringify(Object.fromEntries(index)));
 }
 
-async function request(url, route, init = {}) {
-    const token = process.env.CROSSBIND_TOKEN;
-    const headers = { ...(token ? { authorization: `Bearer ${token}` } : {}), ...init.headers };
-    try {
-        // A redirect would send the request, sources included, to an address nobody configured.
-        return await fetch(`${url}${route}`, { ...init, headers, redirect: 'error' });
-    } catch (error) {
-        throw new Error(`crossbind: the remote runner at ${url} is unreachable (${error.cause?.code ?? error.message}).`, { cause: error });
-    }
-}
-
-async function expectOk(response, what) {
-    if (response.ok) return response.json();
-    const body = await response.json().catch(() => ({}));
-    throw new Error(`crossbind: the remote runner failed ${what}: ${body.error ?? response.status}.`);
-}
-
 function describeMount(mount, rules, index) {
     const { files, dirs } = walk(mount.host, mount.inputRoots, rules);
     const hashes = hashIndex(mount.host, files, index);
     const manifest = Object.fromEntries([...hashes].map(([rel, sha256]) => [rel, { sha256, mode: files.get(rel).mode }]));
     const sources = [...hashes].map(([rel, sha256]) => [sha256, path.join(mount.host, rel)]);
     return { manifest, dirs, sources };
-}
-
-// `sources` maps each hash to a file holding it; only what the runner lacks travels, in a few batches.
-async function uploadMissing(url, sources) {
-    const listing = await request(url, '/v1/missing', { method: 'POST', body: JSON.stringify({ hashes: [...sources.keys()] }) });
-    const { missing } = await expectOk(listing, 'to list the files it lacks');
-    let batch = [];
-    let size = 0;
-    const flush = async () => {
-        if (batch.length === 0) return;
-        const body = batch.map(({ hash, data }) => JSON.stringify({ sha256: hash, data: data.toString('base64') })).join('\n');
-        await expectOk(await request(url, '/v1/blobs', { method: 'POST', body }), `to receive ${batch.length} files`);
-        batch = [];
-        size = 0;
-    };
-    for (const hash of missing) {
-        const data = fs.readFileSync(sources.get(hash));
-        if (size > 0 && size + data.length > UPLOAD_BATCH_BYTES) await flush();
-        batch.push({ hash, data });
-        size += data.length;
-    }
-    await flush();
 }
 
 function writeOutput(target, entry, data, indexes) {

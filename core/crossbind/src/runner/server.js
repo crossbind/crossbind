@@ -6,7 +6,7 @@ import crypto from 'node:crypto';
 import readline from 'node:readline';
 import { spawn } from 'node:child_process';
 import { pathToFileURL } from 'node:url';
-import { createBlobStore, isHash } from './blobs.js';
+import { createBlobStore, isHash, isUploadId } from './blobs.js';
 import {
     snapshot, hashIndex, planSync, applySync, diffSnapshots, expandRoots, sha256Of,
 } from './files.js';
@@ -14,12 +14,14 @@ import {
 // The runner side of `RUNNER=REMOTE`: it runs inside a crossbind toolchain image and executes the
 // toolchain steps a client would otherwise `docker run`, against folders it keeps in sync with the client.
 
-export const PROTOCOL_VERSION = 1;
+// 2: a blob too large for one request arrives in parts.
+export const PROTOCOL_VERSION = 2;
 export const MIN_TOKEN_LENGTH = 16;
 const MAX_JSON_BYTES = 16 * 1024 * 1024;
 const INLINE_OUTPUT_BYTES = 8 * 1024 * 1024;
 const MAX_MOUNTS = 8;
 const DEFAULT_PORT = 8787;
+const CONTENT_RANGE = /^bytes (\d+)-(\d+)\/(\d+)$/;
 // A proxy in front of a hosted runner (fly, cloudflare) closes a response that stays quiet, and a compile
 // step can print nothing for minutes.
 const HEARTBEAT_MS = 15_000;
@@ -254,6 +256,19 @@ export function createRunnerServer({
         if (blobMatch) {
             const hash = decodeURIComponent(blobMatch[1]);
             if (!isHash(hash)) return send(res, 400, { error: 'blob names are sha256 digests' });
+            if (req.method === 'PUT' && req.headers['content-range'] !== undefined) {
+                const range = CONTENT_RANGE.exec(req.headers['content-range']);
+                const [start, end, total] = range ? range.slice(1).map(Number) : [];
+                const upload = req.headers['x-crossbind-upload'];
+                if (!range || start > end || end >= total || !isUploadId(upload)) {
+                    return send(res, 400, { error: 'a part needs a content-range of bytes start-end/total and an x-crossbind-upload id' });
+                }
+                const result = await blobs.putPart(hash, upload, { start, end, total }, req);
+                if (result.status === 'stored') return send(res, 201, { stored: hash });
+                if (result.status === 'partial') return send(res, 202, { received: result.received });
+                if (result.status === 'gap') return send(res, 409, { error: `the upload holds ${result.received} bytes, so its next part starts there`, received: result.received });
+                return send(res, 400, { error: result.status === 'short' ? 'the part is not as long as its content-range says' : 'content does not match the hash' });
+            }
             if (req.method === 'PUT') {
                 return (await blobs.putStream(hash, req)) ? send(res, 201, { stored: hash }) : send(res, 400, { error: 'content does not match the hash' });
             }

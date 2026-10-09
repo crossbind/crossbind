@@ -114,12 +114,12 @@ Releases from before `RUNNER=REMOTE` read the same `~/.crossbind.json` and stop 
 - A runner runs one step at a time; concurrent builds queue.
 - A step's `make -jN` and `cmake --build -j N` run as many jobs as the runner has cores: the runner replaces the count the client computed for its own machine. On Cloud Run the container sees more cores than the service has (9 on 4 vCPU).
 - Its disk is a cache. When the platform starts the container fresh from its image, the next step uploads its inputs again. Cloud Run keeps that disk in memory, so it counts against the service's `--memory`.
-- Cloudflare Workers accept request bodies up to 100 MB on the Free and Pro plans. Uploads travel base64-encoded, so a single input file over about 75 MB cannot reach a Cloudflare runner. Cloud Run accepts up to 32 MiB per HTTP/1 request, about 24 MB of file. Results are not limited.
+- Cloudflare Workers accept request bodies up to 100 MB on the Free and Pro plans, and Cloud Run 32 MiB per HTTP/1 request. Small inputs therefore travel base64-encoded in batches of up to 16 MB, and a larger file as raw bytes in 16 MB parts, which the runner joins and checks against its hash. A part whose connection drops goes again, and the upload is named after the file's hash, so a later build goes on with the parts the runner holds; parts nobody added to for an hour are dropped. A runner deployed before parts existed (protocol 1) takes such a file in one request, which those limits refuse: the build stops naming the file, and deploying the runner again with the current crossbind fixes it. Results are not limited.
 - A step answers at once, and heartbeats every 15 seconds while it waits behind another one or runs quietly, so proxies keep the response open.
 - Cloudflare stops a container whose Durable Object is idle, and the work inside a container does not count as activity. The generated Worker therefore keeps both up with an alarm while a step streams, and lets the container sleep a minute after the last one. A container woken from sleep answered in about 2 seconds; the first start after `wrangler deploy` took over four minutes while the image spread, so a step that waits longer than four minutes fails and the next one finds the runner up.
 - Rust archives built on an amd64 runner (Cloudflare, Fly, Cloud Run, Azure) differ in bytes from ones built on arm64 (Docker on an Apple-silicon Mac), because a crate's metadata hash includes the machine that compiled it. C and C++ outputs match byte for byte.
 
-## Protocol (v1)
+## Protocol (v2)
 
 Every route but `/v1/health` needs `authorization: Bearer <token>`.
 
@@ -128,7 +128,7 @@ Every route but `/v1/health` needs `authorization: Bearer <token>`.
 | `GET /v1/health` | — | `{ ok, protocol, role, image }` |
 | `POST /v1/missing` | `{ hashes }` | `{ missing }`: the hashes the runner lacks |
 | `POST /v1/blobs` | JSON lines of `{ sha256, data }`, base64 | `{ stored }`: how many it stored |
-| `PUT /v1/blobs/<sha256>` | one file's bytes | `{ stored }` |
+| `PUT /v1/blobs/<sha256>` | one file's bytes, or, with `content-range: bytes <start>-<end>/<total>` and `x-crossbind-upload: <id>`, the next part of one (v2) | `{ stored }` once the file is whole, or at once for a file the runner holds; `202 { received }` after an earlier part, `409 { received }` for a part that does not start where its upload stands |
 | `GET /v1/blobs/<sha256>` | — | the file's bytes |
 | `POST /v1/exec` | `{ role, image, rules, mounts, cwd, argv, env }`; each mount lists its roots, output roots, manifest, folders and present store units | JSON lines: `stdout`, `stderr`, `heartbeat`, `file` (outputs up to 8 MB inline), then `{ exit, outputs, removed }` |
 

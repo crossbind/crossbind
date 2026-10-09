@@ -148,6 +148,57 @@ describe.skipIf(process.platform === 'win32')('runner server', () => {
         expect(missing).toEqual([sha('three')]);
     });
 
+    test('joins a blob sent in parts and stores it only when the whole matches its hash', async () => {
+        const runner = await start();
+        const put = (hash, upload, range, body) => runner.call(`/v1/blobs/${hash}`, {
+            method: 'PUT', body, headers: { 'content-range': `bytes ${range}`, 'x-crossbind-upload': upload },
+        });
+
+        await put(sha('hello world'), 'upload-two', '0-4/11', 'jello');
+        const tampered = await put(sha('hello world'), 'upload-two', '5-10/11', ' world');
+        const first = await put(sha('hello world'), 'upload-one', '0-4/11', 'hello');
+        const last = await put(sha('hello world'), 'upload-one', '5-10/11', ' world');
+        const download = await (await runner.call(`/v1/blobs/${sha('hello world')}`)).text();
+
+        expect([tampered.status, first.status, last.status]).toEqual([400, 202, 201]);
+        expect(download).toBe('hello world');
+    });
+
+    test('refuses a part that does not continue its upload, and one whose length does not match its range', async () => {
+        const runner = await start();
+        const put = (range, body) => runner.call(`/v1/blobs/${sha('hello world')}`, {
+            method: 'PUT', body, headers: { 'content-range': `bytes ${range}`, 'x-crossbind-upload': 'upload-one' },
+        });
+
+        const gap = await put('5-10/11', ' world');
+        const short = await put('0-4/11', 'hell');
+        const { missing } = await (await runner.call('/v1/missing', { method: 'POST', body: JSON.stringify({ hashes: [sha('hello world')] }) })).json();
+
+        expect([gap.status, short.status]).toEqual([409, 400]);
+        expect(missing).toEqual([sha('hello world')]);
+    });
+
+    test('answers a part of a blob it already holds as stored, and a gap with where the upload stands', async () => {
+        const runner = await start();
+        await upload(runner.call, 'hello world');
+        const put = (range, body, uploadId = 'upload-one') => runner.call(`/v1/blobs/${sha('hello world')}`, {
+            method: 'PUT', body, headers: { 'content-range': `bytes ${range}`, 'x-crossbind-upload': uploadId },
+        });
+
+        const repeated = await put('5-10/11', ' world');
+        const other = sha('other text!');
+        await runner.call(`/v1/blobs/${other}`, {
+            method: 'PUT', body: 'other', headers: { 'content-range': 'bytes 0-4/11', 'x-crossbind-upload': 'upload-two' },
+        });
+        const gap = await runner.call(`/v1/blobs/${other}`, {
+            method: 'PUT', body: 'text!', headers: { 'content-range': 'bytes 7-11/12', 'x-crossbind-upload': 'upload-two' },
+        });
+
+        expect(repeated.status).toBe(201);
+        expect(gap.status).toBe(409);
+        expect((await gap.json()).received).toBe(5);
+    });
+
     test('rejects blob names that are not sha256 digests', async () => {
         const runner = await start();
         const response = await runner.call('/v1/blobs/..%2F..%2Fetc%2Fpasswd', { method: 'PUT', body: 'x' });
@@ -314,6 +365,61 @@ describe.skipIf(process.platform === 'win32')('runner server', () => {
 });
 
 describe('blob store', () => {
+    test('takes one part of an upload at a time, so a part breaking off cannot undo the one sent after it', async () => {
+        const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'crossbind-runner-blobs-'));
+        const blobs = createBlobStore(dir);
+        const hash = sha('hello world');
+        let breakOff;
+        const straggler = new Readable({
+            read() {
+                if (breakOff) return;
+                this.push(' wo');
+                breakOff = () => this.destroy(new Error('connection reset'));
+            },
+        });
+
+        await blobs.putPart(hash, 'upload-one', { start: 0, end: 4, total: 11 }, Readable.from([Buffer.from('hello')]));
+        const first = blobs.putPart(hash, 'upload-one', { start: 5, end: 10, total: 11 }, straggler).catch((error) => error.message);
+        const retry = blobs.putPart(hash, 'upload-one', { start: 5, end: 10, total: 11 }, Readable.from([Buffer.from(' world')]));
+        await new Promise((resolve) => { setTimeout(resolve, 20); });
+        breakOff();
+
+        expect(await first).toBe('connection reset');
+        expect((await retry).status).toBe('stored');
+        expect(fs.readFileSync(blobs.pathOf(hash), 'utf8')).toBe('hello world');
+    });
+
+    test('drops the parts of an upload nobody added to for an hour when another upload starts', async () => {
+        const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'crossbind-runner-blobs-'));
+        const stale = path.join(dir, `.${sha('gone')}.upload-old.part`);
+        fs.writeFileSync(stale, 'half');
+        const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000);
+        fs.utimesSync(stale, twoHoursAgo, twoHoursAgo);
+
+        await createBlobStore(dir).putPart(sha('hello world'), 'upload-new', { start: 0, end: 4, total: 11 }, Readable.from([Buffer.from('hello')]));
+
+        expect(fs.existsSync(stale)).toBe(false);
+    });
+
+    test('keeps the parts before one that breaks off, so the upload resumes at that part', async () => {
+        const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'crossbind-runner-blobs-'));
+        const blobs = createBlobStore(dir);
+        const hash = sha('hello world');
+        const broken = new Readable({
+            read() {
+                this.push(' wo');
+                this.destroy(new Error('connection reset'));
+            },
+        });
+
+        await blobs.putPart(hash, 'upload-one', { start: 0, end: 4, total: 11 }, Readable.from([Buffer.from('hello')]));
+        await expect(blobs.putPart(hash, 'upload-one', { start: 5, end: 10, total: 11 }, broken)).rejects.toThrow(/connection reset/);
+        const resumed = await blobs.putPart(hash, 'upload-one', { start: 5, end: 10, total: 11 }, Readable.from([Buffer.from(' world')]));
+
+        expect(resumed.status).toBe('stored');
+        expect(fs.readFileSync(blobs.pathOf(hash), 'utf8')).toBe('hello world');
+    });
+
     test('leaves no temporary file behind when an upload breaks off', async () => {
         const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'crossbind-runner-blobs-'));
         const broken = new Readable({
