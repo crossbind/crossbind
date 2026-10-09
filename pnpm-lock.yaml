@@ -13,6 +13,7 @@ overrides:
   brace-expansion@1: ^1.1.21
   brace-expansion@2: ^2.1.4
   brace-expansion@5: ^5.0.12
+  compression@1: ^1.8.2
   dompurify@3: ^3.4.13
   fast-uri@3: ^3.1.5
   hono@4: ^4.13.1
@@ -33,6 +34,7 @@ overrides:
   serialize-javascript: ^7.0.5
   sharp: ^0.35.4
   shell-quote: ^1.10.0
+  source-map-js@1: ^1.2.2
   svgo@3: ^3.3.4
   undici@6: ^6.28.0
   undici@7: ^7.29.1
@@ -399,7 +401,7 @@ importers:
         version: link:../../core/crossbind
       wrangler:
         specifier: ^4.136.3
-        version: 4.147.0(@types/node@22.10.2)
+        version: 4.147.0(@types/node@24.19.1)
 
   e2e/conformance: {}
 
@@ -9912,8 +9914,8 @@ packages:
     resolution: {integrity: sha512-AF3r7P5dWxL8MxyITRMlORQNaOA2IkAFaTr4k7BUumjPtRpGDTZpl0Pb1XCO6JeDCBdp126Cgs9sMxqSjgYyRg==}
     engines: {node: '>= 0.6'}
 
-  compression@1.8.1:
-    resolution: {integrity: sha512-9mAqGPHLakhCLeNyxPkK4xVo746zQ/czLH1Ky+vkitMnWfWZps8r0qXuwhwizagCRttsL4lfG4pIOvaWLpAP0w==}
+  compression@1.8.2:
+    resolution: {integrity: sha512-o8vI5RE5A6EVVOd9o41jKp41aJom+QTEO/Bx8MYNjexMo/Bv2WOjUfZr+aL0WnYSgymUy6zeguqLTsIhV0gMvQ==}
     engines: {node: '>= 0.8.0'}
 
   concat-map@0.0.1:
@@ -12445,8 +12447,8 @@ packages:
     resolution: {integrity: sha512-vZ7rfeehZui7wQs438JXBckYLkIIdfHOXsaVEUMyS5fHo1483l1bMdo0EDSWYclY0yZKFOipDy4KHuKs6ssvdg==}
     engines: {node: '>=8.0.0'}
 
-  source-map-js@1.2.1:
-    resolution: {integrity: sha512-UXWMKhLOwVKb728IUtQPXxfYU+usdybtUrK/8uGE8CQMvrhOpwvzDBwj0QhSL7MQc7vIsISBG8VQ8+IDQxpfQA==}
+  source-map-js@1.2.2:
+    resolution: {integrity: sha512-KGj/8Y43x35aZVDtt+J4mK1hoLGHULMYfSkODJNQjNDC3oW1PqPoxMwo0pLUsWM/UEGzON/NxeHywEfNXNP3Vw==}
     engines: {node: '>=0.10.0'}
 
   source-map-support@0.5.13:
@@ -15524,7 +15526,7 @@ snapshots:
     dependencies:
       '@react-native-community/cli-tools': 20.2.0
       body-parser: 2.3.0(supports-color@10.2.2)
-      compression: 1.8.1(supports-color@10.2.2)
+      compression: 1.8.2(supports-color@10.2.2)
       connect: 3.7.0(supports-color@10.2.2)
       errorhandler: 1.5.1
       nocache: 3.0.4
@@ -16722,7 +16724,7 @@ snapshots:
       '@vue/shared': 3.5.43
       entities: 7.0.1
       estree-walker: 2.0.2
-      source-map-js: 1.2.1
+      source-map-js: 1.2.2
 
   '@vue/compiler-dom@3.5.43':
     dependencies:
@@ -16739,7 +16741,7 @@ snapshots:
       estree-walker: 2.0.2
       magic-string: 0.30.21
       postcss: 8.5.26
-      source-map-js: 1.2.1
+      source-map-js: 1.2.2
 
   '@vue/compiler-ssr@3.5.43':
     dependencies:
@@ -17541,11 +17543,12 @@ snapshots:
     dependencies:
       mime-db: 1.54.0
 
-  compression@1.8.1(supports-color@10.2.2):
+  compression@1.8.2(supports-color@10.2.2):
     dependencies:
       bytes: 3.1.2
       compressible: 2.0.18
       debug: 2.6.9(supports-color@10.2.2)
+      destroy: 1.2.0
       negotiator: 0.6.4
       on-headers: 1.1.0
       safe-buffer: 5.2.1
@@ -19548,7 +19551,7 @@ snapshots:
     dependencies:
       '@babel/parser': 7.29.8
       '@babel/types': 7.29.8
-      source-map-js: 1.2.1
+      source-map-js: 1.2.2
 
   make-dir@4.0.0:
     dependencies:
@@ -19779,19 +19782,6 @@ snapshots:
   mimic-response@1.0.1: {}
 
   mimic-response@3.1.0: {}
-
-  miniflare@5.20261001.0-alpha(@types/node@22.10.2):
-    dependencies:
-      '@cspotcode/source-map-support': 0.8.1
-      sharp: 0.35.5(@types/node@22.10.2)
-      undici: 7.30.0
-      workerd: 1.20261001.1
-      ws: 8.21.0
-      youch: 4.1.0-beta.10
-    transitivePeerDependencies:
-      - '@types/node'
-      - bufferutil
-      - utf-8-validate
 
   miniflare@5.20261001.0-alpha(@types/node@24.19.1):
     dependencies:
@@ -20117,7 +20107,7 @@ snapshots:
     dependencies:
       nanoid: 3.3.18
       picocolors: 1.1.1
-      source-map-js: 1.2.1
+      source-map-js: 1.2.2
 
   postject@1.0.0-alpha.6:
     dependencies:
@@ -20759,7 +20749,7 @@ snapshots:
       chalk: 5.0.1
       chalk-template: 0.4.0
       clipboardy: 3.0.0
-      compression: 1.8.1(supports-color@10.2.2)
+      compression: 1.8.2(supports-color@10.2.2)
       is-port-reachable: 4.0.0
       serve-handler: 6.1.7
       update-check: 1.5.4
@@ -20785,39 +20775,6 @@ snapshots:
       has-property-descriptors: 1.0.2
 
   setprototypeof@1.2.0: {}
-
-  sharp@0.35.5(@types/node@22.10.2):
-    dependencies:
-      '@img/colour': 1.1.0
-      detect-libc: 2.1.2
-      semver: 7.8.5
-    optionalDependencies:
-      '@img/sharp-darwin-arm64': 0.35.5
-      '@img/sharp-darwin-x64': 0.35.5
-      '@img/sharp-freebsd-wasm32': 0.35.5
-      '@img/sharp-libvips-darwin-arm64': 1.3.4
-      '@img/sharp-libvips-darwin-x64': 1.3.4
-      '@img/sharp-libvips-linux-arm': 1.3.4
-      '@img/sharp-libvips-linux-arm64': 1.3.4
-      '@img/sharp-libvips-linux-ppc64': 1.3.4
-      '@img/sharp-libvips-linux-riscv64': 1.3.4
-      '@img/sharp-libvips-linux-s390x': 1.3.4
-      '@img/sharp-libvips-linux-x64': 1.3.4
-      '@img/sharp-libvips-linuxmusl-arm64': 1.3.4
-      '@img/sharp-libvips-linuxmusl-x64': 1.3.4
-      '@img/sharp-linux-arm': 0.35.5
-      '@img/sharp-linux-arm64': 0.35.5
-      '@img/sharp-linux-ppc64': 0.35.5
-      '@img/sharp-linux-riscv64': 0.35.5
-      '@img/sharp-linux-s390x': 0.35.5
-      '@img/sharp-linux-x64': 0.35.5
-      '@img/sharp-linuxmusl-arm64': 0.35.5
-      '@img/sharp-linuxmusl-x64': 0.35.5
-      '@img/sharp-webcontainers-wasm32': 0.35.5
-      '@img/sharp-win32-arm64': 0.35.5
-      '@img/sharp-win32-ia32': 0.35.5
-      '@img/sharp-win32-x64': 0.35.5
-      '@types/node': 22.10.2
 
   sharp@0.35.5(@types/node@24.19.1):
     dependencies:
@@ -20923,7 +20880,7 @@ snapshots:
 
   slugify@1.6.9: {}
 
-  source-map-js@1.2.1: {}
+  source-map-js@1.2.2: {}
 
   source-map-support@0.5.13:
     dependencies:
@@ -21571,23 +21528,6 @@ snapshots:
       '@cloudflare/workerd-linux-64': 1.20261001.1
       '@cloudflare/workerd-linux-arm64': 1.20261001.1
       '@cloudflare/workerd-windows-64': 1.20261001.1
-
-  wrangler@4.147.0(@types/node@22.10.2):
-    dependencies:
-      '@cloudflare/kv-asset-handler': 0.5.0
-      '@cloudflare/unenv-preset': 2.16.2(unenv@2.0.0-rc.24)(workerd@1.20261001.1)
-      blake3-wasm: 2.1.5
-      esbuild: 0.28.1
-      miniflare: 5.20261001.0-alpha(@types/node@22.10.2)
-      path-to-regexp: 6.3.0
-      unenv: 2.0.0-rc.24
-      workerd: 1.20261001.1
-    optionalDependencies:
-      fsevents: 2.3.3
-    transitivePeerDependencies:
-      - '@types/node'
-      - bufferutil
-      - utf-8-validate
 
   wrangler@4.147.0(@types/node@24.19.1):
     dependencies:
