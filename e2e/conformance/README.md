@@ -40,6 +40,11 @@ skips (search `KNOWN ENGINE GAP` in `spec/run.mjs`).
   through the import hooks, import them by name: numbers, a string, a character, a boolean, a macro
   from an included header, one inside a platform `#if`, and const globals; one macro no leg imports
   and a mutable global stay unbound. The other standalone legs import no header and skip the section.
+- `native/confextras.h` and `spec/sections/extras.mjs` — what SWIG skips and crossbind binds for the
+  names an app imports by name: a variadic function read back per argument kind (`vaDouble` included),
+  one taking a struct pointer and returning a string, function-like macros typed by the function they
+  call, a macro naming a function, and mutable globals as handles to their storage. The Vite and
+  React Native legs import them by name; the others skip the section.
 - `../conformance-rust/` — the Rust half: one plain crate (`src/lib.rs`, every construct in
   sections) built as a cargo package like `core/embind-rust/demo`; `spec/sections/rust/*.mjs` hold
   its checks. Constructs the generator does not carry yet are `todo` entries: a miss prints a

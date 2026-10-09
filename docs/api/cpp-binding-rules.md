@@ -178,7 +178,7 @@ import { deflateInit2_, Z_DEFLATED, MAX_WBITS, ZLIB_VERSION } from '@crossbind/p
 - A macro the header takes from another header imports through it, as in C: zlib's `MAX_WBITS` comes from `zconf.h`.
 - Each platform's compiler reads the macro itself, so a value inside `#if` follows the target.
 - `import * as zlib from '@crossbind/port-zlib/zlib.h'` binds every constant SWIG sees in the header, as do `import()`, `import 'x.h'` and `require`, which hand the app the whole module too.
-- Function-like macros, macros whose value is a pointer, arrays other than a single string, and globals that are not `const` stay unbound: Vite and Rollup reject the import as a missing export, and elsewhere the name is `undefined`. The build prints a line for each global it skips.
+- Macros whose value is a pointer and arrays other than a single string stay unbound: Vite and Rollup reject the import as a missing export, and elsewhere the name is `undefined`. Function-like macros and globals that are not `const` bind as rule 10 describes.
 - `crossbind build` output for a plain browser page or an edge runtime binds no constant: those apps import no header. A Node.js app imports headers through the hooks the build writes, so its constants bind as in a bundler app ([Node.js](../playbooks/integration/nodejs.md#importing-headers-and-rust-directly)).
 - A constant first imported while a dev server runs binds the way rule 9 describes for a function.
 
@@ -198,6 +198,30 @@ import { GDALAllRegister, GDALOpenEx, GDALClose } from '@crossbind/port-gdal/gda
 - A Node.js app binds it on its next `crossbind build`, which `node --import crossbind/node/dev` runs before the app starts once its imports changed; until then Node stops at the import with `does not provide an export named 'compressBound'`.
 - The scan reads JavaScript, TypeScript, Vue, Svelte, HTML scripts, Astro and MDX sources, including nested source folders named `build`, `ios` or `android`. It also follows imports and re-exports through the app's declared dependencies, including their import and browser entry points; it does not scan unrelated installed packages. Root build outputs stay excluded.
 - The build warns when a header has no name requested by those sources. An import constructed dynamically from variables cannot be discovered by the scan; import its required functions explicitly or bind the header whole.
+
+### 10. Macros, variadic functions and mutable globals bind when the app imports them by name
+
+SWIG binds none of these; crossbind binds the ones the app names in an `import { … }` from the header, also when another import takes the header whole. `import * as` reaches none of them.
+
+```js
+import { deflateInit2, iconv_open, _libiconv_version, TIFFSetField, vaDouble } from '...';
+```
+
+- A function-like macro that calls one function the header binds, passing each of its parameters whole (in parentheses or through a cast too), binds as a function taking that function's parameter types at those places: `deflateInit2(strm, level, method, windowBits, memLevel, strategy)` takes what `deflateInit2_` takes for them, and `deflateInit2_` binds too. A macro whose body is any other expression, or that calls a builtin, a type, another function-like macro or an overloaded function, stays unbound, and the build prints a line for it.
+- A macro naming a function the header binds (`#define iconv_open libiconv_open`) binds that function under the macro's name.
+- A variadic function takes its fixed parameters as declared and each extra argument by its JavaScript type, up to six of them. A function taking a `va_list` stays unbound.
+
+  | Extra argument | Passed as |
+  |---|---|
+  | an integer Number, a boolean or an enum member | `long` |
+  | a fractional Number, or `vaDouble(x)` | `double` |
+  | a BigInt | `long long` |
+  | a string | `const char *` to a copy that lives for the call |
+  | a handle, or `null` | its pointer, or `NULL` |
+
+  `vaDouble`, which the module exports beside the function, marks a double whose value is a whole number: `TIFFSetField(tif, TIFFTAG_XRESOLUTION, vaDouble(72))`. A `float` is read as a `double`, as C promotes it. A `long` is 32 bits on wasm32 and Windows, so a larger integer takes a BigInt, which passes its 64 bits whether the function reads them signed or not. Each variadic function adds about 25 KB to a wasm module.
+- A global that is not `const` arrives as a handle to its storage: read and write it with `readNumberAt` and `writeNumberAt`, or `readPointerAt` and `writePointerAt` for a pointer, and keep a handle written into it alive while C uses it.
+- The parameters and results of these bindings are numbers, enums, booleans, strings (`const char *`) and pointers; a function taking or returning another type throws when called. An integer out of its parameter's range, a BigInt included, throws instead of wrapping. A string argument is a copy that lives for the call, as in rule 1, so a pointer the function returns into it is not valid afterwards.
 
 ## Wrapper pattern
 

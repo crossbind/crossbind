@@ -24,12 +24,12 @@
     {
       "source": "docs/api/conan.md",
       "output": "api/conan.md",
-      "sha256": "253b5c1fbbe214d0a605168e8cfaa3f5382eeddaf40e90d1ff2fe0d438ad34b4"
+      "sha256": "f7ffaca6728976791f49182d30c150cb942e5f6e8abf90b071013b8d91694938"
     },
     {
       "source": "docs/api/cpp-binding-rules.md",
       "output": "api/cpp-binding-rules.md",
-      "sha256": "05b2731430928a23244704c5a3b6c7254c2d913be0e51b5d47f2a3198ac6971a"
+      "sha256": "da7351a2fd98bfb94c7b2d6b6cc610baeb5c24e062923e944622f0ee5f315538"
     },
     {
       "source": "docs/api/crossbind-build.md",

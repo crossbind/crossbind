@@ -9,6 +9,12 @@ import {
     initNative, AllSymbols as confConstantsModule, CONF_BASE, CONF_BASE_NAME, CONF_CHAR, CONF_DOUBLE, CONF_EXPRESSION,
     CONF_HEX, CONF_INT, CONF_NEGATIVE, CONF_PLATFORM, CONF_STRING, CONF_TRUE, CONF_WIDE, confGlobal, confGlobalName,
 } from '@crossbind/conformance/native/confconstants.h';
+// Variadic functions, function-like and renaming macros and mutable globals bind only for the names imported here.
+import {
+    ConfVaBuffer, confCounter, confCounterValue, confGreeting, confGreetingValue, confMacroAdd, confMacroAdd_, confMacroWide, confMacroWide_, confVaNoexcept, confMacroHalf,
+    confMacroHalf_, confMacroLength, confMacroLength_, confRenamed, confRenamedTarget, confVaFormat, confVaSum, vaDouble,
+    allocBuffer, cstring, readCString, readNumberAt, readPointerAt, writeNumberAt, writePointerAt,
+} from '@crossbind/conformance/native/confextras.h';
 import { Counter } from './native/counter.rs';
 // Direct crate imports: bridged from the crates' own sources, no surface file.
 import { Uuid } from 'cargo:uuid';
@@ -30,6 +36,11 @@ initNative().then(async (m) => {
         const constants = trackExports({
             CONF_BASE, CONF_BASE_NAME, CONF_CHAR, CONF_DOUBLE, CONF_EXPRESSION, CONF_HEX, CONF_INT, CONF_NEGATIVE,
             CONF_PLATFORM, CONF_STRING, CONF_TRUE, CONF_WIDE, confGlobal, confGlobalName, module: confConstantsModule,
+        }, seen).proxy;
+        const extras = trackExports({
+            ConfVaBuffer, confCounter, confCounterValue, confGreeting, confGreetingValue, confMacroAdd, confMacroAdd_, confMacroWide, confMacroWide_, confVaNoexcept, confMacroHalf,
+            confMacroHalf_, confMacroLength, confMacroLength_, confRenamed, confRenamedTarget, confVaFormat, confVaSum, vaDouble,
+            allocBuffer, cstring, readCString, readNumberAt, readPointerAt, writeNumberAt, writePointerAt,
         }, seen).proxy;
         const result = await runConformance({
             cpp: { ConfBox: proxy.ConfBox, ConfCircle: proxy.ConfCircle, ConfOps: proxy.ConfOps, ConfShape: proxy.ConfShape },
@@ -70,6 +81,7 @@ initNative().then(async (m) => {
             wrappers: proxy,
             types: proxy,
             constants,
+            extras,
             rustKit: proxy,
             coverage: { exports: kitExports(fileURLToPath(new URL('../.crossbind/build/bridge/', import.meta.url))), seen },
             caps: { jsiNative: true },

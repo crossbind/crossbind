@@ -24,6 +24,9 @@
 //                   @crossbind/port-webp/encode.h (bundler legs that link both ports)
 //   constants:    the names a leg imports from native/confconstants.h, plus `module` (its AllSymbols);
 //                   constants bind only for header imports, so a leg that imports no header has none
+//   extras:       the names a leg imports from native/confextras.h (variadic functions, function-like and
+//                   renaming macros, mutable globals) with the pointer helpers; they bind only when imported by name
+//   extrasWhole:  the module of a leg that binds native/confextras.h whole, which gets none of them
 //   rustKit:      the exports of @crossbind/conformance-rust (any leg - prebuilt package);
 //                   constructs the generator does not carry yet are `todo` entries, reported
 //                   as TODO lines and counted apart from the pass/run figures
@@ -31,6 +34,7 @@
 
 import { callbackChecks } from './sections/callbacks.mjs';
 import { constantChecks } from './sections/constants.mjs';
+import { extrasChecks } from './sections/extras.mjs';
 import { packageFieldChecks } from './sections/packageFields.mjs';
 import { pointerChecks } from './sections/pointers.mjs';
 import { stringChecks } from './sections/strings.mjs';
@@ -499,6 +503,7 @@ export function buildChecks(s) {
     section(list, 'types', 'no type surface wired on this leg', s.types && (() => typeChecks({ add }, s.types, { worker })));
     section(list, 'packageFields', 'no package header surface wired on this leg (standalone builds bridge only paths.header)', s.packageFields && (() => packageFieldChecks({ add }, s.packageFields, { worker })));
     section(list, 'constants', 'no header import on this leg (constants bind only for the names an app imports)', s.constants && (() => constantChecks({ add }, s.constants, { native: Boolean(s.caps?.jsiNative) })));
+    section(list, 'extras', 'no header import on this leg (variadic functions, macros and mutable globals bind only for the names an app imports)', (s.extras || s.extrasWhole) && (() => extrasChecks({ add }, s.extras ?? s.extrasWhole, { byName: Boolean(s.extras) })));
     section(list, 'rustKit', 'no Rust kit surface wired on this leg', s.rustKit && (() => {
         rustNumberChecks({ add, todo, skip }, s.rustKit);
         rustStringChecks({ add, todo }, s.rustKit);

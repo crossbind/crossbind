@@ -8,30 +8,6 @@ than no entry. Scope each check so it cannot match this file, which quotes what 
 
 Fixing something here is not a prerequisite for anything else; this is a list, not a queue.
 
-## Function-like macros, renaming macros and mutable globals have no binding
-
-Constants bind when the app imports them (`docs/api/cpp-binding-rules.md`, rule 8), but a function-like
-macro (`OPENSSL_free`, `BIO_get_mem_data`, `deflateInit2`) has no binding, a macro that renames a
-function (`iconv_open` to `libiconv_open`) binds only the target name, and a global that is not const
-(`_libiconv_version`) stays out. The JavaScript-only examples call the functions behind the macros.
-
-- Seen: 2026-09-25
-- Check: add `deflateInit2` to the export list in a copy of `landing/demos/lib-zlib/direct/src/headers.js`;
-  `npx vite build` fails with `MISSING_EXPORT`.
-- Remove when function-like macros, renaming macros and mutable globals bind.
-
-## Variadic C functions have no binding
-
-SWIG skips any function with `...` or a `va_list` (warning 505). That removes `TIFFSetField` and
-`TIFFGetField`, `GTIFKeySet`, `curl_easy_setopt` and `curl_easy_getinfo`, and `EVP_PKEY_Q_keygen`,
-so from JavaScript alone libtiff and libgeotiff cannot write a file or read most tags, and curl cannot
-be given a URL. Only a C++ wrapper reaches them.
-
-- Seen: 2026-09-25
-- Check: add `curl_easy_setopt` to the `curl/easy.h` export list in a copy of
-  `landing/demos/lib-curl/direct/src/headers.js`; `npx vite build` fails with `MISSING_EXPORT`.
-- Remove when variadic functions get typed entry points.
-
 ## The JavaScript-only demos work around fixes that are not released yet
 
 `landing/demos/lib-*/direct` builds against the published `beta`, which predates what this tree fixed:
@@ -44,7 +20,9 @@ ignore lists, the examples write constants out as numbers, Expat's limits exampl
 enum members, `.value` and `'|'.charCodeAt(0)`, and the reasons in zstd 02, zlib 04, WebP 02 and 03,
 libjpeg-turbo, libgeotiff 04 and PROJ 05 describe the older field bindings. Built with this tree, zstd 02,
 zlib 04 and libjpeg-turbo 01 and 05 ran from JavaScript alone with the C++ versions' output. GDAL 05
-stays out on size: with GEOS and `-Oz` the JavaScript-only wasm is 26,505,868 bytes.
+stays out on size: with GEOS and `-Oz` the JavaScript-only wasm is 26,505,868 bytes. The examples also call
+the functions behind macros (`deflateInit2_`) and leave variadic functions (`TIFFSetField`, `curl_easy_setopt`) to
+C++, which this tree binds when imported by name (`docs/api/cpp-binding-rules.md`, rule 10).
 
 - Seen: 2026-09-25
 - Check: `grep -c NOT_IN_THIS_BUILD landing/demos/lib-sqlite3/direct/crossbind.config.js` prints 2.

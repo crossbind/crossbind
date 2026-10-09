@@ -267,8 +267,10 @@ export function writeHeaderDts({ headerFile, exportsFile, projectPath, cacheDir,
 // @crossbind/typescript-config includes. `declare` is an error inside one (TS1038).
 export function writeConanImportDts({ headerFile, exportsFile, declarationsFile = exportsFile, cacheDir, dtsMode = 'sync', log = () => {} }) {
     const conanImport = conanImportOfHeader(headerFile, cacheDir);
-    const exportNames = conanImport && readExportNames(declarationsFile, log);
-    if (!exportNames) return;
+    const declared = conanImport && readExportNames(declarationsFile, log);
+    if (!declared) return;
+    // The bridge also binds macros and variadic functions the app imports, which the whole header's SWIG run skips.
+    const exportNames = [...new Set([...declared, ...(readExportNames(exportsFile, log) ?? [])])];
     const body = declarationsOf(headerFile, exportNames, dtsMode, log)
         .replaceAll('export declare ', 'export ')
         .split('\n')

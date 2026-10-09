@@ -603,6 +603,69 @@ describe('free functions of a dependency header', () => {
     });
 });
 
+// The editor's types of a conan: import come from a SWIG run over the whole header, apart from the bridge.
+describe('a header staged from Conan', () => {
+    const target = { platform: 'wasm', path: 'wasm-wasm32-st-release' };
+    const SPECIFIER = `../.crossbind/conan/packages/zlib/dist/prebuilt/${target.path}/include/zlib.h`;
+    const writeApp = (file, text) => fs.writeFileSync(path.join(work, 'src', file), text);
+    const declarationsRuns = (run) => swigRuns(run).filter(([, args]) => args.at(-1).includes('/declarations/'));
+    let zlibHeader;
+
+    beforeEach(() => {
+        const base = upath.normalize(work);
+        const packageDir = upath.join(base, '.crossbind', 'conan', 'packages', 'zlib');
+        const include = upath.join(packageDir, 'dist', 'prebuilt', target.path, 'include');
+        fs.mkdirSync(include, { recursive: true });
+        zlibHeader = upath.join(include, 'zlib.h');
+        fs.writeFileSync(zlibHeader, 'int zlibVersion();\nint compressBound(int length);\nint gzprintf(void *file, const char *format, ...);\n');
+        holder.config.paths.base = base;
+        holder.config.paths.cache = upath.join(base, '.crossbind');
+        holder.config.dependencyParameters.getCmakeDependsPathAndName = () => ({ pathsOfCmakeDepends: [packageDir] });
+        vi.spyOn(console, 'warn').mockImplementation(() => {});
+    });
+
+    // SWIG reports the variadic function it skips, and writes its pointer runtime only for a pointer binding.
+    async function importWithSwig() {
+        const fresh = await importFresh();
+        fresh.run.mockImplementation((program, args) => {
+            const out = args[args.indexOf('-o') + 1];
+            if (program !== 'swig') {
+                fs.writeFileSync(out, '');
+                return '';
+            }
+            const pointers = fs.readFileSync(args.at(-1), 'utf8').includes('crossbindPointerRuntime');
+            fs.writeFileSync(out, pointers ? 'struct NativePointer {};\n' : 'EMSCRIPTEN_BINDINGS(fixture) {}\n');
+            fs.writeFileSync(`${out}.exports.json`, '[]\n');
+            fs.writeFileSync(`${out}.warnings`, `${zlibHeader}:3: Variable length arguments are not supported by embind, gzprintf skipped.\n`);
+            return '';
+        });
+        return fresh;
+    }
+
+    test('runs SWIG over the whole header again for a header change, not for another name imported by name', async () => {
+        const { run, createBridgeFile } = await importWithSwig();
+        writeApp('boot.js', `import * as zlib from '${SPECIFIER}';\n`);
+        writeApp('main.js', `import { zlibVersion } from '${SPECIFIER}';\n`);
+        createBridgeFile(zlibHeader, target);
+
+        writeApp('main.js', `import { compressBound, zlibVersion } from '${SPECIFIER}';\n`);
+        createBridgeFile(zlibHeader, target);
+
+        expect(swigRuns(run).length - declarationsRuns(run).length).toBe(2);
+        expect(declarationsRuns(run)).toHaveLength(1);
+    });
+
+    test('leaves the binding that brings in SWIG\'s pointer runtime out of the editor\'s declarations', async () => {
+        const { createBridgeFile } = await importWithSwig();
+        writeApp('main.js', `import { gzprintf } from '${SPECIFIER}';\n`);
+
+        createBridgeFile(zlibHeader, target);
+
+        expect(fs.readFileSync(cachedInterface(zlibHeader), 'utf8')).toContain('crossbindPointerRuntime');
+        expect(fs.readFileSync(path.join(work, '.crossbind', 'build', 'declarations', 'zlib.i'), 'utf8')).not.toContain('crossbindPointerRuntime');
+    });
+});
+
 // A Metro server started before the port was built for its platform.
 describe('a dependency built after the process loaded', () => {
     test('binds the functions the app imports from its header', async () => {

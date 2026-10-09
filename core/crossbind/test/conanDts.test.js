@@ -55,6 +55,19 @@ describe('editor types of a conan: import', () => {
         expect(dts).toContain('export const compressBound: any;');
     });
 
+    test('also declares what the bridge binds beyond the whole header, a variadic function the app imports', () => {
+        const declarationsFile = upath.join(project, 'zlib.declarations.json');
+        fs.writeFileSync(writeOptions().exportsFile, JSON.stringify(['zlibVersion', 'gzprintf', 'vaDouble']));
+        fs.writeFileSync(declarationsFile, JSON.stringify(['zlibVersion', 'compressBound']));
+
+        writeConanImportDts({ ...writeOptions(), declarationsFile });
+
+        const dts = fs.readFileSync(upath.join(cacheDir(), 'conan/types/zlib/zlib.h.d.ts'), 'utf8');
+        expect(dts).toContain('export const compressBound: any;');
+        expect(dts).toContain('export const gzprintf: any;');
+        expect(dts).toContain('export const vaDouble: any;');
+    });
+
     test('a header that is not staged by Conan gets no ambient module', () => {
         const header = upath.join(project, 'src', 'native', 'zlib.h');
         fs.mkdirSync(path.dirname(header), { recursive: true });

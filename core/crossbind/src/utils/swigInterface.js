@@ -65,6 +65,7 @@ export function interfaceIncludes(headerPath, prelude = []) {
 // wraps just the imported header. The ignored declarations follow the macros, so the retry without macros keeps them.
 export function buildInterfaceContent({
     moduleName, headerPath, prelude = [], completing = [], swigMacros = [], ignored = [], constants = [], preamble = [], functions = ALL_NAMES,
+    extras = [],
 }) {
     const includes = [...new Set([...interfaceIncludes(headerPath, prelude), ...completing])]
         .map((header) => `#include "${header}"`)
@@ -73,6 +74,7 @@ export function buildInterfaceContent({
     const ignores = ignored.length ? `${ignored.map((name) => `%ignore ${name};`).join('\n')}\n\n` : '';
     // The marker keeps a preamble that starts with #define apart from the macro block the retry drops.
     const preambleBlock = preamble.length ? `// package preamble\n${preamble.join('\n')}\n\n` : '';
+    const extraBlock = extras.length ? `${extras.join('\n')}\n\n` : '';
     // Named constants are asked for ahead of the macros, which may define one. Every constant is asked for after them:
     // SWIG binds an interface's own #define lines, and the prelude only carries other headers' values for the parse.
     const everyConstant = constants === ALL_NAMES;
@@ -82,7 +84,7 @@ export function buildInterfaceContent({
 
 %module ${module}
 
-%{
+${extraBlock}%{
 ${includes}
 %}
 
@@ -374,6 +376,26 @@ function walkScopes(text, visit) {
             visit(token, index, tokens, scopes, opening);
         }
     });
+}
+
+// Whether the token at `index` sits inside the parentheses of the declaration it belongs to: a prototype's parameter.
+function isInsideParentheses(tokens, index) {
+    let depth = 0;
+    for (let at = index - 1; at >= 0 && ![';', '{', '}'].includes(tokens[at]); at -= 1) {
+        if (tokens[at] === '(') depth += 1;
+        else if (tokens[at] === ')') depth -= 1;
+    }
+    return depth > 0;
+}
+
+// Whether a variable `name` is declared outside every class, namespace and block, as `extern int name;` is.
+export function declaresAtFileScope(text, name) {
+    let found = false;
+    walkScopes(text, (token, index, tokens, scopes) => {
+        if (token === name && scopes.every((scope) => scope.kind === 'extern') && [';', '=', '[', ','].includes(tokens[index + 1])
+            && !isInsideParentheses(tokens, index)) found = true;
+    });
+    return found;
 }
 
 // Classes, structs and enums by qualified name, including the names C typedefs give them, each mapped to the first header

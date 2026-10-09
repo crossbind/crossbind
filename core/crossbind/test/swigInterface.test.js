@@ -2,6 +2,7 @@ import { describe, test, expect } from 'vitest';
 import {
     buildInterfaceContent, completingIncludes, findHeaderPrelude, findIgnoredDeclarations, findSwigInlineIncludes, findSwigPreamble,
     indexTypeDefinitions, inlineIncludes, interfaceToRetryWithoutMacros, parseMacroDump, referencedTypeHeaders, selectSwigMacros, withoutSwigMacros,
+    declaresAtFileScope,
 } from '../src/utils/swigInterface.js';
 import { ALL_NAMES } from '../src/utils/headerImports.js';
 
@@ -519,5 +520,13 @@ describe('findHeaderPrelude', () => {
         };
         const header = '/work/app/node_modules/pkg/dist/prebuilt/wasm-wasm32-st-release/include/lib.h';
         expect(findHeaderPrelude(header, [app, nested])).toEqual(['pre.h']);
+    });
+});
+
+describe('declaresAtFileScope', () => {
+    test('finds a variable declared outside every scope and none a prototype or a namespace holds', () => {
+        const header = 'extern int confCounter;\nnamespace ns { extern int counter; }\nvoid f(int counter, int x);\nstruct S { int member; };\n';
+
+        expect(['confCounter', 'counter', 'member'].map((name) => declaresAtFileScope(header, name))).toEqual([true, false, false]);
     });
 });
