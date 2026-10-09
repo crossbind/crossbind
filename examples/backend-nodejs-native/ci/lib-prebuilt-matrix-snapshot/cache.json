@@ -1,7 +1,7 @@
 {
     "hashes": {
-        "/Users/runner/work/crossbind/crossbind/examples/lib-prebuilt-matrix/src/native/Matrix.h": "swig-macros-2\n4e2fc15ea690e4096be7867f926b8417248e986f5acd609c2d10bba568e406ea",
-        "/Users/runner/work/crossbind/crossbind/examples/lib-prebuilt-matrix/.crossbind/build/interface/Matrix.i": "swig-callback-fields-1\ne1b5f43282e85d180f7cd582b58c3950cee0f0611877d7ccf8953e08b16a825d\n4e2fc15ea690e4096be7867f926b8417248e986f5acd609c2d10bba568e406ea"
+        "/Users/runner/work/crossbind/crossbind/examples/lib-prebuilt-matrix/src/native/Matrix.h": "swig-macros-3\n4e2fc15ea690e4096be7867f926b8417248e986f5acd609c2d10bba568e406ea",
+        "/Users/runner/work/crossbind/crossbind/examples/lib-prebuilt-matrix/.crossbind/build/interface/Matrix.i": "swig-extras-1\ne1b5f43282e85d180f7cd582b58c3950cee0f0611877d7ccf8953e08b16a825d\n4e2fc15ea690e4096be7867f926b8417248e986f5acd609c2d10bba568e406ea"
     },
     "interfaces": {
         "/Users/runner/work/crossbind/crossbind/examples/lib-prebuilt-matrix/src/native/Matrix.h": "/Users/runner/work/crossbind/crossbind/examples/lib-prebuilt-matrix/.crossbind/build/interface/Matrix.i"

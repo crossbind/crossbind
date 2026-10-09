@@ -1,7 +1,7 @@
 {
     "hashes": {
-        "/Users/runner/work/crossbind/crossbind/examples/mobile-reactnative-cli/src/native/native.h": "swig-macros-2\nd105082c6e8c8652ea461e161c501e824b6b625f7b819490102c5c0699744249\nconstants:Native",
-        "/Users/runner/work/crossbind/crossbind/examples/mobile-reactnative-cli/.crossbind/build/interface/native.i": "swig-callback-fields-1\nd2951a720fdd54191e27157df067c64d7d7839b41c14494d63aef4f3a4eae3a2\nd105082c6e8c8652ea461e161c501e824b6b625f7b819490102c5c0699744249"
+        "/Users/runner/work/crossbind/crossbind/examples/mobile-reactnative-cli/src/native/native.h": "swig-macros-3\nd105082c6e8c8652ea461e161c501e824b6b625f7b819490102c5c0699744249\nconstants:Native\nnamed:Native",
+        "/Users/runner/work/crossbind/crossbind/examples/mobile-reactnative-cli/.crossbind/build/interface/native.i": "swig-extras-1\nd2951a720fdd54191e27157df067c64d7d7839b41c14494d63aef4f3a4eae3a2\nd105082c6e8c8652ea461e161c501e824b6b625f7b819490102c5c0699744249\nnamed:Native"
     },
     "interfaces": {
         "/Users/runner/work/crossbind/crossbind/examples/mobile-reactnative-cli/src/native/native.h": "/Users/runner/work/crossbind/crossbind/examples/mobile-reactnative-cli/.crossbind/build/interface/native.i"

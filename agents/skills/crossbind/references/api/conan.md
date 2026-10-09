@@ -53,7 +53,7 @@ zlibVersion(); // '1.3.2'
 
 The include directories of every Conan package are on your native sources' include path, so a
 header of your own can use any of them, C++ libraries included. It is also the way to reach what a
-header cannot bind on its own, such as templates, header-only libraries and variadic functions:
+header cannot bind on its own, such as templates and header-only libraries:
 
 ```cpp
 // src/native/text.h
@@ -210,7 +210,7 @@ checkout build first; until then it stops with an error instead of leaving the p
   frameworks its recipe asks for are not added, so a package that needs one there stops the build
   at its symbols.
 - A header binds as far as a port's headers do ([`cpp-binding-rules.md`](./cpp-binding-rules.md)):
-  C APIs bind; templates and variadic functions (`gzprintf`) do not.
+  C APIs bind, and variadic functions such as `gzprintf` when imported by name; templates do not.
 - Packages come from ConanCenter only; another remote or a login to one is not supported.
 
 ## See also
