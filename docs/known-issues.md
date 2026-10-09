@@ -50,16 +50,17 @@ stays out on size: with GEOS and `-Oz` the JavaScript-only wasm is 26,505,868 by
 - Check: `grep -c NOT_IN_THIS_BUILD landing/demos/lib-sqlite3/direct/crossbind.config.js` prints 2.
 - Remove when the demos build against a release with these fixes and the workarounds and texts are updated.
 
-## A remote web runner fails the React Native iOS bridge pass
+## The deployed Cloudflare runner has not run the React Native iOS bridge pass yet
 
-With `RUNNER=REMOTE` and the web runner's address and token pointing at the Cloudflare web runner,
-`pod install` in `e2e/mobile-reactnative-cli/ios` stops in the Metro bridge pass with "crossbind:
-command failed (swig) with exit code 1" and no SWIG output. With `RUNNER=DOCKER_RUN`, so that SWIG
-runs in the local Docker, the same `pod install` passes. Node.js addon builds bridged through the
-same runner the same day, so the failure belongs to this path; its cause is not known.
+The bridge pass of `e2e/mobile-reactnative-cli` uploads its dependencies' iOS dists, among them GDAL's 137 MB
+device `libgdal.a`. Uploaded whole and base64-encoded, it hit Cloudflare's 100 MB request limit (413) and SWIG then
+ran without its inputs. Large files now travel in resumable parts (runner protocol 2), and `pod install` passes
+through a local HTTP runner on the pinned image. On the deployed Cloudflare runner the parts arrived, but this
+machine's network then started resetting the TLS handshake of every `*.workers.dev` name while other Cloudflare
+hosts on the same address answered, so the pass never finished there.
 
-- Seen: 2026-10-07
-- Check: with `CROSSBIND_RUNNER=REMOTE` and a web runner in `CROSSBIND_REMOTE_URL_WEB` and
-  `CROSSBIND_TOKEN_WEB`, run `pod install` in `e2e/mobile-reactnative-cli/ios`; it fails at swig.
-- Rechecked: 2026-10-08. `pod install` passes through a temporary local HTTP web runner using the pinned web image, after building `@crossbind/conformance-rust` for iOS. The deployed Cloudflare runner still needs the same check; its address and credentials are not available in this checkout.
+- Seen: 2026-10-07; cause found and fixed 2026-10-09
+- Check: with `CROSSBIND_RUNNER=REMOTE` and the deployed web runner in `CROSSBIND_REMOTE_URL_WEB` and
+  `CROSSBIND_TOKEN_WEB`, run `pod install` in `e2e/mobile-reactnative-cli/ios` from a network that reaches
+  `*.workers.dev`; `curl -s -o /dev/null -w '%{http_code}' https://example.workers.dev/` printing `000` means it does not.
 - Remove when that `pod install` passes through the deployed Cloudflare web runner.
