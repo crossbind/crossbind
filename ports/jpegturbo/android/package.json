@@ -1,6 +1,6 @@
 {
     "name": "@crossbind/port-jpegturbo-android",
-    "version": "2.0.0-beta.62",
+    "version": "2.0.0-beta.63",
     "nativeVersion": "3.2.0",
     "description": "Android build of the precompiled libjpeg-turbo (JPEG) library, built with crossbind. Use it together with the main package @crossbind/port-jpegturbo.",
     "homepage": "https://github.com/crossbind/crossbind/tree/main/ports/jpegturbo#readme",
@@ -24,9 +24,9 @@
         "build:android": "crossbind build -p android"
     },
     "dependencies": {
-        "@crossbind/port-jpegturbo": "workspace:^"
+        "@crossbind/port-jpegturbo": "workspace:*"
     },
     "devDependencies": {
-        "crossbind": "workspace:^"
+        "crossbind": "workspace:*"
     }
 }

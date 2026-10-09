@@ -1,6 +1,6 @@
 {
     "name": "@crossbind/port-spatialite-standalone-napi-linuxmusl-x64",
-    "version": "2.0.0-beta.62",
+    "version": "2.0.0-beta.63",
     "nativeVersion": "5.1.0",
     "homepage": "https://github.com/crossbind/crossbind/tree/main/ports/spatialite#readme",
     "repository": "https://github.com/crossbind/crossbind.git",
@@ -26,10 +26,10 @@
         "prepack": "node ../../../scripts/check-node-package.mjs"
     },
     "devDependencies": {
-        "crossbind": "workspace:^",
-        "@crossbind/port-spatialite-darwin": "workspace:^",
-        "@crossbind/port-spatialite-linux": "workspace:^",
-        "@crossbind/port-spatialite-linuxmusl": "workspace:^",
-        "@crossbind/port-spatialite-win32": "workspace:^"
+        "crossbind": "workspace:*",
+        "@crossbind/port-spatialite-darwin": "workspace:*",
+        "@crossbind/port-spatialite-linux": "workspace:*",
+        "@crossbind/port-spatialite-linuxmusl": "workspace:*",
+        "@crossbind/port-spatialite-win32": "workspace:*"
     }
 }

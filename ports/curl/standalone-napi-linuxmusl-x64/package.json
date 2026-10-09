@@ -1,6 +1,6 @@
 {
     "name": "@crossbind/port-curl-standalone-napi-linuxmusl-x64",
-    "version": "2.0.0-beta.62",
+    "version": "2.0.0-beta.63",
     "nativeVersion": "8.22.0",
     "homepage": "https://github.com/crossbind/crossbind/tree/main/ports/curl#readme",
     "repository": "https://github.com/crossbind/crossbind.git",
@@ -26,10 +26,10 @@
         "prepack": "node ../../../scripts/check-node-package.mjs"
     },
     "devDependencies": {
-        "crossbind": "workspace:^",
-        "@crossbind/port-curl-darwin": "workspace:^",
-        "@crossbind/port-curl-linux": "workspace:^",
-        "@crossbind/port-curl-linuxmusl": "workspace:^",
-        "@crossbind/port-curl-win32": "workspace:^"
+        "crossbind": "workspace:*",
+        "@crossbind/port-curl-darwin": "workspace:*",
+        "@crossbind/port-curl-linux": "workspace:*",
+        "@crossbind/port-curl-linuxmusl": "workspace:*",
+        "@crossbind/port-curl-win32": "workspace:*"
     }
 }

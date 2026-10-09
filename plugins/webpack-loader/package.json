@@ -1,13 +1,13 @@
 {
     "name": "@crossbind/plugin-webpack-loader",
-    "version": "2.0.0-beta.62",
+    "version": "2.0.0-beta.63",
     "description": "crossbind Webpack loader: A tool for seamless C++ integration with the Webpack bundler.",
     "homepage": "https://github.com/crossbind/crossbind/tree/main/plugins/webpack-loader#readme",
     "repository": "https://github.com/crossbind/crossbind.git",
     "license": "MIT",
     "main": "index.js",
     "dependencies": {
-        "crossbind": "workspace:^"
+        "crossbind": "workspace:*"
     },
     "peerDependencies": {
         "webpack": ">=5.0.0"

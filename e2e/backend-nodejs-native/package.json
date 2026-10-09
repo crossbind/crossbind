@@ -16,8 +16,8 @@
         "@crossbind/embind-rust-demo": "workspace:^"
     },
     "devDependencies": {
-        "@crossbind/core-embind-napi": "workspace:^",
-        "@crossbind/core-embind-rust": "workspace:^",
-        "crossbind": "workspace:^"
+        "@crossbind/core-embind-napi": "workspace:*",
+        "@crossbind/core-embind-rust": "workspace:*",
+        "crossbind": "workspace:*"
     }
 }

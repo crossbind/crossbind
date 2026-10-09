@@ -1,6 +1,6 @@
 {
     "name": "@crossbind/port-gdal-ios",
-    "version": "2.0.0-beta.62",
+    "version": "2.0.0-beta.63",
     "nativeVersion": "3.13.3",
     "description": "iOS build of the precompiled GDAL geospatial library, built with crossbind. Use it together with the main package @crossbind/port-gdal.",
     "homepage": "https://github.com/crossbind/crossbind/tree/main/ports/gdal#readme",
@@ -25,23 +25,23 @@
         "prepublishOnly": "crossbind build -p ios"
     },
     "dependencies": {
-        "@crossbind/port-gdal": "workspace:^",
-        "@crossbind/port-curl-ios": "workspace:^",
-        "@crossbind/port-expat-ios": "workspace:^",
-        "@crossbind/port-geos-ios": "workspace:^",
-        "@crossbind/port-geotiff-ios": "workspace:^",
-        "@crossbind/port-iconv-ios": "workspace:^",
-        "@crossbind/port-jpegturbo-ios": "workspace:^",
-        "@crossbind/port-proj-ios": "workspace:^",
-        "@crossbind/port-spatialite-ios": "workspace:^",
-        "@crossbind/port-sqlite3-ios": "workspace:^",
-        "@crossbind/port-tiff-ios": "workspace:^",
-        "@crossbind/port-webp-ios": "workspace:^",
-        "@crossbind/port-zlib-ios": "workspace:^",
-        "@crossbind/port-zstd-ios": "workspace:^",
-        "@crossbind/port-lerc-ios": "workspace:^"
+        "@crossbind/port-gdal": "workspace:*",
+        "@crossbind/port-curl-ios": "workspace:*",
+        "@crossbind/port-expat-ios": "workspace:*",
+        "@crossbind/port-geos-ios": "workspace:*",
+        "@crossbind/port-geotiff-ios": "workspace:*",
+        "@crossbind/port-iconv-ios": "workspace:*",
+        "@crossbind/port-jpegturbo-ios": "workspace:*",
+        "@crossbind/port-proj-ios": "workspace:*",
+        "@crossbind/port-spatialite-ios": "workspace:*",
+        "@crossbind/port-sqlite3-ios": "workspace:*",
+        "@crossbind/port-tiff-ios": "workspace:*",
+        "@crossbind/port-webp-ios": "workspace:*",
+        "@crossbind/port-zlib-ios": "workspace:*",
+        "@crossbind/port-zstd-ios": "workspace:*",
+        "@crossbind/port-lerc-ios": "workspace:*"
     },
     "devDependencies": {
-        "crossbind": "workspace:^"
+        "crossbind": "workspace:*"
     }
 }

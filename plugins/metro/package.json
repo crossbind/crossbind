@@ -1,6 +1,6 @@
 {
     "name": "@crossbind/plugin-metro",
-    "version": "2.0.0-beta.62",
+    "version": "2.0.0-beta.63",
     "description": "crossbind Metro plugin: A tool for seamless C++ integration with the Metro bundler.",
     "homepage": "https://github.com/crossbind/crossbind/tree/main/plugins/metro#readme",
     "repository": "https://github.com/crossbind/crossbind.git",
@@ -14,7 +14,7 @@
         "@babel/core": "^7.0.0"
     },
     "dependencies": {
-        "crossbind": "workspace:^",
+        "crossbind": "workspace:*",
         "@babel/runtime": "^7.29.7",
         "@react-native/metro-babel-transformer": "^0.87.1",
         "upath": "^3.0.8"

@@ -1,6 +1,6 @@
 {
     "name": "@crossbind/port-spatialite-ios",
-    "version": "2.0.0-beta.62",
+    "version": "2.0.0-beta.63",
     "nativeVersion": "5.1.0",
     "description": "iOS build of the precompiled SpatiaLite (spatial SQLite extension) library, built with crossbind. Use it together with the main package @crossbind/port-spatialite.",
     "homepage": "https://github.com/crossbind/crossbind/tree/main/ports/spatialite#readme",
@@ -24,14 +24,14 @@
         "prepublishOnly": "crossbind build -p ios"
     },
     "dependencies": {
-        "@crossbind/port-spatialite": "workspace:^",
-        "@crossbind/port-geos-ios": "workspace:^",
-        "@crossbind/port-proj-ios": "workspace:^",
-        "@crossbind/port-sqlite3-ios": "workspace:^",
-        "@crossbind/port-zlib-ios": "workspace:^",
-        "@crossbind/port-iconv-ios": "workspace:^"
+        "@crossbind/port-spatialite": "workspace:*",
+        "@crossbind/port-geos-ios": "workspace:*",
+        "@crossbind/port-proj-ios": "workspace:*",
+        "@crossbind/port-sqlite3-ios": "workspace:*",
+        "@crossbind/port-zlib-ios": "workspace:*",
+        "@crossbind/port-iconv-ios": "workspace:*"
     },
     "devDependencies": {
-        "crossbind": "workspace:^"
+        "crossbind": "workspace:*"
     }
 }

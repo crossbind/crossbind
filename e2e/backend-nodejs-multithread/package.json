@@ -12,19 +12,19 @@
         "e2e:prod": "node e2e/run.mjs"
     },
     "dependencies": {
-        "@crossbind/port-curl-wasm": "workspace:^",
-        "@crossbind/port-expat-wasm": "workspace:^",
-        "@crossbind/port-gdal-wasm": "workspace:^",
-        "@crossbind/port-geos-wasm": "workspace:^",
-        "@crossbind/port-geotiff-wasm": "workspace:^",
-        "@crossbind/port-iconv-wasm": "workspace:^",
-        "@crossbind/port-openssl-wasm": "workspace:^",
-        "@crossbind/port-proj-wasm": "workspace:^",
-        "@crossbind/port-spatialite-wasm": "workspace:^",
-        "@crossbind/port-sqlite3-wasm": "workspace:^",
-        "@crossbind/port-tiff-wasm": "workspace:^",
-        "@crossbind/port-webp-wasm": "workspace:^",
-        "@crossbind/port-zlib-wasm": "workspace:^",
+        "@crossbind/port-curl-wasm": "workspace:*",
+        "@crossbind/port-expat-wasm": "workspace:*",
+        "@crossbind/port-gdal-wasm": "workspace:*",
+        "@crossbind/port-geos-wasm": "workspace:*",
+        "@crossbind/port-geotiff-wasm": "workspace:*",
+        "@crossbind/port-iconv-wasm": "workspace:*",
+        "@crossbind/port-openssl-wasm": "workspace:*",
+        "@crossbind/port-proj-wasm": "workspace:*",
+        "@crossbind/port-spatialite-wasm": "workspace:*",
+        "@crossbind/port-sqlite3-wasm": "workspace:*",
+        "@crossbind/port-tiff-wasm": "workspace:*",
+        "@crossbind/port-webp-wasm": "workspace:*",
+        "@crossbind/port-zlib-wasm": "workspace:*",
         "@crossbind/embind-rust-demo": "workspace:^",
         "@crossbind/conformance-rust": "workspace:^",
         "@crossbind/conformance": "workspace:^",
@@ -32,7 +32,7 @@
         "xhr2": "^0.2.1"
     },
     "devDependencies": {
-        "crossbind": "workspace:^"
+        "crossbind": "workspace:*"
     },
     "keywords": [
         "crossbind-sample",

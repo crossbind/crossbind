@@ -12,10 +12,10 @@
         "e2e:prod": "node e2e/run.mjs"
     },
     "dependencies": {
-        "@crossbind/example-lib-prebuilt-matrix": "workspace:^"
+        "@crossbind/example-lib-prebuilt-matrix": "workspace:*"
     },
     "devDependencies": {
-        "crossbind": "workspace:^"
+        "crossbind": "workspace:*"
     },
     "keywords": [
         "crossbind-sample",

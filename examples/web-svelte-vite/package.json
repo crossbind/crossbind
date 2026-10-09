@@ -15,14 +15,14 @@
         "e2e:prod": "playwright test --config playwright.prod.config.cjs"
     },
     "dependencies": {
-        "@crossbind/example-lib-prebuilt-matrix": "workspace:^"
+        "@crossbind/example-lib-prebuilt-matrix": "workspace:*"
     },
     "devDependencies": {
         "@sveltejs/vite-plugin-svelte": "^7.3.0",
         "svelte": "^5.57.1",
         "vite": "^8.2.1",
         "@playwright/test": "^1.63.0",
-        "@crossbind/plugin-vite": "workspace:^"
+        "@crossbind/plugin-vite": "workspace:*"
     },
     "keywords": [
         "crossbind-sample",

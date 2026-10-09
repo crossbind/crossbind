@@ -16,10 +16,10 @@
         "e2e:prod": "electron-builder --dir && playwright test --project=packaged"
     },
     "devDependencies": {
-        "@crossbind/core-embind-napi": "workspace:^",
-        "@crossbind/example-lib-prebuilt-matrix": "workspace:^",
+        "@crossbind/core-embind-napi": "workspace:*",
+        "@crossbind/example-lib-prebuilt-matrix": "workspace:*",
         "@playwright/test": "^1.63.0",
-        "crossbind": "workspace:^",
+        "crossbind": "workspace:*",
         "electron": "^44.5.1",
         "electron-builder": "^26.15.3"
     },

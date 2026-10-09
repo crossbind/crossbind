@@ -1,6 +1,6 @@
 {
     "name": "@crossbind/port-jpegturbo-standalone-napi-linux-x64",
-    "version": "2.0.0-beta.62",
+    "version": "2.0.0-beta.63",
     "nativeVersion": "3.2.0",
     "homepage": "https://github.com/crossbind/crossbind/tree/main/ports/jpegturbo#readme",
     "repository": "https://github.com/crossbind/crossbind.git",
@@ -26,10 +26,10 @@
         "prepack": "node ../../../scripts/check-node-package.mjs"
     },
     "devDependencies": {
-        "crossbind": "workspace:^",
-        "@crossbind/port-jpegturbo-darwin": "workspace:^",
-        "@crossbind/port-jpegturbo-linux": "workspace:^",
-        "@crossbind/port-jpegturbo-linuxmusl": "workspace:^",
-        "@crossbind/port-jpegturbo-win32": "workspace:^"
+        "crossbind": "workspace:*",
+        "@crossbind/port-jpegturbo-darwin": "workspace:*",
+        "@crossbind/port-jpegturbo-linux": "workspace:*",
+        "@crossbind/port-jpegturbo-linuxmusl": "workspace:*",
+        "@crossbind/port-jpegturbo-win32": "workspace:*"
     }
 }

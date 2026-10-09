@@ -1,6 +1,6 @@
 {
     "name": "@crossbind/port-tiff-android",
-    "version": "2.0.0-beta.62",
+    "version": "2.0.0-beta.63",
     "nativeVersion": "4.7.2",
     "description": "Android build of the precompiled TIFF (libtiff) image library, built with crossbind. Use it together with the main package @crossbind/port-tiff.",
     "homepage": "https://github.com/crossbind/crossbind/tree/main/ports/tiff#readme",
@@ -23,13 +23,13 @@
         "build:android": "crossbind build -p android"
     },
     "dependencies": {
-        "@crossbind/port-tiff": "workspace:^",
-        "@crossbind/port-zlib-android": "workspace:^",
-        "@crossbind/port-jpegturbo-android": "workspace:^",
-        "@crossbind/port-zstd-android": "workspace:^",
-        "@crossbind/port-lerc-android": "workspace:^"
+        "@crossbind/port-tiff": "workspace:*",
+        "@crossbind/port-zlib-android": "workspace:*",
+        "@crossbind/port-jpegturbo-android": "workspace:*",
+        "@crossbind/port-zstd-android": "workspace:*",
+        "@crossbind/port-lerc-android": "workspace:*"
     },
     "devDependencies": {
-        "crossbind": "workspace:^"
+        "crossbind": "workspace:*"
     }
 }

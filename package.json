@@ -106,7 +106,7 @@
         "check:site": "pnpm run test:site && eslint scripts/site && prettier --check scripts/site"
     },
     "devDependencies": {
-        "crossbind": "workspace:^",
+        "crossbind": "workspace:*",
         "prettier": "^3.9.6",
         "@eslint/js": "^10.0.1",
         "eslint": "^10.11.0",

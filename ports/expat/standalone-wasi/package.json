@@ -1,6 +1,6 @@
 {
     "name": "@crossbind/port-expat-standalone-wasi",
-    "version": "2.0.0-beta.62",
+    "version": "2.0.0-beta.63",
     "nativeVersion": "2.9.0",
     "description": "The xmlwf well-formedness checker prebuilt as a WASI command component.",
     "homepage": "https://github.com/crossbind/crossbind/tree/main/ports/expat#readme",
@@ -23,9 +23,9 @@
         "prepublishOnly": "crossbind build -p wasi -b release && crossbind licenses --sbom"
     },
     "dependencies": {
-        "@crossbind/port-expat": "workspace:^",
-        "@crossbind/port-expat-wasi": "workspace:^",
-        "crossbind": "workspace:^"
+        "@crossbind/port-expat": "workspace:*",
+        "@crossbind/port-expat-wasi": "workspace:*",
+        "crossbind": "workspace:*"
     },
     "bin": {
         "xmlwf-wasi": "bin/xmlwf-wasi.mjs"

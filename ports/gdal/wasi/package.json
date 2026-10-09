@@ -1,6 +1,6 @@
 {
     "name": "@crossbind/port-gdal-wasi",
-    "version": "2.0.0-beta.62",
+    "version": "2.0.0-beta.63",
     "nativeVersion": "3.13.3",
     "description": "WASI build of the precompiled GDAL geospatial library, built with crossbind. Use it together with the main package @crossbind/port-gdal.",
     "homepage": "https://github.com/crossbind/crossbind/tree/main/ports/gdal#readme",
@@ -25,15 +25,15 @@
         "prepublishOnly": "crossbind build -p wasi"
     },
     "dependencies": {
-        "@crossbind/port-gdal": "workspace:^",
-        "@crossbind/port-geotiff-wasi": "workspace:^",
-        "@crossbind/port-proj-wasi": "workspace:^",
-        "@crossbind/port-tiff-wasi": "workspace:^",
-        "@crossbind/port-sqlite3-wasi": "workspace:^",
-        "@crossbind/port-zlib-wasi": "workspace:^",
-        "@crossbind/port-curl-wasi": "workspace:^"
+        "@crossbind/port-gdal": "workspace:*",
+        "@crossbind/port-geotiff-wasi": "workspace:*",
+        "@crossbind/port-proj-wasi": "workspace:*",
+        "@crossbind/port-tiff-wasi": "workspace:*",
+        "@crossbind/port-sqlite3-wasi": "workspace:*",
+        "@crossbind/port-zlib-wasi": "workspace:*",
+        "@crossbind/port-curl-wasi": "workspace:*"
     },
     "devDependencies": {
-        "crossbind": "workspace:^"
+        "crossbind": "workspace:*"
     }
 }

@@ -1,6 +1,6 @@
 {
     "name": "@crossbind/port-openssl-standalone-wasi",
-    "version": "2.0.0-beta.62",
+    "version": "2.0.0-beta.63",
     "nativeVersion": "4.0.3",
     "description": "The openssl CLI prebuilt as a WASI (wasm32-wasip3) command component.",
     "homepage": "https://github.com/crossbind/crossbind/tree/main/ports/openssl#readme",
@@ -23,9 +23,9 @@
         "prepublishOnly": "crossbind build -p wasi -b release && crossbind licenses --sbom"
     },
     "dependencies": {
-        "@crossbind/port-openssl": "workspace:^",
-        "@crossbind/port-openssl-wasi": "workspace:^",
-        "crossbind": "workspace:^"
+        "@crossbind/port-openssl": "workspace:*",
+        "@crossbind/port-openssl-wasi": "workspace:*",
+        "crossbind": "workspace:*"
     },
     "bin": {
         "openssl-wasi": "bin/openssl-wasi.mjs"

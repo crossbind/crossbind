@@ -1,6 +1,6 @@
 {
     "name": "@crossbind/plugin-react-native",
-    "version": "2.0.0-beta.62",
+    "version": "2.0.0-beta.63",
     "description": "crossbind React Native plugin: A tool for seamless C++ integration with React Native and Expo.",
     "homepage": "https://github.com/crossbind/crossbind/tree/main/plugins/react-native#readme",
     "repository": "https://github.com/crossbind/crossbind.git",
@@ -26,12 +26,12 @@
         }
     },
     "dependencies": {
-        "crossbind": "workspace:^",
-        "@crossbind/plugin-metro": "workspace:^",
-        "@crossbind/core-embind-jsi": "workspace:^",
+        "crossbind": "workspace:*",
+        "@crossbind/plugin-metro": "workspace:*",
+        "@crossbind/core-embind-jsi": "workspace:*",
         "@babel/runtime": "^7.29.7",
         "upath": "^3.0.8",
-        "@crossbind/core-embind-rust": "workspace:^"
+        "@crossbind/core-embind-rust": "workspace:*"
     },
     "keywords": [
         "crossbind-plugin",

@@ -1,6 +1,6 @@
 {
     "name": "@crossbind/port-gdal-wasm",
-    "version": "2.0.0-beta.62",
+    "version": "2.0.0-beta.63",
     "nativeVersion": "3.13.3",
     "description": "WebAssembly build of the precompiled GDAL geospatial library, built with crossbind. Use it together with the main package @crossbind/port-gdal.",
     "homepage": "https://github.com/crossbind/crossbind/tree/main/ports/gdal#readme",
@@ -25,23 +25,23 @@
         "prepublishOnly": "crossbind build -p wasm"
     },
     "dependencies": {
-        "@crossbind/port-gdal": "workspace:^",
-        "@crossbind/port-curl-wasm": "workspace:^",
-        "@crossbind/port-expat-wasm": "workspace:^",
-        "@crossbind/port-geos-wasm": "workspace:^",
-        "@crossbind/port-geotiff-wasm": "workspace:^",
-        "@crossbind/port-iconv-wasm": "workspace:^",
-        "@crossbind/port-jpegturbo-wasm": "workspace:^",
-        "@crossbind/port-proj-wasm": "workspace:^",
-        "@crossbind/port-spatialite-wasm": "workspace:^",
-        "@crossbind/port-sqlite3-wasm": "workspace:^",
-        "@crossbind/port-tiff-wasm": "workspace:^",
-        "@crossbind/port-webp-wasm": "workspace:^",
-        "@crossbind/port-zlib-wasm": "workspace:^",
-        "@crossbind/port-zstd-wasm": "workspace:^",
-        "@crossbind/port-lerc-wasm": "workspace:^"
+        "@crossbind/port-gdal": "workspace:*",
+        "@crossbind/port-curl-wasm": "workspace:*",
+        "@crossbind/port-expat-wasm": "workspace:*",
+        "@crossbind/port-geos-wasm": "workspace:*",
+        "@crossbind/port-geotiff-wasm": "workspace:*",
+        "@crossbind/port-iconv-wasm": "workspace:*",
+        "@crossbind/port-jpegturbo-wasm": "workspace:*",
+        "@crossbind/port-proj-wasm": "workspace:*",
+        "@crossbind/port-spatialite-wasm": "workspace:*",
+        "@crossbind/port-sqlite3-wasm": "workspace:*",
+        "@crossbind/port-tiff-wasm": "workspace:*",
+        "@crossbind/port-webp-wasm": "workspace:*",
+        "@crossbind/port-zlib-wasm": "workspace:*",
+        "@crossbind/port-zstd-wasm": "workspace:*",
+        "@crossbind/port-lerc-wasm": "workspace:*"
     },
     "devDependencies": {
-        "crossbind": "workspace:^"
+        "crossbind": "workspace:*"
     }
 }

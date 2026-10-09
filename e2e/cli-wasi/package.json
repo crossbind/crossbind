@@ -9,6 +9,6 @@
         "clear": "rm -rf .crossbind dist"
     },
     "devDependencies": {
-        "crossbind": "workspace:^"
+        "crossbind": "workspace:*"
     }
 }

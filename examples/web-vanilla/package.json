@@ -12,10 +12,10 @@
         "e2e:prod": "playwright test --config playwright.prod.config.cjs"
     },
     "dependencies": {
-        "@crossbind/example-lib-prebuilt-matrix": "workspace:^"
+        "@crossbind/example-lib-prebuilt-matrix": "workspace:*"
     },
     "devDependencies": {
-        "crossbind": "workspace:^",
+        "crossbind": "workspace:*",
         "serve": "^14.2.6",
         "@playwright/test": "^1.63.0"
     },

@@ -1,6 +1,6 @@
 {
     "name": "@crossbind/port-tiff-darwin",
-    "version": "2.0.0-beta.62",
+    "version": "2.0.0-beta.63",
     "nativeVersion": "4.7.2",
     "description": "macOS build of the precompiled TIFF (libtiff) image library, built with crossbind. Use it together with the main package @crossbind/port-tiff.",
     "homepage": "https://github.com/crossbind/crossbind/tree/main/ports/tiff#readme",
@@ -23,13 +23,13 @@
         "prepublishOnly": "crossbind build -p darwin"
     },
     "dependencies": {
-        "@crossbind/port-tiff": "workspace:^",
-        "@crossbind/port-zlib-darwin": "workspace:^",
-        "@crossbind/port-jpegturbo-darwin": "workspace:^",
-        "@crossbind/port-zstd-darwin": "workspace:^",
-        "@crossbind/port-lerc-darwin": "workspace:^"
+        "@crossbind/port-tiff": "workspace:*",
+        "@crossbind/port-zlib-darwin": "workspace:*",
+        "@crossbind/port-jpegturbo-darwin": "workspace:*",
+        "@crossbind/port-zstd-darwin": "workspace:*",
+        "@crossbind/port-lerc-darwin": "workspace:*"
     },
     "devDependencies": {
-        "crossbind": "workspace:^"
+        "crossbind": "workspace:*"
     }
 }

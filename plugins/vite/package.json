@@ -1,6 +1,6 @@
 {
     "name": "@crossbind/plugin-vite",
-    "version": "2.0.0-beta.62",
+    "version": "2.0.0-beta.63",
     "description": "crossbind Vite plugin: A tool for seamless C++ integration with the Vite.",
     "homepage": "https://github.com/crossbind/crossbind/tree/main/plugins/vite#readme",
     "repository": "https://github.com/crossbind/crossbind.git",
@@ -8,9 +8,9 @@
     "type": "module",
     "main": "index.js",
     "dependencies": {
-        "crossbind": "workspace:^",
-        "@crossbind/plugin-rollup": "workspace:^",
-        "@crossbind/core-embind-rust": "workspace:^"
+        "crossbind": "workspace:*",
+        "@crossbind/plugin-rollup": "workspace:*",
+        "@crossbind/core-embind-rust": "workspace:*"
     },
     "peerDependencies": {
         "vite": ">=3.0.0"

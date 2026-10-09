@@ -1,6 +1,6 @@
 {
     "name": "@crossbind/port-tiff-linuxmusl",
-    "version": "2.0.0-beta.62",
+    "version": "2.0.0-beta.63",
     "nativeVersion": "4.7.2",
     "description": "Linux (musl) build of the precompiled TIFF (libtiff) image library, built with crossbind. Use it together with the main package @crossbind/port-tiff.",
     "homepage": "https://github.com/crossbind/crossbind/tree/main/ports/tiff#readme",
@@ -25,13 +25,13 @@
         "prepublishOnly": "crossbind build -p linuxmusl"
     },
     "dependencies": {
-        "@crossbind/port-tiff": "workspace:^",
-        "@crossbind/port-zlib-linuxmusl": "workspace:^",
-        "@crossbind/port-jpegturbo-linuxmusl": "workspace:^",
-        "@crossbind/port-zstd-linuxmusl": "workspace:^",
-        "@crossbind/port-lerc-linuxmusl": "workspace:^"
+        "@crossbind/port-tiff": "workspace:*",
+        "@crossbind/port-zlib-linuxmusl": "workspace:*",
+        "@crossbind/port-jpegturbo-linuxmusl": "workspace:*",
+        "@crossbind/port-zstd-linuxmusl": "workspace:*",
+        "@crossbind/port-lerc-linuxmusl": "workspace:*"
     },
     "devDependencies": {
-        "crossbind": "workspace:^"
+        "crossbind": "workspace:*"
     }
 }

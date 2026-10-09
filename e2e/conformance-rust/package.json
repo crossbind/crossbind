@@ -10,7 +10,7 @@
         "build:android": "crossbind build -p android"
     },
     "devDependencies": {
-        "crossbind": "workspace:^",
-        "@crossbind/core-embind-rust": "workspace:^"
+        "crossbind": "workspace:*",
+        "@crossbind/core-embind-rust": "workspace:*"
     }
 }

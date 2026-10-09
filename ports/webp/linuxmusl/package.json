@@ -1,6 +1,6 @@
 {
     "name": "@crossbind/port-webp-linuxmusl",
-    "version": "2.0.0-beta.62",
+    "version": "2.0.0-beta.63",
     "nativeVersion": "1.6.0",
     "description": "Linux (musl) build of the precompiled WebP image library, built with crossbind. Use it together with the main package @crossbind/port-webp.",
     "homepage": "https://github.com/crossbind/crossbind/tree/main/ports/webp#readme",
@@ -25,9 +25,9 @@
         "prepublishOnly": "crossbind build -p linuxmusl"
     },
     "dependencies": {
-        "@crossbind/port-webp": "workspace:^"
+        "@crossbind/port-webp": "workspace:*"
     },
     "devDependencies": {
-        "crossbind": "workspace:^"
+        "crossbind": "workspace:*"
     }
 }

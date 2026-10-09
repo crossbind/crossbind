@@ -1,6 +1,6 @@
 {
     "name": "@crossbind/port-geos-win32",
-    "version": "2.0.0-beta.62",
+    "version": "2.0.0-beta.63",
     "nativeVersion": "3.15.0",
     "description": "Windows build of the precompiled GEOS geometry library, built with crossbind. Use it together with the main package @crossbind/port-geos.",
     "homepage": "https://github.com/crossbind/crossbind/tree/main/ports/geos#readme",
@@ -24,9 +24,9 @@
         "prepublishOnly": "crossbind build -p win32"
     },
     "dependencies": {
-        "@crossbind/port-geos": "workspace:^"
+        "@crossbind/port-geos": "workspace:*"
     },
     "devDependencies": {
-        "crossbind": "workspace:^"
+        "crossbind": "workspace:*"
     }
 }

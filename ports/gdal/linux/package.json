@@ -1,6 +1,6 @@
 {
     "name": "@crossbind/port-gdal-linux",
-    "version": "2.0.0-beta.62",
+    "version": "2.0.0-beta.63",
     "nativeVersion": "3.13.3",
     "description": "Linux build of the precompiled GDAL geospatial library, built with crossbind. Use it together with the main package @crossbind/port-gdal.",
     "homepage": "https://github.com/crossbind/crossbind/tree/main/ports/gdal#readme",
@@ -26,23 +26,23 @@
         "prepublishOnly": "crossbind build -p linux"
     },
     "dependencies": {
-        "@crossbind/port-gdal": "workspace:^",
-        "@crossbind/port-curl-linux": "workspace:^",
-        "@crossbind/port-expat-linux": "workspace:^",
-        "@crossbind/port-geos-linux": "workspace:^",
-        "@crossbind/port-geotiff-linux": "workspace:^",
-        "@crossbind/port-iconv-linux": "workspace:^",
-        "@crossbind/port-jpegturbo-linux": "workspace:^",
-        "@crossbind/port-proj-linux": "workspace:^",
-        "@crossbind/port-spatialite-linux": "workspace:^",
-        "@crossbind/port-sqlite3-linux": "workspace:^",
-        "@crossbind/port-tiff-linux": "workspace:^",
-        "@crossbind/port-webp-linux": "workspace:^",
-        "@crossbind/port-zlib-linux": "workspace:^",
-        "@crossbind/port-zstd-linux": "workspace:^",
-        "@crossbind/port-lerc-linux": "workspace:^"
+        "@crossbind/port-gdal": "workspace:*",
+        "@crossbind/port-curl-linux": "workspace:*",
+        "@crossbind/port-expat-linux": "workspace:*",
+        "@crossbind/port-geos-linux": "workspace:*",
+        "@crossbind/port-geotiff-linux": "workspace:*",
+        "@crossbind/port-iconv-linux": "workspace:*",
+        "@crossbind/port-jpegturbo-linux": "workspace:*",
+        "@crossbind/port-proj-linux": "workspace:*",
+        "@crossbind/port-spatialite-linux": "workspace:*",
+        "@crossbind/port-sqlite3-linux": "workspace:*",
+        "@crossbind/port-tiff-linux": "workspace:*",
+        "@crossbind/port-webp-linux": "workspace:*",
+        "@crossbind/port-zlib-linux": "workspace:*",
+        "@crossbind/port-zstd-linux": "workspace:*",
+        "@crossbind/port-lerc-linux": "workspace:*"
     },
     "devDependencies": {
-        "crossbind": "workspace:^"
+        "crossbind": "workspace:*"
     }
 }

@@ -1,6 +1,6 @@
 {
     "name": "@crossbind/port-spatialite-android",
-    "version": "2.0.0-beta.62",
+    "version": "2.0.0-beta.63",
     "nativeVersion": "5.1.0",
     "description": "Android build of the precompiled SpatiaLite (spatial SQLite extension) library, built with crossbind. Use it together with the main package @crossbind/port-spatialite.",
     "homepage": "https://github.com/crossbind/crossbind/tree/main/ports/spatialite#readme",
@@ -25,14 +25,14 @@
         "build:android": "crossbind build -p android"
     },
     "dependencies": {
-        "@crossbind/port-spatialite": "workspace:^",
-        "@crossbind/port-geos-android": "workspace:^",
-        "@crossbind/port-proj-android": "workspace:^",
-        "@crossbind/port-sqlite3-android": "workspace:^",
-        "@crossbind/port-zlib-android": "workspace:^",
-        "@crossbind/port-iconv-android": "workspace:^"
+        "@crossbind/port-spatialite": "workspace:*",
+        "@crossbind/port-geos-android": "workspace:*",
+        "@crossbind/port-proj-android": "workspace:*",
+        "@crossbind/port-sqlite3-android": "workspace:*",
+        "@crossbind/port-zlib-android": "workspace:*",
+        "@crossbind/port-iconv-android": "workspace:*"
     },
     "devDependencies": {
-        "crossbind": "workspace:^"
+        "crossbind": "workspace:*"
     }
 }

@@ -1,6 +1,6 @@
 {
     "name": "@crossbind/port-proj-standalone-wasi",
-    "version": "2.0.0-beta.62",
+    "version": "2.0.0-beta.63",
     "nativeVersion": "9.9.0",
     "description": "The PROJ CLIs (proj + cs2cs/cct/geod/gie/projinfo via multicall) as a WASI command component.",
     "homepage": "https://github.com/crossbind/crossbind/tree/main/ports/proj#readme",
@@ -23,9 +23,9 @@
         "prepublishOnly": "crossbind build -p wasi -b release && crossbind licenses --sbom"
     },
     "dependencies": {
-        "@crossbind/port-proj": "workspace:^",
-        "@crossbind/port-proj-wasi": "workspace:^",
-        "crossbind": "workspace:^"
+        "@crossbind/port-proj": "workspace:*",
+        "@crossbind/port-proj-wasi": "workspace:*",
+        "crossbind": "workspace:*"
     },
     "bin": {
         "proj-wasi": "bin/proj-wasi.mjs",

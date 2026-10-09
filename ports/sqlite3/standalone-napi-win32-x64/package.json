@@ -1,6 +1,6 @@
 {
     "name": "@crossbind/port-sqlite3-standalone-napi-win32-x64",
-    "version": "2.0.0-beta.62",
+    "version": "2.0.0-beta.63",
     "nativeVersion": "3.53.4",
     "homepage": "https://github.com/crossbind/crossbind/tree/main/ports/sqlite3#readme",
     "repository": "https://github.com/crossbind/crossbind.git",
@@ -23,10 +23,10 @@
         "prepack": "node ../../../scripts/check-node-package.mjs"
     },
     "devDependencies": {
-        "crossbind": "workspace:^",
-        "@crossbind/port-sqlite3-darwin": "workspace:^",
-        "@crossbind/port-sqlite3-linux": "workspace:^",
-        "@crossbind/port-sqlite3-linuxmusl": "workspace:^",
-        "@crossbind/port-sqlite3-win32": "workspace:^"
+        "crossbind": "workspace:*",
+        "@crossbind/port-sqlite3-darwin": "workspace:*",
+        "@crossbind/port-sqlite3-linux": "workspace:*",
+        "@crossbind/port-sqlite3-linuxmusl": "workspace:*",
+        "@crossbind/port-sqlite3-win32": "workspace:*"
     }
 }

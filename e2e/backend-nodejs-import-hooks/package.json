@@ -11,10 +11,10 @@
         "e2e:dev": "node e2e/dev.mjs"
     },
     "dependencies": {
-        "@crossbind/example-lib-prebuilt-matrix": "workspace:^"
+        "@crossbind/example-lib-prebuilt-matrix": "workspace:*"
     },
     "devDependencies": {
-        "@crossbind/core-embind-napi": "workspace:^",
-        "crossbind": "workspace:^"
+        "@crossbind/core-embind-napi": "workspace:*",
+        "crossbind": "workspace:*"
     }
 }

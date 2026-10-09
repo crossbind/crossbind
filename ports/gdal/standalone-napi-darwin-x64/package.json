@@ -1,6 +1,6 @@
 {
     "name": "@crossbind/port-gdal-standalone-napi-darwin-x64",
-    "version": "2.0.0-beta.62",
+    "version": "2.0.0-beta.63",
     "nativeVersion": "3.13.3",
     "homepage": "https://github.com/crossbind/crossbind/tree/main/ports/gdal#readme",
     "repository": "https://github.com/crossbind/crossbind.git",
@@ -23,10 +23,10 @@
         "prepack": "node ../../../scripts/check-node-package.mjs"
     },
     "devDependencies": {
-        "crossbind": "workspace:^",
-        "@crossbind/port-gdal-darwin": "workspace:^",
-        "@crossbind/port-gdal-linux": "workspace:^",
-        "@crossbind/port-gdal-linuxmusl": "workspace:^",
-        "@crossbind/port-gdal-win32": "workspace:^"
+        "crossbind": "workspace:*",
+        "@crossbind/port-gdal-darwin": "workspace:*",
+        "@crossbind/port-gdal-linux": "workspace:*",
+        "@crossbind/port-gdal-linuxmusl": "workspace:*",
+        "@crossbind/port-gdal-win32": "workspace:*"
     }
 }

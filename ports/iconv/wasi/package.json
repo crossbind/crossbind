@@ -1,6 +1,6 @@
 {
     "name": "@crossbind/port-iconv-wasi",
-    "version": "2.0.0-beta.62",
+    "version": "2.0.0-beta.63",
     "nativeVersion": "1.19",
     "description": "WASI build of the precompiled libiconv character-encoding library, built with crossbind. Use it together with the main package @crossbind/port-iconv.",
     "homepage": "https://github.com/crossbind/crossbind/tree/main/ports/iconv#readme",
@@ -24,9 +24,9 @@
         "prepublishOnly": "crossbind build -p wasi"
     },
     "dependencies": {
-        "@crossbind/port-iconv": "workspace:^"
+        "@crossbind/port-iconv": "workspace:*"
     },
     "devDependencies": {
-        "crossbind": "workspace:^"
+        "crossbind": "workspace:*"
     }
 }

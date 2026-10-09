@@ -1,6 +1,6 @@
 {
     "name": "@crossbind/port-curl-standalone-wasi",
-    "version": "2.0.0-beta.62",
+    "version": "2.0.0-beta.63",
     "nativeVersion": "8.22.0",
     "description": "The curl CLI prebuilt as a WASI (wasm32-wasip3) command component.",
     "homepage": "https://github.com/crossbind/crossbind/tree/main/ports/curl#readme",
@@ -23,9 +23,9 @@
         "prepublishOnly": "crossbind build -p wasi -b release && crossbind licenses --sbom"
     },
     "dependencies": {
-        "@crossbind/port-curl": "workspace:^",
-        "@crossbind/port-curl-wasi": "workspace:^",
-        "crossbind": "workspace:^"
+        "@crossbind/port-curl": "workspace:*",
+        "@crossbind/port-curl-wasi": "workspace:*",
+        "crossbind": "workspace:*"
     },
     "bin": {
         "curl-wasi": "bin/curl-wasi.mjs"

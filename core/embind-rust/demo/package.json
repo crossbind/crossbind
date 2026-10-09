@@ -12,7 +12,7 @@
         "clear": "rm -rf .crossbind dist *.xcframework target"
     },
     "devDependencies": {
-        "crossbind": "workspace:^",
-        "@crossbind/core-embind-rust": "workspace:^"
+        "crossbind": "workspace:*",
+        "@crossbind/core-embind-rust": "workspace:*"
     }
 }

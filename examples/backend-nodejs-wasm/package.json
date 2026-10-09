@@ -10,10 +10,10 @@
         "build": "crossbind build -p wasm -a wasm32 -r st -e node -b release"
     },
     "dependencies": {
-        "@crossbind/example-lib-prebuilt-matrix": "workspace:^"
+        "@crossbind/example-lib-prebuilt-matrix": "workspace:*"
     },
     "devDependencies": {
-        "crossbind": "workspace:^"
+        "crossbind": "workspace:*"
     },
     "keywords": [
         "crossbind-sample",

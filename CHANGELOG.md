@@ -3,6 +3,34 @@
 <!-- release-notes:start -->
 <!-- Generated from releases/crossbind/<version>.md by scripts/release/render-changelog.mjs. Edit the note, then run `pnpm changelog`. -->
 
+## 2.0.0-beta.63
+
+Aligns all public Crossbind packages on beta.63 and pins their Crossbind dependencies to exact versions.
+
+### Highlights
+
+- All public Crossbind packages use `2.0.0-beta.63`.
+- Published packages and generated project templates pin Crossbind dependencies to exact
+  versions. The Expo example also pins its six Crossbind dependencies to this release.
+
+### Breaking changes
+
+None.
+
+### Migration notes
+
+- Upgrade the Crossbind packages used by a project together to `2.0.0-beta.63`.
+- After this release is published, run `npm install` in `examples/mobile-reactnative-expo`
+  to refresh its lockfile against the new exact package versions.
+
+### Fixes
+
+- Generated project templates preserve exact workspace dependency pins.
+
+### Known limitations
+
+- The Expo example's lockfile can only resolve this train after its packages are published.
+
 ## 2.0.0-beta.62
 
 Builds native Node-API addons for macOS, Linux and Windows, imports single Rust modules with cargo:, binds struct fields and imported constants through SWIG, and moves to toolchain images 1.0.8.

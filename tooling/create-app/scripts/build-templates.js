@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 // Copies each sample referenced by src/manifest.json into templates/<key>/ and
 // rewrites it so end-users can `npm install` without the workspace:
-//   - workspace:* | workspace:^ | workspace:~ -> ^<resolved-version>
+//   - workspace:* -> <resolved-version>
+//   - workspace:^ | workspace:~ -> ^<resolved-version>
 //   - lines containing the marker "Delete this line for create-crossbind" are
 //     stripped from crossbind.config.{js,mjs} and metro.config.js (these are
 //     workspace-only knobs that don't belong in scaffolded projects).
@@ -60,7 +61,7 @@ function rewriteWorkspaceDeps(deps, versionMap) {
         if (typeof spec === 'string' && spec.startsWith('workspace:')) {
             const v = versionMap.get(name);
             if (!v) throw new Error(`No workspace version found for ${name} (referenced via ${spec})`);
-            out[name] = `^${v}`;
+            out[name] = spec === 'workspace:*' ? v : `^${v}`;
         } else {
             out[name] = spec;
         }

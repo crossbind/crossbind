@@ -1,6 +1,6 @@
 {
     "name": "@crossbind/port-gdal-standalone-wasi",
-    "version": "2.0.0-beta.62",
+    "version": "2.0.0-beta.63",
     "nativeVersion": "3.13.3",
     "description": "The upstream `gdal` command-line interface prebuilt as a single WASI (wasm32-wasip3) command component. Install, point wasmtime at the shipped .wasm and data folder, and run - no compiler involved.",
     "homepage": "https://github.com/crossbind/crossbind/tree/main/ports/gdal#readme",
@@ -27,15 +27,15 @@
         "prepublishOnly": "crossbind build -p wasi -b release && crossbind licenses --sbom"
     },
     "dependencies": {
-        "@crossbind/port-gdal": "workspace:^",
-        "@crossbind/port-geotiff-wasi": "workspace:^",
-        "@crossbind/port-proj-wasi": "workspace:^",
-        "@crossbind/port-tiff-wasi": "workspace:^",
-        "@crossbind/port-sqlite3-wasi": "workspace:^",
-        "@crossbind/port-zlib-wasi": "workspace:^",
-        "@crossbind/port-curl-wasi": "workspace:^",
-        "@crossbind/port-openssl-wasi": "workspace:^",
-        "crossbind": "workspace:^"
+        "@crossbind/port-gdal": "workspace:*",
+        "@crossbind/port-geotiff-wasi": "workspace:*",
+        "@crossbind/port-proj-wasi": "workspace:*",
+        "@crossbind/port-tiff-wasi": "workspace:*",
+        "@crossbind/port-sqlite3-wasi": "workspace:*",
+        "@crossbind/port-zlib-wasi": "workspace:*",
+        "@crossbind/port-curl-wasi": "workspace:*",
+        "@crossbind/port-openssl-wasi": "workspace:*",
+        "crossbind": "workspace:*"
     },
     "bin": {
         "gdal-wasi": "bin/gdal-wasi.mjs",

@@ -41,7 +41,7 @@ test('scaffolds a neutral port family without carrying zlib metadata', (t) => {
     assert.equal(base.nativeVersion, 'TODO');
     assert.equal(base.license, 'Apache-2.0');
     assert.equal(base.crossbind.upstream.license.declared, 'Apache-2.0');
-    assert.equal(wasm.dependencies['@crossbind/port-demo-lib'], 'workspace:^');
+    assert.equal(wasm.dependencies['@crossbind/port-demo-lib'], 'workspace:*');
     assert.equal(wasm.dependencies['@crossbind/port-zlib'], undefined);
     assert.match(build, /sha256: 'TODO'/);
     assert.match(license, /replace this file with the complete upstream demo-lib license/);

@@ -1,6 +1,6 @@
 {
     "name": "@crossbind/plugin-rollup",
-    "version": "2.0.0-beta.62",
+    "version": "2.0.0-beta.63",
     "description": "crossbind Rollup plugin: A tool for seamless C++ integration with the Rollup bundler.",
     "homepage": "https://github.com/crossbind/crossbind/tree/main/plugins/rollup#readme",
     "repository": "https://github.com/crossbind/crossbind.git",
@@ -8,8 +8,8 @@
     "type": "module",
     "main": "index.js",
     "dependencies": {
-        "crossbind": "workspace:^",
-        "@crossbind/core-embind-rust": "workspace:^"
+        "crossbind": "workspace:*",
+        "@crossbind/core-embind-rust": "workspace:*"
     },
     "peerDependencies": {
         "rollup": ">=2.0.0"

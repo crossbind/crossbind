@@ -1,6 +1,6 @@
 {
     "name": "@crossbind/port-gdal-android",
-    "version": "2.0.0-beta.62",
+    "version": "2.0.0-beta.63",
     "nativeVersion": "3.13.3",
     "description": "Android build of the precompiled GDAL geospatial library, built with crossbind. Use it together with the main package @crossbind/port-gdal.",
     "homepage": "https://github.com/crossbind/crossbind/tree/main/ports/gdal#readme",
@@ -26,23 +26,23 @@
         "build:android": "crossbind build -p android"
     },
     "dependencies": {
-        "@crossbind/port-gdal": "workspace:^",
-        "@crossbind/port-curl-android": "workspace:^",
-        "@crossbind/port-expat-android": "workspace:^",
-        "@crossbind/port-geos-android": "workspace:^",
-        "@crossbind/port-geotiff-android": "workspace:^",
-        "@crossbind/port-iconv-android": "workspace:^",
-        "@crossbind/port-jpegturbo-android": "workspace:^",
-        "@crossbind/port-proj-android": "workspace:^",
-        "@crossbind/port-spatialite-android": "workspace:^",
-        "@crossbind/port-sqlite3-android": "workspace:^",
-        "@crossbind/port-tiff-android": "workspace:^",
-        "@crossbind/port-webp-android": "workspace:^",
-        "@crossbind/port-zlib-android": "workspace:^",
-        "@crossbind/port-zstd-android": "workspace:^",
-        "@crossbind/port-lerc-android": "workspace:^"
+        "@crossbind/port-gdal": "workspace:*",
+        "@crossbind/port-curl-android": "workspace:*",
+        "@crossbind/port-expat-android": "workspace:*",
+        "@crossbind/port-geos-android": "workspace:*",
+        "@crossbind/port-geotiff-android": "workspace:*",
+        "@crossbind/port-iconv-android": "workspace:*",
+        "@crossbind/port-jpegturbo-android": "workspace:*",
+        "@crossbind/port-proj-android": "workspace:*",
+        "@crossbind/port-spatialite-android": "workspace:*",
+        "@crossbind/port-sqlite3-android": "workspace:*",
+        "@crossbind/port-tiff-android": "workspace:*",
+        "@crossbind/port-webp-android": "workspace:*",
+        "@crossbind/port-zlib-android": "workspace:*",
+        "@crossbind/port-zstd-android": "workspace:*",
+        "@crossbind/port-lerc-android": "workspace:*"
     },
     "devDependencies": {
-        "crossbind": "workspace:^"
+        "crossbind": "workspace:*"
     }
 }

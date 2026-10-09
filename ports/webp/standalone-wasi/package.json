@@ -1,6 +1,6 @@
 {
     "name": "@crossbind/port-webp-standalone-wasi",
-    "version": "2.0.0-beta.62",
+    "version": "2.0.0-beta.63",
     "nativeVersion": "1.6.0",
     "description": "cwebp/dwebp/webpinfo prebuilt as WASI (wasm32-wasip3) command components.",
     "homepage": "https://github.com/crossbind/crossbind/tree/main/ports/webp#readme",
@@ -23,9 +23,9 @@
         "prepublishOnly": "crossbind build -p wasi -b release && crossbind licenses --sbom"
     },
     "dependencies": {
-        "@crossbind/port-webp": "workspace:^",
-        "@crossbind/port-webp-wasi": "workspace:^",
-        "crossbind": "workspace:^"
+        "@crossbind/port-webp": "workspace:*",
+        "@crossbind/port-webp-wasi": "workspace:*",
+        "crossbind": "workspace:*"
     },
     "bin": {
         "cwebp-wasi": "bin/cwebp-wasi.mjs",
