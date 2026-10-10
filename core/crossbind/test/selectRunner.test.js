@@ -3,13 +3,17 @@ import {
 } from 'vitest';
 
 vi.mock('../src/utils/logger.js', () => ({ default: { info: vi.fn() } }));
+// Not signed in, whatever the developer's own ~/.crossbind/credentials.json holds.
+vi.mock('../src/utils/cloudAccount.js', async (importOriginal) => ({ ...(await importOriginal()), cloudCredentials: vi.fn(() => null) }));
 
 async function importFresh() {
     vi.resetModules();
     const logger = (await import('../src/utils/logger.js')).default;
     logger.info.mockClear();
+    const { cloudCredentials } = await import('../src/utils/cloudAccount.js');
+    cloudCredentials.mockReset();
     const mod = await import('../src/utils/selectRunner.js');
-    return { ...mod, info: logger.info };
+    return { ...mod, info: logger.info, cloudCredentials };
 }
 
 let chosenRunner;
@@ -95,6 +99,65 @@ describe('runnerFor', () => {
             .toThrow(/REMOTE_URL_WEB in ~\/\.crossbind\.json is "runner\.example:8787", not an http or https address/);
         expect(() => runnerFor('web', { RUNNER: 'REMOTE' }, { CROSSBIND_REMOTE_URL: 'not an address' }))
             .toThrow(/\$CROSSBIND_REMOTE_URL is "not an address"/);
+    });
+});
+
+describe('crossbind cloud under REMOTE', () => {
+    const signedIn = { token: `cbt_${'a'.repeat(43)}`, login: 'octocat' };
+
+    test('runs every image on crossbind cloud once a machine that names no runner is signed in', async () => {
+        const { runnerFor: fresh, cloudCredentials } = await importFresh();
+        cloudCredentials.mockReturnValue(signedIn);
+
+        expect(fresh('android', { RUNNER: 'REMOTE' }, {})).toEqual({
+            runner: 'REMOTE',
+            remote: {
+                url: 'https://api.crossbind.dev/runner/android', from: 'crossbind login as octocat', token: signedIn.token, tokenVariable: null,
+            },
+        });
+        expect(cloudCredentials).toHaveBeenCalledWith('https://api.crossbind.dev');
+    });
+
+    test('sends no image to the cloud once the machine names a runner of its own, in the file or the environment', async () => {
+        const { runnerFor: fresh, cloudCredentials } = await importFresh();
+        cloudCredentials.mockReturnValue(signedIn);
+
+        expect(fresh('android', { RUNNER: 'REMOTE', REMOTE_URL_WEB: 'https://web.example' }, {})).toEqual({ runner: 'REMOTE', remote: null });
+        expect(fresh('android', { RUNNER: 'REMOTE' }, { CROSSBIND_REMOTE_URL_LINUX: 'https://linux.example' })).toEqual({ runner: 'REMOTE', remote: null });
+        expect(cloudCredentials).not.toHaveBeenCalled();
+    });
+
+    test('keeps an image with an address on that runner, with that runner\'s token', async () => {
+        const { runnerFor: fresh, cloudCredentials } = await importFresh();
+        cloudCredentials.mockReturnValue(signedIn);
+
+        expect(fresh('web', { RUNNER: 'REMOTE', REMOTE_URL: 'https://shared.example' }, { CROSSBIND_TOKEN: 'shared-token' }).remote)
+            .toMatchObject({ url: 'https://shared.example', token: 'shared-token' });
+    });
+
+    test('runs on the cloud the environment or the config names', async () => {
+        const { runnerFor: fresh, cloudCredentials } = await importFresh();
+        cloudCredentials.mockReturnValue(signedIn);
+
+        expect(fresh('web', { RUNNER: 'REMOTE' }, { CROSSBIND_CLOUD_URL: 'http://localhost:8686' }).remote.url).toBe('http://localhost:8686/runner/web');
+        expect(cloudCredentials).toHaveBeenCalledWith('http://localhost:8686');
+    });
+
+    test('looks for no sign-in unless RUNNER is REMOTE', async () => {
+        const { runnerFor: fresh, cloudCredentials } = await importFresh();
+
+        ['DOCKER_RUN', 'DOCKER_EXEC', 'LOCAL'].forEach((RUNNER) => fresh('web', { RUNNER }, {}));
+
+        expect(cloudCredentials).not.toHaveBeenCalled();
+    });
+
+    test('names the account an image builds with', async () => {
+        const { runnerFor: fresh, cloudCredentials, info } = await importFresh();
+        cloudCredentials.mockReturnValue(signedIn);
+
+        fresh('web', { RUNNER: 'REMOTE' }, {});
+
+        expect(info.mock.calls[0][0]).toBe('crossbind: web steps run on the runner at https://api.crossbind.dev/runner/web (RUNNER=REMOTE from ~/.crossbind.json, address from crossbind login as octocat).');
     });
 });
 

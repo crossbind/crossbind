@@ -1,0 +1,133 @@
+// The crossbind cloud API on api.crossbind.dev: the playground with its compiler container, the accounts
+// `crossbind login` signs in to, and a runner per user and toolchain image for builds under RUNNER=REMOTE.
+// `pnpm run deploy` (or `deploy:staging`) assembles the image contexts first and migrates the accounts database (D1)
+// after. Secrets, set with `wrangler secret put [--env staging]`: SESSION_SECRET and RUNNER_SECRET (32+ random
+// characters each), TURNSTILE_SECRET, GITHUB_CLIENT_ID, GITHUB_CLIENT_SECRET (a GitHub OAuth app with the device flow
+// enabled).
+{
+    "name": "crossbind-cloud",
+    "main": "worker/index.js",
+    "compatibility_date": "2026-09-01",
+    "workers_dev": false,
+    "routes": [{ "pattern": "api.crossbind.dev", "custom_domain": true }],
+    "observability": { "enabled": true },
+    // Daily: drops the tokens, build seconds and deleted accounts' records the accounts keep only for a while.
+    "triggers": { "crons": ["17 3 * * *"] },
+    // max_instances caps the bill: how many compiles, and how many builds per image, run at once.
+    "containers": [
+        {
+            "class_name": "PlaygroundCompiler",
+            "image": "./.build/Dockerfile",
+            "instance_type": { "vcpu": 1, "memory_mib": 3072, "disk_mb": 6000 },
+            "max_instances": 1
+        },
+        { "class_name": "CloudRunnerWeb", "image": "./.build/runner-web/Dockerfile", "instance_type": "standard-4", "max_instances": 2 },
+        { "class_name": "CloudRunnerAndroid", "image": "./.build/runner-android/Dockerfile", "instance_type": "standard-4", "max_instances": 2 },
+        { "class_name": "CloudRunnerLinux", "image": "./.build/runner-linux/Dockerfile", "instance_type": "standard-4", "max_instances": 2 },
+        { "class_name": "CloudRunnerWindows", "image": "./.build/runner-windows/Dockerfile", "instance_type": "standard-4", "max_instances": 2 }
+    ],
+    "durable_objects": {
+        "bindings": [
+            { "name": "COMPILER", "class_name": "PlaygroundCompiler" },
+            { "name": "QUOTA", "class_name": "PlaygroundQuota" },
+            { "name": "RUNNER_WEB", "class_name": "CloudRunnerWeb" },
+            { "name": "RUNNER_ANDROID", "class_name": "CloudRunnerAndroid" },
+            { "name": "RUNNER_LINUX", "class_name": "CloudRunnerLinux" },
+            { "name": "RUNNER_WINDOWS", "class_name": "CloudRunnerWindows" }
+        ]
+    },
+    "exports": {
+        "PlaygroundCompiler": { "type": "durable-object", "storage": "sqlite" },
+        "PlaygroundQuota": { "type": "durable-object", "storage": "sqlite" },
+        "CloudRunnerWeb": { "type": "durable-object", "storage": "sqlite" },
+        "CloudRunnerAndroid": { "type": "durable-object", "storage": "sqlite" },
+        "CloudRunnerLinux": { "type": "durable-object", "storage": "sqlite" },
+        "CloudRunnerWindows": { "type": "durable-object", "storage": "sqlite" }
+    },
+    "d1_databases": [{ "binding": "DB", "database_name": "crossbind-accounts", "migrations_dir": "migrations" }],
+    // Requests per network and minute, counted at each Cloudflare location: every route, starting a CLI sign-in, and
+    // the runners, which a build talks to far more often.
+    "ratelimits": [
+        { "name": "API_LIMITER", "namespace_id": "1101", "simple": { "limit": 120, "period": 60 } },
+        { "name": "LOGIN_LIMITER", "namespace_id": "1102", "simple": { "limit": 10, "period": 60 } },
+        { "name": "RUNNER_LIMITER", "namespace_id": "1103", "simple": { "limit": 1200, "period": 60 } }
+    ],
+    "vars": {
+        "PLAYGROUND_ENABLED": "true",
+        "CLOUD_BUILDS_ENABLED": "true",
+        "ALLOWED_ORIGINS": "https://crossbind.dev",
+        "PLAYGROUND_URL": "https://crossbind.dev/playground/",
+        "ANONYMOUS_DAILY": "5",
+        "USER_DAILY": "100",
+        "GLOBAL_DAILY": "1000",
+        "BUILD_SECONDS_MONTHLY": "3600",
+        "GLOBAL_BUILD_HOURS_MONTHLY": "100",
+        "GLOBAL_BUILD_HOURS_DAILY": "10",
+        "MIN_GITHUB_ACCOUNT_DAYS": "30",
+        "TURNSTILE_SITE_KEY": "0x4AAAAAAFTFcieHj3dC44NR",
+        "TURNSTILE_HOSTNAMES": "crossbind.dev",
+        "BLOCKED_NETWORKS": ""
+    },
+    "env": {
+        // On api-staging.crossbind.dev (some networks refuse workers.dev names), for the landing's dev server and
+        // `wrangler dev`; Turnstile's always-passing test key, so a client that sends the dev server's Origin skips the
+        // browser check: smaller totals, one runner per image.
+        "staging": {
+            "workers_dev": false,
+            "routes": [{ "pattern": "api-staging.crossbind.dev", "custom_domain": true }],
+            "triggers": { "crons": ["17 3 * * *"] },
+            "containers": [
+                {
+                    "class_name": "PlaygroundCompiler",
+                    "image": "./.build/Dockerfile",
+                    "instance_type": { "vcpu": 1, "memory_mib": 3072, "disk_mb": 6000 },
+                    "max_instances": 1
+                },
+                { "class_name": "CloudRunnerWeb", "image": "./.build/runner-web/Dockerfile", "instance_type": "standard-4", "max_instances": 1 },
+                { "class_name": "CloudRunnerAndroid", "image": "./.build/runner-android/Dockerfile", "instance_type": "standard-4", "max_instances": 1 },
+                { "class_name": "CloudRunnerLinux", "image": "./.build/runner-linux/Dockerfile", "instance_type": "standard-4", "max_instances": 1 },
+                { "class_name": "CloudRunnerWindows", "image": "./.build/runner-windows/Dockerfile", "instance_type": "standard-4", "max_instances": 1 }
+            ],
+            "durable_objects": {
+                "bindings": [
+                    { "name": "COMPILER", "class_name": "PlaygroundCompiler" },
+                    { "name": "QUOTA", "class_name": "PlaygroundQuota" },
+                    { "name": "RUNNER_WEB", "class_name": "CloudRunnerWeb" },
+                    { "name": "RUNNER_ANDROID", "class_name": "CloudRunnerAndroid" },
+                    { "name": "RUNNER_LINUX", "class_name": "CloudRunnerLinux" },
+                    { "name": "RUNNER_WINDOWS", "class_name": "CloudRunnerWindows" }
+                ]
+            },
+            "exports": {
+                "PlaygroundCompiler": { "type": "durable-object", "storage": "sqlite" },
+                "PlaygroundQuota": { "type": "durable-object", "storage": "sqlite" },
+                "CloudRunnerWeb": { "type": "durable-object", "storage": "sqlite" },
+                "CloudRunnerAndroid": { "type": "durable-object", "storage": "sqlite" },
+                "CloudRunnerLinux": { "type": "durable-object", "storage": "sqlite" },
+                "CloudRunnerWindows": { "type": "durable-object", "storage": "sqlite" }
+            },
+            "d1_databases": [{ "binding": "DB", "database_name": "crossbind-accounts-staging", "migrations_dir": "migrations" }],
+            "ratelimits": [
+                { "name": "API_LIMITER", "namespace_id": "1201", "simple": { "limit": 120, "period": 60 } },
+                { "name": "LOGIN_LIMITER", "namespace_id": "1202", "simple": { "limit": 10, "period": 60 } },
+                { "name": "RUNNER_LIMITER", "namespace_id": "1203", "simple": { "limit": 1200, "period": 60 } }
+            ],
+            "vars": {
+                "PLAYGROUND_ENABLED": "true",
+                "CLOUD_BUILDS_ENABLED": "true",
+                "ALLOWED_ORIGINS": "http://localhost:5173",
+                "PLAYGROUND_URL": "http://localhost:5173/playground/",
+                "ANONYMOUS_DAILY": "5",
+                "USER_DAILY": "20",
+                "GLOBAL_DAILY": "100",
+                "BUILD_SECONDS_MONTHLY": "3600",
+                "GLOBAL_BUILD_HOURS_MONTHLY": "10",
+                "GLOBAL_BUILD_HOURS_DAILY": "2",
+                "MIN_GITHUB_ACCOUNT_DAYS": "30",
+                "TURNSTILE_SITE_KEY": "1x00000000000000000000AA",
+                "TURNSTILE_HOSTNAMES": "localhost,example.com",
+                "BLOCKED_NETWORKS": ""
+            }
+        }
+    }
+}

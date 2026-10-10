@@ -14,7 +14,7 @@
     {
       "source": "docs/api/README.md",
       "output": "api/README.md",
-      "sha256": "f9d3cc7bbb465ecc344bc1e049d7086835bc1b025887da2130b908fff586f0a2"
+      "sha256": "84a4f1a5a5971cabe65c09f17c411292cc1135e8fc9967cd51e20eeb534f0c21"
     },
     {
       "source": "docs/api/build-state.md",
@@ -74,7 +74,7 @@
     {
       "source": "docs/api/remote-runner.md",
       "output": "api/remote-runner.md",
-      "sha256": "477839c5d0b5ea9aca41db79f794123372f24f9b96ed67454555fcc38a294e1f"
+      "sha256": "c3464f01d15729d6872e4869f188d06a6293a3138c2beca2abb3ac32bcc541da"
     },
     {
       "source": "docs/api/rust.md",

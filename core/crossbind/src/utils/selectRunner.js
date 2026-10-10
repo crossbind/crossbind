@@ -1,3 +1,4 @@
+import { cloudCredentials, cloudUrl } from './cloudAccount.js';
 import logger from './logger.js';
 import systemKeys, { assertRunner } from './systemKeys.js';
 
@@ -53,12 +54,28 @@ function announce(role, remote, env) {
     logger.info(`crossbind: ${role} steps run on the runner at ${shown} (RUNNER=REMOTE from ${chosenBy}, address from ${remote.from}).`);
 }
 
-// Under REMOTE, an image without an address gets no runner: its steps stop instead of running in the
+// A runner address named anywhere, for any image, keeps every image off the cloud: the sources go only where the
+// user sends them.
+const namesOwnRunner = (system, env) => Object.keys(systemKeys).some((key) => key.startsWith(SHARED.key) && system?.[key])
+    || Object.keys(env).some((name) => name.startsWith(SHARED.url) && env[name]);
+
+// The sign-in of `crossbind login` carries its own token; a token set for runners never reaches the cloud.
+function cloudAddress(role, system, env) {
+    const url = cloudUrl(system, env);
+    const signedIn = cloudCredentials(url);
+    if (!signedIn) return null;
+    return {
+        url: `${url}/runner/${role}`, from: `crossbind login as ${signedIn.login}`, token: signedIn.token, tokenVariable: null,
+    };
+}
+
+// Under REMOTE, an image runs on its own address, else the shared one; a machine that names no runner address at all
+// runs on crossbind cloud once signed in. Without any it gets no runner: its steps stop instead of running in the
 // local Docker, where the build would only seem to run on a runner.
 export function runnerFor(role, system, env = process.env) {
     const runner = chosenRunner(system, env);
     if (runner !== 'REMOTE') return { runner };
-    const remote = remoteAddress(role, system, env);
+    const remote = remoteAddress(role, system, env) ?? (namesOwnRunner(system, env) ? null : cloudAddress(role, system, env));
     if (remote) announce(role, remote, env);
     return { runner, remote };
 }

@@ -1,4 +1,5 @@
 import { CHANGELOG_PAGE } from '../changelog/page.js';
+import PRIVACY_PAGE from '../pages/privacy.js';
 import {
     AGENT_URL, DISCUSSIONS_URL, LIBRARIES_URL, LICENSE_URL, LLMS_URL, REPO_URL,
 } from '../data.js';
@@ -16,6 +17,7 @@ const LINKS = [
     { label: 'GitHub', href: REPO_URL, external: true },
     { label: 'Discussions', href: DISCUSSIONS_URL, external: true },
     { label: 'MIT', href: LICENSE_URL, external: true },
+    { label: 'Privacy', href: PRIVACY_PAGE.href },
 ];
 
 export default function Closing({ tokens }) {

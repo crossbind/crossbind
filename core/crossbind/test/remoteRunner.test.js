@@ -116,7 +116,7 @@ describe('remoteExecParams', () => {
 
     test('stops a step whose image has no runner address, naming the settings that would give it one', () => {
         expect(() => remoteExecParams({ ...step, role: 'android', remote: null }, {}))
-            .toThrow('crossbind: RUNNER=REMOTE, but the android image has no runner address - set REMOTE_URL_ANDROID (or REMOTE_URL), or build with CROSSBIND_RUNNER=DOCKER_RUN.');
+            .toThrow('crossbind: RUNNER=REMOTE, but the android image has no runner address - set REMOTE_URL_ANDROID (or REMOTE_URL), or build with CROSSBIND_RUNNER=DOCKER_RUN. A machine that names no runner address builds on crossbind cloud after crossbind login.');
     });
 
     test('stops before the step when the runner\'s address comes without its own token, naming the variable to set', () => {

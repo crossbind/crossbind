@@ -26,6 +26,7 @@ crossbind/
 ├── tooling/                          ← dev-time helpers, not part of a consumer build
 │   ├── create-app/                   ← create-crossbind scaffolder (templates built from examples/)
 │   ├── docker/                       ← pinned build image
+│   ├── cloud/                        ← crossbind cloud on api.crossbind.dev: the playground compiler, the accounts `crossbind login` signs in to, a runner per user and image
 │   └── typescript-config/            ← shared tsconfig
 ├── plugins/
 │   ├── vite/
@@ -126,6 +127,7 @@ Index + template: [`docs/adr/README.md`](./adr/README.md).
 | CMake parameter generation | `src/actions/getCmakeParameters.js` |
 | Docker / Xcode shell-out | `src/actions/run.js` |
 | `crossbind runner` start/stop and the deploy folders `runner init` writes (Fly, Cloudflare) | `src/actions/runnerCommands.js` |
+| `crossbind login`, `logout`, `usage`; the cloud address and the sign-in kept in `~/.crossbind/credentials.json`, which `RUNNER=REMOTE` builds on when the machine names no runner address | `src/actions/cloudCommands.js`, `src/utils/cloudAccount.js` |
 | Remote runner server (`/v1` protocol), its blob store and the file sync it shares with the client | `src/runner/{server,blobs,files}.js` |
 | Bridge file generation (SWIG) | `src/actions/createInterface.js` |
 | Native version mtime check (force trigger) | `src/actions/isSourceNewer.js` |

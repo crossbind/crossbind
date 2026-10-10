@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-IzVbKkezRJPIWtzDrsvAl9/DrEja11v674tLwwJJASc=' blob: 'unsafe-eval' 'wasm-unsafe-eval'; base-uri 'none'; form-action 'none'">
+<title>crossbind playground sandbox</title>
+<script>
+(() => {
+    'use strict';
+    const MAX_TEXT = 4000;
+    const post = (message) => parent.postMessage({ channel: 'crossbind-playground', ...message }, '*');
+    const describe = (value) => {
+        if (typeof value === 'string') return value;
+        if (value instanceof Error) return value.stack || String(value);
+        try {
+            return JSON.stringify(value, (key, item) => (typeof item === 'bigint' ? `${item}n` : item)) ?? String(value);
+        } catch {
+            return String(value);
+        }
+    };
+    const print = (stream) => (...values) => post({ type: 'output', stream, text: values.map(describe).join(' ').slice(0, MAX_TEXT) });
+    const sandboxConsole = Object.freeze({ log: print('log'), info: print('log'), debug: print('log'), warn: print('warn'), error: print('error') });
+    const AsyncFunction = Object.getPrototypeOf(async () => {}).constructor;
+    const decode = (base64) => Uint8Array.from(atob(base64), (char) => char.charCodeAt(0));
+
+    function loadScript(text) {
+        return new Promise((resolve, reject) => {
+            const script = document.createElement('script');
+            script.src = URL.createObjectURL(new Blob([text], { type: 'text/javascript' }));
+            script.onload = resolve;
+            script.onerror = () => reject(new Error('the generated loader did not load'));
+            document.head.append(script);
+        });
+    }
+
+    async function run({ js, wasm, code }) {
+        const compiled = await WebAssembly.compile(decode(wasm));
+        await loadScript(js);
+        const Module = await globalThis.Crossbind.initNative({
+            useWorker: false,
+            getWasmFunction: () => compiled,
+            logHandler: (text) => print('stdout')(text),
+            errorHandler: (text) => print('stderr')(text),
+        });
+        await new AsyncFunction('Module', 'console', code)(Module, sandboxConsole);
+    }
+
+    let started = false;
+    addEventListener('message', (event) => {
+        if (started || event.source !== parent || event.data?.type !== 'run') return;
+        started = true;
+        run(event.data).then(() => post({ type: 'done' }), (error) => post({ type: 'error', text: describe(error) }));
+    });
+    addEventListener('error', (event) => post({ type: 'error', text: describe(event.error ?? event.message) }));
+    addEventListener('unhandledrejection', (event) => post({ type: 'error', text: describe(event.reason) }));
+    post({ type: 'ready' });
+})();
+</script>
+</head>
+<body></body>
+</html>

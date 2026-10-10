@@ -11,15 +11,26 @@ const MB = 1024 * 1024;
 // second longer each time.
 const UPLOAD_RETRIES = 4;
 const RETRY_DELAY_MS = 1000;
+// Failures before a connection opened, such as a name lookup that failed for a moment: the request never reached the
+// runner, so it goes again this many times. After a connection opened it never does, since a step may have started.
+const UNSENT_CODES = new Set(['ENOTFOUND', 'EAI_AGAIN', 'ECONNREFUSED', 'ENETUNREACH', 'EHOSTUNREACH', 'UND_ERR_CONNECT_TIMEOUT']);
+const UNSENT_RETRIES = 2;
+
+const wait = (ms) => new Promise((resolve) => { setTimeout(resolve, ms); });
 
 export async function request(url, route, init = {}) {
     const token = process.env.CROSSBIND_TOKEN;
     const headers = { ...(token ? { authorization: `Bearer ${token}` } : {}), ...init.headers };
-    try {
-        // A redirect would send the request, sources included, to an address nobody configured.
-        return await fetch(`${url}${route}`, { ...init, headers, redirect: 'error' });
-    } catch (error) {
-        throw new Error(`crossbind: the remote runner at ${url} is unreachable (${error.cause?.code ?? error.message}).`, { cause: error });
+    for (let attempt = 1; ; attempt += 1) {
+        try {
+            // A redirect would send the request, sources included, to an address nobody configured.
+            return await fetch(`${url}${route}`, { ...init, headers, redirect: 'error' });
+        } catch (error) {
+            if (!UNSENT_CODES.has(error.cause?.code) || attempt > UNSENT_RETRIES) {
+                throw new Error(`crossbind: the remote runner at ${url} is unreachable (${error.cause?.code ?? error.message}).`, { cause: error });
+            }
+            await wait(RETRY_DELAY_MS * attempt);
+        }
     }
 }
 
@@ -37,7 +48,7 @@ async function requestWithRetries(url, route, init) {
             if (response instanceof Error) throw response;
             return response;
         }
-        await new Promise((resolve) => { setTimeout(resolve, RETRY_DELAY_MS * attempt); });
+        await wait(RETRY_DELAY_MS * attempt);
     }
 }
 

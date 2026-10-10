@@ -16,7 +16,7 @@ Cross-cutting topics:
 
 - [`filesystem.md`](./filesystem.md) — How files persist (or don't) across browser, Node, and edge runtimes. Covers OPFS, memfs, the `useWorker` requirement, and the auto-fallback chain.
 - [`threading.md`](./threading.md) — Single-thread vs multi-thread Wasm, the COOP/COEP requirement, why `useWorker` is a *separate* axis from threading, and what edge runtimes can't do.
-- [`remote-runner.md`](./remote-runner.md) — Builds without a local Docker: `RUNNER=REMOTE` sends each toolchain step to the runner at its image's address (`REMOTE_URL_<IMAGE>`, or `REMOTE_URL` for every image); `crossbind runner start` and `runner init fly|cloudflare`.
+- [`remote-runner.md`](./remote-runner.md) — Builds without a local Docker: `RUNNER=REMOTE` sends each toolchain step to the runner at its image's address (`REMOTE_URL_<IMAGE>`, or `REMOTE_URL` for every image), or to crossbind cloud after `crossbind login` (60 build minutes a month, `crossbind usage`); `crossbind runner start` and `runner init fly|cloudflare`.
 
 C++ binding & build authoring:
 
