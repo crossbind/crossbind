@@ -3,7 +3,7 @@
     "version": "2.0.0-beta.63",
     "nativeVersion": "3.13.3",
     "description": "The upstream `gdal` command-line interface prebuilt as a single WASI (wasm32-wasip3) command component. Install, point wasmtime at the shipped .wasm and data folder, and run - no compiler involved.",
-    "homepage": "https://github.com/crossbind/crossbind/tree/main/ports/gdal#readme",
+    "homepage": "https://crossbind.dev/ports/gdal/",
     "repository": "https://github.com/crossbind/crossbind.git",
     "type": "module",
     "license": "(Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT) AND (Apache-2.0 WITH LLVM-exception) AND Apache-2.0 AND blessing AND curl AND IJG AND libpng-2.0 AND libtiff AND MIT AND Zlib",

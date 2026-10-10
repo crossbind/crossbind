@@ -2,7 +2,7 @@
     "name": "@crossbind/port-geos-standalone-napi-linuxmusl-x64",
     "version": "2.0.0-beta.63",
     "nativeVersion": "3.15.0",
-    "homepage": "https://github.com/crossbind/crossbind/tree/main/ports/geos#readme",
+    "homepage": "https://crossbind.dev/ports/geos/",
     "repository": "https://github.com/crossbind/crossbind.git",
     "license": "(Apache-2.0 WITH LLVM-exception) AND (MIT OR NCSA) AND LGPL-2.1-only AND MIT",
     "description": "Linux x64 (musl) addon of @crossbind/port-geos-standalone-napi, which npm installs on a matching machine.",

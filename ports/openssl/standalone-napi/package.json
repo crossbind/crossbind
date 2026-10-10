@@ -2,7 +2,7 @@
     "name": "@crossbind/port-openssl-standalone-napi",
     "version": "2.0.0-beta.63",
     "nativeVersion": "4.0.3",
-    "homepage": "https://github.com/crossbind/crossbind/tree/main/ports/openssl#readme",
+    "homepage": "https://crossbind.dev/ports/openssl/",
     "repository": "https://github.com/crossbind/crossbind.git",
     "license": "(MIT OR NCSA) AND Apache-2.0 AND MIT",
     "description": "openssl for Node.js with nothing to build: prebuilt Node-API addons for macOS, Linux and Windows, built with crossbind.",

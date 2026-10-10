@@ -2,7 +2,7 @@
     "name": "@crossbind/port-iconv-standalone-napi",
     "version": "2.0.0-beta.63",
     "nativeVersion": "1.19",
-    "homepage": "https://github.com/crossbind/crossbind/tree/main/ports/iconv#readme",
+    "homepage": "https://crossbind.dev/ports/iconv/",
     "repository": "https://github.com/crossbind/crossbind.git",
     "license": "(MIT OR NCSA) AND LGPL-2.1-or-later AND MIT",
     "description": "iconv for Node.js with nothing to build: prebuilt Node-API addons for macOS, Linux and Windows, built with crossbind.",

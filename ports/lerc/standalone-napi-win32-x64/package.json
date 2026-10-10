@@ -2,7 +2,7 @@
     "name": "@crossbind/port-lerc-standalone-napi-win32-x64",
     "version": "2.0.0-beta.63",
     "nativeVersion": "4.2.0",
-    "homepage": "https://github.com/crossbind/crossbind/tree/main/ports/lerc#readme",
+    "homepage": "https://crossbind.dev/ports/lerc/",
     "repository": "https://github.com/crossbind/crossbind.git",
     "license": "(Apache-2.0 WITH LLVM-exception) AND (MIT OR NCSA) AND Apache-2.0 AND LicenseRef-MinGW-w64-runtime AND MIT",
     "description": "Windows x64 addon of @crossbind/port-lerc-standalone-napi, which npm installs on a matching machine.",

@@ -3,7 +3,7 @@
     "version": "2.0.0-beta.63",
     "nativeVersion": "1.5.7",
     "description": "macOS build of the precompiled Zstandard (zstd) library, built with crossbind. Use it together with the main package @crossbind/port-zstd.",
-    "homepage": "https://github.com/crossbind/crossbind/tree/main/ports/zstd#readme",
+    "homepage": "https://crossbind.dev/ports/zstd/",
     "repository": "https://github.com/crossbind/crossbind.git",
     "type": "module",
     "license": "BSD-3-Clause",

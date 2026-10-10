@@ -3,7 +3,7 @@
     "version": "2.0.0-beta.63",
     "nativeVersion": "4.7.2",
     "description": "iOS build of the precompiled TIFF (libtiff) image library, built with crossbind. Use it together with the main package @crossbind/port-tiff.",
-    "homepage": "https://github.com/crossbind/crossbind/tree/main/ports/tiff#readme",
+    "homepage": "https://crossbind.dev/ports/tiff/",
     "repository": "https://github.com/crossbind/crossbind.git",
     "type": "module",
     "license": "libtiff",

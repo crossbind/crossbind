@@ -2,7 +2,7 @@
     "name": "@crossbind/port-jpegturbo-standalone-napi-darwin-x64",
     "version": "2.0.0-beta.63",
     "nativeVersion": "3.2.0",
-    "homepage": "https://github.com/crossbind/crossbind/tree/main/ports/jpegturbo#readme",
+    "homepage": "https://crossbind.dev/ports/jpegturbo/",
     "repository": "https://github.com/crossbind/crossbind.git",
     "license": "(IJG AND BSD-3-Clause AND Zlib) AND (MIT OR NCSA) AND MIT",
     "description": "macOS x64 addon of @crossbind/port-jpegturbo-standalone-napi, which npm installs on a matching machine.",

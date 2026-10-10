@@ -2,7 +2,7 @@
     "name": "@crossbind/port-spatialite-standalone-napi",
     "version": "2.0.0-beta.63",
     "nativeVersion": "5.1.0",
-    "homepage": "https://github.com/crossbind/crossbind/tree/main/ports/spatialite#readme",
+    "homepage": "https://crossbind.dev/ports/spatialite/",
     "repository": "https://github.com/crossbind/crossbind.git",
     "license": "(BSD-3-Clause OR GPL-2.0-only) AND (IJG AND BSD-3-Clause AND Zlib) AND (MIT OR NCSA) AND (MPL-1.1 OR GPL-2.0-or-later OR LGPL-2.1-or-later) AND Apache-2.0 AND blessing AND LGPL-2.1-only AND LGPL-2.1-or-later AND libtiff AND MIT AND Zlib",
     "description": "spatialite for Node.js with nothing to build: prebuilt Node-API addons for macOS, Linux and Windows, built with crossbind.",

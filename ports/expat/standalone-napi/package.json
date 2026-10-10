@@ -2,7 +2,7 @@
     "name": "@crossbind/port-expat-standalone-napi",
     "version": "2.0.0-beta.63",
     "nativeVersion": "2.9.0",
-    "homepage": "https://github.com/crossbind/crossbind/tree/main/ports/expat#readme",
+    "homepage": "https://crossbind.dev/ports/expat/",
     "repository": "https://github.com/crossbind/crossbind.git",
     "license": "(MIT OR NCSA) AND MIT",
     "description": "expat for Node.js with nothing to build: prebuilt Node-API addons for macOS, Linux and Windows, built with crossbind.",
