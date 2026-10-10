@@ -2,13 +2,13 @@
 **Precompiled GNU libiconv (character encoding conversion) library built with crossbind for seamless integration in JavaScript, WebAssembly and React Native projects.**
 
 <a href="https://www.npmjs.com/package/@crossbind/port-iconv">
-    <img alt="NPM version" src="https://img.shields.io/npm/v/@crossbind/port-iconv?style=for-the-badge" />
+    <img alt="NPM version" src="https://img.shields.io/npm/v/@crossbind/port-iconv/beta?style=for-the-badge" />
 </a>
 <a href="https://www.gnu.org/software/libiconv/">
-    <img src="https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Funpkg.com%2F%40crossbind%2Fport-iconv%2Fpackage.json&query=%24.nativeVersion&style=for-the-badge&label=iconv" />
+    <img src="https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fregistry.npmjs.org%2F%40crossbind%2Fport-iconv%2Fbeta&query=%24.nativeVersion&style=for-the-badge&label=iconv" />
 </a>
 <a href="https://spdx.org/licenses/LGPL-2.1-or-later.html">
-    <img alt="License" src="https://img.shields.io/npm/l/%40crossbind%2Fport-iconv?style=for-the-badge" />
+    <img alt="License" src="https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fregistry.npmjs.org%2F%40crossbind%2Fport-iconv%2Fbeta&query=%24.license&style=for-the-badge&label=license" />
 </a>
 
 > Use it together with **[crossbind](https://crossbind.dev)** — the toolchain for using C++ libraries from JavaScript, TypeScript, WebAssembly, Node.js and React Native. Learn more at **[crossbind.dev](https://crossbind.dev)**.
@@ -48,7 +48,7 @@ export default {
 };
 ```
 
-A native Node.js addon links the build of its platform: `crossbind build -p darwin`, `-p linux`, `-p linuxmusl` or `-p win32` takes `@crossbind/port-iconv-darwin`, `-linux`, `-linuxmusl` or `-win32`; `-linuxmusl` is the one for Alpine and other musl distributions. Install it and import its `crossbind.config.js` the same way.
+A native Node.js addon (`crossbind build -e node`) links the build of its platform: `-p darwin`, `-p linux`, `-p linuxmusl` or `-p win32` takes `@crossbind/port-iconv-darwin`, `-linux`, `-linuxmusl` or `-win32`; `-linuxmusl` is the one for Alpine and other musl distributions. Install it and import its `crossbind.config.js` the same way.
 
 ## Usage
 crossbind binds your C++ headers to JavaScript, so the usual pattern is a small wrapper around the library. This one converts strictly between UTF-8 and any encoding libiconv knows. Put it in your project's native folder (`src/native/` by default), and don't call it `iconv.h`, which would hide the library's own header:
@@ -160,7 +160,7 @@ Each one runs in your browser on [crossbind.dev/ports/iconv](https://crossbind.d
 - [Decode a stream that cuts characters in two](https://crossbind.dev/ports/iconv/#03-stream): `EINVAL` at a cut character, whose bytes wait for the next piece.
 - [List the encodings and check a name](https://crossbind.dev/ports/iconv/#04-encodings): `iconvlist`, `iconv_canonicalize`, and `iconv_open` as the real test.
 
-Setup and differences per platform: [WebAssembly](https://crossbind.dev/ports/iconv/wasm/) · [Android](https://crossbind.dev/ports/iconv/android/) · [iOS](https://crossbind.dev/ports/iconv/ios/) · [macOS](https://crossbind.dev/ports/iconv/darwin/) · [Linux](https://crossbind.dev/ports/iconv/linux/) · [Windows](https://crossbind.dev/ports/iconv/win32/) · [WASI](https://crossbind.dev/ports/iconv/wasi/), which also has an iconv-style command-line program built with `crossbind build -p wasi`.
+Setup and differences per platform: [WebAssembly](https://crossbind.dev/ports/iconv/wasm/) · [Android](https://crossbind.dev/ports/iconv/android/) · [iOS](https://crossbind.dev/ports/iconv/ios/) · [macOS](https://crossbind.dev/ports/iconv/darwin/) · [Linux](https://crossbind.dev/ports/iconv/linux/) · [Windows](https://crossbind.dev/ports/iconv/win32/) · [WASI](https://crossbind.dev/ports/iconv/wasi/), which also has an iconv-style command-line program built with `crossbind build -p wasi -e wasi`.
 
 ## What this build includes
 - GNU libiconv 1.19 as a static library. The GPL `iconv` program and its gnulib support are not built.
@@ -192,8 +192,10 @@ This is the main package; the precompiled binaries are shipped per platform:
 | iOS | [`@crossbind/port-iconv-ios`](https://www.npmjs.com/package/@crossbind/port-iconv-ios) | device (`arm64`), simulator (`arm64`) |
 | macOS | [`@crossbind/port-iconv-darwin`](https://www.npmjs.com/package/@crossbind/port-iconv-darwin) | `arm64` (Apple silicon), `x64` (Intel) — native Node.js addons |
 | Linux | [`@crossbind/port-iconv-linux`](https://www.npmjs.com/package/@crossbind/port-iconv-linux) | `x64`, `arm64` — glibc 2.28 or later, native Node.js addons |
+| Linux (musl) | [`@crossbind/port-iconv-linuxmusl`](https://www.npmjs.com/package/@crossbind/port-iconv-linuxmusl) | `x64`, `arm64` — musl 1.2.5 or later (Alpine 3.21 and later), native Node.js addons |
 | Windows | [`@crossbind/port-iconv-win32`](https://www.npmjs.com/package/@crossbind/port-iconv-win32) | `x64`, `arm64` — Windows 10 or later, native Node.js addons |
 | WASI | [`@crossbind/port-iconv-wasi`](https://www.npmjs.com/package/@crossbind/port-iconv-wasi) | `wasm32-wasip3` — single-threaded |
+| Node.js, ready-made | [`@crossbind/port-iconv-standalone-napi`](https://www.npmjs.com/package/@crossbind/port-iconv-standalone-napi) | prebuilt addons for macOS, Linux (glibc and musl) and Windows, `arm64` and `x64`: nothing to build |
 
 ## License
 This project includes the precompiled GNU libiconv library, which is distributed under the [GNU Lesser General Public License v2.1 or later](https://spdx.org/licenses/LGPL-2.1-or-later.html) (LGPL-2.1-or-later). A closed-source app can use it by following the [LGPL playbook](https://github.com/crossbind/crossbind/blob/main/docs/playbooks/licensing-lgpl.md):

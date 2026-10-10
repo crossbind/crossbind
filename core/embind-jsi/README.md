@@ -3,7 +3,7 @@
 The Embind JSI integration tool enables seamless C++ integration with React Native and Expo.
 
 <a href="https://www.npmjs.com/package/@crossbind/core-embind-jsi">
-    <img alt="NPM version" src="https://img.shields.io/npm/v/@crossbind/core-embind-jsi?style=for-the-badge" />
+    <img alt="NPM version" src="https://img.shields.io/npm/v/@crossbind/core-embind-jsi/beta?style=for-the-badge" />
 </a>
 <a href="https://github.com/crossbind/crossbind/blob/main/LICENSE">
     <img alt="License" src="https://img.shields.io/github/license/crossbind/crossbind?style=for-the-badge" />

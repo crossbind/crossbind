@@ -2,7 +2,7 @@
 **Simple matrix multiplier**  
 
 <a href="https://www.npmjs.com/package/@crossbind/example-lib-prebuilt-matrix">
-    <img alt="NPM version" src="https://img.shields.io/npm/v/@crossbind/example-lib-prebuilt-matrix?style=for-the-badge" />
+    <img alt="NPM version" src="https://img.shields.io/npm/v/@crossbind/example-lib-prebuilt-matrix/beta?style=for-the-badge" />
 </a>
 <a href="https://github.com/crossbind/crossbind/blob/main/LICENSE">
     <img alt="License" src="https://img.shields.io/github/license/crossbind/crossbind?style=for-the-badge" />

@@ -16,4 +16,4 @@ await expat.initNative();
 
 Headers: `expat.h`.
 
-Built with [crossbind](https://crossbind.dev) from [@crossbind/port-expat](https://github.com/crossbind/crossbind/tree/main/ports/expat#readme).
+Built with [crossbind](https://crossbind.dev) from [@crossbind/port-expat](https://www.npmjs.com/package/@crossbind/port-expat).

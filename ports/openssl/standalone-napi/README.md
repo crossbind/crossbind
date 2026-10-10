@@ -16,4 +16,4 @@ await openssl.initNative();
 
 Headers: `openssl/opensslv.h`, `openssl/crypto.h`, `openssl/err.h`, `openssl/evp.h`, `openssl/rand.h`, `openssl/sha.h`, `openssl/hmac.h`, `openssl/bio.h`, `openssl/pem.h`, `openssl/x509.h`, `openssl/ssl.h`.
 
-Built with [crossbind](https://crossbind.dev) from [@crossbind/port-openssl](https://github.com/crossbind/crossbind/tree/main/ports/openssl#readme).
+Built with [crossbind](https://crossbind.dev) from [@crossbind/port-openssl](https://www.npmjs.com/package/@crossbind/port-openssl).

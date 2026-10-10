@@ -16,4 +16,4 @@ await geotiff.initNative();
 
 Headers: `geotiff.h`, `geotiffio.h`, `xtiffio.h`, `geo_normalize.h`, `geokeys.h`, `geovalues.h`, `geotiff_crossbind.h`.
 
-Built with [crossbind](https://crossbind.dev) from [@crossbind/port-geotiff](https://github.com/crossbind/crossbind/tree/main/ports/geotiff#readme).
+Built with [crossbind](https://crossbind.dev) from [@crossbind/port-geotiff](https://www.npmjs.com/package/@crossbind/port-geotiff).

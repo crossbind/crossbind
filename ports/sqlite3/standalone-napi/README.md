@@ -16,4 +16,4 @@ await sqlite3.initNative();
 
 Headers: `sqlite3.h`.
 
-Built with [crossbind](https://crossbind.dev) from [@crossbind/port-sqlite3](https://github.com/crossbind/crossbind/tree/main/ports/sqlite3#readme).
+Built with [crossbind](https://crossbind.dev) from [@crossbind/port-sqlite3](https://www.npmjs.com/package/@crossbind/port-sqlite3).

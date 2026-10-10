@@ -16,4 +16,4 @@ await spatialite.initNative();
 
 Headers: `spatialite.h`.
 
-Built with [crossbind](https://crossbind.dev) from [@crossbind/port-spatialite](https://github.com/crossbind/crossbind/tree/main/ports/spatialite#readme).
+Built with [crossbind](https://crossbind.dev) from [@crossbind/port-spatialite](https://www.npmjs.com/package/@crossbind/port-spatialite).

@@ -2,13 +2,13 @@
 **Precompiled SpatiaLite (spatial SQLite extension) library built with crossbind for seamless integration in JavaScript, WebAssembly and React Native projects.**
 
 <a href="https://www.npmjs.com/package/@crossbind/port-spatialite">
-    <img alt="NPM version" src="https://img.shields.io/npm/v/@crossbind/port-spatialite?style=for-the-badge" />
+    <img alt="NPM version" src="https://img.shields.io/npm/v/@crossbind/port-spatialite/beta?style=for-the-badge" />
 </a>
 <a href="https://www.gaia-gis.it/fossil/libspatialite/index">
-    <img src="https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Funpkg.com%2F%40crossbind%2Fport-spatialite%2Fpackage.json&query=%24.nativeVersion&style=for-the-badge&label=SpatiaLite" />
+    <img src="https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fregistry.npmjs.org%2F%40crossbind%2Fport-spatialite%2Fbeta&query=%24.nativeVersion&style=for-the-badge&label=SpatiaLite" />
 </a>
 <a href="https://website-archive.mozilla.org/www.mozilla.org/mpl/MPL/boilerplate-1.1/mpl-tri-license-html">
-    <img alt="License" src="https://img.shields.io/npm/l/%40crossbind%2Fport-spatialite?style=for-the-badge" />
+    <img alt="License" src="https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fregistry.npmjs.org%2F%40crossbind%2Fport-spatialite%2Fbeta&query=%24.license&style=for-the-badge&label=license" />
 </a>
 
 > Use it together with **[crossbind](https://crossbind.dev)** — the toolchain for using C++ libraries from JavaScript, TypeScript, WebAssembly, Node.js and React Native. Learn more at **[crossbind.dev](https://crossbind.dev)**.
@@ -48,9 +48,7 @@ export default {
 };
 ```
 
-A native Node.js addon links the build of its platform: `crossbind build -p darwin`, `-p linux`, `-p linuxmusl` or `-p win32` takes `@crossbind/port-spatialite-darwin`, `-linux`, `-linuxmusl` or `-win32`; `-linuxmusl` is the one for Alpine and other musl distributions. Install it and import its `crossbind.config.js` the same way.
-
-> In a web build, list only `spatialiteWasm` for now: with the Android or iOS config beside it, the build also tries to preload their PROJ data and fails. See [known issues](https://github.com/crossbind/crossbind/blob/main/docs/known-issues.md).
+A native Node.js addon (`crossbind build -e node`) links the build of its platform: `-p darwin`, `-p linux`, `-p linuxmusl` or `-p win32` takes `@crossbind/port-spatialite-darwin`, `-linux`, `-linuxmusl` or `-win32`; `-linuxmusl` is the one for Alpine and other musl distributions. Install it and import its `crossbind.config.js` the same way.
 
 ## Usage
 crossbind binds your C++ headers to JavaScript, so the usual pattern is a small wrapper around the library. SpatiaLite is used through SQL: this wrapper opens an in-memory SQLite database, registers SpatiaLite's functions on it, and runs SQL. Put it in your project's native folder (`src/native/` by default):
@@ -144,7 +142,7 @@ Each one runs in your browser on [crossbind.dev/ports/spatialite](https://crossb
 - [Reproject coordinates between EPSG codes](https://crossbind.dev/ports/spatialite/#04-transform): `ST_Transform` through PROJ, and the reference systems' names in `spatial_ref_sys`.
 - [Read GeoJSON in and write a FeatureCollection out](https://crossbind.dev/ports/spatialite/#05-geojson): `GeomFromGeoJSON`, `AsGeoJSON` and SQLite's JSON functions.
 
-Setup and differences per platform: [WebAssembly](https://crossbind.dev/ports/spatialite/wasm/) · [Android](https://crossbind.dev/ports/spatialite/android/) · [iOS](https://crossbind.dev/ports/spatialite/ios/) · [macOS](https://crossbind.dev/ports/spatialite/darwin/) · [Linux](https://crossbind.dev/ports/spatialite/linux/) · [Windows](https://crossbind.dev/ports/spatialite/win32/) · [WASI](https://crossbind.dev/ports/spatialite/wasi/), which also has a command-line program built with `crossbind build -p wasi`.
+Setup and differences per platform: [WebAssembly](https://crossbind.dev/ports/spatialite/wasm/) · [Android](https://crossbind.dev/ports/spatialite/android/) · [iOS](https://crossbind.dev/ports/spatialite/ios/) · [macOS](https://crossbind.dev/ports/spatialite/darwin/) · [Linux](https://crossbind.dev/ports/spatialite/linux/) · [Windows](https://crossbind.dev/ports/spatialite/win32/) · [WASI](https://crossbind.dev/ports/spatialite/wasi/), which also has a command-line program built with `crossbind build -p wasi -e wasi`.
 
 ## What this build includes
 - SpatiaLite 5.1.0 with GEOS 3.15.0, PROJ 9.9.0 and SQLite 3.53.4, as `spatialite_version()`, `geos_version()`, `proj_version()` and `sqlite_version()` report them in the WebAssembly build.
@@ -166,8 +164,10 @@ This is the main package; the precompiled binaries are shipped per platform:
 | iOS | [`@crossbind/port-spatialite-ios`](https://www.npmjs.com/package/@crossbind/port-spatialite-ios) | device (`arm64`), simulator (`arm64`) |
 | macOS | [`@crossbind/port-spatialite-darwin`](https://www.npmjs.com/package/@crossbind/port-spatialite-darwin) | `arm64` (Apple silicon), `x64` (Intel) — native Node.js addons |
 | Linux | [`@crossbind/port-spatialite-linux`](https://www.npmjs.com/package/@crossbind/port-spatialite-linux) | `x64`, `arm64` — glibc 2.28 or later, native Node.js addons |
+| Linux (musl) | [`@crossbind/port-spatialite-linuxmusl`](https://www.npmjs.com/package/@crossbind/port-spatialite-linuxmusl) | `x64`, `arm64` — musl 1.2.5 or later (Alpine 3.21 and later), native Node.js addons |
 | Windows | [`@crossbind/port-spatialite-win32`](https://www.npmjs.com/package/@crossbind/port-spatialite-win32) | `x64`, `arm64` — Windows 10 or later, native Node.js addons |
 | WASI library | [`@crossbind/port-spatialite-wasi`](https://www.npmjs.com/package/@crossbind/port-spatialite-wasi) | `wasm32-wasip3` — single-threaded |
+| Node.js, ready-made | [`@crossbind/port-spatialite-standalone-napi`](https://www.npmjs.com/package/@crossbind/port-spatialite-standalone-napi) | prebuilt addons for macOS, Linux (glibc and musl) and Windows, `arm64` and `x64`: nothing to build |
 
 ## License
 This project includes the precompiled SpatiaLite library, which is distributed under the [MPL tri-license](https://website-archive.mozilla.org/www.mozilla.org/mpl/MPL/boilerplate-1.1/mpl-tri-license-html): MPL-1.1, GPL-2.0-or-later or LGPL-2.1-or-later, at your choice. RTTOPO and GCP are left out of this build because either would make it GPL-only.

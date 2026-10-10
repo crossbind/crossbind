@@ -16,4 +16,4 @@ await proj.initNative();
 
 Headers: `proj.h`, `geodesic.h`.
 
-Built with [crossbind](https://crossbind.dev) from [@crossbind/port-proj](https://github.com/crossbind/crossbind/tree/main/ports/proj#readme).
+Built with [crossbind](https://crossbind.dev) from [@crossbind/port-proj](https://www.npmjs.com/package/@crossbind/port-proj).

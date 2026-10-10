@@ -2,13 +2,13 @@
 **Precompiled OpenSSL library built with crossbind for seamless integration in JavaScript, WebAssembly and React Native projects.**
 
 <a href="https://www.npmjs.com/package/@crossbind/port-openssl">
-    <img alt="NPM version" src="https://img.shields.io/npm/v/@crossbind/port-openssl?style=for-the-badge" />
+    <img alt="NPM version" src="https://img.shields.io/npm/v/@crossbind/port-openssl/beta?style=for-the-badge" />
 </a>
 <a href="https://github.com/openssl/openssl">
-    <img src="https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Funpkg.com%2F%40crossbind%2Fport-openssl%2Fpackage.json&query=%24.nativeVersion&style=for-the-badge&label=OpenSSL" />
+    <img src="https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fregistry.npmjs.org%2F%40crossbind%2Fport-openssl%2Fbeta&query=%24.nativeVersion&style=for-the-badge&label=OpenSSL" />
 </a>
 <a href="https://github.com/openssl/openssl/blob/master/LICENSE.txt">
-    <img alt="License" src="https://img.shields.io/npm/l/%40crossbind%2Fport-openssl?style=for-the-badge" />
+    <img alt="License" src="https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fregistry.npmjs.org%2F%40crossbind%2Fport-openssl%2Fbeta&query=%24.license&style=for-the-badge&label=license" />
 </a>
 
 > Use it together with **[crossbind](https://crossbind.dev)** — the toolchain for using C++ libraries from JavaScript, TypeScript, WebAssembly, Node.js and React Native. Learn more at **[crossbind.dev](https://crossbind.dev)**.
@@ -48,7 +48,7 @@ export default {
 };
 ```
 
-A native Node.js addon links the build of its platform: `crossbind build -p darwin`, `-p linux`, `-p linuxmusl` or `-p win32` takes `@crossbind/port-openssl-darwin`, `-linux`, `-linuxmusl` or `-win32`; `-linuxmusl` is the one for Alpine and other musl distributions. Install it and import its `crossbind.config.js` the same way.
+A native Node.js addon (`crossbind build -e node`) links the build of its platform: `-p darwin`, `-p linux`, `-p linuxmusl` or `-p win32` takes `@crossbind/port-openssl-darwin`, `-linux`, `-linuxmusl` or `-win32`; `-linuxmusl` is the one for Alpine and other musl distributions. Install it and import its `crossbind.config.js` the same way.
 
 ## Usage
 crossbind binds your C++ headers to JavaScript, so the usual pattern is a small wrapper around the library. This one reads a certificate from PEM text and answers what people open certificates for: whom it is for, who issued it, when it expires, which host names it covers and its fingerprint. Put it in your project's native folder (`src/native/` by default):
@@ -220,7 +220,7 @@ Each one runs in your browser on [crossbind.dev/ports/openssl](https://crossbind
 - [Generate a key, sign and verify](https://crossbind.dev/ports/openssl/#04-signing): `EVP_PKEY_Q_keygen`, `EVP_DigestSign` and `EVP_DigestVerify` with ECDSA P-256, Ed25519 and the post-quantum ML-DSA-65 of FIPS 204.
 - [Make a self-signed certificate for localhost](https://crossbind.dev/ports/openssl/#05-self-signed): `X509_sign` with a random serial and the `subjectAltName` browsers match, read back with the certificate example.
 
-Setup and differences per platform: [WebAssembly](https://crossbind.dev/ports/openssl/wasm/) · [Android](https://crossbind.dev/ports/openssl/android/) · [iOS](https://crossbind.dev/ports/openssl/ios/) · [macOS](https://crossbind.dev/ports/openssl/darwin/) · [Linux](https://crossbind.dev/ports/openssl/linux/) · [Windows](https://crossbind.dev/ports/openssl/win32/) · [WASI](https://crossbind.dev/ports/openssl/wasi/), which also has a command-line program built with `crossbind build -p wasi`: file digests in `sha256sum`'s format, a `sha256sum -c` style check and webhook HMACs.
+Setup and differences per platform: [WebAssembly](https://crossbind.dev/ports/openssl/wasm/) · [Android](https://crossbind.dev/ports/openssl/android/) · [iOS](https://crossbind.dev/ports/openssl/ios/) · [macOS](https://crossbind.dev/ports/openssl/darwin/) · [Linux](https://crossbind.dev/ports/openssl/linux/) · [Windows](https://crossbind.dev/ports/openssl/win32/) · [WASI](https://crossbind.dev/ports/openssl/wasi/), which also has a command-line program built with `crossbind build -p wasi -e wasi`: file digests in `sha256sum`'s format, a `sha256sum -c` style check and webhook HMACs.
 
 ## What this build includes
 - OpenSSL 4.0.2 as two static libraries, `libssl` and `libcrypto`, built with OpenSSL's own `Configure` and `no-apps no-docs no-tests no-shared`.
@@ -242,9 +242,11 @@ This is the main package; the precompiled binaries are shipped per platform:
 | iOS | [`@crossbind/port-openssl-ios`](https://www.npmjs.com/package/@crossbind/port-openssl-ios) | device (`arm64`), simulator (`arm64`) |
 | macOS | [`@crossbind/port-openssl-darwin`](https://www.npmjs.com/package/@crossbind/port-openssl-darwin) | `arm64` (Apple silicon), `x64` (Intel) — native Node.js addons |
 | Linux | [`@crossbind/port-openssl-linux`](https://www.npmjs.com/package/@crossbind/port-openssl-linux) | `x64`, `arm64` — glibc 2.28 or later, native Node.js addons |
+| Linux (musl) | [`@crossbind/port-openssl-linuxmusl`](https://www.npmjs.com/package/@crossbind/port-openssl-linuxmusl) | `x64`, `arm64` — musl 1.2.5 or later (Alpine 3.21 and later), native Node.js addons |
 | Windows | [`@crossbind/port-openssl-win32`](https://www.npmjs.com/package/@crossbind/port-openssl-win32) | `x64`, `arm64` — Windows 10 or later, native Node.js addons |
 | WASI library | [`@crossbind/port-openssl-wasi`](https://www.npmjs.com/package/@crossbind/port-openssl-wasi) | `wasm32-wasip3` — single-threaded |
 | WASI command | [`@crossbind/port-openssl-standalone-wasi`](https://www.npmjs.com/package/@crossbind/port-openssl-standalone-wasi) | the upstream `openssl` CLI as an `openssl-wasi` command (wasmtime 47+) |
+| Node.js, ready-made | [`@crossbind/port-openssl-standalone-napi`](https://www.npmjs.com/package/@crossbind/port-openssl-standalone-napi) | prebuilt addons for macOS, Linux (glibc and musl) and Windows, `arm64` and `x64`: nothing to build |
 
 ## License
 This project includes the precompiled OpenSSL library, which is distributed under the [Apache License 2.0](https://github.com/openssl/openssl/blob/master/LICENSE.txt).

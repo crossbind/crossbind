@@ -2,7 +2,7 @@
 
 Rust **producer** for the crossbind embind registration protocol. Write an idiomatic Rust
 struct, register it, and it surfaces in JS as a real class - on web through emscripten's
-embind, on mobile through [`@crossbind/core-embind-jsi`](../core-embind-jsi) - **with no
+embind, on mobile through [`@crossbind/core-embind-jsi`](../embind-jsi) - **with no
 generated C++ wrapper and no cbindgen header**. The Rust side talks straight to the
 registration ABI that both hosts already consume.
 

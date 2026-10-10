@@ -16,4 +16,4 @@ await webp.initNative();
 
 Headers: `webp/decode.h`, `webp/encode.h`, `webp/types.h`.
 
-Built with [crossbind](https://crossbind.dev) from [@crossbind/port-webp](https://github.com/crossbind/crossbind/tree/main/ports/webp#readme).
+Built with [crossbind](https://crossbind.dev) from [@crossbind/port-webp](https://www.npmjs.com/package/@crossbind/port-webp).

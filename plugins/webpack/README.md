@@ -3,13 +3,13 @@
 A tool for seamless C++ integration with the Webpack bundler.
 
 <a href="https://www.npmjs.com/package/@crossbind/plugin-webpack">
-    <img alt="NPM version" src="https://img.shields.io/npm/v/@crossbind/plugin-webpack?style=for-the-badge" />
+    <img alt="NPM version" src="https://img.shields.io/npm/v/@crossbind/plugin-webpack/beta?style=for-the-badge" />
 </a>
 <a href="https://github.com/crossbind/crossbind/blob/main/LICENSE">
     <img alt="License" src="https://img.shields.io/github/license/crossbind/crossbind?style=for-the-badge" />
 </a>
-<a href="https://crossbind.js.org/docs/guide/integrate-into-existing-project/webpack">
-    <img alt="Docs - React Native" src="https://img.shields.io/badge/Docs_-_Webpack-20B2AA?style=for-the-badge" />
+<a href="https://crossbind.dev/docs/guide/integrate-into-existing-project/webpack">
+    <img alt="Docs - Webpack" src="https://img.shields.io/badge/Docs_-_Webpack-20B2AA?style=for-the-badge" />
 </a>
 
 ## Integration

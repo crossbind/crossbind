@@ -2,10 +2,10 @@
 **Precompiled SQLite3 database engine built with crossbind for seamless integration in JavaScript, WebAssembly and React Native projects.**
 
 <a href="https://www.npmjs.com/package/@crossbind/port-sqlite3">
-    <img alt="NPM version" src="https://img.shields.io/npm/v/@crossbind/port-sqlite3?style=for-the-badge" />
+    <img alt="NPM version" src="https://img.shields.io/npm/v/@crossbind/port-sqlite3/beta?style=for-the-badge" />
 </a>
 <a href="https://www.sqlite.org/">
-    <img src="https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Funpkg.com%2F%40crossbind%2Fport-sqlite3%2Fpackage.json&query=%24.nativeVersion&style=for-the-badge&label=SQLite" />
+    <img src="https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fregistry.npmjs.org%2F%40crossbind%2Fport-sqlite3%2Fbeta&query=%24.nativeVersion&style=for-the-badge&label=SQLite" />
 </a>
 <a href="https://www.sqlite.org/copyright.html">
     <img alt="License" src="https://img.shields.io/badge/license-Public%20Domain-blue?style=for-the-badge" />
@@ -48,7 +48,7 @@ export default {
 };
 ```
 
-A native Node.js addon links the build of its platform: `crossbind build -p darwin`, `-p linux`, `-p linuxmusl` or `-p win32` takes `@crossbind/port-sqlite3-darwin`, `-linux`, `-linuxmusl` or `-win32`; `-linuxmusl` is the one for Alpine and other musl distributions. Install it and import its `crossbind.config.js` the same way.
+A native Node.js addon (`crossbind build -e node`) links the build of its platform: `-p darwin`, `-p linux`, `-p linuxmusl` or `-p win32` takes `@crossbind/port-sqlite3-darwin`, `-linux`, `-linuxmusl` or `-win32`; `-linuxmusl` is the one for Alpine and other musl distributions. Install it and import its `crossbind.config.js` the same way.
 
 ## Usage
 crossbind binds your C++ headers to JavaScript, so the usual pattern is a small wrapper around the library. This one stores notes and finds them again with prepared statements. Put it in your project's native folder (`src/native/` by default):
@@ -153,7 +153,7 @@ Each one runs in your browser on [crossbind.dev/ports/sqlite3](https://crossbind
 - [Search text with FTS4](https://crossbind.dev/ports/sqlite3/#04-search): `MATCH` with stemming, phrases, prefixes, `NOT` and `NEAR`, cut into `snippet()`s.
 - [Save a database to bytes and open it again](https://crossbind.dev/ports/sqlite3/#05-serialize): `sqlite3_serialize` and `sqlite3_deserialize`, then the tables listed with `pragma_table_info`.
 
-Setup and differences per platform: [WebAssembly](https://crossbind.dev/ports/sqlite3/wasm/) · [Android](https://crossbind.dev/ports/sqlite3/android/) · [iOS](https://crossbind.dev/ports/sqlite3/ios/) · [macOS](https://crossbind.dev/ports/sqlite3/darwin/) · [Linux](https://crossbind.dev/ports/sqlite3/linux/) · [Windows](https://crossbind.dev/ports/sqlite3/win32/) · [WASI](https://crossbind.dev/ports/sqlite3/wasi/), which also has a command-line program built with `crossbind build -p wasi`.
+Setup and differences per platform: [WebAssembly](https://crossbind.dev/ports/sqlite3/wasm/) · [Android](https://crossbind.dev/ports/sqlite3/android/) · [iOS](https://crossbind.dev/ports/sqlite3/ios/) · [macOS](https://crossbind.dev/ports/sqlite3/darwin/) · [Linux](https://crossbind.dev/ports/sqlite3/linux/) · [Windows](https://crossbind.dev/ports/sqlite3/win32/) · [WASI](https://crossbind.dev/ports/sqlite3/wasi/), which also has a command-line program built with `crossbind build -p wasi -e wasi`.
 
 ## What this build includes
 - SQLite 3.53.4, built from the amalgamation as a static library. The recipe passes the same `SQLITE_ENABLE_*` options to every platform; the WebAssembly and WASI builds report them as below.
@@ -174,9 +174,11 @@ This is the main package; the precompiled binaries are shipped per platform:
 | iOS | [`@crossbind/port-sqlite3-ios`](https://www.npmjs.com/package/@crossbind/port-sqlite3-ios) | device (`arm64`), simulator (`arm64`) |
 | macOS | [`@crossbind/port-sqlite3-darwin`](https://www.npmjs.com/package/@crossbind/port-sqlite3-darwin) | `arm64` (Apple silicon), `x64` (Intel) — native Node.js addons |
 | Linux | [`@crossbind/port-sqlite3-linux`](https://www.npmjs.com/package/@crossbind/port-sqlite3-linux) | `x64`, `arm64` — glibc 2.28 or later, native Node.js addons |
+| Linux (musl) | [`@crossbind/port-sqlite3-linuxmusl`](https://www.npmjs.com/package/@crossbind/port-sqlite3-linuxmusl) | `x64`, `arm64` — musl 1.2.5 or later (Alpine 3.21 and later), native Node.js addons |
 | Windows | [`@crossbind/port-sqlite3-win32`](https://www.npmjs.com/package/@crossbind/port-sqlite3-win32) | `x64`, `arm64` — Windows 10 or later, native Node.js addons |
 | WASI library | [`@crossbind/port-sqlite3-wasi`](https://www.npmjs.com/package/@crossbind/port-sqlite3-wasi) | `wasm32-wasip3` — single-threaded |
 | WASI command | [`@crossbind/port-sqlite3-standalone-wasi`](https://www.npmjs.com/package/@crossbind/port-sqlite3-standalone-wasi) | the upstream `sqlite3` shell as a `sqlite3-wasi` command (wasmtime 47+), marked experimental |
+| Node.js, ready-made | [`@crossbind/port-sqlite3-standalone-napi`](https://www.npmjs.com/package/@crossbind/port-sqlite3-standalone-napi) | prebuilt addons for macOS, Linux (glibc and musl) and Windows, `arm64` and `x64`: nothing to build |
 
 ## License
 This project includes the precompiled SQLite3 library, which is released into the [public domain](https://www.sqlite.org/copyright.html).

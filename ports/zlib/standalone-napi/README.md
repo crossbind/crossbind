@@ -16,4 +16,4 @@ await zlib.initNative();
 
 Headers: `zlib.h`.
 
-Built with [crossbind](https://crossbind.dev) from [@crossbind/port-zlib](https://github.com/crossbind/crossbind/tree/main/ports/zlib#readme).
+Built with [crossbind](https://crossbind.dev) from [@crossbind/port-zlib](https://www.npmjs.com/package/@crossbind/port-zlib).

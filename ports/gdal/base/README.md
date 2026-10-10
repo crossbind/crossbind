@@ -2,13 +2,13 @@
 **Precompiled GDAL geospatial library built with crossbind for seamless integration in JavaScript, WebAssembly and React Native projects.**
 
 <a href="https://www.npmjs.com/package/@crossbind/port-gdal">
-    <img alt="NPM version" src="https://img.shields.io/npm/v/@crossbind/port-gdal?style=for-the-badge" />
+    <img alt="NPM version" src="https://img.shields.io/npm/v/@crossbind/port-gdal/beta?style=for-the-badge" />
 </a>
 <a href="https://github.com/OSGeo/gdal">
-    <img src="https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Funpkg.com%2F%40crossbind%2Fport-gdal%2Fpackage.json&query=%24.nativeVersion&style=for-the-badge&label=GDAL" />
+    <img src="https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fregistry.npmjs.org%2F%40crossbind%2Fport-gdal%2Fbeta&query=%24.nativeVersion&style=for-the-badge&label=GDAL" />
 </a>
 <a href="https://github.com/OSGeo/gdal/blob/master/LICENSE.TXT">
-    <img alt="License" src="https://img.shields.io/npm/l/%40crossbind%2Fport-gdal?style=for-the-badge" />
+    <img alt="License" src="https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fregistry.npmjs.org%2F%40crossbind%2Fport-gdal%2Fbeta&query=%24.license&style=for-the-badge&label=license" />
 </a>
 
 > Use it together with **[crossbind](https://crossbind.dev)** — the toolchain for using C++ libraries from JavaScript, TypeScript, WebAssembly, Node.js and React Native. Learn more at **[crossbind.dev](https://crossbind.dev)**.
@@ -48,9 +48,7 @@ export default {
 };
 ```
 
-A native Node.js addon links the build of its platform: `crossbind build -p darwin`, `-p linux`, `-p linuxmusl` or `-p win32` takes `@crossbind/port-gdal-darwin`, `-linux`, `-linuxmusl` or `-win32`; `-linuxmusl` is the one for Alpine and other musl distributions. Install it and import its `crossbind.config.js` the same way.
-
-> In a web build, list only `gdalWasm` for now: with the Android or iOS config beside it, the build also tries to preload their GDAL and PROJ data and fails. See [known issues](https://github.com/crossbind/crossbind/blob/main/docs/known-issues.md).
+A native Node.js addon (`crossbind build -e node`) links the build of its platform: `-p darwin`, `-p linux`, `-p linuxmusl` or `-p win32` takes `@crossbind/port-gdal-darwin`, `-linux`, `-linuxmusl` or `-win32`; `-linuxmusl` is the one for Alpine and other musl distributions. Install it and import its `crossbind.config.js` the same way.
 
 ## Usage
 crossbind binds your C++ headers to JavaScript, so the usual pattern is a small wrapper around the library. This one converts GeoJSON text to other vector formats, reprojected, as the ogr2ogr tool does. Put it in your project's native folder (`src/native/` by default):
@@ -156,7 +154,7 @@ Each one runs in your browser on [crossbind.dev/ports/gdal](https://crossbind.de
 - [Hillshade, slope and contour lines from an elevation model](https://crossbind.dev/ports/gdal/#04-terrain): `GDALDEMProcessing` and `GDALContourGenerateEx`.
 - [Read features and filter them by attribute and area](https://crossbind.dev/ports/gdal/#05-features): `OGR_L_SetAttributeFilter`, `OGR_L_SetSpatialFilterRect` and `OGR_L_GetNextFeature` over a CSV opened with open options.
 
-Setup and differences per platform: [WebAssembly](https://crossbind.dev/ports/gdal/wasm/) · [Android](https://crossbind.dev/ports/gdal/android/) · [iOS](https://crossbind.dev/ports/gdal/ios/) · [macOS](https://crossbind.dev/ports/gdal/darwin/) · [Linux](https://crossbind.dev/ports/gdal/linux/) · [Windows](https://crossbind.dev/ports/gdal/win32/) · [WASI](https://crossbind.dev/ports/gdal/wasi/), which also has a command-line program built with `crossbind build -p wasi`.
+Setup and differences per platform: [WebAssembly](https://crossbind.dev/ports/gdal/wasm/) · [Android](https://crossbind.dev/ports/gdal/android/) · [iOS](https://crossbind.dev/ports/gdal/ios/) · [macOS](https://crossbind.dev/ports/gdal/darwin/) · [Linux](https://crossbind.dev/ports/gdal/linux/) · [Windows](https://crossbind.dev/ports/gdal/win32/) · [WASI](https://crossbind.dev/ports/gdal/wasi/), which also has a command-line program built with `crossbind build -p wasi -e wasi`.
 
 ## What this build includes
 - GDAL 3.13.3 as one static library, `libgdal`, with its dependencies from their own crossbind packages: PROJ 9.9.0, GEOS 3.15.0, SQLite 3.53.4, SpatiaLite 5.1.0, libtiff 4.7.2, libgeotiff 1.7.4, libjpeg-turbo 3.2.0, libwebp 1.6.0, zstd 1.5.7, LERC 4.2.0, zlib 1.3.2, Expat 2.8.5, libiconv 1.19, curl 8.22.0 and OpenSSL 4.0.2.
@@ -186,9 +184,11 @@ This is the main package; the precompiled binaries are shipped per platform:
 | iOS | [`@crossbind/port-gdal-ios`](https://www.npmjs.com/package/@crossbind/port-gdal-ios) | device (`arm64`), simulator (`arm64`) |
 | macOS | [`@crossbind/port-gdal-darwin`](https://www.npmjs.com/package/@crossbind/port-gdal-darwin) | `arm64` (Apple silicon), `x64` (Intel) — native Node.js addons |
 | Linux | [`@crossbind/port-gdal-linux`](https://www.npmjs.com/package/@crossbind/port-gdal-linux) | `x64`, `arm64` — glibc 2.28 or later, native Node.js addons |
+| Linux (musl) | [`@crossbind/port-gdal-linuxmusl`](https://www.npmjs.com/package/@crossbind/port-gdal-linuxmusl) | `x64`, `arm64` — musl 1.2.5 or later (Alpine 3.21 and later), native Node.js addons |
 | Windows | [`@crossbind/port-gdal-win32`](https://www.npmjs.com/package/@crossbind/port-gdal-win32) | `x64`, `arm64` — Windows 10 or later, native Node.js addons |
 | WASI library | [`@crossbind/port-gdal-wasi`](https://www.npmjs.com/package/@crossbind/port-gdal-wasi) | `wasm32-wasip3` — single-threaded |
 | WASI command | [`@crossbind/port-gdal-standalone-wasi`](https://www.npmjs.com/package/@crossbind/port-gdal-standalone-wasi) | the upstream `gdal` CLI and its classic tools as `<tool>-wasi` commands (wasmtime 47+) |
+| Node.js, ready-made | [`@crossbind/port-gdal-standalone-napi`](https://www.npmjs.com/package/@crossbind/port-gdal-standalone-napi) | prebuilt addons for macOS, Linux (glibc and musl) and Windows, `arm64` and `x64`: nothing to build |
 
 ## License
 This project includes the precompiled GDAL library, which is distributed under the [MIT License](https://github.com/OSGeo/gdal/blob/master/LICENSE.TXT).

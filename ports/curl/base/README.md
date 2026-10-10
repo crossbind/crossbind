@@ -2,13 +2,13 @@
 **Precompiled libcurl library built with crossbind for seamless integration in JavaScript, WebAssembly and React Native projects.**
 
 <a href="https://www.npmjs.com/package/@crossbind/port-curl">
-    <img alt="NPM version" src="https://img.shields.io/npm/v/@crossbind/port-curl?style=for-the-badge" />
+    <img alt="NPM version" src="https://img.shields.io/npm/v/@crossbind/port-curl/beta?style=for-the-badge" />
 </a>
 <a href="https://github.com/curl/curl">
-    <img src="https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Funpkg.com%2F%40crossbind%2Fport-curl%2Fpackage.json&query=%24.nativeVersion&style=for-the-badge&label=curl" />
+    <img src="https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fregistry.npmjs.org%2F%40crossbind%2Fport-curl%2Fbeta&query=%24.nativeVersion&style=for-the-badge&label=curl" />
 </a>
 <a href="https://github.com/curl/curl/blob/master/COPYING">
-    <img alt="License" src="https://img.shields.io/npm/l/%40crossbind%2Fport-curl?style=for-the-badge" />
+    <img alt="License" src="https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fregistry.npmjs.org%2F%40crossbind%2Fport-curl%2Fbeta&query=%24.license&style=for-the-badge&label=license" />
 </a>
 
 > Use it together with **[crossbind](https://crossbind.dev)** — the toolchain for using C++ libraries from JavaScript, TypeScript, WebAssembly, Node.js and React Native. Learn more at **[crossbind.dev](https://crossbind.dev)**.
@@ -48,7 +48,7 @@ export default {
 };
 ```
 
-A native Node.js addon links the build of its platform: `crossbind build -p darwin`, `-p linux`, `-p linuxmusl` or `-p win32` takes `@crossbind/port-curl-darwin`, `-linux`, `-linuxmusl` or `-win32`; `-linuxmusl` is the one for Alpine and other musl distributions. Install it and import its `crossbind.config.js` the same way.
+A native Node.js addon (`crossbind build -e node`) links the build of its platform: `-p darwin`, `-p linux`, `-p linuxmusl` or `-p win32` takes `@crossbind/port-curl-darwin`, `-linux`, `-linuxmusl` or `-win32`; `-linuxmusl` is the one for Alpine and other musl distributions. Install it and import its `crossbind.config.js` the same way.
 
 ## Usage
 crossbind binds your C++ headers to JavaScript, so the usual pattern is a small wrapper around the library. This one parses URLs with libcurl's URL API, the parser curl runs on a URL before every transfer. Put it in your project's native folder (`src/native/` by default):
@@ -124,7 +124,7 @@ Each one runs in your browser on [crossbind.dev/ports/curl](https://crossbind.de
 - [Read the dates in HTTP headers](https://crossbind.dev/ports/curl/#04-dates): `curl_getdate` on the three date formats HTTP allows.
 - [Check what this libcurl was built with](https://crossbind.dev/ports/curl/#05-build-info): `curl_version_info`, with the protocols and features of this build.
 
-Setup and differences per platform: [WebAssembly](https://crossbind.dev/ports/curl/wasm/) · [Android](https://crossbind.dev/ports/curl/android/) · [iOS](https://crossbind.dev/ports/curl/ios/) · [macOS](https://crossbind.dev/ports/curl/darwin/) · [Linux](https://crossbind.dev/ports/curl/linux/) · [Windows](https://crossbind.dev/ports/curl/win32/) · [WASI](https://crossbind.dev/ports/curl/wasi/), which also has a command-line program built with `crossbind build -p wasi`.
+Setup and differences per platform: [WebAssembly](https://crossbind.dev/ports/curl/wasm/) · [Android](https://crossbind.dev/ports/curl/android/) · [iOS](https://crossbind.dev/ports/curl/ios/) · [macOS](https://crossbind.dev/ports/curl/darwin/) · [Linux](https://crossbind.dev/ports/curl/linux/) · [Windows](https://crossbind.dev/ports/curl/win32/) · [WASI](https://crossbind.dev/ports/curl/wasi/), which also has a command-line program built with `crossbind build -p wasi -e wasi`.
 
 ## What this build includes
 - libcurl 8.22.0 with OpenSSL 4.0.2 for TLS (`curl_version()` reports `libcurl/8.22.0 OpenSSL/4.0.2`): a static library for WebAssembly, iOS, macOS, Linux, Windows and WASI, a shared one for Android.
@@ -146,9 +146,11 @@ This is the main package; the precompiled binaries are shipped per platform:
 | iOS | [`@crossbind/port-curl-ios`](https://www.npmjs.com/package/@crossbind/port-curl-ios) | device (`arm64`), simulator (`arm64`) |
 | macOS | [`@crossbind/port-curl-darwin`](https://www.npmjs.com/package/@crossbind/port-curl-darwin) | `arm64` (Apple silicon), `x64` (Intel) — native Node.js addons |
 | Linux | [`@crossbind/port-curl-linux`](https://www.npmjs.com/package/@crossbind/port-curl-linux) | `x64`, `arm64` — glibc 2.28 or later, native Node.js addons |
+| Linux (musl) | [`@crossbind/port-curl-linuxmusl`](https://www.npmjs.com/package/@crossbind/port-curl-linuxmusl) | `x64`, `arm64` — musl 1.2.5 or later (Alpine 3.21 and later), native Node.js addons |
 | Windows | [`@crossbind/port-curl-win32`](https://www.npmjs.com/package/@crossbind/port-curl-win32) | `x64`, `arm64` — Windows 10 or later, native Node.js addons |
 | WASI library | [`@crossbind/port-curl-wasi`](https://www.npmjs.com/package/@crossbind/port-curl-wasi) | `wasm32-wasip3` — single-threaded |
 | WASI command | [`@crossbind/port-curl-standalone-wasi`](https://www.npmjs.com/package/@crossbind/port-curl-standalone-wasi) | the upstream `curl` CLI as a `curl-wasi` command (wasmtime 47+) |
+| Node.js, ready-made | [`@crossbind/port-curl-standalone-napi`](https://www.npmjs.com/package/@crossbind/port-curl-standalone-napi) | prebuilt addons for macOS, Linux (glibc and musl) and Windows, `arm64` and `x64`: nothing to build |
 
 ## License
 This project includes the precompiled libcurl library, which is distributed under the [curl License](https://github.com/curl/curl/blob/master/COPYING). TLS comes from the `@crossbind/port-openssl` packages, under OpenSSL's Apache-2.0 licence.
