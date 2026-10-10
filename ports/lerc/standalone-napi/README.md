@@ -16,4 +16,4 @@ await lerc.initNative();
 
 Headers: `Lerc_c_api.h`, `Lerc_types.h`.
 
-Built with [crossbind](https://crossbind.dev) from [@crossbind/port-lerc](https://github.com/crossbind/crossbind/tree/main/ports/lerc#readme).
+Built with [crossbind](https://crossbind.dev) from [@crossbind/port-lerc](https://www.npmjs.com/package/@crossbind/port-lerc).

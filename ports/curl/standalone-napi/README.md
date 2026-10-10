@@ -16,4 +16,4 @@ await curl.initNative();
 
 Headers: `curl/curl.h`, `curl/curlver.h`, `curl/easy.h`, `curl/multi.h`, `curl/urlapi.h`, `curl/options.h`, `curl/header.h`, `curl/websockets.h`, `curl/curl_crossbind.h`.
 
-Built with [crossbind](https://crossbind.dev) from [@crossbind/port-curl](https://github.com/crossbind/crossbind/tree/main/ports/curl#readme).
+Built with [crossbind](https://crossbind.dev) from [@crossbind/port-curl](https://www.npmjs.com/package/@crossbind/port-curl).

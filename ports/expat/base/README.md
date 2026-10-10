@@ -2,13 +2,13 @@
 **Precompiled Expat XML parser library built with crossbind for seamless integration in JavaScript, WebAssembly and React Native projects.**
 
 <a href="https://www.npmjs.com/package/@crossbind/port-expat">
-    <img alt="NPM version" src="https://img.shields.io/npm/v/@crossbind/port-expat?style=for-the-badge" />
+    <img alt="NPM version" src="https://img.shields.io/npm/v/@crossbind/port-expat/beta?style=for-the-badge" />
 </a>
 <a href="https://github.com/libexpat/libexpat">
-    <img src="https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Funpkg.com%2F%40crossbind%2Fport-expat%2Fpackage.json&query=%24.nativeVersion&style=for-the-badge&label=Expat" />
+    <img src="https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fregistry.npmjs.org%2F%40crossbind%2Fport-expat%2Fbeta&query=%24.nativeVersion&style=for-the-badge&label=Expat" />
 </a>
 <a href="https://github.com/libexpat/libexpat/blob/master/COPYING">
-    <img alt="License" src="https://img.shields.io/npm/l/%40crossbind%2Fport-expat?style=for-the-badge" />
+    <img alt="License" src="https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fregistry.npmjs.org%2F%40crossbind%2Fport-expat%2Fbeta&query=%24.license&style=for-the-badge&label=license" />
 </a>
 
 > Use it together with **[crossbind](https://crossbind.dev)** — the toolchain for using C++ libraries from JavaScript, TypeScript, WebAssembly, Node.js and React Native. Learn more at **[crossbind.dev](https://crossbind.dev)**.
@@ -48,7 +48,7 @@ export default {
 };
 ```
 
-A native Node.js addon links the build of its platform: `crossbind build -p darwin`, `-p linux`, `-p linuxmusl` or `-p win32` takes `@crossbind/port-expat-darwin`, `-linux`, `-linuxmusl` or `-win32`; `-linuxmusl` is the one for Alpine and other musl distributions. Install it and import its `crossbind.config.js` the same way.
+A native Node.js addon (`crossbind build -e node`) links the build of its platform: `-p darwin`, `-p linux`, `-p linuxmusl` or `-p win32` takes `@crossbind/port-expat-darwin`, `-linux`, `-linuxmusl` or `-win32`; `-linuxmusl` is the one for Alpine and other musl distributions. Install it and import its `crossbind.config.js` the same way.
 
 ## Usage
 crossbind binds your C++ headers to JavaScript, so the usual pattern is a small wrapper around the library. This one turns XML into plain objects with Expat's element and character data handlers, and reports errors with their line and column. Put it in your project's native folder (`src/native/` by default):
@@ -186,7 +186,7 @@ Each one runs in your browser on [crossbind.dev/ports/expat](https://crossbind.d
 - [Read namespaced XML whatever the prefixes](https://crossbind.dev/ports/expat/#03-namespaces): `XML_ParserCreateNS` and `XML_SetStartNamespaceDeclHandler`.
 - [Expand entities without a billion laughs](https://crossbind.dev/ports/expat/#04-limits): `XML_SetBillionLaughsAttackProtectionMaximumAmplification` and `XML_SetBillionLaughsAttackProtectionActivationThreshold`.
 
-Setup and differences per platform: [WebAssembly](https://crossbind.dev/ports/expat/wasm/) · [Android](https://crossbind.dev/ports/expat/android/) · [iOS](https://crossbind.dev/ports/expat/ios/) · [macOS](https://crossbind.dev/ports/expat/darwin/) · [Linux](https://crossbind.dev/ports/expat/linux/) · [Windows](https://crossbind.dev/ports/expat/win32/) · [WASI](https://crossbind.dev/ports/expat/wasi/), which also has a command-line program built with `crossbind build -p wasi`.
+Setup and differences per platform: [WebAssembly](https://crossbind.dev/ports/expat/wasm/) · [Android](https://crossbind.dev/ports/expat/android/) · [iOS](https://crossbind.dev/ports/expat/ios/) · [macOS](https://crossbind.dev/ports/expat/darwin/) · [Linux](https://crossbind.dev/ports/expat/linux/) · [Windows](https://crossbind.dev/ports/expat/win32/) · [WASI](https://crossbind.dev/ports/expat/wasi/), which also has a command-line program built with `crossbind build -p wasi -e wasi`.
 
 ## What this build includes
 - Expat 2.8.5 as a static library, built with upstream's CMake defaults: DTD and general entity support (`XML_DTD`, `XML_GE`), namespaces (`XML_NS`) and 1,024 bytes of context (`XML_CONTEXT_BYTES`). The API speaks UTF-8.
@@ -206,9 +206,11 @@ This is the main package; the precompiled binaries are shipped per platform:
 | iOS | [`@crossbind/port-expat-ios`](https://www.npmjs.com/package/@crossbind/port-expat-ios) | device (`arm64`), simulator (`arm64`) |
 | macOS | [`@crossbind/port-expat-darwin`](https://www.npmjs.com/package/@crossbind/port-expat-darwin) | `arm64` (Apple silicon), `x64` (Intel) — native Node.js addons |
 | Linux | [`@crossbind/port-expat-linux`](https://www.npmjs.com/package/@crossbind/port-expat-linux) | `x64`, `arm64` — glibc 2.28 or later, native Node.js addons |
+| Linux (musl) | [`@crossbind/port-expat-linuxmusl`](https://www.npmjs.com/package/@crossbind/port-expat-linuxmusl) | `x64`, `arm64` — musl 1.2.5 or later (Alpine 3.21 and later), native Node.js addons |
 | Windows | [`@crossbind/port-expat-win32`](https://www.npmjs.com/package/@crossbind/port-expat-win32) | `x64`, `arm64` — Windows 10 or later, native Node.js addons |
 | WASI library | [`@crossbind/port-expat-wasi`](https://www.npmjs.com/package/@crossbind/port-expat-wasi) | `wasm32-wasip3` — single-threaded |
 | WASI command | [`@crossbind/port-expat-standalone-wasi`](https://www.npmjs.com/package/@crossbind/port-expat-standalone-wasi) | the upstream `xmlwf` well-formedness checker as an `xmlwf-wasi` command (wasmtime 47+) |
+| Node.js, ready-made | [`@crossbind/port-expat-standalone-napi`](https://www.npmjs.com/package/@crossbind/port-expat-standalone-napi) | prebuilt addons for macOS, Linux (glibc and musl) and Windows, `arm64` and `x64`: nothing to build |
 
 ## License
 This project includes the precompiled Expat library, which is distributed under the [MIT License](https://github.com/libexpat/libexpat/blob/master/COPYING).

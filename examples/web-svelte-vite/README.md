@@ -1,9 +1,6 @@
 # @crossbind/example-web-svelte-vite
 **crossbind Svelte Vite sample**  
 
-<a href="https://www.npmjs.com/package/@crossbind/example-web-svelte-vite">
-    <img alt="NPM version" src="https://img.shields.io/npm/v/@crossbind/example-web-svelte-vite?style=for-the-badge" />
-</a>
 <a href="https://github.com/crossbind/crossbind/blob/main/LICENSE">
     <img alt="License" src="https://img.shields.io/github/license/crossbind/crossbind?style=for-the-badge" />
 </a>

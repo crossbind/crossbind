@@ -4,7 +4,7 @@ Runs the crossbind embind runtime inside a native Node.js addon, so the bindings
 WebAssembly and React Native also build `.node` addons for Node.js and Electron.
 
 <a href="https://www.npmjs.com/package/@crossbind/core-embind-napi">
-    <img alt="NPM version" src="https://img.shields.io/npm/v/@crossbind/core-embind-napi?style=for-the-badge" />
+    <img alt="NPM version" src="https://img.shields.io/npm/v/@crossbind/core-embind-napi/beta?style=for-the-badge" />
 </a>
 <a href="https://github.com/crossbind/crossbind/blob/main/LICENSE">
     <img alt="License" src="https://img.shields.io/github/license/crossbind/crossbind?style=for-the-badge" />

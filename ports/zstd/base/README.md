@@ -2,13 +2,13 @@
 **Precompiled Zstandard (zstd) library built with crossbind for seamless integration in JavaScript, WebAssembly and React Native projects.**
 
 <a href="https://www.npmjs.com/package/@crossbind/port-zstd">
-    <img alt="NPM version" src="https://img.shields.io/npm/v/@crossbind/port-zstd?style=for-the-badge" />
+    <img alt="NPM version" src="https://img.shields.io/npm/v/@crossbind/port-zstd/beta?style=for-the-badge" />
 </a>
 <a href="https://github.com/facebook/zstd">
-    <img src="https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Funpkg.com%2F%40crossbind%2Fport-zstd%2Fpackage.json&query=%24.nativeVersion&style=for-the-badge&label=ZSTD" />
+    <img src="https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fregistry.npmjs.org%2F%40crossbind%2Fport-zstd%2Fbeta&query=%24.nativeVersion&style=for-the-badge&label=ZSTD" />
 </a>
 <a href="https://github.com/facebook/zstd/blob/dev/LICENSE">
-    <img alt="License" src="https://img.shields.io/npm/l/%40crossbind%2Fport-zstd?style=for-the-badge" />
+    <img alt="License" src="https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fregistry.npmjs.org%2F%40crossbind%2Fport-zstd%2Fbeta&query=%24.license&style=for-the-badge&label=license" />
 </a>
 
 > Use it together with **[crossbind](https://crossbind.dev)** — the toolchain for using C++ libraries from JavaScript, TypeScript, WebAssembly, Node.js and React Native. Learn more at **[crossbind.dev](https://crossbind.dev)**.
@@ -48,7 +48,7 @@ export default {
 };
 ```
 
-A native Node.js addon links the build of its platform: `crossbind build -p darwin`, `-p linux`, `-p linuxmusl` or `-p win32` takes `@crossbind/port-zstd-darwin`, `-linux`, `-linuxmusl` or `-win32`; `-linuxmusl` is the one for Alpine and other musl distributions. Install it and import its `crossbind.config.js` the same way.
+A native Node.js addon (`crossbind build -e node`) links the build of its platform: `-p darwin`, `-p linux`, `-p linuxmusl` or `-p win32` takes `@crossbind/port-zstd-darwin`, `-linux`, `-linuxmusl` or `-win32`; `-linuxmusl` is the one for Alpine and other musl distributions. Install it and import its `crossbind.config.js` the same way.
 
 ## Usage
 crossbind binds your C++ headers to JavaScript, so the usual pattern is a small wrapper around the library. This one compresses and decompresses in one call. Put it in your project's native folder (`src/native/` by default):
@@ -119,7 +119,7 @@ Each one runs in your browser on [crossbind.dev/ports/zstd](https://crossbind.de
 - [Choose a level, a checksum and a window](https://crossbind.dev/ports/zstd/#03-parameters): `ZSTD_CCtx_setParameter`, read back with `ZSTD_getFrameHeader`.
 - [Compress small messages with a dictionary](https://crossbind.dev/ports/zstd/#04-dictionary): train with `ZDICT_trainFromBuffer`, then compress against `ZSTD_createCDict` and `ZSTD_createDDict`.
 
-Setup and differences per platform: [WebAssembly](https://crossbind.dev/ports/zstd/wasm/) · [Android](https://crossbind.dev/ports/zstd/android/) · [iOS](https://crossbind.dev/ports/zstd/ios/) · [macOS](https://crossbind.dev/ports/zstd/darwin/) · [Linux](https://crossbind.dev/ports/zstd/linux/) · [Windows](https://crossbind.dev/ports/zstd/win32/) · [WASI](https://crossbind.dev/ports/zstd/wasi/), which also has a command-line program built with `crossbind build -p wasi`.
+Setup and differences per platform: [WebAssembly](https://crossbind.dev/ports/zstd/wasm/) · [Android](https://crossbind.dev/ports/zstd/android/) · [iOS](https://crossbind.dev/ports/zstd/ios/) · [macOS](https://crossbind.dev/ports/zstd/darwin/) · [Linux](https://crossbind.dev/ports/zstd/linux/) · [Windows](https://crossbind.dev/ports/zstd/win32/) · [WASI](https://crossbind.dev/ports/zstd/wasi/), which also has a command-line program built with `crossbind build -p wasi -e wasi`.
 
 ## What this build includes
 - zstd 1.5.7 as a static library, with the dictionary builder (`ZDICT_*`) compiled in.
@@ -137,9 +137,11 @@ This is the main package; the precompiled binaries are shipped per platform:
 | iOS | [`@crossbind/port-zstd-ios`](https://www.npmjs.com/package/@crossbind/port-zstd-ios) | device (`arm64`), simulator (`arm64`) |
 | macOS | [`@crossbind/port-zstd-darwin`](https://www.npmjs.com/package/@crossbind/port-zstd-darwin) | `arm64` (Apple silicon), `x64` (Intel) — native Node.js addons |
 | Linux | [`@crossbind/port-zstd-linux`](https://www.npmjs.com/package/@crossbind/port-zstd-linux) | `x64`, `arm64` — glibc 2.28 or later, native Node.js addons |
+| Linux (musl) | [`@crossbind/port-zstd-linuxmusl`](https://www.npmjs.com/package/@crossbind/port-zstd-linuxmusl) | `x64`, `arm64` — musl 1.2.5 or later (Alpine 3.21 and later), native Node.js addons |
 | Windows | [`@crossbind/port-zstd-win32`](https://www.npmjs.com/package/@crossbind/port-zstd-win32) | `x64`, `arm64` — Windows 10 or later, native Node.js addons |
 | WASI library | [`@crossbind/port-zstd-wasi`](https://www.npmjs.com/package/@crossbind/port-zstd-wasi) | `wasm32-wasip3` — single-threaded |
 | WASI command | [`@crossbind/port-zstd-standalone-wasi`](https://www.npmjs.com/package/@crossbind/port-zstd-standalone-wasi) | the upstream `zstd` CLI as a `zstd-wasi` command (wasmtime 47+) |
+| Node.js, ready-made | [`@crossbind/port-zstd-standalone-napi`](https://www.npmjs.com/package/@crossbind/port-zstd-standalone-napi) | prebuilt addons for macOS, Linux (glibc and musl) and Windows, `arm64` and `x64`: nothing to build |
 
 ## License
 This project includes the precompiled zstd library, which is distributed under the [zstd License](https://github.com/facebook/zstd/blob/dev/LICENSE).

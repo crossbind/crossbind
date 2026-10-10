@@ -2,13 +2,13 @@
 **Precompiled WebP image library built with crossbind for seamless integration in JavaScript, WebAssembly and React Native projects.**
 
 <a href="https://www.npmjs.com/package/@crossbind/port-webp">
-    <img alt="NPM version" src="https://img.shields.io/npm/v/@crossbind/port-webp?style=for-the-badge" />
+    <img alt="NPM version" src="https://img.shields.io/npm/v/@crossbind/port-webp/beta?style=for-the-badge" />
 </a>
 <a href="https://chromium.googlesource.com/webm/libwebp">
-    <img src="https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Funpkg.com%2F%40crossbind%2Fport-webp%2Fpackage.json&query=%24.nativeVersion&style=for-the-badge&label=WebP" />
+    <img src="https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fregistry.npmjs.org%2F%40crossbind%2Fport-webp%2Fbeta&query=%24.nativeVersion&style=for-the-badge&label=WebP" />
 </a>
 <a href="https://chromium.googlesource.com/webm/libwebp/+/refs/heads/main/COPYING">
-    <img alt="License" src="https://img.shields.io/npm/l/%40crossbind%2Fport-webp?style=for-the-badge" />
+    <img alt="License" src="https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fregistry.npmjs.org%2F%40crossbind%2Fport-webp%2Fbeta&query=%24.license&style=for-the-badge&label=license" />
 </a>
 
 > Use it together with **[crossbind](https://crossbind.dev)** — the toolchain for using C++ libraries from JavaScript, TypeScript, WebAssembly, Node.js and React Native. Learn more at **[crossbind.dev](https://crossbind.dev)**.
@@ -48,7 +48,7 @@ export default {
 };
 ```
 
-A native Node.js addon links the build of its platform: `crossbind build -p darwin`, `-p linux`, `-p linuxmusl` or `-p win32` takes `@crossbind/port-webp-darwin`, `-linux`, `-linuxmusl` or `-win32`; `-linuxmusl` is the one for Alpine and other musl distributions. Install it and import its `crossbind.config.js` the same way.
+A native Node.js addon (`crossbind build -e node`) links the build of its platform: `-p darwin`, `-p linux`, `-p linuxmusl` or `-p win32` takes `@crossbind/port-webp-darwin`, `-linux`, `-linuxmusl` or `-win32`; `-linuxmusl` is the one for Alpine and other musl distributions. Install it and import its `crossbind.config.js` the same way.
 
 ## Usage
 crossbind binds your C++ headers to JavaScript, so the usual pattern is a small wrapper around the library. This one exposes libwebp's simple API: encode RGBA pixels at a quality or losslessly, read the size from a file's header, and decode it back. Put it in your project's native folder (`src/native/` by default):
@@ -172,7 +172,7 @@ Each one runs in your browser on [crossbind.dev/ports/webp](https://crossbind.de
 - [Keep transparency, and decide what happens under it](https://crossbind.dev/ports/webp/#03-transparency): `alpha_quality` for lossy files and `exact` for lossless ones.
 - [Inspect a WebP, then decode only what you need](https://crossbind.dev/ports/webp/#04-read): `WebPGetFeatures`, and `WebPDecode` scaling to a thumbnail or cropping a region.
 
-Setup and differences per platform: [WebAssembly](https://crossbind.dev/ports/webp/wasm/) · [Android](https://crossbind.dev/ports/webp/android/) · [iOS](https://crossbind.dev/ports/webp/ios/) · [macOS](https://crossbind.dev/ports/webp/darwin/) · [Linux](https://crossbind.dev/ports/webp/linux/) · [Windows](https://crossbind.dev/ports/webp/win32/) · [WASI](https://crossbind.dev/ports/webp/wasi/), which also has a command-line program built with `crossbind build -p wasi`.
+Setup and differences per platform: [WebAssembly](https://crossbind.dev/ports/webp/wasm/) · [Android](https://crossbind.dev/ports/webp/android/) · [iOS](https://crossbind.dev/ports/webp/ios/) · [macOS](https://crossbind.dev/ports/webp/darwin/) · [Linux](https://crossbind.dev/ports/webp/linux/) · [Windows](https://crossbind.dev/ports/webp/win32/) · [WASI](https://crossbind.dev/ports/webp/wasi/), which also has a command-line program built with `crossbind build -p wasi -e wasi`.
 
 ## What this build includes
 - libwebp 1.6.0: static libraries for WebAssembly, iOS, macOS, Linux, Windows and WASI, shared libraries for Android.
@@ -190,9 +190,11 @@ This is the main package; the precompiled binaries are shipped per platform:
 | iOS | [`@crossbind/port-webp-ios`](https://www.npmjs.com/package/@crossbind/port-webp-ios) | device (`arm64`), simulator (`arm64`) |
 | macOS | [`@crossbind/port-webp-darwin`](https://www.npmjs.com/package/@crossbind/port-webp-darwin) | `arm64` (Apple silicon), `x64` (Intel) — native Node.js addons |
 | Linux | [`@crossbind/port-webp-linux`](https://www.npmjs.com/package/@crossbind/port-webp-linux) | `x64`, `arm64` — glibc 2.28 or later, native Node.js addons |
+| Linux (musl) | [`@crossbind/port-webp-linuxmusl`](https://www.npmjs.com/package/@crossbind/port-webp-linuxmusl) | `x64`, `arm64` — musl 1.2.5 or later (Alpine 3.21 and later), native Node.js addons |
 | Windows | [`@crossbind/port-webp-win32`](https://www.npmjs.com/package/@crossbind/port-webp-win32) | `x64`, `arm64` — Windows 10 or later, native Node.js addons |
 | WASI library | [`@crossbind/port-webp-wasi`](https://www.npmjs.com/package/@crossbind/port-webp-wasi) | `wasm32-wasip3` — single-threaded |
 | WASI command | [`@crossbind/port-webp-standalone-wasi`](https://www.npmjs.com/package/@crossbind/port-webp-standalone-wasi) | the upstream `cwebp`, `dwebp` and `webpinfo` as `cwebp-wasi`, `dwebp-wasi` and `webpinfo-wasi` commands (wasmtime 47+) |
+| Node.js, ready-made | [`@crossbind/port-webp-standalone-napi`](https://www.npmjs.com/package/@crossbind/port-webp-standalone-napi) | prebuilt addons for macOS, Linux (glibc and musl) and Windows, `arm64` and `x64`: nothing to build |
 
 ## License
 This project includes the precompiled WebP library, which is distributed under the [BSD 3-Clause License](https://chromium.googlesource.com/webm/libwebp/+/refs/heads/main/COPYING).

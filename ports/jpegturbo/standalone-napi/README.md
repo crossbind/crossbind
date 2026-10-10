@@ -16,4 +16,4 @@ await jpegturbo.initNative();
 
 Headers: `jpeglib.h`, `jerror.h`, `jconfig.h`, `jpeglib_crossbind.h`.
 
-Built with [crossbind](https://crossbind.dev) from [@crossbind/port-jpegturbo](https://github.com/crossbind/crossbind/tree/main/ports/jpegturbo#readme).
+Built with [crossbind](https://crossbind.dev) from [@crossbind/port-jpegturbo](https://www.npmjs.com/package/@crossbind/port-jpegturbo).

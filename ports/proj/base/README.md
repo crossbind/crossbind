@@ -2,13 +2,13 @@
 **Precompiled PROJ coordinate-transformation library built with crossbind for seamless integration in JavaScript, WebAssembly and React Native projects.**
 
 <a href="https://www.npmjs.com/package/@crossbind/port-proj">
-    <img alt="NPM version" src="https://img.shields.io/npm/v/@crossbind/port-proj?style=for-the-badge" />
+    <img alt="NPM version" src="https://img.shields.io/npm/v/@crossbind/port-proj/beta?style=for-the-badge" />
 </a>
 <a href="https://github.com/OSGeo/PROJ">
-    <img src="https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Funpkg.com%2F%40crossbind%2Fport-proj%2Fpackage.json&query=%24.nativeVersion&style=for-the-badge&label=PROJ" />
+    <img src="https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fregistry.npmjs.org%2F%40crossbind%2Fport-proj%2Fbeta&query=%24.nativeVersion&style=for-the-badge&label=PROJ" />
 </a>
 <a href="https://github.com/OSGeo/PROJ/blob/master/COPYING">
-    <img alt="License" src="https://img.shields.io/npm/l/%40crossbind%2Fport-proj?style=for-the-badge" />
+    <img alt="License" src="https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fregistry.npmjs.org%2F%40crossbind%2Fport-proj%2Fbeta&query=%24.license&style=for-the-badge&label=license" />
 </a>
 
 > Use it together with **[crossbind](https://crossbind.dev)** — the toolchain for using C++ libraries from JavaScript, TypeScript, WebAssembly, Node.js and React Native. Learn more at **[crossbind.dev](https://crossbind.dev)**.
@@ -48,9 +48,7 @@ export default {
 };
 ```
 
-A native Node.js addon links the build of its platform: `crossbind build -p darwin`, `-p linux`, `-p linuxmusl` or `-p win32` takes `@crossbind/port-proj-darwin`, `-linux`, `-linuxmusl` or `-win32`; `-linuxmusl` is the one for Alpine and other musl distributions. Install it and import its `crossbind.config.js` the same way.
-
-> In a web build, list only `projWasm` for now: with the Android or iOS config beside it, the build also tries to preload their `share/proj` data and fails. See [known issues](https://github.com/crossbind/crossbind/blob/main/docs/known-issues.md).
+A native Node.js addon (`crossbind build -e node`) links the build of its platform: `-p darwin`, `-p linux`, `-p linuxmusl` or `-p win32` takes `@crossbind/port-proj-darwin`, `-linux`, `-linuxmusl` or `-win32`; `-linuxmusl` is the one for Alpine and other musl distributions. Install it and import its `crossbind.config.js` the same way.
 
 ## Usage
 crossbind binds your C++ headers to JavaScript, so the usual pattern is a small wrapper around the library. This one transforms coordinates between two coordinate reference systems with PROJ's C API. Put it in your project's native folder (`src/native/` by default):
@@ -154,7 +152,7 @@ Each one runs in your browser on [crossbind.dev/ports/proj](https://crossbind.de
 - [Measure distances, headings and areas on the ellipsoid](https://crossbind.dev/ports/proj/#04-geodesic): `geod_inverse`, `geod_direct` and `geod_polygonarea` from `geodesic.h`.
 - [Find the EPSG code of a .prj, and the UTM zone of a point](https://crossbind.dev/ports/proj/#05-identify): `proj_identify` and `proj_get_crs_info_list_from_database`.
 
-Setup and differences per platform: [WebAssembly](https://crossbind.dev/ports/proj/wasm/) · [Android](https://crossbind.dev/ports/proj/android/) · [iOS](https://crossbind.dev/ports/proj/ios/) · [macOS](https://crossbind.dev/ports/proj/darwin/) · [Linux](https://crossbind.dev/ports/proj/linux/) · [Windows](https://crossbind.dev/ports/proj/win32/) · [WASI](https://crossbind.dev/ports/proj/wasi/), which also has a command-line program built with `crossbind build -p wasi`.
+Setup and differences per platform: [WebAssembly](https://crossbind.dev/ports/proj/wasm/) · [Android](https://crossbind.dev/ports/proj/android/) · [iOS](https://crossbind.dev/ports/proj/ios/) · [macOS](https://crossbind.dev/ports/proj/darwin/) · [Linux](https://crossbind.dev/ports/proj/linux/) · [Windows](https://crossbind.dev/ports/proj/win32/) · [WASI](https://crossbind.dev/ports/proj/wasi/), which also has a command-line program built with `crossbind build -p wasi -e wasi`.
 
 ## What this build includes
 - PROJ 9.9.0 as a static library, `libproj`, with its C API (`proj.h`), the geodesic library (`geodesic.h`) and the C++ API headers. SQLite 3.53.4 reads its database and libtiff 4.7.2 its GeoTIFF grid files.
@@ -173,9 +171,11 @@ This is the main package; the precompiled binaries are shipped per platform:
 | iOS | [`@crossbind/port-proj-ios`](https://www.npmjs.com/package/@crossbind/port-proj-ios) | device (`arm64`), simulator (`arm64`) |
 | macOS | [`@crossbind/port-proj-darwin`](https://www.npmjs.com/package/@crossbind/port-proj-darwin) | `arm64` (Apple silicon), `x64` (Intel) — native Node.js addons |
 | Linux | [`@crossbind/port-proj-linux`](https://www.npmjs.com/package/@crossbind/port-proj-linux) | `x64`, `arm64` — glibc 2.28 or later, native Node.js addons |
+| Linux (musl) | [`@crossbind/port-proj-linuxmusl`](https://www.npmjs.com/package/@crossbind/port-proj-linuxmusl) | `x64`, `arm64` — musl 1.2.5 or later (Alpine 3.21 and later), native Node.js addons |
 | Windows | [`@crossbind/port-proj-win32`](https://www.npmjs.com/package/@crossbind/port-proj-win32) | `x64`, `arm64` — Windows 10 or later, native Node.js addons |
 | WASI library | [`@crossbind/port-proj-wasi`](https://www.npmjs.com/package/@crossbind/port-proj-wasi) | `wasm32-wasip3` — single-threaded |
 | WASI command | [`@crossbind/port-proj-standalone-wasi`](https://www.npmjs.com/package/@crossbind/port-proj-standalone-wasi) | the upstream `proj`, `cct`, `cs2cs`, `geod`, `gie` and `projinfo` as `-wasi` commands (wasmtime 47+) |
+| Node.js, ready-made | [`@crossbind/port-proj-standalone-napi`](https://www.npmjs.com/package/@crossbind/port-proj-standalone-napi) | prebuilt addons for macOS, Linux (glibc and musl) and Windows, `arm64` and `x64`: nothing to build |
 
 ## License
 This project includes the precompiled PROJ library, which is distributed under the [MIT License](https://github.com/OSGeo/PROJ/blob/master/COPYING). The libraries it links ship in their own packages under their own licences: SQLite, which is in the public domain, and libtiff.

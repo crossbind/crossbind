@@ -16,4 +16,4 @@ await tiff.initNative();
 
 Headers: `tiffio.h`, `tiff.h`, `tiffvers.h`, `tiffio_crossbind.h`.
 
-Built with [crossbind](https://crossbind.dev) from [@crossbind/port-tiff](https://github.com/crossbind/crossbind/tree/main/ports/tiff#readme).
+Built with [crossbind](https://crossbind.dev) from [@crossbind/port-tiff](https://www.npmjs.com/package/@crossbind/port-tiff).

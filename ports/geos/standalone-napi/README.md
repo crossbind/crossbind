@@ -16,4 +16,4 @@ await geos.initNative();
 
 Headers: `geos_c.h`.
 
-Built with [crossbind](https://crossbind.dev) from [@crossbind/port-geos](https://github.com/crossbind/crossbind/tree/main/ports/geos#readme).
+Built with [crossbind](https://crossbind.dev) from [@crossbind/port-geos](https://www.npmjs.com/package/@crossbind/port-geos).

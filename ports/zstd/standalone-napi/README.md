@@ -16,4 +16,4 @@ await zstd.initNative();
 
 Headers: `zstd.h`, `zdict.h`, `zstd_errors.h`.
 
-Built with [crossbind](https://crossbind.dev) from [@crossbind/port-zstd](https://github.com/crossbind/crossbind/tree/main/ports/zstd#readme).
+Built with [crossbind](https://crossbind.dev) from [@crossbind/port-zstd](https://www.npmjs.com/package/@crossbind/port-zstd).

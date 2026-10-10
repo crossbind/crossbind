@@ -2,7 +2,7 @@
 **Create crossbind Applications**  
 
 <a href="https://www.npmjs.com/package/create-crossbind">
-    <img alt="NPM version" src="https://img.shields.io/npm/v/create-crossbind?style=for-the-badge" />
+    <img alt="NPM version" src="https://img.shields.io/npm/v/create-crossbind/beta?style=for-the-badge" />
 </a>
 <a href="https://github.com/crossbind/crossbind/blob/main/LICENSE">
     <img alt="License" src="https://img.shields.io/github/license/crossbind/crossbind?style=for-the-badge" />

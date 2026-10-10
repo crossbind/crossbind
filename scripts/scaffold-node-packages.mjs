@@ -126,7 +126,7 @@ export default {
 `;
 }
 
-function nodeReadme(family, base, headers) {
+function nodeReadme(family, headers) {
     const name = portName(family, NODE_TARGET);
     const module = family.replace(/\W/g, '_');
     return `# ${name}
@@ -134,7 +134,7 @@ function nodeReadme(family, base, headers) {
 ${family} for Node.js with nothing to build: prebuilt Node-API addons for macOS, Linux (glibc and musl) and Windows, on arm64 and x64. npm installs only the addon for your machine.
 
 \`\`\`bash
-npm install ${name}
+npm install ${name}@beta
 \`\`\`
 
 The package root exports every function, class and constant of the public headers, ready once \`initNative()\` resolves:
@@ -147,7 +147,7 @@ await ${module}.initNative();
 
 Headers: ${headers.map((header) => `\`${header}\``).join(', ')}.
 
-Built with [crossbind](https://crossbind.dev) from [${portName(family)}](${base.homepage}).
+Built with [crossbind](https://crossbind.dev) from [${portName(family)}](https://www.npmjs.com/package/${portName(family)}).
 `;
 }
 
@@ -175,7 +175,7 @@ export async function scaffoldNodePackages(family, { force = false } = {}) {
     writePackage(portDir(ROOT, family, NODE_TARGET), {
         'package.json': nodeManifest(family, base),
         'crossbind.config.js': nodeConfig(family),
-        'README.md': nodeReadme(family, base, headers),
+        'README.md': nodeReadme(family, headers),
     }, force);
     ADDON_TARGETS.forEach((target) => writePackage(portDir(ROOT, family, targetOf(target)), {
         'package.json': addonManifest(family, base, target),

@@ -3,13 +3,13 @@
 A tool for seamless C++ integration with the Vite.
 
 <a href="https://www.npmjs.com/package/@crossbind/plugin-vite">
-    <img alt="NPM version" src="https://img.shields.io/npm/v/@crossbind/plugin-vite?style=for-the-badge" />
+    <img alt="NPM version" src="https://img.shields.io/npm/v/@crossbind/plugin-vite/beta?style=for-the-badge" />
 </a>
 <a href="https://github.com/crossbind/crossbind/blob/main/LICENSE">
     <img alt="License" src="https://img.shields.io/github/license/crossbind/crossbind?style=for-the-badge" />
 </a>
 <a href="https://crossbind.dev/docs/guide/integrate-into-existing-project/vite">
-    <img alt="Docs - React Native" src="https://img.shields.io/badge/Docs_-_Vite-20B2AA?style=for-the-badge" />
+    <img alt="Docs - Vite" src="https://img.shields.io/badge/Docs_-_Vite-20B2AA?style=for-the-badge" />
 </a>
 
 ## Integration

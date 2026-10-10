@@ -3,7 +3,7 @@
 A tool for seamless C++ integration with the Metro bundler.
 
 <a href="https://www.npmjs.com/package/@crossbind/plugin-metro">
-    <img alt="NPM version" src="https://img.shields.io/npm/v/@crossbind/plugin-metro?style=for-the-badge" />
+    <img alt="NPM version" src="https://img.shields.io/npm/v/@crossbind/plugin-metro/beta?style=for-the-badge" />
 </a>
 <a href="https://github.com/crossbind/crossbind/blob/main/LICENSE">
     <img alt="License" src="https://img.shields.io/github/license/crossbind/crossbind?style=for-the-badge" />

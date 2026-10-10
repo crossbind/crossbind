@@ -2,7 +2,7 @@
 **crossbind sample library: simple cmake library**  
 
 <a href="https://www.npmjs.com/package/@crossbind/example-lib-cmake">
-    <img alt="NPM version" src="https://img.shields.io/npm/v/@crossbind/example-lib-cmake?style=for-the-badge" />
+    <img alt="NPM version" src="https://img.shields.io/npm/v/@crossbind/example-lib-cmake/beta?style=for-the-badge" />
 </a>
 <a href="https://github.com/crossbind/crossbind/blob/main/LICENSE">
     <img alt="License" src="https://img.shields.io/github/license/crossbind/crossbind?style=for-the-badge" />

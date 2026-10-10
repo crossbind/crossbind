@@ -2,13 +2,13 @@
 **Precompiled libjpeg-turbo (JPEG) library built with crossbind for seamless integration in JavaScript, WebAssembly and React Native projects.**
 
 <a href="https://www.npmjs.com/package/@crossbind/port-jpegturbo">
-    <img alt="NPM version" src="https://img.shields.io/npm/v/@crossbind/port-jpegturbo?style=for-the-badge" />
+    <img alt="NPM version" src="https://img.shields.io/npm/v/@crossbind/port-jpegturbo/beta?style=for-the-badge" />
 </a>
 <a href="https://github.com/libjpeg-turbo/libjpeg-turbo">
-    <img src="https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Funpkg.com%2F%40crossbind%2Fport-jpegturbo%2Fpackage.json&query=%24.nativeVersion&style=for-the-badge&label=LIBJPEG-TURBO" />
+    <img src="https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fregistry.npmjs.org%2F%40crossbind%2Fport-jpegturbo%2Fbeta&query=%24.nativeVersion&style=for-the-badge&label=LIBJPEG-TURBO" />
 </a>
 <a href="https://github.com/libjpeg-turbo/libjpeg-turbo/blob/3.2.0/LICENSE.md">
-    <img alt="License" src="https://img.shields.io/npm/l/%40crossbind%2Fport-jpegturbo?style=for-the-badge" />
+    <img alt="License" src="https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fregistry.npmjs.org%2F%40crossbind%2Fport-jpegturbo%2Fbeta&query=%24.license&style=for-the-badge&label=license" />
 </a>
 
 > Use it together with **[crossbind](https://crossbind.dev)** — the toolchain for using C++ libraries from JavaScript, TypeScript, WebAssembly, Node.js and React Native. Learn more at **[crossbind.dev](https://crossbind.dev)**.
@@ -48,7 +48,7 @@ export default {
 };
 ```
 
-A native Node.js addon links the build of its platform: `crossbind build -p darwin`, `-p linux`, `-p linuxmusl` or `-p win32` takes `@crossbind/port-jpegturbo-darwin`, `-linux`, `-linuxmusl` or `-win32`; `-linuxmusl` is the one for Alpine and other musl distributions. Install it and import its `crossbind.config.js` the same way.
+A native Node.js addon (`crossbind build -e node`) links the build of its platform: `-p darwin`, `-p linux`, `-p linuxmusl` or `-p win32` takes `@crossbind/port-jpegturbo-darwin`, `-linux`, `-linuxmusl` or `-win32`; `-linuxmusl` is the one for Alpine and other musl distributions. Install it and import its `crossbind.config.js` the same way.
 
 ## Usage
 crossbind binds your C++ headers to JavaScript, so the usual pattern is a small wrapper around the library. This one encodes RGBA pixels to a JPEG in memory with a chosen quality and chroma subsampling. Put it in your project's native folder (`src/native/` by default):
@@ -169,7 +169,7 @@ Each one runs in your browser on [crossbind.dev/ports/jpegturbo](https://crossbi
 - [Make a JPEG smaller without re-encoding it](https://crossbind.dev/ports/jpegturbo/#04-transcode): `jpeg_read_coefficients` and `jpeg_write_coefficients` with optimised or progressive Huffman coding, byte for byte what `jpegtran -copy all` writes.
 - [Read and write EXIF and comments](https://crossbind.dev/ports/jpegturbo/#05-markers): `jpeg_save_markers` and `jpeg_write_marker`.
 
-Setup and differences per platform: [WebAssembly](https://crossbind.dev/ports/jpegturbo/wasm/) · [Android](https://crossbind.dev/ports/jpegturbo/android/) · [iOS](https://crossbind.dev/ports/jpegturbo/ios/) · [macOS](https://crossbind.dev/ports/jpegturbo/darwin/) · [Linux](https://crossbind.dev/ports/jpegturbo/linux/) · [Windows](https://crossbind.dev/ports/jpegturbo/win32/) · [WASI](https://crossbind.dev/ports/jpegturbo/wasi/), which also has a command-line program built with `crossbind build -p wasi`.
+Setup and differences per platform: [WebAssembly](https://crossbind.dev/ports/jpegturbo/wasm/) · [Android](https://crossbind.dev/ports/jpegturbo/android/) · [iOS](https://crossbind.dev/ports/jpegturbo/ios/) · [macOS](https://crossbind.dev/ports/jpegturbo/darwin/) · [Linux](https://crossbind.dev/ports/jpegturbo/linux/) · [Windows](https://crossbind.dev/ports/jpegturbo/win32/) · [WASI](https://crossbind.dev/ports/jpegturbo/wasi/), which also has a command-line program built with `crossbind build -p wasi -e wasi`.
 
 ## What this build includes
 - libjpeg-turbo 3.2.0's libjpeg API (`jpeglib.h`) and TurboJPEG API (`turbojpeg.h`): static `libjpeg.a` and `libturbojpeg.a` for WebAssembly, WASI, iOS, macOS, Linux and Windows, and shared `libjpeg.so` and `libturbojpeg.so` for Android.
@@ -188,9 +188,11 @@ This is the main package; the precompiled binaries are shipped per platform:
 | iOS | [`@crossbind/port-jpegturbo-ios`](https://www.npmjs.com/package/@crossbind/port-jpegturbo-ios) | device (`arm64`), simulator (`arm64`) |
 | macOS | [`@crossbind/port-jpegturbo-darwin`](https://www.npmjs.com/package/@crossbind/port-jpegturbo-darwin) | `arm64` (Apple silicon), `x64` (Intel) — native Node.js addons |
 | Linux | [`@crossbind/port-jpegturbo-linux`](https://www.npmjs.com/package/@crossbind/port-jpegturbo-linux) | `x64`, `arm64` — glibc 2.28 or later, native Node.js addons |
+| Linux (musl) | [`@crossbind/port-jpegturbo-linuxmusl`](https://www.npmjs.com/package/@crossbind/port-jpegturbo-linuxmusl) | `x64`, `arm64` — musl 1.2.5 or later (Alpine 3.21 and later), native Node.js addons |
 | Windows | [`@crossbind/port-jpegturbo-win32`](https://www.npmjs.com/package/@crossbind/port-jpegturbo-win32) | `x64`, `arm64` — Windows 10 or later, native Node.js addons |
 | WASI library | [`@crossbind/port-jpegturbo-wasi`](https://www.npmjs.com/package/@crossbind/port-jpegturbo-wasi) | `wasm32-wasip3` — single-threaded |
 | WASI command | [`@crossbind/port-jpegturbo-standalone-wasi`](https://www.npmjs.com/package/@crossbind/port-jpegturbo-standalone-wasi) | the upstream `cjpeg`, `djpeg` and `jpegtran` as `cjpeg-wasi`, `djpeg-wasi` and `jpegtran-wasi` commands (wasmtime 47+) |
+| Node.js, ready-made | [`@crossbind/port-jpegturbo-standalone-napi`](https://www.npmjs.com/package/@crossbind/port-jpegturbo-standalone-napi) | prebuilt addons for macOS, Linux (glibc and musl) and Windows, `arm64` and `x64`: nothing to build |
 
 ## License
 This project includes the precompiled libjpeg-turbo library, which is distributed under the [libjpeg-turbo licenses](https://github.com/libjpeg-turbo/libjpeg-turbo/blob/3.2.0/LICENSE.md) (IJG AND BSD-3-Clause AND Zlib): the [IJG License](https://github.com/libjpeg-turbo/libjpeg-turbo/blob/3.2.0/README.ijg) for the libjpeg API library, the [Modified (3-clause) BSD License](https://spdx.org/licenses/BSD-3-Clause.html) for its build system, and the [zlib License](https://spdx.org/licenses/Zlib.html) for the SIMD code in the iOS and Android builds.
