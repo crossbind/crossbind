@@ -286,7 +286,7 @@
       "npm": "@crossbind/port-sqlite3",
       "category": "database",
       "summary": "Embedded relational database",
-      "nativeVersion": "3.53.4",
+      "nativeVersion": "3.54.0",
       "license": "blessing",
       "homepage": "https://github.com/crossbind/crossbind/tree/main/ports/sqlite3#readme",
       "targets": [

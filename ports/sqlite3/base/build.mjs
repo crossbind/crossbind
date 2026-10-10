@@ -32,7 +32,7 @@ const noShellReplaceList = [
 ];
 
 export default {
-    sha256: '0e9483900e92cd5de8fd48d16bf9200145a61f7fd5be542a5ac81d8a9516eb9c', // sqlite-autoconf-3530400.tar.gz
+    sha256: '134ec0802dda5795816e25d25872d20b312cb3973438c49b30bc40b7705ea9ed', // sqlite-autoconf-3540000.tar.gz
     // SQLite hosts each release under its release-year directory; bump RELEASE_YEAR together with
     // nativeVersion (the year cannot be derived from the version number).
     getURL: (version) => {
