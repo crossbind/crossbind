@@ -46,6 +46,7 @@ export const LLMS_URL = '/llms.txt';
 // Examples is in the navbar because three examples are proof-complete (src/pages/examples.js);
 // set it to null again if that page ever loses an entry.
 export const EXAMPLES_URL = '/examples/';
+export const PLAYGROUND_URL = '/playground/';
 // The frozen cpp.js 1.x documentation (branch archive/v1-docs), linked from the version menu and
 // the migration guide.
 export const V1_DOCS_URL = 'https://v1.crossbind.dev';

@@ -4,7 +4,7 @@ const systemKeys = {
         default: '',
     },
     RUNNER: {
-        description: 'Where toolchain steps run: DOCKER_RUN, DOCKER_EXEC, LOCAL, or REMOTE on the runners REMOTE_URL and REMOTE_URL_<IMAGE> name. The CROSSBIND_RUNNER environment variable overrides it.',
+        description: 'Where toolchain steps run: DOCKER_RUN, DOCKER_EXEC, LOCAL, or REMOTE on the runners REMOTE_URL and REMOTE_URL_<IMAGE> name; a machine that names none builds on crossbind cloud once signed in with crossbind login. The CROSSBIND_RUNNER environment variable overrides it.',
         options: ['DOCKER_RUN', 'DOCKER_EXEC', 'LOCAL', 'REMOTE'],
         default: 'DOCKER_RUN',
     },
@@ -27,6 +27,10 @@ const systemKeys = {
     REMOTE_URL_WINDOWS: {
         description: 'Under RUNNER=REMOTE, the runner of the windows image (win32 builds). Token: CROSSBIND_TOKEN_WINDOWS. The CROSSBIND_REMOTE_URL_WINDOWS environment variable overrides it.',
         default: '',
+    },
+    CLOUD_URL: {
+        description: 'The crossbind cloud that crossbind login, logout and usage talk to. The CROSSBIND_CLOUD_URL environment variable overrides it.',
+        default: 'https://api.crossbind.dev',
     },
     WASI_SDK_PATH: {
         description: 'Path to an extracted wasi-sdk (>= 34, wasm32-wasip3 sysroot) that platform:\'wasi\' builds use under RUNNER=LOCAL; the other runners use the sdk in the image. The CROSSBIND_WASI_SDK_PATH environment variable overrides it.',

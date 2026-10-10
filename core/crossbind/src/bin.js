@@ -36,6 +36,10 @@ import { getDockerImage, getDockerContainerName } from './utils/pullDockerImage.
 import {
     RUNNER_PLATFORMS, RUNNER_ROLES, connectCommands, deploySteps, initRunner, newRunnerToken, runnerHostPort, startRunner, stopRunner,
 } from './actions/runnerCommands.js';
+import {
+    deleteAccount as deleteCloudAccount, fetchUsage, login as loginToCloud, logout as logoutOfCloud, usageLines,
+} from './actions/cloudCommands.js';
+import { cloudUrl } from './utils/cloudAccount.js';
 import { cargoHome } from './utils/runCargo.js';
 import { conanRoot } from './utils/runConan.js';
 import { cleanDepsCache } from './utils/dependencyRebuild.js';
@@ -301,6 +305,49 @@ commandRunner.command('init')
         console.log(`crossbind: wrote ${dir}. Deploy it:`);
         deploySteps(platform, dir, newRunnerToken(), options.role, url).forEach((step) => console.log(`  ${step}`));
     }));
+
+program.command('login')
+    .description('sign in to crossbind cloud with your GitHub account')
+    .action(async () => {
+        const url = cloudUrl(state.config.system);
+        const { login } = await loginToCloud({ url });
+        console.log(`crossbind: signed in to ${url} as ${login}.`);
+    });
+
+program.command('logout')
+    .description('sign out of crossbind cloud on this machine')
+    .option('--all', 'sign out every machine signed in to this account')
+    .action(async (options) => {
+        const url = cloudUrl(state.config.system);
+        const result = await logoutOfCloud({ url, all: Boolean(options.all) });
+        if (!result) {
+            console.log(`crossbind: not signed in to ${url}.`);
+        } else if (result.revoked) {
+            console.log(`crossbind: signed ${result.login} out${options.all ? ' on every machine' : ''}.`);
+        } else {
+            console.warn(`crossbind: signed out here, but crossbind cloud did not revoke the token (${result.reason.replace(/^crossbind: /, '')}). Sign in again and run crossbind logout --all to revoke it.`);
+        }
+    });
+
+program.command('usage')
+    .description('show what you used of crossbind cloud this month and what is left')
+    .action(async () => {
+        usageLines(await fetchUsage({ url: cloudUrl(state.config.system) })).forEach((line) => console.log(line));
+    });
+
+program.command('account')
+    .description('manage your crossbind cloud account')
+    .command('delete')
+    .description('delete your crossbind cloud account, with the sign-in of every machine (https://crossbind.dev/privacy/)')
+    .option('--yes', 'delete it; without this, nothing is deleted')
+    .action(async (options) => {
+        const url = cloudUrl(state.config.system);
+        if (!options.yes) {
+            throw new Error(`crossbind: this deletes your crossbind cloud account at ${url}, with the sign-in of every machine. Run crossbind account delete --yes to go ahead.`);
+        }
+        const { login } = await deleteCloudAccount({ url });
+        console.log(`crossbind: deleted the crossbind cloud account of ${login}.`);
+    });
 
 const commandConfig = program.command('config')
     .description('manage the crossbind configuration files');

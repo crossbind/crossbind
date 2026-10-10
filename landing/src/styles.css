@@ -193,7 +193,19 @@
     outline-offset: 2px;
 }
 
+/* The playground's editors: the C++ pair beside main.js and the console, one column on narrow screens.
+   min-width: 0 lets a long line scroll inside its editor instead of widening the page. */
+.playground-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 16px;
+}
+
 @media (max-width: 950px) {
+    .playground-grid {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
     .nav-links {
         display: none !important;
     }

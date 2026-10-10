@@ -29,6 +29,26 @@ For a single build, the environment does the same without changing `~/.crossbind
 CROSSBIND_RUNNER=REMOTE CROSSBIND_REMOTE_URL_WEB=http://127.0.0.1:8787 CROSSBIND_TOKEN_WEB=<token> crossbind build -p wasm
 ```
 
+## Build on crossbind cloud
+
+Without a runner of your own, sign in and build on crossbind cloud:
+
+```bash
+crossbind login                       # shows a code to enter on github.com
+crossbind config set RUNNER REMOTE
+crossbind build -p wasm
+# crossbind: web steps run on the runner at https://api.crossbind.dev/runner/web (RUNNER=REMOTE from ~/.crossbind.json, address from crossbind login as octocat).
+crossbind usage                       # this month's build minutes, by image
+```
+
+- Under `REMOTE`, a machine that names no runner address (no `REMOTE_URL` or `REMOTE_URL_<IMAGE>`, in `~/.crossbind.json` or the environment) builds every image on crossbind cloud once signed in. Naming any runner keeps every image off the cloud, so your sources go only where you send them. Every image has a cloud runner: web, android, linux and windows.
+- A signed-in GitHub account has 60 build minutes a month. A minute counts while your runner is up: from a build's first step until a minute after its last, so the steps of one build share a warm runner. `crossbind usage` shows them by image; they come back on the 1st (UTC). Once they are spent, steps stop with a message saying so; `CROSSBIND_RUNNER=DOCKER_RUN` builds in the local Docker. crossbind cloud also caps the time of everyone together, per day and per month; when either is spent, steps stop with a message saying when time comes back.
+- Each account's runner of each image is a Firecracker microVM of its own, stopped and wiped a minute after its last step: nothing passes between accounts, and the first step after a pause uploads its inputs again.
+- A cloud runner reaches crates.io, ConanCenter and GitHub, nothing else, and only to download: a Conan recipe whose sources live on another host fails there, and so does a build step that pushes or uploads.
+- crossbind cloud runs the toolchain images of the current crossbind release; a build from an older crossbind stops with `toolchain mismatch` until crossbind is upgraded.
+- `crossbind login` asks GitHub for no permission and turns away GitHub accounts younger than 30 days. Its token is kept for that cloud address in `~/.crossbind/credentials.json`, readable by you only, and stops working after 90 days unused. `crossbind logout` revokes it, `--all` the token of every machine signed in to the account. `CLOUD_URL` in `~/.crossbind.json`, or `CROSSBIND_CLOUD_URL`, names another cloud.
+- crossbind cloud keeps your GitHub id and name, when you signed in, your tokens' hashes and how long your runners were up; no email, and none of your sources once the runner stops. `crossbind account delete --yes` deletes the account and signs out every machine; [crossbind.dev/privacy](https://crossbind.dev/privacy/) says what stays and for how long.
+
 `runner start` runs the runner in the local Docker, which is how you try it out or turn one machine into the build machine of others (`--host 0.0.0.0`, `--port`, `--token`; the token defaults to `$CROSSBIND_RUNNER_TOKEN`, else a new one). `--role android|linux|windows` starts the other images, on ports 8788, 8789 and 8790, so the runners one build needs fit on one machine. To run a runner elsewhere, deploy it.
 
 ## Deploy a runner
@@ -74,7 +94,8 @@ Under `REMOTE`, each image has its own address, and an image's own address wins 
 | `REMOTE_URL_WINDOWS` | `CROSSBIND_TOKEN_WINDOWS` | win32 builds |
 | `REMOTE_URL` | `CROSSBIND_TOKEN` | the steps of every image without an address of its own |
 
-- A step whose image has no address stops before anything runs and names the setting to add; it never falls back to the local Docker, where the build would only seem to run on a runner. `CROSSBIND_RUNNER=DOCKER_RUN` runs that build in the local Docker instead. Once per image, the build says which runner its steps go to and which settings chose it.
+- A machine that names none of these addresses builds every image on crossbind cloud once signed in with `crossbind login`, with the sign-in's token rather than any of the variables above.
+- Otherwise a step whose image has no address stops before anything runs and names the settings that would give it one; it never falls back to the local Docker, where the build would only seem to run on a runner, nor to crossbind cloud. `CROSSBIND_RUNNER=DOCKER_RUN` runs that build in the local Docker instead. Once per image, the build says which runner its steps go to and which settings chose it.
 - A desktop build takes its bridges from the web image, so it needs two runners:
 
   ```bash
@@ -120,6 +141,7 @@ Releases from before `RUNNER=REMOTE` read the same `~/.crossbind.json` and stop 
 - Its disk is a cache. When the platform starts the container fresh from its image, the next step uploads its inputs again. Cloud Run keeps that disk in memory, so it counts against the service's `--memory`.
 - Cloudflare Workers accept request bodies up to 100 MB on the Free and Pro plans, and Cloud Run 32 MiB per HTTP/1 request. Small inputs therefore travel base64-encoded in batches of up to 16 MB, and a larger file as raw bytes in 16 MB parts, which the runner joins and checks against its hash. A part whose connection drops goes again, and the upload is named after the file's hash, so a later build goes on with the parts the runner holds; parts nobody added to for an hour are dropped. A runner deployed before parts existed (protocol 1) takes such a file in one request, which those limits refuse: the build stops naming the file, and deploying the runner again with the current crossbind fixes it. Results are not limited.
 - A step answers at once, and heartbeats every 15 seconds while it waits behind another one or runs quietly, so proxies keep the response open.
+- A request that never reached the runner, such as one whose name lookup failed for a moment, goes again up to twice, a second and then two seconds later. Once a connection opened, a failure stops the build, since the step may have started.
 - Cloudflare stops a container whose Durable Object is idle, and the work inside a container does not count as activity. The generated Worker therefore keeps both up with an alarm while a step streams, and lets the container sleep a minute after the last one. A container woken from sleep answered in about 2 seconds; the first start after `wrangler deploy` took over four minutes while the image spread, so a step that waits longer than four minutes fails and the next one finds the runner up.
 - Rust archives built on an amd64 runner (Cloudflare, Fly, Cloud Run, Azure) differ in bytes from ones built on arm64 (Docker on an Apple-silicon Mac), because a crate's metadata hash includes the machine that compiled it. C and C++ outputs match byte for byte.
 

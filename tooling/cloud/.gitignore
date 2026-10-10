@@ -1,0 +1,4 @@
+.build/
+# wrangler dev keeps local secrets and state here.
+.dev.vars
+.wrangler/

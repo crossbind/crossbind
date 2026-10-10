@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { AGENT_URL, BRAND, EXAMPLES_URL, LIBRARIES_URL, REPO_URL } from '../data.js';
+import { AGENT_URL, BRAND, EXAMPLES_URL, LIBRARIES_URL, PLAYGROUND_URL, REPO_URL } from '../data.js';
 import { guideHref } from '../guide/nav.js';
 import Logo from './Logo.jsx';
 import VersionMenu from './VersionMenu.jsx';
@@ -10,6 +10,7 @@ const LINKS = [
     { id: 'docs', label: 'Docs', href: guideHref(), prefix: '/guide' },
     { id: 'libraries', label: 'Libraries', href: LIBRARIES_URL, prefix: '/ports' },
     ...(EXAMPLES_URL ? [{ id: 'examples', label: 'Examples', href: EXAMPLES_URL, prefix: '/examples' }] : []),
+    { id: 'playground', label: 'Playground', href: PLAYGROUND_URL, prefix: '/playground' },
 ];
 
 // Agent setup is deliberately not here: it is a site page (/agent/), reachable from the hero,

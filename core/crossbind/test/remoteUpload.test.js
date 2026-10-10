@@ -1,5 +1,5 @@
 import {
-    describe, test, expect, afterEach, beforeEach,
+    describe, test, expect, afterEach, beforeEach, vi,
 } from 'vitest';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -7,7 +7,7 @@ import path from 'node:path';
 import http from 'node:http';
 import crypto from 'node:crypto';
 import { createRunnerServer } from '../src/runner/server.js';
-import { uploadMissing } from '../src/utils/remoteUpload.js';
+import { request, uploadMissing } from '../src/utils/remoteUpload.js';
 
 const TOKEN = 'secret-token-for-tests';
 const FORWARDED_HEADERS = ['authorization', 'content-type', 'content-range', 'x-crossbind-upload'];
@@ -181,5 +181,46 @@ describe.skipIf(process.platform === 'win32')('uploadMissing', () => {
         await uploadMissing(runner, sources, 128);
 
         expect(received).toEqual([{ method: 'PUT', url: `/v1/blobs/${[...sources.keys()][0]}`, length: 1000 }]);
+    });
+});
+
+// fetch fails as undici does: with the system's code on its cause.
+const fetchFailure = (code) => new TypeError('fetch failed', { cause: Object.assign(new Error(code), { code }) });
+
+describe('request', () => {
+    afterEach(() => {
+        vi.restoreAllMocks();
+        vi.useRealTimers();
+    });
+
+    test('sends a request again when it never reached the runner', async () => {
+        vi.useFakeTimers();
+        const fetchMock = vi.spyOn(globalThis, 'fetch')
+            .mockRejectedValueOnce(fetchFailure('ENOTFOUND'))
+            .mockResolvedValueOnce(new Response('{}'));
+
+        const answer = request('https://runner.example', '/v1/exec', { method: 'POST', body: '{}' });
+        await vi.runAllTimersAsync();
+
+        expect((await answer).status).toBe(200);
+        expect(fetchMock).toHaveBeenCalledTimes(2);
+    });
+
+    test('never sends a request again once its connection broke, since a step may have started', async () => {
+        const fetchMock = vi.spyOn(globalThis, 'fetch').mockRejectedValue(fetchFailure('ECONNRESET'));
+
+        await expect(request('https://runner.example', '/v1/exec', { method: 'POST', body: '{}' })).rejects.toThrow('unreachable (ECONNRESET)');
+        expect(fetchMock).toHaveBeenCalledTimes(1);
+    });
+
+    test('gives up on a runner it cannot reach', async () => {
+        vi.useFakeTimers();
+        const fetchMock = vi.spyOn(globalThis, 'fetch').mockRejectedValue(fetchFailure('ECONNREFUSED'));
+
+        const answer = request('https://runner.example', '/v1/health').catch((error) => error);
+        await vi.runAllTimersAsync();
+
+        expect((await answer).message).toMatch(/unreachable \(ECONNREFUSED\)/);
+        expect(fetchMock).toHaveBeenCalledTimes(3);
     });
 });

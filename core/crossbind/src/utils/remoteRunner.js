@@ -87,7 +87,7 @@ export function referencedPaths(base, values) {
 // synchronous as it is with docker. The token reaches it through its environment, never its command line.
 export function remoteExecParams({ remote, role, image, mounts, cwd, argv, env }, options) {
     if (!remote) {
-        throw new Error(`crossbind: RUNNER=REMOTE, but the ${role} image has no runner address - set ${remoteVariables(role).key} (or REMOTE_URL), or build with CROSSBIND_RUNNER=DOCKER_RUN.`);
+        throw new Error(`crossbind: RUNNER=REMOTE, but the ${role} image has no runner address - set ${remoteVariables(role).key} (or REMOTE_URL), or build with CROSSBIND_RUNNER=DOCKER_RUN. A machine that names no runner address builds on crossbind cloud after crossbind login.`);
     }
     const { url, token, tokenVariable } = remote;
     if (!token) throw new Error(`crossbind: the ${role} runner at ${url} needs a token - set ${tokenVariable}.`);

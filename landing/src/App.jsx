@@ -3,6 +3,7 @@ import Nav from './components/Nav.jsx';
 import ChangelogPage from './changelog/ChangelogPage.jsx';
 import Guide from './guide/Guide.jsx';
 import ExamplesPage from './pages/ExamplesPage.jsx';
+import PlaygroundPage from './playground/PlaygroundPage.jsx';
 import LibrariesPage from './ports/LibrariesPage.jsx';
 import PortPage from './ports/PortPage.jsx';
 import Search from './guide/Search.jsx';
@@ -25,12 +26,13 @@ function currentPath(url) {
     return typeof location === 'undefined' ? '/' : location.pathname;
 }
 
-// Libraries and Examples are pages of their own; everything else that is not the landing renders
-// in the guide shell.
+// Libraries, Examples and the playground are pages of their own; everything else that is not the
+// landing renders in the guide shell.
 function Page({ tokens, page }) {
     if (page.kind === 'ports-index') return <LibrariesPage tokens={tokens} page={page} />;
     if (page.kind === 'port' || page.kind === 'port-platform') return <PortPage tokens={tokens} page={page} />;
     if (page.kind === 'examples') return <ExamplesPage tokens={tokens} page={page} />;
+    if (page.kind === 'playground') return <PlaygroundPage tokens={tokens} page={page} />;
     if (page.kind === 'changelog') return <ChangelogPage tokens={tokens} page={page} />;
     return <Guide tokens={tokens} page={page} />;
 }

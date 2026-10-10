@@ -3,3 +3,9 @@
 # index.html and favicon.svg are left out on purpose - they keep their names across deploys.
 /assets/*
   Cache-Control: public, max-age=31536000, immutable
+
+# The playground runs visitors' code here, in a frame with an opaque origin: no network, no forms, no other
+# scripts, and a sandbox even when the page is opened on its own. The hash is the page's one inline script.
+/playground/sandbox.html
+  Content-Security-Policy: sandbox allow-scripts; default-src 'none'; script-src 'sha256-IzVbKkezRJPIWtzDrsvAl9/DrEja11v674tLwwJJASc=' blob: 'unsafe-eval' 'wasm-unsafe-eval'; base-uri 'none'; form-action 'none'; frame-ancestors 'self'
+  Cache-Control: no-cache

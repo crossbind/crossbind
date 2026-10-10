@@ -12,7 +12,8 @@ export default defineConfig({
     test: {
         include: ['test/**/*.test.js'],
         environment: 'node',
-        // A developer's own runner settings must not decide where the tested steps run.
+        // A developer's own runner settings must not decide where the tested steps run, and neither must their
+        // crossbind login: no one signs in to a cloud at this address.
         env: {
             CROSSBIND_RUNNER: '',
             CROSSBIND_REMOTE_URL: '',
@@ -20,6 +21,7 @@ export default defineConfig({
             CROSSBIND_REMOTE_URL_ANDROID: '',
             CROSSBIND_REMOTE_URL_LINUX: '',
             CROSSBIND_REMOTE_URL_WINDOWS: '',
+            CROSSBIND_CLOUD_URL: 'http://127.0.0.1:9',
         },
         coverage: {
             provider: 'v8',
