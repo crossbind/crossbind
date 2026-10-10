@@ -1,6 +1,6 @@
 {
     "name": "@crossbind/core-embind-napi",
-    "version": "2.0.0-beta.62",
+    "version": "2.0.0-beta.63",
     "description": "Node-API host for the crossbind embind runtime: native Node.js addons from the same C++ and Rust bindings.",
     "homepage": "https://github.com/crossbind/crossbind/tree/main/core/embind-napi#readme",
     "repository": "https://github.com/crossbind/crossbind.git",

@@ -3,6 +3,205 @@
 <!-- release-notes:start -->
 <!-- Generated from releases/crossbind/<version>.md by scripts/release/render-changelog.mjs. Edit the note, then run `pnpm changelog`. -->
 
+## 2.0.0-beta.63
+
+Makes only the binaries a build names and links native executables, adds the linuxmusl platform and ready-made Node.js packages, imports C and C++ packages from ConanCenter, runs toolchain steps on a remote runner, binds only the functions an app imports, and brings the C++ to Expo web and Electron.
+
+### Highlights
+
+### Build what you name
+
+- `crossbind build -e` makes binaries only for the runtime environments it names: `browser`,
+  `edge`, `node`, `native` or `wasi`, several separated by commas, or one `target.runtimeEnv` in
+  `crossbind.config.js`. The Vite, Webpack, Rspack and Rollup plugins choose `browser` themselves
+  and React Native links the archives, so projects built through them need no change.
+- `-e native` links the project's `main()` (from `src/native`) with its dependencies into one
+  executable per platform and architecture, such as `dist/app.linux-x64`. A `linuxmusl`
+  executable is fully static and runs on any Linux; a `linux` one needs glibc 2.28, a macOS one
+  macOS 11 and a Windows one Windows 10, each with the C++ runtime linked in.
+  `npm create crossbind@beta -- my-app Native Executable` scaffolds one.
+- The prebuilt archives of every library crossbind builds, the ports included, link in a C or C++
+  build that is not crossbind: pkg-config files resolve through `${pcfiledir}`, `*-config` scripts
+  find their prefix, libtool `.la` files are gone and dependencies are named by library. C++
+  packages need clang with libc++ 19 or later on Linux. Reference: `docs/api/native.md`.
+
+### Linux on musl and ready-made Node.js packages
+
+- `-p linuxmusl` builds Node.js addons and executables for musl, x64 and arm64; an addon loads on
+  Alpine 3.21 and newer. Every port family gains a `-linuxmusl` package, and `-p host` picks
+  `darwin`, `win32`, `linux` or `linuxmusl` for the machine the build runs on.
+- Every port has a `-standalone-napi` package, such as `@crossbind/port-zlib-standalone-napi`, that
+  installs with no build and no Docker: npm picks the matching addon among eight platform packages
+  (darwin, linux, linuxmusl and win32, arm64 and x64). Twelve ports also ship their command-line
+  tools as WASI commands in a `-standalone-wasi` package, such as `curl-wasi` in
+  `@crossbind/port-curl-standalone-wasi`.
+
+### Node.js without a bundler
+
+- `crossbind build -e node` writes one ES module per runtime binary (`dist/node/napi.mjs`,
+  `dist/node/wasm.mjs` and `dist/edge/wasm.mjs`) and Node.js module hooks that serve an app's
+  native imports from it: headers, a package's headers, `conan:` headers, the app's own `.rs` files
+  and `cargo:` crates. A deployed app starts with `node --import ./dist/node/napi.register.mjs`.
+- `node --import crossbind/node/dev` builds the machine's binary before the app starts whenever its
+  native sources, config or native imports changed, also under `node --watch`.
+- Rust packages, the app's own `.rs` files and `cargo:` imports link into Node.js addons for Linux
+  (glibc and musl) and Windows, x64 and arm64, as they already did on macOS.
+
+### `conan:` imports
+
+- Declare packages from ConanCenter under `conanDependencies` in `crossbind.config.js` (a version,
+  a Conan range or `{ version, options }`), then import a header such as `conan:zlib/zlib.h` or
+  include the package's headers from your own. crossbind builds each package from source with its
+  own toolchains and links it statically: web builds (wasm32 and wasm64, single- and
+  multithreaded), React Native on Android and iOS, and Node.js addons for Linux, macOS and Windows.
+- The first install writes `conan.lock` next to `crossbind.config.js`; commit it. Each import is
+  typed, and `crossbind licenses` lists every package with its recipe's license, source and
+  SHA-256. Reference: `docs/api/conan.md`.
+
+### Smaller bindings, and more of C bound
+
+- A header of a dependency, a port or a `conan:` package binds the free functions the app imports
+  from it by name, besides all its classes and enums, and the library code only the other
+  functions reach is linked out. On the site's JavaScript-only demos the wasm shrinks by 40% for
+  OpenSSL, 47% for GEOS, 11% for zlib and 4% for GDAL. Dev servers bind a newly imported function
+  when the file is saved.
+- Function-like macros, macros naming a function, variadic functions and mutable globals bind when
+  the app imports them by name: `deflateInit2(...)`, `iconv_open(...)`,
+  `TIFFSetField(tif, TIFFTAG_XRESOLUTION, vaDouble(72))`, and `_libiconv_version` as a handle to
+  its storage. Rule 10 of `docs/api/cpp-binding-rules.md` has the details.
+
+### Remote runner
+
+- crossbind runs its toolchain steps (C++ builds, cargo, Conan) on a runner instead of the local
+  Docker: `crossbind config set RUNNER REMOTE` and
+  `crossbind config set REMOTE_URL_WEB https://…` (also `_ANDROID`, `_LINUX` and `_WINDOWS`, or
+  `REMOTE_URL` for every image), with the token in `CROSSBIND_TOKEN` or a per-image
+  `CROSSBIND_TOKEN_WEB`.
+  `CROSSBIND_RUNNER` overrides `RUNNER` for one build.
+- `crossbind runner start` runs one on this machine's Docker, and
+  `crossbind runner init fly|cloudflare|cloudrun|azure` writes a folder ready to deploy to Fly.io,
+  Cloudflare Containers, Google Cloud Run or Azure Container Apps.
+- Only native inputs travel, content-addressed, so an edit uploads only the changed file, and a
+  file over 16 MB goes in resumable parts. Reference: `docs/api/remote-runner.md`.
+
+### Expo web and Electron
+
+- `@crossbind/plugin-metro` builds an Expo app's C++ to WebAssembly for its web platform:
+  `expo start --web` builds it on first load, and `crossbind-metro prepare-web` and `export-web`
+  stage and link the release build around `expo export -p web`.
+- `examples/desktop-electron` is an Electron app whose main process loads its addon; a packaged
+  app reads the addon's data from `app.asar.unpacked`. Every example is now a `create-crossbind`
+  template.
+
+### Ports, licenses and images
+
+- OpenSSL 4.0.3, expat 2.9.0 and SQLite 3.54.0. SQLite release builds now use `-O2` instead of no
+  optimization, which runs `speedtest1` twice as fast.
+- libiconv builds its extra encodings, libjpeg-turbo ships the TurboJPEG API, and curl's wasm
+  build sends requests through a fetch transport that follows curl's options and reports progress.
+- `crossbind licenses` lists every dependency package that is not private, not only ports, and
+  `crossbind licenses -e node --package` writes each package's LICENSE, SBOM and license field.
+- The pinned toolchain images move to 1.0.12: musl sysroots, Rust 1.99.0 with the Linux and
+  Windows targets, Conan 2.33 and refreshed Debian packages.
+
+### Breaking changes
+
+- `crossbind build` makes binaries only for the runtime environments it is asked for, with `-e`
+  or `target.runtimeEnv`. With neither, it makes the archives only and says so.
+- `export.bundle` is removed: a `crossbind.config.js` that still sets it stops with a message.
+  Packages published with it, such as the beta.62 ports, still build as dependencies.
+- A Node.js build writes `dist/node/napi.mjs`, `dist/node/wasm.mjs` and `dist/edge/wasm.mjs`
+  instead of one `.h.cjs` entry per header.
+- A function of a dependency's header that no source imports by name is no longer bound:
+  `const m = await initNative(); m.GDALVersionInfo()` fails unless something imports
+  `GDALVersionInfo`.
+- A host wasi-sdk (`WASI_SDK_PATH`, `CROSSBIND_WASI_SDK_PATH`) applies under `RUNNER=LOCAL` only;
+  with the default runner a WASI build uses the SDK in the image, as CI does.
+
+### Migration notes
+
+- Add `-e` to each script that runs `crossbind build` for a binary: `-e node` for a Node.js addon
+  or a wasm module for Node.js, `-e browser` or `-e edge` for a wasm module built outside a bundler
+  plugin, `-e wasi` for a WASI command and `-e native` for an executable. A project that makes one
+  kind of binary can set `target.runtimeEnv` instead.
+- Delete `export.bundle` from `crossbind.config.js`. A library that set `bundle: false` needs
+  nothing else.
+- In Node.js, import a Node-API package from its root or its `node/napi` entry and
+  `await initNative()` before using its names, instead of importing one of its headers.
+- Import each function you call from the header that declares it
+  (`import { GDALVersionInfo } from '@crossbind/port-gdal/gdal.h'`), or take the header whole with
+  `import * as`, which still binds every function.
+- For a WASI build with your own wasi-sdk, run `CROSSBIND_RUNNER=LOCAL crossbind build -p wasi`.
+- The first build after the upgrade regenerates every interface and bridge.
+
+### Fixes
+
+### Bindings and runtime
+
+- Two pending calls of one bound function, or a call made again from a callback it ran, no longer
+  free each other's arguments, which broke the heap silently in release builds.
+- `_JSPI` calls run one at a time, so suspended calls no longer overwrite each other's C stack.
+- Worker handles convert to JSON and to strings, worker objects share the module's channel, and
+  logging a worker module no longer raises an error in Expo's web dev server.
+- `FS.writeFile` replaces a file that exists.
+- A debug build takes an enum member for an integer parameter, and its pthreads start from the
+  main script.
+- C function-pointer struct fields bind, and a callback's `const char *` followed by its length
+  arrives as a handle that `readBuffer` reads exactly.
+- Generated types read constructors, byte strings and literals.
+- An app served from a subpath (Vite `base`, webpack `publicPath`) finds its runtime.
+- A header installed twice is bound once, and SWIG reads the headers of a CMake package that ships
+  its sources.
+
+### Builds
+
+- A newer or deleted native source rebuilds the library.
+- Parallel builds take turns compiling in Docker, configure-based installs finish on Docker
+  Desktop and keep the extracted source's file times, and source downloads retry with backoff.
+- A binary publishes only into an output folder of its own, and a package's data comes only from
+  packages that serve the target.
+- A `RUNNER=LOCAL` build pulls no Docker image, and cargo refuses a runner it does not know.
+- The bundler plugins build dependencies before they transform an import.
+- Node.js addons of several packages run in one process, and on Windows a C++ `long` (zlib's
+  `uLong` among others) crosses as a Number instead of failing with unbound types.
+- WASI writes after `SEEK_END` land at the end of the file.
+
+### React Native
+
+- A failed native build fails `pod install` instead of surfacing later in the app build.
+- A change to the runtime JavaScript rebuilds the Android bundle.
+
+### Ports
+
+- curl's wasm build no longer overflows a buffer on a long custom method, reports network and CORS
+  failures instead of `CURLE_OK`, honours `FAILONERROR`, `MAXFILESIZE` and `TIMEOUT`, and calls
+  the header callback. Only http and https work in this build.
+- GDAL's single-threaded wasm build runs thread-pool jobs in place, LERC no longer writes
+  uninitialized Huffman padding, SpatiaLite's WASI programs link, and libwebp links its mux and
+  demux libraries.
+- The GEOS npm packages are licensed LGPL-2.1-only.
+
+### Known limitations
+
+- Native executables: the Windows ones and the x64 macOS one are built and checked, not run.
+  Nothing points an executable at a port's data, so set `GDAL_DATA` and `PROJ_DATA`. Rust packages
+  make no executable.
+- `conan:` imports: no WASI builds. Web and React Native builds link a package's own archives
+  only; the system libraries and frameworks its recipe declares reach Node.js addons alone.
+  Templates do not bind, and packages come from ConanCenter only.
+- Remote runner: a desktop build also needs a web runner, because SWIG runs in the web image for
+  every platform but Android. Cloudflare Containers built two to three times slower than a recent
+  Mac's Docker, the first start after a deploy can take over four minutes, and some networks refuse
+  `workers.dev` names, which a custom domain avoids. Cloud Run keeps the build tree in memory, and
+  an Azure runner scaled to zero takes about 33 seconds to answer.
+- Expo web: Metro does not watch the C++ sources, so reload the page after an edit, and a
+  multithreaded build needs COOP/COEP from the production host.
+- An import whose specifier is built from variables is not seen by the scan; import the functions
+  by name or bind the header whole.
+- Macros, variadic functions and globals take numbers, enums, booleans, strings and pointers only.
+  A variadic call takes up to six extra arguments, and each variadic function adds about 25 KB to a
+  wasm module.
+
 ## 2.0.0-beta.62
 
 Builds native Node-API addons for macOS, Linux and Windows, imports single Rust modules with cargo:, binds struct fields and imported constants through SWIG, and moves to toolchain images 1.0.8.

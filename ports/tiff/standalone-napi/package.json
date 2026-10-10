@@ -1,6 +1,6 @@
 {
     "name": "@crossbind/port-tiff-standalone-napi",
-    "version": "2.0.0-beta.62",
+    "version": "2.0.0-beta.63",
     "nativeVersion": "4.7.2",
     "homepage": "https://github.com/crossbind/crossbind/tree/main/ports/tiff#readme",
     "repository": "https://github.com/crossbind/crossbind.git",
