@@ -2,7 +2,7 @@
     "name": "@crossbind/port-proj-standalone-napi-win32-arm64",
     "version": "2.0.0-beta.63",
     "nativeVersion": "9.9.0",
-    "homepage": "https://github.com/crossbind/crossbind/tree/main/ports/proj#readme",
+    "homepage": "https://crossbind.dev/ports/proj/",
     "repository": "https://github.com/crossbind/crossbind.git",
     "license": "(Apache-2.0 WITH LLVM-exception) AND (BSD-3-Clause OR GPL-2.0-only) AND (IJG AND BSD-3-Clause AND Zlib) AND (MIT OR NCSA) AND Apache-2.0 AND blessing AND libtiff AND LicenseRef-MinGW-w64-runtime AND MIT AND Zlib",
     "description": "Windows arm64 addon of @crossbind/port-proj-standalone-napi, which npm installs on a matching machine.",

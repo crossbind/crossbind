@@ -2,7 +2,7 @@
     "name": "@crossbind/port-tiff-standalone-napi",
     "version": "2.0.0-beta.63",
     "nativeVersion": "4.7.2",
-    "homepage": "https://github.com/crossbind/crossbind/tree/main/ports/tiff#readme",
+    "homepage": "https://crossbind.dev/ports/tiff/",
     "repository": "https://github.com/crossbind/crossbind.git",
     "license": "(BSD-3-Clause OR GPL-2.0-only) AND (IJG AND BSD-3-Clause AND Zlib) AND (MIT OR NCSA) AND Apache-2.0 AND libtiff AND MIT AND Zlib",
     "description": "tiff for Node.js with nothing to build: prebuilt Node-API addons for macOS, Linux and Windows, built with crossbind.",

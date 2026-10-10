@@ -3,7 +3,7 @@
     "version": "2.0.0-beta.63",
     "nativeVersion": "1.7.4",
     "description": "Linux build of the precompiled libgeotiff (GeoTIFF) library, built with crossbind. Use it together with the main package @crossbind/port-geotiff.",
-    "homepage": "https://github.com/crossbind/crossbind/tree/main/ports/geotiff#readme",
+    "homepage": "https://crossbind.dev/ports/geotiff/",
     "repository": "https://github.com/crossbind/crossbind.git",
     "type": "module",
     "license": "MIT",

@@ -2,7 +2,7 @@
     "name": "@crossbind/port-tiff-standalone-napi-darwin-arm64",
     "version": "2.0.0-beta.63",
     "nativeVersion": "4.7.2",
-    "homepage": "https://github.com/crossbind/crossbind/tree/main/ports/tiff#readme",
+    "homepage": "https://crossbind.dev/ports/tiff/",
     "repository": "https://github.com/crossbind/crossbind.git",
     "license": "(BSD-3-Clause OR GPL-2.0-only) AND (IJG AND BSD-3-Clause AND Zlib) AND (MIT OR NCSA) AND Apache-2.0 AND libtiff AND MIT AND Zlib",
     "description": "macOS arm64 addon of @crossbind/port-tiff-standalone-napi, which npm installs on a matching machine.",
