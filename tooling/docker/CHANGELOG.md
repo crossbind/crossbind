@@ -1,6 +1,6 @@
 # @crossbind/docker
 
-## Unreleased — image family 1.0.12
+## Image family 1.0.12
 
 ### Patch Changes
 

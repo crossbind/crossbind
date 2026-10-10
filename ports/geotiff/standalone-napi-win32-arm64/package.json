@@ -1,6 +1,6 @@
 {
     "name": "@crossbind/port-geotiff-standalone-napi-win32-arm64",
-    "version": "2.0.0-beta.62",
+    "version": "2.0.0-beta.63",
     "nativeVersion": "1.7.4",
     "homepage": "https://github.com/crossbind/crossbind/tree/main/ports/geotiff#readme",
     "repository": "https://github.com/crossbind/crossbind.git",

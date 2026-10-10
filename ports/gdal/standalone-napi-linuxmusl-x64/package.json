@@ -1,6 +1,6 @@
 {
     "name": "@crossbind/port-gdal-standalone-napi-linuxmusl-x64",
-    "version": "2.0.0-beta.62",
+    "version": "2.0.0-beta.63",
     "nativeVersion": "3.13.3",
     "homepage": "https://github.com/crossbind/crossbind/tree/main/ports/gdal#readme",
     "repository": "https://github.com/crossbind/crossbind.git",

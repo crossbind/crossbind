@@ -1,6 +1,6 @@
 {
     "name": "@crossbind/port-jpegturbo-standalone-napi-win32-arm64",
-    "version": "2.0.0-beta.62",
+    "version": "2.0.0-beta.63",
     "nativeVersion": "3.2.0",
     "homepage": "https://github.com/crossbind/crossbind/tree/main/ports/jpegturbo#readme",
     "repository": "https://github.com/crossbind/crossbind.git",

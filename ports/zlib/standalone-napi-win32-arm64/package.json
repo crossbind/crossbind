@@ -1,6 +1,6 @@
 {
     "name": "@crossbind/port-zlib-standalone-napi-win32-arm64",
-    "version": "2.0.0-beta.62",
+    "version": "2.0.0-beta.63",
     "nativeVersion": "1.3.2",
     "homepage": "https://github.com/crossbind/crossbind/tree/main/ports/zlib#readme",
     "repository": "https://github.com/crossbind/crossbind.git",
