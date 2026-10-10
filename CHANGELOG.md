@@ -5,7 +5,7 @@
 
 ## 2.0.0-beta.63
 
-Makes only the binaries a build names and links native executables, adds the linuxmusl platform and ready-made Node.js packages, imports C and C++ packages from ConanCenter, runs toolchain steps on a remote runner, binds only the functions an app imports, and brings the C++ to Expo web and Electron.
+Makes only the binaries a build names and links native executables, adds the linuxmusl platform and ready-made Node.js packages, imports C and C++ packages from ConanCenter, runs toolchain steps on a remote runner or, after `crossbind login`, on crossbind cloud, binds only the functions an app imports, and brings the C++ to Expo web and Electron.
 
 ### Highlights
 
@@ -84,6 +84,19 @@ Makes only the binaries a build names and links native executables, adds the lin
 - Only native inputs travel, content-addressed, so an edit uploads only the changed file, and a
   file over 16 MB goes in resumable parts. Reference: `docs/api/remote-runner.md`.
 
+### crossbind cloud
+
+- `crossbind login` signs in to crossbind cloud with GitHub, through the device flow and without
+  asking for any permission. `crossbind usage` shows this month's build minutes by image and the
+  playground's compiles left today; `crossbind logout [--all]` signs out, and
+  `crossbind account delete --yes` deletes the account.
+- Under `RUNNER=REMOTE`, a machine that names no runner address builds on crossbind cloud once
+  signed in: a runner of your own per toolchain image, with 60 build minutes a month. `CLOUD_URL`
+  (or `CROSSBIND_CLOUD_URL`) names another cloud. Reference: `docs/api/remote-runner.md`; what is
+  kept and for how long: https://crossbind.dev/privacy/.
+- The playground at https://crossbind.dev/playground/ compiles a header and its source on crossbind
+  cloud and runs the module in the page, with nothing to install.
+
 ### Expo web and Electron
 
 - `@crossbind/plugin-metro` builds an Expo app's C++ to WebAssembly for its web platform:
@@ -161,6 +174,8 @@ Makes only the binaries a build names and links native executables, adds the lin
 - A binary publishes only into an output folder of its own, and a package's data comes only from
   packages that serve the target.
 - A `RUNNER=LOCAL` build pulls no Docker image, and cargo refuses a runner it does not know.
+- A remote request that never reached the runner, such as one whose name lookup failed for a
+  moment, goes again up to twice.
 - The bundler plugins build dependencies before they transform an import.
 - Node.js addons of several packages run in one process, and on Windows a C++ `long` (zlib's
   `uLong` among others) crosses as a Number instead of failing with unbound types.
