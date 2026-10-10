@@ -508,6 +508,7 @@ test('daily workflows keep write authority after validation and pin every action
     assert.match(pullRequestValidation, /pnpm --dir tooling\/docker build:family/);
     assert.match(pullRequestValidation, /CROSSBIND_IMAGE_WEB: crossbind\/web:dev-amd64/);
     assert.match(pullRequestValidation, /pnpm run check:release:web/);
+    assert.match(pullRequestValidation, /native-linux:[\s\S]*?max-parallel: 4\n[\s\S]*?native-macos:[\s\S]*?max-parallel: 2\n/);
     assert.match(dependabot, /package-ecosystem: npm/);
     assert.match(dependabot, /package-ecosystem: github-actions/);
     assert.match(dependabot, /package-ecosystem: docker/);
