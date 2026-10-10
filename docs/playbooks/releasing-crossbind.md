@@ -177,11 +177,16 @@ automation tokens.
 npm configures a Trusted Publisher only on a package that already exists, so a package npm has
 never published, such as a new port variant, needs its name first. `node
 scripts/release/bootstrap-npm-packages.mjs` lists those packages. With `--apply`, run by a
-maintainer logged in to npm, it publishes a code-free placeholder `0.0.0-bootstrap.0` of each under
-the `bootstrap` dist-tag and configures the trust above with npm 12.0.2. npm confirms the writes
-with 2FA, and its website offers to skip 2FA for five minutes, which covers about 80 packages. A
-run that stops prints the command that continues it. Afterwards, check `npm view <package>
-dist-tags`: if npm pointed `latest` at the placeholder, move it once the train has published. A
+maintainer logged in to npm, it first publishes a code-free placeholder
+`0.0.0-bootstrap.0` of each under the `bootstrap` dist-tag, and then configures the trust above with
+npm 12.0.2, so no 2FA window is spent waiting for npm to serve a new package. npm confirms the
+writes and the trust reads with 2FA: the script prints each approval link and waits for it, so it
+needs no terminal; tick the website's option to skip 2FA for five minutes at each prompt. Before it
+sets a trust it checks every package and reports how many already trust the workflow, so a run
+that stops continues when it runs again. `--trust-only` skips the placeholders: on its own it only
+reports which packages lack the trust, and with `--apply` it sets the missing ones.
+Afterwards, check `npm view <package> dist-tags`: if npm pointed `latest` at the placeholder, move
+it once the train has published. A
 writing train refuses a package npm has never published and names this command; a dry run lists
 those packages.
 
