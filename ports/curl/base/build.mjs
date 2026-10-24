@@ -27,7 +27,7 @@ const platformBuild = {
 };
 
 export default {
-    sha256: 'd54dd598bf05927a726deb38df31c6a255ba83ff1de57c5d1464dac3ed8f44a1', // curl-8.22.0.tar.gz
+    sha256: 'e3de77cfa6367083c776a26647fc9f633b538c06c3baa73d931a252ac8f72b49', // curl-8.23.0.tar.gz
     getURL: (version) => `https://curl.se/download/curl-${version}.tar.gz`,
     buildType: 'cmake',
     // The typed forms of variadic calls crossbind adds (see the header), shipped beside the upstream headers.

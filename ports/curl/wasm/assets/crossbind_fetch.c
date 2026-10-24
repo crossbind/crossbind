@@ -406,7 +406,7 @@ static CURLcode fetch_finish(struct Curl_easy *data,
     Curl_pgrsUpdate_nometer(data);
     return result;
   }
-  if(Curl_pgrsDone(data) && !result)
+  if(Curl_pgrsDone(data, Curl_pgrs_now(data)) && !result)
     result = CURLE_ABORTED_BY_CALLBACK;
   return result;
 }
