@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import {
     COMMIT_RE,
     SHA1_RE,
@@ -350,7 +350,15 @@ async function osvCommitVulnerabilities(commit, dependencies) {
     return (result.vulns ?? []).filter((vulnerability) => !vulnerability.withdrawn);
 }
 
-async function planNativeSecurity(inventory, policy, proposals, blockers, notices, errors, dependencies) {
+// OSV judges the release as upstream tagged it, so what a recipe's patches fix still shows up against the pinned commit.
+async function recipePatches(root, library) {
+    const recipe = path.join(root, 'ports', library, 'base', 'build.mjs');
+    if (!fs.existsSync(recipe)) return [];
+    const { default: build } = await import(pathToFileURL(recipe).href);
+    return build?.patches ?? [];
+}
+
+async function planNativeSecurity(root, inventory, policy, proposals, blockers, notices, errors, dependencies) {
     const resolveCommit = dependencies.githubCommitForRef ?? githubCommitForRef;
     const queryCommit = dependencies.osvCommitVulnerabilities ?? osvCommitVulnerabilities;
     const removeProposal = (library) => {
@@ -384,13 +392,46 @@ async function planNativeSecurity(inventory, policy, proposals, blockers, notice
                 return;
             }
             try {
+                const patches = await recipePatches(root, row.library);
+                const proposal = proposals.find((entry) => entry.kind === 'native' && entry.unit === row.library);
+                // The gate builds a release with every patch, and one the release already includes no longer applies:
+                // which patches a release makes redundant is a person's call.
+                const isManualUpdate = Boolean(proposal) && patches.length > 0;
+                if (isManualUpdate) {
+                    removeProposal(row.library);
+                    blockers.push({
+                        component: `native-${row.library}`,
+                        current: row.nativeVersion,
+                        target: proposal.target,
+                        reason: `The recipe carries upstream patches, so updating to ${proposal.target} is manual: drop the patches it includes.`,
+                        sourceUrl: proposal.sourceUrl,
+                    });
+                }
                 const currentTag = nativeTag(identity, row.nativeVersion);
                 const currentCommit = await resolveCommit(identity.repository, `tags/${currentTag}`, dependencies);
                 const vulnerabilities = await queryCommit(currentCommit, dependencies);
                 if (vulnerabilities.length === 0) return;
-                const proposal = proposals.find((entry) => entry.kind === 'native' && entry.unit === row.library);
-                const advisoryIds = vulnerabilities.map((entry) => entry.id).sort();
-                if (proposal) {
+                const patched = new Set(patches.flatMap((patch) => patch.advisories ?? []));
+                const isPatched = (entry) => [entry.id, ...(entry.aliases ?? [])].some((id) => patched.has(id));
+                const patchedIds = vulnerabilities
+                    .filter(isPatched)
+                    .map((entry) => entry.id)
+                    .sort();
+                const advisoryIds = vulnerabilities
+                    .filter((entry) => !isPatched(entry))
+                    .map((entry) => entry.id)
+                    .sort();
+                if (advisoryIds.length === 0) {
+                    notices.push({
+                        component: `native-security-${row.library}`,
+                        current: row.nativeVersion,
+                        target: 'patched',
+                        reason: `OSV reports the pinned commit as affected by ${patchedIds.join(', ')}; the recipe's patches fix them.`,
+                        sourceUrl: `https://osv.dev/list?q=${encodeURIComponent(patchedIds[0])}`,
+                    });
+                    return;
+                }
+                if (proposal && !isManualUpdate) {
                     const targetTag = nativeTag(identity, proposal.target);
                     const targetCommit = await resolveCommit(identity.repository, `tags/${targetTag}`, dependencies);
                     const targetVulnerabilities = await queryCommit(targetCommit, dependencies);
@@ -405,7 +446,9 @@ async function planNativeSecurity(inventory, policy, proposals, blockers, notice
                     component: `native-security-${row.library}`,
                     current: row.nativeVersion,
                     target: proposal?.target ?? 'no-fixed-release',
-                    reason: `OSV reports the pinned commit as affected: ${advisoryIds.join(', ')}. No checked clean target is available.`,
+                    reason: `OSV reports the pinned commit as affected: ${advisoryIds.join(', ')}. ${
+                        isManualUpdate ? `Updating to ${proposal.target} is manual (native-${row.library}).` : 'No checked clean target is available.'
+                    }${patchedIds.length > 0 ? ` The recipe's patches fix ${patchedIds.join(', ')}.` : ''}`,
                     sourceUrl: `https://osv.dev/list?q=${encodeURIComponent(advisoryIds[0])}`,
                 });
                 removeProposal(row.library);
@@ -428,7 +471,7 @@ export async function createDependencyPlan({ root = ROOT, dependencies = {} } = 
         const inventory = dependencies.nativeInventory ?? runNativeInventory(root, inventoryPath);
         planNative(inventory, proposals, blockers);
         if (!dependencies.skipNativeSecurity) {
-            await planNativeSecurity(inventory, policy.nativeSecurity, proposals, blockers, notices, errors, dependencies);
+            await planNativeSecurity(root, inventory, policy.nativeSecurity, proposals, blockers, notices, errors, dependencies);
         }
     } finally {
         fs.rmSync(inventoryPath, { force: true });

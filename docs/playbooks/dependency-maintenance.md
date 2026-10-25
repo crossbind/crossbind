@@ -72,6 +72,16 @@ treated as a security update only if its own resolved commit is clean. Changed b
 version, an unknown tag or a library with no configured advisory identity fail closed and enter the
 manual-intervention issue.
 
+A recipe can carry upstream fixes its pinned release lacks: `patches` in
+`ports/<family>/base/build.mjs` (see `docs/api/crossbind-build.md`). Each patch lists the advisories
+it fixes, and the planner counts an OSV finding as fixed when its id or one of its aliases is listed.
+A family whose every finding is patched stands as a `patched` note instead of a blocker. The bot does
+not update a patched family: its gate builds a release with every patch, and a patch the release
+already includes no longer applies, so the planner turns the update into a `native-<family>` blocker.
+Update it by hand and drop each patch the release includes. Only advisories OSV maps to the pinned
+commit reach the planner; a fix OSV has no record of yet is still listed under the id upstream gave
+it, so the planner counts it once OSV adds the record.
+
 GNU libiconv, libspatialite and libtiff currently require manual advisory review because their
 canonical source does not have a reviewed release-tag-to-Git-commit identity suitable for the OSV
 query. This limitation is explicit in `scripts/dependencies/update-policy.json`. Because that is a

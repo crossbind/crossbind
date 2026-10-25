@@ -445,6 +445,107 @@ test('native security fails closed when the proposed target commit is also affec
     assert.match(plan.blockers[0].reason, /No checked clean target is available/);
 });
 
+test('native security counts what the recipe patches fix, by id or alias, and blocks only on the rest', async () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'crossbind-plan-patches-'));
+    const recipe = (library, advisories) => {
+        fs.mkdirSync(path.join(root, 'ports', library, 'base'), { recursive: true });
+        fs.writeFileSync(
+            path.join(root, 'ports', library, 'base', 'build.mjs'),
+            `export default { patches: [{ file: new URL('./patches/fix.patch', import.meta.url), advisories: ${JSON.stringify(advisories)} }] };\n`,
+        );
+    };
+    const row = (library, nativeVersion) => ({
+        package: `@crossbind/port-${library}`,
+        library,
+        nativeVersion,
+        latestVersion: nativeVersion,
+        status: 'up-to-date',
+        path: `ports/${library}/base/package.json`,
+        homepage: `https://example.invalid/${library}`,
+    });
+    try {
+        recipe('zlib', ['CVE-TEST-1', 'GHSA-test']);
+        recipe('expat', ['CVE-TEST-3']);
+        const plan = await createDependencyPlan({
+            root,
+            dependencies: {
+                skipToolchains: true,
+                nativeInventory: { rows: [row('zlib', '1.3.2'), row('expat', '2.9.0')] },
+                githubCommitForRef: async (repository) => (repository === 'madler/zlib' ? 'a'.repeat(40) : 'b'.repeat(40)),
+                osvCommitVulnerabilities: async (commit) =>
+                    commit === 'a'.repeat(40)
+                        ? [{ id: 'CVE-TEST-1' }, { id: 'OSV-TEST-2', aliases: ['GHSA-test'] }]
+                        : [{ id: 'CVE-TEST-3' }, { id: 'CVE-TEST-4' }],
+            },
+        });
+        assert.deepEqual(plan.errors, []);
+        assert.deepEqual(
+            plan.notices.map((notice) => [notice.component, notice.target]),
+            [['native-security-zlib', 'patched']],
+        );
+        assert.match(plan.notices[0].reason, /CVE-TEST-1, OSV-TEST-2/);
+        assert.deepEqual(
+            plan.blockers.map((blocker) => blocker.component),
+            ['native-security-expat'],
+        );
+        assert.match(plan.blockers[0].reason, /affected: CVE-TEST-4\./);
+        assert.match(plan.blockers[0].reason, /patches fix CVE-TEST-3/);
+    } finally {
+        fs.rmSync(root, { recursive: true, force: true });
+    }
+});
+
+test('a family whose recipe carries patches is updated by hand, since the gate cannot drop a patch the release includes', async () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'crossbind-plan-patched-update-'));
+    const recipe = (library, advisories) => {
+        fs.mkdirSync(path.join(root, 'ports', library, 'base'), { recursive: true });
+        fs.writeFileSync(
+            path.join(root, 'ports', library, 'base', 'build.mjs'),
+            `export default { patches: [{ file: new URL('./patches/fix.patch', import.meta.url), advisories: ${JSON.stringify(advisories)} }] };\n`,
+        );
+    };
+    const row = (library, nativeVersion, latestVersion) => ({
+        package: `@crossbind/port-${library}`,
+        library,
+        nativeVersion,
+        latestVersion,
+        status: 'outdated',
+        path: `ports/${library}/base/package.json`,
+        homepage: `https://example.invalid/${library}`,
+    });
+    try {
+        recipe('zlib', ['CVE-TEST-1']);
+        recipe('expat', ['CVE-TEST-3']);
+        const current = { 'tags/v1.3.2': 'a'.repeat(40), 'tags/R_2_9_0': 'b'.repeat(40) };
+        const plan = await createDependencyPlan({
+            root,
+            dependencies: {
+                skipToolchains: true,
+                nativeInventory: { rows: [row('zlib', '1.3.2', '1.3.3'), row('expat', '2.9.0', '2.9.1')] },
+                githubCommitForRef: async (repository, ref) => current[ref] ?? 'c'.repeat(40),
+                osvCommitVulnerabilities: async (commit) => {
+                    if (commit === 'a'.repeat(40)) return [{ id: 'CVE-TEST-1' }];
+                    if (commit === 'b'.repeat(40)) return [{ id: 'CVE-TEST-3' }, { id: 'CVE-TEST-4' }];
+                    return [];
+                },
+            },
+        });
+        assert.deepEqual(plan.errors, []);
+        assert.deepEqual(plan.selected, []);
+        const blockers = Object.fromEntries(plan.blockers.map((blocker) => [blocker.component, blocker]));
+        assert.deepEqual(Object.keys(blockers).sort(), ['native-expat', 'native-security-expat', 'native-zlib']);
+        assert.equal(blockers['native-zlib'].target, '1.3.3');
+        assert.match(blockers['native-zlib'].reason, /patches.*manual/);
+        assert.match(blockers['native-security-expat'].reason, /affected: CVE-TEST-4\. Updating to 2\.9\.1 is manual/);
+        assert.deepEqual(
+            plan.notices.map((notice) => [notice.component, notice.target, notice.sourceUrl]),
+            [['native-security-zlib', 'patched', 'https://osv.dev/list?q=CVE-TEST-1']],
+        );
+    } finally {
+        fs.rmSync(root, { recursive: true, force: true });
+    }
+});
+
 test('a reviewed manual library stands as a notice instead of blocking every run', async () => {
     const plan = await createDependencyPlan({
         dependencies: {
