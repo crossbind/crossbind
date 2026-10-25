@@ -303,9 +303,9 @@ To add a new `ports/<X>`: see `docs/playbooks/new-port.md` (uses `ports/zlib` as
 | `check-native-versions.js` | Native lib version drift via GitHub/registry/HTML scrape (use `--check`/`--update`) |
 | `dependencies/plan-dependency-updates.mjs` | Daily native/toolchain drift, digest and exact-commit advisory planner |
 | `dependencies/apply-dependency-update.mjs` | One-unit updater for native families and transactional Docker/toolchain pins |
-| `dependencies/changed-units.mjs` | Derive the exact native-family and toolchain validation matrix from a PR diff |
+| `dependencies/changed-units.mjs` | Derive the changed native families, their target-group matrices and the toolchain flag from a PR diff |
 | `dependencies/validate-dependency-update.mjs` | Changed-file boundary plus native target/toolchain build gates |
-| `dependencies/validate-native-family.mjs` | Build and pack every existing target in one native family on the appropriate runner |
+| `dependencies/validate-native-family.mjs` | Build each package the changed native families need once per target group, then pack the families' targets; the bot runs every group for its one family |
 | `dependencies/render-dependency-pr.mjs` | Deterministic branch, commit, title and evidence-rich draft PR metadata |
 | `check-beta-status.js` | npm beta tag inventory + `--bump` |
 | `check-publish-hygiene.js` | K1/K4 gates: no executable leaks, provenance + derived license on -bin packages |

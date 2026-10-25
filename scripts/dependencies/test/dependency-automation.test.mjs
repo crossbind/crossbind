@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -18,7 +18,13 @@ import {
 } from '../plan-dependency-updates.mjs';
 import { pullRequestMetadata } from '../render-dependency-pr.mjs';
 import { dependencyPathAllowed } from '../validate-dependency-update.mjs';
-import { nativeDependencyBuildOrder } from '../validate-native-family.mjs';
+import {
+    TARGET_GROUPS,
+    nativeDependencyBuildOrder,
+    nativeValidationSteps,
+    validateNativeFamily,
+    validateNativeTargets,
+} from '../validate-native-family.mjs';
 import gdalBuild from '../../../ports/gdal/base/build.mjs';
 import opensslBuild from '../../../ports/openssl/base/build.mjs';
 import sqliteBuild from '../../../ports/sqlite3/base/build.mjs';
@@ -36,6 +42,202 @@ test('native validation builds the workspace dependency closure in topological o
         nativeDependencyBuildOrder('@crossbind/root', packages).map((candidate) => candidate.manifest.name),
         ['@crossbind/leaf', '@crossbind/middle', '@crossbind/root'],
     );
+});
+
+test('a target group builds each native package once, dependencies first, and packs only the changed families', () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'crossbind-native-group-'));
+    const write = (directory, manifest) => {
+        fs.mkdirSync(path.join(root, directory), { recursive: true });
+        fs.writeFileSync(path.join(root, directory, 'package.json'), JSON.stringify(manifest));
+    };
+    const scripts = { prepublishOnly: 'crossbind build -p wasm' };
+    write('ports/zlib/base', { name: '@crossbind/port-zlib' });
+    write('ports/zlib/wasm', { name: '@crossbind/port-zlib-wasm', scripts, dependencies: { '@crossbind/port-zlib': 'workspace:^' } });
+    write('ports/curl/base', { name: '@crossbind/port-curl' });
+    write('ports/curl/wasm', {
+        name: '@crossbind/port-curl-wasm',
+        scripts,
+        dependencies: { '@crossbind/port-curl': 'workspace:^', '@crossbind/port-zlib-wasm': 'workspace:^' },
+    });
+    write('ports/gdal/base', { name: '@crossbind/port-gdal' });
+    write('ports/gdal/wasm', {
+        name: '@crossbind/port-gdal-wasm',
+        scripts,
+        dependencies: {
+            '@crossbind/port-gdal': 'workspace:^',
+            '@crossbind/port-curl-wasm': 'workspace:^',
+            '@crossbind/port-zlib-wasm': 'workspace:^',
+        },
+    });
+    const steps = (families, targets) =>
+        nativeValidationSteps(families, targets, root).map((step) => `${step.type} ${path.relative(root, step.directory)}`);
+    try {
+        assert.deepEqual(steps(['curl', 'gdal', 'zlib'], ['wasm']), [
+            'build ports/zlib/wasm',
+            'build ports/curl/wasm',
+            'pack ports/curl/wasm',
+            'build ports/gdal/wasm',
+            'pack ports/gdal/wasm',
+            'pack ports/zlib/wasm',
+        ]);
+        // A dependency that did not change is built for its dependents but not packed.
+        assert.deepEqual(steps(['gdal'], ['base', 'wasm']), [
+            'pack ports/gdal/base',
+            'build ports/zlib/wasm',
+            'build ports/curl/wasm',
+            'build ports/gdal/wasm',
+            'pack ports/gdal/wasm',
+        ]);
+    } finally {
+        fs.rmSync(root, { recursive: true, force: true });
+    }
+});
+
+// A throwaway ports tree (zlib: base wasm linux; curl on zlib: base wasm; zstd: base wasm ios; empty: no
+// packages) and a pnpm stand-in that logs "<directory> <subcommand>" and fails inside PNPM_FAIL_IN.
+function nativeFixture() {
+    const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'crossbind-native-fixture-')));
+    const write = (directory, manifest) => {
+        fs.mkdirSync(path.join(root, directory), { recursive: true });
+        fs.writeFileSync(path.join(root, directory, 'package.json'), JSON.stringify(manifest));
+    };
+    const scripts = { prepublishOnly: 'crossbind build' };
+    const on = (...names) => Object.fromEntries(names.map((name) => [name, 'workspace:^']));
+    write('ports/zlib/base', { name: '@crossbind/port-zlib' });
+    write('ports/zlib/wasm', { name: '@crossbind/port-zlib-wasm', scripts, dependencies: on('@crossbind/port-zlib') });
+    write('ports/zlib/linux', { name: '@crossbind/port-zlib-linux', scripts, dependencies: on('@crossbind/port-zlib') });
+    write('ports/curl/base', { name: '@crossbind/port-curl' });
+    write('ports/curl/wasm', { name: '@crossbind/port-curl-wasm', scripts, dependencies: on('@crossbind/port-curl', '@crossbind/port-zlib-wasm') });
+    write('ports/zstd/base', { name: '@crossbind/port-zstd' });
+    write('ports/zstd/wasm', { name: '@crossbind/port-zstd-wasm', scripts, dependencies: on('@crossbind/port-zstd') });
+    write('ports/zstd/ios', { name: '@crossbind/port-zstd-ios', scripts, dependencies: on('@crossbind/port-zstd') });
+    fs.writeFileSync(path.join(root, 'ports/README.md'), '');
+    fs.mkdirSync(path.join(root, 'ports/empty'));
+    fs.writeFileSync(path.join(root, 'ports/empty/README.md'), '');
+    const bin = path.join(root, 'bin');
+    fs.mkdirSync(bin);
+    fs.writeFileSync(
+        path.join(bin, 'pnpm'),
+        '#!/bin/sh\ndir=$(pwd -P)\ndir=${dir#"$FIXTURE_ROOT"/}\necho "$dir $1" >> "$PNPM_LOG"\n[ "$dir" != "$PNPM_FAIL_IN" ]\n',
+        { mode: 0o755 },
+    );
+    const log = path.join(root, 'pnpm.log');
+    return {
+        root,
+        env: { PATH: `${bin}${path.delimiter}${process.env.PATH}`, FIXTURE_ROOT: root, PNPM_LOG: log, PNPM_FAIL_IN: '' },
+        calls: () => (fs.existsSync(log) ? fs.readFileSync(log, 'utf8').trim().split('\n') : []),
+        resetCalls: () => fs.rmSync(log, { force: true }),
+        cleanup: () => fs.rmSync(root, { recursive: true, force: true }),
+    };
+}
+
+test('the target groups follow the packages the changed families actually have', () => {
+    const fixture = nativeFixture();
+    const groups = (files) => {
+        const units = changedDependencyUnits(files, fixture.root);
+        return [units.linuxGroups.include.map((entry) => entry.group), units.macosGroups.include.map((entry) => entry.group)];
+    };
+    try {
+        assert.deepEqual(groups(['ports/zlib/base/build.mjs']), [['wasm', 'linux', 'base'], []]);
+        assert.deepEqual(groups(['ports/zstd/wasm/package.json']), [['wasm', 'base'], ['ios']]);
+        assert.deepEqual(groups(['ports/empty/README.md', 'ports/README.md']), [[], []]);
+    } finally {
+        fixture.cleanup();
+    }
+});
+
+test('the bot gate runs every group for its family, and a failed build stops only what depends on it', () => {
+    const fixture = nativeFixture();
+    const saved = Object.fromEntries(Object.keys(fixture.env).map((key) => [key, process.env[key]]));
+    Object.assign(process.env, fixture.env);
+    try {
+        validateNativeFamily('curl', 'linux', fixture.root);
+        assert.deepEqual(fixture.calls(), ['ports/zlib/wasm run', 'ports/curl/wasm run', 'ports/curl/wasm pack', 'ports/curl/base pack']);
+
+        fixture.resetCalls();
+        process.env.PNPM_FAIL_IN = 'ports/zlib/wasm';
+        assert.throws(() => validateNativeTargets(['curl', 'zlib', 'zstd'], ['wasm'], fixture.root), /@crossbind\/port-zlib-wasm/);
+        // curl needs the failed zlib build, zstd does not: zstd still builds and packs.
+        assert.deepEqual(fixture.calls(), ['ports/zlib/wasm run', 'ports/zstd/wasm run', 'ports/zstd/wasm pack']);
+
+        assert.throws(() => validateNativeFamily('empty', 'linux', fixture.root), /no Linux native package/);
+    } finally {
+        for (const [key, value] of Object.entries(saved)) {
+            if (value === undefined) delete process.env[key];
+            else process.env[key] = value;
+        }
+        fixture.cleanup();
+    }
+});
+
+test('the native validation CLI runs one target group and refuses unknown, unsafe or empty work before running pnpm', () => {
+    const fixture = nativeFixture();
+    const cli = (...args) =>
+        spawnSync(process.execPath, [path.join(ROOT, 'scripts/dependencies/validate-native-family.mjs'), ...args], {
+            encoding: 'utf8',
+            env: { ...process.env, ...fixture.env, CROSSBIND_DEPENDENCY_ROOT: fixture.root },
+        });
+    try {
+        assert.equal(cli('--families', 'zlib,zstd', '--platform', 'linux', '--group', 'wasm').status, 0);
+        assert.deepEqual(fixture.calls(), ['ports/zlib/wasm run', 'ports/zlib/wasm pack', 'ports/zstd/wasm run', 'ports/zstd/wasm pack']);
+        fixture.resetCalls();
+        for (const [args, message] of [
+            [['--families', 'zlib', '--platform', 'linux', '--group', '__proto__'], /Unknown linux target group: __proto__/],
+            [['--families', 'zlib', '--platform', 'constructor', '--group', 'wasm'], /Unsupported native validation platform: constructor/],
+            [['--families', '../ports/zlib', '--platform', 'linux', '--group', 'wasm'], /native family is not safe/],
+            [['--families', 'zlib', '--platform', 'linux', '--group', 'android'], /no linux android package was found/],
+            [['--family', 'zlib', '--platform', 'linux'], /Missing --group/],
+        ]) {
+            const result = cli(...args);
+            assert.equal(result.status, 1, args.join(' '));
+            assert.match(result.stderr, message, args.join(' '));
+        }
+        assert.deepEqual(fixture.calls(), []);
+    } finally {
+        fixture.cleanup();
+    }
+});
+
+test('the dependency PR workflow hands changed-units outputs and target groups to the matching native jobs', () => {
+    const workflow = fs.readFileSync(path.join(ROOT, '.github/workflows/validate-dependency-pr.yml'), 'utf8');
+    const units = fs.readFileSync(path.join(ROOT, 'scripts/dependencies/changed-units.mjs'), 'utf8');
+    const job = (name) => workflow.split(/\n(?= {4}[a-z][a-z-]*:\n)/).find((block) => block.startsWith(`    ${name}:\n`)) ?? '';
+    const written = [...units.matchAll(/GITHUB_OUTPUT, `([a-z_]+)=/g)].map((match) => match[1]).sort();
+    const mapped = [...job('changes').matchAll(/\n {12}([a-z_]+): \$\{\{ steps\.units\.outputs\.([a-z_]+) \}\}/g)];
+    assert.deepEqual(mapped.map((match) => match[1]).sort(), written);
+    assert.ok(mapped.every((match) => match[1] === match[2]));
+    for (const platform of ['linux', 'macos']) {
+        const block = job(`native-${platform}`);
+        assert.match(block, new RegExp(`\\n {8}if: \\$\\{\\{ needs\\.changes\\.outputs\\.${platform}_group_count != '0' \\}\\}\\n`));
+        assert.match(block, new RegExp(`\\n {12}matrix: \\$\\{\\{ fromJSON\\(needs\\.changes\\.outputs\\.${platform}_groups\\) \\}\\}\\n`));
+        assert.match(block, /\n {18}FAMILIES: \$\{\{ needs\.changes\.outputs\.families \}\}\n/);
+        assert.match(block, /\n {18}GROUP: \$\{\{ matrix\.group \}\}\n/);
+        assert.match(block, new RegExp(`--families "\\$FAMILIES" --platform ${platform} --group "\\$GROUP"\\n`));
+    }
+});
+
+test('on the real ports tree every target group builds each package once, dependencies first, and no package twice across groups', () => {
+    const families = fs
+        .readdirSync(path.join(ROOT, 'ports'), { withFileTypes: true })
+        .filter((entry) => entry.isDirectory())
+        .map((entry) => entry.name)
+        .sort();
+    const builtBy = new Map();
+    for (const [platform, groups] of Object.entries(TARGET_GROUPS)) {
+        for (const [group, targets] of Object.entries(groups)) {
+            const builds = nativeValidationSteps(families, targets, ROOT).filter((step) => step.type === 'build');
+            const position = new Map(builds.map((step, index) => [step.name, index]));
+            assert.equal(position.size, builds.length, `${platform}/${group} builds a package twice`);
+            for (const [index, step] of builds.entries()) {
+                for (const required of step.requires) {
+                    assert.ok(!position.has(required) || position.get(required) < index, `${platform}/${group}: ${step.name} before ${required}`);
+                }
+                assert.ok(!builtBy.has(step.name), `${step.name} is built by both ${builtBy.get(step.name)} and ${platform}/${group}`);
+                builtBy.set(step.name, `${platform}/${group}`);
+            }
+        }
+    }
+    assert.ok(builtBy.size > 0);
 });
 
 test('native recipes use portable configure entrypoints and the container WASI SDK fallback', () => {
@@ -473,11 +675,19 @@ test('generated dependency PRs are draft-reviewable release-neutral changes', ()
 test('pull-request validation derives native families and toolchain impact from paths', () => {
     const units = changedDependencyUnits(['ports/zlib/base/build.mjs', 'ports/zlib/wasm/package.json', 'tooling/docker/base.Dockerfile']);
     assert.equal(units.toolchain, true);
+    assert.deepEqual(units.families, ['zlib']);
     assert.deepEqual(
-        units.families.include.map((entry) => entry.family),
-        ['zlib'],
+        units.linuxGroups.include.map((entry) => entry.group),
+        Object.keys(TARGET_GROUPS.linux),
     );
-    assert.equal(units.families.include[0].macos, true);
+    assert.deepEqual(
+        units.macosGroups.include.map((entry) => entry.group),
+        ['ios', 'darwin'],
+    );
+    const toolchainOnly = changedDependencyUnits(['tooling/docker/base.Dockerfile']);
+    assert.deepEqual(toolchainOnly.families, []);
+    assert.deepEqual(toolchainOnly.linuxGroups.include, []);
+    assert.deepEqual(toolchainOnly.macosGroups.include, []);
 });
 
 test("the linux and windows images' toolchain paths the CLI names are a toolchain change", () => {
@@ -540,6 +750,9 @@ test('a rejected candidate becomes a reported finding instead of a failed watch'
 test('native updater changes every nested nativeVersion field together', () => {
     const source = fs.readFileSync(path.join(ROOT, 'scripts/check-native-versions.js'), 'utf8');
     assert.match(source, /nativeVersion.*\)\(\[\^"\]\*\)\(.*\/g/);
-    const validator = fs.readFileSync(path.join(ROOT, 'scripts/dependencies/validate-native-family.mjs'), 'utf8');
-    assert.match(validator, /\['base', 'wasm', 'wasi', 'standalone-wasi', 'android', 'linux', 'linuxmusl', 'win32'\]/);
+    // Every target is validated in exactly one group, and standalone-wasi shares a runner with the wasi packages it wraps.
+    const linuxTargets = Object.values(TARGET_GROUPS.linux).flat();
+    assert.deepEqual([...linuxTargets].sort(), ['android', 'base', 'linux', 'linuxmusl', 'standalone-wasi', 'wasi', 'wasm', 'win32']);
+    assert.ok(Object.values(TARGET_GROUPS.linux).some((targets) => targets.includes('wasi') && targets.includes('standalone-wasi')));
+    assert.deepEqual(Object.values(TARGET_GROUPS.macos).flat(), ['ios', 'darwin']);
 });

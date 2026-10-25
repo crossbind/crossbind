@@ -68,33 +68,98 @@ export function nativeDependencyBuildOrder(packageName, packages) {
     return order;
 }
 
-export function validateNativeFamily(family, platform, root = ROOT) {
-    assertSafeId(family, 'native family');
-    if (!['linux', 'macos'].includes(platform)) throw new Error(`Unsupported native validation platform: ${platform}`);
-    const familyRoot = path.join(root, 'ports', family);
-    if (!fs.existsSync(familyRoot)) throw new Error(`${family}: native family does not exist.`);
+// A pull request validates each group on its own runner, so a package is built once per group however many
+// changed families need it. Longest first, by measured build time: max-parallel's slots then free up together.
+export const TARGET_GROUPS = {
+    linux: {
+        wasm: ['wasm'],
+        wasi: ['wasi', 'standalone-wasi'],
+        linux: ['linux'],
+        linuxmusl: ['linuxmusl'],
+        android: ['android'],
+        win32: ['win32'],
+        base: ['base'],
+    },
+    macos: { ios: ['ios'], darwin: ['darwin'] },
+};
+
+function platformGroups(platform) {
+    if (!Object.hasOwn(TARGET_GROUPS, platform)) throw new Error(`Unsupported native validation platform: ${platform}`);
+    return TARGET_GROUPS[platform];
+}
+
+export function nativeValidationSteps(families, targets, root = ROOT) {
     const packages = nativeWorkspacePackages(root);
+    const closure = (name) => nativeDependencyBuildOrder(name, packages).map((entry) => entry.manifest.name);
     const built = new Set();
-    const targets = platform === 'macos' ? ['ios', 'darwin'] : ['base', 'wasm', 'wasi', 'standalone-wasi', 'android', 'linux', 'linuxmusl', 'win32'];
-    let packed = 0;
+    const steps = [];
     for (const target of targets) {
-        const directory = path.join(familyRoot, target);
-        const manifestPath = path.join(directory, 'package.json');
-        if (!fs.existsSync(manifestPath)) continue;
-        const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
-        for (const entry of nativeDependencyBuildOrder(manifest.name, packages)) {
-            if (built.has(entry.manifest.name)) continue;
-            if (packageHasScript(entry.directory, 'prepublishOnly')) run('pnpm', ['run', 'prepublishOnly'], entry.directory);
-            built.add(entry.manifest.name);
+        for (const family of families) {
+            const directory = path.join(root, 'ports', family, target);
+            const manifestPath = path.join(directory, 'package.json');
+            if (!fs.existsSync(manifestPath)) continue;
+            const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+            for (const entry of nativeDependencyBuildOrder(manifest.name, packages)) {
+                const name = entry.manifest.name;
+                if (built.has(name)) continue;
+                built.add(name);
+                if (packageHasScript(entry.directory, 'prepublishOnly')) {
+                    steps.push({ type: 'build', directory: entry.directory, name, requires: closure(name).slice(0, -1) });
+                }
+            }
+            steps.push({ type: 'pack', directory, family, target, name: manifest.name, requires: closure(manifest.name) });
         }
-        const packDestination = fs.mkdtempSync(path.join(os.tmpdir(), `crossbind-${family}-${target}-`));
-        try {
-            run('pnpm', ['pack', '--pack-destination', packDestination], directory);
-        } finally {
-            fs.rmSync(packDestination, { recursive: true, force: true });
-        }
-        packed += 1;
     }
+    return steps;
+}
+
+// A failed build skips only the steps that need it, so one run reports every family's result.
+export function validateNativeTargets(families, targets, root = ROOT) {
+    for (const family of families) {
+        assertSafeId(family, 'native family');
+        if (!fs.existsSync(path.join(root, 'ports', family))) throw new Error(`${family}: native family does not exist.`);
+    }
+    const broken = new Set();
+    const failed = [];
+    const skipped = [];
+    let packed = 0;
+    for (const step of nativeValidationSteps(families, targets, root)) {
+        const label = `${step.type} ${step.name} (${path.relative(root, step.directory)})`;
+        const blocker = step.requires.find((name) => broken.has(name));
+        if (blocker) {
+            process.stdout.write(`\n== skip ${label}: ${blocker} did not build\n`);
+            if (step.type === 'build') broken.add(step.name);
+            skipped.push(label);
+            continue;
+        }
+        process.stdout.write(`\n== ${label}\n`);
+        try {
+            if (step.type === 'build') {
+                run('pnpm', ['run', 'prepublishOnly'], step.directory);
+                continue;
+            }
+            const packDestination = fs.mkdtempSync(path.join(os.tmpdir(), `crossbind-${step.family}-${step.target}-`));
+            try {
+                run('pnpm', ['pack', '--pack-destination', packDestination], step.directory);
+            } finally {
+                fs.rmSync(packDestination, { recursive: true, force: true });
+            }
+            packed += 1;
+        } catch (error) {
+            console.error(`== ${label} failed: ${error.message}`);
+            if (step.type === 'build') broken.add(step.name);
+            failed.push(label);
+        }
+    }
+    if (failed.length > 0) {
+        const because = skipped.length > 0 ? `; skipped because of them: ${skipped.join('; ')}` : '';
+        throw new Error(`native validation failed: ${failed.join('; ')}${because}`);
+    }
+    return packed;
+}
+
+export function validateNativeFamily(family, platform, root = ROOT) {
+    const packed = validateNativeTargets([family], Object.values(platformGroups(platform)).flat(), root);
     if (packed === 0 && platform === 'linux') throw new Error(`${family}: no Linux native package was found.`);
     process.stdout.write(`${family}: validated and packed ${packed} ${platform} package(s).\n`);
 }
@@ -107,7 +172,14 @@ function option(name) {
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
     try {
-        validateNativeFamily(option('--family'), option('--platform'));
+        const platform = option('--platform');
+        const group = option('--group');
+        const groups = platformGroups(platform);
+        if (!Object.hasOwn(groups, group)) throw new Error(`Unknown ${platform} target group: ${group}`);
+        const families = [...new Set(option('--families').split(','))];
+        const packed = validateNativeTargets(families, groups[group]);
+        if (packed === 0) throw new Error(`${families.join(', ')}: no ${platform} ${group} package was found.`);
+        process.stdout.write(`${families.join(', ')}: validated and packed ${packed} ${platform} ${group} package(s).\n`);
     } catch (error) {
         console.error(error);
         process.exit(1);

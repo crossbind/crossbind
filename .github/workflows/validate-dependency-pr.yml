@@ -30,7 +30,10 @@ jobs:
         runs-on: ubuntu-24.04
         outputs:
             families: ${{ steps.units.outputs.families }}
-            family_count: ${{ steps.units.outputs.family_count }}
+            linux_groups: ${{ steps.units.outputs.linux_groups }}
+            linux_group_count: ${{ steps.units.outputs.linux_group_count }}
+            macos_groups: ${{ steps.units.outputs.macos_groups }}
+            macos_group_count: ${{ steps.units.outputs.macos_group_count }}
             toolchain: ${{ steps.units.outputs.toolchain }}
         steps:
             - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -60,11 +63,11 @@ jobs:
 
     native-linux:
         needs: changes
-        if: ${{ needs.changes.outputs.family_count != '0' }}
+        if: ${{ needs.changes.outputs.linux_group_count != '0' }}
         strategy:
             fail-fast: false
             max-parallel: 4
-            matrix: ${{ fromJSON(needs.changes.outputs.families) }}
+            matrix: ${{ fromJSON(needs.changes.outputs.linux_groups) }}
         runs-on: ubuntu-24.04
         steps:
             - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -76,38 +79,35 @@ jobs:
                   node-version-file: .nvmrc
                   cache: pnpm
             - run: pnpm install --frozen-lockfile
-            - name: Build and pack every Linux target in the changed native family
+            - name: Build each package of the changed native families once for one target group, then pack them
               env:
-                  FAMILY: ${{ matrix.family }}
-              run: node scripts/dependencies/validate-native-family.mjs --family "$FAMILY" --platform linux
+                  FAMILIES: ${{ needs.changes.outputs.families }}
+                  GROUP: ${{ matrix.group }}
+              run: node scripts/dependencies/validate-native-family.mjs --families "$FAMILIES" --platform linux --group "$GROUP"
 
     native-macos:
         needs: changes
-        if: ${{ needs.changes.outputs.family_count != '0' }}
+        if: ${{ needs.changes.outputs.macos_group_count != '0' }}
         strategy:
             fail-fast: false
             max-parallel: 2
-            matrix: ${{ fromJSON(needs.changes.outputs.families) }}
+            matrix: ${{ fromJSON(needs.changes.outputs.macos_groups) }}
         runs-on: macos-15
         steps:
-            - if: ${{ matrix.macos }}
-              uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+            - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
               with:
                   persist-credentials: false
-            - if: ${{ matrix.macos }}
-              uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
-            - if: ${{ matrix.macos }}
-              uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+            - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+            - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
               with:
                   node-version-file: .nvmrc
                   cache: pnpm
-            - if: ${{ matrix.macos }}
-              run: pnpm install --frozen-lockfile
-            - if: ${{ matrix.macos }}
-              name: Build and pack the iOS target in the changed native family
+            - run: pnpm install --frozen-lockfile
+            - name: Build each package of the changed native families once for one target group, then pack them
               env:
-                  FAMILY: ${{ matrix.family }}
-              run: node scripts/dependencies/validate-native-family.mjs --family "$FAMILY" --platform macos
+                  FAMILIES: ${{ needs.changes.outputs.families }}
+                  GROUP: ${{ matrix.group }}
+              run: node scripts/dependencies/validate-native-family.mjs --families "$FAMILIES" --platform macos --group "$GROUP"
 
     toolchain:
         needs: changes
