@@ -156,6 +156,8 @@ Real example: gdal-wasm uses this to gate CPU intrinsics; curl-wasm uses it to s
 
 `replaceList` patches the extracted source once, for every target. `sourceReplaceList` runs per target in a `configure` build, on the target's copy of the source.
 
+An upstream fix the pinned release lacks goes in `patches` instead, as the unified diff upstream published: `patches: [{ file: new URL('./patches/fix.patch', import.meta.url), advisories: ['CVE-…'] }]`. It is applied with `git apply` before `replaceList`, and a patch that does not apply stops the build ([`crossbind-build.md`](./crossbind-build.md)).
+
 #### 15. `beforeRun: (cmakeDir) => Array<{program, parameters}>`
 
 Run shell commands before cmake configure (e.g. `autoreconf -fi` for autotools projects).

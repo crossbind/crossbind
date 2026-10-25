@@ -143,7 +143,7 @@ flowchart TD
     Filter -->|"Change defaults too"| Spec{"Per-target tweak?"}
     Spec -->|"Yes, declarative"| L2["Layer 2: targetSpecs[].specs.{cmake,binary.emccFlags,env,data,ignoreLibName}"]
     Spec -->|"Project-wide"| L3a["Layer 3: crossbind.config.js functions.isEnabled / dependencies / paths.cmake"]
-    Spec -->|"Authoring a package?"| L4["Layer 4: crossbind.build.js hooks (getURL, getBuildParams, replaceList, env, copyToSource, copyToDist, beforeRun, getExtraLibs, setState)"]
+    Spec -->|"Authoring a package?"| L4["Layer 4: crossbind.build.js hooks (getURL, getBuildParams, patches, replaceList, env, copyToSource, copyToDist, beforeRun, getExtraLibs, setState)"]
     Spec -->|"Cross-package plugin"| L5["Layer 5: extensions[] (loadConfig.after, buildWasm.beforeBuild*, createLib.setFlag*)"]
     Spec -->|"Machine-wide"| L6["Layer 6: ~/.crossbind.json (RUNNER, XCODE_DEVELOPMENT_TEAM)"]
     L1 --> Done[Use this]
@@ -171,6 +171,8 @@ sequenceDiagram
     loop For each target in state.targets
         CLI->>Hook: getURL(version)
         Hook-->>Build: download source → state.config.paths.build
+        CLI->>Hook: patches?
+        Hook-->>Build: git apply upstream fixes
         CLI->>Hook: replaceList / sourceReplaceList(target, depPaths)?
         Hook-->>Build: regex-patch upstream sources
         CLI->>Hook: copyToSource?

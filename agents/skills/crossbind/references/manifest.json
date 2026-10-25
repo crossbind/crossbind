@@ -24,7 +24,7 @@
     {
       "source": "docs/api/build-state.md",
       "output": "api/build-state.md",
-      "sha256": "3b30bd9359d411885372c6dc5f94a65af293670adadebc15559d9bb58e062784"
+      "sha256": "8098e6a3442d4dcec1a9b26785a10c116405f67c835c9e3778658784ded86d1a"
     },
     {
       "source": "docs/api/conan.md",
@@ -39,7 +39,7 @@
     {
       "source": "docs/api/crossbind-build.md",
       "output": "api/crossbind-build.md",
-      "sha256": "a9940a5928ad1160e1e610d5105abffbab5afdaae0c2be08f8b215985da5cab2"
+      "sha256": "66f743f1f320268cf4ed5b60ef29002e8be14154b49ca11f61861b3c8ad59661"
     },
     {
       "source": "docs/api/crossbind-config.md",
@@ -69,7 +69,7 @@
     {
       "source": "docs/api/overrides.md",
       "output": "api/overrides.md",
-      "sha256": "4113264a580cd128535d1b60c882fcbbfb3007a28c66d3f65a6388f72694ef2f"
+      "sha256": "5968b9dc9718949dba9ba11c97fbdbc3ea5598269ad2d9ce7e496d7b0338629c"
     },
     {
       "source": "docs/api/performance.md",

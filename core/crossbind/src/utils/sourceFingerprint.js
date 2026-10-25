@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import { getContentHash } from './hash.js';
+import { recipePatchesFingerprint } from './recipePatches.js';
 
 // The prebuilt-lib cache in buildLib is existence-only, so a nativeVersion or recipe-sha256 bump
 // would otherwise be served from the previous build - shipping the old upstream under the new
@@ -12,7 +13,13 @@ export function getSourceFingerprint(config, target) {
     // Local-source packages pin neither; buildLib checks their native source inventory instead.
     if (!nativeVersion && !sha256) return null;
     const sourceReplacements = target ? config?.build?.sourceReplaceList?.(target, config.allDependencyPaths?.[target.path] ?? {}) : undefined;
-    return getContentHash(JSON.stringify({ nativeVersion, sha256, ...(sourceReplacements?.length ? { sourceReplacements } : {}) }));
+    const patches = recipePatchesFingerprint(config?.build?.patches);
+    return getContentHash(JSON.stringify({
+        nativeVersion,
+        sha256,
+        ...(sourceReplacements?.length ? { sourceReplacements } : {}),
+        ...(patches ? { patches } : {}),
+    }));
 }
 
 export function isSourceFingerprintStale(libdir, fingerprint) {

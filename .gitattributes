@@ -5,3 +5,6 @@ core/crossbind/src/assets/wasi-runtime/http/wit/deps/** linguist-generated
 tooling/docker/android-app/gradle/verification-metadata.xml linguist-generated
 # The windows image runs it with a POSIX shell, which a Windows checkout's CRLF would break.
 core/app-host/windows/jsign.sh text eol=lf
+# git apply matches a recipe patch byte for byte against the upstream source, which a Windows checkout's CRLF would
+# break, and its context lines keep the trailing spaces upstream's lines have.
+ports/*/base/patches/*.patch -text -whitespace
