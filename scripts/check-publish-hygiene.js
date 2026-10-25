@@ -141,7 +141,7 @@ for (const { pkgDir, manifest } of packages) {
             if (!provenance.source?.url || !provenance.source?.sha256) problems.push('source.url/sha256 missing');
             if (!provenance.environment?.dockerImage) problems.push('environment.dockerImage missing');
             if (!provenance.sbom) problems.push('sbom path missing');
-            else if (!files.includes(provenance.sbom)) problems.push(`sbom ${provenance.sbom} not in tarball (run crossbind licenses)`);
+            else if (!files.includes(provenance.sbom)) problems.push(`sbom ${provenance.sbom} not in tarball (run the package build, which writes it)`);
             if (manifest.license && !manifest.license.includes(' AND '))
                 problems.push(
                     'license field is a single license for an aggregate binary (expected the derived compound expression - run the package build)',

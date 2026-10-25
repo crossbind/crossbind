@@ -66,9 +66,10 @@ Machinery: `crossbind licenses --notices --sbom` (core: `actions/licenses.js` re
 the §D upstream layer, walks the resolved graph including the root package and
 pulls license texts from the family's extracted source tree, or in a package
 installed without one from the `LICENSE` it ships and the vendored copies' texts
-the build keeps in `dist/licenses/<name>/`) plus the thin
-wrapper `scripts/generate-third-party.js` (writes next to
-`dist/prebuilt/<host>/`).
+the build keeps in `dist/licenses/<name>/`). A `-standalone-wasi` build writes
+its `LICENSE`, and its `sbom.cdx.json` and `THIRD-PARTY-LICENSES.md` into
+`dist/prebuilt/<host>/`, from the rows of its own platform; a `-standalone-napi`
+build runs `crossbind licenses --platform <p> -e node --package`.
 
 **K4 — `-bin` packages carry provenance metadata.**
 A machine-readable `crossbind.provenance` block in package.json (namespaced under
@@ -232,8 +233,8 @@ from syft-class scanners: they inspect a finished artifact afterwards and
 guess; crossbind knows the link-time ground truth — the difference is accuracy,
 not existence.
 
-`crossbind licenses --platform <p>` (passed automatically by
-`scripts/generate-third-party.js` from the host dir prefix) additionally rows
+`crossbind licenses --platform <p>` (the platform a `-standalone-*` build
+targets) additionally rows
 up what that platform's artifact statically links beyond the package graph:
 recipe-declared vendored copies (§D `bundled`) and, for wasi, the toolchain
 runtime — wasi-libc (triple-licensed) and the LLVM runtimes
