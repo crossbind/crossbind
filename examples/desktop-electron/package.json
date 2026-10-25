@@ -20,7 +20,7 @@
         "@crossbind/example-lib-prebuilt-matrix": "workspace:^",
         "@playwright/test": "^1.63.0",
         "crossbind": "workspace:^",
-        "electron": "^44.5.1",
+        "electron": "^45.0.0",
         "electron-builder": "^26.15.3"
     },
     "keywords": [
