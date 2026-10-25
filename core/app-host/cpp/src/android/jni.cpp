@@ -192,6 +192,10 @@ void revealFile(std::string, std::function<void(Failure)>) {
     throw std::runtime_error("crossbind: an Android app has no file manager to show a file in");
 }
 
+void trashFile(std::string, std::function<void(Failure)>) {
+    throw std::runtime_error("crossbind: an Android app has no trash to move a file to");
+}
+
 void quitApp() { throw std::runtime_error("crossbind: an Android app does not quit itself: the system ends it"); }
 
 void setMenu(std::vector<MenuItem>, MenuClicked, std::function<void(Failure)>) {

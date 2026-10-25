@@ -57,12 +57,16 @@ export declare const shell: {
     openPath(path: string): Promise<void>;
     /** A file, selected, in the system's file manager: one in the app's folders, or one a dialog picked during this run. */
     revealInFolder(path: string): Promise<void>;
+    /** A file or folder moved to the system's trash, where its user can take it back: one in the app's folders, not one of them itself, or one a dialog picked during this run. Where the system has no trash, nothing moves and it rejects. */
+    trash(path: string): Promise<void>;
 };
 
 export declare const app: {
     paths(): Promise<AppPaths>;
     /** Ends the app as closing its window does. */
     quit(): Promise<void>;
+    /** Ends the app as quit() does, then opens it again, with no link. */
+    relaunch(): Promise<void>;
     /** The links of app.urlSchemes in crossbind.config.js that opened the app and have not reached the page yet, the one it was launched with among them. Once the page has asked, each later link comes as the event open-url while it listens, so listening first, then asking, misses none. */
     launchUrls(): Promise<string[]>;
 };
@@ -111,6 +115,10 @@ export declare const events: {
     on(name: 'open-url', listener: (open: OpenUrl) => void): () => void;
     /** Calls listener with each later launch of a desktop app that app.singleInstance keeps to one instance, which brings its window to the front as far as the system lets it, until the function it returns is called. */
     on(name: 'second-instance', listener: (launch: SecondInstance) => void): () => void;
+    /** Calls listener as the system of a desktop app goes to sleep, which it may do before the page has run, until the function it returns is called. */
+    on(name: 'suspend', listener: () => void): () => void;
+    /** Calls listener as the system of a desktop app wakes from sleep, until the function it returns is called. */
+    on(name: 'resume', listener: () => void): () => void;
     /** Calls listener with the value of each event of this name the app's native code emits from now on, until the function it returns is called. */
     on(name: string, listener: (value: unknown) => void): () => void;
 };

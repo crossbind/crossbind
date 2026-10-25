@@ -29,6 +29,9 @@ BEGIN
         BEGIN
             VALUE "FileDescription", CROSSBIND_APP_NAME
             VALUE "FileVersion", CROSSBIND_APP_VERSION
+#ifdef CROSSBIND_APP_COPYRIGHT
+            VALUE "LegalCopyright", CROSSBIND_APP_COPYRIGHT
+#endif
             VALUE "ProductName", CROSSBIND_APP_NAME
             VALUE "ProductVersion", CROSSBIND_APP_VERSION
         END

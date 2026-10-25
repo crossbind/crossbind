@@ -6,7 +6,7 @@ import { appleSigning } from './appleSigning.js';
 import { updaterSigning } from './appUpdate.js';
 import { inWindowsImage, jsignScript, windowsSigning } from './windowsSigning.js';
 import state from '../state/index.js';
-import { appDisplayName, appId, appUrlSchemes } from '../utils/appOptions.js';
+import { appCategory, appDisplayName, appId, appUrlSchemes } from '../utils/appOptions.js';
 import { readAppIcon, windowsIcon } from '../utils/appIcon.js';
 import { imageRoleFor } from '../utils/pullDockerImage.js';
 import { isUnderBase } from '../utils/replaceBasePathForDocker.js';
@@ -61,12 +61,13 @@ export function debianControl({ name, version, arch, author, description, label 
 
 // The desktop entry a Linux menu shows an app by. GTK names the app's window after the command that started it, and
 // GNOME on Wayland shows the icon of the entry whose file has that name.
-// A link of one of its schemes opens it with the link as its argument, %u.
-export function desktopEntry({ label, command, hasIcon, urlSchemes = [] }) {
+// A link of one of its schemes opens it with the link as its argument, %u. A menu shows it under its categories.
+export function desktopEntry({ label, command, hasIcon, urlSchemes = [], categories = null }) {
     const isLinked = urlSchemes.length > 0;
     return [
         '[Desktop Entry]', 'Type=Application', `Name=${label}`, `Exec=${command}${isLinked ? ' %u' : ''}`, ...(hasIcon ? [`Icon=${command}`] : []),
-        ...(isLinked ? [`MimeType=${urlSchemes.map((scheme) => `x-scheme-handler/${scheme};`).join('')}`] : []), 'Terminal=false', '',
+        ...(isLinked ? [`MimeType=${urlSchemes.map((scheme) => `x-scheme-handler/${scheme};`).join('')}`] : []),
+        ...(categories ? [`Categories=${categories};`] : []), 'Terminal=false', '',
     ].join('\n');
 }
 
@@ -106,7 +107,9 @@ function debianPackage(app, target) {
     const icon = `${app}/resources/icon.png`;
     const hasIcon = fs.existsSync(icon);
     if (hasIcon) fs.copyFileSync(icon, `${dir('usr/share/icons/hicolor/512x512/apps')}/${name}.png`);
-    fs.writeFileSync(`${dir('usr/share/applications')}/${name}.desktop`, desktopEntry({ label, command: name, hasIcon, urlSchemes: appUrlSchemes(state.config) }));
+    fs.writeFileSync(`${dir('usr/share/applications')}/${name}.desktop`, desktopEntry({
+        label, command: name, hasIcon, urlSchemes: appUrlSchemes(state.config), categories: appCategory(state.config)?.linux,
+    }));
     const { author, description } = state.config.package ?? {};
     fs.writeFileSync(`${dir('DEBIAN')}/control`, debianControl({ name, version: packageVersion(), arch: target.arch, author, description, label }));
     run(null, ['dpkg-deb', '--build', '--root-owner-group', root, `${app}.deb`], null, target);

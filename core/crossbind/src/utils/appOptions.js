@@ -11,6 +11,16 @@ const WINDOWS_VERSION = /^(\d+(?:\.\d+){0,3})(?:[-+][0-9A-Za-z.+-]*)?$/;
 // What app.openPath can let the page's shell.openPath open: the app's folders as app.paths() names them, and what a
 // dialog picked during this run.
 const OPEN_PATH_PLACES = ['data', 'cache', 'logs', 'picked'];
+// Apple's app categories, which macOS shows an app under, each with the main categories of the freedesktop menu
+// specification a Linux menu shows it under. An audio or a video app is in AudioVideo as well, as the specification asks.
+const GAMES = ['', 'action-', 'adventure-', 'arcade-', 'board-', 'card-', 'casino-', 'dice-', 'educational-', 'family-', 'kids-', 'music-', 'puzzle-',
+    'racing-', 'role-playing-', 'simulation-', 'sports-', 'strategy-', 'trivia-', 'word-'].map((kind) => `${kind}games`);
+const APP_CATEGORIES = {
+    business: 'Office', 'developer-tools': 'Development', education: 'Education', entertainment: 'AudioVideo', finance: 'Office',
+    'graphics-design': 'Graphics', 'healthcare-fitness': 'Utility', lifestyle: 'Utility', medical: 'Science', music: 'Audio;AudioVideo', news: 'Network',
+    photography: 'Graphics', productivity: 'Office', reference: 'Education', 'social-networking': 'Network', sports: 'Utility', travel: 'Utility',
+    utilities: 'Utility', video: 'Video;AudioVideo', weather: 'Utility', ...Object.fromEntries(GAMES.map((category) => [category, 'Game'])),
+};
 
 // An app's bundle id, which also names its folders on the desktop: app.id, else one made from the project's name.
 export function appId(config) {
@@ -36,6 +46,28 @@ export function appDisplayName(config) {
             : `crossbind: general.name ${JSON.stringify(name)}, which an app shows without app.name, is no name it can show, ${rule}. Set app.name in crossbind.config.js.`);
     }
     return name;
+}
+
+// The copyright line a macOS app's About panel and a Windows executable's details show: app.copyright, else none. The
+// host takes it as a C string and a Windows resource string, as it takes the name.
+export function appCopyright(config) {
+    const copyright = config.app.copyright;
+    if (copyright === undefined) return null;
+    if (typeof copyright !== 'string' || !copyright.trim() || /["\\\p{Cc}]/u.test(copyright)) {
+        throw new Error(`crossbind: app.copyright ${JSON.stringify(copyright)} is no copyright line, which is text without a quotation mark, a backslash or a control character, as '© 2026 Example Inc.' is.`);
+    }
+    return copyright;
+}
+
+// The category app.category names, under which macOS shows the app, and the ones a Linux menu shows it under; none
+// without app.category.
+export function appCategory(config) {
+    const category = config.app.category;
+    if (category === undefined) return null;
+    if (!Object.hasOwn(APP_CATEGORIES, category)) {
+        throw new Error(`crossbind: app.category ${JSON.stringify(category)} is none of Apple's app categories, which are ${Object.keys(APP_CATEGORIES).join(', ')}.`);
+    }
+    return { darwin: `public.app-category.${category}`, linux: APP_CATEGORIES[category] };
 }
 
 // The desktop window: the size of its page, the least it shrinks to and the most it grows to, whether it resizes and
@@ -249,6 +281,10 @@ export function appHeader(config, platform) {
         ...PERMISSIONS.map((name) => `#define CROSSBIND_APP_PERMISSION_${name.toUpperCase()} ${name in permissions ? 1 : 0}`),
     ];
     if (!['darwin', 'linux', 'win32'].includes(platform)) return [comment, openPath, ...page, ''].join('\n');
+    // The category goes to the Info.plist and the desktop entry, which the build writes later; any desktop refuses a
+    // wrong one here.
+    const copyright = appCopyright(config);
+    appCategory(config);
     const lines = [
         comment,
         openPath,
@@ -277,6 +313,7 @@ export function appHeader(config, platform) {
     if (platform === 'win32') {
         const version = windowsVersion(config);
         lines.push(`#define CROSSBIND_APP_VERSION "${version.text}"`, `#define CROSSBIND_APP_VERSION_NUMBERS ${version.numbers}`);
+        if (copyright) lines.push(`#define CROSSBIND_APP_COPYRIGHT "${copyright}"`);
         // The build writes the icon beside this header.
         if (config.app.icon !== undefined) lines.push('#define CROSSBIND_APP_ICON 1');
     }

@@ -1,4 +1,5 @@
 #include "crossbind_app.h"
+#include "host_core.h"
 #include "platform.h"
 
 #include <gtk/gtk.h>
@@ -25,6 +26,23 @@ std::string resourceDir() {
 
 // The app ends with its window; anything else ends the process as it ends any other.
 void onQuit(std::function<void()>) {}
+
+// logind says the system goes to sleep and wakes over the system bus, which a container may not have. It sleeps without
+// waiting for the page.
+void listenForSleep() {
+    GDBusConnection *bus = g_bus_get_sync(G_BUS_TYPE_SYSTEM, nullptr, nullptr);
+    if (!bus) return;
+    // GDBus ends the app by default when the bus goes away.
+    g_dbus_connection_set_exit_on_close(bus, FALSE);
+    g_dbus_connection_signal_subscribe(
+        bus, "org.freedesktop.login1", "org.freedesktop.login1.Manager", "PrepareForSleep", "/org/freedesktop/login1", nullptr, G_DBUS_SIGNAL_FLAGS_NONE,
+        +[](GDBusConnection *, const gchar *, const gchar *, const gchar *, const gchar *, GVariant *parameters, gpointer) {
+            gboolean isSleeping = FALSE;
+            g_variant_get(parameters, "(b)", &isSleeping);
+            crossbind::app::postEvent(isSleeping ? "suspend" : "resume", "null");
+        },
+        nullptr, nullptr);
+}
 
 // WebKitGTK shows the page's dialogs, file inputs and downloads itself.
 void showPageDialogs(void *) {}

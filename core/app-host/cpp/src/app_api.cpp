@@ -91,6 +91,10 @@ bool isWithin(const fs::path &path, const fs::path &folder) {
 // The page reaches places by name: the app's folders as app.paths() names them, and "picked", what its dialogs picked, a
 // picked folder with what is in it. The app's own code reaches any path.
 void checkScope(const std::string &path, const char *function, const std::vector<std::string> &places, const char *rule) {
+    // The system follows a link before a .., which leads it elsewhere than the path reads.
+    for (const auto &part : pathOf(path)) {
+        if (part == "." || part == "..") throw std::invalid_argument(std::string("crossbind: the page's ") + function + " takes a path without . or .., not " + path);
+    }
     const fs::path asked = normal(path);
     const Paths folders = appPaths();
     std::vector<fs::path> allowed;
@@ -106,6 +110,50 @@ void checkScope(const std::string &path, const char *function, const std::vector
     if (std::none_of(allowed.begin(), allowed.end(), [&](const fs::path &folder) { return isWithin(asked, folder); })) {
         throw std::invalid_argument(std::string("crossbind: the page's ") + function + " " + rule + ", not " + path +
                                     "; the app's native code reaches any path through <crossbind/app.h>");
+    }
+}
+
+// Where a path written as normal() writes it leads, the links of the folders above it followed; the system's trash
+// follows those and moves the last name itself, a link as well. None when the system cannot tell.
+std::optional<fs::path> followedParent(const fs::path &path) {
+    std::error_code error;
+    const std::u8string parent = fs::weakly_canonical(path.parent_path(), error).u8string();
+    if (error) return std::nullopt;
+    return normal(std::string(parent.begin(), parent.end())) / path.filename();
+}
+
+// A folder written as normal() writes it, its links followed.
+fs::path followed(const fs::path &folder) {
+    std::error_code error;
+    const std::u8string real = fs::weakly_canonical(folder, error).u8string();
+    return error ? folder : normal(std::string(real.begin(), real.end()));
+}
+
+// The page's trash takes what is in the app's folders, but none of the folders, and what its dialogs picked, both as
+// the path is written and where it leads.
+void checkTrash(const std::string &path) {
+    const char *rule = "trashes what is in the app's folders and what its dialogs picked";
+    checkScope(path, "shell.trash", {"data", "cache", "logs", "picked"}, rule);
+    const std::optional<fs::path> asked = followedParent(normal(path));
+    if (!asked) throw std::invalid_argument("crossbind: the page's shell.trash cannot tell where " + path + " leads");
+    const Paths folders = appPaths();
+    std::vector<fs::path> allowed;
+    for (const auto &folder : {folders.data, folders.cache, folders.logs}) {
+        allowed.push_back(followed(normal(folder)));
+        if (normal(path) == normal(folder) || *asked == allowed.back()) {
+            throw std::invalid_argument("crossbind: the page's shell.trash takes what is in the app's folders, not " + path + " itself");
+        }
+    }
+    {
+        // A picked folder's own link is followed as well, and a picked file's is not.
+        std::lock_guard<std::mutex> lock(grantedMutex);
+        for (const auto &picked : granted) {
+            allowed.push_back(followed(picked));
+            if (const auto parent = followedParent(picked)) allowed.push_back(*parent);
+        }
+    }
+    if (std::none_of(allowed.begin(), allowed.end(), [&](const fs::path &folder) { return isWithin(*asked, folder); })) {
+        throw std::invalid_argument(std::string("crossbind: the page's shell.trash ") + rule + ", not " + path + ", which a link leads out of them");
     }
 }
 
@@ -400,9 +448,16 @@ void revealInFolder(const std::string &path) {
     waitDone([&](std::function<void(Failure)> done) { revealFile(path, std::move(done)); });
 }
 
+void trash(const std::string &path) {
+    checkPath(path, "trash");
+    waitDone([&](std::function<void(Failure)> done) { trashFile(path, std::move(done)); });
+}
+
 Paths paths() { return appPaths(); }
 
 void quit() { quitApp(); }
+
+void relaunch() { relaunchApp(); }
 
 void emitEvent(const std::string &event, const std::string &json) { postEvent(event, json); }
 
@@ -492,12 +547,20 @@ void callApp(jsi::Runtime &rt, const std::string &name, const jsi::Value &option
             checkPath(path, "shell.revealInFolder");
             checkScope(path, "shell.revealInFolder", {"data", "cache", "logs", "picked"}, "reaches the app's folders and what its dialogs picked");
             revealFile(path, answered(reply));
+        } else if (name == "shell.trash") {
+            const std::string path = text(rt, options, "path");
+            checkPath(path, "shell.trash");
+            checkTrash(path);
+            trashFile(path, answered(reply));
         } else if (name == "app.paths") {
             const Paths folders = appPaths();
             reply(ok("{\"data\":" + json(folders.data) + ",\"cache\":" + json(folders.cache) + ",\"logs\":" + json(folders.logs) + "}"));
         } else if (name == "app.quit") {
             // A platform whose apps do not quit themselves throws, and the page hears that alone.
             quitApp();
+            reply(ok("null"));
+        } else if (name == "app.relaunch") {
+            relaunchApp();
             reply(ok("null"));
         } else if (name == "menu.set") {
             setMenu(menuItems(rt, property(rt, options, "menus")), menuClicked, answered(reply));

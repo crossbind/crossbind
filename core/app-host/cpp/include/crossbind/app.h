@@ -1,13 +1,14 @@
 #pragma once
 
 // What an app's host does for the app's own code: the dialogs that pick files or show a message, opening an address or
-// a file outside the app, the app's folders, quitting, events for the page and a desktop app's updates. The page
-// reaches the same through crossbind/app, where openPath() opens files where app.openPath lets it alone and
-// revealInFolder() shows the app's folders and what a dialog picked alone; here they reach any path. Call them from the
-// module's code, which an app builds with CROSSBIND_APP defined, once the module has started and never on the app's main
-// thread: the dialogs and the functions that open something wait for that thread, and throw when called before it can
-// answer, as from a static initializer, or once the app quits. An iOS app has messageDialog(), paths(), openExternal()
-// and emitEvent() alone, and an Android app messageDialog(), paths() and emitEvent(): the others throw there.
+// a file outside the app, moving a file to the trash, the app's folders, quitting and opening anew, events for the page
+// and a desktop app's updates. The page reaches the same through crossbind/app, where openPath() opens files where
+// app.openPath lets it alone, and revealInFolder() and trash() reach the app's folders and what a dialog picked alone;
+// here they reach any path. Call them from the module's code, which an app builds with CROSSBIND_APP defined, once the
+// module has started and never on the app's main thread: the dialogs and the functions that open something wait for
+// that thread, and throw when called before it can answer, as from a static initializer, or once the app quits. An iOS
+// app has messageDialog(), paths(), openExternal() and emitEvent() alone, and an Android app messageDialog(), paths()
+// and emitEvent(): the others throw there.
 #include <optional>
 #include <string>
 #include <vector>
@@ -69,13 +70,17 @@ void openExternal(const std::string &url);
 void openPath(const std::string &path);
 // A file, selected, in the system's file manager.
 void revealInFolder(const std::string &path);
+// A file or folder moved to the system's trash, which fails and moves nothing where the system has no trash.
+void trash(const std::string &path);
 Paths paths();
 // Ends the app as closing its window does.
 void quit();
+// Ends the app as quit() does, then opens it anew, with no arguments.
+void relaunch();
 // Sends the page an event, whose listeners through crossbind/app's events.on get the value json holds, a JSON text. It
 // waits for nothing, so any thread may call it. A page gets the events emitted once it listens: one emitted before,
-// as before the module starts or once the app quits, reaches none. The events menu, second-instance and open-url are the
-// host's own.
+// as before the module starts or once the app quits, reaches none. The events menu, second-instance, open-url, suspend
+// and resume are the host's own.
 void emitEvent(const std::string &event, const std::string &json = "null");
 // The version app.updater.url in crossbind.config.js offers when it is newer than this app's, or nothing. It waits for
 // the download, and throws while another check or install runs.

@@ -29,6 +29,9 @@ export default {
         openPath: ['data'],
         // e2e/run.mjs checks the app has it.
         icon: 'icon.png',
+        // e2e/run.mjs checks the app carries them where the system shows them.
+        copyright: '© 2026 crossbind e2e',
+        category: 'developer-tools',
         // e2e/run.mjs serves the updates src/main.js checks a desktop app for.
         updater: UPDATER,
         // e2e/run.mjs launches a desktop app again, which hands src/main.js the launch.

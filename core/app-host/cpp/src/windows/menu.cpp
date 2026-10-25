@@ -1,3 +1,4 @@
+#include "host_core.h"
 #include "platform.h"
 #include "windows/com.h"
 
@@ -152,6 +153,10 @@ LRESULT CALLBACK menuProcedure(HWND hwnd, UINT message, WPARAM wParam, LPARAM lP
             for (auto &set : std::exchange(waiting, {})) set();
         }
         return 0;
+    }
+    // Windows tells the app's windows the system goes to sleep and wakes; one with Modern Standby may tell neither.
+    if (message == WM_POWERBROADCAST && (wParam == PBT_APMSUSPEND || wParam == PBT_APMRESUMEAUTOMATIC)) {
+        crossbind::app::postEvent(wParam == PBT_APMSUSPEND ? "suspend" : "resume", "null");
     }
     // webview sizes the window anew for a new scale, and Windows leaves it as it was for a new screen size: a window that
     // filled its screen fills it again.

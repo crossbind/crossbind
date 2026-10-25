@@ -80,6 +80,10 @@ void revealFile(std::string, std::function<void(Failure)>) {
     throw std::runtime_error("crossbind: an iOS app has no file manager to show a file in");
 }
 
+void trashFile(std::string, std::function<void(Failure)>) {
+    throw std::runtime_error("crossbind: an iOS app has no trash to move a file to");
+}
+
 void quitApp() { throw std::runtime_error("crossbind: an iOS app does not quit itself: the system ends it"); }
 
 void setMenu(std::vector<MenuItem>, MenuClicked, std::function<void(Failure)>) {
@@ -225,6 +229,24 @@ void revealFile(std::string path, std::function<void(Failure)> done) {
       }
       [NSWorkspace.sharedWorkspace activateFileViewerSelectingURLs:@[ file ]];
       done(std::nullopt);
+    });
+}
+
+// A volume without a trash fails it rather than deleting the file.
+void trashFile(std::string path, std::function<void(Failure)> done) {
+    onMain(^{
+      NSURL *file = [NSURL fileURLWithPath:ns(path)];
+      if (!exists(file)) {
+          done("crossbind: there is no " + path);
+          return;
+      }
+      NSError *error = nil;
+      if ([NSFileManager.defaultManager trashItemAtURL:file resultingItemURL:nil error:&error]) {
+          done(std::nullopt);
+      } else {
+          NSString *why = error.localizedDescription;
+          done("crossbind: cannot move " + path + " to the trash: " + std::string(why ? why.UTF8String : "macOS gave no reason"));
+      }
     });
 }
 

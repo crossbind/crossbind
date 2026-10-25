@@ -231,6 +231,12 @@ export default {
       // The name the app shows: its window's title, its macOS menus, its Windows file description and the label
       // under its icon on iOS and Android. Text without a quotation mark, a backslash or a control character.
       // Default: general.name.
+    copyright: '© 2026 Example Inc.',
+      // The copyright line a macOS app's About panel and a Windows executable's details show, text as app.name is.
+      // Default: none.
+    category: 'developer-tools',
+      // One of Apple's app categories, as public.app-category.<category> names them: macOS shows the app under it,
+      // and a Linux menu under the freedesktop category closest to it (see app.md). Default: none.
     window: { width: 1024, height: 768, minWidth: 0, minHeight: 0, maxWidth: 0, maxHeight: 0, resizable: true, fullscreen: false, backgroundColor: '#1e1e1e' },
       // The desktop window, these being the defaults but for backgroundColor: the size of its page in pixels (up to
       // 16384), the least it shrinks to and the most it grows to (0: no limit), whether it resizes and whether it

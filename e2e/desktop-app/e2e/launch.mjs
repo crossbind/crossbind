@@ -1,3 +1,5 @@
+// The file e2e/run.mjs leaves in a desktop app's data folder, which src/main.js moves to the trash.
+export const TRASHED_FILE = 'crossbind-trash-me';
 // The link e2e/run.mjs launches a desktop app with, which src/main.js asks the app for.
 export const LAUNCH_URL = 'crossbind-e2e://launch?ü=1';
 // The link e2e/run.mjs opens an Android app with through adb once its page listens.
