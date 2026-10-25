@@ -309,7 +309,6 @@ To add a new `ports/<X>`: see `docs/playbooks/new-port.md` (uses `ports/zlib` as
 | `dependencies/render-dependency-pr.mjs` | Deterministic branch, commit, title and evidence-rich draft PR metadata |
 | `check-beta-status.js` | npm beta tag inventory + `--bump` |
 | `check-publish-hygiene.js` | K1/K4 gates: no executable leaks, provenance + derived license on -bin packages |
-| `generate-third-party.js` | K3 wrapper: `crossbind licenses --notices --sbom --platform` per dist host |
 | `pin-docker-image.js` | Re-pin the digest-locked build image after a docker publish |
 | `release/actionlint.mjs` | Download SHA-pinned actionlint and validate package-release workflows |
 | `release/set-workspace-version.mjs` | Prepare one common train version for explicit changed packages or an intentional `--all` release |
