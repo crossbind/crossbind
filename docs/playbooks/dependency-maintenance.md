@@ -54,6 +54,10 @@ The PR remains draft and is never auto-merged. Merging a dependency PR does not 
 Public package versions and the release channel are chosen later through the npm release train.
 `validate-dependency-pr.yml` repeats the affected native-family or complete toolchain gate on the
 actual PR head, including Dependabot's Debian digest PRs, so branch protection sees the result.
+It runs one job per target group (`wasm`, `wasi`, `linux`, `linuxmusl`, `android`, `win32` and
+`base` on Linux, `ios` and `darwin` on macOS), and each job builds every package the changed
+families need once: a release train that touches every family compiles each library once per group,
+not once for every family that depends on it.
 
 ## Security checks
 
