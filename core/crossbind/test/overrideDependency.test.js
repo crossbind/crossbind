@@ -149,6 +149,11 @@ describe('mergeBuildOverride', () => {
         expect(mergeBuildOverride(recipe(), { replaceList: { set: [extra] } }).replaceList).toEqual([extra]);
     });
 
+    test('keeps the recipe patches, so a dependency rebuilt from source is patched as its prebuilt is', () => {
+        const patched = { ...recipe(), patches: [{ file: 'fix.patch', advisories: ['CVE-1'] }] };
+        expect(mergeBuildOverride(patched, { getURL: (v) => `o/${v}`, patches: [] }).patches).toEqual(patched.patches);
+    });
+
     test('getBuildParams wrap passes the original recipe function as `base`', () => {
         const merged = mergeBuildOverride(recipe(), {
             getBuildParams: (base, target) => [...base(target), '-DEXTRA=ON'],
@@ -181,6 +186,11 @@ describe('getOverrideKey', () => {
     test('changes when the override source version changes', () => {
         expect(getOverrideKey(dep({ nativeVersion: '3.12.0' })))
             .not.toBe(getOverrideKey(dep({ nativeVersion: '3.11.0' })));
+    });
+
+    test('changes with the package version, whose recipe may build the same release differently, as with a new patch', () => {
+        const at = (version) => ({ ...dep({ rebuild: true }), package: { nativeVersion: '3.13.0', version } });
+        expect(getOverrideKey(at('2.0.0-beta.67'))).not.toBe(getOverrideKey(at('2.0.0-beta.66')));
     });
 
     test('changes when a function body in the override changes', () => {

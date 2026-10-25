@@ -90,9 +90,12 @@ export function getOverrideKey(dep) {
         override,
         (key, value) => (typeof value === 'function' ? `fn:${value.toString()}` : value),
     );
+    // The package version too: a new release of the package can build the same upstream release differently, as one
+    // that adds a patch does, and the rebuild cached under the old one would keep linking the old build.
     const parts = [
         dep.general?.name || '',
         override.nativeVersion || dep.package?.nativeVersion || '',
+        dep.package?.version || '',
         serial,
     ];
     return getContentHash(parts.join(' '));
