@@ -34,7 +34,7 @@ One-off rebuilds without a file: `CROSSBIND_REBUILD_DEPS=all` (or a comma-separa
 
 ## How it works
 
-- `buildDependencies` compiles the dependency from source into `<app>/.crossbind/deps/<name>/` and writes a `.crossbind-rebuild.json` marker keyed by a hash of (name, nativeVersion, serialized override).
+- `buildDependencies` compiles the dependency from source into `<app>/.crossbind/deps/<name>/` and writes a `.crossbind-rebuild.json` marker keyed by a hash of (name, nativeVersion, package version, serialized override). A new release of the dependency's package rebuilds it, since its recipe can build the same upstream release differently, as one that adds a patch does.
 - Every config load consumes a marker whose key still matches: the dependency's artifact paths switch to the rebuilt `dist`. This works across processes — e.g. Android rebuilds at the gradle config phase, the CMake configure phase picks the fresh paths up.
 - The Android plugin forwards a stamp of the consumed set as a CMake argument (`-DCROSSBIND_DEPS_STAMP`), so changing the override set automatically re-runs the CMake configure — no manual `.cxx` cleaning.
 - Rebuilds are incremental per target: adding an ABI/platform later only compiles the missing targets. Concurrent builds of the same dependency are serialized with a lock file (`<name>.lock`).
