@@ -75,10 +75,15 @@ void showMessageDialog(crossbind::app::MessageOptions options, std::function<voi
 void openUrl(std::string url, std::function<void(Failure)> done);
 void openFile(std::string path, std::function<void(Failure)> done);
 void revealFile(std::string path, std::function<void(Failure)> done);
+// Moves a file or folder to the system's trash. Where it has no trash, as on a network share, it moves nothing and fails.
+void trashFile(std::string path, std::function<void(Failure)> done);
 // The app's folders, made if missing; on any thread.
 crossbind::app::Paths appPaths();
 // Ends the app on the main thread, as closing its window does.
 void quitApp();
+// Opens the app anew, with no arguments: on macOS and Linux once this process has ended, on Windows as it ends, where an
+// app that app.singleInstance keeps to one instance waits for this one to end. Why not when it cannot.
+Failure openAnew();
 // The window the app's dialogs belong to.
 void setMainWindow(void *window);
 // Brings a desktop app's window to the front, restored if it was minimized; token is what lets a Linux window take the
@@ -128,6 +133,9 @@ using MenuClicked = std::function<void(std::string id, std::optional<bool> check
 // Sets the app's menus, on the main thread, which calls done; a click of an item with an id calls clicked there, with
 // whether a checked one now is.
 void setMenu(std::vector<MenuItem> menus, MenuClicked clicked, std::function<void(Failure)> done);
+// Tells the page when the system goes to sleep and when it wakes, as the events suspend and resume, on macOS and Linux;
+// a Windows app's window hears of it itself. On the main thread.
+void listenForSleep();
 
 #ifdef __APPLE__
 // macOS sends the standard shortcuts, ⌘C and ⌘Q among them, through the menu bar, so a window without the app, Edit,

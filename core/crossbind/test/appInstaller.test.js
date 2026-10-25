@@ -89,6 +89,10 @@ describe("a Linux app's Debian package", () => {
         expect(desktopEntry({ label: 'My Demo', command: 'demo', hasIcon: false, urlSchemes: ['myapp', 'other'] })).toBe(
             '[Desktop Entry]\nType=Application\nName=My Demo\nExec=demo %u\nMimeType=x-scheme-handler/myapp;x-scheme-handler/other;\nTerminal=false\n',
         );
+        // A menu shows it under the categories app.category gives.
+        expect(desktopEntry({ label: 'My Demo', command: 'demo', hasIcon: false, categories: 'Audio;AudioVideo' })).toBe(
+            '[Desktop Entry]\nType=Application\nName=My Demo\nExec=demo\nCategories=Audio;AudioVideo;\nTerminal=false\n',
+        );
     });
 
     // Windows writes a link's target with backslashes, and a drive for /Applications.

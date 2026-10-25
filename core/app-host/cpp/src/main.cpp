@@ -112,6 +112,9 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char **argv) {
         const std::string url = app::attach(core, webView, devUrl);
         // Quitting from the Dock or the system ends the app as closing its window does.
         onQuit([&core] { app::quit(core, 0); });
+#ifndef _WIN32
+        listenForSleep();
+#endif
 
         view.navigate(url);
         view.run();

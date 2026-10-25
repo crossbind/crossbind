@@ -50,6 +50,7 @@ set(SOURCES
     src/app.cpp
     src/app_api.cpp
     src/host_core.cpp
+    src/reopen.cpp
     src/updater.cpp
     ${MONOCYPHER_SOURCES}
     ${PLATFORM_SOURCES}

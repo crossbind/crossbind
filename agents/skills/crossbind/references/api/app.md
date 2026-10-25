@@ -81,7 +81,11 @@ the process already has keeps its value.
 `app.name` in `crossbind.config.js` is the name the app shows: its window's title, its macOS menus, its Windows file
 description and the label under its icon on iOS and Android; without it, the app shows `general.name`. A Windows app's
 executable also carries `package.json`'s version, which Windows takes as up to four numbers from 0 to 65535 and a
-prerelease part, as 1.2.3-beta.1. `app.window` sizes the desktop window, and colors what the app shows behind its page:
+prerelease part, as 1.2.3-beta.1. `app.copyright` is the line a macOS app's About panel and a Windows executable's
+details show. `app.category`, one of Apple's app categories (`developer-tools`, `games`, `puzzle-games` and the rest of
+`public.app-category.*`), is the one macOS shows the app under, and a Linux menu shows it under the freedesktop main
+category closest to it: Development for `developer-tools`, Game for any of the games, Utility for those with none of
+their own. `app.window` sizes the desktop window, and colors what the app shows behind its page:
 
 ```js
 app: {
@@ -310,8 +314,10 @@ std::string databasePath() { return crossbind::app::paths().data + "/notes.sqlit
 | `shell.openExternal(url)` | An http, https or mailto address in the default browser or mail app | ✓ | ✓ | |
 | `shell.openPath(path)` | A file in the app the system opens its kind with | ✓ | | |
 | `shell.revealInFolder(path)` | A file, selected, in the system's file manager, or on Linux without one its folder | ✓ | | |
+| `shell.trash(path)` | Moves a file or folder to the system's trash, and nothing where it has none | ✓ | | |
 | `app.paths()` | `{ data, cache, logs }`, the app's own folders, made if missing | ✓ | ✓ | ✓ |
 | `app.quit()` | Ends the app as closing its window does | ✓ | | |
+| `app.relaunch()` | Ends the app as `app.quit()` does, then opens it anew with no link | ✓ | | |
 | `app.launchUrls()` | The links of `app.urlSchemes` that opened the app and have not reached the page yet; the page alone | ✓ | ✓ | ✓ |
 | `menu.set(menus)` | Sets the app's menus, whose clicks are the event `menu`; the page alone | ✓ | | |
 | `events.on(name, listener)` | Calls `listener` with each event of this name the app's C++ emits; returns what stops it | ✓ | ✓ | ✓ |
@@ -321,7 +327,10 @@ std::string databasePath() { return crossbind::app::paths().data + "/notes.sqlit
 In the page each returns a promise once `initNative()` has run, as what it loads carries the calls to the host, but
 `events.on`, which returns at once what stops it and throws where it cannot listen; in C++ each waits for its answer,
 a dialog for its user's, but `emitEvent`. A function a platform has not got rejects, or throws, saying so, and in a web
-or Node.js build every one fails. A filter's extensions go with or without their dot, `"*"` for any
+or Node.js build every one fails. `app.relaunch()` opens the app anew as a fresh launch: on macOS and Linux once it has
+ended, on Windows as it ends, where an app `app.singleInstance` keeps to one instance hands the new one its place once
+it has. A Linux app opens with the command that started it. A development session refuses it, as its dev server opened
+the app. A filter's extensions go with or without their dot, `"*"` for any
 file, paths are absolute, and an option the page misspells fails before the host sees it. The dialogs are modal: to the
 app on macOS, to its window elsewhere; one shows at a time, and another rejects while it does.
 
@@ -348,7 +357,11 @@ The page's `shell.openPath` opens files where `app.openPath` in `crossbind.confi
 without it: in `data`, `cache` or `logs`, the app's folders, and in `picked`, what a dialog picked during this run, a
 picked folder with what is in it. Opening a program runs it, and a script that found its way into the page could
 name any path: list no folder the module writes a file to that the page names or fills. Its `shell.revealInFolder`
-shows the app's folders and what a dialog picked during this run. The app's C++ reaches any path. It calls these
+shows the app's folders and what a dialog picked during this run, and its `shell.trash` moves what is in the app's
+folders, but none of the folders, and what a dialog picked during this run, both where the path is written and where
+the links of the folders above it lead. A path the page names holds no `.` or `..`, as the system follows a link before
+one elsewhere than the path reads. Where the system has no trash, as on a network share, the file stays and the call
+rejects: Windows would delete it for good, and crossbind stops it. The app's C++ reaches any path. It calls these
 functions once the module has started and never on the app's main thread, which the dialogs and the functions that
 open something wait for: called before that, as from a static initializer, or once the app quits, they throw.
 
@@ -394,6 +407,15 @@ const stop = events.on('progress', ({ done }) => { progress.value = done; });
 calls of the page's functions. A page gets the events emitted once its first `events.on`, or the first function it
 passes, has reached the host: a call of the module it makes after either comes later. Text that is no JSON reaches no
 page, and the app's output says why. Both travel with the page's other messages, on every platform an app runs on.
+
+A desktop page hears of the system going to sleep as the event `suspend`, and of its waking as `resume`, both without a
+value: macOS tells the app through NSWorkspace, Linux through logind on the system bus, and Windows through its window.
+The system sleeps without waiting for the page, which may not run before it does; a Windows machine with Modern
+Standby may tell neither, and a Linux system without logind none.
+
+```js
+events.on('resume', () => reconnect());
+```
 
 ## Menus
 
@@ -623,7 +645,9 @@ delivers one ABI.
   does a frame of the page's own origin, which can read the top frame's globals: the page and such frames are the
   app's own code. `shell.openExternal` opens http, https and mailto addresses alone, the page's `shell.openPath` opens
   files where `app.openPath` lets it alone, nowhere by default, and its `shell.revealInFolder` shows the app's folders
-  and what its dialogs picked alone.
+  and what its dialogs picked alone. Its `shell.trash` moves what is in those, none of the app's folders itself, and
+  checks where the links of the folders above a path lead as well, as the system's trash follows them; nothing goes
+  where no trash keeps it. Each takes a path without `.` or `..`.
 - Only the debug host the dev server opens reads `CROSSBIND_APP_URL`; a release build always loads its own page.
 - An update installs only when the key of `app.updater.publicKey` signed it, over the app's id, its platform and
   architecture, its version and its file. A server can offer any version to `updater.check()`, and can serve an older
@@ -802,6 +826,11 @@ writes to logcat, under the tag `Crossbind`: the URL only on `localhost`, and th
   `shell.openExternal` refusing other addresses; `shell.openExternal` opening one and `shell.openPath` opening a file
   have not. On Linux and Windows the file dialogs, `shell.openExternal` opening an address, `shell.openPath`,
   `shell.revealInFolder` and `app.quit` are built, not measured yet.
+- The conformance runs of the desktop apps, in CI and installed, move a file of the data folder to the trash and find it
+  gone, see the page refused a path outside the app's folders, a folder of them and one with `..`, and relaunch the app,
+  which must leave with 0 and open anew. A file on a drive or mount without a trash has not been tried. On Windows the
+  runs tell the window the system sleeps and wakes, as Windows does, and the page hears both; the sleep of a macOS or
+  Linux system has not been measured.
 - Message dialogs have been measured from the page and from C++: on macOS, and on Linux under Xvfb with openbox, with
   their buttons, Return and Escape; in the iOS Simulator with their buttons; on an Android emulator with their buttons,
   Back and a tap outside. On Windows the conformance runs in CI check that the host refuses one no platform shows; the

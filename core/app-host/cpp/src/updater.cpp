@@ -322,18 +322,16 @@ bool swapped(const fs::path &a, const fs::path &b) {
 // the app, on the same disk, whose file system swaps the two.
 void replaceApp(const fs::path &update) {
 #ifdef __APPLE__
-    // A macOS app is its bundle, which ditto unpacks with its signature and Apple's ticket, and open opens anew.
+    // A macOS app is its bundle, which ditto unpacks with its signature and Apple's ticket.
     const fs::path app = pathOf(resourceDir()).parent_path().parent_path();
     const fs::path marker = fs::path("Contents") / "Info.plist";
     const std::vector<std::string> unpack = {"/usr/bin/ditto", "-x", "-k", update.string()};
-    const std::vector<std::string> reopen = {"/usr/bin/open", "-n", app.string()};
 #else
-    // A Linux app is a folder, which tar unpacks as this user's, opened anew by its executable.
+    // A Linux app is a folder, which tar unpacks as this user's.
     const fs::path executable = fs::read_symlink("/proc/self/exe");
     const fs::path app = executable.parent_path();
     const fs::path marker = executable.filename();
     const std::vector<std::string> unpack = {"/bin/tar", "--no-same-owner", "-xzf", update.string(), "-C"};
-    const std::vector<std::string> reopen = {executable.string()};
 #endif
     std::string staging = (app.parent_path() / ".crossbind-update-XXXXXX").string();
     if (!mkdtemp(staging.data())) cannotInstall(app.parent_path().string() + ": " + std::strerror(errno) + ". " + READ_ONLY_HINT);
@@ -352,13 +350,7 @@ void replaceApp(const fs::path &update) {
     }
     // The old app is where the update was unpacked.
     fs::remove_all(staging, ignored);
-    // A shell waits for this process to end, then opens the app.
-    std::vector<std::string> waitThenOpen = {"/bin/sh", "-c", "while kill -0 \"$1\" 2>/dev/null; do sleep 0.1; done; shift; exec \"$@\"", "sh",
-                                             std::to_string(getpid())};
-    waitThenOpen.insert(waitThenOpen.end(), reopen.begin(), reopen.end());
-    if (spawn(waitThenOpen) < 0) {
-        throw std::runtime_error("crossbind: the update is installed, but the app cannot open it anew: " + std::string(std::strerror(errno)) + ". Open the app again");
-    }
+    if (const Failure failure = openAnew()) throw std::runtime_error("crossbind: the update is installed, but " + *failure + ". Open the app again");
 }
 
 #endif

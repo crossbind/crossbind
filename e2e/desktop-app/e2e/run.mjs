@@ -1,14 +1,15 @@
 import { execFileSync, spawn, spawnSync } from 'node:child_process';
-import { existsSync, mkdtempSync, readFileSync, realpathSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
 import { createServer } from 'node:http';
-import { tmpdir } from 'node:os';
+import { homedir, tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import config from '../crossbind.config.mjs';
-import { LAUNCH_ARGS, LAUNCH_URL, PHONE_URL } from './launch.mjs';
+import { LAUNCH_ARGS, LAUNCH_URL, PHONE_URL, TRASHED_FILE } from './launch.mjs';
 import { UPDATE_PORT, signUpdate } from './updates.mjs';
 
 // Opens the app `pnpm build` made, whose page runs the conformance suite and logs its summary last, and closes it
-// once the summary is in. With CROSSBIND_APP_PLATFORM=ios the app is an Xcode project, built and opened in the Simulator,
+// once the summary is in, or a desktop app once it has opened anew, as its page asks then. With
+// CROSSBIND_APP_PLATFORM=ios the app is an Xcode project, built and opened in the Simulator,
 // and with android a Gradle project, built and opened on the attached device. With --installed a desktop app opens
 // from where its installer put it: from its disk image on macOS, and on Linux and Windows from where its Debian package
 // or setup program, which the runner ran first, installed it.
@@ -27,6 +28,9 @@ const DEVTOOLS_PORT = 9223;
 const SETTLE_MS = 1000;
 // How long the page's button waits for DevTools' click, which comes at once.
 const CLICK_TIMEOUT_MS = 5000;
+// How long an app takes to quit and open anew after app.relaunch(), and for its output to arrive after its exit.
+const RELAUNCH_TIMEOUT_MS = 30000;
+const EXIT_SETTLE_MS = 1000;
 // Tells the window the scale of its screen went up by half, as Windows does when its user changes it, reads where the
 // window is, and goes back. Anything that fails stops the script, and a window that takes 5 s to answer fails.
 const SCALE_SCRIPT = `
@@ -67,9 +71,30 @@ public static class Screen {
 '@
 [Screen]::Check((Get-Process -Id APP_PID).MainWindowHandle)
 `;
+// Tells the window the system goes to sleep, then that it woke, as Windows does with WM_POWERBROADCAST's PBT_APMSUSPEND
+// and PBT_APMRESUMEAUTOMATIC. A window that takes 5 s to answer fails.
+const SLEEP_SCRIPT = `
+$ErrorActionPreference = 'Stop'
+Add-Type -TypeDefinition @'
+using System;
+using System.Runtime.InteropServices;
+public static class Power {
+    [DllImport("user32.dll", SetLastError = true)] static extern IntPtr SendMessageTimeout(IntPtr window, uint message, IntPtr w, IntPtr l, uint flags, uint timeout, out IntPtr result);
+    public static void Sleep(IntPtr window) {
+        foreach (int kind in new[] { 4, 18 }) {
+            IntPtr result;
+            if (SendMessageTimeout(window, 0x0218, (IntPtr)kind, IntPtr.Zero, 2, 5000, out result) == IntPtr.Zero) throw new Exception("the window did not take WM_POWERBROADCAST: error " + Marshal.GetLastWin32Error());
+        }
+    }
+}
+'@
+[Power]::Sleep((Get-Process -Id APP_PID).MainWindowHandle)
+`;
 
 const root = resolve(import.meta.dirname, '..');
 const { name } = config.general;
+// The app's id: app.id's default, which the e2e app keeps.
+const id = `dev.crossbind.${name}`;
 const platform = process.env.CROSSBIND_APP_PLATFORM;
 const env = { CROSSBIND_APP_CONSOLE: '1' };
 if (process.platform === 'win32' && !platform) env.WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS = `--remote-debugging-port=${DEVTOOLS_PORT}`;
@@ -82,10 +107,11 @@ function missing(file) {
 // The start of a 256 × 256 PNG, the largest image of a Windows app's icon.
 const PNG_256 = Buffer.from('89504e470d0a1a0a0000000d494844520000010000000100', 'hex');
 
+const has = (file, part) => existsSync(file) && (!part || readFileSync(file).includes(part));
+
 // The build gave the app the icon app.icon names.
 function checkIcon() {
     const app = `${root}/dist/${name}`;
-    const has = (file, part) => existsSync(file) && (!part || readFileSync(file).includes(part));
     const checks = {
         ios: () => has(`${app}-ios/Assets.xcassets/AppIcon.appiconset/icon.png`),
         android: () => has(`${app}-android/app/src/main/res/mipmap-anydpi/ic_launcher.xml`),
@@ -109,6 +135,36 @@ function checkUrlSchemes() {
         console.error(`FAIL: the ${platform ?? process.platform} app declares no scheme of app.urlSchemes.`);
         process.exit(1);
     }
+}
+
+// The build gave the app app.copyright and app.category where the system shows them: a macOS app's Info.plist, a
+// Windows executable's details and, once its Debian package installed it, a Linux app's menu entry.
+function checkMetadata() {
+    const app = `${root}/dist/${name}`;
+    const checks = {
+        darwin: () => has(`${app}.app/Contents/Info.plist`, '<key>NSHumanReadableCopyright</key>')
+            && has(`${app}.app/Contents/Info.plist`, `<string>public.app-category.${config.app.category}</string>`),
+        linux: () => !process.argv.includes('--installed') || has(`/usr/share/applications/${name}.desktop`, 'Categories=Development;'),
+        win32: () => has(`${app}-win32-${process.arch}/${name}.exe`, Buffer.from(config.app.copyright, 'utf16le')),
+    };
+    const check = checks[platform ?? process.platform];
+    if (check && !check()) {
+        console.error(`FAIL: the ${platform ?? process.platform} app does not carry app.copyright and app.category where the system shows them.`);
+        process.exit(1);
+    }
+}
+
+// A file in a desktop app's data folder, where its host makes the folder, which src/main.js moves to the trash.
+function leaveFileToTrash() {
+    const folders = {
+        darwin: () => join(homedir(), 'Library', 'Application Support', id),
+        win32: () => join(process.env.APPDATA, id),
+        linux: () => join(process.env.XDG_DATA_HOME || join(homedir(), '.local', 'share'), id),
+    };
+    const folder = !platform && folders[process.platform]?.();
+    if (!folder) return;
+    mkdirSync(folder, { recursive: true });
+    writeFileSync(join(folder, TRASHED_FILE), 'src/main.js moves this file to the trash');
 }
 
 async function open() {
@@ -150,18 +206,34 @@ function installedApp() {
     return { executable: `/usr/bin/${name}`, close: () => {} };
 }
 
+// A desktop app's page asks app.relaunch() once its summary is out: the app leaves with 0, and the one it opens anew,
+// which is no child of the run's and which the run ends, asks for an update first.
+const relaunch = { isAsked: false, hasLeft: false, hasOpened: false };
+function awaitRelaunch() {
+    if (relaunch.isAsked) return;
+    relaunch.isAsked = true;
+    setTimeout(() => finish(relaunch.hasLeft ? 'the app did not open anew after app.relaunch()' : 'the app did not quit after app.relaunch()'), RELAUNCH_TIMEOUT_MS);
+}
+
+function checkRelaunch() {
+    if (relaunch.hasLeft && relaunch.hasOpened) finish();
+}
+
 // The update app.updater finds, which src/main.js installs twice: a newer version whose file its signature covers, which
 // unpacks to no app, then the same version with that file changed, as one tampered with would be.
 function serveUpdates() {
     const target = `${process.platform}-${process.arch}`;
     const file = Buffer.from('an update that unpacks to no app');
-    // The app's id: app.id's default, which the e2e app keeps.
-    const id = `dev.crossbind.${name}`;
     const manifest = JSON.stringify({ version: '99.0.0', file: 'update.bin', signature: signUpdate(id, target, '99.0.0', file) });
     let downloads = 0;
     const server = createServer((request, response) => {
         if (request.url === `/${target}.update.json`) {
             response.end(manifest);
+            // After the summary, it is the app app.relaunch() opened anew that asks.
+            if (relaunch.isAsked) {
+                relaunch.hasOpened = true;
+                checkRelaunch();
+            }
         } else if (request.url === '/update.bin') {
             downloads += 1;
             response.end(downloads === 1 ? file : Buffer.from('a tampered update'));
@@ -179,6 +251,8 @@ function serveUpdates() {
 let out = '';
 checkIcon();
 checkUrlSchemes();
+checkMetadata();
+leaveFileToTrash();
 // A phone's app does not update itself.
 if (!platform) await serveUpdates();
 const { child: app, close, executable } = await open();
@@ -277,12 +351,18 @@ async function readClipboard() {
     }
 }
 
-// The page asks for it on Windows once it listens: reads of the clipboard, then its element full screen, then a new
-// scale of the screen, after which the window must cover the screen still, then the page out of full screen.
+// The page asks for it on Windows once it listens: the system's sleep and wake, reads of the clipboard, then its element
+// full screen, then a new scale of the screen, after which the window must cover the screen still, then the page out of
+// full screen.
 let isScreenFilled = false;
 async function fillScreen() {
     if (isScreenFilled || !FILL_SCREEN.test(out)) return;
     isScreenFilled = true;
+    try {
+        execFileSync('powershell', ['-NoProfile', '-Command', SLEEP_SCRIPT.replace('APP_PID', String(app.pid))], { encoding: 'utf8', timeout: ASKED_TIMEOUT_MS });
+    } catch (error) {
+        finish(`the window could not be told the system sleeps and wakes: ${error.message}`);
+    }
     await readClipboard();
     try {
         await inPage('document.documentElement.requestFullscreen()');
@@ -299,6 +379,11 @@ async function fillScreen() {
 function finish(problem) {
     clearTimeout(timer);
     app.kill();
+    // Whatever the run found, the app app.relaunch() may have opened anew holds the app's one instance from the next.
+    if (relaunch.isAsked) {
+        if (process.platform === 'win32') spawnSync('taskkill', ['/F', '/IM', `${name}.exe`]);
+        else spawnSync('pkill', ['-f', `/${name}$`]);
+    }
     // The disk image an app ran from detaches once the app is stopped; a failure to does not change the suite's result.
     try {
         close();
@@ -320,19 +405,29 @@ function finish(problem) {
 }
 
 const timer = setTimeout(() => finish('the suite did not finish in time'), RUN_TIMEOUT_MS);
+// A desktop app that passed opens anew, which the run waits for; any other summary ends the run.
+const summarized = () => (!platform && CONFORMANCE.test(out) ? awaitRelaunch() : finish());
 app.stdout.on('data', (chunk) => {
     out += chunk;
     launchAgain();
     openLink();
     fillScreen();
-    if (FINISHED.test(out)) finish();
+    if (FINISHED.test(out)) summarized();
 });
 app.stderr.on('data', (chunk) => {
     out += chunk;
     launchAgain();
     openLink();
     fillScreen();
-    if (FINISHED.test(out)) finish();
+    if (FINISHED.test(out)) summarized();
 });
-// An app that leaves at once, having said nothing, handed its launch to another instance of it.
-app.on('exit', (code) => finish(code === 0 && !out ? 'the app handed its launch to an instance of it that runs already: close that one' : `the app exited with ${code} before the suite finished`));
+// An app that leaves at once, having said nothing, handed its launch to another instance of it. What it wrote last may
+// come after its exit.
+app.on('exit', (code) => setTimeout(() => {
+    if (!relaunch.isAsked) {
+        finish(code === 0 && !out ? 'the app handed its launch to an instance of it that runs already: close that one' : `the app exited with ${code} before the suite finished`);
+    }
+    if (code !== 0) finish(`the app exited with ${code} after app.relaunch(), not 0`);
+    relaunch.hasLeft = true;
+    checkRelaunch();
+}, EXIT_SETTLE_MS));

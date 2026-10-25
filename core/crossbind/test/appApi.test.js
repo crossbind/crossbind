@@ -47,11 +47,15 @@ describe("crossbind/app, an app's own functions", () => {
         expect(host).toHaveBeenLastCalledWith('shell.openPath', { path: '/home/me/b.csv' });
         await shell.revealInFolder('/home/me/a.txt');
         expect(host).toHaveBeenLastCalledWith('shell.revealInFolder', { path: '/home/me/a.txt' });
+        await shell.trash('/home/me/old.txt');
+        expect(host).toHaveBeenLastCalledWith('shell.trash', { path: '/home/me/old.txt' });
         const folders = { data: '/d', cache: '/c', logs: '/l' };
         host.mockResolvedValueOnce(folders);
         await expect(app.paths()).resolves.toEqual(folders);
         await app.quit();
         expect(host).toHaveBeenLastCalledWith('app.quit', {});
+        await app.relaunch();
+        expect(host).toHaveBeenLastCalledWith('app.relaunch', {});
         host.mockResolvedValueOnce(['myapp://open?id=1']);
         await expect(app.launchUrls()).resolves.toEqual(['myapp://open?id=1']);
         expect(host).toHaveBeenLastCalledWith('app.launchUrls', {});
@@ -88,6 +92,7 @@ describe("crossbind/app, an app's own functions", () => {
         await expect(dialog.open({ filters: [{ name: 'Text' }] })).rejects.toThrow('list of { name, extensions }');
         await expect(dialog.open('a.txt')).rejects.toThrow('takes an object');
         await expect(shell.openPath('')).rejects.toThrow('takes a path');
+        await expect(shell.trash(42)).rejects.toThrow('shell.trash takes a path');
         await expect(shell.openExternal()).rejects.toThrow('takes an address');
         await expect(shell.openExternal(42)).rejects.toThrow('takes an address');
         expect(host).not.toHaveBeenCalled();

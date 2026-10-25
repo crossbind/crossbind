@@ -145,6 +145,9 @@ export const shell = {
     openPath: async (path) => call('shell.openPath', checkedPath('shell.openPath', path)),
     // A file, selected, in the system's file manager: one in the app's folders, or one a dialog picked during this run.
     revealInFolder: async (path) => call('shell.revealInFolder', checkedPath('shell.revealInFolder', path)),
+    // A file or folder moved to the system's trash, where its user can take it back: one in the app's folders, not one of
+    // them itself, or one a dialog picked during this run. Where the system has no trash, nothing moves.
+    trash: async (path) => call('shell.trash', checkedPath('shell.trash', path)),
 };
 
 export const app = {
@@ -152,6 +155,8 @@ export const app = {
     paths: async () => call('app.paths', {}),
     // Ends the app as closing its window does.
     quit: async () => call('app.quit', {}),
+    // Ends the app as quit() does, then opens it again, with no link.
+    relaunch: async () => call('app.relaunch', {}),
     // The links of app.urlSchemes that opened the app and have not reached the page yet, the one it was launched with
     // among them; later ones come as the event open-url. Listening first, then asking, misses none.
     launchUrls: async () => call('app.launchUrls', {}),

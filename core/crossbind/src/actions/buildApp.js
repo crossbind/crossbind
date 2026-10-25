@@ -30,7 +30,7 @@ import findFiles from '../utils/findFiles.js';
 import { getContentHash, getFilesFingerprint } from '../utils/hash.js';
 import { xmlPlist } from '../utils/plist.js';
 import {
-    appBackgroundColor, appDisplayName, appHeader, appId, appPermissions, appUrlSchemes, usageDescriptions,
+    appBackgroundColor, appCategory, appCopyright, appDisplayName, appHeader, appId, appPermissions, appUrlSchemes, usageDescriptions,
 } from '../utils/appOptions.js';
 import { androidIcons, iosIcon, linuxIcon, macIcon, readAppIcon, windowsIcon } from '../utils/appIcon.js';
 import writeIfChanged from '../utils/writeIfChanged.js';
@@ -195,9 +195,12 @@ const infoPlist = (name, version, hasIcon, urlSchemes) => xmlPlist({
     CFBundleShortVersionString: version,
     ...(urlSchemes.length > 0 ? { CFBundleURLTypes: [{ CFBundleURLName: appId(state.config), CFBundleURLSchemes: urlSchemes }] } : {}),
     CFBundleVersion: version,
+    ...(appCategory(state.config) ? { LSApplicationCategoryType: appCategory(state.config).darwin } : {}),
     LSMinimumSystemVersion: DARWIN_DEPLOYMENT_TARGET,
     NSPrincipalClass: 'NSApplication',
     NSHighResolutionCapable: true,
+    // The app menu's About item shows it.
+    ...(appCopyright(state.config) ? { NSHumanReadableCopyright: appCopyright(state.config) } : {}),
     ...usageDescriptions(state.config, 'darwin'),
 });
 

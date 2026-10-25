@@ -166,6 +166,25 @@ void openFile(std::string path, std::function<void(Failure)> done) {
     });
 }
 
+// A mount without a trash, as a network share may be, fails it rather than deleting the file.
+void trashFile(std::string path, std::function<void(Failure)> done) {
+    onMainThread([path = std::move(path), done = std::move(done)] {
+        if (!g_file_test(path.c_str(), G_FILE_TEST_EXISTS)) {
+            done("crossbind: there is no " + path);
+            return;
+        }
+        GFile *file = g_file_new_for_path(path.c_str());
+        GError *error = nullptr;
+        if (g_file_trash(file, nullptr, &error)) {
+            done(std::nullopt);
+        } else {
+            done("crossbind: cannot move " + path + " to the trash: " + error->message);
+            g_error_free(error);
+        }
+        g_object_unref(file);
+    });
+}
+
 // The file managers of GNOME, KDE and others show a file selected when asked over D-Bus; without one, its folder opens.
 // The answer comes back to the loop, which a file manager that has to start first would hold up otherwise.
 void revealFile(std::string path, std::function<void(Failure)> done) {

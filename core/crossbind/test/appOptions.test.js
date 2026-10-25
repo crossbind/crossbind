@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'vitest';
 import {
-    appBackgroundColor, appDisplayName, appHeader, appId, appPermissions, appUpdater, appUrlSchemes, appWindow, usageDescriptions,
+    appBackgroundColor, appCategory, appCopyright, appDisplayName, appHeader, appId, appPermissions, appUpdater, appUrlSchemes, appWindow,
+    usageDescriptions,
 } from '../src/utils/appOptions.js';
 
 const config = (app = {}, version = '1.2.3') => ({ general: { name: 'demo-app' }, app, package: { version } });
@@ -41,6 +42,34 @@ describe("an app's name", () => {
 
     test("names general.name and the fix when the project's name is the one it cannot show", () => {
         expect(() => appDisplayName({ general: { name: '@scope' }, app: {} })).toThrow('Set app.name');
+    });
+});
+
+describe("an app's copyright and category", () => {
+    test('are none without app.copyright and app.category', () => {
+        expect(appCopyright(config())).toBeNull();
+        expect(appCategory(config())).toBeNull();
+    });
+
+    test('take a copyright line its C and Windows resource strings can hold', () => {
+        expect(appCopyright(config({ copyright: '© 2026 Örnek A.Ş.' }))).toBe('© 2026 Örnek A.Ş.');
+        for (const copyright of ['Say "hi"', 'a\\b', 'two\nlines', '', '  ', 42]) {
+            expect(() => appCopyright(config({ copyright }))).toThrow('app.copyright');
+        }
+    });
+
+    test("take one of Apple's categories, which macOS shows the app under, and the main one a Linux menu shows it under", () => {
+        expect(appCategory(config({ category: 'developer-tools' }))).toEqual({ darwin: 'public.app-category.developer-tools', linux: 'Development' });
+        expect(appCategory(config({ category: 'puzzle-games' }))).toEqual({ darwin: 'public.app-category.puzzle-games', linux: 'Game' });
+        // An audio or a video app is in AudioVideo as well, as the freedesktop menu specification asks.
+        expect(appCategory(config({ category: 'music' })).linux).toBe('Audio;AudioVideo');
+    });
+
+    test("refuses a category Apple has none of, naming the ones it has", () => {
+        for (const category of ['Development', 'public.app-category.games', '', 7]) {
+            expect(() => appCategory(config({ category }))).toThrow(`app.category ${JSON.stringify(category)} is none of Apple's app categories`);
+        }
+        expect(() => appCategory(config({ category: 'games ' }))).toThrow('developer-tools');
     });
 });
 
@@ -315,6 +344,18 @@ describe("the header a desktop app's host builds with", () => {
         expect(appHeader(config({ icon: 'icon.png' }), 'win32')).toContain('#define CROSSBIND_APP_ICON 1\n');
         expect(appHeader(config(), 'win32')).not.toContain('CROSSBIND_APP_ICON');
         expect(appHeader(config({ icon: 'icon.png' }), 'darwin')).not.toContain('CROSSBIND_APP_ICON');
+    });
+
+    test('adds the copyright a Windows executable carries, with app.copyright', () => {
+        expect(appHeader(config({ copyright: '© 2026 Example' }), 'win32')).toContain('#define CROSSBIND_APP_COPYRIGHT "© 2026 Example"\n');
+        expect(appHeader(config(), 'win32')).not.toContain('COPYRIGHT');
+        expect(appHeader(config({ copyright: '© 2026 Example' }), 'darwin')).not.toContain('COPYRIGHT');
+    });
+
+    test('refuses an app.copyright or app.category no desktop shows, on every desktop', () => {
+        expect(() => appHeader(config({ copyright: 'a\\b' }), 'linux')).toThrow('app.copyright');
+        expect(() => appHeader(config({ category: 'tools' }), 'darwin')).toThrow('app.category');
+        expect(() => appHeader(config({ category: 'tools' }), 'win32')).toThrow('app.category');
     });
 
     test('refuses a version Windows cannot carry on Windows alone', () => {

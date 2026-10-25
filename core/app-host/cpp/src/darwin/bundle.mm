@@ -54,6 +54,22 @@ void showError(const std::string &message) {
     [alert runModal];
 }
 
+void listenForSleep() {
+    NSNotificationCenter *center = NSWorkspace.sharedWorkspace.notificationCenter;
+    [center addObserverForName:NSWorkspaceWillSleepNotification
+                        object:nil
+                         queue:nil
+                    usingBlock:^(NSNotification *) {
+                      crossbind::app::postEvent("suspend", "null");
+                    }];
+    [center addObserverForName:NSWorkspaceDidWakeNotification
+                        object:nil
+                         queue:nil
+                    usingBlock:^(NSNotification *) {
+                      crossbind::app::postEvent("resume", "null");
+                    }];
+}
+
 void onQuit(std::function<void()> quit) {
     [NSNotificationCenter.defaultCenter addObserverForName:NSApplicationWillTerminateNotification
                                                     object:nil

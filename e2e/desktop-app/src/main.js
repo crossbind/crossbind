@@ -14,7 +14,7 @@ import {
     allocBuffer, cstring, readCString, readNumberAt, readPointerAt, writeNumberAt, writePointerAt,
 } from '@crossbind/conformance/native/confextras.h';
 import { Counter } from './native/counter.rs';
-import { LAUNCH_ARGS, LAUNCH_URL, PHONE_URL } from '../e2e/launch.mjs';
+import { LAUNCH_ARGS, LAUNCH_URL, PHONE_URL, TRASHED_FILE } from '../e2e/launch.mjs';
 // Direct crate imports: bridged from the crates' own sources, no surface file.
 import { Uuid } from 'cargo:uuid';
 import { Version, VersionReq } from 'cargo:semver';
@@ -197,6 +197,9 @@ initNative().then(async (m) => {
         const isAndroid = Boolean(globalThis.__crossbind_port);
         // The desktop window opens the page at the size app.window gives, whatever frame it adds around it.
         const isDesktop = !isAndroid && navigator.maxTouchPoints === 0;
+        // A built desktop app asks for an update first, which tells e2e/run.mjs that the app app.relaunch() opened anew
+        // has opened.
+        if (isDesktop && !import.meta.env.DEV) await updater.check();
         if (isDesktop && (innerWidth !== 800 || innerHeight !== 600)) {
             throw new Error(`the page is ${innerWidth} × ${innerHeight}, not the 800 × 600 app.window gives`);
         }
@@ -246,6 +249,22 @@ initNative().then(async (m) => {
         if (listed === 'opened' || listed.includes('app.openPath')) throw new Error(`a missing file where app.openPath lets the page: ${listed}`);
         const inside = await shell.revealInFolder(`${folders.data}${separator}crossbind-missing`).then(() => 'shown', (error) => error.message);
         if (inside === 'shown' || inside.includes("reaches the app's folders")) throw new Error(`a missing file in the app's folder: ${inside}`);
+        // The page moves what is in the app's folders to the trash, but none of the folders.
+        const outsideTrash = await shell.trash(folders.data.replace(/[^\\/]+$/, 'crossbind-outside')).then(() => 'trashed', (error) => error.message);
+        if (!outsideTrash.includes('shell.trash')) throw new Error(`a path outside the app's folders was not refused the trash: ${outsideTrash}`);
+        const folderTrash = await shell.trash(folders.data).then(() => 'trashed', (error) => error.message);
+        if (!folderTrash.includes('itself')) throw new Error(`the app's data folder was not refused the trash: ${folderTrash}`);
+        // A link before a .. would lead the system out of the folder the path reads as.
+        const dotted = await shell.trash(`${folders.data}${separator}crossbind-missing${separator}..${separator}${TRASHED_FILE}`).then(() => 'trashed', (error) => error.message);
+        if (!dotted.includes('without . or ..')) throw new Error(`a path with .. in it was not refused the trash: ${dotted}`);
+        // e2e/run.mjs leaves a file in a desktop app's data folder, which goes to the trash and is gone from there.
+        if (isDesktop && !import.meta.env.DEV) {
+            const file = `${folders.data}${separator}${TRASHED_FILE}`;
+            const trashed = await shell.trash(file).then(() => 'trashed', (error) => error.message);
+            if (trashed !== 'trashed') throw new Error(`a file in the app's data folder did not go to the trash: ${trashed}`);
+            const again = await shell.trash(file).then(() => 'trashed', (error) => error.message);
+            if (!again.includes('there is no')) throw new Error(`a file that went to the trash is still there: ${again}`);
+        }
         await checkMenus(isDesktop);
         // A development session opens the app with no link.
         await checkLaunchUrls(isDesktop && !import.meta.env.DEV ? [LAUNCH_URL] : []);
@@ -253,6 +272,8 @@ initNative().then(async (m) => {
         if (!isDesktop) {
             const quit = await host.quit().then(() => 'quit', (error) => error.message);
             if (!quit.includes('does not quit itself')) throw new Error(`app.quit() did not refuse on a phone: ${quit}`);
+            const relaunched = await host.relaunch().then(() => 'relaunched', (error) => error.message);
+            if (!relaunched.includes('does not quit itself')) throw new Error(`app.relaunch() did not refuse on a phone: ${relaunched}`);
             const checked = await updater.check().then(() => 'checked', (error) => error.message);
             if (!checked.includes('does not update itself')) throw new Error(`updater.check() did not refuse on a phone: ${checked}`);
             // iOS asks its user before a link from outside opens the app, which no run can answer.
@@ -260,7 +281,8 @@ initNative().then(async (m) => {
         } else if (!import.meta.env.DEV) {
             await checkUpdates();
             await checkSecondInstance();
-            if (navigator.userAgent.includes('Windows')) await checkScaledFullScreen();
+            // e2e/run.mjs tells a Windows app's window the system goes to sleep and wakes, as Windows does, first.
+            if (navigator.userAgent.includes('Windows')) await Promise.all([nextEvent('suspend'), nextEvent('resume'), checkScaledFullScreen()]);
         }
         if (!isAndroid || !import.meta.env.DEV) {
             const { status } = await fetch(isAndroid ? '/b/result?id=1' : 'crossbind://app/b/result?id=1');
@@ -315,10 +337,11 @@ initNative().then(async (m) => {
             rustKit: m,
             caps: { worker: true, jsiNative: true },
         });
-        // The summary comes last: the run ends the app once it reads it.
+        // The summary comes last: the run ends the app once it reads it, or a built desktop app's once it has opened anew.
         if (result.pass !== result.run) console.log(result.lines.join('\n'));
         console.log(result.summary);
         document.getElementById('conf').textContent = result.summary;
+        if (isDesktop && !import.meta.env.DEV && result.pass === result.run) await host.relaunch();
     } catch (error) {
         console.error(`CONFORMANCE ERR: ${error?.message ?? error}`);
     }

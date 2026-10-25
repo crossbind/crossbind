@@ -13,6 +13,9 @@ Core &start(const char *devUrl);
 // Ends the app without running destructors: bindings keep JSI values in globals, which must not be destroyed after the
 // runtime they belong to.
 [[noreturn]] void quit(Core &core, int status);
+// Quits the app as quitApp() does, and opens it anew once it has, as app.relaunch() asks. A phone throws as quitApp()
+// does, and a desktop development session as well: its dev server opened the app, and would lose it.
+void relaunchApp();
 // Ends the app for this reason, which its output gets, and its user as well when nobody reads that output.
 [[noreturn]] void fail(Core &core, const char *devUrl, const std::string &reason);
 // Readies a webview for the page, and returns the URL it opens first. An Android app's activity does this in Java.
