@@ -7,6 +7,7 @@ import state from '../state/index.js';
 import buildLib from './buildLib.js';
 import buildBinTools from './buildBinTools.js';
 import { copyBundledLicenses } from '../utils/bundledLicenses.js';
+import { applyRecipePatches, refreshPatchedSource, writePatchedSourceStamp } from '../utils/recipePatches.js';
 
 export default async function buildExternal(targetParams, options = {}) {
     const version = state.config.package.nativeVersion;
@@ -14,9 +15,15 @@ export default async function buildExternal(targetParams, options = {}) {
         throw new Error(`crossbind: "${state.config.general?.name}" has a crossbind.build recipe but no "nativeVersion" in package.json — cannot build from source.`);
     }
 
-    const { sha256, replaceList, copyToSource, copyToDist } = state.config.build;
+    const { sha256, replaceList, copyToSource, copyToDist, patches } = state.config.build;
+    refreshPatchedSource(state.config.paths.build, patches);
     const isNewlyCreated = await downloadAndExtractFile(sourcesOf(state.config.build, version), state.config.paths.build, sha256);
     const sourcePath = `${state.config.paths.build}/source`;
+    // Upstream fixes are diffs against the source as released, so they go in before crossbind's own edits.
+    if (isNewlyCreated) {
+        applyRecipePatches(sourcePath, patches);
+        writePatchedSourceStamp(state.config.paths.build, patches);
+    }
     if (isNewlyCreated && replaceList) {
         replaceList.forEach(({ regex, replacement, paths }) => {
             replace({

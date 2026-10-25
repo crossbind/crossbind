@@ -118,6 +118,25 @@ export default {
     //   sourceReplaceList: (target, depPaths) => [...]
 
   // ─────────────────────────────────────────────────────────────
+  // Upstream fixes (unified diffs)
+  // ─────────────────────────────────────────────────────────────
+  patches: [
+    {
+      file: new URL('./patches/df84af25-gzwrite-failed-write.patch', import.meta.url),
+      advisories: ['CVE-2026-76844', 'CVE-2026-85091'],
+    },
+  ],
+    // Diffs against the source as released, with paths relative to the
+    // extracted source root, applied once with `git apply` before
+    // replaceList, so git must be on the PATH. A patch that does not apply
+    // stops the build. Adding, editing or dropping a patch extracts the
+    // source again and rebuilds every target. `advisories` names what the
+    // patch fixes, so the dependency bot stops reporting those advisories
+    // against the pinned release. Drop a patch once a release includes it.
+    //
+    // Real users: zlib, jpegturbo and expat (upstream security fixes).
+
+  // ─────────────────────────────────────────────────────────────
   // Asset copying — into source dir before build, into dist after
   // ─────────────────────────────────────────────────────────────
   copyToSource: {
@@ -216,6 +235,7 @@ export default {
 | Download an upstream tarball | `getURL` |
 | Inject CMake / configure flags | `getBuildParams` |
 | Patch source files between fetch and build | `replaceList`, or `sourceReplaceList` per target in a `configure` build |
+| Backport an upstream fix the pinned release lacks | `patches` |
 
 Start with the simplest hook that works. Most packages need only `getURL` + `buildType` + `getBuildParams`.
 

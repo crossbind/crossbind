@@ -19,6 +19,7 @@ const STRICT = process.argv.includes('--check');
 const families = listFamilies(ROOT);
 
 const missing = [];
+const unsourcedPatches = [];
 let checked = 0;
 
 for (const family of families) {
@@ -30,14 +31,26 @@ for (const family of families) {
     if (!recipe.sha256 || !/^[0-9a-f]{64}$/i.test(String(recipe.sha256))) {
         missing.push(family);
     }
+    // A patch is an upstream fix, so it names where upstream published it, ahead of the diff.
+    for (const { file } of recipe.patches ?? []) {
+        const patch = file instanceof URL ? fileURLToPath(file) : file;
+        const header = fs.existsSync(patch) ? fs.readFileSync(patch, 'utf8').split(/^diff --git /m)[0] : '';
+        if (!/^Upstream: https:\/\//m.test(header)) unsourcedPatches.push(path.relative(ROOT, patch));
+    }
 }
 
-if (missing.length === 0) {
+if (missing.length === 0 && unsourcedPatches.length === 0) {
     console.log(`crossbind: source hashes OK — every source-building package pins a sha256 (${checked} packages).`);
     process.exit(0);
 }
 
-console.error('crossbind: packages that download their source but do NOT pin a sha256:\n');
-missing.forEach((f) => console.error(`  - @crossbind/port-${f}`));
-console.error(`\nRun: node scripts/pin-source-hash.js ${missing.join(' ')}`);
+if (missing.length > 0) {
+    console.error('crossbind: packages that download their source but do NOT pin a sha256:\n');
+    missing.forEach((f) => console.error(`  - @crossbind/port-${f}`));
+    console.error(`\nRun: node scripts/pin-source-hash.js ${missing.join(' ')}`);
+}
+if (unsourcedPatches.length > 0) {
+    console.error('crossbind: recipe patches that are missing or name no upstream (an `Upstream: https://...` line before the diff):\n');
+    unsourcedPatches.forEach((patch) => console.error(`  - ${patch}`));
+}
 process.exit(STRICT ? 1 : 0);

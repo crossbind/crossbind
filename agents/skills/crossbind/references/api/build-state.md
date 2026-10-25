@@ -77,6 +77,7 @@ state.config = {
         getBuildParams?:      (target, depPaths, ext, buildPath) => string[],
         getExtraLibs?:        (target)        => string[],
         sourceReplaceList?:   (target, depPaths) => Array<{regex, replacement, paths}>,
+        patches?:             Array<{file: URL | string, advisories?: string[]}>, // upstream fixes, applied with git apply; file is a URL or an absolute path
         env?:                 ((target) => string[]) | string[],
         copyToSource?:        Record<string, string[]>,
         copyToDist?:          Record<string, string[]>,
