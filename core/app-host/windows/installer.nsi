@@ -54,14 +54,47 @@ SetCompressor /SOLID zlib
     ${EndIf}
   !macroend
 
-  ; A scheme another app took over since stays its own.
-  !macro UnregisterScheme SCHEME
-    ReadRegStr $0 HKCU "Software\Classes\${SCHEME}\shell\open\command" ""
-    ${If} $0 == '"$INSTDIR\${EXE}" "%1"'
-      DeleteRegKey HKCU "Software\Classes\${SCHEME}"
+  !macro ListedScheme SCHEME
+    ${If} $0 == "${SCHEME}"
+      StrCpy $2 "listed"
     ${EndIf}
   !macroend
 !endif
+
+; The URL schemes a release of the app registered are those whose link opens its executable. An update removes the ones
+; this release no longer lists and the uninstaller all of them; a scheme another app took over since stays its own.
+!macro UnregisterSchemes KEEP_LISTED
+  StrCpy $3 0
+  ${Do}
+    ClearErrors
+    EnumRegKey $0 HKCU "Software\Classes" $3
+    ${If} ${Errors}
+    ${OrIf} $0 == ""
+      ${Break}
+    ${EndIf}
+    StrCpy $2 ""
+    !if ${KEEP_LISTED} == 1
+      !ifdef SCHEMES
+        !insertmacro CROSSBIND_URL_SCHEMES ListedScheme
+      !endif
+    !endif
+    ClearErrors
+    ReadRegStr $1 HKCU "Software\Classes\$0" "URL Protocol"
+    ${IfNot} ${Errors}
+    ${AndIf} $2 != "listed"
+      ReadRegStr $1 HKCU "Software\Classes\$0\shell\open\command" ""
+      ${If} $1 == '"$INSTDIR\${EXE}" "%1"'
+        ClearErrors
+        DeleteRegKey HKCU "Software\Classes\$0"
+        ; The next class takes the index of the one removed.
+        ${IfNot} ${Errors}
+          ${Continue}
+        ${EndIf}
+      ${EndIf}
+    ${EndIf}
+    IntOp $3 $3 + 1
+  ${Loop}
+!macroend
 
 Name "${NAME}"
 OutFile "${OUTFILE}"
@@ -141,6 +174,7 @@ Section
   WriteRegStr HKCU "${UNINSTALL}" "QuietUninstallString" '"$INSTDIR\uninstall.exe" /S'
   WriteRegDWORD HKCU "${UNINSTALL}" "NoModify" 1
   WriteRegDWORD HKCU "${UNINSTALL}" "NoRepair" 1
+  !insertmacro UnregisterSchemes 1
 !ifdef SCHEMES
   !insertmacro CROSSBIND_URL_SCHEMES RegisterScheme
 !endif
@@ -184,9 +218,7 @@ Section Uninstall
     RMDir /r "$INSTDIR\resources"
   ${EndIf}
   Delete "$SMPROGRAMS\${NAME}.lnk"
-!ifdef SCHEMES
-  !insertmacro CROSSBIND_URL_SCHEMES UnregisterScheme
-!endif
+  !insertmacro UnregisterSchemes 0
   DeleteRegKey HKCU "${UNINSTALL}"
   Delete "$INSTDIR\uninstall.exe"
   RMDir "$INSTDIR"

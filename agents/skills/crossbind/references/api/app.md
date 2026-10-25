@@ -502,9 +502,10 @@ The app as built tells each system its schemes:
   `xcrun simctl openurl`.
 - Android: its activity's intent filter. The activity is its task's one, so a link that comes while the app runs reaches
   its page.
-- Windows: the setup program registers each scheme for its user, under `HKEY_CURRENT_USER\Software\Classes\<scheme>`,
-  and the uninstaller removes one the app still owns. A name Windows gives a file type or another class that is no
-  scheme keeps what it opens, as the setup program says. The zip registers none.
+- Windows: the setup program registers each scheme for its user, under `HKEY_CURRENT_USER\Software\Classes\<scheme>`.
+  An update removes a scheme of the app that the new release no longer lists, and the uninstaller every one the app
+  still owns. A name Windows gives a file type or another class that is no scheme keeps what it opens, as the setup
+  program says. The zip registers none.
 - Linux: the Debian package's desktop entry, with `x-scheme-handler/<scheme>` among its MIME types, which the system's
   MIME tools take in as the package installs. The tar.gz registers none.
 

@@ -320,10 +320,19 @@ jobs:
                   }
             - name: Run the conformance suite in the installed app
               run: node e2e/desktop-app/e2e/run.mjs --installed
-            - name: Update the installed app as its updater does, which waits for the app to quit and opens it again
+            - name: Update the installed app as its updater does, which waits for the app to quit, opens it again and removes the URL schemes it no longer lists
               run: |
                   $app = "$env:LOCALAPPDATA\Programs\crossbind-e2e-desktop-app"
                   $exe = "$app\crossbind-e2e-desktop-app.exe"
+                  # A scheme a release before registered and this one no longer lists, and another app's.
+                  $dropped = 'HKCU:\Software\Classes\crossbind-e2e-dropped'
+                  $foreign = 'HKCU:\Software\Classes\crossbind-e2e-foreign'
+                  foreach ($scheme in $dropped, $foreign) {
+                      New-Item -Path "$scheme\shell\open\command" -Force | Out-Null
+                      Set-ItemProperty -LiteralPath $scheme -Name 'URL Protocol' -Value ''
+                  }
+                  Set-Item -LiteralPath "$dropped\shell\open\command" -Value "`"$exe`" `"%1`""
+                  Set-Item -LiteralPath "$foreign\shell\open\command" -Value '"C:\elsewhere\app.exe" "%1"'
                   $running = Start-Process -PassThru -FilePath $exe
                   $setup = Start-Process -PassThru -FilePath e2e\desktop-app\dist\crossbind-e2e-desktop-app-win32-${{ matrix.arch }}-setup.exe -ArgumentList "/S /UPDATE /D=$app"
                   # PowerShell reads a process's exit code through a handle it took while the process ran.
@@ -333,6 +342,8 @@ jobs:
                   Stop-Process -Id $running.Id -Force
                   if (-not $setup.WaitForExit(60000)) { throw 'the update did not finish once the app had quit' }
                   if ($setup.ExitCode -ne 0) { throw "the update exited with $($setup.ExitCode)" }
+                  if (Test-Path $dropped) { throw "the update left $dropped, which the app no longer lists" }
+                  foreach ($path in $foreign, 'HKCU:\Software\Classes\crossbind-e2e') { if (-not (Test-Path $path)) { throw "the update removed $path" } }
                   $opened = $null
                   for ($i = 0; $i -lt 30 -and -not $opened; $i++) {
                       Start-Sleep -Seconds 1
@@ -342,12 +353,18 @@ jobs:
                   # The uninstaller stops while the app runs.
                   $opened | Stop-Process -Force
                   $opened | Wait-Process -Timeout 30
-            - name: Uninstall the app, which takes its shortcut, its files, its entry in Settings and its URL scheme
+            - name: Uninstall the app, which takes its shortcut, its files, its entry in Settings and its URL schemes
               run: |
                   $app = "$env:LOCALAPPDATA\Programs\crossbind-e2e-desktop-app"
                   $shortcut = "$env:APPDATA\Microsoft\Windows\Start Menu\Programs\crossbind-e2e-desktop-app.lnk"
                   $entry = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\dev.crossbind.crossbind-e2e-desktop-app'
                   $scheme = 'HKCU:\Software\Classes\crossbind-e2e'
+                  # A scheme of the app it no longer lists, as an uninstaller before this one left behind.
+                  $dropped = 'HKCU:\Software\Classes\crossbind-e2e-dropped'
+                  $foreign = 'HKCU:\Software\Classes\crossbind-e2e-foreign'
+                  New-Item -Path "$dropped\shell\open\command" -Force | Out-Null
+                  Set-ItemProperty -LiteralPath $dropped -Name 'URL Protocol' -Value ''
+                  Set-Item -LiteralPath "$dropped\shell\open\command" -Value "`"$app\crossbind-e2e-desktop-app.exe`" `"%1`""
                   foreach ($path in $shortcut, $entry, $scheme) { if (-not (Test-Path $path)) { throw "the setup program left out $path" } }
                   # A link of app.urlSchemes opens the app with the link as its argument, as the suite launches it.
                   $command = (Get-Item -LiteralPath "$scheme\shell\open\command").GetValue('')
@@ -356,7 +373,9 @@ jobs:
                   if ($uninstall.ExitCode -ne 0) { throw "the uninstaller exited with $($uninstall.ExitCode)" }
                   # It finishes from a copy of itself, whose last step removes the folder.
                   for ($i = 0; $i -lt 30 -and (Test-Path $app); $i++) { Start-Sleep -Seconds 1 }
-                  foreach ($path in $app, $shortcut, $entry, $scheme) { if (Test-Path $path) { throw "the uninstaller left $path" } }
+                  foreach ($path in $app, $shortcut, $entry, $scheme, $dropped) { if (Test-Path $path) { throw "the uninstaller left $path" } }
+                  if (-not (Test-Path $foreign)) { throw "the uninstaller removed $foreign, another app's" }
+                  Remove-Item -LiteralPath $foreign -Recurse
     app-android:
         # The Android app's host and Rust build in crossbind's android-app image, its bridges in the web image, and Gradle
         # packages the app in the android-app image too; it runs on an emulator.
