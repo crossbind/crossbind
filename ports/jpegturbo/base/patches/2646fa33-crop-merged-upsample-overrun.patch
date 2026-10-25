@@ -1,0 +1,18 @@
+Dec: Fix buf overrun w/4:2:0 merged/!SIMD/crop w<2
+Upstream: https://github.com/libjpeg-turbo/libjpeg-turbo/commit/2646fa33f8d67373c27b558b47e77b2d8d517e31 (without ChangeLog.md)
+Without the SIMD extensions, which the wasm build lacks, partially decompressing a crafted 4:2:0 JPEG with merged upsampling, cropped to a width of 1 or 2 samples, overran a buffer.
+
+diff --git a/src/jdapistd.c b/src/jdapistd.c
+index 8f5f85a8d..04a1cc41c 100644
+--- a/src/jdapistd.c
++++ b/src/jdapistd.c
+@@ -282,7 +282,8 @@ _jpeg_crop_scanline(j_decompress_ptr cinfo, JDIMENSION *xoffset,
+                                        compptr->_DCT_scaled_size),
+                                 (long)(cinfo->max_h_samp_factor *
+                                        cinfo->_min_DCT_scaled_size));
+-    if (compptr->downsampled_width < 2 && orig_downsampled_width >= 2)
++    if (compptr->downsampled_width < 2 && orig_downsampled_width >= 2 &&
++        !master->using_merged_upsample)
+       reinit_upsampler = TRUE;
+ 
+     /* Set the first and last iMCU columns that we must decompress.  These
