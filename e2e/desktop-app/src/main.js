@@ -122,7 +122,7 @@ async function checkUpdates() {
 
 const LAUNCH_TIMEOUT_MS = 30000;
 // Longer than e2e/run.mjs's steps may take together, so a failure of its own says what went wrong.
-const FULL_SCREEN_TIMEOUT_MS = 120000;
+const FULL_SCREEN_TIMEOUT_MS = 150000;
 
 // e2e/run.mjs reads the clipboard, shows the page's element full screen, as only a user's click could, gives the
 // window's screen a new scale, checks the window still covers it, and leaves full screen: the page waits for both changes.

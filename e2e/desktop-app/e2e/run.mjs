@@ -25,6 +25,8 @@ const ASKED_TIMEOUT_MS = 20000;
 const DEVTOOLS_PORT = 9223;
 // How long a window takes to fill the screen once the page asks.
 const SETTLE_MS = 1000;
+// How long the page's button waits for DevTools' click, which comes at once.
+const CLICK_TIMEOUT_MS = 5000;
 // Tells the window the scale of its screen went up by half, as Windows does when its user changes it, reads where the
 // window is, and goes back. Anything that fails stops the script, and a window that takes 5 s to answer fails.
 const SCALE_SCRIPT = `
@@ -221,41 +223,54 @@ function openLink() {
     if (opened.status !== 0) finish(`the app cannot be opened with a link: ${opened.error?.message ?? `${opened.stdout}${opened.stderr}`.trim()}`);
 }
 
-// Runs an expression in the page through WebView2's DevTools, as a user's click would unless userGesture is false, and
-// gives its value. The page has the focus a click gives it.
-async function inPage(expression, userGesture = true) {
+// Sends commands to the page through WebView2's DevTools, in order, and gives the last one's result. The page has the
+// focus a user's click gives it.
+async function devTools(...commands) {
     const signal = AbortSignal.timeout(ASKED_TIMEOUT_MS);
     const targets = await (await fetch(`http://127.0.0.1:${DEVTOOLS_PORT}/json`, { signal })).json();
     const page = targets.find((target) => target.type === 'page');
     if (!page) throw new Error('WebView2 lists no page');
+    const sent = [{ method: 'Emulation.setFocusEmulationEnabled', params: { enabled: true } }, ...commands];
     const socket = new WebSocket(page.webSocketDebuggerUrl);
     try {
         const { error, result } = await new Promise((done, fail) => {
             signal.addEventListener('abort', () => fail(new Error('DevTools did not answer in time')));
             socket.onerror = () => fail(new Error('DevTools refused the connection'));
-            socket.onopen = () => {
-                socket.send(JSON.stringify({ id: 1, method: 'Emulation.setFocusEmulationEnabled', params: { enabled: true } }));
-                socket.send(JSON.stringify({ id: 2, method: 'Runtime.evaluate', params: { expression, userGesture, awaitPromise: true, returnByValue: true } }));
-            };
+            socket.onopen = () => sent.forEach((command, index) => socket.send(JSON.stringify({ id: index + 1, ...command })));
             socket.onmessage = (event) => {
                 const message = JSON.parse(event.data);
-                if (message.id === 2) done(message);
+                if (message.id === sent.length) done(message);
             };
         });
         if (error || result?.exceptionDetails) throw new Error(JSON.stringify(error ?? result.exceptionDetails));
-        return result.result.value;
+        return result;
     } finally {
         socket.close();
     }
 }
 
-// The page reads the clipboard on its user's click alone.
+// Runs an expression in the page, after the commands given before it, as a user's click would unless userGesture is
+// false, and gives its value.
+async function inPage(expression, userGesture = true, ...before) {
+    const { result } = await devTools(...before, { method: 'Runtime.evaluate', params: { expression, userGesture, awaitPromise: true, returnByValue: true } });
+    return result.value;
+}
+
+// The page reads the clipboard on its user's click alone: a button at its corner reads it when DevTools clicks it with
+// the mouse, as the page's user would, and the run waits for the read, which may come after the click's answer.
 async function readClipboard() {
     const read = "navigator.clipboard.readText().then(() => 'read', (error) => error.message)";
+    const mouse = (type) => ({ method: 'Input.dispatchMouseEvent', params: { type, x: 20, y: 20, button: 'left', clickCount: 1 } });
     try {
         const unclicked = await inPage(read, false);
         if (unclicked === 'read') finish("the page read the clipboard without its user's click");
-        const clicked = await inPage(read);
+        await inPage(`void (globalThis.crossbindRead = new Promise((resolve) => {
+            const button = document.body.appendChild(document.createElement('button'));
+            button.style.cssText = 'position: fixed; left: 0; top: 0; width: 40px; height: 40px; z-index: 2147483647';
+            button.onclick = () => { resolve(${read}); button.remove(); };
+            setTimeout(() => resolve('the click missed its button'), ${CLICK_TIMEOUT_MS});
+        }))`, false);
+        const clicked = await inPage('globalThis.crossbindRead', false, mouse('mousePressed'), mouse('mouseReleased'));
         if (clicked !== 'read') finish(`the page could not read the clipboard on its user's click: ${clicked}`);
     } catch (error) {
         finish(`the clipboard could not be checked: ${error.message}`);
