@@ -139,7 +139,7 @@
     {
       "source": "docs/playbooks/integration/react-native-expo.md",
       "output": "integration/react-native-expo.md",
-      "sha256": "671428968a59d92c3b56548a63987a40e748b54ffdd8d734e49b5f68f252789f"
+      "sha256": "71b64fa6deb878c194bec651e4b64950f71f9fc234d2009bbba98be5b181b8da"
     },
     {
       "source": "docs/playbooks/integration/rollup.md",

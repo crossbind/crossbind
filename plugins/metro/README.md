@@ -57,6 +57,11 @@ module.exports = mergeConfig(getDefaultConfig(__dirname), config);
 ```
 
 **Expo**
+
+`expo/metro-config` exports no `mergeConfig`, so an Expo app installs `metro-config` as a dev dependency too:
+```sh
+npm install metro-config --save-dev
+```
 ```diff
 // Learn more https://docs.expo.io/guides/customizing-metro
 const { getDefaultConfig } = require('expo/metro-config');
