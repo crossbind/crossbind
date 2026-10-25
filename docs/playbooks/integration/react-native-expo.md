@@ -46,6 +46,7 @@ The web build needs neither: Metro compiles the C++ to WebAssembly in crossbind'
 ```bash
 pnpm add @crossbind/plugin-react-native@beta @crossbind/plugin-react-native-ios-helper@beta
 pnpm add -D @crossbind/plugin-metro@beta     # bundling; the RN plugin brings the native toolchain, Metro builds the web wasm
+pnpm add -D metro-config     # mergeConfig for metro.config.js, which expo/metro-config does not export
 pnpm add @crossbind/port-<name>@beta     # optional
 
 # Add "@crossbind/plugin-react-native" to expo.plugins in app.json before prebuilding

@@ -138,7 +138,7 @@ npm run ios`,
         },
         {
             type: 'p',
-            text: 'During prebuild it drops the x86_64 simulator architecture from every pod and the app target, raises any pod below iOS 15.1 to 15.1, and adopts the UIScene lifecycle iOS 27 requires, unless the app already declares a scene manifest. Wrap Expo\'s own Metro config rather than `@react-native/metro-config`:',
+            text: 'During prebuild it drops the x86_64 simulator architecture from every pod and the app target, raises any pod below iOS 15.1 to 15.1, and adopts the UIScene lifecycle iOS 27 requires, unless the app already declares a scene manifest. Wrap Expo\'s own Metro config rather than `@react-native/metro-config`; `expo/metro-config` exports no `mergeConfig`, so install `metro-config` as a dev dependency too (`npm install --save-dev metro-config`):',
         },
         {
             type: 'code',
