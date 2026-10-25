@@ -2,6 +2,14 @@ export default {
     sha256: '6f30092cef9fb839779646608f4ee14ae3cbac989c47fa05e841b0841f09878e', // libjpeg-turbo-3.2.0.tar.gz
     getURL: (version) => `https://github.com/libjpeg-turbo/libjpeg-turbo/releases/download/${version}/libjpeg-turbo-${version}.tar.gz`,
     buildType: 'cmake',
+    patches: [
+        { file: new URL('./patches/fb7c5d2e-load-image-overflow.patch', import.meta.url) },
+        {
+            file: new URL('./patches/f1465639-png-indexed-color-fpe.patch', import.meta.url),
+            advisories: ['CVE-2026-75466'],
+        },
+        { file: new URL('./patches/2646fa33-crop-merged-upsample-overrun.patch', import.meta.url) },
+    ],
     // The typed forms of variadic calls crossbind adds (see the header), shipped beside the upstream headers.
     copyToDist: {
         'node_modules/@crossbind/port-jpegturbo/include/jpeglib_crossbind.h': 'include/jpeglib_crossbind.h',

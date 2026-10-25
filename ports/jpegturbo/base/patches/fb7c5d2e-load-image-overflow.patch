@@ -1,0 +1,21 @@
+tj3LoadImage*(): Fix overflow/overrun w/ huge img
+Upstream: https://github.com/libjpeg-turbo/libjpeg-turbo/commit/fb7c5d2e06b666ef6b077a1c6394142c8e8e7351 (without ChangeLog.md)
+In a 32-bit build, such as wasm32, tj3LoadImage12() and tj3LoadImage16() sized the buffer for an image of more than 2^31 components with an overflow and overran it.
+
+diff --git a/src/turbojpeg-mp.c b/src/turbojpeg-mp.c
+index d8353d1fe..f3ac09540 100644
+--- a/src/turbojpeg-mp.c
++++ b/src/turbojpeg-mp.c
+@@ -399,9 +399,11 @@ _JSAMPLE *GET_NAME(_tj3LoadImageFromFileHandle, BITS_IN_JSAMPLE)
+   *pixelFormat = cs2pf[cinfo->in_color_space];
+ 
+   pitch = PAD((*width) * tjPixelSize[*pixelFormat], align);
++
+   if (
+ #if ULLONG_MAX > SIZE_MAX
+-      (unsigned long long)pitch * (unsigned long long)(*height) >
++      (unsigned long long)pitch * (unsigned long long)(*height) *
++      (unsigned long long)sizeof(_JSAMPLE) >
+       (unsigned long long)((size_t)-1) ||
+ #endif
+       (dstBuf = (_JSAMPLE *)malloc(pitch * (*height) *
