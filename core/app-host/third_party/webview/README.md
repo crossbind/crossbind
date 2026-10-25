@@ -19,6 +19,15 @@ Only `core/include` is kept.
   are open.
 - `detail/backends/win32_edge.hh` makes WebView2's environment with the options `win32_environment_options_hook`
   returns, when one is set, instead of none: WebView2 takes custom URL schemes from those options alone.
+- `detail/backends/win32_edge.hh` keeps WebView2's profile in the folder `win32_user_data_folder_hook` returns, when one
+  is set, instead of one under the executable's name in the roaming application data, which another app's executable
+  of the same name shares and its cache roams with.
+- `detail/backends/win32_edge.hh` leaves WebView2's permission requests to the app host: upstream let every read of
+  the clipboard through, without its user's gesture as well, and WebView2 kept that answer in the profile.
+- `detail/backends/cocoa_webkit.hh` sets no `DOMPasteAllowed`, and `detail/backends/gtk_webkitgtk.hh` no
+  `javascript-can-access-clipboard`, which let a page's script paste from the clipboard with
+  `document.execCommand('paste')`: a page reads it on its user's gesture, once WebKit's Paste menu or the app host lets
+  it. WebKitGTK's setting let script cut and copy as well, which now take a gesture there.
 - `detail/backends/cocoa_webkit.hh` sizes the window's content in `set_size`, not its frame, as the other backends do:
   the app's window opens with the page size crossbind.config.js gives.
 - `detail/backends/win32_edge.hh` takes the minimum and maximum sizes as the content's, in logical pixels, as the size

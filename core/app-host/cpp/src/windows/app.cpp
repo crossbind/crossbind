@@ -4,25 +4,9 @@
 
 using namespace crossbind::windows;
 
-namespace {
-
-std::string executablePath() {
-    std::wstring path(MAX_PATH, L'\0');
-    for (;;) {
-        const DWORD length = GetModuleFileNameW(nullptr, path.data(), static_cast<DWORD>(path.size()));
-        if (length < path.size()) {
-            path.resize(length);
-            return utf8(path.c_str());
-        }
-        path.resize(path.size() * 2);
-    }
-}
-
-}  // namespace
-
 // A Windows app is a directory: the executable, and the app's files in resources\ beside it.
 std::string resourceDir() {
-    const std::string executable = executablePath();
+    const std::string executable = utf8(executablePath().c_str());
     return executable.substr(0, executable.find_last_of("\\/")) + "\\resources";
 }
 
@@ -32,8 +16,30 @@ void onQuit(std::function<void()>) {}
 // WebView2 shows the page's dialogs, file inputs and downloads itself.
 void showPageDialogs(void *) {}
 
-// The page gets the devices app.permissions lists, and no other, without a question of WebView2's; WebView2 decides the
-// rest.
+namespace {
+
+// webview let an earlier crossbind's page read the clipboard without its user's gesture as well, and WebView2 keeps that
+// answer in the profile, which it would give again without asking.
+void forgetClipboardAnswer(ICoreWebView2 *webView) {
+    ICoreWebView2_13 *withProfile = nullptr;
+    if (FAILED(webView->QueryInterface(IID_ICoreWebView2_13, reinterpret_cast<void **>(&withProfile)))) return;
+    ICoreWebView2Profile *profile = nullptr;
+    ICoreWebView2Profile4 *permissions = nullptr;
+    if (SUCCEEDED(withProfile->get_Profile(&profile)) && SUCCEEDED(profile->QueryInterface(IID_ICoreWebView2Profile4, reinterpret_cast<void **>(&permissions)))) {
+        auto *done = new Handler<ICoreWebView2SetPermissionStateCompletedHandler, HRESULT>(IID_ICoreWebView2SetPermissionStateCompletedHandler,
+                                                                                            [](HRESULT) -> HRESULT { return S_OK; });
+        permissions->SetPermissionState(COREWEBVIEW2_PERMISSION_KIND_CLIPBOARD_READ, L"crossbind://app", COREWEBVIEW2_PERMISSION_STATE_DEFAULT, done);
+        done->Release();
+        permissions->Release();
+    }
+    if (profile) profile->Release();
+    withProfile->Release();
+}
+
+}  // namespace
+
+// The page gets the devices app.permissions lists, and no other, without a question of WebView2's. It reads the clipboard
+// on its user's gesture alone. WebView2 decides the rest.
 void answerPermissions(void *webView) {
     auto *asked = new Handler<ICoreWebView2PermissionRequestedEventHandler, ICoreWebView2 *, ICoreWebView2PermissionRequestedEventArgs *>(
         IID_ICoreWebView2PermissionRequestedEventHandler, [](ICoreWebView2 *, ICoreWebView2PermissionRequestedEventArgs *args) -> HRESULT {
@@ -50,6 +56,12 @@ void answerPermissions(void *webView) {
             case COREWEBVIEW2_PERMISSION_KIND_GEOLOCATION:
                 isAllowed = CROSSBIND_APP_PERMISSION_LOCATION;
                 break;
+            case COREWEBVIEW2_PERMISSION_KIND_CLIPBOARD_READ: {
+                BOOL isUserInitiated = FALSE;
+                args->get_IsUserInitiated(&isUserInitiated);
+                isAllowed = isUserInitiated;
+                break;
+            }
             default:
                 return S_OK;
             }
@@ -65,6 +77,7 @@ void answerPermissions(void *webView) {
     EventRegistrationToken token;
     coreWebView(webView)->add_PermissionRequested(asked, &token);
     asked->Release();
+    forgetClipboardAnswer(coreWebView(webView));
 }
 
 void showError(const std::string &message) {

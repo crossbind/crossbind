@@ -249,6 +249,14 @@ jobs:
                   CROSSBIND_WINDOWS_SIGNING_ALIAS: crossbind e2e
                   CROSSBIND_WINDOWS_SIGNING_STOREPASS: e2e-pass
               run: pnpm --filter=@crossbind/e2e-desktop-app run build
+            - name: Check that the app loads the system DLLs it imports from System32 alone
+              # A file of their name in the app's folder, as in one it was downloaded to, would otherwise run inside it.
+              run: |
+                  image="ghcr.io/crossbind/windows@$(node -p "require('./core/crossbind/src/assets/toolchain-digests.json').images.windows.index")"
+                  for exe in e2e/desktop-app/dist/crossbind-e2e-desktop-app-win32-*/crossbind-e2e-desktop-app.exe; do
+                      docker run --rm --entrypoint /opt/llvm-mingw/bin/llvm-readobj -v "$PWD:/w" -w /w "$image" --coff-load-config "$exe" \
+                          | grep -q 'DependentLoadFlags: 0x800' || { echo "$exe looks for its DLLs in its own folder first"; exit 1; }
+                  done
             - name: Keep the app for the runners that open it
               uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
               with:
@@ -273,6 +281,10 @@ jobs:
                     - { runner: windows-11-arm, arch: arm64 }
         runs-on: ${{ matrix.runner }}
         timeout-minutes: 15
+        env:
+            # The common name of the signer the updater holds an update to, once the runner trusts the build's key:
+            # e2e/run.mjs checks the app named it.
+            CROSSBIND_E2E_UPDATE_SIGNER: crossbind e2e
         defaults:
             run:
                 working-directory: ünicode
@@ -299,8 +311,39 @@ jobs:
               with:
                   name: windows-app
                   path: ünicode/e2e/desktop-app/dist
+            - name: Trust the key the build signed with, so that the app's updater holds an update to the app's signer
+              run: |
+                  $certificate = (Get-AuthenticodeSignature e2e\desktop-app\dist\crossbind-e2e-desktop-app-win32-${{ matrix.arch }}\crossbind-e2e-desktop-app.exe).SignerCertificate
+                  if (-not $certificate) { throw 'the app carries no signature' }
+                  $store = [System.Security.Cryptography.X509Certificates.X509Store]::new('Root', 'LocalMachine')
+                  $store.Open('ReadWrite')
+                  $store.Add($certificate)
+                  $store.Close()
+            - name: Leave a WebView2 profile where a release before kept it, under the executable's name in the roaming folder
+              run: New-Item -ItemType File -Force -Path "$env:APPDATA\crossbind-e2e-desktop-app.exe\crossbind-profile" | Out-Null
             - name: Run the conformance suite in the app
               run: node e2e/desktop-app/e2e/run.mjs
+            - name: Check that the profile moved to the app's own local folder
+              run: |
+                  if (-not (Test-Path "$env:LOCALAPPDATA\dev.crossbind.crossbind-e2e-desktop-app\WebView2\crossbind-profile")) { throw 'the profile of a release before did not move' }
+                  if (Test-Path "$env:APPDATA\crossbind-e2e-desktop-app.exe") { throw 'the profile of a release before stayed in the roaming folder' }
+            - name: Check what the setup program asks of the WebView2 bootstrapper before running it
+              # The command installer.nsi runs, as its 32-bit setup program starts it: Microsoft's bootstrapper passes, a
+              # file another signed or none signed fails.
+              run: |
+                  $line = Select-String -Path core\app-host\windows\installer.nsi -Pattern 'nsExec::ExecToStack (?:/TIMEOUT=\d+ )?`"([^"]+)" (.*)`'
+                  if (-not $line) { throw 'installer.nsi runs no check of the bootstrapper' }
+                  $program = $line.Matches[0].Groups[1].Value.Replace('$SYSDIR', "$env:SystemRoot\SysWOW64")
+                  $arguments = $line.Matches[0].Groups[2].Value.Replace('$$', '$')
+                  $bootstrapper = "$env:RUNNER_TEMP\MicrosoftEdgeWebview2Setup.exe"
+                  Invoke-WebRequest -Uri 'https://go.microsoft.com/fwlink/p/?LinkId=2124703' -OutFile $bootstrapper -MaximumRetryCount 3 -RetryIntervalSec 5
+                  Set-Content -Path "$env:RUNNER_TEMP\unsigned.exe" -Value 'not a program'
+                  $expected = @{ $bootstrapper = 0; "$env:RUNNER_TEMP\unsigned.exe" = 1; "$PWD\e2e\desktop-app\dist\crossbind-e2e-desktop-app-win32-${{ matrix.arch }}\crossbind-e2e-desktop-app.exe" = 1 }
+                  foreach ($file in $expected.Keys) {
+                      $env:CROSSBIND_WEBVIEW2_BOOTSTRAPPER = $file
+                      $check = Start-Process -FilePath $program -ArgumentList $arguments -NoNewWindow -Wait -PassThru
+                      if ($check.ExitCode -ne $expected[$file]) { throw "the check answered $($check.ExitCode) for $file, not $($expected[$file])" }
+                  }
             - name: Install the app with its setup program
               run: |
                   $setup = Start-Process -Wait -PassThru -FilePath e2e\desktop-app\dist\crossbind-e2e-desktop-app-win32-${{ matrix.arch }}-setup.exe -ArgumentList /S
@@ -311,10 +354,9 @@ jobs:
                       "e2e\desktop-app\dist\crossbind-e2e-desktop-app-win32-${{ matrix.arch }}-setup.exe",
                       "$env:LOCALAPPDATA\Programs\crossbind-e2e-desktop-app\uninstall.exe"
                   foreach ($file in $files) {
-                      # The throwaway key is trusted nowhere, so a sound signature by it reads as untrusted, not as
-                      # missing or broken.
+                      # The runner trusts the throwaway key, so a sound signature by it is valid, as the updater asks.
                       $signature = Get-AuthenticodeSignature $file
-                      if ($signature.Status -in 'NotSigned', 'HashMismatch', 'NotSupportedFileFormat') { throw "$file has no sound signature: $($signature.Status)" }
+                      if ($signature.Status -ne 'Valid') { throw "$file has no valid signature: $($signature.Status)" }
                       if ($signature.SignerCertificate.Subject -ne 'CN=crossbind e2e') { throw "$file is not signed by the build's key: $($signature.SignerCertificate.Subject)" }
                       if (-not $signature.TimeStamperCertificate) { throw "$file has no timestamp" }
                   }

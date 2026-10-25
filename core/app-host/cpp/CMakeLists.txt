@@ -97,7 +97,7 @@ if(APPLE)
     target_link_options(app PRIVATE "-F${CROSSBIND_HERMES}/Library/Frameworks/macosx" "LINKER:-rpath,@executable_path/../Frameworks"
         "LINKER:-dead_strip" "$<$<CONFIG:Release>:LINKER:-x>")
     target_link_libraries(app PRIVATE "-framework hermesvm" "-framework WebKit" "-framework Cocoa" "-framework CoreServices"
-        "-framework UniformTypeIdentifiers" "-framework CoreLocation")
+        "-framework UniformTypeIdentifiers" "-framework CoreLocation" "-framework Security")
 elseif(ANDROID)
     # Hermes comes with the app from its own package; the C++ runtime the host shares with it is this NDK's, which goes
     # beside the host, stripped.
@@ -112,9 +112,12 @@ elseif(WIN32)
     # loader DLL ships. WebView2's headers come from crossbind's windows image.
     target_include_directories(app SYSTEM PRIVATE "${CROSSBIND_WEBVIEW2_INCLUDE}")
     target_link_libraries(app PRIVATE "${CROSSBIND_HERMES}/lib/libhermesvm_a.a"
-        ole32 oleaut32 uuid shell32 shlwapi user32 gdi32 advapi32 version dwmapi winmm winhttp comctl32)
+        ole32 oleaut32 uuid shell32 shlwapi user32 gdi32 advapi32 version dwmapi winmm winhttp comctl32 wintrust crypt32)
     set_target_properties(app PROPERTIES WIN32_EXECUTABLE ON)
-    target_link_options(app PRIVATE -static "LINKER:--gc-sections" "$<$<CONFIG:Release>:LINKER:-s>")
+    # Some DLLs the app imports, as version, winhttp and wintrust, are no known DLLs, which Windows looks for in the app's
+    # folder first: a file of their name there, as in a folder the app was downloaded to, would run inside the app. They
+    # load from System32 alone.
+    target_link_options(app PRIVATE -static "LINKER:--gc-sections" "LINKER:--dependent-load-flag=0x800" "$<$<CONFIG:Release>:LINKER:-s>")
 else()
     # WebKitGTK comes from the Ubuntu 22.04 packages crossbind downloads: its headers are searched after the C library's,
     # which the image's glibc 2.28 sysroot keeps, and its libraries are only linked against, as the system's load at run

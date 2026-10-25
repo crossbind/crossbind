@@ -1,8 +1,12 @@
 #include "platform.h"
 #include "windows/com.h"
 
+#include <softpub.h>
+#include <wincrypt.h>
 #include <winhttp.h>
+#include <wintrust.h>
 
+#include <cstdio>
 #include <fstream>
 #include <memory>
 #include <stdexcept>
@@ -26,7 +30,77 @@ std::runtime_error failed(const std::string &url) {
     return std::runtime_error("crossbind: cannot download " + url + ": WinHTTP error " + std::to_string(GetLastError()));
 }
 
+std::string hex(LONG status) {
+    char text[sizeof "0x00000000"];
+    std::snprintf(text, sizeof text, "0x%08lx", static_cast<unsigned long>(status));
+    return text;
+}
+
+// A file's Authenticode signature: whether Windows trusts it, whether the file has none at all, which WinVerifyTrust
+// tells apart from one it cannot read by the thread's last error, and the common name of the certificate that made it
+// once Windows trusts it. Windows checks no revocation for it, as a revocation server out of reach would refuse every
+// update.
+struct Signature {
+    LONG trust;
+    bool isUnsigned;
+    std::wstring signer;
+};
+
+Signature signature(const std::wstring &file) {
+    WINTRUST_FILE_INFO info{};
+    info.cbStruct = sizeof info;
+    info.pcwszFilePath = file.c_str();
+    WINTRUST_DATA data{};
+    data.cbStruct = sizeof data;
+    data.dwUIChoice = WTD_UI_NONE;
+    data.fdwRevocationChecks = WTD_REVOKE_NONE;
+    data.dwUnionChoice = WTD_CHOICE_FILE;
+    data.pFile = &info;
+    data.dwStateAction = WTD_STATEACTION_VERIFY;
+    data.dwProvFlags = WTD_REVOCATION_CHECK_NONE;
+    GUID action = WINTRUST_ACTION_GENERIC_VERIFY_V2;
+    const HWND noWindow = static_cast<HWND>(INVALID_HANDLE_VALUE);
+    Signature result{WinVerifyTrust(noWindow, &action, &data), false, {}};
+    if (result.trust == TRUST_E_NOSIGNATURE) {
+        const auto reason = static_cast<LONG>(GetLastError());
+        result.isUnsigned = reason == TRUST_E_NOSIGNATURE || reason == TRUST_E_SUBJECT_FORM_UNKNOWN || reason == TRUST_E_PROVIDER_UNKNOWN;
+    }
+    if (result.trust == ERROR_SUCCESS) {
+        CRYPT_PROVIDER_DATA *provider = WTHelperProvDataFromStateData(data.hWVTStateData);
+        CRYPT_PROVIDER_SGNR *signer = provider ? WTHelperGetProvSignerFromChain(provider, 0, FALSE, 0) : nullptr;
+        CRYPT_PROVIDER_CERT *leaf = signer ? WTHelperGetProvCertFromChain(signer, 0) : nullptr;
+        if (leaf) {
+            void *commonName = const_cast<char *>(szOID_COMMON_NAME);
+            const DWORD length = CertGetNameStringW(leaf->pCert, CERT_NAME_ATTR_TYPE, 0, commonName, nullptr, 0);
+            result.signer.resize(length);
+            CertGetNameStringW(leaf->pCert, CERT_NAME_ATTR_TYPE, 0, commonName, result.signer.data(), length);
+            result.signer.resize(length - 1);
+        }
+    }
+    data.dwStateAction = WTD_STATEACTION_CLOSE;
+    WinVerifyTrust(noWindow, &action, &data);
+    return result;
+}
+
 }  // namespace
+
+// A signed app's update has a setup program whose signature Windows trusts, by the app's own signer: the same common
+// name, which a renewed certificate keeps. A signed app whose own signature Windows does not trust installs none.
+void checkSigner(const std::filesystem::path &update) {
+    const Signature own = signature(executablePath());
+    if (own.isUnsigned) return;
+    if (own.trust != ERROR_SUCCESS) {
+        throw std::runtime_error("crossbind: cannot install the update: Windows does not trust this app's own signature (" + hex(own.trust) +
+                                 "), whose signer an update must carry; sign the app with a certificate Windows trusts");
+    }
+    const Signature theirs = signature(update.wstring());
+    if (theirs.trust != ERROR_SUCCESS || theirs.signer != own.signer) {
+        const std::string but = theirs.trust != ERROR_SUCCESS ? ", and Windows trusts no signature of it (" + hex(theirs.trust) + ")"
+                                                              : ", but by " + utf8(theirs.signer.c_str());
+        throw std::runtime_error("crossbind: cannot install the update: " + utf8(update.filename().c_str()) + " is not signed by " + utf8(own.signer.c_str()) +
+                                 ", who signs this app" + but);
+    }
+}
 
 // WinHTTP keeps no cache, so every check asks the server anew, and it goes through the system's proxy.
 void download(const std::string &url, const std::filesystem::path &file, std::uintmax_t maxBytes) {

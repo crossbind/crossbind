@@ -45,6 +45,8 @@ private:
 
 std::wstring wide(const std::string &text);
 std::string utf8(const wchar_t *text);
+// The app's executable, however long its path.
+std::wstring executablePath();
 // A string WebView2 hands out, which the caller owns.
 std::string take(LPWSTR text);
 // A copy WebView2 takes ownership of.

@@ -6,6 +6,7 @@
 #include <knownfolders.h>
 #include <shellapi.h>
 #include <shlobj.h>
+#include <shlwapi.h>
 #include <shobjidl.h>
 
 #include <algorithm>
@@ -89,6 +90,17 @@ crossbind::app::Paths appPaths() {
     const std::string id = CROSSBIND_APP_ID;
     const std::string local = knownFolder(FOLDERID_LocalAppData) + "\\" + id;
     return {made(knownFolder(FOLDERID_RoamingAppData) + "\\" + id), made(local + "\\Cache"), made(local + "\\Logs")};
+}
+
+// The profile is the page's cache as much as its storage, so it stays on the machine with the app's cache. A release
+// before kept it where webview does, under the executable's name in the roaming folder: it moves here once, and where it
+// cannot, as when the roaming folder is on another disk, the page keeps it there. A launch beside it may move it first.
+std::wstring webViewProfile() {
+    const std::string profile = made(knownFolder(FOLDERID_LocalAppData) + "\\" + CROSSBIND_APP_ID) + "\\WebView2";
+    const std::wstring executable = executablePath();
+    const std::string old = knownFolder(FOLDERID_RoamingAppData) + "\\" + utf8(PathFindFileNameW(executable.c_str()));
+    if (!exists(profile) && exists(old)) MoveFileExW(wide(old).c_str(), wide(profile).c_str(), 0);
+    return wide(exists(profile) || !exists(old) ? profile : old);
 }
 
 // Modal to the app's window, as the system's file dialogs are.

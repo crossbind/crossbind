@@ -151,8 +151,9 @@ resampled from the PNG, so a small one blurs when enlarged.
 - Windows: `dist/<name>-win32-<arch>-setup.exe`, which installs the app for the user who runs it, with no
   administrator's approval, in `%LOCALAPPDATA%\Programs\<app name>`. It adds the app to the Start menu and to the apps
   Settings lists, whose Uninstall removes it again and leaves its data, and when the system has no WebView2 Runtime it
-  downloads Microsoft's bootstrapper, which installs it. While the app runs, an update or Uninstall asks to close it
-  and changes nothing. `/S` installs without a window. NSIS, in crossbind's windows image, builds it.
+  downloads Microsoft's bootstrapper and, once it carries a valid signature of Microsoft's, runs it, which installs the
+  runtime. While the app runs, an update or Uninstall asks to close it and changes nothing. `/S` installs without a
+  window. NSIS, in crossbind's windows image, builds it.
 
 The Debian package and the shortcut and folder take their names from the app's, so a `general.name` that makes no
 Debian name, or an app name with any of `< > : / | ? *` or a space or dot at its end, stops `crossbind app build` before
@@ -258,6 +259,15 @@ install runs at a time, and another rejects meanwhile. A manifest past 64 KiB or
 - Windows: the setup program waits up to 30 seconds for the app to quit, installs the update in the app's folder and
   opens it, or opens the app as it was once it has waited in vain.
 
+An app signed for its platform holds an update to its own signer as well, so that the updater's key alone installs
+nothing else. On macOS, as Sparkle does, the bundle in the zip meets the requirement the app's own signature states,
+which for a Developer ID names its identifier and team. On Windows the setup program carries an Authenticode signature
+Windows trusts, whose certificate has the common name of the app's own: a name, which any authority Windows trusts may
+certify for whoever it finds holds it. A renewed certificate keeps the team and the common name, so its updates
+install. Windows checks no revocation for them. An app signed ad hoc or not at all, and a Linux app, which no signature
+names, take any update the key signed; a Windows app signed with a certificate Windows does not trust, as a
+self-signed one, installs none and says why.
+
 On macOS and Linux the app's folder swaps the app for its update in one step, which local file systems such as APFS
 and ext4 do; where it cannot, as on a network share, the update fails and leaves the app as it is. An app updates where
 its user can change it, too: a macOS app opened from its disk image, or from where it was downloaded to, updates once
@@ -345,7 +355,10 @@ open something wait for: called before that, as from a static initializer, or on
 On the desktop the folders take the name of `app.id`: under `~/Library` on macOS, under `$XDG_DATA_HOME`,
 `$XDG_CACHE_HOME` and `$XDG_STATE_HOME` on Linux, and under `%APPDATA%` and `%LOCALAPPDATA%` on Windows. An iOS
 app's are its own `Library/Application Support`, `Library/Caches` and `Library/Logs`, and an Android app's its
-`files`, `cache` and `files/logs`.
+`files`, `cache` and `files/logs`. A Windows page's own storage and cache, WebView2's profile, are in
+`%LOCALAPPDATA%\<app.id>\WebView2`; those of an app an earlier crossbind built, under `%APPDATA%\<name>.exe`, move
+there when it first opens, or stay in use where they are when they cannot move, as from a roaming folder on another
+drive.
 
 ## Events and callbacks
 
@@ -616,7 +629,14 @@ delivers one ABI.
   architecture, its version and its file. A server can offer any version to `updater.check()`, and can serve an older
   signed update that is still newer than the installed app, but it installs nothing unsigned, nothing built for another
   platform, and no other app the same key signs. Whoever holds `CROSSBIND_UPDATER_PRIVATE_KEY` can sign any update, so
-  it stays where the app is built; the app checks no Apple or Authenticode signature of the update besides.
+  it stays where the app is built; a macOS or Windows app signed for its platform also takes an update only from its
+  own signer, as [Updates](#updates) tells.
+- A desktop page reads the clipboard on its user's gesture alone, as a click: on Windows with no question of
+  WebView2's, on macOS once its user picks WebKit's Paste, and on Linux as WebKitGTK asks the app host, which lets it.
+  A read without a gesture gets nothing. On Linux a page's script writes to the clipboard on its user's gesture alone.
+- A Windows app loads the system DLLs it imports from System32 alone, from Windows 10 1607 on, so a file of their name
+  in its folder, as in one it was downloaded to, does not run in it. Its setup program runs the WebView2 bootstrapper
+  it downloads only with a valid signature of Microsoft's, which PowerShell checks.
 - On Android the page comes from `https://appassets.androidplatform.net`, which the app serves from its files, and
   the top frame loads that origin alone. Android does not let an app refuse a frame's page, but no frame reaches the
   module: calls and their bytes travel over a message port the app hands the top frame alone, with the token, and
@@ -740,8 +760,18 @@ writes to logcat, under the tag `Crossbind`: the URL only on `localhost`, and th
 - The Windows setup program runs in CI on x64 and arm64: it installs the app with `/S`, the app it installed passes the
   conformance runs, `/UPDATE` waits for the app to quit and opens it again, and the uninstaller takes the app, its
   shortcut, its entry in Settings and its scheme. Its install of the WebView2 Runtime, for a system that has none,
-  cannot be measured on the Windows machines crossbind is tested on, which have the runtime; the bootstrapper it
-  downloads over HTTPS runs with no check of its own.
+  cannot be measured on the Windows machines crossbind is tested on, which have the runtime. The check of the
+  bootstrapper's signature it runs first runs in CI on its own, as the setup program's script states it, on
+  Microsoft's bootstrapper and on files it refuses.
+- A desktop page's read of the clipboard without a gesture gets nothing in the conformance runs on Windows, macOS and
+  Linux. On macOS 27 it got nothing with WebKit's DOM paste setting on as well, so that run does not show what the
+  setting let through. One on a click reads it in CI on Windows alone, through WebView2's DevTools; on macOS and
+  Linux, where it waits on WebKit's Paste menu or WebKitGTK's request, it has not been measured, nor has an answer an
+  earlier crossbind left in a Windows profile, which the app forgets.
+- The updater's hold on an update to the app's signer has been measured on macOS with two self-signed identities: an
+  app signed with one took a bundle it signed and refused one the other signed and one signed ad hoc, and an app signed
+  ad hoc took all three. On Windows the conformance runs in CI trust the build's throwaway key and check that an update
+  without its signature is refused for want of it; a setup program by the same signer passing has not been run.
 - On the desktop, one window.
 - `app.window`'s place, limits and full screen have been measured on macOS, and on Linux under Xvfb with openbox, for a
   window that resizes and one that does not: an element's full screen, which Escape leaves, and `fullscreen: true`. A

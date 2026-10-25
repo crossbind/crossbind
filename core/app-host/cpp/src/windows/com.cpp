@@ -62,6 +62,18 @@ std::string utf8(const wchar_t *text) {
     return result;
 }
 
+std::wstring executablePath() {
+    std::wstring path(MAX_PATH, L'\0');
+    for (;;) {
+        const DWORD length = GetModuleFileNameW(nullptr, path.data(), static_cast<DWORD>(path.size()));
+        if (length < path.size()) {
+            path.resize(length);
+            return path;
+        }
+        path.resize(path.size() * 2);
+    }
+}
+
 std::string take(LPWSTR text) {
     std::string result = utf8(text);
     CoTaskMemFree(text);

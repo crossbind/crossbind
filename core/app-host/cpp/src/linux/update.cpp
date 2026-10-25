@@ -13,6 +13,9 @@ constexpr guint IDLE_TIMEOUT = 60;
 
 }  // namespace
 
+// Linux signs no apps, so an update is the app's when app.updater's key signed it.
+void checkSigner(const std::filesystem::path &) {}
+
 // libsoup, which WebKitGTK loads anyway. Its blocking calls run off the main thread in a context of their own, and
 // without the decoder that would unpack a .tar.gz a server labels gzip-encoded.
 void download(const std::string &url, const std::filesystem::path &file, std::uintmax_t maxBytes) {

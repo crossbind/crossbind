@@ -114,16 +114,18 @@ async function checkUpdates() {
     if (offered?.version !== '99.0.0') throw new Error(`updater.check() found ${JSON.stringify(offered)}, not the 99.0.0 e2e/run.mjs serves`);
     const signed = await updater.install().then(() => 'installed', (error) => error.message);
     if (!signed.includes('cannot install the update')) throw new Error(`a signed update did not get past its signature: ${signed}`);
+    // e2e/run.mjs reads why, where the runner trusts the key the app is signed with.
+    console.log(`crossbind e2e: the signed update was refused: ${signed}`);
     const tampered = await updater.install().then(() => 'installed', (error) => error.message);
     if (!tampered.includes('app.updater.publicKey')) throw new Error(`a tampered update was not refused: ${tampered}`);
 }
 
 const LAUNCH_TIMEOUT_MS = 30000;
 // Longer than e2e/run.mjs's steps may take together, so a failure of its own says what went wrong.
-const FULL_SCREEN_TIMEOUT_MS = 90000;
+const FULL_SCREEN_TIMEOUT_MS = 120000;
 
-// e2e/run.mjs shows the page's element full screen, as only a user's click could, gives the window's screen a new
-// scale, checks the window still covers it, and leaves full screen: the page waits for both changes.
+// e2e/run.mjs reads the clipboard, shows the page's element full screen, as only a user's click could, gives the
+// window's screen a new scale, checks the window still covers it, and leaves full screen: the page waits for both changes.
 function checkScaledFullScreen() {
     let counted;
     let timer;
@@ -206,6 +208,13 @@ initNative().then(async (m) => {
         // A macOS page's location, which app.permissions lists, comes from the host, as WKWebView gives none there.
         if (isDesktop && navigator.userAgent.includes('Macintosh') && /\[native code\]/.test(String(navigator.geolocation.getCurrentPosition))) {
             throw new Error("the macOS page's navigator.geolocation is WebKit's, which gives no position there");
+        }
+        // A desktop page reads the clipboard on its user's gesture alone, which e2e/run.mjs gives on Windows. A read that
+        // waits reads nothing either.
+        if (isDesktop) {
+            const read = navigator.clipboard?.readText().then(() => 'read', (error) => error.name);
+            const answer = await Promise.race([read, new Promise((resolve) => { setTimeout(() => resolve('waited'), 3000); })]);
+            if (answer === 'read') throw new Error('the page read the clipboard without its user\'s gesture');
         }
         // The app's own functions answer over the page's channel on every platform, and the host checks what it opens.
         const folders = await host.paths();

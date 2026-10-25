@@ -344,6 +344,7 @@ void replaceApp(const fs::path &update) {
         if (!runs(command)) cannotInstall(command[0] + " cannot unpack " + update.string());
         const fs::path unpacked = unpackedApp(staging);
         if (unpacked.empty() || !fs::exists(unpacked / marker)) cannotInstall(update.string() + " holds no app");
+        checkSigner(unpacked);
         if (!swapped(unpacked, app)) cannotInstall(app.parent_path().string() + " cannot swap the app for its update: " + std::strerror(errno));
     } catch (...) {
         fs::remove_all(staging, ignored);
@@ -382,6 +383,7 @@ void installUpdate() {
         download(fileUrl(manifestUrl(), manifest->file), file, MAX_UPDATE_SIZE);
         verify(*manifest, file);
 #ifdef _WIN32
+        checkSigner(file);
         runSetup(file);
 #else
         replaceApp(file);

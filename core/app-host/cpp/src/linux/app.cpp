@@ -29,8 +29,9 @@ void onQuit(std::function<void()>) {}
 // WebKitGTK shows the page's dialogs, file inputs and downloads itself.
 void showPageDialogs(void *) {}
 
-// The page gets the devices app.permissions lists, and no other, without a question; WebKitGTK decides the rest. A page
-// has neither camera nor microphone without WebKitGTK's media streams, which are off by default.
+// The page gets the devices app.permissions lists, and no other, without a question, and reads the clipboard on its
+// user's gesture; WebKitGTK decides the rest. A page has neither camera nor microphone without WebKitGTK's media
+// streams, which are off by default.
 void answerPermissions(void *webView) {
     if (CROSSBIND_APP_PERMISSION_CAMERA || CROSSBIND_APP_PERMISSION_MICROPHONE) {
         webkit_settings_set_enable_media_stream(webkit_web_view_get_settings(WEBKIT_WEB_VIEW(webView)), TRUE);
@@ -45,6 +46,10 @@ void answerPermissions(void *webView) {
                                          (!isVideo || CROSSBIND_APP_PERMISSION_CAMERA) && (!isAudio || CROSSBIND_APP_PERMISSION_MICROPHONE);
                          } else if (WEBKIT_IS_GEOLOCATION_PERMISSION_REQUEST(request)) {
                              isAllowed = CROSSBIND_APP_PERMISSION_LOCATION;
+                         } else if (g_strcmp0(G_OBJECT_TYPE_NAME(request), "WebKitClipboardPermissionRequest") == 0) {
+                             // WebKitGTK asks about a read on its user's gesture alone. The request goes by its name, so
+                             // that the app links to no symbol of a WebKitGTK past 2.40.
+                             isAllowed = true;
                          } else {
                              return FALSE;
                          }

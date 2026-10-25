@@ -1,4 +1,5 @@
 #import <Foundation/Foundation.h>
+#import <Security/Security.h>
 
 #include "platform.h"
 
@@ -9,7 +10,43 @@ namespace {
 // How often the wait looks at what the download has received.
 constexpr int64_t CHECK_NSEC = NSEC_PER_SEC / 4;
 
+std::string describe(OSStatus status) {
+    NSString *message = CFBridgingRelease(SecCopyErrorMessageString(status, nullptr));
+    return message ? std::string(message.UTF8String) : "error " + std::to_string(status);
+}
+
 }  // namespace
+
+// As Sparkle holds an update: the app it unpacked to meets the requirement this app's own signature states, which for a
+// Developer ID names the app's identifier and its team. An ad hoc signature names no signer to hold it to.
+void checkSigner(const std::filesystem::path &update) {
+    @autoreleasepool {
+        SecCodeRef running = nullptr;
+        if (SecCodeCopySelf(kSecCSDefaultFlags, &running) != errSecSuccess) return;
+        CFDictionaryRef signing = nullptr;
+        const bool hasSigner = SecCodeCopySigningInformation(running, kSecCSSigningInformation, &signing) == errSecSuccess &&
+                               CFDictionaryGetValue(signing, kSecCodeInfoCertificates) != nullptr;
+        if (signing) CFRelease(signing);
+        SecRequirementRef requirement = nullptr;
+        OSStatus status = hasSigner ? SecCodeCopyDesignatedRequirement(running, kSecCSDefaultFlags, &requirement) : errSecSuccess;
+        CFRelease(running);
+        if (!hasSigner) return;
+        SecStaticCodeRef code = nullptr;
+        if (status == errSecSuccess) {
+            NSURL *app = [NSURL fileURLWithPath:@(update.c_str()) isDirectory:YES];
+            status = SecStaticCodeCreateWithPath((__bridge CFURLRef)app, kSecCSDefaultFlags, &code);
+        }
+        if (status == errSecSuccess) {
+            status = SecStaticCodeCheckValidity(code, kSecCSCheckAllArchitectures | kSecCSCheckNestedCode | kSecCSStrictValidate, requirement);
+        }
+        if (code) CFRelease(code);
+        if (requirement) CFRelease(requirement);
+        if (status != errSecSuccess) {
+            throw std::runtime_error("crossbind: cannot install the update: " + update.filename().string() + " is not signed as this app is: " +
+                                     describe(status));
+        }
+    }
+}
 
 // A session that keeps nothing, so that every check asks the server anew.
 void download(const std::string &url, const std::filesystem::path &file, std::uintmax_t maxBytes) {
