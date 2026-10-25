@@ -1,0 +1,16 @@
+Remedy missing return statement in gzwrite.c.
+Upstream: https://github.com/madler/zlib/commit/bbc2ccf3d0de267576b524b875c769a724a513b0
+Without it, gzvprintf() goes on after a stalled non-blocking write and writes past the end of the input buffer.
+
+diff --git a/gzwrite.c b/gzwrite.c
+index b5026e5fad..b217b85cef 100644
+--- a/gzwrite.c
++++ b/gzwrite.c
+@@ -444,6 +444,7 @@ int ZEXPORTVA gzvprintf(gzFile file, const char *format, va_list va) {
+                a Z_BUF_ERROR to let the application know that this gzprintf()
+                needs to be retried. */
+             gz_error(state, Z_BUF_ERROR, "stalled write on gzprintf");
++            return state->err;
+         }
+         if (!state->again)
+             return state->err;
