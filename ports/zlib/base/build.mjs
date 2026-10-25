@@ -3,6 +3,13 @@ export default {
     // zlib.net drops superseded releases and its edge occasionally serves other bytes; the GitHub asset is stable.
     getURL: (version) => `https://github.com/madler/zlib/releases/download/v${version}/zlib-${version}.tar.gz`,
     buildType: 'cmake',
+    patches: [
+        { file: new URL('./patches/bbc2ccf3-gzvprintf-stalled-write.patch', import.meta.url) },
+        {
+            file: new URL('./patches/df84af25-gzwrite-failed-write.patch', import.meta.url),
+            advisories: ['CVE-2026-76844', 'CVE-2026-85091'],
+        },
+    ],
     // On Windows zlib names its static library zs; every consumer links it as z.
     replaceList: [
         {
