@@ -328,12 +328,13 @@ jobs:
                   if (-not (Test-Path "$env:LOCALAPPDATA\dev.crossbind.crossbind-e2e-desktop-app\WebView2\crossbind-profile")) { throw 'the profile of a release before did not move' }
                   if (Test-Path "$env:APPDATA\crossbind-e2e-desktop-app.exe") { throw 'the profile of a release before stayed in the roaming folder' }
             - name: Check what the setup program asks of the WebView2 bootstrapper before running it
-              # The command installer.nsi runs, as its 32-bit setup program starts it: Microsoft's bootstrapper passes, a
-              # file another signed or none signed fails.
+              # The command installer.nsi runs, with the system's own PowerShell, which its 32-bit setup program finds
+              # through Sysnative and this step in System32: Microsoft's bootstrapper passes, a file another signed or
+              # none signed fails.
               run: |
                   $line = Select-String -Path core\app-host\windows\installer.nsi -Pattern 'nsExec::ExecToStack (?:/TIMEOUT=\d+ )?`"([^"]+)" (.*)`'
                   if (-not $line) { throw 'installer.nsi runs no check of the bootstrapper' }
-                  $program = $line.Matches[0].Groups[1].Value.Replace('$SYSDIR', "$env:SystemRoot\SysWOW64")
+                  $program = $line.Matches[0].Groups[1].Value.Replace('$WINDIR\Sysnative', "$env:SystemRoot\System32")
                   $arguments = $line.Matches[0].Groups[2].Value.Replace('$$', '$')
                   $bootstrapper = "$env:RUNNER_TEMP\MicrosoftEdgeWebview2Setup.exe"
                   Invoke-WebRequest -Uri 'https://go.microsoft.com/fwlink/p/?LinkId=2124703' -OutFile $bootstrapper -MaximumRetryCount 3 -RetryIntervalSec 5
