@@ -317,7 +317,8 @@ private:
   void window_settings(bool debug) {
     WebKitSettings *settings =
         webkit_web_view_get_settings(WEBKIT_WEB_VIEW(m_webview));
-    webkit_settings_set_javascript_can_access_clipboard(settings, true);
+    // crossbind: no javascript-can-access-clipboard, with which the page's
+    // script pastes from the clipboard without its user's gesture.
     if (debug) {
       webkit_settings_set_enable_write_console_messages_to_stdout(settings,
                                                                   true);

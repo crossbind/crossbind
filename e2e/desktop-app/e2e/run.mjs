@@ -221,8 +221,9 @@ function openLink() {
     if (opened.status !== 0) finish(`the app cannot be opened with a link: ${opened.error?.message ?? `${opened.stdout}${opened.stderr}`.trim()}`);
 }
 
-// Runs an expression in the page as a user's click would, through WebView2's DevTools.
-async function inPage(expression) {
+// Runs an expression in the page through WebView2's DevTools, as a user's click would unless userGesture is false, and
+// gives its value. The page has the focus a click gives it.
+async function inPage(expression, userGesture = true) {
     const signal = AbortSignal.timeout(ASKED_TIMEOUT_MS);
     const targets = await (await fetch(`http://127.0.0.1:${DEVTOOLS_PORT}/json`, { signal })).json();
     const page = targets.find((target) => target.type === 'page');
@@ -232,24 +233,42 @@ async function inPage(expression) {
         const { error, result } = await new Promise((done, fail) => {
             signal.addEventListener('abort', () => fail(new Error('DevTools did not answer in time')));
             socket.onerror = () => fail(new Error('DevTools refused the connection'));
-            socket.onopen = () => socket.send(JSON.stringify({ id: 1, method: 'Runtime.evaluate', params: { expression, userGesture: true, awaitPromise: true } }));
+            socket.onopen = () => {
+                socket.send(JSON.stringify({ id: 1, method: 'Emulation.setFocusEmulationEnabled', params: { enabled: true } }));
+                socket.send(JSON.stringify({ id: 2, method: 'Runtime.evaluate', params: { expression, userGesture, awaitPromise: true, returnByValue: true } }));
+            };
             socket.onmessage = (event) => {
                 const message = JSON.parse(event.data);
-                if (message.id === 1) done(message);
+                if (message.id === 2) done(message);
             };
         });
         if (error || result?.exceptionDetails) throw new Error(JSON.stringify(error ?? result.exceptionDetails));
+        return result.result.value;
     } finally {
         socket.close();
     }
 }
 
-// The page asks for it on Windows once it listens: its element full screen, then a new scale of the screen, after which
-// the window must cover the screen still, then the page out of full screen.
+// The page reads the clipboard on its user's click alone.
+async function readClipboard() {
+    const read = "navigator.clipboard.readText().then(() => 'read', (error) => error.message)";
+    try {
+        const unclicked = await inPage(read, false);
+        if (unclicked === 'read') finish("the page read the clipboard without its user's click");
+        const clicked = await inPage(read);
+        if (clicked !== 'read') finish(`the page could not read the clipboard on its user's click: ${clicked}`);
+    } catch (error) {
+        finish(`the clipboard could not be checked: ${error.message}`);
+    }
+}
+
+// The page asks for it on Windows once it listens: reads of the clipboard, then its element full screen, then a new
+// scale of the screen, after which the window must cover the screen still, then the page out of full screen.
 let isScreenFilled = false;
 async function fillScreen() {
     if (isScreenFilled || !FILL_SCREEN.test(out)) return;
     isScreenFilled = true;
+    await readClipboard();
     try {
         await inPage('document.documentElement.requestFullscreen()');
         await new Promise((done) => { setTimeout(done, SETTLE_MS); });
@@ -272,7 +291,11 @@ function finish(problem) {
         console.error(`warning: ${error.message}`);
     }
     const summary = out.match(CONFORMANCE);
-    const failure = problem ?? (isLaunchedAgain && !hasLeft ? 'the app launched again had not left when the suite finished' : undefined);
+    // A runner that trusts the key the app is signed with has the updater hold an update to that signer.
+    const signer = process.env.CROSSBIND_E2E_UPDATE_SIGNER;
+    const failure = problem
+        ?? (isLaunchedAgain && !hasLeft ? 'the app launched again had not left when the suite finished' : undefined)
+        ?? (signer && summary && !out.includes(`is not signed by ${signer}`) ? `the updater did not hold the update to the app's signer, ${signer}` : undefined);
     if (failure || !summary) {
         console.error(`FAIL: ${failure ?? 'the app failed the conformance suite'}:\n${out}`);
         process.exit(1);

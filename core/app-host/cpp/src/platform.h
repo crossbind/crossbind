@@ -92,6 +92,11 @@ void fillScreen();
 // Fetches an address into a file for a desktop app's updater, on the thread that calls it, which is not the main one,
 // and throws why it could not, as when the answer runs past maxBytes.
 void download(const std::string &url, const std::filesystem::path &file, std::uintmax_t maxBytes);
+// Throws why not when an update, the app it unpacked to or its setup program, is not signed by the app's own signer: on
+// macOS by its code signature, on Windows by its Authenticode signature, which Windows trusts. A leaked key of
+// app.updater's then installs nothing else. An app without such a signature, as a Linux app always is, takes any update
+// the key signed; a Windows app whose own signature Windows does not trust takes none.
+void checkSigner(const std::filesystem::path &update);
 
 // A key and its modifiers, as crossbind/app checks them: the key is A–Z, 0–9, F1–F12 or one of crossbind/app's names,
 // and CmdOrCtrl is command on macOS and control elsewhere.
@@ -152,4 +157,6 @@ void setMenuWebView(void *controller);
 void followPageFullScreen(void *controller);
 // A window that fills its screen fills it again once Windows changes the screen's size or scale. On the main thread.
 void fitFullScreen();
+// The folder WebView2 keeps the page's profile in: the app's own, on this machine.
+std::wstring webViewProfile();
 #endif

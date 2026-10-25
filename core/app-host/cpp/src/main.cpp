@@ -77,6 +77,7 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char **argv) {
 #elif defined(_WIN32)
     if (devUrl) schemeOrigins.push_back(app::originOf(devUrl));
     webview::detail::win32_environment_options_hook = environmentOptions;
+    webview::detail::win32_user_data_folder_hook = webViewProfile;
 #endif
     try {
         webview::webview view(devUrl != nullptr, nullptr);

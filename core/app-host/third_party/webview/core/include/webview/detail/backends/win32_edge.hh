@@ -167,7 +167,7 @@ public:
     ::EventRegistrationToken token;
     controller->get_CoreWebView2(&webview);
     webview->add_WebMessageReceived(this, &token);
-    webview->add_PermissionRequested(this, &token);
+    // crossbind: the app host answers permission requests alone.
 
     m_cb(controller, webview);
     return S_OK;
@@ -312,6 +312,9 @@ private:
 
 // crossbind: the options WebView2's environment is made with, the only time a custom URL scheme can be registered.
 inline ICoreWebView2EnvironmentOptions *(*win32_environment_options_hook)() = nullptr;
+// crossbind: the folder WebView2 keeps its profile in, instead of one under the executable's name in the roaming
+// application data.
+inline std::wstring (*win32_user_data_folder_hook)() = nullptr;
 
 class win32_edge_engine : public engine_base {
 public:
@@ -760,13 +763,19 @@ private:
     GetModuleFileNameW(nullptr, currentExePath, MAX_PATH);
     wchar_t *currentExeName = PathFindFileNameW(currentExePath);
 
-    wchar_t dataPath[MAX_PATH];
-    if (!SUCCEEDED(
-            SHGetFolderPathW(nullptr, CSIDL_APPDATA, nullptr, 0, dataPath))) {
-      return error_info{WEBVIEW_ERROR_UNSPECIFIED, "SHGetFolderPathW failed"};
+    std::wstring userDataFolder;
+    if (win32_user_data_folder_hook) {
+      userDataFolder = win32_user_data_folder_hook();
+    } else {
+      wchar_t dataPath[MAX_PATH];
+      if (!SUCCEEDED(
+              SHGetFolderPathW(nullptr, CSIDL_APPDATA, nullptr, 0, dataPath))) {
+        return error_info{WEBVIEW_ERROR_UNSPECIFIED, "SHGetFolderPathW failed"};
+      }
+      wchar_t folder[MAX_PATH];
+      PathCombineW(folder, dataPath, currentExeName);
+      userDataFolder = folder;
     }
-    wchar_t userDataFolder[MAX_PATH];
-    PathCombineW(userDataFolder, dataPath, currentExeName);
 
     m_com_handler = new webview2_com_handler(
         wnd, cb,
@@ -784,7 +793,7 @@ private:
 
     m_com_handler->set_attempt_handler([&] {
       return m_webview2_loader.create_environment_with_options(
-          nullptr, userDataFolder,
+          nullptr, userDataFolder.c_str(),
           win32_environment_options_hook ? win32_environment_options_hook()
                                          : nullptr,
           m_com_handler);

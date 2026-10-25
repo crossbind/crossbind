@@ -476,9 +476,8 @@ private:
       NSObject_setValue_forKey(
           preferences, yes_value,
           NSString_stringWithUTF8String("javaScriptCanAccessClipboard"));
-      NSObject_setValue_forKey(
-          preferences, yes_value,
-          NSString_stringWithUTF8String("DOMPasteAllowed"));
+      // crossbind: no DOMPasteAllowed, with which the page's script pastes
+      // from the clipboard without its user's gesture.
     }
 #else
 #error __builtin_available not supported by compiler

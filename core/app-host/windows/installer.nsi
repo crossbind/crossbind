@@ -201,6 +201,18 @@ Function InstallWebView2
   DetailPrint "Installing the WebView2 Runtime"
   InitPluginsDir
   System::Call 'urlmon::URLDownloadToFileW(p 0, w "https://go.microsoft.com/fwlink/p/?LinkId=2124703", w "$PLUGINSDIR\MicrosoftEdgeWebview2Setup.exe", i 0, p 0) i .r0'
+  ; HTTPS does not tell what was downloaded: the bootstrapper runs only with a valid signature of Microsoft's, which
+  ; PowerShell checks, started by its path rather than its name, which the setup program's own folder could answer.
+  ${If} $0 == 0
+    System::Call 'kernel32::SetEnvironmentVariable(t "CROSSBIND_WEBVIEW2_BOOTSTRAPPER", t "$PLUGINSDIR\MicrosoftEdgeWebview2Setup.exe")'
+    nsExec::ExecToStack /TIMEOUT=60000 `"$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -NonInteractive -Command "$$signature = Get-AuthenticodeSignature -LiteralPath $$env:CROSSBIND_WEBVIEW2_BOOTSTRAPPER; if ($$signature.Status -ne 'Valid' -or $$signature.SignerCertificate.Subject -notmatch '^CN=Microsoft Corporation,') { exit 1 }"`
+    Pop $0
+    Pop $1
+    System::Call 'kernel32::SetEnvironmentVariable(t "CROSSBIND_WEBVIEW2_BOOTSTRAPPER", p 0)'
+    ${If} $0 != 0
+      DetailPrint "The WebView2 bootstrapper that downloaded carries no valid signature of Microsoft's"
+    ${EndIf}
+  ${EndIf}
   ${If} $0 == 0
     ExecWait '"$PLUGINSDIR\MicrosoftEdgeWebview2Setup.exe" /silent /install' $0
   ${EndIf}
