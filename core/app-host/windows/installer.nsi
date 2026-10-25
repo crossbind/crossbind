@@ -203,11 +203,12 @@ Function InstallWebView2
   System::Call 'urlmon::URLDownloadToFileW(p 0, w "https://go.microsoft.com/fwlink/p/?LinkId=2124703", w "$PLUGINSDIR\MicrosoftEdgeWebview2Setup.exe", i 0, p 0) i .r0'
   ; HTTPS does not tell what was downloaded: the bootstrapper runs only with a valid signature of Microsoft's, which
   ; PowerShell checks, started by its path rather than its name, which the setup program's own folder could answer.
-  ; It is the system's own PowerShell, which this 32-bit program reaches through Sysnative: the 32-bit one cannot load
-  ; the module of the check on Windows on Arm.
+  ; It is the system's own PowerShell, which this 32-bit program reaches through Sysnative, and it loads the module of
+  ; the check from its own folder: a PSModulePath inherited from PowerShell 7 names that release's module first, which
+  ; Windows PowerShell cannot load.
   ${If} $0 == 0
     System::Call 'kernel32::SetEnvironmentVariable(t "CROSSBIND_WEBVIEW2_BOOTSTRAPPER", t "$PLUGINSDIR\MicrosoftEdgeWebview2Setup.exe")'
-    nsExec::ExecToStack /TIMEOUT=60000 `"$WINDIR\Sysnative\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -NonInteractive -Command "$$signature = Get-AuthenticodeSignature -LiteralPath $$env:CROSSBIND_WEBVIEW2_BOOTSTRAPPER; if ($$signature.Status -ne 'Valid' -or $$signature.SignerCertificate.Subject -notmatch '^CN=Microsoft Corporation,') { exit 1 }"`
+    nsExec::ExecToStack /TIMEOUT=60000 `"$WINDIR\Sysnative\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -NonInteractive -Command "Import-Module (Join-Path $$PSHOME 'Modules\Microsoft.PowerShell.Security'); $$signature = Get-AuthenticodeSignature -LiteralPath $$env:CROSSBIND_WEBVIEW2_BOOTSTRAPPER; if ($$signature.Status -ne 'Valid' -or $$signature.SignerCertificate.Subject -notmatch '^CN=Microsoft Corporation,') { exit 1 }"`
     Pop $0
     Pop $1
     System::Call 'kernel32::SetEnvironmentVariable(t "CROSSBIND_WEBVIEW2_BOOTSTRAPPER", p 0)'
