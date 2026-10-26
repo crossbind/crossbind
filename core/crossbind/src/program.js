@@ -22,7 +22,9 @@ export const handleFatal = (e) => {
         if (e?.cause?.message) message += `\n  caused by: ${e.cause.message.split('\n')[0]}`;
         console.error(message);
     }
-    process.exit(1);
+    // Writes to a pipe are asynchronous, so exiting at once would cut what is still queued, such as the failed
+    // command's output run.js printed: exit after both streams have written it.
+    process.stdout.write('', () => process.stderr.write('', () => process.exit(1)));
 };
 
 export const createProgram = () => new Command()

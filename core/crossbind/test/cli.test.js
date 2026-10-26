@@ -142,3 +142,25 @@ setInterval(() => {}, 1000);
         expect(status).toBe(143);
     });
 });
+
+describe('a fatal error', () => {
+    // A failed build prints its whole output right before crossbind exits, and a pipe holds about 64 KiB.
+    test('exits only once a pipe nobody reads yet has taken everything written before it', async () => {
+        const program = new URL('../src/program.js', import.meta.url).href;
+        const script = `import { handleFatal } from ${JSON.stringify(program)};
+process.stderr.write('x'.repeat(1 << 20));
+handleFatal(new Error('boom'));`;
+        const cli = spawn(process.execPath, ['--input-type=module', '-e', script], {
+            cwd: dir, env: environment({ DEBUG: '' }), stdio: ['ignore', 'ignore', 'pipe'],
+        });
+        const closed = new Promise((resolve) => { cli.once('close', resolve); });
+        cli.stderr.pause();
+        await new Promise((resolve) => { setTimeout(resolve, 300); });
+        let stderr = '';
+        cli.stderr.setEncoding('utf8').on('data', (chunk) => { stderr += chunk; }).resume();
+        const status = await closed;
+
+        expect(status).toBe(1);
+        expect({ length: stderr.length, end: stderr.slice(-6) }).toEqual({ length: (1 << 20) + 5, end: 'xboom\n' });
+    });
+});
