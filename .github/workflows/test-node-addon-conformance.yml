@@ -209,9 +209,11 @@ jobs:
             - name: Build the app
               run: pnpm --filter=@crossbind/e2e-desktop-app run build
             - name: Install the app's Debian package, whose dependencies bring the WebKitGTK it runs on
+              # The run starts a session bus of its own, on which e2e/tray-host.py plays a tray and a notification
+              # server.
               run: |
                   sudo apt-get update
-                  sudo apt-get install -y --no-install-recommends ./e2e/desktop-app/dist/crossbind-e2e-desktop-app-linux-x64.deb
+                  sudo apt-get install -y --no-install-recommends ./e2e/desktop-app/dist/crossbind-e2e-desktop-app-linux-x64.deb dbus python3-gi
             - name: Run the conformance suite in the app and in the installed app
               # WebKitGTK runs without its sandbox and GPU compositing, as in the containers the app was measured in.
               env:

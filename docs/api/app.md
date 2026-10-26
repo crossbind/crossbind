@@ -285,8 +285,8 @@ which it compiles in.
 ## The app's functions
 
 The page imports what the app's host does for it from `crossbind/app`. The app's C++ calls the same, but for
-`menu.set`, `app.launchUrls` and `events.on`, through `<crossbind/app.h>`, which an app's own code finds as it builds,
-with `CROSSBIND_APP` defined:
+`menu.set`, `tray`, `notification.show`, `app.launchUrls` and `events.on`, through `<crossbind/app.h>`, which an app's
+own code finds as it builds, with `CROSSBIND_APP` defined:
 
 ```js
 import { app, dialog, shell } from 'crossbind/app';
@@ -318,6 +318,9 @@ std::string databasePath() { return crossbind::app::paths().data + "/notes.sqlit
 | `app.relaunch()` | Ends the app as `app.quit()` does, then opens it anew with no link | ✓ | | |
 | `app.launchUrls()` | The links of `app.urlSchemes` that opened the app and have not reached the page yet; the page alone | ✓ | ✓ | ✓ |
 | `menu.set(menus)` | Sets the app's menus, whose clicks are the event `menu`; the page alone | ✓ | | |
+| `tray.set({ tooltip, menu })` | The app's icon in the menu bar, notification area or status tray, whose clicks are the events `tray` and `menu`; the page alone | ✓ | | |
+| `tray.remove()` | Takes the tray's icon away; the page alone | ✓ | | |
+| `notification.show({ title, body })` | A notification of the system's, a click on which is the event `notification`; the page alone | ✓ | | |
 | `events.on(name, listener)` | Calls `listener` with each event of this name the app's C++ emits; returns what stops it | ✓ | ✓ | ✓ |
 | `updater.check()` | `{ version }`, the newer version `app.updater.url` offers, or `null` | ✓ | | |
 | `updater.install()` | Installs that version once its signature holds, then quits the app and opens the new one | ✓ | | |
@@ -456,8 +459,52 @@ opens with: ⌘C, ⌘V, ⌘Z and ⌘A reach the page through `editMenu` or the e
 `windowMenu` or `minimize` and `close`. On Windows and Linux they are a bar in the window, above the page, which keeps
 its size, as the window grows by the bar's height unless it fills the screen; `editMenu` and `windowMenu` are there the
 standard items of that platform's apps, and `menu.set([])` takes the bar away. iOS and Android apps have no menu bar,
-and `menu.set` rejects there. The event `menu` is the menus' alone: the app's C++ sets no menus, and the events it
-emits, one of which the page may set them on, go by other names.
+and `menu.set` rejects there. The event `menu` is the menus' and the [tray's](#tray-and-notifications) alone: the app's
+C++ sets neither, and the events it emits, one of which the page may set them on, go by other names.
+
+## Tray and notifications
+
+A desktop page puts the app's icon in the macOS menu bar, the Windows notification area or a Linux desktop's status
+tray, with a tooltip and a menu, and shows the system's notifications:
+
+```js
+import { app, events, notification, tray } from 'crossbind/app';
+
+await tray.set({
+    tooltip: 'Sync',
+    menu: [
+        { label: 'Sync now', id: 'sync' },
+        { label: 'Paused', id: 'pause', checked: false },
+        { type: 'separator' },
+        { label: 'Quit', id: 'quit' },
+    ],
+});
+events.on('menu', ({ id, checked }) => {
+    if (id === 'sync') sync();
+    if (id === 'pause') paused = checked;
+    if (id === 'quit') app.quit();
+});
+events.on('tray', () => sync());
+
+await notification.show({ title: 'Synced', body: '12 files are up to date.' });
+events.on('notification', () => showReport());
+```
+
+The tray's menu takes the items of `menu.set` but for roles and accelerators: `{ label, id, enabled, checked }`, a
+submenu `{ label, items }` and `{ type: 'separator' }`. A click of an item with an id is the event `menu`, as one in the
+menus is, and turns an item with `checked` over first. The icon is the app's, from `app.icon`, or the system's for an app
+without one. The menu opens on a click on macOS, on a right click on Windows, and on Linux on the click its desktop
+opens menus on; a left or right click that opens none, as a left click does on Windows, is the event `tray`. `tray.set` again changes the tooltip and the menu of the same icon, `tray.remove()` takes the icon away,
+and the app takes it along as it quits. A Linux tray is a StatusNotifierItem, which the trays of KDE, Xfce, LXQt and
+others show, and GNOME's with its AppIndicator extension, which Ubuntu's comes with; on a desktop without one `tray.set`
+rejects, saying so.
+
+`notification.show` answers once the system has taken the notification, and a click on it while the app runs is the
+event `notification`, without a value. macOS asks the app's user first, and the call rejects when they refuse, as it
+does in an executable run outside its bundle. On Windows it is a balloon of the tray's icon, which Windows 10 and later
+show as one of their notifications: without the page's tray, or after `tray.remove()`, an icon of the app's shows in the
+notification area until the notification goes, and its clicks tell the page nothing. A Linux app gives it to the desktop's notification server, with the body escaped for one that reads markup in it.
+iOS and Android apps have neither a tray nor these notifications yet, and both calls reject there.
 
 ## One instance
 
@@ -833,6 +880,11 @@ writes to logcat, under the tag `Crossbind`: the URL only on `localhost`, and th
   their buttons, Return and Escape; in the iOS Simulator with their buttons; on an Android emulator with their buttons,
   Back and a tap outside. On Windows the conformance runs in CI check that the host refuses one no platform shows; the
   dialog itself is built there, not measured yet.
+- The tray and notifications: the conformance runs on Windows click the icon, an item of its menu and the notification
+  with the messages Windows sends the app, and those on Linux run against a tray and a notification server of the run's
+  own, which read the icon and its menu as KDE's tray does, and click them. On macOS the runs set the icon and take it
+  away, unclicked. Nobody has looked at the icon in a real KDE, GNOME or Windows tray yet, nor at a notification shown,
+  nor at macOS's question for notifications.
 - The icon has been seen in macOS's Finder, in the icon files of an iOS Simulator build and on Android's launcher;
   Windows and Linux apps carry it, but nobody has looked at it there yet.
 - A download the page starts saves where its user picks on macOS, iOS and Android when it is a `Blob` or a `data:` URL

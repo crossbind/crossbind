@@ -1,7 +1,8 @@
 // What an app's host does for its page: the dialogs that pick files or show a message, opening an address or a file
-// outside the app, the app's folders, quitting, its menus, the events of the app's native code and a desktop app's
-// updates. Each call goes to the host of an app (target.runtimeEnv: 'app'); in any other build it rejects, or events.on
-// throws. The app's native code calls the same through <crossbind/app.h>, but for the menus and events.on.
+// outside the app, the app's folders, quitting, its menus, its tray icon and notifications, the events of the app's
+// native code and a desktop app's updates. Each call goes to the host of an app (target.runtimeEnv: 'app'); in any
+// other build it rejects, or events.on throws. The app's native code calls the same through <crossbind/app.h>, but for
+// the menus, the tray, notifications and events.on.
 
 const OPEN = { title: 'string', defaultPath: 'string', filters: 'filters', directory: 'boolean', multiple: 'boolean' };
 const SAVE = { title: 'string', defaultPath: 'string', defaultName: 'string', filters: 'filters' };
@@ -32,6 +33,7 @@ const isButtons = (value) => Array.isArray(value) && value.length >= 1 && value.
 const LISTS = {
     filters: { isFitting: isFilters, name: 'list of { name, extensions }' },
     buttons: { isFitting: isButtons, name: 'list of one to three labels' },
+    list: { isFitting: Array.isArray, name: 'list' },
 };
 
 // The options as the host takes them, so a misspelt or mistyped one fails here, saying which.
@@ -125,6 +127,46 @@ function checkedMenus(menus) {
     return { menus };
 }
 
+// A tray item is { label, id, enabled, checked }, a submenu { label, items } or { type: 'separator' }: a tray's menu has
+// no keys, and no standard item.
+const TRAY = { tooltip: 'string', menu: 'list' };
+const TRAY_ITEM = { label: 'string', id: 'string', enabled: 'boolean', checked: 'boolean', items: 'list', type: 'string' };
+const NOTIFICATION = { title: 'string', body: 'string' };
+
+function checkTrayItem(item, where) {
+    const refuse = (what) => {
+        throw new TypeError(`crossbind: tray.set's ${where} ${what}.`);
+    };
+    if (item === null || typeof item !== 'object' || Array.isArray(item)) refuse('is no object');
+    for (const [key, value] of Object.entries(item)) {
+        if (!Object.hasOwn(TRAY_ITEM, key)) refuse(`takes ${Object.keys(TRAY_ITEM).join(', ')}; ${key} is none of them`);
+        const kind = TRAY_ITEM[key];
+        if (value !== undefined && !(kind === 'list' ? Array.isArray(value) : typeof value === kind)) refuse(`.${key} is no ${kind}`);
+    }
+    const others = Object.keys(item).filter((key) => key !== 'type' && item[key] !== undefined);
+    if (item.type !== undefined) {
+        if (item.type !== 'separator' || others.length > 0) refuse("is no separator, which is { type: 'separator' } alone");
+    } else if (!item.label) {
+        refuse('has no label');
+    } else if (item.items !== undefined) {
+        if (others.some((key) => key !== 'label' && key !== 'items')) refuse('is a menu, which takes a label and items alone');
+        // entries() reads a hole as undefined, which forEach skips.
+        for (const [index, child] of item.items.entries()) checkTrayItem(child, `${where}.items[${index}]`);
+    }
+}
+
+function checkedTray(options) {
+    checked('tray.set', options, TRAY);
+    for (const [index, item] of (options.menu ?? []).entries()) checkTrayItem(item, `menu[${index}]`);
+    return options;
+}
+
+function checkedNotification(options) {
+    checked('notification.show', options, NOTIFICATION);
+    if (!options.title) throw new TypeError('crossbind: notification.show takes a title.');
+    return options;
+}
+
 export const dialog = {
     // The paths of the files or folders the user picked, or null when they cancelled.
     open: async (options = {}) => call('dialog.open', checked('dialog.open', options, OPEN)),
@@ -167,6 +209,20 @@ export const menu = {
     // window. A click of an item with an id is an event, menu, of { id }, and of { id, checked } for an item it checked
     // or unchecked; a standard item does what its role says.
     set: async (menus) => call('menu.set', checkedMenus(menus)),
+};
+
+export const tray = {
+    // The app's icon in the macOS menu bar, the Windows notification area or a Linux desktop's status tray, with its
+    // tooltip and the menu a click opens. A click of an item with an id is the event menu, as one of menu.set's is, and a
+    // click of the icon the event tray where it opens no menu. Set again, it changes the icon that shows.
+    set: async (options = {}) => call('tray.set', checkedTray(options)),
+    // Takes the icon away.
+    remove: async () => call('tray.remove', {}),
+};
+
+export const notification = {
+    // A notification of the system's, with a title and a body; a click on it is the event notification.
+    show: async (options) => call('notification.show', checkedNotification(options)),
 };
 
 export const events = {

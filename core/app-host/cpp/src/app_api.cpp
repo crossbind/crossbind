@@ -392,6 +392,16 @@ std::vector<MenuItem> menuItems(jsi::Runtime &rt, const jsi::Value &list) {
     return out;
 }
 
+// A tray's menu has neither standard items nor keys, and each item but a separator has a label, as crossbind/app holds
+// a page to.
+void checkTrayItems(const std::vector<MenuItem> &items) {
+    for (const auto &item : items) {
+        if (!item.role.empty() || item.accelerator) throw std::invalid_argument("crossbind: tray.set's menu takes no role or accelerator");
+        if (!item.isSeparator && item.label.empty()) throw std::invalid_argument("crossbind: tray.set's menu has an item without a label");
+        checkTrayItems(item.items);
+    }
+}
+
 // A click the page hears of as the event menu.
 void menuClicked(std::string id, std::optional<bool> checked) {
     postEvent("menu", "{\"id\":" + json(id) + (checked ? std::string(",\"checked\":") + (*checked ? "true" : "false") : "") + "}");
@@ -564,6 +574,17 @@ void callApp(jsi::Runtime &rt, const std::string &name, const jsi::Value &option
             reply(ok("null"));
         } else if (name == "menu.set") {
             setMenu(menuItems(rt, property(rt, options, "menus")), menuClicked, answered(reply));
+        } else if (name == "tray.set") {
+            const jsi::Value items = property(rt, options, "menu");
+            TrayOptions tray{text(rt, options, "tooltip"), items.isUndefined() ? std::vector<MenuItem>() : menuItems(rt, items)};
+            checkTrayItems(tray.menu);
+            setTray(std::move(tray), menuClicked, answered(reply));
+        } else if (name == "tray.remove") {
+            removeTray(answered(reply));
+        } else if (name == "notification.show") {
+            const std::string title = text(rt, options, "title");
+            if (title.empty()) throw std::invalid_argument("crossbind: notification.show takes a title");
+            showNotification({title, text(rt, options, "body")}, answered(reply));
         } else if (name == "updater.check") {
             inBackground(reply, [] {
                 const std::optional<std::string> version = checkForUpdate();

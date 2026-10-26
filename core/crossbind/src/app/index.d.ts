@@ -97,6 +97,36 @@ export declare const menu: {
     set(menus: Menu[]): Promise<void>;
 };
 
+/** An item of the tray's menu: one the page handles, by its id, a submenu or a separator. */
+export type TrayItem =
+    | { label: string; id?: string; enabled?: boolean; checked?: boolean }
+    | { label: string; items: TrayItem[] }
+    | { type: 'separator' };
+
+export interface TrayOptions {
+    /** What the icon shows when the pointer rests on it. */
+    tooltip?: string;
+    /** The menu a click of the icon opens: a click on macOS, a right click on Windows, and on Linux the one its desktop takes. */
+    menu?: TrayItem[];
+}
+
+export declare const tray: {
+    /** The app's icon in the macOS menu bar, the Windows notification area or a Linux desktop's status tray. A click of an item with an id is the event menu, with a MenuClick, and a click of the icon the event tray where it opens no menu. Set again, it changes the icon that shows. */
+    set(options?: TrayOptions): Promise<void>;
+    /** Takes the icon away. */
+    remove(): Promise<void>;
+};
+
+export interface NotificationOptions {
+    title: string;
+    body?: string;
+}
+
+export declare const notification: {
+    /** A notification of the system's; a click on it is the event notification. macOS asks its user first. */
+    show(options: NotificationOptions): Promise<void>;
+};
+
 /** What the event second-instance carries: a later launch's arguments, the program's own left out, and the folder it was launched in. */
 export interface SecondInstance {
     args: string[];
@@ -109,7 +139,7 @@ export interface OpenUrl {
 }
 
 export declare const events: {
-    /** Calls listener with each click of an item with an id in the menus menu.set sets, until the function it returns is called. */
+    /** Calls listener with each click of an item with an id in the menus menu.set sets or in the tray's menu, until the function it returns is called. */
     on(name: 'menu', listener: (click: MenuClick) => void): () => void;
     /** Calls listener with each link of app.urlSchemes the system opens the app with once the page has called app.launchUrls(), until the function it returns is called. */
     on(name: 'open-url', listener: (open: OpenUrl) => void): () => void;
@@ -119,6 +149,10 @@ export declare const events: {
     on(name: 'suspend', listener: () => void): () => void;
     /** Calls listener as the system of a desktop app wakes from sleep, until the function it returns is called. */
     on(name: 'resume', listener: () => void): () => void;
+    /** Calls listener with each left or right click of the tray's icon that opens no menu, until the function it returns is called. */
+    on(name: 'tray', listener: () => void): () => void;
+    /** Calls listener with each click on a notification the app's notification.show showed while it runs, until the function it returns is called. */
+    on(name: 'notification', listener: () => void): () => void;
     /** Calls listener with the value of each event of this name the app's native code emits from now on, until the function it returns is called. */
     on(name: string, listener: (value: unknown) => void): () => void;
 };

@@ -4,8 +4,10 @@
 #else
 #import <Cocoa/Cocoa.h>
 #import <UniformTypeIdentifiers/UniformTypeIdentifiers.h>
+#import <UserNotifications/UserNotifications.h>
 #endif
 
+#include "host_core.h"
 #include "platform.h"
 
 #include <memory>
@@ -90,6 +92,14 @@ void setMenu(std::vector<MenuItem>, MenuClicked, std::function<void(Failure)>) {
     throw std::runtime_error("crossbind: an iOS app has no menu bar");
 }
 
+void setTray(TrayOptions, MenuClicked, std::function<void(Failure)>) { throw std::runtime_error("crossbind: an iOS app has no tray icon"); }
+
+void removeTray(std::function<void(Failure)>) { throw std::runtime_error("crossbind: an iOS app has no tray icon"); }
+
+void showNotification(Notification, std::function<void(Failure)>) {
+    throw std::runtime_error("crossbind: an iOS app shows no notifications yet");
+}
+
 namespace {
 
 __weak UIWindow *mainWindow;
@@ -152,6 +162,28 @@ NSArray<UTType *> *typesOf(const std::vector<crossbind::app::FileFilter> &filter
 bool exists(NSURL *file) { return [NSFileManager.defaultManager fileExistsAtPath:file.path]; }
 
 }  // namespace
+
+// Shows the app's notifications while it is in front, as macOS does only when asked, and tells the page of a click on
+// one.
+@interface CrossbindNotifications : NSObject <UNUserNotificationCenterDelegate>
+@end
+
+@implementation CrossbindNotifications
+
+- (void)userNotificationCenter:(UNUserNotificationCenter *)center
+       willPresentNotification:(UNNotification *)notification
+         withCompletionHandler:(void (^)(UNNotificationPresentationOptions))completionHandler {
+    completionHandler(UNNotificationPresentationOptionBanner | UNNotificationPresentationOptionList | UNNotificationPresentationOptionSound);
+}
+
+- (void)userNotificationCenter:(UNUserNotificationCenter *)center
+    didReceiveNotificationResponse:(UNNotificationResponse *)response
+             withCompletionHandler:(void (^)(void))completionHandler {
+    if ([response.actionIdentifier isEqualToString:UNNotificationDefaultActionIdentifier]) crossbind::app::postEvent("notification", "null");
+    completionHandler();
+}
+
+@end
 
 // The panels are app-modal: nothing else in the app, quitting among it, happens while one asks.
 void showOpenDialog(crossbind::app::OpenOptions options, std::function<void(Picked)> done) {
@@ -305,6 +337,45 @@ void fillScreen() {
       // A window that does not resize goes full screen only when it says it can.
       mainWindow.collectionBehavior |= NSWindowCollectionBehaviorFullScreenPrimary;
       [mainWindow toggleFullScreen:nil];
+    });
+}
+
+// macOS asks its user the first time, and has no notifications for an executable outside a bundle, as a development
+// session may run.
+void showNotification(Notification notification, std::function<void(Failure)> done) {
+    onMain(^{
+      if (!NSBundle.mainBundle.bundleIdentifier) {
+          done("crossbind: a macOS app shows notifications from its bundle alone");
+          return;
+      }
+      static CrossbindNotifications *delegate = [CrossbindNotifications new];
+      UNUserNotificationCenter *center = UNUserNotificationCenter.currentNotificationCenter;
+      center.delegate = delegate;
+      UNMutableNotificationContent *content = [UNMutableNotificationContent new];
+      content.title = ns(notification.title);
+      content.body = ns(notification.body);
+      content.sound = UNNotificationSound.defaultSound;
+      [center requestAuthorizationWithOptions:UNAuthorizationOptionAlert | UNAuthorizationOptionSound
+                            completionHandler:^(BOOL isAllowed, NSError *refused) {
+                              if (!isAllowed) {
+                                  const std::string why = refused ? refused.localizedDescription.UTF8String : "its user turned them off";
+                                  onMain(^{
+                                    done("crossbind: macOS does not let the app show notifications: " + why);
+                                  });
+                                  return;
+                              }
+                              UNNotificationRequest *request = [UNNotificationRequest requestWithIdentifier:NSUUID.UUID.UUIDString
+                                                                                                    content:content
+                                                                                                    trigger:nil];
+                              [center addNotificationRequest:request withCompletionHandler:^(NSError *failed) {
+                                const Failure failure = failed ? Failure(std::string("crossbind: macOS did not show the notification: ") +
+                                                                         failed.localizedDescription.UTF8String)
+                                                               : Failure();
+                                onMain(^{
+                                  done(failure);
+                                });
+                              }];
+                            }];
     });
 }
 

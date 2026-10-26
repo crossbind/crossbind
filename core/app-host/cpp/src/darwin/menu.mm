@@ -1,15 +1,18 @@
 #import <Cocoa/Cocoa.h>
 
 #include "crossbind_app.h"
+#include "host_core.h"
 #include "platform.h"
 
 #include <cctype>
 #include <map>
 #include <stdexcept>
 
-// What a click of one of the page's items does: it tells the page, after toggling the item when it has checked.
+// What a click of one of the page's items does: it tells the page, after toggling the item when it has checked. A click
+// of the tray's icon without a menu tells the page as well.
 @interface CrossbindMenuTarget : NSObject
 - (void)clicked:(NSMenuItem *)item;
+- (void)trayClicked:(id)sender;
 @end
 
 namespace {
@@ -17,10 +20,13 @@ namespace {
 // The tags of the page's items.
 constexpr NSInteger CHECKABLE = 1;
 constexpr NSInteger DISABLED = 2;
+// The size of the icons in macOS's menu bar.
+constexpr CGFloat TRAY_ICON_SIZE = 18;
 
 MenuClicked onClick;
 // A menu item holds its target weakly.
 CrossbindMenuTarget *target;
+NSStatusItem *tray;
 
 NSString *ns(const std::string &text) { return [NSString stringWithUTF8String:text.c_str()] ?: @""; }
 
@@ -166,6 +172,10 @@ NSMenuItem *itemOf(const MenuItem &page) {
     if (onClick && itemId.length > 0) onClick(itemId.UTF8String, checked);
 }
 
+- (void)trayClicked:(id)sender {
+    crossbind::app::postEvent("tray", "null");
+}
+
 // AppKit enables an item whose target takes its action, unless the item says otherwise.
 - (BOOL)validateMenuItem:(NSMenuItem *)item {
     return !(item.tag & DISABLED);
@@ -206,5 +216,43 @@ void setMenu(std::vector<MenuItem> menus, MenuClicked clicked, std::function<voi
           NSApp.servicesMenu = services;
           done(std::string(error.what()));
       }
+    });
+}
+
+// The tray's icon is the app's own. A click opens its menu, or without one tells the page.
+void setTray(TrayOptions options, MenuClicked clicked, std::function<void(Failure)> done) {
+    dispatch_async(dispatch_get_main_queue(), ^{
+      try {
+          if (!target) target = [CrossbindMenuTarget new];
+          NSMenu *menu = nil;
+          if (!options.menu.empty()) {
+              menu = [NSMenu new];
+              for (const auto &item : options.menu) [menu addItem:itemOf(item)];
+          }
+          if (!tray) {
+              tray = [NSStatusBar.systemStatusBar statusItemWithLength:NSSquareStatusItemLength];
+              NSImage *icon = [NSApp.applicationIconImage copy];
+              icon.size = NSMakeSize(TRAY_ICON_SIZE, TRAY_ICON_SIZE);
+              tray.button.image = icon;
+              // A right click tells the page as a click does elsewhere.
+              [tray.button sendActionOn:NSEventMaskLeftMouseUp | NSEventMaskRightMouseUp];
+          }
+          tray.button.toolTip = options.tooltip.empty() ? nil : ns(options.tooltip);
+          tray.button.target = target;
+          tray.button.action = menu ? nil : @selector(trayClicked:);
+          tray.menu = menu;
+          onClick = clicked;
+          done(std::nullopt);
+      } catch (const std::exception &error) {
+          done(std::string(error.what()));
+      }
+    });
+}
+
+void removeTray(std::function<void(Failure)> done) {
+    dispatch_async(dispatch_get_main_queue(), ^{
+      if (tray) [NSStatusBar.systemStatusBar removeStatusItem:tray];
+      tray = nil;
+      done(std::nullopt);
     });
 }

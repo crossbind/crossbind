@@ -133,6 +133,22 @@ using MenuClicked = std::function<void(std::string id, std::optional<bool> check
 // Sets the app's menus, on the main thread, which calls done; a click of an item with an id calls clicked there, with
 // whether a checked one now is.
 void setMenu(std::vector<MenuItem> menus, MenuClicked clicked, std::function<void(Failure)> done);
+// The app's icon in the menu bar on macOS, the notification area on Windows and a desktop's status tray on Linux, with
+// its tooltip and the menu a click opens. A click of an item with an id calls clicked, and a click of the icon that opens
+// no menu tells the page as the event tray. Set again, it changes the icon. On the main thread, which calls done.
+struct TrayOptions {
+    std::string tooltip;
+    std::vector<MenuItem> menu;
+};
+void setTray(TrayOptions options, MenuClicked clicked, std::function<void(Failure)> done);
+void removeTray(std::function<void(Failure)> done);
+// A notification of the system's, a click on which tells the page as the event notification. On the main thread, which
+// calls done once the system has taken it.
+struct Notification {
+    std::string title;
+    std::string body;
+};
+void showNotification(Notification notification, std::function<void(Failure)> done);
 // Tells the page when the system goes to sleep and when it wakes, as the events suspend and resume, on macOS and Linux;
 // a Windows app's window hears of it itself. On the main thread.
 void listenForSleep();

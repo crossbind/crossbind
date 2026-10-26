@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, test, vi } from 'vitest';
 import {
-    app, dialog, events, menu, shell, updater,
+    app, dialog, events, menu, notification, shell, tray, updater,
 } from '../src/app/index.js';
 
 // The host of an app, as page.js hands it the page's calls.
@@ -210,6 +210,37 @@ describe("crossbind/app's menus", () => {
         for (const accelerator of ['Cmd+O', 'CmdOrCtrl+o', 'Ctrl+Ctrl+O', 'CmdOrCtrl+', 'F13', 'Ctrl+Alt', 'O', 'Shift+O', 'Enter']) {
             await expect(set(file({ label: 'Open', accelerator }))).rejects.toThrow(`menus[0].items[0].accelerator ${JSON.stringify(accelerator)} is none`);
         }
+        expect(host).not.toHaveBeenCalled();
+    });
+});
+
+describe("crossbind/app's tray and notifications", () => {
+    test('go to the host as the page gives them', async () => {
+        inApp();
+        const menuOfTray = [{ label: 'Open', id: 'open' }, { type: 'separator' }, { label: 'View', items: [{ label: 'Dark', id: 'dark', checked: true, enabled: false }] }];
+
+        await tray.set({ tooltip: 'Demo', menu: menuOfTray });
+        expect(host).toHaveBeenLastCalledWith('tray.set', { tooltip: 'Demo', menu: menuOfTray });
+        await tray.set();
+        expect(host).toHaveBeenLastCalledWith('tray.set', {});
+        await tray.remove();
+        expect(host).toHaveBeenLastCalledWith('tray.remove', {});
+        await notification.show({ title: 'Saved', body: 'The file is saved.' });
+        expect(host).toHaveBeenLastCalledWith('notification.show', { title: 'Saved', body: 'The file is saved.' });
+    });
+
+    test('are refused before the host sees them where it could not show them, naming the item', async () => {
+        inApp();
+
+        await expect(tray.set({ icon: 'tray.png' })).rejects.toThrow('tray.set takes tooltip, menu; icon is none of them');
+        await expect(tray.set({ menu: {} })).rejects.toThrow("tray.set's menu is no list");
+        await expect(tray.set({ menu: [{ id: 'open' }] })).rejects.toThrow("tray.set's menu[0] has no label");
+        await expect(tray.set({ menu: [{ label: 'Copy', role: 'copy' }] })).rejects.toThrow("tray.set's menu[0] takes label, id, enabled, checked, items, type; role is none of them");
+        await expect(tray.set({ menu: [{ label: 'Open', accelerator: 'CmdOrCtrl+O' }] })).rejects.toThrow('accelerator is none of them');
+        await expect(tray.set({ menu: [{ label: 'View', items: [{ type: 'separator', label: '-' }] }] })).rejects.toThrow("tray.set's menu[0].items[0] is no separator");
+        await expect(tray.set({ menu: [{ label: 'View', id: 'view', items: [] }] })).rejects.toThrow("tray.set's menu[0] is a menu, which takes a label and items alone");
+        await expect(notification.show({})).rejects.toThrow('notification.show takes a title');
+        await expect(notification.show({ title: 'Saved', icon: 'x.png' })).rejects.toThrow('notification.show takes title, body; icon is none of them');
         expect(host).not.toHaveBeenCalled();
     });
 });

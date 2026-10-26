@@ -4,7 +4,7 @@ import { createServer } from 'node:http';
 import { homedir, tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import config from '../crossbind.config.mjs';
-import { LAUNCH_ARGS, LAUNCH_URL, PHONE_URL, TRASHED_FILE } from './launch.mjs';
+import { LAUNCH_ARGS, LAUNCH_URL, NOTIFICATION, PHONE_URL, TRASHED_FILE, TRAY } from './launch.mjs';
 import { UPDATE_PORT, signUpdate } from './updates.mjs';
 
 // Opens the app `pnpm build` made, whose page runs the conformance suite and logs its summary last, and closes it
@@ -20,6 +20,10 @@ const FINISHED = /^(CONFORMANCE .*|CONFORMANCE ERR: .*)$/m;
 const LAUNCH_AGAIN = /^LAUNCH AGAIN$/m;
 const OPEN_LINK = /^OPEN LINK$/m;
 const FILL_SCREEN = /^FILL SCREEN$/m;
+const CLICK_TRAY = /^CLICK TRAY$/m;
+const TRAY_HOST_READY = /^TRAY HOST READY$/m;
+const TRAY_HOST_FAIL = /^TRAY HOST FAIL: (.*)$/m;
+const TRAY_HOST_REMOVED = 'TRAY HOST REMOVED';
 // Below the page's wait for the launch or the link, so a launch that stays or an adb that hangs says so.
 const ASKED_TIMEOUT_MS = 20000;
 // WebView2's DevTools, through which the run does on Windows what only a user's click could.
@@ -89,6 +93,54 @@ public static class Power {
 }
 '@
 [Power]::Sleep((Get-Process -Id APP_PID).MainWindowHandle)
+`;
+// Clicks the tray's icon, an item of its menu and the notification, with the messages Windows sends the window of a tray
+// icon of NOTIFYICON_VERSION_4: WM_APP + 3, with what happened beside the icon's id, 1. WM_CONTEXTMENU opens the menu,
+// whose loop takes the keys posted to it: Down to each item up to the one clicked, and Return. A window that takes 5 s
+// to answer fails.
+const TRAY_SCRIPT = `
+$ErrorActionPreference = 'Stop'
+Add-Type -TypeDefinition @'
+using System;
+using System.Runtime.InteropServices;
+using System.Threading;
+public static class Tray {
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern IntPtr FindWindowEx(IntPtr parent, IntPtr after, string type, string title);
+    [DllImport("user32.dll")] static extern uint GetWindowThreadProcessId(IntPtr window, out uint process);
+    [DllImport("user32.dll")] static extern bool IsWindowVisible(IntPtr window);
+    [DllImport("user32.dll", SetLastError = true)] static extern bool PostMessage(IntPtr window, uint message, IntPtr w, IntPtr l);
+    [DllImport("user32.dll", SetLastError = true)] static extern IntPtr SendMessageTimeout(IntPtr window, uint message, IntPtr w, IntPtr l, uint flags, uint timeout, out IntPtr result);
+    static IntPtr Find(string type, int app, bool isShown) {
+        IntPtr window = IntPtr.Zero;
+        while ((window = FindWindowEx(IntPtr.Zero, window, type, null)) != IntPtr.Zero) {
+            uint process;
+            GetWindowThreadProcessId(window, out process);
+            if (process == app && (!isShown || IsWindowVisible(window))) return window;
+        }
+        return IntPtr.Zero;
+    }
+    static void Tell(IntPtr tray, int what) {
+        IntPtr result;
+        if (SendMessageTimeout(tray, 0x8003, IntPtr.Zero, (IntPtr)(0x10000 | what), 2, 5000, out result) == IntPtr.Zero) throw new Exception("the tray's window did not answer: error " + Marshal.GetLastWin32Error());
+    }
+    public static void Click(int app, int downs) {
+        IntPtr tray = Find("crossbind_tray", app, false);
+        if (tray == IntPtr.Zero) throw new Exception("the app has no tray window");
+        Tell(tray, 0x400);
+        if (!PostMessage(tray, 0x8003, (IntPtr)(200 * 65536 + 200), (IntPtr)(0x10000 | 0x7B))) throw new Exception("the tray's menu was not asked for: error " + Marshal.GetLastWin32Error());
+        IntPtr menu = IntPtr.Zero;
+        for (int i = 0; i < 50 && menu == IntPtr.Zero; i += 1) {
+            Thread.Sleep(100);
+            menu = Find("#32768", app, true);
+        }
+        if (menu == IntPtr.Zero) throw new Exception("the tray's menu did not open");
+        for (int i = 0; i < downs; i += 1) PostMessage(menu, 0x0100, (IntPtr)0x28, IntPtr.Zero);
+        PostMessage(menu, 0x0100, (IntPtr)0x0D, IntPtr.Zero);
+        Tell(tray, 0x405);
+    }
+}
+'@
+[Tray]::Click(APP_PID, DOWNS)
 `;
 
 const root = resolve(import.meta.dirname, '..');
@@ -248,6 +300,49 @@ function serveUpdates() {
     });
 }
 
+// What a child of the run writes until it matches, within ASKED_TIMEOUT_MS.
+function awaitOutput(child, pattern) {
+    return new Promise((resolve, reject) => {
+        let text = '';
+        const timeout = setTimeout(() => reject(new Error(`it wrote nothing that matches ${pattern} in time`)), ASKED_TIMEOUT_MS);
+        const read = (chunk) => {
+            text += chunk;
+            if (!pattern.test(text)) return;
+            clearTimeout(timeout);
+            child.stdout.off('data', read);
+            resolve(text);
+        };
+        child.stdout.on('data', read);
+        child.once('error', reject);
+        child.once('exit', (code) => reject(new Error(`it exited with ${code}: ${text}`)));
+    });
+}
+
+// On Linux a session bus of the run's own, on which e2e/tray-host.py plays the desktop's tray and notification server
+// for the app.
+async function startTrayHost() {
+    if (platform || process.platform !== 'linux') return null;
+    try {
+        // Each goes as the run ends, however it ends.
+        const bus = spawn('dbus-daemon', ['--session', '--nofork', '--print-address=1'], { stdio: ['ignore', 'pipe', 'inherit'] });
+        process.once('exit', () => bus.kill());
+        const address = (await awaitOutput(bus, /\n/)).trim();
+        const host = spawn('python3', [join(import.meta.dirname, 'tray-host.py'), JSON.stringify({ tray: TRAY, notification: NOTIFICATION })], {
+            env: { ...process.env, DBUS_SESSION_BUS_ADDRESS: address },
+        });
+        process.once('exit', () => host.kill());
+        host.stderr.on('data', (chunk) => {
+            out += `[tray host] ${chunk}`;
+        });
+        await awaitOutput(host, TRAY_HOST_READY);
+        env.DBUS_SESSION_BUS_ADDRESS = address;
+        return { bus, host };
+    } catch (error) {
+        console.error(`FAIL: the run's tray and notification server did not start, which needs dbus-daemon and python3 with PyGObject (apt install dbus python3-gi): ${error.message}\n${out}`);
+        process.exit(1);
+    }
+}
+
 let out = '';
 checkIcon();
 checkUrlSchemes();
@@ -255,6 +350,7 @@ checkMetadata();
 leaveFileToTrash();
 // A phone's app does not update itself.
 if (!platform) await serveUpdates();
+const trayHost = await startTrayHost();
 const { child: app, close, executable } = await open();
 // The adb crossbind opened the Android app with, which opens it with a link as well.
 const adb = platform === 'android' ? (await import('crossbind')).adbPath() : undefined;
@@ -376,6 +472,26 @@ async function fillScreen() {
     }
 }
 
+// The page asks for them once it shows its notification and listens: clicks of the tray's icon, of the menu's first
+// item with checked and of the notification, which the tray host makes on Linux.
+let isTrayClicked = false;
+function clickTray() {
+    if (isTrayClicked || !CLICK_TRAY.test(out)) return;
+    isTrayClicked = true;
+    if (trayHost) {
+        trayHost.host.stdin.write('click\n');
+        return;
+    }
+    const clicked = TRAY.menu.findIndex((item) => 'checked' in item);
+    const downs = TRAY.menu.slice(0, clicked + 1).filter((item) => item.type !== 'separator').length;
+    try {
+        const script = TRAY_SCRIPT.replace('APP_PID', String(app.pid)).replace('DOWNS', String(downs));
+        execFileSync('powershell', ['-NoProfile', '-Command', script], { encoding: 'utf8', timeout: ASKED_TIMEOUT_MS });
+    } catch (error) {
+        finish(`the tray could not be clicked: ${error.message}`);
+    }
+}
+
 function finish(problem) {
     clearTimeout(timer);
     app.kill();
@@ -393,9 +509,12 @@ function finish(problem) {
     const summary = out.match(CONFORMANCE);
     // A runner that trusts the key the app is signed with has the updater hold an update to that signer.
     const signer = process.env.CROSSBIND_E2E_UPDATE_SIGNER;
+    // The tray took the icon away as the page asked, before the app quit to open anew.
+    const removed = out.indexOf(TRAY_HOST_REMOVED);
     const failure = problem
         ?? (isLaunchedAgain && !hasLeft ? 'the app launched again had not left when the suite finished' : undefined)
-        ?? (signer && summary && !out.includes(`is not signed by ${signer}`) ? `the updater did not hold the update to the app's signer, ${signer}` : undefined);
+        ?? (signer && summary && !out.includes(`is not signed by ${signer}`) ? `the updater did not hold the update to the app's signer, ${signer}` : undefined)
+        ?? (trayHost && summary && !(removed >= 0 && removed < summary.index) ? "the tray kept the app's icon after tray.remove()" : undefined);
     if (failure || !summary) {
         console.error(`FAIL: ${failure ?? 'the app failed the conformance suite'}:\n${out}`);
         process.exit(1);
@@ -412,6 +531,7 @@ app.stdout.on('data', (chunk) => {
     launchAgain();
     openLink();
     fillScreen();
+    clickTray();
     if (FINISHED.test(out)) summarized();
 });
 app.stderr.on('data', (chunk) => {
@@ -419,7 +539,13 @@ app.stderr.on('data', (chunk) => {
     launchAgain();
     openLink();
     fillScreen();
+    clickTray();
     if (FINISHED.test(out)) summarized();
+});
+trayHost?.host.stdout.on('data', (chunk) => {
+    out += chunk;
+    const found = out.match(TRAY_HOST_FAIL);
+    if (found) finish(`the tray host found that ${found[1]}`);
 });
 // An app that leaves at once, having said nothing, handed its launch to another instance of it. What it wrote last may
 // come after its exit.
