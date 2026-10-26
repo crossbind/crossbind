@@ -209,7 +209,7 @@ void hideIcon() {
 
 // Why the icon did not show, right after Windows took none.
 std::string noNotificationArea() {
-    return "crossbind: Windows' notification area did not take the app's icon, as in a session without a taskbar: error " + std::to_string(GetLastError());
+    return "crossbind: Windows' notification area did not take the app's icon: error " + std::to_string(GetLastError());
 }
 
 LRESULT CALLBACK menuProcedure(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) {

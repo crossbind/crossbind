@@ -144,18 +144,50 @@ public static class Tray {
 '@
 [Tray]::Click(APP_PID, DOWNS)
 `;
-// Whether the session shows Windows' taskbar, whose notification area takes the apps' icons.
-const TASKBAR_SCRIPT = `
+// Whether Windows takes a tray icon at all in the run's session: it adds one of its own, Windows' application icon on a
+// window of the Static class, and takes it away.
+const ICON_PROBE_SCRIPT = `
 $ErrorActionPreference = 'Stop'
 Add-Type -TypeDefinition @'
 using System;
 using System.Runtime.InteropServices;
-public static class Taskbar {
-    [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern IntPtr FindWindow(string type, string title);
-    public static bool IsShown() { return FindWindow("Shell_TrayWnd", null) != IntPtr.Zero; }
+public static class Probe {
+    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+    struct NotifyIconData {
+        public int Size;
+        public IntPtr Window;
+        public int Id;
+        public int Flags;
+        public int CallbackMessage;
+        public IntPtr Icon;
+        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 128)] public string Tip;
+        public int State;
+        public int StateMask;
+        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 256)] public string Info;
+        public int Version;
+        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 64)] public string InfoTitle;
+        public int InfoFlags;
+        public Guid Item;
+        public IntPtr BalloonIcon;
+    }
+    [DllImport("shell32.dll", CharSet = CharSet.Unicode, SetLastError = true)] static extern bool Shell_NotifyIcon(int message, ref NotifyIconData data);
+    [DllImport("user32.dll", CharSet = CharSet.Unicode, SetLastError = true)] static extern IntPtr CreateWindowEx(int exStyle, string type, string title, uint style, int x, int y, int width, int height, IntPtr parent, IntPtr menu, IntPtr instance, IntPtr parameter);
+    [DllImport("user32.dll")] static extern IntPtr LoadIcon(IntPtr instance, IntPtr name);
+    [DllImport("user32.dll")] static extern bool DestroyWindow(IntPtr window);
+    public static string Add() {
+        IntPtr window = CreateWindowEx(0, "Static", "", 0x80000000, 0, 0, 0, 0, IntPtr.Zero, IntPtr.Zero, IntPtr.Zero, IntPtr.Zero);
+        if (window == IntPtr.Zero) throw new Exception("the probe's window cannot be made: error " + Marshal.GetLastWin32Error());
+        NotifyIconData data = new NotifyIconData { Window = window, Id = 1, Flags = 2, Icon = LoadIcon(IntPtr.Zero, (IntPtr)32512), Tip = "", Info = "", InfoTitle = "" };
+        data.Size = Marshal.SizeOf(data);
+        bool isAdded = Shell_NotifyIcon(0, ref data);
+        string answer = isAdded ? "added" : "refused with error " + Marshal.GetLastWin32Error();
+        if (isAdded) Shell_NotifyIcon(2, ref data);
+        DestroyWindow(window);
+        return answer;
+    }
 }
 '@
-[Taskbar]::IsShown()
+[Probe]::Add()
 `;
 
 const root = resolve(import.meta.dirname, '..');
@@ -507,19 +539,19 @@ function clickTray() {
     }
 }
 
-// The page tells it when Windows took no tray icon, which a session without a taskbar, as a CI runner's may be, has no
-// notification area for; with the taskbar it is the app's failure.
+// The page tells it when Windows took no tray icon. A session that takes none, as a CI runner's may be, refuses the run's
+// own icon as well; one that takes the run's refused the app's alone.
 let isAreaChecked = false;
 function checkNotificationArea() {
     const refused = out.match(NO_NOTIFICATION_AREA);
     if (isAreaChecked || !refused) return;
     isAreaChecked = true;
     try {
-        const taskbar = execFileSync('powershell', ['-NoProfile', '-Command', TASKBAR_SCRIPT], { encoding: 'utf8', timeout: ASKED_TIMEOUT_MS }).trim();
-        if (taskbar === 'True') finish('Windows took no tray icon while its taskbar shows');
-        else console.log(`note: this Windows session shows no taskbar, so its tray and notification went unclicked: ${refused[0].trim()}`);
+        const probe = execFileSync('powershell', ['-NoProfile', '-Command', ICON_PROBE_SCRIPT], { encoding: 'utf8', timeout: ASKED_TIMEOUT_MS }).trim();
+        if (probe === 'added') finish(`Windows took the run's own tray icon, but not the app's: ${refused[0].trim()}`);
+        else console.log(`note: this Windows session takes no tray icon, as the run's own was ${probe}, so the app's tray and notification went unclicked: ${refused[0].trim()}`);
     } catch (error) {
-        finish(`the Windows session's taskbar could not be looked for: ${error.message}`);
+        finish(`the run's own tray icon could not be tried: ${error.message}`);
     }
 }
 
