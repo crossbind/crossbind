@@ -234,7 +234,7 @@ void _embind_register_optional(CrossbindTid, CrossbindTid);
 void _embind_register_smart_ptr(CrossbindTid, CrossbindTid, const char*, emscripten::sharing_policy, const char*, CrossbindFn, const char*, CrossbindFn, const char*, CrossbindFn, const char*, CrossbindFn);
 void _embind_register_enum(CrossbindTid, const char*, size_t, bool, int);
 void _embind_register_enum_value(CrossbindTid, const char*, int);
-void _embind_register_value_object(CrossbindTid, const char*, const char*, CrossbindFn, const char*, CrossbindFn);
+void _embind_register_value_object(CrossbindTid, const char*, const char*, CrossbindFn, const char*, CrossbindFn, size_t, bool);
 void _embind_register_constant(const char*, CrossbindTid, double);
 void _embind_register_class_property(CrossbindTid, const char*, CrossbindTid, const char*, CrossbindFn, void*, CrossbindTid, const char*, CrossbindFn, void*);
 void _embind_register_value_object_field(CrossbindTid, const char*, CrossbindTid, const char*, CrossbindFn, void*, CrossbindTid, const char*, CrossbindFn, void*);
@@ -283,7 +283,8 @@ void crossbind_embind_register_constant(const char* name, CrossbindTid ty, doubl
     _embind_register_constant(name, ty, value);
 }
 void crossbind_embind_register_value_object(CrossbindTid a, const char* b, const char* c, CrossbindFn d, const char* e, CrossbindFn f) {
-    _embind_register_value_object(a, b, c, d, e, f);
+    // Not trivial: embind builds the value with its constructor (T::default()), never in zeroed stack memory.
+    _embind_register_value_object(a, b, c, d, e, f, 0, false);
 }
 void crossbind_embind_register_value_object_field(CrossbindTid a, const char* b, CrossbindTid c, const char* d, CrossbindFn e, void* f, CrossbindTid g, const char* h, CrossbindFn i, void* j) {
     _embind_register_value_object_field(a, b, c, sigForWasm(d), e, f, g, sigForWasm(h), i, j);
