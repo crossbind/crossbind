@@ -3,6 +3,107 @@
 <!-- release-notes:start -->
 <!-- Generated from releases/crossbind/<version>.md by scripts/release/render-changelog.mjs. Edit the note, then run `pnpm changelog`. -->
 
+## 2.0.0-beta.67
+
+Desktop apps get a tray icon with its menu, the system's notifications, the trash, relaunch, sleep and wake events and copyright and category metadata, and no longer load a planted DLL on Windows, let a page read the clipboard without a gesture or take an update from another signer; the toolchain images move to 1.0.18, with Emscripten 6.0.13.
+
+### Highlights
+
+### Apps
+
+- `tray.set({ tooltip, menu })` from `crossbind/app` puts a desktop app's icon in the macOS menu bar, the Windows
+  notification area or a Linux status tray, with a tooltip and a menu of `menu.set`'s items without roles or
+  accelerators, and `tray.remove()` takes it away. A click of an item with an id is the event `menu`, a click of the
+  icon that opens no menu the event `tray`. On Linux the icon is a StatusNotifierItem, so the app needs no extra
+  library; where no tray runs, as on GNOME without its AppIndicator extension, `tray.set` rejects and says so.
+- `notification.show({ title, body })` shows one of the system's notifications, and a click on it is the event
+  `notification`. macOS asks its user first, and Windows shows it as one of its own.
+- `shell.trash(path)` moves a file or folder to the system's trash: what is inside the app's data, cache and logs
+  folders, and what a dialog picked during this run. Where a volume has no trash the call fails, and nothing is deleted
+  for good. Native code gets `trash()` from the C++ header `crossbind/app.h`, without that scope.
+- `app.relaunch()` ends a desktop app as `app.quit()` does and opens it anew; a development session refuses it. Native
+  code gets `relaunch()`.
+- A desktop page hears the system going to sleep as the event `suspend`, and its waking as `resume`.
+- `app.copyright` is the line a macOS app's About panel and a Windows executable's details show, and `app.category`,
+  one of Apple's app categories such as `developer-tools`, files the app under macOS's categories and in a Linux menu.
+
+### Ports
+
+- A recipe's `patches` apply upstream fixes to the source it downloads, with `git apply` and before `replaceList`; one
+  that does not apply stops the build. Through them zlib takes two fixes for heap buffer overflows when a non-blocking
+  `gzwrite` fails (CVE-2026-76844, CVE-2026-85091), libjpeg-turbo three memory safety fixes (CVE-2026-75466 among
+  them) and expat the fix for CVE-2026-113351.
+- curl moves to 8.23.0 and OpenSSL to 4.1.0, whose WASI build leaves out DTLS, as it already left out QUIC.
+
+### Images
+
+- The pinned toolchain images move to 1.0.18. The web image carries Emscripten 6.0.13 with crossbind's embind overload
+  patch. npm's vendored undici moves to 6.29.1 (CVE-2026-109869), Debian's Brotli to 1.1.0-2+deb13u1 (CVE-2026-111497)
+  and the linux image's musl sysroots to musl 1.2.5-r24 (CVE-2026-107891).
+
+Reference: `docs/api/app.md`, `docs/api/crossbind-build.md`.
+
+### Breaking changes
+
+- A desktop page reads the clipboard only on its user's gesture: on Windows the host allows such a read, on macOS
+  WebKit shows its Paste menu and on Linux WebKitGTK asks the host. A read without a gesture gets nothing, and on Linux
+  script cut and copy need a gesture too.
+- `shell.openPath` and `shell.revealInFolder` refuse a path that contains `.` or `..`, as `shell.trash` does: the
+  system follows a link before a `..`, so such a path leads somewhere other than where it reads.
+- A signed app takes an update only from its own signer. On macOS the update must meet the running app's designated
+  requirement; on Windows its setup program needs an Authenticode signature that Windows trusts, with the common name
+  of the app's own certificate, and an app whose own signature Windows does not trust, such as a self-signed one,
+  refuses every update. An app signed ad hoc on macOS, an unsigned app and a Linux app take any update their
+  `app.updater` key signed, as before.
+- Emscripten 6.0.13's WasmFS has no `FS.analyzePath` or `FS.findObject`, so wasm code that calls them breaks.
+
+### Migration notes
+
+- A runner started or deployed with beta.66 serves the 1.0.16 images, so builds stop with a toolchain mismatch: run
+  `crossbind runner delete` and `crossbind runner start` again, or rerun `crossbind runner init` and redeploy.
+  crossbind cloud runs the images of the current release, so there a build from beta.66 stops the same way until
+  crossbind is upgraded.
+- Code that asked `FS.analyzePath(path).exists` calls `FS.stat(path)`, which throws for a path that does not exist.
+- A page reads the clipboard from a handler of its user's input, such as a click.
+
+### Fixes
+
+- A Windows app loads the system DLLs it imports, such as `version`, `winhttp` and `wintrust`, from System32 alone, so
+  a DLL of the same name next to it, as in a Downloads folder, no longer runs inside it.
+- A Windows app keeps its WebView2 profile under `%LOCALAPPDATA%`, in a folder named after its `app.id`, not in a
+  roaming folder that every app with the same executable name shared; the profile of an earlier release moves there on
+  first launch.
+- The Windows setup program runs the WebView2 bootstrapper it downloads only when Microsoft's Authenticode signature on
+  it is valid.
+- A Windows update removes the URL schemes an earlier release registered and this one no longer lists, and the
+  uninstaller removes every scheme of the app; a scheme another app took over keeps its key.
+- A dependency that `crossbind.overrides.js` rebuilds is rebuilt again when its package's version changes, so a port
+  release that adds a patch no longer leaves the old build linked.
+- A `-standalone-wasi` package's SBOM and `THIRD-PARTY-LICENSES.md` list what its binary links in on WASI, such as
+  wasi-libc and the LLVM runtimes, not the library alone.
+- The Expo guide and the plugin README install `metro-config`, whose `mergeConfig` their `metro.config.js` takes;
+  `expo/metro-config` exports none.
+- The Expo template asks for caret ranges and ships no lockfile or npm overrides, like the other templates; the
+  Electron template asks for Electron 45.
+
+### Known limitations
+
+- The tray and notifications have been clicked in CI with the messages Windows sends and against a Linux tray and
+  notification server of the run's own; nobody has looked at the icon in a real KDE, GNOME or Windows tray yet, at a
+  notification shown, or at macOS's question for notifications.
+- A clipboard read on a click has been measured on Windows alone. On Windows CI checks that an update without the
+  app's signature is refused; one by the same signer passing has not been run, and revocation is not checked.
+- The sleep and wake events have been checked on Windows, with the messages Windows sends, not on macOS or Linux; a
+  Windows machine with Modern Standby may send neither, and a Linux system without logind sends none. A trash on a
+  drive without one has not been tried.
+- expat's CVE-2026-115506 and libjpeg-turbo's OSV-2026-1068 stay open: neither has a fix that applies to the pinned
+  release yet.
+- In wasm, libcurl's own engine has no sockets: `curl_multi_init` returns a handle, but its transfers cannot connect.
+- Developer ID signing and notarization have not been run with a real Developer ID yet, nor Windows signing with a
+  cloud key service.
+- On the desktop, one window. Linux, Windows and Android apps build in Docker.
+- `fsync` in a Node.js wasm build reaches the operating system, not the disk.
+
 ## 2.0.0-beta.66
 
 Apps install, sign and update themselves, call back and forth with their page, keep one instance, open their own links and use the camera, microphone and location, with menus, window options and message dialogs; the toolchain images move to 1.0.16, whose windows image builds and signs Windows setup programs.

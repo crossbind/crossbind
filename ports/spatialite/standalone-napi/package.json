@@ -1,6 +1,6 @@
 {
     "name": "@crossbind/port-spatialite-standalone-napi",
-    "version": "2.0.0-beta.66",
+    "version": "2.0.0-beta.67",
     "nativeVersion": "5.1.0",
     "homepage": "https://crossbind.dev/ports/spatialite/",
     "repository": "https://github.com/crossbind/crossbind.git",
