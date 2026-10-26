@@ -1,5 +1,14 @@
 # @crossbind/docker
 
+## Image family 1.0.18
+
+### Patch Changes
+
+- Updated Emscripten to 6.0.13 in `web`. The Crossbind embind overload patch is rebased directly
+  onto it (crossbind/emscripten@44d615ce) and is content-hash verified during the image build.
+  Emscripten 6.0.13's WasmFS no longer has `FS.analyzePath` or `FS.findObject` and now supports
+  `pipe2`, so libcurl's `curl_multi_init` returns a handle instead of NULL.
+
 ## Image family 1.0.17
 
 ### Patch Changes
