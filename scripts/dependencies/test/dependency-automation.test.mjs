@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { compareVersions, decodeProposal, encodeProposal } from '../dependency-lib.mjs';
 import { changedDependencyUnits } from '../changed-units.mjs';
 import {
@@ -27,6 +27,7 @@ import {
 } from '../validate-native-family.mjs';
 import gdalBuild from '../../../ports/gdal/base/build.mjs';
 import opensslBuild from '../../../ports/openssl/base/build.mjs';
+import opensslConfig from '../../../ports/openssl/base/mergeConfig.mjs';
 import sqliteBuild from '../../../ports/sqlite3/base/build.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
@@ -281,6 +282,30 @@ test('on the real ports tree every target group builds each package once, depend
         }
     }
     assert.ok(builtBy.size > 0);
+});
+
+test("openssl's Windows addons link the system libraries its own build lists in libcrypto.pc", () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'crossbind-openssl-pc-'));
+    const flags = (pkg) => {
+        const config = pathToFileURL(path.join(root, pkg, 'crossbind.config.js')).href;
+        return opensslConfig({ paths: { config } }).targetSpecs.find((spec) => spec.platform === 'win32').specs.binary.addonFlags;
+    };
+    const pc = (pkg, target, libs) => {
+        const directory = path.join(root, pkg, 'dist/prebuilt', target, 'lib/pkgconfig');
+        fs.mkdirSync(directory, { recursive: true });
+        fs.writeFileSync(path.join(directory, 'libcrypto.pc'), `Name: OpenSSL-libcrypto\nLibs: -L\${libdir} -lcrypto\nLibs.private: ${libs}\n`);
+    };
+    // OpenSSL 4.0's list: 4.1.0 added -lbcrypt.
+    pc('win32', 'win32-arm64-mt-release', '-lws2_32 -lgdi32 -lcrypt32');
+    // Every platform package of the port takes part in a Windows addon's link; only the win32 one has its libraries.
+    pc('linux', 'linux-x64-mt-release', '-ldl -pthread');
+    try {
+        assert.deepEqual(flags('win32'), ['-lws2_32', '-lgdi32', '-lcrypt32']);
+        assert.deepEqual(flags('linux'), []);
+        assert.deepEqual(flags('unbuilt'), []);
+    } finally {
+        fs.rmSync(root, { recursive: true, force: true });
+    }
 });
 
 test('native recipes use portable configure entrypoints and the container WASI SDK fallback', () => {

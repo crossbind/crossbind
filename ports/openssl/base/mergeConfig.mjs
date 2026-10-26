@@ -1,6 +1,21 @@
+import fs from 'node:fs';
+
 // The CA certificates ship as data. curl has none built in on these platforms; GDAL and the curl tool find them
 // through CURL_CA_BUNDLE.
 const CERTS = { data: { 'ssl/certs': 'certs' }, env: { CURL_CA_BUNDLE: '_CROSSBIND_DATA_PATH_/certs/cacert.pem' } };
+
+// OpenSSL's MinGW build lists the system libraries libcrypto needs in its pkg-config file, and a release may add one
+// (4.1.0 added bcrypt): a Windows addon links what the win32 package's own build lists.
+function windowsSystemLibs({ config, output = 'dist' } = {}) {
+    const prebuilt = config && new URL(`${output}/prebuilt/`, config);
+    if (!prebuilt || !fs.existsSync(prebuilt)) return [];
+    const pc = fs.readdirSync(prebuilt)
+        .filter((target) => target.startsWith('win32-'))
+        .map((target) => new URL(`${target}/lib/pkgconfig/libcrypto.pc`, prebuilt))
+        .find((file) => fs.existsSync(file));
+    const libs = pc ? fs.readFileSync(pc, 'utf8').match(/^Libs\.private:(.*)$/m)?.[1] ?? '' : '';
+    return libs.split(/\s+/).filter((flag) => flag.startsWith('-l'));
+}
 
 export default (newConfig = {}) => ({
     ...newConfig,
@@ -39,8 +54,7 @@ export default (newConfig = {}) => ({
         { platform: 'darwin', specs: CERTS },
         { platform: 'linux', specs: CERTS },
         { platform: 'linuxmusl', specs: CERTS },
-        // The Winsock, GDI, CryptoAPI and, since 4.1.0, CNG (BCryptGenRandom) libraries OpenSSL's MinGW targets link.
-        { platform: 'win32', specs: { ...CERTS, binary: { addonFlags: ['-lws2_32', '-lgdi32', '-lcrypt32', '-lbcrypt'] } } },
+        { platform: 'win32', specs: { ...CERTS, binary: { addonFlags: windowsSystemLibs(newConfig.paths) } } },
         ...(newConfig.targetSpecs || []),
     ],
 });
