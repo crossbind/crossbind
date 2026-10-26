@@ -70,7 +70,27 @@ const DEBUG = [
     '    }',
 ].join('\n\t\t\t');
 
-const GLUES = [['release', RELEASE], ['debug', DEBUG]];
+// craftInvokerFunction as emscripten 6.0.13 writes it into a release glue: a stack frame brackets the call,
+// and the invoker goes straight into createNamedFunction.
+const RELEASE_6013 = 'function craftInvokerFunction(humanName,argTypes,classType,cppInvokerFunc,cppTargetFunc,isAsync){var argCount=argTypes.length;'
+    + 'if(argCount<2)throwBindingError("argTypes array size mismatch! Must at least get return value and receiver (this) types!");'
+    + 'var isClassMethodFunc=argTypes[1]!==null&&classType!==null;var needsDestructorStack=usesDestructorStack(argTypes);'
+    + 'var argsNeedStack=argsUseStackAlloc(argTypes);var useStackFrame=argsNeedStack&&!isAsync&&!needsDestructorStack;'
+    + 'if(argsNeedStack&&!useStackFrame)needsDestructorStack=true;var returns=!argTypes[0].isVoid;var expectedArgCount=argCount-2;'
+    + 'var argsWired=new Array(expectedArgCount);var invokerFuncArgs=[];var destructors=[];'
+    + 'return createNamedFunction(humanName,function(...args){destructors.length=0;var sp;if(useStackFrame)sp=stackSave();var thisWired;var rv;'
+    + 'try{invokerFuncArgs.length=isClassMethodFunc?2:1;invokerFuncArgs[0]=cppTargetFunc;'
+    + 'if(isClassMethodFunc){thisWired=argTypes[1].toWireType(destructors,this);invokerFuncArgs[1]=thisWired;}'
+    + 'for(var i=0;i<expectedArgCount;++i){var argType=argTypes[i+2];'
+    + 'argsWired[i]=argType.toWireType(useStackFrame&&argType.argStackAlloc?null:destructors,args[i]);invokerFuncArgs.push(argsWired[i]);}'
+    + 'rv=cppInvokerFunc(...invokerFuncArgs);}finally{if(useStackFrame)stackRestore(sp);}'
+    + 'function onDone(rv){if(needsDestructorStack)runDestructors(destructors);'
+    + 'else for(var i=isClassMethodFunc?1:2;i<argTypes.length;i++){var param=i===1?thisWired:argsWired[i-2];'
+    + 'if(argTypes[i].destructorFunction!==null)argTypes[i].destructorFunction(param);}if(returns)return argTypes[0].fromWireType(rv)}'
+    + 'if(isAsync)return rv.then(onDone);return onDone(rv)})}';
+
+const GLUES = [['release', RELEASE], ['debug', DEBUG], ['6.0.13 release', RELEASE_6013]];
+const RELEASES = [['release', RELEASE], ['6.0.13 release', RELEASE_6013]];
 const RETURNS_STRING = { isVoid: false, fromWireType: (value) => value };
 
 // Pointers stand in for wasm memory: every argument gets a fresh one, and each free is recorded.
@@ -106,6 +126,7 @@ function stringParameter(heap, { destructorFunction = true } = {}) {
 function craft(glue, argTypes, cppInvokerFunc, isAsync) {
     const load = new Function(
         'throwBindingError', 'usesDestructorStack', 'runDestructors', 'createNamedFunction', 'getRequiredArgCount', 'checkArgCount',
+        'argsUseStackAlloc', 'stackSave', 'stackRestore',
         `${glue}; return craftInvokerFunction;`,
     );
     const craftInvokerFunction = load(
@@ -120,6 +141,9 @@ function craft(glue, argTypes, cppInvokerFunc, isAsync) {
             }
         },
         (name, fn) => fn,
+        () => 0,
+        () => {},
+        () => false,
         () => 0,
         () => {},
     );
@@ -165,8 +189,8 @@ describe('separateCallArguments', () => {
         expect([...heap.freed].sort()).toEqual([1, 2, 3, 4]);
     });
 
-    test('rewrites a glue once', () => {
-        const once = separateCallArguments(RELEASE);
+    test.each(RELEASES)('rewrites a %s glue once', (_, glue) => {
+        const once = separateCallArguments(glue);
 
         const twice = separateCallArguments(once.text);
 
@@ -174,8 +198,8 @@ describe('separateCallArguments', () => {
         expect([once.missed, twice.missed]).toEqual([false, false]);
     });
 
-    test('reports an invoker whose code no longer matches', () => {
-        const changed = RELEASE.replace('var destructors=[];', 'let destructors=[];');
+    test.each(RELEASES)('reports a %s invoker whose code no longer matches', (_, glue) => {
+        const changed = glue.replace('var destructors=[];', 'let destructors=[];');
 
         expect(separateCallArguments(changed).missed).toBe(true);
         expect(separateCallArguments('var unrelated=1;').missed).toBe(false);

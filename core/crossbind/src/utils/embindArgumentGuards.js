@@ -26,8 +26,9 @@ const GUARDS = [
     },
 ];
 
-// The release glue spells the bigint conversion `typeof value=="number"`, the debug glue `typeof value == 'number'`.
-const BIGINT_FROM_NUMBER = /if\s*\(\s*typeof value\s*==\s*["']number["']\s*\)\s*\{\s*value\s*=\s*BigInt\(value\)\s*;?\s*\}/g;
+// The release glue spells the bigint conversion `typeof value=="number"`, the debug glue `typeof value == 'number'`;
+// emscripten 6.0.10 and later write `===`, and their release glue drops the braces.
+const BIGINT_FROM_NUMBER = /if\s*\(\s*typeof value\s*===?\s*["']number["']\s*\)\s*(?:\{\s*value\s*=\s*BigInt\(value\)\s*;?\s*\}|value\s*=\s*BigInt\(value\)\s*;?)/g;
 const SAFE_BIGINT_FROM_NUMBER = 'if(typeof value=="number"){if(!Number.isSafeInteger(value))throw new TypeError("a 64-bit integer parameter takes a BigInt or a safe integer Number, got "+value);value=BigInt(value)}';
 
 // Returns the rewritten glue and whether a bigint registration kept a conversion this rewrite does not recognise.
@@ -43,7 +44,7 @@ const DEBUG_GUARDS = [
     {
         registration: '__embind_register_integer',
         end: 'readValueFromPointer: integerReadValueFromPointer(',
-        from: /toWireType: \(destructors, value\) => \{(\s*)(?=if \(typeof value != ["']number["'])/,
+        from: /toWireType: \(destructors, value\) => \{(\s*)(?=if \(typeof value !==? ["']number["'])/,
         to: 'toWireType: (destructors, value) => {$1'
             + 'if (typeof value == "string" && size == 1 && value.length == 1) value = value.charCodeAt(0);$1'
             + 'if (value !== null && typeof value == "object" && typeof value.value == "number") value = value.value;$1',
@@ -72,9 +73,11 @@ function guardDebugRegistration(glue, { registration, end, from, to, applied }) 
     return { text: glue.slice(0, start) + rewritten + glue.slice(stop), missed: rewritten === code };
 }
 
-// Returns the rewritten glue and the registrations whose code no longer looks the way these rewrites expect.
+// Returns the rewritten glue and the registrations whose code no longer looks the way these rewrites expect. Emscripten
+// 6.0.10 and later write a registration the glue uses once into the wasm imports, as `name:(` rather than `name=(`; a
+// debug glue's wasm imports only name it (`name: __name`).
 export function guardEmbindArguments(glue) {
-    const missed = GUARDS.filter(({ registration, from, to }) => glue.includes(`${registration}=`) && !glue.includes(from) && !glue.includes(to))
+    const missed = GUARDS.filter(({ registration, from, to }) => new RegExp(`${registration}[=:]\\(`).test(glue) && !glue.includes(from) && !glue.includes(to))
         .map(({ registration }) => registration);
     const released = GUARDS.reduce((current, { from, to }) => current.split(from).join(to), glue);
     return DEBUG_GUARDS.reduce(({ text, missed: names }, guard) => {
