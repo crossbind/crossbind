@@ -77,7 +77,9 @@ export const TARGET_GROUPS = {
         linux: ['linux'],
         linuxmusl: ['linuxmusl'],
         android: ['android'],
-        win32: ['win32'],
+        // A Windows addon links its port's archives into a DLL, which has to resolve every symbol they use: before the
+        // release train, nothing else links a port on Windows.
+        win32: ['win32', 'standalone-napi-win32-x64', 'standalone-napi-win32-arm64'],
         base: ['base'],
     },
     macos: { ios: ['ios'], darwin: ['darwin'] },
@@ -103,8 +105,12 @@ export function nativeValidationSteps(families, targets, root = ROOT) {
                 const name = entry.manifest.name;
                 if (built.has(name)) continue;
                 built.add(name);
-                if (packageHasScript(entry.directory, 'prepublishOnly')) {
-                    steps.push({ type: 'build', directory: entry.directory, name, requires: closure(name).slice(0, -1) });
+                // A ready-made Node package has only a build script, the one the release train runs.
+                const script = ['prepublishOnly', 'build'].find((candidate) => packageHasScript(entry.directory, candidate));
+                if (script) {
+                    // Its ports are dev dependencies: it waits for those this group built before it.
+                    const ports = Object.keys(entry.manifest.devDependencies ?? {}).filter((dependency) => built.has(dependency));
+                    steps.push({ type: 'build', script, directory: entry.directory, name, requires: [...closure(name).slice(0, -1), ...ports] });
                 }
             }
             steps.push({ type: 'pack', directory, family, target, name: manifest.name, requires: closure(manifest.name) });
@@ -135,7 +141,7 @@ export function validateNativeTargets(families, targets, root = ROOT) {
         process.stdout.write(`\n== ${label}\n`);
         try {
             if (step.type === 'build') {
-                run('pnpm', ['run', 'prepublishOnly'], step.directory);
+                run('pnpm', ['run', step.script], step.directory);
                 continue;
             }
             const packDestination = fs.mkdtempSync(path.join(os.tmpdir(), `crossbind-${step.family}-${step.target}-`));

@@ -93,6 +93,49 @@ test('a target group builds each native package once, dependencies first, and pa
     }
 });
 
+test("the win32 group builds a port's Windows addons with their build script, after the port they link", () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'crossbind-native-addons-'));
+    const write = (directory, manifest) => {
+        fs.mkdirSync(path.join(root, directory), { recursive: true });
+        fs.writeFileSync(path.join(root, directory, 'package.json'), JSON.stringify(manifest));
+    };
+    const port = (platform) => ({
+        name: `@crossbind/port-zlib-${platform}`,
+        scripts: { prepublishOnly: `crossbind build -p ${platform}` },
+        dependencies: { '@crossbind/port-zlib': 'workspace:^' },
+    });
+    const addon = (arch) => ({
+        name: `@crossbind/port-zlib-standalone-napi-win32-${arch}`,
+        scripts: { build: `crossbind build -p win32 -a ${arch} -e node -b release` },
+        devDependencies: { '@crossbind/port-zlib-darwin': 'workspace:^', '@crossbind/port-zlib-win32': 'workspace:^' },
+    });
+    write('ports/zlib/base', { name: '@crossbind/port-zlib' });
+    write('ports/zlib/darwin', port('darwin'));
+    write('ports/zlib/win32', port('win32'));
+    write('ports/zlib/standalone-napi-win32-x64', addon('x64'));
+    write('ports/zlib/standalone-napi-win32-arm64', addon('arm64'));
+    try {
+        const steps = nativeValidationSteps(['zlib'], TARGET_GROUPS.linux.win32, root);
+        assert.deepEqual(
+            steps.map((step) => [step.type, step.script, path.relative(root, step.directory)].filter(Boolean).join(' ')),
+            [
+                'build prepublishOnly ports/zlib/win32',
+                'pack ports/zlib/win32',
+                'build build ports/zlib/standalone-napi-win32-x64',
+                'pack ports/zlib/standalone-napi-win32-x64',
+                'build build ports/zlib/standalone-napi-win32-arm64',
+                'pack ports/zlib/standalone-napi-win32-arm64',
+            ],
+        );
+        // Its ports are dev dependencies: it waits for the one this group builds, so a failed port skips its addons.
+        for (const step of steps.filter((candidate) => candidate.type === 'build' && candidate.script === 'build')) {
+            assert.deepEqual(step.requires, ['@crossbind/port-zlib-win32']);
+        }
+    } finally {
+        fs.rmSync(root, { recursive: true, force: true });
+    }
+});
+
 // A throwaway ports tree (zlib: base wasm linux; curl on zlib: base wasm; zstd: base wasm ios; empty: no
 // packages) and a pnpm stand-in that logs "<directory> <subcommand>" and fails inside PNPM_FAIL_IN.
 function nativeFixture() {
@@ -851,9 +894,22 @@ test('a rejected candidate becomes a reported finding instead of a failed watch'
 test('native updater changes every nested nativeVersion field together', () => {
     const source = fs.readFileSync(path.join(ROOT, 'scripts/check-native-versions.js'), 'utf8');
     assert.match(source, /nativeVersion.*\)\(\[\^"\]\*\)\(.*\/g/);
-    // Every target is validated in exactly one group, and standalone-wasi shares a runner with the wasi packages it wraps.
+    // Every target is validated in exactly one group, and standalone-wasi shares a runner with the wasi packages it wraps,
+    // a Windows addon with the win32 port it links.
     const linuxTargets = Object.values(TARGET_GROUPS.linux).flat();
-    assert.deepEqual([...linuxTargets].sort(), ['android', 'base', 'linux', 'linuxmusl', 'standalone-wasi', 'wasi', 'wasm', 'win32']);
+    assert.deepEqual([...linuxTargets].sort(), [
+        'android',
+        'base',
+        'linux',
+        'linuxmusl',
+        'standalone-napi-win32-arm64',
+        'standalone-napi-win32-x64',
+        'standalone-wasi',
+        'wasi',
+        'wasm',
+        'win32',
+    ]);
     assert.ok(Object.values(TARGET_GROUPS.linux).some((targets) => targets.includes('wasi') && targets.includes('standalone-wasi')));
+    assert.deepEqual(TARGET_GROUPS.linux.win32, ['win32', 'standalone-napi-win32-x64', 'standalone-napi-win32-arm64']);
     assert.deepEqual(Object.values(TARGET_GROUPS.macos).flat(), ['ios', 'darwin']);
 });
