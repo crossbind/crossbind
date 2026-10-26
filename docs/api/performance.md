@@ -30,7 +30,7 @@ The rule: **if your build runs and your app works, the defaults are fine**. Only
 | `-Wl,--wrap=__wasi_fd_sync`, `-Wl,--wrap=__syscall_fdatasync` | node | `fsync` and `fdatasync` on a host file succeed instead of trapping in WasmFS's Node backend | 🔒 Don't touch |
 | `-sEXPORT_NAME=Module2` | always | JS namespace name | 🔒 crossbind bundling depends on this |
 
-Emscripten 6.0.9 enables WebAssembly BigInt integration for every supported engine. Crossbind
+Emscripten 6.0.13 enables WebAssembly BigInt integration for every supported engine. Crossbind
 therefore relies on that toolchain default instead of passing the deprecated `WASM_BIGINT` setting;
 `i64` values still cross the JavaScript boundary as `bigint`.
 
