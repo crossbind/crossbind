@@ -203,7 +203,7 @@ async function checkTray(isDesktop) {
         if (!shown.includes('shows no notifications')) throw new Error(`notification.show() did not refuse on a phone: ${shown}`);
         return;
     }
-    // A Windows session without Explorer has no notification area, which e2e/run.mjs checks the runner's has not.
+    // A Windows session without a taskbar has no notification area, which e2e/run.mjs checks the runner's has not.
     if (set.includes('notification area did not take')) {
         console.log(`NO NOTIFICATION AREA: ${set}`);
         return;
