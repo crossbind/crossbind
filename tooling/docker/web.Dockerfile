@@ -7,10 +7,10 @@
 
 ARG BASE_IMAGE=crossbind/base:dev
 ARG RUST_SYSROOT_IMAGE=crossbind/rust-sysroot:dev
-ARG EMSDK_VERSION=6.0.9
+ARG EMSDK_VERSION=6.0.13
 
 # Digest-pinned (multi-arch INDEX): buildx materializes amd64+arm64 from it; bump via `docker manifest inspect emscripten/emsdk:<tag>`.
-FROM emscripten/emsdk:${EMSDK_VERSION}@sha256:96617f27fe16421588241def73908fd348a7f9d260440ed0d00b36dcf7a063cc AS emsdk
+FROM emscripten/emsdk:${EMSDK_VERSION}@sha256:fb7864e398acfda863dfcea78b8bc8adad359fa60c6a0bbeb845931de64aa68a AS emsdk
 FROM ${RUST_SYSROOT_IMAGE} AS sysroot
 
 FROM ${BASE_IMAGE} AS web
@@ -41,9 +41,9 @@ RUN printf '%s\n' \
         > /emsdk/.emscripten
 
 WORKDIR /emsdk/upstream/emscripten/src/lib
-# The overload patch is rebased directly onto the upstream 6.0.9 tag commit.
-ARG CROSSBIND_EMSCRIPTEN_REV=708586d3c5c038363756b71671e275c5e6f6ce30
-ARG CROSSBIND_EMBIND_SHA256=9635b03ef93c4de7975edcd68bea2c0b8f47cecf0d9a795874631db5faa62c1a
+# The overload patch is rebased directly onto the upstream 6.0.13 tag commit.
+ARG CROSSBIND_EMSCRIPTEN_REV=44d615ce4d0532105e1ca6839629f11f07121091
+ARG CROSSBIND_EMBIND_SHA256=14f5ba8f61df1a208a2f6532ee66591aaf94b2e96bdba9774962aeb356dc1a91
 RUN wget -q "https://raw.githubusercontent.com/crossbind/emscripten/${CROSSBIND_EMSCRIPTEN_REV}/src/lib/libembind.js" -O libembind.js && \
     echo "${CROSSBIND_EMBIND_SHA256}  libembind.js" | sha256sum -c -
 

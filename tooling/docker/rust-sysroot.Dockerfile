@@ -22,7 +22,7 @@ RUN set -eu; \
     test "$(rustc -vV | sed -n 's/^release: //p')" = "${RUST_VERSION}"
 
 # Recorded in the manifest so a sysroot can never be paired with the wrong emscripten.
-ARG EMSDK_VERSION=6.0.9
+ARG EMSDK_VERSION=6.0.13
 ARG RUST_TARGET=wasm32-unknown-emscripten
 # The MT contract (crossbind's MT_RUSTFLAGS): shared memory needs std itself rebuilt with these.
 ARG MT_FEATURES=+atomics,+bulk-memory,+mutable-globals
