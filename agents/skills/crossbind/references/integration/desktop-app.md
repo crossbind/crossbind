@@ -25,10 +25,11 @@ now.
 3. Add `viteCrossbindPlugin()` to `vite.config.js` if it is not there yet.
 4. Write the page as for a worker-backed web build: `await initNative()`, then await every call. A function passed to
    the module runs in the page later, without an answer for native code. What the app's host does, the file and
-   message dialogs, opening a link in the browser, the app's folders, quitting, the menus, the later launches of an app
-   that `app.singleInstance` keeps to one instance, the links of `app.urlSchemes` and the events of the app's C++, the
-   page imports from `crossbind/app` after `initNative()`; the C++ includes the same from `<crossbind/app.h>`, but for
-   the menus, the launches and the links, and emits the events.
+   message dialogs, opening a link in the browser, the app's folders, quitting, the menus, the tray's icon, the
+   system's notifications, the later launches of an app that `app.singleInstance` keeps to one instance, the links of
+   `app.urlSchemes` and the events of the app's C++, the page imports from `crossbind/app` after `initNative()`; the C++
+   includes the same from `<crossbind/app.h>`, but for the menus, the tray, the notifications, the launches and the
+   links, and emits the events.
 5. Run `pnpm crossbind app dev` to develop, `pnpm crossbind app build` to get `dist/<name>.app` and its disk image. Its
    icon comes from the square PNG `app.icon` names in `crossbind.config.js`, at best 1024 × 1024. To ship it to other
    Macs, set `CROSSBIND_APPLE_SIGNING_IDENTITY` to a Developer ID and `CROSSBIND_APPLE_API_KEY`,

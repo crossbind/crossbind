@@ -35,7 +35,7 @@ elseif(WIN32)
     set_source_files_properties(src/windows/app.rc PROPERTIES COMPILE_OPTIONS --codepage=65001 OBJECT_DEPENDS "${RESOURCE_INPUTS}")
 else()
     set(PLATFORM_SOURCES src/linux/app.cpp src/linux/app_api.cpp src/linux/channels.cpp src/linux/menu.cpp src/linux/navigation.cpp
-        src/linux/update.cpp)
+        src/linux/notifications.cpp src/linux/tray.cpp src/linux/update.cpp)
 endif()
 if(APPLE)
     set(CMAKE_OBJCXX_STANDARD 20)
@@ -98,7 +98,7 @@ if(APPLE)
     target_link_options(app PRIVATE "-F${CROSSBIND_HERMES}/Library/Frameworks/macosx" "LINKER:-rpath,@executable_path/../Frameworks"
         "LINKER:-dead_strip" "$<$<CONFIG:Release>:LINKER:-x>")
     target_link_libraries(app PRIVATE "-framework hermesvm" "-framework WebKit" "-framework Cocoa" "-framework CoreServices"
-        "-framework UniformTypeIdentifiers" "-framework CoreLocation" "-framework Security")
+        "-framework UniformTypeIdentifiers" "-framework CoreLocation" "-framework Security" "-framework UserNotifications")
 elseif(ANDROID)
     # Hermes comes with the app from its own package; the C++ runtime the host shares with it is this NDK's, which goes
     # beside the host, stripped.

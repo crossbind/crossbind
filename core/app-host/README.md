@@ -46,7 +46,9 @@ defaults and current limits (macOS, Linux, Windows, iOS and Android for now).
 - `cpp/include/crossbind/app.h` — the host's functions for an app's own code: dialogs, opening outside the app, the
   trash, the app's folders, quitting and opening anew, events for the page and a desktop app's updates.
   `src/app_api.cpp` answers them and the page's `crossbind/app`, and each platform's `app_api` does the work, and its
-  `menu` the page's menus; `src/updater.cpp` checks and installs updates, which each platform's `update` downloads, and
+  `menu` the page's menus and tray; a Linux app's tray and notifications are `src/linux/tray.cpp` and
+  `notifications.cpp`, over D-Bus, and a Windows app's notifications balloons of its tray's icon;
+  `src/updater.cpp` checks and installs updates, which each platform's `update` downloads, and
   `src/reopen.cpp` opens the app anew after it and `app.relaunch()`; `src/instance.cpp` (macOS and Linux) and
   `src/windows/instance.cpp` hand a later launch of an app with `app.singleInstance` to the instance that runs.
 - `third_party/webview/` — webview/webview (MIT), vendored at a pinned commit; provenance and the local patch are in

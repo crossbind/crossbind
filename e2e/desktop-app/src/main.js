@@ -1,7 +1,7 @@
 // The conformance suite inside an app: the page reaches the module the app's host runs as a worker-backed web build
 // reaches its worker, and the host runs embind-jsi as React Native does.
 import { runConformance } from '@crossbind/conformance/spec/run.mjs';
-import { app as host, events, menu, shell, updater } from 'crossbind/app';
+import { app as host, events, menu, notification, shell, tray, updater } from 'crossbind/app';
 // Constants bind only for the names imported here; the header also defines one no leg imports.
 import {
     initNative, AllSymbols as confConstantsModule, CONF_BASE, CONF_BASE_NAME, CONF_CHAR, CONF_DOUBLE, CONF_EXPRESSION,
@@ -14,7 +14,7 @@ import {
     allocBuffer, cstring, readCString, readNumberAt, readPointerAt, writeNumberAt, writePointerAt,
 } from '@crossbind/conformance/native/confextras.h';
 import { Counter } from './native/counter.rs';
-import { LAUNCH_ARGS, LAUNCH_URL, PHONE_URL, TRASHED_FILE } from '../e2e/launch.mjs';
+import { LAUNCH_ARGS, LAUNCH_URL, NOTIFICATION, PHONE_URL, TRASHED_FILE, TRAY } from '../e2e/launch.mjs';
 // Direct crate imports: bridged from the crates' own sources, no surface file.
 import { Uuid } from 'cargo:uuid';
 import { Version, VersionReq } from 'cargo:semver';
@@ -189,6 +189,36 @@ async function checkSecondInstance() {
     if (url !== LAUNCH_ARGS.at(-1)) throw new Error(`the link the app was launched again with reached the page as ${JSON.stringify(url)}`);
 }
 
+// e2e/run.mjs clicks the tray's icon, its menu's first item with checked and the notification: on Windows with the
+// messages Windows sends the app, on Linux as the tray and the notification server of the run's own session bus. A
+// macOS app's icon shows unclicked, and its notification would ask its user first; a phone has neither.
+async function checkTray(isDesktop) {
+    // The host holds a page that went around crossbind/app to the same menus.
+    const unchecked = await globalThis.Crossbind.app('tray.set', { menu: [{ label: 'Quit', role: 'quit' }] }).then(() => 'set', (error) => error.message);
+    if (!unchecked.includes('takes no role')) throw new Error(`a tray menu with a standard item was not refused: ${unchecked}`);
+    const set = await tray.set(TRAY).then(() => 'set', (error) => error.message);
+    if (!isDesktop) {
+        if (!set.includes('has no tray icon')) throw new Error(`tray.set() did not refuse on a phone: ${set}`);
+        const shown = await notification.show(NOTIFICATION).then(() => 'shown', (error) => error.message);
+        if (!shown.includes('shows no notifications')) throw new Error(`notification.show() did not refuse on a phone: ${shown}`);
+        return;
+    }
+    if (set !== 'set') throw new Error(`tray.set() failed: ${set}`);
+    if (!navigator.userAgent.includes('Macintosh')) {
+        const shown = await notification.show(NOTIFICATION).then(() => 'shown', (error) => error.message);
+        if (shown !== 'shown') throw new Error(`notification.show() failed: ${shown}`);
+        const clicked = Promise.all([nextEvent('tray'), nextEvent('menu'), nextEvent('notification')]);
+        console.log('CLICK TRAY');
+        const [, click] = await clicked;
+        const item = TRAY.menu.find((entry) => 'checked' in entry);
+        if (click.id !== item.id || click.checked !== !item.checked) {
+            throw new Error(`a click of the tray's ${item.label} reached the page as ${JSON.stringify(click)}`);
+        }
+    }
+    const removed = await tray.remove().then(() => 'removed', (error) => error.message);
+    if (removed !== 'removed') throw new Error(`tray.remove() failed: ${removed}`);
+}
+
 initNative().then(async (m) => {
     try {
         // Markup can make a crossbind:// request as well, so one without the page's token must be refused. On Android the
@@ -276,6 +306,7 @@ initNative().then(async (m) => {
             if (!relaunched.includes('does not quit itself')) throw new Error(`app.relaunch() did not refuse on a phone: ${relaunched}`);
             const checked = await updater.check().then(() => 'checked', (error) => error.message);
             if (!checked.includes('does not update itself')) throw new Error(`updater.check() did not refuse on a phone: ${checked}`);
+            await checkTray(false);
             // iOS asks its user before a link from outside opens the app, which no run can answer.
             if (isAndroid && !import.meta.env.DEV) await checkOpenedUrl();
         } else if (!import.meta.env.DEV) {
@@ -283,6 +314,7 @@ initNative().then(async (m) => {
             await checkSecondInstance();
             // e2e/run.mjs tells a Windows app's window the system goes to sleep and wakes, as Windows does, first.
             if (navigator.userAgent.includes('Windows')) await Promise.all([nextEvent('suspend'), nextEvent('resume'), checkScaledFullScreen()]);
+            await checkTray(true);
         }
         if (!isAndroid || !import.meta.env.DEV) {
             const { status } = await fetch(isAndroid ? '/b/result?id=1' : 'crossbind://app/b/result?id=1');
