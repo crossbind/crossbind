@@ -1,6 +1,6 @@
 {
     "name": "@crossbind/port-curl-standalone-napi-linux-x64",
-    "version": "2.0.0-beta.66",
+    "version": "2.0.0-beta.67",
     "nativeVersion": "8.23.0",
     "homepage": "https://crossbind.dev/ports/curl/",
     "repository": "https://github.com/crossbind/crossbind.git",
