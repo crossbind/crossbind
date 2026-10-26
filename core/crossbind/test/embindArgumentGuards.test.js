@@ -51,6 +51,15 @@ describe('guardEmbindArguments', () => {
         expect(guardEmbindArguments(`${changed}${ENUM}`).missed).toEqual(['_embind_register_integer']);
         expect(guardEmbindArguments('var unrelated=1;').missed).toEqual([]);
     });
+
+    test('reports a registration that the wasm imports hold inline', () => {
+        // Emscripten 6.0.10 and later write a registration the glue uses once into the wasm imports.
+        const inline = (code) => code.replace(/^var _(_embind_register_\w+)=/, 'var wasmImports={$1:').replace(/;$/, '};');
+        const changed = inline(INTEGER).replace('toWireType:(destructors,value)=>value', 'toWireType:(d,v)=>v');
+
+        expect(guardEmbindArguments(changed).missed).toEqual(['_embind_register_integer']);
+        expect(guardEmbindArguments(inline(INTEGER)).missed).toEqual([]);
+    });
 });
 
 // The integer and float registrations as emscripten 6.0.9 writes them into the debug glue the dev servers load, with
@@ -118,6 +127,9 @@ const DEBUG_ENUM = [
     '};',
 ].join('\n');
 
+// Emscripten 6.0.10 and later spell these comparisons `===` and `!==`.
+const strict = (glue) => glue.replace(/(typeof value\s*[!=]=)(?!=)/g, '$1=');
+
 // Measured on e2e/web-rspack's dev server: pkgField:enumMember read 0 and pkgField:enumNumberParam took the default preset.
 describe('guardEmbindArguments on a debug glue', () => {
     test('an integer parameter takes an enum member as its value and a char a one-character string', () => {
@@ -126,6 +138,15 @@ describe('guardEmbindArguments on a debug glue', () => {
 
         expect([toInt(7), toInt(true), toInt({ value: 2 }), toChar('|')]).toEqual([7, true, 2, 124]);
         expect(() => toInt({})).toThrow(/Cannot convert/);
+    });
+
+    test('a debug glue that compares strictly gets the same guards', () => {
+        const { text, missed } = guardEmbindArguments(strict(DEBUG_INTEGER));
+        const toInt = wireOf(text, (register) => register('i32', 'int', 4, -2147483648, 2147483647));
+        const toChar = wireOf(text, (register) => register('c', 'char', 1, -128, 127));
+
+        expect(missed).toEqual([]);
+        expect([toInt({ value: 2 }), toChar('|')]).toEqual([2, 124]);
     });
 
     test('a float conversion is left as it is', () => {
@@ -141,6 +162,12 @@ describe('guardEmbindArguments on a debug glue', () => {
         expect(() => toWire('flat')).toThrow(/Style takes a member/);
     });
 
+    test("does not take the wasm imports' names for release registrations", () => {
+        const imports = 'var wasmImports = {\n  _embind_register_enum: __embind_register_enum,\n  _embind_register_integer: __embind_register_integer,\n};';
+
+        expect(guardEmbindArguments(`${DEBUG_INTEGER}\n${DEBUG_ENUM}\n${imports}`).missed).toEqual([]);
+    });
+
     test('reports a debug registration whose code no longer matches', () => {
         const changed = DEBUG_INTEGER.replace('toWireType: (destructors, value) => {', 'toWireType: (d, v) => {');
 
@@ -153,9 +180,16 @@ describe('guardEmbindArguments on a debug glue', () => {
 // into the debug glue the dev servers load.
 const BIGINT_RELEASE = 'toWireType:(destructors,value)=>{if(typeof value=="number"){value=BigInt(value)}else if(typeof value!="bigint"){throw new TypeError("x")}return value}';
 const BIGINT_DEBUG = "toWireType: (destructors, value) => {\n  if (typeof value == 'number') {\n    value = BigInt(value);\n  }\n  else if (typeof value != 'bigint') {\n    throw new TypeError('x');\n  }\n  return value;\n}";
+// Emscripten 6.0.13 writes the release conversion strictly and without braces.
+const BIGINT_RELEASE_6013 = 'toWireType:(destructors,value)=>{if(typeof value==="number")value=BigInt(value);return value}';
 
 describe('guardBigIntArguments', () => {
-    test.each([['release', BIGINT_RELEASE], ['debug', BIGINT_DEBUG]])('a 64-bit parameter of a %s glue refuses an unsafe Number', (_, glue) => {
+    test.each([
+        ['release', BIGINT_RELEASE],
+        ['debug', BIGINT_DEBUG],
+        ['6.0.13 release', BIGINT_RELEASE_6013],
+        ['strict debug', strict(BIGINT_DEBUG)],
+    ])('a 64-bit parameter of a %s glue refuses an unsafe Number', (_, glue) => {
         const { text } = guardBigIntArguments(`var __embind_register_bigint=1;${glue}`);
         const toWireType = new Function(`return (${text.slice(text.indexOf('toWireType:') + 'toWireType:'.length)})`)();
 
