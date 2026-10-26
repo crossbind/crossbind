@@ -31,13 +31,6 @@ function canvasOf(rgba, width, height) {
 
 const blobOf = (canvas, type, quality) => new Promise((resolve) => canvas.toBlob(resolve, type, quality));
 
-// m.FS.writeFile appends to a file that already exists (Emscripten's WASMFS writes at the current end),
-// so a second image would land behind the first; the old file goes first.
-async function writeFile(m, path, bytes) {
-    if ((await m.FS.analyzePath(path)).exists) await m.FS.unlink(path);
-    await m.FS.writeFile(path, bytes);
-}
-
 // What this browser's own encoder makes of the same pixels; toBlob falls back to PNG where WebP is not supported.
 async function browserWebp(canvas, quality) {
     const blob = await blobOf(canvas, 'image/webp', quality / 100);
@@ -223,7 +216,7 @@ export function WebpStudio({ tokens, index, load }) {
         run(async (m) => {
             const image = await readImageFile(file, STUDIO_MAX_SIDE);
             await m.FS.mkdirTree(`${DIRECTORY}/studio`);
-            await writeFile(m, STUDIO.source, image.rgba);
+            await m.FS.writeFile(STUDIO.source, image.rgba);
             source.current = { name: file.name, width: image.width, height: image.height, canvas: image.canvas, png: await blobOf(image.canvas, 'image/png'), fileBytes: file.size };
             return encode(m, settings);
         });
@@ -405,7 +398,7 @@ export function StickerMakerApp({ tokens, index, load }) {
         run(async (m) => {
             const image = await readImageFile(file, STICKER_MAX_SIDE);
             await m.FS.mkdirTree(`${DIRECTORY}/sticker`);
-            await writeFile(m, STICKER.source, image.rgba);
+            await m.FS.writeFile(STICKER.source, image.rgba);
             source.current = { name: file.name, width: image.width, height: image.height };
             return make(m, { budget, outline });
         });
