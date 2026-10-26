@@ -144,6 +144,19 @@ public static class Tray {
 '@
 [Tray]::Click(APP_PID, DOWNS)
 `;
+// Whether the session shows Windows' taskbar, whose notification area takes the apps' icons.
+const TASKBAR_SCRIPT = `
+$ErrorActionPreference = 'Stop'
+Add-Type -TypeDefinition @'
+using System;
+using System.Runtime.InteropServices;
+public static class Taskbar {
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern IntPtr FindWindow(string type, string title);
+    public static bool IsShown() { return FindWindow("Shell_TrayWnd", null) != IntPtr.Zero; }
+}
+'@
+[Taskbar]::IsShown()
+`;
 
 const root = resolve(import.meta.dirname, '..');
 const { name } = config.general;
@@ -494,17 +507,20 @@ function clickTray() {
     }
 }
 
-// The page tells it when Windows took no tray icon, which a session without Explorer, as a CI runner's may be, has no
-// notification area for; with Explorer it is the app's failure.
+// The page tells it when Windows took no tray icon, which a session without a taskbar, as a CI runner's may be, has no
+// notification area for; with the taskbar it is the app's failure.
 let isAreaChecked = false;
 function checkNotificationArea() {
     const refused = out.match(NO_NOTIFICATION_AREA);
     if (isAreaChecked || !refused) return;
     isAreaChecked = true;
-    const shells = spawnSync('tasklist', ['/FI', 'IMAGENAME eq explorer.exe', '/NH'], { encoding: 'utf8', timeout: ASKED_TIMEOUT_MS });
-    if (shells.status !== 0) finish(`the Windows session's Explorer could not be looked for: ${shells.error?.message ?? shells.stderr}`);
-    else if (/explorer\.exe/i.test(shells.stdout)) finish('Windows took no tray icon while Explorer runs');
-    else console.log(`note: this Windows session runs no Explorer, so its tray and notification went unclicked: ${refused[0].trim()}`);
+    try {
+        const taskbar = execFileSync('powershell', ['-NoProfile', '-Command', TASKBAR_SCRIPT], { encoding: 'utf8', timeout: ASKED_TIMEOUT_MS }).trim();
+        if (taskbar === 'True') finish('Windows took no tray icon while its taskbar shows');
+        else console.log(`note: this Windows session shows no taskbar, so its tray and notification went unclicked: ${refused[0].trim()}`);
+    } catch (error) {
+        finish(`the Windows session's taskbar could not be looked for: ${error.message}`);
+    }
 }
 
 function finish(problem) {
