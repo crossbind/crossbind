@@ -203,6 +203,11 @@ async function checkTray(isDesktop) {
         if (!shown.includes('shows no notifications')) throw new Error(`notification.show() did not refuse on a phone: ${shown}`);
         return;
     }
+    // A Windows session without Explorer has no notification area, which e2e/run.mjs checks the runner's has not.
+    if (set.includes('notification area did not take')) {
+        console.log(`NO NOTIFICATION AREA: ${set}`);
+        return;
+    }
     if (set !== 'set') throw new Error(`tray.set() failed: ${set}`);
     if (!navigator.userAgent.includes('Macintosh')) {
         const shown = await notification.show(NOTIFICATION).then(() => 'shown', (error) => error.message);

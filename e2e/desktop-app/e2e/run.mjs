@@ -16,11 +16,13 @@ import { UPDATE_PORT, signUpdate } from './updates.mjs';
 const RUN_TIMEOUT_MS = 300000;
 // Shared conformance list: pass must equal run (backreference); skips are explicit lines.
 const CONFORMANCE = /^CONFORMANCE (\d+)\/\1\b.*$/m;
-const FINISHED = /^(CONFORMANCE .*|CONFORMANCE ERR: .*)$/m;
+// A whole line: the run ends the app once it reads it.
+const FINISHED = /^(CONFORMANCE .*|CONFORMANCE ERR: .*)\r?\n/m;
 const LAUNCH_AGAIN = /^LAUNCH AGAIN$/m;
 const OPEN_LINK = /^OPEN LINK$/m;
 const FILL_SCREEN = /^FILL SCREEN$/m;
 const CLICK_TRAY = /^CLICK TRAY$/m;
+const NO_NOTIFICATION_AREA = /^NO NOTIFICATION AREA: .*\r?\n/m;
 const TRAY_HOST_READY = /^TRAY HOST READY$/m;
 const TRAY_HOST_FAIL = /^TRAY HOST FAIL: (.*)$/m;
 const TRAY_HOST_REMOVED = 'TRAY HOST REMOVED';
@@ -492,6 +494,19 @@ function clickTray() {
     }
 }
 
+// The page tells it when Windows took no tray icon, which a session without Explorer, as a CI runner's may be, has no
+// notification area for; with Explorer it is the app's failure.
+let isAreaChecked = false;
+function checkNotificationArea() {
+    const refused = out.match(NO_NOTIFICATION_AREA);
+    if (isAreaChecked || !refused) return;
+    isAreaChecked = true;
+    const shells = spawnSync('tasklist', ['/FI', 'IMAGENAME eq explorer.exe', '/NH'], { encoding: 'utf8', timeout: ASKED_TIMEOUT_MS });
+    if (shells.status !== 0) finish(`the Windows session's Explorer could not be looked for: ${shells.error?.message ?? shells.stderr}`);
+    else if (/explorer\.exe/i.test(shells.stdout)) finish('Windows took no tray icon while Explorer runs');
+    else console.log(`note: this Windows session runs no Explorer, so its tray and notification went unclicked: ${refused[0].trim()}`);
+}
+
 function finish(problem) {
     clearTimeout(timer);
     app.kill();
@@ -532,6 +547,7 @@ app.stdout.on('data', (chunk) => {
     openLink();
     fillScreen();
     clickTray();
+    checkNotificationArea();
     if (FINISHED.test(out)) summarized();
 });
 app.stderr.on('data', (chunk) => {
@@ -540,6 +556,7 @@ app.stderr.on('data', (chunk) => {
     openLink();
     fillScreen();
     clickTray();
+    checkNotificationArea();
     if (FINISHED.test(out)) summarized();
 });
 trayHost?.host.stdout.on('data', (chunk) => {

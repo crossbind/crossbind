@@ -28,7 +28,6 @@ constexpr UINT WM_TRAY = WM_APP + 3;
 constexpr UINT TRAY_ICON = 1;
 // The app's icon among its resources, which app.rc gives the id of Windows' own.
 constexpr WORD APP_ICON = 32512;
-const char *const NO_NOTIFICATION_AREA = "crossbind: Windows' notification area did not take the app's icon, as when Explorer does not run";
 
 // What a click of an item does: one of the page's tells the page its id, a standard one does what its role says.
 struct Command {
@@ -206,6 +205,11 @@ void hideIcon() {
     }
     isIconShown = false;
     balloons = 0;
+}
+
+// Why the icon did not show, right after Windows took none.
+std::string noNotificationArea() {
+    return "crossbind: Windows' notification area did not take the app's icon, as when Explorer does not run: error " + std::to_string(GetLastError());
 }
 
 LRESULT CALLBACK menuProcedure(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) {
@@ -417,8 +421,9 @@ void setTrayNow(const TrayOptions &options, const MenuClicked &clicked, const st
     trayTip = wide(options.tooltip);
     NOTIFYICONDATAW data = iconData(0);
     if (!(isIconShown && Shell_NotifyIconW(NIM_MODIFY, &data)) && !showIcon()) {
+        const std::string why = noNotificationArea();
         if (next) DestroyMenu(next);
-        done(NO_NOTIFICATION_AREA);
+        done(why);
         return;
     }
     if (trayMenu) DestroyMenu(trayMenu);
@@ -526,7 +531,7 @@ void showNotification(Notification notification, std::function<void(Failure)> do
             return;
         }
         if (!isIconShown && !showIcon()) {
-            done(NO_NOTIFICATION_AREA);
+            done(noNotificationArea());
             return;
         }
         static const HICON icon = iconAt(SM_CXICON);
