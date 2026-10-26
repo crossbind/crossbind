@@ -237,7 +237,8 @@ std::string cancelSlow(const std::string &base) {
   return withError(out) + " bytes=" + std::to_string(res.body.size());
 }
 
-// curl's own engine cannot run in the wasm build: its multi handle needs a socketpair.
+// curl's own engine has no sockets in the wasm build. Its multi handle opens anyway: emscripten 6.0.13's
+// WasmFS implements pipe2.
 std::string multiHandle() {
   CURLM *multi = curl_multi_init();
   curl_multi_cleanup(multi);

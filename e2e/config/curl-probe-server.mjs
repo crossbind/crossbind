@@ -124,7 +124,7 @@ export function expectedCurlReport({ blocking }) {
         ['timeout', blocking ? 'rc=0 code=200 late' : 'rc=28 code=0'],
         ['file', 'rc=1 code=0 err=Protocol "file" is not supported by the fetch transport'],
         ['badurl', 'rc=3 code=0 err=URL rejected: Malformed input to a URL function'],
-        ['multi', 'null'],
+        ['multi', 'handle'],
         // /big has no Content-Length, so the total stays 0 as in curl.
         ['progress', `rc=0 code=200 calls=some last=${BIG_BYTES}/0`],
         ['abort', 'rc=42 code=0 err=Callback aborted'],
