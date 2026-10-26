@@ -39,8 +39,8 @@ export default (newConfig = {}) => ({
         { platform: 'darwin', specs: CERTS },
         { platform: 'linux', specs: CERTS },
         { platform: 'linuxmusl', specs: CERTS },
-        // The Winsock, GDI and CryptoAPI libraries OpenSSL's MinGW targets link.
-        { platform: 'win32', specs: { ...CERTS, binary: { addonFlags: ['-lws2_32', '-lgdi32', '-lcrypt32'] } } },
+        // The Winsock, GDI, CryptoAPI and, since 4.1.0, CNG (BCryptGenRandom) libraries OpenSSL's MinGW targets link.
+        { platform: 'win32', specs: { ...CERTS, binary: { addonFlags: ['-lws2_32', '-lgdi32', '-lcrypt32', '-lbcrypt'] } } },
         ...(newConfig.targetSpecs || []),
     ],
 });
