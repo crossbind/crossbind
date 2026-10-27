@@ -154,7 +154,7 @@ SbqKkb0RUXoYBoI=
             const hidden = await run('ED25519', '', false, true, false);
             check('app tls encrypted client hello', [hidden.ok, hidden.ech.status, hidden.ech.inner, hidden.ech.outer, hidden.echOffered, hidden.serverNames, hidden.secretNameOnWire, hidden.publicNameOnWire, hidden.verify], [true, 'success', 'secret.example', 'public.example', true, ['public.example'], 0, 1, 'ok']);
             const broken = await run('ED25519', '', false, false, true);
-            check('app tls one flipped bit', [broken.ok, broken.clientError, broken.messages.map((message) => message.type)], [false, 'error:0A000119:SSL routines::decryption failed or bad record mac', ['ClientHello', 'ServerHello', 'ChangeCipherSpec', 'Alert: bad record mac']]);
+            check('app tls one flipped bit', [broken.ok, broken.clientError, broken.messages.map((message) => message.type)], [false, 'error:1C800064:Provider routines::bad decrypt', ['ClientHello', 'ServerHello', 'ChangeCipherSpec', 'Alert: bad record mac']]);
             const classic = await run('ED25519', 'X25519', false, false, false);
             const quantum = await run('ED25519', 'MLKEM768', false, false, false);
             check('app tls key exchange groups', [classic.group, classic.clientShares, classic.serverShare, quantum.group, quantum.clientShares, quantum.serverShare], ['x25519', [{ group: 'x25519', bytes: 32 }], 32, 'MLKEM768', [{ group: 'MLKEM768', bytes: 1184 }], 1088]);
