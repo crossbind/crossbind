@@ -123,7 +123,7 @@ export function expectedCurlReport({ blocking }) {
         ['reuse', 'first=7 second=22 code=404 err=The requested URL returned error: 404'],
         ['timeout', blocking ? 'rc=0 code=200 late' : 'rc=28 code=0'],
         ['file', 'rc=1 code=0 err=Protocol "file" is not supported by the fetch transport'],
-        ['badurl', 'rc=3 code=0 err=URL rejected: Malformed input to a URL function'],
+        ['badurl', 'rc=3 code=0 err=URL rejected: Bad hostname'],
         ['multi', 'handle'],
         // /big has no Content-Length, so the total stays 0 as in curl.
         ['progress', `rc=0 code=200 calls=some last=${BIG_BYTES}/0`],
