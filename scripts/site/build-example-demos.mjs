@@ -421,14 +421,21 @@ async function verifyDemo(id) {
         });
         await page.goto(`http://127.0.0.1:${port}/examples/${id}/`, { waitUntil: 'networkidle' });
         await page.waitForFunction(() => document.body.innerText.includes('=>'), null, { timeout: 30000 }).catch(() => {});
-        const text = await page.evaluate(() => document.body.innerText.replace(/\s+/g, ' ').trim());
+        const shown = await page.evaluate(() => document.body.innerText);
+        const text = shown.replace(/\s+/g, ' ').trim();
         if (failed.length) throw new Error(`${id}: requests failed under the subpath: ${failed.join(', ')}`);
         if (!text.includes('=>')) throw new Error(`${id}: the page did not render its C++ result; saw "${text.slice(0, 120)}"`);
-        return text;
+        return { text, shown };
     } finally {
         await browser.close();
         server.close();
     }
+}
+
+// What a page that missed its expectation shows: a library page's FAIL lines and its "=>" line, else how it starts.
+export function mismatchReport(shown) {
+    const told = shown.split('\n').filter((line) => line.startsWith('FAIL') || line.includes('=>'));
+    return told.length ? told.join('\n') : shown.replace(/\s+/g, ' ').trim().slice(0, 120);
 }
 
 // Deploy-time check: the page's live frames must be the same crossbind version the site says it
@@ -505,9 +512,9 @@ export async function buildExampleDemos({ channel, only = null } = {}) {
         const crossbindVersion = fs.existsSync(installed) ? JSON.parse(fs.readFileSync(installed, 'utf8')).version : null;
         fs.rmSync(out, { recursive: true, force: true });
         const artifact = await BUILDERS[demo.kind](project, demo.id, out);
-        const onScreen = await verifyDemo(demo.id);
+        const { text: onScreen, shown } = await verifyDemo(demo.id);
         if (demo.expect && !onScreen.includes(demo.expect)) {
-            throw new Error(`${demo.id}: expected "${demo.expect}" on the page, saw "${onScreen.slice(0, 120)}"`);
+            throw new Error(`${demo.id}: expected "${demo.expect}" on the page, saw:\n${mismatchReport(shown)}`);
         }
         // A sample's page ends with "=> done" only once its whole main.js ran.
         if (demo.kind === 'sample' && !onScreen.endsWith('=> done')) {

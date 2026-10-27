@@ -8,6 +8,7 @@ import {
     assertDemosMatchSnapshot,
     DEMOS,
     demoFingerprint,
+    mismatchReport,
     RECORD_NAME,
     REPOSITORY_ROOT,
     patchBundles,
@@ -23,6 +24,20 @@ const manifestFor = (version) => ({
     builtAt: '2026-09-11T15:28:51.897Z',
     distTag: 'beta',
     demos: DEMOS.map((demo) => ({ id: demo.id, href: `/examples/${demo.id}/`, crossbind: version, ...sourcesOf(demo) })),
+});
+
+test('a library page that misses its count reports its FAIL lines and its result line', () => {
+    const shown = [
+        'ok   example "Parse a URL": ["https://example.com/"]',
+        'FAIL app dates seconds: [1,2] (expected [1,3])',
+        'ok   app dates iso: ["2070-01-01T00:00:01Z"]',
+        'curl 8.23.0 => 10/11 checks passed',
+    ].join('\n');
+    assert.equal(mismatchReport(shown), 'FAIL app dates seconds: [1,2] (expected [1,3])\ncurl 8.23.0 => 10/11 checks passed');
+});
+
+test('a page with neither FAIL nor result lines reports how it starts', () => {
+    assert.equal(mismatchReport('compiling ...\n  still   compiling'), 'compiling ... still compiling');
 });
 
 test('base-aware demo bundles build without needing a compatibility patch', () => {
