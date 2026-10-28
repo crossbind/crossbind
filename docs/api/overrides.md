@@ -191,6 +191,8 @@ Use when you need to share an override across **multiple crossbind packages**. I
 | Key | Default | Notes |
 |-----|---------|-------|
 | `XCODE_DEVELOPMENT_TEAM` | `''` | Required for iOS device (not simulator) builds |
+| `ANDROID_KEYSTORE` | `''` | This machine's upload key, which signs an Android app's release and its bundle; `crossbind app upload-key` sets it ([app.md](./app.md#the-upload-key)). Env: `CROSSBIND_ANDROID_KEYSTORE` |
+| `ANDROID_KEY_ALIAS` | `''` | The upload key's alias in `ANDROID_KEYSTORE`. Env: `CROSSBIND_ANDROID_KEY_ALIAS` |
 | `RUNNER` | `'DOCKER_RUN'` | `'DOCKER_EXEC'` reuses a long-lived container that you create yourself — crossbind never creates one, and tells you the exact `docker run` command (name and both mounts) if it is missing or wrong; `'LOCAL'` skips Docker entirely (only works if you have all toolchains installed); `'REMOTE'` sends each image's steps to the runner at that image's address, without waiting on the lock below, and stops a step whose image has no address ([`remote-runner.md`](./remote-runner.md)). Under either Docker runner, builds running at the same time compile one at a time, because their containers share the memory of Docker's VM; a build that waits says so and names `~/.crossbind/docker-compile.lock`. Env: `CROSSBIND_RUNNER` |
 | `REMOTE_URL_WEB`, `REMOTE_URL_ANDROID`, `REMOTE_URL_LINUX`, `REMOTE_URL_WINDOWS` | `''` | Under `RUNNER=REMOTE`, the address of that image's runner. Its token comes only from `CROSSBIND_TOKEN_<IMAGE>` in the environment. Env: `CROSSBIND_REMOTE_URL_<IMAGE>` |
 | `REMOTE_URL` | `''` | Under `RUNNER=REMOTE`, the runner of every image without an address of its own; its token comes from `CROSSBIND_TOKEN`. Env: `CROSSBIND_REMOTE_URL` |

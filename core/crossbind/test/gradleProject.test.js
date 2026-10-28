@@ -7,7 +7,7 @@ const state = { config: { general: { name: 'demo-app' }, target: {}, app: {}, pa
 vi.mock('../src/state/index.js', () => ({ default: state }));
 
 const { default: writeGradleProject } = await import('../src/actions/gradleProject.js');
-const { publishApp } = await import('../src/actions/buildApp.js');
+const { androidVersion, appBuildNumber, publishApp } = await import('../src/actions/buildApp.js');
 
 function part(root, arch) {
     const dir = path.join(root, `demo-app.android-${arch}`);
@@ -185,5 +185,29 @@ describe("an Android app's Gradle project", () => {
         state.config.app = { permissions: { contacts: 'To invite friends' } };
         expect(() => publishApp(android, { to: path.join(os.tmpdir(), 'crossbind-android-permissions') })).toThrow('contacts is none of them');
         state.config.app = {};
+    });
+});
+
+describe("a mobile app's build number", () => {
+    test('is CROSSBIND_APP_BUILD_NUMBER, a whole number both stores take, else none', () => {
+        expect(appBuildNumber({})).toBe(null);
+        expect(appBuildNumber({ CROSSBIND_APP_BUILD_NUMBER: '42' })).toBe(42);
+        for (const value of ['0', '-1', '1.5', '01', 'x', '2100000001']) {
+            expect(() => appBuildNumber({ CROSSBIND_APP_BUILD_NUMBER: value })).toThrow(`CROSSBIND_APP_BUILD_NUMBER ${JSON.stringify(value)} is no build number, which is a whole number from 1 to 2100000000`);
+        }
+    });
+
+    test("is an Android app's version code, else its version's numbers make one", () => {
+        state.config.package = { version: '1.2.3-beta.1' };
+        expect(androidVersion({})).toEqual({ name: '1.2.3-beta.1', code: 1002003 });
+        expect(androidVersion({ CROSSBIND_APP_BUILD_NUMBER: '7' })).toEqual({ name: '1.2.3-beta.1', code: 7 });
+        delete state.config.package;
+    });
+
+    test('stops a build it cannot number before its project is written', () => {
+        vi.stubEnv('CROSSBIND_APP_BUILD_NUMBER', 'next');
+        const android = { platform: 'android', arch: 'x86_64', buildType: 'release' };
+        expect(() => publishApp(android, { to: path.join(os.tmpdir(), 'crossbind-android-number') })).toThrow('CROSSBIND_APP_BUILD_NUMBER "next" is no build number');
+        vi.unstubAllEnvs();
     });
 });

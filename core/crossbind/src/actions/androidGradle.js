@@ -8,6 +8,7 @@ import pullDockerImage, { getDockerImage } from '../utils/pullDockerImage.js';
 import { DOCKER_BASE, isUnderBase } from '../utils/replaceBasePathForDocker.js';
 import { DOCKER_RUN_SECURITY_ARGS } from '../utils/dockerSecurity.js';
 import { getContentHash } from '../utils/hash.js';
+import { readSecret } from '../utils/keychain.js';
 
 const ROLE = 'android-app';
 const PLATFORM = 'linux/amd64';
@@ -40,6 +41,25 @@ export function releaseSigning(env = process.env) {
     return { file, names: [SIGNING.alias, SIGNING.password, SIGNING.keyPassword].filter((name) => env[name]) };
 }
 
+// This machine's upload key, which ~/.crossbind.json names, for a build whose environment names none: its file and alias,
+// and its password from the environment, else the keychain, else none yet.
+export function machineUploadKey(env = process.env, system = state.config.system ?? {}) {
+    if (env[SIGNING.keystore] || !system.ANDROID_KEYSTORE) return null;
+    return {
+        keystore: system.ANDROID_KEYSTORE,
+        alias: env[SIGNING.alias] || system.ANDROID_KEY_ALIAS || 'upload',
+        password: env[SIGNING.password] || readSecret(path.resolve(system.ANDROID_KEYSTORE)),
+    };
+}
+
+// The environment a build signs with this machine's upload key in.
+export function uploadKeyEnv({ keystore, alias, password }) {
+    if (!password) {
+        throw new Error(`crossbind: this machine's upload key, ${keystore}, needs its password: set ${SIGNING.password}, or build on a terminal, which asks for it.`);
+    }
+    return { [SIGNING.keystore]: keystore, [SIGNING.alias]: alias, [SIGNING.password]: password };
+}
+
 // Gradle's caches and the Android tools' home outlive a container; the second keeps the debug key, which a new one would
 // replace, so that a later build still installs over the last.
 function homes() {
@@ -61,8 +81,8 @@ function containerArgs(signing) {
     ];
 }
 
-function docker(args, what) {
-    const result = spawnSync('docker', args, { encoding: 'utf8', maxBuffer: OUTPUT_LIMIT });
+function docker(args, what, env = process.env) {
+    const result = spawnSync('docker', args, { encoding: 'utf8', maxBuffer: OUTPUT_LIMIT, env });
     if (result.error) throw new Error(`crossbind: cannot run docker for ${what}: ${result.error.message}`, { cause: result.error });
     if (result.status !== 0) {
         const output = `${result.stdout ?? ''}${result.stderr ?? ''}`.trim().split('\n').slice(-FAILURE_LINES).join('\n');
@@ -79,20 +99,22 @@ function inContainer(project) {
     return path.posix.join(DOCKER_BASE, ...path.relative(state.config.paths.base, dir).split(path.sep));
 }
 
-// An Android app as the files it ships: its release APK, and with an upload key also the bundle Google Play takes, beside
-// the Gradle project as <project>.apk and <project>.aab.
+// An Android app as the files it ships: its release APK, and with an upload key, the environment's or this machine's,
+// also the bundle Google Play takes, beside the Gradle project as <project>.apk and <project>.aab.
 export function packageAndroidRelease(project) {
-    const signing = releaseSigning();
+    const key = machineUploadKey();
+    const env = key ? { ...process.env, ...uploadKeyEnv(key) } : process.env;
+    const signing = releaseSigning(env);
     pullDockerImage(ROLE, PLATFORM);
     docker(['run', '--rm', ...containerArgs(signing), '-w', inContainer(project), getDockerImage(ROLE, PLATFORM),
-        ...GRADLE, '--no-daemon', 'assembleRelease', ...(signing ? ['bundleRelease'] : [])], `packaging ${path.basename(project)}`);
+        ...GRADLE, '--no-daemon', 'assembleRelease', ...(signing ? ['bundleRelease'] : [])], `packaging ${path.basename(project)}`, env);
     const outputs = `${project}/app/build/outputs`;
     fs.copyFileSync(`${outputs}/apk/release/app-release.apk`, `${project}.apk`);
     fs.rmSync(`${project}.aab`, { force: true });
     if (signing) {
         fs.copyFileSync(`${outputs}/bundle/release/app-release.aab`, `${project}.aab`);
     } else {
-        console.warn(`crossbind: ${path.basename(project)}.apk is signed with this machine's debug key: it installs for testing, and Google Play takes no app signed so. Set ${SIGNING.keystore}, ${SIGNING.alias} and ${SIGNING.password} to sign it with your upload key and make the bundle too.`);
+        console.warn(`crossbind: ${path.basename(project)}.apk is signed with this machine's debug key: it installs for testing, and Google Play takes no app signed so. crossbind app upload-key makes an upload key, which signs it and makes the bundle too; or set ${SIGNING.keystore}, ${SIGNING.alias} and ${SIGNING.password} to sign it with yours.`);
     }
 }
 

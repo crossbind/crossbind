@@ -155,3 +155,55 @@ describe('an iOS app\'s Xcode project', () => {
         state.config.app = {};
     });
 });
+
+describe("an iOS app's store statements", () => {
+    const write = (options) => {
+        const root = fs.mkdtempSync(path.join(os.tmpdir(), 'crossbind-xcode-'));
+        const to = path.join(root, 'demo-ios');
+        writeXcodeProject(to, { parts: [part(root, 'iphoneos')], identity: { id: 'com.example.demo', team: '' }, label: 'Demo', version: '1.2.3', ...options });
+        return { to, project: fs.readFileSync(path.join(to, 'demo.xcodeproj', 'project.pbxproj'), 'utf8'), info: fs.readFileSync(path.join(to, 'Info.plist'), 'utf8') };
+    };
+
+    test("tells App Store Connect app.encryption, so that it stops asking for every build", () => {
+        expect(write({ encryption: false }).info).toContain('<key>ITSAppUsesNonExemptEncryption</key>\n    <false/>');
+        expect(write({ encryption: true }).info).toContain('<key>ITSAppUsesNonExemptEncryption</key>\n    <true/>');
+        expect(write({}).info).not.toContain('ITSAppUsesNonExemptEncryption');
+    });
+
+    test("carries a privacy manifest of app.privacy's reasons, and none without them", () => {
+        const { to, project } = write({ privacy: { fileTimestamp: ['C617.1'], diskSpace: ['E174.1', '85F4.1'] } });
+        const manifest = fs.readFileSync(path.join(to, 'PrivacyInfo.xcprivacy'), 'utf8');
+        expect(manifest).toContain('<key>NSPrivacyAccessedAPIType</key>\n            <string>NSPrivacyAccessedAPICategoryFileTimestamp</string>');
+        expect(manifest).toContain('<string>NSPrivacyAccessedAPICategoryDiskSpace</string>\n            <key>NSPrivacyAccessedAPITypeReasons</key>\n            <array>\n                <string>E174.1</string>\n                <string>85F4.1</string>');
+        expect(project).toContain('"path" = "PrivacyInfo.xcprivacy";');
+        if (process.platform === 'darwin') {
+            expect(execFileSync('plutil', ['-extract', 'NSPrivacyAccessedAPITypes.1.NSPrivacyAccessedAPITypeReasons.1', 'raw', path.join(to, 'PrivacyInfo.xcprivacy')], { encoding: 'utf8' }).trim()).toBe('85F4.1');
+            expect(execFileSync('plutil', ['-lint', path.join(to, 'demo.xcodeproj', 'project.pbxproj')], { encoding: 'utf8' })).toContain(': OK');
+        }
+        const plain = write({});
+        expect(fs.existsSync(path.join(plain.to, 'PrivacyInfo.xcprivacy'))).toBe(false);
+        expect(plain.project).not.toContain('PrivacyInfo');
+    });
+
+    test('numbers its build as given, else as its version', () => {
+        const numbered = write({ build: '42' }).project;
+        expect(numbered).toContain('"CURRENT_PROJECT_VERSION" = "42";');
+        expect(numbered).toContain('"MARKETING_VERSION" = "1.2.3";');
+        expect(write({}).project).toContain('"CURRENT_PROJECT_VERSION" = "1.2.3";');
+    });
+});
+
+describe("an iOS app's build", () => {
+    test('stops on an app.encryption, an app.privacy or a build number it cannot take, before its project is written', () => {
+        const ios = { platform: 'ios', arch: 'iphoneos', buildType: 'release' };
+        const to = path.join(os.tmpdir(), 'crossbind-ios-statements');
+        state.config.app = { encryption: 'no' };
+        expect(() => publishApp(ios, { to })).toThrow('app.encryption "no" is no boolean');
+        state.config.app = { privacy: { fileTimestamp: ['E174.1'] } };
+        expect(() => publishApp(ios, { to })).toThrow('app.privacy.fileTimestamp ["E174.1"] is no list');
+        state.config.app = {};
+        vi.stubEnv('CROSSBIND_APP_BUILD_NUMBER', '1.0');
+        expect(() => publishApp(ios, { to })).toThrow('CROSSBIND_APP_BUILD_NUMBER "1.0" is no build number');
+        vi.unstubAllEnvs();
+    });
+});

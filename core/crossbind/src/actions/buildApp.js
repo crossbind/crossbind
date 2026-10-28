@@ -30,8 +30,10 @@ import findFiles from '../utils/findFiles.js';
 import { getContentHash, getFilesFingerprint } from '../utils/hash.js';
 import { xmlPlist } from '../utils/plist.js';
 import {
-    appBackgroundColor, appCategory, appCopyright, appDisplayName, appHeader, appId, appPermissions, appUrlSchemes, usageDescriptions,
+    appBackgroundColor, appCategory, appCopyright, appDisplayName, appEncryption, appHeader, appId, appPermissions, appPrivacy, appUrlSchemes,
+    usageDescriptions,
 } from '../utils/appOptions.js';
+import { unreasonedApis, unreasonedWarning } from '../utils/requiredReasonApis.js';
 import { androidIcons, iosIcon, linuxIcon, macIcon, readAppIcon, windowsIcon } from '../utils/appIcon.js';
 import writeIfChanged from '../utils/writeIfChanged.js';
 import { writeNativeSourceStamp } from '../utils/nativeSourceStamp.js';
@@ -131,10 +133,26 @@ function androidAppId() {
 // Apple takes dot-separated integers alone as an app's version.
 const appVersion = () => (state.config.package?.version ?? '1.0.0').replace(/[-+].*$/, '');
 
-// Android takes any name for an app's version, and a positive integer that grows from release to release as its code.
-function androidVersion() {
+const BUILD_NUMBER = 'CROSSBIND_APP_BUILD_NUMBER';
+// Google Play takes no larger version code.
+const MAX_VERSION_CODE = 2100000000;
+
+// The number CI or a publish gives a build, which iOS takes as its build and Android as its version code:
+// CROSSBIND_APP_BUILD_NUMBER, a whole number both stores take, else none.
+export function appBuildNumber(env = process.env) {
+    const value = env[BUILD_NUMBER];
+    if (!value) return null;
+    if (!/^[1-9]\d*$/.test(value) || Number(value) > MAX_VERSION_CODE) {
+        throw new Error(`crossbind: ${BUILD_NUMBER} ${JSON.stringify(value)} is no build number, which is a whole number from 1 to ${MAX_VERSION_CODE}, as both stores take.`);
+    }
+    return Number(value);
+}
+
+// Android takes any name for an app's version, and a positive integer that grows from release to release as its code:
+// the build number, else one made of the version's numbers.
+export function androidVersion(env = process.env) {
     const [major = 0, minor = 0, patch = 0] = appVersion().split('.').map(Number);
-    return { name: state.config.package?.version ?? '1.0.0', code: Math.max(1, major * 1000000 + minor * 1000 + patch) };
+    return { name: state.config.package?.version ?? '1.0.0', code: appBuildNumber(env) ?? Math.max(1, major * 1000000 + minor * 1000 + patch) };
 }
 
 // The apps this run built or found current. A part of an iOS app that an earlier run built may be stale.
@@ -327,6 +345,16 @@ function shipMacApp(app, signing) {
     else console.warn(`crossbind: ${path.basename(app)} is signed ad hoc, which opens it on this Mac alone. Set ${APPLE_SIGNING.identity} to sign it with your Developer ID, and ${notarize}.`);
 }
 
+// App Store Connect refuses an iOS app whose archives call required reason API without app.privacy's reasons; the build
+// names them, from the archives a device gets.
+function warnUnreasonedApis(project, privacy) {
+    const device = `${project}/lib/iphoneos`;
+    if (!fs.existsSync(device)) return;
+    const archives = fs.readdirSync(device).filter((file) => file.endsWith('.a')).map((file) => `${device}/${file}`);
+    const warning = unreasonedWarning(unreasonedApis(archives, privacy));
+    if (warning) console.warn(warning);
+}
+
 // Where a build without a bundler puts an app: under its own name, or for iOS and Android as the project of its build
 // type.
 export function appOutputPath(target) {
@@ -342,10 +370,14 @@ export function publishApp(target, { to = appOutputPath(target), page = null } =
     if (target.platform === 'ios') {
         const parts = appParts(target).map(({ arch, dir }) => ({ sdk: arch, dir }));
         const icon = readAppIcon(state.config);
+        const privacy = appPrivacy(state.config);
+        const build = appBuildNumber();
         writeXcodeProject(to, {
-            parts, identity: { id: appId(state.config), team: appTeam() }, label: appDisplayName(state.config), version: appVersion(), icon: icon && iosIcon(icon),
-            urlSchemes: appUrlSchemes(state.config), background: appBackgroundColor(state.config), usage: usageDescriptions(state.config, 'ios'),
+            parts, identity: { id: appId(state.config), team: appTeam() }, label: appDisplayName(state.config), version: appVersion(),
+            build: build === null ? appVersion() : String(build), icon: icon && iosIcon(icon), urlSchemes: appUrlSchemes(state.config),
+            background: appBackgroundColor(state.config), usage: usageDescriptions(state.config, 'ios'), encryption: appEncryption(state.config), privacy,
         });
+        if (target.buildType === 'release') warnUnreasonedApis(to, privacy);
     } else if (target.platform === 'android') {
         const icon = readAppIcon(state.config);
         writeGradleProject(to, {

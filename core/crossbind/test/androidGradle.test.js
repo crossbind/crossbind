@@ -5,8 +5,10 @@ import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 
 // docker answers as it would; each Gradle run leaves the outputs its tasks make.
 const calls = [];
-const spawnSync = vi.fn((program, args) => {
+const envs = [];
+const spawnSync = vi.fn((program, args, options) => {
     calls.push(args);
+    envs.push(options?.env);
     const tasks = args.slice(args.indexOf('gradle'));
     const project = args[args.indexOf('-w') + 1]?.replace('/tmp/crossbind/live', base);
     const write = (file) => {
@@ -20,6 +22,9 @@ const spawnSync = vi.fn((program, args) => {
 vi.mock('node:child_process', async (importOriginal) => ({ ...await importOriginal(), spawnSync }));
 vi.mock('../src/utils/pullDockerImage.js', () => ({ default: vi.fn(), getDockerImage: () => 'android-app-image' }));
 vi.mock('../src/utils/getOsUserAndGroupId.js', () => ({ default: () => '1000:1000' }));
+// The keychain keeps the passwords of the keys this map names.
+const secrets = new Map();
+vi.mock('../src/utils/keychain.js', () => ({ readSecret: (key) => secrets.get(key) ?? null }));
 
 let base;
 let home;
@@ -30,7 +35,9 @@ vi.mock('node:os', async (importOriginal) => {
     return { ...real, default: { ...real, homedir: () => home } };
 });
 
-const { SIGNING, buildApk, packageAndroidRelease, releaseSigning } = await import('../src/actions/androidGradle.js');
+const {
+    SIGNING, buildApk, machineUploadKey, packageAndroidRelease, releaseSigning, uploadKeyEnv,
+} = await import('../src/actions/androidGradle.js');
 const { getContentHash } = await import('../src/utils/hash.js');
 
 let keystore;
@@ -42,7 +49,10 @@ beforeEach(() => {
     fs.writeFileSync(keystore, 'key');
     state.config.paths.base = base;
     state.config.paths.project = path.join(base, 'apps', 'demo');
+    state.config.system = {};
+    secrets.clear();
     calls.length = 0;
+    envs.length = 0;
     Object.values(SIGNING).forEach((name) => vi.stubEnv(name, ''));
 });
 
@@ -135,5 +145,33 @@ describe('the debug APK of a development session', () => {
         expect(execs).toHaveLength(2);
         expect(execs[0]).toEqual(expect.arrayContaining(['-w', '/tmp/crossbind/live/.crossbind/build/demo-android.debug', 'assembleDebug']));
         expect(execs[0]).not.toContain('--no-daemon');
+    });
+});
+
+describe("this machine's upload key", () => {
+    test("signs a release whose environment names no key, with the password the keychain keeps", () => {
+        state.config.system = { ANDROID_KEYSTORE: keystore, ANDROID_KEY_ALIAS: 'upload' };
+        secrets.set(keystore, 'kept-4711');
+        const project = path.join(base, 'dist', 'demo-android');
+
+        packageAndroidRelease(project);
+
+        expect(calls[0]).toContain(`${keystore}:/tmp/crossbind/keystore:ro`);
+        expect(calls[0]).toEqual(expect.arrayContaining([SIGNING.alias, SIGNING.password]));
+        expect(calls[0].join(' ')).not.toContain('kept-4711');
+        expect(envs[0]).toMatchObject({ [SIGNING.keystore]: keystore, [SIGNING.alias]: 'upload', [SIGNING.password]: 'kept-4711' });
+        expect(fs.existsSync(`${project}.aab`)).toBe(true);
+    });
+
+    test("gives way to the environment's own key, and stops without its password", () => {
+        const system = { ANDROID_KEYSTORE: keystore, ANDROID_KEY_ALIAS: 'upload' };
+        expect(machineUploadKey({ [SIGNING.keystore]: '/elsewhere/own.jks' }, system)).toBeNull();
+        expect(machineUploadKey({}, { ANDROID_KEYSTORE: '' })).toBeNull();
+        expect(machineUploadKey({}, system)).toEqual({ keystore, alias: 'upload', password: null });
+        expect(machineUploadKey({ [SIGNING.password]: 'given' }, system).password).toBe('given');
+        expect(() => uploadKeyEnv({ keystore, alias: 'upload', password: null }))
+            .toThrow(`this machine's upload key, ${keystore}, needs its password: set ${SIGNING.password}, or build on a terminal, which asks for it`);
+        expect(uploadKeyEnv({ keystore, alias: 'upload', password: 'p' }))
+            .toEqual({ [SIGNING.keystore]: keystore, [SIGNING.alias]: 'upload', [SIGNING.password]: 'p' });
     });
 });

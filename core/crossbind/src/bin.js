@@ -15,8 +15,10 @@ import buildWasiCommand from './actions/buildWasiCommand.js';
 import buildNode, { addonsInPackages, bundleNodeLoader, publishNodeData } from './actions/buildNode.js';
 import buildNativeCommand from './actions/buildNativeCommand.js';
 import buildApp, { appOutputPath, assertAppRunner, publishApp } from './actions/buildApp.js';
-import { releaseSigning } from './actions/androidGradle.js';
+import { machineUploadKey, releaseSigning, uploadKeyEnv } from './actions/androidGradle.js';
 import { UPDATER_KEY, newUpdaterKey } from './actions/appUpdate.js';
+import { makeUploadKey, showUploadKeyPassword, useUploadKey } from './actions/uploadKey.js';
+import { askHidden, hasTerminal } from './utils/ask.js';
 import buildExternal from './actions/buildExternal.js';
 import buildPackageTypes from './actions/buildTypes.js';
 import buildLib from './actions/buildLib.js';
@@ -116,6 +118,16 @@ function projectVite() {
     }
 }
 
+// An Android release signs with the environment's upload key, else this machine's, whose password the keychain keeps or
+// the terminal gives; Vite's build gets it in its environment.
+async function androidReleaseEnv() {
+    const key = machineUploadKey();
+    const password = key && !key.password && hasTerminal() ? await askHidden(`Password of this machine's upload key, ${key.keystore}: `) : null;
+    const env = key ? uploadKeyEnv({ ...key, password: key.password || password }) : {};
+    releaseSigning({ ...process.env, ...env });
+    return env;
+}
+
 const commandApp = program.command('app').description('build the project as an app, or open it on the dev server');
 [
     ['dev', 'open the app on the dev server, and open it anew as its native code changes'],
@@ -125,16 +137,16 @@ const commandApp = program.command('app').description('build the project as an a
     // Vite's own options, as --port or --mode, go on to Vite.
     .allowUnknownOption()
     .allowExcessArguments()
-    .action(({ platform }, command) => {
+    .action(async ({ platform }, command) => {
         if (state.config.target.runtimeEnv !== 'app') {
             throw new Error("crossbind: crossbind app builds an app, which this project is not: set target: { runtimeEnv: 'app' } in crossbind.config.js, as the desktop-app template does.");
         }
         // An Android build checks its upload key before the native build, not after it.
-        if (name === 'build' && (platform ?? process.env.CROSSBIND_APP_PLATFORM) === 'android') releaseSigning();
+        const signing = name === 'build' && (platform ?? process.env.CROSSBIND_APP_PLATFORM) === 'android' ? await androidReleaseEnv() : {};
         const vite = spawn(process.execPath, [projectVite(), ...(name === 'build' ? ['build'] : []), ...command.args], {
             stdio: 'inherit',
             cwd: state.config.paths.project,
-            env: platform ? { ...process.env, CROSSBIND_APP_PLATFORM: platform } : process.env,
+            env: { ...process.env, ...signing, ...(platform ? { CROSSBIND_APP_PLATFORM: platform } : {}) },
         });
         // A signal sent to crossbind alone reaches Vite too, which ends through its exit hooks; Ctrl-C reaches both.
         ['SIGINT', 'SIGTERM', 'SIGHUP'].forEach((signal) => process.prependListener(signal, () => vite.kill(signal)));
@@ -147,6 +159,18 @@ commandApp.command('updater-key')
         const { publicKey, privateKey } = newUpdaterKey();
         console.log(`crossbind: app.updater.publicKey in crossbind.config.js: ${publicKey}`);
         console.log(`crossbind: ${UPDATER_KEY}, kept secret where the app is built: ${privateKey}`);
+    });
+
+commandApp.command('upload-key')
+    .description("make this machine's upload key, which signs an Android app's bundle for Google Play")
+    .option('--use <keystore>', 'make a key you have the upload key instead, once it opens with its password')
+    .option('--alias <alias>', 'the alias of the key in the keystore --use names', 'upload')
+    .option('--no-keychain', 'keep the password in no keychain, so builds ask for it')
+    .option('--show-password', 'print the password the keychain keeps, for another machine or CI')
+    .action(async ({ use, alias, keychain, showPassword }) => {
+        if (showPassword) showUploadKeyPassword();
+        else if (use) await useUploadKey(use, { alias, isKeychain: keychain });
+        else await makeUploadKey({ isKeychain: keychain });
     });
 
 program.command('licenses')

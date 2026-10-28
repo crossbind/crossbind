@@ -146,6 +146,46 @@ export function usageDescriptions(config, platform) {
     return Object.fromEntries(Object.entries(appPermissions(config)).flatMap(([name, reason]) => keys[name].map((key) => [key, reason])));
 }
 
+// Apple's categories of required reason API, each with the type a privacy manifest names it by and the reasons Apple
+// takes for it, from "Describing use of required reason API".
+export const PRIVACY_CATEGORIES = {
+    fileTimestamp: { type: 'NSPrivacyAccessedAPICategoryFileTimestamp', reasons: ['DDA9.1', 'C617.1', '3B52.1', '0A2A.1'] },
+    systemBootTime: { type: 'NSPrivacyAccessedAPICategorySystemBootTime', reasons: ['35F9.1', '8FFB.1', '3D61.1'] },
+    diskSpace: { type: 'NSPrivacyAccessedAPICategoryDiskSpace', reasons: ['85F4.1', 'E174.1', '7D9E.1', 'B728.1'] },
+    activeKeyboards: { type: 'NSPrivacyAccessedAPICategoryActiveKeyboards', reasons: ['3EC4.1', '54BD.1'] },
+    userDefaults: { type: 'NSPrivacyAccessedAPICategoryUserDefaults', reasons: ['CA92.1', '1C8F.1', 'C56D.1', 'AC6B.1'] },
+};
+
+// The reasons an iOS app's privacy manifest gives for the required reason API it calls: app.privacy, each category with
+// Apple's reasons that fit, as { fileTimestamp: ['C617.1'] }.
+export function appPrivacy(config) {
+    const privacy = config.app.privacy ?? {};
+    const names = Object.keys(PRIVACY_CATEGORIES).join(', ');
+    if (typeof privacy !== 'object' || privacy === null || Array.isArray(privacy)) {
+        throw new Error(`crossbind: app.privacy ${JSON.stringify(privacy)} is no object of ${names}, each with Apple's reasons for it, as { fileTimestamp: ['C617.1'] } is.`);
+    }
+    const unknown = Object.keys(privacy).filter((name) => !Object.hasOwn(PRIVACY_CATEGORIES, name));
+    if (unknown.length > 0) throw new Error(`crossbind: app.privacy takes ${names}; ${unknown.join(', ')} is none of them.`);
+    Object.entries(privacy).forEach(([name, reasons]) => {
+        const allowed = PRIVACY_CATEGORIES[name].reasons;
+        if (!Array.isArray(reasons) || reasons.length === 0 || reasons.some((reason) => !allowed.includes(reason))) {
+            throw new Error(`crossbind: app.privacy.${name} ${JSON.stringify(reasons)} is no list of Apple's reasons for it, which are ${allowed.join(', ')}; Apple's "Describing use of required reason API" says what each covers.`);
+        }
+    });
+    return privacy;
+}
+
+// Whether an iOS app uses encryption that export rules do not exempt, which its Info.plist tells App Store Connect so that
+// it stops asking for every build: app.encryption. It is a legal statement, so there is none without it.
+export function appEncryption(config) {
+    const encryption = config.app.encryption;
+    if (encryption === undefined) return null;
+    if (typeof encryption !== 'boolean') {
+        throw new Error(`crossbind: app.encryption ${JSON.stringify(encryption)} is no boolean: set it to false when the app uses no encryption, or only what export rules exempt as the system's HTTPS, and to true when it uses any other.`);
+    }
+    return encryption;
+}
+
 // The version a Windows app's executable carries: package.json's, whose numbers are its file version.
 function windowsVersion(config) {
     const version = config.package?.version ?? '1.0.0';

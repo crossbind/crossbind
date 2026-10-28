@@ -253,6 +253,14 @@ export default {
     permissions: { camera: 'To scan barcodes', microphone: 'To record voice notes', location: 'To find the nearest store' },
       // The devices the page may use through getUserMedia() and navigator.geolocation, each with the reason for it,
       // which iOS shows its user when it asks (see app.md). Default: {}, none.
+    encryption: false,
+      // Whether an iOS app uses encryption that export rules do not exempt, which App Store Connect otherwise asks for
+      // every build: false for none or only the system's, as HTTPS; true for its own. A legal statement, so there is
+      // no default (see app.md).
+    privacy: { fileTimestamp: ['C617.1'] },
+      // Apple's reasons for the required reason API an iOS app calls, by category: fileTimestamp, systemBootTime,
+      // diskSpace, activeKeyboards and userDefaults. The build writes them as the app's privacy manifest, and a
+      // release build names each library that calls a category without one (see app.md). Default: {}, none.
     openPath: ['logs', 'picked'],
       // Where the page's shell.openPath opens files (see app.md): 'data', 'cache' and 'logs', the app's folders,
       // and 'picked', what a dialog picked during this run. Opening a program runs it. Default: [], nowhere.
