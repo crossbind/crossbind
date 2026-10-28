@@ -179,7 +179,7 @@ it, which Apple has notarized. Both come from the environment alone:
 |---|---|
 | `CROSSBIND_APPLE_SIGNING_IDENTITY` | A code signing identity in the keychain, by name or hash, as `Developer ID Application: <name> (<team>)`. |
 | `CROSSBIND_APPLE_API_KEY` | The API key's `.p8` file, which App Store Connect gives once. |
-| `CROSSBIND_APPLE_API_KEY_ID` | The key's ID. |
+| `CROSSBIND_APPLE_API_KEY_ID` | The key's ID, which the file's name tells where it keeps the one App Store Connect gives it, `AuthKey_<key id>.p8`. |
 | `CROSSBIND_APPLE_API_ISSUER` | The issuer ID of the key's team. |
 
 An identity the keychain does not hold or a name two of its identities share, as after a renewal, stops

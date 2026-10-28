@@ -7,7 +7,7 @@ import { afterAll, afterEach, beforeEach, describe, expect, test, vi } from 'vit
 const spawnSync = vi.fn();
 vi.mock('node:child_process', async (importOriginal) => ({ ...await importOriginal(), spawnSync }));
 
-const { appleSigning, notarizeApp } = await import('../src/actions/appleSigning.js');
+const { appStoreKey, appleSigning, notarizeApp } = await import('../src/actions/appleSigning.js');
 
 const DEVELOPER_ID = 'Developer ID Application: Ada Lovelace (ABCDE12345)';
 const HASH = '89ABCDEF0123456789ABCDEF0123456789ABCDEF';
@@ -65,6 +65,24 @@ describe('the identity and key that sign and notarize a macOS app', () => {
             .toThrow('which "Apple Development: Ada Lovelace (FGHIJ67890)" is not');
         expect(() => appleSigning({ CROSSBIND_APPLE_SIGNING_IDENTITY: DEVELOPER_ID, ...notary, CROSSBIND_APPLE_API_KEY: path.join(dir, 'missing.p8') }))
             .toThrow('which is no file');
+    });
+});
+
+describe('the App Store Connect API key', () => {
+    test('takes its ID from the name App Store Connect gives its file, AuthKey_<key id>.p8, where the environment names none', () => {
+        const named = path.join(dir, 'AuthKey_2X9R4HXF34.p8');
+        fs.writeFileSync(named, 'key');
+        expect(appStoreKey({ CROSSBIND_APPLE_API_KEY: named, CROSSBIND_APPLE_API_ISSUER: 'issuer-uuid' }))
+            .toEqual({ key: named, keyId: '2X9R4HXF34', issuer: 'issuer-uuid' });
+        expect(appStoreKey({ CROSSBIND_APPLE_API_KEY: named, CROSSBIND_APPLE_API_KEY_ID: 'Q1W2E3R4T5', CROSSBIND_APPLE_API_ISSUER: 'issuer-uuid' }).keyId)
+            .toBe('Q1W2E3R4T5');
+        expect(() => appStoreKey({ CROSSBIND_APPLE_API_KEY: named }))
+            .toThrow('crossbind: CROSSBIND_APPLE_API_KEY is set, but CROSSBIND_APPLE_API_ISSUER is not: an App Store Connect API key takes all three.');
+    });
+
+    test('names its ID among what is missing where its file has another name', () => {
+        expect(() => appStoreKey({ CROSSBIND_APPLE_API_KEY: key, CROSSBIND_APPLE_API_ISSUER: 'issuer-uuid' }))
+            .toThrow('CROSSBIND_APPLE_API_KEY_ID is not: an App Store Connect API key takes all three, the ID unless its file keeps the name App Store Connect gives it, AuthKey_<key id>.p8.');
     });
 });
 
