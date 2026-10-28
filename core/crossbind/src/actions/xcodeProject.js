@@ -3,6 +3,7 @@ import { spawnSync } from 'node:child_process';
 import state from '../state/index.js';
 import { IOS_DEPLOYMENT_TARGET } from '../utils/iosToolchain.js';
 import { textPlist, xmlPlist } from '../utils/plist.js';
+import { PRIVACY_CATEGORIES } from '../utils/appOptions.js';
 
 // The SDKs an iOS app builds for, one target each, and the slice of Hermes' release each takes.
 export const IOS_SDKS = ['iphoneos', 'iphonesimulator'];
@@ -18,7 +19,7 @@ int main(int argc, char *argv[]) { return crossbind_app_main(argc, argv); }
 
 const OBJECT_NAMES = ['project', 'mainGroup', 'products', 'target', 'product', 'main', 'info', 'app', 'hermes', 'mainBuild',
     'appBuild', 'hermesLink', 'hermesEmbed', 'sources', 'frameworks', 'resources', 'embed', 'projectDebug', 'projectRelease',
-    'targetDebug', 'targetRelease', 'projectConfigs', 'targetConfigs', 'assets', 'assetsBuild'];
+    'targetDebug', 'targetRelease', 'projectConfigs', 'targetConfigs', 'assets', 'assetsBuild', 'privacy', 'privacyBuild'];
 // Xcode names its objects by 24 hex digits. Fixed ones leave the project unchanged while what it holds is.
 const ID = Object.fromEntries(OBJECT_NAMES.map((name, index) => [name, `CB${(index + 1).toString(16).toUpperCase().padStart(22, '0')}`]));
 
@@ -39,7 +40,7 @@ const ORIENTATIONS = ['UIInterfaceOrientationPortrait', 'UIInterfaceOrientationL
 // The color set of app.window.backgroundColor, which the launch screen shows.
 const LAUNCH_COLOR = 'LaunchBackground';
 
-const infoPlist = (name, urlSchemes, hasBackground, usage) => xmlPlist({
+const infoPlist = (name, urlSchemes, hasBackground, usage, encryption) => xmlPlist({
     CFBundleDevelopmentRegion: 'en',
     CFBundleDisplayName: name,
     CFBundleExecutable: '$(EXECUTABLE_NAME)',
@@ -50,6 +51,7 @@ const infoPlist = (name, urlSchemes, hasBackground, usage) => xmlPlist({
     CFBundleShortVersionString: '$(MARKETING_VERSION)',
     ...(urlSchemes.length > 0 ? { CFBundleURLTypes: [{ CFBundleURLName: '$(PRODUCT_BUNDLE_IDENTIFIER)', CFBundleURLSchemes: urlSchemes }] } : {}),
     CFBundleVersion: '$(CURRENT_PROJECT_VERSION)',
+    ...(encryption === null ? {} : { ITSAppUsesNonExemptEncryption: encryption }),
     LSRequiresIPhoneOS: true,
     UIApplicationSceneManifest: { UIApplicationSupportsMultipleScenes: false },
     UILaunchScreen: hasBackground ? { UIColorName: LAUNCH_COLOR } : {},
@@ -59,7 +61,7 @@ const infoPlist = (name, urlSchemes, hasBackground, usage) => xmlPlist({
     ...usage,
 });
 
-function objects(name, targetSettings, hasAssets) {
+function objects(name, targetSettings, hasAssets, hasPrivacy) {
     const file = (path, type) => ({ isa: 'PBXFileReference', lastKnownFileType: type, path, sourceTree: '<group>' });
     const phase = (isa, files, extra = {}) => ({ isa, buildActionMask: 2147483647, files, runOnlyForDeploymentPostprocessing: 0, ...extra });
     const configuration = (configurationName, buildSettings) => ({ isa: 'XCBuildConfiguration', buildSettings, name: configurationName });
@@ -71,8 +73,13 @@ function objects(name, targetSettings, hasAssets) {
         [ID.assets]: file('Assets.xcassets', 'folder.assetcatalog'),
         [ID.assetsBuild]: { isa: 'PBXBuildFile', fileRef: ID.assets },
     } : {};
+    const privacy = hasPrivacy ? {
+        [ID.privacy]: file('PrivacyInfo.xcprivacy', 'text.xml'),
+        [ID.privacyBuild]: { isa: 'PBXBuildFile', fileRef: ID.privacy },
+    } : {};
     return {
         ...assets,
+        ...privacy,
         [ID.main]: file('main.m', 'sourcecode.c.objc'),
         [ID.info]: file('Info.plist', 'text.plist.xml'),
         [ID.app]: file('app', 'folder'),
@@ -86,10 +93,12 @@ function objects(name, targetSettings, hasAssets) {
         [ID.hermesEmbed]: { isa: 'PBXBuildFile', fileRef: ID.hermes, settings: { ATTRIBUTES: ['CodeSignOnCopy', 'RemoveHeadersOnCopy'] } },
         [ID.sources]: phase('PBXSourcesBuildPhase', [ID.mainBuild]),
         [ID.frameworks]: phase('PBXFrameworksBuildPhase', [ID.hermesLink]),
-        [ID.resources]: phase('PBXResourcesBuildPhase', [ID.appBuild, ...(hasAssets ? [ID.assetsBuild] : [])]),
+        [ID.resources]: phase('PBXResourcesBuildPhase', [ID.appBuild, ...(hasAssets ? [ID.assetsBuild] : []), ...(hasPrivacy ? [ID.privacyBuild] : [])]),
         [ID.embed]: phase('PBXCopyFilesBuildPhase', [ID.hermesEmbed], { dstPath: '', dstSubfolderSpec: 10, name: 'Embed Frameworks' }),
         [ID.mainGroup]: {
-            isa: 'PBXGroup', children: [ID.main, ID.info, ID.app, ...(hasAssets ? [ID.assets] : []), ID.hermes, ID.products], sourceTree: '<group>',
+            isa: 'PBXGroup',
+            children: [ID.main, ID.info, ID.app, ...(hasAssets ? [ID.assets] : []), ...(hasPrivacy ? [ID.privacy] : []), ID.hermes, ID.products],
+            sourceTree: '<group>',
         },
         [ID.products]: { isa: 'PBXGroup', children: [ID.product], name: 'Products', sourceTree: '<group>' },
         [ID.target]: {
@@ -143,10 +152,20 @@ function writeAssets(catalog, icon, background) {
     }
 }
 
+// The privacy manifest of app.privacy, without which App Store Connect refuses an app that calls required reason API.
+const privacyManifest = (privacy) => xmlPlist({
+    NSPrivacyAccessedAPITypes: Object.entries(privacy).map(([name, reasons]) => ({
+        NSPrivacyAccessedAPIType: PRIVACY_CATEGORIES[name].type,
+        NSPrivacyAccessedAPITypeReasons: reasons,
+    })),
+});
+
 // An iOS app as an Xcode project, written anew from the parts its SDK targets built: each brings its archives and
 // their link line, and its slice of Hermes; the first also the app's files. Xcode signs the app and runs it, in the
 // Simulator or on a device, and makes every size of its icon from the one PNG given.
-export default function writeXcodeProject(to, { parts, identity, label, version, icon = null, urlSchemes = [], background = null, usage = {} }) {
+export default function writeXcodeProject(to, {
+    parts, identity, label, version, build = version, icon = null, urlSchemes = [], background = null, usage = {}, encryption = null, privacy = {},
+}) {
     const { name } = state.config.general;
     if (parts.length === 0) throw new Error(`crossbind: no part of the iOS app ${name} is built, so there is no Xcode project to write.`);
     fs.rmSync(to, { recursive: true, force: true });
@@ -165,8 +184,10 @@ export default function writeXcodeProject(to, { parts, identity, label, version,
     if (result.status !== 0) throw new Error(`crossbind: cannot make Hermes' xcframework for ${to}: ${result.stderr || result.error?.message}`);
 
     fs.writeFileSync(`${to}/main.m`, MAIN);
-    fs.writeFileSync(`${to}/Info.plist`, infoPlist(label, urlSchemes, Boolean(background), usage));
+    fs.writeFileSync(`${to}/Info.plist`, infoPlist(label, urlSchemes, Boolean(background), usage, encryption));
     writeAssets(`${to}/Assets.xcassets`, icon, background);
+    const hasPrivacy = Object.keys(privacy).length > 0;
+    if (hasPrivacy) fs.writeFileSync(`${to}/PrivacyInfo.xcprivacy`, privacyManifest(privacy));
     const targetSettings = {
         ...(icon ? { ASSETCATALOG_COMPILER_APPICON_NAME: 'AppIcon' } : {}),
         PRODUCT_NAME: name,
@@ -175,12 +196,12 @@ export default function writeXcodeProject(to, { parts, identity, label, version,
         CODE_SIGN_STYLE: 'Automatic',
         INFOPLIST_FILE: 'Info.plist',
         MARKETING_VERSION: version,
-        CURRENT_PROJECT_VERSION: version,
+        CURRENT_PROJECT_VERSION: build,
         LD_RUNPATH_SEARCH_PATHS: ['$(inherited)', '@executable_path/Frameworks'],
         ...linkFlags,
     };
     fs.writeFileSync(`${to}/${name}.xcodeproj/project.pbxproj`, textPlist({
-        archiveVersion: 1, classes: {}, objectVersion: 56, objects: objects(name, targetSettings, Boolean(icon || background)), rootObject: ID.project,
+        archiveVersion: 1, classes: {}, objectVersion: 56, objects: objects(name, targetSettings, Boolean(icon || background), hasPrivacy), rootObject: ID.project,
     }));
     return to;
 }

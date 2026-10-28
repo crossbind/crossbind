@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'vitest';
 import {
-    appBackgroundColor, appCategory, appCopyright, appDisplayName, appHeader, appId, appPermissions, appUpdater, appUrlSchemes, appWindow,
-    usageDescriptions,
+    appBackgroundColor, appCategory, appCopyright, appDisplayName, appEncryption, appHeader, appId, appPermissions, appPrivacy, appUpdater,
+    appUrlSchemes, appWindow, usageDescriptions,
 } from '../src/utils/appOptions.js';
 
 const config = (app = {}, version = '1.2.3') => ({ general: { name: 'demo-app' }, app, package: { version } });
@@ -363,5 +363,41 @@ describe("the header a desktop app's host builds with", () => {
             expect(() => appHeader(config({}, version), 'win32')).toThrow('65535');
         }
         expect(appHeader(config({}, '20261021.0.0'), 'darwin')).not.toContain('VERSION');
+    });
+});
+
+describe("an iOS app's encryption statement", () => {
+    test('is none without app.encryption, as it is a legal statement crossbind does not make for the app', () => {
+        expect(appEncryption(config())).toBe(null);
+        expect(appEncryption(config({ encryption: false }))).toBe(false);
+        expect(appEncryption(config({ encryption: true }))).toBe(true);
+    });
+
+    test('takes true or false alone', () => {
+        for (const encryption of ['no', 0, null]) {
+            expect(() => appEncryption(config({ encryption }))).toThrow(`app.encryption ${JSON.stringify(encryption)} is no boolean`);
+        }
+    });
+});
+
+describe("an iOS app's privacy reasons", () => {
+    test("are none without app.privacy, and Apple's reasons for each category it lists", () => {
+        expect(appPrivacy(config())).toEqual({});
+        expect(appPrivacy(config({ privacy: { fileTimestamp: ['C617.1'], diskSpace: ['E174.1', '85F4.1'] } })))
+            .toEqual({ fileTimestamp: ['C617.1'], diskSpace: ['E174.1', '85F4.1'] });
+    });
+
+    test("take Apple's categories alone, so a misspelt one does not pass unnoticed", () => {
+        expect(() => appPrivacy(config({ privacy: { fileTimestamps: ['C617.1'] } })))
+            .toThrow('app.privacy takes fileTimestamp, systemBootTime, diskSpace, activeKeyboards, userDefaults; fileTimestamps is none of them');
+        expect(() => appPrivacy(config({ privacy: { toString: ['C617.1'] } }))).toThrow('toString is none of them');
+        expect(() => appPrivacy(config({ privacy: ['C617.1'] }))).toThrow('app.privacy ["C617.1"] is no object');
+    });
+
+    test("take for each category one or more of the reasons Apple allows for it", () => {
+        expect(() => appPrivacy(config({ privacy: { fileTimestamp: ['E174.1'] } })))
+            .toThrow('app.privacy.fileTimestamp ["E174.1"] is no list of Apple\'s reasons for it, which are DDA9.1, C617.1, 3B52.1, 0A2A.1');
+        expect(() => appPrivacy(config({ privacy: { userDefaults: [] } }))).toThrow('app.privacy.userDefaults []');
+        expect(() => appPrivacy(config({ privacy: { systemBootTime: '35F9.1' } }))).toThrow('app.privacy.systemBootTime "35F9.1"');
     });
 });

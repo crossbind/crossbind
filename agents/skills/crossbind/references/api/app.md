@@ -50,6 +50,7 @@ export default defineConfig({ plugins: [viteCrossbindPlugin()] });
 | `crossbind app build -p android` | Builds the page and the host for arm64-v8a and x86_64, writes the app's Gradle project, `dist/<name>-android/`, and packages it: `dist/<name>-android.apk`, and with an upload key `dist/<name>-android.aab` too (see [Android](#android)). |
 | `crossbind build -p android -e app` | Writes the Gradle project with no page in it: `<paths.output>/<name>-android`, or `<name>-android.debug` for a debug build. A release build packages it as `crossbind app build -p android` does. |
 | `crossbind app updater-key` | Prints a new key pair for a desktop app's updates: the public key for `app.updater.publicKey`, the private one for `CROSSBIND_UPDATER_PRIVATE_KEY` (see [Updates](#updates)). |
+| `crossbind app upload-key` | Makes this machine's upload key, which signs an Android app's bundle for Google Play, and keeps its password in the system keychain; `--use <keystore>` takes a key you have instead (see [The upload key](#the-upload-key)). |
 
 `crossbind app` runs the project's Vite with `CROSSBIND_APP_PLATFORM` set to the platform `-p` names, `macos`, `linux`,
 `windows`, `ios` or `android`; without `-p` it keeps the variable the environment sets, and without that builds this
@@ -723,13 +724,32 @@ in it to edit: what would change it comes from `crossbind.config.js`.
 app: {
     id: 'com.example.myapp', // the bundle id; dev.crossbind.<name> without it
     team: 'ABCDE12345',      // the Apple team that signs the app; XCODE_DEVELOPMENT_TEAM of ~/.crossbind.json without it
+    encryption: false,       // whether the app uses encryption that export rules do not exempt
+    privacy: { fileTimestamp: ['C617.1'] }, // Apple's reasons for the required reason API the app calls
 },
 ```
 
 Open `dist/<name>-ios/<name>.xcodeproj` in Xcode to run the app on a device or to archive it for TestFlight and the App
 Store; Xcode signs it for the team. The version is the project's `package.json` version without its prerelease part,
-as Apple takes numbers alone. A build for the Simulator
+as Apple takes numbers alone, and so is the build number, unless `CROSSBIND_APP_BUILD_NUMBER` gives one, a whole
+number, as CI does. A build for the Simulator
 needs no team: `xcodebuild -project dist/<name>-ios/<name>.xcodeproj -sdk iphonesimulator build`.
+
+`app.encryption` tells App Store Connect whether the app uses encryption that export rules do not exempt, as the
+Info.plist's `ITSAppUsesNonExemptEncryption`; without it, App Store Connect asks for every build before TestFlight
+takes it. Set it to `false` when the app uses no encryption, or only what is exempt, as the system's HTTPS, and to
+`true` when it uses its own. It is a legal statement, so crossbind sets none by itself.
+
+App Store Connect refuses an app that calls Apple's required reason API without its reasons (ITMS-91053). The host and
+Hermes call none, but six of crossbind's ports do, through `stat` and its kin: curl, GDAL, OpenSSL, PROJ, SQLite and
+libtiff. `app.privacy` gives the reasons, each category with Apple's codes from
+[Describing use of required reason API](https://developer.apple.com/documentation/bundleresources/describing-use-of-required-reason-api),
+and the build writes them as the app's privacy manifest, `PrivacyInfo.xcprivacy`. The categories are `fileTimestamp`,
+`systemBootTime`, `diskSpace`, `activeKeyboards` and `userDefaults`. A release build reads what the archives the app
+links reference, and names each library that references a category `app.privacy` gives no reason for. The linker may
+leave some of it out of the app: the conformance app's Rust references `stat`, `lstat`, `fstat` and `fstatat`, and the
+app calls `fstat` alone. The scan finds C functions, as `stat` and `mach_absolute_time`, but not Objective-C selectors,
+as `systemUptime`.
 
 ## Android
 
@@ -745,7 +765,33 @@ app: {
 `crossbind app build -p android` packages it in crossbind's android-app image, with no network: the release APK,
 `dist/<name>-android.apk`, and with an upload key also the bundle Google Play takes, `dist/<name>-android.aab`.
 Without one, the APK is signed with this machine's debug key, which installs it for testing (`adb install`), and the
-build says so. The upload key comes from the environment alone, so no secret reaches a file:
+build says so. The Gradle project stays in `dist/<name>-android/`, which Android Studio opens too. The version name is
+the project's `package.json` version; the version code is made from its numbers, major × 1,000,000 + minor × 1,000 +
+patch, so the prereleases of one version share it, unless `CROSSBIND_APP_BUILD_NUMBER` gives one, a whole number up
+to 2,100,000,000, as CI does.
+
+### The upload key
+
+`crossbind app upload-key` makes one, so neither a JDK nor any knowledge of keystores is needed. It runs `keytool` in
+the android-app image, with no network, and writes `~/.crossbind/keys/android-upload.p12`, an RSA 2048 key valid for
+10,000 days, which `~/.crossbind.json` then names as `ANDROID_KEYSTORE` and `ANDROID_KEY_ALIAS`. Its password is one
+crossbind makes, 24 random characters shown once, or one you type. A typed one needs 15 characters or more, as NIST SP
+800-63B-4 asks of a password that alone guards what it locks, and must be no one part repeated, no run as 1234 or
+qwerty, and no well-known password; no mix of kinds of characters is asked for.
+
+The system keychain keeps the password, so builds sign without asking: macOS's Keychain, Windows' DPAPI, or Linux's
+Secret Service through `secret-tool`. With `--no-keychain`, or where there is no keychain, a build asks for it on the
+terminal, so the command then takes a typed password alone. `--show-password` prints the password the keychain keeps,
+for another machine or CI.
+
+The command never makes a key over one the machine has. Keep a copy of the keystore and of its password somewhere safe,
+as a password manager: Google Play keeps only the upload key's certificate, and a lost key takes an upload key reset in
+Play Console, which takes effect 72 hours later. The app's own signing key stays with Google, so its users see no
+change.
+
+A key you have, from Android Studio or `keytool`, signs as well. `crossbind app upload-key --use <keystore> [--alias
+<alias>]` checks that it opens with its password and keeps it the same way. Or the environment names it for each build,
+as CI does, and comes before the machine's:
 
 | Variable | Value |
 |---|---|
@@ -755,10 +801,7 @@ build says so. The upload key comes from the environment alone, so no secret rea
 | `CROSSBIND_ANDROID_KEY_PASSWORD` | The key's password, when it is not the keystore's. |
 
 The keystore reaches the container read-only and the passwords by name, never on a command line. A keystore without
-its alias and password stops the build, and so does an alias or a password without a keystore. Android Studio makes
-an upload key, and so does the `keytool` of any JDK. The Gradle project stays in `dist/<name>-android/`, which
-Android Studio opens too. The version name is the project's `package.json` version; the version code is made from its
-numbers, major × 1,000,000 + minor × 1,000 + patch, so the prereleases of one version share it.
+its alias and password stops the build, and so does an alias or a password without a keystore.
 
 The image carries a JDK, the Android SDK platform and build tools, Gradle and every Maven artifact the build takes,
 Hermes' `hermes-android` and androidx.webkit among them, each checked against its sha256, so a build needs no JDK or

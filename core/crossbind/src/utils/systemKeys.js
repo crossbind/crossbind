@@ -3,6 +3,14 @@ const systemKeys = {
         description: 'The unique identifier of the development team used for code signing and app distribution in Xcode.',
         default: '',
     },
+    ANDROID_KEYSTORE: {
+        description: "This machine's upload key, which signs an Android app's release and its bundle for Google Play; crossbind app upload-key sets it. The CROSSBIND_ANDROID_KEYSTORE environment variable overrides it.",
+        default: '',
+    },
+    ANDROID_KEY_ALIAS: {
+        description: 'The alias of the upload key in ANDROID_KEYSTORE. The CROSSBIND_ANDROID_KEY_ALIAS environment variable overrides it.',
+        default: '',
+    },
     RUNNER: {
         description: 'Where toolchain steps run: DOCKER_RUN, DOCKER_EXEC, LOCAL, or REMOTE on the runners REMOTE_URL and REMOTE_URL_<IMAGE> name; a machine that names none builds on crossbind cloud once signed in with crossbind login. The CROSSBIND_RUNNER environment variable overrides it.',
         options: ['DOCKER_RUN', 'DOCKER_EXEC', 'LOCAL', 'REMOTE'],
