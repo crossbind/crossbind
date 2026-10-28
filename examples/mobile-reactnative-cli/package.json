@@ -25,7 +25,7 @@
         "@crossbind/plugin-react-native-ios-helper": "workspace:^",
         "@crossbind/example-lib-prebuilt-matrix": "workspace:^",
         "react": "19.3.1",
-        "react-native": "0.88.0",
+        "react-native": "0.88.1",
         "react-native-safe-area-context": "^5.8.0",
         "hermes-compiler": "260318099.0.4"
     },
