@@ -87,6 +87,14 @@ describe("Google Play's credentials", () => {
         expect(() => playCredentials({ [PLAY.key]: path.join(dir, 'none.json') }, {})).toThrow(`${PLAY.key} names ${path.join(dir, 'none.json')}, which is no file`);
     });
 
+    test('are an access token from the environment alone, as CI makes one with no key, and never with another kind', () => {
+        expect(playCredentials({ [PLAY.token]: 'ci-token' }, {})).toEqual({ token: 'ci-token' });
+        expect(playCredentials({}, { GOOGLE_PLAY_TOKEN: 'ci-token' })).toBeNull();
+        expect(() => playCredentials({ [PLAY.token]: 'ci-token' }, { GOOGLE_PLAY_SERVICE_ACCOUNT: ACCOUNT }))
+            .toThrow(`${PLAY.token} is set, and so is ${PLAY.serviceAccount} or its key in ~/.crossbind.json: set one.`);
+        expect(() => playCredentials({ [PLAY.token]: 'ci-token', [PLAY.key]: keyFile }, {})).toThrow(`and so is ${PLAY.key}`);
+    });
+
     test('are, with neither set, the Google sign-in this machine keeps while Google takes it', async () => {
         expect(await keptSignIn()).toBeNull();
         expect(keepSignIn('refresh')).toBe(true);
@@ -121,6 +129,11 @@ describe("Google Play's token", () => {
         expect(route).toBe('POST iamcredentials.googleapis.com');
         expect(init.headers.authorization).toBe('Bearer user-token');
         expect(JSON.parse(init.body)).toEqual({ scope: ['https://www.googleapis.com/auth/androidpublisher'] });
+    });
+
+    test('of an access token from the environment is the token itself', async () => {
+        expect(await playToken({ token: 'ci-token' })).toBe('ci-token');
+        expect(requests).toEqual([]);
     });
 
     test('of a Google sign-in is bought with its refresh token', async () => {
@@ -166,6 +179,20 @@ describe("an app's edit on Google Play", () => {
             status: 403,
             message: expect.stringContaining('the Google account you signed in with has no release rights for dev.example.app: sign in with one that has, or have it invited in Play Console'),
         });
+    });
+
+    test('says what an access token from the environment lacks: life, the scope or release rights', async () => {
+        const token = { token: 'ci-token' };
+        answers['POST /edits'] = () => failure(401, 'Request had invalid authentication credentials.');
+        await expect(highestVersionCode('dev.example.app', token)).rejects.toThrow(`Google Play takes ${PLAY.token} no more: it has expired`);
+        answers['POST /edits'] = () => failure(403, 'Request had insufficient authentication scopes.');
+        await expect(highestVersionCode('dev.example.app', token))
+            .rejects.toThrow(`${PLAY.token} lacks the scope https://www.googleapis.com/auth/androidpublisher, which Google Play's API takes`);
+        answers['POST /edits'] = () => failure(403, 'The caller does not have permission');
+        await expect(highestVersionCode('dev.example.app', token))
+            .rejects.toThrow(`the account behind ${PLAY.token} has no release rights for dev.example.app: invite it in Play Console`);
+        const request = requests.find(({ route }) => route === 'POST /edits');
+        expect(request.init.headers.authorization).toBe('Bearer ci-token');
     });
 
     test("uploads a bundle and releases it on a track, the bundle's bytes as they are", async () => {

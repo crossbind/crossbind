@@ -866,8 +866,9 @@ from `~/.crossbind.json` under the same name without `CROSSBIND_` (`crossbind co
 |---|---|
 | `CROSSBIND_GOOGLE_PLAY_SERVICE_ACCOUNT` | The service account's e-mail. Your own gcloud login buys an hour's token of it at each publish, so no key of it exists anywhere. |
 | `CROSSBIND_GOOGLE_PLAY_KEY` | The service account's JSON key, where gcloud is not, as in CI. |
+| `CROSSBIND_GOOGLE_PLAY_TOKEN` | An access token of the service account with the androidpublisher scope, from the environment alone, as CI makes one with no key (see [From CI](#from-ci)). It lasts an hour. |
 
-Setting both stops the publish. Once, for each app or account:
+Setting two of them stops the publish. Once, for each app or account:
 
 1. In Play Console, create the app, with `app.id` as its package name; Play's API makes none.
 2. For a service account, enable the Google Play Android Developer API in a Google Cloud project and make one there.
@@ -933,6 +934,91 @@ On a terminal, the publish asks for what is missing and sets it up:
 
 Without a terminal, as in CI, nothing is asked: the publish names every missing piece at once, warns without
 `app.encryption`, and stops at the first failure.
+
+### From CI
+
+A CI job publishes as a publish without a terminal does: it asks nothing. So publish once on your own machine first,
+where the publish asks for the app's settings and writes them into `crossbind.config.js`, and commit them. CI has no
+Xcode account and no one to sign in to Google, so it needs these besides, as the repository's secrets and variables:
+
+| Store | CI needs |
+|---|---|
+| Google Play | The upload key as a base64 secret, which `base64 < <keystore>` prints, with its alias and its password, which `crossbind app upload-key --show-password` prints. A service account invited in Play Console (see [Google Play](#google-play)), through Workload Identity Federation with no key, or its JSON key. |
+| App Store Connect | `app.team` in `crossbind.config.js`, as this machine's `XCODE_DEVELOPMENT_TEAM` stays behind. An App Store Connect API key, its `.p8` as a secret: an Admin key, whose uploads Apple signs in the cloud and whose secret can do all an Admin can, or a key of another role with an Apple Distribution certificate imported into the runner's keychain before the publish. |
+
+For GitHub Actions, with npm, publishing to Google Play:
+
+```yaml
+name: Publish to Google Play
+on: workflow_dispatch
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - id: google
+        uses: google-github-actions/auth@v3
+        with:
+          workload_identity_provider: ${{ vars.GOOGLE_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.GOOGLE_PLAY_SERVICE_ACCOUNT }}
+          token_format: access_token
+          access_token_scopes: https://www.googleapis.com/auth/androidpublisher
+      - run: echo "$UPLOAD_KEY" | base64 --decode > "$RUNNER_TEMP/upload.p12"
+        env:
+          UPLOAD_KEY: ${{ secrets.ANDROID_UPLOAD_KEY }}
+      - run: npx crossbind app publish -p android
+        env:
+          CROSSBIND_GOOGLE_PLAY_TOKEN: ${{ steps.google.outputs.access_token }}
+          CROSSBIND_ANDROID_KEYSTORE: ${{ runner.temp }}/upload.p12
+          CROSSBIND_ANDROID_KEY_ALIAS: upload
+          CROSSBIND_ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_UPLOAD_KEY_PASSWORD }}
+```
+
+Workload Identity Federation lets the repository's jobs act as the service account, with no key anywhere;
+[google-github-actions/auth](https://github.com/google-github-actions/auth) says how to set it up, with
+`roles/iam.workloadIdentityUser` on the service account for the pool. The token lasts an hour, so the publish's own job
+makes it, and it asks for the androidpublisher scope, as the action's default, cloud-platform, does not cover Google
+Play. With a JSON key instead, write it to a file as the upload key is, and name the file with
+`CROSSBIND_GOOGLE_PLAY_KEY`.
+
+Publishing to TestFlight, on macOS:
+
+```yaml
+name: Publish to TestFlight
+on: workflow_dispatch
+jobs:
+  publish:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - uses: actions/cache@v6
+        with:
+          path: ~/.crossbind/hermes
+          key: hermes-${{ hashFiles('package-lock.json') }}
+      - run: echo "$APPLE_API_KEY" > "$RUNNER_TEMP/AuthKey.p8"
+        env:
+          APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
+      - run: npx crossbind app publish -p ios
+        env:
+          CROSSBIND_APPLE_API_KEY: ${{ runner.temp }}/AuthKey.p8
+          CROSSBIND_APPLE_API_KEY_ID: ${{ vars.APPLE_API_KEY_ID }}
+          CROSSBIND_APPLE_API_ISSUER: ${{ vars.APPLE_API_ISSUER }}
+```
+
+The cache keeps Hermes and its dSYM, which every upload carries, from downloading again at each run.
 
 ## Hermes
 

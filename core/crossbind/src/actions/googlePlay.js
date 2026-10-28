@@ -7,8 +7,9 @@ import { accessToken } from './googleSignIn.js';
 import { readSecret, storeSecret } from '../utils/keychain.js';
 
 // Google Play's credentials, which the environment or ~/.crossbind.json names: a service account's e-mail, whose token
-// the user's gcloud login buys with no key, or its JSON key.
-export const PLAY = { key: 'CROSSBIND_GOOGLE_PLAY_KEY', serviceAccount: 'CROSSBIND_GOOGLE_PLAY_SERVICE_ACCOUNT' };
+// the user's gcloud login buys with no key, or its JSON key; or, from the environment alone, an access token made
+// elsewhere, as CI makes one with no key.
+export const PLAY = { key: 'CROSSBIND_GOOGLE_PLAY_KEY', serviceAccount: 'CROSSBIND_GOOGLE_PLAY_SERVICE_ACCOUNT', token: 'CROSSBIND_GOOGLE_PLAY_TOKEN' };
 export const PLAY_SCOPE = 'https://www.googleapis.com/auth/androidpublisher';
 // The keychain keeps the user's Google sign-in for Play under this service; on Windows, beside this path.
 const SIGN_IN_SERVICE = 'crossbind google play';
@@ -36,13 +37,18 @@ function readKey(file) {
     return key;
 }
 
-// The credentials Play takes from this environment and machine, or null without any: one of the two kinds.
+// The credentials Play takes from this environment and machine, or null without any: one of the three kinds.
 export function playCredentials(env = process.env, system = {}) {
     const file = env[PLAY.key] || system.GOOGLE_PLAY_KEY;
     const account = env[PLAY.serviceAccount] || system.GOOGLE_PLAY_SERVICE_ACCOUNT;
+    const token = env[PLAY.token];
     if (file && account) {
         throw new Error(`crossbind: both ${PLAY.key} and ${PLAY.serviceAccount} are set, or their keys in ~/.crossbind.json: set one, the service account's e-mail to use your gcloud login, or its JSON key.`);
     }
+    if (token && (file || account)) {
+        throw new Error(`crossbind: ${PLAY.token} is set, and so is ${file ? PLAY.key : PLAY.serviceAccount} or its key in ~/.crossbind.json: set one.`);
+    }
+    if (token) return { token };
     if (account) return { account };
     if (!file) return null;
     const key = readKey(file);
@@ -100,8 +106,10 @@ async function accountToken({ account }) {
     return body.accessToken;
 }
 
-// An hour's token of Play's API, for the user's Google sign-in or for the service account.
-export function playToken(credentials) {
+// An hour's token of Play's API: the one from the environment, or one for the user's Google sign-in or for the service
+// account.
+export async function playToken(credentials) {
+    if (credentials.token) return credentials.token;
     if (credentials.refreshToken) return accessToken(credentials.refreshToken);
     return credentials.key ? keyToken(credentials) : accountToken(credentials);
 }
@@ -111,10 +119,15 @@ function playError(status, message, method, url, appId, credentials) {
     let text = `crossbind: Google Play answered ${method} ${route} with ${status}: ${message}`;
     if (status === 404 && route === '/edits') {
         text = `crossbind: Play Console has no app ${appId}: create it there, with ${appId} as its package name, as Play's API makes none.`;
+    } else if (status === 401 && credentials.token) {
+        text = `crossbind: Google Play takes ${PLAY.token} no more: it has expired, as access tokens do after an hour, or it is no access token; make it in the publish's own job.`;
+    } else if (status === 403 && credentials.token && /insufficient authentication scopes/i.test(message)) {
+        text = `crossbind: ${PLAY.token} lacks the scope ${PLAY_SCOPE}, which Google Play's API takes: ask for it where the token is made, as google-github-actions/auth's access_token_scopes does.`;
     } else if (status === 403 && credentials.refreshToken) {
         text = `crossbind: the Google account you signed in with has no release rights for ${appId}: sign in with one that has, or have it invited in Play Console, under Users and permissions, with "Release apps to testing tracks" for the app.`;
     } else if (status === 403) {
-        text = `crossbind: ${credentials.account} has no release rights for ${appId}: invite it in Play Console, under Users and permissions, with "Release apps to testing tracks" for the app.`;
+        const account = credentials.token ? `the account behind ${PLAY.token}` : credentials.account;
+        text = `crossbind: ${account} has no release rights for ${appId}: invite it in Play Console, under Users and permissions, with "Release apps to testing tracks" for the app.`;
     }
     return Object.assign(new Error(text), { status, playMessage: message });
 }
