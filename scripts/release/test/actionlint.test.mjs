@@ -273,11 +273,26 @@ test('unsupported actionlint platforms fail instead of downloading an unpinned b
 
 test('every external action in every repository workflow is pinned to a full commit SHA', () => {
     const workflowDirectory = path.join(ROOT, '.github', 'workflows');
+    let validated = 0;
     for (const workflow of fs.readdirSync(workflowDirectory).filter((name) => /\.ya?ml$/.test(name))) {
         const source = fs.readFileSync(path.join(ROOT, '.github', 'workflows', workflow), 'utf8');
         const actions = [...source.matchAll(/^\s*-?\s*uses:\s*([^\s#]+)/gm)].map((match) => match[1]).filter((action) => !action.startsWith('./'));
-        assert.ok(actions.length > 0, `${workflow} has no external actions to validate`);
         for (const action of actions) assert.match(action, /^[^@\s]+@[0-9a-f]{40}$/, `${workflow}: ${action} is not commit-pinned`);
+        validated += actions.length;
+    }
+    assert.ok(validated > 0, 'no workflow has external actions to validate');
+});
+
+test('every workflow a workflow_run waits for exists under that name', () => {
+    const workflowDirectory = path.join(ROOT, '.github', 'workflows');
+    const sources = fs
+        .readdirSync(workflowDirectory)
+        .filter((name) => /\.ya?ml$/.test(name))
+        .map((name) => [name, fs.readFileSync(path.join(workflowDirectory, name), 'utf8')]);
+    const names = new Set(sources.map(([, source]) => source.match(/^name: (.+)$/m)?.[1]));
+    for (const [workflow, source] of sources) {
+        const listed = source.match(/^ {4}workflow_run:\n {8}workflows:\n((?: {12}- .+\n)+)/m)?.[1] ?? '';
+        for (const [, name] of listed.matchAll(/- (.+)/g)) assert.ok(names.has(name), `${workflow} waits for ${name}, which no workflow is named`);
     }
 });
 

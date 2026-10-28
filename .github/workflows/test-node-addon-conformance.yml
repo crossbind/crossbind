@@ -134,6 +134,23 @@ jobs:
                   cache: 'pnpm'
             - name: Install dependencies
               run: pnpm install
+            # Fetched once per version and kept: React Native's Maven repository has served Hermes at a crawl.
+            - name: Restore Hermes
+              id: hermes
+              uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+              with:
+                  path: ~/.crossbind/hermes
+                  key: hermes-${{ runner.os }}-${{ hashFiles('core/crossbind/src/utils/hermes.js') }}
+            - name: Fetch Hermes
+              if: steps.hermes.outputs.cache-hit != 'true'
+              timeout-minutes: 15
+              run: node --input-type=module -e "await (await import('./core/crossbind/src/utils/hermes.js')).default()"
+            - name: Save Hermes
+              if: steps.hermes.outputs.cache-hit != 'true'
+              uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+              with:
+                  path: ~/.crossbind/hermes
+                  key: ${{ steps.hermes.outputs.cache-primary-key }}
             - name: Restore the addon build
               uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
               with:
@@ -173,6 +190,23 @@ jobs:
                   cache: 'pnpm'
             - name: Install dependencies
               run: pnpm install
+            # Fetched once per version and kept: React Native's Maven repository has served Hermes at a crawl.
+            - name: Restore Hermes
+              id: hermes
+              uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+              with:
+                  path: ~/.crossbind/hermes
+                  key: hermes-${{ runner.os }}-${{ hashFiles('core/crossbind/src/utils/hermes.js') }}
+            - name: Fetch Hermes
+              if: steps.hermes.outputs.cache-hit != 'true'
+              timeout-minutes: 15
+              run: node --input-type=module -e "await (await import('./core/crossbind/src/utils/hermes.js')).default()"
+            - name: Save Hermes
+              if: steps.hermes.outputs.cache-hit != 'true'
+              uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+              with:
+                  path: ~/.crossbind/hermes
+                  key: ${{ steps.hermes.outputs.cache-primary-key }}
             - name: Add Rust's iOS targets
               run: rustup target add aarch64-apple-ios aarch64-apple-ios-sim
             - name: Restore the addon build
