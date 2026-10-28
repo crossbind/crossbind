@@ -242,7 +242,7 @@ On iOS SDK 26+, autoconf misdetects `pipe2` due to a cache mismatch. curl-ios us
 
 When the error doesn't match anything above:
 
-1. **`pnpm run doctor`** — verifies Node, pnpm, Docker, Android SDK/NDK, Xcode. Most "weird" build failures are missing toolchains.
+1. **Check the toolchain** against the [prerequisites](https://crossbind.dev/guide/quick-start/#prerequisites); inside the crossbind repository, `pnpm run doctor` checks it. Most "weird" build failures are missing toolchains.
 2. **Rerun the `crossbind` command with `DEBUG=1`** — a failure prints its full error, stack and `cause` chain instead of one line. Often shows which step failed.
 3. **Reduce to smallest reproducer** — create a fresh project with just the failing dep. Apply the bug-fix playbook (`docs/playbooks/bug-fix.md`).
 4. **Search for the error literal** in `core/crossbind/src/`. Most crossbind error messages are unique enough to find the throwing site.

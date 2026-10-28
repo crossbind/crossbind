@@ -133,11 +133,13 @@ native call:
 import { initNative, hello } from './native/hello.h';
 
 await initNative();
-console.log(hello('crossbind'));
+console.log(await hello('crossbind'));
 ```
 
 `initNative()` is exported by every generated native module. One call starts
-the runtime and binds all native modules imported by the application.
+the runtime and binds all native modules imported by the application. In a
+browser the module runs in a Web Worker by default, so each call returns a
+promise.
 
 ## Add crossbind to an existing Vite app
 
@@ -223,7 +225,8 @@ contract.
 Threading and worker execution are independent choices:
 
 - `target.runtime: 'mt'` enables a multithreaded build.
-- `initNative({ useWorker: true })` moves the module into a browser Web Worker.
+- Browsers run the module in a Web Worker by default;
+  `initNative({ useWorker: false })` keeps it on the page thread.
 - Browser OPFS persistence requires `useWorker: true`.
 - Browser `mt` builds require COOP/COEP response headers in production.
 

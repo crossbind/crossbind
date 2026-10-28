@@ -9,7 +9,7 @@ import Article from '../guide/Article.jsx';
 import { inline } from '../guide/inline.jsx';
 import { TUTORIAL_PAGES } from '../pages/tutorial.js';
 import {
-    editDraft, projectOf, readDrafts, updateDrafts, without,
+    PLAYGROUND_DRAFT_KEY, editDraft, projectOf, readDrafts, replacesEdits, updateDrafts, without,
 } from '../playground/drafts.js';
 import Editor, { fitHeight } from '../playground/Editor.jsx';
 import {
@@ -26,6 +26,7 @@ import { canRunPrebuilt, useRunner } from '../playground/useRunner.js';
 
 const DRAFT_KEY = 'crossbind.tutorial.project';
 const RESET_QUESTION = 'Discard your changes to this step?';
+const REPLACE_QUESTION = 'Replace your changes to this sample in the playground?';
 const MIN_EDITOR_HEIGHT = 320;
 
 // The header first, as most lessons read, then the rest of the native files, then main.js, and last the config the
@@ -87,6 +88,17 @@ export default function TutorialPage({ tokens, page }) {
         document.getElementById(`tutorial-file-${file}`)?.focus();
     }
 
+    // The playground opens the step as edited here. Its own different edits to the sample go only on a yes.
+    function openInPlayground(event) {
+        const draft = drafts[sample.id];
+        if (!draft) return;
+        if (replacesEdits(readDrafts(PLAYGROUND_DRAFT_KEY, SAMPLES).drafts, sample, draft) && !window.confirm(REPLACE_QUESTION)) {
+            event.preventDefault();
+            return;
+        }
+        updateDrafts(PLAYGROUND_DRAFT_KEY, SAMPLES, (store) => ({ ...store, drafts: { ...store.drafts, [sample.id]: draft } }));
+    }
+
     const onKeyDown = (event) => {
         if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') {
             event.preventDefault();
@@ -141,7 +153,7 @@ export default function TutorialPage({ tokens, page }) {
                     onSignOut={runner.leave}
                     onDeleteAccount={runner.removeAccount}
                 >
-                    <a href={`${PLAYGROUND_URL}?sample=${sample.id}`} className="tap-target" style={{ ...linkButtonStyle(tokens), fontSize: 13, textDecoration: 'none' }}>
+                    <a href={`${PLAYGROUND_URL}?sample=${sample.id}`} onClick={openInPlayground} onAuxClick={(event) => { if (event.button === 1) openInPlayground(event); }} className="tap-target" style={{ ...linkButtonStyle(tokens), fontSize: 13, textDecoration: 'none' }}>
                         Open in playground
                     </a>
                     {drafts[sample.id] && (

@@ -56,7 +56,7 @@ const sorted = (list) => [...list].sort();
 
 export const samePackages = (a, b) => sorted(a).join('\n') === sorted(b).join('\n');
 
-function sameProject(a, b) {
+export function sameProject(a, b) {
     const names = Object.keys(a.files);
     return names.length === Object.keys(b.files).length
         && names.every((name) => a.files[name] === b.files[name])
