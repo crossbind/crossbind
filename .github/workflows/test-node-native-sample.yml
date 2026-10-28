@@ -11,6 +11,7 @@ on:
             - plugins/rollup/**
             - .nvmrc
             - .github/workflows/test-node-native-sample.yml
+            - '!**/*.md'
     pull_request:
         branches:
             - main
@@ -29,6 +30,7 @@ on:
             - examples/mobile-reactnative-cli/ci/**
             - .nvmrc
             - .github/workflows/test-node-native-sample.yml
+            - '!**/*.md'
 
 permissions: {}
 concurrency:

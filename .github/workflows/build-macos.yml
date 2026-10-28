@@ -13,6 +13,7 @@ on:
             - e2e/**
             - .nvmrc
             - .github/workflows/build-macos.yml
+            - '!**/*.md'
     pull_request:
         branches:
             - main
@@ -25,6 +26,7 @@ on:
             - examples/cloud-*/**
             - .nvmrc
             - .github/workflows/build-macos.yml
+            - '!**/*.md'
 
 permissions: {}
 concurrency:
