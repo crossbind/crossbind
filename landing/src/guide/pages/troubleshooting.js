@@ -131,7 +131,7 @@ export default {
         {
             type: 'ol',
             items: [
-                'Run the doctor script - most "weird" build failures are a missing toolchain (Node, Docker, Android SDK/NDK, Xcode).',
+                'Check the [prerequisites](/guide/quick-start/#prerequisites) - most "weird" build failures are a missing toolchain.',
                 'Rerun the `crossbind` command with `DEBUG=1`: a failure prints its full error, stack and cause chain, which usually names the failing step.',
                 'Reduce to the smallest reproducer: a fresh project with only the failing dependency.',
                 'Search the error text in the source - error messages are unique enough to find where they are thrown.',

@@ -19,6 +19,10 @@ export default {
             type: 'p',
             text: 'iOS and macOS builds still compile with Xcode on the Mac under every runner; only their bridge steps go to the web runner. Your JavaScript never leaves the machine.',
         },
+        {
+            type: 'p',
+            text: 'Apps for Android, Linux and Windows are the exception: `crossbind app` builds them only in the local Docker, under `RUNNER=DOCKER_RUN` or `DOCKER_EXEC`, and any other runner stops it before the first step.',
+        },
 
         { type: 'h2', id: 'cloud', text: 'crossbind cloud' },
         {

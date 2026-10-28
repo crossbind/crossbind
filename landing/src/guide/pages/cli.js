@@ -12,7 +12,7 @@ export default {
             head: ['Command', 'Does', 'Touches'],
             rows: [
                 ['`build`', 'compiles the project', 'Docker or a runner, the network, `.crossbind/`, `paths.output`'],
-                ['`app`', 'builds the project as an app with its Vite, or opens it on the dev server', 'what `build` touches, `dist/`, `~/.crossbind/android/`, the attached Android device or the iOS Simulator'],
+                ['`app`', 'builds the project as an app with its Vite, opens it on the dev server, or makes the key pair for its updates','what `build` touches, `dist/`, `~/.crossbind/android/`, the attached Android device or the iOS Simulator'],
                 ['`licenses`', 'lists the licenses of the native dependencies', 'reads the project; writes only the files you ask for'],
                 ['`clean-deps`', 'deletes dependencies rebuilt from source', '`.crossbind/deps/`'],
                 ['`docker`', 'manages the toolchain containers', 'Docker'],
@@ -44,7 +44,7 @@ export default {
                 ['`-a, --arch`', '`wasm32`, `wasm64`, `arm64-v8a`, `x86_64`, `iphoneos`, `iphonesimulator`, `arm64`, `x64`', 'every arch but `wasm64`'],
                 ['`-r, --runtime`', '`st`, `mt`', 'both'],
                 ['`-b, --build-type`', '`release`, `debug`', '`release`'],
-                ['`-e, --runtime-env`', '`browser`, `edge`, `node`, `native`, `wasi`, `http`', '`target.runtimeEnv` from `crossbind.config.js`; with neither, only the archives'],
+                ['`-e, --runtime-env`', '`browser`, `edge`, `node`, `native`, `wasi`, `http`, `app`', '`target.runtimeEnv` from `crossbind.config.js`; with neither, only the archives'],
                 ['`--rebuild-deps [list]`', '`all`, or dependency names separated by commas', 'prebuilt dependencies'],
                 ['`--bind-imports`', 'none', 'a `browser` module binds only the headers in `paths.native`'],
             ],
@@ -55,7 +55,7 @@ export default {
         },
         {
             type: 'p',
-            text: '`-e` names the binaries to make: on `wasm`, `browser`, `edge` and `node` each give a module and its loader; on a desktop platform, `node` gives a Node-API addon and `native` an executable; on `wasi`, `wasi` gives a command and `http` a wasi:http component. Android and iOS take none, since React Native links the archives. See [Browser](/guide/browser/), [Node.js](/guide/node/) and [Executables](/guide/executables/).',
+            text: '`-e` names the binaries to make: on `wasm`, `browser`, `edge` and `node` each give a module and its loader; on a desktop platform, `node` gives a Node-API addon and `native` an executable; on `wasi`, `wasi` gives a command and `http` a wasi:http component. `app` gives an app without its page, which `app build` adds, for each platform `-p` names: the app itself on `darwin`, `linux` and `win32`, its Xcode or Gradle project on `ios` and `android`. Otherwise Android and iOS take none, since React Native links the archives. See [Browser](/guide/browser/), [Node.js](/guide/node/) and [Executables](/guide/executables/).',
         },
         {
             type: 'p',
@@ -83,6 +83,7 @@ crossbind app build -p android`,
             rows: [
                 ['`app dev [-p platform]`', 'opens the app on the dev server: an edit to the page reloads it, an edit to native code rebuilds the host and opens the app again'],
                 ['`app build [-p platform]`', 'builds the page and the host and writes the app to `dist/`'],
+                ['`app updater-key`', "prints a new key pair for a desktop app's updates: the public key for `app.updater.publicKey`, the private one for `CROSSBIND_UPDATER_PRIVATE_KEY` where the app is built"],
             ],
         },
         {
@@ -91,7 +92,7 @@ crossbind app build -p android`,
         },
         {
             type: 'p',
-            text: "**Touches:** Linux, Windows and Android apps build in the pinned linux, windows and android-app images, and Gradle packages an Android app there with no network, keeping its caches and the debug key in `~/.crossbind/android/`. An Android app opens on the attached device through this machine's `adb`, which crossbind does not install; an iOS app opens in the Simulator.",
+            text: "**Touches:** Linux, Windows and Android apps build in the pinned linux, windows and android-app images, so only under `RUNNER=DOCKER_RUN` or `DOCKER_EXEC`, and Gradle packages an Android app there with no network, keeping its caches and the debug key in `~/.crossbind/android/`. An Android app opens on the attached device through this machine's `adb`, which crossbind does not install; an iOS app opens in the Simulator.",
         },
 
         { type: 'h2', id: 'licenses', text: 'licenses' },
@@ -116,6 +117,7 @@ crossbind licenses --notices --sbom`,
                 ['`--check`', 'exits non-zero when a license field is missing or not valid SPDX'],
                 ['`--platform <platform>`', "adds what that platform's artifact links statically beyond the package graph: vendored copies and the toolchain runtime"],
                 ['`-e, --runtime-env node`', 'adds the crossbind runtime an addon of `--platform` compiles in, or without `--platform` the one its loader bundles'],
+                ['`-e, --runtime-env app`', "adds what an app carries beside its packages: crossbind's runtime, Hermes, JSI's `jsi.cpp` and webview/webview, adjusted to the app `--platform` names"],
                 ['`--package`', "with `-e node`: writes a Node-API package's `LICENSE`, `sbom.cdx.json` and `package.json` license field"],
             ],
         },

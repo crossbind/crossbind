@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import {
-    editDraft, projectOf, readDrafts, updateDrafts, without,
+    PLAYGROUND_DRAFT_KEY, editDraft, projectOf, readDrafts, updateDrafts, without,
 } from './drafts.js';
 import ModernWorkspace from './ModernWorkspace.jsx';
 import PackageDialog from './PackageDialog.jsx';
@@ -21,7 +21,6 @@ import { shortName } from './workspace.jsx';
 // project. All of it lives here once; the modern and the Turbo look only draw it. The first render matches the
 // prerendered page: the drafts, the linked sample, the look, the sign-in result and the session load afterwards.
 
-const DRAFT_KEY = 'crossbind.playground.project';
 const SAMPLE_PARAM = 'sample';
 const RESET_QUESTION = 'Discard your changes to this sample?';
 const LOGIN_NOTICES = Object.freeze({
@@ -107,7 +106,7 @@ export default function PlaygroundPage({ tokens, page }) {
     const ready = restored && !busy && (prebuilt || runner.canCompile);
 
     useEffect(() => {
-        const stored = readDrafts(DRAFT_KEY, SAMPLES);
+        const stored = readDrafts(PLAYGROUND_DRAFT_KEY, SAMPLES);
         const linked = linkedSample();
         const id = linked ?? stored.sample ?? DEFAULT_SAMPLE.id;
         setDrafts(stored.drafts);
@@ -130,7 +129,7 @@ export default function PlaygroundPage({ tokens, page }) {
     // Applied to the project as each copy holds it, so a second tab's edits to the same sample survive.
     const change = (edit) => {
         setDrafts((current) => editDraft(current, sample, edit));
-        updateDrafts(DRAFT_KEY, SAMPLES, (store) => ({ ...store, drafts: editDraft(store.drafts, sample, edit) }));
+        updateDrafts(PLAYGROUND_DRAFT_KEY, SAMPLES, (store) => ({ ...store, drafts: editDraft(store.drafts, sample, edit) }));
     };
 
     const run = () => {
@@ -151,7 +150,7 @@ export default function PlaygroundPage({ tokens, page }) {
         setActive(MAIN);
         setCreating(0);
         setParam(SAMPLE_PARAM, id);
-        updateDrafts(DRAFT_KEY, SAMPLES, (store) => ({ ...store, sample: id }));
+        updateDrafts(PLAYGROUND_DRAFT_KEY, SAMPLES, (store) => ({ ...store, sample: id }));
         runner.clear();
     }
 
@@ -159,7 +158,7 @@ export default function PlaygroundPage({ tokens, page }) {
     function resetSample() {
         if (!window.confirm(RESET_QUESTION)) return;
         setDrafts((current) => without(current, sampleId));
-        updateDrafts(DRAFT_KEY, SAMPLES, (store) => ({ ...store, drafts: without(store.drafts, sampleId) }));
+        updateDrafts(PLAYGROUND_DRAFT_KEY, SAMPLES, (store) => ({ ...store, drafts: without(store.drafts, sampleId) }));
         setActive(MAIN);
         if (skin === 'modern') document.getElementById('playground-sample')?.focus();
     }

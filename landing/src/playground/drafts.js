@@ -1,11 +1,16 @@
 import { FILE_NAME } from '../../../tooling/cloud/compiler/validate.js';
-import { MAIN, packageOf, samePackages } from './project.js';
+import {
+    MAIN, packageOf, samePackages, sameProject,
+} from './project.js';
 
 // Edits kept per sample in this browser, one storage key per page. A draft holds only what differs from its sample:
 // the files edited or added, the sample's files deleted, and the package list once it changed. So a later fix to a
 // sample's other files still reaches whoever edited one of them. Every change is applied to what is stored at that
 // moment rather than to the page's own copy, so two open tabs keep each other's drafts. Storage can be blocked, as in
 // private windows; a page then starts from the samples. No Vite-only imports, so the tests can load this file.
+
+// The playground's key; the tutorial's "Open in playground" writes a step's draft there too.
+export const PLAYGROUND_DRAFT_KEY = 'crossbind.playground.project';
 
 const isObject = (value) => typeof value === 'object' && value !== null && !Array.isArray(value);
 
@@ -68,6 +73,10 @@ export function updateDrafts(storageKey, samples, change) {
         // Not stored; the code stays on the page.
     }
 }
+
+// Whether `drafts` hold edits of `sample` other than `draft`'s, which handing `draft` over would replace.
+export const replacesEdits = (drafts, sample, draft) => Boolean(drafts[sample.id])
+    && !sameProject(projectOf(sample, drafts[sample.id]), projectOf(sample, draft));
 
 // `change` applied to `sample`'s project as `drafts` hold it: the draft keeps what then differs, and goes once
 // nothing does.

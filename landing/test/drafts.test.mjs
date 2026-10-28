@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-    draftOf, editDraft, parseDrafts, projectOf,
+    draftOf, editDraft, parseDrafts, projectOf, replacesEdits,
 } from '../src/playground/drafts.js';
 import {
     addFile, addPackage, removeFile, setFile,
@@ -62,6 +62,23 @@ test('a change applies to the draft as stored, so another tab\'s edit to the sam
     assert.deepEqual(editDraft(stored, HELLO, (project) => setFile(project, 'main.js', 'mine')), {
         hello: { files: { 'native/native.h': 'from the other tab', 'main.js': 'mine' } },
     });
+});
+
+test('handing a draft over replaces no edits when the drafts hold none of that sample or the same project', () => {
+    const draft = { files: { 'main.js': 'edited', 'native/more.h': 'm' } };
+    const sameInAnotherOrder = { files: { 'native/more.h': 'm', 'main.js': 'edited' } };
+    assert.equal(replacesEdits({}, HELLO, draft), false);
+    assert.equal(replacesEdits({ hero: { files: { 'main.js': 'other' } } }, HELLO, draft), false);
+    assert.equal(replacesEdits({ hello: sameInAnotherOrder }, HELLO, draft), false);
+});
+
+test('handing a draft over replaces edits of that sample that differ', () => {
+    const draft = { files: { 'main.js': 'edited' } };
+    assert.equal(replacesEdits({ hello: { files: { 'main.js': 'mine' } } }, HELLO, draft), true);
+    assert.equal(replacesEdits({ hello: { removed: ['native/native.cpp'] } }, HELLO, draft), true);
+    assert.equal(replacesEdits({ hello: { files: { 'main.js': 'edited' }, packages: ['port:zlib'] } }, HELLO, draft), true);
+    assert.equal(replacesEdits({ hello: { files: { 'main.js': 'edited' }, removed: ['native/native.cpp'] } }, HELLO, draft), true);
+    assert.equal(replacesEdits({ hero: { packages: ['port:sqlite3'] } }, HERO, { files: { 'main.js': 'hjs2' } }), true);
 });
 
 test('an edit leaves the other samples\' drafts alone', () => {
