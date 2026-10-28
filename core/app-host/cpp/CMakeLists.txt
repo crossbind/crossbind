@@ -103,11 +103,23 @@ elseif(ANDROID)
     # Hermes comes with the app from its own package; the C++ runtime the host shares with it is this NDK's, which goes
     # beside the host, stripped.
     target_link_libraries(app PRIVATE jsi "${CROSSBIND_HERMES}/libs/android.${ANDROID_ABI}/libhermesvm.so" log)
-    target_link_options(app PRIVATE "LINKER:--gc-sections" "$<$<CONFIG:Release>:LINKER:-s>")
-    target_link_options(jsi PRIVATE "$<$<CONFIG:Release>:LINKER:-s>")
-    add_custom_command(TARGET app POST_BUILD
-        COMMAND "${CMAKE_STRIP}" -o "$<TARGET_FILE_DIR:app>/libc++_shared.so"
-            "${CMAKE_SYSROOT}/usr/lib/${CMAKE_LIBRARY_ARCHITECTURE}/libc++_shared.so")
+    target_link_options(app PRIVATE "LINKER:--gc-sections")
+    set(LIBCXX "${CMAKE_SYSROOT}/usr/lib/${CMAKE_LIBRARY_ARCHITECTURE}/libc++_shared.so")
+    add_custom_command(TARGET app POST_BUILD COMMAND "${CMAKE_STRIP}" -o "$<TARGET_FILE_DIR:app>/libc++_shared.so" "${LIBCXX}")
+    if(CMAKE_BUILD_TYPE STREQUAL "Release")
+        # A release ships its libraries stripped, the packages' shared libraries too, and keeps them as linked in
+        # symbols/, which crossbind gives Google Play, so that a crash there shows function names.
+        set(SYMBOLS "$<TARGET_FILE_DIR:app>/symbols")
+        add_custom_command(TARGET app POST_BUILD
+            COMMAND "${CMAKE_COMMAND}" -E make_directory "${SYMBOLS}"
+            COMMAND "${CMAKE_COMMAND}" -E copy "$<TARGET_FILE:app>" "$<TARGET_FILE:jsi>" "${LIBCXX}" ${CROSSBIND_SHARED_LIBS} "${SYMBOLS}"
+            COMMAND "${CMAKE_STRIP}" --strip-unneeded "$<TARGET_FILE:app>"
+            COMMAND "${CMAKE_STRIP}" --strip-unneeded "$<TARGET_FILE:jsi>")
+        foreach(library ${CROSSBIND_SHARED_LIBS})
+            get_filename_component(name "${library}" NAME)
+            add_custom_command(TARGET app POST_BUILD COMMAND "${CMAKE_STRIP}" --strip-unneeded -o "$<TARGET_FILE_DIR:app>/${name}" "${library}")
+        endforeach()
+    endif()
 elseif(WIN32)
     # A window app, linked whole: the system's UCRT is all it loads beside WebView2, which webview finds itself, so no
     # loader DLL ships. WebView2's headers come from crossbind's windows image.

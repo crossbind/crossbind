@@ -58,6 +58,7 @@ async function runVite(args, env) {
     const project = path.join(base, 'dist', 'demo-android');
     fs.mkdirSync(project, { recursive: true });
     fs.writeFileSync(`${project}.aab`, 'bundle');
+    fs.writeFileSync(`${project}-symbols.zip`, 'symbols');
     fs.mkdirSync(state.config.paths.build, { recursive: true });
     fs.writeFileSync(path.join(state.config.paths.build, 'app-outputs.json'), JSON.stringify({ android: project }));
     return 0;
@@ -91,7 +92,12 @@ describe('publishing an Android app', () => {
         expect(vite.args).toEqual(['build', '--mode', 'production']);
         expect(vite.env).toMatchObject({ ...KEY, CROSSBIND_APP_PLATFORM: 'android', CROSSBIND_APP_BUILD_NUMBER: '1002006' });
         expect(play.uploads).toEqual([{
-            appId: 'dev.example.demo', credentials: play.credentials, aab: path.join(base, 'dist', 'demo-android.aab'), track: 'internal', status: 'completed',
+            appId: 'dev.example.demo',
+            credentials: play.credentials,
+            aab: path.join(base, 'dist', 'demo-android.aab'),
+            symbols: path.join(base, 'dist', 'demo-android-symbols.zip'),
+            track: 'internal',
+            status: 'completed',
         }]);
         const said = printed.join('\n');
         expect(said).toContain('Google Play has seen versionCode 1002005 at most, so this build is 1002006.');

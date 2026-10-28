@@ -281,13 +281,16 @@ function assembleIosPart(target, { library, linkArgs, hbc, hermes }) {
 }
 
 // What an Android ABI target brings to the app's Gradle project: the host, the libraries beside it and the packages'
-// shared libraries it links, and the app's files.
+// shared libraries it links, and the app's files. A release's host build left the packages' libraries stripped beside
+// the host, and every library as linked in symbols/.
 function assembleAndroidPart(target, { libDir, sharedLibs, hbc }) {
     const part = `${state.config.paths.build}/${target.appName}`;
     fs.rmSync(part, { recursive: true, force: true });
     fs.mkdirSync(`${part}/lib`, { recursive: true });
-    [...['libcrossbind_app.so', 'libjsi.so', 'libc++_shared.so'].map((file) => `${libDir}/${file}`), ...sharedLibs]
+    const shipped = sharedLibs.map((file) => (fs.existsSync(`${libDir}/${path.basename(file)}`) ? `${libDir}/${path.basename(file)}` : file));
+    [...['libcrossbind_app.so', 'libjsi.so', 'libc++_shared.so'].map((file) => `${libDir}/${file}`), ...shipped]
         .forEach((file) => fs.copyFileSync(file, `${part}/lib/${path.basename(file)}`));
+    if (fs.existsSync(`${libDir}/symbols`)) fs.cpSync(`${libDir}/symbols`, `${part}/symbols`, { recursive: true });
     copyAppFiles(`${part}/app`, hbc, target);
 }
 
@@ -474,6 +477,7 @@ export default async function buildApp(target, { bridges = [], force = false } =
         inputs: headerDirs.flatMap((dir) => (fs.existsSync(dir) ? findFiles('**/*.h', { cwd: dir }) : [dir])),
     });
     const { libs, linkArgs, extraSources } = linkInputs(target, { bridge: BRIDGE });
+    const sharedLibs = libs.filter((lib) => lib.endsWith('.so'));
 
     const fingerprintFile = `${build}/${target.appName}.fingerprint`;
     const fingerprint = getContentHash(JSON.stringify({
@@ -530,6 +534,8 @@ export default async function buildApp(target, { bridges = [], force = false } =
         `-DCROSSBIND_EXTRA_SOURCES=${extraSources.join(';')}`,
         `-DCROSSBIND_LINK_ARGS=${linkArgs.join(';')}`,
         `-DCROSSBIND_LINK_DEPENDS=${libs.join(';')}`,
+        // An Android release ships the packages' shared libraries stripped as well, and keeps them as they come.
+        ...(target.platform === 'android' ? [`-DCROSSBIND_SHARED_LIBS=${sharedLibs.join(';')}`] : []),
         ...cmakeArgs,
     ], platformPrefix, target);
     run(null, ['cmake', '--build', '.', '-j', String(cpuCount)], platformPrefix, target, { exclusive: true });
@@ -546,7 +552,7 @@ export default async function buildApp(target, { bridges = [], force = false } =
     if (target.platform === 'ios') {
         assembleIosPart(target, { library: `${workDir}/lib${name}.a`, linkArgs, hbc: `${workDir}/host.hbc`, hermes });
     } else if (target.platform === 'android') {
-        assembleAndroidPart(target, { libDir: workDir, sharedLibs: libs.filter((lib) => lib.endsWith('.so')), hbc: `${workDir}/host.hbc` });
+        assembleAndroidPart(target, { libDir: workDir, sharedLibs, hbc: `${workDir}/host.hbc` });
     } else {
         assembleApp(target, { executable: `${workDir}/${path.basename(appLayout(target).executable)}`, hbc: `${workDir}/host.hbc`, hermes, icon });
     }

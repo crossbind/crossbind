@@ -85,10 +85,12 @@ export async function publishAndroid({ track, status, viteArgs }, { runVite }) {
         ...process.env, ...signing.env, CROSSBIND_APP_PLATFORM: 'android', CROSSBIND_APP_BUILD_NUMBER: String(versionCode),
     });
     if (exitCode !== 0) throw Object.assign(new Error(`crossbind: the build ended with exit code ${exitCode}, so nothing went to Google Play.`), { exitCode });
-    const aab = `${appOutputOf('android')}.aab`;
+    const project = appOutputOf('android');
+    const aab = `${project}.aab`;
     if (!fs.existsSync(aab)) throw new Error(`crossbind: the build made no bundle at ${aab}, so nothing went to Google Play.`);
+    const symbols = fs.existsSync(`${project}-symbols.zip`) ? `${project}-symbols.zip` : null;
 
-    const released = await uploadBundle(appId, credentials, { aab, track, status });
+    const released = await uploadBundle(appId, credentials, { aab, symbols, track, status });
     const app = `${appId} ${state.config.package?.version ?? '1.0.0'} (versionCode ${released.versionCode})`;
     if (released.status !== 'draft') {
         console.log(`crossbind: ${app} is out on Google Play's ${track} track.`);
