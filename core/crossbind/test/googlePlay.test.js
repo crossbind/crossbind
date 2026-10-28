@@ -8,8 +8,16 @@ import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 const gcloud = { fails: null };
 const spawnSync = vi.fn(() => (gcloud.fails ?? { status: 0, stdout: 'user-token\n', stderr: '' }));
 vi.mock('node:child_process', async (importOriginal) => ({ ...await importOriginal(), spawnSync }));
+// The system keychain, which keeps each secret by its service and key.
+const keychain = new Map();
+vi.mock('../src/utils/keychain.js', () => ({
+    readSecret: (key, { service }) => keychain.get(`${service}: ${key}`) ?? null,
+    storeSecret: (key, secret, { service }) => Boolean(keychain.set(`${service}: ${key}`, secret)),
+}));
 
-const { PLAY, highestVersionCode, playCredentials, playToken, uploadBundle } = await import('../src/actions/googlePlay.js');
+const {
+    PLAY, highestVersionCode, keepSignIn, keptSignIn, playCredentials, playToken, uploadBundle,
+} = await import('../src/actions/googlePlay.js');
 
 const { privateKey, publicKey } = generateKeyPairSync('rsa', { modulusLength: 2048 });
 const ACCOUNT = 'play@demo.iam.gserviceaccount.com';
@@ -17,6 +25,7 @@ const json = (status, body) => new Response(JSON.stringify(body), { status, head
 const failure = (status, message) => json(status, { error: { code: status, message } });
 
 let dir;
+let home;
 let keyFile;
 let requests;
 // Google Play as an app's edit sees it: its answers by method and path, else the default ones below.
@@ -28,6 +37,7 @@ function play(url, init = {}) {
     requests.push({ route, init });
     if (answers[route]) return answers[route](init);
     if (route === 'POST oauth2.example.test') return json(200, { access_token: 'key-token' });
+    if (route === 'POST oauth2.googleapis.com') return json(200, { access_token: 'signed-in-token' });
     if (route === 'POST iamcredentials.googleapis.com') return json(200, { accessToken: 'account-token' });
     if (route === 'POST /edits') return json(200, { id: 'E1' });
     if (route === 'GET /edits/E1/tracks') return json(200, { tracks: [{ track: 'internal', releases: [{ status: 'completed', versionCodes: ['1000004'] }] }, { track: 'production' }] });
@@ -49,11 +59,14 @@ beforeEach(() => {
     requests = [];
     answers = {};
     gcloud.fails = null;
+    keychain.clear();
+    home = vi.spyOn(os, 'homedir').mockReturnValue(dir);
     vi.stubGlobal('fetch', vi.fn(async (url, init) => play(url, init)));
 });
 
 afterEach(() => {
     vi.unstubAllGlobals();
+    home.mockRestore();
     fs.rmSync(dir, { recursive: true, force: true });
 });
 
@@ -72,6 +85,20 @@ describe("Google Play's credentials", () => {
         fs.writeFileSync(keyFile, JSON.stringify({ client_email: ACCOUNT }));
         expect(() => playCredentials({ [PLAY.key]: keyFile }, {})).toThrow(`${keyFile} (${PLAY.key}) has no private_key, token_uri, so it is no service account key`);
         expect(() => playCredentials({ [PLAY.key]: path.join(dir, 'none.json') }, {})).toThrow(`${PLAY.key} names ${path.join(dir, 'none.json')}, which is no file`);
+    });
+
+    test('are, with neither set, the Google sign-in this machine keeps while Google takes it', async () => {
+        expect(await keptSignIn()).toBeNull();
+        expect(keepSignIn('refresh')).toBe(true);
+        expect([...keychain.keys()]).toEqual([`crossbind google play: ${path.join(dir, '.crossbind', 'google-play')}`]);
+        expect(fs.statSync(path.join(dir, '.crossbind')).isDirectory()).toBe(true);
+        expect(await keptSignIn()).toEqual({ refreshToken: 'refresh' });
+
+        const said = vi.spyOn(console, 'log').mockImplementation(() => {});
+        answers['POST oauth2.googleapis.com'] = () => json(400, { error: 'invalid_grant', error_description: 'Token has been expired or revoked.' });
+        expect(await keptSignIn()).toBeNull();
+        expect(said).toHaveBeenCalledWith('crossbind: Google no longer takes the sign-in this machine keeps for Google Play, as when it was revoked.');
+        said.mockRestore();
     });
 });
 
@@ -94,6 +121,12 @@ describe("Google Play's token", () => {
         expect(route).toBe('POST iamcredentials.googleapis.com');
         expect(init.headers.authorization).toBe('Bearer user-token');
         expect(JSON.parse(init.body)).toEqual({ scope: ['https://www.googleapis.com/auth/androidpublisher'] });
+    });
+
+    test('of a Google sign-in is bought with its refresh token', async () => {
+        expect(await playToken({ refreshToken: 'refresh' })).toBe('signed-in-token');
+        const grant = new URLSearchParams(String(requests[0].init.body));
+        expect([requests[0].route, grant.get('grant_type'), grant.get('refresh_token')]).toEqual(['POST oauth2.googleapis.com', 'refresh_token', 'refresh']);
     });
 
     test('names the fix when it is refused', async () => {
@@ -128,6 +161,10 @@ describe("an app's edit on Google Play", () => {
         answers['POST /edits'] = () => failure(403, 'The caller does not have permission');
         await expect(highestVersionCode('dev.example.app', credentials())).rejects.toMatchObject({
             status: 403, message: expect.stringContaining(`${ACCOUNT} has no release rights for dev.example.app: invite it in Play Console`),
+        });
+        await expect(highestVersionCode('dev.example.app', { refreshToken: 'refresh' })).rejects.toMatchObject({
+            status: 403,
+            message: expect.stringContaining('the Google account you signed in with has no release rights for dev.example.app: sign in with one that has, or have it invited in Play Console'),
         });
     });
 

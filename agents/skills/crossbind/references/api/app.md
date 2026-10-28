@@ -850,8 +850,17 @@ The build's versionCode is then one above that, or the version's own when that i
 on the internal track unless `--track` names another (`alpha`, `beta`, `production` or one of your own), and out to its
 testers at once, unless `--draft` leaves it for Play Console to roll out.
 
-Google Play takes uploads from a service account. It needs one of these, from the environment, or from
-`~/.crossbind.json` under the same name without `CROSSBIND_` (`crossbind config set GOOGLE_PLAY_SERVICE_ACCOUNT …`):
+Google Play takes uploads from your Google account or from a service account.
+
+With neither set, a publish on a terminal signs you in to Google: your browser opens Google's page, where you pick the
+account and allow its Google Play access, and the system keychain keeps the sign-in for later publishes, with a terminal
+or without; a machine with no keychain signs in at each publish. The account's own rights in Play Console apply, so it
+needs "Release apps to testing tracks" for the app, as its owner has. The browser has to run on the same machine, as
+Google's page sends it back to a port of crossbind's there. To sign out, remove crossbind in your Google account, under
+Security › Your connections to third-party apps & services; the next publish signs in again.
+
+A service account is for CI, where no one signs in, and wins over the sign-in where one is set, from the environment or
+from `~/.crossbind.json` under the same name without `CROSSBIND_` (`crossbind config set GOOGLE_PLAY_SERVICE_ACCOUNT …`):
 
 | Variable | Value |
 |---|---|
@@ -861,13 +870,13 @@ Google Play takes uploads from a service account. It needs one of these, from th
 Setting both stops the publish. Once, for each app or account:
 
 1. In Play Console, create the app, with `app.id` as its package name; Play's API makes none.
-2. In a Google Cloud project, enable the Google Play Android Developer API and make a service account.
+2. For a service account, enable the Google Play Android Developer API in a Google Cloud project and make one there.
    - For `CROSSBIND_GOOGLE_PLAY_SERVICE_ACCOUNT`, enable the IAM Service Account Credentials API too, and give your
      gcloud account the Service Account Token Creator role on the service account:
      `gcloud iam service-accounts add-iam-policy-binding <e-mail> --member="user:$(gcloud config get-value account)" --role=roles/iam.serviceAccountTokenCreator`.
    - For `CROSSBIND_GOOGLE_PLAY_KEY`, make a JSON key of it. An organization may refuse keys
      (`iam.disableServiceAccountKeyCreation`): use the first way, or a project with no organization.
-3. In Play Console, under Users and permissions, invite the service account's e-mail with "Release apps to testing
+3. For a service account, invite its e-mail in Play Console, under Users and permissions, with "Release apps to testing
    tracks" for the app.
 4. Play takes draft releases alone until an app's first release is out. So the first publish leaves its release a draft;
    roll it out once in Play Console, under Test and release, and later publishes go out by themselves.
@@ -875,10 +884,8 @@ Setting both stops the publish. Once, for each app or account:
 On a terminal, the publish asks for what is missing and sets it up before the build:
 - the package name, one both stores take, which it writes into `crossbind.config.js` once you say yes;
 - the upload key, which it makes as `crossbind app upload-key` does;
-- the service account: with gcloud signed in, it makes `crossbind-play` in gcloud's project, enables both APIs and gives
-  your login the Token Creator role, all after one yes; else it takes the JSON key you name. `~/.crossbind.json` keeps
-  it.
-- what only Play Console does, creating the app and inviting the service account: the publish names it, opens Play
+- the Google sign-in, after a yes, and another account's when the one signed in has no release rights for the app;
+- what only Play Console does, creating the app and inviting a service account: the publish names it, opens Play
   Console, and checks again when you press Enter.
 
 Without a terminal, as in CI, nothing is asked, and the publish names every missing piece at once.

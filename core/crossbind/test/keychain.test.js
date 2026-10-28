@@ -81,4 +81,13 @@ describe("the keychain of an upload key's password", () => {
         expect(calls.at(-1).options.env.CROSSBIND_KEYCHAIN_SECRET).toBe(undefined);
         expect(argvHasNoSecret()).toBe(true);
     });
+
+    test('keeps another secret under a service of its own, as the Google sign-in Play takes uploads with', () => {
+        expect(storeSecret(KEY, SECRET, { platform: 'darwin', service: 'crossbind google play' })).toBe(true);
+        expect(calls[0].options.input).toContain('-s "crossbind google play" -a');
+        expect(calls.at(-1).args).toEqual(['find-generic-password', '-s', 'crossbind google play', '-a', KEY, '-w']);
+        expect(storeSecret(KEY, SECRET, { platform: 'linux', service: 'crossbind google play' })).toBe(true);
+        expect(calls.at(-2).args).toEqual(['store', '--label', 'crossbind google play', 'service', 'crossbind google play', 'account', KEY]);
+        expect(calls.at(-1).args).toEqual(['lookup', 'service', 'crossbind google play', 'account', KEY]);
+    });
 });

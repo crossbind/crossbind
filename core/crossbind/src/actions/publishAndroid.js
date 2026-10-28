@@ -4,8 +4,10 @@ import { SIGNING } from './androidGradle.js';
 import {
     androidAppId, androidVersion, appBuildNumber, appOutputOf, clearAppOutputs,
 } from './buildApp.js';
-import { PLAY, highestVersionCode, playCredentials, uploadBundle } from './googlePlay.js';
-import { setUpPlayAccount } from './playSetup.js';
+import {
+    PLAY, highestVersionCode, keptSignIn, playCredentials, uploadBundle,
+} from './googlePlay.js';
+import { signInToPlay } from './playSetup.js';
 import { askAppId } from './appSetup.js';
 import { makeUploadKey, releaseSigningEnv } from './uploadKey.js';
 import { askLine, askYesNo, hasTerminal } from '../utils/ask.js';
@@ -15,21 +17,30 @@ import openUrl from '../utils/openUrl.js';
 const PLAY_CONSOLE = 'https://play.google.com/console';
 const NO_APP_ID = 'crossbind: Google Play knows an app by its package name, app.id, which crossbind.config.js does not set: set it, as com.example.myapp, before the first publish, as Play keeps it for good.';
 const NO_UPLOAD_KEY = `crossbind: Google Play takes bundles signed with your upload key: crossbind app upload-key makes one, or ${SIGNING.keystore}, ${SIGNING.alias} and ${SIGNING.password} name yours.`;
-const NO_CREDENTIALS = `crossbind: Google Play takes uploads from a service account: set ${PLAY.serviceAccount} to its e-mail, with gcloud signed in, or ${PLAY.key} to its JSON key; app.md's Publishing says how to make one.`;
+const NO_CREDENTIALS = `crossbind: Google Play takes uploads from your Google account, which a publish on a terminal signs in to, or from a service account: set ${PLAY.serviceAccount} to its e-mail, with gcloud signed in, or ${PLAY.key} to its JSON key; app.md's Publishing says how to make one.`;
+const SIGN_IN = 'Google Play takes uploads from your Google account once crossbind is signed in to it. Sign in now, in your browser? [Y/n] ';
+const ANOTHER_ACCOUNT = 'Sign in with another Google account? [Y/n] ';
 
-// The highest versionCode Play has seen, once the user has done in Play Console what Play asks for, which only the
-// user can do there: crossbind opens it, waits for Enter, and checks again.
+// The highest versionCode Play has seen, and the credentials that saw it, once the user has done what Play asks for,
+// which only the user can do: in Play Console, which crossbind opens before it waits for Enter and checks again, or, for
+// a Google account without release rights, by signing in with another.
 async function highestWithPlayConsole(appId, credentials) {
+    let current = credentials;
     for (;;) {
         try {
-            return await highestVersionCode(appId, credentials);
+            return { highest: await highestVersionCode(appId, current), credentials: current };
         } catch (error) {
             console.log(error.message);
-            if ([403, 404].includes(error.status)) {
-                console.log(`crossbind: opening ${PLAY_CONSOLE}.`);
-                openUrl(PLAY_CONSOLE);
+            if (error.status === 403 && current.refreshToken) {
+                current = await signInToPlay(ANOTHER_ACCOUNT);
+                if (!current) throw error;
+            } else {
+                if ([403, 404].includes(error.status)) {
+                    console.log(`crossbind: opening ${PLAY_CONSOLE}.`);
+                    openUrl(PLAY_CONSOLE);
+                }
+                await askLine('Press Enter once that is done to check again, or Ctrl-C to stop. ');
             }
-            await askLine('Press Enter once that is done to check again, or Ctrl-C to stop. ');
         }
     }
 }
@@ -52,12 +63,14 @@ export async function publishAndroid({ track, status, viteArgs }, { runVite }) {
     }
     if (!signing.isSigned) missing.push(NO_UPLOAD_KEY);
 
-    let credentials = playCredentials(process.env, state.config.system);
-    if (!credentials && isGuided) credentials = await setUpPlayAccount();
+    let credentials = playCredentials(process.env, state.config.system) ?? await keptSignIn();
+    if (!credentials && isGuided) credentials = await signInToPlay(SIGN_IN);
     if (!credentials) missing.push(NO_CREDENTIALS);
     if (missing.length > 0) throw new Error(missing.join('\n'));
 
-    const highest = isGuided ? await highestWithPlayConsole(appId, credentials) : await highestVersionCode(appId, credentials);
+    let highest;
+    if (isGuided) ({ highest, credentials } = await highestWithPlayConsole(appId, credentials));
+    else highest = await highestVersionCode(appId, credentials);
     const versionCode = appBuildNumber() ?? Math.max(androidVersion().code, highest + 1);
     console.log(highest
         ? `crossbind: Google Play has seen versionCode ${highest} at most, so this build is ${versionCode}.`
