@@ -15,10 +15,11 @@ import buildWasiCommand from './actions/buildWasiCommand.js';
 import buildNode, { addonsInPackages, bundleNodeLoader, publishNodeData } from './actions/buildNode.js';
 import buildNativeCommand from './actions/buildNativeCommand.js';
 import buildApp, { appOutputPath, assertAppRunner, publishApp } from './actions/buildApp.js';
-import { machineUploadKey, releaseSigning, uploadKeyEnv } from './actions/androidGradle.js';
 import { UPDATER_KEY, newUpdaterKey } from './actions/appUpdate.js';
-import { makeUploadKey, showUploadKeyPassword, useUploadKey } from './actions/uploadKey.js';
-import { askHidden, hasTerminal } from './utils/ask.js';
+import {
+    makeUploadKey, releaseSigningEnv, showUploadKeyPassword, useUploadKey,
+} from './actions/uploadKey.js';
+import { publishAndroid } from './actions/publishAndroid.js';
 import buildExternal from './actions/buildExternal.js';
 import buildPackageTypes from './actions/buildTypes.js';
 import buildLib from './actions/buildLib.js';
@@ -118,14 +119,20 @@ function projectVite() {
     }
 }
 
-// An Android release signs with the environment's upload key, else this machine's, whose password the keychain keeps or
-// the terminal gives; Vite's build gets it in its environment.
-async function androidReleaseEnv() {
-    const key = machineUploadKey();
-    const password = key && !key.password && hasTerminal() ? await askHidden(`Password of this machine's upload key, ${key.keystore}: `) : null;
-    const env = key ? uploadKeyEnv({ ...key, password: key.password || password }) : {};
-    releaseSigning({ ...process.env, ...env });
-    return env;
+// The project's Vite, as `crossbind app dev`, `build` and `publish` run it, and its exit code once it ends. A signal sent
+// to crossbind alone reaches Vite too, which ends through its exit hooks; Ctrl-C reaches both.
+function runVite(args, env) {
+    const vite = spawn(process.execPath, [projectVite(), ...args], { stdio: 'inherit', cwd: state.config.paths.project, env });
+    ['SIGINT', 'SIGTERM', 'SIGHUP'].forEach((signal) => process.prependListener(signal, () => vite.kill(signal)));
+    return new Promise((resolve) => {
+        vite.on('exit', (code, signal) => resolve(code ?? 128 + os.constants.signals[signal]));
+    });
+}
+
+function assertAppProject() {
+    if (state.config.target.runtimeEnv !== 'app') {
+        throw new Error("crossbind: crossbind app builds an app, which this project is not: set target: { runtimeEnv: 'app' } in crossbind.config.js, as the desktop-app template does.");
+    }
 }
 
 const commandApp = program.command('app').description('build the project as an app, or open it on the dev server');
@@ -138,19 +145,12 @@ const commandApp = program.command('app').description('build the project as an a
     .allowUnknownOption()
     .allowExcessArguments()
     .action(async ({ platform }, command) => {
-        if (state.config.target.runtimeEnv !== 'app') {
-            throw new Error("crossbind: crossbind app builds an app, which this project is not: set target: { runtimeEnv: 'app' } in crossbind.config.js, as the desktop-app template does.");
-        }
+        assertAppProject();
         // An Android build checks its upload key before the native build, not after it.
-        const signing = name === 'build' && (platform ?? process.env.CROSSBIND_APP_PLATFORM) === 'android' ? await androidReleaseEnv() : {};
-        const vite = spawn(process.execPath, [projectVite(), ...(name === 'build' ? ['build'] : []), ...command.args], {
-            stdio: 'inherit',
-            cwd: state.config.paths.project,
-            env: { ...process.env, ...signing, ...(platform ? { CROSSBIND_APP_PLATFORM: platform } : {}) },
-        });
-        // A signal sent to crossbind alone reaches Vite too, which ends through its exit hooks; Ctrl-C reaches both.
-        ['SIGINT', 'SIGTERM', 'SIGHUP'].forEach((signal) => process.prependListener(signal, () => vite.kill(signal)));
-        vite.on('exit', (code, signal) => process.exit(code ?? 128 + os.constants.signals[signal]));
+        const isAndroidBuild = name === 'build' && (platform ?? process.env.CROSSBIND_APP_PLATFORM) === 'android';
+        const { env: signing } = isAndroidBuild ? await releaseSigningEnv() : { env: {} };
+        const env = { ...process.env, ...signing, ...(platform ? { CROSSBIND_APP_PLATFORM: platform } : {}) };
+        process.exit(await runVite([...(name === 'build' ? ['build'] : []), ...command.args], env));
     }));
 
 commandApp.command('updater-key')
@@ -171,6 +171,22 @@ commandApp.command('upload-key')
         if (showPassword) showUploadKeyPassword();
         else if (use) await useUploadKey(use, { alias, isKeychain: keychain });
         else await makeUploadKey({ isKeychain: keychain });
+    });
+
+commandApp.command('publish')
+    .description('build the app and send it to its store: an Android bundle to a Google Play track')
+    .addOption(new Option('-p, --platform <platform>', "the store's platform (default: CROSSBIND_APP_PLATFORM)").choices(['android']))
+    .option('--track <track>', 'the Google Play track the release goes on: internal, alpha, beta, production or one of your own', 'internal')
+    .option('--draft', 'leave the Google Play release a draft, which Play Console rolls out')
+    // Vite's own options, as --mode, go on to Vite.
+    .allowUnknownOption()
+    .allowExcessArguments()
+    .action(async ({ platform, track, draft }, command) => {
+        assertAppProject();
+        if ((platform ?? process.env.CROSSBIND_APP_PLATFORM) !== 'android') {
+            throw new Error('crossbind: crossbind app publish takes -p android, the platform of the store it sends the app to.');
+        }
+        await publishAndroid({ track, status: draft ? 'draft' : 'completed', viteArgs: command.args }, { runVite });
     });
 
 program.command('licenses')

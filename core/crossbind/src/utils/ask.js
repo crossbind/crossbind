@@ -33,3 +33,6 @@ export const askHidden = (question, { input = process.stdin, output = process.st
 
 // An answer typed on the terminal.
 export const askLine = (question, { input = process.stdin, output = process.stderr } = {}) => ask(question, { input, output, isHidden: false });
+
+// A yes or no typed on the terminal: yes unless it starts with n.
+export const askYesNo = async (question, streams) => !/^\s*n/i.test(await askLine(question, streams));
