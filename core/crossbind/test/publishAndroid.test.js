@@ -9,7 +9,7 @@ vi.mock('../src/state/index.js', () => ({ default: state }));
 // sign-in `kept`.
 const play = {};
 vi.mock('../src/actions/googlePlay.js', () => ({
-    PLAY: { key: 'CROSSBIND_GOOGLE_PLAY_KEY', serviceAccount: 'CROSSBIND_GOOGLE_PLAY_SERVICE_ACCOUNT' },
+    PLAY: { key: 'CROSSBIND_GOOGLE_PLAY_KEY', serviceAccount: 'CROSSBIND_GOOGLE_PLAY_SERVICE_ACCOUNT', token: 'CROSSBIND_GOOGLE_PLAY_TOKEN' },
     playCredentials: () => play.credentials,
     keptSignIn: async () => play.kept,
     highestVersionCode: async () => {
@@ -137,7 +137,7 @@ describe('publishing an Android app', () => {
         signing.isSigned = true;
         play.credentials = null;
         await expect(publishAndroid({ track: 'internal', status: 'completed', viteArgs: [] }, { runVite }))
-            .rejects.toThrow('set CROSSBIND_GOOGLE_PLAY_SERVICE_ACCOUNT to its e-mail, with gcloud signed in, or CROSSBIND_GOOGLE_PLAY_KEY to its JSON key');
+            .rejects.toThrow('set CROSSBIND_GOOGLE_PLAY_SERVICE_ACCOUNT to its e-mail, with gcloud signed in, CROSSBIND_GOOGLE_PLAY_KEY to its JSON key, or CROSSBIND_GOOGLE_PLAY_TOKEN to an access token of it');
         expect(vite.runs).toBe(0);
     });
 
