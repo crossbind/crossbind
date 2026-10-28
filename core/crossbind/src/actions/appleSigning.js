@@ -12,6 +12,8 @@ export const APPLE_SIGNING = {
     issuer: 'CROSSBIND_APPLE_API_ISSUER',
 };
 const NOTARY = [APPLE_SIGNING.key, APPLE_SIGNING.keyId, APPLE_SIGNING.issuer];
+// App Store Connect gives a key's file as AuthKey_<key id>.p8, so the file's own name tells its ID.
+const KEY_FILE = /^AuthKey_([A-Z0-9]{10})\.p8$/;
 
 const listed = (names) => `${names.join(' and ')} ${names.length > 1 ? 'are' : 'is'}`;
 
@@ -31,15 +33,19 @@ function signingIdentities() {
 }
 
 // The App Store Connect API key the environment names, with which Apple notarizes a macOS app and xcodebuild uploads an
-// iOS one in place of Xcode's account, or null: all of it or none.
+// iOS one in place of Xcode's account, or null: all of it or none, but for its ID where its file's name tells it.
 export function appStoreKey(env = process.env) {
     const set = NOTARY.filter((name) => env[name]);
     if (!set.length) return null;
-    const missing = NOTARY.filter((name) => !env[name]);
-    if (missing.length) throw new Error(`crossbind: ${listed(set)} set, but ${listed(missing)} not: an App Store Connect API key takes all three.`);
+    const keyId = env[APPLE_SIGNING.keyId] || path.basename(env[APPLE_SIGNING.key] ?? '').match(KEY_FILE)?.[1];
+    const missing = NOTARY.filter((name) => !env[name] && !(name === APPLE_SIGNING.keyId && keyId));
+    if (missing.length) {
+        const byName = missing.includes(APPLE_SIGNING.keyId) ? ', the ID unless its file keeps the name App Store Connect gives it, AuthKey_<key id>.p8' : '';
+        throw new Error(`crossbind: ${listed(set)} set, but ${listed(missing)} not: an App Store Connect API key takes all three${byName}.`);
+    }
     const key = path.resolve(env[APPLE_SIGNING.key]);
     if (!fs.statSync(key, { throwIfNoEntry: false })?.isFile()) throw new Error(`crossbind: ${APPLE_SIGNING.key} names ${key}, which is no file.`);
-    return { key, keyId: env[APPLE_SIGNING.keyId], issuer: env[APPLE_SIGNING.issuer] };
+    return { key, keyId, issuer: env[APPLE_SIGNING.issuer] };
 }
 
 // The identity a macOS app is signed with and the key Apple notarizes it with, or null without an identity: the app is
