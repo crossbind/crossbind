@@ -164,3 +164,19 @@ describe("an app's edit on Google Play", () => {
         expect(requests.at(-1).route).toBe('DELETE /edits/E1');
     });
 });
+
+describe("an app's native debug symbols on Google Play", () => {
+    test('go up with its bundle, as the nativeCode file of its versionCode, in the same edit', async () => {
+        const aab = path.join(dir, 'app.aab');
+        const symbols = path.join(dir, 'symbols.zip');
+        fs.writeFileSync(aab, 'bundle');
+        fs.writeFileSync(symbols, Buffer.from([0x50, 0x4b, 0x05, 0x06]));
+        answers['POST /edits/E1/apks/1000007/deobfuscationFiles/nativeCode?uploadType=media'] = () => json(200, { deobfuscationFile: { symbolType: 'nativeCode' } });
+        await uploadBundle('dev.example.app', playCredentials({ [PLAY.key]: keyFile }, {}), { aab, symbols, track: 'internal', status: 'completed' });
+        const routes = requests.map(({ route }) => route);
+        const upload = routes.indexOf('POST /edits/E1/apks/1000007/deobfuscationFiles/nativeCode?uploadType=media');
+        expect(upload).toBeGreaterThan(routes.indexOf('POST /edits/E1/bundles?uploadType=media'));
+        expect(upload).toBeLessThan(routes.indexOf('POST /edits/E1:commit'));
+        expect(Buffer.compare(requests[upload].init.body, fs.readFileSync(symbols))).toBe(0);
+    });
+});

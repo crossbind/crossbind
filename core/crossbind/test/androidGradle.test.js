@@ -175,3 +175,23 @@ describe("this machine's upload key", () => {
             .toEqual({ [SIGNING.keystore]: keystore, [SIGNING.alias]: 'upload', [SIGNING.password]: 'p' });
     });
 });
+
+describe("an Android release's symbols zip", () => {
+    test("is made beside the bundle by the image's jar, with each ABI's libraries at its root", () => {
+        sign();
+        const project = path.join(base, 'dist', 'demo-android');
+        fs.mkdirSync(path.join(project, 'symbols', 'arm64-v8a'), { recursive: true });
+        packageAndroidRelease(project);
+        const zip = calls.find((args) => args.includes('jar'));
+        expect(zip.slice(zip.indexOf('jar'))).toEqual(['jar', '--create', '--no-manifest', '--file', '../demo-android-symbols.zip', '-C', 'symbols', '.']);
+        expect(zip).toEqual(expect.arrayContaining(['--network', 'none', '-w', '/tmp/crossbind/live/dist/demo-android']));
+    });
+
+    test('is not made without symbols, as a debug build keeps its libraries as they are', () => {
+        const project = path.join(base, 'dist', 'demo-android');
+        vi.spyOn(console, 'warn').mockImplementation(() => {});
+        packageAndroidRelease(project);
+        expect(calls.some((args) => args.includes('jar'))).toBe(false);
+        vi.restoreAllMocks();
+    });
+});

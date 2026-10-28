@@ -211,3 +211,18 @@ describe("a mobile app's build number", () => {
         vi.unstubAllEnvs();
     });
 });
+
+describe("an Android release's native debug symbols", () => {
+    test("sit by ABI in the Gradle project's symbols/, as each part kept its libraries as linked", () => {
+        const root = fs.mkdtempSync(path.join(os.tmpdir(), 'crossbind-gradle-symbols-'));
+        const arm = part(root, 'arm64-v8a');
+        fs.mkdirSync(path.join(arm.dir, 'symbols'));
+        fs.writeFileSync(path.join(arm.dir, 'symbols', 'libcrossbind_app.so'), 'unstripped');
+        const to = path.join(root, 'demo-app-android');
+        writeGradleProject(to, { parts: [arm, part(root, 'x86_64')], id: 'com.example.demo', label: 'Demo', version: { name: '1.0.0', code: 1 } });
+        expect(fs.readFileSync(path.join(to, 'symbols', 'arm64-v8a', 'libcrossbind_app.so'), 'utf8')).toBe('unstripped');
+        expect(fs.existsSync(path.join(to, 'symbols', 'x86_64'))).toBe(false);
+        expect(fs.existsSync(path.join(to, 'app', 'src', 'main', 'jniLibs', 'arm64-v8a', 'symbols'))).toBe(false);
+        fs.rmSync(root, { recursive: true, force: true });
+    });
+});

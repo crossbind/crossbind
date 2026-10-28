@@ -111,6 +111,12 @@ export function packageAndroidRelease(project) {
     const outputs = `${project}/app/build/outputs`;
     fs.copyFileSync(`${outputs}/apk/release/app-release.apk`, `${project}.apk`);
     fs.rmSync(`${project}.aab`, { force: true });
+    // The zip of native debug symbols Google Play takes, each ABI's libraries at its root, which the image's JDK makes.
+    fs.rmSync(`${project}-symbols.zip`, { force: true });
+    if (fs.existsSync(`${project}/symbols`)) {
+        docker(['run', '--rm', ...containerArgs(null), '-w', inContainer(project), getDockerImage(ROLE, PLATFORM),
+            'jar', '--create', '--no-manifest', '--file', `../${path.basename(project)}-symbols.zip`, '-C', 'symbols', '.'], `zipping the symbols of ${path.basename(project)}`);
+    }
     if (signing) {
         fs.copyFileSync(`${outputs}/bundle/release/app-release.aab`, `${project}.aab`);
     } else {

@@ -769,6 +769,11 @@ the project's `package.json` version; the version code is made from its numbers,
 patch, so the prereleases of one version share it, unless `CROSSBIND_APP_BUILD_NUMBER` gives one, a whole number up
 to 2,100,000,000, as CI does.
 
+A release ships its libraries stripped, the packages' shared libraries too, so no debug information reaches a phone. It
+keeps them as linked in `dist/<name>-android/symbols/<abi>/`, and zipped as `dist/<name>-android-symbols.zip`, the native
+debug symbols Google Play takes. `crossbind app publish` uploads the zip with the bundle, so a crash in Play Console
+shows function names. Hermes and fbjni come stripped from their releases, so their frames stay addresses.
+
 ### The upload key
 
 `crossbind app upload-key` makes one, so neither a JDK nor any knowledge of keystores is needed. It runs `keytool` in

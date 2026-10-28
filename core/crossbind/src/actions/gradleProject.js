@@ -154,6 +154,9 @@ export default function writeGradleProject(to, { parts, id, label, version, icon
         .replace(INTERNET, [INTERNET, ...usesPermissions(permissions)].join('\n'))
         .replace(ACTIVITY_END, urlSchemes.length > 0 ? `${urlFilter(urlSchemes)}\n${ACTIVITY_END}` : ACTIVITY_END));
     parts.forEach(({ arch, dir }) => fs.cpSync(path.join(dir, 'lib'), path.join(main, 'jniLibs', arch), { recursive: true }));
+    // A release keeps its libraries as linked beside the stripped ones it ships, for Google Play's crash reports.
+    parts.filter(({ dir }) => fs.existsSync(path.join(dir, 'symbols')))
+        .forEach(({ arch, dir }) => fs.cpSync(path.join(dir, 'symbols'), path.join(to, 'symbols', arch), { recursive: true }));
     fs.cpSync(path.join(parts[0].dir, 'app'), path.join(main, 'assets', 'app'), { recursive: true });
     if (icons) {
         Object.entries({ ...icons, 'mipmap-anydpi/ic_launcher.xml': ADAPTIVE_ICON }).forEach(([file, content]) => {

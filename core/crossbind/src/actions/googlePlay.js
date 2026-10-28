@@ -125,14 +125,18 @@ export async function highestVersionCode(appId, credentials) {
     }
 }
 
-// Uploads a bundle and releases it on a track, as status says, in one edit. An app never released takes a draft alone,
-// which its first rollout in Play Console makes live, so its release becomes one.
-export async function uploadBundle(appId, credentials, { aab, track, status }) {
+// Uploads a bundle, with the zip of its native debug symbols if there is one, and releases it on a track, as status
+// says, in one edit. An app never released takes a draft alone, which its first rollout in Play Console makes live, so
+// its release becomes one.
+export async function uploadBundle(appId, credentials, { aab, symbols = null, track, status }) {
     const call = await playCaller(appId, credentials);
     const edits = `${API}/${appId}/edits`;
     const edit = await call('POST', edits, {});
     try {
         const { versionCode } = await call('POST', `${UPLOAD}/${appId}/edits/${edit.id}/bundles?uploadType=media`, fs.readFileSync(aab));
+        if (symbols) {
+            await call('POST', `${UPLOAD}/${appId}/edits/${edit.id}/apks/${versionCode}/deobfuscationFiles/nativeCode?uploadType=media`, fs.readFileSync(symbols));
+        }
         const release = async (releaseStatus) => {
             await call('PUT', `${edits}/${edit.id}/tracks/${track}`, { track, releases: [{ versionCodes: [String(versionCode)], status: releaseStatus }] });
             await call('POST', `${edits}/${edit.id}:commit`);
