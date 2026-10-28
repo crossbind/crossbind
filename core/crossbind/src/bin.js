@@ -20,6 +20,7 @@ import {
     makeUploadKey, releaseSigningEnv, showUploadKeyPassword, useUploadKey,
 } from './actions/uploadKey.js';
 import { publishAndroid } from './actions/publishAndroid.js';
+import { publishIos } from './actions/publishIos.js';
 import buildExternal from './actions/buildExternal.js';
 import buildPackageTypes from './actions/buildTypes.js';
 import buildLib from './actions/buildLib.js';
@@ -120,12 +121,17 @@ function projectVite() {
 }
 
 // The project's Vite, as `crossbind app dev`, `build` and `publish` run it, and its exit code once it ends. A signal sent
-// to crossbind alone reaches Vite too, which ends through its exit hooks; Ctrl-C reaches both.
+// to crossbind alone reaches Vite too, which ends through its exit hooks; Ctrl-C reaches both. Once Vite has ended,
+// signals stop crossbind again, as at the questions a publish asks after its build.
 function runVite(args, env) {
     const vite = spawn(process.execPath, [projectVite(), ...args], { stdio: 'inherit', cwd: state.config.paths.project, env });
-    ['SIGINT', 'SIGTERM', 'SIGHUP'].forEach((signal) => process.prependListener(signal, () => vite.kill(signal)));
+    const forwards = ['SIGINT', 'SIGTERM', 'SIGHUP'].map((signal) => [signal, () => vite.kill(signal)]);
+    forwards.forEach(([signal, forward]) => process.prependListener(signal, forward));
     return new Promise((resolve) => {
-        vite.on('exit', (code, signal) => resolve(code ?? 128 + os.constants.signals[signal]));
+        vite.on('exit', (code, signal) => {
+            forwards.forEach(([name, forward]) => process.off(name, forward));
+            resolve(code ?? 128 + os.constants.signals[signal]);
+        });
     });
 }
 
@@ -174,8 +180,8 @@ commandApp.command('upload-key')
     });
 
 commandApp.command('publish')
-    .description('build the app and send it to its store: an Android bundle to a Google Play track')
-    .addOption(new Option('-p, --platform <platform>', "the store's platform (default: CROSSBIND_APP_PLATFORM)").choices(['android']))
+    .description('build the app and send it to its store: an Android bundle to a Google Play track, an iOS app to App Store Connect for TestFlight')
+    .addOption(new Option('-p, --platform <platform>', "the store's platform (default: CROSSBIND_APP_PLATFORM)").choices(['android', 'ios']))
     .option('--track <track>', 'the Google Play track the release goes on: internal, alpha, beta, production or one of your own', 'internal')
     .option('--draft', 'leave the Google Play release a draft, which Play Console rolls out')
     // Vite's own options, as --mode, go on to Vite.
@@ -183,10 +189,17 @@ commandApp.command('publish')
     .allowExcessArguments()
     .action(async ({ platform, track, draft }, command) => {
         assertAppProject();
-        if ((platform ?? process.env.CROSSBIND_APP_PLATFORM) !== 'android') {
-            throw new Error('crossbind: crossbind app publish takes -p android, the platform of the store it sends the app to.');
+        const store = platform ?? process.env.CROSSBIND_APP_PLATFORM;
+        if (store === 'android') {
+            await publishAndroid({ track, status: draft ? 'draft' : 'completed', viteArgs: command.args }, { runVite });
+            return;
         }
-        await publishAndroid({ track, status: draft ? 'draft' : 'completed', viteArgs: command.args }, { runVite });
+        if (store !== 'ios') throw new Error('crossbind: crossbind app publish takes -p android or -p ios, the platform of the store it sends the app to.');
+        const playOptions = ['track', 'draft'].filter((option) => command.getOptionValueSource(option) === 'cli');
+        if (playOptions.length > 0) {
+            throw new Error(`crossbind: ${playOptions.map((option) => `--${option}`).join(' and ')} ${playOptions.length > 1 ? 'are' : 'is'} Google Play's; App Store Connect hands every iOS upload to TestFlight.`);
+        }
+        await publishIos({ viteArgs: command.args }, { runVite });
     });
 
 program.command('licenses')

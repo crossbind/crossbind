@@ -12,6 +12,10 @@ export function compilesAsApp(target) {
     return state.config.target?.runtimeEnv === 'app' && runtimeEnvsOf(target.platform).includes('app');
 }
 
+// What an app's own code compiles with: CROSSBIND_APP, and on iOS its debug information, from which the archive's dSYM
+// gives App Store Connect its files and lines; Android's NDK keeps that by default.
+export const appCompileOptions = (target) => (compilesAsApp(target) ? ['-DCROSSBIND_APP', ...(target.platform === 'ios' ? ['-g'] : [])] : []);
+
 export function appApiHeader() {
     const header = `${resolveAppHostRoot()}/cpp/include/crossbind/app.h`;
     if (!fs.existsSync(header)) {

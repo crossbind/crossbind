@@ -113,7 +113,7 @@ export function appTargetParams({ dev = false } = {}, env = process.env) {
 }
 
 // The Apple team that signs an iOS app: the project's app.team, else the machine's XCODE_DEVELOPMENT_TEAM, else none.
-function appTeam() {
+export function appTeam() {
     const team = state.config.app.team ?? state.config.system.XCODE_DEVELOPMENT_TEAM ?? '';
     if (team && !/^[A-Z0-9]{10}$/.test(team)) {
         throw new Error(`crossbind: ${JSON.stringify(team)} (app.team or XCODE_DEVELOPMENT_TEAM) is no Apple team id, which is ten capital letters and digits.`);
@@ -122,7 +122,7 @@ function appTeam() {
 }
 
 // An Android application id: dot-separated parts of letters, digits and underscores that each start with a letter.
-export const ANDROID_APP_ID = /^[A-Za-z][A-Za-z0-9_]*(\.[A-Za-z][A-Za-z0-9_]*)+$/;
+const ANDROID_APP_ID = /^[A-Za-z][A-Za-z0-9_]*(\.[A-Za-z][A-Za-z0-9_]*)+$/;
 
 // An Android app's id: the project's app.id, else one made from the project's name.
 export function androidAppId() {
@@ -134,7 +134,7 @@ export function androidAppId() {
 }
 
 // Apple takes dot-separated integers alone as an app's version.
-const appVersion = () => (state.config.package?.version ?? '1.0.0').replace(/[-+].*$/, '');
+export const appVersion = () => (state.config.package?.version ?? '1.0.0').replace(/[-+].*$/, '');
 
 const BUILD_NUMBER = 'CROSSBIND_APP_BUILD_NUMBER';
 // Google Play takes no larger version code.

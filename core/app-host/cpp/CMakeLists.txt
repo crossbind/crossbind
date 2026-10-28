@@ -84,6 +84,8 @@ if(APPLE)
     set_source_files_properties(${PLATFORM_SOURCES} PROPERTIES COMPILE_OPTIONS -fobjc-arc)
 endif()
 if(CMAKE_SYSTEM_NAME STREQUAL "iOS")
+    # The archive's dSYM gives App Store Connect the host's files and lines; the app it ships stays stripped.
+    target_compile_options(app PRIVATE -g)
     return()
 endif()
 

@@ -31,15 +31,20 @@ export function reasonCategories(output) {
     return categories;
 }
 
+// The categories an archive or a linked binary imports.
+function importedCategories(file) {
+    const result = spawnSync('nm', ['-u', '-j', file], { encoding: 'utf8', maxBuffer: NM_OUTPUT_LIMIT });
+    if (result.status !== 0) throw new Error(`crossbind: cannot list what ${file} calls: ${result.stderr || result.error?.message}`);
+    return reasonCategories(result.stdout);
+}
+
 // What the archives an iOS app links call of required reason API with no reason in app.privacy: each library, by the
 // name its archive has, with each such category and its symbols.
 export function unreasonedApis(archives, privacy) {
     const found = new Map();
     archives.forEach((archive) => {
-        const result = spawnSync('nm', ['-u', '-j', archive], { encoding: 'utf8', maxBuffer: NM_OUTPUT_LIMIT });
-        if (result.status !== 0) throw new Error(`crossbind: cannot list what ${archive} calls: ${result.stderr || result.error?.message}`);
         const library = path.basename(archive).replace(/^\d+-/, '').replace(/^lib/, '').replace(/\.a$/, '');
-        reasonCategories(result.stdout).forEach((symbols, category) => {
+        importedCategories(archive).forEach((symbols, category) => {
             if (Object.hasOwn(privacy, category)) return;
             const key = `${library}\0${category}`;
             found.set(key, new Set([...(found.get(key) ?? []), ...symbols]));
@@ -50,6 +55,13 @@ export function unreasonedApis(archives, privacy) {
         return { library, category, symbols: [...symbols].sort() };
     }).sort((a, b) => a.library.localeCompare(b.library) || a.category.localeCompare(b.category));
 }
+
+// What an iOS app's linked binary calls of required reason API with no reason in app.privacy, each category with its
+// symbols: what the linker kept of its archives, which App Store Connect checks.
+export const unreasonedImports = (binary, privacy) => [...importedCategories(binary)]
+    .filter(([category]) => !Object.hasOwn(privacy, category))
+    .map(([category, symbols]) => ({ category, symbols: [...symbols].sort() }))
+    .sort((a, b) => a.category.localeCompare(b.category));
 
 // The warning of what the archives of an iOS app reference of required reason API without its reasons, or none. The
 // linker may leave some of it out of the app, as it left _stat, _lstat and _fstatat out of the conformance app, whose

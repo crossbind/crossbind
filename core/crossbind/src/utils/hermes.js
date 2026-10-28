@@ -3,6 +3,7 @@ import os from 'node:os';
 import path from 'node:path';
 import withDirLock from './dirLock.js';
 import downloadAndExtractFile from './downloadAndExtractFile.js';
+import logger from './logger.js';
 
 // The Hermes React Native publishes on Maven Central for Apple platforms: the macOS framework, the iOS xcframework,
 // hermesc and the headers. A new version also moves third_party/jsi of @crossbind/core-app-host to its tag, and the
@@ -23,6 +24,29 @@ export default async function resolveHermes() {
     fs.mkdirSync(path.dirname(dir), { recursive: true });
     await withDirLock(`${dir}.lock`, () => downloadAndExtractFile(hermesUrl(HERMES.version), dir, HERMES.sha256));
     return `${dir}/source/destroot`;
+}
+
+// The dSYMs of the release's frameworks, with which App Store Connect shows Hermes' frames in an iOS app's crash reports
+// as functions and lines.
+export const HERMES_DSYM = {
+    url: `https://repo1.maven.org/maven2/com/facebook/hermes/hermes-ios/${HERMES.version}/hermes-ios-${HERMES.version}-hermes-framework-dSYM-release.tar.gz`,
+    sha256: '5cea3dd57ecadb42c40d1cc8acf2e178dbfbe6a230410742d997ff3fe313a9c0',
+};
+
+// The dSYM of the device's framework, downloaded once and checked against the pinned sha256. The release's 360 MB hold
+// every Apple platform's, of which only the device's 80 MB are kept.
+export async function resolveHermesDsym() {
+    const dir = `${hermesDir()}-dsym`;
+    const dsym = `${dir}/source/iphoneos/hermesvm.framework.dSYM`;
+    if (!fs.existsSync(dsym)) logger.info(`crossbind: downloading the dSYM of Hermes ${HERMES.version} once, 360 MB of which 80 MB stay, for crash reports.`);
+    fs.mkdirSync(path.dirname(dir), { recursive: true });
+    await withDirLock(`${dir}.lock`, async () => {
+        await downloadAndExtractFile(HERMES_DSYM.url, dir, HERMES_DSYM.sha256);
+        fs.rmSync(`${dir}/${path.basename(HERMES_DSYM.url)}`, { force: true });
+        fs.readdirSync(`${dir}/source`).filter((entry) => entry !== 'iphoneos')
+            .forEach((entry) => fs.rmSync(`${dir}/source/${entry}`, { recursive: true, force: true }));
+    });
+    return dsym;
 }
 
 // Linux and Windows have no published Hermes, so crossbind's linux and windows images build the release's source, with
