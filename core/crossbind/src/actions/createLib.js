@@ -11,7 +11,9 @@ import state from '../state/index.js';
 import logger from '../utils/logger.js';
 import { WASI_EMULATION_LIBS, WASI_LINK_LIBS, wasiCFlags, wasiCxxFlags } from '../utils/wasiToolchain.js';
 import { stageWasiHttpInclude, wasiHttpHeader } from '../utils/wasiHttp.js';
-import { appApiHeader, compilesAsApp, stageAppApiInclude } from '../utils/appApiHeader.js';
+import {
+    appApiHeader, appCompileOptions, compilesAsApp, stageAppApiInclude,
+} from '../utils/appApiHeader.js';
 import { getFilesFingerprint, getContentHash } from '../utils/hash.js';
 import { withDependencyBridges } from '../utils/dependencyBridges.js';
 import { targetArchiveFlags } from '../utils/archiveFlags.js';
@@ -66,8 +68,8 @@ export default function createLib(target, fileType, options = {}) {
         : null;
     // An Android app links the project's archives from the build where React Native's shared library comes from.
     const appArchives = target.platform === 'android' && target.runtimeEnv === 'app' ? 'archives' : null;
-    // An app's own code compiles against <crossbind/app.h>, with CROSSBIND_APP defined.
-    const appApi = compilesAsApp(target) ? getFilesFingerprint([appApiHeader()]) : null;
+    // An app's own code compiles against <crossbind/app.h>, with the options of an app.
+    const appApi = compilesAsApp(target) ? [getFilesFingerprint([appApiHeader()]), ...appCompileOptions(target)] : null;
     const extraKeys = [httpHeader, appArchives, appApi].filter(Boolean);
     const flagsFingerprint = getContentHash(JSON.stringify(extraKeys.length ? [keyInputs, ...extraKeys] : keyInputs));
     const flagsChanged = !fs.existsSync(flagsFingerprintFile)

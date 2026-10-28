@@ -20,10 +20,18 @@ describe("a key written into crossbind.config.js's app section", () => {
             .toBe("import a from 'a';\n\nexport default {\n  app: {\n    id: 'it\\'s',\n  },\n  general: { name: 'demo' },\n};\n");
     });
 
+    test('is written as JavaScript, as one would write it by hand', () => {
+        expect(withAppOption("export default {\n    app: { name: 'Demo' },\n};\n", 'privacy', { fileTimestamp: ['C617.1'], diskSpace: ['E174.1', '85F4.1'] }))
+            .toBe("export default {\n    app: { privacy: { fileTimestamp: ['C617.1'], diskSpace: ['E174.1', '85F4.1'] }, name: 'Demo' },\n};\n");
+    });
+
     test('is not written where it cannot be placed safely, or is set already', () => {
         expect(withAppOption('export default makeConfig({ app: {} });\n', 'id', 'x')).toBeNull();
         expect(withAppOption('const app = {};\nexport default { app };\n', 'id', 'x')).toBeNull();
         expect(withAppOption("export default { app: { id: 'old' } };\n", 'id', 'x')).toBeNull();
+        // A spread may carry the key, and would win over one written before it.
+        expect(withAppOption("export default { app: { ...shared, name: 'Demo' } };\n", 'privacy', {})).toBeNull();
+        expect(withAppOption("export default { ...base, general: { name: 'demo' } };\n", 'id', 'x')).toBeNull();
     });
 
     test("lands in the project's config file, which is changed only when it can be", () => {

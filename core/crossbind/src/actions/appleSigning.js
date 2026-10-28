@@ -30,16 +30,25 @@ function signingIdentities() {
         .map(([, hash, name]) => ({ hash, name }));
 }
 
+// The App Store Connect API key the environment names, with which Apple notarizes a macOS app and xcodebuild uploads an
+// iOS one in place of Xcode's account, or null: all of it or none.
+export function appStoreKey(env = process.env) {
+    const set = NOTARY.filter((name) => env[name]);
+    if (!set.length) return null;
+    const missing = NOTARY.filter((name) => !env[name]);
+    if (missing.length) throw new Error(`crossbind: ${listed(set)} set, but ${listed(missing)} not: an App Store Connect API key takes all three.`);
+    const key = path.resolve(env[APPLE_SIGNING.key]);
+    if (!fs.statSync(key, { throwIfNoEntry: false })?.isFile()) throw new Error(`crossbind: ${APPLE_SIGNING.key} names ${key}, which is no file.`);
+    return { key, keyId: env[APPLE_SIGNING.keyId], issuer: env[APPLE_SIGNING.issuer] };
+}
+
 // The identity a macOS app is signed with and the key Apple notarizes it with, or null without an identity: the app is
-// then signed ad hoc, which opens it on the Mac that built it alone. codesign takes the identity's hash, which the
-// renewed certificates of one name do not share.
+// then signed ad hoc, which opens it on the Mac that built it alone, even with the key, which iOS uploads take too.
+// codesign takes the identity's hash, which the renewed certificates of one name do not share.
 export function appleSigning(env = process.env) {
-    const notary = NOTARY.filter((name) => env[name]);
     const identity = env[APPLE_SIGNING.identity];
-    if (!identity) {
-        if (notary.length) throw new Error(`crossbind: ${listed(notary)} set without ${APPLE_SIGNING.identity}, the Developer ID that signs the app Apple notarizes.`);
-        return null;
-    }
+    if (!identity) return null;
+    const notary = appStoreKey(env);
     const found = signingIdentities().filter(({ hash, name }) => hash === identity.toUpperCase() || name.includes(identity));
     const matches = [...new Map(found.map((match) => [match.hash, match])).values()];
     if (!matches.length) throw new Error(`crossbind: ${APPLE_SIGNING.identity} names ${JSON.stringify(identity)}, which no valid code signing identity in the keychain is; \`security find-identity -v -p codesigning\` lists them.`);
@@ -47,13 +56,10 @@ export function appleSigning(env = process.env) {
         throw new Error(`crossbind: ${APPLE_SIGNING.identity} names ${JSON.stringify(identity)}, which ${matches.length} identities in the keychain are: ${matches.map(({ hash, name }) => `${hash} "${name}"`).join(', ')}. Set it to one of their hashes.`);
     }
     const [{ hash, name }] = matches;
-    if (!notary.length) return { identity: hash, notary: null };
-    const missing = NOTARY.filter((variable) => !env[variable]);
-    if (missing.length) throw new Error(`crossbind: ${listed(notary)} set, but ${listed(missing)} not: notarizing takes all three.`);
-    if (!name.startsWith('Developer ID Application:')) throw new Error(`crossbind: Apple notarizes an app signed with a Developer ID Application certificate, which ${JSON.stringify(name)} is not.`);
-    const key = path.resolve(env[APPLE_SIGNING.key]);
-    if (!fs.statSync(key, { throwIfNoEntry: false })?.isFile()) throw new Error(`crossbind: ${APPLE_SIGNING.key} names ${key}, which is no file.`);
-    return { identity: hash, notary: { key, keyId: env[APPLE_SIGNING.keyId], issuer: env[APPLE_SIGNING.issuer] } };
+    if (notary && !name.startsWith('Developer ID Application:')) {
+        throw new Error(`crossbind: Apple notarizes an app signed with a Developer ID Application certificate, which ${JSON.stringify(name)} is not.`);
+    }
+    return { identity: hash, notary };
 }
 
 // The ticket Apple issues can take a moment to reach the servers stapler asks for it.

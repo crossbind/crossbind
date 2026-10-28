@@ -35,6 +35,10 @@ describe('getCmakeParameters', () => {
         expect(compileOptions({ ...linux, runtimeEnv: 'app' })).toBe('-DCOMPILE_OPTIONS=-O2;-DCROSSBIND_APP');
     });
 
+    test("keeps an iOS app's debug information, for its dSYM", () => {
+        expect(compileOptions({ ...linux, platform: 'ios', arch: 'iphoneos' })).toBe('-DCOMPILE_OPTIONS=-O2;-DCROSSBIND_APP;-g');
+    });
+
     test("defines it neither in a library nor in an app's web build", () => {
         expect(compileOptions(wasm)).toBe('-DCOMPILE_OPTIONS=-O2');
         state.config.target = { runtimeEnv: 'browser' };

@@ -10,7 +10,16 @@ const isOneLine = (source, from, to) => !source.slice(from, to).includes('\n');
 const insert = (source, at, text) => `${source.slice(0, at)}${text}${source.slice(at)}`;
 const propertyOf = (object, name) => object.properties.find((property) => property.type === 'Property' && !property.computed
     && (property.key.name ?? property.key.value) === name);
-const entry = (key, value) => `${key}: ${typeof value === 'string' ? `'${value.replace(/[\\']/g, '\\$&')}'` : JSON.stringify(value)}`;
+// A spread may carry the key, and would win over one written before it.
+const hasSpread = (object) => object.properties.some((property) => property.type === 'SpreadElement');
+// A value as one writes it in a config by hand: { fileTimestamp: ['C617.1'] }.
+function literal(value) {
+    if (typeof value === 'string') return `'${value.replace(/[\\']/g, '\\$&')}'`;
+    if (Array.isArray(value)) return `[${value.map(literal).join(', ')}]`;
+    if (value !== null && typeof value === 'object') return `{ ${Object.entries(value).map(([key, item]) => `${key}: ${literal(item)}`).join(', ')} }`;
+    return JSON.stringify(value);
+}
+export const entry = (key, value) => `${key}: ${literal(value)}`;
 
 // How far an object's keys sit in from the line it opens on.
 function indentUnit(source, object) {
@@ -20,7 +29,7 @@ function indentUnit(source, object) {
 }
 
 // The config's source with `key: value` first in its app section, which it makes where there is none, or null where it
-// cannot place it safely: the default export must be an object literal, its app one too, without the key.
+// cannot place it safely: the default export must be an object literal, its app one too, without the key or a spread.
 export function withAppOption(source, key, value) {
     const exported = parseAst(source).body.find((node) => node.type === 'ExportDefaultDeclaration')?.declaration;
     if (exported?.type !== 'ObjectExpression') return null;
@@ -28,12 +37,13 @@ export function withAppOption(source, key, value) {
     const text = entry(key, value);
     const app = propertyOf(exported, 'app');
     if (!app) {
+        if (hasSpread(exported)) return null;
         const [first] = exported.properties;
         if (!first || isOneLine(source, exported.start, first.start)) return insert(source, exported.start + 1, ` app: { ${text} },`);
         const indent = indentOf(source, first.start);
         return insert(source, exported.start + 1, `\n${indent}app: {\n${indent}${unit}${text},\n${indent}},`);
     }
-    if (app.value.type !== 'ObjectExpression' || propertyOf(app.value, key)) return null;
+    if (app.value.type !== 'ObjectExpression' || propertyOf(app.value, key) || hasSpread(app.value)) return null;
     const [first] = app.value.properties;
     if (!first) {
         const indent = indentOf(source, app.start);

@@ -50,6 +50,7 @@ export default defineConfig({ plugins: [viteCrossbindPlugin()] });
 | `crossbind app updater-key` | Prints a new key pair for a desktop app's updates: the public key for `app.updater.publicKey`, the private one for `CROSSBIND_UPDATER_PRIVATE_KEY` (see [Updates](#updates)). |
 | `crossbind app upload-key` | Makes this machine's upload key, which signs an Android app's bundle for Google Play, and keeps its password in the system keychain; `--use <keystore>` takes a key you have instead (see [The upload key](#the-upload-key)). |
 | `crossbind app publish -p android` | Builds the Android app with the next versionCode Google Play takes and releases its bundle on a track, internal unless `--track` names another (see [Publishing](#publishing)). |
+| `crossbind app publish -p ios` | Builds the iOS app, archives it and uploads it to App Store Connect, whose TestFlight hands it to testers; Xcode numbers the build (see [Publishing](#publishing)). |
 
 `crossbind app` runs the project's Vite with `CROSSBIND_APP_PLATFORM` set to the platform `-p` names, `macos`, `linux`,
 `windows`, `ios` or `android`; without `-p` it keeps the variable the environment sets, and without that builds this
@@ -181,9 +182,10 @@ it, which Apple has notarized. Both come from the environment alone:
 | `CROSSBIND_APPLE_API_KEY_ID` | The key's ID. |
 | `CROSSBIND_APPLE_API_ISSUER` | The issuer ID of the key's team. |
 
-An identity the keychain does not hold, a name two of its identities share, as after a renewal, a key without an
-identity or a key without all three stops `crossbind app build` before anything compiles, and so does a key beside an
-identity other than a Developer ID Application one. Apple takes a few minutes to check the app, two hours at most
+An identity the keychain does not hold or a name two of its identities share, as after a renewal, stops
+`crossbind app build` before anything compiles, and so does a key beside the identity that lacks one of its three
+variables or comes with an identity other than a Developer ID Application one. Without an identity the key signs
+nothing here, as it serves iOS uploads too (see [Publishing](#publishing)), and the app is signed ad hoc. Apple takes a few minutes to check the app, two hours at most
 before the build gives up, and a rejection stops the build with Apple's log. A signed app that is not notarized opens
 on another Mac only once its user allows it in System Settings, and the build says so.
 
@@ -729,10 +731,13 @@ app: {
 ```
 
 Open `dist/<name>-ios/<name>.xcodeproj` in Xcode to run the app on a device or to archive it for TestFlight and the App
-Store; Xcode signs it for the team. The version is the project's `package.json` version without its prerelease part,
+Store, or let `crossbind app publish -p ios` archive and upload it (see [Publishing](#publishing)); Xcode signs it for
+the team. The version is the project's `package.json` version without its prerelease part,
 as Apple takes numbers alone, and so is the build number, unless `CROSSBIND_APP_BUILD_NUMBER` gives one, a whole
 number, as CI does. A build for the Simulator
-needs no team: `xcodebuild -project dist/<name>-ios/<name>.xcodeproj -sdk iphonesimulator build`.
+needs no team: `xcodebuild -project dist/<name>-ios/<name>.xcodeproj -sdk iphonesimulator build`. The host and the
+project's own code keep their debug information, from which an archive's dSYM gives crash reports their files and
+lines; the app ships without it.
 
 `app.encryption` tells App Store Connect whether the app uses encryption that export rules do not exempt, as the
 Info.plist's `ITSAppUsesNonExemptEncryption`; without it, App Store Connect asks for every build before TestFlight
@@ -747,8 +752,9 @@ and the build writes them as the app's privacy manifest, `PrivacyInfo.xcprivacy`
 `systemBootTime`, `diskSpace`, `activeKeyboards` and `userDefaults`. A release build reads what the archives the app
 links reference, and names each library that references a category `app.privacy` gives no reason for. The linker may
 leave some of it out of the app: the conformance app's Rust references `stat`, `lstat`, `fstat` and `fstatat`, and the
-app calls `fstat` alone. The scan finds C functions, as `stat` and `mach_absolute_time`, but not Objective-C selectors,
-as `systemUptime`.
+app calls `fstat` alone. `crossbind app publish -p ios` reads what the archived app calls instead, and stops on a
+category without its reason. The scan finds C functions, as `stat` and `mach_absolute_time`, but not Objective-C
+selectors, as `systemUptime`.
 
 ## Android
 
@@ -825,6 +831,11 @@ its data, and leaves running it to you.
 
 ## Publishing
 
+`crossbind app publish` builds the app and sends it to its store: with `-p android` its bundle to a Google Play track,
+with `-p ios` the app to App Store Connect, whose TestFlight hands it to testers.
+
+### Google Play
+
 `crossbind app publish -p android` builds the Android app and releases its bundle on a Google Play track. Before the
 build, which takes minutes, it checks all it needs:
 - `app.id`, set in `crossbind.config.js`, as Play keeps an app's package name for good;
@@ -860,7 +871,7 @@ Setting both stops the publish. Once, for each app or account:
    roll it out once in Play Console, under Test and release, and later publishes go out by themselves.
 
 On a terminal, the publish asks for what is missing and sets it up before the build:
-- the package name, which it writes into `crossbind.config.js` once you say yes;
+- the package name, one both stores take, which it writes into `crossbind.config.js` once you say yes;
 - the upload key, which it makes as `crossbind app upload-key` does;
 - the service account: with gcloud signed in, it makes `crossbind-play` in gcloud's project, enables both APIs and gives
   your login the Token Creator role, all after one yes; else it takes the JSON key you name. `~/.crossbind.json` keeps
@@ -869,6 +880,50 @@ On a terminal, the publish asks for what is missing and sets it up before the bu
   Console, and checks again when you press Enter.
 
 Without a terminal, as in CI, nothing is asked, and the publish names every missing piece at once.
+
+### App Store Connect
+
+`crossbind app publish -p ios` builds the iOS app, archives it with `xcodebuild` and uploads it to App Store Connect,
+whose TestFlight hands it to testers once Apple has processed it, usually within 5 to 30 minutes. It runs on macOS,
+with Xcode. Before the build it checks all it needs:
+- `app.id`, set in `crossbind.config.js`, as App Store Connect keeps an app's bundle id for good;
+- the Apple Developer Program team, `app.team` or `XCODE_DEVELOPMENT_TEAM`;
+- and `app.icon`, as App Store Connect takes no app without an icon.
+
+The account Xcode is signed in to archives and uploads the app. It registers the bundle id, signs the archive for
+development and the upload for distribution, in the cloud, and numbers the build: the version's own number at first,
+the next free one for each later upload of that version, unless `CROSSBIND_APP_BUILD_NUMBER` gives one. With
+`CROSSBIND_APPLE_API_KEY`, `CROSSBIND_APPLE_API_KEY_ID` and `CROSSBIND_APPLE_API_ISSUER` set, as for notarizing a macOS
+app, an App Store Connect API key does it in place of the account, as in CI. Apple signs in the cloud for an Admin key
+alone; a key of another role needs an Apple Distribution certificate in the keychain, which Xcode makes once under
+Settings › Accounts › Manage Certificates. `--track` and `--draft` are Google Play's, and stop an iOS publish.
+
+Once, for each app, create it in App Store Connect, under Apps, as a new iOS app with `app.id` as its bundle ID; Apple's
+API makes none. The first publish's archive registers the bundle id, so App Store Connect lists it from then on, and
+the upload fails until the app is there.
+
+The archived app shows what of Apple's required reason API it calls, and a category its privacy manifest gives no reason
+for stops the publish before the upload, which App Store Connect would refuse (see [iOS](#ios)). The upload carries the
+app's dSYM, with the files and lines of the host and the project's own code, and Hermes' dSYM, which crossbind
+downloads before the first build from Maven Central and checks against the sha256 it pins, keeping the device's 80 MB
+of the release's 360 MB. Crash reports in App Store Connect and Xcode's Organizer then show functions and lines. What
+App Store Connect warns of without refusing the upload, the publish repeats. The archive, the upload's options and
+both logs stay in `.crossbind/build/app-store/`.
+
+On a terminal, the publish asks for what is missing and sets it up:
+- the bundle id, the icon, `app.encryption` and the reasons of `app.privacy`, which it writes into
+  `crossbind.config.js` once you say yes; new reasons build the app again. One bundle id both stores take, letters and
+  digits in dot-separated parts, serves both. The encryption answer is a legal statement, so it takes y or n alone, and
+  a config that sets `app.privacy` already gets the whole of it named to set by hand.
+- the team: one of those the accounts Xcode is signed in to have, or one you type, which `~/.crossbind.json` keeps as
+  `XCODE_DEVELOPMENT_TEAM`.
+- what only Xcode or Apple's sites do: signing in to Xcode again, accepting a new Program License Agreement, registering
+  a device, which Apple's development profile needs, or creating the app. A failed archive or upload names it, opens
+  the page where crossbind knows it, and tries again when you press Enter, without building again. Any other failure
+  stops the publish.
+
+Without a terminal, as in CI, nothing is asked: the publish names every missing piece at once, warns without
+`app.encryption`, and stops at the first failure.
 
 ## Hermes
 

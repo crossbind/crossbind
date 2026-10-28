@@ -246,7 +246,11 @@ describe('the names an installer takes', () => {
 
     test('stop a macOS build whose notarization could not be, before anything compiles', () => {
         project({});
+        vi.stubEnv('CROSSBIND_APPLE_SIGNING_IDENTITY', 'Developer ID Application: Ada Lovelace');
+        vi.stubEnv('CROSSBIND_APPLE_API_KEY', '');
         vi.stubEnv('CROSSBIND_APPLE_API_KEY_ID', 'ABC123');
-        expect(() => checkInstaller({ platform: 'darwin', arch: 'arm64' })).toThrow('CROSSBIND_APPLE_API_KEY_ID is set without CROSSBIND_APPLE_SIGNING_IDENTITY');
+        vi.stubEnv('CROSSBIND_APPLE_API_ISSUER', '');
+        expect(() => checkInstaller({ platform: 'darwin', arch: 'arm64' }))
+            .toThrow('CROSSBIND_APPLE_API_KEY_ID is set, but CROSSBIND_APPLE_API_KEY and CROSSBIND_APPLE_API_ISSUER are not');
     });
 });

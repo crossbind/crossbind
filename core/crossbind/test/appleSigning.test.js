@@ -32,8 +32,9 @@ beforeEach(() => {
 });
 
 describe('the identity and key that sign and notarize a macOS app', () => {
-    test('are none without an identity, so the app is signed ad hoc', () => {
+    test('are none without an identity, so the app is signed ad hoc, even with the key, which iOS uploads take too', () => {
         expect(appleSigning({})).toBeNull();
+        expect(appleSigning(notary)).toBeNull();
         expect(spawnSync).not.toHaveBeenCalled();
     });
 
@@ -52,9 +53,7 @@ describe('the identity and key that sign and notarize a macOS app', () => {
         expect(appleSigning({ CROSSBIND_APPLE_SIGNING_IDENTITY: RENEWED })).toEqual({ identity: RENEWED, notary: null });
     });
 
-    test('stop the build for a key without an identity, an identity the keychain lacks, or part of a key', () => {
-        expect(() => appleSigning({ CROSSBIND_APPLE_API_KEY_ID: 'ABC123' }))
-            .toThrow('CROSSBIND_APPLE_API_KEY_ID is set without CROSSBIND_APPLE_SIGNING_IDENTITY');
+    test('stop the build for an identity the keychain lacks, or part of a key', () => {
         expect(() => appleSigning({ CROSSBIND_APPLE_SIGNING_IDENTITY: 'Developer ID Application: Someone Else' }))
             .toThrow('which no valid code signing identity in the keychain is');
         expect(() => appleSigning({ CROSSBIND_APPLE_SIGNING_IDENTITY: DEVELOPER_ID, CROSSBIND_APPLE_API_KEY: key }))
