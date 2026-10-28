@@ -1,11 +1,18 @@
 import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import { createSign } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
+import { accessToken } from './googleSignIn.js';
+import { readSecret, storeSecret } from '../utils/keychain.js';
 
 // Google Play's credentials, which the environment or ~/.crossbind.json names: a service account's e-mail, whose token
 // the user's gcloud login buys with no key, or its JSON key.
 export const PLAY = { key: 'CROSSBIND_GOOGLE_PLAY_KEY', serviceAccount: 'CROSSBIND_GOOGLE_PLAY_SERVICE_ACCOUNT' };
-const SCOPE = 'https://www.googleapis.com/auth/androidpublisher';
+export const PLAY_SCOPE = 'https://www.googleapis.com/auth/androidpublisher';
+// The keychain keeps the user's Google sign-in for Play under this service; on Windows, beside this path.
+const SIGN_IN_SERVICE = 'crossbind google play';
+const signInKey = () => path.join(os.homedir(), '.crossbind', 'google-play');
 const API = 'https://androidpublisher.googleapis.com/androidpublisher/v3/applications';
 const UPLOAD = 'https://androidpublisher.googleapis.com/upload/androidpublisher/v3/applications';
 const IAM = 'https://iamcredentials.googleapis.com/v1/projects/-/serviceAccounts';
@@ -42,9 +49,29 @@ export function playCredentials(env = process.env, system = {}) {
     return { account: key.client_email, key, file };
 }
 
+// The user's Google sign-in for Play that this machine keeps, or null where it keeps none or Google no longer takes it.
+export async function keptSignIn() {
+    const refreshToken = readSecret(signInKey(), { service: SIGN_IN_SERVICE });
+    if (!refreshToken) return null;
+    try {
+        await accessToken(refreshToken);
+    } catch (error) {
+        if (error.reason !== 'invalid_grant') throw error;
+        console.log('crossbind: Google no longer takes the sign-in this machine keeps for Google Play, as when it was revoked.');
+        return null;
+    }
+    return { refreshToken };
+}
+
+// Keeps the user's Google sign-in for Play in the system's keychain, and says whether it did.
+export function keepSignIn(refreshToken) {
+    fs.mkdirSync(path.dirname(signInKey()), { recursive: true });
+    return storeSecret(signInKey(), refreshToken, { service: SIGN_IN_SERVICE });
+}
+
 async function keyToken({ account, key }) {
     const now = Math.floor(Date.now() / 1000);
-    const unsigned = `${encode({ alg: 'RS256', typ: 'JWT' })}.${encode({ iss: account, scope: SCOPE, aud: key.token_uri, iat: now, exp: now + TOKEN_SECONDS })}`;
+    const unsigned = `${encode({ alg: 'RS256', typ: 'JWT' })}.${encode({ iss: account, scope: PLAY_SCOPE, aud: key.token_uri, iat: now, exp: now + TOKEN_SECONDS })}`;
     const signature = createSign('RSA-SHA256').update(unsigned).sign(key.private_key).toString('base64url');
     const response = await fetch(key.token_uri, {
         method: 'POST',
@@ -64,7 +91,7 @@ async function accountToken({ account }) {
     const response = await fetch(`${IAM}/${account}:generateAccessToken`, {
         method: 'POST',
         headers: { authorization: `Bearer ${own.stdout.trim()}`, 'content-type': 'application/json' },
-        body: JSON.stringify({ scope: [SCOPE] }),
+        body: JSON.stringify({ scope: [PLAY_SCOPE] }),
     });
     const body = await response.json().catch(() => ({}));
     if (!response.ok) {
@@ -73,16 +100,21 @@ async function accountToken({ account }) {
     return body.accessToken;
 }
 
-// An hour's token of Play's API for the service account.
-export const playToken = (credentials) => (credentials.key ? keyToken(credentials) : accountToken(credentials));
+// An hour's token of Play's API, for the user's Google sign-in or for the service account.
+export function playToken(credentials) {
+    if (credentials.refreshToken) return accessToken(credentials.refreshToken);
+    return credentials.key ? keyToken(credentials) : accountToken(credentials);
+}
 
-function playError(status, message, method, url, appId, account) {
-    const path = new URL(url).pathname.replace(/^.*\/applications\/[^/]+/, '') || '/';
-    let text = `crossbind: Google Play answered ${method} ${path} with ${status}: ${message}`;
-    if (status === 404 && path === '/edits') {
+function playError(status, message, method, url, appId, credentials) {
+    const route = new URL(url).pathname.replace(/^.*\/applications\/[^/]+/, '') || '/';
+    let text = `crossbind: Google Play answered ${method} ${route} with ${status}: ${message}`;
+    if (status === 404 && route === '/edits') {
         text = `crossbind: Play Console has no app ${appId}: create it there, with ${appId} as its package name, as Play's API makes none.`;
+    } else if (status === 403 && credentials.refreshToken) {
+        text = `crossbind: the Google account you signed in with has no release rights for ${appId}: sign in with one that has, or have it invited in Play Console, under Users and permissions, with "Release apps to testing tracks" for the app.`;
     } else if (status === 403) {
-        text = `crossbind: ${account} has no release rights for ${appId}: invite it in Play Console, under Users and permissions, with "Release apps to testing tracks" for the app.`;
+        text = `crossbind: ${credentials.account} has no release rights for ${appId}: invite it in Play Console, under Users and permissions, with "Release apps to testing tracks" for the app.`;
     }
     return Object.assign(new Error(text), { status, playMessage: message });
 }
@@ -105,7 +137,7 @@ async function playCaller(appId, credentials) {
         } catch {
             // Not Google's JSON error, so the text is the message.
         }
-        throw playError(response.status, message, method, url, appId, credentials.account);
+        throw playError(response.status, message, method, url, appId, credentials);
     };
 }
 

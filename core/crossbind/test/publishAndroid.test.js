@@ -5,11 +5,13 @@ import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 
 const state = { config: { general: { name: 'demo' }, app: {}, paths: {}, system: {} }, targets: [] };
 vi.mock('../src/state/index.js', () => ({ default: state }));
-// Play has seen `highest` at most, and releases what it is given, or answers `result`.
+// Play has seen `highest` at most, and releases what it is given, or answers `result`; the keychain keeps the Google
+// sign-in `kept`.
 const play = {};
 vi.mock('../src/actions/googlePlay.js', () => ({
     PLAY: { key: 'CROSSBIND_GOOGLE_PLAY_KEY', serviceAccount: 'CROSSBIND_GOOGLE_PLAY_SERVICE_ACCOUNT' },
     playCredentials: () => play.credentials,
+    keptSignIn: async () => play.kept,
     highestVersionCode: async () => {
         const answer = play.answers.length > 0 ? play.answers.shift() : play.highest;
         if (answer instanceof Error) throw answer;
@@ -35,11 +37,12 @@ vi.mock('../src/utils/ask.js', () => ({
     askLine: async () => terminal.lines.shift() ?? '',
     askYesNo: async () => terminal.yes.shift() ?? true,
 }));
+// The Google sign-ins the user makes when asked, one per question, none once they run out.
 const setup = {};
 vi.mock('../src/actions/playSetup.js', () => ({
-    setUpPlayAccount: async () => {
-        setup.calls += 1;
-        return { account: 'crossbind-play@demo.iam.gserviceaccount.com' };
+    signInToPlay: async (question) => {
+        setup.questions.push(question);
+        return setup.signIns.shift() ?? null;
     },
 }));
 const opened = [];
@@ -68,10 +71,10 @@ const KEY = { CROSSBIND_ANDROID_KEYSTORE: '/keys/upload.p12', CROSSBIND_ANDROID_
 beforeEach(() => {
     base = fs.mkdtempSync(path.join(os.tmpdir(), 'crossbind-publish-'));
     Object.assign(state.config, { app: { id: 'dev.example.demo' }, package: { version: '1.2.3' }, paths: { build: path.join(base, '.crossbind', 'build') } });
-    Object.assign(play, { credentials: { account: 'play@demo.iam.gserviceaccount.com' }, highest: 1002005, answers: [], result: null, uploads: [] });
+    Object.assign(play, { credentials: { account: 'play@demo.iam.gserviceaccount.com' }, kept: null, highest: 1002005, answers: [], result: null, uploads: [] });
     Object.assign(signing, { env: KEY, isSigned: true, made: 0 });
     Object.assign(terminal, { isThere: false, lines: [], yes: [] });
-    Object.assign(setup, { calls: 0 });
+    Object.assign(setup, { questions: [], signIns: [] });
     opened.length = 0;
     Object.assign(vite, { args: null, env: null, runs: 0, exitCode: 0 });
     printed = [];
@@ -138,6 +141,14 @@ describe('publishing an Android app', () => {
         expect(vite.runs).toBe(0);
     });
 
+    test('uploads with the Google sign-in this machine keeps, with no terminal to ask at', async () => {
+        play.credentials = null;
+        play.kept = { refreshToken: 'kept' };
+        await publishAndroid({ track: 'internal', status: 'completed', viteArgs: [] }, { runVite });
+        expect(play.uploads[0].credentials).toEqual({ refreshToken: 'kept' });
+        expect(setup.questions).toEqual([]);
+    });
+
     test('uploads nothing when the build fails', async () => {
         vite.exitCode = 2;
         await expect(publishAndroid({ track: 'internal', status: 'completed', viteArgs: [] }, { runVite }))
@@ -160,13 +171,14 @@ describe('publishing an Android app with something missing', () => {
         expect(vite.runs).toBe(0);
     });
 
-    test('asks for it on a terminal and sets it up: the package name, the upload key, the service account, the app in Play Console', async () => {
+    test('asks for it on a terminal and sets it up: the package name, the upload key, the Google sign-in, the app in Play Console', async () => {
         terminal.isThere = true;
         state.config.app = {};
         state.config.paths.project = base;
         fs.writeFileSync(path.join(base, 'crossbind.config.js'), "export default {\n    general: { name: 'demo' },\n};\n");
         signing.isSigned = false;
         play.credentials = null;
+        setup.signIns = [{ refreshToken: 'signed-in' }];
         play.answers = [Object.assign(new Error('crossbind: Play Console has no app dev.example.guided: create it there'), { status: 404 }), 7];
         terminal.lines = ['not a package', 'dev.example.guided', ''];
 
@@ -174,13 +186,31 @@ describe('publishing an Android app with something missing', () => {
 
         expect(fs.readFileSync(path.join(base, 'crossbind.config.js'), 'utf8')).toContain("app: {\n        id: 'dev.example.guided',\n    },");
         expect(signing.made).toBe(1);
-        expect(setup.calls).toBe(1);
+        expect(setup.questions).toEqual([expect.stringContaining('Sign in now, in your browser? [Y/n]')]);
         expect(opened).toEqual(['https://play.google.com/console']);
-        expect(play.uploads[0]).toMatchObject({ appId: 'dev.example.guided', credentials: { account: 'crossbind-play@demo.iam.gserviceaccount.com' } });
+        expect(play.uploads[0]).toMatchObject({ appId: 'dev.example.guided', credentials: { refreshToken: 'signed-in' } });
         expect(vite.env.CROSSBIND_APP_BUILD_NUMBER).toBe('1002003');
         const said = printed.join('\n');
         expect(said).toContain('That is no package name');
         expect(said).toContain('Play Console has no app dev.example.guided');
+    });
+
+    test('offers another Google account when the one signed in has no release rights, and stops on a no', async () => {
+        terminal.isThere = true;
+        play.credentials = null;
+        play.kept = { refreshToken: 'first' };
+        const refused = Object.assign(new Error('crossbind: the Google account you signed in with has no release rights for dev.example.demo'), { status: 403 });
+        play.answers = [refused, 7];
+        setup.signIns = [{ refreshToken: 'second' }];
+
+        await publishAndroid({ track: 'internal', status: 'completed', viteArgs: [] }, { runVite });
+        expect(setup.questions).toEqual(['Sign in with another Google account? [Y/n] ']);
+        expect(play.uploads[0].credentials).toEqual({ refreshToken: 'second' });
+        expect(opened).toEqual([]);
+
+        play.answers = [refused];
+        await expect(publishAndroid({ track: 'internal', status: 'completed', viteArgs: [] }, { runVite })).rejects.toBe(refused);
+        expect(vite.runs).toBe(1);
     });
 
     test('stops when the user will not have the package name written or the key made', async () => {
