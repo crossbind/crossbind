@@ -2,7 +2,9 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { SIGNING } from './androidGradle.js';
+import {
+    SIGNING, machineUploadKey, releaseSigning, uploadKeyEnv,
+} from './androidGradle.js';
 import pullDockerImage, { getDockerImage } from '../utils/pullDockerImage.js';
 import { DOCKER_RUN_SECURITY_ARGS } from '../utils/dockerSecurity.js';
 import getOsUserAndGroupId from '../utils/getOsUserAndGroupId.js';
@@ -111,6 +113,15 @@ export async function useUploadKey(file, { alias = ALIAS, isKeychain = true } = 
     if (opened.status !== 0) throw new Error(`crossbind: ${keystore} did not open with that password and the alias ${alias}:\n${opened.output}`);
     console.log(`crossbind: this machine's upload key is ${keystore}, alias ${alias}.`);
     keep(keystore, alias, password, isKeychain);
+}
+
+// The environment an Android release builds in, with the environment's upload key, else this machine's, whose password
+// the keychain keeps or the terminal gives, and whether a key signs it: checked before the native build, not after it.
+export async function releaseSigningEnv() {
+    const key = machineUploadKey();
+    const password = key && !key.password && hasTerminal() ? await askHidden(`Password of this machine's upload key, ${key.keystore}: `) : null;
+    const env = key ? uploadKeyEnv({ ...key, password: key.password || password }) : {};
+    return { env, isSigned: releaseSigning({ ...process.env, ...env }) !== null };
 }
 
 // The password the keychain keeps for this machine's upload key, for another machine or CI.

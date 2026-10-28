@@ -29,3 +29,12 @@ describe('a question on the terminal', () => {
         await expect(askHidden('Password: ', terminal(null))).rejects.toThrow('crossbind: the terminal closed before an answer.');
     });
 });
+
+describe('a yes or no on the terminal', () => {
+    test('is yes unless the answer starts with n', async () => {
+        const { askYesNo } = await import('../src/utils/ask.js');
+        expect(await askYesNo('Make one? [Y/n] ', terminal('\n'))).toBe(true);
+        expect(await askYesNo('Make one? [Y/n] ', terminal('yes\n'))).toBe(true);
+        expect(await askYesNo('Make one? [Y/n] ', terminal(' No\n'))).toBe(false);
+    });
+});

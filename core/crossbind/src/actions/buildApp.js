@@ -121,10 +121,13 @@ function appTeam() {
     return team;
 }
 
+// An Android application id: dot-separated parts of letters, digits and underscores that each start with a letter.
+export const ANDROID_APP_ID = /^[A-Za-z][A-Za-z0-9_]*(\.[A-Za-z][A-Za-z0-9_]*)+$/;
+
 // An Android app's id: the project's app.id, else one made from the project's name.
-function androidAppId() {
+export function androidAppId() {
     const id = state.config.app.id ?? `dev.crossbind.${state.config.general.name.replace(/[^A-Za-z0-9.]/g, '_')}`;
-    if (!/^[A-Za-z][A-Za-z0-9_]*(\.[A-Za-z][A-Za-z0-9_]*)+$/.test(id)) {
+    if (!ANDROID_APP_ID.test(id)) {
         throw new Error(`crossbind: ${JSON.stringify(id)} (app.id, else made from the project's name) is no Android application id, which takes dot-separated parts of letters, digits and underscores that each start with a letter, as com.example.app does. Set app.id in crossbind.config.js.`);
     }
     return id;
@@ -355,6 +358,24 @@ function warnUnreasonedApis(project, privacy) {
     if (warning) console.warn(warning);
 }
 
+// Where publishApp last put this project's iOS and Android apps, for `crossbind app publish`, which runs Vite and so
+// cannot know the outDir it builds into.
+const appOutputsFile = () => `${state.config.paths.build}/app-outputs.json`;
+const readAppOutputs = () => (fs.existsSync(appOutputsFile()) ? JSON.parse(fs.readFileSync(appOutputsFile(), 'utf8')) : {});
+
+export const clearAppOutputs = () => fs.rmSync(appOutputsFile(), { force: true });
+
+export function appOutputOf(platform) {
+    const output = readAppOutputs()[platform];
+    if (!output) throw new Error(`crossbind: the build wrote no ${platform} app, so there is nothing to publish.`);
+    return output;
+}
+
+function recordAppOutput(platform, to) {
+    fs.mkdirSync(state.config.paths.build, { recursive: true });
+    fs.writeFileSync(appOutputsFile(), `${JSON.stringify({ ...readAppOutputs(), [platform]: path.resolve(to) }, null, 4)}\n`);
+}
+
 // Where a build without a bundler puts an app: under its own name, or for iOS and Android as the project of its build
 // type.
 export function appOutputPath(target) {
@@ -405,7 +426,10 @@ export function publishApp(target, { to = appOutputPath(target), page = null } =
         if (page) shipMacApp(to, signing);
     } else if (target.platform === 'android' && target.buildType === 'release') {
         packageAndroidRelease(to);
-    } else if (!['ios', 'android'].includes(target.platform)) {
+    }
+    if (['ios', 'android'].includes(target.platform)) {
+        recordAppOutput(target.platform, to);
+    } else if (target.platform !== 'darwin') {
         if (target.platform === 'win32') signWindowsApp(to, target, page);
         archiveApp(to, target);
     }

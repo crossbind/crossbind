@@ -11,6 +11,14 @@ const systemKeys = {
         description: 'The alias of the upload key in ANDROID_KEYSTORE. The CROSSBIND_ANDROID_KEY_ALIAS environment variable overrides it.',
         default: '',
     },
+    GOOGLE_PLAY_SERVICE_ACCOUNT: {
+        description: "The e-mail of the service account crossbind app publish uploads to Google Play as, through this machine's gcloud login, so no key of it exists. The CROSSBIND_GOOGLE_PLAY_SERVICE_ACCOUNT environment variable overrides it.",
+        default: '',
+    },
+    GOOGLE_PLAY_KEY: {
+        description: 'The JSON key of the service account crossbind app publish uploads to Google Play as, where gcloud is not, as in CI. The CROSSBIND_GOOGLE_PLAY_KEY environment variable overrides it.',
+        default: '',
+    },
     RUNNER: {
         description: 'Where toolchain steps run: DOCKER_RUN, DOCKER_EXEC, LOCAL, or REMOTE on the runners REMOTE_URL and REMOTE_URL_<IMAGE> name; a machine that names none builds on crossbind cloud once signed in with crossbind login. The CROSSBIND_RUNNER environment variable overrides it.',
         options: ['DOCKER_RUN', 'DOCKER_EXEC', 'LOCAL', 'REMOTE'],
