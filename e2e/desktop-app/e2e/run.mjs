@@ -28,6 +28,8 @@ const TRAY_HOST_FAIL = /^TRAY HOST FAIL: (.*)$/m;
 const TRAY_HOST_REMOVED = 'TRAY HOST REMOVED';
 // Below the page's wait for the launch or the link, so a launch that stays or an adb that hangs says so.
 const ASKED_TIMEOUT_MS = 20000;
+// How long PowerShell's first compile may take, before the app opens.
+const WARM_TIMEOUT_MS = 120000;
 // WebView2's DevTools, through which the run does on Windows what only a user's click could.
 const DEVTOOLS_PORT = 9223;
 // How long a window takes to fill the screen once the page asks.
@@ -266,6 +268,18 @@ function leaveFileToTrash() {
     writeFileSync(join(folder, TRASHED_FILE), 'src/main.js moves this file to the trash');
 }
 
+// PowerShell's first Add-Type starts a cold C# compiler, which took over 20 s on the windows-11-arm runner. Done once
+// before the app opens, outside the page's waits, it leaves the scripts that answer the page warm.
+function warmPowerShell() {
+    if (process.platform !== 'win32' || platform) return;
+    try {
+        execFileSync('powershell', ['-NoProfile', '-Command', "Add-Type -TypeDefinition 'public static class Warm {}'"], { encoding: 'utf8', timeout: WARM_TIMEOUT_MS });
+    } catch (error) {
+        console.error(`FAIL: PowerShell could not compile a script's C#: ${error.message}`);
+        process.exit(1);
+    }
+}
+
 async function open() {
     if (platform) {
         const project = `${root}/dist/${name}-${platform}`;
@@ -398,6 +412,7 @@ leaveFileToTrash();
 // A phone's app does not update itself.
 if (!platform) await serveUpdates();
 const trayHost = await startTrayHost();
+warmPowerShell();
 const { child: app, close, executable } = await open();
 // The adb crossbind opened the Android app with, which opens it with a link as well.
 const adb = platform === 'android' ? (await import('crossbind')).adbPath() : undefined;
