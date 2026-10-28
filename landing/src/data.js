@@ -117,17 +117,25 @@ export default {
 // products named in text. Apple's and Microsoft's terms forbid their logos without a license but
 // allow their product names for stating compatibility. `detail` (the tooltip and the llms.txt line)
 // is what each target is built as, per docs/playbooks/integration/nodejs.md and the WASI and
-// architecture guides.
+// architecture guides. `via`, a second line, names how an app ships there.
 export const RUNTIMES = [
     { id: 'browsers', scene: 'browser', title: 'Browsers', names: 'Chrome, Firefox, Safari', detail: 'WebAssembly' },
-    { id: 'mobile', scene: 'phone', title: 'Mobile', names: 'React Native, iOS, Android', detail: 'Native code over JSI' },
+    {
+        id: 'mobile',
+        scene: 'phone',
+        title: 'Mobile',
+        names: 'iOS, Android',
+        via: 'crossbind apps · React Native',
+        detail: 'A crossbind app, or native code over JSI in React Native',
+    },
     { id: 'server', scene: 'cloud', title: 'Server & Edge', names: 'Node.js, Cloudflare Workers', detail: 'WebAssembly, or a Node-API addon in Node.js' },
     {
         id: 'desktop',
         scene: 'laptop',
         title: 'Desktop',
-        names: 'Electron, macOS, Linux, Windows',
-        detail: 'A Node-API addon in Electron, or an executable or a library for macOS, Linux and Windows',
+        names: 'macOS, Linux, Windows',
+        via: 'crossbind apps · Electron',
+        detail: 'A crossbind app, a Node-API addon in Electron, or an executable or a library for macOS, Linux and Windows',
     },
     { id: 'wasi', scene: 'terminal', title: 'WASI', names: 'wasmtime 47+', detail: 'A command or a library for WASI 0.3' },
 ];
@@ -163,8 +171,9 @@ export const PLATFORM_MAP = {
         rows: [
             { scene: 'browser', title: 'WebAssembly', note: 'Browsers, Node.js, Workers', guide: 'browser' },
             { scene: 'cloud', title: 'Node-API addons', note: 'Node.js and Electron', guide: 'node', anchor: 'addon' },
-            { scene: 'phone', title: 'iOS & Android', note: 'Libraries for React Native', guide: 'react-native' },
-            { scene: 'laptop', title: 'Executables', note: 'macOS, Linux, Windows', guide: 'executables', anchor: 'native' },
+            { scene: 'phone', title: 'React Native libraries', note: 'iOS and Android, over JSI', guide: 'react-native' },
+            { scene: 'app', title: 'Apps', note: 'Desktop and mobile', guide: 'apps' },
+            { scene: 'laptop', title: 'Native executables', note: 'macOS, Linux, Windows', guide: 'executables', anchor: 'native' },
             { scene: 'terminal', title: 'WASI', note: 'Commands and libraries', guide: 'executables', anchor: 'wasi' },
             { scene: 'package', title: 'npm packages', note: 'Prebuilt per platform', guide: 'publishing' },
         ],

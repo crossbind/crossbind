@@ -7,7 +7,7 @@ export default {
     // /guide/ is what the Docs menu calls Guide, so its tab says so.
     headTitle: 'Guide',
     description: 'What crossbind does, what one import buys you, and where the output runs.',
-    lede: `${BRAND} compiles C++ and Rust into WebAssembly, Node-API addons and native iOS and Android libraries, then hands the result to JavaScript as an ordinary module; the same sources also build into executables that need no JavaScript at all. You import a header; the bindings are generated from it.`,
+    lede: `${BRAND} compiles C++ and Rust into WebAssembly, Node-API addons and native iOS and Android libraries, then hands the result to JavaScript as an ordinary module; the same sources also build into desktop and mobile apps around a page of yours, and into executables that need no JavaScript at all. You import a header; the bindings are generated from it.`,
     blocks: [
         {
             type: 'p',
@@ -73,6 +73,7 @@ console.log(await GDALVersionInfo('RELEASE_NAME'));`,
                 ['[Node.js](/guide/node/)', 'WebAssembly, or a native Node-API addon'],
                 ['[Edge](/guide/edge/)', 'WebAssembly for Cloudflare Workers, or a `wasi:http` component'],
                 ['[Electron](/guide/electron/)', 'The Node-API addon, loaded in the main process'],
+                ['[Apps](/guide/apps/)', 'An app for macOS, Linux, Windows, iOS or Android: your page in the system webview, native code in its own process'],
                 ['[React Native](/guide/react-native/)', 'Native iOS and Android code over JSI - no wasm'],
                 ['[Executables](/guide/executables/)', 'Native programs for macOS, Linux and Windows, or a WASI command'],
             ],

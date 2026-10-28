@@ -53,6 +53,27 @@ const SCENES = {
             </>
         ),
     },
+    app: {
+        width: 128,
+        body: () => (
+            <>
+                <rect x="1.25" y="1.25" width="82.5" height="70" rx="7" {...OUTLINE} />
+                <path d="M1.25 15h82.5" {...OUTLINE} />
+                <circle cx="9.5" cy="8.25" r="2.25" {...SOLID} />
+                <circle cx="16" cy="8.25" r="2.25" {...SOLID} />
+                <circle cx="22.5" cy="8.25" r="2.25" {...SOLID} />
+                <rect x="10" y="23" width="36" height="40" rx="3" {...BLOCK} />
+                <rect x="52" y="23" width="23" height="8" rx="3" {...BLOCK} />
+                <rect x="52" y="36" width="23" height="6" rx="3" {...BLOCK} />
+                <rect x="52" y="47" width="16" height="6" rx="3" {...BLOCK} />
+                <rect x="92" y="22" width="34.75" height="68.75" rx="7" {...OUTLINE} />
+                <rect x="103" y="27" width="12" height="3.5" rx="1.75" {...SOLID} />
+                <rect x="98" y="36" width="22.75" height="10" rx="2.5" {...BLOCK} />
+                <rect x="98" y="50" width="22.75" height="10" rx="2.5" {...BLOCK} />
+                <rect x="98" y="64" width="22.75" height="19" rx="2.5" {...BLOCK} />
+            </>
+        ),
+    },
     package: {
         width: 92,
         body: () => (
