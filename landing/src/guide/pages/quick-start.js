@@ -62,7 +62,7 @@ docker pull ${WEB_IMAGE}   # optional: the first build pulls it anyway`,
         { type: 'h2', id: 'new-project', text: 'A new project' },
         {
             type: 'p',
-            text: 'The scaffolder wires the bundler, its plugin and a starter `crossbind.config.js` for you. Answer the prompts - if you are unsure, pick Web, React and Vite.',
+            text: 'The scaffolder wires the bundler, its plugin and a starter `crossbind.config.js` for you. Answer the prompts - if you are unsure, pick Web, React and Vite. For a desktop or mobile app of your own, pick Desktop and App, then follow [Apps](/guide/apps/).',
         },
         { type: 'code', file: 'shell', code: CREATE_COMMAND },
         {
@@ -184,7 +184,7 @@ console.log(await MySampleClass.sample());`,
         { type: 'code', file: 'shell', code: 'npm run build' },
         {
             type: 'p',
-            text: 'Building for another platform? Each one has its own page: [Node.js](/guide/node/), [Edge](/guide/edge/), [Electron](/guide/electron/), [React Native](/guide/react-native/) and [Executables](/guide/executables/).',
+            text: 'Building for another platform? Each one has its own page: [Node.js](/guide/node/), [Edge](/guide/edge/), [Electron](/guide/electron/), [Apps](/guide/apps/), [React Native](/guide/react-native/) and [Executables](/guide/executables/).',
         },
 
         { type: 'h2', id: 'next', text: 'Where to next' },

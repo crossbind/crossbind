@@ -25,6 +25,12 @@ function RunsOn({ tokens }) {
                     <span style={{ fontSize: 15, fontWeight: 600, color: tokens.text }}>{runtime.title}</span>
                     <span style={{ maxWidth: 190, fontSize: 13, color: tokens.textMuted, textAlign: 'center', textWrap: 'balance' }}>
                         {runtime.names}
+                        {runtime.via && (
+                            <>
+                                <br />
+                                {runtime.via}
+                            </>
+                        )}
                     </span>
                 </li>
             ))}

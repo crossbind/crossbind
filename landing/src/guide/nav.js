@@ -1,4 +1,5 @@
 import { AGENT_URL } from '../data.js';
+import apps from './pages/apps.js';
 import architecture from './pages/architecture.js';
 import assets from './pages/assets.js';
 import bindings from './pages/bindings.js';
@@ -42,7 +43,7 @@ export const guideHref = (slug = '') => (slug ? `${GUIDE_BASE}/${slug}/` : `${GU
 const SECTIONS = [
     { label: 'Get started', pages: [introduction, quickStart], links: [{ title: 'Agent setup', href: AGENT_URL }] },
     { label: 'Native code', pages: [bindings, rust, libraries, cratesIo, conan] },
-    { label: 'Platforms', pages: [browser, node, edge, electron, reactNative, executables] },
+    { label: 'Platforms', pages: [browser, node, edge, electron, apps, reactNative, executables] },
     { label: 'Runtime', pages: [filesystem, assets, threading] },
     { label: 'Build', pages: [architecture, performance, remoteBuilds, publishing] },
     { label: 'Reference', pages: [configuration, runtimeApi, cli, troubleshooting, migration] },

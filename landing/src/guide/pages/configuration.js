@@ -127,6 +127,21 @@ export default {
             text: 'Shipping data files is the most common use - that has its own page, [Data files](/guide/assets/).',
         },
 
+        { type: 'h2', id: 'app', text: 'App' },
+        {
+            type: 'p',
+            text: "`app` describes an app that `target: { runtimeEnv: 'app' }` builds: the name it shows, its id, icon and window, the links that open it, the reasons it gives for devices and where it finds its updates. [Apps](/guide/apps/#config) lists every key.",
+        },
+        {
+            type: 'code',
+            file: 'crossbind.config.js',
+            code: `export default {
+    paths: { config: import.meta.url },
+    target: { runtimeEnv: 'app' },
+    app: { name: 'My App', icon: 'icon.png' },
+};`,
+        },
+
         { type: 'h2', id: 'export', text: 'Export' },
         {
             type: 'p',

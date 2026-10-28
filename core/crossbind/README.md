@@ -8,7 +8,7 @@
   <p>
     <strong>Import C++ and Rust like JavaScript modules.</strong><br>
     Build, package, and run native libraries across browsers, Node.js, edge
-    runtimes, iOS, Android, and WASI.
+    runtimes, iOS, Android, and WASI, or ship them in a desktop or mobile app.
   </p>
 
   <p>
@@ -28,10 +28,12 @@
 </div>
 
 crossbind makes native libraries as easy to distribute and consume as
-JavaScript packages. A C++ header, an app-local Rust file, or a declared Cargo
-crate becomes an importable module; crossbind generates the binding layer,
-resolves the transitive native dependency graph, and selects the right artifact
-for every target.
+JavaScript packages. A C++ header, an app-local Rust file, a declared Cargo
+crate, or a ConanCenter package becomes an importable module; crossbind
+generates the binding layer, resolves the transitive native dependency graph,
+and selects the right artifact for every target. It also builds a web page and
+the native code it imports into an app for macOS, Linux, Windows, iOS, and
+Android.
 
 > **Note** — crossbind 2.0 is currently published on the npm `beta` channel.
 > The commands below use `@beta` deliberately.
@@ -179,8 +181,8 @@ or start from the closest project in [`examples/`](https://github.com/crossbind/
 ## How it works
 
 ```text
-  C++ / Rust source                        header, .rs, or
-  or prebuilt port                         cargo: import
+  C++ / Rust source                        header, .rs, cargo:
+  or prebuilt port                         or conan: import
           |                                       |
           v                                       |
   versioned native package graph                  |
@@ -193,11 +195,13 @@ or start from the closest project in [`examples/`](https://github.com/crossbind/
                     + binding generation
                    + native build and link
                               |
-        +---------------------+---------------------+
-        |                     |                     |
-        v                     v                     v
-  browser / Node / edge   iOS / Android            WASI
-  JavaScript + Wasm       native library + JSI     command component
+                              v
+  browser, Node.js, edge     JavaScript + Wasm
+  Node.js, Electron          Node-API addon
+  iOS, Android               native library + JSI
+  desktop and mobile apps    your page + native host
+  macOS, Linux, Windows      native executable
+  WASI runtimes              command component
 ```
 
 There are two configuration surfaces:
@@ -214,13 +218,15 @@ contract.
 
 ## Runtimes
 
-| Runtime      | Output                                | Important behavior                                                                    |
-| ------------ | ------------------------------------- | ------------------------------------------------------------------------------------- |
-| Browser      | JavaScript loader + WebAssembly       | Single-threaded by default; multithreaded builds need COOP/COEP headers in production |
-| Node.js      | JavaScript loader + WebAssembly       | Supports CommonJS or ESM and reads the host filesystem                                |
-| Edge         | JavaScript loader + WebAssembly       | Single-threaded, memory-backed, with no OPFS or nested worker mode                    |
-| React Native | Native iOS/Android libraries over JSI | No WebAssembly or browser isolation headers                                           |
-| WASI         | One `wasm32-wasip3` command component | No JavaScript host; run with a compatible WASI runtime such as wasmtime 47+           |
+| Runtime      | Output                                               | Important behavior                                                                      |
+| ------------ | ---------------------------------------------------- | --------------------------------------------------------------------------------------- |
+| Browser      | JavaScript loader + WebAssembly                      | Single-threaded by default; multithreaded builds need COOP/COEP headers in production   |
+| Node.js      | JavaScript loader + WebAssembly, or a Node-API addon | Supports CommonJS or ESM and reads the host filesystem; the addon loads in Electron too |
+| Edge         | JavaScript loader + WebAssembly                      | Single-threaded, memory-backed, with no OPFS or nested worker mode                      |
+| React Native | Native iOS/Android libraries over JSI                | No WebAssembly or browser isolation headers                                             |
+| Apps         | An app for macOS, Linux, Windows, iOS, and Android   | The page runs in the system webview, native code in the app's own process; no Node.js   |
+| Executables  | Native programs for macOS, Linux, and Windows        | No JavaScript host                                                                      |
+| WASI         | One `wasm32-wasip3` command component                | No JavaScript host; run with a compatible WASI runtime such as wasmtime 47+             |
 
 Threading and worker execution are independent choices:
 
@@ -307,7 +313,7 @@ for the supported type surface and configuration.
 ## Documentation
 
 - [Guide](https://crossbind.dev/guide/) — product concepts, quick start,
-  runtimes, bundlers, bindings, packages, and troubleshooting.
+  runtimes, apps, bundlers, bindings, packages, and troubleshooting.
 - [Runtime and configuration API](https://github.com/crossbind/crossbind/blob/main/docs/api/README.md)
   — canonical build-time and runtime behavior.
 - [Integration playbooks](https://github.com/crossbind/crossbind/blob/main/docs/playbooks/integration/README.md)

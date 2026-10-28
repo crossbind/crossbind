@@ -6,7 +6,7 @@ import { guideHref } from '../guide/nav.js';
 
 // The flow is drawn in a fixed space, x in thousandths of the width and y in pixels, so the curves
 // meet the nodes without measuring them and the prerendered page already shows them.
-const FLOW_HEIGHT = 400;
+const FLOW_HEIGHT = 460;
 const NODE_HEIGHT = 56;
 const EDGES = { sourceEnd: 260, hubStart: 370, hubEnd: 630, outputStart: 740 };
 
