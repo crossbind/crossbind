@@ -81,6 +81,7 @@ async function untilDone(isGuided, step) {
                 openUrl(error.page);
             }
             await askLine('Press Enter once that is done to try again, or Ctrl-C to stop. ');
+            console.log('crossbind: trying again, which can take a few minutes.');
         }
     }
 }
@@ -122,11 +123,12 @@ export async function publishIos({ viteArgs }, { runVite }) {
     const hermesDsym = await resolveHermesDsym();
 
     const facts = { id: appId(state.config), team: appTeam() };
+    console.log(`crossbind: publishing ${facts.id} ${appVersion()} to App Store Connect for team ${facts.team}; building the app first.`);
     let archive;
     for (;;) {
         const project = await buildIosApp(viteArgs, runVite);
-        console.log(`crossbind: archiving the app for team ${facts.team} with ${key ? `the API key ${key.keyId}` : "Xcode's account"}, which takes a few minutes.`);
-        archive = await untilDone(isGuided, () => archiveIosApp(project, { key, facts }));
+        console.log('crossbind: archiving the app, which takes a few minutes.');
+        archive = await untilDone(isGuided, () => archiveIosApp(project, { facts }));
         const unreasoned = unreasonedImports(archivedBinary(archive), archivedPrivacy(archive));
         if (unreasoned.length === 0) break;
         if (!isGuided) throw unreasonedError(unreasoned);
@@ -134,7 +136,7 @@ export async function publishIos({ viteArgs }, { runVite }) {
         console.log('crossbind: building the app again, with those reasons in its privacy manifest.');
     }
     addHermesDsym(archive, hermesDsym);
-    console.log('crossbind: uploading the app to App Store Connect.');
+    console.log(`crossbind: uploading the app to App Store Connect for team ${facts.team} with ${key ? `the API key ${key.keyId}` : "Xcode's account"}, which signs it.`);
     const build = appBuildNumber();
     await untilDone(isGuided, () => uploadIosArchive(archive, {
         team: facts.team, key, isBuildManaged: build === null, facts,

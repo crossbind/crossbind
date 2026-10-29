@@ -102,12 +102,14 @@ describe('publishing an iOS app', () => {
         expect(vite.args).toEqual(['build', '--mode', 'production']);
         expect(vite.env.CROSSBIND_APP_PLATFORM).toBe('ios');
         const facts = { id: 'dev.example.demo', team: TEAM.id };
-        expect(store.archives).toEqual([{ project: path.join(base, 'dist', 'demo-ios'), key: null, facts }]);
+        expect(store.archives).toEqual([{ project: path.join(base, 'dist', 'demo-ios'), facts }]);
         expect(scan.binaries).toEqual(['/build/app-store/demo.xcarchive/Products/Applications/demo.app/demo']);
         expect(store.dsyms).toEqual([['/build/app-store/demo.xcarchive', '/hermes/hermesvm.framework.dSYM']]);
         expect(store.uploads).toEqual([{ archive: '/build/app-store/demo.xcarchive', team: TEAM.id, key: null, isBuildManaged: true, facts }]);
         const said = printed.join('\n');
-        expect(said).toContain(`archiving the app for team ${TEAM.id} with Xcode's account`);
+        expect(said).toContain(`crossbind: publishing dev.example.demo 1.2.3 to App Store Connect for team ${TEAM.id}; building the app first.`);
+        expect(said).toContain('crossbind: archiving the app, which takes a few minutes.');
+        expect(said).toContain(`crossbind: uploading the app to App Store Connect for team ${TEAM.id} with Xcode's account, which signs it.`);
         expect(said).toContain('dev.example.demo 1.2.3, numbered by Xcode after the builds App Store Connect has of it, is on App Store Connect.');
         expect(warned).toEqual([]);
     });
@@ -123,6 +125,7 @@ describe('publishing an iOS app', () => {
         await publish();
 
         expect(store.uploads[0]).toMatchObject({ key: { key, keyId: 'ABC123', issuer: 'issuer-uuid' }, isBuildManaged: false });
+        expect(printed.join('\n')).toContain('with the API key ABC123, which signs it.');
         expect(printed.join('\n')).toContain('the API key ABC123');
         expect(printed.join('\n')).toContain('dev.example.demo 1.2.3 (build 42) is on App Store Connect.');
     });
@@ -250,7 +253,9 @@ describe('publishing an iOS app on a terminal', () => {
         expect(opened).toEqual(['https://appstoreconnect.apple.com/apps']);
         expect(store.uploads).toHaveLength(2);
         expect(store.archives).toHaveLength(1);
-        expect(printed.join('\n')).toContain('App Store Connect has no app dev.example.demo');
+        const said = printed.join('\n');
+        expect(said).toContain('App Store Connect has no app dev.example.demo');
+        expect(said).toContain('crossbind: trying again, which can take a few minutes.');
     });
 
     test('stops at a failure no cause the user mends explains', async () => {

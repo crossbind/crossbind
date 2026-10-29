@@ -103,7 +103,9 @@ describe('publishing an Android app', () => {
             status: 'completed',
         }]);
         const said = printed.join('\n');
+        expect(said).toContain("crossbind: publishing dev.example.demo 1.2.3 to Google Play's internal track.");
         expect(said).toContain('Google Play has seen versionCode 1002005 at most, so this build is 1002006.');
+        expect(said).toContain('crossbind: uploading the bundle and its native debug symbols to Google Play.');
         expect(said).toContain("dev.example.demo 1.2.3 (versionCode 1002006) is out on Google Play's internal track.");
     });
 
