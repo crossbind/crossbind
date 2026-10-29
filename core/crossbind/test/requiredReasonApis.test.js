@@ -8,7 +8,10 @@ const NM = {
     // A linked app imports only what the linker kept of its archives.
     '/demo.xcarchive/Products/Applications/demo.app/demo': '_fstat\n_malloc\n_mach_absolute_time\n_statfs\n',
 };
-const spawnSync = vi.fn((program, [, , archive]) => (archive in NM ? { status: 0, stdout: NM[archive], stderr: '' } : { status: 1, stdout: '', stderr: 'no such file' }));
+const spawnSync = vi.fn((program, args) => {
+    const archive = args.at(-1);
+    return archive in NM ? { status: 0, stdout: NM[archive], stderr: '' } : { status: 1, stdout: '', stderr: 'no such file' };
+});
 vi.mock('node:child_process', async (importOriginal) => ({ ...await importOriginal(), spawnSync }));
 
 const {
@@ -34,7 +37,9 @@ describe("an iOS app's required reason API", () => {
         ]);
         expect(unreasonedApis(archives, { fileTimestamp: ['C617.1'], diskSpace: ['E174.1'] }))
             .toEqual([{ library: 'demo', category: 'systemBootTime', symbols: ['_mach_absolute_time'] }]);
-        expect(spawnSync).toHaveBeenCalledWith('nm', ['-u', '-j', '/app/lib/iphoneos/3-libgdal.a'], expect.objectContaining({ encoding: 'utf8' }));
+        // Xcode's nm, whatever nm comes first on the PATH, reading symbol tables alone: Rust's standard library embeds
+        // bitcode of a newer LLVM than an older Xcode's reads.
+        expect(spawnSync).toHaveBeenCalledWith('xcrun', ['nm', '--no-llvm-bc', '-u', '-j', '/app/lib/iphoneos/3-libgdal.a'], expect.objectContaining({ encoding: 'utf8' }));
     });
 
     test('stops when nm cannot read an archive', () => {
