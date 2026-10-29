@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import upath from 'upath';
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 
 const state = { config: { general: { name: 'demo' }, paths: {} } };
@@ -49,12 +50,13 @@ let store;
 let project;
 
 beforeEach(() => {
-    base = fs.mkdtempSync(path.join(os.tmpdir(), 'crossbind-app-store-'));
-    store = path.join(base, 'build', 'app-store');
-    project = path.join(base, 'dist', 'demo-ios');
+    // crossbind holds paths with forward slashes, as upath gives them, on Windows too.
+    base = upath.toUnix(fs.mkdtempSync(path.join(os.tmpdir(), 'crossbind-app-store-')));
+    store = upath.join(base, 'build', 'app-store');
+    project = upath.join(base, 'dist', 'demo-ios');
     fs.mkdirSync(`${project}/demo.xcodeproj`, { recursive: true });
     fs.writeFileSync(`${project}/demo.xcodeproj/project.pbxproj`, '{ "DEVELOPMENT_TEAM" = "ABCDE12345"; }');
-    state.config.paths = { build: path.join(base, 'build') };
+    state.config.paths = { build: upath.join(base, 'build') };
     Object.assign(xcode, { runs: [], answers: [], teams: null, signed: [], signFailure: null });
 });
 
@@ -78,7 +80,7 @@ describe("an iOS app's archive", () => {
     test('carries the entitlements its project names in its ad hoc signature, for the export to sign with', () => {
         fs.writeFileSync(`${project}/demo.xcodeproj/project.pbxproj`, '{ "CODE_SIGN_ENTITLEMENTS" = "demo.entitlements"; "DEVELOPMENT_TEAM" = "ABCDE12345"; }');
         const archive = archiveIosApp(project, { facts });
-        expect(xcode.signed.at(-1)).toEqual(['--force', '--sign', '-', '--timestamp=none', '--entitlements', `${project}/demo.entitlements`,
+        expect(xcode.signed.at(-1)).toEqual(['--force', '--sign', '-', '--timestamp=none', '--entitlements', path.resolve(project, 'demo.entitlements'),
             '--generate-entitlement-der', `${archive}/Products/Applications/demo.app`]);
     });
 
