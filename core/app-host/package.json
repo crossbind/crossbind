@@ -1,6 +1,6 @@
 {
     "name": "@crossbind/core-app-host",
-    "version": "2.0.0-beta.67",
+    "version": "2.0.0-beta.68",
     "description": "App host for the crossbind embind runtime: a desktop app whose page runs in the system webview and whose bindings run natively in Hermes.",
     "homepage": "https://github.com/crossbind/crossbind/tree/main/core/app-host#readme",
     "repository": "https://github.com/crossbind/crossbind.git",
