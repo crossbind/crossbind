@@ -991,14 +991,15 @@ every repository's jobs, so give it an attribute condition that admits only your
 so the publish's own job makes it, and it asks for the androidpublisher scope, as the action's default, cloud-platform,
 does not cover Google Play. With a JSON key instead, give its text, from a secret, in `CROSSBIND_GOOGLE_PLAY_KEY`.
 
-Publishing to TestFlight, on macOS:
+Publishing to TestFlight takes two jobs. A hosted macOS runner has no Docker, in which crossbind runs SWIG, so a Linux
+job builds the app for Linux, which makes its bridges, and the macOS job builds the iOS app from them:
 
 ```yaml
 name: Publish to TestFlight
 on: workflow_dispatch
 jobs:
-  publish:
-    runs-on: macos-latest
+  bridges:
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
@@ -1006,6 +1007,32 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
+      - run: npx crossbind app build -p linux
+      - uses: actions/upload-artifact@v7
+        with:
+          name: bridges
+          include-hidden-files: true
+          path: |
+            .crossbind/cache.json
+            .crossbind/build/bridge/
+            .crossbind/build/interface/
+  publish:
+    needs: bridges
+    runs-on: macos-latest
+    env:
+      CROSSBIND_RUNNER: LOCAL
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - uses: actions/download-artifact@v8
+        with:
+          name: bridges
+          path: .crossbind
+      - run: grep -rl /home/runner/work/ .crossbind | xargs sed -i '' -e 's#/home/runner/work/#/Users/runner/work/#g'
       - uses: actions/cache@v6
         with:
           path: ~/.crossbind/hermes
@@ -1017,7 +1044,9 @@ jobs:
           CROSSBIND_APPLE_API_ISSUER: ${{ vars.APPLE_API_ISSUER }}
 ```
 
-The cache keeps Hermes and its dSYM, which every upload carries, from downloading again at each run.
+The bridges keep the Linux runner's paths, which the `sed` moves to the macOS runner's, and `CROSSBIND_RUNNER: LOCAL`
+builds the rest with the runner's Xcode. The cache keeps Hermes and its dSYM, which every upload carries, from
+downloading again at each run.
 
 ## Hermes
 
