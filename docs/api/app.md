@@ -972,6 +972,7 @@ jobs:
           service_account: ${{ vars.GOOGLE_PLAY_SERVICE_ACCOUNT }}
           token_format: access_token
           access_token_scopes: https://www.googleapis.com/auth/androidpublisher
+          create_credentials_file: false
       - run: npx crossbind app publish -p android
         env:
           CROSSBIND_GOOGLE_PLAY_TOKEN: ${{ steps.google.outputs.access_token }}
@@ -982,9 +983,11 @@ jobs:
 
 Workload Identity Federation lets the repository's jobs act as the service account, with no key anywhere;
 [google-github-actions/auth](https://github.com/google-github-actions/auth) says how to set it up, with
-`roles/iam.workloadIdentityUser` on the service account for the pool. The token lasts an hour, so the publish's own job
-makes it, and it asks for the androidpublisher scope, as the action's default, cloud-platform, does not cover Google
-Play. With a JSON key instead, give its text, from a secret, in `CROSSBIND_GOOGLE_PLAY_KEY`.
+`roles/iam.workloadIdentityUser` on the service account for the pool. The pool's provider trusts the tokens GitHub gives
+every repository's jobs, so give it an attribute condition that admits only yours, as
+`assertion.repository_id == '<id>'` with the id `gh api repos/<owner>/<repo> --jq .id` prints. The token lasts an hour,
+so the publish's own job makes it, and it asks for the androidpublisher scope, as the action's default, cloud-platform,
+does not cover Google Play. With a JSON key instead, give its text, from a secret, in `CROSSBIND_GOOGLE_PLAY_KEY`.
 
 Publishing to TestFlight, on macOS:
 
