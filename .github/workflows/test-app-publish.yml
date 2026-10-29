@@ -69,8 +69,41 @@ jobs:
                   CROSSBIND_ANDROID_KEYSTORE: ${{ secrets.ANDROID_UPLOAD_KEY }}
                   CROSSBIND_ANDROID_KEY_ALIAS: upload
                   CROSSBIND_ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_UPLOAD_KEY_PASSWORD }}
+    bridges:
+        # A macOS runner has neither Docker, in which crossbind runs SWIG, nor a SWIG of crossbind's own, so the iOS job
+        # builds from the bridges the app's Linux build makes: its SWIG runs in the web image, as an iOS build's does.
+        runs-on: ubuntu-latest
+        timeout-minutes: 60
+        permissions:
+            contents: read
+        steps:
+            - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+            - name: Install pnpm
+              uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+            - name: Use Node.js
+              uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+              with:
+                  node-version-file: .nvmrc
+                  cache: 'pnpm'
+            - name: Install dependencies
+              run: pnpm install
+            - name: Build the app for Linux, which makes its bridges
+              run: pnpm --filter=@crossbind/e2e-app-publish exec crossbind app build -p linux
+            - name: Keep the bridges for the iOS job
+              uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+              with:
+                  name: app-publish-bridges
+                  if-no-files-found: error
+                  # A re-run of this job uploads under the same name again.
+                  overwrite: true
+                  include-hidden-files: true
+                  path: |
+                      e2e/app-publish/.crossbind/cache.json
+                      e2e/app-publish/.crossbind/build/bridge/
+                      e2e/app-publish/.crossbind/build/interface/
     ios:
         # The archive is unsigned, and the export signs in the cloud with the Admin key: the runner has no certificate.
+        needs: bridges
         runs-on: macos-latest
         timeout-minutes: 60
         environment: app-publish
@@ -89,6 +122,14 @@ jobs:
                   cache: 'pnpm'
             - name: Install dependencies
               run: pnpm install
+            - name: Restore the bridges
+              uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+              with:
+                  name: app-publish-bridges
+                  path: e2e/app-publish/.crossbind
+            - name: Take the bridges under this runner's paths
+              working-directory: e2e/app-publish
+              run: grep -rl /home/runner/work/ .crossbind | xargs sed -i '' -e 's#/home/runner/work/#/Users/runner/work/#g'
             # Fetched once per version and kept, with the dSYM every upload carries. The key is not app-ios's, whose
             # cache has no dSYM: a saved key never takes more.
             - name: Restore Hermes
