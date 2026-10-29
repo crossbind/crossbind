@@ -67,6 +67,8 @@ export async function publishAndroid({ track, status, viteArgs }, { runVite }) {
     if (!credentials && isGuided) credentials = await signInToPlay(SIGN_IN);
     if (!credentials) missing.push(NO_CREDENTIALS);
     if (missing.length > 0) throw new Error(missing.join('\n'));
+    const version = state.config.package?.version ?? '1.0.0';
+    console.log(`crossbind: publishing ${appId} ${version} to Google Play's ${track} track.`);
 
     let highest;
     if (isGuided) ({ highest, credentials } = await highestWithPlayConsole(appId, credentials));
@@ -86,8 +88,9 @@ export async function publishAndroid({ track, status, viteArgs }, { runVite }) {
     if (!fs.existsSync(aab)) throw new Error(`crossbind: the build made no bundle at ${aab}, so nothing went to Google Play.`);
     const symbols = fs.existsSync(`${project}-symbols.zip`) ? `${project}-symbols.zip` : null;
 
+    console.log(`crossbind: uploading the bundle${symbols ? ' and its native debug symbols' : ''} to Google Play.`);
     const released = await uploadBundle(appId, credentials, { aab, symbols, track, status });
-    const app = `${appId} ${state.config.package?.version ?? '1.0.0'} (versionCode ${released.versionCode})`;
+    const app = `${appId} ${version} (versionCode ${released.versionCode})`;
     if (released.status !== 'draft') {
         console.log(`crossbind: ${app} is out on Google Play's ${track} track.`);
         return;

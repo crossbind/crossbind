@@ -900,17 +900,18 @@ with Xcode. Before the build it checks all it needs:
 - the Apple Developer Program team, `app.team` or `XCODE_DEVELOPMENT_TEAM`;
 - and `app.icon`, as App Store Connect takes no app without an icon.
 
-The account Xcode is signed in to archives and uploads the app. It registers the bundle id, signs the archive for
-development and the upload for distribution, in the cloud, and numbers the build: the version's own number at first,
-the next free one for each later upload of that version, unless `CROSSBIND_APP_BUILD_NUMBER` gives one. With
+crossbind archives the app unsigned and signs it ad hoc, so archiving takes no development certificate, profile,
+registered device or Apple account. The account Xcode is signed in to then uploads it: it signs the app for
+distribution, in the cloud, and numbers the build: the version's own number at first, the next free one for each later
+upload of that version, unless `CROSSBIND_APP_BUILD_NUMBER` gives one. With
 `CROSSBIND_APPLE_API_KEY`, `CROSSBIND_APPLE_API_KEY_ID` and `CROSSBIND_APPLE_API_ISSUER` set, as for notarizing a macOS
 app, an App Store Connect API key does it in place of the account, as in CI. Apple signs in the cloud for an Admin key
 alone; a key of another role needs an Apple Distribution certificate in the keychain, which Xcode makes once under
 Settings › Accounts › Manage Certificates. `--track` and `--draft` are Google Play's, and stop an iOS publish.
 
 Once, for each app, create it in App Store Connect, under Apps, as a new iOS app with `app.id` as its bundle ID; Apple's
-API makes none. The first publish's archive registers the bundle id, so App Store Connect lists it from then on, and
-the upload fails until the app is there.
+API makes none, and the upload fails until the app is there. A publish that finds no app registers the bundle id with
+Apple first, through an export that uploads nothing, so App Store Connect's form lists it.
 
 The archived app shows what of Apple's required reason API it calls, and a category its privacy manifest gives no reason
 for stops the publish before the upload, which App Store Connect would refuse (see [iOS](#ios)). The upload carries the
@@ -927,10 +928,9 @@ On a terminal, the publish asks for what is missing and sets it up:
   a config that sets `app.privacy` already gets the whole of it named to set by hand.
 - the team: one of those the accounts Xcode is signed in to have, or one you type, which `~/.crossbind.json` keeps as
   `XCODE_DEVELOPMENT_TEAM`.
-- what only Xcode or Apple's sites do: signing in to Xcode again, accepting a new Program License Agreement, registering
-  a device, which Apple's development profile needs, or creating the app. A failed archive or upload names it, opens
-  the page where crossbind knows it, and tries again when you press Enter, without building again. Any other failure
-  stops the publish.
+- what only Xcode or Apple's sites do: signing in to Xcode again, accepting a new Program License Agreement or creating
+  the app. A failed upload names it, opens the page where crossbind knows it, and tries again when you press Enter,
+  without building again. Any other failure stops the publish.
 
 Without a terminal, as in CI, nothing is asked: the publish names every missing piece at once, warns without
 `app.encryption`, and stops at the first failure.
@@ -944,7 +944,7 @@ Xcode account and no one to sign in to Google, so it needs these besides, as the
 | Store | CI needs |
 |---|---|
 | Google Play | The upload key as a base64 secret, which `base64 < <keystore>` prints, with its alias and its password, which `crossbind app upload-key --show-password` prints. A service account invited in Play Console (see [Google Play](#google-play)), through Workload Identity Federation with no key, or its JSON key. |
-| App Store Connect | `app.team` in `crossbind.config.js`, as this machine's `XCODE_DEVELOPMENT_TEAM` stays behind. An App Store Connect API key, its `.p8` as a secret: an Admin key, whose uploads Apple signs in the cloud and whose secret can do all an Admin can, or a key of another role with an Apple Distribution certificate imported into the runner's keychain before the publish. |
+| App Store Connect | `app.team` in `crossbind.config.js`, as this machine's `XCODE_DEVELOPMENT_TEAM` stays behind. An App Store Connect API key, its `.p8` as a secret: an Admin key, whose uploads Apple signs in the cloud and whose secret can do all an Admin can, or a key of another role with an Apple Distribution certificate imported into the runner's keychain before the publish. The archive is unsigned, so the runner needs no development certificate or device. |
 
 For GitHub Actions, with npm, publishing to Google Play:
 
