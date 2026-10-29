@@ -24,17 +24,25 @@ const DRAFT_APP = /status draft may be created on draft app/;
 
 const encode = (value) => Buffer.from(JSON.stringify(value)).toString('base64url');
 
-function readKey(file) {
-    if (!fs.statSync(file, { throwIfNoEntry: false })?.isFile()) throw new Error(`crossbind: ${PLAY.key} names ${file}, which is no file.`);
+// A JSON key's own text, as CI's secrets give it, in place of its file's path.
+const KEY_TEXT = /^\s*\{/;
+
+// A service account key from its JSON, which `source` names where it is none, never repeating the text.
+function parseKey(json, source, isText) {
     let key;
     try {
-        key = JSON.parse(fs.readFileSync(file, 'utf8'));
+        key = JSON.parse(json);
     } catch {
-        throw new Error(`crossbind: ${file} (${PLAY.key}) is no JSON, so it is no service account key.`);
+        throw new Error(`crossbind: ${source} ${isText ? 'holds' : 'is'} no JSON, so it is no service account key.`);
     }
     const missing = ['client_email', 'private_key', 'token_uri'].filter((field) => !key[field]);
-    if (missing.length) throw new Error(`crossbind: ${file} (${PLAY.key}) has no ${missing.join(', ')}, so it is no service account key.`);
+    if (missing.length) throw new Error(`crossbind: ${source} has no ${missing.join(', ')}, so it is no service account key.`);
     return key;
+}
+
+function readKey(file) {
+    if (!fs.statSync(file, { throwIfNoEntry: false })?.isFile()) throw new Error(`crossbind: ${PLAY.key} names ${file}, which is no file.`);
+    return parseKey(fs.readFileSync(file, 'utf8'), `${file} (${PLAY.key})`, false);
 }
 
 // The credentials Play takes from this environment and machine, or null without any: one of the three kinds.
@@ -51,6 +59,10 @@ export function playCredentials(env = process.env, system = {}) {
     if (token) return { token };
     if (account) return { account };
     if (!file) return null;
+    if (KEY_TEXT.test(env[PLAY.key] ?? '')) {
+        const key = parseKey(env[PLAY.key], PLAY.key, true);
+        return { account: key.client_email, key, file: null };
+    }
     const key = readKey(file);
     return { account: key.client_email, key, file };
 }

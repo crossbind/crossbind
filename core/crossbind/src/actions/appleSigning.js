@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
+import { secretFile } from '../utils/secretFile.js';
 
 // The Developer ID that signs a macOS app and the App Store Connect API key Apple notarizes it with, named by the
 // environment alone so that no secret reaches a file.
@@ -14,6 +15,8 @@ export const APPLE_SIGNING = {
 const NOTARY = [APPLE_SIGNING.key, APPLE_SIGNING.keyId, APPLE_SIGNING.issuer];
 // App Store Connect gives a key's file as AuthKey_<key id>.p8, so the file's own name tells its ID.
 const KEY_FILE = /^AuthKey_([A-Z0-9]{10})\.p8$/;
+// A key's own text, as CI's secrets give it, in place of its file's path.
+const KEY_TEXT = /^\s*-----BEGIN /;
 
 const listed = (names) => `${names.join(' and ')} ${names.length > 1 ? 'are' : 'is'}`;
 
@@ -33,17 +36,20 @@ function signingIdentities() {
 }
 
 // The App Store Connect API key the environment names, with which Apple notarizes a macOS app and xcodebuild uploads an
-// iOS one in place of Xcode's account, or null: all of it or none, but for its ID where its file's name tells it.
+// iOS one in place of Xcode's account, or null: all of it or none, but for its ID where its file's name tells it. The key
+// is its file, or its text, which goes to a file as the tools take files.
 export function appStoreKey(env = process.env) {
     const set = NOTARY.filter((name) => env[name]);
     if (!set.length) return null;
-    const keyId = env[APPLE_SIGNING.keyId] || path.basename(env[APPLE_SIGNING.key] ?? '').match(KEY_FILE)?.[1];
+    const given = env[APPLE_SIGNING.key] ?? '';
+    const isText = KEY_TEXT.test(given);
+    const keyId = env[APPLE_SIGNING.keyId] || (isText ? undefined : path.basename(given).match(KEY_FILE)?.[1]);
     const missing = NOTARY.filter((name) => !env[name] && !(name === APPLE_SIGNING.keyId && keyId));
     if (missing.length) {
-        const byName = missing.includes(APPLE_SIGNING.keyId) ? ', the ID unless its file keeps the name App Store Connect gives it, AuthKey_<key id>.p8' : '';
+        const byName = missing.includes(APPLE_SIGNING.keyId) && !isText ? ', the ID unless its file keeps the name App Store Connect gives it, AuthKey_<key id>.p8' : '';
         throw new Error(`crossbind: ${listed(set)} set, but ${listed(missing)} not: an App Store Connect API key takes all three${byName}.`);
     }
-    const key = path.resolve(env[APPLE_SIGNING.key]);
+    const key = isText ? secretFile('AuthKey.p8', `${given.trim()}\n`) : path.resolve(given);
     if (!fs.statSync(key, { throwIfNoEntry: false })?.isFile()) throw new Error(`crossbind: ${APPLE_SIGNING.key} names ${key}, which is no file.`);
     return { key, keyId, issuer: env[APPLE_SIGNING.issuer] };
 }

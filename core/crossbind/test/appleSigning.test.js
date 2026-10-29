@@ -8,6 +8,8 @@ const spawnSync = vi.fn();
 vi.mock('node:child_process', async (importOriginal) => ({ ...await importOriginal(), spawnSync }));
 
 const { appStoreKey, appleSigning, notarizeApp } = await import('../src/actions/appleSigning.js');
+const { removeSecretFiles } = await import('../src/utils/secretFile.js');
+afterAll(removeSecretFiles);
 
 const DEVELOPER_ID = 'Developer ID Application: Ada Lovelace (ABCDE12345)';
 const HASH = '89ABCDEF0123456789ABCDEF0123456789ABCDEF';
@@ -78,6 +80,15 @@ describe('the App Store Connect API key', () => {
             .toBe('Q1W2E3R4T5');
         expect(() => appStoreKey({ CROSSBIND_APPLE_API_KEY: named }))
             .toThrow('crossbind: CROSSBIND_APPLE_API_KEY is set, but CROSSBIND_APPLE_API_ISSUER is not: an App Store Connect API key takes all three.');
+    });
+
+    test('takes its text in place of its file, as CI gives a secret, with its ID beside it', () => {
+        const text = '-----BEGIN PRIVATE KEY-----\nMIGTAgEAMBMGByqGSM49\n-----END PRIVATE KEY-----';
+        const key = appStoreKey({ CROSSBIND_APPLE_API_KEY: text, CROSSBIND_APPLE_API_KEY_ID: '2X9R4HXF34', CROSSBIND_APPLE_API_ISSUER: 'issuer-uuid' });
+        expect(key).toMatchObject({ keyId: '2X9R4HXF34', issuer: 'issuer-uuid' });
+        expect(fs.readFileSync(key.key, 'utf8')).toBe(`${text}\n`);
+        expect(() => appStoreKey({ CROSSBIND_APPLE_API_KEY: text, CROSSBIND_APPLE_API_ISSUER: 'issuer-uuid' }))
+            .toThrow('crossbind: CROSSBIND_APPLE_API_KEY and CROSSBIND_APPLE_API_ISSUER are set, but CROSSBIND_APPLE_API_KEY_ID is not: an App Store Connect API key takes all three.');
     });
 
     test('names its ID among what is missing where its file has another name', () => {

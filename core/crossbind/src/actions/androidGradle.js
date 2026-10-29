@@ -9,6 +9,7 @@ import { DOCKER_BASE, isUnderBase } from '../utils/replaceBasePathForDocker.js';
 import { DOCKER_RUN_SECURITY_ARGS } from '../utils/dockerSecurity.js';
 import { getContentHash } from '../utils/hash.js';
 import { readSecret } from '../utils/keychain.js';
+import { secretFile } from '../utils/secretFile.js';
 
 const ROLE = 'android-app';
 const PLATFORM = 'linux/amd64';
@@ -26,8 +27,12 @@ export const SIGNING = {
 };
 
 const listed = (names) => `${names.join(' and ')} ${names.length > 1 ? 'are' : 'is'}`;
+// A keystore's base64 text, as CI's secrets give it, in place of its file's path: no path runs to a hundred of base64's
+// letters alone.
+const KEYSTORE_TEXT = /^[A-Za-z0-9+/=\s]{100,}$/;
 
-// The keystore of the upload key, or null for none: a release is then signed with the debug key.
+// The keystore of the upload key, or null for none: a release is then signed with the debug key. The keystore is its
+// file, or its base64 text, which goes to a file for the image to mount.
 export function releaseSigning(env = process.env) {
     if (!env[SIGNING.keystore]) {
         const stray = [SIGNING.alias, SIGNING.password, SIGNING.keyPassword].filter((name) => env[name]);
@@ -36,7 +41,9 @@ export function releaseSigning(env = process.env) {
     }
     const missing = [SIGNING.alias, SIGNING.password].filter((name) => !env[name]);
     if (missing.length) throw new Error(`crossbind: ${SIGNING.keystore} is set, but ${listed(missing)} not.`);
-    const file = path.resolve(env[SIGNING.keystore]);
+    const given = env[SIGNING.keystore];
+    const isText = !fs.existsSync(given) && KEYSTORE_TEXT.test(given);
+    const file = isText ? secretFile('upload.keystore', Buffer.from(given.replace(/\s/g, ''), 'base64')) : path.resolve(given);
     if (!fs.statSync(file, { throwIfNoEntry: false })?.isFile()) throw new Error(`crossbind: ${SIGNING.keystore} names ${file}, which is no file.`);
     return { file, names: [SIGNING.alias, SIGNING.password, SIGNING.keyPassword].filter((name) => env[name]) };
 }
