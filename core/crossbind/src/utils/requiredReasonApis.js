@@ -31,9 +31,11 @@ export function reasonCategories(output) {
     return categories;
 }
 
-// The categories an archive or a linked binary imports.
+// The categories an archive or a linked binary imports, as Xcode's nm lists them, whatever nm comes first on the PATH.
+// Its LLVM bitcode reader stays off: the symbol table tells all, and the bitcode Rust's standard library embeds comes
+// from a newer LLVM than an older Xcode reads.
 function importedCategories(file) {
-    const result = spawnSync('nm', ['-u', '-j', file], { encoding: 'utf8', maxBuffer: NM_OUTPUT_LIMIT });
+    const result = spawnSync('xcrun', ['nm', '--no-llvm-bc', '-u', '-j', file], { encoding: 'utf8', maxBuffer: NM_OUTPUT_LIMIT });
     if (result.status !== 0) throw new Error(`crossbind: cannot list what ${file} calls: ${result.stderr || result.error?.message}`);
     return reasonCategories(result.stdout);
 }
