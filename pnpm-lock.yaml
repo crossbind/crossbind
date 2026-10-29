@@ -158,6 +158,21 @@ importers:
         specifier: workspace:^
         version: link:../../crossbind
 
+  e2e/app-publish:
+    devDependencies:
+      '@crossbind/core-app-host':
+        specifier: workspace:^
+        version: link:../../core/app-host
+      '@crossbind/plugin-vite':
+        specifier: workspace:^
+        version: link:../../plugins/vite
+      crossbind:
+        specifier: workspace:^
+        version: link:../../core/crossbind
+      vite:
+        specifier: ^8.3.3
+        version: 8.3.5(@types/node@24.19.1)(esbuild@0.28.2)(jiti@2.7.0)(terser@5.37.0)(yaml@2.9.0)
+
   e2e/backend-nodejs:
     dependencies:
       '@crossbind/conformance':
