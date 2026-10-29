@@ -1,12 +1,14 @@
 import { AUTHOR_URL } from '../data.js';
 import LICENSE_PAGE from '../pages/license.js';
 import PRIVACY_PAGE from '../pages/privacy.js';
+import TERMS_PAGE from '../pages/terms.js';
 
 // Docs, Libraries, the changelog (version menu) and GitHub sit in the navbar on every page, so the
 // footer keeps only what the navbar lacks.
 const LINKS = [
     { label: 'MIT License', href: LICENSE_PAGE.href },
     { label: 'Privacy', href: PRIVACY_PAGE.href },
+    { label: 'Terms', href: TERMS_PAGE.href },
 ];
 
 export default function Closing({ tokens }) {
