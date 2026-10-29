@@ -40,9 +40,10 @@ now.
    `crossbind.config.js` with the address of the updates (`app: { updater: { url, publicKey } }`), its private key in
    `CROSSBIND_UPDATER_PRIVATE_KEY` where the app is built. The build then writes each app's signed update beside it, to
    upload where `url` points, and the page calls `updater.check()` and `updater.install()` from `crossbind/app`.
-7. For iOS, add `-p ios`: `crossbind app dev -p ios` opens the app in the Simulator and `crossbind app build -p ios`
-   writes the Xcode project `dist/<name>-ios/`. To run it on a device, give the app its bundle id and Apple team in
-   `crossbind.config.js` (`app: { id, team }`) and open the project in Xcode.
+7. For iOS, add `-p ios`: `crossbind app dev -p ios` opens the app in the Simulator, `crossbind app dev -p ios
+   --device` on the iPhone or iPad connected, and `crossbind app build -p ios` writes the Xcode project
+   `dist/<name>-ios/`. A device takes the app's Apple team in `crossbind.config.js` (`app: { team }`), a free Personal
+   Team among them, and a bundle id of its own (`app: { id }`), as `docs/api/app.md` tells.
 8. For Android, add `-p android`, with `adb` installed and an emulator running or a phone attached:
    `crossbind app dev -p android` opens the app on it and `crossbind app build -p android` writes
    `dist/<name>-android.apk`. For Google Play, give the app its id in `crossbind.config.js` (`app: { id }`, without

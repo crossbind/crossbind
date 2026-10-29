@@ -91,12 +91,12 @@ describe('crossbind inside a project', () => {
 describe('crossbind app', () => {
     const VITE = `const fs = require('node:fs');
 process.on('SIGTERM', () => { fs.writeFileSync(process.env.FAKE_VITE_MARK, 'SIGTERM'); process.exit(143); });
-console.log(JSON.stringify({ args: process.argv.slice(2), platform: process.env.CROSSBIND_APP_PLATFORM }));
+console.log(JSON.stringify({ args: process.argv.slice(2), platform: process.env.CROSSBIND_APP_PLATFORM, device: process.env.CROSSBIND_APP_DEVICE || undefined }));
 if (!process.env.FAKE_VITE_MARK) process.exit(3);
 setInterval(() => {}, 1000);
 `;
     const UNSET = {
-        CROSSBIND_APP_PLATFORM: '', CROSSBIND_ANDROID_KEYSTORE: '', CROSSBIND_ANDROID_KEY_ALIAS: '', CROSSBIND_ANDROID_KEYSTORE_PASSWORD: '', FAKE_VITE_MARK: '',
+        CROSSBIND_APP_PLATFORM: '', CROSSBIND_APP_DEVICE: '', CROSSBIND_ANDROID_KEYSTORE: '', CROSSBIND_ANDROID_KEY_ALIAS: '', CROSSBIND_ANDROID_KEYSTORE_PASSWORD: '', FAKE_VITE_MARK: '',
     };
     const started = (stdout) => JSON.parse(stdout.trim().split('\n').at(-1));
 
@@ -120,6 +120,20 @@ setInterval(() => {}, 1000);
         const { stdout } = crossbindWith({ ...UNSET, CROSSBIND_APP_PLATFORM: 'ios' }, 'app', 'dev', '--port', '3000');
 
         expect(started(stdout)).toEqual({ args: ['--port', '3000'], platform: 'ios' });
+    });
+
+    test('opens an iOS app on the iPhone --device names, which Vite takes as CROSSBIND_APP_DEVICE', () => {
+        const { stdout } = crossbindWith(UNSET, 'app', 'dev', '-p', 'ios', '--device', "Ada's iPhone", '--port', '3000');
+
+        expect(started(stdout)).toEqual({ args: ['--port', '3000'], platform: 'ios', device: "Ada's iPhone" });
+    });
+
+    test('opens no app of another platform on an iPhone', () => {
+        const { status, stdout, stderr } = crossbindWith(UNSET, 'app', 'dev', '-p', 'android', '--device');
+
+        expect(status).toBe(1);
+        expect(stderr).toContain('--device opens an iOS app on an iPhone or iPad: add -p ios');
+        expect(stdout).not.toContain('"args"');
     });
 
     test("checks an Android build's upload key before the build", () => {

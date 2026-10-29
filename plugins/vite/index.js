@@ -2,7 +2,7 @@
 import {
     state, createLib, createBridgeFile, buildWasm, buildDependencies, getTargetParams, getFilteredBuildTargets, isSourceNewer, getRustJsScript,
     isAppSource, getFileHash, buildProjectApp, appLayout, appOutputName, appTargetParams, publishApp, buildForSimulator,
-    openInSimulator, buildApk, openOnDevice,
+    openInSimulator, buildApk, openOnDevice, buildForIosDevice, openOnIosDevice, connectedIosDevice, iosDevServer,
 } from 'crossbind';
 import rollupCrossbindPlugin from '@crossbind/plugin-rollup';
 
@@ -26,13 +26,15 @@ if (!buildTargetDebug) {
 }
 
 // During development an app opens on the dev server. Its host is built for this machine first, an iOS app's for the
-// Simulator or an Android app's for the attached device, and built and reopened whenever the native code or the native
-// imports of the page change; the page itself reloads as any Vite page does. Closing the window, or the app on the
-// Simulator or device, ends the session.
+// Simulator or the iPhone or iPad CROSSBIND_APP_DEVICE names, or an Android app's for the attached device, and built and
+// reopened whenever the native code or the native imports of the page change; the page itself reloads as any Vite page
+// does. Closing the window, or the app on the Simulator or device, ends the session.
 function appDevPlugin() {
     let isServe = false;
     let server = null;
     let appUrl = null;
+    let iosDevice = null;
+    let address = 'localhost';
     let app = null;
     let closeApp = null;
     let mobileApp = null;
@@ -49,7 +51,8 @@ function appDevPlugin() {
         // A mobile app links in Xcode or packages in Gradle, as a desktop host links in its build: before the app that
         // runs gives way. Its project holds no page, which the dev server serves.
         const project = publishApp(target, { to: `${state.config.paths.build}/${appOutputName(target)}.debug` });
-        mobileApp = target.platform === 'ios' ? buildForSimulator(project, 'Debug') : buildApk(project);
+        if (target.platform === 'android') mobileApp = buildApk(project);
+        else mobileApp = iosDevice ? buildForIosDevice(project, iosDevice) : buildForSimulator(project, 'Debug');
         return true;
     }
 
@@ -63,9 +66,11 @@ function appDevPlugin() {
             const executable = `${state.config.paths.build}/${target.appName}/${appLayout(target).executable}`;
             return spawn(executable, [], { stdio: 'inherit', env: { ...process.env, CROSSBIND_APP_URL: appUrl } });
         }
-        // The terminal's input stays Vite's: simctl and adb would forward it to the device.
+        // The terminal's input stays Vite's: simctl, devicectl and adb would forward it to the device.
         const options = { env: { CROSSBIND_APP_URL: appUrl }, stdio: ['ignore', 'inherit', 'inherit'] };
-        const opened = target.platform === 'ios' ? openInSimulator(mobileApp, { ...options, show: true }) : openOnDevice(mobileApp, options);
+        let opened;
+        if (target.platform === 'android') opened = openOnDevice(mobileApp, options);
+        else opened = iosDevice ? openOnIosDevice(mobileApp, { ...options, device: iosDevice }) : openInSimulator(mobileApp, { ...options, show: true });
         closeApp = opened.close;
         return opened.child;
     }
@@ -91,7 +96,8 @@ function appDevPlugin() {
         closeApp = null;
         if (!running || running.exitCode !== null || running.signalCode !== null) return Promise.resolve();
         const ended = new Promise((resolve) => running.once('exit', resolve));
-        running.kill();
+        // An app on an iPhone or iPad ends by its devicectl's signal, which closing it sent already.
+        if (!running.killed) running.kill();
         // A host SIGTERM cannot end, as one stopped in a debugger, does not hold the session up.
         const killer = setTimeout(() => running.kill('SIGKILL'), STOP_TIMEOUT_MS);
         return ended.finally(() => clearTimeout(killer));
@@ -118,8 +124,23 @@ function appDevPlugin() {
     return {
         name: 'vite-plugin-crossbind-app',
         // Gradle writes reports into the Android project it builds, in crossbind's own directory, and an HTML file there
-        // would reload the page.
-        config: () => ({ server: { watch: { ignored: [`${state.config.paths.cache}/**`, `${state.config.paths.build}/**`] } } }),
+        // would reload the page. An iPhone or iPad reaches the dev server at this Mac's address on its cable or network,
+        // which alone the server listens on, unless Vite's own --host names an address or every one.
+        config(userConfig, { command }) {
+            const watch = { ignored: [`${state.config.paths.cache}/**`, `${state.config.paths.build}/**`] };
+            if (command !== 'serve' || process.env.CROSSBIND_APP_PLATFORM !== 'ios' || !process.env.CROSSBIND_APP_DEVICE) return { server: { watch } };
+            try {
+                iosDevice = connectedIosDevice(process.env.CROSSBIND_APP_DEVICE);
+                const devServer = iosDevServer(iosDevice, userConfig.server?.host);
+                address = devServer.address;
+                return { server: { watch, host: devServer.host } };
+            } catch (error) {
+                // What the developer mends, as a device to connect or a setting to turn on, needs no stack, which Vite
+                // would print with an error it starts with.
+                console.error(error.message);
+                process.exit(1);
+            }
+        },
         configResolved(config) {
             isServe = config.command === 'serve';
         },
@@ -129,13 +150,14 @@ function appDevPlugin() {
             return fs.readFileSync(`${state.config.paths.build}/${target.appJsName}`, { encoding: 'utf8' });
         },
         configureServer(devServer) {
-            // This machine, the Simulator, or the Android device attached now. iOS and Android keep targets without a
-            // runtime environment for React Native, which the filter leaves out.
+            // This machine, the Simulator or the iPhone or iPad named, or the Android device attached now. iOS and Android
+            // keep targets without a runtime environment for React Native, which the filter leaves out.
             devParams = appTargetParams({ dev: true });
             [target] = getFilteredBuildTargets(devParams, { buildType: 'debug', runtimeEnv: 'app' });
             server = devServer;
             devServer.httpServer?.once('listening', () => {
-                appUrl = `http://localhost:${devServer.httpServer.address().port}${devServer.config.base}`;
+                const host = address.includes(':') ? `[${address}]` : address;
+                appUrl = `http://${host}:${devServer.httpServer.address().port}${devServer.config.base}`;
                 refresh({ always: true }).catch((error) => devServer.config.logger.error(error.message));
             });
             devServer.httpServer?.once('close', stop);

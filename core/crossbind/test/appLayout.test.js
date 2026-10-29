@@ -56,9 +56,10 @@ describe('the app a bundler builds', () => {
         expect(() => appTargetParams({}, { CROSSBIND_APP_PLATFORM: 'tvos' })).toThrow('CROSSBIND_APP_PLATFORM=tvos');
     });
 
-    test.runIf(process.platform === 'darwin')('is an iOS app for both SDKs, or for the Simulator alone during development', () => {
+    test.runIf(process.platform === 'darwin')('is an iOS app for both SDKs, or during development for the Simulator, or for devices where CROSSBIND_APP_DEVICE names one', () => {
         expect(appTargetParams({}, { CROSSBIND_APP_PLATFORM: 'ios' })).toMatchObject({ platform: ['ios'], arch: ['iphoneos', 'iphonesimulator'] });
         expect(appTargetParams({ dev: true }, { CROSSBIND_APP_PLATFORM: 'ios' })).toMatchObject({ arch: ['iphonesimulator'] });
+        expect(appTargetParams({ dev: true }, { CROSSBIND_APP_PLATFORM: 'ios', CROSSBIND_APP_DEVICE: "Ada's iPhone" })).toMatchObject({ arch: ['iphoneos'] });
     });
 
     test('is an Android app for both ABIs, or for the attached device\'s alone during development', () => {

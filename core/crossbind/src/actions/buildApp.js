@@ -80,7 +80,8 @@ export function assertAppRunner(target) {
 
 // The app a bundler builds: this machine's desktop app, or with CROSSBIND_APP_PLATFORM an iOS app for both SDKs, an
 // Android app for both ABIs, or a Linux or Windows app for both arches, which builds in Docker on any machine. During
-// development only what runs it: the Simulator, the attached device, or this machine.
+// development only what runs it: the Simulator, or the iPhone or iPad CROSSBIND_APP_DEVICE names, the attached Android
+// device, or this machine.
 export function appTargetParams({ dev = false } = {}, env = process.env) {
     const platform = env.CROSSBIND_APP_PLATFORM;
     const app = (platforms, archs) => {
@@ -109,7 +110,8 @@ export function appTargetParams({ dev = false } = {}, env = process.env) {
         throw new Error(`crossbind: CROSSBIND_APP_PLATFORM=${platform} names no platform an app builds for. Set it to android, ios, linux, macos or windows, or leave it unset for this machine's desktop app.`);
     }
     if (process.platform !== 'darwin') throw new Error('crossbind: iOS apps build on macOS, with Xcode.');
-    return getTargetParams({ platform: ['ios'], arch: dev ? ['iphonesimulator'] : IOS_SDKS, runtime: ['mt'], runtimeEnv: ['app'] }, true);
+    const devSdk = env.CROSSBIND_APP_DEVICE ? 'iphoneos' : 'iphonesimulator';
+    return getTargetParams({ platform: ['ios'], arch: dev ? [devSdk] : IOS_SDKS, runtime: ['mt'], runtimeEnv: ['app'] }, true);
 }
 
 // The Apple team that signs an iOS app: the project's app.team, else the machine's XCODE_DEVELOPMENT_TEAM, else none.

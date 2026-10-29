@@ -123,6 +123,7 @@ Index + template: [`docs/adr/README.md`](./adr/README.md).
 | Desktop app updates: the Ed25519 key pair of `crossbind app updater-key`, and the signed manifest and file the build writes beside an app with `CROSSBIND_UPDATER_PRIVATE_KEY`, which the host's `cpp/src/updater.cpp` checks with Monocypher | `src/actions/appUpdate.js` |
 | iOS app: the Xcode project written anew from each SDK's part (archives and their link line, Hermes' slice, the app's files) | `src/actions/xcodeProject.js` |
 | An iOS app built for the Simulator and opened there, for `vite` and the e2e runs | `src/actions/iosSimulator.js` |
+| An iOS app built for an iPhone or iPad, signed by Xcode for the app's team, installed and opened on it through devicectl, and the Mac's address it reaches the dev server at, on its cable or the local network, for `vite` | `src/actions/iosDevice.js` |
 | Android app: the Gradle project written anew from `core/app-host/android` and each ABI's part (the host and the libraries it loads, the app's files) | `src/actions/gradleProject.js` |
 | An Android app's debug APK opened on the attached device through the machine's adb, its log relayed, for `vite` and the e2e runs | `src/actions/androidDevice.js` |
 | Gradle in the android-app image with no network: the release APK, and the bundle signed with the upload key the environment names; the debug APKs of a development session in one container | `src/actions/androidGradle.js` |
