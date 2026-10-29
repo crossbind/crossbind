@@ -1,15 +1,16 @@
 import { DISCUSSIONS_URL, PRIVACY_EMAIL } from '../data.js';
-import LICENSE_PAGE from './license.js';
 
 // /privacy/: what crossbind.dev, the playground and crossbind cloud (tooling/cloud) keep, for how long, and how to
-// delete it. Every period here is one the code enforces; change them together.
+// delete it, and what the CLI does with a Google sign-in for Google Play (core/crossbind/src/actions/googleSignIn.js),
+// which Google asks the policy its consent screen links to say. Every period here is one the code enforces; change
+// them together.
 
 export default {
     kind: 'document',
     slug: 'privacy',
     title: 'Privacy',
-    description: 'What crossbind.dev, the playground and crossbind cloud keep about you, for how long, and how to delete it.',
-    lede: 'crossbind.dev has no analytics and sets no tracking cookies. The playground and crossbind cloud keep what they need to run and to stop abuse: your GitHub id and name once you sign in, and how much you used. No email, no GitHub token, nothing to pay with. Last changed 16 October 2026.',
+    description: 'What crossbind.dev, the playground and crossbind cloud keep about you, for how long, how to delete it, and where a Google sign-in for publishing stays.',
+    lede: 'crossbind.dev has no analytics and sets no tracking cookies. The playground and crossbind cloud keep what they need to run and to stop abuse: your GitHub id and name once you sign in, and how much you used. No email, no GitHub token, nothing to pay with. A Google sign-in for publishing to Google Play stays on your machine. Last changed 29 October 2026.',
     section: 'Privacy',
     path: '/privacy',
     href: '/privacy/',
@@ -41,6 +42,19 @@ export default {
             ],
         },
 
+        { type: 'h2', id: 'stores', text: 'Publishing to the app stores' },
+        {
+            type: 'ul',
+            items: [
+                '`crossbind app publish` uploads your app from your machine, or from your CI, straight to Google Play or App Store Connect, with your own accounts. None of it passes through crossbind.dev or crossbind cloud, and crossbind runs no server for it.',
+                "To publish to Google Play, the CLI can sign in with your Google account, in your browser, on Google's own page. It asks for one permission alone, to view and manage your Google Play Developer account (`androidpublisher`): not your email, your profile or anything else. Google sends your browser back to your own machine, and the CLI takes its tokens from Google directly.",
+                'Your machine keeps that sign-in in its own keychain: the macOS Keychain, a file only your Windows account can decrypt, or the Secret Service on Linux. A publish keeps the short-lived token it makes from it in memory alone.',
+                "The CLI uses the sign-in only for a publish you run: to read the version codes your app's tracks hold, upload the bundle and its native debug symbols, and put the release on the track you name. It shares it with no one and uses it for nothing else.",
+                'To end it, remove crossbind under Your connections to third-party apps & services, on the Security page of your Google Account, or delete the `crossbind google play` entry from your keychain.',
+                'To publish to App Store Connect, the CLI uses the account Xcode is signed in to, or an App Store Connect API key you give it, which stays on your machine.',
+            ],
+        },
+
         { type: 'h2', id: 'how-long', text: 'How long it stays' },
         {
             type: 'table',
@@ -51,6 +65,7 @@ export default {
                 ['Compile counts per network and per account', 'A day or two'],
                 ['Your GitHub id, name and sign-in times', 'Until you delete your account'],
                 ['CLI tokens, as hashes', 'Until you sign out, or 90 days unused'],
+                ['Your Google sign-in for Google Play', "In your machine's keychain alone, until you end it"],
                 ['Cloud build minutes per month and image', 'The current month and the three before it'],
                 ['Files on your cloud runner', 'Until it stops, a minute after your last step'],
                 ['Service logs: what happened, with your account id or network', 'Seven days, at Cloudflare'],
@@ -67,12 +82,6 @@ export default {
         {
             type: 'p',
             text: 'Or sign in on the [playground](/playground/) and press Delete account. Either deletes your account and signs out every machine at once. Two things stay after it, under your GitHub id alone: this month\'s build minutes, until the month ends, so that signing in again does not bring a fresh month; and, for an account blocked for abuse, the block. To also remove crossbind from your GitHub account, revoke it under Settings, Applications, Authorized OAuth Apps.',
-        },
-
-        { type: 'h2', id: 'no-warranty', text: 'No warranty' },
-        {
-            type: 'p',
-            text: `crossbind is an open-source project, free under the [MIT license](${LICENSE_PAGE.href}). crossbind.dev, the playground and crossbind cloud are provided as they are, without warranty of any kind, and may change, pause or stop at any time without notice. To the extent the law allows, the crossbind project is not liable for any loss that comes from using them. You are responsible for the code you send and for what you do with what comes back: keep your own copies, and do not rely on these services where an outage or a wrong result would cause harm.`,
         },
 
         { type: 'h2', id: 'who', text: 'Who runs it' },

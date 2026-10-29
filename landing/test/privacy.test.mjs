@@ -1,7 +1,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import PRIVACY_PAGE from '../src/pages/privacy.js';
 import { SITE_ROUTES } from '../src/site-pages.js';
+import { PLAY_SCOPE } from '../../core/crossbind/src/actions/googlePlay.js';
 import { TOKEN_IDLE_DAYS, USAGE_MONTHS_KEPT } from '../../tooling/cloud/worker/accounts.js';
 import { SESSION_TTL_MS } from '../../tooling/cloud/worker/session.js';
 import { RUNNER_IDLE_SECONDS } from '../../tooling/cloud/worker/runner-api.js';
@@ -21,4 +23,11 @@ test('names the periods crossbind cloud enforces', () => {
     assert.equal(RUNNER_IDLE_SECONDS, 60);
     assert.ok(text.includes('a minute after your last step'));
     assert.ok(!text.includes('two minutes'));
+});
+
+test("names the one permission the CLI's Google Play sign-in asks for, and the keychain entry it keeps", () => {
+    const source = readFileSync(new URL('../../core/crossbind/src/actions/googlePlay.js', import.meta.url), 'utf8');
+    const service = source.match(/const SIGN_IN_SERVICE = '([^']+)';/)[1];
+    assert.ok(text.includes(`(\`${PLAY_SCOPE.split('/').at(-1)}\`)`));
+    assert.ok(text.includes(`\`${service}\` entry`));
 });
