@@ -38,7 +38,7 @@
         "@rollup/plugin-virtual": "^3.0.2",
         "comlink": "^4.4.2",
         "commander": "^15.0.0",
-        "glob": "^13.0.6",
+        "glob": "^14.0.3",
         "log-update": "^8.0.0",
         "picocolors": "^1.1.1",
         "pngjs": "^7.0.0",
