@@ -429,7 +429,7 @@ importers:
         version: link:../../core/crossbind
       wrangler:
         specifier: ^4.136.3
-        version: 4.154.0(@types/node@24.19.1)
+        version: 4.155.0(@types/node@24.19.1)
 
   e2e/cloud-wasi-http:
     devDependencies:
@@ -1009,7 +1009,7 @@ importers:
         version: link:../../core/crossbind
       wrangler:
         specifier: ^4.136.3
-        version: 4.154.0(@types/node@24.19.1)
+        version: 4.155.0(@types/node@24.19.1)
 
   examples/desktop-app:
     dependencies:
@@ -1445,8 +1445,8 @@ importers:
         specifier: 0.5.14
         version: 0.5.14(vite@8.3.5(@types/node@24.19.1)(esbuild@0.28.2)(jiti@2.7.0)(terser@5.37.0)(yaml@2.9.0))
       wrangler:
-        specifier: 4.154.0
-        version: 4.154.0(@types/node@24.19.1)
+        specifier: 4.155.0
+        version: 4.155.0(@types/node@24.19.1)
 
   plugins/metro:
     dependencies:
@@ -6706,8 +6706,8 @@ importers:
         version: 0.3.7
     devDependencies:
       wrangler:
-        specifier: 4.154.0
-        version: 4.154.0(@types/node@24.19.1)
+        specifier: 4.155.0
+        version: 4.155.0(@types/node@24.19.1)
 
   tooling/create-app:
     dependencies:
@@ -12529,8 +12529,8 @@ packages:
     resolution: {integrity: sha512-z0yWI+4FDrrweS8Zmt4Ej5HdJmky15+L2e6Wgn3+iK5fWzb6T3fhNFq2+MeTRb064c6Wr4N/wv0DzQTjNzHNGQ==}
     engines: {node: '>=10'}
 
-  miniflare@5.20261023.1-beta:
-    resolution: {integrity: sha512-hgm1AJhwC6W+iaRhvMnfs7bPOsxjKa8LXTFR2WVPA5qA9KhpyBd2LddmT+9M9tm65VZ8YWkwQGvB+cKbqJoKeA==}
+  miniflare@5.20261023.2-beta:
+    resolution: {integrity: sha512-sXpZloQnIUe4raXXdwwqd2ioRHox9a/1B4nB2/p4JWKDwGuVgEK4DugCNgIeQf0iVuSgBItdYpodJe4iwY6SrQ==}
     engines: {node: '>=22.0.0'}
 
   minimatch@10.2.5:
@@ -14237,8 +14237,8 @@ packages:
     engines: {node: '>=16'}
     hasBin: true
 
-  wrangler@4.154.0:
-    resolution: {integrity: sha512-duA4dckBE/51ibAlGh2mUYcvGiu7sZFcn61I+KfNEeK5KQzKKEth9Xf5ROatoPBOebYPz0gfknXOCjBhwLOo8Q==}
+  wrangler@4.155.0:
+    resolution: {integrity: sha512-gBKtAg2e0abQDvXPRQu611YMTd/cfAaJTOLAs/89tTxFxEeUyC260MRJRK+m3gLmQjDYWFwJv+ErwuJ/GuALpA==}
     engines: {node: '>=22.0.0'}
     hasBin: true
     peerDependencies:
@@ -21901,7 +21901,7 @@ snapshots:
 
   mimic-response@3.1.0: {}
 
-  miniflare@5.20261023.1-beta(@types/node@24.19.1):
+  miniflare@5.20261023.2-beta(@types/node@24.19.1):
     dependencies:
       '@cspotcode/source-map-support': 0.8.1
       sharp: 0.35.5(@types/node@24.19.1)
@@ -23863,13 +23863,13 @@ snapshots:
       '@cloudflare/workerd-linux-arm64': 1.20261023.1
       '@cloudflare/workerd-windows-64': 1.20261023.1
 
-  wrangler@4.154.0(@types/node@24.19.1):
+  wrangler@4.155.0(@types/node@24.19.1):
     dependencies:
       '@cloudflare/kv-asset-handler': 0.5.0
       '@cloudflare/unenv-preset': 2.16.2(unenv@2.0.0-rc.24)(workerd@1.20261023.1)
       blake3-wasm: 2.1.5
       esbuild: 0.28.2
-      miniflare: 5.20261023.1-beta(@types/node@24.19.1)
+      miniflare: 5.20261023.2-beta(@types/node@24.19.1)
       path-to-regexp: 6.3.0
       unenv: 2.0.0-rc.24
       workerd: 1.20261023.1
