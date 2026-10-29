@@ -21,6 +21,7 @@ import {
 } from './actions/uploadKey.js';
 import { publishAndroid } from './actions/publishAndroid.js';
 import { publishIos } from './actions/publishIos.js';
+import { iosDeviceOption } from './actions/iosDevice.js';
 import buildExternal from './actions/buildExternal.js';
 import buildPackageTypes from './actions/buildTypes.js';
 import buildLib from './actions/buildLib.js';
@@ -145,19 +146,26 @@ const commandApp = program.command('app').description('build the project as an a
 [
     ['dev', 'open the app on the dev server, and open it anew as its native code changes'],
     ['build', 'build the app with its page: for Android also its APK, and with an upload key its bundle'],
-].forEach(([name, description]) => commandApp.command(name).description(description)
-    .addOption(new Option('-p, --platform <platform>', "the app's platform (default: CROSSBIND_APP_PLATFORM, else this machine's)").choices(APP_PLATFORMS))
-    // Vite's own options, as --port or --mode, go on to Vite.
-    .allowUnknownOption()
-    .allowExcessArguments()
-    .action(async ({ platform }, command) => {
-        assertAppProject();
-        // An Android build checks its upload key before the native build, not after it.
-        const isAndroidBuild = name === 'build' && (platform ?? process.env.CROSSBIND_APP_PLATFORM) === 'android';
-        const { env: signing } = isAndroidBuild ? await releaseSigningEnv() : { env: {} };
-        const env = { ...process.env, ...signing, ...(platform ? { CROSSBIND_APP_PLATFORM: platform } : {}) };
-        process.exit(await runVite([...(name === 'build' ? ['build'] : []), ...command.args], env));
-    }));
+].forEach(([name, description]) => {
+    const appCommand = commandApp.command(name).description(description)
+        .addOption(new Option('-p, --platform <platform>', "the app's platform (default: CROSSBIND_APP_PLATFORM, else this machine's)").choices(APP_PLATFORMS));
+    if (name === 'dev') {
+        appCommand.option('--device [name]', 'open an iOS app on a connected iPhone or iPad, the one named or else the only one, rather than in the Simulator');
+    }
+    appCommand
+        // Vite's own options, as --port or --mode, go on to Vite.
+        .allowUnknownOption()
+        .allowExcessArguments()
+        .action(async ({ platform, device }, command) => {
+            assertAppProject();
+            // An Android build checks its upload key before the native build, not after it.
+            const isAndroidBuild = name === 'build' && (platform ?? process.env.CROSSBIND_APP_PLATFORM) === 'android';
+            const { env: signing } = isAndroidBuild ? await releaseSigningEnv() : { env: {} };
+            const onDevice = device === undefined ? {} : { CROSSBIND_APP_DEVICE: iosDeviceOption(device, platform ?? process.env.CROSSBIND_APP_PLATFORM) };
+            const env = { ...process.env, ...signing, ...(platform ? { CROSSBIND_APP_PLATFORM: platform } : {}), ...onDevice };
+            process.exit(await runVite([...(name === 'build' ? ['build'] : []), ...command.args], env));
+        });
+});
 
 commandApp.command('updater-key')
     .description("make the key pair that signs a desktop app's updates")

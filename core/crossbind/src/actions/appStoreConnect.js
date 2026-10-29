@@ -35,6 +35,12 @@ const CAUSES = [
         pattern: /Cloud signing permission error/i,
         hint: () => `the API key may not sign in the cloud, which takes its Admin role: use an Admin key, make an Apple Distribution certificate once in Xcode, under Settings › Accounts › Manage Certificates, or unset ${APPLE_SIGNING.key} to upload with Xcode's account.`,
     },
+    {
+        pattern: /cannot be registered to your development team because it is not available/i,
+        hint: ({ id }) => `another team registered the bundle id ${id} with Apple first: set app.id in crossbind.config.js to an id of your own, as one under a domain you own.`,
+        // The id is in what was built, so the same step tried again fails the same way.
+        needsRebuild: true,
+    },
     MISSING_APP,
 ];
 
@@ -45,7 +51,7 @@ const keyArgs = (key) => (key ? ['-authenticationKeyPath', key.key, '-authentica
 
 // Runs xcodebuild with its output in `log`, which it returns. Its failure names the lines that say why, and what to do
 // where those leave it unclear.
-function xcodebuild(what, args, log, facts) {
+export function xcodebuild(what, args, log, facts) {
     const out = fs.openSync(log, 'w');
     let result;
     try {
@@ -60,7 +66,7 @@ function xcodebuild(what, args, log, facts) {
     const reasons = [...new Set(output.split('\n').map((line) => line.trim()).filter((line) => /\berror\b|ITMS-/i.test(line)))].slice(-REASON_LINES);
     const cause = CAUSES.find(({ pattern }) => pattern.test(output));
     const lines = [`crossbind: ${what} failed; xcodebuild's log is ${log}.`, ...reasons.map((line) => `  ${line}`), ...(cause ? [`crossbind: ${cause.hint(facts)}`] : [])];
-    throw Object.assign(new Error(lines.join('\n')), { isMendable: Boolean(cause), page: cause?.page ?? null, reason: cause ?? null });
+    throw Object.assign(new Error(lines.join('\n')), { isMendable: Boolean(cause) && !cause.needsRebuild, page: cause?.page ?? null, reason: cause ?? null });
 }
 
 const archivedApp = (archive) => `${archive}/Products/Applications/${state.config.general.name}.app`;
@@ -169,14 +175,14 @@ export function uploadIosArchive(archive, { team, key, isBuildManaged, facts }) 
 }
 
 // The teams of the accounts signed in to Xcode that upload to App Store Connect, which a free personal team does not,
-// from Xcode's settings.
-export function xcodeTeams() {
+// from Xcode's settings; `withPersonal` adds those free teams, which sign for their own devices.
+export function xcodeTeams({ withPersonal = false } = {}) {
     const settings = spawnSync('defaults', ['export', 'com.apple.dt.Xcode', '-'], { maxBuffer: EXEC_MAX_BUFFER });
     if (settings.status !== 0) return [];
     const teams = spawnSync('plutil', ['-extract', 'IDEProvisioningTeamByIdentifier', 'json', '-o', '-', '-'], {
         input: settings.stdout, encoding: 'utf8', maxBuffer: EXEC_MAX_BUFFER,
     });
     if (teams.status !== 0) return [];
-    const paid = Object.values(JSON.parse(teams.stdout)).flat().filter((team) => !team.isFreeProvisioningTeam);
-    return [...new Map(paid.map((team) => [team.teamID, { id: team.teamID, name: team.teamName }])).values()];
+    const signing = Object.values(JSON.parse(teams.stdout)).flat().filter((team) => withPersonal || !team.isFreeProvisioningTeam);
+    return [...new Map(signing.map((team) => [team.teamID, { id: team.teamID, name: team.teamName }])).values()];
 }

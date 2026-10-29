@@ -12,7 +12,7 @@ export default {
             head: ['Command', 'Does', 'Touches'],
             rows: [
                 ['`build`', 'compiles the project', 'Docker or a runner, the network, `.crossbind/`, `paths.output`'],
-                ['`app`', 'builds the project as an app with its Vite, opens it on the dev server, or makes the key pair for its updates','what `build` touches, `dist/`, `~/.crossbind/android/`, the attached Android device or the iOS Simulator'],
+                ['`app`', 'builds the project as an app with its Vite, opens it on the dev server, or makes the key pair for its updates','what `build` touches, `dist/`, `~/.crossbind/android/`, the attached Android device, the iOS Simulator or the iPhone `--device` names'],
                 ['`licenses`', 'lists the licenses of the native dependencies', 'reads the project; writes only the files you ask for'],
                 ['`clean-deps`', 'deletes dependencies rebuilt from source', '`.crossbind/deps/`'],
                 ['`docker`', 'manages the toolchain containers', 'Docker'],
@@ -82,6 +82,7 @@ crossbind app build -p android`,
             head: ['Command', 'Does'],
             rows: [
                 ['`app dev [-p platform]`', 'opens the app on the dev server: an edit to the page reloads it, an edit to native code rebuilds the host and opens the app again'],
+                ['`app dev -p ios --device [name]`', 'opens an iOS app on the iPhone or iPad connected, or on the one named, rather than in the Simulator'],
                 ['`app build [-p platform]`', 'builds the page and the host and writes the app to `dist/`'],
                 ['`app updater-key`', "prints a new key pair for a desktop app's updates: the public key for `app.updater.publicKey`, the private one for `CROSSBIND_UPDATER_PRIVATE_KEY` where the app is built"],
             ],
@@ -92,7 +93,7 @@ crossbind app build -p android`,
         },
         {
             type: 'p',
-            text: "**Touches:** Linux, Windows and Android apps build in the pinned linux, windows and android-app images, so only under `RUNNER=DOCKER_RUN` or `DOCKER_EXEC`, and Gradle packages an Android app there with no network, keeping its caches and the debug key in `~/.crossbind/android/`. An Android app opens on the attached device through this machine's `adb`, which crossbind does not install; an iOS app opens in the Simulator.",
+            text: "**Touches:** Linux, Windows and Android apps build in the pinned linux, windows and android-app images, so only under `RUNNER=DOCKER_RUN` or `DOCKER_EXEC`, and Gradle packages an Android app there with no network, keeping its caches and the debug key in `~/.crossbind/android/`. An Android app opens on the attached device through this machine's `adb`, which crossbind does not install; an iOS app opens in the Simulator, or with `--device` on an iPhone or iPad, which Xcode signs for the app's team through the accounts it is signed in to and registers with that team.",
         },
 
         { type: 'h2', id: 'licenses', text: 'licenses' },

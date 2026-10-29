@@ -157,6 +157,18 @@ describe("an iOS app's upload", () => {
         expect(failure).toMatchObject({ isMendable: true, page: null });
     });
 
+    test('names an id of its own for a bundle id another team holds, which no second try of the same archive gives', () => {
+        fs.mkdirSync(store, { recursive: true });
+        xcode.answers.push({
+            status: 70,
+            output: 'error: Failed Registering Bundle Identifier: The app identifier "dev.example.demo" cannot be registered to your development team because it is not available.\n',
+        });
+        const failure = failureOf(() => uploadIosArchive(`${store}/demo.xcarchive`, { team: 'ABCDE12345', key: null, isBuildManaged: true, facts }));
+
+        expect(failure.message).toContain('set app.id in crossbind.config.js to an id of your own');
+        expect(failure).toMatchObject({ isMendable: false });
+    });
+
     test("names App Store Connect's warnings, which do not stop the upload", () => {
         fs.mkdirSync(store, { recursive: true });
         const warned = vi.spyOn(console, 'warn').mockImplementation(() => {});
@@ -232,6 +244,17 @@ describe('the teams Xcode is signed in to', () => {
             'account-3': [{ teamID: 'ABCDE12345', teamName: 'Ada Ltd', isFreeProvisioningTeam: false, teamType: 'Company' }],
         };
         expect(xcodeTeams()).toEqual([{ id: 'ABCDE12345', name: 'Ada Ltd' }]);
+    });
+
+    test('take in the free Personal Teams too where asked, which sign for their own devices', () => {
+        xcode.teams = {
+            'account-1': [{ teamID: 'FREE000000', teamName: 'Ada Lovelace (Personal Team)', isFreeProvisioningTeam: true, teamType: 'Personal Team' }],
+            'account-2': [{ teamID: 'ABCDE12345', teamName: 'Ada Ltd', isFreeProvisioningTeam: false, teamType: 'Company' }],
+        };
+        expect(xcodeTeams({ withPersonal: true })).toEqual([
+            { id: 'FREE000000', name: 'Ada Lovelace (Personal Team)' },
+            { id: 'ABCDE12345', name: 'Ada Ltd' },
+        ]);
     });
 
     test('are none where Xcode has no settings', () => {

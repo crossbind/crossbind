@@ -8,6 +8,9 @@ export {
 } from './actions/buildApp.js';
 export { checkInstaller } from './actions/appInstaller.js';
 export { default as openInSimulator, buildForSimulator } from './actions/iosSimulator.js';
+export {
+    default as openOnIosDevice, buildForIosDevice, connectedIosDevice, iosDeviceAddress, iosDevServer,
+} from './actions/iosDevice.js';
 export { default as openOnDevice, adbPath } from './actions/androidDevice.js';
 export { buildApk } from './actions/androidGradle.js';
 export { default as isSourceNewer } from './actions/isSourceNewer.js';

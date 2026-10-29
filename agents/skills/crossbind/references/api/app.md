@@ -44,6 +44,7 @@ export default defineConfig({ plugins: [viteCrossbindPlugin()] });
 | `crossbind app build -p windows` | Writes the Windows app for x64 and arm64, on a Mac or a Linux machine as well: `dist/<name>-win32-x64/` and `dist/<name>-win32-arm64/`, each with its `.zip` and `-setup.exe`. A Windows app's development session runs on Windows. |
 | `crossbind build -p host -e app` | Builds the host alone, with no page in it: `<paths.output>/<name>.darwin-<arch>.app` on macOS, `<paths.output>/<name>.linux-<arch>` and its `.tar.gz` on Linux. `-p linux` or `-p win32` builds a Linux app, or a Windows app with its `.zip`, from a Mac as well. |
 | `crossbind app dev -p ios` | Builds the host for the iOS Simulator and opens the app there on the dev server: in the Simulator already booted, else in an iPhone of the newest iOS. Edits reload the page or rebuild the host as on the desktop, and ending the app in the Simulator ends the session. |
+| `crossbind app dev -p ios --device` | Builds the host for devices and opens the app on the dev server on the iPhone or iPad connected, or on the one `--device <name>` names by its name or UDID: Xcode signs it for the app's team, and devicectl installs it. The phone reaches the dev server through its cable, or on the local network when it is paired over it. Edits reload the page or rebuild the host as in the Simulator, the page's console shows in the terminal, and ending the app on the phone ends the session (see [iOS](#ios)). |
 | `crossbind app build -p ios` | Builds the page and the host for devices and the Simulator and writes the app's Xcode project, `dist/<name>-ios/` (see [iOS](#ios)). |
 | `crossbind build -p ios -e app` | Writes the Xcode project with no page in it: `<paths.output>/<name>-ios`, or `<name>-ios.debug` for a debug build. |
 | `crossbind app dev -p android` | Builds the host for the attached Android device or emulator, installs the app as a debug APK and opens it on the dev server, which the device reaches through `adb reverse`. Edits reload the page or rebuild the host as on the desktop; the page's console shows in the terminal, and the end of the app's process, as when it is swiped away, ends the session (Back leaves the process running). crossbind starts no emulator: start one, or connect a phone with USB debugging on, and with several attached set `ANDROID_SERIAL`. |
@@ -56,8 +57,9 @@ export default defineConfig({ plugins: [viteCrossbindPlugin()] });
 
 `crossbind app` runs the project's Vite with `CROSSBIND_APP_PLATFORM` set to the platform `-p` names, `macos`, `linux`,
 `windows`, `ios` or `android`; without `-p` it keeps the variable the environment sets, and without that builds this
-machine's desktop app. `vite` and `vite build` take the variable as well, and Vite's own options, such as `--port` or
-`--mode`, pass through `crossbind app` to Vite. A macOS or iOS build fetches Hermes once; Linux, Windows and Android
+machine's desktop app. `--device` sets `CROSSBIND_APP_DEVICE` to the device it names, or to the UDID of the only one
+connected. `vite` and `vite build` take the variables as well, and Vite's own options, such as `--port` or `--mode`,
+pass through `crossbind app` to Vite. A macOS or iOS build fetches Hermes once; Linux, Windows and Android
 apps build in crossbind's linux, windows and android-app images, which carry what they compile and link against (see
 [Hermes](#hermes)).
 They need `RUNNER=DOCKER_RUN` or `DOCKER_EXEC`, and another runner stops the build before its first step.
@@ -741,6 +743,24 @@ needs no team: `xcodebuild -project dist/<name>-ios/<name>.xcodeproj -sdk iphone
 project's own code keep their debug information, from which an archive's dSYM gives crash reports their files and
 lines; the app ships without it.
 
+`crossbind app dev -p ios --device` opens the app on an iPhone or iPad as it develops, on iOS 17 or later. The first
+time on a device:
+
+- Connect it with a cable and unlock it. crossbind pairs it with this Mac, which takes a tap on Trust on the phone and
+  its passcode.
+- Turn on its Developer Mode, in Settings › Privacy & Security › Developer Mode, which restarts it. The setting
+  appears once the phone has paired with a Mac.
+- Sign in to Xcode, under Settings › Accounts, with an account of the app's team. A free Apple Account will do: its
+  Personal Team signs for its own devices, 3 of them, with profiles that last 7 days, which each build renews. The phone
+  opens such a team's first app once Settings › General › VPN & Device Management trusts its developer. Without
+  `app.team` or `XCODE_DEVELOPMENT_TEAM`, the error names the teams Xcode is signed in to.
+- Xcode registers the device and the app's id with the team as it builds. An id belongs to the team that registered it
+  first, which for `dev.crossbind.<name>` may be another developer's: `app.id` then gives the app an id of its own.
+
+The phone reaches the dev server at this Mac's address on the network the cable makes between them, with no Wi-Fi; a
+phone paired over the network reaches it on the local network both are on. The dev server listens on that one address,
+and Vite's own `--host <address>` picks another. A `.local` name reaches nothing from the app.
+
 `app.encryption` tells App Store Connect whether the app uses encryption that export rules do not exempt, as the
 Info.plist's `ITSAppUsesNonExemptEncryption`; without it, App Store Connect asks for every build before TestFlight
 takes it. Set it to `false` when the app uses no encryption, or only what is exempt, as the system's HTTPS, and to
@@ -1174,7 +1194,9 @@ writes to logcat, under the tag `Crossbind`: the URL only on `localhost`, and th
   one clicked outside the document, three in a row and a picker cancelled. On macOS a `Blob` has been. WebView2 and
   WebKitGTK handle downloads themselves on Windows and Linux, which has not been measured yet.
 - iOS 15.1 or later, arm64 alone: devices, and the Simulator of an Apple silicon Mac. It builds on macOS with Xcode.
-- During development an iOS app runs in the Simulator; a device runs the Xcode project's build.
+- During development an iOS app runs in the Simulator, or with `--device` on an iPhone or iPad on iOS 17 or later. A
+  session on a device has been measured on an iPhone on iOS 27 on its cable with a paid team; a free Personal Team and
+  the local network were measured by hand.
 - Android 13 (API 33) or later, the level crossbind's Android libraries build against, with Android System WebView
   116 or later, the first that passes byte arrays as ArrayBuffer messages; an older WebView gets a message that names
   the version it needs. arm64-v8a and x86_64.
