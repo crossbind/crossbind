@@ -87,6 +87,15 @@ describe("Google Play's credentials", () => {
         expect(() => playCredentials({ [PLAY.key]: path.join(dir, 'none.json') }, {})).toThrow(`${PLAY.key} names ${path.join(dir, 'none.json')}, which is no file`);
     });
 
+    test("are a JSON key's text in the environment, as CI gives a secret, which no failure repeats", () => {
+        expect(playCredentials({ [PLAY.key]: fs.readFileSync(keyFile, 'utf8') }, {})).toMatchObject({ account: ACCOUNT, file: null });
+        const broken = () => playCredentials({ [PLAY.key]: '{ "private_key": "secret-material", ' }, {});
+        expect(broken).toThrow(`crossbind: ${PLAY.key} holds no JSON, so it is no service account key.`);
+        expect(broken).not.toThrow('secret-material');
+        expect(() => playCredentials({ [PLAY.key]: '{ "private_key": "secret-material" }' }, {}))
+            .toThrow(`crossbind: ${PLAY.key} has no client_email, token_uri, so it is no service account key.`);
+    });
+
     test('are an access token from the environment alone, as CI makes one with no key, and never with another kind', () => {
         expect(playCredentials({ [PLAY.token]: 'ci-token' }, {})).toEqual({ token: 'ci-token' });
         expect(playCredentials({}, { GOOGLE_PLAY_TOKEN: 'ci-token' })).toBeNull();

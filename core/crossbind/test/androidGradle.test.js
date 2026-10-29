@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
+import { afterAll, afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 
 // docker answers as it would; each Gradle run leaves the outputs its tasks make.
 const calls = [];
@@ -39,6 +39,8 @@ const {
     SIGNING, buildApk, machineUploadKey, packageAndroidRelease, releaseSigning, uploadKeyEnv,
 } = await import('../src/actions/androidGradle.js');
 const { getContentHash } = await import('../src/utils/hash.js');
+const { removeSecretFiles } = await import('../src/utils/secretFile.js');
+afterAll(removeSecretFiles);
 
 let keystore;
 
@@ -80,6 +82,14 @@ describe("an Android release's upload key", () => {
             .toThrow('which is no file');
         expect(releaseSigning({ [SIGNING.keystore]: keystore, [SIGNING.alias]: 'a', [SIGNING.password]: 'p', [SIGNING.keyPassword]: 'k' }))
             .toEqual({ file: keystore, names: [SIGNING.alias, SIGNING.password, SIGNING.keyPassword] });
+    });
+
+    test("is the keystore's base64 text in place of its file, as CI gives a secret", () => {
+        const bytes = Buffer.from(Array.from({ length: 120 }, (_, index) => index));
+        const text = bytes.toString('base64').replace(/(.{76})/g, '$1\n');
+        const signing = releaseSigning({ [SIGNING.keystore]: text, [SIGNING.alias]: 'a', [SIGNING.password]: 'p' });
+        expect(path.basename(path.dirname(signing.file))).toMatch(/^crossbind-secrets-/);
+        expect(Buffer.compare(fs.readFileSync(signing.file), bytes)).toBe(0);
     });
 });
 
