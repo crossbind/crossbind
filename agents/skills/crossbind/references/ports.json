@@ -195,7 +195,7 @@
       "npm": "@crossbind/port-lerc",
       "category": "image",
       "summary": "Limited-error raster compression",
-      "nativeVersion": "4.2.0",
+      "nativeVersion": "4.3.0",
       "license": "Apache-2.0",
       "homepage": "https://crossbind.dev/ports/lerc/",
       "targets": [
