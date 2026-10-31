@@ -1,5 +1,5 @@
 export default {
-    sha256: 'a1fb593ed1fcb5b38800caf3c4454f872745202e961d00d745e53d81447e17c9', // v4.2.0.tar.gz
+    sha256: '28d74992e0bc0f13ecdda1dd9ca3b40b1a87009369b9ec5a599853f6f311fee7', // v4.3.0.tar.gz
     getURL: (version) => `https://github.com/Esri/lerc/archive/refs/tags/v${version}.tar.gz`,
     buildType: 'cmake',
     // Huffman's trailing decoder read-ahead word is counted in the blob but never written.
