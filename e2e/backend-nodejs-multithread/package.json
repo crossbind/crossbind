@@ -28,7 +28,7 @@
         "@crossbind/embind-rust-demo": "workspace:^",
         "@crossbind/conformance-rust": "workspace:^",
         "@crossbind/conformance": "workspace:^",
-        "ws": "8.22.0",
+        "ws": "8.22.1",
         "xhr2": "^0.2.1"
     },
     "devDependencies": {
