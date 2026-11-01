@@ -1,15 +1,16 @@
 import { useState } from 'react';
-import { AGENT_URL, BRAND, LIBRARIES_URL, PLAYGROUND_URL, REPO_URL } from '../data.js';
+import { AGENT_URL, BRAND, PLAYGROUND_URL, REPO_URL } from '../data.js';
 import DocsMenu from './DocsMenu.jsx';
+import EcosystemMenu from './EcosystemMenu.jsx';
 import Logo from './Logo.jsx';
 import { isUnder, navLinkStyle } from './menu.jsx';
 import VersionMenu from './VersionMenu.jsx';
 
 const DOCS_PREFIXES = ['/guide', '/tutorial', '/examples', '/agent'];
+const ECOSYSTEM_PREFIXES = ['/ports', '/integrations'];
 
-// The links after the Docs menu, in order. Why has no entry on purpose, it lives in the docs and README.
+// The links after the Docs and Ecosystem menus, in order. Why has no entry on purpose, it lives in the docs and README.
 const LINKS = [
-    { id: 'libraries', label: 'Libraries', href: LIBRARIES_URL, prefix: '/ports' },
     { id: 'playground', label: 'Playground', href: PLAYGROUND_URL, prefix: '/playground' },
 ];
 
@@ -144,6 +145,7 @@ export default function Nav({ tokens, path = '/', onToggleTheme, onOpenSearch })
                 style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 4, flexGrow: 1, marginLeft: 'var(--nav-gap)' }}
             >
                 <DocsMenu tokens={tokens} path={path} active={DOCS_PREFIXES.some((prefix) => isUnder(path, prefix))} />
+                <EcosystemMenu tokens={tokens} path={path} active={ECOSYSTEM_PREFIXES.some((prefix) => isUnder(path, prefix))} />
                 {LINKS.map((link) => {
                     const active = isUnder(path, link.prefix);
                     return (

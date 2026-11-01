@@ -4,6 +4,7 @@ import ChangelogPage from './changelog/ChangelogPage.jsx';
 import Guide from './guide/Guide.jsx';
 import DocumentPage from './pages/DocumentPage.jsx';
 import ExamplesPage from './pages/ExamplesPage.jsx';
+import IntegrationsPage from './pages/IntegrationsPage.jsx';
 import PlaygroundPage from './playground/PlaygroundPage.jsx';
 import LibrariesPage from './ports/LibrariesPage.jsx';
 import PortPage from './ports/PortPage.jsx';
@@ -27,11 +28,12 @@ function currentPath(url) {
     return typeof location === 'undefined' ? '/' : location.pathname;
 }
 
-// Libraries, Examples, the playground, the tutorial, Privacy and License are pages of their own; everything else
-// that is not the landing renders in the guide shell.
+// Libraries, Integrations, Examples, the playground, the tutorial, Privacy and License are pages of their own;
+// everything else that is not the landing renders in the guide shell.
 function Page({ tokens, page }) {
     if (page.kind === 'ports-index') return <LibrariesPage tokens={tokens} page={page} />;
     if (page.kind === 'port') return <PortPage tokens={tokens} page={page} />;
+    if (page.kind === 'integrations') return <IntegrationsPage tokens={tokens} page={page} />;
     if (page.kind === 'examples') return <ExamplesPage tokens={tokens} page={page} />;
     if (page.kind === 'playground') return <PlaygroundPage tokens={tokens} page={page} />;
     if (page.kind === 'tutorial') return <TutorialPage tokens={tokens} page={page} />;

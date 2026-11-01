@@ -42,6 +42,7 @@ export const AUTHOR_URL = 'https://github.com/bugra9';
 export const PRIVACY_EMAIL = 'privacy@crossbind.dev';
 export const AGENT_URL = '/agent/';
 export const LIBRARIES_URL = '/ports/';
+export const INTEGRATIONS_URL = '/integrations/';
 export const EXAMPLES_URL = '/examples/';
 export const PLAYGROUND_URL = '/playground/';
 export const TUTORIAL_URL = '/tutorial/';
