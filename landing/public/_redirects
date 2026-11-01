@@ -71,7 +71,6 @@
 # Sub-pages of the cpp.js.org landing and its sample blog, which redirects here path for path.
 /bind-types /guide/bindings/ 301
 /how-it-works /guide/architecture/ 301
-/integrations /guide/browser/ 301
 /react-native /guide/react-native/ 301
 /web /guide/quick-start/ 301
 /seamless-integration /guide/quick-start/ 301
