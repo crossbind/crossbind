@@ -27,7 +27,11 @@ ENV EMSDK=/emsdk \
 COPY --from=emsdk /emsdk/upstream /emsdk/upstream
 # emsdk ships Emscripten's development dependencies (eslint, typescript, vite, webpack, ...). emcc
 # needs only the runtime set, and the dev tree carries most of the image's fixable npm and Go CVEs.
-RUN cd /emsdk/upstream/emscripten && npm prune --omit=dev --offline --no-audit --no-fund
+# Closure Compiler runs as its native build, which emsdk ships for both architectures, and falls
+# back to its jar only with a JVM, which this image has not got; the jar carries a Guava with
+# CVE-2026-102554. Its package stays, as the compiler's module imports the jar's path.
+RUN cd /emsdk/upstream/emscripten && npm prune --omit=dev --offline --no-audit --no-fund && \
+    rm node_modules/google-closure-compiler-java/compiler.jar
 COPY --from=emsdk /emsdk/LICENSE /opt/licenses/emsdk-LICENSE
 COPY --from=emsdk /emsdk/upstream/emscripten/LICENSE /opt/licenses/emscripten-LICENSE
 
