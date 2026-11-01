@@ -1,5 +1,15 @@
 # @crossbind/docker
 
+## Image family 1.0.19
+
+### Patch Changes
+
+- Compiled Kotlin in `android-app`'s warm-up project, so the image's offline Gradle cache holds the
+  Kotlin compiler and library that the Android Gradle plugin builds Kotlin sources with, and an
+  app's Android sources, an extension's among them, may be Kotlin. Without them a Kotlin source
+  failed to compile offline, for want of `kotlin-build-tools-impl` 2.2.10. The cache grows by
+  58 MB.
+
 ## Image family 1.0.18
 
 ### Patch Changes
