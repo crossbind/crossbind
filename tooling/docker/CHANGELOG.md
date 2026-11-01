@@ -9,6 +9,15 @@
   app's Android sources, an extension's among them, may be Kotlin. Without them a Kotlin source
   failed to compile offline, for want of `kotlin-build-tools-impl` 2.2.10. The cache grows by
   58 MB.
+- Removed the jar of Closure Compiler's Java build from `web`. emcc runs Closure's native build,
+  which the image has for both architectures, and only a JVM, which the image has not got, would
+  run the jar, whose Guava 33.4.6 carried CVE-2026-102554.
+- Rebuilt `windows` and `android-app` on OpenJDK 21.0.13 from Debian's security updates, which
+  fixes CVE-2026-91403 and CVE-2026-91415.
+- `android-app` still holds Guava with CVE-2026-102554 in Gradle 9.8.1, the Android Gradle
+  plugin's dependencies and the Kotlin Gradle plugin, none of which has a release with Guava
+  33.7.2. The image scans pass it under an exception in `.trivyignore` until 15 December 2026,
+  which `docs/known-issues.md` tracks.
 
 ## Image family 1.0.18
 

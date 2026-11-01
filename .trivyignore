@@ -1,0 +1,7 @@
+# Read by every image scan, which runs Trivy at the repository's root. An entry is a reviewed, time-bounded exception
+# that docs/known-issues.md tracks: renew it with a fresh review or remove it by its date, after which the scans fail.
+
+# Guava's DoS while deserializing (CVE-2026-102554, fixed in Guava 33.7.2) ships inside the android-app image's build
+# tools: Gradle 9.8.1's lib, AGP 9.4.1's dependency (AGP 9.5.0 still takes 33.4.0) and the Kotlin Gradle plugin's jar.
+# None has a release with the fix; they deserialize the build's own data, not input from outside.
+CVE-2026-102554 exp:2026-12-15
