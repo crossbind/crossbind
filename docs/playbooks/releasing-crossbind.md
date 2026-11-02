@@ -190,7 +190,7 @@ it once the train has published. A
 writing train refuses a package npm has never published and names this command; a dry run lists
 those packages.
 
-The repository uses the exact Node 24.22.1 LTS pin in `.nvmrc`; npm is pinned separately because it
+The repository uses the exact Node 26.13.0 LTS pin in `.nvmrc`; npm is pinned separately because it
 has no LTS channel. External actions are pinned to full commits. The repository-wide
 `crossbind-npm-release` concurrency group uses `cancel-in-progress: false`, so package trains cannot
 overlap.
