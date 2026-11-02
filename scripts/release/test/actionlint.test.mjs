@@ -283,6 +283,23 @@ test('every external action in every repository workflow is pinned to a full com
     assert.ok(validated > 0, 'no workflow has external actions to validate');
 });
 
+test('every job that runs Trivy checks out the repository first, as Trivy reads .trivyignore from the working directory', () => {
+    const workflowDirectory = path.join(ROOT, '.github', 'workflows');
+    const scanJobs = fs
+        .readdirSync(workflowDirectory)
+        .filter((name) => /\.ya?ml$/.test(name))
+        .flatMap((workflow) =>
+            fs
+                .readFileSync(path.join(workflowDirectory, workflow), 'utf8')
+                .split(/^(?= {4}[\w-]+:\s*$)/m)
+                .filter((job) => job.includes('aquasecurity/trivy-action@'))
+                .map((job) => ({ id: `${workflow}: ${job.trim().split(':')[0]}`, job })),
+        );
+    assert.ok(scanJobs.length > 0, 'no workflow runs Trivy');
+    const withoutCheckout = scanJobs.filter(({ job }) => !/actions\/checkout@[\s\S]*aquasecurity\/trivy-action@/.test(job)).map(({ id }) => id);
+    assert.deepEqual(withoutCheckout, []);
+});
+
 test('every workflow a workflow_run waits for exists under that name', () => {
     const workflowDirectory = path.join(ROOT, '.github', 'workflows');
     const sources = fs
