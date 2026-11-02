@@ -18,6 +18,9 @@
   plugin's dependencies and the Kotlin Gradle plugin, none of which has a release with Guava
   33.7.2. The image scans pass it under an exception in `.trivyignore` until 15 December 2026,
   which `docs/known-issues.md` tracks.
+- Refreshed the pinned `debian:trixie-slim` digest, the starting point of `base` (and so of
+  every image built on it) and of the stage that assembles the `linux` sysroots. The tag is the
+  same; upstream rebuilt it.
 
 ## Image family 1.0.18
 
