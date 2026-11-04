@@ -13,7 +13,7 @@
         "deploy": "node scripts/deploy.mjs"
     },
     "devDependencies": {
-        "wrangler": "4.156.1"
+        "wrangler": "4.157.0"
     },
     "dependencies": {
         "@cloudflare/containers": "0.3.7"
