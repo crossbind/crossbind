@@ -2,7 +2,9 @@
 // Byte arrays from transport.attachBytes up travel as attachments of a frame, a large result comes back on its own, and
 // a frame waits for the messages sent before it, so order holds where the two take different channels. A function
 // passed to the module goes as an id, and the host's calls of it run it here, later and without an answer.
-import { pack, unpack, CODEC_TAG as TAG } from './codec.js';
+import {
+    concatenate, pack, unpack, CODEC_TAG as TAG,
+} from './codec.js';
 
 const FUNCTION = Symbol('remote function');
 const LOCAL_MEMBERS = {
@@ -37,17 +39,6 @@ function receivePush([kind, id, value]) {
             throw error;
         });
     }
-}
-
-function concatenate(views) {
-    const total = views.reduce((sum, view) => sum + view.byteLength, 0);
-    const body = new Uint8Array(total);
-    let offset = 0;
-    for (const view of views) {
-        body.set(new Uint8Array(view.buffer, view.byteOffset, view.byteLength), offset);
-        offset += view.byteLength;
-    }
-    return body;
 }
 
 function createSession(transport) {

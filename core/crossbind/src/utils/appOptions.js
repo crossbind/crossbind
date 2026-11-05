@@ -1,6 +1,7 @@
 // The app section of crossbind.config.js: what a user sees of an app, its name and, on the desktop, its window, and where
 // its page opens files.
-import { fileTypeOwners, linkOwners } from './appLaunches.js';
+import { carriedPath } from './appFiles.js';
+import { activityTypeOwners, fileTypeOwners, linkOwners, shortcutItemOwners } from './appLaunches.js';
 
 const WINDOW_DEFAULTS = { width: 1024, height: 768, minWidth: 0, minHeight: 0, maxWidth: 0, maxHeight: 0, resizable: true, fullscreen: false, backgroundColor: null };
 // Larger than any display, and far within the int a host takes a size as.
@@ -31,6 +32,18 @@ export function appId(config) {
     // An empty part would let "." or ".." name the folder above the app's own.
     if (typeof id !== 'string' || !/^[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)*$/.test(id)) {
         throw new Error(`crossbind: app.id ${JSON.stringify(id)} is no bundle id, which takes dot-separated parts of letters, digits and hyphens, as com.example.app does.`);
+    }
+    return id;
+}
+
+// An Android application id: dot-separated parts of letters, digits and underscores that each start with a letter.
+const ANDROID_APP_ID = /^[A-Za-z][A-Za-z0-9_]*(\.[A-Za-z][A-Za-z0-9_]*)+$/;
+
+// An Android app's id: the project's app.id, else one made from the project's name.
+export function androidAppId(config) {
+    const id = config.app.id ?? `dev.crossbind.${config.general.name.replace(/[^A-Za-z0-9.]/g, '_')}`;
+    if (!ANDROID_APP_ID.test(id)) {
+        throw new Error(`crossbind: ${JSON.stringify(id)} (app.id, else made from the project's name) is no Android application id, which takes dot-separated parts of letters, digits and underscores that each start with a letter, as com.example.app does. Set app.id in crossbind.config.js.`);
     }
     return id;
 }
@@ -202,6 +215,15 @@ function windowsVersion(config) {
     return { text: version, numbers: [...numbers, 0, 0, 0].slice(0, 4).join(',') };
 }
 
+// The files and folders of the project the app carries for its own native code, as app.files lists them: inside the
+// project's folder, which keep their places in the app's files/.
+export function appFiles(config) {
+    const files = config.app.files ?? [];
+    if (!Array.isArray(files)) throw new Error(`crossbind: app.files ${JSON.stringify(files)} is no list of the project's files and folders, as ['seed.sqlite'] is.`);
+    const root = config.paths.project;
+    return files.map((file) => carriedPath('app.files', root, file, "project's"));
+}
+
 // Where the page's shell.openPath opens a file: nowhere unless app.openPath lists it, as opening a program runs it.
 function appOpenPath(config) {
     const places = config.app.openPath ?? [];
@@ -213,6 +235,26 @@ function appOpenPath(config) {
         throw new Error(`crossbind: app.openPath takes ${OPEN_PATH_PLACES.join(', ')}; ${unknown.map((place) => JSON.stringify(place)).join(', ')} is none of them.`);
     }
     return places;
+}
+
+// The origins whose pages load in the app beside its own, as app.navigation.load lists them for the host's
+// page-navigation: http and https ones alone, each as a URL's origin is, as 'https://login.example.com'.
+function appNavigation(config) {
+    const navigation = config.app.navigation ?? {};
+    if (navigation === null || typeof navigation !== 'object' || Array.isArray(navigation)) {
+        throw new Error(`crossbind: app.navigation ${JSON.stringify(navigation)} is no object, as { load: ['https://login.example.com'] } is.`);
+    }
+    const unknown = Object.keys(navigation).filter((key) => key !== 'load');
+    if (unknown.length > 0) throw new Error(`crossbind: app.navigation takes load alone; ${unknown.join(', ')} is none of it.`);
+    const load = navigation.load ?? [];
+    if (!Array.isArray(load)) throw new Error(`crossbind: app.navigation.load ${JSON.stringify(load)} is no list of origins, as ['https://login.example.com'] is.`);
+    for (const origin of load) {
+        const url = typeof origin === 'string' && URL.canParse(origin) ? new URL(origin) : null;
+        if (!url || !['http:', 'https:'].includes(url.protocol) || url.origin !== origin) {
+            throw new Error(`crossbind: app.navigation.load's ${JSON.stringify(origin)} is no http or https origin, as 'https://login.example.com' is, with no path, no default port and its host in lower case.`);
+        }
+    }
+    return { load };
 }
 
 // Schemes the web, the system or crossbind owns, which no app takes, and the keys of Windows' own classes, whose name a
@@ -354,20 +396,28 @@ function windowDefines(window) {
     ];
 }
 
-// The options of the host's own extensions, from the app's: the files, which hand the page the files no extension
-// owns, to an app that opens files; a desktop app's instance, where it keeps one, the app's id, which names the
-// instance; the links, which hand the page the links of app.urlSchemes, and a phone's of app.links, where it lists any;
-// the shell's where its page opens files; a Linux app's menu the app's id, which its tray names itself by on the session
-// bus; and a desktop app's updater app.updater, with the app's version and id, which an update's signature covers.
+// The options of the host's own extensions, from the app's: an Apple app's activities, which hand the page the user
+// activities of app.activityTypes and take its own, the types it lists, where it lists any; the files, which hand the
+// page the files no extension owns, to an app that opens files; a desktop app's instance, where it keeps one, the app's
+// id, which names the instance; the links, which hand the page the links of app.urlSchemes, and a phone's of app.links,
+// where it lists any; a phone's shortcuts, which hand the page the taps of app.shortcutItems' quick actions, where it
+// lists any;
+// the shell's where its page opens files; the page's navigation the origins app.navigation.load lists; a Linux app's
+// menu the app's id, which its tray names itself by on the session bus; and a desktop app's updater app.updater, with
+// the app's version and id, which an update's signature covers.
 export function hostExtensionOptions(config, platform) {
     const isDesktop = DESKTOP.includes(platform);
     const updater = isDesktop ? appUpdater(config) : null;
     const isOwn = ({ extension }) => extension === null;
+    const ownActivityTypes = ['darwin', 'ios'].includes(platform) ? activityTypeOwners(config).filter(isOwn).map(({ type }) => type) : [];
     return {
+        ...(ownActivityTypes.length > 0 ? { activities: { types: ownActivityTypes } } : {}),
         ...(fileTypeOwners(config).length > 0 ? { files: {} } : {}),
         ...(isDesktop && appSingleInstance(config, platform) ? { instance: { id: appId(config) } } : {}),
         ...(urlSchemeOwners(config).some(isOwn) || (!isDesktop && linkOwners(config).some(isOwn)) ? { links: {} } : {}),
+        ...(!isDesktop && shortcutItemOwners(config).some(isOwn) ? { shortcuts: {} } : {}),
         shell: { openPath: appOpenPath(config) },
+        'page-navigation': appNavigation(config),
         ...(platform === 'linux' ? { menu: { id: appId(config) } } : {}),
         // WKWebView gives a macOS page no location of its own.
         ...(platform === 'darwin' && 'location' in appPermissions(config) ? { 'page-location': {} } : {}),
@@ -375,10 +425,11 @@ export function hostExtensionOptions(config, platform) {
     };
 }
 
-// The header an app's host compiles its name with, an iOS or desktop host the color it shows until its page paints and
-// the devices the page may use, a desktop host its id and window, and a Windows host its version resource.
+// The header an app's host compiles its id and name with, an iOS or desktop host the color it shows until its page paints
+// and the devices the page may use, a desktop host its window, and a Windows host its version resource.
 export function appHeader(config, platform) {
     const comment = '// crossbind writes this file from crossbind.config.js and package.json.';
+    const id = `#define CROSSBIND_APP_ID "${platform === 'android' ? androidAppId(config) : appId(config)}"`;
     const name = `#define CROSSBIND_APP_NAME "${appDisplayName(config)}"`;
     const color = appBackgroundColor(config);
     const permissions = appPermissions(config);
@@ -387,7 +438,7 @@ export function appHeader(config, platform) {
         ...(color ? [`#define CROSSBIND_APP_BACKGROUND_COLOR 0x${color.slice(1).toLowerCase()}`] : []),
         ...PERMISSIONS.map((name) => `#define CROSSBIND_APP_PERMISSION_${name.toUpperCase()} ${name in permissions ? 1 : 0}`),
     ];
-    if (!DESKTOP.includes(platform)) return [comment, ...page, name, ''].join('\n');
+    if (!DESKTOP.includes(platform)) return [comment, ...page, id, name, ''].join('\n');
     // The category goes to the Info.plist and the desktop entry, which the build writes later; any desktop refuses a
     // wrong one here.
     const copyright = appCopyright(config);
@@ -395,7 +446,7 @@ export function appHeader(config, platform) {
     const lines = [
         comment,
         ...page,
-        `#define CROSSBIND_APP_ID "${appId(config)}"`,
+        id,
         name,
         ...windowDefines(appWindow(config)),
     ];

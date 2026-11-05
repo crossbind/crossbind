@@ -17,6 +17,12 @@ namespace {
 std::atomic<bool> isOpeningAnew{false};
 }  // namespace
 
+std::string originOf(const std::string &url) {
+    const auto scheme = url.find("://");
+    if (scheme == std::string::npos) return url;
+    return url.substr(0, url.find_first_of("/?#", scheme + 3));
+}
+
 const char *devUrl() {
 #ifdef CROSSBIND_APP_DEV
     return std::getenv("CROSSBIND_APP_URL");
@@ -29,7 +35,7 @@ const char *devUrl() {
 Core &start(const char *devUrl, const Launch *launch) {
     const std::string resources = resourceDir();
     Core &core = *new Core(resources + "/page");
-    core.cors = devUrl != nullptr;
+    if (devUrl) core.corsOrigin = originOf(devUrl);
     // An extension's entry reads the launch's arguments already.
     if (launch) firstLaunch() = *launch;
     try {
@@ -40,6 +46,7 @@ Core &start(const char *devUrl, const Launch *launch) {
             std::fflush(nullptr);
             std::_Exit(0);
         }
+        started();
     } catch (const std::exception &error) {
         fail(core, devUrl, error.what());
     } catch (...) {
@@ -56,8 +63,9 @@ Core &start(const char *devUrl, const Launch *launch) {
 }
 
 void quit(Core &core, int status) {
-    // The extensions quit before the module stops, which may take it a while: a later launch of an app kept to one
-    // instance then waits for this one to end, and becomes the next.
+    // The extensions hear the windows close and quit before the module stops, which may take it a while: a later launch
+    // of an app kept to one instance then waits for this one to end, and becomes the next.
+    windowsClosed();
     quitting();
     core.stop();
     // The instance left, the app this opens becomes the next. An app its user opened has no output, as fail() tells.

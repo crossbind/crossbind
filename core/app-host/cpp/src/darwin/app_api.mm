@@ -8,6 +8,7 @@
 
 #include "host_core.h"
 #include "platform.h"
+#include "values.h"
 
 #include <atomic>
 #include <cstdio>
@@ -115,6 +116,27 @@ void answerApp(SEL selector, id block) {
     class_addMethod([delegate class], selector, imp_implementationWithBlock(block), types);
 }
 }  // namespace
+
+void answerLaunches() {
+    // A user activity reaches the owner of its type, and macOS tells its user it could not continue one that none took.
+    answerApp(@selector(application:continueUserActivity:restorationHandler:), ^BOOL(id, NSApplication *, NSUserActivity *activity, id) {
+        return continueActivity((__bridge void *)activity);
+    });
+    // The app's push token, which an extension asked for with registerForPush(), why macOS gave none, and each silent
+    // push reach every extension; macOS takes no answer of a push.
+    answerApp(@selector(application:didRegisterForRemoteNotificationsWithDeviceToken:), ^(id, NSApplication *, NSData *token) {
+        crossbind::app::pushTokenArrived(hexOf(token));
+    });
+    answerApp(@selector(application:didFailToRegisterForRemoteNotificationsWithError:), ^(id, NSApplication *, NSError *error) {
+        crossbind::app::pushTokenFailed(textOf(error.localizedDescription));
+    });
+    answerApp(@selector(application:didReceiveRemoteNotification:), ^(id, NSApplication *, NSDictionary *payload) {
+        crossbind::app::pushArrived(valueOfPlist(payload), nullptr);
+    });
+    id appDelegate = NSApp.delegate;
+    NSApp.delegate = nil;
+    NSApp.delegate = appDelegate;
+}
 
 // A panel asks for its app, not a window of it; showWindow needs the window. The window fills the screen whatever
 // app.window's limits, which it holds to again after: AppKit keeps a window that does not resize, or one with a

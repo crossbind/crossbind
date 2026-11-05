@@ -54,15 +54,39 @@ Every platform compiles `app.sources`, so a source there that calls a platform's
 platform. An extension that takes some platforms alone gives its sources per platform, the entry among them; on a
 platform it gives none, the page's call rejects as the host has no such function: say so in the README.
 
+## Beyond functions
+
+An extension takes more than calls through the same registry, each as a section of
+[`docs/api/extensions.md`](../api/extensions.md) tells:
+
+| What | Through |
+|---|---|
+| URLs the page loads, as `<img>` and `<video>` do | `registry.route()`, [Routes](../api/extensions.md#routes) |
+| Progress before an answer, and the page's cancel | `call.send()`, `call.onCancel()`, [Messages, cancels and bytes](../api/extensions.md#messages-cancels-and-bytes) |
+| What it starts as the app runs, the app's windows, pages, state before its user, quit and reopening | `onStart`, `onWindow`, `onWindowClosed`, `onPage`, `onActive`, `onClose`, `onQuitRequest`, `onQuit`, `onReopen`, [The native side](../api/extensions.md#the-native-side) |
+| Events the page listens for | `registry.events()`, [The native side](../api/extensions.md#the-native-side) |
+| Launches, and the links, files, user activities and quick actions the system opens the app with | `onLaunch`, `onOpenUrl`, `onOpenFiles`, `onUserActivity`, `onShortcutItem`, with what the descriptor declares, [Launches and links](../api/extensions.md#launches-and-links) |
+| Notifications and push on iOS and macOS | `onNotification`, `addNotificationCategories()`, `registerForPush()`, `onPushToken`, `onPushTokenFailure`, `onPushMessage`, [Notifications and push](../api/extensions.md#notifications-and-push) |
+| The page's navigations, downloads, drops, dialogs, permissions and file inputs | the hooks of the role of each, which an extension takes from the host's with `replaces`, [The page's requests](../api/extensions.md#the-pages-requests) |
+| What one of the host's own does, as its tray | `replaces`, [The host's own extensions](../api/extensions.md#the-hosts-own-extensions) |
+| Files the app carries for it, as models | `app.files`, `registry.files()`, [What an extension is](../api/extensions.md#what-an-extension-is) |
+| A store the app is published to, or what installs a desktop app | `publisher`, `installer`, [Publishers](../api/extensions.md#publishers), [Installers](../api/extensions.md#installers) |
+
+What the system hands an app at launch reaches the owner the descriptor names: a scheme, a file type, a site, a user
+activity's type or a quick action has one owner, the app or one extension, and an extension that declares one calls its
+hook. What the host keeps for itself, [What the host keeps](../api/extensions.md#what-the-host-keeps) lists.
+
 ## Steps
 
-1. **Name it.** Lowercase letters and digits, dashes between. Look on npm for the keyword `crossbind-extension`
-   first, so two extensions do not take one name, which stops an app that lists both. Give it `contract: 1`, the
-   version of the contract it is written for.
+1. **Name it.** Lowercase letters and digits, from a letter, dashes between. Look on npm for the keyword `crossbind-extension`
+   first, so two extensions do not take one name, which stops an app that lists both: crossbind keeps the names of the
+   host's own extensions and of their roles, `app`, `events`, `crossbind` and those that start with `page-`. Give it
+   `contract: 1`, the version of the contract it is written for, and `replaces` for each role of the host's it takes.
 2. **Write the shared C++.** The entry registers each function as `<name>.<function>`, which the app checks as it
    starts, checks the options, and hands the call to the platform's code. A function that waits, as one that reads a
    file, goes `inBackground()`; one that calls the platform's UI goes `onMainThread()`, which runs it after what waits
-   there, or through the Java on Android. What the extension keeps for a page it lets go of in `onPage`.
+   there, or through the Java on Android. What the extension starts as the app runs it starts in `onStart`, and what it
+   keeps for a page it lets go of in `onPage`.
 3. **Write each platform.** Each answers the call once, from any thread. A failure rejects with `crossbind: ` and
    what happened; a function never does nothing.
 4. **Declare what each platform links and takes** in `crossbind.extension.js`, never by editing the app's generated
@@ -90,4 +114,9 @@ platform it gives none, the page's call rejects as the host has no such function
 - [ ] Nothing reaches beyond what the page could do itself without the app's opt-in in the extension's options.
 - [ ] Each platform the README names has passed its page-side checks.
 - [ ] The package carries every source it builds from, and no binary; `app.licenses` names the code of others in it.
-- [ ] The extension gives the `contract` it is written for.
+- [ ] The extension gives the `contract` it is written for, and `replaces` for each role of the host's it takes.
+- [ ] Each hook does its work on the thread its section names, and hands what the page should hear of on through
+      `registry.events()`, with `hold()` where it may come before the page listens, as a launch's does.
+- [ ] Each scheme, file type, site, user activity type and quick action the extension owns is in its descriptor, and
+      the hook that gets them is called on each platform the system hands them over on.
+- [ ] The files it carries are its own, inside its folder, with no link.

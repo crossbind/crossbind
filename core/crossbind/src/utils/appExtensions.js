@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { checkedFileTypes, checkedLinks } from './appLaunches.js';
+import { carriedPath, isOutside } from './appFiles.js';
+import { checkedActivityTypes, checkedFileTypes, checkedLinks, checkedShortcutItems } from './appLaunches.js';
 import { checkedPrivacy, checkedUrlSchemes } from './appOptions.js';
 import { isUnderBase } from './replaceBasePathForDocker.js';
 
@@ -8,15 +9,16 @@ import { isUnderBase } from './replaceBasePathForDocker.js';
 // includes are found in, and the macros they are compiled with.
 const COMPILED = ['sources', 'includes', 'defines'];
 // What an app extension may add on each platform, by the names crossbind's app commands give them, beside what it
-// compiles with: the frameworks an Apple host links, the libraries another links, an Apple app's entitlements and
-// Info.plist keys, an iOS app's reasons for Apple's required reason API, and of an Android app the folder of its Java
-// with the class in it the app calls, the permissions it asks for, a manifest of its own and the resources the app takes.
+// compiles with and the files it carries: the frameworks an Apple host links, the libraries another links, an Apple
+// app's entitlements and Info.plist keys, an iOS app's reasons for Apple's required reason API, and of an Android app the
+// folder of its Java with the class in it the app calls, the permissions it asks for, a manifest of its own and the
+// resources the app takes.
 const PLATFORM_PARTS = {
-    macos: [...COMPILED, 'frameworks', 'entitlements', 'plist'],
-    ios: [...COMPILED, 'frameworks', 'entitlements', 'plist', 'privacy'],
-    linux: [...COMPILED, 'libraries', 'packages', 'depends'],
-    windows: [...COMPILED, 'libraries'],
-    android: [...COMPILED, 'libraries', 'java', 'class', 'permissions', 'manifest', 'resources', 'maven', 'verification'],
+    macos: [...COMPILED, 'files', 'frameworks', 'entitlements', 'plist'],
+    ios: [...COMPILED, 'files', 'frameworks', 'entitlements', 'plist', 'privacy'],
+    linux: [...COMPILED, 'files', 'libraries', 'packages', 'depends'],
+    windows: [...COMPILED, 'files', 'libraries'],
+    android: [...COMPILED, 'files', 'libraries', 'java', 'class', 'permissions', 'manifest', 'resources', 'maven', 'verification'],
 };
 // An Android permission, as its manifest names it.
 const PERMISSION = /^[A-Za-z_][\w]*(\.[A-Za-z_][\w]*)+$/;
@@ -48,17 +50,29 @@ export const isJsonValue = (value, depth = 0) => depth <= MAX_JSON_DEPTH && (val
     || (isObject(value) && [Object.prototype, null].includes(Object.getPrototypeOf(value))
         && Object.entries(value).every(([key, item]) => key.isWellFormed() && isJsonValue(item, depth + 1))));
 
-// A file or folder of the extension's own, inside its folder.
-function ownPath(where, root, file, isFolder = false) {
+// The full path of a path of the extension's own, inside its folder.
+function insideOwn(where, root, file) {
     const full = path.resolve(root, String(file));
     const relative = path.relative(root, full);
-    if (typeof file !== 'string' || path.isAbsolute(file) || relative.startsWith('..') || relative === '') {
+    if (typeof file !== 'string' || path.isAbsolute(file) || isOutside(relative) || relative === '') {
         throw new Error(`crossbind: ${where} names ${JSON.stringify(file)}, which is no path inside the extension's folder.`);
     }
+    return full;
+}
+
+// A file or folder of the extension's own, inside its folder.
+function ownPath(where, root, file, isFolder = false) {
+    const full = insideOwn(where, root, file);
     if (!fs.existsSync(full) || fs.statSync(full).isDirectory() !== isFolder) {
         throw new Error(`crossbind: ${where} names ${file}, which is no ${isFolder ? 'folder' : 'file'} of the extension's.`);
     }
     return file;
+}
+
+// The files and folders an extension carries, as app.files and a platform's files list them, inside its folder.
+function checkedFiles(where, root, files) {
+    if (!Array.isArray(files)) throw new Error(`crossbind: ${where} is no list of the files and folders the extension carries.`);
+    return files.map((file) => carriedPath(where, root, file, "extension's"));
 }
 
 function checkedSources(where, root, sources, pattern) {
@@ -202,6 +216,7 @@ function checkedPlatform(where, root, platform, part) {
         const at = `${where}.${key}`;
         if (!allowed.includes(key)) throw new Error(`crossbind: ${where} takes ${allowed.join(', ')}; ${key} is none of them.`);
         if (COMPILED.includes(key)) return [key, checkedCompiled(at, root, key, value, ['macos', 'ios'].includes(platform) ? APPLE_SOURCE : SOURCE)];
+        if (key === 'files') return [key, checkedFiles(at, root, value)];
         if (key === 'java' || key === 'resources') return [key, ownPath(at, root, value, true)];
         if (key === 'manifest') return [key, ownPath(at, root, value)];
         if (key === 'class') return [key, value];
@@ -330,12 +345,15 @@ export function checkedExtension(extension, root, where) {
     const checked = Object.fromEntries(Object.entries(app).map(([key, value]) => {
         const at = `${where}'s app.${key}`;
         if (COMPILED.includes(key)) return [key, checkedCompiled(at, root, key, value, SOURCE)];
+        if (key === 'files') return [key, checkedFiles(at, root, value)];
         if (key === 'urlSchemes') return [key, checkedUrlSchemes(value, at)];
         if (key === 'fileTypes') return [key, checkedFileTypes(value, at)];
         if (key === 'links') return [key, checkedLinks(value, at)];
+        if (key === 'activityTypes') return [key, checkedActivityTypes(value, at)];
+        if (key === 'shortcutItems') return [key, checkedShortcutItems(value, at)];
         if (key === 'licenses') return [key, checkedLicenses(at, root, value)];
         if (!Object.hasOwn(PLATFORM_PARTS, key)) {
-            throw new Error(`crossbind: ${where}'s app takes ${COMPILED.join(', ')}, urlSchemes, fileTypes, links, licenses and ${Object.keys(PLATFORM_PARTS).join(', ')}; ${key} is none of them.`);
+            throw new Error(`crossbind: ${where}'s app takes ${COMPILED.join(', ')}, files, urlSchemes, fileTypes, links, activityTypes, shortcutItems, licenses and ${Object.keys(PLATFORM_PARTS).join(', ')}; ${key} is none of them.`);
         }
         return [key, checkedPlatform(at, root, key, value)];
     }));
@@ -350,21 +368,70 @@ export function checkedExtension(extension, root, where) {
     return { name: extension.name, root, app: checked, options: extension.options, ...roles };
 }
 
-// The version of the contract between crossbind and its extensions, which a change that breaks an extension raises.
+// The versions of the contract between crossbind and its extensions this crossbind takes, the oldest to the newest: an
+// extension written for any of them builds. A minor version that adds to the contract raises the newest, and a major
+// version that breaks it the oldest.
+export const OLDEST_EXTENSION_CONTRACT = 1;
 export const EXTENSION_CONTRACT = 1;
 
-// The contract an extension is written for is this crossbind's: one written for another stops the build, naming what to
-// update.
+// The contract an extension is written for, or the several it is written for alike, is one this crossbind takes: one
+// written for others alone stops the build, naming what to update.
 function checkedContract({ contract }, where, update) {
-    if (contract === EXTENSION_CONTRACT) return;
     if (contract === undefined) {
         throw new Error(`crossbind: ${where} names no contract, the version of crossbind's extension contract it is written for, as contract: ${EXTENSION_CONTRACT} is for this crossbind: ${update}.`);
     }
-    if (!Number.isInteger(contract) || contract < 1) throw new Error(`crossbind: ${where}'s contract ${JSON.stringify(contract)} is no version of crossbind's extension contract, as ${EXTENSION_CONTRACT} is.`);
-    if (contract > EXTENSION_CONTRACT) {
-        throw new Error(`crossbind: ${where} is written for crossbind's extension contract ${contract}, newer than this crossbind's ${EXTENSION_CONTRACT}: update crossbind.`);
+    const versions = Array.isArray(contract) ? contract : [contract];
+    if (versions.length === 0 || versions.some((version) => !Number.isInteger(version) || version < 1) || new Set(versions).size !== versions.length) {
+        throw new Error(`crossbind: ${where}'s contract ${JSON.stringify(contract)} is no version of crossbind's extension contract, as 1 or [1, 2] is.`);
     }
-    throw new Error(`crossbind: ${where} is written for crossbind's extension contract ${contract}, older than this crossbind's ${EXTENSION_CONTRACT}: ${update}.`);
+    if (versions.some((version) => version >= OLDEST_EXTENSION_CONTRACT && version <= EXTENSION_CONTRACT)) return;
+    const named = versions.join(' and ');
+    if (versions.every((version) => version > EXTENSION_CONTRACT)) {
+        throw new Error(`crossbind: ${where} is written for crossbind's extension contract ${named}, newer than this crossbind's ${EXTENSION_CONTRACT}: update crossbind.`);
+    }
+    const taken = OLDEST_EXTENSION_CONTRACT === EXTENSION_CONTRACT ? `${EXTENSION_CONTRACT}` : `${OLDEST_EXTENSION_CONTRACT} to ${EXTENSION_CONTRACT}`;
+    throw new Error(`crossbind: ${where} is written for crossbind's extension contract ${named}, older than this crossbind's ${taken}: ${update}.`);
+}
+
+// The roles an app's extension may take in place of the host's own, each with the host's extension that holds it: the
+// host's menu holds the menus, the tray and the notifications, its page-navigation the page's navigations and their
+// authentications, and each other extension its own role.
+export const HOST_ROLES = {
+    activities: 'activities',
+    dialog: 'dialog',
+    files: 'files',
+    instance: 'instance',
+    links: 'links',
+    menu: 'menu',
+    notification: 'menu',
+    'page-authentication': 'page-navigation',
+    'page-dialogs': 'page-dialogs',
+    'page-downloads': 'page-downloads',
+    'page-drops': 'page-drops',
+    'page-files': 'page-files',
+    'page-location': 'page-location',
+    'page-navigation': 'page-navigation',
+    'page-permissions': 'page-permissions',
+    power: 'power',
+    shell: 'shell',
+    shortcuts: 'shortcuts',
+    tray: 'menu',
+    updater: 'updater',
+};
+// The names crossbind keeps for itself, which no extension crossbind.config.js lists takes: its roles, the names of the
+// host's own of this contract, those of the app's own functions and events, and every name of a page's request.
+const KEPT_NAMES = new Set([...Object.keys(HOST_ROLES), ...Object.values(HOST_ROLES), 'app', 'events', 'crossbind']);
+const isKeptName = (name) => KEPT_NAMES.has(name) || name.startsWith('page-');
+
+// The roles of the host's a listed extension takes, each once: one, or a list of them.
+function checkedReplaces(replaces, where) {
+    const roles = Array.isArray(replaces) ? replaces : [replaces];
+    if (roles.length === 0 || roles.some((role) => typeof role !== 'string') || new Set(roles).size !== roles.length) {
+        throw new Error(`crossbind: ${where}'s replaces is no role of the host's, or list of them, as 'tray' or ['page-navigation', 'page-downloads'] is.`);
+    }
+    const unknown = roles.find((role) => !Object.hasOwn(HOST_ROLES, role));
+    if (unknown) throw new Error(`crossbind: ${where}'s replaces names ${unknown}, which is no role of the host's: it takes ${Object.keys(HOST_ROLES).join(', ')}.`);
+    return roles;
 }
 
 // The extension package a listed extension's folder is in, under the project's base, which its package.json names as
@@ -387,7 +454,7 @@ export function extensionPackage(root, base) {
 
 // What an extension of crossbind's build once hooked into, which no build runs.
 const OLD_HOOKS = ['loadConfig', 'buildWasm', 'createLib'];
-const LISTED_KEYS = ['name', 'contract', 'root', 'app', 'options', 'publisher', 'installer'];
+const LISTED_KEYS = ['name', 'contract', 'root', 'app', 'options', 'publisher', 'installer', 'replaces'];
 
 // An extension crossbind.config.js lists, as its package's crossbind.extension.js gives it: its name, the folder its
 // files are in, which a build sees under the project's base alone, and what it adds to an app.
@@ -406,7 +473,12 @@ export function listedExtension(extension, where, base) {
     if (unknown) throw new Error(`crossbind: ${where} takes ${LISTED_KEYS.join(', ')}; ${unknown} is none of them.`);
     if (!isFolder) throw new Error(`crossbind: ${where} has no root, the absolute path of the folder its files are in.`);
     if (!isUnderBase(root, base)) throw new Error(`crossbind: ${where}'s root ${root} is outside ${base}, the project's base and all a build sees.`);
-    return checkedExtension(extension, root, where);
+    const checked = checkedExtension(extension, root, where);
+    if (Object.hasOwn(HOST_ROLES, checked.name)) {
+        throw new Error(`crossbind: ${where} is named ${checked.name}, which crossbind keeps for the host's own: name it as its package, as acme-${checked.name}, and give replaces: '${checked.name}' to take the host's place.`);
+    }
+    if (isKeptName(checked.name)) throw new Error(`crossbind: ${where} is named ${checked.name}, which crossbind keeps for itself: name it as its package, as acme-${checked.name}.`);
+    return extension.replaces === undefined ? checked : { ...checked, replaces: checkedReplaces(extension.replaces, where) };
 }
 
 // The host's own extensions: one folder of the host's extensions/ each, named as its extension.json names it.
@@ -443,20 +515,48 @@ export async function extensionStep(name, which, run) {
 export const withOptions = (extensions, options) => extensions.map((extension) => (Object.hasOwn(options, extension.name)
     ? { ...extension, options: options[extension.name] } : extension));
 
-// The host's own extensions an app has, with the options the app's give them: every one, but the files, the instance,
-// the links, the page's location and the updater only where they give them options, as an app's do that opens files, a
-// desktop app's that keeps one instance or has app.updater, an app's that lists app.urlSchemes or a phone's app.links,
-// and a macOS app's whose app.permissions lists the location. The host refuses the updater's functions to any other app.
+// The host's own extensions an app has, with the options the app's give them: every one, but the activities, the files,
+// the instance, the links, the page's location, the shortcuts and the updater only where they give them options, as an
+// Apple app's do that lists app.activityTypes, an app's that opens files, a desktop app's that keeps one instance or has
+// app.updater, an app's that lists app.urlSchemes or a phone's app.links or app.shortcutItems, and a macOS app's whose
+// app.permissions lists the location. The host refuses the activities' and the updater's functions to any other app.
 export const appHostExtensions = (appHostRoot, options) => withOptions(hostExtensions(appHostRoot), options)
-    .filter((extension) => !['files', 'instance', 'links', 'page-location', 'updater'].includes(extension.name) || Object.hasOwn(options, extension.name));
+    .filter((extension) => !['activities', 'files', 'instance', 'links', 'page-location', 'shortcuts', 'updater'].includes(extension.name)
+        || Object.hasOwn(options, extension.name));
 
 // The extensions crossbind.config.js lists that add to an app: all but those that give a publisher or an installer
 // alone, which leave the host's own of their name as it is.
 export const appExtensionsOf = (listed) => listed
     .filter((extension) => (!extension.publisher && !extension.installer) || Object.keys(extension.app).length > 0);
 
-// The host's own extensions an app has, then those crossbind.config.js lists: one listed under the name of one of the
-// host's takes its place.
+// The host's own extensions an app has, then those crossbind.config.js lists, each with the roles it holds: a role a
+// listed one replaces leaves the host's that held it, which the app leaves out once it holds none, and two that replace
+// one stop the build. A listed one of the name of a host's own that a later crossbind adds takes its place, saying so,
+// as no listed one of this contract has such a name.
+export function withRoles(own, listed, warn = () => {}) {
+    const taken = new Map();
+    for (const extension of listed) {
+        for (const role of extension.replaces ?? []) {
+            if (taken.has(role)) throw new Error(`crossbind: the extensions ${taken.get(role)} and ${extension.name} both replace the host's ${role}, which one alone takes.`);
+            taken.set(role, extension.name);
+        }
+    }
+    const kept = own.flatMap((extension) => {
+        if (listed.some(({ name }) => name === extension.name)) {
+            warn(`the extension ${extension.name} that crossbind.config.js lists takes the place of the host's own ${extension.name}, which this crossbind adds: name it as its package, as acme-${extension.name}, to keep both`);
+            return [];
+        }
+        const held = Object.values(HOST_ROLES).includes(extension.name)
+            ? Object.entries(HOST_ROLES).filter(([, holder]) => holder === extension.name).map(([role]) => role)
+            : [extension.name];
+        const roles = held.filter((role) => !taken.has(role));
+        return roles.length > 0 ? [{ ...extension, roles, given: held.filter((role) => taken.has(role)) }] : [];
+    });
+    return [...kept, ...listed.map((extension) => ({ ...extension, roles: extension.replaces ?? [], given: [] }))];
+}
+
+// crossbind's own publishers or installers, then those crossbind.config.js lists: one listed under the name of one of
+// crossbind's takes its place.
 export function withListed(own, listed) {
     const kept = own.map((extension) => listed.find(({ name }) => name === extension.name) ?? extension);
     return [...kept, ...listed.filter((extension) => !kept.includes(extension))];
@@ -529,7 +629,7 @@ export function extensionPart(extensions, platform) {
     const owned = (key) => extensions.filter((extension) => own(extension)[key]).map((extension) => [`the extension ${extension.name}`, own(extension)[key]]);
     const native = extensions.filter((extension) => sourcesOf(extension).length > 0);
     return {
-        native: native.map(({ name, options }) => ({ name, options: options ?? null })),
+        native: native.map(({ name, options, roles, given }) => ({ name, options: options ?? null, roles: roles ?? [], given: given ?? [] })),
         roots: native.map(({ root }) => root),
         sources: extensions.flatMap(sourcesOf),
         // An Apple app's Swift compiles apart, before the host, whose own sources hold the extension's entry.
@@ -551,7 +651,7 @@ export function extensionPart(extensions, platform) {
         frameworks: unique(extensions.flatMap((extension) => own(extension).frameworks ?? [])),
         libraries: unique(extensions.flatMap((extension) => own(extension).libraries ?? [])),
         java: extensions.filter((extension) => own(extension).java).map((extension) => ({
-            name: extension.name, dir: path.join(extension.root, own(extension).java), className: own(extension).class,
+            name: extension.name, dir: path.join(extension.root, own(extension).java), className: own(extension).class, roles: extension.roles ?? [],
         })),
         // An Android app's libraries of Maven's, by the extension that uses them, with its verification metadata.
         maven: extensions.filter((extension) => own(extension).maven).map((extension) => ({
@@ -565,6 +665,9 @@ export function extensionPart(extensions, platform) {
             .map((extension) => ({ name: extension.name, file: path.join(extension.root, own(extension).manifest) })),
         resources: extensions.filter((extension) => own(extension).resources)
             .map((extension) => ({ name: extension.name, dir: path.join(extension.root, own(extension).resources) })),
+        // The files each carries, which the app keeps in ext/<name>/.
+        files: extensions.filter((extension) => both(extension, 'files').length > 0)
+            .map((extension) => ({ name: extension.name, root: extension.root, paths: both(extension, 'files') })),
     };
 }
 
@@ -595,20 +698,25 @@ function optionsText(name, options) {
 }
 
 // The C++ that starts the extensions with native code, each through its entry, which its sources define, with its
-// options, and that names the owner of each of the app's URL schemes, of the extensions of the files it opens and of its
-// sites' links: the extension that declared it, or for the app's own the host's links or files, which hand them to the
-// page. An owner has native code to get what it owns.
-export function registrationSource(native, urlSchemes, fileTypes = [], links = []) {
-    const schemes = urlSchemes.map(({ scheme, extension }) => ({ key: scheme, owner: extension ?? 'links', what: `the links of ${scheme}` }));
-    const files = fileTypes.flatMap(({ extensions, extension }) => extensions.map((ending) => ({ key: ending, owner: extension ?? 'files', what: `the files .${ending}` })));
+// options and the roles of the host's it holds, and that names the owner of each of the app's URL schemes, of the
+// extensions of the files it opens, of its sites' links, of the types of the user activities it continues and of its
+// icon's quick actions: the extension that declared it, or for the app's own the holder of the links', files',
+// activities' or shortcuts' role, which hands them to the page. An owner has native code to get what it owns.
+export function registrationSource(native, urlSchemes, fileTypes = [], links = [], activityTypes = [], shortcutItems = []) {
+    const holderOf = (role) => native.find(({ roles = [] }) => roles.includes(role))?.name ?? role;
+    const schemes = urlSchemes.map(({ scheme, extension }) => ({ key: scheme, owner: extension ?? holderOf('links'), what: `the links of ${scheme}` }));
+    const files = fileTypes.flatMap(({ extensions, extension }) => extensions.map((ending) => ({ key: ending, owner: extension ?? holderOf('files'), what: `the files .${ending}` })));
     // The MIME type an Android file comes with names its owner before its name does, where one owner's types alone list it.
-    const typed = fileTypes.flatMap(({ mimeTypes = [], extension }) => mimeTypes.map((mime) => ({ key: mime, owner: extension ?? 'files' })));
+    const typed = fileTypes.flatMap(({ mimeTypes = [], extension }) => mimeTypes.map((mime) => ({ key: mime, owner: extension ?? holderOf('files') })));
     const mimes = typed.filter(({ key, owner }, index) => typed.findIndex((other) => other.key === key) === index
         && typed.every((other) => other.key !== key || other.owner === owner));
-    const sites = links.map(({ link, extension }) => ({ key: link, owner: extension ?? 'links', what: `the links of ${link}` }));
-    const unheard = [...schemes, ...files, ...sites].find(({ owner }) => !native.some(({ name }) => name === owner));
+    const sites = links.map(({ link, extension }) => ({ key: link, owner: extension ?? holderOf('links'), what: `the links of ${link}` }));
+    const activities = activityTypes.map(({ type, extension }) => ({ key: type, owner: extension ?? holderOf('activities'), what: `the user activities ${type}` }));
+    const shortcuts = shortcutItems.map(({ type, extension }) => ({ key: type, owner: extension ?? holderOf('shortcuts'), what: `the quick action ${type}` }));
+    const unheard = [...schemes, ...files, ...sites, ...activities, ...shortcuts].find(({ owner }) => !native.some(({ name }) => name === owner));
     if (unheard) throw new Error(`crossbind: the extension ${unheard.owner} gets ${unheard.what}, but has no native code on this platform.`);
-    const start = ({ name, options }) => `    startExtension("${name}", ${options === null ? 'nullptr' : optionsText(name, options)}, ${entryOf(name)});`;
+    const list = (roles = []) => `{${roles.map((role) => `"${role}"`).join(', ')}}`;
+    const start = ({ name, options, roles, given }) => `    startExtension("${name}", ${options === null ? 'nullptr' : optionsText(name, options)}, ${entryOf(name)}, ${list(roles)}, ${list(given)});`;
     const owners = (fn, owned) => [
         '',
         `std::vector<std::pair<std::string, std::string>> ${fn}() {`,
@@ -617,15 +725,17 @@ export function registrationSource(native, urlSchemes, fileTypes = [], links = [
     ];
     return [
         "// crossbind writes this file from the app's extensions: the entry of each one with native code, which starts it with",
-        "// its options, and the owner of each of the app's URL schemes, file types, their MIME types and links, the extension",
-        '// that gets them.',
+        "// its options, the roles of the host's it holds and those it gave an app's extension, and the owner of each of the",
+        "// app's URL schemes, file types, their MIME types, links, user activity types and quick actions, the extension that",
+        '// gets them.',
         '#include "crossbind/extension.h"',
         '',
         ...native.map(({ name }) => `void ${entryOf(name)}(crossbind::Registry &registry);`),
         ...(native.length > 0 ? [''] : []),
         'namespace crossbind::app {',
         '',
-        'void startExtension(const char *name, const char *options, void (*entry)(Registry &));',
+        'void startExtension(const char *name, const char *options, void (*entry)(Registry &), std::vector<std::string> roles,',
+        '    std::vector<std::string> given);',
         '',
         'void extensionEntries() {',
         ...native.map(start),
@@ -634,6 +744,8 @@ export function registrationSource(native, urlSchemes, fileTypes = [], links = [
         ...owners('fileTypes', files),
         ...owners('fileMimeTypes', mimes),
         ...owners('appLinks', sites),
+        ...owners('userActivityTypes', activities),
+        ...owners('shortcutItemTypes', shortcuts),
         '',
         '}  // namespace crossbind::app',
         '',

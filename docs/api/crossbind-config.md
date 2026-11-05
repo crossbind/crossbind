@@ -261,9 +261,22 @@ export default {
       // then maybe the path they start with. Each site names the app in its apple-app-site-association and
       // assetlinks.json (see app.md). The page gets them as open-url links do; an extension's own reach the extension
       // alone. Default: [], none.
+    activityTypes: ['com.example.notes.edit'],
+      // The types of the user activities an iOS or macOS app continues, as Handoff does: the page makes one current with
+      // app.setUserActivity() and gets each continued as the event user-activity (see app.md); an extension's own reach
+      // the extension alone. Default: [], none.
+    shortcutItems: [{ type: 'new-note', title: 'New note', subtitle: 'A blank one', icon: 'compose' }],
+      // The quick actions a long press of an iOS or Android app's icon shows: each by its type, with its title, and on iOS
+      // a subtitle and one of its own icons. The page gets each tap as the event shortcut-item (see app.md); an
+      // extension's own reach the extension alone. Default: [], none.
     permissions: { camera: 'To scan barcodes', microphone: 'To record voice notes', location: 'To find the nearest store' },
       // The devices the page may use through getUserMedia() and navigator.geolocation, each with the reason for it,
       // which iOS shows its user when it asks (see app.md). Default: {}, none.
+    navigation: { load: ['https://docs.example.com'] },
+      // The origins beyond the app's own whose pages load in the app, http or https, each as new URL(…).origin names
+      // it, which the host's page-navigation reads: it opens any other link the page's user follows in the browser and
+      // refuses the rest, and an extension that takes its role takes its place (see extensions.md). A page of another origin
+      // reaches none of the app's functions. Default: { load: [] }.
     encryption: false,
       // Whether an iOS app uses encryption that export rules do not exempt, which App Store Connect otherwise asks for
       // every build: false for none or only the system's, as HTTPS; true for its own. A legal statement, so there is
@@ -272,6 +285,11 @@ export default {
       // Apple's reasons for the required reason API an iOS app calls, by category: fileTimestamp, systemBootTime,
       // diskSpace, activeKeyboards and userDefaults. The build writes them as the app's privacy manifest, and a
       // release build names each library that calls a category without one (see app.md). Default: {}, none.
+    files: ['seed.sqlite', 'models/'],
+      // The project's files and folders the app carries for its own native code, as a database to start from, each in
+      // the place it had in the project: in the folder crossbind/app's app.paths().resources and <crossbind/app.h>'s
+      // paths().resources name, read-only, which Android copies out of its APK as the app first starts after each
+      // install. None holds a link. Default: [], none.
     openPath: ['logs', 'picked'],
       // Where the page's shell.openPath opens files (see app.md): 'data', 'cache' and 'logs', the app's folders,
       // and 'picked', what a dialog picked during this run. Opening a program runs it. Default: [], nowhere.
@@ -336,8 +354,9 @@ export default {
   // ─────────────────────────────────────────────────────────────
   extensions: [
     {
-      name: 'clipboard',                     // lowercase letters and digits, dashes between
-      contract: 1,                           // the version of the contract it is written for
+      name: 'clipboard',                     // lowercase letters and digits, from a letter, dashes between
+      contract: 1,                           // the version of the contract it is written for, or a list, as [1, 2]
+      replaces: 'tray',                      // the roles of the host's extensions it takes, one or a list
       root: '/abs/path/to/the/extension',    // the folder its files are in, under paths.base
       app: {
         sources: ['native/clipboard.cpp'],   // C and C++ every platform compiles, relative to root
@@ -346,6 +365,8 @@ export default {
         urlSchemes: [],                      // schemes whose links its native code gets, beside app.urlSchemes'
         fileTypes: [],                       // types whose files its native code gets, beside app.fileTypes'
         links: [],                           // its sites' links its native code gets on iOS and Android, beside app.links'
+        activityTypes: [],                   // user activities its native code continues on iOS and macOS, beside app.activityTypes'
+        shortcutItems: [],                   // quick actions whose taps its native code gets on iOS and Android, beside app.shortcutItems'
         licenses: [],                        // the code of others it carries, for the app's license report
         macos:   { sources: ['native/darwin.mm'], frameworks: ['AppKit'], entitlements: {}, plist: {} },
         ios:     { sources: ['native/ios.mm'], frameworks: ['UIKit'], entitlements: {}, plist: {}, privacy: {} },
@@ -363,16 +384,17 @@ export default {
   ],
     // Usually what an extension package's crossbind.extension.js gives, its root
     // its own folder. An app's host builds them in beside its own extensions,
-    // dialog, instance, links, menu, page-dialogs, page-files, page-location,
-    // page-permissions, power, shell and updater, which one listed under the same name replaces, and its sources add
-    // functions, and what they do as the app is launched, opens a link and quits,
+    // activities, dialog, files, instance, links, menu, page-dialogs, page-downloads, page-drops, page-files,
+    // page-location, page-navigation, page-permissions, power, shell, shortcuts and updater, whose roles one listed
+    // with replaces takes, and whose names, their roles' and app, events, crossbind and page-* none takes; and its
+    // sources add functions, and what they do as the app is launched, opens a link and quits,
     // through <crossbind/extension.h>: C and C++ on every platform, Objective-C
     // and Objective-C++ on Apple's. Two owners of one URL scheme stop the build.
     // An Android extension's Java is the folder java names, class the
     // dev.crossbind.app.Extension in it the activity calls. Entitlements merge
     // with app.permissions' on macOS, and Info.plist keys with crossbind's own;
     // two owners giving one key different values stop the build, but lists,
-    // which join. An extension written for another contract stops the build,
+    // which join. An extension written for no version of the contract this crossbind takes stops the build,
     // naming what to update.
 
   // ─────────────────────────────────────────────────────────────

@@ -117,13 +117,62 @@ static std::vector<uint8_t> readBody(NSURLRequest *request) {
     return body;
 }
 
+// A file's length of bytes goes in parts, read on a queue of their own, each handed to WebKit before the next is read,
+// until the page stops the task.
+static void sendFile(id<WKURLSchemeTask> task, NSHTTPURLResponse *response, NSString *path, unsigned long long length, NSMutableSet *stopped) {
+    constexpr NSUInteger CHUNK_BYTES = 1 << 20;
+    dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
+        NSFileHandle *file = [NSFileHandle fileHandleForReadingAtPath:path];
+        __block BOOL isDone = NO;
+        __block unsigned long long left = length;
+        // On the main thread, which alone touches stopped.
+        BOOL (^isStopped)(void) = ^BOOL {
+            if (![stopped containsObject:task]) return NO;
+            [stopped removeObject:task];
+            return YES;
+        };
+        dispatch_sync(dispatch_get_main_queue(), ^{
+            isDone = isStopped();
+            if (isDone) return;
+            if (!file) {
+                [task didFailWithError:[NSError errorWithDomain:NSCocoaErrorDomain code:NSFileReadNoSuchFileError userInfo:nil]];
+                isDone = YES;
+                return;
+            }
+            [task didReceiveResponse:response];
+        });
+        while (!isDone) {
+            @autoreleasepool {
+                NSError *error = nil;
+                NSData *chunk = left == 0 ? [NSData data] : [file readDataUpToLength:static_cast<NSUInteger>(MIN(left, CHUNK_BYTES)) error:&error];
+                left -= chunk.length;
+                dispatch_sync(dispatch_get_main_queue(), ^{
+                    isDone = YES;
+                    if (isStopped()) return;
+                    if (!chunk) {
+                        [task didFailWithError:error];
+                    } else if (chunk.length == 0) {
+                        [task didFinish];
+                    } else {
+                        [task didReceiveData:chunk];
+                        isDone = NO;
+                    }
+                });
+            }
+        }
+        [file closeFile];
+    });
+}
+
 - (void)webView:(WKWebView *)webView startURLSchemeTask:(id<WKURLSchemeTask>)task {
     NSURLRequest *request = task.request;
     SchemeRequest incoming;
     incoming.method = request.HTTPMethod.UTF8String ?: "GET";
-    incoming.path = request.URL.path.UTF8String ?: "";
+    incoming.path = [NSURLComponents componentsWithURL:request.URL resolvingAgainstBaseURL:NO].percentEncodedPath.UTF8String ?: "";
     incoming.query = request.URL.query.UTF8String ?: "";
     incoming.body = readBody(request);
+    NSDictionary<NSString *, NSString *> *fields = request.allHTTPHeaderFields;
+    for (NSString *name in fields) incoming.headers.emplace_back(name.UTF8String ?: "", fields[name].UTF8String ?: "");
 
     id<WKURLSchemeTask> held = task;
     NSURL *url = request.URL;
@@ -131,21 +180,29 @@ static std::vector<uint8_t> readBody(NSURLRequest *request) {
     _handler(std::move(incoming), [held, url, stopped](SchemeResponse response) {
         // A call's answer comes from the host's JS thread, which has no autorelease pool of its own.
         @autoreleasepool {
+            const bool isFile = !response.file.empty();
             auto *bytes = new std::vector<uint8_t>(std::move(response.body));
             NSData *data = [[NSData alloc] initWithBytesNoCopy:bytes->data()
                                                         length:bytes->size()
                                                    deallocator:^(void *, NSUInteger) { delete bytes; }];
+            const unsigned long long length = isFile ? response.fileLength : data.length;
             NSMutableDictionary *headers = [@{
-                @"Content-Type": [NSString stringWithUTF8String:response.mime.c_str()],
-                @"Content-Length": [NSString stringWithFormat:@"%lu", static_cast<unsigned long>(data.length)],
+                // A route's type that is no UTF-8 makes no string.
+                @"Content-Type": [NSString stringWithUTF8String:response.mime.c_str()] ?: @"application/octet-stream",
+                @"Content-Length": [NSString stringWithFormat:@"%llu", length],
             } mutableCopy];
             for (const auto &[name, value] : response.headers) {
-                headers[[NSString stringWithUTF8String:name.c_str()]] = [NSString stringWithUTF8String:value.c_str()];
+                NSString *key = [NSString stringWithUTF8String:name.c_str()];
+                if (key) headers[key] = [NSString stringWithUTF8String:value.c_str()];
             }
             NSHTTPURLResponse *http = [[NSHTTPURLResponse alloc] initWithURL:url
                                                                   statusCode:response.status
                                                                  HTTPVersion:@"HTTP/1.1"
                                                                 headerFields:headers];
+            if (isFile) {
+                sendFile(held, http, [NSString stringWithUTF8String:response.file.c_str()], length, stopped);
+                return;
+            }
             onMainThread(^{
                 // The page may have dropped the request meanwhile; WebKit refuses answers to a stopped task.
                 if ([stopped containsObject:held]) {

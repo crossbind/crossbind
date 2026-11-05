@@ -29,14 +29,14 @@ import findFiles from '../utils/findFiles.js';
 import { getContentHash, getFilesFingerprint } from '../utils/hash.js';
 import { xmlPlist } from '../utils/plist.js';
 import {
-    appBackgroundColor, appCategory, appCopyright, appDisplayName, appEncryption, appHeader, appId, appPermissions, appPrivacy, appUrlSchemes,
-    hostExtensionOptions, urlSchemeOwners, usageDescriptions,
+    androidAppId, appBackgroundColor, appCategory, appCopyright, appDisplayName, appEncryption, appFiles, appHeader, appId, appPermissions, appPrivacy,
+    appUrlSchemes, hostExtensionOptions, urlSchemeOwners, usageDescriptions,
 } from '../utils/appOptions.js';
-import { fileTypeOwners, linkOwners, macDocumentTypes } from '../utils/appLaunches.js';
+import { carriedFilesOf, copyCarriedFiles } from '../utils/appFiles.js';
+import { activityTypeOwners, fileTypeOwners, linkOwners, macDocumentTypes, shortcutItemOwners } from '../utils/appLaunches.js';
 import { unreasonedApis, unreasonedWarning } from '../utils/requiredReasonApis.js';
 import {
-    appExtensionsOf, appHostExtensions, extensionCmakeArgs, extensionPart, hostExtensions, mergedEntitlements, mergedPlist, mergedPrivacy, registrationSource,
-    withListed,
+    appExtensionsOf, appHostExtensions, extensionCmakeArgs, extensionPart, mergedEntitlements, mergedPlist, mergedPrivacy, registrationSource, withRoles,
 } from '../utils/appExtensions.js';
 import { androidIcons, iosIcon, linuxIcon, macIcon, readAppIcon, windowsIcon } from '../utils/appIcon.js';
 import writeIfChanged from '../utils/writeIfChanged.js';
@@ -56,10 +56,11 @@ const LINUX_MULTIARCH = { x64: 'x86_64-linux-gnu', arm64: 'aarch64-linux-gnu' };
 const IMAGE_HERMES = `/opt/crossbind/hermes/${HERMES.version}`;
 
 // What the host's extensions the app has, with the options the app's give them, and those crossbind.config.js lists add
-// to an app of this platform; one listed under the name of one of the host's replaces it.
-const extensionsOf = (platform) => extensionPart(withListed(
+// to an app of this platform, each with the roles of the host's it holds: a role a listed one replaces leaves the host's.
+const extensionsOf = (platform) => extensionPart(withRoles(
     appHostExtensions(resolveAppHostRoot(), hostExtensionOptions(state.config, platform)),
     appExtensionsOf(state.config.extensions),
+    (message) => console.warn(`crossbind: ${message}.`),
 ), platform);
 
 // Where an app keeps its executable and its files: a macOS bundle, a Linux or Windows directory, or the app folder of an
@@ -135,18 +136,6 @@ export function appTeam() {
     return team;
 }
 
-// An Android application id: dot-separated parts of letters, digits and underscores that each start with a letter.
-const ANDROID_APP_ID = /^[A-Za-z][A-Za-z0-9_]*(\.[A-Za-z][A-Za-z0-9_]*)+$/;
-
-// An Android app's id: the project's app.id, else one made from the project's name.
-export function androidAppId(config = state.config) {
-    const id = config.app.id ?? `dev.crossbind.${config.general.name.replace(/[^A-Za-z0-9.]/g, '_')}`;
-    if (!ANDROID_APP_ID.test(id)) {
-        throw new Error(`crossbind: ${JSON.stringify(id)} (app.id, else made from the project's name) is no Android application id, which takes dot-separated parts of letters, digits and underscores that each start with a letter, as com.example.app does. Set app.id in crossbind.config.js.`);
-    }
-    return id;
-}
-
 // Apple takes dot-separated integers alone as an app's version.
 export const appVersion = () => (state.config.package?.version ?? '1.0.0').replace(/[-+].*$/, '');
 
@@ -216,13 +205,14 @@ async function bundle(input, file, plugins) {
     await build.close();
 }
 
-// A development build claims no scheme, nor any file type: the built app, of the same id, owns them, and a link it opens
-// shows its own page.
+// A development build claims no scheme, no file type and no user activity: the built app, of the same id, owns them, and
+// a link it opens shows its own page.
 const urlSchemesOf = (target) => (target.buildType === 'release' ? appUrlSchemes(state.config) : []);
 const fileTypesOf = (target) => (target.buildType === 'release' ? fileTypeOwners(state.config) : []);
+const activityTypesOf = (target) => (target.buildType === 'release' ? activityTypeOwners(state.config).map(({ type }) => type) : []);
 
 // The app's Info.plist, with the keys its extensions give.
-const infoPlist = (name, version, hasIcon, urlSchemes, fileTypes) => xmlPlist(mergedPlist({
+const infoPlist = (name, version, hasIcon, urlSchemes, fileTypes, activityTypes) => xmlPlist(mergedPlist({
     CFBundleDisplayName: appDisplayName(state.config),
     ...(fileTypes.length > 0 ? { CFBundleDocumentTypes: macDocumentTypes(fileTypes) } : {}),
     CFBundleExecutable: name,
@@ -240,8 +230,12 @@ const infoPlist = (name, version, hasIcon, urlSchemes, fileTypes) => xmlPlist(me
     NSHighResolutionCapable: true,
     // The app menu's About item shows it.
     ...(appCopyright(state.config) ? { NSHumanReadableCopyright: appCopyright(state.config) } : {}),
+    ...(activityTypes.length > 0 ? { NSUserActivityTypes: activityTypes } : {}),
     ...usageDescriptions(state.config, 'darwin'),
 }, extensionsOf('darwin').plist));
+
+// The app's own files, as app.files lists them, by the project's folder.
+const ownFiles = () => ({ root: state.config.paths.project, paths: appFiles(state.config) });
 
 // The host's bytecode and the data the packages ship, beside the page's folder.
 function copyAppFiles(dir, hbc, target) {
@@ -250,6 +244,7 @@ function copyAppFiles(dir, hbc, target) {
     Object.entries(getData('data', target)).forEach(([source, dataName]) => {
         if (fs.existsSync(source)) fs.cpSync(source, `${dir}/data/${dataName}`, { recursive: true });
     });
+    copyCarriedFiles(dir, extensionsOf(target.platform).files, ownFiles());
 }
 
 // Everything but the page: the host and the app's files, its icon, and on macOS Hermes beside them. A Windows host
@@ -264,7 +259,7 @@ function assembleApp(target, { executable, hbc, hermes, icon }) {
     copyAppFiles(`${app}/${layout.resources}`, hbc, target);
     if (target.platform === 'linux' && icon) fs.writeFileSync(`${app}/${layout.resources}/icon.png`, linuxIcon(icon));
     if (target.platform !== 'darwin') return;
-    fs.writeFileSync(`${app}/Contents/Info.plist`, infoPlist(name, appVersion(), Boolean(icon), urlSchemesOf(target), fileTypesOf(target)));
+    fs.writeFileSync(`${app}/Contents/Info.plist`, infoPlist(name, appVersion(), Boolean(icon), urlSchemesOf(target), fileTypesOf(target), activityTypesOf(target)));
     if (icon) fs.writeFileSync(`${app}/Contents/Resources/icon.icns`, macIcon(icon));
     const framework = `${app}/Contents/Frameworks/hermesvm.framework`;
     fs.cpSync(`${hermes}/Library/Frameworks/macosx/hermesvm.framework`, framework, { recursive: true, verbatimSymlinks: true });
@@ -436,6 +431,7 @@ export function publishApp(target, { to = appOutputPath(target), page = null } =
             parts, identity: { id: appId(state.config), team: appTeam() }, label: appDisplayName(state.config), version: appVersion(),
             build: build === null ? appVersion() : String(build), icon: icon && iosIcon(icon), urlSchemes: appUrlSchemes(state.config),
             fileTypes: fileTypeOwners(state.config), links: linkOwners(state.config).map(({ link }) => link),
+            activityTypes: activityTypeOwners(state.config).map(({ type }) => type), shortcutItems: shortcutItemOwners(state.config),
             background: appBackgroundColor(state.config), usage: usageDescriptions(state.config, 'ios'), encryption: appEncryption(state.config),
         };
         const extensions = extensionsOf('ios');
@@ -445,9 +441,9 @@ export function publishApp(target, { to = appOutputPath(target), page = null } =
     } else if (target.platform === 'android') {
         const icon = readAppIcon(state.config);
         const options = {
-            parts: appParts(target), id: androidAppId(), label: appDisplayName(state.config), version: androidVersion(), icons: icon && androidIcons(icon),
+            parts: appParts(target), id: androidAppId(state.config), label: appDisplayName(state.config), version: androidVersion(), icons: icon && androidIcons(icon),
             urlSchemes: appUrlSchemes(state.config), background: appBackgroundColor(state.config), permissions: Object.keys(appPermissions(state.config)),
-            fileTypes: fileTypeOwners(state.config), links: linkOwners(state.config).map(({ link }) => link),
+            fileTypes: fileTypeOwners(state.config), links: linkOwners(state.config).map(({ link }) => link), shortcutItems: shortcutItemOwners(state.config),
         };
         const extensions = extensionsOf('android');
         writeGradleProject(to, {
@@ -499,17 +495,27 @@ export default async function buildApp(target, { bridges = [], force = false } =
     const header = appHeader(state.config, target.platform);
     const icon = readAppIcon(state.config);
     const extensions = extensionsOf(target.platform);
-    // A desktop's system hands an app no https link: its owners there are those with native code, whose onUrl a phone's
-    // code may share.
+    const carried = carriedFilesOf(extensions.files, ownFiles());
+    const carriedPaths = new Set(carried);
+    // A desktop's system hands an app no https link: its owners there are those with native code, whose onOpenUrl a
+    // phone's code may share.
     const isPhone = ['ios', 'android'].includes(target.platform);
     const links = linkOwners(state.config).filter(({ extension }) => isPhone || extensions.native.some(({ name }) => name === (extension ?? 'links')));
-    const registration = registrationSource(extensions.native, urlSchemeOwners(state.config), fileTypeOwners(state.config), links);
+    // Another system continues no user activity: its owners there are those with native code, whose onUserActivity
+    // Apple's code may share.
+    const isApple = ['darwin', 'ios'].includes(target.platform);
+    const activities = activityTypeOwners(state.config)
+        .filter(({ extension }) => isApple || extensions.native.some(({ name }) => name === (extension ?? 'activities')));
+    // A desktop has no quick actions either.
+    const shortcuts = shortcutItemOwners(state.config)
+        .filter(({ extension }) => isPhone || extensions.native.some(({ name }) => name === (extension ?? 'shortcuts')));
+    const registration = registrationSource(extensions.native, urlSchemeOwners(state.config), fileTypeOwners(state.config), links, activities, shortcuts);
 
     const buildType = target.buildType === 'release' ? 'Release' : 'Debug';
     const { build } = state.config.paths;
     const appHostRoot = resolveAppHostRoot();
-    appExtensionsOf(state.config.extensions).filter(({ name }) => hostExtensions(appHostRoot).some((own) => own.name === name))
-        .forEach(({ name, root }) => logger.info(`[${target.path}] the extension ${name} of ${root} replaces the host's own`));
+    appExtensionsOf(state.config.extensions).filter(({ replaces }) => replaces)
+        .forEach(({ name, root, replaces }) => logger.info(`[${target.path}] the extension ${name} of ${root} takes the host's ${replaces.join(', ')}`));
     const jsiRoot = resolveAppEmbindJsiRoot();
     const { hermes, cmakeArgs, inputs } = await hostInputs(target);
 
@@ -536,7 +542,8 @@ export default async function buildApp(target, { bridges = [], force = false } =
         // A desktop app carries its icon; an iOS or Android one gets it as its project is written.
         icon: ['ios', 'android'].includes(target.platform) ? null : icon?.hash ?? null,
         // A macOS app's bundle takes its id, name and version from it.
-        infoPlist: target.platform === 'darwin' ? infoPlist(state.config.general.name, appVersion(), Boolean(icon), urlSchemesOf(target), fileTypesOf(target)) : null,
+        infoPlist: target.platform === 'darwin'
+            ? infoPlist(state.config.general.name, appVersion(), Boolean(icon), urlSchemesOf(target), fileTypesOf(target), activityTypesOf(target)) : null,
         hermes: HERMES.version,
         inputs,
         linkArgs,
@@ -546,6 +553,11 @@ export default async function buildApp(target, { bridges = [], force = false } =
         }),
         env: getEnv(target),
         data: getData('data', target),
+        // What the app carries, by its size and time, as a large model would take long to read at each build.
+        carried: carried.map((file) => {
+            const stat = fs.statSync(file);
+            return { file, size: stat.size, mtimeMs: stat.mtimeMs };
+        }),
         version: state.config.package?.version,
         runtime: getFilesFingerprint(filesUnder([
             `${appHostRoot}/cpp`, `${appHostRoot}/js`, `${appHostRoot}/third_party`, `${jsiRoot}/cpp/src`, `${jsiRoot}/js`,
@@ -555,7 +567,7 @@ export default async function buildApp(target, { bridges = [], force = false } =
         // An iOS app's frameworks reach its Xcode project through what the host's build writes.
         extensions: {
             registration,
-            files: getFilesFingerprint(filesUnder(extensions.roots)),
+            files: getFilesFingerprint(filesUnder(extensions.roots).filter((file) => !carriedPaths.has(path.resolve(file)))),
             compiled: extensions.compiled,
             link: hostLinkArgs.slice(linkArgs.length),
             frameworks: extensions.frameworks,

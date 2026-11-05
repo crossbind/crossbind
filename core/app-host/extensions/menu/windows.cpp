@@ -533,6 +533,68 @@ void setMenu(std::vector<MenuItem> menus, MenuClicked clicked, std::function<voi
     });
 }
 
+// The menu opens at the page's point in the webview, which WebView2 zooms and scales to the screen's pixels, from the
+// top left of its bounds in its parent window. Its loop runs the tasks of the main thread, and so the page's next
+// popup, which waits for none.
+void popupMenu(std::vector<MenuItem> items, double x, double y, std::function<void(Failure, std::optional<std::string>)> done) {
+    onMainThread([items = std::move(items), x, y, done = std::move(done)] {
+        static bool isOpen = false;
+        if (!follow() || !controller) {
+            done(std::string("crossbind: the app has no window to show a menu in"), std::nullopt);
+            return;
+        }
+        if (isOpen) {
+            done(std::string("crossbind: a menu of the page's is open already"), std::nullopt);
+            return;
+        }
+        HMENU menu = CreatePopupMenu();
+        if (!menu) {
+            done("crossbind: the menu cannot be made: error " + std::to_string(GetLastError()), std::nullopt);
+            return;
+        }
+        Built popup;
+        try {
+            for (const auto &item : items) addItem(menu, item, popup);
+        } catch (const std::exception &error) {
+            DestroyMenu(menu);
+            done(std::string(error.what()), std::nullopt);
+            return;
+        }
+        RECT bounds{};
+        controller->get_Bounds(&bounds);
+        double zoom = 1;
+        controller->get_ZoomFactor(&zoom);
+        double scale = 1;
+        ICoreWebView2Controller3 *scaled = nullptr;
+        if (SUCCEEDED(controller->QueryInterface(IID_ICoreWebView2Controller3, reinterpret_cast<void **>(&scaled)))) {
+            scaled->get_RasterizationScale(&scale);
+            scaled->Release();
+        }
+        HWND parent = nullptr;
+        controller->get_ParentWindow(&parent);
+        POINT at{bounds.left + static_cast<LONG>(x * zoom * scale), bounds.top + static_cast<LONG>(y * zoom * scale)};
+        ClientToScreen(parent ? parent : window, &at);
+        isOpen = true;
+        const auto command = static_cast<UINT>(TrackPopupMenuEx(menu, TPM_RETURNCMD | TPM_RIGHTBUTTON, at.x, at.y, window, nullptr));
+        isOpen = false;
+        DestroyMenu(menu);
+        std::optional<std::string> picked;
+        if (command >= FIRST_COMMAND && command - FIRST_COMMAND < popup.commands.size()) {
+            const Command &item = popup.commands[command - FIRST_COMMAND];
+            if (!item.role.empty()) {
+                runRole(item.role);
+            } else if (!item.id.empty()) {
+                picked = item.id;
+            }
+        }
+        done(std::nullopt, picked);
+    });
+}
+
+void setDockMenu(std::vector<MenuItem>, MenuClicked, std::function<void(Failure)>) {
+    throw std::runtime_error("crossbind: a macOS app alone has a Dock menu");
+}
+
 void setTray(TrayOptions options, MenuClicked clicked, std::function<void(Failure)> done) {
     onMainThread([options = std::move(options), clicked = std::move(clicked), done = std::move(done)] {
         follow();

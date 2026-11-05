@@ -1,0 +1,11 @@
+{
+    "name": "page-downloads",
+    "contract": 1,
+    "app": {
+        "macos": { "sources": ["downloads.cpp"] },
+        "ios": { "sources": ["downloads.cpp"] },
+        "linux": { "sources": ["downloads.cpp"] },
+        "windows": { "sources": ["downloads.cpp"] },
+        "android": { "sources": ["downloads.cpp"] }
+    }
+}

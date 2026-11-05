@@ -173,6 +173,53 @@ describe("an Android app's Gradle project", () => {
         fs.rmSync(root, { recursive: true, force: true });
     });
 
+    test("shows app.shortcutItems as its icon's static shortcuts, with the app's icon, which the host's trampoline hands its activity", () => {
+        const root = fs.mkdtempSync(path.join(os.tmpdir(), 'crossbind-gradle-'));
+        const projectOf = (shortcutItems, icons = null) => {
+            const to = path.join(root, `demo-${shortcutItems.length}-${Boolean(icons)}`);
+            writeGradleProject(to, { parts: [part(root, 'x86_64')], id: 'com.example.demo', label: 'Demo', version: { name: '1.0.0', code: 1 }, icons, shortcutItems });
+            const main = path.join(to, 'app', 'src', 'main');
+            const read = (file) => (fs.existsSync(path.join(main, file)) ? fs.readFileSync(path.join(main, file), 'utf8') : null);
+            return {
+                manifest: read('AndroidManifest.xml'), shortcuts: read('res/xml/shortcuts.xml'), labels: read('res/values/shortcuts.xml'),
+                gradle: fs.readFileSync(path.join(to, 'app', 'build.gradle'), 'utf8'),
+            };
+        };
+        const items = [
+            { type: 'new-note', title: 'Tom\'s "new" note & <more>', subtitle: 'iOS alone', icon: 'compose' },
+            { type: 'com.example.scan', title: '@scan 50% off\\', subtitle: null, icon: null },
+            { type: '1', title: ' ?attr', subtitle: null, icon: null },
+        ];
+        const icons = { 'mipmap-mdpi/ic_launcher_foreground.png': 'mdpi png' };
+        const { manifest, shortcuts, labels, gradle } = projectOf(items, icons);
+        expect(manifest).toContain([
+            '            <meta-data android:name="android.app.shortcuts" android:resource="@xml/shortcuts" />',
+            '        </activity>',
+        ].join('\n'));
+        expect(manifest).toContain('<activity android:name="dev.crossbind.app.CrossbindShortcutActivity" android:exported="false" android:taskAffinity=""');
+        expect(gradle).toContain("launchMode: 'singleTask'");
+        expect(shortcuts).toContain([
+            '    <shortcut android:shortcutId="new-note" android:icon="@mipmap/ic_launcher" android:shortcutShortLabel="@string/crossbind_shortcut_0">',
+            '        <intent android:action="dev.crossbind.app.SHORTCUT" android:targetPackage="com.example.demo" android:targetClass="dev.crossbind.app.CrossbindShortcutActivity">',
+            '            <extra android:name="dev.crossbind.app.shortcut" android:value="type:new-note" />',
+            '        </intent>',
+            '    </shortcut>',
+        ].join('\n'));
+        expect(shortcuts).toContain('<shortcut android:shortcutId="com.example.scan" android:icon="@mipmap/ic_launcher" android:shortcutShortLabel="@string/crossbind_shortcut_1">');
+        expect(labels).toContain('    <string name="crossbind_shortcut_0" formatted="false">Tom\\\'s \\"new\\" note &amp; &lt;more&gt;</string>');
+        expect(labels).toContain('    <string name="crossbind_shortcut_1" formatted="false">\\@scan 50% off\\\\</string>');
+        // Android reads an extra of digits as a number, and a label that starts with ? after a space as a reference.
+        expect(shortcuts).toContain('<extra android:name="dev.crossbind.app.shortcut" android:value="type:1" />');
+        expect(labels).toContain('    <string name="crossbind_shortcut_2" formatted="false"> \\?attr</string>');
+        // Without the app's icon, Android shows the launcher's own.
+        expect(projectOf(items).shortcuts).toContain('<shortcut android:shortcutId="new-note" android:shortcutShortLabel="@string/crossbind_shortcut_0">');
+        const plain = projectOf([]);
+        expect(plain.manifest).not.toContain('android.app.shortcuts');
+        expect([plain.shortcuts, plain.labels]).toEqual([null, null]);
+        expect(plain.gradle).toContain("launchMode: 'standard'");
+        fs.rmSync(root, { recursive: true, force: true });
+    });
+
     test("asks Maven for its extensions' libraries, checking each file Gradle resolves by the image's metadata and theirs", () => {
         const root = fs.mkdtempSync(path.join(os.tmpdir(), 'crossbind-gradle-'));
         const to = path.join(root, 'demo-app-android');
@@ -193,21 +240,21 @@ describe("an Android app's Gradle project", () => {
         fs.rmSync(root, { recursive: true, force: true });
     });
 
-    test("takes each extension's Java beside the activity, which calls its class, and refuses one that brings a file the project has", () => {
+    test("takes each extension's Java beside the activity, which calls its class and knows the holder of each role, and refuses one that brings a file the project has", () => {
         const root = fs.mkdtempSync(path.join(os.tmpdir(), 'crossbind-gradle-'));
         const to = path.join(root, 'demo-app-android');
-        const javaOf = (name, file, className) => {
+        const javaOf = (name, file, className, roles = []) => {
             const dir = path.join(root, name, 'android');
             fs.mkdirSync(path.dirname(path.join(dir, file)), { recursive: true });
             fs.writeFileSync(path.join(dir, file), `package ${className.replace(/\.[^.]+$/, '')};`);
-            return { name, dir, className };
+            return { name, dir, className, roles };
         };
         const write = (java) => writeGradleProject(to, { parts: [part(root, 'x86_64')], id: 'com.example.demo', label: 'Demo', version: { name: '1.0.0', code: 1 }, java });
         const clipboard = path.join('dev', 'crossbind', 'clipboard', 'ClipboardExtension.java');
         const kotlin = path.join('dev', 'crossbind', 'storage', 'Keychain.kt');
         const storage = javaOf('secure-storage', path.join('dev', 'crossbind', 'storage', 'StorageExtension.java'), 'dev.crossbind.storage.StorageExtension');
         fs.writeFileSync(path.join(storage.dir, kotlin), 'package dev.crossbind.storage');
-        write([javaOf('clipboard', clipboard, 'dev.crossbind.clipboard.ClipboardExtension'), storage]);
+        write([javaOf('clipboard', clipboard, 'dev.crossbind.clipboard.ClipboardExtension', ['page-dialogs', 'page-files']), storage]);
         const sources = path.join(to, 'app', 'src', 'main', 'java');
         expect(fs.readFileSync(path.join(sources, clipboard), 'utf8')).toBe('package dev.crossbind.clipboard;');
         // Kotlin beside the Java, which the Android Gradle plugin compiles with it.
@@ -218,6 +265,10 @@ describe("an Android app's Gradle project", () => {
         all.put("clipboard", new dev.crossbind.clipboard.ClipboardExtension());
         all.put("secure-storage", new dev.crossbind.storage.StorageExtension());
         ALL = Collections.unmodifiableMap(all);
+        Map<String, Extension> roles = new HashMap<>();
+        roles.put("page-dialogs", all.get("clipboard"));
+        roles.put("page-files", all.get("clipboard"));
+        ROLES = Collections.unmodifiableMap(roles);
 `);
         for (const [name, file] of [['activity', 'CrossbindActivity.java'], ['registry', 'Extensions.java']]) {
             const shadow = path.join('dev', 'crossbind', 'app', file);
@@ -262,6 +313,10 @@ describe("an Android app's Gradle project", () => {
         const plain = manifestOf([]);
         expect(plain).toContain('android.permission.INTERNET');
         expect(plain.match(/uses-permission/g)).toHaveLength(1);
+        // The page may ask for the devices app.permissions lists alone, whatever an extension's Java asks for.
+        const listed = (count) => fs.readFileSync(path.join(root, `demo-${count}`, 'app', 'src', 'main', 'res', 'values', 'permissions.xml'), 'utf8');
+        expect(listed(2)).toContain('<string-array name="crossbind_permissions">\n        <item>camera</item>\n        <item>location</item>\n    </string-array>');
+        expect(listed(0)).toContain('<string-array name="crossbind_permissions">\n    </string-array>');
         fs.rmSync(root, { recursive: true, force: true });
     });
 

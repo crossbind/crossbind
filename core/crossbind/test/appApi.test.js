@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, test, vi } from 'vitest';
 import {
-    app, dialog, events, invoke, menu, notification, shell, tray, updater,
+    app, dialog, events, invoke, menu, notification, routeUrl, shell, tray, updater,
 } from '../src/app/index.js';
 
 // The host of an app, as page.js hands it the page's calls.
@@ -82,11 +82,43 @@ describe("crossbind/app, an app's own functions", () => {
         inApp();
         host.mockResolvedValueOnce('copied');
         await expect(invoke('clipboard.readText')).resolves.toBe('copied');
-        expect(host).toHaveBeenLastCalledWith('clipboard.readText', {});
+        expect(host).toHaveBeenLastCalledWith('clipboard.readText', {}, { onMessage: undefined, signal: undefined });
         await invoke('clipboard.writeText', { text: 'hi' });
-        expect(host).toHaveBeenLastCalledWith('clipboard.writeText', { text: 'hi' });
+        expect(host).toHaveBeenLastCalledWith('clipboard.writeText', { text: 'hi' }, { onMessage: undefined, signal: undefined });
         await expect(invoke('')).rejects.toThrow("crossbind: invoke takes the name of one of the app's functions.");
         expect(host).toHaveBeenCalledTimes(2);
+    });
+
+    test("hands the host what takes a call's messages and what cancels it, and refuses them of another kind or to an older host", async () => {
+        globalThis.Crossbind = { app: host, takesMessages: true };
+        const onMessage = () => {};
+        const { signal } = new AbortController();
+
+        await invoke('downloads.fetch', { url: 'https://crossbind.dev/a.zip' }, { onMessage, signal });
+
+        expect(host).toHaveBeenLastCalledWith('downloads.fetch', { url: 'https://crossbind.dev/a.zip' }, { onMessage, signal });
+        await expect(invoke('downloads.fetch', {}, { onMessage: 'progress' })).rejects.toThrow('crossbind: invoke takes onMessage as a function.');
+        await expect(invoke('downloads.fetch', {}, { signal: { aborted: false } })).rejects.toThrow('crossbind: invoke takes signal as an AbortSignal.');
+        inApp();
+        await expect(invoke('downloads.fetch', {}, { onMessage })).rejects.toThrow('update @crossbind/core-app-host to call invoke with onMessage or signal');
+        expect(host).toHaveBeenCalledTimes(1);
+    });
+
+    test("names the URL of a path an extension's route serves, under the app's own origin, before the page called initNative()", () => {
+        expect(routeUrl('media', '/clips/intro.mp4?t=1')).toBe('crossbind://app/ext/media/clips/intro.mp4?t=1');
+        globalThis.__crossbind_port = Promise.resolve();
+        try {
+            expect(routeUrl('media', '/clips/a%20b.mp4')).toBe('https://appassets.androidplatform.net/ext/media/clips/a%20b.mp4');
+        } finally {
+            delete globalThis.__crossbind_port;
+        }
+        expect(() => routeUrl('Media', '/a')).toThrow("crossbind: routeUrl takes the name of one of the app's extensions.");
+        expect(() => routeUrl('media/x', '/a')).toThrow("crossbind: routeUrl takes the name of one of the app's extensions.");
+        expect(() => routeUrl('media', 'clips/intro.mp4')).toThrow('crossbind: routeUrl takes a path that starts with "/".');
+        for (const path of ['/../other/x', '/a/./b', '/a/%2E%2e/b', '/%2e']) {
+            expect(() => routeUrl('media', path)).toThrow('crossbind: routeUrl takes a path without a part "." or "..".');
+        }
+        expect(routeUrl('media', '/a..b/c?d=..')).toBe('crossbind://app/ext/media/a..b/c?d=..');
     });
 
     test("hands a listener of the app's events to the host, which returns what stops it", () => {
@@ -118,6 +150,31 @@ describe("crossbind/app, an app's own functions", () => {
         await expect(shell.trash(42)).rejects.toThrow('shell.trash takes a path');
         await expect(shell.openExternal()).rejects.toThrow('takes an address');
         await expect(shell.openExternal(42)).rejects.toThrow('takes an address');
+        expect(host).not.toHaveBeenCalled();
+    });
+
+    test('makes a user activity current through the host as the page gives it, or none', async () => {
+        inApp();
+        const activity = { type: 'com.example.demo.edit', userInfo: { id: 7, tags: ['a'] }, webpageUrl: 'https://example.com/notes/7' };
+
+        await app.setUserActivity(activity);
+        expect(host).toHaveBeenLastCalledWith('activities.set', activity);
+        await app.setUserActivity({ type: 'com.example.demo.edit' });
+        expect(host).toHaveBeenLastCalledWith('activities.set', { type: 'com.example.demo.edit' });
+        await app.setUserActivity(null);
+        expect(host).toHaveBeenLastCalledWith('activities.set', {});
+    });
+
+    test('refuses a user activity before the host sees it where the host could not make it, naming what is wrong', async () => {
+        inApp();
+
+        await expect(app.setUserActivity()).rejects.toThrow('crossbind: app.setUserActivity takes an object of type, userInfo, webpageUrl.');
+        await expect(app.setUserActivity({ userInfo: {} })).rejects.toThrow('crossbind: app.setUserActivity takes a type, one of app.activityTypes.');
+        await expect(app.setUserActivity({ type: 'com.example.demo.edit', title: 'Edit' })).rejects.toThrow('app.setUserActivity takes type, userInfo, webpageUrl; title is none of them.');
+        await expect(app.setUserActivity({ type: 'com.example.demo.edit', userInfo: [1] })).rejects.toThrow("crossbind: app.setUserActivity's userInfo is no object.");
+        for (const webpageUrl of ['ftp://example.com/a', 'example.com/a']) {
+            await expect(app.setUserActivity({ type: 'com.example.demo.edit', webpageUrl })).rejects.toThrow("crossbind: app.setUserActivity's webpageUrl is no http or https address.");
+        }
         expect(host).not.toHaveBeenCalled();
     });
 });
@@ -233,6 +290,52 @@ describe("crossbind/app's menus", () => {
         for (const accelerator of ['Cmd+O', 'CmdOrCtrl+o', 'Ctrl+Ctrl+O', 'CmdOrCtrl+', 'F13', 'Ctrl+Alt', 'O', 'Shift+O', 'Enter']) {
             await expect(set(file({ label: 'Open', accelerator }))).rejects.toThrow(`menus[0].items[0].accelerator ${JSON.stringify(accelerator)} is none`);
         }
+        expect(host).not.toHaveBeenCalled();
+    });
+
+    test('open a popup at the page point the page gives, resolving with the id clicked, or null for none', async () => {
+        inApp();
+        const items = [{ id: 'rename', label: 'Rename', accelerator: 'F2' }, { type: 'separator' }, { role: 'copy' }, { label: 'Sort', items: [{ id: 'by-name', label: 'By name', checked: true }] }];
+        host.mockResolvedValueOnce('rename');
+
+        await expect(menu.popup(items, { x: 12.5, y: 40 })).resolves.toBe('rename');
+        expect(host).toHaveBeenLastCalledWith('menu.popup', { items, x: 12.5, y: 40 });
+        await expect(menu.popup([{ id: 'open', label: 'Open' }], { x: 0, y: 0 })).resolves.toBeNull();
+    });
+
+    test('refuse a popup before the host sees it where it could not open it, naming what is wrong', async () => {
+        inApp();
+        const popup = (items, at) => menu.popup(items, at);
+        const open = [{ id: 'open', label: 'Open' }];
+
+        await expect(popup({}, { x: 0, y: 0 })).rejects.toThrow('menu.popup takes a list of items');
+        await expect(popup([{ role: 'print' }], { x: 0, y: 0 })).rejects.toThrow("menu.popup's items[0] has no role \"print\"");
+        await expect(popup([{ label: 'Open', accelerator: 'O' }], { x: 0, y: 0 })).rejects.toThrow("menu.popup's items[0].accelerator \"O\" is none");
+        await expect(popup([{ label: '' }], { x: 0, y: 0 })).rejects.toThrow("menu.popup's items[0] has no label");
+        await expect(popup(open)).rejects.toThrow('menu.popup takes the point it opens at, { x, y }');
+        await expect(popup(open, { x: 1 })).rejects.toThrow('menu.popup takes the point it opens at, { x, y }');
+        await expect(popup(open, { x: Number.NaN, y: 1 })).rejects.toThrow('menu.popup takes the point it opens at, { x, y }');
+        await expect(popup(open, { x: '1', y: 1 })).rejects.toThrow('menu.popup takes the point it opens at, { x, y }');
+        expect(host).not.toHaveBeenCalled();
+    });
+
+    test("set the Dock's menu of a macOS app, of a tray's items, whose clicks are the event menu", async () => {
+        inApp();
+        const items = [{ label: 'New window', id: 'new-window' }, { type: 'separator' }, { label: 'Recent', items: [{ label: 'a.txt', id: 'recent-a', checked: true }] }];
+
+        await menu.setDock(items);
+        expect(host).toHaveBeenLastCalledWith('menu.setDock', { items });
+        await menu.setDock([]);
+        expect(host).toHaveBeenLastCalledWith('menu.setDock', { items: [] });
+    });
+
+    test("refuse a Dock menu before the host sees it where it could not build it, naming the item", async () => {
+        inApp();
+
+        await expect(menu.setDock({})).rejects.toThrow("crossbind: menu.setDock takes a list of items.");
+        await expect(menu.setDock([{ id: 'open' }])).rejects.toThrow("menu.setDock's items[0] has no label");
+        await expect(menu.setDock([{ label: 'Copy', role: 'copy' }])).rejects.toThrow("menu.setDock's items[0] takes label, id, enabled, checked, items, type; role is none of them");
+        await expect(menu.setDock([{ label: 'Open', accelerator: 'CmdOrCtrl+O' }])).rejects.toThrow("menu.setDock's items[0] takes label, id, enabled, checked, items, type; accelerator is none of them");
         expect(host).not.toHaveBeenCalled();
     });
 });

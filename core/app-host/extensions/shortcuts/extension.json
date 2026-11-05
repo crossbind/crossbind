@@ -1,0 +1,8 @@
+{
+    "name": "shortcuts",
+    "contract": 1,
+    "app": {
+        "ios": { "sources": ["shortcuts.cpp"] },
+        "android": { "sources": ["shortcuts.cpp"] }
+    }
+}

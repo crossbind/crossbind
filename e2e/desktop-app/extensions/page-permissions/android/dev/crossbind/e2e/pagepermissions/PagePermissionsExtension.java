@@ -5,8 +5,8 @@ import java.util.Map;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
-import dev.crossbind.app.CrossbindActivity;
 import dev.crossbind.app.Extension;
+import dev.crossbind.app.ExtensionHost;
 
 // What the page asks to use on Android, denied and kept as permissions.cpp does elsewhere. The activity calls both
 // methods on the UI thread.
@@ -14,21 +14,20 @@ public final class PagePermissionsExtension implements Extension {
     private final JSONArray asked = new JSONArray();
 
     @Override
-    public void call(CrossbindActivity activity, String function, JSONObject options, Call call) {
+    public void call(ExtensionHost host, String function, JSONObject options, Call call) {
         if (function.equals("asked")) call.resolve(asked);
         else call.reject("crossbind: the e2e app's page-permissions has no function " + function);
     }
 
     // It fails as the activity resumes, which leaves the extensions after it, as the probe, the resume as well.
     @Override
-    public void onResume(CrossbindActivity activity) {
+    public void onResume(ExtensionHost host) {
         throw new IllegalStateException("the e2e app's page-permissions fails as the activity resumes");
     }
 
     @Override
-    public boolean onPagePermission(CrossbindActivity activity, PagePermission request) {
+    public void onPagePermission(ExtensionHost host, PagePermission request) {
         asked.put(new JSONObject(Map.of("kinds", new JSONArray(request.kinds()), "origin", request.origin(), "isListed", request.isListed())));
         request.deny();
-        return true;
     }
 }

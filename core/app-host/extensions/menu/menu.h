@@ -44,6 +44,13 @@ using MenuClicked = std::function<void(std::string id, std::optional<bool> check
 // Sets the app's menus, on the main thread, which calls done; a click of an item with an id calls clicked there, with
 // whether a checked one now is.
 void setMenu(std::vector<MenuItem> menus, MenuClicked clicked, std::function<void(Failure)> done);
+// Opens a menu of these items at the page's point x, y, in CSS pixels from its top left, as a right click's menu opens,
+// on the main thread: done gets there the id of the item clicked, or none when the menu closed without one. A standard
+// item does what its role says.
+void popupMenu(std::vector<MenuItem> items, double x, double y, std::function<void(Failure, std::optional<std::string> id)> done);
+// The menu a macOS app's Dock icon shows above the system's items, on the main thread, which calls done; a click of an
+// item with an id calls clicked there. None takes it away.
+void setDockMenu(std::vector<MenuItem> items, MenuClicked clicked, std::function<void(Failure)> done);
 // The app's icon in the menu bar on macOS, the notification area on Windows and a desktop's status tray on Linux, with
 // its tooltip and the menu a click opens. A click of an item with an id calls clicked, and a click of the icon that opens
 // no menu tells the page as the event tray. Set again, it changes the icon. On the main thread, which calls done.
@@ -60,13 +67,23 @@ struct Notification {
     std::string body;
 };
 void showNotification(Notification notification, std::function<void(Failure)> done);
+// What the identifier of each notification showNotification() shows starts with, whose taps the page hears of on macOS.
+inline constexpr char NOTIFICATION_ID_PREFIX[] = "crossbind.menu.";
 
 // The app's id, which a Linux tray names itself by on the session bus, as the build gives it in the extension's options.
 const std::string &appId();
 
+#if defined(__APPLE__) && !TARGET_OS_IPHONE
+// Gives the app's delegate the Dock's menu, none until setDockMenu() sets one, as the window opens: AppKit asks a delegate
+// that answered as it was set alone.
+void answerDockMenu();
+#endif
+
 #if defined(__linux__) && !defined(__ANDROID__)
 // The folder of a Linux app's files, resources/ beside its executable, which holds the app's icon.png.
 std::string resourceFolder();
+// Keeps the webview's last button press, which popupMenu() opens from, as the window opens.
+void keepPresses();
 #endif
 
 }  // namespace crossbind::menu

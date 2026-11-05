@@ -12,28 +12,27 @@ import java.util.List;
 
 import org.json.JSONObject;
 
-import dev.crossbind.app.CrossbindActivity;
 import dev.crossbind.app.Extension;
+import dev.crossbind.app.ExtensionHost;
 
 // The host's page-files on Android: a file input opens the system's picker for its accept types, with several files
 // where the input takes them.
 public final class PageFilesExtension implements Extension {
     @Override
-    public void call(CrossbindActivity activity, String function, JSONObject options, Call call) {
+    public void call(ExtensionHost host, String function, JSONObject options, Call call) {
         call.reject("crossbind: page-files has no function " + function);
     }
 
     @Override
-    public boolean onFileInput(CrossbindActivity activity, FileInput input) {
+    public void onFileInput(ExtensionHost host, FileInput input) {
         Intent intent = input.params().createIntent();
         if (input.allowsMultiple()) intent.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true);
         try {
-            activity.startForResult(intent, (result, data) -> input.pick(picked(result, data)));
+            host.startForResult(intent, (result, data) -> input.pick(picked(result, data)));
         } catch (ActivityNotFoundException none) {
             Log.w("crossbind", "nothing on this device picks a file");
-            return false;
+            input.useDefault();
         }
-        return true;
     }
 
     // What the picker chose, several files as clip data.

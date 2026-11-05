@@ -100,7 +100,12 @@ void revealInFolder(const std::string &path) { invoked("shell.revealInFolder", V
 
 void trash(const std::string &path) { invoked("shell.trash", Value::Object{{"path", path}}); }
 
-Paths paths() { return appPaths(); }
+// The read-only folder of the files app.files lists, beside the page among the app's resources.
+Paths paths() {
+    Paths folders = appPaths();
+    folders.resources = resourceDir() + "/files";
+    return folders;
+}
 
 void quit() { quitApp(); }
 
@@ -292,7 +297,7 @@ std::vector<std::string> ownArgs(const Launch &launch) {
 }
 
 // Who gets a file: the extension whose types alone list the MIME type it came with, without its parameters, else the
-// one that owns its name's extension's type, else the host's files.
+// one that owns its name's extension's type, else the holder of files.
 std::string fileOwnerOf(const std::string &path, const std::string &mimeType) {
     static const std::vector<std::pair<std::string, std::string>> mimes = fileMimeTypes();
     std::string mime = lowered(mimeType.substr(0, mimeType.find(';')));
@@ -309,7 +314,7 @@ std::string fileOwnerOf(const std::string &path, const std::string &mimeType) {
             if (type == ending) return owner;
         }
     }
-    return "files";
+    return holderOf("files");
 }
 }  // namespace
 
@@ -327,15 +332,32 @@ void openUrlsIn(const std::vector<std::string> &args) {
     for (const auto &arg : args) openedUrl(arg);
 }
 
+bool continuedActivity(const UserActivity &activity) {
+    static const std::vector<std::pair<std::string, std::string>> types = userActivityTypes();
+    for (const auto &[type, owner] : types) {
+        if (type == activity.type) return continueActivityOf(owner, activity);
+    }
+    return false;
+}
+
+bool shortcutItemTapped(const std::string &type) {
+    static const std::vector<std::pair<std::string, std::string>> types = shortcutItemTypes();
+    for (const auto &[shortcut, owner] : types) {
+        if (shortcut == type) return tapShortcutItemOf(owner, type);
+    }
+    return false;
+}
+
 void openedFiles(const std::vector<std::string> &paths, const std::vector<std::string> &mimeTypes) {
-    // Each owner gets its files at once, in their order.
-    std::vector<std::pair<std::string, std::vector<std::string>>> owned;
+    // Each owner gets its files at once, in their order, each with its MIME type.
+    std::vector<std::pair<std::string, OpenFiles>> owned;
     for (size_t index = 0; index < paths.size(); ++index) {
-        const std::string &path = paths[index];
-        const std::string owner = fileOwnerOf(path, index < mimeTypes.size() ? mimeTypes[index] : "");
-        const auto entry = std::find_if(owned.begin(), owned.end(), [&owner](const auto &other) { return other.first == owner; });
-        if (entry == owned.end()) owned.push_back({owner, {path}});
-        else entry->second.push_back(path);
+        const std::string mimeType = index < mimeTypes.size() ? mimeTypes[index] : "";
+        const std::string owner = fileOwnerOf(paths[index], mimeType);
+        auto entry = std::find_if(owned.begin(), owned.end(), [&owner](const auto &other) { return other.first == owner; });
+        if (entry == owned.end()) entry = owned.insert(owned.end(), {owner, OpenFiles{}});
+        entry->second.paths.push_back(paths[index]);
+        entry->second.mimeTypes.push_back(mimeType);
     }
     for (const auto &[owner, files] : owned) openFilesOf(owner, files);
 }
@@ -372,8 +394,8 @@ void startTakingLaunches() {
 
 void appFunctions(Registry &registry) {
     registry.function("app.paths", [](Call call) {
-        const Paths folders = appPaths();
-        call.resolve(Value::Object{{"data", folders.data}, {"cache", folders.cache}, {"logs", folders.logs}});
+        const Paths folders = paths();
+        call.resolve(Value::Object{{"data", folders.data}, {"cache", folders.cache}, {"logs", folders.logs}, {"resources", folders.resources}});
     });
     // A platform whose apps do not quit themselves throws, and the page hears that alone.
     registry.function("app.quit", [](Call call) {
@@ -389,12 +411,17 @@ void appFunctions(Registry &registry) {
         call.resolve();
     });
     registry.function("app.launchArgs", [](Call call) {
-        const Launch launch = crossbind::launchArguments();
+        const Launch launch = crossbind::launchArgs();
         call.resolve(Value::Object{{"args", launch.args}, {"cwd", launch.cwd}});
     });
 }
 
 void refusedFunctions(Registry &registry) {
+    if (!hasFunction("activities.set")) {
+        registry.function("activities.set", [](Call) {
+            throw std::runtime_error("crossbind: an iOS or macOS app alone sets a user activity, of a type app.activityTypes in crossbind.config.js lists");
+        });
+    }
     for (const char *name : {"updater.check", "updater.install"}) {
         if (hasFunction(name)) continue;
         registry.function(name, [](Call) {
@@ -411,7 +438,11 @@ namespace crossbind {
 
 std::string appName() { return CROSSBIND_APP_NAME; }
 
+std::string appId() { return CROSSBIND_APP_ID; }
+
+// A path that is not absolute, as an empty one, would reach every file the shell's functions take.
 void allowPath(const std::string &path) {
+    if (!std::filesystem::path(std::u8string(path.begin(), path.end())).is_absolute()) return;
     std::lock_guard<std::mutex> lock(app::grantedMutex);
     app::granted.push_back(path);
 }
@@ -430,15 +461,18 @@ void launchedAgain(Launch launch) {
             return;
         }
     }
-    showWindow(launch.token);
-    // Each of its links reaches the owner of its scheme alone: one of app.urlSchemes the page hears of as open-url. So
-    // does each file, in an app that opens files: the page hears of those no extension owns as open-files.
-    app::postEvent("second-instance", Value(Value::Object{{"args", app::ownArgs(launch)}, {"cwd", launch.cwd}}).json());
-    app::openLaunch(launch);
+    // Each of its links reaches the owner of its scheme alone, on the main thread, in the order of the launches: one of
+    // app.urlSchemes the page hears of as open-url. So does each file, in an app that opens files: the page hears of
+    // those no extension owns as open-files.
+    onMainThread([launch = std::move(launch)] {
+        showWindow(launch.token);
+        app::postEvent("second-instance", Value(Value::Object{{"args", app::ownArgs(launch)}, {"cwd", launch.cwd}}).json());
+        app::openLaunch(launch);
+    });
 }
 #endif
 
-Launch launchArguments() {
+Launch launchArgs() {
     Launch launch = app::firstLaunch();
     launch.args = app::ownArgs(launch);
     return launch;

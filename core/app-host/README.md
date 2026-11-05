@@ -69,7 +69,11 @@ defaults and current limits (macOS, Linux, Windows, iOS and Android for now).
   has `updater/`, which checks and installs its updates, each platform's file downloading them; `src/app_api.cpp`
   refuses the updater's functions to any other app. A macOS app whose `app.permissions` lists the location has
   `page-location/`, which answers the page's `navigator.geolocation` from CoreLocation, as WKWebView gives a macOS page
-  none, once `page-permissions` allows it.
+  none, once `page-permissions` allows it. Every app has `page-navigation/`, which takes the page's navigations beyond
+  the app's origins, and `page-downloads/`, which saves its downloads, and every desktop app `page-drops/`, which hands
+  the page the files its user drops on it. An Apple app that lists `app.activityTypes` has `activities/`, which holds
+  their user activities for the page as the event `user-activity` and makes the page's one current, and a phone's that
+  lists `app.shortcutItems` has `shortcuts/`, which holds the taps of their quick actions as the event `shortcut-item`.
 - `extensions/updater/monocypher/` — Monocypher 4.0.3 (BSD-2-Clause or CC0-1.0), whose Ed25519 and SHA-512 check a
   desktop app's updates; provenance in its README.
 - `third_party/webview/` — webview/webview (MIT), vendored at a pinned commit; provenance and the local patch are in

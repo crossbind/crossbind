@@ -62,8 +62,15 @@ activityPort.onmessage = ({ data }) => {
         const header = new TextDecoder().decode(new Uint8Array(data, 4, headerLength));
         const bar = header.indexOf('|');
         const [id, query] = [header.slice(0, bar), header.slice(bar + 1)];
-        const refused = refusesFrames || new URLSearchParams(query).get('t') !== TOKEN;
-        activityPort.postMessage(refused ? `${id}|!${REFUSED}` : `${id}|${globalThis.__crossbind_frame(query, data.slice(4 + headerLength))}`);
+        if (refusesFrames || new URLSearchParams(query).get('t') !== TOKEN) {
+            activityPort.postMessage(`${id}|!${REFUSED}`);
+            return;
+        }
+        // As the host answers a frame once its message has.
+        const call = String(nextCall);
+        nextCall += 1;
+        pageIds.set(call, id);
+        globalThis.__crossbind_frame(call, query, data.slice(4 + headerLength));
         return;
     }
     const bar = data.indexOf('|');
@@ -153,6 +160,134 @@ describe('the page of an Android app', () => {
             refusesFrames = false;
         }
         expect(await m.add(1, 2)).toBe(3);
+    });
+
+    test("carries bytes in a call's options and its result: in the message, in a frame, and as a large result of its own", async () => {
+        const passed = [];
+        // As the host answers through the module's thread, with a Uint8Array for bytes.
+        globalThis.__app_call = (call, name, options) => {
+            passed.push(options);
+            globalThis.__crossbind_answered(call, { size: options.data.byteLength, back: options.data.slice().reverse() }, 0);
+        };
+        seen.length = 0;
+
+        const small = await globalThis.Crossbind.app('probe.bytes', { data: new Uint8Array([1, 2, 3]) });
+        const large = Uint8Array.from({ length: 20000 }, (_, i) => i % 251);
+        const echoed = await globalThis.Crossbind.app('probe.bytes', { data: large.buffer });
+        globalThis.__app_call = (call) => globalThis.__crossbind_answered(call, new Uint8Array(8192).fill(9), 0);
+        const big = await globalThis.Crossbind.app('probe.big', {});
+
+        expect(passed[0].data).toBeInstanceOf(Uint8Array);
+        expect(small.size).toBe(3);
+        expect(small.back).toBeInstanceOf(Uint8Array);
+        expect([...small.back]).toEqual([3, 2, 1]);
+        expect(passed[1].data).toEqual(large);
+        expect(echoed.size).toBe(20000);
+        expect(big).toBeInstanceOf(Uint8Array);
+        expect(big.length).toBe(8192);
+        expect(big.every((byte) => byte === 9)).toBe(true);
+        expect(seen).toEqual(['message', 'frame', 'message', 'result']);
+    });
+
+    test("hands onMessage a call's messages in order, all of them before the call resolves, those after its answer too", async () => {
+        const calls = [];
+        globalThis.__app_call = (call, name, options, id, wantsMessages) => {
+            calls.push({ id, wantsMessages });
+            globalThis.__crossbind_message(id, { done: 1 });
+            // The answer tells how many messages went before it, the last of which may reach the page after it.
+            globalThis.__crossbind_answered(call, 'finished', 2);
+            setTimeout(() => globalThis.__crossbind_message(id, { done: 2, bytes: new Uint8Array([7]) }), 30);
+        };
+        const got = [];
+
+        const result = await globalThis.Crossbind.app('downloads.fetch', {}, { onMessage: (message) => got.push(message) });
+        await globalThis.Crossbind.app('downloads.fetch', {});
+
+        expect(result).toBe('finished');
+        expect(got).toEqual([{ done: 1 }, { done: 2, bytes: new Uint8Array([7]) }]);
+        expect(calls.map(({ wantsMessages }) => wantsMessages)).toEqual([true, false]);
+        expect(calls[1].id).toBe(calls[0].id + 1);
+    });
+
+    test("rejects a call its signal aborts with the signal's reason, and tells the host, which cancels it", async () => {
+        const cancelled = [];
+        const called = [];
+        globalThis.__app_cancel = (id) => cancelled.push(id);
+        // A function that answers only once it is cancelled, as the host does then.
+        globalThis.__app_call = (call, name, options, id) => called.push(id);
+        const controller = new AbortController();
+
+        const pending = globalThis.Crossbind.app('probe.wait', {}, { signal: controller.signal });
+        await until(() => called.length === 1);
+        controller.abort();
+
+        await expect(pending).rejects.toMatchObject({ name: 'AbortError' });
+        await until(() => cancelled.length === 1);
+        expect(cancelled).toEqual(called);
+        await expect(globalThis.Crossbind.app('probe.wait', {}, { signal: controller.signal })).rejects.toMatchObject({ name: 'AbortError' });
+        expect(called).toHaveLength(1);
+    });
+
+    test('hands onMessage the messages a function sent before it failed, then rejects', async () => {
+        globalThis.__app_call = (call, name, options, id) => {
+            globalThis.__crossbind_message(id, 1);
+            // As the host answers a failure, with how many messages went before it.
+            globalThis.__host_reply(call, JSON.stringify([1, { name: 'Error', message: 'crossbind: the import failed' }, 2]));
+            setTimeout(() => globalThis.__crossbind_message(id, 2), 30);
+        };
+        const got = [];
+
+        await expect(globalThis.Crossbind.app('rows.import', {}, { onMessage: (message) => got.push(message) })).rejects.toThrow('crossbind: the import failed');
+
+        expect(got).toEqual([1, 2]);
+    });
+
+    test('lets go of a large result the page no longer waits for, and tells the host of no cancel once the call has answered', async () => {
+        const cancelled = [];
+        globalThis.__app_cancel = (id) => cancelled.push(id);
+        let answer = null;
+        globalThis.__app_call = (call, name, options, id) => {
+            answer = () => globalThis.__crossbind_answered(call, new Uint8Array(8192), 0);
+            if (name === 'probe.messages') {
+                globalThis.__crossbind_answered(call, 'done', 1);
+                answer = () => globalThis.__crossbind_message(id, 'late');
+            }
+        };
+        seen.length = 0;
+        const first = new AbortController();
+        const pending = globalThis.Crossbind.app('probe.big', {}, { signal: first.signal });
+        await until(() => answer !== null);
+        first.abort();
+        answer();
+        await expect(pending).rejects.toMatchObject({ name: 'AbortError' });
+        await until(() => seen.includes('result'));
+        answer = null;
+        const second = new AbortController();
+        const waiting = globalThis.Crossbind.app('probe.messages', {}, { signal: second.signal, onMessage: () => {} });
+        await until(() => answer !== null);
+        await new Promise((resolve) => { setTimeout(resolve, 30); });
+        second.abort();
+
+        await expect(waiting).rejects.toMatchObject({ name: 'AbortError' });
+        expect(cancelled).toHaveLength(1);
+    });
+
+    test("carries a Buffer's bytes, which its toJSON would turn into an object", async () => {
+        const passed = [];
+        globalThis.__app_call = (call, name, options) => {
+            passed.push(options.data);
+            globalThis.__crossbind_answered(call, null, 0);
+        };
+        class Buffer extends Uint8Array {
+            toJSON() {
+                return { type: 'Buffer', data: [...this] };
+            }
+        }
+
+        await globalThis.Crossbind.app('probe.bytes', { data: Buffer.from([1, 2]) });
+
+        expect(passed[0]).toBeInstanceOf(Uint8Array);
+        expect([...passed[0]]).toEqual([1, 2]);
     });
 });
 

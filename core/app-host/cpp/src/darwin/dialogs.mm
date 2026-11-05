@@ -25,8 +25,20 @@ std::string utf8(NSString *text) { return text.UTF8String ?: ""; }
 
 NSString *ns(const std::string &text) { return [NSString stringWithUTF8String:text.c_str()] ?: @""; }
 
-void askDialog(PageDialog::Kind kind, NSString *message, NSString *text, std::function<void(std::optional<std::string>)> answer) {
-    app::askPageDialog(PageDialog(std::make_shared<PageDialog::State>(kind, utf8(message), utf8(text), std::move(answer))));
+// WebKit asks its user where the holder of page-permissions leaves it the answer.
+WKPermissionDecision decisionOf(app::PermissionAnswer answer) API_AVAILABLE(macos(12.0), ios(15.0)) {
+    return answer == app::PermissionAnswer::allow ? WKPermissionDecisionGrant
+           : answer == app::PermissionAnswer::deny ? WKPermissionDecisionDeny
+                                                   : WKPermissionDecisionPrompt;
+}
+
+// A frame of another origin gets no dialog, as it would show under the app's name: one answers as cancelled.
+void askDialog(PageDialog::Kind kind, NSString *message, NSString *text, WKFrameInfo *frame, std::function<void(std::optional<std::string>)> answer) {
+    if (!app::isOwnOrigin(app::originOf(frame.securityOrigin))) {
+        answer(std::nullopt);
+        return;
+    }
+    app::askPageDialog(app::make<PageDialog>(std::make_shared<app::StateOf<PageDialog>>(kind, utf8(message), utf8(text), std::move(answer))));
 }
 
 }  // namespace
@@ -73,7 +85,7 @@ bool presentOnTop(void *controller, void *window) {
                       initiatedByFrame:(WKFrameInfo *)frame
                      completionHandler:(void (^)(void))done {
     void (^answer)(void) = [done copy];
-    askDialog(PageDialog::Kind::alert, message, nil, [answer](std::optional<std::string>) { answer(); });
+    askDialog(PageDialog::Kind::alert, message, nil, frame, [answer](std::optional<std::string>) { answer(); });
 }
 
 - (void)webView:(WKWebView *)webView
@@ -81,7 +93,7 @@ bool presentOnTop(void *controller, void *window) {
                         initiatedByFrame:(WKFrameInfo *)frame
                        completionHandler:(void (^)(BOOL))done {
     void (^answer)(BOOL) = [done copy];
-    askDialog(PageDialog::Kind::confirm, message, nil, [answer](std::optional<std::string> text) { answer(text.has_value()); });
+    askDialog(PageDialog::Kind::confirm, message, nil, frame, [answer](std::optional<std::string> text) { answer(text.has_value()); });
 }
 
 - (void)webView:(WKWebView *)webView
@@ -90,7 +102,17 @@ bool presentOnTop(void *controller, void *window) {
                          initiatedByFrame:(WKFrameInfo *)frame
                         completionHandler:(void (^)(NSString *))done {
     void (^answer)(NSString *) = [done copy];
-    askDialog(PageDialog::Kind::prompt, prompt, text, [answer](std::optional<std::string> given) { answer(given ? ns(*given) : nil); });
+    askDialog(PageDialog::Kind::prompt, prompt, text, frame, [answer](std::optional<std::string> given) { answer(given ? ns(*given) : nil); });
+}
+
+// A window the page asks for with window.open(): WebKit opens none without a web view of the delegate's, and the app
+// gives none.
+- (WKWebView *)webView:(WKWebView *)webView
+    createWebViewWithConfiguration:(WKWebViewConfiguration *)configuration
+               forNavigationAction:(WKNavigationAction *)action
+                    windowFeatures:(WKWindowFeatures *)features {
+    openPageWindow((__bridge void *)webView, (__bridge void *)action);
+    return nil;
 }
 
 #if !TARGET_OS_IPHONE
@@ -100,7 +122,7 @@ bool presentOnTop(void *controller, void *window) {
               initiatedByFrame:(WKFrameInfo *)frame
              completionHandler:(void (^)(NSArray<NSURL *> *))done {
     void (^answer)(NSArray<NSURL *> *) = [done copy];
-    app::askFileInput(FileInput(std::make_shared<FileInput::State>(
+    app::askFileInput(app::make<FileInput>(std::make_shared<app::StateOf<FileInput>>(
         parameters.allowsMultipleSelection, parameters.allowsDirectories, std::vector<std::string>{},
         [answer](std::optional<std::vector<std::string>> paths) {
             if (!paths) {
@@ -125,9 +147,7 @@ bool presentOnTop(void *controller, void *window) {
     if (type != WKMediaCaptureTypeMicrophone) kinds.emplace_back("camera");
     if (type != WKMediaCaptureTypeCamera) kinds.emplace_back("microphone");
     void (^answer)(WKPermissionDecision) = [decide copy];
-    app::askPagePermission(app::pagePermission(std::move(kinds), app::originOf(origin), [answer](bool isAllowed) {
-        answer(isAllowed ? WKPermissionDecisionGrant : WKPermissionDecisionDeny);
-    }));
+    app::askPagePermission(app::pagePermission(std::move(kinds), app::originOf(origin), [answer](app::PermissionAnswer decision) { answer(decisionOf(decision)); }));
 }
 
 // The location, which the system then asks the app's user for.
@@ -136,9 +156,7 @@ bool presentOnTop(void *controller, void *window) {
                          initiatedByFrame:(WKFrameInfo *)frame
                           decisionHandler:(void (^)(WKPermissionDecision))decide API_AVAILABLE(macos(27.0), ios(27.0)) {
     void (^answer)(WKPermissionDecision) = [decide copy];
-    app::askPagePermission(app::pagePermission({"location"}, app::originOf(origin), [answer](bool isAllowed) {
-        answer(isAllowed ? WKPermissionDecisionGrant : WKPermissionDecisionDeny);
-    }));
+    app::askPagePermission(app::pagePermission({"location"}, app::originOf(origin), [answer](app::PermissionAnswer decision) { answer(decisionOf(decision)); }));
 }
 
 #if TARGET_OS_IPHONE
@@ -148,19 +166,18 @@ bool presentOnTop(void *controller, void *window) {
                                         initiatedByFrame:(WKFrameInfo *)frame
                                          decisionHandler:(void (^)(WKPermissionDecision))decide {
     void (^answer)(WKPermissionDecision) = [decide copy];
-    app::askPagePermission(app::pagePermission({"motion"}, app::originOf(origin), [answer](bool isAllowed) {
-        answer(isAllowed ? WKPermissionDecisionGrant : WKPermissionDecisionDeny);
-    }));
+    app::askPagePermission(app::pagePermission({"motion"}, app::originOf(origin), [answer](app::PermissionAnswer decision) { answer(decisionOf(decision)); }));
 }
 #endif
 
 #if TARGET_OS_IPHONE && CROSSBIND_APP_PERMISSION_LOCATION
 // Before iOS 27 WebKit asks a private selector of the UI delegate instead, which only an app that lists the location
-// answers. Another carries no reason for it, without which CoreLocation asks the app's user nothing. A macOS page's
-// location comes from the extension page-location.
+// answers, and which takes no answer that WebKit asks its user. Another carries no reason for it, without which
+// CoreLocation asks the app's user nothing. A macOS page's location comes from the extension page-location.
 - (void)_webView:(WKWebView *)webView requestGeolocationPermissionForFrame:(WKFrameInfo *)frame decisionHandler:(void (^)(BOOL))decide {
     void (^answer)(BOOL) = [decide copy];
-    app::askPagePermission(app::pagePermission({"location"}, app::originOf(frame.securityOrigin), [answer](bool isAllowed) { answer(isAllowed); }));
+    app::askPagePermission(app::pagePermission({"location"}, app::originOf(frame.securityOrigin),
+        [answer](app::PermissionAnswer decision) { answer(decision == app::PermissionAnswer::allow); }));
 }
 #endif
 

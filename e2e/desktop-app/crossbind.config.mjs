@@ -4,7 +4,10 @@ import conformanceRust from '@crossbind/conformance-rust/crossbind.config.mjs';
 import clipboard from '@crossbind/extension-clipboard/crossbind.extension.js';
 import probe, { probeMirror } from './extensions/probe/crossbind.extension.js';
 import pageDialogs from './extensions/page-dialogs/crossbind.extension.js';
+import pageDownloads from './extensions/page-downloads/crossbind.extension.js';
+import pageNavigation from './extensions/page-navigation/crossbind.extension.js';
 import pagePermissions from './extensions/page-permissions/crossbind.extension.js';
+import { ACTIVITIES, SHORTCUTS } from './e2e/launch.mjs';
 import { UPDATER } from './e2e/updates.mjs';
 
 export default {
@@ -28,15 +31,19 @@ export default {
     // src/main.js checks the page reads back what it writes to the clipboard, and through the probe what the shell
     // reaches for the page and for the app's own code, and that the links of the probe's scheme reach the probe alone.
     // e2e/publish.mjs publishes through the probe's store and the mirror after it, and e2e/run.mjs reads what the
-    // probe's installer writes beside a desktop app. The page's dialogs and what it asks to use reach the app's own
-    // page-dialogs and page-permissions, which answer at once, where the host's would ask the run's machine's user.
-    extensions: [clipboard(), probe(), probeMirror(), pageDialogs(), pagePermissions()],
+    // probe's installer writes beside a desktop app. The page's dialogs, what it asks to use and its downloads reach the
+    // app's own page-dialogs, page-permissions and page-downloads, which answer at once, where the host's would ask the
+    // run's machine's user, and its navigations beyond the app's origins the app's own page-navigation, which refuses
+    // them. Its page-permissions comes before the probe, whose Java hears each resume page-permissions' fails on.
+    extensions: [clipboard(), pagePermissions(), probe(), probeMirror(), pageDialogs(), pageDownloads(), pageNavigation()],
     // Smaller than every runner's display, which would hold the window to less; src/main.js checks the page has it. The
     // page has no background of its own, for backgroundColor to show behind it.
     app: {
         window: { width: 800, height: 600, maxWidth: 1000, maxHeight: 700, backgroundColor: '#d4e6f6' },
         // src/main.js checks the page opens files in the data folder alone.
         openPath: ['data'],
+        // src/main.js checks the app carries it, as the probe reads it.
+        files: ['e2e/carried.txt'],
         // e2e/run.mjs checks the app has it.
         icon: 'icon.png',
         // e2e/run.mjs checks the app carries them where the system shows them.
@@ -52,6 +59,10 @@ export default {
         // and opens an Android app with a link of example.com/e2e.
         fileTypes: [{ name: 'crossbind e2e', extensions: ['cbe2e'], mimeTypes: ['application/x-crossbind-e2e'] }],
         links: ['example.com/e2e'],
+        // The probe hands an Apple app's delegate an activity of it, which src/main.js gets.
+        activityTypes: [ACTIVITIES.page],
+        // The probe taps it on a phone's icon, as the system does, which src/main.js gets.
+        shortcutItems: [{ type: SHORTCUTS.page, title: 'New note', subtitle: 'From e2e', icon: 'compose' }],
         // src/main.js checks the page has the camera and the microphone.
         permissions: {
             camera: 'To check the page reaches the camera',

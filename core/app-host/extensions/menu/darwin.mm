@@ -2,12 +2,15 @@
 // app menu the host starts the app with.
 #import <Cocoa/Cocoa.h>
 #import <UserNotifications/UserNotifications.h>
+#import <WebKit/WebKit.h>
+#import <objc/runtime.h>
 
 #include "menu.h"
 
 #include "crossbind/app.h"
 
 #include <cctype>
+#include <cstdio>
 #include <map>
 #include <stdexcept>
 
@@ -18,9 +21,13 @@
 - (void)trayClicked:(id)sender;
 @end
 
-// Shows the app's notifications while it is in front, as macOS does only when asked, and tells the page of a click on
-// one.
-@interface CrossbindNotifications : NSObject <UNUserNotificationCenterDelegate>
+// What a click of one of a popup's items does: the popup answers with its id. AppKit sends the action before the popup
+// returns.
+@interface CrossbindPopupTarget : NSObject {
+@public
+    NSString *picked;
+}
+- (void)picked:(NSMenuItem *)item;
 @end
 
 namespace crossbind::menu {
@@ -173,19 +180,14 @@ NSMenuItem *itemOf(const MenuItem &page) {
 
 @end
 
-@implementation CrossbindNotifications
+@implementation CrossbindPopupTarget
 
-- (void)userNotificationCenter:(UNUserNotificationCenter *)center
-       willPresentNotification:(UNNotification *)notification
-         withCompletionHandler:(void (^)(UNNotificationPresentationOptions))completionHandler {
-    completionHandler(UNNotificationPresentationOptionBanner | UNNotificationPresentationOptionList | UNNotificationPresentationOptionSound);
+- (void)picked:(NSMenuItem *)item {
+    picked = item.representedObject;
 }
 
-- (void)userNotificationCenter:(UNUserNotificationCenter *)center
-    didReceiveNotificationResponse:(UNNotificationResponse *)response
-             withCompletionHandler:(void (^)(void))completionHandler {
-    if ([response.actionIdentifier isEqualToString:UNNotificationDefaultActionIdentifier]) crossbind::app::emitEvent("notification");
-    completionHandler();
+- (BOOL)validateMenuItem:(NSMenuItem *)item {
+    return !(item.tag & crossbind::menu::DISABLED);
 }
 
 @end
@@ -211,6 +213,97 @@ void setMenu(std::vector<MenuItem> menus, MenuClicked clicked, std::function<voi
           done(std::nullopt);
       } catch (const std::exception &error) {
           NSApp.windowsMenu = windows;
+          done(std::string(error.what()));
+      }
+    });
+}
+
+namespace {
+
+// A popup's items of the page's answer the popup, not the page's menus.
+void answerPopup(NSMenu *menu, CrossbindPopupTarget *popup) {
+    for (NSMenuItem *entry in menu.itemArray) {
+        if (entry.target == target) {
+            entry.target = popup;
+            entry.action = @selector(picked:);
+        }
+        if (entry.submenu) answerPopup(entry.submenu, popup);
+    }
+}
+
+}  // namespace
+
+// WKWebView's points are the page's CSS pixels at its zoom, from its top left. The menu's loop runs the main queue's
+// blocks, and so the page's next popup, which waits for none.
+void popupMenu(std::vector<MenuItem> items, double x, double y, std::function<void(Failure, std::optional<std::string>)> done) {
+    dispatch_async(dispatch_get_main_queue(), ^{
+      static bool isOpen = false;
+      WKWebView *view = (__bridge WKWebView *)appWebView();
+      if (!view.window) {
+          done(std::string("crossbind: the app has no window to show a menu in"), std::nullopt);
+          return;
+      }
+      if (isOpen) {
+          done(std::string("crossbind: a menu of the page's is open already"), std::nullopt);
+          return;
+      }
+      CrossbindPopupTarget *popup = [CrossbindPopupTarget new];
+      NSMenu *menu = [NSMenu new];
+      try {
+          if (!target) target = [CrossbindMenuTarget new];
+          for (const auto &item : items) [menu addItem:itemOf(item)];
+      } catch (const std::exception &error) {
+          done(std::string(error.what()), std::nullopt);
+          return;
+      }
+      answerPopup(menu, popup);
+      NSPoint at = NSMakePoint(x * view.pageZoom, y * view.pageZoom);
+      if (!view.isFlipped) at.y = NSHeight(view.bounds) - at.y;
+      isOpen = true;
+      [menu popUpMenuPositioningItem:nil atLocation:at inView:view];
+      isOpen = false;
+      done(std::nullopt, popup->picked.length > 0 ? std::optional<std::string>(popup->picked.UTF8String) : std::nullopt);
+    });
+}
+
+namespace {
+
+// The Dock's menu of the page's, which the app's delegate gives the Dock, none before the page sets one.
+NSMenu *dockMenu;
+// Whether the app's delegate gives the Dock dockMenu, as answerDockMenu() made it.
+bool isAnsweringDock = false;
+
+}  // namespace
+
+void answerDockMenu() {
+    id delegate = NSApp.delegate;
+    if (!delegate || isAnsweringDock) return;
+    if ([delegate respondsToSelector:@selector(applicationDockMenu:)]) {
+        std::fprintf(stderr, "crossbind: the app's delegate gives the Dock a menu of its own, which menu.setDock leaves as it is\n");
+        return;
+    }
+    const char *types = protocol_getMethodDescription(@protocol(NSApplicationDelegate), @selector(applicationDockMenu:), NO, YES).types;
+    class_addMethod([delegate class], @selector(applicationDockMenu:), imp_implementationWithBlock(^NSMenu *(id, NSApplication *) {
+                        return dockMenu;
+                    }),
+                    types);
+    isAnsweringDock = true;
+    // AppKit learns what a delegate answers as it is set.
+    NSApp.delegate = nil;
+    NSApp.delegate = delegate;
+}
+
+void setDockMenu(std::vector<MenuItem> items, MenuClicked clicked, std::function<void(Failure)> done) {
+    dispatch_async(dispatch_get_main_queue(), ^{
+      try {
+          if (!isAnsweringDock) throw std::runtime_error("crossbind: the app's delegate gives the Dock no menu of the page's");
+          if (!target) target = [CrossbindMenuTarget new];
+          NSMenu *menu = items.empty() ? nil : [NSMenu new];
+          for (const auto &item : items) [menu addItem:itemOf(item)];
+          dockMenu = menu;
+          onClick = clicked;
+          done(std::nullopt);
+      } catch (const std::exception &error) {
           done(std::string(error.what()));
       }
     });
@@ -255,16 +348,14 @@ void removeTray(std::function<void(Failure)> done) {
 }
 
 // macOS asks its user the first time, and has no notifications for an executable outside a bundle, as a development
-// session may run.
+// session may run. The host's notification center shows each while the app is in front, and hands menu.cpp its taps.
 void showNotification(Notification notification, std::function<void(Failure)> done) {
     onMain(^{
       if (!NSBundle.mainBundle.bundleIdentifier) {
           done("crossbind: a macOS app shows notifications from its bundle alone");
           return;
       }
-      static CrossbindNotifications *delegate = [CrossbindNotifications new];
       UNUserNotificationCenter *center = UNUserNotificationCenter.currentNotificationCenter;
-      center.delegate = delegate;
       UNMutableNotificationContent *content = [UNMutableNotificationContent new];
       content.title = ns(notification.title);
       content.body = ns(notification.body);
@@ -278,9 +369,8 @@ void showNotification(Notification notification, std::function<void(Failure)> do
                                   });
                                   return;
                               }
-                              UNNotificationRequest *request = [UNNotificationRequest requestWithIdentifier:NSUUID.UUID.UUIDString
-                                                                                                    content:content
-                                                                                                    trigger:nil];
+                              NSString *id = [@(NOTIFICATION_ID_PREFIX) stringByAppendingString:NSUUID.UUID.UUIDString];
+                              UNNotificationRequest *request = [UNNotificationRequest requestWithIdentifier:id content:content trigger:nil];
                               [center addNotificationRequest:request withCompletionHandler:^(NSError *failed) {
                                 const Failure failure = failed ? Failure(std::string("crossbind: macOS did not show the notification: ") +
                                                                          failed.localizedDescription.UTF8String)

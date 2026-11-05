@@ -73,11 +73,31 @@ std::vector<uint8_t> readBody(WebKitURISchemeRequest *request) {
 }
 
 void respond(WebKitURISchemeRequest *request, SchemeResponse response) {
-    auto *bytes = new std::vector<uint8_t>(std::move(response.body));
-    GBytes *data = g_bytes_new_with_free_func(bytes->data(), bytes->size(),
-        [](gpointer owned) { delete static_cast<std::vector<uint8_t> *>(owned); }, bytes);
-    GInputStream *stream = g_memory_input_stream_new_from_bytes(data);
-    WebKitURISchemeResponse *answer = webkit_uri_scheme_response_new(stream, static_cast<gint64>(g_bytes_get_size(data)));
+    GInputStream *stream = nullptr;
+    gint64 length = 0;
+    if (response.file.empty()) {
+        auto *bytes = new std::vector<uint8_t>(std::move(response.body));
+        GBytes *data = g_bytes_new_with_free_func(bytes->data(), bytes->size(),
+            [](gpointer owned) { delete static_cast<std::vector<uint8_t> *>(owned); }, bytes);
+        stream = g_memory_input_stream_new_from_bytes(data);
+        length = static_cast<gint64>(g_bytes_get_size(data));
+        g_bytes_unref(data);
+    } else {
+        // WebKit reads a file's stream as the page takes it.
+        GFile *file = g_file_new_for_path(response.file.c_str());
+        GError *error = nullptr;
+        GFileInputStream *read = g_file_read(file, nullptr, &error);
+        g_object_unref(file);
+        if (!read) {
+            webkit_uri_scheme_request_finish_error(request, error);
+            g_error_free(error);
+            g_object_unref(request);
+            return;
+        }
+        stream = G_INPUT_STREAM(read);
+        length = static_cast<gint64>(response.fileLength);
+    }
+    WebKitURISchemeResponse *answer = webkit_uri_scheme_response_new(stream, length);
     webkit_uri_scheme_response_set_status(answer, static_cast<guint>(response.status), nullptr);
     webkit_uri_scheme_response_set_content_type(answer, response.mime.c_str());
     if (!response.headers.empty()) {
@@ -88,7 +108,6 @@ void respond(WebKitURISchemeRequest *request, SchemeResponse response) {
     webkit_uri_scheme_request_finish_with_response(request, answer);
     g_object_unref(answer);
     g_object_unref(stream);
-    g_bytes_unref(data);
     g_object_unref(request);
 }
 
@@ -102,6 +121,14 @@ void onSchemeRequest(WebKitURISchemeRequest *request, gpointer data) {
     const char *query = uri ? std::strchr(uri, '?') : nullptr;
     incoming.query = query ? query + 1 : "";
     incoming.body = readBody(request);
+    if (SoupMessageHeaders *headers = webkit_uri_scheme_request_get_http_headers(request)) {
+        soup_message_headers_foreach(
+            headers,
+            [](const char *name, const char *value, gpointer into) {
+                static_cast<std::vector<std::pair<std::string, std::string>> *>(into)->emplace_back(name, value);
+            },
+            &incoming.headers);
+    }
     g_object_ref(request);
     (*static_cast<SchemeHandler *>(data))(std::move(incoming), [request](SchemeResponse response) {
         onMainThread([request, response = std::move(response)]() mutable { respond(request, std::move(response)); });

@@ -11,7 +11,7 @@ import { readSecret, storeSecret } from '../utils/keychain.js';
 import { entry, writeOption } from '../utils/configWriter.js';
 import { readAppIcon, windowsIcon } from '../utils/appIcon.js';
 import {
-    PRIVACY_CATEGORIES, appCategory, appDisplayName, appEncryption, appId, appPrivacy, appUpdater, appUrlSchemes,
+    PRIVACY_CATEGORIES, androidAppId, appCategory, appDisplayName, appEncryption, appId, appPrivacy, appUpdater, appUrlSchemes,
 } from '../utils/appOptions.js';
 import { isJsonValue, linuxDepends } from '../utils/appExtensions.js';
 import { fileTypeOwners } from '../utils/appLaunches.js';
@@ -20,7 +20,7 @@ import { resolveHermesDsym } from '../utils/hermes.js';
 import { imageRoleFor } from '../utils/pullDockerImage.js';
 import { isUnderBase } from '../utils/replaceBasePathForDocker.js';
 import {
-    androidAppId, androidVersion, appBuildNumber, appTeam, appVersion,
+    androidVersion, appBuildNumber, appTeam, appVersion,
 } from './buildApp.js';
 import runTool from './run.js';
 import { makeUploadKey, releaseSigningEnv } from './uploadKey.js';
@@ -237,7 +237,7 @@ export default function extensionApi(name, {
         get workDir() { return path.join(state.config.paths.build, name); },
         config,
         app: Object.freeze({
-            get id() { return platform === 'android' ? androidAppId() : appId(state.config); },
+            get id() { return platform === 'android' ? androidAppId(state.config) : appId(state.config); },
             get name() { return appDisplayName(state.config); },
             get version() { return state.config.package?.version ?? '1.0.0'; },
             get appleVersion() { return appVersion(); },

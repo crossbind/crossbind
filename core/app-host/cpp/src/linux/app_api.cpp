@@ -94,7 +94,9 @@ bool isMainThread() { return syscall(SYS_gettid) == getpid(); }
 // The window goes without asking the app's extensions, as its user's closing it does.
 void quitApp() {
     onMainThread([] {
-        if (mainWindow) gtk_widget_destroy(GTK_WIDGET(mainWindow));
+        if (!mainWindow) return;
+        crossbind::app::windowsClosed();
+        gtk_widget_destroy(GTK_WIDGET(mainWindow));
     });
 }
 
@@ -105,8 +107,12 @@ void quitApp() {
 void setMainWindow(void *window, void *view) {
     mainWindow = GTK_WINDOW(window);
     g_object_add_weak_pointer(G_OBJECT(mainWindow), reinterpret_cast<gpointer *>(&mainWindow));
-    // The window asks the app's extensions as its user closes it: TRUE keeps it.
-    g_signal_connect(mainWindow, "delete-event", G_CALLBACK(+[](GtkWidget *, GdkEvent *, gpointer) -> gboolean { return !crossbind::app::isCloseAllowed(); }), nullptr);
+    // The window asks the app's extensions as its user closes it: TRUE keeps it, and one that goes they hear of first.
+    g_signal_connect(mainWindow, "delete-event", G_CALLBACK(+[](GtkWidget *, GdkEvent *, gpointer) -> gboolean {
+        if (!crossbind::app::isCloseAllowed()) return TRUE;
+        crossbind::app::windowsClosed();
+        return FALSE;
+    }), nullptr);
     // A Linux desktop tells of the app's window alone: the app is active while its window has the focus, which it may
     // have taken as it showed, so the extensions hear how it is once the window has opened.
     g_signal_connect(mainWindow, "notify::is-active", G_CALLBACK(+[](GObject *window, GParamSpec *, gpointer) {

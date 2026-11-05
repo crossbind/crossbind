@@ -48,6 +48,7 @@ void listenForUrls() {
                                                     object:nil
                                                      queue:nil
                                                 usingBlock:^(NSNotification *) {
+                                                  answerLaunches();
                                                   [NSAppleEventManager.sharedAppleEventManager setEventHandler:handler
                                                                                                    andSelector:@selector(openUrl:withReplyEvent:)
                                                                                                  forEventClass:kInternetEventClass

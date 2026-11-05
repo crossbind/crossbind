@@ -34,11 +34,12 @@ export interface MessageOptions {
     buttons?: string[];
 }
 
-/** The app's own folders, made when first asked for: what it keeps, what it can lose, and its logs. */
+/** The app's own folders, made when first asked for: what it keeps, what it can lose, and its logs; and the read-only one of the files app.files lists, each in the place it had in the project. */
 export interface AppPaths {
     data: string;
     cache: string;
     logs: string;
+    resources: string;
 }
 
 export declare const dialog: {
@@ -75,6 +76,8 @@ export declare const app: {
     launchFiles(): Promise<string[]>;
     /** The launch that started a desktop app. A phone's has no arguments, and no folder. */
     launchArgs(): Promise<Launch>;
+    /** Makes this user activity the app's current one on iOS and macOS, for its user's other devices to continue, as Handoff does; null makes none current. Its type is one of app.activityTypes in crossbind.config.js, and another platform rejects. */
+    setUserActivity(activity: UserActivity | null): Promise<void>;
 };
 
 /** A key with CmdOrCtrl, Ctrl or Alt and maybe Shift, joined by +, as CmdOrCtrl+Shift+O is, or F1–F12, alone or with any of them. The key is A–Z, 0–9, F1–F12, Enter, Escape, Tab, Space, Backspace, Delete, Up, Down, Left, Right, Home, End, PageUp, PageDown, Plus, Minus, Comma or Period. */
@@ -98,9 +101,19 @@ export interface MenuClick {
     checked?: boolean;
 }
 
+/** A point of the page's, in CSS pixels from its top left, as a contextmenu event's clientX and clientY are. */
+export interface PagePoint {
+    x: number;
+    y: number;
+}
+
 export declare const menu: {
     /** Sets the app's menus: on macOS after its app menu, which the app keeps, and on Windows and Linux in a bar of its window. A click of an item with an id is an event, menu, with a MenuClick. */
     set(menus: Menu[]): Promise<void>;
+    /** Opens a menu of these items at the page's point, on the desktop, as a right click's menu opens: it resolves with the id of the item clicked, or null when the menu closes without one, and a standard item does what its role says. A contextmenu listener that opens it keeps the webview's own menu away with preventDefault(). */
+    popup(items: MenuItem[], at: PagePoint): Promise<string | null>;
+    /** Sets the menu a macOS app's Dock icon shows above the system's own items, of a tray's items; a click of an item with an id is the event menu, with a MenuClick. An empty list takes it away. */
+    setDock(items: TrayItem[]): Promise<void>;
 };
 
 /** An item of the tray's menu: one the page handles, by its id, a submenu or a separator. */
@@ -147,9 +160,29 @@ export interface OpenUrl {
     url: string;
 }
 
+/** A user activity of an iOS or macOS app's, which another of its user's devices continues, as Handoff does: its type, one of app.activityTypes in crossbind.config.js, what the app keeps in its userInfo, JSON values, and the http or https page a device without the app opens instead. */
+export interface UserActivity {
+    type: string;
+    /** An object, always, in the event user-activity. */
+    userInfo?: Record<string, unknown>;
+    webpageUrl?: string;
+}
+
+/** What the event shortcut-item carries: the type of the quick action of app.shortcutItems its user tapped on an iOS or Android app's icon. */
+export interface ShortcutItem {
+    type: string;
+}
+
 /** What the event open-files carries: the absolute paths of the files the system opened the app with at once. */
 export interface OpenFiles {
     paths: string[];
+}
+
+/** What the event drop carries: the absolute paths of the files the app's user dropped on the page at once, and the page's point they were dropped at, in CSS pixels from its top left. */
+export interface PageDrop {
+    paths: string[];
+    x: number;
+    y: number;
 }
 
 export declare const events: {
@@ -159,6 +192,10 @@ export declare const events: {
     on(name: 'open-url', listener: (open: OpenUrl) => void): () => void;
     /** Calls listener with each set of files the system opens the app with once the page has called app.launchFiles(), or events.held('open-files'), until the function it returns is called. */
     on(name: 'open-files', listener: (open: OpenFiles) => void): () => void;
+    /** Calls listener with each user activity of app.activityTypes the system continues an iOS or macOS app with once the page has called events.held('user-activity'), until the function it returns is called. */
+    on(name: 'user-activity', listener: (activity: UserActivity) => void): () => void;
+    /** Calls listener with each tap of a quick action of app.shortcutItems on an iOS or Android app's icon once the page has called events.held('shortcut-item'), until the function it returns is called. */
+    on(name: 'shortcut-item', listener: (item: ShortcutItem) => void): () => void;
     /** Calls listener with each later launch of a desktop app that app.singleInstance keeps to one instance, which brings its window to the front as far as the system lets it, until the function it returns is called. */
     on(name: 'second-instance', listener: (launch: SecondInstance) => void): () => void;
     /** Calls listener as the app becomes the active one on the desktop, or comes to a phone's foreground, until the function it returns is called. A Linux app's is its window's focus. */
@@ -173,12 +210,18 @@ export declare const events: {
     on(name: 'tray', listener: () => void): () => void;
     /** Calls listener with each click on a notification the app's notification.show showed while it runs, until the function it returns is called. */
     on(name: 'notification', listener: () => void): () => void;
+    /** Calls listener with the files of each drop of the app's user's on the page, on the desktop, as the page's own drop event goes on, until the function it returns is called. The page may reach each path through shell's functions, as one its user picked. */
+    on(name: 'drop', listener: (drop: PageDrop) => void): () => void;
     /** Calls listener with the value of each event of this name the app's native code emits from now on, until the function it returns is called. */
     on(name: string, listener: (value: unknown) => void): () => void;
     /** The links of app.urlSchemes the host held for the page, which came before it asked since it loaded, as app.launchUrls() gives their addresses. */
     held(name: 'open-url'): Promise<OpenUrl[]>;
     /** The files the host held for the page, which came before it asked since it loaded, as app.launchFiles() gives their paths. */
     held(name: 'open-files'): Promise<OpenFiles[]>;
+    /** The user activities of app.activityTypes the system continued the app with that the host held for the page, which came before it asked since it loaded, the launch's own among them. */
+    held(name: 'user-activity'): Promise<UserActivity[]>;
+    /** The taps of the quick actions of app.shortcutItems that the host held for the page, which came before it asked since it loaded, the launch's own among them. */
+    held(name: 'shortcut-item'): Promise<ShortcutItem[]>;
     /** The values of the events of this name the app's native code held for the page with holdEvent(), which came before the page asked for them since it loaded; later ones come as the events while it listens, so listening first, then asking, misses none. */
     held(name: string): Promise<unknown[]>;
 };
@@ -188,8 +231,19 @@ export interface Update {
     version: string;
 }
 
-/** A function of one of the app's extensions, by its name, as clipboard.readText, with options of JSON values; an extension's own package calls it so. */
-export declare function invoke<T = unknown>(name: string, options?: Record<string, unknown>): Promise<T>;
+/** What invoke takes beside a function's options. */
+export interface InvokeOptions<M = unknown> {
+    /** Gets each message the function sends before it answers, in the order it sent them, all of them before invoke resolves. */
+    onMessage?: (message: M) => void;
+    /** Cancels the call: invoke rejects with the signal's reason, and the function hears of it. A new page cancels each call of the one before. */
+    signal?: AbortSignal;
+}
+
+/** A function of one of the app's extensions, by its name, as clipboard.readText, with options of JSON values and bytes, a typed array, a DataView or an ArrayBuffer, whose result's bytes come back as a Uint8Array; an extension's own package calls it so. */
+export declare function invoke<T = unknown, M = unknown>(name: string, options?: Record<string, unknown>, call?: InvokeOptions<M>): Promise<T>;
+
+/** The URL of a path an extension's route serves, as "/clips/intro.mp4" or "/thumb/42?size=256", for the page's <img>, <video> or fetch(): crossbind://app/ext/<extension><path>, and https://appassets.androidplatform.net/ext/<extension><path> on Android. The path is as a URL holds it, escaped where it must be, without a part "." or ".."; the route gets it decoded. */
+export declare function routeUrl(extension: string, path: string): string;
 
 /** One check or install runs at a time, and another rejects meanwhile. */
 export declare const updater: {

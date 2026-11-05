@@ -5,11 +5,12 @@
 // and a desktop app's updates. The page reaches the same through crossbind/app, where openPath() opens files where
 // app.openPath lets it alone, and revealInFolder() and trash() reach the app's folders and what a dialog picked alone;
 // here they reach any path. Call them from the module's code, which an app builds with CROSSBIND_APP defined, once the
-// module has started and never on the app's main thread: the dialogs and the functions that open something wait for
-// that thread. They and the updater's throw when called before the app can answer, as from a static initializer, or
-// once the app quits. What fails throws a std::runtime_error, which says why. An iOS app has messageDialog(), paths(),
-// openExternal(), emitEvent() and holdEvent() alone, and an Android app messageDialog(), paths(), emitEvent() and
-// holdEvent(): the others throw there.
+// module has started: the dialogs, the updater's and the functions that open something wait for the app's main thread,
+// which calls none of them, and paths(), quit(), requestQuit(), emitEvent() and holdEvent() any thread calls. Those
+// that wait throw when called before the app can answer, as from a static initializer, or once the app quits. What
+// fails throws a std::runtime_error, which says why. An iOS app has messageDialog(), paths(), openExternal(),
+// emitEvent() and holdEvent() alone, and an Android app messageDialog(), paths(), emitEvent() and holdEvent(): the
+// others throw there.
 #include <optional>
 #include <string>
 #include <vector>
@@ -52,11 +53,13 @@ struct MessageOptions {
     std::vector<std::string> buttons;
 };
 
-// The app's own folders, made when first asked for: what it keeps, what it can lose, and its logs.
+// The app's own folders, made when first asked for: what it keeps, what it can lose, and its logs; and the read-only one
+// of the files app.files lists, each in the place it had in the project.
 struct Paths {
     std::string data;
     std::string cache;
     std::string logs;
+    std::string resources;
 };
 
 // The files or folders the user picked, or nothing when they cancelled.
@@ -83,14 +86,13 @@ void requestQuit();
 void relaunch();
 // Sends the page an event, whose listeners through crossbind/app's events.on get the value json holds, a JSON text. It
 // waits for nothing, so any thread may call it. A page gets the events emitted once it listens: one emitted before,
-// as before the module starts or once the app quits, reaches none. The events menu, second-instance, open-url, suspend,
-// resume, active and inactive are the host's own.
+// as before its page loads or once the app quits, reaches none. The events menu, second-instance, open-url, suspend,
+// resume, active, inactive, drop, open-files, tray, notification, user-activity and shortcut-item are the host's own.
 void emitEvent(const std::string &event, const std::string &json = "null");
 // Sends the page an event as emitEvent() does, which the host holds until the page asks for the events of its name with
 // crossbind/app's events.held() since it loaded, as what came before it listened: each reaches the page once, in that
 // answer or as the event while it listens, and one a reload cut off waits for the page's next ask. The host holds 1,000
-// of a name at most. Any thread may call it; one held before the module starts, as from an extension's entry, reaches
-// none, as an event emitted then does.
+// of a name at most. Any thread may call it, before the module starts as well, as an extension's onStart does.
 void holdEvent(const std::string &event, const std::string &json = "null");
 // The version app.updater.url in crossbind.config.js offers when it is newer than this app's, or nothing. It waits for
 // the download, and throws while another check or install runs.

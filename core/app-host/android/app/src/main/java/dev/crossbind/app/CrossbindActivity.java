@@ -1,6 +1,5 @@
 package dev.crossbind.app;
 
-import android.Manifest;
 import android.app.Activity;
 import android.app.AlertDialog;
 import android.content.ActivityNotFoundException;
@@ -25,6 +24,7 @@ import android.view.WindowInsets;
 import android.view.WindowInsetsController;
 import android.webkit.ConsoleMessage;
 import android.webkit.GeolocationPermissions;
+import android.webkit.HttpAuthHandler;
 import android.webkit.JsPromptResult;
 import android.webkit.JsResult;
 import android.webkit.PermissionRequest;
@@ -47,6 +47,9 @@ import androidx.webkit.WebViewFeature;
 
 import java.io.ByteArrayInputStream;
 import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileNotFoundException;
+import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -54,6 +57,7 @@ import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.nio.file.StandardCopyOption;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -66,8 +70,9 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 import org.json.JSONException;
@@ -76,7 +81,7 @@ import org.json.JSONObject;
 // An app's one activity: its page in a WebView, its module in Hermes behind JNI (libcrossbind_app.so). The page comes
 // from an https origin the activity serves from the app's files, or in a debug app from a dev server; calls and their
 // bytes travel over a message port that the page's top frame alone gets.
-public class CrossbindActivity extends Activity {
+public class CrossbindActivity extends Activity implements ExtensionHost {
     static {
         System.loadLibrary("crossbind_app");
     }
@@ -169,10 +174,6 @@ public class CrossbindActivity extends Activity {
             PermissionRequest.RESOURCE_AUDIO_CAPTURE, "microphone",
             PermissionRequest.RESOURCE_PROTECTED_MEDIA_ID, "media-keys",
             PermissionRequest.RESOURCE_MIDI_SYSEX, "midi");
-    private static final Map<String, String> DEVICE_PERMISSIONS = Map.of(
-            "camera", Manifest.permission.CAMERA,
-            "microphone", Manifest.permission.RECORD_AUDIO,
-            "location", Manifest.permission.ACCESS_COARSE_LOCATION);
 
     // A call of a page, answered on the port of the page that made it: a page that went away gets no answer.
     private static final class Call {
@@ -187,6 +188,15 @@ public class CrossbindActivity extends Activity {
 
     private static final Map<Integer, Call> calls = new ConcurrentHashMap<>();
     private static final AtomicInteger nextCall = new AtomicInteger();
+    // nativeNavigation()'s answers, in the order of the host's NavigationAnswer.
+    private static final int LOAD = 0;
+    private static final int OUTSIDE = 1;
+    // The authentications page-navigation has yet to answer, by their ids.
+    private static final Map<Integer, HttpAuthHandler> authentications = new ConcurrentHashMap<>();
+    private static final AtomicInteger nextAuthentication = new AtomicInteger();
+    // answerDownload()'s answers, in the order of the host's DownloadAnswer.
+    private static final int SAVE_TO = 0;
+    private static final int ASK = 1;
     // The activity that the calls of extensions' Java get while it lives.
     private static volatile CrossbindActivity current;
 
@@ -204,25 +214,33 @@ public class CrossbindActivity extends Activity {
     // at a time, and answers one asked meanwhile with nothing.
     private Runnable answering;
     private final ArrayDeque<Runnable> waiting = new ArrayDeque<>();
-    private Set<String> declared;
+    private Set<String> listed;
     // Back walks the page's history first, as in a browser; with none left, the system's own back leaves the app.
     private final OnBackInvokedCallback back = () -> webView.goBack();
     private boolean isBackTaken;
-    // The downloads the page started, in turn for the save picker, which shows one at a time.
+    // The downloads the page started, in turn: page-downloads hears of each once the page has handed it over, and the
+    // save picker, which shows one at a time, takes those ask() saves. Their ids are the process's, as the host keeps
+    // each one's owner by its id.
     private final ArrayDeque<Download> downloads = new ArrayDeque<>();
-    private int nextDownload;
-    private boolean isPicking;
+    private static final AtomicInteger nextDownload = new AtomicInteger();
+    // The download whose save picker is open.
+    private Download picking;
 
     private static final class Download {
         final int id;
+        final String url;
         final String mime;
         String name;
         // What the page handed over, with the download's bytes from offset on; null until it has.
         byte[] frame;
         int offset;
+        // Whether ask() saves it, through the picker, and whether a cancel() after that stops it.
+        boolean isAsked;
+        boolean isStopped;
 
-        Download(int id, String name, String mime) {
+        Download(int id, String url, String name, String mime) {
             this.id = id;
+            this.url = url;
             this.name = name;
             this.mime = mime;
         }
@@ -238,13 +256,17 @@ public class CrossbindActivity extends Activity {
 
     private static native void nativeResult(int call, String query);
 
-    // A file of the page, its path in UTF-8: "<status> <mime>\n" and its bytes.
-    private static native byte[] nativeRequest(byte[] path, String query);
+    // A request of the page's for a file of its own or an extension's URL: the path and the query as the URL has them, and
+    // each header's name and value in UTF-8, one after the other. The answer is what responseOf() makes.
+    private static native WebResourceResponse nativeRequest(String method, String path, String query, byte[][] headers);
 
     private static native void nativeNewPage();
 
     // A link of app.urlSchemes the system opened the app with, in UTF-8.
     private static native void nativeOpenUrl(byte[] url);
+
+    // A tap of a quick action of app.shortcutItems, by its type in UTF-8.
+    private static native void nativeShortcutItem(byte[] type);
 
     // The activity came to the foreground, or left it, which the app's extensions and its page hear of.
     private static native void nativeActive(boolean isActive);
@@ -253,12 +275,32 @@ public class CrossbindActivity extends Activity {
     // none, which names its owner before its name does.
     private static native void nativeOpenFiles(byte[][] paths, byte[][] mimeTypes);
 
-    // The answer of an extension's Java to its native code: the result's JSON, or why the call failed, in UTF-8.
-    static native void nativeExtensionAnswered(int call, boolean ok, byte[] text);
+    // A navigation beyond the app's origins, which the extension page-navigation decides on the UI thread, in UTF-8:
+    // LOAD loads it, OUTSIDE opens it in the browser or the mail app, and any other answer refuses it.
+    private static native int nativeNavigation(byte[] url, boolean isMainFrame, boolean isUserInitiated);
+
+    // A server's ask for a name and password, in UTF-8, which page-navigation answers through answerHttpAuthentication()
+    // under the same id.
+    private static native void nativeHttpAuthentication(int id, byte[] host, byte[] realm);
+
+    // A download the page handed over, which the extension page-downloads answers through answerDownload() under the same
+    // id: its address, name and MIME type in UTF-8, and its size.
+    private static native void nativeDownload(int id, byte[] url, byte[] name, byte[] mime, long size);
+
+    // How a download page-downloads heard of ended, on the UI thread: why it was not saved, or null, and the path or
+    // content: URI it was saved at, in UTF-8.
+    private static native void nativeDownloadFinished(int id, boolean isCancelled, byte[] failure, byte[] path);
+
+    // The answer of an extension's Java to its native code: the result's JSON and its bytes, or why the call failed, in
+    // UTF-8.
+    static native void nativeExtensionAnswered(int call, boolean ok, byte[] text, byte[][] bytes);
+
+    // A message of an extension's Java for the page of its call: its JSON and its bytes.
+    static native void nativeExtensionMessage(int call, byte[] text, byte[][] bytes);
 
     // A call of an extension's Java by its native code, from whichever thread makes it: the extension's name, the
-    // function's and its options' JSON, in UTF-8.
-    static void callExtension(int id, byte[] extensionName, byte[] functionName, byte[] optionsJson) {
+    // function's and its options' JSON, in UTF-8, and the options' bytes.
+    static void callExtension(int id, byte[] extensionName, byte[] functionName, byte[] optionsJson, byte[][] bytes) {
         String extension = new String(extensionName, StandardCharsets.UTF_8);
         String function = new String(functionName, StandardCharsets.UTF_8);
         String options = new String(optionsJson, StandardCharsets.UTF_8);
@@ -273,12 +315,52 @@ public class CrossbindActivity extends Activity {
                 call.reject("crossbind: " + called + " needs the app's activity, which is gone");
             } else {
                 try {
-                    to.call(activity, function, new JSONObject(options), call);
+                    to.call(activity, function, Extension.Call.optionsOf(options, bytes), call);
                 } catch (JSONException | RuntimeException error) {
                     Log.e(TAG, called + " failed", error);
                     call.reject("crossbind: " + called + " failed: " + error);
                 }
             }
+        });
+    }
+
+    // The page cancelled a call of an extension's Java, or went away, after the call itself reached the UI thread.
+    static void cancelExtension(int id) {
+        MAIN.post(() -> Extension.Call.cancel(id));
+    }
+
+    // page-navigation's answer to an authentication, from whichever thread gives it: a name and a password, or neither for
+    // a cancel.
+    static void answerHttpAuthentication(int id, byte[] user, byte[] password) {
+        HttpAuthHandler handler = authentications.remove(id);
+        if (handler == null) return;
+        MAIN.post(() -> {
+            if (user == null) {
+                handler.cancel();
+            } else {
+                handler.proceed(new String(user, StandardCharsets.UTF_8), new String(password, StandardCharsets.UTF_8));
+            }
+        });
+    }
+
+    // page-downloads' answer to a download, from whichever thread gives it: SAVE_TO with a path, ASK, or any other for a
+    // cancel.
+    static void answerDownload(int id, int kind, byte[] path) {
+        MAIN.post(() -> {
+            CrossbindActivity activity = current;
+            if (activity != null) {
+                activity.answered(id, kind, path == null ? "" : new String(path, StandardCharsets.UTF_8));
+            } else {
+                nativeDownloadFinished(id, false, "the app's activity went away".getBytes(StandardCharsets.UTF_8), new byte[0]);
+            }
+        });
+    }
+
+    // A cancel() of page-downloads' after its answer, from whichever thread gives it.
+    static void stopDownload(int id) {
+        MAIN.post(() -> {
+            CrossbindActivity activity = current;
+            if (activity != null) activity.stopped(id);
         });
     }
 
@@ -387,18 +469,29 @@ public class CrossbindActivity extends Activity {
             File opened = new File(getCacheDir(), "opened");
             COPIES.execute(() -> deleteTree(opened));
         }
-        if (state == null && (getIntent().getFlags() & Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY) == 0) openUrlOf(getIntent());
+        if (state == null && (getIntent().getFlags() & Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY) == 0) {
+            openUrlOf(getIntent());
+            shortcutOf(getIntent());
+        }
         tellExtensions((extension) -> extension.onCreate(this));
     }
 
-    // A link that opens the app while it runs comes here, as an app with app.urlSchemes keeps the activity its task's
-    // one, which keeps the page.
+    // A link or a quick action's tap that opens the app while it runs comes here, as an app with app.urlSchemes or
+    // app.shortcutItems keeps the activity its task's one, which keeps the page.
     @Override
     protected void onNewIntent(Intent intent) {
         super.onNewIntent(intent);
         setIntent(intent);
         openUrlOf(intent);
+        shortcutOf(intent);
         tellExtensions((extension) -> extension.onNewIntent(this, intent));
+    }
+
+    // A tap the app's trampoline handed over, as any app may start the activity.
+    private void shortcutOf(Intent intent) {
+        if (token == null) return;
+        String type = CrossbindShortcutActivity.tapOf(intent);
+        if (type != null) nativeShortcutItem(type.getBytes(StandardCharsets.UTF_8));
     }
 
     private void openUrlOf(Intent intent) {
@@ -433,12 +526,15 @@ public class CrossbindActivity extends Activity {
                 if (in == null) throw new IOException("its provider gives no stream");
                 if (!folder.mkdirs()) throw new IOException("cannot make " + folder);
                 Files.copy(in, copy.toPath());
-                nativeOpenFiles(new byte[][] {copy.getPath().getBytes(StandardCharsets.UTF_8)}, new byte[][] {mimeType.getBytes(StandardCharsets.UTF_8)});
             } catch (IOException | RuntimeException error) {
                 Log.e(TAG, "crossbind: the app cannot copy the file it was opened with, " + uri, error);
                 // A copy cut short is no file the app was opened with.
                 deleteTree(folder);
+                return;
             }
+            // Its owner gets it on the UI thread, as every hook of what the system hands the app.
+            runOnUiThread(() -> nativeOpenFiles(new byte[][] {copy.getPath().getBytes(StandardCharsets.UTF_8)},
+                    new byte[][] {mimeType.getBytes(StandardCharsets.UTF_8)}));
         });
     }
 
@@ -512,18 +608,17 @@ public class CrossbindActivity extends Activity {
         getWindow().getInsetsController().setSystemBarsAppearance(isDark ? 0 : light, light);
     }
 
-    // The WebView that shows the page, for an extension's Java on the UI thread: null before the activity has made it,
-    // and on a device without one.
+    @Override
+    public Activity activity() {
+        return this;
+    }
+
+    @Override
     public WebView webView() {
         return webView;
     }
 
-    public interface ActivityResult {
-        void onResult(int result, Intent data);
-    }
-
-    // Starts an activity for its result, which then gets on the UI thread. It throws ActivityNotFoundException, as
-    // startActivityForResult() does.
+    @Override
     public void startForResult(Intent intent, ActivityResult then) {
         int request = nextRequest++;
         startActivityForResult(intent, request);
@@ -537,16 +632,15 @@ public class CrossbindActivity extends Activity {
         if (then != null) then.onResult(result, data);
     }
 
-    // A download the page starts saves where its user picks, as a browser asks: the page hands over its name and bytes,
-    // as only the page knows them, and the system's save picker takes them in turn. A download that is no link of the
-    // page's is named after its address.
+    // A download the page starts: the page hands over its name and bytes, as only the page knows them, and the extension
+    // page-downloads then answers it. A download that is no link of the page's is named after its address.
     private void download(String url, String name, String mime) {
-        Download download = new Download(nextDownload++, name, mime);
+        Download download = new Download(nextDownload.getAndIncrement(), url, name, mime);
         downloads.add(download);
-        // A page yet to run DOWNLOAD_SCRIPT hands over nothing.
+        // A page yet to run DOWNLOAD_SCRIPT, as one of another origin, hands over nothing.
         String take = TAKE_DOWNLOAD + "(" + download.id + ", " + JSONObject.quote(url) + ")";
         webView.evaluateJavascript("typeof " + TAKE_DOWNLOAD + " === 'function' && (" + take + ", true)", (taken) -> {
-            if (!"true".equals(taken)) notSaved(download, "the page went away");
+            if (!"true".equals(taken)) notSaved(download, "the page did not hand it over");
         });
     }
 
@@ -569,7 +663,8 @@ public class CrossbindActivity extends Activity {
         if (nameLength > 0) download.name = new String(frame, 8, nameLength, StandardCharsets.UTF_8);
         download.frame = frame;
         download.offset = 8 + nameLength;
-        pickNext();
+        nativeDownload(download.id, download.url.getBytes(StandardCharsets.UTF_8), download.name.getBytes(StandardCharsets.UTF_8),
+                (download.mime == null ? "" : download.mime).getBytes(StandardCharsets.UTF_8), frame.length - download.offset);
     }
 
     private Download downloadOf(int id) {
@@ -587,41 +682,111 @@ public class CrossbindActivity extends Activity {
         }
     }
 
-    // The save picker for the first download, once the page has handed it over.
+    // page-downloads' answer, on the UI thread.
+    private void answered(int id, int kind, String path) {
+        Download download = downloadOf(id);
+        if (download == null) {
+            nativeDownloadFinished(id, false, "the page went away".getBytes(StandardCharsets.UTF_8), new byte[0]);
+        } else if (kind == ASK) {
+            download.isAsked = true;
+            pickNext();
+        } else {
+            downloads.remove(download);
+            if (kind == SAVE_TO) {
+                saveTo(download, path);
+            } else {
+                cancelled(download);
+            }
+        }
+    }
+
+    // A cancel() after the answer: the open picker's download saves nothing, and one that waits for it goes.
+    private void stopped(int id) {
+        if (picking != null && picking.id == id) {
+            picking.isStopped = true;
+            return;
+        }
+        Download download = downloadOf(id);
+        if (download != null && download.isAsked && downloads.remove(download)) cancelled(download);
+    }
+
+    // The save picker for the first download ask() saves.
     private void pickNext() {
-        Download first = downloads.peek();
-        if (isPicking || first == null || first.frame == null) return;
+        if (picking != null) return;
+        Download first = downloads.stream().filter((waiting) -> waiting.isAsked).findFirst().orElse(null);
+        if (first == null) return;
         Intent picker = new Intent(Intent.ACTION_CREATE_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE)
                 .setType(first.mime == null || first.mime.isEmpty() ? "application/octet-stream" : first.mime)
                 .putExtra(Intent.EXTRA_TITLE, first.name);
         try {
             startForResult(picker, (result, data) -> save(result == RESULT_OK && data != null ? data.getData() : null));
-            isPicking = true;
+            picking = first;
         } catch (ActivityNotFoundException none) {
             notSaved(first, "nothing on this device saves a file");
         }
     }
 
-    // Writes the first download where its user picked, on a thread of its own, as the ipc thread carries the page's
+    // Writes the download its user picked a place for, on a thread of its own, as the ipc thread carries the page's
     // calls; or drops it when they cancelled.
     private void save(Uri place) {
-        isPicking = false;
-        Download saving = downloads.poll();
-        if (saving != null && saving.frame != null && place != null) {
-            new Thread(() -> {
-                try (OutputStream out = getContentResolver().openOutputStream(place, "wt")) {
-                    out.write(saving.frame, saving.offset, saving.frame.length - saving.offset);
-                } catch (IOException | RuntimeException error) {
-                    runOnUiThread(() -> tellNotSaved(saving.name, error.toString()));
-                }
-            }).start();
+        Download saving = picking;
+        picking = null;
+        if (saving != null && downloads.remove(saving)) {
+            if (place == null || saving.isStopped) {
+                cancelled(saving);
+            } else {
+                // Saved once the stream has closed, which a provider may write on.
+                new Thread(() -> {
+                    try (OutputStream out = getContentResolver().openOutputStream(place, "wt")) {
+                        out.write(saving.frame, saving.offset, saving.frame.length - saving.offset);
+                    } catch (IOException | RuntimeException error) {
+                        runOnUiThread(() -> {
+                            tellNotSaved(saving.name, error.toString());
+                            finished(saving, error.toString(), "");
+                        });
+                        return;
+                    }
+                    runOnUiThread(() -> finished(saving, null, place.toString()));
+                }).start();
+            }
         }
         pickNext();
     }
 
+    // Writes a download where saveTo() names, beside it first, so a write that fails leaves the file it was to replace
+    // as it was.
+    private void saveTo(Download saving, String path) {
+        new Thread(() -> {
+            File target = new File(path);
+            File arrival = new File(target.getParentFile(), "." + target.getName() + "." + saving.id + ".download");
+            try {
+                // A folder there stays, as the move would put the file in an empty one's place.
+                if (target.isDirectory()) throw new IOException("a folder is at " + path);
+                try (OutputStream out = new FileOutputStream(arrival)) {
+                    out.write(saving.frame, saving.offset, saving.frame.length - saving.offset);
+                }
+                Files.move(arrival.toPath(), target.toPath(), StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
+                runOnUiThread(() -> finished(saving, null, path));
+            } catch (IOException | RuntimeException error) {
+                if (arrival.exists() && !arrival.delete()) Log.w(TAG, "could not remove " + arrival);
+                runOnUiThread(() -> finished(saving, error.toString(), ""));
+            }
+        }).start();
+    }
+
+    private static void finished(Download download, String failure, String path) {
+        nativeDownloadFinished(download.id, false, failure == null ? null : failure.getBytes(StandardCharsets.UTF_8), path.getBytes(StandardCharsets.UTF_8));
+    }
+
+    private static void cancelled(Download download) {
+        nativeDownloadFinished(download.id, true, null, new byte[0]);
+    }
+
+    // A download the page could not hand over, which page-downloads never heard of, or one ask() saves that cannot be.
     private void notSaved(Download download, String reason) {
         if (!downloads.remove(download)) return;
         tellNotSaved(download.name, reason);
+        if (download.frame != null) finished(download, reason, "");
         pickNext();
     }
 
@@ -630,25 +795,18 @@ public class CrossbindActivity extends Activity {
         new AlertDialog.Builder(this).setMessage(name + " was not saved\n\n" + reason).setPositiveButton(android.R.string.ok, null).show();
     }
 
-    // The permissions the app's manifest asks for, which crossbind writes from app.permissions.
-    private boolean isDeclared(String permission) {
-        if (declared == null) {
-            try {
-                String[] requested = getPackageManager()
-                        .getPackageInfo(getPackageName(), PackageManager.PackageInfoFlags.of(PackageManager.GET_PERMISSIONS)).requestedPermissions;
-                declared = requested == null ? Set.of() : new HashSet<>(Arrays.asList(requested));
-            } catch (PackageManager.NameNotFoundException none) {
-                declared = Set.of();
-            }
-        }
-        return permission != null && declared.contains(permission);
+    // Whether app.permissions lists the device, as the Gradle project's crossbind_permissions holds them: the
+    // manifest asks Android for its extensions' permissions as well, which are their Java's alone.
+    private boolean isListed(String kind) {
+        if (listed == null) listed = Set.of(getResources().getStringArray(R.array.crossbind_permissions));
+        return listed.contains(kind);
     }
 
     private boolean isGranted(String permission) {
         return checkSelfPermission(permission) == PackageManager.PERMISSION_GRANTED;
     }
 
-    // Asks the app's user for whichever of these permissions it lacks, then runs then, which checks what it was given.
+    @Override
     public void afterAsking(String[] permissions, Runnable then) {
         if (answering != null) {
             waiting.add(() -> afterAsking(permissions, then));
@@ -685,6 +843,12 @@ public class CrossbindActivity extends Activity {
     @Override
     protected void onDestroy() {
         tellExtensions((extension) -> extension.onDestroy(this));
+        // A download page-downloads heard of that waits for its picker, or its answer, ends with the activity.
+        for (Download pending : downloads) {
+            if (pending.frame != null) finished(pending, "the app's activity went away", "");
+        }
+        downloads.clear();
+        picking = null;
         if (current == this) current = null;
         if (port != null) close(port);
         if (webView != null) webView.destroy();
@@ -753,12 +917,15 @@ public class CrossbindActivity extends Activity {
     }
 
     private final class PageClient extends WebViewClient {
-        // Only the app's origins load; a link the user follows to another opens in the browser.
+        // The app's origins load without asking; the extension page-navigation decides every other URL. A page of
+        // another origin gets no token, so it reaches none of the app's functions.
         @Override
         public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
             Uri url = request.getUrl();
             if (allows(url)) return false;
-            if (request.hasGesture() && Set.of("http", "https", "mailto").contains(url.getScheme())) {
+            int answer = nativeNavigation(url.toString().getBytes(StandardCharsets.UTF_8), request.isForMainFrame(), request.hasGesture());
+            if (answer == LOAD) return false;
+            if (answer == OUTSIDE) {
                 try {
                     startActivity(new Intent(Intent.ACTION_VIEW, url));
                 } catch (ActivityNotFoundException none) {
@@ -768,15 +935,33 @@ public class CrossbindActivity extends Activity {
             return true;
         }
 
-        // The page's files. Calls and their bytes travel over the port alone, which no other frame holds.
+        // A server's ask for a name and password, which page-navigation answers; a cancel goes on without them, so the
+        // page gets what the server answers to that. A certificate the system does not trust the WebView refuses
+        // without asking, as Android asks of an app.
+        @Override
+        public void onReceivedHttpAuthRequest(WebView view, HttpAuthHandler handler, String host, String realm) {
+            int id = nextAuthentication.getAndIncrement();
+            authentications.put(id, handler);
+            nativeHttpAuthentication(id, (host == null ? "" : host).getBytes(StandardCharsets.UTF_8),
+                    (realm == null ? "" : realm).getBytes(StandardCharsets.UTF_8));
+        }
+
+        // The page's files and its extensions' URLs. Calls and their bytes travel over the port alone, which no other frame
+        // holds. Android's WebView gives no request's body.
         @Override
         public WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest request) {
             Uri url = request.getUrl();
             if (!"https".equals(url.getScheme()) || !HOST.equals(url.getHost())) return null;
-            String path = url.getPath() == null ? "/" : url.getPath();
-            if (path.startsWith("/b/")) return response("404 text/plain\n".getBytes(StandardCharsets.US_ASCII));
+            String path = url.getEncodedPath() == null ? "/" : url.getEncodedPath();
+            // The host decodes the path, as Uri does here.
+            if (url.getPath() != null && url.getPath().startsWith("/b/")) return responseOf(404, "text/plain", new byte[0][], new byte[0], null, null);
             String query = url.getEncodedQuery();
-            return response(nativeRequest(path.getBytes(StandardCharsets.UTF_8), query == null ? "" : query));
+            List<byte[]> headers = new ArrayList<>();
+            for (Map.Entry<String, String> header : request.getRequestHeaders().entrySet()) {
+                headers.add(header.getKey().getBytes(StandardCharsets.UTF_8));
+                headers.add(header.getValue().getBytes(StandardCharsets.UTF_8));
+            }
+            return nativeRequest(request.getMethod(), path, query == null ? "" : query, headers.toArray(new byte[0][]));
         }
 
         @Override
@@ -855,16 +1040,20 @@ public class CrossbindActivity extends Activity {
                 result.cancel();
                 return true;
             }
-            Extension owner = Extensions.ALL.get("page-dialogs");
+            Extension owner = Extensions.ROLES.get("page-dialogs");
+            if (owner == null) return false;
             Extension.PageDialog dialog = new Extension.PageDialog(kind, message == null ? "" : message, defaultText, result);
-            return owner != null && isTaken("page-dialogs", () -> owner.onPageDialog(CrossbindActivity.this, dialog), dialog::cancel);
+            ask("page-dialogs", () -> owner.onPageDialog(CrossbindActivity.this, dialog), dialog::cancel);
+            return !dialog.isLeft();
         }
 
         @Override
         public boolean onShowFileChooser(WebView view, ValueCallback<Uri[]> files, FileChooserParams params) {
-            Extension owner = Extensions.ALL.get("page-files");
+            Extension owner = Extensions.ROLES.get("page-files");
+            if (owner == null) return false;
             Extension.FileInput input = new Extension.FileInput(params, files);
-            if (owner == null || !isTaken("page-files", () -> owner.onFileInput(CrossbindActivity.this, input), input::cancel)) return false;
+            ask("page-files", () -> owner.onFileInput(CrossbindActivity.this, input), input::cancel);
+            if (input.isLeft()) return false;
             if (pendingFiles != null) pendingFiles.cancel();
             pendingFiles = input;
             return true;
@@ -887,35 +1076,146 @@ public class CrossbindActivity extends Activity {
         }
 
         private void askPermission(List<String> kinds, String origin, Consumer<Boolean> answer) {
-            Extension owner = Extensions.ALL.get("page-permissions");
-            boolean isListed = kinds.stream().allMatch((kind) -> isDeclared(DEVICE_PERMISSIONS.get(kind)));
+            Extension owner = Extensions.ROLES.get("page-permissions");
+            boolean isListed = kinds.stream().allMatch((kind) -> isListed(kind));
             Extension.PagePermission request = new Extension.PagePermission(kinds, origin, isListed, answer);
-            if (!origins.contains(origin) || owner == null
-                    || !isTaken("page-permissions", () -> owner.onPagePermission(CrossbindActivity.this, request), request::deny)) {
+            if (!origins.contains(origin) || owner == null) {
                 request.deny();
+                return;
             }
+            ask("page-permissions", () -> owner.onPagePermission(CrossbindActivity.this, request), request::deny);
         }
 
-        // Whether the owner took the request: one it throws on is cancelled, as in an extension's C++.
-        private boolean isTaken(String role, BooleanSupplier ask, Runnable cancel) {
+        // What the owner throws cancels the request, as in an extension's C++.
+        private void ask(String role, Runnable hook, Runnable cancel) {
             try {
-                return ask.getAsBoolean();
+                hook.run();
             } catch (RuntimeException error) {
-                Log.e(TAG, "crossbind: the extension " + role + " failed on the page's request", error);
+                Log.e(TAG, "crossbind: the holder of " + role + " failed on the page's request", error);
                 cancel.run();
-                return true;
             }
         }
     }
 
-    private static WebResourceResponse response(byte[] answer) {
-        int newline = 0;
-        while (answer[newline] != '\n') newline += 1;
-        String[] head = new String(answer, 0, newline, StandardCharsets.US_ASCII).split(" ", 2);
-        int status = Integer.parseInt(head[0]);
-        String mime = head[1].split(";", 2)[0];
-        InputStream body = new ByteArrayInputStream(answer, newline + 1, answer.length - newline - 1);
-        return new WebResourceResponse(mime, "utf-8", status, status == 200 ? "OK" : "Not Found", new HashMap<>(), body);
+    // The host's answer to a request: its headers' names and values in UTF-8, one after the other, and the body, or the
+    // file, by its path in UTF-8, whose content is the body in its place, which the WebView reads as it takes it; range
+    // is the request's Range header, or null.
+    static WebResourceResponse responseOf(int status, String mime, byte[][] headers, byte[] body, byte[] file, byte[] range) {
+        Map<String, String> fields = new HashMap<>();
+        for (int i = 0; i + 1 < headers.length; i += 2) {
+            fields.put(new String(headers[i], StandardCharsets.UTF_8), new String(headers[i + 1], StandardCharsets.UTF_8));
+        }
+        InputStream data = new ByteArrayInputStream(body);
+        long length = body.length;
+        if (file != null) {
+            String path = new String(file, StandardCharsets.UTF_8);
+            try {
+                data = new FileInputStream(path);
+                length = new File(path).length();
+            } catch (FileNotFoundException gone) {
+                byte[] missing = "crossbind: the file went away before it was read".getBytes(StandardCharsets.UTF_8);
+                return responseOf(404, "text/plain; charset=utf-8", new byte[0][], missing, null, range);
+            }
+        }
+        // The WebView measures a stream by its available(), which a FileInputStream gives of the file in an int.
+        data = range == null ? new RangedStream(data, 0, length) : forRange(data, length, new String(range, StandardCharsets.UTF_8), status);
+        String[] type = mime.split(";", 2);
+        String charset = type.length > 1 && type[1].trim().startsWith("charset=") ? type[1].trim().substring("charset=".length()) : null;
+        return new WebResourceResponse(type[0].trim(), charset, status, reasonOf(status), fields, data);
+    }
+
+    private static final Pattern SINGLE_RANGE = Pattern.compile("^\\s*bytes\\s*=\\s*(\\d*)\\s*-\\s*(\\d*)\\s*$");
+
+    // The WebView takes a request's one Range to any stream that answers it, as a server would to its whole body: it
+    // skips the stream to the range's first byte, takes the range's length for the body's and reads on to the stream's
+    // end. A 206 of the host's, a failure and a body that ends before the range starts are the answer itself, so their
+    // stream starts with that many bytes of nothing, which the WebView skips; another's ends where the range does. The
+    // last n bytes the WebView finds itself. It measures in an int, so a file of 2 GiB or more fails it.
+    private static InputStream forRange(InputStream body, long length, String range, int status) {
+        Matcher match = SINGLE_RANGE.matcher(range);
+        if (!match.matches() || match.group(1).isEmpty()) return new RangedStream(body, 0, length);
+        try {
+            long first = Long.parseLong(match.group(1));
+            long end = Math.min(match.group(2).isEmpty() ? Long.MAX_VALUE : Long.parseLong(match.group(2)), Long.MAX_VALUE - 1);
+            if (end < first) return new RangedStream(body, 0, length);
+            boolean isAnswer = status == 206 || status >= 400 || length <= first;
+            return new RangedStream(body, isAnswer ? first : 0, isAnswer ? Math.min(length, end - first + 1) : Math.min(length, end + 1));
+        } catch (NumberFormatException tooLarge) {
+            return new RangedStream(body, 0, length);
+        }
+    }
+
+    // A body after so many bytes of nothing, which a skip passes, up to a length.
+    private static final class RangedStream extends InputStream {
+        private final InputStream body;
+        private long nothing;
+        private long left;
+
+        RangedStream(InputStream body, long nothing, long left) {
+            this.body = body;
+            this.nothing = nothing;
+            this.left = left;
+        }
+
+        // An empty body has nothing for the WebView to measure a range against.
+        @Override
+        public int available() {
+            if (left == 0) return 0;
+            return (int) Math.min(Integer.MAX_VALUE, nothing + left);
+        }
+
+        @Override
+        public long skip(long count) throws IOException {
+            long skipped = Math.min(count, nothing);
+            nothing -= skipped;
+            if (skipped < count && nothing == 0 && left > 0) {
+                long more = body.skip(Math.min(count - skipped, left));
+                left -= more;
+                skipped += more;
+            }
+            return skipped;
+        }
+
+        @Override
+        public int read() throws IOException {
+            byte[] one = new byte[1];
+            return read(one, 0, 1) == 1 ? one[0] & 255 : -1;
+        }
+
+        @Override
+        public int read(byte[] into, int offset, int count) throws IOException {
+            if (nothing > 0) {
+                int zeros = (int) Math.min(count, nothing);
+                Arrays.fill(into, offset, offset + zeros, (byte) 0);
+                nothing -= zeros;
+                return zeros;
+            }
+            if (left == 0) return -1;
+            int read = body.read(into, offset, (int) Math.min(count, left));
+            if (read > 0) left -= read;
+            return read;
+        }
+
+        @Override
+        public void close() throws IOException {
+            body.close();
+        }
+    }
+
+    // WebResourceResponse takes no empty reason.
+    private static String reasonOf(int status) {
+        switch (status) {
+            case 200: return "OK";
+            case 204: return "No Content";
+            case 206: return "Partial Content";
+            case 400: return "Bad Request";
+            case 403: return "Forbidden";
+            case 404: return "Not Found";
+            case 405: return "Method Not Allowed";
+            case 416: return "Range Not Satisfiable";
+            case 500: return "Internal Server Error";
+            default: return status < 400 ? "OK" : "Error";
+        }
     }
 
     // The module reads the app's files from disk, so they are copied out of the APK once per install, where no backup
