@@ -118,6 +118,7 @@ What a platform adds:
 | `entitlements` | `macos`, `ios` | The entitlements the app takes: on macOS merged with `app.permissions`', on iOS written into the app's entitlements file. Two owners that give one key lists join them, and other values that differ stop the build. |
 | `plist` | `macos`, `ios` | Info.plist keys, each with text, a number, a boolean, or a list or an object of them, as `{ NSContactsUsageDescription: reason }` with a reason the extension's options take from the app. A key crossbind writes from the app's config, as `CFBundleIdentifier` or a reason of `app.permissions`, the extension gives with the same value alone; two extensions that give one key lists join them, and other values that differ stop the build. |
 | `privacy` | `ios` | Apple's reasons for the required reason API its code calls, as `app.privacy` gives them, as `{ userDefaults: ['CA92.1'] }`: the app's privacy manifest gives them beside `app.privacy`'s. |
+| `targets` | `ios` | Apple's app extensions it adds to the app, as a widget, each a target of the app's Xcode project of its own, as [iOS app extensions](#ios-app-extensions) says. |
 | `permissions` | `android` | The Android permissions the app asks for, by their full names, as `android.permission.READ_CONTACTS`, beside `app.permissions`', each once. Its Java asks its user for one that asks with the host's `afterAsking()`. |
 | `manifest` | `android` | A manifest of its own, as an `AndroidManifest.xml` is, whose elements the app's takes: those of the manifest, as `<queries>` and `<uses-feature>`, beside the app's, and those of its `<application>`, which has no attributes, as the app's are its own, inside the app's application. Its `<manifest>` has no attributes but the `android` and `tools` prefixes, and it asks for no permission with `<uses-permission>`, which `permissions` lists. It takes `${applicationId}` as Gradle gives it, as for a `<provider>`'s authorities. |
 | `resources` | `android` | A folder of Android resources, as `res/` holds them, which join the app's: one at a path the app has stops the build, naming the extension. Its Java reads them through the app's `dev.crossbind.app.R`. |
@@ -599,6 +600,71 @@ Java, as Android's WebView asks for them in Java; the holders' C++ of `page-navi
 `page-downloads` take the page's navigations, authentications and downloads on Android as everywhere, as the activity
 hands them over.
 
+## iOS app extensions
+
+An extension adds Apple's app extensions to an iOS app with `app.ios.targets`: a widget, a share extension, a
+notification service or content extension, or one of iOS's other extension points. Each is a target of the app's Xcode
+project of its own, whose sources Xcode compiles alone, in Swift, Objective-C, Objective-C++, C and C++, with none of
+the host's: no page, no module and no `<crossbind/…>`, as iOS gives an extension little memory, 24 MB to a
+notification service. The app builds each first and carries it in its PlugIns.
+
+```js
+ios: {
+    targets: [{
+        name: 'clock',
+        kind: 'widget',
+        sources: ['ios/widget/ClockWidget.swift'],
+        resources: ['ios/widget/Assets.xcassets'],
+        appGroup: true,
+        privacy: { userDefaults: ['1C8F.1'] },
+    }],
+},
+```
+
+| Key | Value |
+|---|---|
+| `name` | Its name, of lowercase letters and digits that dashes may join, which no other target of the app's has: its bundle is the app's id and its name, as `com.example.notes.clock`, its product `clock.appex`, and its Swift module `clock`, with underscores for dashes. |
+| `kind` | `widget`, `share`, `notification-service`, `notification-content`, or `other` with its `extensionPoint`, as below. |
+| `sources` | Its own sources, of which it compiles one at least: Swift, Objective-C, Objective-C++, C and C++, with the headers, `.h` and `.hpp`, they import from beside them. One the extension's `ios` part lists as well compiles into both. |
+| `resources` | The files and folders the target carries, as an asset catalog, which Xcode compiles. |
+| `displayName` | The name iOS shows of it, as in the share sheet: the app's by default. |
+| `plist`, `attributes` | Keys of its Info.plist, and of its `NSExtension`'s `NSExtensionAttributes`, but those crossbind writes: its bundle's keys, `CrossbindAppGroup`, its `NSExtension`, and the attributes its kind's options give, as a share target's activation rule. A content extension's `UNNotificationExtensionInitialContentSizeRatio` is 1 unless its attributes give another. |
+| `entitlements`, `frameworks`, `privacy` | Its own, as an extension's `ios` part gives the app's: its entitlements, the frameworks it links, and its reasons for Apple's required reason API, in a privacy manifest of its own, as App Store Connect asks of each bundle. |
+| `appGroup` | `true` puts the app's App Group in its entitlements and the app's, as below. |
+| `deploymentTarget` | The iOS it needs, as `'17.0'`, from the app's 15.1, which it is by default: iOS shows it from that iOS on alone, and the app from 15.1 as ever. |
+
+What each kind runs at and takes:
+
+| Kind | Extension point | Takes |
+|---|---|---|
+| `widget` | `com.apple.widgetkit-extension` | A Swift source among its sources, whose `@main` is its `Widget` or `WidgetBundle`. |
+| `share` | `com.apple.share-services` | `principalClass`, the class iOS makes, and `activation`, what of the share sheet's items it takes, as `{ images: 10, urls: 1, text: true }`: a count from 1 of `attachments`, `files`, `images`, `movies`, `urls` and `webPages`, and `text: true`. App Review refuses the predicate that takes everything. |
+| `notification-service` | `com.apple.usernotifications.service` | `principalClass`, a `UNNotificationServiceExtension`, which iOS hands each remote notification of `mutable-content` to change before it shows. |
+| `notification-content` | `com.apple.usernotifications.content-extension` | `principalClass`, its view controller, and `categories`, the ids of the notification categories it shows. |
+| `other` | Its `extensionPoint`, as `com.apple.keyboard-service` | `principalClass`, of a point that makes one, and the `attributes` the point reads. |
+
+The principal class of a target of Swift alone is its module's, as Xcode's templates name it,
+`$(PRODUCT_MODULE_NAME).ShareViewController`; one beside Objective-C goes by the name its runtime knows, so a Swift
+class there declares `@objc(ShareViewController)`.
+
+An app whose targets ask for one shares an App Group with them: `group.` and the app's id, as `group.com.example.notes`,
+unless `app.ios.appGroup` names another. crossbind writes it into the entitlements of the app and of each target that
+asks for it, and into their Info.plists as `CrossbindAppGroup`; the app's native code finds its folder as
+`crossbind::app::paths().group`, and the page as `app.paths()`' `group`. A widget reads what the app wrote there, in
+files or in the `UserDefaults(suiteName:)` of that id, which each side's `privacy` gives the reason `1C8F.1` for, and
+the app has it reload through WidgetKit's `WidgetCenter`; a widget's link opens the app as a link of `app.urlSchemes`
+does. An App Group is registered with Apple before an App Store build is signed with it: Xcode registers one as it signs
+a build it develops, and the developer portal's Identifiers list them.
+
+Each target is signed as the app is: Xcode signs a development build with the app's team, and
+`crossbind app publish app-store` signs each target in the archive with its own entitlements before the app, checks its
+binary against its own privacy manifest, and uploads them together. Each takes an App ID of its own, of which a free
+team makes ten a week.
+
+An Android app's widget and share target take nothing of this: an extension's `manifest` declares the `<receiver>` of
+its `AppWidgetProvider`, and an `<activity>` of its own with an `<intent-filter>` of `ACTION_SEND`, its `resources` the
+widget's layout and its `appwidget-provider` XML, and its `java` the classes, as [Android](#android) says.
+
 ## The host's own extensions
 
 Each of the host's own extensions holds roles, which an app's extension takes with `replaces`: `menu` holds `menu`,
@@ -890,10 +956,15 @@ The host's core does what every extension stands on, and no extension takes its 
 
 ## Limits
 
-- **Not in the contract yet**, to come with designs of their own: an iOS app's own extensions,
-  as a widget, a share extension or a notification service extension are, which are targets of their own, the programs
-  an extension would carry to run, and quick actions that change as the app runs. An Android extension takes its own
-  pushes, as Firebase's, through its Java, manifest and Maven libraries.
+- **Not in the contract yet**, to come with designs of their own: an iOS app's App Intents extensions, which
+  ExtensionKit puts in the app's Extensions, a macOS app's own app extensions, the programs an extension would carry to
+  run, and quick actions that change as the app runs. An Android extension takes its own pushes, as Firebase's, through
+  its Java, manifest and Maven libraries.
+- **iOS app extensions** have been measured in the iOS Simulator, of an iPhone and of an iPad, as the app carries them,
+  of their kinds, ids and versions, as iOS registers each, and with the App Group the app writes into. A widget's
+  drawing, a share sheet's extension, a notification service's change of a real push, a notification content
+  extension's view, a keyboard, a build for a device, signed for development, and an upload of an app with targets,
+  which signs each, have not been run.
 - **Routes** answer whole, with a body or a file, as WebView2 reads a response only once all of it is there, and take
   GET and HEAD alone, as Android's WebView gives no request's body: a stream goes as a call's messages, and what the
   page sends as a call's options.

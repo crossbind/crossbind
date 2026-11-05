@@ -361,6 +361,97 @@ describe('an extension', () => {
         expect(check({ ios: { privacy: { clipboard: ['CA92.1'] } } })).toThrow("crossbind: dialog's app.ios.privacy takes fileTimestamp");
     });
 
+    // The sources and resources of the iOS targets the tests below add, in the extension's folder.
+    const withTargetFiles = () => {
+        const dir = root();
+        ['ios/widget/Clock.swift', 'ios/widget/Format.swift', 'ios/share/Share.swift', 'ios/notify/Service.h', 'ios/notify/Service.m', 'ios/content/Content.swift', 'ios/keys/Keys.swift', 'ios/widget/Info.plist'].forEach((file) => {
+            fs.mkdirSync(path.dirname(path.join(dir, file)), { recursive: true });
+            fs.writeFileSync(path.join(dir, file), '');
+        });
+        fs.mkdirSync(path.join(dir, 'ios', 'widget', 'Assets.xcassets'), { recursive: true });
+        return dir;
+    };
+    const TARGETS = [
+        {
+            name: 'clock', kind: 'widget', sources: ['ios/widget/Clock.swift', 'ios/widget/Format.swift'], resources: ['ios/widget/Assets.xcassets'],
+            displayName: 'Clock', appGroup: true, deploymentTarget: '17.0', privacy: { userDefaults: ['1C8F.1'] }, frameworks: ['WidgetKit'],
+            plist: { CrossbindClockStyle: 'digital' }, entitlements: { 'com.apple.developer.weatherkit': true },
+        },
+        { name: 'share', kind: 'share', sources: ['ios/share/Share.swift'], principalClass: 'ShareViewController', activation: { images: 10, urls: 1, text: true } },
+        { name: 'notify', kind: 'notification-service', sources: ['ios/notify/Service.m'], principalClass: 'NotificationService' },
+        { name: 'invite', kind: 'notification-content', sources: ['ios/content/Content.swift'], principalClass: 'ContentController', categories: ['invite'] },
+        {
+            name: 'keys', kind: 'other', sources: ['ios/keys/Keys.swift'], extensionPoint: 'com.apple.keyboard-service', principalClass: 'KeyboardViewController',
+            attributes: { IsASCIICapable: true, PrimaryLanguage: 'en-US' },
+        },
+    ];
+
+    test("adds Apple's app extensions to an iOS app as targets of their own, each with its own sources and what its kind takes", () => {
+        const dir = withTargetFiles();
+        const extension = checkedExtension({ name: 'dialog', app: { ios: { targets: TARGETS } } }, dir, 'dialog');
+
+        expect(extension.app.ios.targets).toEqual(TARGETS);
+        const [clock, ...others] = extensionPart([{ ...extension, root: dir }], 'ios').targets;
+        expect(clock).toEqual({ ...TARGETS[0], owner: 'dialog', root: dir });
+        expect(others.map(({ name, owner }) => [name, owner])).toEqual([['share', 'dialog'], ['notify', 'dialog'], ['invite', 'dialog'], ['keys', 'dialog']]);
+        expect(extensionPart([{ ...extension, root: dir }], 'android').targets).toEqual([]);
+    });
+
+    test('refuses an iOS target that is no app extension crossbind makes, naming what is wrong', () => {
+        const dir = withTargetFiles();
+        const targets = (value) => () => checkedExtension({ name: 'dialog', app: { ios: { targets: value } } }, dir, 'dialog');
+        const target = (fields) => targets([{ ...TARGETS[0], ...fields }]);
+        const at = "crossbind: dialog's app.ios.targets[0]";
+
+        expect(targets({ clock: {} })).toThrow("crossbind: dialog's app.ios.targets is no list of targets, as [{ name: 'clock', kind: 'widget', sources: ['ios/Clock.swift'] }] is.");
+        expect(targets([TARGETS[1], TARGETS[1]])).toThrow("crossbind: dialog's app.ios.targets names two targets share.");
+        expect(targets([7])).toThrow(`${at} is no object of a target.`);
+        expect(target({ color: 'red' })).toThrow(`${at} takes name, kind, sources, resources, displayName, plist, entitlements, frameworks, privacy, appGroup, deploymentTarget, principalClass, activation, categories, extensionPoint, attributes; color is none of them.`);
+        expect(target({ name: 'Clock' })).toThrow(`${at}.name "Clock" is no name of lowercase letters and digits, which dashes may join.`);
+        expect(target({ kind: 'watch' })).toThrow(`${at}.kind "watch" is none of widget, share, notification-service, notification-content, other.`);
+        expect(target({ sources: [] })).toThrow(`${at} has no sources, which a target compiles alone.`);
+        expect(target({ sources: ['ios/widget/Missing.swift'] })).toThrow(`${at}.sources names ios/widget/Missing.swift, which is no file of the extension's.`);
+        expect(target({ sources: ['ios/notify/Service.m'] })).toThrow(`${at} is a widget, whose SwiftUI needs a Swift source among its sources.`);
+        expect(target({ resources: ['ios/widget/Missing.png'] })).toThrow(`${at}.resources names ios/widget/Missing.png, which is no file or folder of the extension's.`);
+        expect(target({ activation: { images: 1 } })).toThrow(`${at}, a widget target, takes no activation.`);
+        expect(targets([{ ...TARGETS[1], activation: undefined }])).toThrow(`${at}, a share target, has no activation: what of the share sheet's items it takes, as { images: 10 }.`);
+        expect(targets([{ ...TARGETS[1], activation: { everything: true } }])).toThrow(`${at}.activation is no object of attachments, files, images, movies, text, urls, webPages, each a count from 1 and text true, as { images: 10, urls: 1 } is.`);
+        expect(targets([{ ...TARGETS[1], activation: {} }])).toThrow(`${at}.activation is no object of attachments`);
+        expect(targets([{ ...TARGETS[2], principalClass: undefined }])).toThrow(`${at}, a notification-service target, has no principalClass: the class iOS makes as it starts the target.`);
+        expect(targets([{ ...TARGETS[2], principalClass: 'Module.Service' }])).toThrow(`${at}.principalClass "Module.Service" is no class name.`);
+        expect(targets([{ ...TARGETS[3], categories: [] }])).toThrow(`${at}.categories is no list of the notification categories the target shows.`);
+        expect(targets([{ ...TARGETS[4], extensionPoint: undefined }])).toThrow(`${at}, an other target, has no extensionPoint: the extension point iOS runs it at, as com.apple.keyboard-service.`);
+        expect(targets([{ ...TARGETS[4], extensionPoint: 'com.apple.appintents-extension' }])).toThrow(`${at}.extensionPoint com.apple.appintents-extension is ExtensionKit's, whose extensions crossbind makes none of yet.`);
+        expect(targets([{ ...TARGETS[2], sources: ['ios/notify/Service.h'] }])).toThrow(`${at} has no sources, which a target compiles alone.`);
+        expect(targets([{ ...TARGETS[2], sources: ['ios/notify/Service.m', 'ios/notify/Service.txt'] }])).toThrow(`${at}.sources names ios/notify/Service.txt, which is no C, C++, Objective-C, Objective-C++ or Swift source, nor a header.`);
+        expect(target({ resources: ['ios/widget/Info.plist'] })).toThrow(`${at}.resources names ios/widget/Info.plist, a file crossbind writes into the target's bundle.`);
+        expect(target({ entitlements: { 'com.apple.security.application-groups': 'group.x' } })).toThrow(`${at}.entitlements.com.apple.security.application-groups is no list, which crossbind joins with the app's.`);
+        expect(() => checkedExtension({ name: 'dialog', app: { ios: { entitlements: { 'com.apple.developer.associated-domains': 'applinks:x' } } } }, dir, 'dialog'))
+            .toThrow("crossbind: dialog's app.ios.entitlements.com.apple.developer.associated-domains is no list, which crossbind joins with the app's.");
+        expect(targets([{ ...TARGETS[4], extensionPoint: 'keyboard' }])).toThrow(`${at}.extensionPoint "keyboard" is no extension point, as com.apple.keyboard-service is.`);
+        expect(targets([{ ...TARGETS[1], attributes: { NSExtensionActivationRule: 'TRUEPREDICATE' } }])).toThrow(`${at}.attributes gives NSExtensionActivationRule, which crossbind writes from the target's activation.`);
+        expect(targets([{ ...TARGETS[3], attributes: { UNNotificationExtensionCategory: 'other' } }])).toThrow(`${at}.attributes gives UNNotificationExtensionCategory, which crossbind writes from the target's categories.`);
+        expect(target({ deploymentTarget: '14.0' })).toThrow(`${at}.deploymentTarget 14.0 is below the app's iOS 15.1, which each of its targets runs on as well.`);
+        expect(target({ deploymentTarget: 'latest' })).toThrow(`${at}.deploymentTarget "latest" is no iOS version, as '17.0' is.`);
+        expect(target({ appGroup: 'yes' })).toThrow(`${at}.appGroup is no boolean.`);
+        expect(target({ displayName: '' })).toThrow(`${at}.displayName is no name the system shows.`);
+        expect(target({ plist: { CFBundleIdentifier: 'x' } })).toThrow(`${at}.plist gives CFBundleIdentifier, which crossbind writes for each target.`);
+        expect(() => checkedExtension({ name: 'dialog', app: { macos: { targets: TARGETS } } }, dir, 'dialog')).toThrow("crossbind: dialog's app.macos takes sources, includes, defines, files, frameworks, entitlements, plist; targets is none of them.");
+    });
+
+    test("lets an other target give the attributes of its point, as an action's activation rule, and a target headers beside its sources", () => {
+        const dir = withTargetFiles();
+        const action = { ...TARGETS[4], extensionPoint: 'com.apple.ui-services', attributes: { NSExtensionActivationRule: { NSExtensionActivationSupportsImageWithMaxCount: 1 } } };
+        const service = { ...TARGETS[2], sources: ['ios/notify/Service.h', 'ios/notify/Service.m'] };
+        expect(checkedExtension({ name: 'dialog', app: { ios: { targets: [action, service] } } }, dir, 'dialog').app.ios.targets).toEqual([action, service]);
+    });
+
+    test('stop the build where two name one iOS target, naming both', () => {
+        const dir = withTargetFiles();
+        const extension = (name) => ({ ...checkedExtension({ name, app: { ios: { targets: [TARGETS[0]] } } }, dir, name), root: dir });
+        expect(() => extensionPart([extension('dialog'), extension('weather')], 'ios')).toThrow('crossbind: the extensions dialog and weather both name an iOS target clock.');
+    });
+
     test('gives an Android app the permissions it asks for, a manifest of its own and its resources', () => {
         const android = { permissions: ['android.permission.READ_CONTACTS'], manifest: 'android/AndroidManifest.xml', resources: 'android/res' };
         expect(check({ android })()).toMatchObject({ app: { android } });

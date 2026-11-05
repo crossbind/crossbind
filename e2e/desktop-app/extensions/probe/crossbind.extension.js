@@ -62,7 +62,31 @@ export default function probe() {
             includes: ['include'],
             defines: ['PROBE_OFFSET=1'],
             macos: { sources: ['apple.mm', 'probe.swift'], plist, frameworks: ['UserNotifications'] },
-            ios: { sources: ['apple.mm', 'probe.swift'], plist, privacy: { userDefaults: ['CA92.1'] }, frameworks: ['UserNotifications'] },
+            ios: {
+                // The defaults of its own, and of the App Group it shares with its targets, which probe.writeGroup writes.
+                sources: ['apple.mm', 'probe.swift'], plist, privacy: { userDefaults: ['CA92.1', '1C8F.1'] }, frameworks: ['UserNotifications'],
+                // An app extension of each kind, which e2e/run.mjs finds in the app as iOS registers it, those that ask
+                // for it sharing the App Group the probe writes into.
+                targets: [
+                    { name: 'probe-widget', kind: 'widget', sources: ['ios/targets/ProbeWidget.swift'], appGroup: true, privacy: { userDefaults: ['1C8F.1'] } },
+                    {
+                        name: 'probe-share', kind: 'share', sources: ['ios/targets/ProbeShare.swift'], principalClass: 'ProbeShareViewController',
+                        activation: { text: true, urls: 1 }, appGroup: true, displayName: 'Probe',
+                    },
+                    {
+                        name: 'probe-service', kind: 'notification-service', sources: ['ios/targets/ProbeService.m'], principalClass: 'ProbeNotificationService',
+                        frameworks: ['UserNotifications'],
+                    },
+                    {
+                        name: 'probe-content', kind: 'notification-content', sources: ['ios/targets/ProbeContent.swift'],
+                        principalClass: 'ProbeContentViewController', categories: ['probe.invite'],
+                    },
+                    {
+                        name: 'probe-keys', kind: 'other', sources: ['ios/targets/ProbeKeys.swift'], extensionPoint: 'com.apple.keyboard-service',
+                        principalClass: 'ProbeKeyboardViewController', attributes: { IsASCIICapable: false, PrimaryLanguage: 'en-US', RequestsOpenAccess: false },
+                    },
+                ],
+            },
             // zstd, which crossbind's sysroot lacks: Ubuntu 22.04's packages of its headers and library for each
             // architecture, as its Packages index pins them, and the one an installed app needs.
             linux: {

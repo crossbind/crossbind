@@ -62,6 +62,23 @@ void tellActive(bool isActive) {
 void probePlatform(crossbind::Registry &registry) {
     using crossbind::Call;
     using crossbind::Value;
+    // An iOS app's App Group, which its targets share: the probe writes the widget's text into its defaults and a file into
+    // its folder, which e2e/run.mjs reads from the Simulator. Elsewhere, none.
+    registry.function("probe.writeGroup", [](Call call) {
+        NSString *group = [NSBundle.mainBundle objectForInfoDictionaryKey:@"CrossbindAppGroup"];
+        const std::string folder = crossbind::app::paths().group;
+        if (!group || folder.empty()) {
+            call.resolve(Value());
+            return;
+        }
+        [[[NSUserDefaults alloc] initWithSuiteName:group] setObject:@"probe" forKey:@"probe"];
+        NSString *file = [NSString stringWithUTF8String:(folder + "/probe.txt").c_str()];
+        if (![@"probe" writeToFile:file atomically:YES encoding:NSUTF8StringEncoding error:nil]) {
+            call.reject("the probe could not write into the App Group's folder");
+            return;
+        }
+        call.resolve(Value::Object{{"id", group.UTF8String}, {"folder", folder}});
+    });
     registry.function("probe.apple", [](Call call) {
         NSString *plist = [NSBundle.mainBundle objectForInfoDictionaryKey:@"CrossbindProbe"];
         // A property list, which the bundle may hold in its binary form.

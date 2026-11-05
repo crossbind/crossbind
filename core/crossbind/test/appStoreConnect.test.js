@@ -16,7 +16,9 @@ const spawnSync = vi.fn((program, args, options) => {
         xcode.runs.push(args);
         fs.writeSync(options.stdio[1], output);
         if (args[0] === 'archive' && status === 0) {
-            fs.mkdirSync(`${args[args.indexOf('-archivePath') + 1]}/Products/Applications/demo.app/Frameworks/hermesvm.framework`, { recursive: true });
+            const app = `${args[args.indexOf('-archivePath') + 1]}/Products/Applications/demo.app`;
+            fs.mkdirSync(`${app}/Frameworks/hermesvm.framework`, { recursive: true });
+            xcode.plugIns.forEach((name) => fs.mkdirSync(`${app}/PlugIns/${name}.appex`, { recursive: true }));
         }
         return { status, signal };
     }
@@ -34,7 +36,7 @@ vi.mock('node:child_process', async (importOriginal) => ({ ...await importOrigin
 const { xcodebuild, xcodeTeams } = await import('../src/actions/xcodebuild.js');
 const { PRIVACY_CATEGORIES } = await import('../src/utils/appOptions.js');
 const {
-    APP_STORE_CONNECT, addDsyms, archiveIosApp, archivedBinary, archivedPrivacy, uploadIosArchive,
+    APP_STORE_CONNECT, addDsyms, archiveIosApp, archivedBinary, archivedPrivacy, archivedTargets, uploadIosArchive,
 } = await import('../src/publishers/app-store/appStoreConnect.js');
 
 const KEY = { key: '/keys/AuthKey_ABC123.p8', keyId: 'ABC123', issuer: 'issuer-uuid' };
@@ -67,7 +69,7 @@ beforeEach(() => {
         log: (line) => console.log(line),
         warn: (line) => console.warn(line),
     };
-    Object.assign(xcode, { runs: [], answers: [], teams: null, signed: [], signFailure: null });
+    Object.assign(xcode, { runs: [], answers: [], teams: null, signed: [], signFailure: null, plugIns: [] });
 });
 
 afterEach(() => fs.rmSync(base, { recursive: true, force: true }));
@@ -92,6 +94,19 @@ describe("an iOS app's archive", () => {
         const archive = archiveIosApp(api, project, { facts });
         expect(xcode.signed.at(-1)).toEqual(['--force', '--sign', '-', '--timestamp=none', '--entitlements', path.resolve(project, 'demo.entitlements'),
             '--generate-entitlement-der', `${archive}/Products/Applications/demo.app`]);
+    });
+
+    test("signs each app extension of its PlugIns ad hoc with its target's entitlements, after the frameworks and before the app", () => {
+        fs.writeFileSync(`${project}/demo.xcodeproj/project.pbxproj`, '{ "CODE_SIGN_ENTITLEMENTS" = "targets/clock/clock.entitlements"; "CODE_SIGN_ENTITLEMENTS" = "demo.entitlements"; }');
+        xcode.plugIns = ['notify', 'clock'];
+        const app = `${archiveIosApp(api, project, { facts })}/Products/Applications/demo.app`;
+        const signed = (code, entitlements) => ['--force', '--sign', '-', '--timestamp=none', ...(entitlements ? ['--entitlements', path.resolve(project, entitlements), '--generate-entitlement-der'] : []), code];
+        expect(xcode.signed).toEqual([
+            signed(`${app}/Frameworks/hermesvm.framework`),
+            signed(`${app}/PlugIns/clock.appex`, 'targets/clock/clock.entitlements'),
+            signed(`${app}/PlugIns/notify.appex`),
+            signed(app, 'demo.entitlements'),
+        ]);
     });
 
     test('fails where codesign cannot sign it ad hoc', () => {
@@ -133,6 +148,21 @@ describe("an iOS app's archive", () => {
             ],
         }));
         expect(archivedPrivacy(api, archive)).toEqual({ fileTimestamp: ['C617.1'], systemBootTime: ['35F9.1'] });
+    });
+
+    test('gives each app extension of its PlugIns with its binary and the reasons of its own privacy manifest', () => {
+        const archive = `${store}/demo.xcarchive`;
+        const plugIns = `${archive}/Products/Applications/demo.app/PlugIns`;
+        expect(archivedTargets(api, archive)).toEqual([]);
+        fs.mkdirSync(`${plugIns}/clock.appex`, { recursive: true });
+        fs.mkdirSync(`${plugIns}/notify.appex`, { recursive: true });
+        fs.writeFileSync(`${plugIns}/clock.appex/PrivacyInfo.xcprivacy`, JSON.stringify({
+            NSPrivacyAccessedAPITypes: [{ NSPrivacyAccessedAPIType: 'NSPrivacyAccessedAPICategoryUserDefaults', NSPrivacyAccessedAPITypeReasons: ['1C8F.1'] }],
+        }));
+        expect(archivedTargets(api, archive)).toEqual([
+            { name: 'clock', binary: `${plugIns}/clock.appex/clock`, privacy: { userDefaults: ['1C8F.1'] } },
+            { name: 'notify', binary: `${plugIns}/notify.appex/notify`, privacy: {} },
+        ]);
     });
 });
 

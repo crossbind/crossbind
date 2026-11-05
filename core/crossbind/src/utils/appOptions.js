@@ -204,18 +204,38 @@ export function appEncryption(config) {
     return encryption;
 }
 
+const IOS_OPTIONS = ['multipleWindows', 'appGroup'];
+// An App Group of iOS's: group. and a bundle id's dot-separated parts.
+const APP_GROUP = /^group(\.[A-Za-z0-9-]+)+$/;
+
+function iosOptions(config) {
+    const ios = config.app.ios ?? {};
+    if (typeof ios !== 'object' || Array.isArray(ios)) {
+        throw new Error(`crossbind: app.ios ${JSON.stringify(ios)} is no object of multipleWindows and appGroup, as { multipleWindows: true } is.`);
+    }
+    const unknown = Object.keys(ios).filter((key) => !IOS_OPTIONS.includes(key));
+    if (unknown.length > 0) throw new Error(`crossbind: app.ios takes multipleWindows and appGroup; ${unknown.join(', ')} is none of them.`);
+    return ios;
+}
+
 // Whether an iPad app's user, and its page, open more windows of it, as app.ios.multipleWindows says: iOS shows an
 // iPhone's one window alone.
 export function iosMultipleWindows(config) {
-    const ios = config.app.ios ?? {};
-    if (typeof ios !== 'object' || Array.isArray(ios)) throw new Error(`crossbind: app.ios ${JSON.stringify(ios)} is no object of multipleWindows, as { multipleWindows: true } is.`);
-    const unknown = Object.keys(ios).filter((key) => key !== 'multipleWindows');
-    if (unknown.length > 0) throw new Error(`crossbind: app.ios takes multipleWindows; ${unknown.join(', ')} is none of it.`);
-    const { multipleWindows = false } = ios;
+    const { multipleWindows = false } = iosOptions(config);
     if (typeof multipleWindows !== 'boolean') {
         throw new Error(`crossbind: app.ios.multipleWindows ${JSON.stringify(multipleWindows)} is no boolean: set it to true for an iPad app's windows, or leave it out.`);
     }
     return multipleWindows;
+}
+
+// The App Group an iOS app shares with the targets its extensions add, as app.ios.appGroup names it, else group. and the
+// app's id.
+export function iosAppGroup(config) {
+    const { appGroup = `group.${appId(config)}` } = iosOptions(config);
+    if (typeof appGroup !== 'string' || !APP_GROUP.test(appGroup)) {
+        throw new Error(`crossbind: app.ios.appGroup ${JSON.stringify(appGroup)} is no App Group, which is group. and a bundle id's parts, as group.com.example.notes is.`);
+    }
+    return appGroup;
 }
 
 // The version a Windows app's executable carries: package.json's, whose numbers are its file version.
@@ -440,8 +460,9 @@ export function hostExtensionOptions(config, platform) {
 }
 
 // The header an app's host compiles its id and name with, an iOS or desktop host the color it shows until its page paints
-// and the devices the page may use, a desktop host its window, and a Windows host its version resource.
-export function appHeader(config, platform) {
+// and the devices the page may use, an iOS host the App Group of its extensions' targets, a desktop host its window, and a
+// Windows host its version resource.
+export function appHeader(config, platform, appGroup = null) {
     const comment = '// crossbind writes this file from crossbind.config.js and package.json.';
     const id = `#define CROSSBIND_APP_ID "${platform === 'android' ? androidAppId(config) : appId(config)}"`;
     const name = `#define CROSSBIND_APP_NAME "${appDisplayName(config)}"`;
@@ -453,7 +474,8 @@ export function appHeader(config, platform) {
         ...PERMISSIONS.map((name) => `#define CROSSBIND_APP_PERMISSION_${name.toUpperCase()} ${name in permissions ? 1 : 0}`),
     ];
     const windows = platform === 'ios' && iosMultipleWindows(config) ? ['#define CROSSBIND_APP_IOS_MULTIPLE_WINDOWS 1'] : [];
-    if (!DESKTOP.includes(platform)) return [comment, ...page, ...windows, id, name, ''].join('\n');
+    const group = platform === 'ios' && appGroup ? [`#define CROSSBIND_APP_GROUP "${appGroup}"`] : [];
+    if (!DESKTOP.includes(platform)) return [comment, ...page, ...windows, ...group, id, name, ''].join('\n');
     // The category goes to the Info.plist and the desktop entry, which the build writes later; any desktop refuses a
     // wrong one here.
     const copyright = appCopyright(config);

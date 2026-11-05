@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'vitest';
 import {
     appBackgroundColor, appCategory, appCopyright, appDisplayName, appEncryption, appHeader, appId, appPermissions, appPrivacy, appUpdater,
-    appUrlSchemes, appWindow, hostExtensionOptions, iosMultipleWindows, urlSchemeOwners, usageDescriptions,
+    appUrlSchemes, appWindow, hostExtensionOptions, iosAppGroup, iosMultipleWindows, urlSchemeOwners, usageDescriptions,
 } from '../src/utils/appOptions.js';
 
 const config = (app = {}, version = '1.2.3') => ({ general: { name: 'demo-app' }, app, package: { version } });
@@ -531,8 +531,23 @@ describe("an iPad app's windows", () => {
     });
 
     test('are refused of any other value, naming what app.ios takes', () => {
-        expect(() => iosMultipleWindows(config({ ios: true }))).toThrow('app.ios true is no object of multipleWindows');
-        expect(() => iosMultipleWindows(config({ ios: { scenes: 2 } }))).toThrow('app.ios takes multipleWindows; scenes is none of it');
+        expect(() => iosMultipleWindows(config({ ios: true }))).toThrow('app.ios true is no object of multipleWindows and appGroup');
+        expect(iosMultipleWindows(config({ ios: null }))).toBe(false);
+        expect(() => iosMultipleWindows(config({ ios: { scenes: 2 } }))).toThrow('app.ios takes multipleWindows and appGroup; scenes is none of them');
         expect(() => iosMultipleWindows(config({ ios: { multipleWindows: 'yes' } }))).toThrow('app.ios.multipleWindows "yes" is no boolean');
+    });
+});
+
+describe("an iOS app's App Group", () => {
+    test('is group. and its id, unless app.ios.appGroup names another, which the iOS host is built with where a target asks for it', () => {
+        expect(iosAppGroup(config({ id: 'com.example.notes' }))).toBe('group.com.example.notes');
+        expect(iosAppGroup(config({ ios: { appGroup: 'group.com.example.shared' } }))).toBe('group.com.example.shared');
+        expect(appHeader(config(), 'ios', 'group.com.example.notes')).toContain('#define CROSSBIND_APP_GROUP "group.com.example.notes"\n');
+        expect(appHeader(config(), 'ios')).not.toContain('CROSSBIND_APP_GROUP');
+    });
+
+    test('is refused of a name that is no App Group', () => {
+        expect(() => iosAppGroup(config({ ios: { appGroup: 'com.example.shared' } }))).toThrow('app.ios.appGroup "com.example.shared" is no App Group');
+        expect(() => iosAppGroup(config({ ios: { appGroup: 'group.' } }))).toThrow('is no App Group');
     });
 });

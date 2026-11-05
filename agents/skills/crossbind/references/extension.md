@@ -71,6 +71,7 @@ An extension takes more than calls through the same registry, each as a section 
 | What one of the host's own does, as its tray | `replaces`, [The host's own extensions](../api/extensions.md#the-hosts-own-extensions) |
 | Files the app carries for it, as models | `app.files`, `registry.files()`, [What an extension is](../api/extensions.md#what-an-extension-is) |
 | A store the app is published to, or what installs a desktop app | `publisher`, `installer`, [Publishers](../api/extensions.md#publishers), [Installers](../api/extensions.md#installers) |
+| A widget, a share extension or a notification service of an iOS app, and the App Group it shares with the app | `app.ios.targets`, [iOS app extensions](../api/extensions.md#ios-app-extensions) |
 
 What the system hands an app at launch reaches the owner the descriptor names: a scheme, a file type, a site, a user
 activity's type or a quick action has one owner, the app or one extension, and an extension that declares one calls its
@@ -92,7 +93,9 @@ hook. What the host keeps for itself, [What the host keeps](../api/extensions.md
 4. **Declare what each platform links and takes** in `crossbind.extension.js`, never by editing the app's generated
    projects: its folders of includes and macros, frameworks, libraries and entitlements, an Apple app's Info.plist keys,
    as a usage description with a reason the extension's options take from the app, an iOS app's privacy reasons, an
-   Android app's permissions, manifest elements and resources, and in `app.licenses` the code of others it carries.
+   Android app's permissions, manifest elements and resources, and in `app.licenses` the code of others it carries. An
+   iOS app extension, as a widget, is a target the descriptor declares in `app.ios.targets`, whose own sources Xcode
+   compiles apart from the host's.
 5. **Write the page's module and types.** Each function checks its arguments before it calls `invoke`, so a wrong
    type fails at once, with the extension's name.
 6. **Try it in an app.** `npm pack` it, and `crossbind add` the tarball in an app, which installs it and lists it in

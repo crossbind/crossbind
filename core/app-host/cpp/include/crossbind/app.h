@@ -54,13 +54,15 @@ struct MessageOptions {
     std::vector<std::string> buttons;
 };
 
-// The app's own folders, made when first asked for: what it keeps, what it can lose, and its logs; and the read-only one
-// of the files app.files lists, each in the place it had in the project.
+// The app's own folders, made when first asked for: what it keeps, what it can lose, and its logs; the read-only one of
+// the files app.files lists, each in the place it had in the project; and an iOS app's App Group's, which the targets of
+// its extensions' that ask for it share, or none.
 struct Paths {
     std::string data;
     std::string cache;
     std::string logs;
     std::string resources;
+    std::string group;
 };
 
 // The files or folders the user picked, or nothing when they cancelled.
