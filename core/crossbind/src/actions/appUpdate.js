@@ -4,6 +4,7 @@ import path from 'node:path';
 import run from './run.js';
 import state from '../state/index.js';
 import { appId, appUpdater } from '../utils/appOptions.js';
+import { configChangesOf } from '../utils/configChanges.js';
 
 // The private key that signs a desktop app's updates, named by the environment alone so that no secret reaches a file.
 export const UPDATER_KEY = 'CROSSBIND_UPDATER_PRIVATE_KEY';
@@ -22,11 +23,14 @@ export function newUpdaterKey() {
     };
 }
 
-// The key a build signs updates with, or null without CROSSBIND_UPDATER_PRIVATE_KEY. It has to be the private half of
-// app.updater.publicKey, or the app would refuse what it signs.
+// The key a build signs updates with, or null without CROSSBIND_UPDATER_PRIVATE_KEY, or where a publish's changes to the
+// config removed app.updater for its build. It has to be the private half of app.updater.publicKey, or the app would
+// refuse what it signs.
 export function updaterSigning(env = process.env) {
     if (!env[UPDATER_KEY]) return null;
     const updater = appUpdater(state.config);
+    const changes = configChangesOf(env);
+    if (!updater && changes && (changes.app === null || changes.app?.updater === null)) return null;
     if (!updater) throw new Error(`crossbind: ${UPDATER_KEY} is set, but crossbind.config.js has no app.updater, which tells an app where its updates are.`);
     const seed = Buffer.from(env[UPDATER_KEY], 'base64');
     if (seed.length !== 32) throw new Error(`crossbind: ${UPDATER_KEY} is no Ed25519 private key, which \`crossbind app updater-key\` prints.`);
@@ -44,11 +48,19 @@ export function signedText(id, target, version, file) {
     return `crossbind update\n${id}\n${target}\n${version}\n${hash}\n`;
 }
 
+// The installer whose first file a Linux or Windows app updates itself from: an archive of the app's folder, which the
+// host unpacks with tar, and a setup program, which it runs with /S /UPDATE /D=<the app's folder>.
+export const UPDATE_INSTALLERS = { linux: 'tar-gz', win32: 'nsis' };
+
 // The file a desktop app updates itself from, beside it: a macOS app as a zip, which keeps its signature and Apple's
-// ticket, a Windows app's setup program and a Linux app's tar.gz.
-function updateFile(app, target) {
-    if (target.platform === 'win32') return `${app}-setup.exe`;
-    if (target.platform === 'linux') return `${app}.tar.gz`;
+// ticket, and a Linux or Windows app's of its installers.
+function updateFile(app, target, installers) {
+    const installer = UPDATE_INSTALLERS[target.platform];
+    if (installer) {
+        const file = installers.find(({ name }) => name === installer)?.files[0];
+        if (!file) throw new Error(`crossbind: the ${installer} installer made no file of ${app} for its update.`);
+        return file;
+    }
     const zip = path.join(path.dirname(app), `${state.config.general.name}-darwin-${target.arch}.app.zip`);
     fs.rmSync(zip, { force: true });
     run(null, ['ditto', '-c', '-k', '--keepParent', app, zip], null, target);
@@ -56,13 +68,16 @@ function updateFile(app, target) {
 }
 
 // With a key in the environment, the update a desktop app finds at app.updater.url, beside the app: its file, and the
-// manifest that gives its version, the file's name and its signature, <name>-<platform>-<arch>.update.json.
-export default function writeUpdate(app, target) {
+// manifest that gives its version, the file's name and its signature, <name>-<platform>-<arch>.update.json. It returns
+// the two, or null without a key.
+export default function writeUpdate(app, target, installers = []) {
     const signing = updaterSigning();
-    if (!signing) return;
-    const file = updateFile(app, target);
+    if (!signing) return null;
+    const file = updateFile(app, target, installers);
     const name = `${target.platform}-${target.arch}`;
     const signature = crypto.sign(null, Buffer.from(signedText(appId(state.config), name, signing.version, file)), signing.privateKey).toString('base64');
     const manifest = { version: signing.version, file: path.basename(file), signature };
-    fs.writeFileSync(path.join(path.dirname(app), `${state.config.general.name}-${name}.update.json`), `${JSON.stringify(manifest, null, 2)}\n`);
+    const written = path.join(path.dirname(app), `${state.config.general.name}-${name}.update.json`);
+    fs.writeFileSync(written, `${JSON.stringify(manifest, null, 2)}\n`);
+    return { manifest: written, file };
 }

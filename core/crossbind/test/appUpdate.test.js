@@ -63,6 +63,14 @@ describe("a desktop app's update key", () => {
         expect(updaterSigning({})).toBeNull();
     });
 
+    test("signs nothing where a publish's changes to the config removed app.updater for its build", () => {
+        const { privateKey } = newUpdaterKey();
+        project();
+        expect(updaterSigning({ [UPDATER_KEY]: privateKey, CROSSBIND_CONFIG_CHANGES: '{"app":{"updater":null}}' })).toBeNull();
+        expect(updaterSigning({ [UPDATER_KEY]: privateKey, CROSSBIND_CONFIG_CHANGES: '{"app":null}' })).toBeNull();
+        expect(() => updaterSigning({ [UPDATER_KEY]: privateKey, CROSSBIND_CONFIG_CHANGES: '{"app":{"name":"Store"}}' })).toThrow('crossbind.config.js has no app.updater');
+    });
+
     test('is refused without app.updater, when it is no key, and when app.updater.publicKey is not its public half', () => {
         const { publicKey, privateKey } = newUpdaterKey();
         project();
@@ -81,15 +89,18 @@ describe("a desktop app's update", () => {
             .toBe(`crossbind update\ncom.example.app\nlinux-x64\n1.2.0\n${ABC_SHA512}\n`);
     });
 
-    test("is a Linux app's archive or a Windows app's setup program, beside a manifest the host checks it by", () => {
+    test("is the archive of a Linux app's tar-gz installer or the setup program of a Windows app's nsis one, beside a manifest the host checks it by", () => {
         const { publicKey, privateKey } = newUpdaterKey();
         const root = project(publicKey);
         vi.stubEnv(UPDATER_KEY, privateKey);
         fs.writeFileSync(path.join(root, 'demo-linux-x64.tar.gz'), 'a Linux app');
         fs.writeFileSync(path.join(root, 'demo-win32-arm64-setup.exe'), 'MZ');
+        const made = (name, file) => ({ name, files: [path.join(root, file)] });
 
-        writeUpdate(path.join(root, 'demo-linux-x64'), { platform: 'linux', arch: 'x64' });
-        writeUpdate(path.join(root, 'demo-win32-arm64'), { platform: 'win32', arch: 'arm64' });
+        writeUpdate(path.join(root, 'demo-linux-x64'), { platform: 'linux', arch: 'x64' }, [made('deb', 'demo-linux-x64.deb'), made('tar-gz', 'demo-linux-x64.tar.gz')]);
+        writeUpdate(path.join(root, 'demo-win32-arm64'), { platform: 'win32', arch: 'arm64' }, [made('zip', 'demo-win32-arm64.zip'), made('nsis', 'demo-win32-arm64-setup.exe')]);
+        expect(() => writeUpdate(path.join(root, 'demo-linux-x64'), { platform: 'linux', arch: 'x64' }, [{ name: 'tar-gz', files: [] }]))
+            .toThrow(`crossbind: the tar-gz installer made no file of ${path.join(root, 'demo-linux-x64')} for its update.`);
 
         expect(JSON.parse(fs.readFileSync(path.join(root, 'demo-linux-x64.update.json'), 'utf8')))
             .toEqual({ version: '1.2.0', file: 'demo-linux-x64.tar.gz', signature: expect.any(String) });

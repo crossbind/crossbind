@@ -8,16 +8,17 @@ import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 const gcloud = { fails: null };
 const spawnSync = vi.fn(() => (gcloud.fails ?? { status: 0, stdout: 'user-token\n', stderr: '' }));
 vi.mock('node:child_process', async (importOriginal) => ({ ...await importOriginal(), spawnSync }));
-// The system keychain, which keeps each secret by its service and key.
+// The publisher's secrets in the system keychain, and this machine's settings, as the api gives them.
 const keychain = new Map();
-vi.mock('../src/utils/keychain.js', () => ({
-    readSecret: (key, { service }) => keychain.get(`${service}: ${key}`) ?? null,
-    storeSecret: (key, secret, { service }) => Boolean(keychain.set(`${service}: ${key}`, secret)),
-}));
+const secrets = {
+    get: (account) => keychain.get(account) ?? null,
+    set: (account, secret) => Boolean(keychain.set(account, secret)),
+};
+const settings = (values) => ({ get: (key) => values[key] });
 
 const {
     PLAY, highestVersionCode, keepSignIn, keptSignIn, playCredentials, playToken, uploadBundle,
-} = await import('../src/actions/googlePlay.js');
+} = await import('../src/publishers/google-play/googlePlay.js');
 
 const { privateKey, publicKey } = generateKeyPairSync('rsa', { modulusLength: 2048 });
 const ACCOUNT = 'play@demo.iam.gserviceaccount.com';
@@ -75,48 +76,47 @@ afterEach(() => {
 
 describe("Google Play's credentials", () => {
     test("are a service account's JSON key, or its e-mail for the user's gcloud login, from the environment or this machine", () => {
-        expect(playCredentials({}, {})).toBeNull();
-        expect(playCredentials({ [PLAY.key]: keyFile }, {})).toMatchObject({ account: ACCOUNT, file: keyFile });
-        expect(playCredentials({}, { GOOGLE_PLAY_KEY: keyFile })).toMatchObject({ account: ACCOUNT });
-        expect(playCredentials({ [PLAY.serviceAccount]: ACCOUNT }, {})).toEqual({ account: ACCOUNT });
-        expect(playCredentials({}, { GOOGLE_PLAY_SERVICE_ACCOUNT: ACCOUNT })).toEqual({ account: ACCOUNT });
+        expect(playCredentials({}, settings({}))).toBeNull();
+        expect(playCredentials({ [PLAY.key]: keyFile }, settings({}))).toMatchObject({ account: ACCOUNT, file: keyFile });
+        expect(playCredentials({}, settings({ GOOGLE_PLAY_KEY: keyFile }))).toMatchObject({ account: ACCOUNT });
+        expect(playCredentials({ [PLAY.serviceAccount]: ACCOUNT }, settings({}))).toEqual({ account: ACCOUNT });
+        expect(playCredentials({}, settings({ GOOGLE_PLAY_SERVICE_ACCOUNT: ACCOUNT }))).toEqual({ account: ACCOUNT });
     });
 
     test('are one of the two, and a key with what a service account key has', () => {
-        expect(() => playCredentials({ [PLAY.key]: keyFile, [PLAY.serviceAccount]: ACCOUNT }, {}))
+        expect(() => playCredentials({ [PLAY.key]: keyFile, [PLAY.serviceAccount]: ACCOUNT }, settings({})))
             .toThrow(`both ${PLAY.key} and ${PLAY.serviceAccount} are set`);
         fs.writeFileSync(keyFile, JSON.stringify({ client_email: ACCOUNT }));
-        expect(() => playCredentials({ [PLAY.key]: keyFile }, {})).toThrow(`${keyFile} (${PLAY.key}) has no private_key, token_uri, so it is no service account key`);
-        expect(() => playCredentials({ [PLAY.key]: path.join(dir, 'none.json') }, {})).toThrow(`${PLAY.key} names ${path.join(dir, 'none.json')}, which is no file`);
+        expect(() => playCredentials({ [PLAY.key]: keyFile }, settings({}))).toThrow(`${keyFile} (${PLAY.key}) has no private_key, token_uri, so it is no service account key`);
+        expect(() => playCredentials({ [PLAY.key]: path.join(dir, 'none.json') }, settings({}))).toThrow(`${PLAY.key} names ${path.join(dir, 'none.json')}, which is no file`);
     });
 
     test("are a JSON key's text in the environment, as CI gives a secret, which no failure repeats", () => {
-        expect(playCredentials({ [PLAY.key]: fs.readFileSync(keyFile, 'utf8') }, {})).toMatchObject({ account: ACCOUNT, file: null });
-        const broken = () => playCredentials({ [PLAY.key]: '{ "private_key": "secret-material", ' }, {});
+        expect(playCredentials({ [PLAY.key]: fs.readFileSync(keyFile, 'utf8') }, settings({}))).toMatchObject({ account: ACCOUNT, file: null });
+        const broken = () => playCredentials({ [PLAY.key]: '{ "private_key": "secret-material", ' }, settings({}));
         expect(broken).toThrow(`crossbind: ${PLAY.key} holds no JSON, so it is no service account key.`);
         expect(broken).not.toThrow('secret-material');
-        expect(() => playCredentials({ [PLAY.key]: '{ "private_key": "secret-material" }' }, {}))
+        expect(() => playCredentials({ [PLAY.key]: '{ "private_key": "secret-material" }' }, settings({})))
             .toThrow(`crossbind: ${PLAY.key} has no client_email, token_uri, so it is no service account key.`);
     });
 
     test('are an access token from the environment alone, as CI makes one with no key, and never with another kind', () => {
-        expect(playCredentials({ [PLAY.token]: 'ci-token' }, {})).toEqual({ token: 'ci-token' });
-        expect(playCredentials({}, { GOOGLE_PLAY_TOKEN: 'ci-token' })).toBeNull();
-        expect(() => playCredentials({ [PLAY.token]: 'ci-token' }, { GOOGLE_PLAY_SERVICE_ACCOUNT: ACCOUNT }))
+        expect(playCredentials({ [PLAY.token]: 'ci-token' }, settings({}))).toEqual({ token: 'ci-token' });
+        expect(playCredentials({}, settings({ GOOGLE_PLAY_TOKEN: 'ci-token' }))).toBeNull();
+        expect(() => playCredentials({ [PLAY.token]: 'ci-token' }, settings({ GOOGLE_PLAY_SERVICE_ACCOUNT: ACCOUNT })))
             .toThrow(`${PLAY.token} is set, and so is ${PLAY.serviceAccount} or its key in ~/.crossbind.json: set one.`);
-        expect(() => playCredentials({ [PLAY.token]: 'ci-token', [PLAY.key]: keyFile }, {})).toThrow(`and so is ${PLAY.key}`);
+        expect(() => playCredentials({ [PLAY.token]: 'ci-token', [PLAY.key]: keyFile }, settings({}))).toThrow(`and so is ${PLAY.key}`);
     });
 
     test('are, with neither set, the Google sign-in this machine keeps while Google takes it', async () => {
-        expect(await keptSignIn()).toBeNull();
-        expect(keepSignIn('refresh')).toBe(true);
-        expect([...keychain.keys()]).toEqual([`crossbind google play: ${path.join(dir, '.crossbind', 'google-play')}`]);
-        expect(fs.statSync(path.join(dir, '.crossbind')).isDirectory()).toBe(true);
-        expect(await keptSignIn()).toEqual({ refreshToken: 'refresh' });
+        expect(await keptSignIn(secrets)).toBeNull();
+        expect(keepSignIn(secrets, 'refresh')).toBe(true);
+        expect([...keychain.keys()]).toEqual(['sign-in']);
+        expect(await keptSignIn(secrets)).toEqual({ refreshToken: 'refresh' });
 
         const said = vi.spyOn(console, 'log').mockImplementation(() => {});
         answers['POST oauth2.googleapis.com'] = () => json(400, { error: 'invalid_grant', error_description: 'Token has been expired or revoked.' });
-        expect(await keptSignIn()).toBeNull();
+        expect(await keptSignIn(secrets)).toBeNull();
         expect(said).toHaveBeenCalledWith('crossbind: Google no longer takes the sign-in this machine keeps for Google Play, as when it was revoked.');
         said.mockRestore();
     });
@@ -124,7 +124,7 @@ describe("Google Play's credentials", () => {
 
 describe("Google Play's token", () => {
     test('of a key is a JWT signed RS256 for one hour with the androidpublisher scope', async () => {
-        expect(await playToken(playCredentials({ [PLAY.key]: keyFile }, {}))).toBe('key-token');
+        expect(await playToken(playCredentials({ [PLAY.key]: keyFile }, settings({})))).toBe('key-token');
         const assertion = new URLSearchParams(String(requests[0].init.body)).get('assertion');
         const [header, claims, signature] = assertion.split('.');
         expect(createVerify('RSA-SHA256').update(`${header}.${claims}`).verify(publicKey, Buffer.from(signature, 'base64url'))).toBe(true);
@@ -156,7 +156,7 @@ describe("Google Play's token", () => {
 
     test('names the fix when it is refused', async () => {
         answers['POST oauth2.example.test'] = () => json(400, { error: 'invalid_grant', error_description: 'Invalid JWT Signature.' });
-        await expect(playToken(playCredentials({ [PLAY.key]: keyFile }, {}))).rejects.toThrow(`Google refused the token of ${ACCOUNT}: 400 invalid_grant Invalid JWT Signature.`);
+        await expect(playToken(playCredentials({ [PLAY.key]: keyFile }, settings({})))).rejects.toThrow(`Google refused the token of ${ACCOUNT}: 400 invalid_grant Invalid JWT Signature.`);
         gcloud.fails = { status: 1, stdout: '', stderr: 'ERROR: (gcloud.auth.print-access-token) You do not currently have an active account selected.' };
         await expect(playToken({ account: ACCOUNT })).rejects.toThrow('gcloud gave no token of yours: sign in with gcloud auth login');
         gcloud.fails = null;
@@ -166,7 +166,7 @@ describe("Google Play's token", () => {
 });
 
 describe("an app's edit on Google Play", () => {
-    const credentials = () => playCredentials({ [PLAY.key]: keyFile }, {});
+    const credentials = () => playCredentials({ [PLAY.key]: keyFile }, settings({}));
 
     test('gives the highest versionCode Play has seen, in bundles, APKs and releases alike, and is deleted', async () => {
         expect(await highestVersionCode('dev.example.app', credentials())).toBe(1000006);
@@ -248,7 +248,7 @@ describe("an app's native debug symbols on Google Play", () => {
         fs.writeFileSync(aab, 'bundle');
         fs.writeFileSync(symbols, Buffer.from([0x50, 0x4b, 0x05, 0x06]));
         answers['POST /edits/E1/apks/1000007/deobfuscationFiles/nativeCode?uploadType=media'] = () => json(200, { deobfuscationFile: { symbolType: 'nativeCode' } });
-        await uploadBundle('dev.example.app', playCredentials({ [PLAY.key]: keyFile }, {}), { aab, symbols, track: 'internal', status: 'completed' });
+        await uploadBundle('dev.example.app', playCredentials({ [PLAY.key]: keyFile }, settings({})), { aab, symbols, track: 'internal', status: 'completed' });
         const routes = requests.map(({ route }) => route);
         const upload = routes.indexOf('POST /edits/E1/apks/1000007/deobfuscationFiles/nativeCode?uploadType=media');
         expect(upload).toBeGreaterThan(routes.indexOf('POST /edits/E1/bundles?uploadType=media'));
@@ -258,7 +258,7 @@ describe("an app's native debug symbols on Google Play", () => {
 });
 
 describe("a release's rollout, notes and listing on Google Play", () => {
-    const credentials = () => playCredentials({ [PLAY.key]: keyFile }, {});
+    const credentials = () => playCredentials({ [PLAY.key]: keyFile }, settings({}));
     const hash = (bytes) => createHash('sha256').update(bytes).digest('hex');
     const file = (name, bytes) => {
         fs.writeFileSync(path.join(dir, name), bytes);

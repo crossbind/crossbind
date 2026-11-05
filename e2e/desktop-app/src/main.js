@@ -267,6 +267,27 @@ async function checkClipboard(isIos) {
     if (!unchecked.includes('takes a string')) throw new Error(`a clipboard write of no text was not refused: ${unchecked}`);
 }
 
+// The page's dialogs and what it asks to use reach the app's own page-dialogs and page-permissions, which answer at
+// once: a dialog of the message "cancel" cancelled, a prompt() with what it was asked, and the location denied.
+async function checkPageRequests() {
+    alert('alert');
+    if (!confirm('confirm') || confirm('cancel')) throw new Error("confirm() did not give page-dialogs' answers");
+    const text = 'Öffnen 😀';
+    const prompted = JSON.parse(prompt(`prompt ${text}`, `default ${text}`) ?? 'null');
+    if (prompted?.message !== `prompt ${text}` || prompted.defaultText !== `default ${text}`) {
+        throw new Error(`prompt() gave ${JSON.stringify(prompted)}, not what page-dialogs was asked`);
+    }
+    if (prompt('cancel') !== null) throw new Error('a prompt() that page-dialogs cancelled gave a text');
+    const code = await new Promise((resolve) => {
+        navigator.geolocation.getCurrentPosition(() => resolve(0), (error) => resolve(error.code));
+    });
+    if (code !== GeolocationPositionError.PERMISSION_DENIED) throw new Error(`the location page-permissions denied ended with code ${code}`);
+    const asked = await invoke('page-permissions.asked');
+    if (!asked.some(({ kinds, origin, isListed }) => kinds.join() === 'location' && origin === location.origin && isListed)) {
+        throw new Error(`page-permissions was not asked for the page's location: ${JSON.stringify(asked)}`);
+    }
+}
+
 initNative().then(async (m) => {
     try {
         // Markup can make a crossbind:// request as well, so one without the page's token must be refused. On Android the
@@ -298,6 +319,7 @@ initNative().then(async (m) => {
             if (answer === 'read') throw new Error('the page read the clipboard without its user\'s gesture');
         }
         await checkClipboard(!isAndroid && !isDesktop);
+        await checkPageRequests();
         // The app's own functions answer over the page's channel on every platform, and the host checks what it opens.
         const folders = await host.paths();
         if (![folders.data, folders.cache, folders.logs].every((folder) => /^(\/|[A-Za-z]:\\)/.test(folder))) {

@@ -29,7 +29,7 @@ const isEntitlement = (value) => typeof value === 'boolean' || typeof value === 
 const MAX_JSON_DEPTH = 64;
 // A value JSON writes as it is, which the extension's native code reads back the same: no deeper than the host reads,
 // its strings and keys without a lone surrogate, which the host would read as U+FFFD.
-const isJsonValue = (value, depth = 0) => depth <= MAX_JSON_DEPTH && (value === null || typeof value === 'boolean'
+export const isJsonValue = (value, depth = 0) => depth <= MAX_JSON_DEPTH && (value === null || typeof value === 'boolean'
     || (typeof value === 'string' && value.isWellFormed())
     || (typeof value === 'number' && Number.isFinite(value))
     || (Array.isArray(value) && value.every((item) => isJsonValue(item, depth + 1)))
@@ -97,9 +97,97 @@ function checkedPlatform(where, root, platform, part) {
     return checked;
 }
 
+// The platforms a publisher takes apps of, by the command line's names, and desktop for the three of them.
+export const PUBLISH_PLATFORMS = ['android', 'ios', 'macos', 'linux', 'windows'];
+const DESKTOP_PLATFORMS = ['macos', 'linux', 'windows'];
+
+// The platforms a publisher or an installer names, one or a list of those it may, desktop for the three of them.
+function checkedPlatforms(where, platform, allowed) {
+    const named = [platform].flat();
+    if (named.length === 0 || !named.every((one) => [...allowed, 'desktop'].includes(one))) {
+        throw new Error(`crossbind: ${where}.platform is no platform or list of them, of ${[...allowed, 'desktop'].join(', ')}.`);
+    }
+    return [...new Set(named.flatMap((one) => (one === 'desktop' ? DESKTOP_PLATFORMS : [one])))];
+}
+
+// The steps an object gives are functions.
+function assertSteps(where, object, steps) {
+    const notSteps = steps.filter((step) => object[step] !== undefined && typeof object[step] !== 'function');
+    if (notSteps.length > 0) throw new Error(`crossbind: ${where}'s ${notSteps.join(' and ')} ${notSteps.length > 1 ? 'are' : 'is'} no function.`);
+}
+const PUBLISHER_KEYS = ['platform', 'store', 'options', 'after', 'build', 'check', 'buildNumber', 'buildEnv', 'upload'];
+const PUBLISHER_STEPS = ['build', 'check', 'buildNumber', 'buildEnv', 'upload'];
+// The steps of a publisher that builds, which one after another publisher leaves to that one.
+const BUILD_STEPS = ['build', 'buildNumber', 'buildEnv'];
+// The options `crossbind app publish` has of its own, with crossbind's, which no publisher's takes the name of.
+const COMMAND_OPTIONS = ['platform', 'help', 'version'];
+// An option's name, as JavaScript writes it, whose --kebab-case the command line takes.
+const OPTION_NAME = /^[a-z][a-zA-Z0-9]*$/;
+const OPTION_KEYS = ['help', 'value', 'default'];
+
+function checkedPublishOption(where, name, option) {
+    const at = `${where}.options.${name}`;
+    if (!OPTION_NAME.test(name) || COMMAND_OPTIONS.includes(name)) {
+        throw new Error(`crossbind: ${where}.options names ${name}, which is no option of its own: one of letters and digits, starting with a lowercase letter, but ${COMMAND_OPTIONS.slice(0, -1).join(', ')} and ${COMMAND_OPTIONS.at(-1)}.`);
+    }
+    if (!isObject(option) || typeof option.help !== 'string') throw new Error(`crossbind: ${at} is no option, which is { help } for a flag and { help, value } for one that takes a value.`);
+    const unknown = Object.keys(option).find((key) => !OPTION_KEYS.includes(key));
+    if (unknown) throw new Error(`crossbind: ${at} takes ${OPTION_KEYS.join(', ')}; ${unknown} is none of them.`);
+    if (option.value !== undefined && typeof option.value !== 'string') throw new Error(`crossbind: ${at}.value is no name of the value it takes, as '<track>'.`);
+    if (option.default !== undefined && (option.value === undefined || typeof option.default !== 'string')) {
+        throw new Error(`crossbind: ${at}.default is no value of an option that takes one: a string, beside its value.`);
+    }
+    return { help: option.help, value: option.value ?? null, default: option.default ?? null };
+}
+
+// A publisher as crossbind runs it: the platforms it takes apps of, the name its store goes by, the options it takes on
+// the command line, the publisher it comes after, where it does, and its steps, which keep the object as their this.
+export function checkedPublisher(publisher, where) {
+    if (!isObject(publisher)) throw new Error(`crossbind: ${where} is no object.`);
+    const unknown = Object.keys(publisher).find((key) => !PUBLISHER_KEYS.includes(key));
+    if (unknown) throw new Error(`crossbind: ${where} takes ${PUBLISHER_KEYS.join(', ')}; ${unknown} is none of them.`);
+    const platforms = checkedPlatforms(where, publisher.platform, PUBLISH_PLATFORMS);
+    if (publisher.store !== undefined && typeof publisher.store !== 'string') throw new Error(`crossbind: ${where}.store is no name.`);
+    if (publisher.after !== undefined && (typeof publisher.after !== 'string' || !NAME.test(publisher.after))) {
+        throw new Error(`crossbind: ${where}.after is no name of a publisher.`);
+    }
+    assertSteps(where, publisher, PUBLISHER_STEPS);
+    if (!publisher.upload) throw new Error(`crossbind: ${where} has no upload, the step that sends the app to its store.`);
+    const ownBuild = BUILD_STEPS.filter((step) => publisher[step]);
+    if (publisher.after !== undefined && ownBuild.length > 0) {
+        throw new Error(`crossbind: ${where} comes after ${publisher.after}, whose build it publishes from, so it takes no ${ownBuild.join(' or ')}.`);
+    }
+    const options = publisher.options ?? {};
+    if (!isObject(options)) throw new Error(`crossbind: ${where}.options is no object of options.`);
+    const steps = PUBLISHER_STEPS.filter((step) => publisher[step]).map((step) => [step, publisher[step].bind(publisher)]);
+    return {
+        platforms,
+        store: publisher.store ?? null,
+        options: Object.fromEntries(Object.entries(options).map(([name, option]) => [name, checkedPublishOption(where, name, option)])),
+        after: publisher.after ?? null,
+        ...Object.fromEntries(steps),
+    };
+}
+
+const INSTALLER_STEPS = ['check', 'make'];
+const INSTALLER_KEYS = ['platform', ...INSTALLER_STEPS];
+
+// An installer as crossbind runs it: the desktop platforms whose apps it makes what installs, and its steps, which keep
+// the object as their this.
+export function checkedInstaller(installer, where) {
+    if (!isObject(installer)) throw new Error(`crossbind: ${where} is no object.`);
+    const unknown = Object.keys(installer).find((key) => !INSTALLER_KEYS.includes(key));
+    if (unknown) throw new Error(`crossbind: ${where} takes ${INSTALLER_KEYS.join(', ')}; ${unknown} is none of them.`);
+    const platforms = checkedPlatforms(where, installer.platform, DESKTOP_PLATFORMS);
+    assertSteps(where, installer, INSTALLER_STEPS);
+    if (!installer.make) throw new Error(`crossbind: ${where} has no make, the step that makes what installs the app.`);
+    const steps = INSTALLER_STEPS.filter((step) => installer[step]).map((step) => [step, installer[step].bind(installer)]);
+    return { platforms, ...Object.fromEntries(steps) };
+}
+
 // An extension as crossbind takes it, its paths relative to root: its name, in app the sources every platform compiles,
-// the schemes whose links its native code gets and what each platform adds, and the options its native code reads,
-// where it has them.
+// the schemes whose links its native code gets and what each platform adds, the options its native code reads, and its
+// publisher and its installer, where it has them.
 export function checkedExtension(extension, root, where) {
     if (!isObject(extension) || typeof extension.name !== 'string' || !NAME.test(extension.name)) {
         throw new Error(`crossbind: ${where} has no name of lowercase letters and digits, which dashes may join.`);
@@ -113,16 +201,20 @@ export function checkedExtension(extension, root, where) {
         if (!(key in PLATFORM_PARTS)) throw new Error(`crossbind: ${where}'s app takes sources, urlSchemes and ${Object.keys(PLATFORM_PARTS).join(', ')}; ${key} is none of them.`);
         return [key, checkedPlatform(at, root, key, value)];
     }));
-    if (extension.options === undefined) return { name: extension.name, root, app: checked };
+    const roles = {
+        ...(extension.publisher === undefined ? {} : { publisher: checkedPublisher(extension.publisher, `${where}'s publisher`) }),
+        ...(extension.installer === undefined ? {} : { installer: checkedInstaller(extension.installer, `${where}'s installer`) }),
+    };
+    if (extension.options === undefined) return { name: extension.name, root, app: checked, ...roles };
     if (!isJsonValue(extension.options)) {
         throw new Error(`crossbind: ${where}'s options are no JSON value the host reads as it is: plain objects, arrays, strings, finite numbers, booleans and null alone, 64 levels deep at most, without a lone surrogate.`);
     }
-    return { name: extension.name, root, app: checked, options: extension.options };
+    return { name: extension.name, root, app: checked, options: extension.options, ...roles };
 }
 
 // What an extension of crossbind's build once hooked into, which no build runs.
 const OLD_HOOKS = ['loadConfig', 'buildWasm', 'createLib'];
-const LISTED_KEYS = ['name', 'root', 'app', 'options'];
+const LISTED_KEYS = ['name', 'root', 'app', 'options', 'publisher', 'installer'];
 
 // An extension crossbind.config.js lists, as its package's crossbind.extension.js gives it: its name, the folder its
 // files are in, which a build sees under the project's base alone, and what it adds to an app.
@@ -169,6 +261,11 @@ export const withOptions = (extensions, options) => extensions.map((extension) =
 // an app's that lists app.urlSchemes. The host refuses the updater's functions to any other app.
 export const appHostExtensions = (appHostRoot, options) => withOptions(hostExtensions(appHostRoot), options)
     .filter((extension) => !['instance', 'links', 'updater'].includes(extension.name) || Object.hasOwn(options, extension.name));
+
+// The extensions crossbind.config.js lists that add to an app: all but those that give a publisher or an installer
+// alone, which leave the host's own of their name as it is.
+export const appExtensionsOf = (listed) => listed
+    .filter((extension) => (!extension.publisher && !extension.installer) || Object.keys(extension.app).length > 0);
 
 // The host's own extensions an app has, then those crossbind.config.js lists: one listed under the name of one of the
 // host's takes its place.

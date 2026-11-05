@@ -4,9 +4,9 @@ import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 
 // The browser, which Google's sign-in page opens in once crossbind hands it the page's address.
 let onOpen;
-vi.mock('../src/utils/openUrl.js', () => ({ default: (url) => onOpen(url) }));
+const openUrl = (url) => onOpen(url);
 
-const { accessToken, signIn } = await import('../src/actions/googleSignIn.js');
+const { accessToken, signIn } = await import('../src/publishers/google-play/googleSignIn.js');
 
 const SCOPE = 'https://www.googleapis.com/auth/androidpublisher';
 const json = (status, body) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
@@ -48,7 +48,7 @@ afterEach(() => {
 describe('a Google sign-in', () => {
     test("goes through the user's browser to a port of this machine, and trades the code for tokens with PKCE", async () => {
         const page = opened();
-        const tokens = signIn(SCOPE);
+        const tokens = signIn(SCOPE, openUrl);
         const query = await page;
         expect(fields(query, ['response_type', 'scope', 'code_challenge_method', 'prompt'])).toEqual({
             response_type: 'code', scope: SCOPE, code_challenge_method: 'S256', prompt: 'select_account',
@@ -69,7 +69,7 @@ describe('a Google sign-in', () => {
 
     test("turns away what is not Google's answer to it, and ends when the user cancels on Google's page", async () => {
         const page = opened();
-        const tokens = signIn(SCOPE);
+        const tokens = signIn(SCOPE, openUrl);
         const query = await page;
         expect((await visit(`${query.get('redirect_uri')}/favicon.ico`)).status).toBe(400);
         expect((await visit(`${query.get('redirect_uri')}/?state=another&code=forged`)).status).toBe(400);

@@ -1,0 +1,18 @@
+{
+    "name": "@crossbind/e2e-app-page-requests",
+    "version": "0.0.0",
+    "private": true,
+    "description": "crossbind - the host's own page dialogs and permissions, answered as the app's user would",
+    "license": "MIT",
+    "type": "module",
+    "scripts": {
+        "build": "crossbind app build",
+        "e2e:prod": "node e2e/run.mjs"
+    },
+    "devDependencies": {
+        "@crossbind/core-app-host": "workspace:^",
+        "@crossbind/plugin-vite": "workspace:^",
+        "crossbind": "workspace:^",
+        "vite": "^8.2.1"
+    }
+}

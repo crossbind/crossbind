@@ -3,7 +3,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { createVerify, generateKeyPairSync } from 'node:crypto';
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
-import { appStoreCaller, appStoreToken, uploadParts } from '../src/actions/appStoreApi.js';
+import { appStoreCaller, appStoreToken, uploadParts } from '../src/publishers/app-store/appStoreApi.js';
 
 const { privateKey, publicKey } = generateKeyPairSync('ec', { namedCurve: 'P-256' });
 const json = (status, body) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });

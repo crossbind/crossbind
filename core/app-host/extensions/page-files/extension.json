@@ -1,0 +1,7 @@
+{
+    "name": "page-files",
+    "app": {
+        "darwin": { "sources": ["darwin.mm"] },
+        "android": { "java": "android", "class": "dev.crossbind.extension.pagefiles.PageFilesExtension" }
+    }
+}

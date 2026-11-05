@@ -15,6 +15,7 @@ import { RUNTIME_ENVS } from '../utils/targets.js';
 import { normalizeConanDependencies } from '../utils/conanDependencies.js';
 import isSourceCmakePackage from '../utils/isSourceCmakePackage.js';
 import { listedExtension } from '../utils/appExtensions.js';
+import { mergePatch } from '../utils/configChanges.js';
 // import getCmakeParameters from './getCmakeParameters.js';
 
 // For the project being built only: dependency builds load published configs that may still set
@@ -29,8 +30,10 @@ export function assertBinarySelection(config) {
     }
 }
 
-export default async function loadConfig(configDir = process.cwd(), configName = 'crossbind.config') {
-    const config = await loadJs(configDir, configName) || {};
+// The project's config, with the changes a publisher makes for its build, as a JSON merge patch of the export.
+export default async function loadConfig(configDir = process.cwd(), configName = 'crossbind.config', { changes = null } = {}) {
+    const exported = await loadJs(configDir, configName) || {};
+    const config = changes ? mergePatch(exported, changes) : exported;
     if (config.excludedDependencies?.length) {
         logger.info('crossbind: `excludedDependencies` in crossbind.config.js is no longer read — declare exclusions in crossbind.overrides.js as { <name>: { exclude: true } }.');
     }
@@ -203,6 +206,8 @@ export function getFilledConfig(config, options = { isDepend: false }) {
 
     if (!Array.isArray(newConfig.extensions)) throw new Error('crossbind: "extensions" must be a list of extensions, as their packages\' crossbind.extension.js gives them.');
     newConfig.extensions = newConfig.extensions.map((extension, i) => listedExtension(extension, `extensions[${i}]`, newConfig.paths.base));
+    const twice = newConfig.extensions.find(({ name }, i) => newConfig.extensions.findIndex((other) => other.name === name) !== i);
+    if (twice) throw new Error(`crossbind: "extensions" lists two extensions named ${twice.name}.`);
 
     if (newConfig.target.runtime !== 'mt' && newConfig.allDependencies.some((d) => d?.target?.runtime === 'mt')) {
         newConfig.target.runtime = 'mt';

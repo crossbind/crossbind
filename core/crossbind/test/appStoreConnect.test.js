@@ -31,9 +31,11 @@ const spawnSync = vi.fn((program, args, options) => {
 });
 vi.mock('node:child_process', async (importOriginal) => ({ ...await importOriginal(), spawnSync }));
 
+const { xcodebuild, xcodeTeams } = await import('../src/actions/xcodebuild.js');
+const { PRIVACY_CATEGORIES } = await import('../src/utils/appOptions.js');
 const {
-    APP_STORE_CONNECT, addHermesDsym, archiveIosApp, archivedBinary, archivedPrivacy, uploadIosArchive, xcodeTeams,
-} = await import('../src/actions/appStoreConnect.js');
+    APP_STORE_CONNECT, addDsyms, archiveIosApp, archivedBinary, archivedPrivacy, uploadIosArchive,
+} = await import('../src/publishers/app-store/appStoreConnect.js');
 
 const KEY = { key: '/keys/AuthKey_ABC123.p8', keyId: 'ABC123', issuer: 'issuer-uuid' };
 function failureOf(step) {
@@ -48,6 +50,7 @@ const facts = { id: 'dev.example.demo', team: 'ABCDE12345' };
 let base;
 let store;
 let project;
+let api;
 
 beforeEach(() => {
     // crossbind holds paths with forward slashes, as upath gives them, on Windows too.
@@ -57,6 +60,13 @@ beforeEach(() => {
     fs.mkdirSync(`${project}/demo.xcodeproj`, { recursive: true });
     fs.writeFileSync(`${project}/demo.xcodeproj/project.pbxproj`, '{ "DEVELOPMENT_TEAM" = "ABCDE12345"; }');
     state.config.paths = { build: upath.join(base, 'build') };
+    api = {
+        workDir: store,
+        project: { name: 'demo' },
+        apple: { xcodebuild, privacyCategories: PRIVACY_CATEGORIES },
+        log: (line) => console.log(line),
+        warn: (line) => console.warn(line),
+    };
     Object.assign(xcode, { runs: [], answers: [], teams: null, signed: [], signFailure: null });
 });
 
@@ -64,9 +74,9 @@ afterEach(() => fs.rmSync(base, { recursive: true, force: true }));
 
 describe("an iOS app's archive", () => {
     test('is the app of the Xcode project crossbind wrote, archived unsigned and then signed ad hoc, frameworks first', () => {
-        const archive = archiveIosApp(project, { facts });
+        const archive = archiveIosApp(api, project, { facts });
         expect(archive).toBe(`${store}/demo.xcarchive`);
-        expect(archivedBinary(archive)).toBe(`${store}/demo.xcarchive/Products/Applications/demo.app/demo`);
+        expect(archivedBinary(api, archive)).toBe(`${store}/demo.xcarchive/Products/Applications/demo.app/demo`);
         expect(xcode.runs[0]).toEqual(['archive', '-project', `${project}/demo.xcodeproj`, '-scheme', 'demo', '-configuration', 'Release',
             '-destination', 'generic/platform=iOS', '-archivePath', archive, 'CODE_SIGNING_ALLOWED=NO']);
         const app = `${archive}/Products/Applications/demo.app`;
@@ -79,41 +89,41 @@ describe("an iOS app's archive", () => {
 
     test('carries the entitlements its project names in its ad hoc signature, for the export to sign with', () => {
         fs.writeFileSync(`${project}/demo.xcodeproj/project.pbxproj`, '{ "CODE_SIGN_ENTITLEMENTS" = "demo.entitlements"; "DEVELOPMENT_TEAM" = "ABCDE12345"; }');
-        const archive = archiveIosApp(project, { facts });
+        const archive = archiveIosApp(api, project, { facts });
         expect(xcode.signed.at(-1)).toEqual(['--force', '--sign', '-', '--timestamp=none', '--entitlements', path.resolve(project, 'demo.entitlements'),
             '--generate-entitlement-der', `${archive}/Products/Applications/demo.app`]);
     });
 
     test('fails where codesign cannot sign it ad hoc', () => {
         xcode.signFailure = { status: 1, stderr: 'resource fork, Finder information, or similar detritus not allowed\n' };
-        expect(() => archiveIosApp(project, { facts })).toThrow(`crossbind: codesign could not sign ${store}/demo.xcarchive/Products/Applications/demo.app/Frameworks/hermesvm.framework ad hoc: resource fork, Finder information, or similar detritus not allowed`);
+        expect(() => archiveIosApp(api, project, { facts })).toThrow(`crossbind: codesign could not sign ${store}/demo.xcarchive/Products/Applications/demo.app/Frameworks/hermesvm.framework ad hoc: resource fork, Finder information, or similar detritus not allowed`);
     });
 
     test('fails for good where no cause the user mends is known', () => {
         xcode.answers.push({ status: 65, output: 'ld: error: undefined symbol: _demo\n** ARCHIVE FAILED **\n' });
-        const failure = failureOf(() => archiveIosApp(project, { facts }));
+        const failure = failureOf(() => archiveIosApp(api, project, { facts }));
         expect(failure.message.split('\n')).toEqual([`crossbind: the archive failed; xcodebuild's log is ${store}/archive.log.`, '  ld: error: undefined symbol: _demo']);
         expect(failure).toMatchObject({ isMendable: false, page: null });
     });
 
     test('ends, rather than waits to be tried again, once Ctrl-C stopped xcodebuild', () => {
         xcode.answers.push({ status: null, signal: 'SIGINT', output: 'error: interrupted\n' });
-        const failure = failureOf(() => archiveIosApp(project, { facts }));
+        const failure = failureOf(() => archiveIosApp(api, project, { facts }));
         expect(failure.message).toBe('crossbind: the archive stopped on SIGINT.');
         expect(failure.isMendable).toBeUndefined();
     });
 
-    test("takes Hermes' dSYM, which its prebuilt framework lacks", () => {
+    test("takes the dSYMs of the prebuilt frameworks crossbind puts in the app, as Hermes', which they lack", () => {
         const dsym = path.join(base, 'hermes', 'hermesvm.framework.dSYM');
         fs.mkdirSync(`${dsym}/Contents/Resources/DWARF`, { recursive: true });
         fs.writeFileSync(`${dsym}/Contents/Resources/DWARF/hermesvm`, 'dwarf');
-        addHermesDsym(`${store}/demo.xcarchive`, dsym);
+        addDsyms(`${store}/demo.xcarchive`, [dsym]);
         expect(fs.readFileSync(`${store}/demo.xcarchive/dSYMs/hermesvm.framework.dSYM/Contents/Resources/DWARF/hermesvm`, 'utf8')).toBe('dwarf');
     });
 
     test("gives the reasons of the archived app's privacy manifest, by category", () => {
         const archive = `${store}/demo.xcarchive`;
-        expect(archivedPrivacy(archive)).toEqual({});
+        expect(archivedPrivacy(api, archive)).toEqual({});
         const app = `${archive}/Products/Applications/demo.app`;
         fs.mkdirSync(app, { recursive: true });
         fs.writeFileSync(`${app}/PrivacyInfo.xcprivacy`, JSON.stringify({
@@ -122,7 +132,7 @@ describe("an iOS app's archive", () => {
                 { NSPrivacyAccessedAPIType: 'NSPrivacyAccessedAPICategorySystemBootTime', NSPrivacyAccessedAPITypeReasons: ['35F9.1'] },
             ],
         }));
-        expect(archivedPrivacy(archive)).toEqual({ fileTimestamp: ['C617.1'], systemBootTime: ['35F9.1'] });
+        expect(archivedPrivacy(api, archive)).toEqual({ fileTimestamp: ['C617.1'], systemBootTime: ['35F9.1'] });
     });
 });
 
@@ -130,7 +140,7 @@ describe("an iOS app's upload", () => {
     test('exports the archive for App Store Connect and uploads it with its dSYMs', () => {
         const archive = `${store}/demo.xcarchive`;
         fs.mkdirSync(store, { recursive: true });
-        uploadIosArchive(archive, { team: 'ABCDE12345', key: KEY, isBuildManaged: true, facts });
+        uploadIosArchive(api, archive, { team: 'ABCDE12345', key: KEY, isBuildManaged: true, facts });
         expect(xcode.runs[0]).toEqual(['-exportArchive', '-archivePath', archive, '-exportOptionsPlist', `${store}/ExportOptions.plist`,
             '-exportPath', `${store}/export`, '-allowProvisioningUpdates', '-authenticationKeyPath', KEY.key, '-authenticationKeyID', 'ABC123',
             '-authenticationKeyIssuerID', 'issuer-uuid']);
@@ -147,7 +157,7 @@ describe("an iOS app's upload", () => {
             status: 70,
             output: 'error: exportArchive No Account for Team "ABCDE12345". Add a new account in Accounts settings.\nerror: exportArchive No profiles for \'dev.example.demo\' were found\n** EXPORT FAILED **\n',
         });
-        const failure = failureOf(() => uploadIosArchive(`${store}/demo.xcarchive`, { team: 'ABCDE12345', key: null, isBuildManaged: true, facts }));
+        const failure = failureOf(() => uploadIosArchive(api, `${store}/demo.xcarchive`, { team: 'ABCDE12345', key: null, isBuildManaged: true, facts }));
         expect(failure.message.split('\n')).toEqual([
             `crossbind: the upload failed; xcodebuild's log is ${store}/upload.log.`,
             '  error: exportArchive No Account for Team "ABCDE12345". Add a new account in Accounts settings.',
@@ -163,7 +173,7 @@ describe("an iOS app's upload", () => {
             status: 70,
             output: 'error: Failed Registering Bundle Identifier: The app identifier "dev.example.demo" cannot be registered to your development team because it is not available.\n',
         });
-        const failure = failureOf(() => uploadIosArchive(`${store}/demo.xcarchive`, { team: 'ABCDE12345', key: null, isBuildManaged: true, facts }));
+        const failure = failureOf(() => uploadIosArchive(api, `${store}/demo.xcarchive`, { team: 'ABCDE12345', key: null, isBuildManaged: true, facts }));
 
         expect(failure.message).toContain('set app.id in crossbind.config.js to an id of your own');
         expect(failure).toMatchObject({ isMendable: false });
@@ -173,14 +183,14 @@ describe("an iOS app's upload", () => {
         fs.mkdirSync(store, { recursive: true });
         const warned = vi.spyOn(console, 'warn').mockImplementation(() => {});
         xcode.answers.push({ output: 'Upload succeeded.\nwarning: exportArchive Upload Symbols Failed. The archive did not include a dSYM\n** EXPORT SUCCEEDED **\n' });
-        uploadIosArchive(`${store}/demo.xcarchive`, { team: 'ABCDE12345', key: null, isBuildManaged: true, facts });
+        uploadIosArchive(api, `${store}/demo.xcarchive`, { team: 'ABCDE12345', key: null, isBuildManaged: true, facts });
         expect(warned.mock.calls).toEqual([['crossbind: warning: exportArchive Upload Symbols Failed. The archive did not include a dSYM']]);
         warned.mockRestore();
     });
 
     test('keeps the build number CROSSBIND_APP_BUILD_NUMBER gave', () => {
         fs.mkdirSync(store, { recursive: true });
-        uploadIosArchive(`${store}/demo.xcarchive`, { team: 'ABCDE12345', key: null, isBuildManaged: false, facts });
+        uploadIosArchive(api, `${store}/demo.xcarchive`, { team: 'ABCDE12345', key: null, isBuildManaged: false, facts });
         expect(fs.readFileSync(`${store}/ExportOptions.plist`, 'utf8')).toContain('<key>manageAppVersionAndBuildNumber</key>\n    <false/>');
     });
 
@@ -197,7 +207,7 @@ describe("an iOS app's upload", () => {
             {},
         );
         for (let run = 0; run < 2; run += 1) {
-            expect(() => uploadIosArchive(`${store}/demo.xcarchive`, { team: 'ABCDE12345', key: null, isBuildManaged: true, facts }))
+            expect(() => uploadIosArchive(api, `${store}/demo.xcarchive`, { team: 'ABCDE12345', key: null, isBuildManaged: true, facts }))
                 .toThrow(expect.objectContaining({
                     message: expect.stringContaining(`App Store Connect has no app dev.example.demo: create it at ${APP_STORE_CONNECT}, a new iOS app with dev.example.demo as its bundle ID, which this publish registered with Apple.`),
                     isMendable: true,
@@ -211,7 +221,7 @@ describe("an iOS app's upload", () => {
         xcode.answers.push({ status: 70, output: 'error: exportArchive Error Downloading App Information\n  App record with bundle identifier "dev.example.demo" not found on App Store Connect.\n' });
         const archive = `${store}/demo.xcarchive`;
         const said = vi.spyOn(console, 'log').mockImplementation(() => {});
-        failureOf(() => uploadIosArchive(archive, { team: 'ABCDE12345', key: KEY, isBuildManaged: true, facts }));
+        failureOf(() => uploadIosArchive(api, archive, { team: 'ABCDE12345', key: KEY, isBuildManaged: true, facts }));
         expect(said.mock.calls).toEqual([['crossbind: App Store Connect has no app dev.example.demo yet, so this publish registers its bundle id with Apple first.']]);
         said.mockRestore();
         expect(xcode.runs[1]).toEqual(['-exportArchive', '-archivePath', archive, '-exportOptionsPlist', `${store}/RegisterOptions.plist`,
@@ -224,13 +234,25 @@ describe("an iOS app's upload", () => {
         expect(xcode.runs).toHaveLength(2);
     });
 
+    test("names crossbind's own cause first, as a lapsed sign-in, before the upload's, and registers nothing then", () => {
+        fs.mkdirSync(store, { recursive: true });
+        xcode.answers.push({
+            status: 70,
+            output: 'error: exportArchive No Account for Team "ABCDE12345".\nerror: exportArchive No suitable application records were found.\n',
+        });
+        const failure = failureOf(() => uploadIosArchive(api, `${store}/demo.xcarchive`, { team: 'ABCDE12345', key: null, isBuildManaged: true, facts }));
+        expect(failure.message).toContain('crossbind: Xcode is signed in to no account of team ABCDE12345');
+        expect(failure).toMatchObject({ isMendable: true, page: null });
+        expect(xcode.runs).toHaveLength(1);
+    });
+
     test('names why the bundle id could not be registered, where that fails too', () => {
         fs.mkdirSync(store, { recursive: true });
         xcode.answers.push(
             { status: 70, output: 'error: exportArchive App record with bundle identifier "dev.example.demo" not found on App Store Connect.\n' },
             { status: 70, output: 'error: exportArchive No Account for Team "ABCDE12345".\n' },
         );
-        const failure = failureOf(() => uploadIosArchive(`${store}/demo.xcarchive`, { team: 'ABCDE12345', key: null, isBuildManaged: true, facts }));
+        const failure = failureOf(() => uploadIosArchive(api, `${store}/demo.xcarchive`, { team: 'ABCDE12345', key: null, isBuildManaged: true, facts }));
         expect(failure.message).toContain(`crossbind: the registration of the bundle id failed; xcodebuild's log is ${store}/register.log.`);
         expect(failure).toMatchObject({ isMendable: true, page: null });
     });

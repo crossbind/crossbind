@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, test } from 'vitest';
-import { readAppStoreListing } from '../src/actions/appStoreListing.js';
+import { readAppStoreListing } from '../src/publishers/app-store/appStoreListing.js';
 
 let project;
 const PNG = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);

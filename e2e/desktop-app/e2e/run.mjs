@@ -261,6 +261,19 @@ function checkMetadata() {
     }
 }
 
+// The build ran every installer of the platform, crossbind's and the probe's, which writes a note of what crossbind
+// gave it beside the app.
+function checkInstallers() {
+    const app = `${root}/dist/${name}`;
+    const note = { darwin: `${app}.app.probe.json`, linux: `${app}-linux-${process.arch}.probe.json`, win32: `${app}-win32-${process.arch}.probe.json` }[platform ?? process.platform];
+    if (!note) return;
+    const made = existsSync(note) ? JSON.parse(readFileSync(note, 'utf8')) : null;
+    if (made?.name !== (config.app.name ?? name) || made?.arch !== process.arch) {
+        console.error(`FAIL: the probe's installer made no note of the ${platform ?? process.platform} app at ${note}: ${JSON.stringify(made)}.`);
+        process.exit(1);
+    }
+}
+
 // A file in a desktop app's data folder, where its host makes the folder, which src/main.js moves to the trash.
 function leaveFileToTrash() {
     const folders = {
@@ -414,6 +427,7 @@ let out = '';
 checkIcon();
 checkUrlSchemes();
 checkMetadata();
+checkInstallers();
 leaveFileToTrash();
 // A phone's app does not update itself.
 if (!platform) await serveUpdates();

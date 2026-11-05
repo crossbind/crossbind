@@ -8,7 +8,8 @@
     "scripts": {
         "dev": "crossbind app dev",
         "build": "crossbind app build",
-        "e2e:prod": "node e2e/run.mjs"
+        "e2e:prod": "node e2e/run.mjs",
+        "e2e:publish": "node e2e/publish.mjs"
     },
     "dependencies": {
         "@crossbind/conformance": "workspace:^",

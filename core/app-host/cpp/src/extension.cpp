@@ -2,7 +2,9 @@
 // what the page passed as a JSON value, the function of the name it called, and the answer. Also the JSON an Android
 // extension's Java answers with.
 #include "crossbind/extension.h"
+#include "crossbind_app.h"
 #include "host_core.h"
+#include "page_requests.h"
 
 #include <algorithm>
 #include <atomic>
@@ -329,13 +331,19 @@ private:
     }
 };
 
-// What the app's extensions do as it is launched, quits and opens their links, each with its extension's name.
+// What the app's extensions do as it is launched, quits and opens their links, each with its extension's name, and
+// who takes the page's dialogs, what it asks to use and its file inputs.
 struct Hooks {
     std::string launcher;
     std::function<bool(const Launch &)> launch;
     std::vector<std::pair<std::string, std::function<void()>>> windows;
     std::vector<std::pair<std::string, std::function<void()>>> quits;
     std::map<std::string, std::function<void(const std::string &)>> urls;
+#if !defined(__ANDROID__)
+    std::function<void(PageDialog)> pageDialogs;
+    std::function<void(PagePermission)> pagePermissions;
+    std::function<void(FileInput)> fileInputs;
+#endif
 };
 
 Hooks &hooks() {
@@ -350,6 +358,21 @@ std::atomic<bool> isLaunched{false};
 void checkStarting(const std::string &what) {
     if (isSealed) throw std::logic_error("crossbind: " + what + " came after the app started: an extension adds what it does as its entry runs");
 }
+
+#if !defined(__ANDROID__)
+// The page's own requests go to the extension named for them, the host's or one of the app's in its place.
+template <typename Request>
+void takePageRequests(std::function<void(Request)> &owner, std::function<void(Request)> fn, const std::string &extension, const char *role,
+    const char *hook) {
+    checkStarting("the extension " + extension + "'s " + hook);
+    if (extension != role) {
+        throw std::logic_error(std::string("crossbind: the extension ") + extension + " calls " + hook + ", which the extension named " + role +
+                               " alone does: an app's extension of that name takes the host's place");
+    }
+    if (owner) throw std::logic_error("crossbind: the extension " + extension + " calls " + hook + " twice");
+    owner = std::move(fn);
+}
+#endif
 
 }  // namespace
 
@@ -444,6 +467,50 @@ void Registry::onUrl(std::function<void(const std::string &url)> fn) {
     }
     if (!hooks().urls.emplace(extension_, std::move(fn)).second) throw std::logic_error("crossbind: the extension " + extension_ + " calls onUrl twice");
 }
+
+#if !defined(__ANDROID__)
+void Registry::onPageDialog(std::function<void(PageDialog)> fn) {
+    takePageRequests(hooks().pageDialogs, std::move(fn), extension_, "page-dialogs", "onPageDialog");
+}
+
+void Registry::onPagePermission(std::function<void(PagePermission)> fn) {
+    takePageRequests(hooks().pagePermissions, std::move(fn), extension_, "page-permissions", "onPagePermission");
+}
+
+void Registry::onFileInput(std::function<void(FileInput)> fn) {
+    takePageRequests(hooks().fileInputs, std::move(fn), extension_, "page-files", "onFileInput");
+}
+
+PageDialog::Kind PageDialog::kind() const { return state_->kind; }
+
+const std::string &PageDialog::message() const { return state_->message; }
+
+const std::string &PageDialog::defaultText() const { return state_->defaultText; }
+
+void PageDialog::accept(const std::string &text) const { state_->answer.give(text); }
+
+void PageDialog::cancel() const { state_->answer.give(std::nullopt); }
+
+const std::vector<std::string> &PagePermission::kinds() const { return state_->kinds; }
+
+const std::string &PagePermission::origin() const { return state_->origin; }
+
+bool PagePermission::isListed() const { return state_->isListed; }
+
+void PagePermission::allow() const { state_->answer.give(true); }
+
+void PagePermission::deny() const { state_->answer.give(false); }
+
+bool FileInput::allowsMultiple() const { return state_->allowsMultiple; }
+
+bool FileInput::allowsFolders() const { return state_->allowsFolders; }
+
+const std::vector<std::string> &FileInput::accept() const { return state_->accept; }
+
+void FileInput::pick(const std::vector<std::string> &paths) const { state_->answer.give(paths); }
+
+void FileInput::cancel() const { state_->answer.give(std::nullopt); }
+#endif
 
 void inBackground(Call call, std::function<Value()> work) {
     std::thread([call = std::move(call), work = std::move(work)] {
@@ -574,5 +641,43 @@ void openUrlOf(const std::string &extension, const std::string &url) {
         std::fprintf(stderr, "crossbind: the extension %s did not take a link\n", extension.c_str());
     }
 }
+
+#if !defined(__ANDROID__)
+namespace {
+
+// What the owner throws leaves the request unanswered, which its last copy then cancels.
+template <typename Request>
+void askOwner(const std::function<void(Request)> &owner, Request request, const char *role) {
+    try {
+        owner(std::move(request));
+    } catch (const std::exception &error) {
+        std::fprintf(stderr, "crossbind: the extension %s failed on the page's request: %s\n", role, error.what());
+    } catch (...) {
+        std::fprintf(stderr, "crossbind: the extension %s failed on the page's request\n", role);
+    }
+}
+
+}  // namespace
+
+PagePermission pagePermission(std::vector<std::string> kinds, std::string origin, std::function<void(bool)> decide) {
+    const bool isListed = !kinds.empty() && std::all_of(kinds.begin(), kinds.end(), [](const std::string &kind) {
+        return (kind == "camera" && CROSSBIND_APP_PERMISSION_CAMERA) || (kind == "microphone" && CROSSBIND_APP_PERMISSION_MICROPHONE) ||
+               (kind == "location" && CROSSBIND_APP_PERMISSION_LOCATION);
+    });
+    return PagePermission(std::make_shared<PagePermission::State>(std::move(kinds), std::move(origin), isListed, std::move(decide)));
+}
+
+bool hasPageDialogs() { return static_cast<bool>(hooks().pageDialogs); }
+
+bool hasPagePermissions() { return static_cast<bool>(hooks().pagePermissions); }
+
+bool hasFileInputs() { return static_cast<bool>(hooks().fileInputs); }
+
+void askPageDialog(PageDialog dialog) { askOwner(hooks().pageDialogs, std::move(dialog), "page-dialogs"); }
+
+void askPagePermission(PagePermission request) { askOwner(hooks().pagePermissions, std::move(request), "page-permissions"); }
+
+void askFileInput(FileInput input) { askOwner(hooks().fileInputs, std::move(input), "page-files"); }
+#endif
 
 }  // namespace crossbind::app

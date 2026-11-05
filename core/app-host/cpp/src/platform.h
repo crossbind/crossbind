@@ -49,11 +49,11 @@ void restrictNavigation(void *webView, std::vector<std::string> origins, std::fu
 // Runs when the app is quit other than by closing its window (the Dock on macOS, the system on iOS), before it would
 // exit.
 void onQuit(std::function<void()> quit);
-// The page's alert(), confirm() and prompt(), and on macOS its file inputs, as a browser shows them. WebKitGTK and
-// WebView2 show them themselves.
+// The page's alert(), confirm() and prompt(), and its file inputs where the webview lets the host take them, go to the
+// extensions page-dialogs and page-files; without one, the webview shows its own.
 void showPageDialogs(void *webView);
-// The page gets the camera, microphone and location app.permissions lists, once the system's user gives them where the
-// system asks, and is denied them otherwise; the webview asks nothing of its own.
+// What the page asks to use goes to the extension page-permissions; without it, the webview does as it would, and the
+// host denies a macOS page the location it gives.
 void answerPermissions(void *webView);
 // Tells the user why the app cannot go on: in a message box on the desktop, in the system's log on iOS and Android.
 void showError(const std::string &message);

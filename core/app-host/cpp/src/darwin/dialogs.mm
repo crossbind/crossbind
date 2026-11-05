@@ -8,13 +8,25 @@
 #import <objc/runtime.h>
 
 #include "crossbind_app.h"
+#include "page_requests.h"
 #include "platform.h"
+
+#include <optional>
+#include <string>
+#include <vector>
+
+using crossbind::FileInput;
+using crossbind::PageDialog;
+namespace app = crossbind::app;
 
 namespace {
 
-// The app's name titles the page's dialogs, as a browser's name the page's origin.
-NSString *appTitle() {
-    return [NSBundle.mainBundle objectForInfoDictionaryKey:@"CFBundleDisplayName"] ?: NSProcessInfo.processInfo.processName;
+std::string utf8(NSString *text) { return text.UTF8String ?: ""; }
+
+NSString *ns(const std::string &text) { return [NSString stringWithUTF8String:text.c_str()] ?: @""; }
+
+void askDialog(PageDialog::Kind kind, NSString *message, NSString *text, std::function<void(std::optional<std::string>)> answer) {
+    app::askPageDialog(PageDialog(std::make_shared<PageDialog::State>(kind, utf8(message), utf8(text), std::move(answer))));
 }
 
 }  // namespace
@@ -29,92 +41,47 @@ bool presentOnTop(void *controller, void *window) {
 }
 #endif
 
-// WKWebView leaves the page's dialogs to its UI delegate: without one, alert() returns at once, confirm() answers false
-// and prompt() null.
-@interface CBPageDialogs : NSObject <WKUIDelegate>
+// WKWebView leaves the page's dialogs, what it asks to use and its file inputs to its UI delegate, which hands each to
+// its owner, the extension of its name. It answers no selector of one without an owner, where WebKit does as it would
+// without the delegate: alert() returns at once, confirm() answers false, prompt() null, and no picker shows.
+@interface CBPageDelegate : NSObject <WKUIDelegate>
 @end
 
-@implementation CBPageDialogs
+@implementation CBPageDelegate
 
-#if TARGET_OS_IPHONE
-
-// With nothing to show it over, the caller answers at once, as if the dialog were cancelled: WebKit wants an answer to
-// every one.
-- (BOOL)show:(UIAlertController *)alert over:(WKWebView *)webView {
-    return presentOnTop((__bridge void *)alert, (__bridge void *)webView.window);
-}
-
-- (UIAlertController *)alertWithText:(NSString *)message {
-    return [UIAlertController alertControllerWithTitle:appTitle() message:message preferredStyle:UIAlertControllerStyleAlert];
-}
-
-- (void)webView:(WKWebView *)webView
-    runJavaScriptAlertPanelWithMessage:(NSString *)message
-                      initiatedByFrame:(WKFrameInfo *)frame
-                     completionHandler:(void (^)(void))done {
-    UIAlertController *alert = [self alertWithText:message];
-    [alert addAction:[UIAlertAction actionWithTitle:@"OK" style:UIAlertActionStyleDefault handler:^(UIAlertAction *) { done(); }]];
-    if (![self show:alert over:webView]) done();
-}
-
-- (void)webView:(WKWebView *)webView
-    runJavaScriptConfirmPanelWithMessage:(NSString *)message
-                        initiatedByFrame:(WKFrameInfo *)frame
-                       completionHandler:(void (^)(BOOL))done {
-    UIAlertController *alert = [self alertWithText:message];
-    [alert addAction:[UIAlertAction actionWithTitle:@"Cancel" style:UIAlertActionStyleCancel handler:^(UIAlertAction *) { done(NO); }]];
-    [alert addAction:[UIAlertAction actionWithTitle:@"OK" style:UIAlertActionStyleDefault handler:^(UIAlertAction *) { done(YES); }]];
-    if (![self show:alert over:webView]) done(NO);
-}
-
-- (void)webView:(WKWebView *)webView
-    runJavaScriptTextInputPanelWithPrompt:(NSString *)prompt
-                              defaultText:(NSString *)text
-                         initiatedByFrame:(WKFrameInfo *)frame
-                        completionHandler:(void (^)(NSString *))done {
-    UIAlertController *alert = [self alertWithText:prompt];
-    [alert addTextFieldWithConfigurationHandler:^(UITextField *field) { field.text = text; }];
-    [alert addAction:[UIAlertAction actionWithTitle:@"Cancel" style:UIAlertActionStyleCancel handler:^(UIAlertAction *) { done(nil); }]];
-    __weak UIAlertController *shown = alert;
-    [alert addAction:[UIAlertAction actionWithTitle:@"OK" style:UIAlertActionStyleDefault handler:^(UIAlertAction *) {
-               done(shown.textFields.firstObject.text);
-           }]];
-    if (![self show:alert over:webView]) done(nil);
-}
-
-#else
-
-// A sheet on the page's window, as Safari shows them.
-- (void)show:(NSAlert *)alert over:(WKWebView *)webView then:(void (^)(NSModalResponse))done {
-    if (webView.window) {
-        [alert beginSheetModalForWindow:webView.window completionHandler:done];
-    } else {
-        done([alert runModal]);
+// WebKit asks which selectors the delegate answers once, as it is set.
+- (BOOL)respondsToSelector:(SEL)selector {
+    if (selector == @selector(webView:runJavaScriptAlertPanelWithMessage:initiatedByFrame:completionHandler:) ||
+        selector == @selector(webView:runJavaScriptConfirmPanelWithMessage:initiatedByFrame:completionHandler:) ||
+        selector == @selector(webView:runJavaScriptTextInputPanelWithPrompt:defaultText:initiatedByFrame:completionHandler:)) {
+        return app::hasPageDialogs();
     }
-}
-
-- (NSAlert *)alertWithText:(NSString *)message buttons:(NSArray<NSString *> *)buttons {
-    NSAlert *alert = [NSAlert new];
-    alert.messageText = appTitle();
-    alert.informativeText = message;
-    for (NSString *button in buttons) [alert addButtonWithTitle:button];
-    return alert;
+    if (selector == NSSelectorFromString(@"webView:runOpenPanelWithParameters:initiatedByFrame:completionHandler:")) {
+        return app::hasFileInputs() && [super respondsToSelector:selector];
+    }
+    if (selector == @selector(webView:requestMediaCapturePermissionForOrigin:initiatedByFrame:type:decisionHandler:) ||
+        selector == NSSelectorFromString(@"webView:requestGeolocationPermissionForOrigin:initiatedByFrame:decisionHandler:") ||
+        selector == NSSelectorFromString(@"_webView:requestGeolocationPermissionForFrame:decisionHandler:") ||
+        selector == NSSelectorFromString(@"webView:requestDeviceOrientationAndMotionPermissionForOrigin:initiatedByFrame:decisionHandler:")) {
+        return app::hasPagePermissions() && [super respondsToSelector:selector];
+    }
+    return [super respondsToSelector:selector];
 }
 
 - (void)webView:(WKWebView *)webView
     runJavaScriptAlertPanelWithMessage:(NSString *)message
                       initiatedByFrame:(WKFrameInfo *)frame
                      completionHandler:(void (^)(void))done {
-    [self show:[self alertWithText:message buttons:@[ @"OK" ]] over:webView then:^(NSModalResponse) { done(); }];
+    void (^answer)(void) = [done copy];
+    askDialog(PageDialog::Kind::alert, message, nil, [answer](std::optional<std::string>) { answer(); });
 }
 
 - (void)webView:(WKWebView *)webView
     runJavaScriptConfirmPanelWithMessage:(NSString *)message
                         initiatedByFrame:(WKFrameInfo *)frame
                        completionHandler:(void (^)(BOOL))done {
-    [self show:[self alertWithText:message buttons:@[ @"OK", @"Cancel" ]] over:webView then:^(NSModalResponse response) {
-        done(response == NSAlertFirstButtonReturn);
-    }];
+    void (^answer)(BOOL) = [done copy];
+    askDialog(PageDialog::Kind::confirm, message, nil, [answer](std::optional<std::string> text) { answer(text.has_value()); });
 }
 
 - (void)webView:(WKWebView *)webView
@@ -122,77 +89,84 @@ bool presentOnTop(void *controller, void *window) {
                               defaultText:(NSString *)text
                          initiatedByFrame:(WKFrameInfo *)frame
                         completionHandler:(void (^)(NSString *))done {
-    NSAlert *alert = [self alertWithText:prompt buttons:@[ @"OK", @"Cancel" ]];
-    NSTextField *field = [NSTextField textFieldWithString:text ?: @""];
-    field.frame = NSMakeRect(0, 0, 260, 24);
-    alert.accessoryView = field;
-    alert.window.initialFirstResponder = field;
-    [self show:alert over:webView then:^(NSModalResponse response) {
-        done(response == NSAlertFirstButtonReturn ? field.stringValue : nil);
-    }];
+    void (^answer)(NSString *) = [done copy];
+    askDialog(PageDialog::Kind::prompt, prompt, text, [answer](std::optional<std::string> given) { answer(given ? ns(*given) : nil); });
 }
 
-// A file input; iOS's WKWebView shows its own picker.
+#if !TARGET_OS_IPHONE
+// A file input; iOS's WKWebView shows its own picker, which no extension takes.
 - (void)webView:(WKWebView *)webView
     runOpenPanelWithParameters:(WKOpenPanelParameters *)parameters
               initiatedByFrame:(WKFrameInfo *)frame
              completionHandler:(void (^)(NSArray<NSURL *> *))done {
-    NSOpenPanel *panel = [NSOpenPanel openPanel];
-    panel.canChooseFiles = YES;
-    panel.canChooseDirectories = parameters.allowsDirectories;
-    panel.allowsMultipleSelection = parameters.allowsMultipleSelection;
-    if (!webView.window) {
-        done([panel runModal] == NSModalResponseOK ? panel.URLs : nil);
-        return;
-    }
-    [panel beginSheetModalForWindow:webView.window completionHandler:^(NSModalResponse response) {
-        done(response == NSModalResponseOK ? panel.URLs : nil);
-    }];
+    void (^answer)(NSArray<NSURL *> *) = [done copy];
+    app::askFileInput(FileInput(std::make_shared<FileInput::State>(
+        parameters.allowsMultipleSelection, parameters.allowsDirectories, std::vector<std::string>{},
+        [answer](std::optional<std::vector<std::string>> paths) {
+            if (!paths) {
+                answer(nil);
+                return;
+            }
+            NSMutableArray<NSURL *> *picked = [NSMutableArray array];
+            for (const auto &path : *paths) [picked addObject:[NSURL fileURLWithPath:ns(path)]];
+            answer(picked);
+        })));
 }
-
 #endif
 
-// The camera and microphone of app.permissions, which the system asks the app's user for; WebKit would ask as well.
+// The camera and microphone the page asks for: one page-permissions allows the system asks the app's user for, with
+// app.permissions' reason, and WebKit asks nothing of its own.
 - (void)webView:(WKWebView *)webView
     requestMediaCapturePermissionForOrigin:(WKSecurityOrigin *)origin
                           initiatedByFrame:(WKFrameInfo *)frame
                                       type:(WKMediaCaptureType)type
                            decisionHandler:(void (^)(WKPermissionDecision))decide API_AVAILABLE(macos(12.0), ios(15.0)) {
-    bool isAllowed = false;
-    switch (type) {
-    case WKMediaCaptureTypeCamera:
-        isAllowed = CROSSBIND_APP_PERMISSION_CAMERA;
-        break;
-    case WKMediaCaptureTypeMicrophone:
-        isAllowed = CROSSBIND_APP_PERMISSION_MICROPHONE;
-        break;
-    case WKMediaCaptureTypeCameraAndMicrophone:
-        isAllowed = CROSSBIND_APP_PERMISSION_CAMERA && CROSSBIND_APP_PERMISSION_MICROPHONE;
-        break;
-    }
-    decide(isAllowed ? WKPermissionDecisionGrant : WKPermissionDecisionDeny);
+    std::vector<std::string> kinds;
+    if (type != WKMediaCaptureTypeMicrophone) kinds.emplace_back("camera");
+    if (type != WKMediaCaptureTypeCamera) kinds.emplace_back("microphone");
+    void (^answer)(WKPermissionDecision) = [decide copy];
+    app::askPagePermission(app::pagePermission(std::move(kinds), app::originOf(origin), [answer](bool isAllowed) {
+        answer(isAllowed ? WKPermissionDecisionGrant : WKPermissionDecisionDeny);
+    }));
 }
 
-// The location of app.permissions, which the system asks the app's user for.
+// The location, which the system then asks the app's user for.
 - (void)webView:(WKWebView *)webView
     requestGeolocationPermissionForOrigin:(WKSecurityOrigin *)origin
                          initiatedByFrame:(WKFrameInfo *)frame
                           decisionHandler:(void (^)(WKPermissionDecision))decide API_AVAILABLE(macos(27.0), ios(27.0)) {
-    decide(CROSSBIND_APP_PERMISSION_LOCATION ? WKPermissionDecisionGrant : WKPermissionDecisionDeny);
+    void (^answer)(WKPermissionDecision) = [decide copy];
+    app::askPagePermission(app::pagePermission({"location"}, app::originOf(origin), [answer](bool isAllowed) {
+        answer(isAllowed ? WKPermissionDecisionGrant : WKPermissionDecisionDeny);
+    }));
 }
+
+#if TARGET_OS_IPHONE
+// The device's motion and orientation, which the system gives the app without asking.
+- (void)webView:(WKWebView *)webView
+    requestDeviceOrientationAndMotionPermissionForOrigin:(WKSecurityOrigin *)origin
+                                        initiatedByFrame:(WKFrameInfo *)frame
+                                         decisionHandler:(void (^)(WKPermissionDecision))decide {
+    void (^answer)(WKPermissionDecision) = [decide copy];
+    app::askPagePermission(app::pagePermission({"motion"}, app::originOf(origin), [answer](bool isAllowed) {
+        answer(isAllowed ? WKPermissionDecisionGrant : WKPermissionDecisionDeny);
+    }));
+}
+#endif
 
 #if TARGET_OS_IPHONE && CROSSBIND_APP_PERMISSION_LOCATION
 // Before iOS 27 WebKit asks a private selector of the UI delegate instead, which only an app that lists the location
 // answers. Another carries no reason for it, without which CoreLocation asks the app's user nothing. A macOS page's
 // location comes from the host.
 - (void)_webView:(WKWebView *)webView requestGeolocationPermissionForFrame:(WKFrameInfo *)frame decisionHandler:(void (^)(BOOL))decide {
-    decide(YES);
+    void (^answer)(BOOL) = [decide copy];
+    app::askPagePermission(app::pagePermission({"location"}, app::originOf(frame.securityOrigin), [answer](bool isAllowed) { answer(isAllowed); }));
 }
 #endif
 
 @end
 
-// CBPageDialogs, the page's UI delegate, answers them; on macOS the host gives the page the location, as WKWebView does not.
+// CBPageDelegate answers the rest; on macOS the host gives the page the location, as WKWebView does not.
 void answerPermissions([[maybe_unused]] void *webView) {
 #if !TARGET_OS_IPHONE && CROSSBIND_APP_PERMISSION_LOCATION
     provideLocation(webView);
@@ -201,14 +175,14 @@ void answerPermissions([[maybe_unused]] void *webView) {
 
 void showPageDialogs(void *webView) {
     WKWebView *view = (__bridge WKWebView *)webView;
-    CBPageDialogs *dialogs = [CBPageDialogs new];
+    CBPageDelegate *delegate = [CBPageDelegate new];
     // The webview holds its UI delegate weakly. On macOS webview's window releases the UI delegate it finds when it
     // goes, as it owns the one it set itself, so it gets a reference to this one.
 #if TARGET_OS_IPHONE
     static char key;
-    objc_setAssociatedObject(view, &key, dialogs, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    objc_setAssociatedObject(view, &key, delegate, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
 #else
-    (void)CFBridgingRetain(dialogs);
+    (void)CFBridgingRetain(delegate);
 #endif
-    view.UIDelegate = dialogs;
+    view.UIDelegate = delegate;
 }

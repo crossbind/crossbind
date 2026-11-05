@@ -19,10 +19,7 @@ import { UPDATER_KEY, newUpdaterKey } from './actions/appUpdate.js';
 import {
     makeUploadKey, releaseSigningEnv, showUploadKeyPassword, useUploadKey,
 } from './actions/uploadKey.js';
-import { desktopPlatformOf, storeOf } from './actions/publish.js';
-import { playRelease, publishAndroid, rolloutPercent } from './actions/publishAndroid.js';
-import { publishGithub } from './actions/publishGithub.js';
-import { publishIos } from './actions/publishIos.js';
+import publish, { publishHelp } from './actions/publish.js';
 import { iosDeviceOption } from './actions/iosDevice.js';
 import addExtension from './actions/addExtension.js';
 import buildExternal from './actions/buildExternal.js';
@@ -192,42 +189,15 @@ commandApp.command('upload-key')
 
 commandApp.command('publish')
     .usage('[store] [options]')
-    .description("build the app and send it to a store: google-play, an Android bundle to a Google Play track, app-store, an iOS app to App Store Connect for TestFlight and, with --submit, App Review, or github, a desktop app's installers and update to a GitHub release")
-    .addOption(new Option('-p, --platform <platform>', "the app's platform: android's store is google-play, ios' app-store, and github takes macos, linux or windows (default: CROSSBIND_APP_PLATFORM, else for github this machine's)").choices(APP_PLATFORMS))
-    .option('--track <track>', 'the Google Play track the release goes on: internal, alpha, beta, production or one of your own', 'internal')
-    .option('--draft', "leave the release a draft: Google Play's, which Play Console rolls out, or GitHub's, which a publish without --draft puts out")
-    .addOption(new Option('--rollout <percent>', "release on Google Play to this percent of the track's users at first, as 10 or 10%: a staged rollout, which Play Console raises").argParser(rolloutPercent))
-    .option('--submit', "hand the iOS app's version to App Review too, with the build and the listing in store/app-store, through App Store Connect's API")
-    .option('--phased', 'release the version App Review approves in phases over 7 days, with --submit')
-    // Vite's own options, as --mode, go on to Vite.
+    .description("build the app and send it to a store, as its publisher does: crossbind's own google-play sends an Android bundle to a Google Play track, app-store an iOS app to App Store Connect for TestFlight and App Review, and github a desktop app's installers and update to a GitHub release; an app's extensions add more")
+    .addOption(new Option('-p, --platform <platform>', "the app's platform: without a store, android's is google-play and ios' app-store (default: CROSSBIND_APP_PLATFORM, else for a store of desktop apps this machine's)").choices(APP_PLATFORMS))
+    .addHelpText('after', () => publishHelp())
+    // The store's own options, and Vite's, as --mode, which go on to Vite.
     .allowUnknownOption()
     .allowExcessArguments()
-    .action(async ({
-        platform, track, draft, rollout, submit, phased,
-    }, command) => {
+    .action(async ({ platform }, command) => {
         assertAppProject();
-        const { store, viteArgs } = storeOf(command.args, platform, process.env.CROSSBIND_APP_PLATFORM);
-        const given = (options) => options.filter((option) => command.getOptionValueSource(option) === 'cli').map((option) => `--${option}`);
-        const theirs = (options, owner) => `crossbind: ${options.join(' and ')} ${options.length > 1 ? 'are' : 'is'} ${owner}`;
-        if (store === 'google-play') {
-            const iosOptions = given(['submit', 'phased']);
-            if (iosOptions.length > 0) throw new Error(`${theirs(iosOptions, "App Store Connect's")}; Google Play reviews a release on its own.`);
-            await publishAndroid({ track, ...playRelease(draft, rollout), viteArgs }, { runVite });
-            return;
-        }
-        if (store === 'github') {
-            const others = given(['track', 'rollout', 'submit', 'phased']);
-            if (others.length > 0) throw new Error(`${theirs(others, "another store's")}; GitHub Releases takes the app's files as they are.`);
-            await publishGithub(desktopPlatformOf(store, platform, process.env.CROSSBIND_APP_PLATFORM), { isDraft: Boolean(draft), viteArgs }, { runVite });
-            return;
-        }
-        if (store !== 'app-store') {
-            throw new Error(`crossbind: crossbind app publish takes the store it sends the app to first: google-play, app-store or github${store ? `, not ${store}` : ''}.`);
-        }
-        const playOptions = given(['track', 'draft', 'rollout']);
-        if (playOptions.length > 0) throw new Error(`${theirs(playOptions, "another store's")}; App Store Connect hands every iOS upload to TestFlight.`);
-        if (phased && !submit) throw new Error('crossbind: --phased releases the version App Review approves, so it takes --submit.');
-        await publishIos({ viteArgs, shouldSubmit: Boolean(submit), isPhased: Boolean(phased) }, { runVite });
+        await publish(command.args, { platform, envPlatform: process.env.CROSSBIND_APP_PLATFORM, runVite });
     });
 
 program.command('add')

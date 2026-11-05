@@ -2,7 +2,9 @@ import { conformanceExport } from '@crossbind/conformance/config.mjs';
 import embindRustDemo from '@crossbind/embind-rust-demo/crossbind.config.mjs';
 import conformanceRust from '@crossbind/conformance-rust/crossbind.config.mjs';
 import clipboard from '@crossbind/extension-clipboard/crossbind.extension.js';
-import probe from './extensions/probe/crossbind.extension.js';
+import probe, { probeMirror } from './extensions/probe/crossbind.extension.js';
+import pageDialogs from './extensions/page-dialogs/crossbind.extension.js';
+import pagePermissions from './extensions/page-permissions/crossbind.extension.js';
 import { UPDATER } from './e2e/updates.mjs';
 
 export default {
@@ -25,7 +27,10 @@ export default {
     },
     // src/main.js checks the page reads back what it writes to the clipboard, and through the probe what the shell
     // reaches for the page and for the app's own code, and that the links of the probe's scheme reach the probe alone.
-    extensions: [clipboard(), probe()],
+    // e2e/publish.mjs publishes through the probe's store and the mirror after it, and e2e/run.mjs reads what the
+    // probe's installer writes beside a desktop app. The page's dialogs and what it asks to use reach the app's own
+    // page-dialogs and page-permissions, which answer at once, where the host's would ask the run's machine's user.
+    extensions: [clipboard(), probe(), probeMirror(), pageDialogs(), pagePermissions()],
     // Smaller than every runner's display, which would hold the window to less; src/main.js checks the page has it. The
     // page has no background of its own, for backgroundColor to show behind it.
     app: {

@@ -8,27 +8,30 @@ const state = { config: {}, targets: [] };
 vi.mock('../src/state/index.js', () => ({ default: state }));
 // xcodebuild's archive and upload, which go as `store` says, and the teams Xcode is signed in to, one list per look.
 const store = {};
-vi.mock('../src/actions/appStoreConnect.js', () => ({
-    archiveIosApp: (project, options) => {
+vi.mock('../src/publishers/app-store/appStoreConnect.js', () => ({
+    archiveIosApp: (api, project, options) => {
         store.archives.push({ project, ...options });
         const failure = store.archiveFailures.shift();
         if (failure) throw failure;
         return '/build/app-store/demo.xcarchive';
     },
-    archivedBinary: (archive) => `${archive}/Products/Applications/demo.app/demo`,
+    archivedBinary: (api, archive) => `${archive}/Products/Applications/demo.app/demo`,
     archivedPrivacy: () => ({}),
-    addHermesDsym: (archive, dsym) => store.dsyms.push([archive, dsym]),
-    uploadIosArchive: (archive, options) => {
+    addDsyms: (archive, dsyms) => store.dsyms.push([archive, dsyms]),
+    uploadIosArchive: (api, archive, options) => {
         store.uploads.push({ archive, ...options });
         const failure = store.uploadFailures.shift();
         if (failure) throw failure;
     },
+}));
+vi.mock('../src/actions/xcodebuild.js', () => ({
+    xcodebuild: () => '',
     xcodeTeams: () => (store.teams.length > 1 ? store.teams.shift() : store.teams[0]),
 }));
 // App Store Connect's API, which the steps of a submission to App Review go through as `review` says.
 const review = {};
-vi.mock('../src/actions/appStoreApi.js', () => ({ appStoreCaller: (key) => ({ key }) }));
-vi.mock('../src/actions/appStoreRelease.js', () => ({
+vi.mock('../src/publishers/app-store/appStoreApi.js', () => ({ appStoreCaller: (key) => ({ key }) }));
+vi.mock('../src/publishers/app-store/appStoreRelease.js', () => ({
     appStoreApp: async (call, bundleId) => {
         review.steps.push(['app', call.key.keyId, bundleId]);
         return 'A1';
@@ -67,7 +70,7 @@ vi.mock('../src/utils/systemConfig.js', () => ({ default: () => ({ ...saved }), 
 const opened = [];
 vi.mock('../src/utils/openUrl.js', () => ({ default: (url) => opened.push(url) }));
 
-const { publishIos } = await import('../src/actions/publishIos.js');
+const { default: runPublish } = await import('../src/actions/publish.js');
 
 const hostPlatform = Object.getOwnPropertyDescriptor(process, 'platform');
 const TEAM = { id: 'ABCDE12345', name: 'Ada Ltd' };
@@ -80,10 +83,10 @@ async function runVite(args, env) {
     Object.assign(vite, { args, env, runs: vite.runs + 1 });
     if (vite.exitCode) return vite.exitCode;
     fs.mkdirSync(state.config.paths.build, { recursive: true });
-    fs.writeFileSync(path.join(state.config.paths.build, 'app-outputs.json'), JSON.stringify({ ios: path.join(base, 'dist', 'demo-ios') }));
+    fs.writeFileSync(path.join(state.config.paths.build, 'app-outputs.json'), JSON.stringify({ ios: { project: path.join(base, 'dist', 'demo-ios') } }));
     return 0;
 }
-const publish = () => publishIos({ viteArgs: ['--mode', 'production'] }, { runVite });
+const publish = () => runPublish(['app-store', '--mode', 'production'], { runVite });
 const xcodebuildFailure = (message, { isMendable = true, page = null } = {}) => Object.assign(new Error(message), { isMendable, page });
 
 beforeEach(() => {
@@ -92,6 +95,7 @@ beforeEach(() => {
     state.config = {
         general: { name: 'demo' },
         app: { id: 'dev.example.demo', icon: 'icon.png', encryption: false },
+        extensions: [],
         package: { version: '1.2.3' },
         paths: { project: base, build: path.join(base, '.crossbind', 'build') },
         system: { XCODE_DEVELOPMENT_TEAM: TEAM.id },
@@ -126,7 +130,7 @@ describe('publishing an iOS app', () => {
         const facts = { id: 'dev.example.demo', team: TEAM.id };
         expect(store.archives).toEqual([{ project: path.join(base, 'dist', 'demo-ios'), facts }]);
         expect(scan.binaries).toEqual(['/build/app-store/demo.xcarchive/Products/Applications/demo.app/demo']);
-        expect(store.dsyms).toEqual([['/build/app-store/demo.xcarchive', '/hermes/hermesvm.framework.dSYM']]);
+        expect(store.dsyms).toEqual([['/build/app-store/demo.xcarchive', ['/hermes/hermesvm.framework.dSYM']]]);
         expect(store.uploads).toEqual([{ archive: '/build/app-store/demo.xcarchive', team: TEAM.id, key: null, isBuildManaged: true, facts }]);
         const said = printed.join('\n');
         expect(said).toContain(`crossbind: publishing dev.example.demo 1.2.3 to App Store Connect for team ${TEAM.id}; building the app first.`);
@@ -155,6 +159,12 @@ describe('publishing an iOS app', () => {
     test('builds on macOS alone', async () => {
         Object.defineProperty(process, 'platform', { ...hostPlatform, value: 'linux' });
         await expect(publish()).rejects.toThrow('iOS apps build and go to App Store Connect on macOS, with Xcode.');
+    });
+
+    test('refuses a build number neither store takes before the build, which takes minutes', async () => {
+        vi.stubEnv('CROSSBIND_APP_BUILD_NUMBER', 'build-17');
+        await expect(publish()).rejects.toThrow('crossbind: CROSSBIND_APP_BUILD_NUMBER "build-17" is no build number');
+        expect(vite.runs).toBe(0);
     });
 
     test('uploads nothing when the build fails', async () => {
@@ -289,7 +299,7 @@ describe('publishing an iOS app on a terminal', () => {
 });
 
 describe('publishing an iOS app to App Review', () => {
-    const submit = (options = {}) => publishIos({ viteArgs: [], shouldSubmit: true, ...options }, { runVite });
+    const submit = ({ isPhased = false } = {}) => runPublish(['app-store', '--submit', ...(isPhased ? ['--phased'] : [])], { runVite });
     let key;
 
     beforeEach(() => {

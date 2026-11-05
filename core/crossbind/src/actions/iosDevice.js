@@ -3,7 +3,7 @@ import os from 'node:os';
 import { spawn, spawnSync } from 'node:child_process';
 import { EXEC_MAX_BUFFER } from './run.js';
 import { appTeam } from './buildApp.js';
-import { xcodebuild, xcodeTeams } from './appStoreConnect.js';
+import { xcodebuild, xcodeTeams } from './xcodebuild.js';
 import state from '../state/index.js';
 import { appId } from '../utils/appOptions.js';
 
@@ -171,7 +171,7 @@ export function buildForIosDevice(project, device) {
     xcodebuild(`the build for ${device.name}`, [
         '-project', `${project}/${name}.xcodeproj`, '-scheme', name, '-configuration', 'Debug', '-sdk', 'iphoneos', '-destination', `id=${device.udid}`,
         '-allowProvisioningUpdates', '-allowProvisioningDeviceRegistration', `SYMROOT=${products}`, 'build',
-    ], `${products}/device.log`, { team, id: appId(state.config) });
+    ], { log: `${products}/device.log`, facts: { team, id: appId(state.config) } });
     return `${products}/Debug-iphoneos/${name}.app`;
 }
 

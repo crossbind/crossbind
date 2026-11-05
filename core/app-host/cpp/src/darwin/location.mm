@@ -2,11 +2,13 @@
 #import <WebKit/WebKit.h>
 
 #include "crossbind_app.h"
+#include "page_requests.h"
 #include "platform.h"
 
 #if CROSSBIND_APP_PERMISSION_LOCATION
 
 #include <cmath>
+#include <optional>
 #include <utility>
 #include <vector>
 
@@ -146,6 +148,10 @@ bool always(const Ask &) { return true; }
     // Ticks while the page asks, answering the asks held too long, and stops CoreLocation once none came for a while.
     NSTimer *_clock;
     NSDate *_lastAsk;
+    // Whether page-permissions lets the page have the location, which the host asks it once in the app's run, and the
+    // asks that wait for its answer.
+    std::optional<bool> _isAllowed;
+    std::vector<std::pair<NSDictionary *, ReplyFn>> _undecided;
 }
 
 - (instancetype)init {
@@ -169,7 +175,32 @@ bool always(const Ask &) { return true; }
     }
     NSString *body = [message.body isKindOfClass:NSString.class] ? message.body : @"";
     id ask = [NSJSONSerialization JSONObjectWithData:[body dataUsingEncoding:NSUTF8StringEncoding allowLossyConversion:YES] options:0 error:nil];
-    [self ask:[ask isKindOfClass:NSDictionary.class] ? ask : @{} reply:std::move(reply)];
+    [self decide:[ask isKindOfClass:NSDictionary.class] ? ask : @{} origin:crossbind::app::originOf(message.frameInfo.securityOrigin) reply:std::move(reply)];
+}
+
+// The page has a position once page-permissions allows it, which a watch would otherwise ask after each position;
+// without the extension the page has none, as WebKit gives a macOS page none of its own.
+- (void)decide:(NSDictionary *)ask origin:(std::string)origin reply:(ReplyFn)reply {
+    if (_isAllowed) {
+        if (*_isAllowed) [self ask:ask reply:std::move(reply)];
+        else reply(failureOf(1, @"User denied Geolocation"));
+        return;
+    }
+    _undecided.emplace_back(ask, std::move(reply));
+    if (_undecided.size() > 1) return;
+    if (!crossbind::app::hasPagePermissions()) {
+        [self decided:false];
+        return;
+    }
+    crossbind::app::askPagePermission(crossbind::app::pagePermission({"location"}, std::move(origin), [self](bool isAllowed) { [self decided:isAllowed]; }));
+}
+
+- (void)decided:(bool)isAllowed {
+    _isAllowed = isAllowed;
+    for (auto &[ask, reply] : std::exchange(_undecided, {})) {
+        if (isAllowed) [self ask:ask reply:std::move(reply)];
+        else reply(failureOf(1, @"User denied Geolocation"));
+    }
 }
 
 - (void)ask:(NSDictionary *)ask reply:(ReplyFn)reply {

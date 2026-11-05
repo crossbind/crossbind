@@ -3,8 +3,8 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, test } from 'vitest';
 import {
-    appHostExtensions, checkedExtension, extensionPart, hostExtensions, listedExtension, mergedEntitlements, registrationSource, withListed,
-    withOptions,
+    appExtensionsOf, appHostExtensions, checkedExtension, checkedInstaller, checkedPublisher, extensionPart, hostExtensions, listedExtension, mergedEntitlements,
+    registrationSource, withListed, withOptions,
 } from '../src/utils/appExtensions.js';
 
 const roots = [];
@@ -57,7 +57,7 @@ describe("an app host's own extensions", () => {
         expect(extensions[0].app.darwin.frameworks).toEqual(['UniformTypeIdentifiers']);
     });
 
-    test("of crossbind's own host are the dialog's, the instance's, the menu's, the power's, the shell's and the updater's, which each platform's sources show", () => {
+    test("of crossbind's own host are the dialog's, the instance's, the links', the menu's, the page's dialogs, files and permissions, the power's, the shell's and the updater's, which each platform's sources show", () => {
         const root = path.join(import.meta.dirname, '..', '..', 'app-host');
         const sources = (platform, options = {}) => extensionPart(appHostExtensions(root, options), platform).sources
             .map((file) => path.relative(path.join(file, '..', '..'), file));
@@ -65,41 +65,46 @@ describe("an app host's own extensions", () => {
         const updaterSources = ['updater/updater.cpp', 'updater/monocypher.cpp', 'updater/monocypher-ed25519.cpp'];
         const instance = { instance: { id: 'com.example.demo' } };
         const linuxMenu = ['menu/menu.cpp', 'menu/linux.cpp', 'menu/linux-tray.cpp', 'menu/linux-notifications.cpp'];
-        expect(hostExtensions(root).map(({ name }) => name)).toEqual(['dialog', 'instance', 'links', 'menu', 'power', 'shell', 'updater']);
-        expect(sources('ios', { links: {} })).toEqual(['dialog/dialog.cpp', 'dialog/ios.mm', 'links/links.cpp', 'menu/menu.cpp', 'menu/ios.cpp', 'shell/shell.cpp', 'shell/ios.mm']);
+        expect(hostExtensions(root).map(({ name }) => name)).toEqual(['dialog', 'instance', 'links', 'menu', 'page-dialogs', 'page-files', 'page-permissions', 'power', 'shell', 'updater']);
+        const page = (platform) => ['page-dialogs/dialogs.cpp', `page-dialogs/${platform}`, ...(platform === 'darwin.mm' ? ['page-files/darwin.mm'] : []), 'page-permissions/permissions.cpp'];
+        expect(sources('ios', { links: {} })).toEqual(['dialog/dialog.cpp', 'dialog/ios.mm', 'links/links.cpp', 'menu/menu.cpp', 'menu/ios.cpp', ...page('ios.mm'), 'shell/shell.cpp', 'shell/ios.mm']);
         expect(sources('darwin')).toEqual([
-            'dialog/dialog.cpp', 'dialog/darwin.mm', 'menu/menu.cpp', 'menu/darwin.mm', 'power/power.cpp', 'power/darwin.mm', 'shell/shell.cpp', 'shell/darwin.mm',
+            'dialog/dialog.cpp', 'dialog/darwin.mm', 'menu/menu.cpp', 'menu/darwin.mm', ...page('darwin.mm'), 'power/power.cpp', 'power/darwin.mm', 'shell/shell.cpp',
+            'shell/darwin.mm',
         ]);
         expect(sources('darwin', updater)).toEqual([...sources('darwin'), ...updaterSources, 'updater/darwin.mm']);
         expect(sources('darwin', instance)).toEqual([
-            'dialog/dialog.cpp', 'dialog/darwin.mm', 'instance/instance.cpp', 'instance/posix.cpp', 'menu/menu.cpp', 'menu/darwin.mm', 'power/power.cpp', 'power/darwin.mm',
-            'shell/shell.cpp', 'shell/darwin.mm',
+            'dialog/dialog.cpp', 'dialog/darwin.mm', 'instance/instance.cpp', 'instance/posix.cpp', 'menu/menu.cpp', 'menu/darwin.mm', ...page('darwin.mm'), 'power/power.cpp',
+            'power/darwin.mm', 'shell/shell.cpp', 'shell/darwin.mm',
         ]);
-        expect(sources('ios')).toEqual(['dialog/dialog.cpp', 'dialog/ios.mm', 'menu/menu.cpp', 'menu/ios.cpp', 'shell/shell.cpp', 'shell/ios.mm']);
+        expect(sources('ios')).toEqual(['dialog/dialog.cpp', 'dialog/ios.mm', 'menu/menu.cpp', 'menu/ios.cpp', ...page('ios.mm'), 'shell/shell.cpp', 'shell/ios.mm']);
         expect(sources('linux', { ...instance, ...updater })).toEqual([
-            'dialog/dialog.cpp', 'dialog/linux.cpp', 'instance/instance.cpp', 'instance/posix.cpp', ...linuxMenu, 'power/power.cpp', 'power/linux.cpp', 'shell/shell.cpp',
-            'shell/linux.cpp', ...updaterSources, 'updater/linux.cpp',
+            'dialog/dialog.cpp', 'dialog/linux.cpp', 'instance/instance.cpp', 'instance/posix.cpp', ...linuxMenu, ...page('linux.cpp'), 'power/power.cpp', 'power/linux.cpp',
+            'shell/shell.cpp', 'shell/linux.cpp', ...updaterSources, 'updater/linux.cpp',
         ]);
         expect(sources('win32', { ...instance, ...updater })).toEqual([
-            'dialog/dialog.cpp', 'dialog/windows.cpp', 'instance/instance.cpp', 'instance/windows.cpp', 'menu/menu.cpp', 'menu/windows.cpp', 'power/power.cpp',
-            'power/windows.cpp', 'shell/shell.cpp', 'shell/windows.cpp', ...updaterSources, 'updater/windows.cpp',
+            'dialog/dialog.cpp', 'dialog/windows.cpp', 'instance/instance.cpp', 'instance/windows.cpp', 'menu/menu.cpp', 'menu/windows.cpp', ...page('windows.cpp'),
+            'power/power.cpp', 'power/windows.cpp', 'shell/shell.cpp', 'shell/windows.cpp', ...updaterSources, 'updater/windows.cpp',
         ]);
         expect(sources('android')).toEqual(['dialog/dialog.cpp', 'dialog/android.cpp', 'menu/menu.cpp', 'menu/android.cpp', 'shell/shell.cpp', 'shell/android.cpp']);
         expect(extensionPart(appHostExtensions(root, {}), 'darwin').frameworks).toEqual(['UniformTypeIdentifiers', 'UserNotifications']);
         expect(extensionPart(appHostExtensions(root, updater), 'darwin').frameworks).toEqual(['UniformTypeIdentifiers', 'UserNotifications', 'Security']);
         expect(extensionPart(appHostExtensions(root, {}), 'win32').libraries).toEqual(['comctl32', 'shell32', 'ole32']);
         expect(extensionPart(appHostExtensions(root, updater), 'win32').libraries).toEqual(['comctl32', 'shell32', 'ole32', 'winhttp', 'wintrust', 'crypt32']);
-        expect(extensionPart(appHostExtensions(root, {}), 'android').java.map(({ className }) => className)).toEqual(['dev.crossbind.extension.dialog.DialogExtension']);
+        expect(extensionPart(appHostExtensions(root, {}), 'android').java.map(({ className }) => className)).toEqual([
+            'dev.crossbind.extension.dialog.DialogExtension', 'dev.crossbind.extension.pagedialogs.PageDialogsExtension', 'dev.crossbind.extension.pagefiles.PageFilesExtension',
+            'dev.crossbind.extension.pagepermissions.PagePermissionsExtension',
+        ]);
     });
 
     test("give an app the instance, the links and the updater only where the app's options give them, as an app's do that keeps one instance, lists app.urlSchemes or has app.updater", () => {
         const root = path.join(import.meta.dirname, '..', '..', 'app-host');
         const updater = { url: 'https://example.com/{platform}-{arch}.json', publicKey: 'key', version: '1.2.3', id: 'com.example.demo' };
         const instance = { id: 'com.example.demo' };
-        expect(appHostExtensions(root, { shell: { openPath: [] } }).map(({ name }) => name)).toEqual(['dialog', 'menu', 'power', 'shell']);
+        expect(appHostExtensions(root, { shell: { openPath: [] } }).map(({ name }) => name)).toEqual(['dialog', 'menu', 'page-dialogs', 'page-files', 'page-permissions', 'power', 'shell']);
         expect(appHostExtensions(root, { instance, links: {}, shell: { openPath: [] }, updater }).map(({ name, options }) => [name, options])).toEqual([
-            ['dialog', undefined], ['instance', instance], ['links', {}], ['menu', undefined], ['power', undefined], ['shell', { openPath: [] }],
-            ['updater', updater],
+            ['dialog', undefined], ['instance', instance], ['links', {}], ['menu', undefined], ['page-dialogs', undefined], ['page-files', undefined],
+            ['page-permissions', undefined], ['power', undefined], ['shell', { openPath: [] }], ['updater', updater],
         ]);
     });
 
@@ -109,7 +114,8 @@ describe("an app host's own extensions", () => {
         expect(named[0]).toBe(extensions[0]);
         expect(extensionPart(named, 'darwin').native).toEqual([
             { name: 'dialog', options: null }, { name: 'instance', options: null }, { name: 'links', options: null }, { name: 'menu', options: null },
-            { name: 'power', options: null }, { name: 'shell', options: { openPath: ['data'] } }, { name: 'updater', options: null },
+            { name: 'page-dialogs', options: null }, { name: 'page-files', options: null }, { name: 'page-permissions', options: null }, { name: 'power', options: null },
+            { name: 'shell', options: { openPath: ['data'] } }, { name: 'updater', options: null },
         ]);
         expect(withOptions([{ name: 'constructor' }], {})).toEqual([{ name: 'constructor' }]);
     });
@@ -139,6 +145,15 @@ describe('the extensions an app has', () => {
         const clipboard = named('clipboard', '/app/clipboard');
         expect(withListed(own, [clipboard, shell])).toEqual([own[0], own[1], shell, clipboard]);
         expect(withListed(own, [])).toEqual(own);
+    });
+
+    test("leave out those listed with a publisher or an installer alone, which leave the host's own of their name as it is", () => {
+        const upload = async () => {};
+        const store = { name: 'dialog', root: '/demo', app: {}, publisher: { upload } };
+        const installer = { name: 'menu', root: '/demo', app: {}, installer: { make: () => [] } };
+        const both = { name: 'demo-store', root: '/demo', app: { sources: ['store.cpp'] }, publisher: { upload } };
+        const plain = { name: 'clipboard', root: '/demo', app: {} };
+        expect(appExtensionsOf([store, installer, both, plain])).toEqual([both, plain]);
     });
 
     test('stop the build with two listed of one name, as any two of one name do', () => {
@@ -224,13 +239,13 @@ describe('an extension crossbind.config.js lists', () => {
             .toThrow("crossbind: extensions[0]'s app.sources names native/missing.cpp, which is no file of the extension's.");
     });
 
-    test("refuses the hooks of crossbind's build, which no build runs, and anything but its name, root and app", () => {
+    test("refuses the hooks of crossbind's build, which no build runs, and anything but its name, root, app, options, publisher and installer", () => {
         const { base, root } = project();
         expect(() => listedExtension({ loadConfig: { after: () => {} }, buildWasm: {} }, 'extensions[0]', base)).toThrow(
             'crossbind: extensions[0] has the hooks loadConfig, buildWasm, which crossbind no longer runs: an extension adds native code to an app. Set build flags in targetSpecs or crossbind.build.js.',
         );
         expect(() => listedExtension({ name: 'clipboard', root, app: {}, version: 1 }, 'extensions[0]', base))
-            .toThrow('crossbind: extensions[0] takes name, root, app, options; version is none of them.');
+            .toThrow('crossbind: extensions[0] takes name, root, app, options, publisher, installer; version is none of them.');
         expect(() => listedExtension('clipboard', 'extensions[0]', base))
             .toThrow("crossbind: extensions[0] is no extension, as an extension package's crossbind.extension.js gives one.");
     });
@@ -271,6 +286,104 @@ describe('an extension crossbind.config.js lists', () => {
         const other = path.join(base, 'other');
         expect(() => listedExtension({ name: 'clipboard', root }, 'extensions[0]', other))
             .toThrow(`crossbind: extensions[0]'s root ${root} is outside ${other}, the project's base and all a build sees.`);
+    });
+});
+
+describe("an extension's publisher", () => {
+    const upload = async () => {};
+    const checked = (publisher) => checkedPublisher({ upload, ...publisher }, 'extensions[0].publisher');
+
+    test('takes apps of its platforms, desktop for the three, with its options, steps and the store it names', () => {
+        const publisher = {
+            platform: ['android', 'desktop', 'linux'],
+            store: 'Demo Store',
+            options: { track: { help: 'the track', value: '<track>', default: 'beta' }, draft: { help: 'a draft' } },
+            check() {
+                return { session: this.store };
+            },
+            upload,
+        };
+        const result = checkedPublisher(publisher, 'extensions[0].publisher');
+        expect(result).toMatchObject({
+            platforms: ['android', 'macos', 'linux', 'windows'],
+            store: 'Demo Store',
+            options: { track: { help: 'the track', value: '<track>', default: 'beta' }, draft: { help: 'a draft', value: null, default: null } },
+            after: null,
+        });
+        expect(result.check()).toEqual({ session: 'Demo Store' });
+        expect(checked({ platform: 'ios' })).toMatchObject({ platforms: ['ios'], store: null, options: {} });
+    });
+
+    test('refuses what it does not take, a step that is no function, and a publisher without an upload', () => {
+        expect(() => checked({ platform: 'ios', publish: upload })).toThrow('crossbind: extensions[0].publisher takes platform, store, options, after, build, check, buildNumber, buildEnv, upload; publish is none of them.');
+        expect(() => checked({ platform: 'web' })).toThrow('crossbind: extensions[0].publisher.platform is no platform or list of them, of android, ios, macos, linux, windows, desktop.');
+        expect(() => checked({ platform: [] })).toThrow('is no platform or list of them');
+        expect(() => checked({ platform: 'ios', check: 'yes', buildEnv: {} })).toThrow("crossbind: extensions[0].publisher's check and buildEnv are no function.");
+        expect(() => checkedPublisher({ platform: 'ios' }, 'extensions[0].publisher')).toThrow('crossbind: extensions[0].publisher has no upload, the step that sends the app to its store.');
+        expect(() => checked({ platform: 'ios', after: 'GitHub' })).toThrow('crossbind: extensions[0].publisher.after is no name of a publisher.');
+    });
+
+    test('that comes after another takes no build of its own', () => {
+        expect(() => checked({ platform: 'macos', after: 'github', build: () => ({}), buildEnv: () => ({}) }))
+            .toThrow('crossbind: extensions[0].publisher comes after github, whose build it publishes from, so it takes no build or buildEnv.');
+        expect(checked({ platform: 'macos', after: 'github' }).after).toBe('github');
+    });
+
+    test("names its options as JavaScript does, but the command's own, each a flag or one that takes a value", () => {
+        expect(() => checked({ platform: 'ios', options: { platform: { help: 'p' } } })).toThrow('crossbind: extensions[0].publisher.options names platform, which is no option of its own: one of letters and digits, starting with a lowercase letter, but platform, help and version.');
+        expect(() => checked({ platform: 'ios', options: { version: { help: 'v', value: '<version>' } } })).toThrow('names version, which is no option of its own');
+        expect(() => checked({ platform: 'ios', options: { 'release-notes': { help: 'n' } } })).toThrow('names release-notes, which is no option of its own');
+        expect(() => checked({ platform: 'ios', options: { track: 'beta' } })).toThrow('crossbind: extensions[0].publisher.options.track is no option, which is { help } for a flag and { help, value } for one that takes a value.');
+        expect(() => checked({ platform: 'ios', options: { track: { help: 't', type: 'string' } } })).toThrow('crossbind: extensions[0].publisher.options.track takes help, value, default; type is none of them.');
+        expect(() => checked({ platform: 'ios', options: { draft: { help: 'd', default: 'yes' } } })).toThrow('crossbind: extensions[0].publisher.options.draft.default is no value of an option that takes one');
+    });
+
+    test('is checked with the extension crossbind.config.js lists, beside its app', () => {
+        const base = hostWith({ store: { json: {} } });
+        const root = path.join(base, 'extensions', 'store');
+        const listed = listedExtension({ name: 'demo-store', root, publisher: { platform: 'android', upload } }, 'extensions[0]', base);
+        expect(listed).toMatchObject({ name: 'demo-store', root, app: {}, publisher: { platforms: ['android'] } });
+        expect(() => listedExtension({ name: 'demo-store', root, publisher: { platform: 'android' } }, 'extensions[0]', base))
+            .toThrow("crossbind: extensions[0]'s publisher has no upload");
+    });
+});
+
+describe("an extension's installer", () => {
+    const make = () => ['demo.AppImage'];
+    const checked = (installer) => checkedInstaller({ make, ...installer }, 'extensions[0].installer');
+
+    test('makes what installs apps of its desktop platforms, desktop for the three, with steps that keep it as their this', () => {
+        const installer = {
+            platform: ['linux', 'desktop'],
+            check() {
+                return this.platform;
+            },
+            make() {
+                return [`demo-${this.platform[0]}.AppImage`];
+            },
+        };
+        const result = checkedInstaller(installer, 'extensions[0].installer');
+        expect(result.platforms).toEqual(['linux', 'macos', 'windows']);
+        expect([result.check(), result.make()]).toEqual([['linux', 'desktop'], ['demo-linux.AppImage']]);
+        expect(checked({ platform: 'macos' })).toEqual({ platforms: ['macos'], make: expect.any(Function) });
+    });
+
+    test('refuses what it does not take, a platform that is no desktop one, a step that is no function, and an installer without a make', () => {
+        expect(() => checked({ platform: 'linux', kind: 'AppImage' })).toThrow('crossbind: extensions[0].installer takes platform, check, make; kind is none of them.');
+        expect(() => checked({ platform: 'android' })).toThrow('crossbind: extensions[0].installer.platform is no platform or list of them, of macos, linux, windows, desktop.');
+        expect(() => checked({})).toThrow('is no platform or list of them');
+        expect(() => checked({ platform: 'linux', check: true })).toThrow("crossbind: extensions[0].installer's check is no function.");
+        expect(() => checkedInstaller({ platform: 'linux' }, 'extensions[0].installer')).toThrow('crossbind: extensions[0].installer has no make, the step that makes what installs the app.');
+        expect(() => checkedInstaller('deb', 'extensions[0].installer')).toThrow('crossbind: extensions[0].installer is no object.');
+    });
+
+    test('is checked with the extension crossbind.config.js lists, beside its app and its publisher', () => {
+        const base = hostWith({ appimage: { json: {} } });
+        const root = path.join(base, 'extensions', 'appimage');
+        const listed = listedExtension({ name: 'appimage', root, installer: { platform: 'linux', make } }, 'extensions[0]', base);
+        expect(listed).toMatchObject({ name: 'appimage', root, app: {}, installer: { platforms: ['linux'] } });
+        expect(() => listedExtension({ name: 'appimage', root, installer: { platform: 'linux' } }, 'extensions[0]', base))
+            .toThrow("crossbind: extensions[0]'s installer has no make");
     });
 });
 
