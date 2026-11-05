@@ -24,6 +24,7 @@ import { playRelease, publishAndroid, rolloutPercent } from './actions/publishAn
 import { publishGithub } from './actions/publishGithub.js';
 import { publishIos } from './actions/publishIos.js';
 import { iosDeviceOption } from './actions/iosDevice.js';
+import addExtension from './actions/addExtension.js';
 import buildExternal from './actions/buildExternal.js';
 import buildPackageTypes from './actions/buildTypes.js';
 import buildLib from './actions/buildLib.js';
@@ -227,6 +228,13 @@ commandApp.command('publish')
         if (playOptions.length > 0) throw new Error(`${theirs(playOptions, "another store's")}; App Store Connect hands every iOS upload to TestFlight.`);
         if (phased && !submit) throw new Error('crossbind: --phased releases the version App Review approves, so it takes --submit.');
         await publishIos({ viteArgs, shouldSubmit: Boolean(submit), isPhased: Boolean(phased) }, { runVite });
+    });
+
+program.command('add')
+    .description("install an app extension's package with the project's package manager and list it in crossbind.config.js's extensions")
+    .argument('<package>', "the package as a package manager takes it: its name, name@version or a path to it")
+    .action((spec) => {
+        addExtension(spec, { config: state.config });
     });
 
 program.command('licenses')

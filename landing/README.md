@@ -40,9 +40,12 @@ catalog are generated from one verified release snapshot, so they cannot disagre
    version, nothing is copied across;
 5. builds the Libraries catalog (`scripts/site/build-ports-catalog.mjs`) from `ports/catalog.json`,
    every port's `package.json` and `build.mjs`, and what npm serves for each variant on the same
-   dist-tag - a variant counts as published only when the registry has it;
-6. writes `generated/release-snapshot.js` and `generated/ports-catalog.js`, which `src/release.js`
-   and `src/ports/catalog.js` re-export to the site, and starts `vite` with a one-off build token
+   dist-tag - a variant counts as published only when the registry has it - and the Apps guide's
+   list of crossbind's extensions (`scripts/site/build-extensions-catalog.mjs`) from
+   `extensions/*/package.json` the same way;
+6. writes `generated/release-snapshot.js`, `generated/ports-catalog.js` and
+   `generated/extensions-catalog.js`, which `src/release.js`, `src/ports/catalog.js` and
+   `src/guide/pages/apps.js` read, and starts `vite` with a one-off build token
    that `vite.config.js` checks, so a bare `vite build` cannot reuse files left behind by an
    earlier run.
 

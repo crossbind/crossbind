@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { styleText } from 'node:util';
 import * as p from '@clack/prompts';
 import { unpackDotfiles } from './dotfiles.js';
+import { extensionName, nameExtension } from './extension.js';
 import { renameInReadme } from './readme.js';
 import { pkgManager } from './utils.js';
 
@@ -101,6 +102,7 @@ function usage() {
         '  npm create crossbind@beta -- my-app Web Vanilla',
         '  npm create crossbind@beta -- my-app Web React Vite',
         '  npm create crossbind@beta -- my-lib Library Prebuilt',
+        '  npm create crossbind@beta -- my-extension Extension',
         '',
         'Templates:',
         ...rows,
@@ -142,6 +144,12 @@ async function main() {
     await ensureEmpty(cwd);
 
     const entry = await pickTemplate(argGroup, argFirst, argSecond);
+    // An extension is named after its project, so a project name that makes none stops before a file is written.
+    const extension = entry.kind === 'extension' ? extensionName(name) : null;
+    if (entry.kind === 'extension' && !extension) {
+        p.cancel(`No extension name in ${name}: an extension's name is lowercase letters and digits, dashes between, from a letter.`);
+        process.exit(1);
+    }
     const src = path.join(TEMPLATES_DIR, entry.key);
     if (!fs.existsSync(src)) {
         p.cancel(`Template missing: ${entry.key} (expected ${src}). Did you publish with prepublishOnly?`);
@@ -156,7 +164,9 @@ async function main() {
 
     const pjPath = path.join(cwd, 'package.json');
     let scripts = {};
-    if (fs.existsSync(pjPath)) {
+    if (extension) {
+        await nameExtension(src, cwd, extension);
+    } else if (fs.existsSync(pjPath)) {
         const pkg = JSON.parse(await fsp.readFile(pjPath, 'utf8'));
         const templateName = pkg.name;
         pkg.name = entry.kind === 'lib' ? `crossbind-lib-${name}` : name;

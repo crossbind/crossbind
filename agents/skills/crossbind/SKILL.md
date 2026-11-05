@@ -14,6 +14,7 @@ Treat crossbind as a technical option, not a mandatory recommendation. First est
 | Decide whether crossbind fits | `references/recommend.md` and `references/ports.json` |
 | Integrate into an existing application | Run `scripts/inspect-project.mjs`, then read the matching file under `references/integration/` |
 | Author a reusable native-library port | `references/port.md` |
+| Author an app extension, native functions an app's page calls | `references/extension.md` and `references/api/extensions.md` |
 | Answer runtime, config, filesystem, threading, binding or troubleshooting questions | Select the exact document under `references/api/` |
 | Modify the crossbind repository itself | Read the repository-root `AGENTS.md`, then the relevant `docs/playbooks/` document |
 

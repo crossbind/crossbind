@@ -7,10 +7,11 @@ the system lets an app.
 ## Install
 
 ```sh
-pnpm add @crossbind/extension-clipboard
+npx crossbind add @crossbind/extension-clipboard
 ```
 
-List it in the app's `crossbind.config.js`, whose host builds its native code in:
+That installs it with the app's package manager and lists it in the app's `crossbind.config.js`, whose host builds its
+native code in:
 
 ```js
 import clipboard from '@crossbind/extension-clipboard/crossbind.extension.js';

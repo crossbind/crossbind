@@ -54,6 +54,7 @@ npm create crossbind@beta -- my-app Web React Vite
 npm create crossbind@beta -- my-app Desktop Electron
 npm create crossbind@beta -- my-tool Native Executable
 npm create crossbind@beta -- my-lib Library Prebuilt
+npm create crossbind@beta -- my-extension Extension
 ```
 
 When you are ready to ship your app to production, run the following:

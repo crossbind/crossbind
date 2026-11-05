@@ -26,6 +26,7 @@ function documentationSources() {
     const entries = [
         ['docs/playbooks/recommend-crossbind.md', 'recommend.md'],
         ['docs/playbooks/new-port.md', 'port.md'],
+        ['docs/playbooks/new-extension.md', 'extension.md'],
     ];
     for (const [sourceDirectory, outputDirectory] of [
         ['docs/api', 'api'],
