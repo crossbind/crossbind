@@ -25,6 +25,27 @@ vi.mock('../src/actions/appStoreConnect.js', () => ({
     },
     xcodeTeams: () => (store.teams.length > 1 ? store.teams.shift() : store.teams[0]),
 }));
+// App Store Connect's API, which the steps of a submission to App Review go through as `review` says.
+const review = {};
+vi.mock('../src/actions/appStoreApi.js', () => ({ appStoreCaller: (key) => ({ key }) }));
+vi.mock('../src/actions/appStoreRelease.js', () => ({
+    appStoreApp: async (call, bundleId) => {
+        review.steps.push(['app', call.key.keyId, bundleId]);
+        return 'A1';
+    },
+    assertReviewable: async (call, appStoreId, version) => {
+        review.steps.push(['reviewable', appStoreId, version, `builds ${vite.runs}`]);
+        if (review.refusal) throw review.refusal;
+    },
+    newestBuild: async (call, appStoreId, version) => {
+        review.steps.push(['newest', appStoreId, version, `uploads ${store.uploads.length}`]);
+        return 'B1';
+    },
+    submitRelease: async (call, options) => {
+        review.steps.push(['submit', options]);
+        return review.result;
+    },
+}));
 vi.mock('../src/utils/hermes.js', async (importOriginal) => ({ ...await importOriginal(), resolveHermesDsym: async () => '/hermes/hermesvm.framework.dSYM' }));
 // What the archived app calls without a reason, one answer per archive.
 const scan = {};
@@ -77,6 +98,7 @@ beforeEach(() => {
     };
     Object.assign(store, { archives: [], archiveFailures: [], dsyms: [], uploads: [], uploadFailures: [], teams: [[TEAM]] });
     Object.assign(scan, { binaries: [], answers: [] });
+    Object.assign(review, { steps: [], refusal: null, result: { build: '42', listed: ['en-US'] } });
     Object.assign(terminal, { isThere: false, lines: [], yes: [] });
     Object.keys(saved).forEach((key) => delete saved[key]);
     opened.length = 0;
@@ -263,5 +285,72 @@ describe('publishing an iOS app on a terminal', () => {
         await expect(publish()).rejects.toThrow('crossbind: the archive failed');
         expect(store.archives).toHaveLength(1);
         expect(store.uploads).toEqual([]);
+    });
+});
+
+describe('publishing an iOS app to App Review', () => {
+    const submit = (options = {}) => publishIos({ viteArgs: [], shouldSubmit: true, ...options }, { runVite });
+    let key;
+
+    beforeEach(() => {
+        key = path.join(base, 'AuthKey_ABC123DEFG.p8');
+        fs.writeFileSync(key, 'key');
+        vi.stubEnv('CROSSBIND_APPLE_API_KEY', key);
+        vi.stubEnv('CROSSBIND_APPLE_API_ISSUER', 'issuer-uuid');
+    });
+
+    test('checks App Store Connect would review the version before the build, and hands it the upload with the listing', async () => {
+        fs.mkdirSync(path.join(base, 'store', 'app-store', 'en-US'), { recursive: true });
+        fs.writeFileSync(path.join(base, 'store', 'app-store', 'en-US', 'release_notes.txt'), 'Fixes.');
+
+        await submit({ isPhased: true });
+
+        expect(review.steps).toEqual([
+            ['app', 'ABC123DEFG', 'dev.example.demo'],
+            ['reviewable', 'A1', '1.2.3', 'builds 0'],
+            ['newest', 'A1', '1.2.3', 'uploads 0'],
+            ['submit', {
+                appId: 'A1', versionString: '1.2.3', before: 'B1', buildNumber: null, listings: [{ locale: 'en-US', info: {}, version: { whatsNew: 'Fixes.' }, screenshots: {} }], isPhased: true,
+            }],
+        ]);
+        expect(store.uploads).toHaveLength(1);
+        const said = printed.join('\n');
+        expect(said).toContain(`crossbind: publishing dev.example.demo 1.2.3 to App Store Connect for team ${TEAM.id} and App Review; building the app first.`);
+        expect(said).toContain(`crossbind: App Store Connect's listing changed in en-US, as ${path.join('store', 'app-store')} has it.`);
+        expect(said).toContain('crossbind: dev.example.demo 1.2.3 (build 42) went to App Review, to go out in phases over 7 days once released; Apple mails as the review goes.');
+    });
+
+    test('takes an API key and app.encryption, named with every other missing piece before the build', async () => {
+        vi.stubEnv('CROSSBIND_APPLE_API_KEY', '');
+        vi.stubEnv('CROSSBIND_APPLE_API_ISSUER', '');
+        delete state.config.app.encryption;
+        state.config.app.icon = undefined;
+        const failure = await submit().catch((error) => error);
+        expect(failure.message.split('\n').map((line) => line.slice(0, 50))).toEqual([
+            "crossbind: --submit hands the version to App Revie",
+            'crossbind: App Store Connect takes no iOS app with',
+            'crossbind: App Review takes no build without its a',
+        ]);
+        expect(review.steps).toEqual([]);
+        expect(vite.runs).toBe(0);
+    });
+
+    test('stops before the build where App Store Connect would not review the version, or its listing has a file it takes none of', async () => {
+        review.refusal = new Error('crossbind: App Store Connect has 1.2.3 as READY_FOR_DISTRIBUTION already, which takes no other build');
+        await expect(submit()).rejects.toBe(review.refusal);
+        expect(vite.runs).toBe(0);
+
+        fs.mkdirSync(path.join(base, 'store', 'app-store', 'en-US'), { recursive: true });
+        fs.writeFileSync(path.join(base, 'store', 'app-store', 'en-US', 'notes.txt'), 'Fixes.');
+        await expect(submit()).rejects.toThrow(`crossbind: ${path.join('store', 'app-store', 'en-US', 'notes.txt')} is none of the files an App Store listing takes`);
+        expect(vite.runs).toBe(0);
+    });
+
+    test('leaves App Review and the listing alone without --submit', async () => {
+        fs.mkdirSync(path.join(base, 'store', 'app-store', 'en-US'), { recursive: true });
+        fs.writeFileSync(path.join(base, 'store', 'app-store', 'en-US', 'notes.txt'), 'Fixes.');
+        await publish();
+        expect(review.steps).toEqual([]);
+        expect(store.uploads).toHaveLength(1);
     });
 });

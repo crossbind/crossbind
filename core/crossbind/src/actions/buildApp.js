@@ -369,10 +369,13 @@ function warnUnreasonedApis(project, privacy) {
     if (warning) console.warn(warning);
 }
 
-// Where publishApp last put this project's iOS and Android apps, for `crossbind app publish`, which runs Vite and so
-// cannot know the outDir it builds into.
+// Where publishApp last put this project's apps, for `crossbind app publish`, which runs Vite and so cannot know the
+// outDir it builds into: an iOS or Android app's project, and each arch's desktop app under its platform's name on the
+// command line.
 const appOutputsFile = () => `${state.config.paths.build}/app-outputs.json`;
 const readAppOutputs = () => (fs.existsSync(appOutputsFile()) ? JSON.parse(fs.readFileSync(appOutputsFile(), 'utf8')) : {});
+// The command line's names of the desktop platforms.
+export const DESKTOP_PLATFORMS = { darwin: 'macos', linux: 'linux', win32: 'windows' };
 
 export const clearAppOutputs = () => fs.rmSync(appOutputsFile(), { force: true });
 
@@ -382,9 +385,15 @@ export function appOutputOf(platform) {
     return output;
 }
 
-function recordAppOutput(platform, to) {
+function recordAppOutput(target, to) {
+    const outputs = readAppOutputs();
+    const app = path.resolve(to);
+    const desktop = DESKTOP_PLATFORMS[target.platform];
+    const recorded = desktop
+        ? { [desktop]: [...(outputs[desktop] ?? []).filter((entry) => entry.app !== app), { app, arch: target.arch }] }
+        : { [target.platform]: app };
     fs.mkdirSync(state.config.paths.build, { recursive: true });
-    fs.writeFileSync(appOutputsFile(), `${JSON.stringify({ ...readAppOutputs(), [platform]: path.resolve(to) }, null, 4)}\n`);
+    fs.writeFileSync(appOutputsFile(), `${JSON.stringify({ ...outputs, ...recorded }, null, 4)}\n`);
 }
 
 // Where a build without a bundler puts an app: under its own name, or for iOS and Android as the project of its build
@@ -441,7 +450,7 @@ export function publishApp(target, { to = appOutputPath(target), page = null } =
         packageAndroidRelease(to);
     }
     if (['ios', 'android'].includes(target.platform)) {
-        recordAppOutput(target.platform, to);
+        recordAppOutput(target, to);
     } else if (target.platform !== 'darwin') {
         if (target.platform === 'win32') signWindowsApp(to, target, page);
         archiveApp(to, target);
@@ -450,6 +459,7 @@ export function publishApp(target, { to = appOutputPath(target), page = null } =
     if (page && ['darwin', 'linux', 'win32'].includes(target.platform)) {
         writeInstaller(to, target);
         writeUpdate(to, target);
+        recordAppOutput(target, to);
     }
     return to;
 }

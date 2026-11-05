@@ -1,18 +1,22 @@
 import state from '../state/index.js';
-import { appStoreKey } from './appleSigning.js';
-import {
-    appBuildNumber, appOutputOf, appTeam, appVersion, clearAppOutputs,
-} from './buildApp.js';
+import { APPLE_SIGNING, appStoreKey } from './appleSigning.js';
+import { appBuildNumber, appTeam, appVersion } from './buildApp.js';
+import { appStoreCaller } from './appStoreApi.js';
 import {
     addHermesDsym, archiveIosApp, archivedBinary, archivedPrivacy, uploadIosArchive, xcodeTeams,
 } from './appStoreConnect.js';
+import { APP_STORE_LISTING, readAppStoreListing } from './appStoreListing.js';
+import {
+    appStoreApp, assertReviewable, newestBuild, submitRelease,
+} from './appStoreRelease.js';
 import {
     askAppId, askEncryption, askIcon, askPrivacy,
 } from './appSetup.js';
 import { appEncryption, appId } from '../utils/appOptions.js';
 import { resolveHermesDsym } from '../utils/hermes.js';
 import { unreasonedImports } from '../utils/requiredReasonApis.js';
-import { askLine, askYesNo, hasTerminal } from '../utils/ask.js';
+import publish from './publish.js';
+import { askLine, askYesNo } from '../utils/ask.js';
 import loadSystemConfig, { updateSystemConfig } from '../utils/systemConfig.js';
 import openUrl from '../utils/openUrl.js';
 
@@ -20,6 +24,8 @@ const NO_APP_ID = 'crossbind: App Store Connect knows an app by its bundle id, a
 const NO_TEAM = "crossbind: App Store Connect takes uploads from an Apple Developer Program team, which neither app.team in crossbind.config.js nor this machine's XCODE_DEVELOPMENT_TEAM names: set either to its id, which developer.apple.com/account shows under Membership details.";
 const NO_ICON = 'crossbind: App Store Connect takes no iOS app without an icon: set app.icon in crossbind.config.js to a square PNG, at best 1024 × 1024.';
 const NO_ENCRYPTION = 'crossbind: app.encryption is not set, so App Store Connect asks whether this build uses encryption before TestFlight hands it out; set it in crossbind.config.js to answer for every build.';
+const NO_ENCRYPTION_TO_SUBMIT = 'crossbind: App Review takes no build without its answer to whether it uses encryption: set app.encryption in crossbind.config.js.';
+const NO_KEY_TO_SUBMIT = `crossbind: --submit hands the version to App Review through App Store Connect's API, which takes an API key: set ${APPLE_SIGNING.key}, ${APPLE_SIGNING.keyId} and ${APPLE_SIGNING.issuer}, as app.md's Publishing says.`;
 const TEAM_ID = /^[A-Z0-9]{10}$/;
 
 async function pickTeam(teams) {
@@ -86,61 +92,95 @@ async function untilDone(isGuided, step) {
     }
 }
 
-async function buildIosApp(viteArgs, runVite) {
-    clearAppOutputs();
-    const exitCode = await runVite(['build', ...viteArgs], { ...process.env, CROSSBIND_APP_PLATFORM: 'ios' });
-    if (exitCode !== 0) throw Object.assign(new Error(`crossbind: the build ended with exit code ${exitCode}, so nothing went to App Store Connect.`), { exitCode });
-    return appOutputOf('ios');
+// What a publish with --submit hands to App Review through: the API, the app App Store Connect has, and the listing,
+// once App Store Connect would take the version to review.
+async function reviewableRelease(key, bundleId, listings) {
+    const call = appStoreCaller(key);
+    const appStoreId = await appStoreApp(call, bundleId);
+    await assertReviewable(call, appStoreId, appVersion());
+    return { call, appStoreId, listings };
+}
+
+// Hands the uploaded build to App Review, with the listing, and says how it went.
+async function submitToReview({ call, appStoreId, listings }, { before, isPhased, facts }) {
+    const { build, listed } = await submitRelease(call, {
+        appId: appStoreId, versionString: appVersion(), before, buildNumber: appBuildNumber(), listings, isPhased,
+    });
+    if (listings.length > 0) {
+        console.log(listed.length > 0
+            ? `crossbind: App Store Connect's listing changed in ${listed.join(', ')}, as ${APP_STORE_LISTING} has it.`
+            : `crossbind: App Store Connect's listing is the one ${APP_STORE_LISTING} has already.`);
+    }
+    const phases = isPhased ? ', to go out in phases over 7 days once released' : '';
+    console.log(`crossbind: ${facts.id} ${appVersion()} (build ${build}) went to App Review${phases}; Apple mails as the review goes.`);
 }
 
 const unreasonedError = (unreasoned) => new Error(`crossbind: App Store Connect refuses an iOS app that calls required reason API without Apple's reasons for it (ITMS-91053), and this app calls ${unreasoned.map(({ category, symbols }) => `${category} (${symbols.join(', ')})`).join(' and ')} with no reason in its privacy manifest. Give app.privacy Apple's reasons, as { fileTimestamp: ['C617.1'] }; Apple's "Describing use of required reason API" says what each covers. Nothing went to App Store Connect.`);
 
-// Builds an iOS app, archives it and uploads it to App Store Connect, whose TestFlight hands it out. All it needs is
-// checked before the build, which takes minutes: on a terminal, what is missing is asked for and set up; without one,
-// as in CI, every missing piece is named at once. The archived app then shows what required reason API it calls.
-export async function publishIos({ viteArgs }, { runVite }) {
-    if (process.platform !== 'darwin') throw new Error('crossbind: iOS apps build and go to App Store Connect on macOS, with Xcode.');
-    const isGuided = hasTerminal();
-    const key = appStoreKey();
-    const missing = [];
-    if (state.config.app.id === undefined) {
-        if (isGuided) await askAppId('App Store Connect', 'bundle id');
-        else missing.push(NO_APP_ID);
-    }
-    if (!appTeam()) {
-        if (isGuided) await askTeam();
-        else missing.push(NO_TEAM);
-    }
-    if (state.config.app.icon === undefined) {
-        if (isGuided) await askIcon();
-        else missing.push(NO_ICON);
-    }
-    if (missing.length > 0) throw new Error(missing.join('\n'));
-    if (appEncryption(state.config) === null) {
-        if (isGuided) await askEncryption();
-        else console.warn(NO_ENCRYPTION);
-    }
-    const hermesDsym = await resolveHermesDsym();
+// The publisher of an iOS app to App Store Connect, whose TestFlight hands it out: crossbind builds the app, which the
+// upload archives, and the archived app shows what required reason API it calls before it goes.
+export const appStore = {
+    name: 'app-store',
+    platform: 'ios',
+    store: 'App Store Connect',
 
-    const facts = { id: appId(state.config), team: appTeam() };
-    console.log(`crossbind: publishing ${facts.id} ${appVersion()} to App Store Connect for team ${facts.team}; building the app first.`);
-    let archive;
-    for (;;) {
-        const project = await buildIosApp(viteArgs, runVite);
+    async check({ isGuided, options: { shouldSubmit = false } }) {
+        if (process.platform !== 'darwin') throw new Error('crossbind: iOS apps build and go to App Store Connect on macOS, with Xcode.');
+        const key = appStoreKey();
+        const listings = shouldSubmit ? readAppStoreListing(state.config.paths.project) : [];
+        const missing = [];
+        if (shouldSubmit && !key) missing.push(NO_KEY_TO_SUBMIT);
+        if (state.config.app.id === undefined) {
+            if (isGuided) await askAppId('App Store Connect', 'bundle id');
+            else missing.push(NO_APP_ID);
+        }
+        if (!appTeam()) {
+            if (isGuided) await askTeam();
+            else missing.push(NO_TEAM);
+        }
+        if (state.config.app.icon === undefined) {
+            if (isGuided) await askIcon();
+            else missing.push(NO_ICON);
+        }
+        if (shouldSubmit && !isGuided && appEncryption(state.config) === null) missing.push(NO_ENCRYPTION_TO_SUBMIT);
+        if (missing.length > 0) return { missing };
+        if (appEncryption(state.config) === null) {
+            if (isGuided) await askEncryption();
+            else console.warn(NO_ENCRYPTION);
+        }
+        const facts = { id: appId(state.config), team: appTeam() };
+        const release = shouldSubmit ? await reviewableRelease(key, facts.id, listings) : null;
+        const hermesDsym = await resolveHermesDsym();
+
+        console.log(`crossbind: publishing ${facts.id} ${appVersion()} to App Store Connect for team ${facts.team}${release ? ' and App Review' : ''}; building the app first.`);
+        return { session: { key, hermesDsym, facts, release } };
+    },
+
+    // Xcode numbers a build without CROSSBIND_APP_BUILD_NUMBER after those App Store Connect has.
+    buildNumber: () => appBuildNumber(),
+
+    async upload({ isGuided, options: { isPhased = false } }, { key, hermesDsym, facts, release }, project) {
         console.log('crossbind: archiving the app, which takes a few minutes.');
-        archive = await untilDone(isGuided, () => archiveIosApp(project, { facts }));
+        const archive = await untilDone(isGuided, () => archiveIosApp(project, { facts }));
         const unreasoned = unreasonedImports(archivedBinary(archive), archivedPrivacy(archive));
-        if (unreasoned.length === 0) break;
-        if (!isGuided) throw unreasonedError(unreasoned);
-        await askPrivacy(unreasoned);
-        console.log('crossbind: building the app again, with those reasons in its privacy manifest.');
-    }
-    addHermesDsym(archive, hermesDsym);
-    console.log(`crossbind: uploading the app to App Store Connect for team ${facts.team} with ${key ? `the API key ${key.keyId}` : "Xcode's account"}, which signs it.`);
-    const build = appBuildNumber();
-    await untilDone(isGuided, () => uploadIosArchive(archive, {
-        team: facts.team, key, isBuildManaged: build === null, facts,
-    }));
-    const app = build === null ? `${facts.id} ${appVersion()}, numbered by Xcode after the builds App Store Connect has of it,` : `${facts.id} ${appVersion()} (build ${build})`;
-    console.log(`crossbind: ${app} is on App Store Connect. TestFlight hands it out once Apple has processed it, usually within 5 to 30 minutes, and Apple mails when it has.`);
-}
+        if (unreasoned.length > 0) {
+            if (!isGuided) throw unreasonedError(unreasoned);
+            await askPrivacy(unreasoned);
+            console.log('crossbind: building the app again, with those reasons in its privacy manifest.');
+            return { isRebuildAsked: true };
+        }
+        addHermesDsym(archive, hermesDsym);
+        console.log(`crossbind: uploading the app to App Store Connect for team ${facts.team} with ${key ? `the API key ${key.keyId}` : "Xcode's account"}, which signs it.`);
+        const build = appBuildNumber();
+        const before = release ? await newestBuild(release.call, release.appStoreId, appVersion()) : null;
+        await untilDone(isGuided, () => uploadIosArchive(archive, {
+            team: facts.team, key, isBuildManaged: build === null, facts,
+        }));
+        const app = build === null ? `${facts.id} ${appVersion()}, numbered by Xcode after the builds App Store Connect has of it,` : `${facts.id} ${appVersion()} (build ${build})`;
+        console.log(`crossbind: ${app} is on App Store Connect. TestFlight hands it out once Apple has processed it, usually within 5 to 30 minutes, and Apple mails when it has.`);
+        if (release) await submitToReview(release, { before, isPhased, facts });
+        return { isRebuildAsked: false };
+    },
+};
+
+export const publishIos = (options, tools) => publish(appStore, options, tools);

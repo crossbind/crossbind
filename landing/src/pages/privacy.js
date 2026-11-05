@@ -46,12 +46,13 @@ export default {
         {
             type: 'ul',
             items: [
-                '`crossbind app publish` uploads your app from your machine, or from your CI, straight to Google Play or App Store Connect, with your own accounts. None of it passes through crossbind.dev or crossbind cloud, and crossbind runs no server for it.',
+                '`crossbind app publish` uploads your app from your machine, or from your CI, straight to Google Play, App Store Connect or GitHub Releases, with your own accounts. None of it passes through crossbind.dev or crossbind cloud, and crossbind runs no server for it.',
                 "To publish to Google Play, the CLI can sign in with your Google account, in your browser, on Google's own page. It asks for one permission alone, to view and manage your Google Play Developer account (`androidpublisher`): not your email, your profile or anything else. Google sends your browser back to your own machine, and the CLI takes its tokens from Google directly.",
                 'Your machine keeps that sign-in in its own keychain: the macOS Keychain, a file only your Windows account can decrypt, or the Secret Service on Linux. A publish keeps the short-lived token it makes from it in memory alone.',
-                "The CLI uses the sign-in only for a publish you run: to read the version codes your app's tracks hold, upload the bundle and its native debug symbols, and put the release on the track you name. It shares it with no one and uses it for nothing else.",
+                "The CLI uses the sign-in only for a publish you run: to read the version codes your app's tracks hold, upload the bundle and its native debug symbols, put the release on the track you name, and update your app's store listing from the files your project holds for it. It shares it with no one and uses it for nothing else.",
                 'To end it, remove crossbind under Your connections to third-party apps & services, on the Security page of your Google Account, or delete the `crossbind google play` entry from your keychain.',
                 'To publish to App Store Connect, the CLI uses the account Xcode is signed in to, or an App Store Connect API key you give it, which stays on your machine.',
+                "To publish to GitHub Releases, the CLI uses the token you give it in `GH_TOKEN` or `GITHUB_TOKEN`, or the sign-in of the GitHub CLI, only for a release you publish: to find or make the release of your app's version, upload its files and put it out. It keeps no token of its own and passes none to your app's build.",
             ],
         },
 

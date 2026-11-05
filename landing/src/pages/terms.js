@@ -33,7 +33,7 @@ export default {
         { type: 'h2', id: 'stores', text: 'Publishing to the app stores' },
         {
             type: 'p',
-            text: '`crossbind app publish` acts for you, with your own accounts, on Google Play and App Store Connect, whose own terms cover what you publish there. What you publish, and under which developer account, is yours to decide and answer for.',
+            text: '`crossbind app publish` acts for you, with your own accounts, on Google Play, App Store Connect and GitHub, whose own terms cover what you publish there. What you publish, and under which developer account, is yours to decide and answer for.',
         },
 
         { type: 'h2', id: 'no-warranty', text: 'No warranty' },

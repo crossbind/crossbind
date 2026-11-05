@@ -19,7 +19,7 @@ vi.mock('../src/actions/googlePlay.js', () => ({
     },
     uploadBundle: async (appId, credentials, options) => {
         play.uploads.push({ appId, credentials, ...options });
-        return play.result ?? { versionCode: Number(vite.env.CROSSBIND_APP_BUILD_NUMBER), status: options.status };
+        return play.result ?? { versionCode: Number(vite.env.CROSSBIND_APP_BUILD_NUMBER), status: options.status, listed: [] };
     },
 }));
 const signing = {};
@@ -49,7 +49,7 @@ const opened = [];
 vi.mock('../src/utils/openUrl.js', () => ({ default: (url) => opened.push(url) }));
 vi.mock('../src/utils/systemConfig.js', () => ({ default: () => ({}) }));
 
-const { publishAndroid } = await import('../src/actions/publishAndroid.js');
+const { playRelease, publishAndroid, rolloutPercent } = await import('../src/actions/publishAndroid.js');
 
 let base;
 let printed;
@@ -70,7 +70,7 @@ const KEY = { CROSSBIND_ANDROID_KEYSTORE: '/keys/upload.p12', CROSSBIND_ANDROID_
 
 beforeEach(() => {
     base = fs.mkdtempSync(path.join(os.tmpdir(), 'crossbind-publish-'));
-    Object.assign(state.config, { app: { id: 'dev.example.demo' }, package: { version: '1.2.3' }, paths: { build: path.join(base, '.crossbind', 'build') } });
+    Object.assign(state.config, { app: { id: 'dev.example.demo' }, package: { version: '1.2.3' }, paths: { project: base, build: path.join(base, '.crossbind', 'build') } });
     Object.assign(play, { credentials: { account: 'play@demo.iam.gserviceaccount.com' }, kept: null, highest: 1002005, answers: [], result: null, uploads: [] });
     Object.assign(signing, { env: KEY, isSigned: true, made: 0 });
     Object.assign(terminal, { isThere: false, lines: [], yes: [] });
@@ -101,6 +101,8 @@ describe('publishing an Android app', () => {
             symbols: path.join(base, 'dist', 'demo-android-symbols.zip'),
             track: 'internal',
             status: 'completed',
+            userFraction: null,
+            listings: [],
         }]);
         const said = printed.join('\n');
         expect(said).toContain("crossbind: publishing dev.example.demo 1.2.3 to Google Play's internal track.");
@@ -121,7 +123,7 @@ describe('publishing an Android app', () => {
     });
 
     test('says a release Play took as a draft goes out once Play Console rolls it out', async () => {
-        play.result = { versionCode: 1002006, status: 'draft' };
+        play.result = { versionCode: 1002006, status: 'draft', listed: [] };
         await publishAndroid({ track: 'internal', status: 'completed', viteArgs: [] }, { runVite });
         const said = printed.join('\n');
         expect(said).toContain("dev.example.demo 1.2.3 (versionCode 1002006) is a draft on Google Play's internal track.");
@@ -156,6 +158,69 @@ describe('publishing an Android app', () => {
         await expect(publishAndroid({ track: 'internal', status: 'completed', viteArgs: [] }, { runVite }))
             .rejects.toMatchObject({ exitCode: 2, message: 'crossbind: the build ended with exit code 2, so nothing went to Google Play.' });
         expect(play.uploads).toEqual([]);
+    });
+});
+
+describe('a release on Google Play', () => {
+    const listing = path.join('store', 'google-play', 'en-US');
+
+    test('rolls out to the percent --rollout gives, and to everyone at 100%, but never as a draft', () => {
+        expect(['10', '12.5%', '0.01', '100'].map(rolloutPercent)).toEqual([10, 12.5, 0.01, 100]);
+        ['0', '101', 'ten', '-5', '10%%', '12.345', ''].forEach((value) => expect(() => rolloutPercent(value))
+            .toThrow(`--rollout takes the percent of the track's users a release reaches at first, above 0 and at most 100 with two decimals at most, as 10 or 12.5%, not ${value}.`));
+        expect(playRelease(undefined, undefined)).toEqual({ status: 'completed', rollout: null });
+        expect(playRelease(true, undefined)).toEqual({ status: 'draft', rollout: null });
+        expect(playRelease(undefined, 10)).toEqual({ status: 'inProgress', rollout: 10 });
+        expect(playRelease(undefined, 100)).toEqual({ status: 'completed', rollout: null });
+        expect(() => playRelease(true, 10)).toThrow('crossbind: --draft and --rollout do not go together');
+    });
+
+    test("goes up with the project's listing, at the share of users a staged rollout reaches, and says what changed", async () => {
+        fs.mkdirSync(path.join(base, listing), { recursive: true });
+        fs.writeFileSync(path.join(base, listing, 'title.txt'), 'Demo\n');
+        play.result = { versionCode: 1002006, status: 'inProgress', listed: ['en-US'] };
+
+        await publishAndroid({ track: 'production', status: 'inProgress', rollout: 10, viteArgs: [] }, { runVite });
+
+        expect(play.uploads[0]).toMatchObject({ track: 'production', status: 'inProgress', userFraction: 0.1, listings: [{ language: 'en-US', texts: { title: 'Demo' }, notes: {}, images: {} }] });
+        const said = printed.join('\n');
+        expect(said).toContain(`crossbind: Google Play's listing changed in en-US, as ${path.join('store', 'google-play')} has it.`);
+        expect(said).toContain("dev.example.demo 1.2.3 (versionCode 1002006) is out to 10% of the users of Google Play's production track: Play Console raises the share");
+
+        play.result = { versionCode: 1002007, status: 'completed', listed: [] };
+        await publishAndroid({ track: 'production', status: 'completed', viteArgs: [] }, { runVite });
+        expect(printed.join('\n')).toContain(`crossbind: Google Play's listing is the one ${path.join('store', 'google-play')} has already.`);
+    });
+
+    test("gives Play a staged rollout's share as a fraction with four decimals at most", async () => {
+        await publishAndroid({ track: 'production', status: 'inProgress', rollout: 33.3, viteArgs: [] }, { runVite });
+        expect(play.uploads[0].userFraction).toBe(0.333);
+    });
+
+    test("says a staged rollout Play made a draft of, as an app's first release, reaches all of the track's users", async () => {
+        play.result = { versionCode: 1002006, status: 'draft', listed: [] };
+        await publishAndroid({ track: 'production', status: 'inProgress', rollout: 10, viteArgs: [] }, { runVite });
+        const said = printed.join('\n');
+        expect(said).toContain("dev.example.demo 1.2.3 (versionCode 1002006) is a draft on Google Play's production track.");
+        expect(said).toContain("crossbind: Play stages updates alone, so that first release reaches all of the track's users, not 10% of them.");
+    });
+
+    test('says nothing of a listing whose folder holds release notes alone', async () => {
+        fs.mkdirSync(path.join(base, listing, 'changelogs'), { recursive: true });
+        fs.writeFileSync(path.join(base, listing, 'changelogs', 'default.txt'), 'Fixes.');
+        await publishAndroid({ track: 'internal', status: 'completed', viteArgs: [] }, { runVite });
+        expect(play.uploads[0].listings).toEqual([{ language: 'en-US', texts: {}, notes: { default: 'Fixes.' }, images: {} }]);
+        expect(printed.join('\n')).not.toContain('listing');
+    });
+
+    test('stops at a listing file Play would refuse, before anything is asked or built', async () => {
+        terminal.isThere = true;
+        fs.mkdirSync(path.join(base, listing), { recursive: true });
+        fs.writeFileSync(path.join(base, listing, 'title.txt'), 'A title longer than Google Play takes');
+        await expect(publishAndroid({ track: 'internal', status: 'completed', viteArgs: [] }, { runVite }))
+            .rejects.toThrow(`crossbind: ${path.join(listing, 'title.txt')} has 37 characters, and Google Play takes 30 at most.`);
+        expect(vite.runs).toBe(0);
+        expect(setup.questions).toEqual([]);
     });
 });
 
