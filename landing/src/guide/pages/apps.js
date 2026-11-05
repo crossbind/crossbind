@@ -142,7 +142,7 @@ const { data, cache, logs } = await app.paths();`,
                 ['`name`', "the name the app shows: its window's title, its menus, the label under its icon; `general.name` without it"],
                 ['`id`', 'the bundle id on Apple platforms, the application id on Android; `dev.crossbind.<name>` without it'],
                 ['`icon`', "a square PNG, at best 1024 × 1024, made into each platform's icon"],
-                ['`window`', "the desktop window's size and limits, `resizable`, `fullscreen` and `backgroundColor`"],
+                ['`window`', "the first desktop window's size and limits, `resizable` and `fullscreen`, and every window's `backgroundColor`"],
                 ['`category`, `copyright`', 'the category macOS and Linux menus list the app under, and the line its About panel shows'],
                 ['`urlSchemes`', 'the schemes whose links open the app'],
                 ['`singleInstance`', 'hands a second launch to the app that runs'],
@@ -186,7 +186,7 @@ if (update && confirm(\`Install \${update.version}?\`)) await updater.install();
         {
             type: 'ul',
             items: [
-                '**One window** on the desktop, and **Vite** for the page.',
+                '**Vite** for the page.',
                 '**macOS 11, iOS 15.1 and Android 13** or later: iOS on arm64 alone, Android on arm64-v8a and x86_64 with Android System WebView 116 or later.',
                 '**Linux** needs a glibc system with WebKitGTK 4.1, release 2.40 or later. **Windows** needs the WebView2 Runtime, which Windows 11 includes.',
                 `**Not everything is measured everywhere yet.** Signing with a real Developer ID and notarizing, Windows signing with a cloud key service, building on a Windows machine and several desktop functions on Linux and Windows have not been run; the [reference](${REFERENCE}#limits) lists what has been measured on each platform.`,

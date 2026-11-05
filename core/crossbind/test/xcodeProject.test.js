@@ -82,6 +82,18 @@ describe('an iOS app\'s Xcode project', () => {
         }
     });
 
+    test("lets an iPad's system and page open more of the app's windows where app.ios.multipleWindows says so", () => {
+        const root = fs.mkdtempSync(path.join(os.tmpdir(), 'crossbind-xcode-'));
+        const scenes = (multipleWindows) => {
+            const to = path.join(root, String(multipleWindows));
+            writeXcodeProject(to, { parts: [part(root, 'iphonesimulator')], identity: { id: 'com.example.demo', team: '' }, label: 'Demo', version: '1.0.0', multipleWindows });
+            return fs.readFileSync(path.join(to, 'Info.plist'), 'utf8');
+        };
+
+        expect(scenes(true)).toContain('<key>UIApplicationSupportsMultipleScenes</key>\n        <true/>');
+        expect(scenes(false)).toContain('<key>UIApplicationSupportsMultipleScenes</key>\n        <false/>');
+    });
+
     test("has the app's icon in an asset catalog, from which Xcode makes every size", () => {
         const root = fs.mkdtempSync(path.join(os.tmpdir(), 'crossbind-xcode-'));
         const to = path.join(root, 'demo-ios');

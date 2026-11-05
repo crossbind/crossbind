@@ -61,7 +61,8 @@ std::vector<std::string> pathsOf(ICoreWebView2WebMessageReceivedEventArgs *args)
     return paths;
 }
 
-HRESULT onMessage(const std::vector<std::string> &origins, ICoreWebView2WebMessageReceivedEventArgs *args) {
+// webView is the controller of the window the files were dropped on.
+HRESULT onMessage(void *webView, const std::vector<std::string> &origins, ICoreWebView2WebMessageReceivedEventArgs *args) {
     LPWSTR raw = nullptr;
     if (FAILED(args->TryGetWebMessageAsString(&raw))) return S_OK;
     const std::string text = take(raw);
@@ -74,7 +75,7 @@ HRESULT onMessage(const std::vector<std::string> &origins, ICoreWebView2WebMessa
     const double y = std::strtod(text.c_str() + second + 1, nullptr);
     std::vector<std::string> paths = pathsOf(args);
     // Its owner may ask the app's user, which no WebView2 event's handler may wait for.
-    if (!paths.empty()) onMainThread([paths = std::move(paths), x, y] { app::droppedFiles(paths, x, y); });
+    if (!paths.empty()) onMainThread([webView, paths = std::move(paths), x, y] { app::droppedFiles(webView, paths, x, y); });
     return S_OK;
 }
 
@@ -84,7 +85,9 @@ void takeDrops(void *webView, std::vector<std::string> origins) {
     addTopFrameScript(webView, dropScript(origins));
     auto *received = new Handler<ICoreWebView2WebMessageReceivedEventHandler, ICoreWebView2 *, ICoreWebView2WebMessageReceivedEventArgs *>(
         IID_ICoreWebView2WebMessageReceivedEventHandler,
-        [origins = std::move(origins)](ICoreWebView2 *, ICoreWebView2WebMessageReceivedEventArgs *args) -> HRESULT { return onMessage(origins, args); });
+        [webView, origins = std::move(origins)](ICoreWebView2 *, ICoreWebView2WebMessageReceivedEventArgs *args) -> HRESULT {
+            return onMessage(webView, origins, args);
+        });
     EventRegistrationToken token;
     coreWebView(webView)->add_WebMessageReceived(received, &token);
     received->Release();

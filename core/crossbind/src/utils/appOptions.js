@@ -204,6 +204,20 @@ export function appEncryption(config) {
     return encryption;
 }
 
+// Whether an iPad app's user, and its page, open more windows of it, as app.ios.multipleWindows says: iOS shows an
+// iPhone's one window alone.
+export function iosMultipleWindows(config) {
+    const ios = config.app.ios ?? {};
+    if (typeof ios !== 'object' || Array.isArray(ios)) throw new Error(`crossbind: app.ios ${JSON.stringify(ios)} is no object of multipleWindows, as { multipleWindows: true } is.`);
+    const unknown = Object.keys(ios).filter((key) => key !== 'multipleWindows');
+    if (unknown.length > 0) throw new Error(`crossbind: app.ios takes multipleWindows; ${unknown.join(', ')} is none of it.`);
+    const { multipleWindows = false } = ios;
+    if (typeof multipleWindows !== 'boolean') {
+        throw new Error(`crossbind: app.ios.multipleWindows ${JSON.stringify(multipleWindows)} is no boolean: set it to true for an iPad app's windows, or leave it out.`);
+    }
+    return multipleWindows;
+}
+
 // The version a Windows app's executable carries: package.json's, whose numbers are its file version.
 function windowsVersion(config) {
     const version = config.package?.version ?? '1.0.0';
@@ -438,7 +452,8 @@ export function appHeader(config, platform) {
         ...(color ? [`#define CROSSBIND_APP_BACKGROUND_COLOR 0x${color.slice(1).toLowerCase()}`] : []),
         ...PERMISSIONS.map((name) => `#define CROSSBIND_APP_PERMISSION_${name.toUpperCase()} ${name in permissions ? 1 : 0}`),
     ];
-    if (!DESKTOP.includes(platform)) return [comment, ...page, id, name, ''].join('\n');
+    const windows = platform === 'ios' && iosMultipleWindows(config) ? ['#define CROSSBIND_APP_IOS_MULTIPLE_WINDOWS 1'] : [];
+    if (!DESKTOP.includes(platform)) return [comment, ...page, ...windows, id, name, ''].join('\n');
     // The category goes to the Info.plist and the desktop entry, which the build writes later; any desktop refuses a
     // wrong one here.
     const copyright = appCopyright(config);

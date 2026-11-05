@@ -86,7 +86,11 @@ public:
       gtk_window_set_child(window, nullptr);
     }
 #else
-    gtk_container_remove(GTK_CONTAINER(window), widget);
+    // crossbind: the widget may sit in a box of the host's in the window.
+    (void)window;
+    if (GtkWidget *parent = gtk_widget_get_parent(widget)) {
+      gtk_container_remove(GTK_CONTAINER(parent), widget);
+    }
 #endif
   }
 

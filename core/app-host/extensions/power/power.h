@@ -6,7 +6,12 @@
 
 namespace crossbind::power {
 
-// Starts hearing of them, on the main thread once the app's window has opened.
+// Starts hearing of them, on the main thread once the app's first window has opened.
 void listen();
+
+#ifdef _WIN32
+// The window that hears of them for the app closed, on the main thread: the oldest left hears of them from now on.
+void windowClosed(void *window);
+#endif
 
 }  // namespace crossbind::power

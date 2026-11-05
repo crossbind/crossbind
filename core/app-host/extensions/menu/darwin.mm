@@ -44,6 +44,18 @@ MenuClicked onClick;
 CrossbindMenuTarget *target;
 NSStatusItem *tray;
 
+// A menu bar and its Window menu, which AppKit lists the app's windows in.
+struct Bar {
+    NSMenu *menu = nil;
+    NSMenu *windows = nil;
+};
+// The menus each window's page set, by the window's id, which the menu bar shows while that window is key, and the bar
+// the host started the app with, for a window that set none.
+std::map<uint64_t, Bar> bars;
+Bar startBar;
+// The Window menu the last bar made has, as windowMenu makes it.
+NSMenu *madeWindowsMenu;
+
 NSString *ns(const std::string &text) { return [NSString stringWithUTF8String:text.c_str()] ?: @""; }
 
 void onMain(void (^block)(void)) { dispatch_async(dispatch_get_main_queue(), block); }
@@ -81,13 +93,13 @@ void addEditItems(NSMenu *edit) {
     [edit addItem:roleItem("selectAll")];
 }
 
-// AppKit lists the app's windows below.
+// AppKit lists the app's windows below, once its bar shows.
 void addWindowItems(NSMenu *window) {
     [window addItem:roleItem("minimize")];
     [window addItem:item(@"Zoom", @selector(performZoom:), @"")];
     [window addItem:NSMenuItem.separatorItem];
     [window addItem:roleItem("close")];
-    NSApp.windowsMenu = window;
+    madeWindowsMenu = window;
 }
 
 const std::map<std::string, unichar> NAMED_KEYS{
@@ -154,6 +166,51 @@ NSMenuItem *itemOf(const MenuItem &page) {
     return made;
 }
 
+// The window of the app's whose bar a menu is in, by the bar's top menu; 0 for the tray's and the Dock's.
+uint64_t windowOfMenu(NSMenu *menu) {
+    while (menu.supermenu) menu = menu.supermenu;
+    for (const auto &[window, bar] : bars) {
+        if (bar.menu == menu) return window;
+    }
+    return 0;
+}
+
+// The window of the app's of an NSWindow: a sheet's parent, whose bar shows while the sheet is key.
+uint64_t idOf(NSWindow *window) {
+    if (window.sheetParent) window = window.sheetParent;
+    for (const Window &open : openWindows()) {
+        if ((__bridge NSWindow *)open.native() == window) return open.id();
+    }
+    return 0;
+}
+
+// The menu bar shows the menus of this window's page, or those the app started with, and the app menu moves to them.
+void showBarOf(uint64_t window) {
+    const auto found = bars.find(window);
+    const Bar shown = found == bars.end() ? startBar : found->second;
+    if (!shown.menu || shown.menu == NSApp.mainMenu) return;
+    if (NSMenuItem *app = NSApp.mainMenu.itemArray.firstObject) {
+        [NSApp.mainMenu removeItem:app];
+        [shown.menu insertItem:app atIndex:0];
+    }
+    NSApp.mainMenu = shown.menu;
+    NSApp.windowsMenu = shown.windows;
+}
+
+// The key window's bar shows, from the first menus a page sets on.
+void watchKeyWindows() {
+    static bool isWatching = false;
+    if (isWatching) return;
+    isWatching = true;
+    startBar = Bar{NSApp.mainMenu, NSApp.windowsMenu};
+    [NSNotificationCenter.defaultCenter addObserverForName:NSWindowDidBecomeKeyNotification
+                                                    object:nil
+                                                     queue:nil
+                                                usingBlock:^(NSNotification *note) {
+                                                  showBarOf(idOf(note.object));
+                                                }];
+}
+
 }  // namespace
 }  // namespace crossbind::menu
 
@@ -166,11 +223,11 @@ NSMenuItem *itemOf(const MenuItem &page) {
         checked = item.state == NSControlStateValueOn;
     }
     NSString *itemId = item.representedObject;
-    if (crossbind::menu::onClick && itemId.length > 0) crossbind::menu::onClick(itemId.UTF8String, checked);
+    if (crossbind::menu::onClick && itemId.length > 0) crossbind::menu::onClick(crossbind::menu::windowOfMenu(item.menu), itemId.UTF8String, checked);
 }
 
 - (void)trayClicked:(id)sender {
-    crossbind::app::emitEvent("tray");
+    crossbind::app::emitEventToFront("tray");
 }
 
 // AppKit enables an item whose target takes its action, unless the item says otherwise.
@@ -194,28 +251,38 @@ NSMenuItem *itemOf(const MenuItem &page) {
 
 namespace crossbind::menu {
 
-// The page's menus follow the app menu, which the app keeps from the menus the host starts it with.
-void setMenu(std::vector<MenuItem> menus, MenuClicked clicked, std::function<void(Failure)> done) {
+// A window's menus follow the app menu, which the app keeps from the menus the host starts it with, and show while it
+// is the key window.
+void setMenu(uint64_t window, std::vector<MenuItem> menus, MenuClicked clicked, std::function<void(Failure)> done) {
     dispatch_async(dispatch_get_main_queue(), ^{
-      NSMenu *windows = NSApp.windowsMenu;
+      if (!windowOf(window)) {
+          done(std::string("crossbind: the page's window has closed"));
+          return;
+      }
       try {
           if (!target) target = [CrossbindMenuTarget new];
-          // windowMenu sets it again.
-          NSApp.windowsMenu = nil;
+          watchKeyWindows();
+          madeWindowsMenu = nil;
           NSMenu *bar = [NSMenu new];
           for (const auto &menu : menus) [bar addItem:itemOf(menu)];
-          if (NSMenuItem *app = NSApp.mainMenu.itemArray.firstObject) {
-              [NSApp.mainMenu removeItem:app];
-              [bar insertItem:app atIndex:0];
-          }
+          // The bar it replaces lets go of the app menu first.
+          const bool isShown = bars.count(window) && bars[window].menu == NSApp.mainMenu;
+          if (isShown) showBarOf(0);
+          bars[window] = Bar{bar, madeWindowsMenu};
           onClick = clicked;
-          NSApp.mainMenu = bar;
+          if (isShown || idOf(NSApp.keyWindow) == window) showBarOf(window);
           done(std::nullopt);
       } catch (const std::exception &error) {
-          NSApp.windowsMenu = windows;
           done(std::string(error.what()));
       }
     });
+}
+
+void dropMenus(uint64_t window) {
+    const auto found = bars.find(window);
+    if (found == bars.end()) return;
+    if (found->second.menu == NSApp.mainMenu) showBarOf(0);
+    bars.erase(found);
 }
 
 namespace {
@@ -235,10 +302,11 @@ void answerPopup(NSMenu *menu, CrossbindPopupTarget *popup) {
 
 // WKWebView's points are the page's CSS pixels at its zoom, from its top left. The menu's loop runs the main queue's
 // blocks, and so the page's next popup, which waits for none.
-void popupMenu(std::vector<MenuItem> items, double x, double y, std::function<void(Failure, std::optional<std::string>)> done) {
+void popupMenu(uint64_t window, std::vector<MenuItem> items, double x, double y, std::function<void(Failure, std::optional<std::string>)> done) {
     dispatch_async(dispatch_get_main_queue(), ^{
       static bool isOpen = false;
-      WKWebView *view = (__bridge WKWebView *)appWebView();
+      const std::optional<Window> open = windowOf(window);
+      WKWebView *view = open ? (__bridge WKWebView *)open->webView() : nil;
       if (!view.window) {
           done(std::string("crossbind: the app has no window to show a menu in"), std::nullopt);
           return;

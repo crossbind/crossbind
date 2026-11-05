@@ -110,11 +110,29 @@ void checkTrayItems(const std::vector<MenuItem> &items, const std::string &menu)
     }
 }
 
-// A click the page hears of as the event menu.
-void menuClicked(std::string id, std::optional<bool> checked) {
+// A click the pages hear of as the event menu: one in a window's menus reaches the page that window shows, and one in the
+// tray's menu or the Dock's the page in front that listens.
+void menuClicked(uint64_t window, std::string id, std::optional<bool> checked) {
     Value::Object click{{"id", std::move(id)}};
     if (checked) click.emplace_back("checked", *checked);
-    app::emitEvent("menu", Value(std::move(click)).json());
+    const std::string json = Value(std::move(click)).json();
+#if !defined(__ANDROID__)
+    if (window != 0) {
+        if (const std::optional<Window> open = windowOf(window)) app::emitEvent("menu", json, open->page().id());
+        return;
+    }
+#endif
+    app::emitEventToFront("menu", json);
+}
+
+// The window of the page whose call sets menus or opens one: the app's own code has none. A phone's platform refuses
+// menus itself.
+uint64_t windowOfCall(const Call &call) {
+    const uint64_t window = call.page().windowId();
+#if !defined(__ANDROID__) && !TARGET_OS_IPHONE
+    if (window == 0) throw std::invalid_argument("crossbind: " + call.name() + " sets the menus of a page's window, which the app's own code has none of");
+#endif
+    return window;
 }
 
 }  // namespace
@@ -128,14 +146,22 @@ void crossbind_extension_menu(crossbind::Registry &registry) {
     using crossbind::Call;
     trayId = registry.options()["id"].asString("");
 #if defined(__linux__) && !defined(__ANDROID__)
-    registry.onWindow([](const crossbind::Window &) { keepPresses(); });
+    registry.onWindow([](const crossbind::Window &window) { keepPresses(window.webView()); });
 #elif defined(__APPLE__) && !TARGET_OS_IPHONE
     registry.onWindow([](const crossbind::Window &) { answerDockMenu(); });
 #endif
-    registry.function("menu.set", [](Call call) { setMenu(menuItems(call.options()["menus"]), menuClicked, answered(call)); });
+    registry.onWindowClosed([](const crossbind::Window &window) { dropMenus(window.id()); });
+#ifdef _WIN32
+    registry.onQuit(quitTray);
+#endif
+    registry.function("menu.set", [](Call call) {
+        std::vector<MenuItem> menus = menuItems(call.options()["menus"]);
+        setMenu(windowOfCall(call), std::move(menus), menuClicked, answered(call));
+    });
     registry.function("menu.popup", [](Call call) {
         const crossbind::Value &options = call.options();
-        popupMenu(menuItems(options["items"]), options["x"].asNumber(), options["y"].asNumber(), [call](Failure failure, std::optional<std::string> id) {
+        std::vector<MenuItem> items = menuItems(options["items"]);
+        popupMenu(windowOfCall(call), std::move(items), options["x"].asNumber(), options["y"].asNumber(), [call](Failure failure, std::optional<std::string> id) {
             if (failure) {
                 call.reject(*failure);
             } else {
@@ -159,7 +185,7 @@ void crossbind_extension_menu(crossbind::Registry &registry) {
     // names its own.
     registry.onNotification([](const crossbind::Notification &notification) {
         if (notification.isTap() && !notification.isRemote() && notification.id().rfind(NOTIFICATION_ID_PREFIX, 0) == 0) {
-            crossbind::app::emitEvent("notification");
+            crossbind::app::emitEventToFront("notification");
         }
     });
     registry.function("notification.show", [](Call call) {

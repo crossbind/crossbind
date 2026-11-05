@@ -16,7 +16,8 @@ void takeDrops(void *, std::vector<std::string>) {}
 #else
 namespace {
 
-__weak WKWebView *dropTarget;
+// The app's windows' webviews, which take drops for their pages.
+NSHashTable<WKWebView *> *dropTargets;
 std::vector<std::string> dropOrigins;
 // WebKit's own drop, which page-drops goes before.
 IMP webKitDrop;
@@ -29,7 +30,7 @@ std::string originOf(NSURL *url) {
 
 BOOL performDrop(id self, SEL command, id<NSDraggingInfo> sender) {
     WKWebView *view = self;
-    if (view == dropTarget && view.URL && std::find(dropOrigins.begin(), dropOrigins.end(), originOf(view.URL)) != dropOrigins.end()) {
+    if ([dropTargets containsObject:view] && view.URL && std::find(dropOrigins.begin(), dropOrigins.end(), originOf(view.URL)) != dropOrigins.end()) {
         NSArray<NSURL *> *files = [sender.draggingPasteboard readObjectsForClasses:@[ NSURL.class ]
                                                                            options:@{NSPasteboardURLReadingFileURLsOnlyKey : @YES}];
         std::vector<std::string> paths;
@@ -39,7 +40,7 @@ BOOL performDrop(id self, SEL command, id<NSDraggingInfo> sender) {
         if (!paths.empty()) {
             NSPoint at = [view convertPoint:sender.draggingLocation fromView:nil];
             if (!view.isFlipped) at.y = NSHeight(view.bounds) - at.y;
-            crossbind::app::droppedFiles(paths, at.x / view.pageZoom, at.y / view.pageZoom);
+            crossbind::app::droppedFiles((__bridge const void *)view, paths, at.x / view.pageZoom, at.y / view.pageZoom);
         }
     }
     return reinterpret_cast<BOOL (*)(id, SEL, id<NSDraggingInfo>)>(webKitDrop)(self, command, sender);
@@ -50,7 +51,8 @@ BOOL performDrop(id self, SEL command, id<NSDraggingInfo> sender) {
 // webview makes a WKWebView of WebKit's class, whose performDragOperation: the host's goes before, for every WKWebView
 // of the app's: one an extension makes drops as WebKit's do.
 void takeDrops(void *webView, std::vector<std::string> origins) {
-    dropTarget = (__bridge WKWebView *)webView;
+    if (!dropTargets) dropTargets = [NSHashTable weakObjectsHashTable];
+    [dropTargets addObject:(__bridge WKWebView *)webView];
     dropOrigins = std::move(origins);
     Method method = class_getInstanceMethod(WKWebView.class, @selector(performDragOperation:));
     if (webKitDrop || !method) return;

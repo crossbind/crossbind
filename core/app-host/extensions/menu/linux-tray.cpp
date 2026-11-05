@@ -178,7 +178,7 @@ void clicked(gint32 id) {
                                                     g_variant_new_array(G_VARIANT_TYPE("(ias)"), nullptr, 0)),
                                       nullptr);
     }
-    if (onClick && !item.id.empty()) onClick(item.id, item.checked);
+    if (onClick && !item.id.empty()) onClick(0, item.id, item.checked);
 }
 
 void returnNoEntry(GDBusMethodInvocation *invocation, gint32 id) {
@@ -294,7 +294,7 @@ GVariant *itemProperty(GDBusConnection *, const gchar *, const gchar *, const gc
 void itemCalled(GDBusConnection *, const gchar *, const gchar *, const gchar *, const gchar *method, GVariant *,
                 GDBusMethodInvocation *invocation, gpointer) {
     const std::string name = method;
-    if (name == "Activate" || (name == "ContextMenu" && !hasMenu())) app::emitEvent("tray");
+    if (name == "Activate" || (name == "ContextMenu" && !hasMenu())) app::emitEventToFront("tray");
     g_dbus_method_invocation_return_value(invocation, nullptr);
 }
 

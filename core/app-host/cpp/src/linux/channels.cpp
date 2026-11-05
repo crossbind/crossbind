@@ -3,8 +3,12 @@
 
 #include <webkit2/webkit2.h>
 
+#include <algorithm>
 #include <cstdio>
 #include <cstring>
+#include <string>
+#include <utility>
+#include <vector>
 
 namespace {
 
@@ -121,6 +125,7 @@ void onSchemeRequest(WebKitURISchemeRequest *request, gpointer data) {
     const char *query = uri ? std::strchr(uri, '?') : nullptr;
     incoming.query = query ? query + 1 : "";
     incoming.body = readBody(request);
+    incoming.webView = webkit_uri_scheme_request_get_web_view(request);
     if (SoupMessageHeaders *headers = webkit_uri_scheme_request_get_http_headers(request)) {
         soup_message_headers_foreach(
             headers,
@@ -140,7 +145,8 @@ void onSchemeRequest(WebKitURISchemeRequest *request, gpointer data) {
 void installReplyChannel(void *webView, const char *name, MessageHandler handler) {
     WebKitUserContentManager *manager = webkit_web_view_get_user_content_manager(WEBKIT_WEB_VIEW(webView));
     const std::string signal = std::string("script-message-with-reply-received::") + name;
-    g_signal_connect(manager, signal.c_str(), G_CALLBACK(onMessage), new MessageHandler(std::move(handler)));
+    g_signal_connect_data(manager, signal.c_str(), G_CALLBACK(onMessage), new MessageHandler(std::move(handler)),
+        [](gpointer owned, GClosure *) { delete static_cast<MessageHandler *>(owned); }, static_cast<GConnectFlags>(0));
     webkit_user_content_manager_register_script_message_handler_with_reply(manager, name, nullptr);
 }
 
@@ -159,9 +165,13 @@ void addTopFrameScript(void *webView, const std::string &source) {
     webkit_user_script_unref(script);
 }
 
-// The page's requests are secure-context requests, and CORS applies to them as it does to https.
+// The page's requests are secure-context requests, and CORS applies to them as it does to https. Every window's webview
+// shares one context, which takes the scheme once, and each request names its webview.
 void registerSchemeHandler(void *target, const char *scheme, SchemeHandler handler) {
     WebKitWebContext *context = webkit_web_view_get_context(WEBKIT_WEB_VIEW(target));
+    static std::vector<std::pair<WebKitWebContext *, std::string>> registered;
+    if (std::find(registered.begin(), registered.end(), std::make_pair(context, std::string(scheme))) != registered.end()) return;
+    registered.emplace_back(context, scheme);
     webkit_web_context_register_uri_scheme(context, scheme, onSchemeRequest, new SchemeHandler(std::move(handler)),
         [](gpointer owned) { delete static_cast<SchemeHandler *>(owned); });
     WebKitSecurityManager *security = webkit_web_context_get_security_manager(context);

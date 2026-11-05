@@ -74,6 +74,8 @@ bool cancelCall(const std::shared_ptr<StateOf<Call>> &state);
 void invoke(const std::string &name, Value options, std::function<void(Failure, Value)> done);
 // Adds the host's own functions, the ones crossbind/app calls.
 void appFunctions(Registry &registry);
+// Adds crossbind/app's windows.* among them.
+void windowFunctions(Registry &registry);
 // Runs the entry of each of the app's extensions with native code through startExtension(), from the file crossbind
 // writes of them into the host's build.
 void extensionEntries();
@@ -114,11 +116,23 @@ void started();
 // The launch the app started with, as start() was given it before its extensions start, its links among its arguments;
 // none on a phone.
 Launch &firstLaunch();
-// Runs the extensions' onWindow, on the main thread, as a window of the app's has opened, with appWindow() and
-// appWebView() set, before its page loads: the window's id.
-uint64_t windowOpened(void *window, void *webView);
-// Runs the extensions' onWindowClosed, on the main thread, as the window of this id closes.
+// Runs the extensions' onWindow, on the main thread, as a window of the app's has opened, before its page loads, with
+// the name crossbind/app's windows.open() gave it, if any: the window's id. The window comes to the front, and the pages
+// hear of it as the event window-opened.
+uint64_t windowOpened(void *window, void *webView, std::string name = "");
+// Runs the extensions' onWindowClosed, on the main thread, as the window of this id closes, whose page goes with it, and
+// the pages hear of it as the event window-closed.
 void windowClosed(uint64_t id);
+// The running module lets go of what the page of the window of this id held, as the window closed; from any thread.
+void closeChannel(uint64_t window);
+// The window of this id came to the front, as its user used it, on the main thread.
+void windowFocused(uint64_t id);
+// The name windows.open() gave the open window of this id, or "" for none; from any thread.
+std::string nameOfWindow(uint64_t id);
+// The open window in front, of the window its user used last, or 0 for none; from any thread.
+uint64_t frontWindow();
+// The open windows, the one in front first, then as their user used them last; from any thread.
+std::vector<uint64_t> frontWindows();
 // Runs the extensions' onPage, on the module's thread, as a page of the app's starts.
 void pageStarted(const Page &page);
 // Runs the extensions' onQuit, once, in an app that runs on with its launch.
@@ -160,9 +174,13 @@ std::string jsonWithBytes(const Value &value, std::vector<Value::Bytes> &bytes);
 Value valueWithBytes(std::string_view text, const std::vector<Value::Bytes> &bytes);
 // Whether the main thread answers the waits of <crossbind/app.h>: from the module's start until the app quits.
 void answerWaits(bool answer);
-// Sends an event of the app's native code to the page, from any thread, through the app's one module, which gets those
-// sent before it booted as it boots. A held one waits for the page to ask for the events of its name.
-void postEvent(std::string event, std::string json, bool isHeld = false);
+// The pages an event reaches: every one that listens to its name, the one page given, or the page in front that
+// listens, of the window its user used last.
+enum class Reach { everyPage, onePage, frontPage };
+// Sends an event of the app's native code to the pages, from any thread, through the app's one module, which gets those
+// sent before it booted as it boots. A held one waits for a page to ask for the events of its name, and reaches the
+// page in front that asked, whatever reach says.
+void postEvent(std::string event, std::string json, bool isHeld = false, Reach reach = Reach::everyPage, uint64_t page = 0);
 
 // Runs every JS task on one thread, as JSI requires, and drains Hermes' microtasks after each, so a reply that waits
 // on a promise goes out before the next message.
@@ -199,20 +217,25 @@ public:
 
     // Loads the host bundle, Hermes bytecode or source, and starts the module. Returns an error, or nothing.
     std::string boot(std::string bundle, const std::string &sourceUrl, const std::string &dataPath);
+    // The token of the channel of a window's pages, 0 for an Android page's, for its top frame alone: every message and
+    // every call made as a crossbind:// request carries it, which names the window, so markup and frames that cannot read
+    // the top frame's globals cannot make one. From any thread, before the window's page loads.
+    std::string addWindow(uint64_t window);
     // A page message, which the host bundle answers through __host_reply.
     void receive(std::string message, ReplyFn reply);
     // The page's files, and the calls whose bytes are the request or response body.
     void serve(SchemeRequest request, SchemeRespond respond);
-    // A new page replaced the one that held the module's objects.
-    void reset();
-    // An event for the page, from any thread.
-    void postEvent(std::string event, std::string json, bool isHeld = false);
+    // A new page replaced the one that held the module's objects in the window of this id, as the webview committed it.
+    void reset(uint64_t window);
+    // The window of this id closed: its page's calls are cancelled, and what it held let go of.
+    void closed(uint64_t window);
+    // An event for the pages, from any thread.
+    void postEvent(std::string event, std::string json, bool isHeld, Reach reach, uint64_t page);
     void stop() {
         // A wait of the module's code would hold the join below forever.
         answerWaits(false);
         js_.stop();
     }
-    const std::string &token() const { return token_; }
 
     // The dev server's origin, which every response lets read it, as its page needs; empty for none, as a page of
     // another origin that page-navigation loads reads nothing of the app's.
@@ -226,36 +249,49 @@ private:
         std::string reply;
         std::string name;
     };
+    // A window's channel, on the JS thread: the page it shows; the functions that page passed, by its id for each, while
+    // the module holds them, whose weak references belong to the JS thread and the runtime, which a Core outlives, as
+    // nothing deletes one; its calls that wait for their answers, by the page's id of each, which a new page cancels;
+    // and the ids of those it cancelled before they came, as a call that carries bytes takes another channel than its
+    // cancel. A new page counts anew, and what the one before passed reaches no page.
+    struct Channel {
+        long long page = 0;
+        std::unordered_map<long long, std::pair<std::weak_ptr<PageFunction>, jsi::WeakObject>> pageFunctions;
+        std::unordered_map<long long, OpenCall> openCalls;
+        std::unordered_set<long long> cancelledEarly;
+    };
+    // What the host bundle's reply of a message answers, and the window whose page sent it.
+    struct Reply {
+        ReplyFn answer;
+        uint64_t window;
+    };
 
     void installHostFunctions(jsi::Runtime &rt);
     // Hands the reply of this call of the page's its text, once; on the JS thread.
     void reply(const std::string &call, const std::string &text);
+    // The window whose token this is, on the JS thread; none for a token of no open window's.
+    std::optional<uint64_t> windowOfToken(const std::string &token) const;
+    // The window that shows the page of this id, on the JS thread; none once it went.
+    std::optional<uint64_t> windowOfPage(long long page) const;
     // A call of the page's to one of the app's functions, which call names the reply of, and id the page's own.
     void callApp(jsi::Runtime &rt, std::string call, const std::string &name, const jsi::Value &options, long long id, bool wantsMessages);
-    // The page cancelled its call of this id, which it sent in a frame or as a message.
-    void cancelCall(long long id, bool isFramed);
-    // The frame of a call, whose reply answers the request.
-    void serveFrame(SchemeRequest request, SchemeRespond respond);
+    // The page whose message call names the reply of cancelled its call of this id, which it sent in a frame or as a
+    // message.
+    void cancelCall(const std::string &call, long long id, bool isFramed);
+    // Cancels each call of a channel's page that waits for its answer.
+    void cancelOpenCalls(Channel &channel);
+    // The frame of a call of the window's page, whose reply answers the request; on the JS thread.
+    void serveFrame(jsi::Runtime &rt, uint64_t window, SchemeRequest request, SchemeRespond respond);
     // The module's function for one the page passed: the same one while the module holds it.
-    jsi::Value pageFunction(jsi::Runtime &rt, long long id);
+    jsi::Value pageFunction(jsi::Runtime &rt, long long page, long long id);
     void dropped(long long page, long long id, double passed);
 
     JsThread js_;
-    // The functions the page passed, by its id for each, while the module holds them. A new page counts anew, and the
-    // functions of the one before reach no page. Their weak references belong to the JS thread and the runtime, which
-    // a Core outlives, as nothing deletes one.
-    long long page_ = 0;
-    uint64_t window_ = 0;
-    std::unordered_map<long long, std::pair<std::weak_ptr<PageFunction>, jsi::WeakObject>> pageFunctions_;
-    // The page's calls that wait for their answers, by the page's id of each, which a new page cancels; and the ids of
-    // those it cancelled before they came, as a call that carries bytes takes another channel than its cancel.
-    std::unordered_map<long long, OpenCall> openCalls_;
-    std::unordered_set<long long> cancelledEarly_;
+    // The windows' channels, by their ids, and their tokens, on the JS thread.
+    std::unordered_map<uint64_t, Channel> channels_;
+    std::unordered_map<std::string, uint64_t> tokens_;
     std::string pageDir_;
-    // Made at boot for the page's top frame. Every message and every call made as a crossbind:// request carries it, so
-    // markup and frames that cannot read the top frame's globals cannot make one.
-    std::string token_;
-    std::unordered_map<std::string, ReplyFn> replies_;
+    std::unordered_map<std::string, Reply> replies_;
     long long nextReply_ = 0;
 };
 

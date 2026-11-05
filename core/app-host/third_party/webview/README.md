@@ -28,18 +28,10 @@ Only `core/include` is kept.
   `javascript-can-access-clipboard`, which let a page's script paste from the clipboard with
   `document.execCommand('paste')`: a page reads it on its user's gesture, once WebKit's Paste menu or the app host lets
   it. WebKitGTK's setting let script cut and copy as well, which now take a gesture there.
-- `detail/backends/cocoa_webkit.hh` sizes the window's content in `set_size`, not its frame, as the other backends do:
-  the app's window opens with the page size crossbind.config.js gives.
-- `detail/backends/win32_edge.hh` takes the minimum and maximum sizes as the content's, in logical pixels, as the size
-  itself, and turns them into frame sizes at the window's DPI when Windows asks; upstream passed the numbers to Windows
-  as frame pixels. Maximized, the window keeps to its monitor on a side whose maximum is larger, where upstream made it
-  the maximum.
-- `detail/backends/win32_edge.hh` opens the window in the middle of its monitor's work area, and
-  `detail/backends/gtk_webkitgtk.hh` with GTK 3 in the middle of the screen, as the macOS backend does; upstream left
-  where to the system. A GTK 3 window that does not resize takes the size of what it holds, so its webview asks for the
-  size `set_size` gives before the window shows.
-- `detail/platform/windows/dpi.hh` counts a window's menu bar in its frame, so the page's minimum size and its size
-  after a change of DPI leave the bar out, as the size `set_size` gives does.
+- `detail/platform/windows/dpi.hh` counts a window's menu bar in its frame, so the page's size, its minimum and its size
+  after a change of DPI leave the bar out.
+- `detail/platform/linux/gtk/compat.hh` takes the webview out of the widget that holds it, which may be the app host's
+  box in the window, where upstream took it out of the window.
 - `detail/native_library.hh` loads a library named without a path from System32 alone. webview first tries
   `WebView2Loader.dll`, which no crossbind app ships, so otherwise a copy in the working directory or on `PATH` would
   load into the app.

@@ -10,7 +10,11 @@
 namespace crossbind::dialog {
 namespace {
 
-HWND window() { return static_cast<HWND>(appWindow()); }
+// The window a dialog is modal to: the calling page's, or the app's oldest.
+HWND parentOf(uint64_t window) {
+    const std::optional<Window> open = windowOf(window);
+    return static_cast<HWND>(open ? open->native() : appWindow());
+}
 
 // A message dialog's own buttons are numbered past the common ones, IDOK to IDCONTINUE.
 constexpr int FIRST_BUTTON = 100;
@@ -78,8 +82,8 @@ void report(const char *dialog, HRESULT result) {
 }  // namespace
 
 // Modal to the app's window, as the system's file dialogs are.
-void showOpenDialog(app::OpenOptions options, std::function<void(Picked)> done) {
-    onMainThread([options = std::move(options), done = std::move(done)] {
+void showOpenDialog(uint64_t window, app::OpenOptions options, std::function<void(Picked)> done) {
+    onMainThread([window, options = std::move(options), done = std::move(done)] {
         IFileOpenDialog *dialog = nullptr;
         if (const HRESULT made = CoCreateInstance(CLSID_FileOpenDialog, nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&dialog)); FAILED(made)) {
             report("open", made);
@@ -93,7 +97,7 @@ void showOpenDialog(app::OpenOptions options, std::function<void(Picked)> done) 
         setUp(dialog, options.title, options.defaultPath, types);
         Picked picked;
         IShellItemArray *items = nullptr;
-        const HRESULT shown = dialog->Show(window());
+        const HRESULT shown = dialog->Show(parentOf(window));
         report("open", shown);
         if (SUCCEEDED(shown) && SUCCEEDED(dialog->GetResults(&items))) {
             picked.emplace();
@@ -112,8 +116,8 @@ void showOpenDialog(app::OpenOptions options, std::function<void(Picked)> done) 
     });
 }
 
-void showSaveDialog(app::SaveOptions options, std::function<void(std::optional<std::string>)> done) {
-    onMainThread([options = std::move(options), done = std::move(done)] {
+void showSaveDialog(uint64_t window, app::SaveOptions options, std::function<void(std::optional<std::string>)> done) {
+    onMainThread([window, options = std::move(options), done = std::move(done)] {
         IFileSaveDialog *dialog = nullptr;
         if (const HRESULT made = CoCreateInstance(CLSID_FileSaveDialog, nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&dialog)); FAILED(made)) {
             report("save", made);
@@ -132,7 +136,7 @@ void showSaveDialog(app::SaveOptions options, std::function<void(std::optional<s
         }
         std::optional<std::string> file;
         IShellItem *item = nullptr;
-        const HRESULT shown = dialog->Show(window());
+        const HRESULT shown = dialog->Show(parentOf(window));
         report("save", shown);
         if (SUCCEEDED(shown) && SUCCEEDED(dialog->GetResult(&item))) {
             file = pathOf(item);
@@ -144,8 +148,8 @@ void showSaveDialog(app::SaveOptions options, std::function<void(std::optional<s
 }
 
 // Modal to the app's window, as a message box is.
-void showMessageDialog(app::MessageOptions options, std::function<void(int)> done) {
-    onMainThread([options = std::move(options), done = std::move(done)] {
+void showMessageDialog(uint64_t window, app::MessageOptions options, std::function<void(int)> done) {
+    onMainThread([window, options = std::move(options), done = std::move(done)] {
         const std::wstring title = wide(appName());
         const std::wstring message = wide(options.message);
         const std::wstring detail = wide(options.detail);
@@ -160,7 +164,7 @@ void showMessageDialog(app::MessageOptions options, std::function<void(int)> don
         for (size_t i = 0; i < labels.size(); i += 1) buttons.push_back({FIRST_BUTTON + static_cast<int>(i), labels[i].c_str()});
         TASKDIALOGCONFIG config{};
         config.cbSize = sizeof config;
-        config.hwndParent = window();
+        config.hwndParent = parentOf(window);
         // Escape and closing the dialog answer IDCANCEL.
         config.dwFlags = TDF_ALLOW_DIALOG_CANCELLATION | TDF_POSITION_RELATIVE_TO_WINDOW;
         config.dwCommonButtons = buttons.empty() ? TDCBF_OK_BUTTON : 0;

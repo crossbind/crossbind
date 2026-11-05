@@ -55,7 +55,7 @@ gboolean onDragDrop(GtkWidget *widget, GdkDragContext *drag, gint x, gint y, gui
     forget(drops);
     if (!paths.empty()) {
         const double zoom = webkit_web_view_get_zoom_level(view);
-        app::droppedFiles(paths, x / zoom, y / zoom);
+        app::droppedFiles(view, paths, x / zoom, y / zoom);
     }
     return FALSE;
 }
@@ -64,6 +64,12 @@ gboolean onDragDrop(GtkWidget *widget, GdkDragContext *drag, gint x, gint y, gui
 
 void takeDrops(void *webView, std::vector<std::string> origins) {
     auto *drops = new Drops{std::move(origins)};
+    // The webview's drops go with it.
+    g_object_set_data_full(G_OBJECT(webView), "crossbind-drops", drops, [](gpointer owned) {
+        auto *gone = static_cast<Drops *>(owned);
+        forget(*gone);
+        delete gone;
+    });
     g_signal_connect(WEBKIT_WEB_VIEW(webView), "drag-data-received", G_CALLBACK(onDragData), drops);
     g_signal_connect(WEBKIT_WEB_VIEW(webView), "drag-drop", G_CALLBACK(onDragDrop), drops);
 }

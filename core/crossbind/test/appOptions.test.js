@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'vitest';
 import {
     appBackgroundColor, appCategory, appCopyright, appDisplayName, appEncryption, appHeader, appId, appPermissions, appPrivacy, appUpdater,
-    appUrlSchemes, appWindow, hostExtensionOptions, urlSchemeOwners, usageDescriptions,
+    appUrlSchemes, appWindow, hostExtensionOptions, iosMultipleWindows, urlSchemeOwners, usageDescriptions,
 } from '../src/utils/appOptions.js';
 
 const config = (app = {}, version = '1.2.3') => ({ general: { name: 'demo-app' }, app, package: { version } });
@@ -518,5 +518,21 @@ describe("the options of the host's own extensions", () => {
             expect(hostExtensionOptions(config({ updater: { url: 'http://example.com/u.json', publicKey: 'key' } }), platform)).not.toHaveProperty('updater');
         });
         expect(() => hostExtensionOptions(config({ updater: { url: 'http://example.com/u.json', publicKey: 'key' } }), 'darwin')).toThrow('is no https address');
+    });
+});
+
+describe("an iPad app's windows", () => {
+    test('open beside the first where app.ios.multipleWindows says so, which the iOS host is built with', () => {
+        expect(iosMultipleWindows(config())).toBe(false);
+        expect(iosMultipleWindows(config({ ios: { multipleWindows: true } }))).toBe(true);
+        expect(appHeader(config({ ios: { multipleWindows: true } }), 'ios')).toContain('#define CROSSBIND_APP_IOS_MULTIPLE_WINDOWS 1\n');
+        expect(appHeader(config(), 'ios')).not.toContain('MULTIPLE_WINDOWS');
+        expect(appHeader(config({ ios: { multipleWindows: true } }), 'darwin')).not.toContain('MULTIPLE_WINDOWS');
+    });
+
+    test('are refused of any other value, naming what app.ios takes', () => {
+        expect(() => iosMultipleWindows(config({ ios: true }))).toThrow('app.ios true is no object of multipleWindows');
+        expect(() => iosMultipleWindows(config({ ios: { scenes: 2 } }))).toThrow('app.ios takes multipleWindows; scenes is none of it');
+        expect(() => iosMultipleWindows(config({ ios: { multipleWindows: 'yes' } }))).toThrow('app.ios.multipleWindows "yes" is no boolean');
     });
 });

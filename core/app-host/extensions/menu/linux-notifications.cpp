@@ -27,7 +27,7 @@ void actionInvoked(GDBusConnection *, const gchar *, const gchar *, const gchar 
     guint32 id = 0;
     const gchar *action = nullptr;
     g_variant_get(parameters, "(u&s)", &id, &action);
-    if (shown.count(id) && g_strcmp0(action, "default") == 0) app::emitEvent("notification");
+    if (shown.count(id) && g_strcmp0(action, "default") == 0) app::emitEventToFront("notification");
 }
 
 void notificationClosed(GDBusConnection *, const gchar *, const gchar *, const gchar *, const gchar *, GVariant *parameters, gpointer) {

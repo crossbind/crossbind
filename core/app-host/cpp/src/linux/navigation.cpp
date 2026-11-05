@@ -10,9 +10,9 @@ using crossbind::CertificateError;
 using crossbind::HttpAuthentication;
 namespace app = crossbind::app;
 
-// The app's own origins load in any frame, but a window the page asks for at one of them opens nowhere, as the app
-// opens no window of its own; the extension page-navigation decides every other URL, windows too, which load in the
-// page's place if they load. A page of another origin gets no token, so it reaches none of the app's functions.
+// The app's own origins load in any frame, but a window the page asks for at one of them opens nowhere, as the app's
+// windows open through windows.open(); the extension page-navigation decides every other URL, windows too, which load
+// in the page's place if they load. A page of another origin gets no token, so it reaches none of the app's functions.
 // WebKitGTK tells no frame, so each navigation is the top frame's to page-navigation.
 namespace {
 
@@ -51,7 +51,7 @@ gboolean onDecidePolicy(WebKitWebView *view, WebKitPolicyDecision *decision, Web
     const bool isNewWindow = type == WEBKIT_POLICY_DECISION_TYPE_NEW_WINDOW_ACTION;
     if (!isNewWindow && (isApproved(*lock, uri) || allows(*lock, uri))) return FALSE;
     const app::NavigationAnswer answer =
-        allows(*lock, uri) ? app::NavigationAnswer::refuse : app::decideNavigation(uri, true, webkit_navigation_action_is_user_gesture(action), isNewWindow);
+        allows(*lock, uri) ? app::NavigationAnswer::refuse : app::decideNavigation(view, uri, true, webkit_navigation_action_is_user_gesture(action), isNewWindow);
     if (answer == app::NavigationAnswer::load && !isNewWindow) return FALSE;
     webkit_policy_decision_ignore(decision);
     if (answer == app::NavigationAnswer::load) {
@@ -79,7 +79,7 @@ std::string hostOf(const char *host, guint port) {
 
 // A user's name and password a server asks for; a cancel goes on without them, so the page gets what the server answers
 // to that, and WebKitGTK asks nothing of its own.
-gboolean onAuthenticate(WebKitWebView *, WebKitAuthenticationRequest *request, gpointer) {
+gboolean onAuthenticate(WebKitWebView *view, WebKitAuthenticationRequest *request, gpointer) {
     switch (webkit_authentication_request_get_scheme(request)) {
     case WEBKIT_AUTHENTICATION_SCHEME_HTTP_BASIC:
     case WEBKIT_AUTHENTICATION_SCHEME_HTTP_DIGEST:
@@ -91,7 +91,7 @@ gboolean onAuthenticate(WebKitWebView *, WebKitAuthenticationRequest *request, g
     }
     const char *realm = webkit_authentication_request_get_realm(request);
     g_object_ref(request);
-    app::askHttpAuthentication(app::make<HttpAuthentication>(std::make_shared<app::StateOf<HttpAuthentication>>(
+    app::askHttpAuthentication(app::make<HttpAuthentication>(std::make_shared<app::StateOf<HttpAuthentication>>(view,
         hostOf(webkit_authentication_request_get_host(request), webkit_authentication_request_get_port(request)), realm ? realm : "",
         webkit_authentication_request_is_for_proxy(request), [request](std::optional<std::pair<std::string, std::string>> given) {
             onMainThread([request, given] {
@@ -125,7 +125,8 @@ gboolean onTlsErrors(WebKitWebView *view, gchar *failing, GTlsCertificate *certi
     if (parsed) g_uri_unref(parsed);
     g_object_ref(view);
     g_object_ref(certificate);
-    app::askCertificateError(app::make<CertificateError>(std::make_shared<app::StateOf<CertificateError>>(url, named, reasonOf(errors), [view, certificate, url, host, lock](bool isTrusted) {
+    app::askCertificateError(app::make<CertificateError>(std::make_shared<app::StateOf<CertificateError>>(view, url, named, reasonOf(errors),
+        [view, certificate, url, host, lock](bool isTrusted) {
         onMainThread([view, certificate, url, host, lock, isTrusted] {
             if (isTrusted) {
                 webkit_web_context_allow_tls_certificate_for_host(webkit_web_view_get_context(view), certificate, host.c_str());

@@ -90,6 +90,8 @@ ByteRange rangeOf(const std::string &header, std::uint64_t size) {
 }  // namespace
 
 struct Request::State {
+    explicit State(Page page) : page(page) {}
+
     std::string extension;
     std::string method;
     std::string path;
@@ -97,7 +99,7 @@ struct Request::State {
     // Their names in lower case.
     Headers headers;
     SchemeRespond respond;
-    Page page = app::shownPage();
+    Page page;
     std::atomic<bool> isAnswered{false};
 
     bool answers() { return !isAnswered.exchange(true); }
@@ -235,7 +237,7 @@ void serveRoute(SchemeRequest request, SchemeRespond respond) {
         respond(textResponse(404, "crossbind: no extension of the app serves /ext/" + extension + "/"));
         return;
     }
-    auto state = std::make_shared<StateOf<Request>>();
+    auto state = std::make_shared<StateOf<Request>>(app::pageOf(request.webView));
     state->extension = extension;
     state->method = std::move(request.method);
     state->path = std::move(path);

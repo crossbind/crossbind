@@ -3,7 +3,8 @@ import { installHost } from '../../app-host/js/lean-host.js';
 import { connect } from '../../app-host/js/lean-client.js';
 
 // The two sides of an app's protocol joined in one process: the page's messages reach the host directly, and so do
-// the frames and results that carry bytes, as the host's byte routes take them.
+// the frames and results that carry bytes, as the host's byte routes take them, each with the id of the page that sent
+// it, as the host's core gives it.
 
 const points = [];
 class Point {
@@ -57,24 +58,32 @@ const fakeModule = {
     filled: (length) => new Uint8Array(length).fill(7),
 };
 
-// As the host takes messages, which come with the token it gave the page and get their replies later.
+// As the host takes messages, which come with the token it gave the page's window and get their replies later. The page
+// that sends is the window's page now, which a reload replaces.
 const TOKEN = 'session-token';
 const REFUSED = JSON.stringify([1, { name: 'Error', message: "crossbind: this message does not carry the page's token" }]);
 let nextCall = 0;
+let page = 1;
 const pending = new Map();
 const sent = [];
+const sendAs = (from, text) => new Promise((resolve) => {
+    sent.push(text);
+    if (!text.startsWith(TOKEN)) {
+        resolve(REFUSED);
+        return;
+    }
+    const call = String(nextCall);
+    nextCall += 1;
+    pending.set(call, resolve);
+    setImmediate(() => globalThis.__crossbind_receive(call, text.slice(TOKEN.length), from));
+});
+// A new page replaces the window's, as a reload does, and the host lets go of the one before.
+const reload = () => {
+    globalThis.__crossbind_gone(page);
+    page += 1;
+};
 const transport = {
-    send: (text) => new Promise((resolve) => {
-        sent.push(text);
-        if (!text.startsWith(TOKEN)) {
-            resolve(REFUSED);
-            return;
-        }
-        const call = String(nextCall);
-        nextCall += 1;
-        pending.set(call, resolve);
-        setImmediate(() => globalThis.__crossbind_receive(call, text.slice(TOKEN.length)));
-    }),
+    send: (text) => sendAs(page, text),
     // As the host's byte routes answer: a request without the page's token is refused, and a frame gets its reply later.
     frame: (query, body) => new Promise((resolve, reject) => {
         requests.push('frame');
@@ -85,12 +94,12 @@ const transport = {
         const call = String(nextCall);
         nextCall += 1;
         pending.set(call, resolve);
-        globalThis.__crossbind_frame(call, query, body.buffer.slice(body.byteOffset, body.byteOffset + body.byteLength));
+        globalThis.__crossbind_frame(call, query, body.buffer.slice(body.byteOffset, body.byteOffset + body.byteLength), page);
     }),
     result: async (query) => {
         requests.push('result');
         if (new URLSearchParams(query).get('t') !== TOKEN) throw new Error("crossbind: this request does not carry the page's token");
-        return globalThis.__crossbind_result(query).slice().buffer;
+        return globalThis.__crossbind_result(query, new ArrayBuffer(0), page).slice().buffer;
     },
     attachBytes: 8,
     token: TOKEN,
@@ -179,6 +188,14 @@ describe('the lean protocol of an app', () => {
         expect(requests).toEqual(['frame', 'result']);
     });
 
+    test("hands a page's large result to that page alone", async () => {
+        const [, big] = JSON.parse(await transport.send(TOKEN + JSON.stringify(['call', 0, ['filled'], [8192]])));
+        const other = page + 1000;
+        expect(() => globalThis.__crossbind_result(`id=${big.v}`, new ArrayBuffer(0), other)).toThrow(`crossbind: no result ${big.v} waits for this page`);
+        expect(globalThis.__crossbind_result(`id=${big.v}`, new ArrayBuffer(0), page)).toHaveLength(8192);
+        globalThis.__crossbind_gone(other);
+    });
+
     test("leaves a variable the process has to the build's env, lets initNative()'s replace one, and fills in the data path", () => {
         expect(env.PRESET).toBe('machine');
         expect(env.DATA).toBe('/app/data/proj');
@@ -200,76 +217,140 @@ describe('the lean protocol of an app', () => {
         const handle = await new m.Point(5);
         const point = points.at(-1);
 
-        globalThis.__crossbind_reset();
+        reload();
 
         expect(point.freed).toBe(true);
         await expect(m.xOf(handle)).rejects.toThrow('already released');
     });
+
+    test("keeps each window's page to its own objects, which another page's going leaves alone", async () => {
+        const [, handle] = JSON.parse(await sendAs(page, TOKEN + JSON.stringify(['new', 0, ['Point'], [9]])));
+        const point = points.at(-1);
+        const other = page + 1000;
+
+        const [failed, error] = JSON.parse(await sendAs(other, TOKEN + JSON.stringify(['call', 0, ['xOf'], [{ '\u0001t': 'h', v: handle.v }]])));
+        await sendAs(other, TOKEN + JSON.stringify(['release', 0, [], [[handle.v]]]));
+        globalThis.__crossbind_gone(other);
+
+        expect([failed, error.message]).toEqual([1, `crossbind: object ${handle.v} was already released`]);
+        expect(point.freed).toBe(false);
+        expect(JSON.parse(await sendAs(page, TOKEN + JSON.stringify(['call', 0, ['xOf'], [{ '\u0001t': 'h', v: handle.v }]])))).toEqual([0, 9]);
+    });
 });
 
 describe('what the host pushes to the page', () => {
-    const askForPushes = () => transport.send(TOKEN + JSON.stringify(['events', 0, [], []]));
+    const askForPushes = (from = page) => sendAs(from, TOKEN + JSON.stringify(['events', 0, [], []]));
+    // A page hears the events of the names it listens to alone.
+    const listenTo = (names, from = page) => Promise.all(names.map((name) => sendAs(from, TOKEN + JSON.stringify(['listen', 0, [name], [1]]))));
+    const emit = (name, json, to = null) => globalThis.__crossbind_event(name, json, false, to);
 
     test('holds the request for pushes until there are some, and gets the events emitted once the page asks', async () => {
-        globalThis.__crossbind_reset();
-        globalThis.__crossbind_event('early', '1');
+        reload();
+        await listenTo(['early', 'progress', 'later']);
+        emit('early', '1');
         const waiting = askForPushes();
         await new Promise(setImmediate);
 
-        globalThis.__crossbind_event('progress', '{"done":0.5}');
+        emit('progress', '{"done":0.5}');
 
         expect(JSON.parse(await waiting)).toEqual([0, [['event', 'progress', { done: 0.5 }]]]);
-        globalThis.__crossbind_event('later', 'null');
+        emit('later', 'null');
         expect(JSON.parse(await askForPushes())).toEqual([0, [['event', 'later', null]]]);
     });
 
+    test('pushes a page the events of the names it listens to alone, from its listen until it lets go of them', async () => {
+        reload();
+        await listenTo(['heard']);
+        const waiting = askForPushes();
+        await new Promise(setImmediate);
+        emit('unheard', '1');
+        emit('heard', '2');
+        expect(JSON.parse(await waiting)).toEqual([0, [['event', 'heard', 2]]]);
+
+        await sendAs(page, TOKEN + JSON.stringify(['listen', 0, ['heard'], [0]]));
+        await listenTo(['again']);
+        const next = askForPushes();
+        await new Promise(setImmediate);
+        emit('heard', '3');
+        emit('again', '4');
+        expect(JSON.parse(await next)).toEqual([0, [['event', 'again', 4]]]);
+    });
+
     test('names the event whose text is no JSON', () => {
-        expect(() => globalThis.__crossbind_event('broken', '{')).toThrow('the event broken carries no JSON text');
+        expect(() => emit('broken', '{')).toThrow('the event broken carries no JSON text');
     });
 
     test('answers null, to stop asking, the request of a page another one replaced, and keeps none of what was for it', async () => {
+        await listenTo(['stale']);
         const waiting = askForPushes();
         await new Promise(setImmediate);
 
-        globalThis.__crossbind_reset();
-        globalThis.__crossbind_event('stale', '1');
+        reload();
+        emit('stale', '1');
 
         expect(JSON.parse(await waiting)).toEqual([0, null]);
+        await listenTo(['fresh']);
         const next = askForPushes();
         await new Promise(setImmediate);
-        globalThis.__crossbind_event('fresh', '2');
+        emit('fresh', '2');
         expect(JSON.parse(await next)).toEqual([0, [['event', 'fresh', 2]]]);
     });
 
     test('answers null a request another request took the place of', async () => {
+        await listenTo(['now']);
         const first = askForPushes();
         await new Promise(setImmediate);
         const second = askForPushes();
         await new Promise(setImmediate);
 
         expect(JSON.parse(await first)).toEqual([0, null]);
-        globalThis.__crossbind_event('now', '3');
+        emit('now', '3');
         expect(JSON.parse(await second)).toEqual([0, [['event', 'now', 3]]]);
     });
 
-    const askForHeld = (name) => transport.send(TOKEN + JSON.stringify(['app', 0, ['events.held'], [{ name }]]));
-    const hold = (name, json) => globalThis.__crossbind_event(name, json, true);
+    test('sends an event to every page that listens to it, to the one page named, or to the first in front of those that listen', async () => {
+        reload();
+        const other = page + 1000;
+        await listenTo(['all', 'one', 'front']);
+        await listenTo(['all', 'one'], other);
+        const own = askForPushes();
+        const others = askForPushes(other);
+        await new Promise(setImmediate);
+
+        emit('all', '1');
+        expect([JSON.parse(await own), JSON.parse(await others)]).toEqual([[0, [['event', 'all', 1]]], [0, [['event', 'all', 1]]]]);
+        const ownNext = askForPushes();
+        const othersNext = askForPushes(other);
+        await new Promise(setImmediate);
+        emit('one', '2', other);
+        // The page in front listens to front not, so the next in front gets it.
+        emit('front', '3', [other, page]);
+        expect(JSON.parse(await othersNext)).toEqual([0, [['event', 'one', 2]]]);
+        expect(JSON.parse(await ownNext)).toEqual([0, [['event', 'front', 3]]]);
+        globalThis.__crossbind_gone(other);
+    });
+
+    const askForHeld = (name, from = page) => sendAs(from, TOKEN + JSON.stringify(['app', 0, ['events.held'], [{ name }]]));
+    // A held event goes to the page in front that asked, which the window's page is here.
+    const hold = (name, json, front = [page]) => globalThis.__crossbind_event(name, json, true, front);
     // The page listens, and the request for pushes it makes takes the next one.
     const listenAgain = async () => {
+        await listenTo(['resumed']);
         const next = askForPushes();
         await new Promise(setImmediate);
-        globalThis.__crossbind_event('resumed', '1');
+        emit('resumed', '1');
         expect(JSON.parse(await next)).toEqual([0, [['event', 'resumed', 1]]]);
     };
 
     test('holds the events held for the page that come before it asks for those of their name, and hands each over once', async () => {
-        globalThis.__crossbind_reset();
+        reload();
+        await listenTo(['open-url', 'tapped', 'other']);
         hold('open-url', '{"url":"myapp://launch"}');
         const waiting = askForPushes();
         await new Promise(setImmediate);
         hold('open-url', '{"url":"myapp://before"}');
         hold('tapped', '{"id":7}');
-        globalThis.__crossbind_event('other', '1');
+        emit('other', '1');
         expect(JSON.parse(await waiting)).toEqual([0, [['event', 'other', 1]]]);
 
         expect(JSON.parse(await askForHeld('open-url'))).toEqual([0, [{ url: 'myapp://launch' }, { url: 'myapp://before' }]]);
@@ -282,19 +363,32 @@ describe('what the host pushes to the page', () => {
         expect(JSON.parse(await askForHeld('tapped'))).toEqual([0, [{ id: 7 }]]);
     });
 
-    test('holds an event pushed for a page another replaced before it got it, for the new one to ask for', async () => {
-        hold('open-url', '{"url":"myapp://unseen"}');
-        globalThis.__crossbind_reset();
-        expect(JSON.parse(await askForHeld('open-url'))).toEqual([0, [{ url: 'myapp://unseen' }]]);
-        await listenAgain();
+    test('hands a held event to the page in front of those that asked, and to it alone', async () => {
+        reload();
+        const other = page + 1000;
+        await listenTo(['opened']);
+        await listenTo(['opened'], other);
+        await askForHeld('opened');
+        const own = askForPushes();
+        const others = askForPushes(other);
+        await new Promise(setImmediate);
+
+        // The page in front has not asked for them.
+        hold('opened', '1', [other, page]);
+        expect(JSON.parse(await own)).toEqual([0, [['event', 'opened', 1]]]);
+        await askForHeld('opened', other);
+        hold('opened', '2', [other, page]);
+        expect(JSON.parse(await others)).toEqual([0, [['event', 'opened', 2]]]);
+        globalThis.__crossbind_gone(other);
     });
 
     // The page listens, and its request for pushes has come back, so a push waits for the next.
     const listenWithoutRequest = async () => {
-        globalThis.__crossbind_reset();
+        reload();
+        await listenTo(['first', 'open-url', 'tick']);
         const waiting = askForPushes();
         await new Promise(setImmediate);
-        globalThis.__crossbind_event('first', '1');
+        emit('first', '1');
         await waiting;
     };
 
@@ -302,9 +396,33 @@ describe('what the host pushes to the page', () => {
         await listenWithoutRequest();
         await askForHeld('open-url');
         hold('open-url', '{"url":"myapp://held"}');
-        globalThis.__crossbind_event('open-url', '{"url":"myapp://plain"}');
-        globalThis.__crossbind_reset();
+        emit('open-url', '{"url":"myapp://plain"}');
+        reload();
         expect(JSON.parse(await askForHeld('open-url'))).toEqual([0, [{ url: 'myapp://held' }]]);
+        await listenAgain();
+    });
+
+    test('hands a held event a page went without to another page that asked for those of its name', async () => {
+        await listenWithoutRequest();
+        await askForHeld('open-url');
+        const other = page + 1000;
+        await listenTo(['open-url'], other);
+        await askForHeld('open-url', other);
+        const others = askForPushes(other);
+        await new Promise(setImmediate);
+        hold('open-url', '{"url":"myapp://moved"}');
+        reload();
+        expect(JSON.parse(await others)).toEqual([0, [['event', 'open-url', { url: 'myapp://moved' }]]]);
+        expect(JSON.parse(await askForHeld('open-url'))).toEqual([0, []]);
+        globalThis.__crossbind_gone(other);
+        await listenAgain();
+    });
+
+    test('holds an event held for a page that asked for those of its name but does not listen to them', async () => {
+        await listenWithoutRequest();
+        expect(JSON.parse(await askForHeld('tapped'))).toEqual([0, []]);
+        hold('tapped', '{"id":8}');
+        expect(JSON.parse(await askForHeld('tapped'))).toEqual([0, [{ id: 8 }]]);
         await listenAgain();
     });
 
@@ -312,14 +430,15 @@ describe('what the host pushes to the page', () => {
         await listenWithoutRequest();
         await askForHeld('open-url');
         hold('open-url', '{"url":"myapp://oldest"}');
-        for (let i = 0; i < 1000; i += 1) globalThis.__crossbind_event('tick', String(i));
+        for (let i = 0; i < 1000; i += 1) emit('tick', String(i));
         expect(JSON.parse(await askForHeld('open-url'))).toEqual([0, [{ url: 'myapp://oldest' }]]);
         const [, entries] = JSON.parse(await askForPushes());
         expect([entries.length, entries.some(([, name]) => name === 'open-url')]).toEqual([1000, false]);
     });
 
     test('holds what comes once the page asked but before it listens', async () => {
-        globalThis.__crossbind_reset();
+        reload();
+        await listenTo(['open-url']);
         expect(JSON.parse(await askForHeld('open-url'))).toEqual([0, []]);
         hold('open-url', '{"url":"myapp://early"}');
         expect(JSON.parse(await askForHeld('open-url'))).toEqual([0, [{ url: 'myapp://early' }]]);
@@ -327,7 +446,7 @@ describe('what the host pushes to the page', () => {
     });
 
     test('holds a thousand events of a name at most, and refuses an ask without a name', async () => {
-        globalThis.__crossbind_reset();
+        reload();
         for (let i = 0; i < 1001; i += 1) hold('open-url', JSON.stringify({ url: `myapp://${i}` }));
         const [, values] = JSON.parse(await askForHeld('open-url'));
         expect([values.length, values[0], values.at(-1)]).toEqual([1000, { url: 'myapp://0' }, { url: 'myapp://999' }]);
@@ -338,7 +457,8 @@ describe('what the host pushes to the page', () => {
     });
 
     test('keeps the latest events for a page that asks no more, up to a limit', async () => {
-        for (let i = 0; i < 1005; i += 1) globalThis.__crossbind_event('tick', String(i));
+        await listenTo(['tick']);
+        for (let i = 0; i < 1005; i += 1) emit('tick', String(i));
 
         const [, entries] = JSON.parse(await askForPushes());
 
@@ -348,13 +468,13 @@ describe('what the host pushes to the page', () => {
     });
 
     test("keeps a call's messages, with their bytes, whatever the events push out, and none of a page another replaced", async () => {
-        globalThis.__crossbind_message(7, { done: 1, bytes: new Uint8Array([5]) });
-        for (let i = 0; i < 1005; i += 1) globalThis.__crossbind_event('tick', String(i));
+        globalThis.__crossbind_message(page, 7, { done: 1, bytes: new Uint8Array([5]) });
+        for (let i = 0; i < 1005; i += 1) emit('tick', String(i));
 
         const [, entries] = JSON.parse(await askForPushes());
-        globalThis.__crossbind_message(8, 'gone');
-        globalThis.__crossbind_reset();
-        globalThis.__crossbind_message(9, 'kept');
+        globalThis.__crossbind_message(page, 8, 'gone');
+        reload();
+        globalThis.__crossbind_message(page, 9, 'kept');
         const [, next] = JSON.parse(await askForPushes());
 
         expect(entries).toHaveLength(1001);

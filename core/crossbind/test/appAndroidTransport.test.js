@@ -4,9 +4,11 @@ import {
 import { installHost } from '../../app-host/js/lean-host.js';
 
 // The page of an Android app over a real message port: a stand-in for the activity reads what the page sends as the
-// activity does, and answers from the host's functions as the activity relays the module's answers.
+// activity does, and answers from the host's functions as the activity relays the module's answers, each of the
+// activity's one page, of the id the host's core gives it.
 
 const TOKEN = 'android-token';
+const PAGE = 1;
 const REFUSED = "crossbind: this request does not carry the page's token";
 const { port1: pagePort, port2: activityPort } = new MessageChannel();
 const seen = [];
@@ -33,8 +35,8 @@ let refusesPolls = false;
 // As the host keeps one function for each the page passed while the module holds it, counting the messages that
 // passed it, and as Hermes collecting one tells the page.
 const pageFunctions = new Map();
-function hostPageFunction(id) {
-    if (!pageFunctions.has(id)) pageFunctions.set(id, { passed: 0, fn: (...args) => globalThis.__crossbind_called(id, ...args) });
+function hostPageFunction(page, id) {
+    if (!pageFunctions.has(id)) pageFunctions.set(id, { passed: 0, fn: (...args) => globalThis.__crossbind_called(page, id, ...args) });
     const held = pageFunctions.get(id);
     held.passed += 1;
     return held.fn;
@@ -43,7 +45,7 @@ function hostPageFunction(id) {
 function collect(fn) {
     const [id, held] = [...pageFunctions].find(([, entry]) => entry.fn === fn);
     pageFunctions.delete(id);
-    globalThis.__crossbind_dropped(id, held.passed);
+    globalThis.__crossbind_dropped(PAGE, id, held.passed);
 }
 
 async function until(isDone) {
@@ -70,7 +72,7 @@ activityPort.onmessage = ({ data }) => {
         const call = String(nextCall);
         nextCall += 1;
         pageIds.set(call, id);
-        globalThis.__crossbind_frame(call, query, data.slice(4 + headerLength));
+        globalThis.__crossbind_frame(call, query, data.slice(4 + headerLength), PAGE);
         return;
     }
     const bar = data.indexOf('|');
@@ -78,7 +80,7 @@ activityPort.onmessage = ({ data }) => {
     const rest = data.slice(bar + 3);
     if (data[bar + 1] === 'r') {
         seen.push('result');
-        const view = globalThis.__crossbind_result(rest);
+        const view = globalThis.__crossbind_result(rest, new ArrayBuffer(0), PAGE);
         const framed = new Uint8Array(4 + view.byteLength);
         new DataView(framed.buffer).setUint32(0, Number(id), true);
         framed.set(view, 4);
@@ -95,7 +97,7 @@ activityPort.onmessage = ({ data }) => {
     const call = String(nextCall);
     nextCall += 1;
     pageIds.set(call, id);
-    globalThis.__crossbind_receive(call, rest.slice(TOKEN.length));
+    globalThis.__crossbind_receive(call, rest.slice(TOKEN.length), PAGE);
 };
 
 let m;
@@ -167,14 +169,14 @@ describe('the page of an Android app', () => {
         // As the host answers through the module's thread, with a Uint8Array for bytes.
         globalThis.__app_call = (call, name, options) => {
             passed.push(options);
-            globalThis.__crossbind_answered(call, { size: options.data.byteLength, back: options.data.slice().reverse() }, 0);
+            globalThis.__crossbind_answered(call, { size: options.data.byteLength, back: options.data.slice().reverse() }, 0, PAGE);
         };
         seen.length = 0;
 
         const small = await globalThis.Crossbind.app('probe.bytes', { data: new Uint8Array([1, 2, 3]) });
         const large = Uint8Array.from({ length: 20000 }, (_, i) => i % 251);
         const echoed = await globalThis.Crossbind.app('probe.bytes', { data: large.buffer });
-        globalThis.__app_call = (call) => globalThis.__crossbind_answered(call, new Uint8Array(8192).fill(9), 0);
+        globalThis.__app_call = (call) => globalThis.__crossbind_answered(call, new Uint8Array(8192).fill(9), 0, PAGE);
         const big = await globalThis.Crossbind.app('probe.big', {});
 
         expect(passed[0].data).toBeInstanceOf(Uint8Array);
@@ -193,10 +195,10 @@ describe('the page of an Android app', () => {
         const calls = [];
         globalThis.__app_call = (call, name, options, id, wantsMessages) => {
             calls.push({ id, wantsMessages });
-            globalThis.__crossbind_message(id, { done: 1 });
+            globalThis.__crossbind_message(PAGE, id, { done: 1 });
             // The answer tells how many messages went before it, the last of which may reach the page after it.
-            globalThis.__crossbind_answered(call, 'finished', 2);
-            setTimeout(() => globalThis.__crossbind_message(id, { done: 2, bytes: new Uint8Array([7]) }), 30);
+            globalThis.__crossbind_answered(call, 'finished', 2, PAGE);
+            setTimeout(() => globalThis.__crossbind_message(PAGE, id, { done: 2, bytes: new Uint8Array([7]) }), 30);
         };
         const got = [];
 
@@ -212,7 +214,7 @@ describe('the page of an Android app', () => {
     test("rejects a call its signal aborts with the signal's reason, and tells the host, which cancels it", async () => {
         const cancelled = [];
         const called = [];
-        globalThis.__app_cancel = (id) => cancelled.push(id);
+        globalThis.__app_cancel = (call, id) => cancelled.push(id);
         // A function that answers only once it is cancelled, as the host does then.
         globalThis.__app_call = (call, name, options, id) => called.push(id);
         const controller = new AbortController();
@@ -230,10 +232,10 @@ describe('the page of an Android app', () => {
 
     test('hands onMessage the messages a function sent before it failed, then rejects', async () => {
         globalThis.__app_call = (call, name, options, id) => {
-            globalThis.__crossbind_message(id, 1);
+            globalThis.__crossbind_message(PAGE, id, 1);
             // As the host answers a failure, with how many messages went before it.
             globalThis.__host_reply(call, JSON.stringify([1, { name: 'Error', message: 'crossbind: the import failed' }, 2]));
-            setTimeout(() => globalThis.__crossbind_message(id, 2), 30);
+            setTimeout(() => globalThis.__crossbind_message(PAGE, id, 2), 30);
         };
         const got = [];
 
@@ -244,13 +246,13 @@ describe('the page of an Android app', () => {
 
     test('lets go of a large result the page no longer waits for, and tells the host of no cancel once the call has answered', async () => {
         const cancelled = [];
-        globalThis.__app_cancel = (id) => cancelled.push(id);
+        globalThis.__app_cancel = (call, id) => cancelled.push(id);
         let answer = null;
         globalThis.__app_call = (call, name, options, id) => {
-            answer = () => globalThis.__crossbind_answered(call, new Uint8Array(8192), 0);
+            answer = () => globalThis.__crossbind_answered(call, new Uint8Array(8192), 0, PAGE);
             if (name === 'probe.messages') {
-                globalThis.__crossbind_answered(call, 'done', 1);
-                answer = () => globalThis.__crossbind_message(id, 'late');
+                globalThis.__crossbind_answered(call, 'done', 1, PAGE);
+                answer = () => globalThis.__crossbind_message(PAGE, id, 'late');
             }
         };
         seen.length = 0;
@@ -276,7 +278,7 @@ describe('the page of an Android app', () => {
         const passed = [];
         globalThis.__app_call = (call, name, options) => {
             passed.push(options.data);
-            globalThis.__crossbind_answered(call, null, 0);
+            globalThis.__crossbind_answered(call, null, 0, PAGE);
         };
         class Buffer extends Uint8Array {
             toJSON() {
@@ -341,12 +343,16 @@ describe('what the host pushes to the page', () => {
         const off = globalThis.Crossbind.on('progress', (value) => got.push(value));
         const done = [];
         globalThis.Crossbind.on('done', (value) => done.push(value));
+        // The page hears the events of a name once its listen has reached the host.
+        await until(() => ['progress', 'done'].every((name) => messages.includes(`${TOKEN}["listen",0,["${name}"],[1]]`)));
         await until(() => messages.some((text) => text.startsWith(`${TOKEN}["events"`)));
 
         globalThis.__crossbind_event('progress', '{"done":0.5}');
         globalThis.__crossbind_event('other', '1');
         await until(() => got.length === 1);
         off();
+        // The host hears that the page listens no more.
+        await until(() => messages.includes(`${TOKEN}["listen",0,["progress"],[0]]`));
         globalThis.__crossbind_event('progress', '1');
         globalThis.__crossbind_event('done', 'true');
         await until(() => done.length === 1);
@@ -365,6 +371,7 @@ describe('what the host pushes to the page', () => {
             added = true;
             globalThis.Crossbind.on('tick', (value) => got.push(`late ${value}`));
         });
+        await until(() => messages.includes(`${TOKEN}["listen",0,["tick"],[1]]`));
 
         globalThis.__crossbind_event('tick', '1');
         await until(() => got.length === 2);
@@ -414,6 +421,7 @@ describe('what the host pushes to the page', () => {
     test('asks again a moment after the channel failed its request for pushes', async () => {
         const got = [];
         globalThis.Crossbind.on('again', (value) => got.push(value));
+        await until(() => messages.includes(`${TOKEN}["listen",0,["again"],[1]]`));
         refusesPolls = true;
         // The request waiting now is answered, so the next one is refused.
         globalThis.__crossbind_event('again', '1');

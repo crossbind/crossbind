@@ -82,11 +82,14 @@ struct EarlyEvent {
     std::string event;
     std::string json;
     bool isHeld;
+    Reach reach;
+    uint64_t page;
 };
 std::mutex earlyMutex;
 std::vector<EarlyEvent> earlyEvents;
 
 // 128 random bits, as hex.
+constexpr size_t TOKEN_LENGTH = 32;
 std::string randomToken() {
     std::random_device random;
     char token[33];
@@ -195,9 +198,11 @@ std::string countedReply(std::string reply, double sent) {
     return reply;
 }
 
-SchemeResponse binaryCall(jsi::Runtime &rt, const std::string &function, SchemeRequest &request) {
+// The answer of the host bundle's function for a request of this page's.
+SchemeResponse binaryCall(jsi::Runtime &rt, const std::string &function, SchemeRequest &request, long long page) {
     jsi::ArrayBuffer body(rt, std::make_shared<VectorBuffer>(std::move(request.body)));
-    auto reply = rt.global().getPropertyAsFunction(rt, function.c_str()).call(rt, jsi::String::createFromUtf8(rt, request.query), std::move(body));
+    auto reply = rt.global().getPropertyAsFunction(rt, function.c_str())
+                     .call(rt, jsi::String::createFromUtf8(rt, request.query), std::move(body), static_cast<double>(page));
     if (reply.isString()) return SchemeResponse{200, "application/json", bytesOf(reply.asString(rt).utf8(rt))};
     auto view = reply.asObject(rt);
     auto buffer = view.getProperty(rt, "buffer").asObject(rt).getArrayBuffer(rt);
@@ -358,8 +363,9 @@ void Core::installHostFunctions(jsi::Runtime &rt) {
         auto bytes = fromBase64(args[0].asString(rt).utf8(rt));
         return jsi::Value(rt, jsi::ArrayBuffer(rt, std::make_shared<VectorBuffer>(std::move(bytes))));
     });
-    setFunction(rt, "__host_page_function", 1, [this](jsi::Runtime &rt, const jsi::Value &, const jsi::Value *args, size_t) {
-        return pageFunction(rt, static_cast<long long>(args[0].asNumber()));
+    // A function a page passed: the page's id, and the page's id of the function.
+    setFunction(rt, "__host_page_function", 2, [this](jsi::Runtime &rt, const jsi::Value &, const jsi::Value *args, size_t) {
+        return pageFunction(rt, static_cast<long long>(args[0].asNumber()), static_cast<long long>(args[1].asNumber()));
     });
     // A call of the page to one of the app's functions: its reply's call, the function's name, its options, the page's id
     // of it and whether the page takes its messages.
@@ -371,8 +377,10 @@ void Core::installHostFunctions(jsi::Runtime &rt) {
         }
         return jsi::Value::undefined();
     });
-    setFunction(rt, "__app_cancel", 2, [this](jsi::Runtime &, const jsi::Value &, const jsi::Value *args, size_t) {
-        cancelCall(static_cast<long long>(args[0].asNumber()), args[1].isBool() && args[1].getBool());
+    // A page's cancel of its call: the reply's call of the cancel's message, the page's id of the call, and whether the
+    // call came in a frame.
+    setFunction(rt, "__app_cancel", 3, [this](jsi::Runtime &rt, const jsi::Value &, const jsi::Value *args, size_t) {
+        cancelCall(args[0].asString(rt).utf8(rt), static_cast<long long>(args[1].asNumber()), args[2].isBool() && args[2].getBool());
         return jsi::Value::undefined();
     });
     setFunction(rt, "__host_reply", 2, [this](jsi::Runtime &rt, const jsi::Value &, const jsi::Value *args, size_t) {
@@ -384,29 +392,49 @@ void Core::installHostFunctions(jsi::Runtime &rt) {
 void Core::reply(const std::string &call, const std::string &text) {
     const auto pending = replies_.find(call);
     if (pending == replies_.end()) return;
-    const ReplyFn reply = std::move(pending->second);
+    const ReplyFn reply = std::move(pending->second.answer);
     replies_.erase(pending);
     reply(text);
 }
 
+std::optional<uint64_t> Core::windowOfToken(const std::string &token) const {
+    const auto window = tokens_.find(token);
+    if (window == tokens_.end()) return std::nullopt;
+    return window->second;
+}
+
+std::optional<uint64_t> Core::windowOfPage(long long page) const {
+    for (const auto &[window, channel] : channels_) {
+        if (channel.page == page) return window;
+    }
+    return std::nullopt;
+}
+
 void Core::callApp(jsi::Runtime &rt, std::string call, const std::string &name, const jsi::Value &options, long long id, bool wantsMessages) {
-    const long long page = page_;
+    const uint64_t window = replies_.at(call).window;
+    const long long page = channels_[window].page;
+    // Whether the page that made the call still shows: a reload or the window's close let it go.
+    const auto isShown = [this, window, page] {
+        const auto channel = channels_.find(window);
+        return channel != channels_.end() && channel->second.page == page;
+    };
     PageCall answers;
     // The JS thread encodes the result as the page decodes it, after the messages before it have joined the pushes. A
     // failure tells their count too, as the page takes them before it.
-    answers.answer = [this, call, page, id](Failure failure, Value result, double sent) {
-        js_.post([this, call, page, id, failure = std::move(failure), result = std::move(result), sent](jsi::Runtime &rt) {
-            if (page != page_) {
+    answers.answer = [this, call, window, page, id, isShown](Failure failure, Value result, double sent) {
+        js_.post([this, call, window, page, id, isShown, failure = std::move(failure), result = std::move(result), sent](jsi::Runtime &rt) {
+            if (!isShown()) {
                 reply(call, errorReply("crossbind: the page that made the call went away"));
                 return;
             }
-            openCalls_.erase(id);
+            channels_[window].openCalls.erase(id);
             if (failure) {
                 reply(call, countedReply(errorReply(*failure), sent));
                 return;
             }
             try {
-                rt.global().getPropertyAsFunction(rt, "__crossbind_answered").call(rt, jsi::String::createFromUtf8(rt, call), jsiOf(rt, result), sent);
+                rt.global().getPropertyAsFunction(rt, "__crossbind_answered")
+                    .call(rt, jsi::String::createFromUtf8(rt, call), jsiOf(rt, result), sent, static_cast<double>(page));
             } catch (const std::exception &error) {
                 reply(call, countedReply(errorReply(error.what()), sent));
             }
@@ -414,49 +442,71 @@ void Core::callApp(jsi::Runtime &rt, std::string call, const std::string &name, 
     };
     if (wantsMessages) {
         // A message the page cannot be given still counts, as null.
-        answers.message = [this, page, id](Value message) {
-            js_.post([this, page, id, message = std::move(message)](jsi::Runtime &rt) {
-                if (page != page_) return;
+        answers.message = [this, page, id, isShown](Value message) {
+            js_.post([this, page, id, isShown, message = std::move(message)](jsi::Runtime &rt) {
+                if (!isShown()) return;
                 const jsi::Function deliver = rt.global().getPropertyAsFunction(rt, "__crossbind_message");
                 try {
-                    deliver.call(rt, static_cast<double>(id), jsiOf(rt, message));
+                    deliver.call(rt, static_cast<double>(page), static_cast<double>(id), jsiOf(rt, message));
                 } catch (const std::exception &error) {
                     std::fprintf(stderr, "crossbind: a message of the call %lld reached the page as null: %s\n", id, error.what());
-                    deliver.call(rt, static_cast<double>(id), jsi::Value::null());
+                    deliver.call(rt, static_cast<double>(page), static_cast<double>(id), jsi::Value::null());
                 }
             });
         };
     }
     answers.page = static_cast<uint64_t>(page);
-    answers.window = window_;
+    answers.window = window;
     std::shared_ptr<StateOf<Call>> state = pageCall(rt, name, options, std::move(answers));
     if (!state) return;
-    if (cancelledEarly_.erase(id) > 0) {
+    Channel &channel = channels_[window];
+    if (channel.cancelledEarly.erase(id) > 0) {
         if (app::cancelCall(state)) reply(call, abortReply(name));
         return;
     }
-    openCalls_.insert_or_assign(id, OpenCall{state, std::move(call), name});
+    channel.openCalls.insert_or_assign(id, OpenCall{state, std::move(call), name});
     runCall(std::move(state));
 }
 
 // Far more than a page cancels of calls still on their way.
 constexpr size_t MAX_EARLY_CANCELS = 1000;
 
-void Core::cancelCall(long long id, bool isFramed) {
-    const auto open = openCalls_.find(id);
-    if (open == openCalls_.end()) {
+void Core::cancelCall(const std::string &call, long long id, bool isFramed) {
+    const auto message = replies_.find(call);
+    if (message == replies_.end()) return;
+    Channel &channel = channels_[message->second.window];
+    const auto open = channel.openCalls.find(id);
+    if (open == channel.openCalls.end()) {
         // A call that came as a message came before its cancel, which the page sends no more once it has its answer.
-        if (isFramed && cancelledEarly_.size() < MAX_EARLY_CANCELS) cancelledEarly_.insert(id);
+        if (isFramed && channel.cancelledEarly.size() < MAX_EARLY_CANCELS) channel.cancelledEarly.insert(id);
         return;
     }
-    const OpenCall call = std::move(open->second);
-    openCalls_.erase(open);
-    const std::shared_ptr<StateOf<Call>> state = call.state.lock();
-    if (state && app::cancelCall(state)) reply(call.reply, abortReply(call.name));
+    const OpenCall cancelled = std::move(open->second);
+    channel.openCalls.erase(open);
+    const std::shared_ptr<StateOf<Call>> state = cancelled.state.lock();
+    if (state && app::cancelCall(state)) reply(cancelled.reply, abortReply(cancelled.name));
+}
+
+void Core::cancelOpenCalls(Channel &channel) {
+    const auto open = std::move(channel.openCalls);
+    channel.openCalls.clear();
+    channel.cancelledEarly.clear();
+    for (const auto &[id, call] : open) {
+        const std::shared_ptr<StateOf<Call>> state = call.state.lock();
+        if (state && app::cancelCall(state)) reply(call.reply, abortReply(call.name));
+    }
+}
+
+std::string Core::addWindow(uint64_t window) {
+    std::string token = randomToken();
+    js_.post([this, window, token](jsi::Runtime &) {
+        channels_[window];
+        tokens_[token] = window;
+    });
+    return token;
 }
 
 std::string Core::boot(std::string bundle, const std::string &sourceUrl, const std::string &dataPath) {
-    token_ = randomToken();
     std::promise<std::string> booted;
     js_.start([&](jsi::Runtime &rt) {
         try {
@@ -478,7 +528,7 @@ std::string Core::boot(std::string bundle, const std::string &sourceUrl, const s
     // sent before goes first.
     if (error.empty()) {
         std::lock_guard<std::mutex> lock(earlyMutex);
-        for (auto &early : earlyEvents) postEvent(std::move(early.event), std::move(early.json), early.isHeld);
+        for (auto &early : earlyEvents) postEvent(std::move(early.event), std::move(early.json), early.isHeld, early.reach, early.page);
         earlyEvents.clear();
         running = this;
     }
@@ -486,17 +536,18 @@ std::string Core::boot(std::string bundle, const std::string &sourceUrl, const s
 }
 
 void Core::receive(std::string message, ReplyFn reply) {
-    if (message.compare(0, token_.size(), token_) != 0) {
-        reply(errorReply("crossbind: this message does not carry the page's token"));
-        return;
-    }
-    message.erase(0, token_.size());
     js_.post([this, message = std::move(message), reply = std::move(reply)](jsi::Runtime &rt) {
+        const std::optional<uint64_t> window = windowOfToken(message.substr(0, TOKEN_LENGTH));
+        if (!window) {
+            reply(errorReply("crossbind: this message does not carry the page's token"));
+            return;
+        }
         const std::string call = std::to_string(nextReply_++);
-        replies_.emplace(call, reply);
+        replies_.emplace(call, Reply{reply, *window});
         try {
             rt.global().getPropertyAsFunction(rt, "__crossbind_receive")
-                .call(rt, jsi::String::createFromUtf8(rt, call), jsi::String::createFromUtf8(rt, message));
+                .call(rt, jsi::String::createFromUtf8(rt, call), jsi::String::createFromUtf8(rt, message.substr(TOKEN_LENGTH)),
+                    static_cast<double>(channels_[*window].page));
         } catch (const std::exception &error) {
             replies_.erase(call);
             reply(errorReply(error.what()));
@@ -535,62 +586,86 @@ void Core::serve(SchemeRequest request, SchemeRespond answer) {
         respond(pageFile(pageDir_, request.path));
         return;
     }
-    if (("&" + request.query + "&").find("&t=" + token_ + "&") == std::string::npos) {
-        respond(SchemeResponse{403, "text/plain", bytesOf("crossbind: this request does not carry the page's token")});
-        return;
-    }
-    if (request.path == "/b/frame") {
-        serveFrame(std::move(request), std::move(respond));
-        return;
-    }
-    js_.post([function = route->second, request = std::move(request), respond = std::move(respond)](jsi::Runtime &rt) mutable {
+    // The token names the window whose page asks, which the JS thread knows.
+    const std::string query = "&" + request.query + "&";
+    const size_t at = query.find("&t=");
+    const std::string token = at == std::string::npos ? "" : query.substr(at + 3, query.find('&', at + 3) - at - 3);
+    js_.post([this, token, function = route->second, request = std::move(request), respond = std::move(respond)](jsi::Runtime &rt) mutable {
+        const std::optional<uint64_t> window = windowOfToken(token);
+        if (!window) {
+            respond(SchemeResponse{403, "text/plain", bytesOf("crossbind: this request does not carry the page's token")});
+            return;
+        }
+        if (request.path == "/b/frame") {
+            serveFrame(rt, *window, std::move(request), std::move(respond));
+            return;
+        }
         try {
-            respond(binaryCall(rt, function, request));
+            respond(binaryCall(rt, function, request, channels_[*window].page));
         } catch (const std::exception &error) {
             respond(SchemeResponse{500, "text/plain", bytesOf(error.what())});
         }
     });
 }
 
-// A frame answers once its message has, which a call of the app's functions does later.
-void Core::serveFrame(SchemeRequest request, SchemeRespond respond) {
-    js_.post([this, request = std::move(request), respond = std::move(respond)](jsi::Runtime &rt) mutable {
-        const std::string call = std::to_string(nextReply_++);
-        replies_.emplace(call, [respond](const std::string &text) { respond(SchemeResponse{200, "application/json", bytesOf(text)}); });
-        try {
-            jsi::ArrayBuffer body(rt, std::make_shared<VectorBuffer>(std::move(request.body)));
-            rt.global().getPropertyAsFunction(rt, "__crossbind_frame")
-                .call(rt, jsi::String::createFromUtf8(rt, call), jsi::String::createFromUtf8(rt, request.query), std::move(body));
-        } catch (const std::exception &error) {
-            if (replies_.erase(call) > 0) respond(SchemeResponse{500, "text/plain", bytesOf(error.what())});
-        }
-    });
+// A frame answers once its message has, which a call of the app's functions does later. On the JS thread.
+void Core::serveFrame(jsi::Runtime &rt, uint64_t window, SchemeRequest request, SchemeRespond respond) {
+    const std::string call = std::to_string(nextReply_++);
+    replies_.emplace(call, Reply{[respond](const std::string &text) { respond(SchemeResponse{200, "application/json", bytesOf(text)}); }, window});
+    try {
+        jsi::ArrayBuffer body(rt, std::make_shared<VectorBuffer>(std::move(request.body)));
+        rt.global().getPropertyAsFunction(rt, "__crossbind_frame")
+            .call(rt, jsi::String::createFromUtf8(rt, call), jsi::String::createFromUtf8(rt, request.query), std::move(body),
+                static_cast<double>(channels_[window].page));
+    } catch (const std::exception &error) {
+        if (replies_.erase(call) > 0) respond(SchemeResponse{500, "text/plain", bytesOf(error.what())});
+    }
 }
 
-void Core::reset() {
-    const Page page = newPage();
+void Core::reset(uint64_t window) {
+    const Page page = newPage(window);
     // After the calls the page before made, which the module's thread takes in order, and before the new page's.
-    js_.post([this, page](jsi::Runtime &rt) {
-        page_ = static_cast<long long>(page.id());
-        window_ = page.windowId();
-        pageFunctions_.clear();
+    js_.post([this, window, page](jsi::Runtime &rt) {
+        const auto open = channels_.find(window);
+        if (open == channels_.end()) return;
+        Channel &channel = open->second;
+        const long long before = channel.page;
+        channel.page = static_cast<long long>(page.id());
+        channel.pageFunctions.clear();
         // The page before's calls reach no page: each that waits is cancelled.
-        const auto open = std::move(openCalls_);
-        openCalls_.clear();
-        cancelledEarly_.clear();
-        for (const auto &[id, call] : open) {
-            const std::shared_ptr<StateOf<Call>> state = call.state.lock();
-            if (state && app::cancelCall(state)) reply(call.reply, abortReply(call.name));
-        }
+        cancelOpenCalls(channel);
         pageStarted(page);
-        rt.global().getPropertyAsFunction(rt, "__crossbind_reset").call(rt);
+        if (before != 0) rt.global().getPropertyAsFunction(rt, "__crossbind_gone").call(rt, static_cast<double>(before));
     });
 }
 
-void Core::postEvent(std::string event, std::string json, bool isHeld) {
-    js_.postOrRun([event = std::move(event), json = std::move(json), isHeld](jsi::Runtime &rt) {
+void Core::closed(uint64_t window) {
+    js_.post([this, window](jsi::Runtime &rt) {
+        const auto open = channels_.find(window);
+        if (open == channels_.end()) return;
+        const long long page = open->second.page;
+        cancelOpenCalls(open->second);
+        channels_.erase(open);
+        for (auto token = tokens_.begin(); token != tokens_.end();) token = token->second == window ? tokens_.erase(token) : std::next(token);
+        if (page != 0) rt.global().getPropertyAsFunction(rt, "__crossbind_gone").call(rt, static_cast<double>(page));
+    });
+}
+
+void Core::postEvent(std::string event, std::string json, bool isHeld, Reach reach, uint64_t page) {
+    // The pages in front as it is sent, for one that reaches the front one alone.
+    std::vector<uint64_t> front = isHeld || reach == Reach::frontPage ? frontPages() : std::vector<uint64_t>{};
+    js_.postOrRun([event = std::move(event), json = std::move(json), isHeld, reach, page, front = std::move(front)](jsi::Runtime &rt) {
+        // The host bundle takes null for every page, a page's id for one, and the pages in front for the front one.
+        jsi::Value pages = jsi::Value::null();
+        if (isHeld || reach == Reach::frontPage) {
+            jsi::Array ordered(rt, front.size());
+            for (size_t i = 0; i < front.size(); i += 1) ordered.setValueAtIndex(rt, i, static_cast<double>(front[i]));
+            pages = jsi::Value(rt, ordered);
+        } else if (reach == Reach::onePage) {
+            pages = static_cast<double>(page);
+        }
         rt.global().getPropertyAsFunction(rt, "__crossbind_event")
-            .call(rt, jsi::String::createFromUtf8(rt, event), jsi::String::createFromUtf8(rt, json), isHeld);
+            .call(rt, jsi::String::createFromUtf8(rt, event), jsi::String::createFromUtf8(rt, json), isHeld, pages);
     });
 }
 
@@ -608,9 +683,12 @@ struct Core::PageFunction {
     double passed = 0;
 };
 
-jsi::Value Core::pageFunction(jsi::Runtime &rt, long long id) {
-    const auto held = pageFunctions_.find(id);
-    if (held != pageFunctions_.end()) {
+jsi::Value Core::pageFunction(jsi::Runtime &rt, long long page, long long id) {
+    const std::optional<uint64_t> window = windowOfPage(page);
+    if (!window) throw std::runtime_error("crossbind: the page that passed the function went away");
+    auto &functions = channels_[*window].pageFunctions;
+    const auto held = functions.find(id);
+    if (held != functions.end()) {
         const std::shared_ptr<PageFunction> state = held->second.first.lock();
         jsi::Value function = held->second.second.lock(rt);
         if (state && function.isObject()) {
@@ -618,40 +696,47 @@ jsi::Value Core::pageFunction(jsi::Runtime &rt, long long id) {
             return function;
         }
     }
-    auto state = std::make_shared<PageFunction>(this, page_, id);
+    auto state = std::make_shared<PageFunction>(this, page, id);
     state->passed = 1;
     jsi::Function function = jsi::Function::createFromHostFunction(rt, jsi::PropNameID::forAscii(rt, "pageFunction"), 0,
         [this, state](jsi::Runtime &rt, const jsi::Value &, const jsi::Value *args, size_t count) {
-            if (state->page != page_) return jsi::Value::undefined();
+            if (!windowOfPage(state->page)) return jsi::Value::undefined();
             std::vector<jsi::Value> forwarded;
-            forwarded.reserve(count + 1);
+            forwarded.reserve(count + 2);
+            forwarded.emplace_back(static_cast<double>(state->page));
             forwarded.emplace_back(static_cast<double>(state->id));
             for (size_t i = 0; i < count; i += 1) forwarded.emplace_back(rt, args[i]);
             rt.global().getPropertyAsFunction(rt, "__crossbind_called").call(rt, static_cast<const jsi::Value *>(forwarded.data()), forwarded.size());
             return jsi::Value::undefined();
         });
-    pageFunctions_.insert_or_assign(id, std::make_pair(std::weak_ptr<PageFunction>(state), jsi::WeakObject(rt, function)));
+    functions.insert_or_assign(id, std::make_pair(std::weak_ptr<PageFunction>(state), jsi::WeakObject(rt, function)));
     return jsi::Value(rt, function);
 }
 
 // Hermes collects functions while JS runs, so the page hears of one in a task of its own.
 void Core::dropped(long long page, long long id, double passed) {
     js_.post([this, page, id, passed](jsi::Runtime &rt) {
-        if (page != page_) return;
-        const auto held = pageFunctions_.find(id);
-        if (held != pageFunctions_.end() && held->second.first.expired()) pageFunctions_.erase(held);
-        rt.global().getPropertyAsFunction(rt, "__crossbind_dropped").call(rt, static_cast<double>(id), passed);
+        const std::optional<uint64_t> window = windowOfPage(page);
+        if (!window) return;
+        auto &functions = channels_[*window].pageFunctions;
+        const auto held = functions.find(id);
+        if (held != functions.end() && held->second.first.expired()) functions.erase(held);
+        rt.global().getPropertyAsFunction(rt, "__crossbind_dropped").call(rt, static_cast<double>(page), static_cast<double>(id), passed);
     });
 }
 
-void postEvent(std::string event, std::string json, bool isHeld) {
+void closeChannel(uint64_t window) {
+    if (Core *core = running.load()) core->closed(window);
+}
+
+void postEvent(std::string event, std::string json, bool isHeld, Reach reach, uint64_t page) {
     if (Core *core = running.load()) {
-        core->postEvent(std::move(event), std::move(json), isHeld);
+        core->postEvent(std::move(event), std::move(json), isHeld, reach, page);
         return;
     }
     std::lock_guard<std::mutex> lock(earlyMutex);
-    if (Core *core = running.load()) core->postEvent(std::move(event), std::move(json), isHeld);
-    else earlyEvents.push_back({std::move(event), std::move(json), isHeld});
+    if (Core *core = running.load()) core->postEvent(std::move(event), std::move(json), isHeld, reach, page);
+    else earlyEvents.push_back({std::move(event), std::move(json), isHeld, reach, page});
 }
 
 }  // namespace crossbind::app

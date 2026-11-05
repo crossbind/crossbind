@@ -111,6 +111,8 @@ public:
     uint64_t id() const { return id_; }
     void *native() const { return native_; }
     void *webView() const { return webView_; }
+    // The page it shows now, which a reload replaces, from any thread: of id 0 before its first and once it closed.
+    Page page() const;
 
 private:
     friend struct app::RegistryAccess;
@@ -509,14 +511,18 @@ private:
     std::shared_ptr<State> state_;
 };
 
-// What an extension sends the page as events, each named after the extension, as clipboard.changed is an event changed
-// of the extension clipboard's: the page's listeners of that name get its value through crossbind/app's events.on().
-// Any thread may hold a copy and send. emit() reaches the page that listens; hold() keeps each until the page asks for
-// the events of its name with events.held(), as what came before it listened. A value with bytes, which JSON has none
-// of, throws; so does an empty name.
+// What an extension sends the pages as events, each named after the extension, as clipboard.changed is an event changed
+// of the extension clipboard's: a page's listeners of that name get its value through crossbind/app's events.on(). Any
+// thread may hold a copy and send. emit() reaches every page that listens to the name, or the one page given;
+// emitToFront() the page in front that listens, of the window its user used last, for what one page is to act on once.
+// hold() keeps each until a page asks for the events of its name with events.held(), as what came before it listened,
+// then hands it to the page in front that asked. A value with bytes, which JSON has none of, throws; so does an empty
+// name.
 class Events {
 public:
     void emit(const std::string &name, const Value &value = {}) const;
+    void emit(const std::string &name, const Value &value, const Page &page) const;
+    void emitToFront(const std::string &name, const Value &value = {}) const;
     void hold(const std::string &name, const Value &value = {}) const;
 
 private:
@@ -573,10 +579,11 @@ public:
     // runs, and holds what the page is to hear of first. A launch that onLaunch ends never calls it. Android's UI thread
     // runs it as the activity first starts. What fn throws ends the app, which runs every extension's onQuit.
     void onStart(std::function<void()> fn);
-    // Run fn on the main thread as each window of the app's opens, with appWindow() and appWebView() set, before its
-    // page loads, and as it closes, while it is there. A desktop app opens one window, which closes as the app quits,
-    // before onQuit; an iOS app one for each scene that connects, which closes as its scene disconnects; an Android app
-    // has none an extension reaches, and calls neither. An app that fails runs onQuit alone.
+    // Run fn on the main thread as each window of the app's opens, before its page loads, and as it closes, while it is
+    // there. A desktop app opens its first window as it starts and each the page opens with crossbind/app's
+    // windows.open(), and they close as their user closes them, and all as the app quits, before onQuit; an iOS app opens
+    // one for each scene that connects, which closes as its scene disconnects; an Android app has none an extension
+    // reaches, and calls neither. An app that fails runs onQuit alone.
     void onWindow(std::function<void(const Window &window)> fn);
     void onWindowClosed(std::function<void(const Window &window)> fn);
     // Runs fn on the module's thread as each page of the app's starts, the first one and each that replaces the page
@@ -584,16 +591,17 @@ public:
     // page's do. Where the extension lets go of what it kept for the page before, whose calls get no answer from then
     // on. A load may start more than one page, each of an id of its own.
     void onPage(std::function<void(const Page &page)> fn);
-    // Asks fn on the main thread as the app's window closes on the desktop, as its user closes it, or on Windows and
-    // Linux another program, as taskkill without /F does: false keeps the window open, as an app that stays in its tray,
-    // which hides the window itself, and asks no other extension; what fn throws lets it close. app.quit() closes it
-    // without asking, and the menu's quit item and the system's own quit, as from the macOS Dock, ask onQuitRequest
-    // instead. A phone's app has no window its user closes, and never asks fn.
-    void onClose(std::function<bool()> fn);
-    // Runs fn on the main thread with whether the app is before its user, once its window has opened, and again as that
-    // changes: true as it becomes the active app on the desktop or comes to a phone's foreground, false as another app
-    // takes its place, or a phone's is interrupted, by a call, a system alert or another app's picker, or goes to the
-    // background. A Linux app's is its window's focus, which a dialog of its own takes as well. The page hears each
+    // Asks fn on the main thread as a window of the app's closes on the desktop, as its user closes it, the page's
+    // windows.close() does, or on Windows and Linux another program, as taskkill without /F does: false keeps the window
+    // open, as an app that stays in its tray, which hides the window itself, and asks no other extension; what fn throws
+    // lets it close. The app quits as its last window closes. A window that closes with its parent goes without asking,
+    // as do all as app.quit() closes them; the menu's quit item and the system's own quit, as from the macOS Dock, ask
+    // onQuitRequest instead. A phone's app has no window its user closes, and iOS closes an iPad's without asking fn.
+    void onClose(std::function<bool(const Window &window)> fn);
+    // Runs fn on the main thread with whether the app is before its user, once its first window has opened, and again as
+    // that changes: true as it becomes the active app on the desktop or comes to a phone's foreground, false as another
+    // app takes its place, or a phone's is interrupted, by a call, a system alert or another app's picker, or goes to the
+    // background. A Linux app is active while one of its windows has the focus, which a dialog of its own takes as well. The page hears each
     // change as the events active and inactive. fn returns at once: a modal loop in it lets the next change through
     // first.
     void onActive(std::function<void(bool isActive)> fn);
@@ -746,15 +754,20 @@ void launchedAgain(Launch launch);
 // onQuit, may never run.
 void onMainThread(std::function<void()> fn);
 
-// The app's first window, on the main thread: an NSWindow on macOS, a UIWindow on iOS, a GtkWindow on Linux and an
-// HWND on Windows; null before it has one.
+// The app's oldest open window, on the main thread: an NSWindow on macOS, a UIWindow on iOS, a GtkWindow on Linux and
+// an HWND on Windows; null while it has none.
 void *appWindow();
 
-// The first window's webview, on the main thread: a WKWebView on macOS and iOS, an ICoreWebView2Controller on Windows,
-// and on Linux a WebKitWebView in a vertical GtkBox, which puts the widgets an extension adds to it with
-// gtk_container_add above the page at their own height: the window holds the page to app.window's limits, with their
-// height added. Null before the app has one. A Linux app is GTK 3's and WebKitGTK 4.1's.
+// The oldest open window's webview, on the main thread: a WKWebView on macOS and iOS, an ICoreWebView2Controller on
+// Windows, and on Linux a WebKitWebView in a vertical GtkBox, which puts the widgets an extension adds to it with
+// gtk_container_add above the page at their own height: the window holds the page to its limits, with their height
+// added. Null while the app has none. A Linux app is GTK 3's and WebKitGTK 4.1's.
 void *appWebView();
+
+// The open window of this id, as a Page's windowId() names it, on the main thread; none for one that closed.
+std::optional<Window> windowOf(uint64_t id);
+// The app's open windows, the oldest first, on the main thread.
+std::vector<Window> openWindows();
 
 // Asks the holder of page-permissions, as the webview does, whether the page of origin may use these kinds: for an
 // extension that gives the page what its webview lacks, as the host's page-location gives a macOS page its location.

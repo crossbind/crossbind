@@ -80,7 +80,7 @@ void installAppMenu() {
     addEditItems(submenu(bar, @"Edit"));
     NSMenu *view = submenu(bar, @"View");
     [view addItem:item(@"Enter Full Screen", @selector(toggleFullScreen:), @"f", NSEventModifierFlagCommand | NSEventModifierFlagControl)];
-    // The app has one window, so AppKit adds no tab items to these menus.
+    // An app's windows stay apart, not as tabs, so AppKit adds no tab items to these menus.
     NSWindow.allowsAutomaticWindowTabbing = NO;
     addWindowItems(submenu(bar, @"Window"));
     NSApp.mainMenu = bar;

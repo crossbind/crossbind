@@ -24,6 +24,8 @@ struct SchemeRequest {
     std::string query;
     std::vector<uint8_t> body;
     std::vector<std::pair<std::string, std::string>> headers;
+    // The webview that asks, as windowOpened() was given it; null on Android, whose page is of no window.
+    const void *webView = nullptr;
 };
 
 struct SchemeResponse {
@@ -78,8 +80,9 @@ using Failure = std::optional<std::string>;
 // Whether the caller is the app's main thread, where the platform's UI runs.
 bool isMainThread();
 namespace crossbind::app {
-// Whether the window closes as its user closes it: true unless an extension's onClose keeps it. On the main thread.
-bool isCloseAllowed();
+// Whether the window of this id closes as its user closes it: true unless an extension's onClose keeps it. On the main
+// thread.
+bool isCloseAllowed(uint64_t window);
 // Runs the extensions' onWindowClosed for each window still open, on the main thread, as the app's windows close, while
 // they are there: before Linux and Windows destroy theirs, and as the app quits.
 void windowsClosed();
@@ -101,21 +104,95 @@ void quitApp();
 // Opens the app anew, with no arguments: on macOS and Linux once this process has ended, on Windows as it ends, where an
 // app that app.singleInstance keeps to one instance waits for this one to end. Why not when it cannot.
 Failure openAnew();
-// The app's window and its webview, which appWindow() and appWebView() give its extensions.
-void setMainWindow(void *window, void *webView);
-// Brings a desktop app's window to the front, restored if it was minimized; token is what lets a Linux window take the
-// front from another app. On any thread.
+// Brings the desktop app's window in front to the front, restored if it was minimized; token is what lets a Linux window
+// take the front from another app. On any thread.
 void showWindow(const std::string &token);
 // A desktop app's window and webview show this color, 0xRRGGBB, until the page paints and behind a page without a
 // background of its own. On the main thread, before the window shows.
 void setBackgroundColor(void *window, void *webView, std::uint32_t color);
-// The window fills the screen, as app.window.fullscreen asks. On the main thread.
-void fillScreen();
+
+namespace crossbind::app {
+// What a window of the app's opens with: the options of crossbind/app's windows.open(), or app.window's for an app's
+// first. Sizes are the page's, in logical pixels, 0 for no limit; x and y place the window's frame from the top left of
+// the main screen, and without them the window opens in its middle.
+struct WindowOptions {
+    std::string path = "/";
+    std::string title;
+    std::string name;
+    int width = 1024;
+    int height = 768;
+    int minWidth = 0;
+    int minHeight = 0;
+    int maxWidth = 0;
+    int maxHeight = 0;
+    bool resizable = true;
+    bool fullscreen = false;
+    std::optional<std::uint32_t> backgroundColor;
+    std::optional<int> x;
+    std::optional<int> y;
+    bool alwaysOnTop = false;
+    bool frame = true;
+    uint64_t parent = 0;
+    bool modal = false;
+};
+// What windows.set() changes of an open window: each key it was given.
+struct WindowChanges {
+    std::optional<std::string> title;
+    std::optional<int> width;
+    std::optional<int> height;
+    std::optional<int> x;
+    std::optional<int> y;
+    bool center = false;
+    std::optional<int> minWidth;
+    std::optional<int> minHeight;
+    std::optional<int> maxWidth;
+    std::optional<int> maxHeight;
+    std::optional<bool> resizable;
+    std::optional<bool> alwaysOnTop;
+    std::optional<bool> fullscreen;
+};
+// An open window as windows.list() tells of it: its frame's place and its page's size, in logical pixels.
+struct WindowState {
+    std::string title;
+    int x = 0;
+    int y = 0;
+    int width = 0;
+    int height = 0;
+    bool isMaximized = false;
+    bool isMinimized = false;
+    bool isFullscreen = false;
+    bool isFocused = false;
+};
+
+// The windows of crossbind/app's windows.*, on the main thread. A window opens with these options and loads its page,
+// and done gets on the main thread why it did not, or its id, with the keys the platform could not honour: at once on
+// the desktop, and as its scene connects on an iPad. Each other call names an open window; one that names none throws,
+// as an Android app does for every one.
+using WindowOpened = std::function<void(std::optional<std::string> failure, uint64_t id, std::vector<std::string> ignored)>;
+void openAppWindow(const WindowOptions &options, WindowOpened done);
+void changeAppWindow(uint64_t id, const WindowChanges &changes, std::vector<std::string> &ignored);
+// Closes it as its user does: an extension's onClose may keep it, but for an iPad's scene, which iOS closes.
+void closeAppWindow(uint64_t id);
+// Brings it to the front, restored if it was minimized.
+void focusAppWindow(uint64_t id);
+void minimizeAppWindow(uint64_t id);
+void toggleMaximizeAppWindow(uint64_t id);
+// Moves it with the pointer while the primary button is down, as its title bar does.
+void dragAppWindow(uint64_t id);
+WindowState appWindowState(uint64_t id);
+}  // namespace crossbind::app
 
 #ifdef __APPLE__
 // macOS sends the standard shortcuts, ⌘C and ⌘Q among them, through the menu bar, so a window without the app, Edit,
 // View and Window menus never sees them.
 void installAppMenu();
+// Tells the extensions and the pages as a macOS app becomes active and leaves it, and answers AppKit's Quit and Dock
+// click: the app's delegate is set.
+void watchApp();
+// Shows the windows of a macOS app that were hidden or minimized, as a click of its Dock icon does.
+void showHiddenWindows();
+// Tells the extensions and the page as an iOS app comes to the foreground and leaves it, once for all its scenes.
+void listenForActivity();
 // Hears of the links of the app's schemes and the files macOS opens it with, the launch's own as well, which come as
 // Apple Events, and of what the app's delegate is handed from the launch on, through answerLaunches().
 void listenForUrls();
@@ -146,11 +223,9 @@ void ownNotificationCenter();
 // The ICoreWebView2EnvironmentOptions WebView2's environment is made with: they register the scheme, which pages of
 // these other origins may request as well.
 void *schemeEnvironmentOptions(const char *scheme, const std::vector<std::string> &origins);
-// The window fills the screen while the page shows an element full screen, which WebView2 leaves to its host. On the
-// main thread.
+// The window of this controller fills the screen while the page shows an element full screen, which WebView2 leaves to
+// its host. On the main thread.
 void followPageFullScreen(void *controller);
-// A window that fills its screen fills it again once Windows changes the screen's size or scale. On the main thread.
-void fitFullScreen();
 // The folder WebView2 keeps the page's profile in: the app's own, on this machine.
 std::wstring webViewProfile();
 #endif

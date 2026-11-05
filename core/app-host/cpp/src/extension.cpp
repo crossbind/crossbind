@@ -422,7 +422,7 @@ struct Hooks {
     std::vector<std::pair<std::string, std::function<void(const Window &)>>> windows;
     std::vector<std::pair<std::string, std::function<void(const Window &)>>> closedWindows;
     std::vector<std::pair<std::string, std::function<void(const Page &)>>> pages;
-    std::vector<std::pair<std::string, std::function<bool()>>> closes;
+    std::vector<std::pair<std::string, std::function<bool(const Window &)>>> closes;
     std::vector<std::pair<std::string, std::function<void(bool)>>> actives;
     std::vector<std::pair<std::string, std::function<bool()>>> quitRequests;
     std::vector<std::pair<std::string, std::function<void()>>> reopens;
@@ -481,10 +481,11 @@ void takePageRequests(Hook &owner, Hook fn, const std::string &extension, const 
     owner = std::move(fn);
 }
 
-// The extension's event of this name, which the page's listeners of <extension>.<name> get.
-void sendEvent(const std::string &extension, const std::string &name, const Value &value, bool isHeld) {
+// The extension's event of this name, which the pages' listeners of <extension>.<name> get.
+void sendEvent(const std::string &extension, const std::string &name, const Value &value, bool isHeld, app::Reach reach = app::Reach::everyPage,
+    uint64_t page = 0) {
     if (name.empty()) throw std::invalid_argument("crossbind: the extension " + extension + " sends an event without a name");
-    app::postEvent(extension + "." + name, value.json(), isHeld);
+    app::postEvent(extension + "." + name, value.json(), isHeld, reach, page);
 }
 
 }  // namespace
@@ -576,7 +577,15 @@ void Call::onCancel(std::function<void()> fn) const {
     fn();
 }
 
+Page Window::page() const { return app::pageOfWindow(id_); }
+
 void Events::emit(const std::string &name, const Value &value) const { sendEvent(extension_, name, value, false); }
+
+void Events::emit(const std::string &name, const Value &value, const Page &page) const {
+    sendEvent(extension_, name, value, false, app::Reach::onePage, page.id());
+}
+
+void Events::emitToFront(const std::string &name, const Value &value) const { sendEvent(extension_, name, value, false, app::Reach::frontPage); }
 
 void Events::hold(const std::string &name, const Value &value) const { sendEvent(extension_, name, value, true); }
 
@@ -631,7 +640,7 @@ void Registry::onPage(std::function<void(const Page &)> fn) {
     hooks().pages.emplace_back(extension_, std::move(fn));
 }
 
-void Registry::onClose(std::function<bool()> fn) {
+void Registry::onClose(std::function<bool(const Window &)> fn) {
     checkStarting("the extension " + extension_ + "'s onClose");
     hooks().closes.emplace_back(extension_, std::move(fn));
 }
@@ -1137,10 +1146,11 @@ void runEach(const std::vector<std::pair<std::string, Hook>> &all, const char *a
 }
 
 // Whether every extension's hook of a kind allows it: the first false stops, and one that throws allows it.
-bool isAllowedByEach(const std::vector<std::pair<std::string, std::function<bool()>>> &all, const char *as) {
+template <typename... Args>
+bool isAllowedByEach(const std::vector<std::pair<std::string, std::function<bool(const Args &...)>>> &all, const char *as, const Args &...args) {
     for (const auto &[extension, hook] : all) {
         try {
-            if (!hook()) return false;
+            if (!hook(args...)) return false;
         } catch (const std::exception &error) {
             std::fprintf(stderr, "crossbind: the extension %s failed as %s: %s\n", extension.c_str(), as, error.what());
         } catch (...) {
@@ -1150,34 +1160,50 @@ bool isAllowedByEach(const std::vector<std::pair<std::string, std::function<bool
     return true;
 }
 
-// What the app shows: its open windows, the first of which appWindow() is, and its page, with the ids each got.
+// What the app shows: its open windows, the oldest first, which appWindow() gives, each with the page it shows and the
+// name crossbind/app's windows.open() gave it; their ids from the one in front, of the window its user used last; and
+// an Android page, of no window. Ids count from 1 within the run.
 struct OpenWindow {
     uint64_t id;
     void *native;
     void *webView;
+    std::string name;
+    uint64_t page = 0;
 };
 std::mutex shownMutex;
 std::vector<OpenWindow> openWindows;
+std::vector<uint64_t> frontOrder;
+uint64_t windowlessPage = 0;
 uint64_t windowCount = 0;
 uint64_t pageCount = 0;
-uint64_t pageShown = 0;
-uint64_t pageWindow = 0;
+
+Window windowFrom(const OpenWindow &window) { return make<Window>(window.id, window.native, window.webView); }
+
+// A window's event, of its id and its name, for every page that listens.
+void tellPages(const char *event, const OpenWindow &window) {
+    postEvent(event, Value(Value::Object{{"id", static_cast<double>(window.id)}, {"name", window.name.empty() ? Value() : Value(window.name)}}).json());
+}
 
 void tellClosed(const OpenWindow &window) {
-    if (!hasQuit) runEach(hooks().closedWindows, "a window closed", make<Window>(window.id, window.native, window.webView));
+    if (hasQuit) return;
+    runEach(hooks().closedWindows, "a window closed", windowFrom(window));
+    tellPages("window-closed", window);
 }
 
 }  // namespace
 
-uint64_t windowOpened(void *window, void *webView) {
-    uint64_t id = 0;
+uint64_t windowOpened(void *window, void *webView, std::string name) {
+    OpenWindow opened{0, window, webView, std::move(name)};
     {
         std::lock_guard<std::mutex> lock(shownMutex);
-        id = ++windowCount;
-        openWindows.push_back({id, window, webView});
+        opened.id = ++windowCount;
+        openWindows.push_back(opened);
+        frontOrder.insert(frontOrder.begin(), opened.id);
     }
-    if (!hasQuit) runEach(hooks().windows, "a window opened", make<Window>(id, window, webView));
-    return id;
+    if (hasQuit) return opened.id;
+    runEach(hooks().windows, "a window opened", windowFrom(opened));
+    tellPages("window-opened", opened);
+    return opened.id;
 }
 
 void windowClosed(uint64_t id) {
@@ -1188,9 +1214,10 @@ void windowClosed(uint64_t id) {
         if (open == openWindows.end()) return;
         closed = *open;
         openWindows.erase(open);
-        // Its page goes with it.
-        if (pageWindow == id) pageShown = pageWindow = 0;
+        frontOrder.erase(std::remove(frontOrder.begin(), frontOrder.end(), id), frontOrder.end());
     }
+    // Its page goes with it.
+    closeChannel(id);
     tellClosed(*closed);
 }
 
@@ -1199,30 +1226,82 @@ void windowsClosed() {
     {
         std::lock_guard<std::mutex> lock(shownMutex);
         open.swap(openWindows);
-        pageShown = pageWindow = 0;
+        frontOrder.clear();
     }
     for (const auto &window : open) tellClosed(window);
 }
 
-Page newPage() {
+std::string nameOfWindow(uint64_t id) {
     std::lock_guard<std::mutex> lock(shownMutex);
-    pageShown = ++pageCount;
-    pageWindow = openWindows.empty() ? 0 : openWindows.front().id;
-    return make<Page>(pageShown, pageWindow);
+    for (const auto &open : openWindows) {
+        if (open.id == id) return open.name;
+    }
+    return "";
 }
 
-Page shownPage() {
+uint64_t frontWindow() {
     std::lock_guard<std::mutex> lock(shownMutex);
-    return make<Page>(pageShown, pageWindow);
+    return frontOrder.empty() ? 0 : frontOrder.front();
+}
+
+std::vector<uint64_t> frontWindows() {
+    std::lock_guard<std::mutex> lock(shownMutex);
+    return frontOrder;
+}
+
+void windowFocused(uint64_t id) {
+    std::lock_guard<std::mutex> lock(shownMutex);
+    const auto at = std::find(frontOrder.begin(), frontOrder.end(), id);
+    if (at != frontOrder.end()) std::rotate(frontOrder.begin(), at, at + 1);
+}
+
+Page newPage(uint64_t window) {
+    std::lock_guard<std::mutex> lock(shownMutex);
+    const uint64_t page = ++pageCount;
+    if (window == 0) windowlessPage = page;
+    for (auto &open : openWindows) {
+        if (open.id == window) open.page = page;
+    }
+    return make<Page>(page, window);
+}
+
+Page pageOf(const void *webView) {
+    std::lock_guard<std::mutex> lock(shownMutex);
+    if (!webView) return make<Page>(windowlessPage, uint64_t{0});
+    for (const auto &open : openWindows) {
+        if (open.webView == webView) return make<Page>(open.page, open.id);
+    }
+    return make<Page>(uint64_t{0}, uint64_t{0});
+}
+
+Page pageOfWindow(uint64_t window) {
+    std::lock_guard<std::mutex> lock(shownMutex);
+    if (window == 0) return make<Page>(windowlessPage, uint64_t{0});
+    for (const auto &open : openWindows) {
+        if (open.id == window) return make<Page>(open.page, open.id);
+    }
+    return make<Page>(uint64_t{0}, uint64_t{0});
+}
+
+std::vector<uint64_t> frontPages() {
+    std::lock_guard<std::mutex> lock(shownMutex);
+    std::vector<uint64_t> pages;
+    for (const uint64_t id : frontOrder) {
+        for (const auto &open : openWindows) {
+            if (open.id == id && open.page != 0) pages.push_back(open.page);
+        }
+    }
+    if (windowlessPage != 0) pages.push_back(windowlessPage);
+    return pages;
 }
 
 void pageStarted(const Page &page) { runEach(hooks().pages, "a page started", page); }
 
-void droppedFiles(const std::vector<std::string> &paths, double x, double y) {
+void droppedFiles(const void *webView, const std::vector<std::string> &paths, double x, double y) {
     const auto &owner = hooks().drops;
     if (!owner || hasQuit) return;
     try {
-        owner(Drop{paths, x, y, shownPage()});
+        owner(Drop{paths, x, y, pageOf(webView)});
     } catch (const std::exception &error) {
         std::fprintf(stderr, "crossbind: the extension %s failed on a drop: %s\n", holderOf("page-drops").c_str(), error.what());
     } catch (...) {
@@ -1230,7 +1309,17 @@ void droppedFiles(const std::vector<std::string> &paths, double x, double y) {
     }
 }
 
-bool isCloseAllowed() { return hasQuit || isAllowedByEach(hooks().closes, "the window closed"); }
+bool isCloseAllowed(uint64_t window) {
+    if (hasQuit) return true;
+    std::optional<Window> closing;
+    {
+        std::lock_guard<std::mutex> lock(shownMutex);
+        for (const auto &open : openWindows) {
+            if (open.id == window) closing = windowFrom(open);
+        }
+    }
+    return !closing || isAllowedByEach(hooks().closes, "the window closed", *closing);
+}
 
 bool isQuitAllowed() { return hasQuit || isAllowedByEach(hooks().quitRequests, "the app was asked to quit"); }
 
@@ -1372,12 +1461,12 @@ bool askOwner(const std::function<void(Asked)> &owner, const Asked &request, con
 
 }  // namespace
 
-PagePermission pagePermission(std::vector<std::string> kinds, std::string origin, std::function<void(PermissionAnswer)> decide) {
+PagePermission pagePermission(Page page, std::vector<std::string> kinds, std::string origin, std::function<void(PermissionAnswer)> decide) {
     const bool isListed = !kinds.empty() && std::all_of(kinds.begin(), kinds.end(), [](const std::string &kind) {
         return (kind == "camera" && CROSSBIND_APP_PERMISSION_CAMERA) || (kind == "microphone" && CROSSBIND_APP_PERMISSION_MICROPHONE) ||
                (kind == "location" && CROSSBIND_APP_PERMISSION_LOCATION);
     });
-    return make<PagePermission>(std::make_shared<StateOf<PagePermission>>(std::move(kinds), std::move(origin), isListed, std::move(decide)));
+    return make<PagePermission>(std::make_shared<StateOf<PagePermission>>(page, std::move(kinds), std::move(origin), isListed, std::move(decide)));
 }
 
 bool hasPageDialogs() { return static_cast<bool>(hooks().pageDialogs); }
@@ -1413,13 +1502,38 @@ bool askFileInput(FileInput input) { return askOwner(hooks().fileInputs, input, 
 #if !defined(__ANDROID__)
 namespace crossbind {
 
+void *appWindow() {
+    std::lock_guard<std::mutex> lock(app::shownMutex);
+    return app::openWindows.empty() ? nullptr : app::openWindows.front().native;
+}
+
+void *appWebView() {
+    std::lock_guard<std::mutex> lock(app::shownMutex);
+    return app::openWindows.empty() ? nullptr : app::openWindows.front().webView;
+}
+
+std::optional<Window> windowOf(uint64_t id) {
+    std::lock_guard<std::mutex> lock(app::shownMutex);
+    for (const auto &open : app::openWindows) {
+        if (open.id == id) return app::windowFrom(open);
+    }
+    return std::nullopt;
+}
+
+std::vector<Window> openWindows() {
+    std::lock_guard<std::mutex> lock(app::shownMutex);
+    std::vector<Window> all;
+    for (const auto &open : app::openWindows) all.push_back(app::windowFrom(open));
+    return all;
+}
+
 void askPagePermission(std::vector<std::string> kinds, std::string origin, std::function<void(bool)> done) {
     onMainThread([kinds = std::move(kinds), origin = std::move(origin), done = std::move(done)]() mutable {
         if (!app::hasPagePermissions()) {
             done(false);
             return;
         }
-        app::askPagePermission(app::pagePermission(std::move(kinds), std::move(origin), [done = std::move(done)](app::PermissionAnswer answer) {
+        app::askPagePermission(app::pagePermission(app::pageOf(nullptr), std::move(kinds), std::move(origin), [done = std::move(done)](app::PermissionAnswer answer) {
             done(answer == app::PermissionAnswer::allow);
         }));
     });

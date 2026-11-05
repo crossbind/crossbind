@@ -1,5 +1,5 @@
-// The page's menus, the tray's icon in the notification area and the system's notifications on Windows: the menus on the
-// app's window, whose procedure the extension takes their commands in, and notifications as balloons of the tray's icon.
+// The page's menus, the tray's icon in the notification area and the system's notifications on Windows: each window's
+// menus on it, whose procedure the extension takes their commands in, and notifications as balloons of the tray's icon.
 #include "menu.h"
 
 #include "crossbind/app.h"
@@ -36,7 +36,7 @@ const UINT WM_TRAY = RegisterWindowMessageW(L"crossbind.menu.tray");
 constexpr UINT TRAY_ICON = 1;
 // The app's icon among its resources, which app.rc gives the id of Windows' own.
 constexpr WORD APP_ICON = 32512;
-// The extension's subclass of the app's window.
+// The extension's subclass of each window of the app's.
 constexpr UINT_PTR SUBCLASS = 1;
 
 // What a click of an item does: one of the page's tells the page its id, a standard one does what its role says.
@@ -81,14 +81,20 @@ const std::map<std::string, UINT> NAMED_KEYS{
     {"Minus", VK_OEM_MINUS}, {"Comma", VK_OEM_COMMA}, {"Period", VK_OEM_PERIOD},
 };
 
-HWND window = nullptr;
-ICoreWebView2Controller *controller = nullptr;
-HMENU bar = nullptr;
-Built built;
+// A window's menus: the window and its webview, its bar and what its items do, a generation each change of them moves
+// on, so an accelerator pressed before one runs nothing after it, and the menus set while one of its own was open, which
+// wait for it.
+struct WindowMenus {
+    HWND window = nullptr;
+    ICoreWebView2Controller *controller = nullptr;
+    HMENU bar = nullptr;
+    Built built;
+    LPARAM generation = 0;
+    std::vector<std::function<void()>> waiting;
+};
+// By the windows' ids, on the main thread.
+std::map<uint64_t, WindowMenus> windowMenus;
 MenuClicked onClick;
-// Each change of the menus moves it on, so an accelerator pressed before one runs nothing after it.
-LPARAM generation = 0;
-std::vector<std::function<void()>> waiting;
 
 // A hidden window takes the tray icon's messages. As a top-level one, it hears as well that Explorer started anew, as
 // after a crash, without the icons it showed.
@@ -135,13 +141,14 @@ std::wstring labelOf(const std::string &label) {
 }
 
 // One of the window's own, not of a dialog it shows.
-bool isMenuOpen() {
+bool isMenuOpen(HWND window) {
     GUITHREADINFO info{};
     info.cbSize = sizeof(info);
     return GetGUIThreadInfo(GetCurrentThreadId(), &info) && (info.flags & GUI_INMENUMODE) && info.hwndMenuOwner == window;
 }
 
-void runRole(const std::string &role) {
+// A standard item's role, which acts on the window whose menu it is in.
+void runRole(const std::string &role, HWND window, ICoreWebView2Controller *controller) {
     const auto found = ROLES.find(role);
     if (found != ROLES.end() && found->second.editKey) {
         if (controller) controller->MoveFocus(COREWEBVIEW2_MOVE_FOCUS_REASON_PROGRAMMATIC);
@@ -163,13 +170,14 @@ void runRole(const std::string &role) {
     }
 }
 
-// An item of the bar's menus or of the tray's, by its index among their commands.
-void run(HMENU menu, const Built &from, UINT index) {
+// An item of a window's menus, or for 0 of the tray's, by its index among their commands.
+void run(HMENU menu, const Built &from, UINT index, uint64_t window) {
     const UINT command = FIRST_COMMAND + index;
     if (index >= from.commands.size() || (GetMenuState(menu, command, MF_BYCOMMAND) & (MF_GRAYED | MF_DISABLED))) return;
     const Command &item = from.commands[index];
     if (!item.role.empty()) {
-        runRole(item.role);
+        const auto menus = windowMenus.find(window);
+        if (menus != windowMenus.end()) runRole(item.role, menus->second.window, menus->second.controller);
         return;
     }
     std::optional<bool> checked;
@@ -177,7 +185,7 @@ void run(HMENU menu, const Built &from, UINT index) {
         checked = !(GetMenuState(menu, command, MF_BYCOMMAND) & MF_CHECKED);
         CheckMenuItem(menu, command, MF_BYCOMMAND | (*checked ? MF_CHECKED : MF_UNCHECKED));
     }
-    if (onClick && !item.id.empty()) onClick(item.id, checked);
+    if (onClick && !item.id.empty()) onClick(window, item.id, checked);
 }
 
 // Cut to what Windows keeps.
@@ -231,33 +239,37 @@ std::string noNotificationArea() {
     return "crossbind: Windows' notification area did not take the app's icon: error " + std::to_string(GetLastError());
 }
 
-LRESULT CALLBACK menuProcedure(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam, UINT_PTR, DWORD_PTR) {
+// A window's subclass, which knows the window's id.
+LRESULT CALLBACK menuProcedure(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam, UINT_PTR, DWORD_PTR id) {
+    const auto found = windowMenus.find(static_cast<uint64_t>(id));
+    if (found == windowMenus.end()) return DefSubclassProc(hwnd, message, wParam, lParam);
+    WindowMenus &menus = found->second;
     if (message == WM_COMMAND && HIWORD(wParam) == 0 && lParam == 0 && LOWORD(wParam) >= FIRST_COMMAND) {
-        run(bar, built, LOWORD(wParam) - FIRST_COMMAND);
+        run(menus.bar, menus.built, LOWORD(wParam) - FIRST_COMMAND, static_cast<uint64_t>(id));
         return 0;
     }
     if (message == WM_SHORTCUT) {
-        if (lParam == generation) run(bar, built, static_cast<UINT>(wParam));
+        if (lParam == menus.generation) run(menus.bar, menus.built, static_cast<UINT>(wParam), static_cast<uint64_t>(id));
         return 0;
     }
-    if (message == WM_EXITMENULOOP && !waiting.empty()) PostMessageW(hwnd, WM_MENUS_WAITING, 0, 0);
+    if (message == WM_EXITMENULOOP && !menus.waiting.empty()) PostMessageW(hwnd, WM_MENUS_WAITING, 0, 0);
     // Posted once more, so the command of a click on the menu that closed runs first, on the menus it was made for.
     if (message == WM_MENUS_WAITING) {
         if (wParam == 0) {
             PostMessageW(hwnd, WM_MENUS_WAITING, 1, 0);
-        } else if (!isMenuOpen()) {
-            for (auto &set : std::exchange(waiting, {})) set();
+        } else if (!isMenuOpen(hwnd)) {
+            for (auto &set : std::exchange(menus.waiting, {})) set();
         }
         return 0;
     }
-    // The app ends with its window, and its icon would stay in the notification area until a pointer passed over it.
-    if (message == WM_DESTROY) hideIcon();
     return DefSubclassProc(hwnd, message, wParam, lParam);
 }
 
-// The webview's key presses, which reach the menus' accelerators first, as the webview holds the keyboard.
+// A window's webview's key presses, which reach its menus' accelerators first, as the webview holds the keyboard.
 class KeyPressed final : public ICoreWebView2AcceleratorKeyPressedEventHandler {
 public:
+    explicit KeyPressed(uint64_t window) : window_(window) {}
+
     ULONG STDMETHODCALLTYPE AddRef() override { return ++refs_; }
     ULONG STDMETHODCALLTYPE Release() override {
         const ULONG left = --refs_;
@@ -280,14 +292,17 @@ public:
         COREWEBVIEW2_PHYSICAL_KEY_STATUS status{};
         if (FAILED(args->get_KeyEventKind(&kind)) || FAILED(args->get_VirtualKey(&key)) || FAILED(args->get_PhysicalKeyStatus(&status))) return S_OK;
         if (kind != COREWEBVIEW2_KEY_EVENT_KIND_KEY_DOWN && kind != COREWEBVIEW2_KEY_EVENT_KIND_SYSTEM_KEY_DOWN) return S_OK;
+        const auto found = windowMenus.find(window_);
+        if (found == windowMenus.end()) return S_OK;
+        const WindowMenus &menus = found->second;
         const bool control = GetKeyState(VK_CONTROL) < 0;
         const bool alt = GetKeyState(VK_MENU) < 0;
         const bool shift = GetKeyState(VK_SHIFT) < 0;
-        for (const auto &shortcut : built.shortcuts) {
+        for (const auto &shortcut : menus.built.shortcuts) {
             if (shortcut.key != key || shortcut.control != control || shortcut.alt != alt || shortcut.shift != shift) continue;
             // A held key repeats, which neither the page nor the menus take.
             args->put_Handled(TRUE);
-            if (!status.WasKeyDown) PostMessageW(window, WM_SHORTCUT, shortcut.index, generation);
+            if (!status.WasKeyDown) PostMessageW(menus.window, WM_SHORTCUT, shortcut.index, menus.generation);
             break;
         }
         return S_OK;
@@ -295,23 +310,26 @@ public:
 
 private:
     std::atomic<ULONG> refs_{1};
+    uint64_t window_;
 };
 
-// The menus go on the top window, WebView2's own being a child of it: the extension's subclass of its procedure takes
-// their commands first, and the webview hands their accelerators over. Once there is a window, on the main thread.
-bool follow() {
-    if (window) return true;
-    HWND app = static_cast<HWND>(appWindow());
-    if (!app || !SetWindowSubclass(app, menuProcedure, SUBCLASS, 0)) return false;
-    window = app;
-    controller = static_cast<ICoreWebView2Controller *>(appWebView());
-    if (controller) {
-        auto *pressed = new KeyPressed();
+// A window's menus go on the top window, WebView2's own being a child of it: the extension's subclass of its procedure
+// takes their commands first, and the webview hands their accelerators over. Once for each open window, on the main
+// thread: none for one that closed.
+WindowMenus *follow(uint64_t id) {
+    if (const auto found = windowMenus.find(id); found != windowMenus.end()) return &found->second;
+    const std::optional<Window> open = windowOf(id);
+    if (!open || !SetWindowSubclass(static_cast<HWND>(open->native()), menuProcedure, SUBCLASS, static_cast<DWORD_PTR>(id))) return nullptr;
+    WindowMenus &menus = windowMenus[id];
+    menus.window = static_cast<HWND>(open->native());
+    menus.controller = static_cast<ICoreWebView2Controller *>(open->webView());
+    if (menus.controller) {
+        auto *pressed = new KeyPressed(id);
         EventRegistrationToken token;
-        controller->add_AcceleratorKeyPressed(pressed, &token);
+        menus.controller->add_AcceleratorKeyPressed(pressed, &token);
         pressed->Release();
     }
-    return true;
+    return &menus;
 }
 
 void addItem(HMENU menu, const MenuItem &page, Built &into) {
@@ -351,9 +369,9 @@ void addItem(HMENU menu, const MenuItem &page, Built &into) {
     AppendMenuW(menu, flags, FIRST_COMMAND + index, label.c_str());
 }
 
-// The page keeps the height app.window gives it, so the window takes the bar's height on, unless it is maximized or
+// The page keeps the height its window gave it, so the window takes the bar's height on, unless it is maximized or
 // fills the screen, which takes its caption away.
-void keepPageHeight(LONG pageHeight) {
+void keepPageHeight(HWND window, LONG pageHeight) {
     RECT client{};
     RECT frame{};
     const bool fillsScreen = !(GetWindowLongPtrW(window, GWL_STYLE) & WS_CAPTION);
@@ -364,7 +382,7 @@ void keepPageHeight(LONG pageHeight) {
 }
 
 // No menus take the bar away.
-void setMenus(const std::vector<MenuItem> &menus, const MenuClicked &clicked, const std::function<void(Failure)> &done) {
+void setMenus(WindowMenus &into, const std::vector<MenuItem> &menus, const MenuClicked &clicked, const std::function<void(Failure)> &done) {
     HMENU next = menus.empty() ? nullptr : CreateMenu();
     if (!menus.empty() && !next) {
         done("crossbind: the window's menus cannot be made: error " + std::to_string(GetLastError()));
@@ -379,19 +397,19 @@ void setMenus(const std::vector<MenuItem> &menus, const MenuClicked &clicked, co
         return;
     }
     RECT page{};
-    GetClientRect(window, &page);
-    if (!SetMenu(window, next)) {
+    GetClientRect(into.window, &page);
+    if (!SetMenu(into.window, next)) {
         const DWORD error = GetLastError();
         if (next) DestroyMenu(next);
         done("crossbind: the window's menus cannot change: error " + std::to_string(error));
         return;
     }
-    if (bar) DestroyMenu(bar);
-    bar = next;
-    built = std::move(nextBuilt);
-    generation += 1;
+    if (into.bar) DestroyMenu(into.bar);
+    into.bar = next;
+    into.built = std::move(nextBuilt);
+    into.generation += 1;
     onClick = clicked;
-    keepPageHeight(page.bottom - page.top);
+    keepPageHeight(into.window, page.bottom - page.top);
     done(std::nullopt);
 }
 
@@ -409,7 +427,7 @@ void openTrayMenu(int x, int y) {
     const auto command = static_cast<UINT>(TrackPopupMenu(trayMenu, TPM_RETURNCMD | TPM_NONOTIFY | TPM_RIGHTBUTTON, x, y, 0, trayWindow, nullptr));
     isTrayMenuOpen = false;
     PostMessageW(trayWindow, WM_NULL, 0, 0);
-    if (command >= FIRST_COMMAND) run(trayMenu, trayBuilt, command - FIRST_COMMAND);
+    if (command >= FIRST_COMMAND) run(trayMenu, trayBuilt, command - FIRST_COMMAND, 0);
     for (auto &set : std::exchange(trayWaiting, {})) set();
 }
 
@@ -420,17 +438,17 @@ LRESULT CALLBACK trayProcedure(HWND hwnd, UINT message, WPARAM wParam, LPARAM lP
         switch (LOWORD(lParam)) {
         case NIN_SELECT:
         case NIN_KEYSELECT:
-            if (isTraySet) app::emitEvent("tray");
+            if (isTraySet) app::emitEventToFront("tray");
             break;
         case WM_CONTEXTMENU:
             if (trayMenu) {
                 openTrayMenu(GET_X_LPARAM(wParam), GET_Y_LPARAM(wParam));
             } else if (isTraySet) {
-                app::emitEvent("tray");
+                app::emitEventToFront("tray");
             }
             break;
         case NIN_BALLOONUSERCLICK:
-            app::emitEvent("notification");
+            app::emitEventToFront("notification");
             balloonEnded();
             break;
         case NIN_BALLOONTIMEOUT:
@@ -519,30 +537,46 @@ void removeTrayNow() {
 }  // namespace
 
 // Menus set while one of the window's is open, or while others wait, wait for it to close, in order.
-void setMenu(std::vector<MenuItem> menus, MenuClicked clicked, std::function<void(Failure)> done) {
-    onMainThread([menus = std::move(menus), clicked = std::move(clicked), done = std::move(done)] {
-        if (!follow()) {
-            done("crossbind: the app has no window to show its menus in");
+void setMenu(uint64_t window, std::vector<MenuItem> menus, MenuClicked clicked, std::function<void(Failure)> done) {
+    onMainThread([window, menus = std::move(menus), clicked = std::move(clicked), done = std::move(done)] {
+        WindowMenus *into = follow(window);
+        if (!into) {
+            done("crossbind: the page's window has closed");
             return;
         }
-        if (isMenuOpen() || !waiting.empty()) {
-            waiting.push_back([menus, clicked, done] { setMenus(menus, clicked, done); });
+        if (isMenuOpen(into->window) || !into->waiting.empty()) {
+            into->waiting.push_back([window, menus, clicked, done] {
+                if (WindowMenus *still = follow(window)) setMenus(*still, menus, clicked, done);
+            });
             return;
         }
-        setMenus(menus, clicked, done);
+        setMenus(*into, menus, clicked, done);
     });
 }
+
+// The subclass goes before the window, and the bar with it.
+void dropMenus(uint64_t window) {
+    const auto found = windowMenus.find(window);
+    if (found == windowMenus.end()) return;
+    RemoveWindowSubclass(found->second.window, menuProcedure, SUBCLASS);
+    windowMenus.erase(found);
+}
+
+// The app's icon would stay in the notification area until a pointer passed over it.
+void quitTray() { hideIcon(); }
 
 // The menu opens at the page's point in the webview, which WebView2 zooms and scales to the screen's pixels, from the
 // top left of its bounds in its parent window. Its loop runs the tasks of the main thread, and so the page's next
 // popup, which waits for none.
-void popupMenu(std::vector<MenuItem> items, double x, double y, std::function<void(Failure, std::optional<std::string>)> done) {
-    onMainThread([items = std::move(items), x, y, done = std::move(done)] {
+void popupMenu(uint64_t window, std::vector<MenuItem> items, double x, double y, std::function<void(Failure, std::optional<std::string>)> done) {
+    onMainThread([window, items = std::move(items), x, y, done = std::move(done)] {
         static bool isOpen = false;
-        if (!follow() || !controller) {
-            done(std::string("crossbind: the app has no window to show a menu in"), std::nullopt);
+        WindowMenus *shown = follow(window);
+        if (!shown || !shown->controller) {
+            done(std::string("crossbind: the page's window has closed"), std::nullopt);
             return;
         }
+        ICoreWebView2Controller *controller = shown->controller;
         if (isOpen) {
             done(std::string("crossbind: a menu of the page's is open already"), std::nullopt);
             return;
@@ -573,16 +607,17 @@ void popupMenu(std::vector<MenuItem> items, double x, double y, std::function<vo
         HWND parent = nullptr;
         controller->get_ParentWindow(&parent);
         POINT at{bounds.left + static_cast<LONG>(x * zoom * scale), bounds.top + static_cast<LONG>(y * zoom * scale)};
-        ClientToScreen(parent ? parent : window, &at);
+        ClientToScreen(parent ? parent : shown->window, &at);
         isOpen = true;
-        const auto command = static_cast<UINT>(TrackPopupMenuEx(menu, TPM_RETURNCMD | TPM_RIGHTBUTTON, at.x, at.y, window, nullptr));
+        const HWND owner = shown->window;
+        const auto command = static_cast<UINT>(TrackPopupMenuEx(menu, TPM_RETURNCMD | TPM_RIGHTBUTTON, at.x, at.y, owner, nullptr));
         isOpen = false;
         DestroyMenu(menu);
         std::optional<std::string> picked;
         if (command >= FIRST_COMMAND && command - FIRST_COMMAND < popup.commands.size()) {
             const Command &item = popup.commands[command - FIRST_COMMAND];
             if (!item.role.empty()) {
-                runRole(item.role);
+                runRole(item.role, owner, controller);
             } else if (!item.id.empty()) {
                 picked = item.id;
             }
@@ -597,7 +632,6 @@ void setDockMenu(std::vector<MenuItem>, MenuClicked, std::function<void(Failure)
 
 void setTray(TrayOptions options, MenuClicked clicked, std::function<void(Failure)> done) {
     onMainThread([options = std::move(options), clicked = std::move(clicked), done = std::move(done)] {
-        follow();
         if (isTrayMenuOpen) {
             trayWaiting.push_back([options, clicked, done] { setTrayNow(options, clicked, done); });
             return;
@@ -624,7 +658,6 @@ void removeTray(std::function<void(Failure)> done) {
 // icon of the app's shows until the notification goes.
 void showNotification(Notification notification, std::function<void(Failure)> done) {
     onMainThread([notification = std::move(notification), done = std::move(done)] {
-        follow();
         if (!makeTrayWindow()) {
             done("crossbind: the tray's window cannot be made: error " + std::to_string(GetLastError()));
             return;

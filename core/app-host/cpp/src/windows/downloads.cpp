@@ -112,7 +112,8 @@ void answer(ICoreWebView2DownloadStartingEventArgs *args, ICoreWebView2DownloadO
 // The name WebView2 would save a download by, at the end of the path it suggests.
 std::string nameOf(const std::string &path) { return path.substr(path.find_last_of("\\/") + 1); }
 
-HRESULT onDownloadStarting(ICoreWebView2 *, ICoreWebView2DownloadStartingEventArgs *args) {
+// webView is the controller of the window whose page downloads.
+HRESULT onDownloadStarting(void *webView, ICoreWebView2DownloadStartingEventArgs *args) {
     ICoreWebView2DownloadOperation *operation = nullptr;
     if (FAILED(args->get_DownloadOperation(&operation))) return S_OK;
     ICoreWebView2Deferral *deferral = nullptr;
@@ -132,7 +133,7 @@ HRESULT onDownloadStarting(ICoreWebView2 *, ICoreWebView2DownloadStartingEventAr
     LPWSTR suggested = nullptr;
     args->get_ResultFilePath(&suggested);
     args->AddRef();
-    const auto download = std::make_shared<app::StateOf<Download>>(running->url, nameOf(take(suggested)), take(mime), size, running->events,
+    const auto download = std::make_shared<app::StateOf<Download>>(webView, running->url, nameOf(take(suggested)), take(mime), size, running->events,
         [args, deferral, operation, running](app::DownloadAnswer given) {
             onMainThread([args, deferral, operation, running, given] {
                 answer(args, operation, running, given);
@@ -153,7 +154,8 @@ void takeDownloads(void *webView) {
     ICoreWebView2_4 *core4 = nullptr;
     if (FAILED(coreWebView(webView)->QueryInterface(IID_ICoreWebView2_4, reinterpret_cast<void **>(&core4)))) return;
     auto *starting = new Handler<ICoreWebView2DownloadStartingEventHandler, ICoreWebView2 *, ICoreWebView2DownloadStartingEventArgs *>(
-        IID_ICoreWebView2DownloadStartingEventHandler, onDownloadStarting);
+        IID_ICoreWebView2DownloadStartingEventHandler,
+        [webView](ICoreWebView2 *, ICoreWebView2DownloadStartingEventArgs *args) { return onDownloadStarting(webView, args); });
     EventRegistrationToken token;
     core4->add_DownloadStarting(starting, &token);
     starting->Release();

@@ -19,10 +19,10 @@ void responded(GtkDialog *box, gint response, gpointer data) {
 
 }  // namespace
 
-// A dialog of the app's window, with the app's name over the message, as GTK shows its own.
+// A dialog of the page's window, with the app's name over the message, as GTK shows its own.
 void showPageDialog(PageDialog dialog) {
     const std::string title = crossbind::appName();
-    GtkWidget *box = gtk_message_dialog_new(static_cast<GtkWindow *>(crossbind::appWindow()), GtkDialogFlags(GTK_DIALOG_MODAL | GTK_DIALOG_DESTROY_WITH_PARENT),
+    GtkWidget *box = gtk_message_dialog_new(static_cast<GtkWindow *>(windowOf(dialog)), GtkDialogFlags(GTK_DIALOG_MODAL | GTK_DIALOG_DESTROY_WITH_PARENT),
                                             GTK_MESSAGE_OTHER, dialog.kind() == PageDialog::Kind::alert ? GTK_BUTTONS_OK : GTK_BUTTONS_OK_CANCEL, "%s",
                                             title.c_str());
     gtk_window_set_title(GTK_WINDOW(box), title.c_str());

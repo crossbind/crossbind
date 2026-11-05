@@ -78,7 +78,7 @@ hook. What the host keeps for itself, [What the host keeps](../api/extensions.md
 
 1. **Name it.** Lowercase letters and digits, from a letter, dashes between. Look on npm for the keyword `crossbind-extension`
    first, so two extensions do not take one name, which stops an app that lists both: crossbind keeps the names of the
-   host's own extensions and of their roles, `app`, `events`, `crossbind` and those that start with `page-`. Give it
+   host's own extensions and of their roles, `app`, `events`, `windows`, `crossbind` and those that start with `page-`. Give it
    `contract: 1`, the version of the contract it is written for, and `replaces` for each role of the host's it takes.
 2. **Write the shared C++.** The entry registers each function as `<name>.<function>`, which the app checks as it
    starts, checks the options, and hands the call to the platform's code. A function that waits, as one that reads a

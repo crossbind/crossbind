@@ -47,10 +47,17 @@ const std::shared_ptr<StateOf<T>> &stateOf(const T &object) {
 // The extension that holds this role of the host's, or "" for none.
 std::string holderOf(const std::string &role);
 
-// The page the app shows, whose requests the webview hands over, from any thread: none, 0 for its id and its window's,
-// before the first.
-Page shownPage();
-// The next page, in the first of the app's open windows, which the app shows from now on, as the webview commits it.
-Page newPage();
+// The page a window of the app's shows, by its webview as windowOpened() was given it, whose requests the webview hands
+// over, from any thread: none, 0 for its id and its window's, before the first or once the window closed. An Android
+// page is of no window, and null names it.
+Page pageOf(const void *webView);
+// The page of the window of this id, 0 for an Android page's, from any thread: none before the first.
+Page pageOfWindow(uint64_t window);
+// The next page of the window of this id, 0 for an Android page's, which it shows from now on, as the webview commits
+// it.
+Page newPage(uint64_t window);
+// The pages the app's windows show, from the one in front, of the window its user used last, to the one used longest
+// ago, from any thread.
+std::vector<uint64_t> frontPages();
 
 }  // namespace crossbind::app

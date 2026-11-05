@@ -457,7 +457,7 @@ describe('an extension crossbind.config.js lists', () => {
         expect(() => listedExtension({ ...extension, name: 'dialog' }, 'extensions[0]', base)).toThrow(
             "crossbind: extensions[0] is named dialog, which crossbind keeps for the host's own: name it as its package, as acme-dialog, and give replaces: 'dialog' to take the host's place.",
         );
-        for (const name of ['events', 'app', 'crossbind', 'page-custom']) {
+        for (const name of ['events', 'app', 'windows', 'crossbind', 'page-custom']) {
             expect(() => listedExtension({ ...extension, name }, 'extensions[0]', base))
                 .toThrow(`crossbind: extensions[0] is named ${name}, which crossbind keeps for itself: name it as its package, as acme-${name}.`);
         }

@@ -11,6 +11,7 @@
 // fails throws a std::runtime_error, which says why. An iOS app has messageDialog(), paths(), openExternal(),
 // emitEvent() and holdEvent() alone, and an Android app messageDialog(), paths(), emitEvent() and holdEvent(): the
 // others throw there.
+#include <cstdint>
 #include <optional>
 #include <string>
 #include <vector>
@@ -77,22 +78,30 @@ void revealInFolder(const std::string &path);
 // A file or folder moved to the system's trash, which fails and moves nothing where the system has no trash.
 void trash(const std::string &path);
 Paths paths();
-// Ends the app as closing its window does, without asking the extensions that may keep the window open.
+// Ends the app as closing its last window does, without asking the extensions that may keep a window open.
 void quit();
 // Asks the extensions' onQuitRequest, as the app's user's Quit does, then ends the app as quit() does, unless one keeps
 // it running: from any thread, without waiting. A desktop app's alone.
 void requestQuit();
 // Ends the app as quit() does, then opens it anew, with no arguments.
 void relaunch();
-// Sends the page an event, whose listeners through crossbind/app's events.on get the value json holds, a JSON text. It
-// waits for nothing, so any thread may call it. A page gets the events emitted once it listens: one emitted before,
-// as before its page loads or once the app quits, reaches none. The events menu, second-instance, open-url, suspend,
-// resume, active, inactive, drop, open-files, tray, notification, user-activity and shortcut-item are the host's own.
+// Sends every page that listens to it an event, whose listeners through crossbind/app's events.on get the value json
+// holds, a JSON text. It waits for nothing, so any thread may call it. A page gets the events emitted once it listens to
+// their name: one emitted before, as before its page loads or once the app quits, reaches none. The events menu,
+// second-instance, open-url, suspend, resume, active, inactive, drop, open-files, tray, notification, user-activity,
+// shortcut-item, window-opened and window-closed are the host's own.
 void emitEvent(const std::string &event, const std::string &json = "null");
-// Sends the page an event as emitEvent() does, which the host holds until the page asks for the events of its name with
-// crossbind/app's events.held() since it loaded, as what came before it listened: each reaches the page once, in that
-// answer or as the event while it listens, and one a reload cut off waits for the page's next ask. The host holds 1,000
-// of a name at most. Any thread may call it, before the module starts as well, as an extension's onStart does.
+// Sends an event as emitEvent() does to one page alone, by its id, as an extension's Page names it: none once that page
+// went.
+void emitEvent(const std::string &event, const std::string &json, uint64_t page);
+// Sends an event as emitEvent() does to the page in front that listens to it, of the window its user used last, for
+// what one page is to act on once.
+void emitEventToFront(const std::string &event, const std::string &json = "null");
+// Sends an event as emitEvent() does, which the host holds until a page asks for the events of its name with
+// crossbind/app's events.held() since it loaded, as what came before it listened, then hands to the page in front that
+// asked, of the window its user used last: each reaches one page once, in that answer or as the event while it
+// listens, and one a reload cut off waits for the next ask. The host holds 1,000 of a name at most. Any thread may call
+// it, before the module starts as well, as an extension's onStart does.
 void holdEvent(const std::string &event, const std::string &json = "null");
 // The version app.updater.url in crossbind.config.js offers when it is newer than this app's, or nothing. It waits for
 // the download, and throws while another check or install runs.

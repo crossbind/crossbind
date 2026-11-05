@@ -33,12 +33,14 @@ WKPermissionDecision decisionOf(app::PermissionAnswer answer) API_AVAILABLE(maco
 }
 
 // A frame of another origin gets no dialog, as it would show under the app's name: one answers as cancelled.
-void askDialog(PageDialog::Kind kind, NSString *message, NSString *text, WKFrameInfo *frame, std::function<void(std::optional<std::string>)> answer) {
+void askDialog(WKWebView *webView, PageDialog::Kind kind, NSString *message, NSString *text, WKFrameInfo *frame,
+    std::function<void(std::optional<std::string>)> answer) {
     if (!app::isOwnOrigin(app::originOf(frame.securityOrigin))) {
         answer(std::nullopt);
         return;
     }
-    app::askPageDialog(app::make<PageDialog>(std::make_shared<app::StateOf<PageDialog>>(kind, utf8(message), utf8(text), std::move(answer))));
+    app::askPageDialog(app::make<PageDialog>(
+        std::make_shared<app::StateOf<PageDialog>>((__bridge const void *)webView, kind, utf8(message), utf8(text), std::move(answer))));
 }
 
 }  // namespace
@@ -85,7 +87,7 @@ bool presentOnTop(void *controller, void *window) {
                       initiatedByFrame:(WKFrameInfo *)frame
                      completionHandler:(void (^)(void))done {
     void (^answer)(void) = [done copy];
-    askDialog(PageDialog::Kind::alert, message, nil, frame, [answer](std::optional<std::string>) { answer(); });
+    askDialog(webView, PageDialog::Kind::alert, message, nil, frame, [answer](std::optional<std::string>) { answer(); });
 }
 
 - (void)webView:(WKWebView *)webView
@@ -93,7 +95,7 @@ bool presentOnTop(void *controller, void *window) {
                         initiatedByFrame:(WKFrameInfo *)frame
                        completionHandler:(void (^)(BOOL))done {
     void (^answer)(BOOL) = [done copy];
-    askDialog(PageDialog::Kind::confirm, message, nil, frame, [answer](std::optional<std::string> text) { answer(text.has_value()); });
+    askDialog(webView, PageDialog::Kind::confirm, message, nil, frame, [answer](std::optional<std::string> text) { answer(text.has_value()); });
 }
 
 - (void)webView:(WKWebView *)webView
@@ -102,7 +104,7 @@ bool presentOnTop(void *controller, void *window) {
                          initiatedByFrame:(WKFrameInfo *)frame
                         completionHandler:(void (^)(NSString *))done {
     void (^answer)(NSString *) = [done copy];
-    askDialog(PageDialog::Kind::prompt, prompt, text, frame, [answer](std::optional<std::string> given) { answer(given ? ns(*given) : nil); });
+    askDialog(webView, PageDialog::Kind::prompt, prompt, text, frame, [answer](std::optional<std::string> given) { answer(given ? ns(*given) : nil); });
 }
 
 // A window the page asks for with window.open(): WebKit opens none without a web view of the delegate's, and the app
@@ -122,7 +124,7 @@ bool presentOnTop(void *controller, void *window) {
               initiatedByFrame:(WKFrameInfo *)frame
              completionHandler:(void (^)(NSArray<NSURL *> *))done {
     void (^answer)(NSArray<NSURL *> *) = [done copy];
-    app::askFileInput(app::make<FileInput>(std::make_shared<app::StateOf<FileInput>>(
+    app::askFileInput(app::make<FileInput>(std::make_shared<app::StateOf<FileInput>>((__bridge const void *)webView,
         parameters.allowsMultipleSelection, parameters.allowsDirectories, std::vector<std::string>{},
         [answer](std::optional<std::vector<std::string>> paths) {
             if (!paths) {
@@ -147,7 +149,7 @@ bool presentOnTop(void *controller, void *window) {
     if (type != WKMediaCaptureTypeMicrophone) kinds.emplace_back("camera");
     if (type != WKMediaCaptureTypeCamera) kinds.emplace_back("microphone");
     void (^answer)(WKPermissionDecision) = [decide copy];
-    app::askPagePermission(app::pagePermission(std::move(kinds), app::originOf(origin), [answer](app::PermissionAnswer decision) { answer(decisionOf(decision)); }));
+    app::askPagePermission(app::pagePermission(app::pageOf((__bridge const void *)webView), std::move(kinds), app::originOf(origin), [answer](app::PermissionAnswer decision) { answer(decisionOf(decision)); }));
 }
 
 // The location, which the system then asks the app's user for.
@@ -156,7 +158,7 @@ bool presentOnTop(void *controller, void *window) {
                          initiatedByFrame:(WKFrameInfo *)frame
                           decisionHandler:(void (^)(WKPermissionDecision))decide API_AVAILABLE(macos(27.0), ios(27.0)) {
     void (^answer)(WKPermissionDecision) = [decide copy];
-    app::askPagePermission(app::pagePermission({"location"}, app::originOf(origin), [answer](app::PermissionAnswer decision) { answer(decisionOf(decision)); }));
+    app::askPagePermission(app::pagePermission(app::pageOf((__bridge const void *)webView), {"location"}, app::originOf(origin), [answer](app::PermissionAnswer decision) { answer(decisionOf(decision)); }));
 }
 
 #if TARGET_OS_IPHONE
@@ -166,7 +168,7 @@ bool presentOnTop(void *controller, void *window) {
                                         initiatedByFrame:(WKFrameInfo *)frame
                                          decisionHandler:(void (^)(WKPermissionDecision))decide {
     void (^answer)(WKPermissionDecision) = [decide copy];
-    app::askPagePermission(app::pagePermission({"motion"}, app::originOf(origin), [answer](app::PermissionAnswer decision) { answer(decisionOf(decision)); }));
+    app::askPagePermission(app::pagePermission(app::pageOf((__bridge const void *)webView), {"motion"}, app::originOf(origin), [answer](app::PermissionAnswer decision) { answer(decisionOf(decision)); }));
 }
 #endif
 
@@ -176,7 +178,7 @@ bool presentOnTop(void *controller, void *window) {
 // CoreLocation asks the app's user nothing. A macOS page's location comes from the extension page-location.
 - (void)_webView:(WKWebView *)webView requestGeolocationPermissionForFrame:(WKFrameInfo *)frame decisionHandler:(void (^)(BOOL))decide {
     void (^answer)(BOOL) = [decide copy];
-    app::askPagePermission(app::pagePermission({"location"}, app::originOf(frame.securityOrigin),
+    app::askPagePermission(app::pagePermission(app::pageOf((__bridge const void *)webView), {"location"}, app::originOf(frame.securityOrigin),
         [answer](app::PermissionAnswer decision) { answer(decision == app::PermissionAnswer::allow); }));
 }
 #endif
