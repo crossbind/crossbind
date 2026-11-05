@@ -406,7 +406,7 @@ jobs:
               # through Sysnative and this step in System32: Microsoft's bootstrapper passes, a file another signed or
               # none signed fails.
               run: |
-                  $line = Select-String -Path core\crossbind\src\installers\nsis\installer.nsi -Pattern 'nsExec::ExecToStack (?:/TIMEOUT=\d+ )?`"([^"]+)" (.*)`'
+                  $line = Select-String -Path extensions\nsis\installer.nsi -Pattern 'nsExec::ExecToStack (?:/TIMEOUT=\d+ )?`"([^"]+)" (.*)`'
                   if (-not $line) { throw 'installer.nsi runs no check of the bootstrapper' }
                   $program = $line.Matches[0].Groups[1].Value.Replace('$WINDIR\Sysnative', "$env:SystemRoot\System32")
                   $arguments = $line.Matches[0].Groups[2].Value.Replace('$$', '$')

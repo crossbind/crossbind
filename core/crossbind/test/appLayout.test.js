@@ -6,6 +6,7 @@ import {
 } from 'vitest';
 
 const state = { config: { general: { name: 'demo' }, app: {}, target: {}, extensions: [] }, targets: [] };
+vi.mock('../src/utils/appExtensions.js', async (importOriginal) => (await import('./ownTools.js')).default(importOriginal));
 vi.mock('../src/state/index.js', () => ({ default: state }));
 // The emulator a dev session runs an Android app on.
 vi.mock('../src/actions/androidDevice.js', () => ({ attachedDevice: () => ({ serial: 'emulator-5554', abi: 'x86_64' }) }));
@@ -34,9 +35,9 @@ const inWindowsImage = vi.fn((command, cwd) => writeMade(command, cwd));
 const signWindows = vi.fn();
 vi.mock('../src/actions/windowsSigning.js', async (importOriginal) => ({ ...await importOriginal(), inWindowsImage, signWindows }));
 
-const { appLayout, appOutputName, appTargetParams, publishApp } = await import('../src/actions/buildApp.js');
+const { appLayout, appOutputName, appOutputOf, appTargetParams, clearAppOutputs, publishApp } = await import('../src/actions/buildApp.js');
 const { shipApp } = await import('../src/actions/appInstaller.js');
-const { newUpdaterKey } = await import('../src/actions/appUpdate.js');
+const { newUpdaterKey } = await import('../../../extensions/updater/src/update.js');
 
 // An app as the bundler's plugin publishes it: with its page, then with what installs it.
 async function ship(target, options) {
@@ -146,7 +147,7 @@ describe("a desktop app's page", () => {
         ];
         fs.mkdirSync(path.join(root, 'build', arm64.appName, 'resources'), { recursive: true });
         ['index.html', 'crossbind.js', 'assets/index.js', 'demo-linux-x64/demo', 'demo-linux-x64.tar.gz', 'demo-linux-x64.deb', 'demo-android.apk',
-            'demo-android.aab', 'demo-win32-x64.zip', 'demo-win32-x64-setup.exe', 'demo.dmg'].forEach((file) => {
+            'demo-android.aab', 'demo-win32-x64.zip', 'demo-win32-x64-setup.exe'].forEach((file) => {
             fs.mkdirSync(path.dirname(path.join(dist, file)), { recursive: true });
             fs.writeFileSync(path.join(dist, file), file);
         });
@@ -161,9 +162,9 @@ describe("a desktop app's page", () => {
                 expect(fs.readdirSync(path.join(dist, app, 'resources', 'page')).sort()).toEqual(['assets', 'crossbind.js', 'index.html']);
             });
             // A publish finds each desktop app by its platform's name on the command line, the last of a place once, with its
-            // installers and its update, which no key signed here.
+            // installers, among which no update, as no key signed one here.
             const entry = (app) => ({
-                app, arch: 'arm64', installers: [{ name: 'deb', files: [`${app}.deb`] }, { name: 'tar-gz', files: [`${app}.tar.gz`] }], update: null,
+                app, arch: 'arm64', installers: [{ name: 'deb', files: [`${app}.deb`] }, { name: 'tar-gz', files: [`${app}.tar.gz`] }],
             });
             expect(JSON.parse(fs.readFileSync(path.join(root, 'build', 'app-outputs.json'), 'utf8'))).toEqual({
                 android: '/demo/dist/demo-android',
@@ -241,9 +242,14 @@ describe("a desktop app's page", () => {
         ['index.html', 'Demo.AppImage', 'notes.txt'].forEach((file) => fs.writeFileSync(path.join(dist, file), file));
         const app = path.join(dist, 'demo-linux-x64');
         fs.writeFileSync(path.join(root, 'build', 'app-outputs.json'), JSON.stringify({
-            linux: [{ app, arch: 'x64', installers: [{ name: 'appimage', files: [path.join(dist, 'Demo.AppImage')] }], update: null }],
+            linux: [{ app, arch: 'x64', installers: [{ name: 'appimage', files: [path.join(dist, 'Demo.AppImage')] }] }],
         }));
         try {
+            publishApp(x64, { to: app, page: dist });
+            expect(fs.readdirSync(path.join(app, 'resources', 'page')).sort()).toEqual(['index.html', 'notes.txt']);
+            // A publish's build forgets the apps but not those files.
+            clearAppOutputs();
+            expect(() => appOutputOf('linux')).toThrow('the build wrote no linux app');
             publishApp(x64, { to: app, page: dist });
             expect(fs.readdirSync(path.join(app, 'resources', 'page')).sort()).toEqual(['index.html', 'notes.txt']);
         } finally {
@@ -267,8 +273,9 @@ describe("a desktop app's page", () => {
             const app = await ship(x64, { to: path.join(dist, 'demo-linux-x64'), page: dist });
 
             const [entry] = JSON.parse(fs.readFileSync(path.join(root, 'build', 'app-outputs.json'), 'utf8')).linux;
-            expect(entry.update).toEqual({ manifest: path.join(dist, 'demo-linux-x64.update.json'), file: `${app}.tar.gz` });
-            expect(JSON.parse(fs.readFileSync(entry.update.manifest, 'utf8')).file).toBe('demo-linux-x64.tar.gz');
+            const manifest = path.join(dist, 'demo-linux-x64.update.json');
+            expect(entry.installers.at(-1)).toEqual({ name: 'updater', files: [`${app}.tar.gz`, manifest] });
+            expect(JSON.parse(fs.readFileSync(manifest, 'utf8')).file).toBe('demo-linux-x64.tar.gz');
         } finally {
             vi.unstubAllEnvs();
             state.config.app = {};

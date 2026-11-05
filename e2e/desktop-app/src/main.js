@@ -128,7 +128,7 @@ async function checkUpdates() {
     const offered = await updater.check();
     if (offered?.version !== '99.0.0') throw new Error(`updater.check() found ${JSON.stringify(offered)}, not the 99.0.0 e2e/run.mjs serves`);
     const offeredToApp = await invoke('probe.checkForUpdate');
-    if (offeredToApp !== '99.0.0') throw new Error(`crossbind::app::checkForUpdate() found ${JSON.stringify(offeredToApp)}, not 99.0.0`);
+    if (offeredToApp !== '99.0.0') throw new Error(`the app's own code found ${JSON.stringify(offeredToApp)} as the update, not 99.0.0`);
     const signed = await updater.install().then(() => 'installed', (error) => error.message);
     if (!signed.includes('cannot install the update')) throw new Error(`a signed update did not get past its signature: ${signed}`);
     // e2e/run.mjs reads why, where the runner trusts the key the app is signed with.
@@ -568,7 +568,7 @@ async function checkNotifications(isDesktop) {
 // that is no UTF-8 as U+FFFD, a call of the app's functions from native code, which is no page's, and the pages it hears
 // of, and the app's state before its user, whose changes the page hears too; on the desktop the close its user asks
 // for and the quit the page asks for as its user's Quit does, which the probe refuses, so the app runs on; on the main
-// thread a task that throws and a wait of <crossbind/app.h>, which the app outlives; on Apple's platforms the
+// thread a task that throws, which the app outlives; on Apple's platforms the
 // Info.plist key and the iOS privacy reasons it gave; and on Android its manifest's elements, its resources, its
 // permission and the page's WebView.
 async function checkContract(isDesktop, isAndroid) {
@@ -601,8 +601,6 @@ async function checkContract(isDesktop, isAndroid) {
     if (!isAndroid) {
         const thrown = await invoke('probe.throwOnMain').then(() => 'answered', (error) => error.message);
         if (!thrown.includes('probe.throwOnMain gave no answer')) throw new Error(`a task that threw on the main thread: ${thrown}`);
-        const waited = await invoke('probe.waitOnMain');
-        if (!waited.includes('the main thread never calls it')) throw new Error(`<crossbind/app.h> waited on the main thread: ${waited}`);
     }
     if (isDesktop) {
         await invoke('probe.close');

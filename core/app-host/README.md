@@ -44,14 +44,17 @@ defaults and current limits (macOS, Linux, Windows, iOS and Android for now).
 - `js/page.js` — what the page loads as `crossbind.js`: `initNative()` over the webview's messages, or on Android its
   message port, the calls of `crossbind/app`, and a request left waiting for what the host pushes: the events of the
   app's C++ and the calls of the functions the page passed.
-- `cpp/include/crossbind/app.h` — the host's functions for an app's own code: dialogs, opening outside the app, the
-  trash, the app's folders, quitting and opening anew, events for the page and a desktop app's updates.
+- `js/app.js`, `app.d.ts` — `crossbind/app` as a page imports it and its types: `crossbind/app/core`'s functions, with what
+  each of crossbind's own extensions gives the page in its `page.js`. Beside `package.json`'s dependencies, they alone name
+  those extensions; an app's bundler plugin routes `crossbind/app` here.
+- `cpp/include/crossbind/app.h` — the host's functions for an app's own code: the app's folders, quitting and opening
+  anew, and events for the page.
   `src/app_api.cpp` answers them and adds the page's `crossbind/app` functions to the registry of
   `cpp/include/crossbind/extension.h` (`src/extension.cpp`), which answers the page's calls with JSON values; each
   platform's `app_api` does the work, and a macOS app's `menu` the menus it starts with;
   `src/reopen.cpp` opens the app anew after `app.relaunch()` and an update; `src/launch.cpp` reads a desktop app's
   launch, whose links, as every link the system opens an app with, `src/app_api.cpp` hands to the owner of their scheme.
-- `extensions/` — the host's own extensions, each in the folder its `extension.json` describes, all through
+- The repository's `extensions/` — the host's own extensions, each a package this one has as its dependency, all through
   `<crossbind/app.h>` and `<crossbind/extension.h>` alone. Every app has `dialog/`, which shows the file and message
   dialogs on each platform; `menu/`, which shows the page's menus, a desktop app's tray icon and the system's
   notifications, a Linux app's tray and notifications over D-Bus and a Windows app's notifications as balloons of its
@@ -66,21 +69,16 @@ defaults and current limits (macOS, Linux, Windows, iOS and Android for now).
   extension owns as the event `open-files`. A desktop app that `app.singleInstance` keeps to one instance
   alone has `instance/`, which hands a later launch to the instance that runs: through a lock and a socket on macOS and
   Linux (`posix.cpp`), a mutex and a message window on Windows (`windows.cpp`). A desktop app with `app.updater` alone
-  has `updater/`, which checks and installs its updates, each platform's file downloading them; `src/app_api.cpp`
-  refuses the updater's functions to any other app. A macOS app whose `app.permissions` lists the location has
+  has `updater/`, which checks and installs its updates, each platform's file downloading them. A macOS app whose `app.permissions` lists the location has
   `page-location/`, which answers the page's `navigator.geolocation` from CoreLocation, as WKWebView gives a macOS page
   none, once `page-permissions` allows it. Every app has `page-navigation/`, which takes the page's navigations beyond
   the app's origins, and `page-downloads/`, which saves its downloads, and every desktop app `page-drops/`, which hands
   the page the files its user drops on it. An Apple app that lists `app.activityTypes` has `activities/`, which holds
   their user activities for the page as the event `user-activity` and makes the page's one current, and a phone's that
   lists `app.shortcutItems` has `shortcuts/`, which holds the taps of their quick actions as the event `shortcut-item`.
-- `extensions/updater/monocypher/` — Monocypher 4.0.3 (BSD-2-Clause or CC0-1.0), whose Ed25519 and SHA-512 check a
-  desktop app's updates; provenance in its README.
 - `third_party/webview/` — webview/webview (MIT), vendored at a pinned commit; provenance and the local patches are in
   its README.
 - `third_party/jsi/` — JSI's `jsi.cpp` (MIT) from the Hermes release the host links, and on Android its headers.
-- `third_party/nsis/` — the license of NSIS 3.11 (zlib, and MIT for its System plugin), whose installer stub and
-  plugins a Windows app's setup program carries; provenance in its README.
 - `third_party/webview2/` — the license of the WebView2 SDK (BSD-3-Clause), whose headers crossbind's windows image
   carries for a Windows host.
 

@@ -26,8 +26,8 @@ now.
    message dialogs, opening a link in the browser, the app's folders, quitting, the menus, the tray's icon, the
    system's notifications, the later launches of an app that `app.singleInstance` keeps to one instance, the links of
    `app.urlSchemes` and the events of the app's C++, the page imports from `crossbind/app` after `initNative()`; the C++
-   includes the same from `<crossbind/app.h>`, but for the menus, the tray, the notifications, the launches and the
-   links, and emits the events.
+   includes the folders and quitting from `<crossbind/app.h>`, calls the rest by name with `<crossbind/extension.h>`'s
+   `invoke()`, and emits the events.
 5. Run `pnpm crossbind app dev` to develop, `pnpm crossbind app build` to get `dist/<name>.app` and its disk image. Its
    icon comes from the square PNG `app.icon` names in `crossbind.config.js`, at best 1024 × 1024. To ship it to other
    Macs, set `CROSSBIND_APPLE_SIGNING_IDENTITY` to a Developer ID and `CROSSBIND_APPLE_API_KEY`,
@@ -75,7 +75,7 @@ now.
   page in an iframe.
 - The page's `shell.openPath` opens nothing until `app.openPath` lists where it may, and its `shell.revealInFolder`
   and `shell.trash` refuse a path outside the app's folders that no dialog picked during this run, `shell.trash` one of
-  the folders as well; the C++ reaches any path through `<crossbind/app.h>`.
+  the folders as well; the C++ reaches any path with `<crossbind/extension.h>`'s `invoke()`.
 - `crossbind app dev` and `crossbind app build` make the app of the machine they run on, macOS, Linux or Windows,
   unless `-p` names another; `crossbind app build -p linux` builds the Linux app on a Mac too, but its development
   session runs on Linux alone. A Linux app needs Docker to build and WebKitGTK 4.1 (2.40 or later) to run.

@@ -193,6 +193,64 @@ handleFatal(new Error('boom'));`;
     });
 });
 
+describe("crossbind app's commands of extensions", () => {
+    const appWith = (extensions) => {
+        fs.writeFileSync(path.join(dir, 'package.json'), JSON.stringify({ name: 'demo', version: '1.2.3', type: 'module' }));
+        fs.writeFileSync(path.join(dir, 'crossbind.config.mjs'), `export default { target: { runtimeEnv: 'app' }, extensions: [${extensions}] };\n`);
+    };
+    const root = () => JSON.stringify(fs.realpathSync(dir));
+    const hello = (name) => `{ name: 'acme', contract: 1, root: ${root()}, commands: { '${name}': { help: 'says hello', options: { to: { help: 'whom', value: '<name>', default: 'you' }, loud: { help: 'louder' } }, run: (api) => api.log(\`hello \${api.options.to} \${api.options.loud === true} \${api.project.name}\`) } } }`;
+
+    test("gives crossbind's own updater-key, which prints a key pair", () => {
+        appWith('');
+        const { status, stdout } = crossbind('app', 'updater-key');
+        expect(status).toBe(0);
+        expect(stdout).toMatch(/app\.updater\.publicKey in crossbind\.config\.js: \S{44}\n/);
+        expect(stdout).toMatch(/CROSSBIND_UPDATER_PRIVATE_KEY, kept secret where the app is built: \S{44}\n/);
+    });
+
+    test("runs a listed extension's with its options, and lists it in the help", () => {
+        appWith(hello('hello'));
+        expect(crossbind('app', 'hello', '--to', 'ada', '--loud').stdout).toContain('hello ada true demo');
+        expect(crossbind('app', 'hello').stdout).toContain('hello you false demo');
+        expect(crossbind('app', '--help').stdout).toMatch(/hello \[options\]\s+says hello/);
+    });
+
+    test("stops at a name crossbind or another extension has, naming the extension and the owner, and takes the place of one whose role it replaces", () => {
+        appWith(hello('publish'));
+        expect(crossbind('app', 'dev').stderr).toContain('crossbind: acme adds the command crossbind app publish, which crossbind has.');
+        appWith(hello('updater-key'));
+        expect(crossbind('app', 'dev').stderr).toContain('crossbind: acme adds the command crossbind app updater-key, which updater has.');
+        const replacing = hello('updater-key').replace("name: 'acme',", "name: 'acme', replaces: 'updater',");
+        appWith(replacing);
+        expect(crossbind('app', 'updater-key').stdout).toContain('hello you false demo');
+    });
+
+    test('names the extension where a command fails', () => {
+        appWith(`{ name: 'acme', contract: 1, root: ${root()}, commands: { boom: { help: 'fails', run() { throw new Error('no key'); } } } }`);
+        const { status, stderr } = crossbind('app', 'boom');
+        expect(status).toBe(1);
+        expect(stderr).toContain("crossbind: acme's boom failed: no key");
+    });
+
+    test('reads the extensions of the host for crossbind app alone, so that one that cannot be read stops no other command', () => {
+        appWith('');
+        const host = path.join(dir, 'node_modules', '@crossbind', 'core-app-host');
+        fs.mkdirSync(host, { recursive: true });
+        fs.writeFileSync(path.join(host, 'package.json'), JSON.stringify({ name: '@crossbind/core-app-host', dependencies: { '@crossbind/extension-gone': '1.0.0' } }));
+        expect(crossbind('app', 'updater-key').stderr).toContain("crossbind: cannot read @crossbind/extension-gone's crossbind.extension.js");
+        expect(crossbind('config', 'keys').status).toBe(0);
+        const { status, stderr } = crossbind('licenses');
+        expect(stderr).not.toContain('extension-gone');
+        expect(status).toBe(0);
+    });
+
+    test('has none outside an app project', () => {
+        fs.writeFileSync(path.join(dir, 'package.json'), JSON.stringify({ name: 'demo' }));
+        expect(crossbind('app', 'updater-key').stderr).toContain("unknown command 'updater-key'");
+    });
+});
+
 describe('crossbind app publish', () => {
     // An app whose one store, an extension's, names what the command line gave it as all it lacks, so nothing builds. Its
     // root is the folder's real path, which the process's own is too.

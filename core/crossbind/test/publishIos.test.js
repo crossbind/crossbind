@@ -5,12 +5,13 @@ import { PNG } from 'pngjs';
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 
 const state = { config: {}, targets: [] };
+vi.mock('../src/utils/appExtensions.js', async (importOriginal) => (await import('./ownTools.js')).default(importOriginal));
 vi.mock('../src/state/index.js', () => ({ default: state }));
 // The test's config stands for crossbind.config.js's export, which an extension's api shows.
 vi.mock('../src/state/loadConfig.js', async (importOriginal) => ({ ...await importOriginal(), exportOf: (config) => config }));
 // xcodebuild's archive and upload, which go as `store` says, and the teams Xcode is signed in to, one list per look.
 const store = {};
-vi.mock('../src/publishers/app-store/appStoreConnect.js', () => ({
+vi.mock('../../../extensions/app-store/src/appStoreConnect.js', () => ({
     archiveIosApp: (api, project, options) => {
         store.archives.push({ project, ...options });
         const failure = store.archiveFailures.shift();
@@ -33,8 +34,8 @@ vi.mock('../src/actions/xcodebuild.js', () => ({
 }));
 // App Store Connect's API, which the steps of a submission to App Review go through as `review` says.
 const review = {};
-vi.mock('../src/publishers/app-store/appStoreApi.js', () => ({ appStoreCaller: (key) => ({ key }) }));
-vi.mock('../src/publishers/app-store/appStoreRelease.js', () => ({
+vi.mock('../../../extensions/app-store/src/appStoreApi.js', () => ({ appStoreCaller: (key) => ({ key }) }));
+vi.mock('../../../extensions/app-store/src/appStoreRelease.js', () => ({
     appStoreApp: async (call, bundleId) => {
         review.steps.push(['app', call.key.keyId, bundleId]);
         return 'A1';

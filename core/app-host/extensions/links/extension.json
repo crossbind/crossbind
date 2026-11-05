@@ -1,7 +1,0 @@
-{
-    "name": "links",
-    "contract": 1,
-    "app": {
-        "sources": ["links.cpp"]
-    }
-}

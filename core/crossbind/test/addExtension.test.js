@@ -51,6 +51,16 @@ const installing = (name, manifest = EXTENSION, field = 'dependencies') => vi.fn
 });
 
 describe('crossbind add', () => {
+    test("adds none an app has by having the host, which a build would refuse in its list, and installs nothing", () => {
+        const spawn = vi.fn();
+
+        for (const spec of ['@crossbind/extension-dialog', '@crossbind/extension-google-play@beta']) {
+            expect(() => addExtension(spec, { config: configOf(), spawn, platform: 'darwin' }))
+                .toThrow('by having @crossbind/core-app-host, which brings it, so there is nothing to add');
+        }
+        expect(spawn).not.toHaveBeenCalled();
+    });
+
     test('installs an extension with the manager of the lockfile nearest the project, then lists it', () => {
         fs.writeFileSync(path.join(root, 'pnpm-lock.yaml'), '');
         const spawn = installing('@crossbind/extension-clipboard');

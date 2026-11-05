@@ -1,7 +1,7 @@
 import { DISCUSSIONS_URL, PRIVACY_EMAIL } from '../data.js';
 
 // /privacy/: what crossbind.dev, the playground and crossbind cloud (tooling/cloud) keep, for how long, and how to
-// delete it, and what the CLI does with a Google sign-in for Google Play (core/crossbind/src/publishers/google-play/),
+// delete it, and what the CLI does with a Google sign-in for Google Play (extensions/google-play/),
 // which Google asks the policy its consent screen links to say. Every period here is one the code enforces; change
 // them together.
 

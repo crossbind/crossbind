@@ -69,6 +69,7 @@ An extension takes more than calls through the same registry, each as a section 
 | What one of the host's own does, as its tray | `replaces`, [The host's own extensions](../api/extensions.md#the-hosts-own-extensions) |
 | Files the app carries for it, as models | `app.files`, `registry.files()`, [What an extension is](../api/extensions.md#what-an-extension-is) |
 | A store the app is published to, or what installs a desktop app | `publisher`, `installer`, [Publishers](../api/extensions.md#publishers), [Installers](../api/extensions.md#installers) |
+| A command of `crossbind app` | `commands`, [Commands](../api/extensions.md#commands) |
 | A widget, a share extension or a notification service of an iOS app, and the App Group it shares with the app | `app.ios.targets`, [iOS app extensions](../api/extensions.md#ios-app-extensions) |
 
 What the system hands an app at launch reaches the owner the descriptor names: a scheme, a file type, a site, a user
@@ -78,8 +79,9 @@ hook. What the host keeps for itself, [What the host keeps](../api/extensions.md
 ## Steps
 
 1. **Name it.** Lowercase letters and digits, from a letter, dashes between. Look on npm for the keyword `crossbind-extension`
-   first, so two extensions do not take one name, which stops an app that lists both: crossbind keeps the names of the
-   host's own extensions and of their roles, `app`, `events`, `windows`, `crossbind` and those that start with `page-`. Give it
+   first, so two extensions do not take one name, which stops an app that lists both: crossbind keeps `app`, `events`, `windows`,
+   `crossbind` and those that start with `page-`, one named as a role of the host's stops the build, and one named as an
+   extension of the host's takes its place. Give it
    `contract: 1`, the version of the contract it is written for, and `replaces` for each role of the host's it takes.
 2. **Write the shared C++.** The entry registers each function as `<name>.<function>`, which the app checks as it
    starts, checks the options, and hands the call to the platform's code. A function that waits, as one that reads a

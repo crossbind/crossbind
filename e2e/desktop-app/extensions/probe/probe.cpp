@@ -110,28 +110,23 @@ void crossbind_extension_probe(crossbind::Registry &registry) {
         crossbind::allowPath(call.options()["path"].asString());
         call.resolve();
     });
-    // The app's own code reaches any path through <crossbind/app.h>, and hears of a relative one by its own names.
+    // The app's own code reaches any path by the shell's functions, and hears of a relative one by its own names.
     registry.function("probe.trash", [](Call call) {
-        crossbind::inBackground(call, [path = call.options()["path"].asString()] {
-            crossbind::app::trash(path);
-            return Value();
+        crossbind::invoke("shell.trash", Value::Object{{"path", call.options()["path"].asString()}}, [call](std::optional<std::string> failure, Value) {
+            if (failure) call.reject(*failure);
+            else call.resolve();
         });
     });
     registry.function("probe.openRelative", [](Call call) {
-        crossbind::inBackground(call, [] {
-            try {
-                crossbind::app::openPath("crossbind-relative");
-            } catch (const std::exception &error) {
-                return Value(error.what());
-            }
-            return Value("opened");
+        crossbind::invoke("shell.openPath", Value::Object{{"path", "crossbind-relative"}}, [call](std::optional<std::string> failure, Value) {
+            call.resolve(failure ? Value(*failure) : Value("opened"));
         });
     });
     // The app's own code asks the host's updater as the page does.
     registry.function("probe.checkForUpdate", [](Call call) {
-        crossbind::inBackground(call, [] {
-            const std::optional<std::string> version = crossbind::app::checkForUpdate();
-            return version ? Value(*version) : Value();
+        crossbind::invoke("updater.check", Value::Object{}, [call](std::optional<std::string> failure, Value offered) {
+            if (failure) call.reject(*failure);
+            else call.resolve(offered.isNull() ? Value() : Value(offered["version"].asString()));
         });
     });
     // The probe's C source, compiled with the folder of its includes and its macros.
@@ -306,17 +301,6 @@ void crossbind_extension_probe(crossbind::Registry &registry) {
     // A task on the main thread that throws leaves the app running, and the call it held fails as it lets go of it.
     registry.function("probe.throwOnMain", [](Call call) {
         crossbind::onMainThread([call] { throw std::runtime_error("the probe's task fails"); });
-    });
-    // <crossbind/app.h> refuses the main thread, which answers its waits.
-    registry.function("probe.waitOnMain", [](Call call) {
-        crossbind::onMainThread([call] {
-            try {
-                crossbind::app::openExternal("https://example.com/");
-                call.resolve("opened");
-            } catch (const std::exception &error) {
-                call.resolve(error.what());
-            }
-        });
     });
 #endif
     probePlatform(registry);

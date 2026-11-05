@@ -7,7 +7,7 @@ import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 vi.mock('../src/state/index.js', () => ({ default: { config: {} } }));
 // The uploads of screenshots' bytes where App Store Connect reserved them.
 const parts = [];
-vi.mock('../src/publishers/app-store/appStoreApi.js', () => ({
+vi.mock('../../../extensions/app-store/src/appStoreApi.js', () => ({
     uploadParts: async (operations, bytes, file) => {
         parts.push({ operations, bytes: String(bytes), file });
     },
@@ -15,7 +15,7 @@ vi.mock('../src/publishers/app-store/appStoreApi.js', () => ({
 
 const {
     appStoreApp, assertReviewable, newestBuild, submitRelease,
-} = await import('../src/publishers/app-store/appStoreRelease.js');
+} = await import('../../../extensions/app-store/src/appStoreRelease.js');
 
 const EDITABLE = 'PREPARE_FOR_SUBMISSION,DEVELOPER_REJECTED,REJECTED,METADATA_REJECTED,INVALID_BINARY';
 const BUILDS = 'GET /builds?filter[app]=A1&filter[preReleaseVersion.version]=1.2.3&filter[preReleaseVersion.platform]=IOS&sort=-uploadedDate&limit=1';

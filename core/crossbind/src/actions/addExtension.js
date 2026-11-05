@@ -3,6 +3,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { configFileOf, writeExtension } from '../utils/configWriter.js';
 import { isUnderBase } from '../utils/replaceBasePathForDocker.js';
+import { ownPackages } from '../utils/appExtensions.js';
+import resolveAppHostRoot from '../utils/resolveAppHost.js';
 
 // The lockfiles by which a project names the package manager it is installed with.
 const LOCKFILES = [
@@ -106,6 +108,20 @@ function assertSpec(spec, platform) {
     }
 }
 
+// An extension an app has by having the host is none to add. A project without a host yet has none of them.
+function assertNotOwn(spec) {
+    const name = registryName(spec);
+    let root;
+    try {
+        root = resolveAppHostRoot();
+    } catch {
+        return;
+    }
+    if (ownPackages(root).includes(name)) {
+        throw new Error(`crossbind: an app has ${name} by having @crossbind/core-app-host, which brings it, so there is nothing to add; an extension takes its place with replaces, as extensions.md says.`);
+    }
+}
+
 // The installed package the spec named: the one the install added to package.json, as a spec's own text names no package
 // for every package manager, else the one a registry spec names, which package.json had already.
 function installedName(spec, before, after, manifest) {
@@ -127,6 +143,7 @@ export default function addExtension(spec, {
         throw new Error("crossbind: an extension builds into an app, which this project is not: set target: { runtimeEnv: 'app' } in crossbind.config.js, as the desktop-app template does.");
     }
     assertSpec(spec, platform);
+    assertNotOwn(spec);
     const { project, base } = config.paths;
     const manifest = path.join(project, 'package.json');
     if (!fs.existsSync(manifest)) throw new Error(`crossbind: crossbind add installs into the project's package.json, which ${project} has none of.`);

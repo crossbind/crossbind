@@ -1,0 +1,38 @@
+{
+    "name": "@crossbind/extension-dialog",
+    "version": "2.0.0-beta.68",
+    "description": "crossbind app extension: open and save dialogs on the desktop, message dialogs everywhere.",
+    "homepage": "https://github.com/crossbind/crossbind/tree/main/extensions/dialog#readme",
+    "repository": "https://github.com/crossbind/crossbind.git",
+    "license": "MIT",
+    "type": "module",
+    "exports": {
+        "./page": {
+            "types": "./page.d.ts",
+            "default": "./page.js"
+        },
+        "./crossbind.extension.js": "./crossbind.extension.js"
+    },
+    "files": [
+        "crossbind.extension.js",
+        "native",
+        "page.d.ts",
+        "page.js"
+    ],
+    "crossbind": {
+        "extension": "./crossbind.extension.js"
+    },
+    "peerDependencies": {
+        "crossbind": "workspace:^"
+    },
+    "devDependencies": {
+        "crossbind": "workspace:^"
+    },
+    "keywords": [
+        "crossbind-extension",
+        "crossbind",
+        "system",
+        "dialog",
+        "app"
+    ]
+}

@@ -1,0 +1,38 @@
+{
+    "name": "@crossbind/extension-menu",
+    "version": "2.0.0-beta.68",
+    "description": "crossbind app extension: the app's menus and context menus, the tray icon and system notifications.",
+    "homepage": "https://github.com/crossbind/crossbind/tree/main/extensions/menu#readme",
+    "repository": "https://github.com/crossbind/crossbind.git",
+    "license": "MIT",
+    "type": "module",
+    "exports": {
+        "./page": {
+            "types": "./page.d.ts",
+            "default": "./page.js"
+        },
+        "./crossbind.extension.js": "./crossbind.extension.js"
+    },
+    "files": [
+        "crossbind.extension.js",
+        "native",
+        "page.d.ts",
+        "page.js"
+    ],
+    "crossbind": {
+        "extension": "./crossbind.extension.js"
+    },
+    "peerDependencies": {
+        "crossbind": "workspace:^"
+    },
+    "devDependencies": {
+        "crossbind": "workspace:^"
+    },
+    "keywords": [
+        "crossbind-extension",
+        "crossbind",
+        "system",
+        "menu",
+        "app"
+    ]
+}

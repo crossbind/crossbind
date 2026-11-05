@@ -12,8 +12,11 @@ import resolveAppHostRoot, { resolveAppEmbindJsiRoot } from '../utils/resolveApp
 import {
     HERMES, HERMES_ANDROID, HERMES_SOURCE, hermesUrl,
 } from '../utils/hermes.js';
+import { installersFor } from './appInstaller.js';
+import { DESKTOP_PLATFORMS } from './buildApp.js';
+import extensionsInApp from './extensionsInApp.js';
 import { ANDROIDX_WEBKIT } from './gradleProject.js';
-import { appExtensionsOf, extensionPackage } from '../utils/appExtensions.js';
+import { extensionPackage, extensionPart } from '../utils/appExtensions.js';
 import { shippedBundledLicense } from '../utils/bundledLicenses.js';
 import toolchainNoticesDir from '../utils/toolchainNotices.js';
 
@@ -210,12 +213,11 @@ function nodeRuntimeRows({ isAddon }) {
 }
 
 // What an app's host carries beside crossbind's runtime, pinned as the READMEs beside them in @crossbind/core-app-host
-// record: React Native's Hermes, JSI's jsi.cpp from the same release, webview/webview, the updater's Monocypher, and on
-// Windows the WebView2 SDK's headers.
+// record: React Native's Hermes, JSI's jsi.cpp from the same release, webview/webview, and on Windows the WebView2 SDK's
+// headers.
 const WEBVIEW = { version: 'cbbdee44afff22867de9fd88a9fc8350d9bdd399', sha256: '10e972a2327b5681474f4aa4499e505eaa4ff659aa995380386f08fd6fc1b763' };
 const WEBVIEW2_SDK = { version: '1.0.4258.31', sha256: '56f7f4b8bf9aee4b8efefbbdd4f67d5f74ebd1b100ed0806da71bf76af481aa9' };
 const JSI_SHA256 = 'cb6274a22abc93ecc970066539815e716d3e47716e8f93a9971cf4eb5918ffc1';
-const MONOCYPHER = { version: '4.0.3', sha256: '8cc9bc341a66249016db9bd70e9142d8d0aef9945973744b1ac05dbc55d8ee66' };
 // The fbjni the Hermes release for Android depends on.
 const FBJNI_VERSION = '0.7.0';
 
@@ -274,8 +276,8 @@ function androidAppRows() {
     ];
 }
 
-// The WebView2 SDK headers a Windows host compiles against, and the NSIS its setup program carries. webview/webview
-// loads the WebView2 Runtime itself, without the SDK's loader.
+// The WebView2 SDK headers a Windows host compiles against. webview/webview loads the WebView2 Runtime itself, without the
+// SDK's loader.
 function windowsAppRows(hostRoot) {
     const license = 'BSD-3-Clause';
     return [{
@@ -291,26 +293,47 @@ function windowsAppRows(hostRoot) {
         sourceUrl: `https://api.nuget.org/v3-flatcontainer/microsoft.web.webview2/${WEBVIEW2_SDK.version}/microsoft.web.webview2.${WEBVIEW2_SDK.version}.nupkg`,
         licenseNotes: "the WebView2 SDK's headers from the windows toolchain image, whose interface IDs the host compiles in",
         licenseText: textOf(path.join(hostRoot, 'third_party', 'webview2', 'LICENSE')),
-    }, {
-        npmName: '@crossbind/core-app-host',
-        name: 'nsis',
-        version: '3.11',
-        nativeVersion: '3.11',
-        sha256: null,
-        license: 'Zlib AND MIT',
-        licenseDeclared: 'Zlib AND MIT',
-        licenseSelected: null,
-        isCopyleft: false,
-        sourceUrl: 'https://sources.debian.org/src/nsis/3.11-1/',
-        licenseNotes: "the installer stub and plugins the app's setup program carries, from Debian's nsis in the windows toolchain image: zlib/libpng, but for the System plugin's Call.S, MIT",
-        licenseText: textOf(path.join(hostRoot, 'third_party', 'nsis', 'LICENSE')),
     }];
 }
 
+const APP_PLATFORMS = ['darwin', 'ios', 'android', 'linux', 'win32'];
+
+// The extensions an app of this platform has, of any platform's without one: crossbind's own that bring it code, and those
+// crossbind.config.js lists.
+function extensionsIn(platform) {
+    if (!platform) return [...new Map(APP_PLATFORMS.flatMap((one) => extensionsIn(one)).map((extension) => [extension.name, extension])).values()];
+    const listed = (state.config.extensions ?? []).map(({ name }) => name);
+    const hasCode = (extension) => {
+        const { native, java } = extensionPart([extension], platform);
+        return native.length > 0 || java.length > 0;
+    };
+    return extensionsInApp(platform).filter((extension) => listed.includes(extension.name) || hasCode(extension));
+}
+
+// A row of the code of others an extension carries, by what its licenses list says of it.
+const carriedRow = (entry, root, notes) => ({
+    npmName: null,
+    name: entry.name,
+    version: null,
+    nativeVersion: entry.version,
+    sha256: entry.sha256 ?? null,
+    license: entry.license,
+    licenseDeclared: entry.license,
+    licenseSelected: null,
+    isCopyleft: isCopyleft(entry.license),
+    sourceUrl: entry.source ?? null,
+    licenseNotes: entry.notes ?? notes,
+    licenseText: textOf(path.join(root, entry.file)),
+});
+
+// What the installers of a desktop app carry into what they make.
+const installerRows = (platform) => (DESKTOP_PLATFORMS[platform] ? installersFor({ platform }) : [])
+    .flatMap(({ name, root, installer }) => (installer.licenses ?? []).map((entry) => carriedRow(entry, root, `carried by what the installer ${name} makes`)));
+
 // What an app's extensions bring into it: each extension package's own code, and the code of others each carries, as its
 // app.licenses lists it. An extension in the project's own folders is the project's code, as the app is.
-function extensionRows() {
-    return appExtensionsOf(state.config.extensions ?? []).flatMap((extension) => {
+function extensionRows(platform) {
+    return extensionsIn(platform).flatMap((extension) => {
         const own = extensionPackage(extension.root, state.config.paths.base);
         const owner = own?.manifest.name ?? null;
         const license = own?.manifest.license ?? null;
@@ -328,20 +351,11 @@ function extensionRows() {
             licenseNotes: `the app extension ${extension.name}, which the app's host compiles in`,
             licenseText: shipped ? textOf(shipped) : null,
         }] : [];
-        const carried = (extension.app.licenses ?? []).map((entry) => ({
-            npmName: null,
-            name: entry.name,
-            version: null,
-            nativeVersion: entry.version,
-            sha256: entry.sha256 ?? null,
-            license: entry.license,
-            licenseDeclared: entry.license,
-            licenseSelected: null,
-            isCopyleft: isCopyleft(entry.license),
-            sourceUrl: entry.source ?? null,
-            licenseNotes: `carried by the app extension ${extension.name}${owner ? ` of ${owner}` : ''}, which the app's host compiles in`,
-            licenseText: textOf(path.join(extension.root, entry.file)),
-        }));
+        const carried = (extension.app.licenses ?? []).map((entry) => carriedRow(
+            entry,
+            extension.root,
+            `carried by the app extension ${extension.name}${owner ? ` of ${owner}` : ''}, which the app's host compiles in`,
+        ));
         return [...packageRows, ...carried];
     });
 }
@@ -389,21 +403,6 @@ function appRuntimeRows(platform) {
             sourceUrl: 'https://github.com/webview/webview',
             licenseNotes: 'webview/webview, with the local patches @crossbind/core-app-host lists',
             licenseText: textOf(path.join(hostRoot, 'third_party', 'webview', 'LICENSE')),
-        }]),
-        // A desktop app with app.updater alone has the host's updater, which checks updates with Monocypher.
-        ...(['ios', 'android'].includes(platform) || state.config.app?.updater === undefined ? [] : [{
-            npmName: '@crossbind/core-app-host',
-            name: 'monocypher',
-            version: MONOCYPHER.version,
-            nativeVersion: MONOCYPHER.version,
-            sha256: MONOCYPHER.sha256,
-            license: 'BSD-2-Clause OR CC0-1.0',
-            licenseDeclared: 'BSD-2-Clause OR CC0-1.0',
-            licenseSelected: null,
-            isCopyleft: false,
-            sourceUrl: `https://monocypher.org/download/monocypher-${MONOCYPHER.version}.tar.gz`,
-            licenseNotes: "Monocypher's Ed25519 and SHA-512, compiled into the host's updater, which check the app's updates",
-            licenseText: textOf(path.join(hostRoot, 'extensions', 'updater', 'monocypher', 'LICENCE.md')),
         }]),
     ];
 }
@@ -529,7 +528,7 @@ export default async function collectLicenseRows(platform = null, { runtimeEnv =
         // A library two extensions carry, or one the app has already, is listed once for each version the app ships.
         const versionOf = (row) => `${row.name}@${row.nativeVersion ?? row.version}`;
         const listed = new Set(rows.map(versionOf));
-        for (const row of extensionRows()) {
+        for (const row of [...extensionRows(platform), ...installerRows(platform)]) {
             if (listed.has(versionOf(row))) continue;
             listed.add(versionOf(row));
             rows.push(row);

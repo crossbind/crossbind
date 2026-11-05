@@ -7,6 +7,7 @@ export {
     default as buildApp, buildProjectApp, publishApp, appLayout, appOutputName, appTargetParams,
 } from './actions/buildApp.js';
 export { checkInstaller, shipApp } from './actions/appInstaller.js';
+export { resolveAppPageApi } from './utils/resolveAppHost.js';
 export { default as openInSimulator, buildForSimulator } from './actions/iosSimulator.js';
 export {
     default as openOnIosDevice, buildForIosDevice, connectedIosDevice, iosDeviceAddress, iosDevServer,

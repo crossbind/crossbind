@@ -316,6 +316,10 @@ export default {
       // The installers alone a desktop build runs, of crossbind's, dmg, deb, tar-gz, nsis and zip, and of the
       // extensions': each platform runs those of its own. A Linux or Windows app with app.updater keeps tar-gz or
       // nsis, whose file it updates from (see app.md). Default: every one.
+    without: ['menu', 'power'],
+      // crossbind's own extensions this app leaves out, by their names, with what the page calls of them, their
+      // commands, stores and installers (see extensions.md). An option of the app one of them reads stops the build.
+      // Default: none.
   },
 
   targetSpecs: [
@@ -387,6 +391,7 @@ export default {
       options: { maxLength: 1000 },          // a JSON value its native code reads as registry.options()
       publisher: { platform: 'android', upload: async (api, session, output) => {} },  // a store: extensions.md
       installer: { platform: 'linux', make: async (api, { app, arch }) => [] },      // what installs it: extensions.md
+      commands: { 'my-key': { help: 'print it', run: async (api) => {} } },          // of crossbind app: extensions.md
     },
   ],
     // Usually what an extension package's crossbind.extension.js gives, its root

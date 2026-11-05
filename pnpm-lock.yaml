@@ -79,6 +79,85 @@ importers:
       '@crossbind/core-embind-jsi':
         specifier: workspace:^
         version: link:../embind-jsi
+      '@crossbind/extension-activities':
+        specifier: workspace:^
+        version: link:../../extensions/activities
+      '@crossbind/extension-app-store':
+        specifier: workspace:^
+        version: link:../../extensions/app-store
+      '@crossbind/extension-deb':
+        specifier: workspace:^
+        version: link:../../extensions/deb
+      '@crossbind/extension-dialog':
+        specifier: workspace:^
+        version: link:../../extensions/dialog
+      '@crossbind/extension-dmg':
+        specifier: workspace:^
+        version: link:../../extensions/dmg
+      '@crossbind/extension-files':
+        specifier: workspace:^
+        version: link:../../extensions/files
+      '@crossbind/extension-github':
+        specifier: workspace:^
+        version: link:../../extensions/github
+      '@crossbind/extension-google-play':
+        specifier: workspace:^
+        version: link:../../extensions/google-play
+      '@crossbind/extension-instance':
+        specifier: workspace:^
+        version: link:../../extensions/instance
+      '@crossbind/extension-links':
+        specifier: workspace:^
+        version: link:../../extensions/links
+      '@crossbind/extension-menu':
+        specifier: workspace:^
+        version: link:../../extensions/menu
+      '@crossbind/extension-nsis':
+        specifier: workspace:^
+        version: link:../../extensions/nsis
+      '@crossbind/extension-page-dialogs':
+        specifier: workspace:^
+        version: link:../../extensions/page-dialogs
+      '@crossbind/extension-page-downloads':
+        specifier: workspace:^
+        version: link:../../extensions/page-downloads
+      '@crossbind/extension-page-drops':
+        specifier: workspace:^
+        version: link:../../extensions/page-drops
+      '@crossbind/extension-page-files':
+        specifier: workspace:^
+        version: link:../../extensions/page-files
+      '@crossbind/extension-page-location':
+        specifier: workspace:^
+        version: link:../../extensions/page-location
+      '@crossbind/extension-page-navigation':
+        specifier: workspace:^
+        version: link:../../extensions/page-navigation
+      '@crossbind/extension-page-permissions':
+        specifier: workspace:^
+        version: link:../../extensions/page-permissions
+      '@crossbind/extension-power':
+        specifier: workspace:^
+        version: link:../../extensions/power
+      '@crossbind/extension-shell':
+        specifier: workspace:^
+        version: link:../../extensions/shell
+      '@crossbind/extension-shortcuts':
+        specifier: workspace:^
+        version: link:../../extensions/shortcuts
+      '@crossbind/extension-tar-gz':
+        specifier: workspace:^
+        version: link:../../extensions/tar-gz
+      '@crossbind/extension-updater':
+        specifier: workspace:^
+        version: link:../../extensions/updater
+      '@crossbind/extension-zip':
+        specifier: workspace:^
+        version: link:../../extensions/zip
+    devDependencies:
+      crossbind:
+        specifier: workspace:^
+        version: link:../crossbind
 
   core/crossbind:
     dependencies:
@@ -157,6 +236,8 @@ importers:
       crossbind:
         specifier: workspace:^
         version: link:../../crossbind
+
+  core/store-kit: {}
 
   e2e/app-page-requests:
     devDependencies:
@@ -1444,11 +1525,113 @@ importers:
         specifier: ^8.3.3
         version: 8.3.5(@types/node@24.19.1)(esbuild@0.28.2)(jiti@2.7.0)(terser@5.37.0)(yaml@2.9.0)
 
+  extensions/activities:
+    devDependencies:
+      crossbind:
+        specifier: workspace:^
+        version: link:../../core/crossbind
+
+  extensions/app-store:
+    dependencies:
+      '@crossbind/core-store-kit':
+        specifier: workspace:^
+        version: link:../../core/store-kit
+
   extensions/clipboard:
     devDependencies:
       crossbind:
         specifier: workspace:^
         version: link:../../core/crossbind
+
+  extensions/deb: {}
+
+  extensions/dialog:
+    devDependencies:
+      crossbind:
+        specifier: workspace:^
+        version: link:../../core/crossbind
+
+  extensions/dmg: {}
+
+  extensions/files:
+    devDependencies:
+      crossbind:
+        specifier: workspace:^
+        version: link:../../core/crossbind
+
+  extensions/github: {}
+
+  extensions/google-play:
+    dependencies:
+      '@crossbind/core-store-kit':
+        specifier: workspace:^
+        version: link:../../core/store-kit
+
+  extensions/instance:
+    devDependencies:
+      crossbind:
+        specifier: workspace:^
+        version: link:../../core/crossbind
+
+  extensions/links:
+    devDependencies:
+      crossbind:
+        specifier: workspace:^
+        version: link:../../core/crossbind
+
+  extensions/menu:
+    devDependencies:
+      crossbind:
+        specifier: workspace:^
+        version: link:../../core/crossbind
+
+  extensions/nsis: {}
+
+  extensions/page-dialogs: {}
+
+  extensions/page-downloads: {}
+
+  extensions/page-drops:
+    devDependencies:
+      crossbind:
+        specifier: workspace:^
+        version: link:../../core/crossbind
+
+  extensions/page-files: {}
+
+  extensions/page-location: {}
+
+  extensions/page-navigation: {}
+
+  extensions/page-permissions: {}
+
+  extensions/power:
+    devDependencies:
+      crossbind:
+        specifier: workspace:^
+        version: link:../../core/crossbind
+
+  extensions/shell:
+    devDependencies:
+      crossbind:
+        specifier: workspace:^
+        version: link:../../core/crossbind
+
+  extensions/shortcuts:
+    devDependencies:
+      crossbind:
+        specifier: workspace:^
+        version: link:../../core/crossbind
+
+  extensions/tar-gz: {}
+
+  extensions/updater:
+    devDependencies:
+      crossbind:
+        specifier: workspace:^
+        version: link:../../core/crossbind
+
+  extensions/zip: {}
 
   landing:
     dependencies:

@@ -54,8 +54,6 @@ std::wstring webViewProfile() {
 
 void crossbind::onMainThread(std::function<void()> fn) { windows::onMainThread(std::move(fn)); }
 
-bool isMainThread() { return isUiThread(); }
-
 // The windows go without asking the app's extensions, as the app quits once the loop ends.
 void quitApp() {
     onMainThread([] { endLoop(); });

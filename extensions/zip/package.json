@@ -1,0 +1,25 @@
+{
+    "name": "@crossbind/extension-zip",
+    "version": "2.0.0-beta.68",
+    "description": "crossbind app extension: a Windows zip, for those who take no setup program.",
+    "homepage": "https://github.com/crossbind/crossbind/tree/main/extensions/zip#readme",
+    "repository": "https://github.com/crossbind/crossbind.git",
+    "license": "MIT",
+    "type": "module",
+    "exports": {
+        "./crossbind.extension.js": "./crossbind.extension.js"
+    },
+    "files": [
+        "crossbind.extension.js"
+    ],
+    "crossbind": {
+        "extension": "./crossbind.extension.js"
+    },
+    "keywords": [
+        "crossbind-extension",
+        "crossbind",
+        "zip",
+        "installer",
+        "app"
+    ]
+}

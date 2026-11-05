@@ -52,7 +52,12 @@ export default defineConfig({
             // exercised a machine without that image already cached, and android builds shipped
             // broken to every Apple Silicon user. Which command line these actions build IS the
             // behaviour, so the layer is measured.
-            include: ['src/utils/**/*.js', 'src/state/**/*.js', 'src/assets/**/*.js', 'src/actions/**/*.js'],
+            // crossbind's own extensions' build-side code, which left src/ as packages of their own, is measured with it.
+            include: [
+                'src/utils/**/*.js', 'src/state/**/*.js', 'src/assets/**/*.js', 'src/actions/**/*.js',
+                '../../extensions/*/crossbind.extension.js', '../../extensions/*/src/**/*.js', '../../core/store-kit/*.js',
+            ],
+            allowExternal: true,
             all: true,
             // A floor with a one-point band, not a ratchet. Coverage is not identical across
             // environments - resolveEmbindRust walks the real node_modules layout, so which of its

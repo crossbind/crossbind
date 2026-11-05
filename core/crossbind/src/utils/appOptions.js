@@ -1,7 +1,6 @@
 // The app section of crossbind.config.js: what a user sees of an app, its name and, on the desktop, its window, and where
 // its page opens files.
 import { carriedPath } from './appFiles.js';
-import { activityTypeOwners, fileTypeOwners, linkOwners, shortcutItemOwners } from './appLaunches.js';
 
 const WINDOW_DEFAULTS = { width: 1024, height: 768, minWidth: 0, minHeight: 0, maxWidth: 0, maxHeight: 0, resizable: true, fullscreen: false, backgroundColor: null };
 // Larger than any display, and far within the int a host takes a size as.
@@ -10,9 +9,6 @@ const MAX_WINDOW_SIZE = 16384;
 const MAX_VERSION_NUMBER = 65535;
 // Up to four numbers, then a semver prerelease or build part; none of its characters needs escaping in C or RC.
 const WINDOWS_VERSION = /^(\d+(?:\.\d+){0,3})(?:[-+][0-9A-Za-z.+-]*)?$/;
-// What app.openPath can let the page's shell.openPath open: the app's folders as app.paths() names them, and what a
-// dialog picked during this run.
-const OPEN_PATH_PLACES = ['data', 'cache', 'logs', 'picked'];
 // The platforms whose apps have a window of their own, and updates.
 const DESKTOP = ['darwin', 'linux', 'win32'];
 // Apple's app categories, which macOS shows an app under, each with the main categories of the freedesktop menu
@@ -258,39 +254,6 @@ export function appFiles(config) {
     return files.map((file) => carriedPath('app.files', root, file, "project's"));
 }
 
-// Where the page's shell.openPath opens a file: nowhere unless app.openPath lists it, as opening a program runs it.
-function appOpenPath(config) {
-    const places = config.app.openPath ?? [];
-    if (!Array.isArray(places)) {
-        throw new Error(`crossbind: app.openPath ${JSON.stringify(places)} is no list of ${OPEN_PATH_PLACES.join(', ')}, as ['logs', 'picked'] is.`);
-    }
-    const unknown = places.filter((place) => !OPEN_PATH_PLACES.includes(place));
-    if (unknown.length > 0) {
-        throw new Error(`crossbind: app.openPath takes ${OPEN_PATH_PLACES.join(', ')}; ${unknown.map((place) => JSON.stringify(place)).join(', ')} is none of them.`);
-    }
-    return places;
-}
-
-// The origins whose pages load in the app beside its own, as app.navigation.load lists them for the host's
-// page-navigation: http and https ones alone, each as a URL's origin is, as 'https://login.example.com'.
-function appNavigation(config) {
-    const navigation = config.app.navigation ?? {};
-    if (navigation === null || typeof navigation !== 'object' || Array.isArray(navigation)) {
-        throw new Error(`crossbind: app.navigation ${JSON.stringify(navigation)} is no object, as { load: ['https://login.example.com'] } is.`);
-    }
-    const unknown = Object.keys(navigation).filter((key) => key !== 'load');
-    if (unknown.length > 0) throw new Error(`crossbind: app.navigation takes load alone; ${unknown.join(', ')} is none of it.`);
-    const load = navigation.load ?? [];
-    if (!Array.isArray(load)) throw new Error(`crossbind: app.navigation.load ${JSON.stringify(load)} is no list of origins, as ['https://login.example.com'] is.`);
-    for (const origin of load) {
-        const url = typeof origin === 'string' && URL.canParse(origin) ? new URL(origin) : null;
-        if (!url || !['http:', 'https:'].includes(url.protocol) || url.origin !== origin) {
-            throw new Error(`crossbind: app.navigation.load's ${JSON.stringify(origin)} is no http or https origin, as 'https://login.example.com' is, with no path, no default port and its host in lower case.`);
-        }
-    }
-    return { load };
-}
-
 // Schemes the web, the system or crossbind owns, which no app takes, and the keys of Windows' own classes, whose name a
 // scheme's registry key would take.
 const RESERVED_SCHEMES = [
@@ -339,77 +302,15 @@ export function urlSchemeOwners(config) {
 // The schemes whose links open the app: app.urlSchemes's, then its extensions'.
 export const appUrlSchemes = (config) => urlSchemeOwners(config).map(({ scheme }) => scheme);
 
-// Whether a desktop app keeps to one instance: app.singleInstance, else whether it has a scheme or opens files on
-// Windows or Linux, whose links and files start the app again; macOS hands them to the app that runs.
-function appSingleInstance(config, platform) {
-    const singleInstance = config.app.singleInstance ?? (platform !== 'darwin' && (appUrlSchemes(config).length > 0 || fileTypeOwners(config).length > 0));
-    if (typeof singleInstance !== 'boolean') {
-        throw new Error(`crossbind: app.singleInstance ${JSON.stringify(singleInstance)} is no boolean: set it to true to keep a desktop app to one instance, or to false to let each launch run.`);
-    }
-    return singleInstance;
-}
-
-// Semver's version: three numbers, then a prerelease and build metadata of dot-separated identifiers.
-const SEMVER = /^\d+\.\d+\.\d+(-[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?(\+[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?$/;
-// What an update's files are named after: characters an address carries as they are, and no leading dot.
-const UPDATE_NAME = /^[A-Za-z0-9_~-][A-Za-z0-9._~-]*$/;
-// The Ed25519 public keys of the points of small order, whatever the sign of x, whose signatures anyone can forge: the
-// list libsodium's ge25519_has_small_order checks.
-const SMALL_ORDER_KEYS = [
-    '0000000000000000000000000000000000000000000000000000000000000000',
-    '0100000000000000000000000000000000000000000000000000000000000000',
-    '26e8958fc2b227b045c3f489f2ef98f0d5dfac05d3c63339b13802886d53fc05',
-    'c7176a703d4dd84fba3c0b760d10670f2a2053fa2c39ccc64ec7fd7792ac037a',
-    'ecffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7f',
-    'edffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7f',
-    'eeffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7f',
-].map((hex) => Buffer.from(hex, 'hex'));
-
-const isSmallOrder = (key) => SMALL_ORDER_KEYS.some((point) => key.subarray(0, 31).equals(point.subarray(0, 31)) && (key[31] & 0x7f) === point[31]);
-
 // The installers app.installers names, which alone of each desktop platform's make what installs its app; null without
 // it, when every one does.
 export function appInstallers(config) {
     const { installers } = config.app;
     if (installers === undefined) return null;
     if (!Array.isArray(installers) || !installers.every((name) => typeof name === 'string') || new Set(installers).size !== installers.length) {
-        throw new Error(`crossbind: app.installers ${JSON.stringify(installers)} is no list of installers' names, each once, as ['dmg', 'deb'] is.`);
+        throw new Error(`crossbind: app.installers ${JSON.stringify(installers)} is no list of installers' names, each once.`);
     }
     return installers;
-}
-
-// Where a desktop app finds its updates, the key their signatures are checked with, and the version they are newer than:
-// package.json's, which semver orders. Null without app.updater.
-export function appUpdater(config) {
-    const updater = config.app.updater;
-    if (updater === undefined) return null;
-    const keys = 'url and publicKey';
-    if (updater === null || typeof updater !== 'object' || Array.isArray(updater)) {
-        throw new Error(`crossbind: app.updater ${JSON.stringify(updater)} is no object of ${keys}, as { url: 'https://example.com/updates/<name>-{platform}-{arch}.update.json', publicKey: '…' } is.`);
-    }
-    const unknown = Object.keys(updater).filter((key) => !['url', 'publicKey'].includes(key));
-    if (unknown.length > 0) throw new Error(`crossbind: app.updater takes ${keys}; ${unknown.join(', ')} is none of them.`);
-    const url = URL.canParse(updater.url) ? new URL(updater.url) : null;
-    const isLocal = url?.protocol === 'http:' && ['localhost', '127.0.0.1', '[::1]'].includes(url.hostname);
-    // The host takes the address as a C string, as it is written, and the update's file from beside the manifest.
-    if (!url || !(url.protocol === 'https:' || isLocal) || /[^\x21-\x7e]|["\\]/.test(updater.url) || url.pathname.endsWith('/')) {
-        throw new Error(`crossbind: app.updater.url ${JSON.stringify(updater.url)} is no https address of a manifest, as https://example.com/updates/<name>-{platform}-{arch}.update.json is; http serves localhost alone.`);
-    }
-    const publicKey = Buffer.from(typeof updater.publicKey === 'string' ? updater.publicKey : '', 'base64');
-    if (publicKey.length !== 32 || publicKey.toString('base64') !== updater.publicKey) {
-        throw new Error(`crossbind: app.updater.publicKey ${JSON.stringify(updater.publicKey)} is no Ed25519 public key, which \`crossbind app updater-key\` prints.`);
-    }
-    if (isSmallOrder(publicKey)) {
-        throw new Error(`crossbind: app.updater.publicKey ${JSON.stringify(updater.publicKey)} is a key anyone can forge signatures for, which no key pair has. Use the one \`crossbind app updater-key\` prints.`);
-    }
-    const version = config.package?.version ?? '1.0.0';
-    if (typeof version !== 'string' || !SEMVER.test(version)) {
-        throw new Error(`crossbind: package.json's version ${JSON.stringify(version)} is no semver version, as 1.2.3 and 1.2.3-beta.1 are, which an app that updates needs to tell a newer one.`);
-    }
-    if (!UPDATE_NAME.test(config.general.name)) {
-        throw new Error(`crossbind: general.name ${JSON.stringify(config.general.name)} names an app's update files, which an app fetches by name: letters, digits, and . _ ~ - alone, not starting with a dot. Change general.name in crossbind.config.js.`);
-    }
-    return { url: updater.url, publicKey, version };
 }
 
 // A desktop host's window: its page's size and limits, whether it resizes and whether it opens full screen. A maximum of
@@ -428,35 +329,6 @@ function windowDefines(window) {
         ...most,
         ...(window.fullscreen ? ['#define CROSSBIND_APP_WINDOW_FULLSCREEN 1'] : []),
     ];
-}
-
-// The options of the host's own extensions, from the app's: an Apple app's activities, which hand the page the user
-// activities of app.activityTypes and take its own, the types it lists, where it lists any; the files, which hand the
-// page the files no extension owns, to an app that opens files; a desktop app's instance, where it keeps one, the app's
-// id, which names the instance; the links, which hand the page the links of app.urlSchemes, and a phone's of app.links,
-// where it lists any; a phone's shortcuts, which hand the page the taps of app.shortcutItems' quick actions, where it
-// lists any;
-// the shell's where its page opens files; the page's navigation the origins app.navigation.load lists; a Linux app's
-// menu the app's id, which its tray names itself by on the session bus; and a desktop app's updater app.updater, with
-// the app's version and id, which an update's signature covers.
-export function hostExtensionOptions(config, platform) {
-    const isDesktop = DESKTOP.includes(platform);
-    const updater = isDesktop ? appUpdater(config) : null;
-    const isOwn = ({ extension }) => extension === null;
-    const ownActivityTypes = ['darwin', 'ios'].includes(platform) ? activityTypeOwners(config).filter(isOwn).map(({ type }) => type) : [];
-    return {
-        ...(ownActivityTypes.length > 0 ? { activities: { types: ownActivityTypes } } : {}),
-        ...(fileTypeOwners(config).length > 0 ? { files: {} } : {}),
-        ...(isDesktop && appSingleInstance(config, platform) ? { instance: { id: appId(config) } } : {}),
-        ...(urlSchemeOwners(config).some(isOwn) || (!isDesktop && linkOwners(config).some(isOwn)) ? { links: {} } : {}),
-        ...(!isDesktop && shortcutItemOwners(config).some(isOwn) ? { shortcuts: {} } : {}),
-        shell: { openPath: appOpenPath(config) },
-        'page-navigation': appNavigation(config),
-        ...(platform === 'linux' ? { menu: { id: appId(config) } } : {}),
-        // WKWebView gives a macOS page no location of its own.
-        ...(platform === 'darwin' && 'location' in appPermissions(config) ? { 'page-location': {} } : {}),
-        ...(updater ? { updater: { url: updater.url, publicKey: updater.publicKey.toString('base64'), version: updater.version, id: appId(config) } } : {}),
-    };
 }
 
 // The header an app's host compiles its id and name with, an iOS or desktop host the color it shows until its page paints

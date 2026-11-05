@@ -35,7 +35,7 @@
         "clear:ports": "pnpm run clear:cache:ports && pnpm run clear:dist:ports",
         "clear:ports:android": "pnpm run clear:cache:ports && pnpm run clear:dist:ports:android",
         "clear": "pnpm run clear:cache && pnpm run clear:dist && pnpm run clear:pack",
-        "lint": "eslint core/crossbind/src plugins",
+        "lint": "eslint core/crossbind/src core/store-kit plugins extensions",
         "pack:list": "find ports -name '*.tgz' -maxdepth 4 -type f",
         "ci:linux:build:port": "pnpm --filter=@crossbind/port-zlib-* --filter='!@crossbind/port-zlib-standalone-napi*' run build",
         "ci:linux:build": "pnpm run build:examples && pnpm run build:examples:desktop && pnpm run ci:linux:build:port",

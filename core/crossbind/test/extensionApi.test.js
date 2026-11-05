@@ -114,7 +114,7 @@ describe("an extension's api", () => {
         const android = extensionApi('demo-store', { platform: 'android', run });
         const ios = extensionApi('demo-store', { platform: 'ios', run });
         expect(android.app).toMatchObject({
-            id: 'dev.crossbind.demo', name: 'demo', version: '1.2.3-beta.1', appleVersion: '1.2.3', versionCode: 1002003, buildNumber: null, encryption: null, updater: null,
+            id: 'dev.crossbind.demo', name: 'demo', version: '1.2.3-beta.1', appleVersion: '1.2.3', versionCode: 1002003, buildNumber: null, encryption: null,
         });
         state.config.app = { id: 'com.example.demo', name: 'Demo' };
         expect([android.app.id, ios.app.id, ios.app.name]).toEqual(['com.example.demo', 'com.example.demo', 'Demo']);
@@ -172,7 +172,7 @@ describe("an extension's api", () => {
         await expect(api.config.write('app..id', 'x')).rejects.toThrow('crossbind: demo-store names "app..id", which is no option of crossbind.config.js');
         await expect(api.config.write('app.privacy', { fileTimestamp: [Number.NaN] })).rejects.toThrow('a value that is no JSON value');
         await expect(api.config.write('app.window', { width: 800 })).rejects.toThrow(
-            "crossbind: demo-store writes app.window, which api.config.write leaves to the app's developer: it writes app.id, app.name, app.icon, app.encryption, app.privacy and app.updater alone.",
+            "crossbind: demo-store writes app.window, which api.config.write leaves to the app's developer: it writes app.id, app.name, app.icon, app.encryption and app.privacy alone.",
         );
         expect(state.config.app).toEqual({});
     });

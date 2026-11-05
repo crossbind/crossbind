@@ -5,17 +5,11 @@ import {
 } from './buildApp.js';
 import extensionApi from './extensionApi.js';
 import {
-    PUBLISH_PLATFORMS, checkedExtension, extensionStep, isJsonValue, withListed,
+    PUBLISH_PLATFORMS, extensionStep, isJsonValue, ownExtensions, withListed, withoutNamed,
 } from '../utils/appExtensions.js';
 import { CONFIG_CHANGES } from '../utils/configChanges.js';
 import { hasTerminal } from '../utils/ask.js';
-import googlePlay from '../publishers/google-play/index.js';
-import appStore from '../publishers/app-store/index.js';
-import github from '../publishers/github/index.js';
-
-// The store crossbind app publish sends the app of each mobile platform to where it names none, as -p, or
-// CROSSBIND_APP_PLATFORM, names the platform.
-export const PLATFORM_STORES = { android: 'google-play', ios: 'app-store' };
+import resolveAppHostRoot from '../utils/resolveAppHost.js';
 
 const isObject = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
 const possessive = (name) => (name.endsWith('s') ? `${name}'` : `${name}'s`);
@@ -29,25 +23,24 @@ const MAX_BUILDS = 4;
 // A step of the publisher's, which its publisher may lack.
 const step = ({ name, publisher }, which, ...args) => extensionStep(name, which, () => publisher[which]?.(...args));
 
-// crossbind's own publishers, each an extension as an extension package's crossbind.extension.js gives one.
-export const builtInPublishers = () => [googlePlay, appStore, github].map((extension) => {
-    const own = extension();
-    return checkedExtension(own, own.root, `crossbind's own extension ${own.name}`);
-});
+// crossbind's own publishers, which the host brings as it brings its other extensions.
+export const builtInPublishers = () => withoutNamed(ownExtensions(resolveAppHostRoot()), state.config?.app).filter(({ publisher }) => publisher);
 
 // The publishers an app has: crossbind's own, each in the place of the app's extension of its name that has a
 // publisher, then those of the app's other extensions.
 export const publishersOf = (extensions) => withListed(builtInPublishers(), extensions.filter((extension) => extension.publisher));
 
-// The store the command names first, before the options, else the one of the platform -p, or CROSSBIND_APP_PLATFORM,
-// names, and the arguments after it. A store named after the options, of those crossbind knows, is refused, as Vite
-// would take it.
-export function storeOf(args, platform, envPlatform, stores = []) {
+// The store the command names first, before the options, else the last publisher that says it is the one of the platform
+// -p, or CROSSBIND_APP_PLATFORM, names, and the arguments after it. A store named after the options, of those crossbind
+// knows, is refused, as Vite would take it.
+export function storeOf(args, platform, envPlatform, publishers = []) {
     const [first, ...rest] = args;
     const named = first !== undefined && !first.startsWith('-') ? first : null;
-    const late = named ? null : args.find((arg) => stores.includes(arg));
+    const late = named ? null : args.find((arg) => publishers.some(({ name }) => name === arg));
     if (late) throw new Error(`crossbind: crossbind app publish takes the store first, before the options: crossbind app publish ${late} ${args.filter((arg) => arg !== late).join(' ')}.`);
-    return { store: named ?? PLATFORM_STORES[platform ?? envPlatform] ?? null, rest: named ? rest : args };
+    const where = platform ?? envPlatform;
+    const usual = publishers.findLast(({ publisher }) => publisher.isDefault && publisher.platforms.includes(where));
+    return { store: named ?? usual?.name ?? null, rest: named ? rest : args };
 }
 
 // The publisher of a store, after those it comes after, first to last.
@@ -140,7 +133,7 @@ export function publishHelp(publishers = builtInPublishers()) {
         '',
         'Stores, each with the options it takes after its name:',
         ...publishers.flatMap(({ name, publisher }) => [
-            `  ${name}: ${storeName({ name, publisher })}, for ${listed(publisher.platforms)} apps`,
+            `  ${name}: ${storeName({ name, publisher })}, for ${listed(publisher.platforms)} apps${publisher.isDefault ? ', which goes first for them' : ''}`,
             ...Object.entries(publisher.options).map(([option, declared]) => `    ${signature(option, declared).padEnd(width)}  ${declared.help}${declared.default ? ` (default: ${declared.default})` : ''}`),
         ]),
         "An app's extensions add stores of their own, each with the options its package gives.",
@@ -179,7 +172,7 @@ async function uploadAfter(chain, apis, sessions, output, firstPublished) {
 // an iOS app's does once its user has given Apple's reasons for an API it calls.
 export default async function publish(args, { platform, envPlatform, runVite }) {
     const publishers = publishersOf(state.config.extensions);
-    const { store, rest } = storeOf(args, platform, envPlatform, publishers.map(({ name }) => name));
+    const { store, rest } = storeOf(args, platform, envPlatform, publishers);
     const chain = publishChain(publishers, store);
     const own = builtInPublishers().map(({ name }) => name);
     chain.filter((extension) => own.includes(extension.name) && state.config.extensions.includes(extension))

@@ -1,9 +1,0 @@
-{
-    "name": "page-drops",
-    "contract": 1,
-    "app": {
-        "macos": { "sources": ["drops.cpp"] },
-        "linux": { "sources": ["drops.cpp"] },
-        "windows": { "sources": ["drops.cpp"] }
-    }
-}

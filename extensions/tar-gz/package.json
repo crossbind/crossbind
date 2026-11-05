@@ -1,0 +1,26 @@
+{
+    "name": "@crossbind/extension-tar-gz",
+    "version": "2.0.0-beta.68",
+    "description": "crossbind app extension: a Linux archive, which a Linux app updates itself from.",
+    "homepage": "https://github.com/crossbind/crossbind/tree/main/extensions/tar-gz#readme",
+    "repository": "https://github.com/crossbind/crossbind.git",
+    "license": "MIT",
+    "type": "module",
+    "exports": {
+        "./crossbind.extension.js": "./crossbind.extension.js"
+    },
+    "files": [
+        "crossbind.extension.js"
+    ],
+    "crossbind": {
+        "extension": "./crossbind.extension.js"
+    },
+    "keywords": [
+        "crossbind-extension",
+        "crossbind",
+        "tar",
+        "gz",
+        "installer",
+        "app"
+    ]
+}

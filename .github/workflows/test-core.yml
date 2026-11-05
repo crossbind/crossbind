@@ -6,6 +6,8 @@ on:
             - main
         paths:
             - core/crossbind/**
+            - core/store-kit/**
+            - extensions/**
             - ports/**
             - .nvmrc
             - .github/workflows/test-core.yml
@@ -15,6 +17,8 @@ on:
             - main
         paths:
             - core/crossbind/**
+            - core/store-kit/**
+            - extensions/**
             - ports/**
             - .nvmrc
             - .github/workflows/test-core.yml

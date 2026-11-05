@@ -12,7 +12,7 @@ vi.mock('node:child_process', async (importOriginal) => ({
 
 const {
     githubCaller, githubRepository, githubToken, newRelease, publishRelease, releaseOf, uploadAsset,
-} = await import('../src/publishers/github/githubReleases.js');
+} = await import('../../../extensions/github/src/githubReleases.js');
 
 const json = (status, body) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
 let dir;

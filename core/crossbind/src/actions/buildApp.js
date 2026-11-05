@@ -30,13 +30,13 @@ import { getContentHash, getFilesFingerprint } from '../utils/hash.js';
 import { xmlPlist } from '../utils/plist.js';
 import {
     androidAppId, appBackgroundColor, appCategory, appCopyright, appDisplayName, appEncryption, appFiles, appHeader, appId, appPermissions, appPrivacy,
-    appUrlSchemes, hostExtensionOptions, iosAppGroup, iosMultipleWindows, urlSchemeOwners, usageDescriptions,
+    appUrlSchemes, iosAppGroup, iosMultipleWindows, urlSchemeOwners, usageDescriptions,
 } from '../utils/appOptions.js';
 import { carriedFilesOf, copyCarriedFiles } from '../utils/appFiles.js';
 import { activityTypeOwners, fileTypeOwners, linkOwners, macDocumentTypes, shortcutItemOwners } from '../utils/appLaunches.js';
 import { unreasonedApis, unreasonedWarning } from '../utils/requiredReasonApis.js';
 import {
-    appExtensionsOf, appHostExtensions, extensionCmakeArgs, extensionPart, mergedEntitlements, mergedPlist, mergedPrivacy, registrationSource, withRoles,
+    appExtensionsOf, extensionCmakeArgs, extensionPart, mergedEntitlements, mergedPlist, mergedPrivacy, registrationSource,
 } from '../utils/appExtensions.js';
 import { androidIcons, iosIcon, linuxIcon, macIcon, readAppIcon, windowsIcon } from '../utils/appIcon.js';
 import writeIfChanged from '../utils/writeIfChanged.js';
@@ -48,6 +48,7 @@ import { getDockerImage, imageRoleFor } from '../utils/pullDockerImage.js';
 import { isUnderBase } from '../utils/replaceBasePathForDocker.js';
 import { chosenRunner } from '../utils/selectRunner.js';
 import { DARWIN_DEPLOYMENT_TARGET } from '../utils/darwinToolchain.js';
+import extensionsInApp from './extensionsInApp.js';
 
 const cpuCount = Math.max(1, os.cpus().length - 1);
 const BRIDGE = 'AppBridge';
@@ -55,13 +56,8 @@ const LINUX_MULTIARCH = { x64: 'x86_64-linux-gnu', arm64: 'aarch64-linux-gnu' };
 // Where the android-app, linux and windows images keep the Hermes of the release crossbind pins.
 const IMAGE_HERMES = `/opt/crossbind/hermes/${HERMES.version}`;
 
-// What the host's extensions the app has, with the options the app's give them, and those crossbind.config.js lists add
-// to an app of this platform, each with the roles of the host's it holds: a role a listed one replaces leaves the host's.
-const extensionsOf = (platform) => extensionPart(withRoles(
-    appHostExtensions(resolveAppHostRoot(), hostExtensionOptions(state.config, platform)),
-    appExtensionsOf(state.config.extensions),
-    (message) => console.warn(`crossbind: ${message}.`),
-), platform);
+// What the app's extensions add to an app of this platform.
+const extensionsOf = (platform) => extensionPart(extensionsInApp(platform, (message) => console.warn(`crossbind: ${message}.`)), platform);
 
 // The App Group an iOS app shares with the targets of its extensions' that ask for one, or none; app.ios.appGroup is
 // checked all the same.
@@ -379,13 +375,19 @@ function warnUnreasonedApis(project, privacy) {
 // command line.
 const appOutputsFile = () => `${state.config.paths.build}/app-outputs.json`;
 const readAppOutputs = () => (fs.existsSync(appOutputsFile()) ? JSON.parse(fs.readFileSync(appOutputsFile(), 'utf8')) : {});
-// What each desktop app's installers wrote beside it, with its update, as builds recorded them.
+// What each desktop app's installers wrote beside it, as builds recorded them.
 const shippedFiles = () => new Set(Object.values(readAppOutputs()).filter(Array.isArray).flat()
-    .flatMap(({ installers = [], update }) => [...installers.flatMap(({ files }) => files), ...(update ? [update.manifest, update.file] : [])]));
+    .flatMap(({ installers = [] }) => installers.flatMap(({ files }) => files)));
 // The command line's names of the desktop platforms.
 export const DESKTOP_PLATFORMS = { darwin: 'macos', linux: 'linux', win32: 'windows' };
 
-export const clearAppOutputs = () => fs.rmSync(appOutputsFile(), { force: true });
+// Forgets what the builds wrote, as a publish's own build writes it anew, but for the installers' files, which a folder the
+// bundler kept holds still, for the page to leave out.
+export function clearAppOutputs() {
+    const earlier = [...shippedFiles()];
+    if (earlier.length > 0) fs.writeFileSync(appOutputsFile(), JSON.stringify({ earlier: [{ installers: [{ files: earlier }] }] }));
+    else fs.rmSync(appOutputsFile(), { force: true });
+}
 
 // What a publisher's upload gets of the app the build wrote for a platform: a desktop platform's apps, one for each arch.
 export function appOutputOf(platform) {
@@ -397,8 +399,8 @@ export function appOutputOf(platform) {
 const madeFile = (file) => (fs.existsSync(file) ? file : null);
 
 // What a publisher's upload takes of an app: an iOS app's project, an Android app's with its APK, bundle and native
-// debug symbols where the build made them, and each arch's desktop app with its installers and update.
-export function recordAppOutput(target, to, { installers = [], update = null } = {}) {
+// debug symbols where the build made them, and each arch's desktop app with its installers.
+export function recordAppOutput(target, to, { installers = [] } = {}) {
     const outputs = readAppOutputs();
     const app = path.resolve(to);
     const desktop = DESKTOP_PLATFORMS[target.platform];
@@ -410,7 +412,6 @@ export function recordAppOutput(target, to, { installers = [], update = null } =
             app,
             arch: target.arch,
             installers: installers.map(({ name, files }) => ({ name, files: files.map((file) => path.resolve(file)) })),
-            update: update && { manifest: path.resolve(update.manifest), file: path.resolve(update.file) },
         }] }
         : { [target.platform]: mobile };
     fs.mkdirSync(state.config.paths.build, { recursive: true });
@@ -467,13 +468,13 @@ export function publishApp(target, { to = appOutputPath(target), page = null } =
     }
     if (page) {
         // The app may land inside the page's own directory, which it then leaves out, with every app built there and what
-        // packages it: crossbind's files by their names, and every installer's as a build recorded them, which a folder
-        // the bundler left as it was holds still.
-        const apps = new Set([path.basename(to), ...state.targets.filter((t) => t.runtimeEnv === 'app')
-            .flatMap((t) => [appOutputName(t), `${state.config.general.name}-${t.platform}-${t.arch}`])]);
+        // packages it: what is named after a target of the app, and every installer's files as a build recorded them, which
+        // a folder the bundler left as it was holds still.
+        const apps = state.targets.filter((t) => t.runtimeEnv === 'app')
+            .flatMap((t) => [appOutputName(t), `${state.config.general.name}-${t.platform}-${t.arch}`]).filter((name) => !name.endsWith('.app'));
         const shipped = shippedFiles();
-        const isApp = (entry) => entry.endsWith('.app') || apps.has(entry.replace(/\.dmg$/, '.app'))
-            || apps.has(entry.replace(/(\.tar\.gz|\.app\.zip|\.zip|\.apk|\.aab|\.deb|-setup\.exe|\.update\.json)$/, ''))
+        const isApp = (entry) => entry === path.basename(to) || entry.endsWith('.app')
+            || apps.some((app) => entry === app || entry.startsWith(`${app}.`) || entry.startsWith(`${app}-`))
             || shipped.has(path.resolve(page, entry));
         fs.readdirSync(page).filter((entry) => !isApp(entry)).forEach((entry) => {
             fs.cpSync(`${page}/${entry}`, `${to}/${appLayout(target).resources}/page/${entry}`, { recursive: true });
@@ -509,18 +510,18 @@ export default async function buildApp(target, { bridges = [], force = false } =
     const header = appHeader(state.config, target.platform, appGroupOf(target.platform, extensions));
     const carried = carriedFilesOf(extensions.files, ownFiles());
     const carriedPaths = new Set(carried);
+    // Whether the extension that owns a launch has native code, or for the app's own one that holds the role.
+    const hasNative = (extension, role) => extensions.native.some(({ name, roles }) => (extension === null ? roles.includes(role) : name === extension));
     // A desktop's system hands an app no https link: its owners there are those with native code, whose onOpenUrl a
     // phone's code may share.
     const isPhone = ['ios', 'android'].includes(target.platform);
-    const links = linkOwners(state.config).filter(({ extension }) => isPhone || extensions.native.some(({ name }) => name === (extension ?? 'links')));
+    const links = linkOwners(state.config).filter(({ extension }) => isPhone || hasNative(extension, 'links'));
     // Another system continues no user activity: its owners there are those with native code, whose onUserActivity
     // Apple's code may share.
     const isApple = ['darwin', 'ios'].includes(target.platform);
-    const activities = activityTypeOwners(state.config)
-        .filter(({ extension }) => isApple || extensions.native.some(({ name }) => name === (extension ?? 'activities')));
+    const activities = activityTypeOwners(state.config).filter(({ extension }) => isApple || hasNative(extension, 'activities'));
     // A desktop has no quick actions either.
-    const shortcuts = shortcutItemOwners(state.config)
-        .filter(({ extension }) => isPhone || extensions.native.some(({ name }) => name === (extension ?? 'shortcuts')));
+    const shortcuts = shortcutItemOwners(state.config).filter(({ extension }) => isPhone || hasNative(extension, 'shortcuts'));
     const registration = registrationSource(extensions.native, urlSchemeOwners(state.config), fileTypeOwners(state.config), links, activities, shortcuts);
 
     const buildType = target.buildType === 'release' ? 'Release' : 'Debug';

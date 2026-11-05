@@ -5,8 +5,6 @@
 #include "platform.h"
 
 #include <gtk/gtk.h>
-#include <sys/syscall.h>
-#include <unistd.h>
 #include <webkit2/webkit2.h>
 
 #include <cerrno>
@@ -38,9 +36,6 @@ crossbind::app::Paths appPaths() {
 }
 
 void crossbind::onMainThread(std::function<void()> fn) { ::onMainThread(std::move(fn)); }
-
-// The process's first thread runs GTK; the image's glibc predates gettid().
-bool isMainThread() { return syscall(SYS_gettid) == getpid(); }
 
 // The windows go without asking the app's extensions, as the app quits once the loop ends.
 void quitApp() {

@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 let onOpen;
 const openUrl = (url) => onOpen(url);
 
-const { accessToken, signIn } = await import('../src/publishers/google-play/googleSignIn.js');
+const { accessToken, signIn } = await import('../../../extensions/google-play/src/googleSignIn.js');
 
 const SCOPE = 'https://www.googleapis.com/auth/androidpublisher';
 const json = (status, body) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });

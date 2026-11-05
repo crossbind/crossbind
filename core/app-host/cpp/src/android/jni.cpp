@@ -45,8 +45,8 @@ JNIEnv *attachedEnv() {
     JNIEnv *env = nullptr;
     if (vm->GetEnv(reinterpret_cast<void **>(&env), JNI_VERSION_1_6) == JNI_EDETACHED) {
         vm->AttachCurrentThread(&env, nullptr);
-        // ART aborts the app when a thread it attached ends attached, as a thread of the app's that called
-        // messageDialog() would.
+        // ART aborts the app when a thread it attached ends attached, as a thread of the app's that showed a dialog
+        // would.
         thread_local const struct Detach {
             ~Detach() { vm->DetachCurrentThread(); }
         } detach;
@@ -305,9 +305,6 @@ void callJava(const std::string &extension, const std::string &function, Call ca
 }  // namespace crossbind::android
 
 void quitApp() { throw std::runtime_error("crossbind: an Android app does not quit itself: the system ends it"); }
-
-// The activity's UI thread is the process's first.
-bool isMainThread() { return gettid() == getpid(); }
 
 extern "C" JNIEXPORT jint JNI_OnLoad(JavaVM *jvm, void *) {
     vm = jvm;

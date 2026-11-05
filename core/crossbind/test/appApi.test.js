@@ -1,10 +1,12 @@
 import { afterEach, describe, expect, test, vi } from 'vitest';
 import {
     app, dialog, events, invoke, menu, notification, routeUrl, shell, tray, updater, windows,
-} from '../src/app/index.js';
+} from '../../app-host/js/app.js';
 
 // The host of an app, as page.js hands it the page's calls.
 const host = vi.fn(async () => null);
+// What invoke hands the host beside a call's options, of one that takes no messages and no signal.
+const NO_MESSAGES = { onMessage: undefined, signal: undefined };
 const inApp = () => {
     globalThis.Crossbind = { app: host };
 };
@@ -37,18 +39,18 @@ describe("crossbind/app, an app's own functions", () => {
         host.mockResolvedValueOnce(['/home/me/a.txt']);
 
         await expect(dialog.open({ multiple: true, filters: [{ name: 'Text', extensions: ['.txt', 'md'] }] })).resolves.toEqual(['/home/me/a.txt']);
-        expect(host).toHaveBeenCalledWith('dialog.open', { multiple: true, filters: [{ name: 'Text', extensions: ['.txt', 'md'] }] });
+        expect(host).toHaveBeenCalledWith('dialog.open', { multiple: true, filters: [{ name: 'Text', extensions: ['.txt', 'md'] }] }, NO_MESSAGES);
         host.mockResolvedValueOnce('/home/me/b.csv');
         await expect(dialog.save({ defaultName: 'b.csv' })).resolves.toBe('/home/me/b.csv');
-        expect(host).toHaveBeenLastCalledWith('dialog.save', { defaultName: 'b.csv' });
+        expect(host).toHaveBeenLastCalledWith('dialog.save', { defaultName: 'b.csv' }, NO_MESSAGES);
         await shell.openExternal(new URL('https://crossbind.dev/guide'));
-        expect(host).toHaveBeenLastCalledWith('shell.openExternal', { url: 'https://crossbind.dev/guide' });
+        expect(host).toHaveBeenLastCalledWith('shell.openExternal', { url: 'https://crossbind.dev/guide' }, NO_MESSAGES);
         await shell.openPath('/home/me/b.csv');
-        expect(host).toHaveBeenLastCalledWith('shell.openPath', { path: '/home/me/b.csv' });
+        expect(host).toHaveBeenLastCalledWith('shell.openPath', { path: '/home/me/b.csv' }, NO_MESSAGES);
         await shell.revealInFolder('/home/me/a.txt');
-        expect(host).toHaveBeenLastCalledWith('shell.revealInFolder', { path: '/home/me/a.txt' });
+        expect(host).toHaveBeenLastCalledWith('shell.revealInFolder', { path: '/home/me/a.txt' }, NO_MESSAGES);
         await shell.trash('/home/me/old.txt');
-        expect(host).toHaveBeenLastCalledWith('shell.trash', { path: '/home/me/old.txt' });
+        expect(host).toHaveBeenLastCalledWith('shell.trash', { path: '/home/me/old.txt' }, NO_MESSAGES);
         const folders = { data: '/d', cache: '/c', logs: '/l' };
         host.mockResolvedValueOnce(folders);
         await expect(app.paths()).resolves.toEqual(folders);
@@ -73,9 +75,9 @@ describe("crossbind/app, an app's own functions", () => {
         await expect(events.held('')).rejects.toThrow('crossbind: events.held takes the name of an event.');
         host.mockResolvedValueOnce({ version: '1.3.0' });
         await expect(updater.check()).resolves.toEqual({ version: '1.3.0' });
-        expect(host).toHaveBeenLastCalledWith('updater.check', {});
+        expect(host).toHaveBeenLastCalledWith('updater.check', {}, NO_MESSAGES);
         await updater.install();
-        expect(host).toHaveBeenLastCalledWith('updater.install', {});
+        expect(host).toHaveBeenLastCalledWith('updater.install', {}, NO_MESSAGES);
     });
 
     test("calls an extension's function by its name, with its options or none", async () => {
@@ -158,11 +160,11 @@ describe("crossbind/app, an app's own functions", () => {
         const activity = { type: 'com.example.demo.edit', userInfo: { id: 7, tags: ['a'] }, webpageUrl: 'https://example.com/notes/7' };
 
         await app.setUserActivity(activity);
-        expect(host).toHaveBeenLastCalledWith('activities.set', activity);
+        expect(host).toHaveBeenLastCalledWith('activities.set', activity, NO_MESSAGES);
         await app.setUserActivity({ type: 'com.example.demo.edit' });
-        expect(host).toHaveBeenLastCalledWith('activities.set', { type: 'com.example.demo.edit' });
+        expect(host).toHaveBeenLastCalledWith('activities.set', { type: 'com.example.demo.edit' }, NO_MESSAGES);
         await app.setUserActivity(null);
-        expect(host).toHaveBeenLastCalledWith('activities.set', {});
+        expect(host).toHaveBeenLastCalledWith('activities.set', {}, NO_MESSAGES);
     });
 
     test('refuses a user activity before the host sees it where the host could not make it, naming what is wrong', async () => {
@@ -188,9 +190,9 @@ describe("crossbind/app's message dialog", () => {
         host.mockResolvedValueOnce(2);
 
         await expect(dialog.message(options)).resolves.toBe(2);
-        expect(host).toHaveBeenCalledWith('dialog.message', options);
+        expect(host).toHaveBeenCalledWith('dialog.message', options, NO_MESSAGES);
         await dialog.message({ message: 'Exported.' });
-        expect(host).toHaveBeenLastCalledWith('dialog.message', { message: 'Exported.' });
+        expect(host).toHaveBeenLastCalledWith('dialog.message', { message: 'Exported.' }, NO_MESSAGES);
     });
 
     test('takes each kind, one to three labels and options left undefined', async () => {
@@ -203,8 +205,8 @@ describe("crossbind/app's message dialog", () => {
         await dialog.message({ message: 'Saved.', detail: undefined, kind: undefined, buttons: undefined });
 
         expect(host).toHaveBeenCalledTimes(kinds.length + lists.length + 1);
-        for (const kind of kinds) expect(host).toHaveBeenCalledWith('dialog.message', { message: 'Saved.', kind });
-        for (const buttons of lists) expect(host).toHaveBeenCalledWith('dialog.message', { message: 'Saved.', buttons });
+        for (const kind of kinds) expect(host).toHaveBeenCalledWith('dialog.message', { message: 'Saved.', kind }, NO_MESSAGES);
+        for (const buttons of lists) expect(host).toHaveBeenCalledWith('dialog.message', { message: 'Saved.', buttons }, NO_MESSAGES);
     });
 
     test('is refused before the host sees it without a message, of another kind or without one to three labels', async () => {
@@ -246,7 +248,7 @@ describe("crossbind/app's menus", () => {
 
         await menu.set(menus);
 
-        expect(host).toHaveBeenLastCalledWith('menu.set', { menus });
+        expect(host).toHaveBeenLastCalledWith('menu.set', { menus }, NO_MESSAGES);
     });
 
     test('take no menus, a standard item without a label and a function key with any modifiers', async () => {
@@ -299,7 +301,7 @@ describe("crossbind/app's menus", () => {
         host.mockResolvedValueOnce('rename');
 
         await expect(menu.popup(items, { x: 12.5, y: 40 })).resolves.toBe('rename');
-        expect(host).toHaveBeenLastCalledWith('menu.popup', { items, x: 12.5, y: 40 });
+        expect(host).toHaveBeenLastCalledWith('menu.popup', { items, x: 12.5, y: 40 }, NO_MESSAGES);
         await expect(menu.popup([{ id: 'open', label: 'Open' }], { x: 0, y: 0 })).resolves.toBeNull();
     });
 
@@ -324,9 +326,9 @@ describe("crossbind/app's menus", () => {
         const items = [{ label: 'New window', id: 'new-window' }, { type: 'separator' }, { label: 'Recent', items: [{ label: 'a.txt', id: 'recent-a', checked: true }] }];
 
         await menu.setDock(items);
-        expect(host).toHaveBeenLastCalledWith('menu.setDock', { items });
+        expect(host).toHaveBeenLastCalledWith('menu.setDock', { items }, NO_MESSAGES);
         await menu.setDock([]);
-        expect(host).toHaveBeenLastCalledWith('menu.setDock', { items: [] });
+        expect(host).toHaveBeenLastCalledWith('menu.setDock', { items: [] }, NO_MESSAGES);
     });
 
     test("refuse a Dock menu before the host sees it where it could not build it, naming the item", async () => {
@@ -346,13 +348,13 @@ describe("crossbind/app's tray and notifications", () => {
         const menuOfTray = [{ label: 'Open', id: 'open' }, { type: 'separator' }, { label: 'View', items: [{ label: 'Dark', id: 'dark', checked: true, enabled: false }] }];
 
         await tray.set({ tooltip: 'Demo', menu: menuOfTray });
-        expect(host).toHaveBeenLastCalledWith('tray.set', { tooltip: 'Demo', menu: menuOfTray });
+        expect(host).toHaveBeenLastCalledWith('tray.set', { tooltip: 'Demo', menu: menuOfTray }, NO_MESSAGES);
         await tray.set();
-        expect(host).toHaveBeenLastCalledWith('tray.set', {});
+        expect(host).toHaveBeenLastCalledWith('tray.set', {}, NO_MESSAGES);
         await tray.remove();
-        expect(host).toHaveBeenLastCalledWith('tray.remove', {});
+        expect(host).toHaveBeenLastCalledWith('tray.remove', {}, NO_MESSAGES);
         await notification.show({ title: 'Saved', body: 'The file is saved.' });
-        expect(host).toHaveBeenLastCalledWith('notification.show', { title: 'Saved', body: 'The file is saved.' });
+        expect(host).toHaveBeenLastCalledWith('notification.show', { title: 'Saved', body: 'The file is saved.' }, NO_MESSAGES);
     });
 
     test('are refused before the host sees them where it could not show them, naming the item', async () => {

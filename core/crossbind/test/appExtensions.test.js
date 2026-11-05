@@ -3,21 +3,23 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, test } from 'vitest';
 import {
-    appExtensionsOf, appHostExtensions, checkedExtension, checkedInstaller, checkedPublisher, extensionCmakeArgs, extensionPart, hostExtensions, linuxDepends, listedExtension, mergedEntitlements,
-    mergedPlist, mergedPrivacy,
-    registrationSource, withOptions, withRoles,
+    appExtensionsOf, checkedExtension, checkedInstaller, checkedPublisher, extensionCmakeArgs, extensionPart, linuxDepends, listedExtension, mergedEntitlements,
+    mergedPlist, mergedPrivacy, ownExtensions,
+    registrationSource, withFromApp, withRoles, withoutNamed,
 } from '../src/utils/appExtensions.js';
+
+// crossbind's own that add to an app.
+const hostExtensions = (root) => appExtensionsOf(ownExtensions(root));
 
 const roots = [];
 
-// An app host whose extensions/ holds these folders, each its extension.json and the files it names.
+// A folder whose extensions/ holds these folders, each with the files it names.
 function hostWith(extensions) {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'crossbind-extensions-'));
     roots.push(root);
-    Object.entries(extensions).forEach(([folder, { json, files = [] }]) => {
+    Object.entries(extensions).forEach(([folder, { files = [] }]) => {
         const dir = path.join(root, 'extensions', folder);
         fs.mkdirSync(dir, { recursive: true });
-        fs.writeFileSync(path.join(dir, 'extension.json'), typeof json === 'string' ? json : JSON.stringify({ contract: 1, ...json }));
         files.forEach((file) => {
             if (file.endsWith('/')) {
                 fs.mkdirSync(path.join(dir, file), { recursive: true });
@@ -25,6 +27,34 @@ function hostWith(extensions) {
             }
             fs.mkdirSync(path.dirname(path.join(dir, file)), { recursive: true });
             fs.writeFileSync(path.join(dir, file), '');
+        });
+    });
+    return root;
+}
+
+// A value as JavaScript source: its JSON, with what could end a script or a line escaped.
+const asSource = (value) => JSON.stringify(value).replace(/[<>/\u2028\u2029]/g, (char) => `\\u${char.charCodeAt(0).toString(16).padStart(4, '0')}`);
+
+// An app host whose package.json has these extensions as their packages among its dependencies, in its node_modules: each
+// gives this descriptor, a publisher's or an installer's steps in place of true, or is this source.
+function hostOf(extensions) {
+    const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'crossbind-extensions-')));
+    roots.push(root);
+    const names = Object.keys(extensions).map((folder) => `@crossbind/extension-${folder}`);
+    const dependencies = Object.fromEntries(['@crossbind/core-embind-jsi', ...names].map((name) => [name, '1.0.0']));
+    fs.writeFileSync(path.join(root, 'package.json'), JSON.stringify({ name: '@crossbind/core-app-host', dependencies }));
+    const written = ({ publisher, installer, ...data }) => {
+        const role = publisher ? "publisher: { platform: 'android', upload() {} }" : installer ? "installer: { platform: 'windows', make() {} }" : '';
+        return `export default () => ({ ${role}, root: import.meta.dirname, ...${asSource({ contract: 1, ...data })} });`.replace('{ , ', '{ ');
+    };
+    Object.entries(extensions).forEach(([folder, { json, files = [] }]) => {
+        const dir = path.join(root, 'node_modules', '@crossbind', `extension-${folder}`);
+        fs.mkdirSync(dir, { recursive: true });
+        fs.writeFileSync(path.join(dir, 'package.json'), JSON.stringify({ type: 'module', exports: { './crossbind.extension.js': './crossbind.extension.js' } }));
+        fs.writeFileSync(path.join(dir, 'crossbind.extension.js'), typeof json === 'string' ? json : written(json));
+        files.forEach((file) => {
+            fs.mkdirSync(file.endsWith('/') ? path.join(dir, file) : path.dirname(path.join(dir, file)), { recursive: true });
+            if (!file.endsWith('/')) fs.writeFileSync(path.join(dir, file), '');
         });
     });
     return root;
@@ -49,31 +79,49 @@ const DIALOG = {
 };
 
 describe("an app host's own extensions", () => {
-    test('are the folders of its extensions/, in order, each read from its extension.json', () => {
-        const root = hostWith({
-            dialog: DIALOG,
+    test('are the extension packages among its dependencies, in order, each read from its crossbind.extension.js', () => {
+        const root = hostOf({
             'secure-storage': { json: { name: 'secure-storage', app: { sources: ['store.cpp'] } }, files: ['store.cpp'] },
+            dialog: DIALOG,
         });
-        fs.mkdirSync(path.join(root, 'extensions', 'notes'));
         const extensions = hostExtensions(root);
         expect(extensions.map(({ name }) => name)).toEqual(['dialog', 'secure-storage']);
-        expect(extensions[0].root).toBe(path.join(root, 'extensions', 'dialog'));
+        expect(extensions[0].root).toBe(path.join(root, 'node_modules', '@crossbind', 'extension-dialog'));
         expect(extensions[0].app.macos.frameworks).toEqual(['UniformTypeIdentifiers']);
     });
 
+    test('leave the publishers and the installers among those packages to the publish and the build', () => {
+        const root = hostOf({
+            dialog: DIALOG,
+            store: { json: { name: 'store', publisher: true } },
+            zip: { json: { name: 'zip', installer: true } },
+        });
+        expect(ownExtensions(root).map(({ name }) => name)).toEqual(['dialog', 'store', 'zip']);
+        expect(hostExtensions(root).map(({ name }) => name)).toEqual(['dialog']);
+    });
+
+    test('keep one that adds to the app and installs what it makes as well', () => {
+        const root = hostOf({ updater: { json: { name: 'updater', installer: true, app: { sources: ['updater.cpp'] } }, files: ['updater.cpp'] } });
+        expect(hostExtensions(root).map(({ name, installer }) => [name, installer.platforms])).toEqual([['updater', ['windows']]]);
+    });
+
     test("are written for this crossbind's extension contract, else name the app host to update", () => {
-        const root = hostWith({ dialog: { json: { contract: undefined, name: 'dialog' } } });
+        const root = hostOf({ dialog: { json: { contract: undefined, name: 'dialog' } } });
         expect(() => hostExtensions(root)).toThrow(
-            `crossbind: ${path.join(root, 'extensions', 'dialog', 'extension.json')} names no contract, the version of crossbind's extension contract it is written for, as contract: 1 is for this crossbind: update @crossbind/core-app-host to match crossbind.`,
+            "crossbind: @crossbind/extension-dialog's crossbind.extension.js names no contract, the version of crossbind's extension contract it is written for, as contract: 1 is for this crossbind: update @crossbind/core-app-host to match crossbind.",
         );
-        const newer = hostWith({ dialog: { json: { contract: 2, name: 'dialog' } } });
+        const newer = hostOf({ dialog: { json: { contract: 2, name: 'dialog' } } });
         expect(() => hostExtensions(newer)).toThrow("is written for crossbind's extension contract 2, newer than this crossbind's 1: update crossbind.");
     });
 
     test("of crossbind's own host are the activities', the dialog's, the files', the instance's, the links', the menu's, the page's dialogs, downloads, drops, files, location, navigation and permissions, the power's, the shell's, the shortcuts' and the updater's, which each platform's sources show", () => {
         const root = path.join(import.meta.dirname, '..', '..', 'app-host');
-        const sources = (platform, options = {}) => extensionPart(appHostExtensions(root, options), platform).sources
-            .map((file) => path.relative(path.join(file, '..', '..'), file));
+        const packages = path.join(root, '..', '..', 'extensions');
+        // Those an app has only where its config asks for them, as these options say here.
+        const asked = ['activities', 'files', 'instance', 'links', 'page-location', 'shortcuts', 'updater'];
+        const appHostExtensions = (options) => hostExtensions(root).filter(({ name }) => !asked.includes(name) || Object.hasOwn(options, name));
+        const sources = (platform, options = {}) => extensionPart(appHostExtensions(options), platform).sources
+            .map((file) => path.relative(packages, file).split(path.sep).join('/').replace('/native/', '/'));
         const updater = { updater: { url: 'https://example.com/{platform}-{arch}.json' } };
         const updaterSources = ['updater/updater.cpp', 'updater/monocypher.cpp', 'updater/monocypher-ed25519.cpp'];
         const instance = { instance: { id: 'com.example.demo' } };
@@ -116,70 +164,87 @@ describe("an app host's own extensions", () => {
             'dialog/dialog.cpp', 'dialog/android.cpp', 'menu/menu.cpp', 'menu/android.cpp', 'page-downloads/downloads.cpp', 'page-navigation/navigation.cpp', 'shell/shell.cpp',
             'shell/android.cpp',
         ]);
-        expect(extensionPart(appHostExtensions(root, {}), 'darwin').frameworks).toEqual(['UniformTypeIdentifiers', 'UserNotifications']);
-        expect(extensionPart(appHostExtensions(root, updater), 'darwin').frameworks).toEqual(['UniformTypeIdentifiers', 'UserNotifications', 'Security']);
-        expect(extensionPart(appHostExtensions(root, { 'page-location': {} }), 'darwin').frameworks).toEqual(['UniformTypeIdentifiers', 'UserNotifications', 'CoreLocation']);
-        expect(extensionPart(appHostExtensions(root, {}), 'win32').libraries).toEqual(['comctl32', 'shell32', 'ole32']);
-        expect(extensionPart(appHostExtensions(root, updater), 'win32').libraries).toEqual(['comctl32', 'shell32', 'ole32', 'winhttp', 'wintrust', 'crypt32']);
-        expect(extensionPart(appHostExtensions(root, {}), 'android').java.map(({ className }) => className)).toEqual([
+        expect(extensionPart(appHostExtensions({}), 'darwin').frameworks).toEqual(['UniformTypeIdentifiers', 'UserNotifications']);
+        expect(extensionPart(appHostExtensions(updater), 'darwin').frameworks).toEqual(['UniformTypeIdentifiers', 'UserNotifications', 'Security']);
+        expect(extensionPart(appHostExtensions({ 'page-location': {} }), 'darwin').frameworks).toEqual(['UniformTypeIdentifiers', 'UserNotifications', 'CoreLocation']);
+        expect(extensionPart(appHostExtensions({}), 'win32').libraries).toEqual(['comctl32', 'shell32', 'ole32']);
+        expect(extensionPart(appHostExtensions(updater), 'win32').libraries).toEqual(['comctl32', 'shell32', 'ole32', 'winhttp', 'wintrust', 'crypt32']);
+        expect(extensionPart(appHostExtensions({}), 'android').java.map(({ className }) => className)).toEqual([
             'dev.crossbind.extension.dialog.DialogExtension', 'dev.crossbind.extension.pagedialogs.PageDialogsExtension', 'dev.crossbind.extension.pagefiles.PageFilesExtension',
             'dev.crossbind.extension.pagepermissions.PagePermissionsExtension',
         ]);
     });
 
-    test("give an app the activities, the instance, the links, the page's location, the shortcuts and the updater only where the app's options give them, as an Apple app's do that lists app.activityTypes, a phone's that lists app.shortcutItems, an app's that keeps one instance, lists app.urlSchemes, lists the location on macOS or has app.updater", () => {
-        const root = path.join(import.meta.dirname, '..', '..', 'app-host');
-        const updater = { url: 'https://example.com/{platform}-{arch}.json', publicKey: 'key', version: '1.2.3', id: 'com.example.demo' };
-        const instance = { id: 'com.example.demo' };
-        const activities = { types: ['com.example.demo.edit'] };
-        expect(appHostExtensions(root, { shell: { openPath: [] } }).map(({ name }) => name)).toEqual([
-            'dialog', 'menu', 'page-dialogs', 'page-downloads', 'page-drops', 'page-files', 'page-navigation', 'page-permissions', 'power', 'shell',
-        ]);
-        expect(appHostExtensions(root, {
-            activities, instance, links: {}, 'page-location': {}, shell: { openPath: [] }, shortcuts: {}, updater,
-        }).map(({ name, options }) => [name, options])).toEqual([
-            ['activities', activities], ['dialog', undefined], ['instance', instance], ['links', {}], ['menu', undefined], ['page-dialogs', undefined], ['page-downloads', undefined],
-            ['page-drops', undefined], ['page-files', undefined], ['page-location', {}], ['page-navigation', undefined], ['page-permissions', undefined],
-            ['power', undefined], ['shell', { openPath: [] }], ['shortcuts', {}], ['updater', updater],
-        ]);
+    test('stop the build where its dependencies hold no extension package, as an older host keeps them in itself', () => {
+        const root = hostOf({});
+        expect(() => hostExtensions(root)).toThrow(`crossbind: the app host at ${root} brings no extensions: update @crossbind/core-app-host to match crossbind.`);
     });
 
-    test("take the options the app's give them by their own names alone", () => {
-        const extensions = hostExtensions(path.join(import.meta.dirname, '..', '..', 'app-host'));
-        const named = withOptions(extensions, { shell: { openPath: ['data'] } });
-        expect(named[0]).toBe(extensions[0]);
-        expect(extensionPart(named, 'darwin').native).toEqual([
-            { name: 'activities', options: null, roles: [], given: [] }, { name: 'dialog', options: null, roles: [], given: [] }, { name: 'files', options: null, roles: [], given: [] }, { name: 'instance', options: null, roles: [], given: [] }, { name: 'links', options: null, roles: [], given: [] },
-            { name: 'menu', options: null, roles: [], given: [] },
-            { name: 'page-dialogs', options: null, roles: [], given: [] }, { name: 'page-downloads', options: null, roles: [], given: [] }, { name: 'page-drops', options: null, roles: [], given: [] }, { name: 'page-files', options: null, roles: [], given: [] },
-            { name: 'page-location', options: null, roles: [], given: [] }, { name: 'page-navigation', options: null, roles: [], given: [] }, { name: 'page-permissions', options: null, roles: [], given: [] }, { name: 'power', options: null, roles: [], given: [] },
-            { name: 'shell', options: { openPath: ['data'] }, roles: [], given: [] }, { name: 'updater', options: null, roles: [], given: [] },
-        ]);
-        expect(withOptions([{ name: 'constructor' }], {})).toEqual([{ name: 'constructor' }]);
+    test('are named as their packages', () => {
+        const root = hostOf({ dialogs: DIALOG });
+        expect(() => hostExtensions(root)).toThrow("crossbind: @crossbind/extension-dialogs's crossbind.extension.js names the extension dialog, not dialogs as its package.");
     });
 
-    test('are none where the host has no extensions/', () => {
-        expect(hostExtensions(fs.mkdtempSync(path.join(os.tmpdir(), 'crossbind-extensions-')))).toEqual([]);
+    // Of a name no install has, which the NODE_PATH pnpm's scripts run with finds nowhere either.
+    test('stop the build on a crossbind.extension.js that cannot be read, saying which and what to do', () => {
+        const root = hostOf({ unread: { json: 'export default (' } });
+        expect(() => hostExtensions(root)).toThrow("crossbind: cannot read @crossbind/extension-unread's crossbind.extension.js");
+        fs.rmSync(path.join(root, 'node_modules'), { recursive: true });
+        expect(() => hostExtensions(root)).toThrow("install the project's packages, or update @crossbind/core-app-host to match crossbind.");
+    });
+});
+
+describe("what an extension says of crossbind's own host", () => {
+    test('is the roles it holds and the options of the app it reads, as lists of names, each once', () => {
+        const root = os.tmpdir();
+        const checked = checkedExtension({ name: 'menu', holds: ['menu', 'tray'], reads: ['urlSchemes', 'permissions.location'] }, root, 'menu');
+        expect(checked).toMatchObject({ holds: ['menu', 'tray'], reads: ['urlSchemes', 'permissions.location'] });
+        expect(() => checkedExtension({ name: 'menu', holds: 'menu' }, root, 'menu')).toThrow("crossbind: menu's holds \"menu\" is no list of names, each once.");
+        expect(() => checkedExtension({ name: 'menu', holds: ['menu', 'menu'] }, root, 'menu')).toThrow('is no list of names');
+        expect(() => checkedExtension({ name: 'menu', reads: ['a b'] }, root, 'menu')).toThrow("crossbind: menu's reads [\"a b\"] is no list of names, each once.");
     });
 
-    test('are named as their folders', () => {
-        const root = hostWith({ dialogs: DIALOG });
-        const file = path.join(root, 'extensions', 'dialogs', 'extension.json');
-        expect(() => hostExtensions(root)).toThrow(`crossbind: ${file} names the extension dialog, not dialogs as its folder.`);
+    test('is no more than a fromApp, which is a function, or options, which it gives itself', () => {
+        const root = os.tmpdir();
+        expect(() => checkedExtension({ name: 'shell', fromApp: true }, root, 'shell')).toThrow("crossbind: shell's fromApp is no function.");
+        expect(() => checkedExtension({ name: 'shell', fromApp: () => ({}), options: {} }, root, 'shell')).toThrow('gives options and a fromApp, which gives them too: one of them alone.');
+    });
+});
+
+describe('the options an extension takes from the app', () => {
+    const extension = (fromApp) => ({ name: 'demo', root: '/demo', app: {}, fromApp });
+
+    test("are what its fromApp gives, from the api of its name, and leave it out where that is null", () => {
+        const called = [];
+        const taken = withFromApp([extension(({ name }) => { called.push(name); return { id: 1 }; }), { name: 'plain', root: '/plain', app: {} }, extension(() => null)], (name) => ({ name }));
+        expect(taken.map(({ name, options }) => [name, options])).toEqual([['demo', { id: 1 }], ['plain', undefined]]);
+        expect(called).toEqual(['demo']);
     });
 
-    test('stop the build on an extension.json that is no JSON, saying which', () => {
-        const root = hostWith({ dialog: { json: '{ "name": ' } });
-        expect(() => hostExtensions(root)).toThrow(`crossbind: cannot read the extension ${path.join(root, 'extensions', 'dialog', 'extension.json')}`);
+    test('stop the build on what is no JSON value, as the host reads them as they are, and on a failure, naming the extension', () => {
+        expect(() => withFromApp([extension(() => undefined)], () => ({}))).toThrow("crossbind: demo's fromApp gives no JSON value the host reads as it is, or null, which leaves it out of the app.");
+        expect(() => withFromApp([extension(() => { throw new Error('broken'); })], () => ({}))).toThrow("crossbind: demo's fromApp failed: broken");
+        expect(() => withFromApp([extension(() => { throw new Error('crossbind: app.demo is wrong.'); })], () => ({}))).toThrow(/^crossbind: app\.demo is wrong\.$/);
+    });
+});
+
+describe('app.without', () => {
+    test('leaves the rest as they are, and every one without it', () => {
+        const own = [{ name: 'dialog' }, { name: 'menu' }];
+        expect(withoutNamed(own)).toEqual(own);
+        expect(withoutNamed(own, {})).toEqual(own);
+        expect(withoutNamed(own, { without: ['menu'] })).toEqual([{ name: 'dialog' }]);
     });
 });
 
 describe('the extensions an app has', () => {
     const named = (name, root = `/host/${name}`, extra = {}) => ({ name, root, app: {}, ...extra });
     const rolesOf = (extensions) => extensions.map(({ name, roles, given }) => [name, roles, given]);
+    const menu = named('menu', '/host/menu', { holds: ['menu', 'notification', 'tray'] });
+    const pageNavigation = named('page-navigation', '/host/page-navigation', { holds: ['page-authentication', 'page-navigation'] });
 
     test("are the host's own, each with the roles it holds, then those listed, each with the roles it replaces", () => {
-        const own = [named('dialog'), named('menu'), named('page-navigation')];
+        const own = [named('dialog'), menu, pageNavigation];
         expect(rolesOf(withRoles(own, [named('clipboard', '/app/clipboard')]))).toEqual([
             ['dialog', ['dialog'], []], ['menu', ['menu', 'notification', 'tray'], []], ['page-navigation', ['page-authentication', 'page-navigation'], []],
             ['clipboard', [], []],
@@ -187,7 +252,7 @@ describe('the extensions an app has', () => {
     });
 
     test("leave out of the host's own the roles a listed one replaces, and the host's own that holds none then", () => {
-        const own = [named('dialog'), named('menu'), named('page-navigation')];
+        const own = [named('dialog'), menu, pageNavigation];
         const tray = named('acme-tray', '/app/tray', { replaces: ['tray'] });
         const browser = named('acme-browser', '/app/browser', { replaces: ['page-navigation', 'page-authentication'] });
         const dialog = named('acme-dialog', '/app/dialog', { replaces: ['dialog'] });
@@ -198,16 +263,40 @@ describe('the extensions an app has', () => {
     });
 
     test('stop the build where two listed replace one role, naming both', () => {
-        expect(() => withRoles([named('menu')], [named('a-tray', '/a', { replaces: ['tray'] }), named('b-tray', '/b', { replaces: ['tray'] })]))
+        expect(() => withRoles([menu], [named('a-tray', '/a', { replaces: ['tray'] }), named('b-tray', '/b', { replaces: ['tray'] })]))
             .toThrow("crossbind: the extensions a-tray and b-tray both replace the host's tray, which one alone takes.");
     });
 
-    test("let a listed one of the name of a host's own that a later crossbind adds take its place, saying so", () => {
+    test("take no replaces of a role none of the host's own holds, naming those they hold", () => {
+        expect(() => withRoles([named('dialog'), menu], [named('acme-clipboard', '/a', { replaces: ['clipboard'] })]))
+            .toThrow("crossbind: the extension acme-clipboard replaces clipboard, which is no role of the host's: it takes dialog, menu, notification, tray.");
+    });
+
+    test('take a role of one of the host\'s own that app.without leaves out, which they know of beside those the app keeps', () => {
+        expect(rolesOf(withRoles([named('dialog')], [named('acme-tray', '/a', { replaces: ['tray'] })], () => {}, [named('dialog'), menu]))).toEqual([
+            ['dialog', ['dialog'], []], ['acme-tray', ['tray'], []],
+        ]);
+    });
+
+    test("take none named as a role another of the host's own holds, whose functions would clash", () => {
+        expect(() => withRoles([menu], [named('tray', '/a')])).toThrow(
+            "crossbind: the extension tray is named as the host's role tray, which its menu holds: name it as its package, as acme-tray, and give replaces: 'tray' to take the host's place.",
+        );
+    });
+
+    test("let a listed one of the name of a host's own take its place, saying so, as one a later crossbind adds may have it", () => {
         const warnings = [];
         const merged = withRoles([named('dialog'), named('battery')], [named('battery', '/app/battery')], (message) => warnings.push(message));
         expect(merged.map(({ name, root }) => [name, root])).toEqual([['dialog', '/host/dialog'], ['battery', '/app/battery']]);
         expect(warnings).toEqual([
-            "the extension battery that crossbind.config.js lists takes the place of the host's own battery, which this crossbind adds: name it as its package, as acme-battery, to keep both",
+            "the extension battery that crossbind.config.js lists takes the place of the host's own battery: name it as its package, as acme-battery, to keep both",
+        ]);
+    });
+
+    test("give a listed one that takes the place of a host's own by its name the roles that one held, but those another replaces", () => {
+        expect(rolesOf(withRoles([menu], [named('menu', '/fork')]))).toEqual([['menu', ['menu', 'notification', 'tray'], []]]);
+        expect(rolesOf(withRoles([menu], [named('menu', '/fork'), named('acme-tray', '/a', { replaces: ['tray'] })]))).toEqual([
+            ['menu', ['menu', 'notification'], ['tray']], ['acme-tray', ['tray'], []],
         ]);
     });
 
@@ -467,7 +556,7 @@ describe('an extension', () => {
         const pinned = { ...vendored, name: 'other', sha256: 'a'.repeat(64) };
         expect(check({ licenses: [vendored, pinned] })()).toMatchObject({ app: { licenses: [vendored, pinned] } });
         expect(check({ licenses: [{ ...vendored, license: '' }] })).toThrow("crossbind: dialog's app.licenses[0] is no code the extension carries: { name, version, license, file }");
-        expect(check({ licenses: [{ ...vendored, url: 'x' }] })).toThrow("crossbind: dialog's app.licenses[0] takes name, version, license, file, source, sha256; url is none of them.");
+        expect(check({ licenses: [{ ...vendored, url: 'x' }] })).toThrow("crossbind: dialog's app.licenses[0] takes name, version, license, file, source, sha256, notes; url is none of them.");
         expect(check({ licenses: [{ ...vendored, file: 'third_party/MISSING' }] })).toThrow("crossbind: dialog's app.licenses[0].file names third_party/MISSING, which is no file of the extension's.");
         expect(check({ licenses: [{ ...vendored, sha256: 'ABC' }] })).toThrow("crossbind: dialog's app.licenses[0].sha256 is no SHA-256, in 64 lowercase hex digits.");
         expect(check({ licenses: vendored })).toThrow("crossbind: dialog's app.licenses is no list of the code of others the extension carries.");
@@ -510,7 +599,7 @@ describe('an extension crossbind.config.js lists', () => {
             'crossbind: extensions[0] has the hooks loadConfig, buildWasm, which crossbind no longer runs: an extension adds native code to an app. Set build flags in targetSpecs or crossbind.build.js.',
         );
         expect(() => listedExtension({ contract: 1, name: 'clipboard', root, app: {}, version: 1 }, 'extensions[0]', base))
-            .toThrow('crossbind: extensions[0] takes name, contract, root, app, options, publisher, installer, replaces; version is none of them.');
+            .toThrow('crossbind: extensions[0] takes name, contract, root, app, options, fromApp, publisher, installer, commands, replaces; version is none of them.');
         expect(() => listedExtension('clipboard', 'extensions[0]', base))
             .toThrow("crossbind: extensions[0] is no extension, as an extension package's crossbind.extension.js gives one.");
     });
@@ -545,9 +634,6 @@ describe('an extension crossbind.config.js lists', () => {
     test("takes no name crossbind keeps for itself, and replaces the roles of the host's it names", () => {
         const { base, root } = project();
         const extension = { contract: 1, root, app: {} };
-        expect(() => listedExtension({ ...extension, name: 'dialog' }, 'extensions[0]', base)).toThrow(
-            "crossbind: extensions[0] is named dialog, which crossbind keeps for the host's own: name it as its package, as acme-dialog, and give replaces: 'dialog' to take the host's place.",
-        );
         for (const name of ['events', 'app', 'windows', 'crossbind', 'page-custom']) {
             expect(() => listedExtension({ ...extension, name }, 'extensions[0]', base))
                 .toThrow(`crossbind: extensions[0] is named ${name}, which crossbind keeps for itself: name it as its package, as acme-${name}.`);
@@ -555,11 +641,9 @@ describe('an extension crossbind.config.js lists', () => {
         expect(listedExtension({ ...extension, name: 'acme-tray', replaces: 'tray' }, 'extensions[0]', base).replaces).toEqual(['tray']);
         expect(listedExtension({ ...extension, name: 'acme-browser', replaces: ['page-navigation', 'page-downloads'] }, 'extensions[0]', base).replaces)
             .toEqual(['page-navigation', 'page-downloads']);
-        expect(() => listedExtension({ ...extension, name: 'acme-clipboard', replaces: 'clipboard' }, 'extensions[0]', base))
-            .toThrow("crossbind: extensions[0]'s replaces names clipboard, which is no role of the host's: it takes activities, dialog,");
         for (const replaces of [[], ['tray', 'tray'], 7]) {
             expect(() => listedExtension({ ...extension, name: 'acme-tray', replaces }, 'extensions[0]', base))
-                .toThrow("crossbind: extensions[0]'s replaces is no role of the host's, or list of them, as 'tray' or ['page-navigation', 'page-downloads'] is.");
+                .toThrow("crossbind: extensions[0]'s replaces is no role of the host's, or list of them.");
         }
     });
 
@@ -624,7 +708,7 @@ describe("an extension's publisher", () => {
     });
 
     test('refuses what it does not take, a step that is no function, and a publisher without an upload', () => {
-        expect(() => checked({ platform: 'ios', publish: upload })).toThrow('crossbind: extensions[0].publisher takes platform, store, options, after, build, check, buildNumber, buildEnv, upload; publish is none of them.');
+        expect(() => checked({ platform: 'ios', publish: upload })).toThrow('crossbind: extensions[0].publisher takes platform, isDefault, store, options, after, build, check, buildNumber, buildEnv, upload; publish is none of them.');
         expect(() => checked({ platform: 'web' })).toThrow('crossbind: extensions[0].publisher.platform is no platform or list of them, of android, ios, macos, linux, windows, desktop.');
         expect(() => checked({ platform: [] })).toThrow('is no platform or list of them');
         expect(() => checked({ platform: 'ios', check: 'yes', buildEnv: {} })).toThrow("crossbind: extensions[0].publisher's check and buildEnv are no function.");
@@ -684,8 +768,9 @@ describe("an extension's installer", () => {
     });
 
     test('refuses what it does not take, a platform that is no desktop one, a step that is no function, and an installer without a make', () => {
-        expect(() => checked({ platform: 'linux', kind: 'AppImage' })).toThrow('crossbind: extensions[0].installer takes platform, check, make; kind is none of them.');
+        expect(() => checked({ platform: 'linux', kind: 'AppImage' })).toThrow('crossbind: extensions[0].installer takes platform, isLast, licenses, check, make; kind is none of them.');
         expect(() => checked({ platform: 'android' })).toThrow('crossbind: extensions[0].installer.platform is no platform or list of them, of macos, linux, windows, desktop.');
+        expect(() => checked({ platform: 'linux', isLast: 'yes', make() {} })).toThrow('crossbind: extensions[0].installer.isLast is no boolean.');
         expect(() => checked({})).toThrow('is no platform or list of them');
         expect(() => checked({ platform: 'linux', check: true })).toThrow("crossbind: extensions[0].installer's check is no function.");
         expect(() => checkedInstaller({ platform: 'linux' }, 'extensions[0].installer')).toThrow('crossbind: extensions[0].installer has no make, the step that makes what installs the app.');
@@ -702,9 +787,44 @@ describe("an extension's installer", () => {
     });
 });
 
+describe("an extension's commands", () => {
+    const checked = (commands) => checkedExtension({ name: 'tool', commands }, os.tmpdir(), 'extensions[0]').commands;
+    const run = () => {};
+
+    test('are each its help, its options, as a publisher takes them, and what runs it', () => {
+        const commands = checked({
+            'make-key': { help: 'makes a key', run },
+            hello: { help: 'says hello', run, options: { to: { help: 'whom', value: '<name>', default: 'you' }, loud: { help: 'louder' }, mode: { help: 'not the Vite option here' } } },
+        });
+        expect(Object.keys(commands)).toEqual(['make-key', 'hello']);
+        expect(commands['make-key']).toMatchObject({ help: 'makes a key', options: {} });
+        expect(commands.hello.options).toEqual({
+            to: { help: 'whom', value: '<name>', default: 'you' }, loud: { help: 'louder', value: null, default: null }, mode: { help: 'not the Vite option here', value: null, default: null },
+        });
+        expect(checkedExtension({ name: 'tool' }, os.tmpdir(), 'extensions[0]')).not.toHaveProperty('commands');
+    });
+
+    test('keep the object as the this of what runs them', () => {
+        const command = { help: 'says hello', run() { return this.help; } };
+        expect(checked({ hello: command }).hello.run()).toBe('says hello');
+    });
+
+    test('are refused where they are not so', () => {
+        const at = "crossbind: extensions[0]'s commands";
+        expect(() => checked('hello')).toThrow(`${at} is no object of commands, as { 'my-key': { help, run } }.`);
+        expect(() => checked({ Hello: { help: 'h', run } })).toThrow(`${at} names Hello, which is no command of lowercase letters and digits, which dashes may join.`);
+        expect(() => checked({ hello: 'run' })).toThrow(`${at}.hello is no command, which is { help, run }.`);
+        expect(() => checked({ hello: { help: 'h', run, about: 'x' } })).toThrow(`${at}.hello takes help, options, run; about is none of them.`);
+        expect(() => checked({ hello: { run } })).toThrow(`${at}.hello has no help, its line in crossbind app --help.`);
+        expect(() => checked({ hello: { help: 'h' } })).toThrow(`${at}.hello has no run, the step that does its work.`);
+        expect(() => checked({ hello: { help: 'h', run, options: 'x' } })).toThrow(`${at}.hello.options is no object of options.`);
+        expect(() => checked({ hello: { help: 'h', run, options: { help: { help: 'x' } } } })).toThrow('which is no option of its own');
+    });
+});
+
 describe("what an app's extensions add on a platform", () => {
     const extensions = () => {
-        const root = hostWith({
+        const root = hostOf({
             dialog: DIALOG,
             push: {
                 json: {
@@ -735,7 +855,7 @@ describe("what an app's extensions add on a platform", () => {
     });
 
     test("is the files each carries on the platform, every platform's first, by the folder they come from", () => {
-        const root = hostWith({
+        const root = hostOf({
             models: { json: { name: 'models', app: { files: ['data/'], ios: { files: ['ios.bin'] } } }, files: ['data/', 'ios.bin'] },
             plain: { json: { name: 'plain', app: { sources: ['plain.cpp'] } }, files: ['plain.cpp'] },
         });

@@ -36,8 +36,6 @@ std::string folder(NSSearchPathDirectory directory, NSString *child) {
 
 void crossbind::onMainThread(std::function<void()> fn) { onMain(^{ runTask(fn); }); }
 
-bool isMainThread() { return NSThread.isMainThread; }
-
 // Called on the module's thread, which has no autorelease pool of its own.
 crossbind::app::Paths appPaths() {
     @autoreleasepool {

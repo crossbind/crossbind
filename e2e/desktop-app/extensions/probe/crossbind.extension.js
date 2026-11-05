@@ -18,7 +18,7 @@ const store = {
     build: () => ({ app: { name: 'crossbind probe store', updater: null, installers: ['probe'] } }),
     check: (api) => ({
         session: {
-            note: api.options.note, platform: api.platform, name: api.app.name, hasUpdater: api.app.updater !== null,
+            note: api.options.note, platform: api.platform, name: api.app.name, hasUpdater: api.config.app.updater !== undefined,
         },
     }),
     upload(api, session, output) {

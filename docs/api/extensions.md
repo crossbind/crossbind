@@ -6,13 +6,16 @@ comes before its user and quits, as the system opens it with a link, a file, a u
 a notification or a push, and as the page navigates, downloads, drops files or asks for what it uses. A package of its
 own carries it, as
 [`@crossbind/extension-clipboard`](../../extensions/clipboard/README.md) carries the system clipboard's text on macOS,
-iOS, Android, Windows and Linux. The host's own, `activities`, `dialog`, `files`, `instance`, `links`, `menu`,
-`page-dialogs`, `page-files`, `page-downloads`, `page-drops`, `page-location`, `page-navigation`, `page-permissions`, `power`, `shell`,
-`shortcuts` and `updater`, are built the same way, and an app's extension takes the place of one, or of one of its
-roles, as [The host's own extensions](#the-hosts-own-extensions) says. An extension may add a store the app is published to as well, as
-[Publishers](#publishers) says, and what installs a desktop app, as [Installers](#installers) says: crossbind's own
-stores, `google-play`, `app-store` and `github`, and installers, `dmg`, `deb`, `tar-gz`, `nsis` and `zip`, are of the
-same kind.
+iOS, Android, Windows and Linux, which an app lists. An extension may add a store the app is published to as well, as
+[Publishers](#publishers) says, what installs a desktop app, as [Installers](#installers) says, and commands of
+`crossbind app`, as [Commands](#commands) says.
+
+crossbind's own are packages of the same kind, in its repository's `extensions/`: the host's, `activities`, `dialog`,
+`files`, `instance`, `links`, `menu`, `page-dialogs`, `page-files`, `page-downloads`, `page-drops`, `page-location`,
+`page-navigation`, `page-permissions`, `power`, `shell`, `shortcuts` and `updater`; the stores, `google-play`, `app-store`
+and `github`; and the installers, `dmg`, `deb`, `tar-gz`, `nsis` and `zip`. An app has them without installing or listing
+them, as `@crossbind/core-app-host` has them as its dependencies, and an app's extension takes the place of one, or of
+one of its roles, as [The host's own extensions](#the-hosts-own-extensions) says.
 
 An extension names the version of this contract it is written for, as [Versions](#versions) says.
 
@@ -65,8 +68,7 @@ versions it works with as a peer dependency as well.
 
 The contract is what this page gives, with `<crossbind/extension.h>` and `<crossbind/app.h>`, and Android's
 `dev.crossbind.app.Extension` and `ExtensionHost`: no other file of crossbind's, as one a package imports from
-`crossbind/src/`, is in it, nor are the api's `apple`, `windows`, `android` and `run`, which hand an extension
-crossbind's own tooling as it is, and change with it.
+`crossbind/src/`, is in it.
 
 ## What an extension is
 
@@ -82,9 +84,10 @@ The extension the function gives:
 
 | Key | Value |
 |---|---|
-| `name` | Lowercase letters and digits, from a letter, which dashes may join. Each of the extension's function names starts with it and a dot, as `clipboard.readText`, or with a role's it takes, as `tray.set` does for one that takes `tray`, or the app stops as it starts, saying so; and it names its C++ entry, `crossbind_extension_<name>`, with underscores for dashes, and its events, as [The native side](#the-native-side) says. An app has one extension of a name, so a distinctive one, as its package's, keeps an extension from another's: two of one name stop the build. So does one named as the host's own extensions or their roles are, as `dialog` or `tray`, or `app`, `events`, `windows` or `crossbind`, or a name that starts with `page-`, all of which crossbind keeps: an extension takes the place of one of the host's with `replaces`. One named as an extension of the host's that a later crossbind adds takes that one's place, as the build says. |
+| `name` | Lowercase letters and digits, from a letter, which dashes may join. Each of the extension's function names starts with it and a dot, as `clipboard.readText`, or with a role's it takes, as `tray.set` does for one that takes `tray`, or the app stops as it starts, saying so; and it names its C++ entry, `crossbind_extension_<name>`, with underscores for dashes, and its events, as [The native side](#the-native-side) says. An app has one extension of a name, so a distinctive one, as its package's, keeps an extension from another's: two of one name stop the build. So does one named as a role another of the host's extensions holds, as `tray`, or `app`, `events`, `windows` or `crossbind`, or a name that starts with `page-`, all of which crossbind keeps: an extension takes the place of one of the host's with `replaces`. One named as an extension of the host's takes that one's place with its roles, as the build says, as a later crossbind may add one of a name an app has already. |
 | `contract` | The version of the contract it is written for, `1`, or a list of the versions, as [Versions](#versions) says. |
 | `replaces` | The roles of the host's own extensions it takes, one or a list, as `'tray'` or `['page-navigation', 'page-downloads']`, as [The host's own extensions](#the-hosts-own-extensions) says. |
+| `fromApp` | A function of the [`api`](#the-api) that gives the options its native code reads, from the app's config, or `null`, which leaves the extension out of this platform's app. It runs as a build starts, and takes the place of `options`. |
 | `root` | The absolute path of the extension's folder, `import.meta.dirname` in `crossbind.extension.js`. It is under the project's `paths.base`, as all a build sees is. |
 | `app.sources` | The C and C++ sources every platform compiles, relative to `root`. |
 | `app.includes` | The extension's folders its sources' includes are found in, beside the host's `<crossbind/extension.h>` and `<crossbind/app.h>` and the platform's headers, which are all they see of the host. |
@@ -95,11 +98,12 @@ The extension the function gives:
 | `app.links` | The https links of its sites that the extension's native code gets through `onOpenUrl` on iOS and Android, as [`app.links`](./app.md#the-apps-sites)' rules take them: an extension that declares them has native code there, and on the desktop calls `onOpenUrl` or not. Two owners of one entry stop the build, naming both. |
 | `app.shortcutItems` | The quick actions of the app's icon whose taps the extension's native code gets through `onShortcutItem` on iOS and Android, as [`app.shortcutItems`](./app.md#quick-actions)' rules take them: an extension that declares them has native code there, and on the desktop calls `onShortcutItem` or not. The app lists them beside its own, and two owners of one type stop the build, naming both. |
 | `app.activityTypes` | The types of the user activities the extension's native code gets through `onUserActivity` on iOS and macOS, as [`app.activityTypes`](./app.md#user-activities)' rules take them: an extension that declares them has native code there, and elsewhere calls `onUserActivity` or not. The app's Info.plist lists them beside the app's own, and two owners of one type stop the build, naming both. |
-| `app.licenses` | The code of others the extension carries, which the app's license report lists beside the extension's package: `[{ name, version, license, file, source, sha256 }]`, its `license` an SPDX expression, which `crossbind licenses --check` checks, and `file` its license's text in the extension's folder; `source`, where the code comes from, and `sha256`, that source's, where it has them. |
+| `app.licenses` | The code of others the extension carries, which the app's license report lists beside the extension's package: `[{ name, version, license, file, source, sha256, notes }]`, its `license` an SPDX expression, which `crossbind licenses --check` checks, and `file` its license's text in the extension's folder; `source`, where the code comes from, and `sha256`, that source's, where it has them. |
 | `app.<platform>` | What one platform adds, by the names crossbind's app commands give them: `macos`, `ios`, `linux`, `windows` or `android`. |
 | `options` | What the extension's native code reads as `registry.options()`, as `crossbind.extension.js` takes it from the app: a JSON value alone, of plain objects, arrays, strings, finite numbers, booleans and null. Its native code leaves out the keys it knows nothing of, as a later version of its package's may give. |
 | `publisher` | The store it sends the app to, as [Publishers](#publishers) says. |
 | `installer` | What it makes to install a desktop app, as [Installers](#installers) says. |
+| `commands` | The commands it adds under `crossbind app`, as [Commands](#commands) says. |
 
 What a platform adds:
 
@@ -157,7 +161,7 @@ void crossbind_extension_clipboard(crossbind::Registry &registry) {
 | Name | What it is |
 |---|---|
 | `Value` | A JSON value, or bytes, which never changes, so any thread may hold a copy: `isString()`, `asString()`, `asString(fallback)` and the rest; `value["key"]`, null for a member it lacks; `json()`. Its bytes, a `Value::Bytes`, a `std::vector<std::uint8_t>`, are what a typed array, a `DataView` or an `ArrayBuffer` of the page's holds, and reach the page as a `Uint8Array`: `isBytes()`, `asBytes()`, and `json()` throws on them. |
-| `Call` | A call of the page's: its `name()`, `options()` and `page()`. Its function answers it once, from any thread, with `resolve(value)` or `reject(message)`; a call that every copy lets go of unanswered fails, saying it gave no answer. `isFromPage()` is false for the calls of the app's native code, through `<crossbind/app.h>` or `invoke()`, which reaches more than the page may. Before its answer, `send(value)` from any thread sends the page a message, which the `onMessage` the page passed gets, in the order they were sent, all of them before `invoke()` resolves; one after the answer goes nowhere, as does each of a call whose page passed no `onMessage`, or of one the app's native code made. `onCancel(fn)` runs `fn` once, on the module's thread, as the page cancels the call through its signal, or another page replaces it, as a reload does: the call answers nothing from then on. Each `fn` given runs, in the order given, and an answered call lets go of them. |
+| `Call` | A call of the page's: its `name()`, `options()` and `page()`. Its function answers it once, from any thread, with `resolve(value)` or `reject(message)`; a call that every copy lets go of unanswered fails, saying it gave no answer. `isFromPage()` is false for the calls of the app's native code, through `invoke()`, which reaches more than the page may. Before its answer, `send(value)` from any thread sends the page a message, which the `onMessage` the page passed gets, in the order they were sent, all of them before `invoke()` resolves; one after the answer goes nowhere, as does each of a call whose page passed no `onMessage`, or of one the app's native code made. `onCancel(fn)` runs `fn` once, on the module's thread, as the page cancels the call through its signal, or another page replaces it, as a reload does: the call answers nothing from then on. Each `fn` given runs, in the order given, and an answered call lets go of them. |
 | `Page`, `Window` | A page of the app's, from its start, as `onPage` tells, until the next replaces it: its `id()` within the run, never 0, and the `windowId()` of the window it is in; a call of the app's own code is of none, 0 for both, and an Android page of no window an extension reaches, 0. A window of the app's, for the main thread while it is open: its `id()` within the run, from 1, the platform's `native()` window, as `appWindow()` gives the oldest one's, its `webView()`, as `appWebView()` does, and from any thread the `page()` it shows now, which a reload replaces, of id 0 once it closed. |
 | `Registry::function(name, fn)` | Adds a function the page calls by that name, which starts with the extension's own and a dot, or with a role's it takes, as `tray.` for one that takes `tray`. The page's calls run it on the module's thread, which it must not hold up: it answers there, or hands the call on. A call of the app's native code runs it on the caller's thread, so it may run on several at once. What it throws fails the call. |
 | `Registry::route(fn)` | Answers the page's requests for the extension's URLs, as [Routes](#routes) tells. |
@@ -198,7 +202,7 @@ void crossbind_extension_clipboard(crossbind::Registry &registry) {
 | `allowPath(path)` | Lets the page reach a file or folder through `crossbind/app`'s shell functions from now on, as what its user picked: a picker's answer, for one. |
 | `allowedPaths()` | What `allowPath()` was given so far, as it was given. |
 | `android::callJava(extension, function, options, done)` | On Android, calls a function of the extension's Java on the UI thread with the app's host; `done` gets why it failed, or its result, once. What `done` throws goes to the system's log, and a call `done` held fails as it lets go of it. `callJava(extension, function, call)` hands the Java a page's call whole: its options, the Java's messages, which reach the page, the page's cancel, which reaches the Java, and its answer. |
-| `<crossbind/app.h>` | The app's own functions, as its native code calls them, and the events it sends the pages by the host's names, which have no dot: `emitEvent()` to every page that listens, or to one by its id, `emitEventToFront()` to the page in front that listens, and `holdEvent()` for those a page takes once it asks, as an extension in the place of one of the host's sends the host's events. One that waits for its answer, as `messageDialog()`, refuses the main thread, which gives the answer. |
+| `<crossbind/app.h>` | The app's folders and quitting, as its native code calls them, and the events it sends the pages by the host's names, which have no dot: `emitEvent()` to every page that listens, or to one by its id, `emitEventToFront()` to the page in front that listens, and `holdEvent()` for those a page takes once it asks, as an extension in the place of one of the host's sends the host's events. |
 
 What an extension throws:
 
@@ -665,10 +669,32 @@ widget's layout and its `appwidget-provider` XML, and its `java` the classes, as
 
 ## The host's own extensions
 
+Each is a package of the repository's `extensions/`, `@crossbind/extension-<name>`, among the dependencies of
+`@crossbind/core-app-host`, as crossbind's stores and installers are: an app has them by having the host, and crossbind
+finds them through it, as `pnpm` shows them to the host alone. The host's `package.json` is the one list of them, with its
+`js/app.js` and `app.d.ts`, which put together what each gives the page. Each says the rest of itself in its own
+`crossbind.extension.js`: `holds`, the roles it holds where they are more than its name; `reads`, the options of the app it
+reads, by their paths in `app`; and `fromApp`, which takes them, and leaves out of an app one that has nothing to do there.
+
+The page calls them through `crossbind/app`, whose functions serve any extension that holds their role. An app's bundler
+plugin takes it from the host: `crossbind/app/core`'s functions, with what each package's `page.js` gives. A TypeScript page
+reads its types with `/// <reference types="@crossbind/core-app-host/app" />`, as it reads `vite/client`'s.
+
+`app.without` leaves out those it names, of every kind, with their commands, stores and installers:
+
+```js
+// crossbind.config.js
+export default { app: { without: ['menu', 'power'] } };
+```
+
+A page that calls one of their functions then hears that the app has no such function. A name that is none of crossbind's
+own stops the build, and so does one whose option the app's config sets to something, as `without: ['updater']` with
+`app.updater`, as nothing would honor it. An extension may still take a role of one it leaves out.
+
 Each of the host's own extensions holds roles, which an app's extension takes with `replaces`: `menu` holds `menu`,
 `tray` and `notification`, `page-navigation` holds `page-navigation` and `page-authentication`, and each other one the
 role of its own name. The extension that takes a role takes its calls and hooks, and answers them as the host's does:
-by the same names, with the options the page's `crossbind/app` and the app's `<crossbind/app.h>` send, and with the
+by the same names, with the options the page's `crossbind/app` sends, and with the
 results [app.md](./app.md#the-apps-functions) gives. The host's extension leaves it the functions of that role, whose
 names start with the role's and a dot, and the hooks of the page's requests the role takes, and goes on with its other
 roles; one left with none is not built in. An app's `acme-tray` takes `tray.set` and `tray.remove`, and the host's
@@ -684,9 +710,13 @@ export default function acmeTray() {
 Windows shows a notification as a balloon of a tray icon, so where an app's extension takes `tray` alone, the host's
 `notification.show()` shows an icon of the app's of its own beside that extension's until the notification goes; one
 that takes both shows them from its own. Two extensions that take one role stop the build, and one that takes several
-takes each, as `['page-navigation', 'page-downloads']`. An extension in a role's place gets its own options alone, as `crossbind.config.js` lists it, not
-the app's options the host's took, as `app.navigation` is `page-navigation`'s and `app.updater` the `updater`'s, and
-reads the app's id with `appId()`.
+takes each, as `['page-navigation', 'page-downloads']`. An extension in a role's place gets its own options alone, as `crossbind.config.js` lists it or
+its `fromApp` gives them, and the host's `fromApp` does not run, so that the app's options the host's took, as `app.navigation` is `page-navigation`'s and
+`app.updater` the `updater`'s, are its own to read, and it reads the app's id with `appId()`.
+
+An extension named as one of the host's own takes its place with the roles it held, saying so at each build, as a later
+crossbind may add one of a name an app has already. One named as a role that another of the host's holds, as `tray`, stops
+the build.
 
 | Extension | Its functions, with the options each takes | What it sends the page |
 |---|---|---|
@@ -775,6 +805,7 @@ export default function demoStore() {
 | Key | Value |
 |---|---|
 | `platform` | The platform of the apps it takes: `android`, `ios`, `macos`, `linux`, `windows`, or `desktop` for the last three; or a list of them. |
+| `isDefault` | True for the store a publish of its platforms goes to where it names none: the last that says so, an app's after crossbind's, whose `google-play` and `app-store` do for Android and iOS. |
 | `store` | The name the store goes by in crossbind's messages; the extension's name without it. |
 | `options` | The options it takes after its name, by camelCase names the command line writes in `--kebab-case`: `{ help }` for a flag, which is true or false, and `{ help, value, default }` for one that takes a value, which `value` names as `'<channel>'`. `platform`, `help` and `version` are the command's own, and those of the Vite build the publish runs, as `mode` and `debug`, are Vite's, so no publisher takes their names; two publishers of one publish take an option of one name alike. |
 | `after` | The publisher it comes after: the publish runs that one first, from the same build. A publisher after another takes no `build`, `buildNumber` or `buildEnv`, and asks for no other build. |
@@ -811,14 +842,15 @@ lists the app's stores, crossbind's own and its extensions', with their options.
 |---|---|
 | `android` | `{ project, apk, bundle, symbols }`: the Gradle project, and beside it the APK, the bundle and the zip of the native debug symbols, each null where the build made none, as the bundle without an upload key. |
 | `ios` | `{ project }`: the Xcode project, which a store archives. |
-| `macos`, `linux`, `windows` | `{ apps }`, one `{ app, arch, installers, update }` for each arch: the app, its installers as `[{ name, files }]`, as `[{ name: 'dmg', files: ['…/demo.dmg'] }]`, and the update's `{ manifest, file }` where `app.updater` and its key made one, else null. |
+| `macos`, `linux`, `windows` | `{ apps }`, one `{ app, arch, installers }` for each arch: the app, and what each installer that made any made, as `[{ name: 'dmg', files: ['…/demo.dmg'] }]`, in the order they ran. Where `app.updater` and its key made an update, `updater`'s files are its file and its manifest, the file one that an installer before it made on Linux and Windows. |
 
 ## Installers
 
 An extension's `installer` makes what installs a desktop app, beside it, in each build of the app. crossbind's own
 `dmg` on macOS, `deb` and `tar-gz` on Linux, and `nsis` and `zip` on Windows are installers of this kind, which use the
 same [`api`](#the-api) alone, and an extension `extensions` lists under one of their names, with an installer,
-replaces it.
+replaces it. So is `updater`, which makes a desktop app's update after them, and whose place an extension takes with
+`replaces`.
 
 ```js
 // crossbind.extension.js
@@ -848,8 +880,10 @@ export default function appimage() {
 | Key | Value |
 |---|---|
 | `platform` | The platform of the apps it makes what installs: `macos`, `linux`, `windows`, or `desktop` for the three; or a list of them. |
-| `check(api)` | What it takes, checked before anything compiles: what it throws stops the build. |
-| `make(api, { app, arch })` | Makes what installs the app, once every app of the build has its page: `app` is the app's bundle on macOS and its folder on Linux and Windows, beside which it writes, and `arch` is `x64` or `arm64`. A Linux or Windows app's folder holds its executable, named as `general.name`, with `.exe` on Windows, and its resources in `resources/`, a Linux app's icon as `resources/icon.png`. It returns the paths of the files it made, a relative one beside the app. |
+| `isLast` | True for one that runs after every other, whatever `app.installers` names, as `updater` does. |
+| `licenses` | The code of others what it makes carries, as `app.licenses` lists it, which the app's license report lists where it runs. |
+| `check(api, { installers })` | What it takes, checked before anything compiles: what it throws stops the build. `installers` names those that run. |
+| `make(api, { app, arch, made })` | Makes what installs the app, once every app of the build has its page: `app` is the app's bundle on macOS and its folder on Linux and Windows, beside which it writes, and `arch` is `x64` or `arm64`. A Linux or Windows app's folder holds its executable, named as `general.name`, with `.exe` on Windows, and its resources in `resources/`, a Linux app's icon as `resources/icon.png`. `made` is what those before it made, as `[{ name, files }]`. It returns the paths of the files it made, a relative one beside the app, or none. |
 
 `make` alone is required. A step that fails with a message not crossbind's own stops the build with one that names the
 installer and the step, as a publisher's does.
@@ -857,26 +891,68 @@ installer and the step, as a publisher's does.
 A desktop build runs every installer of its platform: crossbind's, then those of the extensions `extensions` lists, in
 its order, and says so of one listed in the place of crossbind's own. `app.installers` names those alone that run, as `installers: ['deb']` builds a Linux app without its tar.gz,
 and a publisher's `build` may narrow them for its own build, as `{ app: { installers: ['pkg'] } }` would for a store
-that takes a package. A name that is no installer stops the build. The build's output gives each one's files to the
-publishers, in the order they ran.
+that takes a package. Those with `isLast` run after the others, whatever it names. A name that is no installer stops the
+build. The build's output gives each one's files to the publishers, in the order they ran.
 
 A Linux or Windows app with `app.updater` updates itself from an installer's first file: a Linux app from `tar-gz`'s,
 which it unpacks with tar, and a Windows app from `nsis`'s, a setup program it runs with `/S /UPDATE /D=<its folder>`.
 Its build takes that installer: one where `app.installers` leaves it out stops, naming it; an extension's installer in
-its place makes a file of the same kind. A macOS app's update is a zip of its own.
+its place makes a file of the same kind. A macOS app's update is a zip of its own. `updater` makes the update last, with
+the key `CROSSBIND_UPDATER_PRIVATE_KEY` gives, beside the app: its file, and `<name>-<platform>-<arch>.update.json`, the
+manifest that signs it. Without the key it makes none.
+
+## Commands
+
+An extension's `commands` add commands under `crossbind app`, which run in crossbind's process with the
+[`api`](#the-api). crossbind's own `updater` gives `crossbind app updater-key` this way.
+
+```js
+// crossbind.extension.js
+export default function demoTool() {
+    return {
+        name: 'demo-tool',
+        contract: 1,
+        root: import.meta.dirname,
+        commands: {
+            'demo-report': {
+                help: 'print what the app is',
+                options: {
+                    out: { help: 'the file it writes to', value: '<file>' },
+                    short: { help: 'a line alone' },
+                },
+                run(api) {
+                    api.log(`${api.app.name} ${api.app.version}${api.options.short ? '' : ` in ${api.project.root}`}`);
+                },
+            },
+        },
+    };
+}
+```
+
+| Key | Value |
+|---|---|
+| `help` | Its line in `crossbind app --help`. |
+| `options` | The options it takes, as a publisher's are: by camelCase names the command line writes in `--kebab-case`, `{ help }` for a flag and `{ help, value, default }` for one that takes a value. |
+| `run(api)` | Does its work, with the options in `api.options`. A failure with a message not crossbind's own stops the command with one that names the extension and the command. |
+
+A command has no platform, so its `api.platform` is null and `api.run`, an installer's, refuses it. It is there only in
+a project whose `target.runtimeEnv` is `app`. A name that `crossbind app` has already, of crossbind's or of another
+extension's, stops `crossbind app` in the project, naming both; an extension that takes the place of one of
+crossbind's own, by its name or with `replaces`, takes the place of that one's commands too.
 
 ## The api
 
-A publisher's or an installer's code imports nothing of crossbind's: each step gets the `api`, made for its extension
-and its run, and frozen.
+A publisher's, an installer's or a command's code imports nothing of crossbind's: each step gets the `api`, made for its
+extension and its run, and frozen.
 
 | Member | What it is |
 |---|---|
-| `name`, `platform`, `isGuided`, `options` | The extension's name, the platform it publishes or makes what installs, whether a terminal answers questions, and a publisher's options. |
+| `name`, `platform`, `isGuided`, `options` | The extension's name, the platform it publishes or makes what installs, whether a terminal answers questions, and a publisher's or a command's options. |
 | `project` | `{ root, name, package }`: the project's folder, its name, `general.name`, which names the app's files, and its `package.json`. |
 | `workDir` | A folder of the extension's own under the build's, `.crossbind/build/<name>`, for its files and logs, which the extension makes as it needs it. |
-| `app` | The app as its platform's build makes it: `id`, `name`, `version`, which is package.json's, `appleVersion`, its numbers alone as Apple takes them, `versionCode`, Android's, `buildNumber`, `team`, the Apple team, `encryption`, `updater`, `urlSchemes`, the schemes whose links open it, `fileTypes`, the types of files it opens, its extensions' among them, each `{ name, extensions, mimeTypes, role, contentTypes }`, `depends`, what a Linux app's package depends on beside WebKitGTK and GTK, as its extensions' `linux.depends` list it, and `category`, `app.category` as macOS and a Linux menu name it, `{ macos, linux }`, or null. |
-| `config` | `crossbind.config.js`'s export as crossbind read it, with the changes a publisher's `build` made and the `app` options the api wrote since, which each read sees, read-only: none of this machine's settings or of what crossbind fills in. `await config.write('app.id', 'com.example.app')` writes `app.id`, `app.name`, `app.icon`, `app.encryption`, `app.privacy` or `app.updater` into it once the user says yes on a terminal, and fails without one. A value the build would refuse fails with `isInvalid` set, for the publisher to ask again; one the config sets already is the user's to change. |
+| `app` | The app as its platform's build makes it: `id`, `name`, `version`, which is package.json's, `appleVersion`, its numbers alone as Apple takes them, `versionCode`, Android's, `buildNumber`, `team`, the Apple team, `encryption`, `urlSchemes`, the schemes whose links open it, `fileTypes`, the types of files it opens, its extensions' among them, each `{ name, extensions, mimeTypes, role, contentTypes }`, `depends`, what a Linux app's package depends on beside WebKitGTK and GTK, as its extensions' `linux.depends` list it, and `category`, `app.category` as macOS and a Linux menu name it, `{ macos, linux }`, or null. |
+| `config` | `crossbind.config.js`'s export as crossbind read it, with the changes a publisher's `build` made and the `app` options the api wrote since, which each read sees, read-only: none of this machine's settings or of what crossbind fills in. `await config.write('app.id', 'com.example.app')` writes `app.id`, `app.name`, `app.icon`, `app.encryption` or `app.privacy` into it once the user says yes on a terminal, and fails without one. A value the build would refuse fails with `isInvalid` set, for the publisher to ask again; one the config sets already is the user's to change. |
+| `publisherChanges` | An installer's: the changes a publisher's `build` made to this build's config, as its JSON merge patch, or null. |
 | `log(text)`, `warn(text)` | A line of crossbind's output. |
 | `ask(question)`, `askYesNo(question)` | A question on the terminal, which fails without one. |
 | `openUrl(url)` | Opens an http or https page in the user's browser, as a store's console. |
@@ -888,7 +964,7 @@ and its run, and frozen.
 | `apple` | `key()`, the App Store Connect API key the environment names, or null; `teams()`, the teams Xcode is signed in to; `xcodebuild(what, args, { log, facts, causes })`, which writes xcodebuild's output to the file `log` names and returns it, and whose failure names xcodebuild's reasons and the fix of the cause it finds, crossbind's first, then one of `causes`; `unreasonedApis(binary, privacy)`, the required reason API a binary calls with no reason in `privacy`; `privacyCategories`; and `dsyms()`, the dSYMs of the prebuilt frameworks crossbind puts in an app. |
 
 Each function of the api may return a promise, so a step awaits each: one that answers at once now may wait in a later
-crossbind. A publisher's code runs in crossbind's process, and an installer's in the Vite build's, with the
+crossbind. A publisher's or a command's code runs in crossbind's process, and an installer's in the Vite build's, with the
 developer's credentials, as all build code does: listing an extension is the decision to trust it. `e2e/desktop-app`
 checks the contract with the probe's store, a mirror after it and the probe's installer: its `pnpm e2e:publish`
 publishes through the two stores, and every build makes the installer's note beside the app, which its `pnpm e2e:prod`
@@ -904,6 +980,11 @@ An extension's `package.json`:
 - names the crossbind versions it works with as a peer dependency of `crossbind`;
 - has the keyword `crossbind-extension`, by which npm finds extensions;
 - has the license of the code it carries, its own and any it wraps, as an SPDX expression.
+
+crossbind's own have the keyword too, though an app has them already and `crossbind add` refuses them, with the one of the
+group [the site](https://crossbind.dev/extensions/) lists them under: `publishing`, `installer`, `system`, `launch` or
+`page`. Those whose page code imports `crossbind/app/core` name `crossbind` as a peer dependency; the others name none,
+as the host brings the versions it works with.
 
 Its `crossbind.extension.js` gives the extension's `contract`, as [Versions](#versions) says. The native code an
 extension builds from is in the package, pinned with it; a build downloads none.

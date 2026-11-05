@@ -20,6 +20,10 @@
             "types": "./src/app/index.d.ts",
             "default": "./src/app/index.js"
         },
+        "./app/core": {
+            "types": "./src/app/index.d.ts",
+            "default": "./src/app/index.js"
+        },
         "./*": "./*"
     },
     "scripts": {

@@ -22,6 +22,7 @@ crossbind/
 │   ├── crossbind/                    ← the CLI + build orchestration (most-touched)
 │   ├── embind-jsi/                   ← Embind/JSI helper used by RN bridge
 │   ├── embind-napi/                  ← Node-API host for embind-jsi: native Node.js addons (ADR-0011)
+│   ├── store-kit/                    ← What crossbind's publishers share for app stores
 │   ├── app-host/                     ← App host for embind-jsi: the system webview + Hermes, desktop and mobile apps (ADR-0017)
 │   └── embind-rust/                  ← Rust producer crate + per-host adapters (see docs/api/rust.md)
 ├── tooling/                          ← dev-time helpers, not part of a consumer build
@@ -29,6 +30,7 @@ crossbind/
 │   ├── docker/                       ← pinned build image
 │   ├── cloud/                        ← crossbind cloud on api.crossbind.dev: the playground compiler, the accounts `crossbind login` signs in to, a runner per user and image
 │   └── typescript-config/            ← shared tsconfig
+├── extensions/                       ← app extensions: crossbind's own, which app-host has as dependencies, and clipboard
 ├── plugins/
 │   ├── vite/
 │   ├── webpack/
@@ -117,11 +119,11 @@ Index + template: [`docs/adr/README.md`](./adr/README.md).
 | Wasm linking + JS loader gen | `src/actions/buildWasm.js` |
 | Node-API addon link (`.node`) + CommonJS loader | `src/actions/buildNode.js` |
 | App host link: bridges against Hermes' JSI, host bytecode, page runtime; a macOS `.app` signed ad hoc or with a Developer ID, a Linux directory, a signed Windows directory, or what each iOS SDK or Android ABI brings to the Xcode or Gradle project | `src/actions/buildApp.js` |
-| Desktop app installers: those of the platform that run, crossbind's and the extensions', or those `app.installers` names, their checks before the build, the one an app with `app.updater` keeps, and each app shipped once every app of the build has its page | `src/actions/appInstaller.js` |
-| crossbind's own installers, which use the api alone: `dmg` (hdiutil), `deb` (dpkg-deb in the linux image), `tar-gz`, `nsis` (NSIS in the windows image, from its `installer.nsi`) and `zip` | `src/installers/` |
+| Desktop app installers: those of the platform that run, crossbind's and the extensions', or those `app.installers` names, and those that run last, their checks before the build, and each app shipped once every app of the build has its page | `src/actions/appInstaller.js` |
+| crossbind's own installers, which use the api alone: `dmg` (hdiutil), `deb` (dpkg-deb in the linux image), `tar-gz`, `nsis` (NSIS in the windows image, from its `installer.nsi`) and `zip` | `extensions/dmg/`, `extensions/deb/`, `extensions/tar-gz/`, `extensions/nsis/`, `extensions/zip/` |
 | macOS app signing: the Developer ID and App Store Connect API key the environment names, notarization with notarytool and the stapled ticket | `src/actions/appleSigning.js` |
 | Windows app signing: the jsign key the environment names, passed into the windows image by name, which signs the app, its setup program and its uninstaller (`core/app-host/windows/jsign.sh`) | `src/actions/windowsSigning.js` |
-| Desktop app updates: the Ed25519 key pair of `crossbind app updater-key`, and the signed manifest and file the build writes beside an app with `CROSSBIND_UPDATER_PRIVATE_KEY`, which the host's updater extension, `extensions/updater/`, checks with Monocypher | `src/actions/appUpdate.js` |
+| Desktop app updates: the Ed25519 key pair of `crossbind app updater-key`, and the signed manifest and file the build writes beside an app with `CROSSBIND_UPDATER_PRIVATE_KEY`, which the updater extension's native code checks with Monocypher | `extensions/updater/src/update.js` |
 | iOS app: the Xcode project written anew from each SDK's part (archives and their link line, Hermes' slice, the app's files) | `src/actions/xcodeProject.js` |
 | An iOS app built for the Simulator and opened there, for `vite` and the e2e runs | `src/actions/iosSimulator.js` |
 | An iOS app built for an iPhone or iPad, signed by Xcode for the app's team, installed and opened on it through devicectl, and the Mac's address it reaches the dev server at, on its cable or the local network, for `vite` | `src/actions/iosDevice.js` |
@@ -131,7 +133,7 @@ Index + template: [`docs/adr/README.md`](./adr/README.md).
 | The bridges a native binary binds: own headers, headers bound whole, imported headers | `src/actions/nativeBridges.js` |
 | Node import hooks: the native imports of an app without a bundler (`dist/node/<format>.register.mjs`) | `src/actions/createImportedBridges.js`, `src/actions/writeRuntimeEntry.js`, `src/assets/node-import-hooks.mjs` |
 | `crossbind/node/dev`: build this machine's Node binary when its native inputs changed, then load those hooks | `src/node/dev.mjs`, `src/utils/nodeDevBuild.js` |
-| `crossbind/app`: the app host's functions for the page (dialogs, opening outside, folders, quitting); `<crossbind/app.h>` for an app's own code | `src/app/index.js`, `src/utils/appApiHeader.js` |
+| `crossbind/app`: as a page imports it, `core/app-host/js/app.js` and `app.d.ts`, which an app's bundler plugin routes to, with each own extension's `page.js`; `crossbind/app/core`, what the host alone gives a page (folders, quitting, windows, events, calls by name); `<crossbind/app.h>` for an app's own code | `src/app/index.js`, `src/utils/resolveAppHost.js`, `src/utils/appApiHeader.js` |
 | Archives of a final link and what stays whole (wasm and addon) | `src/actions/getLinkInputs.js` |
 | WASI command and HTTP component link (single .wasm) | `src/actions/buildWasiCommand.js` |
 | Rust crate build (`export.type: 'cargo'`) | `src/actions/buildCargo.js` |
@@ -150,11 +152,12 @@ Index + template: [`docs/adr/README.md`](./adr/README.md).
 | Resolve transitive C++ deps | `src/actions/getDependLibs.js` |
 | Aggregate `env`/`data`/`cmake` per target | `src/actions/getData.js` |
 | Target matrix + filtering | `src/actions/target.js` |
-| App extensions: the host's own and `extensions` in crossbind.config.js | `src/utils/appExtensions.js` |
+| App extensions: crossbind's own, which `@crossbind/core-app-host` has as its dependencies, less `app.without`, and `extensions` in crossbind.config.js; each own one's `holds`, `reads` and `fromApp` | `src/utils/appExtensions.js`, `src/utils/extensionSteps.js`, `src/actions/extensionsInApp.js` |
+| The commands extensions add under `crossbind app` | `src/actions/extensionCommands.js` |
 | `crossbind add`: an extension's package installed and listed in crossbind.config.js | `src/actions/addExtension.js`, `src/utils/configWriter.js` |
 | `crossbind app publish`: the publishers an app has, crossbind's own and its extensions', their options on the command line, the platform, the first one's changes to the config, one build and each upload in turn | `src/actions/publish.js`, `src/utils/configChanges.js` |
 | The api a publisher's or an installer's steps get in place of crossbind's modules: the run, the app as its platform's build makes it, the config read-only and written after a yes, the terminal, this machine's settings and keychain, Android's upload key, Apple's tools, a Windows app's icon and signer, and an installer's tools in the platform's image | `src/actions/extensionApi.js` |
-| crossbind's own publishers, which use the api alone: Google Play, App Store Connect with App Review, GitHub Releases, and the listings and questions they share | `src/publishers/` |
+| crossbind's own publishers, which use the api alone: Google Play, App Store Connect with App Review, GitHub Releases, and the listings and questions the two stores share | `extensions/google-play/`, `extensions/app-store/`, `extensions/github/`, `core/store-kit/` |
 | xcodebuild with its log, the fix of a failure's cause, and the teams Xcode is signed in to | `src/actions/xcodebuild.js` |
 
 ### Configuration + state

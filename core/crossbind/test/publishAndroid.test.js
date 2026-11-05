@@ -4,13 +4,14 @@ import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 
 const state = { config: { general: { name: 'demo' }, app: {}, paths: {}, system: {} }, targets: [] };
+vi.mock('../src/utils/appExtensions.js', async (importOriginal) => (await import('./ownTools.js')).default(importOriginal));
 vi.mock('../src/state/index.js', () => ({ default: state }));
 // The test's config stands for crossbind.config.js's export, which an extension's api shows.
 vi.mock('../src/state/loadConfig.js', async (importOriginal) => ({ ...await importOriginal(), exportOf: (config) => config }));
 // Play has seen `highest` at most, and releases what it is given, or answers `result`; the keychain keeps the Google
 // sign-in `kept`.
 const play = {};
-vi.mock('../src/publishers/google-play/googlePlay.js', () => ({
+vi.mock('../../../extensions/google-play/src/googlePlay.js', () => ({
     PLAY: { key: 'CROSSBIND_GOOGLE_PLAY_KEY', serviceAccount: 'CROSSBIND_GOOGLE_PLAY_SERVICE_ACCOUNT', token: 'CROSSBIND_GOOGLE_PLAY_TOKEN' },
     playCredentials: () => play.credentials,
     keptSignIn: async () => play.kept,
@@ -41,7 +42,7 @@ vi.mock('../src/utils/ask.js', () => ({
 }));
 // The Google sign-ins the user makes when asked, one per question, none once they run out.
 const setup = {};
-vi.mock('../src/publishers/google-play/playSetup.js', () => ({
+vi.mock('../../../extensions/google-play/src/playSetup.js', () => ({
     signInToPlay: async (api, question) => {
         setup.questions.push(question);
         return setup.signIns.shift() ?? null;
@@ -51,7 +52,7 @@ const opened = [];
 vi.mock('../src/utils/openUrl.js', () => ({ default: (url) => opened.push(url) }));
 vi.mock('../src/utils/systemConfig.js', () => ({ default: () => ({}) }));
 
-const { playRelease, rolloutPercent } = await import('../src/publishers/google-play/index.js');
+const { playRelease, rolloutPercent } = await import('../../../extensions/google-play/crossbind.extension.js');
 const { default: publish } = await import('../src/actions/publish.js');
 
 let base;

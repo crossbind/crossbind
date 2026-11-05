@@ -1,0 +1,26 @@
+{
+    "name": "@crossbind/extension-page-dialogs",
+    "version": "2.0.0-beta.68",
+    "description": "crossbind app extension: a page's alert, confirm and prompt, as the system's dialogs.",
+    "homepage": "https://github.com/crossbind/crossbind/tree/main/extensions/page-dialogs#readme",
+    "repository": "https://github.com/crossbind/crossbind.git",
+    "license": "MIT",
+    "type": "module",
+    "exports": {
+        "./crossbind.extension.js": "./crossbind.extension.js"
+    },
+    "files": [
+        "crossbind.extension.js",
+        "native"
+    ],
+    "crossbind": {
+        "extension": "./crossbind.extension.js"
+    },
+    "keywords": [
+        "crossbind-extension",
+        "crossbind",
+        "page",
+        "dialogs",
+        "app"
+    ]
+}

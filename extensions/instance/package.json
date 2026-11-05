@@ -1,0 +1,36 @@
+{
+    "name": "@crossbind/extension-instance",
+    "version": "2.0.0-beta.68",
+    "description": "crossbind app extension: keeps a desktop app to one instance, handing later launches to the one running.",
+    "homepage": "https://github.com/crossbind/crossbind/tree/main/extensions/instance#readme",
+    "repository": "https://github.com/crossbind/crossbind.git",
+    "license": "MIT",
+    "type": "module",
+    "exports": {
+        "./page": {
+            "types": "./page.d.ts"
+        },
+        "./crossbind.extension.js": "./crossbind.extension.js"
+    },
+    "files": [
+        "crossbind.extension.js",
+        "native",
+        "page.d.ts"
+    ],
+    "crossbind": {
+        "extension": "./crossbind.extension.js"
+    },
+    "peerDependencies": {
+        "crossbind": "workspace:^"
+    },
+    "devDependencies": {
+        "crossbind": "workspace:^"
+    },
+    "keywords": [
+        "crossbind-extension",
+        "crossbind",
+        "launch",
+        "instance",
+        "app"
+    ]
+}

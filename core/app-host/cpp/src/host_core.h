@@ -100,10 +100,6 @@ std::vector<std::pair<std::string, std::string>> userActivityTypes();
 // The types of the quick actions of the app's icon, each with the extension whose onShortcutItem gets their taps, the
 // host's shortcuts for those of app.shortcutItems.
 std::vector<std::pair<std::string, std::string>> shortcutItemTypes();
-// Adds the host's refusals of what crossbind/app reaches that no extension of the app added: the activities' function,
-// which an Apple app with app.activityTypes alone has, and the updater's functions, which a desktop app with app.updater
-// alone has.
-void refusedFunctions(Registry &registry);
 // Adds the host's functions and runs the extensions' entries, once, on the main thread as the app starts, before its
 // module does; an entry that throws, or extensions that break a rule of what they add, throw.
 void startExtensions();
@@ -157,8 +153,6 @@ enum class PushResult { noData, newData, failed };
 // Runs each extension's onPushMessage with a silent push's payload: done gets their answers as one, once, on any thread,
 // as the last answers or 25 s after the push came; without done, as on macOS, which takes no answer, nothing waits.
 void pushArrived(const Value &payload, std::function<void(PushResult)> done);
-// Whether the app has a function of this name so far.
-bool hasFunction(const std::string &name);
 // The route of the extension of this name, which the extensions' entries added, or null without one.
 const std::function<void(Request)> *routeOf(const std::string &extension);
 // A request for one of an extension's URLs, its path decoded, as /ext/<extension>/<path>; respond() may be called from any
@@ -172,8 +166,6 @@ Value valueOfJson(std::string_view text);
 // them, and the value of such text with its bytes in their places.
 std::string jsonWithBytes(const Value &value, std::vector<Value::Bytes> &bytes);
 Value valueWithBytes(std::string_view text, const std::vector<Value::Bytes> &bytes);
-// Whether the main thread answers the waits of <crossbind/app.h>: from the module's start until the app quits.
-void answerWaits(bool answer);
 // The pages an event reaches: every one that listens to its name, the one page given, or the page in front that
 // listens, of the window its user used last.
 enum class Reach { everyPage, onePage, frontPage };
@@ -232,8 +224,6 @@ public:
     // An event for the pages, from any thread.
     void postEvent(std::string event, std::string json, bool isHeld, Reach reach, uint64_t page);
     void stop() {
-        // A wait of the module's code would hold the join below forever.
-        answerWaits(false);
         js_.stop();
     }
 

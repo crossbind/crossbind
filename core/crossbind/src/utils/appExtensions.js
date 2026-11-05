@@ -1,6 +1,10 @@
 import fs from 'node:fs';
+import { createRequire } from 'node:module';
 import path from 'node:path';
 import { carriedPath, isOutside } from './appFiles.js';
+import {
+    NAME, checkedCommands, checkedInstaller, checkedPublisher,
+} from './extensionSteps.js';
 import { checkedActivityTypes, checkedFileTypes, checkedLinks, checkedShortcutItems } from './appLaunches.js';
 import { checkedPrivacy, checkedUrlSchemes } from './appOptions.js';
 import { checkedTargetKind, checkedTargetOptions, isHeader } from './appTargets.js';
@@ -33,11 +37,11 @@ const TARGET_SOURCE = /\.(c|cpp|cc|cxx|m|mm|swift|h|hpp)$/;
 const isSwift = (file) => file.endsWith('.swift');
 // A macro, NAME or NAME=value, of a value a compiler's command line takes as it is.
 const DEFINE = /^[A-Za-z_][A-Za-z0-9_]*(=[A-Za-z0-9_.+-]*)?$/;
-// A name prefixes the extension's functions and names its C++ entry, crossbind_extension_<name>.
-const NAME = /^[a-z][a-z0-9]*(-[a-z0-9]+)*$/;
 const LINK_NAME = /^[A-Za-z0-9][A-Za-z0-9_.+-]*$/;
 // A class in a package, which the activity's package can name.
 const JAVA_CLASS = /^[A-Za-z_$][\w$]*(\.[A-Za-z_$][\w$]*)+$/;
+
+export { PUBLISH_PLATFORMS, checkedInstaller, checkedPublisher } from './extensionSteps.js';
 
 const isObject = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
 const isEntitlement = (value) => typeof value === 'boolean' || typeof value === 'string'
@@ -186,7 +190,7 @@ function checkedPermissions(where, permissions) {
     return permissions;
 }
 
-const LICENSE_KEYS = ['name', 'version', 'license', 'file', 'source', 'sha256'];
+const LICENSE_KEYS = ['name', 'version', 'license', 'file', 'source', 'sha256', 'notes'];
 
 // The code of others an extension carries, which the app's license report lists: its name and version, its license as
 // an SPDX expression, the file of its license's text in the extension's folder, and where its source comes from.
@@ -200,6 +204,7 @@ function checkedLicenses(where, root, licenses) {
         const unknown = Object.keys(entry).find((key) => !LICENSE_KEYS.includes(key));
         if (unknown) throw new Error(`crossbind: ${at} takes ${LICENSE_KEYS.join(', ')}; ${unknown} is none of them.`);
         if (entry.source !== undefined && typeof entry.source !== 'string') throw new Error(`crossbind: ${at}.source is no address of its source.`);
+        if (entry.notes !== undefined && typeof entry.notes !== 'string') throw new Error(`crossbind: ${at}.notes is no text.`);
         if (entry.sha256 !== undefined && !/^[0-9a-f]{64}$/.test(entry.sha256)) throw new Error(`crossbind: ${at}.sha256 is no SHA-256, in 64 lowercase hex digits.`);
         return { ...entry, file: ownPath(`${at}.file`, root, entry.file) };
     });
@@ -277,105 +282,29 @@ function checkedPlatform(where, root, platform, part) {
     return checked;
 }
 
-// The platforms a publisher takes apps of, by the command line's names, and desktop for the three of them.
-export const PUBLISH_PLATFORMS = ['android', 'ios', 'macos', 'linux', 'windows'];
-const DESKTOP_PLATFORMS = ['macos', 'linux', 'windows'];
+// An option's path in the app's config, as a dotted name.
+const OPTION_PATH = /^[A-Za-z_$][\w$]*(\.[A-Za-z_$][\w$]*)*$/;
 
-// The platforms a publisher or an installer names, one or a list of those it may, desktop for the three of them.
-function checkedPlatforms(where, platform, allowed) {
-    const named = [platform].flat();
-    if (named.length === 0 || !named.every((one) => [...allowed, 'desktop'].includes(one))) {
-        throw new Error(`crossbind: ${where}.platform is no platform or list of them, of ${[...allowed, 'desktop'].join(', ')}.`);
+// A list of names, each once, none empty.
+function checkedOwnNames(where, names, pattern) {
+    if (!Array.isArray(names) || names.length === 0 || !names.every((name) => typeof name === 'string' && pattern.test(name)) || new Set(names).size !== names.length) {
+        throw new Error(`crossbind: ${where} ${JSON.stringify(names)} is no list of names, each once.`);
     }
-    return [...new Set(named.flatMap((one) => (one === 'desktop' ? DESKTOP_PLATFORMS : [one])))];
+    return names;
 }
 
-// The steps an object gives are functions.
-function assertSteps(where, object, steps) {
-    const notSteps = steps.filter((step) => object[step] !== undefined && typeof object[step] !== 'function');
-    if (notSteps.length > 0) throw new Error(`crossbind: ${where}'s ${notSteps.join(' and ')} ${notSteps.length > 1 ? 'are' : 'is'} no function.`);
-}
-const PUBLISHER_KEYS = ['platform', 'store', 'options', 'after', 'build', 'check', 'buildNumber', 'buildEnv', 'upload'];
-const PUBLISHER_STEPS = ['build', 'check', 'buildNumber', 'buildEnv', 'upload'];
-// The steps of a publisher that builds, which one after another publisher leaves to that one.
-const BUILD_STEPS = ['build', 'buildNumber', 'buildEnv'];
-// The options `crossbind app publish` has of its own, with crossbind's, and those `vite build` takes, which the command
-// line hands Vite: no publisher's takes the name of one.
-const COMMAND_OPTIONS = ['platform', 'help', 'version'];
-const VITE_OPTIONS = [
-    'app', 'assetsDir', 'assetsInlineLimit', 'base', 'clearScreen', 'config', 'configLoader', 'debug', 'emptyOutDir', 'filter',
-    'logLevel', 'manifest', 'minify', 'mode', 'outDir', 'profile', 'sourcemap', 'ssr', 'ssrManifest', 'target', 'watch',
-];
-// An option's name, as JavaScript writes it, whose --kebab-case the command line takes.
-const OPTION_NAME = /^[a-z][a-zA-Z0-9]*$/;
-const OPTION_KEYS = ['help', 'value', 'default'];
-
-function checkedPublishOption(where, name, option) {
-    const at = `${where}.options.${name}`;
-    if (!OPTION_NAME.test(name) || COMMAND_OPTIONS.includes(name)) {
-        throw new Error(`crossbind: ${where}.options names ${name}, which is no option of its own: one of letters and digits, starting with a lowercase letter, but ${COMMAND_OPTIONS.slice(0, -1).join(', ')} and ${COMMAND_OPTIONS.at(-1)}.`);
-    }
-    if (VITE_OPTIONS.includes(name)) {
-        throw new Error(`crossbind: ${where}.options names ${name}, which is an option of the Vite build the publish runs, the command line's --${name.replace(/[A-Z]/g, (letter) => `-${letter.toLowerCase()}`)}: name it otherwise.`);
-    }
-    if (!isObject(option) || typeof option.help !== 'string') throw new Error(`crossbind: ${at} is no option, which is { help } for a flag and { help, value } for one that takes a value.`);
-    const unknown = Object.keys(option).find((key) => !OPTION_KEYS.includes(key));
-    if (unknown) throw new Error(`crossbind: ${at} takes ${OPTION_KEYS.join(', ')}; ${unknown} is none of them.`);
-    if (option.value !== undefined && typeof option.value !== 'string') throw new Error(`crossbind: ${at}.value is no name of the value it takes, as '<track>'.`);
-    if (option.default !== undefined && (option.value === undefined || typeof option.default !== 'string')) {
-        throw new Error(`crossbind: ${at}.default is no value of an option that takes one: a string, beside its value.`);
-    }
-    return { help: option.help, value: option.value ?? null, default: option.default ?? null };
-}
-
-// A publisher as crossbind runs it: the platforms it takes apps of, the name its store goes by, the options it takes on
-// the command line, the publisher it comes after, where it does, and its steps, which keep the object as their this.
-export function checkedPublisher(publisher, where) {
-    if (!isObject(publisher)) throw new Error(`crossbind: ${where} is no object.`);
-    const unknown = Object.keys(publisher).find((key) => !PUBLISHER_KEYS.includes(key));
-    if (unknown) throw new Error(`crossbind: ${where} takes ${PUBLISHER_KEYS.join(', ')}; ${unknown} is none of them.`);
-    const platforms = checkedPlatforms(where, publisher.platform, PUBLISH_PLATFORMS);
-    if (publisher.store !== undefined && typeof publisher.store !== 'string') throw new Error(`crossbind: ${where}.store is no name.`);
-    if (publisher.after !== undefined && (typeof publisher.after !== 'string' || !NAME.test(publisher.after))) {
-        throw new Error(`crossbind: ${where}.after is no name of a publisher.`);
-    }
-    assertSteps(where, publisher, PUBLISHER_STEPS);
-    if (!publisher.upload) throw new Error(`crossbind: ${where} has no upload, the step that sends the app to its store.`);
-    const ownBuild = BUILD_STEPS.filter((step) => publisher[step]);
-    if (publisher.after !== undefined && ownBuild.length > 0) {
-        throw new Error(`crossbind: ${where} comes after ${publisher.after}, whose build it publishes from, so it takes no ${ownBuild.join(' or ')}.`);
-    }
-    const options = publisher.options ?? {};
-    if (!isObject(options)) throw new Error(`crossbind: ${where}.options is no object of options.`);
-    const steps = PUBLISHER_STEPS.filter((step) => publisher[step]).map((step) => [step, publisher[step].bind(publisher)]);
+// What an extension of crossbind's own says of itself beside what it adds: the roles of the host's it holds, where they
+// are more than its name, and the app's options it reads, each by its path in app, which app.without would leave to no one.
+function checkedOwnKeys({ holds, reads }, where) {
     return {
-        platforms,
-        store: publisher.store ?? null,
-        options: Object.fromEntries(Object.entries(options).map(([name, option]) => [name, checkedPublishOption(where, name, option)])),
-        after: publisher.after ?? null,
-        ...Object.fromEntries(steps),
+        ...(holds === undefined ? {} : { holds: checkedOwnNames(`${where}'s holds`, holds, NAME) }),
+        ...(reads === undefined ? {} : { reads: checkedOwnNames(`${where}'s reads`, reads, OPTION_PATH) }),
     };
 }
 
-const INSTALLER_STEPS = ['check', 'make'];
-const INSTALLER_KEYS = ['platform', ...INSTALLER_STEPS];
-
-// An installer as crossbind runs it: the desktop platforms whose apps it makes what installs, and its steps, which keep
-// the object as their this.
-export function checkedInstaller(installer, where) {
-    if (!isObject(installer)) throw new Error(`crossbind: ${where} is no object.`);
-    const unknown = Object.keys(installer).find((key) => !INSTALLER_KEYS.includes(key));
-    if (unknown) throw new Error(`crossbind: ${where} takes ${INSTALLER_KEYS.join(', ')}; ${unknown} is none of them.`);
-    const platforms = checkedPlatforms(where, installer.platform, DESKTOP_PLATFORMS);
-    assertSteps(where, installer, INSTALLER_STEPS);
-    if (!installer.make) throw new Error(`crossbind: ${where} has no make, the step that makes what installs the app.`);
-    const steps = INSTALLER_STEPS.filter((step) => installer[step]).map((step) => [step, installer[step].bind(installer)]);
-    return { platforms, ...Object.fromEntries(steps) };
-}
-
 // An extension as crossbind takes it, its paths relative to root: its name, in app the sources every platform compiles,
-// the schemes whose links its native code gets and what each platform adds, the options its native code reads, and its
-// publisher and its installer, where it has them.
+// the schemes whose links its native code gets and what each platform adds, the options its native code reads or the
+// fromApp that takes them from the app's config, and its publisher and its installer, where it has them.
 export function checkedExtension(extension, root, where) {
     if (!isObject(extension) || typeof extension.name !== 'string' || !NAME.test(extension.name)) {
         throw new Error(`crossbind: ${where} has no name of lowercase letters and digits, which dashes may join.`);
@@ -397,9 +326,20 @@ export function checkedExtension(extension, root, where) {
         }
         return [key, checkedPlatform(at, root, key, value)];
     }));
+    if (extension.fromApp !== undefined && typeof extension.fromApp !== 'function') throw new Error(`crossbind: ${where}'s fromApp is no function.`);
+    if (extension.fromApp !== undefined && extension.options !== undefined) throw new Error(`crossbind: ${where} gives options and a fromApp, which gives them too: one of them alone.`);
+    const installerAt = `${where}'s installer`;
     const roles = {
         ...(extension.publisher === undefined ? {} : { publisher: checkedPublisher(extension.publisher, `${where}'s publisher`) }),
-        ...(extension.installer === undefined ? {} : { installer: checkedInstaller(extension.installer, `${where}'s installer`) }),
+        ...(extension.installer === undefined ? {} : {
+            installer: {
+                ...checkedInstaller(extension.installer, installerAt),
+                ...(extension.installer.licenses === undefined ? {} : { licenses: checkedLicenses(`${installerAt}.licenses`, root, extension.installer.licenses) }),
+            },
+        }),
+        ...(extension.commands === undefined ? {} : { commands: checkedCommands(extension.commands, `${where}'s commands`) }),
+        ...(extension.fromApp === undefined ? {} : { fromApp: extension.fromApp.bind(extension) }),
+        ...checkedOwnKeys(extension, where),
     };
     if (extension.options === undefined) return { name: extension.name, root, app: checked, ...roles };
     if (!isJsonValue(extension.options)) {
@@ -433,44 +373,17 @@ function checkedContract({ contract }, where, update) {
     throw new Error(`crossbind: ${where} is written for crossbind's extension contract ${named}, older than this crossbind's ${taken}: ${update}.`);
 }
 
-// The roles an app's extension may take in place of the host's own, each with the host's extension that holds it: the
-// host's menu holds the menus, the tray and the notifications, its page-navigation the page's navigations and their
-// authentications, and each other extension its own role.
-export const HOST_ROLES = {
-    activities: 'activities',
-    dialog: 'dialog',
-    files: 'files',
-    instance: 'instance',
-    links: 'links',
-    menu: 'menu',
-    notification: 'menu',
-    'page-authentication': 'page-navigation',
-    'page-dialogs': 'page-dialogs',
-    'page-downloads': 'page-downloads',
-    'page-drops': 'page-drops',
-    'page-files': 'page-files',
-    'page-location': 'page-location',
-    'page-navigation': 'page-navigation',
-    'page-permissions': 'page-permissions',
-    power: 'power',
-    shell: 'shell',
-    shortcuts: 'shortcuts',
-    tray: 'menu',
-    updater: 'updater',
-};
-// The names crossbind keeps for itself, which no extension crossbind.config.js lists takes: its roles, the names of the
-// host's own of this contract, those of the app's own functions and events, and every name of a page's request.
-const KEPT_NAMES = new Set([...Object.keys(HOST_ROLES), ...Object.values(HOST_ROLES), 'app', 'events', 'windows', 'crossbind']);
+// The names crossbind keeps for itself, which no extension crossbind.config.js lists takes: those of the app's own
+// functions and events, and every name of a page's request.
+const KEPT_NAMES = new Set(['app', 'events', 'windows', 'crossbind']);
 const isKeptName = (name) => KEPT_NAMES.has(name) || name.startsWith('page-');
 
 // The roles of the host's a listed extension takes, each once: one, or a list of them.
 function checkedReplaces(replaces, where) {
     const roles = Array.isArray(replaces) ? replaces : [replaces];
     if (roles.length === 0 || roles.some((role) => typeof role !== 'string') || new Set(roles).size !== roles.length) {
-        throw new Error(`crossbind: ${where}'s replaces is no role of the host's, or list of them, as 'tray' or ['page-navigation', 'page-downloads'] is.`);
+        throw new Error(`crossbind: ${where}'s replaces is no role of the host's, or list of them.`);
     }
-    const unknown = roles.find((role) => !Object.hasOwn(HOST_ROLES, role));
-    if (unknown) throw new Error(`crossbind: ${where}'s replaces names ${unknown}, which is no role of the host's: it takes ${Object.keys(HOST_ROLES).join(', ')}.`);
     return roles;
 }
 
@@ -494,7 +407,7 @@ export function extensionPackage(root, base) {
 
 // What an extension of crossbind's build once hooked into, which no build runs.
 const OLD_HOOKS = ['loadConfig', 'buildWasm', 'createLib'];
-const LISTED_KEYS = ['name', 'contract', 'root', 'app', 'options', 'publisher', 'installer', 'replaces'];
+const LISTED_KEYS = ['name', 'contract', 'root', 'app', 'options', 'fromApp', 'publisher', 'installer', 'commands', 'replaces'];
 
 // An extension crossbind.config.js lists, as its package's crossbind.extension.js gives it: its name, the folder its
 // files are in, which a build sees under the project's base alone, and what it adds to an app.
@@ -514,85 +427,132 @@ export function listedExtension(extension, where, base) {
     if (!isFolder) throw new Error(`crossbind: ${where} has no root, the absolute path of the folder its files are in.`);
     if (!isUnderBase(root, base)) throw new Error(`crossbind: ${where}'s root ${root} is outside ${base}, the project's base and all a build sees.`);
     const checked = checkedExtension(extension, root, where);
-    if (Object.hasOwn(HOST_ROLES, checked.name)) {
-        throw new Error(`crossbind: ${where} is named ${checked.name}, which crossbind keeps for the host's own: name it as its package, as acme-${checked.name}, and give replaces: '${checked.name}' to take the host's place.`);
-    }
     if (isKeptName(checked.name)) throw new Error(`crossbind: ${where} is named ${checked.name}, which crossbind keeps for itself: name it as its package, as acme-${checked.name}.`);
     return extension.replaces === undefined ? checked : { ...checked, replaces: checkedReplaces(extension.replaces, where) };
 }
 
-// The host's own extensions: one folder of the host's extensions/ each, named as its extension.json names it.
-export function hostExtensions(appHostRoot) {
-    const dir = path.join(appHostRoot, 'extensions');
-    if (!fs.existsSync(dir)) return [];
-    return fs.readdirSync(dir).sort().filter((folder) => fs.existsSync(path.join(dir, folder, 'extension.json'))).map((folder) => {
-        const file = path.join(dir, folder, 'extension.json');
+const OWN_PACKAGE = /^@crossbind\/extension-(.+)$/;
+
+// The names of the extension packages among the host's dependencies.
+export const ownPackages = (appHostRoot) => Object.keys(JSON.parse(fs.readFileSync(path.join(appHostRoot, 'package.json'), 'utf8')).dependencies ?? {})
+    .filter((name) => OWN_PACKAGE.test(name)).sort();
+
+// crossbind's own extensions: the extension packages among the host's dependencies, which an app has by having the host,
+// each named as its package. crossbind finds them as it finds the embind runtime, through the host, as pnpm shows them to
+// it alone.
+export function ownExtensions(appHostRoot) {
+    const load = createRequire(path.join(appHostRoot, 'package.json'));
+    const packages = ownPackages(appHostRoot);
+    if (packages.length === 0) throw new Error(`crossbind: the app host at ${appHostRoot} brings no extensions: update @crossbind/core-app-host to match crossbind.`);
+    return packages.map((name) => {
+        const where = `${name}'s crossbind.extension.js`;
         let extension;
         try {
-            extension = JSON.parse(fs.readFileSync(file, 'utf8'));
+            extension = load(`${name}/crossbind.extension.js`).default();
         } catch (error) {
-            throw new Error(`crossbind: cannot read the extension ${file}: ${error.message}`, { cause: error });
+            throw new Error(`crossbind: cannot read ${where}: ${error.message}: install the project's packages, or update @crossbind/core-app-host to match crossbind.`, { cause: error });
         }
-        checkedContract(extension ?? {}, file, 'update @crossbind/core-app-host to match crossbind');
-        const checked = checkedExtension(extension, path.dirname(file), file);
-        if (checked.name !== folder) throw new Error(`crossbind: ${file} names the extension ${checked.name}, not ${folder} as its folder.`);
+        checkedContract(extension ?? {}, where, 'update @crossbind/core-app-host to match crossbind');
+        const checked = checkedExtension(extension, extension?.root, where);
+        const expected = OWN_PACKAGE.exec(name)[1];
+        if (checked.name !== expected) throw new Error(`crossbind: ${where} names the extension ${checked.name}, not ${expected} as its package.`);
         return checked;
     });
 }
 
-// A step of an extension's publisher or installer: a failure whose message is not crossbind's own stops the run with one
-// that names the extension and the step.
+// Whether an option of the app's config asks for anything, as false, null and an empty list or object do not.
+const asksForAnything = (value) => value !== undefined && value !== null && value !== false
+    && (typeof value !== 'object' || Object.keys(value).length > 0);
+
+// crossbind's own extensions but those app.without names: its own alone, each once, none whose option in the app's
+// config would then reach no one.
+export function withoutNamed(own, app = {}) {
+    const { without = [] } = app;
+    const names = own.map(({ name }) => name);
+    if (!Array.isArray(without) || !without.every((name) => typeof name === 'string') || new Set(without).size !== without.length) {
+        throw new Error(`crossbind: app.without ${JSON.stringify(without)} is no list of crossbind's own extensions, each once: ${names.join(', ')}.`);
+    }
+    const unknown = without.find((name) => !names.includes(name));
+    if (unknown) throw new Error(`crossbind: app.without names ${unknown}, which is none of crossbind's own extensions: ${names.join(', ')}.`);
+    const left = own.filter(({ name }) => without.includes(name));
+    for (const { name, reads = [] } of left) {
+        const read = reads.find((option) => asksForAnything(option.split('.').reduce((value, key) => value?.[key], app)));
+        if (read) throw new Error(`crossbind: app.without leaves out ${name}, which app.${read} in crossbind.config.js needs: remove one of them.`);
+    }
+    return own.filter((extension) => !left.includes(extension));
+}
+
+// A failure of an extension's step: crossbind's own message as it is, else one that names the extension and the step.
+const stepFailure = (name, which, error) => (error instanceof Error && error.message.startsWith('crossbind:') ? error
+    : new Error(`crossbind: ${name}'s ${which} failed: ${error instanceof Error ? error.message : String(error)}`, { cause: error }));
+
+// A step of an extension's publisher or installer, whose failure stops the run.
 export async function extensionStep(name, which, run) {
     try {
         return await run();
     } catch (error) {
-        if (error instanceof Error && error.message.startsWith('crossbind:')) throw error;
-        throw new Error(`crossbind: ${name}'s ${which} failed: ${error instanceof Error ? error.message : String(error)}`, { cause: error });
+        throw stepFailure(name, which, error);
     }
 }
 
-// The host's own extensions with the options the app's give them, each by its own name.
-export const withOptions = (extensions, options) => extensions.map((extension) => (Object.hasOwn(options, extension.name)
-    ? { ...extension, options: options[extension.name] } : extension));
+// What an extension's fromApp gives: the options of its native code, or null, which leaves it out of the app.
+function fromAppOf({ name, fromApp }, api) {
+    let options;
+    try {
+        options = fromApp(api);
+    } catch (error) {
+        throw stepFailure(name, 'fromApp', error);
+    }
+    if (!isJsonValue(options)) throw new Error(`crossbind: ${name}'s fromApp gives no JSON value the host reads as it is, or null, which leaves it out of the app.`);
+    return options;
+}
 
-// The host's own extensions an app has, with the options the app's give them: every one, but the activities, the files,
-// the instance, the links, the page's location, the shortcuts and the updater only where they give them options, as an
-// Apple app's do that lists app.activityTypes, an app's that opens files, a desktop app's that keeps one instance or has
-// app.updater, an app's that lists app.urlSchemes or a phone's app.links or app.shortcutItems, and a macOS app's whose
-// app.permissions lists the location. The host refuses the activities' and the updater's functions to any other app.
-export const appHostExtensions = (appHostRoot, options) => withOptions(hostExtensions(appHostRoot), options)
-    .filter((extension) => !['activities', 'files', 'instance', 'links', 'page-location', 'shortcuts', 'updater'].includes(extension.name)
-        || Object.hasOwn(options, extension.name));
+// The extensions of an app, each that gives a fromApp with the options it takes from the app's config, or left out where
+// it gives null.
+export const withFromApp = (extensions, apiOf) => extensions.flatMap((extension) => {
+    if (!extension.fromApp) return [extension];
+    const options = fromAppOf(extension, apiOf(extension.name));
+    return options === null ? [] : [{ ...extension, options }];
+});
 
 // The extensions crossbind.config.js lists that add to an app: all but those that give a publisher or an installer
 // alone, which leave the host's own of their name as it is.
 export const appExtensionsOf = (listed) => listed
     .filter((extension) => (!extension.publisher && !extension.installer) || Object.keys(extension.app).length > 0);
 
-// The host's own extensions an app has, then those crossbind.config.js lists, each with the roles it holds: a role a
-// listed one replaces leaves the host's that held it, which the app leaves out once it holds none, and two that replace
-// one stop the build. A listed one of the name of a host's own that a later crossbind adds takes its place, saying so,
-// as no listed one of this contract has such a name.
-export function withRoles(own, listed, warn = () => {}) {
+// The host's own extensions an app has, then those crossbind.config.js lists, each with the roles it holds, its own name
+// where it says nothing else: a role a listed one replaces leaves the host's that held it, which the app leaves out once
+// it holds none, and two that replace one stop the build, as one no extension of known holds. A listed one of the name of
+// a host's own takes its place and its roles, saying so, as a later crossbind may add one of a name an app has already.
+export function withRoles(own, listed, warn = () => {}, known = own) {
+    const holdersOf = new Map(known.flatMap(({ name, holds }) => (holds ?? [name]).map((role) => [role, name])));
     const taken = new Map();
     for (const extension of listed) {
+        const holder = holdersOf.get(extension.name);
+        if (holder !== undefined && holder !== extension.name) {
+            throw new Error(`crossbind: the extension ${extension.name} is named as the host's role ${extension.name}, which its ${holder} holds: name it as its package, as acme-${extension.name}, and give replaces: '${extension.name}' to take the host's place.`);
+        }
         for (const role of extension.replaces ?? []) {
+            if (!holdersOf.has(role)) throw new Error(`crossbind: the extension ${extension.name} replaces ${role}, which is no role of the host's: it takes ${[...holdersOf.keys()].sort().join(', ')}.`);
             if (taken.has(role)) throw new Error(`crossbind: the extensions ${taken.get(role)} and ${extension.name} both replace the host's ${role}, which one alone takes.`);
             taken.set(role, extension.name);
         }
     }
     const kept = own.flatMap((extension) => {
         if (listed.some(({ name }) => name === extension.name)) {
-            warn(`the extension ${extension.name} that crossbind.config.js lists takes the place of the host's own ${extension.name}, which this crossbind adds: name it as its package, as acme-${extension.name}, to keep both`);
+            warn(`the extension ${extension.name} that crossbind.config.js lists takes the place of the host's own ${extension.name}: name it as its package, as acme-${extension.name}, to keep both`);
             return [];
         }
-        const held = Object.values(HOST_ROLES).includes(extension.name)
-            ? Object.entries(HOST_ROLES).filter(([, holder]) => holder === extension.name).map(([role]) => role)
-            : [extension.name];
+        const held = extension.holds ?? [extension.name];
         const roles = held.filter((role) => !taken.has(role));
         return roles.length > 0 ? [{ ...extension, roles, given: held.filter((role) => taken.has(role)) }] : [];
     });
-    return [...kept, ...listed.map((extension) => ({ ...extension, roles: extension.replaces ?? [], given: [] }))];
+    return [...kept, ...listed.map((extension) => {
+        const named = known.find(({ name }) => name === extension.name);
+        const held = named ? named.holds ?? [named.name] : [];
+        const isAnothers = (role) => taken.has(role) && taken.get(role) !== extension.name;
+        return { ...extension, roles: [...new Set([...(extension.replaces ?? []), ...held.filter((role) => !isAnothers(role))])], given: held.filter(isAnothers) };
+    })];
 }
 
 // crossbind's own publishers or installers, then those crossbind.config.js lists: one listed under the name of one of

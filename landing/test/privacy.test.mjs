@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import PRIVACY_PAGE from '../src/pages/privacy.js';
 import { SITE_ROUTES } from '../src/site-pages.js';
-import { PLAY_SCOPE } from '../../core/crossbind/src/publishers/google-play/googlePlay.js';
+import { PLAY_SCOPE } from '../../extensions/google-play/src/googlePlay.js';
 import { TOKEN_IDLE_DAYS, USAGE_MONTHS_KEPT } from '../../tooling/cloud/worker/accounts.js';
 import { SESSION_TTL_MS } from '../../tooling/cloud/worker/session.js';
 import { RUNNER_IDLE_SECONDS } from '../../tooling/cloud/worker/runner-api.js';
@@ -28,7 +28,7 @@ test('names the periods crossbind cloud enforces', () => {
 test("names the one permission the CLI's Google Play sign-in asks for, and the keychain entry it keeps", () => {
     // The keychain keeps an extension's secrets under the service crossbind <name>, as the api names it.
     const api = readFileSync(new URL('../../core/crossbind/src/actions/extensionApi.js', import.meta.url), 'utf8');
-    const publisher = readFileSync(new URL('../../core/crossbind/src/publishers/google-play/index.js', import.meta.url), 'utf8');
+    const publisher = readFileSync(new URL('../../extensions/google-play/crossbind.extension.js', import.meta.url), 'utf8');
     assert.ok(api.includes('const service = `crossbind ${name}`;'));
     const service = `crossbind ${publisher.match(/name: '([^']+)',/)[1]}`;
     assert.ok(text.includes(`(\`${PLAY_SCOPE.split('/').at(-1)}\`)`));

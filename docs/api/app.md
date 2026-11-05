@@ -376,8 +376,8 @@ On macOS and Linux the app's folder swaps the app for its update in one step, wh
 and ext4 do; where it cannot, as on a network share, the update fails and leaves the app as it is. An app updates where
 its user can change it, too: a macOS app opened from its disk image, or from where it was downloaded to, updates once
 it is moved to Applications, and a Linux app installed from its Debian package updates with the package manager. The
-C++ of an app calls the same as `crossbind::app::checkForUpdate()` and `crossbind::app::installUpdate()`, which wait
-for the download. An iOS or Android app updates through its store, and `updater.check()` rejects there.
+C++ of an app calls the same with `<crossbind/extension.h>`'s `invoke("updater.check", …)`. An iOS or Android app updates
+through its store, and `updater.check()` rejects there.
 
 An `app.updater.url` that is neither https nor http on localhost or names no manifest, a public key that is none or
 one anyone can forge signatures for, a package.json version that is not semver, and a private key that is not the
@@ -386,9 +386,12 @@ public key's pair stop `crossbind app build` before anything compiles. The host'
 
 ## The app's functions
 
-The page imports what the app's host does for it from `crossbind/app`. The app's C++ calls the same, but for `windows`,
-`menu.set`, `tray`, `notification.show`, `app.launchUrls`, `app.launchArgs`, `app.setUserActivity`, `events.on` and
-`events.held`, through `<crossbind/app.h>`, which an app's own code finds as it builds, with `CROSSBIND_APP` defined:
+The page imports what the app's host and crossbind's own extensions do for it from `crossbind/app`, which an app's bundler
+plugin takes from `@crossbind/core-app-host`; a TypeScript page reads its types with
+`/// <reference types="@crossbind/core-app-host/app" />`. `app.without` leaves out those of the extensions an app does not
+want, as [extensions.md](./extensions.md#the-hosts-own-extensions) says. The app's C++ reaches the app's folders and
+quitting through `<crossbind/app.h>`, which an app's own code finds as it builds, with `CROSSBIND_APP` defined, and an
+extension's functions by their names, with `<crossbind/extension.h>`'s `invoke()`, where they reach any path:
 
 ```js
 import { app, dialog, shell } from 'crossbind/app';
@@ -435,9 +438,8 @@ std::string databasePath() { return crossbind::app::paths().data + "/notes.sqlit
 | `updater.install()` | Installs that version once its signature holds, then quits the app and opens the new one | ✓ | | |
 
 In the page each returns a promise once `initNative()` has run, as what it loads carries the calls to the host, but
-`events.on`, which returns at once what stops it and throws where it cannot listen; in C++ each waits for its answer,
-a dialog for its user's, but `emitEvent` and `holdEvent`. A function a platform has not got rejects, or throws, saying so, and in a web
-or Node.js build every one fails. `app.relaunch()` opens the app anew as a fresh launch: on macOS and Linux once it has
+`events.on`, which returns at once what stops it and throws where it cannot listen. A function a platform has not got
+rejects, saying so, and in a web or Node.js build every one fails. `app.relaunch()` opens the app anew as a fresh launch: on macOS and Linux once it has
 ended, on Windows as it ends, where an app `app.singleInstance` keeps to one instance hands the new one its place once
 it has. A Linux app opens with the command that started it. A development session refuses it, as its dev server opened
 the app. A filter's extensions go with or without their dot, `"*"` for any
@@ -471,9 +473,8 @@ shows the app's folders and what a dialog picked during this run, and its `shell
 folders, but none of the folders, and what a dialog picked during this run, both where the path is written and where
 the links of the folders above it lead. A path the page names holds no `.` or `..`, as the system follows a link before
 one elsewhere than the path reads. Where the system has no trash, as on a network share, the file stays and the call
-rejects: Windows would delete it for good, and crossbind stops it. The app's C++ reaches any path. It calls these
-functions once the module has started and never on the app's main thread, which the dialogs and the functions that
-open something wait for: called before that, as from a static initializer, or once the app quits, they throw.
+rejects: Windows would delete it for good, and crossbind stops it. The app's C++ reaches any path, calling these
+functions by their names with `invoke()` once the app's extensions have all started.
 
 On the desktop the folders take the name of `app.id`: under `~/Library` on macOS, under `$XDG_DATA_HOME`,
 `$XDG_CACHE_HOME` and `$XDG_STATE_HOME` on Linux, and under `%APPDATA%` and `%LOCALAPPDATA%` on Windows. An iOS
@@ -1783,7 +1784,7 @@ writes to logcat, under the tag `Crossbind`: the URL only on `localhost`, and th
   which must leave with 0 and open anew. A file on a drive or mount without a trash has not been tried. On Windows the
   runs tell the window the system sleeps and wakes, as Windows does, and the page hears both; the sleep of a macOS or
   Linux system has not been measured.
-- Message dialogs have been measured from the page and from C++: on macOS, and on Linux under Xvfb with openbox, with
+- Message dialogs have been measured from the page: on macOS, and on Linux under Xvfb with openbox, with
   their buttons, Return and Escape; in the iOS Simulator with their buttons; on an Android emulator with their buttons,
   Back and a tap outside. On Windows the conformance runs in CI check that the host refuses one no platform shows; the
   dialog itself is built there, not measured yet.

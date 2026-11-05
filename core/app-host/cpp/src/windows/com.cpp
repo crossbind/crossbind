@@ -14,7 +14,6 @@ namespace {
 
 constexpr UINT RUN = WM_APP + 1;
 // The thread that starts the process, the UI's, which makes the host's static objects.
-const DWORD uiThread = GetCurrentThreadId();
 // Set once, under queueMutex, which other threads read it under.
 HWND dispatcher = nullptr;
 std::mutex queueMutex;
@@ -120,7 +119,6 @@ void onMainThread(std::function<void()> fn) {
     post();
 }
 
-bool isUiThread() { return GetCurrentThreadId() == uiThread; }
 
 bool openOutside(const std::string &uri) {
     std::string scheme = uri.substr(0, uri.find(':'));
