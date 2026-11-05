@@ -1,10 +1,11 @@
-import { INTEGRATIONS_URL, LIBRARIES_URL } from '../data.js';
+import { EXTENSIONS_URL, INTEGRATIONS_URL, LIBRARIES_URL } from '../data.js';
 import { normalizePath } from '../guide/nav.js';
 import { isUnder, NavMenu } from './menu.jsx';
 
 const ITEMS = [
     { label: 'Libraries', href: LIBRARIES_URL },
     { label: 'Integrations', href: INTEGRATIONS_URL },
+    { label: 'Extensions', href: EXTENSIONS_URL },
 ];
 
 export default function EcosystemMenu({ tokens, path, active }) {

@@ -1,9 +1,11 @@
 import { AGENT_URL } from '../data.js';
+import appStore from './pages/app-store.js';
 import apps from './pages/apps.js';
 import architecture from './pages/architecture.js';
 import assets from './pages/assets.js';
 import bindings from './pages/bindings.js';
 import browser from './pages/browser.js';
+import bundlerPlugins from './pages/bundler-plugins.js';
 import cli from './pages/cli.js';
 import conan from './pages/conan.js';
 import configuration from './pages/configuration.js';
@@ -11,7 +13,11 @@ import cratesIo from './pages/crates-io.js';
 import edge from './pages/edge.js';
 import electron from './pages/electron.js';
 import executables from './pages/executables.js';
+import extensions from './pages/extensions.js';
 import filesystem from './pages/filesystem.js';
+import githubReleases from './pages/github-releases.js';
+import googlePlay from './pages/google-play.js';
+import installers from './pages/installers.js';
 import introduction from './pages/introduction.js';
 import libraries from './pages/libraries.js';
 import migration from './pages/migration.js';
@@ -25,6 +31,8 @@ import runtimeApi from './pages/runtime-api.js';
 import rust from './pages/rust.js';
 import threading from './pages/threading.js';
 import troubleshooting from './pages/troubleshooting.js';
+import updates from './pages/updates.js';
+import wingetMicrosoftStore from './pages/winget-microsoft-store.js';
 
 // The guide's one source of order. Sidebar grouping, reading order (prev/next), the search index,
 // the prerender route list and the sitemap all derive from the array below, so a new page is one
@@ -43,9 +51,11 @@ export const guideHref = (slug = '') => (slug ? `${GUIDE_BASE}/${slug}/` : `${GU
 const SECTIONS = [
     { label: 'Get started', pages: [introduction, quickStart], links: [{ title: 'Agent setup', href: AGENT_URL }] },
     { label: 'Native code', pages: [bindings, rust, libraries, cratesIo, conan] },
-    { label: 'Platforms', pages: [browser, node, edge, electron, apps, reactNative, executables] },
+    { label: 'Platforms', pages: [browser, node, edge, electron, reactNative, executables] },
+    { label: 'Apps', pages: [apps, extensions] },
+    { label: 'Distribute', pages: [installers, updates, appStore, googlePlay, githubReleases, wingetMicrosoftStore, publishing] },
     { label: 'Runtime', pages: [filesystem, assets, threading] },
-    { label: 'Build', pages: [architecture, performance, remoteBuilds, publishing] },
+    { label: 'Build', pages: [architecture, bundlerPlugins, performance, remoteBuilds] },
     { label: 'Reference', pages: [configuration, runtimeApi, cli, troubleshooting, migration] },
 ];
 

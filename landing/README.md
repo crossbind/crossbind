@@ -1,7 +1,7 @@
 # @crossbind/landing
 
 The crossbind.dev site: the landing page, the `/guide/` docs, the `/agent/` setup page, the
-`/ports/` library catalog, `/integrations/`, `/examples/` and the `/changelog/`. Plain Vite + React, no
+`/ports/` library catalog, `/integrations/`, `/extensions/`, `/examples/` and the `/changelog/`. Plain Vite + React, no
 router and no CMS: the landing is one page built from a [Claude Design](https://claude.ai/design)
 mock, and every other page is prerendered to its own static HTML file, so links are plain
 `<a href>` and the browser does the navigating.

@@ -19,7 +19,7 @@ test('with none of its own on npm, the Apps guide still says how to add one, fin
 
     assert.equal(blocks.some((block) => block.type === 'ul'), false);
     assert.match(textOf(blocks), /`crossbind add <package>`/);
-    assert.match(textOf(blocks), /\(https:\/\/www\.npmjs\.com\/search\?q=keywords%3Acrossbind-extension\), and crossbind has not reviewed them/);
+    assert.match(textOf(blocks), /\(https:\/\/www\.npmjs\.com\/search\?q=keywords%3Acrossbind-extension\), crossbind's own as well, and crossbind has not reviewed the ones others publish/);
     assert.match(textOf(blocks), /create crossbind\S* -- my-extension Extension`/);
 });
 
