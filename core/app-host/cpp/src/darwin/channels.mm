@@ -173,6 +173,7 @@ static void sendFile(id<WKURLSchemeTask> task, NSHTTPURLResponse *response, NSSt
     incoming.body = readBody(request);
     NSDictionary<NSString *, NSString *> *fields = request.allHTTPHeaderFields;
     for (NSString *name in fields) incoming.headers.emplace_back(name.UTF8String ?: "", fields[name].UTF8String ?: "");
+    incoming.webView = (__bridge const void *)webView;
 
     id<WKURLSchemeTask> held = task;
     NSURL *url = request.URL;
@@ -252,12 +253,11 @@ void registerSchemeHandler(void *target, const char *scheme, SchemeHandler handl
     [config setURLSchemeHandler:schemeHandler forURLScheme:[NSString stringWithUTF8String:scheme]];
 }
 
-#if !TARGET_OS_IPHONE
+// WebKit may suspend the page of a hidden window, as behind a locked screen or an iPad's in the background, while a call
+// of the page waits for the host's answer, which then reaches it no more. iOS suspends an app in the background all the
+// same.
 void keepRunningWhenHidden(void *target) {
-    // WebKit may suspend the page of a hidden window, as behind a locked screen, while a call of the page waits for the
-    // host's answer, which then reaches it no more.
-    if (@available(macOS 14.0, *)) {
+    if (@available(macOS 14.0, iOS 17.0, *)) {
         ((__bridge WKWebViewConfiguration *)target).preferences.inactiveSchedulingPolicy = WKInactiveSchedulingPolicyNone;
     }
 }
-#endif

@@ -40,28 +40,33 @@ struct MenuItem {
     std::vector<MenuItem> items;
 };
 
-using MenuClicked = std::function<void(std::string id, std::optional<bool> checked)>;
-// Sets the app's menus, on the main thread, which calls done; a click of an item with an id calls clicked there, with
-// whether a checked one now is.
-void setMenu(std::vector<MenuItem> menus, MenuClicked clicked, std::function<void(Failure)> done);
-// Opens a menu of these items at the page's point x, y, in CSS pixels from its top left, as a right click's menu opens,
-// on the main thread: done gets there the id of the item clicked, or none when the menu closed without one. A standard
-// item does what its role says.
-void popupMenu(std::vector<MenuItem> items, double x, double y, std::function<void(Failure, std::optional<std::string> id)> done);
+// A click of an item with an id, on the main thread: the window whose menus it is in, 0 for the tray's and the Dock's,
+// and whether a checked one now is.
+using MenuClicked = std::function<void(uint64_t window, std::string id, std::optional<bool> checked)>;
+// Sets the menus of the window of this id, on the main thread, which calls done: the bar of that window on Windows and
+// Linux, and on macOS the menu bar while it is the key window. A click of an item with an id calls clicked there.
+void setMenu(uint64_t window, std::vector<MenuItem> menus, MenuClicked clicked, std::function<void(Failure)> done);
+// The menus of a window that closed go with it, on the main thread.
+void dropMenus(uint64_t window);
+// Opens a menu of these items at the point x, y of the page of the window of this id, in CSS pixels from its top left,
+// as a right click's menu opens, on the main thread: done gets there the id of the item clicked, or none when the menu
+// closed without one. A standard item does what its role says.
+void popupMenu(uint64_t window, std::vector<MenuItem> items, double x, double y, std::function<void(Failure, std::optional<std::string> id)> done);
 // The menu a macOS app's Dock icon shows above the system's items, on the main thread, which calls done; a click of an
 // item with an id calls clicked there. None takes it away.
 void setDockMenu(std::vector<MenuItem> items, MenuClicked clicked, std::function<void(Failure)> done);
 // The app's icon in the menu bar on macOS, the notification area on Windows and a desktop's status tray on Linux, with
 // its tooltip and the menu a click opens. A click of an item with an id calls clicked, and a click of the icon that opens
-// no menu tells the page as the event tray. Set again, it changes the icon. On the main thread, which calls done.
+// no menu tells the page in front that listens as the event tray. Set again, it changes the icon. On the main thread,
+// which calls done.
 struct TrayOptions {
     std::string tooltip;
     std::vector<MenuItem> menu;
 };
 void setTray(TrayOptions options, MenuClicked clicked, std::function<void(Failure)> done);
 void removeTray(std::function<void(Failure)> done);
-// A notification of the system's, a click on which tells the page as the event notification. On the main thread, which
-// calls done once the system has taken it.
+// A notification of the system's, a click on which tells the page in front that listens as the event notification. On
+// the main thread, which calls done once the system has taken it.
 struct Notification {
     std::string title;
     std::string body;
@@ -79,11 +84,16 @@ const std::string &appId();
 void answerDockMenu();
 #endif
 
+#ifdef _WIN32
+// Takes the app's icon from the notification area as the app quits, where it would stay until a pointer passed over it.
+void quitTray();
+#endif
+
 #if defined(__linux__) && !defined(__ANDROID__)
 // The folder of a Linux app's files, resources/ beside its executable, which holds the app's icon.png.
 std::string resourceFolder();
-// Keeps the webview's last button press, which popupMenu() opens from, as the window opens.
-void keepPresses();
+// Keeps the last button press of a window's webview, which popupMenu() opens from, as the window opens.
+void keepPresses(void *webView);
 #endif
 
 }  // namespace crossbind::menu

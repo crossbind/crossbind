@@ -26,9 +26,10 @@ struct MessageAnswer {
     ~MessageAnswer() { give(NO_BUTTON); }
 };
 
-// Over whatever the app's window shows on top; false when it has nothing to show it over.
-bool presentOnTop(UIViewController *controller) {
-    UIViewController *top = ((__bridge UIWindow *)appWindow()).rootViewController;
+// Over whatever the window of this id, or the app's oldest, shows on top; false when it has nothing to show it over.
+bool presentOnTop(UIViewController *controller, uint64_t window) {
+    const std::optional<Window> open = windowOf(window);
+    UIViewController *top = ((__bridge UIWindow *)(open ? open->native() : appWindow())).rootViewController;
     while (top.presentedViewController) top = top.presentedViewController;
     if (!top || top.isBeingDismissed) return false;
     [top presentViewController:controller animated:YES completion:nil];
@@ -37,14 +38,14 @@ bool presentOnTop(UIViewController *controller) {
 
 }  // namespace
 
-void showOpenDialog(app::OpenOptions, std::function<void(Picked)>) { throw std::runtime_error("crossbind: an iOS app has no file dialogs yet"); }
+void showOpenDialog(uint64_t, app::OpenOptions, std::function<void(Picked)>) { throw std::runtime_error("crossbind: an iOS app has no file dialogs yet"); }
 
-void showSaveDialog(app::SaveOptions, std::function<void(std::optional<std::string>)>) {
+void showSaveDialog(uint64_t, app::SaveOptions, std::function<void(std::optional<std::string>)>) {
     throw std::runtime_error("crossbind: an iOS app has no file dialogs yet");
 }
 
 // The last of several buttons is the one a keyboard's Escape clicks, which iOS places where its apps put Cancel.
-void showMessageDialog(app::MessageOptions options, std::function<void(int)> done) {
+void showMessageDialog(uint64_t window, app::MessageOptions options, std::function<void(int)> done) {
     onMain(^{
       auto answer = std::make_shared<MessageAnswer>();
       answer->done = done;
@@ -60,7 +61,7 @@ void showMessageDialog(app::MessageOptions options, std::function<void(int)> don
           [alert addAction:action];
           if (i == 0) alert.preferredAction = action;
       }
-      if (!presentOnTop(alert)) answer->give(NO_BUTTON);
+      if (!presentOnTop(alert, window)) answer->give(NO_BUTTON);
     });
 }
 

@@ -21,7 +21,8 @@ using crossbind::PageDialog;
 
 // The page waits for a dialog's answer, which the extension that takes them gives once the event has returned. A page
 // that leaves does so without asking, as WKWebView's does.
-HRESULT onScriptDialog(ICoreWebView2 *, ICoreWebView2ScriptDialogOpeningEventArgs *args) {
+// webView is the controller of the window whose page asks.
+HRESULT onScriptDialog(void *webView, ICoreWebView2ScriptDialogOpeningEventArgs *args) {
     COREWEBVIEW2_SCRIPT_DIALOG_KIND type = COREWEBVIEW2_SCRIPT_DIALOG_KIND_ALERT;
     args->get_Kind(&type);
     if (type == COREWEBVIEW2_SCRIPT_DIALOG_KIND_BEFOREUNLOAD) return args->Accept();
@@ -44,7 +45,7 @@ HRESULT onScriptDialog(ICoreWebView2 *, ICoreWebView2ScriptDialogOpeningEventArg
     }
     args->AddRef();
     const PageDialog dialog = crossbind::app::make<PageDialog>(std::make_shared<crossbind::app::StateOf<PageDialog>>(
-        kind, take(message), take(text), [args, deferral, kind](std::optional<std::string> answer) {
+        webView, kind, take(message), take(text), [args, deferral, kind](std::optional<std::string> answer) {
             if (answer) {
                 if (kind == PageDialog::Kind::prompt) args->put_ResultText(wide(*answer).c_str());
                 args->Accept();
@@ -69,7 +70,8 @@ void showPageDialogs(void *webView) {
         settings->Release();
     }
     auto *opening = new Handler<ICoreWebView2ScriptDialogOpeningEventHandler, ICoreWebView2 *, ICoreWebView2ScriptDialogOpeningEventArgs *>(
-        IID_ICoreWebView2ScriptDialogOpeningEventHandler, onScriptDialog);
+        IID_ICoreWebView2ScriptDialogOpeningEventHandler,
+        [webView](ICoreWebView2 *, ICoreWebView2ScriptDialogOpeningEventArgs *args) { return onScriptDialog(webView, args); });
     EventRegistrationToken token;
     coreWebView(webView)->add_ScriptDialogOpening(opening, &token);
     opening->Release();
@@ -123,7 +125,8 @@ std::string kindOf(COREWEBVIEW2_PERMISSION_KIND kind) {
     }
 }
 
-HRESULT onPermissionRequest(ICoreWebView2 *, ICoreWebView2PermissionRequestedEventArgs *args) {
+// webView is the controller of the window whose page asks.
+HRESULT onPermissionRequest(void *webView, ICoreWebView2PermissionRequestedEventArgs *args) {
     COREWEBVIEW2_PERMISSION_KIND kind = COREWEBVIEW2_PERMISSION_KIND_UNKNOWN_PERMISSION;
     args->get_PermissionKind(&kind);
     // What WebView2 gives without asking stays its own.
@@ -147,7 +150,7 @@ HRESULT onPermissionRequest(ICoreWebView2 *, ICoreWebView2PermissionRequestedEve
     }
     args->AddRef();
     // WebView2 asks its user what the owner leaves it.
-    const crossbind::PagePermission request = crossbind::app::pagePermission(
+    const crossbind::PagePermission request = crossbind::app::pagePermission(crossbind::app::pageOf(webView),
         {kindOf(kind)}, crossbind::app::originOf(take(uri)), [args, deferral](crossbind::app::PermissionAnswer answer) {
             args->put_State(answer == crossbind::app::PermissionAnswer::allow  ? COREWEBVIEW2_PERMISSION_STATE_ALLOW
                             : answer == crossbind::app::PermissionAnswer::deny ? COREWEBVIEW2_PERMISSION_STATE_DENY
@@ -168,7 +171,8 @@ void answerPermissions(void *webView) {
     forgetClipboardAnswer(coreWebView(webView));
     if (!crossbind::app::hasPagePermissions()) return;
     auto *asked = new Handler<ICoreWebView2PermissionRequestedEventHandler, ICoreWebView2 *, ICoreWebView2PermissionRequestedEventArgs *>(
-        IID_ICoreWebView2PermissionRequestedEventHandler, onPermissionRequest);
+        IID_ICoreWebView2PermissionRequestedEventHandler,
+        [webView](ICoreWebView2 *, ICoreWebView2PermissionRequestedEventArgs *args) { return onPermissionRequest(webView, args); });
     EventRegistrationToken token;
     coreWebView(webView)->add_PermissionRequested(asked, &token);
     asked->Release();

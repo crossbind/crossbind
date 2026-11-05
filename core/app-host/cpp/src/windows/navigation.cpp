@@ -3,18 +3,21 @@
 #include "windows/com.h"
 
 #include <algorithm>
+#include <memory>
 
 using namespace crossbind::windows;
 using crossbind::CertificateError;
 using crossbind::HttpAuthentication;
 namespace app = crossbind::app;
 
-// The app's own origins load in any frame, but a window the page asks for at one of them opens nowhere, as the app
-// opens no window of its own; the extension page-navigation decides every other URL, windows too, which load in the
-// page's place if they load. A page of another origin gets no token, so it reaches none of the app's functions.
+// The app's own origins load in any frame, but a window the page asks for at one of them opens nowhere, as the app's
+// windows open through windows.open(); the extension page-navigation decides every other URL, windows too, which load
+// in the page's place if they load. A page of another origin gets no token, so it reaches none of the app's functions.
 namespace {
 
 struct Lock {
+    // The controller of the window whose page navigates.
+    void *webView;
     std::vector<std::string> origins;
     std::function<void()> newPage;
     // A window's URL page-navigation loaded in the page's place, whose navigation it does not decide again.
@@ -50,7 +53,7 @@ std::string hostOf(const std::string &uri) {
 
 using Starting = Handler<ICoreWebView2NavigationStartingEventHandler, ICoreWebView2 *, ICoreWebView2NavigationStartingEventArgs *>;
 
-Starting *decide(Lock *lock, bool isMainFrame) {
+Starting *decide(const std::shared_ptr<Lock> &lock, bool isMainFrame) {
     return new Starting(IID_ICoreWebView2NavigationStartingEventHandler,
         [lock, isMainFrame](ICoreWebView2 *, ICoreWebView2NavigationStartingEventArgs *args) -> HRESULT {
             LPWSTR requested = nullptr;
@@ -59,7 +62,7 @@ Starting *decide(Lock *lock, bool isMainFrame) {
             if (isApproved(*lock, uri) || allows(*lock, uri)) return S_OK;
             BOOL followed = FALSE;
             args->get_IsUserInitiated(&followed);
-            const app::NavigationAnswer answer = app::decideNavigation(uri, isMainFrame, followed != FALSE, false);
+            const app::NavigationAnswer answer = app::decideNavigation(lock->webView, uri, isMainFrame, followed != FALSE, false);
             if (answer == app::NavigationAnswer::load) return S_OK;
             if (answer == app::NavigationAnswer::openOutside) openOutside(uri);
             args->put_Cancel(TRUE);
@@ -79,11 +82,11 @@ std::string realmOf(const std::string &challenge) {
 
 // A user's name and password a server asks for, which WebView2 would ask the app's user for itself: a cancel goes on
 // without them, so the page gets what the server answers to that. WebView2 tells no proxy's ask from a server's.
-void takeAuthentication(ICoreWebView2 *core) {
+void takeAuthentication(void *webView, ICoreWebView2 *core) {
     ICoreWebView2_10 *core10 = nullptr;
     if (FAILED(core->QueryInterface(IID_ICoreWebView2_10, reinterpret_cast<void **>(&core10)))) return;
     auto *asked = new Handler<ICoreWebView2BasicAuthenticationRequestedEventHandler, ICoreWebView2 *, ICoreWebView2BasicAuthenticationRequestedEventArgs *>(
-        IID_ICoreWebView2BasicAuthenticationRequestedEventHandler, [](ICoreWebView2 *, ICoreWebView2BasicAuthenticationRequestedEventArgs *args) -> HRESULT {
+        IID_ICoreWebView2BasicAuthenticationRequestedEventHandler, [webView](ICoreWebView2 *, ICoreWebView2BasicAuthenticationRequestedEventArgs *args) -> HRESULT {
             LPWSTR uri = nullptr;
             args->get_Uri(&uri);
             const std::string host = hostOf(take(uri));
@@ -98,7 +101,7 @@ void takeAuthentication(ICoreWebView2 *core) {
                 return S_OK;
             }
             args->AddRef();
-            const HttpAuthentication request = app::make<HttpAuthentication>(std::make_shared<app::StateOf<HttpAuthentication>>(host, realm, false,
+            const HttpAuthentication request = app::make<HttpAuthentication>(std::make_shared<app::StateOf<HttpAuthentication>>(webView, host, realm, false,
                 [args, response, deferral](std::optional<std::pair<std::string, std::string>> given) {
                     onMainThread([args, response, deferral, given] {
                         if (given) {
@@ -135,11 +138,11 @@ std::string reasonOf(COREWEBVIEW2_WEB_ERROR_STATUS status) {
 // A request whose server's certificate the system does not trust: one page-navigation trusts goes on, as the host's
 // later ones with the certificate do; one it refuses fails, without WebView2's own error page, which would let the
 // app's user go on.
-void takeCertificateErrors(ICoreWebView2 *core) {
+void takeCertificateErrors(void *webView, ICoreWebView2 *core) {
     ICoreWebView2_14 *core14 = nullptr;
     if (FAILED(core->QueryInterface(IID_ICoreWebView2_14, reinterpret_cast<void **>(&core14)))) return;
     auto *detected = new Handler<ICoreWebView2ServerCertificateErrorDetectedEventHandler, ICoreWebView2 *, ICoreWebView2ServerCertificateErrorDetectedEventArgs *>(
-        IID_ICoreWebView2ServerCertificateErrorDetectedEventHandler, [](ICoreWebView2 *, ICoreWebView2ServerCertificateErrorDetectedEventArgs *args) -> HRESULT {
+        IID_ICoreWebView2ServerCertificateErrorDetectedEventHandler, [webView](ICoreWebView2 *, ICoreWebView2ServerCertificateErrorDetectedEventArgs *args) -> HRESULT {
             LPWSTR requested = nullptr;
             args->get_RequestUri(&requested);
             const std::string uri = take(requested);
@@ -148,7 +151,8 @@ void takeCertificateErrors(ICoreWebView2 *core) {
             ICoreWebView2Deferral *deferral = nullptr;
             if (FAILED(args->GetDeferral(&deferral))) return S_OK;
             args->AddRef();
-            const CertificateError error = app::make<CertificateError>(std::make_shared<app::StateOf<CertificateError>>(uri, hostOf(uri), reasonOf(status), [args, deferral](bool isTrusted) {
+            const CertificateError error = app::make<CertificateError>(std::make_shared<app::StateOf<CertificateError>>(webView, uri, hostOf(uri), reasonOf(status),
+                [args, deferral](bool isTrusted) {
                 onMainThread([args, deferral, isTrusted] {
                     args->put_Action(isTrusted ? COREWEBVIEW2_SERVER_CERTIFICATE_ERROR_ACTION_ALWAYS_ALLOW : COREWEBVIEW2_SERVER_CERTIFICATE_ERROR_ACTION_CANCEL);
                     deferral->Complete();
@@ -169,7 +173,8 @@ void takeCertificateErrors(ICoreWebView2 *core) {
 
 void restrictNavigation(void *webView, std::vector<std::string> origins, std::function<void()> newPage) {
     ICoreWebView2 *core = coreWebView(webView);
-    auto *lock = new Lock{std::move(origins), std::move(newPage), {}};
+    // The webview's handlers hold its lock, which goes once WebView2 lets go of them.
+    const auto lock = std::make_shared<Lock>(Lock{webView, std::move(origins), std::move(newPage), {}});
     EventRegistrationToken token;
     Starting *top = decide(lock, true);
     core->add_NavigationStarting(top, &token);
@@ -185,7 +190,7 @@ void restrictNavigation(void *webView, std::vector<std::string> origins, std::fu
             BOOL followed = FALSE;
             args->get_IsUserInitiated(&followed);
             args->put_Handled(TRUE);
-            const app::NavigationAnswer answer = allows(*lock, uri) ? app::NavigationAnswer::refuse : app::decideNavigation(uri, true, followed != FALSE, true);
+            const app::NavigationAnswer answer = allows(*lock, uri) ? app::NavigationAnswer::refuse : app::decideNavigation(lock->webView, uri, true, followed != FALSE, true);
             if (answer == app::NavigationAnswer::load) {
                 lock->approved = uri;
                 sender->Navigate(wide(uri).c_str());
@@ -204,6 +209,6 @@ void restrictNavigation(void *webView, std::vector<std::string> origins, std::fu
         });
     core->add_ContentLoading(loading, &token);
     loading->Release();
-    takeAuthentication(core);
-    takeCertificateErrors(core);
+    takeAuthentication(webView, core);
+    takeCertificateErrors(webView, core);
 }

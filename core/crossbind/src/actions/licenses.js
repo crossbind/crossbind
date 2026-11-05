@@ -387,7 +387,7 @@ function appRuntimeRows(platform) {
             nativeVersion: WEBVIEW.version,
             sha256: WEBVIEW.sha256,
             sourceUrl: 'https://github.com/webview/webview',
-            licenseNotes: 'webview/webview, with the local patch @crossbind/core-app-host lists',
+            licenseNotes: 'webview/webview, with the local patches @crossbind/core-app-host lists',
             licenseText: textOf(path.join(hostRoot, 'third_party', 'webview', 'LICENSE')),
         }]),
         // A desktop app with app.updater alone has the host's updater, which checks updates with Monocypher.

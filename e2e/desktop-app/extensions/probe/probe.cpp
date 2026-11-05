@@ -43,6 +43,9 @@ std::atomic<int> starts{0};
 std::atomic<int> windows{0};
 std::atomic<bool> isStartFirst{false};
 std::atomic<bool> isAppWindow{false};
+// The windows the probe saw close, by their ids.
+std::mutex closedMutex;
+crossbind::Value::Array closedWindows;
 // The calls that wait for their cancel, and the cancels the probe heard of.
 std::mutex waitingMutex;
 std::vector<crossbind::Call> waiting;
@@ -188,6 +191,32 @@ void crossbind_extension_probe(crossbind::Registry &registry) {
         isAppWindow = window.id() != 0 && window.native() == crossbind::appWindow() && window.webView() == crossbind::appWebView();
 #endif
     });
+    registry.onWindowClosed([](const crossbind::Window &window) {
+        std::lock_guard<std::mutex> lock(closedMutex);
+        closedWindows.emplace_back(static_cast<double>(window.id()));
+    });
+    registry.function("probe.closedWindows", [](Call call) {
+        std::lock_guard<std::mutex> lock(closedMutex);
+        call.resolve(Value(closedWindows));
+    });
+    // Its events for every page that listens, for the page in front alone, for the calling page alone, and one it holds
+    // for the page in front that asked.
+    registry.function("probe.emitEvery", [events = registry.events()](Call call) {
+        events.emit("every");
+        call.resolve();
+    });
+    registry.function("probe.emitFront", [events = registry.events()](Call call) {
+        events.emitToFront("front");
+        call.resolve();
+    });
+    registry.function("probe.emitMine", [events = registry.events()](Call call) {
+        events.emit("mine", {}, call.page());
+        call.resolve();
+    });
+    registry.function("probe.holdLater", [events = registry.events()](Call call) {
+        events.hold("later", call.options());
+        call.resolve();
+    });
     registry.function("probe.lifecycle", [](Call call) {
         call.resolve(Value::Object{{"starts", starts.load()}, {"isStartFirst", isStartFirst.load()}, {"windows", windows.load()},
                                    {"isAppWindow", isAppWindow.load()}, {"appId", crossbind::appId()}});
@@ -243,11 +272,11 @@ void crossbind_extension_probe(crossbind::Registry &registry) {
         for (size_t i = 0; i < bytes.size(); i += 1) bytes[i] = static_cast<uint8_t>(i % 251);
         call.resolve(std::move(bytes));
     });
-    // The probe keeps the window open whenever its user closes it, as an app that stays in its tray does: the
-    // app.relaunch() that ends the run quits as app.quit() does, which asks it nothing.
-    registry.onClose([] {
+    // The probe keeps the first window open whenever its user closes it, as an app that stays in its tray does, and lets
+    // the others close: the app.relaunch() that ends the run quits as app.quit() does, which asks it nothing.
+    registry.onClose([](const crossbind::Window &window) {
         closes += 1;
-        return false;
+        return window.id() != 1;
     });
     registry.function("probe.closes", [](Call call) { call.resolve(closes.load()); });
     // The app's state before its user, which the probe hears of once the window has opened, and the quits asked of the

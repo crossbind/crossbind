@@ -38,7 +38,7 @@ export default defineConfig({ plugins: [viteCrossbindPlugin()] });
 
 | Command | What it does |
 |---|---|
-| `crossbind app dev` | Builds the host for this machine and opens the app on the dev server. An edit to the page reloads it; an edit to native code, or to what the page imports from it, rebuilds the host and opens the app again. The page's console shows in the terminal, and closing the window ends the session. |
+| `crossbind app dev` | Builds the host for this machine and opens the app on the dev server. An edit to the page reloads it; an edit to native code, or to what the page imports from it, rebuilds the host and opens the app again. The page's console shows in the terminal, and closing its last window ends the session. |
 | `crossbind app build` | Builds the page and the host and writes the app with what installs it (see [Installers](#installers)): `dist/<name>.app`, signed ad hoc or with a Developer ID (see [Signing a macOS app](#signing-a-macos-app)), and `dist/<name>.dmg` on macOS; `dist/<name>-linux-<arch>/`, the same as a `.tar.gz`, and its `.deb` on Linux. |
 | `crossbind app build -p linux` | Writes the Linux app for x64 and arm64, on a Mac as well: `dist/<name>-linux-x64/` and `dist/<name>-linux-arm64/`, each with its `.tar.gz` and `.deb`. A Linux app's development session runs on Linux. |
 | `crossbind app build -p windows` | Writes the Windows app for x64 and arm64, on a Mac or a Linux machine as well: `dist/<name>-win32-x64/` and `dist/<name>-win32-arm64/`, each with its `.zip` and `-setup.exe`. A Windows app's development session runs on Windows. |
@@ -128,6 +128,87 @@ leaves the app when there is none.
 
 An app that cannot start, for want of the WebView2 Runtime or of a file it carries, writes why to its output; a desktop
 app its user opened says so in a message box as well.
+
+## Windows
+
+A desktop page opens more windows of the app's own pages with `crossbind/app`'s `windows`, as an iPad page does where
+`app.ios.multipleWindows` lets it ([iOS](#ios)):
+
+```js
+import { events, windows } from 'crossbind/app';
+
+const { id, ignored } = await windows.open({ path: '/settings.html', name: 'settings', title: 'Settings', width: 480, height: 360 });
+events.on('window-closed', (closed) => {
+    if (closed.id === id) settingsClosed();
+});
+```
+
+A window opens in front with the page at its `path`, `/` by default, which may carry a query and a hash, and with these
+options beside it, its own, as `app.window`'s are the first window's:
+
+- `title`, `app.name` by default.
+- `width` and `height`, 1024 × 768 by default, `minWidth`, `minHeight`, `maxWidth` and `maxHeight`, the page's, in
+  whole pixels, with `resizable` and `fullscreen`, as `app.window` takes them; and `backgroundColor`, `app.window`'s by
+  default.
+- `x` and `y` together, the place of the window's frame from the top left of the main screen, without which it opens in
+  the middle of the screen.
+- `alwaysOnTop`, which keeps it above the other apps' windows.
+- `frame: false`, which takes its title bar and its buttons away.
+- `parent`, the id of a window it stays above, and minimizes and closes with; and `modal`, which with a parent makes it
+  a sheet of the parent's on macOS, and on Windows and Linux a window its parent takes no input under until it closes.
+- `name`, of the app's own: a name already open brings that window to the front, and opens no other.
+
+`open()` resolves with the window's `id` and the options its platform went without, `ignored`, as the window opens
+without them all the same: a Wayland compositor places a window and keeps it among the others itself, so `x`, `y` and
+`alwaysOnTop` go there; a macOS sheet stays where its parent shows it; and an iPad window takes its path, its title and
+its name alone. A path of another origin, an option it does not know, limits `app.window` would refuse and a modal
+window without a parent reject.
+
+`windows.set()` changes the page's own window, or the one of an id given first: its `title`, its sizes and limits, `x`
+and `y`, or `center`, which moves it to the middle of its screen, `resizable`, `alwaysOnTop` and `fullscreen`, and
+resolves with what it went without, as `open()` does, a Wayland window's `center` among them. `close()` closes a window
+as its user does, which an extension may keep open; `focus()` brings one to the front, restored if it was minimized;
+`minimize()` and `toggleMaximize()` do what they say. Each takes the id of a window, or none for the page's own.
+`windows.list()` gives the open windows, the oldest first, and `windows.current()` the page's own, each as
+`{ id, name, title, x, y, width, height, isMaximized, isMinimized, isFullscreen, isFocused }`. Every page hears of each
+window that opens and closes, as the events `window-opened` and `window-closed` of `{ id, name }`. The app's native code
+reaches each function by name with an extension's `invoke`, as `invoke("windows.open", ...)`, and names a window by its
+id, as a call of its own comes from no page's window.
+
+A window without a frame moves as its page lets it: its user drags it by an element of `data-crossbind-drag`, and a
+double click there maximizes or restores it, as on a title bar, but for a press on what takes one, as a button, a link
+or a field, or within an element of `data-crossbind-drag="false"`. `windows.startDrag()` moves it from the page's own
+mousedown of the primary button, while that is down.
+
+```html
+<header data-crossbind-drag>
+    <span>Report.txt</span>
+    <button id="minimize">–</button>
+    <button id="close">×</button>
+</header>
+```
+
+```js
+import { windows } from 'crossbind/app';
+
+document.querySelector('#minimize').addEventListener('click', () => windows.minimize());
+document.querySelector('#close').addEventListener('click', () => windows.close());
+```
+
+Every window's page reaches the app's one module and its C++ state, but holds its objects alone: another page's handle
+reaches none of them, and a page that goes, as its window closes or it reloads, frees what it held. The pages talk to
+each other as pages of one origin do, through `BroadcastChannel` and the `storage` event of `localStorage`.
+`window.open()` and a link of `target="_blank"` open no window of the app's: one of the app's own pages opens nowhere,
+but on Android, whose WebView loads it in the page's place, and one of another origin goes to `page-navigation`, as
+[Security](#security) tells.
+
+The app quits as its last window closes, on every desktop. iOS sizes, places and closes an app's windows itself: an
+iPhone shows one window of an app, so `windows.open()` rejects there; `set()` takes the title alone; `close()` of the
+last window rejects, asking no extension, one of a window in the background brings it to the front as it closes, as iOS
+lets a window in front alone go, and the app's window used last takes the front from one that closes, where iOS would
+show the Home Screen; and `minimize()`, `toggleMaximize()` and `startDrag()` reject. From iOS 17 the page of a window in
+the background runs on while the app does, as a desktop window's hidden page does. An Android app shows its activity's
+one, and rejects every function of `windows`.
 
 ## The icon
 
@@ -307,7 +388,7 @@ public key's pair stop `crossbind app build` before anything compiles. The host'
 
 ## The app's functions
 
-The page imports what the app's host does for it from `crossbind/app`. The app's C++ calls the same, but for
+The page imports what the app's host does for it from `crossbind/app`. The app's C++ calls the same, but for `windows`,
 `menu.set`, `tray`, `notification.show`, `app.launchUrls`, `app.launchArgs`, `app.setUserActivity`, `events.on` and
 `events.held`, through `<crossbind/app.h>`, which an app's own code finds as it builds, with `CROSSBIND_APP` defined:
 
@@ -337,14 +418,14 @@ std::string databasePath() { return crossbind::app::paths().data + "/notes.sqlit
 | `shell.revealInFolder(path)` | A file, selected, in the system's file manager, or on Linux without one its folder | ✓ | | |
 | `shell.trash(path)` | Moves a file or folder to the system's trash, and nothing where it has none | ✓ | | |
 | `app.paths()` | `{ data, cache, logs, resources }`, the app's own folders, made if missing, and the read-only one of the files `app.files` lists | ✓ | ✓ | ✓ |
-| `app.quit()` | Ends the app as closing its window does, without asking the extensions that may keep the window open | ✓ | | |
+| `app.quit()` | Ends the app as closing its last window does, without asking the extensions that may keep a window open | ✓ | | |
 | `app.requestQuit()` | Asks the extensions, as its user's Quit does, then ends the app as `app.quit()` does, unless one keeps it running | ✓ | | |
 | `app.relaunch()` | Ends the app as `app.quit()` does, then opens it anew with no link | ✓ | | |
 | `app.launchUrls()` | The links of `app.urlSchemes` that opened the app and have not reached the page yet; the page alone | ✓ | ✓ | ✓ |
 | `app.launchFiles()` | The files the system opened the app with that have not reached the page yet, as [Files](#files) tells; the page alone | ✓ | ✓ | ✓ |
 | `app.launchArgs()` | `{ args, cwd }`, the launch that started the app, as [One instance](#one-instance) tells, empty on a phone; the page alone | ✓ | ✓ | ✓ |
 | `app.setUserActivity({ type, userInfo, webpageUrl })` | Makes a user activity of `app.activityTypes` the app's current one, which its user's other devices continue, as [User activities](#user-activities) tells, or none with `null`; iOS, macOS and the page alone | ✓ | ✓ | |
-| `menu.set(menus)` | Sets the app's menus, whose clicks are the event `menu`; the page alone | ✓ | | |
+| `menu.set(menus)` | Sets the menus of the page's window, whose clicks are the event `menu` its page hears; the page alone | ✓ | | |
 | `menu.popup(items, { x, y })` | Opens a menu at the page's point, as a right click's: the id of the item clicked, or `null`; the page alone | ✓ | | |
 | `menu.setDock(items)` | The menu of a macOS app's Dock icon, whose clicks are the event `menu`; macOS and the page alone | ✓ | | |
 | `tray.set({ tooltip, menu })` | The app's icon in the menu bar, notification area or status tray, whose clicks are the events `tray` and `menu`; the page alone | ✓ | | |
@@ -433,7 +514,7 @@ and an error one throws reaches the page as an uncaught one. Their arguments arr
 arrays as copies; a pointer, such as the one a C callback gets for its buffer, may point at nothing by the time the
 page reads it. Native code may keep the function and call it again, and the page lets go of it once native code has.
 
-An event the app's C++ emits reaches the page's listeners of it, with the value its JSON text holds:
+An event the app's C++ emits reaches every page's listeners of it, with the value its JSON text holds:
 
 ```cpp
 crossbind::app::emitEvent("progress", "{\"done\":0.5}");
@@ -446,16 +527,23 @@ const stop = events.on('progress', ({ done }) => { progress.value = done; });
 ```
 
 `emitEvent` waits for nothing, so any thread may call it, and events of the module's thread keep their order among the
-calls of the page's functions. A page gets the events emitted once its first `events.on`, or the first function it
-passes, has reached the host: a call of the module it makes after either comes later. Text that is no JSON reaches no
-page, and the app's output says why. Both travel with the page's other messages, on every platform an app runs on.
+calls of the page's functions. A page gets the events of a name emitted once its `events.on` of the name has reached the
+host: a call of the module it makes after it comes later. Text that is no JSON reaches no page, and the app's output
+says why. Both travel with the page's other messages, on every platform an app runs on.
 
-An event the page must not miss, as what came before it listened, the app's C++ holds with `holdEvent`: the host keeps
-each until the page asks for the events of its name with `events.held()` since it loaded, then pushes the later ones
-while it listens. Each reaches the page once, and one a reload cut off waits for the page's next ask; the host keeps
-1,000 of a name at most. `events.held()` is no queue to poll: once the page has asked, the later events go to its
-listeners of the name, so listening first, then asking, misses none. One held before the module starts, as from an
-extension's entry, reaches no page.
+An event a page must not miss, as what came before it listened, the app's C++ holds with `holdEvent`: the host keeps
+each until a page asks for the events of its name with `events.held()` since it loaded, then pushes the later ones to
+the page in front that asked, of the window its user used last, while it listens. Each reaches one page once, and one a
+reload cut off waits for the next ask; the host keeps 1,000 of a name at most. `events.held()` is no queue to poll: once
+a page has asked, the later events go to its listeners of the name, so listening first, then asking, misses none. One
+held before the module starts, as from an extension's entry, reaches no page.
+
+With several windows, each of the host's events reaches the pages as what it tells says: a click of a window's menus
+reaches the page that window shows; a click of the tray or of the Dock's menu, a notification's tap, `second-instance`
+and the held `open-url`, `open-files`, `user-activity` and `shortcut-item` reach the page in front that listens, so
+that one page acts on each once; `drop` reaches the page the files were dropped on; and the rest reach every page that
+listens. `emitEvent` reaches every page that listens, as an extension's `emit()` does, which reaches one page as well,
+and `emitEventToFront` the page in front.
 
 ```cpp
 crossbind::app::holdEvent("tapped", "{\"id\":7}");
@@ -476,11 +564,11 @@ Standby may tell neither, and a Linux system without logind none.
 events.on('resume', () => reconnect());
 ```
 
-The page hears of the app becoming the active one, as its user switches to it or a phone brings it to the foreground,
-as the event `active`, and of another app taking its place, or a phone's being interrupted, by a call, a system alert or
-another app's picker, or going to the background, as `inactive`, both without a value. A Linux app's is its window's
-focus, which a dialog of its own takes as well. An extension hears the same through `onActive`, as
-[extensions.md](./extensions.md#the-native-side) tells.
+The page hears of the app becoming the active one, as its user switches to it or a phone brings it to the foreground, as
+the event `active`, and of another app taking its place, or a phone's being interrupted, by a call, a system alert or
+another app's picker, or going to the background, as `inactive`, both without a value. A Linux app is active while one
+of its windows has the focus, which a dialog of its own takes as well. An extension hears the same through `onActive`,
+as [extensions.md](./extensions.md#the-native-side) tells.
 
 A desktop page hears of the files its user drops on it as the event `drop`, of `{ paths, x, y }`: their absolute
 paths, which the page may then reach through `shell`'s functions, as what its user picked, and the point they were
@@ -494,7 +582,7 @@ events.on('drop', ({ paths }) => open(paths[0]));
 
 ## Menus
 
-The page sets the app's menus while it runs, and hears of their clicks as the event `menu`:
+The page sets its window's menus while it runs, and hears of their clicks as the event `menu`:
 
 ```js
 import { events, menu } from 'crossbind/app';
@@ -520,8 +608,9 @@ item is `{ label, id, accelerator, enabled, checked }`, a submenu `{ label, item
 standard menu, or a standard item by its role, which a label may rename: `undo`, `redo`, `cut`, `copy`, `paste` and
 `selectAll`, which keep the platform's keys, and `minimize`, `close` and `quit`, whose accelerator the page may change.
 A click of an item with an id is the event `menu` of `{ id }`, or of `{ id, checked }` for an item with `checked`,
-which the click turns over first; a standard item does what its role says, and the page hears nothing of it: `close`
-closes the window as its user does, which an extension may keep open, and `quit` asks to end the app as
+which the click turns over first, and reaches the page of the window whose menus they are; a standard item does what its
+role says, and the page hears nothing of it: `close` closes its window as its user does, which an extension may keep
+open, and `quit` asks to end the app as
 `app.requestQuit()` does, which an extension may refuse. An accelerator is a key with `CmdOrCtrl`, `Ctrl` or `Alt`, and
 maybe `Shift`, joined by `+`, as `CmdOrCtrl+Shift+O` is, or one of `F1` to `F12`, alone or with any of them. The key is
 a capital letter, a digit, a function key or one of `Enter`, `Escape`, `Tab`, `Space`, `Backspace`, `Delete`, `Up`,
@@ -529,14 +618,16 @@ a capital letter, a digit, a function key or one of `Enter`, `Escape`, `Tab`, `S
 is ⌘ on macOS and Ctrl elsewhere. A menu the page
 gets wrong fails before the host sees it, naming the item.
 
-Each call replaces the menus the last one set, so the page changes an item by setting them all again. On macOS they
-follow the app menu, which the app keeps with its ⌘H, ⌥⌘H and ⌘Q, in place of the Edit, View and Window menus it
-opens with: ⌘C, ⌘V, ⌘Z and ⌘A reach the page through `editMenu` or the editing items alone, and ⌘M and ⌘W through
-`windowMenu` or `minimize` and `close`. On Windows and Linux they are a bar in the window, above the page, which keeps
+Each call replaces the menus the window's page set last, so the page changes an item by setting them all again, and a
+reload keeps them. On macOS the menu bar shows the menus of the window in front after the app menu, which the app keeps
+with its ⌘H, ⌥⌘H and ⌘Q, in place of the Edit, View and Window menus it opens with, which a window whose page set none
+shows: ⌘C, ⌘V, ⌘Z and ⌘A reach the page through `editMenu` or the editing items alone, and ⌘M and ⌘W through
+`windowMenu` or `minimize` and `close`. On Windows and Linux they are a bar in their window, above the page, which keeps
 its size, as the window grows by the bar's height unless it fills the screen; `editMenu` and `windowMenu` are there the
-standard items of that platform's apps, and `menu.set([])` takes the bar away. iOS and Android apps have no menu bar,
-and `menu.set` rejects there. The event `menu` is the menus' and the [tray's](#tray-and-notifications) alone: the app's
-C++ sets neither, and the events it emits, one of which the page may set them on, go by other names.
+standard items of that platform's apps, and a window whose page set none has no bar, as `menu.set([])` takes it away.
+iOS and Android apps have no menu bar, and `menu.set` rejects there. The event `menu` is the menus' and the
+[tray's](#tray-and-notifications) alone: the app's C++ sets neither, and the events it emits, one of which the page may
+set them on, go by other names.
 
 A desktop page opens a menu of its own where its user right clicks, of the items a menu takes, and gets the id of the
 item clicked, or `null` when the menu closes without one:
@@ -555,7 +646,8 @@ a popup's clicks. `preventDefault()` keeps the webview's own menu away. iOS and 
 `menu.popup` rejects there.
 
 A macOS page sets the menu its Dock icon shows above the system's own items, of the tray's items, `{ label, id,
-enabled, checked }`, submenus and separators, whose clicks are the event `menu` as well:
+enabled, checked }`, submenus and separators, whose clicks are the event `menu` as well, for the page in front that
+listens:
 
 ```js
 await menu.setDock([{ label: 'New window', id: 'new-window' }]);
@@ -593,7 +685,8 @@ events.on('notification', () => showReport());
 
 The tray's menu takes the items of `menu.set` but for roles and accelerators: `{ label, id, enabled, checked }`, a
 submenu `{ label, items }` and `{ type: 'separator' }`. A click of an item with an id is the event `menu`, as one in the
-menus is, and turns an item with `checked` over first. The icon is the app's, from `app.icon`, or the system's for an app
+menus is, and turns an item with `checked` over first; it, and the event `tray`, reach the page in front that listens,
+of the window its user used last. The icon is the app's, from `app.icon`, or the system's for an app
 without one. The menu opens on a click on macOS, on a right click on Windows, and on Linux on the click its desktop
 opens menus on; a left or right click that opens none, as a left click does on Windows, is the event `tray`. `tray.set` again changes the tooltip and the menu of the same icon, `tray.remove()` takes the icon away,
 and the app takes it along as it quits. A Linux tray is a StatusNotifierItem, which the trays of KDE, Xfce, LXQt and
@@ -601,11 +694,12 @@ others show, and GNOME's with its AppIndicator extension, which Ubuntu's comes w
 rejects, saying so.
 
 `notification.show` answers once the system has taken the notification, and a click on it while the app runs is the
-event `notification`, without a value. macOS asks the app's user first, and the call rejects when they refuse, as it
-does in an executable run outside its bundle. On Windows it is a balloon of the tray's icon, which Windows 10 and later
-show as one of their notifications: without the page's tray, or after `tray.remove()`, an icon of the app's shows in the
-notification area until the notification goes, and its clicks tell the page nothing. A Linux app gives it to the desktop's notification server, with the body escaped for one that reads markup in it.
-iOS and Android apps have neither a tray nor these notifications yet, and both calls reject there.
+event `notification`, without a value, for the page in front that listens. macOS asks the app's user first, and the call
+rejects when they refuse, as it does in an executable run outside its bundle. On Windows it is a balloon of the tray's
+icon, which Windows 10 and later show as one of their notifications: without the page's tray, or after `tray.remove()`,
+an icon of the app's shows in the notification area until the notification goes, and its clicks tell the page nothing. A
+Linux app gives it to the desktop's notification server, with the body escaped for one that reads markup in it. iOS and
+Android apps have neither a tray nor these notifications yet, and both calls reject there.
 
 On iOS and macOS the host owns the system's notification center, whose notifications, pushes among them, reach the
 app's extensions, as [extensions.md](./extensions.md#notifications-and-push) tells: one that comes while the app is in
@@ -623,8 +717,9 @@ app: {
 
 A later launch, as when its user opens the app again, hands its arguments and the folder it was launched in to the
 instance that runs, and leaves with exit status 0 before it opens a window or starts the module; static initializers of
-the app's code, and its extensions' entries, run in it all the same. The instance brings its window to the front, restored if it was minimized, as
-far as the system lets it, and its page hears of the launch as the event `second-instance`:
+the app's code, and its extensions' entries, run in it all the same. The instance brings its window in front to the
+front, restored if it was minimized, as far as the system lets it, and its page in front that listens hears of the
+launch as the event `second-instance`:
 
 ```js
 import { events } from 'crossbind/app';
@@ -967,7 +1062,8 @@ delivers one ABI.
   other URL goes to the holder of `page-navigation` ([Navigation](./extensions.md#navigation)): the host's own loads
   the origins `app.navigation.load` lists, opens any other link the user follows in the default browser, and refuses
   any other navigation away. A page of another origin that loads gets no token, so it reaches neither the module's
-  channel nor the app's functions, nor any dialog or device of the app's, and no page opens a window of its own.
+  channel nor the app's functions, nor any dialog or device of the app's; and `window.open()` opens no window, for any
+  page.
 - The host gives the top frame of its page a token, and every message to the module and every call that travels as a
   `crossbind://` request carries it. Markup, such as an image, a frame from another origin and a sandboxed frame
   cannot read it, so none of them reaches the module. On macOS, iOS and Windows the channel also checks the sender's
@@ -1015,8 +1111,14 @@ app: {
     team: 'ABCDE12345',      // the Apple team that signs the app; XCODE_DEVELOPMENT_TEAM of ~/.crossbind.json without it
     encryption: false,       // whether the app uses encryption that export rules do not exempt
     privacy: { fileTimestamp: ['C617.1'] }, // Apple's reasons for the required reason API the app calls
+    ios: { multipleWindows: true },          // an iPad's user and page open more windows of the app
 },
 ```
+
+`app.ios.multipleWindows` lets an iPad's user open more windows of the app, as the system's New Window does, which shows
+the app's first page, and its page open more with `windows.open()` ([Windows](#windows)). Each window is a scene of the
+app's, which iOS sizes and places itself, and may let go of in the background and restore later with the page it
+showed, as a new page of the same path. An iPhone shows one window of an app, whatever the key says.
 
 Open `dist/<name>-ios/<name>.xcodeproj` in Xcode to run the app on a device or to archive it for TestFlight and the App
 Store, or let `crossbind app publish -p ios` archive and upload it (see [Publishing](#publishing)); Xcode signs it for
@@ -1634,7 +1736,16 @@ writes to logcat, under the tag `Crossbind`: the URL only on `localhost`, and th
   app signed with one took a bundle it signed and refused one the other signed and one signed ad hoc, and an app signed
   ad hoc took all three. On Windows the conformance runs in CI trust the build's throwaway key and check that an update
   without its signature is refused for want of it; a setup program by the same signer passing has not been run.
-- On the desktop, one window.
+- Several windows have been measured on macOS, on Linux under Xvfb without a window manager, and on an iPad Simulator
+  of iPadOS 27: a second window of another page of the app's, which reaches the module with objects of its own, talks
+  to the first through `BroadcastChannel` and the `storage` event, and hears the events for every page, for the page in
+  front and for one page as each says; and the app going on as each closes. On the desktop as well: the size a window
+  opened at and the one `set()` gave it, a modal window and one without a frame opening with their pages, and a
+  `startDrag()` with no press down moving nothing; on the iPad, a window closed in the background and one closed in
+  front, after which the first has the front. Windows builds them, and its conformance runs check them in CI. A
+  frameless window's move and its buttons, the look and the stacking of a modal window and of one above the others, the
+  place `x` and `y` give, and the menus of several windows have not been measured, nor has a Wayland compositor or an
+  iPad itself.
 - `app.window`'s place, limits and full screen have been measured on macOS, and on Linux under Xvfb with openbox, for a
   window that resizes and one that does not: an element's full screen, which Escape leaves, and `fullscreen: true`. A
   Wayland compositor places a window itself, and with WebKitGTK before 2.44 a window that opened full screen leaves it

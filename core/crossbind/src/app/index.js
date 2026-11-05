@@ -1,8 +1,8 @@
 // What an app's host does for its page: the dialogs that pick files or show a message, opening an address or a file
-// outside the app, the app's folders, quitting, its menus, its tray icon and notifications, the events of the app's
-// native code and a desktop app's updates. Each call goes to the host of an app (target.runtimeEnv: 'app'); in any
+// outside the app, the app's folders, quitting, its windows, its menus, its tray icon and notifications, the events of
+// the app's native code and a desktop app's updates. Each call goes to the host of an app (target.runtimeEnv: 'app'); in any
 // other build it rejects, or events.on throws. The app's native code calls the same through <crossbind/app.h>, but for
-// the menus, the tray, notifications and events.on.
+// the windows, the menus, the tray, notifications and events.on.
 
 const OPEN = { title: 'string', defaultPath: 'string', filters: 'filters', directory: 'boolean', multiple: 'boolean' };
 const SAVE = { title: 'string', defaultPath: 'string', defaultName: 'string', filters: 'filters' };
@@ -192,6 +192,72 @@ function checkedActivity(activity) {
     return activity;
 }
 
+// A window's options, as windows.open() takes them, and those windows.set() changes: sizes and places in logical pixels.
+// A window opens in the middle of the screen without x and y, and set() moves one there with center.
+const WINDOW_SIZES = ['width', 'height', 'minWidth', 'minHeight', 'maxWidth', 'maxHeight'];
+const WINDOW_SHARED = {
+    title: 'string', width: 'number', height: 'number', x: 'number', y: 'number', minWidth: 'number', minHeight: 'number',
+    maxWidth: 'number', maxHeight: 'number', resizable: 'boolean', alwaysOnTop: 'boolean', fullscreen: 'boolean',
+};
+const WINDOW_SET = { ...WINDOW_SHARED, center: 'boolean' };
+const WINDOW_OPEN = {
+    ...WINDOW_SHARED, path: 'string', name: 'string', backgroundColor: 'string', frame: 'boolean', parent: 'number', modal: 'boolean',
+};
+const MAX_WINDOW_SIZE = 16384;
+const MAX_WINDOW_PLACE = 1000000;
+// The size a window opens at without one.
+const WINDOW_SIZE = { width: 1024, height: 768 };
+const COLOR = /^#[0-9a-f]{6}$/i;
+
+const isWindowId = (id) => Number.isSafeInteger(id) && id >= 1;
+
+function checkedWindow(name, options, kinds) {
+    checked(name, options, kinds);
+    const least = name === 'windows.set' ? 0 : 1;
+    for (const key of WINDOW_SIZES) {
+        const size = options[key];
+        // A limit of 0 that windows.set() gives takes it away.
+        const isFitting = Number.isInteger(size) && size >= ((key === 'width' || key === 'height') ? 1 : least) && size <= MAX_WINDOW_SIZE;
+        if (size !== undefined && !isFitting) throw new TypeError(`crossbind: ${name}'s ${key} is no whole number of pixels up to ${MAX_WINDOW_SIZE}.`);
+    }
+    for (const key of ['x', 'y']) {
+        const place = options[key];
+        if (place !== undefined && !(Number.isInteger(place) && Math.abs(place) <= MAX_WINDOW_PLACE)) {
+            throw new TypeError(`crossbind: ${name}'s ${key} is no whole number of pixels from -${MAX_WINDOW_PLACE} to ${MAX_WINDOW_PLACE}.`);
+        }
+    }
+    if ((options.x === undefined) !== (options.y === undefined)) throw new TypeError(`crossbind: ${name} takes x and y together.`);
+    const { path, backgroundColor, parent } = options;
+    if (path !== undefined && (!path.startsWith('/') || path.startsWith('//') || path.split(/[?#]/, 1)[0].split('/').some((part) => DOT_PART.test(part) || part.includes('\\')))) {
+        throw new TypeError(`crossbind: ${name}'s path ${JSON.stringify(path)} is no path of the app's own pages, as /settings.html is.`);
+    }
+    if (backgroundColor !== undefined && !COLOR.test(backgroundColor)) throw new TypeError(`crossbind: ${name}'s backgroundColor is no color of the form #rrggbb.`);
+    if (parent !== undefined && !isWindowId(parent)) throw new TypeError(`crossbind: ${name}'s parent is no window's id.`);
+    if (options.modal && parent === undefined) throw new TypeError(`crossbind: ${name} opens a modal window above a parent: give it parent, the id of a window.`);
+    if (name === 'windows.open') checkedLimits(options);
+    return options;
+}
+
+// The limits of a window that opens, as app.window takes them: those of one that resizes, around the size it opens at.
+function checkedLimits(options) {
+    const limits = ['minWidth', 'minHeight', 'maxWidth', 'maxHeight'].filter((key) => options[key] !== undefined);
+    if (options.resizable === false && limits.length > 0) {
+        throw new TypeError(`crossbind: windows.open's ${limits.join(', ')} limit a window that resizes: drop them, or leave resizable true.`);
+    }
+    for (const [size, side] of [['width', 'Width'], ['height', 'Height']]) {
+        const opensAt = options[size] ?? WINDOW_SIZE[size];
+        if (options[`min${side}`] > opensAt) throw new TypeError(`crossbind: windows.open's min${side} is above the ${size} the window opens at, ${opensAt}.`);
+        if (options[`max${side}`] < opensAt) throw new TypeError(`crossbind: windows.open's max${side} is below the ${size} the window opens at, ${opensAt}.`);
+    }
+}
+
+// The window a call names by its id, or with none the calling page's own.
+function windowOf(name, id) {
+    if (id === undefined) return {};
+    if (!isWindowId(id)) throw new TypeError(`crossbind: ${name} takes the id of a window, as windows.open() gives it, or none for the page's own.`);
+    return { id };
+}
+
 function checkedNotification(options) {
     checked('notification.show', options, NOTIFICATION);
     if (!options.title) throw new TypeError('crossbind: notification.show takes a title.');
@@ -246,6 +312,30 @@ export const app = {
     // Makes this user activity the app's current one on iOS and macOS, for its user's other devices to continue, as
     // Handoff does: { type, userInfo, webpageUrl }, its type one of app.activityTypes. null makes none current.
     setUserActivity: async (activity) => call('activities.set', checkedActivity(activity)),
+};
+
+export const windows = {
+    // Opens a window of the app's own page at path, '/' by default, in front: { id, ignored }, its id and the options the
+    // platform could not honour, which it opens without. A name already open brings that window to the front instead.
+    // The other functions name a window by its id, and with none the calling page's own.
+    open: async (options = {}) => call('windows.open', checkedWindow('windows.open', options, WINDOW_OPEN)),
+    // Changes an open window: { ignored }, as open() gives it.
+    set: async (id, options) => {
+        const [named, changes] = typeof id === 'object' && options === undefined ? [undefined, id] : [id, options];
+        return call('windows.set', { ...checkedWindow('windows.set', changes, WINDOW_SET), ...windowOf('windows.set', named) });
+    },
+    // Closes a window as its user does, which an extension may keep open.
+    close: async (id) => call('windows.close', windowOf('windows.close', id)),
+    // Brings a window to the front, restored if it was minimized.
+    focus: async (id) => call('windows.focus', windowOf('windows.focus', id)),
+    minimize: async (id) => call('windows.minimize', windowOf('windows.minimize', id)),
+    toggleMaximize: async (id) => call('windows.toggleMaximize', windowOf('windows.toggleMaximize', id)),
+    // Moves the page's window with the pointer, as its title bar does, from a mousedown of the primary button.
+    startDrag: async () => call('windows.startDrag', {}),
+    // The open windows, the oldest first, and the page's own: { id, name, title, x, y, width, height, isMaximized,
+    // isMinimized, isFullscreen, isFocused }.
+    list: async () => call('windows.list', {}),
+    current: async () => call('windows.current', {}),
 };
 
 export const menu = {

@@ -20,8 +20,9 @@ Core &start(const char *devUrl, const Launch *launch = nullptr);
 void relaunchApp();
 // Ends the app for this reason, which its output gets, and its user as well when nobody reads that output.
 [[noreturn]] void fail(Core &core, const char *devUrl, const std::string &reason);
-// Readies a webview for the page, and returns the URL it opens first. An Android app's activity does this in Java.
-std::string attach(Core &core, void *webView, const char *devUrl);
+// Readies the webview of the window of this id for the page, and returns the URL it opens first. An Android app's
+// activity does this in Java.
+std::string attach(Core &core, void *webView, const char *devUrl, uint64_t window);
 // The scheme and authority of a URL: the origin a webview names a page by.
 std::string originOf(const std::string &url);
 // A link of the app's schemes the system opened it with, or on iOS and Android one of app.links, on any thread: the

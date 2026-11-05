@@ -420,7 +420,7 @@ export const HOST_ROLES = {
 };
 // The names crossbind keeps for itself, which no extension crossbind.config.js lists takes: its roles, the names of the
 // host's own of this contract, those of the app's own functions and events, and every name of a page's request.
-const KEPT_NAMES = new Set([...Object.keys(HOST_ROLES), ...Object.values(HOST_ROLES), 'app', 'events', 'crossbind']);
+const KEPT_NAMES = new Set([...Object.keys(HOST_ROLES), ...Object.values(HOST_ROLES), 'app', 'events', 'windows', 'crossbind']);
 const isKeptName = (name) => KEPT_NAMES.has(name) || name.startsWith('page-');
 
 // The roles of the host's a listed extension takes, each once: one, or a list of them.

@@ -80,6 +80,92 @@ export declare const app: {
     setUserActivity(activity: UserActivity | null): Promise<void>;
 };
 
+/** What windows.set() changes of an open window: sizes and places in logical pixels, a page's size without the frame, and x and y the frame's place from the top left of the main screen, given together. A limit of 0 takes it away. */
+export interface WindowChanges {
+    title?: string;
+    width?: number;
+    height?: number;
+    x?: number;
+    y?: number;
+    /** Moves the window to the middle of its screen. */
+    center?: boolean;
+    minWidth?: number;
+    minHeight?: number;
+    maxWidth?: number;
+    maxHeight?: number;
+    resizable?: boolean;
+    /** Keeps the window above the other apps' windows. */
+    alwaysOnTop?: boolean;
+    fullscreen?: boolean;
+}
+
+/** What a window opens with: app.window's options, beside the page it loads and its name. Without x and y it opens in the middle of the screen. */
+export interface WindowOptions extends Omit<WindowChanges, 'center' | 'minWidth' | 'minHeight' | 'maxWidth' | 'maxHeight'> {
+    /** The app's own page, as /settings.html?tab=2: '/' by default. */
+    path?: string;
+    /** A name of the app's own: a window of a name already open comes to the front, and no other opens. */
+    name?: string;
+    minWidth?: number;
+    minHeight?: number;
+    maxWidth?: number;
+    maxHeight?: number;
+    /** What the window shows until the page paints, as #rrggbb: app.window's by default. */
+    backgroundColor?: string;
+    /** false opens a window without a title bar and its buttons, which the page moves with data-crossbind-drag or windows.startDrag(). */
+    frame?: boolean;
+    /** The id of the window it stays above, and closes with. */
+    parent?: number;
+    /** With a parent: a sheet of the parent's on macOS, and on Windows and Linux a window the parent takes no input under until it closes. */
+    modal?: boolean;
+}
+
+/** An open window, as windows.list() tells of it. */
+export interface WindowState {
+    id: number;
+    name: string | null;
+    title: string;
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+    isMaximized: boolean;
+    isMinimized: boolean;
+    isFullscreen: boolean;
+    isFocused: boolean;
+}
+
+/** What windows.open() and windows.set() answer: the window's id, and the options the platform could not honour, which it did without, as Wayland's x and y. */
+export interface WindowOpened {
+    id: number;
+    ignored: string[];
+}
+
+/** What the events window-opened and window-closed carry. */
+export interface WindowEvent {
+    id: number;
+    name: string | null;
+}
+
+export declare const windows: {
+    /** Opens a window of the app's own page, in front, on the desktop and an iPad whose app.ios.multipleWindows is true; an iPhone and Android reject. */
+    open(options?: WindowOptions): Promise<WindowOpened>;
+    /** Changes the window of this id, or the page's own without one. */
+    set(changes: WindowChanges): Promise<{ ignored: string[] }>;
+    set(id: number, changes: WindowChanges): Promise<{ ignored: string[] }>;
+    /** Closes the window of this id, or the page's own without one, as its user does: an extension may keep it open. The app quits as its last window closes. */
+    close(id?: number): Promise<void>;
+    /** Brings the window of this id, or the page's own without one, to the front, restored if it was minimized. */
+    focus(id?: number): Promise<void>;
+    minimize(id?: number): Promise<void>;
+    toggleMaximize(id?: number): Promise<void>;
+    /** Moves the page's window with the pointer, as its title bar does, from a mousedown of the primary button. */
+    startDrag(): Promise<void>;
+    /** The open windows, the oldest first. */
+    list(): Promise<WindowState[]>;
+    /** The page's own window. */
+    current(): Promise<WindowState>;
+};
+
 /** A key with CmdOrCtrl, Ctrl or Alt and maybe Shift, joined by +, as CmdOrCtrl+Shift+O is, or F1–F12, alone or with any of them. The key is A–Z, 0–9, F1–F12, Enter, Escape, Tab, Space, Backspace, Delete, Up, Down, Left, Right, Home, End, PageUp, PageDown, Plus, Minus, Comma or Period. */
 export type Accelerator = string;
 
@@ -212,6 +298,10 @@ export declare const events: {
     on(name: 'notification', listener: () => void): () => void;
     /** Calls listener with the files of each drop of the app's user's on the page, on the desktop, as the page's own drop event goes on, until the function it returns is called. The page may reach each path through shell's functions, as one its user picked. */
     on(name: 'drop', listener: (drop: PageDrop) => void): () => void;
+    /** Calls listener as each window of the app's opens, until the function it returns is called. */
+    on(name: 'window-opened', listener: (window: WindowEvent) => void): () => void;
+    /** Calls listener as each window of the app's closes, until the function it returns is called. */
+    on(name: 'window-closed', listener: (window: WindowEvent) => void): () => void;
     /** Calls listener with the value of each event of this name the app's native code emits from now on, until the function it returns is called. */
     on(name: string, listener: (value: unknown) => void): () => void;
     /** The links of app.urlSchemes the host held for the page, which came before it asked since it loaded, as app.launchUrls() gives their addresses. */

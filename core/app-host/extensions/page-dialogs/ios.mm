@@ -8,9 +8,9 @@ namespace {
 
 NSString *ns(const std::string &text) { return [NSString stringWithUTF8String:text.c_str()] ?: @""; }
 
-// Over what the app's window shows on top, if it shows anything.
-void presentOnTop(UIViewController *controller) {
-    UIViewController *top = ((__bridge UIWindow *)crossbind::appWindow()).rootViewController;
+// Over what the page's window shows on top, if it shows anything.
+void presentOnTop(UIViewController *controller, const PageDialog &dialog) {
+    UIViewController *top = ((__bridge UIWindow *)windowOf(dialog)).rootViewController;
     while (top.presentedViewController) top = top.presentedViewController;
     if (top && !top.isBeingDismissed) [top presentViewController:controller animated:YES completion:nil];
 }
@@ -33,5 +33,5 @@ void showPageDialog(PageDialog dialog) {
     [alert addAction:[UIAlertAction actionWithTitle:@"OK" style:UIAlertActionStyleDefault handler:^(UIAlertAction *) {
                dialog.accept(kind == PageDialog::Kind::prompt ? (shown.textFields.firstObject.text.UTF8String ?: "") : "");
            }]];
-    presentOnTop(alert);
+    presentOnTop(alert, dialog);
 }

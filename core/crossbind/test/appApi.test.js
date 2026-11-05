@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, test, vi } from 'vitest';
 import {
-    app, dialog, events, invoke, menu, notification, routeUrl, shell, tray, updater,
+    app, dialog, events, invoke, menu, notification, routeUrl, shell, tray, updater, windows,
 } from '../src/app/index.js';
 
 // The host of an app, as page.js hands it the page's calls.
@@ -367,6 +367,64 @@ describe("crossbind/app's tray and notifications", () => {
         await expect(tray.set({ menu: [{ label: 'View', id: 'view', items: [] }] })).rejects.toThrow("tray.set's menu[0] is a menu, which takes a label and items alone");
         await expect(notification.show({})).rejects.toThrow('notification.show takes a title');
         await expect(notification.show({ title: 'Saved', icon: 'x.png' })).rejects.toThrow('notification.show takes title, body; icon is none of them');
+        expect(host).not.toHaveBeenCalled();
+    });
+});
+
+describe("crossbind/app's windows", () => {
+    test('go to the host as the page gives them, the page\'s own window without an id', async () => {
+        inApp();
+        host.mockResolvedValueOnce({ id: 2, ignored: [] });
+
+        await expect(windows.open({
+            path: '/settings.html?tab=2', title: 'Settings', name: 'settings', width: 480, height: 360, x: -40, y: 20, alwaysOnTop: true, frame: false,
+            parent: 1, modal: true, backgroundColor: '#1e1e1e',
+        })).resolves.toEqual({ id: 2, ignored: [] });
+        expect(host).toHaveBeenLastCalledWith('windows.open', expect.objectContaining({ path: '/settings.html?tab=2', parent: 1, modal: true }));
+        await windows.open();
+        expect(host).toHaveBeenLastCalledWith('windows.open', {});
+        await windows.set({ title: 'Report.txt' });
+        expect(host).toHaveBeenLastCalledWith('windows.set', { title: 'Report.txt' });
+        await windows.set(2, { width: 800, height: 600, center: true, maxWidth: 0 });
+        expect(host).toHaveBeenLastCalledWith('windows.set', { width: 800, height: 600, center: true, maxWidth: 0, id: 2 });
+        await windows.close();
+        expect(host).toHaveBeenLastCalledWith('windows.close', {});
+        for (const name of ['close', 'focus', 'minimize', 'toggleMaximize']) {
+            await windows[name](3);
+            expect(host).toHaveBeenLastCalledWith(`windows.${name}`, { id: 3 });
+        }
+        for (const name of ['startDrag', 'list', 'current']) {
+            await windows[name]();
+            expect(host).toHaveBeenLastCalledWith(`windows.${name}`, {});
+        }
+    });
+
+    test('are refused before the host sees them where the host could not honour them, naming what is wrong', async () => {
+        inApp();
+
+        await expect(windows.open({ url: 'https://example.com' })).rejects.toThrow('windows.open takes title, width');
+        await expect(windows.open({ path: 'https://example.com/' })).rejects.toThrow('is no path of the app\'s own pages');
+        await expect(windows.open({ path: '//example.com/' })).rejects.toThrow('is no path of the app\'s own pages');
+        await expect(windows.open({ path: '/a/../../b.html' })).rejects.toThrow('is no path of the app\'s own pages');
+        await expect(windows.open({ path: '/a/%2e%2e/b.html' })).rejects.toThrow('is no path of the app\'s own pages');
+        await expect(windows.open({ width: 0 })).rejects.toThrow("windows.open's width is no whole number of pixels up to 16384");
+        await expect(windows.open({ height: 12.5 })).rejects.toThrow("windows.open's height is no whole number");
+        await expect(windows.open({ minWidth: 0 })).rejects.toThrow("windows.open's minWidth is no whole number");
+        await expect(windows.open({ x: 10 })).rejects.toThrow('windows.open takes x and y together');
+        await expect(windows.open({ x: 1.5, y: 2 })).rejects.toThrow("windows.open's x is no whole number of pixels");
+        await expect(windows.open({ x: 0, y: -1000001 })).rejects.toThrow("windows.open's y is no whole number of pixels from -1000000 to 1000000");
+        await expect(windows.open({ center: true })).rejects.toThrow('windows.open takes title, width');
+        await expect(windows.open({ resizable: false, minWidth: 300 })).rejects.toThrow("windows.open's minWidth limit a window that resizes");
+        await expect(windows.open({ width: 400, minWidth: 500 })).rejects.toThrow("windows.open's minWidth is above the width the window opens at, 400");
+        await expect(windows.open({ maxHeight: 600 })).rejects.toThrow("windows.open's maxHeight is below the height the window opens at, 768");
+        await expect(windows.open({ modal: true })).rejects.toThrow('give it parent, the id of a window');
+        await expect(windows.open({ parent: 0 })).rejects.toThrow("windows.open's parent is no window's id");
+        await expect(windows.open({ backgroundColor: 'red' })).rejects.toThrow('is no color of the form #rrggbb');
+        await expect(windows.open({ frame: 'no' })).rejects.toThrow("windows.open's frame is no boolean");
+        await expect(windows.set(1, { path: '/x.html' })).rejects.toThrow('windows.set takes title, width');
+        await expect(windows.set({ width: -1 })).rejects.toThrow("windows.set's width is no whole number");
+        await expect(windows.focus(0)).rejects.toThrow('windows.focus takes the id of a window');
+        await expect(windows.close('main')).rejects.toThrow('windows.close takes the id of a window');
         expect(host).not.toHaveBeenCalled();
     });
 });

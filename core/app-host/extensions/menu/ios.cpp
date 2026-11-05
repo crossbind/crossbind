@@ -5,11 +5,13 @@
 
 namespace crossbind::menu {
 
-void setMenu(std::vector<MenuItem>, MenuClicked, std::function<void(Failure)>) { throw std::runtime_error("crossbind: an iOS app has no menu bar"); }
+void setMenu(uint64_t, std::vector<MenuItem>, MenuClicked, std::function<void(Failure)>) { throw std::runtime_error("crossbind: an iOS app has no menu bar"); }
 
-void popupMenu(std::vector<MenuItem>, double, double, std::function<void(Failure, std::optional<std::string>)>) {
+void popupMenu(uint64_t, std::vector<MenuItem>, double, double, std::function<void(Failure, std::optional<std::string>)>) {
     throw std::runtime_error("crossbind: an iOS app opens no menu of the page's");
 }
+
+void dropMenus(uint64_t) {}
 
 void setDockMenu(std::vector<MenuItem>, MenuClicked, std::function<void(Failure)>) {
     throw std::runtime_error("crossbind: a macOS app alone has a Dock menu");

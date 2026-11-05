@@ -5,7 +5,7 @@
 #include <string>
 #include <vector>
 
-// The host's page-files on macOS: a file input's picker, as a sheet on the app's window, which takes folders where the
+// The host's page-files on macOS: a file input's picker, as a sheet on the page's window, which takes folders where the
 // input does. WKWebView tells none of the input's accept types.
 void crossbind_extension_page_files(crossbind::Registry &registry) {
     registry.onFileInput([](crossbind::FileInput input) {
@@ -22,7 +22,8 @@ void crossbind_extension_page_files(crossbind::Registry &registry) {
             for (NSURL *url in panel.URLs) paths.emplace_back(url.path.UTF8String ?: "");
             input.pick(paths);
         };
-        NSWindow *window = (__bridge NSWindow *)crossbind::appWindow();
+        const std::optional<crossbind::Window> open = crossbind::windowOf(input.page().windowId());
+        NSWindow *window = (__bridge NSWindow *)(open ? open->native() : crossbind::appWindow());
         if (window) {
             [panel beginSheetModalForWindow:window completionHandler:done];
         } else {

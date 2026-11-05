@@ -56,7 +56,7 @@ gboolean onScriptDialog(WebKitWebView *view, WebKitScriptDialog *dialog, gpointe
     const char *text = kind == PageDialog::Kind::prompt ? webkit_script_dialog_prompt_get_default_text(dialog) : nullptr;
     webkit_script_dialog_ref(dialog);
     const bool isLeft = crossbind::app::askPageDialog(crossbind::app::make<PageDialog>(std::make_shared<crossbind::app::StateOf<PageDialog>>(
-        kind, webkit_script_dialog_get_message(dialog), text ? text : "",
+        view, kind, webkit_script_dialog_get_message(dialog), text ? text : "",
         [dialog, kind](std::optional<std::string> answer) {
             if (kind == PageDialog::Kind::confirm) webkit_script_dialog_confirm_set_confirmed(dialog, answer.has_value());
             // A prompt without a text answers null.
@@ -69,14 +69,14 @@ gboolean onScriptDialog(WebKitWebView *view, WebKitScriptDialog *dialog, gpointe
     return !isLeft;
 }
 
-gboolean onFileChooser(WebKitWebView *, WebKitFileChooserRequest *request, gpointer) {
+gboolean onFileChooser(WebKitWebView *view, WebKitFileChooserRequest *request, gpointer) {
     std::vector<std::string> accept;
     if (const gchar *const *types = webkit_file_chooser_request_get_mime_types(request)) {
         for (; *types; ++types) accept.emplace_back(*types);
     }
     g_object_ref(request);
     const bool isLeft = crossbind::app::askFileInput(crossbind::app::make<FileInput>(std::make_shared<crossbind::app::StateOf<FileInput>>(
-        webkit_file_chooser_request_get_select_multiple(request), false, std::move(accept),
+        view, webkit_file_chooser_request_get_select_multiple(request), false, std::move(accept),
         [request](std::optional<std::vector<std::string>> paths) {
             if (paths) {
                 std::vector<const gchar *> files;
@@ -125,7 +125,8 @@ gboolean onPermissionRequest(WebKitWebView *webView, WebKitPermissionRequest *re
     const char *uri = webkit_web_view_get_uri(webView);
     // WebKitGTK denies what the owner leaves it.
     crossbind::app::askPagePermission(
-        crossbind::app::pagePermission(kindsOf(request), crossbind::app::originOf(uri ? uri : ""), [request](crossbind::app::PermissionAnswer answer) {
+        crossbind::app::pagePermission(crossbind::app::pageOf(webView), kindsOf(request), crossbind::app::originOf(uri ? uri : ""),
+            [request](crossbind::app::PermissionAnswer answer) {
             if (answer == crossbind::app::PermissionAnswer::allow) webkit_permission_request_allow(request);
             else webkit_permission_request_deny(request);
             g_object_unref(request);

@@ -15,11 +15,13 @@
 namespace crossbind::menu {
 namespace {
 
-GtkWidget *bar = nullptr;
-GtkAccelGroup *barAccelerators = nullptr;
-// What the bar adds to the page's height.
-int menuBarHeight = 0;
-// The webview's last button press, which a popup opens from, as Wayland asks of one, and when it came: a press too old
+// Each window's bar, by the window's id, and the accelerators that come with it.
+struct Bar {
+    GtkWidget *bar = nullptr;
+    GtkAccelGroup *accelerators = nullptr;
+};
+std::map<uint64_t, Bar> bars;
+// The webviews' last button press, which a popup opens from, as Wayland asks of one, and when it came: a press too old
 // for a grab, as a contextmenu of the keyboard follows none, gives way to none.
 GdkEvent *lastPress = nullptr;
 gint64 lastPressTime = 0;
@@ -27,12 +29,10 @@ constexpr gint64 FRESH_PRESS_US = 1000000;
 // Whether a popup of the page's shows, beside which the page opens none.
 bool isPopupOpen = false;
 
-GtkWindow *window() { return GTK_WINDOW(appWindow()); }
-
-GtkWidget *webView() { return static_cast<GtkWidget *>(appWebView()); }
-
-// What a click of an item does: one of the page's tells its menu's owner its id, a standard one does what its role says.
+// What a click of an item does: one of the page's tells its menu's owner its id, a standard one does what its role says,
+// to the window whose menus it is in.
 struct Action {
+    uint64_t window;
     std::string id;
     std::string role;
     MenuClicked clicked;
@@ -81,27 +81,31 @@ guint keyOf(const Accelerator &accelerator) {
     return named->second;
 }
 
-void runRole(const std::string &role) {
-    if (const auto command = EDITING_COMMANDS.find(role); command != EDITING_COMMANDS.end()) {
-        if (webView()) webkit_web_view_execute_editing_command(WEBKIT_WEB_VIEW(webView()), command->second);
-    } else if (window() && role == "minimize") {
-        gtk_window_iconify(window());
-    } else if (role == "quit") {
+void runRole(uint64_t window, const std::string &role) {
+    if (role == "quit") {
         app::requestQuit();
-    } else if (window()) {
-        gtk_window_close(window());
+        return;
+    }
+    const std::optional<Window> open = windowOf(window);
+    if (!open) return;
+    if (const auto command = EDITING_COMMANDS.find(role); command != EDITING_COMMANDS.end()) {
+        webkit_web_view_execute_editing_command(WEBKIT_WEB_VIEW(open->webView()), command->second);
+    } else if (role == "minimize") {
+        gtk_window_iconify(GTK_WINDOW(open->native()));
+    } else {
+        gtk_window_close(GTK_WINDOW(open->native()));
     }
 }
 
 void activated(GtkMenuItem *item, gpointer data) {
     const Action &action = *static_cast<Action *>(data);
     if (!action.role.empty()) {
-        runRole(action.role);
+        runRole(action.window, action.role);
         return;
     }
     std::optional<bool> checked;
     if (GTK_IS_CHECK_MENU_ITEM(item)) checked = gtk_check_menu_item_get_active(GTK_CHECK_MENU_ITEM(item)) != FALSE;
-    if (action.clicked && !action.id.empty()) action.clicked(action.id, checked);
+    if (action.clicked && !action.id.empty()) action.clicked(action.window, action.id, checked);
 }
 
 void connect(GtkWidget *item, Action action) {
@@ -109,25 +113,25 @@ void connect(GtkWidget *item, Action action) {
                           [](gpointer data, GClosure *) { delete static_cast<Action *>(data); }, static_cast<GConnectFlags>(0));
 }
 
-void addItem(GtkMenuShell *shell, const MenuItem &page, GtkAccelGroup *accelerators, const MenuClicked &clicked);
+void addItem(GtkMenuShell *shell, const MenuItem &page, uint64_t window, GtkAccelGroup *accelerators, const MenuClicked &clicked);
 
 // Each item goes in its shell before what may throw, so the bar destroys it with itself.
-void addMenu(GtkMenuShell *shell, const std::string &label, const std::vector<MenuItem> &items, GtkAccelGroup *accelerators,
+void addMenu(GtkMenuShell *shell, const std::string &label, const std::vector<MenuItem> &items, uint64_t window, GtkAccelGroup *accelerators,
              const MenuClicked &clicked) {
     GtkWidget *holder = gtk_menu_item_new_with_label(label.c_str());
     GtkWidget *menu = gtk_menu_new();
     gtk_menu_item_set_submenu(GTK_MENU_ITEM(holder), menu);
     gtk_menu_shell_append(shell, holder);
-    for (const auto &child : items) addItem(GTK_MENU_SHELL(menu), child, accelerators, clicked);
+    for (const auto &child : items) addItem(GTK_MENU_SHELL(menu), child, window, accelerators, clicked);
 }
 
-void addItem(GtkMenuShell *shell, const MenuItem &page, GtkAccelGroup *accelerators, const MenuClicked &clicked) {
+void addItem(GtkMenuShell *shell, const MenuItem &page, uint64_t window, GtkAccelGroup *accelerators, const MenuClicked &clicked) {
     if (page.isSeparator) {
         gtk_menu_shell_append(shell, gtk_separator_menu_item_new());
         return;
     }
     if (page.isSubmenu) {
-        addMenu(shell, page.label, page.items, accelerators, clicked);
+        addMenu(shell, page.label, page.items, window, accelerators, clicked);
         return;
     }
     GtkWidget *made = nullptr;
@@ -138,13 +142,13 @@ void addItem(GtkMenuShell *shell, const MenuItem &page, GtkAccelGroup *accelerat
         if (!page.accelerator && role->second.key) {
             gtk_widget_add_accelerator(made, "activate", accelerators, role->second.key, role->second.modifiers, GTK_ACCEL_VISIBLE);
         }
-        connect(made, Action{"", page.role, nullptr});
+        connect(made, Action{window, "", page.role, nullptr});
     } else {
         made = page.checked ? gtk_check_menu_item_new_with_label(page.label.c_str()) : gtk_menu_item_new_with_label(page.label.c_str());
         // Setting it activates the item, so before the page hears of its clicks.
         if (page.checked) gtk_check_menu_item_set_active(GTK_CHECK_MENU_ITEM(made), *page.checked);
         gtk_widget_set_sensitive(made, page.isEnabled);
-        connect(made, Action{page.id, "", clicked});
+        connect(made, Action{window, page.id, "", clicked});
     }
     gtk_menu_shell_append(shell, made);
     if (page.accelerator) {
@@ -155,13 +159,13 @@ void addItem(GtkMenuShell *shell, const MenuItem &page, GtkAccelGroup *accelerat
     }
 }
 
-// The page keeps the height app.window gives it, so the window takes the bar's height on, unless it fills the screen.
-void keepPageHeight(GtkWindow *window, int barHeight) {
+// The page keeps the height its window gave it, so the window takes the bar's height on, unless it fills the screen.
+void keepPageHeight(GtkWindow *window, GtkWidget *webView, int barHeight) {
     GdkWindow *shown = gtk_widget_get_window(GTK_WIDGET(window));
     if (!shown || (gdk_window_get_state(shown) & (GDK_WINDOW_STATE_MAXIMIZED | GDK_WINDOW_STATE_FULLSCREEN))) return;
     int width = 0;
     gtk_window_get_size(window, &width, nullptr);
-    gtk_window_resize(window, width, gtk_widget_get_allocated_height(webView()) + barHeight);
+    gtk_window_resize(window, width, gtk_widget_get_allocated_height(webView) + barHeight);
 }
 
 gboolean onPress(GtkWidget *, GdkEvent *event, gpointer) {
@@ -200,14 +204,13 @@ void setDockMenu(std::vector<MenuItem>, MenuClicked, std::function<void(Failure)
     throw std::runtime_error("crossbind: a macOS app alone has a Dock menu");
 }
 
-void keepPresses() {
-    if (GtkWidget *view = webView()) g_signal_connect(view, "button-press-event", G_CALLBACK(onPress), nullptr);
-}
+void keepPresses(void *webView) { g_signal_connect(GTK_WIDGET(webView), "button-press-event", G_CALLBACK(onPress), nullptr); }
 
-// The menu opens at the page's point in the webview, which WebKitGTK zooms.
-void popupMenu(std::vector<MenuItem> items, double x, double y, std::function<void(Failure, std::optional<std::string>)> done) {
-    onMainThread([items = std::move(items), x, y, done = std::move(done)] {
-        GtkWidget *view = webView();
+// The menu opens at the page's point in its window's webview, which WebKitGTK zooms.
+void popupMenu(uint64_t window, std::vector<MenuItem> items, double x, double y, std::function<void(Failure, std::optional<std::string>)> done) {
+    onMainThread([window, items = std::move(items), x, y, done = std::move(done)] {
+        const std::optional<Window> open = windowOf(window);
+        GtkWidget *view = open ? GTK_WIDGET(open->webView()) : nullptr;
         if (!view || !gtk_widget_get_realized(view)) {
             done(std::string("crossbind: the app has no window to show a menu in"), std::nullopt);
             return;
@@ -221,7 +224,7 @@ void popupMenu(std::vector<MenuItem> items, double x, double y, std::function<vo
         GtkAccelGroup *accelerators = gtk_accel_group_new();
         try {
             for (const auto &item : items) {
-                addItem(GTK_MENU_SHELL(menu), item, accelerators, [picked](std::string id, std::optional<bool>) { *picked = std::move(id); });
+                addItem(GTK_MENU_SHELL(menu), item, window, accelerators, [picked](uint64_t, std::string id, std::optional<bool>) { *picked = std::move(id); });
             }
         } catch (const std::exception &error) {
             gtk_widget_destroy(menu);
@@ -258,21 +261,23 @@ std::string resourceFolder() {
     return executable.substr(0, executable.find_last_of('/')) + "/resources";
 }
 
-// The bar goes above the webview, in the box the host holds it in, and its accelerators come before the webview's keys;
-// no menus hide it.
-void setMenu(std::vector<MenuItem> menus, MenuClicked clicked, std::function<void(Failure)> done) {
-    onMainThread([menus = std::move(menus), clicked = std::move(clicked), done = std::move(done)] {
-        GtkWidget *view = webView();
+// The bar goes above the window's webview, in the box the host holds it in, and its accelerators come before the
+// webview's keys; no menus hide it.
+void setMenu(uint64_t window, std::vector<MenuItem> menus, MenuClicked clicked, std::function<void(Failure)> done) {
+    onMainThread([window, menus = std::move(menus), clicked = std::move(clicked), done = std::move(done)] {
+        const std::optional<Window> open = windowOf(window);
+        GtkWidget *view = open ? GTK_WIDGET(open->webView()) : nullptr;
         GtkWidget *box = view ? gtk_widget_get_parent(view) : nullptr;
-        if (!window() || !GTK_IS_BOX(box)) {
-            done("crossbind: the app has no window to show its menus in");
+        if (!GTK_IS_BOX(box)) {
+            done("crossbind: the page's window has no place to show its menus in");
             return;
         }
+        GtkWindow *shown = GTK_WINDOW(open->native());
         GtkAccelGroup *accelerators = gtk_accel_group_new();
         GtkWidget *next = gtk_menu_bar_new();
         g_object_ref_sink(next);
         try {
-            for (const auto &menu : menus) addItem(GTK_MENU_SHELL(next), menu, accelerators, clicked);
+            for (const auto &menu : menus) addItem(GTK_MENU_SHELL(next), menu, window, accelerators, clicked);
         } catch (const std::exception &error) {
             gtk_widget_destroy(next);
             g_object_unref(next);
@@ -280,25 +285,33 @@ void setMenu(std::vector<MenuItem> menus, MenuClicked clicked, std::function<voi
             done(std::string(error.what()));
             return;
         }
-        if (bar) gtk_widget_destroy(bar);
-        if (barAccelerators) {
-            gtk_window_remove_accel_group(window(), barAccelerators);
-            g_object_unref(barAccelerators);
+        Bar &before = bars[window];
+        if (before.bar) gtk_widget_destroy(before.bar);
+        if (before.accelerators) {
+            gtk_window_remove_accel_group(shown, before.accelerators);
+            g_object_unref(before.accelerators);
         }
         // Above the webview, which the box holds at its end.
         gtk_container_add(GTK_CONTAINER(box), next);
-        menuBarHeight = 0;
+        int height = 0;
         if (!menus.empty()) {
             gtk_widget_show_all(next);
-            gtk_widget_get_preferred_height(next, nullptr, &menuBarHeight);
+            gtk_widget_get_preferred_height(next, nullptr, &height);
         }
         g_object_unref(next);
-        gtk_window_add_accel_group(window(), accelerators);
-        bar = next;
-        barAccelerators = accelerators;
-        keepPageHeight(window(), menuBarHeight);
+        gtk_window_add_accel_group(shown, accelerators);
+        before = Bar{next, accelerators};
+        keepPageHeight(shown, view, height);
         done(std::nullopt);
     });
+}
+
+// The bar went with its window, which held the accelerators as well.
+void dropMenus(uint64_t window) {
+    const auto found = bars.find(window);
+    if (found == bars.end()) return;
+    if (found->second.accelerators) g_object_unref(found->second.accelerators);
+    bars.erase(found);
 }
 
 }  // namespace crossbind::menu

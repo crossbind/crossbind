@@ -21,12 +21,25 @@ LRESULT CALLBACK powerProcedure(HWND hwnd, UINT message, WPARAM wParam, LPARAM l
     return DefSubclassProc(hwnd, message, wParam, lParam);
 }
 
+// The one window that hears of them, as each of the app's would.
+HWND listener = nullptr;
+
+void listenOn(HWND window) {
+    listener = nullptr;
+    if (!window) return;
+    if (!SetWindowSubclass(window, powerProcedure, SUBCLASS, 0)) {
+        std::fprintf(stderr, "crossbind: the app cannot hear of the system's sleep: Windows error %lu\n", GetLastError());
+        return;
+    }
+    listener = window;
+}
+
 }  // namespace
 
-void listen() {
-    if (!SetWindowSubclass(static_cast<HWND>(appWindow()), powerProcedure, SUBCLASS, 0)) {
-        std::fprintf(stderr, "crossbind: the app cannot hear of the system's sleep: Windows error %lu\n", GetLastError());
-    }
+void listen() { listenOn(static_cast<HWND>(appWindow())); }
+
+void windowClosed(void *window) {
+    if (window == listener) listenOn(static_cast<HWND>(appWindow()));
 }
 
 }  // namespace crossbind::power

@@ -54,15 +54,8 @@ crossbind::app::Paths appPaths() {
 
 void quitApp() { throw std::runtime_error("crossbind: an iOS app does not quit itself: the system ends it"); }
 
-namespace {
-__weak UIWindow *mainWindow;
-__weak id mainWebView;
-}  // namespace
-
-void setMainWindow(void *window, void *webView) {
-    mainWindow = (__bridge UIWindow *)window;
-    mainWebView = (__bridge id)webView;
-    // The app comes to the foreground and leaves it, which every scene's window shares.
+// The app comes to the foreground and leaves it, which every scene's window shares.
+void listenForActivity() {
     static dispatch_once_t once;
     dispatch_once(&once, ^{
       NSNotificationCenter *center = NSNotificationCenter.defaultCenter;
@@ -74,10 +67,6 @@ void setMainWindow(void *window, void *webView) {
       }];
     });
 }
-
-void *crossbind::appWindow() { return (__bridge void *)mainWindow; }
-
-void *crossbind::appWebView() { return (__bridge void *)mainWebView; }
 
 #else
 
@@ -100,10 +89,7 @@ void terminateApp() {
 }
 
 namespace {
-__weak NSWindow *mainWindow;
-__weak id mainWebView;
-
-// What the app's delegate, webview's, answers of a question AppKit asks the app, which AppKit learns as the delegate is
+// What the app's delegate, the host's, answers of a question AppKit asks the app, which AppKit learns as the delegate is
 // set.
 void answerApp(SEL selector, id block) {
     id delegate = NSApp.delegate;
@@ -138,71 +124,44 @@ void answerLaunches() {
     NSApp.delegate = appDelegate;
 }
 
-// A panel asks for its app, not a window of it; showWindow needs the window. The window fills the screen whatever
-// app.window's limits, which it holds to again after: AppKit keeps a window that does not resize, or one with a
-// maximum, to its size there.
-void setMainWindow(void *window, void *webView) {
-    mainWindow = (__bridge NSWindow *)window;
-    mainWebView = (__bridge id)webView;
-    // The window asks the app's extensions as its user closes it; app.quit() terminates the app without asking. Its
-    // delegate, webview's, has no windowShouldClose: of its own, and AppKit learns what a delegate answers as it is set.
-    id delegate = mainWindow.delegate;
-    if (delegate && ![delegate respondsToSelector:@selector(windowShouldClose:)]) {
-        const char *types = protocol_getMethodDescription(@protocol(NSWindowDelegate), @selector(windowShouldClose:), NO, YES).types;
-        class_addMethod([delegate class], @selector(windowShouldClose:), imp_implementationWithBlock(^BOOL(id, NSWindow *) {
-            return crossbind::app::isCloseAllowed();
-        }), types);
-        mainWindow.delegate = nil;
-        mainWindow.delegate = delegate;
-    }
-    const NSSize most = mainWindow.contentMaxSize;
-    const NSWindowStyleMask style = mainWindow.styleMask;
+void watchApp() {
     NSNotificationCenter *center = NSNotificationCenter.defaultCenter;
-    [center addObserverForName:NSWindowWillEnterFullScreenNotification object:mainWindow queue:nil usingBlock:^(NSNotification *note) {
-        NSWindow *filling = note.object;
-        filling.styleMask |= NSWindowStyleMaskResizable;
-        filling.contentMaxSize = NSMakeSize(CGFLOAT_MAX, CGFLOAT_MAX);
-    }];
-    [center addObserverForName:NSWindowDidExitFullScreenNotification object:mainWindow queue:nil usingBlock:^(NSNotification *note) {
-        NSWindow *windowed = note.object;
-        windowed.styleMask = style;
-        windowed.contentMaxSize = most;
-    }];
     [center addObserverForName:NSApplicationDidBecomeActiveNotification object:NSApp queue:nil usingBlock:^(NSNotification *) {
         crossbind::app::appActivated(true);
     }];
     [center addObserverForName:NSApplicationDidResignActiveNotification object:NSApp queue:nil usingBlock:^(NSNotification *) {
         crossbind::app::appActivated(false);
     }];
-    // The app's Quit asks its extensions, which app.quit() does not; a click of the Dock icon shows the window again, as
-    // one an app in its tray hid.
+    // The app's Quit asks its extensions, which app.quit() does not; a click of the Dock icon shows the windows again, as
+    // those an app in its tray hid.
     answerApp(@selector(applicationShouldTerminate:), ^NSApplicationTerminateReply(id, NSApplication *) {
         return isQuittingByApp || crossbind::app::isQuitAllowed() ? NSTerminateNow : NSTerminateCancel;
     });
     answerApp(@selector(applicationShouldHandleReopen:hasVisibleWindows:), ^BOOL(id, NSApplication *, BOOL) {
-        if (mainWindow.miniaturized) [mainWindow deminiaturize:nil];
-        [mainWindow makeKeyAndOrderFront:nil];
+        showHiddenWindows();
+        if (const std::optional<crossbind::Window> front = crossbind::windowOf(crossbind::app::frontWindow())) {
+            [(__bridge NSWindow *)front->native() makeKeyAndOrderFront:nil];
+        }
         crossbind::app::reopened();
         return NO;
     });
     id appDelegate = NSApp.delegate;
     NSApp.delegate = nil;
     NSApp.delegate = appDelegate;
-    // The app may have become active as it launched, before the window opened: the extensions hear how it is once the
-    // window has.
+    // The app may have become active as it launched, before its first window opened: the extensions hear how it is once
+    // the loop runs.
     onMain(^{
       crossbind::app::appActivated(NSApp.active);
     });
 }
 
-void *crossbind::appWindow() { return (__bridge void *)mainWindow; }
-
-void *crossbind::appWebView() { return (__bridge void *)mainWebView; }
-
 void showWindow(const std::string &) {
     onMain(^{
-      if (mainWindow.miniaturized) [mainWindow deminiaturize:nil];
-      [mainWindow makeKeyAndOrderFront:nil];
+      if (const std::optional<crossbind::Window> front = crossbind::windowOf(crossbind::app::frontWindow())) {
+          NSWindow *window = (__bridge NSWindow *)front->native();
+          if (window.miniaturized) [window deminiaturize:nil];
+          [window makeKeyAndOrderFront:nil];
+      }
       [NSApp activateIgnoringOtherApps:YES];
     });
 }
@@ -216,15 +175,6 @@ void setBackgroundColor(void *window, void *webView, std::uint32_t color) {
     // which a later macOS may take away.
     id view = (__bridge id)webView;
     if ([view respondsToSelector:NSSelectorFromString(@"_setDrawsBackground:")]) [view setValue:@NO forKey:@"drawsBackground"];
-}
-
-// macOS takes the window full screen, into a Space of its own, once the app runs.
-void fillScreen() {
-    onMain(^{
-      // A window that does not resize goes full screen only when it says it can.
-      mainWindow.collectionBehavior |= NSWindowCollectionBehaviorFullScreenPrimary;
-      [mainWindow toggleFullScreen:nil];
-    });
 }
 
 #endif

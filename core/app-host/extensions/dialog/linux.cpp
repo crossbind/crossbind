@@ -5,7 +5,11 @@
 namespace crossbind::dialog {
 namespace {
 
-GtkWindow *window() { return static_cast<GtkWindow *>(appWindow()); }
+// The window a dialog is modal to: the calling page's, or the app's oldest.
+GtkWindow *parentOf(uint64_t window) {
+    const std::optional<Window> open = windowOf(window);
+    return static_cast<GtkWindow *>(open ? open->native() : appWindow());
+}
 
 // GTK matches a pattern in one case alone, where macOS and Windows match an extension in any; "*" is any file.
 std::string patternOf(const std::string &extension) {
@@ -31,9 +35,9 @@ void addFilters(GtkFileChooser *chooser, const std::vector<app::FileFilter> &fil
 }  // namespace
 
 // The portal's chooser where there is one, as in a Flatpak, else GTK's own; modal to the app's window.
-void showOpenDialog(app::OpenOptions options, std::function<void(Picked)> done) {
-    onMainThread([options = std::move(options), done = std::move(done)] {
-        GtkFileChooserNative *dialog = gtk_file_chooser_native_new(options.title.empty() ? nullptr : options.title.c_str(), window(),
+void showOpenDialog(uint64_t window, app::OpenOptions options, std::function<void(Picked)> done) {
+    onMainThread([window, options = std::move(options), done = std::move(done)] {
+        GtkFileChooserNative *dialog = gtk_file_chooser_native_new(options.title.empty() ? nullptr : options.title.c_str(), parentOf(window),
             options.directory ? GTK_FILE_CHOOSER_ACTION_SELECT_FOLDER : GTK_FILE_CHOOSER_ACTION_OPEN, nullptr, nullptr);
         GtkFileChooser *chooser = GTK_FILE_CHOOSER(dialog);
         gtk_file_chooser_set_select_multiple(chooser, options.multiple);
@@ -54,9 +58,9 @@ void showOpenDialog(app::OpenOptions options, std::function<void(Picked)> done) 
     });
 }
 
-void showSaveDialog(app::SaveOptions options, std::function<void(std::optional<std::string>)> done) {
-    onMainThread([options = std::move(options), done = std::move(done)] {
-        GtkFileChooserNative *dialog = gtk_file_chooser_native_new(options.title.empty() ? nullptr : options.title.c_str(), window(),
+void showSaveDialog(uint64_t window, app::SaveOptions options, std::function<void(std::optional<std::string>)> done) {
+    onMainThread([window, options = std::move(options), done = std::move(done)] {
+        GtkFileChooserNative *dialog = gtk_file_chooser_native_new(options.title.empty() ? nullptr : options.title.c_str(), parentOf(window),
             GTK_FILE_CHOOSER_ACTION_SAVE, nullptr, nullptr);
         GtkFileChooser *chooser = GTK_FILE_CHOOSER(dialog);
         gtk_file_chooser_set_do_overwrite_confirmation(chooser, TRUE);
@@ -76,12 +80,12 @@ void showSaveDialog(app::SaveOptions options, std::function<void(std::optional<s
 }
 
 // Modal to the app's window, its buttons in GNOME's order: the first, the default, on the right.
-void showMessageDialog(app::MessageOptions options, std::function<void(int)> done) {
-    onMainThread([options = std::move(options), done = std::move(done)] {
+void showMessageDialog(uint64_t window, app::MessageOptions options, std::function<void(int)> done) {
+    onMainThread([window, options = std::move(options), done = std::move(done)] {
         const GtkMessageType type = options.kind == app::MessageKind::error     ? GTK_MESSAGE_ERROR
                                     : options.kind == app::MessageKind::warning ? GTK_MESSAGE_WARNING
                                                                                 : GTK_MESSAGE_INFO;
-        GtkWidget *dialog = gtk_message_dialog_new(window(), GTK_DIALOG_MODAL, type, options.buttons.empty() ? GTK_BUTTONS_OK : GTK_BUTTONS_NONE,
+        GtkWidget *dialog = gtk_message_dialog_new(parentOf(window), GTK_DIALOG_MODAL, type, options.buttons.empty() ? GTK_BUTTONS_OK : GTK_BUTTONS_NONE,
                                                    "%s", options.message.c_str());
         if (!options.detail.empty()) gtk_message_dialog_format_secondary_text(GTK_MESSAGE_DIALOG(dialog), "%s", options.detail.c_str());
         gtk_window_set_title(GTK_WINDOW(dialog), appName().c_str());

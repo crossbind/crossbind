@@ -36,15 +36,13 @@ std::string utf8(const std::wstring &text) {
     return out;
 }
 
-HWND window() { return static_cast<HWND>(crossbind::appWindow()); }
-
-// An alert or a confirm as the system's task dialog, modal to the app's window, as a message box is.
+// An alert or a confirm as the system's task dialog, modal to the page's window, as a message box is.
 bool confirmed(const PageDialog &dialog) {
     const std::wstring title = wide(crossbind::appName());
     const std::wstring message = wide(dialog.message());
     TASKDIALOGCONFIG config{};
     config.cbSize = sizeof config;
-    config.hwndParent = window();
+    config.hwndParent = static_cast<HWND>(windowOf(dialog));
     // Escape and closing the dialog answer IDCANCEL.
     config.dwFlags = TDF_ALLOW_DIALOG_CANCELLATION | TDF_POSITION_RELATIVE_TO_WINDOW;
     config.dwCommonButtons = dialog.kind() == PageDialog::Kind::alert ? TDCBF_OK_BUTTON : TDCBF_OK_BUTTON | TDCBF_CANCEL_BUTTON;
@@ -194,7 +192,7 @@ std::optional<std::string> prompted(const PageDialog &dialog) {
     layout.item(BS_DEFPUSHBUTTON | WS_TABSTOP, WIDTH - MARGIN - 2 * BUTTON_WIDTH - 4, BUTTONS_Y, BUTTON_WIDTH, BUTTON_HEIGHT, IDOK, 0x0080, L"OK");
     layout.item(BS_PUSHBUTTON | WS_TABSTOP, WIDTH - MARGIN - BUTTON_WIDTH, BUTTONS_Y, BUTTON_WIDTH, BUTTON_HEIGHT, IDCANCEL, 0x0080, L"Cancel");
     Prompt prompt{wide(dialog.message()), wide(dialog.defaultText())};
-    DialogBoxIndirectParamW(GetModuleHandleW(nullptr), layout.data(), window(), promptProc, reinterpret_cast<LPARAM>(&prompt));
+    DialogBoxIndirectParamW(GetModuleHandleW(nullptr), layout.data(), static_cast<HWND>(windowOf(dialog)), promptProc, reinterpret_cast<LPARAM>(&prompt));
     if (!prompt.isAnswered) return std::nullopt;
     return utf8(prompt.text);
 }

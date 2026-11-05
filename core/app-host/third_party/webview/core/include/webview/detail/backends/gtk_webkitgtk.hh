@@ -184,15 +184,6 @@ protected:
     gtk_window_set_resizable(GTK_WINDOW(m_window), hints != WEBVIEW_HINT_FIXED);
     if (hints == WEBVIEW_HINT_NONE || hints == WEBVIEW_HINT_FIXED) {
       gtk_compat::window_set_size(GTK_WINDOW(m_window), width, height);
-#if GTK_MAJOR_VERSION < 4
-      // crossbind: the window opens in the middle of the screen, as on macOS,
-      // at its size, which for a window that does not resize is that of what
-      // it holds.
-      if (hints == WEBVIEW_HINT_FIXED) {
-        gtk_widget_set_size_request(m_webview, width, height);
-      }
-      gtk_window_set_position(GTK_WINDOW(m_window), GTK_WIN_POS_CENTER);
-#endif
     } else if (hints == WEBVIEW_HINT_MIN) {
       gtk_widget_set_size_request(m_window, width, height);
     } else if (hints == WEBVIEW_HINT_MAX) {

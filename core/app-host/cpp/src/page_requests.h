@@ -79,30 +79,31 @@ struct Navigation::State {
     bool isMainFrame = true;
     bool isUserInitiated = false;
     bool isNewWindow = false;
-    Page page = app::shownPage();
+    Page page = app::pageOf(nullptr);
 };
 
 // The name and password an authentication answers with; none for a cancel.
 struct HttpAuthentication::State {
-    State(std::string host, std::string realm, bool isProxy, std::function<void(std::optional<std::pair<std::string, std::string>>)> answer)
-        : host(std::move(host)), realm(std::move(realm)), isProxy(isProxy), answer(std::move(answer), std::nullopt) {}
+    State(const void *webView, std::string host, std::string realm, bool isProxy,
+        std::function<void(std::optional<std::pair<std::string, std::string>>)> answer)
+        : host(std::move(host)), realm(std::move(realm)), isProxy(isProxy), page(app::pageOf(webView)), answer(std::move(answer), std::nullopt) {}
 
     std::string host;
     std::string realm;
     bool isProxy;
-    Page page = app::shownPage();
+    Page page;
     GivenOnce<std::optional<std::pair<std::string, std::string>>> answer;
 };
 
 // Whether the certificate is trusted.
 struct CertificateError::State {
-    State(std::string url, std::string host, std::string reason, std::function<void(bool)> answer)
-        : url(std::move(url)), host(std::move(host)), reason(std::move(reason)), answer(std::move(answer), false) {}
+    State(const void *webView, std::string url, std::string host, std::string reason, std::function<void(bool)> answer)
+        : url(std::move(url)), host(std::move(host)), reason(std::move(reason)), page(app::pageOf(webView)), answer(std::move(answer), false) {}
 
     std::string url;
     std::string host;
     std::string reason;
-    Page page = app::shownPage();
+    Page page;
     GivenOnce<bool> answer;
 };
 
@@ -112,16 +113,16 @@ std::string fileNameOf(const std::string &name);
 }  // namespace app
 
 struct Download::State {
-    State(std::string url, const std::string &suggestedName, std::string mimeType, int64_t size, std::shared_ptr<app::DownloadEvents> events,
-        std::function<void(app::DownloadAnswer)> answer)
-        : url(std::move(url)), suggestedName(app::fileNameOf(suggestedName)), mimeType(std::move(mimeType)), size(size), events(std::move(events)),
-          answer(std::move(answer), app::DownloadAnswer{}) {}
+    State(const void *webView, std::string url, const std::string &suggestedName, std::string mimeType, int64_t size,
+        std::shared_ptr<app::DownloadEvents> events, std::function<void(app::DownloadAnswer)> answer)
+        : url(std::move(url)), suggestedName(app::fileNameOf(suggestedName)), mimeType(std::move(mimeType)), size(size), page(app::pageOf(webView)),
+          events(std::move(events)), answer(std::move(answer), app::DownloadAnswer{}) {}
 
     std::string url;
     std::string suggestedName;
     std::string mimeType;
     int64_t size;
-    Page page = app::shownPage();
+    Page page;
     std::shared_ptr<app::DownloadEvents> events;
     GivenOnce<app::DownloadAnswer> answer;
 };
@@ -134,10 +135,10 @@ namespace crossbind::app {
 const std::function<NavigationAnswer(const Navigation &)> &navigationOwner();
 const std::function<void(HttpAuthentication)> &httpAuthenticationOwner();
 const std::function<void(CertificateError)> &certificateErrorOwner();
-// The owner's answer to a navigation beyond the app's origins, which the platform's webview then carries out, on the
-// main thread: refuse without an owner, for useDefault, for an owner that fails, and for an openOutside of a scheme
+// The owner's answer to a navigation of this webview's page beyond the app's origins, which the platform's webview then
+// carries out, on the main thread: refuse without an owner, for useDefault, for an owner that fails, and for an openOutside of a scheme
 // that is neither http, https nor mailto.
-NavigationAnswer decideNavigation(std::string url, bool isMainFrame, bool isUserInitiated, bool isNewWindow);
+NavigationAnswer decideNavigation(const void *webView, std::string url, bool isMainFrame, bool isUserInitiated, bool isNewWindow);
 // Hand a request to its owner: one without an owner, or whose owner fails on it, is cancelled or refused.
 void askHttpAuthentication(HttpAuthentication request);
 void askCertificateError(CertificateError error);
@@ -153,9 +154,9 @@ bool startDownload(DownloadEvents &events, std::function<void()> stop);
 void tellProgress(DownloadEvents &events, const std::string &url, int64_t received, int64_t size);
 void tellFinish(DownloadEvents &events, const std::string &url, DownloadEnd end);
 
-// Hands the files the app's user dropped on the page to page-drops, on the main thread, with the page's point in CSS
-// pixels: nothing without an owner.
-void droppedFiles(const std::vector<std::string> &paths, double x, double y);
+// Hands the files the app's user dropped on the page of this webview to page-drops, on the main thread, with the page's
+// point in CSS pixels: nothing without an owner.
+void droppedFiles(const void *webView, const std::vector<std::string> &paths, double x, double y);
 
 }  // namespace crossbind::app
 
@@ -203,37 +204,40 @@ private:
 
 // A dialog's answer: the text a prompt gives, or an alert's or a confirm's OK, with an empty one; none for Cancel.
 struct PageDialog::State {
-    State(Kind kind, std::string message, std::string defaultText, std::function<void(std::optional<std::string>)> answer, bool offersDefault = false)
-        : kind(kind), message(std::move(message)), defaultText(std::move(defaultText)), answer(std::move(answer), std::nullopt, offersDefault) {}
+    State(const void *webView, Kind kind, std::string message, std::string defaultText, std::function<void(std::optional<std::string>)> answer,
+        bool offersDefault = false)
+        : kind(kind), message(std::move(message)), defaultText(std::move(defaultText)), page(app::pageOf(webView)),
+          answer(std::move(answer), std::nullopt, offersDefault) {}
 
     Kind kind;
     std::string message;
     std::string defaultText;
-    Page page = app::shownPage();
+    Page page;
     AnswerOnce<std::optional<std::string>> answer;
 };
 
 struct PagePermission::State {
-    State(std::vector<std::string> kinds, std::string origin, bool isListed, std::function<void(app::PermissionAnswer)> answer)
-        : kinds(std::move(kinds)), origin(std::move(origin)), isListed(isListed), answer(std::move(answer), app::PermissionAnswer::deny) {}
+    State(Page page, std::vector<std::string> kinds, std::string origin, bool isListed, std::function<void(app::PermissionAnswer)> answer)
+        : kinds(std::move(kinds)), origin(std::move(origin)), isListed(isListed), page(page), answer(std::move(answer), app::PermissionAnswer::deny) {}
 
     std::vector<std::string> kinds;
     std::string origin;
     bool isListed;
-    Page page = app::shownPage();
+    Page page;
     AnswerOnce<app::PermissionAnswer> answer;
 };
 
 // A file input's answer: the paths picked; none for Cancel.
 struct FileInput::State {
-    State(bool allowsMultiple, bool allowsFolders, std::vector<std::string> accept, std::function<void(std::optional<std::vector<std::string>>)> answer,
-        bool offersDefault = false)
-        : allowsMultiple(allowsMultiple), allowsFolders(allowsFolders), accept(std::move(accept)), answer(std::move(answer), std::nullopt, offersDefault) {}
+    State(const void *webView, bool allowsMultiple, bool allowsFolders, std::vector<std::string> accept,
+        std::function<void(std::optional<std::vector<std::string>>)> answer, bool offersDefault = false)
+        : allowsMultiple(allowsMultiple), allowsFolders(allowsFolders), accept(std::move(accept)), page(app::pageOf(webView)),
+          answer(std::move(answer), std::nullopt, offersDefault) {}
 
     bool allowsMultiple;
     bool allowsFolders;
     std::vector<std::string> accept;
-    Page page = app::shownPage();
+    Page page;
     AnswerOnce<std::optional<std::vector<std::string>>> answer;
 };
 
@@ -255,8 +259,8 @@ inline std::string originOf(WKSecurityOrigin *origin) {
 void setOwnOrigins(std::vector<std::string> origins);
 bool isOwnOrigin(const std::string &origin);
 
-// A request of the page's for these kinds, which knows whether app.permissions lists each.
-PagePermission pagePermission(std::vector<std::string> kinds, std::string origin, std::function<void(PermissionAnswer)> decide);
+// A request of this page's for these kinds, which knows whether app.permissions lists each.
+PagePermission pagePermission(Page page, std::vector<std::string> kinds, std::string origin, std::function<void(PermissionAnswer)> decide);
 
 // Whether an extension takes them on this platform; without one, the webview does as it would.
 bool hasPageDialogs();

@@ -309,8 +309,6 @@ void quitApp() { throw std::runtime_error("crossbind: an Android app does not qu
 // The activity's UI thread is the process's first.
 bool isMainThread() { return gettid() == getpid(); }
 
-void setMainWindow(void *, void *) {}
-
 extern "C" JNIEXPORT jint JNI_OnLoad(JavaVM *jvm, void *) {
     vm = jvm;
     forward(STDOUT_FILENO, ANDROID_LOG_INFO);
@@ -341,8 +339,10 @@ extern "C" JNIEXPORT jobjectArray JNICALL Java_dev_crossbind_app_CrossbindActivi
         core = &app::start(app::devUrl());
     }
     const char *devUrl = app::devUrl();
+    // The activity's one WebView shows a page of no window, 0, whose channel every activity of the process shares.
+    static const std::string token = core->addWindow(0);
     jobjectArray started = env->NewObjectArray(2, env->FindClass("java/lang/String"), nullptr);
-    env->SetObjectArrayElement(started, 0, env->NewStringUTF(core->token().c_str()));
+    env->SetObjectArrayElement(started, 0, env->NewStringUTF(token.c_str()));
     env->SetObjectArrayElement(started, 1, env->NewStringUTF(devUrl ? devUrl : ""));
     return started;
 }
@@ -409,7 +409,7 @@ extern "C" JNIEXPORT jobject JNICALL Java_dev_crossbind_app_CrossbindActivity_na
 }
 
 // A new page replaced the one that held the module's objects.
-extern "C" JNIEXPORT void JNICALL Java_dev_crossbind_app_CrossbindActivity_nativeNewPage(JNIEnv *, jclass) { core->reset(); }
+extern "C" JNIEXPORT void JNICALL Java_dev_crossbind_app_CrossbindActivity_nativeNewPage(JNIEnv *, jclass) { core->reset(0); }
 
 extern "C" JNIEXPORT void JNICALL Java_dev_crossbind_app_CrossbindActivity_nativeOpenUrl(JNIEnv *env, jclass, jbyteArray url) {
     app::openedUrl(textOf(env, url));
@@ -446,7 +446,7 @@ extern "C" JNIEXPORT void JNICALL Java_dev_crossbind_app_CrossbindActivity_nativ
 // the page's: it loads a link of target="_blank" in the page's place.
 extern "C" JNIEXPORT jint JNICALL Java_dev_crossbind_app_CrossbindActivity_nativeNavigation(JNIEnv *env, jclass, jbyteArray url,
     jboolean isMainFrame, jboolean isUserInitiated) {
-    return static_cast<jint>(app::decideNavigation(textOf(env, url), isMainFrame == JNI_TRUE, isUserInitiated == JNI_TRUE, false));
+    return static_cast<jint>(app::decideNavigation(nullptr, textOf(env, url), isMainFrame == JNI_TRUE, isUserInitiated == JNI_TRUE, false));
 }
 
 namespace {
@@ -484,7 +484,8 @@ extern "C" JNIEXPORT void JNICALL Java_dev_crossbind_app_CrossbindActivity_nativ
         std::lock_guard<std::mutex> lock(downloadsMutex);
         downloading[id] = Downloading{events, address};
     }
-    app::askDownload(std::make_shared<app::StateOf<crossbind::Download>>(address, textOf(env, name), textOf(env, mime), static_cast<int64_t>(size), events,
+    // An Android page is of no window, which no webview names.
+    app::askDownload(std::make_shared<app::StateOf<crossbind::Download>>(nullptr, address, textOf(env, name), textOf(env, mime), static_cast<int64_t>(size), events,
         [id, events](app::DownloadAnswer answer) {
             const bool isStarted = answer.kind != app::DownloadAnswer::Kind::cancel && app::startDownload(*events, [id] { stopActivity(id); });
             answerActivity(id, isStarted ? answer.kind : app::DownloadAnswer::Kind::cancel, answer.path);
@@ -508,7 +509,7 @@ extern "C" JNIEXPORT void JNICALL Java_dev_crossbind_app_CrossbindActivity_nativ
 // Android's WebView names the host without its port, and tells no proxy's ask from a server's.
 extern "C" JNIEXPORT void JNICALL Java_dev_crossbind_app_CrossbindActivity_nativeHttpAuthentication(JNIEnv *env, jclass, jint id,
     jbyteArray host, jbyteArray realm) {
-    app::askHttpAuthentication(app::make<crossbind::HttpAuthentication>(std::make_shared<app::StateOf<crossbind::HttpAuthentication>>(
+    app::askHttpAuthentication(app::make<crossbind::HttpAuthentication>(std::make_shared<app::StateOf<crossbind::HttpAuthentication>>(nullptr,
         textOf(env, host), textOf(env, realm), false, [id](std::optional<std::pair<std::string, std::string>> given) {
             JNIEnv *answering = attachedEnv();
             jbyteArray user = given ? bytesOf(answering, given->first) : nullptr;

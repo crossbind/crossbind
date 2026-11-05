@@ -10,6 +10,7 @@
 #include <cstdlib>
 #include <map>
 #include <memory>
+#include <set>
 
 using namespace crossbind::windows;
 
@@ -94,10 +95,13 @@ void addScript(ICoreWebView2 *core, const std::string &source) {
     done->Release();
 }
 
+// Each window's webview, once: the channels' handlers are the same for all, and each reply goes to its own page. The
+// host holds each webview as long as the app runs, so none that comes later takes its place here, and a reply that comes
+// after its window closed goes to no page.
 void listen(ICoreWebView2 *core) {
-    static bool listening = false;
-    if (listening) return;
-    listening = true;
+    static std::set<ICoreWebView2 *> listening;
+    if (!listening.insert(core).second) return;
+    core->AddRef();
     addScript(core, CHANNELS_SCRIPT);
     auto *received = new Handler<ICoreWebView2WebMessageReceivedEventHandler, ICoreWebView2 *, ICoreWebView2WebMessageReceivedEventArgs *>(
         IID_ICoreWebView2WebMessageReceivedEventHandler, [core](ICoreWebView2 *, ICoreWebView2WebMessageReceivedEventArgs *args) -> HRESULT {
@@ -318,10 +322,11 @@ void registerSchemeHandler(void *target, const char *scheme, SchemeHandler handl
     auto *serve = new SchemeHandler(std::move(handler));
     auto *requested = new Handler<ICoreWebView2WebResourceRequestedEventHandler, ICoreWebView2 *, ICoreWebView2WebResourceRequestedEventArgs *>(
         IID_ICoreWebView2WebResourceRequestedEventHandler,
-        [serve, environment](ICoreWebView2 *, ICoreWebView2WebResourceRequestedEventArgs *args) -> HRESULT {
+        [serve, environment, target](ICoreWebView2 *, ICoreWebView2WebResourceRequestedEventArgs *args) -> HRESULT {
             ICoreWebView2WebResourceRequest *request = nullptr;
             if (FAILED(args->get_Request(&request))) return S_OK;
             SchemeRequest incoming;
+            incoming.webView = target;
             LPWSTR method = nullptr;
             request->get_Method(&method);
             incoming.method = take(method);

@@ -5,9 +5,11 @@
 #include <glib/gstdio.h>
 #include <webkit2/webkit2.h>
 
+#include <algorithm>
 #include <cerrno>
 #include <cstdio>
 #include <cstring>
+#include <vector>
 
 using crossbind::Download;
 using crossbind::DownloadEnd;
@@ -129,7 +131,8 @@ gboolean onDecideDestination(WebKitDownload *download, gchar *suggested, gpointe
     const std::string name = app::fileNameOf(suggested ? suggested : "");
     const char *mime = response ? webkit_uri_response_get_mime_type(response) : nullptr;
     g_object_ref(download);
-    app::askDownload(std::make_shared<app::StateOf<Download>>(running->url, name, mime ? mime : "", sizeOf(download), running->events,
+    app::askDownload(std::make_shared<app::StateOf<Download>>(webkit_download_get_web_view(download), running->url, name, mime ? mime : "",
+        sizeOf(download), running->events,
         [download, name](app::DownloadAnswer given) {
             onMainThread([download, name, given] {
                 answer(download, name, given);
@@ -145,6 +148,11 @@ void onDownloadStarted(WebKitWebContext *, WebKitDownload *download, gpointer) {
 
 }  // namespace
 
+// Every window's webview shares one context, which tells of each download once, with the webview it came from.
 void takeDownloads(void *webView) {
-    g_signal_connect(webkit_web_view_get_context(WEBKIT_WEB_VIEW(webView)), "download-started", G_CALLBACK(onDownloadStarted), nullptr);
+    static std::vector<WebKitWebContext *> taken;
+    WebKitWebContext *context = webkit_web_view_get_context(WEBKIT_WEB_VIEW(webView));
+    if (std::find(taken.begin(), taken.end(), context) != taken.end()) return;
+    taken.push_back(context);
+    g_signal_connect(context, "download-started", G_CALLBACK(onDownloadStarted), nullptr);
 }

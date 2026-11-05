@@ -55,7 +55,6 @@
 #include "../user_script.hh"
 #include "../utility/string.hh"
 
-#include <algorithm>
 #include <atomic>
 #include <cstdlib>
 #include <functional>
@@ -441,19 +440,9 @@ protected:
           scale_size(width, height, get_default_window_dpi(), dpi);
       auto frame_size =
           make_window_frame_size(m_window, scaled_size.cx, scaled_size.cy, dpi);
-      // crossbind: the window opens in the middle of its monitor's work
-      // area, as on macOS.
-      MONITORINFO monitor{};
-      monitor.cbSize = sizeof(monitor);
-      GetMonitorInfoW(MonitorFromWindow(m_window, MONITOR_DEFAULTTONEAREST),
-                      &monitor);
-      const auto &work = monitor.rcWork;
-      SetWindowPos(
-          m_window, nullptr,
-          work.left + (std::max)(0L, (work.right - work.left - frame_size.cx) / 2),
-          work.top + (std::max)(0L, (work.bottom - work.top - frame_size.cy) / 2),
-          frame_size.cx, frame_size.cy,
-          SWP_NOZORDER | SWP_NOACTIVATE | SWP_FRAMECHANGED);
+      SetWindowPos(m_window, nullptr, 0, 0, frame_size.cx, frame_size.cy,
+                   SWP_NOZORDER | SWP_NOACTIVATE | SWP_NOMOVE |
+                       SWP_FRAMECHANGED);
     }
     return window_show();
   }
@@ -581,26 +570,12 @@ private:
           break;
         case WM_GETMINMAXINFO: {
           auto lpmmi = (LPMINMAXINFO)lp;
-          // crossbind: the limits are the content's, in logical pixels, as
-          // set_size's own size is, so they become frame sizes at this DPI.
-          auto frame = [hwnd](POINT size) {
-            auto dpi = get_window_dpi(hwnd);
-            auto scaled =
-                scale_size(size.x, size.y, get_default_window_dpi(), dpi);
-            auto framed =
-                make_window_frame_size(hwnd, scaled.cx, scaled.cy, dpi);
-            return POINT{framed.cx, framed.cy};
-          };
           if (w->m_maxsz.x > 0 && w->m_maxsz.y > 0) {
-            // crossbind: maximized, the window keeps to its monitor on a side
-            // whose limit is larger.
-            auto most = frame(w->m_maxsz);
-            lpmmi->ptMaxSize.x = (std::min)(lpmmi->ptMaxSize.x, most.x);
-            lpmmi->ptMaxSize.y = (std::min)(lpmmi->ptMaxSize.y, most.y);
-            lpmmi->ptMaxTrackSize = most;
+            lpmmi->ptMaxSize = w->m_maxsz;
+            lpmmi->ptMaxTrackSize = w->m_maxsz;
           }
-          if (w->m_minsz.x > 0 || w->m_minsz.y > 0) {
-            lpmmi->ptMinTrackSize = frame(w->m_minsz);
+          if (w->m_minsz.x > 0 && w->m_minsz.y > 0) {
+            lpmmi->ptMinTrackSize = w->m_minsz;
           }
         } break;
         case 0x02E4 /*WM_GETDPISCALEDSIZE*/: {

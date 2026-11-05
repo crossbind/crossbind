@@ -126,6 +126,10 @@ void relaunch() { relaunchApp(); }
 
 void emitEvent(const std::string &event, const std::string &json) { postEvent(event, json); }
 
+void emitEvent(const std::string &event, const std::string &json, uint64_t page) { postEvent(event, json, false, Reach::onePage, page); }
+
+void emitEventToFront(const std::string &event, const std::string &json) { postEvent(event, json, false, Reach::frontPage); }
+
 void holdEvent(const std::string &event, const std::string &json) { postEvent(event, json, true); }
 
 std::optional<std::string> checkForUpdate() {
@@ -414,6 +418,7 @@ void appFunctions(Registry &registry) {
         const Launch launch = crossbind::launchArgs();
         call.resolve(Value::Object{{"args", launch.args}, {"cwd", launch.cwd}});
     });
+    windowFunctions(registry);
 }
 
 void refusedFunctions(Registry &registry) {
@@ -466,7 +471,7 @@ void launchedAgain(Launch launch) {
     // those no extension owns as open-files.
     onMainThread([launch = std::move(launch)] {
         showWindow(launch.token);
-        app::postEvent("second-instance", Value(Value::Object{{"args", app::ownArgs(launch)}, {"cwd", launch.cwd}}).json());
+        app::postEvent("second-instance", Value(Value::Object{{"args", app::ownArgs(launch)}, {"cwd", launch.cwd}}).json(), false, app::Reach::frontPage);
         app::openLaunch(launch);
     });
 }

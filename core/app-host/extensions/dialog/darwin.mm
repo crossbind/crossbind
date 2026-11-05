@@ -25,7 +25,7 @@ NSArray<UTType *> *typesOf(const std::vector<app::FileFilter> &filters) {
 }  // namespace
 
 // The panels are app-modal: nothing else in the app, quitting among it, happens while one asks.
-void showOpenDialog(app::OpenOptions options, std::function<void(Picked)> done) {
+void showOpenDialog(uint64_t, app::OpenOptions options, std::function<void(Picked)> done) {
     onMain(^{
       NSOpenPanel *panel = [NSOpenPanel openPanel];
       panel.canChooseFiles = !options.directory;
@@ -44,7 +44,7 @@ void showOpenDialog(app::OpenOptions options, std::function<void(Picked)> done) 
     });
 }
 
-void showSaveDialog(app::SaveOptions options, std::function<void(std::optional<std::string>)> done) {
+void showSaveDialog(uint64_t, app::SaveOptions options, std::function<void(std::optional<std::string>)> done) {
     onMain(^{
       NSSavePanel *panel = [NSSavePanel savePanel];
       if (!options.title.empty()) panel.message = ns(options.title);
@@ -61,7 +61,7 @@ void showSaveDialog(app::SaveOptions options, std::function<void(std::optional<s
 
 // App-modal, as the panels are. Return clicks the first button and Escape the last of several, as closing the dialog
 // does elsewhere; NSAlert would give Escape to one named Cancel instead, wherever it is.
-void showMessageDialog(app::MessageOptions options, std::function<void(int)> done) {
+void showMessageDialog(uint64_t, app::MessageOptions options, std::function<void(int)> done) {
     onMain(^{
       NSAlert *alert = [NSAlert new];
       alert.messageText = ns(options.message);

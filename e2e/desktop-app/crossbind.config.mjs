@@ -55,6 +55,8 @@ export default {
         singleInstance: true,
         // e2e/run.mjs launches a desktop app with a link of it, and again with another, which src/main.js gets.
         urlSchemes: ['crossbind-e2e'],
+        // src/main.js opens a second window of an iPad's, a scene of the app's.
+        ios: { multipleWindows: true },
         // e2e/run.mjs launches a desktop app with files of it, and opens an Android app on one, which src/main.js gets,
         // and opens an Android app with a link of example.com/e2e.
         fileTypes: [{ name: 'crossbind e2e', extensions: ['cbe2e'], mimeTypes: ['application/x-crossbind-e2e'] }],

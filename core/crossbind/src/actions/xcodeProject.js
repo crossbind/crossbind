@@ -47,7 +47,7 @@ const LAUNCH_COLOR = 'LaunchBackground';
 const ASSOCIATED_DOMAINS = 'com.apple.developer.associated-domains';
 
 // The app's Info.plist, with the keys its extensions give.
-const infoPlist = (name, urlSchemes, fileTypes, activityTypes, shortcutItems, hasBackground, usage, encryption, plist) => xmlPlist(mergedPlist({
+const infoPlist = (name, urlSchemes, fileTypes, activityTypes, shortcutItems, hasBackground, usage, encryption, multipleWindows, plist) => xmlPlist(mergedPlist({
     CFBundleDevelopmentRegion: 'en',
     CFBundleDisplayName: name,
     CFBundleExecutable: '$(EXECUTABLE_NAME)',
@@ -60,7 +60,7 @@ const infoPlist = (name, urlSchemes, fileTypes, activityTypes, shortcutItems, ha
     CFBundleVersion: '$(CURRENT_PROJECT_VERSION)',
     ...(encryption === null ? {} : { ITSAppUsesNonExemptEncryption: encryption }),
     LSRequiresIPhoneOS: true,
-    UIApplicationSceneManifest: { UIApplicationSupportsMultipleScenes: false },
+    UIApplicationSceneManifest: { UIApplicationSupportsMultipleScenes: multipleWindows },
     UILaunchScreen: hasBackground ? { UIColorName: LAUNCH_COLOR } : {},
     UISupportedInterfaceOrientations: ORIENTATIONS,
     'UISupportedInterfaceOrientations~ipad': [...ORIENTATIONS, 'UIInterfaceOrientationPortraitUpsideDown'],
@@ -175,12 +175,12 @@ const privacyManifest = (privacy) => xmlPlist({
 // Simulator or on a device, with the entitlements given, and makes every size of its icon from the one PNG given.
 export default function writeXcodeProject(to, {
     parts, identity, label, version, build = version, icon = null, urlSchemes = [], fileTypes = [], links = [], activityTypes = [], shortcutItems = [],
-    background = null, usage = {}, encryption = null, privacy = {}, entitlements = {}, plist = [],
+    background = null, usage = {}, encryption = null, multipleWindows = false, privacy = {}, entitlements = {}, plist = [],
 }) {
     const { name } = state.config.general;
     if (parts.length === 0) throw new Error(`crossbind: no part of the iOS app ${name} is built, so there is no Xcode project to write.`);
     // The extensions' keys merge before the project goes, which a conflict between them then leaves as it was.
-    const info = infoPlist(label, urlSchemes, fileTypes, activityTypes, shortcutItems, Boolean(background), usage, encryption, plist);
+    const info = infoPlist(label, urlSchemes, fileTypes, activityTypes, shortcutItems, Boolean(background), usage, encryption, multipleWindows, plist);
     const domains = links.map((link) => `applinks:${appLinkParts(link).host}`);
     const signed = domains.length > 0
         ? { ...entitlements, [ASSOCIATED_DOMAINS]: [...new Set([...(entitlements[ASSOCIATED_DOMAINS] ?? []), ...domains])] }

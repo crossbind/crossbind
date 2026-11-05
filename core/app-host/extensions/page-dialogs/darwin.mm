@@ -16,9 +16,9 @@ NSAlert *alertOf(const PageDialog &dialog, NSArray<NSString *> *buttons) {
     return alert;
 }
 
-// A sheet on the app's window, as Safari shows them; before the app has one, a dialog of its own.
-void show(NSAlert *alert, void (^done)(NSModalResponse)) {
-    NSWindow *window = (__bridge NSWindow *)crossbind::appWindow();
+// A sheet on the page's window, as Safari shows them; without one, a dialog of its own.
+void show(NSAlert *alert, const PageDialog &dialog, void (^done)(NSModalResponse)) {
+    NSWindow *window = (__bridge NSWindow *)windowOf(dialog);
     if (window) {
         [alert beginSheetModalForWindow:window completionHandler:done];
     } else {
@@ -31,11 +31,11 @@ void show(NSAlert *alert, void (^done)(NSModalResponse)) {
 void showPageDialog(PageDialog dialog) {
     switch (dialog.kind()) {
     case PageDialog::Kind::alert: {
-        show(alertOf(dialog, @[ @"OK" ]), ^(NSModalResponse) { dialog.accept(); });
+        show(alertOf(dialog, @[ @"OK" ]), dialog, ^(NSModalResponse) { dialog.accept(); });
         return;
     }
     case PageDialog::Kind::confirm: {
-        show(alertOf(dialog, @[ @"OK", @"Cancel" ]), ^(NSModalResponse response) {
+        show(alertOf(dialog, @[ @"OK", @"Cancel" ]), dialog, ^(NSModalResponse response) {
             if (response == NSAlertFirstButtonReturn) dialog.accept();
             else dialog.cancel();
         });
@@ -47,7 +47,7 @@ void showPageDialog(PageDialog dialog) {
         field.frame = NSMakeRect(0, 0, 260, 24);
         alert.accessoryView = field;
         alert.window.initialFirstResponder = field;
-        show(alert, ^(NSModalResponse response) {
+        show(alert, dialog, ^(NSModalResponse response) {
             if (response == NSAlertFirstButtonReturn) dialog.accept(field.stringValue.UTF8String ?: "");
             else dialog.cancel();
         });

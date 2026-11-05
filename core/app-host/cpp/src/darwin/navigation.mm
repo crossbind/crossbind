@@ -123,7 +123,8 @@ API_AVAILABLE(macos(11.3), ios(14.5))
     // The page names a download, and WebKit passes the name on.
     NSString *named = ns(app::fileNameOf(text(name)));
     __weak CBDownloads *weak = self;
-    app::askDownload(std::make_shared<app::StateOf<Download>>(record->url, text(named), text(response.MIMEType), response.expectedContentLength, record->events,
+    app::askDownload(std::make_shared<app::StateOf<Download>>((__bridge const void *)download.webView, record->url, text(named), text(response.MIMEType),
+        response.expectedContentLength, record->events,
         [weak, download, named, destination](app::DownloadAnswer answer) {
             dispatch_async(dispatch_get_main_queue(), ^{
                 CBDownloads *downloads = weak;
@@ -335,11 +336,13 @@ API_AVAILABLE(macos(11.3), ios(14.5))
 
 @end
 
-// The app's own origins load in any frame, but a window the page asks for at one of them opens nowhere, as the app
-// opens no window of its own; the extension page-navigation decides every other URL, windows too, which load in the
-// page's place if they load. A page of another origin gets no token, so it reaches none of the app's functions.
+// The app's own origins load in any frame, but a window the page asks for at one of them opens nowhere, as the app's
+// windows open through windows.open(); the extension page-navigation decides every other URL, windows too, which load
+// in the page's place if they load. A page of another origin gets no token, so it reaches none of the app's functions.
 @interface CBNavigationLock : NSObject <WKNavigationDelegate> {
 @public
+    // The webview it decides for, whose page asks.
+    __weak WKWebView *view;
     std::vector<std::string> origins;
     std::function<void()> newPage;
     id downloads;
@@ -389,7 +392,8 @@ API_AVAILABLE(macos(11.3), ios(14.5))
     }
     const BOOL isUserInitiated = action.navigationType == WKNavigationTypeLinkActivated || action.navigationType == WKNavigationTypeFormSubmitted;
     const app::NavigationAnswer answer = [self allows:url] ? app::NavigationAnswer::refuse
-                                                           : app::decideNavigation(text(url.absoluteString), isNewWindow || action.targetFrame.isMainFrame, isUserInitiated, isNewWindow);
+                                                           : app::decideNavigation((__bridge const void *)webView, text(url.absoluteString), isNewWindow || action.targetFrame.isMainFrame,
+                                                               isUserInitiated, isNewWindow);
     if (answer == app::NavigationAnswer::load && !isNewWindow) {
         decide(WKNavigationActionPolicyAllow);
         return;
@@ -425,7 +429,8 @@ API_AVAILABLE(macos(11.3), ios(14.5))
     }
     // A cancel lets the request go on without the name, as WebKit does without this method, so the page gets what the
     // server answers to that.
-    app::askHttpAuthentication(app::make<HttpAuthentication>(std::make_shared<app::StateOf<HttpAuthentication>>(hostOf(space), text(space.realm), space.isProxy,
+    app::askHttpAuthentication(app::make<HttpAuthentication>(std::make_shared<app::StateOf<HttpAuthentication>>((__bridge const void *)webView, hostOf(space),
+        text(space.realm), space.isProxy,
         [answer](std::optional<std::pair<std::string, std::string>> given) {
             NSURLCredential *credential = given ? [NSURLCredential credentialWithUser:[NSString stringWithUTF8String:given->first.c_str()] ?: @""
                                                                              password:[NSString stringWithUTF8String:given->second.c_str()] ?: @""
@@ -484,7 +489,8 @@ API_AVAILABLE(macos(11.3), ios(14.5))
     }
     __weak CBNavigationLock *weak = self;
     const std::string url = text(space.protocol) + "://" + hostOf(space);
-    app::askCertificateError(app::make<CertificateError>(std::make_shared<app::StateOf<CertificateError>>(url, hostOf(space), text(reason),
+    app::askCertificateError(app::make<CertificateError>(std::make_shared<app::StateOf<CertificateError>>((__bridge const void *)view, url, hostOf(space),
+        text(reason),
         [answer, credential, host, leaf, weak](bool isTrusted) {
             dispatch_async(dispatch_get_main_queue(), ^{
                 if (!isTrusted) {
@@ -548,6 +554,7 @@ char lockKey;
 void restrictNavigation(void *webView, std::vector<std::string> origins, std::function<void()> newPage) {
     WKWebView *view = (__bridge WKWebView *)webView;
     CBNavigationLock *lock = [CBNavigationLock new];
+    lock->view = view;
     lock->origins = std::move(origins);
     lock->newPage = std::move(newPage);
     // The webview holds its navigation delegate weakly.
@@ -565,7 +572,7 @@ void openPageWindow(void *webView, void *navigationAction) {
     NSURL *url = action.request.URL;
     const app::NavigationAnswer answer = !lock || [lock allows:url]
         ? app::NavigationAnswer::refuse
-        : app::decideNavigation(text(url.absoluteString), true, action.navigationType == WKNavigationTypeLinkActivated, true);
+        : app::decideNavigation((__bridge const void *)view, text(url.absoluteString), true, action.navigationType == WKNavigationTypeLinkActivated, true);
     if (answer == app::NavigationAnswer::load) {
         lock->approved = text(url.absoluteString);
         [view loadRequest:action.request];

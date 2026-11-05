@@ -1,7 +1,7 @@
 // The conformance suite inside an app: the page reaches the module the app's host runs as a worker-backed web build
 // reaches its worker, and the host runs embind-jsi as React Native does.
 import { runConformance } from '@crossbind/conformance/spec/run.mjs';
-import { app as host, events, invoke, menu, notification, routeUrl, shell, tray, updater } from 'crossbind/app';
+import { app as host, events, invoke, menu, notification, routeUrl, shell, tray, updater, windows } from 'crossbind/app';
 import * as clipboard from '@crossbind/extension-clipboard';
 // Constants bind only for the names imported here; the header also defines one no leg imports.
 import {
@@ -724,7 +724,165 @@ async function checkCalls(isAndroid) {
     if (!(big instanceof Uint8Array) || big.length !== 100000 || big.some((byte, i) => byte !== i % 251)) throw new Error(`probe.bigBytes came as ${big?.length} bytes`);
 }
 
-initNative().then(async (m) => {
+// The page of another window of the app's, which e2e/run.mjs never reads: it reaches the module as the first does,
+// holding its own objects, and tells the first what it is and what it hears through BroadcastChannel.
+async function runOtherWindow(role) {
+    const channel = new BroadcastChannel('e2e-windows');
+    const post = (kind, value = {}) => channel.postMessage({ kind, role, ...value });
+    try {
+        const m = await initNative();
+        const box = await new m.ConfBox(4, 5);
+        for (const name of ['probe.every', 'probe.front', 'probe.mine', 'probe.later']) events.on(name, (value) => post(name, { value }));
+        await events.held('probe.later');
+        const own = await windows.current();
+        localStorage.setItem('e2e-windows', role);
+        post('ready', { id: own.id, name: own.name, title: own.title, area: await box.area() });
+    } catch (error) {
+        post('failed', { message: error?.message ?? String(error) });
+    }
+}
+
+const sleep = (ms) => new Promise((resolve) => { setTimeout(resolve, ms); });
+
+// The app's windows: the page's own first; a second of another page of the app's, which reaches the same module, holds
+// its objects alone, talks to this one through BroadcastChannel and localStorage, and hears the events for every page,
+// for the page in front, which it is as it opened last, and the held one, but not one for this page alone; on the
+// desktop a modal one and one without a frame; and as each closes, the app goes on with this one, whose objects stay.
+// An iPhone shows one window, and an iPad's second is a scene iOS sizes and places itself.
+async function checkWindows(m, isDesktop, isAndroid) {
+    if (isAndroid) {
+        const listed = await windows.list().then(() => 'listed', (error) => error.message);
+        if (!listed.includes('an Android app has one window')) throw new Error(`windows.list() did not refuse on Android: ${listed}`);
+        return;
+    }
+    const listed = await windows.list();
+    const own = await windows.current();
+    // A desktop app's first window is its first, and an iOS scene that connects anew gets an id of its own.
+    if (listed.length !== 1 || listed[0].id !== own.id || (isDesktop && own.id !== 1) || own.name !== null) {
+        throw new Error(`the app's windows are ${JSON.stringify(listed)}, and this page's ${JSON.stringify(own)}`);
+    }
+    await windows.set({ title: 'crossbind e2e' });
+    const titled = (await windows.current()).title;
+    if (titled !== 'crossbind e2e') throw new Error(`the page's window is titled ${JSON.stringify(titled)} after windows.set()`);
+    if (!isDesktop && navigator.userAgent.includes('iPhone')) {
+        const opened = await windows.open({ path: '/?window=second' }).then(() => 'opened', (error) => error.message);
+        if (!opened.includes('an iPhone shows one window')) throw new Error(`windows.open() did not refuse on an iPhone: ${opened}`);
+        return;
+    }
+    const box = await new m.ConfBox(2, 3);
+    const channel = new BroadcastChannel('e2e-windows');
+    const heard = [];
+    channel.onmessage = ({ data }) => heard.push(data);
+    // A run that stopped halfway may have left the value the second window writes, which would change nothing then.
+    localStorage.removeItem('e2e-windows');
+    const stored = [];
+    const onStorage = ({ key, newValue }) => stored.push({ key, newValue });
+    addEventListener('storage', onStorage);
+    const told = [];
+    const names = ['probe.every', 'probe.front', 'probe.mine', 'probe.later', 'window-opened', 'window-closed'];
+    const stops = names.map((name) => events.on(name, (value) => told.push({ name, value })));
+    await events.held('probe.later');
+    const waitFor = async (list, find, what) => {
+        for (let tries = 0; tries < 200; tries += 1) {
+            const failed = heard.find((data) => data.kind === 'failed');
+            if (failed) throw new Error(`the ${failed.role} window failed: ${failed.message}`);
+            const found = list.find(find);
+            if (found) return found;
+            await sleep(50);
+        }
+        throw new Error(`no window told ${what}`);
+    };
+    // Reads what the host tells until it holds what is asked, naming what it told last.
+    const waitUntil = async (read, holds, what) => {
+        let told;
+        for (let tries = 0; tries < 200; tries += 1) {
+            told = await read();
+            if (holds(told)) return told;
+            await sleep(50);
+        }
+        throw new Error(`${what}: the host told ${JSON.stringify(told)}`);
+    };
+    const opened = await windows.open({ path: '/?window=second', name: 'second', title: 'Second', width: 480, height: 360 });
+    // An iPad's scene takes its page, its title and its name alone.
+    const sized = isDesktop ? [] : ['width', 'height'];
+    if (opened.id === own.id || JSON.stringify(opened.ignored) !== JSON.stringify(sized)) throw new Error(`windows.open() gave ${JSON.stringify(opened)}`);
+    const second = opened.id;
+    const ready = await waitFor(heard, (data) => data.kind === 'ready' && data.role === 'second', 'the second window was ready');
+    if (ready.id !== second || ready.name !== 'second' || ready.title !== 'Second' || ready.area !== 20) throw new Error(`the second window told ${JSON.stringify(ready)}`);
+    await waitFor(told, ({ name, value }) => name === 'window-opened' && value.id === second && value.name === 'second', 'window-opened');
+    await waitFor(stored, ({ key, newValue }) => key === 'e2e-windows' && newValue === 'second', 'the storage it wrote');
+    if (isDesktop) {
+        // The window keeps the size it opened at, which set() changes.
+        const secondState = async () => (await windows.list()).find(({ id }) => id === second);
+        await waitUntil(secondState, ({ width, height }) => width === 480 && height === 360, 'the second window is not at the 480 × 360 it opened at');
+        await windows.set(second, { width: 520, height: 400 });
+        await waitUntil(secondState, ({ width, height }) => width === 520 && height === 400, 'the second window is not at the 520 × 400 set() gave it');
+    }
+    if ((await windows.open({ name: 'second' })).id !== second) throw new Error('a name already open opened another window');
+    const both = (await windows.list()).map(({ id, name }) => [id, name]);
+    if (JSON.stringify(both) !== JSON.stringify([[own.id, null], [second, 'second']])) throw new Error(`the app's windows are ${JSON.stringify(both)}`);
+    for (const name of ['probe.emitEvery', 'probe.emitFront', 'probe.emitMine']) await invoke(name);
+    await invoke('probe.holdLater', { n: 1 });
+    for (const kind of ['probe.every', 'probe.front', 'probe.later']) await waitFor(heard, (data) => data.kind === kind, `it heard ${kind}`);
+    await waitFor(told, ({ name }) => name === 'probe.every', 'this page heard probe.every');
+    await waitFor(told, ({ name }) => name === 'probe.mine', 'this page heard probe.mine');
+    await sleep(500);
+    if (told.some(({ name }) => name === 'probe.front' || name === 'probe.later') || heard.some((data) => data.kind === 'probe.mine')) {
+        throw new Error(`the events reached the wrong pages: this one heard ${JSON.stringify(told.map(({ name }) => name))}, the second ${JSON.stringify(heard.map(({ kind }) => kind))}`);
+    }
+    const others = [second];
+    if (isDesktop) {
+        const modal = await windows.open({ path: '/?window=modal', parent: own.id, modal: true, width: 320, height: 200 });
+        await waitFor(heard, (data) => data.kind === 'ready' && data.role === 'modal', 'the modal window was ready');
+        await windows.close(modal.id);
+        // A Wayland compositor places a window and keeps it among the others itself.
+        const bare = await windows.open({ path: '/?window=bare', frame: false, alwaysOnTop: true, x: 40, y: 40, width: 300, height: 200 });
+        const placed = bare.ignored.length === 0 || (navigator.userAgent.includes('Linux') && bare.ignored.join() === 'alwaysOnTop,x,y');
+        if (!placed) throw new Error(`the window without a frame went without ${bare.ignored.join(', ')}`);
+        await waitFor(heard, (data) => data.kind === 'ready' && data.role === 'bare', 'the window without a frame was ready');
+        await windows.close(bare.id);
+        others.push(modal.id, bare.id);
+        // A move starts from a press of the primary button that is still down, which none is here: the window stays.
+        const before = await windows.current();
+        await windows.startDrag();
+        await sleep(200);
+        const after = await windows.current();
+        if (after.x !== before.x || after.y !== before.y) throw new Error(`windows.startDrag() without a press moved the window from ${before.x}, ${before.y} to ${after.x}, ${after.y}`);
+    } else {
+        // iOS lets a window in front alone go, so the second, in the background now, comes to the front as it closes.
+        await windows.focus(own.id);
+        await waitUntil(() => windows.current(), ({ isFocused }) => isFocused, 'this window did not take the front again');
+    }
+    await windows.close(second);
+    await waitFor(told, ({ name, value }) => name === 'window-closed' && value.id === second && value.name === 'second', 'window-closed');
+    if (!isDesktop) {
+        // A window in front hands the front to the app's window used last as it closes.
+        const third = await windows.open({ path: '/?window=third', name: 'third' });
+        await waitFor(heard, (data) => data.kind === 'ready' && data.role === 'third', 'the third window was ready');
+        await windows.close(third.id);
+        await waitFor(told, ({ name, value }) => name === 'window-closed' && value.id === third.id, 'the third window closed');
+        await waitUntil(() => windows.current(), ({ isFocused }) => isFocused, 'this window did not take the front from the third');
+        others.push(third.id);
+    }
+    const left = (await windows.list()).map(({ id }) => id);
+    if (JSON.stringify(left) !== JSON.stringify([own.id])) throw new Error(`after the others closed, the app's windows are ${JSON.stringify(left)}`);
+    if ((await box.area()) !== 6) throw new Error("an object of this page's went with another window");
+    const closed = await invoke('probe.closedWindows');
+    if (!others.every((id) => closed.includes(id))) throw new Error(`the probe saw the windows ${JSON.stringify(closed)} close`);
+    // iOS shows an app's last window as long as the app runs.
+    if (!isDesktop) {
+        const last = await windows.close().then(() => 'closed', (error) => error.message);
+        if (!last.includes("iOS shows an app's last window")) throw new Error(`windows.close() of the last window did not refuse on an iPad: ${last}`);
+    }
+    for (const stop of stops) stop();
+    removeEventListener('storage', onStorage);
+    localStorage.removeItem('e2e-windows');
+    channel.close();
+}
+
+const otherWindow = new URLSearchParams(location.search).get('window');
+if (otherWindow) runOtherWindow(otherWindow);
+else initNative().then(async (m) => {
     try {
         // Markup can make a crossbind:// request as well, so one without the page's token must be refused. On Android the
         // bytes travel over the page's port alone, and the page's origin serves no such request; during development that
@@ -765,6 +923,7 @@ initNative().then(async (m) => {
         await checkContract(isDesktop, isAndroid);
         await checkRoutes();
         await checkCalls(isAndroid);
+        await checkWindows(m, isDesktop, isAndroid);
         // The app's own functions answer over the page's channel on every platform, and the host checks what it opens.
         const folders = await host.paths();
         if (![folders.data, folders.cache, folders.logs].every((folder) => /^(\/|[A-Za-z]:\\)/.test(folder))) {

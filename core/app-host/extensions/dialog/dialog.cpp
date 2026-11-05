@@ -51,11 +51,11 @@ Options withoutDots(Options options) {
 
 // Shows a dialog unless one is open.
 template <typename Options, typename T>
-void showDialog(void (*show)(Options, std::function<void(T)>), std::type_identity_t<Options> options,
+void showDialog(void (*show)(uint64_t, Options, std::function<void(T)>), uint64_t window, std::type_identity_t<Options> options,
                 std::type_identity_t<std::function<void(T)>> done) {
     if (dialogOpen.exchange(true)) throw std::runtime_error("crossbind: another dialog is open");
     try {
-        show(std::move(options), [done = std::move(done)](T result) {
+        show(window, std::move(options), [done = std::move(done)](T result) {
             dialogOpen = false;
             done(std::move(result));
         });
@@ -73,23 +73,23 @@ void allow(const std::vector<std::string> &paths) {
 
 // A file dialog, whose user's picks the page may reach then.
 template <typename Options, typename T>
-void showFileDialog(void (*show)(Options, std::function<void(T)>), std::type_identity_t<Options> options,
+void showFileDialog(void (*show)(uint64_t, Options, std::function<void(T)>), uint64_t window, std::type_identity_t<Options> options,
                     std::type_identity_t<std::function<void(T)>> done) {
-    showDialog(show, withoutDots(std::move(options)), [done = std::move(done)](T result) {
+    showDialog(show, window, withoutDots(std::move(options)), [done = std::move(done)](T result) {
         if (result) allow(*result);
         done(std::move(result));
     });
 }
 
 // A message dialog, which a page that went around crossbind/app is held to as well; closing it clicks its last button.
-void showMessage(app::MessageOptions options, std::function<void(int)> done) {
+void showMessage(uint64_t window, app::MessageOptions options, std::function<void(int)> done) {
     if (options.message.empty()) throw std::invalid_argument("crossbind: a message dialog takes a message");
     const bool hasEmptyLabel = std::any_of(options.buttons.begin(), options.buttons.end(), [](const std::string &label) { return label.empty(); });
     if (options.buttons.size() > MAX_BUTTONS || hasEmptyLabel) {
         throw std::invalid_argument("crossbind: a message dialog takes three buttons at most, each with a label");
     }
     const int last = std::max(static_cast<int>(options.buttons.size()) - 1, 0);
-    showDialog(showMessageDialog, std::move(options), [last, done = std::move(done)](int button) { done(button < 0 ? last : button); });
+    showDialog(showMessageDialog, window, std::move(options), [last, done = std::move(done)](int button) { done(button < 0 ? last : button); });
 }
 
 }  // namespace
@@ -103,17 +103,17 @@ void crossbind_extension_dialog(crossbind::Registry &registry) {
         const Value &options = call.options();
         crossbind::app::OpenOptions open{options["title"].asString(""), options["defaultPath"].asString(""), filters(options),
                                          options["directory"].asBool(false), options["multiple"].asBool(false)};
-        showFileDialog(showOpenDialog, std::move(open), [call](Picked picked) { call.resolve(picked ? Value(*picked) : Value()); });
+        showFileDialog(showOpenDialog, call.page().windowId(), std::move(open), [call](Picked picked) { call.resolve(picked ? Value(*picked) : Value()); });
     });
     registry.function("dialog.save", [](Call call) {
         const Value &options = call.options();
         crossbind::app::SaveOptions save{options["title"].asString(""), options["defaultPath"].asString(""), options["defaultName"].asString(""),
                                          filters(options)};
-        showFileDialog(showSaveDialog, std::move(save), [call](std::optional<std::string> file) { call.resolve(file ? Value(*file) : Value()); });
+        showFileDialog(showSaveDialog, call.page().windowId(), std::move(save), [call](std::optional<std::string> file) { call.resolve(file ? Value(*file) : Value()); });
     });
     registry.function("dialog.message", [](Call call) {
         const Value &options = call.options();
-        showMessage({options["message"].asString(""), options["detail"].asString(""), kindOf(options["kind"].asString("")), texts(options["buttons"])},
+        showMessage(call.page().windowId(), {options["message"].asString(""), options["detail"].asString(""), kindOf(options["kind"].asString("")), texts(options["buttons"])},
                     [call](int button) { call.resolve(button); });
     });
 }

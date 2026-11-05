@@ -134,18 +134,28 @@ function listen() {
     });
 }
 
+// Tells the host that the page listens to the events of this name from now on, or no more: the host sends a page those
+// of the names it listens to alone.
+function tell(name, isListening) {
+    Promise.resolve(transport).then((chosen) => chosen.send(token + JSON.stringify(['listen', 0, [name], [isListening ? 1 : 0]]))).catch(() => {});
+}
+
 // Calls listener with each event of this name the app's native code emits from now on, until the function it returns
 // is called. Each call listens anew, as a listener passed twice runs twice.
 function on(name, listener) {
     if (!token) throw new Error("crossbind: only the top frame of an app's own page reaches the app's events");
-    if (!listeners.has(name)) listeners.set(name, new Set());
+    if (!listeners.has(name)) {
+        listeners.set(name, new Set());
+        tell(name, true);
+    }
     const subscription = { listener };
     listeners.get(name).add(subscription);
     listen();
     return () => {
         const named = listeners.get(name);
-        named?.delete(subscription);
-        if (named?.size === 0) listeners.delete(name);
+        if (!named?.delete(subscription) || named.size > 0) return;
+        listeners.delete(name);
+        tell(name, false);
     };
 }
 
@@ -275,6 +285,22 @@ async function callApp(name, options, { onMessage, signal } = {}) {
         calls.delete(id);
         if (onAbort) signal.removeEventListener('abort', onAbort);
     }
+}
+
+// An element with data-crossbind-drag moves its window as a title bar does, a double click toggling its size, unless the
+// press is on what takes it, as a button or a field, or within an element of data-crossbind-drag="false". A platform
+// without such windows refuses, and nothing comes of it.
+const TAKES_PRESS = 'button, a[href], input, select, textarea, label, [contenteditable=""], [contenteditable="true"]';
+if (token && typeof addEventListener === 'function') {
+    addEventListener('mousedown', (event) => {
+        if (event.button !== 0 || !(event.target instanceof Element)) return;
+        const region = event.target.closest('[data-crossbind-drag]');
+        if (!region || region.dataset.crossbindDrag === 'false') return;
+        const taker = event.target.closest(TAKES_PRESS);
+        if (taker && region.contains(taker)) return;
+        event.preventDefault();
+        callApp(event.detail === 2 ? 'windows.toggleMaximize' : 'windows.startDrag', {}).catch(() => {});
+    }, true);
 }
 
 // takesMessages: the third argument of crossbind/app's invoke() reaches the host.

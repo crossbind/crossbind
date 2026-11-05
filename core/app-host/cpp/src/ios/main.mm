@@ -1,11 +1,13 @@
-// An iOS app: one scene whose WKWebView page reaches a crossbind module running in Hermes, as on macOS. The page comes
-// from crossbind://app/, or in a debug app the dev server opens, from the URL CROSSBIND_APP_URL names.
+// An iOS app: a window for each of its scenes, whose WKWebView page reaches a crossbind module running in Hermes, as on
+// macOS. The page comes from crossbind://app/, or in a debug app the dev server opens, from the URL CROSSBIND_APP_URL
+// names; another window's from the path windows.open() gave it.
 #import <UIKit/UIKit.h>
 #import <WebKit/WebKit.h>
 
 #include "app.h"
 #include "crossbind_app.h"
 #include "darwin/values.h"
+#include "ios/scenes.h"
 
 #include <cmath>
 #include <cstdint>
@@ -59,10 +61,12 @@ bool isDark(std::uint32_t color) {
 }
 
 - (void)scene:(UIScene *)scene willConnectToSession:(UISceneSession *)session options:(UISceneConnectionOptions *)options {
+    const SceneWindow opening = sceneWindowOf(session, options);
     WKWebViewConfiguration *configuration = [WKWebViewConfiguration new];
     registerSchemeHandler((__bridge void *)configuration, "crossbind", [](SchemeRequest request, SchemeRespond respond) {
         core->serve(std::move(request), std::move(respond));
     });
+    keepRunningWhenHidden((__bridge void *)configuration);
     WKWebView *webView = [[WKWebView alloc] initWithFrame:CGRectZero configuration:configuration];
 #ifdef CROSSBIND_APP_BACKGROUND_COLOR
     // app.window.backgroundColor, which the launch screen shows as well, until the page paints and behind it.
@@ -77,18 +81,21 @@ bool isDark(std::uint32_t color) {
     controller.view = webView;
     self.window = [[UIWindow alloc] initWithWindowScene:(UIWindowScene *)scene];
     self.window.rootViewController = controller;
-    setMainWindow((__bridge void *)self.window, (__bridge void *)webView);
+    listenForActivity();
     [self.window makeKeyAndVisible];
-    windowId = app::windowOpened((__bridge void *)self.window, (__bridge void *)webView);
-    // A scene that connects again, in a process that outlived the last one, gets a page of its own: what the module
-    // pushed for the last page goes to none, and a link that launched the scene waits for the new one to ask.
-    core->reset();
-    const std::string url = app::attach(*core, (__bridge void *)webView, devUrl);
-    [webView loadRequest:[NSURLRequest requestWithURL:[NSURL URLWithString:@(url.c_str())]]];
+    // A scene that connects again, in a process that outlived the last one, is a window of its own, with a page of its
+    // own: a link that launched the scene waits for the page to ask.
+    windowId = app::windowOpened((__bridge void *)self.window, (__bridge void *)webView, opening.name);
+    sceneOpened((UIWindowScene *)scene, windowId, opening);
+    const std::string url = app::attach(*core, (__bridge void *)webView, devUrl, windowId);
+    const std::string page = opening.path == "/" ? url : app::originOf(url) + opening.path;
+    [webView loadRequest:[NSURLRequest requestWithURL:[NSURL URLWithString:@(page.c_str())]]];
     // A link or a document that launched the app reaches the owner of its scheme or type: the page once it asks for it,
     // or an extension; so do a site's link, a user activity and a quick action's tap.
     [self scene:scene openURLContexts:options.URLContexts];
-    for (NSUserActivity *activity in options.userActivities) [self scene:scene continueUserActivity:activity];
+    for (NSUserActivity *activity in options.userActivities) {
+        if (!isWindowActivity(activity)) [self scene:scene continueUserActivity:activity];
+    }
     if (options.shortcutItem) app::shortcutItemTapped(options.shortcutItem.type.UTF8String ?: "");
 }
 
@@ -117,6 +124,13 @@ bool isDark(std::uint32_t color) {
 // iOS lets go of a scene its user swiped away, or one in the background, and may connect it again later.
 - (void)sceneDidDisconnect:(UIScene *)scene {
     app::windowClosed(windowId);
+    sceneClosed(windowId);
+}
+
+// The window its user uses last is the one in front.
+- (void)sceneDidBecomeActive:(UIScene *)scene {
+    app::windowFocused(windowId);
+    sceneActivated(windowId);
 }
 
 // A tap of one of the quick actions of the app's icon while the app runs.
