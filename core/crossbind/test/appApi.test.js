@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, test, vi } from 'vitest';
 import {
-    app, dialog, events, menu, notification, shell, tray, updater,
+    app, dialog, events, invoke, menu, notification, shell, tray, updater,
 } from '../src/app/index.js';
 
 // The host of an app, as page.js hands it the page's calls.
@@ -64,6 +64,17 @@ describe("crossbind/app, an app's own functions", () => {
         expect(host).toHaveBeenLastCalledWith('updater.check', {});
         await updater.install();
         expect(host).toHaveBeenLastCalledWith('updater.install', {});
+    });
+
+    test("calls an extension's function by its name, with its options or none", async () => {
+        inApp();
+        host.mockResolvedValueOnce('copied');
+        await expect(invoke('clipboard.readText')).resolves.toBe('copied');
+        expect(host).toHaveBeenLastCalledWith('clipboard.readText', {});
+        await invoke('clipboard.writeText', { text: 'hi' });
+        expect(host).toHaveBeenLastCalledWith('clipboard.writeText', { text: 'hi' });
+        await expect(invoke('')).rejects.toThrow("crossbind: invoke takes the name of one of the app's functions.");
+        expect(host).toHaveBeenCalledTimes(2);
     });
 
     test("hands a listener of the app's events to the host, which returns what stops it", () => {

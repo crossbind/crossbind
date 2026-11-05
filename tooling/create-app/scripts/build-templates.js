@@ -21,7 +21,7 @@ const REPO_ROOT = path.resolve(__dirname, '../../..');
 const TEMPLATES_DIR = path.join(PKG_DIR, 'templates');
 const MANIFEST = JSON.parse(fs.readFileSync(path.join(PKG_DIR, 'src/manifest.json'), 'utf8'));
 
-const SCAN_ROOTS = ['core', 'tooling', 'plugins', 'ports', 'examples', 'e2e'];
+const SCAN_ROOTS = ['core', 'tooling', 'plugins', 'extensions', 'ports', 'examples', 'e2e'];
 const STRIP_MARKER = /^.*Delete this line for create-crossbind.*\r?\n?/gm;
 
 function findAllPackageJsons() {

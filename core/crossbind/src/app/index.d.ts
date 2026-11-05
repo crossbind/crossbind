@@ -162,6 +162,9 @@ export interface Update {
     version: string;
 }
 
+/** A function of one of the app's extensions, by its name, as clipboard.readText, with options of JSON values; an extension's own package calls it so. */
+export declare function invoke<T = unknown>(name: string, options?: Record<string, unknown>): Promise<T>;
+
 /** One check or install runs at a time, and another rejects meanwhile. */
 export declare const updater: {
     /** The version app.updater.url offers when it is newer than the app's, or null. */

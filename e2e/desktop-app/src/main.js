@@ -2,6 +2,7 @@
 // reaches its worker, and the host runs embind-jsi as React Native does.
 import { runConformance } from '@crossbind/conformance/spec/run.mjs';
 import { app as host, events, menu, notification, shell, tray, updater } from 'crossbind/app';
+import * as clipboard from '@crossbind/extension-clipboard';
 // Constants bind only for the names imported here; the header also defines one no leg imports.
 import {
     initNative, AllSymbols as confConstantsModule, CONF_BASE, CONF_BASE_NAME, CONF_CHAR, CONF_DOUBLE, CONF_EXPRESSION,
@@ -224,6 +225,20 @@ async function checkTray(isDesktop) {
     if (removed !== 'removed') throw new Error(`tray.remove() failed: ${removed}`);
 }
 
+// The clipboard extension's text reads back as the page wrote it, and the host refuses no text from a page that went
+// around the package. The page puts back what the clipboard held, as the run's machine is someone's; iOS alone asks its
+// user before an app reads another app's text, so the page there reads its own alone.
+async function checkClipboard(isIos) {
+    const held = isIos ? null : await clipboard.readText();
+    const text = `crossbind e2e ${Date.now()} Öffnen 😀`;
+    await clipboard.writeText(text);
+    const read = await clipboard.readText();
+    if (held !== null) await clipboard.writeText(held);
+    if (read !== text) throw new Error(`the clipboard gave back ${JSON.stringify(read)}, not ${JSON.stringify(text)}`);
+    const unchecked = await globalThis.Crossbind.app('clipboard.writeText', { text: 5 }).then(() => 'written', (error) => error.message);
+    if (!unchecked.includes('takes a string')) throw new Error(`a clipboard write of no text was not refused: ${unchecked}`);
+}
+
 initNative().then(async (m) => {
     try {
         // Markup can make a crossbind:// request as well, so one without the page's token must be refused. On Android the
@@ -254,6 +269,7 @@ initNative().then(async (m) => {
             const answer = await Promise.race([read, new Promise((resolve) => { setTimeout(() => resolve('waited'), 3000); })]);
             if (answer === 'read') throw new Error('the page read the clipboard without its user\'s gesture');
         }
+        await checkClipboard(!isAndroid && !isDesktop);
         // The app's own functions answer over the page's channel on every platform, and the host checks what it opens.
         const folders = await host.paths();
         if (![folders.data, folders.cache, folders.logs].every((folder) => /^(\/|[A-Za-z]:\\)/.test(folder))) {
