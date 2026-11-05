@@ -3,6 +3,7 @@ packages:
   - 'core/embind-rust/demo'
   - 'tooling/*'
   - 'plugins/*'
+  - 'extensions/*'
   - 'ports/*/*'
   - 'examples/*'
   - 'e2e/*'

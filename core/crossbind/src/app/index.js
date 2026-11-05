@@ -235,6 +235,13 @@ export const events = {
     },
 };
 
+// A function of one of the app's extensions, by its name, as clipboard.readText, with options of JSON values; an
+// extension's own package calls it so. The host checks the options.
+export const invoke = async (name, options = {}) => {
+    if (typeof name !== 'string' || !name) throw new TypeError("crossbind: invoke takes the name of one of the app's functions.");
+    return call(name, options);
+};
+
 // One check or install runs at a time, and another rejects meanwhile.
 export const updater = {
     // The version app.updater.url in crossbind.config.js offers when it is newer than the app's, as { version }, or null.

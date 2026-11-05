@@ -380,6 +380,13 @@ app's are its own `Library/Application Support`, `Library/Caches` and `Library/L
 there when it first opens, or stay in use where they are when they cannot move, as from a roaming folder on another
 drive.
 
+### Extensions
+
+An app takes more functions from extensions: `extensions` in `crossbind.config.js` lists them, and the app's host
+builds their native code in. [`@crossbind/extension-clipboard`](../../extensions/clipboard/README.md), for one, reads
+and writes the clipboard's text on every platform. An extension's package calls its functions by name with `invoke`
+from `crossbind/app`, as `invoke('clipboard.readText')`, and the page imports the package's own functions.
+
 ## Events and callbacks
 
 Native code reaches the page in two ways, each one way.

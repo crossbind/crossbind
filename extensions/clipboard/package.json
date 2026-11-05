@@ -1,0 +1,36 @@
+{
+    "name": "@crossbind/extension-clipboard",
+    "version": "2.0.0-beta.68",
+    "description": "crossbind app extension: the system clipboard's text, read and written from the page on macOS, iOS, Android, Windows and Linux.",
+    "homepage": "https://github.com/crossbind/crossbind/tree/main/extensions/clipboard#readme",
+    "repository": "https://github.com/crossbind/crossbind.git",
+    "license": "MIT",
+    "type": "module",
+    "exports": {
+        ".": {
+            "types": "./index.d.ts",
+            "default": "./index.js"
+        },
+        "./crossbind.extension.js": "./crossbind.extension.js"
+    },
+    "files": [
+        "crossbind.extension.js",
+        "index.d.ts",
+        "index.js",
+        "native"
+    ],
+    "crossbind": {
+        "extension": "./crossbind.extension.js"
+    },
+    "peerDependencies": {
+        "crossbind": "workspace:^"
+    },
+    "devDependencies": {
+        "crossbind": "workspace:^"
+    },
+    "keywords": [
+        "crossbind-extension",
+        "clipboard",
+        "app"
+    ]
+}

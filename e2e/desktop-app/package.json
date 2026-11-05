@@ -13,7 +13,8 @@
     "dependencies": {
         "@crossbind/conformance": "workspace:^",
         "@crossbind/conformance-rust": "workspace:^",
-        "@crossbind/embind-rust-demo": "workspace:^"
+        "@crossbind/embind-rust-demo": "workspace:^",
+        "@crossbind/extension-clipboard": "workspace:^"
     },
     "devDependencies": {
         "@crossbind/core-app-host": "workspace:^",

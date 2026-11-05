@@ -10,6 +10,7 @@ on:
             - core/embind-napi/**
             - core/embind-rust/**
             - core/app-host/**
+            - extensions/**
             - plugins/vite/**
             - plugins/rollup/**
             - e2e/backend-nodejs-native/**
@@ -28,6 +29,7 @@ on:
             - core/embind-napi/**
             - core/embind-rust/**
             - core/app-host/**
+            - extensions/**
             - plugins/vite/**
             - plugins/rollup/**
             - e2e/backend-nodejs-native/**

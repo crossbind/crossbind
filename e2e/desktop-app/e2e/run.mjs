@@ -413,6 +413,9 @@ leaveFileToTrash();
 if (!platform) await serveUpdates();
 const trayHost = await startTrayHost();
 warmPowerShell();
+// The Simulator shares its clipboard with the Mac's, which the page writes and cannot put back: iOS asks its user before
+// an app reads another app's text. The run puts the Mac's back once it is done.
+const macClipboard = platform === 'ios' ? spawnSync('pbpaste', { encoding: 'utf8' }).stdout : null;
 const { child: app, close, executable } = await open();
 // The adb crossbind opened the Android app with, which opens it with a link as well.
 const adb = platform === 'android' ? (await import('crossbind')).adbPath() : undefined;
@@ -573,6 +576,7 @@ function checkNotificationArea() {
 function finish(problem) {
     clearTimeout(timer);
     app.kill();
+    if (macClipboard !== null) spawnSync('pbcopy', { input: macClipboard });
     // Whatever the run found, the app app.relaunch() may have opened anew holds the app's one instance from the next.
     if (relaunch.isAsked) {
         if (process.platform === 'win32') spawnSync('taskkill', ['/F', '/IM', `${name}.exe`]);

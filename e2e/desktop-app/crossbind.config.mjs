@@ -1,6 +1,7 @@
 import { conformanceExport } from '@crossbind/conformance/config.mjs';
 import embindRustDemo from '@crossbind/embind-rust-demo/crossbind.config.mjs';
 import conformanceRust from '@crossbind/conformance-rust/crossbind.config.mjs';
+import clipboard from '@crossbind/extension-clipboard/crossbind.extension.js';
 import { UPDATER } from './e2e/updates.mjs';
 
 export default {
@@ -21,6 +22,8 @@ export default {
     target: {
         runtimeEnv: 'app',
     },
+    // src/main.js checks the page reads back what it writes to the clipboard.
+    extensions: [clipboard()],
     // Smaller than every runner's display, which would hold the window to less; src/main.js checks the page has it. The
     // page has no background of its own, for backgroundColor to show behind it.
     app: {

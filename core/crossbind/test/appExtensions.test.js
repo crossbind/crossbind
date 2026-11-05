@@ -163,6 +163,18 @@ describe('an extension crossbind.config.js lists', () => {
             .toThrow("crossbind: extensions[0] is no extension, as an extension package's crossbind.extension.js gives one.");
     });
 
+    test("is crossbind's clipboard as its package gives it, its Java and each platform's source its own", async () => {
+        const { default: clipboard } = await import('../../../extensions/clipboard/crossbind.extension.js');
+        const listed = listedExtension(clipboard(), 'extensions[0]', path.join(import.meta.dirname, '..', '..', '..'));
+        const sources = (platform) => extensionPart([listed], platform).sources.map((file) => path.basename(file));
+        expect(sources('darwin')).toEqual(['clipboard.cpp', 'darwin.mm']);
+        expect(sources('ios')).toEqual(['clipboard.cpp', 'ios.mm']);
+        expect(sources('linux')).toEqual(['clipboard.cpp', 'linux.cpp']);
+        expect(sources('win32')).toEqual(['clipboard.cpp', 'windows.cpp']);
+        expect(sources('android')).toEqual(['clipboard.cpp', 'android.cpp']);
+        expect(extensionPart([listed], 'android').java.map(({ className }) => className)).toEqual(['dev.crossbind.extension.clipboard.ClipboardExtension']);
+    });
+
     test("names its folder by an absolute path, under the project's base, which every build sees", () => {
         const { base, root } = project();
         for (const folder of [undefined, 'extensions/clipboard', path.join(root, 'native', 'clipboard.cpp'), path.join(base, 'missing')]) {
