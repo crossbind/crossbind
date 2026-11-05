@@ -7,7 +7,7 @@ import { isUnder, navLinkStyle } from './menu.jsx';
 import VersionMenu from './VersionMenu.jsx';
 
 const DOCS_PREFIXES = ['/guide', '/tutorial', '/examples', '/agent'];
-const ECOSYSTEM_PREFIXES = ['/ports', '/integrations'];
+const ECOSYSTEM_PREFIXES = ['/ports', '/integrations', '/extensions'];
 
 // The links after the Docs and Ecosystem menus, in order. Why has no entry on purpose, it lives in the docs and README.
 const LINKS = [

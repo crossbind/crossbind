@@ -7,6 +7,7 @@ import { DEMOS } from '../demos.js';
 import { GUIDE_SECTIONS } from '../guide/nav.js';
 import AGENT_PAGE from '../pages/agent.js';
 import EXAMPLES_PAGE, { TEMPLATE_GROUPS } from '../pages/examples.js';
+import EXTENSIONS_PAGE, { EXTENSION_PAGES } from '../pages/extensions.js';
 import INTEGRATIONS_PAGE from '../pages/integrations.js';
 import LICENSE_PAGE from '../pages/license.js';
 import { TUTORIAL_PAGES } from '../pages/tutorial.js';
@@ -101,6 +102,11 @@ export function renderLlmsIndex() {
         '',
         entry(INTEGRATIONS_PAGE),
         '',
+        '## Extensions',
+        '',
+        entry(EXTENSIONS_PAGE),
+        ...EXTENSION_PAGES.map(entry),
+        '',
         '## Examples',
         '',
         entry(EXAMPLES_PAGE),
@@ -155,6 +161,8 @@ export function renderLlmsFull() {
         page(PORTS_INDEX, 'Library catalog'),
         ...PORT_PAGES.map((item) => page(item, `Library: ${item.title}`)),
         page(INTEGRATIONS_PAGE, 'Integrations'),
+        page(EXTENSIONS_PAGE, 'Extensions'),
+        ...EXTENSION_PAGES.map((item) => page(item, `Extension: ${item.title}`)),
         page(EXAMPLES_PAGE, 'Examples'),
         page(AGENT_PAGE, 'Coding agents'),
         page(CHANGELOG_PAGE, 'Release history'),

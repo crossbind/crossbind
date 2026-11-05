@@ -12,6 +12,11 @@
 /docs/guide/integrate-into-existing-project/expo /guide/react-native/ 301
 /docs/guide/integrate-into-existing-project/nodejs /guide/node/ 301
 /docs/guide/integrate-into-existing-project/cloudflare-worker /guide/edge/ 301
+/docs/guide/integrate-into-existing-project/vite /guide/bundler-plugins/ 301
+/docs/guide/integrate-into-existing-project/webpack /guide/bundler-plugins/ 301
+/docs/guide/integrate-into-existing-project/rspack /guide/bundler-plugins/ 301
+/docs/guide/integrate-into-existing-project/rollup /guide/bundler-plugins/ 301
+/docs/guide/integrate-into-existing-project/create-react-app /guide/bundler-plugins/ 301
 /docs/guide/integrate-into-existing-project/* /guide/browser/ 301
 
 # Feature guides
@@ -19,7 +24,7 @@
 /docs/guide/features/calling-cpp-from-javascript /guide/bindings/ 301
 /docs/guide/features/packages /guide/libraries/ 301
 /guide/packages/* /guide/libraries/ 301
-/docs/guide/features/plugins /guide/browser/ 301
+/docs/guide/features/plugins /guide/bundler-plugins/ 301
 /docs/guide/features/rust /guide/rust/ 301
 /docs/guide/features/wasi /guide/executables/ 301
 /docs/guide/features/monorepo /guide/configuration/ 301
@@ -81,8 +86,8 @@
 # Guide pages folded into the platform and reference pages. /api/<file>.md stays: exact rules only.
 /guide/introduction /guide/ 301
 /guide/introduction/* /guide/ 301
-/guide/bundlers /guide/browser/ 301
-/guide/bundlers/* /guide/browser/ 301
+/guide/bundlers /guide/bundler-plugins/ 301
+/guide/bundlers/* /guide/bundler-plugins/ 301
 /guide/runtimes /guide/ 301
 /guide/runtimes/* /guide/ 301
 /guide/wasi /guide/executables/ 301
@@ -91,6 +96,6 @@
 /api/ /guide/runtime-api/ 301
 /api.md /guide/runtime-api.md 301
 /guide/introduction.md /guide.md 301
-/guide/bundlers.md /guide/browser.md 301
+/guide/bundlers.md /guide/bundler-plugins.md 301
 /guide/runtimes.md /guide.md 301
 /guide/wasi.md /guide/executables.md 301

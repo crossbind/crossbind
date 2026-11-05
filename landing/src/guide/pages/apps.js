@@ -1,5 +1,5 @@
 import extensionsCatalog from '../../../generated/extensions-catalog.js';
-import { CREATE_COMMAND, REPO_URL } from '../../data.js';
+import { CREATE_COMMAND, EXTENSIONS_URL, REPO_URL } from '../../data.js';
 import { RELEASE } from '../../release.js';
 
 const suffix = RELEASE.distTagSuffix;
@@ -21,7 +21,7 @@ export const extensionBlocks = (extensions) => {
             : []),
         {
             type: 'p',
-            text: `Extensions others publish carry the npm keyword [crossbind-extension](${NPM_KEYWORD_SEARCH}), and crossbind has not reviewed them. \`${CREATE_COMMAND} -- my-extension Extension\` starts one of your own, and [extensions.md](${REPO_URL}/blob/main/docs/api/extensions.md) is the contract it is written to.`,
+            text: `Every extension carries the npm keyword [crossbind-extension](${NPM_KEYWORD_SEARCH}), crossbind's own as well, and crossbind has not reviewed the ones others publish. \`${CREATE_COMMAND} -- my-extension Extension\` starts one of your own, and [extensions.md](${REPO_URL}/blob/main/docs/api/extensions.md) is the contract it is written to. [Extensions](/guide/extensions/) shows how to use and write one, and [the catalog](${EXTENSIONS_URL}) lists crossbind's own.`,
         },
     ];
 };
@@ -52,7 +52,7 @@ export default {
         },
         {
             type: 'p',
-            text: '`vite.config.js` registers the plugin as for the [browser](/guide/browser/). C++ goes in `src/native`, and the page imports its headers as a web page does:',
+            text: '`vite.config.js` registers the [Vite plugin](/guide/bundler-plugins/#vite) as for the browser. C++ goes in `src/native`, and the page imports its headers as a web page does:',
         },
         {
             type: 'code',
@@ -153,28 +153,24 @@ const { data, cache, logs } = await app.paths();`,
             ],
         },
 
-        { type: 'h2', id: 'ship', text: 'Installers, signing and updates' },
+        { type: 'h2', id: 'distribute', text: 'Distribute' },
         {
             type: 'p',
-            text: '`crossbind app build` writes what installs a desktop app beside it: a disk image on macOS, a Debian package on Linux, and on Windows a setup program that installs the app for its user, with no administrator\'s approval.',
+            text: '`crossbind app build` writes what installs a desktop app beside it, and `crossbind app publish <store>` builds the app and sends it to a store: `app-store` to App Store Connect and TestFlight, `google-play` to a Google Play track, and `github` a desktop app\'s installers and update to a GitHub release. `-p ios` and `-p android` name the first two. Each has its page:',
+        },
+        {
+            type: 'ul',
+            items: [
+                '[Installers and signing](/guide/installers/): the disk image, Debian package and setup program, and the keys that sign a macOS or Windows app.',
+                '[Updates](/guide/updates/): a desktop app that updates itself, with updates only your key signs.',
+                '[App Store](/guide/app-store/), [Google Play](/guide/google-play/) and [GitHub Releases](/guide/github-releases/): one command each, from your machine or from CI.',
+                '[winget and Microsoft Store](/guide/winget-microsoft-store/): both take the Windows setup from a GitHub release.',
+            ],
         },
         {
             type: 'p',
-            text: `Signing keys come from the environment alone. A macOS app is signed ad hoc, which opens it on the Mac that built it alone, unless \`CROSSBIND_APPLE_SIGNING_IDENTITY\` names a Developer ID; with an App Store Connect API key beside it, the build has Apple notarize the app as well. A Windows app and its setup program are signed with a key file, such as PKCS#12, or a cloud key service, such as Azure Trusted Signing; a hardware token is out of the build's reach. The reference names the variables for [macOS](${REFERENCE}#signing-a-macos-app) and [Windows](${REFERENCE}#signing-a-windows-app).`,
+            text: 'Each store is a publisher an [extension](/guide/extensions/) adds, and one listed under the name of crossbind\'s takes its place.',
         },
-        {
-            type: 'p',
-            text: 'A desktop app updates itself; a Linux app installed from its Debian package updates with the package manager instead. `crossbind app updater-key` prints a key pair: the public key goes in `app.updater.publicKey`, the private one in `CROSSBIND_UPDATER_PRIVATE_KEY` where the app is built, and the build signs each update with it. The page decides when to install:',
-        },
-        {
-            type: 'code',
-            file: 'src/main.js',
-            code: `import { updater } from 'crossbind/app';
-
-const update = await updater.check();
-if (update && confirm(\`Install \${update.version}?\`)) await updater.install();`,
-        },
-        { type: 'p', text: 'iOS and Android apps update through their stores.' },
 
         { type: 'h2', id: 'size', text: 'Size' },
         {

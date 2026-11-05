@@ -34,7 +34,8 @@ function LibraryRow({ tokens, port }) {
     );
 }
 
-export default function LibrariesPage({ tokens, page }) {
+// The page around the rows, which /extensions/ has as well: its title, its lede and the paragraphs its blocks end with.
+export function RowsPage({ tokens, page, children }) {
     return (
         <main id="content">
             <section style={{ padding: '52px var(--content-x) 80px' }}>
@@ -53,26 +54,7 @@ export default function LibrariesPage({ tokens, page }) {
                     </h1>
                     <p style={{ fontSize: 17, lineHeight: 1.65, color: tokens.textDim, margin: 0, maxWidth: 720 }}>{inline(page.lede, tokens)}</p>
 
-                    {GROUPS.map(([category, ports], index) => (
-                        <section key={category} aria-labelledby={`category-${category}`} style={{ marginTop: 44 }}>
-                            <div className="lib-group-head" style={{ fontSize: 13, fontWeight: 600, color: tokens.textMuted, marginBottom: 10 }}>
-                                <h2 id={`category-${category}`} style={{ fontSize: 'inherit', fontWeight: 'inherit', margin: 0 }}>
-                                    {CATEGORY_LABELS[category] ?? category}
-                                </h2>
-                                {index === 0 ? (
-                                    <>
-                                        <span className="lib-version lib-label" aria-hidden="true">Version</span>
-                                        <span className="lib-license lib-label" aria-hidden="true">License</span>
-                                    </>
-                                ) : null}
-                            </div>
-                            <ul style={{ listStyle: 'none', margin: 0, padding: 0, borderBottom: `1px solid ${tokens.border}` }}>
-                                {ports.map((port) => (
-                                    <LibraryRow key={port.family} tokens={tokens} port={port} />
-                                ))}
-                            </ul>
-                        </section>
-                    ))}
+                    {children}
 
                     {page.blocks.map((block) =>
                         block.type === 'p' ? (
@@ -84,5 +66,47 @@ export default function LibrariesPage({ tokens, page }) {
                 </div>
             </section>
         </main>
+    );
+}
+
+// A group of rows under its label, with the labels of the columns beside it where it has them.
+export function RowGroup({ tokens, id, label, columns = null, children }) {
+    return (
+        <section aria-labelledby={id} style={{ marginTop: 44 }}>
+            <div className="lib-group-head" style={{ fontSize: 13, fontWeight: 600, color: tokens.textMuted, marginBottom: 10 }}>
+                <h2 id={id} style={{ fontSize: 'inherit', fontWeight: 'inherit', margin: 0 }}>
+                    {label}
+                </h2>
+                {columns}
+            </div>
+            <ul style={{ listStyle: 'none', margin: 0, padding: 0, borderBottom: `1px solid ${tokens.border}` }}>
+                {children}
+            </ul>
+        </section>
+    );
+}
+
+export default function LibrariesPage({ tokens, page }) {
+    return (
+        <RowsPage tokens={tokens} page={page}>
+            {GROUPS.map(([category, ports], index) => (
+                <RowGroup
+                    key={category}
+                    tokens={tokens}
+                    id={`category-${category}`}
+                    label={CATEGORY_LABELS[category] ?? category}
+                    columns={index === 0 ? (
+                        <>
+                            <span className="lib-version lib-label" aria-hidden="true">Version</span>
+                            <span className="lib-license lib-label" aria-hidden="true">License</span>
+                        </>
+                    ) : null}
+                >
+                    {ports.map((port) => (
+                        <LibraryRow key={port.family} tokens={tokens} port={port} />
+                    ))}
+                </RowGroup>
+            ))}
+        </RowsPage>
     );
 }

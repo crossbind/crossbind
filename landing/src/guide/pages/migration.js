@@ -143,7 +143,7 @@ export default defineConfig({
         },
         {
             type: 'p',
-            text: 'Rollup, Webpack, Rspack, Metro and the React Native plugin follow the same rename; how each one is registered is unchanged. See [Browser](/guide/browser/) and [React Native](/guide/react-native/#metro).',
+            text: 'Rollup, Webpack, Rspack, Metro and the React Native plugin follow the same rename; how each one is registered is unchanged. See [Bundler plugins](/guide/bundler-plugins/) and [React Native](/guide/react-native/#metro).',
         },
 
         { type: 'h2', id: 'code', text: '5. Update the JavaScript' },

@@ -25,28 +25,28 @@ export const INTEGRATION_GROUPS = [
                 name: 'Vite',
                 summary: 'Saving a native file rebuilds the wasm and reloads the page. The dev server and `vite preview` send the COOP/COEP headers, so a multithreaded build runs locally as it is.',
                 packages: ['@crossbind/plugin-vite'],
-                href: guide('browser', 'vite'),
+                href: guide('bundler-plugins', 'vite'),
             },
             {
                 id: 'webpack',
                 name: 'Webpack',
                 summary: 'The plugin, plus the loader its rule hands headers and `.rs` files to. The config has to be an ES module, such as `webpack.config.mjs`.',
                 packages: WEBPACK_PACKAGES,
-                href: guide('browser', 'webpack'),
+                href: guide('bundler-plugins', 'webpack'),
             },
             {
                 id: 'rspack',
                 name: 'Rspack',
                 summary: 'The Webpack plugin and its loader, through Rspack\'s webpack-compatible plugin API.',
                 packages: WEBPACK_PACKAGES,
-                href: guide('browser', 'rspack'),
+                href: guide('bundler-plugins', 'rspack'),
             },
             {
                 id: 'rollup',
                 name: 'Rollup',
                 summary: 'The core the Vite plugin wraps, for a plain Rollup build. There is no dev server: `rollup -c -w` rebuilds the wasm.',
                 packages: ['@crossbind/plugin-rollup'],
-                href: guide('browser', 'rollup'),
+                href: guide('bundler-plugins', 'rollup'),
             },
             {
                 id: 'metro',
@@ -181,7 +181,7 @@ export const INTEGRATION_GROUPS = [
 export const ANOTHER_TOOL = {
     id: 'another-tool',
     title: 'Another tool',
-    text: `A bundler with no plugin here can still drive the build: the plugins only call functions \`crossbind\` exports, and \`@crossbind/plugin-rollup\` is the smallest one to copy. [Another bundler](${guide('browser', 'own-plugin')}) lists those functions. For anything else, ask in [Discussions](${DISCUSSIONS_URL}).`,
+    text: `A bundler with no plugin here can still drive the build: the plugins only call functions \`crossbind\` exports, and \`@crossbind/plugin-rollup\` is the smallest one to copy. [Another bundler](${guide('bundler-plugins', 'own-plugin')}) lists those functions. For anything else, ask in [Discussions](${DISCUSSIONS_URL}).`,
 };
 
 const packagesLine = (packages) => (packages.length ? ` Packages: ${packages.map((name) => `\`${name}\``).join(', ')}.` : '');

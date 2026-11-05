@@ -12,6 +12,7 @@ import {
     resolveSiteRelease,
 } from '../release/resolve-site-release.mjs';
 import { buildPortsCatalog, renderCatalogModule } from './build-ports-catalog.mjs';
+import { readExtensionPages, renderExtensionPagesModule } from './build-extension-pages.mjs';
 import { buildExtensionsCatalog, renderExtensionsModule } from './build-extensions-catalog.mjs';
 import { DEMOS_ROOT, MANIFEST_NAME } from './build-example-demos.mjs';
 import { buildLibraryExamples, renderLibraryExamplesModule } from './build-library-examples.mjs';
@@ -93,6 +94,7 @@ export async function prepareSite({ channel, outDir, env = process.env }) {
     );
     fs.writeFileSync(path.join(outDir, 'ports-catalog.js'), renderCatalogModule(catalog));
     fs.writeFileSync(path.join(outDir, 'extensions-catalog.js'), renderExtensionsModule(extensions));
+    fs.writeFileSync(path.join(outDir, 'extension-pages.js'), renderExtensionPagesModule(readExtensionPages()));
     // Live demos are built separately (build-example-demos.mjs); the page shows the ones present.
     const manifestFile = path.join(DEMOS_ROOT, MANIFEST_NAME);
     const demos = fs.existsSync(manifestFile) ? JSON.parse(fs.readFileSync(manifestFile, 'utf8')) : { builtAt: null, distTag: null, demos: [] };

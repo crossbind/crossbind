@@ -94,7 +94,7 @@ npm run dev`,
         { type: 'h2', id: 'existing-project', text: 'An existing project' },
         {
             type: 'p',
-            text: 'Already have an app? Install the plugin for your bundler and register it. Vite is shown here; Webpack, Rspack and Rollup follow the same shape on the [Browser](/guide/browser/) page, Metro on [React Native](/guide/react-native/#metro).',
+            text: 'Already have an app? Install the plugin for your bundler and register it. Vite is shown here; Webpack, Rspack and Rollup follow the same shape on the [Bundler plugins](/guide/bundler-plugins/) page, Metro on [React Native](/guide/react-native/#metro).',
         },
         { type: 'code', file: 'shell', code: installCommand('@crossbind/plugin-vite') },
         {

@@ -744,3 +744,16 @@ button {
         transition-duration: 0.01ms !important;
     }
 }
+
+/* /extensions/ has the rows of /ports/ with a name and what it is alone. */
+.lib-row.extension-row {
+    grid-template-columns: 160px minmax(0, 1fr);
+    grid-template-areas: 'name summary';
+}
+
+@media (max-width: 900px) {
+    .lib-row.extension-row {
+        grid-template-columns: minmax(0, 1fr);
+        grid-template-areas: 'name' 'summary';
+    }
+}
