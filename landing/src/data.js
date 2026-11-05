@@ -352,8 +352,8 @@ export const FEATURES = [
         guide: 'configuration',
         title: 'Override anything',
         summary:
-            'Seventeen documented override points: swap flags per target, patch sources, drop a dependency from the graph, or rebuild any prebuilt from source.',
-        tag: ['17 OVERRIDE POINTS', 'REBUILD FROM SOURCE'],
+            'Sixteen documented override points: swap flags per target, patch sources, drop a dependency from the graph, or rebuild any prebuilt from source.',
+        tag: ['16 OVERRIDE POINTS', 'REBUILD FROM SOURCE'],
     },
     {
         id: 'platforms',

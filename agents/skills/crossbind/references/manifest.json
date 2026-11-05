@@ -14,7 +14,7 @@
     {
       "source": "docs/api/README.md",
       "output": "api/README.md",
-      "sha256": "1d6aa1a9029cccbe9e8fee2f6276006a04a0146e201ce5d50e24f144090113ec"
+      "sha256": "79200abf9964742fd8d7cadc230fbcb710e969b024c8eca423ff0427aa244701"
     },
     {
       "source": "docs/api/app.md",
@@ -24,7 +24,7 @@
     {
       "source": "docs/api/build-state.md",
       "output": "api/build-state.md",
-      "sha256": "8098e6a3442d4dcec1a9b26785a10c116405f67c835c9e3778658784ded86d1a"
+      "sha256": "85d0c9e0767dc80c4f237e939c4322870fad4d6a65b7c10f27439c04c8c7bf50"
     },
     {
       "source": "docs/api/conan.md",
@@ -39,12 +39,12 @@
     {
       "source": "docs/api/crossbind-build.md",
       "output": "api/crossbind-build.md",
-      "sha256": "66f743f1f320268cf4ed5b60ef29002e8be14154b49ca11f61861b3c8ad59661"
+      "sha256": "cab873db3a9b7676856f39b9169f184b74141aaf91fe748c194b0095ae6e1a6d"
     },
     {
       "source": "docs/api/crossbind-config.md",
       "output": "api/crossbind-config.md",
-      "sha256": "906f7390579e9ec7ef8f785339a21f031476fbbb8a2c472d1eedad4d464a40c9"
+      "sha256": "4d0f9bd0dabbf6da4a59667a86bd20a42efdb578e0691802a3366b01394f3374"
     },
     {
       "source": "docs/api/filesystem.md",
@@ -69,7 +69,7 @@
     {
       "source": "docs/api/overrides.md",
       "output": "api/overrides.md",
-      "sha256": "befedce4c2899b682acf2c533af370963dfb04abb0527c52b630e0ea26b796ad"
+      "sha256": "2a0c50b8d590c27afeeb445de64242f823b14d63fef470f00b7b0ce6167bf015"
     },
     {
       "source": "docs/api/performance.md",
@@ -99,7 +99,7 @@
     {
       "source": "docs/api/troubleshooting.md",
       "output": "api/troubleshooting.md",
-      "sha256": "a94ffa4b4c7f67dfec04b7c194a673f413e97b97843cf4f5ad4b8cc5b484b320"
+      "sha256": "37990dad8ff0e0b399413837972c8f3823fb047a0e004d5e443000c34fe4d1b4"
     },
     {
       "source": "docs/api/wasi.md",

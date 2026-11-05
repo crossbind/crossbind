@@ -62,15 +62,8 @@ void showError(const std::string &message);
 std::string resourceDir();
 
 // The app's functions behind crossbind/app and <crossbind/app.h>. Each is called on the module's thread, works on the
-// main thread and calls done there: a file dialog with what its user picked, or nothing when they cancelled; a message
-// dialog with the index of the button clicked, or NO_BUTTON when its user closed it without one; the others with why
-// they failed, or nothing. A platform that has no such function throws.
-using Picked = std::optional<std::vector<std::string>>;
+// main thread and calls done there with why it failed, or nothing. A platform that has no such function throws.
 using Failure = std::optional<std::string>;
-constexpr int NO_BUTTON = -1;
-void showOpenDialog(crossbind::app::OpenOptions options, std::function<void(Picked)> done);
-void showSaveDialog(crossbind::app::SaveOptions options, std::function<void(std::optional<std::string>)> done);
-void showMessageDialog(crossbind::app::MessageOptions options, std::function<void(int)> done);
 // An http, https or mailto address, which the caller has checked.
 void openUrl(std::string url, std::function<void(Failure)> done);
 void openFile(std::string path, std::function<void(Failure)> done);
@@ -84,7 +77,7 @@ void quitApp();
 // Opens the app anew, with no arguments: on macOS and Linux once this process has ended, on Windows as it ends, where an
 // app that app.singleInstance keeps to one instance waits for this one to end. Why not when it cannot.
 Failure openAnew();
-// The window the app's dialogs belong to.
+// The app's window, which appWindow() gives its extensions.
 void setMainWindow(void *window);
 // Brings a desktop app's window to the front, restored if it was minimized; token is what lets a Linux window take the
 // front from another app. On any thread.

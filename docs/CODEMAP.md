@@ -75,7 +75,7 @@ Every consumer-facing field, every default, every constraint lives in [`docs/api
 - [`wasi.md`](./api/wasi.md) — `platform: 'wasi'` command builds, HTTP components (`-e http`) + `-standalone-wasi` npm tool packages.
 - [`swig-escape.md`](./api/swig-escape.md) — manual `.i` files for the rare cases auto-gen doesn't fit.
 - [`build-state.md`](./api/build-state.md) — `state` and `target` shapes + 32 built-in target inventory.
-- [`overrides.md`](./api/overrides.md) — 17 override points (least → most invasive).
+- [`overrides.md`](./api/overrides.md) — 16 override points (least → most invasive).
 - [`troubleshooting.md`](./api/troubleshooting.md) — common errors mapped to fixes.
 - [`performance.md`](./api/performance.md) — default flag reference + safe-override guide.
 - [`lifecycle-and-types.md`](./api/lifecycle-and-types.md) — JS-side memory + TypeScript notes.
@@ -149,7 +149,7 @@ Index + template: [`docs/adr/README.md`](./adr/README.md).
 | Resolve transitive C++ deps | `src/actions/getDependLibs.js` |
 | Aggregate `env`/`data`/`cmake` per target | `src/actions/getData.js` |
 | Target matrix + filtering | `src/actions/target.js` |
-| Plugin extension hooks | `src/actions/extensions.js` |
+| App extensions: the host's own and `extensions` in crossbind.config.js | `src/utils/appExtensions.js` |
 
 ### Configuration + state
 

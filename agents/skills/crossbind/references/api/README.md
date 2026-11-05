@@ -28,7 +28,7 @@ C++ binding & build authoring:
 - [`app.md`](./app.md) — Apps (`target.runtimeEnv: 'app'`): the page in the system webview, the bindings native in the app's process on Hermes; `crossbind app dev` and `crossbind app build -p <platform>`, the app's functions (`crossbind/app`, `<crossbind/app.h>`), Android signing, security defaults, Hermes and licenses. macOS, Linux, Windows, iOS and Android for now.
 - [`swig-escape.md`](./swig-escape.md) — Manual SWIG `.i` files when auto-generation isn't enough.
 - [`build-state.md`](./build-state.md) — `state` and `target` object shapes passed to `crossbind.build.js` hooks; full inventory of 32 built-in build targets.
-- [`overrides.md`](./overrides.md) — Catalog of 17 override points ordered least → most invasive.
+- [`overrides.md`](./overrides.md) — Catalog of 16 override points ordered least → most invasive.
 - [`troubleshooting.md`](./troubleshooting.md) — Common errors mapped to the right override; tribal-knowledge gotchas from real packages.
 - [`performance.md`](./performance.md) — Default Emscripten + CMake flags reference; what's safe to override and what to leave alone.
 - [`lifecycle-and-types.md`](./lifecycle-and-types.md) — What the garbage collector frees and when to call `.delete()` + TypeScript `.d.ts` notes.

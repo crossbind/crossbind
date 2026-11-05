@@ -37,20 +37,25 @@ defaults and current limits (macOS, Linux, Windows, iOS and Android for now).
   static library for the app's Xcode project), Linux (`src/linux/`, WebKitGTK) and Windows (`src/windows/`, WebView2).
   An Android host (`src/android/jni.cpp`) is a shared library behind JNI.
 - `android/` — the Gradle project an Android app is written into: its one activity (`CrossbindActivity.java`, the
-  WebView, its message port and navigation rule), the manifest, and Gradle 9.8.1's wrapper (Apache-2.0), as
-  `gradle wrapper` writes it; `gradle-wrapper.jar` matches the sha256 Gradle publishes for the release.
+  WebView, its message port and navigation rule), the `Extension.java` an extension's Java implements, which the
+  activity calls for its native code, the manifest, and Gradle 9.8.1's wrapper (Apache-2.0), as `gradle wrapper`
+  writes it; `gradle-wrapper.jar` matches the sha256 Gradle publishes for the release.
 - `js/host.js` — what runs in Hermes: the embind runtime and the side of the protocol that answers the page.
 - `js/page.js` — what the page loads as `crossbind.js`: `initNative()` over the webview's messages, or on Android its
   message port, the calls of `crossbind/app`, and a request left waiting for what the host pushes: the events of the
   app's C++ and the calls of the functions the page passed.
 - `cpp/include/crossbind/app.h` — the host's functions for an app's own code: dialogs, opening outside the app, the
   trash, the app's folders, quitting and opening anew, events for the page and a desktop app's updates.
-  `src/app_api.cpp` answers them and the page's `crossbind/app`, and each platform's `app_api` does the work, and its
+  `src/app_api.cpp` answers them and adds the page's `crossbind/app` functions to the registry of
+  `cpp/include/crossbind/extension.h` (`src/extension.cpp`), which answers the page's calls with JSON values; each
+  platform's `app_api` does the work, and its
   `menu` the page's menus and tray; a Linux app's tray and notifications are `src/linux/tray.cpp` and
   `notifications.cpp`, over D-Bus, and a Windows app's notifications balloons of its tray's icon;
   `src/updater.cpp` checks and installs updates, which each platform's `update` downloads, and
   `src/reopen.cpp` opens the app anew after it and `app.relaunch()`; `src/instance.cpp` (macOS and Linux) and
   `src/windows/instance.cpp` hand a later launch of an app with `app.singleInstance` to the instance that runs.
+- `extensions/` — the host's own extensions, which every app has, each in the folder its `extension.json` describes:
+  `dialog/` shows the file and message dialogs on each platform, through `<crossbind/extension.h>` alone.
 - `third_party/webview/` — webview/webview (MIT), vendored at a pinned commit; provenance and the local patch are in
   its README.
 - `third_party/jsi/` — JSI's `jsi.cpp` (MIT) from the Hermes release the host links, and on Android its headers.

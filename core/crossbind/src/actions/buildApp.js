@@ -34,6 +34,7 @@ import {
     usageDescriptions,
 } from '../utils/appOptions.js';
 import { unreasonedApis, unreasonedWarning } from '../utils/requiredReasonApis.js';
+import { extensionPart, hostExtensions, mergedEntitlements, registrationSource } from '../utils/appExtensions.js';
 import { androidIcons, iosIcon, linuxIcon, macIcon, readAppIcon, windowsIcon } from '../utils/appIcon.js';
 import writeIfChanged from '../utils/writeIfChanged.js';
 import { writeNativeSourceStamp } from '../utils/nativeSourceStamp.js';
@@ -49,6 +50,9 @@ const BRIDGE = 'AppBridge';
 const LINUX_MULTIARCH = { x64: 'x86_64-linux-gnu', arm64: 'aarch64-linux-gnu' };
 // Where the android-app, linux and windows images keep the Hermes of the release crossbind pins.
 const IMAGE_HERMES = `/opt/crossbind/hermes/${HERMES.version}`;
+
+// What the host's extensions, and those crossbind.config.js lists, add to an app of this platform.
+const extensionsOf = (platform) => extensionPart([...hostExtensions(resolveAppHostRoot()), ...state.config.extensions], platform);
 
 // Where an app keeps its executable and its files: a macOS bundle, a Linux or Windows directory, or the app folder of an
 // iOS app's Xcode project or of an Android app's Gradle project, which link the executable themselves.
@@ -329,10 +333,12 @@ const ENTITLEMENTS = {
 function signApp(app, target, signing) {
     const sign = signing ? ['--sign', signing.identity, '--options', 'runtime', '--timestamp'] : ['--sign', '-', '--timestamp=none'];
     run(null, ['codesign', '--force', ...sign, `${app}/Contents/Frameworks/hermesvm.framework`], null, target);
-    // The hardened runtime keeps the app from the devices of app.permissions unless its signature claims them.
-    const claims = Object.keys(appPermissions(state.config)).map((name) => ENTITLEMENTS[name]);
-    const entitlements = claims.length > 0 ? `${state.config.paths.build}/${path.basename(app)}.entitlements` : null;
-    if (entitlements) fs.writeFileSync(entitlements, xmlPlist(Object.fromEntries(claims.map((claim) => [claim, true]))));
+    // The hardened runtime keeps the app from the devices of app.permissions unless its signature claims them, beside what
+    // its extensions claim.
+    const devices = Object.fromEntries(Object.keys(appPermissions(state.config)).map((name) => [ENTITLEMENTS[name], true]));
+    const claims = mergedEntitlements([['app.permissions', devices], ...extensionsOf('darwin').entitlements]);
+    const entitlements = Object.keys(claims).length > 0 ? `${state.config.paths.build}/${path.basename(app)}.entitlements` : null;
+    if (entitlements) fs.writeFileSync(entitlements, xmlPlist(claims));
     run(null, ['codesign', '--force', ...sign, ...(entitlements ? ['--entitlements', entitlements] : []), app], null, target);
 }
 
@@ -402,6 +408,7 @@ export function publishApp(target, { to = appOutputPath(target), page = null } =
             parts, identity: { id: appId(state.config), team: appTeam() }, label: appDisplayName(state.config), version: appVersion(),
             build: build === null ? appVersion() : String(build), icon: icon && iosIcon(icon), urlSchemes: appUrlSchemes(state.config),
             background: appBackgroundColor(state.config), usage: usageDescriptions(state.config, 'ios'), encryption: appEncryption(state.config), privacy,
+            entitlements: mergedEntitlements(extensionsOf('ios').entitlements),
         });
         if (target.buildType === 'release') warnUnreasonedApis(to, privacy);
     } else if (target.platform === 'android') {
@@ -409,6 +416,7 @@ export function publishApp(target, { to = appOutputPath(target), page = null } =
         writeGradleProject(to, {
             parts: appParts(target), id: androidAppId(), label: appDisplayName(state.config), version: androidVersion(), icons: icon && androidIcons(icon),
             urlSchemes: appUrlSchemes(state.config), background: appBackgroundColor(state.config), permissions: Object.keys(appPermissions(state.config)),
+            java: extensionsOf('android').java,
         });
     } else if (path.resolve(to) !== path.resolve(built)) {
         fs.rmSync(to, { recursive: true, force: true });
@@ -480,6 +488,11 @@ export default async function buildApp(target, { bridges = [], force = false } =
     });
     const { libs, linkArgs, extraSources } = linkInputs(target, { bridge: BRIDGE });
     const sharedLibs = libs.filter((lib) => lib.endsWith('.so'));
+    // The extensions' sources compile with the host, which links what they need: a framework on macOS, a library elsewhere.
+    // An iOS host is a static library, whose frameworks the app's Xcode project links.
+    const extensions = extensionsOf(target.platform);
+    const registration = registrationSource(extensions.native);
+    const hostLinkArgs = [...linkArgs, ...(target.platform === 'darwin' ? extensions.frameworks.map((framework) => `-framework ${framework}`) : extensions.libraries)];
 
     const fingerprintFile = `${build}/${target.appName}.fingerprint`;
     const fingerprint = getContentHash(JSON.stringify({
@@ -504,6 +517,7 @@ export default async function buildApp(target, { bridges = [], force = false } =
             `${state.config.paths.cli}/assets/js-runtime/adapters`,
         ])),
         extraSources: getFilesFingerprint(extraSources),
+        extensions: { registration, files: getFilesFingerprint(filesUnder(extensions.roots)), link: hostLinkArgs.slice(linkArgs.length) },
     }));
     const isChanged = !fs.existsSync(fingerprintFile) || fs.readFileSync(fingerprintFile, { encoding: 'utf8' }) !== fingerprint;
     if (!force && !isChanged && fs.existsSync(`${build}/${target.appName}`) && fs.existsSync(`${build}/${target.appJsName}`)) {
@@ -521,6 +535,7 @@ export default async function buildApp(target, { bridges = [], force = false } =
     resetCMakeCacheForSource(workDir, `${appHostRoot}/cpp`, target);
     // The host includes it from its build directory; written only when it changed, it recompiles nothing otherwise.
     writeIfChanged(`${workDir}/crossbind_app.h`, header);
+    writeIfChanged(`${workDir}/extensions.cpp`, registration);
     // A Windows host's executable carries the app's icon, which its resource script takes from beside the header.
     if (target.platform === 'win32') {
         if (icon) writeIfChanged(`${workDir}/icon.ico`, windowsIcon(icon));
@@ -534,7 +549,8 @@ export default async function buildApp(target, { bridges = [], force = false } =
         `-DCROSSBIND_JSI_ROOT=${jsiRoot}`,
         `-DCROSSBIND_HERMES=${hermes}`,
         `-DCROSSBIND_EXTRA_SOURCES=${extraSources.join(';')}`,
-        `-DCROSSBIND_LINK_ARGS=${linkArgs.join(';')}`,
+        `-DCROSSBIND_EXTENSION_SOURCES=${[`${workDir}/extensions.cpp`, ...extensions.sources].join(';')}`,
+        `-DCROSSBIND_LINK_ARGS=${hostLinkArgs.join(';')}`,
         `-DCROSSBIND_LINK_DEPENDS=${libs.join(';')}`,
         // An Android release ships the packages' shared libraries stripped as well, and keeps them as they come.
         ...(target.platform === 'android' ? [`-DCROSSBIND_SHARED_LIBS=${sharedLibs.join(';')}`] : []),
@@ -552,7 +568,8 @@ export default async function buildApp(target, { bridges = [], force = false } =
         platformPrefix, target);
     await bundle(`${appHostRoot}/js/page.js`, `${build}/${target.appJsName}`, []);
     if (target.platform === 'ios') {
-        assembleIosPart(target, { library: `${workDir}/lib${name}.a`, linkArgs, hbc: `${workDir}/host.hbc`, hermes });
+        const frameworks = extensions.frameworks.flatMap((framework) => ['-framework', framework]);
+        assembleIosPart(target, { library: `${workDir}/lib${name}.a`, linkArgs: [...linkArgs, ...frameworks], hbc: `${workDir}/host.hbc`, hermes });
     } else if (target.platform === 'android') {
         assembleAndroidPart(target, { libDir: workDir, sharedLibs, hbc: `${workDir}/host.hbc` });
     } else {

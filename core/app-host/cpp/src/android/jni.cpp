@@ -1,6 +1,6 @@
 // An Android app's native half: the module in Hermes behind JNI. The activity hands in the page's calls, each under an
 // id of its own, and the requests for the page's files; the answers go back through CrossbindActivity's static
-// callbacks, from whichever thread gives them.
+// callbacks, from whichever thread gives them. Extensions call their Java the same way, through callJava().
 #include <android/log.h>
 #include <jni.h>
 #include <unistd.h>
@@ -14,6 +14,7 @@
 #include <mutex>
 #include <stdexcept>
 #include <thread>
+#include <unordered_map>
 
 namespace {
 
@@ -25,10 +26,7 @@ JavaVM *vm;
 jclass activityClass;
 jmethodID onReply;
 jmethodID onReplyBytes;
-jmethodID showMessage;
-// What the message dialog the activity shows answers: crossbind shows one dialog at a time.
-std::mutex messageMutex;
-std::function<void(int)> messageAnswer;
+jmethodID callExtension;
 std::string resources;
 // The app's own folders, which the activity names.
 std::string dataDir;
@@ -133,52 +131,64 @@ crossbind::app::Paths appPaths() {
     return {dataDir, cacheDir, logs};
 }
 
-void showOpenDialog(crossbind::app::OpenOptions, std::function<void(Picked)>) {
-    throw std::runtime_error("crossbind: an Android app has no file dialogs yet");
-}
-
-void showSaveDialog(crossbind::app::SaveOptions, std::function<void(std::optional<std::string>)>) {
-    throw std::runtime_error("crossbind: an Android app has no file dialogs yet");
-}
-
 namespace {
 
-void messageAnswered(int button) {
-    std::function<void(int)> done;
+using JavaAnswer = std::function<void(std::optional<std::string>, crossbind::Value)>;
+
+// What waits for the answer of each call of an extension's Java, under the id the activity answers it with.
+std::mutex javaMutex;
+std::unordered_map<jint, JavaAnswer> javaCalls;
+uint32_t nextJavaCall;
+
+void javaAnswered(jint call, bool ok, const std::string &text) {
+    JavaAnswer done;
     {
-        std::lock_guard<std::mutex> lock(messageMutex);
-        done.swap(messageAnswer);
+        std::lock_guard<std::mutex> lock(javaMutex);
+        const auto waiting = javaCalls.find(call);
+        if (waiting == javaCalls.end()) return;
+        done = std::move(waiting->second);
+        javaCalls.erase(waiting);
     }
-    if (done) done(button);
+    if (!ok) {
+        done(text, {});
+        return;
+    }
+    crossbind::Value result;
+    try {
+        result = app::valueOfJson(text);
+    } catch (const std::exception &error) {
+        done(error.what(), {});
+        return;
+    }
+    done(std::nullopt, std::move(result));
 }
 
 }  // namespace
 
-// The activity in front shows it, and answers through nativeMessageAnswered.
-void showMessageDialog(crossbind::app::MessageOptions options, std::function<void(int)> done) {
+namespace crossbind::android {
+
+void callJava(const std::string &extension, const std::string &function, Value::Object options,
+    std::function<void(std::optional<std::string> failure, Value result)> done) {
+    jint call;
     {
-        std::lock_guard<std::mutex> lock(messageMutex);
-        messageAnswer = std::move(done);
+        std::lock_guard<std::mutex> lock(javaMutex);
+        call = static_cast<jint>(nextJavaCall++);
+        javaCalls.emplace(call, std::move(done));
     }
     JNIEnv *env = attachedEnv();
-    jclass bytesClass = env->FindClass("[B");
-    jobjectArray buttons = env->NewObjectArray(static_cast<jsize>(options.buttons.size()), bytesClass, nullptr);
-    for (size_t i = 0; i < options.buttons.size(); i += 1) {
-        jbyteArray label = bytesOf(env, options.buttons[i]);
-        env->SetObjectArrayElement(buttons, static_cast<jsize>(i), label);
-        env->DeleteLocalRef(label);
-    }
-    jbyteArray message = bytesOf(env, options.message);
-    jbyteArray detail = bytesOf(env, options.detail);
-    env->CallStaticVoidMethod(activityClass, showMessage, message, detail, buttons);
+    jbyteArray name = bytesOf(env, extension);
+    jbyteArray called = bytesOf(env, function);
+    jbyteArray json = bytesOf(env, Value(std::move(options)).json());
+    env->CallStaticVoidMethod(activityClass, callExtension, call, name, called, json);
     const bool hasFailed = env->ExceptionCheck();
     clearException(env);
-    env->DeleteLocalRef(detail);
-    env->DeleteLocalRef(message);
-    env->DeleteLocalRef(buttons);
-    env->DeleteLocalRef(bytesClass);
-    if (hasFailed) messageAnswered(-1);
+    env->DeleteLocalRef(json);
+    env->DeleteLocalRef(called);
+    env->DeleteLocalRef(name);
+    if (hasFailed) javaAnswered(call, false, "crossbind: the activity could not call " + extension + "." + function);
 }
+
+}  // namespace crossbind::android
 
 void openUrl(std::string, std::function<void(Failure)>) {
     throw std::runtime_error("crossbind: an Android app opens no address outside itself yet");
@@ -229,7 +239,7 @@ extern "C" JNIEXPORT jobjectArray JNICALL Java_dev_crossbind_app_CrossbindActivi
         activityClass = static_cast<jclass>(env->NewGlobalRef(type));
         onReply = env->GetStaticMethodID(type, "onReply", "(IZ[B)V");
         onReplyBytes = env->GetStaticMethodID(type, "onReplyBytes", "(I[B)V");
-        showMessage = env->GetStaticMethodID(type, "showMessage", "([B[B[[B)V");
+        callExtension = env->GetStaticMethodID(type, "callExtension", "(I[B[B[B)V");
         resources = asciiOf(env, files);
         dataDir = asciiOf(env, data);
         cacheDir = asciiOf(env, cache);
@@ -287,6 +297,8 @@ extern "C" JNIEXPORT void JNICALL Java_dev_crossbind_app_CrossbindActivity_nativ
     app::openedUrl(textOf(env, url));
 }
 
-extern "C" JNIEXPORT void JNICALL Java_dev_crossbind_app_CrossbindActivity_nativeMessageAnswered(JNIEnv *, jclass, jint button) {
-    messageAnswered(button);
+// The answer of an extension's Java: its result's JSON, or why the call failed.
+extern "C" JNIEXPORT void JNICALL Java_dev_crossbind_app_CrossbindActivity_nativeExtensionAnswered(JNIEnv *env, jclass, jint call,
+    jboolean ok, jbyteArray text) {
+    javaAnswered(call, ok == JNI_TRUE, textOf(env, text));
 }

@@ -185,6 +185,17 @@ describe("an iOS app's store statements", () => {
         expect(plain.project).not.toContain('PrivacyInfo');
     });
 
+    test('is signed with the entitlements its extensions claim, and claims none without them', () => {
+        const { to, project } = write({ entitlements: { 'aps-environment': 'development', 'com.apple.developer.associated-domains': ['applinks:example.com'] } });
+        const entitlements = fs.readFileSync(path.join(to, 'demo.entitlements'), 'utf8');
+        expect(entitlements).toContain('<key>aps-environment</key>\n    <string>development</string>');
+        expect(entitlements).toContain('<key>com.apple.developer.associated-domains</key>\n    <array>\n        <string>applinks:example.com</string>\n    </array>');
+        expect(project).toContain('"CODE_SIGN_ENTITLEMENTS" = "demo.entitlements";');
+        const plain = write({});
+        expect(fs.existsSync(path.join(plain.to, 'demo.entitlements'))).toBe(false);
+        expect(plain.project).not.toContain('CODE_SIGN_ENTITLEMENTS');
+    });
+
     test('numbers its build as given, else as its version', () => {
         const numbered = write({ build: '42' }).project;
         expect(numbered).toContain('"CURRENT_PROJECT_VERSION" = "42";');

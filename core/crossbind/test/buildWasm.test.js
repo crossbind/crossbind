@@ -11,7 +11,6 @@ vi.mock('../src/actions/getData.js', () => ({
     default: (kind) => ({ binary: { emccFlags: [...link.emccFlags] }, env: { ...link.env } }[kind] ?? {}),
 }));
 vi.mock('../src/actions/buildJs.js', () => ({ default: async () => {} }));
-vi.mock('../src/actions/extensions.js', () => ({ default: () => {} }));
 vi.mock('../src/utils/resolveEmbindRust.js', () => ({ default: () => '/embind-rust' }));
 vi.mock('../src/utils/appRustCrates.js', () => ({ default: () => link.rustLibs }));
 vi.mock('../src/utils/logger.js', () => ({

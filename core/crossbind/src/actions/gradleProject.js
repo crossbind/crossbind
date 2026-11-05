@@ -57,6 +57,20 @@ const urlFilter = (schemes) => [
     '            </intent-filter>',
 ].join('\n');
 
+// The class of each extension's Java, which the activity calls by the extension's name.
+const extensionsJava = (java) => `// crossbind writes this file from the app's extensions: the class of each one's Java, under its name.
+package dev.crossbind.app;
+
+import java.util.Map;
+
+final class Extensions {
+    static final Map<String, Extension> ALL = Map.ofEntries(${java.map(({ name, className }) => `
+            Map.entry(${JSON.stringify(name)}, new ${className}())`).join(',')});
+
+    private Extensions() {}
+}
+`;
+
 const buildGradle = ({ id, label, version, abis, icon, launchMode, theme }) => `// crossbind writes this project anew on every build: the module comes prebuilt in src/main/jniLibs/, and the app's
 // files are in src/main/assets/app/.
 plugins {
@@ -138,8 +152,12 @@ dependencies {
 
 // An Android app as a Gradle project, written anew from the parts its ABI targets built: each brings its libraries,
 // the first also the app's files. Gradle adds Hermes and androidx.webkit from Maven, and makes the APK or the bundle.
-// The icons given are the files of the app's launcher icon under res/; without them it has the system's.
-export default function writeGradleProject(to, { parts, id, label, version, icons = null, urlSchemes = [], background = null, permissions = [] }) {
+// The icons given are the files of the app's launcher icon under res/; without them it has the system's. Each of java
+// is an extension's folder of Java sources, by package, which the app's sources take beside the activity, and the
+// class in it the activity calls.
+export default function writeGradleProject(to, {
+    parts, id, label, version, icons = null, urlSchemes = [], background = null, permissions = [], java = [],
+}) {
     const { name } = state.config.general;
     if (parts.length === 0) throw new Error(`crossbind: no part of the Android app ${name} is built, so there is no Gradle project to write.`);
     fs.rmSync(to, { recursive: true, force: true });
@@ -153,6 +171,17 @@ export default function writeGradleProject(to, { parts, id, label, version, icon
     fs.writeFileSync(manifest, text
         .replace(INTERNET, [INTERNET, ...usesPermissions(permissions)].join('\n'))
         .replace(ACTIVITY_END, urlSchemes.length > 0 ? `${urlFilter(urlSchemes)}\n${ACTIVITY_END}` : ACTIVITY_END));
+    fs.writeFileSync(path.join(main, 'java', 'dev', 'crossbind', 'app', 'Extensions.java'), extensionsJava(java));
+    java.forEach(({ name: extension, dir }) => {
+        const sources = path.join(main, 'java');
+        fs.readdirSync(dir, { recursive: true }).forEach((file) => {
+            const into = path.join(sources, file);
+            if (fs.existsSync(into) && !fs.statSync(into).isDirectory()) {
+                throw new Error(`crossbind: the extension ${extension} has ${file} in its Java, which the app's Gradle project has already.`);
+            }
+        });
+        fs.cpSync(dir, sources, { recursive: true });
+    });
     parts.forEach(({ arch, dir }) => fs.cpSync(path.join(dir, 'lib'), path.join(main, 'jniLibs', arch), { recursive: true }));
     // A release keeps its libraries as linked beside the stripped ones it ships, for Google Play's crash reports.
     parts.filter(({ dir }) => fs.existsSync(path.join(dir, 'symbols')))

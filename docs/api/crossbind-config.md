@@ -305,7 +305,7 @@ export default {
     },
   ],
     // See `overrides.md` for the catalog of override mechanisms and when
-    // to reach for `targetSpecs` vs `crossbind.build.js` hooks vs `extensions`.
+    // to reach for `targetSpecs` vs `crossbind.build.js` hooks.
 
   // ─────────────────────────────────────────────────────────────
   // Build hooks (merged from crossbind.build.js if present)
@@ -315,29 +315,30 @@ export default {
     // CLI auto-merges. See crossbind-build.md.
 
   // ─────────────────────────────────────────────────────────────
-  // Plugin / extension system
+  // App extensions: native code an app's host builds in
   // ─────────────────────────────────────────────────────────────
   extensions: [
     {
-      loadConfig: {
-        after: (config) => { /* mutate resolved config after load */ },
-      },
-      buildWasm: {
-        beforeBuild:        (emccFlags) => {},   // all wasm targets — mutate emccFlags array
-        beforeBuildBrowser: (emccFlags) => {},   // browser runtimeEnv only
-        beforeBuildEdge:    (emccFlags) => {},   // edge runtimeEnv only
-        beforeBuildNodeJS:  (emccFlags) => {},   // node runtimeEnv only
-      },
-      createLib: {
-        setFlagWithBuildConfig:    (buildEnv, cFlags, ldFlags) => {},  // tweak CFLAGS/LDFLAGS
-        setFlagWithoutBuildConfig: (buildEnv) => {},                   // env-level override
+      name: 'clipboard',                     // lowercase letters and digits, dashes between
+      root: '/abs/path/to/the/extension',    // the folder its files are in, under paths.base
+      app: {
+        sources: ['native/clipboard.cpp'],   // C++ every platform compiles, relative to root
+        darwin:  { sources: ['native/darwin.mm'], frameworks: ['AppKit'], entitlements: {} },
+        ios:     { sources: ['native/ios.mm'], frameworks: ['UIKit'], entitlements: {} },
+        linux:   { sources: ['native/linux.cpp'], libraries: [] },
+        win32:   { sources: ['native/windows.cpp'], libraries: ['user32'] },
+        android: { sources: ['native/android.cpp'], libraries: [], java: 'android', class: 'dev.example.clipboard.ClipboardExtension' },
       },
     },
   ],
-    // Plugin objects with hooks at config-load and build-step boundaries.
-    // Use only when sharing an override across multiple crossbind packages —
-    // for single-package needs, prefer `targetSpecs` or `crossbind.build.js`.
-    // Real example: OpenSSL Android cert-injection extension.
+    // Usually what an extension package's crossbind.extension.js gives, its root
+    // its own folder. An app's host builds them in beside its own extensions,
+    // such as dialog, and its sources add functions through
+    // <crossbind/extension.h>: C++ on every platform, Objective-C++ on Apple's.
+    // An Android extension's Java is the folder java names, class the
+    // dev.crossbind.app.Extension in it the activity calls. Entitlements merge
+    // with app.permissions' on macOS; two owners giving one key different
+    // values stop the build.
 
   // ─────────────────────────────────────────────────────────────
   // Custom helper functions

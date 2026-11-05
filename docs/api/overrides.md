@@ -1,20 +1,19 @@
 # Override mechanisms catalog
 
-> crossbind picks sane defaults for every build flag, env var, path, and toolchain. When a default doesn't fit your case, there are **17 documented override points**. This doc lists them in order of preference: **start with the least invasive that solves your problem**.
+> crossbind picks sane defaults for every build flag, env var, path, and toolchain. When a default doesn't fit your case, there are **16 documented override points**. This doc lists them in order of preference: **start with the least invasive that solves your problem**.
 
 ## Why "least invasive first"
 
-Every override point exists for a reason — but each adds a layer of "this build differs from the default in a non-obvious way". Reaching for `extensions[]` to override what `targetSpecs[].specs.binary.emccFlags` could do makes the project harder to maintain and harder for AI agents (or future-you) to reason about.
+Every override point exists for a reason — but each adds a layer of "this build differs from the default in a non-obvious way". Reaching for a `crossbind.build.js` hook to override what `targetSpecs[].specs.binary.emccFlags` could do makes the project harder to maintain and harder for AI agents (or future-you) to reason about.
 
 Order of preference, from least to most invasive:
 
 1. Don't override — restate the constraint as a target filter.
 2. `targetSpecs[].specs.*` for declarative per-target tweaks, runtime env vars included.
 3. `crossbind.build.js` hooks (package authors only) for source-acquisition / build-step logic.
-4. `extensions[]` for cross-cutting plugin behavior.
-5. `~/.crossbind.json` for system-wide environment defaults.
+4. `~/.crossbind.json` for system-wide environment defaults.
 
-## The 17 override points
+## The 16 override points
 
 ### Layer 1 — Target filter (narrow the build matrix)
 
@@ -168,23 +167,7 @@ Run shell commands before cmake configure (e.g. `autoreconf -fi` for autotools p
 copyToDist: { 'assets/cacert.pem': ['ssl/certs/cacert.pem'] }
 ```
 
-### Layer 5 — Cross-cutting plugin
-
-#### 17. `extensions: [Extension]`
-
-Plugin objects with hooks at config-load and build-step boundaries:
-
-```js
-extensions: [{
-    loadConfig: { after: (config) => { /* mutate */ } },
-    buildWasm: { beforeBuild: (emccFlags) => { emccFlags.push('-sFOO=1') } },
-    createLib: { setFlagWithBuildConfig: (env, cFlags, ldFlags) => { /* mutate */ } },
-}]
-```
-
-Use when you need to share an override across **multiple crossbind packages**. Inside a single package, prefer `targetSpecs` or `crossbind.build.js` hooks. The OpenSSL Android cert-injection extension is a real example.
-
-### Layer 6 — System (machine-wide)
+### Layer 5 — System (machine-wide)
 
 #### `~/.crossbind.json` — host-wide keys
 
@@ -218,20 +201,16 @@ Need an env var passed to the running module?
 Are you wrapping an upstream library that needs source patching?
 └── crossbind.build.js replaceList or sourceReplaceList (Layer 4 #14).
 
-Need to share an override across packages?
-└── extensions[] (Layer 5 #17).
-
 Need to set XCODE team or pick a non-Docker runner?
-└── ~/.crossbind.json (Layer 6).
+└── ~/.crossbind.json (Layer 5).
 ```
 
 ## Anti-patterns
 
 1. **Reaching for `build: async (state)` when `getBuildParams` would do.** Replacing the build runner means you re-implement what crossbind already does. Override flags first.
-2. **Copying patterns from `extensions[]` into a single package's config.** If only one package needs the override, `targetSpecs` or `crossbind.build.js` keeps it local.
-3. **Using `~/.crossbind.json` for project-specific things.** It's machine-wide; CI won't have your overrides. Project-specific config goes in `crossbind.config.js`.
-4. **Stacking emccFlags in `targetSpecs` AND in `getBuildParams`.** Confusing. Pick one location.
-5. **Editing the extracted upstream source by hand instead of through `replaceList`.** `replaceList` patches are reproducible across version bumps; manual edits aren't.
+2. **Using `~/.crossbind.json` for project-specific things.** It's machine-wide; CI won't have your overrides. Project-specific config goes in `crossbind.config.js`.
+3. **Stacking emccFlags in `targetSpecs` AND in `getBuildParams`.** Confusing. Pick one location.
+4. **Editing the extracted upstream source by hand instead of through `replaceList`.** `replaceList` patches are reproducible across version bumps; manual edits aren't.
 
 ## See also
 

@@ -157,7 +157,7 @@ export default {
   // ─────────────────────────────────────────────────────────────
   setState: (state) => {
     // Mutate state once at init time, after config load but before
-    // any target build. Used by extensions to inject data.
+    // any target build.
     // Most package authors don't write this.
   },
 

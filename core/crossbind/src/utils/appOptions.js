@@ -307,12 +307,13 @@ function windowDefines(window) {
     ];
 }
 
-// The header an app's host compiles where its page opens files from, an iOS or desktop host the color it shows until
-// its page paints and the devices the page may use, a desktop host its title, window, whether it keeps one instance and
-// its updates, and a Windows host its version resource.
+// The header an app's host compiles where its page opens files from and its name, an iOS or desktop host the color it
+// shows until its page paints and the devices the page may use, a desktop host its window, whether it keeps one
+// instance and its updates, and a Windows host its version resource.
 export function appHeader(config, platform) {
     const comment = '// crossbind writes this file from crossbind.config.js and package.json.';
     const openPath = `#define CROSSBIND_APP_OPEN_PATH {${appOpenPath(config).map((place) => `"${place}"`).join(', ')}}`;
+    const name = `#define CROSSBIND_APP_NAME "${appDisplayName(config)}"`;
     const color = appBackgroundColor(config);
     const permissions = appPermissions(config);
     // An Android app's activity takes the color and the permissions from its Gradle project.
@@ -320,7 +321,7 @@ export function appHeader(config, platform) {
         ...(color ? [`#define CROSSBIND_APP_BACKGROUND_COLOR 0x${color.slice(1).toLowerCase()}`] : []),
         ...PERMISSIONS.map((name) => `#define CROSSBIND_APP_PERMISSION_${name.toUpperCase()} ${name in permissions ? 1 : 0}`),
     ];
-    if (!['darwin', 'linux', 'win32'].includes(platform)) return [comment, openPath, ...page, ''].join('\n');
+    if (!['darwin', 'linux', 'win32'].includes(platform)) return [comment, openPath, ...page, name, ''].join('\n');
     // The category goes to the Info.plist and the desktop entry, which the build writes later; any desktop refuses a
     // wrong one here.
     const copyright = appCopyright(config);
@@ -330,7 +331,7 @@ export function appHeader(config, platform) {
         openPath,
         ...page,
         `#define CROSSBIND_APP_ID "${appId(config)}"`,
-        `#define CROSSBIND_APP_NAME "${appDisplayName(config)}"`,
+        name,
         ...windowDefines(appWindow(config)),
     ];
     const urlSchemes = appUrlSchemes(config);

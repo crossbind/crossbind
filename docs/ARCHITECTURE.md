@@ -144,14 +144,12 @@ flowchart TD
     Spec -->|"Yes, declarative"| L2["Layer 2: targetSpecs[].specs.{cmake,binary.emccFlags,env,data,ignoreLibName}"]
     Spec -->|"Project-wide"| L3a["Layer 3: crossbind.config.js functions.isEnabled / dependencies / paths.cmake"]
     Spec -->|"Authoring a package?"| L4["Layer 4: crossbind.build.js hooks (getURL, getBuildParams, patches, replaceList, env, copyToSource, copyToDist, beforeRun, getExtraLibs, setState)"]
-    Spec -->|"Cross-package plugin"| L5["Layer 5: extensions[] (loadConfig.after, buildWasm.beforeBuild*, createLib.setFlag*)"]
-    Spec -->|"Machine-wide"| L6["Layer 6: ~/.crossbind.json (RUNNER, XCODE_DEVELOPMENT_TEAM)"]
+    Spec -->|"Machine-wide"| L5["Layer 5: ~/.crossbind.json (RUNNER, XCODE_DEVELOPMENT_TEAM)"]
     L1 --> Done[Use this]
     L2 --> Done
     L3a --> Done
     L4 --> Done
     L5 --> Done
-    L6 --> Done
 ```
 
 Reach for the **highest** layer that solves the problem (least invasive). See [`docs/api/overrides.md`](./api/overrides.md) for the full catalog.

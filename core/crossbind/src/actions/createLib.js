@@ -6,7 +6,6 @@ import run from './run.js';
 import buildCargo from './buildCargo.js';
 import { cargoTripleFor } from '../utils/cargoTarget.js';
 import getCmakeParameters from './getCmakeParameters.js';
-import triggerExtensions from './extensions.js';
 import state from '../state/index.js';
 import logger from '../utils/logger.js';
 import { WASI_EMULATION_LIBS, WASI_LINK_LIBS, wasiCFlags, wasiCxxFlags } from '../utils/wasiToolchain.js';
@@ -132,7 +131,6 @@ export default function createLib(target, fileType, options = {}) {
 
         const extraLibs = getExtraLibs ? getExtraLibs(target) : [];
 
-        triggerExtensions('createLib', 'setFlagWithBuildConfig', [buildEnv, cFlags, ldFlags]);
         const archiveFlags = targetArchiveFlags(target);
         cFlags.push(...archiveFlags);
         ldFlags.push(...archiveFlags);
@@ -164,8 +162,6 @@ export default function createLib(target, fileType, options = {}) {
             ...(compilesAsApp(target) ? [stageAppApiInclude(`${buildPath}/crossbind-app`)] : []),
         ];
         buildParams = getCmakeParameters(target, { ...options, nativeGlob, headerDirs });
-
-        triggerExtensions('createLib', 'setFlagWithoutBuildConfig', [buildEnv]);
 
         const archiveFlags = targetArchiveFlags(target).join(' ');
         if (archiveFlags) {

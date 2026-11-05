@@ -1,6 +1,6 @@
 # `state` and `target` shapes — what build hooks receive
 
-> When you write a `crossbind.build.js` hook (`getBuildParams(target, depPaths, ext, buildPath)`, `sourceReplaceList(target, depPaths)`, etc.), or an `extensions[]` plugin, you receive a `state` object and a `target` object. This doc enumerates every key on both. Source: `core/crossbind/src/state/index.js`.
+> When you write a `crossbind.build.js` hook (`getBuildParams(target, depPaths, ext, buildPath)`, `sourceReplaceList(target, depPaths)`, etc.), you receive a `state` object and a `target` object. This doc enumerates every key on both. Source: `core/crossbind/src/state/index.js`.
 
 ## `state` — top-level keys
 
@@ -81,7 +81,7 @@ state.config = {
         copyToDist?:          Record<string, string[]>,
     },
 
-    extensions: Extension[],                    // plugin hooks (see § Extensions)
+    extensions: { name, root, app }[],          // the app extensions the config lists, checked (crossbind-config.md)
 
     functions: {
         isEnabled: (target) => boolean,         // default: checks ${cmakeDir}/{target.path} or .xcframework exists
@@ -280,28 +280,6 @@ targetSpecs: [{
     specs: { env: { GDAL_NUM_THREADS: '0' } },
 }]
 ```
-
-## `extensions[]` — plugin hooks
-
-```ts
-type Extension = {
-    loadConfig?: {
-        after?: (config) => void,                // mutate resolved config after load
-    },
-    buildWasm?: {
-        beforeBuild?:        (emccFlags) => void,        // all wasm targets
-        beforeBuildBrowser?: (emccFlags) => void,        // browser only
-        beforeBuildEdge?:    (emccFlags) => void,        // edge only
-        beforeBuildNodeJS?:  (emccFlags) => void,        // node only
-    },
-    createLib?: {
-        setFlagWithBuildConfig?:    (buildEnv, cFlags, ldFlags) => void,
-        setFlagWithoutBuildConfig?: (buildEnv) => void,
-    },
-}
-```
-
-Used internally by built-in extensions (e.g. for OpenSSL Android cert injection). Most users never write extensions; prefer `targetSpecs` first.
 
 ## When you write a hook, here's what to do
 

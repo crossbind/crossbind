@@ -6,7 +6,6 @@ import getLinkInputs from './getLinkInputs.js';
 import getData from './getData.js';
 import getEnv from './getEnv.js';
 import buildJs from './buildJs.js';
-import triggerExtensions from './extensions.js';
 import state from '../state/index.js';
 import resolveEmbindRustRoot from '../utils/resolveEmbindRust.js';
 import logger from '../utils/logger.js';
@@ -128,8 +127,6 @@ export default async function buildWasm(target, options = {}) {
         if (!isProd && !/-s\s*STACK_OVERFLOW_CHECK=/.test(set)) emccFlags.push('-sSTACK_OVERFLOW_CHECK=1');
     }
 
-    triggerExtensions('buildWasm', 'beforeBuild', [emccFlags]);
-
     if (target.runtime === 'mt' && !emccFlags.includes('-pthread')) {
         emccFlags.push('-pthread');
         emccFlags.push('-sPTHREAD_POOL_SIZE=Math.min(navigator.hardwareConcurrency || 1, 2)');
@@ -203,8 +200,6 @@ export default async function buildWasm(target, options = {}) {
         logger.startStep(target, 'wasm');
         const t0 = performance.now();
 
-        triggerExtensions('buildWasm', 'beforeBuildBrowser', [emccFlags]);
-
         const data = Object.entries(getData('data', target)).map(([key, value]) => ['--preload-file', `${key.replaceAll('@', '@@')}@/crossbind/${value}`]).flat();
         run('em++', [
             '-lembind',
@@ -260,8 +255,6 @@ export default async function buildWasm(target, options = {}) {
         logger.startStep(target, 'wasm');
         const t0 = performance.now();
 
-        triggerExtensions('buildWasm', 'beforeBuildEdge', [emccFlags]);
-
         const data = Object.entries(getData('data', target)).map(([key, value]) => ['--preload-file', `${key.replaceAll('@', '@@')}@/crossbind/${value}`]).flat();
         run('em++', [
             '-lembind',
@@ -299,8 +292,6 @@ export default async function buildWasm(target, options = {}) {
 
     if (target.runtimeEnv === 'node') {
         logger.startStep(target, 'wasm');
-
-        triggerExtensions('buildWasm', 'beforeBuildNodeJS', [emccFlags]);
 
         run('em++', [
             '-lembind',

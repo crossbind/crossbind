@@ -14,6 +14,7 @@ import logger from '../utils/logger.js';
 import { RUNTIME_ENVS } from '../utils/targets.js';
 import { normalizeConanDependencies } from '../utils/conanDependencies.js';
 import isSourceCmakePackage from '../utils/isSourceCmakePackage.js';
+import { listedExtension } from '../utils/appExtensions.js';
 // import getCmakeParameters from './getCmakeParameters.js';
 
 // For the project being built only: dependency builds load published configs that may still set
@@ -135,6 +136,7 @@ export function getFilledConfig(config, options = { isDepend: false }) {
         target: config.target || {},
         // An app's identity: its bundle id, on iOS the Apple team that signs it, the name it shows and its desktop window.
         app: config.app || {},
+        // What an app's host builds in beside its own extensions.
         extensions: config.extensions || [],
         package: null,
         functions: config.functions || {},
@@ -199,9 +201,8 @@ export function getFilledConfig(config, options = { isDepend: false }) {
 
     newConfig.allDependencies = flattenDependencies(newConfig.dependencies);
 
-    newConfig.extensions?.forEach(e => {
-        e?.loadConfig?.after(newConfig);
-    });
+    if (!Array.isArray(newConfig.extensions)) throw new Error('crossbind: "extensions" must be a list of extensions, as their packages\' crossbind.extension.js gives them.');
+    newConfig.extensions = newConfig.extensions.map((extension, i) => listedExtension(extension, `extensions[${i}]`, newConfig.paths.base));
 
     if (newConfig.target.runtime !== 'mt' && newConfig.allDependencies.some((d) => d?.target?.runtime === 'mt')) {
         newConfig.target.runtime = 'mt';
