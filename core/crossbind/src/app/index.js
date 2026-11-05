@@ -1,15 +1,7 @@
-// What an app's host does for its page: the dialogs that pick files or show a message, opening an address or a file
-// outside the app, the app's folders, quitting, its windows, its menus, its tray icon and notifications, the events of
-// the app's native code and a desktop app's updates. Each call goes to the host of an app (target.runtimeEnv: 'app'); in any
-// other build it rejects, or events.on throws. The app's native code calls the same through <crossbind/app.h>, but for
-// the windows, the menus, the tray, notifications and events.on.
-
-const OPEN = { title: 'string', defaultPath: 'string', filters: 'filters', directory: 'boolean', multiple: 'boolean' };
-const SAVE = { title: 'string', defaultPath: 'string', defaultName: 'string', filters: 'filters' };
-const MESSAGE = { message: 'string', detail: 'string', kind: 'string', buttons: 'buttons' };
-const MESSAGE_KINDS = ['info', 'warning', 'error'];
-// Android's dialogs take three buttons at most.
-const MAX_BUTTONS = 3;
+// What an app's host does for its page: the app's folders, quitting, its windows, the events of the app's native code and
+// the functions of its extensions, by their names. Each call goes to the host of an app (target.runtimeEnv: 'app'); in any
+// other build it rejects, or events.on throws. A page imports these from crossbind/app, which an app's bundler plugin
+// takes from the app host, with what crossbind's own extensions give the page, as crossbind/app/core alone holds these.
 
 // The app's crossbind.js, which initNative() loads, hands the calls to the host.
 function hostOf(member, name) {
@@ -22,174 +14,20 @@ function hostOf(member, name) {
 
 const call = (name, options) => hostOf('app', name)(name, options);
 
-const isFilters = (value) => Array.isArray(value) && value.every((filter) => typeof filter?.name === 'string'
-    && Array.isArray(filter.extensions) && filter.extensions.every((extension) => typeof extension === 'string'));
-
-// Spread reads a hole as undefined, which every() skips.
-const isButtons = (value) => Array.isArray(value) && value.length >= 1 && value.length <= MAX_BUTTONS
-    && [...value].every((label) => typeof label === 'string' && label !== '');
-
-// The lists an option may be, beside what typeof tells: how each is checked, and what it is called.
-const LISTS = {
-    filters: { isFitting: isFilters, name: 'list of { name, extensions }' },
-    buttons: { isFitting: isButtons, name: 'list of one to three labels' },
-    list: { isFitting: Array.isArray, name: 'list' },
-    record: { isFitting: (value) => value !== null && typeof value === 'object' && !Array.isArray(value), name: 'object' },
-};
-
-// The options as the host takes them, so a misspelt or mistyped one fails here, saying which.
-function checked(name, options, kinds) {
+// The options as the host takes them, so a misspelt or mistyped one fails here, saying which: each key's kind is what
+// typeof gives, or { isFitting, name } for a list or an object, how it is checked and what it is called.
+export function checkedOptions(name, options, kinds) {
     const keys = Object.keys(kinds).join(', ');
     if (options === null || typeof options !== 'object' || Array.isArray(options)) {
         throw new TypeError(`crossbind: ${name} takes an object of ${keys}.`);
     }
     for (const [key, value] of Object.entries(options)) {
         if (!Object.hasOwn(kinds, key)) throw new TypeError(`crossbind: ${name} takes ${keys}; ${key} is none of them.`);
-        const list = LISTS[kinds[key]];
-        if (value !== undefined && !(list ? list.isFitting(value) : typeof value === kinds[key])) {
-            throw new TypeError(`crossbind: ${name}'s ${key} is no ${list ? list.name : kinds[key]}.`);
-        }
+        const kind = kinds[key];
+        const isOfKind = typeof kind === 'string' ? typeof value === kind : kind.isFitting(value);
+        if (value !== undefined && !isOfKind) throw new TypeError(`crossbind: ${name}'s ${key} is no ${typeof kind === 'string' ? kind : kind.name}.`);
     }
     return options;
-}
-
-function checkedMessage(options) {
-    checked('dialog.message', options, MESSAGE);
-    if (!options.message) throw new TypeError('crossbind: dialog.message takes a message.');
-    if (options.kind !== undefined && !MESSAGE_KINDS.includes(options.kind)) {
-        throw new TypeError(`crossbind: dialog.message's kind is info, warning or error, not ${JSON.stringify(options.kind)}.`);
-    }
-    return options;
-}
-
-function checkedPath(name, path) {
-    if (typeof path !== 'string' || !path) throw new TypeError(`crossbind: ${name} takes a path.`);
-    return { path };
-}
-
-// A menu of the bar is { label, items } or a standard one by its role. An item is { label, id, accelerator, enabled,
-// checked }, a submenu { label, items }, { type: 'separator' }, or a standard item by its role, which a label may
-// rename and, but for an editing one, which keeps the platform's keys, an accelerator change.
-const MENU_ROLES = ['editMenu', 'windowMenu'];
-const EDITING_ROLES = ['undo', 'redo', 'cut', 'copy', 'paste', 'selectAll'];
-const ITEM_ROLES = [...EDITING_ROLES, 'minimize', 'close', 'quit'];
-const ITEM_KINDS = {
-    label: 'string', id: 'string', accelerator: 'string', enabled: 'boolean', checked: 'boolean', items: 'list', role: 'string', type: 'string',
-};
-const MODIFIERS = ['CmdOrCtrl', 'Ctrl', 'Alt', 'Shift'];
-const KEY = /^([A-Z0-9]|F([1-9]|1[0-2])|Enter|Escape|Tab|Space|Backspace|Delete|Up|Down|Left|Right|Home|End|PageUp|PageDown|Plus|Minus|Comma|Period)$/;
-
-// Typing uses neither a key with CmdOrCtrl, Ctrl or Alt nor a function key.
-function checkAccelerator(accelerator, where, name) {
-    const modifiers = accelerator.split('+');
-    const key = modifiers.pop();
-    const isKnown = KEY.test(key) && modifiers.every((modifier) => MODIFIERS.includes(modifier)) && new Set(modifiers).size === modifiers.length;
-    if (!isKnown || !(/^F\d+$/.test(key) || modifiers.some((modifier) => modifier !== 'Shift'))) {
-        throw new TypeError(`crossbind: ${name}'s ${where}.accelerator ${JSON.stringify(accelerator)} is none, which is a key with CmdOrCtrl, Ctrl or Alt and maybe Shift, joined by +, as CmdOrCtrl+Shift+O is, or F1 to F12, alone or with any of them.`);
-    }
-}
-
-function checkMenuItem(item, where, isMenu, name = 'menu.set') {
-    if (item === null || typeof item !== 'object' || Array.isArray(item)) throw new TypeError(`crossbind: ${name}'s ${where} is no object.`);
-    for (const [key, value] of Object.entries(item)) {
-        if (!Object.hasOwn(ITEM_KINDS, key)) throw new TypeError(`crossbind: ${name}'s ${where} takes ${Object.keys(ITEM_KINDS).join(', ')}; ${key} is none of them.`);
-        const kind = ITEM_KINDS[key];
-        if (value !== undefined && !(kind === 'list' ? Array.isArray(value) : typeof value === kind)) {
-            throw new TypeError(`crossbind: ${name}'s ${where}.${key} is no ${kind}.`);
-        }
-    }
-    const has = (...keys) => keys.filter((key) => item[key] !== undefined);
-    const refuse = (what) => {
-        throw new TypeError(`crossbind: ${name}'s ${where} ${what}.`);
-    };
-    if (item.type !== undefined) {
-        if (item.type !== 'separator' || isMenu || has(...Object.keys(ITEM_KINDS)).length > 1) refuse("is no separator, which is { type: 'separator' } alone, inside a menu");
-    } else if (item.role !== undefined) {
-        const roles = isMenu ? MENU_ROLES : [...ITEM_ROLES, ...MENU_ROLES];
-        if (!roles.includes(item.role)) refuse(`has no role ${JSON.stringify(item.role)}, which is one of ${roles.join(', ')}`);
-        if (MENU_ROLES.includes(item.role) && has('id', 'accelerator', 'enabled', 'checked', 'items').length > 0) refuse('is a standard menu, which takes a label alone');
-        if (EDITING_ROLES.includes(item.role) && item.accelerator !== undefined) refuse("is an editing item, which keeps the platform's keys and takes a label alone");
-        if (has('id', 'enabled', 'checked', 'items').length > 0) refuse('has a role, which takes a label and an accelerator alone');
-    } else if (!item.label) {
-        refuse('has no label');
-    } else if (item.items !== undefined) {
-        if (has('id', 'accelerator', 'enabled', 'checked').length > 0) refuse('is a menu, which takes a label and items alone');
-        // entries() reads a hole as undefined, which forEach skips.
-        for (const [index, child] of item.items.entries()) checkMenuItem(child, `${where}.items[${index}]`, false, name);
-    } else if (isMenu) {
-        refuse('is a menu, which takes a label and items, or the role editMenu or windowMenu');
-    }
-    if (item.accelerator !== undefined) checkAccelerator(item.accelerator, where, name);
-}
-
-function checkedMenus(menus) {
-    if (!Array.isArray(menus)) throw new TypeError('crossbind: menu.set takes a list of menus.');
-    for (const [index, item] of menus.entries()) checkMenuItem(item, `menus[${index}]`, true);
-    return { menus };
-}
-
-// A popup's items are those of one of menu.set's menus.
-function checkedPopup(items, at) {
-    if (!Array.isArray(items)) throw new TypeError('crossbind: menu.popup takes a list of items.');
-    for (const [index, item] of items.entries()) checkMenuItem(item, `items[${index}]`, false, 'menu.popup');
-    if (at === null || typeof at !== 'object' || !Number.isFinite(at.x) || !Number.isFinite(at.y)) {
-        throw new TypeError("crossbind: menu.popup takes the point it opens at, { x, y }, in the page's CSS pixels from its top left, as a contextmenu event's clientX and clientY are.");
-    }
-    return { items, x: at.x, y: at.y };
-}
-
-// A tray item is { label, id, enabled, checked }, a submenu { label, items } or { type: 'separator' }: a tray's menu has
-// no keys, and no standard item, as the Dock's menu has none.
-const TRAY = { tooltip: 'string', menu: 'list' };
-const TRAY_ITEM = { label: 'string', id: 'string', enabled: 'boolean', checked: 'boolean', items: 'list', type: 'string' };
-const NOTIFICATION = { title: 'string', body: 'string' };
-
-function checkTrayItem(item, where, name = 'tray.set') {
-    const refuse = (what) => {
-        throw new TypeError(`crossbind: ${name}'s ${where} ${what}.`);
-    };
-    if (item === null || typeof item !== 'object' || Array.isArray(item)) refuse('is no object');
-    for (const [key, value] of Object.entries(item)) {
-        if (!Object.hasOwn(TRAY_ITEM, key)) refuse(`takes ${Object.keys(TRAY_ITEM).join(', ')}; ${key} is none of them`);
-        const kind = TRAY_ITEM[key];
-        if (value !== undefined && !(kind === 'list' ? Array.isArray(value) : typeof value === kind)) refuse(`.${key} is no ${kind}`);
-    }
-    const others = Object.keys(item).filter((key) => key !== 'type' && item[key] !== undefined);
-    if (item.type !== undefined) {
-        if (item.type !== 'separator' || others.length > 0) refuse("is no separator, which is { type: 'separator' } alone");
-    } else if (!item.label) {
-        refuse('has no label');
-    } else if (item.items !== undefined) {
-        if (others.some((key) => key !== 'label' && key !== 'items')) refuse('is a menu, which takes a label and items alone');
-        // entries() reads a hole as undefined, which forEach skips.
-        for (const [index, child] of item.items.entries()) checkTrayItem(child, `${where}.items[${index}]`, name);
-    }
-}
-
-function checkedTray(options) {
-    checked('tray.set', options, TRAY);
-    for (const [index, item] of (options.menu ?? []).entries()) checkTrayItem(item, `menu[${index}]`);
-    return options;
-}
-
-function checkedDock(items) {
-    if (!Array.isArray(items)) throw new TypeError('crossbind: menu.setDock takes a list of items.');
-    for (const [index, item] of items.entries()) checkTrayItem(item, `items[${index}]`, 'menu.setDock');
-    return { items };
-}
-
-// A user activity is { type, userInfo, webpageUrl }: NSUserActivity takes an http or https page alone.
-const ACTIVITY = { type: 'string', userInfo: 'record', webpageUrl: 'string' };
-
-function checkedActivity(activity) {
-    if (activity === null) return {};
-    checked('app.setUserActivity', activity, ACTIVITY);
-    if (!activity.type) throw new TypeError('crossbind: app.setUserActivity takes a type, one of app.activityTypes.');
-    const page = activity.webpageUrl;
-    if (page !== undefined && !(URL.canParse(page) && ['http:', 'https:'].includes(new URL(page).protocol))) {
-        throw new TypeError("crossbind: app.setUserActivity's webpageUrl is no http or https address.");
-    }
-    return activity;
 }
 
 // A window's options, as windows.open() takes them, and those windows.set() changes: sizes and places in logical pixels.
@@ -212,7 +50,7 @@ const COLOR = /^#[0-9a-f]{6}$/i;
 const isWindowId = (id) => Number.isSafeInteger(id) && id >= 1;
 
 function checkedWindow(name, options, kinds) {
-    checked(name, options, kinds);
+    checkedOptions(name, options, kinds);
     const least = name === 'windows.set' ? 0 : 1;
     for (const key of WINDOW_SIZES) {
         const size = options[key];
@@ -258,37 +96,6 @@ function windowOf(name, id) {
     return { id };
 }
 
-function checkedNotification(options) {
-    checked('notification.show', options, NOTIFICATION);
-    if (!options.title) throw new TypeError('crossbind: notification.show takes a title.');
-    return options;
-}
-
-export const dialog = {
-    // The paths of the files or folders the user picked, or null when they cancelled.
-    open: async (options = {}) => call('dialog.open', checked('dialog.open', options, OPEN)),
-    // The path the user chose to save to, or null when they cancelled.
-    save: async (options = {}) => call('dialog.save', checked('dialog.save', options, SAVE)),
-    // The index of the button the user clicked: Return gives the first, and Escape or closing the dialog the last.
-    message: async (options) => call('dialog.message', checkedMessage(options)),
-};
-
-export const shell = {
-    // An http, https or mailto address in the default browser or mail app.
-    openExternal: async (url) => {
-        if (typeof url !== 'string' && !(url instanceof URL)) throw new TypeError('crossbind: shell.openExternal takes an address.');
-        return call('shell.openExternal', { url: String(url) });
-    },
-    // A file in the app the system opens its kind with. Opening a program runs it, and a script in the page could ask for
-    // any path, so the host opens files where app.openPath in crossbind.config.js lets it alone; native code opens any.
-    openPath: async (path) => call('shell.openPath', checkedPath('shell.openPath', path)),
-    // A file, selected, in the system's file manager: one in the app's folders, or one a dialog picked during this run.
-    revealInFolder: async (path) => call('shell.revealInFolder', checkedPath('shell.revealInFolder', path)),
-    // A file or folder moved to the system's trash, where its user can take it back: one in the app's folders, not one of
-    // them itself, or one a dialog picked during this run. Where the system has no trash, nothing moves.
-    trash: async (path) => call('shell.trash', checkedPath('shell.trash', path)),
-};
-
 export const app = {
     // The app's own folders, made when first asked for: { data, cache, logs }.
     paths: async () => call('app.paths', {}),
@@ -298,20 +105,9 @@ export const app = {
     requestQuit: async () => call('app.requestQuit', {}),
     // Ends the app as quit() does, then opens it again, with no link.
     relaunch: async () => call('app.relaunch', {}),
-    // The links of app.urlSchemes that opened the app and have not reached the page yet, the one it was launched with
-    // among them, which the host holds as the events open-url; later ones come as the event. Listening first, then
-    // asking, misses none.
-    launchUrls: async () => (await events.held('open-url')).map((value) => value?.url).filter((url) => typeof url === 'string'),
-    // The files the system opened the app with that have not reached the page yet, those no extension's type takes, the
-    // launch's own among them, which the host holds as the events open-files; later ones come as the event.
-    launchFiles: async () => (await events.held('open-files')).flatMap((value) => (Array.isArray(value?.paths) ? value.paths : []))
-        .filter((path) => typeof path === 'string'),
     // The launch that started a desktop app: { args, cwd }, its arguments without the program's own and without the links
     // of the app's schemes, and the folder it was launched in. A phone's has neither.
     launchArgs: async () => call('app.launchArgs', {}),
-    // Makes this user activity the app's current one on iOS and macOS, for its user's other devices to continue, as
-    // Handoff does: { type, userInfo, webpageUrl }, its type one of app.activityTypes. null makes none current.
-    setUserActivity: async (activity) => call('activities.set', checkedActivity(activity)),
 };
 
 export const windows = {
@@ -336,34 +132,6 @@ export const windows = {
     // isMinimized, isFullscreen, isFocused }.
     list: async () => call('windows.list', {}),
     current: async () => call('windows.current', {}),
-};
-
-export const menu = {
-    // Sets the app's menus: on macOS after its app menu, which the app keeps, and on Windows and Linux in a bar of its
-    // window. A click of an item with an id is an event, menu, of { id }, and of { id, checked } for an item it checked
-    // or unchecked; a standard item does what its role says.
-    set: async (menus) => call('menu.set', checkedMenus(menus)),
-    // Opens a menu of these items at the page's point, on the desktop, as a right click's menu opens: it resolves with
-    // the id of the item clicked, or null when the menu closes without one, and a standard item does what its role says.
-    // A contextmenu listener that opens it keeps the webview's own menu away with preventDefault().
-    popup: async (items, at) => call('menu.popup', checkedPopup(items, at)),
-    // Sets the menu a macOS app's Dock icon shows above the system's own items, of a tray's items; a click of an item
-    // with an id is the event menu, as one of menu.set's is. An empty list takes it away.
-    setDock: async (items) => call('menu.setDock', checkedDock(items)),
-};
-
-export const tray = {
-    // The app's icon in the macOS menu bar, the Windows notification area or a Linux desktop's status tray, with its
-    // tooltip and the menu a click opens. A click of an item with an id is the event menu, as one of menu.set's is, and a
-    // click of the icon the event tray where it opens no menu. Set again, it changes the icon that shows.
-    set: async (options = {}) => call('tray.set', checkedTray(options)),
-    // Takes the icon away.
-    remove: async () => call('tray.remove', {}),
-};
-
-export const notification = {
-    // A notification of the system's, with a title and a body; a click on it is the event notification.
-    show: async (options) => call('notification.show', checkedNotification(options)),
 };
 
 export const events = {
@@ -413,11 +181,3 @@ export const routeUrl = (extension, path) => {
     return `${isAndroid ? ANDROID_ORIGIN : 'crossbind://app'}/ext/${extension}${path}`;
 };
 
-// One check or install runs at a time, and another rejects meanwhile.
-export const updater = {
-    // The version app.updater.url in crossbind.config.js offers when it is newer than the app's, as { version }, or null.
-    check: async () => call('updater.check', {}),
-    // Downloads that version, checks that the key of app.updater.publicKey signed it and installs it in place of the app,
-    // which then quits and opens the new version. It rejects when that fails.
-    install: async () => call('updater.install', {}),
-};

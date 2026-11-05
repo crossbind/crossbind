@@ -15,13 +15,13 @@ import buildWasiCommand from './actions/buildWasiCommand.js';
 import buildNode, { addonsInPackages, bundleNodeLoader, publishNodeData } from './actions/buildNode.js';
 import buildNativeCommand from './actions/buildNativeCommand.js';
 import buildApp, { appOutputPath, assertAppRunner, publishApp } from './actions/buildApp.js';
-import { UPDATER_KEY, newUpdaterKey } from './actions/appUpdate.js';
 import {
     makeUploadKey, releaseSigningEnv, showUploadKeyPassword, useUploadKey,
 } from './actions/uploadKey.js';
 import publish, { publishHelp, publishersOf } from './actions/publish.js';
 import { iosDeviceOption } from './actions/iosDevice.js';
 import addExtension from './actions/addExtension.js';
+import addExtensionCommands from './actions/extensionCommands.js';
 import buildExternal from './actions/buildExternal.js';
 import buildPackageTypes from './actions/buildTypes.js';
 import buildLib from './actions/buildLib.js';
@@ -167,14 +167,6 @@ const commandApp = program.command('app').description('build the project as an a
         });
 });
 
-commandApp.command('updater-key')
-    .description("make the key pair that signs a desktop app's updates")
-    .action(() => {
-        const { publicKey, privateKey } = newUpdaterKey();
-        console.log(`crossbind: app.updater.publicKey in crossbind.config.js: ${publicKey}`);
-        console.log(`crossbind: ${UPDATER_KEY}, kept secret where the app is built: ${privateKey}`);
-    });
-
 commandApp.command('upload-key')
     .description("make this machine's upload key, which signs an Android app's bundle for Google Play")
     .option('--use <keystore>', 'make a key you have the upload key instead, once it opens with its password')
@@ -189,8 +181,8 @@ commandApp.command('upload-key')
 
 commandApp.command('publish')
     .usage('[store] [options]')
-    .description("build the app and send it to a store, as its publisher does: crossbind's own google-play sends an Android bundle to a Google Play track, app-store an iOS app to App Store Connect for TestFlight and App Review, and github a desktop app's installers and update to a GitHub release; an app's extensions add more")
-    .addOption(new Option('-p, --platform <platform>', "the app's platform: without a store, android's is google-play and ios' app-store (default: CROSSBIND_APP_PLATFORM, else for a store of desktop apps this machine's)").choices(APP_PLATFORMS))
+    .description("build the app and send it to a store, as its publisher does, one of crossbind's own or of an extension's")
+    .addOption(new Option('-p, --platform <platform>', "the app's platform: without a store, the one that goes first for it (default: CROSSBIND_APP_PLATFORM, else for a store of desktop apps this machine's)").choices(APP_PLATFORMS))
     .addHelpText('after', () => publishHelp(publishersOf(state.config?.extensions ?? [])))
     // The store's own options, and Vite's, as --mode, which go on to Vite.
     .allowUnknownOption()
@@ -199,6 +191,9 @@ commandApp.command('publish')
         assertAppProject();
         await publish(command.args, { platform, envPlatform: process.env.CROSSBIND_APP_PLATFORM, runVite });
     });
+
+// crossbind app alone reads them, so that an extension's package that cannot be read stops no other command.
+if (process.argv[2] === 'app') addExtensionCommands(commandApp);
 
 program.command('add')
     .description("install an app extension's package with the project's package manager and list it in crossbind.config.js's extensions")

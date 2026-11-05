@@ -1,8 +1,0 @@
-{
-    "name": "activities",
-    "contract": 1,
-    "app": {
-        "macos": { "sources": ["apple.mm"] },
-        "ios": { "sources": ["apple.mm"] }
-    }
-}

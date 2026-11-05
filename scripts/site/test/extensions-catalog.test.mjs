@@ -17,6 +17,23 @@ function treeOf(t, manifests) {
     return root;
 }
 
+test('the catalog leaves out the extensions an app has by having the host', (t) => {
+    const root = treeOf(t, [
+        { name: '@crossbind/extension-clipboard', description: 'crossbind app extension: the clipboard.' },
+        { name: '@crossbind/extension-dialog', description: 'crossbind app extension: the dialogs.' },
+    ]);
+    fs.mkdirSync(path.join(root, 'core', 'app-host'), { recursive: true });
+    fs.writeFileSync(
+        path.join(root, 'core', 'app-host', 'package.json'),
+        JSON.stringify({ dependencies: { '@crossbind/extension-dialog': 'workspace:^' } }),
+    );
+
+    assert.deepEqual(
+        readExtensionsTree(root).map(({ name }) => name),
+        ['@crossbind/extension-clipboard'],
+    );
+});
+
 const registryOf = (tags) => ({ distTags: async (name) => tags[name] ?? null });
 
 test("the repository's own extensions have the name and the summary the Apps guide shows", () => {

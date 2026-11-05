@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'vitest';
 import {
-    appBackgroundColor, appCategory, appCopyright, appDisplayName, appEncryption, appHeader, appId, appPermissions, appPrivacy, appUpdater,
-    appUrlSchemes, appWindow, hostExtensionOptions, iosAppGroup, iosMultipleWindows, urlSchemeOwners, usageDescriptions,
+    appBackgroundColor, appCategory, appCopyright, appDisplayName, appEncryption, appHeader, appId, appPermissions, appPrivacy,
+    appUrlSchemes, appWindow, iosAppGroup, iosMultipleWindows, urlSchemeOwners, usageDescriptions,
 } from '../src/utils/appOptions.js';
 
 const config = (app = {}, version = '1.2.3') => ({ general: { name: 'demo-app' }, app, package: { version } });
@@ -154,66 +154,6 @@ describe("an app's background color", () => {
         for (const backgroundColor of ['red', '#fff', '#12345g', '#1e1e1e80', 'rgb(0, 0, 0)', 0x1e1e1e]) {
             expect(() => appBackgroundColor(config({ window: { backgroundColor } }))).toThrow('no color of the form #rrggbb');
         }
-    });
-});
-
-describe("a desktop app's updater", () => {
-    const publicKey = Buffer.alloc(32, 7).toString('base64');
-    const url = 'https://example.com/updates/demo-app-{platform}-{arch}.update.json';
-
-    test('is none without app.updater', () => {
-        expect(appUpdater(config())).toBeNull();
-    });
-
-    test("takes where the updates are and the key that checks them, with package.json's version", () => {
-        expect(appUpdater(config({ updater: { url, publicKey } }, '1.2.3-beta.4'))).toEqual({ url, publicKey: Buffer.alloc(32, 7), version: '1.2.3-beta.4' });
-    });
-
-    test('takes an https address, or http on this machine alone', () => {
-        for (const local of ['http://localhost:8080/u.json', 'http://127.0.0.1/u.json', 'http://[::1]/u.json']) {
-            expect(appUpdater(config({ updater: { url: local, publicKey } })).url).toBe(local);
-        }
-        for (const bad of ['http://example.com/u.json', 'ftp://example.com/u.json', 'example.com/u.json', 'https://example.com/a b.json', 'https://example.com/"u".json', 42]) {
-            expect(() => appUpdater(config({ updater: { url: bad, publicKey } }))).toThrow('is no https address');
-        }
-    });
-
-    test("takes a manifest's address, beside which its file is, as the host can take it", () => {
-        for (const bad of ['https://example.com', 'https://example.com?x=1', 'https://example.com/updates/', 'https://example.com/güncelleme.json']) {
-            expect(() => appUpdater(config({ updater: { url: bad, publicKey } }))).toThrow('is no https address of a manifest');
-        }
-    });
-
-    test('refuses a key of small order, whose signatures anyone can forge, whatever the sign of x', () => {
-        const identity = Buffer.alloc(32);
-        identity[0] = 1;
-        identity[31] = 0x80;
-        for (const key of [Buffer.alloc(32), identity]) {
-            expect(() => appUpdater(config({ updater: { url, publicKey: key.toString('base64') } }))).toThrow('anyone can forge signatures for');
-        }
-    });
-
-    test('takes the Ed25519 public key `crossbind app updater-key` prints, as it prints it', () => {
-        for (const bad of [Buffer.alloc(31).toString('base64'), `${publicKey} `, publicKey.replace(/=$/, ''), undefined]) {
-            expect(() => appUpdater(config({ updater: { url, publicKey: bad } }))).toThrow('is no Ed25519 public key');
-        }
-    });
-
-    test('refuses an option it does not take', () => {
-        expect(() => appUpdater(config({ updater: { url, publicKey, interval: 60 } }))).toThrow('interval is none of them');
-        expect(() => appUpdater(config({ updater: url }))).toThrow('is no object of url and publicKey');
-        expect(() => appUpdater(config({ updater: null }))).toThrow('is no object of url and publicKey');
-    });
-
-    test('needs a semver version in package.json to tell a newer one by', () => {
-        for (const version of ['1.2', '1.2.3.4', '1.2.3-', '1.2.3-a..b', '1.2.3+', 'v1.2.3']) {
-            expect(() => appUpdater(config({ updater: { url, publicKey } }, version))).toThrow('is no semver version');
-        }
-    });
-
-    test('needs a general.name an app can fetch its update files by', () => {
-        expect(() => appUpdater({ general: { name: 'my app' }, app: { updater: { url, publicKey } } })).toThrow('general.name "my app" names');
-        expect(() => appUpdater({ general: { name: '.hidden' }, app: { updater: { url, publicKey } } })).toThrow('not starting with a dot');
     });
 });
 
@@ -387,137 +327,6 @@ describe("an iOS app's privacy reasons", () => {
             .toThrow('app.privacy.fileTimestamp ["E174.1"] is no list of Apple\'s reasons for it, which are DDA9.1, C617.1, 3B52.1, 0A2A.1');
         expect(() => appPrivacy(config({ privacy: { userDefaults: [] } }))).toThrow('app.privacy.userDefaults []');
         expect(() => appPrivacy(config({ privacy: { systemBootTime: '35F9.1' } }))).toThrow('app.privacy.systemBootTime "35F9.1"');
-    });
-});
-
-describe("the options of the host's own extensions", () => {
-    test("give a desktop app's instance the app's id, which names it, with app.singleInstance", () => {
-        ['darwin', 'linux', 'win32'].forEach((platform) => {
-            expect(hostExtensionOptions(config({ id: 'com.example.demo', singleInstance: true }), platform).instance).toEqual({ id: 'com.example.demo' });
-        });
-        expect(hostExtensionOptions(config({ singleInstance: false }), 'win32')).not.toHaveProperty('instance');
-        expect(hostExtensionOptions(config(), 'darwin')).not.toHaveProperty('instance');
-        // A phone keeps every app to one instance itself.
-        ['ios', 'android'].forEach((platform) => {
-            expect(hostExtensionOptions(config({ singleInstance: true }), platform)).not.toHaveProperty('instance');
-        });
-    });
-
-    test('keep a Windows or Linux app with a scheme to one instance unless app.singleInstance is false, as a link starts it again', () => {
-        const linked = config({ urlSchemes: ['myapp'] });
-        expect(hostExtensionOptions(linked, 'win32')).toHaveProperty('instance');
-        expect(hostExtensionOptions(linked, 'linux')).toHaveProperty('instance');
-        // macOS hands a link to the app that runs.
-        expect(hostExtensionOptions(linked, 'darwin')).not.toHaveProperty('instance');
-        expect(hostExtensionOptions(config({ urlSchemes: ['myapp'], singleInstance: false }), 'linux')).not.toHaveProperty('instance');
-        // An extension's scheme starts the app again as well.
-        const extended = { ...config(), extensions: [{ name: 'oauth', app: { urlSchemes: ['myapp.oauth'] } }] };
-        expect(hostExtensionOptions(extended, 'win32')).toHaveProperty('instance');
-    });
-
-    test("give the links, which hand the page the links of app.urlSchemes, to an app that lists any, on every platform", () => {
-        ['darwin', 'linux', 'win32', 'ios', 'android'].forEach((platform) => {
-            expect(hostExtensionOptions(config({ urlSchemes: ['myapp'] }), platform).links).toEqual({});
-        });
-        expect(hostExtensionOptions(config(), 'darwin')).not.toHaveProperty('links');
-        // An extension's schemes reach that extension, not the page.
-        const extended = { ...config(), extensions: [{ name: 'oauth', app: { urlSchemes: ['myapp.oauth'] } }] };
-        expect(hostExtensionOptions(extended, 'ios')).not.toHaveProperty('links');
-    });
-
-    test("give an Apple app's activities, which hand the page the user activities of app.activityTypes and take its own, the types it lists", () => {
-        const continuing = config({ activityTypes: ['com.example.demo.edit'] });
-        ['darwin', 'ios'].forEach((platform) => expect(hostExtensionOptions(continuing, platform).activities).toEqual({ types: ['com.example.demo.edit'] }));
-        ['linux', 'win32', 'android'].forEach((platform) => expect(hostExtensionOptions(continuing, platform)).not.toHaveProperty('activities'));
-        // An extension's types reach that extension, not the page.
-        const extended = { ...config(), extensions: [{ name: 'notes', app: { activityTypes: ['com.example.notes.open'] } }] };
-        expect(hostExtensionOptions(extended, 'ios')).not.toHaveProperty('activities');
-    });
-
-    test("give a phone's shortcuts, which hand the page the taps of app.shortcutItems' quick actions, where it lists any", () => {
-        const acting = config({ shortcutItems: [{ type: 'new-note', title: 'New note' }] });
-        ['ios', 'android'].forEach((platform) => expect(hostExtensionOptions(acting, platform).shortcuts).toEqual({}));
-        ['darwin', 'linux', 'win32'].forEach((platform) => expect(hostExtensionOptions(acting, platform)).not.toHaveProperty('shortcuts'));
-        const extended = { ...config(), extensions: [{ name: 'scanner', app: { shortcutItems: [{ type: 'scan', title: 'Scan' }] } }] };
-        expect(hostExtensionOptions(extended, 'android')).not.toHaveProperty('shortcuts');
-    });
-
-    test("give a phone's links the https links of app.links as well, which a desktop's system hands no app", () => {
-        ['ios', 'android'].forEach((platform) => expect(hostExtensionOptions(config({ links: ['example.com'] }), platform).links).toEqual({}));
-        ['darwin', 'linux', 'win32'].forEach((platform) => expect(hostExtensionOptions(config({ links: ['example.com'] }), platform)).not.toHaveProperty('links'));
-        const extended = { ...config(), extensions: [{ name: 'invites', app: { links: ['example.com/invite'] } }] };
-        expect(hostExtensionOptions(extended, 'android')).not.toHaveProperty('links');
-    });
-
-    test('give the files, which hand the page the files no extension owns, to an app that opens files, and keep it to one instance on Windows and Linux', () => {
-        const opening = config({ fileTypes: [{ name: 'GeoJSON', extensions: ['geojson'] }] });
-        ['darwin', 'linux', 'win32', 'ios', 'android'].forEach((platform) => expect(hostExtensionOptions(opening, platform).files).toEqual({}));
-        expect(hostExtensionOptions({ ...config(), extensions: [{ name: 'maps', app: { fileTypes: [{ name: 'KML', extensions: ['kml'] }] } }] }, 'linux'))
-            .toMatchObject({ files: {}, instance: {} });
-        expect(hostExtensionOptions(opening, 'win32')).toHaveProperty('instance');
-        expect(hostExtensionOptions(opening, 'darwin')).not.toHaveProperty('instance');
-        expect(hostExtensionOptions(config(), 'linux')).not.toHaveProperty('files');
-    });
-
-    test("give a macOS app whose app.permissions lists the location the page's location, which WKWebView gives a macOS page none of", () => {
-        const located = config({ permissions: { location: 'To show where you are' } });
-        expect(hostExtensionOptions(located, 'darwin')['page-location']).toEqual({});
-        ['ios', 'linux', 'win32', 'android'].forEach((platform) => expect(hostExtensionOptions(located, platform)).not.toHaveProperty('page-location'));
-        expect(hostExtensionOptions(config({ permissions: { camera: 'To scan' } }), 'darwin')).not.toHaveProperty('page-location');
-    });
-
-    test('refuse an app.singleInstance that is no boolean on the desktop, naming the values it takes', () => {
-        expect(() => hostExtensionOptions(config({ singleInstance: 'yes' }), 'darwin')).toThrow('app.singleInstance "yes" is no boolean');
-        expect(hostExtensionOptions(config({ singleInstance: 'yes' }), 'ios')).not.toHaveProperty('instance');
-    });
-
-    test("give the shell where the page's shell.openPath opens files: nowhere without app.openPath", () => {
-        expect(hostExtensionOptions(config(), 'darwin')).toEqual({ shell: { openPath: [] }, 'page-navigation': { load: [] } });
-        expect(hostExtensionOptions(config({ openPath: ['logs', 'picked'] }), 'ios').shell).toEqual({ openPath: ['logs', 'picked'] });
-    });
-
-    test("give the page's navigation the origins app.navigation.load lists, on every platform", () => {
-        const load = ['https://login.example.com', 'http://localhost:8080'];
-        ['darwin', 'linux', 'win32', 'ios', 'android'].forEach((platform) => {
-            expect(hostExtensionOptions(config({ navigation: { load } }), platform)['page-navigation']).toEqual({ load });
-        });
-    });
-
-    test('refuse an app.navigation of anything but origins to load', () => {
-        expect(() => hostExtensionOptions(config({ navigation: ['https://a.example'] }), 'linux')).toThrow('app.navigation ["https://a.example"] is no object');
-        expect(() => hostExtensionOptions(config({ navigation: { open: [] } }), 'linux')).toThrow('app.navigation takes load alone; open is none of it.');
-        expect(() => hostExtensionOptions(config({ navigation: { load: 'https://a.example' } }), 'linux')).toThrow('is no list of origins');
-        for (const origin of ['https://a.example/', 'https://a.example/login', 'https://A.example', 'https://a.example:443', 'file:///etc', 'crossbind://app', 7]) {
-            expect(() => hostExtensionOptions(config({ navigation: { load: [origin] } }), 'linux')).toThrow(`app.navigation.load's ${JSON.stringify(origin)} is no http or https origin`);
-        }
-    });
-
-    test('refuse an app.openPath of anything but data, cache, logs and picked', () => {
-        expect(() => hostExtensionOptions(config({ openPath: 'data' }), 'linux')).toThrow('app.openPath "data" is no list');
-        expect(() => hostExtensionOptions(config({ openPath: ['data', 'home'] }), 'linux')).toThrow('"home" is none of them');
-    });
-
-    test("give a Linux app's menu the app's id, which its tray names itself by on the session bus", () => {
-        expect(hostExtensionOptions(config({ id: 'com.example.demo' }), 'linux').menu).toEqual({ id: 'com.example.demo' });
-        ['darwin', 'win32', 'ios', 'android'].forEach((platform) => {
-            expect(hostExtensionOptions(config({ id: 'com.example.demo' }), platform)).not.toHaveProperty('menu');
-        });
-    });
-
-    test("give a desktop app's updater app.updater, with the app's version and id, which an update's signature covers", () => {
-        const updater = { url: 'https://example.com/{platform}-{arch}.json', publicKey: Buffer.alloc(32, 7).toString('base64') };
-        ['darwin', 'linux', 'win32'].forEach((platform) => {
-            expect(hostExtensionOptions(config({ id: 'com.example.demo', updater }), platform).updater)
-                .toEqual({ url: updater.url, publicKey: updater.publicKey, version: '1.2.3', id: 'com.example.demo' });
-        });
-        expect(hostExtensionOptions(config(), 'win32')).not.toHaveProperty('updater');
-    });
-
-    test("give a phone's updater nothing, as its store updates it, and check no app.updater there", () => {
-        ['ios', 'android'].forEach((platform) => {
-            expect(hostExtensionOptions(config({ updater: { url: 'http://example.com/u.json', publicKey: 'key' } }), platform)).not.toHaveProperty('updater');
-        });
-        expect(() => hostExtensionOptions(config({ updater: { url: 'http://example.com/u.json', publicKey: 'key' } }), 'darwin')).toThrow('is no https address');
     });
 });
 

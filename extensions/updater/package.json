@@ -1,0 +1,40 @@
+{
+    "name": "@crossbind/extension-updater",
+    "version": "2.0.0-beta.68",
+    "description": "crossbind app extension: a desktop app's own updates, each checked against its Ed25519 signature.",
+    "homepage": "https://github.com/crossbind/crossbind/tree/main/extensions/updater#readme",
+    "repository": "https://github.com/crossbind/crossbind.git",
+    "license": "MIT AND (BSD-2-Clause OR CC0-1.0)",
+    "type": "module",
+    "exports": {
+        "./page": {
+            "types": "./page.d.ts",
+            "default": "./page.js"
+        },
+        "./crossbind.extension.js": "./crossbind.extension.js"
+    },
+    "files": [
+        "crossbind.extension.js",
+        "native",
+        "page.d.ts",
+        "page.js",
+        "src"
+    ],
+    "crossbind": {
+        "extension": "./crossbind.extension.js"
+    },
+    "peerDependencies": {
+        "crossbind": "workspace:^"
+    },
+    "devDependencies": {
+        "crossbind": "workspace:^"
+    },
+    "keywords": [
+        "crossbind-extension",
+        "crossbind",
+        "installer",
+        "updates",
+        "updater",
+        "app"
+    ]
+}

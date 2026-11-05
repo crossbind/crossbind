@@ -2,7 +2,7 @@
 import {
     state, createLib, createBridgeFile, buildWasm, buildDependencies, getTargetParams, getFilteredBuildTargets, isSourceNewer, getRustJsScript,
     isAppSource, getFileHash, buildProjectApp, appLayout, appOutputName, appTargetParams, publishApp, buildForSimulator,
-    openInSimulator, buildApk, openOnDevice, buildForIosDevice, openOnIosDevice, connectedIosDevice, iosDevServer,
+    openInSimulator, buildApk, openOnDevice, buildForIosDevice, openOnIosDevice, connectedIosDevice, iosDevServer, resolveAppPageApi,
 } from 'crossbind';
 import rollupCrossbindPlugin from '@crossbind/plugin-rollup';
 
@@ -125,15 +125,17 @@ function appDevPlugin() {
         name: 'vite-plugin-crossbind-app',
         // Gradle writes reports into the Android project it builds, in crossbind's own directory, and an HTML file there
         // would reload the page. An iPhone or iPad reaches the dev server at this Mac's address on its cable or network,
-        // which alone the server listens on, unless Vite's own --host names an address or every one.
+        // which alone the server listens on, unless Vite's own --host names an address or every one. The alias, which runs
+        // before Vite's own resolving, takes a page's crossbind/app from the app host.
         config(userConfig, { command }) {
             const watch = { ignored: [`${state.config.paths.cache}/**`, `${state.config.paths.build}/**`] };
-            if (command !== 'serve' || process.env.CROSSBIND_APP_PLATFORM !== 'ios' || !process.env.CROSSBIND_APP_DEVICE) return { server: { watch } };
+            const resolve = { alias: [{ find: /^crossbind\/app$/, replacement: resolveAppPageApi() }] };
+            if (command !== 'serve' || process.env.CROSSBIND_APP_PLATFORM !== 'ios' || !process.env.CROSSBIND_APP_DEVICE) return { resolve, server: { watch } };
             try {
                 iosDevice = connectedIosDevice(process.env.CROSSBIND_APP_DEVICE);
                 const devServer = iosDevServer(iosDevice, userConfig.server?.host);
                 address = devServer.address;
-                return { server: { watch, host: devServer.host } };
+                return { resolve, server: { watch, host: devServer.host } };
             } catch (error) {
                 // What the developer mends, as a device to connect or a setting to turn on, needs no stack, which Vite
                 // would print with an error it starts with.

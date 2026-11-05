@@ -12,7 +12,10 @@ on:
             - main
         # What only publishing runs, or what shows only in a store.
         paths:
-            - core/crossbind/src/publishers/**
+            - extensions/google-play/**
+            - extensions/app-store/**
+            - extensions/github/**
+            - core/store-kit/**
             - core/crossbind/src/actions/publish.js
             - core/crossbind/src/actions/extensionApi.js
             - core/crossbind/src/actions/xcodebuild.js

@@ -1,7 +1,0 @@
-{
-    "name": "page-location",
-    "contract": 1,
-    "app": {
-        "macos": { "sources": ["darwin.mm"], "frameworks": ["CoreLocation"] }
-    }
-}

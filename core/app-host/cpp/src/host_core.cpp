@@ -514,8 +514,6 @@ std::string Core::boot(std::string bundle, const std::string &sourceUrl, const s
             rt.evaluateJavaScript(std::make_shared<jsi::StringBuffer>(std::move(bundle)), sourceUrl);
             emscripten::internal::_embind_initialize_bindings(rt, dataPath);
             rt.global().getPropertyAsFunction(rt, "__crossbind_start").call(rt);
-            // The main thread waits for this boot, so it answers the module's waits from now on alone.
-            answerWaits(true);
             booted.set_value("");
         } catch (const jsi::JSError &error) {
             booted.set_value(error.getMessage() + "\n" + error.getStack());

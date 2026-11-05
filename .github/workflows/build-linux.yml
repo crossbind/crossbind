@@ -6,6 +6,7 @@ on:
             - main
         paths:
             - core/**
+            - extensions/**
             - tooling/**
             - ports/**
             - plugins/**
@@ -19,6 +20,7 @@ on:
             - main
         paths:
             - core/**
+            - extensions/**
             - tooling/**
             - ports/**
             - plugins/**

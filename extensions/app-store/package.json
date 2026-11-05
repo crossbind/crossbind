@@ -1,0 +1,30 @@
+{
+    "name": "@crossbind/extension-app-store",
+    "version": "2.0.0-beta.68",
+    "description": "crossbind app extension: uploads an iOS app to App Store Connect, for TestFlight and App Review.",
+    "homepage": "https://github.com/crossbind/crossbind/tree/main/extensions/app-store#readme",
+    "repository": "https://github.com/crossbind/crossbind.git",
+    "license": "MIT",
+    "type": "module",
+    "exports": {
+        "./crossbind.extension.js": "./crossbind.extension.js"
+    },
+    "files": [
+        "crossbind.extension.js",
+        "src"
+    ],
+    "crossbind": {
+        "extension": "./crossbind.extension.js"
+    },
+    "dependencies": {
+        "@crossbind/core-store-kit": "workspace:^"
+    },
+    "keywords": [
+        "crossbind-extension",
+        "crossbind",
+        "publishing",
+        "app",
+        "store",
+        "publisher"
+    ]
+}

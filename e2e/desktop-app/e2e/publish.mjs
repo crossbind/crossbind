@@ -28,7 +28,7 @@ check(store.session.note === 'from e2e', `the store's --note: ${store.session.no
 check(store.session.platform === platform, `the store's platform: ${store.session.platform}`);
 check(store.session.name === 'crossbind probe store' && store.name === 'crossbind probe store', `the app's name the store read: ${store.session.name}, ${store.name}`);
 check(store.session.hasUpdater === false, 'the store read app.updater its build removes');
-check(store.output.apps.length > 0 && store.output.apps.every(({ app, update }) => existsSync(app) && update === null), 'the apps the store got, each without an update');
+check(store.output.apps.length > 0 && store.output.apps.every(({ app, installers }) => existsSync(app) && installers.every(({ name }) => name !== 'updater')), 'the apps the store got, each without an update');
 const files = store.output.apps.flatMap(({ installers }) => installers.flatMap(({ files: made }) => made));
 const kinds = store.output.apps.map(({ installers }) => installers.map(({ name }) => name).join(' '));
 check(kinds.every((kind) => kind === 'probe'), `the installers the store got, the probe's alone: ${kinds.join(', ')}`);

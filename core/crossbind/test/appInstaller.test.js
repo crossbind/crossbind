@@ -5,6 +5,7 @@ import { afterAll, afterEach, beforeEach, describe, expect, test, vi } from 'vit
 import { PNG } from 'pngjs';
 
 const state = { config: {}, targets: [] };
+vi.mock('../src/utils/appExtensions.js', async (importOriginal) => (await import('./ownTools.js')).default(importOriginal));
 vi.mock('../src/state/index.js', () => ({ default: state }));
 // What the tools that package an app make, as they would: the last argument of dpkg-deb and hdiutil, the zip in the
 // folder zip runs in, makensis's OUTFILE and tar's archive.
@@ -34,10 +35,10 @@ vi.mock('../src/actions/windowsSigning.js', async (importOriginal) => ({ ...awai
 const { checkInstaller, installersFor, writeInstallers } = await import('../src/actions/appInstaller.js');
 const {
     debianControl, debianName, debianVersion, desktopEntry, linuxFileTypes, maintainer, mimePackage,
-} = await import('../src/installers/deb/index.js');
-const { fileTypesMacro } = await import('../src/installers/nsis/index.js');
+} = await import('../../../extensions/deb/crossbind.extension.js');
+const { fileTypesMacro } = await import('../../../extensions/nsis/crossbind.extension.js');
 const { checkedExtension } = await import('../src/utils/appExtensions.js');
-const { newUpdaterKey } = await import('../src/actions/appUpdate.js');
+const { newUpdaterKey } = await import('../../../extensions/updater/src/update.js');
 
 const roots = [];
 afterAll(() => roots.forEach((dir) => fs.rmSync(dir, { recursive: true, force: true })));
@@ -97,6 +98,13 @@ describe("a Linux app's Debian package", () => {
         expect(maintainer({ name: 'Ada Lovelace', email: 'ada@example.com', url: 'https://example.com' })).toBe('Ada Lovelace <ada@example.com>');
         expect(maintainer({ name: 'Ada Lovelace' })).toBe('Ada Lovelace');
         expect(maintainer(undefined)).toBeNull();
+    });
+
+    test('reads an author of many unclosed parentheses at once, as a backtracking regular expression would not', () => {
+        const author = `Ada ${'('.repeat(100_000)}`;
+        const started = performance.now();
+        expect(maintainer(author)).toBe(author);
+        expect(performance.now() - started).toBeLessThan(1000);
     });
 
     test("has a control file that depends on WebKitGTK and describes the app by package.json's description", () => {
@@ -278,7 +286,7 @@ describe("a Windows app's setup program", () => {
             '-DNAME=My $$Demo', '-DEXE=demo.exe', '-DID=dev.crossbind.demo', '-DVERSION=1.2.0-beta.3', `-DAPP=${app}`, `-DOUTFILE=${app}-setup.exe`,
             `-DICON=${path.join(root, 'build', 'nsis', 'demo-win32-x64.ico')}`,
         ]));
-        expect(command.at(-1)).toMatch(/[/\\]installers[/\\]nsis[/\\]installer\.nsi$/);
+        expect(command.at(-1)).toMatch(/[/\\]extensions[/\\]nsis[/\\]installer\.nsi$/);
         expect(fs.existsSync(command.at(-1))).toBe(true);
         expect([workdir, signing]).toEqual([path.join(root, 'dist'), null]);
         expect(command.some((param) => param.startsWith('-DSIGNER='))).toBe(false);
@@ -335,30 +343,67 @@ describe('the installers an app has', () => {
 
     test("are crossbind's and the app's of its platform, crossbind's first, or those alone app.installers names", () => {
         project({}, { extensions: [installer('appimage', 'linux'), installer('notes', 'desktop')] });
-        expect(names({ platform: 'linux' })).toEqual(['deb', 'tar-gz', 'appimage', 'notes']);
-        expect(names({ platform: 'darwin' })).toEqual(['dmg', 'notes']);
-        expect(names({ platform: 'win32' })).toEqual(['nsis', 'zip', 'notes']);
+        expect(names({ platform: 'linux' })).toEqual(['deb', 'tar-gz', 'appimage', 'notes', 'updater']);
+        expect(names({ platform: 'darwin' })).toEqual(['dmg', 'notes', 'updater']);
+        expect(names({ platform: 'win32' })).toEqual(['nsis', 'zip', 'notes', 'updater']);
         state.config.app = { installers: ['notes', 'deb'] };
-        expect(names({ platform: 'linux' })).toEqual(['deb', 'notes']);
-        expect(names({ platform: 'win32' })).toEqual(['notes']);
+        expect(names({ platform: 'linux' })).toEqual(['deb', 'notes', 'updater']);
+        expect(names({ platform: 'win32' })).toEqual(['notes', 'updater']);
         state.config.app = { installers: [] };
-        expect(names({ platform: 'darwin' })).toEqual([]);
+        expect(names({ platform: 'darwin' })).toEqual(['updater']);
+    });
+
+    test('run those that run last after every other, of the app\'s too, whatever app.installers names', () => {
+        project({}, { appOptions: { installers: ['deb'] }, extensions: [installer('checksums', 'linux', { isLast: true }), installer('notes', 'linux')] });
+        expect(names({ platform: 'linux' })).toEqual(['deb', 'updater', 'checksums']);
+    });
+
+    test('tell a check those that run and a make what those before it made, which it cannot change', async () => {
+        const checked = [];
+        const makes = [];
+        const first = installer('first', 'linux', { make: () => ['first.bin'] });
+        const nothing = installer('nothing', 'linux');
+        const last = installer('last', 'linux', {
+            isLast: true,
+            check: (api, facts) => checked.push(facts.installers),
+            make: (api, { made }) => {
+                makes.push(structuredClone(made));
+                made.pop();
+                return ['last.bin'];
+            },
+        });
+        const root = project({ 'demo-linux-x64/demo': 'elf', 'first.bin': '', 'last.bin': '' }, { appOptions: { installers: ['first', 'nothing'] }, extensions: [last, first, nothing] });
+        const app = path.join(root, 'dist/demo-linux-x64');
+
+        await checkInstaller({ platform: 'linux', arch: 'x64' });
+        const made = await writeInstallers(app, { platform: 'linux', arch: 'x64' });
+
+        expect(checked).toEqual([['first', 'nothing', 'updater', 'last']]);
+        expect(makes).toEqual([[{ name: 'first', files: [path.join(root, 'dist/first.bin')] }]]);
+        expect(made.map(({ name }) => name)).toEqual(['first', 'last']);
     });
 
     test('refuse an app.installers that names one that is no installer, or is no list of names', () => {
         project({}, { appOptions: { installers: ['deb', 'rpm'] }, extensions: [installer('appimage', 'linux')] });
-        expect(() => installersFor({ platform: 'linux' })).toThrow('crossbind: app.installers names rpm, which is no installer: dmg, deb, tar-gz, nsis, zip and appimage are.');
+        expect(() => installersFor({ platform: 'linux' })).toThrow('crossbind: app.installers names rpm, which is no installer: deb, dmg, nsis, tar-gz, zip and appimage are.');
         state.config.app = { installers: 'deb' };
-        expect(() => installersFor({ platform: 'linux' })).toThrow('crossbind: app.installers "deb" is no list of installers\' names, each once, as [\'dmg\', \'deb\'] is.');
+        expect(() => installersFor({ platform: 'linux' })).toThrow('crossbind: app.installers "deb" is no list of installers\' names, each once.');
         state.config.app = { installers: ['deb', 'deb'] };
         expect(() => installersFor({ platform: 'linux' })).toThrow('is no list of installers\' names, each once');
+    });
+
+    test('leave out crossbind\'s whose role an extension the app lists takes, which needs no installer of its own', () => {
+        project({}, { extensions: [{ ...installer('acme-updater', 'linux'), replaces: ['updater'] }] });
+        expect(names({ platform: 'linux' })).toEqual(['deb', 'tar-gz', 'acme-updater']);
+        state.config.extensions = [{ ...checkedExtension({ name: 'acme-updater', app: {} }, '/extensions', 'extensions[0]'), replaces: ['updater'] }];
+        expect(names({ platform: 'linux' })).toEqual(['deb', 'tar-gz']);
     });
 
     test("put one the app lists under the name of crossbind's in its place", () => {
         const deb = installer('deb', 'linux');
         project({}, { extensions: [deb] });
         const installers = installersFor({ platform: 'linux' });
-        expect(installers.map(({ name }) => name)).toEqual(['deb', 'tar-gz']);
+        expect(installers.map(({ name }) => name)).toEqual(['deb', 'tar-gz', 'updater']);
         expect(installers[0]).toBe(deb);
     });
 

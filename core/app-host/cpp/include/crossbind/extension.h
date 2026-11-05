@@ -130,8 +130,8 @@ class Call {
 public:
     const std::string &name() const;
     const Value &options() const;
-    // Whether the page made the call; the host makes the rest, as <crossbind/app.h> calls the host's own extensions for
-    // the app's native code, which reaches more than the page may.
+    // Whether the page made the call; invoke() makes the rest, for the app's native code, which reaches more than the page
+    // may.
     bool isFromPage() const;
     // The page that made it, which is none for a call of the app's own code.
     Page page() const;
@@ -549,10 +549,9 @@ public:
     Registry &operator=(const Registry &) = delete;
 
     // A function the page calls by this name, which starts with the extension's own and a dot, as clipboard.readText,
-    // or with a role's it holds, as tray.set for the holder of tray: menu., tray., notification., dialog., shell.,
-    // updater. and activities. It runs on the module's thread for the page's calls, which it must not hold up: it
-    // answers there, or hands the call on, as to inBackground(). A call of the app's own, through <crossbind/app.h> or
-    // invoke(), runs it on the caller's thread, so it may run on several at once. What it throws fails the call.
+    // or with a role's it holds, as tray.set for the holder of tray. It runs on the module's thread for the page's calls,
+    // which it must not hold up: it answers there, or hands the call on, as to inBackground(). A call of the app's own,
+    // through invoke(), runs it on the caller's thread, so it may run on several at once. What it throws fails the call.
     void function(const std::string &name, Function fn);
     // Answers the page's requests for the extension's URLs: fn gets each GET and HEAD on the thread the webview asks on,
     // the main thread but on Android, where it is one of the WebView's, which waits for the answer, and several may ask

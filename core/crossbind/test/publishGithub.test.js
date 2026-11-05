@@ -4,12 +4,13 @@ import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 
 const state = { config: {}, targets: [] };
+vi.mock('../src/utils/appExtensions.js', async (importOriginal) => (await import('./ownTools.js')).default(importOriginal));
 vi.mock('../src/state/index.js', () => ({ default: state }));
 // GitHub as the publisher sees it: the repository and token it finds, the release of the tag at each look, and what it
 // is given.
 const github = {};
 const page = (id) => `https://github.com/demo/app/releases/${id}`;
-vi.mock('../src/publishers/github/githubReleases.js', () => ({
+vi.mock('../../../extensions/github/src/githubReleases.js', () => ({
     githubRepository: (packageJson, env) => (env ? 'demo/app' : github.repository),
     githubToken: () => github.token,
     githubCaller: () => async (method, route) => {
@@ -36,7 +37,7 @@ vi.mock('../src/publishers/github/githubReleases.js', () => ({
 vi.mock('../src/utils/ask.js', () => ({ hasTerminal: () => false }));
 
 const { default: publish } = await import('../src/actions/publish.js');
-const { newUpdaterKey } = await import('../src/actions/appUpdate.js');
+const { newUpdaterKey } = await import('../../../extensions/updater/src/update.js');
 
 const keys = newUpdaterKey();
 const LATEST = 'https://github.com/demo/app/releases/latest/download/demo-{platform}-{arch}.update.json';
@@ -56,16 +57,16 @@ async function runVite(args, env) {
         const installer = { macos: path.join(dist, 'demo.dmg'), linux: `${app}.deb`, windows: `${app}-setup.exe` }[platform];
         const kind = { macos: 'dmg', linux: 'deb', windows: 'nsis' }[platform];
         if (!vite.lacksInstaller) fs.writeFileSync(installer, 'installer');
-        let update = null;
+        let update = [];
         if (env.CROSSBIND_UPDATER_PRIVATE_KEY && !vite.lacksUpdate) {
             const file = { macos: 'demo-darwin-arm64.app.zip', linux: `${path.basename(app)}.tar.gz`, windows: `${path.basename(app)}-setup.exe` }[platform];
             const manifest = path.join(dist, `demo-${UPDATE_PLATFORMS[platform]}-${arch}.update.json`);
             fs.writeFileSync(path.join(dist, file), 'update');
             fs.writeFileSync(manifest, JSON.stringify({ version: '1.2.3', file, signature: 's' }));
-            update = { manifest, file: path.join(dist, file) };
+            update = [{ name: 'updater', files: [path.join(dist, file), manifest] }];
         }
         return {
-            app, arch, installers: vite.lacksInstaller ? [] : [{ name: kind, files: [installer] }, ...(vite.more?.(app, dist) ?? [])], update,
+            app, arch, installers: [...(vite.lacksInstaller ? [] : [{ name: kind, files: [installer] }, ...(vite.more?.(app, dist) ?? [])]), ...update],
         };
     });
     fs.mkdirSync(state.config.paths.build, { recursive: true });

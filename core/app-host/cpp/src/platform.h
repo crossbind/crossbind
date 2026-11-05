@@ -77,8 +77,6 @@ std::string resourceDir();
 // The app's functions behind crossbind/app and <crossbind/app.h>, and what the app's window does; a platform that has no
 // such function throws.
 using Failure = std::optional<std::string>;
-// Whether the caller is the app's main thread, where the platform's UI runs.
-bool isMainThread();
 namespace crossbind::app {
 // Whether the window of this id closes as its user closes it: true unless an extension's onClose keeps it. On the main
 // thread.

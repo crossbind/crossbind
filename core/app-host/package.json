@@ -8,14 +8,45 @@
     "files": [
         "android",
         "android-verification-metadata.xml",
+        "app.d.ts",
         "cpp",
-        "extensions",
         "js",
         "third_party",
         "windows"
     ],
     "dependencies": {
-        "@crossbind/core-embind-jsi": "workspace:^"
+        "@crossbind/core-embind-jsi": "workspace:^",
+        "@crossbind/extension-activities": "workspace:^",
+        "@crossbind/extension-app-store": "workspace:^",
+        "@crossbind/extension-deb": "workspace:^",
+        "@crossbind/extension-dialog": "workspace:^",
+        "@crossbind/extension-dmg": "workspace:^",
+        "@crossbind/extension-files": "workspace:^",
+        "@crossbind/extension-github": "workspace:^",
+        "@crossbind/extension-google-play": "workspace:^",
+        "@crossbind/extension-instance": "workspace:^",
+        "@crossbind/extension-links": "workspace:^",
+        "@crossbind/extension-menu": "workspace:^",
+        "@crossbind/extension-nsis": "workspace:^",
+        "@crossbind/extension-page-dialogs": "workspace:^",
+        "@crossbind/extension-page-downloads": "workspace:^",
+        "@crossbind/extension-page-drops": "workspace:^",
+        "@crossbind/extension-page-files": "workspace:^",
+        "@crossbind/extension-page-location": "workspace:^",
+        "@crossbind/extension-page-navigation": "workspace:^",
+        "@crossbind/extension-page-permissions": "workspace:^",
+        "@crossbind/extension-power": "workspace:^",
+        "@crossbind/extension-shell": "workspace:^",
+        "@crossbind/extension-shortcuts": "workspace:^",
+        "@crossbind/extension-tar-gz": "workspace:^",
+        "@crossbind/extension-updater": "workspace:^",
+        "@crossbind/extension-zip": "workspace:^"
+    },
+    "peerDependencies": {
+        "crossbind": "workspace:^"
+    },
+    "devDependencies": {
+        "crossbind": "workspace:^"
     },
     "keywords": [
         "embind",

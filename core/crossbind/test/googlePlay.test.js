@@ -18,7 +18,7 @@ const settings = (values) => ({ get: (key) => values[key] });
 
 const {
     PLAY, highestVersionCode, keepSignIn, keptSignIn, playCredentials, playToken, uploadBundle,
-} = await import('../src/publishers/google-play/googlePlay.js');
+} = await import('../../../extensions/google-play/src/googlePlay.js');
 
 const { privateKey, publicKey } = generateKeyPairSync('rsa', { modulusLength: 2048 });
 const ACCOUNT = 'play@demo.iam.gserviceaccount.com';

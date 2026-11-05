@@ -1,38 +1,6 @@
-// What an app's host does for its page (target.runtimeEnv: 'app'); in any other build every call rejects.
-
-/** A kind of file a dialog offers: its name, and the extensions, with or without the dot, that make it; "*" is any file. */
-export interface FileFilter {
-    name: string;
-    extensions: string[];
-}
-
-export interface OpenOptions {
-    title?: string;
-    /** The folder the dialog shows first. */
-    defaultPath?: string;
-    filters?: FileFilter[];
-    /** Folders instead of files. */
-    directory?: boolean;
-    multiple?: boolean;
-}
-
-export interface SaveOptions {
-    title?: string;
-    /** The folder the dialog shows first. */
-    defaultPath?: string;
-    defaultName?: string;
-    filters?: FileFilter[];
-}
-
-export interface MessageOptions {
-    message: string;
-    /** Smaller text under the message. */
-    detail?: string;
-    /** info by default. Windows shows its icon for each, and macOS a caution sign for error; Linux, iOS and Android show none. */
-    kind?: 'info' | 'warning' | 'error';
-    /** One to three labels, the first the default; without them OK. */
-    buttons?: string[];
-}
+// What an app's host does for its page (target.runtimeEnv: 'app'): crossbind/app/core alone, which crossbind/app has with
+// what crossbind's own extensions give the page. A TypeScript app has their types with
+// /// <reference types="@crossbind/core-app-host/app" />.
 
 /** The app's own folders, made when first asked for: what it keeps, what it can lose, and its logs; and the read-only one of the files app.files lists, each in the place it had in the project. */
 export interface AppPaths {
@@ -44,26 +12,6 @@ export interface AppPaths {
     group: string;
 }
 
-export declare const dialog: {
-    /** The paths of the files or folders the user picked, or null when they cancelled. */
-    open(options?: OpenOptions): Promise<string[] | null>;
-    /** The path the user chose to save to, or null when they cancelled. */
-    save(options?: SaveOptions): Promise<string | null>;
-    /** The index of the button the user clicked: Return gives the first, and Escape or closing the dialog the last. */
-    message(options: MessageOptions): Promise<number>;
-};
-
-export declare const shell: {
-    /** An http, https or mailto address in the default browser or mail app. */
-    openExternal(url: string | URL): Promise<void>;
-    /** A file in the app the system opens its kind with, where app.openPath in crossbind.config.js lets the page: nowhere without it. */
-    openPath(path: string): Promise<void>;
-    /** A file, selected, in the system's file manager: one in the app's folders, or one a dialog picked during this run. */
-    revealInFolder(path: string): Promise<void>;
-    /** A file or folder moved to the system's trash, where its user can take it back: one in the app's folders, not one of them itself, or one a dialog picked during this run. Where the system has no trash, nothing moves and it rejects. */
-    trash(path: string): Promise<void>;
-};
-
 export declare const app: {
     paths(): Promise<AppPaths>;
     /** Ends the app as closing its window does. */
@@ -72,14 +20,8 @@ export declare const app: {
     requestQuit(): Promise<void>;
     /** Ends the app as quit() does, then opens it again, with no link. */
     relaunch(): Promise<void>;
-    /** The links of app.urlSchemes in crossbind.config.js that opened the app and have not reached the page yet, the one it was launched with among them. Once the page has asked, each later link comes as the event open-url while it listens, so listening first, then asking, misses none. */
-    launchUrls(): Promise<string[]>;
-    /** The files the system opened the app with that have not reached the page yet, those of app.fileTypes in crossbind.config.js and those no extension's type takes, the launch's own among them, each by its absolute path. Once the page has asked, each later opening comes as the event open-files while it listens, so listening first, then asking, misses none. */
-    launchFiles(): Promise<string[]>;
     /** The launch that started a desktop app. A phone's has no arguments, and no folder. */
     launchArgs(): Promise<Launch>;
-    /** Makes this user activity the app's current one on iOS and macOS, for its user's other devices to continue, as Handoff does; null makes none current. Its type is one of app.activityTypes in crossbind.config.js, and another platform rejects. */
-    setUserActivity(activity: UserActivity | null): Promise<void>;
 };
 
 /** What windows.set() changes of an open window: sizes and places in logical pixels, a page's size without the frame, and x and y the frame's place from the top left of the main screen, given together. A limit of 0 takes it away. */
@@ -168,160 +110,44 @@ export declare const windows: {
     current(): Promise<WindowState>;
 };
 
-/** A key with CmdOrCtrl, Ctrl or Alt and maybe Shift, joined by +, as CmdOrCtrl+Shift+O is, or F1–F12, alone or with any of them. The key is A–Z, 0–9, F1–F12, Enter, Escape, Tab, Space, Backspace, Delete, Up, Down, Left, Right, Home, End, PageUp, PageDown, Plus, Minus, Comma or Period. */
-export type Accelerator = string;
-
-/** An item of a menu: one the page handles, by its id, a submenu, a separator, or a standard one by its role. */
-export type MenuItem =
-    | { label: string; id?: string; accelerator?: Accelerator; enabled?: boolean; checked?: boolean }
-    | { label: string; items: MenuItem[] }
-    | { type: 'separator' }
-    | { role: 'undo' | 'redo' | 'cut' | 'copy' | 'paste' | 'selectAll'; label?: string; accelerator?: never }
-    | { role: 'minimize' | 'close' | 'quit'; label?: string; accelerator?: Accelerator }
-    | { role: 'editMenu' | 'windowMenu'; label?: string };
-
-/** A menu of the bar, by its items, or a standard one by its role. */
-export type Menu = { label: string; items: MenuItem[] } | { role: 'editMenu' | 'windowMenu'; label?: string };
-
-/** What the event menu carries: the id of the item clicked, and for one with checked whether it now is. */
-export interface MenuClick {
-    id: string;
-    checked?: boolean;
-}
-
-/** A point of the page's, in CSS pixels from its top left, as a contextmenu event's clientX and clientY are. */
-export interface PagePoint {
-    x: number;
-    y: number;
-}
-
-export declare const menu: {
-    /** Sets the app's menus: on macOS after its app menu, which the app keeps, and on Windows and Linux in a bar of its window. A click of an item with an id is an event, menu, with a MenuClick. */
-    set(menus: Menu[]): Promise<void>;
-    /** Opens a menu of these items at the page's point, on the desktop, as a right click's menu opens: it resolves with the id of the item clicked, or null when the menu closes without one, and a standard item does what its role says. A contextmenu listener that opens it keeps the webview's own menu away with preventDefault(). */
-    popup(items: MenuItem[], at: PagePoint): Promise<string | null>;
-    /** Sets the menu a macOS app's Dock icon shows above the system's own items, of a tray's items; a click of an item with an id is the event menu, with a MenuClick. An empty list takes it away. */
-    setDock(items: TrayItem[]): Promise<void>;
-};
-
-/** An item of the tray's menu: one the page handles, by its id, a submenu or a separator. */
-export type TrayItem =
-    | { label: string; id?: string; enabled?: boolean; checked?: boolean }
-    | { label: string; items: TrayItem[] }
-    | { type: 'separator' };
-
-export interface TrayOptions {
-    /** What the icon shows when the pointer rests on it. */
-    tooltip?: string;
-    /** The menu a click of the icon opens: a click on macOS, a right click on Windows, and on Linux the one its desktop takes. */
-    menu?: TrayItem[];
-}
-
-export declare const tray: {
-    /** The app's icon in the macOS menu bar, the Windows notification area or a Linux desktop's status tray. A click of an item with an id is the event menu, with a MenuClick, and a click of the icon the event tray where it opens no menu. Set again, it changes the icon that shows. */
-    set(options?: TrayOptions): Promise<void>;
-    /** Takes the icon away. */
-    remove(): Promise<void>;
-};
-
-export interface NotificationOptions {
-    title: string;
-    body?: string;
-}
-
-export declare const notification: {
-    /** A notification of the system's; a click on it is the event notification. macOS asks its user first. */
-    show(options: NotificationOptions): Promise<void>;
-};
-
 /** A launch of a desktop app: its arguments, the program's own and its links left out, which reach the owners of their schemes, the page those of app.urlSchemes as the event open-url; and the folder it was launched in. */
 export interface Launch {
     args: string[];
     cwd: string;
 }
 
-/** What the event second-instance carries: a later launch. */
-export type SecondInstance = Launch;
-
-/** What the event open-url carries: a link of one of app.urlSchemes, or on iOS and Android of app.links, that the system opened the app with. */
-export interface OpenUrl {
-    url: string;
+/** What each event a page's listeners get gives them, by the event's name: the host's own here, and those an extension's types add. */
+export interface AppEvents {
+    /** Calls listener as the app becomes the active one on the desktop, or comes to a phone's foreground, until the function it returns is called. A Linux app's is its window's focus. */
+    'active': void;
+    /** Calls listener as another app takes the app's place on the desktop, or a phone's is interrupted, as by a call, a system alert or another app's picker, or goes to the background, until the function it returns is called. */
+    'inactive': void;
+    /** Calls listener as each window of the app's opens, until the function it returns is called. */
+    'window-opened': WindowEvent;
+    /** Calls listener as each window of the app's closes, until the function it returns is called. */
+    'window-closed': WindowEvent;
 }
 
-/** A user activity of an iOS or macOS app's, which another of its user's devices continues, as Handoff does: its type, one of app.activityTypes in crossbind.config.js, what the app keeps in its userInfo, JSON values, and the http or https page a device without the app opens instead. */
-export interface UserActivity {
-    type: string;
-    /** An object, always, in the event user-activity. */
-    userInfo?: Record<string, unknown>;
-    webpageUrl?: string;
-}
-
-/** What the event shortcut-item carries: the type of the quick action of app.shortcutItems its user tapped on an iOS or Android app's icon. */
-export interface ShortcutItem {
-    type: string;
-}
-
-/** What the event open-files carries: the absolute paths of the files the system opened the app with at once. */
-export interface OpenFiles {
-    paths: string[];
-}
-
-/** What the event drop carries: the absolute paths of the files the app's user dropped on the page at once, and the page's point they were dropped at, in CSS pixels from its top left. */
-export interface PageDrop {
-    paths: string[];
-    x: number;
-    y: number;
-}
+/** What each event the host holds for the page gives, by the event's name, which an extension's types add. */
+export interface HeldEvents {}
 
 export declare const events: {
-    /** Calls listener with each click of an item with an id in the menus menu.set sets or in the tray's menu, until the function it returns is called. */
-    on(name: 'menu', listener: (click: MenuClick) => void): () => void;
-    /** Calls listener with each link of app.urlSchemes the system opens the app with once the page has called app.launchUrls(), or events.held('open-url'), until the function it returns is called. */
-    on(name: 'open-url', listener: (open: OpenUrl) => void): () => void;
-    /** Calls listener with each set of files the system opens the app with once the page has called app.launchFiles(), or events.held('open-files'), until the function it returns is called. */
-    on(name: 'open-files', listener: (open: OpenFiles) => void): () => void;
-    /** Calls listener with each user activity of app.activityTypes the system continues an iOS or macOS app with once the page has called events.held('user-activity'), until the function it returns is called. */
-    on(name: 'user-activity', listener: (activity: UserActivity) => void): () => void;
-    /** Calls listener with each tap of a quick action of app.shortcutItems on an iOS or Android app's icon once the page has called events.held('shortcut-item'), until the function it returns is called. */
-    on(name: 'shortcut-item', listener: (item: ShortcutItem) => void): () => void;
-    /** Calls listener with each later launch of a desktop app that app.singleInstance keeps to one instance, which brings its window to the front as far as the system lets it, until the function it returns is called. */
-    on(name: 'second-instance', listener: (launch: SecondInstance) => void): () => void;
-    /** Calls listener as the app becomes the active one on the desktop, or comes to a phone's foreground, until the function it returns is called. A Linux app's is its window's focus. */
-    on(name: 'active', listener: () => void): () => void;
-    /** Calls listener as another app takes the app's place on the desktop, or a phone's is interrupted, as by a call, a system alert or another app's picker, or goes to the background, until the function it returns is called. */
-    on(name: 'inactive', listener: () => void): () => void;
-    /** Calls listener as the system of a desktop app goes to sleep, which it may do before the page has run, until the function it returns is called. */
-    on(name: 'suspend', listener: () => void): () => void;
-    /** Calls listener as the system of a desktop app wakes from sleep, until the function it returns is called. */
-    on(name: 'resume', listener: () => void): () => void;
-    /** Calls listener with each left or right click of the tray's icon that opens no menu, until the function it returns is called. */
-    on(name: 'tray', listener: () => void): () => void;
-    /** Calls listener with each click on a notification the app's notification.show showed while it runs, until the function it returns is called. */
-    on(name: 'notification', listener: () => void): () => void;
-    /** Calls listener with the files of each drop of the app's user's on the page, on the desktop, as the page's own drop event goes on, until the function it returns is called. The page may reach each path through shell's functions, as one its user picked. */
-    on(name: 'drop', listener: (drop: PageDrop) => void): () => void;
-    /** Calls listener as each window of the app's opens, until the function it returns is called. */
-    on(name: 'window-opened', listener: (window: WindowEvent) => void): () => void;
-    /** Calls listener as each window of the app's closes, until the function it returns is called. */
-    on(name: 'window-closed', listener: (window: WindowEvent) => void): () => void;
+    on<Name extends keyof AppEvents>(name: Name, listener: (value: AppEvents[Name]) => void): () => void;
     /** Calls listener with the value of each event of this name the app's native code emits from now on, until the function it returns is called. */
     on(name: string, listener: (value: unknown) => void): () => void;
-    /** The links of app.urlSchemes the host held for the page, which came before it asked since it loaded, as app.launchUrls() gives their addresses. */
-    held(name: 'open-url'): Promise<OpenUrl[]>;
-    /** The files the host held for the page, which came before it asked since it loaded, as app.launchFiles() gives their paths. */
-    held(name: 'open-files'): Promise<OpenFiles[]>;
-    /** The user activities of app.activityTypes the system continued the app with that the host held for the page, which came before it asked since it loaded, the launch's own among them. */
-    held(name: 'user-activity'): Promise<UserActivity[]>;
-    /** The taps of the quick actions of app.shortcutItems that the host held for the page, which came before it asked since it loaded, the launch's own among them. */
-    held(name: 'shortcut-item'): Promise<ShortcutItem[]>;
+    held<Name extends keyof HeldEvents>(name: Name): Promise<HeldEvents[Name][]>;
     /** The values of the events of this name the app's native code held for the page with holdEvent(), which came before the page asked for them since it loaded; later ones come as the events while it listens, so listening first, then asking, misses none. */
     held(name: string): Promise<unknown[]>;
 };
 
-/** A newer version of the app, which app.updater.url in crossbind.config.js offers. */
-export interface Update {
-    version: string;
+/** What an option of a page's function is, beside what typeof tells: how it is checked, and what it is called. */
+export interface OptionKind {
+    isFitting(value: unknown): boolean;
+    name: string;
 }
+
+/** The options as the host takes them, so a misspelt or mistyped one fails here, saying which. */
+export declare function checkedOptions<T>(name: string, options: T, kinds: Record<string, string | OptionKind>): T;
 
 /** What invoke takes beside a function's options. */
 export interface InvokeOptions<M = unknown> {
@@ -336,11 +162,3 @@ export declare function invoke<T = unknown, M = unknown>(name: string, options?:
 
 /** The URL of a path an extension's route serves, as "/clips/intro.mp4" or "/thumb/42?size=256", for the page's <img>, <video> or fetch(): crossbind://app/ext/<extension><path>, and https://appassets.androidplatform.net/ext/<extension><path> on Android. The path is as a URL holds it, escaped where it must be, without a part "." or ".."; the route gets it decoded. */
 export declare function routeUrl(extension: string, path: string): string;
-
-/** One check or install runs at a time, and another rejects meanwhile. */
-export declare const updater: {
-    /** The version app.updater.url offers when it is newer than the app's, or null. */
-    check(): Promise<Update | null>;
-    /** Downloads that version, checks that the key of app.updater.publicKey signed it and installs it in place of the app, which then quits and opens the new version. It rejects when that fails. */
-    install(): Promise<void>;
-};

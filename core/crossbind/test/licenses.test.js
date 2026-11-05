@@ -4,10 +4,11 @@ import os from 'node:os';
 import path from 'node:path';
 import { validateSpdx } from '../src/utils/licenseReport.js';
 
-const { state } = vi.hoisted(() => ({ state: { config: {} } }));
+const { state } = vi.hoisted(() => ({ state: { config: {}, targets: [] } }));
 vi.mock('../src/state/index.js', () => ({ default: state }));
 
 const { default: collectLicenseRows } = await import('../src/actions/licenses.js');
+const { newUpdaterKey } = await import('../../../extensions/updater/src/update.js');
 
 describe('collectLicenseRows', () => {
     beforeEach(() => {
@@ -221,8 +222,10 @@ describe('collectLicenseRows', () => {
 });
 
 describe('collectLicenseRows for an app', () => {
+    const APP = { id: 'com.example.demo' };
+
     beforeEach(() => {
-        state.config = { allDependencies: [] };
+        state.config = { allDependencies: [], app: APP, paths: { base: os.tmpdir() } };
     });
 
     test("lists crossbind's runtime and what the host carries, each upstream piece with its pin and its text", async () => {
@@ -267,7 +270,8 @@ describe('collectLicenseRows for an app', () => {
     });
 
     test('names Monocypher for a desktop app that checks its updates with it, and for no other', async () => {
-        state.config = { allDependencies: [], app: { updater: { url: 'https://example.com/u.json', publicKey: 'key' } } };
+        const updater = { url: 'https://example.com/u.json', publicKey: newUpdaterKey().publicKey };
+        state.config = { allDependencies: [], app: { ...APP, updater }, paths: { base: os.tmpdir() }, package: { version: '1.0.0' }, general: { name: 'demo' } };
 
         const rows = await collectLicenseRows('darwin', { runtimeEnv: 'app' });
         const monocypher = rows.find((row) => row.name === 'monocypher');
@@ -277,8 +281,31 @@ describe('collectLicenseRows for an app', () => {
         expect(monocypher.sha256).toMatch(/^[0-9a-f]{64}$/);
         expect(monocypher.licenseText).toContain('Copyright (c) 2017-2023, Loup Vaillant');
         expect((await collectLicenseRows('ios', { runtimeEnv: 'app' })).map((row) => row.name)).not.toContain('monocypher');
-        state.config = { allDependencies: [], app: {} };
+        expect((await collectLicenseRows(null, { runtimeEnv: 'app' })).map((row) => row.name)).toContain('monocypher');
+        state.config = { allDependencies: [], app: APP, paths: { base: os.tmpdir() } };
         expect((await collectLicenseRows('linux', { runtimeEnv: 'app' })).map((row) => row.name)).not.toContain('monocypher');
+    });
+
+    test("names crossbind's own extensions the app has on its platform, each package with its text, and none another takes the place of", async () => {
+        const base = path.join(import.meta.dirname, '..', '..', '..');
+        state.config = { allDependencies: [], app: APP, paths: { base } };
+
+        const names = async (platform) => (await collectLicenseRows(platform, { runtimeEnv: 'app' })).map((row) => row.name);
+        const linux = await collectLicenseRows('linux', { runtimeEnv: 'app' });
+
+        expect(linux.find((row) => row.name === '@crossbind/extension-dialog')).toMatchObject({
+            npmName: '@crossbind/extension-dialog', license: 'MIT', licenseText: expect.stringContaining('MIT License'), licenseNotes: expect.stringContaining('the app extension dialog'),
+        });
+        expect(await names('linux')).toContain('@crossbind/extension-power');
+        expect(await names('linux')).not.toContain('@crossbind/extension-updater');
+        expect(await names('ios')).not.toContain('@crossbind/extension-power');
+        expect(await names('android')).toContain('@crossbind/extension-page-dialogs');
+        // Without a platform, what any platform's app has, once.
+        const everywhere = await names(null);
+        expect(everywhere).toContain('@crossbind/extension-power');
+        expect(everywhere.filter((name) => name === '@crossbind/extension-dialog')).toHaveLength(1);
+        state.config.extensions = [{ name: 'acme-dialog', root: path.join(base, 'e2e'), replaces: ['dialog'], app: {} }];
+        expect(await names('linux')).not.toContain('@crossbind/extension-dialog');
     });
 
     test("names each extension package the app builds in and the code of others each carries, but not an extension of the project's own", async () => {
@@ -296,6 +323,7 @@ describe('collectLicenseRows for an app', () => {
         const tinyexpr = { name: 'tinyexpr', version: '1.0.0', license: 'Zlib', file: 'third_party/LICENSE', source: 'https://github.com/codeplea/tinyexpr' };
         state.config = {
             allDependencies: [],
+            app: APP,
             paths: { base },
             extensions: [{ name: 'expr', root, app: { sources: ['expr.cpp'], licenses: [tinyexpr] } }, { name: 'probe', root: own, app: { sources: ['probe.cpp'] } }],
         };
@@ -323,7 +351,7 @@ describe('collectLicenseRows for an app', () => {
 
     test('lists a library once for each version the app ships, whichever extensions carry it, and no private extension package', async () => {
         const base = fs.mkdtempSync(path.join(os.tmpdir(), 'crossbind-extension-licenses-'));
-        state.config = { allDependencies: [], paths: { base }, extensions: [] };
+        state.config = { allDependencies: [], app: APP, paths: { base }, extensions: [] };
         const { nativeVersion: webview } = (await collectLicenseRows('linux', { runtimeEnv: 'app' })).find((row) => row.name === 'webview');
         const extensionAt = (name, manifest, licenses) => {
             const root = path.join(base, 'packages', name);

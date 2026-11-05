@@ -94,7 +94,7 @@ document.querySelector('#result').textContent = await Native.sample();`,
         { type: 'h2', id: 'functions', text: 'What the app does for the page' },
         {
             type: 'p',
-            text: 'The page imports the app\'s own functions from `crossbind/app`, and the app\'s C++ reaches most of them through `<crossbind/app.h>`:',
+            text: 'The page imports the app\'s own functions from `crossbind/app`, and the app\'s C++ reaches them by name with `invoke()` from `<crossbind/extension.h>`:',
         },
         {
             type: 'code',

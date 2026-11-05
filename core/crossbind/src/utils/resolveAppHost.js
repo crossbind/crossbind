@@ -19,3 +19,10 @@ export function resolveAppEmbindJsiRoot() {
     const req = createRequire(path.join(resolveAppHostRoot(), 'package.json'));
     return path.dirname(fs.realpathSync(req.resolve('@crossbind/core-embind-jsi/package.json')));
 }
+
+// crossbind/app as an app's page imports it, which the app host assembles with what crossbind's own extensions give the page.
+export function resolveAppPageApi() {
+    const file = path.join(resolveAppHostRoot(), 'js', 'app.js');
+    if (!fs.existsSync(file)) throw new Error(`crossbind: the app host at ${resolveAppHostRoot()} has no crossbind/app for an app's page: update ${PKG} to match crossbind.`);
+    return fs.realpathSync(file);
+}

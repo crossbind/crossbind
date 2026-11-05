@@ -1,16 +1,13 @@
-// The app's functions as its code and its page call them: the module's code through <crossbind/app.h>, which waits for
-// the main thread to do the work, and the page through crossbind/app, which the host answers once the work is done.
+// The app's functions as its code and its page call them: the module's code through <crossbind/app.h>, and the page
+// through crossbind/app, which the host answers once the work is done.
 #include "app.h"
 #include "host_core.h"
 // The app's name and options, which crossbind writes for every app's host.
 #include "crossbind_app.h"
 
 #include <algorithm>
-#include <atomic>
-#include <chrono>
 #include <cstdio>
 #include <filesystem>
-#include <future>
 #include <iterator>
 #include <memory>
 #include <mutex>
@@ -24,81 +21,11 @@ std::filesystem::path pathOf(const std::string &text) { return std::filesystem::
 
 namespace {
 
-// The main thread answers waits from the module's start until the app quits; outside that span a wait would hang.
-std::atomic<bool> answering{false};
-// How often a wait looks whether the app has begun to quit.
-constexpr auto QUIT_CHECK = std::chrono::milliseconds(50);
 // What the user picked in a dialog during this run, which allowPath() was given: "picked" in where the page reaches.
 std::mutex grantedMutex;
 std::vector<std::string> granted;
 
-// Waits for what the main thread hands done. The promise is shared, as done may run after the wait has given up, and a
-// done dropped unrun breaks it rather than hang the wait.
-template <typename T, typename Start>
-T wait(Start start) {
-    if (!answering) throw std::runtime_error("crossbind: <crossbind/app.h> answers once the app's module has started, until the app quits");
-    if (isMainThread()) {
-        throw std::logic_error("crossbind: <crossbind/app.h> waits for the main thread to do the work, so the main thread never calls it: call it from the module's thread or another of the app's own");
-    }
-    auto result = std::make_shared<std::promise<T>>();
-    auto answer = result->get_future();
-    start([result](T value) { result->set_value(std::move(value)); });
-    result.reset();
-    while (answer.wait_for(QUIT_CHECK) == std::future_status::timeout) {
-        if (!answering) throw std::runtime_error("crossbind: the app quit before it answered");
-    }
-    return answer.get();
-}
-
-// One of the app's functions, as the page calls it by its name.
-Value invoked(const std::string &name, Value options) {
-    using Answer = std::pair<Failure, Value>;
-    Answer answer = wait<Answer>([&](std::function<void(Answer)> done) {
-        app::invoke(name, std::move(options), [done = std::move(done)](Failure failure, Value result) { done({std::move(failure), std::move(result)}); });
-    });
-    if (answer.first) throw std::runtime_error(*answer.first);
-    return std::move(answer.second);
-}
-
-Value filtersOf(const std::vector<FileFilter> &filters) {
-    Value::Array out;
-    for (const auto &filter : filters) out.push_back(Value::Object{{"name", filter.name}, {"extensions", filter.extensions}});
-    return out;
-}
-
 }  // namespace
-
-void answerWaits(bool answer) { answering = answer; }
-
-std::optional<std::vector<std::string>> openDialog(const OpenOptions &options) {
-    const Value picked = invoked("dialog.open", Value::Object{{"title", options.title}, {"defaultPath", options.defaultPath},
-        {"filters", filtersOf(options.filters)}, {"directory", options.directory}, {"multiple", options.multiple}});
-    if (picked.isNull()) return std::nullopt;
-    std::vector<std::string> paths;
-    for (const Value &path : picked.asArray()) paths.push_back(path.asString());
-    return paths;
-}
-
-std::optional<std::string> saveDialog(const SaveOptions &options) {
-    const Value file = invoked("dialog.save", Value::Object{{"title", options.title}, {"defaultPath", options.defaultPath},
-        {"defaultName", options.defaultName}, {"filters", filtersOf(options.filters)}});
-    if (file.isNull()) return std::nullopt;
-    return file.asString();
-}
-
-int messageDialog(const MessageOptions &options) {
-    const char *kind = options.kind == MessageKind::error ? "error" : options.kind == MessageKind::warning ? "warning" : "info";
-    return static_cast<int>(invoked("dialog.message", Value::Object{{"message", options.message}, {"detail", options.detail}, {"kind", kind},
-        {"buttons", options.buttons}}).asNumber());
-}
-
-void openExternal(const std::string &url) { invoked("shell.openExternal", Value::Object{{"url", url}}); }
-
-void openPath(const std::string &path) { invoked("shell.openPath", Value::Object{{"path", path}}); }
-
-void revealInFolder(const std::string &path) { invoked("shell.revealInFolder", Value::Object{{"path", path}}); }
-
-void trash(const std::string &path) { invoked("shell.trash", Value::Object{{"path", path}}); }
 
 // The read-only folder of the files app.files lists, beside the page among the app's resources.
 Paths paths() {
@@ -131,14 +58,6 @@ void emitEvent(const std::string &event, const std::string &json, uint64_t page)
 void emitEventToFront(const std::string &event, const std::string &json) { postEvent(event, json, false, Reach::frontPage); }
 
 void holdEvent(const std::string &event, const std::string &json) { postEvent(event, json, true); }
-
-std::optional<std::string> checkForUpdate() {
-    const Value offered = invoked("updater.check", Value::Object{});
-    if (offered.isNull()) return std::nullopt;
-    return offered["version"].asString();
-}
-
-void installUpdate() { invoked("updater.install", Value::Object{}); }
 
 // Far longer than a link: a system that hands over more opens the app on no link.
 constexpr size_t MAX_URL = 1 << 16;
@@ -419,22 +338,6 @@ void appFunctions(Registry &registry) {
         call.resolve(Value::Object{{"args", launch.args}, {"cwd", launch.cwd}});
     });
     windowFunctions(registry);
-}
-
-void refusedFunctions(Registry &registry) {
-    if (!hasFunction("activities.set")) {
-        registry.function("activities.set", [](Call) {
-            throw std::runtime_error("crossbind: an iOS or macOS app alone sets a user activity, of a type app.activityTypes in crossbind.config.js lists");
-        });
-    }
-    for (const char *name : {"updater.check", "updater.install"}) {
-        if (hasFunction(name)) continue;
-        registry.function(name, [](Call) {
-            throw std::runtime_error(
-                "crossbind: this app does not update itself: a desktop app does with app.updater in crossbind.config.js, an iOS or Android "
-                "app through its store");
-        });
-    }
 }
 
 }  // namespace crossbind::app

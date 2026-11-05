@@ -3,7 +3,7 @@
 import {
     state, createLib, createBridgeFile, buildWasm, getCrossbindScript, getRustJsScript, buildDependencies,
     getDependFilePath, getTargetParams, getFilteredBuildTargets, isSourceNewer, appSourceFiles, buildProjectApp, publishApp,
-    appOutputName, appTargetParams, checkInstaller, shipApp,
+    appOutputName, appTargetParams, checkInstaller, resolveAppPageApi, shipApp,
 } from 'crossbind';
 
 import fs from 'node:fs';
@@ -50,6 +50,7 @@ const rollupCrossbindPlugin = (options, bridges = []) => {
             if (source === '/crossbind.js') {
                 return { id: source, external: true };
             }
+            if (isApp && source === 'crossbind/app') return resolveAppPageApi();
             const dependFilePath = getDependFilePath(source, buildTargetRelease);
             if (dependFilePath) {
                 return dependFilePath;

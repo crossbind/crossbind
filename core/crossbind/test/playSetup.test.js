@@ -4,14 +4,14 @@ const SCOPE = 'https://www.googleapis.com/auth/androidpublisher';
 // Google's sign-in page, which grants each sign-in the scope `granted` names in the browser the api opens, and the
 // keychain, which keeps a sign-in unless the machine has none.
 const google = {};
-vi.mock('../src/publishers/google-play/googleSignIn.js', () => ({
+vi.mock('../../../extensions/google-play/src/googleSignIn.js', () => ({
     signIn: async (scope, openUrl) => {
         google.scopes.push(scope);
         google.opener = openUrl;
         return { access_token: 'access', refresh_token: `refresh-${google.scopes.length}`, scope: google.granted.shift() };
     },
 }));
-vi.mock('../src/publishers/google-play/googlePlay.js', () => ({
+vi.mock('../../../extensions/google-play/src/googlePlay.js', () => ({
     PLAY_SCOPE: SCOPE,
     keepSignIn: (secrets, refreshToken) => {
         google.kept.push(refreshToken);
@@ -30,7 +30,7 @@ const api = {
     log: (line) => printed.push(line),
 };
 
-const { signInToPlay } = await import('../src/publishers/google-play/playSetup.js');
+const { signInToPlay } = await import('../../../extensions/google-play/src/playSetup.js');
 
 beforeEach(() => {
     Object.assign(google, { scopes: [], granted: [], kept: [], hasKeychain: true, opener: null });

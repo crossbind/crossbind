@@ -1033,8 +1033,6 @@ std::string validUtf8(const std::string &text) {
     return valid;
 }
 
-bool hasFunction(const std::string &name) { return added().count(name) > 0; }
-
 const std::function<void(Request)> *routeOf(const std::string &extension) {
     const auto &routes = hooks().routes;
     const auto route = routes.find(extension);
@@ -1070,7 +1068,6 @@ void startExtensions() {
     Registry registry = RegistryAccess::host();
     appFunctions(registry);
     extensionEntries();
-    refusedFunctions(registry);
     for (const auto &[scheme, owner] : urlSchemes()) {
         if (hooks().urls.count(owner) == 0) {
             throw std::runtime_error("the extension " + owner + " owns the scheme " + scheme + ", but does not call onOpenUrl, which gets its links");

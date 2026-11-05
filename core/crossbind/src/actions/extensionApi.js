@@ -8,10 +8,11 @@ import systemKeys from '../utils/systemKeys.js';
 import { askLine, askYesNo, hasTerminal } from '../utils/ask.js';
 import openUrl from '../utils/openUrl.js';
 import { readSecret, storeSecret } from '../utils/keychain.js';
+import { configChangesOf } from '../utils/configChanges.js';
 import { entry, writeOption } from '../utils/configWriter.js';
 import { readAppIcon, windowsIcon } from '../utils/appIcon.js';
 import {
-    PRIVACY_CATEGORIES, androidAppId, appCategory, appDisplayName, appEncryption, appId, appPrivacy, appUpdater, appUrlSchemes,
+    PRIVACY_CATEGORIES, androidAppId, appCategory, appDisplayName, appEncryption, appId, appPrivacy, appUrlSchemes,
 } from '../utils/appOptions.js';
 import { isJsonValue, linuxDepends } from '../utils/appExtensions.js';
 import { fileTypeOwners } from '../utils/appLaunches.js';
@@ -104,7 +105,6 @@ const OPTION_CHECKS = {
     'app.icon': readAppIcon,
     'app.encryption': appEncryption,
     'app.privacy': appPrivacy,
-    'app.updater': appUpdater,
 };
 
 // Writes an option into crossbind.config.js once the user says yes on a terminal, and into this run's config: one of
@@ -236,6 +236,7 @@ export default function extensionApi(name, {
         }),
         get workDir() { return path.join(state.config.paths.build, name); },
         config,
+        get publisherChanges() { return readOnly(configChangesOf()); },
         app: Object.freeze({
             get id() { return platform === 'android' ? androidAppId(state.config) : appId(state.config); },
             get name() { return appDisplayName(state.config); },
@@ -245,10 +246,6 @@ export default function extensionApi(name, {
             get buildNumber() { return appBuildNumber(buildEnv()); },
             get team() { return appTeam(); },
             get encryption() { return appEncryption(state.config); },
-            get updater() {
-                const updater = appUpdater(state.config);
-                return updater && Object.freeze({ url: updater.url, publicKey: updater.publicKey.toString('base64'), version: updater.version });
-            },
             get urlSchemes() { return Object.freeze(appUrlSchemes(state.config)); },
             get fileTypes() { return Object.freeze(fileTypeOwners(state.config).map(({ extension, ...type }) => Object.freeze(type))); },
             // The Debian packages a Linux app needs beside WebKitGTK and GTK, as its extensions' Linux parts list them.
