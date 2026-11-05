@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { createVerify, generateKeyPairSync } from 'node:crypto';
+import { createHash, createVerify, generateKeyPairSync } from 'node:crypto';
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 
 // gcloud prints the token of the account signed in to it, unless `gcloud.fails` says why it cannot.
@@ -44,7 +44,10 @@ function play(url, init = {}) {
     if (route === 'GET /edits/E1/bundles') return json(200, { bundles: [{ versionCode: 1000002 }, { versionCode: 1000006 }] });
     if (route === 'GET /edits/E1/apks') return json(200, {});
     if (route === 'POST /edits/E1/bundles?uploadType=media') return json(200, { versionCode: 1000007 });
-    if (route === 'PUT /edits/E1/tracks/internal') return json(200, JSON.parse(init.body));
+    if (/^PUT \/edits\/E1\/(tracks|listings)\/[\w:-]+$/.test(route)) return json(200, JSON.parse(init.body));
+    if (route === 'GET /edits/E1/listings') return json(200, { listings: [{ language: 'en-US', title: 'Demo', shortDescription: 'A demo', fullDescription: 'The demo app.' }] });
+    if (/^(GET|DELETE) \/edits\/E1\/listings\/[\w-]+\/\w+$/.test(route)) return json(200, {});
+    if (/^POST \/edits\/E1\/listings\/[\w-]+\/\w+\?uploadType=media$/.test(route)) return json(200, { image: { id: 'I1' } });
     if (route === 'POST /edits/E1:commit') return json(200, { id: 'E1' });
     if (route === 'DELETE /edits/E1') return new Response(null, { status: 204 });
     return failure(500, `unanswered ${route}`);
@@ -207,7 +210,7 @@ describe("an app's edit on Google Play", () => {
     test("uploads a bundle and releases it on a track, the bundle's bytes as they are", async () => {
         const aab = path.join(dir, 'app.aab');
         fs.writeFileSync(aab, Buffer.from([0x50, 0x4b, 0x03, 0x04, 0xff]));
-        expect(await uploadBundle('dev.example.app', credentials(), { aab, track: 'internal', status: 'completed' })).toEqual({ versionCode: 1000007, status: 'completed' });
+        expect(await uploadBundle('dev.example.app', credentials(), { aab, track: 'internal', status: 'completed' })).toEqual({ versionCode: 1000007, status: 'completed', listed: [] });
         const upload = requests.find(({ route }) => route === 'POST /edits/E1/bundles?uploadType=media');
         expect(upload.init.headers['content-type']).toBe('application/octet-stream');
         expect(Buffer.compare(upload.init.body, fs.readFileSync(aab))).toBe(0);
@@ -223,7 +226,7 @@ describe("an app's edit on Google Play", () => {
         answers['POST /edits/E1:commit'] = () => (++commits === 1
             ? failure(400, 'Only releases with status draft may be created on draft app.')
             : json(200, { id: 'E1' }));
-        expect(await uploadBundle('dev.example.app', credentials(), { aab, track: 'internal', status: 'completed' })).toEqual({ versionCode: 1000007, status: 'draft' });
+        expect(await uploadBundle('dev.example.app', credentials(), { aab, track: 'internal', status: 'completed' })).toEqual({ versionCode: 1000007, status: 'draft', listed: [] });
         const releases = requests.filter(({ route }) => route === 'PUT /edits/E1/tracks/internal').map(({ init }) => JSON.parse(init.body).releases[0].status);
         expect(releases).toEqual(['completed', 'draft']);
     });
@@ -251,5 +254,112 @@ describe("an app's native debug symbols on Google Play", () => {
         expect(upload).toBeGreaterThan(routes.indexOf('POST /edits/E1/bundles?uploadType=media'));
         expect(upload).toBeLessThan(routes.indexOf('POST /edits/E1:commit'));
         expect(Buffer.compare(requests[upload].init.body, fs.readFileSync(symbols))).toBe(0);
+    });
+});
+
+describe("a release's rollout, notes and listing on Google Play", () => {
+    const credentials = () => playCredentials({ [PLAY.key]: keyFile }, {});
+    const hash = (bytes) => createHash('sha256').update(bytes).digest('hex');
+    const file = (name, bytes) => {
+        fs.writeFileSync(path.join(dir, name), bytes);
+        return path.join(dir, name);
+    };
+    const releasesOf = (track) => requests.filter(({ route }) => route === `PUT /edits/E1/tracks/${track}`).map(({ init }) => JSON.parse(init.body).releases[0]);
+    const bodyOf = (route) => requests.find((request) => request.route === route).init.body;
+    const turkish = { title: 'Deneme', shortDescription: 'Bir deneme', fullDescription: 'Deneme uygulaması.' };
+    let aab;
+
+    beforeEach(() => {
+        aab = file('app.aab', 'bundle');
+        answers['GET /edits/E1/listings/en-US/phoneScreenshots'] = () => json(200, { images: [{ id: 'A', sha256: hash('first') }, { id: 'B', sha256: hash('second') }] });
+    });
+
+    test('rolls a release out to the share of users userFraction gives, which a draft never takes', async () => {
+        await uploadBundle('dev.example.app', credentials(), { aab, track: 'production', status: 'inProgress', userFraction: 0.1 });
+        expect(releasesOf('production')).toEqual([{ versionCodes: ['1000007'], status: 'inProgress', userFraction: 0.1 }]);
+
+        requests = [];
+        let commits = 0;
+        answers['POST /edits/E1:commit'] = () => (++commits === 1 ? failure(400, 'Only releases with status draft may be created on draft app.') : json(200, { id: 'E1' }));
+        expect((await uploadBundle('dev.example.app', credentials(), { aab, track: 'production', status: 'inProgress', userFraction: 0.1 })).status).toBe('draft');
+        expect(releasesOf('production').map(({ status, userFraction }) => [status, userFraction])).toEqual([['inProgress', 0.1], ['draft', undefined]]);
+    });
+
+    test('gives a release the notes of each language that has some, for its versionCode or else the default ones', async () => {
+        const listings = [
+            { language: 'de-DE', texts: {}, notes: {}, images: {} },
+            { language: 'en-US', texts: {}, notes: { default: 'Fixes.' }, images: {} },
+            { language: 'tr-TR', texts: {}, notes: { 1000007: 'Bu sürüm için.', default: 'Düzeltmeler.' }, images: {} },
+        ];
+        await uploadBundle('dev.example.app', credentials(), { aab, track: 'internal', status: 'completed', listings });
+        expect(releasesOf('internal')[0].releaseNotes).toEqual([{ language: 'en-US', text: 'Fixes.' }, { language: 'tr-TR', text: 'Bu sürüm için.' }]);
+        expect(requests.filter(({ route }) => route.includes('/listings'))).toEqual([]);
+    });
+
+    test("changes a language's texts and images where Play's differ, before the release, and leaves the rest as they are", async () => {
+        const icon = file('icon.png', Buffer.from([0x89, 0x50, 0x4e, 0x47]));
+        const listings = [
+            { language: 'en-US', texts: { title: 'Demo' }, notes: {}, images: { phoneScreenshots: [file('1.png', 'first'), file('2.png', 'second')] } },
+            { language: 'tr-TR', texts: turkish, notes: {}, images: { icon: [icon] } },
+        ];
+
+        expect((await uploadBundle('dev.example.app', credentials(), { aab, track: 'internal', status: 'completed', listings })).listed).toEqual(['tr-TR']);
+
+        const routes = requests.map(({ route }) => route);
+        expect(routes.filter((route) => route.includes('/listings'))).toEqual([
+            'GET /edits/E1/listings',
+            'GET /edits/E1/listings/en-US/phoneScreenshots',
+            'PUT /edits/E1/listings/tr-TR',
+            'GET /edits/E1/listings/tr-TR/icon',
+            'DELETE /edits/E1/listings/tr-TR/icon',
+            'POST /edits/E1/listings/tr-TR/icon?uploadType=media',
+        ]);
+        expect(routes.indexOf('POST /edits/E1/listings/tr-TR/icon?uploadType=media')).toBeLessThan(routes.indexOf('PUT /edits/E1/tracks/internal'));
+        expect(JSON.parse(bodyOf('PUT /edits/E1/listings/tr-TR'))).toEqual({ language: 'tr-TR', ...turkish });
+        const upload = requests.find(({ route }) => route === 'POST /edits/E1/listings/tr-TR/icon?uploadType=media');
+        expect(upload.init.headers['content-type']).toBe('image/png');
+        expect(Buffer.compare(upload.init.body, fs.readFileSync(icon))).toBe(0);
+    });
+
+    test("puts a listing back whole with the field that changed, and screenshots anew in the project's order", async () => {
+        const listings = [{ language: 'en-US', texts: { fullDescription: 'The demo app, anew.' }, notes: {}, images: { phoneScreenshots: [file('b.jpg', 'second'), file('a.jpg', 'first')] } }];
+
+        expect((await uploadBundle('dev.example.app', credentials(), { aab, track: 'internal', status: 'completed', listings })).listed).toEqual(['en-US']);
+
+        expect(JSON.parse(bodyOf('PUT /edits/E1/listings/en-US'))).toEqual({ language: 'en-US', title: 'Demo', shortDescription: 'A demo', fullDescription: 'The demo app, anew.' });
+        const screenshots = requests.filter(({ route }) => route.startsWith('DELETE /edits/E1/listings/en-US/phoneScreenshots') || route === 'POST /edits/E1/listings/en-US/phoneScreenshots?uploadType=media');
+        expect(screenshots.map(({ route, init }) => [route.split(' ')[0], init.headers['content-type'], init.body && String(init.body)])).toEqual([
+            ['DELETE', 'application/json', undefined],
+            ['POST', 'image/jpeg', 'second'],
+            ['POST', 'image/jpeg', 'first'],
+        ]);
+    });
+
+    test('names the rights a production release and a listing take, when Play refuses the account', async () => {
+        answers['PUT /edits/E1/tracks/production'] = () => failure(403, 'The caller does not have permission');
+        const listings = [{ language: 'en-US', texts: { title: 'Demo' }, notes: {}, images: {} }];
+        await expect(uploadBundle('dev.example.app', credentials(), { aab, track: 'production', status: 'completed', listings })).rejects.toThrow(
+            `${ACCOUNT} has no release rights for dev.example.app: invite it in Play Console, under Users and permissions, with "Release to production, exclude devices, and use Play App Signing" and "Manage store presence" for the app.`,
+        );
+        expect(requests.at(-1).route).toBe('DELETE /edits/E1');
+    });
+
+    test('makes a listing in a language Play has none in only of a title, a short and a full description', async () => {
+        const listings = [{ language: 'tr-TR', texts: { title: 'Deneme' }, notes: {}, images: { icon: [file('icon.png', 'icon')] } }];
+        await expect(uploadBundle('dev.example.app', credentials(), { aab, track: 'internal', status: 'completed', listings })).rejects.toThrow(
+            `crossbind: Google Play has no listing in tr-TR yet, which it makes of a title, a short and a full description: add short_description.txt, full_description.txt to ${path.join('store', 'google-play', 'tr-TR')}.`,
+        );
+        expect(requests.filter(({ route }) => route.includes('/listings/tr-TR'))).toEqual([]);
+        expect(requests.at(-1).route).toBe('DELETE /edits/E1');
+    });
+
+    test('names the image Play refuses', async () => {
+        const shot = file('3.png', 'third');
+        answers['POST /edits/E1/listings/en-US/phoneScreenshots?uploadType=media'] = () => failure(400, 'Image is too small.');
+        const listings = [{ language: 'en-US', texts: {}, notes: {}, images: { phoneScreenshots: [shot] } }];
+        await expect(uploadBundle('dev.example.app', credentials(), { aab, track: 'internal', status: 'completed', listings })).rejects.toMatchObject({
+            status: 400,
+            message: `crossbind: Google Play answered POST /edits/E1/listings/en-US/phoneScreenshots with 400: Image is too small.\ncrossbind: it answered so for ${shot}.`,
+        });
     });
 });

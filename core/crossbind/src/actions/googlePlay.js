@@ -1,9 +1,12 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { createSign } from 'node:crypto';
+import { createHash, createSign } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
 import { accessToken } from './googleSignIn.js';
+import {
+    PLAY_LISTING, isListed, lackedForNewListing, releaseNotesOf,
+} from './playListing.js';
 import { readSecret, storeSecret } from '../utils/keychain.js';
 
 // Google Play's credentials, which the environment or ~/.crossbind.json names: a service account's e-mail, whose token
@@ -21,6 +24,12 @@ const IAM = 'https://iamcredentials.googleapis.com/v1/projects/-/serviceAccounts
 const TOKEN_SECONDS = 3600;
 // Play's answer for an app whose first release Play Console has not rolled out yet.
 const DRAFT_APP = /status draft may be created on draft app/;
+// The rights in Play Console an account needs for a release on a testing track, on production, and for the listing.
+const TESTING_RIGHTS = '"Release apps to testing tracks"';
+const PRODUCTION_RIGHTS = '"Release to production, exclude devices, and use Play App Signing"';
+const LISTING_RIGHTS = '"Manage store presence"';
+// A production track, as a form factor's is too: wear:production.
+const PRODUCTION = /(^|:)production$/;
 
 const encode = (value) => Buffer.from(JSON.stringify(value)).toString('base64url');
 
@@ -126,7 +135,7 @@ export async function playToken(credentials) {
     return credentials.key ? keyToken(credentials) : accountToken(credentials);
 }
 
-function playError(status, message, method, url, appId, credentials) {
+function playError(status, message, method, url, appId, credentials, rights) {
     const route = new URL(url).pathname.replace(/^.*\/applications\/[^/]+/, '') || '/';
     let text = `crossbind: Google Play answered ${method} ${route} with ${status}: ${message}`;
     if (status === 404 && route === '/edits') {
@@ -136,22 +145,23 @@ function playError(status, message, method, url, appId, credentials) {
     } else if (status === 403 && credentials.token && /insufficient authentication scopes/i.test(message)) {
         text = `crossbind: ${PLAY.token} lacks the scope ${PLAY_SCOPE}, which Google Play's API takes: ask for it where the token is made, as google-github-actions/auth's access_token_scopes does.`;
     } else if (status === 403 && credentials.refreshToken) {
-        text = `crossbind: the Google account you signed in with has no release rights for ${appId}: sign in with one that has, or have it invited in Play Console, under Users and permissions, with "Release apps to testing tracks" for the app.`;
+        text = `crossbind: the Google account you signed in with has no release rights for ${appId}: sign in with one that has, or have it invited in Play Console, under Users and permissions, with ${rights.join(' and ')} for the app.`;
     } else if (status === 403) {
         const account = credentials.token ? `the account behind ${PLAY.token}` : credentials.account;
-        text = `crossbind: ${account} has no release rights for ${appId}: invite it in Play Console, under Users and permissions, with "Release apps to testing tracks" for the app.`;
+        text = `crossbind: ${account} has no release rights for ${appId}: invite it in Play Console, under Users and permissions, with ${rights.join(' and ')} for the app.`;
     }
     return Object.assign(new Error(text), { status, playMessage: message });
 }
 
-// A caller of Play's API for one app, whose failures say what to do where they can.
-async function playCaller(appId, credentials) {
+// A caller of Play's API for one app, whose failures say what to do where they can, naming the rights its calls take. A
+// file's bytes go up as they are, of the type given.
+async function playCaller(appId, credentials, rights = [TESTING_RIGHTS]) {
     const token = await playToken(credentials);
-    return async (method, url, body) => {
+    return async (method, url, body, type = 'application/octet-stream') => {
         const isBinary = Buffer.isBuffer(body);
         const response = await fetch(url, {
             method,
-            headers: { authorization: `Bearer ${token}`, 'content-type': isBinary ? 'application/octet-stream' : 'application/json' },
+            headers: { authorization: `Bearer ${token}`, 'content-type': isBinary ? type : 'application/json' },
             body: isBinary || body === undefined ? body : JSON.stringify(body),
         });
         const text = await response.text();
@@ -162,7 +172,7 @@ async function playCaller(appId, credentials) {
         } catch {
             // Not Google's JSON error, so the text is the message.
         }
-        throw playError(response.status, message, method, url, appId, credentials);
+        throw playError(response.status, message, method, url, appId, credentials, rights);
     };
 }
 
@@ -182,22 +192,73 @@ export async function highestVersionCode(appId, credentials) {
     }
 }
 
+const sha256 = (bytes) => createHash('sha256').update(bytes).digest('hex');
+const contentTypeOf = (file) => (/\.png$/i.test(file) ? 'image/png' : 'image/jpeg');
+
+// Puts a language's images of each type into an edit where Play shows others, or in another order, naming a file Play
+// refuses, and says whether it did.
+async function updateImages(call, { editUrl, uploadUrl }, language, images) {
+    let isChanged = false;
+    for (const [type, files] of Object.entries(images)) {
+        const bytes = files.map((file) => fs.readFileSync(file));
+        const { images: shown = [] } = await call('GET', `${editUrl}/listings/${language}/${type}`);
+        if (shown.map((image) => image.sha256).join() === bytes.map(sha256).join()) continue;
+        await call('DELETE', `${editUrl}/listings/${language}/${type}`);
+        for (const [index, file] of files.entries()) {
+            await call('POST', `${uploadUrl}/listings/${language}/${type}?uploadType=media`, bytes[index], contentTypeOf(file)).catch((error) => {
+                throw Object.assign(new Error(`${error.message}\ncrossbind: it answered so for ${file}.`), { status: error.status, playMessage: error.playMessage });
+            });
+        }
+        isChanged = true;
+    }
+    return isChanged;
+}
+
+// Puts into an edit what a project's listing has and Play's lacks: a language's texts where one differs, and its images.
+// A language Play has no listing in takes the texts Play makes one of. Gives the languages it changed.
+async function updateListings(call, urls, listings) {
+    const listed = listings.filter(isListed);
+    if (listed.length === 0) return [];
+    const { listings: shown = [] } = await call('GET', `${urls.editUrl}/listings`);
+    const changed = [];
+    for (const listing of listed) {
+        const { language, texts, images } = listing;
+        const current = shown.find((one) => one.language === language);
+        const lacked = current ? [] : lackedForNewListing(listing);
+        if (lacked.length > 0) {
+            throw new Error(`crossbind: Google Play has no listing in ${language} yet, which it makes of a title, a short and a full description: add ${lacked.join(', ')} to ${path.join(PLAY_LISTING, language)}.`);
+        }
+        const isTextNew = Object.entries(texts).some(([field, text]) => (current?.[field] ?? '') !== text);
+        if (isTextNew) await call('PUT', `${urls.editUrl}/listings/${language}`, { ...current, ...texts, language });
+        const isImageNew = await updateImages(call, urls, language, images);
+        if (isTextNew || isImageNew) changed.push(language);
+    }
+    return changed;
+}
+
 // Uploads a bundle, with the zip of its native debug symbols if there is one, and releases it on a track, as status
-// says, in one edit. An app never released takes a draft alone, which its first rollout in Play Console makes live, so
-// its release becomes one.
-export async function uploadBundle(appId, credentials, { aab, symbols = null, track, status }) {
-    const call = await playCaller(appId, credentials);
+// says, to the share of users userFraction gives while it is in progress, in one edit with the project's listing and
+// the release's notes it has. An app never released takes a draft alone, which its first rollout in Play Console makes
+// live, so its release becomes one. Gives the languages whose listing changed too.
+export async function uploadBundle(appId, credentials, { aab, symbols = null, track, status, userFraction = null, listings = [] }) {
+    const rights = [PRODUCTION.test(track) ? PRODUCTION_RIGHTS : TESTING_RIGHTS, ...(listings.some(isListed) ? [LISTING_RIGHTS] : [])];
+    const call = await playCaller(appId, credentials, rights);
     const edits = `${API}/${appId}/edits`;
     const edit = await call('POST', edits, {});
+    const uploadUrl = `${UPLOAD}/${appId}/edits/${edit.id}`;
     try {
-        const { versionCode } = await call('POST', `${UPLOAD}/${appId}/edits/${edit.id}/bundles?uploadType=media`, fs.readFileSync(aab));
+        const { versionCode } = await call('POST', `${uploadUrl}/bundles?uploadType=media`, fs.readFileSync(aab));
         if (symbols) {
-            await call('POST', `${UPLOAD}/${appId}/edits/${edit.id}/apks/${versionCode}/deobfuscationFiles/nativeCode?uploadType=media`, fs.readFileSync(symbols));
+            await call('POST', `${uploadUrl}/apks/${versionCode}/deobfuscationFiles/nativeCode?uploadType=media`, fs.readFileSync(symbols));
         }
+        const listed = await updateListings(call, { editUrl: `${edits}/${edit.id}`, uploadUrl }, listings);
+        const releaseNotes = releaseNotesOf(listings, versionCode);
         const release = async (releaseStatus) => {
-            await call('PUT', `${edits}/${edit.id}/tracks/${track}`, { track, releases: [{ versionCodes: [String(versionCode)], status: releaseStatus }] });
+            const share = releaseStatus === 'inProgress' ? { userFraction } : {};
+            const notes = releaseNotes.length > 0 ? { releaseNotes } : {};
+            await call('PUT', `${edits}/${edit.id}/tracks/${track}`, { track, releases: [{ versionCodes: [String(versionCode)], status: releaseStatus, ...share, ...notes }] });
             await call('POST', `${edits}/${edit.id}:commit`);
-            return { versionCode, status: releaseStatus };
+            return { versionCode, status: releaseStatus, listed };
         };
         try {
             return await release(status);

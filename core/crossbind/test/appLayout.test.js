@@ -126,13 +126,20 @@ describe("a desktop app's page", () => {
             fs.mkdirSync(path.dirname(path.join(dist, file)), { recursive: true });
             fs.writeFileSync(path.join(dist, file), file);
         });
+        fs.writeFileSync(path.join(root, 'build', 'app-outputs.json'), JSON.stringify({ android: '/demo/dist/demo-android' }));
         try {
+            publishApp(arm64, { to: path.join(dist, 'demo-linux-arm64'), page: dist });
             publishApp(arm64, { to: path.join(dist, 'demo-linux-arm64'), page: dist });
             // An app given a name of its own leaves itself out too.
             publishApp(arm64, { to: path.join(dist, 'renamed'), page: dist });
 
             ['demo-linux-arm64', 'renamed'].forEach((app) => {
                 expect(fs.readdirSync(path.join(dist, app, 'resources', 'page')).sort()).toEqual(['assets', 'crossbind.js', 'index.html']);
+            });
+            // A publish finds each desktop app by its platform's name on the command line, the last of a place once.
+            expect(JSON.parse(fs.readFileSync(path.join(root, 'build', 'app-outputs.json'), 'utf8'))).toEqual({
+                android: '/demo/dist/demo-android',
+                linux: [{ app: path.join(dist, 'demo-linux-arm64'), arch: 'arm64' }, { app: path.join(dist, 'renamed'), arch: 'arm64' }],
             });
             expect(spawnSync).toHaveBeenCalledWith('tar', expect.arrayContaining([`${path.join(dist, 'demo-linux-arm64')}.tar.gz`]), expect.anything());
             expect(run).toHaveBeenCalledWith(null, expect.arrayContaining(['dpkg-deb', `${path.join(dist, 'demo-linux-arm64')}.deb`]), null, arm64);

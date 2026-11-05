@@ -1,16 +1,16 @@
 import fs from 'node:fs';
 import state from '../state/index.js';
 import { SIGNING } from './androidGradle.js';
-import {
-    androidAppId, androidVersion, appBuildNumber, appOutputOf, clearAppOutputs,
-} from './buildApp.js';
+import { androidAppId, androidVersion, appBuildNumber } from './buildApp.js';
 import {
     PLAY, highestVersionCode, keptSignIn, playCredentials, uploadBundle,
 } from './googlePlay.js';
+import { PLAY_LISTING, isListed, readPlayListing } from './playListing.js';
 import { signInToPlay } from './playSetup.js';
 import { askAppId } from './appSetup.js';
+import publish from './publish.js';
 import { makeUploadKey, releaseSigningEnv } from './uploadKey.js';
-import { askLine, askYesNo, hasTerminal } from '../utils/ask.js';
+import { askLine, askYesNo } from '../utils/ask.js';
 import loadSystemConfig from '../utils/systemConfig.js';
 import openUrl from '../utils/openUrl.js';
 
@@ -20,6 +20,23 @@ const NO_UPLOAD_KEY = `crossbind: Google Play takes bundles signed with your upl
 const NO_CREDENTIALS = `crossbind: Google Play takes uploads from your Google account, which a publish on a terminal signs in to, or from a service account: set ${PLAY.serviceAccount} to its e-mail, with gcloud signed in, ${PLAY.key} to its JSON key, or ${PLAY.token} to an access token of it; app.md's Publishing says how to make one.`;
 const SIGN_IN = 'Google Play takes uploads from your Google account once crossbind is signed in to it. Sign in now, in your browser? [Y/n] ';
 const ANOTHER_ACCOUNT = 'Sign in with another Google account? [Y/n] ';
+const PERCENT = /^\d+(\.\d{1,2})?%?$/;
+
+// The percent of a track's users a release reaches at first, as --rollout gives it: 10, or 10%.
+export function rolloutPercent(value) {
+    const percent = PERCENT.test(value) ? Number.parseFloat(value) : Number.NaN;
+    if (!(percent > 0 && percent <= 100)) {
+        throw new Error(`crossbind: --rollout takes the percent of the track's users a release reaches at first, above 0 and at most 100 with two decimals at most, as 10 or 12.5%, not ${value}.`);
+    }
+    return percent;
+}
+
+// The status of the release --draft and --rollout ask for, and the percent of users it reaches while in progress.
+export function playRelease(isDraft, rollout = null) {
+    if (isDraft && rollout !== null) throw new Error('crossbind: --draft and --rollout do not go together: a draft reaches no user until Play Console rolls it out.');
+    if (isDraft) return { status: 'draft', rollout: null };
+    return rollout !== null && rollout < 100 ? { status: 'inProgress', rollout } : { status: 'completed', rollout: null };
+}
 
 // The highest versionCode Play has seen, and the credentials that saw it, once the user has done what Play asks for,
 // which only the user can do: in Play Console, which crossbind opens before it waits for Enter and checks again, or, for
@@ -45,58 +62,82 @@ async function highestWithPlayConsole(appId, credentials) {
     }
 }
 
-// Builds an Android app with the next versionCode Google Play takes, signed with the upload key, and releases its bundle
-// on a track. All it needs is checked before the build, which takes minutes: on a terminal, what is missing is asked for
-// and set up; without one, as in CI, every missing piece is named at once.
-export async function publishAndroid({ track, status, viteArgs }, { runVite }) {
-    const isGuided = hasTerminal();
-    const missing = [];
-    let appId = state.config.app.id === undefined ? null : androidAppId();
-    if (!appId && isGuided) appId = await askAppId('Google Play', 'package name');
-    if (!appId) missing.push(NO_APP_ID);
+// The publisher of an Android app's bundle, signed with the upload key, to a Google Play track, with the next versionCode
+// Play takes.
+export const googlePlay = {
+    name: 'google-play',
+    platform: 'android',
+    store: 'Google Play',
 
-    let signing = await releaseSigningEnv();
-    if (!signing.isSigned && isGuided && await askYesNo('This machine has no upload key, which Google Play takes bundles signed with. Make one now? [Y/n] ')) {
-        await makeUploadKey();
-        state.config.system = loadSystemConfig();
-        signing = await releaseSigningEnv();
-    }
-    if (!signing.isSigned) missing.push(NO_UPLOAD_KEY);
+    async check({ isGuided, options }) {
+        const listings = readPlayListing(state.config.paths.project);
+        const missing = [];
+        let appId = state.config.app.id === undefined ? null : androidAppId();
+        if (!appId && isGuided) appId = await askAppId('Google Play', 'package name');
+        if (!appId) missing.push(NO_APP_ID);
 
-    let credentials = playCredentials(process.env, state.config.system) ?? await keptSignIn();
-    if (!credentials && isGuided) credentials = await signInToPlay(SIGN_IN);
-    if (!credentials) missing.push(NO_CREDENTIALS);
-    if (missing.length > 0) throw new Error(missing.join('\n'));
-    const version = state.config.package?.version ?? '1.0.0';
-    console.log(`crossbind: publishing ${appId} ${version} to Google Play's ${track} track.`);
+        let signing = await releaseSigningEnv();
+        if (!signing.isSigned && isGuided && await askYesNo('This machine has no upload key, which Google Play takes bundles signed with. Make one now? [Y/n] ')) {
+            await makeUploadKey();
+            state.config.system = loadSystemConfig();
+            signing = await releaseSigningEnv();
+        }
+        if (!signing.isSigned) missing.push(NO_UPLOAD_KEY);
 
-    let highest;
-    if (isGuided) ({ highest, credentials } = await highestWithPlayConsole(appId, credentials));
-    else highest = await highestVersionCode(appId, credentials);
-    const versionCode = appBuildNumber() ?? Math.max(androidVersion().code, highest + 1);
-    console.log(highest
-        ? `crossbind: Google Play has seen versionCode ${highest} at most, so this build is ${versionCode}.`
-        : `crossbind: Google Play has no build of ${appId} yet, so this build is ${versionCode}.`);
+        let credentials = playCredentials(process.env, state.config.system) ?? await keptSignIn();
+        if (!credentials && isGuided) credentials = await signInToPlay(SIGN_IN);
+        if (!credentials) missing.push(NO_CREDENTIALS);
+        if (missing.length > 0) return { missing };
+        const version = state.config.package?.version ?? '1.0.0';
+        console.log(`crossbind: publishing ${appId} ${version} to Google Play's ${options.track} track.`);
 
-    clearAppOutputs();
-    const exitCode = await runVite(['build', ...viteArgs], {
-        ...process.env, ...signing.env, CROSSBIND_APP_PLATFORM: 'android', CROSSBIND_APP_BUILD_NUMBER: String(versionCode),
-    });
-    if (exitCode !== 0) throw Object.assign(new Error(`crossbind: the build ended with exit code ${exitCode}, so nothing went to Google Play.`), { exitCode });
-    const project = appOutputOf('android');
-    const aab = `${project}.aab`;
-    if (!fs.existsSync(aab)) throw new Error(`crossbind: the build made no bundle at ${aab}, so nothing went to Google Play.`);
-    const symbols = fs.existsSync(`${project}-symbols.zip`) ? `${project}-symbols.zip` : null;
+        let highest;
+        if (isGuided) ({ highest, credentials } = await highestWithPlayConsole(appId, credentials));
+        else highest = await highestVersionCode(appId, credentials);
+        return { session: { appId, version, signing, credentials, highest, listings } };
+    },
 
-    console.log(`crossbind: uploading the bundle${symbols ? ' and its native debug symbols' : ''} to Google Play.`);
-    const released = await uploadBundle(appId, credentials, { aab, symbols, track, status });
-    const app = `${appId} ${version} (versionCode ${released.versionCode})`;
-    if (released.status !== 'draft') {
-        console.log(`crossbind: ${app} is out on Google Play's ${track} track.`);
-        return;
-    }
-    console.log(`crossbind: ${app} is a draft on Google Play's ${track} track.`);
-    if (status !== 'draft') {
-        console.log("crossbind: Play takes drafts alone until an app's first release is out: roll it out once in Play Console, under Test and release, and later publishes go out by themselves.");
-    }
-}
+    buildNumber(context, { appId, highest }) {
+        const versionCode = appBuildNumber() ?? Math.max(androidVersion().code, highest + 1);
+        console.log(highest
+            ? `crossbind: Google Play has seen versionCode ${highest} at most, so this build is ${versionCode}.`
+            : `crossbind: Google Play has no build of ${appId} yet, so this build is ${versionCode}.`);
+        return versionCode;
+    },
+
+    buildEnv: ({ signing }) => signing.env,
+
+    async upload({ options: { track, status, rollout = null } }, { appId, version, credentials, listings }, project) {
+        const aab = `${project}.aab`;
+        if (!fs.existsSync(aab)) throw new Error(`crossbind: the build made no bundle at ${aab}, so nothing went to Google Play.`);
+        const symbols = fs.existsSync(`${project}-symbols.zip`) ? `${project}-symbols.zip` : null;
+
+        console.log(`crossbind: uploading the bundle${symbols ? ' and its native debug symbols' : ''} to Google Play.`);
+        // A percent's two decimals are a fraction's four, which the division alone would leave as 0.33299999999999996.
+        const userFraction = status === 'inProgress' ? Number((rollout / 100).toFixed(4)) : null;
+        const released = await uploadBundle(appId, credentials, { aab, symbols, track, status, userFraction, listings });
+        if (listings.some(isListed)) {
+            console.log(released.listed.length > 0
+                ? `crossbind: Google Play's listing changed in ${released.listed.join(', ')}, as ${PLAY_LISTING} has it.`
+                : `crossbind: Google Play's listing is the one ${PLAY_LISTING} has already.`);
+        }
+        const app = `${appId} ${version} (versionCode ${released.versionCode})`;
+        if (released.status === 'inProgress') {
+            console.log(`crossbind: ${app} is out to ${rollout}% of the users of Google Play's ${track} track: Play Console raises the share, under Test and release.`);
+            return;
+        }
+        if (released.status !== 'draft') {
+            console.log(`crossbind: ${app} is out on Google Play's ${track} track.`);
+            return;
+        }
+        console.log(`crossbind: ${app} is a draft on Google Play's ${track} track.`);
+        if (status !== 'draft') {
+            console.log("crossbind: Play takes drafts alone until an app's first release is out: roll it out once in Play Console, under Test and release, and later publishes go out by themselves.");
+        }
+        if (status === 'inProgress') {
+            console.log(`crossbind: Play stages updates alone, so that first release reaches all of the track's users, not ${rollout}% of them.`);
+        }
+    },
+};
+
+export const publishAndroid = (options, tools) => publish(googlePlay, options, tools);

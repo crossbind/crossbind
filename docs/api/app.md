@@ -50,8 +50,9 @@ export default defineConfig({ plugins: [viteCrossbindPlugin()] });
 | `crossbind build -p android -e app` | Writes the Gradle project with no page in it: `<paths.output>/<name>-android`, or `<name>-android.debug` for a debug build. A release build packages it as `crossbind app build -p android` does. |
 | `crossbind app updater-key` | Prints a new key pair for a desktop app's updates: the public key for `app.updater.publicKey`, the private one for `CROSSBIND_UPDATER_PRIVATE_KEY` (see [Updates](#updates)). |
 | `crossbind app upload-key` | Makes this machine's upload key, which signs an Android app's bundle for Google Play, and keeps its password in the system keychain; `--use <keystore>` takes a key you have instead (see [The upload key](#the-upload-key)). |
-| `crossbind app publish -p android` | Builds the Android app with the next versionCode Google Play takes and releases its bundle on a track, internal unless `--track` names another (see [Publishing](#publishing)). |
-| `crossbind app publish -p ios` | Builds the iOS app, archives it and uploads it to App Store Connect, whose TestFlight hands it to testers; Xcode numbers the build (see [Publishing](#publishing)). |
+| `crossbind app publish google-play` | Builds the Android app with the next versionCode Google Play takes and releases its bundle on a track, internal unless `--track` names another, to a share of its users with `--rollout`, and with the listing `store/google-play` holds; `-p android` names the same store (see [Publishing](#publishing)). |
+| `crossbind app publish app-store` | Builds the iOS app, archives it and uploads it to App Store Connect, whose TestFlight hands it to testers, and with `--submit` to App Review too, with the listing `store/app-store` holds; Xcode numbers the build, and `-p ios` names the same store (see [Publishing](#publishing)). |
+| `crossbind app publish github` | Builds the desktop app of `-p macos`, `linux` or `windows`, else of this machine, and puts what installs it, and with `app.updater` its update, into the GitHub release of its version, `v<version>` (see [GitHub Releases](#github-releases)). |
 
 `crossbind app` runs the project's Vite with `CROSSBIND_APP_PLATFORM` set to the platform `-p` names, `macos`, `linux`,
 `windows`, `ios` or `android`; without `-p` it keeps the variable the environment sets, and without that builds this
@@ -246,8 +247,8 @@ installs. With it, `crossbind app build` writes each desktop app's update beside
   the app's `.tar.gz`; on Windows its setup program.
 
 Both go where `app.updater.url` points, with `{platform}` as `darwin`, `linux` or `win32` and `{arch}` as `x64` or
-`arm64`, and the file beside the manifest. The page asks for an update and installs it when it decides to, as once its
-user agrees; the host asks no one:
+`arm64`, and the file beside the manifest, as a GitHub release holds them (see [GitHub Releases](#github-releases)). The
+page asks for an update and installs it when it decides to, as once its user agrees; the host asks no one:
 
 ```js
 import { updater } from 'crossbind/app';
@@ -858,12 +859,14 @@ its data, and leaves running it to you.
 
 ## Publishing
 
-`crossbind app publish` builds the app and sends it to its store: with `-p android` its bundle to a Google Play track,
-with `-p ios` the app to App Store Connect, whose TestFlight hands it to testers.
+`crossbind app publish <store>` builds the app and sends it to the store it names first, before any option of Vite's:
+`google-play` takes its bundle on a Google Play track, `app-store` the app to App Store Connect, whose TestFlight hands
+it to testers, and `github` a desktop app's installers and update to a GitHub release. `-p android` and `-p ios` name
+the first two stores, as `CROSSBIND_APP_PLATFORM` does without either; for `github`, `-p` names the desktop platform.
 
 ### Google Play
 
-`crossbind app publish -p android` builds the Android app and releases its bundle on a Google Play track. Before the
+`crossbind app publish google-play` builds the Android app and releases its bundle on a Google Play track. Before the
 build, which takes minutes, it checks all it needs:
 - `app.id`, set in `crossbind.config.js`, as Play keeps an app's package name for good;
 - an upload key;
@@ -875,14 +878,19 @@ The build's versionCode is then one above that, or the version's own when that i
 on the internal track unless `--track` names another (`alpha`, `beta`, `production` or one of your own), and out to its
 testers at once, unless `--draft` leaves it for Play Console to roll out.
 
+`--rollout 10`, or `10%`, makes the release a staged rollout: Play gives it to that percent of the track's users at
+first, and Play Console raises the share later, under Test and release. Play stages updates alone, so an app's first
+release reaches all of them. `--rollout 100` releases to every user, as no `--rollout` does, and a draft takes none.
+
 Google Play takes uploads from your Google account or from a service account.
 
 With neither set, a publish on a terminal signs you in to Google: your browser opens Google's page, where you pick the
 account and allow its Google Play access, and the system keychain keeps the sign-in for later publishes, with a terminal
 or without; a machine with no keychain signs in at each publish. The account's own rights in Play Console apply, so it
-needs "Release apps to testing tracks" for the app, as its owner has. The browser has to run on the same machine, as
-Google's page sends it back to a port of crossbind's there. To sign out, remove crossbind in your Google account, under
-Security › Your connections to third-party apps & services; the next publish signs in again.
+needs "Release apps to testing tracks" for the app, as its owner has, and the rights step 3 below names for production
+and the listing. The browser has to run on the same machine, as Google's page sends it back to a port of crossbind's
+there. To sign out, remove crossbind in your Google account, under Security › Your connections to third-party apps &
+services; the next publish signs in again.
 
 A service account is for CI, where no one signs in, and wins over the sign-in where one is set, from the environment or
 from `~/.crossbind.json` under the same name without `CROSSBIND_` (`crossbind config set GOOGLE_PLAY_SERVICE_ACCOUNT …`):
@@ -903,7 +911,8 @@ Setting two of them stops the publish. Once, for each app or account:
    - For `CROSSBIND_GOOGLE_PLAY_KEY`, make a JSON key of it. An organization may refuse keys
      (`iam.disableServiceAccountKeyCreation`): use the first way, or a project with no organization.
 3. For a service account, invite its e-mail in Play Console, under Users and permissions, with "Release apps to testing
-   tracks" for the app.
+   tracks" for the app; for the production track also "Release to production, exclude devices, and use Play App
+   Signing", and for the listing "Manage store presence".
 4. Play takes draft releases alone until an app's first release is out. So the first publish leaves its release a draft;
    roll it out once in Play Console, under Test and release, and later publishes go out by themselves.
 
@@ -916,9 +925,36 @@ On a terminal, the publish asks for what is missing and sets it up before the bu
 
 Without a terminal, as in CI, nothing is asked, and the publish names every missing piece at once.
 
+### Google Play's listing
+
+A project's `store/google-play` folder holds its Google Play listing: a folder per language, named as Play names it
+(`en-US`, `tr-TR`), with the files fastlane's supply reads:
+
+```text
+store/google-play/en-US/
+├── title.txt                 at most 30 characters
+├── short_description.txt     at most 80
+├── full_description.txt      at most 4000
+├── video.txt                 a YouTube URL
+├── changelogs/default.txt    the release's notes, at most 500; <versionCode>.txt for that release alone
+└── images/
+    ├── icon.png              .png, .jpg or .jpeg, as every image
+    ├── featureGraphic.png
+    ├── tvBanner.png
+    └── phoneScreenshots/     in the order of their names, as 01.png, 02.png; sevenInchScreenshots/,
+                              tenInchScreenshots/, tvScreenshots/ and wearScreenshots/ the same
+```
+
+Each publish puts into its edit what the folder has and Play's listing lacks: a language's texts where one differs, its
+images of a type where Play shows others or in another order, and the notes in the release. What the folder leaves out
+stays as Play has it, so it may hold the notes alone, or the screenshots. A language Play has no listing in yet takes
+`title.txt`, `short_description.txt` and `full_description.txt`, which Play makes a listing of. Before the build, the
+publish stops at an empty text but a video's, which takes the video away, at a text longer than Play takes, at two files
+of one image, and at a file or folder Play takes none of, naming it.
+
 ### App Store Connect
 
-`crossbind app publish -p ios` builds the iOS app, archives it with `xcodebuild` and uploads it to App Store Connect,
+`crossbind app publish app-store` builds the iOS app, archives it with `xcodebuild` and uploads it to App Store Connect,
 whose TestFlight hands it to testers once Apple has processed it, usually within 5 to 30 minutes. It runs on macOS,
 with Xcode. Before the build it checks all it needs:
 - `app.id`, set in `crossbind.config.js`, as App Store Connect keeps an app's bundle id for good;
@@ -932,7 +968,8 @@ upload of that version, unless `CROSSBIND_APP_BUILD_NUMBER` gives one. With
 `CROSSBIND_APPLE_API_KEY`, `CROSSBIND_APPLE_API_KEY_ID` and `CROSSBIND_APPLE_API_ISSUER` set, as for notarizing a macOS
 app, an App Store Connect API key does it in place of the account, as in CI. Apple signs in the cloud for an Admin key
 alone; a key of another role needs an Apple Distribution certificate in the keychain, which Xcode makes once under
-Settings › Accounts › Manage Certificates. `--track` and `--draft` are Google Play's, and stop an iOS publish.
+Settings › Accounts › Manage Certificates. `--track`, `--draft` and `--rollout` are other stores', and stop an
+iOS publish.
 
 Once, for each app, create it in App Store Connect, under Apps, as a new iOS app with `app.id` as its bundle ID; Apple's
 API makes none, and the upload fails until the app is there. A publish that finds no app registers the bundle id with
@@ -960,6 +997,177 @@ On a terminal, the publish asks for what is missing and sets it up:
 Without a terminal, as in CI, nothing is asked: the publish names every missing piece at once, warns without
 `app.encryption`, and stops at the first failure.
 
+`--submit` hands the version to App Review too, through App Store Connect's API, which takes the API key: one of the App
+Manager or Admin role, set as above. Before the build, the publish also checks that App Store Connect has the app, that
+the version takes another build, which none out or in review does, and that App Review has no other submission of the
+app, and it stops without `app.encryption`, whose answer App Review takes with every build. After the upload it takes
+the version of `package.json`'s number, the one App Store Connect prepares under another number, renamed, or a new one,
+and puts the listing `store/app-store` holds into it. It then waits for App Store Connect to process the build, an hour
+at most, picks it for the version and submits the version for review. `--phased` releases the version App Review
+approves in phases over 7 days, as App Store Connect's phased release does; without it the version goes out as App Store
+Connect's release option for it says.
+
+What only App Store Connect does stays there: the first version's age rating, the screenshots of devices other than
+iPhones and iPads, app previews, App Privacy answers, price, category and copyright, App Review's contact, the export
+compliance documents an app that uses encryption takes, a reply to App Review, and a submission it answered with issues,
+which a publish without `--submit` gives a new build to pick. A submission App Store Connect prepares with items in it,
+as a publish stopped midway leaves, stops the next one before its build: submit or remove them there. A call that finds
+App Store Connect busy or out of reach for a moment tries again.
+
+### The App Store listing
+
+A project's `store/app-store` folder holds its App Store listing, which goes with `--submit`: a folder per locale, named
+as App Store Connect names it (`en-US`, `tr`, `zh-Hans`), with the texts' files fastlane's deliver reads and a folder of
+screenshots per display type:
+
+```text
+store/app-store/en-US/
+├── name.txt                  at most 30 characters
+├── subtitle.txt              at most 30
+├── privacy_url.txt           the privacy policy's URL
+├── description.txt           at most 4000
+├── keywords.txt              at most 100, separated by commas
+├── release_notes.txt         what's new in the version, at most 4000
+├── promotional_text.txt      at most 170
+├── support_url.txt
+├── marketing_url.txt
+└── screenshots/
+    ├── APP_IPHONE_67/          the 6.9-inch and 6.7-inch iPhone's: 01.png, 02.png, at most 10
+    └── APP_IPAD_PRO_3GEN_129/  the 13-inch iPad's
+```
+
+The version takes what the folder has where App Store Connect's own differs, in a new localization for a locale it has
+none of; the name, subtitle and privacy policy URL go into the app's information that changes with the version, which
+App Store Connect makes for a new locale of its name alone. What the folder leaves out stays as App Store Connect has
+it, so it may hold the release notes alone. An empty `subtitle.txt`, `promotional_text.txt` or `marketing_url.txt`
+clears its text. Before the build, the publish stops at another empty text, at a text longer than App Store Connect
+takes, and at a file or folder it takes none of, naming it.
+
+A folder of `screenshots/` per display type, named as App Store Connect's API names it, holds the type's .png, .jpg or
+.jpeg files, 10 at most, in the order of their names as text, so 01.png, 02.png and on to 10.png: `APP_IPHONE_67` for
+the 6.9-inch and 6.7-inch iPhones, `APP_IPHONE_65`, `APP_IPHONE_61`, `APP_IPHONE_58`, `APP_IPHONE_55`, `APP_IPHONE_47`,
+`APP_IPHONE_40` and `APP_IPHONE_35`, `APP_IPAD_PRO_3GEN_129` for the 13-inch iPads, `APP_IPAD_PRO_3GEN_11`,
+`APP_IPAD_PRO_129`, `APP_IPAD_105` and `APP_IPAD_97`. Before the build, the publish stops at a file that holds no PNG or
+JPEG image, as an empty one or a Git LFS pointer does. A type's screenshots go up anew where App Store Connect shows
+others, in another order or unprocessed, and the publish waits for it to process them before the build's turn; a type
+the folder has none of stays as it is.
+
+### GitHub Releases
+
+`crossbind app publish github` builds the desktop app of the platform `-p` names, `macos`, `linux` or `windows`, else
+`CROSSBIND_APP_PLATFORM`, else this machine's, and puts what installs it into the GitHub release of its version, tagged
+`v` and package.json's version: the macOS disk image as `<name>-darwin-<arch>.dmg`, as one release holds both arches',
+the Debian package and the Windows setup under their own names. With `app.updater` the release takes the update too, its
+manifest and the file it names, which `CROSSBIND_UPDATER_PRIVATE_KEY` signs, so an app whose updater points at the
+release updates from the newest one GitHub has out:
+
+```js
+app: {
+    updater: {
+        url: 'https://github.com/<owner>/<repo>/releases/latest/download/<name>-{platform}-{arch}.update.json',
+        publicKey: '<what crossbind app updater-key prints>',
+    },
+},
+```
+
+A repository without a release of the tag gets one, a draft until its files are up, tagged at the commit `GITHUB_SHA`
+names where `GITHUB_REPOSITORY` is the repository, else at the project's own where its git origin is, else at the
+repository's default branch, with the notes GitHub writes of the changes since the last release, and a prerelease for a
+version such as 1.2.3-beta.1. A publish takes a release another one made during its build, as the jobs of a matrix do,
+and publishes that make theirs at once agree on the oldest. A file of a name the release has already takes the old one's
+place, so a publish runs again as it did, unless the repository makes its releases immutable.
+
+A release put out holds the files its publishes have put up so far, and the newest one out is the one apps update from:
+put each platform's app up with `--draft` first, and then the release out with a publish without it, `gh release edit
+v<version> --draft=false` or GitHub's page. GitHub makes the release it puts out the latest unless it has a newer
+version out, so a fix of an older line leaves the newest one latest. It makes no prerelease the latest, so apps update
+to none, and an app fetches no release of a private repository, which takes a token; the publish warns of both, and
+where `app.updater.url` is not the newest release's address.
+
+GitHub takes the release from a token with write access to the repository's contents: `GH_TOKEN` or `GITHUB_TOKEN`,
+which a workflow's step takes as `GITHUB_TOKEN: ${{ github.token }}` with the job's `permissions: contents: write`, else
+the sign-in of the GitHub CLI, `gh`. The build gets neither, as it writes nothing to GitHub. The repository is
+`CROSSBIND_GITHUB_REPOSITORY`, else `GITHUB_REPOSITORY`, which GitHub Actions sets, else package.json's `repository`.
+Before the build, the publish names every one of them that is missing, and the updater's key `app.updater` takes. A
+hosted macOS runner has no Docker, so a macOS app's job builds from the bridges a Linux job makes, as for TestFlight
+below.
+
+### winget
+
+The Windows Package Manager installs an app from its community repository, `microsoft/winget-pkgs`, which takes each
+version as a pull request its moderators check. [WinGet Releaser](https://github.com/vedantmgoyal9/winget-releaser),
+which [Komac](https://github.com/russellbanks/Komac) drives, makes that pull request for each GitHub release `crossbind
+app publish github` puts out, from the Windows setups the release holds:
+
+```yaml
+name: Publish to winget
+on:
+  release:
+    types: [released]
+jobs:
+  winget:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: vedantmgoyal9/winget-releaser@v2
+        with:
+          identifier: <Publisher>.<App>
+          installers-regex: '-win32-(x64|arm64)-setup\.exe$'
+          token: ${{ secrets.WINGET_TOKEN }}
+```
+
+Once, for the app: submit its first version to `microsoft/winget-pkgs` yourself, as Komac's `komac new` does, since the
+action makes each new version from the last one there; fork `microsoft/winget-pkgs` under the account of the app's
+repository, or name another account with the action's `fork-user`; and keep a classic token with the `public_repo` and
+`workflow` scopes in the `WINGET_TOKEN` secret, as a workflow's own token opens no pull request in another repository.
+The setup installs the app for its user alone, as winget's `--scope user` does, and `/S` installs it without a window.
+
+`types: [released]` waits for a release out, as GitHub gives its files to no one before: a draft or a prerelease sends
+nothing. A release a workflow puts out with its own `GITHUB_TOKEN` starts no other workflow, as GitHub keeps such events
+from starting one, so there run the action as a job after the one that puts the release out, with `release-tag:
+v<version>`; a release put out by hand, or with another token, starts the workflow above.
+
+### Microsoft Store
+
+The Microsoft Store takes a Windows app as the setup program `crossbind app build` makes, which it downloads from the
+address its submission gives as the app installs: a GitHub release's, which keeps a version's file. Microsoft's [Store
+Developer CLI](https://github.com/microsoft/msstore-cli), `msstore`, points the app's submission at each GitHub release
+`crossbind app publish github` puts out, and sends it for certification:
+
+```yaml
+name: Publish to the Microsoft Store
+on:
+  release:
+    types: [released]
+jobs:
+  store:
+    runs-on: windows-latest
+    steps:
+      - uses: microsoft/microsoft-store-apppublisher@v1.4
+      - run: msstore reconfigure --tenantId ${{ secrets.PARTNER_CENTER_TENANT_ID }} --sellerId ${{ secrets.PARTNER_CENTER_SELLER_ID }} --clientId ${{ secrets.PARTNER_CENTER_CLIENT_ID }} --clientSecret ${{ secrets.PARTNER_CENTER_CLIENT_SECRET }}
+      - shell: bash
+        env:
+          RELEASE: https://github.com/${{ github.repository }}/releases/download/${{ github.event.release.tag_name }}
+        run: |
+          packages=$(jq -nc --arg release "$RELEASE" '{packages: [["x64", "X64"], ["arm64", "Arm64"]] | map({
+            packageUrl: "\($release)/<name>-win32-\(.[0])-setup.exe", architectures: [.[1]],
+            languages: ["en-us"], isSilentInstall: false, installerParameters: "/S", packageType: "exe"})}')
+          msstore submission update ${{ vars.PARTNER_CENTER_PRODUCT_ID }} "$packages"
+      - run: msstore submission publish ${{ vars.PARTNER_CENTER_PRODUCT_ID }}
+```
+
+Once, for the app: create it in Partner Center as an EXE or MSI app, with its name reserved, and complete its first
+submission there, with its listing, age rating and price, which later ones take as they are. Associate a Microsoft Entra
+application with the Partner Center account, under Account settings › User management, and keep its tenant, client ID
+and a client secret, with the account's seller ID, as the workflow's secrets, and the app's product ID, which Partner
+Center shows under Product identity, as a variable. `isSilentInstall` is false, as the setup installs without a window
+with `/S` alone.
+
+The Store installs only a setup signed with a certificate of an authority Microsoft's Trusted Root Program takes, as the
+next publish's certification checks (see [Signing a Windows app](#signing-a-windows-app)). It fetches the setup from the
+release each time it installs the app, so leave a release the Store has as it is; it updates no app it installed this
+way, which the app's own updater does (see [Updates](#updates)). A release a workflow puts out with its own token starts
+the workflow above as little as winget's.
+
 ### From CI
 
 A CI job publishes as a publish without a terminal does: it asks nothing. So publish once on your own machine first,
@@ -970,6 +1178,7 @@ Xcode account and no one to sign in to Google, so it needs these besides, as the
 |---|---|
 | Google Play | The upload key as a base64 secret, which `base64 < <keystore>` prints, with its alias and its password, which `crossbind app upload-key --show-password` prints. A service account invited in Play Console (see [Google Play](#google-play)), through Workload Identity Federation with no key, or its JSON key. |
 | App Store Connect | `app.team` in `crossbind.config.js`, as this machine's `XCODE_DEVELOPMENT_TEAM` stays behind. An App Store Connect API key, its `.p8` as a secret: an Admin key, whose uploads Apple signs in the cloud and whose secret can do all an Admin can, or a key of another role with an Apple Distribution certificate imported into the runner's keychain before the publish. The archive is unsigned, so the runner needs no development certificate or device. |
+| GitHub Releases | The workflow's own token, given as `GITHUB_TOKEN: ${{ github.token }}` with `permissions: contents: write`, and with `app.updater` its private key as a secret in `CROSSBIND_UPDATER_PRIVATE_KEY`. |
 
 Each key goes in as its secret's text, the upload key's as base64, so no step writes it to a file: where a tool takes a
 file, crossbind writes one only the job's user reads, and removes it when the publish ends.
