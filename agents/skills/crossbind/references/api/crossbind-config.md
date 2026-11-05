@@ -287,9 +287,11 @@ export default {
       // Apple's reasons for the required reason API an iOS app calls, by category: fileTimestamp, systemBootTime,
       // diskSpace, activeKeyboards and userDefaults. The build writes them as the app's privacy manifest, and a
       // release build names each library that calls a category without one (see app.md). Default: {}, none.
-    ios: { multipleWindows: true },
+    ios: { multipleWindows: true, appGroup: 'group.com.example.myapp' },
       // Whether an iPad's user, and the page with windows.open(), open more windows of an iOS app, each a scene of its
-      // own; an iPhone shows one whatever it says (see app.md). Default: { multipleWindows: false }.
+      // own; an iPhone shows one whatever it says (see app.md). appGroup names the App Group the app shares with the
+      // app extensions its extensions add, as a widget, where one asks for it (see extensions.md). Default:
+      // { multipleWindows: false }, and the App Group group.<app.id>.
     files: ['seed.sqlite', 'models/'],
       // The project's files and folders the app carries for its own native code, as a database to start from, each in
       // the place it had in the project: in the folder crossbind/app's app.paths().resources and <crossbind/app.h>'s

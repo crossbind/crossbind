@@ -1,6 +1,6 @@
 import { appStoreCaller } from './appStoreApi.js';
 import {
-    addDsyms, archiveIosApp, archivedBinary, archivedPrivacy, uploadIosArchive,
+    addDsyms, archiveIosApp, archivedBinary, archivedPrivacy, archivedTargets, uploadIosArchive,
 } from './appStoreConnect.js';
 import { APP_STORE_LISTING, readAppStoreListing } from './appStoreListing.js';
 import {
@@ -105,6 +105,8 @@ async function submitToReview(api, { call, appStoreId, listings }, { before, fac
     api.log(`crossbind: ${facts.id} ${api.app.appleVersion} (build ${build}) went to App Review${phases}; Apple mails as the review goes.`);
 }
 
+// An app extension's reasons are its target's, which its extension gives, so the publish names them and asks for none.
+const unreasonedTargetError = ({ name, unreasoned }) => new Error(`crossbind: App Store Connect refuses an iOS app that calls required reason API without Apple's reasons for it (ITMS-91053), and the app's target ${name} calls ${unreasoned.map(({ category, symbols }) => `${category} (${symbols.join(', ')})`).join(' and ')} with no reason in its privacy manifest. Its extension gives the target Apple's reasons in its privacy, as { fileTimestamp: ['C617.1'] }. Nothing went to App Store Connect.`);
 const unreasonedError = (unreasoned) => new Error(`crossbind: App Store Connect refuses an iOS app that calls required reason API without Apple's reasons for it (ITMS-91053), and this app calls ${unreasoned.map(({ category, symbols }) => `${category} (${symbols.join(', ')})`).join(' and ')} with no reason in its privacy manifest. Give app.privacy Apple's reasons, as { fileTimestamp: ['C617.1'] }; Apple's "Describing use of required reason API" says what each covers. Nothing went to App Store Connect.`);
 
 // What the app lacks that App Store Connect asks for, asked for on a terminal and named at once without one.
@@ -168,6 +170,9 @@ export default function appStore() {
             }, { project }) {
                 api.log('crossbind: archiving the app, which takes a few minutes.');
                 const archive = await untilDone(api, () => archiveIosApp(api, project, { facts }));
+                const target = archivedTargets(api, archive).map(({ name, binary, privacy }) => ({ name, unreasoned: api.apple.unreasonedApis(binary, privacy) }))
+                    .find(({ unreasoned }) => unreasoned.length > 0);
+                if (target) throw unreasonedTargetError(target);
                 const unreasoned = api.apple.unreasonedApis(archivedBinary(api, archive), archivedPrivacy(api, archive));
                 if (unreasoned.length > 0) {
                     if (!api.isGuided) throw unreasonedError(unreasoned);

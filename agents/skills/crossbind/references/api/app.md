@@ -417,7 +417,7 @@ std::string databasePath() { return crossbind::app::paths().data + "/notes.sqlit
 | `shell.openPath(path)` | A file in the app the system opens its kind with | ✓ | | |
 | `shell.revealInFolder(path)` | A file, selected, in the system's file manager, or on Linux without one its folder | ✓ | | |
 | `shell.trash(path)` | Moves a file or folder to the system's trash, and nothing where it has none | ✓ | | |
-| `app.paths()` | `{ data, cache, logs, resources }`, the app's own folders, made if missing, and the read-only one of the files `app.files` lists | ✓ | ✓ | ✓ |
+| `app.paths()` | `{ data, cache, logs, resources, group }`, the app's own folders, made if missing, the read-only one of the files `app.files` lists, and an iOS app's App Group's, which the targets of its extensions' share, or `''` | ✓ | ✓ | ✓ |
 | `app.quit()` | Ends the app as closing its last window does, without asking the extensions that may keep a window open | ✓ | | |
 | `app.requestQuit()` | Asks the extensions, as its user's Quit does, then ends the app as `app.quit()` does, unless one keeps it running | ✓ | | |
 | `app.relaunch()` | Ends the app as `app.quit()` does, then opens it anew with no link | ✓ | | |
@@ -1111,7 +1111,7 @@ app: {
     team: 'ABCDE12345',      // the Apple team that signs the app; XCODE_DEVELOPMENT_TEAM of ~/.crossbind.json without it
     encryption: false,       // whether the app uses encryption that export rules do not exempt
     privacy: { fileTimestamp: ['C617.1'] }, // Apple's reasons for the required reason API the app calls
-    ios: { multipleWindows: true },          // an iPad's user and page open more windows of the app
+    ios: { multipleWindows: true, appGroup: 'group.com.example.myapp' }, // an iPad's windows, and the App Group
 },
 ```
 
@@ -1119,6 +1119,11 @@ app: {
 the app's first page, and its page open more with `windows.open()` ([Windows](#windows)). Each window is a scene of the
 app's, which iOS sizes and places itself, and may let go of in the background and restore later with the page it
 showed, as a new page of the same path. An iPhone shows one window of an app, whatever the key says.
+
+`app.ios.appGroup` names the App Group the app shares with the app extensions its extensions add, as a widget
+([iOS app extensions](./extensions.md#ios-app-extensions)), `group.` and the app's id without it. The app and each
+target that asks for it take it in their entitlements, the app's native code finds its folder as
+`crossbind::app::paths().group` and the page as `app.paths()`' `group`; an app whose targets ask for none has none.
 
 Open `dist/<name>-ios/<name>.xcodeproj` in Xcode to run the app on a device or to archive it for TestFlight and the App
 Store, or let `crossbind app publish -p ios` archive and upload it (see [Publishing](#publishing)); Xcode signs it for

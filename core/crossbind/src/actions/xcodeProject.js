@@ -3,9 +3,9 @@ import { spawnSync } from 'node:child_process';
 import state from '../state/index.js';
 import { IOS_DEPLOYMENT_TARGET } from '../utils/iosToolchain.js';
 import { textPlist, xmlPlist } from '../utils/plist.js';
-import { PRIVACY_CATEGORIES } from '../utils/appOptions.js';
 import { mergedPlist } from '../utils/appExtensions.js';
 import { appLinkParts, iosDocumentTypes, iosShortcutItems } from '../utils/appLaunches.js';
+import { privacyManifest, writeTargets } from './xcodeTargets.js';
 
 // The SDKs an iOS app builds for, one target each, and the slice of Hermes' release each takes.
 export const IOS_SDKS = ['iphoneos', 'iphonesimulator'];
@@ -21,7 +21,7 @@ int main(int argc, char *argv[]) { return crossbind_app_main(argc, argv); }
 
 const OBJECT_NAMES = ['project', 'mainGroup', 'products', 'target', 'product', 'main', 'info', 'app', 'hermes', 'mainBuild',
     'appBuild', 'hermesLink', 'hermesEmbed', 'sources', 'frameworks', 'resources', 'embed', 'projectDebug', 'projectRelease',
-    'targetDebug', 'targetRelease', 'projectConfigs', 'targetConfigs', 'assets', 'assetsBuild', 'privacy', 'privacyBuild'];
+    'targetDebug', 'targetRelease', 'projectConfigs', 'targetConfigs', 'assets', 'assetsBuild', 'privacy', 'privacyBuild', 'embedTargets'];
 // Xcode names its objects by 24 hex digits. Fixed ones leave the project unchanged while what it holds is.
 const ID = Object.fromEntries(OBJECT_NAMES.map((name, index) => [name, `CB${(index + 1).toString(16).toUpperCase().padStart(22, '0')}`]));
 
@@ -43,11 +43,13 @@ const ORIENTATIONS = ['UIInterfaceOrientationPortrait', 'UIInterfaceOrientationL
 const LAUNCH_COLOR = 'LaunchBackground';
 
 // The entitlement of the domains whose sites' links iOS hands the app, once each site's apple-app-site-association names
-// it.
+// it, and the one of the App Groups it shares with the targets of its extensions'.
 const ASSOCIATED_DOMAINS = 'com.apple.developer.associated-domains';
+const APP_GROUPS = 'com.apple.security.application-groups';
 
-// The app's Info.plist, with the keys its extensions give.
-const infoPlist = (name, urlSchemes, fileTypes, activityTypes, shortcutItems, hasBackground, usage, encryption, multipleWindows, plist) => xmlPlist(mergedPlist({
+// The app's Info.plist, with the keys its extensions give, and the App Group its native code reads where the targets of
+// its extensions' share one.
+const infoPlist = (name, urlSchemes, fileTypes, activityTypes, shortcutItems, hasBackground, usage, encryption, multipleWindows, appGroup, plist) => xmlPlist(mergedPlist({
     CFBundleDevelopmentRegion: 'en',
     CFBundleDisplayName: name,
     CFBundleExecutable: '$(EXECUTABLE_NAME)',
@@ -69,9 +71,11 @@ const infoPlist = (name, urlSchemes, fileTypes, activityTypes, shortcutItems, ha
     ...(shortcutItems.length > 0 ? { UIApplicationShortcutItems: iosShortcutItems(shortcutItems) } : {}),
     // The reasons of app.permissions, without which iOS lets the app use none of those devices.
     ...usage,
+    ...(appGroup ? { CrossbindAppGroup: appGroup } : {}),
 }, plist));
 
-function objects(name, targetSettings, hasAssets, hasPrivacy) {
+// The project's objects: the app's target, and the targets its extensions add, which the app depends on and embeds.
+function objects(name, targetSettings, hasAssets, hasPrivacy, added) {
     const file = (path, type) => ({ isa: 'PBXFileReference', lastKnownFileType: type, path, sourceTree: '<group>' });
     const phase = (isa, files, extra = {}) => ({ isa, buildActionMask: 2147483647, files, runOnlyForDeploymentPostprocessing: 0, ...extra });
     const configuration = (configurationName, buildSettings) => ({ isa: 'XCBuildConfiguration', buildSettings, name: configurationName });
@@ -87,9 +91,11 @@ function objects(name, targetSettings, hasAssets, hasPrivacy) {
         [ID.privacy]: file('PrivacyInfo.xcprivacy', 'text.xml'),
         [ID.privacyBuild]: { isa: 'PBXBuildFile', fileRef: ID.privacy },
     } : {};
+    const hasTargets = added.targets.length > 0;
     return {
         ...assets,
         ...privacy,
+        ...added.objects,
         [ID.main]: file('main.m', 'sourcecode.c.objc'),
         [ID.info]: file('Info.plist', 'text.plist.xml'),
         [ID.app]: file('app', 'folder'),
@@ -105,18 +111,19 @@ function objects(name, targetSettings, hasAssets, hasPrivacy) {
         [ID.frameworks]: phase('PBXFrameworksBuildPhase', [ID.hermesLink]),
         [ID.resources]: phase('PBXResourcesBuildPhase', [ID.appBuild, ...(hasAssets ? [ID.assetsBuild] : []), ...(hasPrivacy ? [ID.privacyBuild] : [])]),
         [ID.embed]: phase('PBXCopyFilesBuildPhase', [ID.hermesEmbed], { dstPath: '', dstSubfolderSpec: 10, name: 'Embed Frameworks' }),
+        ...(hasTargets ? { [ID.embedTargets]: phase('PBXCopyFilesBuildPhase', added.embedded, { dstPath: '', dstSubfolderSpec: 13, name: 'Embed Foundation Extensions' }) } : {}),
         [ID.mainGroup]: {
             isa: 'PBXGroup',
-            children: [ID.main, ID.info, ID.app, ...(hasAssets ? [ID.assets] : []), ...(hasPrivacy ? [ID.privacy] : []), ID.hermes, ID.products],
+            children: [ID.main, ID.info, ID.app, ...(hasAssets ? [ID.assets] : []), ...(hasPrivacy ? [ID.privacy] : []), ID.hermes, ...added.groups, ID.products],
             sourceTree: '<group>',
         },
-        [ID.products]: { isa: 'PBXGroup', children: [ID.product], name: 'Products', sourceTree: '<group>' },
+        [ID.products]: { isa: 'PBXGroup', children: [ID.product, ...added.products], name: 'Products', sourceTree: '<group>' },
         [ID.target]: {
             isa: 'PBXNativeTarget',
             buildConfigurationList: ID.targetConfigs,
-            buildPhases: [ID.sources, ID.frameworks, ID.resources, ID.embed],
+            buildPhases: [ID.sources, ID.frameworks, ID.resources, ID.embed, ...(hasTargets ? [ID.embedTargets] : [])],
             buildRules: [],
-            dependencies: [],
+            dependencies: added.dependencies,
             name,
             productName: name,
             productReference: ID.product,
@@ -133,7 +140,7 @@ function objects(name, targetSettings, hasAssets, hasPrivacy) {
             productRefGroup: ID.products,
             projectDirPath: '',
             projectRoot: '',
-            targets: [ID.target],
+            targets: [ID.target, ...added.targets],
         },
         [ID.projectDebug]: configuration('Debug', PROJECT_SETTINGS),
         [ID.projectRelease]: configuration('Release', PROJECT_SETTINGS),
@@ -162,29 +169,26 @@ function writeAssets(catalog, icon, background) {
     }
 }
 
-// The privacy manifest of app.privacy, without which App Store Connect refuses an app that calls required reason API.
-const privacyManifest = (privacy) => xmlPlist({
-    NSPrivacyAccessedAPITypes: Object.entries(privacy).map(([name, reasons]) => ({
-        NSPrivacyAccessedAPIType: PRIVACY_CATEGORIES[name].type,
-        NSPrivacyAccessedAPITypeReasons: reasons,
-    })),
-});
-
 // An iOS app as an Xcode project, written anew from the parts its SDK targets built: each brings its archives and
 // their link line, and its slice of Hermes; the first also the app's files. Xcode signs the app and runs it, in the
-// Simulator or on a device, with the entitlements given, and makes every size of its icon from the one PNG given.
+// Simulator or on a device, with the entitlements given, and makes every size of its icon from the one PNG given. The
+// targets of Apple's app extensions its extensions add build with it, the App Group in the app's entitlements as well
+// where one of them asks for it.
 export default function writeXcodeProject(to, {
     parts, identity, label, version, build = version, icon = null, urlSchemes = [], fileTypes = [], links = [], activityTypes = [], shortcutItems = [],
-    background = null, usage = {}, encryption = null, multipleWindows = false, privacy = {}, entitlements = {}, plist = [],
+    background = null, usage = {}, encryption = null, multipleWindows = false, privacy = {}, entitlements = {}, plist = [], targets = [], appGroup = null,
 }) {
     const { name } = state.config.general;
     if (parts.length === 0) throw new Error(`crossbind: no part of the iOS app ${name} is built, so there is no Xcode project to write.`);
+    // Xcode keeps what it builds of each target by the target's name, which a Mac's file system takes in either case.
+    const named = targets.find((target) => target.name.toLowerCase() === name.toLowerCase());
+    if (named) throw new Error(`crossbind: the extension ${named.owner} names an iOS target ${named.name}, as the app itself is named: Xcode builds no two targets of one name.`);
     // The extensions' keys merge before the project goes, which a conflict between them then leaves as it was.
-    const info = infoPlist(label, urlSchemes, fileTypes, activityTypes, shortcutItems, Boolean(background), usage, encryption, multipleWindows, plist);
+    const group = appGroup && targets.some((target) => target.appGroup) ? appGroup : null;
+    const info = infoPlist(label, urlSchemes, fileTypes, activityTypes, shortcutItems, Boolean(background), usage, encryption, multipleWindows, group, plist);
     const domains = links.map((link) => `applinks:${appLinkParts(link).host}`);
-    const signed = domains.length > 0
-        ? { ...entitlements, [ASSOCIATED_DOMAINS]: [...new Set([...(entitlements[ASSOCIATED_DOMAINS] ?? []), ...domains])] }
-        : entitlements;
+    const joinedTo = (given, key, values) => (values.length > 0 ? { ...given, [key]: [...new Set([...(given[key] ?? []), ...values])] } : given);
+    const signed = joinedTo(joinedTo(entitlements, ASSOCIATED_DOMAINS, domains), APP_GROUPS, group ? [group] : []);
     fs.rmSync(to, { recursive: true, force: true });
     fs.mkdirSync(`${to}/${name}.xcodeproj`, { recursive: true });
     const linkFlags = {};
@@ -220,8 +224,9 @@ export default function writeXcodeProject(to, {
         LD_RUNPATH_SEARCH_PATHS: ['$(inherited)', '@executable_path/Frameworks'],
         ...linkFlags,
     };
+    const added = writeTargets(to, targets, { project: ID.project, identity, label, version, build, appGroup });
     fs.writeFileSync(`${to}/${name}.xcodeproj/project.pbxproj`, textPlist({
-        archiveVersion: 1, classes: {}, objectVersion: 56, objects: objects(name, targetSettings, Boolean(icon || background), hasPrivacy), rootObject: ID.project,
+        archiveVersion: 1, classes: {}, objectVersion: 56, objects: objects(name, targetSettings, Boolean(icon || background), hasPrivacy, added), rootObject: ID.project,
     }));
     return to;
 }

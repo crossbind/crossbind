@@ -40,6 +40,8 @@ export interface AppPaths {
     cache: string;
     logs: string;
     resources: string;
+    /** An iOS app's App Group's folder, which the targets of its extensions' that ask for it with appGroup: true share; '' elsewhere. */
+    group: string;
 }
 
 export declare const dialog: {

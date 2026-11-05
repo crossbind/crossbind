@@ -399,7 +399,7 @@ void startTakingLaunches() {
 void appFunctions(Registry &registry) {
     registry.function("app.paths", [](Call call) {
         const Paths folders = paths();
-        call.resolve(Value::Object{{"data", folders.data}, {"cache", folders.cache}, {"logs", folders.logs}, {"resources", folders.resources}});
+        call.resolve(Value::Object{{"data", folders.data}, {"cache", folders.cache}, {"logs", folders.logs}, {"resources", folders.resources}, {"group", folders.group}});
     });
     // A platform whose apps do not quit themselves throws, and the page hears that alone.
     registry.function("app.quit", [](Call call) {

@@ -94,6 +94,96 @@ describe('an iOS app\'s Xcode project', () => {
         expect(scenes(false)).toContain('<key>UIApplicationSupportsMultipleScenes</key>\n        <false/>');
     });
 
+    test("adds its extensions' targets of Apple's app extensions, which the app depends on and embeds in its PlugIns, with their own files", () => {
+        const root = fs.mkdtempSync(path.join(os.tmpdir(), 'crossbind-xcode-'));
+        const extension = path.join(root, 'weather');
+        ['ios/Clock.swift', 'ios/Assets.xcassets/Contents.json', 'ios/Service.h', 'ios/Service.m'].forEach((file) => {
+            fs.mkdirSync(path.dirname(path.join(extension, file)), { recursive: true });
+            fs.writeFileSync(path.join(extension, file), file);
+        });
+        const to = path.join(root, 'demo-ios');
+        const targets = [
+            {
+                name: 'clock-face', kind: 'widget', sources: ['ios/Clock.swift'], resources: ['ios/Assets.xcassets'], appGroup: true, deploymentTarget: '17.0',
+                privacy: { userDefaults: ['1C8F.1'] }, frameworks: ['WidgetKit'], owner: 'weather', root: extension,
+            },
+            { name: 'notify', kind: 'notification-service', sources: ['ios/Service.h', 'ios/Service.m'], principalClass: 'NotificationService', owner: 'weather', root: extension },
+        ];
+        writeXcodeProject(to, {
+            parts: [part(root, 'iphonesimulator')], identity: { id: 'com.example.demo', team: 'ABCDE12345' }, label: 'Demo', version: '1.2.3', build: '7',
+            targets, appGroup: 'group.com.example.demo',
+        });
+
+        const project = fs.readFileSync(path.join(to, 'demo.xcodeproj', 'project.pbxproj'), 'utf8');
+        const read = (file) => fs.readFileSync(path.join(to, file), 'utf8');
+        expect(project.match(/"productType" = "com\.apple\.product-type\.app-extension";/g)).toHaveLength(2);
+        expect(project.match(/"isa" = "PBXTargetDependency";/g)).toHaveLength(2);
+        expect(project).toContain('"PRODUCT_BUNDLE_IDENTIFIER" = "com.example.demo.clock-face";');
+        expect(project).toContain('"PRODUCT_MODULE_NAME" = "clock_face";');
+        expect(project).toContain('"PRODUCT_BUNDLE_IDENTIFIER" = "com.example.demo.notify";');
+        expect(project).toContain('"dstSubfolderSpec" = "13";');
+        expect(project).toContain('"name" = "Embed Foundation Extensions";');
+        expect(project).toContain('"IPHONEOS_DEPLOYMENT_TARGET" = "17.0";');
+        expect(project).toContain('"SWIFT_VERSION" = "5.0";');
+        expect(project).toContain('"CODE_SIGN_ENTITLEMENTS" = "targets/clock-face/clock-face.entitlements";');
+        expect(project).toContain('"INFOPLIST_FILE" = "targets/notify/Info.plist";');
+        expect(project.match(/"CURRENT_PROJECT_VERSION" = "7";/g)).toHaveLength(6);
+        expect(project).toContain('"-framework",\n\t\t\t\t\t"WidgetKit",');
+        // Xcode builds the first target of a project given no scheme: the app, which builds its targets first.
+        expect(project.match(/"targets" = \(\n\t\t\t\t"(CB[0-9A-F]{22})",/)?.[1]).toBe(`CB${'4'.padStart(22, '0')}`);
+        expect(read('targets/clock-face/files/ios/Clock.swift')).toBe('ios/Clock.swift');
+        expect(read('targets/clock-face/files/ios/Assets.xcassets/Contents.json')).toBe('ios/Assets.xcassets/Contents.json');
+        expect(project).toContain('"lastKnownFileType" = "folder.assetcatalog";');
+        const clock = read('targets/clock-face/Info.plist');
+        expect(clock).toContain('<key>NSExtensionPointIdentifier</key>\n        <string>com.apple.widgetkit-extension</string>');
+        expect(clock).toContain('<key>CFBundleDisplayName</key>\n    <string>Demo</string>');
+        expect(clock).not.toContain('NSExtensionPrincipalClass');
+        expect(clock).toContain('<key>CrossbindAppGroup</key>\n    <string>group.com.example.demo</string>');
+        expect(read('targets/notify/Info.plist')).not.toContain('CrossbindAppGroup');
+        expect(read('targets/notify/Info.plist')).toContain('<key>NSExtensionPrincipalClass</key>\n        <string>NotificationService</string>');
+        expect(read('targets/clock-face/clock-face.entitlements')).toContain('<key>com.apple.security.application-groups</key>\n    <array>\n        <string>group.com.example.demo</string>');
+        expect(read('demo.entitlements')).toContain('<string>group.com.example.demo</string>');
+        expect(read('Info.plist')).toContain('<key>CrossbindAppGroup</key>\n    <string>group.com.example.demo</string>');
+        expect(fs.existsSync(path.join(to, 'targets', 'notify', 'notify.entitlements'))).toBe(false);
+        expect(read('targets/clock-face/PrivacyInfo.xcprivacy')).toContain('<string>1C8F.1</string>');
+        expect(read('targets/notify/files/ios/Service.h')).toBe('ios/Service.h');
+        if (process.platform === 'darwin') {
+            expect(execFileSync('plutil', ['-lint', path.join(to, 'targets', 'clock-face', 'Info.plist')], { encoding: 'utf8' })).toContain(': OK');
+            // The objects as Xcode reads them: the app builds each target first, embeds its product and lists it after itself.
+            const { objects, rootObject } = JSON.parse(execFileSync('plutil', ['-convert', 'json', '-o', '-', path.join(to, 'demo.xcodeproj', 'project.pbxproj')], { encoding: 'utf8' }));
+            const [app, ...appexes] = objects[rootObject].targets.map((id) => objects[id]);
+            const phase = (target, isa) => target.buildPhases.map((id) => objects[id]).find((built) => built.isa === isa);
+            const paths = (built) => built.files.map((id) => objects[objects[id].fileRef].path);
+            expect([app.productType, ...appexes.map(({ name }) => name)]).toEqual(['com.apple.product-type.application', 'clock-face', 'notify']);
+            expect(app.dependencies.map((id) => objects[objects[id].target].name)).toEqual(['clock-face', 'notify']);
+            expect(app.dependencies.map((id) => objects[objects[objects[id].targetProxy].remoteGlobalIDString].name)).toEqual(['clock-face', 'notify']);
+            expect(paths(app.buildPhases.map((id) => objects[id]).find(({ dstSubfolderSpec }) => dstSubfolderSpec === '13'))).toEqual(['clock-face.appex', 'notify.appex']);
+            expect(paths(phase(appexes[1], 'PBXSourcesBuildPhase'))).toEqual(['files/ios/Service.m']);
+            expect(paths(phase(appexes[0], 'PBXResourcesBuildPhase'))).toEqual(['files/ios/Assets.xcassets', 'PrivacyInfo.xcprivacy']);
+            expect(objects[appexes[1].productReference].path).toBe('notify.appex');
+        }
+        fs.rmSync(root, { recursive: true, force: true });
+    });
+
+    test("names the App Group nowhere where no target asks for it, and refuses a target named as the app", () => {
+        const root = fs.mkdtempSync(path.join(os.tmpdir(), 'crossbind-xcode-'));
+        const extension = path.join(root, 'weather');
+        fs.mkdirSync(path.join(extension, 'ios'), { recursive: true });
+        fs.writeFileSync(path.join(extension, 'ios', 'Service.m'), '');
+        const notify = { name: 'notify', kind: 'notification-service', sources: ['ios/Service.m'], principalClass: 'NotificationService', owner: 'weather', root: extension };
+        const write = (targets) => {
+            const to = path.join(root, 'demo-ios');
+            writeXcodeProject(to, { parts: [part(root, 'iphonesimulator')], identity: { id: 'com.example.demo', team: '' }, label: 'Demo', version: '1', targets, appGroup: 'group.com.example.demo' });
+            return to;
+        };
+        const to = write([notify]);
+
+        expect(fs.existsSync(path.join(to, 'demo.entitlements'))).toBe(false);
+        expect(fs.readFileSync(path.join(to, 'Info.plist'), 'utf8')).not.toContain('CrossbindAppGroup');
+        expect(() => write([{ ...notify, name: 'demo' }])).toThrow('crossbind: the extension weather names an iOS target demo, as the app itself is named: Xcode builds no two targets of one name.');
+        fs.rmSync(root, { recursive: true, force: true });
+    });
+
     test("has the app's icon in an asset catalog, from which Xcode makes every size", () => {
         const root = fs.mkdtempSync(path.join(os.tmpdir(), 'crossbind-xcode-'));
         const to = path.join(root, 'demo-ios');

@@ -43,8 +43,8 @@ export function buildForSimulator(project, configuration = 'Release') {
     return `${products}/${configuration}-iphonesimulator/${name}.app`;
 }
 
-// Opens a Simulator build of an iOS app, with `env` in its environment. The process returned carries the app's output
-// and ends with the app; close() ends the app.
+// Opens a Simulator build of an iOS app, with `env` in its environment, in the Simulator of the device returned. The
+// process returned carries the app's output and ends with the app; close() ends the app.
 export default function openInSimulator(app, { env = {}, show = false, stdio = 'pipe' } = {}) {
     const device = simulator();
     // Simulator.app only shows the device, which runs the app without it as well.
@@ -59,5 +59,5 @@ export default function openInSimulator(app, { env = {}, show = false, stdio = '
         childEnv[`SIMCTL_CHILD_${key}`] = value;
     });
     const child = spawn('xcrun', ['simctl', 'launch', '--console-pty', '--terminate-running-process', device, bundleId], { env: childEnv, stdio });
-    return { child, close: () => spawnSync('xcrun', ['simctl', 'terminate', device, bundleId]) };
+    return { child, device, close: () => spawnSync('xcrun', ['simctl', 'terminate', device, bundleId]) };
 }

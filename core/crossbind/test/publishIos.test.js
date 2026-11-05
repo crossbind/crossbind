@@ -19,6 +19,7 @@ vi.mock('../src/publishers/app-store/appStoreConnect.js', () => ({
     },
     archivedBinary: (api, archive) => `${archive}/Products/Applications/demo.app/demo`,
     archivedPrivacy: () => ({}),
+    archivedTargets: () => store.targets,
     addDsyms: (archive, dsyms) => store.dsyms.push([archive, dsyms]),
     uploadIosArchive: (api, archive, options) => {
         store.uploads.push({ archive, ...options });
@@ -102,7 +103,7 @@ beforeEach(() => {
         paths: { project: base, build: path.join(base, '.crossbind', 'build') },
         system: { XCODE_DEVELOPMENT_TEAM: TEAM.id },
     };
-    Object.assign(store, { archives: [], archiveFailures: [], dsyms: [], uploads: [], uploadFailures: [], teams: [[TEAM]] });
+    Object.assign(store, { archives: [], archiveFailures: [], dsyms: [], uploads: [], uploadFailures: [], teams: [[TEAM]], targets: [] });
     Object.assign(scan, { binaries: [], answers: [] });
     Object.assign(review, { steps: [], refusal: null, result: { build: '42', listed: ['en-US'] } });
     Object.assign(terminal, { isThere: false, lines: [], yes: [] });
@@ -199,6 +200,14 @@ describe('publishing an iOS app without a terminal, as in CI', () => {
     test('stops before the upload on required reason API the archived app calls without a reason', async () => {
         scan.answers.push([{ category: 'fileTimestamp', symbols: ['_fstat', '_stat'] }]);
         await expect(publish()).rejects.toThrow("this app calls fileTimestamp (_fstat, _stat) with no reason in its privacy manifest. Give app.privacy Apple's reasons");
+        expect(store.uploads).toEqual([]);
+    });
+
+    test("stops before the upload on required reason API an app extension calls without a reason in its target's manifest", async () => {
+        store.targets = [{ name: 'clock', binary: '/build/clock.appex/clock', privacy: {} }];
+        scan.answers.push([{ category: 'userDefaults', symbols: ['_NSUserDefaults'] }]);
+        await expect(publish()).rejects.toThrow("the app's target clock calls userDefaults (_NSUserDefaults) with no reason in its privacy manifest. Its extension gives the target Apple's reasons in its privacy");
+        expect(scan.binaries[0]).toBe('/build/clock.appex/clock');
         expect(store.uploads).toEqual([]);
     });
 

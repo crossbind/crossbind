@@ -691,6 +691,20 @@ async function checkRoutes() {
     if (JSON.stringify(statuses) !== JSON.stringify([416, 200, 405, 400, 500, 404])) throw new Error(`the probe's route answered ${JSON.stringify(statuses)}`);
 }
 
+// An iOS app's App Group, which the probe's targets share: the probe writes into it, and app.paths() names its folder.
+// Elsewhere there is none.
+async function checkAppGroup(isIos) {
+    const { group } = await host.paths();
+    if (!isIos) {
+        if (group !== '') throw new Error(`an app of no App Group has app.paths() name its folder ${JSON.stringify(group)}`);
+        return;
+    }
+    const written = await invoke('probe.writeGroup');
+    if (written?.id !== 'group.dev.crossbind.crossbind-e2e-desktop-app' || !written.folder.startsWith('/') || group !== written.folder) {
+        throw new Error(`the iOS app's App Group is ${JSON.stringify(written)}, and app.paths() names ${JSON.stringify(group)}`);
+    }
+}
+
 // The calls of the probe's functions, from its native code and on Android from its Java as well: their messages, which
 // reach onMessage in order, each with its byte, all of them before the call resolves; their cancel, which the function
 // hears of; and bytes both ways, in the message and in a frame, and from native code as a large result too.
@@ -923,6 +937,7 @@ else initNative().then(async (m) => {
         await checkContract(isDesktop, isAndroid);
         await checkRoutes();
         await checkCalls(isAndroid);
+        await checkAppGroup(!isAndroid && !isDesktop);
         await checkWindows(m, isDesktop, isAndroid);
         // The app's own functions answer over the page's channel on every platform, and the host checks what it opens.
         const folders = await host.paths();

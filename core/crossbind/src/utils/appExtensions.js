@@ -3,6 +3,7 @@ import path from 'node:path';
 import { carriedPath, isOutside } from './appFiles.js';
 import { checkedActivityTypes, checkedFileTypes, checkedLinks, checkedShortcutItems } from './appLaunches.js';
 import { checkedPrivacy, checkedUrlSchemes } from './appOptions.js';
+import { checkedTargetKind, checkedTargetOptions, isHeader } from './appTargets.js';
 import { isUnderBase } from './replaceBasePathForDocker.js';
 
 // What an app extension compiles with on every platform, and on each: its sources, the folders of its own their
@@ -10,12 +11,12 @@ import { isUnderBase } from './replaceBasePathForDocker.js';
 const COMPILED = ['sources', 'includes', 'defines'];
 // What an app extension may add on each platform, by the names crossbind's app commands give them, beside what it
 // compiles with and the files it carries: the frameworks an Apple host links, the libraries another links, an Apple
-// app's entitlements and Info.plist keys, an iOS app's reasons for Apple's required reason API, and of an Android app the
-// folder of its Java with the class in it the app calls, the permissions it asks for, a manifest of its own and the
-// resources the app takes.
+// app's entitlements and Info.plist keys, an iOS app's reasons for Apple's required reason API and the targets of Apple's
+// app extensions it adds, and of an Android app the folder of its Java with the class in it the app calls, the
+// permissions it asks for, a manifest of its own and the resources the app takes.
 const PLATFORM_PARTS = {
     macos: [...COMPILED, 'files', 'frameworks', 'entitlements', 'plist'],
-    ios: [...COMPILED, 'files', 'frameworks', 'entitlements', 'plist', 'privacy'],
+    ios: [...COMPILED, 'files', 'frameworks', 'entitlements', 'plist', 'privacy', 'targets'],
     linux: [...COMPILED, 'files', 'libraries', 'packages', 'depends'],
     windows: [...COMPILED, 'files', 'libraries'],
     android: [...COMPILED, 'files', 'libraries', 'java', 'class', 'permissions', 'manifest', 'resources', 'maven', 'verification'],
@@ -27,6 +28,8 @@ const partOf = (platform) => ({ darwin: 'macos', win32: 'windows' })[platform] ?
 // The host compiles C and C++ on every platform, and Objective-C, Objective-C++ and Swift on Apple's.
 const SOURCE = /\.(c|cpp|cc|cxx)$/;
 const APPLE_SOURCE = /\.(c|cpp|cc|cxx|m|mm|swift)$/;
+// An iOS app extension's sources, which Xcode compiles, with the headers they import from beside them.
+const TARGET_SOURCE = /\.(c|cpp|cc|cxx|m|mm|swift|h|hpp)$/;
 const isSwift = (file) => file.endsWith('.swift');
 // A macro, NAME or NAME=value, of a value a compiler's command line takes as it is.
 const DEFINE = /^[A-Za-z_][A-Za-z0-9_]*(=[A-Za-z0-9_.+-]*)?$/;
@@ -78,7 +81,8 @@ function checkedFiles(where, root, files) {
 function checkedSources(where, root, sources, pattern) {
     if (!Array.isArray(sources)) throw new Error(`crossbind: ${where} is no list of source files.`);
     return sources.map((file) => {
-        if (!pattern.test(String(file))) throw new Error(`crossbind: ${where} names ${file}, which is no ${pattern === SOURCE ? 'C or C++' : 'C, C++, Objective-C, Objective-C++ or Swift'} source.`);
+        const kinds = { [SOURCE]: 'C or C++ source', [APPLE_SOURCE]: 'C, C++, Objective-C, Objective-C++ or Swift source' }[pattern] ?? 'C, C++, Objective-C, Objective-C++ or Swift source, nor a header';
+        if (!pattern.test(String(file))) throw new Error(`crossbind: ${where} names ${file}, which is no ${kinds}.`);
         return ownPath(where, root, file);
     });
 }
@@ -145,10 +149,15 @@ function checkedNames(where, names) {
     return names;
 }
 
+// The entitlements crossbind joins the app's own with, which are lists.
+const LISTED_ENTITLEMENTS = ['com.apple.security.application-groups', 'com.apple.developer.associated-domains'];
+
 function checkedEntitlements(where, entitlements) {
     if (!isObject(entitlements) || !Object.values(entitlements).every(isEntitlement)) {
         throw new Error(`crossbind: ${where} is no object of entitlements, each a boolean, a string or a list of strings.`);
     }
+    const single = LISTED_ENTITLEMENTS.find((key) => Object.hasOwn(entitlements, key) && !Array.isArray(entitlements[key]));
+    if (single) throw new Error(`crossbind: ${where}.${single} is no list, which crossbind joins with the app's.`);
     return entitlements;
 }
 
@@ -209,6 +218,36 @@ function checkedJava(where, root, { java, class: name }) {
     }
 }
 
+// The targets of Apple's app extensions an extension adds to an iOS app, each compiling its own sources alone, with its
+// resources, Info.plist keys and attributes, entitlements, frameworks and reasons for Apple's required reason API.
+function checkedTargets(where, root, targets) {
+    if (!Array.isArray(targets)) throw new Error(`crossbind: ${where} is no list of targets, as [{ name: 'clock', kind: 'widget', sources: ['ios/Clock.swift'] }] is.`);
+    const names = new Set();
+    return targets.map((target, index) => {
+        const at = `${where}[${index}]`;
+        if (!isObject(target)) throw new Error(`crossbind: ${at} is no object of a target.`);
+        checkedTargetKind(at, target);
+        if (names.has(target.name)) throw new Error(`crossbind: ${where} names two targets ${target.name}.`);
+        names.add(target.name);
+        const sources = Array.isArray(target.sources) ? checkedSources(`${at}.sources`, root, target.sources, TARGET_SOURCE) : [];
+        if (!sources.some((file) => !isHeader(file))) throw new Error(`crossbind: ${at} has no sources, which a target compiles alone.`);
+        const given = (key, check) => (target[key] === undefined ? {} : { [key]: check(`${at}.${key}`, target[key]) });
+        const checked = {
+            ...target,
+            sources,
+            // With slashes, as the Xcode project takes them, on Windows too.
+            ...given('resources', (atKey, value) => checkedFiles(atKey, root, value).map((file) => file.split(path.sep).join('/'))),
+            ...given('plist', checkedPlist),
+            ...given('attributes', checkedPlist),
+            ...given('entitlements', checkedEntitlements),
+            ...given('frameworks', checkedNames),
+            ...given('privacy', (atKey, value) => checkedPrivacy(value, atKey)),
+        };
+        checkedTargetOptions(at, checked, sources);
+        return checked;
+    });
+}
+
 function checkedPlatform(where, root, platform, part) {
     if (!isObject(part)) throw new Error(`crossbind: ${where} is no object.`);
     const allowed = PLATFORM_PARTS[platform];
@@ -223,6 +262,7 @@ function checkedPlatform(where, root, platform, part) {
         if (key === 'entitlements') return [key, checkedEntitlements(at, value)];
         if (key === 'plist') return [key, checkedPlist(at, value)];
         if (key === 'privacy') return [key, checkedPrivacy(value, at)];
+        if (key === 'targets') return [key, checkedTargets(at, root, value)];
         if (key === 'permissions') return [key, checkedPermissions(at, value)];
         if (key === 'packages') return [key, checkedPackages(at, value)];
         if (key === 'depends') return [key, checkedDepends(at, value)];
@@ -628,6 +668,13 @@ export function extensionPart(extensions, platform) {
     // What each extension that gives it gives of a kind, by its owner, for the merges.
     const owned = (key) => extensions.filter((extension) => own(extension)[key]).map((extension) => [`the extension ${extension.name}`, own(extension)[key]]);
     const native = extensions.filter((extension) => sourcesOf(extension).length > 0);
+    // The targets of Apple's app extensions an iOS app's extensions add, by their owners, no two of one name.
+    const owners = new Map();
+    const targets = extensions.flatMap((extension) => (own(extension).targets ?? []).map((target) => {
+        if (owners.has(target.name)) throw new Error(`crossbind: the extensions ${owners.get(target.name)} and ${extension.name} both name an iOS target ${target.name}.`);
+        owners.set(target.name, extension.name);
+        return { ...target, owner: extension.name, root: extension.root };
+    }));
     return {
         native: native.map(({ name, options, roles, given }) => ({ name, options: options ?? null, roles: roles ?? [], given: given ?? [] })),
         roots: native.map(({ root }) => root),
@@ -668,6 +715,7 @@ export function extensionPart(extensions, platform) {
         // The files each carries, which the app keeps in ext/<name>/.
         files: extensions.filter((extension) => both(extension, 'files').length > 0)
             .map((extension) => ({ name: extension.name, root: extension.root, paths: both(extension, 'files') })),
+        targets,
     };
 }
 

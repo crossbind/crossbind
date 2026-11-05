@@ -6,6 +6,8 @@
 #import <objc/runtime.h>
 #endif
 
+// The App Group of the app's, which crossbind writes into the build directory from its extensions' targets.
+#include "crossbind_app.h"
 #include "host_core.h"
 #include "platform.h"
 #include "values.h"
@@ -40,8 +42,12 @@ bool isMainThread() { return NSThread.isMainThread; }
 crossbind::app::Paths appPaths() {
     @autoreleasepool {
 #if TARGET_OS_IPHONE
-        // An iOS app's folders are its own already.
-        return {folder(NSApplicationSupportDirectory, nil), folder(NSCachesDirectory, nil), folder(NSLibraryDirectory, @"Logs")};
+        // An iOS app's folders are its own already, and iOS keeps the one of its App Group.
+        crossbind::app::Paths folders{folder(NSApplicationSupportDirectory, nil), folder(NSCachesDirectory, nil), folder(NSLibraryDirectory, @"Logs")};
+#ifdef CROSSBIND_APP_GROUP
+        folders.group = [NSFileManager.defaultManager containerURLForSecurityApplicationGroupIdentifier:@CROSSBIND_APP_GROUP].path.UTF8String ?: "";
+#endif
+        return folders;
 #else
         NSString *id = NSBundle.mainBundle.bundleIdentifier ?: NSProcessInfo.processInfo.processName;
         return {folder(NSApplicationSupportDirectory, id), folder(NSCachesDirectory, id),

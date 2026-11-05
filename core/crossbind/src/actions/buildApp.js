@@ -30,7 +30,7 @@ import { getContentHash, getFilesFingerprint } from '../utils/hash.js';
 import { xmlPlist } from '../utils/plist.js';
 import {
     androidAppId, appBackgroundColor, appCategory, appCopyright, appDisplayName, appEncryption, appFiles, appHeader, appId, appPermissions, appPrivacy,
-    appUrlSchemes, hostExtensionOptions, iosMultipleWindows, urlSchemeOwners, usageDescriptions,
+    appUrlSchemes, hostExtensionOptions, iosAppGroup, iosMultipleWindows, urlSchemeOwners, usageDescriptions,
 } from '../utils/appOptions.js';
 import { carriedFilesOf, copyCarriedFiles } from '../utils/appFiles.js';
 import { activityTypeOwners, fileTypeOwners, linkOwners, macDocumentTypes, shortcutItemOwners } from '../utils/appLaunches.js';
@@ -62,6 +62,14 @@ const extensionsOf = (platform) => extensionPart(withRoles(
     appExtensionsOf(state.config.extensions),
     (message) => console.warn(`crossbind: ${message}.`),
 ), platform);
+
+// The App Group an iOS app shares with the targets of its extensions' that ask for one, or none; app.ios.appGroup is
+// checked all the same.
+function appGroupOf(platform, extensions) {
+    if (platform !== 'ios') return null;
+    const group = iosAppGroup(state.config);
+    return extensions.targets.some(({ appGroup }) => appGroup) ? group : null;
+}
 
 // Where an app keeps its executable and its files: a macOS bundle, a Linux or Windows directory, or the app folder of an
 // iOS app's Xcode project or of an Android app's Gradle project, which link the executable themselves.
@@ -437,7 +445,10 @@ export function publishApp(target, { to = appOutputPath(target), page = null } =
         };
         const extensions = extensionsOf('ios');
         const privacy = mergedPrivacy(ownPrivacy, extensions.privacy);
-        writeXcodeProject(to, { ...options, privacy, entitlements: mergedEntitlements(extensions.entitlements), plist: extensions.plist });
+        writeXcodeProject(to, {
+            ...options, privacy, entitlements: mergedEntitlements(extensions.entitlements), plist: extensions.plist, targets: extensions.targets,
+            appGroup: appGroupOf('ios', extensions),
+        });
         if (target.buildType === 'release') warnUnreasonedApis(to, privacy);
     } else if (target.platform === 'android') {
         const icon = readAppIcon(state.config);
@@ -493,9 +504,9 @@ export default async function buildApp(target, { bridges = [], force = false } =
     }
     // A desktop host's title and window, a Windows one's version, the app's icon and its extensions with their options, as
     // where the page opens files: a bad app section stops the build before anything compiles.
-    const header = appHeader(state.config, target.platform);
     const icon = readAppIcon(state.config);
     const extensions = extensionsOf(target.platform);
+    const header = appHeader(state.config, target.platform, appGroupOf(target.platform, extensions));
     const carried = carriedFilesOf(extensions.files, ownFiles());
     const carriedPaths = new Set(carried);
     // A desktop's system hands an app no https link: its owners there are those with native code, whose onOpenUrl a

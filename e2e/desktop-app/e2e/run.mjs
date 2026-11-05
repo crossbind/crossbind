@@ -240,6 +240,50 @@ const has = (file, part) => existsSync(file) && (!part || readFileSync(file).inc
 // What reg query prints of the default of a key of the Windows user's classes.
 const classOf = (key) => spawnSync('reg', ['query', `HKCU\\Software\\Classes\\${key}`, '/ve'], { encoding: 'utf8' }).stdout ?? '';
 
+// The probe's app extension of each kind, which iOS runs at its extension point, those of the App Group sharing it with
+// the app.
+const APP_EXTENSIONS = {
+    'probe-widget': { point: 'com.apple.widgetkit-extension', isGrouped: true },
+    'probe-share': { point: 'com.apple.share-services', isGrouped: true },
+    'probe-service': { point: 'com.apple.usernotifications.service' },
+    'probe-content': { point: 'com.apple.usernotifications.content-extension' },
+    'probe-keys': { point: 'com.apple.keyboard-service' },
+};
+const APP_GROUP = `group.${id}`;
+
+// The build wrote each of the probe's app extensions as a target of the iOS app's Xcode project, those of the App Group
+// with it in their entitlements, as the app has.
+function checkAppExtensions() {
+    if (platform !== 'ios') return;
+    const project = `${root}/dist/${name}-ios`;
+    const wrong = Object.entries(APP_EXTENSIONS).filter(([target, { point, isGrouped }]) => !has(`${project}/targets/${target}/Info.plist`, `<string>${point}</string>`)
+        || (isGrouped && !has(`${project}/targets/${target}/${target}.entitlements`, `<string>${APP_GROUP}</string>`)));
+    if (wrong.length > 0 || !has(`${project}/${name}.entitlements`, `<string>${APP_GROUP}</string>`)) {
+        console.error(`FAIL: the iOS project lacks the probe's app extensions ${wrong.map(([target]) => target).join(', ') || 'none'}, or the app its App Group ${APP_GROUP}.`);
+        process.exit(1);
+    }
+}
+
+// The app Xcode built carries each of them in its PlugIns, of the app's id, version and build, and the Simulator of
+// the device it went to registered each as it installed the app.
+function installedProblem(built, device) {
+    const read = (file, key) => spawnSync('plutil', ['-extract', key, 'raw', '-o', '-', file], { encoding: 'utf8' }).stdout.trim();
+    const versions = ['CFBundleShortVersionString', 'CFBundleVersion'].map((key) => read(`${built}/Info.plist`, key));
+    const wrong = Object.keys(APP_EXTENSIONS).filter((target) => {
+        const info = `${built}/PlugIns/${target}.appex/Info.plist`;
+        const registered = spawnSync('xcrun', ['simctl', 'spawn', device, 'pluginkit', '-m', '-A', '-i', `${id}.${target}`], { encoding: 'utf8' }).stdout ?? '';
+        return !existsSync(info) || read(info, 'CFBundleIdentifier') !== `${id}.${target}`
+            || ['CFBundleShortVersionString', 'CFBundleVersion'].some((key, at) => read(info, key) !== versions[at]) || !registered.includes(`${id}.${target}`);
+    });
+    return wrong.length > 0 ? `the app iOS installed has not the probe's app extensions ${wrong.join(', ')} in its PlugIns, of its id and versions, as iOS registers them` : undefined;
+}
+
+// The App Group's folder holds what the probe wrote there, as the Simulator keeps it beside the app.
+function groupProblem(device) {
+    const folder = spawnSync('xcrun', ['simctl', 'get_app_container', device, id, APP_GROUP], { encoding: 'utf8' }).stdout?.trim();
+    return folder && has(`${folder}/probe.txt`, 'probe') ? undefined : `the App Group ${APP_GROUP} holds no probe.txt the probe wrote, in ${folder || 'no folder'}`;
+}
+
 // The build gave the app the icon app.icon names.
 function checkIcon() {
     const app = `${root}/dist/${name}`;
@@ -367,7 +411,9 @@ async function open() {
         const project = `${root}/dist/${name}-${platform}`;
         if (!existsSync(project)) missing(project);
         const { buildForSimulator, openInSimulator, buildApk, openOnDevice } = await import('crossbind');
-        return platform === 'ios' ? openInSimulator(buildForSimulator(project), { env }) : openOnDevice(buildApk(project), { env });
+        if (platform !== 'ios') return openOnDevice(buildApk(project), { env });
+        const built = buildForSimulator(project);
+        return { ...openInSimulator(built, { env }), built };
     }
     // A macOS app is a bundle; a Linux or Windows app a directory named after its platform and arch.
     const { executable, close } = process.argv.includes('--installed') ? installedApp() : {
@@ -495,6 +541,7 @@ async function startTrayHost() {
 
 let out = '';
 checkIcon();
+checkAppExtensions();
 checkUrlSchemes();
 checkFileTypes();
 checkMetadata();
@@ -508,7 +555,9 @@ warmPowerShell();
 // The Simulator shares its clipboard with the Mac's, which the page writes and cannot put back: iOS asks its user before
 // an app reads another app's text. The run puts the Mac's back once it is done.
 const macClipboard = platform === 'ios' ? spawnSync('pbpaste', { encoding: 'utf8' }).stdout : null;
-const { child: app, close, executable } = await open();
+const { child: app, close, executable, built, device } = await open();
+// An iOS app's extensions, which the run checks as it ends, once the app has run.
+const extensionsProblem = () => (built ? installedProblem(built, device) ?? groupProblem(device) : undefined);
 // The adb crossbind opened the Android app with, which opens it with a link as well.
 const adb = platform === 'android' ? (await import('crossbind')).adbPath() : undefined;
 
@@ -743,6 +792,7 @@ function finish(problem) {
     // The tray took the icon away as the page asked, before the app quit to open anew.
     const removed = out.indexOf(TRAY_HOST_REMOVED);
     const failure = problem
+        ?? (summary ? extensionsProblem() : undefined)
         ?? (isLaunchedAgain && !hasLeft ? 'the app launched again had not left when the suite finished' : undefined)
         ?? (signer && summary && !out.includes(`is not signed by ${signer}`) ? `the updater did not hold the update to the app's signer, ${signer}` : undefined)
         ?? (trayHost && summary && !(removed >= 0 && removed < summary.index) ? "the tray kept the app's icon after tray.remove()" : undefined);
