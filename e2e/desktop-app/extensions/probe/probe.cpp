@@ -8,6 +8,7 @@
 #include <atomic>
 #include <filesystem>
 #include <fstream>
+#include <iterator>
 #include <mutex>
 #include <stdexcept>
 #include <string>
@@ -28,6 +29,8 @@ std::atomic<int> pages{0};
 // The thread onPage ran on last.
 std::atomic<std::thread::id> pageThread{};
 std::atomic<int> closes{0};
+std::atomic<int> actives{0};
+std::atomic<bool> isActive{false};
 // Why the host refused the probe a function of another's name, as the probe starts.
 std::string refusedName;
 
@@ -48,6 +51,17 @@ void crossbind_extension_probe(crossbind::Registry &registry) {
     registry.function("probe.urls", [](Call call) {
         std::lock_guard<std::mutex> lock(linksMutex);
         call.resolve(Value(links));
+    });
+    // The files of the probe's type, which the host holds for the page as the event probe-files, and what one holds.
+    registry.onOpenFiles([](const std::vector<std::string> &paths) {
+        crossbind::app::holdEvent("probe-files", Value(Value::Object{{"paths", paths}}).json());
+    });
+    registry.function("probe.readFile", [](Call call) {
+        crossbind::inBackground(call, [path = call.options()["path"].asString()] {
+            std::ifstream file(std::filesystem::path(std::u8string(path.begin(), path.end())));
+            if (!file) throw std::runtime_error("crossbind: the probe cannot read " + path);
+            return Value(std::string(std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>()));
+        });
     });
     // A folder outside the app's, with a file for the page's trash and one for the app's own code's.
     registry.function("probe.folder", [](Call call) {
@@ -124,6 +138,29 @@ void crossbind_extension_probe(crossbind::Registry &registry) {
         return false;
     });
     registry.function("probe.closes", [](Call call) { call.resolve(closes.load()); });
+    // The app's state before its user, which the probe hears of once the window has opened, and the quits asked of the
+    // app, which it refuses, telling the page: app.relaunch() quits all the same.
+    registry.onActive([](bool active) {
+        isActive = active;
+        actives += 1;
+    });
+    registry.function("probe.actives", [](Call call) { call.resolve(actives.load()); });
+#if defined(__APPLE__) || defined(_WIN32)
+    // The app told it became inactive and active again, or the other way round, as its system tells it, which the page
+    // hears in that order: the probe answers whether the app was active.
+    registry.function("probe.flipActive", [](Call call) {
+        crossbind::onMainThread([call] {
+            const bool was = isActive;
+            tellActive(!was);
+            tellActive(was);
+            call.resolve(was);
+        });
+    });
+#endif
+    registry.onQuitRequest([] {
+        crossbind::app::emitEvent("probe-quit-request", "null");
+        return false;
+    });
 #if !defined(__ANDROID__)
     // A task on the main thread that throws leaves the app running, and the call it held fails as it lets go of it.
     registry.function("probe.throwOnMain", [](Call call) {

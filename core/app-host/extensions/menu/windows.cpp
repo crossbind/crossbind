@@ -157,7 +157,7 @@ void runRole(const std::string &role) {
     } else if (role == "minimize") {
         ShowWindow(window, SW_MINIMIZE);
     } else if (role == "quit") {
-        app::quit();
+        app::requestQuit();
     } else {
         PostMessageW(window, WM_CLOSE, 0, 0);
     }

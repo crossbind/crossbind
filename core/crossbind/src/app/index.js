@@ -197,12 +197,21 @@ export const app = {
     paths: async () => call('app.paths', {}),
     // Ends the app as closing its window does.
     quit: async () => call('app.quit', {}),
+    // Asks the app's extensions, as its user's Quit does, then ends the app as quit() does, unless one keeps it running.
+    requestQuit: async () => call('app.requestQuit', {}),
     // Ends the app as quit() does, then opens it again, with no link.
     relaunch: async () => call('app.relaunch', {}),
     // The links of app.urlSchemes that opened the app and have not reached the page yet, the one it was launched with
     // among them, which the host holds as the events open-url; later ones come as the event. Listening first, then
     // asking, misses none.
     launchUrls: async () => (await events.held('open-url')).map((value) => value?.url).filter((url) => typeof url === 'string'),
+    // The files the system opened the app with that have not reached the page yet, those no extension's type takes, the
+    // launch's own among them, which the host holds as the events open-files; later ones come as the event.
+    launchFiles: async () => (await events.held('open-files')).flatMap((value) => (Array.isArray(value?.paths) ? value.paths : []))
+        .filter((path) => typeof path === 'string'),
+    // The launch that started a desktop app: { args, cwd }, its arguments without the program's own and without the links
+    // of the app's schemes, and the folder it was launched in. A phone's has neither.
+    launchArgs: async () => call('app.launchArgs', {}),
 };
 
 export const menu = {

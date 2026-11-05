@@ -11,9 +11,11 @@
 #include <cstdio>
 #include <filesystem>
 #include <future>
+#include <iterator>
 #include <memory>
 #include <mutex>
 #include <stdexcept>
+#include <tuple>
 #include <utility>
 
 namespace crossbind::app {
@@ -102,6 +104,19 @@ Paths paths() { return appPaths(); }
 
 void quit() { quitApp(); }
 
+void requestQuit() {
+#if defined(__ANDROID__) || (defined(__APPLE__) && TARGET_OS_IPHONE)
+    // Which throws, as a phone's apps quit themselves no more than app.quit() ends them.
+    quitApp();
+#elif defined(__APPLE__)
+    terminateApp();
+#else
+    onMainThread([] {
+        if (isQuitAllowed()) quitApp();
+    });
+#endif
+}
+
 void relaunch() { relaunchApp(); }
 
 void emitEvent(const std::string &event, const std::string &json) { postEvent(event, json); }
@@ -122,19 +137,179 @@ constexpr size_t MAX_URL = 1 << 16;
 namespace {
 // ASCII alone, whatever locale GTK sets.
 char lower(char c) { return c >= 'A' && c <= 'Z' ? static_cast<char>(c - 'A' + 'a') : c; }
+bool isLetter(char c) { return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z'); }
+bool isDigit(char c) { return c >= '0' && c <= '9'; }
+
+std::string lowered(std::string text) {
+    std::transform(text.begin(), text.end(), text.begin(), lower);
+    return text;
+}
+
+// The scheme of a URL, lowercase: what comes before its colon, a letter, then letters, digits, +, - and ., two at least,
+// as one letter is a Windows path's drive. None for what is no URL.
+std::optional<std::string> schemeOf(const std::string &text) {
+    const size_t colon = text.find(':');
+    if (colon == std::string::npos || colon < 2 || !isLetter(text[0])) return std::nullopt;
+    for (size_t at = 1; at < colon; ++at) {
+        const char c = text[at];
+        if (!isLetter(c) && !isDigit(c) && c != '+' && c != '-' && c != '.') return std::nullopt;
+    }
+    return lowered(text.substr(0, colon));
+}
+
+int hexOf(char c) {
+    if (isDigit(c)) return c - '0';
+    const char low = lower(c);
+    return low >= 'a' && low <= 'f' ? low - 'a' + 10 : -1;
+}
+
+// Text with its %XX escapes decoded; a % that starts none stays.
+std::string decoded(const std::string &text) {
+    std::string result;
+    for (size_t at = 0; at < text.size(); ++at) {
+        const int high = text[at] == '%' && at + 2 < text.size() ? hexOf(text[at + 1]) : -1;
+        const int low = high >= 0 ? hexOf(text[at + 2]) : -1;
+        if (low < 0) {
+            result += text[at];
+            continue;
+        }
+        result += static_cast<char>(high * 16 + low);
+        at += 2;
+    }
+    return result;
+}
+
+#if defined(__ANDROID__) || TARGET_OS_IPHONE
+// Who gets an https link of app.links: the owner of the entry whose domain is the link's, a *. taking the subdomains of
+// the one after it, and whose path the link's decoded one starts with, as Android matches it: of those, the one of the
+// longest path, then a domain before a *., then the longest domain.
+std::optional<std::string> linkOwnerOf(const std::string &url) {
+    static const std::vector<std::pair<std::string, std::string>> links = appLinks();
+    const size_t start = url.find("//");
+    if (start == std::string::npos) return std::nullopt;
+    const size_t end = std::min(url.find_first_of("/?#", start + 2), url.size());
+    std::string authority = url.substr(start + 2, end - start - 2);
+    // The host comes after the last @, as a browser reads it.
+    authority = authority.substr(authority.rfind('@') + 1);
+    const std::string host = lowered(authority.substr(0, authority.find(':')));
+    const std::string path = end < url.size() && url[end] == '/' ? decoded(url.substr(end, url.find_first_of("?#", end) - end)) : "/";
+    std::optional<std::string> owner;
+    std::tuple<size_t, bool, size_t> best;
+    for (const auto &[link, linkOwner] : links) {
+        const size_t slash = std::min(link.find('/'), link.size());
+        const std::string domain = link.substr(0, slash);
+        const std::string prefix = link.substr(slash);
+        const bool isWildcard = domain.rfind("*.", 0) == 0;
+        const bool isHost = isWildcard
+            ? host.size() > domain.size() - 1 && host.compare(host.size() - (domain.size() - 1), std::string::npos, domain, 1) == 0
+            : host == domain;
+        const std::tuple<size_t, bool, size_t> rank{prefix.size(), !isWildcard, domain.size()};
+        if (!isHost || path.rfind(prefix, 0) != 0 || (owner && rank <= best)) continue;
+        owner = linkOwner;
+        best = rank;
+    }
+    return owner;
+}
+#endif
 
 // Who gets a link of the app's schemes: the extension that declared its scheme, or for those of app.urlSchemes the
-// host's links, which hands them to the page. None for anything else, as a link of another scheme open -a hands over.
+// host's links, which hands them to the page; on a phone an https link of app.links as well. None for anything else, as
+// a link of another scheme open -a hands over.
 std::optional<std::string> ownerOf(const std::string &url) {
     static const std::vector<std::pair<std::string, std::string>> schemes = urlSchemes();
-    const size_t colon = url.find(':');
-    if (colon == std::string::npos) return std::nullopt;
-    std::string scheme = url.substr(0, colon);
-    std::transform(scheme.begin(), scheme.end(), scheme.begin(), lower);
+    const std::optional<std::string> scheme = schemeOf(url);
+    if (!scheme) return std::nullopt;
+#if defined(__ANDROID__) || TARGET_OS_IPHONE
+    if (*scheme == "https") return linkOwnerOf(url);
+#endif
     for (const auto &[name, owner] : schemes) {
-        if (name == scheme) return owner;
+        if (name == *scheme) return owner;
     }
     return std::nullopt;
+}
+
+// The local path of a file: URL, percent-decoded, without its query and fragment: none for one of a host other than
+// none or localhost, nor for one that holds a NUL, which would end the path early.
+std::optional<std::string> pathOfFileUrl(const std::string &url) {
+    std::string rest = url.substr(url.find(':') + 1);
+    rest = rest.substr(0, rest.find_first_of("?#"));
+    if (rest.rfind("//", 0) == 0) {
+        const size_t slash = std::min(rest.find('/', 2), rest.size());
+        const std::string host = lowered(rest.substr(2, slash - 2));
+        if (!host.empty() && host != "localhost") return std::nullopt;
+        rest = slash < rest.size() ? rest.substr(slash) : "/";
+    }
+    std::string path = decoded(rest);
+    if (path.find('\0') != std::string::npos) return std::nullopt;
+#ifdef _WIN32
+    // file:///C:/Users/me names C:/Users/me.
+    if (path.size() >= 3 && path[0] == '/' && isLetter(path[1]) && path[2] == ':') path.erase(0, 1);
+#endif
+    return path;
+}
+
+// A launch's file by its absolute path, against the folder it was launched in, as UTF-8.
+std::string absoluteOf(const std::string &path, const std::string &cwd) {
+    std::filesystem::path full = pathOf(path);
+    if (full.is_relative() && !cwd.empty()) full = pathOf(cwd) / full;
+    full = full.lexically_normal();
+    full.make_preferred();
+    const std::u8string text = full.u8string();
+    return std::string(text.begin(), text.end());
+}
+
+// Whether the app opens files, as app.fileTypes or an extension's declares them: a desktop launch's arguments are its
+// files then.
+bool opensFiles() {
+    static const bool isOpening = !fileTypes().empty();
+    return isOpening;
+}
+
+// The file a launch's argument names, as Tauri's example of file associations takes them: any argument but an empty
+// one, one that starts with "-", a URL other than a file: one and one that names no path, as a file: URL's text that
+// is no UTF-8 names none on Windows.
+std::optional<std::string> launchFileOf(const std::string &arg, const std::string &cwd) {
+    if (arg.empty() || arg[0] == '-') return std::nullopt;
+    const std::optional<std::string> scheme = schemeOf(arg);
+    if (scheme && *scheme != "file") return std::nullopt;
+    const std::optional<std::string> path = scheme ? pathOfFileUrl(arg) : arg;
+    if (!path) return std::nullopt;
+    try {
+        return absoluteOf(*path, cwd);
+    } catch (const std::exception &) {
+        return std::nullopt;
+    }
+}
+
+// A launch's own arguments: those that are no link of the app's schemes, which reach their owners, nor, in an app that
+// opens files, a file, which reaches the owner of its type.
+std::vector<std::string> ownArgs(const Launch &launch) {
+    std::vector<std::string> kept;
+    std::copy_if(launch.args.begin(), launch.args.end(), std::back_inserter(kept), [&launch](const std::string &arg) {
+        return !ownerOf(arg) && !(opensFiles() && launchFileOf(arg, launch.cwd));
+    });
+    return kept;
+}
+
+// Who gets a file: the extension whose types alone list the MIME type it came with, without its parameters, else the
+// one that owns its name's extension's type, else the host's files.
+std::string fileOwnerOf(const std::string &path, const std::string &mimeType) {
+    static const std::vector<std::pair<std::string, std::string>> mimes = fileMimeTypes();
+    std::string mime = lowered(mimeType.substr(0, mimeType.find(';')));
+    mime.erase(mime.find_last_not_of(" \t") + 1);
+    for (const auto &[type, owner] : mimes) {
+        if (!mime.empty() && type == mime) return owner;
+    }
+    static const std::vector<std::pair<std::string, std::string>> types = fileTypes();
+    const size_t name = path.find_last_of("/\\");
+    const size_t dot = path.rfind('.');
+    if (dot != std::string::npos && (name == std::string::npos || dot > name + 1)) {
+        const std::string ending = lowered(path.substr(dot + 1));
+        for (const auto &[type, owner] : types) {
+            if (type == ending) return owner;
+        }
+    }
+    return "files";
 }
 }  // namespace
 
@@ -150,6 +325,30 @@ void openedUrl(const std::string &url) {
 
 void openUrlsIn(const std::vector<std::string> &args) {
     for (const auto &arg : args) openedUrl(arg);
+}
+
+void openedFiles(const std::vector<std::string> &paths, const std::vector<std::string> &mimeTypes) {
+    // Each owner gets its files at once, in their order.
+    std::vector<std::pair<std::string, std::vector<std::string>>> owned;
+    for (size_t index = 0; index < paths.size(); ++index) {
+        const std::string &path = paths[index];
+        const std::string owner = fileOwnerOf(path, index < mimeTypes.size() ? mimeTypes[index] : "");
+        const auto entry = std::find_if(owned.begin(), owned.end(), [&owner](const auto &other) { return other.first == owner; });
+        if (entry == owned.end()) owned.push_back({owner, {path}});
+        else entry->second.push_back(path);
+    }
+    for (const auto &[owner, files] : owned) openFilesOf(owner, files);
+}
+
+void openLaunch(const Launch &launch) {
+    openUrlsIn(launch.args);
+    if (!opensFiles()) return;
+    std::vector<std::string> files;
+    for (const auto &arg : launch.args) {
+        if (ownerOf(arg)) continue;
+        if (const std::optional<std::string> file = launchFileOf(arg, launch.cwd)) files.push_back(*file);
+    }
+    if (!files.empty()) openedFiles(files);
 }
 
 #if !defined(__ANDROID__) && !TARGET_OS_IPHONE
@@ -181,9 +380,17 @@ void appFunctions(Registry &registry) {
         quitApp();
         call.resolve();
     });
+    registry.function("app.requestQuit", [](Call call) {
+        requestQuit();
+        call.resolve();
+    });
     registry.function("app.relaunch", [](Call call) {
         relaunchApp();
         call.resolve();
+    });
+    registry.function("app.launchArgs", [](Call call) {
+        const Launch launch = crossbind::launchArguments();
+        call.resolve(Value::Object{{"args", launch.args}, {"cwd", launch.cwd}});
     });
 }
 
@@ -224,14 +431,17 @@ void launchedAgain(Launch launch) {
         }
     }
     showWindow(launch.token);
-    // Each of its links reaches the owner of its scheme alone: one of app.urlSchemes the page hears of as open-url.
-    std::vector<std::string> args;
-    for (const auto &arg : launch.args) {
-        if (!app::ownerOf(arg)) args.push_back(arg);
-    }
-    app::postEvent("second-instance", Value(Value::Object{{"args", args}, {"cwd", launch.cwd}}).json());
-    app::openUrlsIn(launch.args);
+    // Each of its links reaches the owner of its scheme alone: one of app.urlSchemes the page hears of as open-url. So
+    // does each file, in an app that opens files: the page hears of those no extension owns as open-files.
+    app::postEvent("second-instance", Value(Value::Object{{"args", app::ownArgs(launch)}, {"cwd", launch.cwd}}).json());
+    app::openLaunch(launch);
 }
 #endif
+
+Launch launchArguments() {
+    Launch launch = app::firstLaunch();
+    launch.args = app::ownArgs(launch);
+    return launch;
+}
 
 }  // namespace crossbind

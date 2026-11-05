@@ -107,6 +107,14 @@ void setMainWindow(void *window, void *view) {
     g_object_add_weak_pointer(G_OBJECT(mainWindow), reinterpret_cast<gpointer *>(&mainWindow));
     // The window asks the app's extensions as its user closes it: TRUE keeps it.
     g_signal_connect(mainWindow, "delete-event", G_CALLBACK(+[](GtkWidget *, GdkEvent *, gpointer) -> gboolean { return !crossbind::app::isCloseAllowed(); }), nullptr);
+    // A Linux desktop tells of the app's window alone: the app is active while its window has the focus, which it may
+    // have taken as it showed, so the extensions hear how it is once the window has opened.
+    g_signal_connect(mainWindow, "notify::is-active", G_CALLBACK(+[](GObject *window, GParamSpec *, gpointer) {
+        crossbind::app::appActivated(gtk_window_is_active(GTK_WINDOW(window)) != FALSE);
+    }), nullptr);
+    onMainThread([] {
+        if (mainWindow) crossbind::app::appActivated(gtk_window_is_active(mainWindow) != FALSE);
+    });
     const std::string icon = resourceDir() + "/icon.png";
     if (g_file_test(icon.c_str(), G_FILE_TEST_EXISTS)) gtk_window_set_icon_from_file(mainWindow, icon.c_str(), nullptr);
     webView = static_cast<GtkWidget *>(view);

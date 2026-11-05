@@ -92,6 +92,17 @@ std::string textOf(JNIEnv *env, jbyteArray value) {
     return text;
 }
 
+std::vector<std::string> textsOf(JNIEnv *env, jobjectArray values) {
+    std::vector<std::string> texts;
+    const jsize count = env->GetArrayLength(values);
+    for (jsize index = 0; index < count; ++index) {
+        auto value = static_cast<jbyteArray>(env->GetObjectArrayElement(values, index));
+        texts.push_back(textOf(env, value));
+        env->DeleteLocalRef(value);
+    }
+    return texts;
+}
+
 // Android drops what a process writes to its standard output and error: the lines go to logcat instead, as an app's
 // output goes to the terminal on the desktop. The WebView's Chromium runs in the process too, and logs its own lines,
 // as "[...:ERROR:file.cc(12)] ...", to logcat as well, so those are left out.
@@ -282,6 +293,17 @@ extern "C" JNIEXPORT void JNICALL Java_dev_crossbind_app_CrossbindActivity_nativ
 
 extern "C" JNIEXPORT void JNICALL Java_dev_crossbind_app_CrossbindActivity_nativeOpenUrl(JNIEnv *env, jclass, jbyteArray url) {
     app::openedUrl(textOf(env, url));
+}
+
+// The files the system opened the app with, each copied into the app's cache, by their paths in UTF-8, with the MIME
+// type it gave each, empty for none.
+extern "C" JNIEXPORT void JNICALL Java_dev_crossbind_app_CrossbindActivity_nativeOpenFiles(JNIEnv *env, jclass, jobjectArray paths,
+                                                                                           jobjectArray mimeTypes) {
+    app::openedFiles(textsOf(env, paths), textsOf(env, mimeTypes));
+}
+
+extern "C" JNIEXPORT void JNICALL Java_dev_crossbind_app_CrossbindActivity_nativeActive(JNIEnv *, jclass, jboolean isActive) {
+    app::appActivated(isActive == JNI_TRUE);
 }
 
 // The answer of an extension's Java: its result's JSON, or why the call failed.

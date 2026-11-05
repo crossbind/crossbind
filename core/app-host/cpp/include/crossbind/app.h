@@ -76,12 +76,15 @@ void trash(const std::string &path);
 Paths paths();
 // Ends the app as closing its window does, without asking the extensions that may keep the window open.
 void quit();
+// Asks the extensions' onQuitRequest, as the app's user's Quit does, then ends the app as quit() does, unless one keeps
+// it running: from any thread, without waiting. A desktop app's alone.
+void requestQuit();
 // Ends the app as quit() does, then opens it anew, with no arguments.
 void relaunch();
 // Sends the page an event, whose listeners through crossbind/app's events.on get the value json holds, a JSON text. It
 // waits for nothing, so any thread may call it. A page gets the events emitted once it listens: one emitted before,
-// as before the module starts or once the app quits, reaches none. The events menu, second-instance, open-url, suspend
-// and resume are the host's own.
+// as before the module starts or once the app quits, reaches none. The events menu, second-instance, open-url, suspend,
+// resume, active and inactive are the host's own.
 void emitEvent(const std::string &event, const std::string &json = "null");
 // Sends the page an event as emitEvent() does, which the host holds until the page asks for the events of its name with
 // crossbind/app's events.held() since it loaded, as what came before it listened: each reaches the page once, in that

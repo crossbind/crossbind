@@ -79,7 +79,7 @@ void runRole(const std::string &role) {
     } else if (window() && role == "minimize") {
         gtk_window_iconify(window());
     } else if (role == "quit") {
-        app::quit();
+        app::requestQuit();
     } else if (window()) {
         gtk_window_close(window());
     }

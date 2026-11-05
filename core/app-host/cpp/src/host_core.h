@@ -50,6 +50,13 @@ void startExtension(const char *name, const char *options, void (*entry)(Registr
 // The app's URL schemes, from the same file, each with the extension whose onUrl gets its links: the one that declared
 // it, or for those of app.urlSchemes the host's links, which hands them to the page.
 std::vector<std::pair<std::string, std::string>> urlSchemes();
+// The extensions of the files the app opens, each with the extension whose onOpenFiles gets them, the host's files for
+// those of app.fileTypes; the MIME types one owner's types alone list, each with that owner, which an Android file's
+// names before its name does; and the https links of app.links, a domain and maybe the path they start with, each with
+// the extension whose onUrl gets them, the host's links for the app's own.
+std::vector<std::pair<std::string, std::string>> fileTypes();
+std::vector<std::pair<std::string, std::string>> fileMimeTypes();
+std::vector<std::pair<std::string, std::string>> appLinks();
 // Adds the host's refusals of what crossbind/app reaches that no extension of the app added: the updater's functions,
 // which a desktop app with app.updater alone has.
 void refusedFunctions(Registry &registry);
@@ -59,6 +66,9 @@ void startExtensions();
 // Whether the app runs on with a desktop app's launch, as the extension that takes its launches decides: true without
 // one, and without a launch, as a phone's. What the extension throws, it throws.
 bool launched(const Launch *launch);
+// The launch the app started with, as start() was given it before its extensions start, its links among its arguments;
+// none on a phone.
+Launch &firstLaunch();
 // Runs the extensions' onWindow, on the main thread, as the app's window has opened, before its page loads.
 void windowOpened();
 // Runs the extensions' onPage, on the module's thread, as a page of the app's starts.
@@ -67,6 +77,8 @@ void pageStarted();
 void quitting();
 // Hands a link to the onUrl of the extension that owns its scheme.
 void openUrlOf(const std::string &extension, const std::string &url);
+// Hands files to the onOpenFiles of the extension that owns their type.
+void openFilesOf(const std::string &extension, const std::vector<std::string> &paths);
 // Whether the app has a function of this name so far.
 bool hasFunction(const std::string &name);
 // The value of JSON text; text that is no JSON throws.

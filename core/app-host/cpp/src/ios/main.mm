@@ -83,12 +83,31 @@ bool isDark(std::uint32_t color) {
     [self.window makeKeyAndVisible];
     app::windowOpened();
     [webView loadRequest:[NSURLRequest requestWithURL:[NSURL URLWithString:@(url.c_str())]]];
-    // A link that launched the app reaches the owner of its scheme: the page once it asks for it, or an extension.
+    // A link or a document that launched the app reaches the owner of its scheme or type: the page once it asks for it,
+    // or an extension; so does a site's link.
     [self scene:scene openURLContexts:options.URLContexts];
+    for (NSUserActivity *activity in options.userActivities) [self scene:scene continueUserActivity:activity];
 }
 
 - (void)scene:(UIScene *)scene openURLContexts:(NSSet<UIOpenURLContext *> *)contexts {
-    for (UIOpenURLContext *context in contexts) app::openedUrl(context.URL.absoluteString.UTF8String);
+    std::vector<std::string> paths;
+    for (UIOpenURLContext *context in contexts) {
+        NSURL *url = context.URL;
+        if (!url.isFileURL) {
+            app::openedUrl(url.absoluteString.UTF8String);
+            continue;
+        }
+        // A document opens where it is, which the app may read and write as long as it runs; one iOS copied into the
+        // app's Inbox is the app's own, and asks for no access.
+        [url startAccessingSecurityScopedResource];
+        if (url.path) paths.push_back(url.path.UTF8String);
+    }
+    if (!paths.empty()) app::openedFiles(paths);
+}
+
+// A link of app.links' sites, which iOS hands the app once the site's apple-app-site-association names it.
+- (void)scene:(UIScene *)scene continueUserActivity:(NSUserActivity *)activity {
+    if ([activity.activityType isEqualToString:NSUserActivityTypeBrowsingWeb] && activity.webpageURL) app::openedUrl(activity.webpageURL.absoluteString.UTF8String);
 }
 
 @end

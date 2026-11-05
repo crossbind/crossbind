@@ -157,8 +157,8 @@ resampled from the PNG, so a small one blurs when enlarged.
 - macOS, `dmg`: `dist/<name>.dmg`, a disk image that holds the app beside a link to Applications, onto which its user
   drags it.
 - Linux, `deb`: `dist/<name>-linux-<arch>.deb`, a Debian package that puts the app in `/usr/lib/<package>`, its command
-  in `/usr/bin` and its entry and icon in the menu. It depends on WebKitGTK 4.1, release 2.40 or later, and GTK 3,
-  which `apt install ./<name>-linux-<arch>.deb` installs with it. The package is named after `general.name`, in lower
+  in `/usr/bin` and its entry and icon in the menu. It depends on WebKitGTK 4.1, release 2.40 or later, GTK 3 and what
+  its extensions' `linux.depends` name, which `apt install ./<name>-linux-<arch>.deb` installs with it. The package is named after `general.name`, in lower
   case with a hyphen for each underscore, from its first letter or digit; package.json's `author` and `description` are
   its maintainer and description, and the app's name stands for both without them.
 - Linux, `tar-gz`: `dist/<name>-linux-<arch>.tar.gz`, the app's folder, which unpacks anywhere its user can write.
@@ -306,8 +306,8 @@ public key's pair stop `crossbind app build` before anything compiles. The host'
 ## The app's functions
 
 The page imports what the app's host does for it from `crossbind/app`. The app's C++ calls the same, but for
-`menu.set`, `tray`, `notification.show`, `app.launchUrls`, `events.on` and `events.held`, through `<crossbind/app.h>`, which an app's
-own code finds as it builds, with `CROSSBIND_APP` defined:
+`menu.set`, `tray`, `notification.show`, `app.launchUrls`, `app.launchArgs`, `events.on` and `events.held`, through
+`<crossbind/app.h>`, which an app's own code finds as it builds, with `CROSSBIND_APP` defined:
 
 ```js
 import { app, dialog, shell } from 'crossbind/app';
@@ -336,8 +336,11 @@ std::string databasePath() { return crossbind::app::paths().data + "/notes.sqlit
 | `shell.trash(path)` | Moves a file or folder to the system's trash, and nothing where it has none | ✓ | | |
 | `app.paths()` | `{ data, cache, logs }`, the app's own folders, made if missing | ✓ | ✓ | ✓ |
 | `app.quit()` | Ends the app as closing its window does, without asking the extensions that may keep the window open | ✓ | | |
+| `app.requestQuit()` | Asks the extensions, as its user's Quit does, then ends the app as `app.quit()` does, unless one keeps it running | ✓ | | |
 | `app.relaunch()` | Ends the app as `app.quit()` does, then opens it anew with no link | ✓ | | |
 | `app.launchUrls()` | The links of `app.urlSchemes` that opened the app and have not reached the page yet; the page alone | ✓ | ✓ | ✓ |
+| `app.launchFiles()` | The files the system opened the app with that have not reached the page yet, as [Files](#files) tells; the page alone | ✓ | ✓ | ✓ |
+| `app.launchArgs()` | `{ args, cwd }`, the launch that started the app, as [One instance](#one-instance) tells, empty on a phone; the page alone | ✓ | ✓ | ✓ |
 | `menu.set(menus)` | Sets the app's menus, whose clicks are the event `menu`; the page alone | ✓ | | |
 | `tray.set({ tooltip, menu })` | The app's icon in the menu bar, notification area or status tray, whose clicks are the events `tray` and `menu`; the page alone | ✓ | | |
 | `tray.remove()` | Takes the tray's icon away; the page alone | ✓ | | |
@@ -465,6 +468,12 @@ Standby may tell neither, and a Linux system without logind none.
 events.on('resume', () => reconnect());
 ```
 
+The page hears of the app becoming the active one, as its user switches to it or a phone brings it to the foreground,
+as the event `active`, and of another app taking its place, or a phone's being interrupted, by a call, a system alert or
+another app's picker, or going to the background, as `inactive`, both without a value. A Linux app's is its window's
+focus, which a dialog of its own takes as well. An extension hears the same through `onActive`, as
+[extensions.md](./extensions.md#the-native-side) tells.
+
 ## Menus
 
 The page sets the app's menus while it runs, and hears of their clicks as the event `menu`:
@@ -494,11 +503,12 @@ standard menu, or a standard item by its role, which a label may rename: `undo`,
 `selectAll`, which keep the platform's keys, and `minimize`, `close` and `quit`, whose accelerator the page may change.
 A click of an item with an id is the event `menu` of `{ id }`, or of `{ id, checked }` for an item with `checked`,
 which the click turns over first; a standard item does what its role says, and the page hears nothing of it: `close`
-closes the window as its user does, which an extension may keep open, and `quit` ends the app as `app.quit()` does. An
-accelerator is a key with `CmdOrCtrl`, `Ctrl` or `Alt`, and maybe `Shift`, joined by `+`, as `CmdOrCtrl+Shift+O` is,
-or one of `F1` to `F12`, alone or with any of them. The key is a capital letter, a digit, a function key or one of
-`Enter`, `Escape`, `Tab`, `Space`, `Backspace`, `Delete`, `Up`, `Down`, `Left`, `Right`, `Home`, `End`, `PageUp`,
-`PageDown`, `Plus`, `Minus`, `Comma` and `Period`, and `CmdOrCtrl` is ⌘ on macOS and Ctrl elsewhere. A menu the page
+closes the window as its user does, which an extension may keep open, and `quit` asks to end the app as
+`app.requestQuit()` does, which an extension may refuse. An accelerator is a key with `CmdOrCtrl`, `Ctrl` or `Alt`, and
+maybe `Shift`, joined by `+`, as `CmdOrCtrl+Shift+O` is, or one of `F1` to `F12`, alone or with any of them. The key is
+a capital letter, a digit, a function key or one of `Enter`, `Escape`, `Tab`, `Space`, `Backspace`, `Delete`, `Up`,
+`Down`, `Left`, `Right`, `Home`, `End`, `PageUp`, `PageDown`, `Plus`, `Minus`, `Comma` and `Period`, and `CmdOrCtrl`
+is ⌘ on macOS and Ctrl elsewhere. A menu the page
 gets wrong fails before the host sees it, naming the item.
 
 Each call replaces the menus the last one set, so the page changes an item by setting them all again. On macOS they
@@ -573,16 +583,17 @@ far as the system lets it, and its page hears of the launch as the event `second
 import { events } from 'crossbind/app';
 
 events.on('second-instance', ({ args, cwd }) => {
-    if (args.length > 0) openFiles(args, cwd);
+    if (args.length > 0) runCommandLine(args, cwd);
 });
 ```
 
 `args` leaves out the program's own path, and the launch's links, which reach the owners of their schemes, those of
-`app.urlSchemes` the page as `open-url`; a relative one resolves against `cwd`. They are whatever the launch was given,
-so the page takes them as it would any command line. The first launch's own arguments do not reach the page, but for
-its links of `app.urlSchemes`, as [Links](#links) tells. A
-launch that arrives before the page listens still brings the window to the front, and its event reaches no page. The
-event `second-instance` is the host's alone: the app's C++ emits others.
+`app.urlSchemes` the page as `open-url`, and in an app that opens files the files, as [Files](#files) tells; a relative
+one resolves against `cwd`. They are whatever the launch was given,
+so the page takes them as it would any command line. The page asks for the first launch's own, which leave out the
+same, with `app.launchArgs()`, and for its links of `app.urlSchemes` as [Links](#links) tells. A launch that arrives
+before the page listens still brings the window to the front, and its event reaches no page. The event
+`second-instance` is the host's alone: the app's C++ emits others.
 
 On macOS and Linux only a launch by the same user reaches the instance, and on Windows any launch in the same signed-in
 session. A launch that comes while the instance quits waits for it to end, ten seconds at most, and becomes the next
@@ -651,6 +662,97 @@ A link starts a Windows or Linux app again, with the link as its argument, so a 
 keeps a Windows or Linux app to one instance unless `app.singleInstance` is `false`: the launch reaches the app that runs as
 [One instance](#one-instance) tells, its link as `open-url` and the event `second-instance` without it. macOS hands a
 link to the app that runs, and brings its window to the front.
+
+### The app's sites
+
+On iOS and Android, `app.links` names the https links of the app's sites that open it in place of the browser, as
+`https://example.com/invite/42` does: a domain, lowercase, maybe with `*.` for its subdomains, then maybe the path its
+links start with.
+
+```js
+app: {
+    links: ['example.com/invite', 'www.example.com'],
+},
+```
+
+They reach the page as the links of `app.urlSchemes` do, through `app.launchUrls()` and the event `open-url`, and an
+extension's own, in its `app.links`, reach its `onUrl` alone: a link reaches the owner of the entry whose domain is
+the link's and whose path the link's decoded path starts with, as Android's `pathPrefix` does: of those, the one of the
+longest path, then a domain before a `*.` of it, then the longest domain. One entry has one owner, and two stop the
+build. An entry's path holds no `%` escape. Each site
+names the app, which the system checks before a link of it opens the app:
+
+- iOS: the app's entitlements claim each domain, as `applinks:example.com`, which its App ID takes once its Associated
+  Domains capability is on, as Xcode's automatic signing turns it on; the site serves
+  `/.well-known/apple-app-site-association`, which names the app by its team and bundle id and the paths that open it.
+- Android: each entry is an intent filter Android verifies, its path the filter's `pathPrefix`; the site serves
+  `/.well-known/assetlinks.json`, which names the app by its id and the SHA-256 of the certificate it is signed with.
+
+macOS, Windows and Linux hand no app an https link.
+
+## Files
+
+`app.fileTypes` names the types of files the app opens, as a double-click on `map.geojson` in Finder or Explorer, a
+file manager's Open with and a phone's Files app open it:
+
+```js
+app: {
+    fileTypes: [{ name: 'GeoJSON', extensions: ['geojson'], mimeTypes: ['application/geo+json'] }],
+},
+```
+
+A type has the name the system shows its files' kind by, on one line, the extensions of its files, lowercase and
+without the dot, and maybe the MIME types Android and Linux match them by, its `role`, `'editor'` by default or
+`'viewer'`, and the `contentTypes` Apple's platforms know a type by that they have of their own, as
+`public.comma-separated-values-text` is CSV's. The page asks for the files that opened the app, the launch's own among
+them, with `app.launchFiles()`, and from then on hears of each opening as the event `open-files`, of `{ paths }`, while
+it listens:
+
+```js
+import { app, events } from 'crossbind/app';
+
+events.on('open-files', ({ paths }) => paths.forEach(open));
+for (const path of await app.launchFiles()) open(path);
+```
+
+Each path is absolute. The host's `files` extension holds them for the page as it holds links, so listening first,
+then asking, misses none, and hands the page as well the files of a type no extension owns. An extension declares types
+of its own in its `app.fileTypes`, whose files reach its native code alone, through `onOpenFiles`, as
+[extensions.md](./extensions.md#the-native-side) tells. One extension of a file has one owner, the app or an
+extension, and two stop the build.
+
+In an app that opens files, a desktop launch's arguments are its files, as Tauri's example of file associations takes
+them: each argument but an empty one, one that starts with `-` and a URL other than a `file:` one, which stands for its
+decoded path without its query, is a file, whether it is there or not, absolute against the folder the app was
+launched in. A `file:` URL of a host other than `localhost`, as a Windows share's, or whose path holds a NUL stays an
+argument. `myapp --verbose map.geojson notes.txt` opens both files and leaves `app.launchArgs()` and `second-instance`
+with `--verbose`, so such an app takes its options as `--profile=work`. An app that declares no type keeps every
+argument.
+
+The app as built tells each system its types, its extensions' as well:
+
+- macOS: its Info.plist's document types, by their extensions or their content types. Finder, the Dock and `open -a`
+  hand the app that runs its files, and a development session's app claims none.
+- iOS: its Info.plist's document types, by their content types, else by a type the app declares from the type's
+  extensions and MIME types, named after its bundle id. A document opens where it is, which the app may read and write
+  as long as it runs.
+- Android: its activity's intent filters, by the type's MIME types, else by its extensions, which a provider's path
+  shows or not. Other apps hand it a file as a `content:` address alone: the app takes no `file:` one, nor a file of a
+  provider of its own that other apps cannot read, which it would read for whichever app opened it. The host copies
+  each file into the app's cache, of the name it had, cut to 255 bytes before its extension, in a folder of its own,
+  and hands the copy's path, which native code opens: what changes the copy does not reach the file. A file reaches the
+  owner of the MIME type it came with, where one owner's types alone list it, before the owner of its name's
+  extension. The app's next process empties the folder as it starts.
+- Windows: the setup program registers each extension for its user under `HKEY_CURRENT_USER\Software\Classes`, so that
+  Open with lists the app, and makes the app the extension's default, as Tauri's and electron-builder's installers do,
+  keeping the default before beside it, which the uninstaller restores; a default its user chose in Windows' settings
+  stays theirs. An update registers its release's types anew. The zip registers none.
+- Linux: the Debian package's desktop entry lists the types' MIME types, and its MIME package,
+  `/usr/share/mime/packages/<name>.xml`, their extensions, under one of the app's for a type that gives none. The tar.gz
+  registers none.
+
+A file starts a Windows or Linux app again, with its path as its argument, so a type of the app's or of an extension's
+keeps a Windows or Linux app to one instance unless `app.singleInstance` is `false`, as a scheme does.
 
 ## Devices
 
@@ -891,7 +993,8 @@ its alias and password stops the build, and so does an alias or a password witho
 
 The image carries a JDK, the Android SDK platform and build tools, Gradle and every Maven artifact the build takes,
 Hermes' `hermes-android` and androidx.webkit among them, each checked against its sha256, so a build needs no JDK or
-Android SDK on the machine and fetches nothing. Gradle's caches and the debug key stay in `~/.crossbind/android/`: the
+Android SDK on the machine and fetches nothing. An app whose extensions name `maven` libraries fetches those, beside the
+image's, and Gradle checks every file it resolves against the image's checksums and its extensions'. Gradle's caches and the debug key stay in `~/.crossbind/android/`: the
 next build reuses them, and an app signed with the same debug key installs over the last. The host builds in the same
 image, as a package's Android libraries do in the android image it adds to, so it needs Docker (`RUNNER=DOCKER_RUN`
 or `DOCKER_EXEC`).

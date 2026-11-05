@@ -1,8 +1,8 @@
 ; A crossbind app's setup program. It installs the app for the user who runs it, with no administrator's approval, in
 ; %LOCALAPPDATA%\Programs, puts it in the Start menu and among the apps Settings lists, and installs the WebView2
 ; Runtime the app runs on when the system has none. crossbind defines NAME, EXE, ID, VERSION, APP and OUTFILE, ICON for
-; an app with an icon, SCHEMES for one with URL schemes, and SIGNER with a signing key. The app's updater runs it with
-; /S /UPDATE /D=<the app's folder>.
+; an app with an icon, SCHEMES for one with URL schemes, FILETYPES for one that opens files, and SIGNER with a signing
+; key. The app's updater runs it with /S /UPDATE /D=<the app's folder>.
 Unicode true
 ManifestDPIAware true
 RequestExecutionLevel user
@@ -60,6 +60,70 @@ SetCompressor /SOLID zlib
     ${EndIf}
   !macroend
 !endif
+
+; With app.fileTypes, crossbind defines FILETYPES, a file whose CROSSBIND_FILE_TYPES macro calls the one it is given on
+; each extension, with its type's name: a file of the extension opens the app, its path as the app's argument. The app
+; becomes the extension's default, as Tauri's and electron-builder's installers make theirs, and keeps the default before
+; beside it, which the uninstaller restores; a default its user chose in Windows' settings stays theirs.
+!ifdef FILETYPES
+  !include "${FILETYPES}"
+
+  !macro RegisterFileType EXT TYPENAME
+    WriteRegStr HKCU "Software\Classes\${ID}.${EXT}" "" "${TYPENAME}"
+    WriteRegStr HKCU "Software\Classes\${ID}.${EXT}\DefaultIcon" "" '"$INSTDIR\${EXE}",0'
+    WriteRegStr HKCU "Software\Classes\${ID}.${EXT}\shell\open\command" "" '"$INSTDIR\${EXE}" "%1"'
+    WriteRegStr HKCU "Software\Classes\.${EXT}\OpenWithProgids" "${ID}.${EXT}" ""
+    ReadRegStr $0 HKCU "Software\Classes\.${EXT}" ""
+    ${If} $0 != "${ID}.${EXT}"
+      WriteRegStr HKCU "Software\Classes\.${EXT}" "${ID}.${EXT}_backup" "$0"
+    ${EndIf}
+    WriteRegStr HKCU "Software\Classes\.${EXT}" "" "${ID}.${EXT}"
+  !macroend
+!endif
+
+; The file types a release of the app registered are the classes of its id and an extension, which no URL scheme's is,
+; whose files open its executable. An update removes them all, then registers its own, and the uninstaller removes them;
+; each gives its extension back the default before it, where the app's is still the default.
+!macro UnregisterFileTypes
+  StrLen $4 "${ID}."
+  StrCpy $3 0
+  ${Do}
+    ClearErrors
+    EnumRegKey $0 HKCU "Software\Classes" $3
+    ${If} ${Errors}
+    ${OrIf} $0 == ""
+      ${Break}
+    ${EndIf}
+    StrCpy $1 $0 $4
+    ClearErrors
+    ReadRegStr $2 HKCU "Software\Classes\$0" "URL Protocol"
+    ${If} $1 == "${ID}."
+    ${AndIf} ${Errors}
+      ReadRegStr $1 HKCU "Software\Classes\$0\shell\open\command" ""
+      ${If} $1 == '"$INSTDIR\${EXE}" "%1"'
+        StrCpy $2 $0 "" $4
+        DeleteRegValue HKCU "Software\Classes\.$2\OpenWithProgids" "$0"
+        ReadRegStr $5 HKCU "Software\Classes\.$2" ""
+        ${If} $5 == $0
+          ReadRegStr $5 HKCU "Software\Classes\.$2" "$0_backup"
+          ${If} $5 == ""
+            DeleteRegValue HKCU "Software\Classes\.$2" ""
+          ${Else}
+            WriteRegStr HKCU "Software\Classes\.$2" "" "$5"
+          ${EndIf}
+        ${EndIf}
+        DeleteRegValue HKCU "Software\Classes\.$2" "$0_backup"
+        ClearErrors
+        DeleteRegKey HKCU "Software\Classes\$0"
+        ; The next class takes the index of the one removed.
+        ${IfNot} ${Errors}
+          ${Continue}
+        ${EndIf}
+      ${EndIf}
+    ${EndIf}
+    IntOp $3 $3 + 1
+  ${Loop}
+!macroend
 
 ; The URL schemes a release of the app registered are those whose link opens its executable. An update removes the ones
 ; this release no longer lists and the uninstaller all of them; a scheme another app took over since stays its own.
@@ -178,6 +242,12 @@ Section
 !ifdef SCHEMES
   !insertmacro CROSSBIND_URL_SCHEMES RegisterScheme
 !endif
+  !insertmacro UnregisterFileTypes
+!ifdef FILETYPES
+  !insertmacro CROSSBIND_FILE_TYPES RegisterFileType
+!endif
+  ; Explorer reads the classes anew.
+  System::Call 'shell32::SHChangeNotify(i 0x08000000, i 0, p 0, p 0)'
 SectionEnd
 
 ; An update opens the app anew once it is installed.
@@ -234,6 +304,8 @@ Section Uninstall
   ${EndIf}
   Delete "$SMPROGRAMS\${NAME}.lnk"
   !insertmacro UnregisterSchemes 0
+  !insertmacro UnregisterFileTypes
+  System::Call 'shell32::SHChangeNotify(i 0x08000000, i 0, p 0, p 0)'
   DeleteRegKey HKCU "${UNINSTALL}"
   Delete "$INSTDIR\uninstall.exe"
   RMDir "$INSTDIR"

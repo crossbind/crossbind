@@ -9,6 +9,8 @@
 #include "host_core.h"
 #include "platform.h"
 
+#include <atomic>
+#include <cstdio>
 #include <stdexcept>
 
 namespace {
@@ -59,6 +61,17 @@ __weak id mainWebView;
 void setMainWindow(void *window, void *webView) {
     mainWindow = (__bridge UIWindow *)window;
     mainWebView = (__bridge id)webView;
+    // The app comes to the foreground and leaves it, which every scene's window shares.
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{
+      NSNotificationCenter *center = NSNotificationCenter.defaultCenter;
+      [center addObserverForName:UIApplicationDidBecomeActiveNotification object:nil queue:nil usingBlock:^(NSNotification *) {
+          crossbind::app::appActivated(true);
+      }];
+      [center addObserverForName:UIApplicationWillResignActiveNotification object:nil queue:nil usingBlock:^(NSNotification *) {
+          crossbind::app::appActivated(false);
+      }];
+    });
 }
 
 void *crossbind::appWindow() { return (__bridge void *)mainWindow; }
@@ -67,7 +80,19 @@ void *crossbind::appWebView() { return (__bridge void *)mainWebView; }
 
 #else
 
+namespace {
+// The app's own quit, app.quit()'s, which asks none of its extensions.
+std::atomic<bool> isQuittingByApp{false};
+}  // namespace
+
 void quitApp() {
+    onMain(^{
+      isQuittingByApp = true;
+      [NSApp terminate:nil];
+    });
+}
+
+void terminateApp() {
     onMain(^{
       [NSApp terminate:nil];
     });
@@ -76,6 +101,19 @@ void quitApp() {
 namespace {
 __weak NSWindow *mainWindow;
 __weak id mainWebView;
+
+// What the app's delegate, webview's, answers of a question AppKit asks the app, which AppKit learns as the delegate is
+// set.
+void answerApp(SEL selector, id block) {
+    id delegate = NSApp.delegate;
+    if (!delegate) return;
+    if ([delegate respondsToSelector:selector]) {
+        std::fprintf(stderr, "crossbind: the app's delegate answers %s itself, which the app's extensions then hear nothing of\n", sel_getName(selector));
+        return;
+    }
+    const char *types = protocol_getMethodDescription(@protocol(NSApplicationDelegate), selector, NO, YES).types;
+    class_addMethod([delegate class], selector, imp_implementationWithBlock(block), types);
+}
 }  // namespace
 
 // A panel asks for its app, not a window of it; showWindow needs the window. The window fills the screen whatever
@@ -108,6 +146,31 @@ void setMainWindow(void *window, void *webView) {
         windowed.styleMask = style;
         windowed.contentMaxSize = most;
     }];
+    [center addObserverForName:NSApplicationDidBecomeActiveNotification object:NSApp queue:nil usingBlock:^(NSNotification *) {
+        crossbind::app::appActivated(true);
+    }];
+    [center addObserverForName:NSApplicationDidResignActiveNotification object:NSApp queue:nil usingBlock:^(NSNotification *) {
+        crossbind::app::appActivated(false);
+    }];
+    // The app's Quit asks its extensions, which app.quit() does not; a click of the Dock icon shows the window again, as
+    // one an app in its tray hid.
+    answerApp(@selector(applicationShouldTerminate:), ^NSApplicationTerminateReply(id, NSApplication *) {
+        return isQuittingByApp || crossbind::app::isQuitAllowed() ? NSTerminateNow : NSTerminateCancel;
+    });
+    answerApp(@selector(applicationShouldHandleReopen:hasVisibleWindows:), ^BOOL(id, NSApplication *, BOOL) {
+        if (mainWindow.miniaturized) [mainWindow deminiaturize:nil];
+        [mainWindow makeKeyAndOrderFront:nil];
+        crossbind::app::reopened();
+        return NO;
+    });
+    id appDelegate = NSApp.delegate;
+    NSApp.delegate = nil;
+    NSApp.delegate = appDelegate;
+    // The app may have become active as it launched, before the window opened: the extensions hear how it is once the
+    // window has.
+    onMain(^{
+      crossbind::app::appActivated(NSApp.active);
+    });
 }
 
 void *crossbind::appWindow() { return (__bridge void *)mainWindow; }

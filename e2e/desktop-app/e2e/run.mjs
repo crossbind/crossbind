@@ -3,8 +3,12 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, writeFi
 import { createServer } from 'node:http';
 import { homedir, tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
+import { pathToFileURL } from 'node:url';
 import config from '../crossbind.config.mjs';
-import { LAUNCH_ARGS, LAUNCH_URL, NOTIFICATION, PHONE_URL, PROBE_SCHEME, PROBE_URLS, TRASHED_FILE, TRAY } from './launch.mjs';
+import {
+    AGAIN_FILE, FIRST_ARGS, FIRST_FILES, LAUNCH_ARGS, LAUNCH_URL, NOTIFICATION, OPENED_FILE, PHONE_FILES, PHONE_LINKS, PHONE_URL, PROBE_SCHEME,
+    PROBE_URLS, TRASHED_FILE, TRAY,
+} from './launch.mjs';
 import { UPDATE_PORT, signUpdate } from './updates.mjs';
 
 // Opens the app `pnpm build` made, whose page runs the conformance suite and logs its summary last, and closes it
@@ -22,6 +26,9 @@ const LAUNCH_AGAIN = /^LAUNCH AGAIN$/m;
 const OPEN_LINK = /^OPEN LINK$/m;
 const FILL_SCREEN = /^FILL SCREEN$/m;
 const CLICK_TRAY = /^CLICK TRAY$/m;
+const REOPEN_APP = /^REOPEN APP$/m;
+const OPEN_FILE = /^OPEN FILE$/m;
+const END_SESSION = /^END SESSION$/m;
 const NO_NOTIFICATION_AREA = /^NO NOTIFICATION AREA: .*\r?\n/m;
 const TRAY_HOST_READY = /^TRAY HOST READY$/m;
 const TRAY_HOST_FAIL = /^TRAY HOST FAIL: (.*)$/m;
@@ -97,6 +104,24 @@ public static class Power {
 }
 '@
 [Power]::Sleep((Get-Process -Id APP_PID).MainWindowHandle)
+`;
+// Asks the window whether its user's session may end, as Windows does with WM_QUERYENDSESSION as its user signs out,
+// and prints its answer, 0 for no. A window that takes 5 s to answer fails.
+const END_SESSION_SCRIPT = `
+$ErrorActionPreference = 'Stop'
+Add-Type -TypeDefinition @'
+using System;
+using System.Runtime.InteropServices;
+public static class Session {
+    [DllImport("user32.dll", SetLastError = true)] static extern IntPtr SendMessageTimeout(IntPtr window, uint message, IntPtr w, IntPtr l, uint flags, uint timeout, out IntPtr result);
+    public static long Ask(IntPtr window) {
+        IntPtr result;
+        if (SendMessageTimeout(window, 0x0011, IntPtr.Zero, IntPtr.Zero, 2, 5000, out result) == IntPtr.Zero) throw new Exception("the window did not take WM_QUERYENDSESSION: error " + Marshal.GetLastWin32Error());
+        return result.ToInt64();
+    }
+}
+'@
+[Session]::Ask((Get-Process -Id APP_PID).MainWindowHandle)
 `;
 // Clicks the tray's icon, an item of its menu and the notification, with the messages Windows sends the window of a tray
 // icon of NOTIFYICON_VERSION_4: the one the menu extension registers as crossbind.menu.tray, with what happened beside
@@ -212,6 +237,8 @@ function missing(file) {
 const PNG_256 = Buffer.from('89504e470d0a1a0a0000000d494844520000010000000100', 'hex');
 
 const has = (file, part) => existsSync(file) && (!part || readFileSync(file).includes(part));
+// What reg query prints of the default of a key of the Windows user's classes.
+const classOf = (key) => spawnSync('reg', ['query', `HKCU\\Software\\Classes\\${key}`, '/ve'], { encoding: 'utf8' }).stdout ?? '';
 
 // The build gave the app the icon app.icon names.
 function checkIcon() {
@@ -247,6 +274,29 @@ function checkUrlSchemes() {
     }
 }
 
+// The build declared app.fileTypes and the probe's where macOS and iOS read them from the app, with an iOS app's domains
+// of app.links in its entitlements, and a Linux app's Debian package in its desktop entry and its MIME package; an
+// Android app is opened on a file and a link of each, and a desktop app launched with files.
+function checkFileTypes() {
+    const app = `${root}/dist/${name}`;
+    const endings = ['cbe2e', 'cbprobe'];
+    const checks = {
+        darwin: () => endings.every((ending) => has(`${app}.app/Contents/Info.plist`, `<string>${ending}</string>`)),
+        ios: () => endings.every((ending) => has(`${app}-ios/Info.plist`, `<string>${ending}</string>`))
+            && has(`${app}-ios/Info.plist`, '<key>LSSupportsOpeningDocumentsInPlace</key>') && has(`${app}-ios/${name}.entitlements`, '<string>applinks:example.com</string>'),
+        linux: () => !process.argv.includes('--installed') || (has(`/usr/share/applications/${name}.desktop`, 'application/x-crossbind-e2e;')
+            && has(`/usr/share/mime/packages/${name}.xml`, '<glob pattern="*.cbprobe"/>')),
+        // The setup program's class of the app's id and each extension opens the app, and is the extension's default.
+        win32: () => !process.argv.includes('--installed') || endings.every((ending) => classOf(`${id}.${ending}\\shell\\open\\command`).includes(`${name}.exe`)
+            && classOf(`.${ending}`).includes(`${id}.${ending}`)),
+    };
+    const check = checks[platform ?? process.platform];
+    if (check && !check()) {
+        console.error(`FAIL: the ${platform ?? process.platform} app does not declare the file types ${endings.join(' and ')} where its system reads them.`);
+        process.exit(1);
+    }
+}
+
 // The build gave the app app.copyright and app.category where the system shows them: a macOS app's Info.plist, a
 // Windows executable's details and, once its Debian package installed it, a Linux app's menu entry.
 function checkMetadata() {
@@ -266,6 +316,16 @@ function checkMetadata() {
 
 // The build ran every installer of the platform, crossbind's and the probe's, which writes a note of what crossbind
 // gave it beside the app.
+// An installed Linux app's package depends on the package of the library the probe links beyond crossbind's sysroot.
+function checkDepends() {
+    if (process.platform !== 'linux' || platform || !process.argv.includes('--installed')) return;
+    const depends = spawnSync('dpkg-query', ['-W', '-f', '${Depends}', name], { encoding: 'utf8' }).stdout ?? '';
+    if (!depends.split(', ').includes('libzstd1')) {
+        console.error(`FAIL: the installed app's package depends on ${JSON.stringify(depends)}, without the probe's libzstd1.`);
+        process.exit(1);
+    }
+}
+
 function checkInstallers() {
     const app = `${root}/dist/${name}`;
     const note = { darwin: `${app}.app.probe.json`, linux: `${app}-linux-${process.arch}.probe.json`, win32: `${app}-win32-${process.arch}.probe.json` }[platform ?? process.platform];
@@ -317,8 +377,15 @@ async function open() {
         close: () => {},
     };
     if (!existsSync(executable)) missing(executable);
-    // The links, as Windows and Linux hand an app one: the page asks the app for its own, and the probe for its.
-    return { child: spawn(executable, [LAUNCH_URL, PROBE_URLS.launch], { env: { ...process.env, ...env } }), close, executable };
+    // The links, as Windows and Linux hand an app one, among the launch's own arguments and its folder, which is not the
+    // one it is launched again from: the page asks the app for its own link and for the arguments, and the probe for its
+    // link.
+    const cwd = realpathSync.native(root);
+    const args = [
+        LAUNCH_URL, ...FIRST_ARGS, FIRST_FILES.page[0], PROBE_URLS.launch, FIRST_FILES.probe, FIRST_FILES.page[1], `${pathToFileURL(join(cwd, FIRST_FILES.url)).href}?x=1#top`,
+        `--cwd=${cwd}`,
+    ];
+    return { child: spawn(executable, args, { cwd, env: { ...process.env, ...env } }), close, executable };
 }
 
 // Where the installer put the app: in the disk image, mounted until the run ends, in /usr/bin, or in the user's
@@ -429,8 +496,10 @@ async function startTrayHost() {
 let out = '';
 checkIcon();
 checkUrlSchemes();
+checkFileTypes();
 checkMetadata();
 checkInstallers();
+checkDepends();
 leaveFileToTrash();
 // A phone's app does not update itself.
 if (!platform) await serveUpdates();
@@ -452,7 +521,8 @@ function launchAgain() {
     isLaunchedAgain = true;
     try {
         const cwd = realpathSync.native(join(root, 'dist'));
-        const again = spawn(executable, [...LAUNCH_ARGS, PROBE_URLS.again, cwd], { cwd, env: { ...process.env, ...env }, stdio: ['ignore', 'ignore', 'pipe'] });
+        const args = [...LAUNCH_ARGS, PROBE_URLS.again, AGAIN_FILE, `--cwd=${cwd}`];
+        const again = spawn(executable, args, { cwd, env: { ...process.env, ...env }, stdio: ['ignore', 'ignore', 'pipe'] });
         const timeout = setTimeout(() => {
             again.kill();
             finish('the app launched again did not leave');
@@ -471,16 +541,67 @@ function launchAgain() {
     }
 }
 
+// The page of a macOS app asks for it once the probe has hidden the window: the app that runs opens again, as a click of
+// its Dock icon opens it.
+let isReopened = false;
+function reopenApp() {
+    if (isReopened || !executable || process.platform !== 'darwin' || !REOPEN_APP.test(out)) return;
+    isReopened = true;
+    const bundle = executable.slice(0, executable.lastIndexOf('.app/') + '.app'.length);
+    const opened = spawnSync('open', ['-a', bundle], { encoding: 'utf8', timeout: ASKED_TIMEOUT_MS });
+    if (opened.status !== 0) finish(`the app cannot be opened again: ${opened.error?.message ?? `${opened.stdout}${opened.stderr}`.trim()}`);
+}
+
+// The page of a macOS app asks for it once it listens: the app that runs opens a file of its type, as Finder opens it.
+let isFileOpened = false;
+function openFile() {
+    if (isFileOpened || !executable || process.platform !== 'darwin' || !OPEN_FILE.test(out)) return;
+    isFileOpened = true;
+    const file = join(root, 'dist', OPENED_FILE);
+    writeFileSync(file, 'crossbind e2e');
+    const bundle = executable.slice(0, executable.lastIndexOf('.app/') + '.app'.length);
+    const opened = spawnSync('open', ['-a', bundle, file], { encoding: 'utf8', timeout: ASKED_TIMEOUT_MS });
+    if (opened.status !== 0) finish(`the app cannot be opened on ${file}: ${opened.error?.message ?? `${opened.stdout}${opened.stderr}`.trim()}`);
+}
+
+// The page of a Windows app asks for it once it listens: Windows asks the window whether the session may end, which the
+// probe refuses, so the window answers no.
+let isSessionAsked = false;
+function askEndSession() {
+    if (isSessionAsked || !executable || process.platform !== 'win32' || !END_SESSION.test(out)) return;
+    isSessionAsked = true;
+    try {
+        const answer = execFileSync('powershell', ['-NoProfile', '-Command', END_SESSION_SCRIPT.replace('APP_PID', String(app.pid))], { encoding: 'utf8', timeout: ASKED_TIMEOUT_MS }).trim();
+        if (answer !== '0') finish(`the window let its user's session end, which the probe refused: it answered ${answer}`);
+    } catch (error) {
+        finish(`the window could not be asked whether the session may end: ${error.message}`);
+    }
+}
+
 // The page of an Android app asks for it once it listens: the system opens the app with a link, as when its user taps
-// one, then with one of the probe's.
+// one, then with an https link of app.links, which reaches the app that names its package, as it would once its site
+// verified it, on a file of its type, as a file manager hands it over, then the probe's of each, its scheme's last.
 let isLinkOpened = false;
 function openLink() {
     if (isLinkOpened || platform !== 'android' || !OPEN_LINK.test(out)) return;
     isLinkOpened = true;
-    for (const url of [PHONE_URL, PROBE_URLS.phone]) {
-        const opened = spawnSync(adb, ['shell', `am start -W -a android.intent.action.VIEW -d '${url}'`], { encoding: 'utf8', timeout: ASKED_TIMEOUT_MS });
-        if (opened.status !== 0) {
-            finish(`the app cannot be opened with ${url}: ${opened.error?.message ?? `${opened.stdout}${opened.stderr}`.trim()}`);
+    const appPackage = `dev.crossbind.${name.replace(/[^A-Za-z0-9.]/g, '_')}`;
+    const pkg = `-p ${appPackage}`;
+    const file = (named, type, provider = 'files') => `-t ${type} -d 'content://dev.crossbind.e2e.probe.${provider}/${named}'`;
+    const opens = [
+        `-d '${PHONE_URL}'`, `${pkg} -d '${PHONE_LINKS.page}'`,
+        // Neither reaches the page: a file: address, which the activity is started with by its name, as its filters take
+        // none, and a file of a provider of the app's own that no other app may read.
+        `-n ${appPackage}/dev.crossbind.app.CrossbindActivity -t application/x-crossbind-e2e -d 'file:///proc/self/cmdline'`,
+        file(PHONE_FILES.refused, 'application/x-crossbind-e2e', 'private'),
+        file(PHONE_FILES.page, 'application/x-crossbind-e2e'),
+        `${pkg} -d '${PHONE_LINKS.probe}'`, file(PHONE_FILES.probe, 'application/x-crossbind-probe'), file(PHONE_FILES.bare, 'application/x-crossbind-probe'),
+        `-d '${PROBE_URLS.phone}'`,
+    ];
+    for (const open of opens) {
+        const opened = spawnSync(adb, ['shell', `am start -W -a android.intent.action.VIEW ${open}`], { encoding: 'utf8', timeout: ASKED_TIMEOUT_MS });
+        if (opened.status !== 0 || /Error:/.test(opened.stdout)) {
+            finish(`the app cannot be opened with ${open}: ${opened.error?.message ?? `${opened.stdout}${opened.stderr}`.trim()}`);
             return;
         }
     }
@@ -639,6 +760,9 @@ const summarized = () => (!platform && CONFORMANCE.test(out) ? awaitRelaunch() :
 app.stdout.on('data', (chunk) => {
     out += chunk;
     launchAgain();
+    reopenApp();
+    openFile();
+    askEndSession();
     openLink();
     fillScreen();
     clickTray();
@@ -648,6 +772,9 @@ app.stdout.on('data', (chunk) => {
 app.stderr.on('data', (chunk) => {
     out += chunk;
     launchAgain();
+    reopenApp();
+    openFile();
+    askEndSession();
     openLink();
     fillScreen();
     clickTray();

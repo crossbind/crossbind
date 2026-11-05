@@ -247,11 +247,22 @@ export default {
       // Keeps a desktop app to one instance for each user, through the host's instance extension: a later launch hands
       // it its arguments, and it brings its window to the front and tells its page (see app.md). false leaves the
       // launches to an extension of the app's that takes them. Default: false, or on Windows and Linux true with a
-      // scheme of app.urlSchemes or of an extension.
+      // scheme or a file type of the app's or of an extension.
     urlSchemes: ['myapp'],
       // The schemes whose links open the app, as myapp://… does: lowercase, and none the web or the system owns. The
       // page gets them from app.launchUrls() and as the event open-url (see app.md); an extension's own schemes reach
       // the extension alone. Default: [], none.
+    fileTypes: [{ name: 'GeoJSON', extensions: ['geojson'], mimeTypes: ['application/geo+json'], role: 'editor', contentTypes: [] }],
+      // The types of files the app opens: the name the system shows their kind by, the extensions of their files,
+      // lowercase and without the dot, the MIME types Android and Linux match them by, 'editor' or 'viewer', and the
+      // type identifiers of a type Apple's platforms know, as CSV's. The page gets the files from app.launchFiles() and
+      // as the event open-files (see app.md), and a desktop app takes each argument of a launch that starts with no -
+      // for a file; an extension's own types reach the extension alone. Default: [], none.
+    links: ['example.com/invite'],
+      // The https links of the app's sites that open it on iOS and Android: a domain, maybe with *. for its subdomains,
+      // then maybe the path they start with. Each site names the app in its apple-app-site-association and
+      // assetlinks.json (see app.md). The page gets them as open-url links do; an extension's own reach the extension
+      // alone. Default: [], none.
     permissions: { camera: 'To scan barcodes', microphone: 'To record voice notes', location: 'To find the nearest store' },
       // The devices the page may use through getUserMedia() and navigator.geolocation, each with the reason for it,
       // which iOS shows its user when it asks (see app.md). Default: {}, none.
@@ -335,6 +346,8 @@ export default {
         includes: ['native/include'],        // its folders of includes
         defines: ['CLIPBOARD_LIMIT=1000'],   // its macros
         urlSchemes: [],                      // schemes whose links its native code gets, beside app.urlSchemes'
+        fileTypes: [],                       // types whose files its native code gets, beside app.fileTypes'
+        links: [],                           // its sites' links its native code gets on iOS and Android, beside app.links'
         licenses: [],                        // the code of others it carries, for the app's license report
         macos:   { sources: ['native/darwin.mm'], frameworks: ['AppKit'], entitlements: {}, plist: {} },
         ios:     { sources: ['native/ios.mm'], frameworks: ['UIKit'], entitlements: {}, plist: {}, privacy: {} },

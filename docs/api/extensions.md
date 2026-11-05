@@ -63,13 +63,15 @@ The extension the function gives:
 
 | Key | Value |
 |---|---|
-| `name` | Lowercase letters and digits, which dashes may join. Each of the extension's function names starts with it and a dot, as `clipboard.readText`, or the app stops as it starts, saying so; and it names its C++ entry, `crossbind_extension_<name>`, with underscores for dashes. An app has one extension of a name, so a distinctive one, as its package's, keeps an extension from another's. Two extensions of one name stop the build, but for one of the host's own: an extension `extensions` lists under the name `dialog`, `instance`, `links`, `menu`, `page-dialogs`, `page-files`, `page-permissions`, `power`, `shell` or `updater` replaces the host's, and the page's calls of its functions, and the app's C++ through `<crossbind/app.h>`, reach the one listed. The host's own `menu` adds `tray` and `notification`'s functions as well, which share its icon on Windows. |
+| `name` | Lowercase letters and digits, which dashes may join. Each of the extension's function names starts with it and a dot, as `clipboard.readText`, or the app stops as it starts, saying so; and it names its C++ entry, `crossbind_extension_<name>`, with underscores for dashes. An app has one extension of a name, so a distinctive one, as its package's, keeps an extension from another's. Two extensions of one name stop the build, but for one of the host's own: an extension `extensions` lists under the name `dialog`, `files`, `instance`, `links`, `menu`, `page-dialogs`, `page-files`, `page-location`, `page-permissions`, `power`, `shell` or `updater` replaces the host's, and the page's calls of its functions, and the app's C++ through `<crossbind/app.h>`, reach the one listed. The host's own `menu` adds `tray` and `notification`'s functions as well, which share its icon on Windows. |
 | `contract` | The version of the contract it is written for, `1`, as [Versions](#versions) says. |
 | `root` | The absolute path of the extension's folder, `import.meta.dirname` in `crossbind.extension.js`. It is under the project's `paths.base`, as all a build sees is. |
 | `app.sources` | The C and C++ sources every platform compiles, relative to `root`. |
 | `app.includes` | The extension's folders its sources' includes are found in, beside the host's `<crossbind/extension.h>` and `<crossbind/app.h>` and the platform's headers, which are all they see of the host. |
 | `app.defines` | The macros its sources compile with, `NAME` or `NAME=value`, a value of letters, digits and `_.+-`. A debug build defines `CROSSBIND_APP_DEV` as well. |
 | `app.urlSchemes` | The schemes whose links the extension's native code gets through `onUrl`, as [`app.urlSchemes`](./app.md#links)' rules take them, on every platform: an extension that declares them has native code on each platform the app builds for. The build tells each system of them beside the app's own, and two owners of one scheme stop the build, naming both. |
+| `app.fileTypes` | The types whose files the extension's native code gets through `onOpenFiles`, as [`app.fileTypes`](./app.md#files)' rules take them, on every platform: an extension that declares them has native code on each platform the app builds for. The build tells each system of them beside the app's own, and two owners of one extension's files stop the build, naming both. |
+| `app.links` | The https links of its sites that the extension's native code gets through `onUrl` on iOS and Android, as [`app.links`](./app.md#the-apps-sites)' rules take them: an extension that declares them has native code there, and on the desktop calls `onUrl` or not. Two owners of one entry stop the build, naming both. |
 | `app.licenses` | The code of others the extension carries, which the app's license report lists beside the extension's package: `[{ name, version, license, file, source, sha256 }]`, its `license` an SPDX expression, which `crossbind licenses --check` checks, and `file` its license's text in the extension's folder; `source`, where the code comes from, and `sha256`, that source's, where it has them. |
 | `app.<platform>` | What one platform adds, by the names crossbind's app commands give them: `macos`, `ios`, `linux`, `windows` or `android`. |
 | `options` | What the extension's native code reads as `registry.options()`, as `crossbind.extension.js` takes it from the app: a JSON value alone, of plain objects, arrays, strings, finite numbers, booleans and null. |
@@ -80,17 +82,20 @@ What a platform adds:
 
 | Key | Platforms | Value |
 |---|---|---|
-| `sources` | all | Its own sources: C `.c` and C++ `.cpp`, `.cc` or `.cxx`, and on `macos` and `ios` Objective-C `.m` and Objective-C++ `.mm` too, which compile with ARC. |
+| `sources` | all | Its own sources: C `.c` and C++ `.cpp`, `.cc` or `.cxx`, and on `macos` and `ios` Objective-C `.m` and Objective-C++ `.mm` too, which compile with ARC, and Swift `.swift`, which swiftc compiles first into the extension's module, its name with underscores for dashes, for the app's deployment targets. Its entry stays C++: Objective-C and Objective-C++ import `<module>-Swift.h`, which declares the module's `@objc` classes and `@_cdecl` functions, and C++ declares such a function itself, as `extern "C" int32_t probe_swift_sum(int32_t, int32_t) noexcept;`. |
 | `includes`, `defines` | all | Its folders of includes and its macros on that platform, beside `app.includes`' and `app.defines`'. |
 | `frameworks` | `macos`, `ios` | The Apple frameworks the app links, as `UniformTypeIdentifiers`. |
-| `libraries` | `linux`, `windows`, `android` | The libraries the app links: Windows' own, as `comctl32`, and on Linux those of crossbind's sysroot. |
+| `libraries` | `linux`, `windows`, `android` | The libraries the app links: Windows' own, as `comctl32`, and on Linux those of crossbind's sysroot and of its `packages`. |
+| `packages` | `linux` | Ubuntu 22.04 packages beyond crossbind's sysroot, each as `"<arch> <file> <sha256>"`, of `amd64` or `arm64`, the SHA-256 the archive's Packages index gives, as `'amd64 libzstd-dev_1.4.8+dfsg-3build1_amd64.deb 9712…'`: crossbind downloads each once from Launchpad, checks it, and unpacks a target's into a sysroot of the extension's own, whose `usr/include` and each folder in it its sources include, and whose libraries the app links against, so a `-dev` package comes with its library's. A target whose architecture it lists none of stops the build. |
+| `depends` | `linux` | What the app's Debian package depends on beside WebKitGTK and GTK, as its `Depends` takes a relation, as `'libzstd1'` or `'libsecret-1-0 (>= 0.20.5)'`: its users' systems load the libraries its `packages` gave at run time. |
+| `maven`, `verification` | `android` | Maven libraries its Java and Kotlin use, each of one version, as `'org.jsoup:jsoup:1.18.1'`, and a file of the checksums of each file Gradle resolves for them, as Gradle's `--write-verification-metadata sha256` writes them into a project of the same dependencies: the app's Gradle project then resolves online, beside the android-app image's cache, and checks every file it resolves against the image's checksums and those of its extensions. A file two give other checksums of, and one that trusts files unchecked, stop the build. Both or neither. |
 | `entitlements` | `macos`, `ios` | The entitlements the app takes: on macOS merged with `app.permissions`', on iOS written into the app's entitlements file. Two owners that give one key lists join them, and other values that differ stop the build. |
 | `plist` | `macos`, `ios` | Info.plist keys, each with text, a number, a boolean, or a list or an object of them, as `{ NSContactsUsageDescription: reason }` with a reason the extension's options take from the app. A key crossbind writes from the app's config, as `CFBundleIdentifier` or a reason of `app.permissions`, the extension gives with the same value alone; two extensions that give one key lists join them, and other values that differ stop the build. |
 | `privacy` | `ios` | Apple's reasons for the required reason API its code calls, as `app.privacy` gives them, as `{ userDefaults: ['CA92.1'] }`: the app's privacy manifest gives them beside `app.privacy`'s. |
 | `permissions` | `android` | The Android permissions the app asks for, by their full names, as `android.permission.READ_CONTACTS`, beside `app.permissions`', each once. Its Java asks its user for one that asks with the activity's `afterAsking()`. |
 | `manifest` | `android` | A manifest of its own, as an `AndroidManifest.xml` is, whose elements the app's takes: those of the manifest, as `<queries>` and `<uses-feature>`, beside the app's, and those of its `<application>`, which has no attributes, as the app's are its own, inside the app's application. Its `<manifest>` has no attributes but the `android` and `tools` prefixes, and it asks for no permission with `<uses-permission>`, which `permissions` lists. It takes `${applicationId}` as Gradle gives it, as for a `<provider>`'s authorities. |
 | `resources` | `android` | A folder of Android resources, as `res/` holds them, which join the app's: one at a path the app has stops the build, naming the extension. Its Java reads them through the app's `dev.crossbind.app.R`. |
-| `java`, `class` | `android` | The folder of the extension's Java, relative to `root`, whose `.java` files alone join the app's sources, so that it may hold the manifest and resources as well, and the class in it the app calls, which implements `dev.crossbind.app.Extension` and has a public constructor without arguments: the app makes one of it, as it starts. Both or neither. |
+| `java`, `class` | `android` | The folder of the extension's Java, relative to `root`, whose `.java` and Kotlin `.kt` files alone join the app's sources, which the Android Gradle plugin compiles together, so that it may hold the manifest and resources as well, and the class in it the app calls, in Java or Kotlin, which implements `dev.crossbind.app.Extension` and has a public constructor without arguments: the app makes one of it, as it starts. Both or neither. |
 
 ## The native side
 
@@ -128,11 +133,16 @@ void crossbind_extension_clipboard(crossbind::Registry &registry) {
 | `Registry::onLaunch(fn)` | Takes a desktop app's launches, as one extension alone does: `fn` gets the `Launch` of this process, its `args`, `cwd` and the `token` that lets a Linux window take the front, on the main thread before the module starts, and hands the app later ones with `launchedAgain()`. `false` ends the launch with exit status 0; what `fn` throws ends it with status 1 and says why, in a message box as well when the app's user opened it. iOS and Android keep an app to one instance themselves and never call it. |
 | `Registry::onWindow(fn)` | Runs `fn` on the main thread as the app's window opens, with `appWindow()` and `appWebView()` set, before its page loads: where the extension starts what it does as the app runs, as the host's `power` starts hearing of the system's sleep. A desktop app opens one window, an iOS app one for each scene that connects; an Android app has none an extension reaches and never calls it. |
 | `Registry::onPage(fn)` | Runs `fn` on the module's thread as each page of the app's starts, the first one and each that replaces the page before it, as a reload does: once the calls of the page before have reached their functions, before the new page's do. It is where the extension lets go of what it kept for the page before, whose calls get no answer from then on, and it may run more than once for one page. |
-| `Registry::onClose(fn)` | Asks `fn` on the main thread as the app's window closes on the desktop, as its user closes it, or on Windows and Linux another program, as `taskkill` without `/F` does: `false` keeps the window open, as an app that stays in its tray, which hides the window itself, and asks no other extension. `app.quit()`, the menu's `quit` item and the system's own quit, as from the macOS Dock, close it without asking, and a phone's app has no window its user closes. |
+| `Registry::onClose(fn)` | Asks `fn` on the main thread as the app's window closes on the desktop, as its user closes it, or on Windows and Linux another program, as `taskkill` without `/F` does: `false` keeps the window open, as an app that stays in its tray, which hides the window itself, and asks no other extension. `app.quit()` closes it without asking, the menu's `quit` item and the system's own quit, as from the macOS Dock, ask `onQuitRequest` instead, and a phone's app has no window its user closes. |
+| `Registry::onActive(fn)` | Runs `fn` on the main thread with whether the app is before its user, once its window has opened, and again as that changes: `true` as it becomes the active app on the desktop or comes to a phone's foreground, `false` as another app takes its place, or a phone's is interrupted, by a call, a system alert or another app's picker, or goes to the background. A Linux app's is its window's focus, which a dialog of its own takes as well. The page hears each change as the events `active` and `inactive`. `fn` returns at once: a modal loop in it lets the next change through first. |
+| `Registry::onQuitRequest(fn)` | Asks `fn` on the main thread as the app's user or its system asks the app to quit, other than by closing its window: macOS's Quit, as ⌘Q, the Dock's and logging out do, the end of a Windows session, but for the Restart Manager's, which closes the app to service the system, and the menu's `quit` item and `app.requestQuit()`, which `<crossbind/app.h>`'s `requestQuit()` asks from native code. `false` keeps the app running, and asks no other extension. `fn` answers at once: one that asks its user returns `false`, asks, and on their answer quits with `quit()`, as `requestQuit()` would ask it again. `app.quit()`, a relaunch and an update quit without asking, and Linux's and a phone's system ask nothing. |
+| `Registry::onReopen(fn)` | Runs `fn` on the main thread as the app's user opens the app that runs again, on macOS: a click of its Dock icon, or `open` with no file or link. The host shows the app's window first, as one an app in its tray hid. |
 | `Registry::onQuit(fn)` | Runs `fn` once as the app quits or fails, on the thread that ends it, before its module stops: never in a launch that `onLaunch` ends, nor in one whose extensions fail to start. A phone's system may end an app without either. |
-| `Registry::onUrl(fn)` | Gets each link of the extension's `app.urlSchemes`, wherever the system hands it over: in a launch's arguments, as macOS's Apple Event, to the iOS scene or in the Android intent. It runs on any thread, which it must not hold up, as the later launches wait for it. The page hears of none of these links. A link is whatever the system hands the app, so `fn` takes it as it would any address from outside. An extension that declares schemes calls it, and one that calls it declares them. |
+| `Registry::onUrl(fn)` | Gets each link of the extension's `app.urlSchemes`, and on iOS and Android of its `app.links`, wherever the system hands it over: in a launch's arguments, as macOS's Apple Event, to the iOS scene or in the Android intent. It runs on any thread, which it must not hold up, as the later launches wait for it. The page hears of none of these links. A link is whatever the system hands the app, so `fn` takes it as it would any address from outside. An extension that declares schemes or links calls it, and one that calls it declares them. |
+| `Registry::onOpenFiles(fn)` | Gets the files of the extension's `app.fileTypes` the system opens the app with, by their absolute paths, wherever it hands them over: in a desktop launch's arguments, as [Files](./app.md#files) tells, as macOS's Apple Event, to the iOS scene, a document where it is, which the app may read and write as long as it runs, or in the Android intent, a `content:` address, a copy in the app's cache, which goes to the owner of the MIME type it came with before the owner of its name's extension. It runs on any thread, which it must not hold up. The page hears of none of these files. An extension that declares file types calls it, and one that calls it declares them. |
 | `Registry::onPageDialog(fn)`, `onPagePermission(fn)`, `onFileInput(fn)` | Take the page's dialogs, what it asks to use and its file inputs, as the extension named `page-dialogs`, `page-permissions` or `page-files` alone does: see [The page's requests](#the-pages-requests). Not on Android, where its Java takes them. |
-| `launchedAgain(launch)` | On the desktop, hands the app a later launch that the extension's `onLaunch` took from another process, from any thread: the window comes to the front, the page hears of the launch as the event `second-instance`, and its links reach the owners of their schemes. |
+| `launchedAgain(launch)` | On the desktop, hands the app a later launch that the extension's `onLaunch` took from another process, from any thread: the window comes to the front, the page hears of the launch as the event `second-instance`, its links reach the owners of their schemes, and in an app that opens files its files the owners of their types. |
+| `launchArguments()` | The `Launch` the app started with, from any thread: its `args` without the links of the app's schemes and, in an app that opens files, its files, which reach their owners, as the page's `app.launchArgs()` gives them. A phone's app starts with none. |
 | `inBackground(call, work)` | Runs `work` on a thread of its own, which answers the call with what `work` returns, or with what it throws. |
 | `invoke(name, options, done)` | Calls one of the app's functions by its name, as the page does, from any thread once the app's extensions have all started: the function runs on the caller's thread, and its call is no page's. `done` gets why the call failed, or its result, once, on the thread that answers: the caller's, before `invoke` returns, for a call that fails at once or that its function answers there. |
 | `onMainThread(fn)` | Runs `fn` on the app's main thread, where the platform's UI is called, after what waits there already, also when the caller is on it. A modal loop `fn` runs, as a dialog's, holds the next until `fn` returns, but on Linux, where that loop runs them. What `fn` throws goes to the app's output, and a call `fn` held fails as it lets go of it. One given as the app quits, as in `onQuit`, may never run. Not on Android. |
@@ -152,8 +162,9 @@ What an extension throws:
 | The entry | Stops the app, saying why and naming the extension, as an app that cannot start does (see [app.md](./app.md#the-window)). |
 | A function | Fails its call. |
 | `onLaunch` | Ends the launch with exit status 1, saying why. |
-| `onWindow`, `onPage`, `onQuit`, `onUrl`, a task of `onMainThread` | Goes to the app's output, and the app goes on. |
+| `onWindow`, `onPage`, `onActive`, `onReopen`, `onQuit`, `onUrl`, `onOpenFiles`, a task of `onMainThread` | Goes to the app's output, and the app goes on. |
 | `onClose` | Goes to the app's output, and the window closes, unless another extension keeps it. |
+| `onQuitRequest` | Goes to the app's output, and the app quits, unless another extension keeps it running. |
 | The owner of a request of the page's | Cancels the request. |
 
 The host's own extensions start first, in the order of their names, then those `extensions` lists, in its order, and
@@ -193,6 +204,10 @@ An extension that hands the page what came before it listened, as `links` does, 
 [app.md](./app.md#events-and-callbacks)). One listed as `links`, in its place, gets the links of `app.urlSchemes`
 through `onUrl`, which it calls, and hands each it lets through to the page with `holdEvent("open-url", {"url": …})`,
 which `app.launchUrls()` and the event `open-url` give.
+
+The files of a type of its own reach an extension as the links of a scheme do, through `onOpenFiles`, and the host's
+`files` holds those of `app.fileTypes` for the page as the event `open-files`, with those no extension's type takes.
+On iOS and Android the https links of an extension's `app.links` reach its `onUrl` beside its schemes'.
 
 ## The page's requests
 
@@ -307,7 +322,8 @@ results [app.md](./app.md#the-apps-functions) gives.
 | `updater` | `updater.check` and `updater.install`, with none | |
 | `menu` | `menu.set` with `{ menus }`, `tray.set` with the page's options, `tray.remove` with none, and `notification.show` with the page's options | The events of [Menus](./app.md#menus) and [Tray and notifications](./app.md#tray-and-notifications) |
 | `power` | | The events `suspend` and `resume` of [Events and callbacks](./app.md#events-and-callbacks) |
-| `links` | `onUrl`, for `app.urlSchemes`' links | The held event `open-url`, `{ url }`, as [Links](./app.md#links) tells |
+| `links` | `onUrl`, for the links of `app.urlSchemes` and a phone's `app.links` | The held event `open-url`, `{ url }`, as [Links](./app.md#links) tells |
+| `files` | `onOpenFiles`, for the files of `app.fileTypes` and of a type no extension owns | The held event `open-files`, `{ paths }`, as [Files](./app.md#files) tells |
 | `instance` | `onLaunch` and `onQuit`, with `launchedAgain()` | |
 | `page-dialogs`, `page-permissions`, `page-files` | The hooks of [the page's requests](#the-pages-requests) | |
 | `page-location` | `onWindow`, where it gives a macOS page its `navigator.geolocation`, and `askPagePermission()` | |
@@ -466,7 +482,7 @@ and its run, and frozen.
 | `name`, `platform`, `isGuided`, `options` | The extension's name, the platform it publishes or makes what installs, whether a terminal answers questions, and a publisher's options. |
 | `project` | `{ root, name, package }`: the project's folder, its name, `general.name`, which names the app's files, and its `package.json`. |
 | `workDir` | A folder of the extension's own under the build's, `.crossbind/build/<name>`, for its files and logs, which the extension makes as it needs it. |
-| `app` | The app as its platform's build makes it: `id`, `name`, `version`, which is package.json's, `appleVersion`, its numbers alone as Apple takes them, `versionCode`, Android's, `buildNumber`, `team`, the Apple team, `encryption`, `updater`, `urlSchemes`, the schemes whose links open it, and `category`, `app.category` as macOS and a Linux menu name it, `{ macos, linux }`, or null. |
+| `app` | The app as its platform's build makes it: `id`, `name`, `version`, which is package.json's, `appleVersion`, its numbers alone as Apple takes them, `versionCode`, Android's, `buildNumber`, `team`, the Apple team, `encryption`, `updater`, `urlSchemes`, the schemes whose links open it, `fileTypes`, the types of files it opens, its extensions' among them, each `{ name, extensions, mimeTypes, role, contentTypes }`, `depends`, what a Linux app's package depends on beside WebKitGTK and GTK, as its extensions' `linux.depends` list it, and `category`, `app.category` as macOS and a Linux menu name it, `{ macos, linux }`, or null. |
 | `config` | `crossbind.config.js`'s export as crossbind read it, with the changes a publisher's `build` made and the `app` options the api wrote since, which each read sees, read-only: none of this machine's settings or of what crossbind fills in. `await config.write('app.id', 'com.example.app')` writes `app.id`, `app.name`, `app.icon`, `app.encryption`, `app.privacy` or `app.updater` into it once the user says yes on a terminal, and fails without one. A value the build would refuse fails with `isInvalid` set, for the publisher to ask again; one the config sets already is the user's to change. |
 | `log(text)`, `warn(text)` | A line of crossbind's output. |
 | `ask(question)`, `askYesNo(question)` | A question on the terminal, which fails without one. |
@@ -508,7 +524,9 @@ platform the extension takes. crossbind's own run in `e2e/desktop-app`, whose pa
 Windows, the iOS Simulator and the Android emulator, and the page's requests through owners of its own in place of
 `page-dialogs` and `page-permissions`. Its probe extension takes every part an extension adds to an app, as its page
 checks: C beside C++, with folders and macros of its own, an Apple app's Info.plist key, an iOS app's privacy reasons,
-an Android app's permission, manifest elements and resources, `invoke()`, `onPage` and the window's `onClose`.
+an Android app's permission, manifest elements and resources, `invoke()`, `onPage`, the window's `onClose`, `onActive`,
+`onQuitRequest`, macOS's `onReopen`, and the files of its type and the https links of its site, which reach it as the
+app's own reach the page.
 `e2e/app-page-requests` keeps the host's own, whose dialogs its run answers as the app's user would, on Linux and
 Windows. The JavaScript is unit-tested as any package's.
 
@@ -521,8 +539,8 @@ The host's core does what every extension stands on, and no extension takes its 
   window of its own;
 - the channel between the page and the native code: `crossbind/app`'s calls by name, their answers, and the events,
   with those held for the page;
-- the module, the app's own code in Hermes on a thread of its own, and `app.paths()`, `app.quit()` and
-  `app.relaunch()`;
+- the module, the app's own code in Hermes on a thread of its own, and `app.paths()`, `app.quit()`,
+  `app.requestQuit()`, `app.relaunch()` and `app.launchArgs()`;
 - a launch's entry points, its arguments, macOS's Apple Events, the iOS scene and the Android intent, from which it
   hands each link to the owner of its scheme;
 - of the page's requests, a clipboard read without its user's gesture, which Windows denies before any extension hears
@@ -532,13 +550,16 @@ The host's core does what every extension stands on, and no extension takes its 
 
 ## Limits
 
-- **Not in the contract yet**, each to come with a design of its own: the app's going to the background and back;
-  universal links, App Links and the files a system opens an app with; iOS's callbacks of push notifications; binary
+- **Not in the contract yet**, each to come with a design of its own: iOS's callbacks of push notifications; binary
   data and streams between the page and native code, which JSON carries today; and extensions of the page's downloads
   and of its links to other origins.
-- **Android:** Java alone, and nothing from Maven, as the app builds offline against the Maven cache of crossbind's
-  android-app image, which pins every artifact: Kotlin and Maven artifacts need that image to change first.
-- **Apple:** Objective-C, Objective-C++, C and C++, with no Swift.
-- **Windows:** Win32 alone, as the toolchain has no WinRT projection.
-- **Linux:** the libraries of crossbind's sysroot alone, 28 pinned Ubuntu 22.04 packages per architecture. The app's
-  Debian package depends on WebKitGTK and GTK alone, so a library beyond theirs has to be on its users' machines.
+- **Android:** Java and Kotlin, which build offline against the Maven cache of crossbind's android-app image, but for
+  an app whose extensions name `maven` libraries, which builds online, checked.
+- **Apple:** C, C++, Objective-C, Objective-C++ and Swift, for the app's deployment targets, macOS 11 and iOS 15.1:
+  Swift that calls a later system's API guards it with `#available`.
+- **Windows:** Win32, and WinRT through mingw-w64's ABI headers in C++, as `windows.ui.notifications.h` and
+  `windows.security.credentials.ui.h`, linking `runtimeobject`: crossbind defines `IReference<boolean>` away, which
+  those headers define twice in C++. The toolchain has no C++/WinRT projection, nor the Store's headers.
+- **Linux:** the libraries of crossbind's sysroot, 28 pinned Ubuntu 22.04 packages per architecture, and those of an
+  extension's `packages`, which its `depends` asks its users' systems for. The tar.gz depends on nothing, so a library
+  beyond WebKitGTK's and GTK's has to be on its users' machines.

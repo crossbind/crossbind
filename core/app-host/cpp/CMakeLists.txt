@@ -21,6 +21,9 @@ set(THIRD_PARTY "${CMAKE_CURRENT_SOURCE_DIR}/../third_party")
 function(crossbind_platform_headers target)
     if(WIN32)
         target_include_directories(${target} SYSTEM PRIVATE "${CROSSBIND_WEBVIEW2_INCLUDE}")
+        # mingw-w64's windows.foundation.h defines IReference<boolean> twice in C++, where boolean is BYTE, which every
+        # WinRT header includes: without it, WinRT's ABI headers compile, as toasts' and Windows Hello's.
+        target_compile_definitions(${target} PRIVATE ____FIReference_1_boolean_INTERFACE_DEFINED__)
     elseif(NOT APPLE AND NOT ANDROID)
         set(GTK_LIB "${CROSSBIND_GTK_SYSROOT}/usr/lib/${CROSSBIND_GTK_MULTIARCH}")
         foreach(dir webkitgtk-4.1 libsoup-3.0 gtk-3.0 at-spi2-atk/2.0 at-spi-2.0 dbus-1.0 gio-unix-2.0 cairo pango-1.0 harfbuzz

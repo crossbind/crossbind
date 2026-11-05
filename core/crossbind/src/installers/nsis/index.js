@@ -17,6 +17,10 @@ const nsisText = (text) => text.replaceAll('$', () => '$$');
 
 // The schemes a Windows app's setup program registers, as a macro that calls the one it is given on each.
 const schemesMacro = (schemes) => ['!macro CROSSBIND_URL_SCHEMES DO', ...schemes.map((scheme) => `  !insertmacro \${DO} "${scheme}"`), '!macroend', ''].join('\n');
+// The extensions of the files it opens, each with its type's name, in a string of the script's, which takes a quote as
+// $\", as a macro that calls the one it is given on each.
+export const fileTypesMacro = (fileTypes) => ['!macro CROSSBIND_FILE_TYPES DO', ...fileTypes.flatMap(({ name, extensions }) => extensions
+    .map((ending) => `  !insertmacro \${DO} "${ending}" "${nsisText(name).replaceAll('"', '$\\"')}"`)), '!macroend', ''].join('\n');
 
 // crossbind's installer of a Windows app: its setup program, which NSIS builds in the windows image; with a key in the
 // environment, the script that signs the app signs it and its uninstaller as NSIS writes them. The name of its shortcut
@@ -38,6 +42,9 @@ export default function nsis() {
                 const schemes = api.app.urlSchemes;
                 const schemesFile = path.join(api.workDir, `${path.basename(app)}.schemes.nsh`);
                 if (schemes.length > 0) fs.writeFileSync(schemesFile, schemesMacro(schemes));
+                const { fileTypes } = api.app;
+                const fileTypesFile = path.join(api.workDir, `${path.basename(app)}.filetypes.nsh`);
+                if (fileTypes.length > 0) fs.writeFileSync(fileTypesFile, fileTypesMacro(fileTypes));
                 const { signer } = api.windows;
                 api.run([
                     'makensis', '-V2', '-INPUTCHARSET', 'UTF8',
@@ -49,6 +56,7 @@ export default function nsis() {
                     `-DOUTFILE=${app}-setup.exe`,
                     ...(icon ? [`-DICON=${iconFile}`] : []),
                     ...(schemes.length > 0 ? [`-DSCHEMES=${schemesFile}`] : []),
+                    ...(fileTypes.length > 0 ? [`-DFILETYPES=${fileTypesFile}`] : []),
                     ...(signer ? [`-DSIGNER=${signer}`] : []),
                     SCRIPT,
                 ], { cwd: path.dirname(app), isSigning: true });

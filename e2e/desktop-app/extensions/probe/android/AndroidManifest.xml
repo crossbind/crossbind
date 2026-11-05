@@ -1,7 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- What the probe adds to the app's manifest: a value its Java reads from the app's application. -->
+<!-- What the probe adds to the app's manifest: a value its Java reads from the app's application, and the providers of
+     the files e2e/run.mjs opens the app on: one any app may read, and one none may, whose files the app takes none of. -->
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <application>
         <meta-data android:name="crossbind.probe" android:value="manifest" />
+        <provider android:name="dev.crossbind.e2e.probe.ProbeFiles" android:authorities="dev.crossbind.e2e.probe.files" android:exported="true" />
+        <provider android:name="dev.crossbind.e2e.probe.ProbePrivateFiles" android:authorities="dev.crossbind.e2e.probe.private" android:exported="false" />
     </application>
 </manifest>

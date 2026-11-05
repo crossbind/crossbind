@@ -8,7 +8,9 @@ import android.content.Intent;
 import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageInfo;
 import android.content.pm.PackageManager;
+import android.content.pm.ProviderInfo;
 import android.content.res.Configuration;
+import android.database.Cursor;
 import android.graphics.Color;
 import android.graphics.Insets;
 import android.net.Uri;
@@ -16,6 +18,7 @@ import android.os.Bundle;
 import android.os.Handler;
 import android.os.HandlerThread;
 import android.os.Looper;
+import android.provider.OpenableColumns;
 import android.util.Log;
 import android.view.Window;
 import android.view.WindowInsets;
@@ -60,6 +63,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
@@ -151,6 +156,13 @@ public class CrossbindActivity extends Activity {
     private static final int PERMISSIONS_REQUEST = 1;
     // Where the native code's calls of an extension's Java run, and the page's requests are answered.
     static final Handler MAIN = new Handler(Looper.getMainLooper());
+    // Where the files the system opens the app with are copied, one at a time, away from the UI and the page's calls.
+    private static final ExecutorService COPIES = Executors.newSingleThreadExecutor();
+    // Whether the process has had COPIES remove the copies of the process before, ahead of its own, on the main thread.
+    private static boolean isOpenedCleared = false;
+    // A copy's name, as Android's file systems take it: 255 bytes at most, which keep an extension of 16 characters.
+    private static final int MAX_NAME_BYTES = 255;
+    private static final int MAX_ENDING = 16;
     // What a page asks for, by the names page-permissions takes, and the Android permission behind each device.
     private static final Map<String, String> PAGE_KINDS = Map.of(
             PermissionRequest.RESOURCE_VIDEO_CAPTURE, "camera",
@@ -233,6 +245,13 @@ public class CrossbindActivity extends Activity {
 
     // A link of app.urlSchemes the system opened the app with, in UTF-8.
     private static native void nativeOpenUrl(byte[] url);
+
+    // The activity came to the foreground, or left it, which the app's extensions and its page hear of.
+    private static native void nativeActive(boolean isActive);
+
+    // Files the system opened the app with, by their copies' paths in UTF-8, with the MIME type each came with, empty for
+    // none, which names its owner before its name does.
+    private static native void nativeOpenFiles(byte[][] paths, byte[][] mimeTypes);
 
     // The answer of an extension's Java to its native code: the result's JSON, or why the call failed, in UTF-8.
     static native void nativeExtensionAnswered(int call, boolean ok, byte[] text);
@@ -363,6 +382,11 @@ public class CrossbindActivity extends Activity {
         // before this one, whose page it forgets first; an activity the system restores, or Recents reopens, brings its
         // old link, which the page had.
         nativeNewPage();
+        if (!isOpenedCleared) {
+            isOpenedCleared = true;
+            File opened = new File(getCacheDir(), "opened");
+            COPIES.execute(() -> deleteTree(opened));
+        }
         if (state == null && (getIntent().getFlags() & Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY) == 0) openUrlOf(getIntent());
         tellExtensions((extension) -> extension.onCreate(this));
     }
@@ -380,22 +404,82 @@ public class CrossbindActivity extends Activity {
     private void openUrlOf(Intent intent) {
         // An activity that could not start the module, for want of a WebView, takes no link.
         if (token == null || !Intent.ACTION_VIEW.equals(intent.getAction()) || intent.getData() == null) return;
-        // Any app may start the activity with any link: the app hears of those of its schemes alone, which the
-        // activity's intent filter matches.
-        Intent own = new Intent(Intent.ACTION_VIEW, intent.getData()).addCategory(Intent.CATEGORY_BROWSABLE).setPackage(getPackageName());
+        // Any app may start the activity with any link or file: the app hears of those its intent filters match alone,
+        // the links of its schemes and sites and the files of its types, which come as content: addresses.
+        Uri data = intent.getData();
+        String type = intent.resolveType(this);
+        Intent own = new Intent(Intent.ACTION_VIEW).setDataAndType(data, type).addCategory(Intent.CATEGORY_BROWSABLE).setPackage(getPackageName());
         if (getPackageManager().queryIntentActivities(own, 0).isEmpty()) return;
-        nativeOpenUrl(intent.getData().toString().getBytes(StandardCharsets.UTF_8));
+        if (!"content".equals(data.getScheme())) nativeOpenUrl(data.toString().getBytes(StandardCharsets.UTF_8));
+        else if (isOthersContent(data)) copyOpened(data, type == null ? "" : type);
+    }
+
+    // Whether other apps may read what a content: address names: it names no file of a provider of the app's own that
+    // they cannot, which the app would copy for whichever app opened it.
+    private boolean isOthersContent(Uri uri) {
+        ProviderInfo provider = getPackageManager().resolveContentProvider(String.valueOf(uri.getAuthority()), 0);
+        if (provider == null || !getPackageName().equals(provider.packageName) || (provider.exported && provider.readPermission == null)) return true;
+        Log.w(TAG, "crossbind: the app was opened on a file of a provider of its own that other apps cannot read, " + uri);
+        return false;
+    }
+
+    // A file the system opened the app with, which native code opens by a path alone: a copy in the app's cache, in a
+    // folder of its own, of the name the file had. The app's next process empties the folder.
+    private void copyOpened(Uri uri, String mimeType) {
+        COPIES.execute(() -> {
+            File folder = new File(new File(getCacheDir(), "opened"), Long.toString(System.nanoTime()));
+            File copy = new File(folder, openedName(uri));
+            try (InputStream in = getContentResolver().openInputStream(uri)) {
+                if (in == null) throw new IOException("its provider gives no stream");
+                if (!folder.mkdirs()) throw new IOException("cannot make " + folder);
+                Files.copy(in, copy.toPath());
+                nativeOpenFiles(new byte[][] {copy.getPath().getBytes(StandardCharsets.UTF_8)}, new byte[][] {mimeType.getBytes(StandardCharsets.UTF_8)});
+            } catch (IOException | RuntimeException error) {
+                Log.e(TAG, "crossbind: the app cannot copy the file it was opened with, " + uri, error);
+                // A copy cut short is no file the app was opened with.
+                deleteTree(folder);
+            }
+        });
+    }
+
+    // The name of a file, as its provider shows it, made one a folder takes: without a slash, neither . nor .., and cut
+    // to fit before its extension.
+    private String openedName(Uri uri) {
+        String name = null;
+        try (Cursor cursor = getContentResolver().query(uri, new String[] {OpenableColumns.DISPLAY_NAME}, null, null, null)) {
+            if (cursor != null && cursor.moveToFirst()) name = cursor.getString(0);
+        } catch (RuntimeException error) {
+            Log.w(TAG, "crossbind: the provider of " + uri + " gives no name", error);
+        }
+        if (name == null) name = uri.getLastPathSegment();
+        name = name == null ? "" : name.replace('/', '_').replace('\0', '_');
+        if (name.isEmpty() || name.equals(".") || name.equals("..")) return "file";
+        int dot = name.lastIndexOf('.');
+        String ending = dot > 0 && name.length() - dot <= MAX_ENDING ? name.substring(dot) : "";
+        String stem = name.substring(0, name.length() - ending.length());
+        while (!stem.isEmpty() && (stem + ending).getBytes(StandardCharsets.UTF_8).length > MAX_NAME_BYTES) {
+            stem = stem.substring(0, stem.offsetByCodePoints(stem.length(), -1));
+        }
+        return stem + ending;
+    }
+
+    private static void deleteTree(File file) {
+        File[] children = file.listFiles();
+        if (children != null) for (File child : children) deleteTree(child);
+        if (file.exists() && !file.delete()) Log.w(TAG, "crossbind: cannot delete " + file);
     }
 
     @Override
     protected void onResume() {
         super.onResume();
+        if (token != null) nativeActive(true);
         tellExtensions((extension) -> extension.onResume(this));
     }
 
     @Override
     protected void onPause() {
         super.onPause();
+        if (token != null) nativeActive(false);
         tellExtensions((extension) -> extension.onPause(this));
     }
 

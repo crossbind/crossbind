@@ -13,7 +13,8 @@ import { readAppIcon, windowsIcon } from '../utils/appIcon.js';
 import {
     PRIVACY_CATEGORIES, appCategory, appDisplayName, appEncryption, appId, appPrivacy, appUpdater, appUrlSchemes,
 } from '../utils/appOptions.js';
-import { isJsonValue } from '../utils/appExtensions.js';
+import { isJsonValue, linuxDepends } from '../utils/appExtensions.js';
+import { fileTypeOwners } from '../utils/appLaunches.js';
 import { unreasonedImports } from '../utils/requiredReasonApis.js';
 import { resolveHermesDsym } from '../utils/hermes.js';
 import { imageRoleFor } from '../utils/pullDockerImage.js';
@@ -249,6 +250,9 @@ export default function extensionApi(name, {
                 return updater && Object.freeze({ url: updater.url, publicKey: updater.publicKey.toString('base64'), version: updater.version });
             },
             get urlSchemes() { return Object.freeze(appUrlSchemes(state.config)); },
+            get fileTypes() { return Object.freeze(fileTypeOwners(state.config).map(({ extension, ...type }) => Object.freeze(type))); },
+            // The Debian packages a Linux app needs beside WebKitGTK and GTK, as its extensions' Linux parts list them.
+            get depends() { return Object.freeze(linuxDepends(state.config.extensions ?? [])); },
             get category() {
                 const category = appCategory(state.config);
                 return category && Object.freeze({ macos: category.darwin, linux: category.linux });

@@ -46,8 +46,8 @@ void registerSchemeHandler(void *target, const char *scheme, SchemeHandler handl
 // The webview loads only these origins, in any frame; a link to another opens in the default browser. newPage runs
 // when the main frame commits another document.
 void restrictNavigation(void *webView, std::vector<std::string> origins, std::function<void()> newPage);
-// Runs when the app is quit other than by closing its window (the Dock on macOS, the system on iOS), before it would
-// exit.
+// Runs when the app is quit other than by closing its window (the Dock on macOS, the system on iOS, the end of the
+// session on Windows), before it would exit.
 void onQuit(std::function<void()> quit);
 // The page's alert(), confirm() and prompt(), and its file inputs where the webview lets the host take them, go to the
 // extensions page-dialogs and page-files; without one, the webview shows its own.
@@ -68,6 +68,13 @@ bool isMainThread();
 namespace crossbind::app {
 // Whether the window closes as its user closes it: true unless an extension's onClose keeps it. On the main thread.
 bool isCloseAllowed();
+// Whether the app quits as its user or its system asks it to: true unless an extension's onQuitRequest keeps it
+// running. On the main thread.
+bool isQuitAllowed();
+// Tells the extensions and the page that the app became active or inactive, once for each change. On the main thread.
+void appActivated(bool isActive);
+// Runs the extensions' onReopen, on the main thread, once the window shows again.
+void reopened();
 }  // namespace crossbind::app
 // Runs a task of the main thread's, whose loop never sees what it throws: the failure is told, and a call the task held
 // fails as the task lets go of it.
@@ -94,8 +101,12 @@ void fillScreen();
 // macOS sends the standard shortcuts, ⌘C and ⌘Q among them, through the menu bar, so a window without the app, Edit,
 // View and Window menus never sees them.
 void installAppMenu();
-// Hears of the links of the app's schemes macOS opens it with, the launch's own as well, which come as Apple Events.
+// Hears of the links of the app's schemes and the files macOS opens it with, the launch's own as well, which come as
+// Apple Events.
 void listenForUrls();
+// Asks a macOS app to quit as its user's Quit does, through AppKit, whose question of the app's delegate asks its
+// extensions. On any thread.
+void terminateApp();
 // The page of the webview made from this configuration keeps running while its window is hidden.
 void keepRunningWhenHidden(void *configuration);
 // Shows an iOS view controller, such as an alert, over whatever the window shows on top; false when it has nothing to
