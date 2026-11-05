@@ -1,0 +1,64 @@
+name: test pack install
+on:
+    workflow_dispatch:
+    push:
+        branches:
+            - main
+        paths:
+            - core/crossbind/**
+            - core/app-host/**
+            - core/embind-jsi/**
+            - core/embind-rust/**
+            - core/store-kit/**
+            - extensions/**
+            - plugins/vite/**
+            - plugins/rollup/**
+            - scripts/e2e-pack-install.mjs
+            - .nvmrc
+            - .github/workflows/test-pack-install.yml
+            - '!**/*.md'
+    pull_request:
+        branches:
+            - main
+        paths:
+            - core/crossbind/**
+            - core/app-host/**
+            - core/embind-jsi/**
+            - core/embind-rust/**
+            - core/store-kit/**
+            - extensions/**
+            - plugins/vite/**
+            - plugins/rollup/**
+            - scripts/e2e-pack-install.mjs
+            - .nvmrc
+            - .github/workflows/test-pack-install.yml
+            - '!**/*.md'
+
+permissions:
+    contents: read
+concurrency:
+    # A new push to a pull request supersedes its running checks; a main commit keeps its own.
+    group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
+    cancel-in-progress: true
+jobs:
+    # Workspace links hid a link failure every plain app had, which packing and installing as a registry would found at once.
+    pack-install:
+        strategy:
+            fail-fast: false
+            matrix:
+                runner: [macos-latest, ubuntu-latest]
+        runs-on: ${{ matrix.runner }}
+        timeout-minutes: 60
+        steps:
+            - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+            - name: Install pnpm
+              uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+            - name: Use Node.js
+              uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+              with:
+                  node-version-file: .nvmrc
+                  cache: 'pnpm'
+            - name: Install dependencies
+              run: pnpm install --frozen-lockfile
+            - name: Install as an app's developer does, with pnpm and with npm, and check what an app gets
+              run: node scripts/e2e-pack-install.mjs

@@ -60,6 +60,7 @@
         "e2e:node-packages": "pnpm -r --workspace-concurrency=1 --filter='@crossbind/port-*-standalone-napi' e2e && node scripts/e2e-node-packages-together.mjs",
         "e2e": "pnpm run e2e:dev && pnpm run e2e:prod && pnpm run e2e:mobile",
         "e2e:templates": "node scripts/e2e-templates.js",
+        "e2e:pack-install": "node scripts/e2e-pack-install.mjs",
         "publish:examples": "node scripts/release/refuse-legacy-npm-publish.mjs",
         "publish:plugins": "node scripts/release/refuse-legacy-npm-publish.mjs",
         "publish:core": "node scripts/release/refuse-direct-crossbind-publish.mjs",
