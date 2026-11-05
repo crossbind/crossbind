@@ -96,3 +96,5 @@ now.
 - `examples/desktop-app/` — the template (`npm create crossbind@beta -- <dir> Desktop App`).
 - `e2e/desktop-app/` — the conformance suite inside an app.
 - `e2e/app-page-requests/` — the host's own page dialogs, answered as the app's user would on Linux and Windows.
+- `e2e/app-bare/` — an app with none of crossbind's own extensions, built on every platform.
+- `scripts/e2e-pack-install.mjs` — an app installed from packed tarballs with pnpm and npm, as a registry would give them.

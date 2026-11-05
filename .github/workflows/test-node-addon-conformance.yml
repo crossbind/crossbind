@@ -16,6 +16,7 @@ on:
             - e2e/backend-nodejs-native/**
             - e2e/desktop-app/**
             - e2e/app-page-requests/**
+            - e2e/app-bare/**
             - e2e/conformance/**
             - e2e/conformance-rust/**
             - .nvmrc
@@ -36,6 +37,7 @@ on:
             - e2e/backend-nodejs-native/**
             - e2e/desktop-app/**
             - e2e/app-page-requests/**
+            - e2e/app-bare/**
             - e2e/conformance/**
             - e2e/conformance-rust/**
             - .nvmrc
@@ -177,6 +179,8 @@ jobs:
             # The e2e app above has app.updater, whose extension links what an app without it would lack.
             - name: Build an app without the host's optional extensions
               run: pnpm --filter=@crossbind/e2e-app-page-requests run build
+            - name: Build an app with none of crossbind's own extensions
+              run: pnpm --filter=@crossbind/e2e-app-bare run build
     app-ios:
         # The iOS app builds on a macOS runner from the addon's bridges as the macOS app does, its Rust for both
         # iOS SDKs, and runs in the Simulator.
@@ -233,6 +237,10 @@ jobs:
               run: |
                   pnpm --filter=@crossbind/e2e-desktop-app run build
                   pnpm --filter=@crossbind/e2e-desktop-app run e2e:prod
+            - name: Build and link an app with none of crossbind's own extensions
+              run: |
+                  pnpm --filter=@crossbind/e2e-app-bare run build
+                  pnpm --filter=@crossbind/e2e-app-bare run link:ios
     app-linux:
         # The app builds in crossbind's linux image, as the addons do, against the Hermes and the WebKitGTK headers and
         # libraries the image carries, and runs on the runner's own WebKitGTK.
@@ -254,6 +262,8 @@ jobs:
             # The app's own page-dialogs and page-permissions take the place of the host's, which this app keeps.
             - name: Build e2e/app-page-requests
               run: pnpm --filter=@crossbind/e2e-app-page-requests run build
+            - name: Build an app with none of crossbind's own extensions
+              run: pnpm --filter=@crossbind/e2e-app-bare run build
             - name: Install the app's Debian package, whose dependencies bring the WebKitGTK it runs on
               # The run starts a session bus of its own, on which e2e/tray-host.py plays a tray and a notification
               # server.
@@ -305,6 +315,8 @@ jobs:
             # The app's own page-dialogs and page-permissions take the place of the host's, which this app keeps.
             - name: Build e2e/app-page-requests
               run: pnpm --filter=@crossbind/e2e-app-page-requests run build
+            - name: Build an app with none of crossbind's own extensions
+              run: pnpm --filter=@crossbind/e2e-app-bare run build
             - name: Check that the app loads the system DLLs it imports from System32 alone
               # A file of their name in the app's folder, as in one it was downloaded to, would otherwise run inside it.
               run: |
@@ -515,6 +527,8 @@ jobs:
               run: pnpm install
             - name: Build the app
               run: pnpm --filter=@crossbind/e2e-desktop-app run build
+            - name: Build an app with none of crossbind's own extensions
+              run: pnpm --filter=@crossbind/e2e-app-bare run build
             - name: Enable KVM
               run: |
                   echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules

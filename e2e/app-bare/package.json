@@ -1,0 +1,18 @@
+{
+    "name": "@crossbind/e2e-app-bare",
+    "version": "0.0.0",
+    "private": true,
+    "description": "crossbind - an app with none of crossbind's own extensions, whose build proves the host needs nothing they bring.",
+    "license": "MIT",
+    "type": "module",
+    "scripts": {
+        "build": "crossbind app build",
+        "link:ios": "xcodebuild -project dist/crossbind-e2e-app-bare-ios/crossbind-e2e-app-bare.xcodeproj -sdk iphonesimulator -configuration Release CODE_SIGNING_ALLOWED=NO ARCHS=arm64 ONLY_ACTIVE_ARCH=NO build"
+    },
+    "devDependencies": {
+        "@crossbind/core-app-host": "workspace:^",
+        "@crossbind/plugin-vite": "workspace:^",
+        "crossbind": "workspace:^",
+        "vite": "^8.2.1"
+    }
+}
