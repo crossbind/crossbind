@@ -1,8 +1,30 @@
+import extensionsCatalog from '../../../generated/extensions-catalog.js';
 import { CREATE_COMMAND, REPO_URL } from '../../data.js';
 import { RELEASE } from '../../release.js';
 
 const suffix = RELEASE.distTagSuffix;
 const REFERENCE = `${REPO_URL}/blob/main/docs/api/app.md`;
+const NPM_KEYWORD_SEARCH = 'https://www.npmjs.com/search?q=keywords%3Acrossbind-extension';
+
+// crossbind's own extensions npm serves on the site's channel, as scripts/site/build-extensions-catalog.mjs finds them,
+// and where the others are.
+export const extensionBlocks = (extensions) => {
+    const published = extensions.filter((extension) => extension.version);
+    return [
+        { type: 'h2', id: 'extensions', text: 'Extensions' },
+        {
+            type: 'p',
+            text: "An extension gives the page more of the app's functions, from a package of its own: `crossbind add <package>` installs one with the project's package manager and lists it in `crossbind.config.js`, and the app's host builds its native code in.",
+        },
+        ...(published.length > 0
+            ? [{ type: 'ul', items: published.map((extension) => `[${extension.name}](https://www.npmjs.com/package/${extension.name}): ${extension.summary}`) }]
+            : []),
+        {
+            type: 'p',
+            text: `Extensions others publish carry the npm keyword [crossbind-extension](${NPM_KEYWORD_SEARCH}), and crossbind has not reviewed them. \`${CREATE_COMMAND} -- my-extension Extension\` starts one of your own, and [extensions.md](${REPO_URL}/blob/main/docs/api/extensions.md) is the contract it is written to.`,
+        },
+    ];
+};
 
 export default {
     slug: 'apps',
@@ -94,6 +116,7 @@ const { data, cache, logs } = await app.paths();`,
             ],
         },
         { type: 'p', text: `The [reference](${REFERENCE}#the-apps-functions) lists which platform has which.` },
+        ...extensionBlocks(extensionsCatalog.extensions),
 
         { type: 'h2', id: 'config', text: 'Configuration' },
         { type: 'p', text: 'The `app` key of `crossbind.config.js` describes the app. Every key is optional:' },

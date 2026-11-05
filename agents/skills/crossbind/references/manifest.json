@@ -12,14 +12,19 @@
       "sha256": "78c331f357b4987201f4e68c714428999325da9a4a67febd096a5ab4a5fe7770"
     },
     {
+      "source": "docs/playbooks/new-extension.md",
+      "output": "extension.md",
+      "sha256": "6479234038c3eb53e6484237fc2aa53bbb60c793fa9c4687256a09456e4e2ab3"
+    },
+    {
       "source": "docs/api/README.md",
       "output": "api/README.md",
-      "sha256": "79200abf9964742fd8d7cadc230fbcb710e969b024c8eca423ff0427aa244701"
+      "sha256": "d7a3b722ae7a242a930083cdf23b6004b5559989a5f601356f2be0714a3eea81"
     },
     {
       "source": "docs/api/app.md",
       "output": "api/app.md",
-      "sha256": "8762db2f69f553a994ec39f929aa64deb65db99e1e38f240d26b2fd2c0c9e189"
+      "sha256": "16eaf38b6d38dec049857cb8ff23b3875737b04fbf1e622876dd2c2b3c0ea6c8"
     },
     {
       "source": "docs/api/build-state.md",
@@ -45,6 +50,11 @@
       "source": "docs/api/crossbind-config.md",
       "output": "api/crossbind-config.md",
       "sha256": "4d0f9bd0dabbf6da4a59667a86bd20a42efdb578e0691802a3366b01394f3374"
+    },
+    {
+      "source": "docs/api/extensions.md",
+      "output": "api/extensions.md",
+      "sha256": "4e297fe3203a6775679f32ba0a28e6a93fa3fd79a740e054a64ee08ff5347661"
     },
     {
       "source": "docs/api/filesystem.md",

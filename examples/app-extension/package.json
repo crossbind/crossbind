@@ -1,0 +1,34 @@
+{
+    "name": "@crossbind/example-app-extension",
+    "private": true,
+    "version": "0.0.0",
+    "description": "crossbind app extension: a function of the app's native code, which its page calls",
+    "license": "MIT",
+    "type": "module",
+    "exports": {
+        ".": {
+            "types": "./index.d.ts",
+            "default": "./index.js"
+        },
+        "./crossbind.extension.js": "./crossbind.extension.js"
+    },
+    "files": [
+        "crossbind.extension.js",
+        "index.d.ts",
+        "index.js",
+        "native"
+    ],
+    "crossbind": {
+        "extension": "./crossbind.extension.js"
+    },
+    "peerDependencies": {
+        "crossbind": "workspace:^"
+    },
+    "devDependencies": {
+        "crossbind": "workspace:^"
+    },
+    "keywords": [
+        "crossbind-extension",
+        "app"
+    ]
+}

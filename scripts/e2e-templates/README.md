@@ -41,6 +41,7 @@ Start with `node scripts/e2e-templates.js --list` to see what your machine can r
 | desktop (electron) | `crossbind build -p host -e node` (Docker; macOS addons on a Mac) | `e2e:prod` packages the app with electron-builder and opens it with Playwright | Docker, a display (Linux: `DISPLAY`, e.g. `xvfb-run`) |
 | lib-prebuilt | `crossbind build` (Docker) | none | Docker |
 | lib-source, lib-cmake | none | none | — (scaffold+install only) |
+| extension (app-extension) | none | none | — (scaffold+install only) |
 | mobile-reactnative-cli | via `e2e:*` | Maestro `e2e:ios` / `e2e:android` | iOS sim or Android emulator + Maestro |
 | mobile-reactnative-expo | — | none → `expo prebuild` smoke | node |
 

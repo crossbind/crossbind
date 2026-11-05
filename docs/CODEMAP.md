@@ -150,6 +150,7 @@ Index + template: [`docs/adr/README.md`](./adr/README.md).
 | Aggregate `env`/`data`/`cmake` per target | `src/actions/getData.js` |
 | Target matrix + filtering | `src/actions/target.js` |
 | App extensions: the host's own and `extensions` in crossbind.config.js | `src/utils/appExtensions.js` |
+| `crossbind add`: an extension's package installed and listed in crossbind.config.js | `src/actions/addExtension.js`, `src/utils/configWriter.js` |
 
 ### Configuration + state
 
@@ -289,6 +290,7 @@ To add a new `ports/<X>`: see `docs/playbooks/new-port.md` (uses `ports/zlib` as
 | `examples/desktop-electron` | Electron app with its own addon in the main process, packaged with electron-builder (`dist/` stays outside the asar archive); takes the `backend-nodejs-native` bridge snapshot in the macOS CI job |
 | `examples/desktop-app` | macOS, Linux, Windows, iOS and Android app on crossbind's own host (`target.runtimeEnv: 'app'`): Vite page in the system webview, the C++ in Hermes; the `Desktop App` template; takes a bridge snapshot in the macOS CI job and builds in the Linux ones |
 | `examples/native-executable` | Native executable from `main()` (`-e native`); the `Native Executable` template |
+| `examples/app-extension` | App extension package: one C++ function every platform compiles and the page's module; the `Extension` template, which names it after the project |
 | `examples/cloud-cloudflare-worker` | Cloudflare Worker / edge |
 | `examples/mobile-reactnative-cli` | RN-cli (canonical mobile reference; CI uses `ci/crossbind-snapshot/`) |
 | `examples/mobile-reactnative-expo` | RN with Expo |

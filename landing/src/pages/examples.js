@@ -33,7 +33,9 @@ export const APP_COUNT = LIVE_APPS.length;
 export const LIBRARY_COUNT = new Set(LIVE_APPS.map((app) => app.family)).size;
 
 // create-crossbind's groups, named as a reader looks for them.
-const GROUP_LABELS = [['Web', 'Web'], ['Backend', 'Node.js'], ['Mobile', 'Mobile'], ['Desktop', 'Desktop'], ['Cloud', 'Edge'], ['Native', 'Executable'], ['Library', 'Library']];
+const GROUP_LABELS = [['Web', 'Web'], ['Backend', 'Node.js'], ['Mobile', 'Mobile'], ['Desktop', 'Desktop'], ['Cloud', 'Edge'], ['Native', 'Executable'], ['Library', 'Library'], ['Extension', 'Extension']];
+// The folder a command scaffolds, whose name a library's and an extension's package take.
+const TEMPLATE_DIRS = { lib: 'my-lib', extension: 'my-extension' };
 const CREATOR_REF = `create-crossbind@${RELEASE.companions['create-crossbind'].version}`;
 const quoted = (word) => (/\s/.test(word) ? `"${word}"` : word);
 
@@ -48,7 +50,7 @@ export const TEMPLATE_GROUPS = GROUP_LABELS.map(([group, label]) => ({
             key: template.key,
             label: name,
             title: name === label ? name : `${label} · ${name}`,
-            command: `npm create crossbind${RELEASE.distTagSuffix} -- ${template.kind === 'lib' ? 'my-lib' : 'my-app'} ${[template.group, template.framework, template.label].filter(Boolean).map(quoted).join(' ')}`,
+            command: `npm create crossbind${RELEASE.distTagSuffix} -- ${TEMPLATE_DIRS[template.kind] ?? 'my-app'} ${[template.group, template.framework, template.label].filter(Boolean).map(quoted).join(' ')}`,
             source: `${REPO_URL}/tree/${CREATOR_REF}/${template.source}`,
         };
     }),
@@ -63,7 +65,7 @@ export default {
     kind: 'examples',
     slug: 'examples',
     title: 'Examples',
-    description: `${APP_COUNT} apps on ${LIBRARY_COUNT} open-source C and C++ libraries running in the browser, each with its code, and a start for every create-crossbind template: web, Node.js, mobile, desktop, edge, executables and libraries.`,
+    description: `${APP_COUNT} apps on ${LIBRARY_COUNT} open-source C and C++ libraries running in the browser, each with its code, and a start for every create-crossbind template: web, Node.js, mobile, desktop, edge, executables, libraries and app extensions.`,
     lede,
     section: 'Examples',
     path: '/examples',

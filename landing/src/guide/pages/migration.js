@@ -126,7 +126,7 @@ export default {
         },
         {
             type: 'p',
-            text: "Everything else in the file is new and optional: `target.runtime` for multithreaded wasm, `cargoDependencies` and `export.type: 'cargo'` for Rust, `dts` for generated types, `extensions` and `functions` for build hooks. The full list is in [Configuration](/guide/configuration/).",
+            text: "Everything else in the file is new and optional: `target.runtime` for multithreaded wasm, `cargoDependencies` and `export.type: 'cargo'` for Rust, `dts` for generated types, `extensions` for an app's native extensions, `functions.isEnabled` to override which build targets are enabled. The full list is in [Configuration](/guide/configuration/).",
         },
 
         { type: 'h2', id: 'bundler', text: '4. Swap the bundler plugin' },

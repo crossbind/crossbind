@@ -973,6 +973,12 @@ importers:
         specifier: ^8.3.3
         version: 8.3.5(@types/node@24.19.1)(esbuild@0.28.2)(jiti@2.7.0)(terser@5.37.0)(yaml@2.9.0)
 
+  examples/app-extension:
+    devDependencies:
+      crossbind:
+        specifier: workspace:^
+        version: link:../../core/crossbind
+
   examples/backend-nodejs-native:
     dependencies:
       '@crossbind/example-lib-prebuilt-matrix':

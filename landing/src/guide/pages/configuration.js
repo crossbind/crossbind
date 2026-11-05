@@ -130,7 +130,7 @@ export default {
         { type: 'h2', id: 'app', text: 'App' },
         {
             type: 'p',
-            text: "`app` describes an app that `target: { runtimeEnv: 'app' }` builds: the name it shows, its id, icon and window, the links that open it, the reasons it gives for devices and where it finds its updates. [Apps](/guide/apps/#config) lists every key.",
+            text: "`app` describes an app that `target: { runtimeEnv: 'app' }` builds: the name it shows, its id, icon and window, the links that open it, the reasons it gives for devices and where it finds its updates. [Apps](/guide/apps/#config) lists every key. `extensions` lists the app extensions whose native functions the app's host builds in, each as its package's `crossbind.extension.js` gives it.",
         },
         {
             type: 'code',
@@ -183,10 +183,6 @@ export default {
             rows: [
                 ['`ext`', 'which extensions count as headers, sources and SWIG modules'],
                 ['`build`', 'do not set this directly - build hooks live in `crossbind.build.js` and are merged in'],
-                [
-                    '`extensions`',
-                    'plugin objects with hooks at config-load and build-step boundaries; for sharing one override across several packages',
-                ],
                 ['`functions.isEnabled`', 'override the "is this target enabled?" check, which by default asks whether the output already exists'],
             ],
         },

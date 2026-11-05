@@ -23,7 +23,7 @@ test('each command picks its template the way create-crossbind reads its argumen
             && (entry.framework ?? entry.label) === first
             && (second === undefined || entry.label === second));
         assert.deepEqual(picked.map((entry) => entry.key), [template.key], template.command);
-        assert.equal(dir, picked[0].kind === 'lib' ? 'my-lib' : 'my-app', template.command);
+        assert.equal(dir, { lib: 'my-lib', extension: 'my-extension' }[picked[0].kind] ?? 'my-app', template.command);
         assert.ok(template.source.endsWith(`/${picked[0].source}`), template.source);
     }
 });

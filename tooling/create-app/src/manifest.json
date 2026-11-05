@@ -146,5 +146,13 @@
         "label": "CMake",
         "kind": "lib",
         "source": "examples/lib-cmake"
+    },
+    {
+        "key": "app-extension",
+        "group": "Extension",
+        "framework": null,
+        "label": "App",
+        "kind": "extension",
+        "source": "examples/app-extension"
     }
 ]

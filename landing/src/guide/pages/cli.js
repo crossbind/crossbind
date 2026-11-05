@@ -4,7 +4,7 @@ export default {
     slug: 'cli',
     title: 'CLI',
     description: 'Every crossbind command and option, and what each one touches before you run it.',
-    lede: 'The `crossbind` package installs one command. Bundler plugins and React Native builds run the build for you; the other commands build and open apps, list licenses, manage the build containers and runners, sign in to crossbind cloud and edit the machine settings.',
+    lede: 'The `crossbind` package installs one command. Bundler plugins and React Native builds run the build for you; the other commands build and open apps, add their extensions, list licenses, manage the build containers and runners, sign in to crossbind cloud and edit the machine settings.',
     blocks: [
         { type: 'h2', id: 'commands', text: 'Commands at a glance' },
         {
@@ -13,6 +13,7 @@ export default {
             rows: [
                 ['`build`', 'compiles the project', 'Docker or a runner, the network, `.crossbind/`, `paths.output`'],
                 ['`app`', 'builds the project as an app with its Vite, opens it on the dev server, or makes the key pair for its updates','what `build` touches, `dist/`, `~/.crossbind/android/`, the attached Android device, the iOS Simulator or the iPhone `--device` names'],
+                ['`add`', "installs an app extension's package and lists it in `crossbind.config.js`", "the project's package manager and the network, `package.json`, its lockfile, `node_modules/`, `crossbind.config.js`"],
                 ['`licenses`', 'lists the licenses of the native dependencies', 'reads the project; writes only the files you ask for'],
                 ['`clean-deps`', 'deletes dependencies rebuilt from source', '`.crossbind/deps/`'],
                 ['`docker`', 'manages the toolchain containers', 'Docker'],
@@ -94,6 +95,18 @@ crossbind app build -p android`,
         {
             type: 'p',
             text: "**Touches:** Linux, Windows and Android apps build in the pinned linux, windows and android-app images, so only under `RUNNER=DOCKER_RUN` or `DOCKER_EXEC`, and Gradle packages an Android app there with no network, keeping its caches and the debug key in `~/.crossbind/android/`. An Android app opens on the attached device through this machine's `adb`, which crossbind does not install; an iOS app opens in the Simulator, or with `--device` on an iPhone or iPad, which Xcode signs for the app's team through the accounts it is signed in to and registers with that team.",
+        },
+
+        { type: 'h2', id: 'add', text: 'add' },
+        {
+            type: 'code',
+            file: 'shell',
+            code: `crossbind add @crossbind/extension-clipboard
+crossbind add ./crossbind-extension-greeter-0.1.0.tgz`,
+        },
+        {
+            type: 'p',
+            text: "Installs an app extension's package, by its name, `name@version` or a path to it, with the package manager the project's nearest lockfile names, else the one that runs crossbind, else npm. Then it lists the extension in `crossbind.config.js`: an import of its `crossbind.extension.js` and a call in `extensions`. A package `package.json` has already, given by its name alone, is listed without installing it again, and one the config lists already stays as it is. It stops before installing in a project that is no app, and lists nothing when the install fails, when the package is no extension, which stays installed, or when it lies outside `paths.base`, as a workspace's packages can, which is all a build sees: the message names the `paths.base` that takes it. On Windows, where the package manager runs in a shell, the name or path holds no spaces, quotes or characters the shell reads.",
         },
 
         { type: 'h2', id: 'licenses', text: 'licenses' },

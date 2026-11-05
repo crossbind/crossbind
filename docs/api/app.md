@@ -384,9 +384,10 @@ drive.
 ### Extensions
 
 An app takes more functions from extensions: `extensions` in `crossbind.config.js` lists them, and the app's host
-builds their native code in. [`@crossbind/extension-clipboard`](../../extensions/clipboard/README.md), for one, reads
+builds their native code in. `crossbind add <package>` installs one and lists it. [`@crossbind/extension-clipboard`](../../extensions/clipboard/README.md), for one, reads
 and writes the clipboard's text on every platform. An extension's package calls its functions by name with `invoke`
 from `crossbind/app`, as `invoke('clipboard.readText')`, and the page imports the package's own functions.
+[extensions.md](./extensions.md) is the contract an extension is written to.
 
 ## Events and callbacks
 
