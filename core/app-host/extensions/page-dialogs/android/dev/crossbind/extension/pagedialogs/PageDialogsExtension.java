@@ -1,24 +1,29 @@
 package dev.crossbind.extension.pagedialogs;
 
+import android.app.Activity;
 import android.app.AlertDialog;
 import android.widget.EditText;
 
 import org.json.JSONObject;
 
-import dev.crossbind.app.CrossbindActivity;
 import dev.crossbind.app.Extension;
+import dev.crossbind.app.ExtensionHost;
 
 // The host's page-dialogs on Android: the page's alert(), confirm() and prompt() as the system's dialog in the activity,
 // titled with the app's name. A dialog its user dismisses answers as cancelled.
 public final class PageDialogsExtension implements Extension {
     @Override
-    public void call(CrossbindActivity activity, String function, JSONObject options, Call call) {
+    public void call(ExtensionHost host, String function, JSONObject options, Call call) {
         call.reject("crossbind: page-dialogs has no function " + function);
     }
 
     @Override
-    public boolean onPageDialog(CrossbindActivity activity, PageDialog dialog) {
-        if (activity.isFinishing() || activity.isDestroyed()) return false;
+    public void onPageDialog(ExtensionHost host, PageDialog dialog) {
+        Activity activity = host.activity();
+        if (activity.isFinishing() || activity.isDestroyed()) {
+            dialog.useDefault();
+            return;
+        }
         EditText field = dialog.kind() == PageDialog.Kind.PROMPT ? new EditText(activity) : null;
         if (field != null) {
             field.setText(dialog.defaultText());
@@ -33,6 +38,5 @@ public final class PageDialogsExtension implements Extension {
         if (field != null) builder.setView(field);
         if (dialog.kind() != PageDialog.Kind.ALERT) builder.setNegativeButton(android.R.string.cancel, (shown, which) -> dialog.cancel());
         builder.show();
-        return true;
     }
 }

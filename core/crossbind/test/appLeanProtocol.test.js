@@ -75,12 +75,18 @@ const transport = {
         pending.set(call, resolve);
         setImmediate(() => globalThis.__crossbind_receive(call, text.slice(TOKEN.length)));
     }),
-    // As the host's byte routes answer: a request without the page's token is refused.
-    frame: async (query, body) => {
+    // As the host's byte routes answer: a request without the page's token is refused, and a frame gets its reply later.
+    frame: (query, body) => new Promise((resolve, reject) => {
         requests.push('frame');
-        if (new URLSearchParams(query).get('t') !== TOKEN) throw new Error("crossbind: this request does not carry the page's token");
-        return globalThis.__crossbind_frame(query, body.buffer.slice(body.byteOffset, body.byteOffset + body.byteLength));
-    },
+        if (new URLSearchParams(query).get('t') !== TOKEN) {
+            reject(new Error("crossbind: this request does not carry the page's token"));
+            return;
+        }
+        const call = String(nextCall);
+        nextCall += 1;
+        pending.set(call, resolve);
+        globalThis.__crossbind_frame(call, query, body.buffer.slice(body.byteOffset, body.byteOffset + body.byteLength));
+    }),
     result: async (query) => {
         requests.push('result');
         if (new URLSearchParams(query).get('t') !== TOKEN) throw new Error("crossbind: this request does not carry the page's token");
@@ -339,6 +345,21 @@ describe('what the host pushes to the page', () => {
         expect(entries).toHaveLength(1000);
         expect(entries[0]).toEqual(['event', 'tick', 5]);
         expect(entries.at(-1)).toEqual(['event', 'tick', 1004]);
+    });
+
+    test("keeps a call's messages, with their bytes, whatever the events push out, and none of a page another replaced", async () => {
+        globalThis.__crossbind_message(7, { done: 1, bytes: new Uint8Array([5]) });
+        for (let i = 0; i < 1005; i += 1) globalThis.__crossbind_event('tick', String(i));
+
+        const [, entries] = JSON.parse(await askForPushes());
+        globalThis.__crossbind_message(8, 'gone');
+        globalThis.__crossbind_reset();
+        globalThis.__crossbind_message(9, 'kept');
+        const [, next] = JSON.parse(await askForPushes());
+
+        expect(entries).toHaveLength(1001);
+        expect(entries[0]).toEqual(['msg', 7, { done: 1, bytes: { '\u0001t': 'view', k: 'Uint8Array', v: 'BQ==' } }]);
+        expect(next).toEqual([['msg', 9, 'kept']]);
     });
 
     test('refuses a function the page names by no id', async () => {

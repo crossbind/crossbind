@@ -5,7 +5,7 @@
 #include "crossbind/extension.h"
 
 void crossbind_extension_files(crossbind::Registry &registry) {
-    registry.onOpenFiles([](const std::vector<std::string> &paths) {
-        crossbind::app::holdEvent("open-files", crossbind::Value(crossbind::Value::Object{{"paths", paths}}).json());
+    registry.onOpenFiles([](const crossbind::OpenFiles &open) {
+        crossbind::app::holdEvent("open-files", crossbind::Value(crossbind::Value::Object{{"paths", open.paths}}).json());
     });
 }

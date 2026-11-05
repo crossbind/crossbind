@@ -19,9 +19,11 @@ using MessageHandler = std::function<void(std::string origin, std::string messag
 
 struct SchemeRequest {
     std::string method;
+    // As the URL has it, its escapes kept.
     std::string path;
     std::string query;
     std::vector<uint8_t> body;
+    std::vector<std::pair<std::string, std::string>> headers;
 };
 
 struct SchemeResponse {
@@ -29,6 +31,10 @@ struct SchemeResponse {
     std::string mime = "application/octet-stream";
     std::vector<uint8_t> body;
     std::vector<std::pair<std::string, std::string>> headers;
+    // A file, by its path in UTF-8, whose fileLength bytes are the body in body's place, which the platform reads as the
+    // webview takes it.
+    std::string file;
+    std::uint64_t fileLength = 0;
 };
 
 using SchemeRespond = std::function<void(SchemeResponse)>;
@@ -43,9 +49,15 @@ void addTopFrameScript(void *webView, const std::string &source);
 // Serves <scheme>:// requests: on macOS of the webview made from this configuration, on Linux of this web view.
 // respond() may be called from any thread.
 void registerSchemeHandler(void *target, const char *scheme, SchemeHandler handler);
-// The webview loads only these origins, in any frame; a link to another opens in the default browser. newPage runs
-// when the main frame commits another document.
+// These origins load in any frame without asking; the extension page-navigation decides every other URL, the page's
+// own windows, and the HTTP authentication and certificate errors of its requests. newPage runs when the main frame
+// commits another document.
 void restrictNavigation(void *webView, std::vector<std::string> origins, std::function<void()> newPage);
+// The page's downloads go to the extension page-downloads, before any of each arrives.
+void takeDownloads(void *webView);
+// The files the app's user drops on a page of these origins go to the extension page-drops, on the desktop, as the
+// page's own drop goes on.
+void takeDrops(void *webView, std::vector<std::string> origins);
 // Runs when the app is quit other than by closing its window (the Dock on macOS, the system on iOS, the end of the
 // session on Windows), before it would exit.
 void onQuit(std::function<void()> quit);
@@ -68,6 +80,9 @@ bool isMainThread();
 namespace crossbind::app {
 // Whether the window closes as its user closes it: true unless an extension's onClose keeps it. On the main thread.
 bool isCloseAllowed();
+// Runs the extensions' onWindowClosed for each window still open, on the main thread, as the app's windows close, while
+// they are there: before Linux and Windows destroy theirs, and as the app quits.
+void windowsClosed();
 // Whether the app quits as its user or its system asks it to: true unless an extension's onQuitRequest keeps it
 // running. On the main thread.
 bool isQuitAllowed();
@@ -102,16 +117,29 @@ void fillScreen();
 // View and Window menus never sees them.
 void installAppMenu();
 // Hears of the links of the app's schemes and the files macOS opens it with, the launch's own as well, which come as
-// Apple Events.
+// Apple Events, and of what the app's delegate is handed from the launch on, through answerLaunches().
 void listenForUrls();
+// Has the app's delegate, webview's, hand the extensions the user activities and push macOS gives it, as it finishes
+// launching, before the launch's own come.
+void answerLaunches();
 // Asks a macOS app to quit as its user's Quit does, through AppKit, whose question of the app's delegate asks its
 // extensions. On any thread.
 void terminateApp();
 // The page of the webview made from this configuration keeps running while its window is hidden.
 void keepRunningWhenHidden(void *configuration);
+// A window the page asked for with window.open(), which the UI delegate hands on with its WKNavigationAction: the app
+// opens no window of the page's, so it loads in the page's place, opens outside or loads nothing, as page-navigation
+// decides.
+void openPageWindow(void *webView, void *navigationAction);
 // Shows an iOS view controller, such as an alert, over whatever the window shows on top; false when it has nothing to
 // show it over.
 bool presentOnTop(void *controller, void *window);
+// A user activity, an NSUserActivity, the system continues the app with, on the main thread: a web page's is a site's
+// link, which reaches its owner as a link does, and one of another type the owner of its type. Whether one took it.
+bool continueActivity(void *activity);
+// The host takes the system's notification center, whose notifications reach the extensions' onNotification, before
+// the app finishes launching, as the tap that launched it comes after; an app outside a bundle has none.
+void ownNotificationCenter();
 #endif
 
 #ifdef _WIN32

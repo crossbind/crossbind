@@ -134,10 +134,35 @@ const wchar_t *reasonOf(int status) {
     switch (status) {
     case 200: return L"OK";
     case 204: return L"No Content";
+    case 206: return L"Partial Content";
+    case 400: return L"Bad Request";
     case 403: return L"Forbidden";
     case 404: return L"Not Found";
+    case 405: return L"Method Not Allowed";
+    case 416: return L"Range Not Satisfiable";
+    case 500: return L"Internal Server Error";
     default: return status < 400 ? L"OK" : L"Error";
     }
+}
+
+std::vector<std::pair<std::string, std::string>> headersOf(ICoreWebView2WebResourceRequest *request) {
+    std::vector<std::pair<std::string, std::string>> headers;
+    ICoreWebView2HttpRequestHeaders *all = nullptr;
+    if (FAILED(request->get_Headers(&all)) || !all) return headers;
+    ICoreWebView2HttpHeadersCollectionIterator *iterator = nullptr;
+    if (SUCCEEDED(all->GetIterator(&iterator)) && iterator) {
+        BOOL hasHeader = FALSE;
+        while (SUCCEEDED(iterator->get_HasCurrentHeader(&hasHeader)) && hasHeader) {
+            LPWSTR name = nullptr;
+            LPWSTR value = nullptr;
+            if (SUCCEEDED(iterator->GetCurrentHeader(&name, &value))) headers.emplace_back(take(name), take(value));
+            BOOL hasNext = FALSE;
+            if (FAILED(iterator->MoveNext(&hasNext)) || !hasNext) break;
+        }
+        iterator->Release();
+    }
+    all->Release();
+    return headers;
 }
 
 class SchemeRegistration final : public ICoreWebView2CustomSchemeRegistration {
@@ -313,14 +338,25 @@ void registerSchemeHandler(void *target, const char *scheme, SchemeHandler handl
                 incoming.body = readAll(content);
                 content->Release();
             }
+            incoming.headers = headersOf(request);
             request->Release();
             ICoreWebView2Deferral *deferral = nullptr;
             args->GetDeferral(&deferral);
             args->AddRef();
             (*serve)(std::move(incoming), [args, deferral, environment](SchemeResponse response) {
-                onMainThread([args, deferral, environment, response = std::move(response)] {
-                    IStream *body = SHCreateMemStream(response.body.data(), static_cast<UINT>(response.body.size()));
+                // WebView2 reads a stream on a thread of its own, which one made off the UI thread, as a file's is
+                // here, lets it do without the UI thread.
+                IStream *file = nullptr;
+                if (!response.file.empty()
+                    && FAILED(SHCreateStreamOnFileEx(wide(response.file).c_str(), STGM_READ | STGM_SHARE_DENY_NONE, FILE_ATTRIBUTE_NORMAL, FALSE, nullptr, &file))) {
+                    const std::string missing = "crossbind: the file went away before it was read";
+                    file = nullptr;
+                    response = SchemeResponse{404, "text/plain; charset=utf-8", std::vector<uint8_t>(missing.begin(), missing.end())};
+                }
+                onMainThread([args, deferral, environment, file, response = std::move(response)] {
+                    IStream *body = file ? file : SHCreateMemStream(response.body.data(), static_cast<UINT>(response.body.size()));
                     std::string headers = "Content-Type: " + response.mime;
+                    if (file) headers += "\r\nContent-Length: " + std::to_string(response.fileLength);
                     for (const auto &[name, value] : response.headers) headers += "\r\n" + name + ": " + value;
                     ICoreWebView2WebResourceResponse *answer = nullptr;
                     environment->CreateWebResourceResponse(body, response.status, reasonOf(response.status), wide(headers).c_str(), &answer);

@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'vitest';
 import {
-    appLinkParts, checkedFileTypes, checkedLinks, fileTypeOwners, iosDocumentTypes, linkOwners, macDocumentTypes,
+    activityTypeOwners, appLinkParts, checkedActivityTypes, checkedFileTypes, checkedLinks, checkedShortcutItems, fileTypeOwners, iosDocumentTypes,
+    iosShortcutItems, linkOwners, macDocumentTypes, shortcutItemOwners,
 } from '../src/utils/appLaunches.js';
 
 const config = (app = {}, extensions = []) => ({ general: { name: 'demo-app' }, app, extensions });
@@ -103,5 +104,70 @@ describe("an app's https links", () => {
         expect(linkOwners(app)).toEqual([{ link: 'example.com', extension: null }, { link: 'example.com/invite', extension: 'invites' }]);
         expect(() => linkOwners(config({ links: ['example.com/invite'] }, [{ name: 'invites', app: { links: ['example.com/invite'] } }])))
             .toThrow('app.links and the extension invites both claim the links of example.com/invite, which one alone gets.');
+    });
+});
+
+describe("an Apple app's user activities", () => {
+    test("take the types of the activities it continues, reverse-DNS names and intents' classes alike", () => {
+        expect(checkedActivityTypes(['com.example.app.edit', 'INSendMessageIntent', 'com.example.app.view_item-2'], 'app.activityTypes'))
+            .toEqual(['com.example.app.edit', 'INSendMessageIntent', 'com.example.app.view_item-2']);
+    });
+
+    test("refuse a web page's type, which app.links takes, a type of other characters, a type twice and a list that is none", () => {
+        expect(() => checkedActivityTypes(['NSUserActivityTypeBrowsingWeb'], 'app.activityTypes')).toThrow("a web page's, which app.links takes by its site");
+        for (const type of ['', '.com.example', 'com.example app', 'com.example."edit"', 'com.example\\edit', 42]) {
+            expect(() => checkedActivityTypes([type], 'app.activityTypes')).toThrow('app.activityTypes takes user activity types');
+        }
+        expect(() => checkedActivityTypes('com.example.app.edit', 'app.activityTypes')).toThrow('is no list of user activity types');
+        expect(() => checkedActivityTypes(['com.example.app.edit', 'com.example.app.edit'], 'app.activityTypes')).toThrow('app.activityTypes lists com.example.app.edit twice');
+    });
+
+    test('give each type one owner, and stop the build when two claim one, naming both', () => {
+        const app = config({ activityTypes: ['com.example.app.edit'] }, [{ name: 'notes', app: { activityTypes: ['com.example.notes.open'] } }]);
+        expect(activityTypeOwners(app)).toEqual([{ type: 'com.example.app.edit', extension: null }, { type: 'com.example.notes.open', extension: 'notes' }]);
+        expect(activityTypeOwners(config())).toEqual([]);
+        expect(() => activityTypeOwners(config({ activityTypes: ['com.example.notes.open'] }, [{ name: 'notes', app: { activityTypes: ['com.example.notes.open'] } }])))
+            .toThrow('app.activityTypes and the extension notes both claim the user activities com.example.notes.open, which one alone continues.');
+    });
+});
+
+describe("a phone app's quick actions", () => {
+    const newNote = { type: 'com.example.app.new-note', title: 'New note' };
+
+    test('take a type and a title, and an iOS subtitle and icon of its own', () => {
+        expect(checkedShortcutItems([newNote, { type: 'search', title: 'Search', subtitle: 'Find a note', icon: 'search' }], 'app.shortcutItems')).toEqual([
+            { ...newNote, subtitle: null, icon: null }, { type: 'search', title: 'Search', subtitle: 'Find a note', icon: 'search' },
+        ]);
+    });
+
+    test('refuse an item that is none, of an unknown key, type or icon, without a title, of two lines, and a type twice', () => {
+        expect(() => checkedShortcutItems(newNote, 'app.shortcutItems')).toThrow("crossbind: app.shortcutItems {\"type\":\"com.example.app.new-note\",\"title\":\"New note\"} is no list of quick actions, as [{ type: 'new-note', title: 'New note' }] is.");
+        expect(() => checkedShortcutItems(['new-note'], 'app.shortcutItems')).toThrow("crossbind: app.shortcutItems[0] is no quick action, as { type: 'new-note', title: 'New note' } is.");
+        expect(() => checkedShortcutItems([{ ...newNote, url: 'x' }], 'app.shortcutItems')).toThrow('crossbind: app.shortcutItems[0] takes type, title, subtitle, icon; url is none of them.');
+        for (const type of ['', 'new note', '.new', 'new"note', 42]) {
+            expect(() => checkedShortcutItems([{ ...newNote, type }], 'app.shortcutItems')).toThrow("crossbind: app.shortcutItems[0].type takes letters, digits, ., _ and -, as 'new-note' does;");
+        }
+        expect(() => checkedShortcutItems([{ type: 'new-note' }], 'app.shortcutItems')).toThrow('crossbind: app.shortcutItems[0].title is no text, which the system shows.');
+        expect(() => checkedShortcutItems([{ ...newNote, subtitle: 'a\nb' }], 'app.shortcutItems')).toThrow('crossbind: app.shortcutItems[0].subtitle "a\\nb" holds a control character, as a line break; give it on one line.');
+        expect(() => checkedShortcutItems([{ ...newNote, icon: 'pencil' }], 'app.shortcutItems')).toThrow("crossbind: app.shortcutItems[0].icon is one of iOS's own icons, add, alarm,");
+        expect(() => checkedShortcutItems([newNote, newNote], 'app.shortcutItems')).toThrow('crossbind: app.shortcutItems lists the quick action com.example.app.new-note twice.');
+    });
+
+    test('give each type one owner, and stop the build when two claim one, naming both', () => {
+        const app = config({ shortcutItems: [newNote] }, [{ name: 'scanner', app: { shortcutItems: [{ type: 'scan', title: 'Scan', subtitle: null, icon: null }] } }]);
+        expect(shortcutItemOwners(app).map(({ type, extension }) => [type, extension])).toEqual([['com.example.app.new-note', null], ['scan', 'scanner']]);
+        expect(shortcutItemOwners(config())).toEqual([]);
+        expect(() => shortcutItemOwners(config({ shortcutItems: [{ type: 'scan', title: 'Scan' }] }, [{ name: 'scanner', app: { shortcutItems: [{ type: 'scan', title: 'Scan' }] } }])))
+            .toThrow('crossbind: app.shortcutItems and the extension scanner both claim the quick action scan, whose taps one alone gets.');
+    });
+
+    test("are an iOS app's Info.plist items, an icon by UIApplicationShortcutIconType's name", () => {
+        expect(iosShortcutItems([{ ...newNote, subtitle: null, icon: null }, { type: 'search', title: 'Search', subtitle: 'Find a note', icon: 'markLocation' }])).toEqual([
+            { UIApplicationShortcutItemType: 'com.example.app.new-note', UIApplicationShortcutItemTitle: 'New note' },
+            {
+                UIApplicationShortcutItemType: 'search', UIApplicationShortcutItemTitle: 'Search', UIApplicationShortcutItemSubtitle: 'Find a note',
+                UIApplicationShortcutItemIconType: 'UIApplicationShortcutIconTypeMarkLocation',
+            },
+        ]);
     });
 });

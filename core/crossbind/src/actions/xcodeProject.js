@@ -5,13 +5,13 @@ import { IOS_DEPLOYMENT_TARGET } from '../utils/iosToolchain.js';
 import { textPlist, xmlPlist } from '../utils/plist.js';
 import { PRIVACY_CATEGORIES } from '../utils/appOptions.js';
 import { mergedPlist } from '../utils/appExtensions.js';
-import { appLinkParts, iosDocumentTypes } from '../utils/appLaunches.js';
+import { appLinkParts, iosDocumentTypes, iosShortcutItems } from '../utils/appLaunches.js';
 
 // The SDKs an iOS app builds for, one target each, and the slice of Hermes' release each takes.
 export const IOS_SDKS = ['iphoneos', 'iphonesimulator'];
 export const HERMES_SLICES = { iphoneos: 'ios-arm64', iphonesimulator: 'ios-arm64_x86_64-simulator' };
 // What the host's own code needs from the system: Xcode adds it only for the sources it compiles itself.
-const SYSTEM_LIBS = ['-framework', 'UIKit', '-framework', 'WebKit', '-framework', 'CoreGraphics', '-lc++'];
+const SYSTEM_LIBS = ['-framework', 'UIKit', '-framework', 'WebKit', '-framework', 'CoreGraphics', '-framework', 'Security', '-framework', 'UserNotifications', '-lc++'];
 
 const MAIN = `// crossbind writes this project anew on every build: the app comes prebuilt in lib/, and its files are in app/.
 int crossbind_app_main(int argc, char *argv[]);
@@ -47,7 +47,7 @@ const LAUNCH_COLOR = 'LaunchBackground';
 const ASSOCIATED_DOMAINS = 'com.apple.developer.associated-domains';
 
 // The app's Info.plist, with the keys its extensions give.
-const infoPlist = (name, urlSchemes, fileTypes, hasBackground, usage, encryption, plist) => xmlPlist(mergedPlist({
+const infoPlist = (name, urlSchemes, fileTypes, activityTypes, shortcutItems, hasBackground, usage, encryption, plist) => xmlPlist(mergedPlist({
     CFBundleDevelopmentRegion: 'en',
     CFBundleDisplayName: name,
     CFBundleExecutable: '$(EXECUTABLE_NAME)',
@@ -65,6 +65,8 @@ const infoPlist = (name, urlSchemes, fileTypes, hasBackground, usage, encryption
     UISupportedInterfaceOrientations: ORIENTATIONS,
     'UISupportedInterfaceOrientations~ipad': [...ORIENTATIONS, 'UIInterfaceOrientationPortraitUpsideDown'],
     ...iosDocumentTypes(fileTypes, '$(PRODUCT_BUNDLE_IDENTIFIER)'),
+    ...(activityTypes.length > 0 ? { NSUserActivityTypes: activityTypes } : {}),
+    ...(shortcutItems.length > 0 ? { UIApplicationShortcutItems: iosShortcutItems(shortcutItems) } : {}),
     // The reasons of app.permissions, without which iOS lets the app use none of those devices.
     ...usage,
 }, plist));
@@ -172,13 +174,13 @@ const privacyManifest = (privacy) => xmlPlist({
 // their link line, and its slice of Hermes; the first also the app's files. Xcode signs the app and runs it, in the
 // Simulator or on a device, with the entitlements given, and makes every size of its icon from the one PNG given.
 export default function writeXcodeProject(to, {
-    parts, identity, label, version, build = version, icon = null, urlSchemes = [], fileTypes = [], links = [], background = null, usage = {},
-    encryption = null, privacy = {}, entitlements = {}, plist = [],
+    parts, identity, label, version, build = version, icon = null, urlSchemes = [], fileTypes = [], links = [], activityTypes = [], shortcutItems = [],
+    background = null, usage = {}, encryption = null, privacy = {}, entitlements = {}, plist = [],
 }) {
     const { name } = state.config.general;
     if (parts.length === 0) throw new Error(`crossbind: no part of the iOS app ${name} is built, so there is no Xcode project to write.`);
     // The extensions' keys merge before the project goes, which a conflict between them then leaves as it was.
-    const info = infoPlist(label, urlSchemes, fileTypes, Boolean(background), usage, encryption, plist);
+    const info = infoPlist(label, urlSchemes, fileTypes, activityTypes, shortcutItems, Boolean(background), usage, encryption, plist);
     const domains = links.map((link) => `applinks:${appLinkParts(link).host}`);
     const signed = domains.length > 0
         ? { ...entitlements, [ASSOCIATED_DOMAINS]: [...new Set([...(entitlements[ASSOCIATED_DOMAINS] ?? []), ...domains])] }

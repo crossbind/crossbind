@@ -278,6 +278,13 @@ describe("the header a desktop app's host builds with", () => {
         expect(appHeader(config(), 'linux')).not.toMatch(/MAX_WIDTH|FULLSCREEN/);
     });
 
+    test("defines the app's id on every platform, an Android app's its application id", () => {
+        expect(appHeader(config({ id: 'com.example.demo' }), 'ios')).toContain('#define CROSSBIND_APP_ID "com.example.demo"\n#define CROSSBIND_APP_NAME');
+        expect(appHeader(config(), 'android')).toContain('#define CROSSBIND_APP_ID "dev.crossbind.demo_app"\n');
+        expect(appHeader(config(), 'linux')).toContain('#define CROSSBIND_APP_ID "dev.crossbind.demo-app"\n');
+        expect(() => appHeader(config({ id: 'com.example.my-app' }), 'android')).toThrow('is no Android application id');
+    });
+
     test("defines the background color on the desktop and on iOS, while an Android app's comes with its project", () => {
         const app = { window: { backgroundColor: '#1E1E1E' } };
         expect(appHeader(config(app), 'darwin')).toContain('#define CROSSBIND_APP_BACKGROUND_COLOR 0x1e1e1e\n');
@@ -303,9 +310,10 @@ describe("the header a desktop app's host builds with", () => {
         expect(appHeader({ general: { name: 'demo' }, app: {} }, 'win32')).toContain('#define CROSSBIND_APP_VERSION_NUMBERS 1,0,0,0\n');
     });
 
-    test("gives a phone's host the app's name alone, so the desktop's options do not stop its build", () => {
+    test("gives a phone's host the app's id and name alone, so the desktop's options do not stop its build", () => {
         expect(appHeader(config({ id: 'com.example.my_app', window: 800 }), 'android')).toBe([
             '// crossbind writes this file from crossbind.config.js and package.json.',
+            '#define CROSSBIND_APP_ID "com.example.my_app"',
             '#define CROSSBIND_APP_NAME "demo-app"',
             '',
         ].join('\n'));
@@ -417,6 +425,23 @@ describe("the options of the host's own extensions", () => {
         expect(hostExtensionOptions(extended, 'ios')).not.toHaveProperty('links');
     });
 
+    test("give an Apple app's activities, which hand the page the user activities of app.activityTypes and take its own, the types it lists", () => {
+        const continuing = config({ activityTypes: ['com.example.demo.edit'] });
+        ['darwin', 'ios'].forEach((platform) => expect(hostExtensionOptions(continuing, platform).activities).toEqual({ types: ['com.example.demo.edit'] }));
+        ['linux', 'win32', 'android'].forEach((platform) => expect(hostExtensionOptions(continuing, platform)).not.toHaveProperty('activities'));
+        // An extension's types reach that extension, not the page.
+        const extended = { ...config(), extensions: [{ name: 'notes', app: { activityTypes: ['com.example.notes.open'] } }] };
+        expect(hostExtensionOptions(extended, 'ios')).not.toHaveProperty('activities');
+    });
+
+    test("give a phone's shortcuts, which hand the page the taps of app.shortcutItems' quick actions, where it lists any", () => {
+        const acting = config({ shortcutItems: [{ type: 'new-note', title: 'New note' }] });
+        ['ios', 'android'].forEach((platform) => expect(hostExtensionOptions(acting, platform).shortcuts).toEqual({}));
+        ['darwin', 'linux', 'win32'].forEach((platform) => expect(hostExtensionOptions(acting, platform)).not.toHaveProperty('shortcuts'));
+        const extended = { ...config(), extensions: [{ name: 'scanner', app: { shortcutItems: [{ type: 'scan', title: 'Scan' }] } }] };
+        expect(hostExtensionOptions(extended, 'android')).not.toHaveProperty('shortcuts');
+    });
+
     test("give a phone's links the https links of app.links as well, which a desktop's system hands no app", () => {
         ['ios', 'android'].forEach((platform) => expect(hostExtensionOptions(config({ links: ['example.com'] }), platform).links).toEqual({}));
         ['darwin', 'linux', 'win32'].forEach((platform) => expect(hostExtensionOptions(config({ links: ['example.com'] }), platform)).not.toHaveProperty('links'));
@@ -447,8 +472,24 @@ describe("the options of the host's own extensions", () => {
     });
 
     test("give the shell where the page's shell.openPath opens files: nowhere without app.openPath", () => {
-        expect(hostExtensionOptions(config(), 'darwin')).toEqual({ shell: { openPath: [] } });
+        expect(hostExtensionOptions(config(), 'darwin')).toEqual({ shell: { openPath: [] }, 'page-navigation': { load: [] } });
         expect(hostExtensionOptions(config({ openPath: ['logs', 'picked'] }), 'ios').shell).toEqual({ openPath: ['logs', 'picked'] });
+    });
+
+    test("give the page's navigation the origins app.navigation.load lists, on every platform", () => {
+        const load = ['https://login.example.com', 'http://localhost:8080'];
+        ['darwin', 'linux', 'win32', 'ios', 'android'].forEach((platform) => {
+            expect(hostExtensionOptions(config({ navigation: { load } }), platform)['page-navigation']).toEqual({ load });
+        });
+    });
+
+    test('refuse an app.navigation of anything but origins to load', () => {
+        expect(() => hostExtensionOptions(config({ navigation: ['https://a.example'] }), 'linux')).toThrow('app.navigation ["https://a.example"] is no object');
+        expect(() => hostExtensionOptions(config({ navigation: { open: [] } }), 'linux')).toThrow('app.navigation takes load alone; open is none of it.');
+        expect(() => hostExtensionOptions(config({ navigation: { load: 'https://a.example' } }), 'linux')).toThrow('is no list of origins');
+        for (const origin of ['https://a.example/', 'https://a.example/login', 'https://A.example', 'https://a.example:443', 'file:///etc', 'crossbind://app', 7]) {
+            expect(() => hostExtensionOptions(config({ navigation: { load: [origin] } }), 'linux')).toThrow(`app.navigation.load's ${JSON.stringify(origin)} is no http or https origin`);
+        }
     });
 
     test('refuse an app.openPath of anything but data, cache, logs and picked', () => {

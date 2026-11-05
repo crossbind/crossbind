@@ -1,7 +1,7 @@
 // The conformance suite inside an app: the page reaches the module the app's host runs as a worker-backed web build
 // reaches its worker, and the host runs embind-jsi as React Native does.
 import { runConformance } from '@crossbind/conformance/spec/run.mjs';
-import { app as host, events, invoke, menu, notification, shell, tray, updater } from 'crossbind/app';
+import { app as host, events, invoke, menu, notification, routeUrl, shell, tray, updater } from 'crossbind/app';
 import * as clipboard from '@crossbind/extension-clipboard';
 // Constants bind only for the names imported here; the header also defines one no leg imports.
 import {
@@ -16,8 +16,8 @@ import {
 } from '@crossbind/conformance/native/confextras.h';
 import { Counter } from './native/counter.rs';
 import {
-    AGAIN_FILE, FIRST_ARGS, FIRST_FILES, LAUNCH_ARGS, LAUNCH_URL, NOTIFICATION, OPENED_FILE, PHONE_FILE_TEXT, PHONE_FILES, PHONE_LINKS, PHONE_URL,
-    PROBE_URLS, TRASHED_FILE, TRAY,
+    ACTIVITIES, AGAIN_FILE, FIRST_ARGS, FIRST_FILES, LAUNCH_ARGS, LAUNCH_URL, NOTIFICATION, OPENED_FILE, PHONE_FILE_TEXT, PHONE_FILES, PHONE_LINKS,
+    PHONE_URL, PROBE_URLS, SHORTCUTS, TRASHED_FILE, TRAY,
 } from '../e2e/launch.mjs';
 // Direct crate imports: bridged from the crates' own sources, no surface file.
 import { Uuid } from 'cargo:uuid';
@@ -99,8 +99,19 @@ async function checkMenus(isDesktop) {
         { label: 'View', items: [{ label: 'Sidebar', id: 'sidebar', checked: true, accelerator: 'F9' }] },
     ];
     const set = await menu.set(menus).then(() => 'set', (error) => error.message);
+    // A macOS app's Dock icon shows the page's items, which no other platform has.
+    const docked = await menu.setDock([{ label: 'New window', id: 'new-window' }]).then(() => 'set', (error) => error.message);
+    if (isDesktop && navigator.userAgent.includes('Macintosh')) {
+        if (docked !== 'set') throw new Error(`menu.setDock() failed: ${docked}`);
+        const titles = await invoke('probe.dockMenu');
+        if (JSON.stringify(titles) !== JSON.stringify(['New window'])) throw new Error(`the Dock's menu is ${JSON.stringify(titles)}, not the page's`);
+    } else if (!docked.includes('a macOS app alone has a Dock menu')) {
+        throw new Error(`menu.setDock() did not refuse off macOS: ${docked}`);
+    }
     if (!isDesktop) {
         if (!set.includes('has no menu bar')) throw new Error(`menu.set() did not refuse on a phone: ${set}`);
+        const popped = await menu.popup([{ label: 'Open', id: 'open' }], { x: 1, y: 1 }).then(() => 'opened', (error) => error.message);
+        if (!popped.includes('opens no menu')) throw new Error(`menu.popup() did not refuse on a phone: ${popped}`);
         return;
     }
     if (set !== 'set') throw new Error(`menu.set() failed: ${set}`);
@@ -165,16 +176,16 @@ function nextEvent(name) {
 
 // e2e/run.mjs launches a desktop app with LAUNCH_URL and the probe's PROBE_URLS.launch, which reached the app before the
 // page listened; a phone's opens with none. The page listens first, then asks, as a page does to miss no link, and gets
-// its own link alone, as the probe its own, which the probe holds for the page as the event probe-url.
+// its own link alone, as the probe its own, which the probe holds for the page as the event probe.url.
 async function checkLaunchUrls(isLinked) {
     const stop = events.on('open-url', () => {});
     const urls = await host.launchUrls();
-    const held = await events.held('probe-url');
+    const held = await events.held('probe.url');
     stop();
     const expected = isLinked ? [LAUNCH_URL] : [];
     if (JSON.stringify(urls) !== JSON.stringify(expected)) throw new Error(`app.launchUrls() is ${JSON.stringify(urls)}, not ${JSON.stringify(expected)}`);
     const probeHeld = isLinked ? [{ url: PROBE_URLS.launch }] : [];
-    if (JSON.stringify(held) !== JSON.stringify(probeHeld)) throw new Error(`events.held('probe-url') is ${JSON.stringify(held)}, not ${JSON.stringify(probeHeld)}`);
+    if (JSON.stringify(held) !== JSON.stringify(probeHeld)) throw new Error(`events.held('probe.url') is ${JSON.stringify(held)}, not ${JSON.stringify(probeHeld)}`);
     await checkProbed(isLinked ? [PROBE_URLS.launch] : []);
 }
 
@@ -193,7 +204,7 @@ const isSameFiles = (paths, cwd, names) => paths.length === names.length && inFo
 async function checkLaunch(isDesktop) {
     const launch = await host.launchArgs();
     const files = await host.launchFiles();
-    const probed = (await events.held('probe-files')).flatMap(({ paths }) => paths);
+    const probed = (await events.held('probe.files')).flatMap(({ paths }) => paths);
     if (!isDesktop) {
         if (launch.args.length > 0 || launch.cwd !== '' || files.length > 0 || probed.length > 0) {
             throw new Error(`a phone's launch has ${JSON.stringify({ launch, files, probed })}`);
@@ -218,7 +229,7 @@ async function checkProbed(expected) {
 async function linksUntilProbed() {
     const links = [];
     const stop = events.on('open-url', ({ url }) => links.push(url));
-    const { url } = await nextEvent('probe-url').finally(stop);
+    const { url } = await nextEvent('probe.url').finally(stop);
     return { links, probed: url };
 }
 
@@ -243,16 +254,16 @@ function eventsUntil(counts) {
 // PHONE_LINKS and on PHONE_FILES, and with the probe's PROBE_URLS.phone last: each reaches the owner of its scheme, site
 // or type, the probe's the probe alone.
 async function checkOpenedUrl() {
-    const opened = eventsUntil({ 'open-url': 2, 'probe-url': 2, 'open-files': 1, 'probe-files': 2 });
+    const opened = eventsUntil({ 'open-url': 2, 'probe.url': 2, 'open-files': 1, 'probe.files': 2 });
     console.log('OPEN LINK');
     const heard = await opened;
     const urls = (name) => heard[name].map(({ url }) => url);
     if (JSON.stringify(urls('open-url')) !== JSON.stringify([PHONE_URL, PHONE_LINKS.page])) throw new Error(`the links the app was opened with reached the page as ${JSON.stringify(urls('open-url'))}`);
-    if (JSON.stringify(urls('probe-url')) !== JSON.stringify([PHONE_LINKS.probe, PROBE_URLS.phone])) throw new Error(`the probe's links reached it as ${JSON.stringify(urls('probe-url'))}`);
+    if (JSON.stringify(urls('probe.url')) !== JSON.stringify([PHONE_LINKS.probe, PROBE_URLS.phone])) throw new Error(`the probe's links reached it as ${JSON.stringify(urls('probe.url'))}`);
     await checkProbed([PHONE_LINKS.probe, PROBE_URLS.phone]);
     // Each file reaches the owner of its MIME type as a copy in the app's cache, of the name it had: the private
     // provider's, which came first, none.
-    for (const [name, files] of [['open-files', [PHONE_FILES.page]], ['probe-files', [PHONE_FILES.probe, PHONE_FILES.bare]]]) {
+    for (const [name, files] of [['open-files', [PHONE_FILES.page]], ['probe.files', [PHONE_FILES.probe, PHONE_FILES.bare]]]) {
         const paths = heard[name].flatMap(({ paths }) => paths);
         if (paths.length !== files.length || !files.every((file, index) => paths[index].endsWith(`/${file}`))) {
             throw new Error(`the files the app was opened on reached ${name} as ${JSON.stringify(paths)}`);
@@ -285,7 +296,7 @@ async function checkSecondInstance() {
 // the app shows the window before the probe hears it reopen.
 async function checkReopen() {
     await invoke('probe.hide');
-    const reopened = nextEvent('probe-reopen');
+    const reopened = nextEvent('probe.reopen');
     console.log('REOPEN APP');
     const { isShown } = await reopened;
     if (!isShown) throw new Error('the probe heard the app reopen with its window hidden');
@@ -303,7 +314,7 @@ async function checkOpenFile() {
 // e2e/run.mjs asks a Windows app's window whether its user's session may end, as Windows does as its user signs out:
 // the probe refuses, which the window answers.
 async function checkEndSession() {
-    const asked = nextEvent('probe-quit-request');
+    const asked = nextEvent('probe.quit-request');
     console.log('END SESSION');
     await asked;
 }
@@ -378,6 +389,181 @@ async function checkPageRequests() {
     }
 }
 
+// How often until() asks again.
+const POLL_MS = 100;
+
+// The first of what an extension's function gives that find takes, once there is one, within LAUNCH_TIMEOUT_MS.
+async function until(name, find, failure) {
+    const end = Date.now() + LAUNCH_TIMEOUT_MS;
+    for (;;) {
+        const found = (await invoke(name)).find(find);
+        if (found) return found;
+        if (Date.now() > end) throw new Error(failure);
+        await new Promise((resolve) => { setTimeout(resolve, POLL_MS); });
+    }
+}
+
+// The page's navigations beyond the app's origins reach the app's own page-navigation, which refuses each, so the page
+// stays: its top frame's, and but on Android, whose WebView loads a frame of another origin without asking, a frame's,
+// which WebKitGTK names the top frame's.
+async function checkNavigation(isDesktop, isAndroid) {
+    const away = 'https://crossbind-e2e.invalid/away';
+    location.href = away;
+    const top = await until('page-navigation.asked', ({ url }) => url === away, `page-navigation was not asked for ${away}`);
+    if (!top.isMainFrame || top.isNewWindow || top.isUserInitiated || !top.isPage) {
+        throw new Error(`page-navigation was asked for the top frame's ${away} as ${JSON.stringify(top)}`);
+    }
+    if (isAndroid) return;
+    // A window the page asks for at the app's own origins opens nowhere, without asking, and the page stays.
+    window.open('about:blank');
+    window.open(URL.createObjectURL(new Blob(['window'], { type: 'text/plain' })));
+    await new Promise((resolve) => { setTimeout(resolve, POLL_MS * 5); });
+    const windows = (await invoke('page-navigation.asked')).filter(({ isNewWindow }) => isNewWindow);
+    if (windows.length > 0) throw new Error(`page-navigation was asked for a window of the app's own origins: ${JSON.stringify(windows)}`);
+    const isLinux = isDesktop && !/Macintosh|Windows/.test(navigator.userAgent);
+    const framed = 'https://crossbind-e2e.invalid/frame';
+    const frame = document.createElement('iframe');
+    frame.src = framed;
+    document.body.append(frame);
+    const asked = await until('page-navigation.asked', ({ url }) => url === framed, `page-navigation was not asked for ${framed}`).finally(() => frame.remove());
+    if (asked.isMainFrame !== isLinux || asked.isNewWindow) throw new Error(`page-navigation was asked for a frame's ${framed} as ${JSON.stringify(asked)}`);
+}
+
+// The page's downloads reach the app's own page-downloads, which asks nothing: one it saves, with the text the page gave
+// it, and one it cancels. WebView2 names a download as it would save it, with a number where the user's Downloads
+// folder has a file of its name.
+async function checkDownloads() {
+    const text = 'crossbind download Öffnen 😀';
+    const download = (name) => {
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(new Blob([text], { type: 'text/plain' }));
+        link.download = name;
+        document.body.append(link);
+        link.click();
+        link.remove();
+    };
+    const ended = (prefix) => until('page-downloads.ended', ({ name }) => name.startsWith(prefix), `page-downloads heard of no download ${prefix}`);
+    download('probe-download.txt');
+    const saved = await ended('probe-download');
+    if (saved.failure !== null || saved.text !== text || !saved.path.includes('probe-download')) {
+        throw new Error(`the download page-downloads saved ended as ${JSON.stringify(saved)}`);
+    }
+    download('cancel-download.txt');
+    const cancelled = await ended('cancel-download');
+    if (!cancelled.isCancelled || cancelled.failure !== null) throw new Error(`the download page-downloads cancelled ended as ${JSON.stringify(cancelled)}`);
+}
+
+// What the app carries beside its page: a file of the probe's, in the folder its registry names, and one of the app's
+// own, in the folder app.paths().resources names, which Android copies out of its APK.
+async function checkCarried() {
+    const { resources } = await host.paths();
+    if (typeof resources !== 'string' || resources === '') throw new Error(`app.paths() gave no folder of the app's own files: ${JSON.stringify(resources)}`);
+    const carried = await invoke('probe.carried');
+    if (carried.extension !== 'carried by the probe\n' || carried.app !== 'carried by the app\n') {
+        throw new Error(`the app carries ${JSON.stringify(carried)}, not the probe's file and its own`);
+    }
+}
+
+// JSON text of a value whose objects' members are in the order of their names, as a dictionary keeps none.
+const sortedJson = (value) => JSON.stringify(value, (key, member) => (member && typeof member === 'object' && !Array.isArray(member)
+    ? Object.fromEntries(Object.entries(member).sort(([a], [b]) => (a < b ? -1 : 1))) : member));
+
+// The probe hands an iOS or macOS app's delegate user activities, as Handoff does, with a userInfo of each kind a
+// property list holds: the page gets the one of app.activityTypes, its date, URL and UUID as their text and its set as an
+// array, once it has asked, and the probe the one of its own, with its bytes; the macOS delegate refuses one of a type no
+// one continues. The page makes one of app.activityTypes current, and then none, which another platform refuses.
+async function checkActivities(isApple, isDesktop) {
+    const set = await host.setUserActivity({ type: ACTIVITIES.page, userInfo: { note: 7 }, webpageUrl: 'https://example.com/notes/7' })
+        .then(() => 'set', (error) => error.message);
+    if (!isApple) {
+        if (!set.includes('an iOS or macOS app alone sets a user activity')) throw new Error(`app.setUserActivity() did not refuse off Apple's platforms: ${set}`);
+        return;
+    }
+    if (set !== 'set') throw new Error(`app.setUserActivity() failed: ${set}`);
+    const undeclared = await host.setUserActivity({ type: ACTIVITIES.nobody }).then(() => 'set', (error) => error.message);
+    if (!undeclared.includes('app.activityTypes')) throw new Error(`app.setUserActivity() took a type app.activityTypes does not list: ${undeclared}`);
+    await host.setUserActivity(null);
+    // A development build claims no user activity on macOS.
+    if (!isDesktop || !import.meta.env.DEV) {
+        const { activityTypes } = await invoke('probe.apple');
+        if (JSON.stringify(activityTypes) !== JSON.stringify([ACTIVITIES.page, ACTIVITIES.probe])) {
+            throw new Error(`the app's Info.plist lists the user activities ${JSON.stringify(activityTypes)}`);
+        }
+    }
+    const continued = Promise.all([nextEvent('user-activity'), nextEvent('probe.activity')]);
+    const held = await events.held('user-activity');
+    if (held.length > 0) throw new Error(`the app was launched with the user activities ${JSON.stringify(held)}`);
+    const taken = [];
+    for (const [type, withData] of [[ACTIVITIES.page, false], [ACTIVITIES.probe, true], [ACTIVITIES.nobody, false]]) {
+        taken.push(await invoke('probe.continueActivity', { type, withData }));
+    }
+    const [page, probed] = await continued;
+    const userInfo = {
+        n: 1, flag: true, text: 'a', list: [1, null], nested: { x: 'y' }, date: '1970-01-01T00:00:00Z', url: 'https://example.com/x',
+        uuid: 'E621E1F8-C36C-495A-93FC-0C247A3E6E5F', set: ['s'],
+    };
+    if (sortedJson(page) !== sortedJson({ type: ACTIVITIES.page, userInfo, webpageUrl: 'https://example.com/page' })) {
+        throw new Error(`the page heard the user activity ${JSON.stringify(page)}`);
+    }
+    if (JSON.stringify(probed) !== JSON.stringify({ type: ACTIVITIES.probe, text: 'a', data: [1, 2, 3], webpageUrl: 'https://example.com/page' })) {
+        throw new Error(`the probe heard the user activity ${JSON.stringify(probed)}`);
+    }
+    if (isDesktop && JSON.stringify(taken) !== JSON.stringify([true, true, false])) throw new Error(`the macOS delegate took the user activities as ${JSON.stringify(taken)}`);
+}
+
+// A phone app's icon shows the quick actions of app.shortcutItems and the probe's, as iOS's Info.plist and Android's
+// static shortcuts list them, and the probe taps each as the system does, on Android with the intent its shortcuts.xml
+// gives: the page gets its own once it has asked, the probe its own, and none one of a type no one owns, which iOS's
+// delegate refuses and Android has no shortcut of. Android starts a tap in a task it empties first, which leaves the
+// page as it was, as this check goes on in it.
+async function checkShortcuts(isAndroid) {
+    const types = [SHORTCUTS.page, SHORTCUTS.probe];
+    // Android lists its static shortcuts in no order of its manifest's.
+    const listed = isAndroid ? (await invoke('probe.shortcuts')).toSorted((a, b) => (a.id < b.id ? -1 : 1)) : (await invoke('probe.apple')).shortcutTypes;
+    const expected = isAndroid ? [{ id: SHORTCUTS.page, label: 'New note' }, { id: SHORTCUTS.probe, label: 'Probe' }] : types;
+    if (JSON.stringify(listed) !== JSON.stringify(expected)) throw new Error(`the app's icon lists the quick actions ${JSON.stringify(listed)}`);
+    const tapped = Promise.all([nextEvent('shortcut-item'), nextEvent('probe.shortcut')]);
+    const held = await events.held('shortcut-item');
+    if (held.length > 0) throw new Error(`the app was launched with the quick actions ${JSON.stringify(held)}`);
+    const taken = [];
+    for (const type of [...types, SHORTCUTS.nobody]) taken.push(await invoke('probe.tapShortcut', { type }));
+    const [page, probed] = await tapped;
+    if (page.type !== SHORTCUTS.page || probed.type !== SHORTCUTS.probe) throw new Error(`the quick actions' taps reached ${JSON.stringify({ page, probed })}`);
+    if (JSON.stringify(taken) !== JSON.stringify([true, true, false])) throw new Error(`the quick actions' taps were taken as ${JSON.stringify(taken)}`);
+}
+
+// The host owns an iOS or macOS app's notification center, whose owner the probe hands notifications as the system
+// does: each extension hears of each, one to show while the app is in front as its first decider shows it, the probe's
+// in the list alone and another as a banner, in the list and with its sound, and the taps and actions its user answers
+// with, a tap of one of notification.show()'s being the page's event notification. The app's push token reaches every
+// extension, or why the system gave none, and so does a silent push, whose answers iOS hears as one.
+async function checkNotifications(isDesktop) {
+    const owner = await invoke('probe.notificationCenter');
+    if (owner !== 'CrossbindNotificationCenter') throw new Error(`the notification center's owner is ${owner}, not the host's`);
+    const probed = eventsUntil({ 'probe.notification': 4 });
+    const presentations = [await invoke('probe.notify', { id: 'probe.present' }), await invoke('probe.notify', { id: 'other.present' })];
+    const shown = [{ banner: false, list: true, sound: false, badge: false }, { banner: true, list: true, sound: true, badge: false }];
+    if (JSON.stringify(presentations) !== JSON.stringify(shown)) throw new Error(`the notifications shown in front were ${JSON.stringify(presentations)}`);
+    const tapped = nextEvent('notification');
+    await invoke('probe.notify', { id: 'crossbind.menu.e2e', answer: 'tap' });
+    await tapped;
+    await invoke('probe.notify', { id: 'probe.reply', answer: 'reply' });
+    const heard = (await probed)['probe.notification'];
+    const answers = heard.map(({ id, isAnswered, isTap, action }) => [id, isAnswered, isTap, action]);
+    const told = [['probe.present', false, false, ''], ['other.present', false, false, ''], ['crossbind.menu.e2e', true, true, ''], ['probe.reply', true, false, 'reply']];
+    if (JSON.stringify(answers) !== JSON.stringify(told) || !heard.every(({ probe, isRemote }) => probe === true && isRemote === false)) {
+        throw new Error(`the probe heard the notifications ${JSON.stringify(heard)}`);
+    }
+    const registered = nextEvent('probe.push');
+    await invoke('probe.registerForPush');
+    const { token, failure } = await registered;
+    if (!(/^[0-9a-f]+$/.test(token ?? '') || failure)) throw new Error(`registerForPush() reached the probe with ${JSON.stringify({ token, failure })}`);
+    const pushed = nextEvent('probe.push-message');
+    const fetched = await invoke('probe.silentPush');
+    const { probe } = await pushed;
+    if (probe !== true || fetched !== (isDesktop ? null : 'newData')) throw new Error(`a silent push reached the probe as ${JSON.stringify({ probe, fetched })}`);
+}
+
 // What an extension adds to an app, through the probe: C compiled with folders of its own and its own macros, text
 // that is no UTF-8 as U+FFFD, a call of the app's functions from native code, which is no page's, and the pages it hears
 // of, and the app's state before its user, whose changes the page hears too; on the desktop the close its user asks
@@ -394,9 +580,24 @@ async function checkContract(isDesktop, isAndroid) {
         throw new Error("a call through the native invoke() was taken for the page's");
     }
     const pages = await invoke('probe.pages');
-    if (!(pages.count >= 1) || !pages.isCallThread) throw new Error(`the probe heard of this page not as it started, on the thread of its calls: ${JSON.stringify(pages)}`);
+    if (!(pages.count >= 1) || !pages.isCallThread || !pages.isCallPage) {
+        throw new Error(`the probe heard of this page not as it started, on the thread of its calls, as the page they come from: ${JSON.stringify(pages)}`);
+    }
     const refused = await invoke('probe.refusedName');
     if (!refused.includes('names a function other.name, where its own start with its name and a dot')) throw new Error(`the probe named a function of another's: ${refused}`);
+    const refusedRole = await invoke('probe.refusedRole');
+    if (!refusedRole.includes("calls onDownload, which the holder of the host's page-downloads alone does")) {
+        throw new Error(`the probe took the page's downloads without the role: ${refusedRole}`);
+    }
+    // Its onStart ran once, before the window it saw open, which is the app's, of the app's id; Android's app has no
+    // window an extension reaches.
+    const lifecycle = await invoke('probe.lifecycle');
+    const appId = isAndroid ? 'dev.crossbind.crossbind_e2e_desktop_app' : 'dev.crossbind.crossbind-e2e-desktop-app';
+    if (lifecycle.starts !== 1 || !lifecycle.isStartFirst || lifecycle.windows !== (isAndroid ? 0 : 1) || lifecycle.isAppWindow === isAndroid || lifecycle.appId !== appId) {
+        throw new Error(`the probe started and saw the app's window as ${JSON.stringify(lifecycle)}`);
+    }
+    const started = await events.held('probe.started');
+    if (JSON.stringify(started) !== '[{"isStartFirst":true}]') throw new Error(`the event the probe held as it started reached the page as ${JSON.stringify(started)}`);
     if (!isAndroid) {
         const thrown = await invoke('probe.throwOnMain').then(() => 'answered', (error) => error.message);
         if (!thrown.includes('probe.throwOnMain gave no answer')) throw new Error(`a task that threw on the main thread: ${thrown}`);
@@ -422,7 +623,7 @@ async function checkContract(isDesktop, isAndroid) {
         if (JSON.stringify(heard) !== JSON.stringify(told)) throw new Error(`the page heard ${JSON.stringify(heard)} as the app was told ${JSON.stringify(told)}`);
     }
     if (isDesktop) {
-        const asked = nextEvent('probe-quit-request');
+        const asked = nextEvent('probe.quit-request');
         await host.requestQuit();
         await asked;
     }
@@ -448,6 +649,79 @@ async function checkContract(isDesktop, isAndroid) {
         const zstd = await invoke('probe.zstd');
         if (!(zstd >= 10400)) throw new Error(`the probe's zstd gave the version ${zstd}`);
     }
+}
+
+// The probe's URLs, which its route answers: a body whole, with the query and a header it was asked with; a file the
+// host reads, the part a Range asks for as 206, from the end too, and the whole file without one, under a path the route
+// gets decoded; and refused, a range past the end, any method but GET and HEAD, a path that leaves its folder, a request
+// the route answers nothing, and an extension without a route.
+async function checkRoutes() {
+    const size = await invoke('probe.routeFile');
+    const byteAt = (i) => i % 251;
+    // A request that fails names what it asked for.
+    const fetched = (url, init = {}) => fetch(url, init).catch((error) => {
+        throw new Error(`${init.method ?? 'GET'} ${url} ${JSON.stringify(init.headers ?? {})} failed: ${error.message}`);
+    });
+    const hello = await fetched(routeUrl('probe', '/hello.txt?who=page'), { headers: { 'X-Probe': 'page' } });
+    const said = await hello.text();
+    if (hello.status !== 200 || said !== 'hello who=page' || hello.headers.get('X-Probe-Header') !== 'page' || hello.headers.get('X-Probe-Page') !== 'yes') {
+        throw new Error(`the probe's route answered ${hello.status} ${JSON.stringify(said)}, as asked with ${hello.headers.get('X-Probe-Header')} by page ${hello.headers.get('X-Probe-Page')}`);
+    }
+    const file = routeUrl('probe', '/a%20b/file.bin');
+    const part = await fetched(file, { headers: { Range: 'bytes=100-199' } });
+    const partBytes = new Uint8Array(await part.arrayBuffer());
+    if (part.status !== 206 || part.headers.get('Content-Range') !== `bytes 100-199/${size}` || partBytes.length !== 100 || partBytes.some((byte, i) => byte !== byteAt(100 + i))) {
+        throw new Error(`a part of the probe's file came as ${part.status} ${part.headers.get('Content-Range')}, ${partBytes.length} bytes`);
+    }
+    const tail = new Uint8Array(await (await fetched(file, { headers: { Range: 'bytes=-10' } })).arrayBuffer());
+    if (tail.length !== 10 || tail[9] !== byteAt(size - 1)) throw new Error(`the last 10 bytes of the probe's file came as ${tail.length} bytes`);
+    const whole = await fetched(file);
+    const wholeBytes = new Uint8Array(await whole.arrayBuffer());
+    if (whole.status !== 200 || wholeBytes.length !== size || wholeBytes.some((byte, i) => byte !== byteAt(i))) {
+        throw new Error(`the probe's file came as ${whole.status}, ${wholeBytes.length} bytes`);
+    }
+    const statuses = await Promise.all([
+        fetched(file, { headers: { Range: `bytes=${size}-` } }),
+        fetched(file, { method: 'HEAD' }),
+        fetched(file, { method: 'POST', body: 'x' }),
+        fetched(routeUrl('probe', '/a%2F..%2Fsecret')),
+        fetched(routeUrl('probe', '/unanswered')),
+        fetched(routeUrl('nobody', '/x')),
+    ].map((request) => request.then(({ status }) => status)));
+    if (JSON.stringify(statuses) !== JSON.stringify([416, 200, 405, 400, 500, 404])) throw new Error(`the probe's route answered ${JSON.stringify(statuses)}`);
+}
+
+// The calls of the probe's functions, from its native code and on Android from its Java as well: their messages, which
+// reach onMessage in order, each with its byte, all of them before the call resolves; their cancel, which the function
+// hears of; and bytes both ways, in the message and in a frame, and from native code as a large result too.
+async function checkCalls(isAndroid) {
+    for (const prefix of isAndroid ? ['probe.', 'probe.java'] : ['probe.']) {
+        const name = (base) => (prefix === 'probe.' ? `probe.${base}` : `probe.java${base[0].toUpperCase()}${base.slice(1)}`);
+        const got = [];
+        const counted = await invoke(name('count'), { count: 50 }, { onMessage: (message) => got.push(message) });
+        if (counted !== 'counted' || got.length !== 50 || got.some(({ n, bytes }, i) => n !== i + 1 || !(bytes instanceof Uint8Array) || bytes[0] !== i + 1)) {
+            throw new Error(`${name('count')} gave ${counted} after ${got.length} messages, the first ${JSON.stringify(got[0])}`);
+        }
+        const before = await invoke(name('cancels'));
+        const controller = new AbortController();
+        const waited = await invoke(name('wait'), {}, { signal: controller.signal, onMessage: () => controller.abort() })
+            .then(() => 'answered', (error) => error.name);
+        if (waited !== 'AbortError') throw new Error(`${name('wait')}, cancelled, ended as ${waited}`);
+        let cancels = before;
+        for (let tries = 0; tries < 50 && cancels === before; tries += 1) {
+            await new Promise((resolve) => { setTimeout(resolve, 100); });
+            cancels = await invoke(name('cancels'));
+        }
+        if (cancels !== before + 1) throw new Error(`${name('wait')}'s function heard of ${cancels - before} cancels, not one`);
+        const small = await invoke(name('bytes'), { data: new Uint8Array([1, 2, 3]) });
+        const large = Uint8Array.from({ length: 70000 }, (_, i) => i % 251);
+        const echoed = await invoke(name('bytes'), { data: large.buffer });
+        if (small.size !== 3 || !(small.back instanceof Uint8Array) || small.back.join() !== '3,2,1' || echoed.size !== 70000 || echoed.back[0] !== large[69999]) {
+            throw new Error(`${name('bytes')} gave back ${small.size} and ${echoed.size} bytes`);
+        }
+    }
+    const big = await invoke('probe.bigBytes');
+    if (!(big instanceof Uint8Array) || big.length !== 100000 || big.some((byte, i) => byte !== i % 251)) throw new Error(`probe.bigBytes came as ${big?.length} bytes`);
 }
 
 initNative().then(async (m) => {
@@ -482,7 +756,15 @@ initNative().then(async (m) => {
         }
         await checkClipboard(!isAndroid && !isDesktop);
         await checkPageRequests();
+        await checkNavigation(isDesktop, isAndroid);
+        await checkDownloads();
+        await checkCarried();
+        await checkActivities(!isAndroid && (!isDesktop || navigator.userAgent.includes('Macintosh')), isDesktop);
+        if (!isDesktop) await checkShortcuts(isAndroid);
+        if (!isAndroid && (!isDesktop || navigator.userAgent.includes('Macintosh'))) await checkNotifications(isDesktop);
         await checkContract(isDesktop, isAndroid);
+        await checkRoutes();
+        await checkCalls(isAndroid);
         // The app's own functions answer over the page's channel on every platform, and the host checks what it opens.
         const folders = await host.paths();
         if (![folders.data, folders.cache, folders.logs].every((folder) => /^(\/|[A-Za-z]:\\)/.test(folder))) {

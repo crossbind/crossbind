@@ -8,6 +8,7 @@
 
 #include <cmath>
 #include <functional>
+#include <map>
 #include <optional>
 #include <string>
 #include <utility>
@@ -158,10 +159,10 @@ bool always(const Ask &) { return true; }
     // Ticks while the page asks, answering the asks held too long, and stops CoreLocation once none came for a while.
     NSTimer *_clock;
     NSDate *_lastAsk;
-    // Whether page-permissions lets the page have the location, which the host asks it once in the app's run, and the
-    // asks that wait for its answer.
-    std::optional<bool> _isAllowed;
-    std::vector<std::pair<NSDictionary *, Reply>> _undecided;
+    // Whether page-permissions lets the page of an origin have the location, which the host asks it once in the app's
+    // run for each, and the asks that wait for its answer.
+    std::map<std::string, bool> _allowed;
+    std::map<std::string, std::vector<std::pair<NSDictionary *, Reply>>> _undecided;
 }
 
 - (instancetype)init {
@@ -173,7 +174,8 @@ bool always(const Ask &) { return true; }
     return self;
 }
 
-// Only the top frame, which the navigation rule keeps to the app's origins, learns where the app's user is.
+// Only the top frame learns where the app's user is, once page-permissions allows its origin, which the host refuses
+// for another origin than the app's own.
 - (void)userContentController:(WKUserContentController *)controller
       didReceiveScriptMessage:(WKScriptMessage *)message
                  replyHandler:(void (^)(id, NSString *))replyHandler {
@@ -191,19 +193,22 @@ bool always(const Ask &) { return true; }
 // The page has a position once page-permissions allows it, which a watch would otherwise ask after each position;
 // without that extension the page has none, as WebKit gives a macOS page none of its own.
 - (void)decide:(NSDictionary *)ask origin:(std::string)origin reply:(Reply)reply {
-    if (_isAllowed) {
-        if (*_isAllowed) [self ask:ask reply:std::move(reply)];
+    if (const auto decided = _allowed.find(origin); decided != _allowed.end()) {
+        if (decided->second) [self ask:ask reply:std::move(reply)];
         else reply(failureOf(1, @"User denied Geolocation"));
         return;
     }
-    _undecided.emplace_back(ask, std::move(reply));
-    if (_undecided.size() > 1) return;
-    crossbind::askPagePermission({"location"}, std::move(origin), [self](bool isAllowed) { [self decided:isAllowed]; });
+    auto &waiting = _undecided[origin];
+    waiting.emplace_back(ask, std::move(reply));
+    if (waiting.size() > 1) return;
+    crossbind::askPagePermission({"location"}, origin, [self, origin](bool isAllowed) { [self decided:isAllowed origin:origin]; });
 }
 
-- (void)decided:(bool)isAllowed {
-    _isAllowed = isAllowed;
-    for (auto &[ask, reply] : std::exchange(_undecided, {})) {
+- (void)decided:(bool)isAllowed origin:(const std::string &)origin {
+    _allowed[origin] = isAllowed;
+    auto waiting = std::move(_undecided[origin]);
+    _undecided.erase(origin);
+    for (auto &[ask, reply] : waiting) {
         if (isAllowed) [self ask:ask reply:std::move(reply)];
         else reply(failureOf(1, @"User denied Geolocation"));
     }
@@ -287,9 +292,9 @@ bool always(const Ask &) { return true; }
 // The page's navigator.geolocation and the handler of its asks join the webview as the window opens, before its page
 // loads.
 void crossbind_extension_page_location(crossbind::Registry &registry) {
-    registry.onWindow([] {
+    registry.onWindow([](const crossbind::Window &window) {
         static CBLocation *location = [CBLocation new];
-        WKUserContentController *contents = ((__bridge WKWebView *)crossbind::appWebView()).configuration.userContentController;
+        WKUserContentController *contents = ((__bridge WKWebView *)window.webView()).configuration.userContentController;
         [contents addUserScript:[[WKUserScript alloc] initWithSource:LOCATION_SCRIPT
                                                        injectionTime:WKUserScriptInjectionTimeAtDocumentStart
                                                     forMainFrameOnly:YES]];

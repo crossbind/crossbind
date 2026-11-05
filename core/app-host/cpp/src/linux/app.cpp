@@ -38,28 +38,35 @@ namespace {
 using crossbind::FileInput;
 using crossbind::PageDialog;
 
-// The page waits for a dialog's answer, which the extension that takes them gives, WebKitGTK's own then closing. A page
-// that leaves does so without asking, as WKWebView's does.
-gboolean onScriptDialog(WebKitWebView *, WebKitScriptDialog *dialog, gpointer) {
+// The page waits for a dialog's answer, which the holder of page-dialogs gives, WebKitGTK's own then closing; one it
+// leaves to WebKitGTK with useDefault() as its hook runs, WebKitGTK shows. A page that leaves does so without asking, as
+// WKWebView's does.
+gboolean onScriptDialog(WebKitWebView *view, WebKitScriptDialog *dialog, gpointer) {
     const WebKitScriptDialogType type = webkit_script_dialog_get_dialog_type(dialog);
     if (type == WEBKIT_SCRIPT_DIALOG_BEFORE_UNLOAD_CONFIRM) {
         webkit_script_dialog_confirm_set_confirmed(dialog, TRUE);
         return TRUE;
     }
+    // A page of another origin gets no dialog, as it would show under the app's name: it closes as cancelled.
+    const char *uri = webkit_web_view_get_uri(view);
+    if (!crossbind::app::isOwnOrigin(crossbind::app::originOf(uri ? uri : ""))) return TRUE;
     const PageDialog::Kind kind = type == WEBKIT_SCRIPT_DIALOG_ALERT     ? PageDialog::Kind::alert
                                   : type == WEBKIT_SCRIPT_DIALOG_CONFIRM ? PageDialog::Kind::confirm
                                                                          : PageDialog::Kind::prompt;
     const char *text = kind == PageDialog::Kind::prompt ? webkit_script_dialog_prompt_get_default_text(dialog) : nullptr;
     webkit_script_dialog_ref(dialog);
-    crossbind::app::askPageDialog(PageDialog(std::make_shared<PageDialog::State>(
-        kind, webkit_script_dialog_get_message(dialog), text ? text : "", [dialog, kind](std::optional<std::string> answer) {
+    const bool isLeft = crossbind::app::askPageDialog(crossbind::app::make<PageDialog>(std::make_shared<crossbind::app::StateOf<PageDialog>>(
+        kind, webkit_script_dialog_get_message(dialog), text ? text : "",
+        [dialog, kind](std::optional<std::string> answer) {
             if (kind == PageDialog::Kind::confirm) webkit_script_dialog_confirm_set_confirmed(dialog, answer.has_value());
             // A prompt without a text answers null.
             if (kind == PageDialog::Kind::prompt && answer) webkit_script_dialog_prompt_set_text(dialog, answer->c_str());
             webkit_script_dialog_close(dialog);
             webkit_script_dialog_unref(dialog);
-        })));
-    return TRUE;
+        },
+        true)));
+    if (isLeft) webkit_script_dialog_unref(dialog);
+    return !isLeft;
 }
 
 gboolean onFileChooser(WebKitWebView *, WebKitFileChooserRequest *request, gpointer) {
@@ -68,8 +75,9 @@ gboolean onFileChooser(WebKitWebView *, WebKitFileChooserRequest *request, gpoin
         for (; *types; ++types) accept.emplace_back(*types);
     }
     g_object_ref(request);
-    crossbind::app::askFileInput(FileInput(std::make_shared<FileInput::State>(
-        webkit_file_chooser_request_get_select_multiple(request), false, std::move(accept), [request](std::optional<std::vector<std::string>> paths) {
+    const bool isLeft = crossbind::app::askFileInput(crossbind::app::make<FileInput>(std::make_shared<crossbind::app::StateOf<FileInput>>(
+        webkit_file_chooser_request_get_select_multiple(request), false, std::move(accept),
+        [request](std::optional<std::vector<std::string>> paths) {
             if (paths) {
                 std::vector<const gchar *> files;
                 for (const auto &path : *paths) files.push_back(path.c_str());
@@ -79,8 +87,11 @@ gboolean onFileChooser(WebKitWebView *, WebKitFileChooserRequest *request, gpoin
                 webkit_file_chooser_request_cancel(request);
             }
             g_object_unref(request);
-        })));
-    return TRUE;
+        },
+        true)));
+    // WebKitGTK shows its own picker for one the owner left to it.
+    if (isLeft) g_object_unref(request);
+    return !isLeft;
 }
 
 // What the page asks to use, by the names page-permissions takes. A request goes by its type's name where WebKitGTK
@@ -112,11 +123,13 @@ std::vector<std::string> kindsOf(WebKitPermissionRequest *request) {
 gboolean onPermissionRequest(WebKitWebView *webView, WebKitPermissionRequest *request, gpointer) {
     g_object_ref(request);
     const char *uri = webkit_web_view_get_uri(webView);
-    crossbind::app::askPagePermission(crossbind::app::pagePermission(kindsOf(request), crossbind::app::originOf(uri ? uri : ""), [request](bool isAllowed) {
-        if (isAllowed) webkit_permission_request_allow(request);
-        else webkit_permission_request_deny(request);
-        g_object_unref(request);
-    }));
+    // WebKitGTK denies what the owner leaves it.
+    crossbind::app::askPagePermission(
+        crossbind::app::pagePermission(kindsOf(request), crossbind::app::originOf(uri ? uri : ""), [request](crossbind::app::PermissionAnswer answer) {
+            if (answer == crossbind::app::PermissionAnswer::allow) webkit_permission_request_allow(request);
+            else webkit_permission_request_deny(request);
+            g_object_unref(request);
+        }));
     return TRUE;
 }
 

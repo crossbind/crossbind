@@ -25,6 +25,10 @@ HRESULT onScriptDialog(ICoreWebView2 *, ICoreWebView2ScriptDialogOpeningEventArg
     COREWEBVIEW2_SCRIPT_DIALOG_KIND type = COREWEBVIEW2_SCRIPT_DIALOG_KIND_ALERT;
     args->get_Kind(&type);
     if (type == COREWEBVIEW2_SCRIPT_DIALOG_KIND_BEFOREUNLOAD) return args->Accept();
+    // A frame of another origin gets no dialog, as it would show under the app's name: one not accepted is cancelled.
+    LPWSTR source = nullptr;
+    args->get_Uri(&source);
+    if (!crossbind::app::isOwnOrigin(crossbind::app::originOf(take(source)))) return S_OK;
     const PageDialog::Kind kind = type == COREWEBVIEW2_SCRIPT_DIALOG_KIND_CONFIRM  ? PageDialog::Kind::confirm
                                   : type == COREWEBVIEW2_SCRIPT_DIALOG_KIND_PROMPT ? PageDialog::Kind::prompt
                                                                                    : PageDialog::Kind::alert;
@@ -39,7 +43,7 @@ HRESULT onScriptDialog(ICoreWebView2 *, ICoreWebView2ScriptDialogOpeningEventArg
         return S_OK;
     }
     args->AddRef();
-    const PageDialog dialog(std::make_shared<PageDialog::State>(
+    const PageDialog dialog = crossbind::app::make<PageDialog>(std::make_shared<crossbind::app::StateOf<PageDialog>>(
         kind, take(message), take(text), [args, deferral, kind](std::optional<std::string> answer) {
             if (answer) {
                 if (kind == PageDialog::Kind::prompt) args->put_ResultText(wide(*answer).c_str());
@@ -56,7 +60,7 @@ HRESULT onScriptDialog(ICoreWebView2 *, ICoreWebView2ScriptDialogOpeningEventArg
 }  // namespace
 
 // The page's dialogs go to the extension that takes them, WebView2 showing none of its own; without one, WebView2
-// shows its own. WebView2 shows the page's file inputs and downloads itself.
+// shows its own. WebView2 shows the page's file inputs itself.
 void showPageDialogs(void *webView) {
     if (!crossbind::app::hasPageDialogs()) return;
     ICoreWebView2Settings *settings = nullptr;
@@ -142,12 +146,16 @@ HRESULT onPermissionRequest(ICoreWebView2 *, ICoreWebView2PermissionRequestedEve
         return args->put_State(COREWEBVIEW2_PERMISSION_STATE_DENY);
     }
     args->AddRef();
-    const crossbind::PagePermission request = crossbind::app::pagePermission({kindOf(kind)}, crossbind::app::originOf(take(uri)), [args, deferral](bool isAllowed) {
-        args->put_State(isAllowed ? COREWEBVIEW2_PERMISSION_STATE_ALLOW : COREWEBVIEW2_PERMISSION_STATE_DENY);
-        deferral->Complete();
-        deferral->Release();
-        args->Release();
-    });
+    // WebView2 asks its user what the owner leaves it.
+    const crossbind::PagePermission request = crossbind::app::pagePermission(
+        {kindOf(kind)}, crossbind::app::originOf(take(uri)), [args, deferral](crossbind::app::PermissionAnswer answer) {
+            args->put_State(answer == crossbind::app::PermissionAnswer::allow  ? COREWEBVIEW2_PERMISSION_STATE_ALLOW
+                            : answer == crossbind::app::PermissionAnswer::deny ? COREWEBVIEW2_PERMISSION_STATE_DENY
+                                                                               : COREWEBVIEW2_PERMISSION_STATE_DEFAULT);
+            deferral->Complete();
+            deferral->Release();
+            args->Release();
+        });
     onMainThread([request] { crossbind::app::askPagePermission(request); });
     return S_OK;
 }

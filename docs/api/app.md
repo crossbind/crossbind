@@ -116,10 +116,12 @@ A macOS app opens with the app, Edit, View and Window menus every Mac app has, s
 it, and the page may set its own, as [Menus](#menus) tells. The
 page's `alert()`, `confirm()` and `prompt()` show as the system's own dialogs, titled with the app's name, and the page
 waits for their answer, as in a browser; its `beforeunload` never asks, and the page leaves at once. A file input shows
-the system's picker. The host's extensions `page-dialogs` and `page-files` show them, which an extension of that name
-replaces (see [extensions.md](./extensions.md#the-pages-requests)). A
+the system's picker. The host's extensions `page-dialogs` and `page-files` show them, whose roles an extension may take
+(see [extensions.md](./extensions.md#the-pages-requests)). A
 download the page starts, such as an `<a download>` link, asks where to save: in a save panel on macOS, in the system's
-export sheet on iOS and in its save picker on Android. On Android, Back goes back in the page's history first, and
+export sheet on iOS and in its save picker on Android; on Linux it goes to the user's Downloads folder, and on Windows
+WebView2 shows its own downloads. The host's extension `page-downloads` saves them so, whose role an extension may take
+(see [extensions.md](./extensions.md#downloads)). On Android, Back goes back in the page's history first, and
 leaves the app when there is none.
 
 An app that cannot start, for want of the WebView2 Runtime or of a file it carries, writes why to its output; a desktop
@@ -304,8 +306,8 @@ public key's pair stop `crossbind app build` before anything compiles. The host'
 ## The app's functions
 
 The page imports what the app's host does for it from `crossbind/app`. The app's C++ calls the same, but for
-`menu.set`, `tray`, `notification.show`, `app.launchUrls`, `app.launchArgs`, `events.on` and `events.held`, through
-`<crossbind/app.h>`, which an app's own code finds as it builds, with `CROSSBIND_APP` defined:
+`menu.set`, `tray`, `notification.show`, `app.launchUrls`, `app.launchArgs`, `app.setUserActivity`, `events.on` and
+`events.held`, through `<crossbind/app.h>`, which an app's own code finds as it builds, with `CROSSBIND_APP` defined:
 
 ```js
 import { app, dialog, shell } from 'crossbind/app';
@@ -332,14 +334,17 @@ std::string databasePath() { return crossbind::app::paths().data + "/notes.sqlit
 | `shell.openPath(path)` | A file in the app the system opens its kind with | ✓ | | |
 | `shell.revealInFolder(path)` | A file, selected, in the system's file manager, or on Linux without one its folder | ✓ | | |
 | `shell.trash(path)` | Moves a file or folder to the system's trash, and nothing where it has none | ✓ | | |
-| `app.paths()` | `{ data, cache, logs }`, the app's own folders, made if missing | ✓ | ✓ | ✓ |
+| `app.paths()` | `{ data, cache, logs, resources }`, the app's own folders, made if missing, and the read-only one of the files `app.files` lists | ✓ | ✓ | ✓ |
 | `app.quit()` | Ends the app as closing its window does, without asking the extensions that may keep the window open | ✓ | | |
 | `app.requestQuit()` | Asks the extensions, as its user's Quit does, then ends the app as `app.quit()` does, unless one keeps it running | ✓ | | |
 | `app.relaunch()` | Ends the app as `app.quit()` does, then opens it anew with no link | ✓ | | |
 | `app.launchUrls()` | The links of `app.urlSchemes` that opened the app and have not reached the page yet; the page alone | ✓ | ✓ | ✓ |
 | `app.launchFiles()` | The files the system opened the app with that have not reached the page yet, as [Files](#files) tells; the page alone | ✓ | ✓ | ✓ |
 | `app.launchArgs()` | `{ args, cwd }`, the launch that started the app, as [One instance](#one-instance) tells, empty on a phone; the page alone | ✓ | ✓ | ✓ |
+| `app.setUserActivity({ type, userInfo, webpageUrl })` | Makes a user activity of `app.activityTypes` the app's current one, which its user's other devices continue, as [User activities](#user-activities) tells, or none with `null`; iOS, macOS and the page alone | ✓ | ✓ | |
 | `menu.set(menus)` | Sets the app's menus, whose clicks are the event `menu`; the page alone | ✓ | | |
+| `menu.popup(items, { x, y })` | Opens a menu at the page's point, as a right click's: the id of the item clicked, or `null`; the page alone | ✓ | | |
+| `menu.setDock(items)` | The menu of a macOS app's Dock icon, whose clicks are the event `menu`; macOS and the page alone | ✓ | | |
 | `tray.set({ tooltip, menu })` | The app's icon in the menu bar, notification area or status tray, whose clicks are the events `tray` and `menu`; the page alone | ✓ | | |
 | `tray.remove()` | Takes the tray's icon away; the page alone | ✓ | | |
 | `notification.show({ title, body })` | A notification of the system's, a click on which is the event `notification`; the page alone | ✓ | | |
@@ -392,7 +397,10 @@ open something wait for: called before that, as from a static initializer, or on
 On the desktop the folders take the name of `app.id`: under `~/Library` on macOS, under `$XDG_DATA_HOME`,
 `$XDG_CACHE_HOME` and `$XDG_STATE_HOME` on Linux, and under `%APPDATA%` and `%LOCALAPPDATA%` on Windows. An iOS
 app's are its own `Library/Application Support`, `Library/Caches` and `Library/Logs`, and an Android app's its
-`files`, `cache` and `files/logs`. A Windows page's own storage and cache, WebView2's profile, are in
+`files`, `cache` and `files/logs`. `resources` is the folder of the files `app.files` in `crossbind.config.js` lists,
+each in the place it had in the project, read-only, among the app's own files: `Contents/Resources/files` of a macOS
+bundle, the iOS bundle's, `resources/files` beside a Linux or Windows app's executable, and on Android a copy on disk
+the app makes as it first starts after each install. A Windows page's own storage and cache, WebView2's profile, are in
 `%LOCALAPPDATA%\<app.id>\WebView2`; those of an app an earlier crossbind built, under `%APPDATA%\<name>.exe`, move
 there when it first opens, or stay in use where they are when they cannot move, as from a roaming folder on another
 drive.
@@ -472,6 +480,16 @@ another app's picker, or going to the background, as `inactive`, both without a 
 focus, which a dialog of its own takes as well. An extension hears the same through `onActive`, as
 [extensions.md](./extensions.md#the-native-side) tells.
 
+A desktop page hears of the files its user drops on it as the event `drop`, of `{ paths, x, y }`: their absolute
+paths, which the page may then reach through `shell`'s functions, as what its user picked, and the point they were
+dropped at, in CSS pixels from its top left. The page's own `drop` event goes on, with its `File`s. The host's
+extension `page-drops` tells it, whose role an extension may take
+([extensions.md](./extensions.md#drops)).
+
+```js
+events.on('drop', ({ paths }) => open(paths[0]));
+```
+
 ## Menus
 
 The page sets the app's menus while it runs, and hears of their clicks as the event `menu`:
@@ -518,6 +536,31 @@ standard items of that platform's apps, and `menu.set([])` takes the bar away. i
 and `menu.set` rejects there. The event `menu` is the menus' and the [tray's](#tray-and-notifications) alone: the app's
 C++ sets neither, and the events it emits, one of which the page may set them on, go by other names.
 
+A desktop page opens a menu of its own where its user right clicks, of the items a menu takes, and gets the id of the
+item clicked, or `null` when the menu closes without one:
+
+```js
+addEventListener('contextmenu', async (event) => {
+    event.preventDefault();
+    const id = await menu.popup([{ label: 'Rename', id: 'rename' }, { type: 'separator' }, { role: 'copy' }], { x: event.clientX, y: event.clientY });
+    if (id === 'rename') rename();
+});
+```
+
+The point is the page's, in CSS pixels from its top left, as a `contextmenu` event's `clientX` and `clientY` are, and
+the menu opens there at the page's zoom. A standard item does what its role says, and the event `menu` hears nothing of
+a popup's clicks. `preventDefault()` keeps the webview's own menu away. iOS and Android apps open none, and
+`menu.popup` rejects there.
+
+A macOS page sets the menu its Dock icon shows above the system's own items, of the tray's items, `{ label, id,
+enabled, checked }`, submenus and separators, whose clicks are the event `menu` as well:
+
+```js
+await menu.setDock([{ label: 'New window', id: 'new-window' }]);
+```
+
+An empty list takes it away, and another platform's `menu.setDock` rejects.
+
 ## Tray and notifications
 
 A desktop page puts the app's icon in the macOS menu bar, the Windows notification area or a Linux desktop's status
@@ -561,6 +604,10 @@ does in an executable run outside its bundle. On Windows it is a balloon of the 
 show as one of their notifications: without the page's tray, or after `tray.remove()`, an icon of the app's shows in the
 notification area until the notification goes, and its clicks tell the page nothing. A Linux app gives it to the desktop's notification server, with the body escaped for one that reads markup in it.
 iOS and Android apps have neither a tray nor these notifications yet, and both calls reject there.
+
+On iOS and macOS the host owns the system's notification center, whose notifications, pushes among them, reach the
+app's extensions, as [extensions.md](./extensions.md#notifications-and-push) tells: one that comes while the app is in
+front shows as a banner, in the list and with its sound, unless an extension shows it otherwise.
 
 ## One instance
 
@@ -674,7 +721,7 @@ app: {
 ```
 
 They reach the page as the links of `app.urlSchemes` do, through `app.launchUrls()` and the event `open-url`, and an
-extension's own, in its `app.links`, reach its `onUrl` alone: a link reaches the owner of the entry whose domain is
+extension's own, in its `app.links`, reach its `onOpenUrl` alone: a link reaches the owner of the entry whose domain is
 the link's and whose path the link's decoded path starts with, as Android's `pathPrefix` does: of those, the one of the
 longest path, then a domain before a `*.` of it, then the longest domain. One entry has one owner, and two stop the
 build. An entry's path holds no `%` escape. Each site
@@ -687,6 +734,79 @@ names the app, which the system checks before a link of it opens the app:
   `/.well-known/assetlinks.json`, which names the app by its id and the SHA-256 of the certificate it is signed with.
 
 macOS, Windows and Linux hand no app an https link.
+
+## User activities
+
+On iOS and macOS, `app.activityTypes` names the types of the user activities the app continues, as Handoff does when
+its user picks up on one device what they did on another, in an app of the same team: a reverse-DNS name, as
+`com.example.notes.edit` is, or an intent's class, a letter or a digit, then letters, digits, `.`, `_` and `-`. A web
+page's, `NSUserActivityTypeBrowsingWeb`, is a site's link, which `app.links` takes.
+
+```js
+app: {
+    activityTypes: ['com.example.notes.edit'],
+},
+```
+
+The page makes one of them the app's current activity, which its user's other devices offer to continue, with
+`app.setUserActivity()`: its `type`, what the page keeps in its `userInfo`, JSON values, and the http or https
+`webpageUrl` a device without the app opens instead. `null` makes none current. A type `app.activityTypes` does not
+list rejects, as every other platform does.
+
+```js
+import { app, events } from 'crossbind/app';
+
+await app.setUserActivity({
+    type: 'com.example.notes.edit', userInfo: { note: 7 }, webpageUrl: 'https://example.com/notes/7',
+});
+```
+
+An activity the system continues the app with, the launch's own among them, reaches the page as the event
+`user-activity`, `{ type, userInfo, webpageUrl }`, which the host's `activities` extension holds, as
+[Events and callbacks](#events-and-callbacks) tells, until the page asks with `events.held('user-activity')`:
+
+```js
+events.on('user-activity', open);
+for (const activity of await events.held('user-activity')) open(activity);
+```
+
+Its `userInfo` holds what the app that made it kept, a property list's values: a date as its ISO 8601 text, a URL and a
+UUID as theirs, and a set as an array. JSON has no bytes, so one that holds bytes reaches no page, and the app's output
+says why. An extension declares types of its own in its `app.activityTypes`, whose activities reach its native code
+alone, as [extensions.md](./extensions.md#launches-and-links) tells. One type has one owner, the app or one extension;
+two stop the build. The app's Info.plist lists them all as `NSUserActivityTypes`, which a macOS development session's
+leaves out, as it does the schemes.
+
+## Quick actions
+
+On iOS and Android, `app.shortcutItems` names the quick actions a long press of the app's icon shows: each by its
+`type`, a letter or a digit, then letters, digits, `.`, `_` and `-`, with its `title`, and on iOS a `subtitle` and an
+`icon`, one of iOS's own by `UIApplicationShortcutIconType`'s name without its prefix, as `compose`, `add` and `search`
+are. Android shows the app's icon beside each, with `app.icon`, and most launchers show four at most.
+
+```js
+app: {
+    shortcutItems: [{ type: 'new-note', title: 'New note', icon: 'compose' }],
+},
+```
+
+A tap reaches the page as the event `shortcut-item`, `{ type }`, the launch's own among them, which the host's
+`shortcuts` extension holds, as [Events and callbacks](#events-and-callbacks) tells, until the page asks with
+`events.held('shortcut-item')`:
+
+```js
+import { events } from 'crossbind/app';
+
+events.on('shortcut-item', ({ type }) => run(type));
+for (const { type } of await events.held('shortcut-item')) run(type);
+```
+
+The app as built lists them in an iOS app's Info.plist as `UIApplicationShortcutItems`, and as an Android app's static
+shortcuts, whose labels are its resources. Android starts a static shortcut's tap in a task it empties first, which
+would end the page; the host's trampoline activity hands the tap to the activity that runs instead, which keeps it. An
+extension declares quick actions of its own in its `app.shortcutItems`, whose taps reach its native code alone, as
+[extensions.md](./extensions.md#launches-and-links) tells. One type has one owner, the app or one extension; two stop
+the build. The list is fixed as the app is built, and a desktop has none.
 
 ## Files
 
@@ -774,8 +894,8 @@ on Windows and Linux the page gets it at once. The webview asks nothing of its o
 asks to use, on any platform, but the autoplay and the sensors Windows' WebView2 gives without asking: no device the
 list leaves out, no notifications, no MIDI, no downloads of several files at once on Windows and no iOS device's motion,
 nor anything for a frame of another origin on Android, which lets the page hold one. It reads the clipboard on its
-user's gesture alone, as in a browser. The host's extension `page-permissions` answers the page, which an extension of
-that name replaces (see [extensions.md](./extensions.md#the-pages-requests)). Without its reason, WebKit gives a macOS
+user's gesture alone, as in a browser. The host's extension `page-permissions` answers the page, whose role an extension
+may take (see [extensions.md](./extensions.md#the-pages-requests)). Without its reason, WebKit gives a macOS
 page no camera or microphone at all.
 
 macOS asks for the app that opened on its own, from the Finder, the Dock or `open`. An app a terminal or an editor
@@ -794,11 +914,13 @@ from CoreLocation, which asks with the reason; a frame inside the page gets none
     ├── icon.icns                 the icon, with app.icon
     ├── host.hbc                  the embind runtime and the protocol, as Hermes bytecode
     ├── page/                     what Vite built, served at crossbind://app/
-    └── data/                     the packages' data (CROSSBIND_DATA_PATH)
+    ├── data/                     the packages' data (CROSSBIND_DATA_PATH)
+    ├── files/                    what app.files lists, each in its place in the project
+    └── ext/<name>/               what each extension's app.files lists, each in its place in the extension
 
 <name>-linux-<arch>/
 ├── <name>                        the window, the webview, Hermes and the bindings, in one executable
-└── resources/                    host.hbc, page/ and data/, as on macOS, and icon.png with app.icon
+└── resources/                    host.hbc, page/, data/, files/ and ext/, as on macOS, and icon.png with app.icon
 
 <name>-win32-<arch>/              as on Linux, with <name>.exe, which carries the icon
 
@@ -810,7 +932,7 @@ from CoreLocation, which asks with the reason; a frame inside the page gets none
 ├── lib/iphoneos/, lib/iphonesimulator/
 │                                 the host and the archives it links, for each SDK
 ├── Frameworks/hermesvm.xcframework
-└── app/                          host.hbc, page/ and data/, copied into the app's bundle
+└── app/                          host.hbc, page/, data/, files/ and ext/, copied into the app's bundle
 
 <name>-android/                   a Gradle project, written anew on every build
 ├── settings.gradle, build.gradle, gradlew and gradle/
@@ -823,7 +945,7 @@ from CoreLocation, which asks with the reason; a frame inside the page gets none
         │                         the WebView, its message port and navigation rule
         ├── jniLibs/<abi>/        the host, JSI, the NDK's libc++ and the packages' shared libraries
         ├── res/mipmap-*/         the icon, with app.icon
-        └── assets/app/           host.hbc, page/ and data/, copied out to the app's files when it first starts
+        └── assets/app/           host.hbc, page/, data/, files/ and ext/, copied out to its files at first start
 
 <name>-android.apk                the release APK Gradle makes of it, and <name>-android.aab with an upload key
 ```
@@ -839,15 +961,21 @@ delivers one ABI.
 
 ## Security
 
-- The webview loads `crossbind://app` alone, in any frame; during development, the dev server too. A frame from
-  another origin would reach the module's channel and its `crossbind://` requests, so none is loaded. A link the user
-  follows to another page opens in the default browser, and any other navigation away is refused.
+- The webview loads `crossbind://app` in any frame without asking; during development, the dev server too. Every
+  other URL goes to the holder of `page-navigation` ([Navigation](./extensions.md#navigation)): the host's own loads
+  the origins `app.navigation.load` lists, opens any other link the user follows in the default browser, and refuses
+  any other navigation away. A page of another origin that loads gets no token, so it reaches neither the module's
+  channel nor the app's functions, nor any dialog or device of the app's, and no page opens a window of its own.
 - The host gives the top frame of its page a token, and every message to the module and every call that travels as a
   `crossbind://` request carries it. Markup, such as an image, a frame from another origin and a sandboxed frame
   cannot read it, so none of them reaches the module. On macOS, iOS and Windows the channel also checks the sender's
   origin, which WebKitGTK does not tell.
-- Responses from `crossbind://` let another origin read them only during development, when the page comes from the
-  dev server.
+- Responses from `crossbind://` let another origin read them only during development, the dev server's alone, as the
+  page comes from it.
+- An extension's route serves URLs of its own, under `crossbind://app/ext/<extension>/`, which any of the app's pages
+  and markup load without the token, as the page's files: it serves what the page may see, and the host refuses a path
+  with a part `..` and any method but GET and HEAD
+  ([Routes](./extensions.md#routes)).
 - The app's functions (`crossbind/app`) travel with the same token, so the top frame of the page reaches them, and so
   does a frame of the page's own origin, which can read the top frame's globals: the page and such frames are the
   app's own code. `shell.openExternal` opens http, https and mailto addresses alone, the page's `shell.openPath` opens

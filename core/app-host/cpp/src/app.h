@@ -34,6 +34,14 @@ void openUrlsIn(const std::vector<std::string> &args);
 // the extension whose types alone list a file's MIME type gets it, else the one that owns its name's extension, and the
 // host's files the rest, which holds them for the page as the event open-files.
 void openedFiles(const std::vector<std::string> &paths, const std::vector<std::string> &mimeTypes = {});
+// A user activity the system continued an iOS or macOS app with, on the main thread: the extension whose
+// app.activityTypes lists its type gets it, for one of the app's own the host's activities, which holds it for the page
+// as the event user-activity. Whether one took it.
+bool continuedActivity(const UserActivity &activity);
+// A tap of one of the quick actions of an iOS or Android app's icon, by its type, on any thread: the extension whose
+// app.shortcutItems lists it gets it, for one of the app's own the host's shortcuts, which holds it for the page as the
+// event shortcut-item. Whether one took it.
+bool shortcutItemTapped(const std::string &type);
 // What a desktop launch opens: the links among its arguments, and in an app that opens files the files they name.
 void openLaunch(const Launch &launch);
 // A desktop app's launch, on Windows from its command line as given, whatever the code page.

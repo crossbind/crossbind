@@ -37,8 +37,8 @@ LRESULT CALLBACK instanceProcedure(HWND window, UINT message, WPARAM wParam, LPA
     try {
         std::optional<Launch> launch = decodeLaunch({static_cast<const char *>(data->lpData), data->cbData});
         if (!launch) return FALSE;
-        // The launch that sent it leaves at once, as on macOS and Linux, whatever the app then does with it: an
-        // extension's onUrl runs on this thread. The data is copied, as the sender may free it from now on.
+        // The launch that sent it leaves at once, as on macOS and Linux, whatever the app then does with it on the main
+        // thread. The data is copied, as the sender may free it from now on.
         ReplyMessage(TRUE);
         crossbind::launchedAgain(std::move(*launch));
         return TRUE;

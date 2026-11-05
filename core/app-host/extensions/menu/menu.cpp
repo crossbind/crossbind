@@ -100,13 +100,13 @@ std::vector<MenuItem> menuItems(const Value &list) {
     return out;
 }
 
-// A tray's menu has neither standard items nor keys, and each item but a separator has a label, as crossbind/app holds
-// a page to.
-void checkTrayItems(const std::vector<MenuItem> &items) {
+// A tray's menu and the Dock's have neither standard items nor keys, and each item but a separator has a label, as
+// crossbind/app holds a page to.
+void checkTrayItems(const std::vector<MenuItem> &items, const std::string &menu) {
     for (const auto &item : items) {
-        if (!item.role.empty() || item.accelerator) throw std::invalid_argument("crossbind: tray.set's menu takes no role or accelerator");
-        if (!item.isSeparator && item.label.empty()) throw std::invalid_argument("crossbind: tray.set's menu has an item without a label");
-        checkTrayItems(item.items);
+        if (!item.role.empty() || item.accelerator) throw std::invalid_argument("crossbind: " + menu + " takes no role or accelerator");
+        if (!item.isSeparator && item.label.empty()) throw std::invalid_argument("crossbind: " + menu + " has an item without a label");
+        checkTrayItems(item.items, menu);
     }
 }
 
@@ -127,14 +127,41 @@ void crossbind_extension_menu(crossbind::Registry &registry) {
     using namespace crossbind::menu;
     using crossbind::Call;
     trayId = registry.options()["id"].asString("");
+#if defined(__linux__) && !defined(__ANDROID__)
+    registry.onWindow([](const crossbind::Window &) { keepPresses(); });
+#elif defined(__APPLE__) && !TARGET_OS_IPHONE
+    registry.onWindow([](const crossbind::Window &) { answerDockMenu(); });
+#endif
     registry.function("menu.set", [](Call call) { setMenu(menuItems(call.options()["menus"]), menuClicked, answered(call)); });
+    registry.function("menu.popup", [](Call call) {
+        const crossbind::Value &options = call.options();
+        popupMenu(menuItems(options["items"]), options["x"].asNumber(), options["y"].asNumber(), [call](Failure failure, std::optional<std::string> id) {
+            if (failure) {
+                call.reject(*failure);
+            } else {
+                call.resolve(id ? crossbind::Value(*id) : crossbind::Value());
+            }
+        });
+    });
     registry.function("tray.set", [](Call call) {
         const crossbind::Value &options = call.options();
         TrayOptions tray{options["tooltip"].asString(""), options["menu"].isNull() ? std::vector<MenuItem>() : menuItems(options["menu"])};
-        checkTrayItems(tray.menu);
+        checkTrayItems(tray.menu, "tray.set's menu");
         setTray(std::move(tray), menuClicked, answered(call));
     });
     registry.function("tray.remove", [](Call call) { removeTray(answered(call)); });
+    registry.function("menu.setDock", [](Call call) {
+        std::vector<MenuItem> items = menuItems(call.options()["items"]);
+        checkTrayItems(items, "menu.setDock's menu");
+        setDockMenu(std::move(items), menuClicked, answered(call));
+    });
+    // A tap of one of showNotification()'s, which the host's notification center hands over on macOS: a push's sender
+    // names its own.
+    registry.onNotification([](const crossbind::Notification &notification) {
+        if (notification.isTap() && !notification.isRemote() && notification.id().rfind(NOTIFICATION_ID_PREFIX, 0) == 0) {
+            crossbind::app::emitEvent("notification");
+        }
+    });
     registry.function("notification.show", [](Call call) {
         const std::string title = call.options()["title"].asString("");
         if (title.empty()) throw std::invalid_argument("crossbind: notification.show takes a title");

@@ -36,6 +36,14 @@ const backgroundValues = (color) => `<?xml version="1.0" encoding="utf-8"?>
 </resources>
 `;
 
+// The devices of app.permissions, which alone the page may ask for, whatever an extension's Java asks Android for.
+const permissionValues = (permissions) => `<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string-array name="crossbind_permissions">${permissions.map((name) => `\n        <item>${name}</item>`).join('')}
+    </string-array>
+</resources>
+`;
+
 // The Android permissions behind each of app.permissions, after the one every app asks for; the activity asks its user
 // for them when the page first uses the device.
 const INTERNET = '    <uses-permission android:name="android.permission.INTERNET" />';
@@ -120,22 +128,55 @@ const linkFilters = (links) => links.map((link) => {
     return viewFilter(['android:scheme="https"', `android:host="${host}"`, ...(prefix ? [`android:pathPrefix="${prefix}"`] : [])], true);
 });
 
+// The app's quick actions, Android's static shortcuts of its icon, which shows the app's icon beside each, or the
+// launcher's own without one: Android empties a static shortcut's task first, so a tap starts the host's trampoline,
+// which hands it to the activity that runs, with its page. Each label is a resource, as Android takes none other.
+const SHORTCUTS_META = '            <meta-data android:name="android.app.shortcuts" android:resource="@xml/shortcuts" />';
+const shortcutsXml = (items, id, icon) => `<?xml version="1.0" encoding="utf-8"?>
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+${items.map(({ type }, index) => [
+        `    <shortcut android:shortcutId="${type}"${icon ? ` android:icon="${icon}"` : ''} android:shortcutShortLabel="@string/crossbind_shortcut_${index}">`,
+        `        <intent android:action="dev.crossbind.app.SHORTCUT" android:targetPackage="${id}" android:targetClass="dev.crossbind.app.CrossbindShortcutActivity">`,
+        // Android reads an extra's value of digits, or true or false, as a number or a boolean: after a prefix, each is text.
+        `            <extra android:name="dev.crossbind.app.shortcut" android:value="type:${type}" />`,
+        '        </intent>',
+        '    </shortcut>',
+    ].join('\n')).join('\n')}
+</shortcuts>
+`;
+// Text as a string resource holds it as it is: XML's escapes, and a backslash before what aapt reads otherwise, a quote,
+// an apostrophe, a backslash and an @ or a ? that starts it after any space; formatted="false" keeps a % as it is.
+const androidText = (text) => text.replace(/[\\'"]/g, '\\$&').replace(/^(\s*)([@?])/, '$1\\$2').replace(/&/g, '&amp;').replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+const shortcutLabels = (items) => `<?xml version="1.0" encoding="utf-8"?>
+<resources>
+${items.map(({ title }, index) => `    <string name="crossbind_shortcut_${index}" formatted="false">${androidText(title)}</string>`).join('\n')}
+</resources>
+`;
+
 // The class of each extension's Java, which the activity calls by the extension's name, in the extensions' order.
-const extensionsJava = (java) => `// crossbind writes this file from the app's extensions: the class of each one's Java, under its name.
+const extensionsJava = (java) => `// crossbind writes this file from the app's extensions: the class of each one's Java, under its name, and the holder of
+// each of the host's roles it holds.
 package dev.crossbind.app;
 
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
 final class Extensions {
     // In the order of the app's extensions, in which each hears what the activity does.
     static final Map<String, Extension> ALL;
+    // By the role, as page-dialogs, whose requests the activity hands its holder's Java.
+    static final Map<String, Extension> ROLES;
 
     static {
         Map<String, Extension> all = new LinkedHashMap<>();${java.map(({ name, className }) => `
         all.put(${JSON.stringify(name)}, new ${className}());`).join('')}
         ALL = Collections.unmodifiableMap(all);
+        Map<String, Extension> roles = new HashMap<>();${java.flatMap(({ name, roles = [] }) => roles.map((role) => `
+        roles.put(${JSON.stringify(role)}, all.get(${JSON.stringify(name)}));`)).join('')}
+        ROLES = Collections.unmodifiableMap(roles);
     }
 
     private Extensions() {}
@@ -228,8 +269,8 @@ ${libraries.map((library) => `    implementation '${library}'\n`).join('')}}
 // is an extension's folder of Java sources, by package, which the app's sources take beside the activity, and the
 // class in it the activity calls.
 export default function writeGradleProject(to, {
-    parts, id, label, version, icons = null, urlSchemes = [], fileTypes = [], links = [], background = null, permissions = [], java = [],
-    extensionPermissions = [], manifests = [], resources = [], maven = [],
+    parts, id, label, version, icons = null, urlSchemes = [], fileTypes = [], links = [], shortcutItems = [], background = null, permissions = [],
+    java = [], extensionPermissions = [], manifests = [], resources = [], maven = [],
 }) {
     const { name } = state.config.general;
     if (parts.length === 0) throw new Error(`crossbind: no part of the Android app ${name} is built, so there is no Gradle project to write.`);
@@ -253,7 +294,10 @@ export default function writeGradleProject(to, {
     // A replacer, as the extensions' text may hold what a replacement string reads as a pattern, as $&.
     fs.writeFileSync(manifest, text
         .replace(INTERNET, () => [INTERNET, ...usesPermissions(permissions, extensionPermissions), ...own('manifest', '    ')].join('\n'))
-        .replace(ACTIVITY_END, () => [...(urlSchemes.length > 0 ? [urlFilter(urlSchemes)] : []), ...fileFilters(fileTypes), ...linkFilters(links), ACTIVITY_END].join('\n'))
+        .replace(ACTIVITY_END, () => [
+            ...(urlSchemes.length > 0 ? [urlFilter(urlSchemes)] : []), ...fileFilters(fileTypes), ...linkFilters(links),
+            ...(shortcutItems.length > 0 ? [SHORTCUTS_META] : []), ACTIVITY_END,
+        ].join('\n'))
         .replace(APPLICATION_END, () => [...own('application', '        '), APPLICATION_END].join('\n')));
     fs.writeFileSync(path.join(main, 'java', 'dev', 'crossbind', 'app', 'Extensions.java'), extensionsJava(java));
     // The Java and Kotlin sources of an extension's folder alone, which may hold its manifest and resources as well: the
@@ -284,6 +328,12 @@ export default function writeGradleProject(to, {
     }
     fs.mkdirSync(path.join(main, 'res', 'values'), { recursive: true });
     fs.writeFileSync(path.join(main, 'res', 'values', 'background.xml'), backgroundValues(background));
+    fs.writeFileSync(path.join(main, 'res', 'values', 'permissions.xml'), permissionValues(permissions));
+    if (shortcutItems.length > 0) {
+        fs.mkdirSync(path.join(main, 'res', 'xml'), { recursive: true });
+        fs.writeFileSync(path.join(main, 'res', 'xml', 'shortcuts.xml'), shortcutsXml(shortcutItems, id, icons ? '@mipmap/ic_launcher' : null));
+        fs.writeFileSync(path.join(main, 'res', 'values', 'shortcuts.xml'), shortcutLabels(shortcutItems));
+    }
     // An extension's resources join the app's, of which they replace none.
     resources.forEach(({ name: extension, dir }) => {
         fs.readdirSync(dir, { recursive: true }).forEach((file) => {
@@ -296,7 +346,8 @@ export default function writeGradleProject(to, {
     });
     fs.writeFileSync(path.join(to, 'app', 'build.gradle'), buildGradle({
         id, label, version, abis: parts.map(({ arch }) => arch), icon: icons ? '@mipmap/ic_launcher' : '@android:drawable/sym_def_app_icon',
-        launchMode: urlSchemes.length + fileTypes.length + links.length > 0 ? 'singleTask' : 'standard', theme: background ? '@style/CrossbindBackground' : DAY_NIGHT,
+        launchMode: urlSchemes.length + fileTypes.length + links.length + shortcutItems.length > 0 ? 'singleTask' : 'standard',
+        theme: background ? '@style/CrossbindBackground' : DAY_NIGHT,
         libraries: [...new Set(maven.flatMap(({ coordinates }) => coordinates))],
     }));
     return to;

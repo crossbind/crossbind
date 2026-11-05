@@ -4,7 +4,7 @@
 #include "crossbind/extension.h"
 
 void crossbind_extension_links(crossbind::Registry &registry) {
-    registry.onUrl([](const std::string &url) {
-        crossbind::app::holdEvent("open-url", crossbind::Value(crossbind::Value::Object{{"url", url}}).json());
+    registry.onOpenUrl([](const crossbind::OpenUrl &open) {
+        crossbind::app::holdEvent("open-url", crossbind::Value(crossbind::Value::Object{{"url", open.url}}).json());
     });
 }

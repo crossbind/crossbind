@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { PROBE_SCHEME } from '../../e2e/launch.mjs';
+import { ACTIVITIES, PROBE_SCHEME, SHORTCUTS } from '../../e2e/launch.mjs';
 
 // What a store of the probe's got from crossbind, in its folder of the build, which e2e/publish.mjs reads.
 function record(api, received) {
@@ -52,11 +52,17 @@ export default function probe() {
             urlSchemes: [PROBE_SCHEME],
             fileTypes: [{ name: 'crossbind probe', extensions: ['cbprobe'], mimeTypes: ['application/x-crossbind-probe'] }],
             links: ['example.com/probe'],
+            // The user activities of its own type, which its Apple code gets.
+            activityTypes: [ACTIVITIES.probe],
+            // A quick action of its own, whose taps its native code gets on a phone.
+            shortcutItems: [{ type: SHORTCUTS.probe, title: 'Probe' }],
             sources: ['probe.cpp', 'compiled.c'],
+            // A file of its own the app carries, which probe.carried reads.
+            files: ['carried/'],
             includes: ['include'],
             defines: ['PROBE_OFFSET=1'],
-            macos: { sources: ['apple.mm', 'probe.swift'], plist },
-            ios: { sources: ['apple.mm', 'probe.swift'], plist, privacy: { userDefaults: ['CA92.1'] } },
+            macos: { sources: ['apple.mm', 'probe.swift'], plist, frameworks: ['UserNotifications'] },
+            ios: { sources: ['apple.mm', 'probe.swift'], plist, privacy: { userDefaults: ['CA92.1'] }, frameworks: ['UserNotifications'] },
             // zstd, which crossbind's sysroot lacks: Ubuntu 22.04's packages of its headers and library for each
             // architecture, as its Packages index pins them, and the one an installed app needs.
             linux: {

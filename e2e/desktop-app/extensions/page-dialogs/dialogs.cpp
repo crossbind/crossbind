@@ -2,7 +2,7 @@
 // what it was asked, and the rest accepted.
 #include "crossbind/extension.h"
 
-void crossbind_extension_page_dialogs(crossbind::Registry &registry) {
+void crossbind_extension_e2e_page_dialogs(crossbind::Registry &registry) {
     using crossbind::PageDialog;
     using crossbind::Value;
     registry.onPageDialog([](const PageDialog &dialog) {

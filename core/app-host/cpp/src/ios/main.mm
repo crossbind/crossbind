@@ -5,6 +5,7 @@
 
 #include "app.h"
 #include "crossbind_app.h"
+#include "darwin/values.h"
 
 #include <cmath>
 #include <cstdint>
@@ -53,12 +54,11 @@ bool isDark(std::uint32_t color) {
 @property(nonatomic, strong) UIWindow *window;
 @end
 
-@implementation CBSceneDelegate
+@implementation CBSceneDelegate {
+    uint64_t windowId;
+}
 
 - (void)scene:(UIScene *)scene willConnectToSession:(UISceneSession *)session options:(UISceneConnectionOptions *)options {
-    // A scene that connects again, in a process that outlived the last one, gets a page of its own: what the module
-    // pushed for the last page goes to none, and a link that launched the scene waits for the new one to ask.
-    core->reset();
     WKWebViewConfiguration *configuration = [WKWebViewConfiguration new];
     registerSchemeHandler((__bridge void *)configuration, "crossbind", [](SchemeRequest request, SchemeRespond respond) {
         core->serve(std::move(request), std::move(respond));
@@ -73,20 +73,23 @@ bool isDark(std::uint32_t color) {
 #ifdef CROSSBIND_APP_DEV
     if (@available(iOS 16.4, *)) webView.inspectable = YES;
 #endif
-    const std::string url = app::attach(*core, (__bridge void *)webView, devUrl);
-
     UIViewController *controller = [CBPageController new];
     controller.view = webView;
     self.window = [[UIWindow alloc] initWithWindowScene:(UIWindowScene *)scene];
     self.window.rootViewController = controller;
     setMainWindow((__bridge void *)self.window, (__bridge void *)webView);
     [self.window makeKeyAndVisible];
-    app::windowOpened();
+    windowId = app::windowOpened((__bridge void *)self.window, (__bridge void *)webView);
+    // A scene that connects again, in a process that outlived the last one, gets a page of its own: what the module
+    // pushed for the last page goes to none, and a link that launched the scene waits for the new one to ask.
+    core->reset();
+    const std::string url = app::attach(*core, (__bridge void *)webView, devUrl);
     [webView loadRequest:[NSURLRequest requestWithURL:[NSURL URLWithString:@(url.c_str())]]];
     // A link or a document that launched the app reaches the owner of its scheme or type: the page once it asks for it,
-    // or an extension; so does a site's link.
+    // or an extension; so do a site's link, a user activity and a quick action's tap.
     [self scene:scene openURLContexts:options.URLContexts];
     for (NSUserActivity *activity in options.userActivities) [self scene:scene continueUserActivity:activity];
+    if (options.shortcutItem) app::shortcutItemTapped(options.shortcutItem.type.UTF8String ?: "");
 }
 
 - (void)scene:(UIScene *)scene openURLContexts:(NSSet<UIOpenURLContext *> *)contexts {
@@ -105,9 +108,20 @@ bool isDark(std::uint32_t color) {
     if (!paths.empty()) app::openedFiles(paths);
 }
 
-// A link of app.links' sites, which iOS hands the app once the site's apple-app-site-association names it.
+// A link of app.links' sites, which iOS hands the app once the site's apple-app-site-association names it, or an
+// activity of a type the app continues.
 - (void)scene:(UIScene *)scene continueUserActivity:(NSUserActivity *)activity {
-    if ([activity.activityType isEqualToString:NSUserActivityTypeBrowsingWeb] && activity.webpageURL) app::openedUrl(activity.webpageURL.absoluteString.UTF8String);
+    continueActivity((__bridge void *)activity);
+}
+
+// iOS lets go of a scene its user swiped away, or one in the background, and may connect it again later.
+- (void)sceneDidDisconnect:(UIScene *)scene {
+    app::windowClosed(windowId);
+}
+
+// A tap of one of the quick actions of the app's icon while the app runs.
+- (void)windowScene:(UIWindowScene *)scene performActionForShortcutItem:(UIApplicationShortcutItem *)item completionHandler:(void (^)(BOOL))done {
+    done(app::shortcutItemTapped(item.type.UTF8String ?: ""));
 }
 
 @end
@@ -120,8 +134,34 @@ bool isDark(std::uint32_t color) {
 - (BOOL)application:(UIApplication *)application didFinishLaunchingWithOptions:(NSDictionary *)options {
     devUrl = app::devUrl();
     core = &app::start(devUrl);
+    // The extensions have started, so the notification that launched the app, which comes next, reaches them.
+    ownNotificationCenter();
     onQuit([] { app::quit(*core, 0); });
     return YES;
+}
+
+// The app's push token, which an extension asked for with registerForPush(), or why iOS gave none, reach every
+// extension.
+- (void)application:(UIApplication *)application didRegisterForRemoteNotificationsWithDeviceToken:(NSData *)token {
+    app::pushTokenArrived(hexOf(token));
+}
+
+- (void)application:(UIApplication *)application didFailToRegisterForRemoteNotificationsWithError:(NSError *)error {
+    app::pushTokenFailed(textOf(error.localizedDescription));
+}
+
+// A silent push, which iOS gives the app 30 s for, reaches every extension, whose answers it hears as one.
+- (void)application:(UIApplication *)application
+    didReceiveRemoteNotification:(NSDictionary *)payload
+          fetchCompletionHandler:(void (^)(UIBackgroundFetchResult))done {
+    app::pushArrived(valueOfPlist(payload), [done](app::PushResult result) {
+        const UIBackgroundFetchResult fetched = result == app::PushResult::newData  ? UIBackgroundFetchResultNewData
+                                                : result == app::PushResult::failed ? UIBackgroundFetchResultFailed
+                                                                                    : UIBackgroundFetchResultNoData;
+        dispatch_async(dispatch_get_main_queue(), ^{
+          done(fetched);
+        });
+    });
 }
 
 - (UISceneConfiguration *)application:(UIApplication *)application

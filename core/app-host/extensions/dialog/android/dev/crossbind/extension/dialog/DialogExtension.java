@@ -1,10 +1,11 @@
 package dev.crossbind.extension.dialog;
 
+import android.app.Activity;
 import android.app.AlertDialog;
 import android.view.WindowManager;
 
-import dev.crossbind.app.CrossbindActivity;
 import dev.crossbind.app.Extension;
+import dev.crossbind.app.ExtensionHost;
 
 import org.json.JSONArray;
 import org.json.JSONObject;
@@ -15,7 +16,7 @@ public final class DialogExtension implements Extension {
     private AlertDialog messageDialog;
 
     @Override
-    public void call(CrossbindActivity activity, String function, JSONObject options, Call call) {
+    public void call(ExtensionHost host, String function, JSONObject options, Call call) {
         if (!function.equals("message")) {
             call.reject("crossbind: the dialog extension's Java has no function " + function);
             return;
@@ -23,19 +24,19 @@ public final class DialogExtension implements Extension {
         JSONArray buttons = options.optJSONArray("buttons");
         String[] labels = new String[buttons == null ? 0 : buttons.length()];
         for (int i = 0; i < labels.length; i += 1) labels[i] = buttons.optString(i);
-        showMessageDialog(activity, options.optString("message"), options.optString("detail"), labels, call);
+        showMessageDialog(host.activity(), options.optString("message"), options.optString("detail"), labels, call);
     }
 
     // A message dialog that goes with its activity answers as one closed.
     @Override
-    public void onDestroy(CrossbindActivity activity) {
+    public void onDestroy(ExtensionHost host) {
         if (messageDialog != null) messageDialog.dismiss();
     }
 
     // Android has a positive, a neutral and a negative button: the first label is the positive one, and the last of
     // several the negative, which Android places where its apps put Cancel. Back and a tap outside close the dialog. The
     // message goes in the dialog's text with the detail, as a title stops after two lines.
-    private void showMessageDialog(CrossbindActivity activity, String message, String detail, String[] labels, Call call) {
+    private void showMessageDialog(Activity activity, String message, String detail, String[] labels, Call call) {
         if (activity.isFinishing() || activity.isDestroyed()) {
             call.resolve(-1);
             return;

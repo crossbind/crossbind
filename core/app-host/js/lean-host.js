@@ -3,7 +3,7 @@
 // with their own fields, and large byte arrays as attachments of a crossbind:// request. Beyond it, a function the page
 // passes reaches the module as one whose calls run it in the page, later and without an answer, and the page gets the
 // events the app's native code emits.
-/* global __host_reply, __app_call, __host_page_function */
+/* global __host_reply, __app_call, __app_cancel, __host_page_function */
 import { pack, unpack, CODEC_TAG as TAG } from './codec.js';
 import { setCoercionModule, unwrapCoercionProxy, wrapWithVectorCoercion } from 'crossbind/runtime/adapters/vector-coercion.js';
 import { UNBOUND_MESSAGE } from 'crossbind/runtime/adapters/unboundMessage.js';
@@ -164,12 +164,35 @@ function decode(value, attachments) {
     });
 }
 
+// What the page passed one of the app's functions: JSON values, with bytes among them.
+function decodeOptions(value, attachments) {
+    return unpack(value, (tag, item) => (tag === 'att' ? attachments[item.i] : undefined));
+}
+
+// A batch of pushes holds this much text beyond its first push at most: the rest waits for the page's next request.
+const MAX_BATCH_TEXT = 4 * 1024 * 1024;
+
 function flush() {
     if (poll === null || pushes.length === 0) return;
+    const texts = [];
+    let size = 0;
+    while (texts.length < pushes.length && (texts.length === 0 || size < MAX_BATCH_TEXT)) {
+        const entry = pushes[texts.length];
+        let text;
+        try {
+            text = JSON.stringify(entry);
+        } catch {
+            // A call's message counts for the page, which gets it as null.
+            text = JSON.stringify(entry[0] === 'msg' ? ['msg', entry[1], null] : ['event', entry[1], null]);
+        }
+        texts.push(text);
+        size += text.length;
+    }
+    const sent = pushes.splice(0, texts.length);
+    waitingEvents -= sent.filter(([kind]) => kind === 'event').length;
     const call = poll;
     poll = null;
-    waitingEvents = 0;
-    __host_reply(call, JSON.stringify([0, pushes.splice(0)]));
+    __host_reply(call, `[0,[${texts.join(',')}]]`);
 }
 
 function push(entry) {
@@ -273,9 +296,10 @@ export function installHost(embindModule, env) {
     }
     setEnv(env, false);
 
-    globalThis.__crossbind_receive = (call, text) => {
-        const message = JSON.parse(text);
-        // One of the app's own functions, which the host answers once the main thread has done it.
+    // A message of the page's, with the byte arrays its frame carried.
+    const receive = (call, message, attachments) => {
+        // One of the app's own functions, which the host answers once its function has, after the messages it sent
+        // before, which go with the pushes.
         if (message[0] === 'app' && message[2][0] === 'events.held') {
             const name = message[3][0]?.name;
             if (typeof name !== 'string') {
@@ -287,7 +311,11 @@ export function installHost(embindModule, env) {
             held.delete(name);
             __host_reply(call, JSON.stringify([0, values]));
         } else if (message[0] === 'app') {
-            __app_call(call, message[2][0], message[3][0]);
+            const [options, wantsMessages] = message[3];
+            __app_call(call, message[2][0], decodeOptions(options, attachments), message[1], wantsMessages === 1);
+        } else if (message[0] === 'cancel') {
+            __app_cancel(message[1], message[3][0] === 1);
+            __host_reply(call, '[0,null]');
         } else if (message[0] === 'events') {
             // The page's request for pushes waits for them. A second one, as from a second copy of the page's script,
             // takes the first one's place.
@@ -296,9 +324,16 @@ export function installHost(embindModule, env) {
             isListening = true;
             flush();
         } else {
-            __host_reply(call, answer(message, []));
+            __host_reply(call, answer(message, attachments));
         }
     };
+
+    globalThis.__crossbind_receive = (call, text) => receive(call, JSON.parse(text), []);
+
+    // The result of a call of one of the app's functions, with how many messages it sent before it.
+    globalThis.__crossbind_answered = (call, value, sent) => __host_reply(call, JSON.stringify([0, encodeResult('call', value), sent]));
+    // A message of such a call, which the page takes with its pushes, whatever else waits there.
+    globalThis.__crossbind_message = (id, value) => push(['msg', id, encode(value)]);
 
     // The module called a function the page passed: the page runs it later, and the module gets no answer.
     globalThis.__crossbind_called = (id, ...args) => push(['cb', id, encode(args)]);
@@ -341,8 +376,8 @@ export function installHost(embindModule, env) {
         bigResults.clear();
     };
 
-    // A message in the query, its attachments one after another in the body.
-    globalThis.__crossbind_frame = (query, buffer) => {
+    // A message in the query, its attachments one after another in the body, which the reply of call answers.
+    globalThis.__crossbind_frame = (call, query, buffer) => {
         const message = JSON.parse(parseQuery(query).m);
         const attachments = [];
         let offset = 0;
@@ -350,7 +385,7 @@ export function installHost(embindModule, env) {
             attachments.push(viewOf(kind, buffer, offset, length));
             offset += length;
         }
-        return answer(message, attachments);
+        receive(call, message.slice(0, 4), attachments);
     };
 
     globalThis.__crossbind_result = (query) => {

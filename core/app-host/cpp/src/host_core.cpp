@@ -2,8 +2,10 @@
 
 #include <emscripten/bind.h>
 
+#include <algorithm>
 #include <array>
 #include <atomic>
+#include <cctype>
 #include <cstdio>
 #include <filesystem>
 #include <fstream>
@@ -73,8 +75,16 @@ namespace {
 
 std::vector<uint8_t> bytesOf(const std::string &text) { return std::vector<uint8_t>(text.begin(), text.end()); }
 
-// The app's one module, which the app's native code emits events through from any thread.
+// The app's one module, which the app's native code emits events through from any thread, and the events sent before it
+// started, as from an extension's onStart, which it gets first as it starts, in their order.
 std::atomic<Core *> running{nullptr};
+struct EarlyEvent {
+    std::string event;
+    std::string json;
+    bool isHeld;
+};
+std::mutex earlyMutex;
+std::vector<EarlyEvent> earlyEvents;
 
 // 128 random bits, as hex.
 std::string randomToken() {
@@ -113,7 +123,77 @@ const std::map<std::string, std::string> MIME_TYPES{
     {"wasm", "application/wasm"},
     {"woff", "font/woff"},
     {"woff2", "font/woff2"},
+    {"ttf", "font/ttf"},
+    {"otf", "font/otf"},
+    {"avif", "image/avif"},
+    {"bmp", "image/bmp"},
+    {"mp4", "video/mp4"},
+    {"m4v", "video/mp4"},
+    {"mov", "video/quicktime"},
+    {"webm", "video/webm"},
+    {"ogv", "video/ogg"},
+    {"mp3", "audio/mpeg"},
+    {"m4a", "audio/mp4"},
+    {"aac", "audio/aac"},
+    {"wav", "audio/wav"},
+    {"ogg", "audio/ogg"},
+    {"oga", "audio/ogg"},
+    {"opus", "audio/ogg"},
+    {"flac", "audio/flac"},
+    {"vtt", "text/vtt; charset=utf-8"},
+    {"csv", "text/csv; charset=utf-8"},
+    {"xml", "application/xml"},
+    {"pdf", "application/pdf"},
+    {"zip", "application/zip"},
 };
+
+// A Value as the module's JavaScript holds it, its bytes a Uint8Array.
+jsi::Value jsiOf(jsi::Runtime &rt, const Value &value) {
+    if (value.isNull()) return jsi::Value::null();
+    if (value.isBool()) return jsi::Value(value.asBool());
+    if (value.isNumber()) return jsi::Value(value.asNumber());
+    if (value.isString()) return jsi::Value(rt, jsi::String::createFromUtf8(rt, validUtf8(value.asString())));
+    if (value.isBytes()) {
+        jsi::ArrayBuffer buffer(rt, std::make_shared<VectorBuffer>(value.asBytes()));
+        return rt.global().getPropertyAsFunction(rt, "Uint8Array").callAsConstructor(rt, std::move(buffer));
+    }
+    if (value.isArray()) {
+        const Value::Array &items = value.asArray();
+        jsi::Array array(rt, items.size());
+        for (size_t i = 0; i < items.size(); i += 1) array.setValueAtIndex(rt, i, jsiOf(rt, items[i]));
+        return jsi::Value(rt, array);
+    }
+    jsi::Object object(rt);
+    for (const auto &[name, member] : value.asObject()) object.setProperty(rt, jsi::PropNameID::forUtf8(rt, validUtf8(name)), jsiOf(rt, member));
+    return jsi::Value(rt, object);
+}
+
+// A path as a URL has it, its %XX escapes undone, as a URL's parser does, which leaves a "%" before anything else as it
+// is: none for a NUL, which no file's name holds.
+std::optional<std::string> decodedPath(const std::string &path) {
+    std::string decoded;
+    decoded.reserve(path.size());
+    for (size_t i = 0; i < path.size(); i += 1) {
+        if (path[i] != '%' || i + 2 >= path.size() || !std::isxdigit(static_cast<unsigned char>(path[i + 1]))
+            || !std::isxdigit(static_cast<unsigned char>(path[i + 2]))) {
+            decoded += path[i];
+            continue;
+        }
+        const char byte = static_cast<char>(std::stoi(path.substr(i + 1, 2), nullptr, 16));
+        if (byte == '\0') return std::nullopt;
+        decoded += byte;
+        i += 2;
+    }
+    return decoded;
+}
+
+std::string abortReply(const std::string &name) { return errorReply("crossbind: " + name + " was cancelled", "AbortError"); }
+
+// A failed call's reply with how many of its messages went before it.
+std::string countedReply(std::string reply, double sent) {
+    reply.insert(reply.size() - 1, "," + std::to_string(static_cast<long long>(sent)));
+    return reply;
+}
 
 SchemeResponse binaryCall(jsi::Runtime &rt, const std::string &function, SchemeRequest &request) {
     jsi::ArrayBuffer body(rt, std::make_shared<VectorBuffer>(std::move(request.body)));
@@ -139,24 +219,32 @@ SchemeResponse pageFile(const std::string &pageDir, const std::string &path) {
     if (!stream) return SchemeResponse{404, "text/plain", {}};
     std::ostringstream content;
     content << stream.rdbuf();
-    const std::string extension = file.extension().string();
-    const auto mime = extension.empty() ? MIME_TYPES.end() : MIME_TYPES.find(extension.substr(1));
-    return SchemeResponse{200, mime == MIME_TYPES.end() ? "application/octet-stream" : mime->second, bytesOf(content.str())};
+    return SchemeResponse{200, mimeTypeOf(file), bytesOf(content.str())};
 }
 
 }  // namespace
 
-std::string errorReply(const std::string &message) {
-    std::string escaped;
-    for (const char c : validUtf8(message)) {
-        if (static_cast<unsigned char>(c) < 0x20) {
-            escaped += ' ';
-            continue;
+std::string mimeTypeOf(const std::filesystem::path &file) {
+    std::string extension = file.extension().string();
+    std::transform(extension.begin(), extension.end(), extension.begin(), [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+    const auto mime = extension.empty() ? MIME_TYPES.end() : MIME_TYPES.find(extension.substr(1));
+    return mime == MIME_TYPES.end() ? "application/octet-stream" : mime->second;
+}
+
+std::string errorReply(const std::string &message, const std::string &name) {
+    const auto escaped = [](const std::string &text) {
+        std::string out;
+        for (const char c : validUtf8(text)) {
+            if (static_cast<unsigned char>(c) < 0x20) {
+                out += ' ';
+                continue;
+            }
+            if (c == '"' || c == '\\') out += '\\';
+            out += c;
         }
-        if (c == '"' || c == '\\') escaped += '\\';
-        escaped += c;
-    }
-    return "[1,{\"name\":\"Error\",\"message\":\"" + escaped + "\"}]";
+        return out;
+    };
+    return "[1,{\"name\":\"" + escaped(name) + "\",\"message\":\"" + escaped(message) + "\"}]";
 }
 
 std::string readFile(const std::string &path) {
@@ -273,25 +361,98 @@ void Core::installHostFunctions(jsi::Runtime &rt) {
     setFunction(rt, "__host_page_function", 1, [this](jsi::Runtime &rt, const jsi::Value &, const jsi::Value *args, size_t) {
         return pageFunction(rt, static_cast<long long>(args[0].asNumber()));
     });
-    // A call of the page to one of the app's functions, which callApp answers once the main thread has done it.
-    setFunction(rt, "__app_call", 3, [this](jsi::Runtime &rt, const jsi::Value &, const jsi::Value *args, size_t) {
-        const auto pending = replies_.find(args[0].asString(rt).utf8(rt));
-        if (pending != replies_.end()) {
-            ReplyFn reply = std::move(pending->second);
-            replies_.erase(pending);
-            callApp(rt, args[1].asString(rt).utf8(rt), args[2], std::move(reply));
+    // A call of the page to one of the app's functions: its reply's call, the function's name, its options, the page's id
+    // of it and whether the page takes its messages.
+    setFunction(rt, "__app_call", 5, [this](jsi::Runtime &rt, const jsi::Value &, const jsi::Value *args, size_t) {
+        std::string call = args[0].asString(rt).utf8(rt);
+        if (replies_.count(call) > 0) {
+            callApp(rt, std::move(call), args[1].asString(rt).utf8(rt), args[2], static_cast<long long>(args[3].asNumber()),
+                args[4].isBool() && args[4].getBool());
         }
+        return jsi::Value::undefined();
+    });
+    setFunction(rt, "__app_cancel", 2, [this](jsi::Runtime &, const jsi::Value &, const jsi::Value *args, size_t) {
+        cancelCall(static_cast<long long>(args[0].asNumber()), args[1].isBool() && args[1].getBool());
         return jsi::Value::undefined();
     });
     setFunction(rt, "__host_reply", 2, [this](jsi::Runtime &rt, const jsi::Value &, const jsi::Value *args, size_t) {
-        const auto pending = replies_.find(args[0].asString(rt).utf8(rt));
-        if (pending != replies_.end()) {
-            const ReplyFn reply = std::move(pending->second);
-            replies_.erase(pending);
-            reply(args[1].asString(rt).utf8(rt));
-        }
+        reply(args[0].asString(rt).utf8(rt), args[1].asString(rt).utf8(rt));
         return jsi::Value::undefined();
     });
+}
+
+void Core::reply(const std::string &call, const std::string &text) {
+    const auto pending = replies_.find(call);
+    if (pending == replies_.end()) return;
+    const ReplyFn reply = std::move(pending->second);
+    replies_.erase(pending);
+    reply(text);
+}
+
+void Core::callApp(jsi::Runtime &rt, std::string call, const std::string &name, const jsi::Value &options, long long id, bool wantsMessages) {
+    const long long page = page_;
+    PageCall answers;
+    // The JS thread encodes the result as the page decodes it, after the messages before it have joined the pushes. A
+    // failure tells their count too, as the page takes them before it.
+    answers.answer = [this, call, page, id](Failure failure, Value result, double sent) {
+        js_.post([this, call, page, id, failure = std::move(failure), result = std::move(result), sent](jsi::Runtime &rt) {
+            if (page != page_) {
+                reply(call, errorReply("crossbind: the page that made the call went away"));
+                return;
+            }
+            openCalls_.erase(id);
+            if (failure) {
+                reply(call, countedReply(errorReply(*failure), sent));
+                return;
+            }
+            try {
+                rt.global().getPropertyAsFunction(rt, "__crossbind_answered").call(rt, jsi::String::createFromUtf8(rt, call), jsiOf(rt, result), sent);
+            } catch (const std::exception &error) {
+                reply(call, countedReply(errorReply(error.what()), sent));
+            }
+        });
+    };
+    if (wantsMessages) {
+        // A message the page cannot be given still counts, as null.
+        answers.message = [this, page, id](Value message) {
+            js_.post([this, page, id, message = std::move(message)](jsi::Runtime &rt) {
+                if (page != page_) return;
+                const jsi::Function deliver = rt.global().getPropertyAsFunction(rt, "__crossbind_message");
+                try {
+                    deliver.call(rt, static_cast<double>(id), jsiOf(rt, message));
+                } catch (const std::exception &error) {
+                    std::fprintf(stderr, "crossbind: a message of the call %lld reached the page as null: %s\n", id, error.what());
+                    deliver.call(rt, static_cast<double>(id), jsi::Value::null());
+                }
+            });
+        };
+    }
+    answers.page = static_cast<uint64_t>(page);
+    answers.window = window_;
+    std::shared_ptr<StateOf<Call>> state = pageCall(rt, name, options, std::move(answers));
+    if (!state) return;
+    if (cancelledEarly_.erase(id) > 0) {
+        if (app::cancelCall(state)) reply(call, abortReply(name));
+        return;
+    }
+    openCalls_.insert_or_assign(id, OpenCall{state, std::move(call), name});
+    runCall(std::move(state));
+}
+
+// Far more than a page cancels of calls still on their way.
+constexpr size_t MAX_EARLY_CANCELS = 1000;
+
+void Core::cancelCall(long long id, bool isFramed) {
+    const auto open = openCalls_.find(id);
+    if (open == openCalls_.end()) {
+        // A call that came as a message came before its cancel, which the page sends no more once it has its answer.
+        if (isFramed && cancelledEarly_.size() < MAX_EARLY_CANCELS) cancelledEarly_.insert(id);
+        return;
+    }
+    const OpenCall call = std::move(open->second);
+    openCalls_.erase(open);
+    const std::shared_ptr<StateOf<Call>> state = call.state.lock();
+    if (state && app::cancelCall(state)) reply(call.reply, abortReply(call.name));
 }
 
 std::string Core::boot(std::string bundle, const std::string &sourceUrl, const std::string &dataPath) {
@@ -313,8 +474,14 @@ std::string Core::boot(std::string bundle, const std::string &sourceUrl, const s
         }
     });
     const std::string error = booted.get_future().get();
-    // The app's native code reaches the page through the module once it has started, and its thread is known.
-    if (error.empty()) running = this;
+    // The app's native code reaches the page through the module once it has started, and its thread is known: what it
+    // sent before goes first.
+    if (error.empty()) {
+        std::lock_guard<std::mutex> lock(earlyMutex);
+        for (auto &early : earlyEvents) postEvent(std::move(early.event), std::move(early.json), early.isHeld);
+        earlyEvents.clear();
+        running = this;
+    }
     return error;
 }
 
@@ -338,11 +505,31 @@ void Core::receive(std::string message, ReplyFn reply) {
 }
 
 void Core::serve(SchemeRequest request, SchemeRespond answer) {
-    SchemeRespond respond = cors ? SchemeRespond([answer = std::move(answer)](SchemeResponse response) {
-        response.headers.emplace_back("Access-Control-Allow-Origin", "*");
+    SchemeRespond respond = !corsOrigin.empty() ? SchemeRespond([answer = std::move(answer), origin = corsOrigin](SchemeResponse response) {
+        response.headers.emplace_back("Access-Control-Allow-Origin", origin);
+        response.headers.emplace_back("Access-Control-Expose-Headers", "*");
         answer(std::move(response));
     })
-                                 : std::move(answer);
+                                                : std::move(answer);
+    // A dev server's page asks first for a request with headers of its own, as a route's Range is in some webviews.
+    if (!corsOrigin.empty() && request.method == "OPTIONS") {
+        SchemeResponse allowed{204, "text/plain", {}};
+        allowed.headers.emplace_back("Access-Control-Allow-Methods", "GET, HEAD, POST");
+        allowed.headers.emplace_back("Access-Control-Allow-Headers", "*");
+        respond(std::move(allowed));
+        return;
+    }
+    // Every platform gives the path as the URL has it, which is decoded here alone.
+    std::optional<std::string> path = decodedPath(request.path);
+    if (!path) {
+        respond(SchemeResponse{400, "text/plain", bytesOf("crossbind: the request's path holds a NUL")});
+        return;
+    }
+    request.path = std::move(*path);
+    if (request.path.compare(0, 5, "/ext/") == 0) {
+        serveRoute(std::move(request), std::move(respond));
+        return;
+    }
     const auto route = ROUTES.find(request.path);
     if (route == ROUTES.end()) {
         respond(pageFile(pageDir_, request.path));
@@ -350,6 +537,10 @@ void Core::serve(SchemeRequest request, SchemeRespond answer) {
     }
     if (("&" + request.query + "&").find("&t=" + token_ + "&") == std::string::npos) {
         respond(SchemeResponse{403, "text/plain", bytesOf("crossbind: this request does not carry the page's token")});
+        return;
+    }
+    if (request.path == "/b/frame") {
+        serveFrame(std::move(request), std::move(respond));
         return;
     }
     js_.post([function = route->second, request = std::move(request), respond = std::move(respond)](jsi::Runtime &rt) mutable {
@@ -361,12 +552,37 @@ void Core::serve(SchemeRequest request, SchemeRespond answer) {
     });
 }
 
+// A frame answers once its message has, which a call of the app's functions does later.
+void Core::serveFrame(SchemeRequest request, SchemeRespond respond) {
+    js_.post([this, request = std::move(request), respond = std::move(respond)](jsi::Runtime &rt) mutable {
+        const std::string call = std::to_string(nextReply_++);
+        replies_.emplace(call, [respond](const std::string &text) { respond(SchemeResponse{200, "application/json", bytesOf(text)}); });
+        try {
+            jsi::ArrayBuffer body(rt, std::make_shared<VectorBuffer>(std::move(request.body)));
+            rt.global().getPropertyAsFunction(rt, "__crossbind_frame")
+                .call(rt, jsi::String::createFromUtf8(rt, call), jsi::String::createFromUtf8(rt, request.query), std::move(body));
+        } catch (const std::exception &error) {
+            if (replies_.erase(call) > 0) respond(SchemeResponse{500, "text/plain", bytesOf(error.what())});
+        }
+    });
+}
+
 void Core::reset() {
+    const Page page = newPage();
     // After the calls the page before made, which the module's thread takes in order, and before the new page's.
-    js_.post([this](jsi::Runtime &rt) {
-        page_ += 1;
+    js_.post([this, page](jsi::Runtime &rt) {
+        page_ = static_cast<long long>(page.id());
+        window_ = page.windowId();
         pageFunctions_.clear();
-        pageStarted();
+        // The page before's calls reach no page: each that waits is cancelled.
+        const auto open = std::move(openCalls_);
+        openCalls_.clear();
+        cancelledEarly_.clear();
+        for (const auto &[id, call] : open) {
+            const std::shared_ptr<StateOf<Call>> state = call.state.lock();
+            if (state && app::cancelCall(state)) reply(call.reply, abortReply(call.name));
+        }
+        pageStarted(page);
         rt.global().getPropertyAsFunction(rt, "__crossbind_reset").call(rt);
     });
 }
@@ -429,7 +645,13 @@ void Core::dropped(long long page, long long id, double passed) {
 }
 
 void postEvent(std::string event, std::string json, bool isHeld) {
+    if (Core *core = running.load()) {
+        core->postEvent(std::move(event), std::move(json), isHeld);
+        return;
+    }
+    std::lock_guard<std::mutex> lock(earlyMutex);
     if (Core *core = running.load()) core->postEvent(std::move(event), std::move(json), isHeld);
+    else earlyEvents.push_back({std::move(event), std::move(json), isHeld});
 }
 
 }  // namespace crossbind::app

@@ -6,7 +6,10 @@
 #include <unistd.h>
 
 #include "app.h"
+#include "page_requests.h"
 
+#include <algorithm>
+#include <cctype>
 #include <cstdio>
 #include <cstdlib>
 #include <filesystem>
@@ -27,6 +30,11 @@ jclass activityClass;
 jmethodID onReply;
 jmethodID onReplyBytes;
 jmethodID callExtension;
+jmethodID cancelExtension;
+jmethodID responseOf;
+jmethodID answerHttpAuthentication;
+jmethodID answerDownload;
+jmethodID stopDownload;
 std::string resources;
 // The app's own folders, which the activity names.
 std::string dataDir;
@@ -103,6 +111,27 @@ std::vector<std::string> textsOf(JNIEnv *env, jobjectArray values) {
     return texts;
 }
 
+std::vector<crossbind::Value::Bytes> bytesListOf(JNIEnv *env, jobjectArray values) {
+    std::vector<crossbind::Value::Bytes> all;
+    for (const std::string &text : textsOf(env, values)) all.emplace_back(text.begin(), text.end());
+    return all;
+}
+
+// A byte[][] of texts or bytes, each a byte[].
+template <typename Items>
+jobjectArray byteArraysOf(JNIEnv *env, const Items &items) {
+    jclass type = env->FindClass("[B");
+    jobjectArray all = env->NewObjectArray(static_cast<jsize>(items.size()), type, nullptr);
+    env->DeleteLocalRef(type);
+    for (size_t index = 0; index < items.size(); ++index) {
+        jbyteArray bytes = env->NewByteArray(static_cast<jsize>(items[index].size()));
+        env->SetByteArrayRegion(bytes, 0, static_cast<jsize>(items[index].size()), reinterpret_cast<const jbyte *>(items[index].data()));
+        env->SetObjectArrayElement(all, static_cast<jsize>(index), bytes);
+        env->DeleteLocalRef(bytes);
+    }
+    return all;
+}
+
 // Android drops what a process writes to its standard output and error: the lines go to logcat instead, as an app's
 // output goes to the terminal on the desktop. The WebView's Chromium runs in the process too, and logs its own lines,
 // as "[...:ERROR:file.cc(12)] ...", to logcat as well, so those are left out.
@@ -146,9 +175,15 @@ namespace {
 
 using JavaAnswer = std::function<void(std::optional<std::string>, crossbind::Value)>;
 
-// What waits for the answer of each call of an extension's Java, under the id the activity answers it with.
+// A call of an extension's Java: what waits for its answer, and where its messages go, where any do.
+struct JavaCall {
+    JavaAnswer done;
+    std::function<void(crossbind::Value)> message;
+};
+
+// The calls of extensions' Java that wait for their answers, under the id the activity answers each with.
 std::mutex javaMutex;
-std::unordered_map<jint, JavaAnswer> javaCalls;
+std::unordered_map<jint, JavaCall> javaCalls;
 uint32_t nextJavaCall;
 
 // Hands done the answer; what done throws stays out of the JVM, which would end the app: it is told, and the call done
@@ -163,13 +198,13 @@ void answer(const JavaAnswer &done, std::optional<std::string> failure, crossbin
     }
 }
 
-void javaAnswered(jint call, bool ok, const std::string &text) {
+void javaAnswered(jint call, bool ok, const std::string &text, const std::vector<crossbind::Value::Bytes> &bytes) {
     JavaAnswer done;
     {
         std::lock_guard<std::mutex> lock(javaMutex);
         const auto waiting = javaCalls.find(call);
         if (waiting == javaCalls.end()) return;
-        done = std::move(waiting->second);
+        done = std::move(waiting->second.done);
         javaCalls.erase(waiting);
     }
     if (!ok) {
@@ -178,12 +213,70 @@ void javaAnswered(jint call, bool ok, const std::string &text) {
     }
     crossbind::Value result;
     try {
-        result = app::valueOfJson(text);
+        result = app::valueWithBytes(text, bytes);
     } catch (const std::exception &error) {
         answer(done, error.what(), {});
         return;
     }
     answer(done, std::nullopt, std::move(result));
+}
+
+// A message of a call's Java, for the call's page; the native code's own calls, and those it let go of, take none.
+void javaSent(jint call, const std::string &text, const std::vector<crossbind::Value::Bytes> &bytes) {
+    std::function<void(crossbind::Value)> message;
+    {
+        std::lock_guard<std::mutex> lock(javaMutex);
+        const auto waiting = javaCalls.find(call);
+        if (waiting == javaCalls.end() || !waiting->second.message) return;
+        message = waiting->second.message;
+    }
+    try {
+        message(app::valueWithBytes(text, bytes));
+    } catch (const std::exception &error) {
+        __android_log_print(ANDROID_LOG_ERROR, TAG, "crossbind: a message of an extension's Java failed: %s", error.what());
+    }
+}
+
+jint waitForJava(JavaCall waiting) {
+    std::lock_guard<std::mutex> lock(javaMutex);
+    const auto call = static_cast<jint>(nextJavaCall++);
+    javaCalls.emplace(call, std::move(waiting));
+    return call;
+}
+
+void startJava(jint call, const std::string &extension, const std::string &function, const crossbind::Value &options) {
+    std::vector<crossbind::Value::Bytes> bytes;
+    std::string json;
+    try {
+        json = app::jsonWithBytes(options, bytes);
+    } catch (const std::exception &error) {
+        javaAnswered(call, false, error.what(), {});
+        return;
+    }
+    JNIEnv *env = attachedEnv();
+    jbyteArray name = bytesOf(env, extension);
+    jbyteArray called = bytesOf(env, function);
+    jbyteArray text = bytesOf(env, json);
+    jobjectArray attached = byteArraysOf(env, bytes);
+    env->CallStaticVoidMethod(activityClass, callExtension, call, name, called, text, attached);
+    const bool hasFailed = env->ExceptionCheck();
+    clearException(env);
+    env->DeleteLocalRef(attached);
+    env->DeleteLocalRef(text);
+    env->DeleteLocalRef(called);
+    env->DeleteLocalRef(name);
+    if (hasFailed) javaAnswered(call, false, "crossbind: the activity could not call " + extension + "." + function, {});
+}
+
+// The page cancelled the call: its Java's answer goes nowhere, and the Java hears of it.
+void cancelJava(jint call) {
+    {
+        std::lock_guard<std::mutex> lock(javaMutex);
+        javaCalls.erase(call);
+    }
+    JNIEnv *env = attachedEnv();
+    env->CallStaticVoidMethod(activityClass, cancelExtension, call);
+    clearException(env);
 }
 
 }  // namespace
@@ -192,23 +285,21 @@ namespace crossbind::android {
 
 void callJava(const std::string &extension, const std::string &function, Value::Object options,
     std::function<void(std::optional<std::string> failure, Value result)> done) {
-    jint call;
-    {
-        std::lock_guard<std::mutex> lock(javaMutex);
-        call = static_cast<jint>(nextJavaCall++);
-        javaCalls.emplace(call, std::move(done));
-    }
-    JNIEnv *env = attachedEnv();
-    jbyteArray name = bytesOf(env, extension);
-    jbyteArray called = bytesOf(env, function);
-    jbyteArray json = bytesOf(env, Value(std::move(options)).json());
-    env->CallStaticVoidMethod(activityClass, callExtension, call, name, called, json);
-    const bool hasFailed = env->ExceptionCheck();
-    clearException(env);
-    env->DeleteLocalRef(json);
-    env->DeleteLocalRef(called);
-    env->DeleteLocalRef(name);
-    if (hasFailed) javaAnswered(call, false, "crossbind: the activity could not call " + extension + "." + function);
+    startJava(waitForJava({std::move(done), {}}), extension, function, Value(std::move(options)));
+}
+
+void callJava(const std::string &extension, const std::string &function, Call call) {
+    const jint id = waitForJava({[call](std::optional<std::string> failure, Value result) {
+                                     if (failure) {
+                                         call.reject(*failure);
+                                     } else {
+                                         call.resolve(std::move(result));
+                                     }
+                                 },
+        [call](Value message) { call.send(std::move(message)); }});
+    startJava(id, extension, function, call.options().isObject() ? call.options() : Value(Value::Object{}));
+    // After the call, so the activity hears of a cancel after the call it cancels.
+    call.onCancel([id] { cancelJava(id); });
 }
 
 }  // namespace crossbind::android
@@ -237,7 +328,12 @@ extern "C" JNIEXPORT jobjectArray JNICALL Java_dev_crossbind_app_CrossbindActivi
         activityClass = static_cast<jclass>(env->NewGlobalRef(type));
         onReply = env->GetStaticMethodID(type, "onReply", "(IZ[B)V");
         onReplyBytes = env->GetStaticMethodID(type, "onReplyBytes", "(I[B)V");
-        callExtension = env->GetStaticMethodID(type, "callExtension", "(I[B[B[B)V");
+        callExtension = env->GetStaticMethodID(type, "callExtension", "(I[B[B[B[[B)V");
+        cancelExtension = env->GetStaticMethodID(type, "cancelExtension", "(I)V");
+        responseOf = env->GetStaticMethodID(type, "responseOf", "(ILjava/lang/String;[[B[B[B[B)Landroid/webkit/WebResourceResponse;");
+        answerHttpAuthentication = env->GetStaticMethodID(type, "answerHttpAuthentication", "(I[B[B)V");
+        answerDownload = env->GetStaticMethodID(type, "answerDownload", "(II[B)V");
+        stopDownload = env->GetStaticMethodID(type, "stopDownload", "(I)V");
         resources = asciiOf(env, files);
         dataDir = asciiOf(env, data);
         cacheDir = asciiOf(env, cache);
@@ -273,19 +369,43 @@ extern "C" JNIEXPORT void JNICALL Java_dev_crossbind_app_CrossbindActivity_nativ
     });
 }
 
-// A file of the page: "<status> <mime>\n" and the body.
-extern "C" JNIEXPORT jbyteArray JNICALL Java_dev_crossbind_app_CrossbindActivity_nativeRequest(JNIEnv *env, jclass, jbyteArray path,
-    jstring query) {
+// A file of the page or an extension's URL, which the WebView's thread waits for, as the WebView asks it to.
+extern "C" JNIEXPORT jobject JNICALL Java_dev_crossbind_app_CrossbindActivity_nativeRequest(JNIEnv *env, jclass type, jstring method,
+    jstring path, jstring query, jobjectArray headers) {
+    SchemeRequest request{asciiOf(env, method), asciiOf(env, path), asciiOf(env, query), {}};
+    const std::vector<std::string> fields = textsOf(env, headers);
+    // The activity measures the answer's stream to the Range the WebView takes to it.
+    std::optional<std::string> range;
+    for (size_t at = 0; at + 1 < fields.size(); at += 2) {
+        request.headers.emplace_back(fields[at], fields[at + 1]);
+        std::string name = fields[at];
+        std::transform(name.begin(), name.end(), name.begin(), [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+        if (name == "range") range = fields[at + 1];
+    }
     std::promise<SchemeResponse> answered;
-    core->serve(SchemeRequest{"GET", textOf(env, path), asciiOf(env, query), {}},
-        [&answered](SchemeResponse response) { answered.set_value(std::move(response)); });
+    core->serve(std::move(request), [&answered](SchemeResponse response) { answered.set_value(std::move(response)); });
     const SchemeResponse response = answered.get_future().get();
-    const std::string head = std::to_string(response.status) + " " + response.mime + "\n";
-    jbyteArray out = env->NewByteArray(static_cast<jsize>(head.size() + response.body.size()));
-    env->SetByteArrayRegion(out, 0, static_cast<jsize>(head.size()), reinterpret_cast<const jbyte *>(head.data()));
-    env->SetByteArrayRegion(out, static_cast<jsize>(head.size()), static_cast<jsize>(response.body.size()),
-        reinterpret_cast<const jbyte *>(response.body.data()));
-    return out;
+    std::vector<std::string> written;
+    for (const auto &[name, value] : response.headers) {
+        written.push_back(name);
+        written.push_back(value);
+    }
+    // Modified UTF-8 carries ASCII alone as UTF-8 does, and a type is ASCII.
+    const bool isAscii = std::all_of(response.mime.begin(), response.mime.end(), [](unsigned char c) { return c < 0x80; });
+    jstring mime = env->NewStringUTF(isAscii ? response.mime.c_str() : "application/octet-stream");
+    jobjectArray answerHeaders = byteArraysOf(env, written);
+    jbyteArray body = env->NewByteArray(static_cast<jsize>(response.body.size()));
+    env->SetByteArrayRegion(body, 0, static_cast<jsize>(response.body.size()), reinterpret_cast<const jbyte *>(response.body.data()));
+    jbyteArray file = response.file.empty() ? nullptr : bytesOf(env, response.file);
+    jbyteArray asked = range ? bytesOf(env, *range) : nullptr;
+    jobject made = env->CallStaticObjectMethod(type, responseOf, response.status, mime, answerHeaders, body, file, asked);
+    clearException(env);
+    if (asked) env->DeleteLocalRef(asked);
+    if (file) env->DeleteLocalRef(file);
+    env->DeleteLocalRef(body);
+    env->DeleteLocalRef(answerHeaders);
+    env->DeleteLocalRef(mime);
+    return made;
 }
 
 // A new page replaced the one that held the module's objects.
@@ -293,6 +413,10 @@ extern "C" JNIEXPORT void JNICALL Java_dev_crossbind_app_CrossbindActivity_nativ
 
 extern "C" JNIEXPORT void JNICALL Java_dev_crossbind_app_CrossbindActivity_nativeOpenUrl(JNIEnv *env, jclass, jbyteArray url) {
     app::openedUrl(textOf(env, url));
+}
+
+extern "C" JNIEXPORT void JNICALL Java_dev_crossbind_app_CrossbindActivity_nativeShortcutItem(JNIEnv *env, jclass, jbyteArray type) {
+    app::shortcutItemTapped(textOf(env, type));
 }
 
 // The files the system opened the app with, each copied into the app's cache, by their paths in UTF-8, with the MIME
@@ -306,8 +430,92 @@ extern "C" JNIEXPORT void JNICALL Java_dev_crossbind_app_CrossbindActivity_nativ
     app::appActivated(isActive == JNI_TRUE);
 }
 
-// The answer of an extension's Java: its result's JSON, or why the call failed.
+// The answer of an extension's Java: its result's JSON and its bytes, or why the call failed.
 extern "C" JNIEXPORT void JNICALL Java_dev_crossbind_app_CrossbindActivity_nativeExtensionAnswered(JNIEnv *env, jclass, jint call,
-    jboolean ok, jbyteArray text) {
-    javaAnswered(call, ok == JNI_TRUE, textOf(env, text));
+    jboolean ok, jbyteArray text, jobjectArray bytes) {
+    javaAnswered(call, ok == JNI_TRUE, textOf(env, text), bytesListOf(env, bytes));
+}
+
+// A message of an extension's Java for its call's page: its JSON and its bytes.
+extern "C" JNIEXPORT void JNICALL Java_dev_crossbind_app_CrossbindActivity_nativeExtensionMessage(JNIEnv *env, jclass, jint call,
+    jbyteArray text, jobjectArray bytes) {
+    javaSent(call, textOf(env, text), bytesListOf(env, bytes));
+}
+
+// page-navigation's answer, as the activity's LOAD and OUTSIDE number NavigationAnswer's. The WebView opens no window of
+// the page's: it loads a link of target="_blank" in the page's place.
+extern "C" JNIEXPORT jint JNICALL Java_dev_crossbind_app_CrossbindActivity_nativeNavigation(JNIEnv *env, jclass, jbyteArray url,
+    jboolean isMainFrame, jboolean isUserInitiated) {
+    return static_cast<jint>(app::decideNavigation(textOf(env, url), isMainFrame == JNI_TRUE, isUserInitiated == JNI_TRUE, false));
+}
+
+namespace {
+
+// The downloads page-downloads heard of, by their ids, till the activity tells how each ended.
+struct Downloading {
+    std::shared_ptr<app::DownloadEvents> events;
+    std::string url;
+};
+std::mutex downloadsMutex;
+std::unordered_map<jint, Downloading> downloading;
+
+void answerActivity(jint id, app::DownloadAnswer::Kind kind, const std::string &path) {
+    JNIEnv *env = attachedEnv();
+    jbyteArray bytes = kind == app::DownloadAnswer::Kind::saveTo ? bytesOf(env, path) : nullptr;
+    env->CallStaticVoidMethod(activityClass, answerDownload, id, static_cast<jint>(kind), bytes);
+    clearException(env);
+    if (bytes) env->DeleteLocalRef(bytes);
+}
+
+void stopActivity(jint id) {
+    JNIEnv *env = attachedEnv();
+    env->CallStaticVoidMethod(activityClass, stopDownload, id);
+    clearException(env);
+}
+
+}  // namespace
+
+// A download the page handed over whole, in the activity's order of DownloadAnswer's kinds.
+extern "C" JNIEXPORT void JNICALL Java_dev_crossbind_app_CrossbindActivity_nativeDownload(JNIEnv *env, jclass, jint id, jbyteArray url,
+    jbyteArray name, jbyteArray mime, jlong size) {
+    auto events = std::make_shared<app::DownloadEvents>();
+    const std::string address = textOf(env, url);
+    {
+        std::lock_guard<std::mutex> lock(downloadsMutex);
+        downloading[id] = Downloading{events, address};
+    }
+    app::askDownload(std::make_shared<app::StateOf<crossbind::Download>>(address, textOf(env, name), textOf(env, mime), static_cast<int64_t>(size), events,
+        [id, events](app::DownloadAnswer answer) {
+            const bool isStarted = answer.kind != app::DownloadAnswer::Kind::cancel && app::startDownload(*events, [id] { stopActivity(id); });
+            answerActivity(id, isStarted ? answer.kind : app::DownloadAnswer::Kind::cancel, answer.path);
+        }));
+}
+
+extern "C" JNIEXPORT void JNICALL Java_dev_crossbind_app_CrossbindActivity_nativeDownloadFinished(JNIEnv *env, jclass, jint id,
+    jboolean isCancelled, jbyteArray failure, jbyteArray path) {
+    Downloading ended;
+    {
+        std::lock_guard<std::mutex> lock(downloadsMutex);
+        const auto found = downloading.find(id);
+        if (found == downloading.end()) return;
+        ended = std::move(found->second);
+        downloading.erase(found);
+    }
+    app::tellFinish(*ended.events, ended.url,
+        crossbind::DownloadEnd{textOf(env, path), isCancelled == JNI_TRUE, failure ? std::optional<std::string>(textOf(env, failure)) : std::nullopt});
+}
+
+// Android's WebView names the host without its port, and tells no proxy's ask from a server's.
+extern "C" JNIEXPORT void JNICALL Java_dev_crossbind_app_CrossbindActivity_nativeHttpAuthentication(JNIEnv *env, jclass, jint id,
+    jbyteArray host, jbyteArray realm) {
+    app::askHttpAuthentication(app::make<crossbind::HttpAuthentication>(std::make_shared<app::StateOf<crossbind::HttpAuthentication>>(
+        textOf(env, host), textOf(env, realm), false, [id](std::optional<std::pair<std::string, std::string>> given) {
+            JNIEnv *answering = attachedEnv();
+            jbyteArray user = given ? bytesOf(answering, given->first) : nullptr;
+            jbyteArray password = given ? bytesOf(answering, given->second) : nullptr;
+            answering->CallStaticVoidMethod(activityClass, answerHttpAuthentication, id, user, password);
+            clearException(answering);
+            if (user) answering->DeleteLocalRef(user);
+            if (password) answering->DeleteLocalRef(password);
+        })));
 }

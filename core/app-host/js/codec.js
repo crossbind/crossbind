@@ -51,6 +51,18 @@ export function fromBase64(text) {
 
 export const CODEC_TAG = TAG;
 
+// Byte arrays one after another, as a frame's body carries its attachments.
+export function concatenate(views) {
+    const total = views.reduce((sum, view) => sum + view.byteLength, 0);
+    const body = new Uint8Array(total);
+    let offset = 0;
+    for (const view of views) {
+        body.set(new Uint8Array(view.buffer, view.byteOffset, view.byteLength), offset);
+        offset += view.byteLength;
+    }
+    return body;
+}
+
 // `hook` sees every value first and may replace it with a tagged one of its own: a handle, an enum, an attachment.
 export function pack(value, hook) {
     if (hook) {

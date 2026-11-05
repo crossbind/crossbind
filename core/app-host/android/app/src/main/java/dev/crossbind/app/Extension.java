@@ -2,92 +2,217 @@ package dev.crossbind.app;
 
 import android.content.Intent;
 import android.net.Uri;
+import android.util.Log;
 import android.webkit.JsPromptResult;
 import android.webkit.JsResult;
 import android.webkit.ValueCallback;
 import android.webkit.WebChromeClient;
 
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
+import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 import org.json.JSONStringer;
 
 // An extension's Java, the class its app.android.class names, which its native code calls through
-// crossbind::android::callJava(). The activity calls each method on the UI thread, with itself. An extension asks for
-// permissions through the activity's afterAsking() and starts an activity for its result through startForResult(), so
-// the activity's own requests and those of other extensions never meet it.
+// crossbind::android::callJava(). The activity calls each method on the UI thread, with the host, through which an
+// extension asks for permissions and starts an activity for its result, so the activity's own requests and those of
+// other extensions never meet it.
 public interface Extension {
+    // The version of crossbind's extension contract this host is built for, as CROSSBIND_EXTENSION_CONTRACT is to native
+    // code.
+    int CONTRACT = 1;
+
     // One of the extension's functions, which answers call once, from any thread. What it throws fails the call.
-    void call(CrossbindActivity activity, String function, JSONObject options, Call call);
+    void call(ExtensionHost host, String function, JSONObject options, Call call);
 
-    default void onCreate(CrossbindActivity activity) {}
+    default void onCreate(ExtensionHost host) {}
 
-    default void onNewIntent(CrossbindActivity activity, Intent intent) {}
+    default void onNewIntent(ExtensionHost host, Intent intent) {}
 
-    default void onResume(CrossbindActivity activity) {}
+    default void onResume(ExtensionHost host) {}
 
-    default void onPause(CrossbindActivity activity) {}
+    default void onPause(ExtensionHost host) {}
 
-    default void onDestroy(CrossbindActivity activity) {}
+    default void onDestroy(ExtensionHost host) {}
 
-    // The page's alert(), confirm() and prompt(), which the Java of the extension named page-dialogs gets: it returns true
-    // and answers the dialog once, from any thread, as the page waits, or false to leave it to the WebView.
-    default boolean onPageDialog(CrossbindActivity activity, PageDialog dialog) {
-        return false;
+    // The page's alert(), confirm() and prompt(), which the Java of the holder of page-dialogs gets: it answers each
+    // once, from any thread, as the page waits, and useDefault() as the hook runs leaves it to the WebView, which shows
+    // its own. What it throws cancels the dialog.
+    default void onPageDialog(ExtensionHost host, PageDialog dialog) {
+        dialog.useDefault();
     }
 
-    // What the page asks to use, which the Java of the extension named page-permissions gets: it returns true and allows
-    // or denies it once, from any thread, or false to leave it to the WebView, which denies it.
-    default boolean onPagePermission(CrossbindActivity activity, PagePermission request) {
-        return false;
+    // What the page asks to use, which the Java of the holder of page-permissions gets: it allows or denies each once,
+    // from any thread, and useDefault() denies it, as the WebView does. What it throws denies it.
+    default void onPagePermission(ExtensionHost host, PagePermission request) {
+        request.useDefault();
     }
 
-    // A file input the page's user clicked, which the Java of the extension named page-files gets: it returns true and
-    // answers once, from any thread, or false to leave it to the WebView, which shows no picker.
-    default boolean onFileInput(CrossbindActivity activity, FileInput input) {
-        return false;
+    // A file input the page's user clicked, which the Java of the holder of page-files gets: it answers each once, from
+    // any thread, and useDefault() as the hook runs leaves it to the WebView, which shows no picker. What it throws
+    // cancels it.
+    default void onFileInput(ExtensionHost host, FileInput input) {
+        input.useDefault();
     }
 
-    // A call of the native code's, which the first resolve() or reject() answers.
+    // A call of the native code's, which the first resolve() or reject() answers. Before its answer it may send the page
+    // messages, as the native code's Call does, and the page may cancel it. Its options and results are org.json's
+    // values, a JSONObject, a JSONArray, a String, a Number, a Boolean or null, and byte arrays, in an object or an array
+    // as well: what is bytes on the page.
     final class Call {
+        // What stands in the JSON for bytes beside it, by their place among them.
+        private static final String TAG = "\u0001t";
+        // The calls that wait for their answers, which their pages may cancel.
+        private static final Map<Integer, Call> OPEN = new ConcurrentHashMap<>();
+
         private final int id;
         private final AtomicBoolean isAnswered = new AtomicBoolean();
+        private final List<Runnable> cancelled = new ArrayList<>();
+        private boolean isCancelled;
 
         Call(int id) {
             this.id = id;
+            OPEN.put(id, this);
         }
 
-        // The result is one of org.json's values: a JSONObject, a JSONArray, a String, a Number, a Boolean or null.
         public void resolve(Object result) {
-            String json;
+            Encoded encoded;
             try {
-                // org.json writes a value alone only inside an array.
-                String array = new JSONStringer().array().value(result).endArray().toString();
-                json = array.substring(1, array.length() - 1);
+                encoded = Encoded.of(result);
             } catch (JSONException error) {
                 reject("crossbind: " + error.getMessage());
                 return;
             }
-            answer(true, json);
+            answer(true, encoded.json, encoded.bytes);
         }
 
         public void reject(String message) {
-            answer(false, message);
+            answer(false, message, new byte[0][]);
         }
 
-        private void answer(boolean ok, String text) {
-            if (isAnswered.compareAndSet(false, true)) CrossbindActivity.nativeExtensionAnswered(id, ok, text.getBytes(StandardCharsets.UTF_8));
+        // A message for the page's onMessage, from any thread, which goes before the answer: one of the values resolve()
+        // takes, as one it does not fails the call. One after the answer or the cancel goes nowhere.
+        public void send(Object message) {
+            if (isAnswered.get()) return;
+            Encoded encoded;
+            try {
+                encoded = Encoded.of(message);
+            } catch (JSONException error) {
+                reject("crossbind: " + error.getMessage());
+                return;
+            }
+            CrossbindActivity.nativeExtensionMessage(id, encoded.json.getBytes(StandardCharsets.UTF_8), encoded.bytes);
+        }
+
+        // Runs fn once, on the UI thread, as the page cancels the call or goes away: the call answers nothing from then
+        // on. Each fn given runs, in the order given. For a call cancelled already, fn runs at once; for one answered,
+        // never, and the call lets go of it.
+        public void onCancel(Runnable fn) {
+            synchronized (this) {
+                if (!isCancelled) {
+                    if (!isAnswered.get()) cancelled.add(fn);
+                    return;
+                }
+            }
+            fn.run();
+        }
+
+        static void cancel(int id) {
+            Call call = OPEN.remove(id);
+            if (call == null || !call.isAnswered.compareAndSet(false, true)) return;
+            List<Runnable> fns;
+            synchronized (call) {
+                call.isCancelled = true;
+                fns = new ArrayList<>(call.cancelled);
+                call.cancelled.clear();
+            }
+            for (Runnable fn : fns) {
+                try {
+                    fn.run();
+                } catch (RuntimeException error) {
+                    Log.e("crossbind", "crossbind: the cancel of an extension's call failed", error);
+                }
+            }
+        }
+
+        // The options of a call, as the native code passes them: their JSON, with its bytes in their places.
+        static JSONObject optionsOf(String json, byte[][] bytes) throws JSONException {
+            return (JSONObject) withBytes(new JSONObject(json), bytes);
+        }
+
+        private static Object withBytes(Object value, byte[][] bytes) throws JSONException {
+            if (value instanceof JSONArray array) {
+                JSONArray items = new JSONArray();
+                for (int i = 0; i < array.length(); i += 1) items.put(withBytes(array.get(i), bytes));
+                return items;
+            }
+            if (!(value instanceof JSONObject object)) return value;
+            if (object.length() == 2 && "bytes".equals(object.opt(TAG)) && object.opt("i") instanceof Number at) {
+                int index = at.intValue();
+                if (index < 0 || index >= bytes.length) throw new JSONException("the options name bytes they do not carry");
+                return bytes[index];
+            }
+            JSONObject members = new JSONObject();
+            for (Iterator<String> keys = object.keys(); keys.hasNext();) {
+                String key = keys.next();
+                members.put(key, withBytes(object.get(key), bytes));
+            }
+            return members;
+        }
+
+        private void answer(boolean ok, String text, byte[][] bytes) {
+            if (!isAnswered.compareAndSet(false, true)) return;
+            OPEN.remove(id);
+            synchronized (this) {
+                cancelled.clear();
+            }
+            CrossbindActivity.nativeExtensionAnswered(id, ok, text.getBytes(StandardCharsets.UTF_8), bytes);
+        }
+
+        // A value as the native code reads it: its JSON, the bytes in it standing for their places among bytes.
+        private record Encoded(String json, byte[][] bytes) {
+            static Encoded of(Object value) throws JSONException {
+                List<byte[]> bytes = new ArrayList<>();
+                // org.json writes a value alone only inside an array.
+                String array = new JSONStringer().array().value(withTags(value, bytes)).endArray().toString();
+                return new Encoded(array.substring(1, array.length() - 1), bytes.toArray(new byte[0][]));
+            }
+
+            private static Object withTags(Object value, List<byte[]> bytes) throws JSONException {
+                if (value instanceof byte[] data) {
+                    bytes.add(data);
+                    return new JSONObject().put(TAG, "bytes").put("i", bytes.size() - 1);
+                }
+                if (value instanceof JSONArray array) {
+                    JSONArray items = new JSONArray();
+                    for (int i = 0; i < array.length(); i += 1) items.put(withTags(array.get(i), bytes));
+                    return items;
+                }
+                if (!(value instanceof JSONObject object)) return value;
+                JSONObject members = new JSONObject();
+                for (Iterator<String> keys = object.keys(); keys.hasNext();) {
+                    String key = keys.next();
+                    members.put(key, withTags(object.get(key), bytes));
+                }
+                return members;
+            }
         }
     }
 
-    // A dialog the page opened: accept() is an alert's or a confirm's OK, or the text a prompt gives, and cancel() a
-    // confirm's or a prompt's Cancel. The first answers it.
+    // A dialog the page opened: accept() is an alert's or a confirm's OK, or the text a prompt gives, cancel() a
+    // confirm's or a prompt's Cancel, and useDefault() leaves it to the WebView where its owner calls it before its
+    // hook returns, and else cancels it. The first answers it.
     final class PageDialog {
         public enum Kind { ALERT, CONFIRM, PROMPT }
 
@@ -95,7 +220,7 @@ public interface Extension {
         private final String message;
         private final String defaultText;
         private final JsResult result;
-        private final AtomicBoolean isAnswered = new AtomicBoolean();
+        private final AnswerOnce once = new AnswerOnce();
 
         PageDialog(Kind kind, String message, String defaultText, JsResult result) {
             this.kind = kind;
@@ -118,7 +243,7 @@ public interface Extension {
         }
 
         public void accept(String text) {
-            if (!isAnswered.compareAndSet(false, true)) return;
+            if (!once.gives()) return;
             CrossbindActivity.MAIN.post(() -> {
                 if (kind == Kind.PROMPT) ((JsPromptResult) result).confirm(text);
                 else result.confirm();
@@ -130,12 +255,20 @@ public interface Extension {
         }
 
         public void cancel() {
-            if (isAnswered.compareAndSet(false, true)) CrossbindActivity.MAIN.post(result::cancel);
+            if (once.gives()) CrossbindActivity.MAIN.post(result::cancel);
+        }
+
+        public void useDefault() {
+            if (!once.leaves()) cancel();
+        }
+
+        boolean isLeft() {
+            return once.isLeft();
         }
     }
 
     // What a frame of the app's asks to use, together: "camera", "microphone", "location", "media-keys" or "midi". The
-    // first allow() or deny() answers it.
+    // first allow() or deny() answers it, and useDefault() denies it, as the WebView does.
     final class PagePermission {
         private final List<String> kinds;
         private final String origin;
@@ -158,7 +291,7 @@ public interface Extension {
             return origin;
         }
 
-        // Whether the app's manifest, which crossbind writes from app.permissions, asks for each device's permission.
+        // Whether app.permissions lists each of the devices it asks for; false for a kind that is no device.
         public boolean isListed() {
             return isListed;
         }
@@ -171,16 +304,22 @@ public interface Extension {
             answer(false);
         }
 
+        public void useDefault() {
+            deny();
+        }
+
         private void answer(boolean isAllowed) {
             if (isAnswered.compareAndSet(false, true)) CrossbindActivity.MAIN.post(() -> answer.accept(isAllowed));
         }
     }
 
-    // A file input the page's user clicked: pick() gives the files picked, and cancel() none. The first answers it.
+    // A file input the page's user clicked: pick() gives the files picked, cancel() none, and useDefault() leaves it to
+    // the WebView, which shows no picker, where its owner calls it before its hook returns, and else cancels it. The
+    // first answers it.
     final class FileInput {
         private final WebChromeClient.FileChooserParams params;
         private final ValueCallback<Uri[]> files;
-        private final AtomicBoolean isAnswered = new AtomicBoolean();
+        private final AnswerOnce once = new AnswerOnce();
 
         FileInput(WebChromeClient.FileChooserParams params, ValueCallback<Uri[]> files) {
             this.params = params;
@@ -212,8 +351,16 @@ public interface Extension {
             answer(null);
         }
 
+        public void useDefault() {
+            if (!once.leaves()) cancel();
+        }
+
+        boolean isLeft() {
+            return once.isLeft();
+        }
+
         private void answer(Uri[] picked) {
-            if (isAnswered.compareAndSet(false, true)) CrossbindActivity.MAIN.post(() -> files.onReceiveValue(picked));
+            if (once.gives()) CrossbindActivity.MAIN.post(() -> files.onReceiveValue(picked));
         }
     }
 }

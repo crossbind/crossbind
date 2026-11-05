@@ -39,8 +39,12 @@ bool exists(const std::string &path) { return GetFileAttributesW(wide(path).c_st
 // webview sizes the window anew for a new scale, and Windows leaves it as it was for a new screen size: a window that
 // filled its screen fills it again.
 LRESULT CALLBACK hostProcedure(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) {
-    // The window asks the app's extensions as its user closes it; app.quit() destroys it without asking.
-    if (message == WM_CLOSE && !crossbind::app::isCloseAllowed()) return 0;
+    // The window asks the app's extensions as its user closes it, and one that goes they hear of first; app.quit()
+    // destroys it without asking.
+    if (message == WM_CLOSE) {
+        if (!crossbind::app::isCloseAllowed()) return 0;
+        crossbind::app::windowsClosed();
+    }
     // So do signing out and shutting down, but for the Restart Manager's close to service the system, and the session
     // ends once every app has returned from WM_ENDSESSION.
     if (message == WM_QUERYENDSESSION) return (lParam & ENDSESSION_CLOSEAPP) || crossbind::app::isQuitAllowed() ? TRUE : FALSE;
@@ -80,7 +84,9 @@ bool isMainThread() { return isUiThread(); }
 
 void quitApp() {
     onMainThread([] {
-        if (mainWindow) DestroyWindow(mainWindow);
+        if (!mainWindow) return;
+        crossbind::app::windowsClosed();
+        DestroyWindow(mainWindow);
     });
 }
 

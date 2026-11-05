@@ -65,6 +65,8 @@ describe('an iOS app\'s Xcode project', () => {
         expect(fs.readFileSync(path.join(to, 'app', 'host.hbc'), 'utf8')).toBe('bytecode');
         expect(project).toContain('"OTHER_LDFLAGS[sdk=iphonesimulator*]" = (\n\t\t\t\t\t"-Wl,-force_load,\\"$(PROJECT_DIR)/lib/iphonesimulator/0-libdemo.a\\"",');
         expect(project).toContain('"-Wl,-u,_crossbind_keep_demo",');
+        // The host's own code checks certificates, whatever the app's extensions link.
+        expect(project).toContain('"-framework",\n\t\t\t\t\t"Security",');
         expect(project).not.toContain('iphoneos*');
         expect(project).toContain('"PRODUCT_BUNDLE_IDENTIFIER" = "com.example.demo";');
         expect(project).toContain('"DEVELOPMENT_TEAM" = "ABCDE12345";');
@@ -164,6 +166,36 @@ describe('an iOS app\'s Xcode project', () => {
             const schemeOf = (key) => execFileSync('plutil', ['-extract', key, 'raw', path.join(to, 'Info.plist')], { encoding: 'utf8' }).trim();
             expect(schemeOf('CFBundleURLTypes.0.CFBundleURLSchemes.0')).toBe('myapp');
             expect(schemeOf('CFBundleURLTypes.0.CFBundleURLName')).toBe('$(PRODUCT_BUNDLE_IDENTIFIER)');
+        }
+        fs.rmSync(root, { recursive: true, force: true });
+    });
+
+    test("continues the user activities of app.activityTypes and of the app's extensions", () => {
+        const root = fs.mkdtempSync(path.join(os.tmpdir(), 'crossbind-xcode-'));
+        const to = path.join(root, 'demo-ios');
+        writeXcodeProject(to, {
+            parts: [part(root, 'iphoneos')], identity: { id: 'com.example.demo', team: '' }, label: 'Demo', version: '1', activityTypes: ['com.example.demo.edit', 'com.example.notes.open'],
+        });
+
+        expect(fs.readFileSync(path.join(to, 'Info.plist'), 'utf8'))
+            .toContain('<key>NSUserActivityTypes</key>\n    <array>\n        <string>com.example.demo.edit</string>\n        <string>com.example.notes.open</string>\n    </array>');
+        fs.rmSync(root, { recursive: true, force: true });
+    });
+
+    test('shows the quick actions of app.shortcutItems and of its extensions on its icon', () => {
+        const root = fs.mkdtempSync(path.join(os.tmpdir(), 'crossbind-xcode-'));
+        const to = path.join(root, 'demo-ios');
+        writeXcodeProject(to, {
+            parts: [part(root, 'iphoneos')], identity: { id: 'com.example.demo', team: '' }, label: 'Demo', version: '1',
+            shortcutItems: [{ type: 'new-note', title: 'New note', subtitle: 'Blank', icon: 'compose' }, { type: 'scan', title: 'Scan', subtitle: null, icon: null }],
+        });
+
+        const plist = fs.readFileSync(path.join(to, 'Info.plist'), 'utf8');
+        expect(plist).toContain('<key>UIApplicationShortcutItemIconType</key>\n            <string>UIApplicationShortcutIconTypeCompose</string>');
+        if (process.platform === 'darwin') {
+            const valueOf = (key) => execFileSync('plutil', ['-extract', key, 'raw', path.join(to, 'Info.plist')], { encoding: 'utf8' }).trim();
+            expect(valueOf('UIApplicationShortcutItems.0.UIApplicationShortcutItemSubtitle')).toBe('Blank');
+            expect(valueOf('UIApplicationShortcutItems.1.UIApplicationShortcutItemType')).toBe('scan');
         }
         fs.rmSync(root, { recursive: true, force: true });
     });

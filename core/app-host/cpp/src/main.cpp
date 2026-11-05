@@ -44,8 +44,10 @@ int main(int argc, char **argv) {
     // them.
     app::openLaunch(launch);
 #ifdef __APPLE__
-    // macOS hands the app its links as it finishes launching, which the window starts.
+    // macOS hands the app its links as it finishes launching, which the window starts, and the notification that
+    // launched it after.
     listenForUrls();
+    ownNotificationCenter();
 #endif
     app::startTakingLaunches();
 
@@ -88,7 +90,7 @@ int main(int argc, char **argv) {
         const std::string url = app::attach(core, webView, devUrl);
         // Quitting from the Dock or the system ends the app as closing its window does.
         onQuit([&core] { app::quit(core, 0); });
-        app::windowOpened();
+        app::windowOpened(view.window().value(), webView);
 
         view.navigate(url);
         view.run();

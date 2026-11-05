@@ -1,10 +1,11 @@
 package dev.crossbind.extension.clipboard;
 
+import android.app.Activity;
 import android.content.ClipData;
 import android.content.ClipboardManager;
 
-import dev.crossbind.app.CrossbindActivity;
 import dev.crossbind.app.Extension;
+import dev.crossbind.app.ExtensionHost;
 
 import org.json.JSONObject;
 
@@ -12,7 +13,8 @@ import org.json.JSONObject;
 // does.
 public final class ClipboardExtension implements Extension {
     @Override
-    public void call(CrossbindActivity activity, String function, JSONObject options, Call call) {
+    public void call(ExtensionHost host, String function, JSONObject options, Call call) {
+        Activity activity = host.activity();
         ClipboardManager board = activity.getSystemService(ClipboardManager.class);
         switch (function) {
             case "readText" -> {

@@ -14,5 +14,9 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+        <!-- A tap of a quick action of app.shortcutItems, which Android starts in a task of its own that it empties first,
+             as it does each static shortcut's: the activity hands the tap to the app's, which keeps its page, and goes. -->
+        <activity android:name="dev.crossbind.app.CrossbindShortcutActivity" android:exported="false" android:taskAffinity=""
+            android:excludeFromRecents="true" android:noHistory="true" android:theme="@android:style/Theme.Translucent.NoTitleBar" />
     </application>
 </manifest>

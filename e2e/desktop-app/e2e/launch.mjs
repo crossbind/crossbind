@@ -30,6 +30,12 @@ export const LAUNCH_ARGS = ['--from-e2e', '', '--ünïcode=✓', 'crossbind-e2e:
 // beside LAUNCH_URL and again with the second beside LAUNCH_ARGS, and opens an Android app with the third after PHONE_URL.
 export const PROBE_SCHEME = 'crossbind-probe';
 export const PROBE_URLS = { launch: `${PROBE_SCHEME}://launch?x=1`, again: `${PROBE_SCHEME}://again?x=1`, phone: `${PROBE_SCHEME}://phone?x=1` };
+// The user activities the probe hands an iOS or macOS app's delegate, as Handoff does, which src/main.js checks reach
+// their owners: one of app.activityTypes, the page's, one of the probe's, and one no one continues.
+export const ACTIVITIES = { page: 'dev.crossbind.e2e.page-activity', probe: 'dev.crossbind.e2e.probe-activity', nobody: 'dev.crossbind.e2e.no-activity' };
+// The quick actions of a phone app's icon, whose taps the probe makes as the system does, which src/main.js checks reach
+// their owners: one of app.shortcutItems, the page's, one of the probe's, and one no one owns.
+export const SHORTCUTS = { page: 'dev.crossbind.e2e.new-note', probe: 'dev.crossbind.e2e.probe-action', nobody: 'dev.crossbind.e2e.no-action' };
 // The tray src/main.js sets and the notification it shows, whose clicks e2e/run.mjs makes: the icon's, the first item's
 // with checked, and the notification's. A Linux tray shows each label's underscore, and its server the body's markup.
 export const TRAY = {

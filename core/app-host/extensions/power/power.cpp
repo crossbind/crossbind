@@ -2,4 +2,6 @@
 // hears of them its own way, from the time the app's window opens.
 #include "power.h"
 
-void crossbind_extension_power(crossbind::Registry &registry) { registry.onWindow(crossbind::power::listen); }
+void crossbind_extension_power(crossbind::Registry &registry) {
+    registry.onWindow([](const crossbind::Window &) { crossbind::power::listen(); });
+}
