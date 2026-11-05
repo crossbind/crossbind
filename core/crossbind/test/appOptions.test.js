@@ -295,10 +295,11 @@ describe("the header a desktop app's host builds with", () => {
         expect(appHeader(config({ openPath: ['logs', 'picked'] }), 'win32')).toContain('#define CROSSBIND_APP_OPEN_PATH {"logs", "picked"}\n');
     });
 
-    test("gives a phone's host that list alone, so the desktop's options do not stop its build", () => {
+    test("gives a phone's host that list and the app's name alone, so the desktop's options do not stop its build", () => {
         expect(appHeader(config({ openPath: ['data'], id: 'com.example.my_app', window: 800 }), 'android')).toBe([
             '// crossbind writes this file from crossbind.config.js and package.json.',
             '#define CROSSBIND_APP_OPEN_PATH {"data"}',
+            '#define CROSSBIND_APP_NAME "demo-app"',
             '',
         ].join('\n'));
     });

@@ -6,7 +6,7 @@ The recovery rule:
 
 1. Read the error literally.
 2. Identify which layer it lives in (binding-time / build-time / link-time / runtime / hosting).
-3. Reach for the **least invasive** override (target filter → targetSpecs → env → build hooks → extensions).
+3. Reach for the **least invasive** override (target filter → targetSpecs → env → build hooks).
 4. Don't manually edit crossbind source, generated artifacts, or upstream library code outside `replaceList`.
 
 ---

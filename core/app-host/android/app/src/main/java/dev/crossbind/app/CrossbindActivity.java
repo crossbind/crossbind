@@ -16,11 +16,11 @@ import android.net.Uri;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.HandlerThread;
+import android.os.Looper;
 import android.util.Log;
 import android.view.Window;
 import android.view.WindowInsets;
 import android.view.WindowInsetsController;
-import android.view.WindowManager;
 import android.webkit.ConsoleMessage;
 import android.webkit.GeolocationPermissions;
 import android.webkit.PermissionRequest;
@@ -60,7 +60,9 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Consumer;
 
+import org.json.JSONException;
 import org.json.JSONObject;
 
 // An app's one activity: its page in a WebView, its module in Hermes behind JNI (libcrossbind_app.so). The page comes
@@ -144,8 +146,8 @@ public class CrossbindActivity extends Activity {
     // The relative luminance of a color that black and white contrast with as much.
     private static final float EVEN_CONTRAST = 0.179f;
     private static final int PERMISSIONS_REQUEST = 1;
-    // A download's save picker answers under the one code a file input's pickers, which count up, never reach.
-    private static final int SAVE_REQUEST = Integer.MAX_VALUE;
+    // Where the native code's calls of an extension's Java run.
+    private static final Handler MAIN = new Handler(Looper.getMainLooper());
     // The Android permission behind each device a page asks for.
     private static final Map<String, String> PAGE_DEVICES = Map.of(
             PermissionRequest.RESOURCE_VIDEO_CAPTURE, Manifest.permission.CAMERA,
@@ -164,7 +166,7 @@ public class CrossbindActivity extends Activity {
 
     private static final Map<Integer, Call> calls = new ConcurrentHashMap<>();
     private static final AtomicInteger nextCall = new AtomicInteger();
-    // The activity that shows the module's message dialogs while it lives.
+    // The activity that the calls of extensions' Java get while it lives.
     private static volatile CrossbindActivity current;
 
     private WebView webView;
@@ -172,8 +174,10 @@ public class CrossbindActivity extends Activity {
     private WebMessagePortCompat port;
     private String token;
     private final Set<String> origins = new HashSet<>();
-    // A file input's picker answers in onActivityResult, under the request code of the latest one.
-    private int pickRequest;
+    // What waits for the result of each activity this one started, under its request code.
+    private final Map<Integer, ActivityResult> results = new HashMap<>();
+    private int nextRequest;
+    // The file input whose picker is open: a picker that opens after it answers it with nothing.
     private ValueCallback<Uri[]> pendingFiles;
     // What waits for the answer the app's user is giving for permissions, and what waits to ask: Android asks one question
     // at a time, and answers one asked meanwhile with nothing.
@@ -183,7 +187,6 @@ public class CrossbindActivity extends Activity {
     // Back walks the page's history first, as in a browser; with none left, the system's own back leaves the app.
     private final OnBackInvokedCallback back = () -> webView.goBack();
     private boolean isBackTaken;
-    private AlertDialog messageDialog;
     // The downloads the page started, in turn for the save picker, which shows one at a time.
     private final ArrayDeque<Download> downloads = new ArrayDeque<>();
     private int nextDownload;
@@ -222,44 +225,33 @@ public class CrossbindActivity extends Activity {
     // A link of app.urlSchemes the system opened the app with, in UTF-8.
     private static native void nativeOpenUrl(byte[] url);
 
-    // The index of the button the user clicked in the module's message dialog, or -1 when it went without one.
-    private static native void nativeMessageAnswered(int button);
+    // The answer of an extension's Java to its native code: the result's JSON, or why the call failed, in UTF-8.
+    static native void nativeExtensionAnswered(int call, boolean ok, byte[] text);
 
-    // The module's message dialog, its text in UTF-8, from the module's thread.
-    static void showMessage(byte[] message, byte[] detail, byte[][] buttons) {
-        CrossbindActivity activity = current;
-        if (activity == null) {
-            nativeMessageAnswered(-1);
-            return;
-        }
-        String[] labels = Arrays.stream(buttons).map((label) -> new String(label, StandardCharsets.UTF_8)).toArray(String[]::new);
-        activity.runOnUiThread(() -> activity.showMessageDialog(new String(message, StandardCharsets.UTF_8),
-                new String(detail, StandardCharsets.UTF_8), labels));
-    }
-
-    // Android has a positive, a neutral and a negative button: the first label is the positive one, and the last of
-    // several the negative, which Android places where its apps put Cancel. Back and a tap outside close the dialog. The
-    // message goes in the dialog's text with the detail, as a title stops after two lines.
-    private void showMessageDialog(String message, String detail, String[] labels) {
-        if (isFinishing() || isDestroyed()) {
-            nativeMessageAnswered(-1);
-            return;
-        }
-        String[] names = labels.length == 0 ? new String[] {getString(android.R.string.ok)} : labels;
-        int[] clicked = {-1};
-        AlertDialog.Builder builder = new AlertDialog.Builder(this).setMessage(detail.isEmpty() ? message : message + "\n\n" + detail)
-                .setPositiveButton(names[0], (dialog, which) -> clicked[0] = 0)
-                .setOnDismissListener((dialog) -> {
-                    messageDialog = null;
-                    nativeMessageAnswered(clicked[0]);
-                });
-        if (names.length == 3) builder.setNeutralButton(names[1], (dialog, which) -> clicked[0] = 1);
-        if (names.length > 1) builder.setNegativeButton(names[names.length - 1], (dialog, which) -> clicked[0] = names.length - 1);
-        try {
-            messageDialog = builder.show();
-        } catch (WindowManager.BadTokenException gone) {
-            nativeMessageAnswered(-1);
-        }
+    // A call of an extension's Java by its native code, from whichever thread makes it: the extension's name, the
+    // function's and its options' JSON, in UTF-8.
+    static void callExtension(int id, byte[] extensionName, byte[] functionName, byte[] optionsJson) {
+        String extension = new String(extensionName, StandardCharsets.UTF_8);
+        String function = new String(functionName, StandardCharsets.UTF_8);
+        String options = new String(optionsJson, StandardCharsets.UTF_8);
+        String called = extension + "." + function;
+        Extension.Call call = new Extension.Call(id);
+        MAIN.post(() -> {
+            Extension to = Extensions.ALL.get(extension);
+            CrossbindActivity activity = current;
+            if (to == null) {
+                call.reject("crossbind: the app has no Java of the extension " + extension);
+            } else if (activity == null) {
+                call.reject("crossbind: " + called + " needs the app's activity, which is gone");
+            } else {
+                try {
+                    to.call(activity, function, new JSONObject(options), call);
+                } catch (JSONException | RuntimeException error) {
+                    Log.e(TAG, called + " failed", error);
+                    call.reject("crossbind: " + called + " failed: " + error);
+                }
+            }
+        });
     }
 
     // The module's answer to a call, from whichever thread gives it.
@@ -363,6 +355,7 @@ public class CrossbindActivity extends Activity {
         // old link, which the page had.
         nativeNewPage();
         if (state == null && (getIntent().getFlags() & Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY) == 0) openUrlOf(getIntent());
+        tellExtensions((extension) -> extension.onCreate(this));
     }
 
     // A link that opens the app while it runs comes here, as an app with app.urlSchemes keeps the activity its task's
@@ -372,6 +365,7 @@ public class CrossbindActivity extends Activity {
         super.onNewIntent(intent);
         setIntent(intent);
         openUrlOf(intent);
+        tellExtensions((extension) -> extension.onNewIntent(this, intent));
     }
 
     private void openUrlOf(Intent intent) {
@@ -382,6 +376,23 @@ public class CrossbindActivity extends Activity {
         Intent own = new Intent(Intent.ACTION_VIEW, intent.getData()).addCategory(Intent.CATEGORY_BROWSABLE).setPackage(getPackageName());
         if (getPackageManager().queryIntentActivities(own, 0).isEmpty()) return;
         nativeOpenUrl(intent.getData().toString().getBytes(StandardCharsets.UTF_8));
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        tellExtensions((extension) -> extension.onResume(this));
+    }
+
+    @Override
+    protected void onPause() {
+        super.onPause();
+        tellExtensions((extension) -> extension.onPause(this));
+    }
+
+    // The Java of each extension hears what the activity does, once the activity has started the module.
+    private void tellExtensions(Consumer<Extension> tell) {
+        if (token != null) Extensions.ALL.values().forEach(tell);
     }
 
     @Override
@@ -400,16 +411,23 @@ public class CrossbindActivity extends Activity {
         getWindow().getInsetsController().setSystemBarsAppearance(isDark ? 0 : light, light);
     }
 
+    public interface ActivityResult {
+        void onResult(int result, Intent data);
+    }
+
+    // Starts an activity for its result, which then gets on the UI thread. It throws ActivityNotFoundException, as
+    // startActivityForResult() does.
+    public void startForResult(Intent intent, ActivityResult then) {
+        int request = nextRequest++;
+        startActivityForResult(intent, request);
+        results.put(request, then);
+    }
+
     @Override
     protected void onActivityResult(int request, int result, Intent data) {
         super.onActivityResult(request, result, data);
-        if (request == SAVE_REQUEST) {
-            save(result == RESULT_OK && data != null ? data.getData() : null);
-            return;
-        }
-        if (request != pickRequest || pendingFiles == null) return;
-        pendingFiles.onReceiveValue(pickedFiles(result, data));
-        pendingFiles = null;
+        ActivityResult then = results.remove(request);
+        if (then != null) then.onResult(result, data);
     }
 
     // A download the page starts saves where its user picks, as a browser asks: the page hands over its name and bytes,
@@ -470,7 +488,7 @@ public class CrossbindActivity extends Activity {
                 .setType(first.mime == null || first.mime.isEmpty() ? "application/octet-stream" : first.mime)
                 .putExtra(Intent.EXTRA_TITLE, first.name);
         try {
-            startActivityForResult(picker, SAVE_REQUEST);
+            startForResult(picker, (result, data) -> save(result == RESULT_OK && data != null ? data.getData() : null));
             isPicking = true;
         } catch (ActivityNotFoundException none) {
             notSaved(first, "nothing on this device saves a file");
@@ -524,7 +542,7 @@ public class CrossbindActivity extends Activity {
     }
 
     // Asks the app's user for whichever of these permissions it lacks, then runs then, which checks what it was given.
-    private void afterAsking(String[] permissions, Runnable then) {
+    public void afterAsking(String[] permissions, Runnable then) {
         if (answering != null) {
             waiting.add(() -> afterAsking(permissions, then));
             return;
@@ -571,8 +589,7 @@ public class CrossbindActivity extends Activity {
 
     @Override
     protected void onDestroy() {
-        // A message dialog that goes with its activity answers as one closed.
-        if (messageDialog != null) messageDialog.dismiss();
+        tellExtensions((extension) -> extension.onDestroy(this));
         if (current == this) current = null;
         if (port != null) close(port);
         if (webView != null) webView.destroy();
@@ -719,7 +736,11 @@ public class CrossbindActivity extends Activity {
             Intent intent = params.createIntent();
             if (params.getMode() == FileChooserParams.MODE_OPEN_MULTIPLE) intent.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true);
             try {
-                startActivityForResult(intent, ++pickRequest);
+                startForResult(intent, (result, data) -> {
+                    if (pendingFiles != files) return;
+                    files.onReceiveValue(pickedFiles(result, data));
+                    pendingFiles = null;
+                });
             } catch (ActivityNotFoundException none) {
                 Log.w(TAG, "nothing on this device picks a file");
                 return false;

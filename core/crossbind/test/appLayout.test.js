@@ -5,7 +5,7 @@ import {
     afterEach, beforeEach, describe, expect, test, vi,
 } from 'vitest';
 
-const state = { config: { general: { name: 'demo' }, app: {}, target: {} }, targets: [] };
+const state = { config: { general: { name: 'demo' }, app: {}, target: {}, extensions: [] }, targets: [] };
 vi.mock('../src/state/index.js', () => ({ default: state }));
 // The emulator a dev session runs an Android app on.
 vi.mock('../src/actions/androidDevice.js', () => ({ attachedDevice: () => ({ serial: 'emulator-5554', abi: 'x86_64' }) }));

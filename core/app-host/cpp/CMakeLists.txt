@@ -49,13 +49,16 @@ endif()
 set(SOURCES
     src/app.cpp
     src/app_api.cpp
+    src/extension.cpp
     src/host_core.cpp
     src/reopen.cpp
     src/updater.cpp
     ${MONOCYPHER_SOURCES}
     ${PLATFORM_SOURCES}
     "${CROSSBIND_JSI_ROOT}/cpp/src/emscripten/bind.cpp"
-    ${CROSSBIND_EXTRA_SOURCES})
+    ${CROSSBIND_EXTRA_SOURCES}
+    # The app's extensions, and what crossbind writes of them.
+    ${CROSSBIND_EXTENSION_SOURCES})
 if(CMAKE_SYSTEM_NAME STREQUAL "iOS")
     add_library(app STATIC src/attach.cpp "${THIRD_PARTY}/jsi/jsi.cpp" ${SOURCES})
 elseif(ANDROID)
@@ -81,7 +84,10 @@ target_include_directories(app PRIVATE
     "${THIRD_PARTY}/webview/core/include"
     "${THIRD_PARTY}/monocypher")
 if(APPLE)
-    set_source_files_properties(${PLATFORM_SOURCES} PROPERTIES COMPILE_OPTIONS -fobjc-arc)
+    # An extension's Objective-C++ keeps its objects under ARC, as the host's own does.
+    set(EXTENSION_OBJC_SOURCES ${CROSSBIND_EXTENSION_SOURCES})
+    list(FILTER EXTENSION_OBJC_SOURCES INCLUDE REGEX "\\.mm$")
+    set_source_files_properties(${PLATFORM_SOURCES} ${EXTENSION_OBJC_SOURCES} PROPERTIES COMPILE_OPTIONS -fobjc-arc)
 endif()
 if(CMAKE_SYSTEM_NAME STREQUAL "iOS")
     # The archive's dSYM gives App Store Connect the host's files and lines; the app it ships stays stripped.
@@ -100,7 +106,7 @@ if(APPLE)
     target_link_options(app PRIVATE "-F${CROSSBIND_HERMES}/Library/Frameworks/macosx" "LINKER:-rpath,@executable_path/../Frameworks"
         "LINKER:-dead_strip" "$<$<CONFIG:Release>:LINKER:-x>")
     target_link_libraries(app PRIVATE "-framework hermesvm" "-framework WebKit" "-framework Cocoa" "-framework CoreServices"
-        "-framework UniformTypeIdentifiers" "-framework CoreLocation" "-framework Security" "-framework UserNotifications")
+        "-framework CoreLocation" "-framework Security" "-framework UserNotifications")
 elseif(ANDROID)
     # Hermes comes with the app from its own package; the C++ runtime the host shares with it is this NDK's, which goes
     # beside the host, stripped.
@@ -127,7 +133,7 @@ elseif(WIN32)
     # loader DLL ships. WebView2's headers come from crossbind's windows image.
     target_include_directories(app SYSTEM PRIVATE "${CROSSBIND_WEBVIEW2_INCLUDE}")
     target_link_libraries(app PRIVATE "${CROSSBIND_HERMES}/lib/libhermesvm_a.a"
-        ole32 oleaut32 uuid shell32 shlwapi user32 gdi32 advapi32 version dwmapi winmm winhttp comctl32 wintrust crypt32)
+        ole32 oleaut32 uuid shell32 shlwapi user32 gdi32 advapi32 version dwmapi winmm winhttp wintrust crypt32)
     set_target_properties(app PROPERTIES WIN32_EXECUTABLE ON)
     # Some DLLs the app imports, as version, winhttp and wintrust, are no known DLLs, which Windows looks for in the app's
     # folder first: a file of their name there, as in a folder the app was downloaded to, would run inside the app. They

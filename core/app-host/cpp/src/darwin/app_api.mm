@@ -3,14 +3,12 @@
 #import <UIKit/UIKit.h>
 #else
 #import <Cocoa/Cocoa.h>
-#import <UniformTypeIdentifiers/UniformTypeIdentifiers.h>
 #import <UserNotifications/UserNotifications.h>
 #endif
 
 #include "host_core.h"
 #include "platform.h"
 
-#include <memory>
 #include <stdexcept>
 
 namespace {
@@ -32,6 +30,8 @@ std::string folder(NSSearchPathDirectory directory, NSString *child) {
 }
 
 }  // namespace
+
+void crossbind::onMainThread(std::function<void()> fn) { onMain(^{ fn(); }); }
 
 // Called on the module's thread, which has no autorelease pool of its own.
 crossbind::app::Paths appPaths() {
@@ -66,14 +66,6 @@ void openUrl(std::string url, std::function<void(Failure)> done) {
 
 #if TARGET_OS_IPHONE
 
-void showOpenDialog(crossbind::app::OpenOptions, std::function<void(Picked)>) {
-    throw std::runtime_error("crossbind: an iOS app has no file dialogs yet");
-}
-
-void showSaveDialog(crossbind::app::SaveOptions, std::function<void(std::optional<std::string>)>) {
-    throw std::runtime_error("crossbind: an iOS app has no file dialogs yet");
-}
-
 void openFile(std::string, std::function<void(Failure)>) {
     throw std::runtime_error("crossbind: an iOS app opens no file in another app yet");
 }
@@ -101,63 +93,16 @@ void showNotification(Notification, std::function<void(Failure)>) {
 }
 
 namespace {
-
 __weak UIWindow *mainWindow;
-
-// A message dialog's answer, given once. UIKit can let an alert go without a click, as when its scene goes, and then
-// the last of its actions to go answers it as closed.
-struct MessageAnswer {
-    std::function<void(int)> done;
-    bool isGiven = false;
-
-    void give(int button) {
-        if (isGiven) return;
-        isGiven = true;
-        done(button);
-    }
-    ~MessageAnswer() { give(NO_BUTTON); }
-};
-
 }  // namespace
 
-// The last of several buttons is the one a keyboard's Escape clicks, which iOS places where its apps put Cancel.
-void showMessageDialog(crossbind::app::MessageOptions options, std::function<void(int)> done) {
-    onMain(^{
-      auto answer = std::make_shared<MessageAnswer>();
-      answer->done = done;
-      UIAlertController *alert = [UIAlertController alertControllerWithTitle:ns(options.message)
-                                                                     message:options.detail.empty() ? nil : ns(options.detail)
-                                                              preferredStyle:UIAlertControllerStyleAlert];
-      const std::vector<std::string> labels = options.buttons.empty() ? std::vector<std::string>{"OK"} : options.buttons;
-      for (size_t i = 0; i < labels.size(); i += 1) {
-          const bool isCancel = labels.size() > 1 && i == labels.size() - 1;
-          UIAlertAction *action = [UIAlertAction actionWithTitle:ns(labels[i])
-                                                           style:isCancel ? UIAlertActionStyleCancel : UIAlertActionStyleDefault
-                                                         handler:^(UIAlertAction *) { answer->give(static_cast<int>(i)); }];
-          [alert addAction:action];
-          if (i == 0) alert.preferredAction = action;
-      }
-      if (!presentOnTop((__bridge void *)alert, (__bridge void *)mainWindow)) answer->give(NO_BUTTON);
-    });
-}
-
 void setMainWindow(void *window) { mainWindow = (__bridge UIWindow *)window; }
+
+void *crossbind::appWindow() { return (__bridge void *)mainWindow; }
 
 #else
 
 namespace {
-
-// The panel shows every filter's files at once; none at all, or "*", lets it show any file.
-NSArray<UTType *> *typesOf(const std::vector<crossbind::app::FileFilter> &filters) {
-    NSMutableArray<UTType *> *types = [NSMutableArray new];
-    for (const auto &filter : filters) {
-        for (const auto &extension : filter.extensions) {
-            if (extension == "*") return @[];
-            if (UTType *type = [UTType typeWithFilenameExtension:ns(extension)]) [types addObject:type];
-        }
-    }
-    return types;
-}
 
 bool exists(NSURL *file) { return [NSFileManager.defaultManager fileExistsAtPath:file.path]; }
 
@@ -184,62 +129,6 @@ bool exists(NSURL *file) { return [NSFileManager.defaultManager fileExistsAtPath
 }
 
 @end
-
-// The panels are app-modal: nothing else in the app, quitting among it, happens while one asks.
-void showOpenDialog(crossbind::app::OpenOptions options, std::function<void(Picked)> done) {
-    onMain(^{
-      NSOpenPanel *panel = [NSOpenPanel openPanel];
-      panel.canChooseFiles = !options.directory;
-      panel.canChooseDirectories = options.directory;
-      panel.allowsMultipleSelection = options.multiple;
-      if (!options.title.empty()) panel.message = ns(options.title);
-      if (!options.defaultPath.empty()) panel.directoryURL = [NSURL fileURLWithPath:ns(options.defaultPath)];
-      panel.allowedContentTypes = typesOf(options.filters);
-      if ([panel runModal] != NSModalResponseOK) {
-          done(std::nullopt);
-          return;
-      }
-      std::vector<std::string> paths;
-      for (NSURL *url in panel.URLs) paths.push_back(url.path.UTF8String);
-      done(paths);
-    });
-}
-
-void showSaveDialog(crossbind::app::SaveOptions options, std::function<void(std::optional<std::string>)> done) {
-    onMain(^{
-      NSSavePanel *panel = [NSSavePanel savePanel];
-      if (!options.title.empty()) panel.message = ns(options.title);
-      if (!options.defaultPath.empty()) panel.directoryURL = [NSURL fileURLWithPath:ns(options.defaultPath)];
-      if (!options.defaultName.empty()) panel.nameFieldStringValue = ns(options.defaultName);
-      panel.allowedContentTypes = typesOf(options.filters);
-      if ([panel runModal] != NSModalResponseOK) {
-          done(std::nullopt);
-          return;
-      }
-      done(std::string(panel.URL.path.UTF8String));
-    });
-}
-
-// App-modal, as the panels are. Return clicks the first button and Escape the last of several, as closing the dialog
-// does elsewhere; NSAlert would give Escape to one named Cancel instead, wherever it is.
-void showMessageDialog(crossbind::app::MessageOptions options, std::function<void(int)> done) {
-    onMain(^{
-      NSAlert *alert = [NSAlert new];
-      alert.messageText = ns(options.message);
-      alert.informativeText = ns(options.detail);
-      alert.alertStyle = options.kind == crossbind::app::MessageKind::error     ? NSAlertStyleCritical
-                         : options.kind == crossbind::app::MessageKind::warning ? NSAlertStyleWarning
-                                                                                : NSAlertStyleInformational;
-      for (const auto &label : options.buttons) [alert addButtonWithTitle:ns(label)];
-      NSString *escape = @"\x1b";
-      for (NSButton *button in alert.buttons) {
-          if ([button.keyEquivalent isEqualToString:escape]) button.keyEquivalent = @"";
-      }
-      alert.buttons.firstObject.keyEquivalent = @"\r";
-      if (alert.buttons.count > 1) alert.buttons.lastObject.keyEquivalent = escape;
-      done(static_cast<int>([alert runModal] - NSAlertFirstButtonReturn));
-    });
-}
 
 void openFile(std::string path, std::function<void(Failure)> done) {
     onMain(^{
@@ -311,6 +200,8 @@ void setMainWindow(void *window) {
         windowed.contentMaxSize = most;
     }];
 }
+
+void *crossbind::appWindow() { return (__bridge void *)mainWindow; }
 
 void showWindow(const std::string &) {
     onMain(^{

@@ -5,6 +5,7 @@
 #include <hermes/hermes.h>
 #include <jsi/jsi.h>
 
+#include "crossbind/extension.h"
 #include "platform.h"
 
 #include <chrono>
@@ -33,6 +34,15 @@ std::filesystem::path pathOf(const std::string &text);
 std::string errorReply(const std::string &message);
 // A call of the page to one of the app's functions through crossbind/app, which reply answers once it is done.
 void callApp(jsi::Runtime &rt, const std::string &name, const jsi::Value &options, ReplyFn reply);
+// A call of the app's own code to one of the app's functions, on the caller's thread, as <crossbind/app.h> makes them:
+// done gets why it failed, or its result.
+void invoke(const std::string &name, Value options, std::function<void(Failure, Value)> done);
+// Adds the host's own functions, the ones crossbind/app calls.
+void appFunctions(Registry &registry);
+// Adds the functions of the app's extensions, through the file crossbind writes of them into the host's build.
+void extensionFunctions(Registry &registry);
+// The value of JSON text; text that is no JSON throws.
+Value valueOfJson(std::string_view text);
 // Whether the main thread answers the waits of <crossbind/app.h>: from the module's start until the app quits.
 void answerWaits(bool answer);
 // Sends an event of the app's native code to the page, from any thread, through the app's one module; before it boots,

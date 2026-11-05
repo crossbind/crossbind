@@ -3,7 +3,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { describe, expect, test, vi } from 'vitest';
 
-const state = { config: { general: { name: 'demo-app' }, target: {}, app: {}, paths: {} }, targets: [] };
+const state = { config: { general: { name: 'demo-app' }, target: {}, app: {}, paths: {}, extensions: [] }, targets: [] };
 vi.mock('../src/state/index.js', () => ({ default: state }));
 
 const { default: writeGradleProject } = await import('../src/actions/gradleProject.js');
@@ -36,6 +36,8 @@ describe("an Android app's Gradle project", () => {
         expect(fs.readFileSync(path.join(main, 'jniLibs', 'arm64-v8a', 'libc++_shared.so'), 'utf8')).toBe('arm64-v8a libc++_shared.so');
         expect(fs.readFileSync(path.join(main, 'assets', 'app', 'host.hbc'), 'utf8')).toBe('bytecode');
         expect(fs.existsSync(path.join(main, 'java', 'dev', 'crossbind', 'app', 'CrossbindActivity.java'))).toBe(true);
+        expect(fs.readFileSync(path.join(main, 'java', 'dev', 'crossbind', 'app', 'Extensions.java'), 'utf8'))
+            .toContain('    static final Map<String, Extension> ALL = Map.ofEntries();\n');
         expect(gradle).toContain("applicationId 'com.example.demo'");
         expect(gradle).toContain('versionCode 1002003');
         expect(gradle).toContain("versionName '1.2.3-beta.1'");
@@ -132,6 +134,36 @@ describe("an Android app's Gradle project", () => {
         const plain = projectOf([]);
         expect(plain.manifest).not.toContain('android.intent.action.VIEW');
         expect(plain.gradle).toContain("launchMode: 'standard'");
+        fs.rmSync(root, { recursive: true, force: true });
+    });
+
+    test("takes each extension's Java beside the activity, which calls its class, and refuses one that brings a file the project has", () => {
+        const root = fs.mkdtempSync(path.join(os.tmpdir(), 'crossbind-gradle-'));
+        const to = path.join(root, 'demo-app-android');
+        const javaOf = (name, file, className) => {
+            const dir = path.join(root, name, 'android');
+            fs.mkdirSync(path.dirname(path.join(dir, file)), { recursive: true });
+            fs.writeFileSync(path.join(dir, file), `package ${className.replace(/\.[^.]+$/, '')};`);
+            return { name, dir, className };
+        };
+        const write = (java) => writeGradleProject(to, { parts: [part(root, 'x86_64')], id: 'com.example.demo', label: 'Demo', version: { name: '1.0.0', code: 1 }, java });
+        const clipboard = path.join('dev', 'crossbind', 'clipboard', 'ClipboardExtension.java');
+        write([
+            javaOf('clipboard', clipboard, 'dev.crossbind.clipboard.ClipboardExtension'),
+            javaOf('secure-storage', path.join('dev', 'crossbind', 'storage', 'StorageExtension.java'), 'dev.crossbind.storage.StorageExtension'),
+        ]);
+        const sources = path.join(to, 'app', 'src', 'main', 'java');
+        expect(fs.readFileSync(path.join(sources, clipboard), 'utf8')).toBe('package dev.crossbind.clipboard;');
+        expect(fs.existsSync(path.join(sources, 'dev', 'crossbind', 'app', 'CrossbindActivity.java'))).toBe(true);
+        expect(fs.readFileSync(path.join(sources, 'dev', 'crossbind', 'app', 'Extensions.java'), 'utf8')).toContain(`    static final Map<String, Extension> ALL = Map.ofEntries(
+            Map.entry("clipboard", new dev.crossbind.clipboard.ClipboardExtension()),
+            Map.entry("secure-storage", new dev.crossbind.storage.StorageExtension()));
+`);
+        for (const [name, file] of [['activity', 'CrossbindActivity.java'], ['registry', 'Extensions.java']]) {
+            const shadow = path.join('dev', 'crossbind', 'app', file);
+            expect(() => write([javaOf(name, shadow, 'dev.crossbind.app.Shadow')]))
+                .toThrow(`crossbind: the extension ${name} has ${shadow} in its Java, which the app's Gradle project has already.`);
+        }
         fs.rmSync(root, { recursive: true, force: true });
     });
 

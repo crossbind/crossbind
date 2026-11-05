@@ -16,8 +16,7 @@
 #include <memory>
 #include <mutex>
 #include <stdexcept>
-#include <thread>
-#include <type_traits>
+#include <utility>
 
 namespace crossbind::app {
 
@@ -31,8 +30,6 @@ namespace fs = std::filesystem;
 std::atomic<bool> answering{false};
 // How often a wait looks whether the app has begun to quit.
 constexpr auto QUIT_CHECK = std::chrono::milliseconds(50);
-// One dialog at a time: another would open inside the first one's modal loop.
-std::atomic<bool> dialogOpen{false};
 // What the user picked in a dialog during this run: "picked" in where the page reaches.
 std::mutex grantedMutex;
 std::vector<fs::path> granted;
@@ -157,67 +154,6 @@ void checkTrash(const std::string &path) {
     }
 }
 
-void grant(const std::string &path) {
-    std::lock_guard<std::mutex> lock(grantedMutex);
-    granted.push_back(normal(path));
-}
-
-void grant(const std::vector<std::string> &paths) {
-    for (const auto &path : paths) grant(path);
-}
-
-// An extension goes without its dot, whoever gave it.
-template <typename Options>
-Options withoutDots(Options options) {
-    for (auto &filter : options.filters) {
-        for (auto &extension : filter.extensions) {
-            if (!extension.empty() && extension[0] == '.') extension.erase(0, 1);
-            if (extension.empty()) throw std::invalid_argument("crossbind: the filter " + filter.name + " has an empty extension");
-        }
-    }
-    return options;
-}
-
-// Shows a dialog unless one is open.
-template <typename Options, typename T>
-void showDialog(void (*show)(Options, std::function<void(T)>), std::type_identity_t<Options> options,
-                std::type_identity_t<std::function<void(T)>> done) {
-    if (dialogOpen.exchange(true)) throw std::runtime_error("crossbind: another dialog is open");
-    try {
-        show(std::move(options), [done = std::move(done)](T result) {
-            dialogOpen = false;
-            done(std::move(result));
-        });
-    } catch (...) {
-        dialogOpen = false;
-        throw;
-    }
-}
-
-// A file dialog, whose user's picks the page may reach then.
-template <typename Options, typename T>
-void showFileDialog(void (*show)(Options, std::function<void(T)>), std::type_identity_t<Options> options,
-                    std::type_identity_t<std::function<void(T)>> done) {
-    showDialog(show, withoutDots(std::move(options)), [done = std::move(done)](T result) {
-        if (result) grant(*result);
-        done(std::move(result));
-    });
-}
-
-// Android's dialogs take three buttons at most.
-constexpr size_t MAX_BUTTONS = 3;
-
-// A message dialog, which a page that went around crossbind/app is held to as well; closing it clicks its last button.
-void showMessage(MessageOptions options, std::function<void(int)> done) {
-    if (options.message.empty()) throw std::invalid_argument("crossbind: a message dialog takes a message");
-    const bool hasEmptyLabel = std::any_of(options.buttons.begin(), options.buttons.end(), [](const std::string &label) { return label.empty(); });
-    if (options.buttons.size() > MAX_BUTTONS || hasEmptyLabel) {
-        throw std::invalid_argument("crossbind: a message dialog takes three buttons at most, each with a label");
-    }
-    const int last = std::max(static_cast<int>(options.buttons.size()) - 1, 0);
-    showDialog(showMessageDialog, std::move(options), [last, done = std::move(done)](int button) { done(button < 0 ? last : button); });
-}
-
 // Waits for what the main thread hands done. The promise is shared, as done may run after the wait has given up, and a
 // done dropped unrun breaks it rather than hang the wait.
 template <typename T, typename Start>
@@ -237,76 +173,37 @@ void waitDone(const std::function<void(std::function<void(Failure)>)> &start) {
     if (const Failure failure = wait<Failure>(start)) throw std::runtime_error(*failure);
 }
 
-std::string json(const std::string &text) {
-    std::string out = "\"";
-    for (const unsigned char c : text) {
-        if (c == '"' || c == '\\') {
-            out += '\\';
-            out += static_cast<char>(c);
-        } else if (c < 0x20) {
-            char escaped[7];
-            std::snprintf(escaped, sizeof escaped, "\\u%04x", c);
-            out += escaped;
-        } else {
-            out += static_cast<char>(c);
-        }
-    }
-    return out + '"';
+// One of the app's functions, as the page calls it by its name.
+Value invoked(const std::string &name, Value options) {
+    using Answer = std::pair<Failure, Value>;
+    Answer answer = wait<Answer>([&](std::function<void(Answer)> done) {
+        invoke(name, std::move(options), [done = std::move(done)](Failure failure, Value result) { done({std::move(failure), std::move(result)}); });
+    });
+    if (answer.first) throw std::runtime_error(*answer.first);
+    return std::move(answer.second);
 }
 
-std::string json(const std::vector<std::string> &items) {
-    std::string out = "[";
-    for (const auto &item : items) out += (out.size() > 1 ? "," : "") + json(item);
-    return out + "]";
+Value filtersOf(const std::vector<FileFilter> &filters) {
+    Value::Array out;
+    for (const auto &filter : filters) out.push_back(Value::Object{{"name", filter.name}, {"extensions", filter.extensions}});
+    return out;
 }
 
-std::string ok(const std::string &value) { return "[0," + value + "]"; }
-
-std::function<void(Failure)> answered(ReplyFn reply) {
-    return [reply = std::move(reply)](Failure failure) { reply(failure ? errorReply(*failure) : ok("null")); };
+std::function<void(Failure)> answered(Call call) {
+    return [call = std::move(call)](Failure failure) {
+        if (failure) call.reject(*failure);
+        else call.resolve();
+    };
 }
 
 // The updater downloads, so the page's calls of it run on a thread of their own, which answers them. Without one they
 // fail at once on the module's thread: an Android app answers from threads Java knows alone.
-void inBackground(ReplyFn reply, std::function<std::string()> work) {
-    auto answer = [reply = std::move(reply), work = std::move(work)] {
-        std::string result;
-        try {
-            result = work();
-        } catch (const std::exception &error) {
-            result = errorReply(error.what());
-        } catch (...) {
-            result = errorReply("crossbind: the updater failed");
-        }
-        reply(result);
-    };
+void updaterCall(Call call, std::function<Value()> work) {
 #ifdef CROSSBIND_APP_UPDATER_URL
-    std::thread(std::move(answer)).detach();
+    inBackground(std::move(call), std::move(work));
 #else
-    answer();
+    call.resolve(work());
 #endif
-}
-
-jsi::Value property(jsi::Runtime &rt, const jsi::Value &options, const char *key) {
-    return options.isObject() ? options.asObject(rt).getProperty(rt, key) : jsi::Value::undefined();
-}
-
-std::string text(jsi::Runtime &rt, const jsi::Value &options, const char *key) {
-    const jsi::Value value = property(rt, options, key);
-    return value.isUndefined() ? std::string() : value.asString(rt).utf8(rt);
-}
-
-bool flag(jsi::Runtime &rt, const jsi::Value &options, const char *key) {
-    const jsi::Value value = property(rt, options, key);
-    return !value.isUndefined() && value.asBool();
-}
-
-std::vector<std::string> texts(jsi::Runtime &rt, const jsi::Value &array) {
-    std::vector<std::string> out;
-    if (array.isUndefined()) return out;
-    const jsi::Array items = array.asObject(rt).asArray(rt);
-    for (size_t i = 0; i < items.size(rt); i += 1) out.push_back(items.getValueAtIndex(rt, i).asString(rt).utf8(rt));
-    return out;
 }
 
 // The roles crossbind/app takes, which a page that went around it is held to as well.
@@ -362,28 +259,24 @@ MenuItem standardMenu(const MenuItem &menu) {
 }
 #endif
 
-std::vector<MenuItem> menuItems(jsi::Runtime &rt, const jsi::Value &list) {
+std::vector<MenuItem> menuItems(const Value &list) {
     std::vector<MenuItem> out;
-    const jsi::Array items = list.asObject(rt).asArray(rt);
-    for (size_t i = 0; i < items.size(rt); i += 1) {
-        const jsi::Value value = items.getValueAtIndex(rt, i);
+    for (const Value &value : list.asArray()) {
         MenuItem item;
-        item.label = text(rt, value, "label");
-        item.id = text(rt, value, "id");
-        item.role = text(rt, value, "role");
+        item.label = value["label"].asString("");
+        item.id = value["id"].asString("");
+        item.role = value["role"].asString("");
         if (!item.role.empty() && std::find(MENU_ROLES.begin(), MENU_ROLES.end(), item.role) == MENU_ROLES.end()) {
             throw std::invalid_argument("crossbind: no menu item has the role " + item.role);
         }
-        const std::string accelerator = text(rt, value, "accelerator");
+        const std::string accelerator = value["accelerator"].asString("");
         if (!accelerator.empty()) item.accelerator = acceleratorOf(accelerator);
-        const jsi::Value checked = property(rt, value, "checked");
-        if (!checked.isUndefined()) item.checked = checked.asBool();
-        const jsi::Value enabled = property(rt, value, "enabled");
-        item.isEnabled = enabled.isUndefined() || enabled.asBool();
-        item.isSeparator = text(rt, value, "type") == "separator";
-        const jsi::Value children = property(rt, value, "items");
-        item.isSubmenu = !children.isUndefined();
-        if (item.isSubmenu) item.items = menuItems(rt, children);
+        if (!value["checked"].isNull()) item.checked = value["checked"].asBool();
+        item.isEnabled = value["enabled"].asBool(true);
+        item.isSeparator = value["type"].asString("") == "separator";
+        const Value &children = value["items"];
+        item.isSubmenu = !children.isNull();
+        if (item.isSubmenu) item.items = menuItems(children);
 #ifndef __APPLE__
         if (item.role == "editMenu" || item.role == "windowMenu") item = standardMenu(item);
 #endif
@@ -404,26 +297,9 @@ void checkTrayItems(const std::vector<MenuItem> &items) {
 
 // A click the page hears of as the event menu.
 void menuClicked(std::string id, std::optional<bool> checked) {
-    postEvent("menu", "{\"id\":" + json(id) + (checked ? std::string(",\"checked\":") + (*checked ? "true" : "false") : "") + "}");
-}
-
-std::vector<FileFilter> filters(jsi::Runtime &rt, const jsi::Value &options) {
-    std::vector<FileFilter> out;
-    const jsi::Value value = property(rt, options, "filters");
-    if (value.isUndefined()) return out;
-    const jsi::Array items = value.asObject(rt).asArray(rt);
-    for (size_t i = 0; i < items.size(rt); i += 1) {
-        const jsi::Value filter = items.getValueAtIndex(rt, i);
-        out.push_back({text(rt, filter, "name"), texts(rt, property(rt, filter, "extensions"))});
-    }
-    return out;
-}
-
-MessageKind kindOf(const std::string &kind) {
-    if (kind.empty() || kind == "info") return MessageKind::info;
-    if (kind == "warning") return MessageKind::warning;
-    if (kind == "error") return MessageKind::error;
-    throw std::invalid_argument("crossbind: no message dialog has the kind " + kind);
+    Value::Object click{{"id", std::move(id)}};
+    if (checked) click.emplace_back("checked", *checked);
+    postEvent("menu", Value(std::move(click)).json());
 }
 
 }  // namespace
@@ -431,16 +307,25 @@ MessageKind kindOf(const std::string &kind) {
 void answerWaits(bool answer) { answering = answer; }
 
 std::optional<std::vector<std::string>> openDialog(const OpenOptions &options) {
-    return wait<Picked>([&](std::function<void(Picked)> done) { showFileDialog(showOpenDialog, options, std::move(done)); });
+    const Value picked = invoked("dialog.open", Value::Object{{"title", options.title}, {"defaultPath", options.defaultPath},
+        {"filters", filtersOf(options.filters)}, {"directory", options.directory}, {"multiple", options.multiple}});
+    if (picked.isNull()) return std::nullopt;
+    std::vector<std::string> paths;
+    for (const Value &path : picked.asArray()) paths.push_back(path.asString());
+    return paths;
 }
 
 std::optional<std::string> saveDialog(const SaveOptions &options) {
-    return wait<std::optional<std::string>>(
-        [&](std::function<void(std::optional<std::string>)> done) { showFileDialog(showSaveDialog, options, std::move(done)); });
+    const Value file = invoked("dialog.save", Value::Object{{"title", options.title}, {"defaultPath", options.defaultPath},
+        {"defaultName", options.defaultName}, {"filters", filtersOf(options.filters)}});
+    if (file.isNull()) return std::nullopt;
+    return file.asString();
 }
 
 int messageDialog(const MessageOptions &options) {
-    return wait<int>([&](std::function<void(int)> done) { showMessage(options, std::move(done)); });
+    const char *kind = options.kind == MessageKind::error ? "error" : options.kind == MessageKind::warning ? "warning" : "info";
+    return static_cast<int>(invoked("dialog.message", Value::Object{{"message", options.message}, {"detail", options.detail}, {"kind", kind},
+        {"buttons", options.buttons}}).asNumber());
 }
 
 void openExternal(const std::string &url) {
@@ -479,7 +364,7 @@ void openedUrl(const std::string &url) {
         std::fprintf(stderr, "crossbind: a link of %zu bytes is longer than the app takes\n", url.size());
         return;
     }
-    postEvent("open-url", "{\"url\":" + json(url) + "}");
+    postEvent("open-url", Value(Value::Object{{"url", url}}).json());
 }
 
 #ifdef CROSSBIND_APP_URL_SCHEMES
@@ -512,7 +397,7 @@ void launchedAgain(Launch launch) {
         }
     }
     showWindow(launch.token);
-    postEvent("second-instance", "{\"args\":" + json(launch.args) + ",\"cwd\":" + json(launch.cwd) + "}");
+    postEvent("second-instance", Value(Value::Object{{"args", launch.args}, {"cwd", launch.cwd}}).json());
 #ifdef CROSSBIND_APP_URL_SCHEMES
     openUrlsIn(launch.args);
 #endif
@@ -529,78 +414,76 @@ void startTakingLaunches() {
 }
 #endif
 
-void callApp(jsi::Runtime &rt, const std::string &name, const jsi::Value &options, ReplyFn reply) {
-    try {
-        if (name == "dialog.open") {
-            OpenOptions open{text(rt, options, "title"), text(rt, options, "defaultPath"), filters(rt, options),
-                             flag(rt, options, "directory"), flag(rt, options, "multiple")};
-            showFileDialog(showOpenDialog, std::move(open), [reply](Picked picked) { reply(ok(picked ? json(*picked) : "null")); });
-        } else if (name == "dialog.save") {
-            SaveOptions save{text(rt, options, "title"), text(rt, options, "defaultPath"), text(rt, options, "defaultName"),
-                             filters(rt, options)};
-            showFileDialog(showSaveDialog, std::move(save), [reply](std::optional<std::string> file) { reply(ok(file ? json(*file) : "null")); });
-        } else if (name == "dialog.message") {
-            showMessage({text(rt, options, "message"), text(rt, options, "detail"), kindOf(text(rt, options, "kind")),
-                         texts(rt, property(rt, options, "buttons"))},
-                        [reply](int button) { reply(ok(std::to_string(button))); });
-        } else if (name == "shell.openExternal") {
-            openUrl(checkedUrl(text(rt, options, "url")), answered(reply));
-        } else if (name == "shell.openPath") {
-            const std::string path = text(rt, options, "path");
-            checkPath(path, "shell.openPath");
-            // Opening a program runs it: the page opens files where the app lets it alone.
-            checkScope(path, "shell.openPath", CROSSBIND_APP_OPEN_PATH,
-                       "opens what app.openPath in crossbind.config.js lists of data, cache, logs and picked");
-            openFile(path, answered(reply));
-        } else if (name == "shell.revealInFolder") {
-            const std::string path = text(rt, options, "path");
-            checkPath(path, "shell.revealInFolder");
-            checkScope(path, "shell.revealInFolder", {"data", "cache", "logs", "picked"}, "reaches the app's folders and what its dialogs picked");
-            revealFile(path, answered(reply));
-        } else if (name == "shell.trash") {
-            const std::string path = text(rt, options, "path");
-            checkPath(path, "shell.trash");
-            checkTrash(path);
-            trashFile(path, answered(reply));
-        } else if (name == "app.paths") {
-            const Paths folders = appPaths();
-            reply(ok("{\"data\":" + json(folders.data) + ",\"cache\":" + json(folders.cache) + ",\"logs\":" + json(folders.logs) + "}"));
-        } else if (name == "app.quit") {
-            // A platform whose apps do not quit themselves throws, and the page hears that alone.
-            quitApp();
-            reply(ok("null"));
-        } else if (name == "app.relaunch") {
-            relaunchApp();
-            reply(ok("null"));
-        } else if (name == "menu.set") {
-            setMenu(menuItems(rt, property(rt, options, "menus")), menuClicked, answered(reply));
-        } else if (name == "tray.set") {
-            const jsi::Value items = property(rt, options, "menu");
-            TrayOptions tray{text(rt, options, "tooltip"), items.isUndefined() ? std::vector<MenuItem>() : menuItems(rt, items)};
-            checkTrayItems(tray.menu);
-            setTray(std::move(tray), menuClicked, answered(reply));
-        } else if (name == "tray.remove") {
-            removeTray(answered(reply));
-        } else if (name == "notification.show") {
-            const std::string title = text(rt, options, "title");
-            if (title.empty()) throw std::invalid_argument("crossbind: notification.show takes a title");
-            showNotification({title, text(rt, options, "body")}, answered(reply));
-        } else if (name == "updater.check") {
-            inBackground(reply, [] {
-                const std::optional<std::string> version = checkForUpdate();
-                return ok(version ? "{\"version\":" + json(*version) + "}" : "null");
-            });
-        } else if (name == "updater.install") {
-            inBackground(reply, [] {
-                installUpdate();
-                return ok("null");
-            });
-        } else {
-            throw std::invalid_argument("crossbind: an app has no function " + name);
-        }
-    } catch (const std::exception &error) {
-        reply(errorReply(error.what()));
-    }
+void appFunctions(Registry &registry) {
+    registry.function("shell.openExternal", [](Call call) { openUrl(checkedUrl(call.options()["url"].asString("")), answered(call)); });
+    registry.function("shell.openPath", [](Call call) {
+        const std::string path = call.options()["path"].asString("");
+        checkPath(path, "shell.openPath");
+        // Opening a program runs it: the page opens files where the app lets it alone.
+        checkScope(path, "shell.openPath", CROSSBIND_APP_OPEN_PATH, "opens what app.openPath in crossbind.config.js lists of data, cache, logs and picked");
+        openFile(path, answered(call));
+    });
+    registry.function("shell.revealInFolder", [](Call call) {
+        const std::string path = call.options()["path"].asString("");
+        checkPath(path, "shell.revealInFolder");
+        checkScope(path, "shell.revealInFolder", {"data", "cache", "logs", "picked"}, "reaches the app's folders and what its dialogs picked");
+        revealFile(path, answered(call));
+    });
+    registry.function("shell.trash", [](Call call) {
+        const std::string path = call.options()["path"].asString("");
+        checkPath(path, "shell.trash");
+        checkTrash(path);
+        trashFile(path, answered(call));
+    });
+    registry.function("app.paths", [](Call call) {
+        const Paths folders = appPaths();
+        call.resolve(Value::Object{{"data", folders.data}, {"cache", folders.cache}, {"logs", folders.logs}});
+    });
+    // A platform whose apps do not quit themselves throws, and the page hears that alone.
+    registry.function("app.quit", [](Call call) {
+        quitApp();
+        call.resolve();
+    });
+    registry.function("app.relaunch", [](Call call) {
+        relaunchApp();
+        call.resolve();
+    });
+    registry.function("menu.set", [](Call call) { setMenu(menuItems(call.options()["menus"]), menuClicked, answered(call)); });
+    registry.function("tray.set", [](Call call) {
+        const Value &options = call.options();
+        TrayOptions tray{options["tooltip"].asString(""), options["menu"].isNull() ? std::vector<MenuItem>() : menuItems(options["menu"])};
+        checkTrayItems(tray.menu);
+        setTray(std::move(tray), menuClicked, answered(call));
+    });
+    registry.function("tray.remove", [](Call call) { removeTray(answered(call)); });
+    registry.function("notification.show", [](Call call) {
+        const std::string title = call.options()["title"].asString("");
+        if (title.empty()) throw std::invalid_argument("crossbind: notification.show takes a title");
+        showNotification({title, call.options()["body"].asString("")}, answered(call));
+    });
+    registry.function("updater.check", [](Call call) {
+        updaterCall(std::move(call), [] {
+            const std::optional<std::string> version = checkForUpdate();
+            return version ? Value(Value::Object{{"version", *version}}) : Value();
+        });
+    });
+    registry.function("updater.install", [](Call call) {
+        updaterCall(std::move(call), [] {
+            installUpdate();
+            return Value();
+        });
+    });
 }
 
 }  // namespace crossbind::app
+
+namespace crossbind {
+
+std::string appName() { return CROSSBIND_APP_NAME; }
+
+void allowPath(const std::string &path) {
+    std::lock_guard<std::mutex> lock(app::grantedMutex);
+    app::granted.push_back(app::normal(path));
+}
+
+}  // namespace crossbind

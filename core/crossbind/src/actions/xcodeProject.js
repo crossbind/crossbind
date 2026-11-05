@@ -162,9 +162,10 @@ const privacyManifest = (privacy) => xmlPlist({
 
 // An iOS app as an Xcode project, written anew from the parts its SDK targets built: each brings its archives and
 // their link line, and its slice of Hermes; the first also the app's files. Xcode signs the app and runs it, in the
-// Simulator or on a device, and makes every size of its icon from the one PNG given.
+// Simulator or on a device, with the entitlements given, and makes every size of its icon from the one PNG given.
 export default function writeXcodeProject(to, {
     parts, identity, label, version, build = version, icon = null, urlSchemes = [], background = null, usage = {}, encryption = null, privacy = {},
+    entitlements = {},
 }) {
     const { name } = state.config.general;
     if (parts.length === 0) throw new Error(`crossbind: no part of the iOS app ${name} is built, so there is no Xcode project to write.`);
@@ -188,12 +189,15 @@ export default function writeXcodeProject(to, {
     writeAssets(`${to}/Assets.xcassets`, icon, background);
     const hasPrivacy = Object.keys(privacy).length > 0;
     if (hasPrivacy) fs.writeFileSync(`${to}/PrivacyInfo.xcprivacy`, privacyManifest(privacy));
+    const hasEntitlements = Object.keys(entitlements).length > 0;
+    if (hasEntitlements) fs.writeFileSync(`${to}/${name}.entitlements`, xmlPlist(entitlements));
     const targetSettings = {
         ...(icon ? { ASSETCATALOG_COMPILER_APPICON_NAME: 'AppIcon' } : {}),
         PRODUCT_NAME: name,
         PRODUCT_BUNDLE_IDENTIFIER: identity.id,
         DEVELOPMENT_TEAM: identity.team,
         CODE_SIGN_STYLE: 'Automatic',
+        ...(hasEntitlements ? { CODE_SIGN_ENTITLEMENTS: `${name}.entitlements` } : {}),
         INFOPLIST_FILE: 'Info.plist',
         MARKETING_VERSION: version,
         CURRENT_PROJECT_VERSION: build,

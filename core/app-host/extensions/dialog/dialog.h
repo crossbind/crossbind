@@ -1,0 +1,24 @@
+#pragma once
+
+// The dialogs each platform shows. Each is called on the module's thread, shows its dialog on the main thread and
+// calls done there: a file dialog with what its user picked, or nothing when they cancelled; a message dialog with the
+// index of the button clicked, or NO_BUTTON when its user closed it without one. A platform that has no such dialog
+// throws.
+#include "crossbind/app.h"
+#include "crossbind/extension.h"
+
+#include <functional>
+#include <optional>
+#include <string>
+#include <vector>
+
+namespace crossbind::dialog {
+
+using Picked = std::optional<std::vector<std::string>>;
+constexpr int NO_BUTTON = -1;
+
+void showOpenDialog(app::OpenOptions options, std::function<void(Picked)> done);
+void showSaveDialog(app::SaveOptions options, std::function<void(std::optional<std::string>)> done);
+void showMessageDialog(app::MessageOptions options, std::function<void(int)> done);
+
+}  // namespace crossbind::dialog

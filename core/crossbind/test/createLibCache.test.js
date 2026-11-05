@@ -11,7 +11,6 @@ vi.mock('../src/actions/run.js', () => ({ default: run }));
 vi.mock('../src/actions/buildCargo.js', () => ({ default: vi.fn() }));
 vi.mock('../src/actions/getCmakeParameters.js', () => ({ default: getCmakeParameters }));
 vi.mock('../src/actions/getData.js', () => ({ default: getData }));
-vi.mock('../src/actions/extensions.js', () => ({ default: () => {} }));
 vi.mock('../src/utils/dependencyBridges.js', () => ({ withDependencyBridges: (glob) => glob }));
 vi.mock('../src/utils/logger.js', () => ({
     default: { info() {}, error() {}, startStep() {}, doneStep() {}, cachedStep() {} },

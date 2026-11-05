@@ -241,6 +241,32 @@ describe('binary selection', () => {
     });
 });
 
+describe('extensions', () => {
+    let project;
+
+    beforeEach(() => {
+        project = fs.mkdtempSync(path.join(os.tmpdir(), 'crossbind-extensions-config-'));
+        fs.mkdirSync(path.join(project, 'clipboard'));
+    });
+
+    afterEach(() => {
+        fs.rmSync(project, { recursive: true, force: true });
+    });
+
+    const fill = (extensions) => getFilledConfig(
+        { general: { name: 'app' }, paths: { project }, extensions },
+        { isDepend: false, exclude: [], seen: new Set() },
+    );
+
+    test('are what an app builds in beside its host\'s own, checked as the config loads', () => {
+        const root = path.join(project, 'clipboard');
+        expect(fill([{ name: 'clipboard', root, app: {} }]).extensions).toEqual([{ name: 'clipboard', root, app: {} }]);
+        expect(fill(undefined).extensions).toEqual([]);
+        expect(() => fill([{ loadConfig: { after: () => {} } }])).toThrow('crossbind: extensions[0] has the hooks loadConfig, which crossbind no longer runs');
+        expect(() => fill({ name: 'clipboard' })).toThrow('crossbind: "extensions" must be a list of extensions');
+    });
+});
+
 describe('specs.cmake shape', () => {
     const fill = (specs) => getFilledConfig(
         { general: { name: 'app' }, paths: { project: '/app' }, targetSpecs: [{ platform: 'wasm', specs }] },
