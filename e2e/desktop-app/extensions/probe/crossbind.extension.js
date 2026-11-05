@@ -23,7 +23,7 @@ const store = {
     }),
     upload(api, session, output) {
         record(api, { session, name: api.app.name, output });
-        return { published: { files: output.flatMap(({ installers }) => installers.flatMap(({ files }) => files)) } };
+        return { published: { files: output.apps.flatMap(({ installers }) => installers.flatMap(({ files }) => files)) } };
     },
 };
 
@@ -39,10 +39,35 @@ const installer = {
 };
 
 // The e2e app's probe of the host's services, which src/main.js calls through crossbind/app's invoke, and which gets
-// the links of a scheme of its own; and a store and an installer of its own.
+// the links of a scheme of its own, with what an extension adds to an app on each platform: C beside its C++, from
+// folders of its own, with its own macros, an Apple app's Info.plist key and an iOS app's privacy reasons, and an
+// Android app's permission, manifest elements and resources; and a store and an installer of its own.
 export default function probe() {
+    const plist = { CrossbindProbe: 'plist' };
     return {
-        name: 'probe', root: import.meta.dirname, app: { urlSchemes: [PROBE_SCHEME], sources: ['probe.cpp'] }, publisher: store, installer,
+        name: 'probe',
+        contract: 1,
+        root: import.meta.dirname,
+        app: {
+            urlSchemes: [PROBE_SCHEME],
+            sources: ['probe.cpp', 'compiled.c'],
+            includes: ['include'],
+            defines: ['PROBE_OFFSET=1'],
+            macos: { sources: ['apple.mm'], plist },
+            ios: { sources: ['apple.mm'], plist, privacy: { userDefaults: ['CA92.1'] } },
+            linux: { sources: ['linux.cpp'] },
+            windows: { sources: ['windows.cpp'] },
+            android: {
+                sources: ['android.cpp'],
+                java: 'android',
+                class: 'dev.crossbind.e2e.probe.ProbeExtension',
+                permissions: ['android.permission.VIBRATE'],
+                manifest: 'android/AndroidManifest.xml',
+                resources: 'android/res',
+            },
+        },
+        publisher: store,
+        installer,
     };
 }
 
@@ -50,12 +75,13 @@ export default function probe() {
 export function probeMirror() {
     return {
         name: 'probe-mirror',
+        contract: 1,
         root: import.meta.dirname,
         publisher: {
             platform: 'desktop',
             after: 'probe',
             upload(api, session, output, published) {
-                record(api, { published, apps: output.length });
+                record(api, { published, apps: output.apps.length });
             },
         },
     };

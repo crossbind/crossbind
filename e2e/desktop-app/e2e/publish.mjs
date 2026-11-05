@@ -28,17 +28,17 @@ check(store.session.note === 'from e2e', `the store's --note: ${store.session.no
 check(store.session.platform === platform, `the store's platform: ${store.session.platform}`);
 check(store.session.name === 'crossbind probe store' && store.name === 'crossbind probe store', `the app's name the store read: ${store.session.name}, ${store.name}`);
 check(store.session.hasUpdater === false, 'the store read app.updater its build removes');
-check(store.output.length > 0 && store.output.every(({ app, update }) => existsSync(app) && update === null), 'the apps the store got, each without an update');
-const files = store.output.flatMap(({ installers }) => installers.flatMap(({ files: made }) => made));
-const kinds = store.output.map(({ installers }) => installers.map(({ name }) => name).join(' '));
+check(store.output.apps.length > 0 && store.output.apps.every(({ app, update }) => existsSync(app) && update === null), 'the apps the store got, each without an update');
+const files = store.output.apps.flatMap(({ installers }) => installers.flatMap(({ files: made }) => made));
+const kinds = store.output.apps.map(({ installers }) => installers.map(({ name }) => name).join(' '));
 check(kinds.every((kind) => kind === 'probe'), `the installers the store got, the probe's alone: ${kinds.join(', ')}`);
-check(files.length === store.output.length && files.every((file) => existsSync(file)), `the files the store got: ${files.join(', ')}`);
+check(files.length === store.output.apps.length && files.every((file) => existsSync(file)), `the files the store got: ${files.join(', ')}`);
 const notes = files.filter((file) => existsSync(file)).map((file) => JSON.parse(readFileSync(file, 'utf8')));
-check(notes.length === store.output.length && notes.every((note, index) => note.platform === platform && note.arch === store.output[index].arch
+check(notes.length === store.output.apps.length && notes.every((note, index) => note.platform === platform && note.arch === store.output.apps[index].arch
     && note.name === 'crossbind probe store'), `what the probe's installer was given: ${JSON.stringify(notes)}`);
 check(JSON.stringify(mirror.published.files) === JSON.stringify(files), `what the mirror got of the store: ${JSON.stringify(mirror.published)}`);
 if (process.platform === 'darwin') {
-    const [{ app }] = store.output;
+    const [{ app }] = store.output.apps;
     const shown = spawnSync('plutil', ['-extract', 'CFBundleDisplayName', 'raw', '-o', '-', join(app, 'Contents', 'Info.plist')], { encoding: 'utf8' }).stdout.trim();
     check(shown === 'crossbind probe store', `the name the built app shows: ${shown}`);
 }

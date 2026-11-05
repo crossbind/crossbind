@@ -147,13 +147,20 @@ export const configFileOf = (project) => CONFIG_EXTENSIONS.map((extension) => pa
     .find((candidate) => fs.existsSync(candidate));
 
 // Writes the extension a module gives into the project's crossbind.config, and says under which name and whether the
-// config listed it already, or null where it could not.
+// config listed it already, or null where it could not: a config the change would leave unreadable stays as it is.
 export function writeExtension(project, specifier, name) {
     const file = configFileOf(project);
     if (!file) return null;
     const written = withExtension(fs.readFileSync(file, 'utf8'), specifier, name);
     if (written === null) return null;
-    if (!written.isListed) fs.writeFileSync(file, written.source);
+    if (!written.isListed) {
+        try {
+            parseAst(written.source);
+        } catch {
+            return null;
+        }
+        fs.writeFileSync(file, written.source);
+    }
     return { file, identifier: written.identifier, isListed: written.isListed };
 }
 

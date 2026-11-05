@@ -399,9 +399,17 @@ public class CrossbindActivity extends Activity {
         tellExtensions((extension) -> extension.onPause(this));
     }
 
-    // The Java of each extension hears what the activity does, once the activity has started the module.
+    // The Java of each extension hears what the activity does, once the activity has started the module; what one throws
+    // is logged, and the others hear of it as well.
     private void tellExtensions(Consumer<Extension> tell) {
-        if (token != null) Extensions.ALL.values().forEach(tell);
+        if (token == null) return;
+        Extensions.ALL.forEach((name, extension) -> {
+            try {
+                tell.accept(extension);
+            } catch (RuntimeException error) {
+                Log.e(TAG, "crossbind: the extension " + name + " failed as the activity changed", error);
+            }
+        });
     }
 
     @Override
@@ -418,6 +426,12 @@ public class CrossbindActivity extends Activity {
                 : (getResources().getConfiguration().uiMode & Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES;
         int light = WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS | WindowInsetsController.APPEARANCE_LIGHT_NAVIGATION_BARS;
         getWindow().getInsetsController().setSystemBarsAppearance(isDark ? 0 : light, light);
+    }
+
+    // The WebView that shows the page, for an extension's Java on the UI thread: null before the activity has made it,
+    // and on a device without one.
+    public WebView webView() {
+        return webView;
     }
 
     public interface ActivityResult {
@@ -776,7 +790,7 @@ public class CrossbindActivity extends Activity {
         public void onPermissionRequest(PermissionRequest request) {
             String origin = originOf(request.getOrigin());
             List<String> kinds = Arrays.stream(request.getResources())
-                    .map((resource) -> PAGE_KINDS.getOrDefault(resource, resource)).collect(Collectors.toList());
+                    .map((resource) -> PAGE_KINDS.getOrDefault(resource, "unknown")).collect(Collectors.toList());
             askPermission(kinds, origin, (isAllowed) -> {
                 if (isAllowed) request.grant(request.getResources());
                 else request.deny();

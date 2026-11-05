@@ -17,6 +17,21 @@ const TARBALL = /\.(tgz|tar|tar\.gz)$/;
 const WINDOWS_SPEC = /^[\w@/\\.~:+=#-]+$/;
 // What a package's crossbind.extension may name: a module of its own, as ./crossbind.extension.js.
 const EXTENSION_ENTRY = /^\.\/(?:[\w-][\w.-]*\/)*[\w-][\w.-]*\.m?js$/;
+
+// Whether a package's exports let another import a module of its by its subpath, as Node resolves one: a package
+// without exports gives every file, and one whose exports name no subpath gives its main module alone.
+function isExported(exports, entry) {
+    if (exports === undefined) return true;
+    if (exports === null || typeof exports !== 'object' || Array.isArray(exports)) return false;
+    if (Object.hasOwn(exports, entry)) return exports[entry] !== null;
+    const pattern = Object.keys(exports).filter((key) => key.startsWith('./') && key.includes('*'))
+        .sort((a, b) => b.length - a.length)
+        .find((key) => {
+            const [head, tail] = key.split('*');
+            return entry.length >= head.length + tail.length && entry.startsWith(head) && entry.endsWith(tail);
+        });
+    return pattern !== undefined && exports[pattern] !== null;
+}
 const DEPENDENCY_FIELDS = ['dependencies', 'devDependencies', 'optionalDependencies'];
 // The words module code keeps, which can name no import.
 const RESERVED = new Set(('arguments await break case catch class const continue debugger default delete do else enum eval '
@@ -123,17 +138,26 @@ export default function addExtension(spec, {
     const dir = packageDir(project, name);
     if (!dir) throw new Error(`crossbind: ${name} is in package.json, but not installed: run ${manager} install.`);
     const removal = isAdded ? ` ${manager} ${manager === 'npm' ? 'uninstall' : 'remove'} ${name} removes it.` : '';
-    const entry = JSON.parse(fs.readFileSync(path.join(dir, 'package.json'), 'utf8')).crossbind?.extension;
+    const own = JSON.parse(fs.readFileSync(path.join(dir, 'package.json'), 'utf8'));
+    const entry = own.crossbind?.extension;
     if (typeof entry !== 'string') {
         throw new Error(`crossbind: ${name} is installed, but it is no crossbind extension: its package.json has no crossbind.extension.${removal}`);
     }
     if (!EXTENSION_ENTRY.test(entry)) {
         throw new Error(`crossbind: ${name}'s crossbind.extension, ${JSON.stringify(entry)}, is no module of its own as ./crossbind.extension.js is, so crossbind.config.js lists nothing new.${removal}`);
     }
+    if (!fs.statSync(path.join(dir, entry), { throwIfNoEntry: false })?.isFile()) {
+        throw new Error(`crossbind: ${name}'s crossbind.extension names ${entry}, which its package has not, so crossbind.config.js lists nothing new.${removal}`);
+    }
+    if (!isExported(own.exports, entry)) {
+        throw new Error(`crossbind: ${name}'s package.json exports no ${entry}, which crossbind.config.js would import, so it lists nothing new: its exports has to give it, as "./crossbind.extension.js": "./crossbind.extension.js" does.${removal}`);
+    }
     // A build sees paths.base alone, and an extension's root is where its files are, links followed.
     const real = fs.realpathSync(dir);
     if (!isUnderBase(real, base)) {
-        const above = path.relative(project, commonFolder(project, real)).split(path.sep).join('/') || '.';
+        // A Windows project's path comes with forward slashes, its real path with backslashes.
+        const home = path.resolve(project);
+        const above = path.relative(home, commonFolder(home, real)).split(path.sep).join('/') || '.';
         throw new Error(`crossbind: ${name} is in ${real}, outside paths.base, ${base}, which is all a build sees, so crossbind.config.js lists nothing new: set paths: { base: '${above}' } in it, a folder above both, and run crossbind add ${name} again.`);
     }
     const specifier = `${name}/${entry.slice(2)}`;

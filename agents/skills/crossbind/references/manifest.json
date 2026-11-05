@@ -14,7 +14,7 @@
     {
       "source": "docs/playbooks/new-extension.md",
       "output": "extension.md",
-      "sha256": "9a7e4b157c3eacf0f2d9ad043c9101bcc871fbe29061dcafe9b37ab4a64332b1"
+      "sha256": "132c8e67c34e31129aabf2ad87b4dd890fc29980f2992cc24b1a6231f8382c07"
     },
     {
       "source": "docs/api/README.md",
@@ -24,12 +24,12 @@
     {
       "source": "docs/api/app.md",
       "output": "api/app.md",
-      "sha256": "bfdfd94e13e3f4f10dc327808d37e21e12d2dc9fa161fe445ed4e82ef6ba4e85"
+      "sha256": "f59ba17f8f474a386ecd2c55a85258134fe608ae13991b3f44058ee14487640c"
     },
     {
       "source": "docs/api/build-state.md",
       "output": "api/build-state.md",
-      "sha256": "8f848bbad5025437f3b7c9829f893d8aeea36a7da954f6d6144a3ee36f7fb8a4"
+      "sha256": "9782a90c6acb218265548ce87c9c1be05bf66cb779918edfbce91d95796a6468"
     },
     {
       "source": "docs/api/conan.md",
@@ -49,12 +49,12 @@
     {
       "source": "docs/api/crossbind-config.md",
       "output": "api/crossbind-config.md",
-      "sha256": "363e2491a3811137fa87e0e22e5928439b6f090e0353524e07046ccb81ab2c1b"
+      "sha256": "3849ac3547b4d56dde9c06e05ce84ee1244fd12122db0f5723b12465aae4a119"
     },
     {
       "source": "docs/api/extensions.md",
       "output": "api/extensions.md",
-      "sha256": "5d7c2c8d9e254340726ffb90d6f0dc935588c4f60d67de706bfc4bc65160ddab"
+      "sha256": "98d7fa5dae1f205445d7b2529b5ef3c78674deb1db9030d1d7c0117c36b9ffae"
     },
     {
       "source": "docs/api/filesystem.md",

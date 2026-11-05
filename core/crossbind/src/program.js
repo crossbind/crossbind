@@ -6,7 +6,7 @@ import {
 } from './actions/cloudCommands.js';
 import { cloudUrl } from './utils/cloudAccount.js';
 import flattenConfigForTable from './utils/flattenConfigForTable.js';
-import loadSystemConfig, { systemConfigPath } from './utils/systemConfig.js';
+import loadSystemConfig, { extensionSettingsOf, systemConfigPath } from './utils/systemConfig.js';
 import systemKeys from './utils/systemKeys.js';
 import writeJson from './utils/writeJson.js';
 
@@ -19,7 +19,9 @@ export const handleFatal = (e) => {
         console.error(e);
     } else {
         let message = e?.message || String(e);
-        if (e?.cause?.message) message += `\n  caused by: ${e.cause.message.split('\n')[0]}`;
+        // A cause the message tells already, as an extension's failed step does, is told once.
+        const cause = e?.cause?.message?.split('\n')[0];
+        if (cause && !message.includes(cause)) message += `\n  caused by: ${cause}`;
         console.error(message);
     }
     // Writes to a pipe are asynchronous, so exiting at once would cut what is still queued, such as the failed
@@ -111,12 +113,30 @@ function listSystemKeys() {
     console.table(systemKeys);
 }
 
+// An extension's own setting, as its name and the setting's name it: demo-store.TOKEN.
+function extensionSetting(text) {
+    const [, extension, key] = /^([a-z][a-z0-9-]*)\.([A-Za-z][A-Za-z0-9_]*)$/.exec(text) ?? [];
+    return extension ? { extension, key: key.toUpperCase() } : null;
+}
+
+// crossbind's settings, and each extension's own by its name and the setting's.
+function shownSettings(system) {
+    const { extensions = {}, ...settings } = system;
+    const owned = Object.keys(extensions).flatMap((name) => Object.entries(extensionSettingsOf(system, name)).map(([key, value]) => [`${name}.${key}`, value]));
+    return { ...settings, ...Object.fromEntries(owned) };
+}
+
 async function getSystemConfig(systemKey) {
     if (!systemKey) {
         await listSystemConfig('system');
         return;
     }
     const system = loadSystemConfig();
+    const own = extensionSetting(systemKey);
+    if (own) {
+        console.table({ [`${own.extension}.${own.key}`]: { value: extensionSettingsOf(system, own.extension)[own.key] ?? 'undefined' } });
+        return;
+    }
     const key = systemKey.toUpperCase();
     const output = {};
     if (key in system) {
@@ -143,6 +163,15 @@ function setSystemConfig(key, value) {
 }
 
 function deleteSystemConfig(key) {
+    const own = extensionSetting(key);
+    if (own) {
+        const system = loadSystemConfig();
+        const { [own.key]: deleted, ...kept } = extensionSettingsOf(system, own.extension);
+        if (deleted === undefined) throw new Error(`Configuration ${own.extension}.${own.key} is not set.`);
+        const { [own.extension]: emptied, ...others } = system.extensions;
+        writeJson(systemConfigPath(), { ...system, extensions: Object.keys(kept).length > 0 ? { ...others, [own.extension]: kept } : others });
+        return;
+    }
     if (!systemKeys[key]) {
         throw new Error(`Configuration ${key} is not available. Please choose from the following available configurations: ${Object.keys(systemKeys).join(', ')}`);
     }
@@ -157,7 +186,7 @@ async function listSystemConfig(type) {
         : (await import('./state/index.js')).default.config;
     if (type === 'all' || type === 'system') {
         console.log('System Configuration');
-        console.table(systemConfig);
+        console.table(shownSettings(systemConfig));
     }
 
     if (type === 'all') {

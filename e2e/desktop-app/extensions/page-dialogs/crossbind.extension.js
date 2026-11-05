@@ -3,12 +3,13 @@ export default function pageDialogs() {
     const native = { sources: ['dialogs.cpp'] };
     return {
         name: 'page-dialogs',
+        contract: 1,
         root: import.meta.dirname,
         app: {
-            darwin: native,
+            macos: native,
             ios: native,
             linux: native,
-            win32: native,
+            windows: native,
             android: { java: 'android', class: 'dev.crossbind.e2e.pagedialogs.PageDialogsExtension' },
         },
     };

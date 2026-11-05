@@ -53,11 +53,12 @@ std::string take(LPWSTR text);
 LPWSTR give(const std::wstring &text);
 // The webview of the controller main() gets from webview.
 ICoreWebView2 *coreWebView(void *controller);
-// Runs fn on the UI thread: at once when the caller is on it, else when the thread's message loop gets to it.
+// Runs fn on the UI thread when its message loop gets to it, after what waits there already, also when the caller is on
+// it: once what runs there now has returned, as a WebView2 event's handler, which must not run a message loop of its
+// own as a modal dialog does. The loop never sees what fn throws.
 void onMainThread(std::function<void()> fn);
-// Runs fn on the UI thread when its message loop gets to it, once what runs there now has returned: from a WebView2
-// event, whose handler must not run a message loop of its own, as a modal dialog does.
-void later(std::function<void()> fn);
+// Whether the caller is the UI thread.
+bool isUiThread();
 // An http, https or mailto address in the default browser or mail app; false when it is none or nothing opened it.
 bool openOutside(const std::string &uri);
 

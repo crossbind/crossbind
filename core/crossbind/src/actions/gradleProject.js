@@ -42,9 +42,57 @@ const ANDROID_PERMISSIONS = {
     microphone: ['RECORD_AUDIO', 'MODIFY_AUDIO_SETTINGS'],
     location: ['ACCESS_COARSE_LOCATION', 'ACCESS_FINE_LOCATION'],
 };
-const usesPermissions = (permissions) => permissions
-    .flatMap((name) => ANDROID_PERMISSIONS[name])
-    .map((permission) => `    <uses-permission android:name="android.permission.${permission}" />`);
+// The permissions the app asks for beside INTERNET, each once: app.permissions' and its extensions'.
+const usesPermissions = (permissions, extensionPermissions) => [...new Set([
+    ...permissions.flatMap((name) => ANDROID_PERMISSIONS[name]).map((permission) => `android.permission.${permission}`),
+    ...extensionPermissions,
+])].filter((permission) => permission !== 'android.permission.INTERNET')
+    .map((permission) => `    <uses-permission android:name="${permission}" />`);
+
+// What an extension's own manifest adds to the app's: the elements of its manifest, and those of its application, which
+// go inside the app's, whose attributes are the app's alone. The app's manifest declares the android and tools prefixes.
+const APPLICATION_END = '    </application>';
+const PREFIXES = ['android', 'tools'];
+
+// A manifest's text without its comments, removed until none is left, as removing one may join others into one.
+function withoutComments(text) {
+    let current = text;
+    let previous;
+    do {
+        previous = current;
+        current = current.replace(/<!--[\s\S]*?-->/g, '');
+    } while (current !== previous);
+    return current;
+}
+
+function manifestParts(name, file) {
+    const text = withoutComments(fs.readFileSync(file, 'utf8').replace(/<\?xml[\s\S]*?\?>/, ''));
+    const root = /^\s*<manifest\b([^>]*)>([\s\S]*)<\/manifest>\s*$/.exec(text);
+    if (!root) throw new Error(`crossbind: the extension ${name}'s manifest ${file} is no <manifest> of elements, as an AndroidManifest.xml is.`);
+    const other = [...root[1].matchAll(/xmlns:([\w-]+)/g)].map(([, prefix]) => prefix).find((prefix) => !PREFIXES.includes(prefix));
+    if (other) throw new Error(`crossbind: the extension ${name}'s manifest ${file} declares the prefix ${other}, which the app's has not: it takes android and tools.`);
+    const attribute = [...root[1].matchAll(/([\w:.-]+)\s*=/g)].map(([, key]) => key).find((key) => !key.startsWith('xmlns'));
+    if (attribute) throw new Error(`crossbind: the extension ${name}'s manifest ${file} gives its <manifest> ${attribute}, which is the app's own.`);
+    // The permissions it asks for are those its permissions list, which the app asks for once each.
+    if (/<uses-permission[\s/>]/.test(root[2])) {
+        throw new Error(`crossbind: the extension ${name}'s manifest ${file} asks for a permission with <uses-permission>, which its app.android.permissions lists, as the app asks for each once.`);
+    }
+    const applications = [...root[2].matchAll(/<application\b([^>]*?)(?:\/>|>([\s\S]*?)<\/application>)/g)];
+    if (applications.length > 1) throw new Error(`crossbind: the extension ${name}'s manifest ${file} holds ${applications.length} <application> elements, of which it takes one.`);
+    const [application] = applications;
+    if (application && application[1].trim() !== '') {
+        throw new Error(`crossbind: the extension ${name}'s manifest ${file} gives its <application> attributes, which are the app's own: it holds what the extension adds to the app's alone.`);
+    }
+    return { manifest: application ? root[2].replace(application[0], '') : root[2], application: application?.[2] ?? '' };
+}
+
+// An extension's elements, as the app's manifest holds them, at the indentation of their place there.
+function indented(text, indent) {
+    const lines = text.split('\n').filter((line, index, all) => line.trim() !== '' || (index > all.findIndex((one) => one.trim() !== '')
+        && index < all.findLastIndex((one) => one.trim() !== '')));
+    const margin = Math.min(...lines.filter((line) => line.trim() !== '').map((line) => /^[ \t]*/.exec(line)[0].length));
+    return lines.map((line) => (line.trim() === '' ? '' : `${indent}${line.slice(margin).trimEnd()}`)).join('\n');
+}
 
 // The links of the app's schemes the activity opens, from a browser as well, before the end of the activity's element.
 const ACTIVITY_END = '        </activity>';
@@ -57,15 +105,23 @@ const urlFilter = (schemes) => [
     '            </intent-filter>',
 ].join('\n');
 
-// The class of each extension's Java, which the activity calls by the extension's name.
+// The class of each extension's Java, which the activity calls by the extension's name, in the extensions' order.
 const extensionsJava = (java) => `// crossbind writes this file from the app's extensions: the class of each one's Java, under its name.
 package dev.crossbind.app;
 
+import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.Map;
 
 final class Extensions {
-    static final Map<String, Extension> ALL = Map.ofEntries(${java.map(({ name, className }) => `
-            Map.entry(${JSON.stringify(name)}, new ${className}())`).join(',')});
+    // In the order of the app's extensions, in which each hears what the activity does.
+    static final Map<String, Extension> ALL;
+
+    static {
+        Map<String, Extension> all = new LinkedHashMap<>();${java.map(({ name, className }) => `
+        all.put(${JSON.stringify(name)}, new ${className}());`).join('')}
+        ALL = Collections.unmodifiableMap(all);
+    }
 
     private Extensions() {}
 }
@@ -156,31 +212,41 @@ dependencies {
 // is an extension's folder of Java sources, by package, which the app's sources take beside the activity, and the
 // class in it the activity calls.
 export default function writeGradleProject(to, {
-    parts, id, label, version, icons = null, urlSchemes = [], background = null, permissions = [], java = [],
+    parts, id, label, version, icons = null, urlSchemes = [], background = null, permissions = [], java = [], extensionPermissions = [], manifests = [],
+    resources = [],
 }) {
     const { name } = state.config.general;
     if (parts.length === 0) throw new Error(`crossbind: no part of the Android app ${name} is built, so there is no Gradle project to write.`);
+    // What the extensions add is read before the project goes, which a manifest crossbind refuses then leaves as it was.
+    const added = manifests.map(({ name: extension, file }) => manifestParts(extension, file));
     fs.rmSync(to, { recursive: true, force: true });
     fs.cpSync(path.join(resolveAppHostRoot(), 'android'), to, { recursive: true });
     const main = path.join(to, 'app', 'src', 'main');
     const manifest = path.join(main, 'AndroidManifest.xml');
     const text = fs.readFileSync(manifest, 'utf8');
-    if (!text.includes(ACTIVITY_END) || !text.includes(INTERNET)) {
+    if (!text.includes(ACTIVITY_END) || !text.includes(INTERNET) || !text.includes(APPLICATION_END)) {
         throw new Error(`crossbind: ${manifest}, from the app host, has no activity or permissions to give app.urlSchemes and app.permissions: update @crossbind/core-app-host to match crossbind.`);
     }
+    const own = (key, indent) => added.map((part) => part[key]).filter((part) => part.trim() !== '').map((part) => indented(part, indent));
+    // A replacer, as the extensions' text may hold what a replacement string reads as a pattern, as $&.
     fs.writeFileSync(manifest, text
-        .replace(INTERNET, [INTERNET, ...usesPermissions(permissions)].join('\n'))
-        .replace(ACTIVITY_END, urlSchemes.length > 0 ? `${urlFilter(urlSchemes)}\n${ACTIVITY_END}` : ACTIVITY_END));
+        .replace(INTERNET, () => [INTERNET, ...usesPermissions(permissions, extensionPermissions), ...own('manifest', '    ')].join('\n'))
+        .replace(ACTIVITY_END, urlSchemes.length > 0 ? `${urlFilter(urlSchemes)}\n${ACTIVITY_END}` : ACTIVITY_END)
+        .replace(APPLICATION_END, () => [...own('application', '        '), APPLICATION_END].join('\n')));
     fs.writeFileSync(path.join(main, 'java', 'dev', 'crossbind', 'app', 'Extensions.java'), extensionsJava(java));
+    // The Java sources of an extension's folder alone, which may hold its manifest and resources as well.
     java.forEach(({ name: extension, dir }) => {
         const sources = path.join(main, 'java');
-        fs.readdirSync(dir, { recursive: true }).forEach((file) => {
-            const into = path.join(sources, file);
-            if (fs.existsSync(into) && !fs.statSync(into).isDirectory()) {
+        const files = fs.readdirSync(dir, { recursive: true }).filter((file) => file.endsWith('.java') && fs.statSync(path.join(dir, file), { throwIfNoEntry: false })?.isFile());
+        files.forEach((file) => {
+            if (fs.existsSync(path.join(sources, file))) {
                 throw new Error(`crossbind: the extension ${extension} has ${file} in its Java, which the app's Gradle project has already.`);
             }
         });
-        fs.cpSync(dir, sources, { recursive: true });
+        files.forEach((file) => {
+            fs.mkdirSync(path.dirname(path.join(sources, file)), { recursive: true });
+            fs.copyFileSync(path.join(dir, file), path.join(sources, file));
+        });
     });
     parts.forEach(({ arch, dir }) => fs.cpSync(path.join(dir, 'lib'), path.join(main, 'jniLibs', arch), { recursive: true }));
     // A release keeps its libraries as linked beside the stripped ones it ships, for Google Play's crash reports.
@@ -195,6 +261,16 @@ export default function writeGradleProject(to, {
     }
     fs.mkdirSync(path.join(main, 'res', 'values'), { recursive: true });
     fs.writeFileSync(path.join(main, 'res', 'values', 'background.xml'), backgroundValues(background));
+    // An extension's resources join the app's, of which they replace none.
+    resources.forEach(({ name: extension, dir }) => {
+        fs.readdirSync(dir, { recursive: true }).forEach((file) => {
+            const into = path.join(main, 'res', file);
+            if (fs.existsSync(into) && !fs.statSync(into).isDirectory()) {
+                throw new Error(`crossbind: the extension ${extension} has ${file} in its resources, which the app's Gradle project has already.`);
+            }
+        });
+        fs.cpSync(dir, path.join(main, 'res'), { recursive: true });
+    });
     fs.writeFileSync(path.join(to, 'app', 'build.gradle'), buildGradle({
         id, label, version, abis: parts.map(({ arch }) => arch), icon: icons ? '@mipmap/ic_launcher' : '@android:drawable/sym_def_app_icon',
         launchMode: urlSchemes.length > 0 ? 'singleTask' : 'standard', theme: background ? '@style/CrossbindBackground' : DAY_NIGHT,

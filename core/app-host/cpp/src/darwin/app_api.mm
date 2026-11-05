@@ -3,6 +3,7 @@
 #import <UIKit/UIKit.h>
 #else
 #import <Cocoa/Cocoa.h>
+#import <objc/runtime.h>
 #endif
 
 #include "host_core.h"
@@ -28,7 +29,9 @@ std::string folder(NSSearchPathDirectory directory, NSString *child) {
 
 }  // namespace
 
-void crossbind::onMainThread(std::function<void()> fn) { onMain(^{ fn(); }); }
+void crossbind::onMainThread(std::function<void()> fn) { onMain(^{ runTask(fn); }); }
+
+bool isMainThread() { return NSThread.isMainThread; }
 
 // Called on the module's thread, which has no autorelease pool of its own.
 crossbind::app::Paths appPaths() {
@@ -81,6 +84,17 @@ __weak id mainWebView;
 void setMainWindow(void *window, void *webView) {
     mainWindow = (__bridge NSWindow *)window;
     mainWebView = (__bridge id)webView;
+    // The window asks the app's extensions as its user closes it; app.quit() terminates the app without asking. Its
+    // delegate, webview's, has no windowShouldClose: of its own, and AppKit learns what a delegate answers as it is set.
+    id delegate = mainWindow.delegate;
+    if (delegate && ![delegate respondsToSelector:@selector(windowShouldClose:)]) {
+        const char *types = protocol_getMethodDescription(@protocol(NSWindowDelegate), @selector(windowShouldClose:), NO, YES).types;
+        class_addMethod([delegate class], @selector(windowShouldClose:), imp_implementationWithBlock(^BOOL(id, NSWindow *) {
+            return crossbind::app::isCloseAllowed();
+        }), types);
+        mainWindow.delegate = nil;
+        mainWindow.delegate = delegate;
+    }
     const NSSize most = mainWindow.contentMaxSize;
     const NSWindowStyleMask style = mainWindow.styleMask;
     NSNotificationCenter *center = NSNotificationCenter.defaultCenter;

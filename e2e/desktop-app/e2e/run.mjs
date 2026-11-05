@@ -99,9 +99,9 @@ public static class Power {
 [Power]::Sleep((Get-Process -Id APP_PID).MainWindowHandle)
 `;
 // Clicks the tray's icon, an item of its menu and the notification, with the messages Windows sends the window of a tray
-// icon of NOTIFYICON_VERSION_4: WM_APP + 3, with what happened beside the icon's id, 1. WM_CONTEXTMENU opens the menu,
-// whose loop takes the keys posted to it: Down to each item up to the one clicked, and Return. A window that takes 5 s
-// to answer fails.
+// icon of NOTIFYICON_VERSION_4: the one the menu extension registers as crossbind.menu.tray, with what happened beside
+// the icon's id, 1. WM_CONTEXTMENU opens the menu, whose loop takes the keys posted to it: Down to each item up to the
+// one clicked, and Return. A window that takes 5 s to answer fails.
 const TRAY_SCRIPT = `
 $ErrorActionPreference = 'Stop'
 Add-Type -TypeDefinition @'
@@ -114,6 +114,8 @@ public static class Tray {
     [DllImport("user32.dll")] static extern bool IsWindowVisible(IntPtr window);
     [DllImport("user32.dll", SetLastError = true)] static extern bool PostMessage(IntPtr window, uint message, IntPtr w, IntPtr l);
     [DllImport("user32.dll", SetLastError = true)] static extern IntPtr SendMessageTimeout(IntPtr window, uint message, IntPtr w, IntPtr l, uint flags, uint timeout, out IntPtr result);
+    [DllImport("user32.dll", CharSet = CharSet.Unicode, SetLastError = true)] static extern uint RegisterWindowMessage(string name);
+    static readonly uint TRAY = RegisterWindowMessage("crossbind.menu.tray");
     static IntPtr Find(string type, int app, bool isShown) {
         IntPtr window = IntPtr.Zero;
         while ((window = FindWindowEx(IntPtr.Zero, window, type, null)) != IntPtr.Zero) {
@@ -125,13 +127,14 @@ public static class Tray {
     }
     static void Tell(IntPtr tray, int what) {
         IntPtr result;
-        if (SendMessageTimeout(tray, 0x8003, IntPtr.Zero, (IntPtr)(0x10000 | what), 2, 5000, out result) == IntPtr.Zero) throw new Exception("the tray's window did not answer: error " + Marshal.GetLastWin32Error());
+        if (SendMessageTimeout(tray, TRAY, IntPtr.Zero, (IntPtr)(0x10000 | what), 2, 5000, out result) == IntPtr.Zero) throw new Exception("the tray's window did not answer: error " + Marshal.GetLastWin32Error());
     }
     public static void Click(int app, int downs) {
+        if (TRAY == 0) throw new Exception("the tray's message is not registered: error " + Marshal.GetLastWin32Error());
         IntPtr tray = Find("crossbind_tray", app, false);
         if (tray == IntPtr.Zero) throw new Exception("the app has no tray window");
         Tell(tray, 0x400);
-        if (!PostMessage(tray, 0x8003, (IntPtr)(200 * 65536 + 200), (IntPtr)(0x10000 | 0x7B))) throw new Exception("the tray's menu was not asked for: error " + Marshal.GetLastWin32Error());
+        if (!PostMessage(tray, TRAY, (IntPtr)(200 * 65536 + 200), (IntPtr)(0x10000 | 0x7B))) throw new Exception("the tray's menu was not asked for: error " + Marshal.GetLastWin32Error());
         IntPtr menu = IntPtr.Zero;
         for (int i = 0; i < 50 && menu == IntPtr.Zero; i += 1) {
             Thread.Sleep(100);

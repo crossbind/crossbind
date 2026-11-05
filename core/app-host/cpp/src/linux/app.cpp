@@ -105,9 +105,8 @@ std::vector<std::string> kindsOf(WebKitPermissionRequest *request) {
         {"WebKitWebsiteDataAccessPermissionRequest", "website-data"},
         {"WebKitInstallMissingMediaPluginsPermissionRequest", "media-plugins"},
     };
-    const std::string type = G_OBJECT_TYPE_NAME(request);
-    const auto kind = named.find(type);
-    return {kind == named.end() ? type : kind->second};
+    const auto kind = named.find(G_OBJECT_TYPE_NAME(request));
+    return {kind == named.end() ? "unknown" : kind->second};
 }
 
 gboolean onPermissionRequest(WebKitWebView *webView, WebKitPermissionRequest *request, gpointer) {

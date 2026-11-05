@@ -32,9 +32,15 @@ function addDependency(name, field = 'dependencies') {
     fs.writeFileSync(path.join(project, 'package.json'), JSON.stringify({ ...pkg, [field]: { ...pkg[field], [name]: '^1.0.0' } }));
 }
 
+// A package's manifest and the module its crossbind.extension names, where that is a path of its own.
 function installPackage(name, manifest = EXTENSION, dir = path.join(project, 'node_modules', name)) {
     fs.mkdirSync(dir, { recursive: true });
     fs.writeFileSync(path.join(dir, 'package.json'), JSON.stringify({ name, ...manifest }));
+    const entry = manifest.crossbind?.extension;
+    if (typeof entry === 'string' && /^\.\/[\w./-]+$/.test(entry) && !entry.includes('..')) {
+        fs.mkdirSync(path.dirname(path.join(dir, entry)), { recursive: true });
+        fs.writeFileSync(path.join(dir, entry), 'export default () => ({});\n');
+    }
 }
 
 // A package manager that installs the named package with the manifest given: into node_modules, and into package.json.
@@ -135,6 +141,30 @@ describe('crossbind add', () => {
         expect(() => addExtension('crossbind-extension-far', { config: configOf(), spawn: installing('crossbind-extension-far', { crossbind: { extension: '../../far.js' } }), env: {} }))
             .toThrow('is no module of its own');
         expect(readConfig()).toBe(APP_CONFIG);
+    });
+
+    test('stops on an extension whose module its package has not, or does not export, which the config could not import', () => {
+        const spawn = installing('crossbind-extension-greeter');
+        const missing = vi.fn(() => {
+            spawn();
+            fs.rmSync(path.join(project, 'node_modules', 'crossbind-extension-greeter', 'crossbind.extension.js'));
+            return { status: 0 };
+        });
+        expect(() => addExtension('crossbind-extension-greeter', { config: configOf(), spawn: missing, env: {} })).toThrow(
+            "crossbind: crossbind-extension-greeter's crossbind.extension names ./crossbind.extension.js, which its package has not, so crossbind.config.js lists nothing new. npm uninstall crossbind-extension-greeter removes it.",
+        );
+        const hidden = { ...EXTENSION, exports: { '.': './index.js' } };
+        expect(() => addExtension('crossbind-extension-hidden', { config: configOf(), spawn: installing('crossbind-extension-hidden', hidden), env: {} }))
+            .toThrow("crossbind: crossbind-extension-hidden's package.json exports no ./crossbind.extension.js, which crossbind.config.js would import");
+        expect(readConfig()).toBe(APP_CONFIG);
+        // A string or a list exports the package's root alone, as conditions without paths do, and null keeps a path out.
+        for (const exports of ['./index.js', ['./index.js'], { import: './index.js', require: './index.cjs' }, { './crossbind.extension.js': null, './*': './*' }]) {
+            expect(() => addExtension('crossbind-extension-hidden', { config: configOf(), spawn: installing('crossbind-extension-hidden', { ...EXTENSION, exports }), env: {} }))
+                .toThrow("crossbind: crossbind-extension-hidden's package.json exports no ./crossbind.extension.js");
+        }
+        const patterned = { ...EXTENSION, exports: { '.': './index.js', './*.js': './*.js' } };
+        expect(addExtension('crossbind-extension-open', { config: configOf(), spawn: installing('crossbind-extension-open', patterned), env: {} }))
+            .toMatchObject({ name: 'crossbind-extension-open', isListed: false });
     });
 
     test('gives the lines to write where the config cannot take them', () => {

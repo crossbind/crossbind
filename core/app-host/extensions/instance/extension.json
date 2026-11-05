@@ -1,9 +1,10 @@
 {
     "name": "instance",
+    "contract": 1,
     "app": {
         "sources": ["instance.cpp"],
-        "darwin": { "sources": ["posix.cpp"] },
+        "macos": { "sources": ["posix.cpp"] },
         "linux": { "sources": ["posix.cpp"] },
-        "win32": { "sources": ["windows.cpp"] }
+        "windows": { "sources": ["windows.cpp"] }
     }
 }

@@ -38,6 +38,8 @@ bool exists(const std::string &path) { return GetFileAttributesW(wide(path).c_st
 // webview sizes the window anew for a new scale, and Windows leaves it as it was for a new screen size: a window that
 // filled its screen fills it again.
 LRESULT CALLBACK hostProcedure(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) {
+    // The window asks the app's extensions as its user closes it; app.quit() destroys it without asking.
+    if (message == WM_CLOSE && !crossbind::app::isCloseAllowed()) return 0;
     if (message == WM_DPICHANGED || message == WM_DISPLAYCHANGE) {
         const LRESULT result = CallWindowProcW(windowProcedure, hwnd, message, wParam, lParam);
         fitFullScreen();
@@ -68,9 +70,11 @@ std::wstring webViewProfile() {
 
 void crossbind::onMainThread(std::function<void()> fn) { windows::onMainThread(std::move(fn)); }
 
+bool isMainThread() { return isUiThread(); }
+
 void quitApp() {
     onMainThread([] {
-        if (mainWindow) PostMessageW(mainWindow, WM_CLOSE, 0, 0);
+        if (mainWindow) DestroyWindow(mainWindow);
     });
 }
 

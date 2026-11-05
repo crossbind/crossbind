@@ -1,21 +1,31 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { checkedUrlSchemes } from './appOptions.js';
+import { checkedPrivacy, checkedUrlSchemes } from './appOptions.js';
 import { isUnderBase } from './replaceBasePathForDocker.js';
 
-// What an app extension may add on each platform beside the sources the host compiles with it: the frameworks an Apple
-// host links, the libraries another links, the folder of an Android app's Java with the class in it the app calls, and
-// an Apple app's entitlements.
+// What an app extension compiles with on every platform, and on each: its sources, the folders of its own their
+// includes are found in, and the macros they are compiled with.
+const COMPILED = ['sources', 'includes', 'defines'];
+// What an app extension may add on each platform, by the names crossbind's app commands give them, beside what it
+// compiles with: the frameworks an Apple host links, the libraries another links, an Apple app's entitlements and
+// Info.plist keys, an iOS app's reasons for Apple's required reason API, and of an Android app the folder of its Java
+// with the class in it the app calls, the permissions it asks for, a manifest of its own and the resources the app takes.
 const PLATFORM_PARTS = {
-    darwin: ['sources', 'frameworks', 'entitlements'],
-    ios: ['sources', 'frameworks', 'entitlements'],
-    linux: ['sources', 'libraries'],
-    win32: ['sources', 'libraries'],
-    android: ['sources', 'libraries', 'java', 'class'],
+    macos: [...COMPILED, 'frameworks', 'entitlements', 'plist'],
+    ios: [...COMPILED, 'frameworks', 'entitlements', 'plist', 'privacy'],
+    linux: [...COMPILED, 'libraries'],
+    windows: [...COMPILED, 'libraries'],
+    android: [...COMPILED, 'libraries', 'java', 'class', 'permissions', 'manifest', 'resources'],
 };
-// The host compiles C++ on every platform, and Objective-C++ on Apple's.
-const SOURCE = /\.(cpp|cc|cxx)$/;
-const APPLE_SOURCE = /\.(cpp|cc|cxx|mm)$/;
+// An Android permission, as its manifest names it.
+const PERMISSION = /^[A-Za-z_][\w]*(\.[A-Za-z_][\w]*)+$/;
+// The part of an extension a build's target takes, whose platform goes by Node's name.
+const partOf = (platform) => ({ darwin: 'macos', win32: 'windows' })[platform] ?? platform;
+// The host compiles C and C++ on every platform, and Objective-C and Objective-C++ on Apple's.
+const SOURCE = /\.(c|cpp|cc|cxx)$/;
+const APPLE_SOURCE = /\.(c|cpp|cc|cxx|m|mm)$/;
+// A macro, NAME or NAME=value, of a value a compiler's command line takes as it is.
+const DEFINE = /^[A-Za-z_][A-Za-z0-9_]*(=[A-Za-z0-9_.+-]*)?$/;
 // A name prefixes the extension's functions and names its C++ entry, crossbind_extension_<name>.
 const NAME = /^[a-z][a-z0-9]*(-[a-z0-9]+)*$/;
 const LINK_NAME = /^[A-Za-z0-9][A-Za-z0-9_.+-]*$/;
@@ -52,9 +62,29 @@ function ownPath(where, root, file, isFolder = false) {
 function checkedSources(where, root, sources, pattern) {
     if (!Array.isArray(sources)) throw new Error(`crossbind: ${where} is no list of source files.`);
     return sources.map((file) => {
-        if (!pattern.test(String(file))) throw new Error(`crossbind: ${where} names ${file}, which is no ${pattern === SOURCE ? 'C++' : 'C++ or Objective-C++'} source.`);
+        if (!pattern.test(String(file))) throw new Error(`crossbind: ${where} names ${file}, which is no ${pattern === SOURCE ? 'C or C++' : 'C, C++, Objective-C or Objective-C++'} source.`);
         return ownPath(where, root, file);
     });
+}
+
+// The extension's folders, its own folder as '.' among them.
+function checkedIncludes(where, root, includes) {
+    if (!Array.isArray(includes)) throw new Error(`crossbind: ${where} is no list of the extension's folders.`);
+    return includes.map((folder) => (folder === '.' ? folder : ownPath(where, root, folder, true)));
+}
+
+function checkedDefines(where, defines) {
+    if (!Array.isArray(defines) || !defines.every((define) => typeof define === 'string' && DEFINE.test(define))) {
+        throw new Error(`crossbind: ${where} is no list of macros, each NAME or NAME=value, a value of letters, digits and _.+- alone.`);
+    }
+    return defines;
+}
+
+// What an extension compiles with, on every platform or on one.
+function checkedCompiled(at, root, key, value, pattern) {
+    if (key === 'sources') return checkedSources(at, root, value, pattern);
+    if (key === 'includes') return checkedIncludes(at, root, value);
+    return checkedDefines(at, value);
 }
 
 function checkedNames(where, names) {
@@ -69,6 +99,50 @@ function checkedEntitlements(where, entitlements) {
         throw new Error(`crossbind: ${where} is no object of entitlements, each a boolean, a string or a list of strings.`);
     }
     return entitlements;
+}
+
+// Text an XML property list holds: well formed, without the control characters XML takes none of.
+// eslint-disable-next-line no-control-regex
+const isPlistText = (text) => text.isWellFormed() && !/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/.test(text);
+// A value an Info.plist holds: text, a number, a boolean, and lists and dictionaries of them.
+const isPlistValue = (value, depth = 0) => depth <= MAX_JSON_DEPTH && (typeof value === 'boolean'
+    || (typeof value === 'string' && isPlistText(value))
+    || (typeof value === 'number' && Number.isFinite(value))
+    || (Array.isArray(value) && value.every((item) => isPlistValue(item, depth + 1)))
+    || (isObject(value) && [Object.prototype, null].includes(Object.getPrototypeOf(value))
+        && Object.entries(value).every(([key, item]) => key !== '' && isPlistText(key) && isPlistValue(item, depth + 1))));
+
+function checkedPlist(where, plist) {
+    if (!isObject(plist) || !isPlistValue(plist)) {
+        throw new Error(`crossbind: ${where} is no object of Info.plist keys, each with text, a number, a boolean, or a list or an object of them.`);
+    }
+    return plist;
+}
+
+function checkedPermissions(where, permissions) {
+    if (!Array.isArray(permissions) || !permissions.every((permission) => typeof permission === 'string' && PERMISSION.test(permission))) {
+        throw new Error(`crossbind: ${where} is no list of Android permissions, each by its full name, as android.permission.READ_CONTACTS.`);
+    }
+    return permissions;
+}
+
+const LICENSE_KEYS = ['name', 'version', 'license', 'file', 'source', 'sha256'];
+
+// The code of others an extension carries, which the app's license report lists: its name and version, its license as
+// an SPDX expression, the file of its license's text in the extension's folder, and where its source comes from.
+function checkedLicenses(where, root, licenses) {
+    if (!Array.isArray(licenses)) throw new Error(`crossbind: ${where} is no list of the code of others the extension carries.`);
+    return licenses.map((entry, index) => {
+        const at = `${where}[${index}]`;
+        if (!isObject(entry) || !['name', 'version', 'license'].every((key) => typeof entry[key] === 'string' && entry[key] !== '')) {
+            throw new Error(`crossbind: ${at} is no code the extension carries: { name, version, license, file }, with its license as an SPDX expression and its source and sha256 where it has them.`);
+        }
+        const unknown = Object.keys(entry).find((key) => !LICENSE_KEYS.includes(key));
+        if (unknown) throw new Error(`crossbind: ${at} takes ${LICENSE_KEYS.join(', ')}; ${unknown} is none of them.`);
+        if (entry.source !== undefined && typeof entry.source !== 'string') throw new Error(`crossbind: ${at}.source is no address of its source.`);
+        if (entry.sha256 !== undefined && !/^[0-9a-f]{64}$/.test(entry.sha256)) throw new Error(`crossbind: ${at}.sha256 is no SHA-256, in 64 lowercase hex digits.`);
+        return { ...entry, file: ownPath(`${at}.file`, root, entry.file) };
+    });
 }
 
 // The app reaches an extension's Java through one class, whose source the folder of its Java holds by its package.
@@ -87,10 +161,14 @@ function checkedPlatform(where, root, platform, part) {
     const checked = Object.fromEntries(Object.entries(part).map(([key, value]) => {
         const at = `${where}.${key}`;
         if (!allowed.includes(key)) throw new Error(`crossbind: ${where} takes ${allowed.join(', ')}; ${key} is none of them.`);
-        if (key === 'sources') return [key, checkedSources(at, root, value, ['darwin', 'ios'].includes(platform) ? APPLE_SOURCE : SOURCE)];
-        if (key === 'java') return [key, ownPath(at, root, value, true)];
+        if (COMPILED.includes(key)) return [key, checkedCompiled(at, root, key, value, ['macos', 'ios'].includes(platform) ? APPLE_SOURCE : SOURCE)];
+        if (key === 'java' || key === 'resources') return [key, ownPath(at, root, value, true)];
+        if (key === 'manifest') return [key, ownPath(at, root, value)];
         if (key === 'class') return [key, value];
         if (key === 'entitlements') return [key, checkedEntitlements(at, value)];
+        if (key === 'plist') return [key, checkedPlist(at, value)];
+        if (key === 'privacy') return [key, checkedPrivacy(value, at)];
+        if (key === 'permissions') return [key, checkedPermissions(at, value)];
         return [key, checkedNames(at, value)];
     }));
     if ('java' in checked || 'class' in checked) checkedJava(where, root, checked);
@@ -119,8 +197,13 @@ const PUBLISHER_KEYS = ['platform', 'store', 'options', 'after', 'build', 'check
 const PUBLISHER_STEPS = ['build', 'check', 'buildNumber', 'buildEnv', 'upload'];
 // The steps of a publisher that builds, which one after another publisher leaves to that one.
 const BUILD_STEPS = ['build', 'buildNumber', 'buildEnv'];
-// The options `crossbind app publish` has of its own, with crossbind's, which no publisher's takes the name of.
+// The options `crossbind app publish` has of its own, with crossbind's, and those `vite build` takes, which the command
+// line hands Vite: no publisher's takes the name of one.
 const COMMAND_OPTIONS = ['platform', 'help', 'version'];
+const VITE_OPTIONS = [
+    'app', 'assetsDir', 'assetsInlineLimit', 'base', 'clearScreen', 'config', 'configLoader', 'debug', 'emptyOutDir', 'filter',
+    'logLevel', 'manifest', 'minify', 'mode', 'outDir', 'profile', 'sourcemap', 'ssr', 'ssrManifest', 'target', 'watch',
+];
 // An option's name, as JavaScript writes it, whose --kebab-case the command line takes.
 const OPTION_NAME = /^[a-z][a-zA-Z0-9]*$/;
 const OPTION_KEYS = ['help', 'value', 'default'];
@@ -129,6 +212,9 @@ function checkedPublishOption(where, name, option) {
     const at = `${where}.options.${name}`;
     if (!OPTION_NAME.test(name) || COMMAND_OPTIONS.includes(name)) {
         throw new Error(`crossbind: ${where}.options names ${name}, which is no option of its own: one of letters and digits, starting with a lowercase letter, but ${COMMAND_OPTIONS.slice(0, -1).join(', ')} and ${COMMAND_OPTIONS.at(-1)}.`);
+    }
+    if (VITE_OPTIONS.includes(name)) {
+        throw new Error(`crossbind: ${where}.options names ${name}, which is an option of the Vite build the publish runs, the command line's --${name.replace(/[A-Z]/g, (letter) => `-${letter.toLowerCase()}`)}: name it otherwise.`);
     }
     if (!isObject(option) || typeof option.help !== 'string') throw new Error(`crossbind: ${at} is no option, which is { help } for a flag and { help, value } for one that takes a value.`);
     const unknown = Object.keys(option).find((key) => !OPTION_KEYS.includes(key));
@@ -196,9 +282,12 @@ export function checkedExtension(extension, root, where) {
     if (!isObject(app)) throw new Error(`crossbind: ${where}'s app is no object.`);
     const checked = Object.fromEntries(Object.entries(app).map(([key, value]) => {
         const at = `${where}'s app.${key}`;
-        if (key === 'sources') return [key, checkedSources(at, root, value, SOURCE)];
+        if (COMPILED.includes(key)) return [key, checkedCompiled(at, root, key, value, SOURCE)];
         if (key === 'urlSchemes') return [key, checkedUrlSchemes(value, at)];
-        if (!(key in PLATFORM_PARTS)) throw new Error(`crossbind: ${where}'s app takes sources, urlSchemes and ${Object.keys(PLATFORM_PARTS).join(', ')}; ${key} is none of them.`);
+        if (key === 'licenses') return [key, checkedLicenses(at, root, value)];
+        if (!Object.hasOwn(PLATFORM_PARTS, key)) {
+            throw new Error(`crossbind: ${where}'s app takes ${COMPILED.join(', ')}, urlSchemes, licenses and ${Object.keys(PLATFORM_PARTS).join(', ')}; ${key} is none of them.`);
+        }
         return [key, checkedPlatform(at, root, key, value)];
     }));
     const roles = {
@@ -212,9 +301,44 @@ export function checkedExtension(extension, root, where) {
     return { name: extension.name, root, app: checked, options: extension.options, ...roles };
 }
 
+// The version of the contract between crossbind and its extensions, which a change that breaks an extension raises.
+export const EXTENSION_CONTRACT = 1;
+
+// The contract an extension is written for is this crossbind's: one written for another stops the build, naming what to
+// update.
+function checkedContract({ contract }, where, update) {
+    if (contract === EXTENSION_CONTRACT) return;
+    if (contract === undefined) {
+        throw new Error(`crossbind: ${where} names no contract, the version of crossbind's extension contract it is written for, as contract: ${EXTENSION_CONTRACT} is for this crossbind: ${update}.`);
+    }
+    if (!Number.isInteger(contract) || contract < 1) throw new Error(`crossbind: ${where}'s contract ${JSON.stringify(contract)} is no version of crossbind's extension contract, as ${EXTENSION_CONTRACT} is.`);
+    if (contract > EXTENSION_CONTRACT) {
+        throw new Error(`crossbind: ${where} is written for crossbind's extension contract ${contract}, newer than this crossbind's ${EXTENSION_CONTRACT}: update crossbind.`);
+    }
+    throw new Error(`crossbind: ${where} is written for crossbind's extension contract ${contract}, older than this crossbind's ${EXTENSION_CONTRACT}: ${update}.`);
+}
+
+// The extension package a listed extension's folder is in, under the project's base, which its package.json names as
+// one: its folder and its manifest.
+export function extensionPackage(root, base) {
+    for (let dir = root; isUnderBase(dir, base); dir = path.dirname(dir)) {
+        const file = path.join(dir, 'package.json');
+        if (fs.existsSync(file)) {
+            try {
+                const manifest = JSON.parse(fs.readFileSync(file, 'utf8'));
+                return typeof manifest.crossbind?.extension === 'string' ? { dir, manifest } : null;
+            } catch {
+                return null;
+            }
+        }
+        if (path.dirname(dir) === dir) return null;
+    }
+    return null;
+}
+
 // What an extension of crossbind's build once hooked into, which no build runs.
 const OLD_HOOKS = ['loadConfig', 'buildWasm', 'createLib'];
-const LISTED_KEYS = ['name', 'root', 'app', 'options', 'publisher', 'installer'];
+const LISTED_KEYS = ['name', 'contract', 'root', 'app', 'options', 'publisher', 'installer'];
 
 // An extension crossbind.config.js lists, as its package's crossbind.extension.js gives it: its name, the folder its
 // files are in, which a build sees under the project's base alone, and what it adds to an app.
@@ -224,12 +348,14 @@ export function listedExtension(extension, where, base) {
     if (hooks.length > 0) {
         throw new Error(`crossbind: ${where} has the hooks ${hooks.join(', ')}, which crossbind no longer runs: an extension adds native code to an app. Set build flags in targetSpecs or crossbind.build.js.`);
     }
+    const { root } = extension;
+    const isFolder = typeof root === 'string' && path.isAbsolute(root) && fs.existsSync(root) && fs.statSync(root).isDirectory();
+    // An extension of another contract may hold what this crossbind knows nothing of, so the contract comes first.
+    const owner = isFolder && isUnderBase(root, base) ? extensionPackage(root, base)?.manifest.name : null;
+    checkedContract(extension, where, `update ${owner ?? 'it'} to a version written for this crossbind`);
     const unknown = Object.keys(extension).find((key) => !LISTED_KEYS.includes(key));
     if (unknown) throw new Error(`crossbind: ${where} takes ${LISTED_KEYS.join(', ')}; ${unknown} is none of them.`);
-    const { root } = extension;
-    if (typeof root !== 'string' || !path.isAbsolute(root) || !fs.existsSync(root) || !fs.statSync(root).isDirectory()) {
-        throw new Error(`crossbind: ${where} has no root, the absolute path of the folder its files are in.`);
-    }
+    if (!isFolder) throw new Error(`crossbind: ${where} has no root, the absolute path of the folder its files are in.`);
     if (!isUnderBase(root, base)) throw new Error(`crossbind: ${where}'s root ${root} is outside ${base}, the project's base and all a build sees.`);
     return checkedExtension(extension, root, where);
 }
@@ -246,21 +372,34 @@ export function hostExtensions(appHostRoot) {
         } catch (error) {
             throw new Error(`crossbind: cannot read the extension ${file}: ${error.message}`, { cause: error });
         }
+        checkedContract(extension ?? {}, file, 'update @crossbind/core-app-host to match crossbind');
         const checked = checkedExtension(extension, path.dirname(file), file);
         if (checked.name !== folder) throw new Error(`crossbind: ${file} names the extension ${checked.name}, not ${folder} as its folder.`);
         return checked;
     });
 }
 
+// A step of an extension's publisher or installer: a failure whose message is not crossbind's own stops the run with one
+// that names the extension and the step.
+export async function extensionStep(name, which, run) {
+    try {
+        return await run();
+    } catch (error) {
+        if (error instanceof Error && error.message.startsWith('crossbind:')) throw error;
+        throw new Error(`crossbind: ${name}'s ${which} failed: ${error instanceof Error ? error.message : String(error)}`, { cause: error });
+    }
+}
+
 // The host's own extensions with the options the app's give them, each by its own name.
 export const withOptions = (extensions, options) => extensions.map((extension) => (Object.hasOwn(options, extension.name)
     ? { ...extension, options: options[extension.name] } : extension));
 
-// The host's own extensions an app has, with the options the app's give them: every one, but the instance, the links and
-// the updater only where they give them options, as a desktop app's do that keeps one instance or has app.updater, and
-// an app's that lists app.urlSchemes. The host refuses the updater's functions to any other app.
+// The host's own extensions an app has, with the options the app's give them: every one, but the instance, the links,
+// the page's location and the updater only where they give them options, as a desktop app's do that keeps one instance
+// or has app.updater, an app's that lists app.urlSchemes, and a macOS app's whose app.permissions lists the location.
+// The host refuses the updater's functions to any other app.
 export const appHostExtensions = (appHostRoot, options) => withOptions(hostExtensions(appHostRoot), options)
-    .filter((extension) => !['instance', 'links', 'updater'].includes(extension.name) || Object.hasOwn(options, extension.name));
+    .filter((extension) => !['instance', 'links', 'page-location', 'updater'].includes(extension.name) || Object.hasOwn(options, extension.name));
 
 // The extensions crossbind.config.js lists that add to an app: all but those that give a publisher or an installer
 // alone, which leave the host's own of their name as it is.
@@ -274,20 +413,49 @@ export function withListed(own, listed) {
     return [...kept, ...listed.filter((extension) => !kept.includes(extension))];
 }
 
-// The entitlements of several owners, as one claims each; two that give one different values stop the build, naming
-// both.
-export function mergedEntitlements(owned) {
+// What two owners give one key: one value alike, or lists, which join; two that give it different values stop the
+// build, naming both.
+function joined(what, key, first, owner, value) {
+    if (Array.isArray(first.value) && Array.isArray(value)) {
+        return [...first.value, ...value.filter((item) => !first.value.some((had) => JSON.stringify(had) === JSON.stringify(item)))];
+    }
+    if (JSON.stringify(first.value) !== JSON.stringify(value)) throw new Error(`crossbind: ${first.owner} and ${owner} give the ${what} ${key} different values.`);
+    return first.value;
+}
+
+// The keys of several owners, in the order they are claimed.
+function mergedKeys(what, owned) {
     const merged = new Map();
-    for (const [owner, entitlements] of owned) {
-        for (const [key, value] of Object.entries(entitlements)) {
+    for (const [owner, keys] of owned) {
+        for (const [key, value] of Object.entries(keys)) {
             const first = merged.get(key);
-            if (first && JSON.stringify(first.value) !== JSON.stringify(value)) {
-                throw new Error(`crossbind: ${first.owner} and ${owner} give the entitlement ${key} different values.`);
-            }
-            if (!first) merged.set(key, { owner, value });
+            merged.set(key, first ? { owner: first.owner, value: joined(what, key, first, owner, value) } : { owner, value });
         }
     }
     return Object.fromEntries([...merged].map(([key, { value }]) => [key, value]));
+}
+
+// The entitlements of several owners, as one claims each.
+export const mergedEntitlements = (owned) => mergedKeys('entitlement', owned);
+
+// An Apple app's Info.plist, crossbind's, with the keys its extensions give: one crossbind writes from the app's config
+// an extension gives with the same value alone.
+export function mergedPlist(base, owned) {
+    for (const [owner, plist] of owned) {
+        const written = Object.keys(plist).find((key) => Object.hasOwn(base, key) && JSON.stringify(base[key]) !== JSON.stringify(plist[key]));
+        if (written) throw new Error(`crossbind: ${owner} gives the Info.plist key ${written}, which crossbind writes from the app's config.`);
+    }
+    const added = owned.map(([owner, plist]) => [owner, Object.fromEntries(Object.entries(plist).filter(([key]) => !Object.hasOwn(base, key)))]);
+    return { ...base, ...mergedKeys('Info.plist key', added) };
+}
+
+// An iOS app's reasons for Apple's required reason API: app.privacy's, with those its extensions give.
+export function mergedPrivacy(base, owned) {
+    const merged = Object.fromEntries(Object.entries(base).map(([category, reasons]) => [category, [...reasons]]));
+    owned.forEach(([, privacy]) => Object.entries(privacy).forEach(([category, reasons]) => {
+        merged[category] = [...new Set([...(merged[category] ?? []), ...reasons])];
+    }));
+    return merged;
 }
 
 const unique = (items) => [...new Set(items)];
@@ -301,24 +469,54 @@ export function extensionPart(extensions, platform) {
         if (names.has(name)) throw new Error(`crossbind: the app has two extensions named ${name}.`);
         names.add(name);
     }
-    const own = (extension) => extension.app[platform] ?? {};
-    const sourcesOf = (extension) => [...(extension.app.sources ?? []), ...(own(extension).sources ?? [])].map((file) => path.join(extension.root, file));
+    const own = (extension) => extension.app[partOf(platform)] ?? {};
+    // What every platform's and this one's part give of a kind, every platform's first.
+    const both = (extension, key) => [...(extension.app[key] ?? []), ...(own(extension)[key] ?? [])];
+    const sourcesOf = (extension) => both(extension, 'sources').map((file) => path.join(extension.root, file));
+    // What each extension that gives it gives of a kind, by its owner, for the merges.
+    const owned = (key) => extensions.filter((extension) => own(extension)[key]).map((extension) => [`the extension ${extension.name}`, own(extension)[key]]);
     const native = extensions.filter((extension) => sourcesOf(extension).length > 0);
     return {
         native: native.map(({ name, options }) => ({ name, options: options ?? null })),
         roots: native.map(({ root }) => root),
         sources: extensions.flatMap(sourcesOf),
+        compiled: native.map((extension) => ({
+            name: extension.name,
+            sources: sourcesOf(extension),
+            includes: both(extension, 'includes').map((folder) => path.join(extension.root, folder)),
+            defines: both(extension, 'defines'),
+        })),
         frameworks: unique(extensions.flatMap((extension) => own(extension).frameworks ?? [])),
         libraries: unique(extensions.flatMap((extension) => own(extension).libraries ?? [])),
         java: extensions.filter((extension) => own(extension).java).map((extension) => ({
             name: extension.name, dir: path.join(extension.root, own(extension).java), className: own(extension).class,
         })),
-        entitlements: extensions.filter((extension) => own(extension).entitlements)
-            .map((extension) => [`the extension ${extension.name}`, own(extension).entitlements]),
+        entitlements: owned('entitlements'),
+        plist: owned('plist'),
+        privacy: owned('privacy'),
+        permissions: unique(extensions.flatMap((extension) => own(extension).permissions ?? [])),
+        manifests: extensions.filter((extension) => own(extension).manifest)
+            .map((extension) => ({ name: extension.name, file: path.join(extension.root, own(extension).manifest) })),
+        resources: extensions.filter((extension) => own(extension).resources)
+            .map((extension) => ({ name: extension.name, dir: path.join(extension.root, own(extension).resources) })),
     };
 }
 
 const entryOf = (name) => `crossbind_extension_${name.replace(/-/g, '_')}`;
+
+// What the host's CMake project gets of the extensions it compiles, each on its own: their names, and each one's
+// sources, folders of includes and macros, as the cache's lists.
+export function extensionCmakeArgs(compiled) {
+    const variable = (name) => `CROSSBIND_EXTENSION_${name.replace(/-/g, '_')}`;
+    return [
+        `-DCROSSBIND_EXTENSIONS=${compiled.map(({ name }) => name.replace(/-/g, '_')).join(';')}`,
+        ...compiled.flatMap(({ name, sources, includes, defines }) => [
+            `-D${variable(name)}_SOURCES=${sources.join(';')}`,
+            `-D${variable(name)}_INCLUDES=${includes.join(';')}`,
+            `-D${variable(name)}_DEFINES=${defines.join(';')}`,
+        ]),
+    ];
+}
 
 // The C++ text of an extension's options, a raw string of their JSON, which the host reads back. A raw string's
 // delimiter takes 16 characters at most.
@@ -337,10 +535,7 @@ function optionsText(name, options) {
 export function registrationSource(native, urlSchemes) {
     const owned = urlSchemes.map(({ scheme, extension }) => ({ scheme, owner: extension ?? 'links' }));
     const unheard = owned.find(({ owner }) => !native.some(({ name }) => name === owner));
-    if (unheard) {
-        const hint = unheard.owner === 'links' ? ': an app host older than crossbind has no links, so update @crossbind/core-app-host to match crossbind' : '';
-        throw new Error(`crossbind: the extension ${unheard.owner} gets the links of ${unheard.scheme}, but has no native code on this platform${hint}.`);
-    }
+    if (unheard) throw new Error(`crossbind: the extension ${unheard.owner} gets the links of ${unheard.scheme}, but has no native code on this platform.`);
     const start = ({ name, options }) => `    startExtension("${name}", ${options === null ? 'nullptr' : optionsText(name, options)}, ${entryOf(name)});`;
     return [
         "// crossbind writes this file from the app's extensions: the entry of each one with native code, which starts it with",

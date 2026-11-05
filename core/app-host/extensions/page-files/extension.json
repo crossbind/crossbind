@@ -1,7 +1,8 @@
 {
     "name": "page-files",
+    "contract": 1,
     "app": {
-        "darwin": { "sources": ["darwin.mm"] },
+        "macos": { "sources": ["darwin.mm"] },
         "android": { "java": "android", "class": "dev.crossbind.extension.pagefiles.PageFilesExtension" }
     }
 }

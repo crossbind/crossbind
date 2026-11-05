@@ -37,7 +37,7 @@ describe("an Android app's Gradle project", () => {
         expect(fs.readFileSync(path.join(main, 'assets', 'app', 'host.hbc'), 'utf8')).toBe('bytecode');
         expect(fs.existsSync(path.join(main, 'java', 'dev', 'crossbind', 'app', 'CrossbindActivity.java'))).toBe(true);
         expect(fs.readFileSync(path.join(main, 'java', 'dev', 'crossbind', 'app', 'Extensions.java'), 'utf8'))
-            .toContain('    static final Map<String, Extension> ALL = Map.ofEntries();\n');
+            .toContain('        Map<String, Extension> all = new LinkedHashMap<>();\n        ALL = Collections.unmodifiableMap(all);\n');
         expect(gradle).toContain("applicationId 'com.example.demo'");
         expect(gradle).toContain('versionCode 1002003');
         expect(gradle).toContain("versionName '1.2.3-beta.1'");
@@ -155,9 +155,11 @@ describe("an Android app's Gradle project", () => {
         const sources = path.join(to, 'app', 'src', 'main', 'java');
         expect(fs.readFileSync(path.join(sources, clipboard), 'utf8')).toBe('package dev.crossbind.clipboard;');
         expect(fs.existsSync(path.join(sources, 'dev', 'crossbind', 'app', 'CrossbindActivity.java'))).toBe(true);
-        expect(fs.readFileSync(path.join(sources, 'dev', 'crossbind', 'app', 'Extensions.java'), 'utf8')).toContain(`    static final Map<String, Extension> ALL = Map.ofEntries(
-            Map.entry("clipboard", new dev.crossbind.clipboard.ClipboardExtension()),
-            Map.entry("secure-storage", new dev.crossbind.storage.StorageExtension()));
+        // In the extensions' order, in which each hears what the activity does.
+        expect(fs.readFileSync(path.join(sources, 'dev', 'crossbind', 'app', 'Extensions.java'), 'utf8')).toContain(`        Map<String, Extension> all = new LinkedHashMap<>();
+        all.put("clipboard", new dev.crossbind.clipboard.ClipboardExtension());
+        all.put("secure-storage", new dev.crossbind.storage.StorageExtension());
+        ALL = Collections.unmodifiableMap(all);
 `);
         for (const [name, file] of [['activity', 'CrossbindActivity.java'], ['registry', 'Extensions.java']]) {
             const shadow = path.join('dev', 'crossbind', 'app', file);
@@ -202,6 +204,123 @@ describe("an Android app's Gradle project", () => {
         const plain = manifestOf([]);
         expect(plain).toContain('android.permission.INTERNET');
         expect(plain.match(/uses-permission/g)).toHaveLength(1);
+        fs.rmSync(root, { recursive: true, force: true });
+    });
+
+    test("asks for its extensions' permissions too, each once, and takes their manifests' elements and their resources", () => {
+        const root = fs.mkdtempSync(path.join(os.tmpdir(), 'crossbind-gradle-'));
+        const to = path.join(root, 'demo-app-android');
+        const file = path.join(root, 'share', 'AndroidManifest.xml');
+        fs.mkdirSync(path.join(root, 'share', 'res', 'xml'), { recursive: true });
+        fs.writeFileSync(file, [
+            '<?xml version="1.0" encoding="utf-8"?>',
+            '<!-- <application android:label="not this one"> -->',
+            '<!<!---->-- <application android:label="nor this one, which one pass of removing comments leaves"> -->',
+            '<manifest xmlns:android="http://schemas.android.com/apk/res/android" xmlns:tools="http://schemas.android.com/tools">',
+            '    <queries>',
+            '        <intent><action android:name="android.intent.action.SEND" /></intent>',
+            '    </queries>',
+            '    <application>',
+            '        <provider android:name="androidx.core.content.FileProvider" android:authorities="${applicationId}.share"',
+            '            android:exported="false" android:grantUriPermissions="true">',
+            '            <meta-data android:name="android.support.FILE_PROVIDER_PATHS" android:resource="@xml/share_paths" />',
+            '        </provider>',
+            '    </application>',
+            '</manifest>',
+        ].join('\n'));
+        fs.writeFileSync(path.join(root, 'share', 'res', 'xml', 'share_paths.xml'), '<paths><cache-path name="shared" path="shared/" /></paths>\n');
+        writeGradleProject(to, {
+            parts: [part(root, 'x86_64')], id: 'com.example.demo', label: 'Demo', version: { name: '1.0.0', code: 1 }, permissions: ['camera'],
+            extensionPermissions: ['android.permission.CAMERA', 'android.permission.READ_CONTACTS'], manifests: [{ name: 'share', file }],
+            resources: [{ name: 'share', dir: path.join(root, 'share', 'res') }],
+        });
+        const main = path.join(to, 'app', 'src', 'main');
+        const manifest = fs.readFileSync(path.join(main, 'AndroidManifest.xml'), 'utf8');
+        expect(manifest).toContain([
+            '    <uses-permission android:name="android.permission.INTERNET" />',
+            '    <uses-permission android:name="android.permission.CAMERA" />',
+            '    <uses-permission android:name="android.permission.READ_CONTACTS" />',
+            '    <queries>',
+            '        <intent><action android:name="android.intent.action.SEND" /></intent>',
+            '    </queries>',
+        ].join('\n'));
+        expect(manifest).toContain([
+            '        <provider android:name="androidx.core.content.FileProvider" android:authorities="${applicationId}.share"',
+            '            android:exported="false" android:grantUriPermissions="true">',
+            '            <meta-data android:name="android.support.FILE_PROVIDER_PATHS" android:resource="@xml/share_paths" />',
+            '        </provider>',
+            '    </application>',
+        ].join('\n'));
+        expect(manifest).not.toContain('not this one');
+        expect(manifest.match(/android\.permission\.CAMERA/g)).toHaveLength(1);
+        expect(fs.readFileSync(path.join(main, 'res', 'xml', 'share_paths.xml'), 'utf8')).toContain('cache-path');
+        fs.rmSync(root, { recursive: true, force: true });
+    });
+
+    test('takes the Java alone of folders that hold a manifest and resources too, as two extensions of that layout have', () => {
+        const root = fs.mkdtempSync(path.join(os.tmpdir(), 'crossbind-gradle-'));
+        const to = path.join(root, 'demo-app-android');
+        const extensionOf = (name) => {
+            const dir = path.join(root, name, 'android');
+            const className = `dev.crossbind.${name}.Extension`;
+            fs.mkdirSync(path.join(dir, 'dev', 'crossbind', name), { recursive: true });
+            fs.mkdirSync(path.join(dir, 'res', 'values'), { recursive: true });
+            fs.writeFileSync(path.join(dir, 'dev', 'crossbind', name, 'Extension.java'), `package dev.crossbind.${name};`);
+            fs.writeFileSync(path.join(dir, 'AndroidManifest.xml'), `<manifest xmlns:android="x"><application><meta-data android:name="${name}" android:value="a$&b$'" /></application></manifest>`);
+            fs.writeFileSync(path.join(dir, 'res', 'values', `${name}.xml`), '<resources />');
+            return {
+                java: { name, dir, className }, manifest: { name, file: path.join(dir, 'AndroidManifest.xml') }, resources: { name, dir: path.join(dir, 'res') },
+            };
+        };
+        const extensions = [extensionOf('first'), extensionOf('second')];
+
+        writeGradleProject(to, {
+            parts: [part(root, 'x86_64')],
+            id: 'com.example.demo',
+            label: 'Demo',
+            version: { name: '1.0.0', code: 1 },
+            java: extensions.map(({ java }) => java),
+            manifests: extensions.map(({ manifest }) => manifest),
+            resources: extensions.map(({ resources }) => resources),
+        });
+
+        const main = path.join(to, 'app', 'src', 'main');
+        expect(fs.readdirSync(path.join(main, 'java'))).toEqual(['dev']);
+        expect(fs.existsSync(path.join(main, 'java', 'dev', 'crossbind', 'second', 'Extension.java'))).toBe(true);
+        expect(fs.existsSync(path.join(main, 'res', 'values', 'first.xml'))).toBe(true);
+        const manifest = fs.readFileSync(path.join(main, 'AndroidManifest.xml'), 'utf8');
+        expect(manifest).toContain('<meta-data android:name="first" android:value="a$&b$\'" />');
+        expect(manifest).toContain('<meta-data android:name="second" android:value="a$&b$\'" />');
+        fs.rmSync(root, { recursive: true, force: true });
+    });
+
+    test("refuses an extension's manifest that gives the app's application attributes or a prefix of its own, and a resource the app has", () => {
+        const root = fs.mkdtempSync(path.join(os.tmpdir(), 'crossbind-gradle-'));
+        const to = path.join(root, 'demo-app-android');
+        const write = (options) => writeGradleProject(to, { parts: [part(root, 'x86_64')], id: 'com.example.demo', label: 'Demo', version: { name: '1.0.0', code: 1 }, ...options });
+        const manifestOf = (text) => {
+            const file = path.join(root, `manifest-${text.length}.xml`);
+            fs.writeFileSync(file, text);
+            return [{ name: 'share', file }];
+        };
+        expect(() => write({ manifests: manifestOf('<manifest xmlns:android="x"><application android:label="Share"></application></manifest>') }))
+            .toThrow("gives its <application> attributes, which are the app's own: it holds what the extension adds to the app's alone.");
+        expect(() => write({ manifests: manifestOf('<manifest xmlns:dist="y"><uses-feature android:name="a" /></manifest>') }))
+            .toThrow("declares the prefix dist, which the app's has not: it takes android and tools.");
+        expect(() => write({ manifests: manifestOf('<uses-permission android:name="a" />') })).toThrow('is no <manifest> of elements, as an AndroidManifest.xml is.');
+        expect(() => write({ manifests: manifestOf('<manifest xmlns:android="x" package="com.example.share"><application /></manifest>') }))
+            .toThrow("gives its <manifest> package, which is the app's own.");
+        expect(() => write({ manifests: manifestOf('<manifest xmlns:android="x">\n<uses-permission android:name="android.permission.CAMERA"/>\n</manifest>') }))
+            .toThrow('asks for a permission with <uses-permission>, which its app.android.permissions lists, as the app asks for each once.');
+        // A refused manifest leaves the project written before as it was.
+        write({});
+        fs.writeFileSync(path.join(to, 'kept.txt'), 'kept');
+        expect(() => write({ manifests: manifestOf('<manifest xmlns:dist="y"></manifest>') })).toThrow('declares the prefix dist');
+        expect(fs.existsSync(path.join(to, 'kept.txt'))).toBe(true);
+        fs.mkdirSync(path.join(root, 'res', 'values'), { recursive: true });
+        fs.writeFileSync(path.join(root, 'res', 'values', 'background.xml'), '<resources />');
+        expect(() => write({ resources: [{ name: 'theme', dir: path.join(root, 'res') }] }))
+            .toThrow(`crossbind: the extension theme has ${path.join('values', 'background.xml')} in its resources, which the app's Gradle project has already.`);
         fs.rmSync(root, { recursive: true, force: true });
     });
 

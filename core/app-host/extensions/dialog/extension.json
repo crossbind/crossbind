@@ -1,11 +1,12 @@
 {
     "name": "dialog",
+    "contract": 1,
     "app": {
         "sources": ["dialog.cpp"],
-        "darwin": { "sources": ["darwin.mm"], "frameworks": ["UniformTypeIdentifiers"] },
+        "macos": { "sources": ["darwin.mm"], "frameworks": ["UniformTypeIdentifiers"] },
         "ios": { "sources": ["ios.mm"] },
         "linux": { "sources": ["linux.cpp"] },
-        "win32": { "sources": ["windows.cpp"], "libraries": ["comctl32"] },
+        "windows": { "sources": ["windows.cpp"], "libraries": ["comctl32"] },
         "android": { "sources": ["android.cpp"], "java": "android", "class": "dev.crossbind.extension.dialog.DialogExtension" }
     }
 }

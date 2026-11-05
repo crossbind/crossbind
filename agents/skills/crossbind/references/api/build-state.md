@@ -150,6 +150,7 @@ state.system = {
     DOCKER_IMAGE_WEB:        string,            // default ''  (image for wasm and wasi builds)
     DOCKER_IMAGE_ANDROID:    string,            // default ''  (image for android builds)
     DOCKER_IMAGE_ANDROID_APP: string,           // default ''  (image for Android apps)
+    extensions:              { [name]: { [KEY]: string } },  // each app extension's own settings, which its api.settings keeps
 }
 ```
 

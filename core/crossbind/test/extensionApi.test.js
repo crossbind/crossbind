@@ -6,9 +6,26 @@ import { PNG } from 'pngjs';
 
 const state = { config: {}, targets: [] };
 vi.mock('../src/state/index.js', () => ({ default: state }));
+// The pages opened in the user's browser.
+const opened = [];
+vi.mock('../src/utils/openUrl.js', () => ({ default: (url) => opened.push(url) }));
+// crossbind.config.js's export each config was filled from, as loadConfig keeps it.
+const exports = new WeakMap();
+vi.mock('../src/state/loadConfig.js', () => ({ exportOf: (config) => exports.get(config) ?? null }));
+// A run's config, filled from this export.
+const loaded = (exported, config = state.config) => {
+    state.config = { ...config, app: exported.app ?? {} };
+    exports.set(state.config, exported);
+};
 // ~/.crossbind.json, as this machine keeps it.
 const saved = {};
-vi.mock('../src/utils/systemConfig.js', () => ({ default: () => ({ ...saved }), updateSystemConfig: (values) => Object.assign(saved, values) }));
+vi.mock('../src/utils/systemConfig.js', async (importOriginal) => ({
+    ...await importOriginal(),
+    default: () => ({ ...saved }),
+    updateSystemConfig: (values, extension = null) => Object.assign(saved, values, extension && {
+        extensions: { ...saved.extensions, [extension.name]: { ...saved.extensions?.[extension.name], ...extension.values } },
+    }),
+}));
 // The system keychain, which keeps each secret by its service and key.
 const keychain = new Map();
 vi.mock('../src/utils/keychain.js', () => ({
@@ -59,6 +76,7 @@ beforeEach(() => {
         paths: { base, project: base, build: path.join(base, '.crossbind', 'build') },
         system: {},
     };
+    exports.set(state.config, { general: { name: 'demo' } });
     tools.run.mockReset();
     tools.inWindowsImage.mockReset();
     Object.keys(saved).forEach((key) => delete saved[key]);
@@ -106,7 +124,8 @@ describe("an extension's api", () => {
 
     test('reads the config, which it cannot change but through write', () => {
         const api = extensionApi('demo-store', { platform: 'ios' });
-        state.config.app = { privacy: { fileTimestamp: ['C617.1'] } };
+        const exported = { general: { name: 'demo' }, app: { privacy: { fileTimestamp: ['C617.1'] } } };
+        loaded(exported);
         expect(api.config.app.privacy.fileTimestamp).toEqual(['C617.1']);
         expect(() => {
             api.config.app.id = 'x';
@@ -116,25 +135,34 @@ describe("an extension's api", () => {
         expect(() => {
             Object.getOwnPropertyDescriptor(api.config.app, 'privacy').value.fileTimestamp = [];
         }).toThrow(TypeError);
-        expect(Object.isExtensible(state.config.app)).toBe(true);
-        expect(state.config.app).toEqual({ privacy: { fileTimestamp: ['C617.1'] } });
+        expect(Object.isExtensible(exported.app)).toBe(true);
+        expect(exported.app).toEqual({ privacy: { fileTimestamp: ['C617.1'] } });
+    });
+
+    test("is crossbind.config.js alone, not this machine's settings or what crossbind fills in", () => {
+        const api = extensionApi('demo-store', { platform: 'ios' });
+        state.config.system = { RUNNER: 'LOCAL' };
+        expect(Object.keys(api.config)).toEqual(['general', 'app']);
+        expect([api.config.system, api.config.paths, api.config.package]).toEqual([undefined, undefined, undefined]);
     });
 
     test("writes an option into crossbind.config.js once the user says yes, and into the run's config", async () => {
         const api = extensionApi('demo-store', { platform: 'ios' });
-        await api.config.write('app.id', 'com.example.demo');
+        const taken = api.config;
+        await taken.write('app.id', 'com.example.demo');
         expect(terminal.asked).toEqual(["Write app.id: 'com.example.demo' into crossbind.config.js? [Y/n] "]);
         expect(config()).toContain("app: {\n        id: 'com.example.demo',\n    },");
-        expect(api.config.app.id).toBe('com.example.demo');
+        expect(taken.app.id).toBe('com.example.demo');
+        expect(api.config).toBe(taken);
         await api.config.write('app.privacy', { fileTimestamp: ['C617.1'] });
         expect(state.config.app).toEqual({ id: 'com.example.demo', privacy: { fileTimestamp: ['C617.1'] } });
     });
 
     test("refuses an option the config sets, the user's no, a config it cannot write into, and any write without a terminal", async () => {
         const api = extensionApi('demo-store', { platform: 'ios' });
-        state.config.app = { id: 'com.example.old' };
+        loaded({ app: { id: 'com.example.old' } });
         await expect(api.config.write('app.id', 'com.example.demo')).rejects.toThrow("crossbind: set app.id: 'com.example.demo' in crossbind.config.js in place of the app.id there.");
-        state.config.app = {};
+        loaded({});
         terminal.yes = [false];
         await expect(api.config.write('app.id', 'com.example.demo')).rejects.toThrow("crossbind: set app.id: 'com.example.demo' in crossbind.config.js.");
         fs.writeFileSync(path.join(base, 'crossbind.config.js'), 'export default makeConfig();\n');
@@ -142,7 +170,10 @@ describe("an extension's api", () => {
         terminal.isThere = false;
         await expect(api.config.write('app.id', 'com.example.demo')).rejects.toThrow("crossbind: demo-store would write app.id: 'com.example.demo' into crossbind.config.js, which takes a yes on a terminal: set it there yourself.");
         await expect(api.config.write('app..id', 'x')).rejects.toThrow('crossbind: demo-store names "app..id", which is no option of crossbind.config.js');
-        await expect(api.config.write('app.window', { width: Number.NaN })).rejects.toThrow('a value that is no JSON value');
+        await expect(api.config.write('app.privacy', { fileTimestamp: [Number.NaN] })).rejects.toThrow('a value that is no JSON value');
+        await expect(api.config.write('app.window', { width: 800 })).rejects.toThrow(
+            "crossbind: demo-store writes app.window, which api.config.write leaves to the app's developer: it writes app.id, app.name, app.icon, app.encryption, app.privacy and app.updater alone.",
+        );
         expect(state.config.app).toEqual({});
     });
 
@@ -154,18 +185,41 @@ describe("an extension's api", () => {
         expect(terminal.asked).toEqual([]);
     });
 
-    test("keeps this machine's settings in ~/.crossbind.json, and its secrets in the keychain under the extension's name", () => {
+    test("keeps this machine's settings in ~/.crossbind.json, its own apart from crossbind's and every other extension's, and its secrets in the keychain under its name", () => {
         const api = extensionApi('demo-store', { platform: 'ios' });
-        api.settings.set({ DEMO_STORE_ACCOUNT: 'ada' });
-        expect(saved).toEqual({ DEMO_STORE_ACCOUNT: 'ada' });
-        expect(api.settings.get('DEMO_STORE_ACCOUNT')).toBe('ada');
+        api.settings.set({ ACCOUNT: 'ada' });
+        expect(saved).toEqual({ extensions: { 'demo-store': { ACCOUNT: 'ada' } } });
+        expect(api.settings.get('ACCOUNT')).toBe('ada');
+        // An extension whose name starts another's reaches none of that one's.
+        const demo = extensionApi('demo', { platform: 'ios' });
+        expect(demo.settings.get('ACCOUNT')).toBeUndefined();
+        demo.settings.set({ STORE_ACCOUNT: 'grace' });
+        expect(api.settings.get('STORE_ACCOUNT')).toBeUndefined();
         expect(() => api.settings.set({ account: 'ada' })).toThrow("crossbind: demo-store sets settings that are no object of this machine's settings");
+        expect(() => api.settings.set({ RUNNER: 'BOGUS', REGION: 'eu' })).toThrow('crossbind: demo-store sets RUNNER to "BOGUS", which takes DOCKER_RUN, DOCKER_EXEC, LOCAL, REMOTE alone.');
+        expect(api.settings.get('REGION')).toBeUndefined();
+        api.settings.set({ XCODE_DEVELOPMENT_TEAM: 'ABCDE12345', REGION: 'eu' });
+        expect(saved).toEqual({ XCODE_DEVELOPMENT_TEAM: 'ABCDE12345', extensions: { 'demo-store': { ACCOUNT: 'ada', REGION: 'eu' }, demo: { STORE_ACCOUNT: 'grace' } } });
+        expect([api.settings.get('XCODE_DEVELOPMENT_TEAM'), api.settings.get('REGION')]).toEqual(['ABCDE12345', 'eu']);
+        state.config.system = { extensions: { 'demo-store': 'ada' } };
+        expect(() => api.settings.get('ACCOUNT')).toThrow('keeps the settings of the extension demo-store as no object of them, under extensions: fix it.');
 
         expect(api.secrets.get('sign-in')).toBeNull();
         expect(api.secrets.set('sign-in', 'refresh')).toBe(true);
         expect([...keychain.keys()]).toEqual([`crossbind demo-store: ${path.join(base, '.crossbind', 'secrets', 'demo-store', 'sign-in')}`]);
         expect(api.secrets.get('sign-in')).toBe('refresh');
         expect(() => api.secrets.get('../other')).toThrow('crossbind: demo-store names the secret "../other", which is no name of letters, digits, dots, dashes and underscores.');
+    });
+
+    test('opens an http or https page alone in the browser', () => {
+        const api = extensionApi('demo-store', { platform: 'ios' });
+        opened.splice(0);
+        api.openUrl('https://store.example/console?app=demo&tab=builds');
+        expect(opened).toEqual(['https://store.example/console?app=demo&tab=builds']);
+        for (const url of ['file:///etc/hosts', 'javascript:alert(1)', 'console', 42]) {
+            expect(() => api.openUrl(url)).toThrow(`crossbind: demo-store opens ${JSON.stringify(url)}, which is no http or https address.`);
+        }
+        expect(opened).toHaveLength(1);
     });
 
     test('asks nothing without a terminal', () => {

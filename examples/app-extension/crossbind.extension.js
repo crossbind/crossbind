@@ -2,6 +2,7 @@
 export default function starter() {
     return {
         name: 'starter',
+        contract: 1,
         root: import.meta.dirname,
         app: {
             sources: ['native/starter.cpp'],

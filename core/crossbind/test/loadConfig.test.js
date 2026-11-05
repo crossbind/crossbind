@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import upath from 'upath';
-import loadConfig, { getFilledConfig, assertBinarySelection } from '../src/state/loadConfig.js';
+import loadConfig, { getFilledConfig, assertBinarySelection, exportOf } from '../src/state/loadConfig.js';
 
 describe('excludedDependencies', () => {
     let tmpDir;
@@ -260,7 +260,7 @@ describe('extensions', () => {
 
     test('are what an app builds in beside its host\'s own, checked as the config loads', () => {
         const root = path.join(project, 'clipboard');
-        expect(fill([{ name: 'clipboard', root, app: {} }]).extensions).toEqual([{ name: 'clipboard', root, app: {} }]);
+        expect(fill([{ contract: 1, name: 'clipboard', root, app: {} }]).extensions).toEqual([{ name: 'clipboard', root, app: {} }]);
         expect(fill(undefined).extensions).toEqual([]);
         expect(() => fill([{ loadConfig: { after: () => {} } }])).toThrow('crossbind: extensions[0] has the hooks loadConfig, which crossbind no longer runs');
         expect(() => fill({ name: 'clipboard' })).toThrow('crossbind: "extensions" must be a list of extensions');
@@ -296,7 +296,7 @@ describe("a publisher's changes to the config", () => {
     });
 
     test('come with extensions of one name each, whatever each gives', async () => {
-        const store = `{ name: 'store', root: ${JSON.stringify(tmpDir)}, publisher: { platform: 'android', upload: async () => {} } }`;
+        const store = `{ name: 'store', contract: 1, root: ${JSON.stringify(tmpDir)}, publisher: { platform: 'android', upload: async () => {} } }`;
         fs.writeFileSync(path.join(tmpDir, 'crossbind.config.mjs'), `export default { general: { name: 'app' }, paths: { project: ${JSON.stringify(tmpDir)} }, extensions: [${store}, ${store}] };\n`);
         await expect(loadConfig(tmpDir)).rejects.toThrow('crossbind: "extensions" lists two extensions named store.');
     });
@@ -305,6 +305,15 @@ describe("a publisher's changes to the config", () => {
         const changed = await loadConfig(tmpDir, undefined, { changes: { app: { updater: null, name: 'Demo for the store', window: { height: 600 } } } });
         expect(changed.app).toEqual({ name: 'Demo for the store', window: { width: 800, height: 600 } });
         expect((await loadConfig(tmpDir)).app).toEqual({ name: 'Demo', updater: { url: 'https://example.com/u.json' }, window: { width: 800 } });
+    });
+
+    test("leave the export an extension's api reads as the build took it, not as crossbind filled it in", async () => {
+        const changed = await loadConfig(tmpDir, undefined, { changes: { app: { name: 'Demo for the store' } } });
+        expect(exportOf(changed)).toEqual({
+            general: { name: 'app' }, paths: { project: tmpDir }, app: { name: 'Demo for the store', updater: { url: 'https://example.com/u.json' }, window: { width: 800 } },
+        });
+        expect(changed.paths.build).toBeTruthy();
+        expect(exportOf({ ...changed })).toBeNull();
     });
 
     test("take a list's place whole, as of the installers a store's build runs", async () => {

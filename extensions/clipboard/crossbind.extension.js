@@ -2,13 +2,14 @@
 export default function clipboard() {
     return {
         name: 'clipboard',
+        contract: 1,
         root: import.meta.dirname,
         app: {
             sources: ['native/clipboard.cpp'],
-            darwin: { sources: ['native/darwin.mm'] },
+            macos: { sources: ['native/darwin.mm'] },
             ios: { sources: ['native/ios.mm'] },
             linux: { sources: ['native/linux.cpp'] },
-            win32: { sources: ['native/windows.cpp'] },
+            windows: { sources: ['native/windows.cpp'] },
             android: { sources: ['native/android.cpp'], java: 'native/android', class: 'dev.crossbind.extension.clipboard.ClipboardExtension' },
         },
     };

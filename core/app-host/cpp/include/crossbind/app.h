@@ -74,7 +74,7 @@ void revealInFolder(const std::string &path);
 // A file or folder moved to the system's trash, which fails and moves nothing where the system has no trash.
 void trash(const std::string &path);
 Paths paths();
-// Ends the app as closing its window does.
+// Ends the app as closing its window does, without asking the extensions that may keep the window open.
 void quit();
 // Ends the app as quit() does, then opens it anew, with no arguments.
 void relaunch();

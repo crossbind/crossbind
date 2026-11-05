@@ -3,11 +3,15 @@
 // links of the probe's own scheme, which reach it and not the page.
 #include "crossbind/app.h"
 #include "crossbind/extension.h"
+#include "probe.h"
 
+#include <atomic>
 #include <filesystem>
 #include <fstream>
 #include <mutex>
 #include <stdexcept>
+#include <string>
+#include <thread>
 #include <vector>
 
 namespace {
@@ -19,6 +23,13 @@ std::string text(const std::filesystem::path &path) {
 
 std::mutex linksMutex;
 std::vector<std::string> links;
+
+std::atomic<int> pages{0};
+// The thread onPage ran on last.
+std::atomic<std::thread::id> pageThread{};
+std::atomic<int> closes{0};
+// Why the host refused the probe a function of another's name, as the probe starts.
+std::string refusedName;
 
 }  // namespace
 
@@ -79,4 +90,56 @@ void crossbind_extension_probe(crossbind::Registry &registry) {
             return version ? Value(*version) : Value();
         });
     });
+    // The probe's C source, compiled with the folder of its includes and its macros.
+    registry.function("probe.compiled", [](Call call) { call.resolve(crossbind_probe_sum(2, 3)); });
+    // Text that is no UTF-8, which the page reads with U+FFFD in its place.
+    registry.function("probe.invalidUtf8", [](Call call) { call.resolve(Value(std::string("a\xff" "b"))); });
+    // Whether the page made the call, as it does this one, and not the probe through invoke().
+    registry.function("probe.fromPage", [](Call call) { call.resolve(call.isFromPage()); });
+    registry.function("probe.invokeOwn", [](Call call) {
+        crossbind::invoke("probe.fromPage", Value::Object{}, [call](std::optional<std::string> failure, Value result) {
+            if (failure) call.reject(*failure);
+            else call.resolve(std::move(result));
+        });
+    });
+    // Each page the app starts, its first one too, on the thread of the page's calls.
+    registry.onPage([] {
+        pageThread = std::this_thread::get_id();
+        pages += 1;
+    });
+    registry.function("probe.pages", [](Call call) {
+        call.resolve(Value::Object{{"count", pages.load()}, {"isCallThread", pageThread.load() == std::this_thread::get_id()}});
+    });
+    // A function's name starts with its extension's.
+    try {
+        registry.function("other.name", [](Call call) { call.resolve(); });
+    } catch (const std::invalid_argument &error) {
+        refusedName = error.what();
+    }
+    registry.function("probe.refusedName", [](Call call) { call.resolve(refusedName); });
+    // The probe keeps the window open whenever its user closes it, as an app that stays in its tray does: the
+    // app.relaunch() that ends the run quits as app.quit() does, which asks it nothing.
+    registry.onClose([] {
+        closes += 1;
+        return false;
+    });
+    registry.function("probe.closes", [](Call call) { call.resolve(closes.load()); });
+#if !defined(__ANDROID__)
+    // A task on the main thread that throws leaves the app running, and the call it held fails as it lets go of it.
+    registry.function("probe.throwOnMain", [](Call call) {
+        crossbind::onMainThread([call] { throw std::runtime_error("the probe's task fails"); });
+    });
+    // <crossbind/app.h> refuses the main thread, which answers its waits.
+    registry.function("probe.waitOnMain", [](Call call) {
+        crossbind::onMainThread([call] {
+            try {
+                crossbind::app::openExternal("https://example.com/");
+                call.resolve("opened");
+            } catch (const std::exception &error) {
+                call.resolve(error.what());
+            }
+        });
+    });
+#endif
+    probePlatform(registry);
 }

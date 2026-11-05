@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- A resource of the probe's, which the app's resources take and its Java reads. -->
+<resources>
+    <string name="crossbind_probe">resource</string>
+</resources>

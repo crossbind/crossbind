@@ -288,6 +288,48 @@ async function checkPageRequests() {
     }
 }
 
+// What an extension adds to an app, through the probe: C compiled with folders of its own and its own macros, text
+// that is no UTF-8 as U+FFFD, a call of the app's functions from native code, which is no page's, and the pages it hears
+// of; on the desktop the close its user asks for, which the probe refuses; on the main thread a task that throws and
+// a wait of <crossbind/app.h>, which the app outlives; on Apple's platforms the Info.plist key and the iOS privacy
+// reasons it gave; and on Android its manifest's elements, its resources, its permission and the page's WebView.
+async function checkContract(isDesktop, isAndroid) {
+    const sum = await invoke('probe.compiled');
+    if (sum !== 6) throw new Error(`the probe's C gave ${sum}, not 6, with its include folder and macros`);
+    const text = await invoke('probe.invalidUtf8');
+    if (text !== 'a�b') throw new Error(`a reply of no UTF-8 reached the page as ${JSON.stringify(text)}`);
+    if ((await invoke('probe.fromPage')) !== true || (await invoke('probe.invokeOwn')) !== false) {
+        throw new Error("a call through the native invoke() was taken for the page's");
+    }
+    const pages = await invoke('probe.pages');
+    if (!(pages.count >= 1) || !pages.isCallThread) throw new Error(`the probe heard of this page not as it started, on the thread of its calls: ${JSON.stringify(pages)}`);
+    const refused = await invoke('probe.refusedName');
+    if (!refused.includes('names a function other.name, where its own start with its name and a dot')) throw new Error(`the probe named a function of another's: ${refused}`);
+    if (!isAndroid) {
+        const thrown = await invoke('probe.throwOnMain').then(() => 'answered', (error) => error.message);
+        if (!thrown.includes('probe.throwOnMain gave no answer')) throw new Error(`a task that threw on the main thread: ${thrown}`);
+        const waited = await invoke('probe.waitOnMain');
+        if (!waited.includes('the main thread never calls it')) throw new Error(`<crossbind/app.h> waited on the main thread: ${waited}`);
+    }
+    if (isDesktop) {
+        await invoke('probe.close');
+        const closes = await invoke('probe.closes');
+        if (closes !== 1) throw new Error(`the probe was asked ${closes} times as the window closed, not once`);
+    }
+    if (isAndroid) {
+        const probed = await invoke('probe.android');
+        if (probed.meta !== 'manifest' || probed.resource !== 'resource' || !probed.permission || !probed.webView) {
+            throw new Error(`the app took not all of the probe's Android parts: ${JSON.stringify(probed)}`);
+        }
+        if (!(probed.resumes >= 1)) throw new Error("the probe's Java heard no resume of the activity, of which the e2e app's page-permissions, before it, fails as each");
+        const failed = await invoke('probe.javaThrows').then(() => 'answered', (error) => error.message);
+        if (!failed.includes('probe.javaThrows gave no answer')) throw new Error(`an answer of the Java whose done threw: ${failed}`);
+    } else if (!isDesktop || navigator.userAgent.includes('Macintosh')) {
+        const apple = await invoke('probe.apple');
+        if (apple.plist !== 'plist' || (!isDesktop && !apple.privacy)) throw new Error(`the app took not all of the probe's Apple parts: ${JSON.stringify(apple)}`);
+    }
+}
+
 initNative().then(async (m) => {
     try {
         // Markup can make a crossbind:// request as well, so one without the page's token must be refused. On Android the
@@ -320,6 +362,7 @@ initNative().then(async (m) => {
         }
         await checkClipboard(!isAndroid && !isDesktop);
         await checkPageRequests();
+        await checkContract(isDesktop, isAndroid);
         // The app's own functions answer over the page's channel on every platform, and the host checks what it opens.
         const folders = await host.paths();
         if (![folders.data, folders.cache, folders.logs].every((folder) => /^(\/|[A-Za-z]:\\)/.test(folder))) {
@@ -455,6 +498,7 @@ initNative().then(async (m) => {
         if (result.pass !== result.run) console.log(result.lines.join('\n'));
         console.log(result.summary);
         document.getElementById('conf').textContent = result.summary;
+        // The app quits for it whatever the probe's onClose says, which keeps the window open, as app.quit() asks none.
         if (isDesktop && !import.meta.env.DEV && result.pass === result.run) await host.relaunch();
     } catch (error) {
         console.error(`CONFORMANCE ERR: ${error?.message ?? error}`);

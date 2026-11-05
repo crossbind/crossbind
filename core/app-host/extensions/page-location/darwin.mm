@@ -1,18 +1,21 @@
+// The host's page-location: a macOS page's navigator.geolocation, to which WKWebView gives no position there, answered
+// from CoreLocation as page-permissions lets the page have it. The build gives it to an app whose app.permissions lists
+// the location, with the reason CoreLocation asks the app's user with.
 #import <CoreLocation/CoreLocation.h>
 #import <WebKit/WebKit.h>
 
-#include "crossbind_app.h"
-#include "page_requests.h"
-#include "platform.h"
-
-#if CROSSBIND_APP_PERMISSION_LOCATION
+#include "crossbind/extension.h"
 
 #include <cmath>
+#include <functional>
 #include <optional>
+#include <string>
 #include <utility>
 #include <vector>
 
 namespace {
+
+using Reply = std::function<void(const std::string &)>;
 
 // How long the host holds an ask before it answers that it has no position yet, and the page asks again: an ask of a
 // page that went away is answered too, as WebKit wants every reply given.
@@ -102,6 +105,13 @@ double numberIn(NSDictionary *ask, NSString *key) {
 
 id known(double value, bool isKnown) { return isKnown ? @(value) : NSNull.null; }
 
+// An origin as the page's scripts name it, as "crossbind://app" or "http://localhost:5173".
+std::string originOf(WKSecurityOrigin *origin) {
+    std::string text = std::string(origin.protocol.UTF8String ?: "") + "://" + std::string(origin.host.UTF8String ?: "");
+    if (origin.port != 0) text += ":" + std::to_string(origin.port);
+    return text;
+}
+
 std::string positionOf(CLLocation *location) {
     return jsonOf(@{
         @"coords" : @{
@@ -121,7 +131,7 @@ std::string positionOf(CLLocation *location) {
 struct Ask {
     double maximumAge;
     NSDate *since;
-    ReplyFn reply;
+    Reply reply;
 };
 
 // Gives the asks isDue picks the answer, and keeps the others.
@@ -151,7 +161,7 @@ bool always(const Ask &) { return true; }
     // Whether page-permissions lets the page have the location, which the host asks it once in the app's run, and the
     // asks that wait for its answer.
     std::optional<bool> _isAllowed;
-    std::vector<std::pair<NSDictionary *, ReplyFn>> _undecided;
+    std::vector<std::pair<NSDictionary *, Reply>> _undecided;
 }
 
 - (instancetype)init {
@@ -168,19 +178,19 @@ bool always(const Ask &) { return true; }
       didReceiveScriptMessage:(WKScriptMessage *)message
                  replyHandler:(void (^)(id, NSString *))replyHandler {
     void (^respond)(id, NSString *) = [replyHandler copy];
-    ReplyFn reply = [respond](const std::string &text) { respond([NSString stringWithUTF8String:text.c_str()], nil); };
+    Reply reply = [respond](const std::string &text) { respond([NSString stringWithUTF8String:text.c_str()], nil); };
     if (!message.frameInfo.isMainFrame) {
         reply(failureOf(1, @"crossbind: a frame inside the page has no location"));
         return;
     }
     NSString *body = [message.body isKindOfClass:NSString.class] ? message.body : @"";
     id ask = [NSJSONSerialization JSONObjectWithData:[body dataUsingEncoding:NSUTF8StringEncoding allowLossyConversion:YES] options:0 error:nil];
-    [self decide:[ask isKindOfClass:NSDictionary.class] ? ask : @{} origin:crossbind::app::originOf(message.frameInfo.securityOrigin) reply:std::move(reply)];
+    [self decide:[ask isKindOfClass:NSDictionary.class] ? ask : @{} origin:originOf(message.frameInfo.securityOrigin) reply:std::move(reply)];
 }
 
 // The page has a position once page-permissions allows it, which a watch would otherwise ask after each position;
-// without the extension the page has none, as WebKit gives a macOS page none of its own.
-- (void)decide:(NSDictionary *)ask origin:(std::string)origin reply:(ReplyFn)reply {
+// without that extension the page has none, as WebKit gives a macOS page none of its own.
+- (void)decide:(NSDictionary *)ask origin:(std::string)origin reply:(Reply)reply {
     if (_isAllowed) {
         if (*_isAllowed) [self ask:ask reply:std::move(reply)];
         else reply(failureOf(1, @"User denied Geolocation"));
@@ -188,11 +198,7 @@ bool always(const Ask &) { return true; }
     }
     _undecided.emplace_back(ask, std::move(reply));
     if (_undecided.size() > 1) return;
-    if (!crossbind::app::hasPagePermissions()) {
-        [self decided:false];
-        return;
-    }
-    crossbind::app::askPagePermission(crossbind::app::pagePermission({"location"}, std::move(origin), [self](bool isAllowed) { [self decided:isAllowed]; }));
+    crossbind::askPagePermission({"location"}, std::move(origin), [self](bool isAllowed) { [self decided:isAllowed]; });
 }
 
 - (void)decided:(bool)isAllowed {
@@ -203,7 +209,7 @@ bool always(const Ask &) { return true; }
     }
 }
 
-- (void)ask:(NSDictionary *)ask reply:(ReplyFn)reply {
+- (void)ask:(NSDictionary *)ask reply:(Reply)reply {
     const CLAuthorizationStatus status = _manager.authorizationStatus;
     if (status == kCLAuthorizationStatusDenied || status == kCLAuthorizationStatusRestricted) {
         reply(failureOf(1, @"User denied Geolocation"));
@@ -278,11 +284,15 @@ bool always(const Ask &) { return true; }
 
 @end
 
-void provideLocation(void *webView) {
-    static CBLocation *location = [CBLocation new];
-    addTopFrameScript(webView, LOCATION_SCRIPT.UTF8String);
-    WKUserContentController *contents = ((__bridge WKWebView *)webView).configuration.userContentController;
-    [contents addScriptMessageHandlerWithReply:location contentWorld:WKContentWorld.pageWorld name:@"crossbind_location"];
+// The page's navigator.geolocation and the handler of its asks join the webview as the window opens, before its page
+// loads.
+void crossbind_extension_page_location(crossbind::Registry &registry) {
+    registry.onWindow([] {
+        static CBLocation *location = [CBLocation new];
+        WKUserContentController *contents = ((__bridge WKWebView *)crossbind::appWebView()).configuration.userContentController;
+        [contents addUserScript:[[WKUserScript alloc] initWithSource:LOCATION_SCRIPT
+                                                       injectionTime:WKUserScriptInjectionTimeAtDocumentStart
+                                                    forMainFrameOnly:YES]];
+        [contents addScriptMessageHandlerWithReply:location contentWorld:WKContentWorld.pageWorld name:@"crossbind_location"];
+    });
 }
-
-#endif

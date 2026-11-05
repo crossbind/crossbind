@@ -1,6 +1,8 @@
 // The page's menus on Linux: a GTK menu bar above the webview.
 #include "menu.h"
 
+#include "crossbind/app.h"
+
 #include <gtk/gtk.h>
 #include <unistd.h>
 #include <webkit2/webkit2.h>
@@ -76,6 +78,8 @@ void runRole(const std::string &role) {
         if (webView()) webkit_web_view_execute_editing_command(WEBKIT_WEB_VIEW(webView()), command->second);
     } else if (window() && role == "minimize") {
         gtk_window_iconify(window());
+    } else if (role == "quit") {
+        app::quit();
     } else if (window()) {
         gtk_window_close(window());
     }

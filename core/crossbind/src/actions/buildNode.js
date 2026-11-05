@@ -24,11 +24,16 @@ import toolchainNoticesDir from '../utils/toolchainNotices.js';
 const cpuCount = Math.max(1, os.cpus().length - 1);
 const WINDOWS_IMAGE_NOTICES = '/opt/licenses/llvm-mingw';
 
+// What a build's output, a package's own packages and a repository's history hold, which no build reads.
+const UNREAD_FOLDERS = ['.crossbind', 'node_modules', '.git'];
+
+// The files under these folders a build reads, a link that leads nowhere left out.
 export function filesUnder(dirs) {
     return dirs.flatMap((dir) => (fs.existsSync(dir)
         ? fs.readdirSync(dir, { recursive: true })
+            .filter((file) => !file.split(/[\\/]/).some((part) => UNREAD_FOLDERS.includes(part)))
             .map((file) => `${dir}/${file}`)
-            .filter((file) => fs.statSync(file).isFile())
+            .filter((file) => fs.statSync(file, { throwIfNoEntry: false })?.isFile())
         : []));
 }
 

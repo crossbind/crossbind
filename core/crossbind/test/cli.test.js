@@ -49,6 +49,20 @@ describe('crossbind outside a project', () => {
         expect(JSON.parse(fs.readFileSync(file, 'utf8'))).not.toHaveProperty('RUNNER');
     });
 
+    test("lists, reads and deletes an extension's own settings by its name and theirs", () => {
+        const file = path.join(home, '.crossbind.json');
+        fs.writeFileSync(file, JSON.stringify({ RUNNER: 'LOCAL', extensions: { 'demo-store': { ACCOUNT: 'ada', REGION: 'eu' } } }));
+
+        expect(crossbind('config', 'list')).toMatchObject({ status: 0, stdout: expect.stringContaining('demo-store.REGION') });
+        expect(crossbind('config', 'get', 'demo-store.account')).toMatchObject({ status: 0, stdout: expect.stringContaining("'ada'") });
+        expect(crossbind('config', 'delete', 'demo-store.ACCOUNT').status).toBe(0);
+        expect(JSON.parse(fs.readFileSync(file, 'utf8'))).toMatchObject({ RUNNER: 'LOCAL', extensions: { 'demo-store': { REGION: 'eu' } } });
+        expect(crossbind('config', 'delete', 'demo-store.ACCOUNT')).toMatchObject({ status: 1, stderr: expect.stringContaining('Configuration demo-store.ACCOUNT is not set.') });
+        expect(crossbind('config', 'delete', 'demo-store.REGION').status).toBe(0);
+        expect(JSON.parse(fs.readFileSync(file, 'utf8')).extensions).toEqual({});
+        expect(crossbind('config', 'delete', 'DEMO_STORE_ACCOUNT')).toMatchObject({ status: 1, stderr: expect.stringContaining('Configuration DEMO_STORE_ACCOUNT is not available') });
+    });
+
     test('still needs one to list the project configuration or to build', () => {
         [['config', 'list', '-t', 'project'], ['build']].forEach((args) => {
             const { status, stderr } = crossbind(...args);
@@ -188,6 +202,7 @@ describe('crossbind app publish', () => {
     target: { runtimeEnv: 'app' },
     extensions: [{
         name: 'demo-store',
+        contract: 1,
         root: ${JSON.stringify(fs.realpathSync(dir))},
         publisher: {
             platform: 'desktop',

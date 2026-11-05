@@ -35,6 +35,9 @@ std::vector<std::string> granted;
 template <typename T, typename Start>
 T wait(Start start) {
     if (!answering) throw std::runtime_error("crossbind: <crossbind/app.h> answers once the app's module has started, until the app quits");
+    if (isMainThread()) {
+        throw std::logic_error("crossbind: <crossbind/app.h> waits for the main thread to do the work, so the main thread never calls it: call it from the module's thread or another of the app's own");
+    }
     auto result = std::make_shared<std::promise<T>>();
     auto answer = result->get_future();
     start([result](T value) { result->set_value(std::move(value)); });
@@ -49,7 +52,7 @@ T wait(Start start) {
 Value invoked(const std::string &name, Value options) {
     using Answer = std::pair<Failure, Value>;
     Answer answer = wait<Answer>([&](std::function<void(Answer)> done) {
-        invoke(name, std::move(options), [done = std::move(done)](Failure failure, Value result) { done({std::move(failure), std::move(result)}); });
+        app::invoke(name, std::move(options), [done = std::move(done)](Failure failure, Value result) { done({std::move(failure), std::move(result)}); });
     });
     if (answer.first) throw std::runtime_error(*answer.first);
     return std::move(answer.second);

@@ -1,10 +1,11 @@
 {
     "name": "page-dialogs",
+    "contract": 1,
     "app": {
-        "darwin": { "sources": ["dialogs.cpp", "darwin.mm"] },
+        "macos": { "sources": ["dialogs.cpp", "darwin.mm"] },
         "ios": { "sources": ["dialogs.cpp", "ios.mm"] },
         "linux": { "sources": ["dialogs.cpp", "linux.cpp"] },
-        "win32": { "sources": ["dialogs.cpp", "windows.cpp"], "libraries": ["comctl32"] },
+        "windows": { "sources": ["dialogs.cpp", "windows.cpp"], "libraries": ["comctl32"] },
         "android": { "java": "android", "class": "dev.crossbind.extension.pagedialogs.PageDialogsExtension" }
     }
 }

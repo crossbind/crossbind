@@ -19,6 +19,12 @@ public final class PagePermissionsExtension implements Extension {
         else call.reject("crossbind: the e2e app's page-permissions has no function " + function);
     }
 
+    // It fails as the activity resumes, which leaves the extensions after it, as the probe, the resume as well.
+    @Override
+    public void onResume(CrossbindActivity activity) {
+        throw new IllegalStateException("the e2e app's page-permissions fails as the activity resumes");
+    }
+
     @Override
     public boolean onPagePermission(CrossbindActivity activity, PagePermission request) {
         asked.put(new JSONObject(Map.of("kinds", new JSONArray(request.kinds()), "origin", request.origin(), "isListed", request.isListed())));

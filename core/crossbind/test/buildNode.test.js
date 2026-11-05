@@ -29,7 +29,7 @@ vi.mock('../src/utils/logger.js', () => ({
 vi.mock('../src/state/index.js', () => ({ default: state }));
 
 const {
-    default: buildNode, addonsInPackages, bundleNodeLoader, nodeLoaderConfig, publishNodeData,
+    default: buildNode, addonsInPackages, bundleNodeLoader, filesUnder, nodeLoaderConfig, publishNodeData,
 } = await import('../src/actions/buildNode.js');
 
 const target = {
@@ -420,5 +420,18 @@ describe('publishNodeData', () => {
 
         publishNodeData(target, { refresh: true });
         expect(fs.readFileSync(`${work}/out/data/gdal/gdalvrt.xsd`, 'utf8')).toBe('v2');
+    });
+});
+
+describe('the files a build reads under a folder', () => {
+    test("are its files, without a build's output, a package's own packages, a repository's history or a link that leads nowhere", () => {
+        const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'crossbind-files-under-'));
+        ['native/clipboard.cpp', '.crossbind/build/app.fingerprint', 'node_modules/dep/dep.cpp', '.git/HEAD'].forEach((file) => {
+            fs.mkdirSync(path.dirname(path.join(dir, file)), { recursive: true });
+            fs.writeFileSync(path.join(dir, file), '');
+        });
+        fs.symlinkSync(path.join(dir, 'missing.cpp'), path.join(dir, 'native', 'gone.cpp'));
+        expect(filesUnder([dir, path.join(dir, 'none')])).toEqual([`${dir}/${path.join('native', 'clipboard.cpp')}`]);
+        fs.rmSync(dir, { recursive: true, force: true });
     });
 });

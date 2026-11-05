@@ -328,15 +328,22 @@ export default {
   extensions: [
     {
       name: 'clipboard',                     // lowercase letters and digits, dashes between
+      contract: 1,                           // the version of the contract it is written for
       root: '/abs/path/to/the/extension',    // the folder its files are in, under paths.base
       app: {
-        sources: ['native/clipboard.cpp'],   // C++ every platform compiles, relative to root
+        sources: ['native/clipboard.cpp'],   // C and C++ every platform compiles, relative to root
+        includes: ['native/include'],        // its folders of includes
+        defines: ['CLIPBOARD_LIMIT=1000'],   // its macros
         urlSchemes: [],                      // schemes whose links its native code gets, beside app.urlSchemes'
-        darwin:  { sources: ['native/darwin.mm'], frameworks: ['AppKit'], entitlements: {} },
-        ios:     { sources: ['native/ios.mm'], frameworks: ['UIKit'], entitlements: {} },
+        licenses: [],                        // the code of others it carries, for the app's license report
+        macos:   { sources: ['native/darwin.mm'], frameworks: ['AppKit'], entitlements: {}, plist: {} },
+        ios:     { sources: ['native/ios.mm'], frameworks: ['UIKit'], entitlements: {}, plist: {}, privacy: {} },
         linux:   { sources: ['native/linux.cpp'], libraries: [] },
-        win32:   { sources: ['native/windows.cpp'], libraries: ['user32'] },
-        android: { sources: ['native/android.cpp'], libraries: [], java: 'android', class: 'dev.example.clipboard.ClipboardExtension' },
+        windows: { sources: ['native/windows.cpp'], libraries: ['user32'] },
+        android: {
+          sources: ['native/android.cpp'], libraries: [], java: 'android', class: 'dev.example.clipboard.ClipboardExtension',
+          permissions: [], manifest: 'android/AndroidManifest.xml', resources: 'android/res',
+        },
       },
       options: { maxLength: 1000 },          // a JSON value its native code reads as registry.options()
       publisher: { platform: 'android', upload: async (api, session, output) => {} },  // a store: extensions.md
@@ -345,15 +352,17 @@ export default {
   ],
     // Usually what an extension package's crossbind.extension.js gives, its root
     // its own folder. An app's host builds them in beside its own extensions,
-    // dialog, instance, links, menu, page-dialogs, page-files, page-permissions, power,
-    // shell and updater, which one listed under the same name replaces, and its sources add
+    // dialog, instance, links, menu, page-dialogs, page-files, page-location,
+    // page-permissions, power, shell and updater, which one listed under the same name replaces, and its sources add
     // functions, and what they do as the app is launched, opens a link and quits,
-    // through <crossbind/extension.h>: C++ on every platform, Objective-C++ on
-    // Apple's. Two owners of one URL scheme stop the build.
+    // through <crossbind/extension.h>: C and C++ on every platform, Objective-C
+    // and Objective-C++ on Apple's. Two owners of one URL scheme stop the build.
     // An Android extension's Java is the folder java names, class the
     // dev.crossbind.app.Extension in it the activity calls. Entitlements merge
-    // with app.permissions' on macOS; two owners giving one key different
-    // values stop the build.
+    // with app.permissions' on macOS, and Info.plist keys with crossbind's own;
+    // two owners giving one key different values stop the build, but lists,
+    // which join. An extension written for another contract stops the build,
+    // naming what to update.
 
   // ─────────────────────────────────────────────────────────────
   // Custom helper functions

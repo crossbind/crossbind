@@ -52,8 +52,8 @@ void onQuit(std::function<void()> quit);
 // The page's alert(), confirm() and prompt(), and its file inputs where the webview lets the host take them, go to the
 // extensions page-dialogs and page-files; without one, the webview shows its own.
 void showPageDialogs(void *webView);
-// What the page asks to use goes to the extension page-permissions; without it, the webview does as it would, and the
-// host denies a macOS page the location it gives.
+// What the page asks to use goes to the extension page-permissions; without it, the webview does as it would. A macOS
+// page's location comes from the extension page-location, which asks page-permissions as well.
 void answerPermissions(void *webView);
 // Tells the user why the app cannot go on: in a message box on the desktop, in the system's log on iOS and Android.
 void showError(const std::string &message);
@@ -63,6 +63,15 @@ std::string resourceDir();
 // The app's functions behind crossbind/app and <crossbind/app.h>, and what the app's window does; a platform that has no
 // such function throws.
 using Failure = std::optional<std::string>;
+// Whether the caller is the app's main thread, where the platform's UI runs.
+bool isMainThread();
+namespace crossbind::app {
+// Whether the window closes as its user closes it: true unless an extension's onClose keeps it. On the main thread.
+bool isCloseAllowed();
+}  // namespace crossbind::app
+// Runs a task of the main thread's, whose loop never sees what it throws: the failure is told, and a call the task held
+// fails as the task lets go of it.
+void runTask(const std::function<void()> &task);
 // The app's folders, made if missing; on any thread.
 crossbind::app::Paths appPaths();
 // Ends the app on the main thread, as closing its window does.
@@ -92,8 +101,6 @@ void keepRunningWhenHidden(void *configuration);
 // Shows an iOS view controller, such as an alert, over whatever the window shows on top; false when it has nothing to
 // show it over.
 bool presentOnTop(void *controller, void *window);
-// A macOS page's navigator.geolocation, to which WKWebView gives no position there, answered from CoreLocation.
-void provideLocation(void *webView);
 #endif
 
 #ifdef _WIN32
