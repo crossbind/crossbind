@@ -140,6 +140,18 @@ std::mutex javaMutex;
 std::unordered_map<jint, JavaAnswer> javaCalls;
 uint32_t nextJavaCall;
 
+// Hands done the answer; what done throws stays out of the JVM, which would end the app: it is told, and the call done
+// held fails as it lets go of it.
+void answer(const JavaAnswer &done, std::optional<std::string> failure, crossbind::Value result) {
+    try {
+        done(std::move(failure), std::move(result));
+    } catch (const std::exception &error) {
+        __android_log_print(ANDROID_LOG_ERROR, TAG, "crossbind: the answer of an extension's Java failed: %s", error.what());
+    } catch (...) {
+        __android_log_write(ANDROID_LOG_ERROR, TAG, "crossbind: the answer of an extension's Java failed");
+    }
+}
+
 void javaAnswered(jint call, bool ok, const std::string &text) {
     JavaAnswer done;
     {
@@ -150,17 +162,17 @@ void javaAnswered(jint call, bool ok, const std::string &text) {
         javaCalls.erase(waiting);
     }
     if (!ok) {
-        done(text, {});
+        answer(done, text, {});
         return;
     }
     crossbind::Value result;
     try {
         result = app::valueOfJson(text);
     } catch (const std::exception &error) {
-        done(error.what(), {});
+        answer(done, error.what(), {});
         return;
     }
-    done(std::nullopt, std::move(result));
+    answer(done, std::nullopt, std::move(result));
 }
 
 }  // namespace
@@ -191,6 +203,9 @@ void callJava(const std::string &extension, const std::string &function, Value::
 }  // namespace crossbind::android
 
 void quitApp() { throw std::runtime_error("crossbind: an Android app does not quit itself: the system ends it"); }
+
+// The activity's UI thread is the process's first.
+bool isMainThread() { return gettid() == getpid(); }
 
 void setMainWindow(void *, void *) {}
 

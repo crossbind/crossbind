@@ -35,7 +35,7 @@ Compare with `extensions/clipboard/`:
 ```text
 <name>/
 ├── package.json              # @<scope>/extension-<name>, crossbind.extension, the crossbind-extension keyword
-├── crossbind.extension.js    # default export: (options) => ({ name, root, app, options })
+├── crossbind.extension.js    # default export: (options) => ({ name, contract: 1, root, app, options })
 ├── index.js                  # the page's functions, each through invoke('<name>.<function>')
 ├── index.d.ts
 ├── README.md                 # install, use, and what each platform does
@@ -57,14 +57,18 @@ platform it gives none, the page's call rejects as the host has no such function
 ## Steps
 
 1. **Name it.** Lowercase letters and digits, dashes between. Look on npm for the keyword `crossbind-extension`
-   first, so two extensions do not take one name, which stops an app that lists both.
-2. **Write the shared C++.** The entry registers each function as `<name>.<function>`, checks the options, and hands
-   the call to the platform's code. A function that waits, as one that reads a file, goes `inBackground()`; one that
-   calls the platform's UI goes `onMainThread()`, or through the Java on Android.
+   first, so two extensions do not take one name, which stops an app that lists both. Give it `contract: 1`, the
+   version of the contract it is written for.
+2. **Write the shared C++.** The entry registers each function as `<name>.<function>`, which the app checks as it
+   starts, checks the options, and hands the call to the platform's code. A function that waits, as one that reads a
+   file, goes `inBackground()`; one that calls the platform's UI goes `onMainThread()`, which runs it after what waits
+   there, or through the Java on Android. What the extension keeps for a page it lets go of in `onPage`.
 3. **Write each platform.** Each answers the call once, from any thread. A failure rejects with `crossbind: ` and
    what happened; a function never does nothing.
-4. **Declare what each platform links and takes:** frameworks, libraries and entitlements in `crossbind.extension.js`,
-   never by editing the app's generated projects.
+4. **Declare what each platform links and takes** in `crossbind.extension.js`, never by editing the app's generated
+   projects: its folders of includes and macros, frameworks, libraries and entitlements, an Apple app's Info.plist keys,
+   as a usage description with a reason the extension's options take from the app, an iOS app's privacy reasons, an
+   Android app's permissions, manifest elements and resources, and in `app.licenses` the code of others it carries.
 5. **Write the page's module and types.** Each function checks its arguments before it calls `invoke`, so a wrong
    type fails at once, with the extension's name.
 6. **Try it in an app.** `npm pack` it, and `crossbind add` the tarball in an app, which installs it and lists it in
@@ -85,4 +89,5 @@ platform it gives none, the page's call rejects as the host has no such function
 - [ ] Nothing holds up the module's thread.
 - [ ] Nothing reaches beyond what the page could do itself without the app's opt-in in the extension's options.
 - [ ] Each platform the README names has passed its page-side checks.
-- [ ] The package carries every source it builds from, and no binary.
+- [ ] The package carries every source it builds from, and no binary; `app.licenses` names the code of others in it.
+- [ ] The extension gives the `contract` it is written for.

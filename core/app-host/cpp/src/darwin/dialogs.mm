@@ -157,7 +157,7 @@ bool presentOnTop(void *controller, void *window) {
 #if TARGET_OS_IPHONE && CROSSBIND_APP_PERMISSION_LOCATION
 // Before iOS 27 WebKit asks a private selector of the UI delegate instead, which only an app that lists the location
 // answers. Another carries no reason for it, without which CoreLocation asks the app's user nothing. A macOS page's
-// location comes from the host.
+// location comes from the extension page-location.
 - (void)_webView:(WKWebView *)webView requestGeolocationPermissionForFrame:(WKFrameInfo *)frame decisionHandler:(void (^)(BOOL))decide {
     void (^answer)(BOOL) = [decide copy];
     app::askPagePermission(app::pagePermission({"location"}, app::originOf(frame.securityOrigin), [answer](bool isAllowed) { answer(isAllowed); }));
@@ -166,12 +166,8 @@ bool presentOnTop(void *controller, void *window) {
 
 @end
 
-// CBPageDelegate answers the rest; on macOS the host gives the page the location, as WKWebView does not.
-void answerPermissions([[maybe_unused]] void *webView) {
-#if !TARGET_OS_IPHONE && CROSSBIND_APP_PERMISSION_LOCATION
-    provideLocation(webView);
-#endif
-}
+// CBPageDelegate, the webview's UI delegate, answers what the page asks to use on Apple's platforms.
+void answerPermissions(void *) {}
 
 void showPageDialogs(void *webView) {
     WKWebView *view = (__bridge WKWebView *)webView;

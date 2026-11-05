@@ -160,18 +160,20 @@ export const PRIVACY_CATEGORIES = {
 
 // The reasons an iOS app's privacy manifest gives for the required reason API it calls: app.privacy, each category with
 // Apple's reasons that fit, as { fileTimestamp: ['C617.1'] }.
-export function appPrivacy(config) {
-    const privacy = config.app.privacy ?? {};
+export const appPrivacy = (config) => checkedPrivacy(config.app.privacy ?? {}, 'app.privacy');
+
+// Reasons for Apple's required reason API, as app.privacy gives them and an extension's ios.privacy does.
+export function checkedPrivacy(privacy, where) {
     const names = Object.keys(PRIVACY_CATEGORIES).join(', ');
     if (typeof privacy !== 'object' || privacy === null || Array.isArray(privacy)) {
-        throw new Error(`crossbind: app.privacy ${JSON.stringify(privacy)} is no object of ${names}, each with Apple's reasons for it, as { fileTimestamp: ['C617.1'] } is.`);
+        throw new Error(`crossbind: ${where} ${JSON.stringify(privacy)} is no object of ${names}, each with Apple's reasons for it, as { fileTimestamp: ['C617.1'] } is.`);
     }
     const unknown = Object.keys(privacy).filter((name) => !Object.hasOwn(PRIVACY_CATEGORIES, name));
-    if (unknown.length > 0) throw new Error(`crossbind: app.privacy takes ${names}; ${unknown.join(', ')} is none of them.`);
+    if (unknown.length > 0) throw new Error(`crossbind: ${where} takes ${names}; ${unknown.join(', ')} is none of them.`);
     Object.entries(privacy).forEach(([name, reasons]) => {
         const allowed = PRIVACY_CATEGORIES[name].reasons;
         if (!Array.isArray(reasons) || reasons.length === 0 || reasons.some((reason) => !allowed.includes(reason))) {
-            throw new Error(`crossbind: app.privacy.${name} ${JSON.stringify(reasons)} is no list of Apple's reasons for it, which are ${allowed.join(', ')}; Apple's "Describing use of required reason API" says what each covers.`);
+            throw new Error(`crossbind: ${where}.${name} ${JSON.stringify(reasons)} is no list of Apple's reasons for it, which are ${allowed.join(', ')}; Apple's "Describing use of required reason API" says what each covers.`);
         }
     });
     return privacy;
@@ -363,6 +365,8 @@ export function hostExtensionOptions(config, platform) {
         ...(urlSchemeOwners(config).some(({ extension }) => extension === null) ? { links: {} } : {}),
         shell: { openPath: appOpenPath(config) },
         ...(platform === 'linux' ? { menu: { id: appId(config) } } : {}),
+        // WKWebView gives a macOS page no location of its own.
+        ...(platform === 'darwin' && 'location' in appPermissions(config) ? { 'page-location': {} } : {}),
         ...(updater ? { updater: { url: updater.url, publicKey: updater.publicKey.toString('base64'), version: updater.version, id: appId(config) } } : {}),
     };
 }

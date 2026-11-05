@@ -14,6 +14,7 @@ vi.mock('../src/state/loadConfig.js', () => ({
 const outputs = { cleared: 0 };
 vi.mock('../src/actions/buildApp.js', () => ({
     DESKTOP_PLATFORMS: { darwin: 'macos', linux: 'linux', win32: 'windows' },
+    MAX_VERSION_CODE: 2100000000,
     appOutputOf: (platform) => ({ project: `/demo/dist/demo-${platform}` }),
     clearAppOutputs: () => {
         outputs.cleared += 1;
@@ -284,6 +285,35 @@ describe('a publish', () => {
         run.uploads = [];
         state.config.extensions = [store('demo'), after('mirror', 'demo', { isRebuildAsked: true })];
         await expect(publish(['mirror'], { runVite })).rejects.toThrow('crossbind: mirror asks for another build, which demo, whose build it publishes from, alone can ask for.');
+    });
+
+    test('stops once the first upload has asked for as many builds as a publish makes', async () => {
+        state.config.extensions = [store('demo', { uploads: 10 })];
+        await expect(publish(['demo'], { runVite })).rejects.toThrow('crossbind: demo asks for another build after 4, as many as a publish makes.');
+        expect(run.builds).toHaveLength(4);
+    });
+
+    test("names the publisher and the step a failure comes from, where its message is not crossbind's own", async () => {
+        state.config.extensions = [store('demo', { publisher: { check: () => { throw new TypeError("Cannot read properties of undefined (reading 'token')"); } } })];
+        await expect(publish(['demo'], { runVite })).rejects.toThrow("crossbind: demo's check failed: Cannot read properties of undefined (reading 'token')");
+        state.config.extensions = [store('demo', { publisher: { upload: async () => { throw new Error('crossbind: Demo Store took no upload.'); } } })];
+        await expect(publish(['demo'], { runVite })).rejects.toThrow(/^crossbind: Demo Store took no upload\.$/);
+    });
+
+    test('refuses a build number no store takes before the build, naming the publisher that gave it', async () => {
+        for (const number of [0, 1.5, '42', 2100000001]) {
+            state.config.extensions = [store('demo', { publisher: { buildNumber: () => number } })];
+            await expect(publish(['demo'], { runVite })).rejects.toThrow(`crossbind: demo's buildNumber gives ${JSON.stringify(number)}, which is no build number`);
+        }
+        expect(run.builds).toEqual([]);
+    });
+
+    test('takes a build number from 1 to 2100000000, as both stores do', async () => {
+        for (const number of [1, 2100000000]) {
+            state.config.extensions = [store('demo', { publisher: { buildNumber: () => number } })];
+            await publish(['demo'], { runVite });
+            expect(run.builds.at(-1).env).toMatchObject({ CROSSBIND_APP_BUILD_NUMBER: String(number) });
+        }
     });
 
     test('uploads nothing when the build fails, naming the store', async () => {

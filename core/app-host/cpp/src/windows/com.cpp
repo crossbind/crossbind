@@ -1,4 +1,5 @@
 #include "windows/com.h"
+#include "platform.h"
 
 #include <shellapi.h>
 
@@ -12,26 +13,44 @@ namespace crossbind::windows {
 namespace {
 
 constexpr UINT RUN = WM_APP + 1;
-std::atomic<DWORD> uiThread{0};
+// The thread that starts the process, the UI's, which makes the host's static objects.
+const DWORD uiThread = GetCurrentThreadId();
 // Set once, under queueMutex, which other threads read it under.
 HWND dispatcher = nullptr;
 std::mutex queueMutex;
 std::deque<std::function<void()>> queue;
+// Under queueMutex: whether a task runs, which posts for the next as it returns, and whether a message is on its way.
+bool isRunning = false;
+bool isPosted = false;
 
+// Under queueMutex. Windows caps the messages a thread has posted, so one is on its way at most.
+void post() {
+    if (isRunning || isPosted || !dispatcher || queue.empty()) return;
+    isPosted = PostMessageW(dispatcher, RUN, 0, 0) != 0;
+}
+
+// One task at a time, in their order, as Apple's main queue runs them: a modal loop a task runs, as a dialog's, leaves
+// the next until it returns.
 LRESULT CALLBACK dispatch(HWND window, UINT message, WPARAM wParam, LPARAM lParam) {
     if (message != RUN) return DefWindowProcW(window, message, wParam, lParam);
-    std::deque<std::function<void()>> tasks;
+    std::function<void()> task;
     {
         std::lock_guard<std::mutex> lock(queueMutex);
-        tasks.swap(queue);
+        isPosted = false;
+        if (isRunning || queue.empty()) return 0;
+        task = std::move(queue.front());
+        queue.pop_front();
+        isRunning = true;
     }
-    for (auto &task : tasks) task();
+    runTask(task);
+    std::lock_guard<std::mutex> lock(queueMutex);
+    isRunning = false;
+    post();
     return 0;
 }
 
 // A message-only window of the UI thread, whose message loop runs what other threads post to it.
 void startDispatcher() {
-    uiThread = GetCurrentThreadId();
     WNDCLASSW type{};
     type.lpfnWndProc = dispatch;
     type.hInstance = GetModuleHandleW(nullptr);
@@ -41,7 +60,7 @@ void startDispatcher() {
     // The module's code can post before the window exists; what it posted runs now.
     std::lock_guard<std::mutex> lock(queueMutex);
     dispatcher = window;
-    if (!queue.empty()) PostMessageW(dispatcher, RUN, 0, 0);
+    post();
 }
 
 }  // namespace
@@ -94,22 +113,14 @@ ICoreWebView2 *coreWebView(void *controller) {
     return core;
 }
 
-// What waits for the UI thread waits in one queue, which one message drains: Windows caps the messages a thread has
-// posted.
-void later(std::function<void()> fn) {
+// What waits for the UI thread waits in one queue.
+void onMainThread(std::function<void()> fn) {
     std::lock_guard<std::mutex> lock(queueMutex);
-    const bool isIdle = queue.empty();
     queue.push_back(std::move(fn));
-    if (isIdle && dispatcher) PostMessageW(dispatcher, RUN, 0, 0);
+    post();
 }
 
-void onMainThread(std::function<void()> fn) {
-    if (GetCurrentThreadId() == uiThread) {
-        fn();
-        return;
-    }
-    later(std::move(fn));
-}
+bool isUiThread() { return GetCurrentThreadId() == uiThread; }
 
 bool openOutside(const std::string &uri) {
     std::string scheme = uri.substr(0, uri.find(':'));

@@ -5,6 +5,11 @@ const escapeXml = (text) => String(text).replace(/&/g, '&amp;').replace(/</g, '&
 
 function xmlLines(value, indent) {
     if (typeof value === 'boolean') return [`${indent}<${value}/>`];
+    if (typeof value === 'number') {
+        // An integer an integer element reads back the same, and any other number a real.
+        const type = Number.isSafeInteger(value) ? 'integer' : 'real';
+        return [`${indent}<${type}>${value}</${type}>`];
+    }
     const inner = indent + XML_INDENT;
     if (Array.isArray(value)) return [`${indent}<array>`, ...value.flatMap((item) => xmlLines(item, inner)), `${indent}</array>`];
     if (typeof value === 'object') {

@@ -32,7 +32,8 @@ import {
 } from '../utils/appOptions.js';
 import { unreasonedApis, unreasonedWarning } from '../utils/requiredReasonApis.js';
 import {
-    appExtensionsOf, appHostExtensions, extensionPart, hostExtensions, mergedEntitlements, registrationSource, withListed,
+    appExtensionsOf, appHostExtensions, extensionCmakeArgs, extensionPart, hostExtensions, mergedEntitlements, mergedPlist, mergedPrivacy, registrationSource,
+    withListed,
 } from '../utils/appExtensions.js';
 import { androidIcons, iosIcon, linuxIcon, macIcon, readAppIcon, windowsIcon } from '../utils/appIcon.js';
 import writeIfChanged from '../utils/writeIfChanged.js';
@@ -148,7 +149,7 @@ export const appVersion = () => (state.config.package?.version ?? '1.0.0').repla
 
 const BUILD_NUMBER = 'CROSSBIND_APP_BUILD_NUMBER';
 // Google Play takes no larger version code.
-const MAX_VERSION_CODE = 2100000000;
+export const MAX_VERSION_CODE = 2100000000;
 
 // The number CI or a publish gives a build, which iOS takes as its build and Android as its version code:
 // CROSSBIND_APP_BUILD_NUMBER, a whole number both stores take, else none.
@@ -215,7 +216,8 @@ async function bundle(input, file, plugins) {
 // A development build claims no scheme: the built app, of the same id, owns them, and a link it opens shows its own page.
 const urlSchemesOf = (target) => (target.buildType === 'release' ? appUrlSchemes(state.config) : []);
 
-const infoPlist = (name, version, hasIcon, urlSchemes) => xmlPlist({
+// The app's Info.plist, with the keys its extensions give.
+const infoPlist = (name, version, hasIcon, urlSchemes) => xmlPlist(mergedPlist({
     CFBundleDisplayName: appDisplayName(state.config),
     CFBundleExecutable: name,
     // Contents/Resources/icon.icns.
@@ -233,7 +235,7 @@ const infoPlist = (name, version, hasIcon, urlSchemes) => xmlPlist({
     // The app menu's About item shows it.
     ...(appCopyright(state.config) ? { NSHumanReadableCopyright: appCopyright(state.config) } : {}),
     ...usageDescriptions(state.config, 'darwin'),
-});
+}, extensionsOf('darwin').plist));
 
 // The host's bytecode and the data the packages ship, beside the page's folder.
 function copyAppFiles(dir, hbc, target) {
@@ -376,10 +378,11 @@ export const DESKTOP_PLATFORMS = { darwin: 'macos', linux: 'linux', win32: 'wind
 
 export const clearAppOutputs = () => fs.rmSync(appOutputsFile(), { force: true });
 
+// What a publisher's upload gets of the app the build wrote for a platform: a desktop platform's apps, one for each arch.
 export function appOutputOf(platform) {
     const output = readAppOutputs()[platform];
     if (!output) throw new Error(`crossbind: the build wrote no ${platform} app, so there is nothing to publish.`);
-    return output;
+    return Object.values(DESKTOP_PLATFORMS).includes(platform) ? { apps: output } : output;
 }
 
 const madeFile = (file) => (fs.existsSync(file) ? file : null);
@@ -420,21 +423,27 @@ export function publishApp(target, { to = appOutputPath(target), page = null } =
     if (target.platform === 'ios') {
         const parts = appParts(target).map(({ arch, dir }) => ({ sdk: arch, dir }));
         const icon = readAppIcon(state.config);
-        const privacy = appPrivacy(state.config);
+        const ownPrivacy = appPrivacy(state.config);
         const build = appBuildNumber();
-        writeXcodeProject(to, {
+        // The app's own options are checked first, then what its extensions add.
+        const options = {
             parts, identity: { id: appId(state.config), team: appTeam() }, label: appDisplayName(state.config), version: appVersion(),
             build: build === null ? appVersion() : String(build), icon: icon && iosIcon(icon), urlSchemes: appUrlSchemes(state.config),
-            background: appBackgroundColor(state.config), usage: usageDescriptions(state.config, 'ios'), encryption: appEncryption(state.config), privacy,
-            entitlements: mergedEntitlements(extensionsOf('ios').entitlements),
-        });
+            background: appBackgroundColor(state.config), usage: usageDescriptions(state.config, 'ios'), encryption: appEncryption(state.config),
+        };
+        const extensions = extensionsOf('ios');
+        const privacy = mergedPrivacy(ownPrivacy, extensions.privacy);
+        writeXcodeProject(to, { ...options, privacy, entitlements: mergedEntitlements(extensions.entitlements), plist: extensions.plist });
         if (target.buildType === 'release') warnUnreasonedApis(to, privacy);
     } else if (target.platform === 'android') {
         const icon = readAppIcon(state.config);
-        writeGradleProject(to, {
+        const options = {
             parts: appParts(target), id: androidAppId(), label: appDisplayName(state.config), version: androidVersion(), icons: icon && androidIcons(icon),
             urlSchemes: appUrlSchemes(state.config), background: appBackgroundColor(state.config), permissions: Object.keys(appPermissions(state.config)),
-            java: extensionsOf('android').java,
+        };
+        const extensions = extensionsOf('android');
+        writeGradleProject(to, {
+            ...options, java: extensions.java, extensionPermissions: extensions.permissions, manifests: extensions.manifests, resources: extensions.resources,
         });
     } else if (path.resolve(to) !== path.resolve(built)) {
         fs.rmSync(to, { recursive: true, force: true });
@@ -531,7 +540,14 @@ export default async function buildApp(target, { bridges = [], force = false } =
             `${state.config.paths.cli}/assets/js-runtime/adapters`,
         ])),
         extraSources: getFilesFingerprint(extraSources),
-        extensions: { registration, files: getFilesFingerprint(filesUnder(extensions.roots)), link: hostLinkArgs.slice(linkArgs.length) },
+        // An iOS app's frameworks reach its Xcode project through what the host's build writes.
+        extensions: {
+            registration,
+            files: getFilesFingerprint(filesUnder(extensions.roots)),
+            compiled: extensions.compiled,
+            link: hostLinkArgs.slice(linkArgs.length),
+            frameworks: extensions.frameworks,
+        },
     }));
     const isChanged = !fs.existsSync(fingerprintFile) || fs.readFileSync(fingerprintFile, { encoding: 'utf8' }) !== fingerprint;
     if (!force && !isChanged && fs.existsSync(`${build}/${target.appName}`) && fs.existsSync(`${build}/${target.appJsName}`)) {
@@ -563,7 +579,8 @@ export default async function buildApp(target, { bridges = [], force = false } =
         `-DCROSSBIND_JSI_ROOT=${jsiRoot}`,
         `-DCROSSBIND_HERMES=${hermes}`,
         `-DCROSSBIND_EXTRA_SOURCES=${extraSources.join(';')}`,
-        `-DCROSSBIND_EXTENSION_SOURCES=${[`${workDir}/extensions.cpp`, ...extensions.sources].join(';')}`,
+        `-DCROSSBIND_EXTENSION_REGISTRATION=${workDir}/extensions.cpp`,
+        ...extensionCmakeArgs(extensions.compiled),
         `-DCROSSBIND_LINK_ARGS=${hostLinkArgs.join(';')}`,
         `-DCROSSBIND_LINK_DEPENDS=${libs.join(';')}`,
         // An Android release ships the packages' shared libraries stripped as well, and keeps them as they come.

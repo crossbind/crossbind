@@ -25,12 +25,13 @@ namespace {
 
 // Commands below it are the window's own.
 constexpr UINT FIRST_COMMAND = 0x1000;
+// The messages of the extension's own, registered, as other extensions post the app's window theirs.
 // An accelerator's item, which the webview's key handler posts with the generation of the menus it was pressed in.
-constexpr UINT WM_SHORTCUT = WM_APP + 1;
+const UINT WM_SHORTCUT = RegisterWindowMessageW(L"crossbind.menu.shortcut");
 // Sets the menus the page set while one of the bar's was open.
-constexpr UINT WM_MENUS_WAITING = WM_APP + 2;
+const UINT WM_MENUS_WAITING = RegisterWindowMessageW(L"crossbind.menu.waiting");
 // What Windows tells of the tray's icon, which it sends the tray's window.
-constexpr UINT WM_TRAY = WM_APP + 3;
+const UINT WM_TRAY = RegisterWindowMessageW(L"crossbind.menu.tray");
 // The one icon the app puts in the notification area.
 constexpr UINT TRAY_ICON = 1;
 // The app's icon among its resources, which app.rc gives the id of Windows' own.
@@ -155,6 +156,8 @@ void runRole(const std::string &role) {
         SendInput(4, keys, sizeof(INPUT));
     } else if (role == "minimize") {
         ShowWindow(window, SW_MINIMIZE);
+    } else if (role == "quit") {
+        app::quit();
     } else {
         PostMessageW(window, WM_CLOSE, 0, 0);
     }

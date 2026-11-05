@@ -4,6 +4,8 @@
 #include "platform.h"
 
 #include <gtk/gtk.h>
+#include <sys/syscall.h>
+#include <unistd.h>
 #include <webkit2/webkit2.h>
 
 #include <cerrno>
@@ -86,9 +88,13 @@ crossbind::app::Paths appPaths() {
 
 void crossbind::onMainThread(std::function<void()> fn) { ::onMainThread(std::move(fn)); }
 
+// The process's first thread runs GTK; the image's glibc predates gettid().
+bool isMainThread() { return syscall(SYS_gettid) == getpid(); }
+
+// The window goes without asking the app's extensions, as its user's closing it does.
 void quitApp() {
     onMainThread([] {
-        if (mainWindow) gtk_window_close(mainWindow);
+        if (mainWindow) gtk_widget_destroy(GTK_WIDGET(mainWindow));
     });
 }
 
@@ -99,6 +105,8 @@ void quitApp() {
 void setMainWindow(void *window, void *view) {
     mainWindow = GTK_WINDOW(window);
     g_object_add_weak_pointer(G_OBJECT(mainWindow), reinterpret_cast<gpointer *>(&mainWindow));
+    // The window asks the app's extensions as its user closes it: TRUE keeps it.
+    g_signal_connect(mainWindow, "delete-event", G_CALLBACK(+[](GtkWidget *, GdkEvent *, gpointer) -> gboolean { return !crossbind::app::isCloseAllowed(); }), nullptr);
     const std::string icon = resourceDir() + "/icon.png";
     if (g_file_test(icon.c_str(), G_FILE_TEST_EXISTS)) gtk_window_set_icon_from_file(mainWindow, icon.c_str(), nullptr);
     webView = static_cast<GtkWidget *>(view);

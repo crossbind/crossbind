@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- What the probe adds to the app's manifest: a value its Java reads from the app's application. -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <application>
+        <meta-data android:name="crossbind.probe" android:value="manifest" />
+    </application>
+</manifest>

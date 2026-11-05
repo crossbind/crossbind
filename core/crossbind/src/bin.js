@@ -19,7 +19,7 @@ import { UPDATER_KEY, newUpdaterKey } from './actions/appUpdate.js';
 import {
     makeUploadKey, releaseSigningEnv, showUploadKeyPassword, useUploadKey,
 } from './actions/uploadKey.js';
-import publish, { publishHelp } from './actions/publish.js';
+import publish, { publishHelp, publishersOf } from './actions/publish.js';
 import { iosDeviceOption } from './actions/iosDevice.js';
 import addExtension from './actions/addExtension.js';
 import buildExternal from './actions/buildExternal.js';
@@ -191,7 +191,7 @@ commandApp.command('publish')
     .usage('[store] [options]')
     .description("build the app and send it to a store, as its publisher does: crossbind's own google-play sends an Android bundle to a Google Play track, app-store an iOS app to App Store Connect for TestFlight and App Review, and github a desktop app's installers and update to a GitHub release; an app's extensions add more")
     .addOption(new Option('-p, --platform <platform>', "the app's platform: without a store, android's is google-play and ios' app-store (default: CROSSBIND_APP_PLATFORM, else for a store of desktop apps this machine's)").choices(APP_PLATFORMS))
-    .addHelpText('after', () => publishHelp())
+    .addHelpText('after', () => publishHelp(publishersOf(state.config?.extensions ?? [])))
     // The store's own options, and Vite's, as --mode, which go on to Vite.
     .allowUnknownOption()
     .allowExcessArguments()

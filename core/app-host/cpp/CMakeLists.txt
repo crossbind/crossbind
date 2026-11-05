@@ -1,8 +1,8 @@
 cmake_minimum_required(VERSION 3.28)
 if(APPLE)
-    project(crossbind_app CXX OBJCXX)
+    project(crossbind_app C CXX OBJC OBJCXX)
 else()
-    project(crossbind_app CXX)
+    project(crossbind_app C CXX)
 endif()
 
 # crossbind configures this project for one app host: the window and its webview, Hermes and the embind runtime
@@ -14,12 +14,29 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 set(THIRD_PARTY "${CMAKE_CURRENT_SOURCE_DIR}/../third_party")
+
+# The headers of the platform's webview and UI, which the host and its extensions compile with: WebView2's from
+# crossbind's windows image, and WebKitGTK's and GTK's from the Ubuntu 22.04 packages crossbind downloads, searched
+# after the C library's, which the image's glibc 2.28 sysroot keeps.
+function(crossbind_platform_headers target)
+    if(WIN32)
+        target_include_directories(${target} SYSTEM PRIVATE "${CROSSBIND_WEBVIEW2_INCLUDE}")
+    elseif(NOT APPLE AND NOT ANDROID)
+        set(GTK_LIB "${CROSSBIND_GTK_SYSROOT}/usr/lib/${CROSSBIND_GTK_MULTIARCH}")
+        foreach(dir webkitgtk-4.1 libsoup-3.0 gtk-3.0 at-spi2-atk/2.0 at-spi-2.0 dbus-1.0 gio-unix-2.0 cairo pango-1.0 harfbuzz
+                fribidi atk-1.0 pixman-1 uuid freetype2 gdk-pixbuf-2.0 libpng16 libmount blkid glib-2.0)
+            target_include_directories(${target} SYSTEM PRIVATE "${CROSSBIND_GTK_SYSROOT}/usr/include/${dir}")
+        endforeach()
+        target_include_directories(${target} SYSTEM PRIVATE "${GTK_LIB}/glib-2.0/include" "${GTK_LIB}/dbus-1.0/include")
+        target_compile_options(${target} PRIVATE "SHELL:-idirafter ${CROSSBIND_GTK_SYSROOT}/usr/include")
+    endif()
+endfunction()
 if(CMAKE_SYSTEM_NAME STREQUAL "iOS")
     set(PLATFORM_SOURCES src/ios/main.mm src/ios/bundle.mm src/darwin/app_api.mm src/darwin/channels.mm src/darwin/dialogs.mm
         src/darwin/navigation.mm)
 elseif(APPLE)
-    set(PLATFORM_SOURCES src/darwin/app_api.mm src/darwin/bundle.mm src/darwin/channels.mm src/darwin/dialogs.mm src/darwin/location.mm
-        src/darwin/menu.mm src/darwin/navigation.mm)
+    set(PLATFORM_SOURCES src/darwin/app_api.mm src/darwin/bundle.mm src/darwin/channels.mm src/darwin/dialogs.mm src/darwin/menu.mm
+        src/darwin/navigation.mm)
 elseif(ANDROID)
     set(PLATFORM_SOURCES src/android/jni.cpp)
 elseif(WIN32)
@@ -49,8 +66,8 @@ set(SOURCES
     ${PLATFORM_SOURCES}
     "${CROSSBIND_JSI_ROOT}/cpp/src/emscripten/bind.cpp"
     ${CROSSBIND_EXTRA_SOURCES}
-    # The app's extensions, and what crossbind writes of them.
-    ${CROSSBIND_EXTENSION_SOURCES})
+    # What crossbind writes of the app's extensions: the entry of each, which their own sources define.
+    ${CROSSBIND_EXTENSION_REGISTRATION})
 if(CMAKE_SYSTEM_NAME STREQUAL "iOS")
     add_library(app STATIC src/attach.cpp "${THIRD_PARTY}/jsi/jsi.cpp" ${SOURCES})
 elseif(ANDROID)
@@ -74,15 +91,33 @@ target_include_directories(app PRIVATE
     "${CROSSBIND_HERMES}/include"
     "${CROSSBIND_JSI_ROOT}/cpp/src"
     "${THIRD_PARTY}/webview/core/include")
+crossbind_platform_headers(app)
 if(APPLE)
-    # An extension's Objective-C++ keeps its objects under ARC, as the host's own does.
-    set(EXTENSION_OBJC_SOURCES ${CROSSBIND_EXTENSION_SOURCES})
-    list(FILTER EXTENSION_OBJC_SOURCES INCLUDE REGEX "\\.mm$")
-    set_source_files_properties(${PLATFORM_SOURCES} ${EXTENSION_OBJC_SOURCES} PROPERTIES COMPILE_OPTIONS -fobjc-arc)
+    set_source_files_properties(${PLATFORM_SOURCES} PROPERTIES COMPILE_OPTIONS -fobjc-arc)
 endif()
 if(CMAKE_SYSTEM_NAME STREQUAL "iOS")
     # The archive's dSYM gives App Store Connect the host's files and lines; the app it ships stays stripped.
     target_compile_options(app PRIVATE -g)
+endif()
+
+# Each of the app's extensions compiles on its own, with the host's public headers, the platform's, and its own
+# folders and macros alone, and goes into the host. Its Objective-C keeps its objects under ARC, as the host's own does.
+foreach(extension ${CROSSBIND_EXTENSIONS})
+    set(compiled "extension_${extension}")
+    add_library(${compiled} OBJECT ${CROSSBIND_EXTENSION_${extension}_SOURCES})
+    target_include_directories(${compiled} PRIVATE include ${CROSSBIND_EXTENSION_${extension}_INCLUDES})
+    target_compile_definitions(${compiled} PRIVATE ${CROSSBIND_EXTENSION_${extension}_DEFINES} "$<$<CONFIG:Debug>:CROSSBIND_APP_DEV>")
+    set_target_properties(${compiled} PROPERTIES POSITION_INDEPENDENT_CODE ON)
+    crossbind_platform_headers(${compiled})
+    if(APPLE)
+        target_compile_options(${compiled} PRIVATE "$<$<COMPILE_LANGUAGE:OBJC,OBJCXX>:-fobjc-arc>")
+    endif()
+    if(CMAKE_SYSTEM_NAME STREQUAL "iOS")
+        target_compile_options(${compiled} PRIVATE -g)
+    endif()
+    target_sources(app PRIVATE $<TARGET_OBJECTS:${compiled}>)
+endforeach()
+if(CMAKE_SYSTEM_NAME STREQUAL "iOS")
     return()
 endif()
 
@@ -96,8 +131,7 @@ if(APPLE)
     # initializers reach stays, without the local symbols of a release build.
     target_link_options(app PRIVATE "-F${CROSSBIND_HERMES}/Library/Frameworks/macosx" "LINKER:-rpath,@executable_path/../Frameworks"
         "LINKER:-dead_strip" "$<$<CONFIG:Release>:LINKER:-x>")
-    target_link_libraries(app PRIVATE "-framework hermesvm" "-framework WebKit" "-framework Cocoa" "-framework CoreServices"
-        "-framework CoreLocation")
+    target_link_libraries(app PRIVATE "-framework hermesvm" "-framework WebKit" "-framework Cocoa" "-framework CoreServices")
 elseif(ANDROID)
     # Hermes comes with the app from its own package; the C++ runtime the host shares with it is this NDK's, which goes
     # beside the host, stripped.
@@ -121,8 +155,7 @@ elseif(ANDROID)
     endif()
 elseif(WIN32)
     # A window app, linked whole: the system's UCRT is all it loads beside WebView2, which webview finds itself, so no
-    # loader DLL ships. WebView2's headers come from crossbind's windows image.
-    target_include_directories(app SYSTEM PRIVATE "${CROSSBIND_WEBVIEW2_INCLUDE}")
+    # loader DLL ships.
     target_link_libraries(app PRIVATE "${CROSSBIND_HERMES}/lib/libhermesvm_a.a"
         ole32 oleaut32 uuid shell32 shlwapi user32 gdi32 advapi32 version dwmapi winmm)
     set_target_properties(app PROPERTIES WIN32_EXECUTABLE ON)
@@ -131,16 +164,8 @@ elseif(WIN32)
     # load from System32 alone.
     target_link_options(app PRIVATE -static "LINKER:--gc-sections" "LINKER:--dependent-load-flag=0x800" "$<$<CONFIG:Release>:LINKER:-s>")
 else()
-    # WebKitGTK comes from the Ubuntu 22.04 packages crossbind downloads: its headers are searched after the C library's,
-    # which the image's glibc 2.28 sysroot keeps, and its libraries are only linked against, as the system's load at run
-    # time.
+    # WebKitGTK's libraries are only linked against, as the system's load at run time.
     set(GTK_LIB "${CROSSBIND_GTK_SYSROOT}/usr/lib/${CROSSBIND_GTK_MULTIARCH}")
-    foreach(dir webkitgtk-4.1 libsoup-3.0 gtk-3.0 at-spi2-atk/2.0 at-spi-2.0 dbus-1.0 gio-unix-2.0 cairo pango-1.0 harfbuzz
-            fribidi atk-1.0 pixman-1 uuid freetype2 gdk-pixbuf-2.0 libpng16 libmount blkid glib-2.0)
-        target_include_directories(app SYSTEM PRIVATE "${CROSSBIND_GTK_SYSROOT}/usr/include/${dir}")
-    endforeach()
-    target_include_directories(app SYSTEM PRIVATE "${GTK_LIB}/glib-2.0/include" "${GTK_LIB}/dbus-1.0/include")
-    target_compile_options(app PRIVATE "SHELL:-idirafter ${CROSSBIND_GTK_SYSROOT}/usr/include")
     target_link_directories(app PRIVATE "${GTK_LIB}")
     target_link_libraries(app PRIVATE "${CROSSBIND_HERMES}/lib/libhermesvm_a.a" "${CROSSBIND_HERMES}/lib/libboost_context.a"
         -Wl,--as-needed webkit2gtk-4.1 javascriptcoregtk-4.1 soup-3.0 gtk-3 gdk-3 gio-2.0 gobject-2.0 glib-2.0 pthread dl)

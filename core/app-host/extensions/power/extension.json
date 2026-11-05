@@ -1,8 +1,9 @@
 {
     "name": "power",
+    "contract": 1,
     "app": {
-        "darwin": { "sources": ["power.cpp", "darwin.mm"] },
+        "macos": { "sources": ["power.cpp", "darwin.mm"] },
         "linux": { "sources": ["power.cpp", "linux.cpp"] },
-        "win32": { "sources": ["power.cpp", "windows.cpp"], "libraries": ["comctl32"] }
+        "windows": { "sources": ["power.cpp", "windows.cpp"], "libraries": ["comctl32"] }
     }
 }

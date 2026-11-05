@@ -30,6 +30,10 @@ export function assertBinarySelection(config) {
     }
 }
 
+// The export each loaded config was filled from, as crossbind read it, which an extension's api shows.
+const exports = new WeakMap();
+export const exportOf = (config) => exports.get(config) ?? null;
+
 // The project's config, with the changes a publisher makes for its build, as a JSON merge patch of the export.
 export default async function loadConfig(configDir = process.cwd(), configName = 'crossbind.config', { changes = null } = {}) {
     const exported = await loadJs(configDir, configName) || {};
@@ -89,6 +93,7 @@ export default async function loadConfig(configDir = process.cwd(), configName =
     output.paths.systemConfig = systemConfigPath();
     output.system = loadSystemConfig();
 
+    exports.set(output, config);
     return output;
 }
 

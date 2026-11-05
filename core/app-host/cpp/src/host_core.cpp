@@ -148,7 +148,7 @@ SchemeResponse pageFile(const std::string &pageDir, const std::string &path) {
 
 std::string errorReply(const std::string &message) {
     std::string escaped;
-    for (const char c : message) {
+    for (const char c : validUtf8(message)) {
         if (static_cast<unsigned char>(c) < 0x20) {
             escaped += ' ';
             continue;
@@ -362,9 +362,11 @@ void Core::serve(SchemeRequest request, SchemeRespond answer) {
 }
 
 void Core::reset() {
+    // After the calls the page before made, which the module's thread takes in order, and before the new page's.
     js_.post([this](jsi::Runtime &rt) {
         page_ += 1;
         pageFunctions_.clear();
+        pageStarted();
         rt.global().getPropertyAsFunction(rt, "__crossbind_reset").call(rt);
     });
 }

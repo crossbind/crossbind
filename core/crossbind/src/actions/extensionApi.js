@@ -2,7 +2,9 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import state from '../state/index.js';
-import loadSystemConfig, { updateSystemConfig } from '../utils/systemConfig.js';
+import { exportOf } from '../state/loadConfig.js';
+import loadSystemConfig, { extensionSettingsOf, updateSystemConfig } from '../utils/systemConfig.js';
+import systemKeys from '../utils/systemKeys.js';
 import { askLine, askYesNo, hasTerminal } from '../utils/ask.js';
 import openUrl from '../utils/openUrl.js';
 import { readSecret, storeSecret } from '../utils/keychain.js';
@@ -66,6 +68,26 @@ function readOnly(value) {
     return views.get(value);
 }
 
+// crossbind.config.js's export as the run's config read it, with the app's options the api wrote since, which the run's
+// config holds: each read sees them, however long ago the extension took the view.
+function configView(write) {
+    const current = () => ({ ...exportOf(state.config), app: state.config.app });
+    return new Proxy({}, {
+        get: (target, key) => (key === 'write' ? write : readOnly(current()[key])),
+        has: (target, key) => key in current(),
+        ownKeys: () => Reflect.ownKeys(current()),
+        getOwnPropertyDescriptor(target, key) {
+            const own = Reflect.getOwnPropertyDescriptor(current(), key);
+            return own && { ...own, value: readOnly(own.value) };
+        },
+        set: refuse,
+        defineProperty: refuse,
+        deleteProperty: refuse,
+        setPrototypeOf: refuse,
+        preventExtensions: refuse,
+    });
+}
+
 const deepFrozen = (value) => {
     if (value !== null && typeof value === 'object') Object.values(value).forEach(deepFrozen);
     return Object.freeze(value);
@@ -84,12 +106,16 @@ const OPTION_CHECKS = {
     'app.updater': appUpdater,
 };
 
-// Writes an option into crossbind.config.js once the user says yes on a terminal, and into this run's config. One the
-// config sets already is the user's to change, and one the builds would refuse fails as invalid, for the caller to ask
-// again.
+// Writes an option into crossbind.config.js once the user says yes on a terminal, and into this run's config: one of
+// those crossbind checks as the builds would, alone. One the config sets already is the user's to change, and one the
+// builds would refuse fails as invalid, for the caller to ask again.
 async function writeConfig(name, platform, key, value) {
     const keys = typeof key === 'string' ? key.split('.') : [];
     if (keys.length === 0 || !keys.every((part) => PATH_PART.test(part))) throw new Error(`crossbind: ${name} names ${JSON.stringify(key)}, which is no option of crossbind.config.js, as 'app.id' is.`);
+    if (!Object.hasOwn(OPTION_CHECKS, key)) {
+        const writable = Object.keys(OPTION_CHECKS);
+        throw new Error(`crossbind: ${name} writes ${key}, which api.config.write leaves to the app's developer: it writes ${writable.slice(0, -1).join(', ')} and ${writable.at(-1)} alone.`);
+    }
     if (!isJsonValue(value)) throw new Error(`crossbind: ${name} gives ${key} a value that is no JSON value, which is all crossbind writes into crossbind.config.js.`);
     // A copy of its own, as the value may hold the api's views of the config.
     const plain = JSON.parse(JSON.stringify(value));
@@ -109,14 +135,24 @@ async function writeConfig(name, platform, key, value) {
     state.config[keys[0]] = changed[keys[0]];
 }
 
+// This machine's settings: crossbind's own by their names, as `crossbind config set` takes them, and by any other name
+// the extension's own, which ~/.crossbind.json keeps apart for each extension.
 function settingsOf(name) {
+    const isCrossbinds = (key) => Object.hasOwn(systemKeys, key);
     return Object.freeze({
-        get: (key) => state.config.system[key],
+        get: (key) => (isCrossbinds(key) ? state.config.system[key] : extensionSettingsOf(state.config.system, name)[key]),
         set(values) {
             if (!isObject(values) || !Object.entries(values).every(([key, value]) => SETTING.test(key) && typeof value === 'string')) {
                 throw new Error(`crossbind: ${name} sets settings that are no object of this machine's settings, each an uppercase name with a string.`);
             }
-            updateSystemConfig(values);
+            const entries = Object.entries(values);
+            entries.filter(([key]) => systemKeys[key]?.options).forEach(([key, value]) => {
+                if (!systemKeys[key].options.includes(value)) {
+                    throw new Error(`crossbind: ${name} sets ${key} to ${JSON.stringify(value)}, which takes ${systemKeys[key].options.join(', ')} alone.`);
+                }
+            });
+            const own = entries.filter(([key]) => !isCrossbinds(key));
+            updateSystemConfig(Object.fromEntries(entries.filter(([key]) => isCrossbinds(key))), own.length > 0 ? { name, values: Object.fromEntries(own) } : null);
             state.config.system = loadSystemConfig();
         },
     });
@@ -186,8 +222,7 @@ export default function extensionApi(name, {
 }) {
     const buildEnv = () => (run.buildNumber === undefined || run.buildNumber === null
         ? process.env : { ...process.env, CROSSBIND_APP_BUILD_NUMBER: String(run.buildNumber) });
-    const write = (key, value) => writeConfig(name, platform, key, value);
-    let view = null;
+    const config = configView((key, value) => writeConfig(name, platform, key, value));
     return Object.freeze({
         name,
         platform,
@@ -199,15 +234,7 @@ export default function extensionApi(name, {
             get package() { return readOnly(state.config.package); },
         }),
         get workDir() { return path.join(state.config.paths.build, name); },
-        get config() {
-            if (view?.config !== state.config) {
-                view = {
-                    config: state.config,
-                    proxy: new Proxy(state.config, { ...READ_ONLY, get: (target, key, receiver) => (key === 'write' ? write : READ_ONLY.get(target, key, receiver)) }),
-                };
-            }
-            return view.proxy;
-        },
+        config,
         app: Object.freeze({
             get id() { return platform === 'android' ? androidAppId() : appId(state.config); },
             get name() { return appDisplayName(state.config); },
@@ -230,7 +257,16 @@ export default function extensionApi(name, {
         log: (text) => console.log(text),
         warn: (text) => console.warn(text),
         ...terminalOf(name),
-        openUrl: (url) => openUrl(url),
+        openUrl(url) {
+            let address = null;
+            try {
+                address = new URL(url);
+            } catch {
+                // What is no URL is refused below.
+            }
+            if (!['http:', 'https:'].includes(address?.protocol)) throw new Error(`crossbind: ${name} opens ${JSON.stringify(url)}, which is no http or https address.`);
+            openUrl(address.href);
+        },
         run: runOf(name, target),
         settings: settingsOf(name),
         secrets: secretsOf(name),

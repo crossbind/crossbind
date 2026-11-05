@@ -95,7 +95,7 @@ export default function github() {
             // The token writes to the repository, which the build has no need of.
             buildEnv: () => ({ GH_TOKEN: undefined, GITHUB_TOKEN: undefined }),
 
-            async upload(api, { call, repository, hasUpdate }, apps) {
+            async upload(api, { call, repository, hasUpdate }, { apps }) {
                 const { platform, app: { version }, options: { draft: isDraft } } = api;
                 const files = apps.flatMap((app) => releaseFiles(api, app, hasUpdate));
                 const twice = files.find(({ name }, index) => files.findIndex((other) => other.name === name) !== index);

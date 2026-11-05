@@ -417,6 +417,13 @@ describe("the options of the host's own extensions", () => {
         expect(hostExtensionOptions(extended, 'ios')).not.toHaveProperty('links');
     });
 
+    test("give a macOS app whose app.permissions lists the location the page's location, which WKWebView gives a macOS page none of", () => {
+        const located = config({ permissions: { location: 'To show where you are' } });
+        expect(hostExtensionOptions(located, 'darwin')['page-location']).toEqual({});
+        ['ios', 'linux', 'win32', 'android'].forEach((platform) => expect(hostExtensionOptions(located, platform)).not.toHaveProperty('page-location'));
+        expect(hostExtensionOptions(config({ permissions: { camera: 'To scan' } }), 'darwin')).not.toHaveProperty('page-location');
+    });
+
     test('refuse an app.singleInstance that is no boolean on the desktop, naming the values it takes', () => {
         expect(() => hostExtensionOptions(config({ singleInstance: 'yes' }), 'darwin')).toThrow('app.singleInstance "yes" is no boolean');
         expect(hostExtensionOptions(config({ singleInstance: 'yes' }), 'ios')).not.toHaveProperty('instance');

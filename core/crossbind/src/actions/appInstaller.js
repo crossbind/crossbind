@@ -8,7 +8,7 @@ import { windowsSigning } from './windowsSigning.js';
 import state from '../state/index.js';
 import { hasTerminal } from '../utils/ask.js';
 import { appInstallers, appUpdater } from '../utils/appOptions.js';
-import { checkedExtension, withListed } from '../utils/appExtensions.js';
+import { checkedExtension, extensionStep, withListed } from '../utils/appExtensions.js';
 import { configChangesOf } from '../utils/configChanges.js';
 import dmg from '../installers/dmg/index.js';
 import deb from '../installers/deb/index.js';
@@ -42,6 +42,9 @@ export function installersFor(target) {
 
 const apiOf = (name, target) => extensionApi(name, { platform: DESKTOP_PLATFORMS[target.platform], isGuided: hasTerminal(), target });
 
+// The installers an extension replaces, told once a run, which checks them for each of its targets.
+const toldReplacing = new Set();
+
 // What a desktop app ships with stops a build that could not make it here, before anything compiles: the keys that sign
 // the app and its update, the installers app.installers names, what each installer checks, and on Linux and Windows
 // the installer whose file an app with app.updater updates itself from.
@@ -51,8 +54,14 @@ export async function checkInstaller(target) {
     if (target.platform === 'win32') windowsSigning();
     updaterSigning();
     const installers = installersFor(target);
+    const own = builtInInstallers().map(({ name }) => name);
+    installers.filter((extension) => own.includes(extension.name) && state.config.extensions?.includes(extension) && !toldReplacing.has(extension.name))
+        .forEach(({ name, root }) => {
+            toldReplacing.add(name);
+            console.log(`crossbind: the extension ${name} of ${root} replaces crossbind's own installer of its name.`);
+        });
     for (const { name, installer } of installers) {
-        if (installer.check) await installer.check(apiOf(name, target));
+        if (installer.check) await extensionStep(name, 'check', () => installer.check(apiOf(name, target)));
     }
     const update = UPDATE_INSTALLERS[target.platform];
     if (update && appUpdater(state.config) && !installers.some(({ name }) => name === update)) {
@@ -81,7 +90,7 @@ function madeFiles(name, app, files) {
 export async function writeInstallers(app, target) {
     const made = [];
     for (const { name, installer } of installersFor(target)) {
-        const files = await installer.make(apiOf(name, target), Object.freeze({ app, arch: target.arch }));
+        const files = await extensionStep(name, 'make', () => installer.make(apiOf(name, target), Object.freeze({ app, arch: target.arch })));
         made.push({ name, files: madeFiles(name, app, files) });
     }
     return made;

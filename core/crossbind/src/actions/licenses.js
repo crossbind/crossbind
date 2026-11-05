@@ -13,6 +13,7 @@ import {
     HERMES, HERMES_ANDROID, HERMES_SOURCE, hermesUrl,
 } from '../utils/hermes.js';
 import { ANDROIDX_WEBKIT } from './gradleProject.js';
+import { appExtensionsOf, extensionPackage } from '../utils/appExtensions.js';
 import { shippedBundledLicense } from '../utils/bundledLicenses.js';
 import toolchainNoticesDir from '../utils/toolchainNotices.js';
 
@@ -306,6 +307,45 @@ function windowsAppRows(hostRoot) {
     }];
 }
 
+// What an app's extensions bring into it: each extension package's own code, and the code of others each carries, as its
+// app.licenses lists it. An extension in the project's own folders is the project's code, as the app is.
+function extensionRows() {
+    return appExtensionsOf(state.config.extensions ?? []).flatMap((extension) => {
+        const own = extensionPackage(extension.root, state.config.paths.base);
+        const owner = own?.manifest.name ?? null;
+        const license = own?.manifest.license ?? null;
+        const shipped = own && packageLicenseFile(own.dir);
+        const packageRows = own && !own.manifest.private ? [{
+            npmName: owner,
+            name: owner,
+            version: own.manifest.version ?? null,
+            nativeVersion: null,
+            license,
+            licenseDeclared: license,
+            licenseSelected: null,
+            isCopyleft: Boolean(license) && isCopyleft(license),
+            sourceUrl: own.manifest.homepage ?? null,
+            licenseNotes: `the app extension ${extension.name}, which the app's host compiles in`,
+            licenseText: shipped ? textOf(shipped) : null,
+        }] : [];
+        const carried = (extension.app.licenses ?? []).map((entry) => ({
+            npmName: null,
+            name: entry.name,
+            version: null,
+            nativeVersion: entry.version,
+            sha256: entry.sha256 ?? null,
+            license: entry.license,
+            licenseDeclared: entry.license,
+            licenseSelected: null,
+            isCopyleft: isCopyleft(entry.license),
+            sourceUrl: entry.source ?? null,
+            licenseNotes: `carried by the app extension ${extension.name}${owner ? ` of ${owner}` : ''}, which the app's host compiles in`,
+            licenseText: textOf(path.join(extension.root, entry.file)),
+        }));
+        return [...packageRows, ...carried];
+    });
+}
+
 function appRuntimeRows(platform) {
     const hostRoot = resolveAppHostRoot();
     const hermesLicense = textOf(path.join(hostRoot, 'third_party', 'jsi', 'LICENSE'));
@@ -484,6 +524,16 @@ export default async function collectLicenseRows(platform = null, { runtimeEnv =
     if (platform === 'wasi') rows.push(...wasiToolchainRows());
     if (['linux', 'linuxmusl', 'win32'].includes(platform)) rows.push(...addonToolchainRows(platform));
     if (runtimeEnv === 'node') rows.push(...nodeRuntimeRows({ isAddon: platform !== null }));
-    if (runtimeEnv === 'app') rows.push(...appRuntimeRows(platform));
+    if (runtimeEnv === 'app') {
+        rows.push(...appRuntimeRows(platform));
+        // A library two extensions carry, or one the app has already, is listed once for each version the app ships.
+        const versionOf = (row) => `${row.name}@${row.nativeVersion ?? row.version}`;
+        const listed = new Set(rows.map(versionOf));
+        for (const row of extensionRows()) {
+            if (listed.has(versionOf(row))) continue;
+            listed.add(versionOf(row));
+            rows.push(row);
+        }
+    }
     return rows.sort((a, b) => a.name.localeCompare(b.name));
 }

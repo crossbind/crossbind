@@ -1,9 +1,11 @@
 import state from '../state/index.js';
 import loadConfig from '../state/loadConfig.js';
-import { DESKTOP_PLATFORMS, appOutputOf, clearAppOutputs } from './buildApp.js';
+import {
+    DESKTOP_PLATFORMS, MAX_VERSION_CODE, appOutputOf, clearAppOutputs,
+} from './buildApp.js';
 import extensionApi from './extensionApi.js';
 import {
-    PUBLISH_PLATFORMS, checkedExtension, isJsonValue, withListed,
+    PUBLISH_PLATFORMS, checkedExtension, extensionStep, isJsonValue, withListed,
 } from '../utils/appExtensions.js';
 import { CONFIG_CHANGES } from '../utils/configChanges.js';
 import { hasTerminal } from '../utils/ask.js';
@@ -21,6 +23,11 @@ const listed = (names, word = 'or') => (names.length > 1 ? `${names.slice(0, -1)
 const kebab = (name) => name.replace(/[A-Z]/g, (letter) => `-${letter.toLowerCase()}`);
 const camel = (name) => name.replace(/-([a-z0-9])/g, (dash, letter) => letter.toUpperCase());
 const storeName = ({ name, publisher }) => publisher.store ?? name;
+// How many builds a publish makes at most, as its first publisher may ask for another.
+const MAX_BUILDS = 4;
+
+// A step of the publisher's, which its publisher may lack.
+const step = ({ name, publisher }, which, ...args) => extensionStep(name, which, () => publisher[which]?.(...args));
 
 // crossbind's own publishers, each an extension as an extension package's crossbind.extension.js gives one.
 export const builtInPublishers = () => [googlePlay, appStore, github].map((extension) => {
@@ -142,8 +149,9 @@ export function publishHelp(publishers = builtInPublishers()) {
 
 // The changes the first publisher makes to the config for its build: a JSON merge patch of crossbind.config.js's
 // export.
-async function buildChanges({ name, publisher }, api) {
-    const changes = publisher.build ? await publisher.build(api) : null;
+async function buildChanges(extension, api) {
+    const { name } = extension;
+    const changes = await step(extension, 'build', api);
     if (changes === null || changes === undefined) return null;
     if (!isObject(changes) || !isJsonValue(changes)) {
         throw new Error(`crossbind: ${name}'s build gives no changes to crossbind.config.js, which are an object of JSON values merged into its export, where null removes a key.`);
@@ -154,9 +162,10 @@ async function buildChanges({ name, publisher }, api) {
 // Hands the build's output to the uploads of the publishers after the first, each with what the one before it put out.
 async function uploadAfter(chain, apis, sessions, output, firstPublished) {
     let published = firstPublished;
-    for (const [index, { name, publisher }] of chain.entries()) {
+    for (const [index, extension] of chain.entries()) {
+        const { name } = extension;
         if (index > 0) {
-            const answer = await publisher.upload(apis[index], sessions[index], output, published);
+            const answer = await step(extension, 'upload', apis[index], sessions[index], output, published);
             if (answer?.isRebuildAsked) throw new Error(`crossbind: ${name} asks for another build, which ${chain[0].name}, whose build it publishes from, alone can ask for.`);
             published = answer?.published;
         }
@@ -172,6 +181,9 @@ export default async function publish(args, { platform, envPlatform, runVite }) 
     const publishers = publishersOf(state.config.extensions);
     const { store, rest } = storeOf(args, platform, envPlatform, publishers.map(({ name }) => name));
     const chain = publishChain(publishers, store);
+    const own = builtInPublishers().map(({ name }) => name);
+    chain.filter((extension) => own.includes(extension.name) && state.config.extensions.includes(extension))
+        .forEach(({ name, root }) => console.log(`crossbind: the extension ${name} of ${root} replaces crossbind's own publisher of its name.`));
     const target = publishPlatform(chain, platform, envPlatform);
     const { options, viteArgs } = publishOptions(chain, rest, publishers);
     const run = { buildNumber: undefined };
@@ -183,14 +195,17 @@ export default async function publish(args, { platform, envPlatform, runVite }) 
     const changes = await buildChanges(first, apis[0]);
     if (changes) state.config = await loadConfig(undefined, undefined, { changes });
     const checked = [];
-    for (const [index, { publisher }] of chain.entries()) checked.push((await publisher.check?.(apis[index])) ?? {});
+    for (const [index, extension] of chain.entries()) checked.push((await step(extension, 'check', apis[index])) ?? {});
     const missing = checked.flatMap((result) => result.missing ?? []);
     if (missing.length > 0) throw new Error(missing.join('\n'));
     const sessions = checked.map(({ session }) => session);
-    run.buildNumber = (await first.publisher.buildNumber?.(apis[0], sessions[0])) ?? null;
-    for (;;) {
+    run.buildNumber = (await step(first, 'buildNumber', apis[0], sessions[0])) ?? null;
+    if (run.buildNumber !== null && !(Number.isInteger(run.buildNumber) && run.buildNumber >= 1 && run.buildNumber <= MAX_VERSION_CODE)) {
+        throw new Error(`crossbind: ${first.name}'s buildNumber gives ${JSON.stringify(run.buildNumber)}, which is no build number: a whole number from 1 to ${MAX_VERSION_CODE}, as both stores take, or null for the app's own.`);
+    }
+    for (let builds = 1; ; builds += 1) {
         clearAppOutputs();
-        const buildEnv = await first.publisher.buildEnv?.(apis[0], sessions[0]);
+        const buildEnv = await step(first, 'buildEnv', apis[0], sessions[0]);
         const exitCode = await runVite(['build', ...viteArgs], {
             ...process.env,
             ...(changes ? { [CONFIG_CHANGES]: JSON.stringify(changes) } : {}),
@@ -202,10 +217,11 @@ export default async function publish(args, { platform, envPlatform, runVite }) 
             throw Object.assign(new Error(`crossbind: the build ended with exit code ${exitCode}, so nothing went to ${storeName(first)}.`), { exitCode });
         }
         const output = appOutputOf(target);
-        const answer = await first.publisher.upload(apis[0], sessions[0], output);
+        const answer = await step(first, 'upload', apis[0], sessions[0], output);
         if (!answer?.isRebuildAsked) {
             await uploadAfter(chain, apis, sessions, output, answer?.published);
             return;
         }
+        if (builds === MAX_BUILDS) throw new Error(`crossbind: ${first.name} asks for another build after ${MAX_BUILDS}, as many as a publish makes.`);
     }
 }

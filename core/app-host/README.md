@@ -66,7 +66,9 @@ defaults and current limits (macOS, Linux, Windows, iOS and Android for now).
   alone has `instance/`, which hands a later launch to the instance that runs: through a lock and a socket on macOS and
   Linux (`posix.cpp`), a mutex and a message window on Windows (`windows.cpp`). A desktop app with `app.updater` alone
   has `updater/`, which checks and installs its updates, each platform's file downloading them; `src/app_api.cpp`
-  refuses the updater's functions to any other app.
+  refuses the updater's functions to any other app. A macOS app whose `app.permissions` lists the location has
+  `page-location/`, which answers the page's `navigator.geolocation` from CoreLocation, as WKWebView gives a macOS page
+  none, once `page-permissions` allows it.
 - `extensions/updater/monocypher/` — Monocypher 4.0.3 (BSD-2-Clause or CC0-1.0), whose Ed25519 and SHA-512 check a
   desktop app's updates; provenance in its README.
 - `third_party/webview/` — webview/webview (MIT), vendored at a pinned commit; provenance and the local patch are in

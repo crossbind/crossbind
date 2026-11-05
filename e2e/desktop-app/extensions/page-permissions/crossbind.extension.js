@@ -3,6 +3,7 @@
 export default function pagePermissions() {
     return {
         name: 'page-permissions',
+        contract: 1,
         root: import.meta.dirname,
         app: {
             sources: ['permissions.cpp'],

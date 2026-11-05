@@ -41,6 +41,11 @@ describe('property lists', () => {
             + '    <key>NSHighResolutionCapable</key>\n    <true/>\n</dict>\n</plist>\n');
     });
 
+    test('an XML one writes a number an integer element reads back the same as one, and any other as a real', () => {
+        expect(xmlPlist({ a: 3, b: -2, c: 1.5, d: 1e21 })).toContain('<integer>3</integer>\n    <key>b</key>\n    <integer>-2</integer>\n'
+            + '    <key>c</key>\n    <real>1.5</real>\n    <key>d</key>\n    <real>1e+21</real>');
+    });
+
     test('the text one quotes every value, escaping quotes and backslashes', () => {
         expect(textPlist({ a: ['x "y"', 'c:\\d'], b: { c: 1 } })).toBe('// !$*UTF8*$!\n{\n\t"a" = (\n\t\t"x \\"y\\"",\n\t\t"c:\\\\d",\n\t);\n'
             + '\t"b" = {\n\t\t"c" = "1";\n\t};\n}\n');
@@ -122,6 +127,28 @@ describe('an iOS app\'s Xcode project', () => {
         });
 
         expect(fs.readFileSync(path.join(to, 'Info.plist'), 'utf8')).toContain('<key>NSCameraUsageDescription</key>\n    <string>To scan &amp; read barcodes</string>');
+        fs.rmSync(root, { recursive: true, force: true });
+    });
+
+    test("takes the Info.plist keys of the app's extensions, a number as a number, and refuses one crossbind writes otherwise", () => {
+        const root = fs.mkdtempSync(path.join(os.tmpdir(), 'crossbind-xcode-'));
+        const to = path.join(root, 'demo-ios');
+        const write = (plist) => writeXcodeProject(to, {
+            parts: [part(root, 'iphoneos')], identity: { id: 'com.example.demo', team: '' }, label: 'Demo', version: '1', plist,
+        });
+        write([['the extension contacts', { NSContactsUsageDescription: 'To pick a contact', UIBackgroundModes: ['fetch'], ContactsLimit: 25 }]]);
+        const plist = fs.readFileSync(path.join(to, 'Info.plist'), 'utf8');
+        expect(plist).toContain('<key>NSContactsUsageDescription</key>\n    <string>To pick a contact</string>');
+        expect(plist).toContain('<key>UIBackgroundModes</key>\n    <array>\n        <string>fetch</string>\n    </array>');
+        expect(plist).toContain('<key>ContactsLimit</key>\n    <integer>25</integer>');
+        if (process.platform === 'darwin') {
+            expect(execFileSync('plutil', ['-lint', path.join(to, 'Info.plist')], { encoding: 'utf8' })).toContain('OK');
+        }
+        fs.writeFileSync(path.join(to, 'kept.txt'), 'kept');
+        expect(() => write([['the extension rename', { CFBundleDisplayName: 'Other' }]]))
+            .toThrow("crossbind: the extension rename gives the Info.plist key CFBundleDisplayName, which crossbind writes from the app's config.");
+        // The keys merge before the project goes, so the one written before stays as it was.
+        expect(fs.existsSync(path.join(to, 'kept.txt'))).toBe(true);
         fs.rmSync(root, { recursive: true, force: true });
     });
 

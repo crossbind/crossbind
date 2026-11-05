@@ -333,7 +333,7 @@ std::string databasePath() { return crossbind::app::paths().data + "/notes.sqlit
 | `shell.revealInFolder(path)` | A file, selected, in the system's file manager, or on Linux without one its folder | ✓ | | |
 | `shell.trash(path)` | Moves a file or folder to the system's trash, and nothing where it has none | ✓ | | |
 | `app.paths()` | `{ data, cache, logs }`, the app's own folders, made if missing | ✓ | ✓ | ✓ |
-| `app.quit()` | Ends the app as closing its window does | ✓ | | |
+| `app.quit()` | Ends the app as closing its window does, without asking the extensions that may keep the window open | ✓ | | |
 | `app.relaunch()` | Ends the app as `app.quit()` does, then opens it anew with no link | ✓ | | |
 | `app.launchUrls()` | The links of `app.urlSchemes` that opened the app and have not reached the page yet; the page alone | ✓ | ✓ | ✓ |
 | `menu.set(menus)` | Sets the app's menus, whose clicks are the event `menu`; the page alone | ✓ | | |
@@ -491,7 +491,8 @@ item is `{ label, id, accelerator, enabled, checked }`, a submenu `{ label, item
 standard menu, or a standard item by its role, which a label may rename: `undo`, `redo`, `cut`, `copy`, `paste` and
 `selectAll`, which keep the platform's keys, and `minimize`, `close` and `quit`, whose accelerator the page may change.
 A click of an item with an id is the event `menu` of `{ id }`, or of `{ id, checked }` for an item with `checked`,
-which the click turns over first; a standard item does what its role says, and the page hears nothing of it. An
+which the click turns over first; a standard item does what its role says, and the page hears nothing of it: `close`
+closes the window as its user does, which an extension may keep open, and `quit` ends the app as `app.quit()` does. An
 accelerator is a key with `CmdOrCtrl`, `Ctrl` or `Alt`, and maybe `Shift`, joined by `+`, as `CmdOrCtrl+Shift+O` is,
 or one of `F1` to `F12`, alone or with any of them. The key is a capital letter, a digit, a function key or one of
 `Enter`, `Escape`, `Tab`, `Space`, `Backspace`, `Delete`, `Up`, `Down`, `Left`, `Right`, `Home`, `End`, `PageUp`,
@@ -677,8 +678,8 @@ page no camera or microphone at all.
 
 macOS asks for the app that opened on its own, from the Finder, the Dock or `open`. An app a terminal or an editor
 starts, as `crossbind app dev` does, is theirs to macOS, which asks for their permission instead. WebKit gives a macOS
-page no location of its own, so the host answers the top frame's `navigator.geolocation` from CoreLocation, which
-asks with the reason; a frame inside the page gets none there.
+page no location of its own, so the host's extension `page-location` answers the top frame's `navigator.geolocation`
+from CoreLocation, which asks with the reason; a frame inside the page gets none there.
 
 ## What the app holds
 

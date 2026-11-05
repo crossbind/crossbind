@@ -32,6 +32,8 @@ std::vector<uint8_t> fromBase64(const std::string &text);
 std::filesystem::path pathOf(const std::string &text);
 // The reply of a call that failed, as the page decodes it.
 std::string errorReply(const std::string &message);
+// Text as UTF-8, with U+FFFD in place of each run of bytes that makes no character, as every webview would read it.
+std::string validUtf8(const std::string &text);
 // A call of the page to one of the app's functions through crossbind/app, which reply answers once it is done.
 void callApp(jsi::Runtime &rt, const std::string &name, const jsi::Value &options, ReplyFn reply);
 // A call of the app's own code to one of the app's functions, on the caller's thread, as <crossbind/app.h> makes them:
@@ -59,6 +61,8 @@ void startExtensions();
 bool launched(const Launch *launch);
 // Runs the extensions' onWindow, on the main thread, as the app's window has opened, before its page loads.
 void windowOpened();
+// Runs the extensions' onPage, on the module's thread, as a page of the app's starts.
+void pageStarted();
 // Runs the extensions' onQuit, once, in an app that runs on with its launch.
 void quitting();
 // Hands a link to the onUrl of the extension that owns its scheme.

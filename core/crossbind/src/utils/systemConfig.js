@@ -13,7 +13,20 @@ export default function loadSystemConfig() {
     return { ...system, ...Object.fromEntries(defaults) };
 }
 
-// Sets keys of ~/.crossbind.json, as `crossbind config set` does, keeping the others.
-export function updateSystemConfig(values) {
-    writeJson(systemConfigPath(), { ...loadSystemConfig(), ...values });
+const isObject = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
+
+// The settings of an extension's own, which ~/.crossbind.json keeps apart from crossbind's, under extensions by the
+// extension's name.
+export function extensionSettingsOf(system, name) {
+    const own = system.extensions === undefined ? {} : isObject(system.extensions) && (system.extensions[name] ?? {});
+    if (!isObject(own)) throw new Error(`crossbind: ${systemConfigPath()} keeps the settings of the extension ${name} as no object of them, under extensions: fix it.`);
+    return own;
+}
+
+// Sets keys of ~/.crossbind.json, as `crossbind config set` does, keeping the others, and with { name, values } settings
+// of that extension's own.
+export function updateSystemConfig(values, extension = null) {
+    const system = loadSystemConfig();
+    const own = extension && { extensions: { ...system.extensions, [extension.name]: { ...extensionSettingsOf(system, extension.name), ...extension.values } } };
+    writeJson(systemConfigPath(), { ...system, ...values, ...own });
 }

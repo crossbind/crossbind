@@ -1,11 +1,12 @@
 {
     "name": "shell",
+    "contract": 1,
     "app": {
         "sources": ["shell.cpp"],
-        "darwin": { "sources": ["darwin.mm"] },
+        "macos": { "sources": ["darwin.mm"] },
         "ios": { "sources": ["ios.mm"] },
         "linux": { "sources": ["linux.cpp"] },
-        "win32": { "sources": ["windows.cpp"], "libraries": ["shell32", "ole32"] },
+        "windows": { "sources": ["windows.cpp"], "libraries": ["shell32", "ole32"] },
         "android": { "sources": ["android.cpp"] }
     }
 }

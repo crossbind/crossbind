@@ -52,7 +52,7 @@ HRESULT onScriptDialog(ICoreWebView2 *, ICoreWebView2ScriptDialogOpeningEventArg
             deferral->Release();
             args->Release();
         }));
-    later([dialog] { crossbind::app::askPageDialog(dialog); });
+    onMainThread([dialog] { crossbind::app::askPageDialog(dialog); });
     return S_OK;
 }
 
@@ -151,7 +151,7 @@ HRESULT onPermissionRequest(ICoreWebView2 *, ICoreWebView2PermissionRequestedEve
         deferral->Release();
         args->Release();
     });
-    later([request] { crossbind::app::askPagePermission(request); });
+    onMainThread([request] { crossbind::app::askPagePermission(request); });
     return S_OK;
 }
 

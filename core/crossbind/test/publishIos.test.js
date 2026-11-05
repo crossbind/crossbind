@@ -6,6 +6,8 @@ import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 
 const state = { config: {}, targets: [] };
 vi.mock('../src/state/index.js', () => ({ default: state }));
+// The test's config stands for crossbind.config.js's export, which an extension's api shows.
+vi.mock('../src/state/loadConfig.js', async (importOriginal) => ({ ...await importOriginal(), exportOf: (config) => config }));
 // xcodebuild's archive and upload, which go as `store` says, and the teams Xcode is signed in to, one list per look.
 const store = {};
 vi.mock('../src/publishers/app-store/appStoreConnect.js', () => ({

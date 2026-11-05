@@ -4,6 +4,7 @@ import state from '../state/index.js';
 import { IOS_DEPLOYMENT_TARGET } from '../utils/iosToolchain.js';
 import { textPlist, xmlPlist } from '../utils/plist.js';
 import { PRIVACY_CATEGORIES } from '../utils/appOptions.js';
+import { mergedPlist } from '../utils/appExtensions.js';
 
 // The SDKs an iOS app builds for, one target each, and the slice of Hermes' release each takes.
 export const IOS_SDKS = ['iphoneos', 'iphonesimulator'];
@@ -40,7 +41,8 @@ const ORIENTATIONS = ['UIInterfaceOrientationPortrait', 'UIInterfaceOrientationL
 // The color set of app.window.backgroundColor, which the launch screen shows.
 const LAUNCH_COLOR = 'LaunchBackground';
 
-const infoPlist = (name, urlSchemes, hasBackground, usage, encryption) => xmlPlist({
+// The app's Info.plist, with the keys its extensions give.
+const infoPlist = (name, urlSchemes, hasBackground, usage, encryption, plist) => xmlPlist(mergedPlist({
     CFBundleDevelopmentRegion: 'en',
     CFBundleDisplayName: name,
     CFBundleExecutable: '$(EXECUTABLE_NAME)',
@@ -59,7 +61,7 @@ const infoPlist = (name, urlSchemes, hasBackground, usage, encryption) => xmlPli
     'UISupportedInterfaceOrientations~ipad': [...ORIENTATIONS, 'UIInterfaceOrientationPortraitUpsideDown'],
     // The reasons of app.permissions, without which iOS lets the app use none of those devices.
     ...usage,
-});
+}, plist));
 
 function objects(name, targetSettings, hasAssets, hasPrivacy) {
     const file = (path, type) => ({ isa: 'PBXFileReference', lastKnownFileType: type, path, sourceTree: '<group>' });
@@ -165,10 +167,12 @@ const privacyManifest = (privacy) => xmlPlist({
 // Simulator or on a device, with the entitlements given, and makes every size of its icon from the one PNG given.
 export default function writeXcodeProject(to, {
     parts, identity, label, version, build = version, icon = null, urlSchemes = [], background = null, usage = {}, encryption = null, privacy = {},
-    entitlements = {},
+    entitlements = {}, plist = [],
 }) {
     const { name } = state.config.general;
     if (parts.length === 0) throw new Error(`crossbind: no part of the iOS app ${name} is built, so there is no Xcode project to write.`);
+    // The extensions' keys merge before the project goes, which a conflict between them then leaves as it was.
+    const info = infoPlist(label, urlSchemes, Boolean(background), usage, encryption, plist);
     fs.rmSync(to, { recursive: true, force: true });
     fs.mkdirSync(`${to}/${name}.xcodeproj`, { recursive: true });
     const linkFlags = {};
@@ -185,7 +189,7 @@ export default function writeXcodeProject(to, {
     if (result.status !== 0) throw new Error(`crossbind: cannot make Hermes' xcframework for ${to}: ${result.stderr || result.error?.message}`);
 
     fs.writeFileSync(`${to}/main.m`, MAIN);
-    fs.writeFileSync(`${to}/Info.plist`, infoPlist(label, urlSchemes, Boolean(background), usage, encryption));
+    fs.writeFileSync(`${to}/Info.plist`, info);
     writeAssets(`${to}/Assets.xcassets`, icon, background);
     const hasPrivacy = Object.keys(privacy).length > 0;
     if (hasPrivacy) fs.writeFileSync(`${to}/PrivacyInfo.xcprivacy`, privacyManifest(privacy));

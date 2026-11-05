@@ -27,8 +27,16 @@ struct Call::State {
     std::atomic<bool> isAnswered{false};
 
     bool answers() { return !isAnswered.exchange(true); }
+    // What an answer throws here would end the app, so it is told instead.
     ~State() {
-        if (answers()) answer("crossbind: " + name + " gave no answer", {});
+        if (!answers()) return;
+        try {
+            answer("crossbind: " + name + " gave no answer", {});
+        } catch (const std::exception &error) {
+            std::fprintf(stderr, "crossbind: the answer to %s failed: %s\n", name.c_str(), error.what());
+        } catch (...) {
+            std::fprintf(stderr, "crossbind: the answer to %s failed\n", name.c_str());
+        }
     }
 };
 
@@ -58,7 +66,7 @@ const char *kindOf(const Value &value) {
 
 void appendString(std::string &out, const std::string &text) {
     out += '"';
-    for (const unsigned char c : text) {
+    for (const unsigned char c : app::validUtf8(text)) {
         if (c == '"' || c == '\\') {
             out += '\\';
             out += static_cast<char>(c);
@@ -337,6 +345,8 @@ struct Hooks {
     std::string launcher;
     std::function<bool(const Launch &)> launch;
     std::vector<std::pair<std::string, std::function<void()>>> windows;
+    std::vector<std::pair<std::string, std::function<void()>>> pages;
+    std::vector<std::pair<std::string, std::function<bool()>>> closes;
     std::vector<std::pair<std::string, std::function<void()>>> quits;
     std::map<std::string, std::function<void(const std::string &)>> urls;
 #if !defined(__ANDROID__)
@@ -436,8 +446,26 @@ void Call::reject(const std::string &message) const {
     if (state_->answers()) state_->answer(message, {});
 }
 
+namespace {
+
+// Whether an extension's function goes by a name of its own: one that starts with the extension's name and a dot, and
+// for the host's menu, which shares its icon with the tray and the notifications on Windows, with theirs.
+bool isOwnFunction(const std::string &extension, const std::string &name) {
+    std::vector<std::string> prefixes{extension + "."};
+    if (extension == "menu") prefixes.insert(prefixes.end(), {"tray.", "notification."});
+    return std::any_of(prefixes.begin(), prefixes.end(), [&](const std::string &prefix) {
+        return name.size() > prefix.size() && name.compare(0, prefix.size(), prefix) == 0;
+    });
+}
+
+}  // namespace
+
 void Registry::function(const std::string &name, Function fn) {
     checkStarting("the function " + name);
+    if (!extension_.empty() && !isOwnFunction(extension_, name)) {
+        throw std::invalid_argument("crossbind: the extension " + extension_ + " names a function " + name + ", where its own start with its name and a dot, as " +
+                                    extension_ + "." + name + " does");
+    }
     if (!added().emplace(name, std::move(fn)).second) throw std::logic_error("crossbind: the app has two functions named " + name);
 }
 
@@ -452,6 +480,16 @@ void Registry::onLaunch(std::function<bool(const Launch &)> fn) {
 void Registry::onWindow(std::function<void()> fn) {
     checkStarting("the extension " + extension_ + "'s onWindow");
     hooks().windows.emplace_back(extension_, std::move(fn));
+}
+
+void Registry::onPage(std::function<void()> fn) {
+    checkStarting("the extension " + extension_ + "'s onPage");
+    hooks().pages.emplace_back(extension_, std::move(fn));
+}
+
+void Registry::onClose(std::function<bool()> fn) {
+    checkStarting("the extension " + extension_ + "'s onClose");
+    hooks().closes.emplace_back(extension_, std::move(fn));
 }
 
 void Registry::onQuit(std::function<void()> fn) {
@@ -524,7 +562,25 @@ void inBackground(Call call, std::function<Value()> work) {
     }).detach();
 }
 
+void invoke(const std::string &name, Value options, std::function<void(std::optional<std::string> failure, Value result)> done) {
+    if (!isSealed) {
+        done("crossbind: invoke() reaches the app's functions once its extensions have all started, which their entries do not wait for", {});
+        return;
+    }
+    app::invoke(name, std::move(options), std::move(done));
+}
+
 }  // namespace crossbind
+
+void runTask(const std::function<void()> &task) {
+    try {
+        task();
+    } catch (const std::exception &error) {
+        std::fprintf(stderr, "crossbind: a task on the main thread failed: %s\n", error.what());
+    } catch (...) {
+        std::fprintf(stderr, "crossbind: a task on the main thread failed\n");
+    }
+}
 
 namespace crossbind::app {
 
@@ -572,11 +628,53 @@ void invoke(const std::string &name, Value options, std::function<void(Failure, 
 
 Value valueOfJson(std::string_view text) { return JsonReader(text).document(); }
 
+namespace {
+
+// The bytes from at that make a character of UTF-8, or, where none starts, those that start one as far as they go, as
+// the WHATWG decoder reads them: an overlong form, a surrogate and a code point past U+10FFFF start none.
+std::pair<size_t, bool> characterAt(const std::string &text, size_t at) {
+    const auto byte = [&](size_t i) { return static_cast<unsigned char>(text[i]); };
+    const unsigned char lead = byte(at);
+    if (lead < 0x80) return {1, true};
+    const size_t length = lead >= 0xc2 && lead <= 0xdf ? 2 : lead >= 0xe0 && lead <= 0xef ? 3 : lead >= 0xf0 && lead <= 0xf4 ? 4 : 0;
+    if (length == 0) return {1, false};
+    unsigned char lower = lead == 0xe0 ? 0xa0 : lead == 0xf0 ? 0x90 : 0x80;
+    unsigned char upper = lead == 0xed ? 0x9f : lead == 0xf4 ? 0x8f : 0xbf;
+    size_t taken = 1;
+    for (; taken < length && at + taken < text.size(); ++taken) {
+        const unsigned char next = byte(at + taken);
+        if (next < lower || next > upper) return {taken, false};
+        lower = 0x80;
+        upper = 0xbf;
+    }
+    return {taken, taken == length};
+}
+
+}  // namespace
+
+std::string validUtf8(const std::string &text) {
+    std::string valid;
+    valid.reserve(text.size());
+    for (size_t at = 0; at < text.size();) {
+        const auto [length, isCharacter] = characterAt(text, at);
+        if (isCharacter) valid.append(text, at, length);
+        else valid += "\xef\xbf\xbd";
+        at += length;
+    }
+    return valid;
+}
+
 bool hasFunction(const std::string &name) { return added().count(name) > 0; }
+
+// The host alone makes a registry: its own, and one for each extension's entry.
+struct RegistryAccess {
+    static Registry host() { return Registry(); }
+    static Registry of(std::string extension, Value options) { return Registry(std::move(extension), std::move(options)); }
+};
 
 void startExtension(const char *name, const char *options, void (*entry)(Registry &)) {
     try {
-        Registry registry(name, options ? valueOfJson(options) : Value());
+        Registry registry = RegistryAccess::of(name, options ? valueOfJson(options) : Value());
         entry(registry);
     } catch (const std::exception &error) {
         throw std::runtime_error(std::string("the extension ") + name + " failed to start: " + error.what());
@@ -586,7 +684,7 @@ void startExtension(const char *name, const char *options, void (*entry)(Registr
 }
 
 void startExtensions() {
-    Registry registry;
+    Registry registry = RegistryAccess::host();
     appFunctions(registry);
     extensionEntries();
     refusedFunctions(registry);
@@ -614,6 +712,31 @@ void windowOpened() {
             std::fprintf(stderr, "crossbind: the extension %s failed as the window opened\n", extension.c_str());
         }
     }
+}
+
+void pageStarted() {
+    for (const auto &[extension, started] : hooks().pages) {
+        try {
+            started();
+        } catch (const std::exception &error) {
+            std::fprintf(stderr, "crossbind: the extension %s failed as a page started: %s\n", extension.c_str(), error.what());
+        } catch (...) {
+            std::fprintf(stderr, "crossbind: the extension %s failed as a page started\n", extension.c_str());
+        }
+    }
+}
+
+bool isCloseAllowed() {
+    for (const auto &[extension, close] : hooks().closes) {
+        try {
+            if (!close()) return false;
+        } catch (const std::exception &error) {
+            std::fprintf(stderr, "crossbind: the extension %s failed as the window closed: %s\n", extension.c_str(), error.what());
+        } catch (...) {
+            std::fprintf(stderr, "crossbind: the extension %s failed as the window closed\n", extension.c_str());
+        }
+    }
+    return true;
 }
 
 void quitting() {
@@ -645,15 +768,21 @@ void openUrlOf(const std::string &extension, const std::string &url) {
 #if !defined(__ANDROID__)
 namespace {
 
-// What the owner throws leaves the request unanswered, which its last copy then cancels.
+void refuse(const PageDialog &dialog) { dialog.cancel(); }
+void refuse(const PagePermission &request) { request.deny(); }
+void refuse(const FileInput &input) { input.cancel(); }
+
+// What the owner throws cancels the request, which an answer the owner gave before keeps as it is.
 template <typename Request>
-void askOwner(const std::function<void(Request)> &owner, Request request, const char *role) {
+void askOwner(const std::function<void(Request)> &owner, const Request &request, const char *role) {
     try {
-        owner(std::move(request));
+        owner(request);
     } catch (const std::exception &error) {
         std::fprintf(stderr, "crossbind: the extension %s failed on the page's request: %s\n", role, error.what());
+        refuse(request);
     } catch (...) {
         std::fprintf(stderr, "crossbind: the extension %s failed on the page's request\n", role);
+        refuse(request);
     }
 }
 
@@ -673,11 +802,27 @@ bool hasPagePermissions() { return static_cast<bool>(hooks().pagePermissions); }
 
 bool hasFileInputs() { return static_cast<bool>(hooks().fileInputs); }
 
-void askPageDialog(PageDialog dialog) { askOwner(hooks().pageDialogs, std::move(dialog), "page-dialogs"); }
+void askPageDialog(PageDialog dialog) { askOwner(hooks().pageDialogs, dialog, "page-dialogs"); }
 
-void askPagePermission(PagePermission request) { askOwner(hooks().pagePermissions, std::move(request), "page-permissions"); }
+void askPagePermission(PagePermission request) { askOwner(hooks().pagePermissions, request, "page-permissions"); }
 
-void askFileInput(FileInput input) { askOwner(hooks().fileInputs, std::move(input), "page-files"); }
+void askFileInput(FileInput input) { askOwner(hooks().fileInputs, input, "page-files"); }
 #endif
 
 }  // namespace crossbind::app
+
+#if !defined(__ANDROID__)
+namespace crossbind {
+
+void askPagePermission(std::vector<std::string> kinds, std::string origin, std::function<void(bool)> done) {
+    onMainThread([kinds = std::move(kinds), origin = std::move(origin), done = std::move(done)]() mutable {
+        if (!app::hasPagePermissions()) {
+            done(false);
+            return;
+        }
+        app::askPagePermission(app::pagePermission(std::move(kinds), std::move(origin), std::move(done)));
+    });
+}
+
+}  // namespace crossbind
+#endif

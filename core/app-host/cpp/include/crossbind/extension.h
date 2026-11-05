@@ -31,7 +31,14 @@ public:
     Value(bool value) : data_(value) {}
     Value(int value) : data_(static_cast<double>(value)) {}
     Value(double value) : data_(value) {}
-    Value(const char *text) : data_(std::string(text)) {}
+    // Null for a null pointer.
+    Value(const char *text) {
+        if (text) data_ = std::string(text);
+    }
+    Value(char *text) : Value(static_cast<const char *>(text)) {}
+    // Another pointer is no JSON value, which would be read as a boolean.
+    template <typename T>
+    Value(T *) = delete;
     Value(std::string text) : data_(std::move(text)) {}
     Value(const std::vector<std::string> &texts) : Value(Array(texts.begin(), texts.end())) {}
     Value(Array items) : data_(std::make_shared<const Array>(std::move(items))) {}
@@ -116,8 +123,8 @@ public:
     struct State;
     explicit PagePermission(std::shared_ptr<State> state) : state_(std::move(state)) {}
 
-    // What it asks for, together: "camera", "microphone", "location", "clipboard", and the webview's others by their
-    // names, as "notifications", "midi" or "fonts".
+    // What it asks for, together: "camera", "microphone", "location", "clipboard", the webview's others by the names
+    // crossbind gives them, as "notifications", "midi" or "fonts", and "unknown" for one it names none of.
     const std::vector<std::string> &kinds() const;
     // The origin of the frame that asks, as "crossbind://app".
     const std::string &origin() const;
@@ -150,19 +157,23 @@ private:
 };
 #endif
 
+namespace app {
+struct RegistryAccess;
+}
+
 // What an extension adds to the app, as its entry runs on the main thread when the app starts, before the app's module.
 // The entry adds what the extension does and starts nothing, as every launch runs every entry, one that another instance
-// then takes as well: what the extension starts as the app runs, it starts in onWindow.
+// then takes as well: what the extension starts as the app runs, it starts in onWindow. The registry lives as long as
+// the entry runs: what a function keeps of it, as its options, it keeps a copy of.
 class Registry {
 public:
     using Function = std::function<void(Call)>;
 
-    Registry() = default;
-    // The host's registry of one extension, which knows it by its name.
-    Registry(std::string extension, Value options) : extension_(std::move(extension)), options_(std::move(options)) {}
-
-    // A function the page calls by this name. It runs on the module's thread, which it must not hold up: it answers
-    // there, or hands the call on, as to inBackground(). What it throws fails the call.
+    // A function the page calls by this name, which starts with the extension's own and a dot, as clipboard.readText;
+    // an extension named menu, as the host's own is, names tray. and notification. ones as well. It runs on the
+    // module's thread for the page's calls, which it must not hold up: it answers there, or hands the call on, as to
+    // inBackground(). A call of the app's own, through <crossbind/app.h> or invoke(), runs it on the caller's thread,
+    // so it may run on several at once. What it throws fails the call.
     void function(const std::string &name, Function fn);
     // The extension's options, a JSON value: what crossbind.config.js lists it with, or for a host's own extension the
     // app's options it takes; null without any. A copy, which outlives the registry, as its functions do.
@@ -176,6 +187,17 @@ public:
     // loads: where the extension starts what it does as the app runs. A desktop app opens one window, an iOS app one
     // for each scene that connects; an Android app has none an extension reaches, and never calls fn.
     void onWindow(std::function<void()> fn);
+    // Runs fn on the module's thread as each page of the app's starts, the first one and each that replaces the page
+    // before it, as a reload does: once the calls of the page before have reached their functions, before the new
+    // page's do. Where the extension lets go of what it kept for the page before, whose calls get no answer from then
+    // on. It may run more than once for one page.
+    void onPage(std::function<void()> fn);
+    // Asks fn on the main thread as the app's window closes on the desktop, as its user closes it, or on Windows and
+    // Linux another program, as taskkill without /F does: false keeps the window open, as an app that stays in its tray,
+    // which hides the window itself, and asks no other extension; what fn throws lets it close. app.quit(), the menu's
+    // quit item and the system's own quit, as from the macOS Dock, close it without asking. A phone's app has no window
+    // its user closes, and never asks fn.
+    void onClose(std::function<bool()> fn);
     // Runs fn once as the app quits or fails, on the thread that ends it, before its module stops: never in a launch
     // that onLaunch ends, nor in one whose extensions fail to start. A phone's system may end an app without either.
     void onQuit(std::function<void()> fn);
@@ -196,12 +218,23 @@ public:
 #endif
 
 private:
+    friend struct app::RegistryAccess;
+    // The host's registry of its own functions, and of one extension, which knows it by its name.
+    Registry() = default;
+    Registry(std::string extension, Value options) : extension_(std::move(extension)), options_(std::move(options)) {}
+
     std::string extension_;
     Value options_;
 };
 
 // Runs work on a thread of its own, which answers the call with what work returns, or with what it throws.
 void inBackground(Call call, std::function<Value()> work);
+
+// Calls one of the app's functions by its name, as the page does, from any thread once the app's extensions have all
+// started: the function runs on the caller's thread, and its call is no page's, so isFromPage() is false. done gets
+// why the call failed, or its result, once, on the thread that answers: the caller's, before invoke returns, for a
+// call that fails at once or that its function answers there.
+void invoke(const std::string &name, Value options, std::function<void(std::optional<std::string> failure, Value result)> done);
 
 // The app's name, as its window and dialogs show it.
 std::string appName();
@@ -220,7 +253,10 @@ void launchedAgain(Launch launch);
 #endif
 
 #if !defined(__ANDROID__)
-// Runs fn on the app's main thread, where the platform's UI is called.
+// Runs fn on the app's main thread, where the platform's UI is called, after what waits there already, also when the
+// caller is on it. A modal loop fn runs, as a dialog's, holds the next until fn returns, but on Linux, where that loop
+// runs them. What fn throws is told, and a call fn held fails as it lets go of it. One given as the app quits, as in
+// onQuit, may never run.
 void onMainThread(std::function<void()> fn);
 
 // The app's window, on the main thread: an NSWindow on macOS, a UIWindow on iOS, a GtkWindow on Linux and an HWND on
@@ -232,6 +268,11 @@ void *appWindow();
 // the page at their own height: the window holds the page to app.window's limits, with their height added. Null before
 // the app has one.
 void *appWebView();
+
+// Asks page-permissions, as the webview does, whether the page of origin may use these kinds: for an extension that
+// gives the page what its webview lacks, as the host's page-location gives a macOS page its location. From any thread;
+// done gets the answer once, on the main thread, false without page-permissions.
+void askPagePermission(std::vector<std::string> kinds, std::string origin, std::function<void(bool isAllowed)> done);
 #endif
 
 #if defined(__ANDROID__)

@@ -5,6 +5,8 @@ import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 
 const state = { config: { general: { name: 'demo' }, app: {}, paths: {}, system: {} }, targets: [] };
 vi.mock('../src/state/index.js', () => ({ default: state }));
+// The test's config stands for crossbind.config.js's export, which an extension's api shows.
+vi.mock('../src/state/loadConfig.js', async (importOriginal) => ({ ...await importOriginal(), exportOf: (config) => config }));
 // Play has seen `highest` at most, and releases what it is given, or answers `result`; the keychain keeps the Google
 // sign-in `kept`.
 const play = {};

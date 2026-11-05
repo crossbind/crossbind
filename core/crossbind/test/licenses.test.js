@@ -281,6 +281,76 @@ describe('collectLicenseRows for an app', () => {
         expect((await collectLicenseRows('linux', { runtimeEnv: 'app' })).map((row) => row.name)).not.toContain('monocypher');
     });
 
+    test("names each extension package the app builds in and the code of others each carries, but not an extension of the project's own", async () => {
+        const base = fs.mkdtempSync(path.join(os.tmpdir(), 'crossbind-extension-licenses-'));
+        const root = path.join(base, 'node_modules', '@acme', 'extension-expr');
+        fs.mkdirSync(path.join(root, 'third_party'), { recursive: true });
+        fs.writeFileSync(path.join(root, 'package.json'), JSON.stringify({
+            name: '@acme/extension-expr', version: '2.1.0', license: 'MIT', homepage: 'https://acme.example/expr', crossbind: { extension: './crossbind.extension.js' },
+        }));
+        fs.writeFileSync(path.join(root, 'LICENSE'), 'MIT License\n\nCopyright (c) 2026 Acme');
+        fs.writeFileSync(path.join(root, 'third_party', 'LICENSE'), 'zlib License\n\nCopyright (c) 2016 Lewis Van Winkle');
+        fs.writeFileSync(path.join(base, 'package.json'), JSON.stringify({ name: 'my-app', version: '1.0.0', license: 'MIT' }));
+        const own = path.join(base, 'extensions', 'probe');
+        fs.mkdirSync(own, { recursive: true });
+        const tinyexpr = { name: 'tinyexpr', version: '1.0.0', license: 'Zlib', file: 'third_party/LICENSE', source: 'https://github.com/codeplea/tinyexpr' };
+        state.config = {
+            allDependencies: [],
+            paths: { base },
+            extensions: [{ name: 'expr', root, app: { sources: ['expr.cpp'], licenses: [tinyexpr] } }, { name: 'probe', root: own, app: { sources: ['probe.cpp'] } }],
+        };
+
+        const rows = await collectLicenseRows('linux', { runtimeEnv: 'app' });
+        const byName = Object.fromEntries(rows.map((row) => [row.name, row]));
+
+        expect(byName['@acme/extension-expr']).toMatchObject({
+            version: '2.1.0', license: 'MIT', sourceUrl: 'https://acme.example/expr', licenseText: expect.stringContaining('Copyright (c) 2026 Acme'),
+        });
+        expect(byName.tinyexpr).toMatchObject({
+            npmName: null,
+            version: null,
+            nativeVersion: '1.0.0',
+            license: 'Zlib',
+            sourceUrl: 'https://github.com/codeplea/tinyexpr',
+            licenseNotes: expect.stringContaining('@acme/extension-expr'),
+            licenseText: expect.stringContaining('Lewis Van Winkle'),
+        });
+        expect(rows.map((row) => row.name)).not.toContain('probe');
+        expect(rows.map((row) => row.name)).not.toContain('my-app');
+        rows.forEach((row) => expect(validateSpdx(row.license).isValid).toBe(true));
+        fs.rmSync(base, { recursive: true, force: true });
+    });
+
+    test('lists a library once for each version the app ships, whichever extensions carry it, and no private extension package', async () => {
+        const base = fs.mkdtempSync(path.join(os.tmpdir(), 'crossbind-extension-licenses-'));
+        state.config = { allDependencies: [], paths: { base }, extensions: [] };
+        const { nativeVersion: webview } = (await collectLicenseRows('linux', { runtimeEnv: 'app' })).find((row) => row.name === 'webview');
+        const extensionAt = (name, manifest, licenses) => {
+            const root = path.join(base, 'packages', name);
+            fs.mkdirSync(root, { recursive: true });
+            fs.writeFileSync(path.join(root, 'package.json'), JSON.stringify({ ...manifest, crossbind: { extension: './crossbind.extension.js' } }));
+            fs.writeFileSync(path.join(root, 'LICENSE'), `zlib License\n\nCopyright (c) 2026 ${name}`);
+            return { name, root, app: { sources: [`${name}.cpp`], licenses: licenses.map(([library, version]) => ({ name: library, version, license: 'Zlib', file: 'LICENSE' })) } };
+        };
+        state.config.extensions = [
+            extensionAt('first', { name: '@acme/first', version: '1.0.0', license: 'MIT', private: true }, [['zlib', '1.3.1'], ['tinyexpr', '1.0.0']]),
+            extensionAt('second', { name: '@acme/second', version: '2.0.0', license: 'MIT' }, [['zlib', '1.2.13'], ['tinyexpr', '1.0.0'], ['webview', webview]]),
+        ];
+
+        const rows = await collectLicenseRows('linux', { runtimeEnv: 'app' });
+        const named = (name) => rows.filter((row) => row.name === name);
+
+        expect(named('zlib').map((row) => row.nativeVersion)).toEqual(expect.arrayContaining(['1.3.1', '1.2.13']));
+        expect(named('zlib')).toHaveLength(2);
+        expect(named('tinyexpr')).toHaveLength(1);
+        expect(named('tinyexpr')[0].licenseNotes).toContain('first of @acme/first');
+        expect(named('webview')).toHaveLength(1);
+        expect(named('webview')[0].npmName).toBe('@crossbind/core-app-host');
+        expect(named('@acme/first')).toHaveLength(0);
+        expect(named('@acme/second')).toHaveLength(1);
+        fs.rmSync(base, { recursive: true, force: true });
+    });
+
     test('leaves webview/webview out of an iOS app, whose window UIKit makes', async () => {
         const rows = await collectLicenseRows('ios', { runtimeEnv: 'app' });
 
