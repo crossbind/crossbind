@@ -4,7 +4,7 @@ import { createServer } from 'node:http';
 import { homedir, tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import config from '../crossbind.config.mjs';
-import { LAUNCH_ARGS, LAUNCH_URL, NOTIFICATION, PHONE_URL, TRASHED_FILE, TRAY } from './launch.mjs';
+import { LAUNCH_ARGS, LAUNCH_URL, NOTIFICATION, PHONE_URL, PROBE_SCHEME, PROBE_URLS, TRASHED_FILE, TRAY } from './launch.mjs';
 import { UPDATE_PORT, signUpdate } from './updates.mjs';
 
 // Opens the app `pnpm build` made, whose page runs the conformance suite and logs its summary last, and closes it
@@ -228,12 +228,18 @@ function checkIcon() {
     }
 }
 
-// The build declared app.urlSchemes where macOS and iOS read them from the app; an Android app is opened with a link,
-// and the installers' registrations are checked where they run.
+// The build declared app.urlSchemes and the probe's scheme where macOS and iOS read them from the app, and a Linux app's
+// Debian package in its desktop entry; an Android app is opened with a link of each, and the Windows setup program's
+// registrations are checked where it runs.
 function checkUrlSchemes() {
-    const plist = { darwin: `${root}/dist/${name}.app/Contents/Info.plist`, ios: `${root}/dist/${name}-ios/Info.plist` }[platform ?? process.platform];
-    if (plist && !(existsSync(plist) && readFileSync(plist, 'utf8').includes(`<string>${config.app.urlSchemes[0]}</string>`))) {
-        console.error(`FAIL: the ${platform ?? process.platform} app declares no scheme of app.urlSchemes.`);
+    const schemes = [config.app.urlSchemes[0], PROBE_SCHEME];
+    const declared = {
+        darwin: [`${root}/dist/${name}.app/Contents/Info.plist`, (scheme) => `<string>${scheme}</string>`],
+        ios: [`${root}/dist/${name}-ios/Info.plist`, (scheme) => `<string>${scheme}</string>`],
+        linux: process.argv.includes('--installed') ? [`/usr/share/applications/${name}.desktop`, (scheme) => `x-scheme-handler/${scheme};`] : null,
+    }[platform ?? process.platform];
+    if (declared && !schemes.every((scheme) => has(declared[0], declared[1](scheme)))) {
+        console.error(`FAIL: the ${platform ?? process.platform} app does not declare the schemes ${schemes.join(' and ')}.`);
         process.exit(1);
     }
 }
@@ -295,8 +301,8 @@ async function open() {
         close: () => {},
     };
     if (!existsSync(executable)) missing(executable);
-    // The link, as Windows and Linux hand an app one, which src/main.js asks the app for.
-    return { child: spawn(executable, [LAUNCH_URL], { env: { ...process.env, ...env } }), close, executable };
+    // The links, as Windows and Linux hand an app one: the page asks the app for its own, and the probe for its.
+    return { child: spawn(executable, [LAUNCH_URL, PROBE_URLS.launch], { env: { ...process.env, ...env } }), close, executable };
 }
 
 // Where the installer put the app: in the disk image, mounted until the run ends, in /usr/bin, or in the user's
@@ -388,7 +394,7 @@ async function startTrayHost() {
         const bus = spawn('dbus-daemon', ['--session', '--nofork', '--print-address=1'], { stdio: ['ignore', 'pipe', 'inherit'] });
         process.once('exit', () => bus.kill());
         const address = (await awaitOutput(bus, /\n/)).trim();
-        const host = spawn('python3', [join(import.meta.dirname, 'tray-host.py'), JSON.stringify({ tray: TRAY, notification: NOTIFICATION })], {
+        const host = spawn('python3', [join(import.meta.dirname, 'tray-host.py'), JSON.stringify({ id, tray: TRAY, notification: NOTIFICATION })], {
             env: { ...process.env, DBUS_SESSION_BUS_ADDRESS: address },
         });
         process.once('exit', () => host.kill());
@@ -420,8 +426,8 @@ const { child: app, close, executable } = await open();
 // The adb crossbind opened the Android app with, which opens it with a link as well.
 const adb = platform === 'android' ? (await import('crossbind')).adbPath() : undefined;
 
-// The page asks for it once it listens: the app, launched again with LAUNCH_ARGS and the folder it is launched in,
-// which the first app does not share, hands them to that app and leaves.
+// The page asks for it once it listens: the app, launched again with LAUNCH_ARGS, the probe's link and the folder it is
+// launched in, which the first app does not share, hands them to that app and leaves.
 let isLaunchedAgain = false;
 let hasLeft = false;
 function launchAgain() {
@@ -429,7 +435,7 @@ function launchAgain() {
     isLaunchedAgain = true;
     try {
         const cwd = realpathSync.native(join(root, 'dist'));
-        const again = spawn(executable, [...LAUNCH_ARGS, cwd], { cwd, env: { ...process.env, ...env }, stdio: ['ignore', 'ignore', 'pipe'] });
+        const again = spawn(executable, [...LAUNCH_ARGS, PROBE_URLS.again, cwd], { cwd, env: { ...process.env, ...env }, stdio: ['ignore', 'ignore', 'pipe'] });
         const timeout = setTimeout(() => {
             again.kill();
             finish('the app launched again did not leave');
@@ -449,13 +455,18 @@ function launchAgain() {
 }
 
 // The page of an Android app asks for it once it listens: the system opens the app with a link, as when its user taps
-// one.
+// one, then with one of the probe's.
 let isLinkOpened = false;
 function openLink() {
     if (isLinkOpened || platform !== 'android' || !OPEN_LINK.test(out)) return;
     isLinkOpened = true;
-    const opened = spawnSync(adb, ['shell', `am start -W -a android.intent.action.VIEW -d '${PHONE_URL}'`], { encoding: 'utf8', timeout: ASKED_TIMEOUT_MS });
-    if (opened.status !== 0) finish(`the app cannot be opened with a link: ${opened.error?.message ?? `${opened.stdout}${opened.stderr}`.trim()}`);
+    for (const url of [PHONE_URL, PROBE_URLS.phone]) {
+        const opened = spawnSync(adb, ['shell', `am start -W -a android.intent.action.VIEW -d '${url}'`], { encoding: 'utf8', timeout: ASKED_TIMEOUT_MS });
+        if (opened.status !== 0) {
+            finish(`the app cannot be opened with ${url}: ${opened.error?.message ?? `${opened.stdout}${opened.stderr}`.trim()}`);
+            return;
+        }
+    }
 }
 
 // Sends commands to the page through WebView2's DevTools, in order, and gives the last one's result. The page has the

@@ -2,38 +2,15 @@
 // finding the mutex, sends its launch to.
 #include "instance.h"
 
-#include "crossbind_app.h"
+#include <windows.h>
 
-#if defined(CROSSBIND_APP_SINGLE_INSTANCE) || defined(CROSSBIND_APP_URL_SCHEMES)
-#include "windows/com.h"
-
-#include <shellapi.h>
-
-#include <filesystem>
-#include <system_error>
-
-Launch launchOf(int, char **) {
-    Launch launch;
-    int count = 0;
-    if (LPWSTR *args = CommandLineToArgvW(GetCommandLineW(), &count)) {
-        for (int i = 1; i < count; i += 1) launch.args.push_back(crossbind::windows::utf8(args[i]));
-        LocalFree(args);
-    }
-    std::error_code error;
-    const std::u8string cwd = std::filesystem::current_path(error).u8string();
-    launch.cwd.assign(cwd.begin(), cwd.end());
-    return launch;
-}
-#endif
-
-#ifdef CROSSBIND_APP_SINGLE_INSTANCE
 #include <atomic>
 #include <cstdio>
 #include <future>
+#include <system_error>
 #include <thread>
 
-using namespace crossbind::windows;
-
+namespace crossbind::instance {
 namespace {
 
 // Marks a launch among the WM_COPYDATA messages the window may get.
@@ -42,6 +19,14 @@ constexpr ULONG_PTR LAUNCH = 0x63626c6e;
 std::atomic<bool> isLeaving{false};
 
 void warn(const std::string &what) { std::fprintf(stderr, "crossbind: %s\n", what.c_str()); }
+
+std::wstring wide(const std::string &text) {
+    if (text.empty()) return {};
+    const int size = MultiByteToWideChar(CP_UTF8, 0, text.data(), static_cast<int>(text.size()), nullptr, 0);
+    std::wstring result(static_cast<size_t>(size), L'\0');
+    MultiByteToWideChar(CP_UTF8, 0, text.data(), static_cast<int>(text.size()), result.data(), size);
+    return result;
+}
 
 LRESULT CALLBACK instanceProcedure(HWND window, UINT message, WPARAM wParam, LPARAM lParam) {
     if (message != WM_COPYDATA) return DefWindowProcW(window, message, wParam, lParam);
@@ -52,7 +37,10 @@ LRESULT CALLBACK instanceProcedure(HWND window, UINT message, WPARAM wParam, LPA
     try {
         std::optional<Launch> launch = decodeLaunch({static_cast<const char *>(data->lpData), data->cbData});
         if (!launch) return FALSE;
-        crossbind::app::launchedAgain(std::move(*launch));
+        // The launch that sent it leaves at once, as on macOS and Linux, whatever the app then does with it: an
+        // extension's onUrl runs on this thread. The data is copied, as the sender may free it from now on.
+        ReplyMessage(TRUE);
+        crossbind::launchedAgain(std::move(*launch));
         return TRUE;
     } catch (const std::exception &error) {
         std::fprintf(stderr, "crossbind: the app did not take a launch: %s\n", error.what());
@@ -105,9 +93,9 @@ bool handOver(const std::wstring &name, const std::string &bytes, std::chrono::s
 
 }  // namespace
 
-Claim claimInstance(const Launch &launch) {
+Claim claimInstance(const Launch &launch, const std::string &id) {
     // Each signed-in user's session has its own; the name also sets a development session apart.
-    const std::wstring name = wide(std::string(CROSSBIND_APP_ID ".") + INSTANCE_NAME);
+    const std::wstring name = wide(id + "." + INSTANCE_NAME);
     const std::wstring mutexName = L"Local\\" + name;
     const std::string bytes = encodeLaunch(launch);
     const auto deadline = std::chrono::steady_clock::now() + CLAIM_TIME;
@@ -143,4 +131,5 @@ Claim claimInstance(const Launch &launch) {
 }
 
 void leaveInstance() { isLeaving = true; }
-#endif
+
+}  // namespace crossbind::instance

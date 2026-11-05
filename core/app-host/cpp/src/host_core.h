@@ -39,15 +39,39 @@ void callApp(jsi::Runtime &rt, const std::string &name, const jsi::Value &option
 void invoke(const std::string &name, Value options, std::function<void(Failure, Value)> done);
 // Adds the host's own functions, the ones crossbind/app calls.
 void appFunctions(Registry &registry);
-// Adds the functions of the app's extensions, through the file crossbind writes of them into the host's build.
-void extensionFunctions(Registry &registry);
+// Runs the entry of each of the app's extensions with native code through startExtension(), from the file crossbind
+// writes of them into the host's build.
+void extensionEntries();
+// Runs one extension's entry with a registry of its own, which knows it by its name and holds its options, read from
+// their JSON or null; what the entry throws, it throws, naming the extension.
+void startExtension(const char *name, const char *options, void (*entry)(Registry &));
+// The app's URL schemes, from the same file, each with the extension whose onUrl gets its links: the one that declared
+// it, or for those of app.urlSchemes the host's links, which hands them to the page.
+std::vector<std::pair<std::string, std::string>> urlSchemes();
+// Adds the host's refusals of what crossbind/app reaches that no extension of the app added: the updater's functions,
+// which a desktop app with app.updater alone has.
+void refusedFunctions(Registry &registry);
+// Adds the host's functions and runs the extensions' entries, once, on the main thread as the app starts, before its
+// module does; an entry that throws, or extensions that break a rule of what they add, throw.
+void startExtensions();
+// Whether the app runs on with a desktop app's launch, as the extension that takes its launches decides: true without
+// one, and without a launch, as a phone's. What the extension throws, it throws.
+bool launched(const Launch *launch);
+// Runs the extensions' onWindow, on the main thread, as the app's window has opened, before its page loads.
+void windowOpened();
+// Runs the extensions' onQuit, once, in an app that runs on with its launch.
+void quitting();
+// Hands a link to the onUrl of the extension that owns its scheme.
+void openUrlOf(const std::string &extension, const std::string &url);
+// Whether the app has a function of this name so far.
+bool hasFunction(const std::string &name);
 // The value of JSON text; text that is no JSON throws.
 Value valueOfJson(std::string_view text);
 // Whether the main thread answers the waits of <crossbind/app.h>: from the module's start until the app quits.
 void answerWaits(bool answer);
 // Sends an event of the app's native code to the page, from any thread, through the app's one module; before it boots,
-// nowhere.
-void postEvent(std::string event, std::string json);
+// nowhere. A held one waits for the page to ask for the events of its name.
+void postEvent(std::string event, std::string json, bool isHeld = false);
 
 // Runs every JS task on one thread, as JSI requires, and drains Hermes' microtasks after each, so a reply that waits
 // on a promise goes out before the next message.
@@ -91,7 +115,7 @@ public:
     // A new page replaced the one that held the module's objects.
     void reset();
     // An event for the page, from any thread.
-    void postEvent(std::string event, std::string json);
+    void postEvent(std::string event, std::string json, bool isHeld = false);
     void stop() {
         // A wait of the module's code would hold the join below forever.
         answerWaits(false);

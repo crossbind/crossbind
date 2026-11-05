@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'vitest';
 import {
     appBackgroundColor, appCategory, appCopyright, appDisplayName, appEncryption, appHeader, appId, appPermissions, appPrivacy, appUpdater,
-    appUrlSchemes, appWindow, usageDescriptions,
+    appUrlSchemes, appWindow, hostExtensionOptions, urlSchemeOwners, usageDescriptions,
 } from '../src/utils/appOptions.js';
 
 const config = (app = {}, version = '1.2.3') => ({ general: { name: 'demo-app' }, app, package: { version } });
@@ -237,13 +237,26 @@ describe("an app's URL schemes", () => {
         }
         expect(() => appUrlSchemes(config({ urlSchemes: ['myapp', 'myapp'] }))).toThrow('lists a scheme twice');
     });
+
+    test("are app.urlSchemes's, then its extensions', each with the extension whose native code gets its links", () => {
+        const app = { ...config({ urlSchemes: ['myapp'] }), extensions: [{ name: 'oauth', app: { urlSchemes: ['myapp.oauth'] } }, { name: 'clipboard', app: {} }] };
+        expect(urlSchemeOwners(app)).toEqual([{ scheme: 'myapp', extension: null }, { scheme: 'myapp.oauth', extension: 'oauth' }]);
+        expect(appUrlSchemes(app)).toEqual(['myapp', 'myapp.oauth']);
+    });
+
+    test('have one owner each: two that claim one stop the build, naming both', () => {
+        const extensions = (...lists) => lists.map((urlSchemes, index) => ({ name: `link${index}`, app: { urlSchemes } }));
+        expect(() => urlSchemeOwners({ ...config({ urlSchemes: ['myapp'] }), extensions: extensions(['myapp']) }))
+            .toThrow('crossbind: app.urlSchemes and the extension link0 both claim the scheme myapp, whose links one alone gets.');
+        expect(() => appUrlSchemes({ ...config(), extensions: extensions(['other'], ['other']) }))
+            .toThrow('crossbind: the extension link0 and the extension link1 both claim the scheme other');
+    });
 });
 
 describe("the header a desktop app's host builds with", () => {
     test('defines the name and the window', () => {
         expect(appHeader(config({ name: 'Demo App', window: { width: 800, height: 600, minWidth: 400 } }), 'darwin')).toBe([
             '// crossbind writes this file from crossbind.config.js and package.json.',
-            '#define CROSSBIND_APP_OPEN_PATH {}',
             '#define CROSSBIND_APP_PERMISSION_CAMERA 0',
             '#define CROSSBIND_APP_PERMISSION_MICROPHONE 0',
             '#define CROSSBIND_APP_PERMISSION_LOCATION 0',
@@ -267,7 +280,7 @@ describe("the header a desktop app's host builds with", () => {
 
     test("defines the background color on the desktop and on iOS, while an Android app's comes with its project", () => {
         const app = { window: { backgroundColor: '#1E1E1E' } };
-        expect(appHeader(config(app), 'darwin')).toContain('#define CROSSBIND_APP_OPEN_PATH {}\n#define CROSSBIND_APP_BACKGROUND_COLOR 0x1e1e1e\n');
+        expect(appHeader(config(app), 'darwin')).toContain('#define CROSSBIND_APP_BACKGROUND_COLOR 0x1e1e1e\n');
         expect(appHeader(config(app), 'ios')).toContain('#define CROSSBIND_APP_BACKGROUND_COLOR 0x1e1e1e\n');
         expect(appHeader(config(app), 'android')).not.toContain('BACKGROUND_COLOR');
         expect(appHeader(config(), 'linux')).not.toContain('BACKGROUND_COLOR');
@@ -290,55 +303,21 @@ describe("the header a desktop app's host builds with", () => {
         expect(appHeader({ general: { name: 'demo' }, app: {} }, 'win32')).toContain('#define CROSSBIND_APP_VERSION_NUMBERS 1,0,0,0\n');
     });
 
-    test("lists where the page's shell.openPath opens files: nowhere without app.openPath", () => {
-        expect(appHeader(config(), 'linux')).toContain('#define CROSSBIND_APP_OPEN_PATH {}\n');
-        expect(appHeader(config({ openPath: ['logs', 'picked'] }), 'win32')).toContain('#define CROSSBIND_APP_OPEN_PATH {"logs", "picked"}\n');
-    });
-
-    test("gives a phone's host that list and the app's name alone, so the desktop's options do not stop its build", () => {
-        expect(appHeader(config({ openPath: ['data'], id: 'com.example.my_app', window: 800 }), 'android')).toBe([
+    test("gives a phone's host the app's name alone, so the desktop's options do not stop its build", () => {
+        expect(appHeader(config({ id: 'com.example.my_app', window: 800 }), 'android')).toBe([
             '// crossbind writes this file from crossbind.config.js and package.json.',
-            '#define CROSSBIND_APP_OPEN_PATH {"data"}',
             '#define CROSSBIND_APP_NAME "demo-app"',
             '',
         ].join('\n'));
     });
 
-    test('refuses anything but a list of data, cache, logs and picked', () => {
-        expect(() => appHeader(config({ openPath: 'data' }), 'ios')).toThrow('app.openPath "data" is no list');
-        expect(() => appHeader(config({ openPath: ['data', 'home'] }), 'darwin')).toThrow('"home" is none of them');
-    });
-
-    test("defines where a desktop app's updates are, the key that checks them and the version they are newer than", () => {
+    test("leaves a desktop app's updates to the updater's options", () => {
         const updater = { url: 'https://example.com/{platform}-{arch}.json', publicKey: Buffer.alloc(32, 7).toString('base64') };
-        const header = appHeader(config({ updater }), 'linux');
-        expect(header).toContain('#define CROSSBIND_APP_UPDATER_URL "https://example.com/{platform}-{arch}.json"\n');
-        expect(header).toContain(`#define CROSSBIND_APP_UPDATER_KEY {${Array(32).fill('0x07').join(', ')}}\n`);
-        expect(header).toContain('#define CROSSBIND_APP_UPDATER_VERSION "1.2.3"\n');
-        expect(appHeader(config(), 'darwin')).not.toContain('UPDATER');
-        expect(appHeader(config({ updater }), 'ios')).not.toContain('UPDATER');
+        expect(appHeader(config({ updater }), 'linux')).not.toContain('UPDATER');
     });
 
-    test("lists a desktop app's URL schemes, which keep a Windows or Linux app to one instance unless app.singleInstance is false", () => {
-        const header = appHeader(config({ urlSchemes: ['myapp', 'other'] }), 'win32');
-        expect(header).toContain('#define CROSSBIND_APP_URL_SCHEMES {"myapp", "other"}\n');
-        expect(header).toContain('#define CROSSBIND_APP_SINGLE_INSTANCE 1\n');
-        expect(appHeader(config({ urlSchemes: ['myapp'], singleInstance: false }), 'linux')).not.toContain('SINGLE_INSTANCE');
-        // macOS hands a link to the app that runs.
-        expect(appHeader(config({ urlSchemes: ['myapp'] }), 'darwin')).not.toContain('SINGLE_INSTANCE');
-        expect(appHeader(config(), 'darwin')).not.toContain('URL_SCHEMES');
-        expect(appHeader(config({ urlSchemes: ['myapp'] }), 'android')).not.toContain('URL_SCHEMES');
-    });
-
-    test('keeps a desktop app to one instance with app.singleInstance, as a phone keeps every app itself', () => {
-        expect(appHeader(config({ singleInstance: true }), 'linux')).toContain('#define CROSSBIND_APP_SINGLE_INSTANCE 1\n');
-        expect(appHeader(config({ singleInstance: false }), 'win32')).not.toContain('SINGLE_INSTANCE');
-        expect(appHeader(config(), 'darwin')).not.toContain('SINGLE_INSTANCE');
-        expect(appHeader(config({ singleInstance: true }), 'ios')).not.toContain('SINGLE_INSTANCE');
-    });
-
-    test('refuses an app.singleInstance that is no boolean, naming the values it takes', () => {
-        expect(() => appHeader(config({ singleInstance: 'yes' }), 'darwin')).toThrow('app.singleInstance "yes" is no boolean');
+    test("leaves the app's URL schemes to its extensions' registration, and one instance to the instance's options", () => {
+        expect(appHeader(config({ urlSchemes: ['myapp'], singleInstance: true }), 'win32')).not.toMatch(/URL_SCHEMES|SINGLE_INSTANCE/);
     });
 
     test('names the icon a Windows executable carries, which the build writes beside the header', () => {
@@ -400,5 +379,79 @@ describe("an iOS app's privacy reasons", () => {
             .toThrow('app.privacy.fileTimestamp ["E174.1"] is no list of Apple\'s reasons for it, which are DDA9.1, C617.1, 3B52.1, 0A2A.1');
         expect(() => appPrivacy(config({ privacy: { userDefaults: [] } }))).toThrow('app.privacy.userDefaults []');
         expect(() => appPrivacy(config({ privacy: { systemBootTime: '35F9.1' } }))).toThrow('app.privacy.systemBootTime "35F9.1"');
+    });
+});
+
+describe("the options of the host's own extensions", () => {
+    test("give a desktop app's instance the app's id, which names it, with app.singleInstance", () => {
+        ['darwin', 'linux', 'win32'].forEach((platform) => {
+            expect(hostExtensionOptions(config({ id: 'com.example.demo', singleInstance: true }), platform).instance).toEqual({ id: 'com.example.demo' });
+        });
+        expect(hostExtensionOptions(config({ singleInstance: false }), 'win32')).not.toHaveProperty('instance');
+        expect(hostExtensionOptions(config(), 'darwin')).not.toHaveProperty('instance');
+        // A phone keeps every app to one instance itself.
+        ['ios', 'android'].forEach((platform) => {
+            expect(hostExtensionOptions(config({ singleInstance: true }), platform)).not.toHaveProperty('instance');
+        });
+    });
+
+    test('keep a Windows or Linux app with a scheme to one instance unless app.singleInstance is false, as a link starts it again', () => {
+        const linked = config({ urlSchemes: ['myapp'] });
+        expect(hostExtensionOptions(linked, 'win32')).toHaveProperty('instance');
+        expect(hostExtensionOptions(linked, 'linux')).toHaveProperty('instance');
+        // macOS hands a link to the app that runs.
+        expect(hostExtensionOptions(linked, 'darwin')).not.toHaveProperty('instance');
+        expect(hostExtensionOptions(config({ urlSchemes: ['myapp'], singleInstance: false }), 'linux')).not.toHaveProperty('instance');
+        // An extension's scheme starts the app again as well.
+        const extended = { ...config(), extensions: [{ name: 'oauth', app: { urlSchemes: ['myapp.oauth'] } }] };
+        expect(hostExtensionOptions(extended, 'win32')).toHaveProperty('instance');
+    });
+
+    test("give the links, which hand the page the links of app.urlSchemes, to an app that lists any, on every platform", () => {
+        ['darwin', 'linux', 'win32', 'ios', 'android'].forEach((platform) => {
+            expect(hostExtensionOptions(config({ urlSchemes: ['myapp'] }), platform).links).toEqual({});
+        });
+        expect(hostExtensionOptions(config(), 'darwin')).not.toHaveProperty('links');
+        // An extension's schemes reach that extension, not the page.
+        const extended = { ...config(), extensions: [{ name: 'oauth', app: { urlSchemes: ['myapp.oauth'] } }] };
+        expect(hostExtensionOptions(extended, 'ios')).not.toHaveProperty('links');
+    });
+
+    test('refuse an app.singleInstance that is no boolean on the desktop, naming the values it takes', () => {
+        expect(() => hostExtensionOptions(config({ singleInstance: 'yes' }), 'darwin')).toThrow('app.singleInstance "yes" is no boolean');
+        expect(hostExtensionOptions(config({ singleInstance: 'yes' }), 'ios')).not.toHaveProperty('instance');
+    });
+
+    test("give the shell where the page's shell.openPath opens files: nowhere without app.openPath", () => {
+        expect(hostExtensionOptions(config(), 'darwin')).toEqual({ shell: { openPath: [] } });
+        expect(hostExtensionOptions(config({ openPath: ['logs', 'picked'] }), 'ios').shell).toEqual({ openPath: ['logs', 'picked'] });
+    });
+
+    test('refuse an app.openPath of anything but data, cache, logs and picked', () => {
+        expect(() => hostExtensionOptions(config({ openPath: 'data' }), 'linux')).toThrow('app.openPath "data" is no list');
+        expect(() => hostExtensionOptions(config({ openPath: ['data', 'home'] }), 'linux')).toThrow('"home" is none of them');
+    });
+
+    test("give a Linux app's menu the app's id, which its tray names itself by on the session bus", () => {
+        expect(hostExtensionOptions(config({ id: 'com.example.demo' }), 'linux').menu).toEqual({ id: 'com.example.demo' });
+        ['darwin', 'win32', 'ios', 'android'].forEach((platform) => {
+            expect(hostExtensionOptions(config({ id: 'com.example.demo' }), platform)).not.toHaveProperty('menu');
+        });
+    });
+
+    test("give a desktop app's updater app.updater, with the app's version and id, which an update's signature covers", () => {
+        const updater = { url: 'https://example.com/{platform}-{arch}.json', publicKey: Buffer.alloc(32, 7).toString('base64') };
+        ['darwin', 'linux', 'win32'].forEach((platform) => {
+            expect(hostExtensionOptions(config({ id: 'com.example.demo', updater }), platform).updater)
+                .toEqual({ url: updater.url, publicKey: updater.publicKey, version: '1.2.3', id: 'com.example.demo' });
+        });
+        expect(hostExtensionOptions(config(), 'win32')).not.toHaveProperty('updater');
+    });
+
+    test("give a phone's updater nothing, as its store updates it, and check no app.updater there", () => {
+        ['ios', 'android'].forEach((platform) => {
+            expect(hostExtensionOptions(config({ updater: { url: 'http://example.com/u.json', publicKey: 'key' } }), platform)).not.toHaveProperty('updater');
+        });
+        expect(() => hostExtensionOptions(config({ updater: { url: 'http://example.com/u.json', publicKey: 'key' } }), 'darwin')).toThrow('is no https address');
     });
 });

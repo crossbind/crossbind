@@ -371,7 +371,7 @@ public class CrossbindActivity extends Activity {
     private void openUrlOf(Intent intent) {
         // An activity that could not start the module, for want of a WebView, takes no link.
         if (token == null || !Intent.ACTION_VIEW.equals(intent.getAction()) || intent.getData() == null) return;
-        // Any app may start the activity with any link: the page hears of those of app.urlSchemes alone, which the
+        // Any app may start the activity with any link: the app hears of those of its schemes alone, which the
         // activity's intent filter matches.
         Intent own = new Intent(Intent.ACTION_VIEW, intent.getData()).addCategory(Intent.CATEGORY_BROWSABLE).setPackage(getPackageName());
         if (getPackageManager().queryIntentActivities(own, 0).isEmpty()) return;

@@ -2,16 +2,12 @@
 // the signature the key of app.updater.publicKey checks, as `crossbind app build` writes them with the key in
 // CROSSBIND_UPDATER_PRIVATE_KEY. The file downloads into the app's cache folder and, once its signature holds, takes
 // the app's place: a macOS or Linux app is swapped for the one the file unpacks, and a Windows app's setup program
-// installs it once the app has quit. The app then opens anew.
-#include "host_core.h"
-// app.updater, which crossbind writes into a desktop app's header.
-#include "crossbind_app.h"
-
-#include <stdexcept>
-#include <string>
-
-#ifdef CROSSBIND_APP_UPDATER_URL
-#include "monocypher-ed25519.h"
+// installs it once the app has quit. The app then opens anew. A desktop app with app.updater alone has the extension,
+// whose options its build gives: app.updater, with the app's version and id. The host refuses its functions elsewhere.
+#include "crossbind/app.h"
+#include "crossbind/extension.h"
+#include "monocypher/monocypher-ed25519.h"
+#include "updater.h"
 
 #include <algorithm>
 #include <cerrno>
@@ -21,6 +17,10 @@
 #include <iterator>
 #include <map>
 #include <mutex>
+#include <optional>
+#include <stdexcept>
+#include <string>
+#include <string_view>
 #include <vector>
 
 #ifndef _WIN32
@@ -30,14 +30,12 @@
 #include <sys/wait.h>
 #include <unistd.h>
 
+#include <cstdlib>
+
 extern char **environ;
 #endif
-#endif
 
-namespace crossbind::app {
-
-#ifdef CROSSBIND_APP_UPDATER_URL
-
+namespace crossbind::updater {
 namespace {
 
 namespace fs = std::filesystem;
@@ -55,7 +53,7 @@ constexpr const char *ARCH = "arm64";
 #else
 constexpr const char *ARCH = "x64";
 #endif
-constexpr uint8_t PUBLIC_KEY[32] = CROSSBIND_APP_UPDATER_KEY;
+constexpr size_t KEY_SIZE = 32;
 constexpr size_t SIGNATURE_SIZE = 64;
 constexpr size_t SIGNATURE_TEXT_SIZE = (SIGNATURE_SIZE + 2) / 3 * 4;
 // A manifest is three short fields; a server that sends more, or an update past what any app weighs, fills the disk.
@@ -65,6 +63,15 @@ constexpr size_t READ_CHUNK = 64 * 1024;
 
 // A check and an install download into the same folder, so one runs at a time and another fails meanwhile.
 std::mutex updating;
+
+// app.updater as the build gives it: the address of the manifest for this app's platform and architecture, the key that
+// signs the app's updates, and the app's version and id, which a signature covers.
+struct Updater {
+    std::string manifestUrl;
+    std::vector<uint8_t> key;
+    std::string version;
+    std::string id;
+};
 
 struct Manifest {
     std::string version;
@@ -181,14 +188,46 @@ std::string replaced(std::string text, const std::string &from, const std::strin
     return text;
 }
 
-// app.updater.url for this app's platform and architecture.
-std::string manifestUrl() { return replaced(replaced(CROSSBIND_APP_UPDATER_URL, "{platform}", PLATFORM), "{arch}", ARCH); }
+// The bytes of base64 text, or nothing when base64 writes them otherwise: in groups of four, padded, with no bit past the
+// last byte.
+std::optional<std::vector<uint8_t>> fromBase64(const std::string &text) {
+    static constexpr std::string_view ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    if (text.size() % 4 != 0) return std::nullopt;
+    const size_t padding = text.ends_with("==") ? 2 : text.ends_with('=') ? 1 : 0;
+    std::vector<uint8_t> bytes;
+    uint32_t bits = 0;
+    int held = 0;
+    for (const char c : std::string_view(text).substr(0, text.size() - padding)) {
+        const size_t value = ALPHABET.find(c);
+        if (value == std::string_view::npos) return std::nullopt;
+        bits = bits << 6 | static_cast<uint32_t>(value);
+        held += 6;
+        if (held >= 8) {
+            held -= 8;
+            bytes.push_back(static_cast<uint8_t>(bits >> held));
+            bits &= (1u << held) - 1;
+        }
+    }
+    if (bits != 0) return std::nullopt;
+    return bytes;
+}
+
+Updater updaterOf(const Value &options) {
+    const std::string version = options["version"].asString();
+    const std::optional<std::vector<uint8_t>> key = fromBase64(options["publicKey"].asString());
+    if (!versionOf(version) || !key || key->size() != KEY_SIZE) {
+        throw std::runtime_error("crossbind: the updater's options are no app.updater, as crossbind's build gives them");
+    }
+    return {replaced(replaced(options["url"].asString(), "{platform}", PLATFORM), "{arch}", ARCH), *key, version, options["id"].asString()};
+}
 
 // The update's file is beside its manifest.
 std::string fileUrl(const std::string &manifest, const std::string &file) {
     const std::string address = manifest.substr(0, manifest.find_first_of("?#"));
     return address.substr(0, address.rfind('/') + 1) + file;
 }
+
+fs::path pathOf(const std::string &text) { return fs::path(std::u8string(text.begin(), text.end())); }
 
 std::string textOf(const fs::path &path) {
     const std::u8string text = path.u8string();
@@ -203,17 +242,16 @@ std::unique_lock<std::mutex> lockUpdates() {
 
 // Emptied each time, so that no download outlives the next check; a setup program that still runs keeps its file.
 fs::path updateFolder() {
-    const fs::path folder = pathOf(appPaths().cache) / "update";
+    const fs::path folder = pathOf(app::paths().cache) / "update";
     std::error_code ignored;
     fs::remove_all(folder, ignored);
     fs::create_directories(folder);
     return folder;
 }
 
-Manifest fetchManifest(const fs::path &folder) {
-    const std::string url = manifestUrl();
+Manifest fetchManifest(const Updater &updater, const fs::path &folder) {
     const fs::path file = folder / "manifest.json";
-    download(url, file, MAX_MANIFEST_SIZE);
+    download(updater.manifestUrl, file, MAX_MANIFEST_SIZE);
     try {
         std::ifstream in(file, std::ios::binary);
         std::map<std::string, std::string> fields = fieldsOf(std::string(std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>()));
@@ -221,14 +259,14 @@ Manifest fetchManifest(const fs::path &folder) {
         if (!versionOf(manifest.version) || !isFileName(manifest.file) || manifest.signature.size() != SIGNATURE_TEXT_SIZE) throw NoManifest();
         return manifest;
     } catch (const NoManifest &) {
-        throw std::runtime_error("crossbind: " + url + " is no update manifest, as `crossbind app build` writes beside an app's update");
+        throw std::runtime_error("crossbind: " + updater.manifestUrl + " is no update manifest, as `crossbind app build` writes beside an app's update");
     }
 }
 
 // The update the manifest offers when its version is newer than this app's.
-std::optional<Manifest> newerUpdate(const fs::path &folder) {
-    const Manifest manifest = fetchManifest(folder);
-    if (!isNewer(versionOf(manifest.version).value(), versionOf(CROSSBIND_APP_UPDATER_VERSION).value())) return std::nullopt;
+std::optional<Manifest> newerUpdate(const Updater &updater, const fs::path &folder) {
+    const Manifest manifest = fetchManifest(updater, folder);
+    if (!isNewer(versionOf(manifest.version).value(), versionOf(updater.version).value())) return std::nullopt;
     return manifest;
 }
 
@@ -254,12 +292,11 @@ std::string sha512Of(const fs::path &file) {
 
 // The signature covers the app's id, its platform and architecture, the version and the file's SHA-512, as the build
 // signed them, so that no update passes for another app's, platform's or version's.
-void verify(const Manifest &manifest, const fs::path &file) {
-    const std::vector<uint8_t> signature = fromBase64(manifest.signature);
-    const std::string text =
-        std::string("crossbind update\n" CROSSBIND_APP_ID "\n") + PLATFORM + "-" + ARCH + "\n" + manifest.version + "\n" + sha512Of(file) + "\n";
-    const bool holds = signature.size() == SIGNATURE_SIZE && toBase64(signature.data(), signature.size()) == manifest.signature &&
-                       crypto_ed25519_check(signature.data(), PUBLIC_KEY, reinterpret_cast<const uint8_t *>(text.data()), text.size()) == 0;
+void verify(const Updater &updater, const Manifest &manifest, const fs::path &file) {
+    const std::optional<std::vector<uint8_t>> signature = fromBase64(manifest.signature);
+    const std::string text = "crossbind update\n" + updater.id + "\n" + PLATFORM + "-" + ARCH + "\n" + manifest.version + "\n" + sha512Of(file) + "\n";
+    const bool holds = signature && signature->size() == SIGNATURE_SIZE &&
+                       crypto_ed25519_check(signature->data(), updater.key.data(), reinterpret_cast<const uint8_t *>(text.data()), text.size()) == 0;
     if (!holds) {
         throw std::runtime_error("crossbind: the update to " + manifest.version +
                                  " is not signed with the key of app.updater.publicKey, so the app does not install it");
@@ -318,12 +355,12 @@ bool swapped(const fs::path &a, const fs::path &b) {
 #endif
 }
 
-// Puts the app the update unpacks in place of this one, and opens it once this one has quit. The update unpacks beside
-// the app, on the same disk, whose file system swaps the two.
+// Puts the app the update unpacks in place of this one. The update unpacks beside the app, on the same disk, whose file
+// system swaps the two.
 void replaceApp(const fs::path &update) {
 #ifdef __APPLE__
     // A macOS app is its bundle, which ditto unpacks with its signature and Apple's ticket.
-    const fs::path app = pathOf(resourceDir()).parent_path().parent_path();
+    const fs::path app = bundlePath();
     const fs::path marker = fs::path("Contents") / "Info.plist";
     const std::vector<std::string> unpack = {"/usr/bin/ditto", "-x", "-k", update.string()};
 #else
@@ -350,30 +387,36 @@ void replaceApp(const fs::path &update) {
     }
     // The old app is where the update was unpacked.
     fs::remove_all(staging, ignored);
-    if (const Failure failure = openAnew()) throw std::runtime_error("crossbind: the update is installed, but " + *failure + ". Open the app again");
 }
 
 #endif
 
-}  // namespace
-
-std::optional<std::string> checkForUpdate() {
+// The version the manifest offers when it is newer than this app's.
+std::optional<std::string> check(const Updater &updater) {
     const std::unique_lock<std::mutex> lock = lockUpdates();
-    const std::optional<Manifest> manifest = newerUpdate(updateFolder());
+    const std::optional<Manifest> manifest = newerUpdate(updater, updateFolder());
     return manifest ? std::optional<std::string>(manifest->version) : std::nullopt;
 }
 
-void installUpdate() {
+// Installs the newer version, then quits the app, which opens anew: a macOS or Linux app once it has quit, a Windows one
+// from its setup program.
+void install(const Updater &updater) {
+#ifdef CROSSBIND_APP_DEV
+    // CROSSBIND_APP_DEV marks a debug host, as `crossbind app dev` builds, whose app its dev server opened; app.relaunch()
+    // refuses it as well.
+    throw std::runtime_error("crossbind: a development session does not install an update, which would take the place of the app its dev "
+                             "server opened: the built app does");
+#endif
     const std::unique_lock<std::mutex> lock = lockUpdates();
     const fs::path folder = updateFolder();
-    const std::optional<Manifest> manifest = newerUpdate(folder);
+    const std::optional<Manifest> manifest = newerUpdate(updater, folder);
     if (!manifest) {
-        throw std::runtime_error("crossbind: the app is up to date: " + manifestUrl() + " offers no version newer than " CROSSBIND_APP_UPDATER_VERSION);
+        throw std::runtime_error("crossbind: the app is up to date: " + updater.manifestUrl + " offers no version newer than " + updater.version);
     }
     const fs::path file = folder / manifest->file;
     try {
-        download(fileUrl(manifestUrl(), manifest->file), file, MAX_UPDATE_SIZE);
-        verify(*manifest, file);
+        download(fileUrl(updater.manifestUrl, manifest->file), file, MAX_UPDATE_SIZE);
+        verify(updater, *manifest, file);
 #ifdef _WIN32
         checkSigner(file);
         runSetup(file);
@@ -385,29 +428,34 @@ void installUpdate() {
         fs::remove(file, ignored);
         throw;
     }
-#ifndef _WIN32
+#ifdef _WIN32
+    app::quit();
+#else
     std::error_code ignored;
     fs::remove(file, ignored);
+    app::relaunch();
 #endif
-    quitApp();
-}
-
-#else
-
-namespace {
-
-[[noreturn]] void noUpdater() {
-    throw std::runtime_error(
-        "crossbind: this app does not update itself: a desktop app does with app.updater in crossbind.config.js, an iOS or Android app "
-        "through its store");
 }
 
 }  // namespace
+}  // namespace crossbind::updater
 
-std::optional<std::string> checkForUpdate() { noUpdater(); }
-
-void installUpdate() { noUpdater(); }
-
-#endif
-
-}  // namespace crossbind::app
+void crossbind_extension_updater(crossbind::Registry &registry) {
+    using namespace crossbind::updater;
+    using crossbind::Call;
+    using crossbind::Value;
+    const Updater updater = updaterOf(registry.options());
+    // The updater downloads, so its calls run on a thread of their own, which answers them.
+    registry.function("updater.check", [updater](Call call) {
+        crossbind::inBackground(std::move(call), [updater] {
+            const std::optional<std::string> version = check(updater);
+            return version ? Value(Value::Object{{"version", *version}}) : Value();
+        });
+    });
+    registry.function("updater.install", [updater](Call call) {
+        crossbind::inBackground(std::move(call), [updater] {
+            install(updater);
+            return Value();
+        });
+    });
+}

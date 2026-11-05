@@ -1,21 +1,16 @@
 #pragma once
 
 // A desktop app that app.singleInstance keeps to one instance for each user: a later launch hands its arguments to the
-// instance that runs, before it starts anything of its own, and leaves.
+// instance that runs, before the app's module starts, and leaves.
+#include "crossbind/extension.h"
+
 #include <chrono>
 #include <cstddef>
 #include <optional>
 #include <string>
 #include <string_view>
-#include <vector>
 
-struct Launch {
-    // The program's own left out.
-    std::vector<std::string> args;
-    std::string cwd;
-    // What lets a Linux window take the front from another app: the launch's Wayland activation token or X11 startup id.
-    std::string token;
-};
+namespace crossbind::instance {
 
 // What a launch is to the app.
 enum class Claim {
@@ -27,7 +22,8 @@ enum class Claim {
     NotTaken,
 };
 
-// A development session's instance is apart from the built app's, which has its id.
+// A development session's instance is apart from the built app's, which has its id. CROSSBIND_APP_DEV marks a debug
+// host, as `crossbind app dev` builds.
 #ifdef CROSSBIND_APP_DEV
 constexpr const char *INSTANCE_NAME = "instance-dev";
 #else
@@ -40,20 +36,12 @@ constexpr size_t MAX_LAUNCH = 1 << 20;
 constexpr auto CLAIM_TIME = std::chrono::seconds(10);
 constexpr auto CLAIM_PAUSE = std::chrono::milliseconds(50);
 
-// This launch, on Windows from its command line as given, whatever the code page.
-Launch launchOf(int argc, char **argv);
 // A launch as one instance hands it to the other.
 std::string encodeLaunch(const Launch &launch);
 std::optional<Launch> decodeLaunch(std::string_view bytes);
-// Each desktop platform's.
-Claim claimInstance(const Launch &launch);
+// Each desktop platform's, for the app of this id.
+Claim claimInstance(const Launch &launch, const std::string &id);
 // The instance takes no later launch from now on: each waits for it to end, and becomes the next instance.
 void leaveInstance();
 
-namespace crossbind::app {
-// What the instance does with a later launch, on any thread: it brings its window to the front and tells the page. One
-// that comes while the module starts waits for startTakingLaunches.
-void launchedAgain(Launch launch);
-// The module has started: the launches handed over meanwhile reach the page now, after the app's own.
-void startTakingLaunches();
-}  // namespace crossbind::app
+}  // namespace crossbind::instance

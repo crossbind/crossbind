@@ -1,0 +1,6 @@
+{
+    "name": "links",
+    "app": {
+        "sources": ["links.cpp"]
+    }
+}

@@ -6,7 +6,6 @@
 #include "crossbind/app.h"
 
 #include <cstdint>
-#include <filesystem>
 #include <functional>
 #include <optional>
 #include <string>
@@ -61,15 +60,9 @@ void showError(const std::string &message);
 // Where the app's files are.
 std::string resourceDir();
 
-// The app's functions behind crossbind/app and <crossbind/app.h>. Each is called on the module's thread, works on the
-// main thread and calls done there with why it failed, or nothing. A platform that has no such function throws.
+// The app's functions behind crossbind/app and <crossbind/app.h>, and what the app's window does; a platform that has no
+// such function throws.
 using Failure = std::optional<std::string>;
-// An http, https or mailto address, which the caller has checked.
-void openUrl(std::string url, std::function<void(Failure)> done);
-void openFile(std::string path, std::function<void(Failure)> done);
-void revealFile(std::string path, std::function<void(Failure)> done);
-// Moves a file or folder to the system's trash. Where it has no trash, as on a network share, it moves nothing and fails.
-void trashFile(std::string path, std::function<void(Failure)> done);
 // The app's folders, made if missing; on any thread.
 crossbind::app::Paths appPaths();
 // Ends the app on the main thread, as closing its window does.
@@ -77,8 +70,8 @@ void quitApp();
 // Opens the app anew, with no arguments: on macOS and Linux once this process has ended, on Windows as it ends, where an
 // app that app.singleInstance keeps to one instance waits for this one to end. Why not when it cannot.
 Failure openAnew();
-// The app's window, which appWindow() gives its extensions.
-void setMainWindow(void *window);
+// The app's window and its webview, which appWindow() and appWebView() give its extensions.
+void setMainWindow(void *window, void *webView);
 // Brings a desktop app's window to the front, restored if it was minimized; token is what lets a Linux window take the
 // front from another app. On any thread.
 void showWindow(const std::string &token);
@@ -87,70 +80,12 @@ void showWindow(const std::string &token);
 void setBackgroundColor(void *window, void *webView, std::uint32_t color);
 // The window fills the screen, as app.window.fullscreen asks. On the main thread.
 void fillScreen();
-// Fetches an address into a file for a desktop app's updater, on the thread that calls it, which is not the main one,
-// and throws why it could not, as when the answer runs past maxBytes.
-void download(const std::string &url, const std::filesystem::path &file, std::uintmax_t maxBytes);
-// Throws why not when an update, the app it unpacked to or its setup program, is not signed by the app's own signer: on
-// macOS by its code signature, on Windows by its Authenticode signature, which Windows trusts. A leaked key of
-// app.updater's then installs nothing else. An app without such a signature, as a Linux app always is, takes any update
-// the key signed; a Windows app whose own signature Windows does not trust takes none.
-void checkSigner(const std::filesystem::path &update);
-
-// A key and its modifiers, as crossbind/app checks them: the key is A–Z, 0–9, F1–F12 or one of crossbind/app's names,
-// and CmdOrCtrl is command on macOS and control elsewhere.
-struct Accelerator {
-    bool command = false;
-    bool control = false;
-    bool alt = false;
-    bool shift = false;
-    std::string key;
-    // 1 to 12 for F1 to F12, else 0.
-    int function = 0;
-};
-
-// An item of the page's menus: a separator, a standard menu or item by its role, a submenu, or one whose clicks the page
-// hears of by its id.
-struct MenuItem {
-    std::string label;
-    std::string id;
-    std::string role;
-    std::optional<Accelerator> accelerator;
-    std::optional<bool> checked;
-    bool isSeparator = false;
-    bool isEnabled = true;
-    bool isSubmenu = false;
-    std::vector<MenuItem> items;
-};
-
-using MenuClicked = std::function<void(std::string id, std::optional<bool> checked)>;
-// Sets the app's menus, on the main thread, which calls done; a click of an item with an id calls clicked there, with
-// whether a checked one now is.
-void setMenu(std::vector<MenuItem> menus, MenuClicked clicked, std::function<void(Failure)> done);
-// The app's icon in the menu bar on macOS, the notification area on Windows and a desktop's status tray on Linux, with
-// its tooltip and the menu a click opens. A click of an item with an id calls clicked, and a click of the icon that opens
-// no menu tells the page as the event tray. Set again, it changes the icon. On the main thread, which calls done.
-struct TrayOptions {
-    std::string tooltip;
-    std::vector<MenuItem> menu;
-};
-void setTray(TrayOptions options, MenuClicked clicked, std::function<void(Failure)> done);
-void removeTray(std::function<void(Failure)> done);
-// A notification of the system's, a click on which tells the page as the event notification. On the main thread, which
-// calls done once the system has taken it.
-struct Notification {
-    std::string title;
-    std::string body;
-};
-void showNotification(Notification notification, std::function<void(Failure)> done);
-// Tells the page when the system goes to sleep and when it wakes, as the events suspend and resume, on macOS and Linux;
-// a Windows app's window hears of it itself. On the main thread.
-void listenForSleep();
 
 #ifdef __APPLE__
 // macOS sends the standard shortcuts, ⌘C and ⌘Q among them, through the menu bar, so a window without the app, Edit,
 // View and Window menus never sees them.
 void installAppMenu();
-// Hears of the links of app.urlSchemes macOS opens the app with, the launch's own as well, which come as Apple Events.
+// Hears of the links of the app's schemes macOS opens it with, the launch's own as well, which come as Apple Events.
 void listenForUrls();
 // The page of the webview made from this configuration keeps running while its window is hidden.
 void keepRunningWhenHidden(void *configuration);
@@ -165,10 +100,6 @@ void provideLocation(void *webView);
 // The ICoreWebView2EnvironmentOptions WebView2's environment is made with: they register the scheme, which pages of
 // these other origins may request as well.
 void *schemeEnvironmentOptions(const char *scheme, const std::vector<std::string> &origins);
-// Starts an update's setup program, which installs it where the app is once the app has quit, and opens it anew.
-void runSetup(const std::filesystem::path &setup);
-// The webview whose key presses reach the menus' accelerators first, as it holds the keyboard.
-void setMenuWebView(void *controller);
 // The window fills the screen while the page shows an element full screen, which WebView2 leaves to its host. On the
 // main thread.
 void followPageFullScreen(void *controller);

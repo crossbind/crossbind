@@ -93,7 +93,7 @@ def check_item():
     name, path = state['item']
     (properties,) = call(name, path, 'org.freedesktop.DBus.Properties', 'GetAll', GLib.Variant('(s)', (ITEM_INTERFACE,)),
                          '(a{sv})')
-    if properties.get('Status') != 'Active' or not properties.get('Id') or not properties.get('Title'):
+    if properties.get('Status') != 'Active' or properties.get('Id') != expected['id'] or not properties.get('Title'):
         fail(f'the icon carries {properties}')
     if properties.get('ToolTip', ('', [], '', ''))[2] != expected['tray']['tooltip']:
         fail(f'the icon shows the tooltip {properties.get("ToolTip")}')

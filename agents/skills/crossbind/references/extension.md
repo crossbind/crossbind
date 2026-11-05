@@ -35,7 +35,7 @@ Compare with `extensions/clipboard/`:
 ```text
 <name>/
 ├── package.json              # @<scope>/extension-<name>, crossbind.extension, the crossbind-extension keyword
-├── crossbind.extension.js    # default export: (options) => ({ name, root, app })
+├── crossbind.extension.js    # default export: (options) => ({ name, root, app, options })
 ├── index.js                  # the page's functions, each through invoke('<name>.<function>')
 ├── index.d.ts
 ├── README.md                 # install, use, and what each platform does

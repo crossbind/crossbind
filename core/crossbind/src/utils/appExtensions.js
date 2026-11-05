@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import { checkedUrlSchemes } from './appOptions.js';
 import { isUnderBase } from './replaceBasePathForDocker.js';
 
 // What an app extension may add on each platform beside the sources the host compiles with it: the frameworks an Apple
@@ -24,6 +25,16 @@ const JAVA_CLASS = /^[A-Za-z_$][\w$]*(\.[A-Za-z_$][\w$]*)+$/;
 const isObject = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
 const isEntitlement = (value) => typeof value === 'boolean' || typeof value === 'string'
     || (Array.isArray(value) && value.every((item) => typeof item === 'string'));
+// The deepest the host reads a JSON value nested, MAX_DEPTH in its extension.cpp.
+const MAX_JSON_DEPTH = 64;
+// A value JSON writes as it is, which the extension's native code reads back the same: no deeper than the host reads,
+// its strings and keys without a lone surrogate, which the host would read as U+FFFD.
+const isJsonValue = (value, depth = 0) => depth <= MAX_JSON_DEPTH && (value === null || typeof value === 'boolean'
+    || (typeof value === 'string' && value.isWellFormed())
+    || (typeof value === 'number' && Number.isFinite(value))
+    || (Array.isArray(value) && value.every((item) => isJsonValue(item, depth + 1)))
+    || (isObject(value) && [Object.prototype, null].includes(Object.getPrototypeOf(value))
+        && Object.entries(value).every(([key, item]) => key.isWellFormed() && isJsonValue(item, depth + 1))));
 
 // A file or folder of the extension's own, inside its folder.
 function ownPath(where, root, file, isFolder = false) {
@@ -86,8 +97,9 @@ function checkedPlatform(where, root, platform, part) {
     return checked;
 }
 
-// An extension as crossbind takes it, its paths relative to root: its name, and in app the sources every platform
-// compiles and what each platform adds.
+// An extension as crossbind takes it, its paths relative to root: its name, in app the sources every platform compiles,
+// the schemes whose links its native code gets and what each platform adds, and the options its native code reads,
+// where it has them.
 export function checkedExtension(extension, root, where) {
     if (!isObject(extension) || typeof extension.name !== 'string' || !NAME.test(extension.name)) {
         throw new Error(`crossbind: ${where} has no name of lowercase letters and digits, which dashes may join.`);
@@ -97,15 +109,20 @@ export function checkedExtension(extension, root, where) {
     const checked = Object.fromEntries(Object.entries(app).map(([key, value]) => {
         const at = `${where}'s app.${key}`;
         if (key === 'sources') return [key, checkedSources(at, root, value, SOURCE)];
-        if (!(key in PLATFORM_PARTS)) throw new Error(`crossbind: ${where}'s app takes sources and ${Object.keys(PLATFORM_PARTS).join(', ')}; ${key} is none of them.`);
+        if (key === 'urlSchemes') return [key, checkedUrlSchemes(value, at)];
+        if (!(key in PLATFORM_PARTS)) throw new Error(`crossbind: ${where}'s app takes sources, urlSchemes and ${Object.keys(PLATFORM_PARTS).join(', ')}; ${key} is none of them.`);
         return [key, checkedPlatform(at, root, key, value)];
     }));
-    return { name: extension.name, root, app: checked };
+    if (extension.options === undefined) return { name: extension.name, root, app: checked };
+    if (!isJsonValue(extension.options)) {
+        throw new Error(`crossbind: ${where}'s options are no JSON value the host reads as it is: plain objects, arrays, strings, finite numbers, booleans and null alone, 64 levels deep at most, without a lone surrogate.`);
+    }
+    return { name: extension.name, root, app: checked, options: extension.options };
 }
 
 // What an extension of crossbind's build once hooked into, which no build runs.
 const OLD_HOOKS = ['loadConfig', 'buildWasm', 'createLib'];
-const LISTED_KEYS = ['name', 'root', 'app'];
+const LISTED_KEYS = ['name', 'root', 'app', 'options'];
 
 // An extension crossbind.config.js lists, as its package's crossbind.extension.js gives it: its name, the folder its
 // files are in, which a build sees under the project's base alone, and what it adds to an app.
@@ -125,8 +142,7 @@ export function listedExtension(extension, where, base) {
     return checkedExtension(extension, root, where);
 }
 
-// The host's own extensions, which every app has: one folder of the host's extensions/ each, named as its extension.json
-// names it.
+// The host's own extensions: one folder of the host's extensions/ each, named as its extension.json names it.
 export function hostExtensions(appHostRoot) {
     const dir = path.join(appHostRoot, 'extensions');
     if (!fs.existsSync(dir)) return [];
@@ -142,6 +158,23 @@ export function hostExtensions(appHostRoot) {
         if (checked.name !== folder) throw new Error(`crossbind: ${file} names the extension ${checked.name}, not ${folder} as its folder.`);
         return checked;
     });
+}
+
+// The host's own extensions with the options the app's give them, each by its own name.
+export const withOptions = (extensions, options) => extensions.map((extension) => (Object.hasOwn(options, extension.name)
+    ? { ...extension, options: options[extension.name] } : extension));
+
+// The host's own extensions an app has, with the options the app's give them: every one, but the instance, the links and
+// the updater only where they give them options, as a desktop app's do that keeps one instance or has app.updater, and
+// an app's that lists app.urlSchemes. The host refuses the updater's functions to any other app.
+export const appHostExtensions = (appHostRoot, options) => withOptions(hostExtensions(appHostRoot), options)
+    .filter((extension) => !['instance', 'links', 'updater'].includes(extension.name) || Object.hasOwn(options, extension.name));
+
+// The host's own extensions an app has, then those crossbind.config.js lists: one listed under the name of one of the
+// host's takes its place.
+export function withListed(own, listed) {
+    const kept = own.map((extension) => listed.find(({ name }) => name === extension.name) ?? extension);
+    return [...kept, ...listed.filter((extension) => !kept.includes(extension))];
 }
 
 // The entitlements of several owners, as one claims each; two that give one different values stop the build, naming
@@ -175,7 +208,7 @@ export function extensionPart(extensions, platform) {
     const sourcesOf = (extension) => [...(extension.app.sources ?? []), ...(own(extension).sources ?? [])].map((file) => path.join(extension.root, file));
     const native = extensions.filter((extension) => sourcesOf(extension).length > 0);
     return {
-        native: native.map(({ name }) => name),
+        native: native.map(({ name, options }) => ({ name, options: options ?? null })),
         roots: native.map(({ root }) => root),
         sources: extensions.flatMap(sourcesOf),
         frameworks: unique(extensions.flatMap((extension) => own(extension).frameworks ?? [])),
@@ -190,18 +223,45 @@ export function extensionPart(extensions, platform) {
 
 const entryOf = (name) => `crossbind_extension_${name.replace(/-/g, '_')}`;
 
-// The C++ that adds the functions of the extensions with native code, each through its entry, which its sources define.
-export function registrationSource(native) {
+// The C++ text of an extension's options, a raw string of their JSON, which the host reads back. A raw string's
+// delimiter takes 16 characters at most.
+function optionsText(name, options) {
+    const json = JSON.stringify(options);
+    if (json.includes(')crossbind_json"')) {
+        throw new Error(`crossbind: the extension ${name}'s options hold )crossbind_json", which ends the text the host reads them from.`);
+    }
+    return `R"crossbind_json(${json})crossbind_json"`;
+}
+
+// The C++ that starts the extensions with native code, each through its entry, which its sources define, with its
+// options, and that names the owner of each of the app's URL schemes: the extension that declared it, or for those of
+// app.urlSchemes the host's links, which hands them to the page. The owner of a scheme has native code to get its
+// links.
+export function registrationSource(native, urlSchemes) {
+    const owned = urlSchemes.map(({ scheme, extension }) => ({ scheme, owner: extension ?? 'links' }));
+    const unheard = owned.find(({ owner }) => !native.some(({ name }) => name === owner));
+    if (unheard) {
+        const hint = unheard.owner === 'links' ? ': an app host older than crossbind has no links, so update @crossbind/core-app-host to match crossbind' : '';
+        throw new Error(`crossbind: the extension ${unheard.owner} gets the links of ${unheard.scheme}, but has no native code on this platform${hint}.`);
+    }
+    const start = ({ name, options }) => `    startExtension("${name}", ${options === null ? 'nullptr' : optionsText(name, options)}, ${entryOf(name)});`;
     return [
-        "// crossbind writes this file from the app's extensions, each of which adds its functions through its entry.",
+        "// crossbind writes this file from the app's extensions: the entry of each one with native code, which starts it with",
+        "// its options, and the owner of each of the app's URL schemes, the extension that gets its links.",
         '#include "crossbind/extension.h"',
         '',
-        ...native.map((name) => `void ${entryOf(name)}(crossbind::Registry &registry);`),
+        ...native.map(({ name }) => `void ${entryOf(name)}(crossbind::Registry &registry);`),
         ...(native.length > 0 ? [''] : []),
         'namespace crossbind::app {',
         '',
-        'void extensionFunctions([[maybe_unused]] Registry &registry) {',
-        ...native.map((name) => `    ${entryOf(name)}(registry);`),
+        'void startExtension(const char *name, const char *options, void (*entry)(Registry &));',
+        '',
+        'void extensionEntries() {',
+        ...native.map(start),
+        '}',
+        '',
+        'std::vector<std::pair<std::string, std::string>> urlSchemes() {',
+        `    return {${owned.map(({ scheme, owner }) => `{"${scheme}", "${owner}"}`).join(', ')}};`,
         '}',
         '',
         '}  // namespace crossbind::app',

@@ -200,8 +200,9 @@ export const app = {
     // Ends the app as quit() does, then opens it again, with no link.
     relaunch: async () => call('app.relaunch', {}),
     // The links of app.urlSchemes that opened the app and have not reached the page yet, the one it was launched with
-    // among them; later ones come as the event open-url. Listening first, then asking, misses none.
-    launchUrls: async () => call('app.launchUrls', {}),
+    // among them, which the host holds as the events open-url; later ones come as the event. Listening first, then
+    // asking, misses none.
+    launchUrls: async () => (await events.held('open-url')).map((value) => value?.url).filter((url) => typeof url === 'string'),
 };
 
 export const menu = {
@@ -232,6 +233,13 @@ export const events = {
         if (typeof name !== 'string' || !name) throw new TypeError('crossbind: events.on takes the name of an event.');
         if (typeof listener !== 'function') throw new TypeError('crossbind: events.on takes a function to call.');
         return hostOf('on', 'events.on')(name, listener);
+    },
+    // The values of the events of this name the app's native code held for the page with holdEvent(), which came before
+    // the page asked for them since it loaded; later ones come as the events while it listens. Listening first, then
+    // asking, misses none.
+    held: async (name) => {
+        if (typeof name !== 'string' || !name) throw new TypeError('crossbind: events.held takes the name of an event.');
+        return call('events.held', { name });
     },
 };
 

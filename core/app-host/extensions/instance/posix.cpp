@@ -1,67 +1,8 @@
-// A launch as one instance of an app hands it to another, and how on macOS and Linux: the instance holds a lock and
-// listens on a socket beside it, and a later launch that finds the lock held hands the instance its launch there.
+// How a macOS or Linux app keeps one instance: the instance holds a lock and listens on a socket beside it, and a later
+// launch that finds the lock held hands the instance its launch there.
 #include "instance.h"
 
-#include "crossbind_app.h"
-
-#ifdef CROSSBIND_APP_SINGLE_INSTANCE
-namespace {
-// Names the format, which another version of the app may not share.
-constexpr std::string_view LAUNCH_TAG = "crossbind launch 1\n";
-}  // namespace
-
-// The tag, the size of the rest, and the token, the folder and the arguments joined by NULs, which no argument holds.
-std::string encodeLaunch(const Launch &launch) {
-    std::string parts = launch.token + '\0' + launch.cwd;
-    for (const auto &arg : launch.args) (parts += '\0') += arg;
-    return std::string(LAUNCH_TAG) + std::to_string(parts.size()) + '\n' + parts;
-}
-
-std::optional<Launch> decodeLaunch(std::string_view bytes) {
-    if (bytes.size() > MAX_LAUNCH || !bytes.starts_with(LAUNCH_TAG)) return std::nullopt;
-    bytes.remove_prefix(LAUNCH_TAG.size());
-    const size_t size = bytes.find('\n');
-    // A launch whose process was killed while it wrote is shorter than it says.
-    if (size == std::string_view::npos || bytes.substr(0, size) != std::to_string(bytes.size() - size - 1)) return std::nullopt;
-    bytes.remove_prefix(size + 1);
-    std::vector<std::string> parts;
-    for (size_t start = 0;;) {
-        const size_t end = bytes.find('\0', start);
-        parts.emplace_back(bytes.substr(start, end == std::string_view::npos ? end : end - start));
-        if (end == std::string_view::npos) break;
-        start = end + 1;
-    }
-    if (parts.size() < 2) return std::nullopt;
-    return Launch{{parts.begin() + 2, parts.end()}, std::move(parts[1]), std::move(parts[0])};
-}
-#endif
-
-#if !defined(_WIN32) && (defined(CROSSBIND_APP_SINGLE_INSTANCE) || defined(CROSSBIND_APP_URL_SCHEMES))
-#include <cstdlib>
-#include <filesystem>
-#include <system_error>
-
-Launch launchOf(int argc, char **argv) {
-    Launch launch;
-    for (int i = 1; i < argc; i += 1) launch.args.emplace_back(argv[i]);
-    std::error_code error;
-    const std::u8string cwd = std::filesystem::current_path(error).u8string();
-    launch.cwd.assign(cwd.begin(), cwd.end());
-#ifdef __linux__
-    for (const char *name : {"XDG_ACTIVATION_TOKEN", "DESKTOP_STARTUP_ID"}) {
-        const char *token = std::getenv(name);
-        if (token && *token) {
-            launch.token = token;
-            break;
-        }
-    }
-#endif
-    return launch;
-}
-#endif
-
-#if !defined(_WIN32) && defined(CROSSBIND_APP_SINGLE_INSTANCE)
-#include "platform.h"
+#include "crossbind/app.h"
 
 #include <fcntl.h>
 #include <poll.h>
@@ -80,6 +21,7 @@ Launch launchOf(int argc, char **argv) {
 #include <system_error>
 #include <thread>
 
+namespace crossbind::instance {
 namespace {
 
 namespace chrono = std::chrono;
@@ -132,14 +74,14 @@ int openOwn(const std::string &place) {
 // The folder of the lock and the socket. Linux keeps them in the user's runtime folder, on this machine even where the
 // home is shared over NFS, which a launch without XDG_RUNTIME_DIR, as from sudo or cron, finds as well; macOS, and Linux
 // without one, in the app's cache folder.
-int openFolder() {
+int openFolder([[maybe_unused]] const std::string &id) {
 #ifdef __linux__
     const char *runtime = std::getenv("XDG_RUNTIME_DIR");
     const std::string runtimeFolder = runtime && runtime[0] == '/' ? runtime : "/run/user/" + std::to_string(geteuid());
-    folderPath = runtimeFolder + "/" + CROSSBIND_APP_ID;
+    folderPath = runtimeFolder + "/" + id;
     if (const int opened = openOwn(folderPath); opened >= 0) return opened;
 #endif
-    folderPath = appPaths().cache;
+    folderPath = crossbind::app::paths().cache;
     return open(folderPath.c_str(), O_RDONLY | O_DIRECTORY | O_CLOEXEC);
 }
 
@@ -227,7 +169,7 @@ void take(int peer) {
     // An instance on its way out takes no launch, which waits for it to end and becomes the next instance. Nor does it
     // take one whose process gave up on it and left, which the answer finds gone.
     if (!launch || isLeaving || send(peer, &TAKEN, 1, SEND_FLAGS) != 1) return;
-    crossbind::app::launchedAgain(std::move(*launch));
+    crossbind::launchedAgain(std::move(*launch));
 }
 
 // Lets later launches run as instances of their own.
@@ -327,14 +269,14 @@ bool handOver(const std::string &bytes, Deadline deadline) {
 
 }  // namespace
 
-Claim claimInstance(const Launch &launch) {
+Claim claimInstance(const Launch &launch, const std::string &id) {
     try {
-        folder = openFolder();
+        folder = openFolder(id);
     } catch (const std::exception &error) {
         std::fprintf(stderr, "%s, so the app runs as one more instance\n", error.what());
         return Claim::Instance;
     }
-    // The shell the updater starts inherits no descriptor, or the app it opens would find its own lock held.
+    // The shell that opens the app anew inherits no descriptor, or the app it opens would find its own lock held.
     lock = folder < 0 ? -1 : openat(folder, LOCK_NAME.c_str(), O_RDWR | O_CREAT | O_CLOEXEC, 0600);
     if (lock < 0) {
         warn("the app cannot lock " + folderPath + ": " + failure() + ", so it runs as one more instance");
@@ -371,4 +313,5 @@ void leaveInstance() {
     // A later launch then finds no socket, and waits for the lock.
     if (isListening) unlinkat(folder, SOCKET_NAME.c_str(), 0);
 }
-#endif
+
+}  // namespace crossbind::instance

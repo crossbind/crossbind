@@ -190,37 +190,9 @@ void callJava(const std::string &extension, const std::string &function, Value::
 
 }  // namespace crossbind::android
 
-void openUrl(std::string, std::function<void(Failure)>) {
-    throw std::runtime_error("crossbind: an Android app opens no address outside itself yet");
-}
-
-void openFile(std::string, std::function<void(Failure)>) {
-    throw std::runtime_error("crossbind: an Android app opens no file in another app yet");
-}
-
-void revealFile(std::string, std::function<void(Failure)>) {
-    throw std::runtime_error("crossbind: an Android app has no file manager to show a file in");
-}
-
-void trashFile(std::string, std::function<void(Failure)>) {
-    throw std::runtime_error("crossbind: an Android app has no trash to move a file to");
-}
-
 void quitApp() { throw std::runtime_error("crossbind: an Android app does not quit itself: the system ends it"); }
 
-void setMenu(std::vector<MenuItem>, MenuClicked, std::function<void(Failure)>) {
-    throw std::runtime_error("crossbind: an Android app has no menu bar");
-}
-
-void setTray(TrayOptions, MenuClicked, std::function<void(Failure)>) { throw std::runtime_error("crossbind: an Android app has no tray icon"); }
-
-void removeTray(std::function<void(Failure)>) { throw std::runtime_error("crossbind: an Android app has no tray icon"); }
-
-void showNotification(Notification, std::function<void(Failure)>) {
-    throw std::runtime_error("crossbind: an Android app shows no notifications yet");
-}
-
-void setMainWindow(void *) {}
+void setMainWindow(void *, void *) {}
 
 extern "C" JNIEXPORT jint JNI_OnLoad(JavaVM *jvm, void *) {
     vm = jvm;

@@ -1,8 +1,8 @@
 # Monocypher (vendored)
 
-A desktop app's host checks an update's Ed25519 signature, and hashes the update with SHA-512, with Monocypher, which it
-compiles in: `monocypher.c` and `monocypher.h`, and `monocypher-ed25519.c` and `monocypher-ed25519.h` from the
-release's `src/optional/`, unchanged.
+The host's updater checks a desktop app's update's Ed25519 signature, and hashes the update with SHA-512, with
+Monocypher, which it compiles as C++ through `../monocypher.cpp` and `../monocypher-ed25519.cpp`: `monocypher.c` and
+`monocypher.h`, and `monocypher-ed25519.c` and `monocypher-ed25519.h` from the release's `src/optional/`, unchanged.
 
 - Upstream: https://monocypher.org
 - Version: `4.0.3`, `https://monocypher.org/download/monocypher-4.0.3.tar.gz`, sha256

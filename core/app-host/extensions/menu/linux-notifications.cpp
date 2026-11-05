@@ -1,7 +1,6 @@
-#include "crossbind_app.h"
-#include "host_core.h"
-#include "linux/main_thread.h"
-#include "platform.h"
+#include "menu.h"
+
+#include "crossbind/app.h"
 
 #include <gio/gio.h>
 
@@ -11,6 +10,7 @@
 #include <string>
 
 // A notification goes to the desktop's notification server, which tells of a click on it as its default action.
+namespace crossbind::menu {
 namespace {
 
 constexpr const char *NOTIFICATIONS = "org.freedesktop.Notifications";
@@ -27,7 +27,7 @@ void actionInvoked(GDBusConnection *, const gchar *, const gchar *, const gchar 
     guint32 id = 0;
     const gchar *action = nullptr;
     g_variant_get(parameters, "(u&s)", &id, &action);
-    if (shown.count(id) && g_strcmp0(action, "default") == 0) crossbind::app::postEvent("notification", "null");
+    if (shown.count(id) && g_strcmp0(action, "default") == 0) app::emitEvent("notification");
 }
 
 void notificationClosed(GDBusConnection *, const gchar *, const gchar *, const gchar *, const gchar *, GVariant *parameters, gpointer) {
@@ -78,11 +78,12 @@ void notified(GObject *source, GAsyncResult *result, gpointer data) {
 void notify(std::unique_ptr<Pending> pending, bool isMarkup) {
     const Notification &notification = pending->notification;
     gchar *body = isMarkup ? g_markup_escape_text(notification.body.c_str(), -1) : g_strdup(notification.body.c_str());
-    const std::string file = resourceDir() + "/icon.png";
+    const std::string file = resourceFolder() + "/icon.png";
     gchar *icon = g_file_test(file.c_str(), G_FILE_TEST_EXISTS) ? g_filename_to_uri(file.c_str(), nullptr, nullptr) : nullptr;
     const gchar *actions[] = {"default", "Open", nullptr};
-    GVariant *parameters = g_variant_new("(susss^as@a{sv}i)", CROSSBIND_APP_NAME, 0, icon ? icon : "", notification.title.c_str(), body,
-                                         actions, g_variant_new_array(G_VARIANT_TYPE("{sv}"), nullptr, 0), SERVER_EXPIRY);
+    const std::string name = appName();
+    GVariant *parameters = g_variant_new("(susss^as@a{sv}i)", name.c_str(), 0, icon ? icon : "", notification.title.c_str(), body, actions,
+                                         g_variant_new_array(G_VARIANT_TYPE("{sv}"), nullptr, 0), SERVER_EXPIRY);
     g_free(icon);
     g_free(body);
     g_dbus_connection_call(sessionBus(), NOTIFICATIONS, NOTIFICATIONS_PATH, NOTIFICATIONS, "Notify", parameters, G_VARIANT_TYPE("(u)"),
@@ -125,3 +126,5 @@ void showNotification(Notification notification, std::function<void(Failure)> do
                                G_DBUS_CALL_FLAGS_NONE, -1, nullptr, capabilitiesRead, pending.release());
     });
 }
+
+}  // namespace crossbind::menu

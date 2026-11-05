@@ -369,9 +369,10 @@ void Core::reset() {
     });
 }
 
-void Core::postEvent(std::string event, std::string json) {
-    js_.postOrRun([event = std::move(event), json = std::move(json)](jsi::Runtime &rt) {
-        rt.global().getPropertyAsFunction(rt, "__crossbind_event").call(rt, jsi::String::createFromUtf8(rt, event), jsi::String::createFromUtf8(rt, json));
+void Core::postEvent(std::string event, std::string json, bool isHeld) {
+    js_.postOrRun([event = std::move(event), json = std::move(json), isHeld](jsi::Runtime &rt) {
+        rt.global().getPropertyAsFunction(rt, "__crossbind_event")
+            .call(rt, jsi::String::createFromUtf8(rt, event), jsi::String::createFromUtf8(rt, json), isHeld);
     });
 }
 
@@ -425,8 +426,8 @@ void Core::dropped(long long page, long long id, double passed) {
     });
 }
 
-void postEvent(std::string event, std::string json) {
-    if (Core *core = running.load()) core->postEvent(std::move(event), std::move(json));
+void postEvent(std::string event, std::string json, bool isHeld) {
+    if (Core *core = running.load()) core->postEvent(std::move(event), std::move(json), isHeld);
 }
 
 }  // namespace crossbind::app

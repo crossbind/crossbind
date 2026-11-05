@@ -1,8 +1,10 @@
-// The page's calls of the app's functions (<crossbind/extension.h>): what the page passed as a JSON value, the function
-// of the name it called, and the answer. Also the JSON an Android extension's Java answers with.
+// What the app's extensions add as it starts (<crossbind/extension.h>), and the page's calls of the app's functions:
+// what the page passed as a JSON value, the function of the name it called, and the answer. Also the JSON an Android
+// extension's Java answers with.
 #include "crossbind/extension.h"
 #include "host_core.h"
 
+#include <algorithm>
 #include <atomic>
 #include <cmath>
 #include <cstdio>
@@ -17,6 +19,8 @@ namespace crossbind {
 struct Call::State {
     std::string name;
     Value options;
+    // A call is the page's, which the scope checks hold to, unless the host's own code made it.
+    bool isFromApp = false;
     std::function<void(Failure, Value)> answer;
     std::atomic<bool> isAnswered{false};
 
@@ -325,17 +329,26 @@ private:
     }
 };
 
-// The functions the page may call, added once, before its first call.
-const Functions &functions() {
-    static const bool isAdded = [] {
-        Registry registry;
-        app::appFunctions(registry);
-        app::extensionFunctions(registry);
-        isSealed = true;
-        return true;
-    }();
-    (void)isAdded;
-    return added();
+// What the app's extensions do as it is launched, quits and opens their links, each with its extension's name.
+struct Hooks {
+    std::string launcher;
+    std::function<bool(const Launch &)> launch;
+    std::vector<std::pair<std::string, std::function<void()>>> windows;
+    std::vector<std::pair<std::string, std::function<void()>>> quits;
+    std::map<std::string, std::function<void(const std::string &)>> urls;
+};
+
+Hooks &hooks() {
+    static Hooks all;
+    return all;
+}
+
+// The app runs on with its launch, so its extensions quit with it.
+std::atomic<bool> isLaunched{false};
+
+// An extension adds what it does as its entry runs, which is before the app's module starts.
+void checkStarting(const std::string &what) {
+    if (isSealed) throw std::logic_error("crossbind: " + what + " came after the app started: an extension adds what it does as its entry runs");
 }
 
 }  // namespace
@@ -390,6 +403,8 @@ const std::string &Call::name() const { return state_->name; }
 
 const Value &Call::options() const { return state_->options; }
 
+bool Call::isFromPage() const { return !state_->isFromApp; }
+
 void Call::resolve(Value result) const {
     if (state_->answers()) state_->answer(std::nullopt, std::move(result));
 }
@@ -399,8 +414,35 @@ void Call::reject(const std::string &message) const {
 }
 
 void Registry::function(const std::string &name, Function fn) {
-    if (isSealed) throw std::logic_error("crossbind: the app's functions are added before the page calls one, and " + name + " came after");
+    checkStarting("the function " + name);
     if (!added().emplace(name, std::move(fn)).second) throw std::logic_error("crossbind: the app has two functions named " + name);
+}
+
+void Registry::onLaunch(std::function<bool(const Launch &)> fn) {
+    checkStarting("the extension " + extension_ + "'s onLaunch");
+    Hooks &all = hooks();
+    if (all.launch) throw std::logic_error("crossbind: the extensions " + all.launcher + " and " + extension_ + " both take the app's launches, which one alone does");
+    all.launcher = extension_;
+    all.launch = std::move(fn);
+}
+
+void Registry::onWindow(std::function<void()> fn) {
+    checkStarting("the extension " + extension_ + "'s onWindow");
+    hooks().windows.emplace_back(extension_, std::move(fn));
+}
+
+void Registry::onQuit(std::function<void()> fn) {
+    checkStarting("the extension " + extension_ + "'s onQuit");
+    hooks().quits.emplace_back(extension_, std::move(fn));
+}
+
+void Registry::onUrl(std::function<void(const std::string &url)> fn) {
+    checkStarting("the extension " + extension_ + "'s onUrl");
+    const auto schemes = app::urlSchemes();
+    if (std::none_of(schemes.begin(), schemes.end(), [this](const auto &scheme) { return scheme.second == extension_; })) {
+        throw std::logic_error("crossbind: the extension " + extension_ + " calls onUrl, but its app.urlSchemes declares no scheme whose links it would get");
+    }
+    if (!hooks().urls.emplace(extension_, std::move(fn)).second) throw std::logic_error("crossbind: the extension " + extension_ + " calls onUrl twice");
 }
 
 void inBackground(Call call, std::function<Value()> work) {
@@ -424,7 +466,7 @@ namespace {
 // What the function of the call's name throws fails the call.
 void run(const Call &call) {
     try {
-        const Functions &table = functions();
+        const Functions &table = added();
         const auto function = table.find(call.name());
         if (function == table.end()) throw std::invalid_argument("crossbind: an app has no function " + call.name());
         function->second(call);
@@ -456,10 +498,81 @@ void invoke(const std::string &name, Value options, std::function<void(Failure, 
     auto state = std::make_shared<Call::State>();
     state->name = name;
     state->options = std::move(options);
+    state->isFromApp = true;
     state->answer = std::move(done);
     run(Call(std::move(state)));
 }
 
 Value valueOfJson(std::string_view text) { return JsonReader(text).document(); }
+
+bool hasFunction(const std::string &name) { return added().count(name) > 0; }
+
+void startExtension(const char *name, const char *options, void (*entry)(Registry &)) {
+    try {
+        Registry registry(name, options ? valueOfJson(options) : Value());
+        entry(registry);
+    } catch (const std::exception &error) {
+        throw std::runtime_error(std::string("the extension ") + name + " failed to start: " + error.what());
+    } catch (...) {
+        throw std::runtime_error(std::string("the extension ") + name + " failed to start");
+    }
+}
+
+void startExtensions() {
+    Registry registry;
+    appFunctions(registry);
+    extensionEntries();
+    refusedFunctions(registry);
+    for (const auto &[scheme, owner] : urlSchemes()) {
+        if (hooks().urls.count(owner) == 0) {
+            throw std::runtime_error("the extension " + owner + " owns the scheme " + scheme + ", but does not call onUrl, which gets its links");
+        }
+    }
+    isSealed = true;
+}
+
+bool launched(const Launch *launch) {
+    if (launch && hooks().launch && !hooks().launch(*launch)) return false;
+    isLaunched = true;
+    return true;
+}
+
+void windowOpened() {
+    for (const auto &[extension, opened] : hooks().windows) {
+        try {
+            opened();
+        } catch (const std::exception &error) {
+            std::fprintf(stderr, "crossbind: the extension %s failed as the window opened: %s\n", extension.c_str(), error.what());
+        } catch (...) {
+            std::fprintf(stderr, "crossbind: the extension %s failed as the window opened\n", extension.c_str());
+        }
+    }
+}
+
+void quitting() {
+    static std::atomic<bool> hasQuit{false};
+    if (!isLaunched || hasQuit.exchange(true)) return;
+    for (const auto &[extension, quit] : hooks().quits) {
+        try {
+            quit();
+        } catch (const std::exception &error) {
+            std::fprintf(stderr, "crossbind: the extension %s failed as the app quit: %s\n", extension.c_str(), error.what());
+        } catch (...) {
+            std::fprintf(stderr, "crossbind: the extension %s failed as the app quit\n", extension.c_str());
+        }
+    }
+}
+
+void openUrlOf(const std::string &extension, const std::string &url) {
+    const auto hook = hooks().urls.find(extension);
+    if (hook == hooks().urls.end()) return;
+    try {
+        hook->second(url);
+    } catch (const std::exception &error) {
+        std::fprintf(stderr, "crossbind: the extension %s did not take a link: %s\n", extension.c_str(), error.what());
+    } catch (...) {
+        std::fprintf(stderr, "crossbind: the extension %s did not take a link\n", extension.c_str());
+    }
+}
 
 }  // namespace crossbind::app

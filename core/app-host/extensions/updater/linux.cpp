@@ -1,10 +1,11 @@
-#include "platform.h"
+#include "updater.h"
 
 #include <libsoup/soup.h>
 
 #include <stdexcept>
 #include <vector>
 
+namespace crossbind::updater {
 namespace {
 
 constexpr gsize READ_CHUNK = 64 * 1024;
@@ -64,3 +65,5 @@ void download(const std::string &url, const std::filesystem::path &file, std::ui
     g_main_context_unref(context);
     if (!failure.empty()) throw std::runtime_error(failure);
 }
+
+}  // namespace crossbind::updater

@@ -31,10 +31,10 @@ import { getContentHash, getFilesFingerprint } from '../utils/hash.js';
 import { xmlPlist } from '../utils/plist.js';
 import {
     appBackgroundColor, appCategory, appCopyright, appDisplayName, appEncryption, appHeader, appId, appPermissions, appPrivacy, appUrlSchemes,
-    usageDescriptions,
+    hostExtensionOptions, urlSchemeOwners, usageDescriptions,
 } from '../utils/appOptions.js';
 import { unreasonedApis, unreasonedWarning } from '../utils/requiredReasonApis.js';
-import { extensionPart, hostExtensions, mergedEntitlements, registrationSource } from '../utils/appExtensions.js';
+import { appHostExtensions, extensionPart, hostExtensions, mergedEntitlements, registrationSource, withListed } from '../utils/appExtensions.js';
 import { androidIcons, iosIcon, linuxIcon, macIcon, readAppIcon, windowsIcon } from '../utils/appIcon.js';
 import writeIfChanged from '../utils/writeIfChanged.js';
 import { writeNativeSourceStamp } from '../utils/nativeSourceStamp.js';
@@ -51,8 +51,12 @@ const LINUX_MULTIARCH = { x64: 'x86_64-linux-gnu', arm64: 'aarch64-linux-gnu' };
 // Where the android-app, linux and windows images keep the Hermes of the release crossbind pins.
 const IMAGE_HERMES = `/opt/crossbind/hermes/${HERMES.version}`;
 
-// What the host's extensions, and those crossbind.config.js lists, add to an app of this platform.
-const extensionsOf = (platform) => extensionPart([...hostExtensions(resolveAppHostRoot()), ...state.config.extensions], platform);
+// What the host's extensions the app has, with the options the app's give them, and those crossbind.config.js lists add
+// to an app of this platform; one listed under the name of one of the host's replaces it.
+const extensionsOf = (platform) => extensionPart(
+    withListed(appHostExtensions(resolveAppHostRoot(), hostExtensionOptions(state.config, platform)), state.config.extensions),
+    platform,
+);
 
 // Where an app keeps its executable and its files: a macOS bundle, a Linux or Windows directory, or the app folder of an
 // iOS app's Xcode project or of an Android app's Gradle project, which link the executable themselves.
@@ -475,14 +479,18 @@ export default async function buildApp(target, { bridges = [], force = false } =
         logger.info(`[${target.path}] app skipped (cargo package - staticlib only)`);
         return false;
     }
-    // Where the page opens files, a desktop host's title and window, a Windows one's version, and the app's icon: a bad
-    // app section stops the build before anything compiles.
+    // A desktop host's title and window, a Windows one's version, the app's icon and its extensions with their options, as
+    // where the page opens files: a bad app section stops the build before anything compiles.
     const header = appHeader(state.config, target.platform);
     const icon = readAppIcon(state.config);
+    const extensions = extensionsOf(target.platform);
+    const registration = registrationSource(extensions.native, urlSchemeOwners(state.config));
 
     const buildType = target.buildType === 'release' ? 'Release' : 'Debug';
     const { build } = state.config.paths;
     const appHostRoot = resolveAppHostRoot();
+    state.config.extensions.filter(({ name }) => hostExtensions(appHostRoot).some((own) => own.name === name))
+        .forEach(({ name, root }) => logger.info(`[${target.path}] the extension ${name} of ${root} replaces the host's own`));
     const jsiRoot = resolveAppEmbindJsiRoot();
     const { hermes, cmakeArgs, inputs } = await hostInputs(target);
 
@@ -500,8 +508,6 @@ export default async function buildApp(target, { bridges = [], force = false } =
     const sharedLibs = libs.filter((lib) => lib.endsWith('.so'));
     // The extensions' sources compile with the host, which links what they need: a framework on macOS, a library elsewhere.
     // An iOS host is a static library, whose frameworks the app's Xcode project links.
-    const extensions = extensionsOf(target.platform);
-    const registration = registrationSource(extensions.native);
     const hostLinkArgs = [...linkArgs, ...(target.platform === 'darwin' ? extensions.frameworks.map((framework) => `-framework ${framework}`) : extensions.libraries)];
 
     const fingerprintFile = `${build}/${target.appName}.fingerprint`;

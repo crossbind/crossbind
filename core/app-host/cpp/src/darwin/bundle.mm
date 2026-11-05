@@ -5,8 +5,8 @@
 #include "crossbind_app.h"
 #include "platform.h"
 
-#ifdef CROSSBIND_APP_URL_SCHEMES
-// What the Apple Event of a link does: it tells the page, and brings the window to the front, restored if minimized.
+// What the Apple Event of a link does: it reaches the owner of its scheme, and brings the window to the front, restored
+// if minimized.
 @interface CrossbindUrlHandler : NSObject
 - (void)openUrl:(NSAppleEventDescriptor *)event withReplyEvent:(NSAppleEventDescriptor *)reply;
 @end
@@ -22,11 +22,9 @@
 }
 
 @end
-#endif
 
 std::string resourceDir() { return NSBundle.mainBundle.resourcePath.UTF8String; }
 
-#ifdef CROSSBIND_APP_URL_SCHEMES
 void listenForUrls() {
     static CrossbindUrlHandler *handler = [CrossbindUrlHandler new];
     // AppKit sets a handler of its own as it starts to finish launching, before the launch's link arrives.
@@ -40,7 +38,6 @@ void listenForUrls() {
                                                                                                     andEventID:kAEGetURL];
                                                 }];
 }
-#endif
 
 void showError(const std::string &message) {
     [NSApplication sharedApplication];
@@ -52,22 +49,6 @@ void showError(const std::string &message) {
     alert.messageText = [NSString stringWithFormat:@"%@ cannot open", @(CROSSBIND_APP_NAME)];
     alert.informativeText = @(message.c_str());
     [alert runModal];
-}
-
-void listenForSleep() {
-    NSNotificationCenter *center = NSWorkspace.sharedWorkspace.notificationCenter;
-    [center addObserverForName:NSWorkspaceWillSleepNotification
-                        object:nil
-                         queue:nil
-                    usingBlock:^(NSNotification *) {
-                      crossbind::app::postEvent("suspend", "null");
-                    }];
-    [center addObserverForName:NSWorkspaceDidWakeNotification
-                        object:nil
-                         queue:nil
-                    usingBlock:^(NSNotification *) {
-                      crossbind::app::postEvent("resume", "null");
-                    }];
 }
 
 void onQuit(std::function<void()> quit) {

@@ -1,0 +1,9 @@
+{
+    "name": "instance",
+    "app": {
+        "sources": ["instance.cpp"],
+        "darwin": { "sources": ["posix.cpp"] },
+        "linux": { "sources": ["posix.cpp"] },
+        "win32": { "sources": ["windows.cpp"] }
+    }
+}

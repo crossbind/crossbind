@@ -1,7 +1,6 @@
 #include "app.h"
 
 #include "crossbind_app.h"
-#include "instance.h"
 
 #include <atomic>
 #include <cstdio>
@@ -27,10 +26,23 @@ const char *devUrl() {
 #endif
 }
 
-Core &start(const char *devUrl) {
+Core &start(const char *devUrl, const Launch *launch) {
     const std::string resources = resourceDir();
     Core &core = *new Core(resources + "/page");
     core.cors = devUrl != nullptr;
+    try {
+        startExtensions();
+        // A launch that ends here, as one the instance that runs took, skips the static destructors of the app's code,
+        // as quit() does, and the extensions' onQuit.
+        if (!launched(launch)) {
+            std::fflush(nullptr);
+            std::_Exit(0);
+        }
+    } catch (const std::exception &error) {
+        fail(core, devUrl, error.what());
+    } catch (...) {
+        fail(core, devUrl, "an extension failed as the app started");
+    }
     std::string bootError;
     try {
         bootError = core.boot(readFile(resources + "/host.hbc"), "host.hbc", resources + "/data");
@@ -42,10 +54,9 @@ Core &start(const char *devUrl) {
 }
 
 void quit(Core &core, int status) {
-#ifdef CROSSBIND_APP_SINGLE_INSTANCE
-    // A later launch waits for this instance to end, which may take the module a while, and becomes the next.
-    leaveInstance();
-#endif
+    // The extensions quit before the module stops, which may take it a while: a later launch of an app kept to one
+    // instance then waits for this one to end, and becomes the next.
+    quitting();
     core.stop();
     // The instance left, the app this opens becomes the next. An app its user opened has no output, as fail() tells.
     if (status == 0 && isOpeningAnew) {
@@ -73,10 +84,8 @@ void relaunchApp() {
 }
 
 void fail(Core &core, const char *devUrl, const std::string &reason) {
-#ifdef CROSSBIND_APP_SINGLE_INSTANCE
     // Nor while its box shows.
-    leaveInstance();
-#endif
+    quitting();
     std::fprintf(stderr, "crossbind: %s\n", reason.c_str());
     // A development session and a run with CROSSBIND_APP_CONSOLE read the output; an app its user opened has none, and
     // its box shows the reason's first line, without the stack a script's error carries. The module stops first, so

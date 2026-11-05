@@ -48,14 +48,24 @@ defaults and current limits (macOS, Linux, Windows, iOS and Android for now).
   trash, the app's folders, quitting and opening anew, events for the page and a desktop app's updates.
   `src/app_api.cpp` answers them and adds the page's `crossbind/app` functions to the registry of
   `cpp/include/crossbind/extension.h` (`src/extension.cpp`), which answers the page's calls with JSON values; each
-  platform's `app_api` does the work, and its
-  `menu` the page's menus and tray; a Linux app's tray and notifications are `src/linux/tray.cpp` and
-  `notifications.cpp`, over D-Bus, and a Windows app's notifications balloons of its tray's icon;
-  `src/updater.cpp` checks and installs updates, which each platform's `update` downloads, and
-  `src/reopen.cpp` opens the app anew after it and `app.relaunch()`; `src/instance.cpp` (macOS and Linux) and
-  `src/windows/instance.cpp` hand a later launch of an app with `app.singleInstance` to the instance that runs.
-- `extensions/` — the host's own extensions, which every app has, each in the folder its `extension.json` describes:
-  `dialog/` shows the file and message dialogs on each platform, through `<crossbind/extension.h>` alone.
+  platform's `app_api` does the work, and a macOS app's `menu` the menus it starts with;
+  `src/reopen.cpp` opens the app anew after `app.relaunch()` and an update; `src/launch.cpp` reads a desktop app's
+  launch, whose links, as every link the system opens an app with, `src/app_api.cpp` hands to the owner of their scheme.
+- `extensions/` — the host's own extensions, each in the folder its `extension.json` describes, all through
+  `<crossbind/app.h>` and `<crossbind/extension.h>` alone. Every app has `dialog/`, which shows the file and message
+  dialogs on each platform; `menu/`, which shows the page's menus, a desktop app's tray icon and the system's
+  notifications, a Linux app's tray and notifications over D-Bus and a Windows app's notifications as balloons of its
+  tray's icon; and `shell/`, which opens addresses and files outside the app, shows files in the file manager and
+  moves them to the trash, where the page may reach them. Every desktop app has `power/`, which tells the page when the
+  system goes to sleep and wakes: through NSWorkspace on macOS, logind on Linux and the window's messages on Windows,
+  from the time the window opens. An app that lists `app.urlSchemes` has `links/`, which holds their links for the page
+  as the event `open-url`. A desktop app that `app.singleInstance` keeps to one instance
+  alone has `instance/`, which hands a later launch to the instance that runs: through a lock and a socket on macOS and
+  Linux (`posix.cpp`), a mutex and a message window on Windows (`windows.cpp`). A desktop app with `app.updater` alone
+  has `updater/`, which checks and installs its updates, each platform's file downloading them; `src/app_api.cpp`
+  refuses the updater's functions to any other app.
+- `extensions/updater/monocypher/` — Monocypher 4.0.3 (BSD-2-Clause or CC0-1.0), whose Ed25519 and SHA-512 check a
+  desktop app's updates; provenance in its README.
 - `third_party/webview/` — webview/webview (MIT), vendored at a pinned commit; provenance and the local patch are in
   its README.
 - `third_party/jsi/` — JSI's `jsi.cpp` (MIT) from the Hermes release the host links, and on Android its headers.
@@ -63,8 +73,6 @@ defaults and current limits (macOS, Linux, Windows, iOS and Android for now).
   plugins a Windows app's setup program carries; provenance in its README.
 - `third_party/webview2/` — the license of the WebView2 SDK (BSD-3-Clause), whose headers crossbind's windows image
   carries for a Windows host.
-- `third_party/monocypher/` — Monocypher 4.0.3 (BSD-2-Clause or CC0-1.0), whose Ed25519 and SHA-512 check a desktop
-  app's updates; provenance in its README.
 
 Hermes itself (MIT) is React Native's published build: on macOS and iOS downloaded once into `~/.crossbind/hermes/`
 and checked against the sha256 crossbind pins, and on Android carried by crossbind's android-app image. Linux and
