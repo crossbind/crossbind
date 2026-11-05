@@ -33,8 +33,9 @@ vi.mock('../src/actions/windowsSigning.js', async (importOriginal) => ({ ...awai
 
 const { checkInstaller, installersFor, writeInstallers } = await import('../src/actions/appInstaller.js');
 const {
-    debianControl, debianName, debianVersion, desktopEntry, maintainer,
+    debianControl, debianName, debianVersion, desktopEntry, linuxFileTypes, maintainer, mimePackage,
 } = await import('../src/installers/deb/index.js');
+const { fileTypesMacro } = await import('../src/installers/nsis/index.js');
 const { checkedExtension } = await import('../src/utils/appExtensions.js');
 const { newUpdaterKey } = await import('../src/actions/appUpdate.js');
 
@@ -111,6 +112,9 @@ describe("a Linux app's Debian package", () => {
             'Package: demo', 'Version: 1.0.0~beta.1', 'Architecture: arm64', 'Maintainer: Demo', 'Depends: libwebkit2gtk-4.1-0 (>= 2.40), libgtk-3-0',
             'Description: Demo', '',
         ].join('\n'));
+        // The packages its extensions' libraries come in, beside WebKitGTK and GTK.
+        expect(debianControl({ ...control, depends: ['libzstd1', 'libsecret-1-0 (>= 0.20.5)'] }))
+            .toContain('Depends: libwebkit2gtk-4.1-0 (>= 2.40), libgtk-3-0, libzstd1, libsecret-1-0 (>= 0.20.5)\n');
     });
 
     test('has a desktop entry that starts its command, with its icon when it has one', () => {
@@ -121,6 +125,10 @@ describe("a Linux app's Debian package", () => {
         // A link of one of its schemes opens it, with the link as its argument.
         expect(desktopEntry({ label: 'My Demo', command: 'demo', hasIcon: false, urlSchemes: ['myapp', 'other'] })).toBe(
             '[Desktop Entry]\nType=Application\nName=My Demo\nExec=demo %u\nMimeType=x-scheme-handler/myapp;x-scheme-handler/other;\nTerminal=false\n',
+        );
+        // Files of its MIME types open it with their paths or file: URLs, as a link of its schemes does.
+        expect(desktopEntry({ label: 'My Demo', command: 'demo', hasIcon: false, urlSchemes: ['myapp'], mimeTypes: ['application/geo+json', 'application/geo+json'] })).toBe(
+            '[Desktop Entry]\nType=Application\nName=My Demo\nExec=demo %U\nMimeType=x-scheme-handler/myapp;application/geo+json;\nTerminal=false\n',
         );
         // A menu shows it under the categories app.category gives.
         expect(desktopEntry({ label: 'My Demo', command: 'demo', hasIcon: false, categories: 'Audio;AudioVideo' })).toBe(
@@ -176,6 +184,42 @@ describe("a Linux app's Debian package", () => {
             .rejects.toThrow(`crossbind: deb runs dpkg-deb in ${elsewhere}, outside ${root}, the project's base and all the linux container sees.`);
         expect(run).not.toHaveBeenCalled();
         expect(fs.existsSync(path.join(root, 'build', 'deb', 'demo-linux-x64'))).toBe(false);
+    });
+});
+
+describe("the file types an installer registers", () => {
+    const types = [
+        { name: 'Geo "JSON" & <maps> $HOME', extensions: ['geojson', 'geo'], mimeTypes: ['application/geo+json'], role: 'editor', contentTypes: [] },
+        { name: 'Track', extensions: ['trk'], mimeTypes: [], role: 'viewer', contentTypes: [] },
+    ];
+
+    test("tell a Linux system of each type's extensions, under one of the app's MIME types where the type gives none", () => {
+        const linux = linuxFileTypes('demo-app', types);
+        expect(linux.map(({ mimeTypes }) => mimeTypes)).toEqual([['application/geo+json'], ['application/x-demo-app-trk']]);
+        expect(mimePackage(linux)).toBe([
+            '<?xml version="1.0" encoding="UTF-8"?>',
+            '<mime-info xmlns="http://www.freedesktop.org/standards/shared-mime-info">',
+            '  <mime-type type="application/geo+json">',
+            '    <comment>Geo "JSON" &amp; &lt;maps&gt; $HOME</comment>',
+            '    <glob pattern="*.geojson"/>',
+            '    <glob pattern="*.geo"/>',
+            '  </mime-type>',
+            '  <mime-type type="application/x-demo-app-trk">',
+            '    <comment>Track</comment>',
+            '    <glob pattern="*.trk"/>',
+            '  </mime-type>',
+            '</mime-info>', '',
+        ].join('\n'));
+    });
+
+    test("give a Windows setup program each extension with its type's name, quoted as its script takes it", () => {
+        expect(fileTypesMacro(types)).toBe([
+            '!macro CROSSBIND_FILE_TYPES DO',
+            '  !insertmacro ${DO} "geojson" "Geo $\\"JSON$\\" & <maps> $$HOME"',
+            '  !insertmacro ${DO} "geo" "Geo $\\"JSON$\\" & <maps> $$HOME"',
+            '  !insertmacro ${DO} "trk" "Track"',
+            '!macroend', '',
+        ].join('\n'));
     });
 });
 

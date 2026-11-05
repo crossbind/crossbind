@@ -61,8 +61,9 @@ defaults and current limits (macOS, Linux, Windows, iOS and Android for now).
   `shell/`, which opens addresses and files outside the app, shows files in the file manager and moves them to the
   trash, where the page may reach them. Every desktop app has `power/`, which tells the page when the
   system goes to sleep and wakes: through NSWorkspace on macOS, logind on Linux and the window's messages on Windows,
-  from the time the window opens. An app that lists `app.urlSchemes` has `links/`, which holds their links for the page
-  as the event `open-url`. A desktop app that `app.singleInstance` keeps to one instance
+  from the time the window opens. An app that lists `app.urlSchemes`, or a phone's `app.links`, has `links/`, which
+  holds their links for the page as the event `open-url`, and one that opens files has `files/`, which holds those no
+  extension owns as the event `open-files`. A desktop app that `app.singleInstance` keeps to one instance
   alone has `instance/`, which hands a later launch to the instance that runs: through a lock and a socket on macOS and
   Linux (`posix.cpp`), a mutex and a message window on Windows (`windows.cpp`). A desktop app with `app.updater` alone
   has `updater/`, which checks and installs its updates, each platform's file downloading them; `src/app_api.cpp`

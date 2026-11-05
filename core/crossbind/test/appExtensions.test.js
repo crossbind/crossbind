@@ -3,7 +3,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, test } from 'vitest';
 import {
-    appExtensionsOf, appHostExtensions, checkedExtension, checkedInstaller, checkedPublisher, extensionCmakeArgs, extensionPart, hostExtensions, listedExtension, mergedEntitlements,
+    appExtensionsOf, appHostExtensions, checkedExtension, checkedInstaller, checkedPublisher, extensionCmakeArgs, extensionPart, hostExtensions, linuxDepends, listedExtension, mergedEntitlements,
     mergedPlist, mergedPrivacy,
     registrationSource, withListed, withOptions,
 } from '../src/utils/appExtensions.js';
@@ -70,7 +70,7 @@ describe("an app host's own extensions", () => {
         expect(() => hostExtensions(newer)).toThrow("is written for crossbind's extension contract 2, newer than this crossbind's 1: update crossbind.");
     });
 
-    test("of crossbind's own host are the dialog's, the instance's, the links', the menu's, the page's dialogs, files, location and permissions, the power's, the shell's and the updater's, which each platform's sources show", () => {
+    test("of crossbind's own host are the dialog's, the files', the instance's, the links', the menu's, the page's dialogs, files, location and permissions, the power's, the shell's and the updater's, which each platform's sources show", () => {
         const root = path.join(import.meta.dirname, '..', '..', 'app-host');
         const sources = (platform, options = {}) => extensionPart(appHostExtensions(root, options), platform).sources
             .map((file) => path.relative(path.join(file, '..', '..'), file));
@@ -79,8 +79,10 @@ describe("an app host's own extensions", () => {
         const instance = { instance: { id: 'com.example.demo' } };
         const linuxMenu = ['menu/menu.cpp', 'menu/linux.cpp', 'menu/linux-tray.cpp', 'menu/linux-notifications.cpp'];
         expect(hostExtensions(root).map(({ name }) => name)).toEqual([
-            'dialog', 'instance', 'links', 'menu', 'page-dialogs', 'page-files', 'page-location', 'page-permissions', 'power', 'shell', 'updater',
+            'dialog', 'files', 'instance', 'links', 'menu', 'page-dialogs', 'page-files', 'page-location', 'page-permissions', 'power', 'shell', 'updater',
         ]);
+        expect(sources('linux', { files: {} })).toContain('files/files.cpp');
+        expect(sources('linux')).not.toContain('files/files.cpp');
         const page = (platform) => ['page-dialogs/dialogs.cpp', `page-dialogs/${platform}`, ...(platform === 'darwin.mm' ? ['page-files/darwin.mm'] : []), 'page-permissions/permissions.cpp'];
         expect(sources('ios', { links: {} })).toEqual(['dialog/dialog.cpp', 'dialog/ios.mm', 'links/links.cpp', 'menu/menu.cpp', 'menu/ios.cpp', ...page('ios.mm'), 'shell/shell.cpp', 'shell/ios.mm']);
         expect(sources('darwin')).toEqual([
@@ -132,7 +134,8 @@ describe("an app host's own extensions", () => {
         const named = withOptions(extensions, { shell: { openPath: ['data'] } });
         expect(named[0]).toBe(extensions[0]);
         expect(extensionPart(named, 'darwin').native).toEqual([
-            { name: 'dialog', options: null }, { name: 'instance', options: null }, { name: 'links', options: null }, { name: 'menu', options: null },
+            { name: 'dialog', options: null }, { name: 'files', options: null }, { name: 'instance', options: null }, { name: 'links', options: null },
+            { name: 'menu', options: null },
             { name: 'page-dialogs', options: null }, { name: 'page-files', options: null }, { name: 'page-location', options: null },
             { name: 'page-permissions', options: null }, { name: 'power', options: null }, { name: 'shell', options: { openPath: ['data'] } }, { name: 'updater', options: null },
         ]);
@@ -194,9 +197,9 @@ describe('an extension', () => {
     });
 
     test('adds parts of the platforms an app builds for alone, each of what that platform takes', () => {
-        expect(check({ web: {} })).toThrow("crossbind: dialog's app takes sources, includes, defines, urlSchemes, licenses and macos, ios, linux, windows, android; web is none of them.");
-        expect(check({ linux: { frameworks: ['Gtk'] } })).toThrow("crossbind: dialog's app.linux takes sources, includes, defines, libraries; frameworks is none of them.");
-        expect(check({ android: { entitlements: {} } })).toThrow("crossbind: dialog's app.android takes sources, includes, defines, libraries, java, class, permissions, manifest, resources; entitlements is none of them.");
+        expect(check({ web: {} })).toThrow("crossbind: dialog's app takes sources, includes, defines, urlSchemes, fileTypes, links, licenses and macos, ios, linux, windows, android; web is none of them.");
+        expect(check({ linux: { frameworks: ['Gtk'] } })).toThrow("crossbind: dialog's app.linux takes sources, includes, defines, libraries, packages, depends; frameworks is none of them.");
+        expect(check({ android: { entitlements: {} } })).toThrow("crossbind: dialog's app.android takes sources, includes, defines, libraries, java, class, permissions, manifest, resources, maven, verification; entitlements is none of them.");
     });
 
     test("declares the schemes whose links its native code gets, by app.urlSchemes' rules", () => {
@@ -207,17 +210,45 @@ describe('an extension', () => {
         expect(check({ urlSchemes: ['myapp', 'myapp'] })).toThrow("crossbind: dialog's app.urlSchemes lists a scheme twice");
     });
 
-    test("reaches its Java through one class in a package, whose source its Java's folder holds", () => {
+    test("reaches its Java through one class in a package, whose source in Java or Kotlin its Java's folder holds", () => {
         const DIALOG_CLASS = 'dev.crossbind.extension.dialog.DialogExtension';
         for (const android of [{ java: 'android/' }, { class: DIALOG_CLASS }]) {
             expect(check({ android })).toThrow("crossbind: dialog's app.android takes java and class together: the folder of its Java and the Extension class in it the app calls.");
         }
         expect(check({ android: { java: 'android/', class: 'DialogExtension' } }))
             .toThrow("crossbind: dialog's app.android.class names DialogExtension, which is no Java class in a package.");
-        const missing = `${path.join('android/', 'dev', 'crossbind', 'extension', 'dialog', 'Missing')}.java`;
+        const missing = path.join('android/', 'dev', 'crossbind', 'extension', 'dialog', 'Missing');
         expect(check({ android: { java: 'android/', class: 'dev.crossbind.extension.dialog.Missing' } }))
-            .toThrow(`crossbind: dialog's app.android.class names dev.crossbind.extension.dialog.Missing, which has no source ${missing}.`);
+            .toThrow(`crossbind: dialog's app.android.class names dev.crossbind.extension.dialog.Missing, which has no source ${missing}.java or ${missing}.kt.`);
         expect(check({ android: { java: 'android/', class: DIALOG_CLASS } })).not.toThrow();
+        const kotlin = root();
+        fs.writeFileSync(path.join(kotlin, 'android', 'dev', 'crossbind', 'extension', 'dialog', 'KotlinExtension.kt'), '');
+        expect(() => checkedExtension({ name: 'dialog', app: { android: { java: 'android/', class: 'dev.crossbind.extension.dialog.KotlinExtension' } } }, kotlin, 'dialog'))
+            .not.toThrow();
+    });
+
+    test("takes a Linux part's Ubuntu packages by architecture, file and SHA-256, and the Debian packages the app needs", () => {
+        const sha = '971297916405f1f184ec0ee5f18734b448a80b45813fe40ff2e00b77609689e7';
+        expect(check({ linux: { packages: [`arm64 libzstd-dev_1.4.8+dfsg-3build1_arm64.deb ${sha}`, `amd64 tzdata_2024a-0ubuntu0.22.04_all.deb ${sha}`], depends: ['libzstd1 (>= 1.4)'] } }))
+            .not.toThrow();
+        for (const line of [`amd64 libzstd-dev_1.4.8_arm64.deb ${sha}`, `i386 libzstd-dev_1.4.8_i386.deb ${sha}`, 'amd64 libzstd-dev_1.4.8_amd64.deb abc', `amd64 ../evil_1_amd64.deb ${sha}`]) {
+            expect(check({ linux: { packages: [line] } })).toThrow('which is no "<arch> <file> <sha256>" of an Ubuntu 22.04 package of amd64 or arm64');
+        }
+        expect(check({ linux: { depends: ['libzstd1; reboot'] } })).toThrow("crossbind: dialog's app.linux.depends is no list of the Debian packages the app needs");
+        expect(check({ macos: { packages: [] } })).toThrow('packages is none of them');
+    });
+
+    test("takes an Android part's Maven libraries of one version each, with the verification metadata of their files", () => {
+        const dir = root();
+        fs.writeFileSync(path.join(dir, 'android', 'verification-metadata.xml'), '');
+        const withMaven = (android) => () => checkedExtension({ name: 'dialog', app: { android } }, dir, 'dialog');
+        expect(withMaven({ maven: ['javax.inject:javax.inject:1', 'androidx.core:core:1.13.1@aar'], verification: 'android/verification-metadata.xml' })).not.toThrow();
+        for (const maven of [['javax.inject:javax.inject:1.+'], ['javax.inject:javax.inject'], 'javax.inject:javax.inject:1', ['javax.inject:javax.inject:[1,2)']]) {
+            expect(withMaven({ maven, verification: 'android/verification-metadata.xml' }))
+                .toThrow("crossbind: dialog's app.android.maven is no list of Maven libraries of one version each, as ['javax.inject:javax.inject:1'].");
+        }
+        expect(withMaven({ maven: ['javax.inject:javax.inject:1'] })).toThrow("crossbind: dialog's app.android takes maven and verification together");
+        expect(withMaven({ verification: 'android/verification-metadata.xml' })).toThrow("crossbind: dialog's app.android takes maven and verification together");
     });
 
     test('compiles its own C++ everywhere, and Objective-C++ on Apple platforms alone', () => {
@@ -526,7 +557,7 @@ describe("what an app's extensions add on a platform", () => {
         const withMacros = [{ ...dialog, app: { ...dialog.app, includes: ['native'], defines: ['DIALOG_LIMIT=10'], linux: { defines: ['DIALOG_GTK=3'] } } }];
         const { compiled } = extensionPart(withMacros, 'linux');
         expect(compiled).toEqual([{
-            name: 'dialog', sources: [path.join(dialog.root, 'native/dialog.cpp')], includes: [path.join(dialog.root, 'native')], defines: ['DIALOG_LIMIT=10', 'DIALOG_GTK=3'],
+            name: 'dialog', sources: [path.join(dialog.root, 'native/dialog.cpp')], swift: [], packages: [], includes: [path.join(dialog.root, 'native')], defines: ['DIALOG_LIMIT=10', 'DIALOG_GTK=3'],
         }]);
         expect(extensionCmakeArgs([...compiled, { name: 'page-dialogs', sources: ['/x/a.cpp', '/x/b.mm'], includes: [], defines: [] }])).toEqual([
             '-DCROSSBIND_EXTENSIONS=dialog;page_dialogs',
@@ -538,6 +569,36 @@ describe("what an app's extensions add on a platform", () => {
             '-DCROSSBIND_EXTENSION_page_dialogs_DEFINES=',
         ]);
         expect(extensionCmakeArgs([])).toEqual(['-DCROSSBIND_EXTENSIONS=']);
+    });
+
+    test("compiles an Apple part's Swift apart from the sources whose C++ holds the extension's entry", () => {
+        const [dialog] = extensions();
+        const withSwift = (macos) => [{ ...dialog, app: { ...dialog.app, macos } }];
+        const [compiled] = extensionPart(withSwift({ sources: ['native/darwin.mm', 'native/store.swift'] }), 'darwin').compiled;
+        expect(compiled.sources).toEqual([path.join(dialog.root, 'native/dialog.cpp'), path.join(dialog.root, 'native/darwin.mm')]);
+        expect(compiled.swift).toEqual([path.join(dialog.root, 'native/store.swift')]);
+        const swiftAlone = [{ ...dialog, app: { macos: { sources: ['native/store.swift'] } } }];
+        expect(() => extensionPart(swiftAlone, 'darwin'))
+            .toThrow('crossbind: the extension dialog has Swift alone on macos, whose entry, crossbind_extension_dialog, a C++ or Objective-C++ source of its own defines.');
+    });
+
+    test("unpacks a Linux part's pinned Ubuntu packages for its sources, and gives the app's package what they need", () => {
+        const [dialog] = extensions();
+        const zstd = ['amd64 libzstd-dev_1.4.8+dfsg-3build1_amd64.deb 971297916405f1f184ec0ee5f18734b448a80b45813fe40ff2e00b77609689e7'];
+        const withPackages = [{ ...dialog, app: { ...dialog.app, linux: { packages: zstd, depends: ['libzstd1'] } } }];
+        expect(extensionPart(withPackages, 'linux').compiled[0].packages).toEqual(zstd);
+        expect(extensionPart(withPackages, 'darwin').compiled[0].packages).toEqual([]);
+        expect(linuxDepends([...withPackages, { ...dialog, name: 'other', app: { linux: { depends: ['libzstd1', 'libsecret-1-0 (>= 0.20.5) | libsecret-1-1'] } } }]))
+            .toEqual(['libzstd1', 'libsecret-1-0 (>= 0.20.5) | libsecret-1-1']);
+    });
+
+    test("is each Android part's Maven libraries, with the verification metadata of their files, which the app's Gradle project takes", () => {
+        const [dialog] = extensions();
+        const android = { ...dialog.app.android, maven: ['javax.inject:javax.inject:1'], verification: 'android/verification-metadata.xml' };
+        expect(extensionPart([{ ...dialog, app: { ...dialog.app, android } }], 'android').maven).toEqual([
+            { name: 'dialog', coordinates: ['javax.inject:javax.inject:1'], verification: path.join(dialog.root, 'android/verification-metadata.xml') },
+        ]);
+        expect(extensionPart([dialog], 'android').maven).toEqual([]);
     });
 
     test('stops at two extensions of one name', () => {
@@ -614,9 +675,25 @@ describe("an Apple app's Info.plist and an iOS app's privacy reasons", () => {
 
 describe("the host's registration of its extensions", () => {
     const HEAD = `// crossbind writes this file from the app's extensions: the entry of each one with native code, which starts it with
-// its options, and the owner of each of the app's URL schemes, the extension that gets its links.
+// its options, and the owner of each of the app's URL schemes, file types, their MIME types and links, the extension
+// that gets them.
 #include "crossbind/extension.h"
 `;
+    const NO_OWNERS = `std::vector<std::pair<std::string, std::string>> urlSchemes() {
+    return {};
+}
+
+std::vector<std::pair<std::string, std::string>> fileTypes() {
+    return {};
+}
+
+std::vector<std::pair<std::string, std::string>> fileMimeTypes() {
+    return {};
+}
+
+std::vector<std::pair<std::string, std::string>> appLinks() {
+    return {};
+}`;
 
     test('starts each extension with native code through its entry, with its options', () => {
         expect(registrationSource([{ name: 'dialog', options: null }, { name: 'secure-storage', options: { openPath: ['logs'] } }], [])).toBe(`${HEAD}
@@ -632,9 +709,7 @@ void extensionEntries() {
     startExtension("secure-storage", R"crossbind_json({"openPath":["logs"]})crossbind_json", crossbind_extension_secure_storage);
 }
 
-std::vector<std::pair<std::string, std::string>> urlSchemes() {
-    return {};
-}
+${NO_OWNERS}
 
 }  // namespace crossbind::app
 `);
@@ -646,6 +721,29 @@ std::vector<std::pair<std::string, std::string>> urlSchemes() {
         const native = [{ name: 'links', options: null }, { name: 'oauth', options: null }];
         const source = registrationSource(native, [{ scheme: 'myapp', extension: null }, { scheme: 'myapp.oauth', extension: 'oauth' }]);
         expect(source).toContain('    return {{"myapp", "links"}, {"myapp.oauth", "oauth"}};\n');
+    });
+
+    test("names the owner of each file type's extension and each link: the extension that declared it, or the host's files or links", () => {
+        const native = [{ name: 'files', options: null }, { name: 'links', options: null }, { name: 'maps', options: null }];
+        const source = registrationSource(native, [], [
+            { name: 'GeoJSON', extensions: ['geojson', 'geo'], extension: null }, { name: 'KML', extensions: ['kml'], extension: 'maps' },
+        ], [{ link: 'example.com', extension: null }, { link: 'example.com/map', extension: 'maps' }]);
+        expect(source).toContain('fileTypes() {\n    return {{"geojson", "files"}, {"geo", "files"}, {"kml", "maps"}};\n');
+        expect(source).toContain('appLinks() {\n    return {{"example.com", "links"}, {"example.com/map", "maps"}};\n');
+        expect(() => registrationSource([{ name: 'links', options: null }], [], [{ name: 'KML', extensions: ['kml'], extension: 'maps' }]))
+            .toThrow('crossbind: the extension maps gets the files .kml, but has no native code on this platform.');
+        expect(() => registrationSource([], [], [], [{ link: 'example.com', extension: null }]))
+            .toThrow('crossbind: the extension links gets the links of example.com, but has no native code on this platform.');
+    });
+
+    test("names the owner of each MIME type one owner's types alone list, which names an Android file's before its name", () => {
+        const native = [{ name: 'files', options: null }, { name: 'maps', options: null }];
+        const source = registrationSource(native, [], [
+            { name: 'GeoJSON', extensions: ['geojson'], mimeTypes: ['application/geo+json', 'application/json'], extension: null },
+            { name: 'Map JSON', extensions: ['mapjson'], mimeTypes: ['application/geo+json'], extension: null },
+            { name: 'KML', extensions: ['kml'], mimeTypes: ['application/vnd.google-earth.kml+xml', 'application/json'], extension: 'maps' },
+        ]);
+        expect(source).toContain('fileMimeTypes() {\n    return {{"application/geo+json", "files"}, {"application/vnd.google-earth.kml+xml", "maps"}};\n');
     });
 
     test('refuses a scheme whose owner has no native code to get its links', () => {
@@ -664,9 +762,7 @@ void startExtension(const char *name, const char *options, void (*entry)(Registr
 void extensionEntries() {
 }
 
-std::vector<std::pair<std::string, std::string>> urlSchemes() {
-    return {};
-}
+${NO_OWNERS}
 
 }  // namespace crossbind::app
 `);

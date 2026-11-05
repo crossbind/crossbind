@@ -14,7 +14,9 @@ import { secretFile } from '../utils/secretFile.js';
 const ROLE = 'android-app';
 const PLATFORM = 'linux/amd64';
 const KEYSTORE = '/tmp/crossbind/keystore';
-const GRADLE = ['gradle', '--offline', '--no-watch-fs', '--console=plain', '-q'];
+// An extension's Kotlin compiles inside Gradle's own process: with the container's home /, the Kotlin daemon's client
+// walked files for hours looking for a daemon to use.
+const GRADLE = ['gradle', '--offline', '--no-watch-fs', '--console=plain', '-q', '-Pkotlin.compiler.execution.strategy=in-process'];
 const OUTPUT_LIMIT = 64 * 1024 * 1024;
 const FAILURE_LINES = 40;
 
@@ -74,11 +76,16 @@ function homes() {
     return [[path.join(root, 'gradle'), '/var/cache/crossbind/gradle'], [path.join(root, 'home'), '/var/cache/crossbind/android']];
 }
 
-// A container of crossbind's android-app image, with no network: the project under the build's base, the homes, and
-// the keystore read-only, its passwords passed by name from this environment.
-function containerArgs(signing) {
+// A project whose extensions ask Maven for libraries carries the verification metadata of every file it resolves, and
+// resolves what the image's cache lacks online; any other builds offline against the cache alone.
+const isOnline = (project) => fs.existsSync(path.join(project, 'gradle', 'verification-metadata.xml'));
+const gradleOf = (project) => (isOnline(project) ? GRADLE.filter((arg) => arg !== '--offline') : GRADLE);
+
+// A container of crossbind's android-app image, with no network but for an online project: the project under the
+// build's base, the homes, and the keystore read-only, its passwords passed by name from this environment.
+function containerArgs(signing, isNetworked = false) {
     return [
-        ...DOCKER_RUN_SECURITY_ARGS, '--network', 'none', '--platform', PLATFORM, '--user', getOsUserAndGroupId(),
+        ...DOCKER_RUN_SECURITY_ARGS, ...(isNetworked ? [] : ['--network', 'none']), '--platform', PLATFORM, '--user', getOsUserAndGroupId(),
         '-v', `${state.config.paths.base}:${DOCKER_BASE}`,
         ...homes().flatMap(([host, container]) => {
             fs.mkdirSync(host, { recursive: true });
@@ -113,8 +120,8 @@ export function packageAndroidRelease(project) {
     const env = key ? { ...process.env, ...uploadKeyEnv(key) } : process.env;
     const signing = releaseSigning(env);
     pullDockerImage(ROLE, PLATFORM);
-    docker(['run', '--rm', ...containerArgs(signing), '-w', inContainer(project), getDockerImage(ROLE, PLATFORM),
-        ...GRADLE, '--no-daemon', 'assembleRelease', ...(signing ? ['bundleRelease'] : [])], `packaging ${path.basename(project)}`, env);
+    docker(['run', '--rm', ...containerArgs(signing, isOnline(project)), '-w', inContainer(project), getDockerImage(ROLE, PLATFORM),
+        ...gradleOf(project), '--no-daemon', 'assembleRelease', ...(signing ? ['bundleRelease'] : [])], `packaging ${path.basename(project)}`, env);
     const outputs = `${project}/app/build/outputs`;
     fs.copyFileSync(`${outputs}/apk/release/app-release.apk`, `${project}.apk`);
     fs.rmSync(`${project}.aab`, { force: true });
@@ -132,25 +139,27 @@ export function packageAndroidRelease(project) {
 }
 
 // During development one container per project, whose Gradle daemon stays warm from one build to the next; it goes with
-// the process.
+// the process, and comes anew when the project comes to need the network, or no longer does.
 let devContainer = null;
 
-function startDevContainer() {
+function startDevContainer(isNetworked) {
     const name = `crossbind-android-app-${getContentHash(state.config.paths.project).slice(0, 12)}`;
     pullDockerImage(ROLE, PLATFORM);
-    // One a crashed session left behind holds the name.
+    // One a crashed session, or the project's need of the network before, left behind holds the name.
     spawnSync('docker', ['rm', '--force', name], { stdio: 'ignore' });
-    docker(['run', '--detach', '--rm', '--init', '--name', name, ...containerArgs(null), getDockerImage(ROLE, PLATFORM), 'sleep', 'infinity'],
+    docker(['run', '--detach', '--rm', '--init', '--name', name, ...containerArgs(null, isNetworked), getDockerImage(ROLE, PLATFORM), 'sleep', 'infinity'],
         'starting the development container');
-    process.once('exit', () => spawnSync('docker', ['rm', '--force', name], { stdio: 'ignore' }));
-    // A closed terminal ends the session through its exit hooks, as Ctrl-C does.
-    process.once('SIGHUP', () => process.exit(129));
-    return name;
+    if (!devContainer) {
+        process.once('exit', () => spawnSync('docker', ['rm', '--force', name], { stdio: 'ignore' }));
+        // A closed terminal ends the session through its exit hooks, as Ctrl-C does.
+        process.once('SIGHUP', () => process.exit(129));
+    }
+    return { name, isNetworked };
 }
 
 // Builds an Android app's Gradle project as a debug APK, signed with the debug key the homes keep, and returns the APK.
 export function buildApk(project) {
-    devContainer ??= startDevContainer();
-    docker(['exec', '-w', inContainer(project), devContainer, ...GRADLE, 'assembleDebug'], `building ${path.basename(project)}`);
+    if (devContainer?.isNetworked !== isOnline(project)) devContainer = startDevContainer(isOnline(project));
+    docker(['exec', '-w', inContainer(project), devContainer.name, ...gradleOf(project), 'assembleDebug'], `building ${path.basename(project)}`);
     return path.join(project, 'app', 'build', 'outputs', 'apk', 'debug', 'app-debug.apk');
 }

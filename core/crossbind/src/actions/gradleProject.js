@@ -5,6 +5,8 @@ import { ANDROID_API_LEVEL } from '../utils/androidToolchain.js';
 import { HERMES } from '../utils/hermes.js';
 import resolveAppHostRoot from '../utils/resolveAppHost.js';
 import { SIGNING } from './androidGradle.js';
+import { appLinkParts } from '../utils/appLaunches.js';
+import { mergedVerification } from './mavenVerification.js';
 
 // The ABIs an Android app builds for: phones and Apple silicon's emulators, and the emulators of x86_64 machines.
 export const ANDROID_ABIS = ['arm64-v8a', 'x86_64'];
@@ -94,16 +96,29 @@ function indented(text, indent) {
     return lines.map((line) => (line.trim() === '' ? '' : `${indent}${line.slice(margin).trimEnd()}`)).join('\n');
 }
 
-// The links of the app's schemes the activity opens, from a browser as well, before the end of the activity's element.
+// What the activity opens, from a browser or a file manager as well, before the end of the activity's element.
 const ACTIVITY_END = '        </activity>';
-const urlFilter = (schemes) => [
-    '            <intent-filter>',
+const viewFilter = (data, isVerified = false) => [
+    `            <intent-filter${isVerified ? ' android:autoVerify="true"' : ''}>`,
     '                <action android:name="android.intent.action.VIEW" />',
     '                <category android:name="android.intent.category.DEFAULT" />',
     '                <category android:name="android.intent.category.BROWSABLE" />',
-    ...schemes.map((scheme) => `                <data android:scheme="${scheme}" />`),
+    ...data.map((attributes) => `                <data ${attributes} />`),
     '            </intent-filter>',
 ].join('\n');
+// The links of the app's schemes.
+const urlFilter = (schemes) => viewFilter(schemes.map((scheme) => `android:scheme="${scheme}"`));
+// The files of the app's types, which other apps hand it as content: addresses alone, as a file: one would have the app
+// read its own: by their MIME types, as Android matches what a content provider gives, else by their names' extensions,
+// which a provider's path shows or not; .*\\. takes one dot, and Android's pattern a single match.
+const fileFilters = (fileTypes) => fileTypes.map(({ extensions, mimeTypes }) => viewFilter(['android:scheme="content"', ...(mimeTypes.length > 0
+    ? mimeTypes.map((mime) => `android:mimeType="${mime}"`)
+    : ['android:host="*"', 'android:mimeType="*/*"', ...extensions.flatMap((ending) => [`android:pathPattern=".*\\\\.${ending}"`, `android:pathPattern=".*\\\\..*\\\\.${ending}"`])])]));
+// The https links of app.links, which Android verifies against each site's assetlinks.json.
+const linkFilters = (links) => links.map((link) => {
+    const { host, path: prefix } = appLinkParts(link);
+    return viewFilter(['android:scheme="https"', `android:host="${host}"`, ...(prefix ? [`android:pathPrefix="${prefix}"`] : [])], true);
+});
 
 // The class of each extension's Java, which the activity calls by the extension's name, in the extensions' order.
 const extensionsJava = (java) => `// crossbind writes this file from the app's extensions: the class of each one's Java, under its name.
@@ -127,7 +142,7 @@ final class Extensions {
 }
 `;
 
-const buildGradle = ({ id, label, version, abis, icon, launchMode, theme }) => `// crossbind writes this project anew on every build: the module comes prebuilt in src/main/jniLibs/, and the app's
+const buildGradle = ({ id, label, version, abis, icon, launchMode, theme, libraries = [] }) => `// crossbind writes this project anew on every build: the module comes prebuilt in src/main/jniLibs/, and the app's
 // files are in src/main/assets/app/.
 plugins {
     id 'com.android.application'
@@ -203,24 +218,31 @@ dependencies {
         }
     }
     implementation 'androidx.webkit:webkit:${ANDROIDX_WEBKIT}'
-}
+${libraries.map((library) => `    implementation '${library}'\n`).join('')}}
 `;
 
 // An Android app as a Gradle project, written anew from the parts its ABI targets built: each brings its libraries,
-// the first also the app's files. Gradle adds Hermes and androidx.webkit from Maven, and makes the APK or the bundle.
+// the first also the app's files. Gradle adds Hermes, androidx.webkit and its extensions' libraries from Maven, and makes
+// the APK or the bundle.
 // The icons given are the files of the app's launcher icon under res/; without them it has the system's. Each of java
 // is an extension's folder of Java sources, by package, which the app's sources take beside the activity, and the
 // class in it the activity calls.
 export default function writeGradleProject(to, {
-    parts, id, label, version, icons = null, urlSchemes = [], background = null, permissions = [], java = [], extensionPermissions = [], manifests = [],
-    resources = [],
+    parts, id, label, version, icons = null, urlSchemes = [], fileTypes = [], links = [], background = null, permissions = [], java = [],
+    extensionPermissions = [], manifests = [], resources = [], maven = [],
 }) {
     const { name } = state.config.general;
     if (parts.length === 0) throw new Error(`crossbind: no part of the Android app ${name} is built, so there is no Gradle project to write.`);
     // What the extensions add is read before the project goes, which a manifest crossbind refuses then leaves as it was.
     const added = manifests.map(({ name: extension, file }) => manifestParts(extension, file));
+    // An app whose extensions ask Maven for libraries checks every file Gradle resolves, which it then resolves online.
+    const verification = maven.length > 0 ? mergedVerification(
+        fs.readFileSync(path.join(resolveAppHostRoot(), 'android-verification-metadata.xml'), 'utf8'),
+        maven.map(({ name: extension, verification: file }) => ({ name: extension, xml: fs.readFileSync(file, 'utf8') })),
+    ) : null;
     fs.rmSync(to, { recursive: true, force: true });
     fs.cpSync(path.join(resolveAppHostRoot(), 'android'), to, { recursive: true });
+    if (verification) fs.writeFileSync(path.join(to, 'gradle', 'verification-metadata.xml'), verification);
     const main = path.join(to, 'app', 'src', 'main');
     const manifest = path.join(main, 'AndroidManifest.xml');
     const text = fs.readFileSync(manifest, 'utf8');
@@ -231,13 +253,14 @@ export default function writeGradleProject(to, {
     // A replacer, as the extensions' text may hold what a replacement string reads as a pattern, as $&.
     fs.writeFileSync(manifest, text
         .replace(INTERNET, () => [INTERNET, ...usesPermissions(permissions, extensionPermissions), ...own('manifest', '    ')].join('\n'))
-        .replace(ACTIVITY_END, urlSchemes.length > 0 ? `${urlFilter(urlSchemes)}\n${ACTIVITY_END}` : ACTIVITY_END)
+        .replace(ACTIVITY_END, () => [...(urlSchemes.length > 0 ? [urlFilter(urlSchemes)] : []), ...fileFilters(fileTypes), ...linkFilters(links), ACTIVITY_END].join('\n'))
         .replace(APPLICATION_END, () => [...own('application', '        '), APPLICATION_END].join('\n')));
     fs.writeFileSync(path.join(main, 'java', 'dev', 'crossbind', 'app', 'Extensions.java'), extensionsJava(java));
-    // The Java sources of an extension's folder alone, which may hold its manifest and resources as well.
+    // The Java and Kotlin sources of an extension's folder alone, which may hold its manifest and resources as well: the
+    // Android Gradle plugin compiles Kotlin beside the Java.
     java.forEach(({ name: extension, dir }) => {
         const sources = path.join(main, 'java');
-        const files = fs.readdirSync(dir, { recursive: true }).filter((file) => file.endsWith('.java') && fs.statSync(path.join(dir, file), { throwIfNoEntry: false })?.isFile());
+        const files = fs.readdirSync(dir, { recursive: true }).filter((file) => /\.(java|kt)$/.test(file) && fs.statSync(path.join(dir, file), { throwIfNoEntry: false })?.isFile());
         files.forEach((file) => {
             if (fs.existsSync(path.join(sources, file))) {
                 throw new Error(`crossbind: the extension ${extension} has ${file} in its Java, which the app's Gradle project has already.`);
@@ -273,7 +296,8 @@ export default function writeGradleProject(to, {
     });
     fs.writeFileSync(path.join(to, 'app', 'build.gradle'), buildGradle({
         id, label, version, abis: parts.map(({ arch }) => arch), icon: icons ? '@mipmap/ic_launcher' : '@android:drawable/sym_def_app_icon',
-        launchMode: urlSchemes.length > 0 ? 'singleTask' : 'standard', theme: background ? '@style/CrossbindBackground' : DAY_NIGHT,
+        launchMode: urlSchemes.length + fileTypes.length + links.length > 0 ? 'singleTask' : 'standard', theme: background ? '@style/CrossbindBackground' : DAY_NIGHT,
+        libraries: [...new Set(maven.flatMap(({ coordinates }) => coordinates))],
     }));
     return to;
 }

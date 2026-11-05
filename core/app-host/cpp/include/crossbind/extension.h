@@ -194,18 +194,45 @@ public:
     void onPage(std::function<void()> fn);
     // Asks fn on the main thread as the app's window closes on the desktop, as its user closes it, or on Windows and
     // Linux another program, as taskkill without /F does: false keeps the window open, as an app that stays in its tray,
-    // which hides the window itself, and asks no other extension; what fn throws lets it close. app.quit(), the menu's
-    // quit item and the system's own quit, as from the macOS Dock, close it without asking. A phone's app has no window
-    // its user closes, and never asks fn.
+    // which hides the window itself, and asks no other extension; what fn throws lets it close. app.quit() closes it
+    // without asking, and the menu's quit item and the system's own quit, as from the macOS Dock, ask onQuitRequest
+    // instead. A phone's app has no window its user closes, and never asks fn.
     void onClose(std::function<bool()> fn);
+    // Runs fn on the main thread with whether the app is before its user, once its window has opened, and again as that
+    // changes: true as it becomes the active app on the desktop or comes to a phone's foreground, false as another app
+    // takes its place, or a phone's is interrupted, by a call, a system alert or another app's picker, or goes to the
+    // background. A Linux app's is its window's focus, which a dialog of its own takes as well. The page hears each
+    // change as the events active and inactive. fn returns at once: a modal loop in it lets the next change through
+    // first.
+    void onActive(std::function<void(bool isActive)> fn);
+    // Asks fn on the main thread as the app's user or its system asks the app to quit, other than by closing its window:
+    // macOS's Quit, as ⌘Q, the Dock's and logging out do, the end of a Windows session, but for the Restart Manager's,
+    // which closes the app to service the system, and the menu's quit item and the page's app.requestQuit(), which
+    // <crossbind/app.h>'s requestQuit() asks from native code. false keeps the app running, and asks no other
+    // extension; what fn throws lets it quit. fn answers at once: one that asks its user returns false, asks, and on
+    // their answer quits with quit(), as requestQuit() would ask it again. app.quit(), a relaunch and an update quit
+    // without asking, and Linux's and a phone's system ask nothing.
+    void onQuitRequest(std::function<bool()> fn);
+    // Runs fn on the main thread as the app's user opens the app that runs again, on macOS: a click of its Dock icon, or
+    // open with no file or link. The host shows the app's window first, as one an app in its tray hid.
+    void onReopen(std::function<void()> fn);
     // Runs fn once as the app quits or fails, on the thread that ends it, before its module stops: never in a launch
     // that onLaunch ends, nor in one whose extensions fail to start. A phone's system may end an app without either.
     void onQuit(std::function<void()> fn);
-    // Gets each link of the schemes the extension's app.urlSchemes declares, wherever the system hands it over, on any
-    // thread, which fn must not hold up, as the later launches wait for it. The host tells the page of none of them. A
-    // link is whatever the system hands the app, so fn takes it as it would any address from outside. An extension that
-    // declares schemes calls it, and one that calls it declares them; the host's links gets those of app.urlSchemes.
+    // Gets each link of the schemes the extension's app.urlSchemes declares, and on iOS and Android each https link of
+    // its app.links, wherever the system hands it over, on any thread, which fn must not hold up, as the later launches
+    // wait for it. The host tells the page of none of them. A link is whatever the system hands the app, so fn takes it
+    // as it would any address from outside. An extension that declares schemes or links calls it, and one that calls it
+    // declares them; the host's links gets those of app.urlSchemes and app.links.
     void onUrl(std::function<void(const std::string &url)> fn);
+    // Gets the files the system opens the app with whose extension the extension's app.fileTypes declares, wherever it
+    // hands them over, on any thread, which fn must not hold up: those of a launch, a desktop launch's arguments among
+    // them, as app.md tells, and those a running app is handed, each path absolute. An iOS app gets a document where it
+    // is, which it may read and write as long as it runs, and an Android app a copy in its cache, of the name it had,
+    // which goes to the owner of the MIME type it came with before the owner of its name's extension. The host tells
+    // the page of none of them. An extension that declares file types calls it, and one that calls it
+    // declares them; the host's files gets those of app.fileTypes, and those no extension's type takes.
+    void onOpenFiles(std::function<void(const std::vector<std::string> &paths)> fn);
 #if !defined(__ANDROID__)
     // Take the page's dialogs, what it asks to use and its file inputs, each as the extension of its name alone does:
     // page-dialogs, page-permissions and page-files, the host's own, which an extension of the app's under the name
@@ -236,6 +263,11 @@ void inBackground(Call call, std::function<Value()> work);
 // call that fails at once or that its function answers there.
 void invoke(const std::string &name, Value options, std::function<void(std::optional<std::string> failure, Value result)> done);
 
+// The arguments and the working folder the system started the app with, on the desktop, from any thread: the links of
+// the app's schemes left out, and in an app that opens files its files, which reach their owners. A phone's app starts
+// with none.
+Launch launchArguments();
+
 // The app's name, as its window and dialogs show it.
 std::string appName();
 
@@ -247,8 +279,9 @@ std::vector<std::string> allowedPaths();
 
 #if !defined(__ANDROID__) && !(defined(__APPLE__) && TARGET_OS_IPHONE)
 // Hands the app a later launch, which an extension's onLaunch took from another process, from any thread: the app
-// brings its window to the front, its page hears of the launch as the event second-instance, and each of its links
-// reaches the owner of its scheme. A launch that comes before the module has started waits for it.
+// brings its window to the front, its page hears of the launch as the event second-instance, each of its links reaches
+// the owner of its scheme, and in an app that opens files each of its files the owner of its type. A launch that comes
+// before the module has started waits for it.
 void launchedAgain(Launch launch);
 #endif
 

@@ -417,6 +417,23 @@ describe("the options of the host's own extensions", () => {
         expect(hostExtensionOptions(extended, 'ios')).not.toHaveProperty('links');
     });
 
+    test("give a phone's links the https links of app.links as well, which a desktop's system hands no app", () => {
+        ['ios', 'android'].forEach((platform) => expect(hostExtensionOptions(config({ links: ['example.com'] }), platform).links).toEqual({}));
+        ['darwin', 'linux', 'win32'].forEach((platform) => expect(hostExtensionOptions(config({ links: ['example.com'] }), platform)).not.toHaveProperty('links'));
+        const extended = { ...config(), extensions: [{ name: 'invites', app: { links: ['example.com/invite'] } }] };
+        expect(hostExtensionOptions(extended, 'android')).not.toHaveProperty('links');
+    });
+
+    test('give the files, which hand the page the files no extension owns, to an app that opens files, and keep it to one instance on Windows and Linux', () => {
+        const opening = config({ fileTypes: [{ name: 'GeoJSON', extensions: ['geojson'] }] });
+        ['darwin', 'linux', 'win32', 'ios', 'android'].forEach((platform) => expect(hostExtensionOptions(opening, platform).files).toEqual({}));
+        expect(hostExtensionOptions({ ...config(), extensions: [{ name: 'maps', app: { fileTypes: [{ name: 'KML', extensions: ['kml'] }] } }] }, 'linux'))
+            .toMatchObject({ files: {}, instance: {} });
+        expect(hostExtensionOptions(opening, 'win32')).toHaveProperty('instance');
+        expect(hostExtensionOptions(opening, 'darwin')).not.toHaveProperty('instance');
+        expect(hostExtensionOptions(config(), 'linux')).not.toHaveProperty('files');
+    });
+
     test("give a macOS app whose app.permissions lists the location the page's location, which WKWebView gives a macOS page none of", () => {
         const located = config({ permissions: { location: 'To show where you are' } });
         expect(hostExtensionOptions(located, 'darwin')['page-location']).toEqual({});

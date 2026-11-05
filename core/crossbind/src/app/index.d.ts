@@ -65,10 +65,16 @@ export declare const app: {
     paths(): Promise<AppPaths>;
     /** Ends the app as closing its window does. */
     quit(): Promise<void>;
+    /** Asks the app's extensions, as its user's Quit does, then ends the app as quit() does, unless one keeps it running. It resolves once it has asked the host, before the answer. */
+    requestQuit(): Promise<void>;
     /** Ends the app as quit() does, then opens it again, with no link. */
     relaunch(): Promise<void>;
     /** The links of app.urlSchemes in crossbind.config.js that opened the app and have not reached the page yet, the one it was launched with among them. Once the page has asked, each later link comes as the event open-url while it listens, so listening first, then asking, misses none. */
     launchUrls(): Promise<string[]>;
+    /** The files the system opened the app with that have not reached the page yet, those of app.fileTypes in crossbind.config.js and those no extension's type takes, the launch's own among them, each by its absolute path. Once the page has asked, each later opening comes as the event open-files while it listens, so listening first, then asking, misses none. */
+    launchFiles(): Promise<string[]>;
+    /** The launch that started a desktop app. A phone's has no arguments, and no folder. */
+    launchArgs(): Promise<Launch>;
 };
 
 /** A key with CmdOrCtrl, Ctrl or Alt and maybe Shift, joined by +, as CmdOrCtrl+Shift+O is, or F1–F12, alone or with any of them. The key is A–Z, 0–9, F1–F12, Enter, Escape, Tab, Space, Backspace, Delete, Up, Down, Left, Right, Home, End, PageUp, PageDown, Plus, Minus, Comma or Period. */
@@ -127,15 +133,23 @@ export declare const notification: {
     show(options: NotificationOptions): Promise<void>;
 };
 
-/** What the event second-instance carries: a later launch's arguments, the program's own and its links left out, which reach the owners of their schemes, the page those of app.urlSchemes as the event open-url; and the folder it was launched in. */
-export interface SecondInstance {
+/** A launch of a desktop app: its arguments, the program's own and its links left out, which reach the owners of their schemes, the page those of app.urlSchemes as the event open-url; and the folder it was launched in. */
+export interface Launch {
     args: string[];
     cwd: string;
 }
 
-/** What the event open-url carries: a link of one of app.urlSchemes that the system opened the app with. */
+/** What the event second-instance carries: a later launch. */
+export type SecondInstance = Launch;
+
+/** What the event open-url carries: a link of one of app.urlSchemes, or on iOS and Android of app.links, that the system opened the app with. */
 export interface OpenUrl {
     url: string;
+}
+
+/** What the event open-files carries: the absolute paths of the files the system opened the app with at once. */
+export interface OpenFiles {
+    paths: string[];
 }
 
 export declare const events: {
@@ -143,8 +157,14 @@ export declare const events: {
     on(name: 'menu', listener: (click: MenuClick) => void): () => void;
     /** Calls listener with each link of app.urlSchemes the system opens the app with once the page has called app.launchUrls(), or events.held('open-url'), until the function it returns is called. */
     on(name: 'open-url', listener: (open: OpenUrl) => void): () => void;
+    /** Calls listener with each set of files the system opens the app with once the page has called app.launchFiles(), or events.held('open-files'), until the function it returns is called. */
+    on(name: 'open-files', listener: (open: OpenFiles) => void): () => void;
     /** Calls listener with each later launch of a desktop app that app.singleInstance keeps to one instance, which brings its window to the front as far as the system lets it, until the function it returns is called. */
     on(name: 'second-instance', listener: (launch: SecondInstance) => void): () => void;
+    /** Calls listener as the app becomes the active one on the desktop, or comes to a phone's foreground, until the function it returns is called. A Linux app's is its window's focus. */
+    on(name: 'active', listener: () => void): () => void;
+    /** Calls listener as another app takes the app's place on the desktop, or a phone's is interrupted, as by a call, a system alert or another app's picker, or goes to the background, until the function it returns is called. */
+    on(name: 'inactive', listener: () => void): () => void;
     /** Calls listener as the system of a desktop app goes to sleep, which it may do before the page has run, until the function it returns is called. */
     on(name: 'suspend', listener: () => void): () => void;
     /** Calls listener as the system of a desktop app wakes from sleep, until the function it returns is called. */
@@ -157,6 +177,8 @@ export declare const events: {
     on(name: string, listener: (value: unknown) => void): () => void;
     /** The links of app.urlSchemes the host held for the page, which came before it asked since it loaded, as app.launchUrls() gives their addresses. */
     held(name: 'open-url'): Promise<OpenUrl[]>;
+    /** The files the host held for the page, which came before it asked since it loaded, as app.launchFiles() gives their paths. */
+    held(name: 'open-files'): Promise<OpenFiles[]>;
     /** The values of the events of this name the app's native code held for the page with holdEvent(), which came before the page asked for them since it loaded; later ones come as the events while it listens, so listening first, then asking, misses none. */
     held(name: string): Promise<unknown[]>;
 };

@@ -30,6 +30,8 @@ Core &start(const char *devUrl, const Launch *launch) {
     const std::string resources = resourceDir();
     Core &core = *new Core(resources + "/page");
     core.cors = devUrl != nullptr;
+    // An extension's entry reads the launch's arguments already.
+    if (launch) firstLaunch() = *launch;
     try {
         startExtensions();
         // A launch that ends here, as one the instance that runs took, skips the static destructors of the app's code,

@@ -1,0 +1,7 @@
+{
+    "name": "files",
+    "contract": 1,
+    "app": {
+        "sources": ["files.cpp"]
+    }
+}

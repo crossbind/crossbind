@@ -10,9 +10,11 @@ import dev.crossbind.app.R;
 
 import org.json.JSONException;
 import org.json.JSONObject;
+import org.jsoup.Jsoup;
 
-// The probe's Java: what the app took of the probe's manifest, permissions and resources, the page's WebView, and the
-// activity's resumes, of which the e2e app's page-permissions, before the probe, fails as each.
+// The probe's Java: what the app took of the probe's manifest, permissions and resources, the page's WebView, the
+// activity's resumes, of which the e2e app's page-permissions, before the probe, fails as each, and the words of its Kotlin
+// and of its library from Maven.
 public final class ProbeExtension implements Extension {
     private int resumes;
 
@@ -32,7 +34,9 @@ public final class ProbeExtension implements Extension {
                             .put("resource", activity.getString(R.string.crossbind_probe))
                             .put("permission", activity.checkSelfPermission(Manifest.permission.VIBRATE) == PackageManager.PERMISSION_GRANTED)
                             .put("webView", activity.webView() != null)
-                            .put("resumes", resumes));
+                            .put("resumes", resumes)
+                            .put("kotlin", ProbeKotlin.language())
+                            .put("maven", Jsoup.parse("<p>maven</p>").text()));
                 }
                 case "echo" -> call.resolve(options);
                 default -> call.reject("crossbind: the probe's Java has no function " + function);

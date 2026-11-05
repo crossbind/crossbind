@@ -16,6 +16,7 @@ namespace {
 HWND mainWindow = nullptr;
 void *mainWebView = nullptr;
 WNDPROC windowProcedure = nullptr;
+std::function<void()> quitWithSession;
 
 std::string knownFolder(REFKNOWNFOLDERID id) {
     PWSTR path = nullptr;
@@ -40,6 +41,11 @@ bool exists(const std::string &path) { return GetFileAttributesW(wide(path).c_st
 LRESULT CALLBACK hostProcedure(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) {
     // The window asks the app's extensions as its user closes it; app.quit() destroys it without asking.
     if (message == WM_CLOSE && !crossbind::app::isCloseAllowed()) return 0;
+    // So do signing out and shutting down, but for the Restart Manager's close to service the system, and the session
+    // ends once every app has returned from WM_ENDSESSION.
+    if (message == WM_QUERYENDSESSION) return (lParam & ENDSESSION_CLOSEAPP) || crossbind::app::isQuitAllowed() ? TRUE : FALSE;
+    if (message == WM_ENDSESSION && wParam && quitWithSession) quitWithSession();
+    if (message == WM_ACTIVATEAPP) crossbind::app::appActivated(wParam != FALSE);
     if (message == WM_DPICHANGED || message == WM_DISPLAYCHANGE) {
         const LRESULT result = CallWindowProcW(windowProcedure, hwnd, message, wParam, lParam);
         fitFullScreen();
@@ -78,11 +84,21 @@ void quitApp() {
     });
 }
 
+// The app ends with its window, and with its user's session; anything else ends the process as it ends any other.
+void onQuit(std::function<void()> quit) { quitWithSession = std::move(quit); }
+
 // The host's procedure takes the window's messages before webview's, and an extension's subclass before the host's.
 void setMainWindow(void *window, void *webView) {
     mainWindow = static_cast<HWND>(window);
     mainWebView = webView;
     windowProcedure = reinterpret_cast<WNDPROC>(SetWindowLongPtrW(mainWindow, GWLP_WNDPROC, reinterpret_cast<LONG_PTR>(hostProcedure)));
+    // The app may have become active as its window showed, before the host's procedure took its messages: the extensions
+    // hear how it is once the window has opened.
+    onMainThread([] {
+        DWORD process = 0;
+        GetWindowThreadProcessId(GetForegroundWindow(), &process);
+        crossbind::app::appActivated(process == GetCurrentProcessId());
+    });
 }
 
 void *crossbind::appWindow() { return mainWindow; }

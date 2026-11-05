@@ -24,11 +24,18 @@ void relaunchApp();
 std::string attach(Core &core, void *webView, const char *devUrl);
 // The scheme and authority of a URL: the origin a webview names a page by.
 std::string originOf(const std::string &url);
-// A link of the app's schemes the system opened it with, on any thread: the extension that owns its scheme gets it,
-// for one of app.urlSchemes the host's links, which holds it for the page as the event open-url.
+// A link of the app's schemes the system opened it with, or on iOS and Android one of app.links, on any thread: the
+// extension that owns its scheme or link gets it, for one of the app's own the host's links, which holds it for the page
+// as the event open-url.
 void openedUrl(const std::string &url);
 // The arguments that are links of the app's schemes, as Windows and Linux hand an app its link.
 void openUrlsIn(const std::vector<std::string> &args);
+// Files the system opened the app with, by their absolute paths, on any thread, maybe with the MIME type it gave each:
+// the extension whose types alone list a file's MIME type gets it, else the one that owns its name's extension, and the
+// host's files the rest, which holds them for the page as the event open-files.
+void openedFiles(const std::vector<std::string> &paths, const std::vector<std::string> &mimeTypes = {});
+// What a desktop launch opens: the links among its arguments, and in an app that opens files the files they name.
+void openLaunch(const Launch &launch);
 // A desktop app's launch, on Windows from its command line as given, whatever the code page.
 Launch launchOf(int argc, char **argv);
 // A desktop app's module has started, and the first launch's links have gone out: the later launches handed over

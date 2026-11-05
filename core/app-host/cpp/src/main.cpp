@@ -40,8 +40,9 @@ int main(int argc, char **argv) {
     const crossbind::Launch launch = app::launchOf(argc, argv);
     app::Core &core = app::start(devUrl, &launch);
     schemeHandler = [&core](SchemeRequest request, SchemeRespond respond) { core.serve(std::move(request), std::move(respond)); };
-    // The links this launch was given reach their owners: an extension's at once, the page's once it asks for them.
-    app::openUrlsIn(launch.args);
+    // The links and files this launch was given reach their owners: an extension's at once, the page's once it asks for
+    // them.
+    app::openLaunch(launch);
 #ifdef __APPLE__
     // macOS hands the app its links as it finishes launching, which the window starts.
     listenForUrls();

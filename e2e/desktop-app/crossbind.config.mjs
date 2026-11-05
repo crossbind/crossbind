@@ -48,6 +48,10 @@ export default {
         singleInstance: true,
         // e2e/run.mjs launches a desktop app with a link of it, and again with another, which src/main.js gets.
         urlSchemes: ['crossbind-e2e'],
+        // e2e/run.mjs launches a desktop app with files of it, and opens an Android app on one, which src/main.js gets,
+        // and opens an Android app with a link of example.com/e2e.
+        fileTypes: [{ name: 'crossbind e2e', extensions: ['cbe2e'], mimeTypes: ['application/x-crossbind-e2e'] }],
+        links: ['example.com/e2e'],
         // src/main.js checks the page has the camera and the microphone.
         permissions: {
             camera: 'To check the page reaches the camera',

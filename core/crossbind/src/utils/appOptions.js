@@ -1,5 +1,6 @@
 // The app section of crossbind.config.js: what a user sees of an app, its name and, on the desktop, its window, and where
 // its page opens files.
+import { fileTypeOwners, linkOwners } from './appLaunches.js';
 
 const WINDOW_DEFAULTS = { width: 1024, height: 768, minWidth: 0, minHeight: 0, maxWidth: 0, maxHeight: 0, resizable: true, fullscreen: false, backgroundColor: null };
 // Larger than any display, and far within the int a host takes a size as.
@@ -262,10 +263,10 @@ export function urlSchemeOwners(config) {
 // The schemes whose links open the app: app.urlSchemes's, then its extensions'.
 export const appUrlSchemes = (config) => urlSchemeOwners(config).map(({ scheme }) => scheme);
 
-// Whether a desktop app keeps to one instance: app.singleInstance, else whether it has a scheme on Windows or Linux,
-// whose links start the app again; macOS hands a link to the app that runs.
+// Whether a desktop app keeps to one instance: app.singleInstance, else whether it has a scheme or opens files on
+// Windows or Linux, whose links and files start the app again; macOS hands them to the app that runs.
 function appSingleInstance(config, platform) {
-    const singleInstance = config.app.singleInstance ?? (platform !== 'darwin' && appUrlSchemes(config).length > 0);
+    const singleInstance = config.app.singleInstance ?? (platform !== 'darwin' && (appUrlSchemes(config).length > 0 || fileTypeOwners(config).length > 0));
     if (typeof singleInstance !== 'boolean') {
         throw new Error(`crossbind: app.singleInstance ${JSON.stringify(singleInstance)} is no boolean: set it to true to keep a desktop app to one instance, or to false to let each launch run.`);
     }
@@ -353,16 +354,19 @@ function windowDefines(window) {
     ];
 }
 
-// The options of the host's own extensions, from the app's: a desktop app's instance, where it keeps one, the app's id,
-// which names the instance; the links, which hand the page the links of app.urlSchemes, where it lists any; the shell's
-// where its page opens files; a Linux app's menu the app's id, which its tray names itself by on the session bus; and a
-// desktop app's updater app.updater, with the app's version and id, which an update's signature covers.
+// The options of the host's own extensions, from the app's: the files, which hand the page the files no extension
+// owns, to an app that opens files; a desktop app's instance, where it keeps one, the app's id, which names the
+// instance; the links, which hand the page the links of app.urlSchemes, and a phone's of app.links, where it lists any;
+// the shell's where its page opens files; a Linux app's menu the app's id, which its tray names itself by on the session
+// bus; and a desktop app's updater app.updater, with the app's version and id, which an update's signature covers.
 export function hostExtensionOptions(config, platform) {
     const isDesktop = DESKTOP.includes(platform);
     const updater = isDesktop ? appUpdater(config) : null;
+    const isOwn = ({ extension }) => extension === null;
     return {
+        ...(fileTypeOwners(config).length > 0 ? { files: {} } : {}),
         ...(isDesktop && appSingleInstance(config, platform) ? { instance: { id: appId(config) } } : {}),
-        ...(urlSchemeOwners(config).some(({ extension }) => extension === null) ? { links: {} } : {}),
+        ...(urlSchemeOwners(config).some(isOwn) || (!isDesktop && linkOwners(config).some(isOwn)) ? { links: {} } : {}),
         shell: { openPath: appOpenPath(config) },
         ...(platform === 'linux' ? { menu: { id: appId(config) } } : {}),
         // WKWebView gives a macOS page no location of its own.

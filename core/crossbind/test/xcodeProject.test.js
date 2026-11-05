@@ -223,6 +223,22 @@ describe("an iOS app's store statements", () => {
         expect(plain.project).not.toContain('CODE_SIGN_ENTITLEMENTS');
     });
 
+    test("claims the domains of app.links beside its extensions' own, once each, and opens app.fileTypes' documents where they are", () => {
+        const { to, info } = write({
+            entitlements: { 'com.apple.developer.associated-domains': ['webcredentials:example.com'] },
+            links: ['example.com', 'example.com/invite', '*.example.org'],
+            fileTypes: [{ name: 'GeoJSON', extensions: ['geojson'], mimeTypes: [], role: 'editor', contentTypes: [] }],
+        });
+        const entitlements = fs.readFileSync(path.join(to, 'demo.entitlements'), 'utf8');
+        expect(entitlements).toContain([
+            '<key>com.apple.developer.associated-domains</key>', '    <array>', '        <string>webcredentials:example.com</string>',
+            '        <string>applinks:example.com</string>', '        <string>applinks:*.example.org</string>', '    </array>',
+        ].join('\n'));
+        expect(info).toContain('<key>LSSupportsOpeningDocumentsInPlace</key>\n    <true/>');
+        expect(info).toContain('<string>$(PRODUCT_BUNDLE_IDENTIFIER).geojson</string>');
+        expect(write({}).info).not.toContain('CFBundleDocumentTypes');
+    });
+
     test('numbers its build as given, else as its version', () => {
         const numbered = write({ build: '42' }).project;
         expect(numbered).toContain('"CURRENT_PROJECT_VERSION" = "42";');

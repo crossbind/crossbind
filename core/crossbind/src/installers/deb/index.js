@@ -25,15 +25,16 @@ export function maintainer(author) {
     return author.email ? `${author.name} <${author.email}>` : author.name;
 }
 
-// The control file of a Linux app's package. dpkg warns of a package without a maintainer in every command it runs
-// afterwards, so without package.json's author the app's name stands for one.
-export function debianControl({ name, version, arch, author, description, label }) {
+// The control file of a Linux app's package, which depends on WebKitGTK and GTK and the packages its extensions name.
+// dpkg warns of a package without a maintainer in every command it runs afterwards, so without package.json's author the
+// app's name stands for one.
+export function debianControl({ name, version, arch, author, description, label, depends = [] }) {
     return [
         `Package: ${name}`,
         `Version: ${debianVersion(version)}`,
         `Architecture: ${DEBIAN_ARCH[arch]}`,
         `Maintainer: ${maintainer(author) ?? label}`,
-        `Depends: ${DEBIAN_DEPENDS}`,
+        `Depends: ${[DEBIAN_DEPENDS, ...depends].join(', ')}`,
         `Description: ${(description || label).replace(/\s+/g, ' ').trim()}`,
         '',
     ].join('\n');
@@ -41,13 +42,37 @@ export function debianControl({ name, version, arch, author, description, label 
 
 // The desktop entry a Linux menu shows an app by. GTK names the app's window after the command that started it, and
 // GNOME on Wayland shows the icon of the entry whose file has that name.
-// A link of one of its schemes opens it with the link as its argument, %u. A menu shows it under its categories.
-export function desktopEntry({ label, command, hasIcon, urlSchemes = [], categories = null }) {
-    const isLinked = urlSchemes.length > 0;
+// A link of one of its schemes opens it with the link as its argument, %u, and files of its MIME types with each one's
+// path or file: URL, %U, which take the link as well. A menu shows it under its categories.
+export function desktopEntry({ label, command, hasIcon, urlSchemes = [], mimeTypes = [], categories = null }) {
+    const handled = [...urlSchemes.map((scheme) => `x-scheme-handler/${scheme}`), ...new Set(mimeTypes)];
+    const field = mimeTypes.length > 0 ? ' %U' : (urlSchemes.length > 0 ? ' %u' : '');
     return [
-        '[Desktop Entry]', 'Type=Application', `Name=${label}`, `Exec=${command}${isLinked ? ' %u' : ''}`, ...(hasIcon ? [`Icon=${command}`] : []),
-        ...(isLinked ? [`MimeType=${urlSchemes.map((scheme) => `x-scheme-handler/${scheme};`).join('')}`] : []),
+        '[Desktop Entry]', 'Type=Application', `Name=${label}`, `Exec=${command}${field}`, ...(hasIcon ? [`Icon=${command}`] : []),
+        ...(handled.length > 0 ? [`MimeType=${handled.map((type) => `${type};`).join('')}`] : []),
         ...(categories ? [`Categories=${categories};`] : []), 'Terminal=false', '',
+    ].join('\n');
+}
+
+// The file types of a Linux app, each with its MIME types: its own, else one of the app's for its extensions.
+export const linuxFileTypes = (name, fileTypes) => fileTypes.map((type) => ({
+    ...type, mimeTypes: type.mimeTypes.length > 0 ? type.mimeTypes : [`application/x-${name}-${type.extensions[0]}`],
+}));
+
+// The shared MIME package of a Linux app's file types, which tells the system of their names' extensions, as Debian's
+// shared-mime-info reads it from /usr/share/mime/packages once a package puts it there.
+export function mimePackage(fileTypes) {
+    const escaped = (text) => text.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
+    return [
+        '<?xml version="1.0" encoding="UTF-8"?>',
+        '<mime-info xmlns="http://www.freedesktop.org/standards/shared-mime-info">',
+        ...fileTypes.flatMap(({ name, extensions, mimeTypes }) => mimeTypes.flatMap((mime) => [
+            `  <mime-type type="${mime}">`,
+            `    <comment>${escaped(name)}</comment>`,
+            ...extensions.map((ending) => `    <glob pattern="*.${ending}"/>`),
+            '  </mime-type>',
+        ])),
+        '</mime-info>', '',
     ].join('\n');
 }
 
@@ -79,11 +104,14 @@ export default function deb() {
                     const icon = `${app}/resources/icon.png`;
                     const hasIcon = fs.existsSync(icon);
                     if (hasIcon) fs.copyFileSync(icon, `${dir('usr/share/icons/hicolor/512x512/apps')}/${name}.png`);
+                    const fileTypes = linuxFileTypes(name, api.app.fileTypes);
                     fs.writeFileSync(`${dir('usr/share/applications')}/${name}.desktop`, desktopEntry({
-                        label, command: name, hasIcon, urlSchemes: api.app.urlSchemes, categories: api.app.category?.linux,
+                        label, command: name, hasIcon, urlSchemes: api.app.urlSchemes, mimeTypes: fileTypes.flatMap(({ mimeTypes }) => mimeTypes),
+                        categories: api.app.category?.linux,
                     }));
+                    if (fileTypes.length > 0) fs.writeFileSync(`${dir('usr/share/mime/packages')}/${name}.xml`, mimePackage(fileTypes));
                     const { author, description } = api.project.package ?? {};
-                    fs.writeFileSync(`${dir('DEBIAN')}/control`, debianControl({ name, version: api.app.version, arch, author, description, label }));
+                    fs.writeFileSync(`${dir('DEBIAN')}/control`, debianControl({ name, version: api.app.version, arch, author, description, label, depends: api.app.depends }));
                     api.run(['dpkg-deb', '--build', '--root-owner-group', root, `${app}.deb`], { cwd: path.dirname(app) });
                 } finally {
                     fs.rmSync(root, { recursive: true, force: true });

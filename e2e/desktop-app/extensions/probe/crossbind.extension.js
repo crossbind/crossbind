@@ -50,13 +50,28 @@ export default function probe() {
         root: import.meta.dirname,
         app: {
             urlSchemes: [PROBE_SCHEME],
+            fileTypes: [{ name: 'crossbind probe', extensions: ['cbprobe'], mimeTypes: ['application/x-crossbind-probe'] }],
+            links: ['example.com/probe'],
             sources: ['probe.cpp', 'compiled.c'],
             includes: ['include'],
             defines: ['PROBE_OFFSET=1'],
-            macos: { sources: ['apple.mm'], plist },
-            ios: { sources: ['apple.mm'], plist, privacy: { userDefaults: ['CA92.1'] } },
-            linux: { sources: ['linux.cpp'] },
-            windows: { sources: ['windows.cpp'] },
+            macos: { sources: ['apple.mm', 'probe.swift'], plist },
+            ios: { sources: ['apple.mm', 'probe.swift'], plist, privacy: { userDefaults: ['CA92.1'] } },
+            // zstd, which crossbind's sysroot lacks: Ubuntu 22.04's packages of its headers and library for each
+            // architecture, as its Packages index pins them, and the one an installed app needs.
+            linux: {
+                sources: ['linux.cpp'],
+                packages: [
+                    'amd64 libzstd-dev_1.4.8+dfsg-3build1_amd64.deb 971297916405f1f184ec0ee5f18734b448a80b45813fe40ff2e00b77609689e7',
+                    'amd64 libzstd1_1.4.8+dfsg-3build1_amd64.deb ae7db00ce8b093e50c994518b90203544e063b4bc574836a048bb142b950b2c9',
+                    'arm64 libzstd-dev_1.4.8+dfsg-3build1_arm64.deb 5382229c585552619e1c75210ef07ee5d0e4230351bf388552e6511d053a19c7',
+                    'arm64 libzstd1_1.4.8+dfsg-3build1_arm64.deb 0102eb80384c2432c4be819663341a1c4e511d05f13ec1467643696531ec6491',
+                ],
+                libraries: ['zstd'],
+                depends: ['libzstd1'],
+            },
+            // WinRT's activation of its classes, which the probe's toast template takes.
+            windows: { sources: ['windows.cpp'], libraries: ['runtimeobject'] },
             android: {
                 sources: ['android.cpp'],
                 java: 'android',
@@ -64,6 +79,9 @@ export default function probe() {
                 permissions: ['android.permission.VIBRATE'],
                 manifest: 'android/AndroidManifest.xml',
                 resources: 'android/res',
+                // A library of Maven's the image's cache lacks, which the app's Gradle project resolves online, checked.
+                maven: ['org.jsoup:jsoup:1.18.1'],
+                verification: 'android/verification-metadata.xml',
             },
         },
         publisher: store,

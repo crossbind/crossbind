@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import { checkedFileTypes, checkedLinks } from './appLaunches.js';
 import { checkedPrivacy, checkedUrlSchemes } from './appOptions.js';
 import { isUnderBase } from './replaceBasePathForDocker.js';
 
@@ -13,17 +14,18 @@ const COMPILED = ['sources', 'includes', 'defines'];
 const PLATFORM_PARTS = {
     macos: [...COMPILED, 'frameworks', 'entitlements', 'plist'],
     ios: [...COMPILED, 'frameworks', 'entitlements', 'plist', 'privacy'],
-    linux: [...COMPILED, 'libraries'],
+    linux: [...COMPILED, 'libraries', 'packages', 'depends'],
     windows: [...COMPILED, 'libraries'],
-    android: [...COMPILED, 'libraries', 'java', 'class', 'permissions', 'manifest', 'resources'],
+    android: [...COMPILED, 'libraries', 'java', 'class', 'permissions', 'manifest', 'resources', 'maven', 'verification'],
 };
 // An Android permission, as its manifest names it.
 const PERMISSION = /^[A-Za-z_][\w]*(\.[A-Za-z_][\w]*)+$/;
 // The part of an extension a build's target takes, whose platform goes by Node's name.
 const partOf = (platform) => ({ darwin: 'macos', win32: 'windows' })[platform] ?? platform;
-// The host compiles C and C++ on every platform, and Objective-C and Objective-C++ on Apple's.
+// The host compiles C and C++ on every platform, and Objective-C, Objective-C++ and Swift on Apple's.
 const SOURCE = /\.(c|cpp|cc|cxx)$/;
-const APPLE_SOURCE = /\.(c|cpp|cc|cxx|m|mm)$/;
+const APPLE_SOURCE = /\.(c|cpp|cc|cxx|m|mm|swift)$/;
+const isSwift = (file) => file.endsWith('.swift');
 // A macro, NAME or NAME=value, of a value a compiler's command line takes as it is.
 const DEFINE = /^[A-Za-z_][A-Za-z0-9_]*(=[A-Za-z0-9_.+-]*)?$/;
 // A name prefixes the extension's functions and names its C++ entry, crossbind_extension_<name>.
@@ -62,7 +64,7 @@ function ownPath(where, root, file, isFolder = false) {
 function checkedSources(where, root, sources, pattern) {
     if (!Array.isArray(sources)) throw new Error(`crossbind: ${where} is no list of source files.`);
     return sources.map((file) => {
-        if (!pattern.test(String(file))) throw new Error(`crossbind: ${where} names ${file}, which is no ${pattern === SOURCE ? 'C or C++' : 'C, C++, Objective-C or Objective-C++'} source.`);
+        if (!pattern.test(String(file))) throw new Error(`crossbind: ${where} names ${file}, which is no ${pattern === SOURCE ? 'C or C++' : 'C, C++, Objective-C, Objective-C++ or Swift'} source.`);
         return ownPath(where, root, file);
     });
 }
@@ -85,6 +87,41 @@ function checkedCompiled(at, root, key, value, pattern) {
     if (key === 'sources') return checkedSources(at, root, value, pattern);
     if (key === 'includes') return checkedIncludes(at, root, value);
     return checkedDefines(at, value);
+}
+
+// An Ubuntu 22.04 package a Linux extension compiles and links against beside crossbind's sysroot, as the sysroot's own
+// list names one: its Debian architecture, its file, which Launchpad serves, and the SHA-256 the Packages index gives.
+const PACKAGE = /^(amd64|arm64) ([a-z0-9][a-z0-9+.-]*_[A-Za-z0-9.+~-]+_(amd64|arm64|all)\.deb) ([0-9a-f]{64})$/;
+// A relation of the app's Debian package, as its Depends takes one: a package, maybe of some versions, or alternatives.
+const RELATION = /^[a-z0-9][a-z0-9+.-]+( \((<<|<=|=|>=|>>) [A-Za-z0-9.+~:-]+\))?$/;
+
+function checkedPackages(where, packages) {
+    if (!Array.isArray(packages)) throw new Error(`crossbind: ${where} is no list of packages.`);
+    return packages.map((line) => {
+        const match = typeof line === 'string' ? line.match(PACKAGE) : null;
+        if (!match || !['all', match[1]].includes(match[3])) {
+            throw new Error(`crossbind: ${where} names ${JSON.stringify(line)}, which is no "<arch> <file> <sha256>" of an Ubuntu 22.04 package of amd64 or arm64, as "amd64 libzstd-dev_1.4.8+dfsg-3build1_amd64.deb 9712…".`);
+        }
+        return line;
+    });
+}
+
+// A library of Maven's an Android extension's Java uses, as Gradle names one, of one version: no range, which a later
+// release would change under the checksums the extension lists.
+const MAVEN = /^[A-Za-z0-9_.-]+:[A-Za-z0-9_.-]+:[A-Za-z0-9][A-Za-z0-9_.-]*(@[a-z]+)?$/;
+
+function checkedMaven(where, maven) {
+    if (!Array.isArray(maven) || !maven.every((coordinate) => typeof coordinate === 'string' && MAVEN.test(coordinate))) {
+        throw new Error(`crossbind: ${where} is no list of Maven libraries of one version each, as ['javax.inject:javax.inject:1'].`);
+    }
+    return maven;
+}
+
+function checkedDepends(where, depends) {
+    if (!Array.isArray(depends) || !depends.every((relation) => typeof relation === 'string' && relation.split(' | ').every((one) => RELATION.test(one)))) {
+        throw new Error(`crossbind: ${where} is no list of the Debian packages the app needs, as ['libzstd1', 'libsecret-1-0 (>= 0.20.5)'].`);
+    }
+    return depends;
 }
 
 function checkedNames(where, names) {
@@ -145,14 +182,17 @@ function checkedLicenses(where, root, licenses) {
     });
 }
 
-// The app reaches an extension's Java through one class, whose source the folder of its Java holds by its package.
+// The app reaches an extension's Java through one class, whose source, in Java or Kotlin, the folder of its Java holds by
+// its package.
 function checkedJava(where, root, { java, class: name }) {
     if (java === undefined || name === undefined) {
         throw new Error(`crossbind: ${where} takes java and class together: the folder of its Java and the Extension class in it the app calls.`);
     }
     if (typeof name !== 'string' || !JAVA_CLASS.test(name)) throw new Error(`crossbind: ${where}.class names ${name}, which is no Java class in a package.`);
-    const source = `${path.join(java, ...name.split('.'))}.java`;
-    if (!fs.existsSync(path.join(root, source))) throw new Error(`crossbind: ${where}.class names ${name}, which has no source ${source}.`);
+    const source = path.join(java, ...name.split('.'));
+    if (!['.java', '.kt'].some((ending) => fs.existsSync(path.join(root, `${source}${ending}`)))) {
+        throw new Error(`crossbind: ${where}.class names ${name}, which has no source ${source}.java or ${source}.kt.`);
+    }
 }
 
 function checkedPlatform(where, root, platform, part) {
@@ -169,9 +209,16 @@ function checkedPlatform(where, root, platform, part) {
         if (key === 'plist') return [key, checkedPlist(at, value)];
         if (key === 'privacy') return [key, checkedPrivacy(value, at)];
         if (key === 'permissions') return [key, checkedPermissions(at, value)];
+        if (key === 'packages') return [key, checkedPackages(at, value)];
+        if (key === 'depends') return [key, checkedDepends(at, value)];
+        if (key === 'maven') return [key, checkedMaven(at, value)];
+        if (key === 'verification') return [key, ownPath(at, root, value)];
         return [key, checkedNames(at, value)];
     }));
     if ('java' in checked || 'class' in checked) checkedJava(where, root, checked);
+    if (('maven' in checked) !== ('verification' in checked)) {
+        throw new Error(`crossbind: ${where} takes maven and verification together: the libraries Gradle resolves for it, and the checksums of each file of theirs, as Gradle's verification metadata lists them.`);
+    }
     return checked;
 }
 
@@ -284,9 +331,11 @@ export function checkedExtension(extension, root, where) {
         const at = `${where}'s app.${key}`;
         if (COMPILED.includes(key)) return [key, checkedCompiled(at, root, key, value, SOURCE)];
         if (key === 'urlSchemes') return [key, checkedUrlSchemes(value, at)];
+        if (key === 'fileTypes') return [key, checkedFileTypes(value, at)];
+        if (key === 'links') return [key, checkedLinks(value, at)];
         if (key === 'licenses') return [key, checkedLicenses(at, root, value)];
         if (!Object.hasOwn(PLATFORM_PARTS, key)) {
-            throw new Error(`crossbind: ${where}'s app takes ${COMPILED.join(', ')}, urlSchemes, licenses and ${Object.keys(PLATFORM_PARTS).join(', ')}; ${key} is none of them.`);
+            throw new Error(`crossbind: ${where}'s app takes ${COMPILED.join(', ')}, urlSchemes, fileTypes, links, licenses and ${Object.keys(PLATFORM_PARTS).join(', ')}; ${key} is none of them.`);
         }
         return [key, checkedPlatform(at, root, key, value)];
     }));
@@ -394,12 +443,12 @@ export async function extensionStep(name, which, run) {
 export const withOptions = (extensions, options) => extensions.map((extension) => (Object.hasOwn(options, extension.name)
     ? { ...extension, options: options[extension.name] } : extension));
 
-// The host's own extensions an app has, with the options the app's give them: every one, but the instance, the links,
-// the page's location and the updater only where they give them options, as a desktop app's do that keeps one instance
-// or has app.updater, an app's that lists app.urlSchemes, and a macOS app's whose app.permissions lists the location.
-// The host refuses the updater's functions to any other app.
+// The host's own extensions an app has, with the options the app's give them: every one, but the files, the instance,
+// the links, the page's location and the updater only where they give them options, as an app's do that opens files, a
+// desktop app's that keeps one instance or has app.updater, an app's that lists app.urlSchemes or a phone's app.links,
+// and a macOS app's whose app.permissions lists the location. The host refuses the updater's functions to any other app.
 export const appHostExtensions = (appHostRoot, options) => withOptions(hostExtensions(appHostRoot), options)
-    .filter((extension) => !['instance', 'links', 'page-location', 'updater'].includes(extension.name) || Object.hasOwn(options, extension.name));
+    .filter((extension) => !['files', 'instance', 'links', 'page-location', 'updater'].includes(extension.name) || Object.hasOwn(options, extension.name));
 
 // The extensions crossbind.config.js lists that add to an app: all but those that give a publisher or an installer
 // alone, which leave the host's own of their name as it is.
@@ -460,6 +509,9 @@ export function mergedPrivacy(base, owned) {
 
 const unique = (items) => [...new Set(items)];
 
+// The Debian packages a Linux app needs beside WebKitGTK and GTK, as its extensions' Linux parts list them, each once.
+export const linuxDepends = (extensions) => unique(extensions.flatMap((extension) => extension.app?.linux?.depends ?? []));
+
 // What the extensions add on one platform: the names and folders of those with native code, the sources the host
 // compiles, by their full paths, the frameworks and the libraries it links, each once, the Java folders of an Android
 // app with the class of each, and the entitlements of an Apple one by their owners, for mergedEntitlements().
@@ -480,16 +532,30 @@ export function extensionPart(extensions, platform) {
         native: native.map(({ name, options }) => ({ name, options: options ?? null })),
         roots: native.map(({ root }) => root),
         sources: extensions.flatMap(sourcesOf),
-        compiled: native.map((extension) => ({
-            name: extension.name,
-            sources: sourcesOf(extension),
-            includes: both(extension, 'includes').map((folder) => path.join(extension.root, folder)),
-            defines: both(extension, 'defines'),
-        })),
+        // An Apple app's Swift compiles apart, before the host, whose own sources hold the extension's entry.
+        compiled: native.map((extension) => {
+            const sources = sourcesOf(extension).filter((file) => !isSwift(file));
+            if (sources.length === 0) {
+                throw new Error(`crossbind: the extension ${extension.name} has Swift alone on ${partOf(platform)}, whose entry, crossbind_extension_${extension.name.replace(/-/g, '_')}, a C++ or Objective-C++ source of its own defines.`);
+            }
+            return {
+                name: extension.name,
+                sources,
+                swift: sourcesOf(extension).filter(isSwift),
+                // A Linux part's packages, which a sysroot of the extension's own holds for its sources.
+                packages: own(extension).packages ?? [],
+                includes: both(extension, 'includes').map((folder) => path.join(extension.root, folder)),
+                defines: both(extension, 'defines'),
+            };
+        }),
         frameworks: unique(extensions.flatMap((extension) => own(extension).frameworks ?? [])),
         libraries: unique(extensions.flatMap((extension) => own(extension).libraries ?? [])),
         java: extensions.filter((extension) => own(extension).java).map((extension) => ({
             name: extension.name, dir: path.join(extension.root, own(extension).java), className: own(extension).class,
+        })),
+        // An Android app's libraries of Maven's, by the extension that uses them, with its verification metadata.
+        maven: extensions.filter((extension) => own(extension).maven).map((extension) => ({
+            name: extension.name, coordinates: own(extension).maven, verification: path.join(extension.root, own(extension).verification),
         })),
         entitlements: owned('entitlements'),
         plist: owned('plist'),
@@ -529,17 +595,30 @@ function optionsText(name, options) {
 }
 
 // The C++ that starts the extensions with native code, each through its entry, which its sources define, with its
-// options, and that names the owner of each of the app's URL schemes: the extension that declared it, or for those of
-// app.urlSchemes the host's links, which hands them to the page. The owner of a scheme has native code to get its
-// links.
-export function registrationSource(native, urlSchemes) {
-    const owned = urlSchemes.map(({ scheme, extension }) => ({ scheme, owner: extension ?? 'links' }));
-    const unheard = owned.find(({ owner }) => !native.some(({ name }) => name === owner));
-    if (unheard) throw new Error(`crossbind: the extension ${unheard.owner} gets the links of ${unheard.scheme}, but has no native code on this platform.`);
+// options, and that names the owner of each of the app's URL schemes, of the extensions of the files it opens and of its
+// sites' links: the extension that declared it, or for the app's own the host's links or files, which hand them to the
+// page. An owner has native code to get what it owns.
+export function registrationSource(native, urlSchemes, fileTypes = [], links = []) {
+    const schemes = urlSchemes.map(({ scheme, extension }) => ({ key: scheme, owner: extension ?? 'links', what: `the links of ${scheme}` }));
+    const files = fileTypes.flatMap(({ extensions, extension }) => extensions.map((ending) => ({ key: ending, owner: extension ?? 'files', what: `the files .${ending}` })));
+    // The MIME type an Android file comes with names its owner before its name does, where one owner's types alone list it.
+    const typed = fileTypes.flatMap(({ mimeTypes = [], extension }) => mimeTypes.map((mime) => ({ key: mime, owner: extension ?? 'files' })));
+    const mimes = typed.filter(({ key, owner }, index) => typed.findIndex((other) => other.key === key) === index
+        && typed.every((other) => other.key !== key || other.owner === owner));
+    const sites = links.map(({ link, extension }) => ({ key: link, owner: extension ?? 'links', what: `the links of ${link}` }));
+    const unheard = [...schemes, ...files, ...sites].find(({ owner }) => !native.some(({ name }) => name === owner));
+    if (unheard) throw new Error(`crossbind: the extension ${unheard.owner} gets ${unheard.what}, but has no native code on this platform.`);
     const start = ({ name, options }) => `    startExtension("${name}", ${options === null ? 'nullptr' : optionsText(name, options)}, ${entryOf(name)});`;
+    const owners = (fn, owned) => [
+        '',
+        `std::vector<std::pair<std::string, std::string>> ${fn}() {`,
+        `    return {${owned.map(({ key, owner }) => `{"${key}", "${owner}"}`).join(', ')}};`,
+        '}',
+    ];
     return [
         "// crossbind writes this file from the app's extensions: the entry of each one with native code, which starts it with",
-        "// its options, and the owner of each of the app's URL schemes, the extension that gets its links.",
+        "// its options, and the owner of each of the app's URL schemes, file types, their MIME types and links, the extension",
+        '// that gets them.',
         '#include "crossbind/extension.h"',
         '',
         ...native.map(({ name }) => `void ${entryOf(name)}(crossbind::Registry &registry);`),
@@ -551,10 +630,10 @@ export function registrationSource(native, urlSchemes) {
         'void extensionEntries() {',
         ...native.map(start),
         '}',
-        '',
-        'std::vector<std::pair<std::string, std::string>> urlSchemes() {',
-        `    return {${owned.map(({ scheme, owner }) => `{"${scheme}", "${owner}"}`).join(', ')}};`,
-        '}',
+        ...owners('urlSchemes', schemes),
+        ...owners('fileTypes', files),
+        ...owners('fileMimeTypes', mimes),
+        ...owners('appLinks', sites),
         '',
         '}  // namespace crossbind::app',
         '',

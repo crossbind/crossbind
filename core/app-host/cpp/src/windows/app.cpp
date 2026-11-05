@@ -15,9 +15,6 @@ std::string resourceDir() {
     return executable.substr(0, executable.find_last_of("\\/")) + "\\resources";
 }
 
-// The app ends with its window; anything else ends the process as it ends any other.
-void onQuit(std::function<void()>) {}
-
 namespace {
 
 using crossbind::PageDialog;

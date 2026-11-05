@@ -15,7 +15,10 @@ import {
     allocBuffer, cstring, readCString, readNumberAt, readPointerAt, writeNumberAt, writePointerAt,
 } from '@crossbind/conformance/native/confextras.h';
 import { Counter } from './native/counter.rs';
-import { LAUNCH_ARGS, LAUNCH_URL, NOTIFICATION, PHONE_URL, PROBE_URLS, TRASHED_FILE, TRAY } from '../e2e/launch.mjs';
+import {
+    AGAIN_FILE, FIRST_ARGS, FIRST_FILES, LAUNCH_ARGS, LAUNCH_URL, NOTIFICATION, OPENED_FILE, PHONE_FILE_TEXT, PHONE_FILES, PHONE_LINKS, PHONE_URL,
+    PROBE_URLS, TRASHED_FILE, TRAY,
+} from '../e2e/launch.mjs';
 // Direct crate imports: bridged from the crates' own sources, no surface file.
 import { Uuid } from 'cargo:uuid';
 import { Version, VersionReq } from 'cargo:semver';
@@ -175,6 +178,36 @@ async function checkLaunchUrls(isLinked) {
     await checkProbed(isLinked ? [PROBE_URLS.launch] : []);
 }
 
+// Whether the folder the run named is the one the app was launched in: Windows takes a folder's name in any case.
+function isSameFolder(folder, cwd) {
+    return cwd.includes('\\') ? folder?.toLowerCase() === cwd.toLowerCase() : folder === cwd;
+}
+
+// The paths of files of these names in a folder, as the host makes them absolute, and whether the files are those.
+const inFolder = (cwd, names) => names.map((file) => `${cwd}${cwd.includes('\\') ? '\\' : '/'}${file}`);
+const isSameFiles = (paths, cwd, names) => paths.length === names.length && inFolder(cwd, names).every((path, index) => isSameFolder(paths[index], path));
+
+// e2e/run.mjs launches a desktop app with FIRST_ARGS, then --cwd= and the folder it launches it in, among its links and
+// FIRST_FILES: app.launchArgs() leaves out the links and files, which the page asks for with app.launchFiles(), each
+// against that folder, the probe's among them reaching the probe alone. A phone opens with none.
+async function checkLaunch(isDesktop) {
+    const launch = await host.launchArgs();
+    const files = await host.launchFiles();
+    const probed = (await events.held('probe-files')).flatMap(({ paths }) => paths);
+    if (!isDesktop) {
+        if (launch.args.length > 0 || launch.cwd !== '' || files.length > 0 || probed.length > 0) {
+            throw new Error(`a phone's launch has ${JSON.stringify({ launch, files, probed })}`);
+        }
+        return;
+    }
+    const { args, cwd } = launch;
+    if (JSON.stringify(args.slice(0, -1)) !== JSON.stringify(FIRST_ARGS) || !isSameFolder(args.at(-1), `--cwd=${cwd}`)) {
+        throw new Error(`app.launchArgs() is ${JSON.stringify(launch)}`);
+    }
+    if (!isSameFiles(files, cwd, [...FIRST_FILES.page, FIRST_FILES.url])) throw new Error(`app.launchFiles() is ${JSON.stringify(files)}`);
+    if (!isSameFiles(probed, cwd, [FIRST_FILES.probe])) throw new Error(`the probe was launched with the files ${JSON.stringify(probed)}`);
+}
+
 // The links the probe got so far, each once.
 async function checkProbed(expected) {
     const probed = await invoke('probe.urls');
@@ -189,33 +222,90 @@ async function linksUntilProbed() {
     return { links, probed: url };
 }
 
-// e2e/run.mjs opens an Android app with PHONE_URL once the page listens, as a link a user taps does, then with the
-// probe's PROBE_URLS.phone, which reaches the probe alone.
+// The values of the events of these names until each has come so many times, within LAUNCH_TIMEOUT_MS.
+function eventsUntil(counts) {
+    const heard = Object.fromEntries(Object.keys(counts).map((name) => [name, []]));
+    let stops = [];
+    let timer;
+    return new Promise((resolve, reject) => {
+        stops = Object.keys(counts).map((name) => events.on(name, (value) => {
+            heard[name].push(value);
+            if (Object.entries(counts).every(([other, count]) => heard[other].length >= count)) resolve(heard);
+        }));
+        timer = setTimeout(() => reject(new Error(`the page heard ${JSON.stringify(heard)}, not as many as ${JSON.stringify(counts)}`)), LAUNCH_TIMEOUT_MS);
+    }).finally(() => {
+        stops.forEach((stop) => stop());
+        clearTimeout(timer);
+    });
+}
+
+// e2e/run.mjs opens an Android app with PHONE_URL once the page listens, as a link a user taps does, then with
+// PHONE_LINKS and on PHONE_FILES, and with the probe's PROBE_URLS.phone last: each reaches the owner of its scheme, site
+// or type, the probe's the probe alone.
 async function checkOpenedUrl() {
-    const opened = linksUntilProbed();
+    const opened = eventsUntil({ 'open-url': 2, 'probe-url': 2, 'open-files': 1, 'probe-files': 2 });
     console.log('OPEN LINK');
-    const { links, probed } = await opened;
-    if (JSON.stringify(links) !== JSON.stringify([PHONE_URL])) throw new Error(`the links the app was opened with reached the page as ${JSON.stringify(links)}, not ${PHONE_URL}`);
-    if (probed !== PROBE_URLS.phone) throw new Error(`the probe's link the app was opened with reached it as ${JSON.stringify(probed)}`);
-    await checkProbed([PROBE_URLS.phone]);
+    const heard = await opened;
+    const urls = (name) => heard[name].map(({ url }) => url);
+    if (JSON.stringify(urls('open-url')) !== JSON.stringify([PHONE_URL, PHONE_LINKS.page])) throw new Error(`the links the app was opened with reached the page as ${JSON.stringify(urls('open-url'))}`);
+    if (JSON.stringify(urls('probe-url')) !== JSON.stringify([PHONE_LINKS.probe, PROBE_URLS.phone])) throw new Error(`the probe's links reached it as ${JSON.stringify(urls('probe-url'))}`);
+    await checkProbed([PHONE_LINKS.probe, PROBE_URLS.phone]);
+    // Each file reaches the owner of its MIME type as a copy in the app's cache, of the name it had: the private
+    // provider's, which came first, none.
+    for (const [name, files] of [['open-files', [PHONE_FILES.page]], ['probe-files', [PHONE_FILES.probe, PHONE_FILES.bare]]]) {
+        const paths = heard[name].flatMap(({ paths }) => paths);
+        if (paths.length !== files.length || !files.every((file, index) => paths[index].endsWith(`/${file}`))) {
+            throw new Error(`the files the app was opened on reached ${name} as ${JSON.stringify(paths)}`);
+        }
+        for (const path of paths) {
+            const text = await invoke('probe.readFile', { path });
+            if (text !== PHONE_FILE_TEXT) throw new Error(`the copy ${path} holds ${JSON.stringify(text)}`);
+        }
+    }
 }
 
 // e2e/run.mjs launches the app again, from a folder that is not this app's, with LAUNCH_ARGS, the probe's
-// PROBE_URLS.again and that folder once the page listens: the app that runs takes the launch, whose arguments leave its
-// links out, and its links, the probe's reaching the probe alone, and the one launched leaves.
+// PROBE_URLS.again, AGAIN_FILE and --cwd= and that folder once the page listens: the app that runs takes the launch,
+// whose arguments leave its links and its file out, which reach their owners, the probe's the probe alone, and the one
+// launched leaves.
 async function checkSecondInstance() {
-    const launched = Promise.all([nextEvent('second-instance'), linksUntilProbed()]);
+    const launched = Promise.all([nextEvent('second-instance'), linksUntilProbed(), nextEvent('open-files')]);
     console.log('LAUNCH AGAIN');
-    const [{ args, cwd }, { links, probed }] = await launched;
-    const folder = args.at(-1);
-    // Windows takes a folder's name in any case.
-    const isSameFolder = cwd.includes('\\') ? folder?.toLowerCase() === cwd.toLowerCase() : folder === cwd;
-    if (JSON.stringify(args.slice(0, -1)) !== JSON.stringify(LAUNCH_ARGS.slice(0, -1)) || !isSameFolder) {
+    const [{ args, cwd }, { links, probed }, { paths }] = await launched;
+    if (JSON.stringify(args.slice(0, -1)) !== JSON.stringify(LAUNCH_ARGS.slice(0, -1)) || !isSameFolder(args.at(-1), `--cwd=${cwd}`)) {
         throw new Error(`the app launched again handed over ${JSON.stringify({ args, cwd })}`);
     }
+    if (!isSameFiles(paths, cwd, [AGAIN_FILE])) throw new Error(`the file the app was launched again with reached the page as ${JSON.stringify(paths)}`);
     if (JSON.stringify(links) !== JSON.stringify([LAUNCH_ARGS.at(-1)])) throw new Error(`the links the app was launched again with reached the page as ${JSON.stringify(links)}`);
     if (probed !== PROBE_URLS.again) throw new Error(`the probe's link the app was launched again with reached it as ${JSON.stringify(probed)}`);
     await checkProbed([PROBE_URLS.launch, PROBE_URLS.again]);
+}
+
+// e2e/run.mjs opens a macOS app that runs again, as a click of its Dock icon does, once the probe has hidden its window:
+// the app shows the window before the probe hears it reopen.
+async function checkReopen() {
+    await invoke('probe.hide');
+    const reopened = nextEvent('probe-reopen');
+    console.log('REOPEN APP');
+    const { isShown } = await reopened;
+    if (!isShown) throw new Error('the probe heard the app reopen with its window hidden');
+}
+
+// e2e/run.mjs opens a macOS app that runs on a file of its type, as Finder does, which the page hears of.
+async function checkOpenFile() {
+    const opened = nextEvent('open-files');
+    console.log('OPEN FILE');
+    const { paths } = await opened;
+    if (paths.length !== 1 || !paths[0].endsWith(`/dist/${OPENED_FILE}`)) throw new Error(`the file macOS opened the app on reached the page as ${JSON.stringify(paths)}`);
+    if ((await invoke('probe.readFile', { path: paths[0] })) !== PHONE_FILE_TEXT) throw new Error(`the file macOS opened the app on is not ${paths[0]}`);
+}
+
+// e2e/run.mjs asks a Windows app's window whether its user's session may end, as Windows does as its user signs out:
+// the probe refuses, which the window answers.
+async function checkEndSession() {
+    const asked = nextEvent('probe-quit-request');
+    console.log('END SESSION');
+    await asked;
 }
 
 // e2e/run.mjs clicks the tray's icon, its menu's first item with checked and the notification: on Windows with the
@@ -290,9 +380,11 @@ async function checkPageRequests() {
 
 // What an extension adds to an app, through the probe: C compiled with folders of its own and its own macros, text
 // that is no UTF-8 as U+FFFD, a call of the app's functions from native code, which is no page's, and the pages it hears
-// of; on the desktop the close its user asks for, which the probe refuses; on the main thread a task that throws and
-// a wait of <crossbind/app.h>, which the app outlives; on Apple's platforms the Info.plist key and the iOS privacy
-// reasons it gave; and on Android its manifest's elements, its resources, its permission and the page's WebView.
+// of, and the app's state before its user, whose changes the page hears too; on the desktop the close its user asks
+// for and the quit the page asks for as its user's Quit does, which the probe refuses, so the app runs on; on the main
+// thread a task that throws and a wait of <crossbind/app.h>, which the app outlives; on Apple's platforms the
+// Info.plist key and the iOS privacy reasons it gave; and on Android its manifest's elements, its resources, its
+// permission and the page's WebView.
 async function checkContract(isDesktop, isAndroid) {
     const sum = await invoke('probe.compiled');
     if (sum !== 6) throw new Error(`the probe's C gave ${sum}, not 6, with its include folder and macros`);
@@ -316,17 +408,45 @@ async function checkContract(isDesktop, isAndroid) {
         const closes = await invoke('probe.closes');
         if (closes !== 1) throw new Error(`the probe was asked ${closes} times as the window closed, not once`);
     }
+    if (!((await invoke('probe.actives')) >= 1)) throw new Error("the probe heard nothing of the app's state before its user");
+    // The probe tells a macOS, iOS or Windows app it became inactive and active again, or the other way round, as its
+    // system does, and the page hears both changes in that order; Linux's focus and Android's activity take no telling.
+    if (!isAndroid && (!isDesktop || /Macintosh|Windows/.test(navigator.userAgent))) {
+        const heard = [];
+        const stops = ['active', 'inactive'].map((name) => events.on(name, () => heard.push(name)));
+        const changed = Promise.all([nextEvent('active'), nextEvent('inactive')]);
+        const was = await invoke('probe.flipActive');
+        await changed;
+        for (const stop of stops) stop();
+        const told = was ? ['inactive', 'active'] : ['active', 'inactive'];
+        if (JSON.stringify(heard) !== JSON.stringify(told)) throw new Error(`the page heard ${JSON.stringify(heard)} as the app was told ${JSON.stringify(told)}`);
+    }
+    if (isDesktop) {
+        const asked = nextEvent('probe-quit-request');
+        await host.requestQuit();
+        await asked;
+    }
     if (isAndroid) {
         const probed = await invoke('probe.android');
-        if (probed.meta !== 'manifest' || probed.resource !== 'resource' || !probed.permission || !probed.webView) {
-            throw new Error(`the app took not all of the probe's Android parts: ${JSON.stringify(probed)}`);
+        if (probed.meta !== 'manifest' || probed.resource !== 'resource' || !probed.permission || !probed.webView || probed.kotlin !== 'kotlin' || probed.maven !== 'maven') {
+            throw new Error(`the app took not all of the probe's Android parts, its Kotlin and its Maven library among them: ${JSON.stringify(probed)}`);
         }
         if (!(probed.resumes >= 1)) throw new Error("the probe's Java heard no resume of the activity, of which the e2e app's page-permissions, before it, fails as each");
         const failed = await invoke('probe.javaThrows').then(() => 'answered', (error) => error.message);
         if (!failed.includes('probe.javaThrows gave no answer')) throw new Error(`an answer of the Java whose done threw: ${failed}`);
     } else if (!isDesktop || navigator.userAgent.includes('Macintosh')) {
         const apple = await invoke('probe.apple');
-        if (apple.plist !== 'plist' || (!isDesktop && !apple.privacy)) throw new Error(`the app took not all of the probe's Apple parts: ${JSON.stringify(apple)}`);
+        if (apple.plist !== 'plist' || (!isDesktop && !apple.privacy) || apple.swift !== 5 || apple.swiftClass !== 'swift') {
+            throw new Error(`the app took not all of the probe's Apple parts, its Swift among them: ${JSON.stringify(apple)}`);
+        }
+    } else if (navigator.userAgent.includes('Windows')) {
+        // WinRT's ABI headers compile in an extension's C++, and its classes activate in the app.
+        const toast = await invoke('probe.toastTemplate');
+        if (toast !== 'ok') throw new Error(`the probe's WinRT gave no toast template: ${toast}`);
+    } else {
+        // A Linux extension compiles and links against a library beyond crossbind's sysroot, from the packages it pins.
+        const zstd = await invoke('probe.zstd');
+        if (!(zstd >= 10400)) throw new Error(`the probe's zstd gave the version ${zstd}`);
     }
 }
 
@@ -423,10 +543,13 @@ initNative().then(async (m) => {
         await checkMenus(isDesktop);
         // A development session opens the app with no link.
         await checkLaunchUrls(isDesktop && !import.meta.env.DEV);
+        if (!isDesktop || !import.meta.env.DEV) await checkLaunch(isDesktop);
         // A phone's system ends its apps, and its store updates them.
         if (!isDesktop) {
             const quit = await host.quit().then(() => 'quit', (error) => error.message);
             if (!quit.includes('does not quit itself')) throw new Error(`app.quit() did not refuse on a phone: ${quit}`);
+            const requested = await host.requestQuit().then(() => 'requested', (error) => error.message);
+            if (!requested.includes('does not quit itself')) throw new Error(`app.requestQuit() did not refuse on a phone: ${requested}`);
             const relaunched = await host.relaunch().then(() => 'relaunched', (error) => error.message);
             if (!relaunched.includes('does not quit itself')) throw new Error(`app.relaunch() did not refuse on a phone: ${relaunched}`);
             const checked = await updater.check().then(() => 'checked', (error) => error.message);
@@ -437,6 +560,11 @@ initNative().then(async (m) => {
         } else if (!import.meta.env.DEV) {
             await checkUpdates();
             await checkSecondInstance();
+            if (navigator.userAgent.includes('Macintosh')) {
+                await checkReopen();
+                await checkOpenFile();
+            }
+            if (navigator.userAgent.includes('Windows')) await checkEndSession();
             // e2e/run.mjs tells a Windows app's window the system goes to sleep and wakes, as Windows does, first.
             if (navigator.userAgent.includes('Windows')) await Promise.all([nextEvent('suspend'), nextEvent('resume'), checkScaledFullScreen()]);
             await checkTray(true);

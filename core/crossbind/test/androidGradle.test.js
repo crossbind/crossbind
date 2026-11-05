@@ -108,6 +108,8 @@ describe('an Android release packaged in the android-app image', () => {
         expect(args).toEqual(expect.arrayContaining([SIGNING.alias, SIGNING.password]));
         expect(args.join(' ')).not.toContain('secret-4711');
         expect(args.slice(-2)).toEqual(['assembleRelease', 'bundleRelease']);
+        // Kotlin compiles in Gradle's own process, as no Kotlin daemon is found from the container's home /.
+        expect(args).toContain('-Pkotlin.compiler.execution.strategy=in-process');
         expect(fs.existsSync(`${project}.apk`)).toBe(true);
         expect(fs.existsSync(`${project}.aab`)).toBe(true);
         expect(fs.existsSync(path.join(home, '.crossbind', 'android', 'home'))).toBe(true);
@@ -126,6 +128,20 @@ describe('an Android release packaged in the android-app image', () => {
         expect(fs.existsSync(`${project}.apk`)).toBe(true);
         expect(fs.existsSync(`${project}.aab`)).toBe(false);
         expect(warn).toHaveBeenCalledWith(expect.stringContaining("signed with this machine's debug key"));
+        warn.mockRestore();
+    });
+
+    test("of a project whose extensions ask Maven for libraries resolves online, checked by the verification metadata it carries", () => {
+        const project = path.join(base, 'dist', 'demo-android');
+        fs.mkdirSync(path.join(project, 'gradle'), { recursive: true });
+        fs.writeFileSync(path.join(project, 'gradle', 'verification-metadata.xml'), '<verification-metadata/>');
+        const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+        packageAndroidRelease(project);
+
+        expect(calls[0]).toContain('assembleRelease');
+        expect(calls[0]).not.toContain('--offline');
+        expect(calls[0]).not.toContain('--network');
         warn.mockRestore();
     });
 
@@ -155,6 +171,21 @@ describe('the debug APK of a development session', () => {
         expect(execs).toHaveLength(2);
         expect(execs[0]).toEqual(expect.arrayContaining(['-w', '/tmp/crossbind/live/.crossbind/build/demo-android.debug', 'assembleDebug']));
         expect(execs[0]).not.toContain('--no-daemon');
+    });
+
+    test('comes anew with the network once the project asks Maven for its extensions\' libraries, and builds online', () => {
+        const project = path.join(base, '.crossbind', 'build', 'demo-android.debug');
+        buildApk(project);
+        fs.mkdirSync(path.join(project, 'gradle'), { recursive: true });
+        fs.writeFileSync(path.join(project, 'gradle', 'verification-metadata.xml'), '<verification-metadata/>');
+        buildApk(project);
+
+        const runs = calls.filter((args) => args[0] === 'run');
+        const execs = calls.filter((args) => args[0] === 'exec');
+        expect(runs.at(-1)).toEqual(expect.arrayContaining(['--detach', 'sleep', 'infinity']));
+        expect(runs.at(-1)).not.toContain('--network');
+        expect(execs.at(-2)).toContain('--offline');
+        expect(execs.at(-1)).not.toContain('--offline');
     });
 });
 

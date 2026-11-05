@@ -347,8 +347,12 @@ struct Hooks {
     std::vector<std::pair<std::string, std::function<void()>>> windows;
     std::vector<std::pair<std::string, std::function<void()>>> pages;
     std::vector<std::pair<std::string, std::function<bool()>>> closes;
+    std::vector<std::pair<std::string, std::function<void(bool)>>> actives;
+    std::vector<std::pair<std::string, std::function<bool()>>> quitRequests;
+    std::vector<std::pair<std::string, std::function<void()>>> reopens;
     std::vector<std::pair<std::string, std::function<void()>>> quits;
     std::map<std::string, std::function<void(const std::string &)>> urls;
+    std::map<std::string, std::function<void(const std::vector<std::string> &)>> openers;
 #if !defined(__ANDROID__)
     std::function<void(PageDialog)> pageDialogs;
     std::function<void(PagePermission)> pagePermissions;
@@ -363,6 +367,8 @@ Hooks &hooks() {
 
 // The app runs on with its launch, so its extensions quit with it.
 std::atomic<bool> isLaunched{false};
+// Once the extensions have quit, as before a failure's message box shows, nothing asks or tells them more.
+std::atomic<bool> hasQuit{false};
 
 // An extension adds what it does as its entry runs, which is before the app's module starts.
 void checkStarting(const std::string &what) {
@@ -492,6 +498,21 @@ void Registry::onClose(std::function<bool()> fn) {
     hooks().closes.emplace_back(extension_, std::move(fn));
 }
 
+void Registry::onActive(std::function<void(bool isActive)> fn) {
+    checkStarting("the extension " + extension_ + "'s onActive");
+    hooks().actives.emplace_back(extension_, std::move(fn));
+}
+
+void Registry::onQuitRequest(std::function<bool()> fn) {
+    checkStarting("the extension " + extension_ + "'s onQuitRequest");
+    hooks().quitRequests.emplace_back(extension_, std::move(fn));
+}
+
+void Registry::onReopen(std::function<void()> fn) {
+    checkStarting("the extension " + extension_ + "'s onReopen");
+    hooks().reopens.emplace_back(extension_, std::move(fn));
+}
+
 void Registry::onQuit(std::function<void()> fn) {
     checkStarting("the extension " + extension_ + "'s onQuit");
     hooks().quits.emplace_back(extension_, std::move(fn));
@@ -499,11 +520,23 @@ void Registry::onQuit(std::function<void()> fn) {
 
 void Registry::onUrl(std::function<void(const std::string &url)> fn) {
     checkStarting("the extension " + extension_ + "'s onUrl");
+    const auto isOwn = [this](const auto &owned) { return owned.second == extension_; };
     const auto schemes = app::urlSchemes();
-    if (std::none_of(schemes.begin(), schemes.end(), [this](const auto &scheme) { return scheme.second == extension_; })) {
-        throw std::logic_error("crossbind: the extension " + extension_ + " calls onUrl, but its app.urlSchemes declares no scheme whose links it would get");
+    const auto links = app::appLinks();
+    if (std::none_of(schemes.begin(), schemes.end(), isOwn) && std::none_of(links.begin(), links.end(), isOwn)) {
+        throw std::logic_error("crossbind: the extension " + extension_ + " calls onUrl, but declares no scheme in its app.urlSchemes and no link in its app.links whose links it would get");
     }
     if (!hooks().urls.emplace(extension_, std::move(fn)).second) throw std::logic_error("crossbind: the extension " + extension_ + " calls onUrl twice");
+}
+
+void Registry::onOpenFiles(std::function<void(const std::vector<std::string> &paths)> fn) {
+    checkStarting("the extension " + extension_ + "'s onOpenFiles");
+    const auto types = app::fileTypes();
+    // The files extension gets the files of a type no extension owns as well, whatever types the app declares.
+    if (extension_ != "files" && std::none_of(types.begin(), types.end(), [this](const auto &type) { return type.second == extension_; })) {
+        throw std::logic_error("crossbind: the extension " + extension_ + " calls onOpenFiles, but its app.fileTypes declares no type whose files it would get");
+    }
+    if (!hooks().openers.emplace(extension_, std::move(fn)).second) throw std::logic_error("crossbind: the extension " + extension_ + " calls onOpenFiles twice");
 }
 
 #if !defined(__ANDROID__)
@@ -693,7 +726,25 @@ void startExtensions() {
             throw std::runtime_error("the extension " + owner + " owns the scheme " + scheme + ", but does not call onUrl, which gets its links");
         }
     }
+    for (const auto &[ending, owner] : fileTypes()) {
+        if (hooks().openers.count(owner) == 0) {
+            throw std::runtime_error("the extension " + owner + " owns the files ." + ending + ", but does not call onOpenFiles, which gets them");
+        }
+    }
+#if defined(__ANDROID__) || TARGET_OS_IPHONE
+    // A desktop's system hands an app no https link, so an extension may leave them to its phones' code.
+    for (const auto &[link, owner] : appLinks()) {
+        if (hooks().urls.count(owner) == 0) {
+            throw std::runtime_error("the extension " + owner + " owns the links of " + link + ", but does not call onUrl, which gets them");
+        }
+    }
+#endif
     isSealed = true;
+}
+
+Launch &firstLaunch() {
+    static Launch launch;
+    return launch;
 }
 
 bool launched(const Launch *launch) {
@@ -702,66 +753,85 @@ bool launched(const Launch *launch) {
     return true;
 }
 
-void windowOpened() {
-    for (const auto &[extension, opened] : hooks().windows) {
+namespace {
+
+// Runs each extension's hook of a kind, telling what one throws, after which the others run as well.
+template <typename Hook, typename... Args>
+void runEach(const std::vector<std::pair<std::string, Hook>> &all, const char *as, const Args &...args) {
+    for (const auto &[extension, hook] : all) {
         try {
-            opened();
+            hook(args...);
         } catch (const std::exception &error) {
-            std::fprintf(stderr, "crossbind: the extension %s failed as the window opened: %s\n", extension.c_str(), error.what());
+            std::fprintf(stderr, "crossbind: the extension %s failed as %s: %s\n", extension.c_str(), as, error.what());
         } catch (...) {
-            std::fprintf(stderr, "crossbind: the extension %s failed as the window opened\n", extension.c_str());
+            std::fprintf(stderr, "crossbind: the extension %s failed as %s\n", extension.c_str(), as);
         }
     }
 }
 
-void pageStarted() {
-    for (const auto &[extension, started] : hooks().pages) {
+// Whether every extension's hook of a kind allows it: the first false stops, and one that throws allows it.
+bool isAllowedByEach(const std::vector<std::pair<std::string, std::function<bool()>>> &all, const char *as) {
+    for (const auto &[extension, hook] : all) {
         try {
-            started();
+            if (!hook()) return false;
         } catch (const std::exception &error) {
-            std::fprintf(stderr, "crossbind: the extension %s failed as a page started: %s\n", extension.c_str(), error.what());
+            std::fprintf(stderr, "crossbind: the extension %s failed as %s: %s\n", extension.c_str(), as, error.what());
         } catch (...) {
-            std::fprintf(stderr, "crossbind: the extension %s failed as a page started\n", extension.c_str());
-        }
-    }
-}
-
-bool isCloseAllowed() {
-    for (const auto &[extension, close] : hooks().closes) {
-        try {
-            if (!close()) return false;
-        } catch (const std::exception &error) {
-            std::fprintf(stderr, "crossbind: the extension %s failed as the window closed: %s\n", extension.c_str(), error.what());
-        } catch (...) {
-            std::fprintf(stderr, "crossbind: the extension %s failed as the window closed\n", extension.c_str());
+            std::fprintf(stderr, "crossbind: the extension %s failed as %s\n", extension.c_str(), as);
         }
     }
     return true;
 }
 
+}  // namespace
+
+void windowOpened() { runEach(hooks().windows, "the window opened"); }
+
+void pageStarted() { runEach(hooks().pages, "a page started"); }
+
+bool isCloseAllowed() { return hasQuit || isAllowedByEach(hooks().closes, "the window closed"); }
+
+bool isQuitAllowed() { return hasQuit || isAllowedByEach(hooks().quitRequests, "the app was asked to quit"); }
+
+void appActivated(bool isActive) {
+    // A platform tells of each window and each switch: the extensions and the page hear of each change once.
+    static std::optional<bool> was;
+    if (hasQuit || was == isActive) return;
+    was = isActive;
+    runEach(hooks().actives, isActive ? "the app became active" : "the app became inactive", isActive);
+    postEvent(isActive ? "active" : "inactive", "null");
+}
+
+void reopened() {
+    if (!hasQuit) runEach(hooks().reopens, "the app was opened again");
+}
+
 void quitting() {
-    static std::atomic<bool> hasQuit{false};
     if (!isLaunched || hasQuit.exchange(true)) return;
-    for (const auto &[extension, quit] : hooks().quits) {
-        try {
-            quit();
-        } catch (const std::exception &error) {
-            std::fprintf(stderr, "crossbind: the extension %s failed as the app quit: %s\n", extension.c_str(), error.what());
-        } catch (...) {
-            std::fprintf(stderr, "crossbind: the extension %s failed as the app quit\n", extension.c_str());
-        }
-    }
+    runEach(hooks().quits, "the app quit");
 }
 
 void openUrlOf(const std::string &extension, const std::string &url) {
     const auto hook = hooks().urls.find(extension);
-    if (hook == hooks().urls.end()) return;
+    if (hasQuit || hook == hooks().urls.end()) return;
     try {
         hook->second(url);
     } catch (const std::exception &error) {
         std::fprintf(stderr, "crossbind: the extension %s did not take a link: %s\n", extension.c_str(), error.what());
     } catch (...) {
         std::fprintf(stderr, "crossbind: the extension %s did not take a link\n", extension.c_str());
+    }
+}
+
+void openFilesOf(const std::string &extension, const std::vector<std::string> &paths) {
+    const auto hook = hooks().openers.find(extension);
+    if (hasQuit || hook == hooks().openers.end()) return;
+    try {
+        hook->second(paths);
+    } catch (const std::exception &error) {
+        std::fprintf(stderr, "crossbind: the extension %s did not take the files it opens: %s\n", extension.c_str(), error.what());
+    } catch (...) {
+        std::fprintf(stderr, "crossbind: the extension %s did not take the files it opens\n", extension.c_str());
     }
 }
 

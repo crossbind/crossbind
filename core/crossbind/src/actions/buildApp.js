@@ -19,6 +19,8 @@ import writeXcodeProject, { HERMES_SLICES, IOS_SDKS } from './xcodeProject.js';
 import writeGradleProject, { ANDROID_ABIS } from './gradleProject.js';
 import { attachedDevice } from './androidDevice.js';
 import { packageAndroidRelease } from './androidGradle.js';
+import { compileSwift, swiftLinkArgs } from './appSwift.js';
+import { unpackPackages } from './linuxPackages.js';
 import { APPLE_SIGNING, appleSigning, notarizeApp } from './appleSigning.js';
 import { WINDOWS_SIGNING, signWindows, windowsSigning } from './windowsSigning.js';
 import state from '../state/index.js';
@@ -30,6 +32,7 @@ import {
     appBackgroundColor, appCategory, appCopyright, appDisplayName, appEncryption, appHeader, appId, appPermissions, appPrivacy, appUrlSchemes,
     hostExtensionOptions, urlSchemeOwners, usageDescriptions,
 } from '../utils/appOptions.js';
+import { fileTypeOwners, linkOwners, macDocumentTypes } from '../utils/appLaunches.js';
 import { unreasonedApis, unreasonedWarning } from '../utils/requiredReasonApis.js';
 import {
     appExtensionsOf, appHostExtensions, extensionCmakeArgs, extensionPart, hostExtensions, mergedEntitlements, mergedPlist, mergedPrivacy, registrationSource,
@@ -213,12 +216,15 @@ async function bundle(input, file, plugins) {
     await build.close();
 }
 
-// A development build claims no scheme: the built app, of the same id, owns them, and a link it opens shows its own page.
+// A development build claims no scheme, nor any file type: the built app, of the same id, owns them, and a link it opens
+// shows its own page.
 const urlSchemesOf = (target) => (target.buildType === 'release' ? appUrlSchemes(state.config) : []);
+const fileTypesOf = (target) => (target.buildType === 'release' ? fileTypeOwners(state.config) : []);
 
 // The app's Info.plist, with the keys its extensions give.
-const infoPlist = (name, version, hasIcon, urlSchemes) => xmlPlist(mergedPlist({
+const infoPlist = (name, version, hasIcon, urlSchemes, fileTypes) => xmlPlist(mergedPlist({
     CFBundleDisplayName: appDisplayName(state.config),
+    ...(fileTypes.length > 0 ? { CFBundleDocumentTypes: macDocumentTypes(fileTypes) } : {}),
     CFBundleExecutable: name,
     // Contents/Resources/icon.icns.
     ...(hasIcon ? { CFBundleIconFile: 'icon' } : {}),
@@ -258,7 +264,7 @@ function assembleApp(target, { executable, hbc, hermes, icon }) {
     copyAppFiles(`${app}/${layout.resources}`, hbc, target);
     if (target.platform === 'linux' && icon) fs.writeFileSync(`${app}/${layout.resources}/icon.png`, linuxIcon(icon));
     if (target.platform !== 'darwin') return;
-    fs.writeFileSync(`${app}/Contents/Info.plist`, infoPlist(name, appVersion(), Boolean(icon), urlSchemesOf(target)));
+    fs.writeFileSync(`${app}/Contents/Info.plist`, infoPlist(name, appVersion(), Boolean(icon), urlSchemesOf(target), fileTypesOf(target)));
     if (icon) fs.writeFileSync(`${app}/Contents/Resources/icon.icns`, macIcon(icon));
     const framework = `${app}/Contents/Frameworks/hermesvm.framework`;
     fs.cpSync(`${hermes}/Library/Frameworks/macosx/hermesvm.framework`, framework, { recursive: true, verbatimSymlinks: true });
@@ -429,6 +435,7 @@ export function publishApp(target, { to = appOutputPath(target), page = null } =
         const options = {
             parts, identity: { id: appId(state.config), team: appTeam() }, label: appDisplayName(state.config), version: appVersion(),
             build: build === null ? appVersion() : String(build), icon: icon && iosIcon(icon), urlSchemes: appUrlSchemes(state.config),
+            fileTypes: fileTypeOwners(state.config), links: linkOwners(state.config).map(({ link }) => link),
             background: appBackgroundColor(state.config), usage: usageDescriptions(state.config, 'ios'), encryption: appEncryption(state.config),
         };
         const extensions = extensionsOf('ios');
@@ -440,10 +447,11 @@ export function publishApp(target, { to = appOutputPath(target), page = null } =
         const options = {
             parts: appParts(target), id: androidAppId(), label: appDisplayName(state.config), version: androidVersion(), icons: icon && androidIcons(icon),
             urlSchemes: appUrlSchemes(state.config), background: appBackgroundColor(state.config), permissions: Object.keys(appPermissions(state.config)),
+            fileTypes: fileTypeOwners(state.config), links: linkOwners(state.config).map(({ link }) => link),
         };
         const extensions = extensionsOf('android');
         writeGradleProject(to, {
-            ...options, java: extensions.java, extensionPermissions: extensions.permissions, manifests: extensions.manifests, resources: extensions.resources,
+            ...options, java: extensions.java, extensionPermissions: extensions.permissions, manifests: extensions.manifests, resources: extensions.resources, maven: extensions.maven,
         });
     } else if (path.resolve(to) !== path.resolve(built)) {
         fs.rmSync(to, { recursive: true, force: true });
@@ -491,7 +499,11 @@ export default async function buildApp(target, { bridges = [], force = false } =
     const header = appHeader(state.config, target.platform);
     const icon = readAppIcon(state.config);
     const extensions = extensionsOf(target.platform);
-    const registration = registrationSource(extensions.native, urlSchemeOwners(state.config));
+    // A desktop's system hands an app no https link: its owners there are those with native code, whose onUrl a phone's
+    // code may share.
+    const isPhone = ['ios', 'android'].includes(target.platform);
+    const links = linkOwners(state.config).filter(({ extension }) => isPhone || extensions.native.some(({ name }) => name === (extension ?? 'links')));
+    const registration = registrationSource(extensions.native, urlSchemeOwners(state.config), fileTypeOwners(state.config), links);
 
     const buildType = target.buildType === 'release' ? 'Release' : 'Debug';
     const { build } = state.config.paths;
@@ -524,7 +536,7 @@ export default async function buildApp(target, { bridges = [], force = false } =
         // A desktop app carries its icon; an iOS or Android one gets it as its project is written.
         icon: ['ios', 'android'].includes(target.platform) ? null : icon?.hash ?? null,
         // A macOS app's bundle takes its id, name and version from it.
-        infoPlist: target.platform === 'darwin' ? infoPlist(state.config.general.name, appVersion(), Boolean(icon), urlSchemesOf(target)) : null,
+        infoPlist: target.platform === 'darwin' ? infoPlist(state.config.general.name, appVersion(), Boolean(icon), urlSchemesOf(target), fileTypesOf(target)) : null,
         hermes: HERMES.version,
         inputs,
         linkArgs,
@@ -571,6 +583,19 @@ export default async function buildApp(target, { bridges = [], force = false } =
         if (icon) writeIfChanged(`${workDir}/icon.ico`, windowsIcon(icon));
         else fs.rmSync(`${workDir}/icon.ico`, { force: true });
     }
+    // An Apple app's Swift, which CMake's Makefiles take none of: each extension's compiles first, its header joins the
+    // extension's includes, and its library the host's link, or an iOS app's Xcode project's.
+    const swift = ['darwin', 'ios'].includes(target.platform) ? compileSwift(target, extensions.compiled, workDir, buildType === 'Release') : [];
+    const swiftLink = swiftLinkArgs(target, swift.map(({ library }) => library));
+    // A Linux app's extensions' packages beside crossbind's sysroot, each extension's in a sysroot of its own, whose
+    // headers its sources include and whose libraries the host links against.
+    const sysroots = target.platform === 'linux' ? await unpackPackages(target, extensions.compiled, {
+        cache: `${build}/linux-packages`, workDir, unpack: (deb, root) => run(null, ['dpkg-deb', '-x', deb, root], platformPrefix, target),
+    }) : [];
+    const compiled = extensions.compiled.map((part) => ({
+        ...part, includes: [...part.includes, ...[...swift, ...sysroots].filter(({ name: owner }) => owner === part.name).flatMap(({ includes }) => includes)],
+    }));
+    const ownLink = target.platform === 'darwin' ? swiftLink : sysroots.flatMap(({ libDir }) => [`-L${libDir}`, `-Wl,-rpath-link,${libDir}`]);
     run(null, [
         // An iOS host builds with crossbind's iOS toolchain file rather than as an Xcode project of its own.
         target.platform === 'ios' ? 'ios-cmake' : 'cmake', `${appHostRoot}/cpp`,
@@ -580,8 +605,8 @@ export default async function buildApp(target, { bridges = [], force = false } =
         `-DCROSSBIND_HERMES=${hermes}`,
         `-DCROSSBIND_EXTRA_SOURCES=${extraSources.join(';')}`,
         `-DCROSSBIND_EXTENSION_REGISTRATION=${workDir}/extensions.cpp`,
-        ...extensionCmakeArgs(extensions.compiled),
-        `-DCROSSBIND_LINK_ARGS=${hostLinkArgs.join(';')}`,
+        ...extensionCmakeArgs(compiled),
+        `-DCROSSBIND_LINK_ARGS=${[...hostLinkArgs, ...ownLink].join(';')}`,
         `-DCROSSBIND_LINK_DEPENDS=${libs.join(';')}`,
         // An Android release ships the packages' shared libraries stripped as well, and keeps them as they come.
         ...(target.platform === 'android' ? [`-DCROSSBIND_SHARED_LIBS=${sharedLibs.join(';')}`] : []),
@@ -600,7 +625,7 @@ export default async function buildApp(target, { bridges = [], force = false } =
     await bundle(`${appHostRoot}/js/page.js`, `${build}/${target.appJsName}`, []);
     if (target.platform === 'ios') {
         const frameworks = extensions.frameworks.flatMap((framework) => ['-framework', framework]);
-        assembleIosPart(target, { library: `${workDir}/lib${name}.a`, linkArgs: [...linkArgs, ...frameworks], hbc: `${workDir}/host.hbc`, hermes });
+        assembleIosPart(target, { library: `${workDir}/lib${name}.a`, linkArgs: [...linkArgs, ...frameworks, ...swiftLink], hbc: `${workDir}/host.hbc`, hermes });
     } else if (target.platform === 'android') {
         assembleAndroidPart(target, { libDir: workDir, sharedLibs, hbc: `${workDir}/host.hbc` });
     } else {
