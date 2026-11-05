@@ -1,7 +1,6 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { rollup } from 'rollup';
 import { nodeResolve } from '@rollup/plugin-node-resolve';
@@ -20,8 +19,6 @@ import writeXcodeProject, { HERMES_SLICES, IOS_SDKS } from './xcodeProject.js';
 import writeGradleProject, { ANDROID_ABIS } from './gradleProject.js';
 import { attachedDevice } from './androidDevice.js';
 import { packageAndroidRelease } from './androidGradle.js';
-import writeInstaller, { assertUnderBase } from './appInstaller.js';
-import writeUpdate from './appUpdate.js';
 import { APPLE_SIGNING, appleSigning, notarizeApp } from './appleSigning.js';
 import { WINDOWS_SIGNING, signWindows, windowsSigning } from './windowsSigning.js';
 import state from '../state/index.js';
@@ -34,7 +31,9 @@ import {
     hostExtensionOptions, urlSchemeOwners, usageDescriptions,
 } from '../utils/appOptions.js';
 import { unreasonedApis, unreasonedWarning } from '../utils/requiredReasonApis.js';
-import { appHostExtensions, extensionPart, hostExtensions, mergedEntitlements, registrationSource, withListed } from '../utils/appExtensions.js';
+import {
+    appExtensionsOf, appHostExtensions, extensionPart, hostExtensions, mergedEntitlements, registrationSource, withListed,
+} from '../utils/appExtensions.js';
 import { androidIcons, iosIcon, linuxIcon, macIcon, readAppIcon, windowsIcon } from '../utils/appIcon.js';
 import writeIfChanged from '../utils/writeIfChanged.js';
 import { writeNativeSourceStamp } from '../utils/nativeSourceStamp.js';
@@ -42,6 +41,7 @@ import resetCMakeCacheForSource from '../utils/resetCMakeCacheForSource.js';
 import resolveAppHostRoot, { resolveAppEmbindJsiRoot } from '../utils/resolveAppHost.js';
 import resolveHermes, { HERMES } from '../utils/hermes.js';
 import { getDockerImage, imageRoleFor } from '../utils/pullDockerImage.js';
+import { isUnderBase } from '../utils/replaceBasePathForDocker.js';
 import { chosenRunner } from '../utils/selectRunner.js';
 import { DARWIN_DEPLOYMENT_TARGET } from '../utils/darwinToolchain.js';
 
@@ -53,10 +53,10 @@ const IMAGE_HERMES = `/opt/crossbind/hermes/${HERMES.version}`;
 
 // What the host's extensions the app has, with the options the app's give them, and those crossbind.config.js lists add
 // to an app of this platform; one listed under the name of one of the host's replaces it.
-const extensionsOf = (platform) => extensionPart(
-    withListed(appHostExtensions(resolveAppHostRoot(), hostExtensionOptions(state.config, platform)), state.config.extensions),
-    platform,
-);
+const extensionsOf = (platform) => extensionPart(withListed(
+    appHostExtensions(resolveAppHostRoot(), hostExtensionOptions(state.config, platform)),
+    appExtensionsOf(state.config.extensions),
+), platform);
 
 // Where an app keeps its executable and its files: a macOS bundle, a Linux or Windows directory, or the app folder of an
 // iOS app's Xcode project or of an Android app's Gradle project, which link the executable themselves.
@@ -135,8 +135,8 @@ export function appTeam() {
 const ANDROID_APP_ID = /^[A-Za-z][A-Za-z0-9_]*(\.[A-Za-z][A-Za-z0-9_]*)+$/;
 
 // An Android app's id: the project's app.id, else one made from the project's name.
-export function androidAppId() {
-    const id = state.config.app.id ?? `dev.crossbind.${state.config.general.name.replace(/[^A-Za-z0-9.]/g, '_')}`;
+export function androidAppId(config = state.config) {
+    const id = config.app.id ?? `dev.crossbind.${config.general.name.replace(/[^A-Za-z0-9.]/g, '_')}`;
     if (!ANDROID_APP_ID.test(id)) {
         throw new Error(`crossbind: ${JSON.stringify(id)} (app.id, else made from the project's name) is no Android application id, which takes dot-separated parts of letters, digits and underscores that each start with a letter, as com.example.app does. Set app.id in crossbind.config.js.`);
     }
@@ -309,20 +309,10 @@ const appParts = (target) => state.targets
     .filter((t) => t.platform === target.platform && t.runtimeEnv === 'app' && t.buildType === target.buildType && currentApps.has(t.appName))
     .map((t) => ({ arch: t.arch, dir: `${state.config.paths.build}/${t.appName}` }));
 
-// A Linux or Windows app also ships as one archive, next to its directory: a Windows one as a zip, made in the windows
-// image.
-function archiveApp(app, target) {
-    if (target.platform === 'win32') {
-        assertUnderBase(app, target);
-        fs.rmSync(`${app}.zip`, { force: true });
-        run(null, ['zip', '-q', '-r', '-X', `${path.basename(app)}.zip`, path.basename(app)], null, target, { workdir: path.dirname(app) });
-        return;
-    }
-    const result = spawnSync('tar', ['-czf', `${app}.tar.gz`, '-C', path.dirname(app), path.basename(app)], {
-        encoding: 'utf8',
-        env: { ...process.env, COPYFILE_DISABLE: '1' },
-    });
-    if (result.status !== 0) throw new Error(`crossbind: cannot archive ${app}: ${result.stderr || result.error?.message}`);
+// The container that signs a Windows app sees the project's base alone.
+function assertUnderBase(app, target) {
+    if (isUnderBase(app, state.config.paths.base)) return;
+    throw new Error(`crossbind: the Windows app ${app} is outside ${state.config.paths.base}, the project's base and all the ${imageRoleFor(target)} container sees. Build the app into a directory under it.`);
 }
 
 const ENTITLEMENTS = {
@@ -378,6 +368,9 @@ function warnUnreasonedApis(project, privacy) {
 // command line.
 const appOutputsFile = () => `${state.config.paths.build}/app-outputs.json`;
 const readAppOutputs = () => (fs.existsSync(appOutputsFile()) ? JSON.parse(fs.readFileSync(appOutputsFile(), 'utf8')) : {});
+// What each desktop app's installers wrote beside it, with its update, as builds recorded them.
+const shippedFiles = () => new Set(Object.values(readAppOutputs()).filter(Array.isArray).flat()
+    .flatMap(({ installers = [], update }) => [...installers.flatMap(({ files }) => files), ...(update ? [update.manifest, update.file] : [])]));
 // The command line's names of the desktop platforms.
 export const DESKTOP_PLATFORMS = { darwin: 'macos', linux: 'linux', win32: 'windows' };
 
@@ -389,13 +382,25 @@ export function appOutputOf(platform) {
     return output;
 }
 
-function recordAppOutput(target, to) {
+const madeFile = (file) => (fs.existsSync(file) ? file : null);
+
+// What a publisher's upload takes of an app: an iOS app's project, an Android app's with its APK, bundle and native
+// debug symbols where the build made them, and each arch's desktop app with its installers and update.
+export function recordAppOutput(target, to, { installers = [], update = null } = {}) {
     const outputs = readAppOutputs();
     const app = path.resolve(to);
     const desktop = DESKTOP_PLATFORMS[target.platform];
+    const mobile = target.platform === 'android'
+        ? { project: app, apk: madeFile(`${app}.apk`), bundle: madeFile(`${app}.aab`), symbols: madeFile(`${app}-symbols.zip`) }
+        : { project: app };
     const recorded = desktop
-        ? { [desktop]: [...(outputs[desktop] ?? []).filter((entry) => entry.app !== app), { app, arch: target.arch }] }
-        : { [target.platform]: app };
+        ? { [desktop]: [...(outputs[desktop] ?? []).filter((entry) => entry.app !== app), {
+            app,
+            arch: target.arch,
+            installers: installers.map(({ name, files }) => ({ name, files: files.map((file) => path.resolve(file)) })),
+            update: update && { manifest: path.resolve(update.manifest), file: path.resolve(update.file) },
+        }] }
+        : { [target.platform]: mobile };
     fs.mkdirSync(state.config.paths.build, { recursive: true });
     fs.writeFileSync(appOutputsFile(), `${JSON.stringify({ ...outputs, ...recorded }, null, 4)}\n`);
 }
@@ -437,11 +442,14 @@ export function publishApp(target, { to = appOutputPath(target), page = null } =
     }
     if (page) {
         // The app may land inside the page's own directory, which it then leaves out, with every app built there and what
-        // packages it.
+        // packages it: crossbind's files by their names, and every installer's as a build recorded them, which a folder
+        // the bundler left as it was holds still.
         const apps = new Set([path.basename(to), ...state.targets.filter((t) => t.runtimeEnv === 'app')
             .flatMap((t) => [appOutputName(t), `${state.config.general.name}-${t.platform}-${t.arch}`])]);
+        const shipped = shippedFiles();
         const isApp = (entry) => entry.endsWith('.app') || apps.has(entry.replace(/\.dmg$/, '.app'))
-            || apps.has(entry.replace(/(\.tar\.gz|\.app\.zip|\.zip|\.apk|\.aab|\.deb|-setup\.exe|\.update\.json)$/, ''));
+            || apps.has(entry.replace(/(\.tar\.gz|\.app\.zip|\.zip|\.apk|\.aab|\.deb|-setup\.exe|\.update\.json)$/, ''))
+            || shipped.has(path.resolve(page, entry));
         fs.readdirSync(page).filter((entry) => !isApp(entry)).forEach((entry) => {
             fs.cpSync(`${page}/${entry}`, `${to}/${appLayout(target).resources}/page/${entry}`, { recursive: true });
         });
@@ -453,18 +461,8 @@ export function publishApp(target, { to = appOutputPath(target), page = null } =
     } else if (target.platform === 'android' && target.buildType === 'release') {
         packageAndroidRelease(to);
     }
-    if (['ios', 'android'].includes(target.platform)) {
-        recordAppOutput(target, to);
-    } else if (target.platform !== 'darwin') {
-        if (target.platform === 'win32') signWindowsApp(to, target, page);
-        archiveApp(to, target);
-    }
-    // A desktop app with its page ships with what installs it, and with an updater's key with its update too.
-    if (page && ['darwin', 'linux', 'win32'].includes(target.platform)) {
-        writeInstaller(to, target);
-        writeUpdate(to, target);
-        recordAppOutput(target, to);
-    }
+    if (['ios', 'android'].includes(target.platform)) recordAppOutput(target, to);
+    else if (target.platform === 'win32') signWindowsApp(to, target, page);
     return to;
 }
 
@@ -489,7 +487,7 @@ export default async function buildApp(target, { bridges = [], force = false } =
     const buildType = target.buildType === 'release' ? 'Release' : 'Debug';
     const { build } = state.config.paths;
     const appHostRoot = resolveAppHostRoot();
-    state.config.extensions.filter(({ name }) => hostExtensions(appHostRoot).some((own) => own.name === name))
+    appExtensionsOf(state.config.extensions).filter(({ name }) => hostExtensions(appHostRoot).some((own) => own.name === name))
         .forEach(({ name, root }) => logger.info(`[${target.path}] the extension ${name} of ${root} replaces the host's own`));
     const jsiRoot = resolveAppEmbindJsiRoot();
     const { hermes, cmakeArgs, inputs } = await hostInputs(target);

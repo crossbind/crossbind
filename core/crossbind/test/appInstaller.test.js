@@ -4,31 +4,58 @@ import path from 'node:path';
 import { afterAll, afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 import { PNG } from 'pngjs';
 
-const state = { config: {} };
+const state = { config: {}, targets: [] };
 vi.mock('../src/state/index.js', () => ({ default: state }));
-// hdiutil and dpkg-deb, which see what they package as it is when they run, and the windows image, which runs makensis.
+// What the tools that package an app make, as they would: the last argument of dpkg-deb and hdiutil, the zip in the
+// folder zip runs in, makensis's OUTFILE and tar's archive.
+function writeMade(command, cwd) {
+    const outfile = command.find((arg) => arg.startsWith('-DOUTFILE='))?.slice('-DOUTFILE='.length);
+    const made = {
+        'dpkg-deb': command.at(-1), hdiutil: command.at(-1), zip: cwd && path.join(cwd, command[4]), makensis: outfile, tar: command[2],
+    }[command[0]];
+    if (made) fs.writeFileSync(made, command[0]);
+}
+// tar, which archives a Linux app here; every other command runs as it is.
+const tar = vi.fn((args) => {
+    writeMade(['tar', ...args]);
+    return { status: 0, stdout: '', stderr: '' };
+});
+vi.mock('node:child_process', async (importOriginal) => {
+    const actual = await importOriginal();
+    return { ...actual, spawnSync: (command, args, options) => (command === 'tar' ? tar(args, options) : actual.spawnSync(command, args, options)) };
+});
+// hdiutil and dpkg-deb, which see what they package as it is when they run, and the windows image, which runs makensis
+// and zip.
 const run = vi.fn();
 vi.mock('../src/actions/run.js', () => ({ default: run }));
 const inWindowsImage = vi.fn();
 vi.mock('../src/actions/windowsSigning.js', async (importOriginal) => ({ ...await importOriginal(), inWindowsImage }));
 
+const { checkInstaller, installersFor, writeInstallers } = await import('../src/actions/appInstaller.js');
 const {
-    default: writeInstaller, checkInstaller, debianControl, debianName, debianVersion, desktopEntry, maintainer,
-} = await import('../src/actions/appInstaller.js');
+    debianControl, debianName, debianVersion, desktopEntry, maintainer,
+} = await import('../src/installers/deb/index.js');
+const { checkedExtension } = await import('../src/utils/appExtensions.js');
+const { newUpdaterKey } = await import('../src/actions/appUpdate.js');
 
 const roots = [];
 afterAll(() => roots.forEach((dir) => fs.rmSync(dir, { recursive: true, force: true })));
 
 // A project with a built app in dist, as publishApp leaves it.
-function project(app, { name = 'demo', appOptions = {}, pkg = { version: '1.2.0-beta.3' } } = {}) {
+function project(app, {
+    name = 'demo', appOptions = {}, pkg = { version: '1.2.0-beta.3' }, extensions = [],
+} = {}) {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'crossbind-installer-'));
     roots.push(root);
     fs.mkdirSync(path.join(root, 'build'));
+    fs.mkdirSync(path.join(root, 'dist'));
     Object.assign(state.config, {
         general: { name },
         app: appOptions,
         package: pkg,
+        extensions,
         paths: { base: root, project: root, build: path.join(root, 'build') },
+        system: {},
     });
     Object.entries(app).forEach(([file, content]) => {
         fs.mkdirSync(path.dirname(path.join(root, 'dist', file)), { recursive: true });
@@ -37,9 +64,15 @@ function project(app, { name = 'demo', appOptions = {}, pkg = { version: '1.2.0-
     return root;
 }
 
+// An installer an extension of the app's gives.
+const installer = (name, platform, steps = {}) => checkedExtension({ name, installer: { platform, make: () => [], ...steps } }, '/extensions', 'extensions[0]');
+
 beforeEach(() => {
     run.mockReset();
+    run.mockImplementation((program, command, prefix, target, options) => writeMade(command, options?.workdir));
     inWindowsImage.mockReset();
+    inWindowsImage.mockImplementation((command, cwd) => writeMade(command, cwd));
+    tar.mockClear();
 });
 afterEach(() => vi.unstubAllEnvs());
 
@@ -96,12 +129,14 @@ describe("a Linux app's Debian package", () => {
     });
 
     // Windows writes a link's target with backslashes, and a drive for /Applications.
-    test.skipIf(process.platform === 'win32')('holds the app in /usr/lib, its command in /usr/bin, and the desktop entry, which opens its links, and icon of a menu', () => {
-        const root = project({ 'demo-linux-x64/demo': 'elf', 'demo-linux-x64/resources/icon.png': 'png' }, { name: 'Demo_App', appOptions: { name: 'My Demo', urlSchemes: ['myapp'] } });
+    test.skipIf(process.platform === 'win32')('holds the app in /usr/lib, its command in /usr/bin, and the desktop entry, which opens its links, and icon of a menu', async () => {
+        const root = project({ 'demo-linux-x64/demo': 'elf', 'demo-linux-x64/resources/icon.png': 'png' }, {
+            name: 'Demo_App', appOptions: { name: 'My Demo', urlSchemes: ['myapp'], category: 'music', installers: ['deb'] },
+        });
         fs.renameSync(path.join(root, 'dist/demo-linux-x64/demo'), path.join(root, 'dist/demo-linux-x64/Demo_App'));
         const target = { platform: 'linux', arch: 'x64' };
         let tree;
-        run.mockImplementationOnce((program, params) => {
+        run.mockImplementationOnce((program, params, prefix, runFor, options) => {
             const stage = params[3];
             const read = (file) => fs.readFileSync(path.join(stage, file), 'utf8');
             tree = {
@@ -111,98 +146,126 @@ describe("a Linux app's Debian package", () => {
                 entry: read('usr/share/applications/demo-app.desktop'),
                 control: read('DEBIAN/control'),
             };
+            writeMade(params, options.workdir);
         });
 
-        writeInstaller(path.join(root, 'dist/demo-linux-x64'), target);
+        const made = await writeInstallers(path.join(root, 'dist/demo-linux-x64'), target);
 
-        expect(run).toHaveBeenCalledWith(null, ['dpkg-deb', '--build', '--root-owner-group', expect.stringMatching(/build[/\\]demo-linux-x64\.deb$/),
-            path.join(root, 'dist/demo-linux-x64.deb')], null, target);
+        expect(made).toEqual([{ name: 'deb', files: [path.join(root, 'dist/demo-linux-x64.deb')] }]);
+        expect(run).toHaveBeenCalledWith(null, ['dpkg-deb', '--build', '--root-owner-group', path.join(root, 'build', 'deb', 'demo-linux-x64'),
+            path.join(root, 'dist/demo-linux-x64.deb')], null, target, { workdir: path.join(root, 'dist') });
         expect(tree).toEqual({
             command: '../lib/demo-app/Demo_App',
             app: ['Demo_App', 'resources'],
             icon: 'png',
-            entry: desktopEntry({ label: 'My Demo', command: 'demo-app', hasIcon: true, urlSchemes: ['myapp'] }),
+            entry: desktopEntry({
+                label: 'My Demo', command: 'demo-app', hasIcon: true, urlSchemes: ['myapp'], categories: 'Audio;AudioVideo',
+            }),
             control: debianControl({ name: 'demo-app', version: '1.2.0-beta.3', arch: 'x64', label: 'My Demo' }),
         });
         // What it packaged is gone once the package is made.
-        expect(fs.existsSync(path.join(root, 'build/demo-linux-x64.deb'))).toBe(false);
+        expect(fs.existsSync(path.join(root, 'build/deb/demo-linux-x64'))).toBe(false);
     });
 
-    test("is refused for an app outside the project's base, which is all the linux image sees", () => {
-        const root = project({});
-        const elsewhere = path.join(os.tmpdir(), 'elsewhere', 'demo-linux-x64');
-        expect(() => writeInstaller(elsewhere, { platform: 'linux', arch: 'x64' })).toThrow(`the Linux app ${elsewhere} is outside ${root}`);
+    test.skipIf(process.platform === 'win32')("is refused for an app outside the project's base, which is all the linux image sees", async () => {
+        const root = project({}, { appOptions: { installers: ['deb'] } });
+        const elsewhere = fs.mkdtempSync(path.join(os.tmpdir(), 'crossbind-elsewhere-'));
+        roots.push(elsewhere);
+        fs.mkdirSync(path.join(elsewhere, 'demo-linux-x64'));
+        await expect(writeInstallers(path.join(elsewhere, 'demo-linux-x64'), { platform: 'linux', arch: 'x64' }))
+            .rejects.toThrow(`crossbind: deb runs dpkg-deb in ${elsewhere}, outside ${root}, the project's base and all the linux container sees.`);
+        expect(run).not.toHaveBeenCalled();
+        expect(fs.existsSync(path.join(root, 'build', 'deb', 'demo-linux-x64'))).toBe(false);
+    });
+});
+
+describe("a Linux app's archive", () => {
+    test('is the app as one tar.gz beside its folder, which macOS writes without AppleDouble files', async () => {
+        const root = project({ 'demo-linux-x64/demo': 'elf' }, { appOptions: { installers: ['tar-gz'] } });
+        const app = path.join(root, 'dist/demo-linux-x64');
+
+        expect(await writeInstallers(app, { platform: 'linux', arch: 'x64' })).toEqual([{ name: 'tar-gz', files: [`${app}.tar.gz`] }]);
+        const [[args, options]] = tar.mock.calls;
+        expect(args).toEqual(['-czf', `${app}.tar.gz`, '-C', path.join(root, 'dist'), 'demo-linux-x64']);
+        expect(options.env.COPYFILE_DISABLE).toBe('1');
     });
 });
 
 describe("a macOS app's disk image", () => {
-    test.skipIf(process.platform === 'win32')('holds the app beside a link to /Applications, and is named after it', () => {
+    test.skipIf(process.platform === 'win32')('holds the app beside a link to /Applications, and is named after it', async () => {
         const root = project({ 'demo.app/Contents/Info.plist': 'plist' }, { appOptions: { name: 'My Demo' } });
         const target = { platform: 'darwin', arch: 'arm64' };
         let folder;
-        run.mockImplementationOnce((program, params) => {
+        run.mockImplementationOnce((program, params, prefix, runFor, options) => {
             const source = params[params.indexOf('-srcfolder') + 1];
             folder = {
                 entries: fs.readdirSync(source).sort(),
                 link: fs.readlinkSync(path.join(source, 'Applications')),
                 plist: fs.readFileSync(path.join(source, 'demo.app/Contents/Info.plist'), 'utf8'),
             };
+            writeMade(params, options.workdir);
         });
 
-        writeInstaller(path.join(root, 'dist/demo.app'), target);
+        const made = await writeInstallers(path.join(root, 'dist/demo.app'), target);
 
+        expect(made).toEqual([{ name: 'dmg', files: [path.join(root, 'dist/demo.dmg')] }]);
         expect(run).toHaveBeenCalledWith(null, ['hdiutil', 'create', '-quiet', '-volname', 'My Demo', '-srcfolder', expect.any(String), '-fs', 'HFS+',
-            '-format', 'UDZO', path.join(root, 'dist/demo.dmg')], null, target);
+            '-format', 'UDZO', path.join(root, 'dist/demo.dmg')], null, target, { workdir: path.join(root, 'dist') });
         expect(folder).toEqual({ entries: ['Applications', 'demo.app'], link: '/Applications', plist: 'plist' });
     });
 });
 
 describe("a Windows app's setup program", () => {
-    test('is built by makensis from the host\'s script, which it gives the app, its names and its icon', () => {
+    const setup = () => inWindowsImage.mock.calls.find(([command]) => command[0] === 'makensis');
+
+    test("is built by makensis from the nsis installer's script, which it gives the app, its names and its icon", async () => {
         const icon = PNG.sync.write({ width: 16, height: 16, data: Buffer.alloc(16 * 16 * 4, 255) });
         const root = project({ 'demo-win32-x64/demo.exe': 'MZ', 'icon.png': icon }, { appOptions: { name: 'My $Demo', icon: 'dist/icon.png' } });
         const target = { platform: 'win32', arch: 'x64' };
         const app = path.join(root, 'dist/demo-win32-x64');
 
-        writeInstaller(app, target);
+        const made = await writeInstallers(app, target);
 
-        const [command, workdir, signing] = inWindowsImage.mock.calls[0];
+        expect(made).toEqual([{ name: 'nsis', files: [`${app}-setup.exe`] }, { name: 'zip', files: [`${app}.zip`] }]);
+        const [command, workdir, signing] = setup();
         expect(command.slice(0, 4)).toEqual(['makensis', '-V2', '-INPUTCHARSET', 'UTF8']);
         // NSIS reads $ as the start of a variable, so the app's name doubles it.
         expect(command).toEqual(expect.arrayContaining([
             '-DNAME=My $$Demo', '-DEXE=demo.exe', '-DID=dev.crossbind.demo', '-DVERSION=1.2.0-beta.3', `-DAPP=${app}`, `-DOUTFILE=${app}-setup.exe`,
-            `-DICON=${path.join(root, 'build')}/demo-win32-x64.ico`,
+            `-DICON=${path.join(root, 'build', 'nsis', 'demo-win32-x64.ico')}`,
         ]));
-        expect(command.at(-1)).toMatch(/[/\\]windows[/\\]installer\.nsi$/);
+        expect(command.at(-1)).toMatch(/[/\\]installers[/\\]nsis[/\\]installer\.nsi$/);
         expect(fs.existsSync(command.at(-1))).toBe(true);
         expect([workdir, signing]).toEqual([path.join(root, 'dist'), null]);
         expect(command.some((param) => param.startsWith('-DSIGNER='))).toBe(false);
-        expect(fs.readFileSync(path.join(root, 'build/demo-win32-x64.ico')).readUInt16LE(2)).toBe(1);
+        expect(fs.readFileSync(path.join(root, 'build/nsis/demo-win32-x64.ico')).readUInt16LE(2)).toBe(1);
+        // The zip is the app as signed, made in the windows image too.
+        expect(inWindowsImage).toHaveBeenCalledWith(['zip', '-q', '-r', '-X', 'demo-win32-x64.zip', 'demo-win32-x64'], path.join(root, 'dist'), null);
     });
 
-    test('has no icon of its own without app.icon, and registers no scheme without app.urlSchemes', () => {
+    test('has no icon of its own without app.icon, and registers no scheme without app.urlSchemes', async () => {
         const root = project({ 'demo-win32-x64/demo.exe': 'MZ' });
-        writeInstaller(path.join(root, 'dist/demo-win32-x64'), { platform: 'win32', arch: 'x64' });
-        expect(inWindowsImage.mock.calls[0][0].some((param) => param.startsWith('-DICON='))).toBe(false);
-        expect(inWindowsImage.mock.calls[0][0].some((param) => param.startsWith('-DSCHEMES='))).toBe(false);
+        await writeInstallers(path.join(root, 'dist/demo-win32-x64'), { platform: 'win32', arch: 'x64' });
+        expect(setup()[0].some((param) => param.startsWith('-DICON='))).toBe(false);
+        expect(setup()[0].some((param) => param.startsWith('-DSCHEMES='))).toBe(false);
     });
 
-    test('registers the schemes of app.urlSchemes, which a file of macros names for its script', () => {
+    test('registers the schemes of app.urlSchemes, which a file of macros names for its script', async () => {
         const root = project({ 'demo-win32-x64/demo.exe': 'MZ' }, { appOptions: { urlSchemes: ['myapp', 'other'] } });
-        writeInstaller(path.join(root, 'dist/demo-win32-x64'), { platform: 'win32', arch: 'x64' });
-        const schemes = inWindowsImage.mock.calls[0][0].find((param) => param.startsWith('-DSCHEMES=')).slice('-DSCHEMES='.length);
+        await writeInstallers(path.join(root, 'dist/demo-win32-x64'), { platform: 'win32', arch: 'x64' });
+        const schemes = setup()[0].find((param) => param.startsWith('-DSCHEMES=')).slice('-DSCHEMES='.length);
         expect(fs.readFileSync(schemes, 'utf8')).toBe('!macro CROSSBIND_URL_SCHEMES DO\n  !insertmacro ${DO} "myapp"\n  !insertmacro ${DO} "other"\n!macroend\n');
     });
 
-    test('is signed with its uninstaller as NSIS writes them, by the script that signs the app, with a key in the environment', () => {
+    test('is signed with its uninstaller as NSIS writes them, by the script that signs the app, with a key in the environment', async () => {
         const root = project({ 'demo-win32-x64/demo.exe': 'MZ', 'key.p12': 'key' });
         vi.stubEnv('CROSSBIND_WINDOWS_SIGNING_STORETYPE', 'PKCS12');
         vi.stubEnv('CROSSBIND_WINDOWS_SIGNING_KEYSTORE', path.join(root, 'dist/key.p12'));
         vi.stubEnv('CROSSBIND_WINDOWS_SIGNING_STOREPASS', 'secret');
 
-        writeInstaller(path.join(root, 'dist/demo-win32-x64'), { platform: 'win32', arch: 'x64' });
+        await writeInstallers(path.join(root, 'dist/demo-win32-x64'), { platform: 'win32', arch: 'x64' });
 
-        const [command, , signing] = inWindowsImage.mock.calls[0];
+        const [command, , signing] = setup();
         const signer = command.find((param) => param.startsWith('-DSIGNER=')).slice('-DSIGNER='.length);
         expect(signer).toMatch(/[/\\]windows[/\\]jsign\.sh$/);
         expect(fs.existsSync(signer)).toBe(true);
@@ -211,46 +274,144 @@ describe("a Windows app's setup program", () => {
             files: { keystore: path.join(root, 'dist/key.p12') },
         });
         expect(command.join(' ')).not.toContain('secret');
+        // The zip, which signs nothing, takes no key.
+        expect(inWindowsImage.mock.calls.find(([zipped]) => zipped[0] === 'zip')[2]).toBeNull();
     });
 
-    test('is refused for a name Windows takes for no shortcut or folder', () => {
+    test('is refused for a name Windows takes for no shortcut or folder', async () => {
         const root = project({}, { appOptions: { name: 'Notes: Pro' } });
-        expect(() => writeInstaller(path.join(root, 'dist/demo-win32-x64'), { platform: 'win32', arch: 'x64' }))
-            .toThrow('"Notes: Pro", the name of a Windows app\'s Start menu shortcut and folder, is no file name Windows takes');
+        await expect(writeInstallers(path.join(root, 'dist/demo-win32-x64'), { platform: 'win32', arch: 'x64' }))
+            .rejects.toThrow('"Notes: Pro", the name of a Windows app\'s Start menu shortcut and folder, is no file name Windows takes');
         expect(inWindowsImage).not.toHaveBeenCalled();
     });
 });
 
-describe('the names an installer takes', () => {
-    test('stop a build that could not write it, before anything compiles', () => {
-        project({}, { name: 'x', appOptions: { name: 'Notes: Pro' } });
-        expect(() => checkInstaller({ platform: 'linux', arch: 'x64' })).toThrow('general.name "x" makes no Debian package name');
-        expect(() => checkInstaller({ platform: 'win32', arch: 'x64' })).toThrow('"Notes: Pro", the name of a Windows app\'s Start menu shortcut');
-        expect(() => checkInstaller({ platform: 'darwin', arch: 'arm64' })).not.toThrow();
+describe('the installers an app has', () => {
+    const names = (target) => installersFor(target).map(({ name }) => name);
+
+    test("are crossbind's and the app's of its platform, crossbind's first, or those alone app.installers names", () => {
+        project({}, { extensions: [installer('appimage', 'linux'), installer('notes', 'desktop')] });
+        expect(names({ platform: 'linux' })).toEqual(['deb', 'tar-gz', 'appimage', 'notes']);
+        expect(names({ platform: 'darwin' })).toEqual(['dmg', 'notes']);
+        expect(names({ platform: 'win32' })).toEqual(['nsis', 'zip', 'notes']);
+        state.config.app = { installers: ['notes', 'deb'] };
+        expect(names({ platform: 'linux' })).toEqual(['deb', 'notes']);
+        expect(names({ platform: 'win32' })).toEqual(['notes']);
+        state.config.app = { installers: [] };
+        expect(names({ platform: 'darwin' })).toEqual([]);
     });
 
-    test('stop a Windows build whose key could not sign it, before anything compiles', () => {
+    test('refuse an app.installers that names one that is no installer, or is no list of names', () => {
+        project({}, { appOptions: { installers: ['deb', 'rpm'] }, extensions: [installer('appimage', 'linux')] });
+        expect(() => installersFor({ platform: 'linux' })).toThrow('crossbind: app.installers names rpm, which is no installer: dmg, deb, tar-gz, nsis, zip and appimage are.');
+        state.config.app = { installers: 'deb' };
+        expect(() => installersFor({ platform: 'linux' })).toThrow('crossbind: app.installers "deb" is no list of installers\' names, each once, as [\'dmg\', \'deb\'] is.');
+        state.config.app = { installers: ['deb', 'deb'] };
+        expect(() => installersFor({ platform: 'linux' })).toThrow('is no list of installers\' names, each once');
+    });
+
+    test("put one the app lists under the name of crossbind's in its place", () => {
+        const deb = installer('deb', 'linux');
+        project({}, { extensions: [deb] });
+        const installers = installersFor({ platform: 'linux' });
+        expect(installers.map(({ name }) => name)).toEqual(['deb', 'tar-gz']);
+        expect(installers[0]).toBe(deb);
+    });
+
+    test('make what installs the app with the api of its platform, which give the files they made, a relative one beside the app', async () => {
+        const seen = [];
+        const appimage = installer('appimage', 'linux', {
+            make(api, { app, arch }) {
+                seen.push({
+                    name: api.name, platform: api.platform, arch, app, workDir: api.workDir, isFrozen: Object.isFrozen(api),
+                });
+                fs.writeFileSync(`${app}.AppImage`, 'elf');
+                return [`${path.basename(app)}.AppImage`];
+            },
+        });
+        const root = project({ 'demo-linux-x64/demo': 'elf' }, { appOptions: { installers: ['appimage'] }, extensions: [appimage] });
+        const app = path.join(root, 'dist/demo-linux-x64');
+
+        expect(await writeInstallers(app, { platform: 'linux', arch: 'x64' })).toEqual([{ name: 'appimage', files: [`${app}.AppImage`] }]);
+        expect(seen).toEqual([{
+            name: 'appimage', platform: 'linux', arch: 'x64', app, workDir: path.join(root, 'build', 'appimage'), isFrozen: true,
+        }]);
+    });
+
+    test('refuse what an installer says it made but did not, and what is no list of files', async () => {
+        const root = project({ 'demo-linux-x64/demo': 'elf' }, {
+            appOptions: { installers: ['appimage'] },
+            extensions: [installer('appimage', 'linux', { make: () => ['missing.AppImage'] }), installer('snap', 'linux', { make: () => 'demo.snap' })],
+        });
+        const app = path.join(root, 'dist/demo-linux-x64');
+        await expect(writeInstallers(app, { platform: 'linux', arch: 'x64' }))
+            .rejects.toThrow(`crossbind: the installer appimage made ${path.join(root, 'dist', 'missing.AppImage')}, which is no file.`);
+        state.config.app = { installers: ['snap'] };
+        await expect(writeInstallers(app, { platform: 'linux', arch: 'x64' })).rejects.toThrow('crossbind: the installer snap made no list of files, which its make returns.');
+    });
+});
+
+describe('what a desktop app ships with', () => {
+    test('stops a build whose installers could not make it, before anything compiles', async () => {
+        project({}, { name: 'x', appOptions: { name: 'Notes: Pro' } });
+        await expect(checkInstaller({ platform: 'linux', arch: 'x64' })).rejects.toThrow('general.name "x" makes no Debian package name');
+        await expect(checkInstaller({ platform: 'win32', arch: 'x64' })).rejects.toThrow('"Notes: Pro", the name of a Windows app\'s Start menu shortcut');
+        await expect(checkInstaller({ platform: 'darwin', arch: 'arm64' })).resolves.toBeUndefined();
+    });
+
+    test("runs each installer's own check, with the api of its platform", async () => {
+        const checked = [];
+        const appimage = installer('appimage', 'linux', {
+            check(api) {
+                checked.push(api.platform);
+                throw new Error('crossbind: appimage takes appimagetool, which this machine has not.');
+            },
+        });
+        project({}, { extensions: [appimage] });
+        await expect(checkInstaller({ platform: 'linux', arch: 'x64' })).rejects.toThrow('crossbind: appimage takes appimagetool, which this machine has not.');
+        expect(checked).toEqual(['linux']);
+        await expect(checkInstaller({ platform: 'darwin', arch: 'arm64' })).resolves.toBeUndefined();
+    });
+
+    test('keeps the installer a Linux or Windows app with app.updater updates itself from', async () => {
+        const updater = { url: 'https://example.com/updates/demo-{platform}-{arch}.update.json', publicKey: newUpdaterKey().publicKey };
+        project({}, { appOptions: { updater, installers: ['deb'] } });
+        await expect(checkInstaller({ platform: 'linux', arch: 'x64' })).rejects.toThrow('crossbind: a Linux app with app.updater updates itself from what its tar-gz installer makes, which app.installers leaves out: list tar-gz in it, or remove app.updater.');
+        state.config.app = { updater, installers: ['zip'] };
+        await expect(checkInstaller({ platform: 'win32', arch: 'x64' })).rejects.toThrow('crossbind: a Windows app with app.updater updates itself from what its nsis installer makes, which app.installers leaves out: list nsis in it, or remove app.updater.');
+        // A macOS app's update is a zip of its own.
+        state.config.app = { updater, installers: [] };
+        await expect(checkInstaller({ platform: 'darwin', arch: 'arm64' })).resolves.toBeUndefined();
+        state.config.app = { updater, installers: ['deb', 'tar-gz'] };
+        await expect(checkInstaller({ platform: 'linux', arch: 'x64' })).resolves.toBeUndefined();
+        // A publisher's build that narrows the installers its store takes keeps the one the update is too.
+        vi.stubEnv('CROSSBIND_CONFIG_CHANGES', JSON.stringify({ app: { installers: ['deb'] } }));
+        state.config.app = { updater, installers: ['deb'] };
+        await expect(checkInstaller({ platform: 'linux', arch: 'x64' })).rejects.toThrow("crossbind: a Linux app with app.updater updates itself from what its tar-gz installer makes, which the publisher's build leaves out of app.installers: its build lists tar-gz too, or removes app.updater with { app: { updater: null } }.");
+    });
+
+    test('stops a Windows build whose key could not sign it, before anything compiles', async () => {
         project({});
         vi.stubEnv('CROSSBIND_WINDOWS_SIGNING_STORETYPE', 'YUBIKEY');
-        expect(() => checkInstaller({ platform: 'win32', arch: 'x64' })).toThrow("is a hardware token, which crossbind's windows container does not reach");
+        await expect(checkInstaller({ platform: 'win32', arch: 'x64' })).rejects.toThrow("is a hardware token, which crossbind's windows container does not reach");
     });
 
-    test("stop a desktop build whose update key could not sign the app's updates, before anything compiles", () => {
+    test("stops a desktop build whose update key could not sign the app's updates, before anything compiles", async () => {
         project({});
         vi.stubEnv('CROSSBIND_UPDATER_PRIVATE_KEY', Buffer.alloc(32).toString('base64'));
-        ['darwin', 'linux', 'win32'].forEach((platform) => {
-            expect(() => checkInstaller({ platform, arch: 'x64' })).toThrow('crossbind.config.js has no app.updater');
-        });
-        expect(() => checkInstaller({ platform: 'android', arch: 'arm64-v8a' })).not.toThrow();
+        for (const platform of ['darwin', 'linux', 'win32']) {
+            await expect(checkInstaller({ platform, arch: 'x64' })).rejects.toThrow('crossbind.config.js has no app.updater');
+        }
+        await expect(checkInstaller({ platform: 'android', arch: 'arm64-v8a' })).resolves.toBeUndefined();
     });
 
-    test('stop a macOS build whose notarization could not be, before anything compiles', () => {
+    test('stops a macOS build whose notarization could not be, before anything compiles', async () => {
         project({});
         vi.stubEnv('CROSSBIND_APPLE_SIGNING_IDENTITY', 'Developer ID Application: Ada Lovelace');
         vi.stubEnv('CROSSBIND_APPLE_API_KEY', '');
         vi.stubEnv('CROSSBIND_APPLE_API_KEY_ID', 'ABC123');
         vi.stubEnv('CROSSBIND_APPLE_API_ISSUER', '');
-        expect(() => checkInstaller({ platform: 'darwin', arch: 'arm64' }))
-            .toThrow('CROSSBIND_APPLE_API_KEY_ID is set, but CROSSBIND_APPLE_API_KEY and CROSSBIND_APPLE_API_ISSUER are not');
+        await expect(checkInstaller({ platform: 'darwin', arch: 'arm64' }))
+            .rejects.toThrow('CROSSBIND_APPLE_API_KEY_ID is set, but CROSSBIND_APPLE_API_KEY and CROSSBIND_APPLE_API_ISSUER are not');
     });
 });

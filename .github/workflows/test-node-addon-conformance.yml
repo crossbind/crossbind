@@ -15,6 +15,7 @@ on:
             - plugins/rollup/**
             - e2e/backend-nodejs-native/**
             - e2e/desktop-app/**
+            - e2e/app-page-requests/**
             - e2e/conformance/**
             - e2e/conformance-rust/**
             - .nvmrc
@@ -34,6 +35,7 @@ on:
             - plugins/rollup/**
             - e2e/backend-nodejs-native/**
             - e2e/desktop-app/**
+            - e2e/app-page-requests/**
             - e2e/conformance/**
             - e2e/conformance-rust/**
             - .nvmrc
@@ -246,12 +248,15 @@ jobs:
               run: pnpm install
             - name: Build the app
               run: pnpm --filter=@crossbind/e2e-desktop-app run build
+            # The app's own page-dialogs and page-permissions take the place of the host's, which this app keeps.
+            - name: Build e2e/app-page-requests
+              run: pnpm --filter=@crossbind/e2e-app-page-requests run build
             - name: Install the app's Debian package, whose dependencies bring the WebKitGTK it runs on
               # The run starts a session bus of its own, on which e2e/tray-host.py plays a tray and a notification
               # server.
               run: |
                   sudo apt-get update
-                  sudo apt-get install -y --no-install-recommends ./e2e/desktop-app/dist/crossbind-e2e-desktop-app-linux-x64.deb dbus python3-gi
+                  sudo apt-get install -y --no-install-recommends ./e2e/desktop-app/dist/crossbind-e2e-desktop-app-linux-x64.deb dbus python3-gi xdotool x11-utils
             - name: Run the conformance suite in the app and in the installed app
               # WebKitGTK runs without its sandbox and GPU compositing, as in the containers the app was measured in.
               env:
@@ -260,6 +265,11 @@ jobs:
               run: |
                   xvfb-run -a pnpm --filter=@crossbind/e2e-desktop-app run e2e:prod
                   xvfb-run -a node e2e/desktop-app/e2e/run.mjs --installed
+            - name: Answer the host's own page dialogs as the app's user would
+              env:
+                  WEBKIT_DISABLE_SANDBOX_THIS_IS_DANGEROUS: '1'
+                  WEBKIT_DISABLE_COMPOSITING_MODE: '1'
+              run: xvfb-run -a pnpm --filter=@crossbind/e2e-app-page-requests run e2e:prod
     app-windows:
         # A hosted Windows runner cannot run crossbind's windows image, a Linux one, so this runner builds the app in it,
         # against the Hermes and the WebView2 SDK headers the image carries.
@@ -289,6 +299,9 @@ jobs:
                   CROSSBIND_WINDOWS_SIGNING_ALIAS: crossbind e2e
                   CROSSBIND_WINDOWS_SIGNING_STOREPASS: e2e-pass
               run: pnpm --filter=@crossbind/e2e-desktop-app run build
+            # The app's own page-dialogs and page-permissions take the place of the host's, which this app keeps.
+            - name: Build e2e/app-page-requests
+              run: pnpm --filter=@crossbind/e2e-app-page-requests run build
             - name: Check that the app loads the system DLLs it imports from System32 alone
               # A file of their name in the app's folder, as in one it was downloaded to, would otherwise run inside it.
               run: |
@@ -308,6 +321,17 @@ jobs:
                       e2e/desktop-app/dist/crossbind-e2e-desktop-app-win32-x64/
                       e2e/desktop-app/dist/crossbind-e2e-desktop-app-win32-arm64/
                       e2e/desktop-app/dist/crossbind-e2e-desktop-app-win32-*-setup.exe
+                      e2e/desktop-app/dist/crossbind-e2e-desktop-app-win32-*.probe.json
+                  retention-days: 1
+            - name: Keep e2e/app-page-requests for the runners that open it
+              uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+              with:
+                  name: windows-page-requests
+                  if-no-files-found: error
+                  overwrite: true
+                  path: |
+                      e2e/app-page-requests/dist/crossbind-e2e-app-page-requests-win32-x64/
+                      e2e/app-page-requests/dist/crossbind-e2e-app-page-requests-win32-arm64/
                   retention-days: 1
     app-windows-run:
         # Each Windows runner opens the app built for it, on its own WebView2 Runtime. The checkout's directory has a
@@ -363,6 +387,13 @@ jobs:
               run: New-Item -ItemType File -Force -Path "$env:APPDATA\crossbind-e2e-desktop-app.exe\crossbind-profile" | Out-Null
             - name: Run the conformance suite in the app
               run: node e2e/desktop-app/e2e/run.mjs
+            - name: Restore e2e/app-page-requests
+              uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+              with:
+                  name: windows-page-requests
+                  path: ünicode/e2e/app-page-requests/dist
+            - name: Answer the host's own page dialogs as the app's user would
+              run: node e2e/app-page-requests/e2e/run.mjs
             - name: Check that the profile moved to the app's own local folder
               run: |
                   if (-not (Test-Path "$env:LOCALAPPDATA\dev.crossbind.crossbind-e2e-desktop-app\WebView2\crossbind-profile")) { throw 'the profile of a release before did not move' }
@@ -372,7 +403,7 @@ jobs:
               # through Sysnative and this step in System32: Microsoft's bootstrapper passes, a file another signed or
               # none signed fails.
               run: |
-                  $line = Select-String -Path core\app-host\windows\installer.nsi -Pattern 'nsExec::ExecToStack (?:/TIMEOUT=\d+ )?`"([^"]+)" (.*)`'
+                  $line = Select-String -Path core\crossbind\src\installers\nsis\installer.nsi -Pattern 'nsExec::ExecToStack (?:/TIMEOUT=\d+ )?`"([^"]+)" (.*)`'
                   if (-not $line) { throw 'installer.nsi runs no check of the bootstrapper' }
                   $program = $line.Matches[0].Groups[1].Value.Replace('$WINDIR\Sysnative', "$env:SystemRoot\System32")
                   $arguments = $line.Matches[0].Groups[2].Value.Replace('$$', '$')

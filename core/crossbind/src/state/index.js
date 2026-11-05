@@ -7,6 +7,7 @@ import {
 import { findCargoModuleImportsIn, writeCargoMarker } from '../utils/cargoImport.js';
 import { exportWasiSdkPath } from '../utils/wasiToolchain.js';
 import loadConfig, { assertBinarySelection } from './loadConfig.js';
+import { configChangesOf } from '../utils/configChanges.js';
 import refreshConanDependencies from './refreshConanDependencies.js';
 
 const cacheDir = `${process.cwd()}/.crossbind`;
@@ -25,7 +26,7 @@ await initProcessState();
 
 async function initProcessState() {
     state.cache = loadCacheState();
-    state.config = await loadConfig();
+    state.config = await loadConfig(undefined, undefined, { changes: configChangesOf() });
     assertBinarySelection(state.config);
     refreshConanDependencies(state.config);
     exportWasiSdkPath(state.config.system);

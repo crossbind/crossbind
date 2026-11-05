@@ -1,0 +1,10 @@
+{
+    "name": "page-permissions",
+    "app": {
+        "darwin": { "sources": ["permissions.cpp"] },
+        "ios": { "sources": ["permissions.cpp"] },
+        "linux": { "sources": ["permissions.cpp"] },
+        "win32": { "sources": ["permissions.cpp"] },
+        "android": { "java": "android", "class": "dev.crossbind.extension.pagepermissions.PagePermissionsExtension" }
+    }
+}

@@ -33,6 +33,8 @@ Read `docs/ARCHITECTURE.md` for the system flow and `docs/CODEMAP.md` before gue
 4. Run the narrowest test/build that proves the change, then the package-level gate when risk warrants it.
 5. Report changed files, validation and any remaining risk. Do not commit, push, publish or open a pull request unless explicitly asked.
 
+When a choice is the maintainer's to make, ask it in detail with examples: what happens today, per platform where that differs; what each option changes, with the code or config the app's developer would write and what the app's user would see; what each option costs; and the recommended option first, with why.
+
 ## Branch and commit naming
 
 A branch name and its commit subject carry the same parts, so either can be derived from the other:

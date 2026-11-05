@@ -178,3 +178,42 @@ handleFatal(new Error('boom'));`;
         expect({ length: stderr.length, end: stderr.slice(-6) }).toEqual({ length: (1 << 20) + 5, end: 'xboom\n' });
     });
 });
+
+describe('crossbind app publish', () => {
+    // An app whose one store, an extension's, names what the command line gave it as all it lacks, so nothing builds. Its
+    // root is the folder's real path, which the process's own is too.
+    const appWithStore = (options) => {
+        fs.writeFileSync(path.join(dir, 'package.json'), JSON.stringify({ name: 'demo', version: '1.2.3', type: 'module' }));
+        fs.writeFileSync(path.join(dir, 'crossbind.config.mjs'), `export default {
+    target: { runtimeEnv: 'app' },
+    extensions: [{
+        name: 'demo-store',
+        root: ${JSON.stringify(fs.realpathSync(dir))},
+        publisher: {
+            platform: 'desktop',
+            options: ${options},
+            check: (api) => ({ missing: [\`GIVEN \${api.platform} \${JSON.stringify(api.options)}\`] }),
+            upload: async () => {},
+        },
+    }],
+};
+`);
+    };
+
+    test("gives a store's options on the command line to its publisher, with the platform -p names", () => {
+        appWithStore("{ channel: { help: 'the channel', value: '<channel>' }, draft: { help: 'a draft' } }");
+        const { status, stderr } = crossbind('app', 'publish', 'demo-store', '--channel', 'stable', '--draft', '-p', 'linux', '--mode', 'staging');
+        expect(status).toBe(1);
+        expect(stderr).toContain('GIVEN linux {"channel":"stable","draft":true}');
+    });
+
+    test("refuses another store's option, a store named after the options, and an option named as crossbind's own", () => {
+        appWithStore('{}');
+        expect(crossbind('app', 'publish', 'demo-store', '--track', 'beta').stderr).toContain("crossbind: --track is google-play's, which demo-store takes none of.");
+        expect(crossbind('app', 'publish', '-p', 'linux', '--draft', 'demo-store').stderr).toContain('crossbind: crossbind app publish takes the store first, before the options');
+        appWithStore("{ version: { help: 'the version', value: '<version>' } }");
+        const named = crossbind('app', 'publish', 'demo-store', '--version', '1');
+        expect(named.status).toBe(1);
+        expect(named.stderr).toContain('names version, which is no option of its own');
+    });
+});

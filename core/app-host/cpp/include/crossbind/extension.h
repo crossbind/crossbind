@@ -88,6 +88,68 @@ struct Launch {
     std::string token;
 };
 
+#if !defined(__ANDROID__)
+// A dialog the page opened with alert(), confirm() or prompt(), which its owner answers once, from any thread, as the
+// page waits: accept() is an alert's or a confirm's OK, or the text a prompt gives, and cancel() a confirm's or a
+// prompt's Cancel. A dialog that every copy lets go of unanswered is cancelled.
+class PageDialog {
+public:
+    enum class Kind { alert, confirm, prompt };
+    struct State;
+    explicit PageDialog(std::shared_ptr<State> state) : state_(std::move(state)) {}
+
+    Kind kind() const;
+    const std::string &message() const;
+    // The text prompt() offers to change; empty for the others.
+    const std::string &defaultText() const;
+    void accept(const std::string &text = {}) const;
+    void cancel() const;
+
+private:
+    std::shared_ptr<State> state_;
+};
+
+// What the page asks to use, which its owner allows or denies once, from any thread, as the page waits. A request that
+// every copy lets go of undecided is denied.
+class PagePermission {
+public:
+    struct State;
+    explicit PagePermission(std::shared_ptr<State> state) : state_(std::move(state)) {}
+
+    // What it asks for, together: "camera", "microphone", "location", "clipboard", and the webview's others by their
+    // names, as "notifications", "midi" or "fonts".
+    const std::vector<std::string> &kinds() const;
+    // The origin of the frame that asks, as "crossbind://app".
+    const std::string &origin() const;
+    // Whether app.permissions lists each of the devices it asks for; false for a kind that is no device.
+    bool isListed() const;
+    void allow() const;
+    void deny() const;
+
+private:
+    std::shared_ptr<State> state_;
+};
+
+// A file input the page's user clicked, which its owner answers once, from any thread, with the paths of what its user
+// picked, or with none when they cancelled. One that every copy lets go of unanswered is cancelled.
+class FileInput {
+public:
+    struct State;
+    explicit FileInput(std::shared_ptr<State> state) : state_(std::move(state)) {}
+
+    bool allowsMultiple() const;
+    // Whether it takes folders, as one with webkitdirectory does.
+    bool allowsFolders() const;
+    // The types its accept attribute names, as "image/*" or ".png", where the webview tells them: macOS's tells none.
+    const std::vector<std::string> &accept() const;
+    void pick(const std::vector<std::string> &paths) const;
+    void cancel() const;
+
+private:
+    std::shared_ptr<State> state_;
+};
+#endif
+
 // What an extension adds to the app, as its entry runs on the main thread when the app starts, before the app's module.
 // The entry adds what the extension does and starts nothing, as every launch runs every entry, one that another instance
 // then takes as well: what the extension starts as the app runs, it starts in onWindow.
@@ -122,6 +184,16 @@ public:
     // link is whatever the system hands the app, so fn takes it as it would any address from outside. An extension that
     // declares schemes calls it, and one that calls it declares them; the host's links gets those of app.urlSchemes.
     void onUrl(std::function<void(const std::string &url)> fn);
+#if !defined(__ANDROID__)
+    // Take the page's dialogs, what it asks to use and its file inputs, each as the extension of its name alone does:
+    // page-dialogs, page-permissions and page-files, the host's own, which an extension of the app's under the name
+    // replaces. fn gets each on the main thread. Without one, the webview does as it would: WebKit on Apple's
+    // platforms answers a dialog as cancelled and shows no picker, WebKitGTK and WebView2 show their own. No extension
+    // takes an iOS or a Windows app's file inputs, whose webview shows its own picker.
+    void onPageDialog(std::function<void(PageDialog)> fn);
+    void onPagePermission(std::function<void(PagePermission)> fn);
+    void onFileInput(std::function<void(FileInput)> fn);
+#endif
 
 private:
     std::string extension_;

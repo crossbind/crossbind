@@ -3,44 +3,62 @@ import os from 'node:os';
 import path from 'node:path';
 import { describe, expect, test } from 'vitest';
 import {
-    withAppOption, withExtension, writeAppOption, writeExtension,
+    withExtension, withOption, writeExtension, writeOption,
 } from '../src/utils/configWriter.js';
 
-describe("a key written into crossbind.config.js's app section", () => {
+describe('an option written into crossbind.config.js', () => {
     test('goes first in the app object, at the indentation of its keys', () => {
         const source = "export default {\n    general: { name: 'demo' },\n    app: {\n        name: 'Demo',\n    },\n};\n";
-        expect(withAppOption(source, 'id', 'com.example.demo'))
+        expect(withOption(source, ['app', 'id'], 'com.example.demo'))
             .toBe("export default {\n    general: { name: 'demo' },\n    app: {\n        id: 'com.example.demo',\n        name: 'Demo',\n    },\n};\n");
-        expect(withAppOption("export default {\n    app: { name: 'Demo' },\n};\n", 'id', 'com.example.demo'))
+        expect(withOption("export default {\n    app: { name: 'Demo' },\n};\n", ['app', 'id'], 'com.example.demo'))
             .toBe("export default {\n    app: { id: 'com.example.demo', name: 'Demo' },\n};\n");
     });
 
     test('fills an empty app object, and makes the app section where there is none', () => {
-        expect(withAppOption("export default {\n    app: {},\n};\n", 'encryption', false))
+        expect(withOption("export default {\n    app: {},\n};\n", ['app', 'encryption'], false))
             .toBe("export default {\n    app: {\n        encryption: false,\n    },\n};\n");
-        expect(withAppOption("import a from 'a';\n\nexport default {\n  general: { name: 'demo' },\n};\n", 'id', "it's"))
+        expect(withOption("import a from 'a';\n\nexport default {\n  general: { name: 'demo' },\n};\n", ['app', 'id'], "it's"))
             .toBe("import a from 'a';\n\nexport default {\n  app: {\n    id: 'it\\'s',\n  },\n  general: { name: 'demo' },\n};\n");
     });
 
     test('is written as JavaScript, as one would write it by hand', () => {
-        expect(withAppOption("export default {\n    app: { name: 'Demo' },\n};\n", 'privacy', { fileTimestamp: ['C617.1'], diskSpace: ['E174.1', '85F4.1'] }))
+        expect(withOption("export default {\n    app: { name: 'Demo' },\n};\n", ['app', 'privacy'], { fileTimestamp: ['C617.1'], diskSpace: ['E174.1', '85F4.1'] }))
             .toBe("export default {\n    app: { privacy: { fileTimestamp: ['C617.1'], diskSpace: ['E174.1', '85F4.1'] }, name: 'Demo' },\n};\n");
     });
 
     test('is not written where it cannot be placed safely, or is set already', () => {
-        expect(withAppOption('export default makeConfig({ app: {} });\n', 'id', 'x')).toBeNull();
-        expect(withAppOption('const app = {};\nexport default { app };\n', 'id', 'x')).toBeNull();
-        expect(withAppOption("export default { app: { id: 'old' } };\n", 'id', 'x')).toBeNull();
+        expect(withOption('export default makeConfig({ app: {} });\n', ['app', 'id'], 'x')).toBeNull();
+        expect(withOption('const app = {};\nexport default { app };\n', ['app', 'id'], 'x')).toBeNull();
+        expect(withOption("export default { app: { id: 'old' } };\n", ['app', 'id'], 'x')).toBeNull();
         // A spread may carry the key, and would win over one written before it.
-        expect(withAppOption("export default { app: { ...shared, name: 'Demo' } };\n", 'privacy', {})).toBeNull();
-        expect(withAppOption("export default { ...base, general: { name: 'demo' } };\n", 'id', 'x')).toBeNull();
+        expect(withOption("export default { app: { ...shared, name: 'Demo' } };\n", ['app', 'privacy'], {})).toBeNull();
+        expect(withOption("export default { ...base, general: { name: 'demo' } };\n", ['app', 'id'], 'x')).toBeNull();
+    });
+
+    test('reads back as it is: what would end a string escaped, and a key that is no name quoted', () => {
+        const value = { 'release-notes': "Fixes:\n- one\r\n- it's\t\u2028done\u0007", plain: 'a\\b' };
+        const changed = withOption("export default {\n    app: { name: 'Demo' },\n};\n", ['app', 'store'], value);
+        expect(changed).toContain("store: { 'release-notes': 'Fixes:\\n- one\\r\\n- it\\'s\\t\\u2028done\\u0007', plain: 'a\\\\b' }");
+        expect(new Function(changed.replace('export default', 'return'))()).toEqual({ app: { store: value, name: 'Demo' } });
+    });
+
+    test('makes each object of its path the config lacks, and goes in any object of the default export', () => {
+        expect(withOption("export default {\n    app: { name: 'Demo' },\n};\n", ['app', 'window', 'width'], 800))
+            .toBe("export default {\n    app: { window: { width: 800 }, name: 'Demo' },\n};\n");
+        expect(withOption("export default {\n    app: {\n        window: { height: 600 },\n    },\n};\n", ['app', 'window', 'width'], 800))
+            .toBe("export default {\n    app: {\n        window: { width: 800, height: 600 },\n    },\n};\n");
+        expect(withOption("export default {\n    general: { name: 'demo' },\n};\n", ['target', 'runtimeEnv'], 'app'))
+            .toBe("export default {\n    target: {\n        runtimeEnv: 'app',\n    },\n    general: { name: 'demo' },\n};\n");
+        expect(withOption('export default {};\n', ['dts'], 'promise')).toBe("export default { dts: 'promise',};\n");
+        expect(withOption("export default { app: { window: 'wide' } };\n", ['app', 'window', 'width'], 800)).toBeNull();
     });
 
     test("lands in the project's config file, which is changed only when it can be", () => {
         const project = fs.mkdtempSync(path.join(os.tmpdir(), 'crossbind-config-writer-'));
-        expect(writeAppOption(project, 'id', 'com.example.demo')).toBe(false);
+        expect(writeOption(project, ['app', 'id'], 'com.example.demo')).toBe(false);
         fs.writeFileSync(path.join(project, 'crossbind.config.mjs'), "export default {\n    app: { name: 'Demo' },\n};\n");
-        expect(writeAppOption(project, 'id', 'com.example.demo')).toBe(true);
+        expect(writeOption(project, ['app', 'id'], 'com.example.demo')).toBe(true);
         expect(fs.readFileSync(path.join(project, 'crossbind.config.mjs'), 'utf8')).toBe("export default {\n    app: { id: 'com.example.demo', name: 'Demo' },\n};\n");
         fs.rmSync(project, { recursive: true, force: true });
     });

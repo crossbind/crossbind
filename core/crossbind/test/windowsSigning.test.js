@@ -133,7 +133,7 @@ describe.skipIf(process.platform === 'win32')("the image's signing script", () =
     });
 
     test('signs the uninstaller and the setup program as NSIS writes them, when crossbind defines SIGNER', () => {
-        const script = fs.readFileSync(path.join(path.dirname(jsignScript()), 'installer.nsi'), 'utf8');
+        const script = fs.readFileSync(path.join(import.meta.dirname, '..', 'src', 'installers', 'nsis', 'installer.nsi'), 'utf8');
         expect(script).toContain('!ifdef SIGNER\n  !uninstfinalize \'sh "${SIGNER}" "%1"\' = 0\n  !finalize \'sh "${SIGNER}" "%1"\' = 0\n!endif');
     });
 });

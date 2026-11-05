@@ -95,3 +95,4 @@ now.
 
 - `examples/desktop-app/` — the template (`npm create crossbind@beta -- <dir> Desktop App`).
 - `e2e/desktop-app/` — the conformance suite inside an app.
+- `e2e/app-page-requests/` — the host's own page dialogs, answered as the app's user would on Linux and Windows.

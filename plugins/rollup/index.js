@@ -3,7 +3,7 @@
 import {
     state, createLib, createBridgeFile, buildWasm, getCrossbindScript, getRustJsScript, buildDependencies,
     getDependFilePath, getTargetParams, getFilteredBuildTargets, isSourceNewer, appSourceFiles, buildProjectApp, publishApp,
-    appOutputName, appTargetParams, checkInstaller,
+    appOutputName, appTargetParams, checkInstaller, shipApp,
 } from 'crossbind';
 
 import fs from 'node:fs';
@@ -79,9 +79,11 @@ const rollupCrossbindPlugin = (options, bridges = []) => {
             return getCrossbindScript(buildTargetRelease, bridgeFile, { base });
         },
         async buildStart() {
-            // writeBundle puts each app beside what installs it, whose names and signing keys stop the build here if
-            // they cannot be, before the dependencies compile.
-            if (isApp && !isServe) appTargets.forEach(checkInstaller);
+            // writeBundle puts each app beside what installs it, whose names, signing keys and installers stop the build
+            // here if they cannot be, before the dependencies compile.
+            if (isApp && !isServe) {
+                for (const target of appTargets) await checkInstaller(target);
+            }
             // Before any transform: a header's bridge reads the include roots of every dependency, and a cargo
             // dependency built for another target only is there but lacks this one until the build makes it.
             await buildDependencies({ targetParams: { ...targetParams, buildType: [buildTargetRelease.buildType] } });
@@ -155,12 +157,14 @@ const rollupCrossbindPlugin = (options, bridges = []) => {
             } */
         },
         // The page, once written, goes into the app beside it: one project of every SDK or ABI for iOS and Android, one
-        // app per arch for a desktop.
-        writeBundle(outputOptions) {
+        // app per arch for a desktop, which then ships with what installs it. The installers write beside the apps, so
+        // they run once every app has its page, which would take their files in.
+        async writeBundle(outputOptions) {
             if (!isApp) return;
             const dir = outputOptions.dir ?? p.dirname(outputOptions.file);
             const apps = ['ios', 'android'].includes(buildTargetRelease.platform) ? [buildTargetRelease] : appTargets;
-            apps.forEach((target) => publishApp(target, { to: `${dir}/${appOutputName(target)}`, page: dir }));
+            const published = apps.map((target) => ({ target, to: publishApp(target, { to: `${dir}/${appOutputName(target)}`, page: dir }) }));
+            for (const { target, to } of published) await shipApp(target, to);
         },
     };
 };

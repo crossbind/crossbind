@@ -94,16 +94,21 @@ ICoreWebView2 *coreWebView(void *controller) {
     return core;
 }
 
-// What other threads post waits in one queue, which one message drains: Windows caps the messages a thread has posted.
+// What waits for the UI thread waits in one queue, which one message drains: Windows caps the messages a thread has
+// posted.
+void later(std::function<void()> fn) {
+    std::lock_guard<std::mutex> lock(queueMutex);
+    const bool isIdle = queue.empty();
+    queue.push_back(std::move(fn));
+    if (isIdle && dispatcher) PostMessageW(dispatcher, RUN, 0, 0);
+}
+
 void onMainThread(std::function<void()> fn) {
     if (GetCurrentThreadId() == uiThread) {
         fn();
         return;
     }
-    std::lock_guard<std::mutex> lock(queueMutex);
-    const bool isIdle = queue.empty();
-    queue.push_back(std::move(fn));
-    if (isIdle && dispatcher) PostMessageW(dispatcher, RUN, 0, 0);
+    later(std::move(fn));
 }
 
 bool openOutside(const std::string &uri) {

@@ -12,14 +12,11 @@ on:
             - main
         # What only publishing runs, or what shows only in a store.
         paths:
-            - core/crossbind/src/actions/publishAndroid.js
-            - core/crossbind/src/actions/publishIos.js
-            - core/crossbind/src/actions/googlePlay.js
-            - core/crossbind/src/actions/googleSignIn.js
-            - core/crossbind/src/actions/playSetup.js
-            - core/crossbind/src/actions/appStoreConnect.js
+            - core/crossbind/src/publishers/**
+            - core/crossbind/src/actions/publish.js
+            - core/crossbind/src/actions/extensionApi.js
+            - core/crossbind/src/actions/xcodebuild.js
             - core/crossbind/src/actions/appleSigning.js
-            - core/crossbind/src/actions/appSetup.js
             - core/crossbind/src/actions/androidGradle.js
             - core/crossbind/src/utils/secretFile.js
             - core/crossbind/src/utils/requiredReasonApis.js

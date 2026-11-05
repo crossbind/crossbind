@@ -116,8 +116,9 @@ Index + template: [`docs/adr/README.md`](./adr/README.md).
 | Per-target static lib build | `src/actions/createLib.js` |
 | Wasm linking + JS loader gen | `src/actions/buildWasm.js` |
 | Node-API addon link (`.node`) + CommonJS loader | `src/actions/buildNode.js` |
-| App host link: bridges against Hermes' JSI, host bytecode, page runtime; a macOS `.app` signed ad hoc or with a Developer ID, a Linux directory and its `.tar.gz`, a Windows directory and its `.zip`, or what each iOS SDK or Android ABI brings to the Xcode or Gradle project | `src/actions/buildApp.js` |
-| Desktop app installers: a macOS disk image (hdiutil), a Linux Debian package (dpkg-deb in the linux image), a Windows setup program (NSIS in the windows image, from `core/app-host/windows/installer.nsi`) | `src/actions/appInstaller.js` |
+| App host link: bridges against Hermes' JSI, host bytecode, page runtime; a macOS `.app` signed ad hoc or with a Developer ID, a Linux directory, a signed Windows directory, or what each iOS SDK or Android ABI brings to the Xcode or Gradle project | `src/actions/buildApp.js` |
+| Desktop app installers: those of the platform that run, crossbind's and the extensions', or those `app.installers` names, their checks before the build, the one an app with `app.updater` keeps, and each app shipped once every app of the build has its page | `src/actions/appInstaller.js` |
+| crossbind's own installers, which use the api alone: `dmg` (hdiutil), `deb` (dpkg-deb in the linux image), `tar-gz`, `nsis` (NSIS in the windows image, from its `installer.nsi`) and `zip` | `src/installers/` |
 | macOS app signing: the Developer ID and App Store Connect API key the environment names, notarization with notarytool and the stapled ticket | `src/actions/appleSigning.js` |
 | Windows app signing: the jsign key the environment names, passed into the windows image by name, which signs the app, its setup program and its uninstaller (`core/app-host/windows/jsign.sh`) | `src/actions/windowsSigning.js` |
 | Desktop app updates: the Ed25519 key pair of `crossbind app updater-key`, and the signed manifest and file the build writes beside an app with `CROSSBIND_UPDATER_PRIVATE_KEY`, which the host's updater extension, `extensions/updater/`, checks with Monocypher | `src/actions/appUpdate.js` |
@@ -151,6 +152,10 @@ Index + template: [`docs/adr/README.md`](./adr/README.md).
 | Target matrix + filtering | `src/actions/target.js` |
 | App extensions: the host's own and `extensions` in crossbind.config.js | `src/utils/appExtensions.js` |
 | `crossbind add`: an extension's package installed and listed in crossbind.config.js | `src/actions/addExtension.js`, `src/utils/configWriter.js` |
+| `crossbind app publish`: the publishers an app has, crossbind's own and its extensions', their options on the command line, the platform, the first one's changes to the config, one build and each upload in turn | `src/actions/publish.js`, `src/utils/configChanges.js` |
+| The api a publisher's or an installer's steps get in place of crossbind's modules: the run, the app as its platform's build makes it, the config read-only and written after a yes, the terminal, this machine's settings and keychain, Android's upload key, Apple's tools, a Windows app's icon and signer, and an installer's tools in the platform's image | `src/actions/extensionApi.js` |
+| crossbind's own publishers, which use the api alone: Google Play, App Store Connect with App Review, GitHub Releases, and the listings and questions they share | `src/publishers/` |
+| xcodebuild with its log, the fix of a failure's cause, and the teams Xcode is signed in to | `src/actions/xcodebuild.js` |
 
 ### Configuration + state
 

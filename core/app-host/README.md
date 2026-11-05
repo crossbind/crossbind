@@ -55,8 +55,11 @@ defaults and current limits (macOS, Linux, Windows, iOS and Android for now).
   `<crossbind/app.h>` and `<crossbind/extension.h>` alone. Every app has `dialog/`, which shows the file and message
   dialogs on each platform; `menu/`, which shows the page's menus, a desktop app's tray icon and the system's
   notifications, a Linux app's tray and notifications over D-Bus and a Windows app's notifications as balloons of its
-  tray's icon; and `shell/`, which opens addresses and files outside the app, shows files in the file manager and
-  moves them to the trash, where the page may reach them. Every desktop app has `power/`, which tells the page when the
+  tray's icon; `page-dialogs/`, which shows the page's `alert()`, `confirm()` and `prompt()` as the system's dialogs,
+  `page-permissions/`, which answers what the page asks to use from `app.permissions`, and `page-files/`, which shows
+  the picker of a macOS or Android page's file input, each of which `src/page_requests.h` hands its requests; and
+  `shell/`, which opens addresses and files outside the app, shows files in the file manager and moves them to the
+  trash, where the page may reach them. Every desktop app has `power/`, which tells the page when the
   system goes to sleep and wakes: through NSWorkspace on macOS, logind on Linux and the window's messages on Windows,
   from the time the window opens. An app that lists `app.urlSchemes` has `links/`, which holds their links for the page
   as the event `open-url`. A desktop app that `app.singleInstance` keeps to one instance

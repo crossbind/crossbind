@@ -9,17 +9,41 @@ const state = { config: { general: { name: 'demo' }, app: {}, target: {}, extens
 vi.mock('../src/state/index.js', () => ({ default: state }));
 // The emulator a dev session runs an Android app on.
 vi.mock('../src/actions/androidDevice.js', () => ({ attachedDevice: () => ({ serial: 'emulator-5554', abi: 'x86_64' }) }));
+// What the tools that package an app make, as they would: the last argument of dpkg-deb and hdiutil, the zip in the
+// folder zip runs in, makensis's OUTFILE and tar's archive.
+function writeMade(command, cwd) {
+    const outfile = command.find((arg) => arg.startsWith('-DOUTFILE='))?.slice('-DOUTFILE='.length);
+    const made = {
+        'dpkg-deb': command.at(-1), hdiutil: command.at(-1), zip: cwd && path.join(cwd, command[4]), makensis: outfile, tar: command[2],
+    }[command[0]];
+    if (made) fs.writeFileSync(made, command[0]);
+}
+const tools = (command, args) => {
+    writeMade([command, ...args]);
+    return { status: 0, stdout: '', stderr: '' };
+};
 // tar, which archives a Linux app.
-const spawnSync = vi.fn(() => ({ status: 0, stdout: '', stderr: '' }));
+const spawnSync = vi.fn(tools);
 vi.mock('node:child_process', async (importOriginal) => ({ ...await importOriginal(), spawnSync }));
-// The windows image, which zips a Windows app, and runs the makensis that writes its setup program.
-const run = vi.fn();
+// The tools that sign and package an app here and in the linux image, and the windows image, which zips a Windows app
+// and runs the makensis that writes its setup program.
+const runTools = (program, command, prefix, target, options) => writeMade(command, options?.workdir);
+const run = vi.fn(runTools);
 vi.mock('../src/actions/run.js', () => ({ default: run }));
-const inWindowsImage = vi.fn();
+const inWindowsImage = vi.fn((command, cwd) => writeMade(command, cwd));
 const signWindows = vi.fn();
 vi.mock('../src/actions/windowsSigning.js', async (importOriginal) => ({ ...await importOriginal(), inWindowsImage, signWindows }));
 
 const { appLayout, appOutputName, appTargetParams, publishApp } = await import('../src/actions/buildApp.js');
+const { shipApp } = await import('../src/actions/appInstaller.js');
+const { newUpdaterKey } = await import('../src/actions/appUpdate.js');
+
+// An app as the bundler's plugin publishes it: with its page, then with what installs it.
+async function ship(target, options) {
+    const app = publishApp(target, options);
+    await shipApp(target, app);
+    return app;
+}
 
 describe('an app on disk', () => {
     test('keeps its executable and its files in a bundle on macOS, and in a directory on Linux and Windows', () => {
@@ -111,7 +135,7 @@ describe('the app a bundler builds', () => {
 });
 
 describe("a desktop app's page", () => {
-    test('is the bundle beside the app, without the apps built there and the files that package them', () => {
+    test('is the bundle beside the app, without the apps built there and the files that package them', async () => {
         const root = fs.mkdtempSync(path.join(os.tmpdir(), 'crossbind-page-'));
         const dist = path.join(root, 'dist');
         const arm64 = { platform: 'linux', arch: 'arm64', runtimeEnv: 'app', appName: 'demo.linux-arm64' };
@@ -128,28 +152,32 @@ describe("a desktop app's page", () => {
         });
         fs.writeFileSync(path.join(root, 'build', 'app-outputs.json'), JSON.stringify({ android: '/demo/dist/demo-android' }));
         try {
-            publishApp(arm64, { to: path.join(dist, 'demo-linux-arm64'), page: dist });
-            publishApp(arm64, { to: path.join(dist, 'demo-linux-arm64'), page: dist });
+            await ship(arm64, { to: path.join(dist, 'demo-linux-arm64'), page: dist });
+            await ship(arm64, { to: path.join(dist, 'demo-linux-arm64'), page: dist });
             // An app given a name of its own leaves itself out too.
-            publishApp(arm64, { to: path.join(dist, 'renamed'), page: dist });
+            await ship(arm64, { to: path.join(dist, 'renamed'), page: dist });
 
             ['demo-linux-arm64', 'renamed'].forEach((app) => {
                 expect(fs.readdirSync(path.join(dist, app, 'resources', 'page')).sort()).toEqual(['assets', 'crossbind.js', 'index.html']);
             });
-            // A publish finds each desktop app by its platform's name on the command line, the last of a place once.
+            // A publish finds each desktop app by its platform's name on the command line, the last of a place once, with its
+            // installers and its update, which no key signed here.
+            const entry = (app) => ({
+                app, arch: 'arm64', installers: [{ name: 'deb', files: [`${app}.deb`] }, { name: 'tar-gz', files: [`${app}.tar.gz`] }], update: null,
+            });
             expect(JSON.parse(fs.readFileSync(path.join(root, 'build', 'app-outputs.json'), 'utf8'))).toEqual({
                 android: '/demo/dist/demo-android',
-                linux: [{ app: path.join(dist, 'demo-linux-arm64'), arch: 'arm64' }, { app: path.join(dist, 'renamed'), arch: 'arm64' }],
+                linux: [entry(path.join(dist, 'demo-linux-arm64')), entry(path.join(dist, 'renamed'))],
             });
             expect(spawnSync).toHaveBeenCalledWith('tar', expect.arrayContaining([`${path.join(dist, 'demo-linux-arm64')}.tar.gz`]), expect.anything());
-            expect(run).toHaveBeenCalledWith(null, expect.arrayContaining(['dpkg-deb', `${path.join(dist, 'demo-linux-arm64')}.deb`]), null, arm64);
+            expect(run).toHaveBeenCalledWith(null, expect.arrayContaining(['dpkg-deb', `${path.join(dist, 'demo-linux-arm64')}.deb`]), null, arm64, { workdir: dist });
         } finally {
             state.targets = [];
             fs.rmSync(root, { recursive: true, force: true });
         }
     });
 
-    test('is in a Windows app, which ships as a zip made beside it in the windows image', () => {
+    test('is in a Windows app, which ships as a zip made beside it in the windows image', async () => {
         const root = fs.mkdtempSync(path.join(os.tmpdir(), 'crossbind-page-'));
         const dist = path.join(root, 'dist');
         const x64 = { platform: 'win32', arch: 'x64', runtimeEnv: 'app', appName: 'demo.win32-x64' };
@@ -159,10 +187,10 @@ describe("a desktop app's page", () => {
         fs.mkdirSync(dist, { recursive: true });
         fs.writeFileSync(path.join(dist, 'index.html'), 'index.html');
         try {
-            publishApp(x64, { to: path.join(dist, 'demo-win32-x64'), page: dist });
+            await ship(x64, { to: path.join(dist, 'demo-win32-x64'), page: dist });
 
             expect(fs.readdirSync(path.join(dist, 'demo-win32-x64', 'resources', 'page'))).toEqual(['index.html']);
-            expect(run).toHaveBeenCalledWith(null, ['zip', '-q', '-r', '-X', 'demo-win32-x64.zip', 'demo-win32-x64'], null, x64, { workdir: dist });
+            expect(inWindowsImage).toHaveBeenCalledWith(['zip', '-q', '-r', '-X', 'demo-win32-x64.zip', 'demo-win32-x64'], dist, null);
             expect(inWindowsImage).toHaveBeenCalledWith(expect.arrayContaining(['makensis', `-DOUTFILE=${path.join(dist, 'demo-win32-x64')}-setup.exe`]), dist, null);
         } finally {
             state.targets = [];
@@ -170,7 +198,7 @@ describe("a desktop app's page", () => {
         }
     });
 
-    test('is in a Windows app signed before its zip and its signed setup program are made, with a key in the environment', () => {
+    test('is in a Windows app signed before its zip and its signed setup program are made, with a key in the environment', async () => {
         const root = fs.mkdtempSync(path.join(os.tmpdir(), 'crossbind-page-'));
         const dist = path.join(root, 'dist');
         const x64 = { platform: 'win32', arch: 'x64', runtimeEnv: 'app', appName: 'demo.win32-x64' };
@@ -182,18 +210,68 @@ describe("a desktop app's page", () => {
         vi.stubEnv('CROSSBIND_WINDOWS_SIGNING_STORETYPE', 'PKCS12');
         vi.stubEnv('CROSSBIND_WINDOWS_SIGNING_KEYSTORE', path.join(root, 'key.p12'));
         try {
-            publishApp(x64, { to: path.join(dist, 'demo-win32-x64'), page: dist });
+            await ship(x64, { to: path.join(dist, 'demo-win32-x64'), page: dist });
 
             const app = path.join(dist, 'demo-win32-x64');
             const signedAt = signWindows.mock.calls.findLastIndex(([files]) => files.join() === `${app}/demo.exe`);
             const setupAt = inWindowsImage.mock.calls.findLastIndex(([command]) => command[0] === 'makensis');
-            const zippedAt = run.mock.calls.findLastIndex(([, args]) => args[0] === 'zip');
-            const order = [signWindows.mock.invocationCallOrder[signedAt], run.mock.invocationCallOrder[zippedAt], inWindowsImage.mock.invocationCallOrder[setupAt]];
-            expect(order.every(Number.isInteger)).toBe(true);
-            expect(order).toEqual(order.toSorted((a, b) => a - b));
+            const zippedAt = inWindowsImage.mock.calls.findLastIndex(([command]) => command[0] === 'zip');
+            const [signed, setup, zipped] = [signWindows.mock.invocationCallOrder[signedAt], ...[setupAt, zippedAt].map((at) => inWindowsImage.mock.invocationCallOrder[at])];
+            expect([signed, setup, zipped].every(Number.isInteger)).toBe(true);
+            expect(Math.min(setup, zipped)).toBeGreaterThan(signed);
             expect(inWindowsImage.mock.calls[setupAt][0].some((param) => /^-DSIGNER=.*jsign\.sh$/.test(param))).toBe(true);
+            // The setup program's build signs with the key, which the zip, of the app as signed, takes none of.
+            expect(inWindowsImage.mock.calls[setupAt][2]).toMatchObject({ files: { keystore: path.join(root, 'key.p12') } });
+            expect(inWindowsImage.mock.calls[zippedAt][2]).toBeNull();
         } finally {
             vi.unstubAllEnvs();
+            state.targets = [];
+            fs.rmSync(root, { recursive: true, force: true });
+        }
+    });
+
+    test("leaves out what an earlier build's installers wrote beside the apps, which a folder the bundler kept holds still", () => {
+        const root = fs.mkdtempSync(path.join(os.tmpdir(), 'crossbind-page-'));
+        const dist = path.join(root, 'dist');
+        const x64 = { platform: 'linux', arch: 'x64', runtimeEnv: 'app', appName: 'demo.linux-x64' };
+        state.config.paths = { base: root, build: path.join(root, 'build') };
+        state.targets = [x64];
+        fs.mkdirSync(path.join(root, 'build', x64.appName, 'resources'), { recursive: true });
+        fs.mkdirSync(dist, { recursive: true });
+        ['index.html', 'Demo.AppImage', 'notes.txt'].forEach((file) => fs.writeFileSync(path.join(dist, file), file));
+        const app = path.join(dist, 'demo-linux-x64');
+        fs.writeFileSync(path.join(root, 'build', 'app-outputs.json'), JSON.stringify({
+            linux: [{ app, arch: 'x64', installers: [{ name: 'appimage', files: [path.join(dist, 'Demo.AppImage')] }], update: null }],
+        }));
+        try {
+            publishApp(x64, { to: app, page: dist });
+            expect(fs.readdirSync(path.join(app, 'resources', 'page')).sort()).toEqual(['index.html', 'notes.txt']);
+        } finally {
+            state.targets = [];
+            fs.rmSync(root, { recursive: true, force: true });
+        }
+    });
+
+    test('is in a Linux app shipped with app.updater and its key with its update, the archive of its tar-gz installer', async () => {
+        const root = fs.mkdtempSync(path.join(os.tmpdir(), 'crossbind-page-'));
+        const dist = path.join(root, 'dist');
+        const x64 = { platform: 'linux', arch: 'x64', runtimeEnv: 'app', appName: 'demo.linux-x64' };
+        const { publicKey, privateKey } = newUpdaterKey();
+        state.config.paths = { base: root, build: path.join(root, 'build') };
+        state.config.app = { updater: { url: 'https://example.com/updates/demo-{platform}-{arch}.update.json', publicKey } };
+        state.targets = [x64];
+        vi.stubEnv('CROSSBIND_UPDATER_PRIVATE_KEY', privateKey);
+        fs.mkdirSync(path.join(root, 'build', x64.appName, 'resources'), { recursive: true });
+        fs.mkdirSync(dist, { recursive: true });
+        try {
+            const app = await ship(x64, { to: path.join(dist, 'demo-linux-x64'), page: dist });
+
+            const [entry] = JSON.parse(fs.readFileSync(path.join(root, 'build', 'app-outputs.json'), 'utf8')).linux;
+            expect(entry.update).toEqual({ manifest: path.join(dist, 'demo-linux-x64.update.json'), file: `${app}.tar.gz` });
+            expect(JSON.parse(fs.readFileSync(entry.update.manifest, 'utf8')).file).toBe('demo-linux-x64.tar.gz');
+        } finally {
+            vi.unstubAllEnvs();
+            state.config.app = {};
             state.targets = [];
             fs.rmSync(root, { recursive: true, force: true });
         }
@@ -242,8 +320,8 @@ describe.skipIf(process.platform === 'win32')("a macOS app's signature", () => {
     // When the last call of a mock that matches came, among the calls of every mock.
     const when = (mock, match) => mock.mock.invocationCallOrder[mock.mock.calls.findLastIndex(match)];
 
-    // A macOS app built beside its page, published with it.
-    function publish() {
+    // A macOS app built beside its page, published with it, and shipped with what installs it.
+    async function publish({ isShipped = false } = {}) {
         const root = fs.mkdtempSync(path.join(os.tmpdir(), 'crossbind-page-'));
         const dist = path.join(root, 'dist');
         state.config.paths = { base: root, build: path.join(root, 'build') };
@@ -252,7 +330,8 @@ describe.skipIf(process.platform === 'win32')("a macOS app's signature", () => {
         fs.mkdirSync(dist, { recursive: true });
         fs.writeFileSync(path.join(dist, 'index.html'), 'index.html');
         try {
-            publishApp(arm64, { to: path.join(dist, 'demo.app'), page: dist });
+            if (isShipped) await ship(arm64, { to: path.join(dist, 'demo.app'), page: dist });
+            else publishApp(arm64, { to: path.join(dist, 'demo.app'), page: dist });
         } finally {
             state.targets = [];
             fs.rmSync(root, { recursive: true, force: true });
@@ -280,27 +359,27 @@ describe.skipIf(process.platform === 'win32')("a macOS app's signature", () => {
         warn.mockRestore();
         log.mockRestore();
         vi.unstubAllEnvs();
-        spawnSync.mockImplementation(() => ({ status: 0, stdout: '', stderr: '' }));
+        spawnSync.mockImplementation(tools);
     });
 
-    test('is ad hoc without a Developer ID, which the build says opens the app on this Mac alone', () => {
-        const app = publish();
+    test('is ad hoc without a Developer ID, which the build says opens the app on this Mac alone', async () => {
+        const app = await publish();
 
         expect(run).toHaveBeenCalledWith(null, ['codesign', '--force', '--sign', '-', '--timestamp=none', app], null, arm64);
         expect(warn).toHaveBeenCalledWith(expect.stringContaining('demo.app is signed ad hoc, which opens it on this Mac alone'));
     });
 
-    test('is the Developer ID\'s without a key, which the build says another Mac opens only once its user allows it', () => {
+    test('is the Developer ID\'s without a key, which the build says another Mac opens only once its user allows it', async () => {
         developerId({});
 
-        const app = publish();
+        const app = await publish();
 
         expect(run).toHaveBeenCalledWith(null, ['codesign', '--force', '--sign', HASH, '--options', 'runtime', '--timestamp', app], null, arm64);
         expect(warn).toHaveBeenCalledWith(expect.stringContaining('demo.app is signed with your Developer ID but not notarized'));
         expect(spawnSync.mock.calls.some(([command]) => command === 'ditto')).toBe(false);
     });
 
-    test('claims the devices of app.permissions, which the hardened runtime keeps the app from otherwise', () => {
+    test('claims the devices of app.permissions, which the hardened runtime keeps the app from otherwise', async () => {
         developerId({});
         state.config.app = { permissions: { camera: 'To scan barcodes', location: 'To find the nearest store' } };
         let entitlements = '';
@@ -309,7 +388,7 @@ describe.skipIf(process.platform === 'win32')("a macOS app's signature", () => {
             if (at > 0) entitlements = fs.readFileSync(args[at + 1], 'utf8');
         });
         try {
-            const app = publish();
+            const app = await publish();
 
             const sign = ['--sign', HASH, '--options', 'runtime', '--timestamp'];
             expect(run).toHaveBeenCalledWith(null, ['codesign', '--force', ...sign, '--entitlements', expect.stringMatching(/demo\.app\.entitlements$/), app], null, arm64);
@@ -319,16 +398,16 @@ describe.skipIf(process.platform === 'win32')("a macOS app's signature", () => {
             expect(entitlements).not.toContain('audio-input');
         } finally {
             state.config.app = {};
-            run.mockImplementation(() => undefined);
+            run.mockImplementation(runTools);
         }
     });
 
-    test("is the Developer ID's, in the hardened runtime, then Apple's ticket, before the unsigned disk image is made of it", () => {
+    test("is the Developer ID's, in the hardened runtime, then Apple's ticket, before the unsigned disk image is made of it", async () => {
         const key = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'crossbind-key-')), 'AuthKey.p8');
         fs.writeFileSync(key, 'key');
         developerId({ CROSSBIND_APPLE_API_KEY: key, CROSSBIND_APPLE_API_KEY_ID: 'ABC123', CROSSBIND_APPLE_API_ISSUER: 'issuer-uuid' });
         try {
-            const app = publish();
+            const app = await publish({ isShipped: true });
 
             const sign = ['--sign', HASH, '--options', 'runtime', '--timestamp'];
             const framework = when(run, ([, args]) => args.join(' ') === ['codesign', '--force', ...sign, `${app}/Contents/Frameworks/hermesvm.framework`].join(' '));

@@ -40,7 +40,7 @@ export default defineConfig({ plugins: [viteCrossbindPlugin()] });
 | `crossbind app build` | Builds the page and the host and writes the app with what installs it (see [Installers](#installers)): `dist/<name>.app`, signed ad hoc or with a Developer ID (see [Signing a macOS app](#signing-a-macos-app)), and `dist/<name>.dmg` on macOS; `dist/<name>-linux-<arch>/`, the same as a `.tar.gz`, and its `.deb` on Linux. |
 | `crossbind app build -p linux` | Writes the Linux app for x64 and arm64, on a Mac as well: `dist/<name>-linux-x64/` and `dist/<name>-linux-arm64/`, each with its `.tar.gz` and `.deb`. A Linux app's development session runs on Linux. |
 | `crossbind app build -p windows` | Writes the Windows app for x64 and arm64, on a Mac or a Linux machine as well: `dist/<name>-win32-x64/` and `dist/<name>-win32-arm64/`, each with its `.zip` and `-setup.exe`. A Windows app's development session runs on Windows. |
-| `crossbind build -p host -e app` | Builds the host alone, with no page in it: `<paths.output>/<name>.darwin-<arch>.app` on macOS, `<paths.output>/<name>.linux-<arch>` and its `.tar.gz` on Linux. `-p linux` or `-p win32` builds a Linux app, or a Windows app with its `.zip`, from a Mac as well. |
+| `crossbind build -p host -e app` | Builds the host alone, with no page in it and nothing that installs it: `<paths.output>/<name>.darwin-<arch>.app` on macOS, `<paths.output>/<name>.linux-<arch>` on Linux. `-p linux` or `-p win32` builds a Linux or a Windows app from a Mac as well. |
 | `crossbind app dev -p ios` | Builds the host for the iOS Simulator and opens the app there on the dev server: in the Simulator already booted, else in an iPhone of the newest iOS. Edits reload the page or rebuild the host as on the desktop, and ending the app in the Simulator ends the session. |
 | `crossbind app dev -p ios --device` | Builds the host for devices and opens the app on the dev server on the iPhone or iPad connected, or on the one `--device <name>` names by its name or UDID: Xcode signs it for the app's team, and devicectl installs it. The phone reaches the dev server through its cable, or on the local network when it is paired over it. Edits reload the page or rebuild the host as in the Simulator, the page's console shows in the terminal, and ending the app on the phone ends the session (see [iOS](#ios)). |
 | `crossbind app build -p ios` | Builds the page and the host for devices and the Simulator and writes the app's Xcode project, `dist/<name>-ios/` (see [iOS](#ios)). |
@@ -114,7 +114,10 @@ fills the screen until the page leaves it. On Windows and Linux a menu bar the p
 
 A macOS app opens with the app, Edit, View and Window menus every Mac app has, so ⌘C, ⌘V, ⌘Z, ⌘A, ⌘W and ⌘Q reach
 it, and the page may set its own, as [Menus](#menus) tells. The
-page's `alert()`, `confirm()` and `prompt()` show as they do in a browser, and so does the picker of a file input. A
+page's `alert()`, `confirm()` and `prompt()` show as the system's own dialogs, titled with the app's name, and the page
+waits for their answer, as in a browser; its `beforeunload` never asks, and the page leaves at once. A file input shows
+the system's picker. The host's extensions `page-dialogs` and `page-files` show them, which an extension of that name
+replaces (see [extensions.md](./extensions.md#the-pages-requests)). A
 download the page starts, such as an `<a download>` link, asks where to save: in a save panel on macOS, in the system's
 export sheet on iOS and in its save picker on Android. On Android, Back goes back in the page's history first, and
 leaves the app when there is none.
@@ -147,21 +150,28 @@ resampled from the PNG, so a small one blurs when enlarged.
 
 ## Installers
 
-`crossbind app build` writes what installs a desktop app beside it:
+`crossbind app build` writes what installs a desktop app beside it, with each installer of its platform:
 
-- macOS: `dist/<name>.dmg`, a disk image that holds the app beside a link to Applications, onto which its user drags
-  it.
-- Linux: `dist/<name>-linux-<arch>.deb`, a Debian package that puts the app in `/usr/lib/<package>`, its command in
-  `/usr/bin` and its entry and icon in the menu. It depends on WebKitGTK 4.1, release 2.40 or later, and GTK 3, which
-  `apt install ./<name>-linux-<arch>.deb` installs with it. The package is named after `general.name`, in lower case
-  with a hyphen for each underscore, from its first letter or digit; package.json's `author` and `description` are its
-  maintainer and description, and the app's name stands for both without them.
-- Windows: `dist/<name>-win32-<arch>-setup.exe`, which installs the app for the user who runs it, with no
+- macOS, `dmg`: `dist/<name>.dmg`, a disk image that holds the app beside a link to Applications, onto which its user
+  drags it.
+- Linux, `deb`: `dist/<name>-linux-<arch>.deb`, a Debian package that puts the app in `/usr/lib/<package>`, its command
+  in `/usr/bin` and its entry and icon in the menu. It depends on WebKitGTK 4.1, release 2.40 or later, and GTK 3,
+  which `apt install ./<name>-linux-<arch>.deb` installs with it. The package is named after `general.name`, in lower
+  case with a hyphen for each underscore, from its first letter or digit; package.json's `author` and `description` are
+  its maintainer and description, and the app's name stands for both without them.
+- Linux, `tar-gz`: `dist/<name>-linux-<arch>.tar.gz`, the app's folder, which unpacks anywhere its user can write.
+- Windows, `nsis`: `dist/<name>-win32-<arch>-setup.exe`, which installs the app for the user who runs it, with no
   administrator's approval, in `%LOCALAPPDATA%\Programs\<app name>`. It adds the app to the Start menu and to the apps
   Settings lists, whose Uninstall removes it again and leaves its data, and when the system has no WebView2 Runtime it
   downloads Microsoft's bootstrapper and, once it carries a valid signature of Microsoft's, runs it, which installs the
   runtime. While the app runs, an update or Uninstall asks to close it and changes nothing. `/S` installs without a
   window. NSIS, in crossbind's windows image, builds it.
+- Windows, `zip`: `dist/<name>-win32-<arch>.zip`, the app's folder as signed.
+
+The tar.gz and the zip register neither the app's schemes nor a menu entry. `app.installers` names the installers alone
+that run, as `app: { installers: ['dmg', 'deb'] }` ships a disk image and a Debian package alone, and a name that is no
+installer stops the build. An extension adds an installer of its own, as an AppImage, and one of a name of crossbind's
+takes its place, as [extensions.md](./extensions.md#installers)' Installers says.
 
 The Debian package and the shortcut and folder take their names from the app's, so a `general.name` that makes no
 Debian name, or an app name with any of `< > : / | ? *` or a space or dot at its end, stops `crossbind app build` before
@@ -244,7 +254,8 @@ installs. With it, `crossbind app build` writes each desktop app's update beside
 - `dist/<name>-<platform>-<arch>.update.json`, the manifest: package.json's version, the update's file and its
   signature.
 - The file: on macOS `dist/<name>-darwin-<arch>.app.zip`, the app as signed and notarized, zipped with ditto; on Linux
-  the app's `.tar.gz`; on Windows its setup program.
+  the app's `.tar.gz`, of its `tar-gz` installer; on Windows its setup program, of its `nsis` installer. A Linux or
+  Windows app keeps that installer, as a build whose `app.installers` leaves it out stops, naming it.
 
 Both go where `app.updater.url` points, with `{platform}` as `darwin`, `linux` or `win32` and `{arch}` as `x64` or
 `arm64`, and the file beside the manifest, as a GitHub release holds them (see [GitHub Releases](#github-releases)). The
@@ -653,12 +664,16 @@ app: {
 },
 ```
 
-The build writes them where each platform reads them: the reasons into the Info.plist of a macOS or iOS app, the
-devices into the entitlements a macOS app's signature claims and into an Android app's manifest. The page gets a device
-it asks for once the system's user gives it: macOS and iOS ask the first time, with the reason, and so does Android,
-without it; on Windows and Linux the page gets it at once. The webview asks nothing of its own, and the page gets no
-device the list leaves out, nor does a frame of another origin on Android, which lets the page hold one. Without its
-reason, WebKit gives a macOS page no camera or microphone at all.
+The build writes them where each platform reads them: the reasons into the Info.plist of a macOS or iOS app, the devices
+into the entitlements a macOS app's signature claims and into an Android app's manifest. The page gets a device it asks
+for once the system's user gives it: macOS and iOS ask the first time, with the reason, and so does Android, without it;
+on Windows and Linux the page gets it at once. The webview asks nothing of its own, and the page gets nothing else it
+asks to use, on any platform, but the autoplay and the sensors Windows' WebView2 gives without asking: no device the
+list leaves out, no notifications, no MIDI, no downloads of several files at once on Windows and no iOS device's motion,
+nor anything for a frame of another origin on Android, which lets the page hold one. It reads the clipboard on its
+user's gesture alone, as in a browser. The host's extension `page-permissions` answers the page, which an extension of
+that name replaces (see [extensions.md](./extensions.md#the-pages-requests)). Without its reason, WebKit gives a macOS
+page no camera or microphone at all.
 
 macOS asks for the app that opened on its own, from the Finder, the Dock or `open`. An app a terminal or an editor
 starts, as `crossbind app dev` does, is theirs to macOS, which asks for their permission instead. WebKit gives a macOS
@@ -894,6 +909,10 @@ its data, and leaves running it to you.
 it to testers, and `github` a desktop app's installers and update to a GitHub release. `-p android` and `-p ios` name
 the first two stores, as `CROSSBIND_APP_PLATFORM` does without either; for `github`, `-p` names the desktop platform.
 
+Each store is a publisher, as an extension adds one: [extensions.md](./extensions.md#publishers)' Publishers says how
+to write one, and an extension listed under the name of one of these three replaces it. A store's options go after its
+name, and one of another store's is refused.
+
 ### Google Play
 
 `crossbind app publish google-play` builds the Android app and releases its bundle on a Google Play track. Before the
@@ -1086,8 +1105,10 @@ the folder has none of stays as it is.
 
 `crossbind app publish github` builds the desktop app of the platform `-p` names, `macos`, `linux` or `windows`, else
 `CROSSBIND_APP_PLATFORM`, else this machine's, and puts what installs it into the GitHub release of its version, tagged
-`v` and package.json's version: the macOS disk image as `<name>-darwin-<arch>.dmg`, as one release holds both arches',
-the Debian package and the Windows setup under their own names. With `app.updater` the release takes the update too, its
+`v` and package.json's version: the files of each installer, a macOS one under the app's name with its platform and
+arch, as `<name>-darwin-<arch>.dmg`, as one release holds both arches', and the others under their own names, as the
+Debian package, the tar.gz, the Windows setup and the zip. Two files of one name stop the publish before any goes up.
+With `app.updater` the release takes the update too, its
 manifest and the file it names, which `CROSSBIND_UPDATER_PRIVATE_KEY` signs, so an app whose updater points at the
 release updates from the newest one GitHub has out:
 

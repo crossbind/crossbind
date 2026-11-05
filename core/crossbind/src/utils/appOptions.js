@@ -288,6 +288,17 @@ const SMALL_ORDER_KEYS = [
 
 const isSmallOrder = (key) => SMALL_ORDER_KEYS.some((point) => key.subarray(0, 31).equals(point.subarray(0, 31)) && (key[31] & 0x7f) === point[31]);
 
+// The installers app.installers names, which alone of each desktop platform's make what installs its app; null without
+// it, when every one does.
+export function appInstallers(config) {
+    const { installers } = config.app;
+    if (installers === undefined) return null;
+    if (!Array.isArray(installers) || !installers.every((name) => typeof name === 'string') || new Set(installers).size !== installers.length) {
+        throw new Error(`crossbind: app.installers ${JSON.stringify(installers)} is no list of installers' names, each once, as ['dmg', 'deb'] is.`);
+    }
+    return installers;
+}
+
 // Where a desktop app finds its updates, the key their signatures are checked with, and the version they are newer than:
 // package.json's, which semver orders. Null without app.updater.
 export function appUpdater(config) {

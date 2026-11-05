@@ -278,6 +278,10 @@ export default {
         // half, in CROSSBIND_UPDATER_PRIVATE_KEY, signs the updates the build writes.
     },
       // Default: none, and the app does not update itself.
+    installers: ['dmg', 'deb', 'nsis'],
+      // The installers alone a desktop build runs, of crossbind's, dmg, deb, tar-gz, nsis and zip, and of the
+      // extensions': each platform runs those of its own. A Linux or Windows app with app.updater keeps tar-gz or
+      // nsis, whose file it updates from (see app.md). Default: every one.
   },
 
   targetSpecs: [
@@ -335,12 +339,14 @@ export default {
         android: { sources: ['native/android.cpp'], libraries: [], java: 'android', class: 'dev.example.clipboard.ClipboardExtension' },
       },
       options: { maxLength: 1000 },          // a JSON value its native code reads as registry.options()
+      publisher: { platform: 'android', upload: async (api, session, output) => {} },  // a store: extensions.md
+      installer: { platform: 'linux', make: async (api, { app, arch }) => [] },      // what installs it: extensions.md
     },
   ],
     // Usually what an extension package's crossbind.extension.js gives, its root
     // its own folder. An app's host builds them in beside its own extensions,
-    // dialog, instance, links, menu, power, shell and updater, which one listed under the
-    // same name replaces, and its sources add
+    // dialog, instance, links, menu, page-dialogs, page-files, page-permissions, power,
+    // shell and updater, which one listed under the same name replaces, and its sources add
     // functions, and what they do as the app is launched, opens a link and quits,
     // through <crossbind/extension.h>: C++ on every platform, Objective-C++ on
     // Apple's. Two owners of one URL scheme stop the build.

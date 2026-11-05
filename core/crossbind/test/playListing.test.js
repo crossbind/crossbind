@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, test } from 'vitest';
-import { readPlayListing, releaseNotesOf } from '../src/actions/playListing.js';
+import { readPlayListing, releaseNotesOf } from '../src/publishers/google-play/playListing.js';
 
 let project;
 // Writes a file of the project's listing, under store/google-play.

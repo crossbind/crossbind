@@ -281,3 +281,35 @@ describe('specs.cmake shape', () => {
         expect(() => fill({ cmake: { compileOptions: ['-O3', '-DFOO=1'] } })).not.toThrow();
     });
 });
+
+describe("a publisher's changes to the config", () => {
+    let tmpDir;
+
+    beforeEach(() => {
+        tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'crossbind-config-changes-'));
+        const config = { general: { name: 'app' }, paths: { project: tmpDir }, app: { name: 'Demo', updater: { url: 'https://example.com/u.json' }, window: { width: 800 } } };
+        fs.writeFileSync(path.join(tmpDir, 'crossbind.config.mjs'), `export default ${JSON.stringify(config)};\n`);
+    });
+
+    afterEach(() => {
+        fs.rmSync(tmpDir, { recursive: true, force: true });
+    });
+
+    test('come with extensions of one name each, whatever each gives', async () => {
+        const store = `{ name: 'store', root: ${JSON.stringify(tmpDir)}, publisher: { platform: 'android', upload: async () => {} } }`;
+        fs.writeFileSync(path.join(tmpDir, 'crossbind.config.mjs'), `export default { general: { name: 'app' }, paths: { project: ${JSON.stringify(tmpDir)} }, extensions: [${store}, ${store}] };\n`);
+        await expect(loadConfig(tmpDir)).rejects.toThrow('crossbind: "extensions" lists two extensions named store.');
+    });
+
+    test('merge into the export before crossbind reads it, null removing a key', async () => {
+        const changed = await loadConfig(tmpDir, undefined, { changes: { app: { updater: null, name: 'Demo for the store', window: { height: 600 } } } });
+        expect(changed.app).toEqual({ name: 'Demo for the store', window: { width: 800, height: 600 } });
+        expect((await loadConfig(tmpDir)).app).toEqual({ name: 'Demo', updater: { url: 'https://example.com/u.json' }, window: { width: 800 } });
+    });
+
+    test("take a list's place whole, as of the installers a store's build runs", async () => {
+        const config = { general: { name: 'app' }, paths: { project: tmpDir }, app: { installers: ['dmg', 'deb', 'nsis'] } };
+        fs.writeFileSync(path.join(tmpDir, 'crossbind.config.mjs'), `export default ${JSON.stringify(config)};\n`);
+        expect((await loadConfig(tmpDir, undefined, { changes: { app: { installers: ['pkg'] } } })).app.installers).toEqual(['pkg']);
+    });
+});

@@ -13,14 +13,23 @@ const propertyOf = (object, name) => object.properties.find((property) => proper
     && (property.key.name ?? property.key.value) === name);
 // A spread may carry the key, and would win over one written before it.
 const hasSpread = (object) => object.properties.some((property) => property.type === 'SpreadElement');
+const IDENTIFIER = /^[A-Za-z_$][\w$]*$/;
+const ESCAPES = {
+    '\\': '\\\\', "'": "\\'", '\n': '\\n', '\r': '\\r', '\t': '\\t', '\u2028': '\\u2028', '\u2029': '\\u2029',
+};
+// A string in single quotes, with what would end its line or its text escaped.
+// eslint-disable-next-line no-control-regex
+const quoted = (text) => `'${text.replace(/[\\'\u0000-\u001f\u2028\u2029]/g, (char) => ESCAPES[char] ?? `\\u${char.charCodeAt(0).toString(16).padStart(4, '0')}`)}'`;
+// A key as one writes it: a name as it is, anything else quoted.
+const keyOf = (key) => (IDENTIFIER.test(key) ? key : quoted(key));
 // A value as one writes it in a config by hand: { fileTimestamp: ['C617.1'] }.
 function literal(value) {
-    if (typeof value === 'string') return `'${value.replace(/[\\']/g, '\\$&')}'`;
+    if (typeof value === 'string') return quoted(value);
     if (Array.isArray(value)) return `[${value.map(literal).join(', ')}]`;
-    if (value !== null && typeof value === 'object') return `{ ${Object.entries(value).map(([key, item]) => `${key}: ${literal(item)}`).join(', ')} }`;
+    if (value !== null && typeof value === 'object') return `{ ${Object.entries(value).map(([key, item]) => `${keyOf(key)}: ${literal(item)}`).join(', ')} }`;
     return JSON.stringify(value);
 }
-export const entry = (key, value) => `${key}: ${literal(value)}`;
+export const entry = (key, value) => `${keyOf(key)}: ${literal(value)}`;
 
 // How far an object's keys sit in from the line it opens on.
 function indentUnit(source, object) {
@@ -29,29 +38,38 @@ function indentUnit(source, object) {
     return indentOf(source, first.start).slice(indentOf(source, object.start).length) || DEFAULT_INDENT;
 }
 
-// The config's source with `key: value` first in its app section, which it makes where there is none, or null where it
-// cannot place it safely: the default export must be an object literal, its app one too, without the key or a spread.
-export function withAppOption(source, key, value) {
+// `key: value` where the rest of a key's path makes the objects the value goes in: window: { width: 800 }.
+const nestedEntry = ([key, ...rest], value) => entry(key, rest.reduceRight((inner, name) => ({ [name]: inner }), value));
+
+// The source with the entry of `keys` first in `object`, or in the object it holds under the first key, which it makes
+// where there is none, or null where it cannot place it safely: a spread in an object a key goes in may carry the key.
+function withEntry(source, { object, property }, keys, value, unit) {
+    const [key, ...rest] = keys;
+    const found = propertyOf(object, key);
+    if (found) {
+        if (rest.length === 0 || found.value.type !== 'ObjectExpression') return null;
+        return withEntry(source, { object: found.value, property: found }, rest, value, unit);
+    }
+    if (hasSpread(object)) return null;
+    const [first] = object.properties;
+    if (!first && property) {
+        const indent = indentOf(source, property.start);
+        return `${source.slice(0, object.start)}{\n${indent}${unit}${nestedEntry(keys, value)},\n${indent}}${source.slice(object.end)}`;
+    }
+    if (!first || isOneLine(source, object.start, first.start)) return insert(source, object.start + 1, ` ${nestedEntry(keys, value)},`);
+    const indent = indentOf(source, first.start);
+    if (rest.length === 0) return insert(source, object.start + 1, `\n${indent}${entry(key, value)},`);
+    // A section the object lacks opens on lines of its own, as the object writes its keys.
+    return insert(source, object.start + 1, `\n${indent}${key}: {\n${indent}${unit}${nestedEntry(rest, value)},\n${indent}},`);
+}
+
+// The config's source with the option a key's path names, as ['app', 'id'], first in the object it goes in, or null
+// where it cannot place it safely: the default export and each object on the way must be object literals, the last
+// without the key.
+export function withOption(source, keys, value) {
     const exported = parseAst(source).body.find((node) => node.type === 'ExportDefaultDeclaration')?.declaration;
     if (exported?.type !== 'ObjectExpression') return null;
-    const unit = indentUnit(source, exported);
-    const text = entry(key, value);
-    const app = propertyOf(exported, 'app');
-    if (!app) {
-        if (hasSpread(exported)) return null;
-        const [first] = exported.properties;
-        if (!first || isOneLine(source, exported.start, first.start)) return insert(source, exported.start + 1, ` app: { ${text} },`);
-        const indent = indentOf(source, first.start);
-        return insert(source, exported.start + 1, `\n${indent}app: {\n${indent}${unit}${text},\n${indent}},`);
-    }
-    if (app.value.type !== 'ObjectExpression' || propertyOf(app.value, key) || hasSpread(app.value)) return null;
-    const [first] = app.value.properties;
-    if (!first) {
-        const indent = indentOf(source, app.start);
-        return `${source.slice(0, app.value.start)}{\n${indent}${unit}${text},\n${indent}}${source.slice(app.value.end)}`;
-    }
-    if (isOneLine(source, app.value.start, first.start)) return insert(source, app.value.start + 1, ` ${text},`);
-    return insert(source, app.value.start + 1, `\n${indentOf(source, first.start)}${text},`);
+    return withEntry(source, { object: exported, property: null }, keys, value, indentUnit(source, exported));
 }
 
 // Every name the module's code holds, bound or read, which a name it gains must not take.
@@ -139,12 +157,18 @@ export function writeExtension(project, specifier, name) {
     return { file, identifier: written.identifier, isListed: written.isListed };
 }
 
-// Writes `key: value` into the project's crossbind.config, and says whether it could.
-export function writeAppOption(project, key, value) {
+// Writes the option a key's path names into the project's crossbind.config, and says whether it could: a config the
+// change would leave unreadable stays as it is.
+export function writeOption(project, keys, value) {
     const file = configFileOf(project);
     if (!file) return false;
-    const changed = withAppOption(fs.readFileSync(file, 'utf8'), key, value);
+    const changed = withOption(fs.readFileSync(file, 'utf8'), keys, value);
     if (changed === null) return false;
+    try {
+        parseAst(changed);
+    } catch {
+        return false;
+    }
     fs.writeFileSync(file, changed);
     return true;
 }

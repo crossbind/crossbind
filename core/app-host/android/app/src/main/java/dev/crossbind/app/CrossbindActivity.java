@@ -4,7 +4,6 @@ import android.Manifest;
 import android.app.Activity;
 import android.app.AlertDialog;
 import android.content.ActivityNotFoundException;
-import android.content.ClipData;
 import android.content.Intent;
 import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageInfo;
@@ -23,6 +22,8 @@ import android.view.WindowInsets;
 import android.view.WindowInsetsController;
 import android.webkit.ConsoleMessage;
 import android.webkit.GeolocationPermissions;
+import android.webkit.JsPromptResult;
+import android.webkit.JsResult;
 import android.webkit.PermissionRequest;
 import android.webkit.URLUtil;
 import android.webkit.ValueCallback;
@@ -60,7 +61,9 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
+import java.util.stream.Collectors;
 
 import org.json.JSONException;
 import org.json.JSONObject;
@@ -146,12 +149,18 @@ public class CrossbindActivity extends Activity {
     // The relative luminance of a color that black and white contrast with as much.
     private static final float EVEN_CONTRAST = 0.179f;
     private static final int PERMISSIONS_REQUEST = 1;
-    // Where the native code's calls of an extension's Java run.
-    private static final Handler MAIN = new Handler(Looper.getMainLooper());
-    // The Android permission behind each device a page asks for.
-    private static final Map<String, String> PAGE_DEVICES = Map.of(
-            PermissionRequest.RESOURCE_VIDEO_CAPTURE, Manifest.permission.CAMERA,
-            PermissionRequest.RESOURCE_AUDIO_CAPTURE, Manifest.permission.RECORD_AUDIO);
+    // Where the native code's calls of an extension's Java run, and the page's requests are answered.
+    static final Handler MAIN = new Handler(Looper.getMainLooper());
+    // What a page asks for, by the names page-permissions takes, and the Android permission behind each device.
+    private static final Map<String, String> PAGE_KINDS = Map.of(
+            PermissionRequest.RESOURCE_VIDEO_CAPTURE, "camera",
+            PermissionRequest.RESOURCE_AUDIO_CAPTURE, "microphone",
+            PermissionRequest.RESOURCE_PROTECTED_MEDIA_ID, "media-keys",
+            PermissionRequest.RESOURCE_MIDI_SYSEX, "midi");
+    private static final Map<String, String> DEVICE_PERMISSIONS = Map.of(
+            "camera", Manifest.permission.CAMERA,
+            "microphone", Manifest.permission.RECORD_AUDIO,
+            "location", Manifest.permission.ACCESS_COARSE_LOCATION);
 
     // A call of a page, answered on the port of the page that made it: a page that went away gets no answer.
     private static final class Call {
@@ -178,7 +187,7 @@ public class CrossbindActivity extends Activity {
     private final Map<Integer, ActivityResult> results = new HashMap<>();
     private int nextRequest;
     // The file input whose picker is open: a picker that opens after it answers it with nothing.
-    private ValueCallback<Uri[]> pendingFiles;
+    private Extension.FileInput pendingFiles;
     // What waits for the answer the app's user is giving for permissions, and what waits to ask: Android asks one question
     // at a time, and answers one asked meanwhile with nothing.
     private Runnable answering;
@@ -565,18 +574,6 @@ public class CrossbindActivity extends Activity {
         while (answering == null && !waiting.isEmpty()) waiting.poll().run();
     }
 
-    // What the picker chose, several files as clip data, and as content URIs alone: a file URI, such as one of this app's
-    // own files a picker could name, stays out.
-    private static Uri[] pickedFiles(int result, Intent data) {
-        if (result != RESULT_OK || data == null) return null;
-        List<Uri> picked = new ArrayList<>();
-        ClipData clip = data.getClipData();
-        if (clip == null) picked.add(data.getData());
-        else for (int i = 0; i < clip.getItemCount(); i += 1) picked.add(clip.getItemAt(i).getUri());
-        Uri[] files = picked.stream().filter((uri) -> uri != null && "content".equals(uri.getScheme())).toArray(Uri[]::new);
-        return files.length == 0 ? null : files;
-    }
-
     // The callback is taken only while the page has history to go back to, so the system's back animates leaving.
     private void matchBack() {
         boolean canGoBack = webView.canGoBack();
@@ -711,7 +708,10 @@ public class CrossbindActivity extends Activity {
                 origin);
     }
 
-    // Without a WebChromeClient the WebView shows no alert(), confirm() or prompt(), and no picker for a file input.
+    // The page's dialogs, what it asks to use and its file inputs go to the Java of the extensions of their names,
+    // page-dialogs, page-permissions and page-files; without one, the WebView does as it would. A frame of another
+    // origin, which Android lets the page hold, gets no dialog and nothing it asks to use, as both would show under the
+    // app's name, and a page that leaves does so without asking, as WKWebView's does.
     private final class PageChrome extends WebChromeClient {
         private final boolean isConsoleShown;
 
@@ -732,57 +732,81 @@ public class CrossbindActivity extends Activity {
         }
 
         @Override
-        public boolean onShowFileChooser(WebView view, ValueCallback<Uri[]> files, FileChooserParams params) {
-            Intent intent = params.createIntent();
-            if (params.getMode() == FileChooserParams.MODE_OPEN_MULTIPLE) intent.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true);
-            try {
-                startForResult(intent, (result, data) -> {
-                    if (pendingFiles != files) return;
-                    files.onReceiveValue(pickedFiles(result, data));
-                    pendingFiles = null;
-                });
-            } catch (ActivityNotFoundException none) {
-                Log.w(TAG, "nothing on this device picks a file");
-                return false;
-            }
-            if (pendingFiles != null) pendingFiles.onReceiveValue(null);
-            pendingFiles = files;
+        public boolean onJsAlert(WebView view, String url, String message, JsResult result) {
+            return pageDialog(url, Extension.PageDialog.Kind.ALERT, message, "", result);
+        }
+
+        @Override
+        public boolean onJsConfirm(WebView view, String url, String message, JsResult result) {
+            return pageDialog(url, Extension.PageDialog.Kind.CONFIRM, message, "", result);
+        }
+
+        @Override
+        public boolean onJsPrompt(WebView view, String url, String message, String defaultValue, JsPromptResult result) {
+            return pageDialog(url, Extension.PageDialog.Kind.PROMPT, message, defaultValue == null ? "" : defaultValue, result);
+        }
+
+        @Override
+        public boolean onJsBeforeUnload(WebView view, String url, String message, JsResult result) {
+            result.confirm();
             return true;
         }
 
-        // The page gets the camera and microphone the manifest asks for, once the app's user gives them; the WebView asks
-        // nothing of its own. A frame of another origin, which Android lets the page hold, gets none.
+        private boolean pageDialog(String url, Extension.PageDialog.Kind kind, String message, String defaultText, JsResult result) {
+            if (url == null || !allows(Uri.parse(url))) {
+                result.cancel();
+                return true;
+            }
+            Extension owner = Extensions.ALL.get("page-dialogs");
+            Extension.PageDialog dialog = new Extension.PageDialog(kind, message == null ? "" : message, defaultText, result);
+            return owner != null && isTaken("page-dialogs", () -> owner.onPageDialog(CrossbindActivity.this, dialog), dialog::cancel);
+        }
+
+        @Override
+        public boolean onShowFileChooser(WebView view, ValueCallback<Uri[]> files, FileChooserParams params) {
+            Extension owner = Extensions.ALL.get("page-files");
+            Extension.FileInput input = new Extension.FileInput(params, files);
+            if (owner == null || !isTaken("page-files", () -> owner.onFileInput(CrossbindActivity.this, input), input::cancel)) return false;
+            if (pendingFiles != null) pendingFiles.cancel();
+            pendingFiles = input;
+            return true;
+        }
+
         @Override
         public void onPermissionRequest(PermissionRequest request) {
-            String[] resources = request.getResources();
-            String[] permissions = Arrays.stream(resources).map(PAGE_DEVICES::get).toArray(String[]::new);
-            if (!origins.contains(originOf(request.getOrigin())) || !Arrays.stream(permissions).allMatch(CrossbindActivity.this::isDeclared)) {
-                request.deny();
-                return;
-            }
-            afterAsking(permissions, () -> {
-                if (Arrays.stream(permissions).allMatch(CrossbindActivity.this::isGranted)) {
-                    request.grant(resources);
-                } else {
-                    request.deny();
-                }
+            String origin = originOf(request.getOrigin());
+            List<String> kinds = Arrays.stream(request.getResources())
+                    .map((resource) -> PAGE_KINDS.getOrDefault(resource, resource)).collect(Collectors.toList());
+            askPermission(kinds, origin, (isAllowed) -> {
+                if (isAllowed) request.grant(request.getResources());
+                else request.deny();
             });
         }
 
-        // The page gets the location the manifest asks for, the approximate one at least, which its user may give alone.
         @Override
         public void onGeolocationPermissionsShowPrompt(String origin, GeolocationPermissions.Callback callback) {
-            if (!origins.contains(originOf(Uri.parse(origin))) || !isDeclared(Manifest.permission.ACCESS_COARSE_LOCATION)) {
-                callback.invoke(origin, false, false);
-                return;
+            askPermission(List.of("location"), originOf(Uri.parse(origin)), (isAllowed) -> callback.invoke(origin, isAllowed, false));
+        }
+
+        private void askPermission(List<String> kinds, String origin, Consumer<Boolean> answer) {
+            Extension owner = Extensions.ALL.get("page-permissions");
+            boolean isListed = kinds.stream().allMatch((kind) -> isDeclared(DEVICE_PERMISSIONS.get(kind)));
+            Extension.PagePermission request = new Extension.PagePermission(kinds, origin, isListed, answer);
+            if (!origins.contains(origin) || owner == null
+                    || !isTaken("page-permissions", () -> owner.onPagePermission(CrossbindActivity.this, request), request::deny)) {
+                request.deny();
             }
-            // Asked for the precise location again, a user who gave the approximate one is asked to change it.
-            if (isGranted(Manifest.permission.ACCESS_COARSE_LOCATION)) {
-                callback.invoke(origin, true, false);
-                return;
+        }
+
+        // Whether the owner took the request: one it throws on is cancelled, as in an extension's C++.
+        private boolean isTaken(String role, BooleanSupplier ask, Runnable cancel) {
+            try {
+                return ask.getAsBoolean();
+            } catch (RuntimeException error) {
+                Log.e(TAG, "crossbind: the extension " + role + " failed on the page's request", error);
+                cancel.run();
+                return true;
             }
-            afterAsking(new String[] {Manifest.permission.ACCESS_COARSE_LOCATION, Manifest.permission.ACCESS_FINE_LOCATION},
-                    () -> callback.invoke(origin, isGranted(Manifest.permission.ACCESS_COARSE_LOCATION), false));
         }
     }
 
