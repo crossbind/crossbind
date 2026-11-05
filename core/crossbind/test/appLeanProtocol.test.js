@@ -246,7 +246,8 @@ describe('what the host pushes to the page', () => {
         expect(JSON.parse(await second)).toEqual([0, [['event', 'now', 3]]]);
     });
 
-    const askForLinks = () => transport.send(TOKEN + JSON.stringify(['app', 0, ['app.launchUrls'], [{}]]));
+    const askForHeld = (name) => transport.send(TOKEN + JSON.stringify(['app', 0, ['events.held'], [{ name }]]));
+    const hold = (name, json) => globalThis.__crossbind_event(name, json, true);
     // The page listens, and the request for pushes it makes takes the next one.
     const listenAgain = async () => {
         const next = askForPushes();
@@ -255,39 +256,78 @@ describe('what the host pushes to the page', () => {
         expect(JSON.parse(await next)).toEqual([0, [['event', 'resumed', 1]]]);
     };
 
-    test('holds the links that come before the page asks for them, whatever else it listens to, and hands each over once', async () => {
+    test('holds the events held for the page that come before it asks for those of their name, and hands each over once', async () => {
         globalThis.__crossbind_reset();
-        globalThis.__crossbind_event('open-url', '{"url":"myapp://launch"}');
+        hold('open-url', '{"url":"myapp://launch"}');
         const waiting = askForPushes();
         await new Promise(setImmediate);
-        globalThis.__crossbind_event('open-url', '{"url":"myapp://before"}');
+        hold('open-url', '{"url":"myapp://before"}');
+        hold('tapped', '{"id":7}');
         globalThis.__crossbind_event('other', '1');
         expect(JSON.parse(await waiting)).toEqual([0, [['event', 'other', 1]]]);
 
-        expect(JSON.parse(await askForLinks())).toEqual([0, ['myapp://launch', 'myapp://before']]);
-        expect(JSON.parse(await askForLinks())).toEqual([0, []]);
+        expect(JSON.parse(await askForHeld('open-url'))).toEqual([0, [{ url: 'myapp://launch' }, { url: 'myapp://before' }]]);
+        expect(JSON.parse(await askForHeld('open-url'))).toEqual([0, []]);
         const next = askForPushes();
         await new Promise(setImmediate);
-        globalThis.__crossbind_event('open-url', '{"url":"myapp://later"}');
+        hold('open-url', '{"url":"myapp://later"}');
         expect(JSON.parse(await next)).toEqual([0, [['event', 'open-url', { url: 'myapp://later' }]]]);
+        // The page has not asked for those of another name.
+        expect(JSON.parse(await askForHeld('tapped'))).toEqual([0, [{ id: 7 }]]);
     });
 
-    test('holds a link pushed for a page another replaced before it got it, for the new one to ask for', async () => {
-        globalThis.__crossbind_event('open-url', '{"url":"myapp://unseen"}');
+    test('holds an event pushed for a page another replaced before it got it, for the new one to ask for', async () => {
+        hold('open-url', '{"url":"myapp://unseen"}');
         globalThis.__crossbind_reset();
-        expect(JSON.parse(await askForLinks())).toEqual([0, ['myapp://unseen']]);
+        expect(JSON.parse(await askForHeld('open-url'))).toEqual([0, [{ url: 'myapp://unseen' }]]);
         await listenAgain();
     });
 
-    test('takes an open-url without a link for none, and holds a thousand links at most', async () => {
-        expect(() => globalThis.__crossbind_event('open-url', 'null')).not.toThrow();
-        globalThis.__crossbind_event('open-url', '{}');
-        expect(JSON.parse(await askForLinks())).toEqual([0, []]);
-
+    // The page listens, and its request for pushes has come back, so a push waits for the next.
+    const listenWithoutRequest = async () => {
         globalThis.__crossbind_reset();
-        for (let i = 0; i < 1001; i += 1) globalThis.__crossbind_event('open-url', JSON.stringify({ url: `myapp://${i}` }));
-        const [, links] = JSON.parse(await askForLinks());
-        expect([links.length, links[0], links.at(-1)]).toEqual([1000, 'myapp://0', 'myapp://999']);
+        const waiting = askForPushes();
+        await new Promise(setImmediate);
+        globalThis.__crossbind_event('first', '1');
+        await waiting;
+    };
+
+    test('holds again at a reload the held events alone that the page had not got', async () => {
+        await listenWithoutRequest();
+        await askForHeld('open-url');
+        hold('open-url', '{"url":"myapp://held"}');
+        globalThis.__crossbind_event('open-url', '{"url":"myapp://plain"}');
+        globalThis.__crossbind_reset();
+        expect(JSON.parse(await askForHeld('open-url'))).toEqual([0, [{ url: 'myapp://held' }]]);
+        await listenAgain();
+    });
+
+    test('holds again a held event that later events pushed out of those waiting, for the next ask', async () => {
+        await listenWithoutRequest();
+        await askForHeld('open-url');
+        hold('open-url', '{"url":"myapp://oldest"}');
+        for (let i = 0; i < 1000; i += 1) globalThis.__crossbind_event('tick', String(i));
+        expect(JSON.parse(await askForHeld('open-url'))).toEqual([0, [{ url: 'myapp://oldest' }]]);
+        const [, entries] = JSON.parse(await askForPushes());
+        expect([entries.length, entries.some(([, name]) => name === 'open-url')]).toEqual([1000, false]);
+    });
+
+    test('holds what comes once the page asked but before it listens', async () => {
+        globalThis.__crossbind_reset();
+        expect(JSON.parse(await askForHeld('open-url'))).toEqual([0, []]);
+        hold('open-url', '{"url":"myapp://early"}');
+        expect(JSON.parse(await askForHeld('open-url'))).toEqual([0, [{ url: 'myapp://early' }]]);
+        await listenAgain();
+    });
+
+    test('holds a thousand events of a name at most, and refuses an ask without a name', async () => {
+        globalThis.__crossbind_reset();
+        for (let i = 0; i < 1001; i += 1) hold('open-url', JSON.stringify({ url: `myapp://${i}` }));
+        const [, values] = JSON.parse(await askForHeld('open-url'));
+        expect([values.length, values[0], values.at(-1)]).toEqual([1000, { url: 'myapp://0' }, { url: 'myapp://999' }]);
+        const [status, error] = JSON.parse(await transport.send(TOKEN + JSON.stringify(['app', 0, ['events.held'], [{}]])));
+        expect(status).toBe(1);
+        expect(JSON.stringify(error)).toContain('events.held takes the name of an event');
         await listenAgain();
     });
 

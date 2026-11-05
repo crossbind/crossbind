@@ -1,13 +1,15 @@
-#include "crossbind_app.h"
-#include "linux/main_thread.h"
-#include "linux/window.h"
-#include "platform.h"
+// The page's menus on Linux: a GTK menu bar above the webview.
+#include "menu.h"
 
+#include <gtk/gtk.h>
+#include <unistd.h>
 #include <webkit2/webkit2.h>
 
+#include <climits>
 #include <map>
 #include <stdexcept>
 
+namespace crossbind::menu {
 namespace {
 
 GtkWidget *bar = nullptr;
@@ -15,6 +17,10 @@ GtkAccelGroup *barAccelerators = nullptr;
 // What the bar adds to the page's height.
 int menuBarHeight = 0;
 MenuClicked onClick;
+
+GtkWindow *window() { return GTK_WINDOW(appWindow()); }
+
+GtkWidget *webView() { return static_cast<GtkWidget *>(appWebView()); }
 
 // What a click of an item does: one of the page's tells the page its id, a standard one does what its role says.
 struct Action {
@@ -66,14 +72,12 @@ guint keyOf(const Accelerator &accelerator) {
 }
 
 void runRole(const std::string &role) {
-    GtkWindow *window = appWindow();
-    GtkWidget *webView = appWebView();
     if (const auto command = EDITING_COMMANDS.find(role); command != EDITING_COMMANDS.end()) {
-        if (webView) webkit_web_view_execute_editing_command(WEBKIT_WEB_VIEW(webView), command->second);
-    } else if (window && role == "minimize") {
-        gtk_window_iconify(window);
-    } else if (window) {
-        gtk_window_close(window);
+        if (webView()) webkit_web_view_execute_editing_command(WEBKIT_WEB_VIEW(webView()), command->second);
+    } else if (window() && role == "minimize") {
+        gtk_window_iconify(window());
+    } else if (window()) {
+        gtk_window_close(window());
     }
 }
 
@@ -144,32 +148,26 @@ void keepPageHeight(GtkWindow *window, int barHeight) {
     if (!shown || (gdk_window_get_state(shown) & (GDK_WINDOW_STATE_MAXIMIZED | GDK_WINDOW_STATE_FULLSCREEN))) return;
     int width = 0;
     gtk_window_get_size(window, &width, nullptr);
-    gtk_window_resize(window, width, gtk_widget_get_allocated_height(appWebView()) + barHeight);
+    gtk_window_resize(window, width, gtk_widget_get_allocated_height(webView()) + barHeight);
 }
 
 }  // namespace
 
-void keepSizeLimits() {
-    GtkWindow *window = appWindow();
-    if (!window) return;
-    GdkWindow *shown = gtk_widget_get_window(GTK_WIDGET(window));
-    const bool fillsScreen = shown && (gdk_window_get_state(shown) & GDK_WINDOW_STATE_FULLSCREEN);
-    gtk_window_set_resizable(window, fillsScreen || CROSSBIND_APP_WINDOW_RESIZABLE);
-#ifdef CROSSBIND_APP_WINDOW_MAX_WIDTH
-    GdkGeometry most{};
-    most.max_width = CROSSBIND_APP_WINDOW_MAX_WIDTH;
-    most.max_height = CROSSBIND_APP_WINDOW_MAX_HEIGHT + menuBarHeight;
-    gtk_window_set_geometry_hints(window, nullptr, &most, fillsScreen ? static_cast<GdkWindowHints>(0) : GDK_HINT_MAX_SIZE);
-#endif
+// A Linux app is a directory: the executable, and the app's files in resources/ beside it.
+std::string resourceFolder() {
+    char path[PATH_MAX];
+    const ssize_t length = readlink("/proc/self/exe", path, sizeof path);
+    const std::string executable = length > 0 ? std::string(path, static_cast<size_t>(length)) : std::string();
+    return executable.substr(0, executable.find_last_of('/')) + "/resources";
 }
 
-// The bar goes above the webview, in the box setMainWindow made, and its accelerators come before the webview's keys;
+// The bar goes above the webview, in the box the host holds it in, and its accelerators come before the webview's keys;
 // no menus hide it.
 void setMenu(std::vector<MenuItem> menus, MenuClicked clicked, std::function<void(Failure)> done) {
     onMainThread([menus = std::move(menus), clicked = std::move(clicked), done = std::move(done)] {
-        GtkWindow *window = appWindow();
-        GtkBox *box = appWindowBox();
-        if (!window || !box || !appWebView()) {
+        GtkWidget *view = webView();
+        GtkWidget *box = view ? gtk_widget_get_parent(view) : nullptr;
+        if (!window() || !GTK_IS_BOX(box)) {
             done("crossbind: the app has no window to show its menus in");
             return;
         }
@@ -187,22 +185,24 @@ void setMenu(std::vector<MenuItem> menus, MenuClicked clicked, std::function<voi
         }
         if (bar) gtk_widget_destroy(bar);
         if (barAccelerators) {
-            gtk_window_remove_accel_group(window, barAccelerators);
+            gtk_window_remove_accel_group(window(), barAccelerators);
             g_object_unref(barAccelerators);
         }
-        gtk_box_pack_start(box, next, FALSE, FALSE, 0);
+        // Above the webview, which the box holds at its end.
+        gtk_container_add(GTK_CONTAINER(box), next);
         menuBarHeight = 0;
         if (!menus.empty()) {
             gtk_widget_show_all(next);
             gtk_widget_get_preferred_height(next, nullptr, &menuBarHeight);
         }
         g_object_unref(next);
-        gtk_window_add_accel_group(window, accelerators);
+        gtk_window_add_accel_group(window(), accelerators);
         bar = next;
         barAccelerators = accelerators;
         onClick = clicked;
-        keepSizeLimits();
-        keepPageHeight(window, menuBarHeight);
+        keepPageHeight(window(), menuBarHeight);
         done(std::nullopt);
     });
 }
+
+}  // namespace crossbind::menu

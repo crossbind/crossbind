@@ -46,7 +46,7 @@ const usesPermissions = (permissions) => permissions
     .flatMap((name) => ANDROID_PERMISSIONS[name])
     .map((permission) => `    <uses-permission android:name="android.permission.${permission}" />`);
 
-// The links of app.urlSchemes the activity opens, from a browser as well, before the end of the activity's element.
+// The links of the app's schemes the activity opens, from a browser as well, before the end of the activity's element.
 const ACTIVITY_END = '        </activity>';
 const urlFilter = (schemes) => [
     '            <intent-filter>',

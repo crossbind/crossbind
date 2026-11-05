@@ -1,10 +1,11 @@
 #import <Foundation/Foundation.h>
 #import <Security/Security.h>
 
-#include "platform.h"
+#include "updater.h"
 
 #include <stdexcept>
 
+namespace crossbind::updater {
 namespace {
 
 // How often the wait looks at what the download has received.
@@ -16,6 +17,8 @@ std::string describe(OSStatus status) {
 }
 
 }  // namespace
+
+std::filesystem::path bundlePath() { return NSBundle.mainBundle.bundlePath.fileSystemRepresentation; }
 
 // As Sparkle holds an update: the app it unpacked to meets the requirement this app's own signature states, which for a
 // Developer ID names the app's identifier and its team. An ad hoc signature names no signer to hold it to.
@@ -93,3 +96,5 @@ void download(const std::string &url, const std::filesystem::path &file, std::ui
         if (!failure.empty()) throw std::runtime_error(failure);
     }
 }
+
+}  // namespace crossbind::updater

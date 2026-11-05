@@ -120,7 +120,7 @@ Index + template: [`docs/adr/README.md`](./adr/README.md).
 | Desktop app installers: a macOS disk image (hdiutil), a Linux Debian package (dpkg-deb in the linux image), a Windows setup program (NSIS in the windows image, from `core/app-host/windows/installer.nsi`) | `src/actions/appInstaller.js` |
 | macOS app signing: the Developer ID and App Store Connect API key the environment names, notarization with notarytool and the stapled ticket | `src/actions/appleSigning.js` |
 | Windows app signing: the jsign key the environment names, passed into the windows image by name, which signs the app, its setup program and its uninstaller (`core/app-host/windows/jsign.sh`) | `src/actions/windowsSigning.js` |
-| Desktop app updates: the Ed25519 key pair of `crossbind app updater-key`, and the signed manifest and file the build writes beside an app with `CROSSBIND_UPDATER_PRIVATE_KEY`, which the host's `cpp/src/updater.cpp` checks with Monocypher | `src/actions/appUpdate.js` |
+| Desktop app updates: the Ed25519 key pair of `crossbind app updater-key`, and the signed manifest and file the build writes beside an app with `CROSSBIND_UPDATER_PRIVATE_KEY`, which the host's updater extension, `extensions/updater/`, checks with Monocypher | `src/actions/appUpdate.js` |
 | iOS app: the Xcode project written anew from each SDK's part (archives and their link line, Hermes' slice, the app's files) | `src/actions/xcodeProject.js` |
 | An iOS app built for the Simulator and opened there, for `vite` and the e2e runs | `src/actions/iosSimulator.js` |
 | An iOS app built for an iPhone or iPad, signed by Xcode for the app's team, installed and opened on it through devicectl, and the Mac's address it reaches the dev server at, on its cable or the local network, for `vite` | `src/actions/iosDevice.js` |
@@ -243,7 +243,7 @@ Index + template: [`docs/adr/README.md`](./adr/README.md).
 | @crossbind/core-app-host resolution (consumer-declared) | `src/utils/resolveAppHost.js` |
 | Hermes for apps: React Native's pinned release for macOS and iOS in `~/.crossbind/hermes`, and the pins of the Android and source releases the android-app and linux images carry | `src/utils/hermes.js` |
 | Property lists: XML for an Info.plist, the text form for a project.pbxproj | `src/utils/plist.js` |
-| App options: the name an app shows, its desktop window, whether it keeps one instance, its URL schemes and its updater from `crossbind.config.js`, as the header a desktop host compiles | `src/utils/appOptions.js` |
+| App options: the name an app shows and its desktop window from `crossbind.config.js`, as the header a desktop host compiles; its URL schemes with their owners, the app's and its extensions'; and the options of the host's own extensions, as the instance's where it keeps one and the updater's `app.updater` | `src/utils/appOptions.js` |
 | App icon: each platform's icon files from the PNG `app.icon` names | `src/utils/appIcon.js` |
 | wasi bin command runner (npm shims import this) | `src/runtime/wasiRun.mjs` |
 

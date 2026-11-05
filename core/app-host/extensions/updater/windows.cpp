@@ -1,5 +1,6 @@
-#include "platform.h"
-#include "windows/com.h"
+#include "updater.h"
+
+#include <windows.h>
 
 #include <softpub.h>
 #include <wincrypt.h>
@@ -12,14 +13,42 @@
 #include <stdexcept>
 #include <vector>
 
-using namespace crossbind::windows;
-
+namespace crossbind::updater {
 namespace {
 
 constexpr DWORD READ_CHUNK = 64 * 1024;
 // Antivirus software reads a program it has just seen written, which holds it from running for a moment.
 constexpr int SETUP_TRIES = 4;
 constexpr DWORD SETUP_RETRY_MS = 500;
+
+std::wstring wide(const std::string &text) {
+    if (text.empty()) return {};
+    const int size = MultiByteToWideChar(CP_UTF8, 0, text.data(), static_cast<int>(text.size()), nullptr, 0);
+    std::wstring result(static_cast<size_t>(size), L'\0');
+    MultiByteToWideChar(CP_UTF8, 0, text.data(), static_cast<int>(text.size()), result.data(), size);
+    return result;
+}
+
+std::string utf8(const wchar_t *text) {
+    if (!text || !*text) return {};
+    const int size = WideCharToMultiByte(CP_UTF8, 0, text, -1, nullptr, 0, nullptr, nullptr);
+    std::string result(static_cast<size_t>(size - 1), '\0');
+    WideCharToMultiByte(CP_UTF8, 0, text, -1, result.data(), size, nullptr, nullptr);
+    return result;
+}
+
+// The app's executable, however long its path.
+std::wstring executablePath() {
+    std::wstring path(MAX_PATH, L'\0');
+    for (;;) {
+        const DWORD length = GetModuleFileNameW(nullptr, path.data(), static_cast<DWORD>(path.size()));
+        if (length < path.size()) {
+            path.resize(length);
+            return path;
+        }
+        path.resize(path.size() * 2);
+    }
+}
 
 // WinHTTP's handles, closed as they go out of scope.
 using Internet = std::unique_ptr<void, decltype(&WinHttpCloseHandle)>;
@@ -142,7 +171,7 @@ void download(const std::string &url, const std::filesystem::path &file, std::ui
 // installer.nsi's /UPDATE waits for the app to quit, installs the update in the app's folder, which /D= names unquoted
 // and last, and opens it anew. A folder this user cannot write to fails here, as the setup program shows nothing.
 void runSetup(const std::filesystem::path &setup) {
-    const std::filesystem::path folder = std::filesystem::path(wide(resourceDir())).parent_path();
+    const std::filesystem::path folder = std::filesystem::path(executablePath()).parent_path();
     wchar_t probe[MAX_PATH];
     if (!GetTempFileNameW(folder.c_str(), L"cbu", 0, probe)) {
         throw std::runtime_error("crossbind: cannot install the update: this user cannot change " + utf8(folder.c_str()));
@@ -162,3 +191,5 @@ void runSetup(const std::filesystem::path &setup) {
     CloseHandle(process.hThread);
     CloseHandle(process.hProcess);
 }
+
+}  // namespace crossbind::updater

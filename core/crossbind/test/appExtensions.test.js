@@ -2,7 +2,10 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, test } from 'vitest';
-import { checkedExtension, extensionPart, hostExtensions, listedExtension, mergedEntitlements, registrationSource } from '../src/utils/appExtensions.js';
+import {
+    appHostExtensions, checkedExtension, extensionPart, hostExtensions, listedExtension, mergedEntitlements, registrationSource, withListed,
+    withOptions,
+} from '../src/utils/appExtensions.js';
 
 const roots = [];
 
@@ -54,18 +57,61 @@ describe("an app host's own extensions", () => {
         expect(extensions[0].app.darwin.frameworks).toEqual(['UniformTypeIdentifiers']);
     });
 
-    test("of crossbind's own host are the dialog's, which each platform's sources show", () => {
+    test("of crossbind's own host are the dialog's, the instance's, the menu's, the power's, the shell's and the updater's, which each platform's sources show", () => {
+        const root = path.join(import.meta.dirname, '..', '..', 'app-host');
+        const sources = (platform, options = {}) => extensionPart(appHostExtensions(root, options), platform).sources
+            .map((file) => path.relative(path.join(file, '..', '..'), file));
+        const updater = { updater: { url: 'https://example.com/{platform}-{arch}.json' } };
+        const updaterSources = ['updater/updater.cpp', 'updater/monocypher.cpp', 'updater/monocypher-ed25519.cpp'];
+        const instance = { instance: { id: 'com.example.demo' } };
+        const linuxMenu = ['menu/menu.cpp', 'menu/linux.cpp', 'menu/linux-tray.cpp', 'menu/linux-notifications.cpp'];
+        expect(hostExtensions(root).map(({ name }) => name)).toEqual(['dialog', 'instance', 'links', 'menu', 'power', 'shell', 'updater']);
+        expect(sources('ios', { links: {} })).toEqual(['dialog/dialog.cpp', 'dialog/ios.mm', 'links/links.cpp', 'menu/menu.cpp', 'menu/ios.cpp', 'shell/shell.cpp', 'shell/ios.mm']);
+        expect(sources('darwin')).toEqual([
+            'dialog/dialog.cpp', 'dialog/darwin.mm', 'menu/menu.cpp', 'menu/darwin.mm', 'power/power.cpp', 'power/darwin.mm', 'shell/shell.cpp', 'shell/darwin.mm',
+        ]);
+        expect(sources('darwin', updater)).toEqual([...sources('darwin'), ...updaterSources, 'updater/darwin.mm']);
+        expect(sources('darwin', instance)).toEqual([
+            'dialog/dialog.cpp', 'dialog/darwin.mm', 'instance/instance.cpp', 'instance/posix.cpp', 'menu/menu.cpp', 'menu/darwin.mm', 'power/power.cpp', 'power/darwin.mm',
+            'shell/shell.cpp', 'shell/darwin.mm',
+        ]);
+        expect(sources('ios')).toEqual(['dialog/dialog.cpp', 'dialog/ios.mm', 'menu/menu.cpp', 'menu/ios.cpp', 'shell/shell.cpp', 'shell/ios.mm']);
+        expect(sources('linux', { ...instance, ...updater })).toEqual([
+            'dialog/dialog.cpp', 'dialog/linux.cpp', 'instance/instance.cpp', 'instance/posix.cpp', ...linuxMenu, 'power/power.cpp', 'power/linux.cpp', 'shell/shell.cpp',
+            'shell/linux.cpp', ...updaterSources, 'updater/linux.cpp',
+        ]);
+        expect(sources('win32', { ...instance, ...updater })).toEqual([
+            'dialog/dialog.cpp', 'dialog/windows.cpp', 'instance/instance.cpp', 'instance/windows.cpp', 'menu/menu.cpp', 'menu/windows.cpp', 'power/power.cpp',
+            'power/windows.cpp', 'shell/shell.cpp', 'shell/windows.cpp', ...updaterSources, 'updater/windows.cpp',
+        ]);
+        expect(sources('android')).toEqual(['dialog/dialog.cpp', 'dialog/android.cpp', 'menu/menu.cpp', 'menu/android.cpp', 'shell/shell.cpp', 'shell/android.cpp']);
+        expect(extensionPart(appHostExtensions(root, {}), 'darwin').frameworks).toEqual(['UniformTypeIdentifiers', 'UserNotifications']);
+        expect(extensionPart(appHostExtensions(root, updater), 'darwin').frameworks).toEqual(['UniformTypeIdentifiers', 'UserNotifications', 'Security']);
+        expect(extensionPart(appHostExtensions(root, {}), 'win32').libraries).toEqual(['comctl32', 'shell32', 'ole32']);
+        expect(extensionPart(appHostExtensions(root, updater), 'win32').libraries).toEqual(['comctl32', 'shell32', 'ole32', 'winhttp', 'wintrust', 'crypt32']);
+        expect(extensionPart(appHostExtensions(root, {}), 'android').java.map(({ className }) => className)).toEqual(['dev.crossbind.extension.dialog.DialogExtension']);
+    });
+
+    test("give an app the instance, the links and the updater only where the app's options give them, as an app's do that keeps one instance, lists app.urlSchemes or has app.updater", () => {
+        const root = path.join(import.meta.dirname, '..', '..', 'app-host');
+        const updater = { url: 'https://example.com/{platform}-{arch}.json', publicKey: 'key', version: '1.2.3', id: 'com.example.demo' };
+        const instance = { id: 'com.example.demo' };
+        expect(appHostExtensions(root, { shell: { openPath: [] } }).map(({ name }) => name)).toEqual(['dialog', 'menu', 'power', 'shell']);
+        expect(appHostExtensions(root, { instance, links: {}, shell: { openPath: [] }, updater }).map(({ name, options }) => [name, options])).toEqual([
+            ['dialog', undefined], ['instance', instance], ['links', {}], ['menu', undefined], ['power', undefined], ['shell', { openPath: [] }],
+            ['updater', updater],
+        ]);
+    });
+
+    test("take the options the app's give them by their own names alone", () => {
         const extensions = hostExtensions(path.join(import.meta.dirname, '..', '..', 'app-host'));
-        const sources = (platform) => extensionPart(extensions, platform).sources.map((file) => path.basename(file));
-        expect(extensions.map(({ name }) => name)).toEqual(['dialog']);
-        expect(sources('darwin')).toEqual(['dialog.cpp', 'darwin.mm']);
-        expect(sources('ios')).toEqual(['dialog.cpp', 'ios.mm']);
-        expect(sources('linux')).toEqual(['dialog.cpp', 'linux.cpp']);
-        expect(sources('win32')).toEqual(['dialog.cpp', 'windows.cpp']);
-        expect(sources('android')).toEqual(['dialog.cpp', 'android.cpp']);
-        expect(extensionPart(extensions, 'darwin').frameworks).toEqual(['UniformTypeIdentifiers']);
-        expect(extensionPart(extensions, 'win32').libraries).toEqual(['comctl32']);
-        expect(extensionPart(extensions, 'android').java.map(({ className }) => className)).toEqual(['dev.crossbind.extension.dialog.DialogExtension']);
+        const named = withOptions(extensions, { shell: { openPath: ['data'] } });
+        expect(named[0]).toBe(extensions[0]);
+        expect(extensionPart(named, 'darwin').native).toEqual([
+            { name: 'dialog', options: null }, { name: 'instance', options: null }, { name: 'links', options: null }, { name: 'menu', options: null },
+            { name: 'power', options: null }, { name: 'shell', options: { openPath: ['data'] } }, { name: 'updater', options: null },
+        ]);
+        expect(withOptions([{ name: 'constructor' }], {})).toEqual([{ name: 'constructor' }]);
     });
 
     test('are none where the host has no extensions/', () => {
@@ -84,6 +130,24 @@ describe("an app host's own extensions", () => {
     });
 });
 
+describe('the extensions an app has', () => {
+    const named = (name, root = `/host/${name}`) => ({ name, root, app: {} });
+
+    test("are the host's own, then those listed, one listed under the name of one of the host's in its place", () => {
+        const own = [named('dialog'), named('menu'), named('shell')];
+        const shell = named('shell', '/app/my-shell');
+        const clipboard = named('clipboard', '/app/clipboard');
+        expect(withListed(own, [clipboard, shell])).toEqual([own[0], own[1], shell, clipboard]);
+        expect(withListed(own, [])).toEqual(own);
+    });
+
+    test('stop the build with two listed of one name, as any two of one name do', () => {
+        const merged = withListed([named('dialog')], [named('dialog', '/a'), named('dialog', '/b')]);
+        expect(merged.map(({ root }) => root)).toEqual(['/a', '/b']);
+        expect(() => extensionPart(merged, 'darwin')).toThrow('crossbind: the app has two extensions named dialog.');
+    });
+});
+
 describe('an extension', () => {
     const root = () => hostWith({ dialog: DIALOG }) && path.join(roots.at(-1), 'extensions', 'dialog');
     const check = (app, name = 'dialog') => () => checkedExtension({ name, app }, root(), 'dialog');
@@ -96,9 +160,17 @@ describe('an extension', () => {
     });
 
     test('adds parts of the platforms an app builds for alone, each of what that platform takes', () => {
-        expect(check({ web: {} })).toThrow("crossbind: dialog's app takes sources and darwin, ios, linux, win32, android; web is none of them.");
+        expect(check({ web: {} })).toThrow("crossbind: dialog's app takes sources, urlSchemes and darwin, ios, linux, win32, android; web is none of them.");
         expect(check({ linux: { frameworks: ['Gtk'] } })).toThrow("crossbind: dialog's app.linux takes sources, libraries; frameworks is none of them.");
         expect(check({ android: { entitlements: {} } })).toThrow("crossbind: dialog's app.android takes sources, libraries, java, class; entitlements is none of them.");
+    });
+
+    test("declares the schemes whose links its native code gets, by app.urlSchemes' rules", () => {
+        expect(check({ urlSchemes: ['myapp.oauth'] })()).toMatchObject({ app: { urlSchemes: ['myapp.oauth'] } });
+        expect(check({ urlSchemes: 'myapp' })).toThrow("crossbind: dialog's app.urlSchemes \"myapp\" is no list of schemes, as ['myapp'] is.");
+        expect(check({ urlSchemes: ['MyApp'] })).toThrow("crossbind: dialog's app.urlSchemes takes schemes of a lowercase letter");
+        expect(check({ urlSchemes: ['https'] })).toThrow("crossbind: dialog's app.urlSchemes cannot take https");
+        expect(check({ urlSchemes: ['myapp', 'myapp'] })).toThrow("crossbind: dialog's app.urlSchemes lists a scheme twice");
     });
 
     test("reaches its Java through one class in a package, whose source its Java's folder holds", () => {
@@ -158,9 +230,24 @@ describe('an extension crossbind.config.js lists', () => {
             'crossbind: extensions[0] has the hooks loadConfig, buildWasm, which crossbind no longer runs: an extension adds native code to an app. Set build flags in targetSpecs or crossbind.build.js.',
         );
         expect(() => listedExtension({ name: 'clipboard', root, app: {}, version: 1 }, 'extensions[0]', base))
-            .toThrow('crossbind: extensions[0] takes name, root, app; version is none of them.');
+            .toThrow('crossbind: extensions[0] takes name, root, app, options; version is none of them.');
         expect(() => listedExtension('clipboard', 'extensions[0]', base))
             .toThrow("crossbind: extensions[0] is no extension, as an extension package's crossbind.extension.js gives one.");
+    });
+
+    test('takes options of JSON values alone, which its native code reads back as they are', () => {
+        const { base, root } = project();
+        const extension = { name: 'clipboard', root, app: { sources: ['native/clipboard.cpp'] } };
+        const nested = (levels) => (levels === 0 ? 'deep' : [nested(levels - 1)]);
+        expect(listedExtension({ ...extension, options: { limit: 10, kinds: ['text'], none: null } }, 'extensions[0]', base))
+            .toEqual({ ...extension, options: { limit: 10, kinds: ['text'], none: null } });
+        expect(listedExtension({ ...extension, options: nested(64) }, 'extensions[0]', base).options).toEqual(nested(64));
+        const refused = [() => {}, { limit: Number.NaN }, { when: new Date(0) }, [undefined], { limit: undefined }, nested(65), ['\ud800'], { '\udc00': 1 }];
+        for (const options of refused) {
+            expect(() => listedExtension({ ...extension, options }, 'extensions[0]', base)).toThrow(
+                "crossbind: extensions[0]'s options are no JSON value the host reads as it is: plain objects, arrays, strings, finite numbers, booleans and null alone, 64 levels deep at most, without a lone surrogate.",
+            );
+        }
     });
 
     test("is crossbind's clipboard as its package gives it, its Java and each platform's source its own", async () => {
@@ -210,12 +297,12 @@ describe("what an app's extensions add on a platform", () => {
         const all = extensions();
         const [dialog] = all;
         const darwin = extensionPart(all, 'darwin');
-        expect(darwin.native).toEqual(['dialog']);
+        expect(darwin.native).toEqual([{ name: 'dialog', options: null }]);
         expect(darwin.roots).toEqual([dialog.root]);
         expect(darwin.sources).toEqual([path.join(dialog.root, 'native/dialog.cpp'), path.join(dialog.root, 'native/darwin.mm')]);
         expect(darwin.frameworks).toEqual(['UniformTypeIdentifiers', 'UserNotifications']);
         expect(extensionPart(all, 'win32').libraries).toEqual(['comctl32', 'runtimeobject']);
-        expect(extensionPart(all, 'ios').native).toEqual(['dialog', 'push']);
+        expect(extensionPart(all, 'ios').native.map(({ name }) => name)).toEqual(['dialog', 'push']);
         expect(extensionPart(all, 'linux').sources).toEqual([path.join(dialog.root, 'native/dialog.cpp')]);
     });
 
@@ -252,31 +339,59 @@ describe('entitlements', () => {
 });
 
 describe("the host's registration of its extensions", () => {
-    test('calls the entry of each extension with native code', () => {
-        expect(registrationSource(['dialog', 'secure-storage'])).toBe(`// crossbind writes this file from the app's extensions, each of which adds its functions through its entry.
+    const HEAD = `// crossbind writes this file from the app's extensions: the entry of each one with native code, which starts it with
+// its options, and the owner of each of the app's URL schemes, the extension that gets its links.
 #include "crossbind/extension.h"
+`;
 
+    test('starts each extension with native code through its entry, with its options', () => {
+        expect(registrationSource([{ name: 'dialog', options: null }, { name: 'secure-storage', options: { openPath: ['logs'] } }], [])).toBe(`${HEAD}
 void crossbind_extension_dialog(crossbind::Registry &registry);
 void crossbind_extension_secure_storage(crossbind::Registry &registry);
 
 namespace crossbind::app {
 
-void extensionFunctions([[maybe_unused]] Registry &registry) {
-    crossbind_extension_dialog(registry);
-    crossbind_extension_secure_storage(registry);
+void startExtension(const char *name, const char *options, void (*entry)(Registry &));
+
+void extensionEntries() {
+    startExtension("dialog", nullptr, crossbind_extension_dialog);
+    startExtension("secure-storage", R"crossbind_json({"openPath":["logs"]})crossbind_json", crossbind_extension_secure_storage);
+}
+
+std::vector<std::pair<std::string, std::string>> urlSchemes() {
+    return {};
 }
 
 }  // namespace crossbind::app
 `);
+        expect(() => registrationSource([{ name: 'odd', options: { text: ')crossbind_json' } }], []))
+            .toThrow('crossbind: the extension odd\'s options hold )crossbind_json", which ends the text the host reads them from.');
     });
 
-    test('adds nothing without them', () => {
-        expect(registrationSource([])).toBe(`// crossbind writes this file from the app's extensions, each of which adds its functions through its entry.
-#include "crossbind/extension.h"
+    test("names each URL scheme's owner: the extension that declared it, or the host's links for those of app.urlSchemes", () => {
+        const native = [{ name: 'links', options: null }, { name: 'oauth', options: null }];
+        const source = registrationSource(native, [{ scheme: 'myapp', extension: null }, { scheme: 'myapp.oauth', extension: 'oauth' }]);
+        expect(source).toContain('    return {{"myapp", "links"}, {"myapp.oauth", "oauth"}};\n');
+    });
 
+    test("refuses a scheme whose owner has no native code to get its links, as an app host older than crossbind has no links", () => {
+        expect(() => registrationSource([{ name: 'dialog', options: null }], [{ scheme: 'myapp.oauth', extension: 'oauth' }]))
+            .toThrow('crossbind: the extension oauth gets the links of myapp.oauth, but has no native code on this platform.');
+        expect(() => registrationSource([{ name: 'dialog', options: null }], [{ scheme: 'myapp', extension: null }]))
+            .toThrow('crossbind: the extension links gets the links of myapp, but has no native code on this platform: an app host older than crossbind has no links, so update @crossbind/core-app-host to match crossbind.');
+    });
+
+    test('starts nothing without them', () => {
+        expect(registrationSource([], [])).toBe(`${HEAD}
 namespace crossbind::app {
 
-void extensionFunctions([[maybe_unused]] Registry &registry) {
+void startExtension(const char *name, const char *options, void (*entry)(Registry &));
+
+void extensionEntries() {
+}
+
+std::vector<std::pair<std::string, std::string>> urlSchemes() {
+    return {};
 }
 
 }  // namespace crossbind::app

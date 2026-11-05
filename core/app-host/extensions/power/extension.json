@@ -1,0 +1,8 @@
+{
+    "name": "power",
+    "app": {
+        "darwin": { "sources": ["power.cpp", "darwin.mm"] },
+        "linux": { "sources": ["power.cpp", "linux.cpp"] },
+        "win32": { "sources": ["power.cpp", "windows.cpp"], "libraries": ["comctl32"] }
+    }
+}

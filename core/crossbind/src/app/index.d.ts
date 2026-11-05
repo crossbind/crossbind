@@ -127,7 +127,7 @@ export declare const notification: {
     show(options: NotificationOptions): Promise<void>;
 };
 
-/** What the event second-instance carries: a later launch's arguments, the program's own left out, and the folder it was launched in. */
+/** What the event second-instance carries: a later launch's arguments, the program's own and its links left out, which reach the owners of their schemes, the page those of app.urlSchemes as the event open-url; and the folder it was launched in. */
 export interface SecondInstance {
     args: string[];
     cwd: string;
@@ -141,7 +141,7 @@ export interface OpenUrl {
 export declare const events: {
     /** Calls listener with each click of an item with an id in the menus menu.set sets or in the tray's menu, until the function it returns is called. */
     on(name: 'menu', listener: (click: MenuClick) => void): () => void;
-    /** Calls listener with each link of app.urlSchemes the system opens the app with once the page has called app.launchUrls(), until the function it returns is called. */
+    /** Calls listener with each link of app.urlSchemes the system opens the app with once the page has called app.launchUrls(), or events.held('open-url'), until the function it returns is called. */
     on(name: 'open-url', listener: (open: OpenUrl) => void): () => void;
     /** Calls listener with each later launch of a desktop app that app.singleInstance keeps to one instance, which brings its window to the front as far as the system lets it, until the function it returns is called. */
     on(name: 'second-instance', listener: (launch: SecondInstance) => void): () => void;
@@ -155,6 +155,10 @@ export declare const events: {
     on(name: 'notification', listener: () => void): () => void;
     /** Calls listener with the value of each event of this name the app's native code emits from now on, until the function it returns is called. */
     on(name: string, listener: (value: unknown) => void): () => void;
+    /** The links of app.urlSchemes the host held for the page, which came before it asked since it loaded, as app.launchUrls() gives their addresses. */
+    held(name: 'open-url'): Promise<OpenUrl[]>;
+    /** The values of the events of this name the app's native code held for the page with holdEvent(), which came before the page asked for them since it loaded; later ones come as the events while it listens, so listening first, then asking, misses none. */
+    held(name: string): Promise<unknown[]>;
 };
 
 /** A newer version of the app, which app.updater.url in crossbind.config.js offers. */

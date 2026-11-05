@@ -442,13 +442,15 @@ jobs:
                   $shortcut = "$env:APPDATA\Microsoft\Windows\Start Menu\Programs\crossbind-e2e-desktop-app.lnk"
                   $entry = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\dev.crossbind.crossbind-e2e-desktop-app'
                   $scheme = 'HKCU:\Software\Classes\crossbind-e2e'
+                  # The probe extension's scheme, which the setup program registers beside the app's.
+                  $probe = 'HKCU:\Software\Classes\crossbind-probe'
                   # A scheme of the app it no longer lists, as an uninstaller before this one left behind.
                   $dropped = 'HKCU:\Software\Classes\crossbind-e2e-dropped'
                   $foreign = 'HKCU:\Software\Classes\crossbind-e2e-foreign'
                   New-Item -Path "$dropped\shell\open\command" -Force | Out-Null
                   Set-ItemProperty -LiteralPath $dropped -Name 'URL Protocol' -Value ''
                   Set-Item -LiteralPath "$dropped\shell\open\command" -Value "`"$app\crossbind-e2e-desktop-app.exe`" `"%1`""
-                  foreach ($path in $shortcut, $entry, $scheme) { if (-not (Test-Path $path)) { throw "the setup program left out $path" } }
+                  foreach ($path in $shortcut, $entry, $scheme, $probe) { if (-not (Test-Path $path)) { throw "the setup program left out $path" } }
                   # A link of app.urlSchemes opens the app with the link as its argument, as the suite launches it.
                   $command = (Get-Item -LiteralPath "$scheme\shell\open\command").GetValue('')
                   if ($command -ne "`"$app\crossbind-e2e-desktop-app.exe`" `"%1`"") { throw "a link of the scheme runs $command" }
@@ -456,7 +458,7 @@ jobs:
                   if ($uninstall.ExitCode -ne 0) { throw "the uninstaller exited with $($uninstall.ExitCode)" }
                   # It finishes from a copy of itself, whose last step removes the folder.
                   for ($i = 0; $i -lt 30 -and (Test-Path $app); $i++) { Start-Sleep -Seconds 1 }
-                  foreach ($path in $app, $shortcut, $entry, $scheme, $dropped) { if (Test-Path $path) { throw "the uninstaller left $path" } }
+                  foreach ($path in $app, $shortcut, $entry, $scheme, $probe, $dropped) { if (Test-Path $path) { throw "the uninstaller left $path" } }
                   if (-not (Test-Path $foreign)) { throw "the uninstaller removed $foreign, another app's" }
                   Remove-Item -LiteralPath $foreign -Recurse
     app-android:

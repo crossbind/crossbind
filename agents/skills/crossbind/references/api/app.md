@@ -263,7 +263,8 @@ if (update && confirm(`Install ${update.version}?`)) await updater.install();
 `null` otherwise. `updater.install()` downloads the file into the app's cache folder and installs it only when the
 signature covers the app's id, its platform and architecture, its version and its SHA-512. The app then quits and
 opens the new version, so it saves what it needs first; the promise rejects when installing fails. One check or
-install runs at a time, and another rejects meanwhile. A manifest past 64 KiB or a file past 2 GiB fails.
+install runs at a time, and another rejects meanwhile. A manifest past 64 KiB or a file past 2 GiB fails. A
+development session checks, but installs nothing in place of the app its dev server opened.
 
 - macOS: the bundle in the zip takes the app's place, and opens.
 - Linux: the folder in the archive takes the app's place, and its executable opens.
@@ -288,13 +289,13 @@ for the download. An iOS or Android app updates through its store, and `updater.
 
 An `app.updater.url` that is neither https nor http on localhost or names no manifest, a public key that is none or
 one anyone can forge signatures for, a package.json version that is not semver, and a private key that is not the
-public key's pair stop `crossbind app build` before anything compiles. The host checks signatures with Monocypher,
-which it compiles in.
+public key's pair stop `crossbind app build` before anything compiles. The host's updater, which a desktop app with
+`app.updater` alone has, checks signatures with Monocypher, which it compiles in.
 
 ## The app's functions
 
 The page imports what the app's host does for it from `crossbind/app`. The app's C++ calls the same, but for
-`menu.set`, `tray`, `notification.show`, `app.launchUrls` and `events.on`, through `<crossbind/app.h>`, which an app's
+`menu.set`, `tray`, `notification.show`, `app.launchUrls`, `events.on` and `events.held`, through `<crossbind/app.h>`, which an app's
 own code finds as it builds, with `CROSSBIND_APP` defined:
 
 ```js
@@ -331,12 +332,13 @@ std::string databasePath() { return crossbind::app::paths().data + "/notes.sqlit
 | `tray.remove()` | Takes the tray's icon away; the page alone | ✓ | | |
 | `notification.show({ title, body })` | A notification of the system's, a click on which is the event `notification`; the page alone | ✓ | | |
 | `events.on(name, listener)` | Calls `listener` with each event of this name the app's C++ emits; returns what stops it | ✓ | ✓ | ✓ |
+| `events.held(name)` | The values of the events of this name the app's C++ held for the page, which came before it asked since it loaded; the page alone | ✓ | ✓ | ✓ |
 | `updater.check()` | `{ version }`, the newer version `app.updater.url` offers, or `null` | ✓ | | |
 | `updater.install()` | Installs that version once its signature holds, then quits the app and opens the new one | ✓ | | |
 
 In the page each returns a promise once `initNative()` has run, as what it loads carries the calls to the host, but
 `events.on`, which returns at once what stops it and throws where it cannot listen; in C++ each waits for its answer,
-a dialog for its user's, but `emitEvent`. A function a platform has not got rejects, or throws, saying so, and in a web
+a dialog for its user's, but `emitEvent` and `holdEvent`. A function a platform has not got rejects, or throws, saying so, and in a web
 or Node.js build every one fails. `app.relaunch()` opens the app anew as a fresh launch: on macOS and Linux once it has
 ended, on Windows as it ends, where an app `app.singleInstance` keeps to one instance hands the new one its place once
 it has. A Linux app opens with the command that started it. A development session refuses it, as its dev server opened
@@ -426,8 +428,25 @@ calls of the page's functions. A page gets the events emitted once its first `ev
 passes, has reached the host: a call of the module it makes after either comes later. Text that is no JSON reaches no
 page, and the app's output says why. Both travel with the page's other messages, on every platform an app runs on.
 
+An event the page must not miss, as what came before it listened, the app's C++ holds with `holdEvent`: the host keeps
+each until the page asks for the events of its name with `events.held()` since it loaded, then pushes the later ones
+while it listens. Each reaches the page once, and one a reload cut off waits for the page's next ask; the host keeps
+1,000 of a name at most. `events.held()` is no queue to poll: once the page has asked, the later events go to its
+listeners of the name, so listening first, then asking, misses none. One held before the module starts, as from an
+extension's entry, reaches no page.
+
+```cpp
+crossbind::app::holdEvent("tapped", "{\"id\":7}");
+```
+
+```js
+const stop = events.on('tapped', open);
+for (const tap of await events.held('tapped')) open(tap);
+```
+
 A desktop page hears of the system going to sleep as the event `suspend`, and of its waking as `resume`, both without a
-value: macOS tells the app through NSWorkspace, Linux through logind on the system bus, and Windows through its window.
+value, through the host's `power` extension: macOS tells the app through NSWorkspace, Linux through logind on the
+system bus, and Windows through its window.
 The system sleeps without waiting for the page, which may not run before it does; a Windows machine with Modern
 Standby may tell neither, and a Linux system without logind none.
 
@@ -535,7 +554,7 @@ app: {
 
 A later launch, as when its user opens the app again, hands its arguments and the folder it was launched in to the
 instance that runs, and leaves with exit status 0 before it opens a window or starts the module; static initializers of
-the app's code run in it all the same. The instance brings its window to the front, restored if it was minimized, as
+the app's code, and its extensions' entries, run in it all the same. The instance brings its window to the front, restored if it was minimized, as
 far as the system lets it, and its page hears of the launch as the event `second-instance`:
 
 ```js
@@ -546,9 +565,10 @@ events.on('second-instance', ({ args, cwd }) => {
 });
 ```
 
-`args` leaves out the program's own path, and a relative one resolves against `cwd`. They are whatever the launch was
-given, so the page takes them as it would any command line. The first launch's own arguments do not reach the page,
-but for its links of `app.urlSchemes`, as [Links](#links) tells. A
+`args` leaves out the program's own path, and the launch's links, which reach the owners of their schemes, those of
+`app.urlSchemes` the page as `open-url`; a relative one resolves against `cwd`. They are whatever the launch was given,
+so the page takes them as it would any command line. The first launch's own arguments do not reach the page, but for
+its links of `app.urlSchemes`, as [Links](#links) tells. A
 launch that arrives before the page listens still brings the window to the front, and its event reaches no page. The
 event `second-instance` is the host's alone: the app's C++ emits others.
 
@@ -562,6 +582,10 @@ desktop's launcher gives it; a terminal's launch carries none. On macOS, Finder,
 runs to the front themselves, so only a launch that starts the program anew, as a terminal or `open -n` does, reaches
 it. A development session keeps one instance of its own, apart from the built app. iOS and Android keep every app to
 one instance themselves.
+
+The host's `instance` extension does this, in an app that `app.singleInstance` keeps to one instance alone. With
+`app.singleInstance: false`, an extension of the app's own may take the launches instead, as
+[extensions.md](./extensions.md#launches-and-links) tells.
 
 ## Links
 
@@ -584,7 +608,8 @@ events.on('open-url', ({ url }) => show(new URL(url)));
 for (const url of await app.launchUrls()) show(new URL(url));
 ```
 
-Each link reaches the page once. The host keeps it until the page has asked since it loaded, and `app.launchUrls()`
+Each link reaches the page once. The host's `links` extension holds it as the event `open-url`, as
+[Events and callbacks](#events-and-callbacks) tells, until the page has asked since it loaded, and `app.launchUrls()`
 hands over what it kept, so listening first, then asking, misses none. A link that comes while the page does not
 listen, or whose event a reload cut off, waits for the page's next `app.launchUrls()`. The host keeps 1,000 links at
 most, and drops a link longer than 64 KiB, saying so in the app's output. A link is whatever the system hands the app, so the
@@ -592,7 +617,11 @@ page takes it as it would any address from outside; macOS hands characters beyon
 and Linux as the link that opened the app has them. The event `open-url` is the host's alone: the app's C++ emits
 others.
 
-The app as built tells each system its schemes:
+An extension declares schemes of its own in its `app.urlSchemes`, whose links reach its native code alone, as
+[extensions.md](./extensions.md#launches-and-links) tells: neither `app.launchUrls()` nor `open-url` carries them. One
+scheme has one owner, the app or one extension; two stop the build.
+
+The app as built tells each system its schemes, its extensions' as well:
 
 - macOS: its Info.plist. A development session's app claims none, so the built app, of the same id, keeps them.
 - iOS: its Info.plist. iOS can ask its user before a link from outside opens the app, as it does for
@@ -606,10 +635,10 @@ The app as built tells each system its schemes:
 - Linux: the Debian package's desktop entry, with `x-scheme-handler/<scheme>` among its MIME types, which the system's
   MIME tools take in as the package installs. The tar.gz registers none.
 
-A link starts a Windows or Linux app again, with the link as its argument, so `app.urlSchemes` keeps a Windows or Linux
-app to one instance unless `app.singleInstance` is `false`: the launch reaches the app that runs as
-[One instance](#one-instance) tells, as the event `second-instance` too. macOS hands a link to the app that runs, and
-brings its window to the front.
+A link starts a Windows or Linux app again, with the link as its argument, so a scheme of the app's or of an extension's
+keeps a Windows or Linux app to one instance unless `app.singleInstance` is `false`: the launch reaches the app that runs as
+[One instance](#one-instance) tells, its link as `open-url` and the event `second-instance` without it. macOS hands a
+link to the app that runs, and brings its window to the front.
 
 ## Devices
 

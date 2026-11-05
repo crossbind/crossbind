@@ -1,7 +1,6 @@
 #include "crossbind/extension.h"
 #include "crossbind_app.h"
 #include "linux/main_thread.h"
-#include "linux/window.h"
 #include "platform.h"
 
 #include <gtk/gtk.h>
@@ -9,7 +8,6 @@
 
 #include <cerrno>
 #include <cstdlib>
-#include <memory>
 #include <stdexcept>
 
 namespace {
@@ -32,27 +30,50 @@ std::string made(const std::string &path) {
     return path;
 }
 
-// What the system opens a URI with, or why it cannot.
-Failure launch(const std::string &uri, const std::string &what) {
-    GError *error = nullptr;
-    if (g_app_info_launch_default_for_uri(uri.c_str(), nullptr, &error)) return std::nullopt;
-    const std::string reason = error ? error->message : "nothing opens it";
-    g_clear_error(&error);
-    return "crossbind: cannot open " + what + ": " + reason;
+#ifdef CROSSBIND_APP_WINDOW_MAX_WIDTH
+// What the widgets an extension shows above the page add to its height, as the menu extension's bar.
+int heightAbove() {
+    int height = 0;
+    GList *children = gtk_container_get_children(GTK_CONTAINER(windowBox));
+    for (GList *child = children; child; child = child->next) {
+        GtkWidget *widget = GTK_WIDGET(child->data);
+        if (widget == webView || !gtk_widget_get_visible(widget)) continue;
+        int natural = 0;
+        gtk_widget_get_preferred_height(widget, nullptr, &natural);
+        height += natural;
+    }
+    g_list_free(children);
+    return height;
+}
+#endif
+
+// Holds the window to app.window's limits, its fixed size or the most the page grows to with what shows above it, but
+// for while it fills the screen, which a window manager would hold to them as well.
+void keepSizeLimits() {
+    if (!mainWindow) return;
+    GdkWindow *shown = gtk_widget_get_window(GTK_WIDGET(mainWindow));
+    const bool fillsScreen = shown && (gdk_window_get_state(shown) & GDK_WINDOW_STATE_FULLSCREEN);
+    gtk_window_set_resizable(mainWindow, fillsScreen || CROSSBIND_APP_WINDOW_RESIZABLE);
+#ifdef CROSSBIND_APP_WINDOW_MAX_WIDTH
+    GdkGeometry most{};
+    most.max_width = CROSSBIND_APP_WINDOW_MAX_WIDTH;
+    most.max_height = CROSSBIND_APP_WINDOW_MAX_HEIGHT + (windowBox ? heightAbove() : 0);
+    gtk_window_set_geometry_hints(mainWindow, nullptr, &most, fillsScreen ? static_cast<GdkWindowHints>(0) : GDK_HINT_MAX_SIZE);
+#endif
 }
 
-// A file revealFile shows, until the file manager answers.
-struct Reveal {
-    std::string path;
-    std::function<void(Failure)> done;
-};
+void sizeLimitsChanged(GObject *, GParamSpec *, gpointer) { keepSizeLimits(); }
 
-void openFolderOf(const Reveal &reveal) {
-    gchar *folder = g_path_get_dirname(reveal.path.c_str());
-    gchar *folderUri = g_filename_to_uri(folder, nullptr, nullptr);
-    reveal.done(folderUri ? launch(folderUri, folder) : Failure("crossbind: there is no folder of " + reveal.path));
-    g_free(folderUri);
-    g_free(folder);
+// An extension's widget goes above the page at its own height, which holds the window to the limits as it shows and
+// goes; the page takes the rest.
+void childAdded(GtkContainer *box, GtkWidget *child, gpointer) {
+    gtk_box_set_child_packing(GTK_BOX(box), child, FALSE, FALSE, 0, GTK_PACK_START);
+    g_signal_connect(child, "notify::visible", G_CALLBACK(sizeLimitsChanged), nullptr);
+    keepSizeLimits();
+}
+
+void childRemoved(GtkContainer *box, GtkWidget *, gpointer) {
+    if (!gtk_widget_in_destruction(GTK_WIDGET(box))) keepSizeLimits();
 }
 
 }  // namespace
@@ -65,76 +86,6 @@ crossbind::app::Paths appPaths() {
 
 void crossbind::onMainThread(std::function<void()> fn) { ::onMainThread(std::move(fn)); }
 
-void openUrl(std::string url, std::function<void(Failure)> done) {
-    onMainThread([url = std::move(url), done = std::move(done)] { done(launch(url, url)); });
-}
-
-void openFile(std::string path, std::function<void(Failure)> done) {
-    onMainThread([path = std::move(path), done = std::move(done)] {
-        gchar *uri = g_file_test(path.c_str(), G_FILE_TEST_EXISTS) ? g_filename_to_uri(path.c_str(), nullptr, nullptr) : nullptr;
-        if (!uri) {
-            done("crossbind: there is no " + path);
-            return;
-        }
-        done(launch(uri, path));
-        g_free(uri);
-    });
-}
-
-// A mount without a trash, as a network share may be, fails it rather than deleting the file.
-void trashFile(std::string path, std::function<void(Failure)> done) {
-    onMainThread([path = std::move(path), done = std::move(done)] {
-        if (!g_file_test(path.c_str(), G_FILE_TEST_EXISTS)) {
-            done("crossbind: there is no " + path);
-            return;
-        }
-        GFile *file = g_file_new_for_path(path.c_str());
-        GError *error = nullptr;
-        if (g_file_trash(file, nullptr, &error)) {
-            done(std::nullopt);
-        } else {
-            done("crossbind: cannot move " + path + " to the trash: " + error->message);
-            g_error_free(error);
-        }
-        g_object_unref(file);
-    });
-}
-
-// The file managers of GNOME, KDE and others show a file selected when asked over D-Bus; without one, its folder opens.
-// The answer comes back to the loop, which a file manager that has to start first would hold up otherwise.
-void revealFile(std::string path, std::function<void(Failure)> done) {
-    onMainThread([path = std::move(path), done = std::move(done)]() mutable {
-        gchar *uri = g_file_test(path.c_str(), G_FILE_TEST_EXISTS) ? g_filename_to_uri(path.c_str(), nullptr, nullptr) : nullptr;
-        if (!uri) {
-            done("crossbind: there is no " + path);
-            return;
-        }
-        auto reveal = std::make_unique<Reveal>(Reveal{std::move(path), std::move(done)});
-        GDBusConnection *bus = g_bus_get_sync(G_BUS_TYPE_SESSION, nullptr, nullptr);
-        if (!bus) {
-            openFolderOf(*reveal);
-            g_free(uri);
-            return;
-        }
-        const gchar *uris[] = {uri, nullptr};
-        g_dbus_connection_call(bus, "org.freedesktop.FileManager1", "/org/freedesktop/FileManager1", "org.freedesktop.FileManager1",
-                               "ShowItems", g_variant_new("(^ass)", uris, ""), nullptr, G_DBUS_CALL_FLAGS_NONE, -1, nullptr,
-                               [](GObject *source, GAsyncResult *result, gpointer data) {
-                                   const std::unique_ptr<Reveal> reveal(static_cast<Reveal *>(data));
-                                   GVariant *shown = g_dbus_connection_call_finish(G_DBUS_CONNECTION(source), result, nullptr);
-                                   if (!shown) {
-                                       openFolderOf(*reveal);
-                                       return;
-                                   }
-                                   g_variant_unref(shown);
-                                   reveal->done(std::nullopt);
-                               },
-                               reveal.release());
-        g_object_unref(bus);
-        g_free(uri);
-    });
-}
-
 void quitApp() {
     onMainThread([] {
         if (mainWindow) gtk_window_close(mainWindow);
@@ -142,15 +93,15 @@ void quitApp() {
 }
 
 // Forgotten when they go, so a late call finds none. It shows the app's icon, if the app has one. Before the page
-// loads, the webview, which webview put in the window, goes in a box, above which the page's menu bar goes, and takes
-// the window's minimum size, which is the page's. GTK holds a window that does not resize to the size of what it
-// holds, whatever size webview asked for, so the webview asks for the page's.
-void setMainWindow(void *window) {
+// loads, the webview, which webview put in the window, goes in a box, above which an extension shows its widgets, as the
+// page's menu bar, and takes the window's minimum size, which is the page's. GTK holds a window that does not resize to
+// the size of what it holds, whatever size webview asked for, so the webview asks for the page's.
+void setMainWindow(void *window, void *view) {
     mainWindow = GTK_WINDOW(window);
     g_object_add_weak_pointer(G_OBJECT(mainWindow), reinterpret_cast<gpointer *>(&mainWindow));
     const std::string icon = resourceDir() + "/icon.png";
     if (g_file_test(icon.c_str(), G_FILE_TEST_EXISTS)) gtk_window_set_icon_from_file(mainWindow, icon.c_str(), nullptr);
-    webView = gtk_bin_get_child(GTK_BIN(mainWindow));
+    webView = static_cast<GtkWidget *>(view);
     if (!webView) return;
     g_object_add_weak_pointer(G_OBJECT(webView), reinterpret_cast<gpointer *>(&webView));
     int minWidth = -1;
@@ -171,6 +122,8 @@ void setMainWindow(void *window) {
     g_object_unref(webView);
     gtk_widget_show(GTK_WIDGET(windowBox));
     gtk_widget_grab_focus(webView);
+    g_signal_connect(windowBox, "add", G_CALLBACK(childAdded), nullptr);
+    g_signal_connect(windowBox, "remove", G_CALLBACK(childRemoved), nullptr);
     g_signal_connect(mainWindow, "window-state-event", G_CALLBACK(+[](GtkWidget *, GdkEventWindowState *event, gpointer) -> gboolean {
                          if (event->changed_mask & GDK_WINDOW_STATE_FULLSCREEN) keepSizeLimits();
                          return FALSE;
@@ -195,10 +148,6 @@ void showWindow(const std::string &token) {
     });
 }
 
-GtkWindow *appWindow() { return mainWindow; }
-
 void *crossbind::appWindow() { return mainWindow; }
 
-GtkBox *appWindowBox() { return windowBox; }
-
-GtkWidget *appWebView() { return webView; }
+void *crossbind::appWebView() { return webView; }

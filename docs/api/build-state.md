@@ -81,7 +81,7 @@ state.config = {
         copyToDist?:          Record<string, string[]>,
     },
 
-    extensions: { name, root, app }[],          // the app extensions the config lists, checked (crossbind-config.md)
+    extensions: { name, root, app, options? }[], // the app extensions the config lists, checked (crossbind-config.md)
 
     functions: {
         isEnabled: (target) => boolean,         // default: checks ${cmakeDir}/{target.path} or .xcframework exists

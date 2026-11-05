@@ -56,9 +56,13 @@ describe("crossbind/app, an app's own functions", () => {
         expect(host).toHaveBeenLastCalledWith('app.quit', {});
         await app.relaunch();
         expect(host).toHaveBeenLastCalledWith('app.relaunch', {});
-        host.mockResolvedValueOnce(['myapp://open?id=1']);
+        host.mockResolvedValueOnce([{ url: 'myapp://open?id=1' }, null, { url: 7 }]);
         await expect(app.launchUrls()).resolves.toEqual(['myapp://open?id=1']);
-        expect(host).toHaveBeenLastCalledWith('app.launchUrls', {});
+        expect(host).toHaveBeenLastCalledWith('events.held', { name: 'open-url' });
+        host.mockResolvedValueOnce([{ id: 7 }]);
+        await expect(events.held('tapped')).resolves.toEqual([{ id: 7 }]);
+        expect(host).toHaveBeenLastCalledWith('events.held', { name: 'tapped' });
+        await expect(events.held('')).rejects.toThrow('crossbind: events.held takes the name of an event.');
         host.mockResolvedValueOnce({ version: '1.3.0' });
         await expect(updater.check()).resolves.toEqual({ version: '1.3.0' });
         expect(host).toHaveBeenLastCalledWith('updater.check', {});

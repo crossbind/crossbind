@@ -1,19 +1,26 @@
-#include "host_core.h"
-#include "platform.h"
-#include "windows/com.h"
+// The page's menus, the tray's icon in the notification area and the system's notifications on Windows: the menus on the
+// app's window, whose procedure the extension takes their commands in, and notifications as balloons of the tray's icon.
+#include "menu.h"
 
+#include "crossbind/app.h"
+
+#include <windows.h>
+
+#include <commctrl.h>
 #include <shellapi.h>
 #include <windowsx.h>
 
+#include "WebView2.h"
+
 #include <algorithm>
+#include <atomic>
 #include <cctype>
 #include <map>
 #include <stdexcept>
 #include <utility>
 #include <vector>
 
-using namespace crossbind::windows;
-
+namespace crossbind::menu {
 namespace {
 
 // Commands below it are the window's own.
@@ -28,6 +35,8 @@ constexpr UINT WM_TRAY = WM_APP + 3;
 constexpr UINT TRAY_ICON = 1;
 // The app's icon among its resources, which app.rc gives the id of Windows' own.
 constexpr WORD APP_ICON = 32512;
+// The extension's subclass of the app's window.
+constexpr UINT_PTR SUBCLASS = 1;
 
 // What a click of an item does: one of the page's tells the page its id, a standard one does what its role says.
 struct Command {
@@ -73,7 +82,6 @@ const std::map<std::string, UINT> NAMED_KEYS{
 
 HWND window = nullptr;
 ICoreWebView2Controller *controller = nullptr;
-WNDPROC windowProcedure = nullptr;
 HMENU bar = nullptr;
 Built built;
 MenuClicked onClick;
@@ -95,6 +103,14 @@ bool isIconShown = false;
 int balloons = 0;
 bool isTrayMenuOpen = false;
 std::vector<std::function<void()>> trayWaiting;
+
+std::wstring wide(const std::string &text) {
+    if (text.empty()) return {};
+    const int size = MultiByteToWideChar(CP_UTF8, 0, text.data(), static_cast<int>(text.size()), nullptr, 0);
+    std::wstring result(static_cast<size_t>(size), L'\0');
+    MultiByteToWideChar(CP_UTF8, 0, text.data(), static_cast<int>(text.size()), result.data(), size);
+    return result;
+}
 
 UINT keyOf(const Accelerator &accelerator) {
     const std::string &key = accelerator.key;
@@ -212,7 +228,7 @@ std::string noNotificationArea() {
     return "crossbind: Windows' notification area did not take the app's icon: error " + std::to_string(GetLastError());
 }
 
-LRESULT CALLBACK menuProcedure(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) {
+LRESULT CALLBACK menuProcedure(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam, UINT_PTR, DWORD_PTR) {
     if (message == WM_COMMAND && HIWORD(wParam) == 0 && lParam == 0 && LOWORD(wParam) >= FIRST_COMMAND) {
         run(bar, built, LOWORD(wParam) - FIRST_COMMAND);
         return 0;
@@ -231,20 +247,68 @@ LRESULT CALLBACK menuProcedure(HWND hwnd, UINT message, WPARAM wParam, LPARAM lP
         }
         return 0;
     }
-    // Windows tells the app's windows the system goes to sleep and wakes; one with Modern Standby may tell neither.
-    if (message == WM_POWERBROADCAST && (wParam == PBT_APMSUSPEND || wParam == PBT_APMRESUMEAUTOMATIC)) {
-        crossbind::app::postEvent(wParam == PBT_APMSUSPEND ? "suspend" : "resume", "null");
-    }
-    // webview sizes the window anew for a new scale, and Windows leaves it as it was for a new screen size: a window that
-    // filled its screen fills it again.
-    if (message == WM_DPICHANGED || message == WM_DISPLAYCHANGE) {
-        const LRESULT result = CallWindowProcW(windowProcedure, hwnd, message, wParam, lParam);
-        fitFullScreen();
-        return result;
-    }
     // The app ends with its window, and its icon would stay in the notification area until a pointer passed over it.
     if (message == WM_DESTROY) hideIcon();
-    return CallWindowProcW(windowProcedure, hwnd, message, wParam, lParam);
+    return DefSubclassProc(hwnd, message, wParam, lParam);
+}
+
+// The webview's key presses, which reach the menus' accelerators first, as the webview holds the keyboard.
+class KeyPressed final : public ICoreWebView2AcceleratorKeyPressedEventHandler {
+public:
+    ULONG STDMETHODCALLTYPE AddRef() override { return ++refs_; }
+    ULONG STDMETHODCALLTYPE Release() override {
+        const ULONG left = --refs_;
+        if (left == 0) delete this;
+        return left;
+    }
+    HRESULT STDMETHODCALLTYPE QueryInterface(REFIID riid, void **out) override {
+        if (!out) return E_POINTER;
+        if (!IsEqualIID(riid, IID_IUnknown) && !IsEqualIID(riid, IID_ICoreWebView2AcceleratorKeyPressedEventHandler)) {
+            *out = nullptr;
+            return E_NOINTERFACE;
+        }
+        *out = static_cast<ICoreWebView2AcceleratorKeyPressedEventHandler *>(this);
+        AddRef();
+        return S_OK;
+    }
+    HRESULT STDMETHODCALLTYPE Invoke(ICoreWebView2Controller *, ICoreWebView2AcceleratorKeyPressedEventArgs *args) override {
+        COREWEBVIEW2_KEY_EVENT_KIND kind;
+        UINT key = 0;
+        COREWEBVIEW2_PHYSICAL_KEY_STATUS status{};
+        if (FAILED(args->get_KeyEventKind(&kind)) || FAILED(args->get_VirtualKey(&key)) || FAILED(args->get_PhysicalKeyStatus(&status))) return S_OK;
+        if (kind != COREWEBVIEW2_KEY_EVENT_KIND_KEY_DOWN && kind != COREWEBVIEW2_KEY_EVENT_KIND_SYSTEM_KEY_DOWN) return S_OK;
+        const bool control = GetKeyState(VK_CONTROL) < 0;
+        const bool alt = GetKeyState(VK_MENU) < 0;
+        const bool shift = GetKeyState(VK_SHIFT) < 0;
+        for (const auto &shortcut : built.shortcuts) {
+            if (shortcut.key != key || shortcut.control != control || shortcut.alt != alt || shortcut.shift != shift) continue;
+            // A held key repeats, which neither the page nor the menus take.
+            args->put_Handled(TRUE);
+            if (!status.WasKeyDown) PostMessageW(window, WM_SHORTCUT, shortcut.index, generation);
+            break;
+        }
+        return S_OK;
+    }
+
+private:
+    std::atomic<ULONG> refs_{1};
+};
+
+// The menus go on the top window, WebView2's own being a child of it: the extension's subclass of its procedure takes
+// their commands first, and the webview hands their accelerators over. Once there is a window, on the main thread.
+bool follow() {
+    if (window) return true;
+    HWND app = static_cast<HWND>(appWindow());
+    if (!app || !SetWindowSubclass(app, menuProcedure, SUBCLASS, 0)) return false;
+    window = app;
+    controller = static_cast<ICoreWebView2Controller *>(appWebView());
+    if (controller) {
+        auto *pressed = new KeyPressed();
+        EventRegistrationToken token;
+        controller->add_AcceleratorKeyPressed(pressed, &token);
+        pressed->Release();
+    }
+    return true;
 }
 
 void addItem(HMENU menu, const MenuItem &page, Built &into) {
@@ -353,17 +417,17 @@ LRESULT CALLBACK trayProcedure(HWND hwnd, UINT message, WPARAM wParam, LPARAM lP
         switch (LOWORD(lParam)) {
         case NIN_SELECT:
         case NIN_KEYSELECT:
-            if (isTraySet) crossbind::app::postEvent("tray", "null");
+            if (isTraySet) app::emitEvent("tray");
             break;
         case WM_CONTEXTMENU:
             if (trayMenu) {
                 openTrayMenu(GET_X_LPARAM(wParam), GET_Y_LPARAM(wParam));
             } else if (isTraySet) {
-                crossbind::app::postEvent("tray", "null");
+                app::emitEvent("tray");
             }
             break;
         case NIN_BALLOONUSERCLICK:
-            crossbind::app::postEvent("notification", "null");
+            app::emitEvent("notification");
             balloonEnded();
             break;
         case NIN_BALLOONTIMEOUT:
@@ -451,42 +515,10 @@ void removeTrayNow() {
 
 }  // namespace
 
-// The menus go on the top window, WebView2's own being a child of it. Its procedure takes their commands first, and the
-// webview, which holds the keyboard, hands their accelerators over.
-void setMenuWebView(void *webView) {
-    controller = static_cast<ICoreWebView2Controller *>(webView);
-    HWND host = nullptr;
-    if (FAILED(controller->get_ParentWindow(&host)) || !host) return;
-    window = GetAncestor(host, GA_ROOT);
-    windowProcedure = reinterpret_cast<WNDPROC>(SetWindowLongPtrW(window, GWLP_WNDPROC, reinterpret_cast<LONG_PTR>(menuProcedure)));
-    auto *pressed = new Handler<ICoreWebView2AcceleratorKeyPressedEventHandler, ICoreWebView2Controller *, ICoreWebView2AcceleratorKeyPressedEventArgs *>(
-        IID_ICoreWebView2AcceleratorKeyPressedEventHandler, [](ICoreWebView2Controller *, ICoreWebView2AcceleratorKeyPressedEventArgs *args) -> HRESULT {
-            COREWEBVIEW2_KEY_EVENT_KIND kind;
-            UINT key = 0;
-            COREWEBVIEW2_PHYSICAL_KEY_STATUS status{};
-            if (FAILED(args->get_KeyEventKind(&kind)) || FAILED(args->get_VirtualKey(&key)) || FAILED(args->get_PhysicalKeyStatus(&status))) return S_OK;
-            if (kind != COREWEBVIEW2_KEY_EVENT_KIND_KEY_DOWN && kind != COREWEBVIEW2_KEY_EVENT_KIND_SYSTEM_KEY_DOWN) return S_OK;
-            const bool control = GetKeyState(VK_CONTROL) < 0;
-            const bool alt = GetKeyState(VK_MENU) < 0;
-            const bool shift = GetKeyState(VK_SHIFT) < 0;
-            for (const auto &shortcut : built.shortcuts) {
-                if (shortcut.key != key || shortcut.control != control || shortcut.alt != alt || shortcut.shift != shift) continue;
-                // A held key repeats, which neither the page nor the menus take.
-                args->put_Handled(TRUE);
-                if (!status.WasKeyDown) PostMessageW(window, WM_SHORTCUT, shortcut.index, generation);
-                break;
-            }
-            return S_OK;
-        });
-    EventRegistrationToken token;
-    controller->add_AcceleratorKeyPressed(pressed, &token);
-    pressed->Release();
-}
-
 // Menus set while one of the window's is open, or while others wait, wait for it to close, in order.
 void setMenu(std::vector<MenuItem> menus, MenuClicked clicked, std::function<void(Failure)> done) {
     onMainThread([menus = std::move(menus), clicked = std::move(clicked), done = std::move(done)] {
-        if (!window) {
+        if (!follow()) {
             done("crossbind: the app has no window to show its menus in");
             return;
         }
@@ -500,6 +532,7 @@ void setMenu(std::vector<MenuItem> menus, MenuClicked clicked, std::function<voi
 
 void setTray(TrayOptions options, MenuClicked clicked, std::function<void(Failure)> done) {
     onMainThread([options = std::move(options), clicked = std::move(clicked), done = std::move(done)] {
+        follow();
         if (isTrayMenuOpen) {
             trayWaiting.push_back([options, clicked, done] { setTrayNow(options, clicked, done); });
             return;
@@ -526,6 +559,7 @@ void removeTray(std::function<void(Failure)> done) {
 // icon of the app's shows until the notification goes.
 void showNotification(Notification notification, std::function<void(Failure)> done) {
     onMainThread([notification = std::move(notification), done = std::move(done)] {
+        follow();
         if (!makeTrayWindow()) {
             done("crossbind: the tray's window cannot be made: error " + std::to_string(GetLastError()));
             return;
@@ -551,3 +585,5 @@ void showNotification(Notification notification, std::function<void(Failure)> do
         done(std::nullopt);
     });
 }
+
+}  // namespace crossbind::menu

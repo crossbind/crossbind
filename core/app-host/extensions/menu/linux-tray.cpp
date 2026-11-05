@@ -1,7 +1,6 @@
-#include "crossbind_app.h"
-#include "host_core.h"
-#include "linux/main_thread.h"
-#include "platform.h"
+#include "menu.h"
+
+#include "crossbind/app.h"
 
 #include <gtk/gtk.h>
 
@@ -12,6 +11,7 @@
 
 // The tray's icon is a StatusNotifierItem, which the trays of KDE, Xfce and others show, and GNOME's with its
 // AppIndicator extension, and its menu a com.canonical.dbusmenu, which the tray shows itself.
+namespace crossbind::menu {
 namespace {
 
 constexpr const char *ITEM_PATH = "/StatusNotifierItem";
@@ -265,7 +265,7 @@ GVariant *menuProperty(GDBusConnection *, const gchar *, const gchar *, const gc
 
 // The app's icon, which a Linux app's build puts in its files.
 bool hasIcon() {
-    static const bool has = g_file_test((resourceDir() + "/icon.png").c_str(), G_FILE_TEST_EXISTS);
+    static const bool has = g_file_test((resourceFolder() + "/icon.png").c_str(), G_FILE_TEST_EXISTS);
     return has;
 }
 
@@ -278,13 +278,13 @@ GVariant *menuPath() { return g_variant_new_object_path(hasMenu() ? MENU_PATH : 
 GVariant *itemProperty(GDBusConnection *, const gchar *, const gchar *, const gchar *, const gchar *property, GError **, gpointer) {
     const std::string name = property;
     if (name == "Category") return g_variant_new_string("ApplicationStatus");
-    if (name == "Id") return g_variant_new_string(CROSSBIND_APP_ID);
-    if (name == "Title") return g_variant_new_string(CROSSBIND_APP_NAME);
+    if (name == "Id") return g_variant_new_string(appId().c_str());
+    if (name == "Title") return g_variant_new_string(appName().c_str());
     if (name == "Status") return g_variant_new_string("Active");
     // A tray finds the app's icon by its name in the app's files, as an AppIndicator's, or one of its theme for an app
     // without an icon.
     if (name == "IconName") return g_variant_new_string(hasIcon() ? "icon" : "application-x-executable");
-    if (name == "IconThemePath") return g_variant_new_string(hasIcon() ? resourceDir().c_str() : "");
+    if (name == "IconThemePath") return g_variant_new_string(hasIcon() ? resourceFolder().c_str() : "");
     if (name == "ToolTip") return toolTip();
     if (name == "ItemIsMenu") return g_variant_new_boolean(FALSE);
     return menuPath();
@@ -294,7 +294,7 @@ GVariant *itemProperty(GDBusConnection *, const gchar *, const gchar *, const gc
 void itemCalled(GDBusConnection *, const gchar *, const gchar *, const gchar *, const gchar *method, GVariant *,
                 GDBusMethodInvocation *invocation, gpointer) {
     const std::string name = method;
-    if (name == "Activate" || (name == "ContextMenu" && !hasMenu())) crossbind::app::postEvent("tray", "null");
+    if (name == "Activate" || (name == "ContextMenu" && !hasMenu())) app::emitEvent("tray");
     g_dbus_method_invocation_return_value(invocation, nullptr);
 }
 
@@ -466,3 +466,5 @@ void removeTray(std::function<void(Failure)> done) {
         done(std::nullopt);
     });
 }
+
+}  // namespace crossbind::menu

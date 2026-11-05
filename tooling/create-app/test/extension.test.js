@@ -95,7 +95,7 @@ test('the scaffolded extension is one crossbind takes, with the C++ entry crossb
     const extension = await extensionOf(project);
     assert.equal(extension.name, 'wiFi');
     assert.deepEqual(listedExtension(extension(), 'extensions[0]', dir), { name: 'wi-fi', root: project, app: { sources: ['native/wi-fi.cpp'] } });
-    const [, entry] = registrationSource(['wi-fi']).match(/void (\w+)\(crossbind::Registry &registry\);/);
+    const [, entry] = registrationSource([{ name: 'wi-fi', options: null }], []).match(/void (\w+)\(crossbind::Registry &registry\);/);
     assert.match(read(project, 'native/wi-fi.cpp'), new RegExp(`^void ${entry}\\(crossbind::Registry &registry\\) \\{$`, 'm'));
 });
 

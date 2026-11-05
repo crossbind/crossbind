@@ -34,14 +34,19 @@ let waitingEvents = 0;
 let poll = null;
 let isListening = false;
 const STOP = '[0,null]';
-// The links of app.urlSchemes the page has not been handed: those that came before it asked for them since it loaded, the
-// one the app was launched with among them. Each reaches the page once, in the answer or as the event open-url.
-const launchUrls = [];
-const MAX_LAUNCH_URLS = 1000;
-let isAskedForLinks = false;
+// The events the app's native code holds for the page, by name, that came before the page asked for them with
+// events.held() since it loaded: the links of app.urlSchemes among them, as open-url, the one the app was launched with
+// too. Each reaches the page once, in the answer or as the event while it listens, and one pushed for a page another
+// replaced waits for the new one to ask.
+const held = new Map();
+const askedFor = new Set();
+const heldPushes = new WeakSet();
+const MAX_HELD = 1000;
 
-function holdLink(url) {
-    if (launchUrls.length < MAX_LAUNCH_URLS) launchUrls.push(url);
+function hold(name, value) {
+    const values = held.get(name) ?? [];
+    if (values.length < MAX_HELD) values.push(value);
+    held.set(name, values);
 }
 
 let module = null;
@@ -170,7 +175,9 @@ function flush() {
 function push(entry) {
     if (entry[0] === 'event') {
         if (waitingEvents === MAX_WAITING_EVENTS) {
-            pushes.splice(pushes.findIndex(([kind]) => kind === 'event'), 1);
+            const [oldest] = pushes.splice(pushes.findIndex(([kind]) => kind === 'event'), 1);
+            // A held event the page has not had waits for its next ask.
+            if (heldPushes.has(oldest)) hold(oldest[1], oldest[2]);
             waitingEvents -= 1;
         }
         waitingEvents += 1;
@@ -269,9 +276,16 @@ export function installHost(embindModule, env) {
     globalThis.__crossbind_receive = (call, text) => {
         const message = JSON.parse(text);
         // One of the app's own functions, which the host answers once the main thread has done it.
-        if (message[0] === 'app' && message[2][0] === 'app.launchUrls') {
-            isAskedForLinks = true;
-            __host_reply(call, JSON.stringify([0, launchUrls.splice(0)]));
+        if (message[0] === 'app' && message[2][0] === 'events.held') {
+            const name = message[3][0]?.name;
+            if (typeof name !== 'string') {
+                __host_reply(call, JSON.stringify([1, encodeError(new TypeError('crossbind: events.held takes the name of an event.'))]));
+                return;
+            }
+            askedFor.add(name);
+            const values = held.get(name) ?? [];
+            held.delete(name);
+            __host_reply(call, JSON.stringify([0, values]));
         } else if (message[0] === 'app') {
             __app_call(call, message[2][0], message[3][0]);
         } else if (message[0] === 'events') {
@@ -290,8 +304,9 @@ export function installHost(embindModule, env) {
     globalThis.__crossbind_called = (id, ...args) => push(['cb', id, encode(args)]);
     // The module let go of one, which so many messages passed it: the page keeps it for any still on their way.
     globalThis.__crossbind_dropped = (id, passed) => push(['drop', id, passed]);
-    // An event of the app's native code, which a page gets once it listens.
-    globalThis.__crossbind_event = (name, json) => {
+    // An event of the app's native code, which a page gets once it listens; one the code holds, once the page has asked
+    // for those of its name as well.
+    globalThis.__crossbind_event = (name, json, isHeld = false) => {
         let value;
         try {
             value = JSON.parse(json);
@@ -299,26 +314,25 @@ export function installHost(embindModule, env) {
             // The JS thread prints it, after crossbind's name.
             throw new Error(`the event ${name} carries no JSON text: ${error.message}`, { cause: error });
         }
-        // The host's own event, which carries a link: held until the page has asked for those that came before.
-        if (name === 'open-url') {
-            if (typeof value?.url !== 'string') return;
-            if (!isAskedForLinks || !isListening) {
-                holdLink(value.url);
-                return;
-            }
+        if (isHeld && (!askedFor.has(name) || !isListening)) {
+            hold(name, value);
+            return;
         }
-        if (isListening) push(['event', name, value]);
+        if (!isListening) return;
+        const entry = ['event', name, value];
+        if (isHeld) heldPushes.add(entry);
+        push(entry);
     };
 
     // A new page replaced the one that held these, and its garbage collector will never release them. What was pushed
     // for it reaches no page, and the new one listens once it asks.
     globalThis.__crossbind_reset = () => {
-        // A link pushed for the page the new one replaced, which may not have got it, waits for the new one to ask.
-        for (const [kind, name, value] of pushes) {
-            if (kind === 'event' && name === 'open-url') holdLink(value.url);
+        // A held event pushed for the page the new one replaced, which may not have got it, waits for the new one to ask.
+        for (const entry of pushes) {
+            if (heldPushes.has(entry)) hold(entry[1], entry[2]);
         }
         pushes.length = 0;
-        isAskedForLinks = false;
+        askedFor.clear();
         waitingEvents = 0;
         if (poll !== null) __host_reply(poll, STOP);
         poll = null;

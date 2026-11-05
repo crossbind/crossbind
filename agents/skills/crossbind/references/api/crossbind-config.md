@@ -244,12 +244,14 @@ export default {
       // until its page paints and behind a page without a background of its own, on iOS and Android as well; without
       // it, the system's.
     singleInstance: true,
-      // Keeps a desktop app to one instance for each user: a later launch hands it its arguments, and it brings its
-      // window to the front and tells its page (see app.md). Default: false, or on Windows and Linux true with
-      // app.urlSchemes.
+      // Keeps a desktop app to one instance for each user, through the host's instance extension: a later launch hands
+      // it its arguments, and it brings its window to the front and tells its page (see app.md). false leaves the
+      // launches to an extension of the app's that takes them. Default: false, or on Windows and Linux true with a
+      // scheme of app.urlSchemes or of an extension.
     urlSchemes: ['myapp'],
       // The schemes whose links open the app, as myapp://… does: lowercase, and none the web or the system owns. The
-      // page gets them from app.launchUrls() and as the event open-url (see app.md). Default: [], none.
+      // page gets them from app.launchUrls() and as the event open-url (see app.md); an extension's own schemes reach
+      // the extension alone. Default: [], none.
     permissions: { camera: 'To scan barcodes', microphone: 'To record voice notes', location: 'To find the nearest store' },
       // The devices the page may use through getUserMedia() and navigator.geolocation, each with the reason for it,
       // which iOS shows its user when it asks (see app.md). Default: {}, none.
@@ -325,18 +327,23 @@ export default {
       root: '/abs/path/to/the/extension',    // the folder its files are in, under paths.base
       app: {
         sources: ['native/clipboard.cpp'],   // C++ every platform compiles, relative to root
+        urlSchemes: [],                      // schemes whose links its native code gets, beside app.urlSchemes'
         darwin:  { sources: ['native/darwin.mm'], frameworks: ['AppKit'], entitlements: {} },
         ios:     { sources: ['native/ios.mm'], frameworks: ['UIKit'], entitlements: {} },
         linux:   { sources: ['native/linux.cpp'], libraries: [] },
         win32:   { sources: ['native/windows.cpp'], libraries: ['user32'] },
         android: { sources: ['native/android.cpp'], libraries: [], java: 'android', class: 'dev.example.clipboard.ClipboardExtension' },
       },
+      options: { maxLength: 1000 },          // a JSON value its native code reads as registry.options()
     },
   ],
     // Usually what an extension package's crossbind.extension.js gives, its root
     // its own folder. An app's host builds them in beside its own extensions,
-    // such as dialog, and its sources add functions through
-    // <crossbind/extension.h>: C++ on every platform, Objective-C++ on Apple's.
+    // dialog, instance, links, menu, power, shell and updater, which one listed under the
+    // same name replaces, and its sources add
+    // functions, and what they do as the app is launched, opens a link and quits,
+    // through <crossbind/extension.h>: C++ on every platform, Objective-C++ on
+    // Apple's. Two owners of one URL scheme stop the build.
     // An Android extension's Java is the folder java names, class the
     // dev.crossbind.app.Extension in it the activity calls. Entitlements merge
     // with app.permissions' on macOS; two owners giving one key different

@@ -1,7 +1,7 @@
 // The conformance suite inside an app: the page reaches the module the app's host runs as a worker-backed web build
 // reaches its worker, and the host runs embind-jsi as React Native does.
 import { runConformance } from '@crossbind/conformance/spec/run.mjs';
-import { app as host, events, menu, notification, shell, tray, updater } from 'crossbind/app';
+import { app as host, events, invoke, menu, notification, shell, tray, updater } from 'crossbind/app';
 import * as clipboard from '@crossbind/extension-clipboard';
 // Constants bind only for the names imported here; the header also defines one no leg imports.
 import {
@@ -15,7 +15,7 @@ import {
     allocBuffer, cstring, readCString, readNumberAt, readPointerAt, writeNumberAt, writePointerAt,
 } from '@crossbind/conformance/native/confextras.h';
 import { Counter } from './native/counter.rs';
-import { LAUNCH_ARGS, LAUNCH_URL, NOTIFICATION, PHONE_URL, TRASHED_FILE, TRAY } from '../e2e/launch.mjs';
+import { LAUNCH_ARGS, LAUNCH_URL, NOTIFICATION, PHONE_URL, PROBE_URLS, TRASHED_FILE, TRAY } from '../e2e/launch.mjs';
 // Direct crate imports: bridged from the crates' own sources, no surface file.
 import { Uuid } from 'cargo:uuid';
 import { Version, VersionReq } from 'cargo:semver';
@@ -113,6 +113,8 @@ async function checkMenus(isDesktop) {
 async function checkUpdates() {
     const offered = await updater.check();
     if (offered?.version !== '99.0.0') throw new Error(`updater.check() found ${JSON.stringify(offered)}, not the 99.0.0 e2e/run.mjs serves`);
+    const offeredToApp = await invoke('probe.checkForUpdate');
+    if (offeredToApp !== '99.0.0') throw new Error(`crossbind::app::checkForUpdate() found ${JSON.stringify(offeredToApp)}, not 99.0.0`);
     const signed = await updater.install().then(() => 'installed', (error) => error.message);
     if (!signed.includes('cannot install the update')) throw new Error(`a signed update did not get past its signature: ${signed}`);
     // e2e/run.mjs reads why, where the runner trusts the key the app is signed with.
@@ -158,36 +160,62 @@ function nextEvent(name) {
     });
 }
 
-// e2e/run.mjs launches a desktop app with LAUNCH_URL, which reached the app before the page listened; a phone's opens
-// with none. The page listens first, then asks, as a page does to miss no link.
-async function checkLaunchUrls(expected) {
+// e2e/run.mjs launches a desktop app with LAUNCH_URL and the probe's PROBE_URLS.launch, which reached the app before the
+// page listened; a phone's opens with none. The page listens first, then asks, as a page does to miss no link, and gets
+// its own link alone, as the probe its own, which the probe holds for the page as the event probe-url.
+async function checkLaunchUrls(isLinked) {
     const stop = events.on('open-url', () => {});
     const urls = await host.launchUrls();
+    const held = await events.held('probe-url');
     stop();
+    const expected = isLinked ? [LAUNCH_URL] : [];
     if (JSON.stringify(urls) !== JSON.stringify(expected)) throw new Error(`app.launchUrls() is ${JSON.stringify(urls)}, not ${JSON.stringify(expected)}`);
+    const probeHeld = isLinked ? [{ url: PROBE_URLS.launch }] : [];
+    if (JSON.stringify(held) !== JSON.stringify(probeHeld)) throw new Error(`events.held('probe-url') is ${JSON.stringify(held)}, not ${JSON.stringify(probeHeld)}`);
+    await checkProbed(isLinked ? [PROBE_URLS.launch] : []);
 }
 
-// e2e/run.mjs opens an Android app with PHONE_URL once the page listens, as a link a user taps does.
+// The links the probe got so far, each once.
+async function checkProbed(expected) {
+    const probed = await invoke('probe.urls');
+    if (JSON.stringify(probed) !== JSON.stringify(expected)) throw new Error(`the probe got the links ${JSON.stringify(probed)}, not ${JSON.stringify(expected)}`);
+}
+
+// The links of the page's scheme that reach it until the probe hears of its own, which comes after them.
+async function linksUntilProbed() {
+    const links = [];
+    const stop = events.on('open-url', ({ url }) => links.push(url));
+    const { url } = await nextEvent('probe-url').finally(stop);
+    return { links, probed: url };
+}
+
+// e2e/run.mjs opens an Android app with PHONE_URL once the page listens, as a link a user taps does, then with the
+// probe's PROBE_URLS.phone, which reaches the probe alone.
 async function checkOpenedUrl() {
-    const opened = nextEvent('open-url');
+    const opened = linksUntilProbed();
     console.log('OPEN LINK');
-    const { url } = await opened;
-    if (url !== PHONE_URL) throw new Error(`the link the app was opened with reached the page as ${JSON.stringify(url)}, not ${PHONE_URL}`);
+    const { links, probed } = await opened;
+    if (JSON.stringify(links) !== JSON.stringify([PHONE_URL])) throw new Error(`the links the app was opened with reached the page as ${JSON.stringify(links)}, not ${PHONE_URL}`);
+    if (probed !== PROBE_URLS.phone) throw new Error(`the probe's link the app was opened with reached it as ${JSON.stringify(probed)}`);
+    await checkProbed([PROBE_URLS.phone]);
 }
 
-// e2e/run.mjs launches the app again, from a folder that is not this app's, with LAUNCH_ARGS and that folder once the
-// page listens: the app that runs takes the launch, and its link, and the one launched leaves.
+// e2e/run.mjs launches the app again, from a folder that is not this app's, with LAUNCH_ARGS, the probe's
+// PROBE_URLS.again and that folder once the page listens: the app that runs takes the launch, whose arguments leave its
+// links out, and its links, the probe's reaching the probe alone, and the one launched leaves.
 async function checkSecondInstance() {
-    const launched = Promise.all([nextEvent('second-instance'), nextEvent('open-url')]);
+    const launched = Promise.all([nextEvent('second-instance'), linksUntilProbed()]);
     console.log('LAUNCH AGAIN');
-    const [{ args, cwd }, { url }] = await launched;
+    const [{ args, cwd }, { links, probed }] = await launched;
     const folder = args.at(-1);
     // Windows takes a folder's name in any case.
     const isSameFolder = cwd.includes('\\') ? folder?.toLowerCase() === cwd.toLowerCase() : folder === cwd;
-    if (JSON.stringify(args.slice(0, -1)) !== JSON.stringify(LAUNCH_ARGS) || !isSameFolder) {
+    if (JSON.stringify(args.slice(0, -1)) !== JSON.stringify(LAUNCH_ARGS.slice(0, -1)) || !isSameFolder) {
         throw new Error(`the app launched again handed over ${JSON.stringify({ args, cwd })}`);
     }
-    if (url !== LAUNCH_ARGS.at(-1)) throw new Error(`the link the app was launched again with reached the page as ${JSON.stringify(url)}`);
+    if (JSON.stringify(links) !== JSON.stringify([LAUNCH_ARGS.at(-1)])) throw new Error(`the links the app was launched again with reached the page as ${JSON.stringify(links)}`);
+    if (probed !== PROBE_URLS.again) throw new Error(`the probe's link the app was launched again with reached it as ${JSON.stringify(probed)}`);
+    await checkProbed([PROBE_URLS.launch, PROBE_URLS.again]);
 }
 
 // e2e/run.mjs clicks the tray's icon, its menu's first item with checked and the notification: on Windows with the
@@ -315,10 +343,21 @@ initNative().then(async (m) => {
             if (trashed !== 'trashed') throw new Error(`a file in the app's data folder did not go to the trash: ${trashed}`);
             const again = await shell.trash(file).then(() => 'trashed', (error) => error.message);
             if (!again.includes('there is no')) throw new Error(`a file that went to the trash is still there: ${again}`);
+            // The page reaches a folder outside the app's once it is allowed, as a dialog allows what its user picked, with
+            // what is in it; the app's own code reaches any path at once, and names its own functions.
+            const probed = await invoke('probe.folder');
+            const unpicked = await shell.trash(`${probed}${separator}page.txt`).then(() => 'trashed', (error) => error.message);
+            if (!unpicked.includes('what its dialogs picked')) throw new Error(`a file outside the app's folders was not refused the trash: ${unpicked}`);
+            await invoke('probe.trash', { path: `${probed}${separator}app.txt` });
+            await invoke('probe.allowPath', { path: `${probed}${separator}` });
+            const picked = await shell.trash(`${probed}${separator}page.txt`).then(() => 'trashed', (error) => error.message);
+            if (picked !== 'trashed') throw new Error(`a file in a folder the app allowed did not go to the trash: ${picked}`);
+            const relative = await invoke('probe.openRelative');
+            if (!relative.startsWith('crossbind: openPath takes an absolute path')) throw new Error(`the app's own openPath took a relative path: ${relative}`);
         }
         await checkMenus(isDesktop);
         // A development session opens the app with no link.
-        await checkLaunchUrls(isDesktop && !import.meta.env.DEV ? [LAUNCH_URL] : []);
+        await checkLaunchUrls(isDesktop && !import.meta.env.DEV);
         // A phone's system ends its apps, and its store updates them.
         if (!isDesktop) {
             const quit = await host.quit().then(() => 'quit', (error) => error.message);

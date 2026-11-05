@@ -11,6 +11,8 @@ const WINDOWS_VERSION = /^(\d+(?:\.\d+){0,3})(?:[-+][0-9A-Za-z.+-]*)?$/;
 // What app.openPath can let the page's shell.openPath open: the app's folders as app.paths() names them, and what a
 // dialog picked during this run.
 const OPEN_PATH_PLACES = ['data', 'cache', 'logs', 'picked'];
+// The platforms whose apps have a window of their own, and updates.
+const DESKTOP = ['darwin', 'linux', 'win32'];
 // Apple's app categories, which macOS shows an app under, each with the main categories of the freedesktop menu
 // specification a Linux menu shows it under. An audio or a video app is in AudioVideo as well, as the specification asks.
 const GAMES = ['', 'action-', 'adventure-', 'arcade-', 'board-', 'card-', 'casino-', 'dice-', 'educational-', 'family-', 'kids-', 'music-', 'puzzle-',
@@ -218,23 +220,54 @@ const RESERVED_SCHEMES = [
     'wow6432node',
 ];
 
-// The schemes whose links open the app, as myapp://… does: lowercase, which is how Android matches them, and of two
-// characters at least, as one would take a Windows path's drive for a scheme.
-export function appUrlSchemes(config) {
-    const schemes = config.app.urlSchemes ?? [];
+// The schemes of a list whose links open the app, as myapp://… does: lowercase, which is how Android matches them, and
+// of two characters at least, as one would take a Windows path's drive for a scheme.
+export function checkedUrlSchemes(schemes, where) {
     if (!Array.isArray(schemes)) {
-        throw new Error(`crossbind: app.urlSchemes ${JSON.stringify(schemes)} is no list of schemes, as ['myapp'] is.`);
+        throw new Error(`crossbind: ${where} ${JSON.stringify(schemes)} is no list of schemes, as ['myapp'] is.`);
     }
     for (const scheme of schemes) {
         if (typeof scheme !== 'string' || !/^[a-z][a-z0-9+.-]+$/.test(scheme)) {
-            throw new Error(`crossbind: app.urlSchemes takes schemes of a lowercase letter, then one or more lowercase letters, digits, +, - and ., as myapp is; ${JSON.stringify(scheme)} is none.`);
+            throw new Error(`crossbind: ${where} takes schemes of a lowercase letter, then one or more lowercase letters, digits, +, - and ., as myapp is; ${JSON.stringify(scheme)} is none.`);
         }
         if (RESERVED_SCHEMES.includes(scheme)) {
-            throw new Error(`crossbind: app.urlSchemes cannot take ${scheme}, which the web or the system owns: pick a scheme of the app's own.`);
+            throw new Error(`crossbind: ${where} cannot take ${scheme}, which the web or the system owns: pick a scheme of the app's own.`);
         }
     }
-    if (new Set(schemes).size !== schemes.length) throw new Error(`crossbind: app.urlSchemes lists a scheme twice: ${JSON.stringify(schemes)}.`);
+    if (new Set(schemes).size !== schemes.length) throw new Error(`crossbind: ${where} lists a scheme twice: ${JSON.stringify(schemes)}.`);
     return schemes;
+}
+
+const ownerName = (extension) => (extension === null ? 'app.urlSchemes' : `the extension ${extension}`);
+
+// The schemes whose links open the app, each with the extension that declared it, whose native code gets its links, or
+// null for those of app.urlSchemes, whose links the host's links hands the page. Two owners of one scheme stop the build,
+// naming both.
+export function urlSchemeOwners(config) {
+    const owned = [
+        ...checkedUrlSchemes(config.app.urlSchemes ?? [], 'app.urlSchemes').map((scheme) => ({ scheme, extension: null })),
+        ...(config.extensions ?? []).flatMap(({ name, app }) => (app.urlSchemes ?? []).map((scheme) => ({ scheme, extension: name }))),
+    ];
+    owned.forEach(({ scheme, extension }, index) => {
+        const first = owned.findIndex((other) => other.scheme === scheme);
+        if (first !== index) {
+            throw new Error(`crossbind: ${ownerName(owned[first].extension)} and ${ownerName(extension)} both claim the scheme ${scheme}, whose links one alone gets.`);
+        }
+    });
+    return owned;
+}
+
+// The schemes whose links open the app: app.urlSchemes's, then its extensions'.
+export const appUrlSchemes = (config) => urlSchemeOwners(config).map(({ scheme }) => scheme);
+
+// Whether a desktop app keeps to one instance: app.singleInstance, else whether it has a scheme on Windows or Linux,
+// whose links start the app again; macOS hands a link to the app that runs.
+function appSingleInstance(config, platform) {
+    const singleInstance = config.app.singleInstance ?? (platform !== 'darwin' && appUrlSchemes(config).length > 0);
+    if (typeof singleInstance !== 'boolean') {
+        throw new Error(`crossbind: app.singleInstance ${JSON.stringify(singleInstance)} is no boolean: set it to true to keep a desktop app to one instance, or to false to let each launch run.`);
+    }
+    return singleInstance;
 }
 
 // Semver's version: three numbers, then a prerelease and build metadata of dot-separated identifiers.
@@ -307,12 +340,26 @@ function windowDefines(window) {
     ];
 }
 
-// The header an app's host compiles where its page opens files from and its name, an iOS or desktop host the color it
-// shows until its page paints and the devices the page may use, a desktop host its window, whether it keeps one
-// instance and its updates, and a Windows host its version resource.
+// The options of the host's own extensions, from the app's: a desktop app's instance, where it keeps one, the app's id,
+// which names the instance; the links, which hand the page the links of app.urlSchemes, where it lists any; the shell's
+// where its page opens files; a Linux app's menu the app's id, which its tray names itself by on the session bus; and a
+// desktop app's updater app.updater, with the app's version and id, which an update's signature covers.
+export function hostExtensionOptions(config, platform) {
+    const isDesktop = DESKTOP.includes(platform);
+    const updater = isDesktop ? appUpdater(config) : null;
+    return {
+        ...(isDesktop && appSingleInstance(config, platform) ? { instance: { id: appId(config) } } : {}),
+        ...(urlSchemeOwners(config).some(({ extension }) => extension === null) ? { links: {} } : {}),
+        shell: { openPath: appOpenPath(config) },
+        ...(platform === 'linux' ? { menu: { id: appId(config) } } : {}),
+        ...(updater ? { updater: { url: updater.url, publicKey: updater.publicKey.toString('base64'), version: updater.version, id: appId(config) } } : {}),
+    };
+}
+
+// The header an app's host compiles its name with, an iOS or desktop host the color it shows until its page paints and
+// the devices the page may use, a desktop host its id and window, and a Windows host its version resource.
 export function appHeader(config, platform) {
     const comment = '// crossbind writes this file from crossbind.config.js and package.json.';
-    const openPath = `#define CROSSBIND_APP_OPEN_PATH {${appOpenPath(config).map((place) => `"${place}"`).join(', ')}}`;
     const name = `#define CROSSBIND_APP_NAME "${appDisplayName(config)}"`;
     const color = appBackgroundColor(config);
     const permissions = appPermissions(config);
@@ -321,36 +368,18 @@ export function appHeader(config, platform) {
         ...(color ? [`#define CROSSBIND_APP_BACKGROUND_COLOR 0x${color.slice(1).toLowerCase()}`] : []),
         ...PERMISSIONS.map((name) => `#define CROSSBIND_APP_PERMISSION_${name.toUpperCase()} ${name in permissions ? 1 : 0}`),
     ];
-    if (!['darwin', 'linux', 'win32'].includes(platform)) return [comment, openPath, ...page, name, ''].join('\n');
+    if (!DESKTOP.includes(platform)) return [comment, ...page, name, ''].join('\n');
     // The category goes to the Info.plist and the desktop entry, which the build writes later; any desktop refuses a
     // wrong one here.
     const copyright = appCopyright(config);
     appCategory(config);
     const lines = [
         comment,
-        openPath,
         ...page,
         `#define CROSSBIND_APP_ID "${appId(config)}"`,
         name,
         ...windowDefines(appWindow(config)),
     ];
-    const urlSchemes = appUrlSchemes(config);
-    if (urlSchemes.length > 0) lines.push(`#define CROSSBIND_APP_URL_SCHEMES {${urlSchemes.map((scheme) => `"${scheme}"`).join(', ')}}`);
-    // A link the system opens a Windows or Linux app with starts it again, which reaches the app that runs this way; macOS
-    // hands the link to the app that runs.
-    const singleInstance = config.app.singleInstance ?? (urlSchemes.length > 0 && platform !== 'darwin');
-    if (typeof singleInstance !== 'boolean') {
-        throw new Error(`crossbind: app.singleInstance ${JSON.stringify(singleInstance)} is no boolean: set it to true to keep a desktop app to one instance, or to false to let each launch run.`);
-    }
-    if (singleInstance) lines.push('#define CROSSBIND_APP_SINGLE_INSTANCE 1');
-    const updater = appUpdater(config);
-    if (updater) {
-        lines.push(
-            `#define CROSSBIND_APP_UPDATER_URL "${updater.url}"`,
-            `#define CROSSBIND_APP_UPDATER_KEY {${[...updater.publicKey].map((byte) => `0x${byte.toString(16).padStart(2, '0')}`).join(', ')}}`,
-            `#define CROSSBIND_APP_UPDATER_VERSION "${updater.version}"`,
-        );
-    }
     if (platform === 'win32') {
         const version = windowsVersion(config);
         lines.push(`#define CROSSBIND_APP_VERSION "${version.text}"`, `#define CROSSBIND_APP_VERSION_NUMBERS ${version.numbers}`);
