@@ -469,7 +469,7 @@ void crossbind_extension_acme_navigation(crossbind::Registry &registry) {
 |---|---|
 | `Navigation` | Its `url()`; `isMainFrame()`, whether it loads the top frame, always on Linux, as WebKitGTK names no frame; `isUserInitiated()`, as a click on a link is; `isNewWindow()`, as `window.open()` and a link of `target="_blank"` ask for, never on Android, whose WebView loads those in the page's place itself; and the `page()` that navigates. `fn` returns its answer: `load` loads it in the app, a window's in the page's place, as the app opens no window of the page's; `openOutside` opens an http, https or mailto URL in the system's browser or mail app, and refuses any other; `refuse` and `useDefault` refuse it, as without an owner. |
 | `HttpAuthentication` | A server's ask for a name and password, as HTTP's Basic, Digest and NTLM authentication and a proxy's are: its `host()`, with its port as an origin names it, which Android's WebView leaves out; its `realm()`; `isProxy()`, whether a proxy asks, never on Windows and Android, whose webviews do not tell; and the `page()` whose request it is. `answer(user, password)`, `cancel()` or `useDefault()`, a cancel, answers it: a cancel goes on without them, so the page gets what the server answers to that. |
-| `CertificateError` | A request to a server whose certificate the system does not trust: its `url()`, on Apple's platforms its origin alone; its `host()`; its `reason()`, a sentence, the system's own on Apple's platforms; and its `page()`. `trust()` lets it go on, and the host's later requests with that certificate, as long as the app runs, and `refuse()` or `useDefault()` fails it. On macOS and iOS App Transport Security fails it all the same, but in an app whose Info.plist exempts its webviews: an extension that trusts certificates gives `plist: { NSAppTransportSecurity: { NSAllowsArbitraryLoadsInWebContent: true } }` on `macos` and `ios`, and a `trust()` in an app without it says so in the app's output. Android's WebView refuses each without asking, as Android asks of an app. |
+| `CertificateError` | A request to a server whose certificate the system does not trust: its `url()`, on Apple's platforms its origin alone; its `host()`; its `reason()`, a sentence, the system's own on Apple's platforms; and its `page()`. `trust()` lets it go on, and the host's later requests with that certificate, as long as the app runs, and `refuse()` or `useDefault()` fails it. On macOS and iOS App Transport Security fails it all the same, but in an app whose Info.plist exempts its webviews: an extension that trusts certificates gives `plist: { NSAppTransportSecurity: { NSAllowsArbitraryLoadsInWebContent: true } }` on `macos` and `ios`, and a `trust()` in an app without it says so in the app's output. WebKitGTK asks of a top frame's alone: a frame's fails without asking, but with a certificate `trust()` took before. Android's WebView refuses each without asking, as Android asks of an app. |
 
 A navigation's `fn` runs on the main thread and answers as it returns, as the webview waits for it: one it throws on
 is refused. Android's WebView asks about no frame's first load, which goes on without `page-navigation`, as a frame's
@@ -642,7 +642,7 @@ What each kind runs at and takes:
 
 | Kind | Extension point | Takes |
 |---|---|---|
-| `widget` | `com.apple.widgetkit-extension` | A Swift source among its sources, whose `@main` is its `Widget` or `WidgetBundle`. |
+| `widget` | `com.apple.widgetkit-extension` | A Swift source among its sources, whose `@main` is its `Widget` or `WidgetBundle`, and whose view gives its background through `containerBackground`, as iOS 17 asks: the build warns of a widget whose Swift names none, which a debug build draws as "Please adopt containerBackground API". |
 | `share` | `com.apple.share-services` | `principalClass`, the class iOS makes, and `activation`, what of the share sheet's items it takes, as `{ images: 10, urls: 1, text: true }`: a count from 1 of `attachments`, `files`, `images`, `movies`, `urls` and `webPages`, and `text: true`. App Review refuses the predicate that takes everything. |
 | `notification-service` | `com.apple.usernotifications.service` | `principalClass`, a `UNNotificationServiceExtension`, which iOS hands each remote notification of `mutable-content` to change before it shows. |
 | `notification-content` | `com.apple.usernotifications.content-extension` | `principalClass`, its view controller, and `categories`, the ids of the notification categories it shows. It links UserNotifications and UserNotificationsUI of itself, as iOS starts it with their classes, which its code may name none of. |
@@ -660,6 +660,47 @@ files or in the `UserDefaults(suiteName:)` of that id, which each side's `privac
 the app has it reload through WidgetKit's `WidgetCenter`; a widget's link opens the app as a link of `app.urlSchemes`
 does. An App Group is registered with Apple before an App Store build is signed with it: Xcode registers one as it signs
 a build it develops, and the developer portal's Identifiers list them.
+
+```swift
+// An extension's ios/Clock.swift, its clock target's source: the widget shows what the app wrote under "clock" in the
+// App Group they share, on the background iOS 17 asks of its view.
+import SwiftUI
+import WidgetKit
+
+struct ClockEntry: TimelineEntry {
+    let date: Date
+    let text: String
+}
+
+struct ClockProvider: TimelineProvider {
+    func placeholder(in context: Context) -> ClockEntry { ClockEntry(date: Date(), text: "") }
+
+    func getSnapshot(in context: Context, completion: @escaping (ClockEntry) -> Void) { completion(entry()) }
+
+    func getTimeline(in context: Context, completion: @escaping (Timeline<ClockEntry>) -> Void) {
+        completion(Timeline(entries: [entry()], policy: .never))
+    }
+
+    private func entry() -> ClockEntry {
+        let group = Bundle.main.object(forInfoDictionaryKey: "CrossbindAppGroup") as? String
+        return ClockEntry(date: Date(), text: group.flatMap { UserDefaults(suiteName: $0)?.string(forKey: "clock") } ?? "")
+    }
+}
+
+@main
+struct Clock: Widget {
+    var body: some WidgetConfiguration {
+        StaticConfiguration(kind: "clock", provider: ClockProvider()) { entry in
+            if #available(iOSApplicationExtension 17.0, *) {
+                Text(entry.text).containerBackground(.background, for: .widget)
+            } else {
+                Text(entry.text)
+            }
+        }
+        .configurationDisplayName("Clock")
+    }
+}
+```
 
 Each target is signed as the app is: Xcode signs a development build with the app's team, and
 `crossbind app publish app-store` signs each target in the archive with its own entitlements before the app, checks its
@@ -1043,10 +1084,13 @@ The host's core does what every extension stands on, and no extension takes its 
   run, and quick actions that change as the app runs. An Android extension takes its own pushes, as Firebase's, through
   its Java, manifest and Maven libraries.
 - **iOS app extensions** have been measured in the iOS Simulator, of an iPhone and of an iPad, as the app carries them,
-  of their kinds, ids and versions, as iOS registers each, and with the App Group the app writes into. A widget's
-  drawing, a share sheet's extension, a notification service's change of a real push, a notification content
-  extension's view, a keyboard, a build for a device, signed for development, and an upload of an app with targets,
-  which signs each, have not been run.
+  of their kinds, ids and versions, as iOS registers each, and with the App Group the app writes into. By hand, in the
+  Simulator and on an iPhone from TestFlight, after an upload of an app with a target of each kind, which signed each:
+  a widget's drawing, a share sheet's extension, a notification content extension's view and a keyboard, and on the
+  iPhone a notification service's change of a real push, which the Simulator's `simctl push` hands no service. And on
+  an iPhone signed for development, through `crossbind app dev -p ios --device` over Wi-Fi: each target signed with a
+  development profile of its own, the App Group the page wrote and the widget drew, and a push of APNs' sandbox the
+  service changed.
 - **Routes** answer whole, with a body or a file, as WebView2 reads a response only once all of it is there, and take
   GET and HEAD alone, as Android's WebView gives no request's body: a stream goes as a call's messages, and what the
   page sends as a call's options.
