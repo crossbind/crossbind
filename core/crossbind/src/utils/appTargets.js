@@ -15,6 +15,14 @@ const KINDS = {
 
 // The frameworks a target links: its kind's, and its own.
 export const targetFrameworks = (target) => [...new Set([...(KINDS[target.kind].frameworks ?? []), ...(target.frameworks ?? [])])];
+
+// The widget targets whose Swift names no containerBackground, through which iOS 17 asks a widget's view for its
+// background: a debug build draws "Please adopt containerBackground API" in place of one without it. read(target, file)
+// gives a source's text.
+export const widgetsWithoutBackground = (targets, read) => targets
+    .filter((target) => target.kind === 'widget')
+    .filter((target) => !target.sources.some((file) => file.endsWith('.swift') && read(target, file).includes('containerBackground')))
+    .map((target) => target.name);
 const KIND_KEYS = ['principalClass', 'activation', 'categories', 'extensionPoint'];
 const TARGET_KEYS = ['name', 'kind', 'sources', 'resources', 'displayName', 'plist', 'entitlements', 'frameworks', 'privacy', 'appGroup',
     'deploymentTarget', ...KIND_KEYS, 'attributes'];

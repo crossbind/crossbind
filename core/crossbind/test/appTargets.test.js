@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest';
-import { targetFrameworks, targetPlist } from '../src/utils/appTargets.js';
+import { targetFrameworks, targetPlist, widgetsWithoutBackground } from '../src/utils/appTargets.js';
 
 describe("an iOS app extension's Info.plist", () => {
     test("names its kind's extension point and its principal class, in its module where no Objective-C is beside it", () => {
@@ -55,5 +55,20 @@ describe("an iOS app extension's frameworks", () => {
             .toEqual(['UserNotifications', 'UserNotificationsUI', 'CoreLocation']);
         expect(targetFrameworks({ kind: 'widget', frameworks: ['WidgetKit'] })).toEqual(['WidgetKit']);
         expect(targetFrameworks({ kind: 'share' })).toEqual([]);
+    });
+});
+
+describe("an iOS app's widgets", () => {
+    test("are told of where their Swift names no containerBackground, which iOS 17 asks of a widget's view", () => {
+        const sources = {
+            'Clock.swift': 'Text(entry.date).containerBackground(.background, for: .widget)', 'Plain.swift': 'Text(entry.date)', 'Share.swift': 'Text("share")',
+        };
+        const targets = [
+            { name: 'clock', kind: 'widget', sources: ['Clock.swift'] },
+            { name: 'plain', kind: 'widget', sources: ['Plain.swift', 'helper.m'] },
+            { name: 'share', kind: 'share', sources: ['Share.swift'] },
+        ];
+
+        expect(widgetsWithoutBackground(targets, (target, file) => sources[file])).toEqual(['plain']);
     });
 });
