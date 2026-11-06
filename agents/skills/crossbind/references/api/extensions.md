@@ -469,7 +469,7 @@ void crossbind_extension_acme_navigation(crossbind::Registry &registry) {
 |---|---|
 | `Navigation` | Its `url()`; `isMainFrame()`, whether it loads the top frame, always on Linux, as WebKitGTK names no frame; `isUserInitiated()`, as a click on a link is; `isNewWindow()`, as `window.open()` and a link of `target="_blank"` ask for, never on Android, whose WebView loads those in the page's place itself; and the `page()` that navigates. `fn` returns its answer: `load` loads it in the app, a window's in the page's place, as the app opens no window of the page's; `openOutside` opens an http, https or mailto URL in the system's browser or mail app, and refuses any other; `refuse` and `useDefault` refuse it, as without an owner. |
 | `HttpAuthentication` | A server's ask for a name and password, as HTTP's Basic, Digest and NTLM authentication and a proxy's are: its `host()`, with its port as an origin names it, which Android's WebView leaves out; its `realm()`; `isProxy()`, whether a proxy asks, never on Windows and Android, whose webviews do not tell; and the `page()` whose request it is. `answer(user, password)`, `cancel()` or `useDefault()`, a cancel, answers it: a cancel goes on without them, so the page gets what the server answers to that. |
-| `CertificateError` | A request to a server whose certificate the system does not trust: its `url()`, on Apple's platforms its origin alone; its `host()`; its `reason()`, a sentence, the system's own on Apple's platforms; and its `page()`. `trust()` lets it go on, and the host's later requests with that certificate, as long as the app runs, and `refuse()` or `useDefault()` fails it. Android's WebView refuses each without asking, as Android asks of an app. |
+| `CertificateError` | A request to a server whose certificate the system does not trust: its `url()`, on Apple's platforms its origin alone; its `host()`; its `reason()`, a sentence, the system's own on Apple's platforms; and its `page()`. `trust()` lets it go on, and the host's later requests with that certificate, as long as the app runs, and `refuse()` or `useDefault()` fails it. On macOS and iOS App Transport Security fails it all the same, but in an app whose Info.plist exempts its webviews: an extension that trusts certificates gives `plist: { NSAppTransportSecurity: { NSAllowsArbitraryLoadsInWebContent: true } }` on `macos` and `ios`, and a `trust()` in an app without it says so in the app's output. Android's WebView refuses each without asking, as Android asks of an app. |
 
 A navigation's `fn` runs on the main thread and answers as it returns, as the webview waits for it: one it throws on
 is refused. Android's WebView asks about no frame's first load, which goes on without `page-navigation`, as a frame's
@@ -525,6 +525,7 @@ and the app's user is told.
 
 The files the app's user drops on a page of the app's origins, on the desktop, reach the holder of `page-drops` as the
 page's own `drop` event goes on: the host's own extension of that name, or the one `extensions` lists in its place.
+The page needs no `dragover` of its own, as the host takes every drag of files on the app's own pages.
 `fn` gets a `Drop`, of their absolute `paths`, the page's point they were dropped at, `x` and `y` in CSS pixels from its
 top left, and the `page`, on the main thread:
 
@@ -644,7 +645,7 @@ What each kind runs at and takes:
 | `widget` | `com.apple.widgetkit-extension` | A Swift source among its sources, whose `@main` is its `Widget` or `WidgetBundle`. |
 | `share` | `com.apple.share-services` | `principalClass`, the class iOS makes, and `activation`, what of the share sheet's items it takes, as `{ images: 10, urls: 1, text: true }`: a count from 1 of `attachments`, `files`, `images`, `movies`, `urls` and `webPages`, and `text: true`. App Review refuses the predicate that takes everything. |
 | `notification-service` | `com.apple.usernotifications.service` | `principalClass`, a `UNNotificationServiceExtension`, which iOS hands each remote notification of `mutable-content` to change before it shows. |
-| `notification-content` | `com.apple.usernotifications.content-extension` | `principalClass`, its view controller, and `categories`, the ids of the notification categories it shows. |
+| `notification-content` | `com.apple.usernotifications.content-extension` | `principalClass`, its view controller, and `categories`, the ids of the notification categories it shows. It links UserNotifications and UserNotificationsUI of itself, as iOS starts it with their classes, which its code may name none of. |
 | `other` | Its `extensionPoint`, as `com.apple.keyboard-service` | `principalClass`, of a point that makes one, and the `attributes` the point reads. |
 
 The principal class of a target of Swift alone is its module's, as Xcode's templates name it,
