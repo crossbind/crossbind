@@ -236,10 +236,13 @@ void popupMenu(uint64_t window, std::vector<MenuItem> items, double x, double y,
         auto *popup = new Popup{done, picked, menu, accelerators};
         g_signal_connect(menu, "deactivate", G_CALLBACK(onPopupClosed), popup);
         const double zoom = webkit_web_view_get_zoom_level(WEBKIT_WEB_VIEW(view));
-        g_object_set(menu, "rect-anchor-dx", static_cast<gint>(x * zoom), "rect-anchor-dy", static_cast<gint>(y * zoom), nullptr);
         gtk_widget_show_all(menu);
         GdkEvent *trigger = lastPress && g_get_monotonic_time() - lastPressTime < FRESH_PRESS_US ? lastPress : nullptr;
-        gtk_menu_popup_at_widget(GTK_MENU(menu), view, GDK_GRAVITY_NORTH_WEST, GDK_GRAVITY_NORTH_WEST, trigger);
+        // The page's point in the webview's own GdkWindow: gtk_menu_popup_at_widget() takes a widget's allocation to be in
+        // that window, and so added the webview's place in its toplevel once more, the menu bar's height on X11 and with
+        // the client-side decorations' on Wayland.
+        GdkRectangle point{static_cast<int>(x * zoom), static_cast<int>(y * zoom), 1, 1};
+        gtk_menu_popup_at_rect(GTK_MENU(menu), gtk_widget_get_window(view), &point, GDK_GRAVITY_NORTH_WEST, GDK_GRAVITY_NORTH_WEST, trigger);
         // GTK shows no menu it could not grab the pointer for, and tells of none: it closes without a click.
         if (!gtk_widget_get_visible(gtk_widget_get_toplevel(menu))) {
             g_signal_handlers_disconnect_by_func(menu, reinterpret_cast<gpointer>(onPopupClosed), popup);
