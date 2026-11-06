@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest';
-import { targetPlist } from '../src/utils/appTargets.js';
+import { targetFrameworks, targetPlist } from '../src/utils/appTargets.js';
 
 describe("an iOS app extension's Info.plist", () => {
     test("names its kind's extension point and its principal class, in its module where no Objective-C is beside it", () => {
@@ -45,5 +45,15 @@ describe("an iOS app extension's Info.plist", () => {
         expect(keys).toMatchObject({ CFBundleDisplayName: 'Keys', CrossbindAppGroup: 'group.com.example.notes', CrossbindLayout: 'qwerty' });
         expect(widget.NSExtension).toEqual({ NSExtensionPointIdentifier: 'com.apple.widgetkit-extension' });
         expect(widget).not.toHaveProperty('CrossbindAppGroup');
+    });
+});
+
+describe("an iOS app extension's frameworks", () => {
+    test("links a content extension with UserNotifications and UserNotificationsUI, whose classes iOS starts it with, beside its own", () => {
+        expect(targetFrameworks({ kind: 'notification-content' })).toEqual(['UserNotifications', 'UserNotificationsUI']);
+        expect(targetFrameworks({ kind: 'notification-content', frameworks: ['UserNotifications', 'CoreLocation'] }))
+            .toEqual(['UserNotifications', 'UserNotificationsUI', 'CoreLocation']);
+        expect(targetFrameworks({ kind: 'widget', frameworks: ['WidgetKit'] })).toEqual(['WidgetKit']);
+        expect(targetFrameworks({ kind: 'share' })).toEqual([]);
     });
 });
