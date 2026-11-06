@@ -12,6 +12,7 @@
 #include "platform.h"
 
 #include <algorithm>
+#include <cstdio>
 
 using crossbind::CertificateError;
 using crossbind::Download;
@@ -59,6 +60,18 @@ NSData *leafOf(SecTrustRef trust) {
     NSData *data = leaf ? CFBridgingRelease(SecCertificateCopyData(leaf)) : nil;
     if (chain) CFRelease(chain);
     return data;
+}
+
+// Whether App Transport Security lets the app's webviews take a certificate the system does not trust, as the app's
+// Info.plist exempts their loads, or every load, from it.
+bool isWebContentExempt() {
+    NSDictionary *security = [NSBundle.mainBundle objectForInfoDictionaryKey:@"NSAppTransportSecurity"];
+    if (![security isKindOfClass:NSDictionary.class]) return false;
+    const auto isOn = [security](NSString *key) {
+        id value = security[key];
+        return [value isKindOfClass:NSNumber.class] && [value boolValue];
+    };
+    return isOn(@"NSAllowsArbitraryLoadsInWebContent") || isOn(@"NSAllowsArbitraryLoads");
 }
 
 }  // namespace
@@ -498,6 +511,12 @@ API_AVAILABLE(macos(11.3), ios(14.5))
                     return;
                 }
                 [weak trust:leaf host:host];
+                if (!isWebContentExempt()) {
+                    std::fprintf(stderr,
+                        "crossbind: the extension %s trusted the certificate of %s, which App Transport Security refuses all the same: an extension that "
+                        "trusts certificates gives NSAppTransportSecurity: { NSAllowsArbitraryLoadsInWebContent: true } in its plist on macos and ios.\n",
+                        app::holderOf("page-authentication").c_str(), host.UTF8String);
+                }
                 answer(NSURLSessionAuthChallengeUseCredential, credential);
             });
         })));
