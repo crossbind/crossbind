@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { xmlPlist } from '../utils/plist.js';
 import { PRIVACY_CATEGORIES } from '../utils/appOptions.js';
-import { isHeader, targetModule, targetPlist } from '../utils/appTargets.js';
+import { isHeader, targetFrameworks, targetModule, targetPlist } from '../utils/appTargets.js';
 
 const APP_GROUPS = 'com.apple.security.application-groups';
 // The kind of each file Xcode compiles or copies into a target, by its ending: a folder is copied as it is, and an asset
@@ -43,6 +43,8 @@ function writeTargetFiles(to, target, { label, appGroup }) {
     return { dir, hasEntitlements, hasPrivacy };
 }
 
+const linkedFrameworks = (frameworks) => (frameworks.length > 0 ? { OTHER_LDFLAGS: ['$(inherited)', ...frameworks.flatMap((name) => ['-framework', name])] } : {});
+
 // A target's build settings: its bundle, of the app's id and its name, signed as the app is, with the app's version and
 // build, and its own deployment target and frameworks.
 const targetSettings = (target, { dir, hasEntitlements }, { identity, version, build }) => ({
@@ -62,7 +64,7 @@ const targetSettings = (target, { dir, hasEntitlements }, { identity, version, b
     LD_RUNPATH_SEARCH_PATHS: ['$(inherited)', '@executable_path/Frameworks', '@executable_path/../../Frameworks'],
     ...(target.sources.some((file) => file.endsWith('.swift')) ? { SWIFT_VERSION: '5.0' } : {}),
     ...(target.deploymentTarget ? { IPHONEOS_DEPLOYMENT_TARGET: target.deploymentTarget } : {}),
-    ...((target.frameworks ?? []).length > 0 ? { OTHER_LDFLAGS: ['$(inherited)', ...target.frameworks.flatMap((name) => ['-framework', name])] } : {}),
+    ...linkedFrameworks(targetFrameworks(target)),
 });
 
 // The project's objects of one target, by ids of its place among them: its files, build phases, configurations and the

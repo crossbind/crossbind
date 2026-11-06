@@ -1,14 +1,20 @@
 import { IOS_DEPLOYMENT_TARGET } from './iosToolchain.js';
 
 // Apple's app extensions an iOS app's extensions add, each a target of the app's Xcode project of its own, by their
-// kinds: the extension point each runs at, which an other target names itself, and the options it needs or may give.
+// kinds: the extension point each runs at, which an other target names itself, the options it needs or may give, and
+// the frameworks iOS starts it with, which its code may name nothing of, so that the linker would leave them out.
 const KINDS = {
     widget: { point: 'com.apple.widgetkit-extension', needs: [], takes: [] },
     share: { point: 'com.apple.share-services', needs: ['principalClass', 'activation'], takes: [] },
     'notification-service': { point: 'com.apple.usernotifications.service', needs: ['principalClass'], takes: [] },
-    'notification-content': { point: 'com.apple.usernotifications.content-extension', needs: ['principalClass', 'categories'], takes: [] },
+    'notification-content': {
+        point: 'com.apple.usernotifications.content-extension', needs: ['principalClass', 'categories'], takes: [], frameworks: ['UserNotifications', 'UserNotificationsUI'],
+    },
     other: { point: null, needs: ['extensionPoint'], takes: ['principalClass'] },
 };
+
+// The frameworks a target links: its kind's, and its own.
+export const targetFrameworks = (target) => [...new Set([...(KINDS[target.kind].frameworks ?? []), ...(target.frameworks ?? [])])];
 const KIND_KEYS = ['principalClass', 'activation', 'categories', 'extensionPoint'];
 const TARGET_KEYS = ['name', 'kind', 'sources', 'resources', 'displayName', 'plist', 'entitlements', 'frameworks', 'privacy', 'appGroup',
     'deploymentTarget', ...KIND_KEYS, 'attributes'];

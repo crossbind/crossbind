@@ -165,6 +165,23 @@ describe('an iOS app\'s Xcode project', () => {
         fs.rmSync(root, { recursive: true, force: true });
     });
 
+    test("links a notification content extension with UserNotificationsUI, whose classes iOS starts it with though its code names none", () => {
+        const root = fs.mkdtempSync(path.join(os.tmpdir(), 'crossbind-xcode-'));
+        const extension = path.join(root, 'invites');
+        fs.mkdirSync(path.join(extension, 'ios'), { recursive: true });
+        fs.writeFileSync(path.join(extension, 'ios', 'Invite.swift'), '');
+        const invite = {
+            name: 'invite', kind: 'notification-content', sources: ['ios/Invite.swift'], principalClass: 'InviteViewController', categories: ['invite'],
+            owner: 'invites', root: extension,
+        };
+        const to = path.join(root, 'demo-ios');
+        writeXcodeProject(to, { parts: [part(root, 'iphonesimulator')], identity: { id: 'com.example.demo', team: '' }, label: 'Demo', version: '1', targets: [invite] });
+
+        const project = fs.readFileSync(path.join(to, 'demo.xcodeproj', 'project.pbxproj'), 'utf8');
+        expect(project).toContain('"-framework",\n\t\t\t\t\t"UserNotifications",\n\t\t\t\t\t"-framework",\n\t\t\t\t\t"UserNotificationsUI",');
+        fs.rmSync(root, { recursive: true, force: true });
+    });
+
     test("names the App Group nowhere where no target asks for it, and refuses a target named as the app", () => {
         const root = fs.mkdtempSync(path.join(os.tmpdir(), 'crossbind-xcode-'));
         const extension = path.join(root, 'weather');
