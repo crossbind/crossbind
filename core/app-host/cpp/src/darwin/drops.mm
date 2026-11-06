@@ -28,6 +28,17 @@ std::string originOf(NSURL *url) {
     return origin;
 }
 
+// WebKit takes a drop of files only where the page cancels the drag's dragover, as a browser does: the host cancels it
+// on the app's own pages, as Windows' does, so page-drops hears of every drop of files on them.
+std::string acceptScript(const std::vector<std::string> &origins) {
+    std::string own;
+    for (const auto &origin : origins) own += (own.empty() ? "'" : ",'") + origin + "'";
+    return "if ([" + own + "].includes(location.protocol + '//' + location.host)) {"
+           " const isFiles = (event) => !!event.dataTransfer && event.dataTransfer.types.includes('Files');"
+           " for (const name of ['dragenter', 'dragover']) addEventListener(name, (event) => { if (isFiles(event)) event.preventDefault(); }, true);"
+           "}";
+}
+
 BOOL performDrop(id self, SEL command, id<NSDraggingInfo> sender) {
     WKWebView *view = self;
     if ([dropTargets containsObject:view] && view.URL && std::find(dropOrigins.begin(), dropOrigins.end(), originOf(view.URL)) != dropOrigins.end()) {
@@ -51,6 +62,7 @@ BOOL performDrop(id self, SEL command, id<NSDraggingInfo> sender) {
 // webview makes a WKWebView of WebKit's class, whose performDragOperation: the host's goes before, for every WKWebView
 // of the app's: one an extension makes drops as WebKit's do.
 void takeDrops(void *webView, std::vector<std::string> origins) {
+    addTopFrameScript(webView, acceptScript(origins));
     if (!dropTargets) dropTargets = [NSHashTable weakObjectsHashTable];
     [dropTargets addObject:(__bridge WKWebView *)webView];
     dropOrigins = std::move(origins);
