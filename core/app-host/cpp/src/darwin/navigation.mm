@@ -74,6 +74,19 @@ bool isWebContentExempt() {
     return isOn(@"NSAllowsArbitraryLoadsInWebContent") || isOn(@"NSAllowsArbitraryLoads");
 }
 
+// The certificates page-navigation trusted, by their hosts, which every window's later requests take without asking, as
+// long as the app runs; the main thread alone reads and writes them.
+NSMutableDictionary<NSString *, NSMutableSet<NSData *> *> *trustedCertificates;
+
+bool wasTrusted(NSString *host, NSData *leaf) { return leaf && [trustedCertificates[host] containsObject:leaf]; }
+
+void trustCertificate(NSString *host, NSData *leaf) {
+    if (!leaf) return;
+    if (!trustedCertificates) trustedCertificates = [NSMutableDictionary new];
+    if (!trustedCertificates[host]) trustedCertificates[host] = [NSMutableSet new];
+    [trustedCertificates[host] addObject:leaf];
+}
+
 }  // namespace
 
 // A download's place as it arrives, and what its owner hears of it.
@@ -361,8 +374,6 @@ API_AVAILABLE(macos(11.3), ios(14.5))
     id downloads;
     // A window's URL page-navigation loaded in the page's place, whose navigation it does not decide again.
     std::string approved;
-    // The certificates page-navigation trusted, by their hosts, which the host's later requests take without asking.
-    NSMutableDictionary<NSString *, NSMutableSet<NSData *> *> *trusted;
 }
 @end
 
@@ -496,21 +507,20 @@ API_AVAILABLE(macos(11.3), ios(14.5))
     NSString *host = ns(hostOf(space));
     NSData *leaf = leafOf(trust);
     NSURLCredential *credential = [NSURLCredential credentialForTrust:trust];
-    if (leaf && [trusted[host] containsObject:leaf]) {
+    if (wasTrusted(host, leaf)) {
         answer(NSURLSessionAuthChallengeUseCredential, credential);
         return;
     }
-    __weak CBNavigationLock *weak = self;
     const std::string url = text(space.protocol) + "://" + hostOf(space);
     app::askCertificateError(app::make<CertificateError>(std::make_shared<app::StateOf<CertificateError>>((__bridge const void *)view, url, hostOf(space),
         text(reason),
-        [answer, credential, host, leaf, weak](bool isTrusted) {
+        [answer, credential, host, leaf](bool isTrusted) {
             dispatch_async(dispatch_get_main_queue(), ^{
                 if (!isTrusted) {
                     answer(NSURLSessionAuthChallengeCancelAuthenticationChallenge, nil);
                     return;
                 }
-                [weak trust:leaf host:host];
+                trustCertificate(host, leaf);
                 if (!isWebContentExempt()) {
                     std::fprintf(stderr,
                         "crossbind: the extension %s trusted the certificate of %s, which App Transport Security refuses all the same: an extension that "
@@ -520,13 +530,6 @@ API_AVAILABLE(macos(11.3), ios(14.5))
                 answer(NSURLSessionAuthChallengeUseCredential, credential);
             });
         })));
-}
-
-- (void)trust:(NSData *)leaf host:(NSString *)host {
-    if (!leaf) return;
-    if (!trusted) trusted = [NSMutableDictionary new];
-    if (!trusted[host]) trusted[host] = [NSMutableSet new];
-    [trusted[host] addObject:leaf];
 }
 
 - (void)webView:(WKWebView *)webView didCommitNavigation:(WKNavigation *)navigation {
