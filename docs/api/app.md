@@ -165,7 +165,8 @@ window without a parent reject.
 `windows.set()` changes the page's own window, or the one of an id given first: its `title`, its sizes and limits, `x`
 and `y`, or `center`, which moves it to the middle of its screen, `resizable`, `alwaysOnTop` and `fullscreen`, and
 resolves with what it went without, as `open()` does, a Wayland window's `center` among them. `close()` closes a window
-as its user does, which an extension may keep open; `focus()` brings one to the front, restored if it was minimized;
+as its user does, which an extension may keep open; `focus()` brings one to the front, restored if it was minimized,
+which a Wayland compositor without the xdg-activation protocol, as Weston, does for no window;
 `minimize()` and `toggleMaximize()` do what they say. Each takes the id of a window, or none for the page's own.
 `windows.list()` gives the open windows, the oldest first, and `windows.current()` the page's own, each as
 `{ id, name, title, x, y, width, height, isMaximized, isMinimized, isFullscreen, isFocused }`. Every page hears of each
@@ -1746,10 +1747,11 @@ writes to logcat, under the tag `Crossbind`: the URL only on `localhost`, and th
   front and for one page as each says; and the app going on as each closes. On the desktop as well: the size a window
   opened at and the one `set()` gave it, a modal window and one without a frame opening with their pages, and a
   `startDrag()` with no press down moving nothing; on the iPad, a window closed in the background and one closed in
-  front, after which the first has the front. Windows builds them, and its conformance runs check them in CI. A
-  frameless window's move and its buttons, the look and the stacking of a modal window and of one above the others, the
-  place `x` and `y` give, and the menus of several windows have not been measured, nor has a Wayland compositor or an
-  iPad itself.
+  front, after which the first has the front. Windows builds them, and its conformance runs check them in CI. By hand,
+  on macOS, on Linux under Xvfb with openbox and on Wayland under Weston 14, and on Windows Server 2025: a frameless
+  window's move and its buttons, a modal window, a sheet on macOS and above its parent elsewhere, the menus of several
+  windows, each its own, and a window above the others and the place `x` and `y` give, which a Wayland compositor
+  takes for itself, as `open()`'s `ignored` says. An iPad itself has not been measured.
 - `app.window`'s place, limits and full screen have been measured on macOS, and on Linux under Xvfb with openbox, for a
   window that resizes and one that does not: an element's full screen, which Escape leaves, and `fullscreen: true`. A
   Wayland compositor places a window itself, and with WebKitGTK before 2.44 a window that opened full screen leaves it
