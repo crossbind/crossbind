@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { xmlPlist } from '../utils/plist.js';
 import { PRIVACY_CATEGORIES } from '../utils/appOptions.js';
-import { isHeader, targetFrameworks, targetModule, targetPlist } from '../utils/appTargets.js';
+import { isHeader, targetFrameworks, targetModule, targetPlist, widgetsWithoutBackground } from '../utils/appTargets.js';
 
 const APP_GROUPS = 'com.apple.security.application-groups';
 // The kind of each file Xcode compiles or copies into a target, by its ending: a folder is copied as it is, and an asset
@@ -106,6 +106,10 @@ function targetObjects(target, place, written, options) {
 // Writes the folder of each target of Apple's app extensions the app's extensions add, and gives the project's objects
 // for them: each a target whose bundle is the app's id and its name, which the app builds first and embeds in its PlugIns.
 export function writeTargets(to, targets, options) {
+    widgetsWithoutBackground(targets, (target, file) => fs.readFileSync(path.join(target.root, file), 'utf8')).forEach((name) => {
+        console.warn(`crossbind: the widget target ${name} names no containerBackground in its Swift, which iOS 17 asks of a widget's view: a debug build `
+            + 'draws "Please adopt containerBackground API" in its place. Its view gives its background with .containerBackground(.background, for: .widget).');
+    });
     const made = targets.map((target, place) => targetObjects(target, place, writeTargetFiles(to, target, options), options));
     return {
         objects: Object.assign({}, ...made.map(({ objects }) => objects)),

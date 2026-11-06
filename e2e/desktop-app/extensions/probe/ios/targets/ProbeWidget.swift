@@ -27,7 +27,12 @@ struct ProbeProvider: TimelineProvider {
 struct ProbeWidget: Widget {
     var body: some WidgetConfiguration {
         StaticConfiguration(kind: "probe", provider: ProbeProvider()) { entry in
-            Text(entry.text)
+            // iOS 17 draws a widget's background itself, from the one its view names.
+            if #available(iOSApplicationExtension 17.0, *) {
+                Text(entry.text).containerBackground(.background, for: .widget)
+            } else {
+                Text(entry.text)
+            }
         }
         .configurationDisplayName("Probe")
     }

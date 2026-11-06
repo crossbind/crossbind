@@ -182,6 +182,25 @@ describe('an iOS app\'s Xcode project', () => {
         fs.rmSync(root, { recursive: true, force: true });
     });
 
+    test("tells of a widget target whose Swift names no containerBackground, which iOS 17 asks of a widget's view", () => {
+        const root = fs.mkdtempSync(path.join(os.tmpdir(), 'crossbind-xcode-'));
+        const extension = path.join(root, 'clocks');
+        fs.mkdirSync(path.join(extension, 'ios'), { recursive: true });
+        fs.writeFileSync(path.join(extension, 'ios', 'Plain.swift'), 'Text(entry.date)');
+        fs.writeFileSync(path.join(extension, 'ios', 'Drawn.swift'), 'Text(entry.date).containerBackground(.background, for: .widget)');
+        const widget = (name, file) => ({ name, kind: 'widget', sources: [`ios/${file}`], owner: 'clocks', root: extension });
+        const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+        writeXcodeProject(path.join(root, 'demo-ios'), {
+            parts: [part(root, 'iphonesimulator')], identity: { id: 'com.example.demo', team: '' }, label: 'Demo', version: '1',
+            targets: [widget('plain', 'Plain.swift'), widget('drawn', 'Drawn.swift')],
+        });
+
+        expect(warn.mock.calls.flat()).toEqual([expect.stringContaining('crossbind: the widget target plain names no containerBackground')]);
+        warn.mockRestore();
+        fs.rmSync(root, { recursive: true, force: true });
+    });
+
     test("names the App Group nowhere where no target asks for it, and refuses a target named as the app", () => {
         const root = fs.mkdtempSync(path.join(os.tmpdir(), 'crossbind-xcode-'));
         const extension = path.join(root, 'weather');
