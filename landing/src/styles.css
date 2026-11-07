@@ -168,31 +168,27 @@ html[data-playground-skin='turbo'] .playground-app[data-skin='modern'] {
     }
 }
 
-/* /examples/ and /integrations/: three cards a row where they fit, two on tablets, one on phones. A card lights its
-   border on hover; an app card's picture keeps the 16:10 the capture writes, and an integration card pads its text. */
-.examples-grid,
-.integrations-grid {
+/* /examples/: three cards a row where they fit, two on tablets, one on phones. A card lights its border on hover, and an
+   app card's picture keeps the 16:10 the capture writes. */
+.examples-grid {
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 18px;
 }
 
 @media (max-width: 1100px) {
-    .examples-grid,
-    .integrations-grid {
+    .examples-grid {
         grid-template-columns: repeat(2, minmax(0, 1fr));
     }
 }
 
 @media (max-width: 640px) {
-    .examples-grid,
-    .integrations-grid {
+    .examples-grid {
         grid-template-columns: minmax(0, 1fr);
     }
 }
 
-.example-card,
-.integration-card {
+.example-card {
     display: flex;
     flex-direction: column;
     min-width: 0;
@@ -203,20 +199,8 @@ html[data-playground-skin='turbo'] .playground-app[data-skin='modern'] {
     text-decoration: none;
 }
 
-.integration-card {
-    gap: 8px;
-    padding: 18px 20px;
-}
-
-/* A command or a package name in a card moves to the next line whole, so `rollup -c -w` never reads as two. */
-.integration-card code {
-    white-space: nowrap;
-}
-
 .example-card:hover,
-.example-card:focus-visible,
-.integration-card:hover,
-.integration-card:focus-visible {
+.example-card:focus-visible {
     border-color: var(--lit);
 }
 
@@ -745,14 +729,14 @@ button {
     }
 }
 
-/* /extensions/ has the rows of /ports/ with a name and what it is alone. */
-.lib-row.extension-row {
+/* /extensions/ and /integrations/ have the rows of /ports/ with a name and what it is alone. */
+.lib-row.summary-row {
     grid-template-columns: 160px minmax(0, 1fr);
     grid-template-areas: 'name summary';
 }
 
 @media (max-width: 900px) {
-    .lib-row.extension-row {
+    .lib-row.summary-row {
         grid-template-columns: minmax(0, 1fr);
         grid-template-areas: 'name' 'summary';
     }
