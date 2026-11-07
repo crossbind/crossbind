@@ -94,4 +94,4 @@ CI workflows: `.github/workflows/test-{android,ios}-sample.yml`.
 - Sibling Metro plugin: `plugins/metro/`
 - Integration recipes: `docs/playbooks/integration/react-native-cli.md`, `docs/playbooks/integration/react-native-expo.md`
 - Canonical examples and fixture: `examples/mobile-reactnative-cli`, `examples/mobile-reactnative-expo`, `e2e/mobile-reactnative-cli`
-- iOS CI workflow (uses bridge cache): `.github/workflows/test-ios-sample.yml`
+- iOS CI workflow: `.github/workflows/test-ios-sample.yml`

@@ -24,6 +24,9 @@ import { withDirLockSync } from '../utils/dirLock.js';
 import { conanImportOfHeader } from '../utils/conanImport.js';
 import run, { cxxPreprocessorFor } from './run.js';
 import isSourceCmakePackage from '../utils/isSourceCmakePackage.js';
+import {
+    loadBridgeTools, runPreprocessor, runSwig, usesBridgeTools,
+} from '../utils/bridgeTools.js';
 
 // Part of every interface hash, so interfaces cached by an older generator are rebuilt.
 const INTERFACE_FORMAT = 'swig-macros-4';
@@ -54,6 +57,8 @@ function bindHeader(headerOrModuleFilePath, target, { withDependencies = true, w
     // dependency built since.
     refreshConanDependencies(state.config);
     refreshBuiltDependencies(state.config);
+    // Without bridge-tools on a Mac the macro step would fail quietly, and its interface would be kept without macros.
+    if (usesBridgeTools(target)) loadBridgeTools();
     const interfaceFilePath = upath.resolve(headerOrModuleFilePath);
     if (!fs.existsSync(`${state.config.paths.build}/interface`)) {
         fs.mkdirSync(`${state.config.paths.build}/interface`, { recursive: true });
@@ -353,20 +358,24 @@ const RELEASE_DEFINE = '-DNDEBUG';
 
 // One bridge serves every desktop target, so SWIG and the macro table it reads come from the web image's em++,
 // which defines no operating system; an android bridge is read with the NDK it compiles with. The headers
-// still come from the target's own packages.
+// still come from the target's own packages. On a Mac, bridge-tools makes the same bridge, in the build directory the
+// image's tools run in.
 const toolTargetFor = (target) => (target?.platform === 'android' ? target : { ...target, platform: 'wasm' });
 
 function dumpMacros(outputFile, includes, includePath, target, defines = []) {
-    const tool = toolTargetFor(target);
-    run(cxxPreprocessorFor(tool), [
+    const args = [
         '-x', 'c++', '-std=c++17', '-dM', '-E', ...defines,
         ...includePath,
         ...includes.flatMap((header) => ['-include', header]),
         '-o', outputFile,
         '/dev/null',
-    ], null, tool);
+    ];
+    if (usesBridgeTools(target)) runPreprocessor(args, state.config.paths.build);
+    else run(cxxPreprocessorFor(toolTargetFor(target)), args, null, toolTargetFor(target));
     return parseMacroDump(fs.readFileSync(outputFile, 'utf8'));
 }
+
+const runSwigFor = (args, target) => (usesBridgeTools(target) ? runSwig(args, state.config.paths.build) : run('swig', args, null, toolTargetFor(target)));
 
 function swigIncludePath(target, sourceDir) {
     const allHeaders = state.config.dependencyParameters.headerPathWithDepends.split(';');
@@ -468,7 +477,7 @@ function createBridgeFileFromInterfaceFile(interfaceFilePath, target, sourceDir 
     const bridgeFilePath = `${state.config.paths.build}/bridge/${interfaceFilePath.split('/').at(-1)}.cpp`;
     fs.writeFileSync(keyOf(bridgeFilePath), '');
     // #error lines guard branches SWIG evaluates without the compiler's predefined macros, so they only warn.
-    const swig = () => run('swig', [
+    const swig = () => runSwigFor([
         '-c++',
         '-embind',
         '-cpperraswarn',
@@ -476,7 +485,7 @@ function createBridgeFileFromInterfaceFile(interfaceFilePath, target, sourceDir 
         ...(swigView ? [`-I${swigView.dir}`] : []),
         ...swigIncludePath(target, sourceDir),
         interfaceFilePath,
-    ], null, toolTargetFor(target));
+    ], target);
     try {
         swig();
     } catch (e) {
@@ -517,8 +526,8 @@ function createConanDeclarations(interfaceFile, target, sourceDir, sourceHash, s
     const hash = getContentHash([BRIDGE_FORMAT, getFileHash(file), sourceHash, swigView?.hash ?? ''].join('\n'));
     if (!fs.existsSync(`${bridge}.exports.json`) || !fs.existsSync(keyOf(bridge)) || fs.readFileSync(keyOf(bridge), 'utf8') !== hash) {
         fs.writeFileSync(keyOf(bridge), '');
-        run('swig', ['-c++', '-embind', '-cpperraswarn', '-o', bridge,
-            ...(swigView ? [`-I${swigView.dir}`] : []), ...swigIncludePath(target, sourceDir), file], null, toolTargetFor(target));
+        runSwigFor(['-c++', '-embind', '-cpperraswarn', '-o', bridge,
+            ...(swigView ? [`-I${swigView.dir}`] : []), ...swigIncludePath(target, sourceDir), file], target);
         fs.writeFileSync(keyOf(bridge), hash);
     }
     return `${bridge}.exports.json`;

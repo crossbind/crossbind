@@ -1485,9 +1485,7 @@ GitHub takes the release from a token with write access to the repository's cont
 which a workflow's step takes as `GITHUB_TOKEN: ${{ github.token }}` with the job's `permissions: contents: write`, else
 the sign-in of the GitHub CLI, `gh`. The build gets neither, as it writes nothing to GitHub. The repository is
 `CROSSBIND_GITHUB_REPOSITORY`, else `GITHUB_REPOSITORY`, which GitHub Actions sets, else package.json's `repository`.
-Before the build, the publish names every one of them that is missing, and the updater's key `app.updater` takes. A
-hosted macOS runner has no Docker, so a macOS app's job builds from the bridges a Linux job makes, as for TestFlight
-below.
+Before the build, the publish names every one of them that is missing, and the updater's key `app.updater` takes.
 
 ### winget
 
@@ -1600,7 +1598,7 @@ jobs:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
         with:
-          node-version: 24
+          node-version: 26
           cache: npm
       - run: npm ci
       - id: google
@@ -1627,33 +1625,14 @@ every repository's jobs, so give it an attribute condition that admits only your
 so the publish's own job makes it, and it asks for the androidpublisher scope, as the action's default, cloud-platform,
 does not cover Google Play. With a JSON key instead, give its text, from a secret, in `CROSSBIND_GOOGLE_PLAY_KEY`.
 
-Publishing to TestFlight takes two jobs. A hosted macOS runner has no Docker, in which crossbind runs SWIG, so a Linux
-job builds the app for Linux, which makes its bridges, and the macOS job builds the iOS app from them:
+Publishing to TestFlight takes one job on a hosted macOS runner. The runner has no Docker and needs none: on a Mac,
+crossbind makes a macOS or iOS build's bridges with `@crossbind/bridge-tools`, which npm installs with crossbind there.
 
 ```yaml
 name: Publish to TestFlight
 on: workflow_dispatch
 jobs:
-  bridges:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-node@v7
-        with:
-          node-version: 24
-          cache: npm
-      - run: npm ci
-      - run: npx crossbind app build -p linux
-      - uses: actions/upload-artifact@v7
-        with:
-          name: bridges
-          include-hidden-files: true
-          path: |
-            .crossbind/cache.json
-            .crossbind/build/bridge/
-            .crossbind/build/interface/
   publish:
-    needs: bridges
     runs-on: macos-latest
     env:
       CROSSBIND_RUNNER: LOCAL
@@ -1661,14 +1640,9 @@ jobs:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
         with:
-          node-version: 24
+          node-version: 26
           cache: npm
       - run: npm ci
-      - uses: actions/download-artifact@v8
-        with:
-          name: bridges
-          path: .crossbind
-      - run: grep -rl /home/runner/work/ .crossbind | xargs sed -i '' -e 's#/home/runner/work/#/Users/runner/work/#g'
       - uses: actions/cache@v6
         with:
           path: ~/.crossbind/hermes
@@ -1680,9 +1654,8 @@ jobs:
           CROSSBIND_APPLE_API_ISSUER: ${{ vars.APPLE_API_ISSUER }}
 ```
 
-The bridges keep the Linux runner's paths, which the `sed` moves to the macOS runner's, and `CROSSBIND_RUNNER: LOCAL`
-builds the rest with the runner's Xcode. The cache keeps Hermes and its dSYM, which every upload carries, from
-downloading again at each run.
+`CROSSBIND_RUNNER: LOCAL` keeps the build's other steps, such as a Rust crate's, on the runner and its Xcode. The cache
+keeps Hermes and its dSYM, which every upload carries, from downloading again at each run.
 
 ## Hermes
 

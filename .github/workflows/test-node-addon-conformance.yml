@@ -19,8 +19,10 @@ on:
             - e2e/app-bare/**
             - e2e/conformance/**
             - e2e/conformance-rust/**
+            - tooling/bridge-tools/**
             - .nvmrc
             - .github/workflows/test-node-addon-conformance.yml
+            - .github/workflows/build-bridge-tools.yml
             - '!**/*.md'
     pull_request:
         branches:
@@ -40,8 +42,10 @@ on:
             - e2e/app-bare/**
             - e2e/conformance/**
             - e2e/conformance-rust/**
+            - tooling/bridge-tools/**
             - .nvmrc
             - .github/workflows/test-node-addon-conformance.yml
+            - .github/workflows/build-bridge-tools.yml
             - '!**/*.md'
 
 permissions: {}
@@ -87,6 +91,9 @@ jobs:
                       e2e/backend-nodejs-native/.crossbind/build/bridge/
                       e2e/backend-nodejs-native/.crossbind/build/interface/
                   retention-days: 1
+    # The macOS legs make their bridges with bridge-tools, as a developer's Mac does.
+    bridge-tools:
+        uses: ./.github/workflows/build-bridge-tools.yml
     run:
         # Linux runs the glibc and musl addons in containers; a hosted Windows runner cannot run the
         # Linux images, so each Windows runner loads the addon built for it.
@@ -120,9 +127,9 @@ jobs:
             - name: Run the conformance suite
               run: node e2e/backend-nodejs-native/e2e/run.mjs
     app:
-        # A macOS runner has no Docker to run SWIG in, so the app leg builds from the addon's bridges: it binds
-        # the same headers with the same names.
-        needs: build
+        # The app leg makes its bridges with bridge-tools, with no Docker, SWIG or emscripten to fall back on, and they
+        # must be the ones the web image made for the addon: the two bind the same headers with the same names.
+        needs: [build, bridge-tools]
         runs-on: macos-latest
         timeout-minutes: 60
         env:
@@ -162,18 +169,29 @@ jobs:
               with:
                   name: node-addon-conformance
                   path: e2e/backend-nodejs-native
-            - name: Take its bridges under the app leg's paths
-              working-directory: e2e/desktop-app
+            - name: Restore the bridge tools
+              uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+              with:
+                  name: bridge-tools
+                  path: tooling/bridge-tools/dist
+            - name: Stand in for Docker, SWIG and emscripten, which the leg must not use
               run: |
-                  mkdir -p .crossbind/build
-                  cp -r ../backend-nodejs-native/.crossbind/build/bridge ../backend-nodejs-native/.crossbind/build/interface .crossbind/build/
-                  cp ../backend-nodejs-native/.crossbind/cache.json .crossbind/
-                  sed -i '' -e 's#/home/runner/work/#/Users/runner/work/#g' -e 's#/e2e/backend-nodejs-native/#/e2e/desktop-app/#g' \
-                      .crossbind/cache.json .crossbind/build/bridge/*.source .crossbind/build/bridge/*.deps
+                  mkdir -p "$RUNNER_TEMP/stand-ins"
+                  for tool in docker swig em++ emcc; do
+                      printf '#!/bin/sh\necho "%s must not run on this leg" >&2\nexit 1\n' "$tool" > "$RUNNER_TEMP/stand-ins/$tool"
+                      chmod +x "$RUNNER_TEMP/stand-ins/$tool"
+                  done
+                  echo "$RUNNER_TEMP/stand-ins" >> "$GITHUB_PATH"
             - name: Build the app and run the conformance suite in it
               run: |
                   pnpm --filter=@crossbind/e2e-desktop-app run build
                   pnpm --filter=@crossbind/e2e-desktop-app run e2e:prod
+            - name: Check its bridges are the ones the web image made for the addon
+              working-directory: e2e
+              run: |
+                  made() { (cd "$1/.crossbind/build" && ls interface/*.i bridge/*.i.cpp bridge/*.i.cpp.exports.json); }
+                  diff <(made desktop-app) <(made backend-nodejs-native)
+                  for file in $(made desktop-app); do cmp "desktop-app/.crossbind/build/$file" "backend-nodejs-native/.crossbind/build/$file"; done
             - name: Run the conformance suite in the app as its disk image holds it
               run: node e2e/desktop-app/e2e/run.mjs --installed
             # The e2e app above has app.updater, whose extension links what an app without it would lack.
@@ -182,9 +200,9 @@ jobs:
             - name: Build an app with none of crossbind's own extensions
               run: pnpm --filter=@crossbind/e2e-app-bare run build
     app-ios:
-        # The iOS app builds on a macOS runner from the addon's bridges as the macOS app does, its Rust for both
+        # The iOS app makes its bridges as the macOS app does and must match the addon's too, builds its Rust for both
         # iOS SDKs, and runs in the Simulator.
-        needs: build
+        needs: [build, bridge-tools]
         runs-on: macos-latest
         timeout-minutes: 60
         env:
@@ -225,18 +243,29 @@ jobs:
               with:
                   name: node-addon-conformance
                   path: e2e/backend-nodejs-native
-            - name: Take its bridges under the app leg's paths
-              working-directory: e2e/desktop-app
+            - name: Restore the bridge tools
+              uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+              with:
+                  name: bridge-tools
+                  path: tooling/bridge-tools/dist
+            - name: Stand in for Docker, SWIG and emscripten, which the leg must not use
               run: |
-                  mkdir -p .crossbind/build
-                  cp -r ../backend-nodejs-native/.crossbind/build/bridge ../backend-nodejs-native/.crossbind/build/interface .crossbind/build/
-                  cp ../backend-nodejs-native/.crossbind/cache.json .crossbind/
-                  sed -i '' -e 's#/home/runner/work/#/Users/runner/work/#g' -e 's#/e2e/backend-nodejs-native/#/e2e/desktop-app/#g' \
-                      .crossbind/cache.json .crossbind/build/bridge/*.source .crossbind/build/bridge/*.deps
+                  mkdir -p "$RUNNER_TEMP/stand-ins"
+                  for tool in docker swig em++ emcc; do
+                      printf '#!/bin/sh\necho "%s must not run on this leg" >&2\nexit 1\n' "$tool" > "$RUNNER_TEMP/stand-ins/$tool"
+                      chmod +x "$RUNNER_TEMP/stand-ins/$tool"
+                  done
+                  echo "$RUNNER_TEMP/stand-ins" >> "$GITHUB_PATH"
             - name: Build the app and run the conformance suite in the Simulator
               run: |
                   pnpm --filter=@crossbind/e2e-desktop-app run build
                   pnpm --filter=@crossbind/e2e-desktop-app run e2e:prod
+            - name: Check its bridges are the ones the web image made for the addon
+              working-directory: e2e
+              run: |
+                  made() { (cd "$1/.crossbind/build" && ls interface/*.i bridge/*.i.cpp bridge/*.i.cpp.exports.json); }
+                  diff <(made desktop-app) <(made backend-nodejs-native)
+                  for file in $(made desktop-app); do cmp "desktop-app/.crossbind/build/$file" "backend-nodejs-native/.crossbind/build/$file"; done
             - name: Build and link an app with none of crossbind's own extensions
               run: |
                   pnpm --filter=@crossbind/e2e-app-bare run build

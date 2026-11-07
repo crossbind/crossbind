@@ -91,8 +91,7 @@
         "framework": "Node.js",
         "label": "Node-API",
         "kind": "app",
-        "source": "examples/backend-nodejs-native",
-        "workspaceOnly": ["ci"]
+        "source": "examples/backend-nodejs-native"
     },
     {
         "key": "backend-nodejs-standalone",

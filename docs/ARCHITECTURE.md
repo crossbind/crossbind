@@ -115,7 +115,7 @@ Sub-packages declare workspace deps to other `@crossbind/port-*-<arch>` they nee
 
 `examples/` doubles as documentation. When integrating crossbind into a new framework, agents should diff against the closest matching sample first. Two samples are agent-canonical:
 
-- `examples/mobile-reactnative-cli/` — RN-cli reference, with CI bridge fixtures under `ci/crossbind-snapshot/`.
+- `examples/mobile-reactnative-cli/` — RN-cli reference.
 - `examples/lib-prebuilt-matrix/` — minimal C++ library packaging reference (no UI).
 
 ## Persistence + caching

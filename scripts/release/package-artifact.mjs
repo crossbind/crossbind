@@ -66,21 +66,11 @@ function npmCacheEnvironment() {
     };
 }
 
+// As every workspace package: pnpm pack writes crossbind's workspace:* pin of bridge-tools as the exact version.
 export function packCrossbind({ root, artifactDirectory }) {
-    fs.mkdirSync(artifactDirectory, { recursive: true });
-    const packed = JSON.parse(
-        execFileSync('npm', ['pack', path.join(root, 'core', 'crossbind'), '--json', '--pack-destination', artifactDirectory], {
-            cwd: root,
-            encoding: 'utf8',
-            env: npmCacheEnvironment(),
-            maxBuffer: 16 * 1024 * 1024,
-        }),
-    );
-    if (!Array.isArray(packed) || packed.length !== 1 || !packed[0].filename) {
-        throw new Error(`npm pack returned an unexpected result: ${JSON.stringify(packed)}`);
-    }
-    const tarball = path.join(artifactDirectory, packed[0].filename);
-    return { tarball, integrity: sha512Integrity(tarball), pack: packed[0] };
+    const packagePath = path.join('core', 'crossbind');
+    const { version } = JSON.parse(fs.readFileSync(path.join(root, packagePath, 'package.json'), 'utf8'));
+    return packWorkspacePackage({ root, packagePath, expectedName: 'crossbind', expectedVersion: version, artifactDirectory });
 }
 
 function publicInstallEnvironment(directory) {

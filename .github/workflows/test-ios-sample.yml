@@ -25,8 +25,10 @@ on:
             - plugins/react-native-ios-helper/**
             - examples/lib-prebuilt-matrix/**
             - examples/mobile-reactnative-cli/**
+            - tooling/bridge-tools/**
             - .nvmrc
             - .github/workflows/test-ios-sample.yml
+            - .github/workflows/build-bridge-tools.yml
             - '!**/*.md'
 
 permissions: {}
@@ -35,7 +37,11 @@ concurrency:
     group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
     cancel-in-progress: true
 jobs:
+    # The iOS builds make their bridges with bridge-tools, as a developer's Mac does.
+    bridge-tools:
+        uses: ./.github/workflows/build-bridge-tools.yml
     build:
+        needs: bridge-tools
         runs-on: macos-latest
         env:
             # Dependabot-triggered runs receive no repository secrets; the simulator build below does
@@ -88,10 +94,11 @@ jobs:
               run: |
                   curl -fsSL "https://get.maestro.mobile.dev" | bash
                   echo "$HOME/.maestro/bin" >> $GITHUB_PATH
-            - name: Restore cached bridge files
-              run: |
-                  mkdir -p ./examples/mobile-reactnative-cli/.crossbind
-                  cp -r ./examples/mobile-reactnative-cli/ci/crossbind-snapshot/. ./examples/mobile-reactnative-cli/.crossbind/
+            - name: Restore the bridge tools
+              uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+              with:
+                  name: bridge-tools
+                  path: tooling/bridge-tools/dist
             - name: Build examples/lib-prebuilt-matrix
               run: pnpm --filter=@crossbind/example-lib-prebuilt-matrix run build:ios
             - name: Pod install

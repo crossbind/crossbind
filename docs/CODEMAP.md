@@ -149,6 +149,7 @@ Index + template: [`docs/adr/README.md`](./adr/README.md).
 | `crossbind login`, `logout`, `usage`; the cloud address and the sign-in kept in `~/.crossbind/credentials.json`, which `RUNNER=REMOTE` builds on when the machine names no runner address | `src/actions/cloudCommands.js`, `src/utils/cloudAccount.js` |
 | Remote runner server (`/v1` protocol), its blob store and the file sync it shares with the client | `src/runner/{server,blobs,files}.js` |
 | Bridge file generation (SWIG) | `src/actions/createInterface.js` |
+| Every bridge on a Mac but Android's: `@crossbind/bridge-tools`' SWIG in this process, Xcode's clang for the macro table | `src/utils/bridgeTools.js` |
 | Native version mtime check (force trigger) | `src/actions/isSourceNewer.js` |
 | Resolve transitive C++ deps | `src/actions/getDependLibs.js` |
 | Aggregate `env`/`data`/`cmake` per target | `src/actions/getData.js` |
@@ -294,14 +295,14 @@ To add a new `ports/<X>`: see `docs/playbooks/new-port.md` (uses `ports/zlib` as
 | `examples/web-react-rspack` | Rspack/Webpack + React |
 | `examples/web-vanilla` | Plain HTML + bundler-less |
 | `examples/backend-nodejs-wasm` | Node.js consumer |
-| `examples/backend-nodejs-native` | Node.js app that builds its own addon (`-p host -e node`, `build:desktop` for every desktop platform; the macOS CI job uses `ci/` bridge snapshots) |
+| `examples/backend-nodejs-native` | Node.js app that builds its own addon (`-p host -e node`, `build:desktop` for every desktop platform) |
 | `examples/backend-nodejs-standalone` | Node.js app on the Node-API addons `@crossbind/example-lib-prebuilt-matrix` ships (`/node/napi`), nothing to build |
-| `examples/desktop-electron` | Electron app with its own addon in the main process, packaged with electron-builder (`dist/` stays outside the asar archive); takes the `backend-nodejs-native` bridge snapshot in the macOS CI job |
-| `examples/desktop-app` | macOS, Linux, Windows, iOS and Android app on crossbind's own host (`target.runtimeEnv: 'app'`): Vite page in the system webview, the C++ in Hermes; the `Desktop App` template; takes a bridge snapshot in the macOS CI job and builds in the Linux ones |
+| `examples/desktop-electron` | Electron app with its own addon in the main process, packaged with electron-builder (`dist/` stays outside the asar archive) |
+| `examples/desktop-app` | macOS, Linux, Windows, iOS and Android app on crossbind's own host (`target.runtimeEnv: 'app'`): Vite page in the system webview, the C++ in Hermes; the `Desktop App` template; builds in the macOS and Linux CI jobs |
 | `examples/native-executable` | Native executable from `main()` (`-e native`); the `Native Executable` template |
 | `examples/app-extension` | App extension package: one C++ function every platform compiles and the page's module; the `Extension` template, which names it after the project |
 | `examples/cloud-cloudflare-worker` | Cloudflare Worker / edge |
-| `examples/mobile-reactnative-cli` | RN-cli (canonical mobile reference; CI uses `ci/crossbind-snapshot/`) |
+| `examples/mobile-reactnative-cli` | RN-cli (canonical mobile reference) |
 | `examples/mobile-reactnative-expo` | RN with Expo |
 | `examples/lib-prebuilt-matrix` | Minimal C++ library packaging (no UI) — canonical for Persona 3; ships its Node-API addons and the `node/napi`, `node/wasm` and `edge/wasm` entries |
 | `e2e/*` | Internal test benches: bigger demos against multiple `@crossbind/port-*` (curl, gdal, geos, …) + the conformance kit |
@@ -351,7 +352,9 @@ All `check:*` and `clear:*` are exposed as `pnpm run` aliases — see `package.j
 | `build-macos.yml` | `pnpm run ci:macos:build` (iOS samples + zlib-ios) |
 | `build-windows.yml` | `pnpm run ci:windows:build` (wasm + android subset) |
 | `test-android-sample.yml` | RN-cli Android E2E |
-| `test-ios-sample.yml` | RN-cli iOS E2E (uses `ci/crossbind-snapshot/` bridge fixtures) |
+| `test-ios-sample.yml` | RN-cli iOS E2E, its bridges made with bridge-tools |
+| `build-bridge-tools.yml` | Called by the workflows with macOS legs: builds `tooling/bridge-tools` in the web image, or takes it from the cache, and hands it over as an artifact |
+| `test-bridge-tools.yml` | Builds `tooling/bridge-tools` and checks on macOS that it makes the web image's bridges and macro tables for `e2e/conformance` |
 | `check-crossbind-release.yml` | PR/push train tests, actionlint, publish hygiene and installed `crossbind` tarball smoke |
 | `check-port-links.yml` | Links the published C++ ports (gdal, proj, geos) with the pinned image and calls them from Node (`scripts/check-port-links.mjs`); on toolchain-pin and port changes, weekly, and on demand |
 | `release-crossbind.yml` | Manual Linux/macOS package train; protected OIDC publish after the all-artifacts barrier; exact `crossbind` GitHub Release |

@@ -11,8 +11,9 @@ Windows and Android System WebView on Android.
 
 >**Note**: Make sure you have completed the [crossbind - Prerequisites](https://crossbind.dev/docs/guide/getting-started/prerequisites) instructions.
 Apps build on macOS with Xcode's command line tools, iOS apps with Xcode and its iOS platform, and Linux, Windows and
-Android apps in crossbind's linux, windows and android-app images, which carry everything they build with; the
-bindings are generated in Docker. A macOS or iOS build fetches React Native's Hermes once into `~/.crossbind/hermes`.
+Android apps in crossbind's linux, windows and android-app images, which carry everything they build with. The
+bindings are generated in Docker, but on a Mac `@crossbind/bridge-tools` generates every app's but Android's. A macOS or
+iOS build fetches React Native's Hermes once into `~/.crossbind/hermes`.
 
 ## Setup
 

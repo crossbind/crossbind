@@ -71,7 +71,7 @@ crossbind app publish github -p windows`,
         { type: 'h2', id: 'ci', text: 'From CI' },
         {
             type: 'p',
-            text: "In a workflow, the job's own token does: give it to the step as `GITHUB_TOKEN: ${{ github.token }}`, with the job's `permissions: contents: write`, and with `app.updater` the private key as a secret in `CROSSBIND_UPDATER_PRIVATE_KEY`. A hosted macOS runner has no Docker, so a macOS app's job builds from the bridges a Linux job makes, as the [TestFlight workflow](/guide/app-store/#ci) does.",
+            text: "In a workflow, the job's own token does: give it to the step as `GITHUB_TOKEN: ${{ github.token }}`, with the job's `permissions: contents: write`, and with `app.updater` the private key as a secret in `CROSSBIND_UPDATER_PRIVATE_KEY`.",
         },
         {
             type: 'p',

@@ -12,6 +12,9 @@ const valueOf = (name) => {
     return index === -1 ? undefined : process.argv[index + 1];
 };
 const valuesOf = (name) => process.argv.flatMap((argument, index) => (argument === name ? [process.argv[index + 1]] : [])).filter(Boolean);
+// crossbind pins bridge-tools at its own version, so a train that releases crossbind releases the bridge tools made from
+// the image that crossbind pins.
+const RELEASED_WITH = { crossbind: ['@crossbind/bridge-tools'] };
 
 function replaceTopLevelVersion(source, version, manifestPath) {
     const pattern = /^(\s*"version"\s*:\s*")([^"]+)(")/m;
@@ -30,7 +33,9 @@ export function setWorkspaceVersion({ root = REPOSITORY_ROOT, version, packageNa
         throw new Error(`Target ${version} must be newer than the current train version ${currentTrainVersion}; npm train versions are immutable.`);
     }
     const byName = new Map(packages.map((candidate) => [candidate.name, candidate]));
-    const selectedNames = all ? packages.map((candidate) => candidate.name) : [...new Set(packageNames)];
+    const requested = all ? packages.map((candidate) => candidate.name) : packageNames;
+    const companions = (name) => (RELEASED_WITH[name] ?? []).filter((companion) => byName.has(companion));
+    const selectedNames = [...new Set(requested.flatMap((name) => [name, ...companions(name)]))];
     const unknown = selectedNames.filter((name) => !byName.has(name));
     if (unknown.length) throw new Error(`Unknown public workspace package(s): ${unknown.join(', ')}.`);
 

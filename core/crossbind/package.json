@@ -51,6 +51,9 @@
         "spdx-expression-parse": "^5.0.0",
         "upath": "^3.0.8"
     },
+    "optionalDependencies": {
+        "@crossbind/bridge-tools": "workspace:*"
+    },
     "keywords": [
         "webassembly",
         "react-native",
