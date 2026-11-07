@@ -28,6 +28,7 @@ crossbind/
 ├── tooling/                          ← dev-time helpers, not part of a consumer build
 │   ├── create-app/                   ← create-crossbind scaffolder (templates built from examples/)
 │   ├── docker/                       ← pinned build image
+│   ├── bridge-tools/                 ← the image's SWIG as WebAssembly + em++'s headers: macOS and iOS bridges on a Mac without Docker
 │   ├── cloud/                        ← crossbind cloud on api.crossbind.dev: the playground compiler, the accounts `crossbind login` signs in to, a runner per user and image
 │   └── typescript-config/            ← shared tsconfig
 ├── extensions/                       ← app extensions: crossbind's own, which app-host has as dependencies, and clipboard

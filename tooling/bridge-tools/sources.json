@@ -1,0 +1,7 @@
+{
+    "pcre2": {
+        "version": "10.46",
+        "url": "https://github.com/PCRE2Project/pcre2/releases/download/pcre2-10.46/pcre2-10.46.tar.gz",
+        "sha256": "8d28d7f2c3b970c3a4bf3776bcbb5adfc923183ce74bc8df1ebaad8c1985bd07"
+    }
+}

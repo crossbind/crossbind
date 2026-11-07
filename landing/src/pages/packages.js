@@ -15,7 +15,7 @@ export const NOT_PUBLISHED = 'Not published yet';
 
 // The folders each group's packages come from, in the order its rows take; one ending in a star takes those under it.
 const GROUPS = [
-    { id: 'cli', label: 'CLI', folders: ['core/crossbind', 'tooling/create-app'] },
+    { id: 'cli', label: 'CLI', folders: ['core/crossbind', 'tooling/create-app', 'tooling/bridge-tools'] },
     { id: 'plugins', label: 'Plugins', folders: ['plugins/*'] },
     { id: 'libraries', label: 'Libraries', folders: ['ports/*'] },
     { id: 'apps', label: 'Apps', folders: ['core/app-host', 'core/store-kit'] },
