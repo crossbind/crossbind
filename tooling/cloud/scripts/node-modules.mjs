@@ -17,6 +17,22 @@ const WORKSPACE_FILES = ['package.json', 'pnpm-workspace.yaml', 'pnpm-lock.yaml'
 const PNPM_STATE = ['.modules.yaml', '.pnpm-workspace-state-v1.json'];
 // The compiler image's: linux on either CPU. Without them a deploy is for the machine it runs on.
 export const IMAGE_PLATFORMS = Object.freeze(['--os', 'linux', '--cpu', 'x64', '--cpu', 'arm64']);
+// crossbind's optional dependency on the workspace's bridge-tools, which a deploy from the lockfile takes only injected.
+const BRIDGE_TOOLS = '@crossbind/bridge-tools';
+const BRIDGE_TOOLS_DIR = path.join(REPO_DIR, 'tooling', 'bridge-tools');
+const BRIDGE_TOOLS_LOCK = `    optionalDependencies:\n      '${BRIDGE_TOOLS}':\n        specifier: workspace:*\n        version: link:../../tooling/bridge-tools\n`;
+
+// The copy leaves bridge-tools out: the compiler image runs on Linux, where crossbind has no use for it.
+function withoutBridgeTools(workspace, cli) {
+    const lockfile = path.join(workspace, 'pnpm-lock.yaml');
+    const lock = fs.readFileSync(lockfile, 'utf8');
+    if (!lock.includes(BRIDGE_TOOLS_LOCK)) throw new Error(`crossbind: pnpm-lock.yaml lists ${BRIDGE_TOOLS} for crossbind otherwise than node-modules.mjs expects.`);
+    fs.writeFileSync(lockfile, lock.replace(BRIDGE_TOOLS_LOCK, ''));
+    const manifestFile = path.join(cli, 'package.json');
+    const { optionalDependencies, ...manifest } = JSON.parse(fs.readFileSync(manifestFile, 'utf8'));
+    const optional = Object.fromEntries(Object.entries(optionalDependencies).filter(([name]) => name !== BRIDGE_TOOLS));
+    fs.writeFileSync(manifestFile, JSON.stringify(Object.keys(optional).length ? { ...manifest, optionalDependencies: optional } : manifest, null, 4));
+}
 
 // crossbind from this repository with every version the workspace lockfile pins; hoisted lays the packages out as npm
 // does, and no install script runs. pnpm deploys from a lockfile only with injected workspace packages, of which
@@ -29,6 +45,7 @@ export function deployCli(target, platforms = []) {
     try {
         WORKSPACE_FILES.forEach((file) => fs.copyFileSync(path.join(REPO_DIR, file), path.join(workspace, file)));
         fs.cpSync(CLI_DIR, cli, { recursive: true, filter: (source) => path.basename(source) !== 'node_modules' });
+        withoutBridgeTools(workspace, cli);
         execFileSync('pnpm', [
             '--silent', '--filter', 'crossbind', 'deploy', '--prod', '--frozen-lockfile', '--ignore-scripts',
             '--config.inject-workspace-packages=true', '--config.node-linker=hoisted', ...platforms, target,
@@ -37,6 +54,12 @@ export function deployCli(target, platforms = []) {
         fs.rmSync(workspace, { recursive: true, force: true });
     }
     PNPM_STATE.forEach((file) => fs.rmSync(path.join(target, 'node_modules', file), { force: true }));
+    // On a Mac crossbind makes every bridge with bridge-tools, so a deploy for this Mac takes the workspace's.
+    if (!platforms.length && process.platform === 'darwin') {
+        ['package.json', 'index.js', 'dist'].filter((entry) => fs.existsSync(path.join(BRIDGE_TOOLS_DIR, entry))).forEach((entry) => {
+            fs.cpSync(path.join(BRIDGE_TOOLS_DIR, entry), path.join(target, 'node_modules', BRIDGE_TOOLS, entry), { recursive: true });
+        });
+    }
 }
 
 // The ports among `packages` (compiler/packages.js), packed from npm at their pinned version and refused unless npm's
