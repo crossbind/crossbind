@@ -6,6 +6,8 @@ import DocumentPage from './pages/DocumentPage.jsx';
 import ExtensionPage from './pages/ExtensionPage.jsx';
 import ExtensionsPage from './pages/ExtensionsPage.jsx';
 import IntegrationsPage from './pages/IntegrationsPage.jsx';
+import PackagePage from './pages/PackagePage.jsx';
+import PackagesPage from './pages/PackagesPage.jsx';
 import ExamplesPage from './pages/ExamplesPage.jsx';
 import PlaygroundPage from './playground/PlaygroundPage.jsx';
 import LibrariesPage from './ports/LibrariesPage.jsx';
@@ -42,6 +44,8 @@ function Page({ tokens, page }) {
     if (page.kind === 'playground') return <PlaygroundPage tokens={tokens} page={page} />;
     if (page.kind === 'tutorial') return <TutorialPage tokens={tokens} page={page} />;
     if (page.kind === 'changelog') return <ChangelogPage tokens={tokens} page={page} />;
+    if (page.kind === 'packages') return <PackagesPage tokens={tokens} page={page} />;
+    if (page.kind === 'package') return <PackagePage tokens={tokens} page={page} />;
     if (page.kind === 'document') return <DocumentPage tokens={tokens} page={page} />;
     return <Guide tokens={tokens} page={page} />;
 }

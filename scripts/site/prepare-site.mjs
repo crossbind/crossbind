@@ -11,9 +11,16 @@ import {
     renderSnapshotModule,
     resolveSiteRelease,
 } from '../release/resolve-site-release.mjs';
-import { buildPortsCatalog, renderCatalogModule } from './build-ports-catalog.mjs';
+import {
+    buildPortsCatalog,
+    createFixtureRegistryClient,
+    createRegistryClient,
+    rememberingRegistryClient,
+    renderCatalogModule,
+} from './build-ports-catalog.mjs';
 import { readExtensionPages, renderExtensionPagesModule } from './build-extension-pages.mjs';
 import { buildExtensionsCatalog, renderExtensionsModule } from './build-extensions-catalog.mjs';
+import { buildPackagesCatalog, renderPackagesModule } from './build-packages-catalog.mjs';
 import { DEMOS_ROOT, MANIFEST_NAME } from './build-example-demos.mjs';
 import { buildLibraryExamples, renderLibraryExamplesModule } from './build-library-examples.mjs';
 import { siteNativeVersions } from './native-versions.mjs';
@@ -22,7 +29,7 @@ import { releaseNotesBlocks } from '../release/release-notes-blocks.mjs';
 import { assertChangelogCurrent, CHANGELOG_FILE, REPOSITORY_ROOT as CHANGELOG_ROOT, splitChangelog } from '../release/render-changelog.mjs';
 
 // Everything the site needs from outside its own tree, resolved once per dev/build run:
-// the verified release snapshot, and the ports and extensions catalogs with their npm publication
+// the verified release snapshot, and the ports, extensions and packages catalogs with their npm publication
 // state. Each is written as a generated module, then vite runs with a one-off token that vite.config.js checks,
 // so a bare `vite build` cannot reuse files left behind by an earlier run. One fixture document
 // (CROSSBIND_SITE_RELEASE_FIXTURE) feeds both for offline work; such a build is marked and
@@ -76,8 +83,10 @@ export async function prepareSite({ channel, outDir, env = process.env }) {
     if (fixture) log(`Resolving the site from fixture ${path.resolve(env[FIXTURE_ENVIRONMENT_VARIABLE])}; this build cannot be deployed.`);
     const clients = fixture ? createFixtureClients(fixture) : createLiveClients();
     const snapshot = await resolveSiteRelease({ channel, ...clients, source: fixture ? 'fixture' : 'live', log });
-    const catalog = await buildPortsCatalog({ distTag: snapshot.distTag, fixture: fixture ?? undefined, log });
-    const extensions = await buildExtensionsCatalog({ distTag: snapshot.distTag, fixture: fixture ?? undefined, log });
+    const registry = rememberingRegistryClient(fixture ? createFixtureRegistryClient(fixture) : createRegistryClient());
+    const catalog = await buildPortsCatalog({ distTag: snapshot.distTag, fixture: fixture ?? undefined, registry, log });
+    const extensions = await buildExtensionsCatalog({ distTag: snapshot.distTag, fixture: fixture ?? undefined, registry, log });
+    const packages = await buildPackagesCatalog({ distTag: snapshot.distTag, fixture: fixture ?? undefined, registry, log });
 
     const buildToken = crypto.randomUUID();
     fs.mkdirSync(outDir, { recursive: true });
@@ -94,6 +103,7 @@ export async function prepareSite({ channel, outDir, env = process.env }) {
     );
     fs.writeFileSync(path.join(outDir, 'ports-catalog.js'), renderCatalogModule(catalog));
     fs.writeFileSync(path.join(outDir, 'extensions-catalog.js'), renderExtensionsModule(extensions));
+    fs.writeFileSync(path.join(outDir, 'packages-catalog.js'), renderPackagesModule(packages));
     fs.writeFileSync(path.join(outDir, 'extension-pages.js'), renderExtensionPagesModule(readExtensionPages()));
     // Live demos are built separately (build-example-demos.mjs); the page shows the ones present.
     const manifestFile = path.join(DEMOS_ROOT, MANIFEST_NAME);

@@ -44,7 +44,9 @@ export function DetailPage({ tokens, page, back, facts, children }) {
                     >
                         {page.title}
                     </h1>
-                    <p style={{ fontSize: 17, lineHeight: 1.65, color: tokens.textDim, margin: '0 0 14px', maxWidth: 760 }}>{inline(page.lede, tokens)}</p>
+                    {page.lede ? (
+                        <p style={{ fontSize: 17, lineHeight: 1.65, color: tokens.textDim, margin: '0 0 14px', maxWidth: 760 }}>{inline(page.lede, tokens)}</p>
+                    ) : null}
                     <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'baseline', gap: '6px 20px', fontSize: 13.5, color: tokens.textMuted }}>
                         {facts}
                         {page.links.map((link) => (
