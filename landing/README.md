@@ -1,7 +1,7 @@
 # @crossbind/landing
 
 The crossbind.dev site: the landing page, the `/guide/` docs, the `/agent/` setup page, the
-`/ports/` library catalog, `/integrations/`, `/extensions/`, `/examples/` and the `/changelog/`. Plain Vite + React, no
+`/ports/` library catalog, `/integrations/`, `/extensions/`, `/examples/`, the `/changelog/` and `/packages/` with each package's releases. Plain Vite + React, no
 router and no CMS: the landing is one page built from a [Claude Design](https://claude.ai/design)
 mock, and every other page is prerendered to its own static HTML file, so links are plain
 `<a href>` and the browser does the navigating.
@@ -42,10 +42,13 @@ catalog are generated from one verified release snapshot, so they cannot disagre
    every port's `package.json` and `build.mjs`, and what npm serves for each variant on the same
    dist-tag - a variant counts as published only when the registry has it - and the Apps guide's
    list of crossbind's extensions (`scripts/site/build-extensions-catalog.mjs`) from
-   `extensions/*/package.json` the same way;
-6. writes `generated/release-snapshot.js`, `generated/ports-catalog.js` and
-   `generated/extensions-catalog.js`, which `src/release.js`, `src/ports/catalog.js` and
-   `src/guide/pages/apps.js` read, and starts `vite` with a one-off build token
+   `extensions/*/package.json` the same way, and every package the release train publishes
+   (`scripts/site/build-packages-catalog.mjs`) with the version npm serves for it on that dist-tag and the releases its
+   `<package>@<version>` tags record, each with the commits that changed its folder since the release before, so the
+   checkout needs its history (`fetch-depth: 0` in CI) and a version npm serves without its tag stops the build;
+6. writes `generated/release-snapshot.js`, `generated/ports-catalog.js`,
+   `generated/extensions-catalog.js` and `generated/packages-catalog.js`, which `src/release.js`,
+   `src/ports/catalog.js`, `src/guide/pages/apps.js` and `src/pages/packages.js` read, and starts `vite` with a one-off build token
    that `vite.config.js` checks, so a bare `vite build` cannot reuse files left behind by an
    earlier run.
 
@@ -87,7 +90,7 @@ switch, and it is deliberately not automatic.
 | `src/release.js` | The verified release snapshot every version-dependent surface reads |
 | `src/data.js` | Every piece of copy, every figure, every outbound URL |
 | `src/site-pages.js` | Every page of the site in one list: routing, prerender, sitemap, llms.txt and search derive from it |
-| `src/pages/` | `/agent/` as a page object rendered in the guide shell; `/examples/` as a page object plus its own `ExamplesPage.jsx`: every create-crossbind template's command, then every library app with its captured picture; `/integrations/` as `integrations.js` plus `IntegrationsPage.jsx`: a card per bundler, mobile and desktop framework, runtime and package registry, naming the crossbind packages it takes and linking to its guide section, which `test/integrations.test.mjs` checks against the guide's headings and the repository's packages; `/privacy/` and `/license/` as page objects in `DocumentPage.jsx`'s single column, the license text being the repository's `LICENSE`, which `prepare-site.mjs` writes to `generated/license.js` |
+| `src/pages/` | `/agent/` as a page object rendered in the guide shell; `/examples/` as a page object plus its own `ExamplesPage.jsx`: every create-crossbind template's command, then every library app with its captured picture; `/integrations/` as `integrations.js` plus `IntegrationsPage.jsx`: a card per bundler, mobile and desktop framework, runtime and package registry, naming the crossbind packages it takes and linking to its guide section, which `test/integrations.test.mjs` checks against the guide's headings and the repository's packages; `/privacy/` and `/license/` as page objects in `DocumentPage.jsx`'s single column, the license text being the repository's `LICENSE`, which `prepare-site.mjs` writes to `generated/license.js`; `/packages/` as `packages.js` plus `PackagesPage.jsx`: every package the release train publishes, grouped by its folder, with the version npm serves on the dist-tag and a library's packages folded under its name, reached from the version menu; and each published package's releases at `/packages/<name>/` in `PackagePage.jsx`, a library's packages sharing one page |
 | `src/demos.js` | The live demos manifest (`generated/example-demos.js`), keyed by example id |
 | `src/ports/` | `/ports/` and `/ports/<name>/` from the generated catalog, each with its own page component (`LibrariesPage.jsx`, `PortPage.jsx`) |
 | `src/changelog/` | `/changelog/`: the page object built from `generated/changelog.js`, its own `ChangelogPage.jsx` with a version rail, the anchor helper and the release row; reached from the navbar's version menu, not the docs sidebar |
@@ -95,7 +98,7 @@ switch, and it is deliberately not automatic.
 | `src/llms/` | Renders `/llms.txt`, `/llms-full.txt` and the Markdown twin of every page (its path plus `.md`; the reference documents under `/api/`) at build time from the snapshot, the catalog and the page list; `pnpm test` covers the block renderer and the link rewriting |
 | `public/_redirects` | 301s for the retired Docusaurus routes; checked by `scripts/site/check-site-links.mjs` |
 | `src/theme.js` | Palettes, the light/dark token tables, and the persisted theme hook |
-| `src/components/` | `Nav` with its `DocsMenu`, its `EcosystemMenu` (Libraries and Integrations) and its `VersionMenu` (version, channel, changelog, GitHub and npm links), and the shared `ui.jsx` primitives |
+| `src/components/` | `Nav` with its `DocsMenu`, its `EcosystemMenu` (Libraries and Integrations) and its `VersionMenu` (the version, with the changelog, all packages, the migration guide and the v1 docs), and the shared `ui.jsx` primitives |
 | `src/sections/` | One file per band of the page, composed in `src/App.jsx` |
 | `src/guide/pages/` | One file per guide page — content as data, no markup |
 | `src/guide/nav.js` | The order everything derives from: sidebar, prev/next, routes |

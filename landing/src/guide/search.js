@@ -50,7 +50,7 @@ function pageEntries(page) {
             href: page.href,
             body: [page.lede, page.description, ...page.blocks.map(blockText)].join(' '),
         },
-        ...sections.map((section) => ({
+        ...(page.shouldIndexSections === false ? [] : sections).map((section) => ({
             title: section.title,
             sub: section.sub,
             href: section.href,

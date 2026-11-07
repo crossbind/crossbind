@@ -74,7 +74,7 @@ export function RowGroup({ tokens, id, label, columns = null, children }) {
     return (
         <section aria-labelledby={id} style={{ marginTop: 44 }}>
             <div className="lib-group-head" style={{ fontSize: 13, fontWeight: 600, color: tokens.textMuted, marginBottom: 10 }}>
-                <h2 id={id} style={{ fontSize: 'inherit', fontWeight: 'inherit', margin: 0 }}>
+                <h2 id={id} style={{ fontSize: 'inherit', fontWeight: 'inherit', margin: 0, scrollMarginTop: 90 }}>
                     {label}
                 </h2>
                 {columns}

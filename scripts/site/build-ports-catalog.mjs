@@ -138,7 +138,18 @@ export function createFixtureRegistryClient(fixture) {
     };
 }
 
-async function mapWithConcurrency(items, limit, worker) {
+// A client that asks the one it wraps once per package, for a build whose catalogs list the same packages.
+export function rememberingRegistryClient(client) {
+    const answers = new Map();
+    return {
+        distTags(packageName) {
+            if (!answers.has(packageName)) answers.set(packageName, client.distTags(packageName));
+            return answers.get(packageName);
+        },
+    };
+}
+
+export async function mapWithConcurrency(items, limit, worker) {
     const results = new Array(items.length);
     let next = 0;
     const lanes = Array.from({ length: Math.min(limit, items.length) }, async () => {

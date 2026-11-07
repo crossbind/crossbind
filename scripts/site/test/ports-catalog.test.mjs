@@ -8,6 +8,7 @@ import {
     LIBRARY_TARGETS,
     NAPI_TARGET,
     readPortsTree,
+    rememberingRegistryClient,
     renderCatalogModule,
     resolvePublication,
 } from '../build-ports-catalog.mjs';
@@ -103,6 +104,21 @@ test('the registry client requests a scoped package by its escaped name', async 
     });
     await client.distTags('@crossbind/port-x');
     assert.deepEqual(requested, ['https://registry.example/@crossbind%2fport-x']);
+});
+
+test('a remembering client asks the registry once for each package, however many catalogs list it', async () => {
+    const asked = [];
+    const client = rememberingRegistryClient({
+        distTags: async (name) => {
+            asked.push(name);
+            return { beta: '2.0.0-beta.68' };
+        },
+    });
+
+    await Promise.all([client.distTags('crossbind'), client.distTags('crossbind'), client.distTags('@crossbind/plugin-vite')]);
+
+    assert.deepEqual(asked, ['crossbind', '@crossbind/plugin-vite']);
+    assert.deepEqual(await client.distTags('crossbind'), { beta: '2.0.0-beta.68' });
 });
 
 test('a fixture build is marked as such and renders deterministically', async () => {

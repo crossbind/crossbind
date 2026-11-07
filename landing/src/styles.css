@@ -757,3 +757,71 @@ button {
         grid-template-areas: 'name' 'summary';
     }
 }
+
+/* /packages/ has a package's name, its version and its npm and GitHub links per row; a library's row opens to its
+   packages, indented under it, its chevron in the last column, which the other rows leave empty so every column lines
+   up. The name's link covers its row, so the whole row opens the package's page; a row npm serves nothing for is no
+   link. On a phone the list leaves the npm and GitHub links to the package's page. */
+.lib-row.package-row {
+    position: relative;
+    grid-template-columns: minmax(0, 1fr) 150px 120px 10px;
+    grid-template-areas: 'name version links marker';
+}
+
+.lib-row.package-row.is-nested {
+    padding-left: 26px;
+}
+
+.lib-row.package-row.is-static:hover {
+    background: none;
+}
+
+.package-link::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: 8px;
+}
+
+.package-link:focus-visible {
+    outline: none;
+}
+
+.package-link:focus-visible::after {
+    outline: 2px solid currentColor;
+    outline-offset: -2px;
+}
+
+.package-links {
+    grid-area: links;
+    position: relative;
+    z-index: 1;
+    display: flex;
+    gap: 4px;
+}
+
+.package-links a {
+    padding: 1px 6px;
+    border-radius: 6px;
+}
+
+.package-links a:hover {
+    background: rgba(127, 127, 127, 0.12);
+}
+
+.package-marker {
+    grid-area: marker;
+    align-self: center;
+    display: flex;
+}
+
+@media (max-width: 560px) {
+    .lib-row.package-row {
+        grid-template-columns: minmax(0, 1fr) 10px;
+        grid-template-areas: 'name marker' 'version marker';
+    }
+
+    .lib-row.package-row .package-links {
+        display: none;
+    }
+}

@@ -10,6 +10,7 @@ import EXAMPLES_PAGE, { TEMPLATE_GROUPS } from '../pages/examples.js';
 import EXTENSIONS_PAGE, { EXTENSION_PAGES } from '../pages/extensions.js';
 import INTEGRATIONS_PAGE from '../pages/integrations.js';
 import LICENSE_PAGE from '../pages/license.js';
+import PACKAGES_PAGE, { PACKAGE_PAGES } from '../pages/packages.js';
 import { TUTORIAL_PAGES } from '../pages/tutorial.js';
 import { PORT_PAGES, PORTS_INDEX } from '../ports/pages.js';
 import { RELEASE } from '../release.js';
@@ -124,6 +125,11 @@ export function renderLlmsIndex() {
         entry(CHANGELOG_PAGE),
         `- [Release notes for ${RELEASE.version}](${SITE}${changelogHref(RELEASE.version)})`,
         '',
+        '## Packages',
+        '',
+        entry(PACKAGES_PAGE),
+        ...PACKAGE_PAGES.map(entry),
+        '',
         '## Optional',
         '',
         `- [llms-full.txt](${FULL_URL}): every page in this index as one Markdown file`,
@@ -166,6 +172,8 @@ export function renderLlmsFull() {
         page(EXAMPLES_PAGE, 'Examples'),
         page(AGENT_PAGE, 'Coding agents'),
         page(CHANGELOG_PAGE, 'Release history'),
+        page(PACKAGES_PAGE, 'Packages'),
+        ...PACKAGE_PAGES.map((item) => page(item, `Package: ${item.title}`)),
     ];
 
     const header = [
