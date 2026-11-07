@@ -49,7 +49,7 @@ export function windowsSigning(env = process.env) {
         return null;
     }
     if (TOKENS.includes(storetype)) {
-        throw new Error(`crossbind: ${WINDOWS_SIGNING.storetype} ${storetype} is a hardware token, which crossbind's windows container does not reach. Sign with a cloud's key service, as Azure Trusted Signing (TRUSTEDSIGNING) or Azure Key Vault (AZUREKEYVAULT), or with a PKCS#12 file.`);
+        throw new Error(`crossbind: ${WINDOWS_SIGNING.storetype} ${storetype} is a hardware token, which crossbind's windows container does not reach. Sign with a cloud's key service, as Azure Artifact Signing (TRUSTEDSIGNING) or Azure Key Vault (AZUREKEYVAULT), or with a PKCS#12 file.`);
     }
     if (![...FILE_STORES, ...CLOUDS].includes(storetype)) {
         throw new Error(`crossbind: ${WINDOWS_SIGNING.storetype} ${storetype} is no store type jsign takes: ${[...FILE_STORES, ...CLOUDS].join(', ')}.`);

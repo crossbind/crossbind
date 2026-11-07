@@ -55,7 +55,7 @@ crossbind app publish github -p windows`,
         },
         {
             type: 'p',
-            text: "A release that is out holds the files its publishes have put up so far, and the newest one out is the one apps update from. So put each platform's app up with `--draft` first, as above, then the release out with a publish without it, `gh release edit v<version> --draft=false` or GitHub's page.",
+            text: "A release that is out holds the files its publishes have put up so far, and the newest one out is the one apps update from. So put each platform's app up with `--draft` first, as above, then the release out with a publish without it. GitHub then makes the release the latest unless it has a newer version out, so a fix of an older line leaves the newest one latest. `gh release edit v<version> --draft=false` makes it the latest whatever its version, and so may GitHub's page, as its \"Set as the latest release\" box says; `gh api --method PATCH repos/<owner>/<repo>/releases/<id> -f draft=false -f make_latest=legacy` puts it out as a publish does, with the id `gh release view v<version> --json databaseId -q .databaseId` prints.",
         },
         {
             type: 'p',

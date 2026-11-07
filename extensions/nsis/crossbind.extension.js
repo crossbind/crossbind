@@ -15,6 +15,14 @@ export function windowsName(label) {
 // A Windows setup program reads a dollar sign in its text as the start of a variable.
 const nsisText = (text) => text.replaceAll('$', () => '$$');
 
+// package.json's author as the apps Settings lists show a publisher: its name alone, which comes before the email and
+// URL npm's "Name <email> (url)" gives.
+export function publisherOf(author) {
+    if (typeof author !== 'string') return author?.name?.trim() || null;
+    const ends = ['<', '('].map((mark) => author.indexOf(mark)).filter((index) => index >= 0);
+    return author.slice(0, Math.min(author.length, ...ends)).trim() || null;
+}
+
 // The schemes a Windows app's setup program registers, as a macro that calls the one it is given on each.
 const schemesMacro = (schemes) => ['!macro CROSSBIND_URL_SCHEMES DO', ...schemes.map((scheme) => `  !insertmacro \${DO} "${scheme}"`), '!macroend', ''].join('\n');
 // The extensions of the files it opens, each with its type's name, in a string of the script's, which takes a quote as
@@ -55,6 +63,7 @@ export default function nsis() {
                 const fileTypesFile = path.join(api.workDir, `${path.basename(app)}.filetypes.nsh`);
                 if (fileTypes.length > 0) fs.writeFileSync(fileTypesFile, fileTypesMacro(fileTypes));
                 const { signer } = api.windows;
+                const publisher = publisherOf(api.project.package?.author);
                 api.run([
                     'makensis', '-V2', '-INPUTCHARSET', 'UTF8',
                     `-DNAME=${nsisText(windowsName(api.app.name))}`,
@@ -63,6 +72,7 @@ export default function nsis() {
                     `-DVERSION=${nsisText(api.app.version)}`,
                     `-DAPP=${app}`,
                     `-DOUTFILE=${app}-setup.exe`,
+                    ...(publisher ? [`-DPUBLISHER=${nsisText(publisher).replaceAll('"', '$\\"')}`] : []),
                     ...(icon ? [`-DICON=${iconFile}`] : []),
                     ...(schemes.length > 0 ? [`-DSCHEMES=${schemesFile}`] : []),
                     ...(fileTypes.length > 0 ? [`-DFILETYPES=${fileTypesFile}`] : []),

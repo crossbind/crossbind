@@ -19,6 +19,20 @@ nothing forces it to disk.
 - Check: `docker run --rm --entrypoint grep "ghcr.io/crossbind/web@$(node -p "require('./core/crossbind/src/assets/toolchain-digests.json').images.web.index")" -c 'implement NodeFile::flush' /emsdk/upstream/emscripten/system/lib/wasmfs/backends/node_backend.cpp` prints 1.
 - Remove when the pinned emsdk implements `NodeFile::flush`; then drop the `--wrap` pair from `buildWasm.js` and `node.cpp`.
 
+## The Microsoft Store refuses the Windows setup program
+
+The Store's policy 10.2.9 asks for "a standalone installer", "not a downloader stub/web installer that downloads bits
+when run" (https://learn.microsoft.com/en-us/windows/apps/publish/store-policies). On a system without the WebView2
+Runtime, the `nsis` setup downloads Microsoft's bootstrapper, so the workflow in `docs/api/app.md`'s Microsoft Store
+section would be refused. The way out chosen on 2026-11-07 is a `microsoft-store` publisher that sends an MSIX
+package, after a prototype.
+
+- Seen: 2026-11-07
+- Check: `grep -c URLDownloadToFileW extensions/nsis/installer.nsi` prints 1 or more.
+- Remove when the Store takes a crossbind app, through the `microsoft-store` publisher or a setup with no download;
+  then drop the warning at the top of `docs/api/app.md`'s Microsoft Store section and its copy in
+  `landing/src/guide/pages/winget-microsoft-store.js`.
+
 ## android-app's build tools carry a Guava with CVE-2026-102554
 
 Guava's DoS while deserializing, fixed in Guava 33.7.2, ships inside three of the android-app image's build tools:

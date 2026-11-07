@@ -246,10 +246,10 @@ resampled from the PNG, so a small one blurs when enlarged.
 - Linux, `tar-gz`: `dist/<name>-linux-<arch>.tar.gz`, the app's folder, which unpacks anywhere its user can write.
 - Windows, `nsis`: `dist/<name>-win32-<arch>-setup.exe`, which installs the app for the user who runs it, with no
   administrator's approval, in `%LOCALAPPDATA%\Programs\<app name>`. It adds the app to the Start menu and to the apps
-  Settings lists, whose Uninstall removes it again and leaves its data, and when the system has no WebView2 Runtime it
-  downloads Microsoft's bootstrapper and, once it carries a valid signature of Microsoft's, runs it, which installs the
-  runtime. While the app runs, an update or Uninstall asks to close it and changes nothing. `/S` installs without a
-  window. NSIS, in crossbind's windows image, builds it.
+  Settings lists, which name package.json's `author` as its publisher and whose Uninstall removes it again and leaves
+  its data, and when the system has no WebView2 Runtime it downloads Microsoft's bootstrapper and, once it carries a
+  valid signature of Microsoft's, runs it, which installs the runtime. While the app runs, an update or Uninstall asks
+  to close it and changes nothing. `/S` installs without a window. NSIS, in crossbind's windows image, builds it.
 - Windows, `zip`: `dist/<name>-win32-<arch>.zip`, the app's folder as signed.
 
 The tar.gz and the zip register neither the app's schemes nor a menu entry. `app.installers` names the installers alone
@@ -291,9 +291,9 @@ on another Mac only once its user allows it in System Settings, and the build sa
 `crossbind app build` leaves a Windows app and its setup program unsigned, so SmartScreen warns about them once they
 are downloaded, and says so. With a key in the environment, jsign in crossbind's windows image signs the app before
 its zip is made, and the setup program and its uninstaller as NSIS writes them, with Authenticode and a timestamp. The
-key is jsign's own: a cloud's key service whose credentials jsign takes as its password, such as Azure Trusted Signing,
-Azure Key Vault, AWS or Google Cloud KMS, or SSL.com eSigner, or a PKCS#12 file. Its files reach the container
-read-only, and its passwords by name, never on a command line:
+key is jsign's own: a cloud's key service whose credentials jsign takes as its password, such as Azure Artifact Signing,
+formerly Trusted Signing, Azure Key Vault, AWS or Google Cloud KMS, or SSL.com eSigner, or a PKCS#12 file. Its files
+reach the container read-only, and its passwords by name, never on a command line:
 
 | Variable | Value |
 |---|---|
@@ -305,7 +305,7 @@ read-only, and its passwords by name, never on a command line:
 | `CROSSBIND_WINDOWS_SIGNING_CERTFILE` | The certificate chain a cloud key comes without, as a `.p7b` file. |
 | `CROSSBIND_WINDOWS_SIGNING_TSAURL` | The timestamp server; `http://timestamp.digicert.com` without it. |
 
-With Azure Trusted Signing, for one:
+With Azure Artifact Signing, for one:
 
 ```bash
 export CROSSBIND_WINDOWS_SIGNING_STORETYPE=TRUSTEDSIGNING
@@ -1470,11 +1470,14 @@ and publishes that make theirs at once agree on the oldest. A file of a name the
 place, so a publish runs again as it did, unless the repository makes its releases immutable.
 
 A release put out holds the files its publishes have put up so far, and the newest one out is the one apps update from:
-put each platform's app up with `--draft` first, and then the release out with a publish without it, `gh release edit
-v<version> --draft=false` or GitHub's page. GitHub makes the release it puts out the latest unless it has a newer
-version out, so a fix of an older line leaves the newest one latest. It makes no prerelease the latest, so apps update
-to none, and an app fetches no release of a private repository, which takes a token; the publish warns of both, and
-where `app.updater.url` is not the newest release's address.
+put each platform's app up with `--draft` first, and then the release out with a publish without it. GitHub then makes
+the release the latest unless it has a newer version out, so a fix of an older line leaves the newest one latest.
+`gh release edit v<version> --draft=false` makes it the latest whatever its version, and so may GitHub's page, as its
+"Set as the latest release" box says; `gh api --method PATCH repos/<owner>/<repo>/releases/<id> -f draft=false -f
+make_latest=legacy` puts it out as a publish does, with the id `gh release view v<version> --json databaseId -q
+.databaseId` prints. GitHub makes no prerelease the latest, so apps update to none, and an app fetches no release of a
+private repository, which takes a token; the publish warns of both, and where `app.updater.url` is not the newest
+release's address.
 
 GitHub takes the release from a token with write access to the repository's contents: `GH_TOKEN` or `GITHUB_TOKEN`,
 which a workflow's step takes as `GITHUB_TOKEN: ${{ github.token }}` with the job's `permissions: contents: write`, else
@@ -1519,6 +1522,11 @@ from starting one, so there run the action as a job after the one that puts the 
 v<version>`; a release put out by hand, or with another token, starts the workflow above.
 
 ### Microsoft Store
+
+The Store refuses this setup program today. Its policy 10.2.9 takes no installer that downloads what the app needs as
+it runs, and the setup downloads Microsoft's WebView2 bootstrapper on a system without the runtime (see
+[Installers](#installers)). So the workflow below does not pass certification yet, as
+[known-issues.md](../known-issues.md#the-microsoft-store-refuses-the-windows-setup-program) records.
 
 The Microsoft Store takes a Windows app as the setup program `crossbind app build` makes, which it downloads from the
 address its submission gives as the app installs: a GitHub release's, which keeps a version's file. Microsoft's [Store
