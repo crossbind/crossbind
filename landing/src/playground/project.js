@@ -52,6 +52,15 @@ export function addPackage(project, id) {
 
 export const removePackage = (project, id) => ({ ...project, packages: project.packages.filter((other) => other !== id) });
 
+// A compile takes main.js and the native files; the project's other scripts, which main.js imports by relative path,
+// run in the page only.
+export const compileRequest = ({ files, packages }) => ({
+    files: Object.fromEntries(Object.entries(files).filter(([name]) => FILE_NAME.test(name))),
+    packages,
+});
+
+export const scriptsOf = ({ files }) => Object.fromEntries(Object.entries(files).filter(([name]) => name !== MAIN && name.endsWith('.js')));
+
 const sorted = (list) => [...list].sort();
 
 export const samePackages = (a, b) => sorted(a).join('\n') === sorted(b).join('\n');
@@ -93,5 +102,5 @@ export function servesProject(project, original) {
         const main = target.files[MAIN] ?? '';
         return `${importStatements(main).join('\n')}\n${sorted(importSpecifiers(main)).join('\n')}`;
     };
-    return sameProject(withoutMain(project), withoutMain(original)) && imports(project) === imports(original);
+    return sameProject(withoutMain(compileRequest(project)), withoutMain(compileRequest(original))) && imports(project) === imports(original);
 }

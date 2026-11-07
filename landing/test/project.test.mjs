@@ -5,7 +5,7 @@ import { PACKAGES } from '../../tooling/cloud/compiler/packages.js';
 import { sampleProject } from '../../scripts/site/build-example-demos.mjs';
 import { ImportError, importSpecifiers, prepareModules } from '../src/playground/modules.js';
 import {
-    addFile, addPackage, fileNames, importStatements, newFileError, removePackage, servesProject, usageOf,
+    addFile, addPackage, compileRequest, fileNames, importStatements, newFileError, removePackage, scriptsOf, servesProject, usageOf,
 } from '../src/playground/project.js';
 import { SAMPLE_LIST } from '../src/playground/sampleList.js';
 
@@ -43,8 +43,19 @@ test('no more packages than the compiler takes', () => {
     assert.deepEqual(addPackage(full, PACKAGES[MAX_PACKAGES].id), full);
 });
 
-test('every sample is a project the compiler accepts', () => {
-    SAMPLE_LIST.forEach(({ id }) => assert.doesNotThrow(() => validateRequest(sampleProject(id)), id));
+test('every sample, as a compile sends it, is a project the compiler accepts', () => {
+    SAMPLE_LIST.forEach(({ id }) => assert.doesNotThrow(() => validateRequest(compileRequest(sampleProject(id))), id));
+});
+
+test('a compile sends main.js and the native files; the project\'s other scripts stay in the page', () => {
+    const project = { files: { 'main.js': '', 'catalog.js': 'export const a = 1;', 'native/a.h': '' }, packages: ['port:zlib'] };
+    assert.deepEqual(compileRequest(project), { files: { 'main.js': '', 'native/a.h': '' }, packages: ['port:zlib'] });
+    assert.deepEqual(scriptsOf(project), { 'catalog.js': 'export const a = 1;' });
+});
+
+test('a prebuilt module serves edits to the project\'s scripts, which it never compiled', () => {
+    const original = { files: { 'main.js': "import { a } from './catalog.js';", 'catalog.js': 'export const a = 1;', 'native/n.h': 'h' }, packages: [] };
+    assert.ok(servesProject({ ...original, files: { ...original.files, 'catalog.js': 'export const a = 2;' } }, original));
 });
 
 test('a prebuilt module serves edits below main.js\'s imports, not to its imports, its native files or its packages', () => {
@@ -76,6 +87,16 @@ test('main.js\'s native imports point at the modules made from the import list, 
     assert.ok(main.includes(`from '${TOKEN}:3'`));
     assert.match(modules[0], /export \{ \$0 as greet, \$1 as Counter, \$2 as sqlite3_libversion, \$3 as semver_Version \};/);
     assert.equal(modules[3], `export { initNative, AllSymbols, semver_Version as Version } from '${TOKEN}:0';`);
+});
+
+test('main.js\'s import of a project script points at a module made from it, ahead of main.js; a missing one is named', () => {
+    const scripts = { 'catalog.js': 'export const catalogAsSql = 1;' };
+    const code = "import { catalogAsSql } from './catalog.js';\nimport { greet } from './native/greet.h';";
+    const modules = prepareModules({ code, imports: IMPORTS, token: TOKEN, scripts });
+    assert.equal(modules.at(-2), scripts['catalog.js']);
+    assert.ok(modules.at(-1).includes(`from '${TOKEN}:${modules.length - 2}'`));
+    assert.ok(modules.at(-1).includes(`from '${TOKEN}:1'`));
+    assert.throws(() => prepareModules({ code: "import { x } from './gone.js';", imports: IMPORTS, token: TOKEN }), /'\.\/gone\.js'/);
 });
 
 test('a native import the project does not provide stops the run with its name; the browser resolves the others', () => {

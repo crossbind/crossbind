@@ -6,7 +6,7 @@
   <h1>crossbind</h1>
 
   <p>
-    <strong>Import C++ and Rust like JavaScript modules.</strong><br>
+    <strong>Build and ship JS apps. Add C++ and Rust as needed.</strong><br>
     Build, package, and run native libraries across browsers, Node.js, edge
     runtimes, iOS, Android, and WASI, or ship them in a desktop or mobile app.
   </p>

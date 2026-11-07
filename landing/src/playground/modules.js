@@ -35,9 +35,9 @@ const wireOf = (name) => (typeof name === 'string' ? name : name.wire);
 const exportOf = (name) => (typeof name === 'string' ? name : `${name.wire} as ${name.local}`);
 const isName = (name) => (typeof name === 'string' ? IDENTIFIER.test(name) : IDENTIFIER.test(name?.local) && IDENTIFIER.test(name?.wire));
 
-// The modules the sandbox makes, main.js last. Throws an ImportError naming every native import the project cannot
-// serve.
-export function prepareModules({ code, imports, token }) {
+// The modules the sandbox makes, main.js last, after the project's other scripts, which go in as they are. Throws an
+// ImportError naming every import of a native file or a script the project cannot serve.
+export function prepareModules({ code, imports, token, scripts = {} }) {
     const natives = imports?.natives ?? [];
     if (!natives.every(({ names }) => Array.isArray(names) && names.every(isName))) {
         throw new ImportError('The module came with an import list this page cannot read.');
@@ -53,19 +53,21 @@ export function prepareModules({ code, imports, token }) {
     const proxies = natives.map(({ names }) => `export { ${['initNative', 'AllSymbols', ...names.map(exportOf)].join(', ')} } from '${token}:0';`);
 
     const byFile = new Map(natives.map(({ file }, index) => [file, index + 1]));
+    const byScript = new Map(Object.keys(scripts).map((name, index) => [resolveFromMain(`./${name}`), proxies.length + 1 + index]));
     const bySpecifier = new Map(natives.flatMap(({ specifiers }, index) => specifiers.map((specifier) => [specifier, index + 1])));
     const unknown = new Set();
     const main = code.replace(IMPORT, (match, before, quote, specifier) => {
-        const index = isRelative(specifier) ? byFile.get(resolveFromMain(specifier)) : bySpecifier.get(specifier);
+        const file = isRelative(specifier) ? resolveFromMain(specifier) : null;
+        const index = file ? byFile.get(file) ?? byScript.get(file) : bySpecifier.get(specifier);
         if (index === undefined) {
-            if (NATIVE.test(specifier)) unknown.add(specifier);
+            if (NATIVE.test(specifier) || (file && specifier.endsWith('.js'))) unknown.add(specifier);
             return match;
         }
         return `${before}${quote}${token}:${index}${quote}`;
     });
     if (unknown.size) {
         const names = [...unknown].map((specifier) => `'${specifier}'`).join(', ');
-        throw new ImportError(`main.js imports ${names}, which this project does not provide: main.js can import its files under native/ and its packages.`);
+        throw new ImportError(`main.js imports ${names}, which this project does not provide: main.js can import its files under native/, its other scripts and its packages.`);
     }
-    return [entry, ...proxies, main];
+    return [entry, ...proxies, ...Object.values(scripts), main];
 }

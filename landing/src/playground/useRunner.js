@@ -3,7 +3,9 @@ import {
     deleteAccount, fetchSession, requestCompile, signOut, turnstileToken,
 } from './client.js';
 import { hasPrebuilt, loadPrebuilt } from './prebuilt.js';
-import { MAIN, servesProject } from './project.js';
+import {
+    MAIN, compileRequest, scriptsOf, servesProject,
+} from './project.js';
 import { runInSandbox } from './sandbox.js';
 
 const MAX_LINES = 500;
@@ -56,7 +58,7 @@ export function useRunner({ lazy = false } = {}) {
 
     async function compile(project) {
         const turnstile = session.user ? undefined : await turnstileToken(check.current, session.turnstileSiteKey);
-        const result = await requestCompile(project, turnstile);
+        const result = await requestCompile(compileRequest(project), turnstile);
         if (typeof result.remaining === 'number') setSession((current) => ({ ...current, remaining: result.remaining }));
         if (result.status !== 200) {
             setNotice({ text: result.error ?? `The playground answered ${result.status}.`, login: Boolean(result.login) });
@@ -81,7 +83,7 @@ export function useRunner({ lazy = false } = {}) {
             if (!module) return;
             setPhase('running');
             const runner = runInSandbox({
-                js: module.js, wasm: module.wasm, imports: module.imports, code: project.files[MAIN] ?? '', onOutput: print,
+                js: module.js, wasm: module.wasm, imports: module.imports, code: project.files[MAIN] ?? '', scripts: scriptsOf(project), onOutput: print,
             });
             stopRun.current = runner.stop;
             if (await runner.done === 'done') {

@@ -30,13 +30,14 @@
         };
 
         try {
-            const [js, wasm, imports, code] = await Promise.all([
+            const [js, wasm, imports, code, scripts] = await Promise.all([
                 fetchOk('./dist/sample.js').then((response) => response.text()),
                 fetchOk('./dist/sample.wasm').then((response) => response.arrayBuffer()),
                 fetchOk('./dist/imports.json').then((response) => response.json()),
                 fetchOk('./main.js').then((response) => response.text()),
+                fetchOk('./scripts.json').then((response) => response.json()),
             ]);
-            const { done } = runInSandbox({ js, wasm: toBase64(new Uint8Array(wasm)), imports, code, onOutput: ({ text }) => print(text) });
+            const { done } = runInSandbox({ js, wasm: toBase64(new Uint8Array(wasm)), imports, code, scripts, onOutput: ({ text }) => print(text) });
             const outcome = await done;
             print(outcome === 'done' ? '=> done' : `failed => ${outcome}`);
         } catch (error) {

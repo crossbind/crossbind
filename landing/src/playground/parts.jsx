@@ -2,6 +2,7 @@ import { CodeWindow, primaryButtonStyle, secondaryButtonStyle } from '../compone
 import { PLAYGROUND_URL } from '../data.js';
 import { inline } from '../guide/inline.jsx';
 import { LOGIN_URL } from './client.js';
+import { PAUSED } from './runReason.js';
 
 // The run controls and the console the playground and the tutorial share; useRunner.js holds their state.
 
@@ -23,7 +24,7 @@ export function statusText(phase, session, prebuilt) {
     if (prebuilt) return 'Runs without a compile until the C++, Rust, packages or imports change.';
     if (!session) return 'Connecting…';
     if (session.error) return session.error;
-    if (!session.enabled) return 'The playground is paused for now.';
+    if (!session.enabled) return PAUSED;
     return `${session.remaining} of ${session.limit} compiles left today`;
 }
 
@@ -63,7 +64,7 @@ export function Account({
 }
 
 export function Toolbar({
-    tokens, phase, session, ready, prebuilt, away, onRun, onStop, onSignOut, onDeleteAccount, children, style,
+    tokens, phase, session, ready, runOff, prebuilt, away, onRun, onStop, onSignOut, onDeleteAccount, children, style,
 }) {
     const button = { padding: '10px 20px', fontSize: 14, cursor: 'pointer' };
     const busy = { loading: 'Loading…', compiling: 'Compiling…' }[phase];
@@ -79,16 +80,21 @@ export function Toolbar({
             {phase === 'running' ? (
                 <button type="button" onClick={onStop} className="tap-target" style={{ ...secondaryButtonStyle(tokens), ...button }}>Stop</button>
             ) : (
-                <button
-                    type="button"
-                    onClick={onRun}
-                    disabled={!ready}
-                    className="tap-target"
-                    aria-keyshortcuts="Control+Enter Meta+Enter"
-                    style={{ ...primaryButtonStyle(tokens), ...button, opacity: ready ? 1 : 0.55, cursor: ready ? 'pointer' : 'default' }}
-                >
-                    {busy ?? 'Run'}
-                </button>
+                // Some browsers give a disabled button no pointer, so the reason sits on a wrapper the pointer reaches.
+                <span title={runOff ?? undefined} style={{ display: 'inline-flex' }}>
+                    <button
+                        type="button"
+                        onClick={onRun}
+                        disabled={!ready}
+                        className="tap-target"
+                        aria-keyshortcuts="Control+Enter Meta+Enter"
+                        style={{
+                            ...primaryButtonStyle(tokens), ...button, opacity: ready ? 1 : 0.55, cursor: ready ? 'pointer' : 'default', pointerEvents: runOff ? 'none' : undefined,
+                        }}
+                    >
+                        {busy ?? 'Run'}
+                    </button>
+                </span>
             )}
         </div>
     );

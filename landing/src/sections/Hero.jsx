@@ -3,10 +3,12 @@ import CommandChip from '../components/CommandChip.jsx';
 import PlatformScene from '../components/PlatformScene.jsx';
 import PromptModal from '../components/PromptModal.jsx';
 import Tabs from '../components/Tabs.jsx';
-import { TURBO, TURBO_SYNTAX, TitlePart } from '../components/turbo.jsx';
+import {
+    TURBO, TURBO_SYNTAX, TitlePart, TurboWindow,
+} from '../components/turbo.jsx';
 import { highlight, primaryButtonStyle, secondaryButtonStyle } from '../components/ui.jsx';
 import {
-    CREATE_COMMANDS, HERO_CONFIG, PLAYGROUND_URL, RUNTIMES,
+    CREATE_COMMANDS, HERO_TERMINAL, PLAYGROUND_URL, RUNTIMES,
 } from '../data.js';
 import heroMain from '../playground/samples/hero/main.js?raw';
 import heroGreet from '../playground/samples/hero/native/greet.h?raw';
@@ -53,15 +55,16 @@ function CreateCommand({ tokens }) {
 }
 
 // The playground's hero sample, which Run opens in the playground's Turbo look: main.js imports the
-// sample's own C++ and Rust and one package of each source (a crossbind port, a crate, a Conan
-// package), and each call is awaited because browsers run the module in a worker by default.
+// sample's own C++ and Rust, and each call is awaited because browsers run the module in a worker by
+// default.
 const HERO_FILES = Object.freeze([
     { id: 'main.js', label: 'main.js', code: heroMain.trimEnd() },
     { id: 'greet.h', label: 'greet.h', code: heroGreet.trimEnd() },
     { id: 'math.rs', label: 'math.rs', code: heroMath.trimEnd() },
-    { id: 'crossbind.config.js', label: 'crossbind.config.js', code: HERO_CONFIG },
 ]);
-const HERO_RUN = `${PLAYGROUND_URL}?sample=hero&skin=turbo`;
+const HERO_RUN = `${PLAYGROUND_URL}?sample=hero`;
+// The brightest red that reads on the menu's gray, at 4.5:1; Turbo's own #aa0000 gives 3.3:1.
+const TRY_RED = '#850000';
 
 // The headline claims C++ and Rust, so the proof sits right beside it: main.js imports both, shown
 // in Turbo C++, the IDE a generation first wrote C++ in: the files are its menu, the code is in its
@@ -102,9 +105,12 @@ function UniversalCode({ tokens }) {
                         fontSize: 13,
                     })}
                 />
-                <a href={HERO_RUN} aria-label="Run in the playground" className="tap-target" style={{ marginLeft: 'auto', padding: '0 8px', color: '#000', textDecoration: 'none' }}>
-                    <span style={{ color: TURBO.red }}>R</span>
-                    un
+                <a href={HERO_RUN} aria-label="Try in Playground" className="tap-target" style={{ marginLeft: 'auto', padding: '0 8px', color: TRY_RED, fontWeight: 700, textDecoration: 'none' }}>
+                    {/* One inline run, so the flex link keeps the space before "in". */}
+                    <span>
+                        Try
+                        <span className="hero-try-rest">{' in Playground'}</span>
+                    </span>
                 </a>
             </div>
             <div style={{ padding: '14px 6px 6px' }}>
@@ -126,6 +132,29 @@ function UniversalCode({ tokens }) {
                     </div>
                 </div>
             </div>
+        </div>
+    );
+}
+
+// The app commands, in a window of their own: the code window's Run runs main.js in the playground, and these are typed
+// in a terminal, so the two stay apart.
+function AppTerminal({ tokens }) {
+    return (
+        <div style={{
+            marginTop: 16, padding: '14px 6px 6px', borderRadius: 4, background: TURBO.black, fontFamily: tokens.mono, fontSize: 13, lineHeight: '20px',
+        }}
+        >
+            <TurboWindow title="Terminal" background={TURBO.black} style={{ padding: '10px 14px', color: TURBO.white, whiteSpace: 'pre' }}>
+                {HERO_TERMINAL.map(({ comment, command }, index) => (
+                    <div key={command} style={{ marginTop: index ? 20 : 0 }}>
+                        <div style={{ color: TURBO.gray }}>{`# ${comment}`}</div>
+                        <div>
+                            <span aria-hidden="true" style={{ color: TURBO.gray }}>$ </span>
+                            {command}
+                        </div>
+                    </div>
+                ))}
+            </TurboWindow>
         </div>
     );
 }
@@ -161,9 +190,9 @@ export default function Hero({ tokens }) {
                         margin: '0 0 64px',
                     }}
                     >
-                        Import C++ and Rust
+                        Build and ship JS&nbsp;apps.
                         <br />
-                        <span style={{ color: tokens.accentDisplay }}>like JavaScript modules.</span>
+                        <span style={{ color: tokens.accentDisplay }}>Add C++ and Rust as&nbsp;needed.</span>
                     </h1>
 
                     <CreateCommand tokens={tokens} />
@@ -182,6 +211,7 @@ export default function Hero({ tokens }) {
 
                 <div style={{ minWidth: 0 }}>
                     <UniversalCode tokens={tokens} />
+                    <AppTerminal tokens={tokens} />
                 </div>
             </div>
 

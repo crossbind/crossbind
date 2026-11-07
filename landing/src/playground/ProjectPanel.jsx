@@ -148,7 +148,7 @@ export function FileList({
                         disabled={disabled}
                     />
                 ))}
-                <Row tokens={tokens} label={CONFIG} note="generated" active={active === CONFIG} onSelect={() => onOpen(CONFIG)} />
+                <Row tokens={tokens} label={CONFIG} active={active === CONFIG} onSelect={() => onOpen(CONFIG)} />
             </ul>
         </>
     );

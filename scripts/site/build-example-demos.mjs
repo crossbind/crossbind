@@ -5,6 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { promisify } from 'node:util';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { scriptsOf } from '../../landing/src/playground/project.js';
 import { SAMPLE_LIST } from '../../landing/src/playground/sampleList.js';
 import { configSource, packagesFor } from '../../tooling/cloud/compiler/packages.js';
 import { deployCli, packModules } from '../../tooling/cloud/scripts/node-modules.mjs';
@@ -88,7 +89,8 @@ export const DEMOS = [
     { id: 'sample-errors', kind: 'sample', expect: 'std::out_of_range: not between 0 and 100' },
     { id: 'sample-rust', kind: 'sample', expect: 'in a new tally: null' },
     { id: 'sample-packages', kind: 'sample', expect: '1.4.2 true' },
-    { id: 'sample-hero', kind: 'sample', expect: 'Hello, crossbind! 2880067194370816120n' },
+    { id: 'sample-sqlite', kind: 'sample', expect: 'Geospatial: 4' },
+    { id: 'sample-hero', kind: 'sample', expect: '2880067194370816120n' },
 ];
 
 const log = (message) => process.stderr.write(`${message}\n`);
@@ -349,6 +351,7 @@ async function buildSample(project, id, out) {
     fs.copyFileSync(path.join(build, 'playground-wasm-wasm32-st-release.browser.wasm'), path.join(dist, 'sample.wasm'));
     fs.copyFileSync(path.join(build, 'browser', 'imports.json'), path.join(dist, 'imports.json'));
     fs.copyFileSync(path.join(project, 'src', 'main.js'), path.join(out, 'main.js'));
+    fs.writeFileSync(path.join(out, 'scripts.json'), JSON.stringify(scriptsOf(sampleProject(sampleOf({ id })))));
     fs.copyFileSync(SAMPLE_PAGE, path.join(out, 'index.html'));
     PLAYGROUND_RUNNER.forEach((file) => fs.copyFileSync(file, path.join(out, path.basename(file))));
     const base = `/examples/${id}/dist`;
