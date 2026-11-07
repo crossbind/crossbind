@@ -86,6 +86,23 @@ export function RowGroup({ tokens, id, label, columns = null, children }) {
     );
 }
 
+// A row per entry, its name and one line of what it is beside it, opening its page, under the label of its group: the
+// rows of /extensions/ and /integrations/. The line is the entry's `shown` where it has one, else its `summary`.
+export function SummaryRows({ tokens, groups }) {
+    return groups.map((group) => (
+        <RowGroup key={group.id} tokens={tokens} id={group.id} label={group.label}>
+            {group.items.map((item) => (
+                <li key={item.id} style={{ borderTop: `1px solid ${tokens.border}` }}>
+                    <a href={item.href} className="lib-row summary-row" style={{ color: tokens.textDim, fontSize: 14, lineHeight: 1.5 }}>
+                        <span className="lib-name" style={{ color: tokens.text, fontWeight: 600, fontSize: 15 }}>{item.name}</span>
+                        <span className="lib-summary">{inline(item.shown ?? item.summary, tokens)}</span>
+                    </a>
+                </li>
+            ))}
+        </RowGroup>
+    ));
+}
+
 export default function LibrariesPage({ tokens, page }) {
     return (
         <RowsPage tokens={tokens} page={page}>
