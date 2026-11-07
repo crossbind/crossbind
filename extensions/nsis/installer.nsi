@@ -232,6 +232,9 @@ Section
   CreateShortcut "$SMPROGRAMS\${NAME}.lnk" "$INSTDIR\${EXE}"
   WriteRegStr HKCU "${UNINSTALL}" "DisplayName" "${NAME}"
   WriteRegStr HKCU "${UNINSTALL}" "DisplayVersion" "${VERSION}"
+!ifdef PUBLISHER
+  WriteRegStr HKCU "${UNINSTALL}" "Publisher" "${PUBLISHER}"
+!endif
   WriteRegStr HKCU "${UNINSTALL}" "DisplayIcon" "$INSTDIR\${EXE}"
   WriteRegStr HKCU "${UNINSTALL}" "InstallLocation" "$INSTDIR"
   WriteRegStr HKCU "${UNINSTALL}" "UninstallString" '"$INSTDIR\uninstall.exe"'

@@ -88,7 +88,7 @@ export default {
         },
         {
             type: 'p',
-            text: 'The key is one jsign takes: a cloud key service whose credentials jsign takes as its password, such as Azure Trusted Signing, Azure Key Vault, AWS or Google Cloud KMS, or SSL.com eSigner, or a PKCS#12 file. Its files reach the container read-only, and its passwords by name, never on a command line:',
+            text: 'The key is one jsign takes: a cloud key service whose credentials jsign takes as its password, such as Azure Artifact Signing, formerly Trusted Signing, Azure Key Vault, AWS or Google Cloud KMS, or SSL.com eSigner, or a PKCS#12 file. Its files reach the container read-only, and its passwords by name, never on a command line:',
         },
         {
             type: 'table',
@@ -103,7 +103,7 @@ export default {
                 ['`CROSSBIND_WINDOWS_SIGNING_TSAURL`', 'The timestamp server; `http://timestamp.digicert.com` without it.'],
             ],
         },
-        { type: 'p', text: 'With Azure Trusted Signing, for one:' },
+        { type: 'p', text: 'With Azure Artifact Signing, for one:' },
         { type: 'code', file: 'shell', code: AZURE_SIGNING },
         {
             type: 'p',

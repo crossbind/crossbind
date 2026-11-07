@@ -11,7 +11,8 @@ npx crossbind app build -p windows
 ```
 
 A Windows build writes a `-setup.exe` named after the app beside its folder, which NSIS makes in crossbind's windows image. It
-installs the app for its user, with a Start menu shortcut, its URL schemes and file types, and an uninstaller. With a key
+installs the app for its user, with a Start menu shortcut, its URL schemes and file types, and an uninstaller, which the
+apps Settings lists show with package.json's `author` as the publisher. With a key
 in the environment, the setup program and its uninstaller are signed. A Windows app with `app.updater` updates itself
 from it.
 

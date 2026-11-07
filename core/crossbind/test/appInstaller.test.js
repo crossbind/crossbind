@@ -36,7 +36,7 @@ const { checkInstaller, installersFor, writeInstallers } = await import('../src/
 const {
     debianControl, debianName, debianVersion, desktopEntry, linuxFileTypes, maintainer, mimePackage,
 } = await import('../../../extensions/deb/crossbind.extension.js');
-const { fileTypesMacro } = await import('../../../extensions/nsis/crossbind.extension.js');
+const { fileTypesMacro, publisherOf } = await import('../../../extensions/nsis/crossbind.extension.js');
 const { checkedExtension } = await import('../src/utils/appExtensions.js');
 const { newUpdaterKey } = await import('../../../extensions/updater/src/update.js');
 
@@ -295,11 +295,24 @@ describe("a Windows app's setup program", () => {
         expect(inWindowsImage).toHaveBeenCalledWith(['zip', '-q', '-r', '-X', 'demo-win32-x64.zip', 'demo-win32-x64'], path.join(root, 'dist'), null);
     });
 
-    test('has no icon of its own without app.icon, and registers no scheme without app.urlSchemes', async () => {
+    test("names package.json's author as the publisher the apps Settings lists show, by name alone", async () => {
+        expect(publisherOf('Ada Lovelace <ada@example.com> (https://example.com)')).toBe('Ada Lovelace');
+        expect(publisherOf('Ada Lovelace (https://example.com)')).toBe('Ada Lovelace');
+        expect(publisherOf({ name: 'Ada Lovelace', email: 'ada@example.com' })).toBe('Ada Lovelace');
+        expect(publisherOf('<ada@example.com>')).toBeNull();
+        expect(publisherOf(undefined)).toBeNull();
+        const root = project({ 'demo-win32-x64/demo.exe': 'MZ' }, { pkg: { version: '1.0.0', author: 'Ada "A" $Lovelace <ada@example.com>' } });
+        await writeInstallers(path.join(root, 'dist/demo-win32-x64'), { platform: 'win32', arch: 'x64' });
+        // The script writes it in a string, which takes a quote as $\" and a dollar sign as $$.
+        expect(setup()[0]).toContain('-DPUBLISHER=Ada $\\"A$\\" $$Lovelace');
+    });
+
+    test("has no icon of its own without app.icon, registers no scheme without app.urlSchemes and names no publisher without package.json's author", async () => {
         const root = project({ 'demo-win32-x64/demo.exe': 'MZ' });
         await writeInstallers(path.join(root, 'dist/demo-win32-x64'), { platform: 'win32', arch: 'x64' });
         expect(setup()[0].some((param) => param.startsWith('-DICON='))).toBe(false);
         expect(setup()[0].some((param) => param.startsWith('-DSCHEMES='))).toBe(false);
+        expect(setup()[0].some((param) => param.startsWith('-DPUBLISHER='))).toBe(false);
     });
 
     test('registers the schemes of app.urlSchemes, which a file of macros names for its script', async () => {

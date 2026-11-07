@@ -66,6 +66,10 @@ export default {
         { type: 'h2', id: 'microsoft-store', text: 'Microsoft Store' },
         {
             type: 'p',
+            text: "The Store refuses this setup program today. Its policy 10.2.9 takes no installer that downloads what the app needs as it runs, and the setup downloads Microsoft's WebView2 bootstrapper on a system without the runtime ([Installers](/guide/installers/)). So the workflow below does not pass certification yet.",
+        },
+        {
+            type: 'p',
             text: "The Microsoft Store takes a Windows app as the setup program `crossbind app build` makes, which it downloads from the address its submission gives each time it installs the app: a GitHub release's, which keeps each version's file. Microsoft's [Store Developer CLI](https://github.com/microsoft/msstore-cli), `msstore`, points the app's submission at each release and sends it for certification:",
         },
         { type: 'code', file: '.github/workflows/microsoft-store.yml', code: MICROSOFT_STORE },
