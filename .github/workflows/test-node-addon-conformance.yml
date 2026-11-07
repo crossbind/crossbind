@@ -431,10 +431,13 @@ jobs:
                       $check = Start-Process -FilePath $program -ArgumentList $arguments -NoNewWindow -Wait -PassThru
                       if ($check.ExitCode -ne $expected[$file]) { throw "the check answered $($check.ExitCode) for $file, not $($expected[$file])" }
                   }
-            - name: Install the app with its setup program
+            - name: Install the app with its setup program, whose Settings entry names package.json's author as the publisher
               run: |
                   $setup = Start-Process -Wait -PassThru -FilePath e2e\desktop-app\dist\crossbind-e2e-desktop-app-win32-${{ matrix.arch }}-setup.exe -ArgumentList /S
                   if ($setup.ExitCode -ne 0) { throw "the setup program exited with $($setup.ExitCode)" }
+                  $entry = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\dev.crossbind.crossbind-e2e-desktop-app'
+                  $publisher = (Get-ItemProperty -LiteralPath $entry).Publisher
+                  if ($publisher -ne 'crossbind e2e') { throw "the Settings entry names '$publisher' as the publisher, not package.json's author by name" }
             - name: Check that the app, its setup program and its uninstaller carry the build's signature
               run: |
                   $files = "e2e\desktop-app\dist\crossbind-e2e-desktop-app-win32-${{ matrix.arch }}\crossbind-e2e-desktop-app.exe",

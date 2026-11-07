@@ -4,6 +4,7 @@
     "private": true,
     "description": "crossbind - conformance leg for apps",
     "license": "MIT",
+    "author": "crossbind e2e <e2e@crossbind.dev>",
     "type": "module",
     "scripts": {
         "dev": "crossbind app dev",
