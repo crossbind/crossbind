@@ -28,6 +28,22 @@ from ${TABLE}
 group by category
 order by libraries desc, category;`;
 
+// The code the home page shows: the demo's database.h whole but for its comments, which are written for whoever keeps
+// the demo, and the opening of the playground's SQLite sample's main.js (samples/sqlite), around the query the visitor
+// edits.
+export const withoutCommentLines = (code) => code.replace(/^[ \t]*\/\/.*\n/gm, '');
+
+export const MAIN_BEFORE = `import { initNative, Database } from './native/database.h';
+import { catalogAsSql } from './catalog.js';
+
+await initNative();
+const db = await new Database();
+await db.exec(catalogAsSql);
+
+const rows = await db.query(\``;
+
+export const MAIN_AFTER = '`);';
+
 // SQLite hands back one JSON array; the panel needs columns in the order the query asked for them.
 export function toTable(json) {
     const rows = JSON.parse(json);

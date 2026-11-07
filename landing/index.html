@@ -9,7 +9,7 @@
          twitter text tags are written per route by src/main.jsx; a copy here would duplicate
          itself onto all sixteen pages. The title below is the dev-server fallback and mirrors
          SITE_TITLE in src/data.js. -->
-    <title>crossbind · import C++ and Rust like JavaScript modules</title>
+    <title>crossbind · build and ship JS apps, add C++ and Rust as needed</title>
     <meta name="theme-color" content="#ffffff" />
 
     <meta property="og:type" content="website" />
@@ -17,7 +17,7 @@
     <meta property="og:image" content="https://crossbind.dev/og.png" />
     <meta property="og:image:width" content="1200" />
     <meta property="og:image:height" content="630" />
-    <meta property="og:image:alt" content="crossbind: import C++ and Rust like JavaScript modules" />
+    <meta property="og:image:alt" content="crossbind: build and ship JS apps, add C++ and Rust as needed" />
 
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:image" content="https://crossbind.dev/og.png" />
@@ -34,11 +34,6 @@
                 document.querySelector('meta[name="theme-color"]').setAttribute('content', '#22262e');
             }
         } catch (e) { /* private mode blocks storage; the light default stands */ }
-        // The playground's Turbo look: marked here so the prerendered modern look never shows first. Mirrors
-        // src/playground/skin.js (SKIN_PARAM, readSkin).
-        if (location.pathname.indexOf('/playground') === 0 && new URLSearchParams(location.search).get('skin') === 'turbo') {
-            document.documentElement.setAttribute('data-playground-skin', 'turbo');
-        }
     </script>
 </head>
 <body>

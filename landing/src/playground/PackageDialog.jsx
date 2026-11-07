@@ -25,6 +25,8 @@ const HIDDEN = {
 const matches = (pkg, query) => `${pkg.name} ${pkg.summary}`.toLowerCase().includes(query.trim().toLowerCase());
 
 // A port's own version is its library's (the Libraries catalog), not its npm package's.
+const MAX_HEIGHT = 'min(80vh, 680px)';
+
 const versionOf = (pkg) => (pkg.source === 'port' ? PORTS.find(({ family }) => family === pkg.name)?.nativeVersion : null) ?? pkg.version;
 
 function modernLook(tokens) {
@@ -55,9 +57,12 @@ function modernLook(tokens) {
 function turboLook(tokens) {
     return {
         code: turboTokens(tokens),
+        // The frame sits inside the dialog's gray, as Turbo Vision's did, so the title on it stays within the dialog.
         dialog: {
-            border: `3px double ${TURBO.white}`, borderRadius: 0, background: TURBO.gray, boxShadow: `16px 16px 0 ${TURBO.black}`, color: TURBO.black, fontFamily: tokens.mono, overflow: 'visible',
+            border: 'none', borderRadius: 0, padding: '11px 6px 6px', background: TURBO.gray, boxShadow: `16px 16px 0 ${TURBO.black}`, color: TURBO.black, fontFamily: tokens.mono, overflow: 'visible',
         },
+        // As tall as the dialog at most, less its 11px and 6px of padding.
+        frame: { border: `3px double ${TURBO.white}`, maxHeight: `calc(${MAX_HEIGHT} - 17px)` },
         input: {
             color: TURBO.white, background: TURBO.blue, border: 'none', borderRadius: 0,
         },
@@ -135,16 +140,14 @@ export default function PackageDialog({
             aria-labelledby="package-dialog-title"
             className="prompt-dialog"
             style={{
-                width: 'min(600px, calc(100vw - 32px))', maxHeight: 'min(80vh, 680px)', padding: 0, overflow: 'hidden', ...look.dialog,
+                width: 'min(600px, calc(100vw - 32px))', maxHeight: MAX_HEIGHT, padding: 0, overflow: 'hidden', ...look.dialog,
             }}
         >
-            <div style={{ position: 'relative', display: 'flex', flexDirection: 'column', maxHeight: 'inherit' }}>
-                {turbo && (
-                    <>
-                        <TitlePart background={TURBO.gray} color={TURBO.white} style={{ left: 8, top: -14 }}>[<span style={{ color: TURBO.green }}>■</span>]</TitlePart>
-                        <TitlePart background={TURBO.gray} color={TURBO.white} style={{ left: '50%', top: -14, transform: 'translateX(-50%)' }}>Add package</TitlePart>
-                    </>
-                )}
+            <div style={{
+                position: 'relative', display: 'flex', flexDirection: 'column', maxHeight: 'inherit', ...look.frame,
+            }}
+            >
+                {turbo && <TitlePart background={TURBO.gray} color={TURBO.white} style={{ left: '50%', top: -14, transform: 'translateX(-50%)' }}>Add package</TitlePart>}
                 <div style={{ display: 'flex', alignItems: 'center', padding: turbo ? '18px 20px 10px' : '18px 20px 12px' }}>
                     <h2 id="package-dialog-title" style={{ margin: 0, fontSize: 16, fontWeight: 600, ...(turbo ? HIDDEN : {}) }}>
                         Add a package
@@ -178,21 +181,27 @@ export default function PackageDialog({
                         const added = project.packages.includes(pkg.id);
                         const add = look.add(added);
                         return (
+                            // The Turbo rows' grid is in styles.css (.turbo-package), which stacks them on a phone.
                             <li
                                 key={pkg.id}
+                                className={turbo ? 'turbo-package' : undefined}
                                 onFocus={() => setChosen(pkg.id)}
                                 onMouseEnter={() => setChosen(pkg.id)}
                                 style={{
-                                    display: 'grid', gridTemplateColumns: turbo ? 'auto 120px minmax(0, 1fr)' : '120px minmax(0, 1fr) auto', gap: 12, alignItems: 'center', padding: turbo ? '2px 8px' : '9px 20px', ...look.row(added),
+                                    ...(turbo ? {} : {
+                                        display: 'grid', gridTemplateColumns: '120px minmax(0, 1fr) auto', gap: 12, alignItems: 'center',
+                                    }),
+                                    padding: turbo ? '2px 8px' : '9px 20px',
+                                    ...look.row(added),
                                 }}
                             >
-                                <span style={{ fontFamily: tokens.mono, fontSize: 13, fontWeight: turbo ? 400 : 600, order: turbo ? 1 : 0 }}>{pkg.name}</span>
-                                <span style={{ fontSize: 13, color: look.dim, order: turbo ? 2 : 0 }}>
+                                <span className="package-name" style={{ fontFamily: tokens.mono, fontSize: 13, fontWeight: turbo ? 400 : 600 }}>{pkg.name}</span>
+                                <span className="package-summary" style={{ fontSize: 13, color: look.dim }}>
                                     {pkg.summary}
-                                    <span style={{ color: look.muted, fontSize: 12 }}>{` · ${versionOf(pkg)}`}</span>
+                                    <span className="package-version" style={{ color: look.muted, fontSize: 12 }}>{` · ${versionOf(pkg)}`}</span>
                                 </span>
                                 {added ? (
-                                    <span style={{
+                                    <span className="package-add" style={{
                                         fontSize: 12.5, fontFamily: turbo ? tokens.mono : 'inherit', padding: turbo ? 0 : '4px 12px', ...add.style, border: 'none',
                                     }}
                                     >
@@ -208,7 +217,7 @@ export default function PackageDialog({
                                             setChosen(pkg.id);
                                             onAdd(pkg.id);
                                         }}
-                                        className="tap-target"
+                                        className="tap-target package-add"
                                         style={{
                                             fontSize: 12.5, fontFamily: turbo ? tokens.mono : 'inherit', padding: turbo ? 0 : '4px 12px', background: 'transparent', cursor: full ? 'default' : 'pointer', opacity: full ? 0.55 : 1, ...add.style,
                                         }}
@@ -232,6 +241,15 @@ export default function PackageDialog({
                             OK
                         </button>
                     </div>
+                )}
+                {/* Turbo Vision's close box, last so the dialog still opens with the search focused. */}
+                {turbo && (
+                    <button type="button" onClick={onClose} aria-label="Close" className="turbo-close" style={{
+                        position: 'absolute', left: 8, top: -14, padding: '0 4px', border: 'none', color: TURBO.white, font: 'inherit', lineHeight: 'inherit', whiteSpace: 'pre', cursor: 'pointer',
+                    }}
+                    >
+                        [<span>■</span>]
+                    </button>
                 )}
             </div>
         </dialog>

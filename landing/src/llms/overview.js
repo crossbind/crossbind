@@ -27,7 +27,8 @@ import { LIMITS, WHY_POINTS } from '../why.js';
 
 export const SUMMARY = `${BRAND} builds and packages C++ and Rust for JavaScript applications, generating the bindings from the header `
     + 'or crate you already own. It produces WebAssembly for browsers, Node.js and Cloudflare Workers, and native iOS and Android '
-    + 'libraries for React Native. A separate C/C++ target produces WASI command components that run without a JavaScript host; '
+    + 'libraries for React Native. It also builds a web page and the native code it imports into an app for macOS, Linux, Windows, '
+    + 'iOS and Android. A separate C/C++ target produces WASI command components that run without a JavaScript host; '
     + 'Rust is not supported on that target yet.';
 
 // The facts an agent gets wrong most often, kept in front of both llms files.

@@ -30,9 +30,9 @@ export const SITE = 'https://crossbind.dev';
 // The landing page's own title and description. index.html carries the same title as the
 // dev-server fallback; the build's prerender step writes these into every page's <head>
 // (see main.jsx), so keep the two titles in step.
-export const SITE_TITLE = `${BRAND} · import C++ and Rust like JavaScript modules`;
+export const SITE_TITLE = `${BRAND} · build and ship JS apps, add C++ and Rust as needed`;
 export const SITE_DESCRIPTION =
-    'No bindings, no glue, no second build system. One import runs in the browser, on iOS and Android, in Node and on Workers, and builds to a WASI command too.';
+    'Build and ship JavaScript apps for browsers, servers, desktops and phones. Add C++ and Rust as needed: crossbind imports them like JavaScript modules.';
 
 // Every reference page lives on this site now; the old Docusaurus site is gone and its URLs are
 // 301s in public/_redirects. Nothing here may point at a /docs/ path.
@@ -57,6 +57,11 @@ const createCommand = (manager) => `${manager} create crossbind${RELEASE.distTag
 export const CREATE_COMMAND = createCommand('npm');
 // Each one was run against the published beta; add a manager only after doing the same.
 export const CREATE_COMMANDS = ['npm', 'pnpm', 'bun'].map((manager) => ({ id: manager, label: manager, command: createCommand(manager) }));
+// The hero's terminal: one command for each kind of project, as typed in it. docs/api documents both.
+export const HERO_TERMINAL = Object.freeze([
+    { comment: 'For library projects', command: 'npx crossbind build' },
+    { comment: 'For app projects', command: 'npx crossbind app publish app-store' },
+]);
 export const installCommand = (packageName) => `npm install -D ${packageName}${RELEASE.distTagSuffix}`;
 
 // The Skills CLI installs straight from the repository tree, so this is derived from REPO_URL
@@ -99,22 +104,6 @@ Follow the repository's conventions and make the smallest complete integration. 
 
 Tell the user what you installed and changed, the commands you ran and their results, and anything you could not verify. Include the Wasm artifact size when one is produced. If you installed the skill, say that a new session may be needed before it loads.
 `;
-
-// The hero's config tab: the one a project of your own would carry for the playground's hero sample
-// (src/playground/samples/hero), whose files the other tabs show. The binding is `db` so the import
-// stays within the 66 characters the code column holds.
-export const HERO_CONFIG = `import db from '@crossbind/port-sqlite3-wasm/crossbind.config.js';
-
-export default {
-    dependencies: [db],
-    cargoDependencies: {
-        uuid: '{ version = "1", features = ["v4"] }',
-    },
-    conanDependencies: {
-        zlib: '1.3.2',
-    },
-    paths: { config: import.meta.url },
-};`;
 
 // The band under the hero: a drawing per kind of host (components/PlatformScene.jsx) with the
 // products named in text. Apple's and Microsoft's terms forbid their logos without a license but

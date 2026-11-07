@@ -4,10 +4,8 @@ import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { SITE_ROUTES } from '../src/site-pages.js';
 import PLAYGROUND_PAGE from '../src/pages/playground.js';
-import { HERO_CONFIG } from '../src/data.js';
-import { SKIN_PARAM, readSkin } from '../src/playground/skin.js';
+import { PAUSED, runOffReason } from '../src/playground/runReason.js';
 import { LIMITS } from '../../tooling/cloud/compiler/sandbox.js';
-import { packagesFor } from '../../tooling/cloud/compiler/packages.js';
 import { sampleProject } from '../../scripts/site/build-example-demos.mjs';
 
 const html = readFileSync(new URL('../public/playground/sandbox.html', import.meta.url), 'utf8');
@@ -53,36 +51,63 @@ test('until the first run the console says what a compile gets and links Privacy
     assert.ok(intro.includes('](/privacy/)'));
 });
 
-// A visitor who picked the Turbo look back when the choice was stored.
-function withStoredTurbo(check) {
-    const descriptor = Object.getOwnPropertyDescriptor(globalThis, 'localStorage');
-    Object.defineProperty(globalThis, 'localStorage', { configurable: true, value: { getItem: () => 'turbo' } });
-    try {
-        check();
-    } finally {
-        if (descriptor) Object.defineProperty(globalThis, 'localStorage', descriptor);
-        else delete globalThis.localStorage;
-    }
-}
+const source = (path) => readFileSync(new URL(path, import.meta.url), 'utf8');
 
-test('only the link a visit came with opens the Turbo look; every other visit opens the modern one', () => {
-    withStoredTurbo(() => {
-        assert.equal(readSkin(`?sample=hero&${SKIN_PARAM}=turbo`), 'turbo');
-        assert.equal(readSkin('?sample=hero'), 'modern');
-        assert.equal(readSkin(`?${SKIN_PARAM}=neon`), 'modern');
-        assert.equal(readSkin(''), 'modern');
-    });
+test('the playground always opens in the Turbo look and nothing leads to the modern one', () => {
+    assert.match(source('../src/playground/PlaygroundPage.jsx'), /^const SKIN = 'turbo';$/m);
+    assert.ok(!source('../src/playground/TurboBar.jsx').includes('Modern view'));
+    assert.ok(!source('../src/sections/Hero.jsx').includes('skin='));
+    assert.ok(!source('../index.html').includes('data-playground-skin'));
 });
 
-test('the pre-paint script reads the look from the same parameter and stores nothing', () => {
-    const page = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
-    assert.ok(page.includes(`.get('${SKIN_PARAM}')`));
-    assert.ok(!page.includes('crossbind.playground.skin'));
+test('Run closes the Turbo menu bar, after File, Packages and Samples', () => {
+    const bar = source('../src/playground/TurboBar.jsx');
+    const at = (label) => bar.indexOf(`<Hotkey>${label}</Hotkey>`);
+    const labels = ['Run', 'Samples', 'Packages', 'File'].filter((label) => at(label) >= 0);
+    assert.deepEqual(labels.toSorted((a, b) => at(a) - at(b)), ['File', 'Packages', 'Samples', 'Run']);
 });
 
-test('the hero shows the hero sample in the 66 characters its code column holds, its config declaring the sample\'s packages', () => {
+test('the project lists crossbind.config.js with no note beside it', () => {
+    const row = source('../src/playground/ProjectPanel.jsx').split('\n').find((line) => line.includes('label={CONFIG}'));
+    assert.ok(row && !row.includes('note='), row);
+});
+
+test('the hero shows the hero sample in the 66 characters its code column holds; it takes no packages, having no config tab to declare them', () => {
     const { files, packages } = sampleProject('hero');
-    [files['main.js'], files['native/greet.h'], files['native/math.rs'], HERO_CONFIG].join('\n').split('\n')
+    [files['main.js'], files['native/greet.h'], files['native/math.rs']].join('\n').split('\n')
         .forEach((line) => assert.ok(line.length <= 66, line));
-    packagesFor(packages).forEach(({ source, name, package: npm }) => assert.ok(HERO_CONFIG.includes(source === 'port' ? npm : `${name}:`), name));
+    assert.deepEqual(packages, []);
+});
+
+test('Run that cannot run says why: the compile the project needs, and what keeps the service from it', () => {
+    const unreachable = 'The playground service cannot be reached right now.';
+    assert.equal(runOffReason({ prebuilt: true, session: null }), null);
+    assert.equal(runOffReason({ prebuilt: false, session: { enabled: true } }), null);
+    assert.equal(runOffReason({ prebuilt: false, session: null }), 'This project needs a compile. The playground service has not answered yet.');
+    assert.equal(runOffReason({ prebuilt: false, session: { error: unreachable } }), `This project needs a compile. ${unreachable}`);
+    assert.equal(runOffReason({ prebuilt: false, session: { enabled: false } }), `This project needs a compile. ${PAUSED}`);
+    assert.equal(
+        runOffReason({ prebuilt: false, session: { error: unreachable }, canReset: true }),
+        `This project needs a compile. ${unreachable} Reset your changes to run it without one.`,
+    );
+});
+
+test("the package dialog's close box is a button that closes it, as Turbo Vision's was, and comes last so the search keeps the opening focus", () => {
+    const dialog = readFileSync(new URL('../src/playground/PackageDialog.jsx', import.meta.url), 'utf8');
+    const closeBox = dialog.search(/<button type="button" onClick=\{onClose\} aria-label="Close" className="turbo-close"[^>]*>\s*\[<span>■<\/span>\]/);
+    assert.ok(closeBox > 0);
+    assert.ok(closeBox > dialog.indexOf('type="search"'));
+    // Its mark lightens on the hover's green, or the green square would vanish into it.
+    assert.match(readFileSync(new URL('../src/styles.css', import.meta.url), 'utf8'), /\.turbo-close:hover span \{\s*color: #55ff55;/);
+});
+
+test('on a phone the package dialog puts what a package is under its name, beside its box, and leaves the version to the desktop', () => {
+    const css = readFileSync(new URL('../src/styles.css', import.meta.url), 'utf8');
+    const phone = css.slice(css.indexOf('@media (max-width: 640px) {\n    .turbo-package'));
+    assert.ok(phone.length < css.length);
+    // A 44px column, the phone's tap target, so an added row's narrower [X] keeps its name in line with the others.
+    assert.match(phone, /\.turbo-package \{\s*grid-template-columns: 44px minmax\(0, 1fr\);/);
+    assert.match(phone, /\.turbo-package \.package-add \{\s*grid-row: 1 \/ span 2;\s*justify-self: center;/);
+    assert.match(phone, /\.turbo-package \.package-summary \{\s*grid-column: 2;\s*grid-row: 2;/);
+    assert.match(phone, /\.turbo-package \.package-version \{\s*display: none;/);
 });

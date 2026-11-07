@@ -15,8 +15,10 @@ import Editor, { fitHeight } from '../playground/Editor.jsx';
 import {
     Console, Notice, Toolbar, linkButtonStyle,
 } from '../playground/parts.jsx';
+import { hasPrebuilt } from '../playground/prebuilt.js';
 import { MAIN, setFile } from '../playground/project.js';
 import { CONFIG } from '../playground/ProjectPanel.jsx';
+import { runOffReason } from '../playground/runReason.js';
 import { SAMPLES, findSample } from '../playground/samples.js';
 import { canRunPrebuilt, useRunner } from '../playground/useRunner.js';
 
@@ -50,6 +52,11 @@ export default function TutorialPage({ tokens, page }) {
     const output = useRef(null);
     const project = projectOf(sample, drafts[sample.id]);
     const prebuilt = canRunPrebuilt(sample.id, project, sample.project);
+    const idle = restored && runner.phase === 'idle';
+    const ready = idle && (prebuilt || runner.canCompile);
+    const runOff = idle && !ready
+        ? runOffReason({ prebuilt, session: runner.session, canReset: Boolean(drafts[sample.id]) && hasPrebuilt(sample.id) })
+        : null;
     const index = TUTORIAL_PAGES.findIndex((step) => step.path === page.path);
     // The last step's "where to go next" sits with the links to the other steps, so it follows the code once the
     // columns stack.
@@ -145,7 +152,8 @@ export default function TutorialPage({ tokens, page }) {
                     tokens={tokens}
                     phase={runner.phase}
                     session={runner.session}
-                    ready={restored && runner.phase === 'idle' && (prebuilt || runner.canCompile)}
+                    ready={ready}
+                    runOff={runOff}
                     prebuilt={prebuilt}
                     away
                     onRun={run}
