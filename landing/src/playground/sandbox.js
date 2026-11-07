@@ -8,13 +8,14 @@ const randomToken = () => `crossbind-${[...crypto.getRandomValues(new Uint8Array
 
 // Runs the compiled module and main.js in a fresh frame with an opaque origin (see public/playground/sandbox.html):
 // it can reach neither this page, its cookies nor the network. `imports` is the build's import list, which maps
-// main.js's native imports (modules.js). `onOutput` gets one { stream, text } per printed line. Returns
-// { done, stop }; `done` settles with 'done', 'error', 'timeout' or 'stopped', after which the frame is gone.
-export function runInSandbox({ js, wasm, imports, code, onOutput }) {
+// main.js's native imports (modules.js); `scripts` are the project's other scripts, by name. `onOutput` gets one
+// { stream, text } per printed line. Returns { done, stop }; `done` settles with 'done', 'error', 'timeout' or
+// 'stopped', after which the frame is gone.
+export function runInSandbox({ js, wasm, imports, code, scripts, onOutput }) {
     const token = randomToken();
     let modules;
     try {
-        modules = prepareModules({ code, imports, token });
+        modules = prepareModules({ code, imports, token, scripts });
     } catch (error) {
         if (!(error instanceof ImportError)) throw error;
         onOutput({ stream: 'error', text: error.message });

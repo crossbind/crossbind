@@ -93,8 +93,7 @@
 }
 
 /* The Turbo look's desktop: the project and packages windows over each other beside the editor, the output across
-   the bottom. index.html's pre-paint script marks a Turbo visit, so the prerendered modern look stays hidden until the
-   page has drawn the Turbo one. */
+   the bottom. */
 .turbo-body {
     flex: 1;
     min-height: 0;
@@ -122,17 +121,79 @@
     grid-area: output;
 }
 
-html[data-playground-skin='turbo'] .playground-app[data-skin='modern'] {
-    visibility: hidden;
-}
-
 .turbo-bar button {
     background: none;
 }
 
+/* The Turbo package dialog's rows: the box, the name, then what the package is, with its version. */
+.turbo-package {
+    display: grid;
+    grid-template-columns: auto 120px minmax(0, 1fr);
+    gap: 12px;
+    align-items: center;
+}
+
+.turbo-package .package-add {
+    grid-column: 1;
+    grid-row: 1;
+}
+
+.turbo-package .package-name {
+    grid-column: 2;
+    grid-row: 1;
+}
+
+.turbo-package .package-summary {
+    grid-column: 3;
+    grid-row: 1;
+}
+
+/* On a phone what the package is goes under its name, beside the box, and the version stays on the desktop. */
+@media (max-width: 640px) {
+    .turbo-package {
+        grid-template-columns: 44px minmax(0, 1fr);
+        row-gap: 0;
+    }
+
+    .turbo-package .package-add {
+        grid-row: 1 / span 2;
+        justify-self: center;
+    }
+
+    .turbo-package .package-name {
+        grid-column: 2;
+        grid-row: 1;
+        align-self: end;
+    }
+
+    .turbo-package .package-summary {
+        grid-column: 2;
+        grid-row: 2;
+        align-self: start;
+    }
+
+    .turbo-package .package-version {
+        display: none;
+    }
+}
+
+/* The package dialog's close box on its frame; its colours live here so a hover can light it. */
+.turbo-close {
+    background: #aaaaaa;
+}
+
+.turbo-close span {
+    color: #00aa00;
+}
+
 @media (hover: hover) {
-    .turbo-bar button:hover:not(:disabled) {
+    .turbo-bar button:hover:not(:disabled),
+    .turbo-close:hover {
         background: #00aa00;
+    }
+
+    .turbo-close:hover span {
+        color: #55ff55;
     }
 
     .turbo-menu a:hover {
@@ -222,7 +283,7 @@ html[data-playground-skin='turbo'] .playground-app[data-skin='modern'] {
 /* The hero fills the first screen under the header, as cpp.js.org's did: copy and the create
    command beside the code, centred in the height the runtime strip leaves them. 560px holds the
    longest sample line without wrapping, so the columns stack once it no longer fits. The title
-   scales with its column so "Import C++ and Rust" stays on one line. */
+   scales with its column so each of its two sentences stays on one line. */
 .hero {
     display: flex;
     flex-direction: column;
@@ -230,7 +291,7 @@ html[data-playground-skin='turbo'] .playground-app[data-skin='modern'] {
 }
 
 .hero-grid {
-    --hero-title: clamp(36px, 3.3vw, 48px);
+    --hero-title: clamp(36px, 2.85vw, 41px);
     flex: 1;
     display: grid;
     grid-template-columns: minmax(0, 1fr) 560px;
@@ -334,6 +395,13 @@ li > .map-link:hover {
     gap: 16px;
 }
 
+/* Its database.h is as tall as main.js beside it and scrolls for the rest: size containment keeps the file's length
+   out of the row's height. Stacked, it takes main.js's default height of 13 lines instead. */
+.demo-header {
+    contain: size;
+    height: 100%;
+}
+
 .demo-query:focus-visible {
     outline: 2px solid currentColor;
     outline-offset: -2px;
@@ -394,6 +462,12 @@ li > .map-link:hover {
 @media (max-width: 1240px) {
     .demo-code {
         grid-template-columns: minmax(0, 1fr);
+    }
+
+    .demo-header {
+        contain: none;
+        height: auto;
+        max-height: 280px;
     }
 
     .hero-grid {
@@ -496,12 +570,22 @@ li > .map-link:hover {
         align-items: center;
         justify-content: center;
     }
+
+    /* The SQLite demo's Try in Playground: phones leave it out. */
+    .demo-try {
+        display: none !important;
+    }
 }
 
 /* With its label the GitHub button pushes the controls under the logo below 393px, a second row --nav-h does not
    count, so phones show the mark alone and the header stays one row down to 341px. */
 @media (max-width: 480px) {
     .nav-github-label {
+        display: none;
+    }
+
+    /* The hero code window's link keeps "Try" alone, as the whole label would wrap its menu. */
+    .hero-try-rest {
         display: none;
     }
 }

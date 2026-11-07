@@ -1,37 +1,21 @@
 import { useState } from 'react';
-import { CodeWindow, highlight, primaryButtonStyle } from '../components/ui.jsx';
-import { REPO_URL } from '../data.js';
+import { TURBO, TURBO_SYNTAX, TurboWindow } from '../components/turbo.jsx';
+import { highlight, primaryButtonStyle } from '../components/ui.jsx';
+import { PLAYGROUND_URL } from '../data.js';
 import { isLive, liveDemo, loadDemo } from '../live/runtime.js';
-import { createStatement, DEFAULT_QUERY, insertStatement, toTable } from '../live/sqlite.js';
+import {
+    createStatement, DEFAULT_QUERY, insertStatement, MAIN_AFTER, MAIN_BEFORE, toTable, withoutCommentLines,
+} from '../live/sqlite.js';
+import databaseHeader from '../../demos/panel-sqlite/src/native/database.h?raw';
 
 // The page's one real-library demo: SQLite compiled from the published port, booted in the
 // visitor's browser and queried against this site's own catalog. Everything is click-gated - the
 // artifact is over a megabyte, so it must never touch a first paint.
 
 const DEMO_ID = 'panel-sqlite';
-const SOURCE_URL = `${REPO_URL}/blob/main/landing/demos/panel-sqlite/src/native/database.h`;
-
-const WRAPPER = `#include <sqlite3.h>
-
-class Database {
-public:
-    Database() { sqlite3_open(":memory:", &handle); }
-    ~Database() { sqlite3_close(handle); }
-
-    void exec(const std::string& sql);
-    std::string query(const std::string& sql);
-
-private:
-    sqlite3* handle = nullptr;
-};`;
-
-const USAGE = `import { initNative, Database } from './native/database.h';
-
-await initNative();
-const db = await new Database();
-
-await db.exec(catalogAsSql);
-const rows = await db.query(yourQuery);`;
+const HEADER_CODE = withoutCommentLines(databaseHeader).trimEnd();
+// The playground's SQLite sample: the same database.h and main.js, where the C++ can change too.
+const PLAYGROUND_SAMPLE = `${PLAYGROUND_URL}?sample=sqlite`;
 
 const megabytes = (bytes) => `${Math.round((bytes / 1024 / 1024) * 10) / 10} MB`;
 
@@ -42,13 +26,17 @@ function statusText(state, bytes) {
     return `SQLite ${state.version} · ${count} ${count === 1 ? 'row' : 'rows'} in ${state.ms} ms`;
 }
 
-// The highlighter emits one div per line, so the indentation only survives with `pre`.
-function Source({ tokens, title, code }) {
-    return (
-        <CodeWindow tokens={tokens} title={title}>
-            <div style={{ whiteSpace: 'pre' }}>{highlight(code, tokens)}</div>
-        </CodeWindow>
-    );
+// A line too long for its window wraps under its own indent plus four, as an editor's soft wrap does, so the code
+// never scrolls sideways. The line's div inherits the negative indent, which puts its first row back at the edge.
+function WrappedCode({ code, syntax }) {
+    return code.split('\n').map((line, index) => {
+        const hang = `${line.length - line.trimStart().length + 4}ch`;
+        return (
+            <div key={`${index}-${line}`} style={{ paddingLeft: hang, textIndent: `-${hang}`, whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>
+                {highlight(line, syntax)}
+            </div>
+        );
+    });
 }
 
 function Results({ tokens, state }) {
@@ -134,57 +122,54 @@ export default function LibraryDemo({ tokens }) {
     };
 
     const busy = state.status === 'running';
+    const syntax = { ...tokens, ...TURBO_SYNTAX };
+    const onKeyDown = (event) => {
+        if (!(event.metaKey || event.ctrlKey) || event.key !== 'Enter') return;
+        event.preventDefault();
+        if (!busy) run();
+    };
 
     return (
         <section style={{ padding: '80px var(--content-x) 80px' }}>
             <div style={{ marginBottom: 32 }}>
                 <h2 style={{ fontSize: 36, margin: '0 0 12px', fontWeight: 600, letterSpacing: -1, color: tokens.text }}>
-                    Query a real C library, here.
+                    Use SQLite from JavaScript.
                 </h2>
                 <p style={{ fontSize: 16, lineHeight: 1.6, color: tokens.textDim, margin: 0, maxWidth: 640 }}>
-                    This page boots the published SQLite port, seeds an in-memory database with its own library catalog and runs
-                    whatever you type. No server answers these queries.
+                    Run SQL queries against crossbind&apos;s library catalog. SQLite runs as WebAssembly in your browser.
                 </p>
             </div>
 
-            <div className="demo-code">
-                <Source
-                    tokens={tokens}
-                    code={WRAPPER}
-                    title={(
-                        <span style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}>
-                            src/native/database.h
-                            <a href={SOURCE_URL} target="_blank" rel="noreferrer" style={{ color: tokens.accentText }}>
-                                Full source ↗
-                            </a>
-                        </span>
-                    )}
-                />
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 16, minWidth: 0 }}>
-                    <Source tokens={tokens} title="src/main.js" code={USAGE} />
-                    <CodeWindow tokens={tokens} title="SQL" padded={false}>
-                        <textarea
-                            className="demo-query"
-                            value={sql}
-                            onChange={(event) => setSql(event.target.value)}
-                            spellCheck="false"
-                            aria-label="SQL to run against the library catalog"
-                            rows={DEFAULT_QUERY.split('\n').length}
-                            style={{
-                                display: 'block',
-                                width: '100%',
-                                resize: 'vertical',
-                                background: 'transparent',
-                                color: tokens.codeText,
-                                border: 'none',
-                                padding: 18,
-                                fontFamily: tokens.mono,
-                                fontSize: 13,
-                                lineHeight: 1.7,
-                            }}
-                        />
-                    </CodeWindow>
-                </div>
+            {/* Turbo C++'s desktop, as the hero's: the C++ that binds SQLite beside the JavaScript that calls it, and the
+                query the visitor edits inside main.js. database.h scrolls down within main.js's height. */}
+            <div
+                onKeyDown={onKeyDown}
+                className="demo-code"
+                style={{
+                    gap: 10, padding: '14px 6px 6px', borderRadius: 4, background: TURBO.blue, color: TURBO.yellow, fontFamily: tokens.mono, fontSize: 13, lineHeight: '20px',
+                }}
+            >
+                <TurboWindow title="database.h" number="1" style={{ minWidth: 0 }}>
+                    <div className="demo-header" style={{ padding: '10px 14px', overflowY: 'auto', scrollbarColor: `${TURBO.cyan} ${TURBO.blue}` }}>
+                        <WrappedCode code={HEADER_CODE} syntax={syntax} />
+                    </div>
+                </TurboWindow>
+                <TurboWindow title="main.js" number="2" style={{ minWidth: 0, padding: '10px 14px' }}>
+                    <WrappedCode code={MAIN_BEFORE} syntax={syntax} />
+                    {/* Turbo's input colours mark the one part to edit. */}
+                    <textarea
+                        className="demo-query"
+                        value={sql}
+                        onChange={(event) => setSql(event.target.value)}
+                        spellCheck="false"
+                        aria-label="SQL to run against the library catalog"
+                        rows={sql.split('\n').length}
+                        style={{
+                            display: 'block', width: '100%', boxSizing: 'border-box', resize: 'vertical', margin: 0, padding: '0 6px', border: 'none', borderRadius: 0, background: TURBO.cyan, color: TURBO.black, font: 'inherit', lineHeight: 'inherit',
+                        }}
+                    />
+                    <WrappedCode code={MAIN_AFTER} syntax={syntax} />
+                </TurboWindow>
             </div>
 
             <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 14, marginTop: 16 }}>
@@ -193,6 +178,7 @@ export default function LibraryDemo({ tokens }) {
                     className="tap-target"
                     onClick={run}
                     disabled={busy}
+                    aria-keyshortcuts="Control+Enter Meta+Enter"
                     style={{ ...primaryButtonStyle(tokens), padding: '10px 20px', fontSize: 14, cursor: busy ? 'progress' : 'pointer' }}
                 >
                     {busy ? 'Running…' : 'Run'}
@@ -200,6 +186,9 @@ export default function LibraryDemo({ tokens }) {
                 <span aria-live="polite" style={{ fontSize: 13, color: tokens.textDim }}>
                     {statusText(state, demo.bytes ?? 0)}
                 </span>
+                <a href={PLAYGROUND_SAMPLE} className="tap-target demo-try" style={{ marginLeft: 'auto', color: tokens.accentText, fontSize: 14 }}>
+                    Try in Playground →
+                </a>
             </div>
 
             <Results tokens={tokens} state={state} />

@@ -2,9 +2,9 @@ import { useEffect, useRef, useState } from 'react';
 import { TURBO } from '../components/turbo.jsx';
 import { Account, statusText, visuallyHidden } from './parts.jsx';
 
-// The Turbo look's menu bar in place of the modern toolbar, with the same actions: Run, the samples, packages, a new
-// file, and the switch back to the modern look under ≡. A menu is a button that shows a list of buttons; the
-// background is left to styles.css, so hovering an item lights it.
+// The Turbo look's menu bar in place of the modern toolbar, with the same actions: Run, the samples, packages and a
+// new file; ≡ is only drawn, as in the hero. A menu is a button that shows a list of buttons; the background is left
+// to styles.css, so hovering an item lights it.
 
 const item = (mono) => ({
     border: 'none', padding: '0 8px', font: 'inherit', fontFamily: mono, color: TURBO.black, cursor: 'pointer', whiteSpace: 'pre',
@@ -83,8 +83,8 @@ function Menu({
 }
 
 export default function TurboBar({
-    tokens, phase, session, ready, prebuilt, samples, sampleId, edited,
-    onRun, onStop, onSelectSample, onNewFile, onReset, onAddPackage, onModern, onSignOut, onDeleteAccount,
+    tokens, phase, session, ready, runOff, prebuilt, samples, sampleId, edited,
+    onRun, onStop, onSelectSample, onNewFile, onReset, onAddPackage, onSignOut, onDeleteAccount,
 }) {
     const { mono } = tokens;
     const busy = phase !== 'idle';
@@ -98,7 +98,7 @@ export default function TurboBar({
         }}
         >
             <h1 style={visuallyHidden}>Playground</h1>
-            <Menu mono={mono} label="≡" title="System" items={[{ label: 'Modern view', onSelect: onModern }]} />
+            <span aria-hidden="true" className="tap-target" style={{ padding: '0 8px' }}>≡</span>
             <Menu
                 id="turbo-file-menu"
                 mono={mono}
@@ -109,17 +109,6 @@ export default function TurboBar({
                     { label: 'Reset sample', onSelect: onReset, disabled: busy || !edited },
                 ]}
             />
-            <button
-                type="button"
-                onClick={phase === 'running' ? onStop : onRun}
-                disabled={phase !== 'running' && !ready}
-                aria-label={runLabel ?? 'Run'}
-                aria-keyshortcuts="Control+Enter Meta+Enter"
-                className="tap-target"
-                style={{ ...item(mono), opacity: phase === 'running' || ready ? 1 : 0.55, cursor: phase === 'running' || ready ? 'pointer' : 'default' }}
-            >
-                {runLabel ?? <Hotkey>Run</Hotkey>}
-            </button>
             <button type="button" onClick={onAddPackage} disabled={busy} aria-label="Packages" className="tap-target" style={item(mono)}>
                 <Hotkey>Packages</Hotkey>
             </button>
@@ -132,6 +121,22 @@ export default function TurboBar({
                     label: sample.title, current: sample.id === sampleId, disabled: busy, onSelect: () => onSelectSample(sample.id),
                 }))}
             />
+            {/* Some browsers give a disabled button no pointer, so the reason sits on a wrapper the pointer reaches. */}
+            <span title={runOff ?? undefined} style={{ display: 'inline-flex' }}>
+                <button
+                    type="button"
+                    onClick={phase === 'running' ? onStop : onRun}
+                    disabled={phase !== 'running' && !ready}
+                    aria-label={runLabel ?? 'Run'}
+                    aria-keyshortcuts="Control+Enter Meta+Enter"
+                    className="tap-target"
+                    style={{
+                        ...item(mono), opacity: phase === 'running' || ready ? 1 : 0.55, cursor: phase === 'running' || ready ? 'pointer' : 'default', pointerEvents: runOff ? 'none' : undefined,
+                    }}
+                >
+                    {runLabel ?? <Hotkey>Run</Hotkey>}
+                </button>
+            </span>
             <span style={{ flex: 1 }} />
             <span aria-live="polite" style={{ padding: '0 8px' }}>{statusText(phase, session, prebuilt)}</span>
             <span style={{ padding: '0 8px' }}>
