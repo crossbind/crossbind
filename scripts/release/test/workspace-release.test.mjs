@@ -292,6 +292,18 @@ test('workspace version command updates only selected packages to one new train 
     assert.equal(discoverPublishablePackages(root).find((candidate) => candidate.name === '@crossbind/consumer').version, '2.0.0-beta.2');
 });
 
+test('workspace version command releases bridge-tools with crossbind, which pins it at its own version', () => {
+    const root = fixtureRepository([
+        { path: 'core/crossbind', name: 'crossbind', version: '2.0.0-beta.2' },
+        { path: 'tooling/bridge-tools', name: '@crossbind/bridge-tools', version: '2.0.0-beta.1' },
+    ]);
+    const result = setWorkspaceVersion({ root, version: '2.0.0-beta.3', packageNames: ['crossbind'] });
+    assert.deepEqual(
+        result.changes.map((change) => `${change.name}@${change.to}`),
+        ['crossbind@2.0.0-beta.3', '@crossbind/bridge-tools@2.0.0-beta.3'],
+    );
+});
+
 test('workspace version command refuses an already-used local version', () => {
     const root = fixtureRepository([{ path: 'core/base', name: '@crossbind/base', version: '2.0.0-beta.2' }]);
     assert.throws(() => setWorkspaceVersion({ root, version: '2.0.0-beta.2', packageNames: ['@crossbind/base'], apply: true }), /must be newer/);

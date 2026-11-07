@@ -157,7 +157,7 @@ console.log(Native.sample());`,
         },
         {
             type: 'p',
-            text: '`-p host` picks `darwin`, `win32`, or on Linux `linux` or `linuxmusl` by the C library Node.js runs on; `-p darwin,linux,linuxmusl,win32` builds all four, each for arm64 and x64. A Mac needs Docker too, because the bindings are generated in the image the wasm build uses. To publish addons so that npm installs only the one a machine needs, see [Publishing packages](/guide/publishing/#package-types).',
+            text: '`-p host` picks `darwin`, `win32`, or on Linux `linux` or `linuxmusl` by the C library Node.js runs on; `-p darwin,linux,linuxmusl,win32` builds all four, each for arm64 and x64. A Mac builds its own addons without Docker: Xcode compiles them, and `@crossbind/bridge-tools`, which npm installs with crossbind there, generates the bindings as the image the wasm build uses would. To publish addons so that npm installs only the one a machine needs, see [Publishing packages](/guide/publishing/#package-types).',
         },
 
         { type: 'h2', id: 'limits', text: 'Limits' },

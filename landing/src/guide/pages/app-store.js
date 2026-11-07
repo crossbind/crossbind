@@ -20,26 +20,7 @@ const LISTING = `store/app-store/en-US/
 const TESTFLIGHT = `name: Publish to TestFlight
 on: workflow_dispatch
 jobs:
-  bridges:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-node@v7
-        with:
-          node-version: 24
-          cache: npm
-      - run: npm ci
-      - run: npx crossbind app build -p linux
-      - uses: actions/upload-artifact@v7
-        with:
-          name: bridges
-          include-hidden-files: true
-          path: |
-            .crossbind/cache.json
-            .crossbind/build/bridge/
-            .crossbind/build/interface/
   publish:
-    needs: bridges
     runs-on: macos-latest
     env:
       CROSSBIND_RUNNER: LOCAL
@@ -47,14 +28,9 @@ jobs:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
         with:
-          node-version: 24
+          node-version: 26
           cache: npm
       - run: npm ci
-      - uses: actions/download-artifact@v8
-        with:
-          name: bridges
-          path: .crossbind
-      - run: grep -rl /home/runner/work/ .crossbind | xargs sed -i '' -e 's#/home/runner/work/#/Users/runner/work/#g'
       - uses: actions/cache@v6
         with:
           path: ~/.crossbind/hermes
@@ -175,12 +151,12 @@ export default {
         },
         {
             type: 'p',
-            text: 'A hosted macOS runner has no Docker, in which crossbind runs SWIG, so publishing to TestFlight takes two jobs: a Linux job builds the app for Linux, which makes its bridges, and the macOS job builds the iOS app from them:',
+            text: 'Publishing to TestFlight takes one job on a hosted macOS runner. The runner has no Docker and needs none: on a Mac, crossbind makes a macOS or iOS build\'s bridges with `@crossbind/bridge-tools`, which npm installs with crossbind there.',
         },
         { type: 'code', file: '.github/workflows/testflight.yml', code: TESTFLIGHT },
         {
             type: 'p',
-            text: "The bridges keep the Linux runner's paths, which the `sed` moves to the macOS runner's, and `CROSSBIND_RUNNER: LOCAL` builds the rest with the runner's Xcode. The cache keeps Hermes and its dSYM, which every upload carries, from downloading again at each run. The key goes in as its secret's text, so no step writes it to a file: where a tool takes a file, crossbind writes one only the job's user reads, and removes it when the publish ends.",
+            text: "`CROSSBIND_RUNNER: LOCAL` keeps the build's other steps, such as a Rust crate's, on the runner and its Xcode. The cache keeps Hermes and its dSYM, which every upload carries, from downloading again at each run. The key goes in as its secret's text, so no step writes it to a file: where a tool takes a file, crossbind writes one only the job's user reads, and removes it when the publish ends.",
         },
         {
             type: 'p',

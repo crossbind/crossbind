@@ -90,31 +90,10 @@ export default {
 
 `.mjs` is preferred (ESM) so the `import.meta.url` reference works; `.js` is fine too if `package.json` declares `"type": "module"`.
 
-## CI bridge cache (optional, advanced)
+## iOS in CI
 
-The `examples/mobile-reactnative-cli` example keeps a snapshot of generated bridge files at `ci/crossbind-snapshot/` — the iOS workflow restores it before `pod install` to skip the SWIG bridge generation step in CI. This is **not** required for normal development, only for fast CI builds. Pattern:
-
-```
-my-app/
-└── ci/
-    └── crossbind-snapshot/        ← snapshot of .crossbind/build/{bridge,interface} + cache.json
-        └── build/
-            ├── bridge/
-            │   ├── native.i.cpp
-            │   └── native.i.cpp.exports.json
-            ├── interface/
-            │   └── native.i
-            └── ...
-```
-
-In CI, before pod install:
-
-```bash
-mkdir -p .crossbind
-cp -r ci/crossbind-snapshot/. .crossbind/
-```
-
-Don't name the snapshot dir `.crossbind` — `clear:cache:examples`-style globs may pick it up and delete it. Use a different name (`crossbind-snapshot`, `bridge-cache`, etc.).
+A hosted macOS runner has no Docker and needs none: on a Mac, crossbind makes the iOS bridges with
+`@crossbind/bridge-tools`, which npm installs with crossbind there.
 
 ## Multithread → COOP/COEP
 
@@ -134,7 +113,6 @@ Don't name the snapshot dir `.crossbind` — `clear:cache:examples`-style globs 
 - **Mixing Expo and bare RN.** If `expo` is in deps, this playbook doesn't apply — switch to `react-native-expo.md`.
 - **React Native older than 0.81.** The generated bridges stop compiling with errors about `facebook::jsi::UUID` or `getRuntimeData`; upgrade React Native.
 - **Skipping `pod install`** after adding the plugin. iOS will fail to find the xcframeworks at link time.
-- **Deleting `ci/.crossbind` directly with the older `find`-based clear scripts.** Use the `crossbind-snapshot/` rename pattern (see "CI bridge cache" above) so future clear globs don't wipe it.
 - **arm64e / x86_64 simulator slices.** `@crossbind/port-*-ios` podspecs already exclude `x86_64` for iphonesimulator (Apple Silicon-only). If a custom user package's podspec is missing `EXCLUDED_ARCHS[sdk=iphonesimulator*] = x86_64`, Apple Silicon Macs running the iOS simulator will fail to link.
 - **NDK / cmake version mismatch.** The plugin's native build needs CMake 3.28 or newer, and the app's `ndkVersion` should be the NDK the crossbind images build with, as the examples set it (the pin is in [`performance.md`](../../api/performance.md)). `pnpm android` will surface mismatches via Gradle.
 - **`crossbind: compressBound is not bound in the native module` after a new import.** A port's header binds the functions the app imports, and Metro binds the new one when the file is saved. Rebuild the app (`pnpm ios` / `pnpm android`); Metro can keep running.
@@ -143,7 +121,7 @@ Don't name the snapshot dir `.crossbind` — `clear:cache:examples`-style globs 
 
 ## Reference examples
 
-- `examples/mobile-reactnative-cli/` — canonical RN-cli reference (with `ci/crossbind-snapshot/`)
+- `examples/mobile-reactnative-cli/` — canonical RN-cli reference
 - `e2e/mobile-reactnative-cli/` — bigger demo with multiple packages
 
 Plugin sources:
@@ -151,4 +129,4 @@ Plugin sources:
 - `plugins/react-native-ios-helper/` (iOS-side glue)
 - `plugins/metro/` (Metro bundler integration)
 
-iOS CI workflow (uses bridge cache): `.github/workflows/test-ios-sample.yml`.
+iOS CI workflow: `.github/workflows/test-ios-sample.yml`.

@@ -1,0 +1,52 @@
+# The bridge tools a macOS leg makes its bridges with, as the artifact bridge-tools: the web image builds them, so a Linux
+# job builds them once per change of what they are made from and keeps them in the cache. Called by the workflows with
+# macOS legs that bind headers; not useful on its own.
+
+name: Build bridge-tools
+
+on:
+    workflow_call:
+
+permissions: {}
+jobs:
+    build:
+        runs-on: ubuntu-latest
+        timeout-minutes: 30
+        steps:
+            - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+            - name: Restore the bridge tools
+              id: cache
+              uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+              with:
+                  path: tooling/bridge-tools/dist
+                  key: bridge-tools-${{ hashFiles('tooling/bridge-tools/scripts/build.mjs', 'tooling/bridge-tools/scripts/build-in-image.sh', 'tooling/bridge-tools/sources.json', 'tooling/docker/base.Dockerfile', 'core/crossbind/src/assets/toolchain-digests.json') }}
+            - name: Install pnpm
+              if: steps.cache.outputs.cache-hit != 'true'
+              uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+            - name: Use Node.js
+              if: steps.cache.outputs.cache-hit != 'true'
+              uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+              with:
+                  node-version-file: .nvmrc
+                  cache: 'pnpm'
+            - name: Install dependencies
+              if: steps.cache.outputs.cache-hit != 'true'
+              run: pnpm install
+            - name: Build the bridge tools in the web image
+              if: steps.cache.outputs.cache-hit != 'true'
+              run: node tooling/bridge-tools/scripts/build.mjs
+            - name: Save the bridge tools
+              if: steps.cache.outputs.cache-hit != 'true'
+              uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+              with:
+                  path: tooling/bridge-tools/dist
+                  key: ${{ steps.cache.outputs.cache-primary-key }}
+            - name: Hand the bridge tools to the macOS legs
+              uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+              with:
+                  name: bridge-tools
+                  if-no-files-found: error
+                  # A re-run of this job uploads under the same name again.
+                  overwrite: true
+                  path: tooling/bridge-tools/dist/
+                  retention-days: 1

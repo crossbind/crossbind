@@ -1,6 +1,6 @@
 # Remote runner — `RUNNER=REMOTE`
 
-> Builds without a local Docker. A **runner** is one toolchain image this crossbind pins plus a small server that ships inside the CLI. With `RUNNER=REMOTE` and a runner's address and token set, every toolchain step bound for its image (compilers, CMake, SWIG, the linker, cargo, conan) runs on the runner instead of a local container; crossbind neither pulls that image nor starts containers. Your JavaScript never leaves the machine.
+> Builds without a local Docker. A **runner** is one toolchain image this crossbind pins plus a small server that ships inside the CLI. With `RUNNER=REMOTE` and a runner's address and token set, every toolchain step bound for its image (compilers, CMake, SWIG, the linker, cargo, conan) runs on the runner instead of a local container; crossbind neither pulls that image nor starts containers. Your JavaScript never leaves the machine. On a Mac, `@crossbind/bridge-tools` makes every bridge but Android's, so a macOS or iOS build, which Xcode compiles, needs no runner.
 
 ## Quick start
 

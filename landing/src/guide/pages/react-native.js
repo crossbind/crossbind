@@ -35,7 +35,7 @@ npm install --save-dev @crossbind/plugin-metro${tag}`,
         },
         {
             type: 'p',
-            text: 'Builds need Docker to generate the bridges for both platforms, or a [remote runner](/guide/remote-builds/), and the mobile tools in [Prerequisites](/guide/quick-start/#prerequisites). Add a `crossbind.config.mjs` at the project root; a port joins with its `-android` and `-ios` packages, both installed and listed:',
+            text: 'Android builds need Docker, or a [remote runner](/guide/remote-builds/), to generate their bridges; on a Mac, an iOS build generates them with `@crossbind/bridge-tools`, which npm installs with crossbind there. Both need the mobile tools in [Prerequisites](/guide/quick-start/#prerequisites). Add a `crossbind.config.mjs` at the project root; a port joins with its `-android` and `-ios` packages, both installed and listed:',
         },
         {
             type: 'code',

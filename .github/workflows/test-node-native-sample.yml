@@ -10,8 +10,10 @@ on:
             - examples/**
             - plugins/vite/**
             - plugins/rollup/**
+            - tooling/bridge-tools/**
             - .nvmrc
             - .github/workflows/test-node-native-sample.yml
+            - .github/workflows/build-bridge-tools.yml
             - '!**/*.md'
     pull_request:
         branches:
@@ -29,9 +31,10 @@ on:
             - examples/native-executable/**
             - examples/desktop-electron/**
             - examples/desktop-app/**
-            - examples/mobile-reactnative-cli/ci/**
+            - tooling/bridge-tools/**
             - .nvmrc
             - .github/workflows/test-node-native-sample.yml
+            - .github/workflows/build-bridge-tools.yml
             - '!**/*.md'
 
 permissions: {}
@@ -40,7 +43,11 @@ concurrency:
     group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
     cancel-in-progress: true
 jobs:
+    # The macOS builds make their bridges with bridge-tools, as a developer's Mac does.
+    bridge-tools:
+        uses: ./.github/workflows/build-bridge-tools.yml
     build:
+        needs: bridge-tools
         runs-on: macos-latest
         steps:
             - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -70,19 +77,11 @@ jobs:
               with:
                   path: ~/.crossbind/hermes
                   key: ${{ steps.hermes.outputs.cache-primary-key }}
-            - name: Restore cached bridge files
-              # A macOS runner has no Docker and cannot run SWIG, so the bridges come from committed
-              # snapshots; regenerate them when the headers or the SWIG fork change. desktop-electron
-              # binds the same native.h as backend-nodejs-native, and desktop-app imports Native from it by
-              # name as mobile-reactnative-cli does, so each takes that example's snapshot under its paths.
-              run: |
-                  mkdir -p ./examples/lib-prebuilt-matrix/.crossbind ./examples/backend-nodejs-native/.crossbind ./examples/desktop-electron/.crossbind ./examples/desktop-app/.crossbind
-                  cp -r ./examples/backend-nodejs-native/ci/lib-prebuilt-matrix-snapshot/. ./examples/lib-prebuilt-matrix/.crossbind/
-                  cp -r ./examples/backend-nodejs-native/ci/crossbind-snapshot/. ./examples/backend-nodejs-native/.crossbind/
-                  cp -r ./examples/backend-nodejs-native/ci/crossbind-snapshot/. ./examples/desktop-electron/.crossbind/
-                  cp -r ./examples/mobile-reactnative-cli/ci/crossbind-snapshot/. ./examples/desktop-app/.crossbind/
-                  sed -i '' 's#/examples/backend-nodejs-native/#/examples/desktop-electron/#g' ./examples/desktop-electron/.crossbind/cache.json
-                  sed -i '' 's#/examples/mobile-reactnative-cli/#/examples/desktop-app/#g' ./examples/desktop-app/.crossbind/cache.json
+            - name: Restore the bridge tools
+              uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+              with:
+                  name: bridge-tools
+                  path: tooling/bridge-tools/dist
             - name: Build examples/lib-prebuilt-matrix
               run: pnpm --filter=@crossbind/example-lib-prebuilt-matrix run build:darwin
             - name: Build examples/backend-nodejs-native

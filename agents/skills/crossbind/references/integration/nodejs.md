@@ -201,7 +201,8 @@ A Linux or Windows addon carries its C++ runtime; a macOS addon uses the system'
 
 Requirements:
 
-- Docker, on macOS too: the SWIG bridges are generated in the same image the wasm build uses.
+- Docker for Linux and Windows addons. A macOS addon builds on a Mac without it: Xcode compiles it, and
+  `@crossbind/bridge-tools`, which npm installs with crossbind on a Mac, makes its SWIG bridges as the web image would.
 - Every C++ dependency needs prebuilts for the platform (`crossbind build -p <platform>` in the library). Each `@crossbind/port-*` family publishes them as `@crossbind/port-<name>-darwin`, `-linux`, `-linuxmusl` and `-win32`: install the ones you build for and import their `crossbind.config.js` next to the other platform variants. The addon links the archives statically; the few system libraries a port uses (libxml2 and zlib of the macOS SDK, Winsock and the certificate store on Windows) come from the port's `binary.addonFlags`, and data such as `GDAL_DATA` and `proj.db` lands in `dist/data`.
 - Rust packages, `.rs` files and `cargo:` crates build in the toolchain images for Linux and Windows; for macOS they need this machine's Rust with the cargo target of each architecture, e.g. `rustup target add x86_64-apple-darwin` on an arm64 Mac.
 

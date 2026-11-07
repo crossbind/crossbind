@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { packCrossbind, packWorkspacePackage, smokeTestCrossbindTarball } from './package-artifact.mjs';
+import { packWorkspacePackage, smokeTestCrossbindTarball } from './package-artifact.mjs';
 import { MULTI_PLATFORM_BUILDS, RUNNERS, findBuildManifests, multiPlatformBuildArgs, validateWorkspaceReleasePlan } from './workspace-release.mjs';
 import {
     NODE_RUNNER_BUILDS,
@@ -117,16 +117,13 @@ for (const name of plan.publishOrder) {
     const candidate = workspace[name];
     if (!candidates.has(name) || candidate.buildKind === 'multi-platform') continue;
     if (candidate.buildKind !== runner) continue;
-    const packed =
-        candidate.name === 'crossbind'
-            ? packCrossbind({ root, artifactDirectory: path.join(artifactRoot, 'tarballs') })
-            : packWorkspacePackage({
-                  root,
-                  packagePath: candidate.path,
-                  expectedName: candidate.name,
-                  expectedVersion: candidate.version,
-                  artifactDirectory: path.join(artifactRoot, 'tarballs'),
-              });
+    const packed = packWorkspacePackage({
+        root,
+        packagePath: candidate.path,
+        expectedName: candidate.name,
+        expectedVersion: candidate.version,
+        artifactDirectory: path.join(artifactRoot, 'tarballs'),
+    });
     if (candidate.name === 'crossbind') {
         smokeTestCrossbindTarball({ tarball: packed.tarball, expectedVersion: candidate.version });
     }

@@ -11,8 +11,8 @@ version and nothing for `electron-rebuild` to do.
 # Getting Started
 
 >**Note**: Make sure you have completed the [crossbind - Prerequisites](https://crossbind.dev/docs/guide/getting-started/prerequisites) instructions.
-The bindings and the Linux and Windows addons build in Docker; the macOS addons build on a macOS
-host with Xcode's command line tools.
+The Linux and Windows addons build in Docker, and so do the bindings but on a Mac, where
+`@crossbind/bridge-tools` generates them; the macOS addons build on a macOS host with Xcode's command line tools.
 
 ## Setup
 

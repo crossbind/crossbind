@@ -13,6 +13,13 @@ vi.mock('../src/actions/run.js', () => ({
     default: vi.fn(),
     cxxPreprocessorFor: () => 'em++',
 }));
+// Off a Mac unless a test says otherwise: there, bridge-tools makes the bridges.
+vi.mock('../src/utils/bridgeTools.js', () => ({
+    usesBridgeTools: vi.fn(() => false),
+    loadBridgeTools: vi.fn(),
+    runSwig: vi.fn(),
+    runPreprocessor: vi.fn(),
+}));
 
 const holder = { config: {}, cache: {} };
 vi.mock('../src/state/index.js', () => ({
@@ -30,15 +37,24 @@ let header;
 
 async function importFresh() {
     vi.resetModules();
-    const { default: run } = await import('../src/actions/run.js');
-    run.mockReset();
-    run.mockImplementation((program, args) => {
+    const writeOutput = (program, args) => {
         const out = args[args.indexOf('-o') + 1];
         fs.writeFileSync(out, program === 'swig' ? 'EMSCRIPTEN_BINDINGS(fixture) {}\n' : '');
         return '';
-    });
+    };
+    const { default: run } = await import('../src/actions/run.js');
+    run.mockReset();
+    run.mockImplementation(writeOutput);
+    const bridgeTools = await import('../src/utils/bridgeTools.js');
+    bridgeTools.usesBridgeTools.mockReset();
+    bridgeTools.usesBridgeTools.mockReturnValue(false);
+    bridgeTools.loadBridgeTools.mockReset();
+    bridgeTools.runSwig.mockReset();
+    bridgeTools.runSwig.mockImplementation((args) => writeOutput('swig', args));
+    bridgeTools.runPreprocessor.mockReset();
+    bridgeTools.runPreprocessor.mockImplementation((args) => writeOutput('clang', args));
     const { default: createBridgeFile } = await import('../src/actions/createInterface.js');
-    return { run, createBridgeFile };
+    return { run, bridgeTools, createBridgeFile };
 }
 
 beforeEach(() => {
@@ -431,6 +447,37 @@ describe('the image SWIG reads a header in', () => {
         createBridgeFile(header, { platform: 'android', arch: 'arm64-v8a', runtimeEnv: 'app', path: 'android-arm64-v8a-mt-app-release' });
 
         expect(toolPlatforms(run)).toEqual(new Set(['android']));
+    });
+
+    test("is none on a Mac but for Android: bridge-tools reads the header and runs SWIG in the build directory, an app page's too", async () => {
+        const { run, bridgeTools, createBridgeFile } = await importFresh();
+        bridgeTools.usesBridgeTools.mockImplementation((target) => target?.platform !== 'android');
+        const page = path.join(path.dirname(header), 'page.h');
+        const android = path.join(path.dirname(header), 'android.h');
+        [header, page, android].forEach((file) => fs.writeFileSync(file, 'int one();\n'));
+
+        createBridgeFile(header, { platform: 'ios', arch: 'iphoneos', path: 'ios-iphoneos-mt-release' });
+        createBridgeFile(page);
+        createBridgeFile(android, { platform: 'android', arch: 'arm64-v8a', path: 'android-arm64-v8a-mt-release' });
+
+        const build = holder.config.paths.build;
+        expect(bridgeTools.loadBridgeTools).toHaveBeenCalled();
+        expect(bridgeTools.runSwig.mock.calls.map(([args, cwd]) => [args.includes('-embind'), cwd])).toEqual([[true, build], [true, build]]);
+        expect(bridgeTools.runPreprocessor.mock.calls.every(([, cwd]) => cwd === build)).toBe(true);
+        expect(toolPlatforms(run)).toEqual(new Set(['android']));
+    });
+
+    test('stops before writing an interface when bridge-tools does not load on a Mac', async () => {
+        const { run, bridgeTools, createBridgeFile } = await importFresh();
+        bridgeTools.usesBridgeTools.mockReturnValue(true);
+        bridgeTools.loadBridgeTools.mockImplementation(() => {
+            throw new Error('crossbind: bridges on a Mac need @crossbind/bridge-tools');
+        });
+        fs.writeFileSync(header, 'int one();\n');
+
+        expect(() => createBridgeFile(header, { platform: 'darwin', arch: 'arm64', path: 'darwin-arm64-mt-release' })).toThrow(/need @crossbind\/bridge-tools/);
+        expect(cachedInterface(header)).toBeUndefined();
+        expect(run).not.toHaveBeenCalled();
     });
 });
 
