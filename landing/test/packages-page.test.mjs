@@ -41,7 +41,7 @@ test('the groups come in the agreed order, each package in the group of its fold
     );
     assert.deepEqual(
         rowsOf(PACKAGE_GROUPS[0]).map(({ name }) => name),
-        ['crossbind', 'create-crossbind'],
+        ['crossbind', 'create-crossbind', '@crossbind/bridge-tools'],
     );
     assert.equal(groupOfPackage('@crossbind/plugin-react-native'), 'plugins');
     assert.equal(groupOfPackage('@crossbind/port-gdal-wasm'), 'libraries');

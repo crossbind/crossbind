@@ -15,7 +15,7 @@ crossbind compiles C++ and Rust libraries to WebAssembly, native iOS/Android bin
 - `extensions/` — `@crossbind/extension-*` app extensions: crossbind's own, which `@crossbind/core-app-host` has as dependencies, and those an app's `crossbind.config.js` lists.
 - `examples/` — published `@crossbind/example-*` reference integrations and create-crossbind template sources.
 - `e2e/` — isolated `@crossbind/e2e-*` conformance and regression fixtures.
-- `tooling/` — the create-app generator, owned Docker/toolchain packaging and shared TypeScript configuration.
+- `tooling/` — the create-app generator, owned Docker/toolchain packaging, the bridge tools with which a Mac makes macOS and iOS bridges without Docker, and shared TypeScript configuration.
 - `scripts/` — repository maintenance, validation, scaffolding and generated-agent entrypoints.
 - `docs/api/` — canonical runtime and build API reference.
 - `docs/playbooks/` — integration, package-authoring and contributor workflows.

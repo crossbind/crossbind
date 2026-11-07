@@ -6927,6 +6927,8 @@ importers:
         specifier: workspace:^
         version: link:../../../core/crossbind
 
+  tooling/bridge-tools: {}
+
   tooling/cloud:
     dependencies:
       '@cloudflare/containers':

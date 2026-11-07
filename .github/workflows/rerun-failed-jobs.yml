@@ -11,6 +11,7 @@ on:
             - test ios sample
             - test node addon conformance
             - test e2e fixtures
+            - test bridge-tools
         types:
             - completed
 
