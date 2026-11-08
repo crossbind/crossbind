@@ -28,7 +28,7 @@
       "npm": "@crossbind/port-expat",
       "category": "text",
       "summary": "Streaming XML parser",
-      "nativeVersion": "2.9.0",
+      "nativeVersion": "2.10.0",
       "license": "MIT",
       "homepage": "https://crossbind.dev/ports/expat/",
       "targets": [
@@ -170,7 +170,7 @@
       "npm": "@crossbind/port-jpegturbo",
       "category": "image",
       "summary": "High-performance JPEG codec",
-      "nativeVersion": "3.2.0",
+      "nativeVersion": "3.2.1",
       "license": "IJG AND BSD-3-Clause AND Zlib",
       "homepage": "https://crossbind.dev/ports/jpegturbo/",
       "targets": [

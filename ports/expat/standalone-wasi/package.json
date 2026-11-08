@@ -1,7 +1,7 @@
 {
     "name": "@crossbind/port-expat-standalone-wasi",
     "version": "2.0.0-beta.67",
-    "nativeVersion": "2.9.0",
+    "nativeVersion": "2.10.0",
     "description": "The xmlwf well-formedness checker prebuilt as a WASI command component.",
     "homepage": "https://crossbind.dev/ports/expat/",
     "repository": "https://github.com/crossbind/crossbind.git",
@@ -34,26 +34,16 @@
         "provenance": {
             "recipe": {
                 "name": "@crossbind/port-expat",
-                "version": "2.0.0-beta.58",
-                "nativeVersion": "2.9.0"
+                "version": "2.0.0-beta.67",
+                "nativeVersion": "2.10.0"
             },
             "source": {
-                "url": "https://github.com/libexpat/libexpat/releases/download/R_2_8_5/expat-2.8.5.tar.gz",
-                "sha256": "920dde485e15eda0cce8d2310b41d492c534e5e3d89ad407a0b4176dd2ff88fe"
+                "url": "https://github.com/libexpat/libexpat/releases/download/R_2_10_0/expat-2.10.0.tar.gz",
+                "sha256": "5466a341f9c692ef7a958a6881311be597f8e1ce345984cf78414f54793dea4c"
             },
             "environment": {
-                "builder": "host",
-                "dockerImage": "ghcr.io/crossbind/web@sha256:cd9065909b8e4aea584fbe6f6e0215773feaed97ab46e5ce265a487171f87757",
-                "hostPlatform": "darwin-arm64",
-                "toolchain": {
-                    "name": "wasi-sdk",
-                    "version": "34.0-rc.3+m",
-                    "wasi-libc": "2e6fb9d8ee0c",
-                    "llvm": "7196f931f212",
-                    "llvm-version": "23.1.0",
-                    "config": "f992bcc08219",
-                    "clangSha256": "82a4a3fa013d14978f98452bb76213a3212ee4f5d7937e493ab40724061be570"
-                }
+                "builder": "docker",
+                "dockerImage": "ghcr.io/crossbind/web@sha256:1c6d31ea55b69656f084ed91e31b89266c590a8c4f76bbf9f6fc4cc73ddc0e58"
             },
             "sbom": "dist/prebuilt/wasi-wasm32-st-release/sbom.cdx.json"
         }
