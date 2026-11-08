@@ -38,7 +38,8 @@ const written = outputCapacity - Number(readNumberAt(outputLeft, 0, 'uint64'));
 assert.deepEqual(Buffer.from(readBuffer(output, written)), Buffer.from(TEXT, 'utf16le'));
 assert.equal(iconv_close(converter), 0);
 
+// The upstream macro encodes only major and minor, including for patch releases such as 1.19.1.
 const version = `${_LIBICONV_VERSION >> 8}.${_LIBICONV_VERSION & 0xff}`;
-assert.equal(version, process.env.NATIVE_VERSION);
+assert.equal(version, process.env.NATIVE_VERSION.split('.').slice(0, 2).join('.'));
 assert.equal(createRequire(import.meta.url)('@crossbind/port-iconv-standalone-napi').iconv_open, iconv_open);
-console.log(`ok: libiconv ${version} on ${process.platform}-${process.arch}`);
+console.log(`ok: libiconv ${process.env.NATIVE_VERSION} (API ${version}) on ${process.platform}-${process.arch}`);

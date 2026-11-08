@@ -163,7 +163,7 @@ Each one runs in your browser on [crossbind.dev/ports/iconv](https://crossbind.d
 Setup for every platform: [crossbind.dev/ports/iconv](https://crossbind.dev/ports/iconv/#install). The same page has [an iconv-style command-line program](https://crossbind.dev/ports/iconv/#wasi-program) built with `crossbind build -p wasi -e wasi`.
 
 ## What this build includes
-- GNU libiconv 1.19 as a static library. The GPL `iconv` program and its gnulib support are not built.
+- GNU libiconv 1.19.1 as a static library. The GPL `iconv` program and its gnulib support are not built.
 - 198 encodings under 736 names, as `iconvlist` reports them, each usable in both directions, plus the locale-dependent `char` and `wchar_t`:
   - European and Semitic: ASCII, ISO-8859-1 to -16, KOI8-R, KOI8-U, KOI8-RU, Windows-1250 to -1258, DOS 850, 862, 866 and 1131, eleven Mac code pages, HP-ROMAN8 and NEXTSTEP.
   - Japanese: EUC-JP, SHIFT_JIS, CP932, ISO-2022-JP, -JP-1, -JP-2 and -JP-MS.
