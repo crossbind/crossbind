@@ -1,7 +1,7 @@
 {
     "name": "@crossbind/port-jpegturbo-standalone-wasi",
     "version": "2.0.0-beta.67",
-    "nativeVersion": "3.2.0",
+    "nativeVersion": "3.2.1",
     "description": "cjpeg/djpeg/jpegtran prebuilt as WASI (wasm32-wasip3) command components.",
     "homepage": "https://crossbind.dev/ports/jpegturbo/",
     "repository": "https://github.com/crossbind/crossbind.git",
@@ -36,26 +36,16 @@
         "provenance": {
             "recipe": {
                 "name": "@crossbind/port-jpegturbo",
-                "version": "2.0.0-beta.53",
-                "nativeVersion": "3.2.0"
+                "version": "2.0.0-beta.67",
+                "nativeVersion": "3.2.1"
             },
             "source": {
-                "url": "https://github.com/libjpeg-turbo/libjpeg-turbo/releases/download/3.2.0/libjpeg-turbo-3.2.0.tar.gz",
-                "sha256": "6f30092cef9fb839779646608f4ee14ae3cbac989c47fa05e841b0841f09878e"
+                "url": "https://github.com/libjpeg-turbo/libjpeg-turbo/releases/download/3.2.1/libjpeg-turbo-3.2.1.tar.gz",
+                "sha256": "c27ad72a68da151177929aa969ae773a2da5ac2af9ce946079314fdac8cece7f"
             },
             "environment": {
-                "builder": "host",
-                "dockerImage": "ghcr.io/crossbind/web@sha256:c1d1d81a4775871cd90c8ac980e0a5f87cb7890822117f77be1c8345f51b1f47",
-                "hostPlatform": "darwin-arm64",
-                "toolchain": {
-                    "name": "wasi-sdk",
-                    "version": "34.0-rc.3+m",
-                    "wasi-libc": "2e6fb9d8ee0c",
-                    "llvm": "7196f931f212",
-                    "llvm-version": "23.1.0",
-                    "config": "f992bcc08219",
-                    "clangSha256": "82a4a3fa013d14978f98452bb76213a3212ee4f5d7937e493ab40724061be570"
-                }
+                "builder": "docker",
+                "dockerImage": "ghcr.io/crossbind/web@sha256:1c6d31ea55b69656f084ed91e31b89266c590a8c4f76bbf9f6fc4cc73ddc0e58"
             },
             "sbom": "dist/prebuilt/wasi-wasm32-st-release/sbom.cdx.json"
         }

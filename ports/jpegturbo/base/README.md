@@ -7,7 +7,7 @@
 <a href="https://github.com/libjpeg-turbo/libjpeg-turbo">
     <img src="https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fregistry.npmjs.org%2F%40crossbind%2Fport-jpegturbo%2Fbeta&query=%24.nativeVersion&style=for-the-badge&label=LIBJPEG-TURBO" />
 </a>
-<a href="https://github.com/libjpeg-turbo/libjpeg-turbo/blob/3.2.0/LICENSE.md">
+<a href="https://github.com/libjpeg-turbo/libjpeg-turbo/blob/3.2.1/LICENSE.md">
     <img alt="License" src="https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fregistry.npmjs.org%2F%40crossbind%2Fport-jpegturbo%2Fbeta&query=%24.license&style=for-the-badge&label=license" />
 </a>
 
@@ -146,7 +146,7 @@ for (let i = 0; i < width * height; i += 1) {
     rgba.set(disc ? [230, 30, 40, 255] : [x * 2, y * 3, 160, 255], i * 4);
 }
 const pixels = String.fromCharCode(...rgba);
-console.log(`libjpeg-turbo ${await JpegEncoder.version()}: ${width}x${height}, ${rgba.length} B of RGBA`); // libjpeg-turbo 3.2.0: 100x75, 30000 B of RGBA
+console.log(`libjpeg-turbo ${await JpegEncoder.version()}: ${width}x${height}, ${rgba.length} B of RGBA`); // libjpeg-turbo 3.2.1: 100x75, 30000 B of RGBA
 for (const [quality, subsampling] of [[90, 444], [90, 420], [50, 420]]) {
     const jpeg = await JpegEncoder.encode(pixels, width, height, quality, subsampling);
     console.log(`quality ${quality}, subsampling ${subsampling}: ${jpeg.length} B`);
@@ -172,7 +172,7 @@ Each one runs in your browser on [crossbind.dev/ports/jpegturbo](https://crossbi
 Setup for every platform: [crossbind.dev/ports/jpegturbo](https://crossbind.dev/ports/jpegturbo/#install). The same page has [a command-line program](https://crossbind.dev/ports/jpegturbo/#wasi-program) built with `crossbind build -p wasi -e wasi`.
 
 ## What this build includes
-- libjpeg-turbo 3.2.0's libjpeg API (`jpeglib.h`) and TurboJPEG API (`turbojpeg.h`): static `libjpeg.a` and `libturbojpeg.a` for WebAssembly, WASI, iOS, macOS, Linux and Windows, and shared `libjpeg.so` and `libturbojpeg.so` for Android.
+- libjpeg-turbo 3.2.1's libjpeg API (`jpeglib.h`) and TurboJPEG API (`turbojpeg.h`): static `libjpeg.a` and `libturbojpeg.a` for WebAssembly, WASI, iOS, macOS, Linux and Windows, and shared `libjpeg.so` and `libturbojpeg.so` for Android.
 - Baseline, progressive and arithmetic coding in both directions, in-memory I/O (`jpeg_mem_src`, `jpeg_mem_dest`), decoding straight to a reduced size (`scale_num`, `scale_denom`), the coefficient API for lossless transcoding and marker handling (`jpeg_save_markers`, `jpeg_write_marker`). The examples and apps above use each of these, and their output matches native libjpeg-turbo 3.2.0 byte for byte.
 - The 12-bit and lossless entry points (`jpeg12_*`, `jpeg16_*`, `jpeg_enable_lossless`) and the ICC profile helpers (`jpeg_read_icc_profile`, `jpeg_write_icc_profile`) are exported too; nothing here exercises them yet.
 - The TurboJPEG API (`tj3*`): compression and decompression in one call, YUV planes, and `tj3Transform`'s lossless transforms (rotation, flipping, transposition, cropping and conversion to grayscale).
@@ -195,6 +195,6 @@ This is the main package; the precompiled binaries are shipped per platform:
 | Node.js, ready-made | [`@crossbind/port-jpegturbo-standalone-napi`](https://www.npmjs.com/package/@crossbind/port-jpegturbo-standalone-napi) | prebuilt addons for macOS, Linux (glibc and musl) and Windows, `arm64` and `x64`: nothing to build |
 
 ## License
-This project includes the precompiled libjpeg-turbo library, which is distributed under the [libjpeg-turbo licenses](https://github.com/libjpeg-turbo/libjpeg-turbo/blob/3.2.0/LICENSE.md) (IJG AND BSD-3-Clause AND Zlib): the [IJG License](https://github.com/libjpeg-turbo/libjpeg-turbo/blob/3.2.0/README.ijg) for the libjpeg API library, the [Modified (3-clause) BSD License](https://spdx.org/licenses/BSD-3-Clause.html) for its build system, and the [zlib License](https://spdx.org/licenses/Zlib.html) for the SIMD code in the iOS and Android builds.
+This project includes the precompiled libjpeg-turbo library, which is distributed under the [libjpeg-turbo licenses](https://github.com/libjpeg-turbo/libjpeg-turbo/blob/3.2.1/LICENSE.md) (IJG AND BSD-3-Clause AND Zlib): the [IJG License](https://github.com/libjpeg-turbo/libjpeg-turbo/blob/3.2.1/README.ijg) for the libjpeg API library, the [Modified (3-clause) BSD License](https://spdx.org/licenses/BSD-3-Clause.html) for its build system, and the [zlib License](https://spdx.org/licenses/Zlib.html) for the SIMD code in the iOS and Android builds.
 
 libjpeg-turbo Homepage: [https://libjpeg-turbo.org](https://libjpeg-turbo.org)
