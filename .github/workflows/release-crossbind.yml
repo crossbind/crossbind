@@ -234,15 +234,23 @@ jobs:
                   path: ${{ runner.temp }}/workspace-release-node-bridges
                   retention-days: 1
 
+    # Binding a header loads bridge-tools on macOS even when its bridge came from the Linux runner's cache.
+    bridge_tools:
+        needs: plan
+        if: ${{ needs.plan.outputs.packageCount != '0' && needs.plan.outputs.hasNodeMacos == 'true' }}
+        uses: ./.github/workflows/build-bridge-tools.yml
+
     build_node_macos:
         name: Build the macOS addons of ready-made Node packages
         needs:
             - plan
             - build_macos
             - build_node
+            - bridge_tools
         if: >-
             ${{ !cancelled() && needs.plan.result == 'success' && needs.plan.outputs.packageCount != '0' &&
-            needs.plan.outputs.hasNodeMacos == 'true' && needs.build_macos.result == 'success' && needs.build_node.result == 'success' }}
+            needs.plan.outputs.hasNodeMacos == 'true' && needs.build_macos.result == 'success' &&
+            needs.build_node.result == 'success' && needs.bridge_tools.result == 'success' }}
         runs-on: macos-15
         steps:
             - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -277,6 +285,11 @@ jobs:
               with:
                   name: workspace-release-node-bridges-${{ github.sha }}
                   path: ${{ runner.temp }}/workspace-release-node-bridges
+            - name: Restore the bridge tools
+              uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+              with:
+                  name: bridge-tools
+                  path: tooling/bridge-tools/dist
             - name: Build the macOS addons
               run: |
                   node scripts/release/build-workspace-artifacts.mjs \
