@@ -1,7 +1,7 @@
 {
     "name": "@crossbind/port-zlib-standalone-napi-darwin-arm64",
     "version": "2.0.0-beta.67",
-    "nativeVersion": "1.3.2",
+    "nativeVersion": "1.4",
     "homepage": "https://crossbind.dev/ports/zlib/",
     "repository": "https://github.com/crossbind/crossbind.git",
     "license": "(MIT OR NCSA) AND MIT AND Zlib",

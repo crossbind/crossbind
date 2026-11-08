@@ -1,15 +1,12 @@
 export default {
-    sha256: 'bb329a0a2cd0274d05519d61c667c062e06990d72e125ee2dfa8de64f0119d16', // zlib-1.3.2.tar.gz
+    sha256: '02dd159783677a749c04adbdd02b55b8a2bcc7e054f51b76b549199a916ad584', // zlib-1.4.tar.gz
     // zlib.net drops superseded releases and its edge occasionally serves other bytes; the GitHub asset is stable.
     getURL: (version) => `https://github.com/madler/zlib/releases/download/v${version}/zlib-${version}.tar.gz`,
-    buildType: 'cmake',
-    patches: [
-        { file: new URL('./patches/bbc2ccf3-gzvprintf-stalled-write.patch', import.meta.url) },
-        {
-            file: new URL('./patches/df84af25-gzwrite-failed-write.patch', import.meta.url),
-            advisories: ['CVE-2026-76844', 'CVE-2026-85091'],
-        },
+    getMirrors: (version) => [
+        `https://zlib.net/zlib-${version}.tar.gz`,
+        `https://zlib.net/fossils/zlib-${version}.tar.gz`,
     ],
+    buildType: 'cmake',
     // On Windows zlib names its static library zs; every consumer links it as z.
     replaceList: [
         {

@@ -106,7 +106,7 @@ await initNative();
 const text = 'crossbind '.repeat(100);
 const packed = await Zlib.compress(text, 9);
 const bytes = Uint8Array.from(packed, (c) => c.charCodeAt(0));
-console.log(await Zlib.version(), bytes.length, [...bytes.slice(0, 2)].map((b) => b.toString(16)).join(' ')); // 1.3.2 27 78 da
+console.log(await Zlib.version(), bytes.length, [...bytes.slice(0, 2)].map((b) => b.toString(16)).join(' ')); // 1.4 27 78 da
 console.log((await Zlib.decompress(packed, text.length)) === text); // true
 ```
 
@@ -126,10 +126,10 @@ Each one runs in your browser on [crossbind.dev/ports/zlib](https://crossbind.de
 Setup for every platform: [crossbind.dev/ports/zlib](https://crossbind.dev/ports/zlib/#install). The same page has [a gzip command-line program](https://crossbind.dev/ports/zlib/#wasi-program) built with `crossbind build -p wasi -e wasi`.
 
 ## What this build includes
-- zlib 1.3.2 from the release tarball, pinned by SHA-256, built with zlib's own CMake options at their defaults apart from `ZLIB_BUILD_TESTING=OFF` and the library type: static on every platform. On Android the archive is position-independent and goes into the libraries that use it, because the app process already holds the system's own `libz.so`, which would shadow a shared build. Its symbols are hidden there, so every library that links it keeps its copy private and calls its own.
+- zlib 1.4 from the release tarball, pinned by SHA-256, built with zlib's own CMake options at their defaults apart from `ZLIB_BUILD_TESTING=OFF` and the library type: static on every platform. On Android the archive is position-independent and goes into the libraries that use it, because the app process already holds the system's own `libz.so`, which would shadow a shared build. Its symbols are hidden there, so every library that links it keeps its copy private and calls its own.
 - The stock `zlib.h` and `zconf.h`, unchanged. The examples and apps here use `deflateSetHeader`, `inflateGetHeader`, `deflateSetDictionary`, `inflatePrime`, `crc32_combine` and, in the WASI program, the `gz*` file functions.
 - No `contrib/minizip` (`ZLIB_BUILD_MINIZIP` is off by default) and none of the programs in zlib's `examples/`, such as `zran.c`. The ZIP inspector and the seekable gzip app bring their own code for those jobs.
-- Every compressed byte the examples and apps above produce is identical to what stock zlib 1.3.2, built natively from the same tarball, produces, except the operating-system byte in a gzip header: zlib writes 3 (Unix) in the WebAssembly and WASI builds, and its `zutil.h` writes 19 wherever `__APPLE__` is defined, which includes iOS. Set the byte with `deflateSetHeader` when files must match across platforms.
+- Every compressed byte the examples and apps above produce is identical to what stock zlib 1.4, built natively from the same tarball, produces, except the operating-system byte in a gzip header: zlib writes 3 (Unix) in the WebAssembly and WASI builds, and its `zutil.h` writes 19 wherever `__APPLE__` is defined, which includes iOS. Set the byte with `deflateSetHeader` when files must match across platforms.
 
 ## Supported platforms
 This is the main package; the precompiled binaries are shipped per platform:

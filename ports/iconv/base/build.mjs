@@ -41,7 +41,7 @@ const noCliReplaceList = [
 ];
 
 export default {
-    sha256: '88dd96a8c0464eca144fc791ae60cd31cd8ee78321e67397e25fc095c4a19aa6', // libiconv-1.19.tar.gz
+    sha256: '9a06844846d664d7122161700c10a64480d7c7bcead3091925a785b38c91edab', // libiconv-1.19.1.tar.gz
     getURL: (version) => `https://mirrors.kernel.org/gnu/libiconv/libiconv-${version}.tar.gz`,
     // Each serves the same tarball: ftp.gnu.org and its mirror network went quiet on 6 Oct 2026, kernel.org on 17 Oct.
     getMirrors: (version) => [

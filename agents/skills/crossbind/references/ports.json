@@ -150,7 +150,7 @@
       "npm": "@crossbind/port-iconv",
       "category": "text",
       "summary": "Character-set conversion",
-      "nativeVersion": "1.19",
+      "nativeVersion": "1.19.1",
       "license": "LGPL-2.1-or-later",
       "homepage": "https://crossbind.dev/ports/iconv/",
       "targets": [
@@ -374,7 +374,7 @@
       "npm": "@crossbind/port-zlib",
       "category": "compression",
       "summary": "DEFLATE compression",
-      "nativeVersion": "1.3.2",
+      "nativeVersion": "1.4",
       "license": "Zlib",
       "homepage": "https://crossbind.dev/ports/zlib/",
       "targets": [
