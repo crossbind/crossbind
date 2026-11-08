@@ -1,5 +1,23 @@
 # @crossbind/docker
 
+## Image family 1.0.20
+
+### Patch Changes
+
+- Updated Node.js to 26.13.0, from 24.22.1, in `base` and every image built on it. Node 26.13.0
+  bundles npm 11.20.0; the image still installs npm 11.19.1 in its place, with the patched
+  brace-expansion and undici, so npm is unchanged. The pinned `node:26.13.0-trixie-slim` digest
+  is upstream's rebuild of the same release on the refreshed Debian below; `base` copies only Node
+  out of it.
+- Moved swig to crossbind/swig `a93ac710`. Its embind module's source now says that what the
+  module writes into a bridge, in this and every earlier version, may be used under the SWIG
+  library's terms, without restriction, so the GPL that covers SWIG itself does not reach the
+  bridges. The runtime blocks the module writes now come from that library (`Lib/embind/`); the
+  bridges are byte-identical to those of `9aa62a1e`.
+- Refreshed the pinned `debian:trixie-slim` digest, the starting point of `base` (and so of
+  every image built on it) and of the stage that assembles the `linux` sysroots. The tag is the
+  same; upstream rebuilt it.
+
 ## Image family 1.0.19
 
 ### Patch Changes
