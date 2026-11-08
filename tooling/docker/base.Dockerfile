@@ -46,6 +46,9 @@ RUN apt-get update && apt-get upgrade -y --with-new-pkgs && apt-get install -y -
         zip \
     && rm -rf /var/lib/apt/lists/*
 
+COPY --chmod=755 download.sh /usr/local/bin/crossbind-download
+COPY --chmod=755 retry-network.sh /usr/local/bin/crossbind-retry-network
+
 # Built here rather than fetched: no upstream ships a binary of the fork.
 FROM os AS swig
 
@@ -54,7 +57,7 @@ ARG SWIG_SHA256=5e783233491d354dd31b23fac80ac6a71a8829ed2a952582613ba62d1f7da3ea
 
 RUN apt-get update && apt-get install -y --no-install-recommends automake bison libbison-dev libpcre2-dev
 WORKDIR /src
-RUN wget -q "https://github.com/crossbind/swig/archive/${SWIG_REV}.zip" -O swig.zip && \
+RUN crossbind-download "https://github.com/crossbind/swig/archive/${SWIG_REV}.zip" swig.zip && \
     echo "${SWIG_SHA256}  swig.zip" | sha256sum -c - && \
     unzip -q swig.zip && \
     cd "swig-${SWIG_REV}" && \
@@ -98,7 +101,7 @@ RUN ln -s ../lib/node_modules/npm/bin/npm-cli.js /usr/local/bin/npm && \
 # HIGH CVEs; npm 12.0.2 still ships the same set. Replace it with the patched 11.x from a hash-verified tarball.
 ARG NPM_VERSION=11.19.1
 ARG NPM_SHA256=9f58bff01604cb1b14008fef14dceb14d836a49225e45c6c2e37de3be3e707f0
-RUN wget -q "https://registry.npmjs.org/npm/-/npm-${NPM_VERSION}.tgz" -O /tmp/npm.tgz && \
+RUN crossbind-download "https://registry.npmjs.org/npm/-/npm-${NPM_VERSION}.tgz" /tmp/npm.tgz && \
     echo "${NPM_SHA256}  /tmp/npm.tgz" | sha256sum -c - && \
     npm install -g --ignore-scripts --no-audit --no-fund /tmp/npm.tgz && \
     rm -f /tmp/npm.tgz && \
@@ -114,7 +117,7 @@ RUN set -eu; \
     vendored=/usr/local/lib/node_modules/npm/node_modules; \
     for package in "brace-expansion ${BRACE_EXPANSION_VERSION} ${BRACE_EXPANSION_SHA256}" "undici ${UNDICI_VERSION} ${UNDICI_SHA256}"; do \
         set -- ${package}; \
-        wget -q "https://registry.npmjs.org/$1/-/$1-$2.tgz" -O /tmp/package.tgz; \
+        crossbind-download "https://registry.npmjs.org/$1/-/$1-$2.tgz" /tmp/package.tgz; \
         echo "$3  /tmp/package.tgz" | sha256sum -c -; \
         rm -rf "${vendored:?}/$1"; \
         mkdir "${vendored}/$1"; \

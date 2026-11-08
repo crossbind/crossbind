@@ -8,6 +8,7 @@ on:
         paths:
             - .nvmrc
             - .github/workflows/**
+            - .github/actions/**
             - package.json
             - pnpm-lock.yaml
             - scripts/release/**
@@ -28,6 +29,7 @@ on:
             - core/crossbind/src/utils/pullDockerImage.js
             - core/crossbind/src/utils/rustSysrootPin.js
             - tooling/docker/*.Dockerfile
+            - tooling/docker/*.sh
             - tooling/docker/VERSION
             - landing/**
     pull_request:
@@ -36,6 +38,7 @@ on:
         paths:
             - .nvmrc
             - .github/workflows/**
+            - .github/actions/**
             - package.json
             - pnpm-lock.yaml
             - scripts/release/**
@@ -56,6 +59,7 @@ on:
             - core/crossbind/src/utils/pullDockerImage.js
             - core/crossbind/src/utils/rustSysrootPin.js
             - tooling/docker/*.Dockerfile
+            - tooling/docker/*.sh
             - tooling/docker/VERSION
             - landing/**
 

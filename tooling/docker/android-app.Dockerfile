@@ -29,7 +29,7 @@ ARG BUILD_TOOLS_SHA1=b0b6376977657e8ad9b969bacf4093601da2c6fb
 ARG BUILD_TOOLS_SHA256=5d9ac77fb6ff43d9da518a337b4fcf8f9097113df531d99ccefe80ef7ce8250b
 RUN set -eu; \
     unpack() { \
-        wget -q "https://dl.google.com/android/repository/$1" -O "/tmp/$1"; \
+        crossbind-download "https://dl.google.com/android/repository/$1" "/tmp/$1"; \
         echo "$2  /tmp/$1" | sha1sum -c -; \
         echo "$3  /tmp/$1" | sha256sum -c -; \
         mkdir -p /tmp/unpack "$(dirname "$4")"; \
@@ -47,7 +47,7 @@ RUN set -eu; \
 ARG GRADLE_VERSION=9.8.1
 ARG GRADLE_SHA256=dce76f55f8e251a3a1f130eb120f30b3d271de2b76c9b0729d316b5a1b6dc01f
 RUN set -eu; \
-    wget -q "https://services.gradle.org/distributions/gradle-${GRADLE_VERSION}-bin.zip" -O /tmp/gradle.zip; \
+    crossbind-download "https://services.gradle.org/distributions/gradle-${GRADLE_VERSION}-bin.zip" /tmp/gradle.zip; \
     echo "${GRADLE_SHA256}  /tmp/gradle.zip" | sha256sum -c -; \
     unzip -q /tmp/gradle.zip -d /opt; \
     mv "/opt/gradle-${GRADLE_VERSION}" /opt/gradle; \
@@ -69,7 +69,7 @@ ARG HERMES_LICENSE_SHA256=da6d3703ed11cbe42bd212c725957c98da23cbff1998c05fa4b3d9
 COPY android-app /tmp/android-app
 RUN set -eu; \
     export GRADLE_USER_HOME=/tmp/gradle-home ANDROID_USER_HOME=/tmp/android-home; \
-    gradle --no-daemon --console=plain -p /tmp/android-app assembleDebug assembleRelease bundleRelease; \
+    crossbind-retry-network gradle --no-daemon --console=plain -p /tmp/android-app assembleDebug assembleRelease bundleRelease; \
     mkdir -p /opt/gradle-ro-cache; \
     cp -R "${GRADLE_USER_HOME}/caches/modules-2" /opt/gradle-ro-cache/; \
     find /opt/gradle-ro-cache -name '*.lock' -delete; \
@@ -84,11 +84,11 @@ RUN set -eu; \
         mkdir -p "${hermes}/libs/android.$(basename "${abi}")"; \
         mv "${abi}/libhermesvm.so" "${hermes}/libs/android.$(basename "${abi}")/"; \
     done; \
-    wget -q "https://registry.npmjs.org/hermes-compiler/-/hermes-compiler-${HERMES_VERSION}.tgz" -O /tmp/hermes-compiler.tgz; \
+    crossbind-download "https://registry.npmjs.org/hermes-compiler/-/hermes-compiler-${HERMES_VERSION}.tgz" /tmp/hermes-compiler.tgz; \
     echo "${HERMES_COMPILER_SHA256}  /tmp/hermes-compiler.tgz" | sha256sum -c -; \
     tar -xzf /tmp/hermes-compiler.tgz -C /tmp package/hermesc/linux64-bin/hermesc; \
     install -m 0755 /tmp/package/hermesc/linux64-bin/hermesc "${hermes}/bin/hermesc"; \
-    wget -q "https://raw.githubusercontent.com/facebook/hermes/hermes-v${HERMES_VERSION}/LICENSE" -O /opt/licenses/hermes-LICENSE; \
+    crossbind-download "https://raw.githubusercontent.com/facebook/hermes/hermes-v${HERMES_VERSION}/LICENSE" /opt/licenses/hermes-LICENSE; \
     echo "${HERMES_LICENSE_SHA256}  /opt/licenses/hermes-LICENSE" | sha256sum -c -; \
     rm -rf /tmp/android-app /tmp/aar /tmp/package /tmp/hermes-compiler.tgz "${GRADLE_USER_HOME}" "${ANDROID_USER_HOME}"
 

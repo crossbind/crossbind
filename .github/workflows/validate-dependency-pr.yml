@@ -17,6 +17,7 @@ on:
             - .github/dependabot.yml
             - .github/workflows/dependency-*.yml
             - .github/workflows/validate-dependency-pr.yml
+            - .github/actions/setup-trivy/**
 
 permissions:
     contents: read
@@ -131,10 +132,16 @@ jobs:
                   node scripts/smoke-images.js base:amd64 web:amd64 android:amd64 android-app:amd64 linux:amd64 windows:amd64
                   pnpm run gate:pinned-local-sysroot
                   pnpm run check:release:web
+            - name: Set up Trivy once for this job
+              timeout-minutes: 10
+              uses: ./.github/actions/setup-trivy
+              with:
+                  version: v0.74.0
             - name: Scan the rebuilt base image
               uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
               with:
                   version: v0.74.0
+                  skip-setup-trivy: true
                   cache: false
                   scan-type: image
                   scan-ref: crossbind/base:dev-amd64
@@ -148,6 +155,7 @@ jobs:
               uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
               with:
                   version: v0.74.0
+                  skip-setup-trivy: true
                   cache: false
                   scan-type: image
                   scan-ref: crossbind/web:dev-amd64
@@ -161,6 +169,7 @@ jobs:
               uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
               with:
                   version: v0.74.0
+                  skip-setup-trivy: true
                   cache: false
                   scan-type: image
                   scan-ref: crossbind/linux:dev-amd64
@@ -174,6 +183,7 @@ jobs:
               uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
               with:
                   version: v0.74.0
+                  skip-setup-trivy: true
                   cache: false
                   scan-type: image
                   scan-ref: crossbind/windows:dev-amd64
@@ -187,6 +197,7 @@ jobs:
               uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
               with:
                   version: v0.74.0
+                  skip-setup-trivy: true
                   cache: false
                   scan-type: image
                   scan-ref: crossbind/android:dev
@@ -200,6 +211,7 @@ jobs:
               uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
               with:
                   version: v0.74.0
+                  skip-setup-trivy: true
                   cache: false
                   scan-type: image
                   scan-ref: crossbind/android-app:dev

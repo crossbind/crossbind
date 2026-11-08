@@ -110,11 +110,18 @@ jobs:
               env:
                   PROPOSAL: ${{ inputs.proposal }}
               run: node scripts/dependencies/validate-dependency-update.mjs --proposal "$PROPOSAL" --platform linux
+            - name: Set up Trivy once for this job
+              if: ${{ inputs.kind == 'toolchain' }}
+              timeout-minutes: 10
+              uses: ./.github/actions/setup-trivy
+              with:
+                  version: v0.74.0
             - name: Scan the rebuilt base image
               if: ${{ inputs.kind == 'toolchain' }}
               uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
               with:
                   version: v0.74.0
+                  skip-setup-trivy: true
                   cache: false
                   scan-type: image
                   scan-ref: crossbind/base:dev-amd64
@@ -129,6 +136,7 @@ jobs:
               uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
               with:
                   version: v0.74.0
+                  skip-setup-trivy: true
                   cache: false
                   scan-type: image
                   scan-ref: crossbind/web:dev-amd64
@@ -143,6 +151,7 @@ jobs:
               uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
               with:
                   version: v0.74.0
+                  skip-setup-trivy: true
                   cache: false
                   scan-type: image
                   scan-ref: crossbind/android:dev
@@ -157,6 +166,7 @@ jobs:
               uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
               with:
                   version: v0.74.0
+                  skip-setup-trivy: true
                   cache: false
                   scan-type: image
                   scan-ref: crossbind/android-app:dev
