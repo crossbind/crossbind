@@ -1,6 +1,6 @@
 {
     "name": "@crossbind/extension-files",
-    "version": "2.0.0-beta.68",
+    "version": "2.0.0-beta.69",
     "description": "crossbind app extension: the files the system opens the app with.",
     "homepage": "https://github.com/crossbind/crossbind/tree/main/extensions/files#readme",
     "repository": "https://github.com/crossbind/crossbind.git",

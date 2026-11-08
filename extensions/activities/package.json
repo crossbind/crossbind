@@ -1,6 +1,6 @@
 {
     "name": "@crossbind/extension-activities",
-    "version": "2.0.0-beta.68",
+    "version": "2.0.0-beta.69",
     "description": "crossbind app extension: Handoff on iOS and macOS, for the user activities the page sets and continues.",
     "homepage": "https://github.com/crossbind/crossbind/tree/main/extensions/activities#readme",
     "repository": "https://github.com/crossbind/crossbind.git",

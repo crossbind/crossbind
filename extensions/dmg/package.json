@@ -1,6 +1,6 @@
 {
     "name": "@crossbind/extension-dmg",
-    "version": "2.0.0-beta.68",
+    "version": "2.0.0-beta.69",
     "description": "crossbind app extension: a macOS disk image, which is also what Apple notarizes.",
     "homepage": "https://github.com/crossbind/crossbind/tree/main/extensions/dmg#readme",
     "repository": "https://github.com/crossbind/crossbind.git",
