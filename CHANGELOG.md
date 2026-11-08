@@ -3,6 +3,43 @@
 <!-- release-notes:start -->
 <!-- Generated from releases/crossbind/<version>.md by scripts/release/render-changelog.mjs. Edit the note, then run `pnpm changelog`. -->
 
+## 2.0.0-beta.69
+
+All 345 public workspace packages share 2.0.0-beta.69, with builds pinned to toolchain image family 1.0.20.
+
+### Highlights
+
+- The CLI, generator, plugins, extensions, native ports and examples share one npm version,
+  `2.0.0-beta.69`, so a project can upgrade its crossbind packages together.
+- Builds use the verified digests of toolchain image family `1.0.20`. The images carry Node.js
+  26.13.0, the updated SWIG embind module and the refreshed Debian base. The SWIG module now
+  explicitly places generated bridges under the SWIG library's terms; its bridge output is unchanged.
+
+### Breaking changes
+
+None in the crossbind API.
+
+### Migration notes
+
+- Upgrade the crossbind packages a project uses to `2.0.0-beta.69`, including its plugins,
+  extensions and ports.
+- Use Node.js 26 or later on the host; `.nvmrc` pins 26.13.0. Builds pull the new toolchain images
+  automatically when their pinned digests are not already available locally.
+
+### Fixes
+
+- Toolchain source downloads retry transient connection failures and HTTP 429/5xx responses.
+  Android app assembly also retries transient download failures, and the release scans retry Trivy
+  setup. Integrity and compilation failures still stop the build.
+
+### Known limitations
+
+- The Node.js wasm `fsync` workaround reaches the operating system but does not force data to disk.
+- The Windows NSIS installer downloads WebView2 when it is missing, so the Microsoft Store does
+  not accept that installer.
+- The Android app image's Gradle and Android build tools still carry the Guava issue tracked in
+  `docs/known-issues.md`, under the existing scan exception until 15 December 2026.
+
 ## 2.0.0-beta.68
 
 crossbind app publish puts an app on Google Play's test tracks and on TestFlight, from a terminal or from CI, and crossbind app dev opens an iOS app on a physical iPhone or iPad; an Android release ships its libraries stripped, with their debug symbols for Google Play.

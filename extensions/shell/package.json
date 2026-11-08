@@ -1,6 +1,6 @@
 {
     "name": "@crossbind/extension-shell",
-    "version": "2.0.0-beta.68",
+    "version": "2.0.0-beta.69",
     "description": "crossbind app extension: opens addresses and files outside the app, shows them in the file manager, moves them to the trash.",
     "homepage": "https://github.com/crossbind/crossbind/tree/main/extensions/shell#readme",
     "repository": "https://github.com/crossbind/crossbind.git",

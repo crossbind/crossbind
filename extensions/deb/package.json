@@ -1,6 +1,6 @@
 {
     "name": "@crossbind/extension-deb",
-    "version": "2.0.0-beta.68",
+    "version": "2.0.0-beta.69",
     "description": "crossbind app extension: a Debian package for Linux, whose dependencies bring WebKitGTK.",
     "homepage": "https://github.com/crossbind/crossbind/tree/main/extensions/deb#readme",
     "repository": "https://github.com/crossbind/crossbind.git",
