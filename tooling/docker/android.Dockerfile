@@ -27,7 +27,7 @@ ARG NDK_SHA256=753611f410d002cfcd3f3dc2ef49aad532089d3180b436c060a90bf0fcb64df2
 # The NDK ships as one self-contained archive, so this image needs no JDK, no command-line tools
 # and no sdkmanager: what lands here is exactly the reviewed bytes. Installing through sdkmanager
 # would hand the unpacking to a separately versioned tool fetched at build time.
-RUN wget -q "https://dl.google.com/android/repository/${NDK_ARCHIVE}" -P /tmp && \
+RUN crossbind-download "https://dl.google.com/android/repository/${NDK_ARCHIVE}" "/tmp/${NDK_ARCHIVE}" && \
     echo "${NDK_SHA1}  /tmp/${NDK_ARCHIVE}" | sha1sum -c - && \
     echo "${NDK_SHA256}  /tmp/${NDK_ARCHIVE}" | sha256sum -c - && \
     mkdir -p "${ANDROID_SDK_ROOT}/ndk" && \

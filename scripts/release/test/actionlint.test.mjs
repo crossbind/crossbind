@@ -65,6 +65,48 @@ test('every Trivy scan uses a real reviewed scanner release', () => {
     assert.equal(reviewedVersions, scanSteps);
 });
 
+test('Trivy is installed once before each job scans and scanner failures remain fatal', () => {
+    const workflowDirectory = path.join(ROOT, '.github', 'workflows');
+    let jobs = 0;
+    for (const workflow of fs.readdirSync(workflowDirectory).filter((name) => name.endsWith('.yml'))) {
+        const source = fs.readFileSync(path.join(workflowDirectory, workflow), 'utf8');
+        for (const job of source.split(/^(?= {4}[\w-]+:\s*$)/m)) {
+            if (!job.includes('uses: aquasecurity/trivy-action@')) continue;
+            jobs += 1;
+            const steps = job.split(/^(?= {12}- )/m);
+            const setup = steps.filter((step) => step.includes('uses: ./.github/actions/setup-trivy'));
+            assert.equal(setup.length, 1, `${workflow}: install the scanner once per job`);
+            assert.match(setup[0], /timeout-minutes: 10/);
+            assert.match(setup[0], /version: v0\.74\.0/);
+            assert.doesNotMatch(setup[0], /continue-on-error:/);
+            assert.ok(job.indexOf('uses: ./.github/actions/setup-trivy') < job.indexOf('uses: aquasecurity/trivy-action@'));
+            for (const scan of steps.filter((step) => step.includes('uses: aquasecurity/trivy-action@'))) {
+                assert.match(scan, /skip-setup-trivy: true/);
+                assert.match(scan, /severity: HIGH,CRITICAL/);
+                assert.match(scan, /ignore-unfixed: true/);
+                assert.match(scan, /exit-code: 1/);
+                assert.doesNotMatch(scan, /continue-on-error:/);
+            }
+        }
+    }
+    assert.ok(jobs > 0);
+
+    const setup = fs.readFileSync(path.join(ROOT, '.github/actions/setup-trivy/action.yml'), 'utf8');
+    const installs = setup.split(/^(?= {8}- )/m).filter((step) => step.includes('uses: aquasecurity/setup-trivy@'));
+    assert.equal(installs.length, 3);
+    for (const install of installs) {
+        assert.match(install, /aquasecurity\/setup-trivy@3fb12ec12f41e471780db15c232d5dd185dcb514/);
+        assert.match(install, /cache: false/);
+        assert.match(install, /version: \$\{\{ inputs\.version \}\}/);
+    }
+    assert.match(installs[0], /continue-on-error: true/);
+    assert.match(installs[1], /steps\.first\.outcome == 'failure'/);
+    assert.match(installs[1], /continue-on-error: true/);
+    assert.match(installs[2], /steps\.second\.outcome == 'failure'/);
+    assert.doesNotMatch(installs[2], /continue-on-error:/);
+    assert.match(setup, /actual=\$\(trivy --version/);
+});
+
 test('the release workflow uses OIDC without stored npm credentials or post-publish dist-tag writes', () => {
     const source = fs.readFileSync(path.join(ROOT, '.github', 'workflows', 'release-crossbind.yml'), 'utf8');
     assert.match(source, /id-token:\s*write/);
@@ -274,8 +316,19 @@ test('unsupported actionlint platforms fail instead of downloading an unpinned b
 test('every external action in every repository workflow is pinned to a full commit SHA', () => {
     const workflowDirectory = path.join(ROOT, '.github', 'workflows');
     let validated = 0;
-    for (const workflow of fs.readdirSync(workflowDirectory).filter((name) => /\.ya?ml$/.test(name))) {
-        const source = fs.readFileSync(path.join(ROOT, '.github', 'workflows', workflow), 'utf8');
+    const files = fs
+        .readdirSync(workflowDirectory)
+        .filter((name) => /\.ya?ml$/.test(name))
+        .map((name) => path.join(workflowDirectory, name));
+    const actionDirectory = path.join(ROOT, '.github', 'actions');
+    files.push(
+        ...fs
+            .readdirSync(actionDirectory, { recursive: true })
+            .filter((name) => /(?:^|[/\\])action\.ya?ml$/.test(name))
+            .map((name) => path.join(actionDirectory, name)),
+    );
+    for (const workflow of files) {
+        const source = fs.readFileSync(workflow, 'utf8');
         const actions = [...source.matchAll(/^\s*-?\s*uses:\s*([^\s#]+)/gm)].map((match) => match[1]).filter((action) => !action.startsWith('./'));
         for (const action of actions) assert.match(action, /^[^@\s]+@[0-9a-f]{40}$/, `${workflow}: ${action} is not commit-pinned`);
         validated += actions.length;

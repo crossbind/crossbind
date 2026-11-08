@@ -51,6 +51,15 @@ CROSSBIND_IMAGE_WEB=crossbind/web:dev crossbind build -p wasm
 `node scripts/smoke-images.js` checks each image on each architecture: pinned tool versions, a
 compile that actually runs, writable caches, and the absence of `rust-src` and `RUSTC_BOOTSTRAP`.
 
+Source and license downloads use `crossbind-download`: five transfer attempts, with a 15-second
+DNS/connect timeout, a 60-second idle read timeout and increasing waits capped at five seconds.
+It retries connection failures and HTTP 429/500/502/503/504, logs transfer errors and replaces the
+destination only after a complete download. The existing checksum checks still gate every archive.
+Android app assembly retries at most three times, waiting five and ten seconds, only when Gradle
+reports a network timeout, connection failure or HTTP 429/5xx. Compile and integrity failures stop
+immediately. Trivy is installed once per CI job at the reviewed version, with at most three setup
+attempts; vulnerability scans keep their existing failure policy.
+
 ## Publishing
 
 `.github/workflows/publish-images.yml` is manual and defaults to a write-free dry run. It builds

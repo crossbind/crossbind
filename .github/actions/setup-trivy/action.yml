@@ -1,0 +1,48 @@
+name: Set up the reviewed Trivy scanner
+description: Install the pinned scanner once per job, retrying installation without caching or retrying scans.
+
+inputs:
+    version:
+        description: Exact reviewed Trivy release, including the v prefix
+        required: true
+
+runs:
+    using: composite
+    steps:
+        - name: Install Trivy (attempt 1/3)
+          id: first
+          continue-on-error: true
+          uses: aquasecurity/setup-trivy@3fb12ec12f41e471780db15c232d5dd185dcb514 # v0.2.6
+          with:
+              version: ${{ inputs.version }}
+              cache: false
+        - name: Wait before retrying installation
+          if: ${{ steps.first.outcome == 'failure' }}
+          shell: bash
+          run: sleep 5
+        - name: Install Trivy (attempt 2/3)
+          id: second
+          if: ${{ steps.first.outcome == 'failure' }}
+          continue-on-error: true
+          uses: aquasecurity/setup-trivy@3fb12ec12f41e471780db15c232d5dd185dcb514 # v0.2.6
+          with:
+              version: ${{ inputs.version }}
+              cache: false
+        - name: Wait before the final installation attempt
+          if: ${{ steps.second.outcome == 'failure' }}
+          shell: bash
+          run: sleep 10
+        - name: Install Trivy (attempt 3/3)
+          if: ${{ steps.second.outcome == 'failure' }}
+          uses: aquasecurity/setup-trivy@3fb12ec12f41e471780db15c232d5dd185dcb514 # v0.2.6
+          with:
+              version: ${{ inputs.version }}
+              cache: false
+        - name: Verify the installed scanner version
+          shell: bash
+          env:
+              TRIVY_VERSION: ${{ inputs.version }}
+          run: |
+              set -euo pipefail
+              actual=$(trivy --version | sed -n 's/^Version: //p')
+              [ "$actual" = "${TRIVY_VERSION#v}" ] || { echo "Expected Trivy ${TRIVY_VERSION}, found ${actual}" >&2; exit 1; }

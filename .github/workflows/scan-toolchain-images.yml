@@ -52,10 +52,16 @@ jobs:
                   registry: ghcr.io
                   username: ${{ github.actor }}
                   password: ${{ github.token }}
+            - name: Set up Trivy once for this job
+              timeout-minutes: 10
+              uses: ./.github/actions/setup-trivy
+              with:
+                  version: v0.74.0
             - name: Scan ${{ matrix.image }} ${{ matrix.platform }} by immutable digest
               uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
               with:
                   version: v0.74.0
+                  skip-setup-trivy: true
                   scan-type: image
                   scan-ref: ${{ matrix.ref }}
                   scanners: vuln

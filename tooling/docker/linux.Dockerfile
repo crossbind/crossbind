@@ -25,6 +25,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         xz-utils \
     && rm -rf /var/lib/apt/lists/*
 
+COPY --chmod=755 download.sh /usr/local/bin/crossbind-download
+
 # buster left the mirrors for Debian's archive, which keeps its pool. Every package is checked
 # against the SHA-256 of the signed Packages index, recorded in linux-sysroot.txt.
 ARG DEBIAN_ARCHIVE=http://archive.debian.org/debian
@@ -33,7 +35,7 @@ RUN set -eu; \
     grep -v -e '^#' -e '^$' /tmp/linux-sysroot.txt | while read -r arch pool sha256; do \
         case "${arch}" in amd64) triple=x86_64-linux-gnu;; arm64) triple=aarch64-linux-gnu;; *) exit 1;; esac; \
         deb="/tmp/$(basename "${pool}")"; \
-        wget -q "${DEBIAN_ARCHIVE}/${pool}" -O "${deb}"; \
+        crossbind-download "${DEBIAN_ARCHIVE}/${pool}" "${deb}"; \
         echo "${sha256}  ${deb}" | sha256sum -c -; \
         mkdir -p "/opt/crossbind/sysroots/${triple}"; \
         dpkg-deb -x "${deb}" "/opt/crossbind/sysroots/${triple}"; \
@@ -65,7 +67,7 @@ RUN set -eu; \
     grep -v -e '^#' -e '^$' /tmp/linuxmusl-sysroot.txt | while read -r arch path sha256; do \
         root="/opt/crossbind/sysroots/${arch}-alpine-linux-musl"; \
         apk="/tmp/$(basename "${path}")"; \
-        wget -q "${ALPINE_MIRROR}/${path}" -O "${apk}"; \
+        crossbind-download "${ALPINE_MIRROR}/${path}" "${apk}"; \
         echo "${sha256}  ${apk}" | sha256sum -c -; \
         mkdir -p "${root}"; \
         case "$(basename "${path}")" in \
@@ -77,12 +79,12 @@ RUN set -eu; \
     done; \
     mkdir -p /opt/licenses/linux-sysroot/musl; \
     cd /opt/licenses/linux-sysroot/musl; \
-    wget -q --tries=5 --retry-on-http-error=429,500,502,503,504 "https://git.musl-libc.org/cgit/musl/plain/COPYRIGHT?h=v1.2.5" -O musl-COPYRIGHT; \
-    wget -q "https://raw.githubusercontent.com/gcc-mirror/gcc/releases/gcc-15.2.0/COPYING3" -O gcc-COPYING3; \
-    wget -q "https://raw.githubusercontent.com/gcc-mirror/gcc/releases/gcc-15.2.0/COPYING.RUNTIME" -O gcc-COPYING.RUNTIME; \
-    wget -q "https://raw.githubusercontent.com/torvalds/linux/v6.16/COPYING" -O linux-COPYING; \
-    wget -q "https://raw.githubusercontent.com/torvalds/linux/v6.16/LICENSES/preferred/GPL-2.0" -O linux-GPL-2.0; \
-    wget -q "https://raw.githubusercontent.com/torvalds/linux/v6.16/LICENSES/exceptions/Linux-syscall-note" -O linux-Linux-syscall-note; \
+    crossbind-download "https://git.musl-libc.org/cgit/musl/plain/COPYRIGHT?h=v1.2.5" musl-COPYRIGHT; \
+    crossbind-download "https://raw.githubusercontent.com/gcc-mirror/gcc/releases/gcc-15.2.0/COPYING3" gcc-COPYING3; \
+    crossbind-download "https://raw.githubusercontent.com/gcc-mirror/gcc/releases/gcc-15.2.0/COPYING.RUNTIME" gcc-COPYING.RUNTIME; \
+    crossbind-download "https://raw.githubusercontent.com/torvalds/linux/v6.16/COPYING" linux-COPYING; \
+    crossbind-download "https://raw.githubusercontent.com/torvalds/linux/v6.16/LICENSES/preferred/GPL-2.0" linux-GPL-2.0; \
+    crossbind-download "https://raw.githubusercontent.com/torvalds/linux/v6.16/LICENSES/exceptions/Linux-syscall-note" linux-Linux-syscall-note; \
     printf '%s\n' \
         "f9bc4423732350eb0b3f7ed7e91d530298476f8fec0c6c427a1c04ade22655af  musl-COPYRIGHT" \
         "8ceb4b9ee5adedde47b31e975c1d90c73ad27b6b165a1dcd80c7c545eb65b903  gcc-COPYING3" \
@@ -99,7 +101,7 @@ ARG LLVM_VERSION=19.1.7
 # The release tarball, whose signature verifies against the LLVM release key D574BD5D1D0E98895E3BF90044F2485E45D59042.
 ARG LLVM_SHA256=82401fea7b79d0078043f7598b835284d6650a75b93e64b6f761ea7b63097501
 RUN set -eu; \
-    wget -q "https://github.com/llvm/llvm-project/releases/download/llvmorg-${LLVM_VERSION}/llvm-project-${LLVM_VERSION}.src.tar.xz" -O /tmp/llvm.tar.xz; \
+    crossbind-download "https://github.com/llvm/llvm-project/releases/download/llvmorg-${LLVM_VERSION}/llvm-project-${LLVM_VERSION}.src.tar.xz" /tmp/llvm.tar.xz; \
     echo "${LLVM_SHA256}  /tmp/llvm.tar.xz" | sha256sum -c -; \
     mkdir /src; \
     tar -xf /tmp/llvm.tar.xz -C /src --strip-components=1 --wildcards \
@@ -153,7 +155,7 @@ COPY webkitgtk-sysroot.txt /tmp/webkitgtk-sysroot.txt
 RUN set -eu; \
     grep -v -e '^#' -e '^$' /tmp/webkitgtk-sysroot.txt | while read -r arch file sha256; do \
         case "${arch}" in amd64) triple=x86_64-linux-gnu;; arm64) triple=aarch64-linux-gnu;; *) exit 1;; esac; \
-        wget -q --tries=5 --retry-on-http-error=429,500,502,503,504 "https://launchpad.net/ubuntu/+archive/primary/+files/${file}" -O "/tmp/${file}"; \
+        crossbind-download "https://launchpad.net/ubuntu/+archive/primary/+files/${file}" "/tmp/${file}"; \
         echo "${sha256}  /tmp/${file}" | sha256sum -c -; \
         mkdir -p "/opt/crossbind/webkitgtk/${triple}"; \
         dpkg-deb -x "/tmp/${file}" "/opt/crossbind/webkitgtk/${triple}"; \
@@ -227,7 +229,7 @@ FROM toolchains AS hermes
 ARG HERMES_VERSION=250829098.0.17
 ARG HERMES_SHA256=37e91915c67ce0c457f69b2de00fcaf28fcf755ab7de6e4f33f1d6ee9efcffed
 RUN set -eu; \
-    wget -q "https://github.com/facebook/hermes/archive/refs/tags/hermes-v${HERMES_VERSION}.tar.gz" -O /tmp/hermes.tar.gz; \
+    crossbind-download "https://github.com/facebook/hermes/archive/refs/tags/hermes-v${HERMES_VERSION}.tar.gz" /tmp/hermes.tar.gz; \
     echo "${HERMES_SHA256}  /tmp/hermes.tar.gz" | sha256sum -c -; \
     mkdir /src; \
     tar -xzf /tmp/hermes.tar.gz -C /src --strip-components=1; \

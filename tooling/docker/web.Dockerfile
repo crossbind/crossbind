@@ -48,7 +48,7 @@ WORKDIR /emsdk/upstream/emscripten/src/lib
 # The overload patch is rebased directly onto the upstream 6.0.13 tag commit.
 ARG CROSSBIND_EMSCRIPTEN_REV=44d615ce4d0532105e1ca6839629f11f07121091
 ARG CROSSBIND_EMBIND_SHA256=14f5ba8f61df1a208a2f6532ee66591aaf94b2e96bdba9774962aeb356dc1a91
-RUN wget -q "https://raw.githubusercontent.com/crossbind/emscripten/${CROSSBIND_EMSCRIPTEN_REV}/src/lib/libembind.js" -O libembind.js && \
+RUN crossbind-download "https://raw.githubusercontent.com/crossbind/emscripten/${CROSSBIND_EMSCRIPTEN_REV}/src/lib/libembind.js" libembind.js && \
     echo "${CROSSBIND_EMBIND_SHA256}  libembind.js" | sha256sum -c -
 
 WORKDIR /emsdk/upstream/emscripten
@@ -108,7 +108,7 @@ RUN case "$TARGETARCH" in \
       arm64) WASI_ARCH=arm64;  WASI_SHA=f7e243dff54d60bcc576e94d6166b69f410f2500ae4a9ceef34315be10e77971 ;; \
       *)     WASI_ARCH=x86_64; WASI_SHA=b761e3a0721dbae9c09a0059e5fdb2bf917d1b4a8a7b430fb3b5aafb0984b2c4 ;; \
     esac && \
-    wget -q "https://github.com/WebAssembly/wasi-sdk/releases/download/wasi-sdk-${WASI_SDK_VERSION}/wasi-sdk-${WASI_SDK_VERSION}.0-${WASI_ARCH}-linux.tar.gz" -O wasi-sdk.tar.gz && \
+    crossbind-download "https://github.com/WebAssembly/wasi-sdk/releases/download/wasi-sdk-${WASI_SDK_VERSION}/wasi-sdk-${WASI_SDK_VERSION}.0-${WASI_ARCH}-linux.tar.gz" wasi-sdk.tar.gz && \
     echo "${WASI_SHA}  wasi-sdk.tar.gz" | sha256sum -c - && \
     tar -xzf wasi-sdk.tar.gz && \
     mv "wasi-sdk-${WASI_SDK_VERSION}.0-${WASI_ARCH}-linux" wasi-sdk && \
@@ -118,12 +118,12 @@ RUN case "$TARGETARCH" in \
 WORKDIR /opt/licenses
 ARG LLVM_REV=895aa2c896ada719451be2e3673c83da8ddf1141
 ARG WASI_LIBC_REV=2e6fb9d8ee0cdf9e431fbcabe8af3115de000a13
-RUN wget -q "https://raw.githubusercontent.com/WebAssembly/wasi-sdk/wasi-sdk-${WASI_SDK_VERSION}/LICENSE" -O wasi-sdk-LICENSE && \
-    wget -q "https://raw.githubusercontent.com/llvm/llvm-project/${LLVM_REV}/LICENSE.TXT" -O llvm-LICENSE.TXT && \
-    wget -q "https://raw.githubusercontent.com/WebAssembly/wasi-libc/${WASI_LIBC_REV}/LICENSE" -O wasi-libc-LICENSE && \
-    wget -q "https://raw.githubusercontent.com/WebAssembly/wasi-libc/${WASI_LIBC_REV}/LICENSE-APACHE" -O wasi-libc-LICENSE-APACHE && \
-    wget -q "https://raw.githubusercontent.com/WebAssembly/wasi-libc/${WASI_LIBC_REV}/LICENSE-APACHE-LLVM" -O wasi-libc-LICENSE-APACHE-LLVM && \
-    wget -q "https://raw.githubusercontent.com/WebAssembly/wasi-libc/${WASI_LIBC_REV}/LICENSE-MIT" -O wasi-libc-LICENSE-MIT && \
+RUN crossbind-download "https://raw.githubusercontent.com/WebAssembly/wasi-sdk/wasi-sdk-${WASI_SDK_VERSION}/LICENSE" wasi-sdk-LICENSE && \
+    crossbind-download "https://raw.githubusercontent.com/llvm/llvm-project/${LLVM_REV}/LICENSE.TXT" llvm-LICENSE.TXT && \
+    crossbind-download "https://raw.githubusercontent.com/WebAssembly/wasi-libc/${WASI_LIBC_REV}/LICENSE" wasi-libc-LICENSE && \
+    crossbind-download "https://raw.githubusercontent.com/WebAssembly/wasi-libc/${WASI_LIBC_REV}/LICENSE-APACHE" wasi-libc-LICENSE-APACHE && \
+    crossbind-download "https://raw.githubusercontent.com/WebAssembly/wasi-libc/${WASI_LIBC_REV}/LICENSE-APACHE-LLVM" wasi-libc-LICENSE-APACHE-LLVM && \
+    crossbind-download "https://raw.githubusercontent.com/WebAssembly/wasi-libc/${WASI_LIBC_REV}/LICENSE-MIT" wasi-libc-LICENSE-MIT && \
     printf '%s\n' \
       "268872b9816f90fd8e85db5a28d33f8150ebb8dd016653fb39ef1f94f2686bc5  wasi-sdk-LICENSE" \
       "8d85c1057d742e597985c7d4e6320b015a9139385cff4cbae06ffc0ebe89afee  llvm-LICENSE.TXT" \

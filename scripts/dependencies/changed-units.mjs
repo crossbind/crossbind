@@ -28,6 +28,7 @@ export function changedDependencyUnits(files, root = ROOT) {
             (file) =>
                 file === '.nvmrc' ||
                 file.startsWith('tooling/docker/') ||
+                file.startsWith('.github/actions/setup-trivy/') ||
                 file === 'core/crossbind/src/actions/run.js' ||
                 file === 'core/crossbind/src/utils/linuxToolchain.js' ||
                 file === 'core/crossbind/src/utils/windowsToolchain.js' ||

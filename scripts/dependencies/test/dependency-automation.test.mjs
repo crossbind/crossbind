@@ -864,6 +864,11 @@ test("the linux and windows images' toolchain paths the CLI names are a toolchai
     assert.equal(changedDependencyUnits(['core/crossbind/src/utils/windowsToolchain.js']).toolchain, true);
 });
 
+test('shared Trivy setup changes select toolchain validation', () => {
+    assert.equal(changedDependencyUnits(['.github/actions/setup-trivy/action.yml']).toolchain, true);
+    assert.equal(changedDependencyUnits(['.github/actions/unrelated/action.yml']).toolchain, false);
+});
+
 test('daily workflows keep write authority after validation and pin every action', () => {
     const watch = fs.readFileSync(path.join(ROOT, '.github/workflows/dependency-watch.yml'), 'utf8');
     const candidate = fs.readFileSync(path.join(ROOT, '.github/workflows/dependency-update-candidate.yml'), 'utf8');

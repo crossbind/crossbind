@@ -27,7 +27,7 @@ RUN set -eu; \
         *) exit 1;; \
     esac; \
     name="llvm-mingw-${LLVM_MINGW_VERSION}-ucrt-ubuntu-22.04-${host}"; \
-    wget -q "https://github.com/mstorsjo/llvm-mingw/releases/download/${LLVM_MINGW_VERSION}/${name}.tar.xz" -O /tmp/llvm-mingw.tar.xz; \
+    crossbind-download "https://github.com/mstorsjo/llvm-mingw/releases/download/${LLVM_MINGW_VERSION}/${name}.tar.xz" /tmp/llvm-mingw.tar.xz; \
     echo "${sha256}  /tmp/llvm-mingw.tar.xz" | sha256sum -c -; \
     tar -xf /tmp/llvm-mingw.tar.xz -C /opt; \
     mv "/opt/${name}" /opt/llvm-mingw; \
@@ -82,7 +82,7 @@ ARG HERMES_VERSION=250829098.0.17
 ARG HERMES_SHA256=37e91915c67ce0c457f69b2de00fcaf28fcf755ab7de6e4f33f1d6ee9efcffed
 COPY windows/llvh-atomic.cpp /tmp/llvh-atomic.cpp
 RUN set -eu; \
-    wget -q "https://github.com/facebook/hermes/archive/refs/tags/hermes-v${HERMES_VERSION}.tar.gz" -O /tmp/hermes.tar.gz; \
+    crossbind-download "https://github.com/facebook/hermes/archive/refs/tags/hermes-v${HERMES_VERSION}.tar.gz" /tmp/hermes.tar.gz; \
     echo "${HERMES_SHA256}  /tmp/hermes.tar.gz" | sha256sum -c -; \
     mkdir -p /src /tmp/compat; \
     tar -xzf /tmp/hermes.tar.gz -C /src --strip-components=1; \
@@ -122,7 +122,7 @@ COPY --from=hermes /opt/licenses/hermes-LICENSE /opt/licenses/hermes-LICENSE
 ARG WEBVIEW2_VERSION=1.0.4258.31
 ARG WEBVIEW2_SHA256=56f7f4b8bf9aee4b8efefbbdd4f67d5f74ebd1b100ed0806da71bf76af481aa9
 RUN set -eu; \
-    wget -q "https://api.nuget.org/v3-flatcontainer/microsoft.web.webview2/${WEBVIEW2_VERSION}/microsoft.web.webview2.${WEBVIEW2_VERSION}.nupkg" -O /tmp/webview2.nupkg; \
+    crossbind-download "https://api.nuget.org/v3-flatcontainer/microsoft.web.webview2/${WEBVIEW2_VERSION}/microsoft.web.webview2.${WEBVIEW2_VERSION}.nupkg" /tmp/webview2.nupkg; \
     echo "${WEBVIEW2_SHA256}  /tmp/webview2.nupkg" | sha256sum -c -; \
     unzip -q /tmp/webview2.nupkg 'build/native/include/*' LICENSE.txt -d /tmp/webview2; \
     mkdir -p /opt/crossbind/webview2 /opt/licenses/webview2-sdk; \
@@ -145,7 +145,7 @@ RUN set -eu; \
     apt-get install -y --no-install-recommends openjdk-21-jre-headless; \
     rm -rf /var/lib/apt/lists/*; \
     mkdir -p /opt/jsign; \
-    wget -q "https://repo1.maven.org/maven2/net/jsign/jsign/${JSIGN_VERSION}/jsign-${JSIGN_VERSION}.jar" -O /opt/jsign/jsign.jar; \
+    crossbind-download "https://repo1.maven.org/maven2/net/jsign/jsign/${JSIGN_VERSION}/jsign-${JSIGN_VERSION}.jar" /opt/jsign/jsign.jar; \
     echo "${JSIGN_SHA256}  /opt/jsign/jsign.jar" | sha256sum -c -; \
     printf '#!/bin/sh\nexec java -jar /opt/jsign/jsign.jar "$@"\n' > /usr/local/bin/jsign; \
     chmod 755 /usr/local/bin/jsign
