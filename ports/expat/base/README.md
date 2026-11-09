@@ -17,7 +17,7 @@
 Three apps on **[crossbind.dev/ports/expat](https://crossbind.dev/ports/expat/#apps)** run this package in your browser, on the same generated data every time:
 
 - **XML firehose.** Parses an OpenStreetMap-style document that is generated as it goes: up to 1.07 GB and 28.8 million elements, 1 MiB at a time, inside the Web Worker the module runs in. The module's memory stays the same size from start to finish. An XML file you pick streams through the same way.
-- **Attack lab.** A 784-byte billion-laughs document that would expand to 3 GB stops at line 14, column 6, after 2.6 MB of text. A quadratic blowup, an external entity pointing at `file:///etc/passwd` (reported to a handler, never loaded) and 100,000 levels of nesting run the same way, with the limits adjustable.
+- **Attack lab.** A 784-byte billion-laughs document that would expand to 3 GB stops at line 14, column 6, before any of its text comes through. A quadratic blowup, an external entity pointing at `file:///etc/passwd` (reported to a handler, never loaded) and 100,000 levels of nesting run the same way, with the limits adjustable.
 - **GPX reader.** A namespace-aware parse finds Garmin's heart-rate extension whether a file spells it `gpxtpx:` or `ns3:`; the reader draws the track and exports GeoJSON. The generated sample ride comes out at 64.043 km, 9,113 points, 803.3 m of climb and an average heart rate of 126.7 bpm.
 
 Their C++ wrappers, and the self-check the site build runs against results computed independently of this package, are in [`landing/demos/lib-expat`](https://github.com/crossbind/crossbind/tree/main/landing/demos/lib-expat).
