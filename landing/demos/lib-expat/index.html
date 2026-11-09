@@ -86,9 +86,9 @@
             const last = await drain(16 * MIB);
             check('app firehose 1,000,000 nodes, memory flat', [last.bytes, last.elements, last.memory === first.memory], [86433335, 2400001, true]);
 
-            // Attack lab: the documents are the reference's bytes, and each verdict matches pyexpat (default
-            // limits) and the host build of Expat 2.8.5 (other limits), except the text that gets through a
-            // billion laughs: none since Expat 2.10.0, as a host build of it gives.
+            // Attack lab: the documents are the reference's bytes. Each verdict matches pyexpat under the default
+            // limits, except the text that gets through a billion laughs: none since Expat 2.10.0. That figure
+            // and the verdicts under other limits come from a host build of 2.10.0.
             const lab = async (xml, amplification, threshold, depth) => JSON.parse(await m.AttackLab.parse(xml, amplification, threshold, depth));
             const verdict = (r) => [r.ok, r.code, r.line, r.column, r.textBytes, r.elements, r.maxDepth];
             const laughs9 = await m.AttackLab.build('laughs', 9);
@@ -119,9 +119,12 @@
             check('app lab deep nesting', [nested.ok, nested.elements, nested.maxDepth], [true, 100000, 100000]);
             const capped = await lab(deep, 100, 8 * MIB, 1000);
             check('app lab deep nesting, depth limit', [...verdict(capped), capped.stoppedByDepth], [false, 35, 1, 3003, 0, 1001, 1001, true]);
-            check('app lab looser and stricter limits', [verdict(await lab(laughs10, 1000, 64 * MIB, 0)), verdict(await lab(laughs5, 100, 64 * 1024, 0))], [
-                [false, 43, 15, 6, 0, 1, 1],
+            // A document the limits decide: a bomb past every limit stops with 0 bytes under any of them, so it
+            // could not show that a limit took effect.
+            check('app lab looser and stricter limits', [verdict(await lab(laughs5, 100, 8 * MIB, 0)), verdict(await lab(laughs5, 100, 64 * 1024, 0)), verdict(await lab(laughs5, 10000, 64 * 1024, 0))], [
+                [true, 0, 10, 19, 300000, 1, 1],
                 [false, 43, 10, 6, 0, 1, 1],
+                [true, 0, 10, 19, 300000, 1, 1],
             ]);
 
             // GPX app: the generated ride is the reference's bytes under either prefix, and its summary
