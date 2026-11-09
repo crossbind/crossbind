@@ -33,3 +33,56 @@ jobs:
                   name: e2e-templates
                   path: tmp/e2e-templates/logs
                   if-no-files-found: ignore
+    # Installs the Expo template as published and opens it on a simulator. `expo` floats in a new project, and a patch
+    # that does not go with its react-native shows only at launch on iOS. No other job runs this template on a device.
+    expo-ios:
+        runs-on: macos-latest
+        timeout-minutes: 90
+        env:
+            # Simulator boot on hosted runners regularly exceeds Maestro's default driver timeout.
+            MAESTRO_DRIVER_STARTUP_TIMEOUT: '180000'
+        steps:
+            - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+            - name: Install pnpm
+              uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+            - name: Use Node.js
+              uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+              with:
+                  node-version-file: .nvmrc
+            - name: Install Maestro
+              run: |
+                  curl -fsSL "https://get.maestro.mobile.dev" | bash
+                  echo "$HOME/.maestro/bin" >> $GITHUB_PATH
+            - name: Scaffold the published template
+              working-directory: ${{ runner.temp }}
+              run: npm create --yes crossbind@beta -- expo-app Mobile "React Native" Expo < /dev/null
+            - name: Install its dependencies
+              working-directory: ${{ runner.temp }}/expo-app
+              run: pnpm install
+            - name: Generate the iOS project
+              working-directory: ${{ runner.temp }}/expo-app
+              run: npx expo prebuild -p ios --no-install
+            - name: Build the app and install it on a simulator
+              working-directory: ${{ runner.temp }}/expo-app
+              run: pnpm run run:ios
+            - name: Close the dialog that opening the app's link can leave over it
+              working-directory: ${{ runner.temp }}
+              run: |
+                  cat > dismiss.yaml <<'FLOW'
+                  appId: dev.crossbind.sampleReactNativeExpo
+                  ---
+                  - tapOn:
+                        text: Cancel
+                        optional: true
+                  FLOW
+                  maestro --device "$(xcrun simctl list devices booted | sed -n 's/.*(\([0-9A-F-]\{36\}\)) (Booted).*/\1/p' | head -1)" test dismiss.yaml
+            - name: Open the app and check its C++ result
+              working-directory: ${{ runner.temp }}/expo-app
+              run: pnpm run maestro:ios
+            - name: Keep Maestro's record
+              if: always()
+              uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+              with:
+                  name: expo-ios-maestro
+                  path: ~/.maestro/tests
+                  if-no-files-found: ignore

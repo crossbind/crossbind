@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { styleText } from 'node:util';
 import * as p from '@clack/prompts';
 import { unpackDotfiles } from './dotfiles.js';
+import { followExpoSdk } from './expo-sdk.js';
 import { extensionName, nameExtension } from './extension.js';
 import { renameInReadme } from './readme.js';
 import { pkgManager } from './utils.js';
@@ -164,12 +165,20 @@ async function main() {
 
     const pjPath = path.join(cwd, 'package.json');
     let scripts = {};
+    let expoSdkError = null;
     if (extension) {
         await nameExtension(src, cwd, extension);
     } else if (fs.existsSync(pjPath)) {
         const pkg = JSON.parse(await fsp.readFile(pjPath, 'utf8'));
         const templateName = pkg.name;
         pkg.name = entry.kind === 'lib' ? `crossbind-lib-${name}` : name;
+        if (entry.key === 'mobile-reactnative-expo') {
+            try {
+                pkg.dependencies = await followExpoSdk(pkg.dependencies);
+            } catch (err) {
+                expoSdkError = err.message;
+            }
+        }
         await fsp.writeFile(pjPath, `${JSON.stringify(pkg, null, 2)}\n`);
         scripts = pkg.scripts || {};
 
@@ -183,6 +192,9 @@ async function main() {
     if (fs.existsSync(gradlew)) await fsp.chmod(gradlew, 0o755);
 
     spin.stop(`Created ${path.relative(process.cwd(), cwd) || '.'}`);
+    if (expoSdkError) {
+        p.log.warn(`Could not read the current Expo versions (${expoSdkError}), so this project keeps the ones create-crossbind v${version} was built with. If the app does not start, run: npx expo install --fix`);
+    }
 
     const rel = path.relative(process.cwd(), cwd);
     const steps = [
