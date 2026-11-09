@@ -270,7 +270,7 @@ const xml = await m.AttackLab.build('laughs', 9);   // 784 bytes
 const result = JSON.parse(await m.AttackLab.parse(xml, 100, 8 * 1024 * 1024, 0));
 // result.error      'limit on input amplification factor (from DTD and entities) breached'
 // result.line       14, result.column 6
-// result.textBytes  2603109: what got through before the stop`;
+// result.textBytes  0: nothing got through before the stop`;
 
 function Verdict({ tokens, result }) {
     const heading = result.ok ? 'Parsed' : result.code === 43 ? 'Blocked by Expat' : result.stoppedByDepth ? 'Stopped by the depth limit' : 'Rejected';

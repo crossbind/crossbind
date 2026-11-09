@@ -87,7 +87,8 @@
             check('app firehose 1,000,000 nodes, memory flat', [last.bytes, last.elements, last.memory === first.memory], [86433335, 2400001, true]);
 
             // Attack lab: the documents are the reference's bytes, and each verdict matches pyexpat (default
-            // limits) and the host build of Expat 2.8.5 (other limits).
+            // limits) and the host build of Expat 2.8.5 (other limits), except the text that gets through a
+            // billion laughs: none since Expat 2.10.0, as a host build of it gives.
             const lab = async (xml, amplification, threshold, depth) => JSON.parse(await m.AttackLab.parse(xml, amplification, threshold, depth));
             const verdict = (r) => [r.ok, r.code, r.line, r.column, r.textBytes, r.elements, r.maxDepth];
             const laughs9 = await m.AttackLab.build('laughs', 9);
@@ -104,7 +105,7 @@
                 'd17ad568cf82220b69129f9e804a72f40b425b0ca29d6e08abea8bd644573cfa',
             ]);
             const blocked = await lab(laughs9, 100, 8 * MIB, 0);
-            check('app lab billion laughs', [...verdict(blocked), blocked.error, blocked.entityCount], [false, 43, 14, 6, 2603109, 1, 1, 'limit on input amplification factor (from DTD and entities) breached', 10]);
+            check('app lab billion laughs', [...verdict(blocked), blocked.error, blocked.entityCount], [false, 43, 14, 6, 0, 1, 1, 'limit on input amplification factor (from DTD and entities) breached', 10]);
             check('app lab quadratic blowup', verdict(await lab(quadratic, 100, 8 * MIB, 0)), [false, 43, 5, 504, 8300000, 1, 1]);
             const xxe = await lab(external, 100, 8 * MIB, 0);
             check('app lab external entity', [xxe.ok, xxe.textBytes, xxe.doctype, xxe.entities, xxe.external], [
@@ -119,8 +120,8 @@
             const capped = await lab(deep, 100, 8 * MIB, 1000);
             check('app lab deep nesting, depth limit', [...verdict(capped), capped.stoppedByDepth], [false, 35, 1, 3003, 0, 1001, 1001, true]);
             check('app lab looser and stricter limits', [verdict(await lab(laughs10, 1000, 64 * MIB, 0)), verdict(await lab(laughs5, 100, 64 * 1024, 0))], [
-                [false, 43, 15, 6, 20826609, 1, 1],
-                [false, 43, 10, 6, 20190, 1, 1],
+                [false, 43, 15, 6, 0, 1, 1],
+                [false, 43, 10, 6, 0, 1, 1],
             ]);
 
             // GPX app: the generated ride is the reference's bytes under either prefix, and its summary
