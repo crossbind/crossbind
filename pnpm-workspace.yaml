@@ -47,7 +47,7 @@ overrides:
   # accept.
   '@expo/config-plugins': '~58.0.10'
   metro: '^0.87.1'
-  react-native: '0.88.0'
+  react-native: '0.88.1'
   'minimatch@3': '^3.1.4'
   'nanoid@3': '^3.3.18'
   'on-headers@1': '^1.1.0'
