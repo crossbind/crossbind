@@ -30,6 +30,16 @@ describe('bridge-tools', () => {
         expect(missingToolsMessage({ code: 'ENOENT' }, '2.0.0-beta.69')).toContain('pnpm --filter @crossbind/bridge-tools build');
     });
 
+    // A package manager leaves out an optional dependency whose engines the running Node does not meet.
+    test('names the Node it needs when the package is missing under an older one', () => {
+        const message = missingToolsMessage({ code: 'MODULE_NOT_FOUND' }, '2.0.0-beta.69', '25.6.0');
+
+        expect(message).toContain('needs Node 26 or later');
+        expect(message).toContain('Node 25.6.0');
+        expect(message).not.toContain('optional dependencies are left out');
+        expect(missingToolsMessage({ code: 'MODULE_NOT_FOUND' }, '2.0.0-beta.69', '26.13.0')).toContain('optional dependencies are left out');
+    });
+
     test('fails as run() does when SWIG exits with an error, so the retry without macros still sees its exit code', () => {
         const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
         const tools = { swig: vi.fn(() => ({ status: 1, output: 'x.i:3: Error: Syntax error in input(1).\n' })) };
