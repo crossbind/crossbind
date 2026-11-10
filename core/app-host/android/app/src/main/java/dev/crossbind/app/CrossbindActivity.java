@@ -28,6 +28,7 @@ import android.webkit.GeolocationPermissions;
 import android.webkit.HttpAuthHandler;
 import android.webkit.JsPromptResult;
 import android.webkit.JsResult;
+import android.webkit.MimeTypeMap;
 import android.webkit.PermissionRequest;
 import android.webkit.URLUtil;
 import android.webkit.ValueCallback;
@@ -65,6 +66,7 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
@@ -718,13 +720,24 @@ public class CrossbindActivity extends Activity implements ExtensionHost {
         if (download != null && download.isAsked && downloads.remove(download)) cancelled(download);
     }
 
+    // The type a save picker takes for a download: that of its name's extension, or none Android knows, as the picker
+    // gives a name the extension of its type where the two differ, as polygon.csv.txt for the text/plain WebView guesses
+    // from a CSV's bytes. A name without an extension takes the type WebView gave.
+    private static String typeOf(Download download) {
+        int dot = download.name.lastIndexOf('.');
+        String byName = dot > 0 ? MimeTypeMap.getSingleton().getMimeTypeFromExtension(download.name.substring(dot + 1).toLowerCase(Locale.ROOT)) : null;
+        if (byName != null) return byName;
+        boolean isTyped = dot <= 0 && download.mime != null && !download.mime.isEmpty();
+        return isTyped ? download.mime : "application/octet-stream";
+    }
+
     // The save picker for the first download ask() saves.
     private void pickNext() {
         if (picking != null) return;
         Download first = downloads.stream().filter((waiting) -> waiting.isAsked).findFirst().orElse(null);
         if (first == null) return;
         Intent picker = new Intent(Intent.ACTION_CREATE_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE)
-                .setType(first.mime == null || first.mime.isEmpty() ? "application/octet-stream" : first.mime)
+                .setType(typeOf(first))
                 .putExtra(Intent.EXTRA_TITLE, first.name);
         try {
             startForResult(picker, (result, data) -> save(result == RESULT_OK && data != null ? data.getData() : null));
