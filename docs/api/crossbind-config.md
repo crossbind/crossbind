@@ -337,7 +337,7 @@ export default {
         binary: {
           emccFlags:   ['-sINITIAL_MEMORY=64MB'],  // -s/-O flags for emcc (wasm only); they follow the default -O3, so -Oz or -Os wins
           wasiFlags:   ['-Wl,--stack-first'],      // flags appended to the wasi command link (platform 'wasi' only; see wasi.md)
-          addonFlags:  ['-lxml2'],                 // system libraries a native addon or executable link needs (platforms 'darwin', 'linux', 'linuxmusl', 'win32'); dependencies' flags add up
+          addonFlags:  ['-lxml2'],                 // system libraries the native link of an addon, executable or app needs (every platform but 'wasm' and 'wasi'); dependencies' flags add up
         },
         env:           { GDAL_NUM_THREADS: '0' },  // env vars of the running module; a value may be a function of (state, target); the app's value beats a dependency's
         data:          { 'share/myapp': 'myapp/data' },  // bundle data files into .data preload
