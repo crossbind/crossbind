@@ -60,6 +60,18 @@ describe("the Rollup plugin of a desktop app's build", () => {
         expect(steps).toEqual(['check x64']);
     });
 
+    // A dependency's header lies under the include root of the target that builds it: bound for wasm, which the app does
+    // not build, it was included by its file name alone.
+    test("binds a header the page imports for the app's target", async () => {
+        const { createBridgeFile } = await import('crossbind');
+        const plugin = rollupCrossbindPlugin();
+        plugin.configResolved({ base: '/', command: 'build' });
+
+        await plugin.transform.call({ addWatchFile: () => {} }, '', '/project/node_modules/lib/Lib.h');
+
+        expect(createBridgeFile).toHaveBeenCalledWith('/project/node_modules/lib/Lib.h', targets[0]);
+    });
+
     test("puts the page into every arch's app before any installer writes beside them, where a later app's page would take their files in", async () => {
         await rollupCrossbindPlugin().writeBundle({ dir: '/project/dist' });
         expect(steps).toEqual(['publish x64', 'publish arm64', 'ship x64 /project/dist/demo-linux-x64', 'ship arm64 /project/dist/demo-linux-arm64']);
