@@ -36,6 +36,13 @@ const backgroundValues = (color) => `<?xml version="1.0" encoding="utf-8"?>
 </resources>
 `;
 
+// The color while the system is dark, where app.window.backgroundColor gives one, which Android takes in place of the other.
+const darkBackgroundValues = (color) => `<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="crossbind_background">${color}</color>
+</resources>
+`;
+
 // The devices of app.permissions, which alone the page may ask for, whatever an extension's Java asks Android for.
 const permissionValues = (permissions) => `<?xml version="1.0" encoding="utf-8"?>
 <resources>
@@ -269,8 +276,8 @@ ${libraries.map((library) => `    implementation '${library}'\n`).join('')}}
 // is an extension's folder of Java sources, by package, which the app's sources take beside the activity, and the
 // class in it the activity calls.
 export default function writeGradleProject(to, {
-    parts, id, label, version, icons = null, urlSchemes = [], fileTypes = [], links = [], shortcutItems = [], background = null, permissions = [],
-    java = [], extensionPermissions = [], manifests = [], resources = [], maven = [],
+    parts, id, label, version, icons = null, urlSchemes = [], fileTypes = [], links = [], shortcutItems = [], background = null, darkBackground = null,
+    permissions = [], java = [], extensionPermissions = [], manifests = [], resources = [], maven = [],
 }) {
     const { name } = state.config.general;
     if (parts.length === 0) throw new Error(`crossbind: no part of the Android app ${name} is built, so there is no Gradle project to write.`);
@@ -328,6 +335,10 @@ export default function writeGradleProject(to, {
     }
     fs.mkdirSync(path.join(main, 'res', 'values'), { recursive: true });
     fs.writeFileSync(path.join(main, 'res', 'values', 'background.xml'), backgroundValues(background));
+    if (background && darkBackground) {
+        fs.mkdirSync(path.join(main, 'res', 'values-night'), { recursive: true });
+        fs.writeFileSync(path.join(main, 'res', 'values-night', 'background.xml'), darkBackgroundValues(darkBackground));
+    }
     fs.writeFileSync(path.join(main, 'res', 'values', 'permissions.xml'), permissionValues(permissions));
     if (shortcutItems.length > 0) {
         fs.mkdirSync(path.join(main, 'res', 'xml'), { recursive: true });

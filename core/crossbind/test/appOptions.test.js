@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'vitest';
 import {
-    appBackgroundColor, appCategory, appCopyright, appDisplayName, appEncryption, appHeader, appId, appPermissions, appPrivacy,
+    appBackgroundColor, appCategory, appCopyright, appDarkBackgroundColor, appDisplayName, appEncryption, appHeader, appId, appPermissions, appPrivacy,
     appUrlSchemes, appWindow, iosAppGroup, iosMultipleWindows, urlSchemeOwners, usageDescriptions,
 } from '../src/utils/appOptions.js';
 
@@ -155,6 +155,21 @@ describe("an app's background color", () => {
             expect(() => appBackgroundColor(config({ window: { backgroundColor } }))).toThrow('no color of the form #rrggbb');
         }
     });
+
+    test('is one of two, for a light and a dark system, which a phone follows and a desktop takes the light one of', () => {
+        const app = { window: { backgroundColor: { light: '#efece4', dark: '#0C0D10' } } };
+        expect(appBackgroundColor(config(app))).toBe('#efece4');
+        expect(appDarkBackgroundColor(config(app))).toBe('#0C0D10');
+        expect(appDarkBackgroundColor(config({ window: { backgroundColor: '#efece4' } }))).toBe(null);
+        expect(appDarkBackgroundColor(config())).toBe(null);
+    });
+
+    test('takes the two as { light, dark }, each #rrggbb', () => {
+        const pairs = [{ light: '#efece4' }, { light: '#efece4', dark: 'black' }, { light: '#efece4', dark: '#0c0d10', auto: '#000000' }, ['#efece4', '#0c0d10']];
+        for (const backgroundColor of pairs) {
+            expect(() => appDarkBackgroundColor(config({ window: { backgroundColor } }))).toThrow('nor { light, dark } of two');
+        }
+    });
 });
 
 describe("an app's URL schemes", () => {
@@ -232,6 +247,14 @@ describe("the header a desktop app's host builds with", () => {
         expect(appHeader(config(app), 'android')).not.toContain('BACKGROUND_COLOR');
         expect(appHeader(config(), 'linux')).not.toContain('BACKGROUND_COLOR');
         expect(() => appHeader(config({ window: { backgroundColor: 'black' } }), 'ios')).toThrow('app.window.backgroundColor "black"');
+    });
+
+    test('defines the dark background color on iOS alone, as a desktop shows the light one', () => {
+        const app = { window: { backgroundColor: { light: '#EFECE4', dark: '#0C0D10' } } };
+        expect(appHeader(config(app), 'ios')).toContain('#define CROSSBIND_APP_BACKGROUND_COLOR 0xefece4\n#define CROSSBIND_APP_BACKGROUND_COLOR_DARK 0x0c0d10\n');
+        expect(appHeader(config(app), 'darwin')).toContain('#define CROSSBIND_APP_BACKGROUND_COLOR 0xefece4\n');
+        expect(appHeader(config(app), 'darwin')).not.toContain('BACKGROUND_COLOR_DARK');
+        expect(appHeader(config(app), 'android')).not.toContain('BACKGROUND_COLOR');
     });
 
     test("defines the devices the page may use on the desktop and on iOS, while an Android app's manifest lists them", () => {

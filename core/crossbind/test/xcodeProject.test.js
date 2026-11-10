@@ -258,6 +258,25 @@ describe('an iOS app\'s Xcode project', () => {
         fs.rmSync(root, { recursive: true, force: true });
     });
 
+    test('launches on the dark one of app.window.backgroundColor while the system is dark', () => {
+        const root = fs.mkdtempSync(path.join(os.tmpdir(), 'crossbind-xcode-'));
+        const to = path.join(root, 'demo-ios');
+        writeXcodeProject(to, {
+            parts: [part(root, 'iphoneos')], identity: { id: 'com.example.demo', team: '' }, label: 'Demo', version: '1', background: '#efece4', darkBackground: '#0c0d10',
+        });
+
+        const set = JSON.parse(fs.readFileSync(path.join(to, 'Assets.xcassets', 'LaunchBackground.colorset', 'Contents.json'), 'utf8'));
+        expect(set.colors).toEqual([
+            { color: { 'color-space': 'srgb', components: { alpha: '1.000', red: '0xEF', green: '0xEC', blue: '0xE4' } }, idiom: 'universal' },
+            {
+                appearances: [{ appearance: 'luminosity', value: 'dark' }],
+                color: { 'color-space': 'srgb', components: { alpha: '1.000', red: '0x0C', green: '0x0D', blue: '0x10' } },
+                idiom: 'universal',
+            },
+        ]);
+        fs.rmSync(root, { recursive: true, force: true });
+    });
+
     test('gives iOS the reasons of app.permissions, without which it lets the app use none of those devices', () => {
         const root = fs.mkdtempSync(path.join(os.tmpdir(), 'crossbind-xcode-'));
         const to = path.join(root, 'demo-ios');

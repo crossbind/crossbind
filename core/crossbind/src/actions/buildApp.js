@@ -29,8 +29,8 @@ import findFiles from '../utils/findFiles.js';
 import { getContentHash, getFilesFingerprint } from '../utils/hash.js';
 import { xmlPlist } from '../utils/plist.js';
 import {
-    androidAppId, appBackgroundColor, appCategory, appCopyright, appDisplayName, appEncryption, appFiles, appHeader, appId, appPermissions, appPrivacy,
-    appUrlSchemes, iosAppGroup, iosMultipleWindows, urlSchemeOwners, usageDescriptions,
+    androidAppId, appBackgroundColor, appCategory, appCopyright, appDarkBackgroundColor, appDisplayName, appEncryption, appFiles, appHeader, appId,
+    appPermissions, appPrivacy, appUrlSchemes, iosAppGroup, iosMultipleWindows, urlSchemeOwners, usageDescriptions,
 } from '../utils/appOptions.js';
 import { carriedFilesOf, copyCarriedFiles } from '../utils/appFiles.js';
 import { activityTypeOwners, fileTypeOwners, linkOwners, macDocumentTypes, shortcutItemOwners } from '../utils/appLaunches.js';
@@ -441,8 +441,8 @@ export function publishApp(target, { to = appOutputPath(target), page = null } =
             build: build === null ? appVersion() : String(build), icon: icon && iosIcon(icon), urlSchemes: appUrlSchemes(state.config),
             fileTypes: fileTypeOwners(state.config), links: linkOwners(state.config).map(({ link }) => link),
             activityTypes: activityTypeOwners(state.config).map(({ type }) => type), shortcutItems: shortcutItemOwners(state.config),
-            background: appBackgroundColor(state.config), usage: usageDescriptions(state.config, 'ios'), encryption: appEncryption(state.config),
-            multipleWindows: iosMultipleWindows(state.config),
+            background: appBackgroundColor(state.config), darkBackground: appDarkBackgroundColor(state.config), usage: usageDescriptions(state.config, 'ios'),
+            encryption: appEncryption(state.config), multipleWindows: iosMultipleWindows(state.config),
         };
         const extensions = extensionsOf('ios');
         const privacy = mergedPrivacy(ownPrivacy, extensions.privacy);
@@ -455,7 +455,8 @@ export function publishApp(target, { to = appOutputPath(target), page = null } =
         const icon = readAppIcon(state.config);
         const options = {
             parts: appParts(target), id: androidAppId(state.config), label: appDisplayName(state.config), version: androidVersion(), icons: icon && androidIcons(icon),
-            urlSchemes: appUrlSchemes(state.config), background: appBackgroundColor(state.config), permissions: Object.keys(appPermissions(state.config)),
+            urlSchemes: appUrlSchemes(state.config), background: appBackgroundColor(state.config), darkBackground: appDarkBackgroundColor(state.config),
+            permissions: Object.keys(appPermissions(state.config)),
             fileTypes: fileTypeOwners(state.config), links: linkOwners(state.config).map(({ link }) => link), shortcutItems: shortcutItemOwners(state.config),
         };
         const extensions = extensionsOf('android');

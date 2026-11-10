@@ -151,8 +151,9 @@ function objects(name, targetSettings, hasAssets, hasPrivacy, added) {
     };
 }
 
-// The asset catalog: the app's icon, from which Xcode makes every size, and the launch screen's color.
-function writeAssets(catalog, icon, background) {
+// The asset catalog: the app's icon, from which Xcode makes every size, and the launch screen's color, with the one of
+// the dark appearance where there is one.
+function writeAssets(catalog, icon, background, darkBackground) {
     const info = { author: 'xcode', version: 1 };
     const assetSet = (set, contents) => {
         fs.mkdirSync(`${catalog}/${set}`, { recursive: true });
@@ -163,9 +164,13 @@ function writeAssets(catalog, icon, background) {
         assetSet('AppIcon.appiconset', { images: [{ filename: 'icon.png', idiom: 'universal', platform: 'ios', size: '1024x1024' }] });
         fs.writeFileSync(`${catalog}/AppIcon.appiconset/icon.png`, icon);
     }
+    const colorOf = (rgb) => {
+        const [red, green, blue] = [1, 3, 5].map((at) => `0x${rgb.slice(at, at + 2).toUpperCase()}`);
+        return { 'color-space': 'srgb', components: { alpha: '1.000', red, green, blue } };
+    };
     if (background) {
-        const [red, green, blue] = [1, 3, 5].map((at) => `0x${background.slice(at, at + 2).toUpperCase()}`);
-        assetSet(`${LAUNCH_COLOR}.colorset`, { colors: [{ color: { 'color-space': 'srgb', components: { alpha: '1.000', red, green, blue } }, idiom: 'universal' }] });
+        const dark = darkBackground ? [{ appearances: [{ appearance: 'luminosity', value: 'dark' }], color: colorOf(darkBackground), idiom: 'universal' }] : [];
+        assetSet(`${LAUNCH_COLOR}.colorset`, { colors: [{ color: colorOf(background), idiom: 'universal' }, ...dark] });
     }
 }
 
@@ -176,7 +181,8 @@ function writeAssets(catalog, icon, background) {
 // where one of them asks for it.
 export default function writeXcodeProject(to, {
     parts, identity, label, version, build = version, icon = null, urlSchemes = [], fileTypes = [], links = [], activityTypes = [], shortcutItems = [],
-    background = null, usage = {}, encryption = null, multipleWindows = false, privacy = {}, entitlements = {}, plist = [], targets = [], appGroup = null,
+    background = null, darkBackground = null, usage = {}, encryption = null, multipleWindows = false, privacy = {}, entitlements = {}, plist = [], targets = [],
+    appGroup = null,
 }) {
     const { name } = state.config.general;
     if (parts.length === 0) throw new Error(`crossbind: no part of the iOS app ${name} is built, so there is no Xcode project to write.`);
@@ -206,7 +212,7 @@ export default function writeXcodeProject(to, {
 
     fs.writeFileSync(`${to}/main.m`, MAIN);
     fs.writeFileSync(`${to}/Info.plist`, info);
-    writeAssets(`${to}/Assets.xcassets`, icon, background);
+    writeAssets(`${to}/Assets.xcassets`, icon, background, darkBackground);
     const hasPrivacy = Object.keys(privacy).length > 0;
     if (hasPrivacy) fs.writeFileSync(`${to}/PrivacyInfo.xcprivacy`, privacyManifest(privacy));
     const hasEntitlements = Object.keys(signed).length > 0;
