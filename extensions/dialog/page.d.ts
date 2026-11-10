@@ -5,6 +5,7 @@ export interface FileFilter {
 }
 
 export interface OpenOptions {
+    /** Not on a phone, whose picker has none. */
     title?: string;
     /** The folder the dialog shows first. */
     defaultPath?: string;
@@ -33,9 +34,12 @@ export interface MessageOptions {
 }
 
 export declare const dialog: {
-    /** The paths of the files or folders the user picked, or null when they cancelled. */
+    /**
+     * The paths of the files or folders the user picked, or null when they cancelled. A phone gives copies of the files,
+     * in a folder of their own in the app's temporary or cache folder; an iOS app a folder where its user keeps it.
+     */
     open(options?: OpenOptions): Promise<string[] | null>;
-    /** The path the user chose to save to, or null when they cancelled. */
+    /** The path the user chose to save to, or null when they cancelled. On the desktop: a phone saves the page's downloads. */
     save(options?: SaveOptions): Promise<string | null>;
     /** The index of the button the user clicked: Return gives the first, and Escape or closing the dialog the last. */
     message(options: MessageOptions): Promise<number>;

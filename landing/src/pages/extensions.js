@@ -46,7 +46,7 @@ export const EXTENSION_GROUPS = [
         id: 'system',
         label: 'System',
         items: [
-            row('dialog', 'Open and save dialogs on the desktop, message dialogs everywhere'),
+            row('dialog', 'Open and message dialogs everywhere, save dialogs on the desktop'),
             row('menu', "The app's menus and context menus, the tray icon and system notifications"),
             row('shell', 'Opens addresses and files outside the app, shows them in the file manager, moves them to the trash'),
             row('clipboard', "The system clipboard's text, read and written whenever the system lets an app", { isAdded: true }),

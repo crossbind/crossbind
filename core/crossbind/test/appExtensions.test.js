@@ -167,6 +167,8 @@ describe("an app host's own extensions", () => {
         expect(extensionPart(appHostExtensions({}), 'darwin').frameworks).toEqual(['UniformTypeIdentifiers', 'UserNotifications']);
         expect(extensionPart(appHostExtensions(updater), 'darwin').frameworks).toEqual(['UniformTypeIdentifiers', 'UserNotifications', 'Security']);
         expect(extensionPart(appHostExtensions({ 'page-location': {} }), 'darwin').frameworks).toEqual(['UniformTypeIdentifiers', 'UserNotifications', 'CoreLocation']);
+        // The document picker of an iOS app's dialog.open offers its files by their types.
+        expect(extensionPart(appHostExtensions({}), 'ios').frameworks).toEqual(['UniformTypeIdentifiers']);
         expect(extensionPart(appHostExtensions({}), 'win32').libraries).toEqual(['comctl32', 'shell32', 'ole32']);
         expect(extensionPart(appHostExtensions(updater), 'win32').libraries).toEqual(['comctl32', 'shell32', 'ole32', 'winhttp', 'wintrust', 'crypt32']);
         expect(extensionPart(appHostExtensions({}), 'android').java.map(({ className }) => className)).toEqual([

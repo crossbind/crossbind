@@ -412,7 +412,7 @@ std::string databasePath() { return crossbind::app::paths().data + "/notes.sqlit
 
 | Function | What it does | macOS, Linux, Windows | iOS | Android |
 |---|---|---|---|---|
-| `dialog.open({ title, defaultPath, filters, directory, multiple })` | The paths of the files or folders its user picks, or `null` | ✓ | | |
+| `dialog.open({ title, defaultPath, filters, directory, multiple })` | The paths of the files or folders its user picks, or `null`; on a phone copies of the files, and on iOS a folder where it is | ✓ | ✓ | ✓ |
 | `dialog.save({ title, defaultPath, defaultName, filters })` | The path its user chooses to save to, or `null` | ✓ | | |
 | `dialog.message({ message, detail, kind, buttons })` | The index of the button its user clicks | ✓ | ✓ | ✓ |
 | `shell.openExternal(url)` | An http, https or mailto address in the default browser or mail app | ✓ | ✓ | |
@@ -1771,6 +1771,9 @@ writes to logcat, under the tag `Crossbind`: the URL only on `localhost`, and th
   their buttons, Return and Escape; in the iOS Simulator with their buttons; on an Android emulator with their buttons,
   Back and a tap outside. On Windows the conformance runs in CI check that the host refuses one no platform shows; the
   dialog itself is built there, not measured yet.
+- A phone's `dialog.open` has been measured from the page: in the iOS Simulator two files at once, whose copies match
+  the files byte for byte, a filter, a folder and a cancel; on an Android emulator two files at once, a cancel and a
+  folder refused.
 - The tray and notifications: the conformance runs on Windows click the icon, an item of its menu and the notification
   with the messages Windows sends the app, and those on Linux run against a tray and a notification server of the run's
   own, which read the icon and its menu as KDE's tray does, and click them. On macOS the runs set the icon and take it
