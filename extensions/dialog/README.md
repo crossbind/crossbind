@@ -1,6 +1,6 @@
 # @crossbind/extension-dialog
 
-Open and save dialogs on the desktop, message dialogs everywhere.
+Open and message dialogs everywhere, save dialogs on the desktop.
 
 An app has it by having `@crossbind/core-app-host`, which lists it as a dependency: there is nothing to install or list.
 
@@ -18,7 +18,13 @@ index of the button clicked. A file a dialog picked is one the page's `shell` fu
 
 ## Platforms
 
-`dialog.open` and `dialog.save` on macOS, Linux and Windows; `dialog.message` there and on iOS and Android.
+`dialog.open` and `dialog.message` on macOS, Linux, Windows, iOS and Android; `dialog.save` on macOS, Linux and Windows.
+
+A phone's `dialog.open` shows the system's document picker, without a title, and gives copies of the files its user
+picks, in a folder of their own in the app's temporary or cache folder, which the system may empty. With
+`directory: true` an iOS app gets a folder where its user keeps it, which it reaches while it runs; Android picks files
+alone. Android offers the files of the filters' types where it knows each extension's, and any file otherwise. A phone
+saves the page's files as its downloads, which show the system's export sheet on iOS and its save picker on Android.
 
 ## Replace or leave out
 
