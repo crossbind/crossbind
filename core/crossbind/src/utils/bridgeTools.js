@@ -15,8 +15,13 @@ const require = createRequire(import.meta.url);
 
 export const usesBridgeTools = (target, host = process.platform) => host === 'darwin' && target?.platform !== 'android';
 
-export function missingToolsMessage(error, version = require('../../package.json').version) {
+export function missingToolsMessage(error, version = require('../../package.json').version, node = process.versions.node) {
     if (error?.code === 'MODULE_NOT_FOUND') {
+        // A package manager leaves out an optional dependency whose engines the Node it runs on does not meet.
+        const needed = Number(require('../../package.json').engines.node.match(/\d+/)[0]);
+        if (Number(node.split('.')[0]) < needed) {
+            return `crossbind: bridges on a Mac need ${PACKAGE}, which needs Node ${needed} or later, as crossbind does: under Node ${node} the package manager leaves it out. Install again with Node ${needed} or later.`;
+        }
         return `crossbind: bridges on a Mac need ${PACKAGE}, which installs with crossbind there unless optional dependencies are left out: npm install --save-dev ${PACKAGE}@${version}`;
     }
     if (error?.code === 'ENOENT') {
