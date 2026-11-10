@@ -109,7 +109,10 @@ option.
 
 `backgroundColor`, as `#rrggbb`, is what the app shows until its page paints, and behind a page without a background of
 its own: in the window on the desktop, and from the launch screen on iOS and Android, where the system bars' icons turn
-light on a dark color and dark on a light one. Without it, each platform shows its own.
+light on a dark color and dark on a light one. Without it, each platform shows its own. A page that follows the
+system's light and dark appearance gives two, `{ light: '#f2f2f2', dark: '#1e1e1e' }`: an iOS or Android app shows the
+one of the appearance the system has, from its launch screen on and as the system switches, and a desktop the light
+one.
 
 On the desktop the page shows an element full screen with `element.requestFullscreen()`, as in a browser: the window
 fills the screen until the page leaves it. On Windows and Linux a menu bar the page set stays above the element.
@@ -1776,6 +1779,9 @@ writes to logcat, under the tag `Crossbind`: the URL only on `localhost`, and th
 - A phone's `dialog.open` has been measured from the page: in the iOS Simulator two files at once, whose copies match
   the files byte for byte, a filter, a folder and a cancel; on an Android emulator two files at once, a cancel and a
   folder refused.
+- The two colors of `backgroundColor` have been measured in the iOS Simulator and on an Android emulator: the launch
+  screen of each appearance, and the page's background and the system bars' icons as the system switches while the app
+  runs.
 - The tray and notifications: the conformance runs on Windows click the icon, an item of its menu and the notification
   with the messages Windows sends the app, and those on Linux run against a tray and a notification server of the run's
   own, which read the icon and its menu as KDE's tray does, and click them. On macOS the runs set the icon and take it

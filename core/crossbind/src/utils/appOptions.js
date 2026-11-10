@@ -117,15 +117,28 @@ export function appWindow(config) {
     return options;
 }
 
-// The color an app shows until its page paints, and behind a page without a background of its own, on iOS and Android as
-// well: app.window.backgroundColor, else null, which leaves the system's.
-export function appBackgroundColor(config) {
+const COLOR = /^#[0-9A-Fa-f]{6}$/;
+
+// The colors an app shows until its page paints, and behind a page without a background of its own, on iOS and Android as
+// well: app.window.backgroundColor, one color, or { light, dark }, the one while the system is light and the one while
+// it is dark, which a phone follows; else null, which leaves the system's.
+function backgroundColors(config) {
     const color = config.app.window?.backgroundColor ?? null;
-    if (color !== null && (typeof color !== 'string' || !/^#[0-9A-Fa-f]{6}$/.test(color))) {
-        throw new Error(`crossbind: app.window.backgroundColor ${JSON.stringify(color)} is no color of the form #rrggbb, as #1e1e1e is.`);
+    if (color === null) return null;
+    if (typeof color === 'string' && COLOR.test(color)) return { light: color, dark: null };
+    const isPair = typeof color === 'object' && !Array.isArray(color) && Object.keys(color).sort().join() === 'dark,light'
+        && [color.light, color.dark].every((one) => typeof one === 'string' && COLOR.test(one));
+    if (!isPair) {
+        throw new Error(`crossbind: app.window.backgroundColor ${JSON.stringify(color)} is no color of the form #rrggbb, as #1e1e1e is, nor { light, dark } of two, as { light: '#f2f2f2', dark: '#1e1e1e' } is.`);
     }
     return color;
 }
+
+// The color, or the light one of the two, which a desktop shows whatever its system's appearance.
+export const appBackgroundColor = (config) => backgroundColors(config)?.light ?? null;
+
+// The color an iOS or Android app shows while its system is dark, where app.window.backgroundColor gives one.
+export const appDarkBackgroundColor = (config) => backgroundColors(config)?.dark ?? null;
 
 const PERMISSIONS = ['camera', 'microphone', 'location'];
 
@@ -339,10 +352,12 @@ export function appHeader(config, platform, appGroup = null) {
     const id = `#define CROSSBIND_APP_ID "${platform === 'android' ? androidAppId(config) : appId(config)}"`;
     const name = `#define CROSSBIND_APP_NAME "${appDisplayName(config)}"`;
     const color = appBackgroundColor(config);
+    const dark = platform === 'ios' ? appDarkBackgroundColor(config) : null;
     const permissions = appPermissions(config);
     // An Android app's activity takes the color and the permissions from its Gradle project.
     const page = platform === 'android' ? [] : [
         ...(color ? [`#define CROSSBIND_APP_BACKGROUND_COLOR 0x${color.slice(1).toLowerCase()}`] : []),
+        ...(dark ? [`#define CROSSBIND_APP_BACKGROUND_COLOR_DARK 0x${dark.slice(1).toLowerCase()}`] : []),
         ...PERMISSIONS.map((name) => `#define CROSSBIND_APP_PERMISSION_${name.toUpperCase()} ${name in permissions ? 1 : 0}`),
     ];
     const windows = platform === 'ios' && iosMultipleWindows(config) ? ['#define CROSSBIND_APP_IOS_MULTIPLE_WINDOWS 1'] : [];

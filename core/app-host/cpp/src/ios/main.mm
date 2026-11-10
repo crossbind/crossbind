@@ -34,11 +34,25 @@ bool isDark(std::uint32_t color) {
     };
     return 0.2126 * linear(color >> 16) + 0.7152 * linear(color >> 8) + 0.0722 * linear(color) < EVEN_CONTRAST;
 }
+
+// app.window.backgroundColor, the dark one of its two while the system is dark.
+std::uint32_t backgroundOf(UITraitCollection *traits) {
+#ifdef CROSSBIND_APP_BACKGROUND_COLOR_DARK
+    if (traits.userInterfaceStyle == UIUserInterfaceStyleDark) return CROSSBIND_APP_BACKGROUND_COLOR_DARK;
+#endif
+    return CROSSBIND_APP_BACKGROUND_COLOR;
+}
+
+// The color, which follows the system's appearance as it changes.
+UIColor *backgroundColor() {
+    return [UIColor colorWithDynamicProvider:^UIColor *(UITraitCollection *traits) { return colorOf(backgroundOf(traits)); }];
+}
 #endif
 
 }  // namespace
 
-// The status bar lies over the page: on app.window.backgroundColor, light on a dark color and dark on a light one.
+// The status bar lies over the page: on app.window.backgroundColor, light on a dark color and dark on a light one, the
+// color of the system's appearance as it changes.
 @interface CBPageController : UIViewController
 @end
 
@@ -46,7 +60,14 @@ bool isDark(std::uint32_t color) {
 
 #ifdef CROSSBIND_APP_BACKGROUND_COLOR
 - (UIStatusBarStyle)preferredStatusBarStyle {
-    return isDark(CROSSBIND_APP_BACKGROUND_COLOR) ? UIStatusBarStyleLightContent : UIStatusBarStyleDarkContent;
+    return isDark(backgroundOf(self.traitCollection)) ? UIStatusBarStyleLightContent : UIStatusBarStyleDarkContent;
+}
+#endif
+
+#ifdef CROSSBIND_APP_BACKGROUND_COLOR_DARK
+- (void)traitCollectionDidChange:(UITraitCollection *)previous {
+    [super traitCollectionDidChange:previous];
+    if ([self.traitCollection hasDifferentColorAppearanceComparedToTraitCollection:previous]) [self setNeedsStatusBarAppearanceUpdate];
 }
 #endif
 
@@ -71,7 +92,7 @@ bool isDark(std::uint32_t color) {
 #ifdef CROSSBIND_APP_BACKGROUND_COLOR
     // app.window.backgroundColor, which the launch screen shows as well, until the page paints and behind it.
     webView.opaque = NO;
-    webView.backgroundColor = colorOf(CROSSBIND_APP_BACKGROUND_COLOR);
+    webView.backgroundColor = backgroundColor();
     webView.scrollView.backgroundColor = webView.backgroundColor;
 #endif
 #ifdef CROSSBIND_APP_DEV

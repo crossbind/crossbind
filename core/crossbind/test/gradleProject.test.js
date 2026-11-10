@@ -113,6 +113,20 @@ describe("an Android app's Gradle project", () => {
         fs.rmSync(root, { recursive: true, force: true });
     });
 
+    test('shows the dark one of app.window.backgroundColor while the system is dark', () => {
+        const root = fs.mkdtempSync(path.join(os.tmpdir(), 'crossbind-gradle-'));
+        const nightOf = (darkBackground) => {
+            const to = path.join(root, `demo-${darkBackground ?? 'light'}`);
+            writeGradleProject(to, {
+                parts: [part(root, 'x86_64')], id: 'com.example.demo', label: 'Demo', version: { name: '1.0.0', code: 1 }, background: '#efece4', darkBackground,
+            });
+            return path.join(to, 'app', 'src', 'main', 'res', 'values-night', 'background.xml');
+        };
+        expect(fs.readFileSync(nightOf('#0c0d10'), 'utf8')).toContain('<color name="crossbind_background">#0c0d10</color>');
+        expect(fs.existsSync(nightOf(null))).toBe(false);
+        fs.rmSync(root, { recursive: true, force: true });
+    });
+
     test('opens the links of app.urlSchemes in its one activity, which a link that comes while it runs reaches as well', () => {
         const root = fs.mkdtempSync(path.join(os.tmpdir(), 'crossbind-gradle-'));
         const projectOf = (urlSchemes) => {

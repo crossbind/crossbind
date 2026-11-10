@@ -240,7 +240,8 @@ export default {
       // 16384), the least it shrinks to and the most it grows to (0: no limit), whether it resizes and whether it
       // opens full screen. A limit needs a window that resizes. backgroundColor, as #rrggbb, is what the app shows
       // until its page paints and behind a page without a background of its own, on iOS and Android as well; without
-      // it, the system's.
+      // it, the system's. As { light: '#f2f2f2', dark: '#1e1e1e' } an iOS or Android app shows the one of the
+      // system's appearance as it changes, and a desktop the light one.
     singleInstance: true,
       // Keeps a desktop app to one instance for each user, through the host's instance extension: a later launch hands
       // it its arguments, and it brings its window to the front and tells its page (see app.md). false leaves the

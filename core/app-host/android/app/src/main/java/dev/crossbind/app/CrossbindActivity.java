@@ -12,6 +12,7 @@ import android.content.res.Configuration;
 import android.database.Cursor;
 import android.graphics.Color;
 import android.graphics.Insets;
+import android.graphics.drawable.ColorDrawable;
 import android.net.Uri;
 import android.os.Bundle;
 import android.os.Handler;
@@ -595,6 +596,13 @@ public class CrossbindActivity extends Activity implements ExtensionHost {
     @Override
     public void onConfigurationChanged(Configuration config) {
         super.onConfigurationChanged(config);
+        // The activity outlives the system's switch between light and dark, so it shows the switched-to color of
+        // app.window.backgroundColor itself.
+        int background = getColor(R.color.crossbind_background);
+        if (Color.alpha(background) != 0) {
+            getWindow().setBackgroundDrawable(new ColorDrawable(background));
+            if (webView != null) webView.setBackgroundColor(background);
+        }
         matchSystemBars();
     }
 
