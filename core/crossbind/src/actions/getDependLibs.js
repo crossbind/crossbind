@@ -21,6 +21,11 @@ export default function getDependLibs(target) {
                 if (libPaths.length === 0) {
                     libPaths = libsIn(target.releasePath);
                 }
+                // A published port can leave its iOS archive to its xcframework, where the package's paths lead.
+                const xcframeworkLib = target.platform === 'ios' && state.config.allDependencyPaths?.[target.path]?.[fileName]?.lib;
+                if (libPaths.length === 0 && xcframeworkLib) {
+                    libPaths = findFiles(xcframeworkLib, { cwd: d.paths.project });
+                }
                 dependLibs.push(...libPaths);
             });
         }
