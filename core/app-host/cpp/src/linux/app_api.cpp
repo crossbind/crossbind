@@ -7,11 +7,21 @@
 #include <gtk/gtk.h>
 #include <webkit2/webkit2.h>
 
+#include <sys/utsname.h>
+
 #include <cerrno>
 #include <cstdlib>
+#include <fstream>
 #include <stdexcept>
 
 namespace {
+
+// A key's value in os-release, without the quotes it may have.
+std::string releaseValue(const std::string &line) {
+    std::string value = line.substr(line.find('=') + 1);
+    const bool isQuoted = value.size() >= 2 && (value.front() == '"' || value.front() == '\'') && value.back() == value.front();
+    return isQuoted ? value.substr(1, value.size() - 2) : value;
+}
 
 // An XDG base directory: the variable's absolute path, else the default under the home folder.
 std::string baseDirectory(const char *variable, const char *underHome) {
@@ -33,6 +43,23 @@ crossbind::app::Paths appPaths() {
     const std::string id = CROSSBIND_APP_ID;
     return {made(baseDirectory("XDG_DATA_HOME", "/.local/share") + "/" + id), made(baseDirectory("XDG_CACHE_HOME", "/.cache") + "/" + id),
             made(baseDirectory("XDG_STATE_HOME", "/.local/state") + "/" + id + "/logs")};
+}
+
+// The distribution os-release names, with its version, else its build as a rolling one has, else the kernel's release.
+System appSystem() {
+    std::ifstream release("/etc/os-release");
+    std::string line, name, version, build;
+    while (std::getline(release, line)) {
+        if (line.rfind("NAME=", 0) == 0) name = releaseValue(line);
+        if (line.rfind("VERSION_ID=", 0) == 0) version = releaseValue(line);
+        if (line.rfind("BUILD_ID=", 0) == 0) build = releaseValue(line);
+    }
+    if (version.empty()) version = build;
+    if (version.empty()) {
+        utsname kernel{};
+        if (uname(&kernel) == 0) version = kernel.release;
+    }
+    return {"desktop", name.empty() ? "Linux" : name, version, false};
 }
 
 void crossbind::onMainThread(std::function<void()> fn) { ::onMainThread(std::move(fn)); }

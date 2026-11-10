@@ -96,6 +96,25 @@ function windowOf(name, id) {
     return { id };
 }
 
+// What the app's host tells the page of where the app runs, from before the page's own scripts on.
+function deviceOf(name) {
+    const device = globalThis.__crossbind_device;
+    if (device) return device[name];
+    if (globalThis.__crossbind_token) throw new Error(`crossbind: this app's host is older than crossbind/app; update @crossbind/core-app-host to read device.${name}`);
+    throw new Error(`crossbind: device.${name} works in an app alone, whose crossbind.config.js sets target.runtimeEnv: 'app'`);
+}
+
+// Where the app runs, the same through its run, which the page reads at once, as it starts: the platform and the arch
+// the app is built for, what the device is to its user, its system's name and version, and whether a simulator or an
+// emulator runs the app.
+export const device = Object.freeze({
+    get platform() { return deviceOf('platform'); },
+    get arch() { return deviceOf('arch'); },
+    get formFactor() { return deviceOf('formFactor'); },
+    get os() { return deviceOf('os'); },
+    get isVirtual() { return deviceOf('isVirtual'); },
+});
+
 export const app = {
     // The app's own folders, made when first asked for: { data, cache, logs }.
     paths: async () => call('app.paths', {}),

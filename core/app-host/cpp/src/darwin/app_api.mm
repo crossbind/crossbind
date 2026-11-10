@@ -54,6 +54,20 @@ crossbind::app::Paths appPaths() {
     }
 }
 
+// An iPad a tablet, and an iPhone or iPad app that runs on a Mac a desktop.
+System appSystem() {
+#if TARGET_OS_IPHONE
+    UIDevice *device = UIDevice.currentDevice;
+    const char *form = NSProcessInfo.processInfo.isiOSAppOnMac ? "desktop" : device.userInterfaceIdiom == UIUserInterfaceIdiomPad ? "tablet" : "phone";
+    return {form, device.systemName.UTF8String ?: "iOS", device.systemVersion.UTF8String ?: "", TARGET_OS_SIMULATOR != 0};
+#else
+    const NSOperatingSystemVersion version = NSProcessInfo.processInfo.operatingSystemVersion;
+    std::string text = std::to_string(version.majorVersion) + "." + std::to_string(version.minorVersion);
+    if (version.patchVersion != 0) text += "." + std::to_string(version.patchVersion);
+    return {"desktop", "macOS", text, false};
+#endif
+}
+
 #if TARGET_OS_IPHONE
 
 void quitApp() { throw std::runtime_error("crossbind: an iOS app does not quit itself: the system ends it"); }

@@ -24,6 +24,23 @@ export declare const app: {
     launchArgs(): Promise<Launch>;
 };
 
+/** Where the app runs, as its host tells the page before the page's own scripts run; the same through the app's run. */
+export interface Device {
+    /** The platform the app is built for. */
+    readonly platform: 'macos' | 'windows' | 'linux' | 'ios' | 'android';
+    /** The arch the app's process runs as. */
+    readonly arch: 'arm64' | 'x64';
+    /** What the device is to its user as the app starts: a phone; a tablet, an iPad or an Android device whose screen's shorter side has 600dp; or a desktop, a computer, a Chromebook or a Mac that runs an iOS app. */
+    readonly formFactor: 'phone' | 'tablet' | 'desktop';
+    /** The system's name and version, as its maker numbers it: iOS or iPadOS 18.4, Android 15 with its API level, macOS 26.1, Windows 10.0.26100, or a Linux distribution's, as Ubuntu 24.04, else its kernel's release. */
+    readonly os: { readonly name: string; readonly version: string; readonly apiLevel?: number };
+    /** Whether the iOS Simulator or an Android emulator runs the app. */
+    readonly isVirtual: boolean;
+}
+
+/** Where the app runs, read at once, as the page starts; reading it outside an app throws. */
+export declare const device: Device;
+
 /** What windows.set() changes of an open window: sizes and places in logical pixels, a page's size without the frame, and x and y the frame's place from the top left of the main screen, given together. A limit of 0 takes it away. */
 export interface WindowChanges {
     title?: string;
