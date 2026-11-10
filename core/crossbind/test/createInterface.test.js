@@ -500,6 +500,32 @@ describe('a dependency header under a path with regex characters', () => {
     });
 });
 
+// A dependency's include root comes from the target that binds its header. For a target the dependency has no build for,
+// the header is included by its file name alone, which a case-insensitive disk can resolve to another header (gdal3.js's
+// Gdal.h to GDAL's gdal.h).
+describe('a dependency header bound for another target', () => {
+    test('is included by its path under the include root of the target it binds for', async () => {
+        const { run, createBridgeFile } = await importFresh();
+        const base = upath.normalize(work);
+        const include = upath.join(base, 'deps', 'libfixture', 'prebuilt', 'include');
+        fs.mkdirSync(upath.join(include, 'sub'), { recursive: true });
+        const dependencyHeader = upath.join(include, 'sub', 'lib.h');
+        fs.writeFileSync(dependencyHeader, 'int one();\n');
+        holder.config.paths.base = base;
+        holder.config.dependencyParameters.getCmakeDependsPathAndName = (target) => ({
+            pathsOfCmakeDepends: target.platform === 'ios' ? [upath.join(base, 'deps', 'libfixture')] : [],
+        });
+        // The app takes the module, so the header binds every function for either target.
+        fs.writeFileSync(path.join(work, 'src', 'main.js'), "import { initNative } from '../deps/libfixture/prebuilt/include/sub/lib.h';\n");
+
+        createBridgeFile(dependencyHeader, { platform: 'wasm', path: 'wasm-wasm32-st-release' });
+        createBridgeFile(dependencyHeader, { platform: 'ios', arch: 'iphonesimulator', path: 'ios-iphonesimulator-mt-release' });
+
+        expect(fs.readFileSync(cachedInterface(dependencyHeader), 'utf8')).toContain('%include "sub/lib.h"');
+        expect(swigRuns(run)).toHaveLength(2);
+    });
+});
+
 // libpng installs its headers in include/ and again in include/libpng16/.
 describe('a dependency header installed twice under one include root', () => {
     const target = { platform: 'wasm', path: 'wasm-wasm32-st-release' };
