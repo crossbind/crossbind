@@ -130,6 +130,16 @@ setInterval(() => {}, 1000);
         expect(status).toBe(3);
     });
 
+    // A workspace can map vite to a package of Vite's API alone, as vite-plus maps it to vite-plus-core.
+    test("names what the project's vite resolves to when that has no vite command", () => {
+        fs.writeFileSync(path.join(dir, 'node_modules', 'vite', 'package.json'), JSON.stringify({ name: '@voidzero-dev/vite-plus-core', version: '0.1.24' }));
+
+        const { status, stderr } = crossbindWith(UNSET, 'app', 'build', '-p', 'linux');
+
+        expect(status).toBe(1);
+        expect(stderr).toContain("the project's vite resolves to @voidzero-dev/vite-plus-core 0.1.24, which has none");
+    });
+
     test('takes the platform from CROSSBIND_APP_PLATFORM without -p', () => {
         const { stdout } = crossbindWith({ ...UNSET, CROSSBIND_APP_PLATFORM: 'ios' }, 'app', 'dev', '--port', '3000');
 

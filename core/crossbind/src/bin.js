@@ -113,12 +113,18 @@ function declaredSbomPath(projectDir) {
 const APP_PLATFORMS = ['android', 'ios', 'linux', 'macos', 'windows'];
 
 function projectVite() {
+    let manifestPath;
     try {
-        const manifest = createRequire(`${state.config.paths.project}/package.json`).resolve('vite/package.json');
-        return path.join(path.dirname(manifest), JSON.parse(fs.readFileSync(manifest, 'utf8')).bin.vite);
+        manifestPath = createRequire(`${state.config.paths.project}/package.json`).resolve('vite/package.json');
     } catch {
         throw new Error("crossbind: crossbind app builds the app's page with the project's Vite, which the project does not have. Add vite and @crossbind/plugin-vite to it, as the desktop-app template has them.");
     }
+    // A workspace can map vite to a package of Vite's API alone.
+    const { name, version, bin } = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+    if (!bin?.vite) {
+        throw new Error(`crossbind: crossbind app runs the vite command, and the project's vite resolves to ${name} ${version}, which has none. Have vite resolve to Vite itself for the project, with an override where its workspace maps vite to another package.`);
+    }
+    return path.join(path.dirname(manifestPath), bin.vite);
 }
 
 // The project's Vite, as `crossbind app dev`, `build` and `publish` run it, and its exit code once it ends. A signal sent
