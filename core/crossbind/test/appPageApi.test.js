@@ -32,7 +32,7 @@ describe("crossbind/app as an app's page imports it", () => {
     });
 
     test('leaves crossbind/app/core with none of the functions of an extension', () => {
-        expect(Object.keys(coreApi).sort()).toEqual(['app', 'checkedOptions', 'events', 'invoke', 'routeUrl', 'windows']);
+        expect(Object.keys(coreApi).sort()).toEqual(['app', 'checkedOptions', 'device', 'events', 'invoke', 'routeUrl', 'windows']);
         expect(Object.keys(coreApi.app).sort()).toEqual(['launchArgs', 'paths', 'quit', 'relaunch', 'requestQuit']);
     });
 });

@@ -34,6 +34,20 @@ bool exists(const std::string &path) { return GetFileAttributesW(wide(path).c_st
 
 }  // namespace
 
+// Windows's own numbers, as 10.0.26100: GetVersionEx gives an app the version its manifest names, not the system's.
+System appSystem() {
+    using GetVersion = LONG(WINAPI *)(PRTL_OSVERSIONINFOW);
+    const HMODULE ntdll = GetModuleHandleW(L"ntdll.dll");
+    const auto getVersion = ntdll ? reinterpret_cast<GetVersion>(reinterpret_cast<void *>(GetProcAddress(ntdll, "RtlGetVersion"))) : nullptr;
+    RTL_OSVERSIONINFOW info{};
+    info.dwOSVersionInfoSize = sizeof info;
+    std::string version;
+    if (getVersion && getVersion(&info) == 0) {
+        version = std::to_string(info.dwMajorVersion) + "." + std::to_string(info.dwMinorVersion) + "." + std::to_string(info.dwBuildNumber);
+    }
+    return {"desktop", "Windows", version, false};
+}
+
 // What the app keeps roams with its user, as Windows apps do; its cache and logs stay on the machine.
 crossbind::app::Paths appPaths() {
     const std::string id = CROSSBIND_APP_ID;

@@ -48,6 +48,18 @@ void installReplyChannel(void *webView, const char *name, MessageHandler handler
 void forwardConsole(void *webView);
 // Runs a script in the top frame of every page, before the page's own.
 void addTopFrameScript(void *webView, const std::string &source);
+
+// What crossbind/app's device tells the page beside the platform and arch the host is built for: what the device is to
+// its user, phone, tablet or desktop; its system's name and version; and whether a simulator or emulator runs the app.
+struct System {
+    std::string formFactor;
+    std::string osName;
+    std::string osVersion;
+    bool isVirtual = false;
+};
+
+// Called on the main thread.
+System appSystem();
 // Serves <scheme>:// requests: on macOS of the webview made from this configuration, on Linux of this web view.
 // respond() may be called from any thread.
 void registerSchemeHandler(void *target, const char *scheme, SchemeHandler handler);

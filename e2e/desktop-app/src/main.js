@@ -1,7 +1,7 @@
 // The conformance suite inside an app: the page reaches the module the app's host runs as a worker-backed web build
 // reaches its worker, and the host runs embind-jsi as React Native does.
 import { runConformance } from '@crossbind/conformance/spec/run.mjs';
-import { app as host, events, invoke, menu, notification, routeUrl, shell, tray, updater, windows } from 'crossbind/app';
+import { app as host, device, events, invoke, menu, notification, routeUrl, shell, tray, updater, windows } from 'crossbind/app';
 import * as clipboard from '@crossbind/extension-clipboard';
 // Constants bind only for the names imported here; the header also defines one no leg imports.
 import {
@@ -352,6 +352,23 @@ async function checkTray(isDesktop) {
     }
     const removed = await tray.remove().then(() => 'removed', (error) => error.message);
     if (removed !== 'removed') throw new Error(`tray.remove() failed: ${removed}`);
+}
+
+// Where the app runs, as its host tells the page before its own scripts: the platform the build is for, which the page's
+// own reading of its webview agrees with, an arch the app builds for, a desktop on the desktop, the system's name and
+// version, and all of it frozen.
+function checkDevice(isDesktop, isAndroid) {
+    const agent = navigator.userAgent;
+    const seen = isAndroid ? 'android' : !isDesktop ? 'ios' : agent.includes('Macintosh') ? 'macos' : agent.includes('Windows') ? 'windows' : 'linux';
+    const { platform, arch, formFactor, os, isVirtual } = device;
+    if (platform !== seen || platform !== import.meta.env.CROSSBIND_APP_PLATFORM) {
+        throw new Error(`device.platform is ${platform}, where the build is for ${import.meta.env.CROSSBIND_APP_PLATFORM} and the webview is ${seen}'s`);
+    }
+    if (!['arm64', 'x64'].includes(arch)) throw new Error(`device.arch is ${arch}`);
+    if (!(isDesktop ? ['desktop'] : ['phone', 'tablet', 'desktop']).includes(formFactor)) throw new Error(`device.formFactor is ${formFactor} on ${platform}`);
+    if (!os.name || !os.version || (isAndroid && !(os.apiLevel >= 33))) throw new Error(`device.os is ${JSON.stringify(os)}`);
+    if (typeof isVirtual !== 'boolean' || (isDesktop && isVirtual)) throw new Error(`device.isVirtual is ${isVirtual} on ${platform}`);
+    if (!Object.isFrozen(device) || !Object.isFrozen(os)) throw new Error('device can change');
 }
 
 // The clipboard extension's text reads back as the page wrote it, and the host refuses no text from a page that went
@@ -924,6 +941,7 @@ else initNative().then(async (m) => {
             const answer = await Promise.race([read, new Promise((resolve) => { setTimeout(() => resolve('waited'), 3000); })]);
             if (answer === 'read') throw new Error('the page read the clipboard without its user\'s gesture');
         }
+        checkDevice(isDesktop, isAndroid);
         await checkClipboard(!isAndroid && !isDesktop);
         await checkPageRequests();
         await checkNavigation(isDesktop, isAndroid);

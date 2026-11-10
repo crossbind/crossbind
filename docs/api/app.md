@@ -80,6 +80,37 @@ They need `RUNNER=DOCKER_RUN` or `DOCKER_EXEC`, and another runner stops the bui
 `initNative({ env })` sets environment variables in the app's process. The build's env is the app's own, and a variable
 the process already has keeps its value.
 
+## The device
+
+`device` from `crossbind/app` tells the page where the app runs, before the page's own scripts run, so the page reads it
+as it starts, without `initNative()`. It stays the same through the app's run, and is frozen.
+
+```js
+import { device } from 'crossbind/app';
+
+if (device.formFactor === 'phone') mountPhoneLayout();
+```
+
+| Field | What it holds |
+|---|---|
+| `platform` | The platform the app is built for: `macos`, `windows`, `linux`, `ios` or `android` |
+| `arch` | The arch the app's process runs as: `arm64` or `x64` |
+| `formFactor` | What the device is to its user as the app starts: `phone`; `tablet`, an iPad or an Android device whose screen's shorter side has 600dp, as Android's own `sw600dp` resources take it; or `desktop`, a computer, a Chromebook, or a Mac that runs an iPhone or iPad app |
+| `os` | `{ name, version }` of the system, as its maker numbers it: `iOS` or `iPadOS` and `18.4`, `Android` and `15` with `apiLevel` `35`, `macOS` and `26.1`, `Windows` and `10.0.26100`, or a Linux distribution's from `/etc/os-release`, as `Ubuntu` and `24.04`, else `Linux` and the kernel's release |
+| `isVirtual` | Whether the iOS Simulator or an Android emulator runs the app |
+
+A foldable or a Chromebook keeps the `formFactor` it started with when it unfolds or resizes, so a page lays itself out
+by its window's size, with CSS, as on the web. Reading `device` outside an app throws, as the rest of `crossbind/app`
+does.
+
+The page also has the platform at build time: crossbind's Vite plugin sets `import.meta.env.CROSSBIND_APP_PLATFORM` to
+the platform `-p` names, else this machine's desktop, so a build leaves out the code of the other platforms. The page's
+types have it with `/// <reference types="@crossbind/core-app-host/app" />`.
+
+```js
+if (import.meta.env.CROSSBIND_APP_PLATFORM === 'ios') registerSwipeBack();
+```
+
 ## The window
 
 `app.name` in `crossbind.config.js` is the name the app shows: its window's title, its macOS menus, its Windows file
@@ -1780,6 +1811,9 @@ writes to logcat, under the tag `Crossbind`: the URL only on `localhost`, and th
 - The two colors of `backgroundColor` have been measured in the iOS Simulator and on an Android emulator: the launch
   screen of each appearance, and the page's background and the system bars' icons as the system switches while the app
   runs.
+- `device` has been measured on macOS, in the iOS Simulator as an iPhone and as an iPad, and on an Android emulator as
+  a phone and, with its screen made larger, as a tablet. The Linux and Windows hosts build with it; neither has run it
+  yet.
 - The tray and notifications: the conformance runs on Windows click the icon, an item of its menu and the notification
   with the messages Windows sends the app, and those on Linux run against a tray and a notification server of the run's
   own, which read the icon and its menu as KDE's tray does, and click them. On macOS the runs set the icon and take it

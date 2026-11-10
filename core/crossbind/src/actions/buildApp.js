@@ -381,6 +381,10 @@ const shippedFiles = () => new Set(Object.values(readAppOutputs()).filter(Array.
 // The command line's names of the desktop platforms.
 export const DESKTOP_PLATFORMS = { darwin: 'macos', linux: 'linux', win32: 'windows' };
 
+// The platform an app is built for, which its page reads as import.meta.env.CROSSBIND_APP_PLATFORM: CROSSBIND_APP_PLATFORM,
+// else this machine's desktop.
+export const appPlatform = (env = process.env) => env.CROSSBIND_APP_PLATFORM || DESKTOP_PLATFORMS[process.platform];
+
 // Forgets what the builds wrote, as a publish's own build writes it anew, but for the installers' files, which a folder the
 // bundler kept holds still, for the page to leave out.
 export function clearAppOutputs() {

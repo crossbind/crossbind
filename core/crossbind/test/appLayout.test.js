@@ -35,7 +35,9 @@ const inWindowsImage = vi.fn((command, cwd) => writeMade(command, cwd));
 const signWindows = vi.fn();
 vi.mock('../src/actions/windowsSigning.js', async (importOriginal) => ({ ...await importOriginal(), inWindowsImage, signWindows }));
 
-const { appLayout, appOutputName, appOutputOf, appTargetParams, clearAppOutputs, publishApp } = await import('../src/actions/buildApp.js');
+const {
+    appLayout, appOutputName, appOutputOf, appPlatform, appTargetParams, clearAppOutputs, publishApp,
+} = await import('../src/actions/buildApp.js');
 const { shipApp } = await import('../src/actions/appInstaller.js');
 const { newUpdaterKey } = await import('../../../extensions/updater/src/update.js');
 
@@ -79,6 +81,11 @@ describe('the app a bundler builds', () => {
 
     test('refuses a platform no app builds for', () => {
         expect(() => appTargetParams({}, { CROSSBIND_APP_PLATFORM: 'tvos' })).toThrow('CROSSBIND_APP_PLATFORM=tvos');
+    });
+
+    test("tells its page the platform it is for: CROSSBIND_APP_PLATFORM's, else this machine's desktop", () => {
+        expect(appPlatform({ CROSSBIND_APP_PLATFORM: 'ios' })).toBe('ios');
+        expect(appPlatform({})).toBe({ darwin: 'macos', linux: 'linux', win32: 'windows' }[process.platform]);
     });
 
     test.runIf(process.platform === 'darwin')('is an iOS app for both SDKs, or during development for the Simulator, or for devices where CROSSBIND_APP_DEVICE names one', () => {

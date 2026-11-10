@@ -109,6 +109,7 @@ const { data, cache, logs } = await app.paths();`,
             type: 'ul',
             items: [
                 '**Files:** open and message dialogs everywhere, save dialogs on the desktop, and the app\'s own data, cache and log folders.',
+                '**Where it runs:** `device` tells the page its platform, arch, whether the device is a phone, a tablet or a desktop, and the system\'s version, as the page starts.',
                 '**The shell:** open a link in the default browser, open a file in its default app where `app.openPath` allows it, show a file in its folder, move one to the trash.',
                 '**Menus, a tray icon and notifications** on the desktop. Their clicks reach the page as events, and so do the events the app\'s C++ emits.',
                 '**Links and one instance:** `app.urlSchemes` opens the app from its own links, and `app.singleInstance` hands a second launch to the app that runs.',

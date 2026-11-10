@@ -24,7 +24,7 @@
     {
       "source": "docs/api/app.md",
       "output": "api/app.md",
-      "sha256": "913a73085e41eea214192f769f71557a448ca910d9c6fb3b5a846e8657d2da0f"
+      "sha256": "1caa2ed399fa3e89be94d5db094b1d58e50110ab56d92bd49552198361814e45"
     },
     {
       "source": "docs/api/build-state.md",

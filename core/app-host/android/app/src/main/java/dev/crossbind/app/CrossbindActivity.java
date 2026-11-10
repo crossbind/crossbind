@@ -14,6 +14,7 @@ import android.graphics.Color;
 import android.graphics.Insets;
 import android.graphics.drawable.ColorDrawable;
 import android.net.Uri;
+import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.HandlerThread;
@@ -161,6 +162,8 @@ public class CrossbindActivity extends Activity implements ExtensionHost {
             + "}";
     // The relative luminance of a color that black and white contrast with as much.
     private static final float EVEN_CONTRAST = 0.179f;
+    // The shorter side a tablet's screen has at least, as Android's own sw600dp resources take it.
+    private static final int TABLET_WIDTH_DP = 600;
     private static final int PERMISSIONS_REQUEST = 1;
     // Where the native code's calls of an extension's Java run, and the page's requests are answered.
     static final Handler MAIN = new Handler(Looper.getMainLooper());
@@ -439,7 +442,7 @@ public class CrossbindActivity extends Activity implements ExtensionHost {
         if (Color.alpha(background) != 0) webView.setBackgroundColor(background);
         webView.getSettings().setJavaScriptEnabled(true);
         webView.getSettings().setDomStorageEnabled(true);
-        WebViewCompat.addDocumentStartJavaScript(webView, topFrameScript(token), origins);
+        WebViewCompat.addDocumentStartJavaScript(webView, topFrameScript(token, deviceJson()), origins);
         WebViewCompat.addDocumentStartJavaScript(webView, DOWNLOAD_SCRIPT, origins);
         WebViewCompat.addWebMessageListener(webView, READY, origins, (view, message, origin, isMainFrame, reply) -> {
             if (isMainFrame) handOverPort(origin, message.getData());
@@ -878,14 +881,16 @@ public class CrossbindActivity extends Activity implements ExtensionHost {
     }
 
     // Runs before the page's own scripts in every frame of the app's origins, and in the top frame alone gives the page
-    // its token and the port its crossbind.js waits for: the one that comes with the token, which no other frame knows,
-    // and with the ask of this page, which a port handed over for the page before cannot carry. The page asks for the
-    // port once it waits for it, as a port handed over before would find no one.
-    private static String topFrameScript(String token) {
+    // its token, where the app runs and the port its crossbind.js waits for: the one that comes with the token, which no
+    // other frame knows, and with the ask of this page, which a port handed over for the page before cannot carry. The
+    // page asks for the port once it waits for it, as a port handed over before would find no one.
+    private static String topFrameScript(String token, String device) {
         return "if (window.top === window) {"
                 + " const token = '" + token + "';"
                 + " const ask = crypto.randomUUID();"
                 + " Object.defineProperty(globalThis, '__crossbind_token', { value: token });"
+                + " Object.defineProperty(globalThis, '__crossbind_device', { value: ((device) => (Object.freeze(device.os), Object.freeze(device)))("
+                + device + ") });"
                 + " Object.defineProperty(globalThis, '__crossbind_port', { value: new Promise((resolve) => {"
                 + "  addEventListener('message', function handshake(event) {"
                 + "   if (event.data !== 'crossbind:' + token + ':' + ask || !event.ports[0]) return;"
@@ -895,6 +900,26 @@ public class CrossbindActivity extends Activity implements ExtensionHost {
                 + "  " + READY + ".postMessage(ask);"
                 + " }) });"
                 + "}";
+    }
+
+    // Where the app runs, as crossbind/app's device reads it from the page's start: a ChromeOS device a desktop, and one
+    // whose screen's shorter side has TABLET_WIDTH_DP a tablet, as the activity starts.
+    private String deviceJson() {
+        String arch = System.getProperty("os.arch", "");
+        boolean isDesktop = getPackageManager().hasSystemFeature(PackageManager.FEATURE_PC);
+        boolean isTablet = getResources().getConfiguration().smallestScreenWidthDp >= TABLET_WIDTH_DP;
+        try {
+            JSONObject os = new JSONObject().put("name", "Android").put("version", Build.VERSION.RELEASE).put("apiLevel", Build.VERSION.SDK_INT);
+            return new JSONObject()
+                    .put("platform", "android")
+                    .put("arch", "aarch64".equals(arch) ? "arm64" : "x86_64".equals(arch) ? "x64" : arch)
+                    .put("formFactor", isDesktop ? "desktop" : isTablet ? "tablet" : "phone")
+                    .put("os", os)
+                    .put("isVirtual", Build.HARDWARE.equals("ranchu") || Build.HARDWARE.equals("goldfish"))
+                    .toString();
+        } catch (JSONException impossible) {
+            throw new IllegalStateException(impossible);
+        }
     }
 
     private static String originOf(Uri url) {

@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, test, vi } from 'vitest';
 import {
-    app, dialog, events, invoke, menu, notification, routeUrl, shell, tray, updater, windows,
+    app, device, dialog, events, invoke, menu, notification, routeUrl, shell, tray, updater, windows,
 } from '../../app-host/js/app.js';
 
 // The host of an app, as page.js hands it the page's calls.
@@ -14,7 +14,33 @@ const inApp = () => {
 afterEach(() => {
     delete globalThis.Crossbind;
     delete globalThis.__crossbind_token;
+    delete globalThis.__crossbind_device;
     host.mockClear();
+});
+
+describe("crossbind/app's device", () => {
+    // As an iPad's host defines it before the page's own scripts run.
+    const IPAD = { platform: 'ios', arch: 'arm64', formFactor: 'tablet', os: Object.freeze({ name: 'iPadOS', version: '18.4' }), isVirtual: true };
+
+    test('is where the app runs, as its host tells the page, at once and without initNative()', () => {
+        globalThis.__crossbind_token = 'token';
+        globalThis.__crossbind_device = Object.freeze({ ...IPAD });
+
+        expect({ ...device }).toEqual(IPAD);
+        expect(device.formFactor).toBe('tablet');
+        expect(JSON.parse(JSON.stringify(device))).toEqual(IPAD);
+        expect(Object.isFrozen(device)).toBe(true);
+    });
+
+    test('throws outside an app, naming what makes one', () => {
+        expect(() => device.platform).toThrow("crossbind: device.platform works in an app alone, whose crossbind.config.js sets target.runtimeEnv: 'app'");
+    });
+
+    test('throws with a host older than crossbind/app, naming the package to update', () => {
+        globalThis.__crossbind_token = 'token';
+
+        expect(() => device.arch).toThrow('update @crossbind/core-app-host to read device.arch');
+    });
 });
 
 describe("crossbind/app, an app's own functions", () => {
