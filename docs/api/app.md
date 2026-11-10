@@ -1794,7 +1794,9 @@ writes to logcat, under the tag `Crossbind`: the URL only on `localhost`, and th
 - Android's WebView hands the app neither a download link's name nor its bytes. So the host keeps, in the page's top
   frame, the `Blob` behind each `blob:` URL and each download link's name as it is followed, which a page's CSP does
   not hinder, and holds the download in memory while its user picks where it goes. A download that is no link of the
-  page's takes its name from its address.
+  page's takes its name from its address. The save picker gets the type of the name's extension, or none Android
+  knows, as it gives a name the extension of its type where the two differ: the `text/plain` WebView guesses from a
+  CSV's bytes would make `report.csv` into `report.csv.txt`. A name without an extension takes WebView's type.
 - Downloads have been measured in the iOS Simulator and on an Android emulator, under a CSP of `default-src 'self'`:
   a `Blob`, every byte value, a `data:` URL, a non-ASCII name, a `blob:` URL the page revoked at once, a link tapped,
   one clicked outside the document, three in a row and a picker cancelled. On macOS a `Blob` has been. WebView2 and
