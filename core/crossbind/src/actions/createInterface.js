@@ -159,10 +159,11 @@ function createInterfaceFile(headerOrModuleFilePath, target, sourceDir, { consta
     const filePathWithoutExt = headerOrModuleFilePath.match(/^(.*)\..+?$/)?.[1];
     const interfaceFile = !isModule && filePathWithoutExt ? `${filePathWithoutExt}.i` : null;
     // A prelude or ignored-declaration change in the owning package, a completed class moving to another header, an
-    // interface the package ships beside the header changing or going away, another imported name, or Conan packages
-    // its includes may reach being staged or moving to another version must regenerate the interface as well.
+    // interface the package ships beside the header changing or going away, another imported name, Conan packages
+    // its includes may reach being staged or moving to another version, or the header included by another path, as
+    // another target finds it, must regenerate the interface as well.
     const fileHash = [
-        INTERFACE_FORMAT, getFileHash(headerOrModuleFilePath), ...prelude,
+        INTERFACE_FORMAT, getFileHash(headerOrModuleFilePath), ...(headerPath ? [`include:${headerPath}`] : []), ...prelude,
         ...(ignored.length ? [`ignored:${ignored.join(',')}`] : []), ...(completing.length ? [`completing:${completing.join(',')}`] : []),
         ...(preamble.length ? [`preamble:${preamble.join('\n')}`] : []),
         ...(interfaceFile && fs.existsSync(interfaceFile) ? [`shipped:${getFileHash(interfaceFile)}`] : []),
