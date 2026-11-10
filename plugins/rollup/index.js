@@ -69,7 +69,7 @@ const rollupCrossbindPlugin = (options, bridges = []) => {
                 return null;
             }
 
-            const bridgeFile = createBridgeFile(path);
+            const bridgeFile = createBridgeFile(path, buildTargetRelease);
             // A header transforms again after each source edit; a repeated entry would change the bridge lib's fingerprint.
             if (!bridges.includes(bridgeFile)) bridges.push(bridgeFile);
             // The names the app imports decide what a header binds, so watch mode transforms it again after any source edit.
