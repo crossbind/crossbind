@@ -411,6 +411,8 @@ describe("crossbind/app's windows", () => {
         expect(host).toHaveBeenLastCalledWith('windows.open', expect.objectContaining({ path: '/settings.html?tab=2', parent: 1, modal: true }));
         await windows.open();
         expect(host).toHaveBeenLastCalledWith('windows.open', {});
+        await windows.open({ titleBar: 'hidden' });
+        expect(host).toHaveBeenLastCalledWith('windows.open', { titleBar: 'hidden' });
         await windows.set({ title: 'Report.txt' });
         expect(host).toHaveBeenLastCalledWith('windows.set', { title: 'Report.txt' });
         await windows.set(2, { width: 800, height: 600, center: true, maxWidth: 0 });
@@ -449,6 +451,8 @@ describe("crossbind/app's windows", () => {
         await expect(windows.open({ parent: 0 })).rejects.toThrow("windows.open's parent is no window's id");
         await expect(windows.open({ backgroundColor: 'red' })).rejects.toThrow('is no color of the form #rrggbb');
         await expect(windows.open({ frame: 'no' })).rejects.toThrow("windows.open's frame is no boolean");
+        await expect(windows.open({ titleBar: 'none' })).rejects.toThrow("windows.open's titleBar is neither 'visible' nor 'hidden'");
+        await expect(windows.open({ frame: false, titleBar: 'hidden' })).rejects.toThrow('windows.open hides the title bar of a window with a frame alone');
         await expect(windows.set(1, { path: '/x.html' })).rejects.toThrow('windows.set takes title, width');
         await expect(windows.set({ width: -1 })).rejects.toThrow("windows.set's width is no whole number");
         await expect(windows.focus(0)).rejects.toThrow('windows.focus takes the id of a window');

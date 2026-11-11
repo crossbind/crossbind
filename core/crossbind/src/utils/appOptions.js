@@ -2,7 +2,8 @@
 // its page opens files.
 import { carriedPath } from './appFiles.js';
 
-const WINDOW_DEFAULTS = { width: 1024, height: 768, minWidth: 0, minHeight: 0, maxWidth: 0, maxHeight: 0, resizable: true, fullscreen: false, backgroundColor: null };
+const WINDOW_DEFAULTS = { width: 1024, height: 768, minWidth: 0, minHeight: 0, maxWidth: 0, maxHeight: 0, resizable: true, fullscreen: false, backgroundColor: null, titleBar: 'visible' };
+const TITLE_BARS = ['visible', 'hidden'];
 // Larger than any display, and far within the int a host takes a size as.
 const MAX_WINDOW_SIZE = 16384;
 // Windows keeps each of a file version's four numbers in 16 bits.
@@ -82,8 +83,9 @@ export function appCategory(config) {
     return { darwin: `public.app-category.${category}`, linux: APP_CATEGORIES[category] };
 }
 
-// The desktop window: the size of its page, the least it shrinks to and the most it grows to, whether it resizes and
-// whether it opens full screen. Its backgroundColor, which a phone takes as well, is appBackgroundColor's.
+// The desktop window: the size of its page, the least it shrinks to and the most it grows to, whether it resizes,
+// whether it opens full screen and whether a macOS page lies under its title bar. Its backgroundColor, which a phone
+// takes as well, is appBackgroundColor's.
 export function appWindow(config) {
     const window = config.app.window ?? {};
     const keys = Object.keys(WINDOW_DEFAULTS).join(', ');
@@ -102,6 +104,9 @@ export function appWindow(config) {
     ['resizable', 'fullscreen'].forEach((key) => {
         if (typeof options[key] !== 'boolean') throw new Error(`crossbind: app.window.${key} ${JSON.stringify(options[key])} is no boolean: set it to true or false.`);
     });
+    if (!TITLE_BARS.includes(options.titleBar)) {
+        throw new Error(`crossbind: app.window.titleBar ${JSON.stringify(options.titleBar)} is neither 'visible' nor 'hidden': 'hidden' lays a macOS app's page under its title bar, whose buttons stay.`);
+    }
     if (!options.resizable && (options.minWidth || options.minHeight || options.maxWidth || options.maxHeight)) {
         throw new Error('crossbind: app.window.minWidth, minHeight, maxWidth and maxHeight limit a window that resizes: drop them, or set app.window.resizable to true.');
     }
@@ -326,8 +331,8 @@ export function appInstallers(config) {
     return installers;
 }
 
-// A desktop host's window: its page's size and limits, whether it resizes and whether it opens full screen. A maximum of
-// one side alone leaves the other as large as any display.
+// A desktop host's window: its page's size and limits, whether it resizes, whether it opens full screen and whether its
+// page lies under its title bar. A maximum of one side alone leaves the other as large as any display.
 function windowDefines(window) {
     const most = window.maxWidth || window.maxHeight ? [
         `#define CROSSBIND_APP_WINDOW_MAX_WIDTH ${window.maxWidth || MAX_WINDOW_SIZE}`,
@@ -341,6 +346,7 @@ function windowDefines(window) {
         `#define CROSSBIND_APP_WINDOW_RESIZABLE ${window.resizable ? 1 : 0}`,
         ...most,
         ...(window.fullscreen ? ['#define CROSSBIND_APP_WINDOW_FULLSCREEN 1'] : []),
+        ...(window.titleBar === 'hidden' ? ['#define CROSSBIND_APP_WINDOW_TITLE_BAR_HIDDEN 1'] : []),
     ];
 }
 

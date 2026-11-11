@@ -172,8 +172,10 @@ void startWindows() {}
 // The library makes the window, which it sizes anew at each scale.
 void *makeWindow(const app::WindowOptions &, void *, std::vector<std::string> &) { return nullptr; }
 
-void readyWindow(void *native, void *, uint64_t id, const app::WindowOptions &options, void *parent, std::vector<std::string> &) {
+void readyWindow(void *native, void *, uint64_t id, const app::WindowOptions &options, void *parent, std::vector<std::string> &ignored) {
     HWND window = static_cast<HWND>(native);
+    // A page under the title bar's buttons is macOS's alone; Windows keeps its title bar.
+    if (options.titleBarHidden) ignored.emplace_back("titleBar");
     Win32Window &state = made[window];
     state.id = id;
     state.minWidth = options.minWidth;

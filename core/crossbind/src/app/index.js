@@ -39,8 +39,9 @@ const WINDOW_SHARED = {
 };
 const WINDOW_SET = { ...WINDOW_SHARED, center: 'boolean' };
 const WINDOW_OPEN = {
-    ...WINDOW_SHARED, path: 'string', name: 'string', backgroundColor: 'string', frame: 'boolean', parent: 'number', modal: 'boolean',
+    ...WINDOW_SHARED, path: 'string', name: 'string', backgroundColor: 'string', frame: 'boolean', titleBar: 'string', parent: 'number', modal: 'boolean',
 };
+const TITLE_BARS = ['visible', 'hidden'];
 const MAX_WINDOW_SIZE = 16384;
 const MAX_WINDOW_PLACE = 1000000;
 // The size a window opens at without one.
@@ -70,6 +71,10 @@ function checkedWindow(name, options, kinds) {
         throw new TypeError(`crossbind: ${name}'s path ${JSON.stringify(path)} is no path of the app's own pages, as /settings.html is.`);
     }
     if (backgroundColor !== undefined && !COLOR.test(backgroundColor)) throw new TypeError(`crossbind: ${name}'s backgroundColor is no color of the form #rrggbb.`);
+    if (options.titleBar !== undefined && !TITLE_BARS.includes(options.titleBar)) throw new TypeError(`crossbind: ${name}'s titleBar is neither 'visible' nor 'hidden'.`);
+    if (options.frame === false && options.titleBar === 'hidden') {
+        throw new TypeError(`crossbind: ${name} hides the title bar of a window with a frame alone: drop titleBar, or frame: false.`);
+    }
     if (parent !== undefined && !isWindowId(parent)) throw new TypeError(`crossbind: ${name}'s parent is no window's id.`);
     if (options.modal && parent === undefined) throw new TypeError(`crossbind: ${name} opens a modal window above a parent: give it parent, the id of a window.`);
     if (name === 'windows.open') checkedLimits(options);

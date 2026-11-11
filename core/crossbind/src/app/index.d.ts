@@ -74,6 +74,8 @@ export interface WindowOptions extends Omit<WindowChanges, 'center' | 'minWidth'
     backgroundColor?: string;
     /** false opens a window without a title bar and its buttons, which the page moves with data-crossbind-drag or windows.startDrag(). */
     frame?: boolean;
+    /** 'hidden' lays a macOS window's page under its title bar, whose buttons stay at its top left, as app.window.titleBar does; Windows and Linux keep their title bar and list it in ignored. */
+    titleBar?: 'visible' | 'hidden';
     /** The id of the window it stays above, and closes with. */
     parent?: number;
     /** With a parent: a sheet of the parent's on macOS, and on Windows and Linux a window the parent takes no input under until it closes. */

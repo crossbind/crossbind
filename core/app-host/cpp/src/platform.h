@@ -142,6 +142,8 @@ struct WindowOptions {
     std::optional<int> y;
     bool alwaysOnTop = false;
     bool frame = true;
+    // A macOS page lies under the title bar, whose buttons stay; Windows and Linux keep their title bar.
+    bool titleBarHidden = false;
     uint64_t parent = 0;
     bool modal = false;
 };
