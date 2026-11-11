@@ -16,12 +16,12 @@ vi.mock('../src/state/loadConfig.js', () => ({
 
 let tmpDir;
 
-const loadStateModule = async (cargoDependencies, project = undefined) => {
+const loadStateModule = async (crates, project = undefined) => {
     h.config = {
         system: {},
         general: { name: 'app' },
         paths: { cache: tmpDir, project },
-        cargoDependencies,
+        packages: { cargo: crates },
         allDependencies: [],
     };
     vi.resetModules();

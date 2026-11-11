@@ -14,6 +14,8 @@ export const sourcePackageDir = (stageDir, name) => `${stageDir}/packages/${name
 // .crossbind/<name>. Where a project declares its packages, as a message names it, and what it declares there.
 export const declarationOf = (source) => `packages.${source}`;
 export const dependenciesOf = (config, source) => config.packages?.[source] ?? {};
+// The crates a project declares: cargo is the core's own, declared beside the sources' packages.
+export const cratesOf = (config) => dependenciesOf(config, 'cargo');
 
 // The source whose scheme a specifier opens with, as conan:zlib/zlib.h names conan.
 export const sourceOfImport = (config, specifier) => (config.packageSources ?? []).find(({ name }) => specifier.startsWith(`${name}:`));

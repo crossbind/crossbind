@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import getDependLibs from './getDependLibs.js';
 import state from '../state/index.js';
 import buildAppRustCrates from '../utils/appRustCrates.js';
+import { cratesOf } from '../utils/packageSourceImport.js';
 
 // The archives of a final link (wasm, Node-API addon, native executable or app host) and which of them must
 // survive whole. keepFlag spells "keep this symbol" for the target's linker; a native executable
@@ -22,7 +23,7 @@ export default function getLinkInputs(target, { keepFlag, withBridge = true, bri
     const bridgeLibCandidates = builtLib(bridge);
     // App-local Rust surfaces (imported .rs files) arrive as ONE super staticlib; it is the
     // single fully-loaded Rust archive of the link (see the libstd rule below).
-    const appRustLibs = buildAppRustCrates(target, cache, state.config.cargoDependencies ?? {});
+    const appRustLibs = buildAppRustCrates(target, cache, cratesOf(state.config));
     const libs = [
         ...getDependLibs(target),
         ...appRustLibs,

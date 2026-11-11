@@ -44,7 +44,9 @@ export default async function loadConfig(configDir = process.cwd(), configName =
     const overrides = await loadJs(configDir, 'crossbind.overrides');
     const exclude = resolveExcludedNames(overrides);
     const seen = new Set();
-    const output = getFilledConfig(config, { isDepend: false, exclude, seen, replaces: overrides });
+    const output = getFilledConfig(config, {
+        isDepend: false, exclude, seen, replaces: overrides, file: `${configDir}/${configName}`,
+    });
     output.excludedDependencies = exclude;
 
     const build = await loadJs(configDir, 'crossbind.build');
@@ -126,7 +128,6 @@ export function getFilledConfig(config, options = { isDepend: false }) {
     const newConfig = {
         general: config.general || {},
         dependencies,
-        cargoDependencies: config.cargoDependencies || {},
         // 'sync' types the direct surface; 'promise' wraps every generated method return
         // for useWorker-style runtimes (constructors stay sync-typed: await new X()).
         dts: config.dts || 'sync',
@@ -213,10 +214,11 @@ export function getFilledConfig(config, options = { isDepend: false }) {
     const twice = newConfig.extensions.find(({ name }, i) => newConfig.extensions.findIndex((other) => other.name === name) !== i);
     if (twice) throw new Error(`crossbind: "extensions" lists two extensions named ${twice.name}.`);
 
-    // What the project declares of each package source, as packages.conan, as the source's own check takes it. A
-    // package installs nothing for the project that depends on it, so a dependency's own declarations are not read.
+    // What the project declares under packages: cargo's crates, and each package source's packages, as packages.conan,
+    // as the source's own check takes them. A package installs nothing for the project that depends on it, so a
+    // dependency's own declarations are not read.
     newConfig.packageSources = packageSourcesOf(newConfig.extensions);
-    newConfig.packages = checkedPackages(newConfig.packageSources, options.isDepend ? {} : config);
+    newConfig.packages = checkedPackages(newConfig.packageSources, options.isDepend ? {} : config, options.file);
 
     if (newConfig.target.runtime !== 'mt' && newConfig.allDependencies.some((d) => d?.target?.runtime === 'mt')) {
         newConfig.target.runtime = 'mt';

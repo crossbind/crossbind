@@ -86,7 +86,7 @@ test('writes the project the build reads: its sources, main.js and a config for 
     assert.equal(seen.main, "import { greet } from './native/greet.h';");
     assert.equal(seen.rust, 'pub fn f() {}');
     assert.match(seen.config, /@crossbind\/port-sqlite3-wasm\/crossbind\.config\.js/);
-    assert.match(seen.config, /^ {8}uuid: '/m);
+    assert.match(seen.config, /^ {4}packages: \{\n {8}cargo: \{\n {12}uuid: '/m);
     assert.ok(seen.argv.includes('--bind-imports'));
 });
 

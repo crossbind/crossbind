@@ -5,6 +5,7 @@ import loadJson from '../utils/loadJson.js';
 import state from '../state/index.js';
 import { parseSurface, createRustBridgeCrate, createCrateImportBridge } from '../utils/rustBridgeGen.js';
 import { parseCargoMarkerName } from '../utils/cargoImport.js';
+import { cratesOf } from '../utils/packageSourceImport.js';
 import { UNBOUND_MESSAGE } from '../assets/js-runtime/adapters/unboundMessage.js';
 
 // `base` is where the bundler serves the app from, as Vite's `base` names it; webpack's public path wins at run time.
@@ -62,7 +63,7 @@ export function getRustSymbols(rsFile) {
     // Marker under <cache>/rust-crates/: a direct crate import - the model comes from the
     // upstream crate's own source, and the bridge is synthesized against the cargo dependency.
     const { crateName, modulePath } = parseCargoMarkerName(path.basename(rsReal, '.rs'));
-    const cargoDeps = state.config.cargoDependencies ?? {};
+    const cargoDeps = cratesOf(state.config);
     if (Object.hasOwn(cargoDeps, crateName)
         && path.dirname(rsReal) === fs.realpathSync(path.join(state.config.paths.cache, 'rust-crates'))) {
         const { exports } = createCrateImportBridge({
@@ -92,7 +93,7 @@ export function getRustSymbols(rsFile) {
             projectPath: state.config.paths.project,
             dtsMode: state.config.dts,
             vectors,
-            cargoDependencies: state.config.cargoDependencies ?? {},
+            cargoDependencies: cratesOf(state.config),
             log: () => {},
         });
     }

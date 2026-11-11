@@ -48,7 +48,7 @@ describe('buildWasm link step', () => {
             general: { name: 'demo' },
             paths: { build: work, output: `${work}/out`, cli: `${work}/cli`, cache: `${work}/cache` },
             dependencyParameters: { getCmakeDepends: () => [] },
-            cargoDependencies: {},
+            packages: { cargo: {} },
             excludedDependencies: [],
         };
         for (const env of Object.keys(ENVIRONMENTS)) fs.writeFileSync(`${work}/demo.raw.${env}.js`, '');

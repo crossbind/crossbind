@@ -1011,10 +1011,11 @@ crossbind's, or a device's name on Windows. All that is the source's goes by it,
 | What a build staged, its logs and the editor's types | `.crossbind/conan/` |
 | Its store, which every project of the machine shares | `~/.crossbind/conan/`, and `~/.crossbind/conan-local/` where its tool runs on the machine itself |
 
-`packages` takes a source's packages under the source's name and no other name: one that is no source of the project
-stops the config as it loads, where a misspelt one would be left unread. So does `<name>Dependencies`, where `conan`'s
-packages were declared once, with where they are declared now. A dependency's own `packages` are not read: a package
-installs nothing for the project that depends on it.
+`packages` takes a source's packages under the source's name, beside the crates of crossbind's own `cargo`
+([rust.md](./rust.md)), and no other name: one that is neither stops the config as it loads, where a misspelt one would
+be left unread. So does `<name>Dependencies`, where `conan`'s packages and cargo's crates were declared once, with where
+they are declared now. A dependency's own `packages` are not read: a package installs nothing for the project that
+depends on it.
 
 ```js
 // crossbind.extension.js

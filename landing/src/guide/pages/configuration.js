@@ -35,12 +35,8 @@ export default {
                     "an array of other packages' configs, imported from a platform variant such as `@crossbind/port-*-wasm/crossbind.config.js`, one per platform you build. Transitive dependencies are flattened automatically.",
                 ],
                 [
-                    '`cargoDependencies`',
-                    'crates importable through `cargo:` - keys are crate names, values are Cargo dependency specs. See [Rust](/guide/rust/).',
-                ],
-                [
                     '`packages`',
-                    "packages of each package source, under the source's name: `packages.conan` holds what `conan:` imports. See [Conan](/guide/conan/).",
+                    'what the project takes from outside npm, under the name its imports open with. `packages.cargo` holds the crates `cargo:` imports - keys are crate names, values are Cargo dependency specs - and `packages.conan` what `conan:` imports. See [Rust](/guide/rust/) and [Conan](/guide/conan/).',
                 ],
             ],
         },
@@ -52,8 +48,10 @@ export default {
 export default {
     general: { name: 'my-geo-app' },
     dependencies: [gdal],
-    cargoDependencies: { uuid: '{ version = "1", features = ["v4"] }' },
-    packages: { conan: { zlib: '1.3.2' } },
+    packages: {
+        cargo: { uuid: '{ version = "1", features = ["v4"] }' },
+        conan: { zlib: '1.3.2' },
+    },
     paths: { config: import.meta.url },
 };`,
         },

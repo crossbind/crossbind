@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import state from '../state/index.js';
 import { parseCargoImport, writeCargoMarker } from '../utils/cargoImport.js';
-import { sourceOfImport, resolveSourceHeader } from '../utils/packageSourceImport.js';
+import { cratesOf, sourceOfImport, resolveSourceHeader } from '../utils/packageSourceImport.js';
 import refreshPackageSources from '../state/refreshPackageSources.js';
 
 const LAYOUT = { header: 'include', module: 'swig', source: '' };
@@ -85,9 +85,8 @@ export default function getDependFilePath(source, target) {
     // an undeclared crate is a hard, actionable error instead of a silent npm fallthrough.
     if (source.startsWith('cargo:')) {
         const cargoImport = parseCargoImport(source);
-        const cargoDeps = state.config.cargoDependencies ?? {};
-        if (!Object.hasOwn(cargoDeps, cargoImport.crateName)) {
-            throw new Error(`crossbind: '${source}' is not declared - add '${cargoImport.crateName}' to cargoDependencies in crossbind.config.`);
+        if (!Object.hasOwn(cratesOf(state.config), cargoImport.crateName)) {
+            throw new Error(`crossbind: '${source}' is not declared - add '${cargoImport.crateName}' to packages.cargo in crossbind.config.`);
         }
         const marker = writeCargoMarker(state.config.paths.cache, cargoImport);
         existsCache.set(marker, true);

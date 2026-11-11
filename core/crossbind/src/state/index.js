@@ -5,6 +5,7 @@ import {
     TARGETS, targetPathOf, nodeAddonNamesOf, nativeCommandNamesOf, wasiNamesOf, appNamesOf,
 } from '../utils/targets.js';
 import { findCargoModuleImportsIn, writeCargoMarker } from '../utils/cargoImport.js';
+import { cratesOf } from '../utils/packageSourceImport.js';
 import { exportWasiSdkPath } from '../utils/wasiToolchain.js';
 import loadConfig, { assertBinarySelection } from './loadConfig.js';
 import { configChangesOf } from '../utils/configChanges.js';
@@ -74,7 +75,7 @@ async function initProcessState() {
     // Cargo-crate import markers must exist BEFORE any bundler starts: metro resolves against
     // its startup file map, so a marker first created mid-resolution is invisible to that very
     // build. Bare crates come from the config, module imports from the app's own sources.
-    const cargoDeps = state.config.cargoDependencies ?? {};
+    const cargoDeps = cratesOf(state.config);
     const crateNames = Object.keys(cargoDeps);
     const moduleImports = crateNames.length && state.config.paths.project
         ? findCargoModuleImportsIn(state.config.paths.project).filter((i) => Object.hasOwn(cargoDeps, i.crateName))

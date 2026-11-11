@@ -23,9 +23,9 @@ export default function buildAppRustCrates(target, cacheDir, cargoDependencies =
         .map((e) => e.name);
 
     // Prune bridges whose source of truth is gone. An app-local surface whose .rs was deleted
-    // breaks cargo on the missing #[path] target; a crate_ bridge whose cargoDependencies entry
+    // breaks cargo on the missing #[path] target; a crate_ bridge whose packages.cargo entry
     // was removed silently keeps dead registrations in every later binary. crate_ pruning only
-    // runs when the caller passes the current cargoDependencies - null means "don't judge".
+    // runs when the caller passes the crates declared now - null means "don't judge".
     crates = crates.filter((name) => {
         const dir = `${root}/${name}`;
         const libRs = `${dir}/src/lib.rs`;

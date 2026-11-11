@@ -1,5 +1,5 @@
 // App-local Rust surface using an UPSTREAM crate directly (no crossbind package): the app config
-// declares `export.bindings.cargoDependencies` (geo, wkt) and this file consumes them - exactly
+// declares `packages.cargo` (geo, wkt) and this file consumes them - exactly
 // like writing your own native.h classes over a linked C library.
 use geo::{Area, ConvexHull};
 use geo::{Geometry, MultiPoint, Polygon};

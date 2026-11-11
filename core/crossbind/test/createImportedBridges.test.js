@@ -20,7 +20,7 @@ const { findAppNativeImports, createImportedBridges, bindsAppImports } = await i
 const TARGET = { platform: 'linux', path: 'linux-x64-mt-release' };
 // What getDependFilePath does with a crate the config does not declare.
 const undeclared = (source) => {
-    if (source.startsWith('cargo:')) throw new Error(`crossbind: '${source}' is not declared - add 'uuid' to cargoDependencies in crossbind.config.`);
+    if (source.startsWith('cargo:')) throw new Error(`crossbind: '${source}' is not declared - add 'uuid' to packages.cargo in crossbind.config.`);
     return null;
 };
 
@@ -66,7 +66,7 @@ describe('findAppNativeImports', () => {
     test('fails the build for a cargo: import the config does not declare, with what to declare', () => {
         write('src/app.mjs', "import { Uuid } from 'cargo:uuid';\n");
 
-        expect(() => findAppNativeImports([TARGET])).toThrow(/add 'uuid' to cargoDependencies/);
+        expect(() => findAppNativeImports([TARGET])).toThrow(/add 'uuid' to packages\.cargo/);
     });
 
     test('warns about a header no dependency ships and goes on', () => {

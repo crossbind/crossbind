@@ -36,9 +36,11 @@ the crate in `crossbind.config.js`, then import with the `cargo:` prefix (the
 
 ```js
 // crossbind.config.js — top level, next to `dependencies`
-cargoDependencies: {
-  uuid: '{ version = "1", features = ["v4"] }',
-  semver: '1',
+packages: {
+  cargo: {
+    uuid: '{ version = "1", features = ["v4"] }',
+    semver: '1',
+  },
 },
 ```
 
@@ -55,14 +57,15 @@ const ok = new VersionReq('^1.2').matches(new Version('1.4.0'))
 crossbind reads the crate's own sources (following `mod` trees, `pub use`
 re-exports, modules declared inside macros and enabled feature gates) and
 generates the bridge crate from what it finds. An undeclared `cargo:` import is a hard error — add the
-crate to `cargoDependencies`.
+crate to `packages.cargo`. Earlier releases spelled the declaration `cargoDependencies`; that key now
+stops the build with an error that names `packages.cargo`.
 
 A crate that keeps its API in modules is imported one public module at a
 time, with `/` between the crate and each module level. xxhash-rust, for
 one, exports nothing from its root:
 
 ```js
-// cargoDependencies: { 'xxhash-rust': '{ version = "0.8", features = ["xxh3"] }' }
+// packages: { cargo: { 'xxhash-rust': '{ version = "0.8", features = ["xxh3"] }' } }
 import { xxh364, Xxh3 } from 'cargo:xxhash-rust/xxh3'
 
 const digest = xxh364(new TextEncoder().encode('crossbind'))
@@ -94,7 +97,7 @@ object, which carries the prefixed spelling.
 ### 2. App-local `.rs` source
 
 Write a Rust file next to your other native sources and import it like a
-header. Upstream crates it uses go into the same `cargoDependencies`:
+header. Upstream crates it uses go into the same `packages.cargo`:
 
 ```rust
 // src/native/geo_surface.rs
@@ -189,7 +192,7 @@ as `finish()`, returns the rest and ends the stream. A reader is built from the 
 methods stay callable, and a call on an ended stream throws `<Name> is finished`:
 
 ```js
-// cargoDependencies: { 'lzma-rust2': '0.16' }
+// packages: { cargo: { 'lzma-rust2': '0.16' } }
 import { XzOptions, XzWriter, XzReader } from 'cargo:lzma-rust2'
 
 const writer = new XzWriter(XzOptions.withPreset(6))
@@ -232,7 +235,7 @@ targetSpecs: [{ platform: 'wasm', specs: { binary: { emccFlags: ['-sSTACK_SIZE=4
 
 The first build that links the app's Rust writes `crossbind.cargo.lock` next to
 `crossbind.config.js`. It pins the exact version of every crate the build links, the ones in
-`cargoDependencies` and the ones they depend on, so commit it. Later builds follow it and add any
+`packages.cargo` and the ones they depend on, so commit it. Later builds follow it and add any
 crate it does not list yet; delete it to resolve every version again. It is not called
 `Cargo.lock`, which a package whose crate sits at the project root already has.
 
@@ -265,6 +268,6 @@ override `paths.cache`, copy the two settings with your custom path instead.
 
 ## See also
 
-- [`crossbind-config.md`](./crossbind-config.md) — `cargoDependencies`, `export.type: 'cargo'`, `export.crate`.
+- [`crossbind-config.md`](./crossbind-config.md) — `packages.cargo`, `export.type: 'cargo'`, `export.crate`.
 - [`cpp-binding-rules.md`](./cpp-binding-rules.md) — the C++ counterpart of this page.
 - Canonical demos: `e2e/web-vite` (all three models on web), `e2e/mobile-reactnative-cli` (the same surface on devices), `core/embind-rust/demo` (a cargo-type package).
