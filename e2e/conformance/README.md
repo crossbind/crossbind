@@ -32,7 +32,7 @@ skips (search `KNOWN ENGINE GAP` in `spec/run.mjs`).
   to a call, or the call can overtake the write.
 - `spec/sections/packageFields.mjs` — the fields of C structs in the ports' own headers
   (`@crossbind/port-zlib/zlib.h`, `@crossbind/port-webp/encode.h`): pointers as handles or
-  instances, a pointer typedef, `char *`, enums as integers, and that the port's zlib 1.3.2 is
+  instances, a pointer typedef, `char *`, enums as integers, and that the port's zlib 1.4 is
   the one running rather than a device's older copy. The bundler legs that link both ports wire it
   (Vite, Rspack, Metro); the standalone legs skip it.
 - `native/confconstants.h` (+ `confconstantsbase.h`) and `spec/sections/constants.mjs` — constants
