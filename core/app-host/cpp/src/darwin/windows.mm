@@ -96,17 +96,21 @@ void startWindows() {
 void *makeWindow(const app::WindowOptions &options, void *, std::vector<std::string> &ignored) {
     NSWindowStyleMask style = NSWindowStyleMaskTitled | NSWindowStyleMaskClosable | NSWindowStyleMaskMiniaturizable;
     if (options.resizable) style |= NSWindowStyleMaskResizable;
-    // A window without a frame keeps its shadow, its corners and its keys, its title bar under the page.
-    if (!options.frame) style |= NSWindowStyleMaskFullSizeContentView;
+    // A window without a frame keeps its shadow, its corners and its keys, its title bar under the page; a hidden title
+    // bar keeps its buttons over the page as well.
+    const bool isUnderTitleBar = !options.frame || options.titleBarHidden;
+    if (isUnderTitleBar) style |= NSWindowStyleMaskFullSizeContentView;
     NSWindow *window = [[NSWindow alloc] initWithContentRect:NSMakeRect(0, 0, options.width, options.height)
                                                    styleMask:style
                                                      backing:NSBackingStoreBuffered
                                                        defer:NO];
     window.releasedWhenClosed = NO;
     window.title = @(options.title.c_str());
-    if (!options.frame) {
+    if (isUnderTitleBar) {
         window.titlebarAppearsTransparent = YES;
         window.titleVisibility = NSWindowTitleHidden;
+    }
+    if (!options.frame) {
         for (const NSWindowButton button : {NSWindowCloseButton, NSWindowMiniaturizeButton, NSWindowZoomButton}) {
             [window standardWindowButton:button].hidden = YES;
         }

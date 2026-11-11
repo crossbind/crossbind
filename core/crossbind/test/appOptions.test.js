@@ -76,12 +76,12 @@ describe("an app's copyright and category", () => {
 describe("an app's window", () => {
     test('opens a 1024 × 768 page that resizes, without app.window', () => {
         expect(appWindow(config())).toEqual({
-            width: 1024, height: 768, minWidth: 0, minHeight: 0, maxWidth: 0, maxHeight: 0, resizable: true, fullscreen: false, backgroundColor: null,
+            width: 1024, height: 768, minWidth: 0, minHeight: 0, maxWidth: 0, maxHeight: 0, resizable: true, fullscreen: false, backgroundColor: null, titleBar: 'visible',
         });
     });
 
-    test('takes the page size, its limits, whether it resizes or opens full screen, and its background from app.window', () => {
-        const window = { width: 800, height: 600, minWidth: 400, minHeight: 300, maxWidth: 1200, maxHeight: 900, fullscreen: true, backgroundColor: '#1E1E1E' };
+    test('takes the page size, its limits, whether it resizes or opens full screen, its background and its title bar from app.window', () => {
+        const window = { width: 800, height: 600, minWidth: 400, minHeight: 300, maxWidth: 1200, maxHeight: 900, fullscreen: true, backgroundColor: '#1E1E1E', titleBar: 'hidden' };
         expect(appWindow(config({ window }))).toEqual({ ...window, resizable: true });
         expect(appWindow(config({ window: { resizable: false } }))).toMatchObject({ resizable: false });
     });
@@ -112,6 +112,12 @@ describe("an app's window", () => {
 
     test('takes true or false alone for whether it opens full screen', () => {
         expect(() => appWindow(config({ window: { fullscreen: 'yes' } }))).toThrow('app.window.fullscreen "yes" is no boolean');
+    });
+
+    test("takes 'visible' or 'hidden' alone for its title bar", () => {
+        for (const titleBar of ['none', 'Hidden', true, false, '']) {
+            expect(() => appWindow(config({ window: { titleBar } }))).toThrow(`app.window.titleBar ${JSON.stringify(titleBar)} is neither 'visible' nor 'hidden'`);
+        }
     });
 });
 
@@ -231,6 +237,11 @@ describe("the header a desktop app's host builds with", () => {
         expect(header).toContain('#define CROSSBIND_APP_WINDOW_MAX_WIDTH 1600\n#define CROSSBIND_APP_WINDOW_MAX_HEIGHT 16384\n');
         expect(header).toContain('#define CROSSBIND_APP_WINDOW_FULLSCREEN 1\n');
         expect(appHeader(config(), 'linux')).not.toMatch(/MAX_WIDTH|FULLSCREEN/);
+    });
+
+    test('defines a title bar the page lies under', () => {
+        expect(appHeader(config({ window: { titleBar: 'hidden' } }), 'darwin')).toContain('#define CROSSBIND_APP_WINDOW_TITLE_BAR_HIDDEN 1\n');
+        expect(appHeader(config({ window: { titleBar: 'visible' } }), 'darwin')).not.toContain('TITLE_BAR');
     });
 
     test("defines the app's id on every platform, an Android app's its application id", () => {

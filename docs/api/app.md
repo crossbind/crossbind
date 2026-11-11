@@ -136,6 +136,11 @@ and `maxHeight`, which need a window that resizes. `fullscreen: true` opens it f
 leaves; on Windows and Linux the app gives no way out of it. An option the build cannot honour stops it, naming the
 option.
 
+`titleBar: 'hidden'` lays a macOS app's page under its title bar: the title and the bar's background go, and its
+buttons stay at the window's top left, over the page, which draws its own toolbar there and leaves them room. The page
+moves the window by an element of `data-crossbind-drag`, as a window without a frame does. Windows and Linux keep their
+title bar; `'visible'`, the default, keeps it on macOS as well.
+
 `backgroundColor`, as `#rrggbb`, is what the app shows until its page paints, and behind a page without a background of
 its own: in the window on the desktop, and from the launch screen on iOS and Android, where the system bars' icons turn
 light on a dark color and dark on a light one. Without it, each platform shows its own. A page that follows the
@@ -186,6 +191,8 @@ options beside it, its own, as `app.window`'s are the first window's:
   the middle of the screen.
 - `alwaysOnTop`, which keeps it above the other apps' windows.
 - `frame: false`, which takes its title bar and its buttons away.
+- `titleBar: 'hidden'`, as `app.window` takes it: a macOS page under the title bar, whose buttons stay. Windows and
+  Linux keep their title bar and list it in `ignored`, and a window without a frame, which has none, refuses it.
 - `parent`, the id of a window it stays above, and minimizes and closes with; and `modal`, which with a parent makes it
   a sheet of the parent's on macOS, and on Windows and Linux a window its parent takes no input under until it closes.
 - `name`, of the app's own: a name already open brings that window to the front, and opens no other.
@@ -1814,6 +1821,9 @@ writes to logcat, under the tag `Crossbind`: the URL only on `localhost`, and th
 - `device` has been measured on macOS, in the iOS Simulator as an iPhone and as an iPad, and on an Android emulator as
   a phone and, with its screen made larger, as a tablet. The Linux and Windows hosts build with it; neither has run it
   yet.
+- `titleBar: 'hidden'` has been measured on macOS 27 with `app.window`: the window's buttons over the page's toolbar,
+  centred in a toolbar 38 pixels high, and a button of the page under them taking its click. The Linux and Windows
+  hosts build with it; neither has run it yet.
 - The tray and notifications: the conformance runs on Windows click the icon, an item of its menu and the notification
   with the messages Windows sends the app, and those on Linux run against a tray and a notification server of the run's
   own, which read the icon and its menu as KDE's tray does, and click them. On macOS the runs set the icon and take it

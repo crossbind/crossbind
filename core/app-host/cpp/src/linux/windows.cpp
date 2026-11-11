@@ -140,6 +140,8 @@ void *makeWindow(const app::WindowOptions &options, void *parent, std::vector<st
     gtk_window_set_default_size(window, options.width, options.height);
     gtk_window_set_resizable(window, options.resizable);
     if (!options.frame) gtk_window_set_decorated(window, FALSE);
+    // A page under the title bar's buttons is macOS's alone; GTK keeps the title bar it draws.
+    if (options.titleBarHidden) ignored.emplace_back("titleBar");
     // Each window is a group of its own, so a modal window holds its parent's group alone.
     if (parent && options.modal) {
         gtk_window_group_add_window(gtk_window_get_group(GTK_WINDOW(parent)), window);

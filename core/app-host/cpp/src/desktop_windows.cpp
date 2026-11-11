@@ -99,6 +99,9 @@ WindowOptions firstWindowOptions() {
 #ifdef CROSSBIND_APP_WINDOW_FULLSCREEN
     options.fullscreen = true;
 #endif
+#ifdef CROSSBIND_APP_WINDOW_TITLE_BAR_HIDDEN
+    options.titleBarHidden = true;
+#endif
     return options;
 }
 

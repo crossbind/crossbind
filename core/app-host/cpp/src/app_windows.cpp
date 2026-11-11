@@ -85,6 +85,14 @@ std::string pathOf(const Value &value) {
     return path;
 }
 
+bool isTitleBarHidden(const Value &value) {
+    const std::string titleBar = textOf(value, "titleBar");
+    if (titleBar != "visible" && titleBar != "hidden") {
+        throw std::invalid_argument("crossbind: windows.open()'s titleBar " + titleBar + " is neither visible nor hidden");
+    }
+    return titleBar == "hidden";
+}
+
 std::uint32_t colorOf(const Value &value) {
     const std::string color = textOf(value, "backgroundColor");
     if (color.size() != 7 || color[0] != '#' || color.find_first_not_of("0123456789abcdefABCDEF", 1) != std::string::npos) {
@@ -113,11 +121,15 @@ WindowOptions openOptionsOf(const Value &given) {
         else if (key == "y") options.y = wholeOf(value, "y", -MAX_PLACE, MAX_PLACE);
         else if (key == "alwaysOnTop") options.alwaysOnTop = boolOf(value, "alwaysOnTop");
         else if (key == "frame") options.frame = boolOf(value, "frame");
+        else if (key == "titleBar") options.titleBarHidden = isTitleBarHidden(value);
         else if (key == "parent") options.parent = idOf(value);
         else if (key == "modal") options.modal = boolOf(value, "modal");
         else throw std::invalid_argument("crossbind: windows.open() takes no " + key);
     }
     if (options.x.has_value() != options.y.has_value()) throw std::invalid_argument("crossbind: windows.open() takes x and y together");
+    if (!options.frame && options.titleBarHidden) {
+        throw std::invalid_argument("crossbind: windows.open() hides the title bar of a window with a frame alone: drop titleBar, or frame: false");
+    }
     // The limits, as app.window takes them: those of a window that resizes, around the size it opens at.
     if (!options.resizable && (options.minWidth || options.minHeight || options.maxWidth || options.maxHeight)) {
         throw std::invalid_argument("crossbind: windows.open()'s limits are those of a window that resizes: drop them, or leave resizable true");
