@@ -182,9 +182,15 @@ maintainer logged in to npm, it first publishes a code-free placeholder
 npm 12.0.2, so no 2FA window is spent waiting for npm to serve a new package. npm confirms the
 writes and the trust reads with 2FA: the script prints each approval link and waits for it, so it
 needs no terminal; tick the website's option to skip 2FA for five minutes at each prompt. Before it
-sets a trust it checks every package and reports how many already trust the workflow, so a run
-that stops continues when it runs again. `--trust-only` skips the placeholders: on its own it only
-reports which packages lack the trust, and with `--apply` it sets the missing ones.
+sets a trust it checks every package and reports how many already trust the workflow, and after a
+stop the same command can run again. `--trust-only` skips the placeholders: on its own it only
+reports which packages lack a trust or hold one that has not published, and with `--apply` it sets them.
+npm [expires a trust that has not published 48 hours after it was set](https://github.blog/changelog/2026-10-02-unvalidated-npm-trusted-publishing-configurations-now-expire),
+keeps listing it and shows neither its age nor its state, and the publish job then stops at that
+package with `ENEEDAUTH`. So an `--apply` run lists the packages still on their placeholder that
+hold a trust and asks before it revokes and sets that trust anew; where there is no terminal it stops
+unless `--yes` answers for it. It leaves alone the trust of a package that has published. Do not run
+it while a train is publishing.
 Afterwards, check `npm view <package> dist-tags`: if npm pointed `latest` at the placeholder, move
 it once the train has published. A
 writing train refuses a package npm has never published and names this command; a dry run lists
@@ -216,7 +222,8 @@ overlap.
     ```
 
 6. Review the package set, dependency order, runners and dist-tags in the job summary.
-7. After the `npm-release` environment and every selected package's Trusted Publisher are ready,
+7. After the `npm-release` environment and every selected package's Trusted Publisher are ready
+   (for a package on its first release, a trust set less than 48 hours before the publish job),
    dispatch the writing run:
 
     ```bash
