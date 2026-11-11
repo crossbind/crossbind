@@ -13,15 +13,17 @@ export default {
         { type: 'h2', id: 'declare', text: 'Declare the crate' },
         {
             type: 'p',
-            text: 'Crates go under `cargoDependencies`, at the top level of `crossbind.config.js` next to `dependencies`. A key is the crate name; its value is what would follow `<crate> =` in a `Cargo.toml`, written as a string: a version requirement, or an inline table.',
+            text: 'Crates go under `packages.cargo` in `crossbind.config.js`; `packages` sits at the top level, next to `dependencies`. A key is the crate name; its value is what would follow `<crate> =` in a `Cargo.toml`, written as a string: a version requirement, or an inline table.',
         },
         {
             type: 'code',
             file: 'crossbind.config.js',
             code: `export default {
-    cargoDependencies: {
-        uuid: '{ version = "1", features = ["v4"] }',
-        semver: '1',
+    packages: {
+        cargo: {
+            uuid: '{ version = "1", features = ["v4"] }',
+            semver: '1',
+        },
     },
     paths: { config: import.meta.url },
 };`,
@@ -41,7 +43,7 @@ const matches = VersionReq.parse('^1.2').matches(Version.parse('1.4.0'));`,
         },
         {
             type: 'p',
-            text: 'The prefix names the store, the way `node:` does, so a crate never collides with an npm package of the same name. Every generated module exports `initNative`, and one call binds them all. Importing a crate that `cargoDependencies` does not declare fails the build and tells you to add it there.',
+            text: 'The prefix names the store, the way `node:` does, so a crate never collides with an npm package of the same name. Every generated module exports `initNative`, and one call binds them all. Importing a crate that `packages.cargo` does not declare fails the build and tells you to add it there.',
         },
         {
             type: 'p',
@@ -59,7 +61,7 @@ const matches = VersionReq.parse('^1.2').matches(Version.parse('1.4.0'));`,
         {
             type: 'code',
             file: 'src/index.mjs',
-            code: `// cargoDependencies: { 'xxhash-rust': '{ version = "0.8", features = ["xxh3"] }' }
+            code: `// packages: { cargo: { 'xxhash-rust': '{ version = "0.8", features = ["xxh3"] }' } }
 import { xxh364, Xxh3 } from 'cargo:xxhash-rust/xxh3';
 
 const digest = xxh364(new TextEncoder().encode('crossbind'));`,
@@ -132,7 +134,7 @@ const digest = xxh364(new TextEncoder().encode('crossbind'));`,
             type: 'ul',
             items: [
                 'No WASI builds: there is no `wasm32-wasip3` Rust target yet.',
-                '`crossbind licenses` does not list the crates in `cargoDependencies`.',
+                '`crossbind licenses` does not list the crates in `packages.cargo`.',
                 'In React Native, Metro learns `cargo:<crate>/<module>` imports by scanning your sources when it starts, so a specifier assembled at run time is not found.',
             ],
         },

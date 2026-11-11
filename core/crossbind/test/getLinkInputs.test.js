@@ -3,10 +3,15 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 
-const { state, appRustLibs } = vi.hoisted(() => ({ state: { config: {} }, appRustLibs: { current: [] } }));
+const { state, appRustLibs } = vi.hoisted(() => ({ state: { config: {} }, appRustLibs: { current: [], asked: [] } }));
 
 vi.mock('../src/actions/getDependLibs.js', () => ({ default: () => ['/deps/libz.a'] }));
-vi.mock('../src/utils/appRustCrates.js', () => ({ default: () => appRustLibs.current }));
+vi.mock('../src/utils/appRustCrates.js', () => ({
+    default: (...asked) => {
+        appRustLibs.asked.push(asked);
+        return appRustLibs.current;
+    },
+}));
 vi.mock('../src/state/index.js', () => ({ default: state }));
 
 const { default: getLinkInputs } = await import('../src/actions/getLinkInputs.js');
@@ -34,7 +39,7 @@ describe('getLinkInputs', () => {
             export: {},
             general: { name: 'demo' },
             paths: { build: work, output: `${work}/out`, cache: `${work}/cache` },
-            cargoDependencies: {},
+            packages: { cargo: {} },
         };
         withDepends([]);
         appRustLibs.current = [];
@@ -56,6 +61,15 @@ describe('getLinkInputs', () => {
         expect([...inputs.wholeArchiveNames]).toEqual([]);
         expect(inputs.rustKeepFlags).toEqual([]);
         expect(inputs.hasRust).toBe(false);
+    });
+
+    // No crate there reads as "none declared", and every crate bridge of the cache is pruned before the link.
+    test("builds the app's Rust with the crates the project declares under packages.cargo", () => {
+        state.config.packages = { cargo: { uuid: '1' } };
+
+        getLinkInputs(target, { keepFlag });
+
+        expect(appRustLibs.asked.at(-1)).toEqual([target, `${work}/cache`, { uuid: '1' }]);
     });
 
     // An app host's bridges compile against another JSI than an addon's, into an archive of their own.

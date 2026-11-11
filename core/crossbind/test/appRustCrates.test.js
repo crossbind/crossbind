@@ -236,7 +236,7 @@ describe('buildAppRustCrates', () => {
         expect(manifest).toContain('rel-surface-crossbind-app');
     });
 
-    test('prunes a crate_ bridge dropped from cargoDependencies, keeps declared ones', async () => {
+    test('prunes a crate_ bridge dropped from packages.cargo, keeps declared ones', async () => {
         addCrate('crate_uuid');
         addCrate('crate_old_dep');
         const { buildAppRustCrates, spawnSync } = await importFresh();
@@ -260,7 +260,7 @@ describe('buildAppRustCrates', () => {
         expect(fs.existsSync(path.join(cacheDir, 'rust-bridges/crate_xxhash_rust__xxh3'))).toBe(false);
     });
 
-    test('leaves crate_ bridges alone when no cargoDependencies are passed', async () => {
+    test('leaves crate_ bridges alone when no declared crates are passed', async () => {
         addCrate('crate_uuid');
         const { buildAppRustCrates, spawnSync } = await importFresh();
         spawnSync.mockImplementation(() => { fakeCargoOutput(); return { status: 0 }; });

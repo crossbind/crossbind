@@ -8,7 +8,7 @@ import * as confRust from '@crossbind/conformance-rust'
 import { initNative as initSemver, Version, VersionReq } from 'cargo:semver'
 import { initNative as initRegex, Regex } from 'cargo:regex'
 // DIRECT crate import: no surface file - bridged from the uuid crate's own source
-// (declared in crossbind.config.js export.bindings.cargoDependencies).
+// (declared in crossbind.config.js packages.cargo).
 import { initNative as initUuidCrate, Uuid } from 'cargo:uuid'
 // One module of a crate: xxhash-rust's root exports nothing, its xxh3 module does.
 import { xxh364, Xxh3 } from 'cargo:xxhash-rust/xxh3'

@@ -39,10 +39,10 @@ test('the config declares the chosen packages only: ports through their own conf
         'export default {',
         "    general: { name: 'playground' },",
         '    dependencies: [sqlite3],',
-        '    cargoDependencies: {',
-        '        uuid: \'{ version = "=1.28.0", features = ["v4"] }\',',
-        '    },',
         '    packages: {',
+        '        cargo: {',
+        '            uuid: \'{ version = "=1.28.0", features = ["v4"] }\',',
+        '        },',
         '        conan: {',
         "            zlib: '1.3.2',",
         '        },',
@@ -66,7 +66,7 @@ test('crossbind reads the crates and the Conan packages of the config as it is w
 
         const config = getFilledConfig((await import(pathToFileURL(file).href)).default);
 
-        assert.deepEqual(Object.keys(config.cargoDependencies), ['uuid']);
+        assert.deepEqual(Object.keys(config.packages.cargo), ['uuid']);
         assert.deepEqual(Object.keys(config.packages.conan), ['zlib']);
     } finally {
         fs.rmSync(dir, { recursive: true, force: true });

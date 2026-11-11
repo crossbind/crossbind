@@ -21,16 +21,18 @@ export default {
         name: 'crossbind-e2e-web-rspack',
     },
     // Direct crate imports (`import { Uuid } from 'cargo:uuid'`) + upstream crates for
-    // the app-local geo_surface.rs - both bridged from crate sources, no packages.
-    cargoDependencies: {
-        uuid: '{ version = "1", features = ["v4"] }',
-        geo: '0.29',
-        wkt: '0.11',
-        semver: '1',
-        regex: '1',
-        'xxhash-rust': '{ version = "0.8", features = ["xxh3", "xxh64", "xxh32"] }',
-        'argon2-rust': '1.1',
-        'lzma-rust2': '0.16',
+    // the app-local geo_surface.rs - both bridged from crate sources, no crossbind package.
+    packages: {
+        cargo: {
+            uuid: '{ version = "1", features = ["v4"] }',
+            geo: '0.29',
+            wkt: '0.11',
+            semver: '1',
+            regex: '1',
+            'xxhash-rust': '{ version = "0.8", features = ["xxh3", "xxh64", "xxh32"] }',
+            'argon2-rust': '1.1',
+            'lzma-rust2': '0.16',
+        },
     },
     dependencies: [
         matrix,

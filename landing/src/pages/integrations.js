@@ -110,7 +110,7 @@ export const INTEGRATION_GROUPS = [
             {
                 id: 'crates-io',
                 name: 'crates.io',
-                summary: 'Crates declared in `cargoDependencies` and imported with `cargo:`',
+                summary: 'Crates declared in `packages.cargo` and imported with `cargo:`',
                 href: guide('crates-io', 'declare'),
             },
             {

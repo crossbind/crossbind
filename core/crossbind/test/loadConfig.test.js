@@ -301,6 +301,15 @@ describe("a publisher's changes to the config", () => {
         await expect(loadConfig(tmpDir)).rejects.toThrow('crossbind: "extensions" lists two extensions named store.');
     });
 
+    // A package crossbind builds from source loads as the project it then is, so the developer of the app that
+    // depends on it reads whose config still has the key.
+    test('a declaration under the key it once had is refused with the config that holds it', async () => {
+        const written = `{ general: { name: 'app' }, paths: { project: ${JSON.stringify(tmpDir)} }, cargoDependencies: { uuid: '1' } }`;
+        fs.writeFileSync(path.join(tmpDir, 'crossbind.config.mjs'), `export default ${written};\n`);
+
+        await expect(loadConfig(tmpDir)).rejects.toThrow(`crossbind: cargoDependencies is now packages.cargo: write packages: { cargo: { … } } in ${tmpDir}/crossbind.config.`);
+    });
+
     test('merge into the export before crossbind reads it, null removing a key', async () => {
         const changed = await loadConfig(tmpDir, undefined, { changes: { app: { updater: null, name: 'Demo for the store', window: { height: 600 } } } });
         expect(changed.app).toEqual({ name: 'Demo for the store', window: { width: 800, height: 600 } });

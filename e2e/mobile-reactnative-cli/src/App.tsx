@@ -38,10 +38,10 @@ import * as confRust from '@crossbind/conformance-rust';
 // App-local Rust file, imported like a .h: the toolchain synthesizes and links its bridge crate.
 import { Counter } from './native/counter.rs';
 // App-local surface over an UPSTREAM crate: geo comes from the app config's
-// export.bindings.cargoDependencies declaration - no crossbind package involved.
+// packages.cargo declaration - no crossbind package involved.
 import { Hull } from './native/geo_surface.rs';
 // DIRECT crate imports: no surface files - bridges are generated from the crates' own sources
-// (declared in cargoDependencies); types come from .crossbind/rust-crates/types.
+// (declared in packages.cargo); types come from .crossbind/rust-crates/types.
 import { Uuid } from 'cargo:uuid';
 import { Version, VersionReq } from 'cargo:semver';
 import { Regex } from 'cargo:regex';

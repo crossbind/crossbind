@@ -61,7 +61,7 @@ describe("what a project declares of its sources' packages", () => {
             packages: { conan: { zlib: '1.3.2' }, vcpkg: { fmt: '12.2.0' } },
         });
 
-        expect(config.packages).toEqual({ conan: { zlib: { version: '1.3.2', options: {} } }, vcpkg: { fmt: { version: '12.2.0' } } });
+        expect(config.packages).toEqual({ cargo: {}, conan: { zlib: { version: '1.3.2', options: {} } }, vcpkg: { fmt: { version: '12.2.0' } } });
         expect(dependenciesOf(config, 'vcpkg')).toEqual({ fmt: { version: '12.2.0' } });
         expect(declaredSources(config).map(({ name }) => name)).toEqual(['conan', 'vcpkg']);
     });
@@ -71,7 +71,7 @@ describe("what a project declares of its sources' packages", () => {
 
         expect(config.packages.vcpkg).toEqual({});
         expect(declaredSources(config).map(({ name }) => name)).toEqual(['conan']);
-        expect(loadConfig().packages).toEqual({ conan: {} });
+        expect(loadConfig().packages).toEqual({ cargo: {}, conan: {} });
         expect(declaredSources(loadConfig())).toEqual([]);
     });
 
@@ -95,32 +95,60 @@ describe("what a project declares of its sources' packages", () => {
         });
 
         expect(taken).toEqual([{ zlib: 'a spelling of its own' }]);
-        expect(config.packages).toEqual({ conan: {} });
+        expect(config.packages).toEqual({ cargo: {}, conan: {} });
     });
 
     test('a config loads the same twice and keeps what was written in it', () => {
-        const written = { paths: { project }, packages: { conan: { zlib: '1.3.2' } } };
+        const written = { paths: { project }, packages: { cargo: { uuid: '1' }, conan: { zlib: '1.3.2' } } };
 
         expect(getFilledConfig(written).packages).toEqual(getFilledConfig(written).packages);
-        expect(written.packages).toEqual({ conan: { zlib: '1.3.2' } });
+        expect(getFilledConfig(written).packages.cargo).not.toBe(written.packages.cargo);
+        expect(written.packages).toEqual({ cargo: { uuid: '1' }, conan: { zlib: '1.3.2' } });
     });
 
-    test('the key each source once had of its own is refused, with where its packages are declared now', () => {
+    test('the key cargo and each source once had of its own is refused, with where its packages are declared now', () => {
         expect(() => loadConfig({ conanDependencies: { zlib: '1.3.2' } }))
             .toThrow('crossbind: conanDependencies is now packages.conan: write packages: { conan: { … } } in crossbind.config.');
+        expect(() => loadConfig({ cargoDependencies: { uuid: '1' } }))
+            .toThrow('crossbind: cargoDependencies is now packages.cargo: write packages: { cargo: { … } } in crossbind.config.');
+        expect(() => loadConfig({ cargoDependencies: {} })).toThrow(/cargoDependencies is now packages\.cargo/);
         expect(() => loadConfig({ extensions: [sourceOf('vcpkg')], vcpkgDependencies: {} })).toThrow(/vcpkgDependencies is now packages\.vcpkg/);
     });
 
-    test('a name under packages that is no source of the project is refused, so that a misspelt one is not left unread', () => {
+    test('a name under packages that is neither cargo nor a source of the project is refused, so that a misspelt one is not left unread', () => {
         expect(() => loadConfig({ packages: { connan: { zlib: '1.3.2' } } }))
-            .toThrow('crossbind: packages.connan names no package source of this project, which has conan. List its extension in extensions, or fix the name.');
-        expect(() => loadConfig({ extensions: [sourceOf('vcpkg')], packages: { acme: {} } })).toThrow(/packages\.acme names no package source of this project, which has conan, vcpkg\./);
-        expect(() => loadConfig({ packages: { '': { zlib: '1.3.2' } } })).toThrow(/names no package source of this project/);
+            .toThrow('crossbind: packages.connan names neither cargo nor a package source of this project, which has conan. List its extension in extensions, or fix the name.');
+        expect(() => loadConfig({ extensions: [sourceOf('vcpkg')], packages: { acme: {} } }))
+            .toThrow(/packages\.acme names neither cargo nor a package source of this project, which has conan, vcpkg\./);
+        expect(() => loadConfig({ packages: { crates: { uuid: '1' } } })).toThrow(/packages\.crates names neither cargo nor a package source/);
+        expect(() => loadConfig({ packages: { '': { zlib: '1.3.2' } } })).toThrow(/names neither cargo nor a package source of this project/);
     });
 
-    test('crates are told where they are declared', () => {
-        expect(() => loadConfig({ packages: { cargo: { uuid: '1' } } }))
-            .toThrow('crossbind: packages.cargo names no package source of this project, which has conan. Crates are declared in cargoDependencies.');
+    test("crates are declared under cargo, beside the sources' packages, as Cargo.toml takes each", () => {
+        const crates = { uuid: '1', geo: '{ version = "0.29", default-features = false }' };
+        const config = loadConfig({ packages: { cargo: crates, conan: { zlib: '1.3.2' } } });
+
+        expect(dependenciesOf(config, 'cargo')).toEqual(crates);
+        expect(dependenciesOf(loadConfig(), 'cargo')).toEqual({});
+        // cargo is the core's own: no source of the project, and nothing a source installs.
+        expect(sourceNamesOf(config)).toEqual(['conan']);
+        expect(declaredSources(config).map(({ name }) => name)).toEqual(['conan']);
+    });
+
+    test('crates that are no object of them are refused', () => {
+        for (const cargo of [['uuid'], 'uuid', null, 1]) {
+            expect(() => loadConfig({ packages: { cargo } }), JSON.stringify(cargo))
+                .toThrow("crossbind: packages.cargo must be an object of crates, such as { uuid: '1' }.");
+        }
+    });
+
+    // Beside packages.conan, whose packages take { version, options }: a crate takes text, and a number would lose a
+    // trailing zero, 0.10 becoming 0.1.
+    test('a crate that is no text is refused, with what Cargo.toml takes', () => {
+        for (const spec of [{ version: '1' }, 1, 0.10, null, ['1']]) {
+            expect(() => loadConfig({ packages: { cargo: { semver: '1', uuid: spec } } }), JSON.stringify(spec))
+                .toThrow('crossbind: packages.cargo.uuid must be text as Cargo.toml takes it: a version such as \'1\', or a table such as \'{ version = "1", features = ["v4"] }\'.');
+        }
     });
 
     test('packages that is no object of sources is refused', () => {
@@ -137,9 +165,12 @@ describe("what a project declares of its sources' packages", () => {
 
     // A package installs nothing for the project that depends on it, and one published before the move still loads.
     test("a dependency's own declarations are not read", () => {
-        const dependency = getFilledConfig({ paths: { project }, conanDependencies: { zlib: '1.3.2' }, packages: { acme: {} } }, { isDepend: true });
+        const written = {
+            paths: { project }, cargoDependencies: { uuid: '1' }, conanDependencies: { zlib: '1.3.2' }, packages: { acme: {}, cargo: { geo: '0.29' } },
+        };
+        const dependency = getFilledConfig(written, { isDepend: true });
 
-        expect(dependency.packages).toEqual({ conan: {} });
+        expect(dependency.packages).toEqual({ cargo: {}, conan: {} });
     });
 
     test('a check that fails without saying whose it is, is named', () => {

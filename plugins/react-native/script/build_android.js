@@ -47,7 +47,7 @@ const params = getCmakeParameters(buildTarget, options);
 
 // App-local Rust surfaces (imported .rs files): cargo-build their synthesized crates for this
 // ABI and hand the staticlibs to CMake, which links them whole-archive (init-array survival).
-const rustLibs = buildAppRustCrates(buildTarget, state.config.paths.cache, state.config.cargoDependencies ?? {});
+const rustLibs = buildAppRustCrates(buildTarget, state.config.paths.cache, state.config.packages.cargo);
 if (rustLibs.length > 0) params.push(`-DCROSSBIND_RUST_APP_LIBS=${rustLibs.join(';')}`);
 
 // Written to a file (one parameter per line), not stdout: crossbind logging shares

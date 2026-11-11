@@ -35,28 +35,25 @@ export default {
     // to 'mt' too.
 
   // ─────────────────────────────────────────────────────────────
-  // Rust crates this project consumes (the cargo store axis)
-  // ─────────────────────────────────────────────────────────────
-  cargoDependencies: {
-    uuid: '{ version = "1", features = ["v4"] }',
-    semver: '1',
-  },
-    // Crates importable via the `cargo:` scheme (`import { Uuid } from 'cargo:uuid'`,
-    // or one public module: 'cargo:xxhash-rust/xxh3') or used by app-local .rs
-    // sources. Keys are crate names, values are Cargo.toml dependency specs as
-    // strings. Undeclared `cargo:` imports are a hard error. See rust.md.
-
-  // ─────────────────────────────────────────────────────────────
-  // Packages this project takes from package sources such as ConanCenter
+  // Packages this project takes from crates.io and from package sources such as ConanCenter
   // ─────────────────────────────────────────────────────────────
   packages: {
+    cargo: {
+      uuid: '{ version = "1", features = ["v4"] }',
+      semver: '1',
+    },
     conan: {
       zlib: '1.3.2',
       sqlite3: { version: '3.53.4', options: { enable_fts5: true } },
     },
   },
-    // One map per package source, under the name its imports open with:
-    // `packages.conan.zlib` is what `conan:zlib/...` imports.
+    // One map under each name its imports open with: `packages.cargo.uuid` is
+    // what `cargo:uuid` imports, `packages.conan.zlib` what `conan:zlib/...` imports.
+    // cargo, which is crossbind's own, takes Rust crates: importable via the
+    // `cargo:` scheme (`import { Uuid } from 'cargo:uuid'`, or one public module:
+    // 'cargo:xxhash-rust/xxh3') or used by app-local .rs sources. Keys are crate
+    // names, values are Cargo.toml dependency specs as strings. Undeclared
+    // `cargo:` imports are a hard error. See rust.md.
     // conan, which crossbind brings, takes C and C++ packages from ConanCenter:
     // their headers are importable (`import { zlibVersion } from 'conan:zlib/zlib.h'`)
     // and usable from your own headers. Keys are Conan package names; values are
@@ -64,8 +61,8 @@ export default {
     // Native and Node.js addon builds; no WASI. Undeclared `conan:` imports are a
     // hard error. See conan.md.
     // A source that `extensions` lists is declared the same way, under its own
-    // name; a name that is no source of the project stops the config. See
-    // extensions.md.
+    // name; a name that is neither cargo nor a source of the project stops the
+    // config. See extensions.md.
 
   // ─────────────────────────────────────────────────────────────
   // Generated .d.ts flavor

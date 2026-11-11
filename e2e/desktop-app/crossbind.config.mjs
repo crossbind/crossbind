@@ -15,13 +15,15 @@ export default {
         name: 'crossbind-e2e-desktop-app',
     },
     // The crates src/main.js imports as `cargo:<crate>`, bridged from their own sources.
-    cargoDependencies: {
-        uuid: '{ version = "1", features = ["v4"] }',
-        semver: '1',
-        regex: '1',
-        'xxhash-rust': '{ version = "0.8", features = ["xxh3", "xxh64", "xxh32"] }',
-        'argon2-rust': '1.1',
-        'lzma-rust2': '0.16',
+    packages: {
+        cargo: {
+            uuid: '{ version = "1", features = ["v4"] }',
+            semver: '1',
+            regex: '1',
+            'xxhash-rust': '{ version = "0.8", features = ["xxh3", "xxh64", "xxh32"] }',
+            'argon2-rust': '1.1',
+            'lzma-rust2': '0.16',
+        },
     },
     dependencies: [embindRustDemo, conformanceRust],
     export: conformanceExport,

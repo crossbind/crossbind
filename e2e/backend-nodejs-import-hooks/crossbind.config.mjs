@@ -8,10 +8,8 @@ export default {
         Matrix,
     ],
     packages: {
+        cargo: { semver: '1' },
         conan: { zlib: '1.3.2' },
-    },
-    cargoDependencies: {
-        semver: '1',
     },
     paths: {
         config: import.meta.url,

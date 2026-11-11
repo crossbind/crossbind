@@ -148,8 +148,10 @@ export function configSource(ids) {
         'export default {',
         "    general: { name: 'playground' },",
         ...(ports.length ? [`    dependencies: [${ports.map((pkg) => bindingOf(pkg.name)).join(', ')}],`] : []),
-        ...indented(block('cargoDependencies', entries('crate', ({ spec }) => spec))),
-        ...indented(block('packages', block('conan', entries('conan', ({ version }) => version)))),
+        ...indented(block('packages', [
+            ...block('cargo', entries('crate', ({ spec }) => spec)),
+            ...block('conan', entries('conan', ({ version }) => version)),
+        ])),
         '    paths: { config: import.meta.url },',
         '};',
         '',

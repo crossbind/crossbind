@@ -60,15 +60,17 @@ console.log(await counter.add(2));`,
         },
         {
             type: 'p',
-            text: "The bridge reads that one file's public items. Crates the file uses go into `cargoDependencies` in `crossbind.config.js`, the same map that lets you import a crate directly, with no Rust of your own - see [crates.io](/guide/crates-io/):",
+            text: "The bridge reads that one file's public items. Crates the file uses go into `packages.cargo` in `crossbind.config.js`, the same map that lets you import a crate directly, with no Rust of your own - see [crates.io](/guide/crates-io/):",
         },
         {
             type: 'code',
             file: 'crossbind.config.js',
             code: `export default {
-    cargoDependencies: {
-        geo: '0.29',
-        wkt: '0.11',
+    packages: {
+        cargo: {
+            geo: '0.29',
+            wkt: '0.11',
+        },
     },
     paths: { config: import.meta.url },
 };`,

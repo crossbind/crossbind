@@ -56,24 +56,40 @@ export function checkedDependencies({ name, packageSource }, raw) {
     return dependencies;
 }
 
-// What a project declares under packages, by each source's name as its imports open with it. A name that is no
-// source of the project stops the config: a misspelt one would be left unread. So does the key a source once had of
-// its own, with where its packages are declared now.
-export function checkedPackages(sources, config) {
+// cargo's crates, each as Cargo.toml takes it: a version, or the table that would follow `<crate> =`. Text, where a
+// source's package may be an object: a number would lose a trailing zero, 0.10 becoming 0.1.
+function checkedCrates(crates = {}) {
+    if (crates === null || typeof crates !== 'object' || Array.isArray(crates)) {
+        throw new Error(`crossbind: ${declarationOf('cargo')} must be an object of crates, such as { uuid: '1' }.`);
+    }
+    const [crate] = Object.entries(crates).find(([, spec]) => typeof spec !== 'string') ?? [];
+    if (crate !== undefined) {
+        throw new Error(`crossbind: ${declarationOf('cargo')}.${crate} must be text as Cargo.toml takes it: a version such as '1', or a table such as '{ version = "1", features = ["v4"] }'.`);
+    }
+    return { ...crates };
+}
+
+// What a project declares under packages, by the name its imports open with: cargo's crates, which are the core's
+// own, and each source's packages. Another name stops the config: a misspelt one would be left unread. So does the
+// key cargo or a source once had of its own, with where its packages are declared now and the config that holds it:
+// a package crossbind builds from source loads as a project too, and its key is not the app's developer's to find.
+export function checkedPackages(sources, config, file = 'crossbind.config') {
     const names = sources.map(({ name }) => name);
-    const moved = names.find((name) => config[`${name}Dependencies`] !== undefined);
-    if (moved) throw new Error(`crossbind: ${moved}Dependencies is now ${declarationOf(moved)}: write packages: { ${moved}: { … } } in crossbind.config.`);
+    const moved = ['cargo', ...names].find((name) => config[`${name}Dependencies`] !== undefined);
+    if (moved) throw new Error(`crossbind: ${moved}Dependencies is now ${declarationOf(moved)}: write packages: { ${moved}: { … } } in ${file}.`);
     const { packages = {} } = config;
     if (packages === null || typeof packages !== 'object' || Array.isArray(packages)) {
         throw new Error("crossbind: \"packages\" must be an object of each package source's packages, such as { conan: { zlib: '1.3.2' } }.");
     }
-    const unknown = Object.keys(packages).find((name) => !names.includes(name));
+    const unknown = Object.keys(packages).find((name) => name !== 'cargo' && !names.includes(name));
     if (unknown !== undefined) {
-        const fix = unknown === 'cargo' ? 'Crates are declared in cargoDependencies.' : 'List its extension in extensions, or fix the name.';
-        throw new Error(`crossbind: ${declarationOf(unknown)} names no package source of this project, which has ${names.join(', ')}. ${fix}`);
+        throw new Error(`crossbind: ${declarationOf(unknown)} names neither cargo nor a package source of this project, which has ${names.join(', ')}. List its extension in extensions, or fix the name.`);
     }
     const written = (name) => (Object.hasOwn(packages, name) ? packages[name] : undefined);
-    return Object.fromEntries(sources.map((source) => [source.name, checkedDependencies(source, written(source.name))]));
+    return {
+        cargo: checkedCrates(written('cargo')),
+        ...Object.fromEntries(sources.map((source) => [source.name, checkedDependencies(source, written(source.name))])),
+    };
 }
 
 // What staged packages were installed for; a change to the dependencies makes them stale.

@@ -102,7 +102,7 @@ in the app config and just `use` them:
 ```js
 // crossbind.config.mjs
 export default {
-    export: { bindings: { cargoDependencies: { geo: '0.29', wkt: '0.11' } } },
+    packages: { cargo: { geo: '0.29', wkt: '0.11' } },
     ...
 };
 ```
@@ -122,7 +122,7 @@ ships none.
 ### Direct crate import (no surface file at all)
 
 When an upstream crate's own API already fits the grammar, skip even the surface file: any
-name declared in `cargoDependencies` can be imported through the `cargo:` scheme (the
+name declared in `packages.cargo` can be imported through the `cargo:` scheme (the
 node:/npm:/jsr: convention for a non-npm store), and the bridge is generated from the crate's
 OWN multi-file source (types from lib.rs; inherent impls and `impl Display` collected across
 its `mod` files, following the cargo-resolved feature set):
@@ -130,7 +130,7 @@ its `mod` files, following the cargo-resolved feature set):
 ```js
 // crossbind.config.mjs
 export default {
-    export: { bindings: { cargoDependencies: { uuid: '{ version = "1", features = ["v4"] }' } } },
+    packages: { cargo: { uuid: '{ version = "1", features = ["v4"] }' } },
 };
 ```
 
@@ -228,7 +228,7 @@ React Native and native Node.js. `e2e/conformance-rust` checks each Rust constru
 | mobile: real Hermes / device smoke (Android emulator, same RN app) | ✅ GREEN 32/32 — same demo, same adapter; cargo dep joins the cmake depends graph, keep-symbol linked; a NEW bare-crate import now links in the FIRST build (rust set busts the CMake configure) |
 | app-local `.rs` import (`./native/counter.rs`, both mobile platforms) | ✅ GREEN — synthesized bridge crate + app super staticlib + typed `counter.rs.d.ts` |
 | typed package import (`import { X } from '@crossbind/embind-rust-demo'`) | ✅ GREEN on iOS, Android AND web (vite) — resolver + proxy module + generated d.ts; web verified by playwright on chromium/firefox/webkit |
-| real-world upstream crate, packageless (`geo` via `cargoDependencies` + app-local surface) | ✅ GREEN — Hull (ConvexHull) on iOS + Android (26/26 smoke) AND in the browser (worker-mode playwright, 3 browsers): the same surface .rs serves all three platforms — a wasm output upstream geo never shipped |
+| real-world upstream crate, packageless (`geo` via `packages.cargo` + app-local surface) | ✅ GREEN — Hull (ConvexHull) on iOS + Android (26/26 smoke) AND in the browser (worker-mode playwright, 3 browsers): the same surface .rs serves all three platforms — a wasm output upstream geo never shipped |
 | Rust idioms: `&str`/`&String` params, `Result` → JS exception, `Option<Self>` → null | ✅ GREEN — conformance kit on every leg, worker-mode playwright on 3 browsers, iOS sim + Android emulator (throw message, null, borrowed str all asserted) |
 | i64/u64 → BigInt, `impl Display` → toString(), top-level free functions | ✅ GREEN — same full bar (conformance kit on every leg, 3-browser worker playwright, both devices); u64::MAX round-trips exactly, free `Result` fns throw |
 | DIRECT crate import (`import { Uuid } from 'cargo:uuid'` — untouched crates.io source, multi-file parse, feature-gated modules) | ✅ GREEN — worker-mode playwright on 3 browsers + iOS sim + Android emulator 26/26 (newV4 format, parse roundtrip, Display toString, Err throws) |

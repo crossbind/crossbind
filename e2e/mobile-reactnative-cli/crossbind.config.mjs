@@ -33,16 +33,18 @@ import { conformanceExport } from '@crossbind/conformance/config.mjs';
 export default {
     // Upstream crates available to app-local .rs surfaces (src/native/*.rs) - the Rust
     // analog of linking a C library and using it from your own native.h classes.
-    cargoDependencies: {
-        geo: '0.29',
-        wkt: '0.11',
-        // Direct crate imports (`import { Uuid } from 'cargo:uuid'`): bridged from crate sources.
-        uuid: '{ version = "1", features = ["v4"] }',
-        semver: '1',
-        regex: '1',
-        'xxhash-rust': '{ version = "0.8", features = ["xxh3", "xxh64", "xxh32"] }',
-        'argon2-rust': '1.1',
-        'lzma-rust2': '0.16',
+    packages: {
+        cargo: {
+            geo: '0.29',
+            wkt: '0.11',
+            // Direct crate imports (`import { Uuid } from 'cargo:uuid'`): bridged from crate sources.
+            uuid: '{ version = "1", features = ["v4"] }',
+            semver: '1',
+            regex: '1',
+            'xxhash-rust': '{ version = "0.8", features = ["xxh3", "xxh64", "xxh32"] }',
+            'argon2-rust': '1.1',
+            'lzma-rust2': '0.16',
+        },
     },
     dependencies: [
         matrix,

@@ -267,7 +267,7 @@ export function createRustBridgeCrate({ rsFile, cacheDir, projectPath, vectors =
         '',
         '[dependencies]',
         `embind-rs = { path = "${relPath(dir, resolveEmbindRsDir())}" }`,
-        // The app config's top-level cargoDependencies, so an app-local surface can use
+        // The app config's packages.cargo, so an app-local surface can use
         // upstream crates directly (values: a version string, or a verbatim `{ ... }` spec).
         ...Object.entries(cargoDependencies).map(([name, spec]) => (
             String(spec).trim().startsWith('{') ? `${name} = ${spec}` : `${name} = "${spec}"`
@@ -295,7 +295,7 @@ export function createRustBridgeCrate({ rsFile, cacheDir, projectPath, vectors =
     return { bridgeDir: dir, crateName: `${stem}_crossbind_app`, model };
 }
 
-// Direct CRATE import (`import { X } from 'cargo:uuid'` with top-level `cargoDependencies`
+// Direct CRATE import (`import { X } from 'cargo:uuid'` with `packages.cargo`
 // declaring `uuid`, or `cargo:<crate>/<module>` for one public module): no surface file and no
 // package - the bridge is generated from the upstream crate's OWN multi-file source. cargo
 // metadata (which fetches on first run) locates the source and the resolved feature set; the
@@ -608,7 +608,7 @@ function findModule(lib, modulePath, enabled, srcDir) {
             : undefined;
         file = decl && modFile(file, name);
         if (!file) {
-            throw new Error(`crossbind: rust bridge: module '${where}' not found in ${srcDir} - a module behind a cargo feature needs that feature in cargoDependencies, and inline mod { } blocks are not read`);
+            throw new Error(`crossbind: rust bridge: module '${where}' not found in ${srcDir} - a module behind a cargo feature needs that feature in packages.cargo, and inline mod { } blocks are not read`);
         }
         if (!decl.isPub) throw new Error(`crossbind: rust bridge: module '${where}' in ${srcDir} is private to the crate`);
     }

@@ -53,7 +53,7 @@ describe('getDependFilePath for cargo imports', () => {
 
     beforeEach(() => {
         cache = fs.mkdtempSync(path.join(os.tmpdir(), 'crossbind-cargo-import-'));
-        h.config = { cargoDependencies: { 'xxhash-rust': '0.8' }, paths: { cache } };
+        h.config = { packages: { cargo: { 'xxhash-rust': '0.8' } }, paths: { cache } };
     });
 
     afterEach(() => {
@@ -69,7 +69,7 @@ describe('getDependFilePath for cargo imports', () => {
 
     test('a module of an undeclared crate is refused like the crate itself', async () => {
         const { default: getDependFilePath } = await import('../src/integration/getDependFilePath.js');
-        expect(() => getDependFilePath('cargo:uuid/fmt')).toThrow(/add 'uuid' to cargoDependencies/);
+        expect(() => getDependFilePath('cargo:uuid/fmt')).toThrow(/add 'uuid' to packages\.cargo/);
     });
 
     test('a module path that could leave the marker directory is refused', async () => {
