@@ -1,6 +1,6 @@
 {
     "name": "@crossbind/extension-page-downloads",
-    "version": "2.0.0-beta.69",
+    "version": "2.0.0-beta.72",
     "description": "crossbind app extension: where a page's downloads go, asking on macOS, iOS and Android and saving to Downloads on Linux.",
     "homepage": "https://github.com/crossbind/crossbind/tree/main/extensions/page-downloads#readme",
     "repository": "https://github.com/crossbind/crossbind.git",

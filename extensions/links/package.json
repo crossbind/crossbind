@@ -1,6 +1,6 @@
 {
     "name": "@crossbind/extension-links",
-    "version": "2.0.0-beta.69",
+    "version": "2.0.0-beta.72",
     "description": "crossbind app extension: URL schemes and, on a phone, the https links of your sites.",
     "homepage": "https://github.com/crossbind/crossbind/tree/main/extensions/links#readme",
     "repository": "https://github.com/crossbind/crossbind.git",

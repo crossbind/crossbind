@@ -1,6 +1,6 @@
 {
     "name": "@crossbind/extension-shortcuts",
-    "version": "2.0.0-beta.69",
+    "version": "2.0.0-beta.72",
     "description": "crossbind app extension: the quick actions of a phone app's icon.",
     "homepage": "https://github.com/crossbind/crossbind/tree/main/extensions/shortcuts#readme",
     "repository": "https://github.com/crossbind/crossbind.git",

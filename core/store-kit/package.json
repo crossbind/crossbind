@@ -1,6 +1,6 @@
 {
     "name": "@crossbind/core-store-kit",
-    "version": "2.0.0-beta.69",
+    "version": "2.0.0-beta.72",
     "description": "What crossbind's publishers share for app stores: a listing's language folders, files and images, and the app's id.",
     "homepage": "https://github.com/crossbind/crossbind/tree/main/core/store-kit#readme",
     "repository": "https://github.com/crossbind/crossbind.git",

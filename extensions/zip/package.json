@@ -1,6 +1,6 @@
 {
     "name": "@crossbind/extension-zip",
-    "version": "2.0.0-beta.69",
+    "version": "2.0.0-beta.72",
     "description": "crossbind app extension: a Windows zip, for those who take no setup program.",
     "homepage": "https://github.com/crossbind/crossbind/tree/main/extensions/zip#readme",
     "repository": "https://github.com/crossbind/crossbind.git",
