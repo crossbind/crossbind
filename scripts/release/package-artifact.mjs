@@ -66,11 +66,26 @@ function npmCacheEnvironment() {
     };
 }
 
-// As every workspace package: pnpm pack writes crossbind's workspace:* pin of bridge-tools as the exact version.
-export function packCrossbind({ root, artifactDirectory }) {
+// As every workspace package: pnpm pack writes crossbind's workspace:* pins as the exact versions. A package of the
+// workspace crossbind depends on is packed beside it: a train publishes the two together, so until then the registry
+// has none of that version for the smoke test to install.
+export function packCrossbind({ root, artifactDirectory, workspace, run = execFileSync }) {
     const packagePath = path.join('core', 'crossbind');
-    const { version } = JSON.parse(fs.readFileSync(path.join(root, packagePath, 'package.json'), 'utf8'));
-    return packWorkspacePackage({ root, packagePath, expectedName: 'crossbind', expectedVersion: version, artifactDirectory });
+    const { version, dependencies = {} } = JSON.parse(fs.readFileSync(path.join(root, packagePath, 'package.json'), 'utf8'));
+    for (const name of Object.keys(dependencies).filter((dependency) => String(dependencies[dependency]).startsWith('workspace:'))) {
+        const own = workspace.find((candidate) => candidate.name === name);
+        if (!own) throw new Error(`crossbind depends on ${name} of the workspace, which is no publishable package of it.`);
+        packWorkspacePackage({ root, packagePath: own.path, expectedName: name, expectedVersion: own.version, artifactDirectory, run });
+    }
+    return packWorkspacePackage({ root, packagePath, expectedName: 'crossbind', expectedVersion: version, artifactDirectory, run });
+}
+
+// The tarballs beside crossbind's of the packages it depends on, as pnpm pack names them.
+function companionTarballs(tarball, run) {
+    const { dependencies = {} } = JSON.parse(run('tar', ['-xOf', tarball, 'package/package.json'], { encoding: 'utf8' }));
+    return Object.entries(dependencies)
+        .map(([name, version]) => path.join(path.dirname(tarball), `${name.replace('@', '').replace('/', '-')}-${version}.tgz`))
+        .filter((file) => fs.existsSync(file));
 }
 
 function publicInstallEnvironment(directory) {
@@ -96,7 +111,8 @@ export function smokeTestCrossbindTarball({ tarball, expectedVersion, temporaryR
     const options = { cwd: directory, encoding: 'utf8', env: environment, maxBuffer: 16 * 1024 * 1024 };
 
     try {
-        run('npm', ['install', '--ignore-scripts', '--no-audit', '--no-fund', '--package-lock=false', artifact.tarball], options);
+        const tarballs = [artifact.tarball, ...companionTarballs(artifact.tarball, run)];
+        run('npm', ['install', '--ignore-scripts', '--no-audit', '--no-fund', '--package-lock=false', ...tarballs], options);
         const installedRoot = path.join(directory, 'node_modules', 'crossbind');
         const installedManifest = JSON.parse(fs.readFileSync(path.join(installedRoot, 'package.json'), 'utf8'));
         if (installedManifest.name !== 'crossbind' || installedManifest.version !== expectedVersion) {
