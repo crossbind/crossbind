@@ -73,7 +73,8 @@ defaults and current limits (macOS, Linux, Windows, iOS and Android for now).
   `page-location/`, which answers the page's `navigator.geolocation` from CoreLocation, as WKWebView gives a macOS page
   none, once `page-permissions` allows it. Every app has `page-navigation/`, which takes the page's navigations beyond
   the app's origins, and `page-downloads/`, which saves its downloads, and every desktop app `page-drops/`, which hands
-  the page the files its user drops on it. An Apple app that lists `app.activityTypes` has `activities/`, which holds
+  the page the files its user drops on it. Every app has `page-feel/`, which has the page behave as an app's own view. An
+  Apple app that lists `app.activityTypes` has `activities/`, which holds
   their user activities for the page as the event `user-activity` and makes the page's one current, and a phone's that
   lists `app.shortcutItems` has `shortcuts/`, which holds the taps of their quick actions as the event `shortcut-item`.
 - `third_party/webview/` — webview/webview (MIT), vendored at a pinned commit; provenance and the local patches are in

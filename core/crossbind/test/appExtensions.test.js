@@ -127,8 +127,8 @@ describe("an app host's own extensions", () => {
         const instance = { instance: { id: 'com.example.demo' } };
         const linuxMenu = ['menu/menu.cpp', 'menu/linux.cpp', 'menu/linux-tray.cpp', 'menu/linux-notifications.cpp'];
         expect(hostExtensions(root).map(({ name }) => name)).toEqual([
-            'activities', 'dialog', 'files', 'instance', 'links', 'menu', 'page-dialogs', 'page-downloads', 'page-drops', 'page-files', 'page-location', 'page-navigation',
-            'page-permissions', 'power', 'shell', 'shortcuts', 'updater',
+            'activities', 'dialog', 'files', 'instance', 'links', 'menu', 'page-dialogs', 'page-downloads', 'page-drops', 'page-feel', 'page-files', 'page-location',
+            'page-navigation', 'page-permissions', 'power', 'shell', 'shortcuts', 'updater',
         ]);
         expect(sources('linux', { files: {} })).toContain('files/files.cpp');
         expect(sources('linux')).not.toContain('files/files.cpp');
@@ -138,6 +138,7 @@ describe("an app host's own extensions", () => {
         // A phone takes no drops of files.
         const page = (platform) => [
             'page-dialogs/dialogs.cpp', `page-dialogs/${platform}`, 'page-downloads/downloads.cpp', ...(platform === 'ios.mm' ? [] : ['page-drops/drops.cpp']),
+            'page-feel/feel.cpp', `page-feel/${platform.endsWith('.mm') ? 'apple.mm' : platform}`,
             ...(platform === 'darwin.mm' ? ['page-files/darwin.mm'] : []), 'page-navigation/navigation.cpp', 'page-permissions/permissions.cpp',
         ];
         expect(sources('ios', { links: {} })).toEqual(['dialog/dialog.cpp', 'dialog/ios.mm', 'links/links.cpp', 'menu/menu.cpp', 'menu/ios.cpp', ...page('ios.mm'), 'shell/shell.cpp', 'shell/ios.mm']);
@@ -161,8 +162,8 @@ describe("an app host's own extensions", () => {
             'power/power.cpp', 'power/windows.cpp', 'shell/shell.cpp', 'shell/windows.cpp', ...updaterSources, 'updater/windows.cpp',
         ]);
         expect(sources('android')).toEqual([
-            'dialog/dialog.cpp', 'dialog/android.cpp', 'menu/menu.cpp', 'menu/android.cpp', 'page-downloads/downloads.cpp', 'page-navigation/navigation.cpp', 'shell/shell.cpp',
-            'shell/android.cpp',
+            'dialog/dialog.cpp', 'dialog/android.cpp', 'menu/menu.cpp', 'menu/android.cpp', 'page-downloads/downloads.cpp', 'page-feel/feel.cpp', 'page-navigation/navigation.cpp',
+            'shell/shell.cpp', 'shell/android.cpp',
         ]);
         expect(extensionPart(appHostExtensions({}), 'darwin').frameworks).toEqual(['UniformTypeIdentifiers', 'UserNotifications']);
         expect(extensionPart(appHostExtensions(updater), 'darwin').frameworks).toEqual(['UniformTypeIdentifiers', 'UserNotifications', 'Security']);
@@ -172,7 +173,8 @@ describe("an app host's own extensions", () => {
         expect(extensionPart(appHostExtensions({}), 'win32').libraries).toEqual(['comctl32', 'shell32', 'ole32']);
         expect(extensionPart(appHostExtensions(updater), 'win32').libraries).toEqual(['comctl32', 'shell32', 'ole32', 'winhttp', 'wintrust', 'crypt32']);
         expect(extensionPart(appHostExtensions({}), 'android').java.map(({ className }) => className)).toEqual([
-            'dev.crossbind.extension.dialog.DialogExtension', 'dev.crossbind.extension.pagedialogs.PageDialogsExtension', 'dev.crossbind.extension.pagefiles.PageFilesExtension',
+            'dev.crossbind.extension.dialog.DialogExtension', 'dev.crossbind.extension.pagedialogs.PageDialogsExtension', 'dev.crossbind.extension.pagefeel.PageFeelExtension',
+            'dev.crossbind.extension.pagefiles.PageFilesExtension',
             'dev.crossbind.extension.pagepermissions.PagePermissionsExtension',
         ]);
     });

@@ -465,7 +465,6 @@ public class CrossbindActivity extends Activity implements ExtensionHost {
         });
         setContentView(frame);
         matchSystemBars();
-        webView.loadUrl(devUrl.isEmpty() ? APP_ORIGIN + "/" : devUrl);
         // A link that launched the activity waits for the page to ask for it. The module may have outlived an activity
         // before this one, whose page it forgets first; an activity the system restores, or Recents reopens, brings its
         // old link, which the page had.
@@ -480,6 +479,7 @@ public class CrossbindActivity extends Activity implements ExtensionHost {
             shortcutOf(getIntent());
         }
         tellExtensions((extension) -> extension.onCreate(this));
+        webView.loadUrl(devUrl.isEmpty() ? APP_ORIGIN + "/" : devUrl);
     }
 
     // A link or a quick action's tap that opens the app while it runs comes here, as an app with app.urlSchemes or

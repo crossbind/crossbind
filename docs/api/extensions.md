@@ -11,8 +11,8 @@ iOS, Android, Windows and Linux, which an app lists. An extension may add a stor
 `crossbind app`, as [Commands](#commands) says.
 
 crossbind's own are packages of the same kind, in its repository's `extensions/`: the host's, `activities`, `dialog`,
-`files`, `instance`, `links`, `menu`, `page-dialogs`, `page-files`, `page-downloads`, `page-drops`, `page-location`,
-`page-navigation`, `page-permissions`, `power`, `shell`, `shortcuts` and `updater`; the stores, `google-play`, `app-store`
+`files`, `instance`, `links`, `menu`, `page-dialogs`, `page-feel`, `page-files`, `page-downloads`, `page-drops`,
+`page-location`, `page-navigation`, `page-permissions`, `power`, `shell`, `shortcuts` and `updater`; the stores, `google-play`, `app-store`
 and `github`; and the installers, `dmg`, `deb`, `tar-gz`, `nsis` and `zip`. An app has them without installing or listing
 them, as `@crossbind/core-app-host` has them as its dependencies, and an app's extension takes the place of one, or of
 one of its roles, as [The host's own extensions](#the-hosts-own-extensions) says.
@@ -776,6 +776,7 @@ the build.
 | `page-navigation`, holding `page-navigation` and `page-authentication` | The hooks of [Navigation](#navigation), with `app.navigation` as its options | |
 | `page-downloads` | The hook of [Downloads](#downloads) | |
 | `page-drops` | The hook of [Drops](#drops) | The event `drop`, `{ paths, x, y }` |
+| `page-feel` | `onWindow`, or on Android `onCreate`, where it has the page behave as [How the page behaves](./app.md#how-the-page-behaves) tells | |
 | `page-location` | `onWindow`, where it gives a macOS page its `navigator.geolocation`, and `askPagePermission()` | |
 
 ## The page side

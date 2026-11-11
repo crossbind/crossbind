@@ -36,6 +36,7 @@ public interface Extension {
     // One of the extension's functions, which answers call once, from any thread. What it throws fails the call.
     void call(ExtensionHost host, String function, JSONObject options, Call call);
 
+    // As the activity starts, with the WebView it made, before the WebView loads its first page.
     default void onCreate(ExtensionHost host) {}
 
     default void onNewIntent(ExtensionHost host, Intent intent) {}

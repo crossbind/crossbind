@@ -30,6 +30,38 @@ import { Argon2, Params as Argon2Params, Algorithm as Argon2Algorithm, Version a
 import { Params as Argon2ModuleParams, Memory as Argon2Memory } from 'cargo:argon2-rust/params';
 import { XzOptions, XzWriter, XzReader, LzmaOptions, LzmaWriter, Lzma2Reader, LzmaReader } from 'cargo:lzma-rust2';
 
+// page-feel has the page behave as an app's own view, from before the app's own styles and scripts, on each platform.
+async function checkPageFeel(isAndroid) {
+    const selects = (element) => getComputedStyle(element).webkitUserSelect;
+    const field = document.body.appendChild(document.createElement('input'));
+    const isFieldSelectable = selects(field) !== 'none';
+    field.remove();
+    if (selects(document.body) !== 'none') throw new Error("the page's text can be selected");
+    if (!isFieldSelectable) throw new Error("the text of the page's inputs cannot be selected");
+    if (document.documentElement.firstElementChild?.localName !== 'style') throw new Error("page-feel's style does not come before the app's");
+    if (!document.querySelector('meta[name="viewport"]')?.content.includes('user-scalable=no')) throw new Error("the page's viewport lets it zoom");
+
+    const rightClick = (target) => {
+        const event = new MouseEvent('contextmenu', { bubbles: true, cancelable: true });
+        target.dispatchEvent(event);
+        return event.defaultPrevented;
+    };
+    if (location.protocol === 'crossbind:' && !rightClick(document.body)) throw new Error("the page's own menu opens on what its user can't edit");
+    if (isAndroid && rightClick(document.body)) throw new Error("page-feel took an Android page's long press");
+
+    if (matchMedia('(hover: none)').matches) {
+        const style = document.createElement('style');
+        style.textContent = '.conf-feel:hover { color: red; }';
+        await new Promise((resolve) => {
+            style.onload = resolve;
+            document.head.append(style);
+        });
+        const selector = style.sheet.cssRules[0].selectorText;
+        style.remove();
+        if (selector !== '.conf-feel:active') throw new Error(`a phone's :hover stayed as ${selector}`);
+    }
+}
+
 // A sandboxed frame of the page reaches the module's channel too, but not the token of the page's top frame; on Android
 // it gets neither the token nor the port, nor the object a page asks for its port with.
 function callFromSandboxedFrame() {
@@ -925,6 +957,7 @@ else initNative().then(async (m) => {
         if (isDesktop && (innerWidth !== 800 || innerHeight !== 600)) {
             throw new Error(`the page is ${innerWidth} × ${innerHeight}, not the 800 × 600 app.window gives`);
         }
+        await checkPageFeel(isAndroid);
         // A desktop page may show an element full screen.
         if (isDesktop && !(document.fullscreenEnabled ?? document.webkitFullscreenEnabled)) throw new Error('the page cannot show an element full screen');
         // The page has getUserMedia() for the camera and the microphone of app.permissions, which WebKit keeps from an

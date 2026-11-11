@@ -80,6 +80,18 @@ They need `RUNNER=DOCKER_RUN` or `DOCKER_EXEC`, and another runner stops the bui
 `initNative({ env })` sets environment variables in the app's process. The build's env is the app's own, and a variable
 the process already has keeps its value.
 
+### How the page behaves
+
+The page behaves as an app's own view, not as a web page, through the extension `page-feel`: it does not zoom, a window
+that fits stays put at its edges, text is selected only where its user edits it, a long press or a right click opens no
+menu on the rest, an image or a link is not dragged out, and a tap leaves no grey flash and no `:hover` behind, whose
+styles show as pressed while the finger is down. A Windows app has no status bar, autofill, swipe navigation or browser
+keys. A build for development keeps the right-click menu, for Inspect Element, and on Windows the browser's keys.
+
+Its styles lose to any rule of the app's, as `.article { -webkit-user-select: text; user-select: text; }` selects text
+in an article again, and an app that names `maximum-scale` or `user-scalable` in its own viewport keeps its zoom.
+`app: { without: ['page-feel'] }` leaves all of it out.
+
 ## The device
 
 `device` from `crossbind/app` tells the page where the app runs, before the page's own scripts run, so the page reads it

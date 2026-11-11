@@ -397,7 +397,7 @@ export default {
   ],
     // Usually what an extension package's crossbind.extension.js gives, its root
     // its own folder. An app's host builds them in beside its own extensions,
-    // activities, dialog, files, instance, links, menu, page-dialogs, page-downloads, page-drops, page-files,
+    // activities, dialog, files, instance, links, menu, page-dialogs, page-downloads, page-drops, page-feel, page-files,
     // page-location, page-navigation, page-permissions, power, shell, shortcuts and updater, whose roles one listed
     // with replaces takes, and whose names, their roles' and app, events, crossbind and page-* none takes; and its
     // sources add functions, and what they do as the app is launched, opens a link and quits,
