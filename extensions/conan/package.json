@@ -1,6 +1,6 @@
 {
     "name": "@crossbind/extension-conan",
-    "version": "2.0.0-beta.69",
+    "version": "2.0.0-beta.72",
     "description": "crossbind extension: C and C++ packages from ConanCenter, each built with the toolchain of the target it links into.",
     "homepage": "https://github.com/crossbind/crossbind/tree/main/extensions/conan#readme",
     "repository": "https://github.com/crossbind/crossbind.git",

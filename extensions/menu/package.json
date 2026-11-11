@@ -1,6 +1,6 @@
 {
     "name": "@crossbind/extension-menu",
-    "version": "2.0.0-beta.69",
+    "version": "2.0.0-beta.72",
     "description": "crossbind app extension: the app's menus and context menus, the tray icon and system notifications.",
     "homepage": "https://github.com/crossbind/crossbind/tree/main/extensions/menu#readme",
     "repository": "https://github.com/crossbind/crossbind.git",
