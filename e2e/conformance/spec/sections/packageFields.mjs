@@ -45,11 +45,11 @@ export function packageFieldChecks({ add }, { zlib, webp }, { worker }) {
         await zlib.inflateEnd(unpacker);
         return [finished, ended, size > 0 && size < text.length, back === text];
     }, [1, 1, true, true]);
-    // The port's zlib 1.3.2 is the one that runs, not a device's older copy: compressBound_z is new in 1.3.2.
+    // The port's zlib 1.4 is the one that runs, not a device's older copy: compressBound_z came with 1.3.2.
     add('pkgField:portZlib', async () => [
         await zlib.zlibVersion(),
         Number(await zlib.compressBound_z(100)) === Number(await zlib.compressBound(100)),
-    ], ['1.3.2', true]);
+    ], ['1.4', true]);
     add('pkgField:unsignedLong', async () => {
         const stream = await open(zlib.deflateInit2_, 9, 8, 15, 8, 0);
         await connect(stream, await bytes('abc'), 3, await zlib.allocBuffer(64), 64);
