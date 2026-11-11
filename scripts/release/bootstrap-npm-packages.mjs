@@ -7,14 +7,18 @@
 //
 // Every placeholder goes out first, so npm's five-minute 2FA window is spent on writes rather than on
 // the minutes npm takes to serve a new package. Then the trust of each name is checked and the
-// missing ones are set. A name stays selected until a real release lands, so a run that stopped
-// continues when it runs again. When npm asks for 2FA, the script prints the approval link and
-// waits for it, so it needs no terminal.
+// missing ones are set. A name stays selected until a real release lands, so after a stop the same
+// command can run again. When npm asks for 2FA, the script prints the approval link and waits for
+// it, so that needs no terminal.
+//
+// npm expires a trust that has not published 48 hours after it was set and does not say which it has
+// expired. So a run lists the names still waiting for their first release that hold a trust and, once the
+// maintainer answers yes or passes --yes, sets it anew: run this within 48 hours of the train's publish.
 //
 //   node scripts/release/bootstrap-npm-packages.mjs                       # list what is left
 //   node scripts/release/bootstrap-npm-packages.mjs --trust-only          # check which trust the workflow
-//   node scripts/release/bootstrap-npm-packages.mjs --apply               # placeholders, then the missing trusts
-//   node scripts/release/bootstrap-npm-packages.mjs --apply --trust-only  # only the missing trusts
+//   node scripts/release/bootstrap-npm-packages.mjs --apply               # placeholders, then the trusts
+//   node scripts/release/bootstrap-npm-packages.mjs --apply --trust-only  # only the trusts
 //   node scripts/release/bootstrap-npm-packages.mjs --apply --package @crossbind/port-zlib-linux
 
 import fs from 'node:fs';
@@ -23,6 +27,7 @@ import path from 'node:path';
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { WORKSPACE_RELEASE_WORKFLOW, WORKSPACE_REPOSITORY, discoverPublishablePackages } from './workspace-release.mjs';
+import { askLine, hasTerminal } from '../../core/crossbind/src/utils/ask.js';
 
 export const BOOTSTRAP_VERSION = '0.0.0-bootstrap.0';
 export const BOOTSTRAP_TAG = 'bootstrap';
@@ -34,7 +39,7 @@ const TRUST_PAUSE_MS = 2000;
 // npm serves a new package minutes after it accepts the publish; trust wants it served.
 const VISIBILITY_PAUSE_MS = 15000;
 const VISIBILITY_ATTEMPTS = 40;
-const RERUN = 'Run the same command again: it picks up where this one stopped.';
+const RERUN = 'Run the same command again.';
 const SCAN_CONCURRENCY = 8;
 // Read one by one, the trusts of every new name outlast the five-minute 2FA window.
 const TRUST_CHECK_CONCURRENCY = 4;
@@ -93,6 +98,10 @@ export function trustListCommand(name) {
     return ['trust', 'list', name, '--json'];
 }
 
+export function revokeCommand(name, id) {
+    return ['trust', 'revoke', name, `--id=${id}`, '--json'];
+}
+
 // npm's cache keeps a 404 for a while, so a package published minutes ago would still look missing.
 export function versionsCommand(name) {
     return ['view', name, 'versions', '--json', '--prefer-online'];
@@ -116,10 +125,21 @@ const jsonDocuments = (output) =>
         .filter(Boolean);
 
 // npm prints one JSON object per trust configuration, and nothing for a package without one.
-export function trustsReleaseWorkflow(output) {
+export function releaseWorkflowTrusts(output) {
     return jsonDocuments(output)
         .map((block) => JSON.parse(block))
-        .some((config) => config.repository === REPOSITORY_SLUG && path.basename(config.file ?? '') === WORKFLOW_FILE);
+        .filter((config) => config.repository === REPOSITORY_SLUG && path.basename(config.file ?? '') === WORKFLOW_FILE);
+}
+
+// npm keeps listing a trust it has expired and shows neither its age nor its state, so a name still waiting for its
+// first release gets a new one. A trust that has published stays valid, and one set in its place could expire again.
+export function sortTrusts(targets, trusts, isPending) {
+    const isListed = (candidate) => trusts.get(candidate).length > 0;
+    return {
+        unvalidated: targets.filter((candidate) => isListed(candidate) && isPending(candidate.name)),
+        inPlace: targets.filter((candidate) => isListed(candidate) && !isPending(candidate.name)),
+        missing: targets.filter((candidate) => !isListed(candidate)),
+    };
 }
 
 const parseOrNull = (block) => {
@@ -232,7 +252,28 @@ async function runNpm(name, step) {
     throw new Error(`npm ${step.slice(0, 2).join(' ')} failed for ${name}: ${npmError(result)} ${RERUN}`);
 }
 
+// A stop between the calls leaves the name without a trust, which the next run sets.
+export async function setTrust(name, configs, { run = runNpm, pause = sleep } = {}) {
+    for (const { id } of configs) {
+        await pause(TRUST_PAUSE_MS);
+        await run(name, revokeCommand(name, id));
+    }
+    await pause(TRUST_PAUSE_MS);
+    await run(name, trustCommand(name));
+}
+
+// Revoking is the one write here that removes something, so the maintainer sees the names and answers first.
+export async function approveRenewal(names, { yes = false, canAsk = hasTerminal(), question = askLine, print = console.log } = {}) {
+    if (names.length === 0 || yes) return true;
+    names.forEach((name) => print(`  ${name}`));
+    if (!canAsk) throw new Error('There is no terminal to ask on, so no trust was changed. Run this in a terminal, or with --yes.');
+    return /^\s*y(es)?\s*$/i.test(await question(`Revoke and set anew the trust of these ${names.length} package(s)? [y/N] `));
+}
+
 const isServed = async (name) => versionsOn(await spawnCaptured('npm', versionsCommand(name))).length > 0;
+
+// The maintainer may answer long after the scan, and a train that has released a name since has validated its trust.
+const isStillPending = async (name) => isPlaceholderOnly(versionsOn(await spawnCaptured('npm', versionsCommand(name))));
 
 export async function waitUntilPublished(name, { isPublished = isServed, pause = sleep, attempts = VISIBILITY_ATTEMPTS, onWait = () => {} } = {}) {
     for (let attempt = 1; attempt <= attempts; attempt += 1) {
@@ -296,17 +337,60 @@ async function scanVersions(names) {
     return versions;
 }
 
-async function checkTrust(targets, publishedNow) {
-    const trusted = new Set();
+async function readTrusts(targets, publishedNow) {
+    const trusts = new Map();
     let checked = 0;
     await forEachConcurrently(targets, TRUST_CHECK_CONCURRENCY, async (candidate) => {
         if (publishedNow.has(candidate))
             await waitUntilPublished(candidate.name, { onWait: () => log(`waiting for npm to serve ${candidate.name}…`) });
-        if (trustsReleaseWorkflow(await runNpm(candidate.name, trustListCommand(candidate.name)))) trusted.add(candidate);
+        trusts.set(candidate, releaseWorkflowTrusts(await runNpm(candidate.name, trustListCommand(candidate.name))));
         checked += 1;
         if (checked % TRUST_PROGRESS_EVERY === 0) log(`checked the trust of ${checked}/${targets.length}`);
     });
-    return targets.filter((candidate) => !trusted.has(candidate));
+    return trusts;
+}
+
+export async function settleTrusts(
+    targets,
+    publishedNow,
+    isPending,
+    { apply, yes, read = readTrusts, askApproval = approveRenewal, write = setTrust, stillPending = isStillPending },
+) {
+    log(`phase 2/2: checking which of ${targets.length} package(s) trust ${WORKSPACE_RELEASE_WORKFLOW}`);
+    const trusts = await read(targets, publishedNow);
+    const { unvalidated, inPlace, missing } = sortTrusts(targets, trusts, isPending);
+    log(
+        `${inPlace.length} already trust it, ${unvalidated.length} have a trust that has not published, which npm expires after 48 hours, ${missing.length} do not.`,
+    );
+    if (!apply) {
+        const unset = [...unvalidated, ...missing];
+        unset.forEach((candidate) => console.log(`  ${candidate.name}`));
+        if (unset.length > 0) console.log('Run again with --apply --trust-only to set them.');
+        return;
+    }
+    const isApproved = await askApproval(
+        unvalidated.map(({ name }) => name),
+        { yes },
+    );
+    const toSet = [...(isApproved ? unvalidated : []), ...missing];
+    let renewed = 0;
+    for (const [index, candidate] of toSet.entries()) {
+        const configs = trusts.get(candidate);
+        if (configs.length > 0 && !(await stillPending(candidate.name))) {
+            log(`${candidate.name} has published since the check, so its trust stays (${index + 1}/${toSet.length})`);
+            continue;
+        }
+        await write(candidate.name, configs);
+        if (configs.length > 0) renewed += 1;
+        log(`${candidate.name} trusts the workflow (${index + 1}/${toSet.length})`);
+    }
+    log(
+        `done: ${publishedNow.size} placeholder(s) published, ${missing.length} trust(s) set, ${renewed} of ${unvalidated.length} renewed, ${inPlace.length} already in place.`,
+    );
+    if (toSet.length > 0) console.log('Publish within 48 hours: npm expires a trust that has not published by then.');
+    console.log(
+        'Check `npm view <package> dist-tags`: if npm pointed latest at the placeholder, move it to the release once the train has published.',
+    );
 }
 
 async function main(args) {
@@ -317,7 +401,8 @@ async function main(args) {
     const names = requested.length > 0 ? requested : candidates.map((candidate) => candidate.name);
     log(`checking ${names.length} package(s) on npm`);
     const versions = await scanVersions(names);
-    const selected = selectPackages(candidates, { requested, isPending: (name) => isPlaceholderOnly(versions.get(name)) });
+    const isPending = (name) => isPlaceholderOnly(versions.get(name));
+    const selected = selectPackages(candidates, { requested, isPending });
     if (selected.length === 0) {
         log('every publishable workspace package has a release on npm.');
         return;
@@ -340,23 +425,7 @@ async function main(args) {
     }
     const { targets, leftOut } = trustTargets(selected, fresh, { trustOnly });
     if (leftOut.length > 0) log(`${leftOut.length} package(s) have no placeholder yet and are left out; run --apply without --trust-only for them.`);
-    log(`phase 2/2: checking which of ${targets.length} package(s) trust ${WORKSPACE_RELEASE_WORKFLOW}`);
-    const missing = await checkTrust(targets, publishedNow);
-    log(`${targets.length - missing.length} already trust it, ${missing.length} do not.`);
-    if (!apply) {
-        missing.forEach((candidate) => console.log(`  ${candidate.name}`));
-        if (missing.length > 0) console.log('Run again with --apply --trust-only to set them.');
-        return;
-    }
-    for (const [index, candidate] of missing.entries()) {
-        await sleep(TRUST_PAUSE_MS);
-        await runNpm(candidate.name, trustCommand(candidate.name));
-        log(`${candidate.name} trusts the workflow (${index + 1}/${missing.length})`);
-    }
-    log(`done: ${publishedNow.size} placeholder(s) published, ${missing.length} trust(s) set, ${targets.length - missing.length} already in place.`);
-    console.log(
-        'Check `npm view <package> dist-tags`: if npm pointed latest at the placeholder, move it to the release once the train has published.',
-    );
+    await settleTrusts(targets, publishedNow, isPending, { apply, yes: args.includes('--yes') });
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
