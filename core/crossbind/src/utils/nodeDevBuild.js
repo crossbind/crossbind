@@ -6,6 +6,7 @@ import loadJson from './loadJson.js';
 import { computeInputStamp } from './inputStamp.js';
 import { findHeaderImportsIn } from './headerImports.js';
 import { findNativeImportsIn, nativeSpecifierTest } from './nativeImports.js';
+import { importSchemesOf } from './packageSources.js';
 
 // Set on the build a dev start runs: that build is a Node process too, which NODE_OPTIONS may hand the dev hooks again.
 export const DEV_BUILD_ENV = 'CROSSBIND_DEV_BUILD';
@@ -49,7 +50,7 @@ export function devFormatOf(project) {
 export function nativeInputsFingerprint(config) {
     const { project, native, header, module: modules } = config.paths;
     const relativeTo = (importer) => upath.relative(project, importer);
-    const imports = findNativeImportsIn(project, nativeSpecifierTest(config.ext))
+    const imports = findNativeImportsIn(project, nativeSpecifierTest(config.ext, importSchemesOf(config)))
         .map(({ importer, specifier }) => ({ importer: relativeTo(importer), specifier }));
     const names = findHeaderImportsIn(project, config.ext.header)
         .map(({ importer, specifier, names: taken }) => JSON.stringify([relativeTo(importer), specifier, taken]));

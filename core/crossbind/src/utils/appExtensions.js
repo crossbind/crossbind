@@ -3,12 +3,13 @@ import { createRequire } from 'node:module';
 import path from 'node:path';
 import { carriedPath, isOutside } from './appFiles.js';
 import {
-    NAME, checkedCommands, checkedInstaller, checkedPublisher,
+    NAME, checkedCommands, checkedInstaller, checkedPackageSource, checkedPublisher,
 } from './extensionSteps.js';
 import { checkedActivityTypes, checkedFileTypes, checkedLinks, checkedShortcutItems } from './appLaunches.js';
 import { checkedPrivacy, checkedUrlSchemes } from './appOptions.js';
 import { checkedTargetKind, checkedTargetOptions, isHeader } from './appTargets.js';
 import { isUnderBase } from './replaceBasePathForDocker.js';
+import { printable } from './printableText.js';
 
 // What an app extension compiles with on every platform, and on each: its sources, the folders of its own their
 // includes are found in, and the macros they are compiled with.
@@ -41,7 +42,7 @@ const LINK_NAME = /^[A-Za-z0-9][A-Za-z0-9_.+-]*$/;
 // A class in a package, which the activity's package can name.
 const JAVA_CLASS = /^[A-Za-z_$][\w$]*(\.[A-Za-z_$][\w$]*)+$/;
 
-export { PUBLISH_PLATFORMS, checkedInstaller, checkedPublisher } from './extensionSteps.js';
+export { PUBLISH_PLATFORMS, checkedInstaller, checkedPackageSource, checkedPublisher } from './extensionSteps.js';
 
 const isObject = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
 const isEntitlement = (value) => typeof value === 'boolean' || typeof value === 'string'
@@ -338,6 +339,9 @@ export function checkedExtension(extension, root, where) {
             },
         }),
         ...(extension.commands === undefined ? {} : { commands: checkedCommands(extension.commands, `${where}'s commands`) }),
+        ...(extension.packageSource === undefined ? {} : {
+            packageSource: checkedPackageSource(extension.packageSource, `${where}'s packageSource`, extension.name),
+        }),
         ...(extension.fromApp === undefined ? {} : { fromApp: extension.fromApp.bind(extension) }),
         ...checkedOwnKeys(extension, where),
     };
@@ -352,11 +356,14 @@ export function checkedExtension(extension, root, where) {
 // extension written for any of them builds. A minor version that adds to the contract raises the newest, and a major
 // version that breaks it the oldest.
 export const OLDEST_EXTENSION_CONTRACT = 1;
-export const EXTENSION_CONTRACT = 1;
+export const EXTENSION_CONTRACT = 2;
+// What a later version added to an extension, by the version that did.
+const ADDED_IN = { packageSource: 2 };
 
 // The contract an extension is written for, or the several it is written for alike, is one this crossbind takes: one
-// written for others alone stops the build, naming what to update.
-function checkedContract({ contract }, where, update) {
+// written for others alone stops the build, naming what to update, as one that gives what its contract has not.
+function checkedContract(extension, where, update) {
+    const { contract } = extension;
     if (contract === undefined) {
         throw new Error(`crossbind: ${where} names no contract, the version of crossbind's extension contract it is written for, as contract: ${EXTENSION_CONTRACT} is for this crossbind: ${update}.`);
     }
@@ -364,8 +371,12 @@ function checkedContract({ contract }, where, update) {
     if (versions.length === 0 || versions.some((version) => !Number.isInteger(version) || version < 1) || new Set(versions).size !== versions.length) {
         throw new Error(`crossbind: ${where}'s contract ${JSON.stringify(contract)} is no version of crossbind's extension contract, as 1 or [1, 2] is.`);
     }
-    if (versions.some((version) => version >= OLDEST_EXTENSION_CONTRACT && version <= EXTENSION_CONTRACT)) return;
     const named = versions.join(' and ');
+    const early = Object.entries(ADDED_IN).find(([key, since]) => extension[key] !== undefined && versions.some((version) => version < since));
+    if (early) {
+        throw new Error(`crossbind: ${where} gives a ${early[0]}, which crossbind's extension contract has from its version ${early[1]} on, and is written for ${named}: name contract: ${early[1]}.`);
+    }
+    if (versions.some((version) => version >= OLDEST_EXTENSION_CONTRACT && version <= EXTENSION_CONTRACT)) return;
     if (versions.every((version) => version > EXTENSION_CONTRACT)) {
         throw new Error(`crossbind: ${where} is written for crossbind's extension contract ${named}, newer than this crossbind's ${EXTENSION_CONTRACT}: update crossbind.`);
     }
@@ -407,7 +418,7 @@ export function extensionPackage(root, base) {
 
 // What an extension of crossbind's build once hooked into, which no build runs.
 const OLD_HOOKS = ['loadConfig', 'buildWasm', 'createLib'];
-const LISTED_KEYS = ['name', 'contract', 'root', 'app', 'options', 'fromApp', 'publisher', 'installer', 'commands', 'replaces'];
+const LISTED_KEYS = ['name', 'contract', 'root', 'app', 'options', 'fromApp', 'publisher', 'installer', 'commands', 'packageSource', 'replaces'];
 
 // An extension crossbind.config.js lists, as its package's crossbind.extension.js gives it: its name, the folder its
 // files are in, which a build sees under the project's base alone, and what it adds to an app.
@@ -433,9 +444,26 @@ export function listedExtension(extension, where, base) {
 
 const OWN_PACKAGE = /^@crossbind\/extension-(.+)$/;
 
-// The names of the extension packages among the host's dependencies.
+// The names of the extension packages among a package's dependencies: the host's, or crossbind's own.
 export const ownPackages = (appHostRoot) => Object.keys(JSON.parse(fs.readFileSync(path.join(appHostRoot, 'package.json'), 'utf8')).dependencies ?? {})
     .filter((name) => OWN_PACKAGE.test(name)).sort();
+
+// One of those packages, as its crossbind.extension.js gives it, named as its package. `fix` is what brings it in step
+// with crossbind.
+export function broughtExtension(load, name, fix) {
+    const where = `${name}'s crossbind.extension.js`;
+    let extension;
+    try {
+        extension = load(`${name}/crossbind.extension.js`).default();
+    } catch (error) {
+        throw new Error(`crossbind: cannot read ${where}: ${error.message}: install the project's packages, or ${fix}.`, { cause: error });
+    }
+    checkedContract(extension ?? {}, where, fix);
+    const checked = checkedExtension(extension, extension?.root, where);
+    const expected = OWN_PACKAGE.exec(name)[1];
+    if (checked.name !== expected) throw new Error(`crossbind: ${where} names the extension ${checked.name}, not ${expected} as its package.`);
+    return checked;
+}
 
 // crossbind's own extensions: the extension packages among the host's dependencies, which an app has by having the host,
 // each named as its package. crossbind finds them as it finds the embind runtime, through the host, as pnpm shows them to
@@ -444,20 +472,7 @@ export function ownExtensions(appHostRoot) {
     const load = createRequire(path.join(appHostRoot, 'package.json'));
     const packages = ownPackages(appHostRoot);
     if (packages.length === 0) throw new Error(`crossbind: the app host at ${appHostRoot} brings no extensions: update @crossbind/core-app-host to match crossbind.`);
-    return packages.map((name) => {
-        const where = `${name}'s crossbind.extension.js`;
-        let extension;
-        try {
-            extension = load(`${name}/crossbind.extension.js`).default();
-        } catch (error) {
-            throw new Error(`crossbind: cannot read ${where}: ${error.message}: install the project's packages, or update @crossbind/core-app-host to match crossbind.`, { cause: error });
-        }
-        checkedContract(extension ?? {}, where, 'update @crossbind/core-app-host to match crossbind');
-        const checked = checkedExtension(extension, extension?.root, where);
-        const expected = OWN_PACKAGE.exec(name)[1];
-        if (checked.name !== expected) throw new Error(`crossbind: ${where} names the extension ${checked.name}, not ${expected} as its package.`);
-        return checked;
-    });
+    return packages.map((name) => broughtExtension(load, name, 'update @crossbind/core-app-host to match crossbind'));
 }
 
 // Whether an option of the app's config asks for anything, as false, null and an empty list or object do not.
@@ -482,9 +497,10 @@ export function withoutNamed(own, app = {}) {
     return own.filter((extension) => !left.includes(extension));
 }
 
-// A failure of an extension's step: crossbind's own message as it is, else one that names the extension and the step.
-const stepFailure = (name, which, error) => (error instanceof Error && error.message.startsWith('crossbind:') ? error
-    : new Error(`crossbind: ${name}'s ${which} failed: ${error instanceof Error ? error.message : String(error)}`, { cause: error }));
+// A failure of an extension's step: crossbind's own message as it is, else one that names the extension and the step,
+// without the control characters a file or a tool's output it quotes may hold.
+export const stepFailure = (name, which, error) => (error instanceof Error && error.message.startsWith('crossbind:') ? error
+    : new Error(`crossbind: ${name}'s ${which} failed: ${printable(error instanceof Error ? error.message : String(error))}`, { cause: error }));
 
 // A step of an extension's publisher or installer, whose failure stops the run.
 export async function extensionStep(name, which, run) {
@@ -515,10 +531,10 @@ export const withFromApp = (extensions, apiOf) => extensions.flatMap((extension)
     return options === null ? [] : [{ ...extension, options }];
 });
 
-// The extensions crossbind.config.js lists that add to an app: all but those that give a publisher or an installer
-// alone, which leave the host's own of their name as it is.
+// The extensions crossbind.config.js lists that add to an app: all but those that give a publisher, an installer or a
+// package source alone, which leave the host's own of their name as it is.
 export const appExtensionsOf = (listed) => listed
-    .filter((extension) => (!extension.publisher && !extension.installer) || Object.keys(extension.app).length > 0);
+    .filter((extension) => (!extension.publisher && !extension.installer && !extension.packageSource) || Object.keys(extension.app).length > 0);
 
 // The host's own extensions an app has, then those crossbind.config.js lists, each with the roles it holds, its own name
 // where it says nothing else: a role a listed one replaces leaves the host's that held it, which the app leaves out once

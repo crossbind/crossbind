@@ -1,4 +1,4 @@
-// What a publisher, an installer and a command of an extension's give, as crossbind takes them.
+// What a publisher, an installer, a package source and a command of an extension's give, as crossbind takes them.
 
 // A name prefixes the extension's functions and names its C++ entry, crossbind_extension_<name>.
 export const NAME = /^[a-z][a-z0-9]*(-[a-z0-9]+)*$/;
@@ -108,6 +108,43 @@ export function checkedInstaller(installer, where) {
     if (!installer.make) throw new Error(`crossbind: ${where} has no make, the step that makes what installs the app.`);
     const steps = INSTALLER_STEPS.filter((step) => installer[step]).map((step) => [step, installer[step].bind(installer)]);
     return { platforms, ...(installer.isLast ? { isLast: true } : {}), ...Object.fromEntries(steps) };
+}
+
+const PACKAGE_SOURCE_STEPS = ['check', 'inputs', 'install'];
+const PACKAGE_SOURCE_KEYS = ['storeUnits', ...PACKAGE_SOURCE_STEPS];
+// A package source's name starts its imports, its key in crossbind.config.js and its folders beside crossbind's own:
+// one word, and none that means something there already: an import scheme of a bundler or a runtime, a folder of
+// crossbind's, or a device's name, which Windows gives no folder.
+const SOURCE_NAME = /^[a-z][a-z0-9]*$/;
+const KEPT_SOURCE_NAMES = [
+    'cargo', 'node', 'file', 'data', 'http', 'https', 'npm', 'virtual', 'blob', 'bun', 'deno', 'jsr', 'cloudflare', 'workerd',
+    'all', 'android', 'build', 'config', 'deps', 'hermes', 'keys', 'secrets', 'sysroots', 'types',
+    'con', 'prn', 'aux', 'nul',
+];
+const STORE_SEGMENT = /^[A-Za-z0-9_-][A-Za-z0-9_.-]*$/;
+// Folders of a source's store that never change once written, as p/*/p names one in each folder of p.
+const isStoreUnit = (unit) => typeof unit === 'string'
+    && unit.split('/').every((segment) => segment === '*' || STORE_SEGMENT.test(segment))
+    && unit.split('/').includes('*');
+
+// A package source as crossbind runs it, under its extension's name: the folders of its store a remote runner sends
+// back, and its steps, which keep the object as their this.
+export function checkedPackageSource(packageSource, where, name) {
+    if (!isObject(packageSource)) throw new Error(`crossbind: ${where} is no object.`);
+    const unknown = Object.keys(packageSource).find((key) => !PACKAGE_SOURCE_KEYS.includes(key));
+    if (unknown) throw new Error(`crossbind: ${where} takes ${PACKAGE_SOURCE_KEYS.join(', ')}; ${unknown} is none of them.`);
+    if (!SOURCE_NAME.test(name) || KEPT_SOURCE_NAMES.includes(name)) {
+        throw new Error(`crossbind: ${where} makes ${name} the name of a package source, which starts its imports, as ${name}:<package>/<header>: one word of lowercase letters and digits, and none of ${KEPT_SOURCE_NAMES.join(', ')}.`);
+    }
+    const storeUnits = packageSource.storeUnits ?? [];
+    if (!Array.isArray(storeUnits) || !storeUnits.every(isStoreUnit)) {
+        throw new Error(`crossbind: ${where}.storeUnits is no list of the folders of its store that never change once written, each a path with a * for a folder's name, as 'p/*/p'.`);
+    }
+    assertSteps(where, packageSource, PACKAGE_SOURCE_STEPS);
+    if (!packageSource.check) throw new Error(`crossbind: ${where} has no check, the step that takes the project's packages.${name}.`);
+    if (!packageSource.install) throw new Error(`crossbind: ${where} has no install, the step that installs a target's packages.`);
+    const steps = PACKAGE_SOURCE_STEPS.filter((step) => packageSource[step]).map((step) => [step, packageSource[step].bind(packageSource)]);
+    return { storeUnits: [...storeUnits], ...Object.fromEntries(steps) };
 }
 
 const COMMAND_KEYS = ['help', 'options', 'run'];

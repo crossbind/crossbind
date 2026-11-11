@@ -98,7 +98,7 @@ npm run ios`,
         },
         {
             type: 'p',
-            text: '`pod install` compiles your C++ and its bridges into the xcframework of the `react-native-crossbind` pod, and a `crossbind` build phase rebuilds what changed before every Xcode build. Each port arrives as a prebuilt pod of its own. Run `pod install` again when `conanDependencies` change.',
+            text: '`pod install` compiles your C++ and its bridges into the xcframework of the `react-native-crossbind` pod, and a `crossbind` build phase rebuilds what changed before every Xcode build. Each port arrives as a prebuilt pod of its own. Run `pod install` again when `packages.conan` changes.',
         },
         {
             type: 'callout',

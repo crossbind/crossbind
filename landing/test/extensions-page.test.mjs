@@ -10,7 +10,9 @@ const read = (file) => readFileSync(new URL(file, ROOT), 'utf8');
 const CONTRACT = read('docs/api/extensions.md');
 const NATIVE_API = read('core/app-host/cpp/include/crossbind/extension.h');
 const manifestOf = (name) => JSON.parse(read(`extensions/${name}/package.json`));
-const hostDependencies = Object.keys(JSON.parse(read('core/app-host/package.json')).dependencies);
+const dependenciesOf = (folder) => Object.keys(JSON.parse(read(`${folder}/package.json`)).dependencies);
+// What an app has by having the host, and what every project has by having crossbind.
+const broughtDependencies = [...dependenciesOf('core/app-host'), ...dependenciesOf('core/crossbind')];
 const PACKAGES = readdirSync(new URL('extensions/', ROOT));
 const ROWS = EXTENSION_GROUPS.flatMap((group) => group.items);
 
@@ -44,23 +46,25 @@ test('a row is one line of what the extension is, as a library\'s is', () => {
     }
 });
 
-test('a row says to add its extension exactly where the host does not bring it', () => {
+test('a row says to add its extension exactly where neither the host nor crossbind brings it', () => {
     for (const { id, isAdded, shown } of ROWS) {
-        assert.equal(isAdded, !hostDependencies.includes(manifestOf(id).name), id);
+        assert.equal(isAdded, !broughtDependencies.includes(manifestOf(id).name), id);
         assert.equal(shown.includes('`crossbind add`'), isAdded, id);
     }
 });
 
 test("a row's summary is its package's description, which npm shows", () => {
     for (const { id, summary } of ROWS) {
-        const description = manifestOf(id).description.replace(/^crossbind app extension: /, '').replace(/\.$/, '');
+        const description = manifestOf(id).description.replace(/^crossbind (app )?extension: /, '').replace(/\.$/, '');
         assert.equal(description.slice(1), summary.slice(1), id);
         assert.equal(description[0].toLowerCase(), summary[0].toLowerCase(), id);
     }
 });
 
 test("every row's package has the keyword of its group, by which npm finds those of one kind", () => {
-    const keywords = { publishing: 'publishing', installers: 'installer', system: 'system', launches: 'launch', 'page-behavior': 'page' };
+    const keywords = {
+        publishing: 'publishing', installers: 'installer', system: 'system', launches: 'launch', 'page-behavior': 'page', 'package-sources': 'package-source',
+    };
     for (const group of EXTENSION_GROUPS) {
         for (const { id } of group.items) assert.ok(manifestOf(id).keywords.includes(keywords[group.id]), `${id} has no keyword ${keywords[group.id]}`);
     }
@@ -96,5 +100,8 @@ test('what the pages say of roles, of when one enters and of app.without is what
     assert.match(packageOf('app-store'), /isDefault: true/);
     for (const name of EXTENSION_GROUPS.find((group) => group.id === 'launches').items.map(({ id }) => id)) {
         assert.match(packageOf(name), /fromApp/, name);
+    }
+    for (const name of EXTENSION_GROUPS.find((group) => group.id === 'package-sources').items.map(({ id }) => id)) {
+        assert.match(packageOf(name), /packageSource: \{/, name);
     }
 });

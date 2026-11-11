@@ -44,7 +44,8 @@ import {
     RUNNER_PLATFORMS, RUNNER_ROLES, connectCommands, deleteRunner, deploySteps, initRunner, newRunnerToken, runnerHostPort, startRunner,
 } from './actions/runnerCommands.js';
 import { cargoHome } from './utils/runCargo.js';
-import { conanRoot } from './utils/runConan.js';
+import { containerRootOf, sourceRoot } from './utils/runPackageSource.js';
+import { importSchemesOf, sourceNamesOf } from './utils/packageSources.js';
 import { cleanDepsCache } from './utils/dependencyRebuild.js';
 import collectLicenseRows from './actions/licenses.js';
 import { formatNoticesMarkdown, formatCycloneDxSbom, validateSpdx } from './utils/licenseReport.js';
@@ -316,17 +317,18 @@ imageArgument(commandDocker.command('create').description('create docker contain
     .action((image) => {
         // Google ships the linux NDK for x86_64 only, so an android or android-app container is always amd64.
         const platform = ['android', 'android-app'].includes(image) ? 'linux/amd64' : undefined;
+        const sources = sourceNamesOf(state.config);
         // Docker on Linux makes a missing mount source owned by root, which the user's builds cannot write.
-        [cargoHome(), conanRoot()].forEach((dir) => fs.mkdirSync(dir, { recursive: true }));
+        [cargoHome(), ...sources.map((name) => sourceRoot(name))].forEach((dir) => fs.mkdirSync(dir, { recursive: true }));
         dockerExec([
             'run', '-dit',
             ...(platform ? ['--platform', platform] : []),
             '--name', dockerContainerName(image),
             '-v', `${state.config.paths.base}:/tmp/crossbind/live`,
-            // Cargo's registry cache, shared with host builds and with every other project, and the
-            // Conan store and work directories every other container build uses.
+            // Cargo's registry cache, shared with host builds and with every other project, and each package
+            // source's store and work directories, which every other container build of it uses.
             '-v', `${cargoHome()}:/var/cache/crossbind/cargo`,
-            '-v', `${conanRoot()}:/var/cache/crossbind/conan`,
+            ...sources.flatMap((name) => ['-v', `${sourceRoot(name)}:${containerRootOf(name)}`]),
             getDockerImage(image, platform),
             'bash',
         ]);
@@ -533,7 +535,7 @@ async function createNodeAddons(targetParams) {
     if (headers.length && fs.existsSync(`${state.config.paths.output}/${loaderTarget.jsName}`)) {
         const entry = `${state.config.paths.output}/node/napi.mjs`;
         writeRuntimeEntry(entry, headers, ENTRY_RUNTIMES.node(loaderTarget.jsName));
-        if (imports.size) writeImportHooks(entry, headers, imports, nativeExtensions(state.config.ext));
+        if (imports.size) writeImportHooks(entry, headers, imports, nativeExtensions(state.config.ext), importSchemesOf(state.config));
         else removeImportHooks(entry);
     }
 }
@@ -609,7 +611,7 @@ async function createWasmJs(targetParams, wasmOptions = {}) {
     if (appHeaders.length && nodeTarget) {
         const entry = `${state.config.paths.output}/node/wasm.mjs`;
         writeRuntimeEntry(entry, appHeaders, ENTRY_RUNTIMES.node(nodeTarget.jsName));
-        if (imports.size) writeImportHooks(entry, appHeaders, imports, nativeExtensions(state.config.ext));
+        if (imports.size) writeImportHooks(entry, appHeaders, imports, nativeExtensions(state.config.ext), importSchemesOf(state.config));
         else removeImportHooks(entry);
     }
     if (headers.length && edgeTarget) {

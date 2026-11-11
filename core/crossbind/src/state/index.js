@@ -8,7 +8,7 @@ import { findCargoModuleImportsIn, writeCargoMarker } from '../utils/cargoImport
 import { exportWasiSdkPath } from '../utils/wasiToolchain.js';
 import loadConfig, { assertBinarySelection } from './loadConfig.js';
 import { configChangesOf } from '../utils/configChanges.js';
-import refreshConanDependencies from './refreshConanDependencies.js';
+import refreshPackageSources from './refreshPackageSources.js';
 
 const cacheDir = `${process.cwd()}/.crossbind`;
 
@@ -28,7 +28,7 @@ async function initProcessState() {
     state.cache = loadCacheState();
     state.config = await loadConfig(undefined, undefined, { changes: configChangesOf() });
     assertBinarySelection(state.config);
-    refreshConanDependencies(state.config);
+    refreshPackageSources(state.config);
     exportWasiSdkPath(state.config.system);
     // Same idea for the docker image overrides: pullDockerImage.js resolves them from the
     // environment alone, so it stays free of a state import (and of the cycle that would create).
@@ -98,8 +98,8 @@ export function setAllDependecyPaths() {
         state.config.allDependencyPaths[target.path] = { cmake: {} };
         state.config.allDependencies.forEach((d) => {
             state.config.allDependencyPaths[target.path].cmake[d.general.name] = `${d.paths.output}/prebuilt`;
-            // A Conan recipe can name a library on another platform only (libpng is png16 on Windows).
-            const libNames = d.general.conan
+            // A package source's recipe can name a library on another platform only (libpng is png16 on Windows).
+            const libNames = d.general.packageSource
                 ? d.export.libName.filter((name) => [target.path, target.releasePath]
                     .some((targetPath) => fs.existsSync(`${d.paths.output}/prebuilt/${targetPath}/lib/lib${name}.a`)))
                 : d.export.libName;

@@ -49,17 +49,25 @@ export default {
     // strings. Undeclared `cargo:` imports are a hard error. See rust.md.
 
   // ─────────────────────────────────────────────────────────────
-  // C and C++ packages this project takes from ConanCenter
+  // Packages this project takes from package sources such as ConanCenter
   // ─────────────────────────────────────────────────────────────
-  conanDependencies: {
-    zlib: '1.3.2',
-    sqlite3: { version: '3.53.4', options: { enable_fts5: true } },
+  packages: {
+    conan: {
+      zlib: '1.3.2',
+      sqlite3: { version: '3.53.4', options: { enable_fts5: true } },
+    },
   },
-    // Packages whose headers are importable via the `conan:` scheme
-    // (`import { zlibVersion } from 'conan:zlib/zlib.h'`) and usable from your
-    // own headers. Keys are Conan package names; values are a version, a Conan
-    // range ('[>=1.3 <2]') or { version, options }. Web builds only for now.
-    // Undeclared `conan:` imports are a hard error. See conan.md.
+    // One map per package source, under the name its imports open with:
+    // `packages.conan.zlib` is what `conan:zlib/...` imports.
+    // conan, which crossbind brings, takes C and C++ packages from ConanCenter:
+    // their headers are importable (`import { zlibVersion } from 'conan:zlib/zlib.h'`)
+    // and usable from your own headers. Keys are Conan package names; values are
+    // a version, a Conan range ('[>=1.3 <2]') or { version, options }. Web, React
+    // Native and Node.js addon builds; no WASI. Undeclared `conan:` imports are a
+    // hard error. See conan.md.
+    // A source that `extensions` lists is declared the same way, under its own
+    // name; a name that is no source of the project stops the config. See
+    // extensions.md.
 
   // ─────────────────────────────────────────────────────────────
   // Generated .d.ts flavor

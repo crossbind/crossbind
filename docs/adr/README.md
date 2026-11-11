@@ -25,6 +25,7 @@ ADRs are **immutable**. When a decision is overturned, write a new ADR that supe
 | [0015](./0015-runner-in-the-system-config.md) | Choose where steps run with `RUNNER` in the system config | Proposed | `selectRunner.js`, `systemKeys.js`, `run.js`, `runCargo.js`, `runConan.js`, `~/.crossbind.json` |
 | [0016](./0016-wasi-http-components.md) | Make WASI HTTP components with `-e http` and one C++ handler | Proposed | `targets.js`, `wasiHttp.js`, `buildWasiCommand.js`, `assets/wasi-runtime/http/`, `e2e/cloud-wasi-http` |
 | [0017](./0017-own-app-host.md) | Build desktop and mobile apps on an own host: the system webview, Hermes and embind-jsi | Proposed | `core/app-host/`, `buildApp.js`, `targets.js`, `hermes.js`, `plugins/{rollup,vite}`, `examples/desktop-app`, `e2e/desktop-app` |
+| [0018](./0018-package-source-extensions.md) | Make package sources an extension role, with Conan the first | Proposed | `packageSource*.js`, `runPackageSource.js`, `targetToolchain.js`, `extensions/conan/`, the extension contract, `node-modules.mjs` |
 
 ## Writing a new ADR
 

@@ -61,6 +61,14 @@ describe('crossbind add', () => {
         expect(spawn).not.toHaveBeenCalled();
     });
 
+    test('adds none every project has by having crossbind, as its package source conan, and installs nothing', () => {
+        const spawn = vi.fn();
+
+        expect(() => addExtension('@crossbind/extension-conan@beta', { config: configOf(), spawn, platform: 'darwin' }))
+            .toThrow('crossbind: every project has @crossbind/extension-conan by having crossbind, which brings it, so there is nothing to add.');
+        expect(spawn).not.toHaveBeenCalled();
+    });
+
     test('installs an extension with the manager of the lockfile nearest the project, then lists it', () => {
         fs.writeFileSync(path.join(root, 'pnpm-lock.yaml'), '');
         const spawn = installing('@crossbind/extension-clipboard');

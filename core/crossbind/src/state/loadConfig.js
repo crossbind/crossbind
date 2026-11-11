@@ -12,7 +12,7 @@ import getCMakeListsFilePath from '../utils/getCMakeListsFilePath.js';
 import calculateDependencyParameters from './calculateDependencyParameters.js';
 import logger from '../utils/logger.js';
 import { RUNTIME_ENVS } from '../utils/targets.js';
-import { normalizeConanDependencies } from '../utils/conanDependencies.js';
+import { checkedPackages, packageSourcesOf } from '../utils/packageSources.js';
 import isSourceCmakePackage from '../utils/isSourceCmakePackage.js';
 import { listedExtension } from '../utils/appExtensions.js';
 import { mergePatch } from '../utils/configChanges.js';
@@ -127,7 +127,6 @@ export function getFilledConfig(config, options = { isDepend: false }) {
         general: config.general || {},
         dependencies,
         cargoDependencies: config.cargoDependencies || {},
-        conanDependencies: normalizeConanDependencies(config.conanDependencies),
         // 'sync' types the direct surface; 'promise' wraps every generated method return
         // for useWorker-style runtimes (constructors stay sync-typed: await new X()).
         dts: config.dts || 'sync',
@@ -213,6 +212,11 @@ export function getFilledConfig(config, options = { isDepend: false }) {
     newConfig.extensions = newConfig.extensions.map((extension, i) => listedExtension(extension, `extensions[${i}]`, newConfig.paths.base));
     const twice = newConfig.extensions.find(({ name }, i) => newConfig.extensions.findIndex((other) => other.name === name) !== i);
     if (twice) throw new Error(`crossbind: "extensions" lists two extensions named ${twice.name}.`);
+
+    // What the project declares of each package source, as packages.conan, as the source's own check takes it. A
+    // package installs nothing for the project that depends on it, so a dependency's own declarations are not read.
+    newConfig.packageSources = packageSourcesOf(newConfig.extensions);
+    newConfig.packages = checkedPackages(newConfig.packageSources, options.isDepend ? {} : config);
 
     if (newConfig.target.runtime !== 'mt' && newConfig.allDependencies.some((d) => d?.target?.runtime === 'mt')) {
         newConfig.target.runtime = 'mt';

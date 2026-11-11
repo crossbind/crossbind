@@ -2,9 +2,9 @@
 import fs from 'node:fs';
 import upath from 'upath';
 import state, { saveCache } from '../state/index.js';
-import refreshConanDependencies from '../state/refreshConanDependencies.js';
+import refreshPackageSources from '../state/refreshPackageSources.js';
 import refreshBuiltDependencies from '../state/refreshBuiltDependencies.js';
-import { conanInputsOf } from '../utils/conanDependencies.js';
+import { packageSourceInputsOf, sourceNamesOf } from '../utils/packageSources.js';
 import { getContentHash, getFileHash } from '../utils/hash.js';
 import guardAsyncBindings from '../utils/bridgeAsyncGuard.js';
 import fixBridgeRuntime from '../utils/bridgeRuntimeFixes.js';
@@ -12,7 +12,7 @@ import {
     interfaceExtras, bridgeExtras, hasPointerRuntime, withPointerRuntimeAnchor, withoutBridgeExtras, POINTER_RUNTIME_ANCHOR,
 } from '../utils/bridgeExtras.js';
 import resolveNativeImport from '../integration/resolveNativeImport.js';
-import { writeHeaderDts, writeConanImportDts } from '../utils/cppDts.js';
+import { writeHeaderDts, writeSourceImportDts } from '../utils/cppDts.js';
 import { ALL_NAMES, findHeaderImportsIn } from '../utils/headerImports.js';
 import {
     buildInterfaceContent, completingIncludes, findHeaderPrelude, findIgnoredDeclarations, findSwigInlineIncludes, findSwigPreamble,
@@ -21,7 +21,7 @@ import {
 } from '../utils/swigInterface.js';
 import writeIfChanged from '../utils/writeIfChanged.js';
 import { withDirLockSync } from '../utils/dirLock.js';
-import { conanImportOfHeader } from '../utils/conanImport.js';
+import { sourceImportOfHeader } from '../utils/packageSourceImport.js';
 import run, { cxxPreprocessorFor } from './run.js';
 import isSourceCmakePackage from '../utils/isSourceCmakePackage.js';
 import {
@@ -53,9 +53,9 @@ export default function createBridgeFile(headerOrModuleFilePath, target = state.
 }
 
 function bindHeader(headerOrModuleFilePath, target, { withDependencies = true, wholeHeaders = [] } = {}) {
-    // A header can include a Conan package's headers that a build staged after this process loaded, or belong to a
-    // dependency built since.
-    refreshConanDependencies(state.config);
+    // A header can include the headers of a package source's package that a build staged after this process loaded,
+    // or belong to a dependency built since.
+    refreshPackageSources(state.config);
     refreshBuiltDependencies(state.config);
     // Without bridge-tools on a Mac the macro step would fail quietly, and its interface would be kept without macros.
     if (usesBridgeTools(target)) loadBridgeTools();
@@ -76,7 +76,7 @@ function bindHeader(headerOrModuleFilePath, target, { withDependencies = true, w
     const { headerPath } = includeLocation(interfaceFilePath, target);
     const inlined = findSwigInlineIncludes(interfaceFilePath, [state.config, ...state.config.allDependencies], headerPath);
     const swigView = inlined.length ? writeSwigView(interfaceFilePath, headerPath, inlined) : null;
-    const sourceHash = [getFileHash(interfaceFilePath), ...conanInputsHash()].join('\n');
+    const sourceHash = [getFileHash(interfaceFilePath), ...packageInputsHash()].join('\n');
     // The names imported by name decide what the bridge adds to SWIG's output, so another one makes another bridge.
     const bridgeSourceHash = names.named.length ? `${sourceHash}\nnamed:${names.named.join(',')}` : sourceHash;
     const extras = { named: names.named, headerText: () => fs.readFileSync(swigView ? upath.join(swigView.dir, headerPath) : interfaceFilePath, 'utf8') };
@@ -91,13 +91,14 @@ function bindHeader(headerOrModuleFilePath, target, { withDependencies = true, w
             exportsFile: `${bridgeFile}.exports.json`,
             projectPath: state.config.paths.project,
             cacheDir: state.config.paths.cache,
+            sources: sourceNamesOf(state.config),
             dtsMode: state.config.dts,
         };
         writeHeaderDts(dtsOptions);
-        if (conanImportOfHeader(interfaceFilePath, state.config.paths.cache)) {
-            dtsOptions.declarationsFile = createConanDeclarations(interfaceFile, target, sourceDir, sourceHash, swigView);
+        if (sourceImportOfHeader(interfaceFilePath, dtsOptions.cacheDir, dtsOptions.sources)) {
+            dtsOptions.declarationsFile = createSourceDeclarations(interfaceFile, target, sourceDir, sourceHash, swigView);
         }
-        writeConanImportDts(dtsOptions);
+        writeSourceImportDts(dtsOptions);
     }
     if (bridgeFile && withDependencies && !moduleRegex.test(interfaceFilePath)) {
         // A header's own bindings need the types its declarations use registered, which only their headers' bridges do.
@@ -115,11 +116,11 @@ function bindHeader(headerOrModuleFilePath, target, { withDependencies = true, w
     return bridgeFile;
 }
 
-// The Conan packages a header's includes may reach, for the interface and bridge caches: they are
-// staged after a header may already be bound, and restaged in place for another version.
-function conanInputsHash() {
-    const conan = conanInputsOf(state.config);
-    return conan ? [`conan:${getContentHash(JSON.stringify(conan))}`] : [];
+// The packages of package sources a header's includes may reach, for the interface and bridge caches: they
+// are staged after a header may already be bound, and restaged in place for another version.
+function packageInputsHash() {
+    const inputs = packageSourceInputsOf(state.config);
+    return inputs ? [`packages:${getContentHash(JSON.stringify(inputs))}`] : [];
 }
 
 // A header binds the constants the app imports from it, and so the free functions of a dependency's header: the project's
@@ -159,9 +160,9 @@ function createInterfaceFile(headerOrModuleFilePath, target, sourceDir, { consta
     const filePathWithoutExt = headerOrModuleFilePath.match(/^(.*)\..+?$/)?.[1];
     const interfaceFile = !isModule && filePathWithoutExt ? `${filePathWithoutExt}.i` : null;
     // A prelude or ignored-declaration change in the owning package, a completed class moving to another header, an
-    // interface the package ships beside the header changing or going away, another imported name, Conan packages
-    // its includes may reach being staged or moving to another version, or the header included by another path, as
-    // another target finds it, must regenerate the interface as well.
+    // interface the package ships beside the header changing or going away, another imported name, packages of a
+    // package source its includes may reach being staged or moving to another version, or the header included by
+    // another path, as another target finds it, must regenerate the interface as well.
     const fileHash = [
         INTERFACE_FORMAT, getFileHash(headerOrModuleFilePath), ...(headerPath ? [`include:${headerPath}`] : []), ...prelude,
         ...(ignored.length ? [`ignored:${ignored.join(',')}`] : []), ...(completing.length ? [`completing:${completing.join(',')}`] : []),
@@ -170,7 +171,7 @@ function createInterfaceFile(headerOrModuleFilePath, target, sourceDir, { consta
         ...(constants.length ? [`constants:${constants === ALL_NAMES ? ALL_NAMES : constants.join(',')}`] : []),
         ...(functions === ALL_NAMES ? [] : [`functions:${functions.join(',')}`]),
         ...(named.length ? [`named:${named.join(',')}`] : []),
-        ...conanInputsHash(),
+        ...packageInputsHash(),
     ].join('\n');
     const cachedInterface = state.cache.interfaces[headerOrModuleFilePath];
     if (state.cache.hashes[headerOrModuleFilePath] === fileHash && cachedInterface && fs.existsSync(cachedInterface)
@@ -518,7 +519,7 @@ function createBridgeFileFromInterfaceFile(interfaceFilePath, target, sourceDir 
 }
 
 // Generate a full export catalog for the editor, without compiling or linking these extra functions.
-function createConanDeclarations(interfaceFile, target, sourceDir, sourceHash, swigView) {
+function createSourceDeclarations(interfaceFile, target, sourceDir, sourceHash, swigView) {
     const dir = `${state.config.paths.build}/declarations`;
     fs.mkdirSync(dir, { recursive: true });
     const file = `${dir}/${upath.basename(interfaceFile)}`;

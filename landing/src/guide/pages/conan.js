@@ -19,10 +19,12 @@ export default {
             type: 'code',
             file: 'crossbind.config.js',
             code: `export default {
-    conanDependencies: {
-        zlib: '1.3.2',
-        libpng: '[>=1.6 <2]',
-        sqlite3: { version: '3.53.4', options: { enable_fts5: true } },
+    packages: {
+        conan: {
+            zlib: '1.3.2',
+            libpng: '[>=1.6 <2]',
+            sqlite3: { version: '3.53.4', options: { enable_fts5: true } },
+        },
     },
     paths: { config: import.meta.url },
 };`,
@@ -30,7 +32,7 @@ export default {
         {
             type: 'ul',
             items: [
-                'A key is the Conan package name. Its value is a version, a Conan version range, or `{ version, options }` with options the recipe defines, as strings, numbers or booleans.',
+                '`packages.conan` holds what `conan:` imports. A key is the Conan package name. Its value is a version, a Conan version range, or `{ version, options }` with options the recipe defines, as strings, numbers or booleans.',
                 '`shared` is not an option you can set: every package links statically into the module.',
             ],
         },
@@ -47,7 +49,7 @@ console.log(await zlibVersion(), await compressBound(1000));`,
         },
         {
             type: 'p',
-            text: "`conan:<package>/<header>` names a header under the package's include directory, subdirectories included: `conan:libxml2/libxml/parser.h`. Importing a package that `conanDependencies` does not declare fails the build. A package another one requires - zlib under libpng - is built and linked either way, and importable once you declare it.",
+            text: "`conan:<package>/<header>` names a header under the package's include directory, subdirectories included: `conan:libxml2/libxml/parser.h`. Importing a package that `packages.conan` does not declare fails the build. A package another one requires - zlib under libpng - is built and linked either way, and importable once you declare it.",
         },
         {
             type: 'p',
@@ -88,7 +90,7 @@ console.log(await Text.price(3.14159));`,
         { type: 'h2', id: 'platforms', text: 'React Native and Node.js' },
         {
             type: 'p',
-            text: 'The same imports work in a React Native app on Android and iOS; the native build installs the packages before Metro bundles the bridges. Android packages are built for API level 33, as the ports are, so in an app with a lower `minSdkVersion` a package that calls a newer libc function fails to link. iOS packages are built for device and simulator, arm64 and iOS 15.1, and each library becomes an xcframework the `react-native-crossbind` pod vendors - run `pod install` again after you change `conanDependencies`.',
+            text: 'The same imports work in a React Native app on Android and iOS; the native build installs the packages before Metro bundles the bridges. Android packages are built for API level 33, as the ports are, so in an app with a lower `minSdkVersion` a package that calls a newer libc function fails to link. iOS packages are built for device and simulator, arm64 and iOS 15.1, and each library becomes an xcframework the `react-native-crossbind` pod vendors - run `pod install` again after you change `packages.conan`.',
         },
         {
             type: 'p',
@@ -102,7 +104,7 @@ console.log(await Text.price(3.14159));`,
                 'When a build starts - in a bundler plugin, `crossbind build`, or the Gradle or Xcode build of a React Native app - crossbind runs `conan install` for each release target it needs, with a profile written from the toolchain the ports are built with. Every package is a static library.',
                 'ConanCenter publishes no binaries for these toolchains, so each package builds from source the first time. Built packages stay in `~/.crossbind/conan/store`, shared by every project; iOS, macOS and `RUNNER=LOCAL` builds use `~/.crossbind/conan-local/store`.',
                 'Each package is staged in `.crossbind/conan/packages/<package>/dist/prebuilt/<target>/`, the layout a port ships, and linked like one. A debug build links the release archives.',
-                "A target is installed again only when its inputs change: `conanDependencies`, the toolchain, crossbind's profile or `conan.lock`.",
+                "A target is installed again only when its inputs change: `packages.conan`, the toolchain, crossbind's profile or `conan.lock`.",
             ],
         },
         {
@@ -147,7 +149,7 @@ console.log(await Text.price(3.14159));`,
         {
             type: 'ul',
             items: [
-                'No WASI: Conan has no WASI target, and a `crossbind build` that would also build WASI fails while `conanDependencies` is declared - name your platforms with `-p`.',
+                'No WASI: Conan has no WASI target, and a `crossbind build` that would also build WASI fails while `packages.conan` declares a package - name your platforms with `-p`.',
                 "A recipe that does not build for Emscripten, the NDK, iOS, macOS, a Linux sysroot or llvm-mingw fails with Conan's own error; its options can often switch the failing part off.",
                 "Web and React Native builds link a package's own archives only: the system libraries and Apple frameworks its recipe asks for are not added.",
                 "A header binds as far as a port's does: C APIs bind, variadic functions when imported by name, templates do not.",

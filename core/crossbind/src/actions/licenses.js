@@ -17,6 +17,7 @@ import { DESKTOP_PLATFORMS } from './buildApp.js';
 import extensionsInApp from './extensionsInApp.js';
 import { ANDROIDX_WEBKIT } from './gradleProject.js';
 import { extensionPackage, extensionPart } from '../utils/appExtensions.js';
+import { declaredSources, declarationOf, dependenciesOf } from '../utils/packageSources.js';
 import { shippedBundledLicense } from '../utils/bundledLicenses.js';
 import toolchainNoticesDir from '../utils/toolchainNotices.js';
 
@@ -458,9 +459,9 @@ async function buildRow(node) {
     };
 }
 
-// A Conan package's facts come from its recipe, and its texts from the licenses/ its package ships.
-function conanRow(node) {
-    const { conan } = node.general;
+// The facts of a package source's package come from its recipe, and its texts from the licenses/ its package ships.
+function sourcePackageRow(node) {
+    const { name: source, package: pkg } = node.general.packageSource;
     const licenseDir = `${node.paths.project}/licenses`;
     const files = fs.existsSync(licenseDir)
         ? fs.readdirSync(licenseDir, { recursive: true, withFileTypes: true }).filter((entry) => entry.isFile())
@@ -468,29 +469,32 @@ function conanRow(node) {
     const texts = files.map((entry) => path.join(entry.parentPath, entry.name)).sort()
         .map((file) => `=== ${path.relative(licenseDir, file)} ===\n\n${fs.readFileSync(file, 'utf8').trim()}`);
     return {
-        name: conan.name,
+        name: pkg.name,
         npmName: null,
         version: null,
-        nativeVersion: conan.version,
-        license: conan.license,
+        nativeVersion: pkg.version,
+        license: pkg.license,
         licenseDeclared: null,
         licenseSelected: null,
-        licenseNotes: `built from the ConanCenter recipe ${conan.ref}`,
-        sha256: conan.source?.sha256 ?? null,
-        sourceUrl: conan.source?.url ?? conan.homepage ?? null,
+        licenseNotes: `built from the ${source} package ${pkg.ref}`,
+        sha256: pkg.source?.sha256 ?? null,
+        sourceUrl: pkg.source?.url ?? pkg.homepage ?? null,
         licenseText: texts.length > 0 ? texts.join('\n\n') : null,
-        isCopyleft: isCopyleft(conan.license),
-        purl: `pkg:conan/${conan.name}@${conan.version}`,
+        isCopyleft: isCopyleft(pkg.license),
+        purl: `pkg:${source}/${pkg.name}@${pkg.version}`,
     };
 }
 
-// Conan packages join the graph from the stage a build makes; without it they would be left out unseen.
-function assertConanStaged() {
-    const attached = new Set(state.config.allDependencies.filter((d) => d.general.conan).map((d) => d.general.conan.name));
-    const missing = Object.keys(state.config.conanDependencies ?? {}).filter((name) => !attached.has(name));
-    if (missing.length > 0) {
-        throw new Error(`crossbind: the Conan packages ${missing.join(', ')} are not installed for the current conanDependencies, so their rows would be missing. Build the project first.`);
-    }
+// The packages of package sources join the graph from the stage a build makes; without it they would be left out unseen.
+function assertSourcesStaged() {
+    declaredSources(state.config).forEach(({ name }) => {
+        const attached = new Set(state.config.allDependencies.filter((d) => d.general.packageSource?.name === name)
+            .map((d) => d.general.packageSource.package.name));
+        const missing = Object.keys(dependenciesOf(state.config, name)).filter((pkg) => !attached.has(pkg));
+        if (missing.length > 0) {
+            throw new Error(`crossbind: the ${name} packages ${missing.join(', ')} are not installed for the current ${declarationOf(name)}, so their rows would be missing. Build the project first.`);
+        }
+    });
 }
 
 // platform (optional, e.g. 'wasi') additionally includes what that platform's
@@ -499,23 +503,25 @@ function assertConanStaged() {
 // addon of that platform compiles in, or without a platform the one its loader bundles;
 // runtimeEnv 'app' adds what an app's host carries.
 export default async function collectLicenseRows(platform = null, { runtimeEnv = null } = {}) {
-    assertConanStaged();
+    assertSourcesStaged();
     // The root package is a component too when it is a port: leaf -wasi packages have no deps but ship
     // their own upstream. A dependency that is no port, such as a library a project publishes, is one by
     // its package name; a private package is the project's own code, like the app.
-    const keyOf = (node) => (node.general.conan ? `conan:${node.general.conan.name}` : node.general.alias?.package ?? node.package?.name);
+    const keyOf = ({ general, package: manifest }) => (general.packageSource
+        ? `${general.packageSource.name}:${general.packageSource.package.name}`
+        : general.alias?.package ?? manifest?.name);
     const nodes = [state.config, ...state.config.allDependencies]
         .filter((node, index) => node?.paths?.project
-            && (node.general?.alias?.package || node.general?.conan || (index > 0 && node.package?.name && !node.package.private)));
+            && (node.general?.alias?.package || node.general?.packageSource || (index > 0 && node.package?.name && !node.package.private)));
     const rows = [];
     const seen = new Set();
     for (const node of nodes) {
         const key = keyOf(node);
         if (seen.has(key)) continue;
         seen.add(key);
-        rows.push(node.general.conan ? conanRow(node) : await buildRow(node));
-        // A Conan package's folder is written from what its recipe produced: nothing there is run.
-        if (platform && !node.general.conan) {
+        rows.push(node.general.packageSource ? sourcePackageRow(node) : await buildRow(node));
+        // A package source's package folder is written from what its recipe produced: nothing there is run.
+        if (platform && !node.general.packageSource) {
             const familyProjects = nodes.filter((other) => keyOf(other) === key).map((other) => other.paths.project);
             rows.push(...await bundledRowsOf(node, platform, familyProjects));
         }

@@ -6,9 +6,9 @@ import os from 'node:os';
 import path from 'node:path';
 import upath from 'upath';
 import { getFilledConfig } from '../src/state/loadConfig.js';
-import attachConanDependencies from '../src/state/attachConanDependencies.js';
-import { conanDependenciesKey, normalizeConanDependencies } from '../src/utils/conanDependencies.js';
-import { writeConanManifest } from '../src/utils/conanStage.js';
+import attachPackageSources from '../src/state/attachPackageSources.js';
+import { dependenciesKey } from '../src/utils/packageSources.js';
+import { writeSourceManifest } from '../src/utils/packageSourceStage.js';
 import { filterTargetSpecs } from '../src/utils/targets.js';
 
 const TARGET = { platform: 'wasm', path: 'wasm-wasm32-st-release', releasePath: 'wasm-wasm32-st-release' };
@@ -22,10 +22,12 @@ const PACKAGES = [
 ];
 
 let project;
-const stageDir = () => upath.join(project, '.crossbind', 'conan');
+const stageDir = (source = 'conan') => upath.join(project, '.crossbind', source);
+const appConfig = (conan, { packages = {}, ...rest } = {}) => getFilledConfig({ paths: { project }, ...rest, packages: { conan, ...packages } });
 
-function stage(conanDependencies, packages = PACKAGES) {
-    writeConanManifest(stageDir(), TARGET.path, { key: conanDependenciesKey(normalizeConanDependencies(conanDependencies)), packages });
+// Staged for what the config makes of the declaration, as an install stages them.
+function stage(conan, packages = PACKAGES) {
+    writeSourceManifest(stageDir(), TARGET.path, { key: dependenciesKey(appConfig(conan).packages.conan), packages });
     packages.forEach((pkg) => {
         const dir = upath.join(stageDir(), 'packages', pkg.name);
         fs.mkdirSync(upath.join(dir, 'dist', 'prebuilt', TARGET.path, 'lib'), { recursive: true });
@@ -34,29 +36,28 @@ function stage(conanDependencies, packages = PACKAGES) {
     });
 }
 
-const appConfig = (conanDependencies) => getFilledConfig({ paths: { project }, conanDependencies });
-const conanNames = (dependencies) => dependencies.filter((d) => d.general.conan).map((d) => d.general.name);
+const sourceNames = (dependencies) => dependencies.filter((d) => d.general.packageSource).map((d) => d.general.name);
 
 beforeEach(() => {
-    project = upath.normalize(fs.mkdtempSync(path.join(os.tmpdir(), 'crossbind-conan-attach-')));
-    fs.writeFileSync(upath.join(project, 'package.json'), JSON.stringify({ name: 'conan-attach-app', version: '0.0.0' }));
+    project = upath.normalize(fs.mkdtempSync(path.join(os.tmpdir(), 'crossbind-source-attach-')));
+    fs.writeFileSync(upath.join(project, 'package.json'), JSON.stringify({ name: 'source-attach-app', version: '0.0.0' }));
 });
 
 afterEach(() => {
     fs.rmSync(project, { recursive: true, force: true });
 });
 
-describe('attaching the staged Conan packages', () => {
+describe('attaching the staged packages of package sources', () => {
     test('every staged package joins the config as a dependency the link and the cmake graph see', () => {
         stage({ libpng: '1.6.58' });
         const config = appConfig({ libpng: '1.6.58' });
 
-        attachConanDependencies(config);
+        attachPackageSources(config);
 
-        expect(conanNames(config.dependencies)).toEqual(['conan_libpng', 'conan_zlib']);
-        expect(conanNames(config.allDependencies)).toEqual(['conan_libpng', 'conan_zlib']);
+        expect(sourceNames(config.dependencies)).toEqual(['conan_libpng', 'conan_zlib']);
+        expect(sourceNames(config.allDependencies)).toEqual(['conan_libpng', 'conan_zlib']);
         const libpng = config.dependencies.find((d) => d.general.name === 'conan_libpng');
-        expect(libpng.general.conan).toMatchObject({ name: 'libpng', license: 'libpng-2.0' });
+        expect(libpng.general.packageSource).toMatchObject({ name: 'conan', package: { name: 'libpng', license: 'libpng-2.0' } });
         expect(libpng.export.libName).toEqual(['png']);
         expect(libpng.paths.output).toBe(upath.join(stageDir(), 'packages', 'libpng', 'dist'));
         expect(libpng.functions.isEnabled(TARGET)).toBe(true);
@@ -67,16 +68,16 @@ describe('attaching the staged Conan packages', () => {
         stage({ libpng: '1.6.58' });
         const config = appConfig({ libpng: '1.6.58' });
 
-        attachConanDependencies(config);
-        attachConanDependencies(config);
+        attachPackageSources(config);
+        attachPackageSources(config);
 
-        expect(conanNames(config.allDependencies)).toEqual(['conan_libpng', 'conan_zlib']);
+        expect(sourceNames(config.allDependencies)).toEqual(['conan_libpng', 'conan_zlib']);
     });
 
     // libcurl staged for each target with what its recipe declares there.
     function stageCurl(fieldsByTarget) {
-        const key = conanDependenciesKey(normalizeConanDependencies({ libcurl: '8.22.0' }));
-        Object.entries(fieldsByTarget).forEach(([targetPath, fields]) => writeConanManifest(stageDir(), targetPath, {
+        const key = dependenciesKey(appConfig({ libcurl: '8.22.0' }).packages.conan);
+        Object.entries(fieldsByTarget).forEach(([targetPath, fields]) => writeSourceManifest(stageDir(), targetPath, {
             key,
             packages: [{
                 name: 'libcurl', version: '8.22.0', ref: 'libcurl/8.22.0#0123456789abcdef0123456789abcdef', license: 'curl', libs: ['curl'], requires: [], ...fields,
@@ -87,7 +88,7 @@ describe('attaching the staged Conan packages', () => {
         fs.writeFileSync(upath.join(dir, 'dist', 'prebuilt', 'CMakeLists.txt'), '');
         fs.writeFileSync(upath.join(dir, 'package.json'), JSON.stringify({ name: 'conan:libcurl', version: '8.22.0' }));
         const config = appConfig({ libcurl: '8.22.0' });
-        attachConanDependencies(config);
+        attachPackageSources(config);
         return config.dependencies.find((d) => d.general.name === 'conan_libcurl');
     }
 
@@ -128,12 +129,36 @@ describe('attaching the staged Conan packages', () => {
         });
     });
 
-    test('packages staged for other conanDependencies are left out', () => {
+    test('packages staged for what packages.conan declared before are left out', () => {
         stage({ libpng: '1.6.57' });
         const config = appConfig({ libpng: '1.6.58' });
 
-        attachConanDependencies(config);
+        attachPackageSources(config);
 
-        expect(conanNames(config.allDependencies)).toEqual([]);
+        expect(sourceNames(config.allDependencies)).toEqual([]);
+    });
+
+    test('the packages of a source the project lists join beside conan\'s, each under its source\'s name', () => {
+        const vcpkg = {
+            name: 'vcpkg', contract: 2, root: project, packageSource: { check: (declared) => declared ?? {}, install: () => ({ packages: [] }) },
+        };
+        const rest = { extensions: [vcpkg], packages: { vcpkg: { fmt: '12.2.0' } } };
+        stage({ zlib: '1.3.2' }, [PACKAGES[1]]);
+        writeSourceManifest(stageDir('vcpkg'), TARGET.path, {
+            key: dependenciesKey({ fmt: '12.2.0' }),
+            packages: [{
+                name: 'fmt', version: '12.2.0', ref: 'fmt/12.2.0', license: 'MIT', libs: ['fmt'], requires: [],
+            }],
+        });
+        fs.mkdirSync(upath.join(stageDir('vcpkg'), 'packages', 'fmt', 'dist', 'prebuilt'), { recursive: true });
+        fs.writeFileSync(upath.join(stageDir('vcpkg'), 'packages', 'fmt', 'dist', 'prebuilt', 'CMakeLists.txt'), '');
+        const config = appConfig({ zlib: '1.3.2' }, rest);
+
+        attachPackageSources(config);
+
+        expect(sourceNames(config.allDependencies)).toEqual(['conan_zlib', 'vcpkg_fmt']);
+        const fmt = config.dependencies.find((d) => d.general.name === 'vcpkg_fmt');
+        expect(fmt.general.packageSource).toMatchObject({ name: 'vcpkg', package: { name: 'fmt', version: '12.2.0' } });
+        expect(fmt.paths.project).toBe(upath.join(stageDir('vcpkg'), 'packages', 'fmt'));
     });
 });

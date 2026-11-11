@@ -9,6 +9,8 @@ import { ENTRY_RUNTIMES } from '../src/utils/runtimeEntries.js';
 import writeRuntimeEntry, { removeImportHooks, writeImportHooks, writeImportManifest } from '../src/actions/writeRuntimeEntry.js';
 
 const EXTENSIONS = ['h', 'hpp', 'hxx', 'hh', 'i', 'rs'];
+// What an import names a store by: cargo, and the project's package sources.
+const SCHEMES = ['cargo', 'conan'];
 
 let work;
 
@@ -35,7 +37,7 @@ function bound(file, names) {
 }
 
 // A dist shaped like a Node build's: the CommonJS loader, the entry and the hooks beside it.
-function writeBuild(headers, imports = new Map(), out = 'dist') {
+function writeBuild(headers, imports = new Map(), out = 'dist', schemes = SCHEMES) {
     write(`${out}/demo.node.js`, [
         "const members = { Native: { sample: () => 'J3' }, ANSWER: 42, Matrix: class Matrix {}, semver_Version: class SemverVersion {}, argon2_Version: class Argon2Version {} };",
         'module.exports = () => Promise.resolve({ ...members });',
@@ -43,7 +45,7 @@ function writeBuild(headers, imports = new Map(), out = 'dist') {
         '',
     ].join('\n'));
     writeRuntimeEntry(upath.join(work, `${out}/node/wasm.mjs`), headers, ENTRY_RUNTIMES.node('demo.node.js'));
-    writeImportHooks(upath.join(work, `${out}/node/wasm.mjs`), headers, imports, EXTENSIONS);
+    writeImportHooks(upath.join(work, `${out}/node/wasm.mjs`), headers, imports, EXTENSIONS, schemes);
 }
 
 function runApp(app, out = 'dist') {
@@ -151,6 +153,28 @@ describe('writeImportHooks', () => {
 
         expect(runApp('src/conan.mjs').stderr).toContain('crossbind: conan:zlib/zlib.h, imported from');
         expect(runApp('src/cargo.mjs').stderr).toContain('crossbind: cargo:serde_json, imported from');
+    });
+
+    test("names the build for an import by the scheme of a package source the project lists", () => {
+        write('src/native/native.h');
+        writeBuild([bound('src/native/native.h', ['Native'])], new Map(), 'dist', [...SCHEMES, 'acme']);
+        write('src/acme.mjs', "import 'acme:fmt/format';\n");
+
+        expect(runApp('src/acme.mjs').stderr).toContain('crossbind: acme:fmt/format, imported from');
+    });
+
+    // A build's two formats share hooks.mjs, and building one leaves the other's register file as an older build wrote it.
+    test('a register file that names no scheme, as an older build wrote it, still serves its imports', () => {
+        write('src/native/native.h');
+        writeBuild([bound('src/native/native.h', ['Native'])]);
+        const register = upath.join(work, 'dist/node/wasm.register.mjs');
+        fs.writeFileSync(register, fs.readFileSync(register, 'utf8').replace(/\n {4}"schemes": \[[^\]]*\],/, ''));
+        write('src/app.mjs', "import { initNative, Native } from './native/native.h';\nawait initNative();\nconsole.log(Native.sample());\n");
+        write('src/conan.mjs', "import 'conan:zlib/zlib.h';\n");
+
+        expect(fs.readFileSync(register, 'utf8')).not.toContain('schemes');
+        expect(runApp('src/app.mjs')).toMatchObject({ stdout: 'J3', status: 0 });
+        expect(runApp('src/conan.mjs').stderr).toContain('crossbind: conan:zlib/zlib.h, imported from');
     });
 
     test('fails to link an import of a name the header does not export', () => {

@@ -5,7 +5,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import upath from 'upath';
-import { writeConanImportDts, writeHeaderDts } from '../src/utils/cppDts.js';
+import { writeSourceImportDts, writeHeaderDts } from '../src/utils/cppDts.js';
 
 let project;
 const cacheDir = () => upath.join(project, '.crossbind');
@@ -23,12 +23,12 @@ afterEach(() => {
 });
 
 const writeOptions = () => ({
-    headerFile: stagedHeader(), exportsFile: upath.join(project, 'zlib.i.cpp.exports.json'), projectPath: project, cacheDir: cacheDir(),
+    headerFile: stagedHeader(), exportsFile: upath.join(project, 'zlib.i.cpp.exports.json'), projectPath: project, cacheDir: cacheDir(), sources: ['conan'],
 });
 
-describe('editor types of a conan: import', () => {
+describe("editor types of a package source's import", () => {
     test('an ambient module named after the import declares what the bridge exports', () => {
-        writeConanImportDts(writeOptions());
+        writeSourceImportDts(writeOptions());
 
         const dts = fs.readFileSync(upath.join(cacheDir(), 'conan', 'types', 'zlib', 'zlib.h.d.ts'), 'utf8');
         expect(dts.startsWith("declare module 'conan:zlib/zlib.h' {\n")).toBe(true);
@@ -49,7 +49,7 @@ describe('editor types of a conan: import', () => {
         fs.writeFileSync(writeOptions().exportsFile, JSON.stringify(['zlibVersion']));
         fs.writeFileSync(declarationsFile, JSON.stringify(['zlibVersion', 'compressBound']));
 
-        writeConanImportDts({ ...writeOptions(), declarationsFile });
+        writeSourceImportDts({ ...writeOptions(), declarationsFile });
 
         const dts = fs.readFileSync(upath.join(cacheDir(), 'conan/types/zlib/zlib.h.d.ts'), 'utf8');
         expect(dts).toContain('export const compressBound: any;');
@@ -60,7 +60,7 @@ describe('editor types of a conan: import', () => {
         fs.writeFileSync(writeOptions().exportsFile, JSON.stringify(['zlibVersion', 'gzprintf', 'vaDouble']));
         fs.writeFileSync(declarationsFile, JSON.stringify(['zlibVersion', 'compressBound']));
 
-        writeConanImportDts({ ...writeOptions(), declarationsFile });
+        writeSourceImportDts({ ...writeOptions(), declarationsFile });
 
         const dts = fs.readFileSync(upath.join(cacheDir(), 'conan/types/zlib/zlib.h.d.ts'), 'utf8');
         expect(dts).toContain('export const compressBound: any;');
@@ -68,13 +68,36 @@ describe('editor types of a conan: import', () => {
         expect(dts).toContain('export const vaDouble: any;');
     });
 
-    test('a header that is not staged by Conan gets no ambient module', () => {
+    test('a header that no source staged gets no ambient module', () => {
         const header = upath.join(project, 'src', 'native', 'zlib.h');
         fs.mkdirSync(path.dirname(header), { recursive: true });
         fs.copyFileSync(stagedHeader(), header);
 
-        writeConanImportDts({ ...writeOptions(), headerFile: header });
+        writeSourceImportDts({ ...writeOptions(), headerFile: header });
 
         expect(fs.existsSync(upath.join(cacheDir(), 'conan', 'types'))).toBe(false);
+    });
+
+    test("another source's header is typed under that source's scheme and folder", () => {
+        const header = upath.join(cacheDir(), 'vcpkg', 'packages', 'zlib', 'dist', 'prebuilt', 'wasm-wasm32-st-release', 'include', 'zlib.h');
+        fs.mkdirSync(path.dirname(header), { recursive: true });
+        fs.copyFileSync(stagedHeader(), header);
+
+        writeSourceImportDts({ ...writeOptions(), headerFile: header, sources: ['conan', 'vcpkg'] });
+        writeHeaderDts({ ...writeOptions(), headerFile: header, sources: ['conan', 'vcpkg'] });
+
+        const dts = fs.readFileSync(upath.join(cacheDir(), 'vcpkg', 'types', 'zlib', 'zlib.h.d.ts'), 'utf8');
+        expect(dts.startsWith("declare module 'vcpkg:zlib/zlib.h' {\n")).toBe(true);
+        expect(fs.existsSync(upath.join(cacheDir(), 'types'))).toBe(false);
+    });
+
+    test('a folder named as a source the project has not is a folder of the project like any other', () => {
+        const header = upath.join(cacheDir(), 'vcpkg', 'packages', 'zlib', 'dist', 'prebuilt', 'wasm-wasm32-st-release', 'include', 'zlib.h');
+        fs.mkdirSync(path.dirname(header), { recursive: true });
+        fs.copyFileSync(stagedHeader(), header);
+
+        writeSourceImportDts({ ...writeOptions(), headerFile: header });
+
+        expect(fs.existsSync(upath.join(cacheDir(), 'vcpkg', 'types'))).toBe(false);
     });
 });

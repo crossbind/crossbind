@@ -40,7 +40,7 @@ const TOOLCHAIN_ENV = Object.freeze({
     CARGO_NET_OFFLINE: 'true',
 });
 
-// The store's two halves where crossbind keeps them under HOME (runCargo.js cargoHome, runConan.js conanRoot under
+// The store's two halves where crossbind keeps them under HOME (runCargo.js cargoHome, runPackageSource.js sourceRoot under
 // LOCAL). Both are written to even when nothing new is built, so each compile gets a throwaway layer over them.
 const storesOf = (paths) => [
     { from: `${paths.store}/cargo`, to: '/tmp/home/.crossbind/cargo' },

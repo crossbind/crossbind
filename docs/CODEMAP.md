@@ -31,7 +31,7 @@ crossbind/
 │   ├── bridge-tools/                 ← the image's SWIG as WebAssembly + em++'s headers: macOS and iOS bridges on a Mac without Docker
 │   ├── cloud/                        ← crossbind cloud on api.crossbind.dev: the playground compiler, the accounts `crossbind login` signs in to, a runner per user and image
 │   └── typescript-config/            ← shared tsconfig
-├── extensions/                       ← app extensions: crossbind's own, which app-host has as dependencies, and clipboard
+├── extensions/                       ← extensions: the app's, which app-host has as dependencies, clipboard, and the package source conan, which crossbind has
 ├── plugins/
 │   ├── vite/
 │   ├── webpack/
@@ -73,7 +73,7 @@ Every consumer-facing field, every default, every constraint lives in [`docs/api
 - [`remote-runner.md`](./api/remote-runner.md) — `RUNNER=REMOTE` builds on remote runners at `REMOTE_URL_<IMAGE>` / `REMOTE_URL`; `crossbind runner start`, `runner init fly|cloudflare|cloudrun|azure`.
 - [`cpp-binding-rules.md`](./api/cpp-binding-rules.md) — what auto-binding handles + wrapper / SWIG escape patterns.
 - [`rust.md`](./api/rust.md) — Rust bindings: `cargo:` imports, app-local `.rs`, cargo-type packages, `crossbind.cargo.lock`.
-- [`conan.md`](./api/conan.md) — C/C++ packages from ConanCenter: `conan:` imports, `conanDependencies`, `conan.lock`.
+- [`conan.md`](./api/conan.md) — C/C++ packages from ConanCenter: `conan:` imports, `packages.conan`, `conan.lock`.
 - [`native.md`](./api/native.md) — desktop platforms beyond Node.js addons: native executables and prebuilt archives in your own C/C++ build.
 - [`wasi.md`](./api/wasi.md) — `platform: 'wasi'` command builds, HTTP components (`-e http`) + `-standalone-wasi` npm tool packages.
 - [`swig-escape.md`](./api/swig-escape.md) — manual `.i` files for the rare cases auto-gen doesn't fit.
@@ -138,7 +138,7 @@ Index + template: [`docs/adr/README.md`](./adr/README.md).
 | Archives of a final link and what stays whole (wasm and addon) | `src/actions/getLinkInputs.js` |
 | WASI command and HTTP component link (single .wasm) | `src/actions/buildWasiCommand.js` |
 | Rust crate build (`export.type: 'cargo'`) | `src/actions/buildCargo.js` |
-| Install and attach `conanDependencies` when a build starts | `src/actions/prepareConanDependencies.js` |
+| Install and attach the packages of package sources, as `packages.conan`, when a build starts | `src/actions/preparePackageSources.js` |
 | -bin tool derivations (commands, multicall, provenance, license) | `src/actions/buildBinTools.js` |
 | License/SBOM row collection (`crossbind licenses`) | `src/actions/licenses.js` |
 | Rollup config for runtime adapters | `src/actions/buildJs.js` |
@@ -169,7 +169,7 @@ Index + template: [`docs/adr/README.md`](./adr/README.md).
 | Merge `crossbind.config.*` + defaults | `src/state/loadConfig.js` |
 | Runtime config singleton | `src/state/index.js` |
 | Default ext lists, paths.\*, dependency graph | `src/state/loadConfig.js` |
-| Staged Conan packages joining the dependencies | `src/state/attachConanDependencies.js` |
+| Staged packages of package sources joining the dependencies | `src/state/attachPackageSources.js`, `src/state/refreshPackageSources.js` |
 
 ### Runtime (JS) layer
 
@@ -238,12 +238,14 @@ Index + template: [`docs/adr/README.md`](./adr/README.md).
 | The linux image's clang wrappers, CMake toolchain files and flags every Linux archive is built with | `src/utils/linuxToolchain.js` |
 | The clang and the macOS every macOS archive is built for, and the host package prefixes it ignores | `src/utils/darwinToolchain.js` |
 | The windows image's llvm-mingw and CMake toolchain files every Windows archive is built with | `src/utils/windowsToolchain.js` |
-| `conan:` specifiers and staged header resolution | `src/utils/conanImport.js` |
-| `conanDependencies` validation, install requirements and options | `src/utils/conanDependencies.js` |
-| Conan host and build profiles from crossbind's toolchain | `src/utils/conanProfile.js` |
-| `conan install` per target: stamps, lock, `conan.lock` | `src/utils/conanInstall.js` |
-| Conan graph → checked, staged prebuilt packages and manifest | `src/utils/conanStage.js` |
-| Every conan invocation (allowlisted env, a home per run, store and docker mounts) | `src/utils/runConan.js` |
+| What crossbind builds a target's own archives with, as the plain data a package source builds its packages to match | `src/utils/targetToolchain.js` |
+| A project's package sources: crossbind's own, which `crossbind` has as dependencies, and those `extensions` lists; the project's `packages` through each source's `check`; the import schemes | `src/utils/packageSources.js` |
+| A source's specifiers, as `conan:<package>/<header>`, and staged header resolution | `src/utils/packageSourceImport.js` |
+| A source's install per target: stamps, the lock, `<name>.lock`, and the source's `inputs` | `src/utils/packageSourceInstall.js` |
+| What a source's steps get of crossbind: `run`, the work directory, the store and the log | `src/utils/packageSourceApi.js` |
+| What a source reports → checked, staged prebuilt packages and manifest | `src/utils/packageSourceStage.js` |
+| Every run of a source's tool (allowlisted env, a work directory per run, store and docker mounts) | `src/utils/runPackageSource.js` |
+| Conan as a package source: `packages.conan`, the host and build profiles, `conan install`, its graph and `conan.lock` | `extensions/conan/` |
 | `RUNNER=DOCKER_EXEC` container mount check (cargo and conan) | `src/utils/execContainer.js` |
 | Where a step runs: `RUNNER`/`CROSSBIND_RUNNER`, each image's runner address and token | `src/utils/selectRunner.js` |
 | What a remote step sends and gets back (roots, files that stay behind) | `src/utils/remoteRunner.js` |

@@ -78,6 +78,12 @@ export const EXTENSION_GROUPS = [
             row('page-location', 'Navigator.geolocation on macOS, which WKWebView leaves out'),
         ],
     },
+    // No app's: every project has these by having crossbind.
+    {
+        id: 'package-sources',
+        label: 'Package sources',
+        items: [row('conan', 'C and C++ packages from ConanCenter, each built with the toolchain of the target it links into')],
+    },
 ];
 
 // Each extension's own page: its README's sections, with its package's npm page and source beside its name.

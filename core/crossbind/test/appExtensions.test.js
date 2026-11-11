@@ -3,7 +3,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, test } from 'vitest';
 import {
-    appExtensionsOf, checkedExtension, checkedInstaller, checkedPublisher, extensionCmakeArgs, extensionPart, linuxDepends, listedExtension, mergedEntitlements,
+    appExtensionsOf, checkedExtension, checkedInstaller, checkedPackageSource, checkedPublisher, extensionCmakeArgs, extensionPart, linuxDepends, listedExtension, mergedEntitlements,
     mergedPlist, mergedPrivacy, ownExtensions,
     registrationSource, withFromApp, withRoles, withoutNamed,
 } from '../src/utils/appExtensions.js';
@@ -108,10 +108,10 @@ describe("an app host's own extensions", () => {
     test("are written for this crossbind's extension contract, else name the app host to update", () => {
         const root = hostOf({ dialog: { json: { contract: undefined, name: 'dialog' } } });
         expect(() => hostExtensions(root)).toThrow(
-            "crossbind: @crossbind/extension-dialog's crossbind.extension.js names no contract, the version of crossbind's extension contract it is written for, as contract: 1 is for this crossbind: update @crossbind/core-app-host to match crossbind.",
+            "crossbind: @crossbind/extension-dialog's crossbind.extension.js names no contract, the version of crossbind's extension contract it is written for, as contract: 2 is for this crossbind: update @crossbind/core-app-host to match crossbind.",
         );
-        const newer = hostOf({ dialog: { json: { contract: 2, name: 'dialog' } } });
-        expect(() => hostExtensions(newer)).toThrow("is written for crossbind's extension contract 2, newer than this crossbind's 1: update crossbind.");
+        const newer = hostOf({ dialog: { json: { contract: 3, name: 'dialog' } } });
+        expect(() => hostExtensions(newer)).toThrow("is written for crossbind's extension contract 3, newer than this crossbind's 2: update crossbind.");
     });
 
     test("of crossbind's own host are the activities', the dialog's, the files', the instance's, the links', the menu's, the page's dialogs, downloads, drops, files, location, navigation and permissions, the power's, the shell's, the shortcuts' and the updater's, which each platform's sources show", () => {
@@ -304,13 +304,14 @@ describe('the extensions an app has', () => {
         ]);
     });
 
-    test("leave out those listed with a publisher or an installer alone, which leave the host's own of their name as it is", () => {
+    test("leave out those listed with a publisher, an installer or a package source alone, which leave the host's own of their name as it is", () => {
         const upload = async () => {};
         const store = { name: 'dialog', root: '/demo', app: {}, publisher: { upload } };
         const installer = { name: 'menu', root: '/demo', app: {}, installer: { make: () => [] } };
+        const source = { name: 'vcpkg', root: '/demo', app: {}, packageSource: { check: () => ({}), install: () => ({}) } };
         const both = { name: 'demo-store', root: '/demo', app: { sources: ['store.cpp'] }, publisher: { upload } };
         const plain = { name: 'clipboard', root: '/demo', app: {} };
-        expect(appExtensionsOf([store, installer, both, plain])).toEqual([both, plain]);
+        expect(appExtensionsOf([store, installer, source, both, plain])).toEqual([both, plain]);
     });
 
     test('stop the build with two listed of one name, as any two of one name do', () => {
@@ -603,7 +604,7 @@ describe('an extension crossbind.config.js lists', () => {
             'crossbind: extensions[0] has the hooks loadConfig, buildWasm, which crossbind no longer runs: an extension adds native code to an app. Set build flags in targetSpecs or crossbind.build.js.',
         );
         expect(() => listedExtension({ contract: 1, name: 'clipboard', root, app: {}, version: 1 }, 'extensions[0]', base))
-            .toThrow('crossbind: extensions[0] takes name, contract, root, app, options, fromApp, publisher, installer, commands, replaces; version is none of them.');
+            .toThrow('crossbind: extensions[0] takes name, contract, root, app, options, fromApp, publisher, installer, commands, packageSource, replaces; version is none of them.');
         expect(() => listedExtension('clipboard', 'extensions[0]', base))
             .toThrow("crossbind: extensions[0] is no extension, as an extension package's crossbind.extension.js gives one.");
     });
@@ -666,21 +667,23 @@ describe('an extension crossbind.config.js lists', () => {
         const { base, root } = project();
         const extension = { name: 'clipboard', root, app: {} };
         expect(() => listedExtension(extension, 'extensions[0]', base)).toThrow(
-            "crossbind: extensions[0] names no contract, the version of crossbind's extension contract it is written for, as contract: 1 is for this crossbind: update it to a version written for this crossbind.",
+            "crossbind: extensions[0] names no contract, the version of crossbind's extension contract it is written for, as contract: 2 is for this crossbind: update it to a version written for this crossbind.",
         );
-        expect(() => listedExtension({ ...extension, contract: 2 }, 'extensions[0]', base))
-            .toThrow("crossbind: extensions[0] is written for crossbind's extension contract 2, newer than this crossbind's 1: update crossbind.");
+        expect(() => listedExtension({ ...extension, contract: 3 }, 'extensions[0]', base))
+            .toThrow("crossbind: extensions[0] is written for crossbind's extension contract 3, newer than this crossbind's 2: update crossbind.");
         // A newer contract may give keys this crossbind does not know, and an app part of a new shape.
-        expect(() => listedExtension({ ...extension, contract: 2, hooks: {}, app: { swift: ['a.swift'] } }, 'extensions[0]', base))
-            .toThrow('newer than this crossbind\'s 1: update crossbind.');
+        expect(() => listedExtension({ ...extension, contract: 3, hooks: {}, app: { swift: ['a.swift'] } }, 'extensions[0]', base))
+            .toThrow('newer than this crossbind\'s 2: update crossbind.');
+        // One written for an older version this crossbind still takes builds as it is.
+        expect([1, 2].map((contract) => listedExtension({ ...extension, contract }, 'extensions[0]', base).name)).toEqual(['clipboard', 'clipboard']);
         for (const contract of ['1', [], [1, 1], [0], 1.5]) {
             expect(() => listedExtension({ ...extension, contract }, 'extensions[0]', base))
                 .toThrow(`crossbind: extensions[0]'s contract ${JSON.stringify(contract)} is no version of crossbind's extension contract, as 1 or [1, 2] is.`);
         }
         // One written for several builds where this crossbind takes one of them.
-        expect(listedExtension({ ...extension, contract: [1, 2] }, 'extensions[0]', base).name).toBe('clipboard');
-        expect(() => listedExtension({ ...extension, contract: [2, 3] }, 'extensions[0]', base))
-            .toThrow("crossbind: extensions[0] is written for crossbind's extension contract 2 and 3, newer than this crossbind's 1: update crossbind.");
+        expect(listedExtension({ ...extension, contract: [2, 3] }, 'extensions[0]', base).name).toBe('clipboard');
+        expect(() => listedExtension({ ...extension, contract: [3, 4] }, 'extensions[0]', base))
+            .toThrow("crossbind: extensions[0] is written for crossbind's extension contract 3 and 4, newer than this crossbind's 2: update crossbind.");
         fs.writeFileSync(path.join(base, 'package.json'), JSON.stringify({ name: '@acme/extension-clipboard', crossbind: { extension: './crossbind.extension.js' } }));
         expect(() => listedExtension(extension, 'extensions[0]', base)).toThrow(': update @acme/extension-clipboard to a version written for this crossbind.');
     });
@@ -788,6 +791,60 @@ describe("an extension's installer", () => {
         expect(listed).toMatchObject({ name: 'appimage', root, app: {}, installer: { platforms: ['linux'] } });
         expect(() => listedExtension({ contract: 1, name: 'appimage', root, installer: { platform: 'linux' } }, 'extensions[0]', base))
             .toThrow("crossbind: extensions[0]'s installer has no make");
+    });
+});
+
+describe("an extension's package source", () => {
+    const check = (dependencies) => dependencies ?? {};
+    const install = () => ({ packages: [], lock: null });
+    const checked = (packageSource, name = 'vcpkg') => checkedPackageSource({ check, install, ...packageSource }, 'extensions[0].packageSource', name);
+
+    test('gives the folders of its store that never change and its steps, which keep it as their this', () => {
+        const source = {
+            storeUnits: ['p/*/p', 'b/*/p'],
+            check() {
+                return this.storeUnits;
+            },
+            install,
+        };
+        const result = checkedPackageSource(source, 'extensions[0].packageSource', 'vcpkg');
+        expect(result).toEqual({ storeUnits: ['p/*/p', 'b/*/p'], check: expect.any(Function), install: expect.any(Function) });
+        expect(result.check()).toEqual(['p/*/p', 'b/*/p']);
+        expect(checked({ inputs: () => 'tool 1.0' })).toEqual({ storeUnits: [], check: expect.any(Function), inputs: expect.any(Function), install: expect.any(Function) });
+    });
+
+    test('refuses what it does not take, a step that is no function, one without its check or its install, and a store folder that is no path with a *', () => {
+        expect(() => checked({ platform: 'linux' })).toThrow('crossbind: extensions[0].packageSource takes storeUnits, check, inputs, install; platform is none of them.');
+        expect(() => checked({ inputs: true })).toThrow("crossbind: extensions[0].packageSource's inputs is no function.");
+        expect(() => checkedPackageSource({ install }, 'extensions[0].packageSource', 'vcpkg'))
+            .toThrow("crossbind: extensions[0].packageSource has no check, the step that takes the project's packages.vcpkg.");
+        expect(() => checkedPackageSource({ check }, 'extensions[0].packageSource', 'vcpkg'))
+            .toThrow("crossbind: extensions[0].packageSource has no install, the step that installs a target's packages.");
+        expect(() => checkedPackageSource('vcpkg', 'extensions[0].packageSource', 'vcpkg')).toThrow('crossbind: extensions[0].packageSource is no object.');
+        for (const storeUnits of ['p/*/p', ['p'], ['/p/*'], ['../*'], ['p/**'], ['p//*'], ['.hidden/*'], [1]]) {
+            expect(() => checked({ storeUnits })).toThrow("crossbind: extensions[0].packageSource.storeUnits is no list of the folders of its store that never change once written, each a path with a * for a folder's name, as 'p/*/p'.");
+        }
+    });
+
+    test("takes its extension's name, one word that starts its imports, and none crossbind keeps", () => {
+        // A runtime's own import scheme would stop resolving, and Windows has no folder named as a device.
+        for (const name of ['acme-vcpkg', 'cargo', 'node', 'https', 'build', 'keys', 'bun', 'jsr', 'cloudflare', 'aux']) {
+            expect(() => checked({}, name)).toThrow(`crossbind: extensions[0].packageSource makes ${name} the name of a package source, which starts its imports, as ${name}:<package>/<header>: one word of lowercase letters and digits, and none of cargo, node,`);
+        }
+        expect(checked({}, 'conan').storeUnits).toEqual([]);
+    });
+
+    test('is checked with the extension crossbind.config.js lists, which is written for the contract that has it', () => {
+        const base = hostWith({ vcpkg: { json: {} } });
+        const root = path.join(base, 'extensions', 'vcpkg');
+        const listed = listedExtension({ contract: 2, name: 'vcpkg', root, packageSource: { check, install } }, 'extensions[0]', base);
+        expect(listed).toMatchObject({ name: 'vcpkg', root, app: {}, packageSource: { storeUnits: [] } });
+        expect(() => listedExtension({ contract: 2, name: 'vcpkg', root, packageSource: { check } }, 'extensions[0]', base))
+            .toThrow("crossbind: extensions[0]'s packageSource has no install");
+        for (const contract of [1, [1, 2]]) {
+            expect(() => listedExtension({ contract, name: 'vcpkg', root, packageSource: { check, install } }, 'extensions[0]', base))
+                .toThrow(`crossbind: extensions[0] gives a packageSource, which crossbind's extension contract has from its version 2 on, and is written for ${[contract].flat().join(' and ')}: name contract: 2.`);
+        }
     });
 });
 

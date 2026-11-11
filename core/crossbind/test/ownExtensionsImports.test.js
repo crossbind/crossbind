@@ -14,8 +14,11 @@ const OPTIONAL = ['clipboard'];
 const filesIn = (dir) => fs.readdirSync(dir, { withFileTypes: true })
     .filter((entry) => entry.name !== 'node_modules')
     .flatMap((entry) => (entry.isDirectory() ? filesIn(path.join(dir, entry.name)) : [path.join(dir, entry.name)]));
-const { dependencies } = JSON.parse(fs.readFileSync(path.join(REPOSITORY, 'core', 'app-host', 'package.json'), 'utf8'));
-const own = Object.keys(dependencies).filter((name) => name.startsWith(OWN_PACKAGE)).map((name) => name.slice(OWN_PACKAGE.length));
+const extensionsOf = (...folder) => Object.keys(JSON.parse(fs.readFileSync(path.join(REPOSITORY, ...folder, 'package.json'), 'utf8')).dependencies)
+    .filter((name) => name.startsWith(OWN_PACKAGE)).map((name) => name.slice(OWN_PACKAGE.length));
+// What an app has by having the host, and what every project has by having crossbind.
+const own = extensionsOf('core', 'app-host');
+const ofTheCore = extensionsOf('core', 'crossbind');
 
 describe("crossbind's own extensions", () => {
     test.each(own)("%s's README names what it reads, the roles it holds, its options and commands, and how to leave it out", async (name) => {
@@ -52,10 +55,10 @@ describe("crossbind's own extensions", () => {
 
     test('are every package of the extensions folder that an app does not list itself', () => {
         const folders = fs.readdirSync(path.join(REPOSITORY, 'extensions')).filter((name) => !OPTIONAL.includes(name));
-        expect(own.toSorted()).toEqual(folders.toSorted());
+        expect([...own, ...ofTheCore].toSorted()).toEqual(folders.toSorted());
     });
 
-    test.each(own)("%s imports nothing of crossbind's but in its page.js, as an extension's package does not: what it uses comes through the api", (name) => {
+    test.each([...own, ...ofTheCore])("%s imports nothing of crossbind's but in its page.js, as an extension's package does not: what it uses comes through the api", (name) => {
         const dir = path.join(REPOSITORY, 'extensions', name);
         const outside = filesIn(dir).filter((file) => file.endsWith('.js')).flatMap((file) => [...fs.readFileSync(file, 'utf8')
             .matchAll(/^\s*(?:import|export)\b[^'"]*?from\s+['"]([^'"]+)['"]|import\(\s*['"]([^'"]+)['"]\s*\)/gm)]

@@ -116,7 +116,7 @@ export const INTEGRATION_GROUPS = [
             {
                 id: 'conan',
                 name: 'ConanCenter',
-                summary: 'Packages declared in `conanDependencies`, built from source for each target',
+                summary: 'Packages declared in `packages.conan`, built from source for each target',
                 href: guide('conan', 'declare'),
             },
         ],

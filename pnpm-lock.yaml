@@ -165,6 +165,9 @@ importers:
 
   core/crossbind:
     dependencies:
+      '@crossbind/extension-conan':
+        specifier: workspace:*
+        version: link:../../extensions/conan
       '@rollup/plugin-commonjs':
         specifier: ^29.0.3
         version: 29.0.3(rollup@4.68.2)
@@ -1565,6 +1568,8 @@ importers:
       crossbind:
         specifier: workspace:^
         version: link:../../core/crossbind
+
+  extensions/conan: {}
 
   extensions/deb: {}
 

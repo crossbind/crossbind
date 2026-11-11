@@ -1,7 +1,8 @@
 import fs from 'node:fs';
 import state, { setAllDependecyPaths } from '../state/index.js';
-import refreshConanDependencies from '../state/refreshConanDependencies.js';
-import installConanPackages from '../utils/conanInstall.js';
+import refreshPackageSources from '../state/refreshPackageSources.js';
+import installPackageSources from '../utils/packageSourceInstall.js';
+import { declaredSources } from '../utils/packageSources.js';
 import { releaseTargetOf, HOST_BUILT_PLATFORMS } from '../utils/targets.js';
 import createXCFramework from './createXCFramework.js';
 
@@ -11,11 +12,11 @@ const isBuiltHere = (target) => process.platform === 'darwin' || !HOST_BUILT_PLA
 
 // iOS headers and archives come out of an xcframework per library with a slice per SDK (state/index.js).
 // One older than an archive it wraps was made before the package was staged again.
-function makeConanXCFrameworks(iosTargets) {
+function makeXCFrameworks(iosTargets) {
     const archiveOf = (dependency, target, name) => `${dependency.paths.output}/prebuilt/${target.path}/lib/lib${name}.a`;
     const isFresh = (dependency, name) => mtimeOf(`${dependency.paths.project}/${name}.xcframework/Info.plist`)
         >= Math.max(...iosTargets.map((target) => mtimeOf(archiveOf(dependency, target, name))));
-    state.config.allDependencies.filter((dependency) => dependency.general.conan).forEach((dependency) => {
+    state.config.allDependencies.filter((dependency) => dependency.general.packageSource).forEach((dependency) => {
         // A library its recipe names on another platform only has no slice here.
         const libName = dependency.export.libName.filter((name) => iosTargets.every((target) => fs.existsSync(archiveOf(dependency, target, name))));
         if (libName.every((name) => isFresh(dependency, name))) return;
@@ -29,11 +30,11 @@ function makeConanXCFrameworks(iosTargets) {
     });
 }
 
-// Conan packages are staged before any header is read: SWIG parses headers that include theirs, and an
-// interface made without its includes stays that way until the header itself changes. Release trees
-// only - a debug build links them like any prebuilt.
-export default async function prepareConanDependencies(targets) {
-    if (Object.keys(state.config.conanDependencies ?? {}).length === 0) return;
+// The packages of a project's sources are staged before any header is read: SWIG parses headers that
+// include theirs, and an interface made without its includes stays that way until the header itself
+// changes. Release trees only - a debug build links them like any prebuilt.
+export default async function preparePackageSources(targets) {
+    if (declaredSources(state.config).length === 0) return;
     // createBridgeFile reads every header for the first wasm target unless it is told otherwise, as it
     // is by Metro, which builds the React Native bridges for the platform's own target, and by a Node
     // build, which reads them for one of its own (nodeBridgeTarget).
@@ -43,9 +44,9 @@ export default async function prepareConanDependencies(targets) {
     const releaseTargets = [...new Map([...targets, bridgeTarget, ...iosTargets].filter(Boolean).map((target) => [
         target.releasePath, releaseTargetOf(target),
     ])).values()].filter(isBuiltHere);
-    await installConanPackages(state.config, releaseTargets);
+    await installPackageSources(state.config, releaseTargets);
     // Also when another process did the staging: this one may have loaded before the manifests existed.
-    refreshConanDependencies(state.config);
+    refreshPackageSources(state.config);
     setAllDependecyPaths();
-    if (iosTargets.length > 0) makeConanXCFrameworks(releaseTargets.filter((target) => target.platform === 'ios'));
+    if (iosTargets.length > 0) makeXCFrameworks(releaseTargets.filter((target) => target.platform === 'ios'));
 }

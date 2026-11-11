@@ -11,9 +11,16 @@ export function findImportSpecifiers(text) {
 
 export const nativeExtensions = ({ header, module }) => [...header, ...module, 'rs'];
 
-export const nativeSpecifierTest = (ext) => {
+// Whether a specifier opens with one of the schemes an import names a store by, as cargo: and conan: are.
+export const schemeTest = (schemes) => {
+    const scheme = new RegExp(`^(${schemes.join('|')}):`);
+    return (specifier) => scheme.test(specifier);
+};
+
+export const nativeSpecifierTest = (ext, schemes) => {
     const extension = new RegExp(`\\.(${nativeExtensions(ext).join('|')})$`);
-    return (specifier) => /^(cargo|conan):/.test(specifier) || extension.test(specifier);
+    const hasScheme = schemeTest(schemes);
+    return (specifier) => hasScheme(specifier) || extension.test(specifier);
 };
 
 export function findNativeImportsIn(projectDir, isNative) {
