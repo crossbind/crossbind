@@ -6,6 +6,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { appendGitHubOutput, PACKAGE_JSON_SOURCE, readJson } from './release-lib.mjs';
 import { inspectCrossbindTarball, packCrossbind, smokeTestCrossbindTarball } from './package-artifact.mjs';
+import { discoverPublishablePackages } from './workspace-release.mjs';
 
 const REPOSITORY_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const valueOf = (name) => {
@@ -22,7 +23,9 @@ const suppliedTarball = valueOf('--tarball');
 const packageJson = readJson(path.resolve(root, PACKAGE_JSON_SOURCE));
 
 try {
-    const artifact = suppliedTarball ? inspectCrossbindTarball(path.resolve(suppliedTarball)) : packCrossbind({ root, artifactDirectory });
+    const artifact = suppliedTarball
+        ? inspectCrossbindTarball(path.resolve(suppliedTarball))
+        : packCrossbind({ root, artifactDirectory, workspace: discoverPublishablePackages(root) });
     smokeTestCrossbindTarball({ tarball: artifact.tarball, expectedVersion: packageJson.version });
     appendGitHubOutput(githubOutput, {
         tarball: artifact.tarball,
