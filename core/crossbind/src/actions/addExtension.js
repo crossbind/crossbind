@@ -4,6 +4,7 @@ import path from 'node:path';
 import { configFileOf, writeExtension } from '../utils/configWriter.js';
 import { isUnderBase } from '../utils/replaceBasePathForDocker.js';
 import { ownPackages } from '../utils/appExtensions.js';
+import { packagesOfCrossbind } from '../utils/packageSources.js';
 import resolveAppHostRoot from '../utils/resolveAppHost.js';
 
 // The lockfiles by which a project names the package manager it is installed with.
@@ -108,9 +109,13 @@ function assertSpec(spec, platform) {
     }
 }
 
-// An extension an app has by having the host is none to add. A project without a host yet has none of them.
+// An extension a project has by having crossbind, or an app by having the host, is none to add. A project without a
+// host yet has none of the host's.
 function assertNotOwn(spec) {
     const name = registryName(spec);
+    if (packagesOfCrossbind().includes(name)) {
+        throw new Error(`crossbind: every project has ${name} by having crossbind, which brings it, so there is nothing to add.`);
+    }
     let root;
     try {
         root = resolveAppHostRoot();

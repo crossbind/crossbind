@@ -14,12 +14,12 @@
     {
       "source": "docs/playbooks/new-extension.md",
       "output": "extension.md",
-      "sha256": "7011032cf0741ac1c106d04d20d93dd0ff5144c05b3bb3dc2e0eba5f9950ff2d"
+      "sha256": "3340dbb1ccd8d99c627b38e3faa762c810fa79feb8fdd1f67b4a952cc6fc5cb0"
     },
     {
       "source": "docs/api/README.md",
       "output": "api/README.md",
-      "sha256": "d7a3b722ae7a242a930083cdf23b6004b5559989a5f601356f2be0714a3eea81"
+      "sha256": "0d1ac0a2e2ce536b94f727041e0aa92dc52910cf3c0f1c802ca2d4fa73d06e35"
     },
     {
       "source": "docs/api/app.md",
@@ -34,7 +34,7 @@
     {
       "source": "docs/api/conan.md",
       "output": "api/conan.md",
-      "sha256": "f7ffaca6728976791f49182d30c150cb942e5f6e8abf90b071013b8d91694938"
+      "sha256": "7e468541804e4be3b782500b63ec0e6da4545fa553518dad6b659c822ae0d511"
     },
     {
       "source": "docs/api/cpp-binding-rules.md",
@@ -49,12 +49,12 @@
     {
       "source": "docs/api/crossbind-config.md",
       "output": "api/crossbind-config.md",
-      "sha256": "e2429ed5cf0f3f3f6841ca412ee1194fb6f9067baf9b671b456d992803730993"
+      "sha256": "d8fd66d6ac20ffb5b8a05ac7ea90d48b61700a9d5a3b713b20c4b833339a276f"
     },
     {
       "source": "docs/api/extensions.md",
       "output": "api/extensions.md",
-      "sha256": "1819e5a094f0503b118f1623ca88559cac168dcfd16847a88b837534dfd92be8"
+      "sha256": "0eeb20a6c09db10bdf37c2f2eea8bbcf320225d4aac98fb146ecacb89d6d5ebc"
     },
     {
       "source": "docs/api/filesystem.md",
@@ -149,7 +149,7 @@
     {
       "source": "docs/playbooks/integration/react-native-expo.md",
       "output": "integration/react-native-expo.md",
-      "sha256": "71b64fa6deb878c194bec651e4b64950f71f9fc234d2009bbba98be5b181b8da"
+      "sha256": "d20a3cc0a5aaedb463a9fc8ff1a7253419d908986be3009539b500518b6da97f"
     },
     {
       "source": "docs/playbooks/integration/rollup.md",

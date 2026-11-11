@@ -1,6 +1,6 @@
 
 /* eslint-disable no-empty */
-import { state, prepareConanDependencies } from 'crossbind';
+import { state, preparePackageSources } from 'crossbind';
 import upath from 'upath';
 import fs from 'node:fs';
 import { createRequire } from 'node:module';
@@ -14,7 +14,7 @@ const bundleOutput = `${state.config.paths.build}/metro-${platform}.js`;
 
 // Metro resolves conan: imports, and SWIG reads their headers, for the platform's first target.
 const metroTarget = state.targets.find((target) => target.platform === platform);
-if (metroTarget) await prepareConanDependencies([metroTarget]);
+if (metroTarget) await preparePackageSources([metroTarget]);
 
 if (isBridgeFresh(platform, bundleOutput)) {
     console.log(`crossbind: bridge bundle (${platform}) up to date — skipping Metro.`);

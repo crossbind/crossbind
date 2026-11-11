@@ -5,9 +5,9 @@ import createBridgeFile from './createInterface.js';
 import getDependFilePath from '../integration/getDependFilePath.js';
 import resolveNativeImport from '../integration/resolveNativeImport.js';
 import { getRustSymbols } from '../integration/getCrossbindScript.js';
-import { findNativeImportsIn, nativeSpecifierTest } from '../utils/nativeImports.js';
+import { findNativeImportsIn, nativeSpecifierTest, schemeTest } from '../utils/nativeImports.js';
+import { importSchemesOf } from '../utils/packageSources.js';
 
-const SCHEME = /^(cargo|conan):/;
 const isBare = (specifier) => !specifier.startsWith('.') && !upath.isAbsolute(specifier);
 
 function realPath(file) {
@@ -18,13 +18,13 @@ function realPath(file) {
     }
 }
 
-// The first target whose packages ship the file. A cargo: or conan: import that none resolves fails the build with
-// what to declare or install, as it does in a bundler.
-function resolveImport(specifier, importer, targets) {
+// The first target whose packages ship the file. An import by a scheme, as cargo: and conan: are, that none resolves
+// fails the build with what to declare or install, as it does in a bundler.
+function resolveImport(specifier, importer, targets, hasScheme) {
     let failure = null;
     for (const target of targets) {
         try {
-            const file = SCHEME.test(specifier) ? getDependFilePath(specifier, target) : resolveNativeImport(specifier, importer, target);
+            const file = hasScheme(specifier) ? getDependFilePath(specifier, target) : resolveNativeImport(specifier, importer, target);
             if (file && fs.existsSync(file)) return { target, file };
         } catch (error) {
             failure ??= error;
@@ -47,8 +47,10 @@ export function findAppNativeImports(targets) {
     const projectDir = state.config.paths.project;
     const imports = new Map();
     if (!projectDir || !fs.existsSync(projectDir)) return imports;
-    for (const { importer, specifier } of findNativeImportsIn(projectDir, nativeSpecifierTest(state.config.ext))) {
-        const resolved = resolveImport(specifier, importer, targets);
+    const schemes = importSchemesOf(state.config);
+    const hasScheme = schemeTest(schemes);
+    for (const { importer, specifier } of findNativeImportsIn(projectDir, nativeSpecifierTest(state.config.ext, schemes))) {
+        const resolved = resolveImport(specifier, importer, targets, hasScheme);
         if (!resolved) {
             console.warn(`crossbind: ${upath.relative(projectDir, importer)} imports ${specifier}, which no dependency ships for ${targets.map((t) => t.path).join(', ')}.`);
             continue;

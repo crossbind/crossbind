@@ -5,7 +5,6 @@ import { registerHooks } from 'node:module';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
-const SCHEME = /^(cargo|conan):/;
 const isBare = (specifier) => !/^(\.{1,2}\/|\/|[A-Za-z]:[\\/]|file:)/.test(specifier);
 
 function notBound(what, parentURL, cause) {
@@ -17,23 +16,25 @@ const exportOf = (name) => (typeof name === 'string' ? name : `${name.wire} as $
 const proxyOf = (entry, names) => `export { ${['initNative', 'AllSymbols', ...names.map(exportOf)].join(', ')} } from ${JSON.stringify(entry)};\n`;
 
 // Another hook may still serve it; Node's own resolver hands an unknown scheme on unresolved.
-function resolveUnbound(specifier, context, nextResolve) {
+function resolveUnbound(specifier, context, nextResolve, scheme) {
     let resolved;
     try {
         resolved = nextResolve(specifier, context);
     } catch (error) {
         throw notBound(specifier, context.parentURL, error);
     }
-    if (SCHEME.test(resolved.url)) throw notBound(specifier, context.parentURL);
+    if (scheme.test(resolved.url)) throw notBound(specifier, context.parentURL);
     return resolved;
 }
 
 // `natives` lists each bound file, relative to the entry, with the bare specifiers that name it and the names it
-// exports, a name the entry exports under another as { local, wire }.
-export default function registerNativeImports(entry, { extensions, natives }) {
+// exports, a name the entry exports under another as { local, wire }. `schemes` are those an import names a store
+// by: the two every build has, for a register file an older build wrote, which names none.
+export default function registerNativeImports(entry, { extensions, schemes = ['cargo', 'conan'], natives }) {
     const entryUrl = new URL(entry).href;
     const dir = path.dirname(fileURLToPath(entryUrl));
     const isNative = new RegExp(`\\.(${extensions.join('|')})$`);
+    const scheme = new RegExp(`^(${schemes.join('|')}):`);
     const byFile = new Map();
     const bySpecifier = new Map();
     natives.forEach(({ file, specifiers, names }) => {
@@ -46,7 +47,7 @@ export default function registerNativeImports(entry, { extensions, natives }) {
         resolve(specifier, context, nextResolve) {
             const url = bySpecifier.get(specifier);
             if (url) return { url, format: 'module', shortCircuit: true };
-            if (isBare(specifier) && (SCHEME.test(specifier) || isNative.test(specifier))) return resolveUnbound(specifier, context, nextResolve);
+            if (isBare(specifier) && (scheme.test(specifier) || isNative.test(specifier))) return resolveUnbound(specifier, context, nextResolve, scheme);
             return nextResolve(specifier, context);
         },
         load(url, context, nextLoad) {

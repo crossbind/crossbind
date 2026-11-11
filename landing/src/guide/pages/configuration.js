@@ -38,6 +38,10 @@ export default {
                     '`cargoDependencies`',
                     'crates importable through `cargo:` - keys are crate names, values are Cargo dependency specs. See [Rust](/guide/rust/).',
                 ],
+                [
+                    '`packages`',
+                    "packages of each package source, under the source's name: `packages.conan` holds what `conan:` imports. See [Conan](/guide/conan/).",
+                ],
             ],
         },
         {
@@ -49,6 +53,7 @@ export default {
     general: { name: 'my-geo-app' },
     dependencies: [gdal],
     cargoDependencies: { uuid: '{ version = "1", features = ["v4"] }' },
+    packages: { conan: { zlib: '1.3.2' } },
     paths: { config: import.meta.url },
 };`,
         },

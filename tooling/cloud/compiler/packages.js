@@ -139,19 +139,17 @@ const quoted = (text) => `'${text.replaceAll('\\', '\\\\').replaceAll("'", "\\'"
 export function configSource(ids) {
     const chosen = packagesFor(ids);
     const ports = chosen.filter(({ source }) => source === 'port');
-    const table = (field, source, value) => {
-        const entries = chosen.filter((pkg) => pkg.source === source);
-        if (!entries.length) return [];
-        return [`    ${field}: {`, ...entries.map((pkg) => `        ${keyOf(pkg.name)}: ${quoted(value(pkg))},`), '    },'];
-    };
+    const indented = (lines) => lines.map((line) => `    ${line}`);
+    const block = (field, lines) => (lines.length ? [`${field}: {`, ...indented(lines), '},'] : []);
+    const entries = (source, value) => chosen.filter((pkg) => pkg.source === source).map((pkg) => `${keyOf(pkg.name)}: ${quoted(value(pkg))},`);
     return [
         ...ports.map((pkg) => `import ${bindingOf(pkg.name)} from '${pkg.package}/crossbind.config.js';`),
         ...(ports.length ? [''] : []),
         'export default {',
         "    general: { name: 'playground' },",
         ...(ports.length ? [`    dependencies: [${ports.map((pkg) => bindingOf(pkg.name)).join(', ')}],`] : []),
-        ...table('cargoDependencies', 'crate', ({ spec }) => spec),
-        ...table('conanDependencies', 'conan', ({ version }) => version),
+        ...indented(block('cargoDependencies', entries('crate', ({ spec }) => spec))),
+        ...indented(block('packages', block('conan', entries('conan', ({ version }) => version)))),
         '    paths: { config: import.meta.url },',
         '};',
         '',

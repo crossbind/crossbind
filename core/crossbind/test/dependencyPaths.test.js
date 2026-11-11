@@ -51,7 +51,7 @@ describe('setAllDependecyPaths', () => {
         fs.mkdirSync(path.join(output, 'prebuilt', 'darwin-arm64-mt-release', 'lib'), { recursive: true });
         fs.writeFileSync(path.join(output, 'prebuilt', 'darwin-arm64-mt-release', 'lib', 'libpng.a'), '');
         const libpng = { ...dep('conan_libpng', { libName: ['png', 'png16'] }), paths: { output, project: output } };
-        libpng.general.conan = { name: 'libpng' };
+        libpng.general.packageSource = { name: 'conan', package: { name: 'libpng' } };
 
         const darwin = target({
             platform: 'darwin', arch: 'arm64', runtime: 'mt', buildType: 'debug', path: 'darwin-arm64-mt-debug', releasePath: 'darwin-arm64-mt-release',

@@ -1,8 +1,13 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { pathToFileURL } from 'node:url';
 import {
     PACKAGES, bindingOf, configSource, packagesFor,
 } from '../compiler/packages.js';
+import { getFilledConfig } from '../../../core/crossbind/src/state/loadConfig.js';
 
 test('every package has a unique id, a source and one way to be used', () => {
     const ids = PACKAGES.map(({ id }) => id);
@@ -37,8 +42,10 @@ test('the config declares the chosen packages only: ports through their own conf
         '    cargoDependencies: {',
         '        uuid: \'{ version = "=1.28.0", features = ["v4"] }\',',
         '    },',
-        '    conanDependencies: {',
-        "        zlib: '1.3.2',",
+        '    packages: {',
+        '        conan: {',
+        "            zlib: '1.3.2',",
+        '        },',
         '    },',
         '    paths: { config: import.meta.url },',
         '};',
@@ -48,6 +55,22 @@ test('the config declares the chosen packages only: ports through their own conf
 
 test('the config of a project without packages declares none', () => {
     assert.equal(configSource([]), "export default {\n    general: { name: 'playground' },\n    paths: { config: import.meta.url },\n};\n");
+});
+
+// The image's crossbind is this repository's, so the config a compile writes is one this loader takes.
+test('crossbind reads the crates and the Conan packages of the config as it is written', async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'playground-config-'));
+    try {
+        const file = path.join(dir, 'crossbind.config.mjs');
+        fs.writeFileSync(file, configSource(['crate:uuid', 'conan:zlib']));
+
+        const config = getFilledConfig((await import(pathToFileURL(file).href)).default);
+
+        assert.deepEqual(Object.keys(config.cargoDependencies), ['uuid']);
+        assert.deepEqual(Object.keys(config.packages.conan), ['zlib']);
+    } finally {
+        fs.rmSync(dir, { recursive: true, force: true });
+    }
 });
 
 test('every port imports its config under a name JavaScript accepts', () => {

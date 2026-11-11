@@ -55,17 +55,21 @@ describe('collectLicenseRows', () => {
     });
 
     const stagedZlib = (project) => ({
-        conanDependencies: { zlib: { version: '1.3.2', options: {} } },
+        packageSources: [{ name: 'conan' }],
+        packages: { conan: { zlib: { version: '1.3.2', options: {} } } },
         allDependencies: [{
             general: {
                 name: 'conan_zlib',
-                conan: {
-                    name: 'zlib',
-                    version: '1.3.2',
-                    ref: 'zlib/1.3.2#1cb806da49011867778ffb6ac7190fcb',
-                    license: 'Zlib',
-                    homepage: 'https://zlib.net',
-                    source: { url: 'https://zlib.net/fossils/zlib-1.3.2.tar.gz', sha256: 'b'.repeat(64) },
+                packageSource: {
+                    name: 'conan',
+                    package: {
+                        name: 'zlib',
+                        version: '1.3.2',
+                        ref: 'zlib/1.3.2#1cb806da49011867778ffb6ac7190fcb',
+                        license: 'Zlib',
+                        homepage: 'https://zlib.net',
+                        source: { url: 'https://zlib.net/fossils/zlib-1.3.2.tar.gz', sha256: 'b'.repeat(64) },
+                    },
                 },
             },
             paths: { project },
@@ -92,7 +96,7 @@ describe('collectLicenseRows', () => {
         });
         expect(row.licenseText).toContain('zlib license text');
         expect(row.licenseText.indexOf('=== COPYING ===')).toBeLessThan(row.licenseText.indexOf('=== LICENSE ==='));
-        expect(row.licenseNotes).toContain('zlib/1.3.2#1cb806da49011867778ffb6ac7190fcb');
+        expect(row.licenseNotes).toBe('built from the conan package zlib/1.3.2#1cb806da49011867778ffb6ac7190fcb');
         fs.rmSync(project, { recursive: true, force: true });
     });
 
@@ -114,9 +118,9 @@ describe('collectLicenseRows', () => {
     });
 
     test('a declared Conan package that is not staged stops the listing instead of going missing from it', async () => {
-        state.config = { conanDependencies: { zlib: { version: '1.3.2', options: {} } }, allDependencies: [] };
+        state.config = { packageSources: [{ name: 'conan' }], packages: { conan: { zlib: { version: '1.3.2', options: {} } } }, allDependencies: [] };
 
-        await expect(collectLicenseRows()).rejects.toThrow(/zlib are not installed[\s\S]*Build the project first/);
+        await expect(collectLicenseRows()).rejects.toThrow(/the conan packages zlib are not installed for the current packages\.conan[\s\S]*Build the project first/);
     });
 
     test('reads the license a package ships when no upstream source was extracted', async () => {

@@ -23,10 +23,12 @@ windows image's llvm-mingw.
 
 ```js
 // crossbind.config.js — top level, next to `dependencies`
-conanDependencies: {
-  zlib: '1.3.2',
-  libpng: '[>=1.6 <2]',
-  sqlite3: { version: '3.53.4', options: { enable_fts5: true } },
+packages: {
+  conan: {
+    zlib: '1.3.2',
+    libpng: '[>=1.6 <2]',
+    sqlite3: { version: '3.53.4', options: { enable_fts5: true } },
+  },
 },
 ```
 
@@ -38,14 +40,20 @@ await initNative();
 zlibVersion(); // '1.3.2'
 ```
 
-- A key is the Conan package name. Its value is a version, a Conan version range, or
-  `{ version, options }` with options the recipe defines.
+- `packages.conan` holds what `conan:` imports. A key is the Conan package name. Its value is a
+  version, a Conan version range, or `{ version, options }` with options the recipe defines. Any
+  other key in that object stops the build with an error that names it.
+- An option name the recipe does not have stops the build after `conan install`, with an error that
+  lists the names it has. A name among the recipe's default options that the recipe drops for a
+  target, as zlib drops `fPIC` on Windows, is skipped there.
 - `conan:<package>/<header>` names a header under the package's include directory,
   subdirectories included: `conan:libxml2/libxml/parser.h`.
-- Importing a package that `conanDependencies` does not declare is a hard error. A package that
+- Importing a package that `packages.conan` does not declare is a hard error. A package that
   another one requires (zlib under libpng) is built and linked either way, and importable once it
   is declared.
 - `shared` is not an option you can set: every package links statically into the module.
+- Earlier releases spelled the declaration `conanDependencies`; that key now stops the build with
+  an error that names `packages.conan`.
 
 ## Through your own header
 
@@ -88,7 +96,7 @@ lower, a package that calls a newer libc function fails to link, as such a port 
 iOS packages are built for the device and the simulator SDK, arm64 and iOS 15.1 like the ports,
 and each library becomes an xcframework that the `react-native-crossbind` pod vendors. CocoaPods
 links what it finds at `pod install`, so run `pod install` again after you change
-`conanDependencies`.
+`packages.conan`.
 
 ## Node.js addons
 
@@ -139,15 +147,15 @@ addons on x64 and arm64 Windows.
 3. crossbind copies each package to `.crossbind/conan/packages/<package>/dist/prebuilt/<target>/`,
    the layout a port ships, and links it like one. A debug build links the release archives. For
    iOS, each library also gets an xcframework in `.crossbind/conan/packages/<package>/`.
-4. A target is installed again only when its inputs change: `conanDependencies`, the toolchain
+4. A target is installed again only when its inputs change: `packages.conan`, the toolchain
    (the image; on the host, `conan` with `emcc` under `RUNNER=LOCAL` or with Xcode's clang for
    iOS and macOS), crossbind's profile or `conan.lock`.
 
 Each install writes Conan's whole log to `.crossbind/conan/logs/<target>.log`; a failed one also
 prints the end of it.
 
-A `crossbind build` that would also build for WASI fails while `conanDependencies` is declared;
-leave it out with `-p`.
+A `crossbind build` that would also build for WASI fails while `packages.conan` declares a
+package; leave WASI out with `-p`.
 
 ## What a recipe can reach
 
@@ -214,5 +222,7 @@ checkout build first; until then it stops with an error instead of leaving the p
 ## See also
 
 - [`rust.md`](./rust.md) — the `cargo:` scheme this one mirrors.
-- [`crossbind-config.md`](./crossbind-config.md) — `conanDependencies` next to the other fields.
+- [`crossbind-config.md`](./crossbind-config.md) — `packages` next to the other fields.
+- [`extensions.md`](./extensions.md#package-sources) — Conan is a package source, an extension crossbind brings:
+  another package manager is one of the same kind.
 - ADR-0013 — why the scheme, the declaration and the staging look the way they do.

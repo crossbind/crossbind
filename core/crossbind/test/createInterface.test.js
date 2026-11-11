@@ -30,7 +30,7 @@ vi.mock('../src/state/index.js', () => ({
     },
     saveCache: vi.fn(),
 }));
-vi.mock('../src/state/refreshConanDependencies.js', () => ({ default: vi.fn(() => false) }));
+vi.mock('../src/state/refreshPackageSources.js', () => ({ default: vi.fn(() => false) }));
 
 let work;
 let header;
@@ -67,6 +67,7 @@ beforeEach(() => {
         ext: { header: ['h', 'hpp', 'hxx', 'hh'], module: ['i'] },
         dts: 'sync',
         export: {},
+        packageSources: [{ name: 'conan' }],
         allDependencies: [],
         dependencyParameters: { headerPathWithDepends: '', getCmakeDependsPathAndName: () => ({ pathsOfCmakeDepends: [] }) },
     };
@@ -165,8 +166,10 @@ describe('createBridgeFile', () => {
         const { run, createBridgeFile } = await importFresh();
         const target = { platform: 'wasm', path: 'wasm-wasm32-st-release' };
         fs.writeFileSync(header, 'int one();\n');
-        holder.config.conanDependencies = { zlib: { version: '[>=1.3 <2]', options: {} } };
-        const zlib = (ref) => ({ general: { name: 'conan_zlib', conan: { name: 'zlib', ref } }, paths: { output: path.join(work, 'zlib', 'dist') }, export: {} });
+        holder.config.packages = { conan: { zlib: { version: '[>=1.3 <2]', options: {} } } };
+        const zlib = (ref) => ({
+            general: { name: 'conan_zlib', packageSource: { name: 'conan', package: { name: 'zlib', ref } } }, paths: { output: path.join(work, 'zlib', 'dist') }, export: {},
+        });
 
         createBridgeFile(header, target);
         holder.config.allDependencies = [zlib('zlib/1.3.1#a')];

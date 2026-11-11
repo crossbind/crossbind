@@ -7,8 +7,8 @@ export default {
     dependencies: [
         Matrix,
     ],
-    conanDependencies: {
-        zlib: '1.3.2',
+    packages: {
+        conan: { zlib: '1.3.2' },
     },
     cargoDependencies: {
         semver: '1',

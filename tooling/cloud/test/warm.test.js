@@ -16,7 +16,8 @@ test('readies the template to build every package once: all declared, each impor
         execFileSync(process.execPath, [WARM, dir]);
         const read = (file) => fs.readFileSync(path.join(dir, file), 'utf8');
 
-        PACKAGES.forEach((pkg) => assert.ok(read('crossbind.config.js').includes(pkg.source === 'port' ? pkg.package : `\n        ${pkg.name}: '`), pkg.id));
+        const declared = read('crossbind.config.js').split('\n').map((line) => line.trim());
+        PACKAGES.forEach((pkg) => assert.ok(declared.some((line) => (pkg.source === 'port' ? line.includes(pkg.package) : line.startsWith(`${pkg.name}: '`))), pkg.id));
         PACKAGES.filter(({ use }) => use.import)
             .forEach(({ use }) => assert.ok(read('src/main.js').includes(`import { ${use.names.join(', ')} } from '${use.import}';`), use.import));
     } finally {

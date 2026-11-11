@@ -17,7 +17,7 @@ Pod::Spec.new do |s|
   s.source       = { :http => "https://crossbind.dev" }
 
   # conan/ holds the app's Conan libraries, which build_ios.js copies there. CocoaPods links what it
-  # finds at pod install, so a changed conanDependencies needs another pod install.
+  # finds at pod install, so a changed packages.conan needs another pod install.
   s.vendored_frameworks = ['react-native-crossbind.xcframework', 'conan/*.xcframework']
 
   s.script_phase = {

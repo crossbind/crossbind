@@ -22,7 +22,7 @@ C++ binding & build authoring:
 
 - [`cpp-binding-rules.md`](./cpp-binding-rules.md) — Rules for writing C++ that crossbind can auto-bind (pointer handles and strings, C++11+, wrapper pattern, JSPI advanced).
 - [`rust.md`](./rust.md) — Rust bindings: `cargo:` crate imports, app-local `.rs` sources, `export.type: 'cargo'` packages, `crossbind.cargo.lock`; idiom table.
-- [`conan.md`](./conan.md) — C and C++ packages from ConanCenter: `conanDependencies`, `conan:` header imports, `conan.lock`; web, Android, iOS and Node.js addon (Linux, macOS, Windows) builds.
+- [`conan.md`](./conan.md) — C and C++ packages from ConanCenter: `packages.conan`, `conan:` header imports, `conan.lock`; web, Android, iOS and Node.js addon (Linux, macOS, Windows) builds.
 - [`wasi.md`](./wasi.md) — `platform: 'wasi'` single-module command builds and HTTP components (`-e http`), `-wasi` prebuilts, `-standalone-wasi` npm CLI tool packages.
 - [`native.md`](./native.md) — Desktop platforms beyond Node.js addons: native executables (`-e native`) and the `darwin`, `linux`, `linuxmusl` and `win32` prebuilt archives in your own C or C++ build.
 - [`app.md`](./app.md) — Apps (`target.runtimeEnv: 'app'`): the page in the system webview, the bindings native in the app's process on Hermes; `crossbind app dev` and `crossbind app build -p <platform>`, the app's functions (`crossbind/app`, `<crossbind/app.h>`), Android signing, security defaults, Hermes and licenses. macOS, Linux, Windows, iOS and Android for now.

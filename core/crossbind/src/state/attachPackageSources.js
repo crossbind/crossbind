@@ -1,8 +1,8 @@
 import { getFilledConfig, flattenDependencies } from './loadConfig.js';
 import calculateDependencyParameters from './calculateDependencyParameters.js';
-import { conanStageDir, conanPackageDir } from '../utils/conanImport.js';
-import { conanDependenciesKey } from '../utils/conanDependencies.js';
-import { readConanManifest, conanTargetName } from '../utils/conanStage.js';
+import { sourceStageDir, sourcePackageDir } from '../utils/packageSourceImport.js';
+import { declaredSources, dependenciesKey, dependenciesOf } from '../utils/packageSources.js';
+import { readSourceManifest, sourceTargetName } from '../utils/packageSourceStage.js';
 import { TARGETS, targetPathOf } from '../utils/targets.js';
 
 // What a recipe declares for its consumers, per staged target since it declares other things on another
@@ -32,25 +32,29 @@ function targetSpecsOf(name, targets) {
 // staged for it, so a name it lacks drops out there.
 const libsOf = (name, targets) => [...new Set(Object.values(targets).flat().filter((entry) => entry.name === name).flatMap((entry) => entry.libs))];
 
-export function conanDependencyConfigs(manifest, stageDir) {
+export function sourceDependencyConfigs(source, manifest, stageDir) {
     return manifest.packages.map((pkg) => ({
-        general: { name: conanTargetName(pkg.name), conan: pkg },
+        general: { name: sourceTargetName(source, pkg.name), packageSource: { name: source, package: pkg } },
         export: { type: 'cmake', libName: libsOf(pkg.name, manifest.targets) },
-        paths: { project: conanPackageDir(stageDir, pkg.name), output: `${conanPackageDir(stageDir, pkg.name)}/dist` },
+        paths: { project: sourcePackageDir(stageDir, pkg.name), output: `${sourcePackageDir(stageDir, pkg.name)}/dist` },
         targetSpecs: targetSpecsOf(pkg.name, manifest.targets),
     }));
 }
 
-// The staged Conan packages join the config as dependencies, so header resolution, the link, the
-// cmake graph and the license rows see them like any port. Only packages staged for the current
-// conanDependencies join; reading the manifest runs nothing, so state can do it while it loads.
-export default function attachConanDependencies(config) {
-    const isDeclared = Object.keys(config.conanDependencies ?? {}).length > 0;
-    if (!isDeclared && !config.dependencies?.some((d) => d.general.conan)) return;
-    const stageDir = conanStageDir(config.paths.cache);
-    const manifest = isDeclared ? readConanManifest(stageDir, conanDependenciesKey(config.conanDependencies)) : null;
-    const conan = manifest ? conanDependencyConfigs(manifest, stageDir).map((d) => getFilledConfig(d, { isDepend: true })) : [];
-    config.dependencies = [...config.dependencies.filter((d) => !d.general.conan), ...conan];
+function stagedDependencies(config, source) {
+    const stageDir = sourceStageDir(config.paths.cache, source);
+    const manifest = readSourceManifest(source, stageDir, dependenciesKey(dependenciesOf(config, source)));
+    return manifest ? sourceDependencyConfigs(source, manifest, stageDir).map((d) => getFilledConfig(d, { isDepend: true })) : [];
+}
+
+// The staged packages of each source join the config as dependencies, so header resolution, the link, the
+// cmake graph and the license rows see them like any port. Only packages staged for what the config declares
+// now join; reading a manifest runs nothing, so state can do it while it loads.
+export default function attachPackageSources(config) {
+    const declared = declaredSources(config);
+    if (declared.length === 0 && !config.dependencies?.some((d) => d.general.packageSource)) return;
+    const staged = declared.flatMap(({ name }) => stagedDependencies(config, name));
+    config.dependencies = [...config.dependencies.filter((d) => !d.general.packageSource), ...staged];
     config.allDependencies = flattenDependencies(config.dependencies);
     config.dependencyParameters = calculateDependencyParameters(config);
 }

@@ -8,14 +8,16 @@ own carries it, as
 [`@crossbind/extension-clipboard`](../../extensions/clipboard/README.md) carries the system clipboard's text on macOS,
 iOS, Android, Windows and Linux, which an app lists. An extension may add a store the app is published to as well, as
 [Publishers](#publishers) says, what installs a desktop app, as [Installers](#installers) says, and commands of
-`crossbind app`, as [Commands](#commands) says.
+`crossbind app`, as [Commands](#commands) says. One kind of extension is no app's: a package source, which gives any
+project the packages of another package manager, as [Package sources](#package-sources) says.
 
 crossbind's own are packages of the same kind, in its repository's `extensions/`: the host's, `activities`, `dialog`,
 `files`, `instance`, `links`, `menu`, `page-dialogs`, `page-feel`, `page-files`, `page-downloads`, `page-drops`,
 `page-location`, `page-navigation`, `page-permissions`, `power`, `shell`, `shortcuts` and `updater`; the stores, `google-play`, `app-store`
 and `github`; and the installers, `dmg`, `deb`, `tar-gz`, `nsis` and `zip`. An app has them without installing or listing
 them, as `@crossbind/core-app-host` has them as its dependencies, and an app's extension takes the place of one, or of
-one of its roles, as [The host's own extensions](#the-hosts-own-extensions) says.
+one of its roles, as [The host's own extensions](#the-hosts-own-extensions) says. The package source `conan` is
+crossbind's own too, and a dependency of `crossbind` itself, so every project has it.
 
 An extension names the version of this contract it is written for, as [Versions](#versions) says.
 
@@ -49,13 +51,16 @@ keys and Android manifests, as it writes each platform's project (see [crossbind
 
 ## Versions
 
-An extension names the versions of the contract it is written for: `contract: 1`, this one, or a list, as `[1, 2]` for
-one written for both. Each crossbind takes a range of them, from the oldest it still builds to the newest, `1` to `1`
+An extension names the versions of the contract it is written for: `contract: 1`, or a list, as `[1, 2]` for one
+written for both. Each crossbind takes a range of them, from the oldest it still builds to the newest, `1` to `2`
 in this one: a build stops on an extension that names none of them, saying what to update, crossbind where the
 extension names newer ones alone, else the extension's package, or `@crossbind/core-app-host` where the host's own
 extensions are of another crossbind. Native code tells the versions apart with `CROSSBIND_EXTENSION_CONTRACT`, the
 newest its host is built for, as `#if CROSSBIND_EXTENSION_CONTRACT >= 2` does, and an Android extension's Java with
 `Extension.CONTRACT`.
+
+Version 2 added [package sources](#package-sources) and changed nothing else: an extension written for 1 builds as it
+did, and one that gives a `packageSource` names 2, or a build stops, saying so.
 
 A change that every extension written for the contract goes on working with raises the newest version alone: a
 function, a hook, a member of a struct or of a request, a key of the descriptor or a member of the api that is new, and
@@ -104,6 +109,7 @@ The extension the function gives:
 | `publisher` | The store it sends the app to, as [Publishers](#publishers) says. |
 | `installer` | What it makes to install a desktop app, as [Installers](#installers) says. |
 | `commands` | The commands it adds under `crossbind app`, as [Commands](#commands) says. |
+| `packageSource` | The packages of another package manager it gives a project, as [Package sources](#package-sources) says. |
 
 What a platform adds:
 
@@ -983,10 +989,141 @@ a project whose `target.runtimeEnv` is `app`. A name that `crossbind app` has al
 extension's, stops `crossbind app` in the project, naming both; an extension that takes the place of one of
 crossbind's own, by its name or with `replaces`, takes the place of that one's commands too.
 
+## Package sources
+
+An extension's `packageSource` gives a project the packages of another package manager: the project declares them and
+imports their headers, and crossbind installs them with the source's tool for each target of a build, checks what the
+tool reports and links them like a port. crossbind's own `conan` is one, for ConanCenter's packages, as
+[conan.md](./conan.md) says: `crossbind` has it as a dependency, so a project has it without installing or listing it. A
+source needs no app, so every kind of project takes one, and one `extensions` lists under the name of crossbind's own
+takes its place. It names `contract: 2`, the version that added package sources. `crossbind add` adds to an app alone:
+a project of another kind installs a source's package with its package manager and lists it in `extensions` itself.
+
+The extension's `name` is the source's: one word of lowercase letters and digits, and none that means something
+already, which a build names: an import scheme of a bundler or a runtime, as `node`, `npm` or `bun`, a folder of
+crossbind's, or a device's name on Windows. All that is the source's goes by it, as `conan`'s does:
+
+| What | Where |
+|---|---|
+| The packages a project declares | `packages.conan` in `crossbind.config.js` |
+| An import of a package's header | `conan:<package>/<header>` |
+| The versions it resolved | `conan.lock`, beside `crossbind.config.js` |
+| What a build staged, its logs and the editor's types | `.crossbind/conan/` |
+| Its store, which every project of the machine shares | `~/.crossbind/conan/`, and `~/.crossbind/conan-local/` where its tool runs on the machine itself |
+
+`packages` takes a source's packages under the source's name and no other name: one that is no source of the project
+stops the config as it loads, where a misspelt one would be left unread. So does `<name>Dependencies`, where `conan`'s
+packages were declared once, with where they are declared now. A dependency's own `packages` are not read: a package
+installs nothing for the project that depends on it.
+
+```js
+// crossbind.extension.js
+export default function acme() {
+    return {
+        name: 'acme',
+        contract: 2,
+        root: import.meta.dirname,
+        packageSource: {
+            // packages: { acme: { zlib: '1.3.2' } }
+            check(declared = {}) {
+                const bad = Object.entries(declared).find(([, version]) => typeof version !== 'string');
+                if (bad) throw new Error(`crossbind: packages.acme.${bad[0]} needs a version such as '1.3.2'.`);
+                return { ...declared };
+            },
+            install(api, { dependencies, toolchain }) {
+                const wanted = Object.entries(dependencies).map(([name, version]) => `${name}@${version}`);
+                api.run(['acme', 'install', ...wanted, '--root', api.store.path(), '--out', api.work.path('installed.json')], {
+                    // The tool's own settings and plugins for this run alone, not the developer's.
+                    env: { ...toolchain.env, ACME_HOME: api.work.path('home') },
+                });
+                const installed = JSON.parse(api.work.read('installed.json'));
+                return { packages: installed.packages, lock: null };
+            },
+        },
+    };
+}
+```
+
+| Key | Value |
+|---|---|
+| `check(declared)` | Takes what the project's `packages.<name>` holds, undefined where it has none, and returns the packages to install: a map of package names to what each asks for, in plain JSON. A package's name is of lowercase letters, digits and `_ + . -`, the first of them a letter, a digit or `_`, which crossbind checks; what each asks for is the source's to check, as a version its tool would take for an option. What it throws stops the config as it loads. |
+| `install(api, { dependencies, toolchain, lock })` | Installs one target's packages with the source's tool and returns `{ packages, lock }`, or a promise of it. `dependencies` is what `check` returned, `toolchain` what crossbind builds the target with, and `lock` the text of `<name>.lock`, or null without one. The `lock` it returns is the text crossbind writes there, of 8 MiB at most, or null, which leaves the file: it comes back from where recipes ran, so the source returns what it has read as a lock alone. |
+| `inputs(api, { dependencies, toolchain })` | Whatever else its packages are made from, as a JSON value, such as the profile it writes, the version of a tool of the machine, and a number it raises when its own way of installing changes: a target is installed again once it changes. It runs as every build starts, for each target, so it runs no build and keeps what it asked a tool. Optional. |
+| `storeUnits` | The folders of its store that never change once written, each a path with `*` for a folder's name, as `'p/*/p'`: all a remote runner sends back of the store, so `RUNNER=REMOTE` refuses a source that names none. Optional elsewhere. |
+
+A target is installed again only when what it was made from changes: the declared packages, the toolchain, the image
+its tool runs in or the compiler of the machine, the lock, and the source's `inputs`. Each install writes what its tool
+printed to stderr to `.crossbind/<name>/logs/<target>.log`, and a failed one also prints the end of it.
+
+The `toolchain` is what crossbind builds the target's own archives with, which a package matches, as it links into
+the same module:
+
+| Member | What it is |
+|---|---|
+| `platform`, `arch`, `runtime` | The target: `wasm`, `android`, `ios`, `linux`, `linuxmusl`, `darwin` or `win32`, its architecture as crossbind names it, and `st` or `mt`. A build that would also build for WASI stops while a source's packages are declared. |
+| `cppStandard` | The C++ standard the project's own sources compile as, `'20'`. |
+| `flags` | What every archive of the target compiles and links with, as `-fwasm-exceptions`, `-pthread` and `-fPIC`. |
+| `compilers` | `{ c, cpp }`, and `rc` on Windows, as the image or the machine has them. None on iOS, where Xcode's are found with `xcrun` for the SDK that `arch` names. |
+| `env` | The environment the target's port archives build in, as `CC`, `AR` and `PKG_CONFIG_LIBDIR`. |
+| `cmakeToolchainFile`, `triple` | Linux and Windows: the image's CMake toolchain file and the target's triple. |
+| `libc` | Linux: `glibc` or `musl`. |
+| `ndk`, `apiLevel` | Android: the NDK's folder in the image, and the API level. |
+| `deploymentTarget` | iOS and macOS: the oldest system the target runs on. |
+| `ignoredPrefixes` | macOS: the prefixes of the machine's own packages, which a build keeps out of reach. |
+
+Each package `install` returns:
+
+| Field | Value |
+|---|---|
+| `name`, `version` | Its name, as a package name is, and a plain version of letters, digits and `_ . + -`. |
+| `ref` | `<name>/<version>`, which a `@user/channel` and a `#` with a revision of hexadecimal digits may follow: what a moved revision changes, so that headers bind again. |
+| `license`, `homepage`, `source` | For the license report: an SPDX expression, or a list of them where each applies, a web address, and `{ url, sha256 }` of the source it was built from, or null. |
+| `libs` | The static libraries it gives, each `lib<name>.a` in one of its `libdirs`. |
+| `requires` | The names of the packages among those returned that it links against: crossbind links each before what it requires. |
+| `systemLibs`, `frameworks`, `defines` | What its recipe asks of what uses it: libraries of the system and Apple frameworks a Node.js addon or a native executable links, and the macros the project's code compiles with. |
+| `packageFolder`, `includedirs`, `libdirs` | Where the tool put it, as the tool names the paths: its own folder in the store, and the folders of its headers and archives, absolute or relative to it. |
+
+What a tool reports comes from recipes, which are code, so crossbind checks it before anything is copied: names and
+library names are plain names, a define that is no plain name with a plain value is left out, with a notice, and every
+path, links followed, stays inside the folder the package reports as its own, a folder of the store below its top
+level. It then copies each package to
+`.crossbind/<name>/packages/<package>/dist/prebuilt/<target>/`, the layout a port ships, with the `licenses/` its
+folder holds, and for iOS makes each library an xcframework. `crossbind licenses` lists each package, and the SBOM
+names it `pkg:<name>/<package>@<version>`.
+
+A source's steps import nothing of crossbind's: each gets an `api` of its own, frozen.
+
+| Member | What it is |
+|---|---|
+| `name` | The source's name. |
+| `isLocal` | Whether its tool runs on the machine itself, from the `PATH`, as under `RUNNER=LOCAL` and for iOS and macOS always, and not in an image. |
+| `work` | `{ dir, path(...segments), read(...segments) }`: the run's work directory, new for each install and deleted with it. `dir` is where the extension's own code writes the tool's inputs, and `path()` names a file of it as the tool sees it, which in a container is another path. `read()` gives a file the tool left there as text, or null where there is none. |
+| `store` | `{ dir, path(...segments) }`: the source's store, which outlives every run, named the same two ways. |
+| `run(command, { env })` | Runs the tool to its end where the target's packages build, in the work directory: `command` is the program and its arguments, and `env` the variables it adds. It returns `{ stdout, stderr }`, and a failure throws with the end of what the tool printed. On the machine the tool's environment is rebuilt from a short list, as `PATH`, `HOME`, the proxy and certificate variables and Emscripten's, and `env` is laid over it. A container's and a remote runner's command line shows `env`, so it carries no secret. |
+| `logFile` | The file an install's log is written to, for a message to name. Null in `inputs`. |
+| `log(text)` | A line of crossbind's output. |
+
+In `inputs`, where `isLocal` is true, the work directory is a folder of the source's that stays and `run` runs a tool
+of the machine in it. Elsewhere the image says what runs: there is nothing to ask, `run` refuses, and the folder is
+only named.
+
+Recipes run inside `run`, and write to the work directory and the store as the tool does. So a source reads what the
+tool left with `work.read()`, which follows no link a recipe planted to a file of the developer's, and keeps the text
+of such a file out of its messages; crossbind takes the control characters out of a failure that is not its own. A
+tool that keeps settings, plugins or logins in a home of its own gets one in the work directory, as `conan` does with
+`CONAN_HOME`: on the machine `HOME` is the developer's, and a recipe would meet theirs.
+
+crossbind downloads no tool. Its images carry Conan; another source's tool runs from the `PATH` where `isLocal` is
+true, and elsewhere takes an image of your own that has it, which `DOCKER_IMAGE_WEB` and its like name
+([overrides.md](./overrides.md)). With the default `RUNNER=DOCKER_RUN` a container sees the store and the work
+directory, not the project. The editor's types of a source's imports are ambient modules under
+`.crossbind/<name>/types/`: `@crossbind/typescript-config` includes `conan`'s, and a project with another source adds
+that folder to its own `include`.
+
 ## The api
 
 A publisher's, an installer's or a command's code imports nothing of crossbind's: each step gets the `api`, made for its
-extension and its run, and frozen.
+extension and its run, and frozen. A package source's steps get [their own](#package-sources).
 
 | Member | What it is |
 |---|---|
@@ -1025,8 +1162,8 @@ An extension's `package.json`:
 - has the license of the code it carries, its own and any it wraps, as an SPDX expression.
 
 crossbind's own have the keyword too, though an app has them already and `crossbind add` refuses them, with the one of the
-group [the site](https://crossbind.dev/extensions/) lists them under: `publishing`, `installer`, `system`, `launch` or
-`page`. Those whose page code imports `crossbind/app/core` name `crossbind` as a peer dependency; the others name none,
+group [the site](https://crossbind.dev/extensions/) lists them under: `publishing`, `installer`, `system`, `launch`,
+`page` or `package-source`. Those whose page code imports `crossbind/app/core` name `crossbind` as a peer dependency; the others name none,
 as the host brings the versions it works with.
 
 Its `crossbind.extension.js` gives the extension's `contract`, as [Versions](#versions) says. The native code an
@@ -1090,6 +1227,9 @@ The host's core does what every extension stands on, and no extension takes its 
   an iPhone signed for development, through `crossbind app dev -p ios --device` over Wi-Fi: each target signed with a
   development profile of its own, the App Group the page wrote and the widget drew, and a push of APNs' sandbox the
   service changed.
+- **Package sources** give static libraries alone, as `lib<name>.a`, for every target but WASI, and a package's header
+  binds as far as a port's does ([`cpp-binding-rules.md`](./cpp-binding-rules.md)). Web and React Native builds link a
+  package's own archives only: the system libraries and Apple frameworks it asks for are not added there.
 - **Routes** answer whole, with a body or a file, as WebView2 reads a response only once all of it is there, and take
   GET and HEAD alone, as Android's WebView gives no request's body: a stream goes as a call's messages, and what the
   page sends as a call's options.

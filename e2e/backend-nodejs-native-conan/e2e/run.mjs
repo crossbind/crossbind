@@ -21,7 +21,7 @@ const root = resolve(import.meta.dirname, '..');
 const dist = join(root, 'dist');
 const arch = process.arch === 'arm64' ? 'arm64' : 'x64';
 const addonOf = (platform, addonArch = arch) => `${config.general.name}.${platform}-${addonArch}.node`;
-const { zlib, libpng, libcurl } = config.conanDependencies;
+const { zlib, libpng, libcurl } = config.packages.conan;
 const markers = [
     `zlib ${zlib}`, `libpng ${libpng}`, `libcurl ${libcurl.version}`,
     'crc32: PASS', 'fmt: PASS', 'exceptions: PASS', 'file fetch: PASS',

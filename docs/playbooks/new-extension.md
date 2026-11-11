@@ -21,7 +21,9 @@ A package that:
 
 For C or C++ the page calls as a library, with no host of its own, port the library instead (see
 [`new-port.md`](./new-port.md)). For code of one app alone, keep the extension in the app's repository and list it in
-its `crossbind.config.js` with `root` its folder, as a package would give.
+its `crossbind.config.js` with `root` its folder, as a package would give. For the packages of another package manager,
+which a project declares and imports as it does Conan's, write a package source, which needs no app (see
+[Package sources](../api/extensions.md#package-sources)).
 
 ## Package shape
 

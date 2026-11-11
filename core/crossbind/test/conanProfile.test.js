@@ -1,5 +1,10 @@
 import { describe, test, expect } from 'vitest';
-import { hostProfile, settingsUser, BUILD_PROFILE } from '../src/utils/conanProfile.js';
+import { hostProfile as profileOf, settingsUser as settingsUserOf, BUILD_PROFILE } from '../../../extensions/conan/src/profile.js';
+import { targetToolchain } from '../src/utils/targetToolchain.js';
+
+// Conan's profile of a target, from what crossbind says of the target's toolchain.
+const hostProfile = (target) => profileOf(targetToolchain(target));
+const settingsUser = (target) => settingsUserOf(targetToolchain(target));
 
 const wasm = (overrides = {}) => ({
     platform: 'wasm', arch: 'wasm32', runtime: 'st', buildType: 'release', ...overrides,
@@ -40,8 +45,8 @@ describe('conan host profile', () => {
         expect(line(hostProfile(wasm()), 'tools.info.package_id:confs')).toContain('"tools.build:cflags"');
     });
 
-    test('other platforms are refused for now', () => {
-        expect(() => hostProfile({ platform: 'wasi', arch: 'wasm32', runtime: 'st', buildType: 'release' })).toThrow(/linuxmusl, darwin and win32 so far; wasi/);
+    test('a platform crossbind names a toolchain for and Conan has no profile of is refused', () => {
+        expect(() => profileOf({ ...targetToolchain(wasm()), platform: 'haiku' })).toThrow('crossbind: conan has no profile for haiku yet, so its build cannot use packages.conan.');
     });
 });
 

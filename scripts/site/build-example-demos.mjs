@@ -254,6 +254,7 @@ const BUILDER_INPUTS = ['scripts/site/build-example-demos.mjs', 'scripts/site/na
 // carries them, the lockfile and settings they deploy with, the compiler's packages and the playground's runner.
 const SAMPLE_INPUTS = [
     'core/crossbind',
+    'extensions/conan',
     'core/embind-rust',
     'tooling/cloud/compiler',
     'tooling/cloud/scripts/node-modules.mjs',

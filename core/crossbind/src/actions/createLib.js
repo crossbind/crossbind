@@ -16,7 +16,7 @@ import {
 import { getFilesFingerprint, getContentHash } from '../utils/hash.js';
 import { withDependencyBridges } from '../utils/dependencyBridges.js';
 import { targetArchiveFlags } from '../utils/archiveFlags.js';
-import { conanInputsOf } from '../utils/conanDependencies.js';
+import { packageSourceInputsOf } from '../utils/packageSources.js';
 import { nativeSourceStampChanged, writeNativeSourceStamp } from '../utils/nativeSourceStamp.js';
 import resetCMakeCacheForSource from '../utils/resetCMakeCacheForSource.js';
 
@@ -57,10 +57,10 @@ export default function createLib(target, fileType, options = {}) {
     const configEmccFlags = getData('binary', target)?.emccFlags || [];
     const compileOptions = getData('cmake', target)?.compileOptions || [];
     const flagsFingerprintFile = `${libdir}/crossbind-emccflags.fingerprint`;
-    const conanInputs = conanInputsOf(state.config);
+    const packageInputs = packageSourceInputsOf(state.config);
     const compileInputs = compileOptions.length ? { emccFlags: configEmccFlags, compileOptions } : configEmccFlags;
     const flagsInputs = sourceReplacements.length ? { compileInputs, sourceReplacements } : compileInputs;
-    const keyInputs = conanInputs ? [flagsInputs, conanInputs] : flagsInputs;
+    const keyInputs = packageInputs ? [flagsInputs, packageInputs] : flagsInputs;
     // An app's wasi source compiles against <crossbind/http.h>, so a new one misses this cache too.
     const httpHeader = target.platform === 'wasi' && !state.config.build.withBuildConfig
         ? getFilesFingerprint([wasiHttpHeader(state.config.paths.cli)])

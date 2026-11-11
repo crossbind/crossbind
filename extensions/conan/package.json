@@ -1,0 +1,26 @@
+{
+    "name": "@crossbind/extension-conan",
+    "version": "2.0.0-beta.69",
+    "description": "crossbind extension: C and C++ packages from ConanCenter, each built with the toolchain of the target it links into.",
+    "homepage": "https://github.com/crossbind/crossbind/tree/main/extensions/conan#readme",
+    "repository": "https://github.com/crossbind/crossbind.git",
+    "license": "MIT",
+    "type": "module",
+    "exports": {
+        "./crossbind.extension.js": "./crossbind.extension.js"
+    },
+    "files": [
+        "crossbind.extension.js",
+        "src"
+    ],
+    "crossbind": {
+        "extension": "./crossbind.extension.js"
+    },
+    "keywords": [
+        "crossbind-extension",
+        "crossbind",
+        "package-source",
+        "conan",
+        "conancenter"
+    ]
+}

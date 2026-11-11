@@ -21,7 +21,7 @@
 // The newest version of the contract between crossbind and its extensions this host is built for, which an extension's
 // crossbind.extension.js names: one written for several tells them apart with it, as #if CROSSBIND_EXTENSION_CONTRACT >=
 // 2 does.
-#define CROSSBIND_EXTENSION_CONTRACT 1
+#define CROSSBIND_EXTENSION_CONTRACT 2
 
 namespace crossbind {
 

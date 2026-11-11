@@ -3,26 +3,31 @@ import path from 'node:path';
 import { createFixtureRegistryClient, createRegistryClient, REPOSITORY_ROOT } from './build-ports-catalog.mjs';
 
 // The app extensions an app adds from the repository's, for the Apps guide: each package's name and the summary its
-// description gives, read from extensions/*/package.json, but for those an app has by having the host, with the version
-// npm serves on the site's dist-tag, or null where it serves none, so the page offers no install that fails.
+// description gives, read from extensions/*/package.json, but for those an app has by having the host, and those every
+// project has by having crossbind, with the version npm serves on the site's dist-tag, or null where it serves none, so
+// the page offers no install that fails.
 
 // How an extension's package description opens, which the page's list says for every entry already.
 const DESCRIPTION_PREFIX = /^crossbind app extension: /;
+// The packages that bring extensions as their dependencies: the app's host, and crossbind itself.
+const BRINGERS = ['app-host', 'crossbind'];
 
-// What the host brings as its dependencies, of which the guide offers none to add.
-function hostDependencies(root) {
-    const manifest = path.join(root, 'core', 'app-host', 'package.json');
-    return fs.existsSync(manifest) ? Object.keys(JSON.parse(fs.readFileSync(manifest, 'utf8')).dependencies ?? {}) : [];
+// What they bring, of which the guide offers none to add.
+function broughtDependencies(root) {
+    return BRINGERS.flatMap((name) => {
+        const manifest = path.join(root, 'core', name, 'package.json');
+        return fs.existsSync(manifest) ? Object.keys(JSON.parse(fs.readFileSync(manifest, 'utf8')).dependencies ?? {}) : [];
+    });
 }
 
 export function readExtensionsTree(root = REPOSITORY_ROOT) {
     const folder = path.join(root, 'extensions');
-    const fromHost = hostDependencies(root);
+    const brought = broughtDependencies(root);
     return fs
         .readdirSync(folder, { withFileTypes: true })
         .filter((entry) => entry.isDirectory() && fs.existsSync(path.join(folder, entry.name, 'package.json')))
         .map((entry) => JSON.parse(fs.readFileSync(path.join(folder, entry.name, 'package.json'), 'utf8')))
-        .filter((manifest) => manifest.private !== true && !fromHost.includes(manifest.name))
+        .filter((manifest) => manifest.private !== true && !brought.includes(manifest.name))
         .map((manifest) => {
             if (!manifest.description) throw new Error(`${manifest.name} has no description for the Apps guide to show.`);
             const summary = manifest.description.replace(DESCRIPTION_PREFIX, '');

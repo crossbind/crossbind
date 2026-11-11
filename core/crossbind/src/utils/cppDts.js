@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { stripComments } from './swigInterface.js';
 import writeIfChanged from './writeIfChanged.js';
-import { conanImportOfHeader, conanStageDir } from './conanImport.js';
+import { sourceImportOfHeader, sourceStageDir } from './packageSourceImport.js';
 
 // Best-effort .d.ts for `.h` imports, the C++ analog of the Rust emitDts: parse the
 // binding-rules surface (classes, public methods, primitives/string/shared_ptr), skip
@@ -256,20 +256,20 @@ function declarationsOf(headerFile, exportNames, dtsMode, log) {
 
 // Mirror the declaration under <cache>/types/<project-relative>.d.ts - never next to the
 // user's header. Package headers are skipped: their types ship with the package itself, and a
-// header staged from Conan is typed by its conan: module instead.
-export function writeHeaderDts({ headerFile, exportsFile, projectPath, cacheDir, dtsMode = 'sync', log = () => {} }) {
+// header staged from a package source is typed by its module instead, as conan:zlib/zlib.h is.
+export function writeHeaderDts({ headerFile, exportsFile, projectPath, cacheDir, sources = [], dtsMode = 'sync', log = () => {} }) {
     const relative = path.relative(projectPath, headerFile);
-    if (relative.startsWith('..') || headerFile.startsWith(`${conanStageDir(cacheDir)}/`)) return;
+    if (relative.startsWith('..') || sources.some((source) => headerFile.startsWith(`${sourceStageDir(cacheDir, source)}/`))) return;
     const exportNames = readExportNames(exportsFile, log);
     if (!exportNames) return;
     writeIfChanged(`${cacheDir}/types/${relative}.d.ts`, declarationsOf(headerFile, exportNames, dtsMode, log));
 }
 
-// A conan: specifier names no file the editor could map, so it is typed by an ambient module that
-// @crossbind/typescript-config includes. `declare` is an error inside one (TS1038).
-export function writeConanImportDts({ headerFile, exportsFile, declarationsFile = exportsFile, cacheDir, dtsMode = 'sync', log = () => {} }) {
-    const conanImport = conanImportOfHeader(headerFile, cacheDir);
-    const declared = conanImport && readExportNames(declarationsFile, log);
+// A specifier such as conan:zlib/zlib.h names no file the editor could map, so it is typed by an ambient
+// module, which @crossbind/typescript-config includes for conan. `declare` is an error inside one (TS1038).
+export function writeSourceImportDts({ headerFile, exportsFile, declarationsFile = exportsFile, cacheDir, sources = [], dtsMode = 'sync', log = () => {} }) {
+    const sourceImport = sourceImportOfHeader(headerFile, cacheDir, sources);
+    const declared = sourceImport && readExportNames(declarationsFile, log);
     if (!declared) return;
     // The bridge also binds macros and variadic functions the app imports, which the whole header's SWIG run skips.
     const exportNames = [...new Set([...declared, ...(readExportNames(exportsFile, log) ?? [])])];
@@ -279,7 +279,7 @@ export function writeConanImportDts({ headerFile, exportsFile, declarationsFile 
         .map((line) => (line ? `    ${line}` : line))
         .join('\n');
     writeIfChanged(
-        `${conanStageDir(cacheDir)}/types/${conanImport.name}/${conanImport.header}.d.ts`,
-        `declare module 'conan:${conanImport.name}/${conanImport.header}' {\n${body}\n}\n`,
+        `${sourceStageDir(cacheDir, sourceImport.source)}/types/${sourceImport.name}/${sourceImport.header}.d.ts`,
+        `declare module '${sourceImport.source}:${sourceImport.name}/${sourceImport.header}' {\n${body}\n}\n`,
     );
 }

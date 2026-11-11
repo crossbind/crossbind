@@ -14,7 +14,7 @@ import {
 } from '../utils/dependencyRebuild.js';
 import withDirLock from '../utils/dirLock.js';
 import { prepareRustSysroot } from '../utils/rustSysroot.js';
-import prepareConanDependencies from './prepareConanDependencies.js';
+import preparePackageSources from './preparePackageSources.js';
 import getAbsolutePath from '../utils/getAbsolutePath.js';
 import getCMakeListsFilePath from '../utils/getCMakeListsFilePath.js';
 import getParentPath from '../utils/getParentPath.js';
@@ -26,7 +26,7 @@ export default async function buildDependencies({ targetParams, rebuildOption })
     // sync cargo work downstream reads what it resolves. A project with nothing to rebuild still
     // needs its sysroot.
     await prepareRustSysroot(getBuildTargets(targetParams));
-    await prepareConanDependencies(getBuildTargets(targetParams));
+    await preparePackageSources(getBuildTargets(targetParams));
     await buildMissingCargoDependencies(getBuildTargets(targetParams), targetParams);
 
     const rebuildDeps = getRebuildDeps(state.config.allDependencies, rebuildOption);
@@ -78,7 +78,7 @@ async function buildMissingCargoDependencies(buildTargets, targetParams) {
     const appConfig = state.config;
     const cargoDependencies = (appConfig.allDependencies ?? []).filter((dep) => dep !== appConfig && dep.export?.type === 'cargo');
     if (cargoDependencies.length === 0) return;
-    // Bridges read every header for the first wasm target (see prepareConanDependencies), which an app configured for
+    // Bridges read every header for the first wasm target (see preparePackageSources), which an app configured for
     // another wasm runtime does not build: there a dependency built for the app's runtime alone counts as half built.
     const bridgeTarget = buildTargets.some(isWasm) ? state.targets.find(isWasm) : undefined;
     const extraTarget = bridgeTarget && !buildTargets.some((target) => target.path === bridgeTarget.path) ? bridgeTarget : undefined;
