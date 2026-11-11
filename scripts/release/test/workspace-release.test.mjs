@@ -67,7 +67,7 @@ function fixtureRepository(packages, { trainVersion } = {}) {
 
 test('the real workspace is classified into publishable Linux, macOS and assembled packages', () => {
     const packages = discoverPublishablePackages(ROOT);
-    assert.equal(packages.length, 345);
+    assert.equal(packages.length, 346);
     assert.equal(packages.find((candidate) => candidate.name === '@crossbind/port-zlib-standalone-napi').buildKind, 'node');
     assert.equal(packages.find((candidate) => candidate.name === '@crossbind/example-lib-prebuilt-matrix').buildKind, 'multi-platform');
     assert.equal(packages.find((candidate) => candidate.name === '@crossbind/port-zlib-standalone-napi-linuxmusl-x64').buildKind, 'node');

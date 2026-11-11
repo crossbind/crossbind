@@ -158,10 +158,10 @@ describe("the options crossbind's own extensions take from the app's config", ()
 describe("crossbind's own extensions an app has", () => {
     test('are each that takes nothing from its config, and those of the others whose fromApp gives options', () => {
         expect(namesIn(config(), 'darwin')).toEqual([
-            'dialog', 'menu', 'page-dialogs', 'page-downloads', 'page-drops', 'page-files', 'page-navigation', 'page-permissions', 'power', 'shell',
+            'dialog', 'menu', 'page-dialogs', 'page-downloads', 'page-drops', 'page-feel', 'page-files', 'page-navigation', 'page-permissions', 'power', 'shell',
         ]);
         expect(namesIn(config({ urlSchemes: ['myapp'], singleInstance: true }), 'darwin')).toEqual([
-            'dialog', 'instance', 'links', 'menu', 'page-dialogs', 'page-downloads', 'page-drops', 'page-files', 'page-navigation', 'page-permissions', 'power', 'shell',
+            'dialog', 'instance', 'links', 'menu', 'page-dialogs', 'page-downloads', 'page-drops', 'page-feel', 'page-files', 'page-navigation', 'page-permissions', 'power', 'shell',
         ]);
     });
 

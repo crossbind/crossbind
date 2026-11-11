@@ -125,6 +125,9 @@ importers:
       '@crossbind/extension-page-drops':
         specifier: workspace:^
         version: link:../../extensions/page-drops
+      '@crossbind/extension-page-feel':
+        specifier: workspace:^
+        version: link:../../extensions/page-feel
       '@crossbind/extension-page-files':
         specifier: workspace:^
         version: link:../../extensions/page-files
@@ -1612,6 +1615,12 @@ importers:
   extensions/page-downloads: {}
 
   extensions/page-drops:
+    devDependencies:
+      crossbind:
+        specifier: workspace:^
+        version: link:../../core/crossbind
+
+  extensions/page-feel:
     devDependencies:
       crossbind:
         specifier: workspace:^

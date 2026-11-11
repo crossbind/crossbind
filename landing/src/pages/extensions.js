@@ -74,6 +74,7 @@ export const EXTENSION_GROUPS = [
             row('page-downloads', "Where a page's downloads go, asking on macOS, iOS and Android and saving to Downloads on Linux"),
             row('page-dialogs', "A page's alert, confirm and prompt, as the system's dialogs"),
             row('page-drops', 'The paths of files dropped on a desktop page, which a web page never gets'),
+            row('page-feel', "A page that behaves as an app's own view, not as a web page"),
             row('page-location', 'Navigator.geolocation on macOS, which WKWebView leaves out'),
         ],
     },

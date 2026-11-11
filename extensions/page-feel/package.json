@@ -1,0 +1,31 @@
+{
+    "name": "@crossbind/extension-page-feel",
+    "version": "2.0.0-beta.69",
+    "description": "crossbind app extension: a page that behaves as an app's own view, not as a web page.",
+    "homepage": "https://github.com/crossbind/crossbind/tree/main/extensions/page-feel#readme",
+    "repository": "https://github.com/crossbind/crossbind.git",
+    "license": "MIT",
+    "type": "module",
+    "exports": {
+        "./crossbind.extension.js": "./crossbind.extension.js"
+    },
+    "files": [
+        "crossbind.extension.js",
+        "native"
+    ],
+    "crossbind": {
+        "extension": "./crossbind.extension.js"
+    },
+    "peerDependencies": {
+        "crossbind": "workspace:^"
+    },
+    "devDependencies": {
+        "crossbind": "workspace:^"
+    },
+    "keywords": [
+        "crossbind-extension",
+        "crossbind",
+        "page",
+        "app"
+    ]
+}

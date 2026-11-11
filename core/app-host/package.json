@@ -31,6 +31,7 @@
         "@crossbind/extension-page-dialogs": "workspace:^",
         "@crossbind/extension-page-downloads": "workspace:^",
         "@crossbind/extension-page-drops": "workspace:^",
+        "@crossbind/extension-page-feel": "workspace:^",
         "@crossbind/extension-page-files": "workspace:^",
         "@crossbind/extension-page-location": "workspace:^",
         "@crossbind/extension-page-navigation": "workspace:^",
