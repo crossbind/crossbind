@@ -10,6 +10,7 @@ import { exportWasiSdkPath } from '../utils/wasiToolchain.js';
 import loadConfig, { assertBinarySelection } from './loadConfig.js';
 import { configChangesOf } from '../utils/configChanges.js';
 import refreshPackageSources from './refreshPackageSources.js';
+import xcframeworkSliceOf from '../utils/xcframeworkSlice.js';
 
 const cacheDir = `${process.cwd()}/.crossbind`;
 
@@ -118,12 +119,7 @@ export function setAllDependecyPaths() {
                 const isDynamicLib = target.platform === 'android' && platformConfig.libType !== 'static';
                 const dep = state.config.allDependencyPaths[target.path][name];
                 if (target.platform === 'ios') {
-                    let xcRoot;
-                    if (target.arch === 'iphoneos') {
-                        xcRoot = `${d.paths.project}/${name}.xcframework/ios-arm64`;
-                    } else if (target.arch === 'iphonesimulator') {
-                        xcRoot = `${d.paths.project}/${name}.xcframework/ios-arm64-simulator`;
-                    }
+                    const xcRoot = xcframeworkSliceOf(d.paths.project, name, target);
                     dep.header = `${xcRoot}/Headers`;
                     dep.libPath = xcRoot;
                     dep.lib = `${dep.libPath}/lib${name}.a`;

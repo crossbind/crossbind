@@ -1,4 +1,5 @@
 import findFiles from '../utils/findFiles.js';
+import xcframeworkSliceOf from '../utils/xcframeworkSlice.js';
 import state from '../state/index.js';
 import { getFilteredTargetSpec } from './target.js';
 
@@ -21,10 +22,10 @@ export default function getDependLibs(target) {
                 if (libPaths.length === 0) {
                     libPaths = libsIn(target.releasePath);
                 }
-                // A published port can leave its iOS archive to its xcframework, where the package's paths lead.
-                const xcframeworkLib = target.platform === 'ios' && state.config.allDependencyPaths?.[target.path]?.[fileName]?.lib;
-                if (libPaths.length === 0 && xcframeworkLib) {
-                    libPaths = findFiles(xcframeworkLib, { cwd: d.paths.project });
+                // A published port can leave its iOS archive to its xcframework: the one of this package, as a project
+                // can list the port's packages of other platforms, whose libraries share the name.
+                if (libPaths.length === 0 && target.platform === 'ios') {
+                    libPaths = findFiles(`${xcframeworkSliceOf(d.paths.project, fileName, target)}/lib${fileName}.a`, { cwd: d.paths.project });
                 }
                 dependLibs.push(...libPaths);
             });

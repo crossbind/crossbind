@@ -59,4 +59,14 @@ describe('an iOS app build', () => {
 
         expect(getDependLibs(simulator)).toEqual([archive]);
     });
+
+    // A project can list a port's packages for several platforms, which share the library's name.
+    test('links the xcframework of the package that serves iOS where another platform\'s package shares its name', () => {
+        const archive = file(upath.join(slice, 'libdep.a'));
+        holder.config.allDependencyPaths = {
+            [simulator.path]: { dep: { lib: upath.join(work, 'dep-win32', 'dep.xcframework', 'ios-arm64-simulator', 'libdep.a') } },
+        };
+
+        expect(getDependLibs(simulator)).toEqual([archive]);
+    });
 });
