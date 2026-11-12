@@ -1,15 +1,15 @@
 // <crossbind/app.h>, which an app's own code includes for the host's functions (docs/api/app.md).
 
 import fs from 'node:fs';
-import state from '../state/index.js';
+import isAppBuild from './appBuild.js';
 import resolveAppHostRoot from './resolveAppHost.js';
 import { runtimeEnvsOf } from './targets.js';
 
-// An app project's native code compiles against the header, with CROSSBIND_APP defined, on every platform an app runs
-// on, and in every flavour of that platform's archives, which share one build. A library and an app's web build get
-// neither.
+// In a run that builds an app its project's native code compiles against the header, with CROSSBIND_APP defined, on every
+// platform an app runs on, and in every flavour of that platform's archives, which share one build. A library and an
+// app's web build get neither.
 export function compilesAsApp(target) {
-    return state.config.target?.runtimeEnv === 'app' && runtimeEnvsOf(target.platform).includes('app');
+    return isAppBuild() && runtimeEnvsOf(target.platform).includes('app');
 }
 
 // What an app's own code compiles with: CROSSBIND_APP, and on iOS its debug information, from which the archive's dSYM

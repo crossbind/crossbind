@@ -11,11 +11,13 @@
         "dev": "crossbind app dev",
         "dev:ios": "crossbind app dev -p ios",
         "dev:android": "crossbind app dev -p android",
+        "dev:web": "vite",
         "build": "crossbind app build",
         "build:linux": "crossbind app build -p linux",
         "build:windows": "crossbind app build -p windows",
         "build:ios": "crossbind app build -p ios",
         "build:android": "crossbind app build -p android",
+        "build:web": "vite build",
         "e2e:prod": "node e2e/run.mjs"
     },
     "dependencies": {

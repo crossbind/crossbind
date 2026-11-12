@@ -26,3 +26,13 @@ export function resolveAppPageApi() {
     if (!fs.existsSync(file)) throw new Error(`crossbind: the app host at ${resolveAppHostRoot()} has no crossbind/app for an app's page: update ${PKG} to match crossbind.`);
     return fs.realpathSync(file);
 }
+
+// The same for a page a bundler builds for the browser, where a project has the app host: code an app shares with its
+// web build still bundles, and what it calls rejects as outside an app. A project without the host has none.
+export function findAppPageApi() {
+    try {
+        return resolveAppPageApi();
+    } catch {
+        return null;
+    }
+}

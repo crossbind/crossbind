@@ -1,15 +1,16 @@
 // What an app's host does for its page: the app's folders, quitting, its windows, the events of the app's native code and
-// the functions of its extensions, by their names. Each call goes to the host of an app (target.runtimeEnv: 'app'); in any
-// other build it rejects, or events.on throws. A page imports these from crossbind/app, which an app's bundler plugin
-// takes from the app host, with what crossbind's own extensions give the page, as crossbind/app/core alone holds these.
+// the functions of its extensions, by their names. Each call goes to the host of an app, which crossbind app builds; in a
+// browser it rejects, or events.on throws. A page imports these from crossbind/app, which an app's bundler plugin takes
+// from the app host, with what crossbind's own extensions give the page, as crossbind/app/core alone holds these.
 
-// The app's crossbind.js, which initNative() loads, hands the calls to the host.
+// The app's crossbind.js, which initNative() loads, hands the calls to the host. A browser has crossbind's glue as well,
+// but no token of a host, and none of its functions.
 function hostOf(member, name) {
     const host = globalThis.Crossbind?.[member];
     if (host) return host;
+    if (!globalThis.__crossbind_token && !globalThis.Crossbind?.app) throw new Error(`crossbind: ${name} works in an app alone, which crossbind app builds`);
     if (globalThis.Crossbind) throw new Error(`crossbind: this app's host is older than crossbind/app; update @crossbind/core-app-host to call ${name}`);
-    if (globalThis.__crossbind_token) throw new Error(`crossbind: ${name} works once the page has called initNative()`);
-    throw new Error(`crossbind: ${name} works in an app alone, whose crossbind.config.js sets target.runtimeEnv: 'app'`);
+    throw new Error(`crossbind: ${name} works once the page has called initNative()`);
 }
 
 const call = (name, options) => hostOf('app', name)(name, options);
@@ -106,7 +107,7 @@ function deviceOf(name) {
     const device = globalThis.__crossbind_device;
     if (device) return device[name];
     if (globalThis.__crossbind_token) throw new Error(`crossbind: this app's host is older than crossbind/app; update @crossbind/core-app-host to read device.${name}`);
-    throw new Error(`crossbind: device.${name} works in an app alone, whose crossbind.config.js sets target.runtimeEnv: 'app'`);
+    throw new Error(`crossbind: device.${name} works in an app alone, which crossbind app builds`);
 }
 
 // Where the app runs, the same through its run, which the page reads at once, as it starts: the platform and the arch

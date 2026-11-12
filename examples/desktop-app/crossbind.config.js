@@ -7,10 +7,6 @@ export default {
     dependencies: [
         Matrix,
     ],
-    // The page runs in the system webview and the C++ in the app's own process.
-    target: {
-        runtimeEnv: 'app',
-    },
     paths: {
         config: import.meta.url,
         base: '../..', /* Delete this line for create-crossbind */

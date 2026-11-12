@@ -15,6 +15,7 @@ import buildWasiCommand from './actions/buildWasiCommand.js';
 import buildNode, { addonsInPackages, bundleNodeLoader, publishNodeData } from './actions/buildNode.js';
 import buildNativeCommand from './actions/buildNativeCommand.js';
 import buildApp, { appOutputPath, assertAppRunner, publishApp } from './actions/buildApp.js';
+import { assertAppProject } from './utils/appProject.js';
 import {
     makeUploadKey, releaseSigningEnv, showUploadKeyPassword, useUploadKey,
 } from './actions/uploadKey.js';
@@ -143,11 +144,7 @@ function runVite(args, env) {
     });
 }
 
-function assertAppProject() {
-    if (state.config.target.runtimeEnv !== 'app') {
-        throw new Error("crossbind: crossbind app builds an app, which this project is not: set target: { runtimeEnv: 'app' } in crossbind.config.js, as the desktop-app template does.");
-    }
-}
+const assertAppCommand = () => assertAppProject(state.config, 'crossbind app builds an app');
 
 const commandApp = program.command('app').description('build the project as an app, or open it on the dev server');
 [
@@ -164,12 +161,12 @@ const commandApp = program.command('app').description('build the project as an a
         .allowUnknownOption()
         .allowExcessArguments()
         .action(async ({ platform, device }, command) => {
-            assertAppProject();
+            assertAppCommand();
             // An Android build checks its upload key before the native build, not after it.
             const isAndroidBuild = name === 'build' && (platform ?? process.env.CROSSBIND_APP_PLATFORM) === 'android';
             const { env: signing } = isAndroidBuild ? await releaseSigningEnv() : { env: {} };
             const onDevice = device === undefined ? {} : { CROSSBIND_APP_DEVICE: iosDeviceOption(device, platform ?? process.env.CROSSBIND_APP_PLATFORM) };
-            const env = { ...process.env, ...signing, ...(platform ? { CROSSBIND_APP_PLATFORM: platform } : {}), ...onDevice };
+            const env = { ...process.env, ...signing, CROSSBIND_APP_BUILD: '1', ...(platform ? { CROSSBIND_APP_PLATFORM: platform } : {}), ...onDevice };
             process.exit(await runVite([...(name === 'build' ? ['build'] : []), ...command.args], env));
         });
 });
@@ -195,7 +192,7 @@ commandApp.command('publish')
     .allowUnknownOption()
     .allowExcessArguments()
     .action(async ({ platform }, command) => {
-        assertAppProject();
+        assertAppCommand();
         await publish(command.args, { platform, envPlatform: process.env.CROSSBIND_APP_PLATFORM, runVite });
     });
 

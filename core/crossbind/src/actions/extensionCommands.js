@@ -3,6 +3,7 @@ import extensionApi from './extensionApi.js';
 import state from '../state/index.js';
 import { hasTerminal } from '../utils/ask.js';
 import { extensionStep, ownExtensions, withoutNamed } from '../utils/appExtensions.js';
+import { isAppProject } from '../utils/appProject.js';
 import resolveAppHostRoot from '../utils/resolveAppHost.js';
 
 const kebab = (name) => name.replace(/[A-Z]/g, (letter) => `-${letter.toLowerCase()}`);
@@ -23,7 +24,7 @@ function ownOf(listed, app) {
 // Adds to crossbind app the commands of an app's extensions, crossbind's own and those crossbind.config.js lists: a name
 // another has stops the run, naming both.
 export default function addExtensionCommands(parent, config = state.config) {
-    if (config?.target?.runtimeEnv !== 'app') return;
+    if (!config?.target || !isAppProject(config)) return;
     const listed = config.extensions ?? [];
     const owners = new Map(parent.commands.map((command) => [command.name(), 'crossbind']));
     for (const { name: extension, commands = {} } of [...ownOf(listed, config.app), ...listed]) {

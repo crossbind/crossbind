@@ -125,7 +125,10 @@ describe('crossbind add', () => {
         const spawn = vi.fn();
 
         expect(() => addExtension('crossbind-extension-greeter', { config: { ...configOf(), target: {} }, spawn }))
-            .toThrow("set target: { runtimeEnv: 'app' }");
+            .toThrow('add @crossbind/core-app-host to its devDependencies');
+        addDependency('@crossbind/core-app-host', 'devDependencies');
+        expect(() => addExtension('crossbind-extension-greeter', { config: { ...configOf(), target: { runtimeEnv: 'browser' } }, spawn }))
+            .toThrow("target.runtimeEnv says browser: leave it out, or set it to 'app'");
         expect(() => addExtension('-g', { config: configOf(), spawn, platform: 'darwin' })).toThrow('-g is an option to a package manager');
         expect(() => addExtension('--registry=https://example.com', { config: configOf(), spawn, platform: 'win32' })).toThrow('is an option');
         expect(spawn).not.toHaveBeenCalled();

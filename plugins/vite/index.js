@@ -3,13 +3,14 @@ import {
     state, createLib, createBridgeFile, buildWasm, buildDependencies, getTargetParams, getFilteredBuildTargets, isSourceNewer, getRustJsScript,
     isAppSource, getFileHash, buildProjectApp, appLayout, appOutputName, appPlatform, appTargetParams, publishApp, buildForSimulator,
     openInSimulator, buildApk, openOnDevice, buildForIosDevice, openOnIosDevice, connectedIosDevice, iosDevServer, resolveAppPageApi,
+    findAppPageApi, isAppBuild,
 } from 'crossbind';
 import rollupCrossbindPlugin from '@crossbind/plugin-rollup';
 
 import fs from 'node:fs';
 import { spawn } from 'node:child_process';
 
-const isApp = state.config.target.runtimeEnv === 'app';
+const isApp = isAppBuild();
 // How long the app that runs gets to end before a new host opens.
 const STOP_TIMEOUT_MS = 5000;
 // An app's targets are what runs it during development, which appDevPlugin finds as the session starts.
@@ -237,6 +238,16 @@ const viteCrossbindPlugin = (options) => {
         rollupCrossbindPlugin(options, bridges),
         {
             name: 'vite-plugin-crossbind',
+            // A page an app shares with its web build takes crossbind/app from the app host here too, and reads that it is
+            // built for no app's platform, which leaves the apps' code out of the build.
+            config() {
+                const pageApi = findAppPageApi();
+                if (!pageApi) return {};
+                return {
+                    resolve: { alias: [{ find: /^crossbind\/app$/, replacement: pageApi }] },
+                    define: { 'import.meta.env.CROSSBIND_APP_PLATFORM': 'undefined' },
+                };
+            },
             async load(source) {
                 if (isServe && source === '/crossbind.js') {
                     inFlightBuild = inFlightBuild || buildGlue().finally(() => { inFlightBuild = null; });

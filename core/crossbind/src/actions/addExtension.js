@@ -5,6 +5,7 @@ import { configFileOf, writeExtension } from '../utils/configWriter.js';
 import { isUnderBase } from '../utils/replaceBasePathForDocker.js';
 import { ownPackages } from '../utils/appExtensions.js';
 import { packagesOfCrossbind } from '../utils/packageSources.js';
+import { assertAppProject } from '../utils/appProject.js';
 import resolveAppHostRoot from '../utils/resolveAppHost.js';
 
 // The lockfiles by which a project names the package manager it is installed with.
@@ -144,9 +145,7 @@ function installedName(spec, before, after, manifest) {
 export default function addExtension(spec, {
     config, env = process.env, platform = process.platform, spawn = spawnSync,
 }) {
-    if (config.target.runtimeEnv !== 'app') {
-        throw new Error("crossbind: an extension builds into an app, which this project is not: set target: { runtimeEnv: 'app' } in crossbind.config.js, as the desktop-app template does.");
-    }
+    assertAppProject(config, 'an extension builds into an app');
     assertSpec(spec, platform);
     assertNotOwn(spec);
     const { project, base } = config.paths;

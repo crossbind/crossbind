@@ -28,5 +28,5 @@ declare module 'crossbind/app' {
 
 // The platform the page is built for, which crossbind's Vite plugin sets, so the build leaves out the others' code.
 interface ImportMetaEnv {
-    readonly CROSSBIND_APP_PLATFORM: 'macos' | 'windows' | 'linux' | 'ios' | 'android';
+    readonly CROSSBIND_APP_PLATFORM?: 'macos' | 'windows' | 'linux' | 'ios' | 'android';
 }

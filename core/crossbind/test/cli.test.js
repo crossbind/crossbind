@@ -89,7 +89,7 @@ describe('crossbind inside a project', () => {
         const { status, stderr } = crossbind('app', 'build', '-p', 'linux');
 
         expect(status).toBe(1);
-        expect(stderr).toContain("set target: { runtimeEnv: 'app' } in crossbind.config.js");
+        expect(stderr).toContain('add @crossbind/core-app-host to its devDependencies');
     });
 
     test('lists the commands that need no project in its help', () => {
