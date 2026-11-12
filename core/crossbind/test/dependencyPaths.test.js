@@ -97,4 +97,20 @@ describe('setAllDependecyPaths', () => {
         expect(paths['ios-iphoneos-mt-release'].z.lib).toBe('/pkg/zlib/z.xcframework/ios-arm64/libz.a');
         expect(paths['ios-iphonesimulator-mt-release'].z.libPath).toBe('/pkg/zlib/z.xcframework/ios-arm64-simulator');
     });
+
+    // A project can list a port's packages for several platforms, which share the library's name.
+    test('takes the entry of the package that serves the target where several share a library name', () => {
+        const serving = (name, platform) => ({ ...dep(name, { libName: ['gdal'] }), functions: { isEnabled: (t) => t.platform === platform } });
+        const ios = serving('gdal-ios', 'ios');
+        const win32 = serving('gdal-win32', 'win32');
+        const simulator = target({ platform: 'ios', arch: 'iphonesimulator', runtime: 'mt', path: 'ios-iphonesimulator-mt-release' });
+        const windows = target({ platform: 'win32', arch: 'x64', runtime: 'mt', path: 'win32-x64-mt-release' });
+
+        [[ios, win32], [win32, ios]].forEach((order) => {
+            const paths = run([simulator, windows], order);
+
+            expect(paths['ios-iphonesimulator-mt-release'].gdal.lib).toBe('/pkg/gdal-ios/gdal.xcframework/ios-arm64-simulator/libgdal.a');
+            expect(paths['win32-x64-mt-release'].gdal.root).toBe('/pkg/gdal-win32/dist/prebuilt/win32-x64-mt-release');
+        });
+    });
 });

@@ -98,6 +98,7 @@ export function setAllDependecyPaths() {
     state.config.allDependencyPaths = {};
     state.targets.forEach((target) => {
         state.config.allDependencyPaths[target.path] = { cmake: {} };
+        const owners = new Map();
         state.config.allDependencies.forEach((d) => {
             state.config.allDependencyPaths[target.path].cmake[d.general.name] = `${d.paths.output}/prebuilt`;
             // A package source's recipe can name a library on another platform only (libpng is png16 on Windows).
@@ -106,6 +107,11 @@ export function setAllDependecyPaths() {
                     .some((targetPath) => fs.existsSync(`${d.paths.output}/prebuilt/${targetPath}/lib/lib${name}.a`)))
                 : d.export.libName;
             libNames.forEach((name) => {
+                // A project can list a port's packages for several platforms, which share the library's name: the one
+                // that serves the target keeps the entry.
+                const owner = owners.get(name);
+                if (owner && owner !== d && d.functions?.isEnabled?.(target) === false) return;
+                owners.set(name, d);
                 state.config.allDependencyPaths[target.path][name] = {
                     root: `${d.paths.output}/prebuilt/${target.path}`,
                 };
