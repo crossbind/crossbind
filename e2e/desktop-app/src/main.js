@@ -564,19 +564,24 @@ async function checkActivities(isApple, isDesktop) {
 // static shortcuts list them, and the probe taps each as the system does, on Android with the intent its shortcuts.xml
 // gives: the page gets its own once it has asked, the probe its own, and none one of a type no one owns, which iOS's
 // delegate refuses and Android has no shortcut of. Android starts a tap in a task it empties first, which leaves the
-// page as it was, as this check goes on in it.
+// page as it was, as this check goes on in it. Each tap is heard before the next is made, as a launcher's come one at
+// a time: of two started together Android drops one, the first's activity emptied from their task before it ran or the
+// second's left behind the app's.
 async function checkShortcuts(isAndroid) {
     const types = [SHORTCUTS.page, SHORTCUTS.probe];
     // Android lists its static shortcuts in no order of its manifest's.
     const listed = isAndroid ? (await invoke('probe.shortcuts')).toSorted((a, b) => (a.id < b.id ? -1 : 1)) : (await invoke('probe.apple')).shortcutTypes;
     const expected = isAndroid ? [{ id: SHORTCUTS.page, label: 'New note' }, { id: SHORTCUTS.probe, label: 'Probe' }] : types;
     if (JSON.stringify(listed) !== JSON.stringify(expected)) throw new Error(`the app's icon lists the quick actions ${JSON.stringify(listed)}`);
-    const tapped = Promise.all([nextEvent('shortcut-item'), nextEvent('probe.shortcut')]);
+    const pageTapped = nextEvent('shortcut-item');
     const held = await events.held('shortcut-item');
     if (held.length > 0) throw new Error(`the app was launched with the quick actions ${JSON.stringify(held)}`);
-    const taken = [];
-    for (const type of [...types, SHORTCUTS.nobody]) taken.push(await invoke('probe.tapShortcut', { type }));
-    const [page, probed] = await tapped;
+    const pageTaken = await invoke('probe.tapShortcut', { type: SHORTCUTS.page });
+    const page = await pageTapped;
+    const probeTapped = nextEvent('probe.shortcut');
+    const probeTaken = await invoke('probe.tapShortcut', { type: SHORTCUTS.probe });
+    const probed = await probeTapped;
+    const taken = [pageTaken, probeTaken, await invoke('probe.tapShortcut', { type: SHORTCUTS.nobody })];
     if (page.type !== SHORTCUTS.page || probed.type !== SHORTCUTS.probe) throw new Error(`the quick actions' taps reached ${JSON.stringify({ page, probed })}`);
     if (JSON.stringify(taken) !== JSON.stringify([true, true, false])) throw new Error(`the quick actions' taps were taken as ${JSON.stringify(taken)}`);
 }
