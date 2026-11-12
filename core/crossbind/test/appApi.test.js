@@ -33,7 +33,7 @@ describe("crossbind/app's device", () => {
     });
 
     test('throws outside an app, naming what makes one', () => {
-        expect(() => device.platform).toThrow("crossbind: device.platform works in an app alone, whose crossbind.config.js sets target.runtimeEnv: 'app'");
+        expect(() => device.platform).toThrow('crossbind: device.platform works in an app alone, which crossbind app builds');
     });
 
     test('throws with a host older than crossbind/app, naming the package to update', () => {
@@ -45,7 +45,13 @@ describe("crossbind/app's device", () => {
 
 describe("crossbind/app, an app's own functions", () => {
     test('rejects outside an app, naming what makes one', async () => {
-        await expect(app.paths()).rejects.toThrow("target.runtimeEnv: 'app'");
+        await expect(app.paths()).rejects.toThrow('which crossbind app builds');
+    });
+
+    test('rejects in a browser, whose crossbind.js sets its global as well, as outside an app', async () => {
+        globalThis.Crossbind = { initNative: () => {} };
+
+        await expect(app.paths()).rejects.toThrow('which crossbind app builds');
     });
 
     test('rejects in an app whose page has not called initNative() yet', async () => {
@@ -55,6 +61,7 @@ describe("crossbind/app, an app's own functions", () => {
     });
 
     test('rejects with a host older than crossbind/app, naming the package to update', async () => {
+        globalThis.__crossbind_token = 'token';
         globalThis.Crossbind = { initNative: () => {} };
 
         await expect(app.paths()).rejects.toThrow('update @crossbind/core-app-host');
@@ -161,7 +168,7 @@ describe("crossbind/app, an app's own functions", () => {
     test('refuses a listener without a name or a function, and one outside an app or with an older host', () => {
         expect(() => events.on('', () => {})).toThrow('takes the name of an event');
         expect(() => events.on('progress', 'listener')).toThrow('takes a function to call');
-        expect(() => events.on('progress', () => {})).toThrow("target.runtimeEnv: 'app'");
+        expect(() => events.on('progress', () => {})).toThrow('which crossbind app builds');
         inApp();
         expect(() => events.on('progress', () => {})).toThrow('update @crossbind/core-app-host to call events.on');
     });

@@ -91,6 +91,11 @@ document.querySelector('#result').textContent = await Native.sample();`,
             text: 'The template runs each as an npm script: `npm run dev`, `npm run build:windows`, `npm run dev:android` and so on. macOS apps build with Xcode\'s command line tools, iOS apps with Xcode. Linux, Windows and Android apps build in crossbind\'s Docker images on this machine, with the default runner or `RUNNER=DOCKER_EXEC`; a [remote](/guide/remote-builds/) or local runner stops them.',
         },
 
+        {
+            type: 'p',
+            text: 'One project can be the web page as well. Leave `target.runtimeEnv` out of `crossbind.config.js` and list a WebAssembly build of each dependency: `crossbind app build` then makes the app and `vite build` the web page, whose code tells them apart by `import.meta.env.CROSSBIND_APP_PLATFORM`, undefined on the web.',
+        },
+
         { type: 'h2', id: 'functions', text: 'What the app does for the page' },
         {
             type: 'p',

@@ -3,7 +3,7 @@
 import {
     state, createLib, createBridgeFile, buildWasm, getCrossbindScript, getRustJsScript, buildDependencies,
     getDependFilePath, getTargetParams, getFilteredBuildTargets, isSourceNewer, appSourceFiles, buildProjectApp, publishApp,
-    appOutputName, appTargetParams, checkInstaller, resolveAppPageApi, shipApp,
+    appOutputName, appTargetParams, checkInstaller, findAppPageApi, isAppBuild, resolveAppPageApi, shipApp,
 } from 'crossbind';
 
 import fs from 'node:fs';
@@ -11,7 +11,7 @@ import p from 'node:path';
 
 // An app's page reaches the module in the host the app runs, so its build makes the host, not wasm: this machine's, or
 // with CROSSBIND_APP_PLATFORM one per iOS SDK, Android ABI or Linux or Windows arch.
-const isApp = state.config.target.runtimeEnv === 'app';
+const isApp = isAppBuild();
 const targetParams = isApp
     ? appTargetParams()
     : getTargetParams({ platform: ['wasm'], arch: ['wasm32'], runtime: ['st'], runtimeEnv: ['browser'] }, true);
@@ -50,7 +50,10 @@ const rollupCrossbindPlugin = (options, bridges = []) => {
             if (source === '/crossbind.js') {
                 return { id: source, external: true };
             }
-            if (isApp && source === 'crossbind/app') return resolveAppPageApi();
+            if (source === 'crossbind/app') {
+                const pageApi = isApp ? resolveAppPageApi() : findAppPageApi();
+                if (pageApi) return pageApi;
+            }
             const dependFilePath = getDependFilePath(source, buildTargetRelease);
             if (dependFilePath) {
                 return dependFilePath;

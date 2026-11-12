@@ -985,7 +985,7 @@ export default function demoTool() {
 | `run(api)` | Does its work, with the options in `api.options`. A failure with a message not crossbind's own stops the command with one that names the extension and the command. |
 
 A command has no platform, so its `api.platform` is null and `api.run`, an installer's, refuses it. It is there only in
-a project whose `target.runtimeEnv` is `app`. A name that `crossbind app` has already, of crossbind's or of another
+a project whose `target.runtimeEnv` names no environment but `app`. A name that `crossbind app` has already, of crossbind's or of another
 extension's, stops `crossbind app` in the project, naming both; an extension that takes the place of one of
 crossbind's own, by its name or with `replaces`, takes the place of that one's commands too.
 

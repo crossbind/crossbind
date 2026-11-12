@@ -63,6 +63,41 @@ apps build in crossbind's linux, windows and android-app images, which carry wha
 [Hermes](#hermes)).
 They need `RUNNER=DOCKER_RUN` or `DOCKER_EXEC`, and another runner stops the build before its first step.
 
+## The same page on the web
+
+A project that leaves `target.runtimeEnv` out builds by the command that runs it: `crossbind app dev` and
+`crossbind app build` make the app, and `vite` and `vite build` what a browser loads, with the native code as
+WebAssembly, as any web project of the Vite plugin. It lists a WebAssembly build of each dependency beside the native
+ones:
+
+```js
+// crossbind.config.js
+export default {
+    general: { name: 'my-app' },
+    dependencies: [wasm, android, darwin, ios, linux, win32],
+    paths: { config: import.meta.url },
+};
+```
+
+```json
+{
+    "scripts": {
+        "dev": "crossbind app dev",
+        "build": "crossbind app build",
+        "build:ios": "crossbind app build -p ios",
+        "dev:web": "vite",
+        "build:web": "vite build"
+    }
+}
+```
+
+`import.meta.env.CROSSBIND_APP_PLATFORM` is undefined in a web build, which tells the page where it runs and leaves the
+apps' code out of the build. `crossbind/app` still resolves there, from the app host, so code the two share bundles:
+what it calls rejects, and `device` throws, as outside an app. The native code compiles without `CROSSBIND_APP`, and
+cannot include `<crossbind/app.h>`.
+
+`target.runtimeEnv: 'app'` says a project is an app alone: `vite build` then makes the app as well.
+
 ## The page
 
 `initNative()` and the imports from headers and crates work as in a web build with `useWorker`

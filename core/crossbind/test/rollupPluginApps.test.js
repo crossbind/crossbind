@@ -8,6 +8,8 @@ const targets = ['x64', 'arm64'].map((arch) => ({ platform: 'linux', arch, build
 const refused = { arch: null };
 vi.mock('crossbind', () => ({
     state: { config: { target: { runtimeEnv: 'app' }, ext: { header: ['h'], module: ['i'] }, paths: { project: '/project', native: [] } } },
+    isAppBuild: () => true,
+    findAppPageApi: () => null,
     appTargetParams: () => ({}),
     getTargetParams: () => ({}),
     getFilteredBuildTargets: () => targets,

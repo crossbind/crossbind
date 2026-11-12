@@ -100,6 +100,16 @@ puts on a device. With `CROSSBIND_ANDROID_KEYSTORE`, `CROSSBIND_ANDROID_KEY_ALIA
 `dist/crossbind-example-desktop-app-android.aab` is the bundle Google Play takes. Gradle runs in Docker, so no JDK or
 Android SDK is needed; the Gradle project it builds stays in `dist/crossbind-example-desktop-app-android/`.
 
+## Web
+
+```bash
+pnpm dev:web
+pnpm build:web
+```
+
+serve the same page in a browser, with the C++ as WebAssembly, and write it to `dist/`. `crossbind.config.js` names no
+runtime environment, so the command decides: `crossbind app` builds the app and plain Vite the web page.
+
 ## Test
 
 `pnpm run e2e:prod` opens the built app and waits for the page to log the result; with `CROSSBIND_APP_PLATFORM=ios` it
