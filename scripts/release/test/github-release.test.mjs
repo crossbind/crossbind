@@ -32,6 +32,99 @@ test('a tag already pointing to the release commit is reused', async () => {
     assert.equal(created, 0);
 });
 
+// What GitHub answers a read with around a write it acknowledged: the old answer until the given read after the write.
+function lagging(before, after, shownFromRead) {
+    let writes = 0;
+    let reads = 0;
+    return {
+        writes: () => writes,
+        write: async () => {
+            writes += 1;
+        },
+        read: async () => {
+            if (writes === 0) return before;
+            reads += 1;
+            return reads >= shownFromRead ? after : before;
+        },
+    };
+}
+
+const RELEASE = { tag_name: TAG, name: 'Crossbind fixture', body: 'Fixture body', draft: false, prerelease: true, assets: [] };
+const RELEASE_OPTIONS = {
+    tag: TAG,
+    title: 'Crossbind fixture',
+    body: 'Fixture body',
+    bodyFile: 'unused.md',
+    prerelease: true,
+    apply: true,
+    log: () => {},
+};
+
+test('a created tag GitHub shows only on a later read is waited for', async () => {
+    const tag = lagging(null, COMMIT, 3);
+    const waits = [];
+    const sleep = async (duration) => waits.push(duration);
+    const action = await ensureGitTag({
+        github: { tagCommit: tag.read, createTag: tag.write },
+        tag: TAG,
+        commit: COMMIT,
+        apply: true,
+        log: () => {},
+        sleep,
+    });
+    assert.equal(action, 'created');
+    assert.equal(tag.writes(), 1);
+    assert.deepEqual(waits, [1000, 2000]);
+});
+
+test('a created tag GitHub never shows fails once its reads are spent', async () => {
+    const tag = lagging(null, COMMIT, Infinity);
+    const waits = [];
+    const sleep = async (duration) => waits.push(duration);
+    await assert.rejects(
+        ensureGitTag({ github: { tagCommit: tag.read, createTag: tag.write }, tag: TAG, commit: COMMIT, apply: true, log: () => {}, sleep }),
+        /settled at \(absent\)/,
+    );
+    assert.deepEqual(waits, [1000, 2000, 4000, 8000, 16000]);
+});
+
+test('a created tag GitHub shows at another commit fails without waiting', async () => {
+    const tag = lagging(null, 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', 1);
+    const waits = [];
+    const sleep = async (duration) => waits.push(duration);
+    await assert.rejects(
+        ensureGitTag({ github: { tagCommit: tag.read, createTag: tag.write }, tag: TAG, commit: COMMIT, apply: true, log: () => {}, sleep }),
+        /settled at a{40}/,
+    );
+    assert.deepEqual(waits, []);
+});
+
+test('a created release GitHub shows only on a later read is waited for', async () => {
+    const shown = lagging(null, RELEASE, 2);
+    const waits = [];
+    const sleep = async (duration) => waits.push(duration);
+    const result = await ensureGitHubRelease({ ...RELEASE_OPTIONS, github: { release: shown.read, createRelease: shown.write }, assets: [], sleep });
+    assert.equal(result.release, RELEASE);
+    assert.equal(shown.writes(), 1);
+    assert.deepEqual(waits, [1000]);
+});
+
+test('an uploaded asset GitHub shows only on a later read is waited for', async () => {
+    const asset = { name: 'crossbind-release.json', url: 'asset-api-url', browser_download_url: 'asset-browser-url' };
+    const shown = lagging(RELEASE, { ...RELEASE, assets: [asset] }, 2);
+    const waits = [];
+    const sleep = async (duration) => waits.push(duration);
+    const result = await ensureGitHubRelease({
+        ...RELEASE_OPTIONS,
+        github: { release: shown.read, uploadAsset: shown.write },
+        assets: [{ name: asset.name, file: 'unused.json' }],
+        sleep,
+    });
+    assert.equal(result.assets[asset.name], 'asset-browser-url');
+    assert.equal(shown.writes(), 1);
+    assert.deepEqual(waits, [1000]);
+});
+
 test('a matching GitHub rerun reuses the release and identical assets', async () => {
     const temporary = fs.mkdtempSync(path.join(os.tmpdir(), 'crossbind-release-test-'));
     const manifest = path.join(temporary, 'crossbind-release.json');
