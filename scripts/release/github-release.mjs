@@ -58,7 +58,6 @@ export class GitHubCliRelease {
         if (prerelease) args.push('--prerelease');
         else args.push('--latest=false');
         await this.run(args);
-        return this.release(tag);
     }
 
     // Every release in the repository, all pages. Callers filter by exact tag prefix; this is not
@@ -88,7 +87,21 @@ export class GitHubCliRelease {
     }
 }
 
-export async function ensureGitTag({ github, tag, commit, apply = false, log = console.log }) {
+// GitHub can answer a read with what it held before a write it has just acknowledged: the beta 72 train read three tags
+// it had just created as absent, each there minutes later. A read after a write is repeated for half a minute first.
+const READ_BACK_ATTEMPTS = 6;
+const READ_BACK_FIRST_WAIT_MS = 1000;
+const pause = (duration) => new Promise((resolve) => setTimeout(resolve, duration));
+
+// The first answer of read that isShown takes, else the last one once the reads are spent.
+async function readBack(read, isShown, sleep, attempt = 1) {
+    const answer = await read();
+    if (isShown(answer) || attempt === READ_BACK_ATTEMPTS) return answer;
+    await sleep(READ_BACK_FIRST_WAIT_MS * 2 ** (attempt - 1));
+    return readBack(read, isShown, sleep, attempt + 1);
+}
+
+export async function ensureGitTag({ github, tag, commit, apply = false, log = console.log, sleep = pause }) {
     const existing = await github.tagCommit(tag);
     if (existing === commit) {
         log(`${tag} already points to ${commit}; reusing it.`);
@@ -102,7 +115,7 @@ export async function ensureGitTag({ github, tag, commit, apply = false, log = c
         return 'planned';
     }
     await github.createTag(tag, commit);
-    const created = await github.tagCommit(tag);
+    const created = await readBack(() => github.tagCommit(tag), Boolean, sleep);
     if (created !== commit) throw new Error(`${tag} settled at ${created ?? '(absent)'}, expected ${commit}.`);
     log(`${tag} created at ${commit}.`);
     return 'created';
@@ -112,7 +125,18 @@ function normalizeMarkdown(value) {
     return String(value).replaceAll('\r\n', '\n').trim();
 }
 
-export async function ensureGitHubRelease({ github, tag, title, body, bodyFile, prerelease, assets, apply = false, log = console.log }) {
+export async function ensureGitHubRelease({
+    github,
+    tag,
+    title,
+    body,
+    bodyFile,
+    prerelease,
+    assets,
+    apply = false,
+    log = console.log,
+    sleep = pause,
+}) {
     let release = await github.release(tag);
     if (release) {
         if (release.tag_name !== tag) throw new Error(`GitHub returned release tag ${release.tag_name}, expected ${tag}.`);
@@ -130,7 +154,8 @@ export async function ensureGitHubRelease({ github, tag, title, body, bodyFile, 
             log(`${tag} GitHub ${prerelease ? 'prerelease' : 'release'} would be created.`);
             return { action: 'planned', release: null, assets: {} };
         }
-        release = await github.createRelease({ tag, title, bodyFile, prerelease });
+        await github.createRelease({ tag, title, bodyFile, prerelease });
+        release = await readBack(() => github.release(tag), Boolean, sleep);
         if (!release) throw new Error(`GitHub Release ${tag} was not visible after creation.`);
         log(`${tag} GitHub ${prerelease ? 'prerelease' : 'release'} created.`);
     }
@@ -153,8 +178,13 @@ export async function ensureGitHubRelease({ github, tag, title, body, bodyFile, 
             continue;
         }
         await github.uploadAsset(tag, asset.file);
-        release = await github.release(tag);
-        const uploaded = release.assets?.find((candidate) => candidate.name === asset.name);
+        const named = (candidate) => candidate.name === asset.name;
+        release = await readBack(
+            () => github.release(tag),
+            (current) => Boolean(current?.assets?.some(named)),
+            sleep,
+        );
+        const uploaded = release?.assets?.find(named);
         if (!uploaded) throw new Error(`${tag} asset ${asset.name} was not visible after upload.`);
         log(`${tag} asset ${asset.name} uploaded.`);
         resolvedAssets[asset.name] = uploaded.browser_download_url;
