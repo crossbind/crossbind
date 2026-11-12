@@ -137,7 +137,22 @@ setInterval(() => {}, 1000);
         const { status, stderr } = crossbindWith(UNSET, 'app', 'build', '-p', 'linux');
 
         expect(status).toBe(1);
-        expect(stderr).toContain("the project's vite resolves to @voidzero-dev/vite-plus-core 0.1.24, which has none");
+        expect(stderr).toContain("its vite resolves to @voidzero-dev/vite-plus-core 0.1.24, which has neither a vite command nor Vite's cli.js beside its entry");
+    });
+
+    // vite-plus-core keeps Vite's CLI beside its entry, where vite-plus's own vp runs it, and Vite keeps it there too.
+    test('runs the Vite CLI beside the entry of a vite that has no vite command', () => {
+        const vite = path.join(dir, 'node_modules', 'vite');
+        const node = path.join(vite, 'dist', 'vite', 'node');
+        fs.mkdirSync(node, { recursive: true });
+        fs.writeFileSync(path.join(vite, 'package.json'), JSON.stringify({ name: '@voidzero-dev/vite-plus-core', version: '0.1.24', main: './dist/vite/node/index.js' }));
+        fs.writeFileSync(path.join(node, 'index.js'), '');
+        fs.writeFileSync(path.join(node, 'cli.js'), VITE);
+
+        const { status, stdout } = crossbindWith(UNSET, 'app', 'build', '-p', 'linux', '--mode', 'staging');
+
+        expect(started(stdout)).toEqual({ args: ['build', '--mode', 'staging'], platform: 'linux' });
+        expect(status).toBe(3);
     });
 
     test('takes the platform from CROSSBIND_APP_PLATFORM without -p', () => {

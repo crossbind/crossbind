@@ -114,19 +114,34 @@ function declaredSbomPath(projectDir) {
 // An app's page is the project's Vite build, which @crossbind/plugin-vite makes into the app of the platform named.
 const APP_PLATFORMS = ['android', 'ios', 'linux', 'macos', 'windows'];
 
+// Vite's CLI beside the entry of the package vite resolves to, where Vite keeps it and vite-plus-core too, whose vp runs
+// it from there. An entry outside the package is another one's, which a lookup past it found.
+function viteCliBesideEntry(require, packageDir) {
+    try {
+        const entry = require.resolve('vite');
+        const cli = path.join(path.dirname(entry), 'cli.js');
+        return entry.startsWith(`${packageDir}${path.sep}`) && fs.existsSync(cli) ? cli : null;
+    } catch {
+        return null;
+    }
+}
+
 function projectVite() {
+    const require = createRequire(`${state.config.paths.project}/package.json`);
     let manifestPath;
     try {
-        manifestPath = createRequire(`${state.config.paths.project}/package.json`).resolve('vite/package.json');
+        manifestPath = require.resolve('vite/package.json');
     } catch {
         throw new Error("crossbind: crossbind app builds the app's page with the project's Vite, which the project does not have. Add vite and @crossbind/plugin-vite to it, as the desktop-app template has them.");
     }
-    // A workspace can map vite to a package of Vite's API alone.
+    // A workspace can map vite to a package of Vite's API alone, as vite-plus maps it to vite-plus-core.
     const { name, version, bin } = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
-    if (!bin?.vite) {
-        throw new Error(`crossbind: crossbind app runs the vite command, and the project's vite resolves to ${name} ${version}, which has none. Have vite resolve to Vite itself for the project, with an override where its workspace maps vite to another package.`);
+    if (bin?.vite) return path.join(path.dirname(manifestPath), bin.vite);
+    const cli = viteCliBesideEntry(require, path.dirname(manifestPath));
+    if (!cli) {
+        throw new Error(`crossbind: crossbind app runs the project's Vite, and its vite resolves to ${name} ${version}, which has neither a vite command nor Vite's cli.js beside its entry. Have vite resolve to Vite itself for the project, with an override where its workspace maps vite to another package.`);
     }
-    return path.join(path.dirname(manifestPath), bin.vite);
+    return cli;
 }
 
 // The project's Vite, as `crossbind app dev`, `build` and `publish` run it, and its exit code once it ends. A signal sent

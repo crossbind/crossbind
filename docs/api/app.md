@@ -58,7 +58,9 @@ export default defineConfig({ plugins: [viteCrossbindPlugin()] });
 `windows`, `ios` or `android`; without `-p` it keeps the variable the environment sets, and without that builds this
 machine's desktop app. `--device` sets `CROSSBIND_APP_DEVICE` to the device it names, or to the UDID of the only one
 connected. `vite` and `vite build` take the variables as well, and Vite's own options, such as `--port` or `--mode`,
-pass through `crossbind app` to Vite. A macOS or iOS build fetches Hermes once; Linux, Windows and Android
+pass through `crossbind app` to Vite. It runs the `vite` command of the package `vite` resolves to, or, where that
+package has none, as `@voidzero-dev/vite-plus-core` that vite-plus maps `vite` to, Vite's `cli.js` beside the package's
+entry. A macOS or iOS build fetches Hermes once; Linux, Windows and Android
 apps build in crossbind's linux, windows and android-app images, which carry what they compile and link against (see
 [Hermes](#hermes)).
 They need `RUNNER=DOCKER_RUN` or `DOCKER_EXEC`, and another runner stops the build before its first step.
