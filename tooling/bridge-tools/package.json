@@ -1,6 +1,6 @@
 {
     "name": "@crossbind/bridge-tools",
-    "version": "2.0.0-beta.72",
+    "version": "2.0.0-beta.73",
     "description": "SWIG as WebAssembly and emscripten's headers, with which crossbind makes the bridges of macOS and iOS apps on a Mac without Docker",
     "license": "(Apache-2.0 WITH LLVM-exception) AND (MIT OR NCSA) AND BSD-3-Clause AND GPL-3.0-or-later AND LicenseRef-Emscripten-Third-Party-Headers AND LicenseRef-SWIG-Library AND MIT",
     "repository": "https://github.com/crossbind/crossbind.git",
