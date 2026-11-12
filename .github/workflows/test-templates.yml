@@ -68,8 +68,8 @@ jobs:
             - name: Close the dialog that opening the app's link can leave over it
               working-directory: ${{ runner.temp }}
               run: |
-                  cat > dismiss.yaml <<'FLOW'
-                  appId: dev.crossbind.sampleReactNativeExpo
+                  cat > dismiss.yaml <<FLOW
+                  appId: $(sed -n 's/^appId: //p' expo-app/maestro.yaml)
                   ---
                   - tapOn:
                         text: Cancel

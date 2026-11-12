@@ -1,4 +1,8 @@
 appId: dev.crossbind.sampleReactNativeExpo
 ---
+# `expo run:ios` opens the app through its link, and iOS 27 asks about that in a dialog over the app.
+- tapOn:
+      text: Cancel
+      optional: true
 - launchApp
 - assertVisible: 'Matrix multiplier with c++.*=>.*J₃ \* \(2\*J₃\) = 6\*J₃'

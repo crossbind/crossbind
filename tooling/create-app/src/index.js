@@ -5,6 +5,9 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { styleText } from 'node:util';
 import * as p from '@clack/prompts';
+import {
+    appName, nameDesktopApp, nameElectronApp, nameExpoApp,
+} from './app-name.js';
 import { unpackDotfiles } from './dotfiles.js';
 import { followExpoSdk } from './expo-sdk.js';
 import { extensionName, nameExtension } from './extension.js';
@@ -186,6 +189,9 @@ async function main() {
         if (fs.existsSync(readmePath)) {
             await fsp.writeFile(readmePath, renameInReadme(await fsp.readFile(readmePath, 'utf8'), templateName, pkg.name));
         }
+        if (entry.key === 'desktop-app') await nameDesktopApp(cwd, appName(name));
+        if (entry.key === 'desktop-electron') await nameElectronApp(cwd, appName(name));
+        if (entry.key === 'mobile-reactnative-expo') await nameExpoApp(cwd, appName(name));
     }
 
     const gradlew = path.join(cwd, 'android', 'gradlew');

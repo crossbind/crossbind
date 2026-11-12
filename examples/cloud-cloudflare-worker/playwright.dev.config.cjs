@@ -4,6 +4,10 @@ const { defineConfig, devices } = require('@playwright/test');
 /**
  * @see https://playwright.dev/docs/test-configuration
  */
+// CROSSBIND_E2E_PORT lets sequential/parallel e2e runs give each project a unique free
+// port (avoids teardown races on the shared default).
+const port = process.env.CROSSBIND_E2E_PORT || '8787';
+
 module.exports = defineConfig({
   testDir: './e2e',
   timeout: 30 * 1000,
@@ -18,7 +22,7 @@ module.exports = defineConfig({
   reporter: 'html',
 
   use: {
-    baseURL: 'http://localhost:8787',
+    baseURL: `http://localhost:${port}`,
     trace: 'on-first-retry',
   },
 
@@ -41,8 +45,8 @@ module.exports = defineConfig({
 
   /* Run your local dev server before starting the tests */
   webServer: {
-    command: 'pnpm run dev',
-    url: 'http://localhost:8787',
+    command: `pnpm run dev --port ${port}`,
+    url: `http://localhost:${port}`,
     reuseExistingServer: !process.env.CI,
   },
 });

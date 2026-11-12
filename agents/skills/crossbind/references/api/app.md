@@ -67,6 +67,11 @@ apps build in crossbind's linux, windows and android-app images, which carry wha
 [Hermes](#hermes)).
 They need `RUNNER=DOCKER_RUN` or `DOCKER_EXEC`, and another runner stops the build before its first step.
 
+A build keeps in `dist/` what builds for the app's other platforms wrote there, so `crossbind app build`, `-p linux`,
+`-p windows`, `-p ios` and `-p android` leave their apps and what installs them side by side. It empties the rest, as Vite
+would, and writes its own platform's anew. With `build.emptyOutDir` in the project's Vite config, or Vite's
+`--emptyOutDir`, Vite empties the folder as it does for any build.
+
 ## The same page on the web
 
 A project that leaves `target.runtimeEnv` out builds by the command that runs it: `crossbind app dev` and
