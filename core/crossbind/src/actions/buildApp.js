@@ -393,6 +393,33 @@ export function clearAppOutputs() {
     else fs.rmSync(appOutputsFile(), { force: true });
 }
 
+// The app target an entry of the folder the bundler builds into was written for, by its name: the target's app, or what
+// packages it.
+function outputTarget(entry) {
+    const { name } = state.config.general;
+    return state.targets.filter((t) => t.runtimeEnv === 'app').find((t) => [appOutputName(t), `${name}-${t.platform}-${t.arch}`]
+        .some((app) => entry === app || entry.startsWith(`${app}.`) || entry.startsWith(`${app}-`)));
+}
+
+// The paths a recorded output names: each desktop app with its installers' files, or a mobile app's project with its APK,
+// bundle and debug symbols.
+const outputPaths = (output) => (Array.isArray(output)
+    ? output.flatMap(({ app, installers = [] }) => [app, ...installers.flatMap(({ files }) => files)])
+    : Object.values(output)).filter(Boolean);
+
+// Empties the folder the bundler builds an app into, as the bundler would, but for git's own folder and what builds for the
+// app's other platforms wrote there: their apps, named after their targets, and the files their installers recorded.
+export function emptyAppOutDir(dir, platform = appPlatform()) {
+    if (!fs.existsSync(dir)) return;
+    const others = new Set(Object.entries(readAppOutputs()).filter(([name]) => name !== platform)
+        .flatMap(([, output]) => outputPaths(output)).map((file) => path.resolve(file)));
+    for (const entry of fs.readdirSync(dir)) {
+        const target = outputTarget(entry);
+        const isOthers = target ? (DESKTOP_PLATFORMS[target.platform] ?? target.platform) !== platform : others.has(path.resolve(dir, entry));
+        if (entry !== '.git' && !isOthers) fs.rmSync(path.join(dir, entry), { recursive: true, force: true });
+    }
+}
+
 // What a publisher's upload gets of the app the build wrote for a platform: a desktop platform's apps, one for each arch.
 export function appOutputOf(platform) {
     const output = readAppOutputs()[platform];
@@ -475,11 +502,8 @@ export function publishApp(target, { to = appOutputPath(target), page = null } =
         // The app may land inside the page's own directory, which it then leaves out, with every app built there and what
         // packages it: what is named after a target of the app, and every installer's files as a build recorded them, which
         // a folder the bundler left as it was holds still.
-        const apps = state.targets.filter((t) => t.runtimeEnv === 'app')
-            .flatMap((t) => [appOutputName(t), `${state.config.general.name}-${t.platform}-${t.arch}`]).filter((name) => !name.endsWith('.app'));
         const shipped = shippedFiles();
-        const isApp = (entry) => entry === path.basename(to) || entry.endsWith('.app')
-            || apps.some((app) => entry === app || entry.startsWith(`${app}.`) || entry.startsWith(`${app}-`))
+        const isApp = (entry) => entry === path.basename(to) || entry.endsWith('.app') || Boolean(outputTarget(entry))
             || shipped.has(path.resolve(page, entry));
         fs.readdirSync(page).filter((entry) => !isApp(entry)).forEach((entry) => {
             fs.cpSync(`${page}/${entry}`, `${to}/${appLayout(target).resources}/page/${entry}`, { recursive: true });

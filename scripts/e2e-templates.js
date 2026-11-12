@@ -4,7 +4,7 @@
  * build + e2e suite, the way an end user would after `npm create crossbind`.
  *
  * It pulls the scaffolder either from npm (the published beta) or from a local
- * pack of the working tree, generates each template into tmp/e2e-templates/,
+ * pack of the working tree, generates each template in the system's temp folder,
  * installs, builds (Wasm/native via the crossbind Docker image), and runs the
  * template's own Playwright / Maestro e2e suite. Anything the host can't do
  * (no Docker, no emulator) is reported as SKIPPED rather than failing the run.
@@ -21,7 +21,7 @@
  *   --skip-build         Scaffold + install only (skip build)
  *   --skip-e2e           Skip the e2e/browser/device step
  *   --skip-npm-check     Skip the `npm install --dry-run` peer-conflict probe
- *   --clean              Wipe tmp/e2e-templates before starting
+ *   --clean              Wipe the projects and tmp/e2e-templates before starting
  *   --list               Print the plan + host capability gating, then exit
  *   --json               Also write tmp/e2e-templates/summary.json
  *   -h, --help           Show this help
@@ -30,15 +30,19 @@
  */
 
 const fs = require('node:fs');
+const os = require('node:os');
 const path = require('node:path');
 const { buildPlan, REPO_ROOT } = require('./e2e-templates/plan');
 const { detectEnv, missingCaps } = require('./e2e-templates/env');
 const { resolveSource } = require('./e2e-templates/source');
 const { runTemplate, pickE2e } = require('./e2e-templates/runner');
 
-const BASE_DIR = path.join(REPO_ROOT, 'tmp/e2e-templates');
-const LOG_DIR = path.join(BASE_DIR, 'logs');
-const SUMMARY_PATH = path.join(BASE_DIR, 'summary.json');
+// Inside the repository Node would resolve a dependency a template forgot through the monorepo's node_modules,
+// crossbind itself among them, so the projects live outside it.
+const PROJECTS_DIR = path.join(os.tmpdir(), 'crossbind-e2e-templates');
+const OUT_DIR = path.join(REPO_ROOT, 'tmp/e2e-templates');
+const LOG_DIR = path.join(OUT_DIR, 'logs');
+const SUMMARY_PATH = path.join(OUT_DIR, 'summary.json');
 
 const STATUS_ICON = { pass: '✓', fail: '✗', skip: '–' };
 
@@ -202,7 +206,11 @@ async function main() {
         return;
     }
 
-    if (flags.clean) fs.rmSync(BASE_DIR, { recursive: true, force: true });
+    if (flags.clean) {
+        fs.rmSync(PROJECTS_DIR, { recursive: true, force: true });
+        fs.rmSync(OUT_DIR, { recursive: true, force: true });
+    }
+    fs.mkdirSync(PROJECTS_DIR, { recursive: true });
     fs.mkdirSync(LOG_DIR, { recursive: true });
 
     if (!caps.docker) {
@@ -212,10 +220,10 @@ async function main() {
     const rootLog = fs.createWriteStream(path.join(LOG_DIR, '_setup.log'), { flags: 'w' });
     const source = await resolveSource({ source: flags.source, tag: flags.tag, logStream: rootLog });
     rootLog.end();
-    process.stdout.write(`\nScaffolder: ${source.describe}\nPackage manager: ${flags.pm}\nWorkdir: ${BASE_DIR}\n`);
+    process.stdout.write(`\nScaffolder: ${source.describe}\nPackage manager: ${flags.pm}\nWorkdir: ${PROJECTS_DIR}\n`);
 
     const ctx = {
-        baseDir: BASE_DIR,
+        baseDir: PROJECTS_DIR,
         logDir: LOG_DIR,
         source,
         caps,

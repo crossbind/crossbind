@@ -22,7 +22,7 @@ To enable the library, modify the crossbind.config.js file as shown below.
 export default {
     dependencies: [
 +        sourceSample
-    ]
+    ],
     paths: {
         config: import.meta.url,
     },

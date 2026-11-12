@@ -4,7 +4,7 @@ export { default as createLib } from './actions/createLib.js';
 export { default as createBridgeFile } from './actions/createInterface.js';
 export { default as buildWasm } from './actions/buildWasm.js';
 export {
-    default as buildApp, buildProjectApp, publishApp, appLayout, appOutputName, appPlatform, appTargetParams,
+    default as buildApp, buildProjectApp, publishApp, appLayout, appOutputName, appPlatform, appTargetParams, emptyAppOutDir,
 } from './actions/buildApp.js';
 export { checkInstaller, shipApp } from './actions/appInstaller.js';
 export { findAppPageApi, resolveAppPageApi } from './utils/resolveAppHost.js';

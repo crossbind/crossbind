@@ -36,7 +36,7 @@ const signWindows = vi.fn();
 vi.mock('../src/actions/windowsSigning.js', async (importOriginal) => ({ ...await importOriginal(), inWindowsImage, signWindows }));
 
 const {
-    appLayout, appOutputName, appOutputOf, appPlatform, appTargetParams, clearAppOutputs, publishApp,
+    appLayout, appOutputName, appOutputOf, appPlatform, appTargetParams, clearAppOutputs, emptyAppOutDir, publishApp,
 } = await import('../src/actions/buildApp.js');
 const { shipApp } = await import('../src/actions/appInstaller.js');
 const { newUpdaterKey } = await import('../../../extensions/updater/src/update.js');
@@ -435,6 +435,93 @@ describe.skipIf(process.platform === 'win32')("a macOS app's signature", () => {
             expect(warn).not.toHaveBeenCalled();
         } finally {
             fs.rmSync(path.dirname(key), { recursive: true, force: true });
+        }
+    });
+});
+
+describe('the folder the bundler builds an app into', () => {
+    const targets = [
+        { platform: 'darwin', arch: 'arm64' }, { platform: 'linux', arch: 'x64' }, { platform: 'linux', arch: 'arm64' },
+        { platform: 'win32', arch: 'x64' }, { platform: 'win32', arch: 'arm64' }, { platform: 'ios', arch: 'iphoneos' },
+        { platform: 'android', arch: 'arm64-v8a' },
+    ].map((target) => ({ ...target, runtimeEnv: 'app' }));
+    const linuxOutputs = (dist) => [
+        { app: path.join(dist, 'demo-linux-x64'), arch: 'x64', installers: [{ name: 'appimage', files: [path.join(dist, 'Demo.AppImage')] }] },
+    ];
+
+    // What builds for every platform of the app wrote there, beside an earlier page and a folder of git's.
+    function builtFolder(outputs) {
+        const root = fs.mkdtempSync(path.join(os.tmpdir(), 'crossbind-outdir-'));
+        const dist = path.join(root, 'dist');
+        ['assets', '.git', 'demo.app', 'demo-linux-x64', 'demo-win32-x64', 'demo-ios', 'demo-android']
+            .forEach((dir) => fs.mkdirSync(path.join(dist, dir), { recursive: true }));
+        ['index.html', 'demo-linux-x64.deb', 'Demo.AppImage', 'demo-win32-x64-setup.exe', 'demo-android.apk']
+            .forEach((file) => fs.writeFileSync(path.join(dist, file), file));
+        state.config.paths = { base: root, build: path.join(root, 'build') };
+        state.targets = targets;
+        fs.mkdirSync(state.config.paths.build);
+        fs.writeFileSync(path.join(root, 'build', 'app-outputs.json'), JSON.stringify(outputs(dist)));
+        return { root, dist };
+    }
+
+    afterEach(() => {
+        state.targets = [];
+    });
+
+    test("keeps what builds for the app's other platforms wrote, and empties the rest as the bundler would", () => {
+        const { root, dist } = builtFolder((dir) => ({ linux: linuxOutputs(dir) }));
+        try {
+            emptyAppOutDir(dist, 'windows');
+            expect(fs.readdirSync(dist).sort()).toEqual([
+                '.git', 'Demo.AppImage', 'demo-android', 'demo-android.apk', 'demo-ios', 'demo-linux-x64', 'demo-linux-x64.deb', 'demo.app',
+            ]);
+        } finally {
+            fs.rmSync(root, { recursive: true, force: true });
+        }
+    });
+
+    test('empties what an earlier build for the same platform wrote, with what installs its apps', () => {
+        const { root, dist } = builtFolder((dir) => ({ linux: linuxOutputs(dir) }));
+        try {
+            emptyAppOutDir(dist, 'linux');
+            expect(fs.readdirSync(dist).sort()).toEqual([
+                '.git', 'demo-android', 'demo-android.apk', 'demo-ios', 'demo-win32-x64', 'demo-win32-x64-setup.exe', 'demo.app',
+            ]);
+        } finally {
+            fs.rmSync(root, { recursive: true, force: true });
+        }
+    });
+
+    test("keeps what installs the apps of a publish's build, which forgot them", () => {
+        const { root, dist } = builtFolder((dir) => ({ earlier: [{ installers: [{ files: [path.join(dir, 'Demo.AppImage')] }] }] }));
+        try {
+            emptyAppOutDir(dist, 'windows');
+            expect(fs.readdirSync(dist)).toContain('Demo.AppImage');
+        } finally {
+            fs.rmSync(root, { recursive: true, force: true });
+        }
+    });
+
+    test('is left alone before the first build makes it', () => {
+        const { root } = builtFolder(() => ({}));
+        try {
+            expect(() => emptyAppOutDir(path.join(root, 'none'), 'linux')).not.toThrow();
+        } finally {
+            fs.rmSync(root, { recursive: true, force: true });
+        }
+    });
+
+    test("holds every platform's apps, which an app's page leaves out", () => {
+        const { root, dist } = builtFolder((dir) => ({ linux: linuxOutputs(dir) }));
+        const x64 = targets.find(({ platform, arch }) => platform === 'win32' && arch === 'x64');
+        const target = { ...x64, appName: 'demo.win32-x64' };
+        fs.mkdirSync(path.join(root, 'build', target.appName, 'resources'), { recursive: true });
+        fs.rmSync(path.join(dist, '.git'), { recursive: true });
+        try {
+            publishApp(target, { to: path.join(dist, 'demo-win32-x64'), page: dist });
+            expect(fs.readdirSync(path.join(dist, 'demo-win32-x64', 'resources', 'page')).sort()).toEqual(['assets', 'index.html']);
+        } finally {
+            fs.rmSync(root, { recursive: true, force: true });
         }
     });
 });

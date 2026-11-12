@@ -3,11 +3,12 @@ import {
     state, createLib, createBridgeFile, buildWasm, buildDependencies, getTargetParams, getFilteredBuildTargets, isSourceNewer, getRustJsScript,
     isAppSource, getFileHash, buildProjectApp, appLayout, appOutputName, appPlatform, appTargetParams, publishApp, buildForSimulator,
     openInSimulator, buildApk, openOnDevice, buildForIosDevice, openOnIosDevice, connectedIosDevice, iosDevServer, resolveAppPageApi,
-    findAppPageApi, isAppBuild,
+    findAppPageApi, isAppBuild, emptyAppOutDir,
 } from 'crossbind';
 import rollupCrossbindPlugin from '@crossbind/plugin-rollup';
 
 import fs from 'node:fs';
+import path from 'node:path';
 import { spawn } from 'node:child_process';
 
 const isApp = isAppBuild();
@@ -32,6 +33,8 @@ if (!buildTargetDebug) {
 // does. Closing the window, or the app on the Simulator or device, ends the session.
 function appDevPlugin() {
     let isServe = false;
+    let isEmptiedHere = false;
+    let outDir = null;
     let server = null;
     let appUrl = null;
     let iosDevice = null;
@@ -133,7 +136,11 @@ function appDevPlugin() {
             const watch = { ignored: [`${state.config.paths.cache}/**`, `${state.config.paths.build}/**`] };
             const resolve = { alias: [{ find: /^crossbind\/app$/, replacement: resolveAppPageApi() }] };
             const define = { 'import.meta.env.CROSSBIND_APP_PLATFORM': JSON.stringify(appPlatform()) };
-            if (command !== 'serve' || process.env.CROSSBIND_APP_PLATFORM !== 'ios' || !process.env.CROSSBIND_APP_DEVICE) return { resolve, define, server: { watch } };
+            // A build for one platform keeps the apps that builds for the others wrote beside the page, so crossbind empties
+            // the folder in Vite's place, unless the project says how Vite does.
+            isEmptiedHere = command === 'build' && userConfig.build?.emptyOutDir === undefined;
+            const build = isEmptiedHere ? { emptyOutDir: false } : {};
+            if (command !== 'serve' || process.env.CROSSBIND_APP_PLATFORM !== 'ios' || !process.env.CROSSBIND_APP_DEVICE) return { resolve, define, server: { watch }, build };
             try {
                 iosDevice = connectedIosDevice(process.env.CROSSBIND_APP_DEVICE);
                 const devServer = iosDevServer(iosDevice, userConfig.server?.host);
@@ -148,6 +155,13 @@ function appDevPlugin() {
         },
         configResolved(config) {
             isServe = config.command === 'serve';
+            const dir = path.resolve(config.root, config.build.outDir);
+            const inRoot = path.relative(config.root, dir);
+            // As Vite, which empties no folder outside the project's root.
+            outDir = isEmptiedHere && inRoot && !inRoot.startsWith('..') && !path.isAbsolute(inRoot) ? dir : null;
+        },
+        buildStart() {
+            if (outDir) emptyAppOutDir(outDir);
         },
         async load(source) {
             if (!isServe || source !== '/crossbind.js') return null;

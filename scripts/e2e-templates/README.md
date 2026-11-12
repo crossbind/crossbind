@@ -21,11 +21,13 @@ node scripts/e2e-templates.js [options]
 | `--only a,b,c` | — | Run only these manifest `key`s (e.g. `web-react-vite`). |
 | `--filter <substr>` | — | Run templates whose key contains `<substr>`. |
 | `--skip-build` / `--skip-e2e` | off | Faster smoke runs. |
-| `--clean` | off | Wipe `tmp/e2e-templates/` first. |
+| `--clean` | off | Wipe the projects and `tmp/e2e-templates/` first. |
 | `--list` | off | Print the plan + host-capability gating and exit (no builds). |
 | `--json` | off | Also write `tmp/e2e-templates/summary.json`. |
 
-Scaffolded projects, logs, and the summary live under `tmp/e2e-templates/` (gitignored).
+Scaffolded projects live in the system's temp folder (`crossbind-e2e-templates`), outside the repository, so a
+dependency a template forgets to declare cannot resolve through the monorepo's `node_modules`. Logs and the summary
+live under `tmp/e2e-templates/` (gitignored).
 Exit code is non-zero if any template **FAILS**; SKIPs (missing Docker/emulator) do not fail the run.
 
 Start with `node scripts/e2e-templates.js --list` to see what your machine can run.
