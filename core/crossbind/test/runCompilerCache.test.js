@@ -113,7 +113,8 @@ describe('run: CROSSBIND_SCCACHE', () => {
         expect(args.some((arg) => /COMPILER_LAUNCHER|EM_COMPILER_WRAPPER|SCCACHE|AWS_/.test(arg))).toBe(false);
     });
 
-    test('a Mac build compiles through the sccache on its PATH, named in full, as the build narrows the PATH', async () => {
+    // A Mac build runs on a Mac alone, whose PATH holds no drive letter.
+    test.skipIf(process.platform === 'win32')('a Mac build compiles through the sccache on its PATH, named in full, as the build narrows the PATH', async () => {
         const bin = fakeSccache();
         vi.stubEnv('PATH', `${bin}:/usr/bin:/bin`);
         const { env } = await runTarget({ platform: 'darwin', arch: 'arm64' }, ['cmake', '/src']);
