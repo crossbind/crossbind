@@ -13,7 +13,7 @@
 | `resolveId('crossbind')` | Mark the crossbind loader as `external: true` so consumers fetch it at runtime, not bundle it |
 | `transform(code, '.h')` | Run SWIG bridge generation; emit JS bridge code for the header |
 | `buildStart` | Iterate `state.config.paths.native` array; `addWatchFile` every entry. Watch mode now sees `.cpp`/`.h` edits |
-| `generateBundle` | Run `createLib + createXCFramework + buildWasm` with `force = isSourceNewer(...)`; emit `crossbind.js`, `crossbind.wasm`, `crossbind.data.txt` as bundle assets |
+| `generateBundle` | Run `createLib + createXCFramework + buildWasm` with `force = isSourceNewer(...)`; emit `crossbind.js`, `crossbind.wasm`, `crossbind.data.txt` as bundle assets, and `crossbind-licenses.json` (`pageLicensesAsset`) when the page imports `crossbind/licenses` |
 
 In app mode (`isAppBuild()`: a run of `crossbind app`, or `target.runtimeEnv: 'app'`; macOS, Linux, Windows, iOS and Android for now) `generateBundle` builds the app host for this machine with `buildProjectApp` instead, or with `CROSSBIND_APP_PLATFORM`, which `crossbind app -p` sets, one for each iOS SDK, Android ABI or Linux or Windows arch (`appTargetParams`), and emits its page runtime as `crossbind.js`; `writeBundle` then puts the written page into each app beside it with `publishApp`: `<name>.app`, `<name>-linux-<arch>/`, `<name>-win32-<arch>/`, the Xcode project `<name>-ios/` or the Gradle project `<name>-android/` and its APK. Once every app has its page, `shipApp` runs each desktop app's installers, crossbind's and its extensions', and its update, which it records for `crossbind app publish`; `buildStart` awaits `checkInstaller` for each desktop app first, which stops the build before anything compiles. See `docs/api/app.md`.
 
@@ -27,7 +27,7 @@ In app mode (`isAppBuild()`: a run of `crossbind app`, or `target.runtimeEnv: 'a
 
 - **Forgetting to call `addWatchFile` per native dir.** Watch mode silently skips edits → users think `pnpm rollup -w` is broken.
 - **Returning `external: true` for `crossbind` in some configs and `false` in others.** Inconsistency makes Vite's HMR vs prod build behave differently.
-- **Emitting `crossbind.js`/`crossbind.wasm` to a custom path.** Consumers (including Vite) expect `crossbind.js`, `crossbind.wasm`, `crossbind.data.txt` at the bundle root. Don't rename without updating the loader.
+- **Emitting `crossbind.js`/`crossbind.wasm` to a custom path.** Consumers (including Vite) expect `crossbind.js`, `crossbind.wasm`, `crossbind.data.txt` at the bundle root, and `crossbind/licenses` reads `crossbind-licenses.json` there. Don't rename without updating the loader.
 - **Re-running `buildWasm` without `force` semantics.** Cache-shortcut bugs land here; always go through `isSourceNewer`.
 - **Calling `state.config.paths.cli/...` directly with hardcoded sub-paths.** Use the public `crossbind` exports (`createLib`, `buildWasm`, `getCrossbindScript`, …); they survive asset reorgs.
 

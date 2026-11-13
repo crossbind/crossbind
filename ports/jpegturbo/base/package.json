@@ -22,6 +22,8 @@
     ],
     "crossbind": {
         "upstream": {
+            "name": "libjpeg-turbo",
+            "cpe": "libjpeg-turbo:libjpeg-turbo",
             "license": {
                 "declared": "IJG AND BSD-3-Clause AND Zlib",
                 "selected": null,

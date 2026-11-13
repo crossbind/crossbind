@@ -181,14 +181,17 @@ tool is in the KB range — the N separate ~43 MB binaries model is closed.)
 
 ## D. Upstream license metadata schema
 
-Single-source principle: `name` derives from the package name, `version` from
-`nativeVersion`, `source.url`/`sha256` from the recipe (`build.mjs`
-`getURL`/`sha256`). package.json carries only the block that needs a human
-decision:
+Single-source principle: `version` derives from `nativeVersion`,
+`source.url`/`sha256` from the recipe (`build.mjs` `getURL`/`sha256`).
+package.json carries only what needs a human decision: the upstream project's
+identity, which a package name does not always tell (`jpegturbo` is
+libjpeg-turbo), and the license block:
 
 ```jsonc
 "crossbind": {
   "upstream": {
+    "name": "libjpeg-turbo",                // the project's own name; notices and SBOM components use it (default: the port's name)
+    "cpe": "libjpeg-turbo:libjpeg-turbo",   // optional CPE 2.3 vendor:product as the NVD dictionary lists it; the SBOM adds the version
     "license": {
       "declared": "MIT",         // upstream SPDX expression
       "selected": null,          // human election for OR expressions; made once, derived ever after
@@ -204,7 +207,9 @@ Recorded cases: sqlite3 (`declared: "blessing"`, `files: []` — the tarball
 ships no license file), iconv (only the library is built; the GPL CLI is off →
 `files: ["COPYING.LIB"]`), zstd and spatialite (OR expressions with
 `selected: null` — until an election is recorded the generator ships all texts
-and notes the absence of an election).
+and notes the absence of an election). Leave `cpe` out when the NVD dictionary
+does not confirm the product; lerc, libgeotiff, PROJ and SpatiaLite carry none
+for now.
 
 ### Vendored copies (`bundled`)
 

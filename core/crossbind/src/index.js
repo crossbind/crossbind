@@ -9,6 +9,7 @@ export {
 export { checkInstaller, shipApp } from './actions/appInstaller.js';
 export { findAppPageApi, resolveAppPageApi } from './utils/resolveAppHost.js';
 export { default as isAppBuild } from './utils/appBuild.js';
+export { default as pageLicensesAsset } from './actions/pageLicenses.js';
 export { default as openInSimulator, buildForSimulator } from './actions/iosSimulator.js';
 export {
     default as openOnIosDevice, buildForIosDevice, connectedIosDevice, iosDeviceAddress, iosDevServer,

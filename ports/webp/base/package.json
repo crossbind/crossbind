@@ -21,6 +21,8 @@
     ],
     "crossbind": {
         "upstream": {
+            "name": "libwebp",
+            "cpe": "webmproject:libwebp",
             "license": {
                 "declared": "BSD-3-Clause",
                 "selected": null,

@@ -24,6 +24,8 @@
     ],
     "crossbind": {
         "upstream": {
+            "name": "gdal",
+            "cpe": "osgeo:gdal",
             "license": {
                 "declared": "MIT",
                 "selected": null,

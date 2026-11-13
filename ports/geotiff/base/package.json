@@ -22,6 +22,7 @@
     ],
     "crossbind": {
         "upstream": {
+            "name": "libgeotiff",
             "license": {
                 "declared": "MIT",
                 "selected": null,

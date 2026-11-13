@@ -48,6 +48,12 @@ describe('excludedDependencies', () => {
         if (tmpDir && fs.existsSync(tmpDir)) fs.rmSync(tmpDir, { recursive: true, force: true });
     });
 
+    test('keeps the licenses option a package gives, which the license files crossbind licenses writes read', () => {
+        expect(fill({ ...appTree(), licenses: { sourceTag: 'v{version}' } }).licenses).toEqual({ sourceTag: 'v{version}' });
+        expect(fill(appTree()).licenses).toEqual({});
+        expect(() => fill({ ...appTree(), licenses: { sourceTag: 3 } })).toThrow('"licenses.sourceTag" must be a string');
+    });
+
     test('keeps every dependency when no exclude is given', () => {
         expect(depNames(fill(appTree()))).toEqual(['geotiff', 'jpeg', 'tiff', 'z']);
     });

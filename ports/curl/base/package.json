@@ -22,6 +22,8 @@
     ],
     "crossbind": {
         "upstream": {
+            "name": "curl",
+            "cpe": "haxx:curl",
             "license": {
                 "declared": "curl",
                 "selected": null,

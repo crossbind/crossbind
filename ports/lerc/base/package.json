@@ -21,6 +21,7 @@
     ],
     "crossbind": {
         "upstream": {
+            "name": "lerc",
             "license": {
                 "declared": "Apache-2.0",
                 "selected": null,

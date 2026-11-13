@@ -15,9 +15,17 @@ crossbind licenses --sbom          # CycloneDX SBOM (component list with source 
 crossbind licenses --check         # CI guard: every license field must be valid SPDX
 crossbind licenses --platform linux -e node --package
                                    # a Node-API package's LICENSE, SBOM and license field,
-                                   # with the relinking steps when it links an LGPL library
-# --platform wasi additionally rows up vendored copies + the statically linked
-# toolchain runtime (what the artifact contains beyond the package graph)
+                                   # with the relinking steps when it links an LGPL library;
+                                   # a package without an addon covers only the runtime,
+                                   # the project's code and the data it ships
+crossbind licenses --platform wasm --notices --sbom
+                                   # a wasm module's notices, with the same relinking steps
+# --platform additionally rows up vendored copies (GDAL's own libpng and giflib) and the
+# statically linked toolchain runtime (Emscripten and LLVM's libc++ for wasm, with crossbind's
+# runtime its glue bundles, wasi-libc for wasi, libc++ and mingw-w64 for Linux and Windows
+# addons). Without it, --notices and --sbom
+# warn when a library vendors copies. The relinking steps link the tag of licenses.sourceTag
+# (crossbind-config.md), {name}@{version} unless the project sets another.
 ```
 
 ## Why the pattern works

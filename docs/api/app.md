@@ -1776,6 +1776,33 @@ image, and the NSIS its setup program carries; with `--platform ios`, no webview
 AAR, the fbjni and androidx.webkit Gradle adds and the NDK's libc++ the app carries. `--notices` writes them to a file
 to ship with the app.
 
+## Open-source licenses
+
+A page lists what it and its app carry, for a screen of open-source licenses, with `licenses()` from
+`crossbind/licenses`:
+
+```js
+import { licenses } from 'crossbind/licenses';
+
+for (const { name, version, license, source, text } of await licenses()) {
+    // license is an SPDX expression; text holds the component's license files, each under its file's name, or is null
+}
+```
+
+Each component is listed once:
+
+- the libraries the module links, with the copies they vendor, by the names their projects give them;
+- what the app's host carries, as `crossbind licenses -e app --platform <platform>` lists it: crossbind's runtime,
+  Hermes, JSI's `jsi.cpp`, webview/webview and what the platform adds;
+- every npm package whose modules or files the page's bundle holds, the fonts a stylesheet takes from a package among
+  them, with the license files the package carries (`LICENSE`, `COPYING`, `NOTICE`, `OFL`), but for the project's own
+  package and private ones.
+
+In a build of a page that imports `crossbind/licenses`, the Vite and Rollup plugins write the list beside the page as
+`crossbind-licenses.json`, which the app carries in `page/` and `licenses()` reads from the page's base. The same page
+built for the web lists its wasm module's runtime in place of the host's: Emscripten's libraries, LLVM's C++ runtime and
+crossbind's runtime. The dev server has no list, so there `licenses()` rejects, saying so.
+
 ## Environment variables of the app
 
 | Variable | Effect |

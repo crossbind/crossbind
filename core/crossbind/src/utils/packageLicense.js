@@ -1,13 +1,12 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { deriveLicenseExpression, formatCycloneDxSbom, formatNoticeSections } from './licenseReport.js';
+import { lgplRows, relinkSection } from './relinking.js';
+
+export { lgplRows };
 
 export const SBOM_FILE = 'sbom.cdx.json';
 const RULE = '-'.repeat(70);
-
-export function lgplRows(rows) {
-    return rows.filter((row) => /\bLGPL\b/.test(row.license ?? ''));
-}
 
 // The LLVM exception waives the notice for runtime parts compiled into a binary; every other
 // component needs its text in the package.
@@ -22,36 +21,20 @@ function assertTexts(name, rows) {
     }
 }
 
-const listOf = (names) => (names.length > 1 ? `${names.slice(0, -1).join(', ')} and ${names.at(-1)}` : names[0]);
-
-function relinkSection({ name, version, repository, projectPath, addonFile, rows }) {
-    const tag = `${name}@${version}`;
-    const repo = repository.replace(/\.git$/, '');
-    return [
-        '## Relinking the LGPL libraries',
-        '',
-        `This addon links ${listOf(rows.map((row) => row.name))} statically; their sections below give their licenses.`,
-        'You may replace them with modified versions and relink the addon:',
-        '',
-        `1. Get the corresponding source. This package was built from ${repo} at the tag ${tag}:`,
-        `   ${repo}/tree/${tag}`,
-        '   The upstream sources are the tarballs the sections below list, with their SHA-256.',
-        `2. In ${projectPath}, point the library at your modified source with a crossbind.overrides.js file`,
-        '   (docs/playbooks/override-dependencies.md in that repository).',
-        `3. Build the addon with \`pnpm install\` and \`pnpm --dir ${projectPath} build\`. Linux and Windows`,
-        '   addons build in Docker, macOS addons on a Mac.',
-        `4. The build writes ${addonFile} in ${projectPath}; it replaces the file of that name in this package.`,
-    ].join('\n');
+// What a Node-API package's license covers: an addon package what its addon links; a package without an addon crossbind's
+// JavaScript runtime, the bindings of the project's own code and the data of the libraries that declare some.
+export function shippedRows(rows, { addonFile }) {
+    return addonFile ? rows : rows.filter((row) => row.isRuntime || !row.isPort || row.shipsData);
 }
 
-export function nodePackageLicense({ name, version, repository, projectPath, addonFile = null, rows }) {
+export function nodePackageLicense({ name, version, repository, projectPath, addonFile = null, sourceTag = null, rows }) {
     assertTexts(name, rows);
     const expression = deriveLicenseExpression(rows);
     const relinked = addonFile ? lgplRows(rows) : [];
     const lines = [
         addonFile
             ? `${name} ships a Node-API addon that links the components below statically.`
-            : `${name} ships the JavaScript bindings, types and data of the components below; the addons that link them are in its platform packages.`,
+            : `${name} ships the JavaScript bindings, types and data of the components below. Each of its platform packages carries the LICENSE of the addon it holds.`,
         'The full license text of every component follows.',
         '',
         'Effective license expression (also package.json "license"):',
@@ -65,7 +48,9 @@ export function nodePackageLicense({ name, version, repository, projectPath, add
         '',
         RULE,
         '',
-        ...(relinked.length ? [relinkSection({ name, version, repository, projectPath, addonFile, rows: relinked }), '', RULE, ''] : []),
+        ...(relinked.length ? [relinkSection({
+            name, version, repository, projectPath, sourceTag, artifact: 'addon', file: addonFile, rows: relinked,
+        }), '', RULE, ''] : []),
         formatNoticeSections(rows).join('\n\n'),
         '',
     ];
@@ -91,7 +76,7 @@ export function writeNodePackageLicense(dir, meta) {
 
 // What a Node-API package's license names, from its manifest and its place in the repository it builds
 // from: an addon package's is the addon its own build writes.
-export function nodePackageMeta({ package: manifest = {}, paths }) {
+export function nodePackageMeta({ package: manifest = {}, paths, licenses }) {
     const repository = typeof manifest.repository === 'string' ? manifest.repository : (manifest.repository?.url ?? '');
     return {
         name: manifest.name,
@@ -99,5 +84,6 @@ export function nodePackageMeta({ package: manifest = {}, paths }) {
         repository,
         projectPath: path.relative(paths.base, paths.project).split(path.sep).join('/') || '.',
         addonFile: manifest.os && /\.node$/.test(manifest.main ?? '') ? manifest.main : null,
+        sourceTag: licenses?.sourceTag ?? null,
     };
 }

@@ -113,6 +113,32 @@ function wasiToolchainRows() {
     ];
 }
 
+// A wasm module statically links Emscripten's runtime and system libraries (its musl-based libc among them) and LLVM's
+// C++ runtime from the same toolchain image.
+function wasmToolchainRows() {
+    const shared = {
+        npmName: null, version: null, nativeVersion: null, sha256: null, licenseSelected: null, licenseText: null, isCopyleft: false,
+    };
+    return [
+        {
+            ...shared,
+            name: 'emscripten',
+            license: 'MIT OR NCSA',
+            licenseDeclared: 'MIT OR NCSA',
+            sourceUrl: 'https://github.com/emscripten-core/emscripten',
+            licenseNotes: "Emscripten's runtime and system libraries, its musl-based libc among them, statically linked into the module; license text: https://github.com/emscripten-core/emscripten/blob/main/LICENSE",
+        },
+        {
+            ...shared,
+            name: 'llvm-runtimes',
+            license: 'Apache-2.0 WITH LLVM-exception',
+            licenseDeclared: 'Apache-2.0 WITH LLVM-exception',
+            sourceUrl: 'https://github.com/llvm/llvm-project',
+            licenseNotes: "libc++, libc++abi and compiler-rt of Emscripten's LLVM, statically linked into the module; license text: https://github.com/llvm/llvm-project/blob/main/LICENSE.TXT",
+        },
+    ];
+}
+
 // The notices a build copied out of its toolchain image (a Windows addon's or app's does).
 function toolchainNoticeTexts(platform) {
     const build = state.config?.paths?.build;
@@ -160,25 +186,31 @@ function addonToolchainRows(platform) {
 const versionOf = (dir) => JSON.parse(fs.readFileSync(path.join(dir, 'package.json'), 'utf8')).version;
 const textOf = (file) => fs.readFileSync(file, 'utf8').trim();
 
+const RUNTIME_ROW = {
+    nativeVersion: null, sha256: null, licenseSelected: null, isCopyleft: false, isRuntime: true,
+};
+
+// crossbind's own code: what an addon and an app host compile in, or the JavaScript a wasm module's glue bundles.
+function crossbindRow(notes) {
+    return {
+        ...RUNTIME_ROW,
+        name: 'crossbind',
+        npmName: 'crossbind',
+        version: versionOf(CROSSBIND_ROOT),
+        license: 'MIT',
+        licenseDeclared: 'MIT',
+        sourceUrl: 'https://github.com/crossbind/crossbind',
+        licenseNotes: notes,
+        licenseText: textOf(path.join(CROSSBIND_ROOT, 'LICENSE')),
+    };
+}
+
 // crossbind's runtime, which an addon and an app host compile in: embind-jsi, which adapts Emscripten's embind.
 function runtimeRows(jsiRoot, notes) {
-    const shared = {
-        nativeVersion: null, sha256: null, licenseSelected: null, isCopyleft: false,
-    };
     return [
+        crossbindRow(notes),
         {
-            ...shared,
-            name: 'crossbind',
-            npmName: 'crossbind',
-            version: versionOf(CROSSBIND_ROOT),
-            license: 'MIT',
-            licenseDeclared: 'MIT',
-            sourceUrl: 'https://github.com/crossbind/crossbind',
-            licenseNotes: notes,
-            licenseText: textOf(path.join(CROSSBIND_ROOT, 'LICENSE')),
-        },
-        {
-            ...shared,
+            ...RUNTIME_ROW,
             name: 'emscripten-embind',
             npmName: '@crossbind/core-embind-jsi',
             version: versionOf(jsiRoot),
@@ -420,10 +452,13 @@ async function buildRow(node) {
             sourceUrl = null;
         }
     }
-    if (!sourceUrl) sourceUrl = manifest?.homepage || null;
-
     const family = familyManifestOf(node);
-    const upstream = family?.manifest?.crossbind?.upstream?.license || null;
+    // A project's own code is at its repository; its homepage is where its docs are.
+    if (!sourceUrl) sourceUrl = repositoryUrl(family?.manifest) || repositoryUrl(manifest) || manifest?.homepage || null;
+
+    // The upstream identity scanners match a component on: the project's own name, and its CPE where NVD has one.
+    const identity = family?.manifest?.crossbind?.upstream ?? null;
+    const upstream = identity?.license || null;
     let license;
     let licenseText;
     if (upstream) {
@@ -437,6 +472,12 @@ async function buildRow(node) {
         if (isComplete) licenseText = fromSource;
         else if (shipped) licenseText = `=== ${path.basename(shipped)} ===\n\n${fs.readFileSync(shipped, 'utf8').trim()}`;
         else licenseText = readLicenseTexts(upstream.files, () => null);
+    } else if (family && family.dir !== node.paths.project) {
+        // The package the alias names holds the code: a published binary's own license field is the expression of
+        // everything it links, which this row would otherwise repeat as its own.
+        license = family.manifest.license || manifest?.license || null;
+        const own = packageLicenseFile(family.dir) ?? packageLicenseFile(node.paths.project);
+        licenseText = own ? fs.readFileSync(own, 'utf8') : null;
     } else {
         license = manifest?.license || null;
         const legacy = packageLicenseFile(node.paths.project);
@@ -444,10 +485,11 @@ async function buildRow(node) {
     }
 
     return {
-        name: node.general.name,
+        name: identity?.name ?? node.general.name,
         npmName: manifest?.name || null,
         version: manifest?.version || null,
         nativeVersion,
+        cpe: identity?.cpe ? `cpe:2.3:a:${identity.cpe}:${nativeVersion ?? '*'}:*:*:*:*:*:*:*` : null,
         license,
         licenseDeclared: upstream?.declared || null,
         licenseSelected: upstream?.selected || null,
@@ -456,7 +498,19 @@ async function buildRow(node) {
         sourceUrl,
         licenseText,
         isCopyleft: isCopyleft(license),
+        isPort: Boolean(upstream),
+        shipsData: shipsData(node),
     };
+}
+
+export function repositoryUrl(manifest) {
+    const repository = typeof manifest?.repository === 'string' ? manifest.repository : manifest?.repository?.url;
+    return repository ? repository.replace(/^git\+/, '').replace(/\.git$/, '') : null;
+}
+
+// The data a dependency declares (GDAL's and PROJ's) travels with the package that ships the module or its loader.
+function shipsData(node) {
+    return (node.targetSpecs ?? []).some((entry) => entry?.specs?.data && Object.keys(entry.specs.data).length > 0);
 }
 
 // The facts of a package source's package come from its recipe, and its texts from the licenses/ its package ships.
@@ -497,9 +551,22 @@ function assertSourcesStaged() {
     });
 }
 
+// The libraries whose recipes vendor copies for some platform, which only a listing for that platform includes.
+export async function vendoringLibraries() {
+    const names = [];
+    for (const node of [state.config, ...state.config.allDependencies]) {
+        if (!node?.paths?.project || node.general?.packageSource) continue;
+        const recipe = await loadJs(node.paths.project, 'crossbind.build');
+        const isVendoring = Object.values(recipe?.bundled ?? {}).some((entries) => entries?.length > 0);
+        if (isVendoring && !names.includes(node.general.name)) names.push(node.general.name);
+    }
+    return names;
+}
+
 // platform (optional, e.g. 'wasi') additionally includes what that platform's
 // artifact statically links beyond the package graph: recipe-declared vendored
-// copies and the toolchain runtime. runtimeEnv 'node' adds the crossbind runtime an
+// copies and the toolchain runtime, and for wasm crossbind's runtime, which the
+// module's glue bundles. runtimeEnv 'node' adds the crossbind runtime an
 // addon of that platform compiles in, or without a platform the one its loader bundles;
 // runtimeEnv 'app' adds what an app's host carries.
 export default async function collectLicenseRows(platform = null, { runtimeEnv = null } = {}) {
@@ -513,12 +580,16 @@ export default async function collectLicenseRows(platform = null, { runtimeEnv =
     const nodes = [state.config, ...state.config.allDependencies]
         .filter((node, index) => node?.paths?.project
             && (node.general?.alias?.package || node.general?.packageSource || (index > 0 && node.package?.name && !node.package.private)));
+    // A project can depend on a library's packages for several platforms; the report names the one its platform links.
+    const target = platform ? state.targets?.find((t) => t.platform === platform) : null;
+    const serves = (node) => !target || node.functions?.isEnabled?.(target) !== false;
     const rows = [];
     const seen = new Set();
-    for (const node of nodes) {
-        const key = keyOf(node);
+    for (const listed of nodes) {
+        const key = keyOf(listed);
         if (seen.has(key)) continue;
         seen.add(key);
+        const node = nodes.find((other) => keyOf(other) === key && serves(other)) ?? listed;
         rows.push(node.general.packageSource ? sourcePackageRow(node) : await buildRow(node));
         // A package source's package folder is written from what its recipe produced: nothing there is run.
         if (platform && !node.general.packageSource) {
@@ -527,6 +598,7 @@ export default async function collectLicenseRows(platform = null, { runtimeEnv =
         }
     }
     if (platform === 'wasi') rows.push(...wasiToolchainRows());
+    if (platform === 'wasm') rows.push(...wasmToolchainRows(), crossbindRow("crossbind's JavaScript runtime, which the module's glue bundles"));
     if (['linux', 'linuxmusl', 'win32'].includes(platform)) rows.push(...addonToolchainRows(platform));
     if (runtimeEnv === 'node') rows.push(...nodeRuntimeRows({ isAddon: platform !== null }));
     if (runtimeEnv === 'app') {
