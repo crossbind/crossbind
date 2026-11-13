@@ -1,6 +1,6 @@
 {
     "name": "@crossbind/extension-nsis",
-    "version": "2.0.0-beta.72",
+    "version": "2.0.0-beta.74",
     "description": "crossbind app extension: a Windows setup program, which a Windows app updates itself from.",
     "homepage": "https://github.com/crossbind/crossbind/tree/main/extensions/nsis#readme",
     "repository": "https://github.com/crossbind/crossbind.git",

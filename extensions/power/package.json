@@ -1,6 +1,6 @@
 {
     "name": "@crossbind/extension-power",
-    "version": "2.0.0-beta.72",
+    "version": "2.0.0-beta.74",
     "description": "crossbind app extension: tells a desktop page when the system sleeps and wakes.",
     "homepage": "https://github.com/crossbind/crossbind/tree/main/extensions/power#readme",
     "repository": "https://github.com/crossbind/crossbind.git",

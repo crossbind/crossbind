@@ -1,6 +1,6 @@
 {
     "name": "@crossbind/extension-updater",
-    "version": "2.0.0-beta.72",
+    "version": "2.0.0-beta.74",
     "description": "crossbind app extension: a desktop app's own updates, each checked against its Ed25519 signature.",
     "homepage": "https://github.com/crossbind/crossbind/tree/main/extensions/updater#readme",
     "repository": "https://github.com/crossbind/crossbind.git",

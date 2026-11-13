@@ -1,6 +1,6 @@
 {
     "name": "@crossbind/extension-page-location",
-    "version": "2.0.0-beta.72",
+    "version": "2.0.0-beta.74",
     "description": "crossbind app extension: navigator.geolocation on macOS, which WKWebView leaves out.",
     "homepage": "https://github.com/crossbind/crossbind/tree/main/extensions/page-location#readme",
     "repository": "https://github.com/crossbind/crossbind.git",

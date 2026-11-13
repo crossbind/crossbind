@@ -1,6 +1,6 @@
 {
     "name": "@crossbind/extension-github",
-    "version": "2.0.0-beta.72",
+    "version": "2.0.0-beta.74",
     "description": "crossbind app extension: puts a desktop app's installers and update on a GitHub release.",
     "homepage": "https://github.com/crossbind/crossbind/tree/main/extensions/github#readme",
     "repository": "https://github.com/crossbind/crossbind.git",
