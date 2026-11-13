@@ -28,11 +28,21 @@ on:
 
 permissions: {}
 concurrency:
-    # A new push to a pull request supersedes its running checks; a main commit keeps its own run.
-    group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
+    # A newer push to the same pull request or branch supersedes the running checks.
+    group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
     cancel-in-progress: true
 jobs:
+    tested:
+        uses: ./.github/workflows/tested-tree.yml
+        permissions:
+            actions: read
+            contents: read
+            pull-requests: read
+        with:
+            workflow: test-conan-node-addons.yml
     build:
+        needs: tested
+        if: needs.tested.outputs.tested != 'true'
         runs-on: ubuntu-latest
         timeout-minutes: 60
         steps:

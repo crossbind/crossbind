@@ -141,6 +141,9 @@ jobs:
         needs: plan
         if: ${{ needs.plan.outputs.packageCount != '0' && needs.plan.outputs.hasMacos == 'true' }}
         runs-on: macos-15
+        permissions:
+            contents: read
+            actions: read
         steps:
             - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
               with:
@@ -159,6 +162,13 @@ jobs:
               env:
                   RELEASE_PLAN_GZIP_BASE64: ${{ needs.plan.outputs.planGzipBase64 }}
               run: node scripts/release/restore-workspace-plan.mjs "$RUNNER_TEMP/workspace-release-plan.json"
+            - name: Set up the compiler cache, from what the last release left
+              uses: ./.github/actions/setup-sccache
+              with:
+                  dir: ${{ runner.temp }}/sccache
+                  size: 4G
+                  artifact: release-sccache-macos
+                  token: ${{ github.token }}
             - name: Build every selected iOS artifact before publication
               run: |
                   node scripts/release/build-workspace-artifacts.mjs \
@@ -172,9 +182,25 @@ jobs:
                   if-no-files-found: error
                   path: ${{ runner.temp }}/workspace-release-macos
                   retention-days: 1
+            # sccache finishes the cache writes it still holds as it stops.
+            - name: Stop the compiler cache
+              if: ${{ always() && env.CROSSBIND_SCCACHE == '1' }}
+              run: sccache --stop-server || echo "No sccache server ran in this job."
+            # A run on main alone leaves it, a failed one too: the next release builds from it, so nothing a branch
+            # compiled reaches npm.
+            - name: Leave the compiler cache to the next release
+              if: ${{ !cancelled() && github.ref == 'refs/heads/main' }}
+              uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+              with:
+                  name: release-sccache-macos
+                  path: ${{ runner.temp }}/sccache
+                  include-hidden-files: true
+                  if-no-files-found: ignore
+                  overwrite: true
+                  retention-days: 30
 
     build_node:
-        name: Build ready-made Node packages
+        name: Build ready-made Node packages for ${{ matrix.platform }}
         needs:
             - plan
             - build_linux
@@ -184,6 +210,11 @@ jobs:
             ${{ !cancelled() && needs.plan.result == 'success' && needs.plan.outputs.packageCount != '0' &&
             needs.plan.outputs.hasNode == 'true' && needs.build_linux.result == 'success' }}
         runs-on: ubuntu-24.04
+        # A job per platform; the linux one also builds the packages of the bindings and the macOS packages' bridges.
+        strategy:
+            fail-fast: false
+            matrix:
+                platform: [linux, linuxmusl, win32]
         steps:
             - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
               with:
@@ -207,25 +238,29 @@ jobs:
               with:
                   pattern: workspace-release-linux-*-native-${{ github.sha }}
                   path: ${{ runner.temp }}/workspace-release-input
-            - name: Build the Linux and Windows addons and the packages of the bindings
+            - name: Build the addons of the platform, and on linux the packages of the bindings
+              env:
+                  PLATFORM: ${{ matrix.platform }}
               run: |
+                  bridges=()
+                  if [ "$PLATFORM" = linux ]; then bridges=(--bridges-out "$RUNNER_TEMP/workspace-release-node-bridges"); fi
                   node scripts/release/build-workspace-artifacts.mjs \
                     --runner node \
+                    --node-platform "$PLATFORM" \
                     --plan "$RUNNER_TEMP/workspace-release-plan.json" \
                     --input-root "$RUNNER_TEMP/workspace-release-input" \
-                    --bridges-out "$RUNNER_TEMP/workspace-release-node-bridges" \
-                    --artifact-dir "$RUNNER_TEMP/workspace-release-node"
+                    --artifact-dir "$RUNNER_TEMP/workspace-release-node" \
+                    "${bridges[@]}"
             - name: Preserve exact Node artifacts for the coordinator
               uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
               with:
-                  name: workspace-release-node-${{ github.sha }}
+                  name: workspace-release-node-shard-${{ matrix.platform }}-${{ github.sha }}
                   if-no-files-found: error
                   path: ${{ runner.temp }}/workspace-release-node
                   retention-days: 1
-            # The macOS runner has no Docker for SWIG, so its addons compile these bridges (crossbind state
-            # lives in .crossbind directories).
-            - name: Hand the bridges to the macOS addons
-              if: ${{ needs.plan.outputs.hasNodeMacos == 'true' }}
+            # The macOS addons make their own with bridge-tools; assemble checks they are these.
+            - name: Keep the bridges for the comparison with the macOS addons'
+              if: ${{ needs.plan.outputs.hasNodeMacos == 'true' && matrix.platform == 'linux' }}
               uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
               with:
                   name: workspace-release-node-bridges-${{ github.sha }}
@@ -234,7 +269,7 @@ jobs:
                   path: ${{ runner.temp }}/workspace-release-node-bridges
                   retention-days: 1
 
-    # Binding a header loads bridge-tools on macOS even when its bridge came from the Linux runner's cache.
+    # The macOS addons make their bridges with bridge-tools, from the headers of the Linux packages.
     bridge_tools:
         needs: plan
         if: ${{ needs.plan.outputs.packageCount != '0' && needs.plan.outputs.hasNodeMacos == 'true' }}
@@ -244,14 +279,17 @@ jobs:
         name: Build the macOS addons of ready-made Node packages
         needs:
             - plan
+            - build_linux
             - build_macos
-            - build_node
             - bridge_tools
         if: >-
             ${{ !cancelled() && needs.plan.result == 'success' && needs.plan.outputs.packageCount != '0' &&
             needs.plan.outputs.hasNodeMacos == 'true' && needs.build_macos.result == 'success' &&
-            needs.build_node.result == 'success' && needs.bridge_tools.result == 'success' }}
+            needs.build_linux.result == 'success' && needs.bridge_tools.result == 'success' }}
         runs-on: macos-15
+        permissions:
+            contents: read
+            actions: read
         steps:
             - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
               with:
@@ -280,23 +318,25 @@ jobs:
               with:
                   name: workspace-release-linux-linux-native-${{ github.sha }}
                   path: ${{ runner.temp }}/workspace-release-input/workspace-release-linux-linux-native-${{ github.sha }}
-            - name: Restore the bridges the Linux job generated
-              uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
-              with:
-                  name: workspace-release-node-bridges-${{ github.sha }}
-                  path: ${{ runner.temp }}/workspace-release-node-bridges
             - name: Restore the bridge tools
               uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
               with:
                   name: bridge-tools
                   path: tooling/bridge-tools/dist
+            - name: Set up the compiler cache, from what the last release left
+              uses: ./.github/actions/setup-sccache
+              with:
+                  dir: ${{ runner.temp }}/sccache
+                  size: 2G
+                  artifact: release-sccache-node-macos
+                  token: ${{ github.token }}
             - name: Build the macOS addons
               run: |
                   node scripts/release/build-workspace-artifacts.mjs \
                     --runner node-macos \
                     --plan "$RUNNER_TEMP/workspace-release-plan.json" \
                     --input-root "$RUNNER_TEMP/workspace-release-input" \
-                    --bridges "$RUNNER_TEMP/workspace-release-node-bridges" \
+                    --bridges-out "$RUNNER_TEMP/workspace-release-node-macos-bridges" \
                     --artifact-dir "$RUNNER_TEMP/workspace-release-node-macos"
             - name: Preserve exact macOS Node artifacts for the coordinator
               uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
@@ -305,6 +345,30 @@ jobs:
                   if-no-files-found: error
                   path: ${{ runner.temp }}/workspace-release-node-macos
                   retention-days: 1
+            - name: Keep the bridges for the comparison with the Linux job's
+              uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+              with:
+                  name: workspace-release-node-macos-bridges-${{ github.sha }}
+                  if-no-files-found: error
+                  include-hidden-files: true
+                  path: ${{ runner.temp }}/workspace-release-node-macos-bridges
+                  retention-days: 1
+            # sccache finishes the cache writes it still holds as it stops.
+            - name: Stop the compiler cache
+              if: ${{ always() && env.CROSSBIND_SCCACHE == '1' }}
+              run: sccache --stop-server || echo "No sccache server ran in this job."
+            # A run on main alone leaves it, a failed one too: the next release builds from it, so nothing a branch
+            # compiled reaches npm.
+            - name: Leave the compiler cache to the next release
+              if: ${{ !cancelled() && github.ref == 'refs/heads/main' }}
+              uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+              with:
+                  name: release-sccache-node-macos
+                  path: ${{ runner.temp }}/sccache
+                  include-hidden-files: true
+                  if-no-files-found: ignore
+                  overwrite: true
+                  retention-days: 30
 
     assemble:
         name: Assemble the complete package train
@@ -357,22 +421,37 @@ jobs:
               if: ${{ needs.plan.outputs.hasNode == 'true' }}
               uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
               with:
-                  name: workspace-release-node-${{ github.sha }}
-                  path: ${{ runner.temp }}/workspace-release-input/workspace-release-node-${{ github.sha }}
+                  pattern: workspace-release-node-shard-*-${{ github.sha }}
+                  path: ${{ runner.temp }}/workspace-release-input
             - name: Restore the macOS addons of ready-made Node packages
               if: ${{ needs.plan.outputs.hasNodeMacos == 'true' }}
               uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
               with:
                   name: workspace-release-node-macos-${{ github.sha }}
                   path: ${{ runner.temp }}/workspace-release-input/workspace-release-node-macos-${{ github.sha }}
+            - name: Restore the bridges of the Linux and macOS addons
+              if: ${{ needs.plan.outputs.hasNodeMacos == 'true' }}
+              uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+              with:
+                  pattern: workspace-release-node-*bridges-${{ github.sha }}
+                  path: ${{ runner.temp }}/workspace-release-bridges
             - name: Refuse incomplete trains and assemble multi-platform tarballs
               id: assemble
+              env:
+                  HAS_NODE_MACOS: ${{ needs.plan.outputs.hasNodeMacos }}
+                  SHA: ${{ github.sha }}
               run: |
+                  bridges=()
+                  if [ "$HAS_NODE_MACOS" = true ]; then
+                      bridges=(--node-bridges "$RUNNER_TEMP/workspace-release-bridges/workspace-release-node-bridges-$SHA" \
+                        --node-macos-bridges "$RUNNER_TEMP/workspace-release-bridges/workspace-release-node-macos-bridges-$SHA")
+                  fi
                   node scripts/release/assemble-workspace-artifacts.mjs \
                     --plan "$RUNNER_TEMP/workspace-release-plan.json" \
                     --input-root "$RUNNER_TEMP/workspace-release-input" \
                     --artifact-dir "$RUNNER_TEMP/workspace-release-artifacts" \
-                    --github-output "$GITHUB_OUTPUT"
+                    --github-output "$GITHUB_OUTPUT" \
+                    "${bridges[@]}"
             - name: Smoke-test the exact crossbind tarball
               if: ${{ needs.plan.outputs.hasCrossbind == 'true' }}
               run: |

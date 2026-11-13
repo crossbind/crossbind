@@ -114,7 +114,8 @@ test('Linux build and assembly preserve one exact pnpm workspace tarball', () =>
     assert.equal(inspected.manifest.name, candidate.name);
 });
 
-test('multi-platform assembly merges exact outputs and regenerates one deterministic CMake host list', () => {
+// A multi-platform library as each runner stages it; nodeInputs are the node runners' jobs, each with the files it stages.
+function assembleMultiPlatform(nodeInputs) {
     const fixture = fs.mkdtempSync(path.join(os.tmpdir(), 'crossbind-workspace-multi-'));
     const packagePath = 'examples/lib-prebuilt-matrix';
     const packageRoot = path.join(fixture, packagePath);
@@ -198,14 +199,12 @@ test('multi-platform assembly merges exact outputs and regenerates one determini
         }
         fs.writeFileSync(path.join(prebuilt, 'CMakeLists.txt'), `set(MY_LIST "${runnerTargets.join(';')}")\nset(FIXTURE true)\n`);
     }
-    // The node runners stage the library's addons, and one of them their loader and entry.
-    const nodeStaged = { node: ['m.linux-x64.node', 'm.native.cjs', 'node/napi.mjs'], 'node-macos': ['m.darwin-arm64.node'] };
-    for (const [runner, files] of Object.entries(nodeStaged)) {
-        const runnerRoot = path.join(inputs, runner);
+    for (const { directory, runner, platform, files } of nodeInputs) {
+        const runnerRoot = path.join(inputs, directory);
         fs.mkdirSync(runnerRoot, { recursive: true });
         fs.writeFileSync(
             path.join(runnerRoot, `build-${runner}.json`),
-            `${JSON.stringify({ schemaVersion: 1, runner, gitCommit: COMMIT, artifacts: [], stagedMultiPlatform: [candidate.name] })}\n`,
+            `${JSON.stringify({ schemaVersion: 1, runner, ...(platform ? { platform } : {}), gitCommit: COMMIT, artifacts: [], stagedMultiPlatform: [candidate.name] })}\n`,
         );
         for (const file of files) {
             const staged = path.join(runnerRoot, 'multi', runner, packagePath, 'dist', file);
@@ -229,6 +228,15 @@ test('multi-platform assembly merges exact outputs and regenerates one determini
         ],
         { cwd: ROOT, encoding: 'utf8' },
     );
+    return { assembled };
+}
+
+test('multi-platform assembly merges exact outputs and regenerates one deterministic CMake host list', () => {
+    // The node runners stage the library's addons, and one of them their loader and entry.
+    const { assembled } = assembleMultiPlatform([
+        { directory: 'node', runner: 'node', files: ['m.linux-x64.node', 'm.native.cjs', 'node/napi.mjs'] },
+        { directory: 'node-macos', runner: 'node-macos', files: ['m.darwin-arm64.node'] },
+    ]);
     const manifest = JSON.parse(fs.readFileSync(path.join(assembled, 'workspace-release-artifacts.json'), 'utf8'));
     const tarball = path.join(assembled, 'tarballs', manifest.artifacts[0].filename);
     const cmake = execFileSync('tar', ['-xOf', tarball, 'package/dist/prebuilt/CMakeLists.txt'], { encoding: 'utf8' });
@@ -241,4 +249,50 @@ test('multi-platform assembly merges exact outputs and regenerates one determini
     for (const file of ['dist/m.darwin-arm64.node', 'dist/m.linux-x64.node', 'dist/m.native.cjs', 'dist/node/napi.mjs']) {
         assert.ok(packed.includes(`package/${file}`), `${file} is in the assembled package`);
     }
+});
+
+test('the ready-made Node packages built in a job per platform assemble into one package', () => {
+    // The linux job builds every node addon of the multi-platform library and its loader; the others stage none of it.
+    const { assembled } = assembleMultiPlatform([
+        {
+            directory: 'node-linux',
+            runner: 'node',
+            platform: 'linux',
+            files: ['m.linux-x64.node', 'm.linuxmusl-x64.node', 'm.win32-x64.node', 'm.native.cjs', 'node/napi.mjs'],
+        },
+        { directory: 'node-linuxmusl', runner: 'node', platform: 'linuxmusl', files: [] },
+        { directory: 'node-win32', runner: 'node', platform: 'win32', files: [] },
+        { directory: 'node-macos', runner: 'node-macos', files: ['m.darwin-arm64.node'] },
+    ]);
+    const manifest = JSON.parse(fs.readFileSync(path.join(assembled, 'workspace-release-artifacts.json'), 'utf8'));
+    const packed = execFileSync('tar', ['-tzf', path.join(assembled, 'tarballs', manifest.artifacts[0].filename)], { encoding: 'utf8' }).split('\n');
+    for (const file of [
+        'dist/m.linux-x64.node',
+        'dist/m.linuxmusl-x64.node',
+        'dist/m.win32-x64.node',
+        'dist/m.darwin-arm64.node',
+        'dist/m.native.cjs',
+    ]) {
+        assert.ok(packed.includes(`package/${file}`), `${file} is in the assembled package`);
+    }
+});
+
+test('a train whose node jobs leave out a platform, or build one twice, is refused', () => {
+    const linux = { directory: 'node-linux', runner: 'node', platform: 'linux', files: ['m.linux-x64.node'] };
+    const macos = { directory: 'node-macos', runner: 'node-macos', files: ['m.darwin-arm64.node'] };
+    assert.throws(() => assembleMultiPlatform([linux, macos]), /node jobs built linux instead of linux, linuxmusl, win32/);
+    assert.throws(
+        () => assembleMultiPlatform([linux, { directory: 'node-win32', runner: 'node', platform: 'win32', files: [] }, macos]),
+        /node jobs built linux, win32 instead of linux, linuxmusl, win32/,
+    );
+    assert.throws(
+        () =>
+            assembleMultiPlatform([
+                linux,
+                { ...linux, directory: 'node-linux-again' },
+                { directory: 'node-win32', runner: 'node', platform: 'win32', files: [] },
+                macos,
+            ]),
+        /node jobs built linux, linux, win32 instead of linux, linuxmusl, win32/,
+    );
 });

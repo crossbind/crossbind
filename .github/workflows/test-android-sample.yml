@@ -30,13 +30,23 @@ on:
 
 permissions: {}
 concurrency:
-    # A new push to a pull request supersedes its running checks; a main commit keeps its own run.
-    group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
+    # A newer push to the same pull request or branch supersedes the running checks.
+    group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
     cancel-in-progress: true
 jobs:
+    tested:
+        uses: ./.github/workflows/tested-tree.yml
+        permissions:
+            actions: read
+            contents: read
+            pull-requests: read
+        with:
+            workflow: test-android-sample.yml
     # Emulator-free fast lane: exercises the gradle config-phase scripts (bridges, deps
     # stamp, assets) and the CMake configure chain (params file, prefab) in ~2-3 minutes.
     configure-only:
+        needs: tested
+        if: needs.tested.outputs.tested != 'true'
         runs-on: ubuntu-latest
         steps:
             - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -66,6 +76,8 @@ jobs:
               run: ./gradlew ":crossbind_plugin-react-native:configureCMakeDebug[x86_64]" -PreactNativeArchitectures=x86_64 --console=plain
 
     build:
+        needs: tested
+        if: needs.tested.outputs.tested != 'true'
         runs-on: ubuntu-latest
         steps:
             - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7

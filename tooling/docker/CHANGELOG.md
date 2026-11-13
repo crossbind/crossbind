@@ -1,5 +1,14 @@
 # @crossbind/docker
 
+## Image family 1.0.21
+
+### Patch Changes
+
+- Added sccache 0.19.0 to `base` and every image built on it, at `/usr/local/bin/sccache`: mozilla's static musl
+  release, checked against its pinned SHA-256 for each architecture. A build whose environment sets
+  `CROSSBIND_SCCACHE` compiles its C and C++ through it; nothing else runs it.
+- Updated Node.js to 26.13.1, from 26.13.0, in `base` and every image built on it.
+
 ## Image family 1.0.20
 
 ### Patch Changes

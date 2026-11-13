@@ -11,8 +11,8 @@ on:
 permissions:
     contents: read
 concurrency:
-    # A new push to a pull request supersedes its running checks; a main commit keeps its own run.
-    group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
+    # A newer push to the same pull request or branch supersedes the running checks.
+    group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
     cancel-in-progress: true
 jobs:
     # The gates of `pnpm run check` that read nothing but the tree. No path filter: they read core/,
@@ -36,3 +36,5 @@ jobs:
               run: pnpm run check:wiring:strict
             - name: Every downloaded source pins its sha256
               run: pnpm run check:sources:strict
+            - name: The CI scripts pass their checks
+              run: pnpm run check:ci

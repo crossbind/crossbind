@@ -31,12 +31,26 @@ on:
 
 permissions: {}
 concurrency:
-    # A new push to a pull request supersedes its running checks; a main commit keeps its own run.
-    group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
+    # A newer push to the same pull request or branch supersedes the running checks.
+    group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
     cancel-in-progress: true
 jobs:
+    tested:
+        uses: ./.github/workflows/tested-tree.yml
+        permissions:
+            actions: read
+            contents: read
+            pull-requests: read
+        with:
+            workflow: build-macos.yml
     build:
+        needs: tested
+        if: needs.tested.outputs.tested != 'true'
         runs-on: macos-latest
+        # main's pushes alone reach the ci-cache environment, whose secrets write the compiler cache; it records no deployment.
+        environment:
+            name: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && 'ci-cache' || '' }}
+            deployment: false
         env:
             # Dependabot-triggered runs receive no repository secrets; static library builds do not
             # need signing, so skip the keychain setup instead of failing on an empty certificate.
@@ -84,5 +98,17 @@ jobs:
               run: |
                   pnpm install
                   pnpm crossbind config set XCODE_DEVELOPMENT_TEAM 7ZZLDWBUVT
+            - name: Set up the compiler cache
+              uses: ./.github/actions/setup-sccache
+              with:
+                  read-key-id: ${{ secrets.SCCACHE_R2_READ_KEY_ID }}
+                  read-secret: ${{ secrets.SCCACHE_R2_READ_SECRET }}
+                  write-key-id: ${{ secrets.SCCACHE_R2_WRITE_KEY_ID }}
+                  write-secret: ${{ secrets.SCCACHE_R2_WRITE_SECRET }}
+                  endpoint: ${{ vars.SCCACHE_R2_ENDPOINT }}
             - name: Build for Macos
               run: pnpm run ci:macos:build
+            # sccache finishes the cache writes it still holds as it stops, and reports what the job took from the cache.
+            - name: Stop the compiler cache
+              if: ${{ always() && env.CROSSBIND_SCCACHE == '1' }}
+              run: sccache --stop-server || echo "No sccache server ran in this job."

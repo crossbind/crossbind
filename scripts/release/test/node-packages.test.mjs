@@ -8,8 +8,10 @@ import {
     binaryIdentity,
     bridgeStateDigest,
     changedBridgeState,
+    differentBridges,
     mergeStagedMulti,
     missingDists,
+    nodePlatformOf,
     nodePackageProblems,
     packBridgeState,
     restoreBridgeState,
@@ -344,4 +346,46 @@ test('a node runner stages the addons it built of the multi-platform library, an
     fs.rmSync(path.join(packageRoot, 'dist', 'm.win32-x64.node'));
     assert.throws(() => stageNodeOutputs({ packageRoot, stagingRoot: path.join(work, 'empty'), withEntry: true }), /no addon/);
     fs.rmSync(work, { recursive: true, force: true });
+});
+
+test('differentBridges names every bridge or interface of the macOS projects that the Linux job made otherwise', () => {
+    const made = (files) => {
+        const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'crossbind-bridges-'));
+        for (const [file, content] of Object.entries(files)) {
+            fs.mkdirSync(path.dirname(path.join(dir, file)), { recursive: true });
+            fs.writeFileSync(path.join(dir, file), content);
+        }
+        return dir;
+    };
+    const darwin = 'ports/zlib/standalone-napi/darwin-arm64/.crossbind/build';
+    const linuxOnly = 'ports/zlib/standalone-napi/linux-x64/.crossbind/build';
+    const linux = made({
+        [`${darwin}/interface/zlib.h.i`]: 'interface',
+        [`${darwin}/bridge/zlib.h.i.cpp`]: 'bridge',
+        [`${darwin}/bridge/zlib.h.i.cpp.exports.json`]: '["deflate"]',
+        [`${darwin}/bridge/gone.h.i.cpp`]: 'only the Linux job made it',
+        [`${linuxOnly}/bridge/zlib.h.i.cpp`]: 'a project the macOS job does not build',
+        [`${darwin.replace('/build', '')}/cache.json`]: '{"root":"/home/runner"}',
+    });
+    const macos = made({
+        [`${darwin}/interface/zlib.h.i`]: 'interface',
+        [`${darwin}/bridge/zlib.h.i.cpp`]: 'bridge',
+        [`${darwin}/bridge/zlib.h.i.cpp.exports.json`]: '["deflate","inflate"]',
+        [`${darwin}/bridge/swigview.txt`]: 'not a bridge',
+        [`${darwin.replace('/build', '')}/cache.json`]: '{"root":"/Users/runner"}',
+    });
+    const projects = ['ports/zlib/standalone-napi/darwin-arm64'];
+    assert.deepEqual(differentBridges(linux, macos, projects), [`${darwin}/bridge/gone.h.i.cpp`, `${darwin}/bridge/zlib.h.i.cpp.exports.json`]);
+    assert.deepEqual(differentBridges(linux, linux, projects), []);
+    // A project the macOS job made no bridge for at all is caught too.
+    const empty = made({ [`${darwin.replace('/build', '')}/cache.json`]: '{}' });
+    assert.deepEqual(differentBridges(linux, empty, projects).length, 4);
+});
+
+test('nodePlatformOf names the node platform an addon package builds for, and none for the bindings', () => {
+    assert.equal(nodePlatformOf({ os: ['linux'], cpu: ['x64'], libc: ['glibc'] }), 'linux');
+    assert.equal(nodePlatformOf({ os: ['linux'], cpu: ['arm64'], libc: ['musl'] }), 'linuxmusl');
+    assert.equal(nodePlatformOf({ os: ['win32'], cpu: ['arm64'] }), 'win32');
+    assert.equal(nodePlatformOf({ os: ['darwin'], cpu: ['x64'] }), 'darwin');
+    assert.equal(nodePlatformOf({ name: '@crossbind/port-zlib-standalone-napi' }), null);
 });

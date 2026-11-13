@@ -18,9 +18,9 @@ on:
 permissions: {}
 jobs:
     # A runner, the network or GitHub's artifact store fails now and then, so a run of these that fails on its first
-    # attempt runs its failed jobs once more, and a real failure fails again and stays red. A pull request's run that a
-    # newer push superseded stays as it is: its rerun would cancel the newer run of its concurrency group. So do a
-    # fork's runs and Dependabot's, whose token cannot rerun them.
+    # attempt runs its failed jobs once more, and a real failure fails again and stays red. A run that a newer push to
+    # its pull request or branch superseded stays as it is: its rerun would cancel the newer run of its concurrency
+    # group. So do a fork's runs and Dependabot's, whose token cannot rerun them.
     rerun:
         if: >-
             github.event.workflow_run.conclusion == 'failure'
@@ -41,11 +41,9 @@ jobs:
                   BRANCH: ${{ github.event.workflow_run.head_branch }}
                   EVENT: ${{ github.event.workflow_run.event }}
               run: |
-                  if [ "$EVENT" = pull_request ]; then
-                      latest=$(gh run list --repo "$REPO" --workflow "$WORKFLOW" --branch "$BRANCH" --event "$EVENT" --limit 1 --json databaseId --jq '.[0].databaseId')
-                      if [ "$latest" != "$RUN" ]; then
-                          echo "Run $latest of $BRANCH supersedes run $RUN."
-                          exit 0
-                      fi
+                  latest=$(gh run list --repo "$REPO" --workflow "$WORKFLOW" --branch "$BRANCH" --event "$EVENT" --limit 1 --json databaseId --jq '.[0].databaseId')
+                  if [ "$latest" != "$RUN" ]; then
+                      echo "Run $latest of $BRANCH supersedes run $RUN."
+                      exit 0
                   fi
                   gh run rerun "$RUN" --failed --repo "$REPO"

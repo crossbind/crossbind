@@ -16,6 +16,7 @@ import {
     encodeWorkspacePlanOutput,
     MULTI_PLATFORM_BUILDS,
     multiPlatformBuildArgs,
+    publishLevels,
 } from '../workspace-release.mjs';
 import { setWorkspaceVersion } from '../set-workspace-version.mjs';
 
@@ -612,4 +613,18 @@ test('the restore script writes the exact plan bytes from the job output environ
         /RELEASE_PLAN_GZIP_BASE64/,
     );
     fs.rmSync(directory, { recursive: true, force: true });
+});
+
+test('publishLevels groups the train so that each package comes after the train packages it depends on', () => {
+    const plan = {
+        publishOrder: ['crossbind', 'a', 'b', 'c', 'd'],
+        packages: [
+            { name: 'crossbind', publishLocalDependencies: [] },
+            { name: 'a', publishLocalDependencies: ['crossbind'] },
+            { name: 'b', publishLocalDependencies: [] },
+            { name: 'c', publishLocalDependencies: ['a', 'not-in-the-train'] },
+            { name: 'd', publishLocalDependencies: ['b'] },
+        ],
+    };
+    assert.deepEqual(publishLevels(plan), [['crossbind', 'b'], ['a', 'd'], ['c']]);
 });

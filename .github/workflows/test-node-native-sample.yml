@@ -39,18 +39,38 @@ on:
 
 permissions: {}
 concurrency:
-    # A new push to a pull request supersedes its running checks; a main commit keeps its own run.
-    group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
+    # A newer push to the same pull request or branch supersedes the running checks.
+    group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
     cancel-in-progress: true
 jobs:
+    tested:
+        uses: ./.github/workflows/tested-tree.yml
+        permissions:
+            actions: read
+            contents: read
+            pull-requests: read
+        with:
+            workflow: test-node-native-sample.yml
     # The macOS builds make their bridges with bridge-tools, as a developer's Mac does.
     bridge-tools:
+        needs: tested
+        if: needs.tested.outputs.tested != 'true'
         uses: ./.github/workflows/build-bridge-tools.yml
     build:
         needs: bridge-tools
         runs-on: macos-latest
+        # main's pushes alone reach the ci-cache environment, whose secrets write the compiler cache; it records no deployment.
+        environment:
+            name: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && 'ci-cache' || '' }}
+            deployment: false
         steps:
             - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+            # crossbind opens examples/desktop-app in a Simulator already booted, so it boots while the job builds.
+            - name: Boot an iPhone Simulator of the newest iOS
+              run: |
+                  udid=$(xcrun simctl list devices available --json | jq -r '[.devices | to_entries[] | select(.key | contains(".SimRuntime.iOS-")) | (.key | split(".SimRuntime.iOS-")[1] | split("-") | map(tonumber)) as $version | .value[] | select(.name | startswith("iPhone")) | {udid, $version}] | sort_by(.version) | last | .udid')
+                  xcrun simctl boot "$udid"
+                  echo "SIMULATOR_UDID=$udid" >> "$GITHUB_ENV"
             - name: Install pnpm
               uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
             - name: Use Node.js
@@ -60,6 +80,14 @@ jobs:
                   cache: 'pnpm'
             - name: Install dependencies
               run: pnpm install
+            - name: Set up the compiler cache
+              uses: ./.github/actions/setup-sccache
+              with:
+                  read-key-id: ${{ secrets.SCCACHE_R2_READ_KEY_ID }}
+                  read-secret: ${{ secrets.SCCACHE_R2_READ_SECRET }}
+                  write-key-id: ${{ secrets.SCCACHE_R2_WRITE_KEY_ID }}
+                  write-secret: ${{ secrets.SCCACHE_R2_WRITE_SECRET }}
+                  endpoint: ${{ vars.SCCACHE_R2_ENDPOINT }}
             # Fetched once per version and kept: React Native's Maven repository has served Hermes at a crawl.
             - name: Restore Hermes
               id: hermes
@@ -102,6 +130,9 @@ jobs:
               run: |
                   pnpm --filter=@crossbind/example-desktop-app run build
                   pnpm --filter=@crossbind/example-desktop-app run e2e:prod
+            # simctl boot returns while the device is still booting, which crossbind would boot again.
+            - name: Wait for the Simulator to finish booting
+              run: xcrun simctl bootstatus "$SIMULATOR_UDID" -b
             - name: Build examples/desktop-app for iOS and run it in the Simulator
               env:
                   CROSSBIND_APP_PLATFORM: ios
@@ -109,7 +140,13 @@ jobs:
                   pnpm --filter=@crossbind/example-lib-prebuilt-matrix run build:ios
                   pnpm --filter=@crossbind/example-desktop-app run build
                   pnpm --filter=@crossbind/example-desktop-app run e2e:prod
+            # sccache finishes the cache writes it still holds as it stops, and reports what the job took from the cache.
+            - name: Stop the compiler cache
+              if: ${{ always() && env.CROSSBIND_SCCACHE == '1' }}
+              run: sccache --stop-server || echo "No sccache server ran in this job."
     android-app:
+        needs: tested
+        if: needs.tested.outputs.tested != 'true'
         # The sample's Android app builds and packages in crossbind's android-app image, the library in the android image
         # it adds to, and runs on an emulator.
         runs-on: ubuntu-latest
@@ -146,6 +183,8 @@ jobs:
                   disable-animations: true
                   script: pnpm --filter=@crossbind/example-desktop-app run e2e:prod
     windows-addons:
+        needs: tested
+        if: needs.tested.outputs.tested != 'true'
         # A hosted Windows runner cannot run the Linux image the win32 addons build in, so this
         # runner builds the ones the Windows runners load.
         runs-on: ubuntu-latest

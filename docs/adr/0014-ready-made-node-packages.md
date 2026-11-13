@@ -55,7 +55,7 @@ for darwin, linux, linuxmusl and win32 on arm64 and x64.
   `crossbind licenses --package`, so nothing copies one package's output into another.
 - **One bridge.** Every addon of a family compiles the same bridge, read from a linux package's
   headers. A build that makes no linux addon still resolves them there when a linux package is
-  installed (`bridgeTargets`), so the macOS runner compiles the bridges the Linux job generated.
+  installed (`bridgeTargets`), so the macOS runner's bridge-tools makes the bridges the Linux job does.
 - **One process, several packages.** Each addon keeps its embind state in its own scope, exports
   only its Node-API entry points on macOS, and shares one ordered exit listener.
 - **The example library.** `@crossbind/example-lib-prebuilt-matrix` ships its eight addons inside
@@ -68,11 +68,12 @@ for darwin, linux, linuxmusl and win32 on arm64 and x64.
   linked: the `LICENSE` of an addon that links one names the exact source tag and the steps to
   relink it with a modified library. The `license` field is committed; `LICENSE` and the SBOM are
   build outputs (vendored copies' texts and the windows image's notices come from the build).
-- **Train.** A `node` job builds the Linux and Windows addon packages and the packages of the
-  bindings after the Linux shards, from the platform packages those shards packed, and runs the
-  macOS addon packages' darwin build there too, which generates their bridges without linking; a
-  `node-macos` job builds the macOS addon packages after it, from the bridges it hands over with their
-  paths moved to the macOS checkout, and fails if its build changed any of them. The plan refuses a train that publishes a standalone Node-API package without the
+- **Train.** A `node` job per platform (linux, linuxmusl, win32) builds that platform's addon packages
+  after the Linux shards, from the platform packages those shards packed; the linux one also builds the
+  packages of the bindings and runs the macOS addon packages' darwin build, which generates their bridges
+  without linking. A `node-macos` job builds the macOS addon packages beside them, making their bridges with bridge-tools
+  from the same linux packages' headers, and the assemble job fails the train when any of them
+  differs from the linux `node` job's. The plan refuses a train that publishes a standalone Node-API package without the
   platform packages it links. `prepack` refuses a package a build did not fill. Before anything is
   published, `verify_node` installs the exact tarballs from a local registry on all eight targets
   with Node.js 24 and 22 and runs every family's check, one package per app and all in one process.
@@ -90,9 +91,8 @@ for darwin, linux, linuxmusl and win32 on arm64 and x64.
   stops the train before npm sees it.
 - **Negative:** 144 more packages per train, each bootstrapped and trusted once by hand. SWIG runs
   once per package rather than once per family, which lengthens the `node` job. The train
-  runs longer: the `node` job waits for every Linux shard, the macOS addons wait for it, and
-  verification adds sixteen jobs. GDAL's addon packages are about 25 MB packed each. A bridge cache
-  miss on the macOS runner fails the build, since nothing there can run SWIG. The LGPL route is a
+  runs longer: the `node` and `node-macos` jobs wait for every Linux shard, and verification adds
+  sixteen jobs. GDAL's addon packages are about 25 MB packed each. The LGPL route is a
   maintainer's assessment, not legal advice. The twelve published `-bin-wasi` packages become
   `-standalone-wasi`, and their old names are deprecated with a pointer to the new ones.
 

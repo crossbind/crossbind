@@ -6,6 +6,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { inspectWorkspaceTarball, packWorkspacePackage } from './package-artifact.mjs';
 import { MULTI_PLATFORM_RUNNERS, findBuildManifests, validateWorkspaceReleasePlan, writeAggregateDistCMake } from './workspace-release.mjs';
+import { NODE_RUNNER_BUILDS, differentBridges } from './node-packages.mjs';
 import { appendGitHubOutput, writeJson } from './release-lib.mjs';
 
 const REPOSITORY_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
@@ -27,7 +28,16 @@ const workspace = plan.workspacePackages;
 fs.mkdirSync(path.join(artifactRoot, 'tarballs'), { recursive: true });
 
 const inputs = [...explicitInputs, ...(inputRoot ? findBuildManifests(path.resolve(inputRoot)) : [])];
-const duplicateRunners = inputs.map((input) => input.runner).filter((runner, index, all) => all.indexOf(runner) !== index);
+// The node runner may build in a job per platform, which together build every platform once.
+const duplicateRunners = inputs.map((input) => input.runner).filter((runner, index, all) => runner !== 'node' && all.indexOf(runner) !== index);
+const nodePlatforms = inputs
+    .filter((input) => input.runner === 'node')
+    .map((input) => JSON.parse(fs.readFileSync(path.join(input.directory, 'build-node.json'), 'utf8')).platform);
+if (nodePlatforms.length > 1 || nodePlatforms.some(Boolean)) {
+    const built = nodePlatforms.map((platform) => platform ?? '(all)').sort();
+    const expected = [...NODE_RUNNER_BUILDS.node.platforms].sort();
+    if (built.join() !== expected.join()) throw new Error(`The node jobs built ${built.join(', ')} instead of ${expected.join(', ')}.`);
+}
 if (duplicateRunners.length) throw new Error(`Duplicate build manifests for runner(s): ${[...new Set(duplicateRunners)].join(', ')}.`);
 const requiredRunners = new Set(
     Object.entries(plan.buildOrderByRunner)
@@ -37,6 +47,12 @@ const requiredRunners = new Set(
 if (plan.multiPlatform.length) for (const runner of MULTI_PLATFORM_RUNNERS) requiredRunners.add(runner);
 const missingRunners = [...requiredRunners].filter((runner) => !inputs.some((input) => input.runner === runner));
 if (missingRunners.length) throw new Error(`Missing required platform build manifest(s): ${missingRunners.join(', ')}.`);
+if (valueOf('--node-bridges') || valueOf('--node-macos-bridges')) {
+    if (!valueOf('--node-bridges') || !valueOf('--node-macos-bridges')) throw new Error('--node-bridges and --node-macos-bridges go together.');
+    const projects = [...plan.buildOrderByRunner['node-macos'], ...plan.multiPlatform].map((name) => workspace[name].path);
+    const different = differentBridges(path.resolve(valueOf('--node-bridges')), path.resolve(valueOf('--node-macos-bridges')), projects);
+    if (different.length) throw new Error(`The macOS addons bound bridges other than the Linux job's: ${different.slice(0, 5).join(', ')}`);
+}
 
 function sameFile(left, right) {
     const hash = (file) => crypto.createHash('sha256').update(fs.readFileSync(file)).digest('hex');
@@ -88,11 +104,14 @@ for (const name of plan.multiPlatform) {
     const candidate = workspace[name];
     const packageRoot = path.join(root, candidate.path);
     const aggregateCMakeFiles = [];
+    // A runner that builds in a job per platform stages the library from one of them.
     for (const runner of MULTI_PLATFORM_RUNNERS) {
-        const input = inputs.find((candidateInput) => candidateInput.runner === runner);
-        const source = path.join(input.directory, 'multi', input.runner, candidate.path);
-        if (!fs.existsSync(source)) throw new Error(`${candidate.name}: ${runner} build did not stage its multi-platform output.`);
-        mergeTree(source, packageRoot, aggregateCMakeFiles);
+        const sources = inputs
+            .filter((input) => input.runner === runner)
+            .map((input) => path.join(input.directory, 'multi', input.runner, candidate.path))
+            .filter((source) => fs.existsSync(source));
+        if (!sources.length) throw new Error(`${candidate.name}: ${runner} build did not stage its multi-platform output.`);
+        sources.forEach((source) => mergeTree(source, packageRoot, aggregateCMakeFiles));
     }
     writeAggregateDistCMake(packageRoot, aggregateCMakeFiles);
     const packed = packWorkspacePackage({
