@@ -1,0 +1,155 @@
+name: Set up the compiler cache
+description: >-
+    Turn on crossbind's compiler cache: in a directory of the job's own, which a release run on main may have left as an
+    artifact, or in R2, which main's pushes alone write and every other run only reads. It installs the pinned sccache:
+    a macOS build compiles with it, and on Linux, where a build runs the image's, it proves the R2 keys first.
+
+inputs:
+    dir:
+        description: A local cache directory, which takes the place of R2.
+        required: false
+        default: ''
+    size:
+        description: The local directory's limit, as SCCACHE_CACHE_SIZE takes it.
+        required: false
+        default: 3G
+    artifact:
+        description: The artifact a run of release-crossbind.yml on main left with the directory, restored into it.
+        required: false
+        default: ''
+    token:
+        description: A token that reads the repository's artifacts, for `artifact`.
+        required: false
+        default: ''
+    read-key-id:
+        description: >-
+            A read-only R2 token's access key ID, a repository secret; a fork's or Dependabot's run has none and builds
+            without the cache.
+        required: false
+        default: ''
+    read-secret:
+        description: The read-only R2 token's secret access key.
+        required: false
+        default: ''
+    write-key-id:
+        description: A read-write R2 token's access key ID, a secret of the ci-cache environment, which main's pushes alone reach.
+        required: false
+        default: ''
+    write-secret:
+        description: The read-write R2 token's secret access key.
+        required: false
+        default: ''
+    endpoint:
+        description: The R2 account's S3 endpoint, https://<account id>.r2.cloudflarestorage.com.
+        required: false
+        default: ''
+
+runs:
+    using: composite
+    steps:
+        # The cache only speeds a build up, so neither its install nor its restore may fail one. A Linux build compiles
+        # with the image's sccache, so there the runner's only proves the R2 keys.
+        - name: Install sccache
+          if: runner.os == 'macOS' || inputs.dir == ''
+          continue-on-error: true
+          shell: bash
+          env:
+              SCCACHE_VERSION: 0.19.0
+              SHA256_MACOS_ARM64: a35a0b7d622618774bc1bb8102d72562dfb21e619f88b153b370d7f89bc286af
+              SHA256_LINUX_X86_64: aa73c7270c997894038c0d8f0d297865f57569e1687883322bc431713d4bb9dd
+              SHA256_LINUX_AARCH64: 3e47fc4a71b1ddd1b4294a0de9d34498922fdf41e3cd0bda5df3954e3d6deb9d
+          run: |
+              set -euo pipefail
+              case "$RUNNER_OS-$(uname -m)" in
+                  macOS-arm64) target=aarch64-apple-darwin sha256=$SHA256_MACOS_ARM64 ;;
+                  Linux-x86_64) target=x86_64-unknown-linux-musl sha256=$SHA256_LINUX_X86_64 ;;
+                  Linux-aarch64) target=aarch64-unknown-linux-musl sha256=$SHA256_LINUX_AARCH64 ;;
+                  *) echo "No sccache build is pinned for $RUNNER_OS on $(uname -m)." >&2; exit 1 ;;
+              esac
+              name="sccache-v${SCCACHE_VERSION}-${target}"
+              curl --fail --silent --show-error --location --retry 5 --retry-all-errors --output "$RUNNER_TEMP/sccache.tar.gz" \
+                  "https://github.com/mozilla/sccache/releases/download/v${SCCACHE_VERSION}/${name}.tar.gz"
+              echo "${sha256}  $RUNNER_TEMP/sccache.tar.gz" | shasum -a 256 -c -
+              tar -xzf "$RUNNER_TEMP/sccache.tar.gz" -C "$RUNNER_TEMP"
+              mkdir -p "$RUNNER_TEMP/sccache-bin"
+              install -m 755 "$RUNNER_TEMP/${name}/sccache" "$RUNNER_TEMP/sccache-bin/sccache"
+              echo "$RUNNER_TEMP/sccache-bin" >> "$GITHUB_PATH"
+        - name: Find the cache a release run on main left
+          id: trusted
+          if: inputs.artifact != ''
+          continue-on-error: true
+          shell: bash
+          env:
+              GH_TOKEN: ${{ inputs.token }}
+              ARTIFACT: ${{ inputs.artifact }}
+          run: node scripts/ci/trusted-artifact.mjs --name "$ARTIFACT" --workflow release-crossbind.yml
+        - name: Restore that cache
+          if: steps.trusted.outputs.run-id != ''
+          continue-on-error: true
+          uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+          with:
+              name: ${{ inputs.artifact }}
+              path: ${{ inputs.dir }}
+              run-id: ${{ steps.trusted.outputs.run-id }}
+              github-token: ${{ inputs.token }}
+        - name: Turn on the compiler cache
+          shell: bash
+          env:
+              DIR: ${{ inputs.dir }}
+              SIZE: ${{ inputs.size }}
+              READ_KEY_ID: ${{ inputs.read-key-id }}
+              READ_SECRET: ${{ inputs.read-secret }}
+              WRITE_KEY_ID: ${{ inputs.write-key-id }}
+              WRITE_SECRET: ${{ inputs.write-secret }}
+              ENDPOINT: ${{ inputs.endpoint }}
+              # Raised by one when a wrong object is suspected in a cache: it enters every key, so nothing cached before
+              # is taken again.
+              CACHE_BUSTER: '1'
+          run: |
+              set -euo pipefail
+              if { [ "$RUNNER_OS" = macOS ] || [ -z "$DIR" ]; } && ! command -v sccache > /dev/null; then
+                  echo "::warning::sccache did not install, so this job builds without the compiler cache."
+                  exit 0
+              fi
+              buster="SCCACHE_C_CUSTOM_CACHE_BUSTER=$CACHE_BUSTER"
+              if [ -n "$DIR" ]; then
+                  mkdir -p "$DIR"
+                  { echo CROSSBIND_SCCACHE=1; echo "$buster"; echo "SCCACHE_DIR=$DIR"; echo "SCCACHE_CACHE_SIZE=$SIZE"; } >> "$GITHUB_ENV"
+                  exit 0
+              fi
+              # The write token reaches main's pushes alone; every other run reads, so nothing a branch compiled enters R2.
+              if [ -n "$WRITE_KEY_ID" ] && [ -n "$WRITE_SECRET" ]; then
+                  key_id=$WRITE_KEY_ID secret=$WRITE_SECRET mode=READ_WRITE
+              elif [ -n "$READ_KEY_ID" ] && [ -n "$READ_SECRET" ]; then
+                  key_id=$READ_KEY_ID secret=$READ_SECRET mode=READ_ONLY
+              else
+                  echo "No R2 keys reach this job, so it builds without the compiler cache."
+                  exit 0
+              fi
+              if [ -z "$ENDPOINT" ]; then
+                  echo "::warning::The SCCACHE_R2_ENDPOINT variable is not set, so this job builds without the compiler cache."
+                  exit 0
+              fi
+              settings=(SCCACHE_BUCKET=crossbind-sccache SCCACHE_REGION=auto "SCCACHE_ENDPOINT=$ENDPOINT" "SCCACHE_S3_RW_MODE=$mode")
+              # sccache does not start when it cannot read the bucket, as with a wrong or revoked key; the job then builds
+              # without it. The keys reach it through the environment, not its arguments.
+              if ! AWS_ACCESS_KEY_ID="$key_id" AWS_SECRET_ACCESS_KEY="$secret" env "${settings[@]}" SCCACHE_IDLE_TIMEOUT=0 sccache --start-server; then
+                  echo "::warning::sccache could not read the R2 bucket, so this job builds without the compiler cache; check the SCCACHE_R2_* secrets and the SCCACHE_R2_ENDPOINT variable."
+                  exit 0
+              fi
+              echo "The compiler cache is $mode."
+              if [ "$RUNNER_OS" = macOS ]; then
+                  # The server holds the keys, so no later step or build sees them; it stays up until the job stops it.
+                  { echo CROSSBIND_SCCACHE=1; echo "$buster"; } >> "$GITHUB_ENV"
+                  exit 0
+              fi
+              # A Linux build compiles in containers, each with a server of its own that needs the settings and keys; this
+              # server only proved them.
+              sccache --stop-server > /dev/null || true
+              {
+                  echo CROSSBIND_SCCACHE=1
+                  echo "$buster"
+                  printf '%s\n' "${settings[@]}"
+                  echo "AWS_ACCESS_KEY_ID=$key_id"
+                  echo "AWS_SECRET_ACCESS_KEY=$secret"
+              } >> "$GITHUB_ENV"

@@ -9,6 +9,7 @@ import {
     buildReleasePlan,
     createReleaseManifest,
     loadReleaseNotes,
+    mapInLanes,
     releasePolicy,
     validateReleaseManifest,
 } from '../release-lib.mjs';
@@ -150,4 +151,37 @@ test('GitHub outputs cannot smuggle extra keys through multi-line values', () =>
     assert.ok(heredoc, `expected a delimiter block, got ${JSON.stringify(text)}`);
     assert.throws(() => appendGitHubOutput(file, { 'bad key': 'x' }), /not a safe GitHub output key/);
     fs.rmSync(directory, { recursive: true, force: true });
+});
+
+test('mapInLanes runs at most the given lanes at once, starts items in order and keeps their order', async () => {
+    const started = [];
+    let running = 0;
+    let most = 0;
+    const results = await mapInLanes([30, 10, 20, 5, 15], 2, async (delay, index) => {
+        started.push(index);
+        running += 1;
+        most = Math.max(most, running);
+        await new Promise((resolve) => setTimeout(resolve, delay));
+        running -= 1;
+        return delay * 2;
+    });
+    assert.deepEqual(results, [60, 20, 40, 10, 30]);
+    assert.deepEqual(started, [0, 1, 2, 3, 4]);
+    assert.equal(most, 2);
+});
+
+test('mapInLanes starts no item after a failure and throws the first error once the running ones end', async () => {
+    const started = [];
+    const ended = [];
+    await assert.rejects(
+        mapInLanes([0, 1, 2, 3, 4], 2, async (item) => {
+            started.push(item);
+            await new Promise((resolve) => setTimeout(resolve, item === 1 ? 20 : 5));
+            if (item === 0) throw new Error('item 0 failed');
+            ended.push(item);
+        }),
+        /item 0 failed/,
+    );
+    assert.deepEqual(started, [0, 1]);
+    assert.deepEqual(ended, [1]);
 });

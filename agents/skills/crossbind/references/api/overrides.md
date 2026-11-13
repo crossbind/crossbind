@@ -188,6 +188,8 @@ copyToDist: { 'assets/cacert.pem': ['ssl/certs/cacert.pem'] }
 
 These apply to every crossbind project on the machine. Use sparingly — they don't travel with the project.
 
+`CROSSBIND_SCCACHE=1`, set in the environment alone, sends every C and C++ compile through [sccache](https://github.com/mozilla/sccache), which its own `SCCACHE_*` variables point at a cache: a folder by default, or S3 and R2 with `SCCACHE_BUCKET`, `SCCACHE_ENDPOINT`, `SCCACHE_REGION` and the `AWS_*` keys. CMake's compiler launchers carry it to every CMake project and `EM_COMPILER_WRAPPER` to every emcc. A Mac needs sccache on the `PATH` (`brew install sccache`); Docker builds run the image's own, from image family 1.0.21, and get the settings by name, never on the command line; a `docker run` mounts `SCCACHE_DIR`, which under `DOCKER_EXEC` must sit inside the project. `RUNNER=REMOTE` refuses it, as the runner would need your cache's keys.
+
 ## Decision flowchart
 
 ```

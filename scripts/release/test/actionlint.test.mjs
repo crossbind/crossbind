@@ -213,6 +213,11 @@ test('the unpublished toolchain image train uses the reviewed stable versions', 
     assert.match(android, /^USER 10001:10001$/m);
     // The copies patched into npm come from tarballs checked against a pinned digest.
     assert.match(base, /^ARG BRACE_EXPANSION_SHA256=[0-9a-f]{64}$/m);
+    // sccache comes from the release archive of each architecture, checked against its pinned digest.
+    assert.match(base, /^ARG SCCACHE_VERSION=\d+\.\d+\.\d+$/m);
+    assert.match(base, /^ARG SCCACHE_SHA256_AMD64=[0-9a-f]{64}$/m);
+    assert.match(base, /^ARG SCCACHE_SHA256_ARM64=[0-9a-f]{64}$/m);
+    assert.match(base, /\$\{sha256\} {2}\/tmp\/sccache\.tar\.gz" \| sha256sum -c -/);
     assert.match(base, /^ARG UNDICI_SHA256=[0-9a-f]{64}$/m);
     assert.match(base, /\$3 {2}\/tmp\/package\.tgz" \| sha256sum -c -/);
 

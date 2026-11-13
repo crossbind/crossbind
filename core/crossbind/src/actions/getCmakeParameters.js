@@ -61,7 +61,6 @@ export default function getCmakeParameters(target, options = {}) {
         `-DBUILD_TYPE=${buildType}`,
         `-DBUILD_${otherBuildType}_LIBS=OFF`,
         `-DCOMPILE_OPTIONS=${cmakeCompileOptions.join(';')}`,
-        // '-DCMAKE_CXX_COMPILER_LAUNCHER=ccache',
         ...(options.buildSource !== false ? ['-DBUILD_SOURCE=TRUE'] : []),
     ]);
 

@@ -4,11 +4,11 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { ensureGitTag, GitHubCliRelease } from './github-release.mjs';
+import { ensureGitTags, GitRemoteTags } from './github-release.mjs';
 import { NpmCliRegistry, publishPackage, trustedPublishingEnvironment, verifyPublishedPackage } from './npm-registry.mjs';
 import { inspectWorkspaceTarball } from './package-artifact.mjs';
-import { appendGitHubOutput, writeJson } from './release-lib.mjs';
-import { validateWorkspaceReleasePlan } from './workspace-release.mjs';
+import { appendGitHubOutput, mapInLanes, writeJson } from './release-lib.mjs';
+import { publishLevels, validateWorkspaceReleasePlan } from './workspace-release.mjs';
 
 const REPOSITORY_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const valueOf = (name) => {
@@ -32,7 +32,7 @@ if (gitCommit !== plan.gitCommit || artifactManifest.gitCommit !== plan.gitCommi
 }
 const candidateByName = new Map(plan.packages.map((candidate) => [candidate.name, candidate]));
 const artifactByName = new Map(artifactManifest.artifacts.map((artifact) => [artifact.package, artifact]));
-const github = new GitHubCliRelease({ cwd: root });
+const git = new GitRemoteTags({ cwd: root });
 if (artifactManifest.schemaVersion !== 1 || artifactManifest.artifacts.length !== artifactByName.size) {
     throw new Error('Assembled release artifact manifest is malformed or contains duplicate packages.');
 }
@@ -52,15 +52,10 @@ for (const name of plan.publishOrder) {
 }
 if (artifactByName.size !== approvedArtifacts.size) throw new Error('Assembled release artifact manifest contains an unexpected package.');
 
-for (const name of plan.publishOrder) {
-    const candidate = candidateByName.get(name);
-    const existingTagCommit = await github.tagCommit(candidate.gitTag);
-    if (existingTagCommit && existingTagCommit !== gitCommit) {
-        throw new Error(`${candidate.gitTag} points to ${existingTagCommit}, expected ${gitCommit}. Refusing npm publication.`);
-    }
-}
+const tags = plan.publishOrder.map((name) => candidateByName.get(name).gitTag);
+// A tag of the train that points elsewhere stops it before npm publication.
+await ensureGitTags({ git, tags, commit: gitCommit });
 
-const results = [];
 const registryFor = (name) => new NpmCliRegistry({ cwd: root, packageName: candidateByName.get(name).name });
 
 // The train publishes in dependency order, then verifies in a second pass. npm accepts a publish
@@ -95,7 +90,8 @@ const verifyOne = async (name, action) => {
         gitCommit,
         action,
     });
-    results.push({
+    process.stdout.write(`${candidate.name}@${candidate.version}: ${verified.action}, integrity and provenance verified.\n`);
+    return {
         package: candidate.name,
         version: candidate.version,
         channel: candidate.channel,
@@ -110,27 +106,26 @@ const verifyOne = async (name, action) => {
         action: verified.action,
         propagationAttempts: verified.attempts,
         localTarball: `tarballs/${artifact.filename}`,
-    });
-    process.stdout.write(`${candidate.name}@${candidate.version}: ${verified.action}, integrity and provenance verified.\n`);
+    };
 };
 
+// npm takes a few publications at once well; verification mostly waits on npm, so more of it runs at once.
+const PUBLISH_LANES = 8;
+const VERIFY_LANES = 16;
 const [canary, ...rest] = plan.publishOrder;
-const actions = new Map();
-actions.set(canary, await publishOne(canary));
-await verifyOne(canary, actions.get(canary));
+const canaryAction = await publishOne(canary);
+const canaryResult = await verifyOne(canary, canaryAction);
 
-for (const name of rest) {
-    actions.set(name, await publishOne(name));
+// Level by level, so npm has accepted every train package a package depends on before that package.
+const actionOf = new Map([[canary, canaryAction]]);
+for (const level of publishLevels(plan)) {
+    const names = level.filter((name) => name !== canary);
+    (await mapInLanes(names, PUBLISH_LANES, publishOne)).forEach((action, index) => actionOf.set(names[index], action));
 }
 process.stdout.write(`npm accepted ${rest.length} further package(s); verifying every one of them.\n`);
-for (const name of rest) {
-    await verifyOne(name, actions.get(name));
-}
+const results = [canaryResult, ...(await mapInLanes(rest, VERIFY_LANES, (name) => verifyOne(name, actionOf.get(name))))];
 
-for (const name of plan.publishOrder) {
-    const candidate = candidateByName.get(name);
-    await ensureGitTag({ github, tag: candidate.gitTag, commit: gitCommit, apply: true });
-}
+await ensureGitTags({ git, tags, commit: gitCommit, apply: true });
 
 fs.mkdirSync(outputRoot, { recursive: true });
 const releaseResult = { schemaVersion: 1, gitCommit, channel: plan.channel, packages: results };

@@ -114,11 +114,80 @@ export async function ensureGitTag({ github, tag, commit, apply = false, log = c
         log(`${tag} would be created at ${commit}.`);
         return 'planned';
     }
-    await github.createTag(tag, commit);
+    try {
+        await github.createTag(tag, commit);
+    } catch (error) {
+        // The train pushes its tags with git, which the API can show a moment later.
+        if (!/Reference already exists/i.test(error.message)) throw error;
+    }
     const created = await readBack(() => github.tagCommit(tag), Boolean, sleep);
     if (created !== commit) throw new Error(`${tag} settled at ${created ?? '(absent)'}, expected ${commit}.`);
     log(`${tag} created at ${commit}.`);
     return 'created';
+}
+
+// The remote's tags through git: one ls-remote reads them all, where the API answers one tag a call.
+export class GitRemoteTags {
+    constructor({ cwd = process.cwd(), remote = 'origin' } = {}) {
+        this.cwd = cwd;
+        this.remote = remote;
+    }
+
+    async run(args) {
+        try {
+            const { stdout } = await execFileAsync('git', args, { cwd: this.cwd, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
+            return stdout;
+        } catch (error) {
+            throw new Error(`git ${args.join(' ')} failed: ${(error.stderr || error.message).toString().trim()}`, { cause: error });
+        }
+    }
+
+    // Each tag and the commit it points to; an annotated tag's peeled line names its commit.
+    async list() {
+        const tags = new Map();
+        for (const line of (await this.run(['ls-remote', '--tags', this.remote])).split('\n')) {
+            const [sha, ref] = line.split('\t');
+            if (!ref?.startsWith('refs/tags/')) continue;
+            const peeled = ref.endsWith('^{}');
+            const name = ref.slice('refs/tags/'.length, peeled ? -3 : undefined);
+            if (peeled || !tags.has(name)) tags.set(name, sha);
+        }
+        return tags;
+    }
+
+    async push(tags, commit) {
+        await this.run(['push', '--atomic', '--quiet', this.remote, ...tags.map((tag) => `${commit}:refs/tags/${tag}`)]);
+    }
+}
+
+const TAGS_PER_PUSH = 64;
+
+// Every tag at commit: the ones already there are reused, the missing ones pushed together. Nothing moves a tag.
+export async function ensureGitTags({ git, tags, commit, apply = false, log = console.log, sleep = pause }) {
+    const existing = await git.list();
+    const moved = tags.filter((tag) => existing.has(tag) && existing.get(tag) !== commit);
+    if (moved.length) {
+        throw new Error(
+            `${moved.map((tag) => `${tag} points to ${existing.get(tag)}`).join(', ')}, expected ${commit}. Refusing to move existing tags.`,
+        );
+    }
+    const missing = tags.filter((tag) => !existing.has(tag));
+    const reused = tags.length - missing.length;
+    if (!apply || !missing.length) {
+        log(`${reused} tag(s) already point to ${commit}${missing.length ? `; ${missing.length} would be created` : ''}.`);
+        return { reused, created: 0 };
+    }
+    for (let index = 0; index < missing.length; index += TAGS_PER_PUSH) await git.push(missing.slice(index, index + TAGS_PER_PUSH), commit);
+    const unsettled = (shown) => missing.filter((tag) => shown.get(tag) !== commit);
+    const shown = await readBack(
+        () => git.list(),
+        (answer) => unsettled(answer).length === 0,
+        sleep,
+    );
+    const absent = unsettled(shown);
+    if (absent.length) throw new Error(`${absent.map((tag) => `${tag} settled at ${shown.get(tag) ?? '(absent)'}`).join(', ')}, expected ${commit}.`);
+    log(`${reused} tag(s) reused and ${missing.length} created at ${commit}.`);
+    return { reused, created: missing.length };
 }
 
 function normalizeMarkdown(value) {

@@ -331,3 +331,25 @@ export function appendGitHubOutput(file, outputs) {
     });
     fs.appendFileSync(file, `${lines.join('\n')}\n`);
 }
+
+// task over every item with at most `lanes` running, started in order; results keep the items' order. After a failure
+// no further item starts, and the first error is thrown once the running ones end.
+export async function mapInLanes(items, lanes, task) {
+    const results = new Array(items.length);
+    let next = 0;
+    let failure = null;
+    const lane = async () => {
+        while (next < items.length && !failure) {
+            const index = next;
+            next += 1;
+            try {
+                results[index] = await task(items[index], index);
+            } catch (error) {
+                failure ??= { error };
+            }
+        }
+    };
+    await Promise.all(Array.from({ length: Math.min(lanes, items.length) }, lane));
+    if (failure) throw failure.error;
+    return results;
+}

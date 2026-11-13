@@ -12,6 +12,7 @@ import {
     changedBridgeState,
     mergeStagedMulti,
     missingDists,
+    nodePlatformOf,
     packBridgeState,
     restoreBridgeState,
     stageNodeOutputs,
@@ -35,7 +36,19 @@ const artifactRoot = path.resolve(valueOf('--artifact-dir') ?? path.join(root, `
 const plan = validateWorkspaceReleasePlan(JSON.parse(fs.readFileSync(planPath, 'utf8')), { root });
 const workspace = plan.workspacePackages;
 const candidates = new Set(plan.packages.map((candidate) => candidate.name));
-const buildOrder = plan.buildOrderByRunner[runner];
+// The node runner may build in a job per platform. The first platform's job also builds what belongs to none: the
+// packages of the bindings, the macOS packages' bridges and the multi-platform library's entry.
+const nodePlatform = valueOf('--node-platform');
+if (nodePlatform && (runner !== 'node' || !NODE_RUNNER_BUILDS.node.platforms.includes(nodePlatform))) {
+    throw new Error(`--node-platform takes one of ${NODE_RUNNER_BUILDS.node.platforms.join(', ')}, with --runner node.`);
+}
+const isFirstNodePlatform = !nodePlatform || nodePlatform === NODE_RUNNER_BUILDS.node.platforms[0];
+const inShard = (name) => {
+    if (!nodePlatform) return true;
+    const platform = nodePlatformOf(JSON.parse(fs.readFileSync(path.join(root, workspace[name].path, 'package.json'), 'utf8')));
+    return platform ? platform === nodePlatform : isFirstNodePlatform;
+};
+const buildOrder = plan.buildOrderByRunner[runner].filter(inShard);
 
 fs.mkdirSync(path.join(artifactRoot, 'tarballs'), { recursive: true });
 
@@ -78,13 +91,14 @@ if (nodeBuild) {
     // Each standalone package builds itself: an addon package its addon, the package of the bindings their loader.
     const packagePaths = buildOrder.map((name) => workspace[name].path);
     // A macOS addon package compiles the bridges the Linux job generates, which a darwin build there does without linking.
-    const bridgeOnlyPaths = runner === 'node' ? plan.buildOrderByRunner['node-macos'].map((name) => workspace[name].path) : [];
-    // The multi-platform library ships its own addons, whose bridges travel to the macOS runner like a package's.
-    const multiPaths = plan.multiPlatform.map((name) => workspace[name].path);
+    const bridgeOnlyPaths = runner === 'node' && isFirstNodePlatform ? plan.buildOrderByRunner['node-macos'].map((name) => workspace[name].path) : [];
+    // The multi-platform library ships its own addons, whose bridges travel to the macOS runner like a package's. The first
+    // platform's job builds all of its node addons, so its loader knows each of them.
+    const multiPaths = isFirstNodePlatform ? plan.multiPlatform.map((name) => workspace[name].path) : [];
     const bridgePaths = [...packagePaths, ...bridgeOnlyPaths, ...multiPaths];
     unpackDists({ root, tarballs: variantTarballs(inputs, workspace, nodeBuild.dists) });
     mergeStagedMulti({ root, inputs, workspace });
-    const missing = missingDists(root, packagePaths, nodeBuild.dists, (name) => workspace[name]?.path);
+    const missing = missingDists(root, packagePaths, nodePlatform ? [nodePlatform] : nodeBuild.dists, (name) => workspace[name]?.path);
     if (missing.length) throw new Error(`[${runner}] no package of this train brought the archives for ${missing.join(', ')}.`);
     if (valueOf('--bridges')) restoreBridgeState({ root, inputDir: path.resolve(valueOf('--bridges')) });
     const handedOver = valueOf('--bridges') ? bridgeStateDigest(root, bridgePaths) : null;
@@ -116,7 +130,7 @@ const artifacts = [];
 for (const name of plan.publishOrder) {
     const candidate = workspace[name];
     if (!candidates.has(name) || candidate.buildKind === 'multi-platform') continue;
-    if (candidate.buildKind !== runner) continue;
+    if (candidate.buildKind !== runner || !inShard(name)) continue;
     const packed = packWorkspacePackage({
         root,
         packagePath: candidate.path,
@@ -140,6 +154,7 @@ for (const name of plan.publishOrder) {
 const result = {
     schemaVersion: 1,
     runner,
+    ...(nodePlatform ? { platform: nodePlatform } : {}),
     gitCommit: plan.gitCommit,
     artifacts,
     stagedMultiPlatform: plan.multiPlatform,

@@ -19,6 +19,14 @@ export const NODE_RUNNER_BUILDS = {
     'node-macos': { platforms: ['darwin'], dists: ['darwin', 'linux'] },
 };
 
+// The node platform an addon package builds for, from npm's os and libc fields; the package of the bindings has none.
+export function nodePlatformOf(manifest) {
+    const [os] = manifest.os ?? [];
+    if (!os) return null;
+    if (os === 'linux') return manifest.libc?.includes('musl') ? 'linuxmusl' : 'linux';
+    return os;
+}
+
 // The platforms a runner builds addons for that no package a family links brought a dist of: a port's
 // platform package carries one platform, a multi-platform library all of them.
 export function missingDists(root, projectPaths, platforms, pathOf) {
@@ -145,6 +153,30 @@ export function bridgeStateDigest(root, projectPaths) {
 
 export function changedBridgeState(before, after) {
     return [...new Set([...before.keys(), ...after.keys()])].filter((file) => before.get(file) !== after.get(file));
+}
+
+const MADE_BRIDGE = /^(.+)\/\.crossbind\/build\/(?:interface\/[^/]+\.i|bridge\/[^/]+\.i\.cpp(?:\.exports\.json)?)$/;
+
+// The bridges and interfaces the macOS addons made with bridge-tools that differ from the Linux job's for the same
+// projects: every addon of a package must bind the bridges its bindings were made from.
+export function differentBridges(linuxDir, macosDir, projects) {
+    const wanted = new Set(projects.map((project) => project.split(path.sep).join('/')));
+    const made = (dir) =>
+        new Map(
+            filesUnder(dir)
+                .map((file) => file.split(path.sep).join('/'))
+                .filter((file) => wanted.has(MADE_BRIDGE.exec(file)?.[1]))
+                .map((file) => [
+                    file,
+                    crypto
+                        .createHash('sha256')
+                        .update(fs.readFileSync(path.join(dir, file)))
+                        .digest('hex'),
+                ]),
+        );
+    const macos = made(macosDir);
+    const linux = made(linuxDir);
+    return [...new Set([...macos.keys(), ...linux.keys()])].filter((file) => macos.get(file) !== linux.get(file)).sort();
 }
 
 // The packages an addon links come from the tarballs the other runners packed, so it links exactly what

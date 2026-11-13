@@ -86,6 +86,29 @@ RUN set -eu; \
       [ -n "$(ls -A "/out/licenses/${name}")" ] || { echo "no license text in ${info}" >&2; exit 1; }; \
     done
 
+FROM os AS sccache
+
+# The compiler cache crossbind's builds go through when CROSSBIND_SCCACHE is set: mozilla/sccache's static musl build,
+# which runs on every image.
+ARG SCCACHE_VERSION=0.19.0
+ARG SCCACHE_SHA256_AMD64=aa73c7270c997894038c0d8f0d297865f57569e1687883322bc431713d4bb9dd
+ARG SCCACHE_SHA256_ARM64=3e47fc4a71b1ddd1b4294a0de9d34498922fdf41e3cd0bda5df3954e3d6deb9d
+ARG TARGETARCH
+RUN set -eu; \
+    case "${TARGETARCH}" in \
+        amd64) arch=x86_64; sha256="${SCCACHE_SHA256_AMD64}";; \
+        arm64) arch=aarch64; sha256="${SCCACHE_SHA256_ARM64}";; \
+        *) echo "sccache has no static build for ${TARGETARCH}" >&2; exit 1;; \
+    esac; \
+    name="sccache-v${SCCACHE_VERSION}-${arch}-unknown-linux-musl"; \
+    crossbind-download "https://github.com/mozilla/sccache/releases/download/v${SCCACHE_VERSION}/${name}.tar.gz" /tmp/sccache.tar.gz; \
+    echo "${sha256}  /tmp/sccache.tar.gz" | sha256sum -c -; \
+    tar -xzf /tmp/sccache.tar.gz -C /tmp; \
+    mkdir -p /out; \
+    install -m 755 "/tmp/${name}/sccache" /out/sccache; \
+    cp "/tmp/${name}/LICENSE" /out/sccache-LICENSE; \
+    test "$(/out/sccache --version)" = "sccache ${SCCACHE_VERSION}"
+
 FROM os AS base
 
 # Safe default for direct consumers. The CLI still overrides this with the host uid:gid so bind
@@ -143,6 +166,8 @@ RUN ln -s /opt/conan/bin/conan /usr/local/bin/conan && mkdir -p "${CONAN_HOME}" 
 COPY --from=swig /out/usr/local/bin/swig /usr/local/bin/swig
 COPY --from=swig /out/usr/local/share/swig /usr/local/share/swig
 
+COPY --from=sccache /out/sccache /usr/local/bin/sccache
+
 # Texts for what this layer redistributes; apt packages keep Debian's /usr/share/doc convention.
 COPY --from=node /usr/local/LICENSE /opt/licenses/node-LICENSE
 COPY --from=rust /usr/local/rustup/toolchains/*/share/doc/rust /opt/licenses/rust/
@@ -150,6 +175,7 @@ COPY --from=swig /out/licenses/LICENSE /opt/licenses/swig-LICENSE
 COPY --from=swig /out/licenses/LICENSE-GPL /opt/licenses/swig-LICENSE-GPL
 COPY --from=swig /out/licenses/LICENSE-UNIVERSITIES /opt/licenses/swig-LICENSE-UNIVERSITIES
 COPY --from=conan /out/licenses /opt/licenses/conan/
+COPY --from=sccache /out/sccache-LICENSE /opt/licenses/sccache-LICENSE
 COPY licenses-README.md /opt/licenses/README.md
 
 WORKDIR /

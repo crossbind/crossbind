@@ -26,6 +26,26 @@ export const EXEC_MAX_BUFFER = 512 * 1024 * 1024;
 // Containers share the memory of Docker's VM, and one compile at full -j can take most of a desktop VM
 // (GDAL's bindings peak at 7.5 of 7.7 GiB), so the exclusive steps of parallel builds take turns.
 const DOCKER_COMPILE_LOCK = path.join(os.homedir(), '.crossbind', 'docker-compile.lock');
+// With CROSSBIND_SCCACHE set, C and C++ compiles go through sccache, which its SCCACHE_* variables configure: CMake's
+// launchers reach every CMake project, EM_COMPILER_WRAPPER every emcc.
+const SCCACHE_LAUNCHERS = ['CMAKE_C_COMPILER_LAUNCHER', 'CMAKE_CXX_COMPILER_LAUNCHER', 'EM_COMPILER_WRAPPER'];
+const SCCACHE_SETTING = /^(SCCACHE_\w+|AWS_ACCESS_KEY_ID|AWS_SECRET_ACCESS_KEY|AWS_SESSION_TOKEN)$/;
+const SCCACHE_IN_IMAGE = 'command -v sccache >/dev/null || { echo "crossbind: CROSSBIND_SCCACHE needs toolchain images that carry sccache, '
+    + 'image family 1.0.21 or later." >&2; exit 1; }; ';
+// A docker run's sccache server ends with its container, so the command stops it first, which waits for the cache writes
+// it holds; a DOCKER_EXEC container's server serves the commands after it.
+const SCCACHE_IN_CONTAINER = {
+    DOCKER_RUN: `${SCCACHE_IN_IMAGE}"$0" "$@"; status=$?; sccache --stop-server >/dev/null 2>&1; exit $status`,
+    DOCKER_EXEC: `${SCCACHE_IN_IMAGE}exec "$0" "$@"`,
+};
+const isSccacheOn = () => /^(1|true)$/i.test(process.env.CROSSBIND_SCCACHE ?? '');
+const sccacheSettings = () => Object.keys(process.env).filter((key) => SCCACHE_SETTING.test(key)).sort();
+// Where a container finds a local sccache directory: a docker run mounts it here, a long-lived container sees the project.
+const SCCACHE_CONTAINER_DIR = '/tmp/crossbind/sccache';
+const isInside = (parent, child) => {
+    const relative = path.relative(parent, child);
+    return !relative.startsWith('..') && !path.isAbsolute(relative);
+};
 const envParams = (env) => Object.entries(env).flatMap(([variable, value]) => ['-e', `${variable}=${value}`]);
 const CROSSCOMPILER_ARM64 = `aarch64-linux-android${ANDROID_API_LEVEL}`;
 const CROSSCOMPILER_x86_64 = `x86_64-linux-android${ANDROID_API_LEVEL}`;
@@ -139,6 +159,15 @@ export default function run(program, params = [], platformPrefix = null, target 
         ? { runner: 'LOCAL' }
         : runnerFor(role, state.config.system);
     const isDocker = runner === 'DOCKER_RUN' || runner === 'DOCKER_EXEC';
+    const isSccache = isSccacheOn();
+    if (isSccache && runner === 'REMOTE') {
+        throw new Error('crossbind: CROSSBIND_SCCACHE works with the DOCKER_RUN, DOCKER_EXEC and LOCAL runners; a remote runner would need your '
+            + 'cache\'s keys. Unset it for a remote build.');
+    }
+    const sccacheDir = isSccache && isDocker ? process.env.SCCACHE_DIR : undefined;
+    if (sccacheDir && runner === 'DOCKER_EXEC' && !isInside(state.config.paths.base, sccacheDir)) {
+        throw new Error(`crossbind: a DOCKER_EXEC container reaches the project alone, so SCCACHE_DIR (${sccacheDir}) must sit inside ${state.config.paths.base}.`);
+    }
     const wasiHostSdk = target?.platform === 'wasi' ? resolveWasiSdkPath(state.config.system) : null;
     if (isDocker) {
         // Google ships the linux NDK for x86_64 only, so the android index carries no arm64 leaf;
@@ -212,10 +241,10 @@ export default function run(program, params = [], platformPrefix = null, target 
                 if (dProgram === 'cmake') {
                     platformParams = [];
                     if (dParams[0] !== '--build' && dParams[0] !== '--install') {
+                        // CMake's own iOS platform with Makefiles: the Xcode generator spent 40-55 s configuring even a
+                        // small project. Not the app host's toolchain file, whose searches find the Mac's own packages.
                         dParams = [
                             ...dParams,
-                            '-G',
-                            'Xcode',
                             '-DBUILD_SHARED_LIBS=OFF',
                             '-DFRAMEWORK=TRUE',
                             `-DCMAKE_OSX_DEPLOYMENT_TARGET=${IOS_DEPLOYMENT_TARGET}`,
@@ -227,6 +256,11 @@ export default function run(program, params = [], platformPrefix = null, target 
                             '-DCMAKE_SYSTEM_PROCESSOR=arm64',
                             `-DCMAKE_C_FLAGS=${target.arch === 'iphoneos' ? '-fembed-bitcode' : '-fembed-bitcode-marker'}`,
                             `-DCMAKE_CXX_FLAGS=${target.arch === 'iphoneos' ? '-fembed-bitcode' : '-fembed-bitcode-marker'}`,
+                            // The objects carry bitcode as before; a link, as of a configure check or a recipe's tests,
+                            // takes none, since Xcode's linker reads -fembed-bitcode-marker's mode as a file.
+                            '-DCMAKE_EXE_LINKER_FLAGS=-fembed-bitcode=off',
+                            '-DCMAKE_SHARED_LINKER_FLAGS=-fembed-bitcode=off',
+                            '-DCMAKE_MODULE_LINKER_FLAGS=-fembed-bitcode=off',
                             "-DCMAKE_XCODE_ATTRIBUTE_CODE_SIGN_IDENTITY='iPhone Developer'",
                             `-DCMAKE_XCODE_ATTRIBUTE_DEVELOPMENT_TEAM=${state.config.system.XCODE_DEVELOPMENT_TEAM}`,
                         ];
@@ -355,6 +389,17 @@ export default function run(program, params = [], platformPrefix = null, target 
     const containerOptions = { cwd: buildPath, stdio: dockerOptions.console ? 'inherit' : ['ignore', 'pipe', 'pipe'], maxBuffer: EXEC_MAX_BUFFER };
     let fileExecParams;
     if (runner === 'LOCAL') {
+        if (isSccache) {
+            // By its full path: a macOS build narrows the PATH below.
+            const sccache = findExecutable('sccache', process.env.PATH ?? '');
+            if (!sccache) throw new Error('crossbind: CROSSBIND_SCCACHE needs sccache on the PATH: install it with `brew install sccache`, or unset CROSSBIND_SCCACHE.');
+            SCCACHE_LAUNCHERS.forEach((key) => {
+                env[key] = sccache;
+            });
+            sccacheSettings().forEach((key) => {
+                env[key] = process.env[key];
+            });
+        }
         env.PATH = `/opt/homebrew/bin:${env.PATH}`;
         // A package's *-config script on the PATH (nc-config, sfcgal-config, ...) would compile that
         // package into the archives. cmake is the one host tool a darwin build takes from the PATH.
@@ -392,6 +437,11 @@ export default function run(program, params = [], platformPrefix = null, target 
         if (runner === 'DOCKER_RUN') {
             imageOrContainer = getDockerImage(role);
             runnerParams = ['run', '--rm', ...DOCKER_RUN_SECURITY_ARGS, '-v', `${state.config.paths.base}:/tmp/crossbind/live`];
+            if (sccacheDir) {
+                // Made here, as docker would make a missing one owned by root.
+                fs.mkdirSync(sccacheDir, { recursive: true });
+                runnerParams.push('-v', `${sccacheDir}:${SCCACHE_CONTAINER_DIR}`);
+            }
             if (target?.platform === 'android') {
                 // Google ships the linux NDK for x86_64 only; use the amd64 leaf ref (classic store holds one platform per digest).
                 pullDockerImage(role, 'linux/amd64');
@@ -403,6 +453,14 @@ export default function run(program, params = [], platformPrefix = null, target 
             runnerParams = ['exec'];
         }
 
+        // The settings go by name, docker taking their values from its own environment, so no key sits in the arguments.
+        const insideDir = sccacheDir && (runner === 'DOCKER_RUN' ? SCCACHE_CONTAINER_DIR : replaceBasePathForDocker(sccacheDir));
+        const sccache = isSccache ? [
+            ...SCCACHE_LAUNCHERS.flatMap((key) => ['-e', `${key}=sccache`]),
+            ...sccacheSettings().filter((key) => !(sccacheDir && key === 'SCCACHE_DIR')).flatMap((key) => ['-e', key]),
+            ...(sccacheDir ? ['-e', `SCCACHE_DIR=${insideDir}`] : []),
+        ] : [];
+        const command = isSccache ? ['sh', '-c', SCCACHE_IN_CONTAINER[runner], dProgram, ...dParams] : [dProgram, ...dParams];
         const args = [
             ...runnerParams,
             '--user',
@@ -410,10 +468,9 @@ export default function run(program, params = [], platformPrefix = null, target 
             '--workdir',
             replaceBasePathForDocker(dockerOptions.workdir || buildPath),
             ...replaceBasePathForDocker(dockerEnv),
-            // '-e', replaceBasePathForDocker(`CCACHE_DIR=${state.config.paths.build}/ccache`),
+            ...sccache,
             imageOrContainer,
-            replaceBasePathForDocker(dProgram),
-            ...replaceBasePathForDocker(dParams),
+            ...replaceBasePathForDocker(command),
         ];
         fileExecParams = ['docker', args, options];
     }

@@ -1,0 +1,39 @@
+name: tested tree
+on:
+    workflow_call:
+        inputs:
+            workflow:
+                description: The calling workflow's file name.
+                required: true
+                type: string
+        outputs:
+            tested:
+                description: "'true' when the pull request merged as this push passed the calling workflow on the same tree."
+                value: ${{ jobs.check.outputs.tested }}
+
+permissions: {}
+jobs:
+    check:
+        runs-on: ubuntu-latest
+        timeout-minutes: 5
+        permissions:
+            actions: read
+            contents: read
+            pull-requests: read
+        outputs:
+            tested: ${{ steps.check.outputs.tested }}
+        # The job runs on every event, as a skipped job would skip every job after it; only a push asks GitHub.
+        steps:
+            - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+              if: github.event_name == 'push'
+              with:
+                  sparse-checkout: |
+                      scripts/ci
+                      .github/workflows
+            - name: Look for a successful run of the same tree in the merged pull request
+              if: github.event_name == 'push'
+              id: check
+              env:
+                  GH_TOKEN: ${{ github.token }}
+                  WORKFLOW: ${{ inputs.workflow }}
+              run: node scripts/ci/tested-tree.mjs --workflow "$WORKFLOW"

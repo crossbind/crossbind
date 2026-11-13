@@ -104,7 +104,8 @@
         "test:watch": "pnpm --filter crossbind test:watch",
         "test:coverage": "pnpm --filter crossbind test:coverage",
         "test:site": "node --test scripts/site/test/*.test.mjs",
-        "check:site": "pnpm run test:site && eslint scripts/site && prettier --check scripts/site"
+        "check:site": "pnpm run test:site && eslint scripts/site && prettier --check scripts/site",
+        "check:ci": "node --test scripts/ci/test/*.test.mjs && eslint scripts/ci && prettier --check scripts/ci .github/workflows/tested-tree.yml"
     },
     "devDependencies": {
         "crossbind": "workspace:^",

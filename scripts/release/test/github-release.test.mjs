@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
-import { ensureGitHubRelease, ensureGitTag, GitHubCliRelease } from '../github-release.mjs';
+import { ensureGitHubRelease, ensureGitTag, ensureGitTags, GitHubCliRelease, GitRemoteTags } from '../github-release.mjs';
 
 const TAG = 'crossbind@1.0.0-beta.41';
 const COMMIT = '1234567890abcdef1234567890abcdef12345678';
@@ -236,4 +236,95 @@ test('tag lookup and creation call gh with the exact api arguments', async () =>
         '-f',
         `sha=${COMMIT}`,
     ]);
+});
+
+function remote(tags) {
+    const pushes = [];
+    return {
+        pushes,
+        list: async () => new Map(tags),
+        push: async (names, commit) => {
+            pushes.push(names);
+            for (const name of names) tags.set(name, commit);
+        },
+    };
+}
+
+test('ensureGitTags pushes only the missing tags at the commit, 64 to a push, and reads them back', async () => {
+    const names = Array.from({ length: 130 }, (_, index) => `@crossbind/port-${index}@1.0.0-beta.41`);
+    const git = remote(new Map([[names[0], COMMIT]]));
+    const outcome = await ensureGitTags({ git, tags: names, commit: COMMIT, apply: true, log: () => {} });
+    assert.deepEqual(outcome, { reused: 1, created: 129 });
+    assert.deepEqual(
+        git.pushes.map((push) => push.length),
+        [64, 64, 1],
+    );
+    assert.ok(!git.pushes.flat().includes(names[0]));
+});
+
+test('ensureGitTags refuses before pushing anything when a tag points to another commit', async () => {
+    const git = remote(new Map([[TAG, 'a'.repeat(40)]]));
+    await assert.rejects(ensureGitTags({ git, tags: ['crossbind@other', TAG], commit: COMMIT, apply: true, log: () => {} }), /refusing to move/i);
+    assert.equal(git.pushes.length, 0);
+});
+
+test('ensureGitTags without apply creates nothing', async () => {
+    const git = remote(new Map());
+    assert.deepEqual(await ensureGitTags({ git, tags: [TAG], commit: COMMIT, log: () => {} }), { reused: 0, created: 0 });
+    assert.equal(git.pushes.length, 0);
+});
+
+test('ensureGitTags reads pushed tags back until they show and fails on one that never settles', async () => {
+    const tags = new Map();
+    let reads = 0;
+    const late = {
+        list: async () => {
+            reads += 1;
+            return reads >= 3 ? new Map(tags) : new Map();
+        },
+        push: async (names, commit) => names.forEach((name) => tags.set(name, commit)),
+    };
+    assert.deepEqual(await ensureGitTags({ git: late, tags: [TAG], commit: COMMIT, apply: true, log: () => {}, sleep: async () => {} }), {
+        reused: 0,
+        created: 1,
+    });
+
+    const lost = { list: async () => new Map(), push: async () => {} };
+    await assert.rejects(
+        ensureGitTags({ git: lost, tags: [TAG], commit: COMMIT, apply: true, log: () => {}, sleep: async () => {} }),
+        /settled at \(absent\)/,
+    );
+});
+
+test('GitRemoteTags reads every tag of the remote at its commit, the peeled one for an annotated tag', async () => {
+    const git = new GitRemoteTags({ cwd: os.tmpdir() });
+    const annotated = 'b'.repeat(40);
+    git.run = async (args) => {
+        assert.deepEqual(args, ['ls-remote', '--tags', 'origin']);
+        return [`${COMMIT}\trefs/tags/${TAG}`, `${annotated}\trefs/tags/v1`, `${'c'.repeat(40)}\trefs/tags/v1^{}`, ''].join('\n');
+    };
+    assert.deepEqual(
+        await git.list(),
+        new Map([
+            [TAG, COMMIT],
+            ['v1', 'c'.repeat(40)],
+        ]),
+    );
+});
+
+test('a tag git already holds but the API does not show yet is read back, not created a second time', async () => {
+    let reads = 0;
+    const github = {
+        tagCommit: async () => {
+            reads += 1;
+            return reads >= 3 ? COMMIT : null;
+        },
+        createTag: async () => {
+            throw new Error('gh api --method POST repos/crossbind/crossbind/git/refs failed: gh: Reference already exists (HTTP 422)');
+        },
+    };
+    assert.equal(await ensureGitTag({ github, tag: TAG, commit: COMMIT, apply: true, log: () => {}, sleep: async () => {} }), 'created');
+
+    const failing = { tagCommit: async () => null, createTag: async () => Promise.reject(new Error('HTTP 403')) };
+    await assert.rejects(ensureGitTag({ github: failing, tag: TAG, commit: COMMIT, apply: true, log: () => {}, sleep: async () => {} }), /HTTP 403/);
 });

@@ -251,6 +251,20 @@ function topologicalOrder(packages, selectedNames) {
     return result;
 }
 
+// The train in levels: a package's level is one above the highest of the train packages it depends on, so a level may
+// publish all at once once the ones before it have.
+export function publishLevels(plan) {
+    const byName = new Map(plan.packages.map((candidate) => [candidate.name, candidate]));
+    const levelOf = new Map();
+    for (const name of plan.publishOrder) {
+        const dependencies = byName.get(name).publishLocalDependencies.filter((dependency) => levelOf.has(dependency));
+        levelOf.set(name, dependencies.length ? Math.max(...dependencies.map((dependency) => levelOf.get(dependency))) + 1 : 0);
+    }
+    const levels = [];
+    for (const name of plan.publishOrder) (levels[levelOf.get(name)] ??= []).push(name);
+    return levels;
+}
+
 function dependencyClosure(packages, candidateNames, { publish = false } = {}) {
     const byName = new Map(packages.map((candidate) => [candidate.name, candidate]));
     const closure = new Set(candidateNames);

@@ -11,8 +11,8 @@ on:
 permissions:
     contents: read
 concurrency:
-    # A new push to a pull request supersedes its running checks; a main commit keeps its own run.
-    group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
+    # A newer push to the same pull request or branch supersedes the running checks.
+    group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
     cancel-in-progress: true
 jobs:
     # No path filter: the gate reads docs/, ports/, agents/, landing/src and the root

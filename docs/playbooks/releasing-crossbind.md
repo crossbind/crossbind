@@ -102,15 +102,15 @@ The protected job downloads those same bytes and calls npm directly for each pac
 npm publish <exact-tarball.tgz> --tag <beta|next|latest> --access public --provenance
 ```
 
-It publishes in dependency order. `crossbind` has no local runtime dependencies and receives
-explicit first priority whenever it is part of the train, so packages depending on it never race
-ahead. Once the packages are published, the workflow polls each one's exact version and expected
-dist-tag, checks the registry SHA-512 and validates the signed SLSA provenance subject, repository,
+It publishes in dependency order: the first package alone, then each dependency level eight at a time. `crossbind` has
+no local runtime dependencies and receives explicit first priority whenever it is part of the train,
+so packages depending on it never race ahead. Once the packages are published, the workflow polls
+each one's exact version and expected dist-tag, sixteen at a time, checks the registry SHA-512 and validates the signed SLSA provenance subject, repository,
 workflow and release commit. There are at most 122 attempts over at most an hour per package, with
 backoff from five to 30 seconds. A previous beta/RC does not count as success.
 
-Only after every npm artifact and provenance statement verifies does the workflow create missing
-exact package tags such as:
+Only after every npm artifact and provenance statement verifies does the workflow push the missing
+exact package tags, 64 to a `git push --atomic`, such as:
 
 ```text
 crossbind@2.0.0-beta.54

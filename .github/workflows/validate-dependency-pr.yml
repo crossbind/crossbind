@@ -94,6 +94,9 @@ jobs:
             max-parallel: 2
             matrix: ${{ fromJSON(needs.changes.outputs.macos_groups) }}
         runs-on: macos-15
+        permissions:
+            contents: read
+            actions: read
         steps:
             - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
               with:
@@ -104,11 +107,22 @@ jobs:
                   node-version-file: .nvmrc
                   cache: pnpm
             - run: pnpm install --frozen-lockfile
+            - name: Set up the compiler cache, from what the last release left
+              uses: ./.github/actions/setup-sccache
+              with:
+                  dir: ${{ runner.temp }}/sccache
+                  size: 4G
+                  artifact: release-sccache-macos
+                  token: ${{ github.token }}
             - name: Build each package of the changed native families once for one target group, then pack them
               env:
                   FAMILIES: ${{ needs.changes.outputs.families }}
                   GROUP: ${{ matrix.group }}
               run: node scripts/dependencies/validate-native-family.mjs --families "$FAMILIES" --platform macos --group "$GROUP"
+            # sccache finishes the cache writes it still holds as it stops.
+            - name: Stop the compiler cache
+              if: ${{ always() && env.CROSSBIND_SCCACHE == '1' }}
+              run: sccache --stop-server || echo "No sccache server ran in this job."
 
     toolchain:
         needs: changes
