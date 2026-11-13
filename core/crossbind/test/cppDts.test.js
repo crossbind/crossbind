@@ -158,6 +158,24 @@ public:
 });
 
 describe('emitCppDts', () => {
+    test('types the module initNative resolves to and says when its values are usable', () => {
+        const dts = emitCppDts(parseCppSurface('class P { public: int id(); };', () => {}), ['P']);
+
+        expect(dts).toContain('Values are usable after initNative() resolves.');
+        expect(dts).toContain('export interface CppVector<T> {');
+        expect(dts).toContain('export interface NativeModule {');
+        expect(dts).toContain('    P: typeof P;');
+        expect(dts).toContain('    toVector<T>(classOrName: unknown, array?: T[]): CppVector<T>;');
+        expect(dts).toContain('export declare function initNative(config?: Record<string, unknown>): Promise<NativeModule>;');
+    });
+
+    test('promise mode wraps the module helpers too', () => {
+        const dts = emitCppDts(parseCppSurface('class P { public: int id(); };', () => {}), ['P'], 'promise');
+
+        expect(dts).toContain('    toVector<T>(classOrName: unknown, array?: T[]): Promise<CppVector<T>>;');
+        expect(dts).toContain('    toArray<T>(vector: CppVector<T> | T[]): Promise<T[]>;');
+    });
+
     test('emits typed classes, any-fallbacks for unparsed exports, and the module tail', () => {
         const model = parseCppSurface(HEADER, () => {});
         const dts = emitCppDts(model, ['Matrix', 'Untouchable', 'VectorMatrix']);
@@ -192,8 +210,10 @@ describe('emitCppDts', () => {
         expect(dts).toContain('get(i: number): number;');
     });
 
-    test('omits the CppVector interface when no vector crosses the surface', () => {
+    // The module's toVector and toArray take and give vectors on every runtime, whatever the surface uses.
+    test('declares the CppVector interface for the module helpers when no vector crosses the surface', () => {
         const dts = emitCppDts(parseCppSurface('class P { public: int id(); };', () => {}), ['P']);
-        expect(dts).not.toContain('CppVector');
+        expect(dts).toContain('export interface CppVector<T> {');
+        expect(dts.slice(dts.indexOf('export declare class P'), dts.indexOf('export declare let'))).not.toContain('CppVector');
     });
 });

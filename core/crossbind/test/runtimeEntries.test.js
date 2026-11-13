@@ -133,7 +133,8 @@ describe('writeRuntimeEntry', () => {
         expect(read('node/napi.d.mts')).toContain('export declare class Matrix {');
         expect(read('node/napi.d.mts')).toContain('    get(i: number): number;');
         expect(read('node/napi.d.mts')).toContain('export declare const compressBound: any;');
-        expect(read('node/napi.d.mts')).toContain('export declare function initNative(config?: Record<string, unknown>): Promise<unknown>;');
+        expect(read('node/napi.d.mts')).toContain('    Matrix: typeof Matrix;');
+        expect(read('node/napi.d.mts')).toContain('export declare function initNative(config?: Record<string, unknown>): Promise<NativeModule>;');
     });
 
     test('declares a class two headers both bind once', () => {
