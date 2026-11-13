@@ -172,7 +172,6 @@ export default {
         ...(platformCmake[target.platform] || []),
         '-DBUILD_APPS=OFF', '-DBUILD_TESTING=OFF', '-DACCEPT_MISSING_SQLITE3_MUTEX_ALLOC=ON',
         '-DOGR_ENABLE_DRIVER_GPSBABEL=OFF', '-DGDAL_USE_HDF5=OFF', '-DGDAL_USE_HDFS=OFF',
-        '-DGDAL_ENABLE_DRIVER_PDS=OFF',
         '-DGDAL_USE_OPENMP=OFF',
         ...ifDep(depPaths.sqlite3, (d) => [`-DSQLite3_INCLUDE_DIR=${d.header}`, `-DSQLite3_LIBRARY=${d.lib}`]),
         ...ifDep(depPaths.proj, (d) => [`-DPROJ_INCLUDE_DIR=${d.header}`, `-DPROJ_LIBRARY_RELEASE=${d.lib}`]),
