@@ -23,6 +23,8 @@
     ],
     "crossbind": {
         "upstream": {
+            "name": "openssl",
+            "cpe": "openssl:openssl",
             "license": {
                 "declared": "Apache-2.0",
                 "selected": null,

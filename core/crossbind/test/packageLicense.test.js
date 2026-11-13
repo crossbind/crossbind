@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import {
-    lgplRows, nodePackageLicense, nodePackageMeta, setManifestLicense, writeNodePackageLicense,
+    lgplRows, nodePackageLicense, nodePackageMeta, setManifestLicense, shippedRows, writeNodePackageLicense,
 } from '../src/utils/packageLicense.js';
 
 const row = (name, license, extra = {}) => ({
@@ -41,6 +41,20 @@ afterEach(() => {
 });
 
 describe('nodePackageLicense', () => {
+    test('takes the source tag from the format the project gives', () => {
+        const { text } = nodePackageLicense({ ...addon, sourceTag: 'v{version}', rows: gdalRows });
+
+        expect(text).toContain('at the tag v2.0.0-beta.63:\n   https://github.com/crossbind/crossbind/tree/v2.0.0-beta.63');
+    });
+
+    test('links the override playbook where it lives and builds what the addon links first', () => {
+        const { text } = nodePackageLicense({ ...addon, rows: gdalRows });
+
+        expect(text).toContain('(https://github.com/crossbind/crossbind/blob/main/docs/playbooks/override-dependencies.md)');
+        expect(text).not.toContain('in that repository');
+        expect(text).toContain('Build the packages the addon links first, as their dist/ folders are not in git');
+    });
+
     test('the LGPL rows are the libraries the LGPL may cover, not every copyleft alternative', () => {
         expect(lgplRows(gdalRows).map((entry) => entry.name)).toEqual(['geos', 'iconv', 'spatialite']);
     });
@@ -127,13 +141,18 @@ describe('writeNodePackageLicense', () => {
 describe('nodePackageMeta', () => {
     const paths = { base: '/repo', project: '/repo/ports/gdal/standalone-napi-linux-x64' };
 
+    test("reads the source tag format of the project's licenses option", () => {
+        expect(nodePackageMeta({ package: { name: 'x', version: '1.0.0' }, paths, licenses: { sourceTag: 'v{version}' } }))
+            .toMatchObject({ sourceTag: 'v{version}' });
+    });
+
     test('names the addon an addon package\'s own build writes', () => {
         const manifest = {
             name: addon.name, version: addon.version, repository: addon.repository, os: ['linux'], main: 'dist/gdal-standalone-napi.linux-x64.node',
         };
 
         expect(nodePackageMeta({ package: manifest, paths })).toEqual({
-            name: addon.name, version: addon.version, repository: addon.repository, projectPath: addon.projectPath, addonFile: addon.addonFile,
+            name: addon.name, version: addon.version, repository: addon.repository, projectPath: addon.projectPath, addonFile: addon.addonFile, sourceTag: null,
         });
     });
 
@@ -142,5 +161,22 @@ describe('nodePackageMeta', () => {
 
         expect(nodePackageMeta({ package: manifest, paths: { base: '/repo', project: '/repo/ports/gdal/standalone-napi' } }))
             .toMatchObject({ repository: addon.repository, projectPath: 'ports/gdal/standalone-napi', addonFile: null });
+    });
+});
+
+describe('shippedRows', () => {
+    const rows = [
+        { name: 'crossbind', isRuntime: true },
+        { name: 'gdal3js', isPort: false },
+        { name: 'gdal', isPort: true, shipsData: true },
+        { name: 'geos', isPort: true, shipsData: false },
+    ];
+
+    test('an addon package covers every component its addon links', () => {
+        expect(shippedRows(rows, { addonFile: 'dist/x.node' })).toHaveLength(4);
+    });
+
+    test("a package without an addon covers the runtime, the project's code and the data it ships", () => {
+        expect(shippedRows(rows, { addonFile: null }).map((row) => row.name)).toEqual(['crossbind', 'gdal3js', 'gdal']);
     });
 });

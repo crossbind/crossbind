@@ -22,6 +22,8 @@
     ],
     "crossbind": {
         "upstream": {
+            "name": "geos",
+            "cpe": "osgeo:geos",
             "license": {
                 "declared": "LGPL-2.1-only",
                 "selected": null,

@@ -22,6 +22,8 @@
     ],
     "crossbind": {
         "upstream": {
+            "name": "libiconv",
+            "cpe": "gnu:libiconv",
             "license": {
                 "declared": "LGPL-2.1-or-later",
                 "selected": null,

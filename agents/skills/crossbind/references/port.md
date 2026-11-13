@@ -63,6 +63,7 @@ The family recipe lives once in `base/build.mjs`. Each platform variant reuses i
 - Name it `@crossbind/port-<name>`.
 - Pin `nativeVersion` to the upstream stable release.
 - Declare `crossbind.upstream.license` according to `ports/README.md`.
+- Give `crossbind.upstream.name` the upstream project's own name, and `cpe` its NVD `vendor:product` when the dictionary lists one.
 - Keep family metadata here instead of duplicating it across variants.
 
 ### Platform-variant `package.json`

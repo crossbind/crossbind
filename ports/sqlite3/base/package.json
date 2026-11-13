@@ -23,6 +23,8 @@
     ],
     "crossbind": {
         "upstream": {
+            "name": "sqlite",
+            "cpe": "sqlite:sqlite",
             "license": {
                 "declared": "blessing",
                 "selected": null,

@@ -53,6 +53,30 @@ describe('formatNoticesMarkdown', () => {
         ...overrides,
     });
 
+    test('states what it is without internal names', () => {
+        const markdown = formatNoticesMarkdown([row()]);
+
+        expect(markdown).not.toContain('contract');
+        expect(markdown).toContain('not legal advice');
+    });
+
+    test('tells how to build the module again when it links an LGPL library', () => {
+        const meta = {
+            name: '@gdal3.js/standalone-wasm', version: '3.0.0', repository: 'https://github.com/bugra9/gdal3.js.git', projectPath: 'packages/standalone-wasm', sourceTag: 'v{version}',
+        };
+        const markdown = formatNoticesMarkdown([row(), row({ name: 'geos', license: 'LGPL-2.1-only', isCopyleft: true })], meta);
+
+        expect(markdown).toContain('## Relinking the LGPL libraries');
+        expect(markdown).toContain('This module links geos statically');
+        expect(markdown).toContain('https://github.com/bugra9/gdal3.js/tree/v3.0.0');
+        expect(markdown).toContain('packages/standalone-wasm/dist');
+    });
+
+    test('adds no relinking steps without an LGPL library or without the package that publishes the module', () => {
+        expect(formatNoticesMarkdown([row()], { name: 'x', version: '1', repository: 'https://example.org/x.git', projectPath: 'x' })).not.toContain('Relinking');
+        expect(formatNoticesMarkdown([row({ name: 'geos', license: 'LGPL-2.1-only' })])).not.toContain('Relinking');
+    });
+
     test('renders a section per dependency, sorted by name, with metadata', () => {
         const markdown = formatNoticesMarkdown([row({ name: 'z' }), row({ name: 'geos', license: 'LGPL-2.1-or-later', isCopyleft: true })]);
 
@@ -106,6 +130,18 @@ describe('formatCycloneDxSbom', () => {
         sha256: 'abc123',
         sourceUrl: 'https://zlib.net/zlib-1.3.2.tar.gz',
         ...overrides,
+    });
+
+    test('names a component by its upstream identity, with its CPE and the package version when no native one is known', () => {
+        const sbom = JSON.parse(formatCycloneDxSbom([
+            row({ name: 'zlib', cpe: 'cpe:2.3:a:zlib:zlib:1.3.2:*:*:*:*:*:*:*' }),
+            row({ name: 'gdal3js', nativeVersion: null, version: '3.0.0-beta.10', license: 'MIT' }),
+        ]));
+        const byName = Object.fromEntries(sbom.components.map((component) => [component.name, component]));
+
+        expect(byName.zlib).toMatchObject({ purl: 'pkg:generic/zlib@1.3.2', cpe: 'cpe:2.3:a:zlib:zlib:1.3.2:*:*:*:*:*:*:*' });
+        expect(byName.gdal3js).toMatchObject({ version: '3.0.0-beta.10', purl: 'pkg:generic/gdal3js@3.0.0-beta.10' });
+        expect(byName.gdal3js.cpe).toBeUndefined();
     });
 
     test('emits deterministic CycloneDX with purl, hash, license expression', () => {

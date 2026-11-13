@@ -21,6 +21,8 @@
     ],
     "crossbind": {
         "upstream": {
+            "name": "expat",
+            "cpe": "libexpat_project:libexpat",
             "license": {
                 "declared": "MIT",
                 "selected": null,

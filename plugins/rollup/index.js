@@ -3,7 +3,7 @@
 import {
     state, createLib, createBridgeFile, buildWasm, getCrossbindScript, getRustJsScript, buildDependencies,
     getDependFilePath, getTargetParams, getFilteredBuildTargets, isSourceNewer, appSourceFiles, buildProjectApp, publishApp,
-    appOutputName, appTargetParams, checkInstaller, findAppPageApi, isAppBuild, resolveAppPageApi, shipApp,
+    appOutputName, appTargetParams, checkInstaller, findAppPageApi, isAppBuild, resolveAppPageApi, shipApp, pageLicensesAsset,
 } from 'crossbind';
 
 import fs from 'node:fs';
@@ -38,12 +38,21 @@ const rollupCrossbindPlugin = (options, bridges = []) => {
     const moduleRegex = new RegExp(`\\.(${state.config.ext.module.join('|')})$`);
     // Vite gives the base it serves the app from; plain Rollup has none.
     let base = '/';
+    // What the names of the files Vite's assets came from are relative to.
+    let root = process.cwd();
     let isServe = false;
+
+    // A page that reads its licenses with crossbind/licenses finds them beside it.
+    async function emitLicenses(context, bundle, runtimeEnv) {
+        const asset = await pageLicensesAsset(bundle, { root, platform: buildTargetRelease.platform, runtimeEnv });
+        if (asset) context.emitFile({ type: 'asset', ...asset });
+    }
 
     return {
         name: 'rollup-plugin-crossbind',
         configResolved(config) {
             base = config.base;
+            root = config.root;
             isServe = config.command === 'serve';
         },
         resolveId(source) {
@@ -114,7 +123,7 @@ const rollupCrossbindPlugin = (options, bridges = []) => {
                 }
             });
         },
-        async generateBundle() {
+        async generateBundle(_, bundle) {
             if (isApp) {
                 for (const target of appTargets) await buildProjectApp(target);
                 this.emitFile({
@@ -122,6 +131,7 @@ const rollupCrossbindPlugin = (options, bridges = []) => {
                     source: fs.readFileSync(`${state.config.paths.build}/${buildTargetRelease.appJsName}`),
                     fileName: 'crossbind.js',
                 });
+                await emitLicenses(this, bundle, 'app');
                 return;
             }
             const force = isSourceNewer(buildTargetRelease);
@@ -151,6 +161,7 @@ const rollupCrossbindPlugin = (options, bridges = []) => {
                     fileName: 'crossbind.data.txt',
                 });
             }
+            await emitLicenses(this, bundle, null);
             /* const workerFilePath = `${state.config.paths.build}/${state.config.general.name}.js`;
             if (fs.existsSync(workerFilePath)) {
                 this.emitFile({

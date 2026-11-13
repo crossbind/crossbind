@@ -21,6 +21,8 @@
     ],
     "crossbind": {
         "upstream": {
+            "name": "zlib",
+            "cpe": "zlib:zlib",
             "license": {
                 "declared": "Zlib",
                 "selected": null,

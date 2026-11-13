@@ -112,7 +112,7 @@ describe('collectLicenseRows', () => {
 
         const rows = await collectLicenseRows('wasm');
 
-        expect(rows.map((row) => row.name)).toEqual(['zlib']);
+        expect(rows.map((row) => row.name)).toEqual(['crossbind', 'emscripten', 'llvm-runtimes', 'zlib']);
         expect(fs.existsSync(marker)).toBe(false);
         fs.rmSync(project, { recursive: true, force: true });
     });
@@ -432,5 +432,120 @@ describe('collectLicenseRows for a Node-API addon', () => {
         const rows = await collectLicenseRows(null, { runtimeEnv: 'node' });
 
         expect(rows.map((row) => row.name)).toEqual(['crossbind', 'emscripten-embind']);
+    });
+});
+
+describe('collectLicenseRows across variants and for a published module', () => {
+    beforeEach(() => {
+        state.config = { allDependencies: [] };
+        state.targets = [];
+    });
+
+    const variant = (platform, project) => ({
+        general: { name: 'demo', alias: { package: '@crossbind/port-demo' } },
+        paths: { project },
+        package: { name: `@crossbind/port-demo-${platform}`, version: '1.0.0', license: 'MIT' },
+        functions: { isEnabled: (target) => target.platform === platform },
+    });
+
+    test('names the package of the platform it reports, whichever variant comes first', async () => {
+        const project = fs.mkdtempSync(path.join(os.tmpdir(), 'crossbind-variant-license-'));
+        state.config = { allDependencies: [variant('darwin', project), variant('linux', project)] };
+        state.targets = [{ platform: 'linux', path: 'linux-x64-mt-release' }];
+
+        const [row] = (await collectLicenseRows('linux')).filter((entry) => entry.name === 'demo');
+
+        expect(row.npmName).toBe('@crossbind/port-demo-linux');
+        fs.rmSync(project, { recursive: true, force: true });
+    });
+
+    test("lists what a wasm module links and its glue bundles: Emscripten's libraries, LLVM's C++ runtime and crossbind's runtime", async () => {
+        const rows = await collectLicenseRows('wasm');
+
+        expect(rows.map((row) => row.name)).toEqual(['crossbind', 'emscripten', 'llvm-runtimes']);
+        expect(rows.map((row) => row.license)).toEqual(['MIT', 'MIT OR NCSA', 'Apache-2.0 WITH LLVM-exception']);
+        expect(rows[0]).toMatchObject({ isRuntime: true, licenseText: expect.stringContaining('MIT License') });
+        rows.forEach((row) => expect(validateSpdx(row.license).isValid).toBe(true));
+    });
+
+    test("gives the project's own row the license of the package its alias names, not the expression it publishes", async () => {
+        const project = fs.mkdtempSync(path.join(os.tmpdir(), 'crossbind-own-license-'));
+        const core = path.join(project, 'node_modules', 'demo-core');
+        fs.mkdirSync(core, { recursive: true });
+        fs.writeFileSync(path.join(core, 'package.json'), JSON.stringify({ name: 'demo-core', license: 'MIT' }));
+        fs.writeFileSync(path.join(core, 'LICENSE'), 'MIT License of the core');
+        fs.writeFileSync(path.join(project, 'LICENSE'), 'license of the published module');
+        state.config = {
+            general: { name: 'demo', alias: { package: 'demo-core' } },
+            paths: { project },
+            package: { name: '@demo/standalone', version: '1.0.0', license: 'LGPL-2.1-only AND MIT' },
+            allDependencies: [],
+        };
+
+        const [row] = await collectLicenseRows();
+
+        expect(row).toMatchObject({ name: 'demo', license: 'MIT', isPort: false });
+        expect(row.licenseText).toContain('MIT License of the core');
+        fs.rmSync(project, { recursive: true, force: true });
+    });
+
+    test('marks the libraries whose data the packages that ship the module carry', async () => {
+        const project = fs.mkdtempSync(path.join(os.tmpdir(), 'crossbind-data-license-'));
+        state.config = {
+            allDependencies: [{
+                general: { name: 'proj' },
+                paths: { project },
+                package: { name: '@crossbind/port-proj-wasm', version: '1.0.0', license: 'MIT' },
+                targetSpecs: [{ specs: { data: { 'share/proj': 'proj' } } }],
+            }, {
+                general: { name: 'geos' },
+                paths: { project },
+                package: { name: '@crossbind/port-geos-wasm', version: '1.0.0', license: 'LGPL-2.1-only' },
+                targetSpecs: [{ specs: { env: { A: '1' } } }],
+            }],
+        };
+
+        const rows = await collectLicenseRows();
+
+        expect(Object.fromEntries(rows.map((row) => [row.name, row.shipsData]))).toEqual({ geos: false, proj: true });
+        fs.rmSync(project, { recursive: true, force: true });
+    });
+});
+
+describe('collectLicenseRows upstream identity', () => {
+    beforeEach(() => {
+        state.config = { allDependencies: [] };
+        state.targets = [];
+    });
+
+    test("names a port by its upstream project, with the CPE its family declares, and a project's own code by its repository", async () => {
+        const project = fs.mkdtempSync(path.join(os.tmpdir(), 'crossbind-identity-license-'));
+        const familyDir = path.join(project, 'node_modules', '@crossbind', 'port-zlib');
+        fs.mkdirSync(familyDir, { recursive: true });
+        fs.writeFileSync(path.join(familyDir, 'package.json'), JSON.stringify({
+            name: '@crossbind/port-zlib',
+            crossbind: { upstream: { name: 'zlib', cpe: 'zlib:zlib', license: { declared: 'Zlib', selected: null, files: ['LICENSE'] } } },
+        }));
+        fs.writeFileSync(path.join(project, 'LICENSE'), 'zlib license text');
+        const library = path.join(project, 'library');
+        fs.mkdirSync(library);
+        fs.writeFileSync(path.join(library, 'LICENSE'), 'MIT License of the library');
+        state.config = {
+            allDependencies: [{
+                general: { name: 'z', alias: { package: '@crossbind/port-zlib' } },
+                paths: { project },
+                package: { name: '@crossbind/port-zlib-wasm', version: '2.0.0', nativeVersion: '1.4' },
+            }, {
+                general: { name: 'demo-lib' },
+                paths: { project: library },
+                package: { name: 'demo-lib', version: '1.2.0', license: 'MIT', homepage: 'https://demo.example', repository: 'git+https://github.com/demo/lib.git' },
+            }],
+        };
+
+        const rows = Object.fromEntries((await collectLicenseRows()).map((row) => [row.name, row]));
+
+        expect(rows.zlib).toMatchObject({ cpe: 'cpe:2.3:a:zlib:zlib:1.4:*:*:*:*:*:*:*', nativeVersion: '1.4' });
+        expect(rows['demo-lib'].sourceUrl).toBe('https://github.com/demo/lib');
+        fs.rmSync(project, { recursive: true, force: true });
     });
 });

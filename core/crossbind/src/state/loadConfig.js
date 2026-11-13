@@ -146,12 +146,17 @@ export function getFilledConfig(config, options = { isDepend: false }) {
         app: config.app || {},
         // What an app's host builds in beside its own extensions.
         extensions: config.extensions || [],
+        // The license files crossbind licenses writes: sourceTag is the git tag a published package's source is at.
+        licenses: config.licenses || {},
         package: null,
         functions: config.functions || {},
     };
 
     if (!['sync', 'promise'].includes(newConfig.dts)) {
         throw new Error(`crossbind: "dts" must be 'sync' or 'promise' (got '${newConfig.dts}').`);
+    }
+    if (newConfig.licenses.sourceTag !== undefined && typeof newConfig.licenses.sourceTag !== 'string') {
+        throw new Error(`crossbind: "licenses.sourceTag" must be a string such as 'v{version}' (got '${newConfig.licenses.sourceTag}').`);
     }
     if (typeof newConfig.types !== 'boolean') {
         throw new Error(`crossbind: "types" must be true or false (got '${newConfig.types}').`);

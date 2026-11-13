@@ -21,6 +21,8 @@
     ],
     "crossbind": {
         "upstream": {
+            "name": "libtiff",
+            "cpe": "libtiff:libtiff",
             "license": {
                 "declared": "libtiff",
                 "selected": null,

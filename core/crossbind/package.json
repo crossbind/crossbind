@@ -24,6 +24,10 @@
             "types": "./src/app/index.d.ts",
             "default": "./src/app/index.js"
         },
+        "./licenses": {
+            "types": "./src/licenses/index.d.ts",
+            "default": "./src/licenses/index.js"
+        },
         "./*": "./*"
     },
     "scripts": {

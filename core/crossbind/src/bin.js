@@ -48,9 +48,9 @@ import { cargoHome } from './utils/runCargo.js';
 import { containerRootOf, sourceRoot } from './utils/runPackageSource.js';
 import { importSchemesOf, sourceNamesOf } from './utils/packageSources.js';
 import { cleanDepsCache } from './utils/dependencyRebuild.js';
-import collectLicenseRows from './actions/licenses.js';
+import collectLicenseRows, { vendoringLibraries } from './actions/licenses.js';
 import { formatNoticesMarkdown, formatCycloneDxSbom, validateSpdx } from './utils/licenseReport.js';
-import { SBOM_FILE, nodePackageMeta, writeNodePackageLicense } from './utils/packageLicense.js';
+import { SBOM_FILE, nodePackageMeta, shippedRows, writeNodePackageLicense } from './utils/packageLicense.js';
 import findFiles from './utils/findFiles.js';
 
 const platforms = [...new Set(state.targets.map(target => target.platform).filter(t => t))];
@@ -240,11 +240,17 @@ program.command('licenses')
         });
         const copyleftRows = rows.filter((row) => row.isCopyleft);
         if (copyleftRows.length > 0) {
-            console.log(`\n! ${copyleftRows.length} copyleft-licensed ${copyleftRows.length === 1 ? 'dependency' : 'dependencies'} (${copyleftRows.map((row) => row.name).join(', ')}) — see docs/playbooks/licensing-lgpl.md`);
+            console.log(`\n! ${copyleftRows.length} copyleft-licensed ${copyleftRows.length === 1 ? 'dependency' : 'dependencies'} (${copyleftRows.map((row) => row.name).join(', ')}) — see https://github.com/crossbind/crossbind/blob/main/docs/playbooks/licensing-lgpl.md`);
+        }
+        if ((options.notices || options.sbom) && !options.platform) {
+            const vendoring = await vendoringLibraries();
+            if (vendoring.length > 0) {
+                console.warn(`crossbind: ${vendoring.join(', ')} vendor${vendoring.length === 1 ? 's' : ''} copies of other libraries per platform; pass --platform <platform> so the notices and SBOM list them.`);
+            }
         }
         if (options.notices) {
             const file = typeof options.notices === 'string' ? options.notices : `${state.config.paths.project}/THIRD-PARTY-NOTICES.md`;
-            fs.writeFileSync(file, formatNoticesMarkdown(rows));
+            fs.writeFileSync(file, formatNoticesMarkdown(rows, nodePackageMeta(state.config)));
             logger.info(`crossbind: wrote ${file}`);
         }
         if (options.sbom) {
@@ -265,7 +271,8 @@ program.command('licenses')
             logger.info(`crossbind: wrote ${file}`);
         }
         if (options.package) {
-            const expression = writeNodePackageLicense(state.config.paths.project, { ...nodePackageMeta(state.config), rows });
+            const meta = nodePackageMeta(state.config);
+            const expression = writeNodePackageLicense(state.config.paths.project, { ...meta, rows: shippedRows(rows, meta) });
             logger.info(`crossbind: wrote LICENSE and ${SBOM_FILE} (${expression})`);
         }
         if (options.check) {

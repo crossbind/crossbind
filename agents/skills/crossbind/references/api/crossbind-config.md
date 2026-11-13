@@ -67,6 +67,17 @@ export default {
     // config. See extensions.md.
 
   // ─────────────────────────────────────────────────────────────
+  // License files `crossbind licenses` writes
+  // ─────────────────────────────────────────────────────────────
+  licenses: {
+    sourceTag: '{name}@{version}',
+      // The git tag a published package's source is at, which the relinking
+      // steps of an LGPL library link to ({repository}/tree/{tag}). {name} and
+      // {version} are the package's own; a project that tags each release once
+      // writes 'v{version}'. The tag must exist where the repository is public.
+  },
+
+  // ─────────────────────────────────────────────────────────────
   // Generated .d.ts flavor
   // ─────────────────────────────────────────────────────────────
   dts: 'sync',
