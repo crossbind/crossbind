@@ -1,6 +1,6 @@
 {
     "name": "@crossbind/extension-google-play",
-    "version": "2.0.0-beta.72",
+    "version": "2.0.0-beta.74",
     "description": "crossbind app extension: sends an Android bundle to a Google Play track, as a draft or a staged rollout.",
     "homepage": "https://github.com/crossbind/crossbind/tree/main/extensions/google-play#readme",
     "repository": "https://github.com/crossbind/crossbind.git",

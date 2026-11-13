@@ -1,6 +1,6 @@
 {
     "name": "@crossbind/extension-page-drops",
-    "version": "2.0.0-beta.72",
+    "version": "2.0.0-beta.74",
     "description": "crossbind app extension: the paths of files dropped on a desktop page, which a web page never gets.",
     "homepage": "https://github.com/crossbind/crossbind/tree/main/extensions/page-drops#readme",
     "repository": "https://github.com/crossbind/crossbind.git",
