@@ -48,7 +48,10 @@ export default function createLib(target, fileType, options = {}) {
     // The lib dir is reused while the bridge list grows, so an early smaller nativeGlob build must not satisfy later sets: fingerprint the glob and miss on mismatch.
     const fingerprintFile = `${libdir}/crossbind-nativeglob.fingerprint`;
     // options.inputs lists what the sources compile against (a binding runtime's headers), so a change there rebuilds too.
-    const fingerprint = nativeGlob ? getFilesFingerprint([...nativeGlob, ...(options.inputs ?? [])]) : null;
+    // A header edit can leave a bridge's text as it was, so the key beside each bridge, the hash of what it was made from, counts too.
+    const fingerprint = nativeGlob
+        ? getFilesFingerprint([...nativeGlob, ...nativeGlob.map((file) => `${file}.key`), ...(options.inputs ?? [])])
+        : null;
     const fingerprintChanged = fingerprint !== null
         && (!fs.existsSync(fingerprintFile) || fs.readFileSync(fingerprintFile, { encoding: 'utf8' }) !== fingerprint);
 
