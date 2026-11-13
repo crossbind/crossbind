@@ -118,7 +118,9 @@ Alongside `cache.json`, the build writes fingerprint files next to its artifacts
 treats a mismatch as a cache miss even when the artifact exists:
 
 - `…/prebuilt/<target>/crossbind-nativeglob.fingerprint` — the Bridge lib's bridge-file set
-  (names + contents), so a lib built from a smaller bridge set cannot satisfy later builds.
+  (names + contents, and each bridge's `.key`: the hash of what it was made from, its header
+  included), so a lib built from a smaller bridge set, or from a header that has changed since,
+  cannot satisfy later builds.
 - `…/prebuilt/<target>/crossbind-emccflags.fingerprint` — the config `emccFlags`, which also
   feed compile-time state (`CROSSBIND_JSPI`).
 - `<jsName>.fingerprint` — the final link's inputs: resolved `emccFlags`, the lib list with

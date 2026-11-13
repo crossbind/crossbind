@@ -11,7 +11,6 @@ vi.mock('../src/actions/run.js', () => ({ default: run }));
 vi.mock('../src/actions/buildCargo.js', () => ({ default: vi.fn() }));
 vi.mock('../src/actions/getCmakeParameters.js', () => ({ default: getCmakeParameters }));
 vi.mock('../src/actions/getData.js', () => ({ default: getData }));
-vi.mock('../src/utils/dependencyBridges.js', () => ({ withDependencyBridges: (glob) => glob }));
 vi.mock('../src/utils/logger.js', () => ({
     default: { info() {}, error() {}, startStep() {}, doneStep() {}, cachedStep() {} },
 }));
@@ -92,6 +91,37 @@ describe('createLib cache', () => {
         fs.writeFileSync(header, '// runtime v2');
 
         expect(build({ inputs: [header] })).toBe(true);
+    });
+
+    // A header edit can leave SWIG's output as it was (gdal3.js changed a parameter's type): the bridge is made again,
+    // with another key, and the objects compiled from the old header are stale.
+    test('rebuilds when a bridge is made again from a changed header, though its text is the same', () => {
+        fs.writeFileSync(`${bridge}.key`, 'header v1');
+        expect(build()).toBe(true);
+        expect(build()).toBe(false);
+        fs.writeFileSync(`${bridge}.key`, 'header v2');
+
+        expect(build()).toBe(true);
+    });
+
+    test('rebuilds when a bridge the listed one depends on is made again from a changed header', () => {
+        const dependency = `${work}/types.i.cpp`;
+        fs.writeFileSync(dependency, '// dependency bridge');
+        fs.writeFileSync(`${bridge}.deps`, `${dependency}\n`);
+        fs.writeFileSync(`${dependency}.key`, 'header v1');
+        build();
+        fs.writeFileSync(`${dependency}.key`, 'header v2');
+
+        expect(build()).toBe(true);
+    });
+
+    // An older crossbind, or a cache CI restores, leaves its bridges without keys.
+    test('serves the library built from bridges without keys until one is made again', () => {
+        expect(build()).toBe(true);
+        expect(build()).toBe(false);
+        fs.writeFileSync(`${bridge}.key`, 'header v2');
+
+        expect(build()).toBe(true);
     });
 
     test('CMake source patches stay in the target copy and a changed patch rebuilds', () => {
