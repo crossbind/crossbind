@@ -26,9 +26,10 @@ export const EXEC_MAX_BUFFER = 512 * 1024 * 1024;
 // Containers share the memory of Docker's VM, and one compile at full -j can take most of a desktop VM
 // (GDAL's bindings peak at 7.5 of 7.7 GiB), so the exclusive steps of parallel builds take turns.
 const DOCKER_COMPILE_LOCK = path.join(os.homedir(), '.crossbind', 'docker-compile.lock');
-// With CROSSBIND_SCCACHE set, C and C++ compiles go through sccache, which its SCCACHE_* variables configure: CMake's
-// launchers reach every CMake project, EM_COMPILER_WRAPPER every emcc.
-const SCCACHE_LAUNCHERS = ['CMAKE_C_COMPILER_LAUNCHER', 'CMAKE_CXX_COMPILER_LAUNCHER', 'EM_COMPILER_WRAPPER'];
+// With CROSSBIND_SCCACHE set, C and C++ compiles go through sccache, which its SCCACHE_* variables configure, by CMake's
+// launchers. A wasm build compiles without it: sccache 0.19 recognizes neither em++ nor emscripten's clang, which has
+// no default target, and cannot cache the -Xclang flags emcc passes that clang.
+const SCCACHE_LAUNCHERS = ['CMAKE_C_COMPILER_LAUNCHER', 'CMAKE_CXX_COMPILER_LAUNCHER'];
 const SCCACHE_SETTING = /^(SCCACHE_\w+|AWS_ACCESS_KEY_ID|AWS_SECRET_ACCESS_KEY|AWS_SESSION_TOKEN)$/;
 const SCCACHE_IN_IMAGE = 'command -v sccache >/dev/null || { echo "crossbind: CROSSBIND_SCCACHE needs toolchain images that carry sccache, '
     + 'image family 1.0.21 or later." >&2; exit 1; }; ';
@@ -159,7 +160,7 @@ export default function run(program, params = [], platformPrefix = null, target 
         ? { runner: 'LOCAL' }
         : runnerFor(role, state.config.system);
     const isDocker = runner === 'DOCKER_RUN' || runner === 'DOCKER_EXEC';
-    const isSccache = isSccacheOn();
+    const isSccache = isSccacheOn() && target?.platform !== 'wasm';
     if (isSccache && runner === 'REMOTE') {
         throw new Error('crossbind: CROSSBIND_SCCACHE works with the DOCKER_RUN, DOCKER_EXEC and LOCAL runners; a remote runner would need your '
             + 'cache\'s keys. Unset it for a remote build.');
