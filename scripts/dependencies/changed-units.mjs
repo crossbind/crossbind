@@ -7,6 +7,8 @@ import { fileURLToPath } from 'node:url';
 import { TARGET_GROUPS } from './validate-native-family.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
+// No image copies these, so they cannot change one.
+const DOCKER_DOCS = ['tooling/docker/CHANGELOG.md', 'tooling/docker/README.md'];
 
 function option(name) {
     const index = process.argv.indexOf(name);
@@ -27,7 +29,7 @@ export function changedDependencyUnits(files, root = ROOT) {
         toolchain: files.some(
             (file) =>
                 file === '.nvmrc' ||
-                file.startsWith('tooling/docker/') ||
+                (file.startsWith('tooling/docker/') && !DOCKER_DOCS.includes(file)) ||
                 file.startsWith('.github/actions/setup-trivy/') ||
                 file === 'core/crossbind/src/actions/run.js' ||
                 file === 'core/crossbind/src/utils/linuxToolchain.js' ||
