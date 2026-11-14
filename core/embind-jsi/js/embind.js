@@ -2565,6 +2565,33 @@ function ownHandle(handle) {
   }
   return handle;
 }
+// A pointer a member function or property hands out can point into the object it was called on, or name that
+// object: its handle holds a clone of the object's handle, on the count the pointer's clones share, so the object goes
+// with the last of them, as the wasm glue does after utils/embindPointerOwners.js. Only a raw pointer, a NativePointer
+// and an emscripten::val can borrow: a copy and a smart pointer hold what they point at.
+function mayBorrow(type) {
+  if (!type) return false;
+  if (type.name === 'emscripten::val') return true;
+  var cls = type.registeredClass;
+  return !!cls && !type.isReference && (!type.isSmartPointer || cls.name === 'NativePointer');
+}
+function keepOwner(value, owner) {
+  var $$ = value && value.$$;
+  var held = owner && owner.$$;
+  if (!$$ || !$$.count || $$.count.owner || !held || !held.ptr || held.preservePointerOnDelete || $$.count === held.count) {
+    return value;
+  }
+  if ($$.smartPtr ? $$.ptrType.registeredClass.name === 'NativePointer' : !$$.count.owned) $$.count.owner = owner.clone();
+  return value;
+}
+function keepsOwner(fn, type) {
+  if (!mayBorrow(type)) return fn;
+  var kept = function () {
+    return keepOwner(fn.apply(this, arguments), this);
+  };
+  Object.defineProperty(kept, 'name', { value: fn.name });
+  return kept;
+}
 function ClassHandle_clone() {
   if (!this.$$.ptr) {
     throwInstanceAlreadyDeleted(this);
@@ -3126,7 +3153,7 @@ function __embind_register_class_function(rawClassType,
 
     whenDependentTypesAreResolved([], rawArgTypes, function (argTypes) {
       //console.log(methodName);
-      var memberFunction = craftInvokerFunction(humanName, argTypes, classType, rawInvoker, context, isAsync);
+      var memberFunction = keepsOwner(craftInvokerFunction(humanName, argTypes, classType, rawInvoker, context, isAsync), argTypes[0]);
 
       // Replace the initial unbound-handler-stub function with the appropriate member function, now that all types
       // are resolved. If multiple overloads are registered for this function, the function goes into an overload table.
@@ -3212,7 +3239,7 @@ function __embind_register_class_property(classType,
           get: function () {
             // console.log('get -> ', this.$$.ptr);
             var ptr = validateThis(this, classType, humanName + ' getter');
-            return getterReturnType['fromWireType'](getter(getterContext, ptr));
+            return keepOwner(getterReturnType['fromWireType'](getter(getterContext, ptr)), this);
           },
           enumerable: true
         };

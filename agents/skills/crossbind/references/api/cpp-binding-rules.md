@@ -138,7 +138,7 @@ The auto-binder needs concrete types. Add `template class Buffer<T>;` declaratio
 
 ### 6. The garbage collector frees what JS owns; `.delete()` frees it now
 
-An instance made with `new`, a value a call returns and a vector `toVector` builds are freed when the garbage collector reclaims their handle, on every runtime with `FinalizationRegistry`; `.delete()` frees one at once, and is the only way on React Native before 0.88, whose Hermes has none. A handle releases what crossbind allocated for it (`allocBuffer`, `allocPointer`, `allocString`, `cstring`) when it goes away. An object reached through a raw pointer, and memory a library returns through one, stay the library's: free it through the library's own function. See `lifecycle-and-types.md`.
+An instance made with `new`, a value a call returns and a vector `toVector` builds are freed when the garbage collector reclaims their handle, on every runtime with `FinalizationRegistry`; `.delete()` frees one at once, and is the only way on React Native before 0.88, whose Hermes has none. A handle releases what crossbind allocated for it (`allocBuffer`, `allocPointer`, `allocString`, `cstring`) when it goes away. An object reached through a raw pointer, and memory a library returns through one, stay the library's: free it through the library's own function. A pointer a method or a field hands out keeps the object it came from alive while its handle lives. See `lifecycle-and-types.md`.
 
 ### 7. Exceptions: thrown C++ exceptions become JS exceptions
 

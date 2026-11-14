@@ -499,7 +499,7 @@ export function buildChecks(s) {
     section(list, 'pointers', 'no pointer surface wired on this leg', s.pointers && (() => pointerChecks({ add }, s.pointers, { worker })));
     section(list, 'callbacks', 'no callback surface wired on this leg', s.callbacks && (() => callbackChecks({ add, skip }, s.callbacks, { worker })));
     section(list, 'strings', 'no string surface wired on this leg', s.strings && (() => stringChecks({ add }, s.strings)));
-    section(list, 'wrappers', 'no wrapper surface wired on this leg', s.wrappers && (() => wrapperChecks({ add }, s.wrappers, { worker })));
+    section(list, 'wrappers', 'no wrapper surface wired on this leg', s.wrappers && (() => wrapperChecks({ add, skip }, s.wrappers, { worker })));
     section(list, 'types', 'no type surface wired on this leg', s.types && (() => typeChecks({ add }, s.types, { worker })));
     section(list, 'packageFields', 'no package header surface wired on this leg (standalone builds bridge only paths.header)', s.packageFields && (() => packageFieldChecks({ add }, s.packageFields, { worker })));
     section(list, 'constants', 'no header import on this leg (constants bind only for the names an app imports)', s.constants && (() => constantChecks({ add }, s.constants, { native: Boolean(s.caps?.jsiNative) })));

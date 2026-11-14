@@ -35,6 +35,22 @@ class ColorValue {
     }
 }
 
+// A raw pointer a member hands out, which holds a clone of its owner's handle on its count as embind-jsi gives it;
+// `clones` more handles share that count.
+class Anchor {
+    constructor(owner, clones) {
+        this.$$ = { count: { value: 1 + clones, owner } };
+    }
+
+    delete() {
+        throw new Error('a raw pointer is its library\'s to free');
+    }
+
+    isDeleted() {
+        return false;
+    }
+}
+
 const env = { PRESET: 'machine', CROSSBIND_DATA_PATH: '/app/data' };
 const fakeModule = {
     Crossbind: {
@@ -49,6 +65,7 @@ const fakeModule = {
     add: (a, b) => a + b,
     big: (n) => n * 2n,
     xOf: (point) => point.x,
+    anchorOf: (x, clones) => new Anchor(new Point(x), clones),
     same: (color) => color,
     fail: () => {
         throw Object.assign(new Error('bad input'), { code: 'E_BAD' });
@@ -211,6 +228,24 @@ describe('the lean protocol of an app', () => {
         await transport.send(TOKEN + JSON.stringify(['release', 0, [], [[handle.v]]]));
 
         expect(point.freed).toBe(true);
+    });
+
+    test('frees the clone of its owner a raw pointer holds once the page releases the pointer', async () => {
+        const [, handle] = JSON.parse(await transport.send(TOKEN + JSON.stringify(['call', 0, ['anchorOf'], [3, 0]])));
+        const owner = points.at(-1);
+
+        await transport.send(TOKEN + JSON.stringify(['release', 0, [], [[handle.v]]]));
+
+        expect(owner.freed).toBe(true);
+    });
+
+    test('keeps that clone while another handle shares the pointer', async () => {
+        const [, handle] = JSON.parse(await transport.send(TOKEN + JSON.stringify(['call', 0, ['anchorOf'], [3, 1]])));
+        const owner = points.at(-1);
+
+        await transport.send(TOKEN + JSON.stringify(['release', 0, [], [[handle.v]]]));
+
+        expect(owner.freed).toBe(false);
     });
 
     test('frees what a page held once another page replaces it', async () => {

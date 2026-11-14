@@ -45,8 +45,19 @@ const ownsObject = (obj) => {
 // frees nothing.
 const moduleObjects = new WeakSet();
 
+// A pointer a member handed out holds a clone of the handle of the object it points into
+// (utils/embindPointerOwners.js), which goes once no handle shares the pointer's count.
+const releaseOwner = (obj) => {
+    const count = obj?.$$?.count;
+    if (!count?.owner || count.value > (obj.isDeleted() ? 0 : 1)) return;
+    const { owner } = count;
+    count.owner = undefined;
+    if (!owner.isDeleted()) owner.delete();
+};
+
 const freeIfOwned = (obj) => {
     if (ownsObject(obj) && !moduleObjects.has(obj) && !obj.isDeleted()) obj.delete();
+    releaseOwner(obj);
 };
 
 // The worker side of a handle the main thread no longer reaches: its id goes, and the object with the last id.

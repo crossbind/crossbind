@@ -13,7 +13,7 @@ const conformance = /^CONFORMANCE (\d+)\/\1\b.*$/m;
 const server = await startCurlProbeServer();
 const env = { ...process.env, CURL_PROBE_URL: server.url, CURL_PROBE_DEAD_URL: server.deadUrl };
 
-execFile('node', ['--experimental-wasm-jspi', 'src/index.mjs'], { timeout: 120000, env }, async (err, stdout, stderr) => {
+execFile('node', ['--experimental-wasm-jspi', '--expose-gc', 'src/index.mjs'], { timeout: 120000, env }, async (err, stdout, stderr) => {
     await server.close();
     const out = `${stdout}\n${stderr}`;
     if (err) {

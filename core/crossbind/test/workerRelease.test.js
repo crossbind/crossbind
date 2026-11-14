@@ -34,6 +34,18 @@ const vectorOf = (items, record) => ({
     isDeleted: () => !record.ptr,
 });
 
+// A raw pointer a member hands out holds a clone of its owner's handle on its count, as utils/embindPointerOwners.js
+// gives it; `clones` more handles share that count.
+const pointerInto = (clones) => {
+    const owner = new Box(owned());
+    const pointer = new Box(borrowed());
+    pointer.$$.count.value += clones;
+    pointer.$$.count.owner = owner;
+    owners.push(owner);
+    return pointer;
+};
+
+let owners;
 let channel;
 let remote;
 let m;
@@ -46,6 +58,7 @@ beforeEach(async () => {
     vi.resetModules();
     watched = [];
     deleted = [];
+    owners = [];
     vi.stubGlobal('FinalizationRegistry', class {
         constructor(cleanup) {
             this.cleanup = cleanup;
@@ -60,6 +73,7 @@ beforeEach(async () => {
     m = {
         makeBox: () => new Box(owned()),
         boxAt: () => new Box(borrowed()),
+        boxInto: (clones) => pointerInto(clones),
         numbers: () => vectorOf([1, 2], owned()),
         numbersAt: () => vectorOf([3], borrowed()),
         // Globals, as emscripten::constant leaves them: owned handles the module keeps.
@@ -114,6 +128,26 @@ describe('a handle the main thread no longer reaches', () => {
 
     test('to a raw pointer is forgotten without freeing what it points at', async () => {
         const box = await remote.boxAt();
+        const { id, collect } = watchOf(box);
+
+        collect();
+
+        await vi.waitFor(() => expect(forgotten(id)).toBe(true));
+        expect(deleted).toEqual([]);
+    });
+
+    test('to a raw pointer a member handed out lets go of the clone of its owner the pointer holds', async () => {
+        const box = await remote.boxInto(0);
+        const { id, collect } = watchOf(box);
+
+        collect();
+
+        await vi.waitFor(() => expect(forgotten(id)).toBe(true));
+        expect(deleted).toEqual(owners);
+    });
+
+    test('to such a pointer keeps that clone while another handle shares the pointer', async () => {
+        const box = await remote.boxInto(1);
         const { id, collect } = watchOf(box);
 
         collect();

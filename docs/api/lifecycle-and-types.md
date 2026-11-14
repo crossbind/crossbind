@@ -21,6 +21,15 @@ What stays C++'s:
 - An object C++ keeps: a C++ function that stores an object it gets from JavaScript takes it as a `std::shared_ptr`, or the object goes when JavaScript lets go of it.
 - The handle a mutable global arrives as (see [`cpp-binding-rules.md`](./cpp-binding-rules.md) Rule 10): the module keeps it while it runs, so letting go of it frees nothing.
 
+A pointer a method or a field hands out can point into the object it came from: a raw pointer or a reference to an object that cannot be copied, a member behind a `std::unique_ptr`, the object itself from a fluent call, or a `NativePointer` into its memory. The pointer's handle keeps that object alive, so the object goes once nothing reaches either handle, and `.delete()` on the object's own handle frees it only after the pointer's handle goes too:
+
+```js
+const leaf = new Tree().child();   // the temporary Tree stays as long as leaf does
+leaf.value();                      // safe after any number of collections
+```
+
+A pointer a free function or a static method returns keeps nothing alive: hold the object it points into for as long as you use the pointer.
+
 ### When C++ has a long-lived resource
 
 If your C++ class wraps a file handle, GPU buffer, network socket, etc., release it in the destructor (RAII), so `.delete()` closes it:
