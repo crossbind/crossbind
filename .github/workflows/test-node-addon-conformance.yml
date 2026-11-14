@@ -66,6 +66,10 @@ jobs:
         needs: tested
         if: needs.tested.outputs.tested != 'true'
         runs-on: ubuntu-latest
+        # main's pushes alone reach the ci-cache environment, whose secrets write the compiler cache; it records no deployment.
+        environment:
+            name: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && 'ci-cache' || '' }}
+            deployment: false
         timeout-minutes: 60
         steps:
             - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -78,6 +82,14 @@ jobs:
                   cache: 'pnpm'
             - name: Install dependencies
               run: pnpm install
+            - name: Set up the compiler cache
+              uses: ./.github/actions/setup-sccache
+              with:
+                  read-key-id: ${{ secrets.SCCACHE_R2_READ_KEY_ID }}
+                  read-secret: ${{ secrets.SCCACHE_R2_READ_SECRET }}
+                  write-key-id: ${{ secrets.SCCACHE_R2_WRITE_KEY_ID }}
+                  write-secret: ${{ secrets.SCCACHE_R2_WRITE_SECRET }}
+                  endpoint: ${{ vars.SCCACHE_R2_ENDPOINT }}
             - name: Build the Linux and Windows addons
               # C++ and Rust alike: the kit's Rust packages and the crates the suite imports build in the
               # linux and windows images too.
@@ -425,6 +437,10 @@ jobs:
         # The app builds in crossbind's linux image, as the addons do, against the Hermes and the WebKitGTK headers and
         # libraries the image carries, and runs on the runner's own WebKitGTK.
         runs-on: ubuntu-latest
+        # main's pushes alone reach the ci-cache environment, whose secrets write the compiler cache; it records no deployment.
+        environment:
+            name: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && 'ci-cache' || '' }}
+            deployment: false
         timeout-minutes: 60
         steps:
             - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -437,6 +453,14 @@ jobs:
                   cache: 'pnpm'
             - name: Install dependencies
               run: pnpm install
+            - name: Set up the compiler cache
+              uses: ./.github/actions/setup-sccache
+              with:
+                  read-key-id: ${{ secrets.SCCACHE_R2_READ_KEY_ID }}
+                  read-secret: ${{ secrets.SCCACHE_R2_READ_SECRET }}
+                  write-key-id: ${{ secrets.SCCACHE_R2_WRITE_KEY_ID }}
+                  write-secret: ${{ secrets.SCCACHE_R2_WRITE_SECRET }}
+                  endpoint: ${{ vars.SCCACHE_R2_ENDPOINT }}
             - name: Build the app
               run: pnpm --filter=@crossbind/e2e-desktop-app run build
             # The app's own page-dialogs and page-permissions take the place of the host's, which this app keeps.
@@ -469,6 +493,10 @@ jobs:
         # A hosted Windows runner cannot run crossbind's windows image, a Linux one, so this runner builds the app in it,
         # against the Hermes and the WebView2 SDK headers the image carries.
         runs-on: ubuntu-latest
+        # main's pushes alone reach the ci-cache environment, whose secrets write the compiler cache; it records no deployment.
+        environment:
+            name: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && 'ci-cache' || '' }}
+            deployment: false
         timeout-minutes: 60
         env:
             CROSSBIND_APP_PLATFORM: windows
@@ -483,6 +511,14 @@ jobs:
                   cache: 'pnpm'
             - name: Install dependencies
               run: pnpm install
+            - name: Set up the compiler cache
+              uses: ./.github/actions/setup-sccache
+              with:
+                  read-key-id: ${{ secrets.SCCACHE_R2_READ_KEY_ID }}
+                  read-secret: ${{ secrets.SCCACHE_R2_READ_SECRET }}
+                  write-key-id: ${{ secrets.SCCACHE_R2_WRITE_KEY_ID }}
+                  write-secret: ${{ secrets.SCCACHE_R2_WRITE_SECRET }}
+                  endpoint: ${{ vars.SCCACHE_R2_ENDPOINT }}
             - name: Make a throwaway key, with which the build signs the app and its setup program
               run: >-
                   keytool -genkeypair -alias "crossbind e2e" -keyalg RSA -keysize 2048 -validity 2 -dname "CN=crossbind e2e"
@@ -698,6 +734,10 @@ jobs:
         # The Android app's host and Rust build in crossbind's android-app image, its bridges in the web image, and Gradle
         # packages the app in the android-app image too; it runs on an emulator.
         runs-on: ubuntu-latest
+        # main's pushes alone reach the ci-cache environment, whose secrets write the compiler cache; it records no deployment.
+        environment:
+            name: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && 'ci-cache' || '' }}
+            deployment: false
         timeout-minutes: 60
         env:
             CROSSBIND_APP_PLATFORM: android
@@ -712,6 +752,14 @@ jobs:
                   cache: 'pnpm'
             - name: Install dependencies
               run: pnpm install
+            - name: Set up the compiler cache
+              uses: ./.github/actions/setup-sccache
+              with:
+                  read-key-id: ${{ secrets.SCCACHE_R2_READ_KEY_ID }}
+                  read-secret: ${{ secrets.SCCACHE_R2_READ_SECRET }}
+                  write-key-id: ${{ secrets.SCCACHE_R2_WRITE_KEY_ID }}
+                  write-secret: ${{ secrets.SCCACHE_R2_WRITE_SECRET }}
+                  endpoint: ${{ vars.SCCACHE_R2_ENDPOINT }}
             - name: Build the app
               run: pnpm --filter=@crossbind/e2e-desktop-app run build
             - name: Build an app with none of crossbind's own extensions

@@ -70,6 +70,9 @@ jobs:
             max-parallel: 4
             matrix: ${{ fromJSON(needs.changes.outputs.linux_groups) }}
         runs-on: ubuntu-24.04
+        permissions:
+            contents: read
+            actions: read
         steps:
             - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
               with:
@@ -80,6 +83,14 @@ jobs:
                   node-version-file: .nvmrc
                   cache: pnpm
             - run: pnpm install --frozen-lockfile
+            # From the release shard that builds the group's targets (classifyBuild, scripts/release/workspace-release.mjs).
+            - name: Set up the compiler cache, from what the last release left
+              uses: ./.github/actions/setup-sccache
+              with:
+                  dir: ${{ runner.temp }}/sccache
+                  size: 4G
+                  artifact: release-sccache-${{ fromJSON('{"wasm":"wasm","wasi":"wasi","linux":"linux-native","linuxmusl":"linux-native","android":"android","win32":"win32-native","base":"linux"}')[matrix.group] }}
+                  token: ${{ github.token }}
             - name: Build each package of the changed native families once for one target group, then pack them
               env:
                   FAMILIES: ${{ needs.changes.outputs.families }}
