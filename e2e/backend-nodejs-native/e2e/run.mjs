@@ -10,8 +10,9 @@ const GLIBC_IMAGE = 'node:24-bookworm-slim';
 const MUSL_IMAGE = 'node:24-alpine';
 // Shared conformance list: pass must equal run (backreference); skips are explicit lines.
 const CONFORMANCE = /^CONFORMANCE (\d+)\/\1\b.*$/m;
-// The suite imports its headers and crates through the hooks the build writes beside the addon's entry.
-const APP = ['--import', './dist/node/napi.register.mjs', 'src/index.mjs'];
+// The suite imports its headers and crates through the hooks the build writes beside the addon's entry, and
+// collects garbage on demand (wrap:uniquePtrReferenceOutlivesItsOwner).
+const APP = ['--expose-gc', '--import', './dist/node/napi.register.mjs', 'src/index.mjs'];
 
 const root = resolve(import.meta.dirname, '..');
 // The suite imports the workspace's conformance kit, so a container sees the whole repository.

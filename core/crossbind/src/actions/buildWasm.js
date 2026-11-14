@@ -15,9 +15,10 @@ import { guardBigIntArguments, guardEmbindArguments } from '../utils/embindArgum
 import { separateCallArguments } from '../utils/embindCallArguments.js';
 import { queueJspiCalls } from '../utils/embindJspiQueue.js';
 import { releaseOwnedHandles } from '../utils/embindObjectLifetime.js';
+import { keepPointerOwners } from '../utils/embindPointerOwners.js';
 import { spawnPthreadsFromMainScript } from '../utils/pthreadMainScript.js';
 
-const GLUE_REWRITES = ['../utils/embindArgumentGuards.js', '../utils/embindCallArguments.js', '../utils/embindJspiQueue.js', '../utils/embindObjectLifetime.js', '../utils/pthreadMainScript.js']
+const GLUE_REWRITES = ['../utils/embindArgumentGuards.js', '../utils/embindCallArguments.js', '../utils/embindJspiQueue.js', '../utils/embindObjectLifetime.js', '../utils/embindPointerOwners.js', '../utils/pthreadMainScript.js']
     .map((file) => fileURLToPath(new URL(file, import.meta.url)));
 
 // embind's bigint converter turns any Number into a BigInt, so 2^53+1 silently becomes 2^53.
@@ -73,6 +74,17 @@ function releaseOwnedObjects(target) {
     fs.writeFileSync(gluePath, text);
     if (missed) {
         logger.error('embind object lifetime rewrite missed (emscripten glue format changed?): returned values and constructed vectors are freed only by .delete()');
+    }
+}
+
+// A pointer a member hands out outlived the object it points into once JavaScript freed that object
+// (utils/embindPointerOwners.js); each runtimeEnv links its own glue, so each one calls this after its link.
+function keepPointerOwnersAlive(target) {
+    const gluePath = `${state.config.paths.build}/${target.rawJsName}`;
+    const { text, missed } = keepPointerOwners(fs.readFileSync(gluePath, 'utf8'));
+    fs.writeFileSync(gluePath, text);
+    if (missed) {
+        logger.error('embind pointer owner rewrite missed (emscripten glue format changed?): a pointer a method returns can outlive the object it points into');
     }
 }
 
@@ -244,6 +256,7 @@ export default async function buildWasm(target, options = {}) {
         separateEmbindCalls(target);
         queueJspiEmbindCalls(target);
         releaseOwnedObjects(target);
+        keepPointerOwnersAlive(target);
         await buildJs(target);
         // fs.rmSync(`${state.config.paths.build}/${state.config.general.name}.js`);
         // fs.copyFileSync(`${state.config.paths.build}/${state.config.general.name}.browser.js`, `${state.config.paths.build}/${state.config.general.name}.js`);
@@ -286,6 +299,7 @@ export default async function buildWasm(target, options = {}) {
         separateEmbindCalls(target);
         queueJspiEmbindCalls(target);
         releaseOwnedObjects(target);
+        keepPointerOwnersAlive(target);
         await buildJs(target);
         logger.doneStep(target, 'js');
     }
@@ -323,6 +337,7 @@ export default async function buildWasm(target, options = {}) {
         separateEmbindCalls(target);
         queueJspiEmbindCalls(target);
         releaseOwnedObjects(target);
+        keepPointerOwnersAlive(target);
         await buildJs(target);
         if (emccFlags.includes('FETCH')) {
             fs.appendFileSync(`${state.config.paths.build}/${target.jsName}`, 'var XMLHttpRequest = require(\'xhr2\');\n');

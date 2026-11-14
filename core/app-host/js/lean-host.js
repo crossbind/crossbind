@@ -83,8 +83,19 @@ const ownsObject = (value) => Boolean(value.$$ && (value.$$.smartPtr || value.$$
 // frees nothing.
 const moduleObjects = new WeakSet();
 
+// A pointer a member handed out holds a clone of the handle of the object it points into, as the worker adapter
+// releases it: the clone goes once no handle shares the pointer's count.
+function releaseOwner(value) {
+    const count = value?.$$?.count;
+    if (!count?.owner || count.value > (value.isDeleted() ? 0 : 1)) return;
+    const { owner } = count;
+    count.owner = undefined;
+    if (!owner.isDeleted()) owner.delete();
+}
+
 function freeIfOwned(value) {
     if (ownsObject(value) && !moduleObjects.has(value) && !value.isDeleted()) value.delete();
+    releaseOwner(value);
 }
 
 function register(value, page) {

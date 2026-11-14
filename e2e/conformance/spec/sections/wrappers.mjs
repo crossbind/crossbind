@@ -1,7 +1,15 @@
 import { rejecting } from './expect.mjs';
 
+// Collects what nothing reaches, then lets the finalizers that follow run, a worker's release among them.
+async function collectGarbage() {
+    for (let i = 0; i < 4; i += 1) {
+        globalThis.gc();
+        await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+}
+
 // Smart pointer wrappers, unique_ptr references, fluent and uncopyable returns (native/confwrappers.h).
-export function wrapperChecks({ add }, w, { worker }) {
+export function wrapperChecks({ add, skip }, w, { worker }) {
     const rejects = rejecting(add);
     add('wrap:returnedAsObject', async () => (await w.confWrapMake(4)).doubled(), 8);
     add('wrap:constReferenceReturned', async () => (await w.confWrapCached()).doubled(), 14);
@@ -21,6 +29,18 @@ export function wrapperChecks({ add }, w, { worker }) {
         return [await size(leaves), await (await at(leaves, 1)).doubled()];
     }, [2, 4]);
     add('wrap:uniquePtrReference', async () => (await (await new w.ConfWrapTree()).child()).doubled(), 10);
+    // The tree is unreachable once its child() returns; collected before the leaf is read, it takes the leaf along
+    // unless the leaf's handle keeps it. Only a runtime started with --expose-gc collects on demand.
+    if (typeof globalThis.gc === 'function') {
+        add('wrap:uniquePtrReferenceOutlivesItsOwner', async () => {
+            const leafOfTemporaryTree = async () => (await new w.ConfWrapTree()).child();
+            const leaf = await leafOfTemporaryTree();
+            await collectGarbage();
+            return leaf.doubled();
+        }, 10);
+    } else {
+        skip('wrap:uniquePtrReferenceOutlivesItsOwner', 'no gc() in this runtime');
+    }
     add('wrap:fluentReturnsSameObject', async () => {
         const builder = await new w.ConfWrapBuilder();
         await (await builder.add(2)).add(3);
