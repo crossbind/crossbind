@@ -3,6 +3,106 @@
 <!-- release-notes:start -->
 <!-- Generated from releases/crossbind/<version>.md by scripts/release/render-changelog.mjs. Edit the note, then run `pnpm changelog`. -->
 
+## 2.0.0-beta.75
+
+A dependency's header binds the classes the app's imports reach rather than every class it declares, GDAL links only the drivers an app registers, a pointer or reference a bound member hands out keeps its object alive, and CROSSBIND_SCCACHE sends C and C++ compiles through sccache on toolchain image family 1.0.21.
+
+### Highlights
+
+### A dependency's header binds the classes the app's imports reach
+
+- A header of a port or a `conan:` package binds the free functions the app imports from it and the classes those names
+  reach: a class the app imports by name, one a function bound for the app takes or returns, and one a reached class
+  uses as a base or in the signature of a public member, in this header or the one defining it. Enums stay whole, and
+  constants follow rule 8 as before.
+- Such a header bound every class it declared, and the headers its types came from bound all of theirs: importing one
+  `RegisterOGR*` function from GDAL's `ogrsf_frmts.h` bound eight more C++ headers and failed to compile.
+- One bridge per header registers the classes that every header using it reaches.
+- The project's own headers, whole-module imports such as `import * as`, the headers a package binds whole and shipped
+  `.i` files bind every class, as before.
+
+```js
+import { GDALAllRegister, GDALOpenEx, GDALClose } from '@crossbind/port-gdal/gdal.h';
+```
+
+Reference: rule 9 in `docs/api/cpp-binding-rules.md`.
+
+### GDAL links the drivers an app registers
+
+- `GDALDataset::ExecuteSQL` reached GDAL's geocoding cache through the SQLite dialect, and that cache registered every
+  driver when none was, so every driver stayed in the link of an app registering only its own. The GDAL ports drop that
+  call: the GDAL direct demo, which registers the drivers its examples use, goes from 26.3 MB of wasm to 15.1 MB. A
+  geocoding cache opened with no driver registered goes unused.
+
+### Compiler cache
+
+- `CROSSBIND_SCCACHE=1`, set in the environment, sends every C and C++ compile through sccache, which its own
+  `SCCACHE_*` variables point at a cache: a folder by default, or S3 and R2 with `SCCACHE_BUCKET`, `SCCACHE_ENDPOINT`,
+  `SCCACHE_REGION` and the `AWS_*` keys.
+- Docker builds run the sccache of image family 1.0.21 and get the settings by name, so no key sits on the command line;
+  a `docker run` mounts `SCCACHE_DIR`, which under `DOCKER_EXEC` must sit inside the project. A Mac needs sccache on the
+  `PATH` (`brew install sccache`). `RUNNER=REMOTE` refuses it, as the runner would need the cache's keys.
+- crossbind appends the target's platform and architecture to `SCCACHE_C_CUSTOM_CACHE_BUSTER`, which sccache hashes
+  into every key, so one target's objects never stand in for another's.
+
+```bash
+CROSSBIND_SCCACHE=1 SCCACHE_DIR="$HOME/.cache/crossbind-sccache" crossbind build -p android
+```
+
+Reference: `docs/api/overrides.md`.
+
+### Toolchain image family 1.0.21
+
+- Builds run on image family 1.0.21: Node.js 26.13.1, from 26.13.0, sccache 0.19.0, and Debian's linux-libc-dev
+  6.12.117-1 security update, which clears the six HIGH CVEs the daily scan found in every 1.0.20 image built on `base`.
+
+Reference: `tooling/docker/CHANGELOG.md`.
+
+### iOS builds
+
+- iOS libraries configure with CMake's own iOS platform and Makefiles instead of the Xcode generator, with the same
+  configure results.
+
+### Breaking changes
+
+- A class of a dependency's header that no imported name reaches is no longer bound, and that header's global variables
+  bind only when imported. JavaScript that used such a class or global without importing it finds it missing from the
+  module, and an object whose own class no import reaches comes as the reached class it derives from, with that class's
+  members.
+
+### Migration notes
+
+- Upgrade the crossbind packages a project uses to `2.0.0-beta.75` together, its plugins, extensions and ports
+  included.
+- Import by name each class or global of a dependency's header that the app uses and no imported function reaches, as
+  `import { GDALDataset } from '@crossbind/port-gdal/gdal_priv.h';`, or bind the header whole with `import * as`.
+
+### Fixes
+
+- A pointer or reference a bound member hands out into its own object, as a `std::unique_ptr` member's `get()`, a fluent
+  `*this`, a reference to a class that cannot be copied, a `T*`, a `NativePointer` or a pointer field, keeps that object
+  alive. The handle JavaScript got was borrowed, so once the collector, or the worker's or the app host's release, freed
+  the object first, it read freed memory: in a wasm build `child()` of a temporary tree returned 82416 instead of 10, in
+  a Node-API addon -2087887018, and the installed Windows app failed the same check once on CI. Such a handle now holds
+  a clone of the object, shared by its own clones, so the object lives until the last of them goes. A reference to a copyable class, which crosses as a
+  copy, and a pointer a free function or a static method returns behave as before.
+- A callback that takes a `const` reference compiles, as `GDALDriver::pfnInstantiateAlgorithm` does with its vector of
+  strings: the runtime fix took the argument by reference without its `const`.
+
+### Known limitations
+
+- `CROSSBIND_SCCACHE` caches neither a wasm build's compiles, as sccache can cache none of emscripten's, nor Rust's.
+- `crossbind-licenses.json` leaves out a file a stylesheet inlines, under Vite's 4 KB `assetsInlineLimit`, and worker
+  bundles; the webpack and Metro plugins do not write it; Emscripten's and LLVM's rows have no license text, as their
+  notices give only a URL.
+- Conan packages come from ConanCenter only and have no WASI builds. An option a recipe gives no default and drops
+  for a target is read as one the recipe does not have.
+- The Node.js wasm `fsync` workaround reaches the operating system but does not force data to disk.
+- The Windows NSIS installer downloads WebView2 when it is missing, so the Microsoft Store does
+  not accept that installer.
+- The Android app image's Gradle and Android build tools still carry the Guava issue tracked in
+  `docs/known-issues.md`, under the existing scan exception until 15 December 2026.
+
 ## 2.0.0-beta.74
 
 A page lists the open-source licenses of what it and its app carry with crossbind/licenses, notices and SBOMs name each library's upstream project with its CPE, initNative() resolves to a typed module, and the GDAL ports build the planetary PDS drivers.

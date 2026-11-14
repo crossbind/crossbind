@@ -1,6 +1,6 @@
 {
     "name": "@crossbind/extension-dialog",
-    "version": "2.0.0-beta.74",
+    "version": "2.0.0-beta.75",
     "description": "crossbind app extension: open and message dialogs everywhere, save dialogs on the desktop.",
     "homepage": "https://github.com/crossbind/crossbind/tree/main/extensions/dialog#readme",
     "repository": "https://github.com/crossbind/crossbind.git",
