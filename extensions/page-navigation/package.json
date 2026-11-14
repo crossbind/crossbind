@@ -1,6 +1,6 @@
 {
     "name": "@crossbind/extension-page-navigation",
-    "version": "2.0.0-beta.74",
+    "version": "2.0.0-beta.75",
     "description": "crossbind app extension: loads the app's pages and the origins it lists, and opens other links the user follows in the browser.",
     "homepage": "https://github.com/crossbind/crossbind/tree/main/extensions/page-navigation#readme",
     "repository": "https://github.com/crossbind/crossbind.git",
