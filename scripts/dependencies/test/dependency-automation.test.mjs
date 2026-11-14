@@ -25,6 +25,7 @@ import {
     validateNativeFamily,
     validateNativeTargets,
 } from '../validate-native-family.mjs';
+import { classifyBuild } from '../../release/workspace-release.mjs';
 import gdalBuild from '../../../ports/gdal/base/build.mjs';
 import opensslBuild from '../../../ports/openssl/base/build.mjs';
 import opensslConfig from '../../../ports/openssl/base/mergeConfig.mjs';
@@ -257,6 +258,18 @@ test('the dependency PR workflow hands changed-units outputs and target groups t
         assert.match(block, /\n {18}FAMILIES: \$\{\{ needs\.changes\.outputs\.families \}\}\n/);
         assert.match(block, /\n {18}GROUP: \$\{\{ matrix\.group \}\}\n/);
         assert.match(block, new RegExp(`--families "\\$FAMILIES" --platform ${platform} --group "\\$GROUP"\\n`));
+    }
+});
+
+test("each Linux group's compiler cache comes from the release shard that builds its first target", () => {
+    const workflow = fs.readFileSync(path.join(ROOT, '.github/workflows/validate-dependency-pr.yml'), 'utf8');
+    const shards = JSON.parse(/release-sccache-\$\{\{ fromJSON\('(\{[^']*\})'\)\[matrix\.group\] \}\}/.exec(workflow)?.[1] ?? '{}');
+    assert.deepEqual(Object.keys(shards).sort(), Object.keys(TARGET_GROUPS.linux).sort());
+    for (const [group, [target]] of Object.entries(TARGET_GROUPS.linux)) {
+        const family = fs.readdirSync(path.join(ROOT, 'ports')).find((name) => fs.existsSync(path.join(ROOT, 'ports', name, target, 'package.json')));
+        const manifestPath = path.join(ROOT, 'ports', family, target, 'package.json');
+        const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+        assert.equal(shards[group], classifyBuild({ name: manifest.name, manifest, manifestPath, path: `ports/${family}/${target}` }), group);
     }
 });
 

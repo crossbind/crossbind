@@ -48,6 +48,10 @@ jobs:
         needs: tested
         if: needs.tested.outputs.tested != 'true'
         runs-on: ubuntu-latest
+        # main's pushes alone reach the ci-cache environment, whose secrets write the compiler cache; it records no deployment.
+        environment:
+            name: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && 'ci-cache' || '' }}
+            deployment: false
         steps:
             - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
             - name: Install pnpm
@@ -59,6 +63,14 @@ jobs:
                   cache: 'pnpm'
             - name: Install dependencies
               run: pnpm install
+            - name: Set up the compiler cache
+              uses: ./.github/actions/setup-sccache
+              with:
+                  read-key-id: ${{ secrets.SCCACHE_R2_READ_KEY_ID }}
+                  read-secret: ${{ secrets.SCCACHE_R2_READ_SECRET }}
+                  write-key-id: ${{ secrets.SCCACHE_R2_WRITE_KEY_ID }}
+                  write-secret: ${{ secrets.SCCACHE_R2_WRITE_SECRET }}
+                  endpoint: ${{ vars.SCCACHE_R2_ENDPOINT }}
             - name: Build for Linux
               run: pnpm run ci:linux:build
             - name: Publish hygiene (K1)
