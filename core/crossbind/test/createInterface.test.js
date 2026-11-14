@@ -69,7 +69,7 @@ beforeEach(() => {
     fs.mkdirSync(native, { recursive: true });
     header = path.join(native, 'fixture.h');
     holder.config = {
-        paths: { project: work, build: path.join(work, '.crossbind', 'build'), cache: path.join(work, '.crossbind'), header: [native] },
+        paths: { project: work, build: path.join(work, '.crossbind', 'build'), cache: path.join(work, '.crossbind'), header: [upath.normalize(native)] },
         ext: { header: ['h', 'hpp', 'hxx', 'hh'], module: ['i'] },
         dts: 'sync',
         export: {},
