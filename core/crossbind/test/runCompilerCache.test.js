@@ -73,6 +73,16 @@ describe('run: CROSSBIND_SCCACHE', () => {
         expect(args.some((arg) => /COMPILER_LAUNCHER|EM_COMPILER_WRAPPER|SCCACHE|AWS_/.test(arg))).toBe(false);
     });
 
+    test("each target keys its compiles apart: llvm-mingw's compilers take their target from their own names, which sccache's keys leave out", async () => {
+        vi.stubEnv('SCCACHE_C_CUSTOM_CACHE_BUSTER', '1');
+        const x64 = (await runTarget({ platform: 'win32', arch: 'x64' }, ['cmake', '/src'])).args;
+        const arm64 = (await runTarget({ platform: 'win32', arch: 'arm64' }, ['cmake', '/src'])).args;
+
+        expect(x64).toContain('SCCACHE_C_CUSTOM_CACHE_BUSTER=1-win32-x64');
+        expect(arm64).toContain('SCCACHE_C_CUSTOM_CACHE_BUSTER=1-win32-arm64');
+        expect(x64).not.toContain('SCCACHE_C_CUSTOM_CACHE_BUSTER');
+    });
+
     test('its settings reach the container by name, so no key sits on the command line', async () => {
         const { args } = await runTarget({ platform: 'linux', arch: 'x64' }, ['cmake', '/src']);
 
@@ -131,6 +141,7 @@ describe('run: CROSSBIND_SCCACHE', () => {
         expect(env.CMAKE_CXX_COMPILER_LAUNCHER).toBe(path.join(bin, 'sccache'));
         expect(env.SCCACHE_BUCKET).toBe('bucket');
         expect(env.AWS_SECRET_ACCESS_KEY).toBe('secret-value');
+        expect(env.SCCACHE_C_CUSTOM_CACHE_BUSTER).toBe('darwin-arm64');
     });
 
     test('a Mac build without sccache stops and names how to install it', async () => {

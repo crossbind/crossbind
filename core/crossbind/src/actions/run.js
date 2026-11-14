@@ -30,7 +30,11 @@ const DOCKER_COMPILE_LOCK = path.join(os.homedir(), '.crossbind', 'docker-compil
 // launchers. A wasm build compiles without it: sccache 0.19 recognizes neither em++ nor emscripten's clang, which has
 // no default target, and cannot cache the -Xclang flags emcc passes that clang.
 const SCCACHE_LAUNCHERS = ['CMAKE_C_COMPILER_LAUNCHER', 'CMAKE_CXX_COMPILER_LAUNCHER'];
-const SCCACHE_SETTING = /^(SCCACHE_\w+|AWS_ACCESS_KEY_ID|AWS_SECRET_ACCESS_KEY|AWS_SESSION_TOKEN)$/;
+// sccache's key leaves out the target llvm-mingw's compilers take from their own names, so an x64 and an arm64 compile of
+// one source would share it; the buster, which sccache hashes into every key, names the target.
+const SCCACHE_BUSTER = 'SCCACHE_C_CUSTOM_CACHE_BUSTER';
+const sccacheBuster = (target) => [process.env[SCCACHE_BUSTER], target?.platform, target?.arch].filter(Boolean).join('-');
+const SCCACHE_SETTING =/^(SCCACHE_\w+|AWS_ACCESS_KEY_ID|AWS_SECRET_ACCESS_KEY|AWS_SESSION_TOKEN)$/;
 const SCCACHE_IN_IMAGE = 'command -v sccache >/dev/null || { echo "crossbind: CROSSBIND_SCCACHE needs toolchain images that carry sccache, '
     + 'image family 1.0.21 or later." >&2; exit 1; }; ';
 // A docker run's sccache server ends with its container, so the command stops it first, which waits for the cache writes
@@ -400,6 +404,7 @@ export default function run(program, params = [], platformPrefix = null, target 
             sccacheSettings().forEach((key) => {
                 env[key] = process.env[key];
             });
+            env[SCCACHE_BUSTER] = sccacheBuster(target);
         }
         env.PATH = `/opt/homebrew/bin:${env.PATH}`;
         // A package's *-config script on the PATH (nc-config, sfcgal-config, ...) would compile that
@@ -458,7 +463,9 @@ export default function run(program, params = [], platformPrefix = null, target 
         const insideDir = sccacheDir && (runner === 'DOCKER_RUN' ? SCCACHE_CONTAINER_DIR : replaceBasePathForDocker(sccacheDir));
         const sccache = isSccache ? [
             ...SCCACHE_LAUNCHERS.flatMap((key) => ['-e', `${key}=sccache`]),
-            ...sccacheSettings().filter((key) => !(sccacheDir && key === 'SCCACHE_DIR')).flatMap((key) => ['-e', key]),
+            ...sccacheSettings().filter((key) => !(sccacheDir && key === 'SCCACHE_DIR') && key !== SCCACHE_BUSTER).flatMap((key) => ['-e', key]),
+            '-e',
+            `${SCCACHE_BUSTER}=${sccacheBuster(target)}`,
             ...(sccacheDir ? ['-e', `SCCACHE_DIR=${insideDir}`] : []),
         ] : [];
         const command = isSccache ? ['sh', '-c', SCCACHE_IN_CONTAINER[runner], dProgram, ...dParams] : [dProgram, ...dParams];
