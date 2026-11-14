@@ -869,6 +869,11 @@ test('shared Trivy setup changes select toolchain validation', () => {
     assert.equal(changedDependencyUnits(['.github/actions/unrelated/action.yml']).toolchain, false);
 });
 
+test('docker docs that no image copies do not select toolchain validation', () => {
+    assert.equal(changedDependencyUnits(['tooling/docker/CHANGELOG.md', 'tooling/docker/README.md']).toolchain, false);
+    assert.equal(changedDependencyUnits(['tooling/docker/licenses-README.md']).toolchain, true);
+});
+
 test('daily workflows keep write authority after validation and pin every action', () => {
     const watch = fs.readFileSync(path.join(ROOT, '.github/workflows/dependency-watch.yml'), 'utf8');
     const candidate = fs.readFileSync(path.join(ROOT, '.github/workflows/dependency-update-candidate.yml'), 'utf8');
