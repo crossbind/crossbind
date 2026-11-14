@@ -8,6 +8,10 @@
   release, checked against its pinned SHA-256 for each architecture. A build whose environment sets
   `CROSSBIND_SCCACHE` compiles its C and C++ through it; nothing else runs it.
 - Updated Node.js to 26.13.1, from 26.13.0, in `base` and every image built on it.
+- Rebuilding brings the Debian packages up to date: linux-libc-dev 6.12.117-1 fixes CVE-2026-98466,
+  CVE-2026-98715, CVE-2026-98853, CVE-2026-99109, CVE-2026-99281 and CVE-2026-99288 (HIGH), which
+  the daily scan has found in every published 1.0.20 image built on `base` since 14 November. The
+  package holds only the kernel's headers, not the kernel code these CVEs are in.
 
 ## Image family 1.0.20
 
