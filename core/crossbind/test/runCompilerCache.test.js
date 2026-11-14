@@ -57,12 +57,20 @@ describe('run: CROSSBIND_SCCACHE', () => {
         const { program, args } = await runTarget({ platform: 'linux', arch: 'x64' }, ['cmake', '/src']);
 
         expect(program).toBe('docker');
-        expect(args).toEqual(expect.arrayContaining(['CMAKE_C_COMPILER_LAUNCHER=sccache', 'CMAKE_CXX_COMPILER_LAUNCHER=sccache', 'EM_COMPILER_WRAPPER=sccache']));
+        expect(args).toEqual(expect.arrayContaining(['CMAKE_C_COMPILER_LAUNCHER=sccache', 'CMAKE_CXX_COMPILER_LAUNCHER=sccache']));
+        expect(args).not.toContain('EM_COMPILER_WRAPPER=sccache');
         const shell = args.indexOf('sh');
         expect(args.slice(shell, shell + 2)).toEqual(['sh', '-c']);
         expect(args[shell + 2]).toContain('sccache --stop-server');
         expect(args[shell + 3]).toBe('cmake');
         expect(args).toContain('/src');
+    });
+
+    test("a wasm build compiles without it, as sccache neither recognizes emscripten's compilers nor caches the flags emcc passes", async () => {
+        const { args } = await runTarget({ platform: 'wasm', arch: 'wasm32' }, ['emcmake', 'cmake', '/src']);
+
+        expect(args).not.toContain('sh');
+        expect(args.some((arg) => /COMPILER_LAUNCHER|EM_COMPILER_WRAPPER|SCCACHE|AWS_/.test(arg))).toBe(false);
     });
 
     test('its settings reach the container by name, so no key sits on the command line', async () => {
