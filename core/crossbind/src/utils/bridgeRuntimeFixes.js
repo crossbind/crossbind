@@ -1,3 +1,25 @@
+// A const char* followed by an integer may be a byte span, with embedded NULs or no terminator.
+// Preserve its address; JavaScript can read exactly the reported length with readBuffer. The argument keeps its const for
+// callbackArgument, which takes it by reference: a callback's const std::vector<std::string> & binds to no other.
+const CALLBACK_ARGUMENT_AT = `template<size_t I, typename Tuple> auto callbackArgumentAt(Tuple values) {
+  using Arg = std::remove_reference_t<decltype(std::get<I>(values))>;
+  using A = std::remove_cv_t<Arg>;
+  if constexpr (std::is_same_v<A, const char *> && I + 1 < std::tuple_size_v<Tuple>) {
+    using Next = std::remove_cv_t<std::remove_reference_t<decltype(std::get<I + 1>(values))>>;
+    if constexpr (std::is_integral_v<Next>) return toHandle(std::get<I>(values));
+    else return callbackArgument<Arg>(std::get<I>(values));
+  } else return callbackArgument<Arg>(std::get<I>(values));
+}`;
+// The form a bridge cached before the argument kept its const still holds.
+const CALLBACK_ARGUMENT_AT_WITHOUT_CONST = `template<size_t I, typename Tuple> auto callbackArgumentAt(Tuple values) {
+  using A = std::remove_cv_t<std::remove_reference_t<decltype(std::get<I>(values))>>;
+  if constexpr (std::is_same_v<A, const char *> && I + 1 < std::tuple_size_v<Tuple>) {
+    using Next = std::remove_cv_t<std::remove_reference_t<decltype(std::get<I + 1>(values))>>;
+    if constexpr (std::is_integral_v<Next>) return toHandle(std::get<I>(values));
+    else return callbackArgument<A>(std::get<I>(values));
+  } else return callbackArgument<A>(std::get<I>(values));
+}`;
+
 // Adapt the runtime emitted by the pinned SWIG fork. Kept in the generator so cache rebuilds
 // produce the same runtime in every bridge, including builds on a remote runner.
 export default function fixBridgeRuntime(text) {
@@ -22,16 +44,7 @@ template<typename T> constexpr bool isPassedByAddress =`);
     }
     if (!text.includes('auto callbackArgumentAt(')) {
         text = '#include <tuple>\n' + text;
-        text = text.replace('#ifndef __EMSCRIPTEN__\nstruct RuntimeCallbacks {', `// A const char* followed by an integer may be a byte span, with embedded NULs or no terminator.
-// Preserve its address; JavaScript can read exactly the reported length with readBuffer.
-template<size_t I, typename Tuple> auto callbackArgumentAt(Tuple values) {
-  using A = std::remove_cv_t<std::remove_reference_t<decltype(std::get<I>(values))>>;
-  if constexpr (std::is_same_v<A, const char *> && I + 1 < std::tuple_size_v<Tuple>) {
-    using Next = std::remove_cv_t<std::remove_reference_t<decltype(std::get<I + 1>(values))>>;
-    if constexpr (std::is_integral_v<Next>) return toHandle(std::get<I>(values));
-    else return callbackArgument<A>(std::get<I>(values));
-  } else return callbackArgument<A>(std::get<I>(values));
-}
+        text = text.replace('#ifndef __EMSCRIPTEN__\nstruct RuntimeCallbacks {', `${CALLBACK_ARGUMENT_AT}
 #ifndef __EMSCRIPTEN__
 struct RuntimeCallbacks {`);
         text = text.replaceAll('template<typename R, typename... A> R invokeCallback(size_t slot, A... args) {',
@@ -44,5 +57,5 @@ struct RuntimeCallbacks {`);
 }
 template<typename F> struct Callback {`);
     }
-    return text;
+    return text.replace(CALLBACK_ARGUMENT_AT_WITHOUT_CONST, CALLBACK_ARGUMENT_AT);
 }

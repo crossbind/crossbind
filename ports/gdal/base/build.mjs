@@ -166,6 +166,14 @@ export default {
             replacement: ')',
             paths: ['ogr/ogrsf_frmts/cad/libopencad/CMakeLists.txt'],
         },
+        // The geocoding cache registers every driver when none is, before it opens its file. GDALDataset's
+        // ExecuteSQL reaches that code through the SQLite dialect, so the call kept every driver in the link of an
+        // app that registers only its own. Without it, a cache opened with no driver registered goes unused.
+        {
+            regex: '        if \\(GDALGetDriverCount\\(\\) == 0\\)\n            GDALAllRegister\\(\\);\n',
+            replacement: '',
+            paths: ['ogr/ogr_geocoding.cpp'],
+        },
     ],
     buildType: 'cmake',
     getBuildParams: (target, depPaths) => [

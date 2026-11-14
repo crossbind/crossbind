@@ -2,7 +2,6 @@
 // name that header does not export, so the import lines on the page are checked here. The page's own
 // calls through the module are here too: a header binds only the functions an import names.
 export {
-    GDALAllRegister,
     GDALClose,
     GDALComputeRasterMinMax,
     GDALComputeRasterStatistics,
@@ -46,6 +45,12 @@ export {
     writeNumberAt,
     writePointerAt,
 } from '@crossbind/port-gdal/gdal.h';
+export {
+    GDALRegister_COG,
+    GDALRegister_GTiff,
+    GDALRegister_MEM,
+    GDALRegister_VRT,
+} from '@crossbind/port-gdal/gdal_frmts.h';
 export {
     GDALDEMProcessing,
     GDALDEMProcessingOptionsFree,
@@ -109,3 +114,9 @@ export {
     OGRGeometryTypeToName,
     OGRwkbGeometryType,
 } from '@crossbind/port-gdal/ogr_core.h';
+export {
+    RegisterOGRCSV,
+    RegisterOGRGeoJSON,
+    RegisterOGRGeoPackage,
+    RegisterOGRShape,
+} from '@crossbind/port-gdal/ogrsf_frmts.h';

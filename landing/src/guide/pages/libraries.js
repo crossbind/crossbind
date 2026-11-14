@@ -37,7 +37,7 @@ console.log(await GDALVersionInfo('RELEASE_NAME'));`,
         },
         {
             type: 'p',
-            text: "The import path after `@crossbind/port-gdal/` is relative to the library's include directory: `@crossbind/port-gdal/gdal.h` is GDAL's own `gdal.h`. The header binds its classes and enums whole, and a free function only when your code imports it by name - see [what a library header binds](/guide/bindings/#imports).",
+            text: "The import path after `@crossbind/port-gdal/` is relative to the library's include directory: `@crossbind/port-gdal/gdal.h` is GDAL's own `gdal.h`. The header binds its enums whole, a free function only when your code imports it by name, and a class only when an import reaches it - see [what a library header binds](/guide/bindings/#imports).",
         },
 
         { type: 'h2', id: 'platform-split', text: 'Meta package and platform variants' },

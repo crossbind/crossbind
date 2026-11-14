@@ -1,5 +1,6 @@
 export const imports = {
-    '@crossbind/port-gdal/gdal.h': ['GDALAllRegister', 'GDALOpenEx', 'GDAL_OF_VECTOR', 'GDALClose', 'allocPointer', 'writePointerAt', 'cstring', 'readCString'],
+    '@crossbind/port-gdal/gdal.h': ['GDALOpenEx', 'GDAL_OF_VECTOR', 'GDALClose', 'allocPointer', 'writePointerAt', 'cstring', 'readCString'],
+    '@crossbind/port-gdal/ogrsf_frmts.h': ['RegisterOGRGeoJSON', 'RegisterOGRGeoPackage', 'RegisterOGRShape'],
     '@crossbind/port-gdal/gdal_utils.h': [
         'GDALVectorTranslateOptionsNew',
         'GDALVectorTranslateOptionsFree',
@@ -11,14 +12,16 @@ export const imports = {
     '@crossbind/port-gdal/cpl_vsi.h': ['VSIUnlink', 'VSIFree'],
     '@crossbind/port-gdal/cpl_error.h': ['CPLGetLastErrorMsg'],
 };
-export const note = 'The same `GDALVectorTranslate` and `GDALVectorInfo` calls the C++ makes. Their arguments are NULL-terminated string lists, which JavaScript builds with `allocPointer` and `cstring`, and flag macros such as `GDAL_OF_VECTOR` are imported as numbers. The module is larger than the C++ one: binding `gdal.h` links `GDALAllRegister` and with it every driver, while the C++ version registers only the drivers it uses.';
+export const note = 'The same `GDALVectorTranslate` and `GDALVectorInfo` calls the C++ makes. Their arguments are NULL-terminated string lists, which JavaScript builds with `allocPointer` and `cstring`, and flag macros such as `GDAL_OF_VECTOR` are imported as numbers. Like the C++ version, it registers only the drivers it uses, each through its own function in `gdal_frmts.h` or `ogrsf_frmts.h`: `GDALAllRegister` would link every driver GDAL was built with.';
 export const expected = [
     'GPKG: 3 features, EPSG:3857, extent 3021523 4639455 3657925 5013551',
     'ESRI Shapefile: 3 features, EPSG:32635, extent 512465 4252837 1000822 4541552',
 ];
 
-export default async function example({ GDALAllRegister, GDALOpenEx, GDAL_OF_VECTOR, GDALClose, allocPointer, writePointerAt, cstring, readCString, GDALVectorTranslateOptionsNew, GDALVectorTranslateOptionsFree, GDALVectorTranslate, GDALVectorInfoOptionsNew, GDALVectorInfoOptionsFree, GDALVectorInfo, VSIUnlink, VSIFree, CPLGetLastErrorMsg }, console) {
-    await GDALAllRegister();
+export default async function example({ RegisterOGRGeoJSON, RegisterOGRGeoPackage, RegisterOGRShape, GDALOpenEx, GDAL_OF_VECTOR, GDALClose, allocPointer, writePointerAt, cstring, readCString, GDALVectorTranslateOptionsNew, GDALVectorTranslateOptionsFree, GDALVectorTranslate, GDALVectorInfoOptionsNew, GDALVectorInfoOptionsFree, GDALVectorInfo, VSIUnlink, VSIFree, CPLGetLastErrorMsg }, console) {
+    await RegisterOGRGeoJSON();
+    await RegisterOGRGeoPackage();
+    await RegisterOGRShape();
     const cities = JSON.stringify({
         type: 'FeatureCollection',
         features: [

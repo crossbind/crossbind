@@ -1,6 +1,5 @@
 export const imports = {
     '@crossbind/port-gdal/gdal.h': [
-        'GDALAllRegister',
         'GDALOpenEx',
         'GDAL_OF_VECTOR',
         'GDALDatasetGetLayer',
@@ -13,6 +12,7 @@ export const imports = {
         'cstring',
         'readCString',
     ],
+    '@crossbind/port-gdal/ogrsf_frmts.h': ['RegisterOGRCSV'],
     '@crossbind/port-gdal/ogr_api.h': [
         'OGR_L_GetLayerDefn',
         'OGR_L_GetName',
@@ -37,7 +37,7 @@ export const imports = {
     '@crossbind/port-gdal/cpl_vsi.h': ['VSIFileFromMemBuffer', 'VSIFCloseL', 'VSIUnlink', 'VSIFree'],
     '@crossbind/port-gdal/cpl_error.h': ['CPLGetLastErrorMsg'],
 };
-export const note = 'The same OGR calls the C++ makes. The CSV goes into `/vsimem` with `VSIFileFromMemBuffer` over an `allocBuffer` block that JavaScript keeps until the file is unlinked, `OGR_L_GetFeatureCount` returns a `GIntBig` that arrives as a BigInt, and `OGR_G_ExportToWkt` writes its `char *` into an `allocPointer` slot, read with `readCString` and freed with `VSIFree`, which `CPLFree` names. The spatial filter builds a GEOS prepared geometry, so this module links GEOS and is built with `-Oz` to stay under the 25 MiB a file the site\'s host accepts (see the configuration above).';
+export const note = 'The same OGR calls the C++ makes. The CSV goes into `/vsimem` with `VSIFileFromMemBuffer` over an `allocBuffer` block that JavaScript keeps until the file is unlinked, `OGR_L_GetFeatureCount` returns a `GIntBig` that arrives as a BigInt, and `OGR_G_ExportToWkt` writes its `char *` into an `allocPointer` slot, read with `readCString` and freed with `VSIFree`, which `CPLFree` names. The spatial filter builds a GEOS prepared geometry, so this module links GEOS (see the configuration above).';
 export const expected = [
     'sensors: 6 features of Point, fields id Integer, kind String, reading Real',
     '1 air 31.5 POINT (28.9784 41.0082)',
@@ -45,8 +45,8 @@ export const expected = [
     '6 air 27.3 POINT (29.061 40.1885)',
 ];
 
-export default async function example({ GDALAllRegister, GDALOpenEx, GDAL_OF_VECTOR, GDALDatasetGetLayer, GDALClose, allocBuffer, allocPointer, writeBytes, writePointerAt, readPointerAt, cstring, readCString, OGR_L_GetLayerDefn, OGR_L_GetName, OGR_L_GetFeatureCount, OGR_L_GetGeomType, OGR_FD_GetFieldCount, OGR_FD_GetFieldDefn, OGR_Fld_GetNameRef, OGR_Fld_GetType, OGR_GetFieldTypeName, OGR_L_SetAttributeFilter, OGR_L_SetSpatialFilterRect, OGR_L_ResetReading, OGR_L_GetNextFeature, OGR_F_GetFieldCount, OGR_F_GetFieldAsString, OGR_F_GetGeometryRef, OGR_G_ExportToWkt, OGR_F_Destroy, OGRGeometryTypeToName, OGRERR_NONE, VSIFileFromMemBuffer, VSIFCloseL, VSIUnlink, VSIFree, CPLGetLastErrorMsg }, console) {
-    await GDALAllRegister();
+export default async function example({ RegisterOGRCSV, GDALOpenEx, GDAL_OF_VECTOR, GDALDatasetGetLayer, GDALClose, allocBuffer, allocPointer, writeBytes, writePointerAt, readPointerAt, cstring, readCString, OGR_L_GetLayerDefn, OGR_L_GetName, OGR_L_GetFeatureCount, OGR_L_GetGeomType, OGR_FD_GetFieldCount, OGR_FD_GetFieldDefn, OGR_Fld_GetNameRef, OGR_Fld_GetType, OGR_GetFieldTypeName, OGR_L_SetAttributeFilter, OGR_L_SetSpatialFilterRect, OGR_L_ResetReading, OGR_L_GetNextFeature, OGR_F_GetFieldCount, OGR_F_GetFieldAsString, OGR_F_GetGeometryRef, OGR_G_ExportToWkt, OGR_F_Destroy, OGRGeometryTypeToName, OGRERR_NONE, VSIFileFromMemBuffer, VSIFCloseL, VSIUnlink, VSIFree, CPLGetLastErrorMsg }, console) {
+    await RegisterOGRCSV();
     const csv = [
         'id,kind,reading,lon,lat',
         '1,air,31.5,28.9784,41.0082',

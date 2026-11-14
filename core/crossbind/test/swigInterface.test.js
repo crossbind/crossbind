@@ -1,7 +1,7 @@
 import { describe, test, expect } from 'vitest';
 import {
     buildInterfaceContent, completingIncludes, findHeaderPrelude, findIgnoredDeclarations, findSwigInlineIncludes, findSwigPreamble,
-    indexTypeDefinitions, inlineIncludes, interfaceToRetryWithoutMacros, parseMacroDump, referencedTypeHeaders, selectSwigMacros, withoutSwigMacros,
+    indexTypeDefinitions, inlineIncludes, interfaceToRetryWithoutMacros, interfaceWithAllFunctions, parseMacroDump, referencedTypeHeaders, selectSwigMacros, withoutSwigMacros,
     declaresAtFileScope,
 } from '../src/utils/swigInterface.js';
 import { ALL_NAMES } from '../src/utils/headerImports.js';
@@ -301,17 +301,40 @@ describe('buildInterfaceContent', () => {
     // Class members, enums and constants are untouched: only declarations of free functions are ignored.
     test('binds only the listed free functions', () => {
         const content = buildInterfaceContent({ moduleName: 'ZLIB', headerPath: 'zlib.h', functions: ['deflate', 'crc32'] });
-        expect(content).toContain('%rename($ignore, %$isfunction, %$isglobal) "";\n%rename("%s") crc32;\n%rename("%s") deflate;\n\n%feature("shared_ptr");');
+        expect(content).toContain('%rename($ignore, %$isfunction, %$isglobal) "";\n%rename($ignore, %$isvariable, %$isglobal) "";\n%rename("%s") crc32;\n%rename("%s") deflate;\n\n%feature("shared_ptr");');
     });
 
     test('binds no free function when the list is empty', () => {
         const content = buildInterfaceContent({ moduleName: 'ZCONF', headerPath: 'zconf.h', functions: [] });
-        expect(content).toContain('%rename($ignore, %$isfunction, %$isglobal) "";\n\n%feature("shared_ptr");');
+        expect(content).toContain('%rename($ignore, %$isfunction, %$isglobal) "";\n%rename($ignore, %$isvariable, %$isglobal) "";\n\n%feature("shared_ptr");');
         expect(content).not.toContain('%rename("%s")');
     });
 
     test('binds every free function when the app takes every name of the header', () => {
         expect(buildInterfaceContent({ moduleName: 'ZLIB', headerPath: 'zlib.h', functions: ALL_NAMES })).not.toContain('%rename');
+    });
+
+    // A class outside any namespace is wrapped as a class only, so a C function sharing its name (stat()) stays out; SWIG
+    // matches a namespace's class by its full name only without that condition.
+    test('binds only the listed classes', () => {
+        const content = buildInterfaceContent({ moduleName: 'SHAPES', headerPath: 'shapes.h', functions: ['make_shape'], classes: ['ns::Spaced', 'Shape'] });
+        expect(content).toContain('%rename("%s") make_shape;\n\n%rename($ignore, %$isclass) "";\n%rename("%s", %$isclass) Shape;\n%rename("%s") ns::Spaced;\n\n%feature("shared_ptr");');
+    });
+
+    test('binds no class when none is listed, and every class of a header bound whole', () => {
+        expect(buildInterfaceContent({ moduleName: 'ZLIB', headerPath: 'zlib.h', functions: [], classes: [] })).toContain('%rename($ignore, %$isclass) "";\n\n%feature("shared_ptr");');
+        expect(buildInterfaceContent({ moduleName: 'ZLIB', headerPath: 'zlib.h', functions: [] })).not.toContain('%$isclass');
+    });
+
+    test('drops the SWIG-only macro block after a class selection too', () => {
+        const options = { moduleName: 'SHAPES', headerPath: 'shapes.h', functions: ['make_shape'], classes: ['Shape'] };
+        expect(withoutSwigMacros(buildInterfaceContent({ ...options, swigMacros: ['#define SHAPES_API'] }))).toBe(buildInterfaceContent(options));
+    });
+
+    // The editor and SWIG's parse for the bindings plan read every function and class of the header.
+    test('selects nothing once the selections of functions and classes are removed', () => {
+        const selected = buildInterfaceContent({ moduleName: 'SHAPES', headerPath: 'shapes.h', functions: ['make_shape'], classes: ['Shape', 'ns::Spaced'] });
+        expect(interfaceWithAllFunctions(selected)).toBe(buildInterfaceContent({ moduleName: 'SHAPES', headerPath: 'shapes.h' }));
     });
 
     // SWIG applies the later of two renames of a name, and %ignore is one: a declaration the library never defines stays out.

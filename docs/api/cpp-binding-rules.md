@@ -185,18 +185,20 @@ import { deflateInit2_, Z_DEFLATED, MAX_WBITS, ZLIB_VERSION } from '@crossbind/p
 - `crossbind build` output for a plain browser page or an edge runtime binds no constant: those apps import no header. A Node.js app imports headers through the hooks the build writes, so its constants bind as in a bundler app ([Node.js](../playbooks/integration/nodejs.md#importing-headers-and-rust-directly)).
 - A constant first imported while a dev server runs binds the way rule 9 describes for a function.
 
-### 9. A dependency's functions bind when the app imports them
+### 9. A dependency's functions and classes bind when the app imports them
 
-A header of a dependency (a port or a `conan:` package) binds the free functions the app imports from it, along with all its classes and enums and the constants rule 8 binds. A function the app never names is left out, and so is the library code only that function reaches:
+A header of a dependency (a port or a `conan:` package) binds the free functions the app imports from it and the classes those names reach, along with all its enums and the constants rule 8 binds. A class is reached when the app imports it by name, when a function bound for the app takes or returns it, or when a class already reached uses it: as a base, or in the signature of a public member, in this header or another. A function or class no import reaches is left out, and so is the library code only it reaches:
 
 ```js
 import { GDALAllRegister, GDALOpenEx, GDALClose } from '@crossbind/port-gdal/gdal.h';
 ```
 
-- The project's own headers bind every function, as do the headers a package binds whole (`export.bindings.headers`).
-- `import * as`, `export *`, `import()`, `import 'x.h'`, `require` and an import of `AllSymbols` hand the app the whole module, so the header binds every function. So does a header whose only imports take `initNative` alone. Its constants still follow rule 8.
-- A function the app reaches only through the module object (`const m = await initNative(); m.GDALVersionInfo()`) needs a named import too. Without one the call fails with `crossbind: GDALVersionInfo is not bound in the native module` in a worker, and with `m.GDALVersionInfo is not a function` on the page thread.
-- A header bound only for the types another one uses (`cpl_error.h` for the `CPLErr` of `gdal.h`) registers its classes and enums but none of its functions.
+- The project's own headers bind every function and class, as do the headers a package binds whole (`export.bindings.headers`).
+- `import * as`, `export *`, `import()`, `import 'x.h'`, `require` and an import of `AllSymbols` hand the app the whole module, so the header binds every function and class. So does a header whose only imports take `initNative` alone. Its constants still follow rule 8.
+- A function or class the app reaches only through the module object (`const m = await initNative(); m.GDALVersionInfo()`) needs a named import too. Without one the call fails with `crossbind: GDALVersionInfo is not bound in the native module` in a worker, and with `m.GDALVersionInfo is not a function` on the page thread.
+- A header bound only for the types another one uses (`cpl_error.h` for the `CPLErr` of `gdal.h`) registers the classes the app's imports reach in it and all its enums, but none of its functions. Importing a function of GDAL's C++ header `ogrsf_frmts.h` (`RegisterOGRGeoJSON`) binds that function alone, none of the header's classes.
+- An object whose own class no import reaches comes to JavaScript as the reached class it derives from, with that class's members; importing its own class by name gives it its own.
+- A function declared through a function typedef (OpenSSL's `OSSL_provider_init_fn OSSL_provider_init;`) binds only when imported too, like any free function.
 - A Vite or webpack/Rspack dev server binds a newly imported function when the file is saved, and Rollup's watch mode on its next rebuild. Metro binds it when the file is saved too, but the running app gets it only from its next native build (React Native) or a page reload (Expo web), with Metro left running; until then a call fails with `crossbind: compressBound is not bound in the native module`.
 - A Node.js app binds it on its next `crossbind build`, which `node --import crossbind/node/dev` runs before the app starts once its imports changed; until then Node stops at the import with `does not provide an export named 'compressBound'`.
 - The scan reads JavaScript, TypeScript, Vue, Svelte, HTML scripts, Astro and MDX sources, including nested source folders named `build`, `ios` or `android`. It also follows imports and re-exports through the app's declared dependencies, including their import and browser entry points; it does not scan unrelated installed packages. Root build outputs stay excluded.

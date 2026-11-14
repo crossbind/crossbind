@@ -1,6 +1,5 @@
 export const imports = {
     '@crossbind/port-gdal/gdal.h': [
-        'GDALAllRegister',
         'GDALGetDriverByName',
         'GDALCreate',
         'GDALDataType',
@@ -31,6 +30,7 @@ export const imports = {
         'writeBytes',
         'readCString',
     ],
+    '@crossbind/port-gdal/gdal_frmts.h': ['GDALRegister_GTiff'],
     '@crossbind/port-gdal/gdal_utils.h': ['GDALInfo'],
     '@crossbind/port-gdal/cpl_vsi.h': ['VSIFree'],
     '@crossbind/port-gdal/cpl_error.h': ['CPLGetLastErrorMsg'],
@@ -45,8 +45,8 @@ export const expected = [
     'Lower Right (  506000.000, 4445500.000) ( 27d 4\'13.64"E, 40d 9\'35.41"N)',
 ];
 
-export default async function example({ GDALAllRegister, GDALGetDriverByName, GDALCreate, GDALDataType, GDALSetGeoTransform, GDALSetProjection, GDALGetRasterBand, GDALRasterIO, GDALRWFlag, GDALClose, GDALOpenEx, GDAL_OF_RASTER, GDALGetDriverShortName, GDALGetDatasetDriver, GDALGetRasterXSize, GDALGetRasterYSize, GDALGetRasterCount, GDALGetDataTypeName, GDALGetRasterDataType, GDALGetGeoTransform, GDALGetProjectionRef, GDALComputeRasterMinMax, allocBuffer, allocPointer, writePointerAt, cstring, writeNumberAt, readNumberAt, writeBytes, readCString, GDALInfo, VSIFree, CPLGetLastErrorMsg }, console) {
-    await GDALAllRegister();
+export default async function example({ GDALRegister_GTiff, GDALGetDriverByName, GDALCreate, GDALDataType, GDALSetGeoTransform, GDALSetProjection, GDALGetRasterBand, GDALRasterIO, GDALRWFlag, GDALClose, GDALOpenEx, GDAL_OF_RASTER, GDALGetDriverShortName, GDALGetDatasetDriver, GDALGetRasterXSize, GDALGetRasterYSize, GDALGetRasterCount, GDALGetDataTypeName, GDALGetRasterDataType, GDALGetGeoTransform, GDALGetProjectionRef, GDALComputeRasterMinMax, allocBuffer, allocPointer, writePointerAt, cstring, writeNumberAt, readNumberAt, writeBytes, readCString, GDALInfo, VSIFree, CPLGetLastErrorMsg }, console) {
+    await GDALRegister_GTiff();
     // 200 x 150 pixels of 30 m, the top left corner at 500000 E 4450000 N in UTM zone 35N
     const [width, height] = [200, 150];
     const options = await allocPointer(2); // a NULL-terminated list: COMPRESS=DEFLATE

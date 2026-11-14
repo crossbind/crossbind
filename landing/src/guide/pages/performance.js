@@ -13,7 +13,7 @@ export default {
         },
         {
             type: 'p',
-            text: 'The bindings decide what is reachable. Your own headers bind every function. A header from a dependency - a [port](/guide/libraries/) or a [ConanCenter](/guide/conan/) package - binds all its classes and enums but only the free functions you import from it by name, so a function you never name, and the library code only it reaches, stays out:',
+            text: 'The bindings decide what is reachable. Your own headers bind every function and class. A header from a dependency - a [port](/guide/libraries/) or a [ConanCenter](/guide/conan/) package - binds all its enums but only the free functions you import from it by name and the classes those reach, so a function or class your imports never reach, and the library code only it reaches, stays out:',
         },
         {
             type: 'code',

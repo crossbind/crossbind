@@ -1,6 +1,5 @@
 export const imports = {
     '@crossbind/port-gdal/gdal.h': [
-        'GDALAllRegister',
         'GDALGetDriverByName',
         'GDALCreate',
         'GDALDataType',
@@ -29,6 +28,7 @@ export const imports = {
         'readNumberAt',
         'writeBytes',
     ],
+    '@crossbind/port-gdal/gdal_frmts.h': ['GDALRegister_GTiff', 'GDALRegister_VRT', 'GDALRegister_COG'],
     '@crossbind/port-gdal/gdal_utils.h': [
         'GDALWarpAppOptionsNew',
         'GDALWarpAppOptionsFree',
@@ -47,8 +47,10 @@ export const expected = [
     'overviews 546 x 336, 273 x 168, 136 x 84',
 ];
 
-export default async function example({ GDALAllRegister, GDALGetDriverByName, GDALCreate, GDALDataType, GDALSetGeoTransform, GDALSetProjection, GDALGetRasterBand, GDALRasterIO, GDALRWFlag, GDALClose, GDALOpenEx, GDAL_OF_RASTER, GDALGetRasterXSize, GDALGetRasterYSize, GDALGetGeoTransform, GDALGetBlockSize, GDALGetMetadataItem, GDALGetOverviewCount, GDALGetOverview, GDALGetRasterBandXSize, GDALGetRasterBandYSize, allocBuffer, allocPointer, writePointerAt, cstring, writeNumberAt, readNumberAt, writeBytes, GDALWarpAppOptionsNew, GDALWarpAppOptionsFree, GDALWarp, GDALTranslateOptionsNew, GDALTranslateOptionsFree, GDALTranslate, VSIUnlink, CPLGetLastErrorMsg }, console) {
-    await GDALAllRegister();
+export default async function example({ GDALRegister_GTiff, GDALRegister_VRT, GDALRegister_COG, GDALGetDriverByName, GDALCreate, GDALDataType, GDALSetGeoTransform, GDALSetProjection, GDALGetRasterBand, GDALRasterIO, GDALRWFlag, GDALClose, GDALOpenEx, GDAL_OF_RASTER, GDALGetRasterXSize, GDALGetRasterYSize, GDALGetGeoTransform, GDALGetBlockSize, GDALGetMetadataItem, GDALGetOverviewCount, GDALGetOverview, GDALGetRasterBandXSize, GDALGetRasterBandYSize, allocBuffer, allocPointer, writePointerAt, cstring, writeNumberAt, readNumberAt, writeBytes, GDALWarpAppOptionsNew, GDALWarpAppOptionsFree, GDALWarp, GDALTranslateOptionsNew, GDALTranslateOptionsFree, GDALTranslate, VSIUnlink, CPLGetLastErrorMsg }, console) {
+    await GDALRegister_GTiff();
+    await GDALRegister_VRT();
+    await GDALRegister_COG();
     // A NULL-terminated list of strings, as GDAL's option and argv parameters take them.
     const list = async (items) => {
         const argv = await allocPointer(items.length + 1);

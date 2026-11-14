@@ -53,7 +53,7 @@ console.log(await zlibVersion(), await compressBound(1000));`,
         },
         {
             type: 'p',
-            text: 'The header binds as any [library header](/guide/bindings/#imports) does: its classes and enums whole, a free function only when your code imports it by name. Without a bundler, Node.js resolves `conan:` imports through the module hooks `crossbind build -e node` writes ([Node.js](/guide/node/)).',
+            text: 'The header binds as any [library header](/guide/bindings/#imports) does: its enums whole, a free function only when your code imports it by name, a class only when an import reaches it. Without a bundler, Node.js resolves `conan:` imports through the module hooks `crossbind build -e node` writes ([Node.js](/guide/node/)).',
         },
 
         { type: 'h2', id: 'own-header', text: 'Through your own header' },
