@@ -6,6 +6,9 @@ import upath from 'upath';
 import { getFileHash } from '../src/utils/hash.js';
 import calculateDependencyParameters from '../src/state/calculateDependencyParameters.js';
 import { getCliCMakeListsFile } from '../src/utils/getCMakeListsFilePath.js';
+import {
+    classOf, field, fn, top,
+} from './swigXml.js';
 
 // The bridge depends on the header's declarations, but the interface text only names the header:
 // a cache keyed on the interface alone kept stale bindings across header edits.
@@ -34,12 +37,15 @@ vi.mock('../src/state/refreshPackageSources.js', () => ({ default: vi.fn(() => f
 
 let work;
 let header;
+// SWIG's parse of a header for the bindings plan, by the name of the interface it reads; a header without one declares nothing.
+const swigTrees = new Map();
+const swigOutput = (args) => (args.includes('-xml') ? swigTrees.get(path.basename(args.at(-1))) ?? top() : 'EMSCRIPTEN_BINDINGS(fixture) {}\n');
 
 async function importFresh() {
     vi.resetModules();
     const writeOutput = (program, args) => {
         const out = args[args.indexOf('-o') + 1];
-        fs.writeFileSync(out, program === 'swig' ? 'EMSCRIPTEN_BINDINGS(fixture) {}\n' : '');
+        fs.writeFileSync(out, program === 'swig' ? swigOutput(args) : '');
         return '';
     };
     const { default: run } = await import('../src/actions/run.js');
@@ -72,6 +78,7 @@ beforeEach(() => {
         dependencyParameters: { headerPathWithDepends: '', getCmakeDependsPathAndName: () => ({ pathsOfCmakeDepends: [] }) },
     };
     holder.cache = { interfaces: {}, hashes: {}, bridges: {} };
+    swigTrees.clear();
 });
 
 afterEach(() => {
@@ -79,11 +86,30 @@ afterEach(() => {
     fs.rmSync(work, { recursive: true, force: true });
 });
 
-const swigRuns = (run) => run.mock.calls.filter(([program]) => program === 'swig');
+// The SWIG runs that make a bridge, not SWIG's parse for the bindings plan.
+const swigRuns = (run) => run.mock.calls.filter(([program, args]) => program === 'swig' && args.includes('-embind'));
 // createBridgeFile keys its cache by the header path as upath resolves it: forward slashes on every OS.
 const cachedInterface = (file) => holder.cache.interfaces[upath.resolve(file)];
 
 describe('createBridgeFile', () => {
+    // A dev server binds a header again after its edit, in the same process: what the header reaches now binds too.
+    test('binds the types an edited header reaches when it is bound again in the same process', async () => {
+        const { createBridgeFile } = await importFresh();
+        const target = { platform: 'wasm', path: 'wasm-wasm32-st-release' };
+        fs.writeFileSync(path.join(path.dirname(header), 'box.h'), 'struct Box {\n  int side;\n};\n');
+        swigTrees.set('box.tree.i', top(classOf('Box', [field('side', 'int')])));
+        fs.writeFileSync(header, 'int one();\n');
+        swigTrees.set('fixture.tree.i', top(fn('one', 'int', 'f().')));
+        const bridge = createBridgeFile(header, target);
+        expect(fs.readFileSync(`${bridge}.deps`, 'utf8')).toBe('');
+
+        fs.writeFileSync(header, '#include "box.h"\nstruct Box *make_box();\n');
+        swigTrees.set('fixture.tree.i', top(fn('make_box', 'Box', 'f().p.')));
+        createBridgeFile(header, target);
+
+        expect(fs.readFileSync(`${bridge}.deps`, 'utf8')).toContain('box.i.cpp');
+    });
+
     test('regenerates the bridge when the header changes but the interface text does not', async () => {
         const { run, createBridgeFile } = await importFresh();
         const target = { platform: 'wasm', path: 'wasm-wasm32-st-release' };
@@ -395,6 +421,8 @@ describe('constants the app imports', () => {
         const box = upath.join(root, 'box.h');
         fs.writeFileSync(box, '#define BOX_SIDES 4\nstruct Box {\n  int side;\n};\n');
         fs.writeFileSync(header, '#include "box.h"\nint area(struct Box *box);\n');
+        swigTrees.set('fixture.tree.i', top(fn('area', 'int', 'f(p.struct Box).', ['p.struct Box'])));
+        swigTrees.set('box.tree.i', top(classOf('Box', [field('side', 'int')])));
 
         const wholeHeaders = [box, header];
 
@@ -465,7 +493,8 @@ describe('the image SWIG reads a header in', () => {
 
         const build = holder.config.paths.build;
         expect(bridgeTools.loadBridgeTools).toHaveBeenCalled();
-        expect(bridgeTools.runSwig.mock.calls.map(([args, cwd]) => [args.includes('-embind'), cwd])).toEqual([[true, build], [true, build]]);
+        expect(bridgeTools.runSwig.mock.calls.every(([, cwd]) => cwd === build)).toBe(true);
+        expect(bridgeTools.runSwig.mock.calls.filter(([args]) => args.includes('-embind'))).toHaveLength(2);
         expect(bridgeTools.runPreprocessor.mock.calls.every(([, cwd]) => cwd === build)).toBe(true);
         expect(toolPlatforms(run)).toEqual(new Set(['android']));
     });
@@ -548,6 +577,7 @@ describe('a dependency header installed twice under one include root', () => {
 
     test.each(['png.h', 'libpng16/png.h'])('binds %s without its copy', async (headerPath) => {
         const { createBridgeFile } = await importFresh();
+        swigTrees.set('png.tree.i', top(classOf('png_color', [field('red', 'int')]), fn('png_count', 'int', 'f(p.png_color).', ['p.png_color'])));
 
         const bridge = createBridgeFile(upath.join(include, headerPath), target);
 
@@ -556,6 +586,9 @@ describe('a dependency header installed twice under one include root', () => {
 
     test('gives a header using its types one dependency bridge', async () => {
         const { createBridgeFile } = await importFresh();
+        swigTrees.set('pngextra.tree.i', top(fn('png_extra', 'int', 'f(p.png_color).', ['p.png_color'])));
+        swigTrees.set('png.tree.i', top(classOf('png_color', [field('red', 'int')])));
+        fs.writeFileSync(path.join(work, 'src', 'main.js'), "import { png_extra } from '../deps/libpng/prebuilt/include/pngextra.h';\n");
 
         const bridge = createBridgeFile(upath.join(include, 'pngextra.h'), target);
 
@@ -568,7 +601,8 @@ describe('a dependency header installed twice under one include root', () => {
 // A dependency's header binds the free functions the app imports from it: binding them all links code the app never calls.
 describe('free functions of a dependency header', () => {
     const target = { platform: 'wasm', path: 'wasm-wasm32-st-release' };
-    const IGNORE_FUNCTIONS = '%rename($ignore, %$isfunction, %$isglobal) "";';
+    const IGNORE_FUNCTIONS = '%rename($ignore, %$isfunction, %$isglobal) "";\n%rename($ignore, %$isvariable, %$isglobal) "";';
+    const IGNORE_CLASSES = '%rename($ignore, %$isclass) "";';
     const SPECIFIER = '../deps/libfixture/prebuilt/include/lib.h';
     const writeApp = (text) => fs.writeFileSync(path.join(work, 'src', 'main.js'), text);
     const interfaceOf = (file) => fs.readFileSync(cachedInterface(file), 'utf8');
@@ -591,7 +625,7 @@ describe('free functions of a dependency header', () => {
 
         createBridgeFile(libHeader, target);
 
-        expect(interfaceOf(libHeader)).toContain(`${IGNORE_FUNCTIONS}\n%rename("%s") one;\n\n%feature("shared_ptr");`);
+        expect(interfaceOf(libHeader)).toContain(`${IGNORE_FUNCTIONS}\n%rename("%s") one;\n\n${IGNORE_CLASSES}\n\n%feature("shared_ptr");`);
     });
 
     test.each([
@@ -616,7 +650,7 @@ describe('free functions of a dependency header', () => {
 
         createBridgeFile(libHeader, target);
 
-        expect(interfaceOf(libHeader)).toContain(`${IGNORE_FUNCTIONS}\n%rename("%s") one;\n\n%feature("shared_ptr");`);
+        expect(interfaceOf(libHeader)).toContain(`${IGNORE_FUNCTIONS}\n%rename("%s") one;\n\n${IGNORE_CLASSES}\n\n%feature("shared_ptr");`);
     });
 
     // A package's own .i says what the header binds.
@@ -668,11 +702,88 @@ describe('free functions of a dependency header', () => {
         fs.writeFileSync(boxHeader, 'struct Box {\n  int side;\n};\nstruct Box *box_new();\n');
         fs.writeFileSync(libHeader, '#include "box.h"\nint area(struct Box *box);\n');
         writeApp(`import { area } from '${SPECIFIER}';\n`);
+        swigTrees.set('lib.tree.i', top(fn('area', 'int', 'f(p.struct Box).', ['p.struct Box'])));
+        swigTrees.set('box.tree.i', top(classOf('Box', [field('side', 'int')]), fn('box_new', 'Box', 'f().p.')));
 
         const bridge = createBridgeFile(libHeader, target);
 
         expect(fs.readFileSync(`${bridge}.deps`, 'utf8')).toContain('box.i.cpp');
-        expect(interfaceOf(boxHeader)).toContain(`${IGNORE_FUNCTIONS}\n\n%feature("shared_ptr");`);
+        expect(interfaceOf(boxHeader)).toContain(`${IGNORE_FUNCTIONS}\n\n${IGNORE_CLASSES}\n%rename("%s", %$isclass) Box;\n\n%feature("shared_ptr");`);
+        expect(interfaceOf(libHeader)).toContain(`%rename("%s") area;\n\n${IGNORE_CLASSES}\n\n%feature("shared_ptr");`);
+    });
+
+    // A class binds when a name the app imports reaches it; binding every class of the header links code nobody calls.
+    test('binds the classes the imported names reach and no other class of the header', async () => {
+        const { createBridgeFile } = await importFresh();
+        fs.writeFileSync(libHeader, 'struct Shape { double area; };\nstruct Unused { int x; };\nstruct Shape *make_shape();\n');
+        swigTrees.set('lib.tree.i', top(
+            classOf('Shape', [field('area', 'double')]), classOf('Unused', [field('x', 'int')]), fn('make_shape', 'Shape', 'f().p.'),
+        ));
+        writeApp(`import { make_shape } from '${SPECIFIER}';\n`);
+
+        const bridge = createBridgeFile(libHeader, target);
+
+        expect(interfaceOf(libHeader)).toContain(`${IGNORE_CLASSES}\n%rename("%s", %$isclass) Shape;\n\n%feature("shared_ptr");`);
+        expect(interfaceOf(libHeader)).not.toContain('Unused;');
+        expect(fs.readFileSync(`${bridge}.deps`, 'utf8')).toBe('');
+    });
+
+    // One bridge registers a header's classes for every header using them, so it binds what each of them needs.
+    test('binds in the header defining them the classes every importing header reaches', async () => {
+        const { createBridgeFile } = await importFresh();
+        const typesHeader = upath.join(include, 'types.h');
+        const otherHeader = upath.join(include, 'other.h');
+        fs.writeFileSync(typesHeader, 'struct Box { int side; };\nstruct Ball { int radius; };\nstruct Spare { int x; };\n');
+        fs.writeFileSync(libHeader, '#include "types.h"\nint area(struct Box *box);\n');
+        fs.writeFileSync(otherHeader, '#include "types.h"\nint volume(struct Ball *ball);\n');
+        swigTrees.set('types.tree.i', top(classOf('Box'), classOf('Ball'), classOf('Spare')));
+        swigTrees.set('lib.tree.i', top(fn('area', 'int', 'f(p.struct Box).', ['p.struct Box'])));
+        swigTrees.set('other.tree.i', top(fn('volume', 'int', 'f(p.struct Ball).', ['p.struct Ball'])));
+        writeApp(`import { area } from '${SPECIFIER}';\nimport { volume } from '../deps/libfixture/prebuilt/include/other.h';\n`);
+
+        const bridges = [libHeader, otherHeader].map((file) => createBridgeFile(file, target));
+
+        bridges.forEach((bridge) => expect(fs.readFileSync(`${bridge}.deps`, 'utf8')).toContain('types.i.cpp'));
+        expect(interfaceOf(typesHeader)).toContain(`${IGNORE_CLASSES}\n%rename("%s", %$isclass) Ball;\n%rename("%s", %$isclass) Box;\n\n`);
+        expect(interfaceOf(typesHeader)).not.toContain('Spare;');
+    });
+
+    test('keeps the dependencies in the text of a header SWIG cannot parse, bound with every class', async () => {
+        const { run, createBridgeFile } = await importFresh();
+        const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+        const boxHeader = upath.join(include, 'box.h');
+        fs.writeFileSync(boxHeader, 'struct Box {\n  int side;\n};\n');
+        fs.writeFileSync(libHeader, '#include "box.h"\nint area(struct Box *box);\n');
+        writeApp(`import { area } from '${SPECIFIER}';\n`);
+        run.mockImplementation((program, args) => {
+            if (args.includes('-xml')) throw Object.assign(new Error('crossbind: command failed (swig)'), { cause: { status: 2 } });
+            fs.writeFileSync(args[args.indexOf('-o') + 1], program === 'swig' ? 'EMSCRIPTEN_BINDINGS(fixture) {}\n' : '');
+            return '';
+        });
+
+        const bridge = createBridgeFile(libHeader, target);
+
+        expect(fs.readFileSync(`${bridge}.deps`, 'utf8')).toContain('box.i.cpp');
+        expect(interfaceOf(boxHeader)).not.toContain(IGNORE_CLASSES);
+        expect(warn.mock.calls.some(([message]) => message.includes('cannot parse lib.h'))).toBe(true);
+    });
+
+    test('warns when SWIG leaves a class the imported names reach out of the bridge', async () => {
+        const { run, createBridgeFile } = await importFresh();
+        const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+        fs.writeFileSync(libHeader, 'struct Shape { double area; };\nstruct Shape *make_shape();\n');
+        swigTrees.set('lib.tree.i', top(classOf('Shape'), fn('make_shape', 'Shape', 'f().p.')));
+        writeApp(`import { make_shape } from '${SPECIFIER}';\n`);
+        run.mockImplementation((program, args) => {
+            const out = args[args.indexOf('-o') + 1];
+            fs.writeFileSync(out, program === 'swig' ? swigOutput(args) : '');
+            if (args.includes('-embind')) fs.writeFileSync(`${out}.exports.json`, '["make_shape"]\n');
+            return '';
+        });
+
+        createBridgeFile(libHeader, target);
+
+        expect(warn.mock.calls.some(([message]) => message.includes('does not bind Shape'))).toBe(true);
     });
 
     // A package that imports the header in its own JavaScript sits in node_modules, which the scan of the app skips.
@@ -684,7 +795,7 @@ describe('free functions of a dependency header', () => {
         createBridgeFile(libHeader, target);
 
         expect(warn.mock.calls.filter(([message]) => message.includes('lib.h'))).toHaveLength(1);
-        expect(interfaceOf(libHeader)).toContain(`${IGNORE_FUNCTIONS}\n\n%feature("shared_ptr");`);
+        expect(interfaceOf(libHeader)).toContain(`${IGNORE_FUNCTIONS}\n\n${IGNORE_CLASSES}\n\n%feature("shared_ptr");`);
     });
 });
 
@@ -781,7 +892,7 @@ describe('a dependency built after the process loaded', () => {
 
         createBridgeFile(libHeader, target);
 
-        expect(fs.readFileSync(cachedInterface(libHeader), 'utf8')).toContain('%rename("%s") one;\n\n%feature("shared_ptr");');
+        expect(fs.readFileSync(cachedInterface(libHeader), 'utf8')).toContain('%rename("%s") one;\n\n%rename($ignore, %$isclass) "";\n\n%feature("shared_ptr");');
     });
 });
 

@@ -1,7 +1,7 @@
-// Libraries left out of the link. Binding gdal.h links GDALAllRegister and so every
-// driver GDAL was built with; leaving out what these examples never call keeps the wasm
-// under the 25 MiB a file the site's host accepts. Calling into a library left out
-// aborts with "missing function". zstd stays in: the COG driver calls it even when it
+// Libraries left out of the link. GDAL's own code reaches them whichever drivers the
+// module registers (its network file systems reach curl and OpenSSL), so leaving out what
+// these examples never call keeps the wasm about 12 MB smaller. Calling into a library
+// left out aborts with "missing function". zstd stays in: the COG driver calls it even when it
 // writes Deflate. GEOS stays in too: a spatial filter makes OGR build a GEOS prepared
 // geometry.
 export default {

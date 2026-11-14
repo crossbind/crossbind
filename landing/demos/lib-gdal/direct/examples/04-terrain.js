@@ -1,6 +1,5 @@
 export const imports = {
     '@crossbind/port-gdal/gdal.h': [
-        'GDALAllRegister',
         'GDALGetDriverByName',
         'GDALCreate',
         'GDALDataType',
@@ -25,6 +24,7 @@ export const imports = {
         'readNumberAt',
         'writeBytes',
     ],
+    '@crossbind/port-gdal/gdal_frmts.h': ['GDALRegister_GTiff', 'GDALRegister_MEM'],
     '@crossbind/port-gdal/gdal_utils.h': ['GDALDEMProcessingOptionsNew', 'GDALDEMProcessingOptionsFree', 'GDALDEMProcessing'],
     '@crossbind/port-gdal/gdal_alg.h': ['GDALChecksumImage', 'GDALContourGenerateEx'],
     '@crossbind/port-gdal/ogr_api.h': [
@@ -48,8 +48,9 @@ export const expected = [
     'contours every 100 m: 11 lines from 200 to 900 m, 46.9 km long',
 ];
 
-export default async function example({ GDALAllRegister, GDALGetDriverByName, GDALCreate, GDALDataType, GDALSetGeoTransform, GDALSetProjection, GDALGetSpatialRef, GDALGetRasterBand, GDALRasterIO, GDALRWFlag, GDALClose, GDALOpenEx, GDAL_OF_RASTER, GDALGetRasterXSize, GDALGetRasterYSize, GDALComputeRasterStatistics, GDALDatasetCreateLayer, allocBuffer, allocPointer, writePointerAt, cstring, writeNumberAt, readNumberAt, writeBytes, GDALDEMProcessingOptionsNew, GDALDEMProcessingOptionsFree, GDALDEMProcessing, GDALChecksumImage, GDALContourGenerateEx, OGR_Fld_Create, OGR_Fld_Destroy, OGR_L_CreateField, OGR_L_ResetReading, OGR_L_GetNextFeature, OGR_F_GetFieldAsDouble, OGR_F_GetGeometryRef, OGR_F_Destroy, OGR_G_Length, OGRwkbGeometryType, OGRFieldType, CPLErr, CPLGetLastErrorMsg }, console) {
-    await GDALAllRegister();
+export default async function example({ GDALRegister_GTiff, GDALRegister_MEM, GDALGetDriverByName, GDALCreate, GDALDataType, GDALSetGeoTransform, GDALSetProjection, GDALGetSpatialRef, GDALGetRasterBand, GDALRasterIO, GDALRWFlag, GDALClose, GDALOpenEx, GDAL_OF_RASTER, GDALGetRasterXSize, GDALGetRasterYSize, GDALComputeRasterStatistics, GDALDatasetCreateLayer, allocBuffer, allocPointer, writePointerAt, cstring, writeNumberAt, readNumberAt, writeBytes, GDALDEMProcessingOptionsNew, GDALDEMProcessingOptionsFree, GDALDEMProcessing, GDALChecksumImage, GDALContourGenerateEx, OGR_Fld_Create, OGR_Fld_Destroy, OGR_L_CreateField, OGR_L_ResetReading, OGR_L_GetNextFeature, OGR_F_GetFieldAsDouble, OGR_F_GetGeometryRef, OGR_F_Destroy, OGR_G_Length, OGRwkbGeometryType, OGRFieldType, CPLErr, CPLGetLastErrorMsg }, console) {
+    await GDALRegister_GTiff();
+    await GDALRegister_MEM();
     // A NULL-terminated list of strings, as GDAL's option and argv parameters take them.
     const list = async (items) => {
         const argv = await allocPointer(items.length + 1);

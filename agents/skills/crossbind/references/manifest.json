@@ -39,7 +39,7 @@
     {
       "source": "docs/api/cpp-binding-rules.md",
       "output": "api/cpp-binding-rules.md",
-      "sha256": "7d634705f26ecece2cf38ef20b2f452a0ea5c7b37a58b104007cd207fe8b24ab"
+      "sha256": "df20bac81ed3bc80ad0c76c386a1a871a32ca97859f0776d55696bcb119af8e5"
     },
     {
       "source": "docs/api/crossbind-build.md",
@@ -49,7 +49,7 @@
     {
       "source": "docs/api/crossbind-config.md",
       "output": "api/crossbind-config.md",
-      "sha256": "6a3c120a23a85a48aa1abc4fc24cd1f20f3e31a9fa442ead5969a6a801af03a4"
+      "sha256": "3581296f7e909e9e0031f366bab8304a05d44aee51dd6a9f4fab1f39df57607b"
     },
     {
       "source": "docs/api/extensions.md",

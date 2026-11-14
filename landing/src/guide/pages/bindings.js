@@ -169,7 +169,7 @@ const bytes = readBuffer(out, encode(out, 1024));`,
         { type: 'h2', id: 'imports', text: 'What a library header binds' },
         {
             type: 'p',
-            text: 'Your own headers bind every function. A header from a dependency - a [port](/guide/libraries/) or a [ConanCenter](/guide/conan/) package - binds its classes and enums, but only the free functions you import from it; a function you never name is left out, and so is the library code only it reaches.',
+            text: 'Your own headers bind every function and class. A header from a dependency - a [port](/guide/libraries/) or a [ConanCenter](/guide/conan/) package - binds its enums, the free functions you import from it and the classes those reach, with their bases and the classes their methods use; a function or class nothing you import reaches is left out, and so is the library code only it reaches.',
         },
         {
             type: 'code',

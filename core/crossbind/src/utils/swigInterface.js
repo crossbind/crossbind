@@ -65,7 +65,7 @@ export function interfaceIncludes(headerPath, prelude = []) {
 // wraps just the imported header. The ignored declarations follow the macros, so the retry without macros keeps them.
 export function buildInterfaceContent({
     moduleName, headerPath, prelude = [], completing = [], swigMacros = [], ignored = [], constants = [], preamble = [], functions = ALL_NAMES,
-    extras = [],
+    classes = ALL_NAMES, extras = [],
 }) {
     const includes = [...new Set([...interfaceIncludes(headerPath, prelude), ...completing])]
         .map((header) => `#include "${header}"`)
@@ -89,7 +89,7 @@ ${extraBlock}%{
 ${includes}
 %}
 
-${everyConstant ? '' : constantRequests(constants)}${functionRequests(functions)}%feature("shared_ptr");
+${everyConstant ? '' : constantRequests(constants)}${functionRequests(functions)}${classRequests(classes)}%feature("shared_ptr");
 %feature("polymorphic_shared_ptr");
 
 ${macros}${ignores}${preambleBlock}${everyConstant ? constantRequests(constants) : ''}%include "${headerPath}"
@@ -104,17 +104,32 @@ function constantRequests(constants) {
     return constants.length ? `${constants.map((name) => `%feature("embind:constant") ${name};`).join('\n')}\n\n` : '';
 }
 
-// SWIG ignores every global function, then wraps the listed names again: class members, enums and constants stay. The
-// package's own ignores come after, since SWIG applies the later of two renames of a name.
+// SWIG ignores every global function, then wraps the listed names again: class members, enums and constants stay. A
+// function declared through a function typedef (OpenSSL's `OSSL_provider_init_fn OSSL_provider_init;`) reads as a
+// variable, so global variables are ignored too, as rule 10 binds a mutable one only when imported. The package's own
+// ignores come after, since SWIG applies the later of two renames of a name.
 function functionRequests(functions) {
     if (functions === ALL_NAMES) return '';
     const names = [...new Set(functions)].sort();
-    return `%rename($ignore, %$isfunction, %$isglobal) "";\n${names.map((name) => `%rename("%s") ${name};\n`).join('')}\n`;
+    return `%rename($ignore, %$isfunction, %$isglobal) "";\n%rename($ignore, %$isvariable, %$isglobal) "";\n${names.map((name) => `%rename("%s") ${name};\n`).join('')}\n`;
 }
 
-// Editor declarations need the whole header even when the compiled bridge selects functions by import.
+// SWIG ignores every class, then wraps the classes the app's imports reach (see typeClosure.js) again. A class outside
+// any namespace is wrapped as a class only, so a C function sharing its name (struct stat and stat()) stays out; SWIG
+// matches a namespace's class by its full name only without that condition.
+function classRequests(classes) {
+    if (classes === ALL_NAMES) return '';
+    const lines = [...new Set(classes)].sort()
+        .map((name) => (name.includes('::') ? `%rename("%s") ${name};\n` : `%rename("%s", %$isclass) ${name};\n`));
+    return `%rename($ignore, %$isclass) "";\n${lines.join('')}\n`;
+}
+
+// Editor declarations and SWIG's parse for the bindings plan need the whole header even when the compiled bridge
+// selects functions and classes by import.
 export function interfaceWithAllFunctions(content) {
-    return content.replace(/%rename\(\$ignore, %\$isfunction, %\$isglobal\) "";\n(?:%rename\("%s"\) [A-Za-z_]\w*;\n)*\n/g, '');
+    return content
+        .replace(/%rename\(\$ignore, %\$isfunction, %\$isglobal\) "";\n(?:%rename\(\$ignore, %\$isvariable, %\$isglobal\) "";\n)?(?:%rename\("%s"\) [A-Za-z_]\w*;\n)*\n/g, '')
+        .replace(/%rename\(\$ignore, %\$isclass\) "";\n(?:%rename\("%s"(?:, %\$isclass)?\) [A-Za-z_][\w:]*;\n)*\n/g, '');
 }
 
 export function withoutSwigMacros(content) {
