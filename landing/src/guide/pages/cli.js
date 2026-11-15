@@ -263,7 +263,7 @@ ${CREATE_COMMAND} -- my-app Web React Vite`,
         },
         {
             type: 'p',
-            text: 'A separate package, `create-crossbind`, scaffolds a project from a template. It asks for a name, a folder and a template; arguments preselect them in order - `<dir> <group> <framework|variant> [<variant>]` - and `-- --help` lists the templates. The groups are Web, Mobile, Desktop, Backend, Cloud, Native and Library. It writes the new folder and prints the next steps; it installs nothing.',
+            text: 'A separate package, `create-crossbind`, scaffolds a project from a template. It asks for a name, a folder and a template; arguments preselect them in order - `<dir> <group> <framework|variant> [<variant>]` - and `-- --help` lists the templates. The groups are Web, Mobile, Desktop, Backend, Cloud, Native, Library and Extension. It writes the new folder and prints the next steps; it installs nothing.',
         },
     ],
 };

@@ -15,14 +15,17 @@ makes. The config it writes:
 import starter from '@crossbind/example-app-extension/crossbind.extension.js';
 
 export default {
-    target: { runtimeEnv: 'app' },
     extensions: [starter()],
 };
 ```
 
+The page calls the extension's functions once its own `initNative()` has resolved:
+
 ```js
+import { initNative } from './native/native.h';
 import { greet } from '@crossbind/example-app-extension';
 
+await initNative();
 console.log(await greet('crossbind')); // Hello, crossbind, from <the app's name>
 ```
 

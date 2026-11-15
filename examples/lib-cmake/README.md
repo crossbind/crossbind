@@ -30,7 +30,8 @@ export default {
 ```
 
 ## Usage
-Below are the steps to use the library in your C++ or JavaScript code.
+The package ships its sources, so its headers are for your app's C++: JavaScript reaches the library through the app's
+own native code, as `Native.sample()` below.
 
 ### Usage in C++ Code
 ```diff
@@ -40,12 +41,4 @@ std::string Native::sample() {
 +    return SampleBasicCmake::sample();
 }
 
-```
-
-### Usage in JavaScript Code (web, with plugin)
-```js
-import { initNative, SampleBasicCmake } from '@crossbind/example-lib-cmake/crossbind-lib-samplebasic-cmake/samplebasiccmake.h';
-
-await initNative();
-console.log(SampleBasicCmake.sample());
 ```

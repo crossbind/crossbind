@@ -275,7 +275,7 @@ App-side wrapper is the default; lib-side only when you're publishing a package.
 
 ## Advanced: JSPI flag (experimental)
 
-The Emscripten `-sJSPI` flag enables JavaScript Promise Integration — letting C++ code call into JS-promising code synchronously (the C++ stack suspends on `await`). The living demos are `e2e/backend-nodejs` and `e2e/backend-nodejs-multithread` (Node, run with `--experimental-wasm-jspi`), where `CurlProbe.run_JSPI` runs curl transfers against a local server.
+The Emscripten `-sJSPI` flag enables JavaScript Promise Integration — letting C++ code call into JS-promising code synchronously (the C++ stack suspends on `await`). The living demos are `e2e/backend-nodejs` and `e2e/backend-nodejs-multithread` (Node), where `CurlProbe.run_JSPI` runs curl transfers against a local server.
 
 You'd opt in via `targetSpecs[].specs.binary.emccFlags` in `crossbind.config.js`:
 
@@ -327,7 +327,7 @@ A module runs its `_JSPI` calls one at a time: a call made while another is pend
 
 Where JSPI actually works (verified against the playgrounds):
 
-- **Node (st and mt)**: works behind `node --experimental-wasm-jspi`; without the flag a JSPI-linked module aborts at boot ("JSPI not supported by current environment").
+- **Node (st and mt)**: works; Node 26, which crossbind requires, has JSPI on by default and refuses the old `--experimental-wasm-jspi` flag.
 - **Browser, st runtime**: Chromium only. Firefox and WebKit ship no `WebAssembly.Suspending`, and a glue linked with `-sJSPI` refuses to boot there even if nothing ever suspends.
 - **Browser, mt (pthreads) runtime**: do NOT combine with `-sJSPI`. The pthread mailbox enters wasm outside a promising export, so Chromium throws `SuspendError: trying to suspend without WebAssembly.promising` at boot. The mt web playgrounds deliberately carry no JSPI flag for this reason.
 

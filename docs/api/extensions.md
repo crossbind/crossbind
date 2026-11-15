@@ -38,8 +38,10 @@ export default {
 
 ```js
 // the page
+import { initNative } from './native/native.h';
 import { readText, writeText } from '@crossbind/extension-clipboard';
 
+await initNative();
 await writeText('Copied from the app');
 ```
 

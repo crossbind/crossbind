@@ -10,7 +10,7 @@ function hostOf(member, name) {
     if (host) return host;
     if (!globalThis.__crossbind_token && !globalThis.Crossbind?.app) throw new Error(`crossbind: ${name} works in an app alone, which crossbind app builds`);
     if (globalThis.Crossbind) throw new Error(`crossbind: this app's host is older than crossbind/app; update @crossbind/core-app-host to call ${name}`);
-    throw new Error(`crossbind: ${name} works once the page has called initNative()`);
+    throw new Error(`crossbind: ${name} works once the page's initNative() has resolved`);
 }
 
 const call = (name, options) => hostOf('app', name)(name, options);

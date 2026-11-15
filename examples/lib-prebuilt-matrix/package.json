@@ -8,7 +8,7 @@
     "type": "module",
     "scripts": {
         "build": "crossbind build",
-        "build:wasm": "crossbind build -p wasm",
+        "build:wasm": "crossbind build -p wasm -e browser,edge,node",
         "build:android": "crossbind build -p android",
         "build:ios": "crossbind build -p ios",
         "build:darwin": "crossbind build -p darwin",

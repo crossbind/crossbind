@@ -4,6 +4,7 @@ import state from '../state/index.js';
 import { parseCargoImport, writeCargoMarker } from '../utils/cargoImport.js';
 import { cratesOf, sourceOfImport, resolveSourceHeader } from '../utils/packageSourceImport.js';
 import refreshPackageSources from '../state/refreshPackageSources.js';
+import isSourceCmakePackage from '../utils/isSourceCmakePackage.js';
 
 const LAYOUT = { header: 'include', module: 'swig', source: '' };
 
@@ -118,7 +119,10 @@ export default function getDependFilePath(source, target) {
         // Skip packages that don't produce artifacts for this target — multiple
         // packages may share the same alias (one per platform), so this filters
         // out the wrong-platform matches without needing explicit metadata.
-        if (!existsCached(prebuiltRoot)) continue;
+        if (!existsCached(prebuiltRoot)) {
+            tried.push(prebuiltRoot);
+            continue;
+        }
 
         const baseDir = subdir ? `${prebuiltRoot}/${subdir}` : prebuiltRoot;
         for (const candidate of getFolderCandidates(pkg, alias)) {
@@ -131,6 +135,9 @@ export default function getDependFilePath(source, target) {
     }
 
     const matchNames = matches.map((m) => m.pkg.package.name).join(', ');
+    if (matches.every(({ pkg }) => pkg.export?.type === 'source' || isSourceCmakePackage(pkg))) {
+        throw new Error(`crossbind: ${matchNames} ships its sources, so "${source}" is for C++: include it in the app's native code and call that from JavaScript.`);
+    }
     throw new Error(
         `Could not resolve "${source}" in package(s) [${matchNames}] for target "${target.path}". Tried:\n`
         + tried.map((t) => `  - ${t}`).join('\n'),
