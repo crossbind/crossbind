@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import upath from 'upath';
 import { afterAll, afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 import { PNG } from 'pngjs';
 
@@ -12,7 +13,7 @@ vi.mock('../src/state/index.js', () => ({ default: state }));
 function writeMade(command, cwd) {
     const outfile = command.find((arg) => arg.startsWith('-DOUTFILE='))?.slice('-DOUTFILE='.length);
     const made = {
-        'dpkg-deb': command.at(-1), hdiutil: command.at(-1), zip: cwd && path.join(cwd, command[4]), makensis: outfile, tar: command[2],
+        'dpkg-deb': command.at(-1), hdiutil: command.at(-1), zip: cwd && upath.join(cwd, command[4]), makensis: outfile, tar: command[command.indexOf('-czf') + 1],
     }[command[0]];
     if (made) fs.writeFileSync(made, command[0]);
 }
@@ -232,13 +233,14 @@ describe("the file types an installer registers", () => {
 });
 
 describe("a Linux app's archive", () => {
-    test('is the app as one tar.gz beside its folder, which macOS writes without AppleDouble files', async () => {
+    // macOS's tar would store each file's extended attributes as pax headers, which GNU tar warns about on every file.
+    test('is the app as one tar.gz beside its folder, which macOS writes without AppleDouble files or extended attributes', async () => {
         const root = project({ 'demo-linux-x64/demo': 'elf' }, { appOptions: { installers: ['tar-gz'] } });
-        const app = path.join(root, 'dist/demo-linux-x64');
+        const app = upath.join(root, 'dist/demo-linux-x64');
 
         expect(await writeInstallers(app, { platform: 'linux', arch: 'x64' })).toEqual([{ name: 'tar-gz', files: [`${app}.tar.gz`] }]);
         const [[args, options]] = tar.mock.calls;
-        expect(args).toEqual(['-czf', `${app}.tar.gz`, '-C', path.join(root, 'dist'), 'demo-linux-x64']);
+        expect(args).toEqual(['--no-xattrs', '-czf', `${app}.tar.gz`, '-C', upath.join(root, 'dist'), 'demo-linux-x64']);
         expect(options.env.COPYFILE_DISABLE).toBe('1');
     });
 });
