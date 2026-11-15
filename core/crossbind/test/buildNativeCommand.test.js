@@ -154,6 +154,30 @@ describe('buildNativeCommand', () => {
         expect(run).not.toHaveBeenCalled();
     });
 
+    // A project copied or moved after a build keeps a build tree that names its old place, which CMake refuses.
+    test('configures afresh a build tree another project directory configured', async () => {
+        const target = targetOf('darwin', 'arm64');
+        const tree = `${work}/Native-Release/${target.path}`;
+        fs.mkdirSync(`${tree}/CMakeFiles`, { recursive: true });
+        fs.writeFileSync(`${tree}/CMakeCache.txt`, 'CMAKE_HOME_DIRECTORY:INTERNAL=/old/place/.crossbind/build/crossbind-command\n');
+
+        await buildNativeCommand(target, { force: true });
+
+        expect(fs.existsSync(`${tree}/CMakeCache.txt`)).toBe(false);
+        expect(fs.existsSync(`${tree}/CMakeFiles`)).toBe(false);
+    });
+
+    test('keeps a build tree this project directory configured', async () => {
+        const target = targetOf('darwin', 'arm64');
+        const tree = `${work}/Native-Release/${target.path}`;
+        fs.mkdirSync(tree, { recursive: true });
+        fs.writeFileSync(`${tree}/CMakeCache.txt`, `CMAKE_HOME_DIRECTORY:INTERNAL=${work}/crossbind-command\n`);
+
+        await buildNativeCommand(target, { force: true });
+
+        expect(fs.existsSync(`${tree}/CMakeCache.txt`)).toBe(true);
+    });
+
     test('stages the command project inside the build directory, which a docker build can read', async () => {
         await buildNativeCommand(targetOf('linux'), { force: true });
 
