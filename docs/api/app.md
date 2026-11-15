@@ -1330,7 +1330,10 @@ image, as a package's Android libraries do in the android image it adds to, so i
 or `DOCKER_EXEC`).
 
 `crossbind app dev -p android` keeps one container of the image for the session, whose Gradle daemon packages each
-build, and removes it when the session ends. The image is amd64 only, as the android image is, so it runs under
+build, and removes it when the session ends. Every Android build on the machine shares Gradle's caches, which that
+daemon holds until its container goes, so the container carries the session's PID: one a session left behind without
+its exit hooks, as a crash or a SIGKILL leaves, is removed before the next Android build. A release that still cannot
+take the caches names the containers that hold them. The image is amd64 only, as the android image is, so it runs under
 emulation on an Apple silicon Mac: there the conformance app reopened about 25 s after an edit to its native code, and
 its page reloaded within 2 s of an edit. The app reaches the device through this machine's `adb`, from `PATH` or the
 Android SDK, which crossbind does not install: `brew install --cask android-platform-tools` on macOS,
@@ -1801,7 +1804,7 @@ Each component is listed once:
 In a build of a page that imports `crossbind/licenses`, the Vite and Rollup plugins write the list beside the page as
 `crossbind-licenses.json`, which the app carries in `page/` and `licenses()` reads from the page's base. The same page
 built for the web lists its wasm module's runtime in place of the host's: Emscripten's libraries, LLVM's C++ runtime and
-crossbind's runtime. The dev server has no list, so there `licenses()` rejects, saying so.
+crossbind's runtime, the first two with the texts and versions the build copied out of the web image. The dev server has no list, so there `licenses()` rejects, saying so.
 
 ## Environment variables of the app
 

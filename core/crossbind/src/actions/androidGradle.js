@@ -119,9 +119,15 @@ export function packageAndroidRelease(project) {
     const key = machineUploadKey();
     const env = key ? { ...process.env, ...uploadKeyEnv(key) } : process.env;
     const signing = releaseSigning(env);
+    const workdir = inContainer(project);
     pullDockerImage(ROLE, PLATFORM);
-    docker(['run', '--rm', ...containerArgs(signing, isOnline(project)), '-w', inContainer(project), getDockerImage(ROLE, PLATFORM),
-        ...gradleOf(project), '--no-daemon', 'assembleRelease', ...(signing ? ['bundleRelease'] : [])], `packaging ${path.basename(project)}`, env);
+    removeOrphanedDevContainers();
+    try {
+        docker(['run', '--rm', ...containerArgs(signing, isOnline(project)), '-w', workdir, getDockerImage(ROLE, PLATFORM),
+            ...gradleOf(project), '--no-daemon', 'assembleRelease', ...(signing ? ['bundleRelease'] : [])], `packaging ${path.basename(project)}`, env);
+    } catch (error) {
+        throw withCacheHolders(error);
+    }
     const outputs = `${project}/app/build/outputs`;
     fs.copyFileSync(`${outputs}/apk/release/app-release.apk`, `${project}.apk`);
     fs.rmSync(`${project}.aab`, { force: true });
@@ -138,6 +144,42 @@ export function packageAndroidRelease(project) {
     }
 }
 
+// Every Android build on this machine shares Gradle's caches, which a development container's daemon holds until the
+// container goes: Gradle cannot hand them to another container. A development container carries the PID of the session it
+// serves, so that one a session left behind without its exit hooks, as a crash or a SIGKILL leaves, goes before the next
+// build instead of stopping it.
+const SESSION_LABEL = 'dev.crossbind.android-app.session';
+
+const isRunning = (pid) => {
+    try {
+        process.kill(pid, 0);
+        return true;
+    } catch (error) {
+        return error.code === 'EPERM';
+    }
+};
+
+function removeOrphanedDevContainers() {
+    const ps = spawnSync('docker', ['ps', '--all', '--filter', `label=${SESSION_LABEL}`, '--format', `{{.Names}} {{.Label "${SESSION_LABEL}"}}`], { encoding: 'utf8' });
+    if (ps.status !== 0) return;
+    for (const line of ps.stdout.split('\n')) {
+        const [name, pid] = line.trim().split(' ');
+        if (!name || !/^\d+$/.test(pid ?? '') || isRunning(Number(pid))) continue;
+        console.warn(`crossbind: removing ${name}, the Android development container of a session that has ended.`);
+        spawnSync('docker', ['rm', '--force', name], { stdio: 'ignore' });
+    }
+}
+
+// What holds Gradle's caches when a release cannot take them: the containers of development sessions that run, and those of
+// a crossbind before the label, which name no session.
+function withCacheHolders(error) {
+    if (!error.message.includes('Timeout waiting to lock')) return error;
+    const ps = spawnSync('docker', ['ps', '--filter', 'name=crossbind-android-app-', '--format', '{{.Names}}'], { encoding: 'utf8' });
+    const names = ps.status === 0 ? ps.stdout.split('\n').map((name) => name.trim()).filter(Boolean) : [];
+    if (names.length === 0) return error;
+    return new Error(`${error.message}\ncrossbind: Gradle's caches are held by ${names.join(', ')}, the container ${names.length > 1 ? 'each ' : ''}of a \`crossbind app dev\`: end that session, or run \`docker rm --force ${names.join(' ')}\` if none is running.`, { cause: error });
+}
+
 // During development one container per project, whose Gradle daemon stays warm from one build to the next; it goes with
 // the process, and comes anew when the project comes to need the network, or no longer does.
 let devContainer = null;
@@ -145,10 +187,11 @@ let devContainer = null;
 function startDevContainer(isNetworked) {
     const name = `crossbind-android-app-${getContentHash(state.config.paths.project).slice(0, 12)}`;
     pullDockerImage(ROLE, PLATFORM);
+    removeOrphanedDevContainers();
     // One a crashed session, or the project's need of the network before, left behind holds the name.
     spawnSync('docker', ['rm', '--force', name], { stdio: 'ignore' });
-    docker(['run', '--detach', '--rm', '--init', '--name', name, ...containerArgs(null, isNetworked), getDockerImage(ROLE, PLATFORM), 'sleep', 'infinity'],
-        'starting the development container');
+    docker(['run', '--detach', '--rm', '--init', '--name', name, '--label', `${SESSION_LABEL}=${process.pid}`, ...containerArgs(null, isNetworked),
+        getDockerImage(ROLE, PLATFORM), 'sleep', 'infinity'], 'starting the development container');
     if (!devContainer) {
         process.once('exit', () => spawnSync('docker', ['rm', '--force', name], { stdio: 'ignore' }));
         // A closed terminal ends the session through its exit hooks, as Ctrl-C does.

@@ -6,6 +6,7 @@ import getLinkInputs from './getLinkInputs.js';
 import getData from './getData.js';
 import getEnv from './getEnv.js';
 import buildJs from './buildJs.js';
+import copyWasmNotices, { hasWasmNotices } from './wasmNotices.js';
 import state from '../state/index.js';
 import resolveEmbindRustRoot from '../utils/resolveEmbindRust.js';
 import logger from '../utils/logger.js';
@@ -204,9 +205,12 @@ export default async function buildWasm(target, options = {}) {
         || fs.readFileSync(linkFingerprintFile, { encoding: 'utf8' }) !== linkFingerprint;
 
     if (!options.force && !linkChanged && fs.existsSync(`${state.config.paths.build}/${target.jsName}`) && fs.existsSync(`${state.config.paths.build}/${target.wasmName}`)) {
+        // A build made before crossbind kept the toolchain's notices has none.
+        if (!hasWasmNotices()) copyWasmNotices(target);
         logger.cachedStep(target, 'wasm+js');
         return false;
     }
+    copyWasmNotices(target);
 
     if (target.runtimeEnv === 'browser') {
         logger.startStep(target, 'wasm');

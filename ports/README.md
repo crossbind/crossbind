@@ -216,7 +216,8 @@ for now.
 Upstream trees sometimes compile third-party copies into the artifact (GDAL's
 internal libpng/libjpeg/giflib under `GDAL_USE_*_INTERNAL`). The recipe
 declares them per platform and the license machinery turns them into
-first-class notice/SBOM rows, with texts pulled from the source tree:
+first-class notice/SBOM rows, with texts pulled from the source tree and the
+source of the package they come in, whose code holds them:
 
 ```js
 // build.mjs
@@ -248,8 +249,9 @@ with source links pinned to the commits recorded in the actual wasi-sdk's
 VERSION file. For linux, linuxmusl and win32 it rows up what a native Node.js addon links
 statically: the LLVM C++ runtime and, on Windows, the mingw-w64 startup code
 and winpthreads, whose licenses ask for their notices in a binary
-distribution. The emscripten runtime equivalent for wasm targets is a known
-open item.
+distribution. For wasm it rows up Emscripten's runtime and system libraries
+and LLVM's C++ runtime, with the license texts and versions the wasm link
+copies out of the web image beside the build (`toolchain-licenses/wasm`).
 
 ## F. Watch items
 

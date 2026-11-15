@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, test, vi } from 'vitest';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import upath from 'upath';
 import { validateSpdx } from '../src/utils/licenseReport.js';
 
 const { state } = vi.hoisted(() => ({ state: { config: {}, targets: [] } }));
@@ -222,6 +223,18 @@ describe('collectLicenseRows', () => {
 
         expect(rows.find((row) => row.name === 'libpng').licenseText).toContain('png license text');
         fs.rmSync(root, { recursive: true, force: true });
+    });
+
+    test('gives a vendored copy the source of the package it comes in, whose code holds it', async () => {
+        const project = upath.normalize(fs.mkdtempSync(upath.join(os.tmpdir(), 'crossbind-bundled-source-')));
+        fs.writeFileSync(upath.join(project, 'crossbind.build.mjs'), "export default { getURL: (version) => `https://example.org/demo-${version}.tar.gz`, bundled: { linux: [{ name: 'giflib', version: '5.2.2', license: 'MIT', files: ['COPYING'] }] } };");
+        state.config = { allDependencies: [{ general: { name: 'demo' }, paths: { project }, package: { name: '@crossbind/port-demo-linux', nativeVersion: '1.2.3' } }] };
+
+        const rows = await collectLicenseRows('linux');
+
+        expect(rows.find((row) => row.name === 'demo').sourceUrl).toBe('https://example.org/demo-1.2.3.tar.gz');
+        expect(rows.find((row) => row.name === 'giflib')).toMatchObject({ nativeVersion: '5.2.2', sourceUrl: 'https://example.org/demo-1.2.3.tar.gz' });
+        fs.rmSync(project, { recursive: true, force: true });
     });
 });
 
@@ -466,6 +479,29 @@ describe('collectLicenseRows across variants and for a published module', () => 
         expect(rows.map((row) => row.license)).toEqual(['MIT', 'MIT OR NCSA', 'Apache-2.0 WITH LLVM-exception']);
         expect(rows[0]).toMatchObject({ isRuntime: true, licenseText: expect.stringContaining('MIT License') });
         rows.forEach((row) => expect(validateSpdx(row.license).isValid).toBe(true));
+    });
+
+    test('gives Emscripten and LLVM the texts and versions the wasm build copied out of its image', async () => {
+        const build = upath.normalize(fs.mkdtempSync(upath.join(os.tmpdir(), 'crossbind-wasm-toolchain-')));
+        const notices = upath.join(build, 'toolchain-licenses', 'wasm');
+        fs.mkdirSync(notices, { recursive: true });
+        fs.writeFileSync(upath.join(notices, 'emscripten-LICENSE'), 'Emscripten is available under 2 licenses\n');
+        fs.writeFileSync(upath.join(notices, 'llvm-LICENSE.TXT'), 'Apache License v2.0 with LLVM Exceptions\n');
+        fs.writeFileSync(upath.join(notices, 'emscripten-version.txt'), '"6.0.13"\n');
+        fs.writeFileSync(upath.join(notices, 'clang-version.txt'), 'clang version 24.0.0git (https://github.com/llvm/llvm-project 83ee07799c34)\nTarget: wasm32-unknown-emscripten\n');
+        state.config = { allDependencies: [], paths: { build } };
+
+        const rows = await collectLicenseRows('wasm');
+
+        expect(rows.find((row) => row.name === 'emscripten')).toMatchObject({
+            nativeVersion: '6.0.13',
+            licenseText: '=== emscripten-LICENSE ===\n\nEmscripten is available under 2 licenses',
+        });
+        expect(rows.find((row) => row.name === 'llvm-runtimes')).toMatchObject({
+            nativeVersion: '24.0.0git',
+            licenseText: '=== llvm-LICENSE.TXT ===\n\nApache License v2.0 with LLVM Exceptions',
+        });
+        fs.rmSync(build, { recursive: true, force: true });
     });
 
     test("gives the project's own row the license of the package its alias names, not the expression it publishes", async () => {
