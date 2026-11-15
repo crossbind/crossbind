@@ -33,7 +33,7 @@ const ifDep = (dep, params) => (dep ? params(dep) : []);
 // GDAL-internal codec copies compiled into the library (GDAL_USE_*_INTERNAL);
 // declared per platform so notices/SBOM track exactly what each artifact embeds.
 const internalPng = { name: 'libpng', version: '1.6.43', license: 'libpng-2.0', files: ['frmts/png/libpng/LICENSE'], notes: 'GDAL internal copy (GDAL_USE_PNG_INTERNAL)' };
-const internalGif = { name: 'giflib', license: 'MIT', files: ['frmts/gif/giflib/COPYING'], notes: 'GDAL internal copy (GDAL_USE_GIF_INTERNAL)' };
+const internalGif = { name: 'giflib', version: '5.2.2', license: 'MIT', files: ['frmts/gif/giflib/COPYING'], notes: 'GDAL internal copy (GDAL_USE_GIF_INTERNAL)' };
 const internalJpeg = { name: 'libjpeg', version: '6b', license: 'IJG', files: ['frmts/jpeg/libjpeg/README'], notes: 'GDAL internal copy, 8- and 12-bit variants (GDAL_USE_JPEG_INTERNAL, GDAL_USE_JPEG12_INTERNAL)' };
 
 export default {

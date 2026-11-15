@@ -19,7 +19,7 @@ import { ANDROIDX_WEBKIT } from './gradleProject.js';
 import { extensionPackage, extensionPart } from '../utils/appExtensions.js';
 import { declaredSources, declarationOf, dependenciesOf } from '../utils/packageSources.js';
 import { shippedBundledLicense } from '../utils/bundledLicenses.js';
-import toolchainNoticesDir from '../utils/toolchainNotices.js';
+import toolchainNoticesDir, { WASM_NOTICES } from '../utils/toolchainNotices.js';
 
 const LEGACY_LICENSE_FILES = ['LICENSE', 'LICENSE.md', 'LICENSE.txt', 'COPYING'];
 const WASI_LIBC_LICENSE = 'Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT';
@@ -53,8 +53,8 @@ function readLicenseTexts(files, locate) {
 
 // Vendored copies compiled into the artifact (recipe `bundled` map, keyed by platform)
 // become first-class notice/SBOM rows with texts from the family source tree, or from the dist
-// of whichever package of the family shipped them.
-async function bundledRowsOf(node, platform, familyProjects) {
+// of whichever package of the family shipped them, and the source of the package they come in.
+async function bundledRowsOf(node, platform, familyProjects, sourceUrl) {
     const recipe = await loadJs(node.paths.project, 'crossbind.build');
     const entries = recipe?.bundled?.[platform];
     if (!entries || entries.length === 0) return [];
@@ -70,7 +70,7 @@ async function bundledRowsOf(node, platform, familyProjects) {
         licenseSelected: null,
         licenseNotes: `${entry.notes ? `${entry.notes}; ` : ''}vendored inside ${node.general.name} ${node.package?.nativeVersion || ''}`.trim(),
         sha256: null,
-        sourceUrl: null,
+        sourceUrl,
         licenseText: readLicenseTexts(entry.files, (file) => (sourceDir
             ? path.join(sourceDir, file)
             : shippedBundledLicense(familyProjects, entry.name, file))),
@@ -113,8 +113,21 @@ function wasiToolchainRows() {
     ];
 }
 
+// What a wasm build copied out of its toolchain image (actions/wasmNotices.js): a file's text, or a license file's under
+// its name.
+function wasmNotice(file) {
+    const build = state.config?.paths?.build;
+    const notice = build ? path.join(build, toolchainNoticesDir('wasm'), file) : null;
+    return notice && fs.existsSync(notice) ? fs.readFileSync(notice, 'utf8').trim() : null;
+}
+
+function wasmNoticeText(file) {
+    const text = wasmNotice(file);
+    return text ? `=== ${file} ===\n\n${text}` : null;
+}
+
 // A wasm module statically links Emscripten's runtime and system libraries (its musl-based libc among them) and LLVM's
-// C++ runtime from the same toolchain image.
+// C++ runtime from the same toolchain image, whose texts and versions the build copied out of it.
 function wasmToolchainRows() {
     const shared = {
         npmName: null, version: null, nativeVersion: null, sha256: null, licenseSelected: null, licenseText: null, isCopyleft: false,
@@ -123,18 +136,22 @@ function wasmToolchainRows() {
         {
             ...shared,
             name: 'emscripten',
+            nativeVersion: wasmNotice(WASM_NOTICES.emscriptenVersion)?.replaceAll('"', '') || null,
             license: 'MIT OR NCSA',
             licenseDeclared: 'MIT OR NCSA',
             sourceUrl: 'https://github.com/emscripten-core/emscripten',
             licenseNotes: "Emscripten's runtime and system libraries, its musl-based libc among them, statically linked into the module; license text: https://github.com/emscripten-core/emscripten/blob/main/LICENSE",
+            licenseText: wasmNoticeText(WASM_NOTICES.emscriptenText),
         },
         {
             ...shared,
             name: 'llvm-runtimes',
             license: 'Apache-2.0 WITH LLVM-exception',
             licenseDeclared: 'Apache-2.0 WITH LLVM-exception',
+            nativeVersion: wasmNotice(WASM_NOTICES.llvmVersion)?.match(/clang version (\S+)/)?.[1] ?? null,
             sourceUrl: 'https://github.com/llvm/llvm-project',
             licenseNotes: "libc++, libc++abi and compiler-rt of Emscripten's LLVM, statically linked into the module; license text: https://github.com/llvm/llvm-project/blob/main/LICENSE.TXT",
+            licenseText: wasmNoticeText(WASM_NOTICES.llvmText),
         },
     ];
 }
@@ -590,11 +607,12 @@ export default async function collectLicenseRows(platform = null, { runtimeEnv =
         if (seen.has(key)) continue;
         seen.add(key);
         const node = nodes.find((other) => keyOf(other) === key && serves(other)) ?? listed;
-        rows.push(node.general.packageSource ? sourcePackageRow(node) : await buildRow(node));
+        const row = node.general.packageSource ? sourcePackageRow(node) : await buildRow(node);
+        rows.push(row);
         // A package source's package folder is written from what its recipe produced: nothing there is run.
         if (platform && !node.general.packageSource) {
             const familyProjects = nodes.filter((other) => keyOf(other) === key).map((other) => other.paths.project);
-            rows.push(...await bundledRowsOf(node, platform, familyProjects));
+            rows.push(...await bundledRowsOf(node, platform, familyProjects, row.sourceUrl));
         }
     }
     if (platform === 'wasi') rows.push(...wasiToolchainRows());

@@ -3,7 +3,9 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 
-const { run, state, link } = vi.hoisted(() => ({ run: vi.fn(), state: { config: {} }, link: { rustLibs: [], emccFlags: [], env: {} } }));
+const { run, state, link, notices } = vi.hoisted(() => ({
+    run: vi.fn(), state: { config: {} }, link: { rustLibs: [], emccFlags: [], env: {} }, notices: { copy: vi.fn(), present: false },
+}));
 
 vi.mock('../src/actions/run.js', () => ({ default: run }));
 vi.mock('../src/actions/getDependLibs.js', () => ({ default: () => [] }));
@@ -17,6 +19,7 @@ vi.mock('../src/utils/logger.js', () => ({
     default: { info() {}, error() {}, startStep() {}, doneStep() {}, cachedStep() {} },
 }));
 vi.mock('../src/state/index.js', () => ({ default: state }));
+vi.mock('../src/actions/wasmNotices.js', () => ({ default: notices.copy, hasWasmNotices: () => notices.present }));
 
 const { default: buildWasm } = await import('../src/actions/buildWasm.js');
 
@@ -53,6 +56,8 @@ describe('buildWasm link step', () => {
         };
         for (const env of Object.keys(ENVIRONMENTS)) fs.writeFileSync(`${work}/demo.raw.${env}.js`, '');
         run.mockReset();
+        notices.copy.mockReset();
+        notices.present = false;
         link.rustLibs = [];
         link.emccFlags = ['-sCUSTOM_FLAG=1'];
         link.env = {};
@@ -159,6 +164,30 @@ describe('buildWasm link step', () => {
         mode = 'b';
         await linkOnce();
         expect(run).toHaveBeenCalledTimes(2);
+    });
+
+    // The module links Emscripten's libraries and LLVM's C++ runtime, whose notices the toolchain's image keeps.
+    test("copies the toolchain's notices with each link, and with one the cache keeps only into a build without them", async () => {
+        const target = makeTarget('node');
+        const linkOnce = async () => {
+            await buildWasm(target);
+            fs.writeFileSync(`${work}/${target.jsName}`, '');
+            fs.writeFileSync(`${work}/${target.wasmName}`, '');
+        };
+
+        await linkOnce();
+        expect(notices.copy).toHaveBeenCalledWith(target);
+        expect(notices.copy).toHaveBeenCalledTimes(1);
+
+        notices.present = true;
+        await linkOnce();
+        expect(run).toHaveBeenCalledTimes(1);
+        expect(notices.copy).toHaveBeenCalledTimes(1);
+
+        notices.present = false;
+        await linkOnce();
+        expect(run).toHaveBeenCalledTimes(1);
+        expect(notices.copy).toHaveBeenCalledTimes(2);
     });
 
     test('a link without Rust keeps emscripten\'s own stack', async () => {
