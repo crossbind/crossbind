@@ -8,6 +8,7 @@ const MINGW_CLANG = '/opt/llvm-mingw/bin/clang';
 // The x64 and arm64 targets share one mingw-w64 build.
 const MINGW_VERSION_HEADER = '/opt/llvm-mingw/x86_64-w64-mingw32/include/_mingw_mac.h';
 const LIBCXX_LICENSE = '/opt/licenses/linux-sysroot/libcxx-LICENSE.TXT';
+const MUSL_LICENSE = '/opt/licenses/linux-sysroot/musl/musl-COPYRIGHT';
 const NDK_CLANG = `${ANDROID_NDK}/toolchains/llvm/prebuilt/linux-x86_64/bin/clang`;
 
 const ifFile = (file, command) => `if [ -f ${file} ]; then ${command}; fi`;
@@ -31,7 +32,16 @@ const SCRIPTS = {
     },
     android: (dir) => [clangVersion(NDK_CLANG, dir)],
 };
-SCRIPTS.linuxmusl = SCRIPTS.linux;
+// A static musl executable also carries musl's libc, whose notice every musl link keeps. musl records its version only
+// in libc, as the one string of version.lo.
+SCRIPTS.linuxmusl = (dir, target) => {
+    const libc = `/opt/crossbind/sysroots/${linuxTriple(target)}/usr/lib/libc.a`;
+    return [
+        ...SCRIPTS.linux(dir, target),
+        ifFile(MUSL_LICENSE, `cp ${MUSL_LICENSE} ${dir}/${NATIVE_NOTICES.muslText}`),
+        ifFile(libc, `ar p ${libc} version.lo | tr -cs '[:print:]' '\\n' | grep -x -E '[0-9]+\\.[0-9]+\\.[0-9]+' > ${dir}/${NATIVE_NOTICES.muslVersion}`),
+    ];
+};
 
 // Copies them beside the build after a link in the target's image, where crossbind licenses reads them. A host
 // toolchain keeps none of these files, and its build goes on without them.

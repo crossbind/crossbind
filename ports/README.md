@@ -246,11 +246,13 @@ recipe-declared vendored copies (§D `bundled`) and, for wasi, the toolchain
 runtime — wasi-libc (triple-licensed) and the LLVM runtimes
 (libc++/libc++abi/compiler-rt/libunwind, Apache-2.0 WITH LLVM-exception),
 with source links pinned to the commits recorded in the actual wasi-sdk's
-VERSION file. For linux, linuxmusl and win32 it rows up what a native Node.js addon links
-statically: the LLVM C++ runtime and, on Windows, the mingw-w64 startup code
+VERSION file. For linux, linuxmusl and win32 it rows up what a native Node.js addon, app or
+executable links statically: the LLVM C++ runtime and, on Windows, the mingw-w64 startup code
 and winpthreads, whose licenses ask for their notices in a binary
 distribution, with the license texts and versions the link copies out of its
-image (`toolchain-licenses/<platform>`). For wasm it rows up Emscripten's runtime and system libraries
+image (`toolchain-licenses/<platform>`); `-e native` adds musl's libc, which a static musl
+executable links, with its notice and version. With `-e`, `--check` fails while a notice those
+licenses ask for is missing. For wasm it rows up Emscripten's runtime and system libraries
 and LLVM's C++ runtime, with the license texts and versions the wasm link
 copies out of the web image beside the build (`toolchain-licenses/wasm`).
 

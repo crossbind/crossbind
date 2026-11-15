@@ -84,6 +84,7 @@ int main(int argc, char **argv) {
                 'Your own archive links whole; a port\'s archive keeps only what `main` reaches.',
                 'A port\'s data, such as `GDAL_DATA` and `proj.db`, is copied to `dist/data`, but nothing points the executable at it: set `GDAL_DATA` and `PROJ_DATA` before running it.',
                 '`-e node,native` makes the addon and the executable from the same archives. A Rust package (`export.type: \'cargo\'`) makes no executable.',
+                'An executable carries code of the toolchain beside the packages it links: LLVM\'s C++ runtime on Linux and Windows, parts of the mingw-w64 runtime on Windows and musl\'s C library in the musl build. After a build, `npx crossbind licenses --platform <platform> -e native --notices` writes their notices, which the link copied out of its image, with the packages\'.',
                 'The test suite runs the glibc build on Debian 10, the musl build on Alpine and Debian 13 and the macOS build on its host; the Windows build is checked for the machine it targets, not run.',
             ],
         },

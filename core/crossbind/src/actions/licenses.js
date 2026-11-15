@@ -179,9 +179,9 @@ function toolchainNoticeTexts(platform, pattern) {
     return texts.length > 0 ? texts.join('\n\n') : null;
 }
 
-// A Linux or Windows addon carries its C++ runtime; a Windows one also carries parts of the
+// A Linux or Windows addon, app or executable carries its C++ runtime; a Windows one also carries parts of the
 // mingw-w64 runtime and winpthreads, whose licenses ask for their notices in binary distributions.
-// A macOS addon uses the system's C++ runtime. Their texts and versions are what the link copied out of its image.
+// A macOS binary uses the system's C++ runtime. Their texts and versions are what the link copied out of its image.
 function addonToolchainRows(platform) {
     const shared = {
         npmName: null, version: null, nativeVersion: null, sha256: null, licenseSelected: null, licenseText: null, isCopyleft: false,
@@ -219,8 +219,41 @@ function addonToolchainRows(platform) {
             sourceUrl: 'https://github.com/mingw-w64/mingw-w64',
             licenseNotes: 'the mingw-w64 startup code and winpthreads, statically linked into the binary; a binary distribution includes their notices: https://github.com/mingw-w64/mingw-w64/blob/master/COPYING.MinGW-w64-runtime/COPYING.MinGW-w64-runtime.txt and https://github.com/mingw-w64/mingw-w64/blob/master/mingw-w64-libraries/winpthreads/COPYING (the windows image carries both in /opt/licenses/llvm-mingw)',
             licenseText: toolchainNoticeTexts('win32', MINGW_NOTICE),
+            isNoticeRequired: true,
         },
     ];
+}
+
+// A static musl executable carries musl's libc, whose MIT license asks every copy for its notice. Its text and version
+// are what the link copied out of its image; an addon and a library leave the C library to what runs them.
+function muslRow() {
+    return {
+        npmName: null,
+        version: null,
+        sha256: null,
+        licenseSelected: null,
+        isCopyleft: false,
+        name: 'musl',
+        license: 'MIT',
+        licenseDeclared: 'MIT',
+        sourceUrl: 'https://git.musl-libc.org/cgit/musl',
+        nativeVersion: toolchainNotice('linuxmusl', NATIVE_NOTICES.muslVersion),
+        licenseText: toolchainNoticeText('linuxmusl', NATIVE_NOTICES.muslText),
+        licenseNotes: 'the musl libc of the linux toolchain image, statically linked into the executable',
+        isNoticeRequired: true,
+    };
+}
+
+const BINARY_KINDS = { node: 'addon', app: 'app', native: 'executable' };
+
+// The runtimes a binary carries without the notice their licenses ask its distribution for, which its link copies out of
+// the image. A list of no binary (no runtimeEnv), such as a static library's, leaves those notices to the binary's own.
+export function missingNotices(rows, { platform, runtimeEnv }) {
+    const kind = BINARY_KINDS[runtimeEnv];
+    if (!kind) return [];
+    return rows
+        .filter((row) => row.isNoticeRequired && !row.licenseText)
+        .map((row) => `x ${row.name}: its license asks a distribution of the ${platform} ${kind} for its notices, and the list has none; build the ${platform} ${kind}, whose link copies them out of its toolchain image`);
 }
 
 const versionOf = (dir) => JSON.parse(fs.readFileSync(path.join(dir, 'package.json'), 'utf8')).version;
@@ -613,7 +646,8 @@ export async function vendoringLibraries() {
 // copies and the toolchain runtime, and for wasm crossbind's runtime, which the
 // module's glue bundles. runtimeEnv 'node' adds the crossbind runtime an
 // addon of that platform compiles in, or without a platform the one its loader bundles;
-// runtimeEnv 'app' adds what an app's host carries.
+// runtimeEnv 'app' adds what an app's host carries; runtimeEnv 'native' adds the C library
+// a static musl executable links.
 export default async function collectLicenseRows(platform = null, { runtimeEnv = null } = {}) {
     assertSourcesStaged();
     // The root package is a component too when it is a port: leaf -wasi packages have no deps but ship
@@ -646,6 +680,7 @@ export default async function collectLicenseRows(platform = null, { runtimeEnv =
     if (platform === 'wasi') rows.push(...wasiToolchainRows());
     if (platform === 'wasm') rows.push(...wasmToolchainRows(), crossbindRow("crossbind's JavaScript runtime, which the module's glue bundles"));
     if (['linux', 'linuxmusl', 'win32'].includes(platform)) rows.push(...addonToolchainRows(platform));
+    if (platform === 'linuxmusl' && runtimeEnv === 'native') rows.push(muslRow());
     if (runtimeEnv === 'node') rows.push(...nodeRuntimeRows({ isAddon: platform !== null }));
     if (runtimeEnv === 'app') {
         rows.push(...appRuntimeRows(platform));

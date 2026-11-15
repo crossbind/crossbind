@@ -48,7 +48,7 @@ import { cargoHome } from './utils/runCargo.js';
 import { containerRootOf, sourceRoot } from './utils/runPackageSource.js';
 import { importSchemesOf, sourceNamesOf } from './utils/packageSources.js';
 import { cleanDepsCache } from './utils/dependencyRebuild.js';
-import collectLicenseRows, { vendoringLibraries } from './actions/licenses.js';
+import collectLicenseRows, { missingNotices, vendoringLibraries } from './actions/licenses.js';
 import { formatNoticesMarkdown, formatCycloneDxSbom, validateSpdx } from './utils/licenseReport.js';
 import { SBOM_FILE, nodePackageMeta, shippedRows, writeNodePackageLicense } from './utils/packageLicense.js';
 import findFiles from './utils/findFiles.js';
@@ -225,9 +225,9 @@ program.command('licenses')
     .description('list bundled native dependencies with SPDX license, versions and source URL')
     .option('--notices [file]', 'write a THIRD-PARTY-NOTICES markdown file (default: THIRD-PARTY-NOTICES.md)')
     .option('--sbom [file]', 'write a CycloneDX SBOM json file (default: sbom.cdx.json)')
-    .option('--check', 'exit non-zero when a license field is missing or not valid SPDX')
+    .option('--check', 'exit non-zero when a license field is missing or not valid SPDX, and with -e when the binary lacks a notice the license of a runtime it carries asks for')
     .option('--platform <platform>', "also list what this platform's artifact statically links beyond the package graph (vendored copies, toolchain runtime)")
-    .addOption(new Option('-e, --runtime-env <runtimeEnv>', "also list the crossbind runtime an addon of --platform compiles in (without --platform the one its loader bundles), or what an app's host carries").choices(['node', 'app']))
+    .addOption(new Option('-e, --runtime-env <runtimeEnv>', "also list the crossbind runtime an addon of --platform compiles in (without --platform the one its loader bundles), what an app's host carries, or the C library a static musl executable links").choices(['node', 'app', 'native']))
     .option('--json [file]', 'write the rows, license texts included, as JSON (default: licenses.json)')
     .option('--package', "write this Node-API package's LICENSE, sbom.cdx.json and package.json license field (with -e node)")
     .action(async (options) => {
@@ -280,7 +280,9 @@ program.command('licenses')
                 .map((row) => ({ row, result: validateSpdx(row.license) }))
                 .filter(({ result }) => !result.isValid);
             invalid.forEach(({ row, result }) => console.error(`x ${row.name} (${row.npmName}): ${result.error}`));
-            if (invalid.length > 0) process.exit(1);
+            const unnoticed = missingNotices(rows, { platform: options.platform, runtimeEnv: options.runtimeEnv });
+            unnoticed.forEach((problem) => console.error(problem));
+            if (invalid.length > 0 || unnoticed.length > 0) process.exit(1);
             console.log('✓ all license fields are valid SPDX');
         }
     });

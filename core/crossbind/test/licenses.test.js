@@ -8,7 +8,7 @@ import { validateSpdx } from '../src/utils/licenseReport.js';
 const { state } = vi.hoisted(() => ({ state: { config: {}, targets: [] } }));
 vi.mock('../src/state/index.js', () => ({ default: state }));
 
-const { default: collectLicenseRows } = await import('../src/actions/licenses.js');
+const { default: collectLicenseRows, missingNotices } = await import('../src/actions/licenses.js');
 const { newUpdaterKey } = await import('../../../extensions/updater/src/update.js');
 
 describe('collectLicenseRows', () => {
@@ -95,6 +95,44 @@ describe('collectLicenseRows', () => {
             licenseText: '=== COPYING.MinGW-w64-runtime.txt ===\n\nruntime notice\n\n=== COPYING.winpthreads.txt ===\n\nwinpthreads notice',
         });
         fs.rmSync(build, { recursive: true, force: true });
+    });
+
+    test("lists, for a static musl executable, the C library it links, with the notice and version its build copied out of the image", async () => {
+        const build = upath.normalize(fs.mkdtempSync(upath.join(os.tmpdir(), 'crossbind-musl-toolchain-')));
+        const notices = upath.join(build, 'toolchain-licenses', 'linuxmusl');
+        fs.mkdirSync(notices, { recursive: true });
+        fs.writeFileSync(upath.join(notices, 'musl-COPYRIGHT'), 'musl as a whole is licensed under the following standard MIT license:\n');
+        fs.writeFileSync(upath.join(notices, 'musl-version.txt'), '1.2.5\n');
+        state.config = { allDependencies: [], paths: { build } };
+
+        const rows = await collectLicenseRows('linuxmusl', { runtimeEnv: 'native' });
+
+        expect(rows.map((row) => row.name)).toEqual(['llvm-runtimes', 'musl']);
+        expect(validateSpdx(rows[1].license).isValid).toBe(true);
+        expect(rows[1]).toMatchObject({
+            name: 'musl',
+            license: 'MIT',
+            nativeVersion: '1.2.5',
+            licenseText: '=== musl-COPYRIGHT ===\n\nmusl as a whole is licensed under the following standard MIT license:',
+            isNoticeRequired: true,
+        });
+        fs.rmSync(build, { recursive: true, force: true });
+    });
+
+    // An addon loads into a Node.js that brings the C library, and a library's list leaves the C library to the binary.
+    test.each([null, 'node'])('lists no musl for a linuxmusl list of runtimeEnv %s', async (runtimeEnv) => {
+        const rows = await collectLicenseRows('linuxmusl', { runtimeEnv });
+
+        expect(rows.map((row) => row.name)).not.toContain('musl');
+    });
+
+    test("marks the runtimes whose licenses ask a binary's distribution for their notices, and not LLVM's, whose exception waives that", async () => {
+        const rows = await collectLicenseRows('win32', { runtimeEnv: 'native' });
+
+        expect(Object.fromEntries(rows.map((row) => [row.name, row.isNoticeRequired === true]))).toEqual({
+            'llvm-runtimes': false,
+            'mingw-w64-runtime': true,
+        });
     });
 
     test('lists no runtime for a macOS addon, which uses the C++ runtime of the system', async () => {
@@ -649,5 +687,31 @@ describe('collectLicenseRows upstream identity', () => {
         expect(rows.zlib).toMatchObject({ cpe: 'cpe:2.3:a:zlib:zlib:1.4:*:*:*:*:*:*:*', nativeVersion: '1.4' });
         expect(rows['demo-lib'].sourceUrl).toBe('https://github.com/demo/lib');
         fs.rmSync(project, { recursive: true, force: true });
+    });
+});
+
+describe('missingNotices', () => {
+    const rows = [
+        { name: 'llvm-runtimes', licenseText: null },
+        { name: 'mingw-w64-runtime', isNoticeRequired: true, licenseText: null },
+        { name: 'musl', isNoticeRequired: true, licenseText: '=== musl-COPYRIGHT ===\n\nMIT' },
+    ];
+
+    test("names, for a binary, each runtime it carries without the notice its license asks for, and how to get it", () => {
+        const problems = missingNotices(rows, { platform: 'win32', runtimeEnv: 'native' });
+
+        expect(problems).toHaveLength(1);
+        expect(problems[0]).toContain('mingw-w64-runtime');
+        expect(problems[0]).toContain('win32 executable');
+        expect(problems[0]).toContain('build the win32 executable');
+    });
+
+    test.each([['node', 'addon'], ['app', 'app']])('names the binary %s builds as an %s', (runtimeEnv, kind) => {
+        expect(missingNotices(rows, { platform: 'win32', runtimeEnv })[0]).toContain(`win32 ${kind}`);
+    });
+
+    // A library's list names the runtime a binary of it links; that binary's own list carries the notices.
+    test('asks nothing of a list that is no binary', () => {
+        expect(missingNotices(rows, { platform: 'win32', runtimeEnv: null })).toEqual([]);
     });
 });

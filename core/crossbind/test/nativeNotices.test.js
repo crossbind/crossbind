@@ -42,6 +42,22 @@ describe("a native build's toolchain notices", () => {
         expect(script).toContain(`if [ -f ${config} ]; then grep '#  *define _LIBCPP_VERSION ' ${config} > toolchain-licenses/${platform}/libcxx-version.txt; fi`);
     });
 
+    // A static musl executable carries musl's libc, whose version lives only in libc, as the one string of version.lo.
+    test.each([
+        ['x64', 'x86_64-alpine-linux-musl'],
+        ['arm64', 'aarch64-alpine-linux-musl'],
+    ])("are, for linuxmusl %s, also musl's notice and the version its libc holds", (arch, triple) => {
+        const script = scriptFor({ platform: 'linuxmusl', arch });
+        const libc = `/opt/crossbind/sysroots/${triple}/usr/lib/libc.a`;
+
+        expect(script).toContain('if [ -f /opt/licenses/linux-sysroot/musl/musl-COPYRIGHT ]; then cp /opt/licenses/linux-sysroot/musl/musl-COPYRIGHT toolchain-licenses/linuxmusl/musl-COPYRIGHT; fi');
+        expect(script).toContain(`if [ -f ${libc} ]; then ar p ${libc} version.lo | tr -cs '[:print:]' '\\n' | grep -x -E '[0-9]+\\.[0-9]+\\.[0-9]+' > toolchain-licenses/linuxmusl/musl-version.txt; fi`);
+    });
+
+    test('keep no musl notice for glibc Linux, whose binaries use the C library of the system', () => {
+        expect(scriptFor({ platform: 'linux', arch: 'x64' })).not.toContain('musl');
+    });
+
     test("are, for an Android app, the version of the NDK's clang, whose libc++ the app carries", () => {
         const script = scriptFor({ platform: 'android', arch: 'arm64-v8a', runtimeEnv: 'app' });
         const clang = '/opt/android-sdk/ndk/current/toolchains/llvm/prebuilt/linux-x86_64/bin/clang';

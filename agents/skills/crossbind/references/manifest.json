@@ -74,7 +74,7 @@
     {
       "source": "docs/api/native.md",
       "output": "api/native.md",
-      "sha256": "8210e6ea41121fbbafe22b5d08b9c2da84e9b20b4f43443931f1bb990ed93050"
+      "sha256": "afc0ee1f43dab2ff473619d738a076ccdd9455007c1a2b190db2034b47d60e7a"
     },
     {
       "source": "docs/api/overrides.md",
