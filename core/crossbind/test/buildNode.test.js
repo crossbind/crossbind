@@ -243,7 +243,7 @@ describe('buildNode', () => {
         expect(copy[3]).toBe(win32);
     });
 
-    test('copies no toolchain notices for a Linux addon, whose LLVM runtime needs none', async () => {
+    test('keeps the license and version of the C++ runtime a Linux addon takes from its toolchain image', async () => {
         const linux = {
             ...target, platform: 'linux', arch: 'x64', path: 'linux-x64-mt-release', addonName: 'demo.linux-x64.node',
         };
@@ -251,7 +251,9 @@ describe('buildNode', () => {
 
         await buildNode(linux, { force: true });
 
-        expect(run.mock.calls.some(([, args]) => args.join(' ').includes('/opt/licenses'))).toBe(false);
+        const copy = run.mock.calls.find(([, args]) => args.join(' ').includes('/opt/licenses/linux-sysroot/libcxx-LICENSE.TXT'));
+        expect(copy[1].join(' ')).toContain('toolchain-licenses/linux/libcxx-version.txt');
+        expect(copy[3]).toBe(linux);
     });
 
     test('links the system libraries the dependencies declare for addons', async () => {

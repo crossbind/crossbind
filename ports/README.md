@@ -249,7 +249,8 @@ with source links pinned to the commits recorded in the actual wasi-sdk's
 VERSION file. For linux, linuxmusl and win32 it rows up what a native Node.js addon links
 statically: the LLVM C++ runtime and, on Windows, the mingw-w64 startup code
 and winpthreads, whose licenses ask for their notices in a binary
-distribution. For wasm it rows up Emscripten's runtime and system libraries
+distribution, with the license texts and versions the link copies out of its
+image (`toolchain-licenses/<platform>`). For wasm it rows up Emscripten's runtime and system libraries
 and LLVM's C++ runtime, with the license texts and versions the wasm link
 copies out of the web image beside the build (`toolchain-licenses/wasm`).
 

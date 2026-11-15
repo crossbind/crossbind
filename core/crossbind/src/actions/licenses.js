@@ -19,7 +19,7 @@ import { ANDROIDX_WEBKIT } from './gradleProject.js';
 import { extensionPackage, extensionPart } from '../utils/appExtensions.js';
 import { declaredSources, declarationOf, dependenciesOf } from '../utils/packageSources.js';
 import { shippedBundledLicense } from '../utils/bundledLicenses.js';
-import toolchainNoticesDir, { WASM_NOTICES } from '../utils/toolchainNotices.js';
+import toolchainNoticesDir, { MINGW_NOTICE, NATIVE_NOTICES, WASM_NOTICES } from '../utils/toolchainNotices.js';
 
 const LEGACY_LICENSE_FILES = ['LICENSE', 'LICENSE.md', 'LICENSE.txt', 'COPYING'];
 const WASI_LIBC_LICENSE = 'Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT';
@@ -113,17 +113,30 @@ function wasiToolchainRows() {
     ];
 }
 
-// What a wasm build copied out of its toolchain image (actions/wasmNotices.js): a file's text, or a license file's under
-// its name.
-function wasmNotice(file) {
+// What a build copied out of its toolchain image (actions/wasmNotices.js, actions/nativeNotices.js): a file's text, or a
+// license file's under its name.
+function toolchainNotice(platform, file) {
     const build = state.config?.paths?.build;
-    const notice = build ? path.join(build, toolchainNoticesDir('wasm'), file) : null;
+    const notice = build ? path.join(build, toolchainNoticesDir(platform), file) : null;
     return notice && fs.existsSync(notice) ? fs.readFileSync(notice, 'utf8').trim() : null;
 }
 
-function wasmNoticeText(file) {
-    const text = wasmNotice(file);
+function toolchainNoticeText(platform, file) {
+    const text = toolchainNotice(platform, file);
     return text ? `=== ${file} ===\n\n${text}` : null;
+}
+
+const clangVersionOf = (text) => text?.match(/clang version (\S+)/)?.[1] ?? null;
+
+// libc++ spells 19.1.7 as 190107.
+function libcxxVersionOf(text) {
+    const number = Number(text?.match(/_LIBCPP_VERSION\s+(\d+)/)?.[1]);
+    return number ? `${Math.floor(number / 10000)}.${Math.floor(number / 100) % 100}.${number % 100}` : null;
+}
+
+function mingwVersionOf(text) {
+    const part = (name) => text?.match(new RegExp(`__MINGW64_VERSION_${name}\\s+(\\d+)`))?.[1];
+    return part('MAJOR') ? [part('MAJOR'), part('MINOR') ?? 0, part('BUGFIX') ?? 0].join('.') : null;
 }
 
 // A wasm module statically links Emscripten's runtime and system libraries (its musl-based libc among them) and LLVM's
@@ -136,39 +149,39 @@ function wasmToolchainRows() {
         {
             ...shared,
             name: 'emscripten',
-            nativeVersion: wasmNotice(WASM_NOTICES.emscriptenVersion)?.replaceAll('"', '') || null,
+            nativeVersion: toolchainNotice('wasm', WASM_NOTICES.emscriptenVersion)?.replaceAll('"', '') || null,
             license: 'MIT OR NCSA',
             licenseDeclared: 'MIT OR NCSA',
             sourceUrl: 'https://github.com/emscripten-core/emscripten',
             licenseNotes: "Emscripten's runtime and system libraries, its musl-based libc among them, statically linked into the module; license text: https://github.com/emscripten-core/emscripten/blob/main/LICENSE",
-            licenseText: wasmNoticeText(WASM_NOTICES.emscriptenText),
+            licenseText: toolchainNoticeText('wasm', WASM_NOTICES.emscriptenText),
         },
         {
             ...shared,
             name: 'llvm-runtimes',
             license: 'Apache-2.0 WITH LLVM-exception',
             licenseDeclared: 'Apache-2.0 WITH LLVM-exception',
-            nativeVersion: wasmNotice(WASM_NOTICES.llvmVersion)?.match(/clang version (\S+)/)?.[1] ?? null,
+            nativeVersion: clangVersionOf(toolchainNotice('wasm', WASM_NOTICES.llvmVersion)),
             sourceUrl: 'https://github.com/llvm/llvm-project',
             licenseNotes: "libc++, libc++abi and compiler-rt of Emscripten's LLVM, statically linked into the module; license text: https://github.com/llvm/llvm-project/blob/main/LICENSE.TXT",
-            licenseText: wasmNoticeText(WASM_NOTICES.llvmText),
+            licenseText: toolchainNoticeText('wasm', WASM_NOTICES.llvmText),
         },
     ];
 }
 
-// The notices a build copied out of its toolchain image (a Windows addon's or app's does).
-function toolchainNoticeTexts(platform) {
+// The notices of one runtime a build copied out of its toolchain image, each under its file's name.
+function toolchainNoticeTexts(platform, pattern) {
     const build = state.config?.paths?.build;
     const dir = build ? path.join(build, toolchainNoticesDir(platform)) : null;
     if (!dir || !fs.existsSync(dir)) return null;
-    const texts = fs.readdirSync(dir).sort()
+    const texts = fs.readdirSync(dir).filter((file) => pattern.test(file)).sort()
         .map((file) => `=== ${file} ===\n\n${fs.readFileSync(path.join(dir, file), 'utf8').trim()}`);
     return texts.length > 0 ? texts.join('\n\n') : null;
 }
 
 // A Linux or Windows addon carries its C++ runtime; a Windows one also carries parts of the
 // mingw-w64 runtime and winpthreads, whose licenses ask for their notices in binary distributions.
-// A macOS addon uses the system's C++ runtime.
+// A macOS addon uses the system's C++ runtime. Their texts and versions are what the link copied out of its image.
 function addonToolchainRows(platform) {
     const shared = {
         npmName: null, version: null, nativeVersion: null, sha256: null, licenseSelected: null, licenseText: null, isCopyleft: false,
@@ -180,22 +193,32 @@ function addonToolchainRows(platform) {
         license: llvmLicense,
         licenseDeclared: llvmLicense,
         sourceUrl: 'https://github.com/llvm/llvm-project',
+        licenseText: toolchainNoticeText(platform, NATIVE_NOTICES.llvmText),
     };
     const llvmText = 'license text: https://github.com/llvm/llvm-project/blob/main/LICENSE.TXT';
     if (platform === 'linux' || platform === 'linuxmusl') {
-        return [{ ...llvmRuntimes, licenseNotes: `libc++ and libc++abi of the linux toolchain image, statically linked into the binary; ${llvmText}` }];
+        return [{
+            ...llvmRuntimes,
+            nativeVersion: libcxxVersionOf(toolchainNotice(platform, NATIVE_NOTICES.libcxxVersion)),
+            licenseNotes: `libc++ and libc++abi of the linux toolchain image, statically linked into the binary; ${llvmText}`,
+        }];
     }
     const mingwLicense = 'LicenseRef-MinGW-w64-runtime';
     return [
-        { ...llvmRuntimes, licenseNotes: `libc++, libc++abi, libunwind and compiler-rt of the windows toolchain image (llvm-mingw), statically linked into the binary; ${llvmText}` },
+        {
+            ...llvmRuntimes,
+            nativeVersion: clangVersionOf(toolchainNotice('win32', NATIVE_NOTICES.clangVersion)),
+            licenseNotes: `libc++, libc++abi, libunwind and compiler-rt of the windows toolchain image (llvm-mingw), statically linked into the binary; ${llvmText}`,
+        },
         {
             ...shared,
             name: 'mingw-w64-runtime',
+            nativeVersion: mingwVersionOf(toolchainNotice('win32', NATIVE_NOTICES.mingwVersion)),
             license: mingwLicense,
             licenseDeclared: mingwLicense,
             sourceUrl: 'https://github.com/mingw-w64/mingw-w64',
             licenseNotes: 'the mingw-w64 startup code and winpthreads, statically linked into the binary; a binary distribution includes their notices: https://github.com/mingw-w64/mingw-w64/blob/master/COPYING.MinGW-w64-runtime/COPYING.MinGW-w64-runtime.txt and https://github.com/mingw-w64/mingw-w64/blob/master/mingw-w64-libraries/winpthreads/COPYING (the windows image carries both in /opt/licenses/llvm-mingw)',
-            licenseText: toolchainNoticeTexts('win32'),
+            licenseText: toolchainNoticeTexts('win32', MINGW_NOTICE),
         },
     ];
 }
@@ -289,13 +312,15 @@ const HERMES_BUILDS = {
     },
 };
 
-// What an Android app's Gradle build adds from Maven, and the C++ runtime the app carries beside its host.
-function androidAppRows() {
+// What an Android app's Gradle build adds from Maven, and the C++ runtime the app carries beside its host: each a file
+// of its own in the app, with its text from @crossbind/core-app-host, and the libc++ with the version of the NDK's clang.
+function androidAppRows(hostRoot) {
     const shared = {
-        npmName: null, sha256: null, licenseSelected: null, licenseText: null, isCopyleft: false,
+        npmName: null, sha256: null, licenseSelected: null, isCopyleft: false,
     };
     const apache = { ...shared, license: 'Apache-2.0', licenseDeclared: 'Apache-2.0' };
     const llvmLicense = 'Apache-2.0 WITH LLVM-exception';
+    const textIn = (dir, file) => textOf(path.join(hostRoot, 'third_party', dir, file));
     return [
         {
             ...apache,
@@ -304,6 +329,7 @@ function androidAppRows() {
             nativeVersion: FBJNI_VERSION,
             sourceUrl: 'https://github.com/facebookincubator/fbjni',
             licenseNotes: 'libfbjni.so, which Hermes loads and Gradle takes with it; license text: https://github.com/facebookincubator/fbjni/blob/main/LICENSE',
+            licenseText: textIn('fbjni', 'LICENSE'),
         },
         {
             ...apache,
@@ -312,16 +338,18 @@ function androidAppRows() {
             nativeVersion: ANDROIDX_WEBKIT,
             sourceUrl: 'https://developer.android.com/jetpack/androidx/releases/webkit',
             licenseNotes: "androidx.webkit, the WebView's message ports and start scripts, from Google's Maven repository; license text: https://www.apache.org/licenses/LICENSE-2.0.txt",
+            licenseText: textIn('androidx-webkit', 'LICENSE'),
         },
         {
             ...shared,
             name: 'llvm-runtimes',
             version: null,
-            nativeVersion: null,
+            nativeVersion: clangVersionOf(toolchainNotice('android', NATIVE_NOTICES.clangVersion)),
             license: llvmLicense,
             licenseDeclared: llvmLicense,
             sourceUrl: 'https://github.com/llvm/llvm-project',
             licenseNotes: "libc++ of the android image's NDK, which the app carries as libc++_shared.so; license text: https://github.com/llvm/llvm-project/blob/main/LICENSE.TXT",
+            licenseText: textIn('libcxx', 'LICENSE.TXT'),
         },
     ];
 }
@@ -441,7 +469,7 @@ function appRuntimeRows(platform) {
             licenseNotes: "JSI's jsi.cpp from the same Hermes release, compiled into the host",
             licenseText: hermesLicense,
         },
-        ...(platform === 'android' ? androidAppRows() : []),
+        ...(platform === 'android' ? androidAppRows(hostRoot) : []),
         ...(platform === 'win32' ? windowsAppRows(hostRoot) : []),
         // A mobile app makes its window with UIKit or an Android activity, without webview/webview.
         ...(['ios', 'android'].includes(platform) ? [] : [{
