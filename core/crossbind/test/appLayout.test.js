@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import upath from 'upath';
 import {
     afterEach, beforeEach, describe, expect, test, vi,
 } from 'vitest';
@@ -15,7 +16,7 @@ vi.mock('../src/actions/androidDevice.js', () => ({ attachedDevice: () => ({ ser
 function writeMade(command, cwd) {
     const outfile = command.find((arg) => arg.startsWith('-DOUTFILE='))?.slice('-DOUTFILE='.length);
     const made = {
-        'dpkg-deb': command.at(-1), hdiutil: command.at(-1), zip: cwd && path.join(cwd, command[4]), makensis: outfile, tar: command[2],
+        'dpkg-deb': command.at(-1), hdiutil: command.at(-1), zip: cwd && upath.join(cwd, command[4]), makensis: outfile, tar: command[command.indexOf('-czf') + 1],
     }[command[0]];
     if (made) fs.writeFileSync(made, command[0]);
 }
