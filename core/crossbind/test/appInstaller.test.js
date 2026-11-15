@@ -238,7 +238,10 @@ describe("a Linux app's archive", () => {
         const root = project({ 'demo-linux-x64/demo': 'elf' }, { appOptions: { installers: ['tar-gz'] } });
         const app = upath.join(root, 'dist/demo-linux-x64');
 
-        expect(await writeInstallers(app, { platform: 'linux', arch: 'x64' })).toEqual([{ name: 'tar-gz', files: [`${app}.tar.gz`] }]);
+        const made = await writeInstallers(app, { platform: 'linux', arch: 'x64' });
+
+        // The installer's files come back in the platform's own form, with backslashes on Windows.
+        expect(made.map(({ name, files }) => ({ name, files: files.map(upath.toUnix) }))).toEqual([{ name: 'tar-gz', files: [`${app}.tar.gz`] }]);
         const [[args, options]] = tar.mock.calls;
         expect(args).toEqual(['--no-xattrs', '-czf', `${app}.tar.gz`, '-C', upath.join(root, 'dist'), 'demo-linux-x64']);
         expect(options.env.COPYFILE_DISABLE).toBe('1');
