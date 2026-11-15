@@ -20,6 +20,8 @@ export const NATIVE_NOTICES = {
     clangVersion: 'clang-version.txt',
     libcxxVersion: 'libcxx-version.txt',
     mingwVersion: 'mingw-w64-version.txt',
+    muslText: 'musl-COPYRIGHT',
+    muslVersion: 'musl-version.txt',
 };
 
 export const MINGW_NOTICE = /^COPYING/;

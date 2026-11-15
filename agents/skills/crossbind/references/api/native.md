@@ -29,6 +29,8 @@ A debug build (`-b debug`) adds `.debug` before the extension.
 - A port's data, such as `GDAL_DATA` and `proj.db`, is copied to `dist/data`, but nothing points the executable at it: set `GDAL_DATA` and `PROJ_DATA` before running it.
 - `-e node,native` makes the addon and the executable from the same archives. Rust packages (`export.type: 'cargo'`) make no executable.
 
+Beside the packages it links, an executable carries code of the toolchain: LLVM's C++ runtime on Linux and Windows, parts of the mingw-w64 runtime and winpthreads on Windows, and musl's C library in the static musl build; a macOS executable uses the system's C++ runtime. Its link copies their license texts and versions out of its image, and `crossbind licenses --platform <platform> -e native --notices` writes them with the packages' into the notices to ship beside the executable. With `-e native`, `--check` fails while the mingw-w64 or musl notice, which their licenses ask a binary's distribution for, is missing: build the executable first.
+
 `npm create crossbind@beta -- <dir> Native Executable` scaffolds a project whose `main()` links a library, from `examples/native-executable`.
 
 `pnpm --filter @crossbind/e2e-cli-native e2e:prod` runs the fixture's executable on Debian 10, its static musl build on Alpine and on Debian 13, and its macOS build on the host; the Windows build is checked for the machine it targets, not run.

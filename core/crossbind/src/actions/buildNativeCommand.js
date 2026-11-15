@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url';
 import run from './run.js';
 import getLinkInputs from './getLinkInputs.js';
 import getData from './getData.js';
+import copyNativeNotices from './nativeNotices.js';
 import state from '../state/index.js';
 import logger from '../utils/logger.js';
 import { getContentHash, getFilesFingerprint } from '../utils/hash.js';
@@ -76,6 +77,7 @@ export default async function buildNativeCommand(target, options = {}) {
         `-DCROSSBIND_STATIC=${isStatic ? 'ON' : 'OFF'}`,
     ], platformPrefix, target);
     run(null, ['cmake', '--build', '.', '-j', String(cpuCount)], platformPrefix, target, { exclusive: true });
+    copyNativeNotices(target);
     fs.copyFileSync(`${build}/${platformPrefix}/${target.path}/${target.commandName}`, `${build}/${target.commandName}`);
     logger.doneStep(target, 'native command');
 

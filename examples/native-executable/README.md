@@ -48,3 +48,15 @@ Run it:
 Put your own code in `src/native`: the file with `main()` and any other sources there are compiled
 into the executable, and the libraries in `crossbind.config.mjs` are linked in. See
 [native executables](https://github.com/crossbind/crossbind/blob/main/docs/api/native.md).
+
+## Licenses
+
+An executable carries code under other licenses: the libraries it links, LLVM's C++ runtime on Linux
+and Windows, parts of the mingw-w64 runtime on Windows and musl's C library in the musl build. After
+a build, write the notices to ship beside the executable of a platform:
+
+```bash
+npx crossbind licenses --platform linuxmusl -e native --notices
+```
+
+`--check` beside it fails while a notice a license asks for is missing.

@@ -77,7 +77,9 @@ describe('buildNativeCommand', () => {
             '-Wl,--no-whole-archive',
         ].join(';'));
         expect(defineOf(configure, 'CROSSBIND_STATIC')).toBe('OFF');
-        expect(run.mock.calls.every(([program, , prefix]) => program === null && prefix === 'Native-Release')).toBe(true);
+        const cmakeCalls = run.mock.calls.filter(([, args]) => args[0] === 'cmake');
+        expect(cmakeCalls).toHaveLength(2);
+        expect(cmakeCalls.every(([program, , prefix]) => program === null && prefix === 'Native-Release')).toBe(true);
         expect(fs.readFileSync(`${work}/demo.linux-x64`, 'utf8')).toBe('executable');
     });
 
@@ -93,6 +95,28 @@ describe('buildNativeCommand', () => {
         await buildNativeCommand(targetOf('linuxmusl'), { force: true });
 
         expect(defineOf(configureOf(), 'CROSSBIND_STATIC')).toBe('ON');
+    });
+
+    test('keeps the runtime notices a Windows executable takes from its toolchain image', async () => {
+        const win32 = targetOf('win32');
+
+        await buildNativeCommand(win32, { force: true });
+
+        const copy = run.mock.calls.find(([, args]) => args.join(' ').includes('/opt/licenses/llvm-mingw'));
+        expect(copy[1].join(' ')).toContain('toolchain-licenses/win32');
+        expect(copy[2]).toBeNull();
+        expect(copy[3]).toBe(win32);
+    });
+
+    test("keeps, for a static musl executable, musl's notice beside the C++ runtime's", async () => {
+        const musl = targetOf('linuxmusl');
+
+        await buildNativeCommand(musl, { force: true });
+
+        const copy = run.mock.calls.find(([program]) => program === 'sh');
+        expect(copy[1].join(' ')).toContain('toolchain-licenses/linuxmusl/libcxx-version.txt');
+        expect(copy[1].join(' ')).toContain('toolchain-licenses/linuxmusl/musl-COPYRIGHT');
+        expect(copy[3]).toBe(musl);
     });
 
     test('force-loads the project archive on macOS and adds the system libraries packages declare', async () => {
