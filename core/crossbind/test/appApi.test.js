@@ -54,10 +54,10 @@ describe("crossbind/app, an app's own functions", () => {
         await expect(app.paths()).rejects.toThrow('which crossbind app builds');
     });
 
-    test('rejects in an app whose page has not called initNative() yet', async () => {
+    test("rejects in an app until the page's initNative() has resolved", async () => {
         globalThis.__crossbind_token = 'token';
 
-        await expect(app.paths()).rejects.toThrow('initNative()');
+        await expect(app.paths()).rejects.toThrow("crossbind: app.paths works once the page's initNative() has resolved");
     });
 
     test('rejects with a host older than crossbind/app, naming the package to update', async () => {

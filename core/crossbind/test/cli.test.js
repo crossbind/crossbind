@@ -69,6 +69,7 @@ describe('crossbind outside a project', () => {
 
             expect(status).toBe(1);
             expect(stderr).toContain('no package.json found');
+            expect(stderr).toContain('scaffold a project with `npm create crossbind@beta`');
         });
     });
 });

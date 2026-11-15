@@ -8,6 +8,10 @@
     <img alt="License" src="https://img.shields.io/github/license/crossbind/crossbind?style=for-the-badge" />
 </a>
 
+## Build
+`pnpm build` makes the archives a crossbind app links. Before `npm publish`, `pnpm build:wasm` makes the web, Node.js
+(wasm) and Workers entries below and `pnpm build:desktop` the Node-API addons.
+
 ## Integration
 Start by installing these package with the following command:
 
@@ -50,21 +54,21 @@ std::string Native::sample() {
 import { initNative, Matrix } from '@crossbind/example-lib-prebuilt-matrix/Matrix.h';
 
 await initNative();
-const a = new Matrix(1210000, 1);
-const b = new Matrix(1210000, 2);
-const result = a.multiple(b);
-console.log(result.get(0));
+const a = await new Matrix(1210000, 1);
+const b = await new Matrix(1210000, 2);
+const result = await a.multiple(b);
+console.log(await result.get(0));
 ```
 
 ### Usage in JavaScript Code (web, without plugin)
 ```js
-import 'node_modules/@crossbind/example-lib-prebuilt-matrix/dist/crossbind-example-lib-prebuilt-matrix-wasm-wasm32-st-release.browser.js';
+import './node_modules/@crossbind/example-lib-prebuilt-matrix/dist/crossbind-example-lib-prebuilt-matrix-wasm-wasm32-st-release.browser.js';
 
-initNative({ path: 'node_modules/@crossbind/example-lib-prebuilt-matrix/dist' }).then(({ Matrix }) => {
-    const a = new Matrix(1210000, 1);
-    const b = new Matrix(1210000, 2);
-    const result = a.multiple(b);
-    console.log(result.get(0));
+initNative({ path: './node_modules/@crossbind/example-lib-prebuilt-matrix/dist' }).then(async ({ Matrix }) => {
+    const a = await new Matrix(1210000, 1);
+    const b = await new Matrix(1210000, 2);
+    const result = await a.multiple(b);
+    console.log(await result.get(0));
 });
 ```
 

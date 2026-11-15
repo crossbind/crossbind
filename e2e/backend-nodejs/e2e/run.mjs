@@ -1,6 +1,3 @@
-// CurlProbe.run_JSPI needs WebAssembly.Suspending, which Node still gates behind
-// --experimental-wasm-jspi; without it the glue aborts at boot ("JSPI not
-// supported by current environment").
 import { execFile } from 'node:child_process';
 import { curlProbeMismatch, startCurlProbeServer } from '../../config/curl-probe-server.mjs';
 
@@ -13,7 +10,7 @@ const fsync = /^FSYNC fsync=0 fdatasync=0 sqlite=kept$/m;
 const server = await startCurlProbeServer();
 const env = { ...process.env, CURL_PROBE_URL: server.url, CURL_PROBE_DEAD_URL: server.deadUrl };
 
-execFile('node', ['--experimental-wasm-jspi', '--expose-gc', 'src/index.mjs'], { timeout: 120000, env }, async (err, stdout, stderr) => {
+execFile('node', ['--expose-gc', 'src/index.mjs'], { timeout: 120000, env }, async (err, stdout, stderr) => {
     await server.close();
     const out = `${stdout}\n${stderr}`;
     if (err) {

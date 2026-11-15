@@ -94,7 +94,8 @@ function runSteps(entry, scripts, pm) {
 
 // Every prompt can be preselected positionally, so CI and docs can scaffold without a TTY.
 function usage() {
-    const rows = MANIFEST.map((m) => `  ${[m.group, m.framework ?? m.label, m.framework ? m.label : ''].filter(Boolean).join(' ')}`);
+    const quoted = (part) => (/\s/.test(part) ? `"${part}"` : part);
+    const rows = MANIFEST.map((m) => `  ${[m.group, m.framework ?? m.label, m.framework ? m.label : ''].filter(Boolean).map(quoted).join(' ')}`);
     return [
         `create-crossbind v${version}`,
         '',

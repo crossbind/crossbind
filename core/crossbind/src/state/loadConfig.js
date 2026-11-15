@@ -179,7 +179,7 @@ export function getFilledConfig(config, options = { isDepend: false }) {
 
     if (!newConfig?.general?.name) {
         if (!newConfig.package) {
-            throw new Error(`crossbind: no package.json found in ${newConfig.paths.project}. Run crossbind from your project root, or scaffold a project with \`npm create crossbind\`.`);
+            throw new Error(`crossbind: no package.json found in ${newConfig.paths.project}. Run crossbind from your project root, or scaffold a project with \`npm create crossbind@beta\`.`);
         }
         newConfig.general.name = fixPackageName(newConfig.package.name) || 'crossbindsample';
     }
