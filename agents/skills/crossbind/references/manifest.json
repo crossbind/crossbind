@@ -84,7 +84,7 @@
     {
       "source": "docs/api/performance.md",
       "output": "api/performance.md",
-      "sha256": "3edc2b7a25473be7802af21b38da29178444c3875f8f1988f1f7070798adf469"
+      "sha256": "3a070edc88653277c421a49e61e981fe38dd05d18f02b3155c7c4901576f0483"
     },
     {
       "source": "docs/api/remote-runner.md",
@@ -144,12 +144,12 @@
     {
       "source": "docs/playbooks/integration/react-native-cli.md",
       "output": "integration/react-native-cli.md",
-      "sha256": "2b1a59a6a50b364554b7aa648436b30d0c89458790e11abe74f4a3dc9ab6224b"
+      "sha256": "c3e61c81c2a3335fbbb3e432ee441b48903a88ae282047959487f85656a70dd9"
     },
     {
       "source": "docs/playbooks/integration/react-native-expo.md",
       "output": "integration/react-native-expo.md",
-      "sha256": "d20a3cc0a5aaedb463a9fc8ff1a7253419d908986be3009539b500518b6da97f"
+      "sha256": "a25369d3d4eb4684cd923a67f630c9f862a6bbbca0aa9eeda8b919199a93fefd"
     },
     {
       "source": "docs/playbooks/integration/rollup.md",

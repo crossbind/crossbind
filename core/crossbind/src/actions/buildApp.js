@@ -181,7 +181,7 @@ async function hostInputs(target) {
     assertAppRunner(target);
     const inputs = [getDockerImage(imageRoleFor(target), target.platform === 'android' ? 'linux/amd64' : undefined)];
     if (target.platform === 'android') {
-        return { hermes: `${IMAGE_HERMES}/android`, cmakeArgs: ['-DANDROID_STL=c++_shared'], inputs };
+        return { hermes: `${IMAGE_HERMES}/android`, cmakeArgs: [], inputs };
     }
     if (target.platform === 'win32') {
         return { hermes: `${IMAGE_HERMES}/win32-${target.arch}`, cmakeArgs: ['-DCROSSBIND_WEBVIEW2_INCLUDE=/opt/crossbind/webview2/include'], inputs };

@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { createRequire } from 'node:module';
+import NDK_VERSION from '../ndk.cjs';
 import {
     state, buildDependencies, getDependenciesStamp, getTargetParams,
     computeInputStamp, collectRustSources, collectRustBridgeFiles,
@@ -8,6 +9,19 @@ import {
 
 const buildType = (process.argv[2] || 'Release').toLowerCase();
 const archs = (process.argv[3] || '').split(',').map((s) => s.trim()).filter(Boolean);
+const appNdk = process.argv[4] || '';
+
+// crossbind's Android libraries link the libc++_shared.so of the NDK its images build with, and the app ships the one of
+// the NDK it builds with: an older one lacks symbols they need, and the app would not start.
+const isOlderVersion = (version, than) => {
+    const [a, b] = [version, than].map((value) => value.split('.').map(Number));
+    const differs = a.findIndex((part, i) => part !== (b[i] ?? 0));
+    return differs !== -1 && a[differs] < (b[differs] ?? 0);
+};
+if (!appNdk || isOlderVersion(appNdk, NDK_VERSION)) {
+    console.error(`crossbind: this app builds with ${appNdk ? `NDK ${appNdk}` : "the Android Gradle plugin's default NDK"}; crossbind's Android libraries need NDK ${NDK_VERSION} or newer: set ndkVersion in android/build.gradle, as the @crossbind/plugin-react-native config plugin does for an Expo app.`);
+    process.exit(1);
+}
 
 await buildDependencies({
     targetParams: getTargetParams({
