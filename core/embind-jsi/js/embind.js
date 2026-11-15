@@ -1050,7 +1050,6 @@ function extendError(baseErrorType, errorName) {
 }
 var BindingError = undefined;
 function throwBindingError(message) {
-  console.log(message);
   throw new BindingError(message);
 }
 

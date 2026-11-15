@@ -30,6 +30,24 @@ test('embind-jsi toVector takes a vector class or its name', () => {
     expect([...Module.toVector(Module.VectorInt, [3]).items]).toEqual([3]);
 });
 
+// crossbind's vector coercion catches the BindingError a JS array meets and passes the vector it makes instead, so the
+// error has nothing to tell the console; one nobody catches still reaches its caller with its message.
+test('a binding error is thrown with its message and leaves the console alone', () => {
+    const printed = [];
+    const quiet = { ...console, log: (...args) => printed.push(args), warn: (...args) => printed.push(args), error: (...args) => printed.push(args) };
+    const context = vm.createContext({ console: quiet });
+    context.globalThis = context;
+    vm.runInContext(fs.readFileSync(runtime, 'utf8').replace(/^export default .*$/m, ''), context);
+    printed.length = 0;
+
+    const caught = vm.runInContext(`(() => {
+        try { throwBindingError('Cannot pass "-json" as a VectorString'); } catch (error) { return [error instanceof BindingError, error.message]; }
+    })()`, context);
+
+    expect([...caught]).toEqual([true, 'Cannot pass "-json" as a VectorString']);
+    expect(printed).toEqual([]);
+});
+
 describe('embind-jsi conversions', () => {
     const toWire = registerTypes();
     const member = { value: 2 };
