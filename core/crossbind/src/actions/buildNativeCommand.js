@@ -9,6 +9,7 @@ import state from '../state/index.js';
 import logger from '../utils/logger.js';
 import { getContentHash, getFilesFingerprint } from '../utils/hash.js';
 import { buildLinkLibArgs } from '../utils/linkLayout.js';
+import resetCMakeCacheForSource from '../utils/resetCMakeCacheForSource.js';
 
 const cpuCount = Math.max(1, os.cpus().length - 1);
 const PROJECT_SOURCE = fileURLToPath(new URL('../assets/cmake/command', import.meta.url));
@@ -68,8 +69,10 @@ export default async function buildNativeCommand(target, options = {}) {
 
     const platformPrefix = `Native-${buildType}`;
     logger.startStep(target, 'native command');
+    const projectDir = stageProject(build);
+    resetCMakeCacheForSource(`${build}/${platformPrefix}/${target.path}`, projectDir, target);
     run(null, [
-        'cmake', stageProject(build),
+        'cmake', projectDir,
         `-DCMAKE_BUILD_TYPE=${buildType}`,
         `-DCROSSBIND_COMMAND_FILE=${target.commandName}`,
         `-DCROSSBIND_LINK_ARGS=${linkArgs.join(';')}`,
