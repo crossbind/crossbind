@@ -13,7 +13,7 @@ import state from '../state/index.js';
 import { wasiCFlags, wasiCxxFlags, resolveWasiSdkPath, WASI_TARGET_TRIPLE } from '../utils/wasiToolchain.js';
 import { HOST_BUILT_PLATFORMS } from '../utils/targets.js';
 import { WASM_EXCEPTION_FLAGS } from '../utils/archiveFlags.js';
-import { ANDROID_NDK, ANDROID_API_LEVEL } from '../utils/androidToolchain.js';
+import { ANDROID_NDK, ANDROID_API_LEVEL, ANDROID_STL } from '../utils/androidToolchain.js';
 import { IOS_DEVELOPER_DIR, IOS_DEPLOYMENT_TARGET, XCODE_TOOLCHAIN_BIN } from '../utils/iosToolchain.js';
 import { LINUX_ARCHIVE_FLAGS, linuxBuildEnv, linuxToolchainFile } from '../utils/linuxToolchain.js';
 import { windowsBuildEnv, windowsToolchainFile } from '../utils/windowsToolchain.js';
@@ -237,6 +237,7 @@ export default function run(program, params = [], platformPrefix = null, target 
                         `-DANDROID_ABI=${target.arch === 'x86_64' ? 'x86_64' : 'arm64-v8a'}`,
                         `-DANDROID_PLATFORM=android-${ANDROID_API_LEVEL}`,
                         `-DANDROID_NDK=${ANDROID_NDK}`,
+                        `-DANDROID_STL=${ANDROID_STL}`,
                     ];
                 }
                 break;

@@ -19,6 +19,7 @@ import { targetArchiveFlags } from '../utils/archiveFlags.js';
 import { packageSourceInputsOf } from '../utils/packageSources.js';
 import { nativeSourceStampChanged, writeNativeSourceStamp } from '../utils/nativeSourceStamp.js';
 import resetCMakeCacheForSource from '../utils/resetCMakeCacheForSource.js';
+import { ANDROID_STL } from '../utils/androidToolchain.js';
 
 const cpuCount = Math.max(1, os.cpus().length - 1);
 const sharedPlatforms = ['android'];
@@ -72,7 +73,9 @@ export default function createLib(target, fileType, options = {}) {
     const appArchives = target.platform === 'android' && target.runtimeEnv === 'app' ? 'archives' : null;
     // An app's own code compiles against <crossbind/app.h>, with the options of an app.
     const appApi = compilesAsApp(target) ? [getFilesFingerprint([appApiHeader()]), ...appCompileOptions(target)] : null;
-    const extraKeys = [httpHeader, appArchives, appApi].filter(Boolean);
+    // An Android library built while it linked libc++ in links again against the shared runtime.
+    const androidRuntime = target.platform === 'android' ? ANDROID_STL : null;
+    const extraKeys = [httpHeader, appArchives, appApi, androidRuntime].filter(Boolean);
     const flagsFingerprint = getContentHash(JSON.stringify(extraKeys.length ? [keyInputs, ...extraKeys] : keyInputs));
     const flagsChanged = !fs.existsSync(flagsFingerprintFile)
         || fs.readFileSync(flagsFingerprintFile, { encoding: 'utf8' }) !== flagsFingerprint;

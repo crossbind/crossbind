@@ -16,7 +16,7 @@ const platformCmake = {
         '-DOGR_ENABLE_DRIVER_SQLITE=ON', '-DOGR_ENABLE_DRIVER_GPKG=ON',
         '-DGDAL_USE_ICONV=OFF',
     ],
-    'android': ['-DCMAKE_ANDROID_STL_TYPE=c++_shared', ...withoutPythonBindings],
+    'android': withoutPythonBindings,
     // GDAL's top-level project probes a host Python interpreter even though this port removes the
     // SWIG subdirectory and ships no Python bindings. New CMake versions reject that probe while
     // cross-compiling unless an emulator is configured (CMP0190), so disable the unused package.

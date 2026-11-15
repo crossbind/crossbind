@@ -208,6 +208,13 @@ test('the unpublished toolchain image train uses the reviewed stable versions', 
     const androidToolchain = fs.readFileSync(path.join(ROOT, 'core/crossbind/src/utils/androidToolchain.js'), 'utf8');
     assert.match(androidToolchain, /\/opt\/android-sdk\/ndk\/current/);
     assert.doesNotMatch(androidToolchain, new RegExp(`/opt/android-sdk/ndk/${ndkVersion.replaceAll('.', '\\.')}`));
+    // A React Native app builds with the image's NDK, whose libc++_shared.so crossbind's Android libraries need: the
+    // plugin names it, and the React Native CLI apps build with it.
+    const ndkPin = `['"]${ndkVersion.replaceAll('.', '\\.')}['"]`;
+    assert.match(fs.readFileSync(path.join(ROOT, 'plugins', 'react-native', 'ndk.cjs'), 'utf8'), new RegExp(ndkPin));
+    for (const app of ['examples/mobile-reactnative-cli', 'e2e/mobile-reactnative-cli']) {
+        assert.match(fs.readFileSync(path.join(ROOT, app, 'android', 'build.gradle'), 'utf8'), new RegExp(`ndkVersion = ${ndkPin}`));
+    }
     assert.match(base, /^USER 10001:10001$/m);
     assert.match(web, /^USER 10001:10001$/m);
     assert.match(android, /^USER 10001:10001$/m);

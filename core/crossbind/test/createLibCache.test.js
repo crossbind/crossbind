@@ -1,7 +1,9 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import upath from 'upath';
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
+import { getContentHash } from '../src/utils/hash.js';
 
 const { run, state, getData, getCmakeParameters, resolveAppHostRoot } = vi.hoisted(() => ({
     run: vi.fn(), state: { config: {} }, getData: vi.fn(), getCmakeParameters: vi.fn(() => []), resolveAppHostRoot: vi.fn(),
@@ -76,6 +78,27 @@ describe('createLib cache', () => {
         expect(createLib(target, 'Source', { buildSource: true })).toBe(true);
         expect(buildCargo).toHaveBeenCalledOnce();
         expect(run).not.toHaveBeenCalled();
+    });
+
+    // A library built before Android libraries linked the shared C++ runtime carries libc++, and exports it, until it links
+    // again; the key of one built then names no runtime.
+    test('links an Android library built before the shared C++ runtime again, once', () => {
+        const android = {
+            platform: 'android', arch: 'arm64-v8a', runtime: 'mt', buildType: 'release', path: 'android-arm64-v8a-mt-release',
+        };
+        state.config.allDependencyPaths = { [android.path]: {} };
+        const libdir = upath.join(work, 'build', 'Bridge-Release', 'prebuilt', android.path);
+        const buildAndroid = () => {
+            run.mockClear();
+            createLib(android, 'Bridge', { buildSource: false, nativeGlob: [bridge] });
+            fs.mkdirSync(upath.join(libdir, 'lib'), { recursive: true });
+            return run.mock.calls.length > 0;
+        };
+        buildAndroid();
+        fs.writeFileSync(upath.join(libdir, 'crossbind-emccflags.fingerprint'), getContentHash(JSON.stringify([])));
+
+        expect(buildAndroid()).toBe(true);
+        expect(buildAndroid()).toBe(false);
     });
 
     // A dependency's compile options (Lerc's LERC_STATIC on Windows) change how the same sources compile.

@@ -20,11 +20,12 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const {
-    createRunOncePlugin, IOSConfig, withDangerousMod, withInfoPlist, withXcodeProject,
+    createRunOncePlugin, IOSConfig, withDangerousMod, withInfoPlist, withProjectBuildGradle, withXcodeProject,
 } = require('@expo/config-plugins');
 const { mergeContents } = require('@expo/config-plugins/build/utils/generateCode');
 
 const pkg = require('./package.json');
+const NDK_VERSION = require('./ndk.cjs');
 
 const SETTING = 'EXCLUDED_ARCHS[sdk=iphonesimulator*]';
 // crossbind compiles its own iOS artifacts for this floor, and Xcode 27 refuses to build a target
@@ -133,8 +134,25 @@ function withSceneLifecycle(config) {
     });
 }
 
+// crossbind's Android libraries need the libc++_shared.so of the NDK its images build with, and an app ships the one of
+// the NDK it builds with: Expo's root project would set its own, older default, so the app's NDK is set first. One the
+// app sets itself stays; the build stops on an older one, naming the version.
+function withCrossbindNdk(config) {
+    return withProjectBuildGradle(config, (cfg) => {
+        cfg.modResults.contents = mergeContents({
+            tag: 'crossbind-ndk-version',
+            src: cfg.modResults.contents,
+            newSrc: `if (!ext.has('ndkVersion')) ext.ndkVersion = '${NDK_VERSION}'`,
+            anchor: /apply plugin: ["']expo-root-project["']/,
+            offset: 0,
+            comment: '//',
+        }).contents;
+        return cfg;
+    });
+}
+
 module.exports = createRunOncePlugin(
-    (config) => withSceneLifecycle(withExcludeSimulatorArchs(config)),
+    (config) => withCrossbindNdk(withSceneLifecycle(withExcludeSimulatorArchs(config))),
     pkg.name,
     pkg.version,
 );

@@ -26,8 +26,9 @@ def crossbindDeps = tasks.register('crossbindDeps', Exec) {
     // bundling, and the deps stamp below must see that fresh set to bust the CMake configure.
     mustRunAfter crossbindBridges
     workingDir __crossbindAppRoot
-    // Pinned to Release: dependency prebuilts ship Release-only, debug app builds link the same deps.
-    commandLine 'node', new File(__crossbindScriptDir, 'build_android_deps.js').absolutePath, 'Release', crossbindAbis.join(',')
+    // Pinned to Release: dependency prebuilts ship Release-only, debug app builds link the same deps. The NDK this
+    // module builds with, the app's, is checked there against the one crossbind's libraries need.
+    commandLine 'node', new File(__crossbindScriptDir, 'build_android_deps.js').absolutePath, 'Release', crossbindAbis.join(','), android.ndkVersion ?: ''
 }
 def crossbindAssets = tasks.register('crossbindAssets', Exec) {
     // Asset data may come from a freshly rebuilt dependency.

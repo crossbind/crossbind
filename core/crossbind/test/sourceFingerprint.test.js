@@ -43,6 +43,18 @@ describe('getSourceFingerprint', () => {
         expect(before).not.toBe(after);
     });
 
+    // An Android library built while it linked libc++ in, before the shared runtime, builds again: of local sources too,
+    // which pin nothing else.
+    test('names the shared C++ runtime of an Android library, also one of local sources', () => {
+        const android = { path: 'android-arm64-v8a-mt-release', platform: 'android' };
+        const linux = { path: 'linux-x64-mt-release', platform: 'linux' };
+        const pinned = configFor('4.2.0', 'a'.repeat(64));
+
+        expect(getSourceFingerprint(pinned, android)).not.toBe(getSourceFingerprint(pinned, linux));
+        expect(getSourceFingerprint({ package: {}, build: {} }, android)).not.toBe(null);
+        expect(getSourceFingerprint({ package: {}, build: {} }, linux)).toBe(null);
+    });
+
     test('invalidates an upstream archive when a target source patch changes', () => {
         const config = configFor('4.2.0', 'a'.repeat(64));
         const target = { path: 'wasm', platform: 'wasm' };

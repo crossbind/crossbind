@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import { getContentHash } from './hash.js';
 import { recipePatchesFingerprint } from './recipePatches.js';
+import { ANDROID_STL } from './androidToolchain.js';
 
 // The prebuilt-lib cache in buildLib is existence-only, so a nativeVersion or recipe-sha256 bump
 // would otherwise be served from the previous build - shipping the old upstream under the new
@@ -10,8 +11,10 @@ export const SOURCE_FINGERPRINT_FILE = 'crossbind-source.fingerprint';
 export function getSourceFingerprint(config, target) {
     const nativeVersion = config?.package?.nativeVersion || null;
     const sha256 = config?.build?.sha256 || null;
+    // An Android library built while it linked libc++ in builds again against the shared runtime, of local sources too.
+    const androidRuntime = target?.platform === 'android' ? ANDROID_STL : null;
     // Local-source packages pin neither; buildLib checks their native source inventory instead.
-    if (!nativeVersion && !sha256) return null;
+    if (!nativeVersion && !sha256 && !androidRuntime) return null;
     const sourceReplacements = target ? config?.build?.sourceReplaceList?.(target, config.allDependencyPaths?.[target.path] ?? {}) : undefined;
     const patches = recipePatchesFingerprint(config?.build?.patches);
     return getContentHash(JSON.stringify({
@@ -19,6 +22,7 @@ export function getSourceFingerprint(config, target) {
         sha256,
         ...(sourceReplacements?.length ? { sourceReplacements } : {}),
         ...(patches ? { patches } : {}),
+        ...(androidRuntime ? { androidRuntime } : {}),
     }));
 }
 

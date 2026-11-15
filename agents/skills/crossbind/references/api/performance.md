@@ -55,6 +55,7 @@ therefore relies on that toolchain default instead of passing the deprecated `WA
 | `-DBUILD_SHARED_LIBS=OFF` | wasm, ios | Inverse of above | 🔒 Don't override |
 | `-DCMAKE_TOOLCHAIN_FILE` | per-platform | toolchain pin | 🔒 Don't override |
 | `-DANDROID_PLATFORM=android-33` | android | NDK API level | ⚠️ Lower if targeting older devices (read § Android API level) |
+| `-DANDROID_STL=c++_shared` | android | One C++ runtime | 🔒 Every library of an app links the one `libc++_shared.so` it ships; Android compares `type_info` by address |
 | `-DCMAKE_OSX_DEPLOYMENT_TARGET=15.1` | ios | iOS minimum | Fixed (read § iOS deployment target) |
 
 ### System defaults
