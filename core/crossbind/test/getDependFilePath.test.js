@@ -3,7 +3,7 @@ import {
 } from 'vitest';
 import fs from 'node:fs';
 import os from 'node:os';
-import path from 'node:path';
+import upath from 'upath';
 
 const h = vi.hoisted(() => ({ config: null }));
 vi.mock('../src/state/index.js', () => ({ default: { get config() { return h.config; } } }));
@@ -11,17 +11,17 @@ vi.mock('../src/state/index.js', () => ({ default: { get config() { return h.con
 const TARGET = { path: 'wasm-wasm32-st-release', platform: 'wasm' };
 
 function packageConfig(root, name, { type, ownCMakeLists = false }) {
-    const project = path.join(root, name);
-    const output = path.join(project, 'dist');
-    const cmake = ownCMakeLists ? path.join(project, 'CMakeLists.txt') : path.join(output, 'prebuilt', 'CMakeLists.txt');
-    fs.mkdirSync(path.dirname(cmake), { recursive: true });
+    const project = upath.join(root, name);
+    const output = upath.join(project, 'dist');
+    const cmake = ownCMakeLists ? upath.join(project, 'CMakeLists.txt') : upath.join(output, 'prebuilt', 'CMakeLists.txt');
+    fs.mkdirSync(upath.dirname(cmake), { recursive: true });
     fs.writeFileSync(cmake, '');
     return {
         package: { name },
         general: { name },
         export: { type },
         paths: {
-            project, output, cmake, cmakeDir: path.dirname(cmake), cliCMakeListsTxt: path.join(root, 'cli', 'CMakeLists.txt'),
+            project, output, cmake, cmakeDir: upath.dirname(cmake), cliCMakeListsTxt: upath.join(root, 'cli', 'CMakeLists.txt'),
         },
     };
 }
@@ -30,7 +30,7 @@ describe('getDependFilePath for a header of an npm dependency', () => {
     let root;
 
     beforeEach(() => {
-        root = fs.mkdtempSync(path.join(os.tmpdir(), 'crossbind-depend-file-'));
+        root = upath.normalize(fs.mkdtempSync(upath.join(os.tmpdir(), 'crossbind-depend-file-')));
     });
 
     afterEach(() => {
@@ -45,8 +45,8 @@ describe('getDependFilePath for a header of an npm dependency', () => {
 
     test('a prebuilt package resolves the header its target ships', async () => {
         const lib = packageConfig(root, 'my-prebuilt-lib', { type: 'cmake' });
-        const header = path.join(lib.paths.output, 'prebuilt', TARGET.path, 'include', 'Matrix.h');
-        fs.mkdirSync(path.dirname(header), { recursive: true });
+        const header = upath.join(lib.paths.output, 'prebuilt', TARGET.path, 'include', 'Matrix.h');
+        fs.mkdirSync(upath.dirname(header), { recursive: true });
         fs.writeFileSync(header, '');
         const resolve = await resolver([lib]);
         expect(resolve('my-prebuilt-lib/Matrix.h')).toBe(header);
