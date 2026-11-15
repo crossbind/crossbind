@@ -19,10 +19,9 @@ import resolveEmbindNapiRoot, { resolveEmbindJsiRoot } from '../utils/resolveEmb
 import scopedEmbind from '../utils/scopedEmbind.js';
 import resolveEmbindRustRoot from '../utils/resolveEmbindRust.js';
 import { rustStdLibsFor } from '../utils/cargoTarget.js';
-import toolchainNoticesDir from '../utils/toolchainNotices.js';
+import copyNativeNotices from './nativeNotices.js';
 
 const cpuCount = Math.max(1, os.cpus().length - 1);
-const WINDOWS_IMAGE_NOTICES = '/opt/licenses/llvm-mingw';
 
 // What a build's output, a package's own packages and a repository's history hold, which no build reads.
 const UNREAD_FOLDERS = ['.crossbind', 'node_modules', '.git'];
@@ -124,13 +123,6 @@ export function bundleNodeLoader(target) {
     return bundleLoader(target, resolveEmbindNapiRoot(), nodeLoaderConfig(target));
 }
 
-// The mingw-w64 runtime and winpthreads in a Windows addon or app ask for their notices in binary
-// distributions. The windows image carries them; a host toolchain may not.
-export function copyWindowsNotices(target) {
-    const notices = toolchainNoticesDir('win32');
-    run(null, ['sh', '-c', `if [ -d ${WINDOWS_IMAGE_NOTICES} ]; then mkdir -p ${notices} && cp ${WINDOWS_IMAGE_NOTICES}/* ${notices}/; fi`], null, target);
-}
-
 // Links one Node-API addon from the project's archives and bundles the loader that picks the
 // addon matching the running process.
 export default async function buildNode(target, options = {}) {
@@ -185,7 +177,7 @@ export default async function buildNode(target, options = {}) {
         `-DCROSSBIND_LINK_DEPENDS=${libs.join(';')}`,
     ], platformPrefix, target);
     run(null, ['cmake', '--build', '.', '-j', String(cpuCount)], platformPrefix, target, { exclusive: true });
-    if (target.platform === 'win32') copyWindowsNotices(target);
+    copyNativeNotices(target);
     fs.copyFileSync(`${build}/${platformPrefix}/${target.path}/${target.addonName}`, `${build}/${target.addonName}`);
     logger.doneStep(target, 'addon');
 

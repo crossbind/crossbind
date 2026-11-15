@@ -1774,10 +1774,12 @@ linked in and no DLL beside it: webview/webview loads the system's WebView2 Runt
 `crossbind licenses -e app` lists what the app carries beside its packages: crossbind's runtime, Hermes, JSI's
 `jsi.cpp` from the same release and webview/webview, each with its version, its sha256 and its license text; with
 `--platform linux`, the Hermes source and the libc++ a Linux app links; with `--platform win32`, the Hermes source, the
-WebView2 SDK and the llvm-mingw and mingw-w64 runtimes a Windows app links, whose notices its build copies out of the
-image, and the NSIS its setup program carries; with `--platform ios`, no webview/webview, which an iOS app does not use; with `--platform android`, Hermes'
-AAR, the fbjni and androidx.webkit Gradle adds and the NDK's libc++ the app carries. `--notices` writes them to a file
-to ship with the app.
+WebView2 SDK and the llvm-mingw and mingw-w64 runtimes a Windows app links, and the NSIS its setup program carries; with
+`--platform ios`, no webview/webview, which an iOS app does not use; with `--platform android`, Hermes' AAR, the fbjni
+and androidx.webkit Gradle adds and the NDK's libc++ the app carries. The runtimes a Linux or Windows app links have
+the texts and versions its build copies out of the image; the NDK's libc++ has the version of the NDK's clang, and it,
+fbjni and androidx.webkit the texts @crossbind/core-app-host keeps, as each is a file of its own in the app. `--notices`
+writes them to a file to ship with the app.
 
 ## Open-source licenses
 

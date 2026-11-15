@@ -51,6 +51,52 @@ describe('collectLicenseRows', () => {
         fs.rmSync(build, { recursive: true, force: true });
     });
 
+    test.each(['linux', 'linuxmusl'])("gives the C++ runtime of a %s addon the license and version its build copied out of the image", async (platform) => {
+        const build = upath.normalize(fs.mkdtempSync(upath.join(os.tmpdir(), 'crossbind-linux-toolchain-')));
+        const notices = upath.join(build, 'toolchain-licenses', platform);
+        fs.mkdirSync(notices, { recursive: true });
+        fs.writeFileSync(upath.join(notices, 'llvm-LICENSE.TXT'), 'The LLVM Project is under the Apache License v2.0 with LLVM Exceptions\n');
+        fs.writeFileSync(upath.join(notices, 'libcxx-version.txt'), '#  define _LIBCPP_VERSION 190107\n');
+        state.config = { allDependencies: [], paths: { build } };
+
+        const [llvm] = await collectLicenseRows(platform);
+
+        expect(llvm).toMatchObject({
+            name: 'llvm-runtimes',
+            nativeVersion: '19.1.7',
+            licenseText: '=== llvm-LICENSE.TXT ===\n\nThe LLVM Project is under the Apache License v2.0 with LLVM Exceptions',
+        });
+        fs.rmSync(build, { recursive: true, force: true });
+    });
+
+    test("splits a Windows image's notices between LLVM's runtime and mingw-w64's, each with its version", async () => {
+        const build = upath.normalize(fs.mkdtempSync(upath.join(os.tmpdir(), 'crossbind-win32-toolchain-')));
+        const notices = upath.join(build, 'toolchain-licenses', 'win32');
+        fs.mkdirSync(notices, { recursive: true });
+        fs.writeFileSync(upath.join(notices, 'COPYING.MinGW-w64-runtime.txt'), 'runtime notice\n');
+        fs.writeFileSync(upath.join(notices, 'COPYING.winpthreads.txt'), 'winpthreads notice\n');
+        fs.writeFileSync(upath.join(notices, 'llvm-LICENSE.TXT'), 'Apache License v2.0 with LLVM Exceptions\n');
+        // An older build copied llvm-mingw's LICENSE.TXT under its own name, beside the mingw-w64 notices.
+        fs.writeFileSync(upath.join(notices, 'LICENSE.TXT'), 'Apache License v2.0 with LLVM Exceptions\n');
+        fs.writeFileSync(upath.join(notices, 'clang-version.txt'), 'clang version 23.1.2 (https://github.com/llvm/llvm-project.git 85ac5602)\nTarget: x86_64-w64-windows-gnu\n');
+        fs.writeFileSync(upath.join(notices, 'mingw-w64-version.txt'), [
+            '#define __MINGW64_VERSION_MAJOR 15', '#define __MINGW64_VERSION_MINOR 0', '#define __MINGW64_VERSION_BUGFIX 0', '#define __MINGW64_VERSION_STATE "alpha"',
+        ].join('\n'));
+        state.config = { allDependencies: [], paths: { build } };
+
+        const [llvm, mingw] = await collectLicenseRows('win32');
+
+        expect(llvm).toMatchObject({
+            name: 'llvm-runtimes', nativeVersion: '23.1.2', licenseText: '=== llvm-LICENSE.TXT ===\n\nApache License v2.0 with LLVM Exceptions',
+        });
+        expect(mingw).toMatchObject({
+            name: 'mingw-w64-runtime',
+            nativeVersion: '15.0.0',
+            licenseText: '=== COPYING.MinGW-w64-runtime.txt ===\n\nruntime notice\n\n=== COPYING.winpthreads.txt ===\n\nwinpthreads notice',
+        });
+        fs.rmSync(build, { recursive: true, force: true });
+    });
+
     test('lists no runtime for a macOS addon, which uses the C++ runtime of the system', async () => {
         expect(await collectLicenseRows('darwin')).toEqual([]);
     });
@@ -413,6 +459,26 @@ describe('collectLicenseRows for an app', () => {
         expect(byName['androidx-webkit'].version).toMatch(/^\d+\.\d+\.\d+$/);
         expect(byName['llvm-runtimes'].licenseNotes).toContain('libc++_shared.so');
         rows.forEach((row) => expect(validateSpdx(row.license).isValid).toBe(true));
+    });
+
+    test("gives what an Android app carries as files of their own their texts, and its libc++ the version of the NDK's clang", async () => {
+        const build = upath.normalize(fs.mkdtempSync(upath.join(os.tmpdir(), 'crossbind-android-toolchain-')));
+        const notices = upath.join(build, 'toolchain-licenses', 'android');
+        fs.mkdirSync(notices, { recursive: true });
+        fs.writeFileSync(
+            upath.join(notices, 'clang-version.txt'),
+            'Android (16134705, +pgo, +bolt, +lto, +mlgo, based on r574158c) clang version 21.0.0 (https://android.googlesource.com/toolchain/llvm-project 9f872551)\n',
+        );
+        state.config = { ...state.config, paths: { ...state.config.paths, build } };
+
+        const byName = Object.fromEntries((await collectLicenseRows('android', { runtimeEnv: 'app' })).map((row) => [row.name, row]));
+
+        expect(byName.fbjni.licenseText).toMatch(/^\s*Apache License\s+Version 2\.0, January 2004/);
+        expect(byName.fbjni.licenseText).toContain('Copyright Facebook, Inc. and its affiliates');
+        expect(byName['androidx-webkit'].licenseText).toMatch(/^\s*Apache License\s+Version 2\.0, January 2004/);
+        expect(byName['llvm-runtimes'].nativeVersion).toBe('21.0.0');
+        expect(byName['llvm-runtimes'].licenseText).toContain('The libc++ library is dual licensed');
+        fs.rmSync(build, { recursive: true, force: true });
     });
 });
 

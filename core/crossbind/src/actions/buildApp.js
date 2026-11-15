@@ -10,7 +10,8 @@ import run from './run.js';
 import createLib from './createLib.js';
 import getData from './getData.js';
 import getEnv from './getEnv.js';
-import { copyWindowsNotices, filesUnder, linkInputs } from './buildNode.js';
+import { filesUnder, linkInputs } from './buildNode.js';
+import copyNativeNotices from './nativeNotices.js';
 import { suppressNodeBuiltinWarnings } from './buildJs.js';
 import { isNativeSourceNewerThan } from './isSourceNewer.js';
 import { createNativeBridges } from './nativeBridges.js';
@@ -667,7 +668,7 @@ export default async function buildApp(target, { bridges = [], force = false } =
         ...cmakeArgs,
     ], platformPrefix, target);
     run(null, ['cmake', '--build', '.', '-j', String(cpuCount)], platformPrefix, target, { exclusive: true });
-    if (target.platform === 'win32') copyWindowsNotices(target);
+    copyNativeNotices(target);
 
     const systemConfig = `export default ${JSON.stringify({ env: getEnv(target) })};`;
     await bundle(`${appHostRoot}/js/host.js`, `${workDir}/host.js`, [
