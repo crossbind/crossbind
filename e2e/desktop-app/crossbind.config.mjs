@@ -53,6 +53,9 @@ export default {
         category: 'developer-tools',
         // e2e/run.mjs serves the updates src/main.js checks a desktop app for.
         updater: UPDATER,
+        // Every installer, and a Windows app's MSIX package handed out, signed with the build's key, which e2e/run.mjs
+        // --msix opens.
+        installers: ['dmg', 'deb', 'tar-gz', 'nsis', 'zip', 'msix'],
         // e2e/run.mjs launches a desktop app again, which hands src/main.js the launch.
         singleInstance: true,
         // e2e/run.mjs launches a desktop app with a link of it, and again with another, which src/main.js gets.

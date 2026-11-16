@@ -169,6 +169,22 @@ async function checkUpdates() {
     if (!tampered.includes('app.updater.publicKey')) throw new Error(`a tampered update was not refused: ${tampered}`);
 }
 
+// What the updater of an app from its MSIX package says, which Windows updates: e2e/run.mjs --msix waits for the page to
+// have heard it, and a run of the app's folder fails on it.
+const PACKAGED_REFUSAL = 'installed from its MSIX package';
+let isPackaged = false;
+function heardPackaged(error) {
+    if (!error?.message?.includes(PACKAGED_REFUSAL)) throw error;
+    console.log('crossbind e2e: the app runs from its MSIX package');
+    return true;
+}
+
+// An app from its MSIX package installs no update either.
+async function checkPackagedUpdates() {
+    const installed = await updater.install().then(() => 'installed', (error) => error.message);
+    if (!installed.includes(PACKAGED_REFUSAL)) throw new Error(`updater.install() did not refuse in an MSIX package: ${installed}`);
+}
+
 const LAUNCH_TIMEOUT_MS = 30000;
 // Longer than e2e/run.mjs's steps may take together, so a failure of its own says what went wrong.
 const FULL_SCREEN_TIMEOUT_MS = 150000;
@@ -957,8 +973,8 @@ else initNative().then(async (m) => {
         // The desktop window opens the page at the size app.window gives, whatever frame it adds around it.
         const isDesktop = !isAndroid && navigator.maxTouchPoints === 0;
         // A built desktop app asks for an update first, which tells e2e/run.mjs that the app app.relaunch() opened anew
-        // has opened.
-        if (isDesktop && !import.meta.env.DEV) await updater.check();
+        // has opened; one from its MSIX package is refused, and e2e/run.mjs sees it open among Windows' processes.
+        if (isDesktop && !import.meta.env.DEV) isPackaged = await updater.check().then(() => false, heardPackaged);
         if (isDesktop && (innerWidth !== 800 || innerHeight !== 600)) {
             throw new Error(`the page is ${innerWidth} × ${innerHeight}, not the 800 × 600 app.window gives`);
         }
@@ -1068,7 +1084,7 @@ else initNative().then(async (m) => {
             // iOS asks its user before a link from outside opens the app, which no run can answer.
             if (isAndroid && !import.meta.env.DEV) await checkOpenedUrl();
         } else if (!import.meta.env.DEV) {
-            await checkUpdates();
+            await (isPackaged ? checkPackagedUpdates() : checkUpdates());
             await checkSecondInstance();
             if (navigator.userAgent.includes('Macintosh')) {
                 await checkReopen();
