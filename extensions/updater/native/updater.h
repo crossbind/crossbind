@@ -22,6 +22,9 @@ std::filesystem::path bundlePath();
 #ifdef _WIN32
 // Starts an update's setup program, which installs it where the app is once the app has quit, and opens it anew.
 void runSetup(const std::filesystem::path &setup);
+// Whether the app runs from its MSIX package, whose folder no setup program changes: Windows updates it, from the Store
+// or with a newer package.
+bool isPackaged();
 #endif
 
 }  // namespace crossbind::updater

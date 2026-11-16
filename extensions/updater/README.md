@@ -24,7 +24,7 @@ public key that checks it. `npx crossbind app updater-key` makes the key pair; a
 
 ## Platforms
 
-macOS, Linux and Windows. A Linux app updates itself from what `tar-gz` makes, and a Windows app from what `nsis` makes. An iOS or Android app updates through its store, and `updater.check()` rejects there.
+macOS, Linux and Windows. A Linux app updates itself from what `tar-gz` makes, and a Windows app from what `nsis` makes. An iOS or Android app updates through its store, and a Windows app installed from its MSIX package as Windows installs a newer package: `updater.check()` rejects there.
 
 ## Replace or leave out
 

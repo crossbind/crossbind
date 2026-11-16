@@ -328,9 +328,14 @@ export default {
     },
       // Default: none, and the app does not update itself.
     installers: ['dmg', 'deb', 'nsis'],
-      // The installers alone a desktop build runs, of crossbind's, dmg, deb, tar-gz, nsis and zip, and of the
+      // The installers alone a desktop build runs, of crossbind's, dmg, deb, tar-gz, nsis, zip and msix, and of the
       // extensions': each platform runs those of its own. A Linux or Windows app with app.updater keeps tar-gz or
-      // nsis, whose file it updates from (see app.md). Default: every one.
+      // nsis, whose file it updates from, and msix makes a package only where it is named here, handed out, or with
+      // app.windows.msix (see app.md). Default: every one.
+    windows: { msix: { name: '12345Example.Demo', publisher: 'CN=1A2B3C4D-…', publisherDisplayName: 'Example' } },
+      // The identity Partner Center's Product identity page shows for a Windows app reserved as an "MSIX or PWA app",
+      // which its MSIX package for the Microsoft Store carries: a Windows build writes dist/<name>-win32-<arch>.msix
+      // with it, unsigned, as the Store signs it (see app.md). Default: none.
     without: ['menu', 'power'],
       // crossbind's own extensions this app leaves out, by their names, with what the page calls of them, their
       // commands, stores and installers (see extensions.md). An option of the app one of them reads stops the build.

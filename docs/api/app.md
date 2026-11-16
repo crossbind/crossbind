@@ -346,6 +346,14 @@ resampled from the PNG, so a small one blurs when enlarged.
   valid signature of Microsoft's, runs it, which installs the runtime. While the app runs, an update or Uninstall asks
   to close it and changes nothing. `/S` installs without a window. NSIS, in crossbind's windows image, builds it.
 - Windows, `zip`: `dist/<name>-win32-<arch>.zip`, the app's folder as signed.
+- Windows, `msix`: `dist/<name>-win32-<arch>.msix`, the app's MSIX package, which a build makes only where it is asked
+  for: with `app.windows.msix`, the identity the Microsoft Store gives the app, unsigned, as the Store signs it (see
+  [Microsoft Store](#microsoft-store)); or where `app.installers` names `msix`, handed out, named after the app's id and
+  signed with the app's key, whose certificate's subject is its publisher, so that Windows installs it where that
+  certificate is trusted. Windows 10 1809 and later install it for the user, with the app in the Start menu and the
+  apps Settings lists, its URL schemes and file types, and an alias, `<name>.exe`, and start the app with the package's
+  identity. Its logos come from `app.icon`, which it needs, and its version is package.json's as `1.2.3.0`: a
+  prerelease stops the build, as the Store cannot tell it from its release.
 
 The tar.gz and the zip register neither the app's schemes nor a menu entry. `app.installers` names the installers alone
 that run, as `app: { installers: ['dmg', 'deb'] }` ships a disk image and a Debian package alone, and a name that is no
@@ -473,7 +481,8 @@ and ext4 do; where it cannot, as on a network share, the update fails and leaves
 its user can change it, too: a macOS app opened from its disk image, or from where it was downloaded to, updates once
 it is moved to Applications, and a Linux app installed from its Debian package updates with the package manager. The
 C++ of an app calls the same with `<crossbind/extension.h>`'s `invoke("updater.check", …)`. An iOS or Android app updates
-through its store, and `updater.check()` rejects there.
+through its store, and a Windows app installed from its MSIX package as Windows installs a newer package, from the Store
+or from whoever handed it out: `updater.check()` and `updater.install()` reject there.
 
 An `app.updater.url` that is neither https nor http on localhost or names no manifest, a public key that is none or
 one anyone can forge signatures for, a package.json version that is not semver, and a private key that is not the
@@ -1619,50 +1628,30 @@ v<version>`; a release put out by hand, or with another token, starts the workfl
 
 ### Microsoft Store
 
-The Store refuses this setup program today. Its policy 10.2.9 takes no installer that downloads what the app needs as
-it runs, and the setup downloads Microsoft's WebView2 bootstrapper on a system without the runtime (see
-[Installers](#installers)). So the workflow below does not pass certification yet, as
-[known-issues.md](../known-issues.md#the-microsoft-store-refuses-the-windows-setup-program) records.
+The Microsoft Store takes a Windows app as its MSIX package (see [Installers](#installers)), which it signs, hosts and
+updates. Reserve the app's name in Partner Center as an "MSIX or PWA app", and copy the identity its Product identity
+page shows into `crossbind.config.js`:
 
-The Microsoft Store takes a Windows app as the setup program `crossbind app build` makes, which it downloads from the
-address its submission gives as the app installs: a GitHub release's, which keeps a version's file. Microsoft's [Store
-Developer CLI](https://github.com/microsoft/msstore-cli), `msstore`, points the app's submission at each GitHub release
-`crossbind app publish github` puts out, and sends it for certification:
-
-```yaml
-name: Publish to the Microsoft Store
-on:
-  release:
-    types: [released]
-jobs:
-  store:
-    runs-on: windows-latest
-    steps:
-      - uses: microsoft/microsoft-store-apppublisher@v1.4
-      - run: msstore reconfigure --tenantId ${{ secrets.PARTNER_CENTER_TENANT_ID }} --sellerId ${{ secrets.PARTNER_CENTER_SELLER_ID }} --clientId ${{ secrets.PARTNER_CENTER_CLIENT_ID }} --clientSecret ${{ secrets.PARTNER_CENTER_CLIENT_SECRET }}
-      - shell: bash
-        env:
-          RELEASE: https://github.com/${{ github.repository }}/releases/download/${{ github.event.release.tag_name }}
-        run: |
-          packages=$(jq -nc --arg release "$RELEASE" '{packages: [["x64", "X64"], ["arm64", "Arm64"]] | map({
-            packageUrl: "\($release)/<name>-win32-\(.[0])-setup.exe", architectures: [.[1]],
-            languages: ["en-us"], isSilentInstall: false, installerParameters: "/S", packageType: "exe"})}')
-          msstore submission update ${{ vars.PARTNER_CENTER_PRODUCT_ID }} "$packages"
-      - run: msstore submission publish ${{ vars.PARTNER_CENTER_PRODUCT_ID }}
+```js
+app: {
+    icon: 'icon.png',
+    windows: {
+        msix: { name: '12345Example.Demo', publisher: 'CN=1A2B3C4D-…', publisherDisplayName: 'Example' },
+    },
+},
 ```
 
-Once, for the app: create it in Partner Center as an EXE or MSI app, with its name reserved, and complete its first
-submission there, with its listing, age rating and price, which later ones take as they are. Associate a Microsoft Entra
-application with the Partner Center account, under Account settings › User management, and keep its tenant, client ID
-and a client secret, with the account's seller ID, as the workflow's secrets, and the app's product ID, which Partner
-Center shows under Product identity, as a variable. `isSilentInstall` is false, as the setup installs without a window
-with `/S` alone.
+`crossbind app build -p windows` then writes `dist/<name>-win32-x64.msix` and `dist/<name>-win32-arm64.msix`, unsigned,
+which a submission in Partner Center takes under Packages. Make the first submission there, with the app's listing, age
+rating and price, which later ones take as they are, and say why the app asks for `runFullTrust`, as every Win32 app in
+a package does: it runs as the app does outside one. Each later version is above the last one the Store has, as
+package.json's next release is.
 
-The Store installs only a setup signed with a certificate of an authority Microsoft's Trusted Root Program takes, as the
-next publish's certification checks (see [Signing a Windows app](#signing-a-windows-app)). It fetches the setup from the
-release each time it installs the app, so leave a release the Store has as it is; it updates no app it installed this
-way, which the app's own updater does (see [Updates](#updates)). A release a workflow puts out with its own token starts
-the workflow above as little as winget's.
+The Store updates the app it installed, and the app's own updater refuses there (see [Updates](#updates)). An app from
+its package uses the WebView2 Runtime that Windows 11 comes with and Windows 10 has from Edge's updates. The setup
+program does not pass the Store's certification: its policy 10.2.9 takes no installer that downloads what the app needs
+as it runs, and the setup downloads Microsoft's WebView2 bootstrapper on a system without the runtime, as
+[known-issues.md](../known-issues.md#the-microsoft-store-refuses-the-windows-setup-program) records.
 
 ### From CI
 

@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import upath from 'upath';
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 import { PNG } from 'pngjs';
 
@@ -292,5 +293,17 @@ describe("an extension's api", () => {
         expect(api.app.category).toBeNull();
         expect(api.windows.icon().readUInt16LE(2)).toBe(1);
         expect(api.windows.signer).toMatch(/[/\\]windows[/\\]jsign\.sh$/);
+    });
+
+    test("gives a Windows app's icon as a square PNG of the size an MSIX package's logo takes", () => {
+        const api = extensionApi('msix', { platform: 'windows' });
+        state.config.app = {};
+        expect(api.windows.logo(44)).toBeNull();
+
+        state.config.app = { icon: 'icon.png' };
+        fs.writeFileSync(upath.join(base, 'icon.png'), PNG.sync.write({ width: 16, height: 16, data: Buffer.alloc(16 * 16 * 4, 255) }));
+        const logo = PNG.sync.read(api.windows.logo(44));
+        expect([logo.width, logo.height]).toEqual([44, 44]);
+        expect(() => api.windows.logo(0)).toThrow('crossbind: msix asks for a logo of 0 pixels, which is no whole number above 0.');
     });
 });
