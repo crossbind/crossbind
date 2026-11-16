@@ -1,13 +1,36 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import {
-    assertImage, languageFolders, readText, takenNames,
+    assertImage, imageOf, isFolder, languageFolders, readSetting, readText, sizeOf, takenNames,
 } from '@crossbind/core-store-kit';
 
+// The app's settings beside the locales' folders, by fastlane deliver's names, which a publish with --submit sends: the
+// version's copyright, the app's categories, its age rating's answers and App Review's contact.
+const COPYRIGHT = 'copyright.txt';
+const CATEGORIES = { 'primary_category.txt': 'primaryCategory', 'secondary_category.txt': 'secondaryCategory' };
+const AGE_RATING = 'age_rating.json';
+const REVIEW = 'review_information';
+const REVIEW_TEXTS = {
+    'first_name.txt': 'contactFirstName',
+    'last_name.txt': 'contactLastName',
+    'phone_number.txt': 'contactPhone',
+    'email_address.txt': 'contactEmail',
+    'demo_user.txt': 'demoAccountName',
+    'demo_password.txt': 'demoAccountPassword',
+    'notes.txt': 'notes',
+};
+const REVIEW_NOTES_MOST = 4000;
+
 // A project's App Store listing: a folder per locale, named as App Store Connect names its localizations (en-US, tr,
-// zh-Hans), with the texts' files fastlane's deliver names and a folder of screenshots per display type.
+// zh-Hans), with the texts' files fastlane's deliver names and a folder of screenshots per display type, and the app's
+// settings beside them.
 const STORE = {
-    name: 'App Store Connect', listing: 'an App Store listing', folder: path.join('store', 'app-store'), language: /^[a-z]{2,3}(-([A-Z]{2}|[A-Z][a-z]{3}))?$/, example: 'en-US',
+    name: 'App Store Connect',
+    listing: 'an App Store listing',
+    folder: path.join('store', 'app-store'),
+    language: /^[a-z]{2,3}(-([A-Z]{2}|[A-Z][a-z]{3}))?$/,
+    example: 'en-US',
+    settings: [COPYRIGHT, ...Object.keys(CATEGORIES), AGE_RATING, REVIEW],
 };
 export const APP_STORE_LISTING = STORE.folder;
 // A listing's texts by their files: those of the app's information, which change with its next version, and those of
@@ -60,3 +83,115 @@ function readLocale(project, { language: locale, folder }) {
 // screenshots, each as its files hold them; none without the folder, and no locale whose folder holds none.
 export const readAppStoreListing = (project) => languageFolders(STORE, project).map((folder) => readLocale(project, folder))
     .filter(({ info, version, screenshots }) => [info, version, screenshots].some((part) => Object.keys(part).length > 0));
+
+// The answers App Store Connect's age rating takes, by its API's names: how often a kind of content shows, whether the
+// app does a thing, and the overrides of the rating it works out.
+const FREQUENCIES = ['NONE', 'INFREQUENT_OR_MILD', 'FREQUENT_OR_INTENSE', 'INFREQUENT', 'FREQUENT'];
+const AGE_RATING_ANSWERS = {
+    ...Object.fromEntries([
+        'alcoholTobaccoOrDrugUseOrReferences', 'contests', 'gamblingSimulated', 'gunsOrOtherWeapons', 'horrorOrFearThemes',
+        'matureOrSuggestiveThemes', 'medicalOrTreatmentInformation', 'profanityOrCrudeHumor', 'sexualContentGraphicAndNudity',
+        'sexualContentOrNudity', 'violenceCartoonOrFantasy', 'violenceRealistic', 'violenceRealisticProlongedGraphicOrSadistic',
+    ].map((field) => [field, FREQUENCIES])),
+    ...Object.fromEntries([
+        'advertising', 'ageAssurance', 'gambling', 'healthOrWellnessTopics', 'lootBox', 'messagingAndChat', 'parentalControls',
+        'socialMedia', 'socialMediaAgeRestricted', 'unrestrictedWebAccess', 'userGeneratedContent',
+    ].map((field) => [field, [true, false]])),
+    kidsAgeBand: ['FIVE_AND_UNDER', 'SIX_TO_EIGHT', 'NINE_TO_ELEVEN', null],
+    ageRatingOverrideV2: ['NONE', 'NINE_PLUS', 'THIRTEEN_PLUS', 'SIXTEEN_PLUS', 'EIGHTEEN_PLUS', 'UNRATED'],
+    koreaAgeRatingOverride: ['NONE', 'ALL', 'TWELVE_PLUS', 'FIFTEEN_PLUS', 'NINETEEN_PLUS'],
+};
+// A category's id, as App Store Connect's API names it: UTILITIES, PRODUCTIVITY, GAMES_PUZZLE.
+const CATEGORY_ID = /^[A-Z][A-Z_]*$/;
+
+// The answers of age_rating.json: those of App Store Connect's API it knows, each checked, and any other it passes on
+// as App Store Connect names it, for a question Apple adds.
+function readAgeRating(project) {
+    const file = path.join(project, STORE.folder, AGE_RATING);
+    if (!fs.existsSync(file)) return null;
+    const shown = path.relative(project, file);
+    let answers;
+    try {
+        answers = JSON.parse(fs.readFileSync(file, 'utf8'));
+    } catch (error) {
+        throw new Error(`crossbind: ${shown} holds no JSON: ${error.message}`, { cause: error });
+    }
+    if (answers === null || typeof answers !== 'object' || Array.isArray(answers)) {
+        throw new Error(`crossbind: ${shown} holds no object of App Store Connect's age rating answers, as { "violenceCartoonOrFantasy": "NONE", "gambling": false }.`);
+    }
+    for (const [field, answer] of Object.entries(answers)) {
+        const known = AGE_RATING_ANSWERS[field];
+        const isTaken = known ? known.includes(answer) : typeof answer === 'boolean' || (typeof answer === 'string' && CATEGORY_ID.test(answer));
+        if (!isTaken) {
+            throw new Error(`crossbind: ${shown} answers ${field} with ${JSON.stringify(answer)}, which App Store Connect takes none of${known ? `: it takes ${known.map((one) => JSON.stringify(one)).join(', ')}` : ''}.`);
+        }
+    }
+    return answers;
+}
+
+// App Review's contact and demo account, by the files of review_information.
+function readReview(project) {
+    const folder = path.join(project, STORE.folder, REVIEW);
+    if (!fs.existsSync(folder)) return {};
+    if (!isFolder(folder)) throw new Error(`crossbind: ${path.relative(project, folder)} is no folder, which holds App Review's contact as fastlane's deliver names its files.`);
+    const names = takenNames(STORE, project, folder, (name, isDir) => !isDir && Object.hasOwn(REVIEW_TEXTS, name));
+    const texts = Object.fromEntries(names.map((name) => [REVIEW_TEXTS[name], readText(STORE, project, path.join(folder, name), { most: name === 'notes.txt' ? REVIEW_NOTES_MOST : Infinity })]));
+    if ((texts.demoAccountName === undefined) !== (texts.demoAccountPassword === undefined)) {
+        throw new Error(`crossbind: ${path.relative(project, folder)} has one of demo_user.txt and demo_password.txt, and App Review signs in with both: add the other, or remove it.`);
+    }
+    return texts.demoAccountName === undefined ? texts : { ...texts, demoAccountRequired: true };
+}
+
+// The app's settings beside the listing's locales, which a publish with --submit sends, each left out without its file:
+// the version's copyright, the app's categories, its age rating's answers and App Review's contact.
+export function readAppStoreSettings(project) {
+    const copyright = readSetting(STORE, project, COPYRIGHT, { most: Infinity });
+    const categories = Object.fromEntries(Object.entries(CATEGORIES).map(([file, field]) => {
+        const id = readSetting(STORE, project, file, { most: Infinity });
+        if (id !== undefined && !CATEGORY_ID.test(id)) {
+            throw new Error(`crossbind: ${path.join(STORE.folder, file)} names ${JSON.stringify(id)}, which is no category's id as App Store Connect's API names it, as UTILITIES or PRODUCTIVITY.`);
+        }
+        return [field, id];
+    }).filter(([, id]) => id !== undefined));
+    const ageRating = readAgeRating(project);
+    return {
+        ...(copyright === undefined ? {} : { copyright }), categories, ...(ageRating === null ? {} : { ageRating }), review: readReview(project),
+    };
+}
+
+// The sizes App Store Connect takes of each display type's screenshots, portrait, which it takes turned too, and the
+// landscape ones of the oldest types that are no portrait one turned, which leave the status bar out.
+const PORTRAITS = {
+    APP_IPHONE_67: [[1320, 2868], [1290, 2796], [1260, 2736], [1284, 2778]],
+    APP_IPHONE_65: [[1284, 2778], [1242, 2688]],
+    APP_IPHONE_61: [[1206, 2622], [1179, 2556], [1170, 2532]],
+    APP_IPHONE_58: [[1125, 2436], [1170, 2532], [1080, 2340]],
+    APP_IPHONE_55: [[1242, 2208]],
+    APP_IPHONE_47: [[750, 1334]],
+    APP_IPHONE_40: [[640, 1136], [640, 1096]],
+    APP_IPHONE_35: [[640, 960], [640, 920]],
+    APP_IPAD_PRO_3GEN_129: [[2064, 2752], [2048, 2732]],
+    APP_IPAD_PRO_129: [[2048, 2732]],
+    APP_IPAD_PRO_3GEN_11: [[1668, 2388], [1640, 2360], [1668, 2420], [1488, 2266], [1512, 2316]],
+    APP_IPAD_105: [[1668, 2224]],
+    APP_IPAD_97: [[1536, 2048], [1536, 2008], [768, 1024], [768, 1004]],
+};
+const LANDSCAPES = { APP_IPHONE_40: [[1136, 600]], APP_IPHONE_35: [[960, 600]], APP_IPAD_97: [[2048, 1496], [1024, 748]] };
+
+// What App Store Connect would refuse of the listing's screenshots, every one at once: a size its display type takes
+// none of, and transparency, which it takes in no image.
+export function appStoreListingProblems(project, listings) {
+    return listings.flatMap(({ screenshots }) => Object.entries(screenshots).flatMap(([type, files]) => files.flatMap((file) => {
+        const shown = path.relative(project, file);
+        const image = imageOf(file);
+        if (!image) return [`crossbind: ${shown} holds no PNG or JPEG image whose size it gives, as a cut-off file does: put the whole image there, or remove the file.`];
+        const portraits = PORTRAITS[type];
+        const sizes = [...portraits, ...portraits.map(([width, height]) => [height, width]), ...(LANDSCAPES[type] ?? [])];
+        const problems = [];
+        if (!sizes.some(([width, height]) => width === image.width && height === image.height)) {
+            problems.push(`crossbind: ${shown} is ${sizeOf(image)}, and App Store Connect takes ${type} screenshots of ${portraits.map((size) => size.join(' × ')).join(', ')}, or the same turned.`);
+        }
+        if (image.hasAlpha) problems.push(`crossbind: ${shown} holds transparency, which App Store Connect takes in no screenshot: save it as a JPEG, or as a PNG without an alpha channel.`);
+        return problems;
+    })));
+}

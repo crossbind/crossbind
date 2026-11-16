@@ -1,13 +1,32 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import {
-    isFolder, languageFolders, readText, takenNames,
+    imageOf, isFolder, languageFolders, readSetting, readText, sizeOf, takenNames,
 } from '@crossbind/core-store-kit';
 
+// The app's contact details on Google Play, by their files beside the languages' folders, which a publish sends.
+const DETAILS = {
+    'contact_email.txt': { field: 'contactEmail', most: 100 },
+    'contact_website.txt': { field: 'contactWebsite', most: 2000 },
+    'contact_phone.txt': { field: 'contactPhone', most: 30 },
+};
+// The declaration of the app's Data safety section, as Play Console exports it, which a publish sends.
+const DATA_SAFETY = 'data_safety.csv';
+// What only Play Console takes, which crossbind app store names to enter there.
+const BY_HAND = {
+    'privacy_url.txt': { field: 'privacyUrl', most: 2000 },
+    'category.txt': { field: 'category', most: 50 },
+};
+
 // A project's Google Play listing: a folder per language, named as Play names its listings (en-US, tr-TR, es-419, fil),
-// with the files fastlane's supply names.
+// with the files fastlane's supply names, and the app's settings beside them.
 const STORE = {
-    name: 'Google Play', listing: 'a Google Play listing', folder: path.join('store', 'google-play'), language: /^[a-z]{2,3}(-([A-Z]{2}|\d{3}))?$/, example: 'en-US',
+    name: 'Google Play',
+    listing: 'a Google Play listing',
+    folder: path.join('store', 'google-play'),
+    language: /^[a-z]{2,3}(-([A-Z]{2}|\d{3}))?$/,
+    example: 'en-US',
+    settings: [...Object.keys(DETAILS), DATA_SAFETY, ...Object.keys(BY_HAND)],
 };
 export const PLAY_LISTING = STORE.folder;
 // A listing's texts by their files, and the most characters Play takes of each; a video's alone may be empty.
@@ -73,3 +92,79 @@ export const lackedForNewListing = ({ texts }) => NEW_LISTING.filter((file) => t
 export const releaseNotesOf = (listings, versionCode) => listings
     .map(({ language, notes }) => ({ language, text: notes[versionCode] ?? notes.default }))
     .filter(({ text }) => text !== undefined);
+
+// The app's settings beside the listing's languages: the contact details and the Data safety declaration a publish
+// sends, and what only Play Console takes, each left out without its file.
+export function readPlaySettings(project) {
+    const textsOf = (files) => Object.fromEntries(Object.entries(files)
+        .map(([file, limits]) => [limits.field, readSetting(STORE, project, file, limits)])
+        .filter(([, text]) => text !== undefined));
+    const dataSafety = readSetting(STORE, project, DATA_SAFETY, { most: Infinity });
+    return { details: textsOf(DETAILS), ...(dataSafety === undefined ? {} : { dataSafety }), ...textsOf(BY_HAND) };
+}
+
+const KB = 1024;
+// What Google Play takes of each image: its size, and whether it may hold transparency, which the icon alone may, and
+// the bytes of the icon at most.
+const IMAGE_RULES = {
+    icon: { what: 'an icon', size: [512, 512], canHaveAlpha: true, bytes: 1024 * KB },
+    featureGraphic: { what: 'a feature graphic', size: [1024, 500] },
+    tvBanner: { what: 'a TV banner', size: [1280, 720] },
+};
+// What Google Play takes of the screenshots of each kind: the pixels of a side, the long side's ratio to the short one,
+// or a square, the bytes of each at most, and how many at least and at most.
+const SIDES = { least: 320, most: 3840, ratio: 2 };
+const SCREENSHOT_RULES = {
+    phoneScreenshots: { what: 'phone screenshots', ...SIDES, fewest: 2 },
+    sevenInchScreenshots: { what: '7-inch tablet screenshots', ...SIDES, most: 7680 },
+    tenInchScreenshots: { what: '10-inch tablet screenshots', ...SIDES, most: 7680 },
+    tvScreenshots: { what: 'TV screenshots', ...SIDES },
+    wearScreenshots: { what: 'Wear OS screenshots', least: 384, isSquare: true },
+};
+const SCREENSHOT_BYTES = 8 * KB * KB;
+const SCREENSHOTS_MOST = 8;
+
+// What Google Play would refuse of a screenshot's size.
+function sidesProblem(image, rule) {
+    const short = Math.min(image.width, image.height);
+    const long = Math.max(image.width, image.height);
+    if (rule.isSquare && image.width !== image.height) return `a square, ${rule.least} pixels a side at least`;
+    if (short < rule.least || (rule.most && long > rule.most)) return `${rule.least} to ${rule.most} pixels a side`;
+    if (rule.ratio && long > short * rule.ratio) return `a long side at most ${rule.ratio} times the short one`;
+    return null;
+}
+
+// What Google Play would refuse of an image, before any goes up: a file that holds no PNG or JPEG image, another size,
+// transparency, and more bytes than it takes.
+function imageProblems(project, file, rule) {
+    const shown = path.relative(project, file);
+    const image = imageOf(file);
+    if (!image) return [`crossbind: ${shown} holds no PNG or JPEG image, as an empty file or a Git LFS pointer does: put the image there, or remove the file.`];
+    const problems = [];
+    if (rule.size && (image.width !== rule.size[0] || image.height !== rule.size[1])) {
+        problems.push(`crossbind: ${shown} is ${sizeOf(image)}, and Google Play takes ${rule.what} of ${rule.size.join(' × ')}.`);
+    }
+    const sides = rule.size ? null : sidesProblem(image, rule);
+    if (sides) problems.push(`crossbind: ${shown} is ${sizeOf(image)}, and Google Play takes ${rule.what} of ${sides}.`);
+    if (image.hasAlpha && !rule.canHaveAlpha) {
+        const one = rule.size ? rule.what.replace(/^an? /, '') : rule.what.replace(/s$/, '');
+        problems.push(`crossbind: ${shown} holds transparency, which Google Play takes in no ${one}: save it as a JPEG, or as a PNG without an alpha channel.`);
+    }
+    const bytes = rule.bytes ?? (rule.size ? Infinity : SCREENSHOT_BYTES);
+    const size = fs.statSync(file).size;
+    if (size > bytes) problems.push(`crossbind: ${shown} is ${Math.ceil(size / KB)} KB, and Google Play takes ${bytes / KB} KB at most of ${rule.what}.`);
+    return problems;
+}
+
+// What Google Play would refuse of the listing's images, every one of them at once: their sizes, transparency and
+// bytes, and how many screenshots of a kind.
+export function playListingProblems(project, listings) {
+    return listings.flatMap(({ language, images }) => Object.entries(images).flatMap(([type, files]) => {
+        const rule = IMAGE_RULES[type] ?? SCREENSHOT_RULES[type];
+        const folder = path.join(PLAY_LISTING, language, 'images', type);
+        const counted = [];
+        if (files.length > SCREENSHOTS_MOST && !IMAGE_RULES[type]) counted.push(`crossbind: ${folder} has ${files.length} ${rule.what}, and Google Play takes ${SCREENSHOTS_MOST} at most.`);
+        if (files.length < (rule.fewest ?? 0)) counted.push(`crossbind: ${folder} has ${files.length} of the ${rule.fewest} ${rule.what} at least that Google Play takes to publish a listing.`);
+        return [...counted, ...files.flatMap((file) => imageProblems(project, file, rule))];
+    }));
+}

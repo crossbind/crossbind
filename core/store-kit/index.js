@@ -19,6 +19,58 @@ export function takenNames(store, project, folder, isTaken) {
 
 // The first bytes of a PNG and of a JPEG image.
 const IMAGE_SIGNATURES = [Buffer.from([0x89, 0x50, 0x4e, 0x47]), Buffer.from([0xff, 0xd8, 0xff])];
+const PNG_SIGNATURE = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+// PNG's color types with an alpha channel: gray and RGB, each with alpha.
+const PNG_ALPHA_TYPES = [4, 6];
+// JPEG's start-of-frame markers, which give the image's size: 0xC0 to 0xCF but the tables' 0xC4, 0xC8 and 0xCC.
+const isFrameMarker = (marker) => marker >= 0xc0 && marker <= 0xcf && ![0xc4, 0xc8, 0xcc].includes(marker);
+// JPEG's markers that stand alone, with no length after them.
+const isBareMarker = (marker) => marker === 0x01 || (marker >= 0xd0 && marker <= 0xd9);
+
+// A PNG's size and whether it holds transparency: an alpha channel, or a tRNS chunk before its image data.
+function pngOf(bytes) {
+    if (bytes.length < 33 || bytes.toString('latin1', 12, 16) !== 'IHDR') return null;
+    let hasAlpha = PNG_ALPHA_TYPES.includes(bytes[25]);
+    for (let at = 8; !hasAlpha && at + 8 <= bytes.length;) {
+        const type = bytes.toString('latin1', at + 4, at + 8);
+        if (type === 'IDAT') break;
+        hasAlpha = type === 'tRNS';
+        at += 12 + bytes.readUInt32BE(at);
+    }
+    return { format: 'png', width: bytes.readUInt32BE(16), height: bytes.readUInt32BE(20), hasAlpha };
+}
+
+// A JPEG's size, from its first start-of-frame segment.
+function jpegOf(bytes) {
+    for (let at = 2; at + 4 <= bytes.length;) {
+        if (bytes[at] !== 0xff) return null;
+        const marker = bytes[at + 1];
+        if (marker === 0xff) {
+            at += 1;
+        } else if (isBareMarker(marker)) {
+            at += 2;
+        } else if (isFrameMarker(marker)) {
+            return at + 9 <= bytes.length ? {
+                format: 'jpeg', width: bytes.readUInt16BE(at + 7), height: bytes.readUInt16BE(at + 5), hasAlpha: false,
+            } : null;
+        } else {
+            at += 2 + bytes.readUInt16BE(at + 2);
+        }
+    }
+    return null;
+}
+
+// A listing's image as its header gives it: PNG or JPEG, its width and height in pixels and whether it holds
+// transparency, which no JPEG does; null for a file that holds neither, or whose header ends early.
+export function imageOf(file) {
+    const bytes = fs.readFileSync(file);
+    if (bytes.subarray(0, PNG_SIGNATURE.length).equals(PNG_SIGNATURE)) return pngOf(bytes);
+    if (bytes.subarray(0, 3).equals(IMAGE_SIGNATURES[1])) return jpegOf(bytes);
+    return null;
+}
+
+// An image's size, as messages name it.
+export const sizeOf = ({ width, height }) => `${width} × ${height}`;
 
 // Stops at a listing's image file that holds no PNG or JPEG image, as an empty file or a Git LFS pointer does.
 export function assertImage(project, file) {
@@ -43,17 +95,26 @@ export function readText(store, project, file, { most, canBeEmpty = false }) {
     return text;
 }
 
-// The folders of a store's listing in a project, one per language, of which a project without the listing has none.
+// The folders of a store's listing in a project, one per language, of which a project without the listing has none;
+// the files of the store's settings beside them, which store.settings names, are none.
 export function languageFolders(store, project) {
     const root = path.join(project, store.folder);
     if (!fs.existsSync(root)) return [];
-    return namesIn(root).map((language) => {
+    const settings = store.settings ?? [];
+    return namesIn(root).filter((name) => !settings.includes(name)).map((language) => {
         const folder = path.join(root, language);
         if (!store.language.test(language) || !isFolder(folder)) {
-            throw new Error(`crossbind: ${path.relative(project, folder)} is no language's folder, as ${store.example} is, which ${store.listing} takes.`);
+            const beside = settings.length > 0 ? ` Beside the languages' folders it takes ${settings.join(', ')} alone.` : '';
+            throw new Error(`crossbind: ${path.relative(project, folder)} is no language's folder, as ${store.example} is, which ${store.listing} takes.${beside}`);
         }
         return { language, folder };
     });
+}
+
+// The text of a setting's file beside the listing's language folders, or undefined without the file.
+export function readSetting(store, project, name, limits) {
+    const file = path.join(project, store.folder, name);
+    return fs.existsSync(file) ? readText(store, project, file, limits) : undefined;
 }
 
 // An id both stores take: dot-separated parts of letters and digits, each starting with a letter, as Apple's take no

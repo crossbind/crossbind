@@ -25,6 +25,7 @@ const DRAFT_APP = /status draft may be created on draft app/;
 const TESTING_RIGHTS = '"Release apps to testing tracks"';
 const PRODUCTION_RIGHTS = '"Release to production, exclude devices, and use Play App Signing"';
 const LISTING_RIGHTS = '"Manage store presence"';
+const POLICY_RIGHTS = '"Manage policy declarations"';
 // A production track, as a form factor's is too: wear:production.
 const PRODUCTION = /(^|:)production$/;
 
@@ -231,13 +232,31 @@ async function updateListings(call, urls, listings) {
     return changed;
 }
 
+// Puts the app's contact details into an edit where Play's differ, and says whether it did.
+async function updateDetails(call, editUrl, details) {
+    if (Object.keys(details).length === 0) return false;
+    const shown = await call('GET', `${editUrl}/details`);
+    const changed = Object.entries(details).filter(([field, text]) => (shown[field] ?? '') !== text);
+    if (changed.length > 0) await call('PATCH', `${editUrl}/details`, Object.fromEntries(changed));
+    return changed.length > 0;
+}
+
 // Uploads a bundle, with the zip of its native debug symbols if there is one, and releases it on a track, as status
-// says, to the share of users userFraction gives while it is in progress, in one edit with the project's listing and
-// the release's notes it has. An app never released takes a draft alone, which its first rollout in Play Console makes
-// live, so its release becomes one. Gives the languages whose listing changed too.
-export async function uploadBundle(appId, credentials, { aab, symbols = null, track, status, userFraction = null, listings = [] }) {
-    const rights = [PRODUCTION.test(track) ? PRODUCTION_RIGHTS : TESTING_RIGHTS, ...(listings.some(isListed) ? [LISTING_RIGHTS] : [])];
+// says, to the share of users userFraction gives while it is in progress, in one edit with the project's listing, the
+// app's contact details and the release's notes it has. An app never released takes a draft alone, which its first
+// rollout in Play Console makes live, so its release becomes one. The Data safety declaration, which Play takes outside
+// an edit, goes first, so a declaration Play refuses stops the publish before the bundle goes up. Gives the languages
+// whose listing changed too, and whether the details did.
+export async function uploadBundle(appId, credentials, {
+    aab, symbols = null, track, status, userFraction = null, listings = [], details = {}, dataSafety = null,
+}) {
+    const rights = [
+        PRODUCTION.test(track) ? PRODUCTION_RIGHTS : TESTING_RIGHTS,
+        ...(listings.some(isListed) || Object.keys(details).length > 0 ? [LISTING_RIGHTS] : []),
+        ...(dataSafety === null ? [] : [POLICY_RIGHTS]),
+    ];
     const call = await playCaller(appId, credentials, rights);
+    if (dataSafety !== null) await call('POST', `${API}/${appId}/dataSafety`, { safetyLabels: dataSafety });
     const edits = `${API}/${appId}/edits`;
     const edit = await call('POST', edits, {});
     const uploadUrl = `${UPLOAD}/${appId}/edits/${edit.id}`;
@@ -247,13 +266,16 @@ export async function uploadBundle(appId, credentials, { aab, symbols = null, tr
             await call('POST', `${uploadUrl}/apks/${versionCode}/deobfuscationFiles/nativeCode?uploadType=media`, fs.readFileSync(symbols));
         }
         const listed = await updateListings(call, { editUrl: `${edits}/${edit.id}`, uploadUrl }, listings);
+        const isDetailed = await updateDetails(call, `${edits}/${edit.id}`, details);
         const releaseNotes = releaseNotesOf(listings, versionCode);
         const release = async (releaseStatus) => {
             const share = releaseStatus === 'inProgress' ? { userFraction } : {};
             const notes = releaseNotes.length > 0 ? { releaseNotes } : {};
             await call('PUT', `${edits}/${edit.id}/tracks/${track}`, { track, releases: [{ versionCodes: [String(versionCode)], status: releaseStatus, ...share, ...notes }] });
             await call('POST', `${edits}/${edit.id}:commit`);
-            return { versionCode, status: releaseStatus, listed };
+            return {
+                versionCode, status: releaseStatus, listed, isDetailed,
+            };
         };
         try {
             return await release(status);

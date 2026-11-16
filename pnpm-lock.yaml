@@ -113,6 +113,9 @@ importers:
       '@crossbind/extension-menu':
         specifier: workspace:^
         version: link:../../extensions/menu
+      '@crossbind/extension-microsoft-store':
+        specifier: workspace:^
+        version: link:../../extensions/microsoft-store
       '@crossbind/extension-msix':
         specifier: workspace:^
         version: link:../../extensions/msix
@@ -1615,6 +1618,12 @@ importers:
       crossbind:
         specifier: workspace:^
         version: link:../../core/crossbind
+
+  extensions/microsoft-store:
+    dependencies:
+      '@crossbind/core-store-kit':
+        specifier: workspace:^
+        version: link:../../core/store-kit
 
   extensions/msix: {}
 

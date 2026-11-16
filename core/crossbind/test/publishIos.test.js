@@ -106,7 +106,7 @@ beforeEach(() => {
     };
     Object.assign(store, { archives: [], archiveFailures: [], dsyms: [], uploads: [], uploadFailures: [], teams: [[TEAM]], targets: [] });
     Object.assign(scan, { binaries: [], answers: [] });
-    Object.assign(review, { steps: [], refusal: null, result: { build: '42', listed: ['en-US'] } });
+    Object.assign(review, { steps: [], refusal: null, result: { build: '42', listed: ['en-US'], settled: [] } });
     Object.assign(terminal, { isThere: false, lines: [], yes: [] });
     Object.keys(saved).forEach((key) => delete saved[key]);
     opened.length = 0;
@@ -332,7 +332,7 @@ describe('publishing an iOS app to App Review', () => {
             ['reviewable', 'A1', '1.2.3', 'builds 0'],
             ['newest', 'A1', '1.2.3', 'uploads 0'],
             ['submit', {
-                appId: 'A1', versionString: '1.2.3', before: 'B1', buildNumber: null, listings: [{ locale: 'en-US', info: {}, version: { whatsNew: 'Fixes.' }, screenshots: {} }], isPhased: true,
+                appId: 'A1', versionString: '1.2.3', before: 'B1', buildNumber: null, listings: [{ locale: 'en-US', info: {}, version: { whatsNew: 'Fixes.' }, screenshots: {} }], settings: { categories: {}, review: {} }, isPhased: true,
             }],
         ]);
         expect(store.uploads).toHaveLength(1);

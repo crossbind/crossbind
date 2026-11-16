@@ -1,9 +1,12 @@
 import {
     PLAY, highestVersionCode, keptSignIn, playCredentials, uploadBundle,
 } from './src/googlePlay.js';
-import { PLAY_LISTING, isListed, readPlayListing } from './src/playListing.js';
+import {
+    PLAY_LISTING, isListed, playListingProblems, readPlayListing, readPlaySettings,
+} from './src/playListing.js';
 import { signInToPlay } from './src/playSetup.js';
 import { askAppId } from '@crossbind/core-store-kit';
+import { playGuide } from './src/playGuide.js';
 
 const PLAY_CONSOLE = 'https://play.google.com/console';
 const NO_APP_ID = 'crossbind: Google Play knows an app by its package name, app.id, which crossbind.config.js does not set: set it, as com.example.myapp, before the first publish, as Play keeps it for good.';
@@ -74,7 +77,8 @@ export default function googlePlay() {
                 const { track, draft, rollout } = api.options;
                 const release = playRelease(draft, rollout === null ? null : rolloutPercent(rollout));
                 const listings = readPlayListing(api.project.root);
-                const missing = [];
+                const settings = readPlaySettings(api.project.root);
+                const missing = playListingProblems(api.project.root, listings);
                 let appId = api.config.app.id === undefined ? null : api.app.id;
                 if (!appId && api.isGuided) appId = await askAppId(api, 'Google Play', 'package name');
                 if (!appId) missing.push(NO_APP_ID);
@@ -95,7 +99,11 @@ export default function googlePlay() {
                 let highest;
                 if (api.isGuided) ({ highest, credentials } = await highestWithPlayConsole(api, appId, credentials));
                 else highest = await highestVersionCode(appId, credentials);
-                return { session: { appId, release, signing, credentials, highest, listings } };
+                return {
+                    session: {
+                        appId, release, signing, credentials, highest, listings, settings,
+                    },
+                };
             },
 
             buildNumber(api, { appId, highest }) {
@@ -108,21 +116,26 @@ export default function googlePlay() {
 
             buildEnv: (api, { signing }) => signing.env,
 
-            async upload(api, { appId, release: { status, rollout }, credentials, listings }, { project, bundle, symbols }) {
+            async upload(api, {
+                appId, release: { status, rollout }, credentials, listings, settings,
+            }, { project, bundle, symbols }) {
                 const { track } = api.options;
                 if (!bundle) throw new Error(`crossbind: the build of ${project} made no bundle, so nothing went to Google Play.`);
+                const { details, dataSafety = null } = settings;
+                if (dataSafety !== null) api.log(`crossbind: sending the Data safety declaration ${PLAY_LISTING}/data_safety.csv holds to Google Play.`);
                 api.log(`crossbind: uploading the bundle${symbols ? ' and its native debug symbols' : ''} to Google Play.`);
                 // A percent's two decimals are a fraction's four, which the division alone would leave as
                 // 0.33299999999999996.
                 const userFraction = status === 'inProgress' ? Number((rollout / 100).toFixed(4)) : null;
                 const released = await uploadBundle(appId, credentials, {
-                    aab: bundle, symbols, track, status, userFraction, listings,
+                    aab: bundle, symbols, track, status, userFraction, listings, details, dataSafety,
                 });
                 if (listings.some(isListed)) {
                     api.log(released.listed.length > 0
                         ? `crossbind: Google Play's listing changed in ${released.listed.join(', ')}, as ${PLAY_LISTING} has it.`
                         : `crossbind: Google Play's listing is the one ${PLAY_LISTING} has already.`);
                 }
+                if (released.isDetailed) api.log(`crossbind: Google Play's contact details changed, as ${PLAY_LISTING} has them.`);
                 const app = `${appId} ${api.app.version} (versionCode ${released.versionCode})`;
                 const published = { published: { appId, track, versionCode: released.versionCode, status: released.status } };
                 if (released.status === 'inProgress') {
@@ -142,6 +155,8 @@ export default function googlePlay() {
                 }
                 return published;
             },
+
+            guide: (api) => playGuide(api),
         },
     };
 }

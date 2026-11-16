@@ -2,12 +2,15 @@ import { appStoreCaller } from './src/appStoreApi.js';
 import {
     addDsyms, archiveIosApp, archivedBinary, archivedPrivacy, archivedTargets, uploadIosArchive,
 } from './src/appStoreConnect.js';
-import { APP_STORE_LISTING, readAppStoreListing } from './src/appStoreListing.js';
+import {
+    APP_STORE_LISTING, appStoreListingProblems, readAppStoreListing, readAppStoreSettings,
+} from './src/appStoreListing.js';
 import {
     appStoreApp, assertReviewable, newestBuild, submitRelease,
 } from './src/appStoreRelease.js';
 import { askAppId } from '@crossbind/core-store-kit';
 import { askEncryption, askIcon, askPrivacy } from './src/appSetup.js';
+import { appStoreGuide } from './src/appStoreGuide.js';
 
 const NO_APP_ID = 'crossbind: App Store Connect knows an app by its bundle id, app.id, which crossbind.config.js does not set: set it, as com.example.myapp, before the first publish, as Apple keeps it for good.';
 const NO_TEAM = "crossbind: App Store Connect takes uploads from an Apple Developer Program team, which neither app.team in crossbind.config.js nor this machine's XCODE_DEVELOPMENT_TEAM names: set either to its id, which developer.apple.com/account shows under Membership details.";
@@ -82,24 +85,29 @@ async function untilDone(api, step) {
 
 // What a publish with --submit hands to App Review through: the API, the app App Store Connect has, and the listing,
 // once App Store Connect would take the version to review.
-async function reviewableRelease(api, key, bundleId, listings) {
+async function reviewableRelease(api, key, bundleId, { listings, settings }) {
     const call = appStoreCaller(key);
     const appStoreId = await appStoreApp(call, bundleId);
     await assertReviewable(call, appStoreId, api.app.appleVersion);
-    return { call, appStoreId, listings };
+    return {
+        call, appStoreId, listings, settings,
+    };
 }
 
-// Hands the uploaded build to App Review, with the listing, and says how it went.
-async function submitToReview(api, { call, appStoreId, listings }, { before, facts }) {
+// Hands the uploaded build to App Review, with the listing and the settings, and says how it went.
+async function submitToReview(api, {
+    call, appStoreId, listings, settings,
+}, { before, facts }) {
     const isPhased = api.options.phased;
-    const { build, listed } = await submitRelease(call, {
-        appId: appStoreId, versionString: api.app.appleVersion, before, buildNumber: api.app.buildNumber, listings, isPhased,
+    const { build, listed, settled } = await submitRelease(call, {
+        appId: appStoreId, versionString: api.app.appleVersion, before, buildNumber: api.app.buildNumber, listings, settings, isPhased,
     });
     if (listings.length > 0) {
         api.log(listed.length > 0
             ? `crossbind: App Store Connect's listing changed in ${listed.join(', ')}, as ${APP_STORE_LISTING} has it.`
             : `crossbind: App Store Connect's listing is the one ${APP_STORE_LISTING} has already.`);
     }
+    if (settled.length > 0) api.log(`crossbind: App Store Connect's ${settled.join(', ')} changed, as ${APP_STORE_LISTING} has them.`);
     const phases = isPhased ? ', to go out in phases over 7 days once released' : '';
     api.log(`crossbind: ${facts.id} ${api.app.appleVersion} (build ${build}) went to App Review${phases}; Apple mails as the review goes.`);
 }
@@ -150,14 +158,15 @@ export default function appStore() {
                 if (process.platform !== 'darwin') throw new Error('crossbind: iOS apps build and go to App Store Connect on macOS, with Xcode.');
                 const key = api.apple.key();
                 const listings = shouldSubmit ? readAppStoreListing(api.project.root) : [];
-                const missing = await missingOf(api, { key, shouldSubmit });
+                const settings = shouldSubmit ? readAppStoreSettings(api.project.root) : {};
+                const missing = [...appStoreListingProblems(api.project.root, listings), ...await missingOf(api, { key, shouldSubmit })];
                 if (missing.length > 0) return { missing };
                 if (api.app.encryption === null) {
                     if (api.isGuided) await askEncryption(api);
                     else api.warn(NO_ENCRYPTION);
                 }
                 const facts = { id: api.app.id, team: api.app.team };
-                const release = shouldSubmit ? await reviewableRelease(api, key, facts.id, listings) : null;
+                const release = shouldSubmit ? await reviewableRelease(api, key, facts.id, { listings, settings }) : null;
                 const dsyms = await api.apple.dsyms();
                 api.log(`crossbind: publishing ${facts.id} ${api.app.appleVersion} to App Store Connect for team ${facts.team}${release ? ' and App Review' : ''}; building the app first.`);
                 return { session: { key, dsyms, facts, release } };
@@ -193,6 +202,8 @@ export default function appStore() {
                 if (release) await submitToReview(api, release, { before, facts });
                 return { published: { appId: facts.id, version: api.app.appleVersion, build } };
             },
+
+            guide: (api) => appStoreGuide(api),
         },
     };
 }

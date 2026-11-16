@@ -5,7 +5,9 @@ import state from '../state/index.js';
 import { exportOf } from '../state/loadConfig.js';
 import loadSystemConfig, { extensionSettingsOf, updateSystemConfig } from '../utils/systemConfig.js';
 import systemKeys from '../utils/systemKeys.js';
-import { askLine, askYesNo, hasTerminal } from '../utils/ask.js';
+import {
+    askHidden, askLine, askYesNo, hasTerminal,
+} from '../utils/ask.js';
 import openUrl from '../utils/openUrl.js';
 import { readSecret, storeSecret } from '../utils/keychain.js';
 import { configChangesOf } from '../utils/configChanges.js';
@@ -190,6 +192,11 @@ function terminalOf(name) {
         askYesNo(question) {
             assertTerminal(question);
             return askYesNo(question);
+        },
+        // A question whose answer the terminal does not show, as a key's.
+        askHidden(question) {
+            assertTerminal(question);
+            return askHidden(question);
         },
     };
 }

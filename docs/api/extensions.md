@@ -13,8 +13,8 @@ project the packages of another package manager, as [Package sources](#package-s
 
 crossbind's own are packages of the same kind, in its repository's `extensions/`: the host's, `activities`, `dialog`,
 `files`, `instance`, `links`, `menu`, `page-dialogs`, `page-feel`, `page-files`, `page-downloads`, `page-drops`,
-`page-location`, `page-navigation`, `page-permissions`, `power`, `shell`, `shortcuts` and `updater`; the stores, `google-play`, `app-store`
-and `github`; and the installers, `dmg`, `deb`, `tar-gz`, `nsis`, `zip` and `msix`. An app has them without installing or listing
+`page-location`, `page-navigation`, `page-permissions`, `power`, `shell`, `shortcuts` and `updater`; the stores, `google-play`, `app-store`,
+`microsoft-store` and `github`; and the installers, `dmg`, `deb`, `tar-gz`, `nsis`, `zip` and `msix`. An app has them without installing or listing
 them, as `@crossbind/core-app-host` has them as its dependencies, and an app's extension takes the place of one, or of
 one of its roles, as [The host's own extensions](#the-hosts-own-extensions) says. The package source `conan` is
 crossbind's own too, and a dependency of `crossbind` itself, so every project has it.
@@ -820,7 +820,7 @@ the path as a URL holds it: escaped where it must be, with a query of its own af
 ## Publishers
 
 An extension's `publisher` sends the app to a store: `crossbind app publish <name>` runs it, with the extension's
-name. crossbind's own `google-play`, `app-store` and `github` are publishers of this kind, which use the same
+name. crossbind's own `google-play`, `app-store`, `microsoft-store` and `github` are publishers of this kind, which use the same
 [`api`](#the-api) alone, and an extension `extensions` lists under one of their names, with a publisher, replaces it;
 one with an `app` alone leaves it as it is.
 
@@ -865,6 +865,7 @@ export default function demoStore() {
 | `buildNumber(api, session)` | The build number, a whole number from 1 to 2100000000, as both stores take, which the build gets as `CROSSBIND_APP_BUILD_NUMBER`, or null for the app's own. |
 | `buildEnv(api, session)` | Variables the build runs with beside crossbind's; one set to `undefined` is left out. |
 | `upload(api, session, output, published)` | Sends what the build made to the store. It returns `{ isRebuildAsked: true }` for another build, after which it runs again, four builds in all at most, or `{ published }`: what it put out, which a publisher after it gets as `published`. |
+| `guide(api)` | What `crossbind app store` says of the store, with no build and no credentials: `{ sends, problems, where, steps }`, the lines of what a publish sends, every problem the store would refuse of the project's files, where the steps are done, and the steps only the store's own site takes, once for the app, each `{ text, url, details }`, its details a list of lines. A store whose publisher has none is left out of `crossbind app store`. |
 
 All but `platform` and `upload` are optional. A step that fails with a message not crossbind's own stops the publish
 with one that names the publisher and the step, as `demo-store's check failed: …`.
@@ -1138,6 +1139,7 @@ extension and its run, and frozen. A package source's steps get [their own](#pac
 | `publisherChanges` | An installer's: the changes a publisher's `build` made to this build's config, as its JSON merge patch, or null. |
 | `log(text)`, `warn(text)` | A line of crossbind's output. |
 | `ask(question)`, `askYesNo(question)` | A question on the terminal, which fails without one. |
+| `askHidden(question)` | A question whose answer the terminal does not show, as a key's, which fails without one. |
 | `openUrl(url)` | Opens an http or https page in the user's browser, as a store's console. |
 | `settings` | `get(key)` and `set(values)`: this machine's settings in `~/.crossbind.json`, by uppercase names, each with text: crossbind's own by their names, which `set` takes as `crossbind config set` does, and by any other name the extension's own, which the file keeps apart from crossbind's and every other extension's, under `extensions` by the extension's name, as `{ "extensions": { "demo-store": { "TOKEN": "…" } } }`. `set` writes all it is given or none. `crossbind config list` shows them as `demo-store.TOKEN`, which `crossbind config get` and `crossbind config delete` take. |
 | `secrets` | `get(name)`, null without one or without a keychain, and `set(name, secret)`, true where the keychain took it: secrets the system keychain keeps under the extension's own service, which goes by its name, so one in the place of crossbind's own store has that store's. |
