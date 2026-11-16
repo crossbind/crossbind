@@ -11,7 +11,7 @@ export default {
     slug: 'installers',
     title: 'Installers and signing',
     description: 'The disk image, Debian package, setup program and archives a desktop app build writes, and the keys that sign a macOS or Windows app.',
-    lede: '`crossbind app build` writes what installs a desktop app beside the app: a disk image on macOS, a Debian package and a tar.gz on Linux, a setup program and a zip on Windows. Keys in the environment sign a macOS or Windows app; without them the app still builds, and the build says what its users will see.',
+    lede: '`crossbind app build` writes what installs a desktop app beside the app: a disk image on macOS, a Debian package and a tar.gz on Linux, a setup program, a zip and, where asked for, an MSIX package on Windows. Keys in the environment sign a macOS or Windows app; without them the app still builds, and the build says what its users will see.',
     blocks: [
         { type: 'h2', id: 'formats', text: 'What each platform gets' },
         {
@@ -23,6 +23,7 @@ export default {
                 ['`tar-gz`', "`dist/<name>-linux-<arch>.tar.gz`, the app's folder, which unpacks anywhere its user can write."],
                 ['`nsis`', "`dist/<name>-win32-<arch>-setup.exe`, a setup program that installs the app for the user who runs it, with no administrator's approval, in `%LOCALAPPDATA%\\Programs\\<app name>`."],
                 ['`zip`', "`dist/<name>-win32-<arch>.zip`, the app's folder, as signed."],
+                ['`msix`', "`dist/<name>-win32-<arch>.msix`, the app's MSIX package, made only where asked for: with `app.windows.msix`, the identity the [Microsoft Store](/guide/winget-microsoft-store/#microsoft-store) gives the app, unsigned, as the Store signs it; or where `app.installers` names `msix`, handed out, signed with the app's key."],
             ],
         },
         {

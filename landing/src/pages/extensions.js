@@ -39,6 +39,7 @@ export const EXTENSION_GROUPS = [
             row('deb', 'A Debian package for Linux, whose dependencies bring WebKitGTK'),
             row('tar-gz', 'A Linux archive, which a Linux app updates itself from'),
             row('zip', 'A Windows zip, for those who take no setup program'),
+            row('msix', "A Windows app's MSIX package, for the Microsoft Store or handed out signed"),
             row('updater', "A desktop app's own updates, each checked against its Ed25519 signature"),
         ],
     },

@@ -16,7 +16,7 @@ project the packages of another package manager, as [Package sources](#package-s
 crossbind's own are packages of the same kind, in its repository's `extensions/`: the host's, `activities`, `dialog`,
 `files`, `instance`, `links`, `menu`, `page-dialogs`, `page-feel`, `page-files`, `page-downloads`, `page-drops`,
 `page-location`, `page-navigation`, `page-permissions`, `power`, `shell`, `shortcuts` and `updater`; the stores, `google-play`, `app-store`
-and `github`; and the installers, `dmg`, `deb`, `tar-gz`, `nsis` and `zip`. An app has them without installing or listing
+and `github`; and the installers, `dmg`, `deb`, `tar-gz`, `nsis`, `zip` and `msix`. An app has them without installing or listing
 them, as `@crossbind/core-app-host` has them as its dependencies, and an app's extension takes the place of one, or of
 one of its roles, as [The host's own extensions](#the-hosts-own-extensions) says. The package source `conan` is
 crossbind's own too, and a dependency of `crossbind` itself, so every project has it.
@@ -900,7 +900,7 @@ lists the app's stores, crossbind's own and its extensions', with their options.
 ## Installers
 
 An extension's `installer` makes what installs a desktop app, beside it, in each build of the app. crossbind's own
-`dmg` on macOS, `deb` and `tar-gz` on Linux, and `nsis` and `zip` on Windows are installers of this kind, which use the
+`dmg` on macOS, `deb` and `tar-gz` on Linux, and `nsis`, `zip` and `msix` on Windows are installers of this kind, which use the
 same [`api`](#the-api) alone, and an extension `extensions` lists under one of their names, with an installer,
 replaces it. So is `updater`, which makes a desktop app's update after them, and whose place an extension takes with
 `replaces`.
@@ -1144,7 +1144,7 @@ extension and its run, and frozen. A package source's steps get [their own](#pac
 | `settings` | `get(key)` and `set(values)`: this machine's settings in `~/.crossbind.json`, by uppercase names, each with text: crossbind's own by their names, which `set` takes as `crossbind config set` does, and by any other name the extension's own, which the file keeps apart from crossbind's and every other extension's, under `extensions` by the extension's name, as `{ "extensions": { "demo-store": { "TOKEN": "…" } } }`. `set` writes all it is given or none. `crossbind config list` shows them as `demo-store.TOKEN`, which `crossbind config get` and `crossbind config delete` take. |
 | `secrets` | `get(name)`, null without one or without a keychain, and `set(name, secret)`, true where the keychain took it: secrets the system keychain keeps under the extension's own service, which goes by its name, so one in the place of crossbind's own store has that store's. |
 | `run(command, { cwd, isSigning })` | An installer's: runs a tool to its end where crossbind packages the platform's apps, on this Mac with Apple's tools, `/bin`, `/usr/sbin` and `/sbin` on the PATH for macOS, and for Linux and Windows in crossbind's linux or windows image, which sees the project's `paths.base` alone. `command` is the program and its arguments; `cwd`, relative to the project's folder, which it is without it, is under the base for an image. `isSigning` gives a Windows tool the key that signs the app, which `windows.signer` signs with. The tool's output goes to crossbind's, and a failure throws, saying the tool's exit status. |
-| `windows` | `icon()`, the app's icon as a Windows `.ico`, or null without `app.icon`; and `signer`, the script that signs a file in the windows image with the key the environment names, which a tool that signs as it builds runs, as NSIS does, or null without a key. |
+| `windows` | `icon()`, the app's icon as a Windows `.ico`, or null without `app.icon`; `logo(size)`, the app's icon as a square PNG of `size` pixels, as an MSIX package's logos are, or null without `app.icon`; and `signer`, the script that signs a file in the windows image with the key the environment names, which a tool that signs as it builds runs, as NSIS does, or null without a key. |
 | `android` | `signing()`, the environment a release builds in with this machine's upload key, as `{ env, isSigned }`, and `makeUploadKey()`, as `crossbind app upload-key` makes it. |
 | `apple` | `key()`, the App Store Connect API key the environment names, or null; `teams()`, the teams Xcode is signed in to; `xcodebuild(what, args, { log, facts, causes })`, which writes xcodebuild's output to the file `log` names and returns it, and whose failure names xcodebuild's reasons and the fix of the cause it finds, crossbind's first, then one of `causes`; `unreasonedApis(binary, privacy)`, the required reason API a binary calls with no reason in `privacy`; `privacyCategories`; and `dsyms()`, the dSYMs of the prebuilt frameworks crossbind puts in an app. |
 

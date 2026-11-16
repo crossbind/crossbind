@@ -113,6 +113,9 @@ importers:
       '@crossbind/extension-menu':
         specifier: workspace:^
         version: link:../../extensions/menu
+      '@crossbind/extension-msix':
+        specifier: workspace:^
+        version: link:../../extensions/msix
       '@crossbind/extension-nsis':
         specifier: workspace:^
         version: link:../../extensions/nsis
@@ -1612,6 +1615,8 @@ importers:
       crossbind:
         specifier: workspace:^
         version: link:../../core/crossbind
+
+  extensions/msix: {}
 
   extensions/nsis: {}
 

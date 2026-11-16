@@ -391,8 +391,19 @@ void replaceApp(const fs::path &update) {
 
 #endif
 
+// A Windows app from its MSIX package, which Windows updates as the Store or its developer gives it a newer package.
+void refusePackaged() {
+#ifdef _WIN32
+    if (isPackaged()) {
+        throw std::runtime_error("crossbind: this app does not update itself: a Windows app installed from its MSIX package updates through the Microsoft Store, "
+                                 "or as a newer package of it is installed");
+    }
+#endif
+}
+
 // The version the manifest offers when it is newer than this app's.
 std::optional<std::string> check(const Updater &updater) {
+    refusePackaged();
     const std::unique_lock<std::mutex> lock = lockUpdates();
     const std::optional<Manifest> manifest = newerUpdate(updater, updateFolder());
     return manifest ? std::optional<std::string>(manifest->version) : std::nullopt;
@@ -407,6 +418,7 @@ void install(const Updater &updater) {
     throw std::runtime_error("crossbind: a development session does not install an update, which would take the place of the app its dev "
                              "server opened: the built app does");
 #endif
+    refusePackaged();
     const std::unique_lock<std::mutex> lock = lockUpdates();
     const fs::path folder = updateFolder();
     const std::optional<Manifest> manifest = newerUpdate(updater, folder);

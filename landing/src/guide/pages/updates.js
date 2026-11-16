@@ -6,7 +6,7 @@ export default {
     slug: 'updates',
     title: 'Updates',
     description: 'A desktop app that updates itself: the key pair, the signed update the build writes, and the page code that checks for one and installs it.',
-    lede: 'A desktop app updates itself from the address `app.updater` names, with updates signed by a key only you hold. The build writes each update beside the app, and the page decides when to install one. iOS and Android apps update through their stores, where `updater.check()` rejects.',
+    lede: 'A desktop app updates itself from the address `app.updater` names, with updates signed by a key only you hold. The build writes each update beside the app, and the page decides when to install one. iOS and Android apps update through their stores, and a Windows app installed from its MSIX package as Windows installs a newer package: `updater.check()` rejects there.',
     blocks: [
         { type: 'h2', id: 'key', text: 'The key' },
         {

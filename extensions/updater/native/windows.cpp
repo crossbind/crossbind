@@ -2,6 +2,7 @@
 
 #include <windows.h>
 
+#include <appmodel.h>
 #include <softpub.h>
 #include <wincrypt.h>
 #include <winhttp.h>
@@ -190,6 +191,11 @@ void runSetup(const std::filesystem::path &setup) {
     }
     CloseHandle(process.hThread);
     CloseHandle(process.hProcess);
+}
+
+bool isPackaged() {
+    UINT32 length = 0;
+    return GetCurrentPackageFullName(&length, nullptr) != APPMODEL_ERROR_NO_PACKAGE;
 }
 
 }  // namespace crossbind::updater

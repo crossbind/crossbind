@@ -10,7 +10,7 @@ import openUrl from '../utils/openUrl.js';
 import { readSecret, storeSecret } from '../utils/keychain.js';
 import { configChangesOf } from '../utils/configChanges.js';
 import { entry, writeOption } from '../utils/configWriter.js';
-import { readAppIcon, windowsIcon } from '../utils/appIcon.js';
+import { readAppIcon, windowsIcon, windowsLogo } from '../utils/appIcon.js';
 import {
     PRIVACY_CATEGORIES, androidAppId, appCategory, appDisplayName, appEncryption, appId, appPrivacy, appUrlSchemes,
 } from '../utils/appOptions.js';
@@ -290,6 +290,12 @@ export default function extensionApi(name, {
             icon() {
                 const icon = readAppIcon(state.config);
                 return icon && windowsIcon(icon);
+            },
+            // The app's icon as a square PNG of the size, as an MSIX package's logos are, or null without app.icon.
+            logo(size) {
+                if (!Number.isInteger(size) || size < 1) throw new Error(`crossbind: ${name} asks for a logo of ${JSON.stringify(size)} pixels, which is no whole number above 0.`);
+                const icon = readAppIcon(state.config);
+                return icon && windowsLogo(icon, size);
             },
             // The script that signs a file in the windows image with the key, which a tool that signs as it builds runs.
             get signer() { return windowsSigning() ? jsignScript() : null; },

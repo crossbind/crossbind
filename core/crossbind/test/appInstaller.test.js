@@ -363,7 +363,7 @@ describe('the installers an app has', () => {
         project({}, { extensions: [installer('appimage', 'linux'), installer('notes', 'desktop')] });
         expect(names({ platform: 'linux' })).toEqual(['deb', 'tar-gz', 'appimage', 'notes', 'updater']);
         expect(names({ platform: 'darwin' })).toEqual(['dmg', 'notes', 'updater']);
-        expect(names({ platform: 'win32' })).toEqual(['nsis', 'zip', 'notes', 'updater']);
+        expect(names({ platform: 'win32' })).toEqual(['msix', 'nsis', 'zip', 'notes', 'updater']);
         state.config.app = { installers: ['notes', 'deb'] };
         expect(names({ platform: 'linux' })).toEqual(['deb', 'notes', 'updater']);
         expect(names({ platform: 'win32' })).toEqual(['notes', 'updater']);
@@ -403,7 +403,7 @@ describe('the installers an app has', () => {
 
     test('refuse an app.installers that names one that is no installer, or is no list of names', () => {
         project({}, { appOptions: { installers: ['deb', 'rpm'] }, extensions: [installer('appimage', 'linux')] });
-        expect(() => installersFor({ platform: 'linux' })).toThrow('crossbind: app.installers names rpm, which is no installer: deb, dmg, nsis, tar-gz, zip and appimage are.');
+        expect(() => installersFor({ platform: 'linux' })).toThrow('crossbind: app.installers names rpm, which is no installer: deb, dmg, msix, nsis, tar-gz, zip and appimage are.');
         state.config.app = { installers: 'deb' };
         expect(() => installersFor({ platform: 'linux' })).toThrow('crossbind: app.installers "deb" is no list of installers\' names, each once.');
         state.config.app = { installers: ['deb', 'deb'] };

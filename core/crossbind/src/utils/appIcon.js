@@ -163,6 +163,9 @@ export function windowsIcon(icon) {
 // A Linux app's window icon.
 export const linuxIcon = (icon) => png(resize(icon.image, LINUX_SIZE));
 
+// A logo of a Windows app's MSIX package, square, at the size its manifest gives it.
+export const windowsLogo = (icon, size) => png(resize(icon.image, size));
+
 // The one image an iOS app's asset catalog holds, on white and without an alpha channel, which the App Store refuses
 // even when every pixel is opaque.
 export const iosIcon = (icon) => png(resize(icon.image, IOS_SIZE), { colorType: 2, bgColor: WHITE });
