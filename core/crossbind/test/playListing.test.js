@@ -2,7 +2,12 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, test } from 'vitest';
-import { readPlayListing, releaseNotesOf } from '../../../extensions/google-play/src/playListing.js';
+import upath from 'upath';
+import {
+    playListingProblems, readPlayListing, readPlaySettings, releaseNotesOf,
+} from '../../../extensions/google-play/src/playListing.js';
+import { playGuide } from '../../../extensions/google-play/src/playGuide.js';
+import { RGBA, jpegOf, pngOf } from './listingImages.js';
 
 let project;
 // Writes a file of the project's listing, under store/google-play.
@@ -126,5 +131,85 @@ describe("a release's notes", () => {
         ];
         expect(releaseNotesOf(listings, 1000007)).toEqual([{ language: 'en-US', text: 'Fixes.' }, { language: 'tr-TR', text: 'Bu sürüm için.' }]);
         expect(releaseNotesOf(listings, 1000008)).toEqual([{ language: 'en-US', text: 'Fixes.' }, { language: 'tr-TR', text: 'Düzeltmeler.' }]);
+    });
+});
+
+describe("a project's Google Play settings", () => {
+    test('are the contact details and Data safety declaration a publish sends, and what Play Console alone takes, beside the languages', () => {
+        write('contact_email.txt', 'support@example.com\n');
+        write('contact_website.txt', 'https://example.com');
+        write('data_safety.csv', 'Question ID,Response ID\nPSL_DATA_COLLECTION_COLLECTS_PERSONAL_DATA,false\n');
+        write('privacy_url.txt', 'https://example.com/privacy');
+        write('category.txt', 'Tools');
+        write('en-US/title.txt', 'Demo');
+        expect(readPlaySettings(project)).toEqual({
+            details: { contactEmail: 'support@example.com', contactWebsite: 'https://example.com' },
+            dataSafety: 'Question ID,Response ID\nPSL_DATA_COLLECTION_COLLECTS_PERSONAL_DATA,false',
+            privacyUrl: 'https://example.com/privacy',
+            category: 'Tools',
+        });
+        expect(readPlayListing(project).map(({ language }) => language)).toEqual(['en-US']);
+    });
+
+    test('are none without their files', () => {
+        expect(readPlaySettings(project)).toEqual({ details: {} });
+    });
+});
+
+describe("what Google Play would refuse of a listing's images", () => {
+    const problemsOf = () => playListingProblems(project, readPlayListing(project)).map(upath.toUnix);
+
+    test('is nothing of images of the sizes it takes', () => {
+        write('en-US/images/icon.png', pngOf(512, 512, { colorType: RGBA }));
+        write('en-US/images/featureGraphic.jpg', jpegOf(1024, 500));
+        write('en-US/images/phoneScreenshots/01.png', pngOf(1080, 1920));
+        write('en-US/images/phoneScreenshots/02.png', pngOf(1920, 1080));
+        write('en-US/images/tenInchScreenshots/01.png', pngOf(1600, 2560));
+        write('en-US/images/wearScreenshots/01.png', pngOf(384, 384));
+        expect(problemsOf()).toEqual([]);
+    });
+
+    test('is every image of another size, with transparency, larger than Play takes, or past its count, at once', () => {
+        write('en-US/images/icon.png', Buffer.concat([pngOf(500, 500), Buffer.alloc(1025 * 1024)]));
+        write('en-US/images/featureGraphic.png', pngOf(1024, 500, { colorType: RGBA }));
+        write('en-US/images/phoneScreenshots/01.png', pngOf(1080, 2400));
+        Array.from({ length: 9 }, (_, index) => write(`en-US/images/tenInchScreenshots/${index}.png`, pngOf(1600, 2560)));
+        write('en-US/images/wearScreenshots/01.png', pngOf(384, 400));
+        expect(problemsOf()).toEqual([
+            'crossbind: store/google-play/en-US/images/featureGraphic.png holds transparency, which Google Play takes in no feature graphic: save it as a JPEG, or as a PNG without an alpha channel.',
+            'crossbind: store/google-play/en-US/images/icon.png is 500 × 500, and Google Play takes an icon of 512 × 512.',
+            'crossbind: store/google-play/en-US/images/icon.png is 1026 KB, and Google Play takes 1024 KB at most of an icon.',
+            'crossbind: store/google-play/en-US/images/phoneScreenshots has 1 of the 2 phone screenshots at least that Google Play takes to publish a listing.',
+            'crossbind: store/google-play/en-US/images/phoneScreenshots/01.png is 1080 × 2400, and Google Play takes phone screenshots of a long side at most 2 times the short one.',
+            'crossbind: store/google-play/en-US/images/tenInchScreenshots has 9 10-inch tablet screenshots, and Google Play takes 8 at most.',
+            'crossbind: store/google-play/en-US/images/wearScreenshots/01.png is 384 × 400, and Google Play takes Wear OS screenshots of a square, 384 pixels a side at least.',
+        ]);
+    });
+});
+
+describe("crossbind app store's word on Google Play", () => {
+    test('names what a publish sends, what Play would refuse of it, and the steps Play Console alone takes', () => {
+        write('en-US/title.txt', 'Demo');
+        write('en-US/short_description.txt', 'A demo');
+        write('en-US/full_description.txt', 'The demo app.');
+        write('en-US/images/icon.png', pngOf(500, 500));
+        write('en-US/changelogs/default.txt', 'Fixes.');
+        write('contact_email.txt', 'support@example.com');
+        write('privacy_url.txt', 'https://example.com/privacy');
+
+        const guide = playGuide({ project: { root: project }, config: { app: { id: 'dev.example.demo' } } });
+
+        expect(guide.where).toBe('Play Console');
+        expect(guide.sends.map(upath.toUnix)).toEqual([
+            'the bundle, signed with the upload key, with its native debug symbols, on a track',
+            'store/google-play/en-US: full description, short description, title; icon; release notes',
+            'contact details: e-mail support@example.com',
+        ]);
+        expect(guide.problems.map(upath.toUnix)).toEqual(['crossbind: store/google-play/en-US/images/icon.png is 500 × 500, and Google Play takes an icon of 512 × 512.']);
+        expect(guide.steps[0]).toEqual({ text: "Create the app, with dev.example.demo as its package name, as Play's API makes none.", url: 'https://play.google.com/console' });
+        const texts = guide.steps.map(({ text }) => text);
+        expect(texts).toContain('Policy and programs › App content › Privacy policy: https://example.com/privacy.');
+        expect(texts.map(upath.toUnix)).toContain('Policy and programs › App content › Data safety: answer it; to keep it in the project, export it to CSV as store/google-play/data_safety.csv, which later publishes then send.');
+        expect(texts.some((text) => text.includes('Contact details'))).toBe(false);
     });
 });

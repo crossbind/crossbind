@@ -210,7 +210,7 @@ describe("an app's edit on Google Play", () => {
     test("uploads a bundle and releases it on a track, the bundle's bytes as they are", async () => {
         const aab = path.join(dir, 'app.aab');
         fs.writeFileSync(aab, Buffer.from([0x50, 0x4b, 0x03, 0x04, 0xff]));
-        expect(await uploadBundle('dev.example.app', credentials(), { aab, track: 'internal', status: 'completed' })).toEqual({ versionCode: 1000007, status: 'completed', listed: [] });
+        expect(await uploadBundle('dev.example.app', credentials(), { aab, track: 'internal', status: 'completed' })).toEqual({ versionCode: 1000007, status: 'completed', listed: [], isDetailed: false });
         const upload = requests.find(({ route }) => route === 'POST /edits/E1/bundles?uploadType=media');
         expect(upload.init.headers['content-type']).toBe('application/octet-stream');
         expect(Buffer.compare(upload.init.body, fs.readFileSync(aab))).toBe(0);
@@ -226,7 +226,7 @@ describe("an app's edit on Google Play", () => {
         answers['POST /edits/E1:commit'] = () => (++commits === 1
             ? failure(400, 'Only releases with status draft may be created on draft app.')
             : json(200, { id: 'E1' }));
-        expect(await uploadBundle('dev.example.app', credentials(), { aab, track: 'internal', status: 'completed' })).toEqual({ versionCode: 1000007, status: 'draft', listed: [] });
+        expect(await uploadBundle('dev.example.app', credentials(), { aab, track: 'internal', status: 'completed' })).toEqual({ versionCode: 1000007, status: 'draft', listed: [], isDetailed: false });
         const releases = requests.filter(({ route }) => route === 'PUT /edits/E1/tracks/internal').map(({ init }) => JSON.parse(init.body).releases[0].status);
         expect(releases).toEqual(['completed', 'draft']);
     });
@@ -361,5 +361,45 @@ describe("a release's rollout, notes and listing on Google Play", () => {
             status: 400,
             message: `crossbind: Google Play answered POST /edits/E1/listings/en-US/phoneScreenshots with 400: Image is too small.\ncrossbind: it answered so for ${shot}.`,
         });
+    });
+});
+
+describe("an app's contact details and Data safety declaration on Google Play", () => {
+    const credentials = () => playCredentials({ [PLAY.key]: keyFile }, settings({}));
+    const bundle = () => {
+        const aab = `${dir}/app.aab`;
+        fs.writeFileSync(aab, Buffer.from([0x50, 0x4b, 0x03, 0x04]));
+        return aab;
+    };
+
+    test('sends the declaration before the edit, and the contact details that differ from those Play has', async () => {
+        answers['GET /edits/E1/details'] = () => json(200, { defaultLanguage: 'en-US', contactEmail: 'old@example.com', contactWebsite: 'https://example.com' });
+        answers['PATCH /edits/E1/details'] = (init) => json(200, JSON.parse(init.body));
+        answers['POST /dataSafety'] = () => json(200, {});
+        const released = await uploadBundle('dev.example.app', credentials(), {
+            aab: bundle(), track: 'internal', status: 'completed', details: { contactEmail: 'support@example.com', contactWebsite: 'https://example.com' }, dataSafety: 'Question ID,Response ID\n',
+        });
+        expect(released).toEqual({
+            versionCode: 1000007, status: 'completed', listed: [], isDetailed: true,
+        });
+        const routes = requests.map(({ route }) => route);
+        expect(routes.indexOf('POST /dataSafety')).toBeLessThan(routes.indexOf('POST /edits'));
+        expect(JSON.parse(requests.find(({ route }) => route === 'POST /dataSafety').init.body)).toEqual({ safetyLabels: 'Question ID,Response ID\n' });
+        expect(JSON.parse(requests.find(({ route }) => route === 'PATCH /edits/E1/details').init.body)).toEqual({ contactEmail: 'support@example.com' });
+    });
+
+    test('leaves the details Play has as they are, and stops before the edit where Play refuses the declaration, naming the rights it takes', async () => {
+        answers['GET /edits/E1/details'] = () => json(200, { contactEmail: 'support@example.com' });
+        const same = await uploadBundle('dev.example.app', credentials(), {
+            aab: bundle(), track: 'internal', status: 'completed', details: { contactEmail: 'support@example.com' },
+        });
+        expect(same.isDetailed).toBe(false);
+        expect(requests.some(({ route }) => route === 'PATCH /edits/E1/details')).toBe(false);
+        requests.length = 0;
+        answers['POST /dataSafety'] = () => failure(403, 'The caller does not have permission');
+        await expect(uploadBundle('dev.example.app', credentials(), {
+            aab: bundle(), track: 'internal', status: 'completed', dataSafety: 'csv',
+        })).rejects.toThrow('"Manage policy declarations"');
+        expect(requests.some(({ route }) => route === 'POST /edits')).toBe(false);
     });
 });

@@ -26,8 +26,8 @@ const STORE_IDENTITY = `app: {
 export default {
     slug: 'winget-microsoft-store',
     title: 'winget and Microsoft Store',
-    description: 'List a Windows app in winget from its GitHub releases, and in the Microsoft Store as its MSIX package.',
-    lede: "winget takes the Windows setup from the [GitHub release](/guide/github-releases/) that `crossbind app publish github` puts out, which a workflow on each release hands on as a pull request to winget's community repository. The Microsoft Store takes the app's MSIX package, which a Windows build makes with the identity Partner Center gives the app.",
+    description: 'List a Windows app in winget from its GitHub releases, and in the Microsoft Store as its MSIX packages, which crossbind app publish sends.',
+    lede: "winget takes the Windows setup from the [GitHub release](/guide/github-releases/) that `crossbind app publish github` puts out, which a workflow on each release hands on as a pull request to winget's community repository. The Microsoft Store takes the app's MSIX packages, which a Windows build makes with the identity Partner Center gives the app, and `crossbind app publish microsoft-store` sends each version after the first with the app's listing.",
     blocks: [
         { type: 'h2', id: 'winget', text: 'winget' },
         {
@@ -58,7 +58,12 @@ export default {
         { type: 'code', file: 'crossbind.config.js', code: STORE_IDENTITY },
         {
             type: 'p',
-            text: "`crossbind app build -p windows` then writes `dist/<name>-win32-x64.msix` and `dist/<name>-win32-arm64.msix`, unsigned, which a submission in Partner Center takes under Packages. Make the first submission there, with the app's listing, age rating and price, which later ones take as they are, and say why the app asks for `runFullTrust`, as every Win32 app in a package does: it runs as the app does outside one. Each later version is above the last one the Store has, as package.json's next release is.",
+            text: "`crossbind app build -p windows` then writes `dist/<name>-win32-x64.msix` and `dist/<name>-win32-arm64.msix`, unsigned. Partner Center's API makes no app's first submission, which takes the age ratings questionnaire: make it there, with these packages and the listing `store/microsoft-store` holds, and say why the app asks for `runFullTrust`, as every Win32 app in a package does: it runs as the app does outside one. `crossbind app store microsoft-store` names each step, with the field and the file it comes from.",
+        },
+        { type: 'code', file: 'shell', code: 'npx crossbind app store microsoft-store\nnpx crossbind app publish microsoft-store --rollout 10' },
+        {
+            type: 'p',
+            text: "Each later version goes with `crossbind app publish microsoft-store`: it builds the app's MSIX packages alone, makes a submission with them and the listing, uploads its files and commits it for certification, which takes up to three business days. `--draft` leaves the submission for Partner Center to submit, and `--rollout` gives the packages to a percent of the app's users first. Partner Center's API takes an Entra ID application its account has with the Manager role, under Account settings › User management › Microsoft Entra applications: `CROSSBIND_MICROSOFT_STORE_TENANT_ID`, `CROSSBIND_MICROSOFT_STORE_CLIENT_ID` and `CROSSBIND_MICROSOFT_STORE_CLIENT_SECRET` name it, or a publish on a terminal asks for them once.",
         },
         {
             type: 'p',

@@ -119,12 +119,66 @@ async function openVersion(call, appId, versionString) {
     return (await call('POST', '/appStoreVersions', { data: version })).data;
 }
 
-// The app's information that changes with the version App Store Connect prepares.
-async function openInfo(call, appId) {
+// The app's information that changes with the version App Store Connect prepares, which takes what the files name.
+async function openInfo(call, appId, { what, files }) {
     const { data } = await call('GET', `/apps/${appId}/appInfos`);
     const info = data.find(({ attributes }) => EDITABLE_INFO.includes(attributes.state));
-    if (!info) throw new Error(`crossbind: App Store Connect takes the app's name, subtitle and privacy policy URL in none of its versions now: remove name.txt, subtitle.txt and privacy_url.txt from ${APP_STORE_LISTING} for this one.`);
+    if (!info) throw new Error(`crossbind: App Store Connect takes the app's ${what} in none of its versions now: remove ${files} from ${APP_STORE_LISTING} for this one.`);
     return info;
+}
+
+// What App Store Connect has of a relationship of the version's: its data, or null where it has none.
+const relatedData = (call, route) => call('GET', route).then(({ data }) => data, (error) => {
+    if (error.status === 404) return null;
+    throw error;
+});
+
+// Changes a resource's attributes where App Store Connect's differ from the settings', and says whether it did.
+async function patchDiffering(call, type, resource, wanted) {
+    const differing = Object.entries(wanted).filter(([field, value]) => resource.attributes?.[field] !== value);
+    if (differing.length > 0) await call('PATCH', `/${type}/${resource.id}`, { data: { type, id: resource.id, attributes: Object.fromEntries(differing) } });
+    return differing.length > 0;
+}
+
+// Puts the app's categories and age rating into its information that changes with the version, where App Store
+// Connect's differ, and gives the names of those it changed.
+async function updateInfoSettings(call, appId, { categories, ageRating }) {
+    const info = await openInfo(call, appId, { what: 'categories and age rating', files: 'primary_category.txt, secondary_category.txt and age_rating.json' });
+    const changed = [];
+    if (Object.keys(categories).length > 0) {
+        const { data } = await call('GET', query(`/appInfos/${info.id}`, { include: 'primaryCategory,secondaryCategory' }));
+        const differing = Object.entries(categories).filter(([field, id]) => data.relationships?.[field]?.data?.id !== id);
+        if (differing.length > 0) {
+            const relationships = Object.fromEntries(differing.map(([field, id]) => [field, to('appCategories', id)]));
+            await call('PATCH', `/appInfos/${info.id}`, { data: { type: 'appInfos', id: info.id, relationships } });
+            changed.push('categories');
+        }
+    }
+    if (ageRating) {
+        const declaration = await call('GET', `/appInfos/${info.id}/ageRatingDeclaration`).then(({ data }) => data);
+        if (await patchDiffering(call, 'ageRatingDeclarations', declaration, ageRating)) changed.push('age rating');
+    }
+    return changed;
+}
+
+// Puts the project's settings into App Store Connect where its own differ: the version's copyright and App Review's
+// contact, and the categories and age rating of the app's information. Gives the names of those it changed.
+async function updateSettings(call, appId, version, {
+    copyright, categories = {}, ageRating, review = {},
+} = {}) {
+    const changed = [];
+    if (copyright !== undefined && await patchDiffering(call, 'appStoreVersions', version, { copyright })) changed.push('copyright');
+    if (Object.keys(categories).length > 0 || ageRating) changed.push(...await updateInfoSettings(call, appId, { categories, ageRating }));
+    if (Object.keys(review).length > 0) {
+        const detail = await relatedData(call, `/appStoreVersions/${version.id}/appStoreReviewDetail`);
+        if (!detail) {
+            await call('POST', '/appStoreReviewDetails', { data: { type: 'appStoreReviewDetails', attributes: review, relationships: { appStoreVersion: to('appStoreVersions', version.id) } } });
+            changed.push("App Review's contact");
+        } else if (await patchDiffering(call, 'appStoreReviewDetails', detail, review)) {
+            changed.push("App Review's contact");
+        }
+    }
+    return changed;
 }
 
 // Gives App Store Connect a locale's texts of one kind where they differ from its own, in a new localization where it
@@ -221,7 +275,8 @@ async function processedScreenshots(call, sets, versionString) {
 async function updateListing(call, appId, version, listings) {
     if (listings.length === 0) return [];
     const { data: versionTexts } = await call('GET', query(`/appStoreVersions/${version.id}/appStoreVersionLocalizations`, { limit: '200' }));
-    const info = listings.some((listing) => Object.keys(listing.info).length > 0) ? await openInfo(call, appId) : null;
+    const info = listings.some((listing) => Object.keys(listing.info).length > 0)
+        ? await openInfo(call, appId, { what: 'name, subtitle and privacy policy URL', files: 'name.txt, subtitle.txt and privacy_url.txt' }) : null;
     const infoTexts = info ? (await call('GET', query(`/appInfos/${info.id}/appInfoLocalizations`, { limit: '200' }))).data : [];
     const lacking = listings.find((listing) => Object.keys(listing.info).length > 0 && listing.info.name === undefined
         && !infoTexts.some(({ attributes }) => attributes.locale === listing.locale));
@@ -270,19 +325,20 @@ async function submitForReview(call, appId, versionId) {
     await call('PATCH', `/reviewSubmissions/${submission.id}`, { data: { type: 'reviewSubmissions', id: submission.id, attributes: { submitted: true } } });
 }
 
-// Hands the upload's build to App Review as the app's version, with the project's listing, once App Store Connect has
-// processed it, to go out in phases over 7 days once released where isPhased says so. Gives the build's number and the
-// locales whose listing changed.
+// Hands the upload's build to App Review as the app's version, with the project's listing and settings, once App Store
+// Connect has processed it, to go out in phases over 7 days once released where isPhased says so. Gives the build's
+// number, the locales whose listing changed and the settings that did.
 export async function submitRelease(call, {
-    appId, versionString, before, buildNumber = null, listings, isPhased,
+    appId, versionString, before, buildNumber = null, listings, settings, isPhased,
 }) {
     const version = await openVersion(call, appId, versionString);
     const listed = await updateListing(call, appId, version, listings);
+    const settled = await updateSettings(call, appId, version, settings);
     if (isPhased) await phaseRelease(call, version.id);
     const build = await processedBuild(call, {
         appId, versionString, before, buildNumber,
     });
     await call('PATCH', `/appStoreVersions/${version.id}/relationships/build`, to('builds', build.id));
     await submitForReview(call, appId, version.id);
-    return { build: build.attributes.version, listed };
+    return { build: build.attributes.version, listed, settled };
 }

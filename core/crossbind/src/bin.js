@@ -20,6 +20,7 @@ import {
     makeUploadKey, releaseSigningEnv, showUploadKeyPassword, useUploadKey,
 } from './actions/uploadKey.js';
 import publish, { publishHelp, publishersOf } from './actions/publish.js';
+import storeGuide from './actions/storeGuide.js';
 import { iosDeviceOption } from './actions/iosDevice.js';
 import addExtension from './actions/addExtension.js';
 import addExtensionCommands from './actions/extensionCommands.js';
@@ -209,6 +210,14 @@ commandApp.command('publish')
     .action(async ({ platform }, command) => {
         assertAppCommand();
         await publish(command.args, { platform, envPlatform: process.env.CROSSBIND_APP_PLATFORM, runVite });
+    });
+
+commandApp.command('store')
+    .argument('[store]', 'the store, as google-play, app-store or microsoft-store (default: every one)')
+    .description("say what each store takes of the app: what crossbind app publish sends from store/, what the store would refuse of it, and the steps only the store's own site takes")
+    .action(async (store) => {
+        assertAppCommand();
+        if (await storeGuide(store) > 0) process.exitCode = 1;
     });
 
 // crossbind app alone reads them, so that an extension's package that cannot be read stops no other command.

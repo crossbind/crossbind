@@ -715,7 +715,7 @@ describe("an extension's publisher", () => {
     });
 
     test('refuses what it does not take, a step that is no function, and a publisher without an upload', () => {
-        expect(() => checked({ platform: 'ios', publish: upload })).toThrow('crossbind: extensions[0].publisher takes platform, isDefault, store, options, after, build, check, buildNumber, buildEnv, upload; publish is none of them.');
+        expect(() => checked({ platform: 'ios', publish: upload })).toThrow('crossbind: extensions[0].publisher takes platform, isDefault, store, options, after, build, check, buildNumber, buildEnv, upload, guide; publish is none of them.');
         expect(() => checked({ platform: 'web' })).toThrow('crossbind: extensions[0].publisher.platform is no platform or list of them, of android, ios, macos, linux, windows, desktop.');
         expect(() => checked({ platform: [] })).toThrow('is no platform or list of them');
         expect(() => checked({ platform: 'ios', check: 'yes', buildEnv: {} })).toThrow("crossbind: extensions[0].publisher's check and buildEnv are no function.");

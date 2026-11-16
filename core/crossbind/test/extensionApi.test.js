@@ -45,6 +45,10 @@ vi.mock('../src/utils/ask.js', () => ({
         terminal.asked.push(question);
         return terminal.yes.shift() ?? true;
     },
+    askHidden: async (question) => {
+        terminal.asked.push(question);
+        return terminal.hidden.shift() ?? '';
+    },
 }));
 const signing = { made: 0 };
 vi.mock('../src/actions/uploadKey.js', () => ({
@@ -228,6 +232,14 @@ describe("an extension's api", () => {
         const api = extensionApi('demo-store', { platform: 'ios' });
         expect(() => api.ask('Track? ')).toThrow('crossbind: demo-store asks "Track?", with no terminal to answer it.');
         expect(() => api.askYesNo('Go? [Y/n] ')).toThrow('crossbind: demo-store asks "Go? [Y/n]", with no terminal to answer it.');
+        expect(() => api.askHidden('Key: ')).toThrow('crossbind: demo-store asks "Key:", with no terminal to answer it.');
+    });
+
+    test('asks for a key on a terminal without showing the answer', async () => {
+        Object.assign(terminal, { isThere: true, asked: [], hidden: ['S3cret'] });
+        const api = extensionApi('demo-store', { platform: 'windows' });
+        expect(await api.askHidden('Key: ')).toBe('S3cret');
+        expect(terminal.asked).toEqual(['Key: ']);
     });
 
     test("gives the signing and the tools crossbind builds each platform's apps with", async () => {

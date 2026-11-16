@@ -53,6 +53,8 @@ export default defineConfig({ plugins: [viteCrossbindPlugin()] });
 | `crossbind app publish google-play` | Builds the Android app with the next versionCode Google Play takes and releases its bundle on a track, internal unless `--track` names another, to a share of its users with `--rollout`, and with the listing `store/google-play` holds; `-p android` names the same store (see [Publishing](#publishing)). |
 | `crossbind app publish app-store` | Builds the iOS app, archives it and uploads it to App Store Connect, whose TestFlight hands it to testers, and with `--submit` to App Review too, with the listing `store/app-store` holds; Xcode numbers the build, and `-p ios` names the same store (see [Publishing](#publishing)). |
 | `crossbind app publish github` | Builds the desktop app of `-p macos`, `linux` or `windows`, else of this machine, and puts what installs it, and with `app.updater` its update, into the GitHub release of its version, `v<version>` (see [GitHub Releases](#github-releases)). |
+| `crossbind app publish microsoft-store` | Builds the Windows app's MSIX packages, x64 and arm64, and sends them to the Microsoft Store in a new submission of the app, with the listing `store/microsoft-store` holds, once Partner Center has the app's first submission (see [Microsoft Store](#microsoft-store)). |
+| `crossbind app store` | Says of each store, or the one it names, what a publish sends from `store/`, what the store would refuse of it, and the steps only the store's own site takes, with the values and files to enter there; it builds nothing, asks for no credentials, and exits with 1 at a problem (see [What each store takes](#what-each-store-takes)). |
 
 `crossbind app` runs the project's Vite with `CROSSBIND_APP_PLATFORM` set to the platform `-p` names, `macos`, `linux`,
 `windows`, `ios` or `android`; without `-p` it keeps the variable the environment sets, and without that builds this
@@ -1354,12 +1356,41 @@ its data, and leaves running it to you.
 
 `crossbind app publish <store>` builds the app and sends it to the store it names first, before any option of Vite's:
 `google-play` takes its bundle on a Google Play track, `app-store` the app to App Store Connect, whose TestFlight hands
-it to testers, and `github` a desktop app's installers and update to a GitHub release. `-p android` and `-p ios` name
-the first two stores, as `CROSSBIND_APP_PLATFORM` does without either; for `github`, `-p` names the desktop platform.
+it to testers, `microsoft-store` a Windows app's MSIX packages to the Microsoft Store, and `github` a desktop app's
+installers and update to a GitHub release. `-p android` and `-p ios` name the first two stores, as
+`CROSSBIND_APP_PLATFORM` does without either; for `github`, `-p` names the desktop platform.
 
 Each store is a publisher, as an extension adds one: [extensions.md](./extensions.md#publishers)' Publishers says how
-to write one, and an extension listed under the name of one of these three replaces it. A store's options go after its
+to write one, and an extension listed under the name of one of these four replaces it. A store's options go after its
 name, and one of another store's is refused.
+
+### What each store takes
+
+A project's `store/` folder holds what the stores show of the app, a folder per store: `store/google-play`,
+`store/app-store` and `store/microsoft-store`. In each, a folder per language holds the listing's texts and images, by
+the names the sections below give, and the files beside them the app's settings, in that store's own terms. A publish
+sends what the store's API takes, and stops before its build at what the store would refuse: a text longer than it
+takes, an image of another size, or a PNG with transparency where it takes none.
+
+`crossbind app store` says, of each store or the one it names, what a publish sends, what to fix first, and the steps
+only the store's own site takes, once for the app, each with the page, the value and the file to enter there:
+
+```text
+$ crossbind app store microsoft-store
+Microsoft Store · Geosmith 1.0.0
+
+crossbind app publish microsoft-store sends:
+  ✓ the app's MSIX packages, x64 and arm64, in place of the last submission's, which Partner Center certifies and signs
+  ✓ store/microsoft-store/en-US: title, description, 6 features, 7 search terms; 4 desktop screenshots, tile, hero
+
+By hand in Partner Center, once for the app:
+  1. Apps and games › New product › MSIX or PWA app: reserve the app's name, as Geosmith.
+     https://partner.microsoft.com/dashboard/apps-and-games/overview
+  …
+```
+
+It builds nothing and asks for no credentials, so it runs on any machine, and it exits with 1 at a problem, as a check
+of the listing in CI would.
 
 ### Google Play
 
@@ -1449,6 +1480,26 @@ stays as Play has it, so it may hold the notes alone, or the screenshots. A lang
 publish stops at an empty text but a video's, which takes the video away, at a text longer than Play takes, at two files
 of one image, and at a file or folder Play takes none of, naming it.
 
+It stops there too at every image Play would refuse: an icon of other than 512 × 512 or above 1024 KB, a feature graphic
+of other than 1024 × 500, a TV banner of other than 1280 × 720, a screenshot with a side outside 320 to 3840 pixels, or
+7680 for a tablet's, a long side more than twice its short one or more than 8 MB, a Wear OS screenshot that is no square,
+transparency in any image but the icon, more than 8 screenshots of a kind, and fewer than 2 of a phone's.
+
+Beside the languages, the folder holds the app's settings:
+
+```text
+store/google-play/
+├── contact_email.txt         the contact details a publish sends where Play's differ
+├── contact_website.txt
+├── contact_phone.txt
+├── data_safety.csv           the Data safety declaration as Play Console exports it, which a publish sends
+├── privacy_url.txt           what Play Console alone takes, which crossbind app store names to enter there
+└── category.txt
+```
+
+The declaration goes first, so one Play refuses stops the publish before its bundle goes up. The contact details take
+"Manage store presence" in Play Console, and the declaration "Manage policy declarations".
+
 ### App Store Connect
 
 `crossbind app publish app-store` builds the iOS app, archives it with `xcodebuild` and uploads it to App Store Connect,
@@ -1504,10 +1555,11 @@ at most, picks it for the version and submits the version for review. `--phased`
 approves in phases over 7 days, as App Store Connect's phased release does; without it the version goes out as App Store
 Connect's release option for it says.
 
-What only App Store Connect does stays there: the first version's age rating, the screenshots of devices other than
-iPhones and iPads, app previews, App Privacy answers, price, category and copyright, App Review's contact, the export
-compliance documents an app that uses encryption takes, a reply to App Review, and a submission it answered with issues,
-which a publish without `--submit` gives a new build to pick. A submission App Store Connect prepares with items in it,
+What only App Store Connect does stays there: the screenshots of devices other than iPhones and iPads, app previews,
+App Privacy answers, price and availability, content rights, the export compliance documents an app that uses
+encryption takes, a reply to App Review, and a submission it answered with issues, which a publish without `--submit`
+gives a new build to pick. The age rating, categories, copyright and App Review's contact go with `--submit` from the
+files [The App Store listing](#the-app-store-listing) names, and stay as App Store Connect has them without those. A submission App Store Connect prepares with items in it,
 as a publish stopped midway leaves, stops the next one before its build: submit or remove them there. A call that finds
 App Store Connect busy or out of reach for a moment tries again.
 
@@ -1548,6 +1600,32 @@ the 6.9-inch and 6.7-inch iPhones, `APP_IPHONE_65`, `APP_IPHONE_61`, `APP_IPHONE
 JPEG image, as an empty one or a Git LFS pointer does. A type's screenshots go up anew where App Store Connect shows
 others, in another order or unprocessed, and the publish waits for it to process them before the build's turn; a type
 the folder has none of stays as it is.
+
+It stops there too at every screenshot of a size its display type takes none of, portrait or turned, as App Store
+Connect's specifications give them, `APP_IPHONE_67` taking 1320 × 2868, 1290 × 2796, 1260 × 2736 or 1284 × 2778 and
+`APP_IPAD_PRO_3GEN_129` 2064 × 2752 or 2048 × 2732, and at one with transparency, which App Store Connect takes in no
+image. It takes a 13-inch iPad's screenshots of every app that runs on iPads, as crossbind's iOS apps do, and scales the
+6.9-inch iPhone's down for smaller ones.
+
+Beside the locales, the folder holds the app's settings, by the names fastlane's deliver gives them, which a publish
+with `--submit` sends where App Store Connect's differ:
+
+```text
+store/app-store/
+├── copyright.txt             the version's copyright, as 2026 Example Ltd.
+├── primary_category.txt      the app's categories, by the ids of App Store Connect's API: UTILITIES, PRODUCTIVITY
+├── secondary_category.txt
+├── age_rating.json           the age rating's answers, by the names of its API, as
+│                             { "violenceCartoonOrFantasy": "NONE", "gambling": false }
+└── review_information/       App Review's contact: first_name.txt, last_name.txt, phone_number.txt,
+                              email_address.txt and notes.txt, and demo_user.txt with demo_password.txt
+                              for an app that signs in
+```
+
+The categories and the age rating go into the app's information that changes with the version, as its name does. An
+answer of `age_rating.json` App Store Connect takes none of stops the publish before the build; a question crossbind
+does not know goes as it is, for one Apple adds. A demo account's password is a secret: keep `demo_password.txt` out of
+the repository, and write it from one in CI.
 
 ### GitHub Releases
 
@@ -1641,11 +1719,59 @@ app: {
 },
 ```
 
-`crossbind app build -p windows` then writes `dist/<name>-win32-x64.msix` and `dist/<name>-win32-arm64.msix`, unsigned,
-which a submission in Partner Center takes under Packages. Make the first submission there, with the app's listing, age
-rating and price, which later ones take as they are, and say why the app asks for `runFullTrust`, as every Win32 app in
-a package does: it runs as the app does outside one. Each later version is above the last one the Store has, as
-package.json's next release is.
+`crossbind app build -p windows` then writes `dist/<name>-win32-x64.msix` and `dist/<name>-win32-arm64.msix`, unsigned.
+Partner Center's API makes no app's first submission, which takes the age ratings questionnaire: make it in Partner
+Center, with these packages under Packages and the listing `store/microsoft-store` holds, whose fields and files
+`crossbind app store microsoft-store` names, and say why the app asks for `runFullTrust`, as every Win32 app in a
+package does: it runs as the app does outside one.
+
+Each later version goes with `crossbind app publish microsoft-store`. It builds the app's MSIX packages alone, with no
+updater, and makes a submission of the app, a copy of its last, with the packages in place of the old ones, the listing
+and the settings `store/microsoft-store` holds; it uploads their files in one zip and commits the submission for
+certification, which takes up to three business days. `--draft` leaves the submission for Partner Center to submit, and
+`--rollout 10`, or `10%`, gives its packages to that percent of the app's users first, a gradual rollout that Partner
+Center raises. A submission in progress stops the publish, which on a terminal asks to delete it. Each version is above
+the last one the Store has, as package.json's next release is, and none is a prerelease, which the Store cannot tell
+from its release.
+
+Partner Center's API takes an Entra ID application its account has with the Manager role: in Partner Center, Account
+settings › User management › Microsoft Entra applications adds one, shows its tenant and client ids and makes a key,
+which expires as it says. A publish takes them from `CROSSBIND_MICROSOFT_STORE_TENANT_ID`,
+`CROSSBIND_MICROSOFT_STORE_CLIENT_ID` and `CROSSBIND_MICROSOFT_STORE_CLIENT_SECRET`, else asks a terminal for them once,
+keeping the ids in `~/.crossbind.json` and the key in the system keychain.
+
+### The Microsoft Store listing
+
+A project's `store/microsoft-store` folder holds its Microsoft Store listing: a folder per language, named as BCP 47
+names it (`en-US`, `tr-TR`), with a file per field:
+
+```text
+store/microsoft-store/en-US/
+├── title.txt                 the product's name, one Partner Center reserved
+├── description.txt           at most 10000 characters
+├── short_description.txt     at most 1000
+├── features.txt              a feature a line, 20 at most of 200 characters each
+├── keywords.txt              a search term a line, 7 at most of 40 characters each, 21 words in all
+├── release_notes.txt         what's new in the version, at most 1500
+├── copyright.txt             at most 200
+├── license_terms.txt         additional license terms, at most 10000
+├── developed_by.txt
+└── images/
+    ├── screenshots/          the desktop's: 01.png, 02.png, 10 at most, 1366 × 768 to 3840 × 2160,
+    │                         and 01.txt with 01.png's caption, at most 200 characters
+    ├── tile.png              the 1:1 app tile icon, 300 × 300
+    └── hero.png              the 16:9 super hero art, 1920 × 1080 or 3840 × 2160, with no text
+```
+
+Beside the languages, `category.txt` names the app's category as Partner Center's API does, as `UtilitiesAndTools`, and
+`notes_for_certification.txt` holds the notes for certification, which a publish sends; `privacy_url.txt`,
+`website_url.txt` and `support_contact.txt` hold what Partner Center's Properties page alone takes, as its API takes them
+no more, so `crossbind app store` names them to enter there.
+
+Every image is a PNG, as the Store takes no other. A language's images of a type go up anew where Partner Center shows
+others, the names they go up under telling them apart by their bytes, and a type the folder has none of stays as it is;
+a language Partner Center has no listing in takes a description, which it makes one of. Before the build, the publish
+stops at a text longer than the Store takes and at every image of another size or kind, naming it.
 
 The Store updates the app it installed, and the app's own updater refuses there (see [Updates](#updates)). An app from
 its package uses the WebView2 Runtime that Windows 11 comes with and Windows 10 has from Edge's updates. The setup
@@ -1664,6 +1790,7 @@ Xcode account and no one to sign in to Google, so it needs these besides, as the
 | Google Play | The upload key as a base64 secret, which `base64 < <keystore>` prints, with its alias and its password, which `crossbind app upload-key --show-password` prints. A service account invited in Play Console (see [Google Play](#google-play)), through Workload Identity Federation with no key, or its JSON key. |
 | App Store Connect | `app.team` in `crossbind.config.js`, as this machine's `XCODE_DEVELOPMENT_TEAM` stays behind. An App Store Connect API key, its `.p8` as a secret: an Admin key, whose uploads Apple signs in the cloud and whose secret can do all an Admin can, or a key of another role with an Apple Distribution certificate imported into the runner's keychain before the publish. The archive is unsigned, so the runner needs no development certificate or device. |
 | GitHub Releases | The workflow's own token, given as `GITHUB_TOKEN: ${{ github.token }}` with `permissions: contents: write`, and with `app.updater` its private key as a secret in `CROSSBIND_UPDATER_PRIVATE_KEY`. |
+| Microsoft Store | The Entra ID application's tenant and client ids, as `CROSSBIND_MICROSOFT_STORE_TENANT_ID` and `CROSSBIND_MICROSOFT_STORE_CLIENT_ID`, and its key as a secret in `CROSSBIND_MICROSOFT_STORE_CLIENT_SECRET`. The Windows app builds in crossbind's windows image, so a Linux runner with Docker publishes it. |
 
 Each key goes in as its secret's text, the upload key's as base64, so no step writes it to a file: where a tool takes a
 file, crossbind writes one only the job's user reads, and removes it when the publish ends.

@@ -121,7 +121,7 @@ export default {
         },
         {
             type: 'p',
-            text: "What only App Store Connect does stays there: the first version's age rating, screenshots of devices other than iPhones and iPads, app previews, App Privacy answers, price, category and copyright, App Review's contact, the export compliance documents an app that uses encryption takes, and a reply to App Review. A submission App Review answered with issues takes a new build from a publish without `--submit`. A submission left with items in it, as a publish stopped midway leaves one, stops the next publish before its build: submit or remove them in App Store Connect.",
+            text: "What only App Store Connect does stays there: screenshots of devices other than iPhones and iPads, app previews, App Privacy answers, price and availability, content rights, the export compliance documents an app that uses encryption takes, and a reply to App Review; `crossbind app store app-store` names each, with what to enter. The age rating, categories, copyright and App Review's contact go with `--submit` from the [listing](#listing)'s files. A submission App Review answered with issues takes a new build from a publish without `--submit`. A submission left with items in it, as a publish stopped midway leaves one, stops the next publish before its build: submit or remove them in App Store Connect.",
         },
         { type: 'p', text: '`--track`, `--draft` and `--rollout` belong to other stores, [Google Play](/guide/google-play/#tracks) and, for `--draft`, [GitHub Releases](/guide/github-releases/), and stop an iOS publish.' },
 
@@ -138,6 +138,10 @@ export default {
         {
             type: 'p',
             text: "Each folder under `screenshots/` is named as App Store Connect's API names the display type, and holds up to 10 .png, .jpg or .jpeg files, in the order of their names: 01.png, 02.png and on to 10.png. Besides `APP_IPHONE_67` and `APP_IPAD_PRO_3GEN_129`, the types are `APP_IPHONE_65`, `APP_IPHONE_61`, `APP_IPHONE_58`, `APP_IPHONE_55`, `APP_IPHONE_47`, `APP_IPHONE_40`, `APP_IPHONE_35`, `APP_IPAD_PRO_3GEN_11`, `APP_IPAD_PRO_129`, `APP_IPAD_105` and `APP_IPAD_97`. A type's screenshots go up anew where App Store Connect shows others, in another order or unprocessed, and a type the folder has none of stays as it is. A file that holds no PNG or JPEG image, such as an empty one or a Git LFS pointer, stops the publish before the build.",
+        },
+        {
+            type: 'p',
+            text: "So does a screenshot of a size its display type takes none of, portrait or turned, as `APP_IPHONE_67` takes 1320 × 2868 and `APP_IPAD_PRO_3GEN_129` 2064 × 2752, or one with transparency. App Store Connect takes 13-inch iPad screenshots of every app that runs on iPads, as crossbind's do. Beside the locales, `copyright.txt`, `primary_category.txt` and `secondary_category.txt` (as `UTILITIES`), `age_rating.json` with the answers by the API's names, and `review_information/` with App Review's contact go with `--submit` where App Store Connect's differ.",
         },
 
         { type: 'h2', id: 'ci', text: 'From CI' },

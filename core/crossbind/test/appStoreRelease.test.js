@@ -132,7 +132,7 @@ describe("a version's submission to App Review", () => {
             { locale: 'tr', info: {}, version: { whatsNew: 'Düzeltmeler.' }, screenshots: {} },
         ];
 
-        expect(await release({ listings, isPhased: true })).toEqual({ build: '42', listed: ['en-US', 'tr'] });
+        expect(await release({ listings, isPhased: true })).toEqual({ build: '42', listed: ['en-US', 'tr'], settled: [] });
 
         expect(keys().filter((key) => !key.startsWith('GET'))).toEqual([
             'POST /appStoreVersions',
@@ -389,5 +389,68 @@ describe("a version's screenshots on App Store Connect", () => {
         await expect(release({ listings: listed({ APP_IPHONE_67: [file('1.png', 'first')] }) })).rejects
             .toThrow('crossbind: App Store Connect has not processed the screenshots in 10 minutes, so the version went to no review: once it has, pick the build for 1.2.3 in App Store Connect and submit it there.');
         expect(keys().filter((key) => key === 'GET /appScreenshotSets/SET1/appScreenshots?limit=200')).toHaveLength(121);
+    });
+});
+
+describe("a version's settings on App Store Connect", () => {
+    const SETTINGS = {
+        copyright: '2026 Example Ltd.',
+        categories: { primaryCategory: 'UTILITIES', secondaryCategory: 'PRODUCTIVITY' },
+        ageRating: { violenceCartoonOrFantasy: 'NONE', gambling: false },
+        review: { contactEmail: 'review@example.com', notes: 'No sign-in.' },
+    };
+    const notFound = () => {
+        throw Object.assign(new Error('not found'), { status: 404 });
+    };
+
+    test("change the copyright, categories, age rating and App Review's contact where App Store Connect's differ", async () => {
+        answers['GET /appInfos/I1?include=primaryCategory,secondaryCategory'] = {
+            data: { id: 'I1', relationships: { primaryCategory: { data: { type: 'appCategories', id: 'PRODUCTIVITY' } }, secondaryCategory: { data: null } } },
+        };
+        answers['GET /appInfos/I1/ageRatingDeclaration'] = { data: { id: 'R1', attributes: { violenceCartoonOrFantasy: 'NONE', gambling: true } } };
+        answers['GET /appStoreVersions/V1/appStoreReviewDetail'] = notFound;
+
+        expect((await release({ settings: SETTINGS })).settled).toEqual(['copyright', 'categories', 'age rating', "App Review's contact"]);
+
+        expect(bodyOf('PATCH /appStoreVersions/V1')).toEqual({ data: { type: 'appStoreVersions', id: 'V1', attributes: { copyright: '2026 Example Ltd.' } } });
+        expect(bodyOf('PATCH /appInfos/I1')).toEqual({
+            data: {
+                type: 'appInfos',
+                id: 'I1',
+                relationships: {
+                    primaryCategory: { data: { type: 'appCategories', id: 'UTILITIES' } },
+                    secondaryCategory: { data: { type: 'appCategories', id: 'PRODUCTIVITY' } },
+                },
+            },
+        });
+        expect(bodyOf('PATCH /ageRatingDeclarations/R1')).toEqual({ data: { type: 'ageRatingDeclarations', id: 'R1', attributes: { gambling: false } } });
+        expect(bodyOf('POST /appStoreReviewDetails')).toEqual({
+            data: {
+                type: 'appStoreReviewDetails', attributes: SETTINGS.review, relationships: { appStoreVersion: { data: { type: 'appStoreVersions', id: 'V1' } } },
+            },
+        });
+        const order = keys();
+        expect(order.indexOf('POST /appStoreReviewDetails')).toBeLessThan(order.indexOf('POST /reviewSubmissions'));
+    });
+
+    test('leave what App Store Connect has as the settings give it, and change the contact it has where it differs', async () => {
+        answers['GET /apps/A1/appStoreVersions?filter[platform]=IOS&filter[versionString]=1.2.3'] = {
+            data: [{ id: 'V1', attributes: { versionString: '1.2.3', appVersionState: 'PREPARE_FOR_SUBMISSION', copyright: '2026 Example Ltd.' } }],
+        };
+        answers['GET /appInfos/I1?include=primaryCategory,secondaryCategory'] = {
+            data: { id: 'I1', relationships: { primaryCategory: { data: { id: 'UTILITIES' } }, secondaryCategory: { data: { id: 'PRODUCTIVITY' } } } },
+        };
+        answers['GET /appInfos/I1/ageRatingDeclaration'] = { data: { id: 'R1', attributes: { violenceCartoonOrFantasy: 'NONE', gambling: false } } };
+        answers['GET /appStoreVersions/V1/appStoreReviewDetail'] = { data: { id: 'D1', attributes: { contactEmail: 'review@example.com', notes: 'Old notes.' } } };
+
+        expect((await release({ settings: SETTINGS })).settled).toEqual(["App Review's contact"]);
+        expect(keys().filter((key) => /^(PATCH|POST) \/(appStoreVersions\/V1$|appInfos|ageRatingDeclarations|appStoreReviewDetails)/.test(key))).toEqual(['PATCH /appStoreReviewDetails/D1']);
+        expect(bodyOf('PATCH /appStoreReviewDetails/D1')).toEqual({ data: { type: 'appStoreReviewDetails', id: 'D1', attributes: { notes: 'No sign-in.' } } });
+    });
+
+    test('stop where App Store Connect takes the categories and age rating in none of its versions now, naming the files to remove', async () => {
+        answers['GET /apps/A1/appInfos'] = { data: [{ id: 'I0', attributes: { state: 'READY_FOR_DISTRIBUTION' } }] };
+        await expect(release({ settings: { categories: { primaryCategory: 'UTILITIES' }, review: {} } })).rejects
+            .toThrow("crossbind: App Store Connect takes the app's categories and age rating in none of its versions now: remove primary_category.txt, secondary_category.txt and age_rating.json from");
     });
 });

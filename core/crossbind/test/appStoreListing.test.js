@@ -2,7 +2,12 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, test } from 'vitest';
-import { readAppStoreListing } from '../../../extensions/app-store/src/appStoreListing.js';
+import upath from 'upath';
+import {
+    appStoreListingProblems, readAppStoreListing, readAppStoreSettings,
+} from '../../../extensions/app-store/src/appStoreListing.js';
+import { appStoreGuide } from '../../../extensions/app-store/src/appStoreGuide.js';
+import { RGBA, jpegOf, pngOf } from './listingImages.js';
 
 let project;
 const PNG = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
@@ -109,5 +114,109 @@ describe("a project's App Store listing", () => {
         fs.rmSync(path.join(project, 'store'), { recursive: true });
         write('en-us/name.txt', 'Demo');
         expect(() => readAppStoreListing(project)).toThrow(`crossbind: ${shown('en-us')} is no language's folder, as en-US is, which an App Store listing takes.`);
+    });
+});
+
+describe("a project's App Store settings", () => {
+    test('are the copyright, categories, age rating answers and App Review contact a publish with --submit sends', () => {
+        write('copyright.txt', '2026 Example Ltd.\n');
+        write('primary_category.txt', 'UTILITIES');
+        write('secondary_category.txt', 'PRODUCTIVITY');
+        write('age_rating.json', JSON.stringify({
+            violenceCartoonOrFantasy: 'NONE', gambling: false, kidsAgeBand: null, aQuestionAppleAdds: true,
+        }));
+        write('review_information/first_name.txt', 'Ada');
+        write('review_information/email_address.txt', 'review@example.com');
+        write('review_information/notes.txt', 'No sign-in.');
+        write('en-US/name.txt', 'Demo');
+        expect(readAppStoreSettings(project)).toEqual({
+            copyright: '2026 Example Ltd.',
+            categories: { primaryCategory: 'UTILITIES', secondaryCategory: 'PRODUCTIVITY' },
+            ageRating: {
+                violenceCartoonOrFantasy: 'NONE', gambling: false, kidsAgeBand: null, aQuestionAppleAdds: true,
+            },
+            review: { contactEmail: 'review@example.com', contactFirstName: 'Ada', notes: 'No sign-in.' },
+        });
+        expect(readAppStoreListing(project).map(({ locale }) => locale)).toEqual(['en-US']);
+    });
+
+    test('are none without their files', () => {
+        expect(readAppStoreSettings(project)).toEqual({ categories: {}, review: {} });
+    });
+
+    test("take a demo account's name and password together, which App Review signs in with", () => {
+        write('review_information/demo_user.txt', 'demo');
+        expect(() => readAppStoreSettings(project)).toThrow('has one of demo_user.txt and demo_password.txt, and App Review signs in with both: add the other, or remove it.');
+        write('review_information/demo_password.txt', 'secret');
+        expect(readAppStoreSettings(project).review).toEqual({ demoAccountName: 'demo', demoAccountPassword: 'secret', demoAccountRequired: true });
+    });
+
+    test("stop at answers App Store Connect takes none of, and at a category's id it names none by", () => {
+        write('age_rating.json', JSON.stringify({ violenceRealistic: 'SOMETIMES' }));
+        expect(() => readAppStoreSettings(project)).toThrow('answers violenceRealistic with "SOMETIMES", which App Store Connect takes none of: it takes "NONE", "INFREQUENT_OR_MILD", "FREQUENT_OR_INTENSE", "INFREQUENT", "FREQUENT".');
+        write('age_rating.json', JSON.stringify({ gambling: 'no' }));
+        expect(() => readAppStoreSettings(project)).toThrow('answers gambling with "no", which App Store Connect takes none of: it takes true, false.');
+        write('age_rating.json', JSON.stringify({ aQuestionAppleAdds: 'maybe' }));
+        expect(() => readAppStoreSettings(project)).toThrow('answers aQuestionAppleAdds with "maybe", which App Store Connect takes none of.');
+        write('age_rating.json', '[]');
+        expect(() => readAppStoreSettings(project)).toThrow("holds no object of App Store Connect's age rating answers");
+        write('age_rating.json', '{');
+        expect(() => readAppStoreSettings(project)).toThrow('holds no JSON');
+        write('age_rating.json', '{}');
+        write('primary_category.txt', 'Utilities');
+        expect(() => readAppStoreSettings(project)).toThrow('names "Utilities", which is no category\'s id as App Store Connect\'s API names it, as UTILITIES or PRODUCTIVITY.');
+    });
+});
+
+describe("what App Store Connect would refuse of a listing's screenshots", () => {
+    const problemsOf = () => appStoreListingProblems(project, readAppStoreListing(project)).map(upath.toUnix);
+
+    test('is nothing of the sizes their display types take, portrait or turned', () => {
+        write('en-US/screenshots/APP_IPHONE_67/01.png', pngOf(1320, 2868));
+        write('en-US/screenshots/APP_IPHONE_67/02.jpg', jpegOf(2868, 1320));
+        write('en-US/screenshots/APP_IPHONE_61/01.png', pngOf(1206, 2622));
+        write('en-US/screenshots/APP_IPAD_PRO_3GEN_129/01.png', pngOf(2064, 2752));
+        write('en-US/screenshots/APP_IPAD_PRO_3GEN_129/02.png', pngOf(2732, 2048));
+        expect(problemsOf()).toEqual([]);
+    });
+
+    test('is every screenshot of a size its type takes none of, with transparency, or cut off, at once', () => {
+        write('en-US/screenshots/APP_IPHONE_67/01.png', pngOf(1080, 1920));
+        write('en-US/screenshots/APP_IPAD_PRO_3GEN_129/01.png', pngOf(2064, 2752, { colorType: RGBA }));
+        write('en-US/screenshots/APP_IPAD_PRO_3GEN_129/02.png');
+        expect(problemsOf()).toEqual([
+            'crossbind: store/app-store/en-US/screenshots/APP_IPAD_PRO_3GEN_129/01.png holds transparency, which App Store Connect takes in no screenshot: save it as a JPEG, or as a PNG without an alpha channel.',
+            'crossbind: store/app-store/en-US/screenshots/APP_IPAD_PRO_3GEN_129/02.png holds no PNG or JPEG image whose size it gives, as a cut-off file does: put the whole image there, or remove the file.',
+            'crossbind: store/app-store/en-US/screenshots/APP_IPHONE_67/01.png is 1080 × 1920, and App Store Connect takes APP_IPHONE_67 screenshots of 1320 × 2868, 1290 × 2796, 1260 × 2736, 1284 × 2778, or the same turned.',
+        ]);
+    });
+});
+
+describe("crossbind app store's word on App Store Connect", () => {
+    test('names what a publish sends, with --submit the listing and settings too, and the steps App Store Connect alone takes', () => {
+        write('en-US/name.txt', 'Demo');
+        write('en-US/privacy_url.txt', 'https://example.com/privacy');
+        write('en-US/screenshots/APP_IPHONE_67/01.png', pngOf(1320, 2868));
+        write('copyright.txt', '2026 Example Ltd.');
+        write('primary_category.txt', 'UTILITIES');
+
+        const guide = appStoreGuide({ project: { root: project }, config: { app: { id: 'dev.example.demo' } }, app: { encryption: false } });
+
+        expect(guide.where).toBe('App Store Connect');
+        expect(guide.problems).toEqual([]);
+        expect(guide.sends.map(upath.toUnix)).toEqual([
+            'the app, archived and uploaded, which TestFlight hands to testers once Apple has processed it',
+            'with --submit, store/app-store/en-US: name, privacy policy URL; 1 APP_IPHONE_67 screenshots',
+            'with --submit, copyright: 2026 Example Ltd.',
+            'with --submit, categories: UTILITIES',
+        ]);
+        const texts = guide.steps.map(({ text }) => text);
+        expect(texts[0]).toBe("Apps › New App: an iOS app with dev.example.demo as its bundle ID, its name, primary language and SKU, as Apple's API makes none; a publish without --submit registers the bundle ID first, so the form lists it.");
+        expect(texts.map(upath.toUnix)).toEqual(expect.arrayContaining([
+            "App Information › Age Rating: answer Apple's questions, which store/app-store/age_rating.json would send.",
+            "The version's App Review Information: a contact's name, phone and e-mail, which store/app-store/review_information would send.",
+            "The version's 13-inch iPad screenshots, which App Store Connect takes of an app that runs on iPads, as crossbind's iOS apps do; a locale's screenshots/APP_IPAD_PRO_3GEN_129 would send them.",
+        ]));
+        expect(texts.some((text) => ['Privacy Policy URL', '› Category', 'Copyright', 'app.encryption'].some((part) => text.includes(part)))).toBe(false);
     });
 });

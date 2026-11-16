@@ -159,6 +159,10 @@ export default {
             type: 'p',
             text: 'Before the build, the publish stops at an empty text, but for an empty `video.txt`, which takes the video away; at a text longer than Play takes; at two files of one image; and at a file or folder Play takes none of, naming it.',
         },
+        {
+            type: 'p',
+            text: "It stops there too at every image Play would refuse: an icon of other than 512 × 512, a feature graphic of other than 1024 × 500, a screenshot whose long side is more than twice its short one, as a 20:9 phone's is, and transparency in any image but the icon. Beside the languages, `contact_email.txt`, `contact_website.txt` and `contact_phone.txt` hold the contact details a publish sends, `data_safety.csv` the Data safety declaration as Play Console exports it, which a publish sends too, and `privacy_url.txt` and `category.txt` what Play Console alone takes. `crossbind app store google-play` names each step Play Console alone takes, with the value to enter there.",
+        },
 
         { type: 'h2', id: 'ci', text: 'From CI' },
         {

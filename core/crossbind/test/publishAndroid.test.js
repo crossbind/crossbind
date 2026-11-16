@@ -111,6 +111,8 @@ describe('publishing an Android app', () => {
             status: 'completed',
             userFraction: null,
             listings: [],
+            details: {},
+            dataSafety: null,
         }]);
         const said = printed.join('\n');
         expect(said).toContain("crossbind: publishing dev.example.demo 1.2.3 to Google Play's internal track.");
