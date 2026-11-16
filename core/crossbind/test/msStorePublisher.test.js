@@ -166,7 +166,8 @@ describe('the Microsoft Store publisher', () => {
                 appId: '9N1', version: '1.2.3', submission: 'S2', status: 'PreProcessing',
             },
         });
-        expect(made.filter((request) => !request.includes('login.microsoftonline.com') && !request.includes('storage.example.test'))).toEqual([
+        // Partner Center's calls, which the record keeps without its address, beside the sign-in's and the blob's.
+        expect(made.filter((request) => !/^\w+ https:\/\//.test(request))).toEqual([
             'GET applications?$top=100&$skip=0',
             'POST applications/9N1/submissions',
             'PUT applications/9N1/submissions/S2',
