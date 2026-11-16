@@ -16,7 +16,8 @@ import { UPDATE_PORT, signUpdate } from './updates.mjs';
 // CROSSBIND_APP_PLATFORM=ios the app is an Xcode project, built and opened in the Simulator,
 // and with android a Gradle project, built and opened on the attached device. With --installed a desktop app opens
 // from where its installer put it: from its disk image on macOS, and on Linux and Windows from where its Debian package
-// or setup program, which the runner ran first, installed it.
+// or setup program, which the runner ran first, installed it. With --msix a Windows app opens through the alias of the
+// MSIX package the runner installed.
 const RUN_TIMEOUT_MS = 300000;
 // Shared conformance list: pass must equal run (backreference); skips are explicit lines.
 const CONFORMANCE = /^CONFORMANCE (\d+)\/\1\b.*$/m;
@@ -45,7 +46,11 @@ const SETTLE_MS = 1000;
 const CLICK_TIMEOUT_MS = 5000;
 // How long an app takes to quit and open anew after app.relaunch(), and for its output to arrive after its exit.
 const RELAUNCH_TIMEOUT_MS = 30000;
+const RELAUNCH_POLL_MS = 500;
 const EXIT_SETTLE_MS = 1000;
+// What src/main.js says once the updater of an app from its MSIX package refused it, which a run of the app's folder
+// never hears.
+const PACKAGED = 'crossbind e2e: the app runs from its MSIX package';
 // Tells the window the scale of its screen went up by half, as Windows does when its user changes it, reads where the
 // window is, and goes back. Anything that fails stops the script, and a window that takes 5 s to answer fails.
 const SCALE_SCRIPT = `
@@ -416,13 +421,14 @@ async function open() {
         return { ...openInSimulator(built, { env }), built };
     }
     // A macOS app is a bundle; a Linux or Windows app a directory named after its platform and arch.
-    const { executable, close } = process.argv.includes('--installed') ? installedApp() : {
+    const { executable, close } = process.argv.includes('--msix') ? msixApp() : process.argv.includes('--installed') ? installedApp() : {
         executable: process.platform === 'darwin'
             ? `${root}/dist/${name}.app/Contents/MacOS/${name}`
             : `${root}/dist/${name}-${process.platform}-${process.arch}/${name}${process.platform === 'win32' ? '.exe' : ''}`,
         close: () => {},
     };
-    if (!existsSync(executable)) missing(executable);
+    // An MSIX package's alias is a reparse point that only Windows' process creation follows: its launch tells.
+    if (!process.argv.includes('--msix') && !existsSync(executable)) missing(executable);
     // The links, as Windows and Linux hand an app one, among the launch's own arguments and its folder, which is not the
     // one it is launched again from: the page asks the app for its own link and for the arguments, and the probe for its
     // link.
@@ -454,8 +460,15 @@ function installedApp() {
     return { executable: `/usr/bin/${name}`, close: () => {} };
 }
 
+// The alias of an MSIX package's app in the user's WindowsApps folder, through which Windows starts the package's
+// executable with the package's identity.
+function msixApp() {
+    return { executable: join(process.env.LOCALAPPDATA, 'Microsoft', 'WindowsApps', `${name}.exe`), close: () => {} };
+}
+
 // A desktop app's page asks app.relaunch() once its summary is out: the app leaves with 0, and the one it opens anew,
-// which is no child of the run's and which the run ends, asks for an update first.
+// which is no child of the run's and which the run ends, asks for an update first; one from its MSIX package, which asks
+// for none, shows among Windows' processes.
 const relaunch = { isAsked: false, hasLeft: false, hasOpened: false };
 function awaitRelaunch() {
     if (relaunch.isAsked) return;
@@ -465,6 +478,16 @@ function awaitRelaunch() {
 
 function checkRelaunch() {
     if (relaunch.hasLeft && relaunch.hasOpened) finish();
+}
+
+function watchRelaunch() {
+    const poll = setInterval(() => {
+        const listed = spawnSync('tasklist', ['/FI', `IMAGENAME eq ${name}.exe`, '/NH', '/FO', 'CSV'], { encoding: 'utf8' }).stdout ?? '';
+        if (!listed.includes(`"${name}.exe"`)) return;
+        clearInterval(poll);
+        relaunch.hasOpened = true;
+        checkRelaunch();
+    }, RELAUNCH_POLL_MS);
 }
 
 // The update app.updater finds, which src/main.js installs twice: a newer version whose file its signature covers, which
@@ -795,6 +818,8 @@ function finish(problem) {
         ?? (summary ? extensionsProblem() : undefined)
         ?? (isLaunchedAgain && !hasLeft ? 'the app launched again had not left when the suite finished' : undefined)
         ?? (signer && summary && !out.includes(`is not signed by ${signer}`) ? `the updater did not hold the update to the app's signer, ${signer}` : undefined)
+        ?? (summary && process.argv.includes('--msix') !== out.includes(PACKAGED)
+            ? `the app ${process.argv.includes('--msix') ? 'did not hear' : 'heard'} that it runs from its MSIX package` : undefined)
         ?? (trayHost && summary && !(removed >= 0 && removed < summary.index) ? "the tray kept the app's icon after tray.remove()" : undefined);
     if (failure || !summary) {
         console.error(`FAIL: ${failure ?? 'the app failed the conformance suite'}:\n${out}`);
@@ -844,5 +869,6 @@ app.on('exit', (code) => setTimeout(() => {
     }
     if (code !== 0) finish(`the app exited with ${code} after app.relaunch(), not 0`);
     relaunch.hasLeft = true;
+    if (process.argv.includes('--msix')) watchRelaunch();
     checkRelaunch();
 }, EXIT_SETTLE_MS));

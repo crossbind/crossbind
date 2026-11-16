@@ -23,15 +23,15 @@ nothing forces it to disk.
 
 The Store's policy 10.2.9 asks for "a standalone installer", "not a downloader stub/web installer that downloads bits
 when run" (https://learn.microsoft.com/en-us/windows/apps/publish/store-policies). On a system without the WebView2
-Runtime, the `nsis` setup downloads Microsoft's bootstrapper, so the workflow in `docs/api/app.md`'s Microsoft Store
-section would be refused. The way out chosen on 2026-11-07 is a `microsoft-store` publisher that sends an MSIX
-package, after a prototype.
+Runtime, the `nsis` setup downloads Microsoft's bootstrapper, so the Store refuses it. The way out chosen on 2026-11-07
+is an MSIX package, which downloads nothing: the `msix` installer makes one with the Store's identity, as
+`docs/api/app.md`'s Microsoft Store section tells, which Windows installs and runs (the conformance workflow's
+`app-windows-msix`), but which the Store has not certified yet.
 
 - Seen: 2026-11-07
 - Check: `grep -c URLDownloadToFileW extensions/nsis/installer.nsi` prints 1 or more.
-- Remove when the Store takes a crossbind app, through the `microsoft-store` publisher or a setup with no download;
-  then drop the warning at the top of `docs/api/app.md`'s Microsoft Store section and its copy in
-  `landing/src/guide/pages/winget-microsoft-store.js`.
+- Remove when the Store certifies a crossbind app's MSIX package; then drop the setup program's sentence at the end of
+  `docs/api/app.md`'s Microsoft Store section and its copy in `landing/src/guide/pages/winget-microsoft-store.js`.
 
 ## android-app's build tools carry a Guava with CVE-2026-102554
 
