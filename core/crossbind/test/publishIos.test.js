@@ -34,8 +34,9 @@ vi.mock('../src/actions/xcodebuild.js', () => ({
 }));
 // App Store Connect's API, which the steps of a submission to App Review go through as `review` says.
 const review = {};
-vi.mock('../../../extensions/app-store/src/appStoreApi.js', () => ({ appStoreCaller: (key) => ({ key }) }));
-vi.mock('../../../extensions/app-store/src/appStoreRelease.js', () => ({
+vi.mock('../../store-kit/app-store/appStoreApi.js', () => ({ appStoreCaller: (key) => ({ key }) }));
+vi.mock('../../store-kit/app-store/appStoreRelease.js', async (importOriginal) => ({
+    ...await importOriginal(),
     appStoreApp: async (call, bundleId) => {
         review.steps.push(['app', call.key.keyId, bundleId]);
         return 'A1';

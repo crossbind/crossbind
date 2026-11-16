@@ -15,7 +15,8 @@ const LISTING = `store/app-store/en-US/
 ├── marketing_url.txt
 └── screenshots/
     ├── APP_IPHONE_67/          the 6.9-inch and 6.7-inch iPhone's: 01.png, 02.png, at most 10
-    └── APP_IPAD_PRO_3GEN_129/  the 13-inch iPad's`;
+    ├── APP_IPAD_PRO_3GEN_129/  the 13-inch iPad's
+    └── APP_DESKTOP/            the Mac's, which the macOS version takes alone`;
 
 const TESTFLIGHT = `name: Publish to TestFlight
 on: workflow_dispatch
@@ -137,11 +138,21 @@ export default {
         },
         {
             type: 'p',
-            text: "Each folder under `screenshots/` is named as App Store Connect's API names the display type, and holds up to 10 .png, .jpg or .jpeg files, in the order of their names: 01.png, 02.png and on to 10.png. Besides `APP_IPHONE_67` and `APP_IPAD_PRO_3GEN_129`, the types are `APP_IPHONE_65`, `APP_IPHONE_61`, `APP_IPHONE_58`, `APP_IPHONE_55`, `APP_IPHONE_47`, `APP_IPHONE_40`, `APP_IPHONE_35`, `APP_IPAD_PRO_3GEN_11`, `APP_IPAD_PRO_129`, `APP_IPAD_105` and `APP_IPAD_97`. A type's screenshots go up anew where App Store Connect shows others, in another order or unprocessed, and a type the folder has none of stays as it is. A file that holds no PNG or JPEG image, such as an empty one or a Git LFS pointer, stops the publish before the build.",
+            text: "Each folder under `screenshots/` is named as App Store Connect's API names the display type, and holds up to 10 .png, .jpg or .jpeg files, in the order of their names: 01.png, 02.png and on to 10.png. Besides `APP_IPHONE_67` and `APP_IPAD_PRO_3GEN_129`, the types are `APP_IPHONE_65`, `APP_IPHONE_61`, `APP_IPHONE_58`, `APP_IPHONE_55`, `APP_IPHONE_47`, `APP_IPHONE_40`, `APP_IPHONE_35`, `APP_IPAD_PRO_3GEN_11`, `APP_IPAD_PRO_129`, `APP_IPAD_105` and `APP_IPAD_97`, and `APP_DESKTOP` for the Mac, 16:10 at 1280 × 800 to 2880 × 1800, which goes to the macOS version alone. A type's screenshots go up anew where App Store Connect shows others, in another order or unprocessed, and a type the folder has none of stays as it is. A file that holds no PNG or JPEG image, such as an empty one or a Git LFS pointer, stops the publish before the build.",
         },
         {
             type: 'p',
             text: "So does a screenshot of a size its display type takes none of, portrait or turned, as `APP_IPHONE_67` takes 1320 × 2868 and `APP_IPAD_PRO_3GEN_129` 2064 × 2752, or one with transparency. App Store Connect takes 13-inch iPad screenshots of every app that runs on iPads, as crossbind's do. Beside the locales, `copyright.txt`, `primary_category.txt` and `secondary_category.txt` (as `UTILITIES`), `age_rating.json` with the answers by the API's names, and `review_information/` with App Review's contact go with `--submit` where App Store Connect's differ.",
+        },
+
+        { type: 'h2', id: 'mac-app-store', text: 'The Mac App Store' },
+        {
+            type: 'p',
+            text: `\`crossbind app publish mac-app-store\` sends the macOS app into the same record on App Store Connect, as a universal purchase, once its macOS platform is added there with the + beside the platform in the sidebar. It builds the app in the App Sandbox ([app.md](${REFERENCE}#the-app-sandbox)), without its updater and for macOS 13 or later, puts it in an archive as Xcode makes one, and has Xcode export it to App Store Connect, as the iOS app goes: Xcode's account or an Admin key signs the app and its installer package in the cloud, so no certificate is made by hand. TestFlight hands it to Mac testers, and \`--submit\` hands it to App Review with the listing's \`APP_DESKTOP\` screenshots; \`crossbind app store mac-app-store\` names what is left.`,
+        },
+        {
+            type: 'p',
+            text: `The [mac-app-store](${EXTENSIONS_URL}mac-app-store/) extension is that publisher, and [app.md](${REFERENCE}#mac-app-store) the reference behind it.`,
         },
 
         { type: 'h2', id: 'ci', text: 'From CI' },

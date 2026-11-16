@@ -2,8 +2,10 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
 import { uploadParts } from './appStoreApi.js';
-import { APP_STORE_CONNECT } from './appStoreConnect.js';
 import { APP_STORE_LISTING } from './appStoreListing.js';
+
+// App Store Connect's page of the team's apps.
+export const APP_STORE_CONNECT = 'https://appstoreconnect.apple.com/apps';
 
 // How often a publish asks App Store Connect about a build it processes, and how long it waits for it at most; then
 // how often it asks whether a version is ready for review, and how many times.
@@ -36,10 +38,10 @@ export async function appStoreApp(call, bundleId) {
     return app.id;
 }
 
-// The app's version of a number on App Store Connect, or null without one; one App Store Connect takes no other build
-// in, as in review or out, stops the publish.
-async function versionOf(call, appId, versionString) {
-    const { data: [version = null] } = await call('GET', query(`/apps/${appId}/appStoreVersions`, { 'filter[platform]': 'IOS', 'filter[versionString]': versionString }));
+// The app's version of a number on App Store Connect, on a platform, IOS or MAC_OS, or null without one; one App Store
+// Connect takes no other build in, as in review or out, stops the publish.
+async function versionOf(call, appId, versionString, platform) {
+    const { data: [version = null] } = await call('GET', query(`/apps/${appId}/appStoreVersions`, { 'filter[platform]': platform, 'filter[versionString]': versionString }));
     const state = version?.attributes.appVersionState;
     if (state === 'READY_FOR_REVIEW') throw new Error(PREPARED_SUBMISSION);
     if (version && !EDITABLE.includes(state)) {
@@ -49,8 +51,8 @@ async function versionOf(call, appId, versionString) {
 }
 
 // The review submission App Store Connect prepares for the app, with the items in it it has not removed, or null.
-async function preparedSubmission(call, appId) {
-    const { data: [submission = null], included = [] } = await call('GET', query(`/apps/${appId}/reviewSubmissions`, { 'filter[platform]': 'IOS', 'filter[state]': 'READY_FOR_REVIEW', include: 'items' }));
+async function preparedSubmission(call, appId, platform) {
+    const { data: [submission = null], included = [] } = await call('GET', query(`/apps/${appId}/reviewSubmissions`, { 'filter[platform]': platform, 'filter[state]': 'READY_FOR_REVIEW', include: 'items' }));
     if (!submission) return null;
     const items = (submission.relationships?.items?.data ?? [])
         .map(({ id }) => included.find((item) => item.type === 'reviewSubmissionItems' && item.id === id))
@@ -60,39 +62,41 @@ async function preparedSubmission(call, appId) {
 
 // Stops a publish, before its build, that App Store Connect would not review: one of a version it takes no other build
 // in, while App Review has another submission of the app, or where it prepares one with items in it.
-export async function assertReviewable(call, appId, versionString) {
-    await versionOf(call, appId, versionString);
-    const { data: [submission] } = await call('GET', query(`/apps/${appId}/reviewSubmissions`, { 'filter[platform]': 'IOS', 'filter[state]': IN_REVIEW.join(',') }));
+export async function assertReviewable(call, appId, versionString, platform = 'IOS') {
+    await versionOf(call, appId, versionString, platform);
+    const { data: [submission] } = await call('GET', query(`/apps/${appId}/reviewSubmissions`, { 'filter[platform]': platform, 'filter[state]': IN_REVIEW.join(',') }));
     if (submission?.attributes.state === 'UNRESOLVED_ISSUES') {
         throw new Error('crossbind: App Review answered the app\'s last submission with issues, which App Store Connect resolves: publish without --submit, pick the new build there and resubmit, or cancel that submission first.');
     }
     if (submission) {
         throw new Error(`crossbind: App Review has the app's submission as ${submission.attributes.state}, and takes one at a time: let it finish, or cancel it in App Store Connect.`);
     }
-    if ((await preparedSubmission(call, appId))?.items.length > 0) throw new Error(PREPARED_SUBMISSION);
+    if ((await preparedSubmission(call, appId, platform))?.items.length > 0) throw new Error(PREPARED_SUBMISSION);
 }
 
 // The newest build App Store Connect has of the version, or of its number where the build has one already.
-const newestQuery = (appId, versionString, buildNumber) => query('/builds', {
+const newestQuery = (appId, versionString, buildNumber, platform) => query('/builds', {
     'filter[app]': appId,
     'filter[preReleaseVersion.version]': versionString,
-    'filter[preReleaseVersion.platform]': 'IOS',
+    'filter[preReleaseVersion.platform]': platform,
     ...(buildNumber === null ? {} : { 'filter[version]': String(buildNumber) }),
     sort: '-uploadedDate',
     limit: '1',
 });
 
 // The newest build App Store Connect has of the version, which tells the upload's own from those before it.
-export async function newestBuild(call, appId, versionString) {
-    const { data: [build] } = await call('GET', newestQuery(appId, versionString, null));
+export async function newestBuild(call, appId, versionString, platform = 'IOS') {
+    const { data: [build] } = await call('GET', newestQuery(appId, versionString, null, platform));
     return build?.id ?? null;
 }
 
 // The upload's build once App Store Connect has processed it: the newest of the version, after the one it had before.
-async function processedBuild(call, { appId, versionString, before, buildNumber }) {
+async function processedBuild(call, {
+    appId, versionString, before, buildNumber, platform,
+}) {
     console.log('crossbind: waiting for App Store Connect to process the build, usually 5 to 30 minutes.');
     for (let waited = 0; ; waited += BUILD_POLL_SECONDS) {
-        const { data: [build] } = await call('GET', newestQuery(appId, versionString, buildNumber));
+        const { data: [build] } = await call('GET', newestQuery(appId, versionString, buildNumber, platform));
         const state = build && build.id !== before ? build.attributes.processingState : null;
         if (state === 'VALID') return build;
         if (state === 'FAILED' || state === 'INVALID') {
@@ -107,15 +111,15 @@ async function processedBuild(call, { appId, versionString, before, buildNumber 
 }
 
 // The app's version to submit: its own, the one App Store Connect prepares under another number, renamed, or a new one.
-async function openVersion(call, appId, versionString) {
-    const own = await versionOf(call, appId, versionString);
+async function openVersion(call, appId, versionString, platform) {
+    const own = await versionOf(call, appId, versionString, platform);
     if (own) return own;
-    const { data: [prepared] } = await call('GET', query(`/apps/${appId}/appStoreVersions`, { 'filter[platform]': 'IOS', 'filter[appVersionState]': EDITABLE.join(',') }));
+    const { data: [prepared] } = await call('GET', query(`/apps/${appId}/appStoreVersions`, { 'filter[platform]': platform, 'filter[appVersionState]': EDITABLE.join(',') }));
     if (prepared) {
         console.log(`crossbind: App Store Connect prepares ${prepared.attributes.versionString}, which becomes ${versionString}.`);
         return (await call('PATCH', `/appStoreVersions/${prepared.id}`, { data: { type: 'appStoreVersions', id: prepared.id, attributes: { versionString } } })).data;
     }
-    const version = { type: 'appStoreVersions', attributes: { platform: 'IOS', versionString }, relationships: { app: to('apps', appId) } };
+    const version = { type: 'appStoreVersions', attributes: { platform, versionString }, relationships: { app: to('apps', appId) } };
     return (await call('POST', '/appStoreVersions', { data: version })).data;
 }
 
@@ -311,10 +315,10 @@ async function phaseRelease(call, versionId) {
 
 // Hands the version to App Review in the app's submission App Store Connect prepares, or a new one, once the version
 // is ready for review; one prepared with items in it stops the publish, which knows none of them.
-async function submitForReview(call, appId, versionId) {
-    const prepared = await preparedSubmission(call, appId);
+async function submitForReview(call, appId, versionId, platform) {
+    const prepared = await preparedSubmission(call, appId, platform);
     if (prepared?.items.length > 0) throw new Error(PREPARED_SUBMISSION);
-    const submission = prepared?.submission ?? (await call('POST', '/reviewSubmissions', { data: { type: 'reviewSubmissions', attributes: { platform: 'IOS' }, relationships: { app: to('apps', appId) } } })).data;
+    const submission = prepared?.submission ?? (await call('POST', '/reviewSubmissions', { data: { type: 'reviewSubmissions', attributes: { platform }, relationships: { app: to('apps', appId) } } })).data;
     const item = { type: 'reviewSubmissionItems', relationships: { reviewSubmission: to('reviewSubmissions', submission.id), appStoreVersion: to('appStoreVersions', versionId) } };
     await call('POST', '/reviewSubmissionItems', { data: item });
     for (let look = 1; ; look += 1) {
@@ -325,20 +329,20 @@ async function submitForReview(call, appId, versionId) {
     await call('PATCH', `/reviewSubmissions/${submission.id}`, { data: { type: 'reviewSubmissions', id: submission.id, attributes: { submitted: true } } });
 }
 
-// Hands the upload's build to App Review as the app's version, with the project's listing and settings, once App Store
-// Connect has processed it, to go out in phases over 7 days once released where isPhased says so. Gives the build's
-// number, the locales whose listing changed and the settings that did.
+// Hands the upload's build to App Review as the app's version on its platform, IOS or MAC_OS, with the project's listing
+// and settings, once App Store Connect has processed it, to go out in phases over 7 days once released where isPhased
+// says so. Gives the build's number, the locales whose listing changed and the settings that did.
 export async function submitRelease(call, {
-    appId, versionString, before, buildNumber = null, listings, settings, isPhased,
+    appId, versionString, before, buildNumber = null, listings, settings, isPhased, platform = 'IOS',
 }) {
-    const version = await openVersion(call, appId, versionString);
+    const version = await openVersion(call, appId, versionString, platform);
     const listed = await updateListing(call, appId, version, listings);
     const settled = await updateSettings(call, appId, version, settings);
     if (isPhased) await phaseRelease(call, version.id);
     const build = await processedBuild(call, {
-        appId, versionString, before, buildNumber,
+        appId, versionString, before, buildNumber, platform,
     });
     await call('PATCH', `/appStoreVersions/${version.id}/relationships/build`, to('builds', build.id));
-    await submitForReview(call, appId, version.id);
+    await submitForReview(call, appId, version.id, platform);
     return { build: build.attributes.version, listed, settled };
 }

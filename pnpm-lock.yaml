@@ -110,6 +110,9 @@ importers:
       '@crossbind/extension-links':
         specifier: workspace:^
         version: link:../../extensions/links
+      '@crossbind/extension-mac-app-store':
+        specifier: workspace:^
+        version: link:../../extensions/mac-app-store
       '@crossbind/extension-menu':
         specifier: workspace:^
         version: link:../../extensions/menu
@@ -1612,6 +1615,12 @@ importers:
       crossbind:
         specifier: workspace:^
         version: link:../../core/crossbind
+
+  extensions/mac-app-store:
+    dependencies:
+      '@crossbind/core-store-kit':
+        specifier: workspace:^
+        version: link:../../core/store-kit
 
   extensions/menu:
     devDependencies:

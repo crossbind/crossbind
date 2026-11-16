@@ -133,3 +133,14 @@ export async function askAppId(api, store, term) {
         api.log(`That is no ${term} both stores take, which is dot-separated parts of letters and digits, each starting with a letter.`);
     }
 }
+
+// App Store Connect's API, the app's versions and their review, and the listing in store/app-store, which the iOS app's
+// publisher and the Mac App Store's share.
+export { appStoreCaller, appStoreToken, uploadParts } from './app-store/appStoreApi.js';
+export {
+    APP_STORE_LISTING, appStoreListingProblems, listingOf, readAppStoreListing, readAppStoreSettings,
+} from './app-store/appStoreListing.js';
+export {
+    APP_STORE_CONNECT, appStoreApp, assertReviewable, newestBuild, submitRelease,
+} from './app-store/appStoreRelease.js';
+export { untilDone, uploadArchive } from './app-store/appStoreExport.js';

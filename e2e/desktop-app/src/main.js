@@ -242,6 +242,13 @@ function isSameFolder(folder, cwd) {
     return cwd.includes('\\') ? folder?.toLowerCase() === cwd.toLowerCase() : folder === cwd;
 }
 
+// Whether a launch's arguments end in --cwd= and the folder e2e/run.mjs launched it in, which is its cwd, but for a
+// sandboxed app's: macOS starts one in its container's Data folder, whatever folder launched it.
+async function isLaunchedIn(args, cwd) {
+    if (await invoke('probe.sandboxed')) return /\/Library\/Containers\/[^/]+\/Data$/.test(cwd) && args.at(-1).startsWith('--cwd=');
+    return isSameFolder(args.at(-1), `--cwd=${cwd}`);
+}
+
 // The paths of files of these names in a folder, as the host makes them absolute, and whether the files are those.
 const inFolder = (cwd, names) => names.map((file) => `${cwd}${cwd.includes('\\') ? '\\' : '/'}${file}`);
 const isSameFiles = (paths, cwd, names) => paths.length === names.length && inFolder(cwd, names).every((path, index) => isSameFolder(paths[index], path));
@@ -260,10 +267,14 @@ async function checkLaunch(isDesktop) {
         return;
     }
     const { args, cwd } = launch;
-    if (JSON.stringify(args.slice(0, -1)) !== JSON.stringify(FIRST_ARGS) || !isSameFolder(args.at(-1), `--cwd=${cwd}`)) {
+    if (JSON.stringify(args.slice(0, -1)) !== JSON.stringify(FIRST_ARGS) || !(await isLaunchedIn(args, cwd))) {
         throw new Error(`app.launchArgs() is ${JSON.stringify(launch)}`);
     }
-    if (!isSameFiles(files, cwd, [...FIRST_FILES.page, FIRST_FILES.url])) throw new Error(`app.launchFiles() is ${JSON.stringify(files)}`);
+    // The app makes a relative path absolute against its cwd; a file: link names its folder itself.
+    const launchedIn = args.at(-1).replace(/^--cwd=/, '');
+    if (!isSameFiles(files.slice(0, -1), cwd, FIRST_FILES.page) || !isSameFiles(files.slice(-1), launchedIn, [FIRST_FILES.url])) {
+        throw new Error(`app.launchFiles() is ${JSON.stringify(files)}`);
+    }
     if (!isSameFiles(probed, cwd, [FIRST_FILES.probe])) throw new Error(`the probe was launched with the files ${JSON.stringify(probed)}`);
 }
 
@@ -331,7 +342,7 @@ async function checkSecondInstance() {
     const launched = Promise.all([nextEvent('second-instance'), linksUntilProbed(), nextEvent('open-files')]);
     console.log('LAUNCH AGAIN');
     const [{ args, cwd }, { links, probed }, { paths }] = await launched;
-    if (JSON.stringify(args.slice(0, -1)) !== JSON.stringify(LAUNCH_ARGS.slice(0, -1)) || !isSameFolder(args.at(-1), `--cwd=${cwd}`)) {
+    if (JSON.stringify(args.slice(0, -1)) !== JSON.stringify(LAUNCH_ARGS.slice(0, -1)) || !(await isLaunchedIn(args, cwd))) {
         throw new Error(`the app launched again handed over ${JSON.stringify({ args, cwd })}`);
     }
     if (!isSameFiles(paths, cwd, [AGAIN_FILE])) throw new Error(`the file the app was launched again with reached the page as ${JSON.stringify(paths)}`);
@@ -1047,9 +1058,11 @@ else initNative().then(async (m) => {
         // A link before a .. would lead the system out of the folder the path reads as.
         const dotted = await shell.trash(`${folders.data}${separator}crossbind-missing${separator}..${separator}${TRASHED_FILE}`).then(() => 'trashed', (error) => error.message);
         if (!dotted.includes('without . or ..')) throw new Error(`a path with .. in it was not refused the trash: ${dotted}`);
-        // e2e/run.mjs leaves a file in a desktop app's data folder, which goes to the trash and is gone from there.
+        // e2e/run.mjs leaves a file in a desktop app's data folder, or the app's own code in a sandboxed app's, which goes
+        // to the trash and is gone from there.
         if (isDesktop && !import.meta.env.DEV) {
             const file = `${folders.data}${separator}${TRASHED_FILE}`;
+            if (await invoke('probe.sandboxed')) await invoke('probe.leaveFile', { path: file });
             const trashed = await shell.trash(file).then(() => 'trashed', (error) => error.message);
             if (trashed !== 'trashed') throw new Error(`a file in the app's data folder did not go to the trash: ${trashed}`);
             const again = await shell.trash(file).then(() => 'trashed', (error) => error.message);

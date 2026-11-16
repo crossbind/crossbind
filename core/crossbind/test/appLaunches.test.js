@@ -51,8 +51,8 @@ describe("an Apple app's document types", () => {
 
     test("name a macOS app's types by their extensions, unless their content types name them", () => {
         expect(macDocumentTypes([geojson, csv])).toEqual([
-            { CFBundleTypeName: 'GeoJSON', CFBundleTypeRole: 'Editor', CFBundleTypeExtensions: ['geojson', 'geo'], CFBundleTypeMIMETypes: ['application/geo+json'] },
-            { CFBundleTypeName: 'CSV', CFBundleTypeRole: 'Viewer', LSItemContentTypes: ['public.comma-separated-values-text'] },
+            { CFBundleTypeName: 'GeoJSON', CFBundleTypeRole: 'Editor', LSHandlerRank: 'Default', CFBundleTypeExtensions: ['geojson', 'geo'], CFBundleTypeMIMETypes: ['application/geo+json'] },
+            { CFBundleTypeName: 'CSV', CFBundleTypeRole: 'Viewer', LSHandlerRank: 'Default', LSItemContentTypes: ['public.comma-separated-values-text'] },
         ]);
     });
 

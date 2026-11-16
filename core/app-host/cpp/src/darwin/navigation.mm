@@ -94,10 +94,13 @@ void trustCertificate(NSString *host, NSData *leaf) {
 @public
     std::string url;
     std::shared_ptr<app::DownloadEvents> events;
-    // Where it goes, and the file it arrives in beside it till it is whole; on iOS, after ask(), the file alone, in a
-    // folder of its own among the app's temporary files, which the export sheet moves.
+    // Where it goes, and the file it arrives in till it is whole; on iOS, after ask(), the file alone, in a folder of its
+    // own among the app's temporary files, which the export sheet moves.
     NSURL *target;
     NSURL *arrival;
+    // The folder the system made for the arrival on the target's volume, which goes once the download ends; none where
+    // the arrival is beside the target.
+    NSURL *arrivalFolder;
     // Whether ask() saves it, so the app's user hears of a failure.
     BOOL isAsked;
     NSTimer *timer;
@@ -180,15 +183,29 @@ API_AVAILABLE(macos(11.3), ios(14.5))
 // A download that saves nothing: WebKit cancels it, and its owner hears why.
 - (void)drop:(WKDownload *)download record:(CBDownload *)record end:(const DownloadEnd &)end done:(void (^)(NSURL *))done {
     [running removeObjectForKey:download];
+    if (record->arrivalFolder) [NSFileManager.defaultManager removeItemAtURL:record->arrivalFolder error:nil];
     done(nil);
     app::tellFinish(*record->events, record->url, end);
 }
 
-// The file arrives beside where it goes and takes its place once whole, so a download that fails leaves the file it
-// was to replace as it was.
+// The file arrives in a folder the system makes on the target's volume for a file that replaces another, which a
+// sandboxed app writes where the target's folder is not its own, else beside the target, and takes the target's place
+// once whole, so a download that fails leaves the file it was to replace as it was.
 - (void)start:(WKDownload *)download record:(CBDownload *)record at:(NSURL *)target done:(void (^)(NSURL *))done {
+    // One that failed while its user picked where has ended already.
+    if ([running objectForKey:download] != record) {
+        done(nil);
+        return;
+    }
+    record->arrivalFolder = [NSFileManager.defaultManager URLForDirectory:NSItemReplacementDirectory
+                                                                 inDomain:NSUserDomainMask
+                                                        appropriateForURL:target
+                                                                   create:YES
+                                                                    error:nil];
     NSString *part = [NSString stringWithFormat:@".%@.%@.download", target.lastPathComponent, NSUUID.UUID.UUIDString];
-    [self start:download record:record target:target arrival:[target.URLByDeletingLastPathComponent URLByAppendingPathComponent:part] done:done];
+    NSURL *arrival = record->arrivalFolder ? [record->arrivalFolder URLByAppendingPathComponent:target.lastPathComponent isDirectory:NO]
+                                           : [target.URLByDeletingLastPathComponent URLByAppendingPathComponent:part];
+    [self start:download record:record target:target arrival:arrival done:done];
 }
 
 - (void)start:(WKDownload *)download record:(CBDownload *)record target:(NSURL *)target arrival:(NSURL *)arrival done:(void (^)(NSURL *))done {
@@ -241,6 +258,7 @@ API_AVAILABLE(macos(11.3), ios(14.5))
         [self failed:record error:error window:download.webView.window];
         return;
     }
+    if (record->arrivalFolder) [files removeItemAtURL:record->arrivalFolder error:nil];
 #if !TARGET_OS_IPHONE
     // Gatekeeper checks it when it is opened, as it checks what a browser saves.
     [record->target setResourceValue:@{(__bridge NSString *)kLSQuarantineTypeKey : (__bridge NSString *)kLSQuarantineTypeWebDownload}
@@ -260,7 +278,9 @@ API_AVAILABLE(macos(11.3), ios(14.5))
 
 // One that failed before it had where to go, as while its user picked where, left nothing, and its owner alone hears.
 - (void)failed:(CBDownload *)record error:(NSError *)error window:(id)window {
-    if (record->arrival) {
+    if (record->arrivalFolder) {
+        [NSFileManager.defaultManager removeItemAtURL:record->arrivalFolder error:nil];
+    } else if (record->arrival) {
         [NSFileManager.defaultManager removeItemAtURL:record->target ? record->arrival : record->arrival.URLByDeletingLastPathComponent error:nil];
     }
     const BOOL isCancelled = [error.domain isEqualToString:NSURLErrorDomain] && error.code == NSURLErrorCancelled;

@@ -26,6 +26,7 @@ export const EXTENSION_GROUPS = [
         label: 'Publishing',
         items: [
             row('app-store', 'Uploads an iOS app to App Store Connect, for TestFlight and App Review'),
+            row('mac-app-store', 'Sends a sandboxed macOS app to App Store Connect, for TestFlight and App Review'),
             row('google-play', 'Sends an Android bundle to a Google Play track, as a draft or a staged rollout'),
             row('microsoft-store', "Sends a Windows app's MSIX packages and listing to the Microsoft Store through Partner Center's submission API"),
             row('github', "Puts a desktop app's installers and update on a GitHub release"),

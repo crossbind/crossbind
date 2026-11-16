@@ -1,14 +1,10 @@
-import { appStoreCaller } from './src/appStoreApi.js';
+import {
+    APP_STORE_LISTING, appStoreApp, appStoreCaller, appStoreListingProblems, askAppId, assertReviewable, listingOf, newestBuild,
+    readAppStoreListing, readAppStoreSettings, submitRelease, untilDone,
+} from '@crossbind/core-store-kit';
 import {
     addDsyms, archiveIosApp, archivedBinary, archivedPrivacy, archivedTargets, uploadIosArchive,
 } from './src/appStoreConnect.js';
-import {
-    APP_STORE_LISTING, appStoreListingProblems, readAppStoreListing, readAppStoreSettings,
-} from './src/appStoreListing.js';
-import {
-    appStoreApp, assertReviewable, newestBuild, submitRelease,
-} from './src/appStoreRelease.js';
-import { askAppId } from '@crossbind/core-store-kit';
 import { askEncryption, askIcon, askPrivacy } from './src/appSetup.js';
 import { appStoreGuide } from './src/appStoreGuide.js';
 
@@ -61,26 +57,6 @@ async function askTeam(api) {
     api.settings.set({ XCODE_DEVELOPMENT_TEAM: id });
     if (api.app.team !== id) throw new Error(`crossbind: ~/.crossbind.json did not take XCODE_DEVELOPMENT_TEAM: set app.team: '${id}' in crossbind.config.js.`);
     api.log(`crossbind: ~/.crossbind.json keeps ${id} as XCODE_DEVELOPMENT_TEAM.`);
-}
-
-// A step that failed for what only the user can mend, in Xcode or on Apple's sites, runs again once they press Enter,
-// after crossbind opened the page that mends it where it knows one. Any other failure, or one without a terminal, stops
-// the publish.
-async function untilDone(api, step) {
-    for (;;) {
-        try {
-            return step();
-        } catch (error) {
-            if (!api.isGuided || !error.isMendable) throw error;
-            api.log(error.message);
-            if (error.page) {
-                api.log(`crossbind: opening ${error.page}.`);
-                api.openUrl(error.page);
-            }
-            await api.ask('Press Enter once that is done to try again, or Ctrl-C to stop. ');
-            api.log('crossbind: trying again, which can take a few minutes.');
-        }
-    }
 }
 
 // What a publish with --submit hands to App Review through: the API, the app App Store Connect has, and the listing,
@@ -157,7 +133,7 @@ export default function appStore() {
                 if (phased && !shouldSubmit) throw new Error('crossbind: --phased releases the version App Review approves, so it takes --submit.');
                 if (process.platform !== 'darwin') throw new Error('crossbind: iOS apps build and go to App Store Connect on macOS, with Xcode.');
                 const key = api.apple.key();
-                const listings = shouldSubmit ? readAppStoreListing(api.project.root) : [];
+                const listings = shouldSubmit ? listingOf(readAppStoreListing(api.project.root), 'IOS') : [];
                 const settings = shouldSubmit ? readAppStoreSettings(api.project.root) : {};
                 const missing = [...appStoreListingProblems(api.project.root, listings), ...await missingOf(api, { key, shouldSubmit })];
                 if (missing.length > 0) return { missing };

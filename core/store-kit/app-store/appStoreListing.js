@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import {
     assertImage, imageOf, isFolder, languageFolders, readSetting, readText, sizeOf, takenNames,
-} from '@crossbind/core-store-kit';
+} from '../index.js';
 
 // The app's settings beside the locales' folders, by fastlane deliver's names, which a publish with --submit sends: the
 // version's copyright, the app's categories, its age rating's answers and App Review's contact.
@@ -46,11 +46,12 @@ const TEXTS = {
     'support_url.txt': { part: 'version', field: 'supportUrl', most: Infinity },
     'marketing_url.txt': { part: 'version', field: 'marketingUrl', most: Infinity, canBeEmpty: true },
 };
-// The display types of an iOS app's screenshots, as App Store Connect names them, a folder each, and the most it takes
-// of one type.
+// The display types of an iOS app's screenshots and a Mac app's, as App Store Connect names them, a folder each, and the
+// most it takes of one type.
+const DESKTOP = 'APP_DESKTOP';
 const DISPLAY_TYPES = [
     'APP_IPHONE_67', 'APP_IPHONE_65', 'APP_IPHONE_61', 'APP_IPHONE_58', 'APP_IPHONE_55', 'APP_IPHONE_47', 'APP_IPHONE_40', 'APP_IPHONE_35',
-    'APP_IPAD_PRO_3GEN_129', 'APP_IPAD_PRO_3GEN_11', 'APP_IPAD_PRO_129', 'APP_IPAD_105', 'APP_IPAD_97',
+    'APP_IPAD_PRO_3GEN_129', 'APP_IPAD_PRO_3GEN_11', 'APP_IPAD_PRO_129', 'APP_IPAD_105', 'APP_IPAD_97', DESKTOP,
 ];
 const SCREENSHOTS_MOST = 10;
 const IMAGE_FILE = /\.(png|jpe?g)$/i;
@@ -177,6 +178,24 @@ const PORTRAITS = {
     APP_IPAD_97: [[1536, 2048], [1536, 2008], [768, 1024], [768, 1004]],
 };
 const LANDSCAPES = { APP_IPHONE_40: [[1136, 600]], APP_IPHONE_35: [[960, 600]], APP_IPAD_97: [[2048, 1496], [1024, 748]] };
+// A Mac app's screenshots, which App Store Connect takes in these 16:10 sizes alone.
+const DESKTOPS = [[1280, 800], [1440, 900], [2560, 1600], [2880, 1800]];
+
+// The listing as one platform's version takes it: the Mac's screenshots for MAC_OS, the other types' for IOS.
+export const listingOf = (listings, platform) => listings.map((listing) => ({
+    ...listing,
+    screenshots: Object.fromEntries(Object.entries(listing.screenshots).filter(([type]) => (type === DESKTOP) === (platform === 'MAC_OS'))),
+}));
+
+// The sizes App Store Connect takes of a display type's screenshots, and how it says so.
+function sizesOf(type) {
+    if (type === DESKTOP) return { sizes: DESKTOPS, said: DESKTOPS.map((size) => size.join(' × ')).join(', ') };
+    const portraits = PORTRAITS[type];
+    return {
+        sizes: [...portraits, ...portraits.map(([width, height]) => [height, width]), ...(LANDSCAPES[type] ?? [])],
+        said: `${portraits.map((size) => size.join(' × ')).join(', ')}, or the same turned`,
+    };
+}
 
 // What App Store Connect would refuse of the listing's screenshots, every one at once: a size its display type takes
 // none of, and transparency, which it takes in no image.
@@ -185,11 +204,10 @@ export function appStoreListingProblems(project, listings) {
         const shown = path.relative(project, file);
         const image = imageOf(file);
         if (!image) return [`crossbind: ${shown} holds no PNG or JPEG image whose size it gives, as a cut-off file does: put the whole image there, or remove the file.`];
-        const portraits = PORTRAITS[type];
-        const sizes = [...portraits, ...portraits.map(([width, height]) => [height, width]), ...(LANDSCAPES[type] ?? [])];
+        const { sizes, said } = sizesOf(type);
         const problems = [];
         if (!sizes.some(([width, height]) => width === image.width && height === image.height)) {
-            problems.push(`crossbind: ${shown} is ${sizeOf(image)}, and App Store Connect takes ${type} screenshots of ${portraits.map((size) => size.join(' × ')).join(', ')}, or the same turned.`);
+            problems.push(`crossbind: ${shown} is ${sizeOf(image)}, and App Store Connect takes ${type} screenshots of ${said}.`);
         }
         if (image.hasAlpha) problems.push(`crossbind: ${shown} holds transparency, which App Store Connect takes in no screenshot: save it as a JPEG, or as a PNG without an alpha channel.`);
         return problems;

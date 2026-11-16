@@ -14,7 +14,7 @@ project the packages of another package manager, as [Package sources](#package-s
 crossbind's own are packages of the same kind, in its repository's `extensions/`: the host's, `activities`, `dialog`,
 `files`, `instance`, `links`, `menu`, `page-dialogs`, `page-feel`, `page-files`, `page-downloads`, `page-drops`,
 `page-location`, `page-navigation`, `page-permissions`, `power`, `shell`, `shortcuts` and `updater`; the stores, `google-play`, `app-store`,
-`microsoft-store` and `github`; and the installers, `dmg`, `deb`, `tar-gz`, `nsis`, `zip` and `msix`. An app has them without installing or listing
+`mac-app-store`, `microsoft-store` and `github`; and the installers, `dmg`, `deb`, `tar-gz`, `nsis`, `zip` and `msix`. An app has them without installing or listing
 them, as `@crossbind/core-app-host` has them as its dependencies, and an app's extension takes the place of one, or of
 one of its roles, as [The host's own extensions](#the-hosts-own-extensions) says. The package source `conan` is
 crossbind's own too, and a dependency of `crossbind` itself, so every project has it.
@@ -820,7 +820,7 @@ the path as a URL holds it: escaped where it must be, with a query of its own af
 ## Publishers
 
 An extension's `publisher` sends the app to a store: `crossbind app publish <name>` runs it, with the extension's
-name. crossbind's own `google-play`, `app-store`, `microsoft-store` and `github` are publishers of this kind, which use the same
+name. crossbind's own `google-play`, `app-store`, `mac-app-store`, `microsoft-store` and `github` are publishers of this kind, which use the same
 [`api`](#the-api) alone, and an extension `extensions` lists under one of their names, with a publisher, replaces it;
 one with an `app` alone leaves it as it is.
 
