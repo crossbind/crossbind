@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'vitest';
 import {
     appBackgroundColor, appCategory, appCopyright, appDarkBackgroundColor, appDisplayName, appEncryption, appHeader, appId, appPermissions, appPrivacy,
-    appUrlSchemes, appWindow, iosAppGroup, iosMultipleWindows, urlSchemeOwners, usageDescriptions,
+    appUrlSchemes, appWindow, iosAppGroup, iosMultipleWindows, macEntitlements, macMinimumVersion, macSandbox, urlSchemeOwners, usageDescriptions,
 } from '../src/utils/appOptions.js';
 
 const config = (app = {}, version = '1.2.3') => ({ general: { name: 'demo-app' }, app, package: { version } });
@@ -392,5 +392,54 @@ describe("an iOS app's App Group", () => {
     test('is refused of a name that is no App Group', () => {
         expect(() => iosAppGroup(config({ ios: { appGroup: 'com.example.shared' } }))).toThrow('app.ios.appGroup "com.example.shared" is no App Group');
         expect(() => iosAppGroup(config({ ios: { appGroup: 'group.' } }))).toThrow('is no App Group');
+    });
+});
+
+describe("a macOS app's entitlements", () => {
+    const microphone = { microphone: 'To record notes' };
+    const sandbox = {
+        'com.apple.security.app-sandbox': true,
+        'com.apple.security.network.client': true,
+        'com.apple.security.files.user-selected.read-write': true,
+    };
+
+    test("claim app.permissions' devices in the hardened runtime, and no App Sandbox without app.macos.sandbox", () => {
+        expect(macSandbox(config())).toBe(false);
+        expect(macEntitlements(config())).toEqual([['app.permissions', {}]]);
+        expect(macEntitlements(config({ permissions: microphone }))).toEqual([['app.permissions', { 'com.apple.security.device.audio-input': true }]]);
+    });
+
+    test('claim the App Sandbox, its connections, the picked files and its own microphone key with app.macos.sandbox', () => {
+        expect(macSandbox(config({ macos: { sandbox: true } }))).toBe(true);
+        expect(macEntitlements(config({ permissions: { ...microphone, camera: 'To scan barcodes' }, macos: { sandbox: true } }))).toEqual([
+            ['app.permissions', {
+                'com.apple.security.device.audio-input': true,
+                'com.apple.security.device.microphone': true,
+                'com.apple.security.device.camera': true,
+            }],
+            ['app.macos.sandbox', sandbox],
+        ]);
+    });
+
+    test('are refused of any other value, naming what app.macos takes', () => {
+        expect(macSandbox(config({ macos: null }))).toBe(false);
+        expect(() => macSandbox(config({ macos: true }))).toThrow('app.macos true is no object of sandbox and minimumVersion');
+        expect(() => macSandbox(config({ macos: { hardened: true } }))).toThrow('app.macos takes sandbox and minimumVersion; hardened is none of them');
+        expect(() => macSandbox(config({ macos: { sandbox: 'yes' } }))).toThrow('app.macos.sandbox "yes" is no boolean');
+    });
+});
+
+describe("a macOS app's minimum release", () => {
+    test('is the floor its code is built for, unless app.macos.minimumVersion raises it', () => {
+        expect(macMinimumVersion(config(), '11.0')).toBe('11.0');
+        expect(macMinimumVersion(config({ macos: { minimumVersion: '13.0' } }), '11.0')).toBe('13.0');
+        expect(macMinimumVersion(config({ macos: { minimumVersion: '11' } }), '11.0')).toBe('11');
+        expect(macMinimumVersion(config({ macos: { minimumVersion: '11.0.1' } }), '11.0')).toBe('11.0.1');
+    });
+
+    test('is refused below the floor, or of anything but a release', () => {
+        expect(() => macMinimumVersion(config({ macos: { minimumVersion: '10.15' } }), '11.0')).toThrow('app.macos.minimumVersion "10.15" is no macOS release from 11.0 on');
+        expect(() => macMinimumVersion(config({ macos: { minimumVersion: 13 } }), '11.0')).toThrow('app.macos.minimumVersion 13 is no macOS release');
+        expect(() => macMinimumVersion(config({ macos: { minimumVersion: '13.0-beta' } }), '11.0')).toThrow('is no macOS release');
     });
 });

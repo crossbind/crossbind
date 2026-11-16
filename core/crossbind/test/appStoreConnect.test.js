@@ -35,8 +35,9 @@ vi.mock('node:child_process', async (importOriginal) => ({ ...await importOrigin
 
 const { xcodebuild, xcodeTeams } = await import('../src/actions/xcodebuild.js');
 const { PRIVACY_CATEGORIES } = await import('../src/utils/appOptions.js');
+const { APP_STORE_CONNECT } = await import('../../store-kit/index.js');
 const {
-    APP_STORE_CONNECT, addDsyms, archiveIosApp, archivedBinary, archivedPrivacy, archivedTargets, uploadIosArchive,
+    addDsyms, archiveIosApp, archivedBinary, archivedPrivacy, archivedTargets, uploadIosArchive,
 } = await import('../../../extensions/app-store/src/appStoreConnect.js');
 
 const KEY = { key: '/keys/AuthKey_ABC123.p8', keyId: 'ABC123', issuer: 'issuer-uuid' };

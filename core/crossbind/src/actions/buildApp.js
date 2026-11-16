@@ -31,7 +31,7 @@ import { getContentHash, getFilesFingerprint } from '../utils/hash.js';
 import { xmlPlist } from '../utils/plist.js';
 import {
     androidAppId, appBackgroundColor, appCategory, appCopyright, appDarkBackgroundColor, appDisplayName, appEncryption, appFiles, appHeader, appId,
-    appPermissions, appPrivacy, appUrlSchemes, iosAppGroup, iosMultipleWindows, urlSchemeOwners, usageDescriptions,
+    appPermissions, appPrivacy, appUrlSchemes, iosAppGroup, iosMultipleWindows, macEntitlements, macMinimumVersion, urlSchemeOwners, usageDescriptions,
 } from '../utils/appOptions.js';
 import { carriedFilesOf, copyCarriedFiles } from '../utils/appFiles.js';
 import { activityTypeOwners, fileTypeOwners, linkOwners, macDocumentTypes, shortcutItemOwners } from '../utils/appLaunches.js';
@@ -228,9 +228,11 @@ const infoPlist = (name, version, hasIcon, urlSchemes, fileTypes, activityTypes)
     CFBundlePackageType: 'APPL',
     CFBundleShortVersionString: version,
     ...(urlSchemes.length > 0 ? { CFBundleURLTypes: [{ CFBundleURLName: appId(state.config), CFBundleURLSchemes: urlSchemes }] } : {}),
-    CFBundleVersion: version,
+    // The build number CI or a publish gives, as iOS takes it, else the version.
+    CFBundleVersion: String(appBuildNumber() ?? version),
+    ...(appEncryption(state.config) === null ? {} : { ITSAppUsesNonExemptEncryption: appEncryption(state.config) }),
     ...(appCategory(state.config) ? { LSApplicationCategoryType: appCategory(state.config).darwin } : {}),
-    LSMinimumSystemVersion: DARWIN_DEPLOYMENT_TARGET,
+    LSMinimumSystemVersion: macMinimumVersion(state.config, DARWIN_DEPLOYMENT_TARGET),
     NSPrincipalClass: 'NSApplication',
     NSHighResolutionCapable: true,
     // The app menu's About item shows it.
@@ -323,22 +325,15 @@ function assertUnderBase(app, target) {
     throw new Error(`crossbind: the Windows app ${app} is outside ${state.config.paths.base}, the project's base and all the ${imageRoleFor(target)} container sees. Build the app into a directory under it.`);
 }
 
-const ENTITLEMENTS = {
-    camera: 'com.apple.security.device.camera',
-    microphone: 'com.apple.security.device.audio-input',
-    location: 'com.apple.security.personal-information.location',
-};
-
 // Apple silicon runs signed code only, and a bundle's signature covers every file in it, so an app is signed once the
 // page is in: with the Developer ID the environment names, in the hardened runtime notarizing asks for, or else ad hoc,
 // which runs on the machine that built it.
 function signApp(app, target, signing) {
     const sign = signing ? ['--sign', signing.identity, '--options', 'runtime', '--timestamp'] : ['--sign', '-', '--timestamp=none'];
     run(null, ['codesign', '--force', ...sign, `${app}/Contents/Frameworks/hermesvm.framework`], null, target);
-    // The hardened runtime keeps the app from the devices of app.permissions unless its signature claims them, beside what
-    // its extensions claim.
-    const devices = Object.fromEntries(Object.keys(appPermissions(state.config)).map((name) => [ENTITLEMENTS[name], true]));
-    const claims = mergedEntitlements([['app.permissions', devices], ...extensionsOf('darwin').entitlements]);
+    // The hardened runtime keeps the app from the devices of app.permissions unless its signature claims them, and
+    // app.macos.sandbox puts it in the App Sandbox, beside what its extensions claim.
+    const claims = mergedEntitlements([...macEntitlements(state.config), ...extensionsOf('darwin').entitlements]);
     const entitlements = Object.keys(claims).length > 0 ? `${state.config.paths.build}/${path.basename(app)}.entitlements` : null;
     if (entitlements) fs.writeFileSync(entitlements, xmlPlist(claims));
     run(null, ['codesign', '--force', ...sign, ...(entitlements ? ['--entitlements', entitlements] : []), app], null, target);

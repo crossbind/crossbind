@@ -26,6 +26,7 @@
         "@crossbind/extension-google-play": "workspace:^",
         "@crossbind/extension-instance": "workspace:^",
         "@crossbind/extension-links": "workspace:^",
+        "@crossbind/extension-mac-app-store": "workspace:^",
         "@crossbind/extension-menu": "workspace:^",
         "@crossbind/extension-microsoft-store": "workspace:^",
         "@crossbind/extension-msix": "workspace:^",

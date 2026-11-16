@@ -68,8 +68,8 @@ describe('the store crossbind app publish sends an app to', () => {
 
     test("is one of the app's publishers, which the command names when it names none of them", () => {
         const publishers = builtInPublishers();
-        expect(() => publishChain(publishers, 'winget')).toThrow('crossbind: crossbind app publish takes the store it sends the app to first: app-store, github, google-play or microsoft-store, not winget.');
-        expect(() => publishChain(publishers, null)).toThrow('crossbind: crossbind app publish takes the store it sends the app to first: app-store, github, google-play or microsoft-store.');
+        expect(() => publishChain(publishers, 'winget')).toThrow('crossbind: crossbind app publish takes the store it sends the app to first: app-store, github, google-play, mac-app-store or microsoft-store, not winget.');
+        expect(() => publishChain(publishers, null)).toThrow('crossbind: crossbind app publish takes the store it sends the app to first: app-store, github, google-play, mac-app-store or microsoft-store.');
     });
 });
 
@@ -80,16 +80,19 @@ describe('the publishers an app has', () => {
             ['app-store', ['ios'], ['submit', 'phased']],
             ['github', ['macos', 'linux', 'windows'], ['draft']],
             ['google-play', ['android'], ['track', 'draft', 'rollout']],
+            ['mac-app-store', ['macos'], ['submit', 'phased']],
             ['microsoft-store', ['windows'], ['draft', 'rollout']],
         ]);
-        expect(publishers.map(({ root }) => root.split(/[\\/]/).slice(-2).join('/'))).toEqual(['extensions/app-store', 'extensions/github', 'extensions/google-play', 'extensions/microsoft-store']);
+        expect(publishers.map(({ root }) => root.split(/[\\/]/).slice(-2).join('/'))).toEqual([
+            'extensions/app-store', 'extensions/github', 'extensions/google-play', 'extensions/mac-app-store', 'extensions/microsoft-store',
+        ]);
     });
 
     test("take an app's extension of one's name with a publisher in its place, and the app's others after them", () => {
         const github = extension('github', { platform: 'macos' });
         const appOnly = checkedExtension({ name: 'google-play', app: {} }, os.tmpdir(), 'extensions[0]');
         const publishers = publishersOf([appOnly, extension('homebrew', { platform: 'macos', after: 'github' }), github]);
-        expect(names(publishers)).toEqual(['app-store', 'github', 'google-play', 'microsoft-store', 'homebrew']);
+        expect(names(publishers)).toEqual(['app-store', 'github', 'google-play', 'mac-app-store', 'microsoft-store', 'homebrew']);
         expect(publishers[1]).toBe(github);
         expect(publishers[2].publisher.store).toBe('Google Play');
     });

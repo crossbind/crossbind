@@ -252,6 +252,75 @@ export function iosAppGroup(config) {
     return appGroup;
 }
 
+const MACOS_OPTIONS = ['sandbox', 'minimumVersion'];
+
+function macosOptions(config) {
+    const macos = config.app.macos ?? {};
+    if (typeof macos !== 'object' || Array.isArray(macos)) {
+        throw new Error(`crossbind: app.macos ${JSON.stringify(macos)} is no object of sandbox and minimumVersion, as { sandbox: true } is.`);
+    }
+    const unknown = Object.keys(macos).filter((key) => !MACOS_OPTIONS.includes(key));
+    if (unknown.length > 0) throw new Error(`crossbind: app.macos takes sandbox and minimumVersion; ${unknown.join(', ')} is none of them.`);
+    return macos;
+}
+
+// Whether a dot-separated version comes before another, part by part.
+function isBefore(version, other) {
+    const [a, b] = [version, other].map((text) => text.split('.').map(Number));
+    for (let at = 0; at < Math.max(a.length, b.length); at += 1) {
+        if ((a[at] ?? 0) !== (b[at] ?? 0)) return (a[at] ?? 0) < (b[at] ?? 0);
+    }
+    return false;
+}
+
+// The macOS release a macOS app takes at least: app.macos.minimumVersion, which raises the floor its code is built for
+// alone, as the Mac App Store takes an Apple silicon app of macOS 13 or later.
+export function macMinimumVersion(config, floor) {
+    const { minimumVersion = floor } = macosOptions(config);
+    if (typeof minimumVersion !== 'string' || !/^\d+(\.\d+){0,2}$/.test(minimumVersion) || isBefore(minimumVersion, floor)) {
+        throw new Error(`crossbind: app.macos.minimumVersion ${JSON.stringify(minimumVersion)} is no macOS release from ${floor} on, as '13.0' is.`);
+    }
+    return minimumVersion;
+}
+
+// Whether a macOS app runs in the App Sandbox, as app.macos.sandbox says: the Mac App Store takes no other app.
+export function macSandbox(config) {
+    const { sandbox = false } = macosOptions(config);
+    if (typeof sandbox !== 'boolean') {
+        throw new Error(`crossbind: app.macos.sandbox ${JSON.stringify(sandbox)} is no boolean: set it to true for the App Sandbox, which the Mac App Store takes alone, or leave it out.`);
+    }
+    return sandbox;
+}
+
+// The entitlement of each device of app.permissions in the hardened runtime, and the App Sandbox's own where it has one.
+const DEVICE_ENTITLEMENTS = {
+    camera: 'com.apple.security.device.camera',
+    microphone: 'com.apple.security.device.audio-input',
+    location: 'com.apple.security.personal-information.location',
+};
+const SANDBOX_DEVICE_ENTITLEMENTS = { microphone: 'com.apple.security.device.microphone' };
+// The App Sandbox, the connections the page and native code open, which WebKit is reported to need for the app's own
+// page too, and the files the app's user picks, opens or saves.
+const SANDBOX_ENTITLEMENTS = {
+    'com.apple.security.app-sandbox': true,
+    'com.apple.security.network.client': true,
+    'com.apple.security.files.user-selected.read-write': true,
+};
+
+// The entitlements a macOS app claims of its own, by their owners: the devices of app.permissions, and with
+// app.macos.sandbox the App Sandbox.
+export function macEntitlements(config) {
+    const isSandboxed = macSandbox(config);
+    const devices = Object.keys(appPermissions(config)).flatMap((name) => [
+        DEVICE_ENTITLEMENTS[name],
+        ...(isSandboxed && SANDBOX_DEVICE_ENTITLEMENTS[name] ? [SANDBOX_DEVICE_ENTITLEMENTS[name]] : []),
+    ]);
+    return [
+        ['app.permissions', Object.fromEntries(devices.map((key) => [key, true]))],
+        ...(isSandboxed ? [['app.macos.sandbox', SANDBOX_ENTITLEMENTS]] : []),
+    ];
+}
+
 // The version a Windows app's executable carries: package.json's, whose numbers are its file version.
 function windowsVersion(config) {
     const version = config.package?.version ?? '1.0.0';

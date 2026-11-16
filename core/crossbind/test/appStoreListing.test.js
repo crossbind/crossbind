@@ -4,8 +4,8 @@ import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, test } from 'vitest';
 import upath from 'upath';
 import {
-    appStoreListingProblems, readAppStoreListing, readAppStoreSettings,
-} from '../../../extensions/app-store/src/appStoreListing.js';
+    appStoreListingProblems, listingOf, readAppStoreListing, readAppStoreSettings,
+} from '../../store-kit/app-store/appStoreListing.js';
 import { appStoreGuide } from '../../../extensions/app-store/src/appStoreGuide.js';
 import { RGBA, jpegOf, pngOf } from './listingImages.js';
 
@@ -189,6 +189,29 @@ describe("what App Store Connect would refuse of a listing's screenshots", () =>
             'crossbind: store/app-store/en-US/screenshots/APP_IPAD_PRO_3GEN_129/02.png holds no PNG or JPEG image whose size it gives, as a cut-off file does: put the whole image there, or remove the file.',
             'crossbind: store/app-store/en-US/screenshots/APP_IPHONE_67/01.png is 1080 × 1920, and App Store Connect takes APP_IPHONE_67 screenshots of 1320 × 2868, 1290 × 2796, 1260 × 2736, 1284 × 2778, or the same turned.',
         ]);
+    });
+
+    test("is a Mac app's screenshot of other than its 16:10 sizes, which it takes unturned", () => {
+        write('en-US/screenshots/APP_DESKTOP/01.png', pngOf(2560, 1600));
+        write('en-US/screenshots/APP_DESKTOP/02.png', pngOf(1440, 900));
+        write('en-US/screenshots/APP_DESKTOP/03.png', pngOf(1600, 2560));
+        write('en-US/screenshots/APP_DESKTOP/04.png', pngOf(1920, 1080));
+        expect(problemsOf()).toEqual([
+            'crossbind: store/app-store/en-US/screenshots/APP_DESKTOP/03.png is 1600 × 2560, and App Store Connect takes APP_DESKTOP screenshots of 1280 × 800, 1440 × 900, 2560 × 1600, 2880 × 1800.',
+            'crossbind: store/app-store/en-US/screenshots/APP_DESKTOP/04.png is 1920 × 1080, and App Store Connect takes APP_DESKTOP screenshots of 1280 × 800, 1440 × 900, 2560 × 1600, 2880 × 1800.',
+        ]);
+    });
+});
+
+describe("a platform's version of the App Store listing", () => {
+    test("takes the Mac's screenshots for macOS, and every other type's for iOS", () => {
+        write('en-US/name.txt', 'Demo');
+        write('en-US/screenshots/APP_IPHONE_67/01.png', pngOf(1320, 2868));
+        write('en-US/screenshots/APP_DESKTOP/01.png', pngOf(2560, 1600));
+        const listings = readAppStoreListing(project);
+        expect(Object.keys(listingOf(listings, 'IOS')[0].screenshots)).toEqual(['APP_IPHONE_67']);
+        expect(Object.keys(listingOf(listings, 'MAC_OS')[0].screenshots)).toEqual(['APP_DESKTOP']);
+        expect(listingOf(listings, 'MAC_OS')[0].info).toEqual({ name: 'Demo' });
     });
 });
 

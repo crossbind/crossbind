@@ -76,11 +76,13 @@ export function fileTypeOwners(config) {
 
 const ROLE_NAMES = { editor: 'Editor', viewer: 'Viewer' };
 
-// A macOS app's document types: each by its extensions, unless its content types name it.
+// A macOS app's document types: each by its extensions, unless its content types name it, with the rank Launch Services
+// gives an app that opens it, which App Store Connect asks for.
 export function macDocumentTypes(fileTypes) {
     return fileTypes.map(({ name, extensions, mimeTypes, role, contentTypes }) => ({
         CFBundleTypeName: name,
         CFBundleTypeRole: ROLE_NAMES[role],
+        LSHandlerRank: 'Default',
         ...(contentTypes.length > 0 ? { LSItemContentTypes: contentTypes } : { CFBundleTypeExtensions: extensions }),
         ...(mimeTypes.length > 0 ? { CFBundleTypeMIMETypes: mimeTypes } : {}),
     }));

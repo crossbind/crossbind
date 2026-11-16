@@ -1,9 +1,8 @@
 import path from 'node:path';
 import {
-    APP_STORE_LISTING, appStoreListingProblems, readAppStoreListing, readAppStoreSettings,
-} from './appStoreListing.js';
+    APP_STORE_CONNECT, APP_STORE_LISTING, appStoreListingProblems, listingOf, readAppStoreListing, readAppStoreSettings,
+} from '@crossbind/core-store-kit';
 
-const APP_STORE_CONNECT = 'https://appstoreconnect.apple.com/apps';
 const API_KEYS = 'https://appstoreconnect.apple.com/access/integrations/api';
 const TEXTS = {
     name: 'name',
@@ -35,7 +34,7 @@ function readAll(root) {
     let listings = [];
     let settings = { categories: {}, review: {} };
     try {
-        listings = readAppStoreListing(root);
+        listings = listingOf(readAppStoreListing(root), 'IOS');
         problems.push(...appStoreListingProblems(root, listings));
     } catch (error) {
         problems.push(error.message);

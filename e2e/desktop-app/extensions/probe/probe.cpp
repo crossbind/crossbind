@@ -7,6 +7,7 @@
 
 #include <algorithm>
 #include <atomic>
+#include <cstdlib>
 #include <filesystem>
 #include <fstream>
 #include <iterator>
@@ -104,6 +105,17 @@ void crossbind_extension_probe(crossbind::Registry &registry) {
                 if (!file) throw std::runtime_error("crossbind: the probe cannot write " + text(folder / name));
             }
             return Value(text(folder));
+        });
+    });
+    // Whether the app runs in the App Sandbox, which macOS names in its environment: no other process reaches its
+    // container unless the Mac's user allows it, so the app's own code leaves there what the run leaves elsewhere.
+    registry.function("probe.sandboxed", [](Call call) { call.resolve(Value(std::getenv("APP_SANDBOX_CONTAINER_ID") != nullptr)); });
+    registry.function("probe.leaveFile", [](Call call) {
+        crossbind::inBackground(call, [path = call.options()["path"].asString()] {
+            std::ofstream file(std::filesystem::path(std::u8string(path.begin(), path.end())));
+            file << "src/main.js moves this file to the trash";
+            if (!file) throw std::runtime_error("crossbind: the probe cannot write " + path);
+            return Value();
         });
     });
     registry.function("probe.allowPath", [](Call call) {

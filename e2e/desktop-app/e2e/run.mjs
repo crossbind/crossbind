@@ -386,10 +386,19 @@ function checkInstallers() {
     }
 }
 
-// A file in a desktop app's data folder, where its host makes the folder, which src/main.js moves to the trash.
+// Whether the macOS app runs in the App Sandbox, as app.macos.sandbox builds it: its signature claims it.
+function isSandboxed() {
+    if (platform || process.platform !== 'darwin') return false;
+    const claims = execFileSync('codesign', ['-d', '--entitlements', '-', '--xml', `${root}/dist/${name}.app`], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
+    return claims.includes('com.apple.security.app-sandbox');
+}
+
+// A file in a desktop app's data folder, where its host makes the folder, which src/main.js moves to the trash. A
+// sandboxed app's folder is in its container, which another process reaches only once the Mac's user allows it, so the
+// app's own code leaves the file there.
 function leaveFileToTrash() {
     const folders = {
-        darwin: () => join(homedir(), 'Library', 'Application Support', id),
+        darwin: () => !isSandboxed() && join(homedir(), 'Library', 'Application Support', id),
         win32: () => join(process.env.APPDATA, id),
         linux: () => join(process.env.XDG_DATA_HOME || join(homedir(), '.local', 'share'), id),
     };

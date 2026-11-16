@@ -307,6 +307,10 @@ export default {
       // own; an iPhone shows one whatever it says (see app.md). appGroup names the App Group the app shares with the
       // app extensions its extensions add, as a widget, where one asks for it (see extensions.md). Default:
       // { multipleWindows: false }, and the App Group group.<app.id>.
+    macos: { sandbox: true },
+      // Whether a macOS app runs in the App Sandbox, which the Mac App Store takes alone: its signature claims the
+      // sandbox, the connections its page and native code open, and the files its user picks, and its folders move
+      // into its container (see app.md). Default: { sandbox: false }.
     files: ['seed.sqlite', 'models/'],
       // The project's files and folders the app carries for its own native code, as a database to start from, each in
       // the place it had in the project: in the folder crossbind/app's app.paths().resources and <crossbind/app.h>'s

@@ -52,6 +52,7 @@ export default defineConfig({ plugins: [viteCrossbindPlugin()] });
 | `crossbind app upload-key` | Makes this machine's upload key, which signs an Android app's bundle for Google Play, and keeps its password in the system keychain; `--use <keystore>` takes a key you have instead (see [The upload key](#the-upload-key)). |
 | `crossbind app publish google-play` | Builds the Android app with the next versionCode Google Play takes and releases its bundle on a track, internal unless `--track` names another, to a share of its users with `--rollout`, and with the listing `store/google-play` holds; `-p android` names the same store (see [Publishing](#publishing)). |
 | `crossbind app publish app-store` | Builds the iOS app, archives it and uploads it to App Store Connect, whose TestFlight hands it to testers, and with `--submit` to App Review too, with the listing `store/app-store` holds; Xcode numbers the build, and `-p ios` names the same store (see [Publishing](#publishing)). |
+| `crossbind app publish mac-app-store` | Builds the macOS app in the App Sandbox and has Xcode export it to App Store Connect, which signs it and its installer package in the cloud as it does an iOS app, whose TestFlight hands it to Mac testers, and with `--submit` to App Review too, with the listing `store/app-store` holds (see [Mac App Store](#mac-app-store)). |
 | `crossbind app publish github` | Builds the desktop app of `-p macos`, `linux` or `windows`, else of this machine, and puts what installs it, and with `app.updater` its update, into the GitHub release of its version, `v<version>` (see [GitHub Releases](#github-releases)). |
 | `crossbind app publish microsoft-store` | Builds the Windows app's MSIX packages, x64 and arm64, and sends them to the Microsoft Store in a new submission of the app, with the listing `store/microsoft-store` holds, once Partner Center has the app's first submission (see [Microsoft Store](#microsoft-store)). |
 | `crossbind app store` | Says of each store, or the one it names, what a publish sends from `store/`, what the store would refuse of it, and the steps only the store's own site takes, with the values and files to enter there; it builds nothing, asks for no credentials, and exits with 1 at a problem (see [What each store takes](#what-each-store-takes)). |
@@ -390,6 +391,22 @@ variables or comes with an identity other than a Developer ID Application one. W
 nothing here, as it serves iOS uploads too (see [Publishing](#publishing)), and the app is signed ad hoc. Apple takes a few minutes to check the app, two hours at most
 before the build gives up, and a rejection stops the build with Apple's log. A signed app that is not notarized opens
 on another Mac only once its user allows it in System Settings, and the build says so.
+
+### The App Sandbox
+
+`app: { macos: { sandbox: true } }` runs a macOS app in the App Sandbox, which the Mac App Store takes alone. Its
+signature claims the sandbox, the connections its page and native code open, the files its user picks, opens or saves,
+and the devices of `app.permissions`, the microphone by the sandbox's own key as well. An ad hoc signature serves to
+try it on the Mac that built it, and a Developer ID one to hand it out. In the sandbox:
+
+- The app's folders are in its container, `~/Library/Containers/<app.id>/Data/Library/…`, and what a build outside the
+  sandbox keeps in `~/Library/Application Support/<app.id>` is not there.
+- The app starts in its container's `Data` folder, whatever folder launched it: `app.launchArgs().cwd` is that folder,
+  and a relative path among its arguments is made absolute against it.
+- The page and native code reach the container, and a file or folder its user picked in a dialog, saved to or opened the
+  app with during this run; the system refuses any other path. A path kept for a later run takes picking again.
+- A download its user saves where the save panel says arrives in a folder the system gives for a file that replaces
+  another, and takes its place once whole.
 
 ## Signing a Windows app
 
@@ -1356,18 +1373,19 @@ its data, and leaves running it to you.
 
 `crossbind app publish <store>` builds the app and sends it to the store it names first, before any option of Vite's:
 `google-play` takes its bundle on a Google Play track, `app-store` the app to App Store Connect, whose TestFlight hands
-it to testers, `microsoft-store` a Windows app's MSIX packages to the Microsoft Store, and `github` a desktop app's
+it to testers, `mac-app-store` a macOS app to the Mac App Store through App Store Connect, `microsoft-store` a Windows
+app's MSIX packages to the Microsoft Store, and `github` a desktop app's
 installers and update to a GitHub release. `-p android` and `-p ios` name the first two stores, as
 `CROSSBIND_APP_PLATFORM` does without either; for `github`, `-p` names the desktop platform.
 
 Each store is a publisher, as an extension adds one: [extensions.md](./extensions.md#publishers)' Publishers says how
-to write one, and an extension listed under the name of one of these four replaces it. A store's options go after its
+to write one, and an extension listed under the name of one of these five replaces it. A store's options go after its
 name, and one of another store's is refused.
 
 ### What each store takes
 
 A project's `store/` folder holds what the stores show of the app, a folder per store: `store/google-play`,
-`store/app-store` and `store/microsoft-store`. In each, a folder per language holds the listing's texts and images, by
+`store/app-store`, which the Mac App Store takes too, and `store/microsoft-store`. In each, a folder per language holds the listing's texts and images, by
 the names the sections below give, and the files beside them the app's settings, in that store's own terms. A publish
 sends what the store's API takes, and stops before its build at what the store would refuse: a text longer than it
 takes, an image of another size, or a PNG with transparency where it takes none.
@@ -1582,7 +1600,8 @@ store/app-store/en-US/
 ├── marketing_url.txt
 └── screenshots/
     ├── APP_IPHONE_67/          the 6.9-inch and 6.7-inch iPhone's: 01.png, 02.png, at most 10
-    └── APP_IPAD_PRO_3GEN_129/  the 13-inch iPad's
+    ├── APP_IPAD_PRO_3GEN_129/  the 13-inch iPad's
+    └── APP_DESKTOP/            the Mac's, which the macOS version takes alone
 ```
 
 The version takes what the folder has where App Store Connect's own differs, in a new localization for a locale it has
@@ -1596,15 +1615,16 @@ A folder of `screenshots/` per display type, named as App Store Connect's API na
 .jpeg files, 10 at most, in the order of their names as text, so 01.png, 02.png and on to 10.png: `APP_IPHONE_67` for
 the 6.9-inch and 6.7-inch iPhones, `APP_IPHONE_65`, `APP_IPHONE_61`, `APP_IPHONE_58`, `APP_IPHONE_55`, `APP_IPHONE_47`,
 `APP_IPHONE_40` and `APP_IPHONE_35`, `APP_IPAD_PRO_3GEN_129` for the 13-inch iPads, `APP_IPAD_PRO_3GEN_11`,
-`APP_IPAD_PRO_129`, `APP_IPAD_105` and `APP_IPAD_97`. Before the build, the publish stops at a file that holds no PNG or
+`APP_IPAD_PRO_129`, `APP_IPAD_105` and `APP_IPAD_97`, and `APP_DESKTOP` for a Mac, whose screenshots go to the macOS
+version alone, as the others go to the iOS one alone. Before the build, the publish stops at a file that holds no PNG or
 JPEG image, as an empty one or a Git LFS pointer does. A type's screenshots go up anew where App Store Connect shows
 others, in another order or unprocessed, and the publish waits for it to process them before the build's turn; a type
 the folder has none of stays as it is.
 
 It stops there too at every screenshot of a size its display type takes none of, portrait or turned, as App Store
 Connect's specifications give them, `APP_IPHONE_67` taking 1320 × 2868, 1290 × 2796, 1260 × 2736 or 1284 × 2778 and
-`APP_IPAD_PRO_3GEN_129` 2064 × 2752 or 2048 × 2732, and at one with transparency, which App Store Connect takes in no
-image. It takes a 13-inch iPad's screenshots of every app that runs on iPads, as crossbind's iOS apps do, and scales the
+`APP_IPAD_PRO_3GEN_129` 2064 × 2752 or 2048 × 2732 and `APP_DESKTOP` the 16:10 1280 × 800, 1440 × 900, 2560 × 1600
+or 2880 × 1800 alone, and at one with transparency, which App Store Connect takes in no image. It takes a 13-inch iPad's screenshots of every app that runs on iPads, as crossbind's iOS apps do, and scales the
 6.9-inch iPhone's down for smaller ones.
 
 Beside the locales, the folder holds the app's settings, by the names fastlane's deliver gives them, which a publish
@@ -1704,6 +1724,23 @@ nothing. A release a workflow puts out with its own `GITHUB_TOKEN` starts no oth
 from starting one, so there run the action as a job after the one that puts the release out, with `release-tag:
 v<version>`; a release put out by hand, or with another token, starts the workflow above.
 
+### Mac App Store
+
+The Mac App Store takes a macOS app into the record the iOS app has on App Store Connect, as a universal purchase, which
+stays one once both platforms are approved: add the macOS platform to the app there, with the + beside its platform in
+the sidebar. It takes the app in the App Sandbox (see [The App Sandbox](#the-app-sandbox)), in an installer package,
+which Apple signs as it does an iOS app: `crossbind app store mac-app-store` names what is left.
+
+`crossbind app publish mac-app-store` builds the app sandboxed and signed ad hoc, without its updater or installers and
+for macOS 13 or a later `app.macos.minimumVersion`, puts it in an archive as Xcode makes one, and has Xcode export the
+archive to App Store Connect, as the iOS publisher has its own: Xcode's account or an Admin key signs the app and its
+installer package in the cloud with the team's distribution certificates, and makes the app's Mac App Store profile, so
+no certificate goes into the keychain. Xcode numbers the build after the builds App Store Connect has of it, unless
+`CROSSBIND_APP_BUILD_NUMBER` gives one, and TestFlight hands it to Mac testers once Apple has processed it. `--submit`
+hands the version to App Review too, through the App Store Connect API key, with the listing `store/app-store` holds,
+its `APP_DESKTOP` screenshots for macOS, and `--phased` releases it in phases over 7 days. It takes `app.team`,
+`app.category`, and `app.encryption`, which App Store Connect asks of every Mac build.
+
 ### Microsoft Store
 
 The Microsoft Store takes a Windows app as its MSIX package (see [Installers](#installers)), which it signs, hosts and
@@ -1789,6 +1826,7 @@ Xcode account and no one to sign in to Google, so it needs these besides, as the
 |---|---|
 | Google Play | The upload key as a base64 secret, which `base64 < <keystore>` prints, with its alias and its password, which `crossbind app upload-key --show-password` prints. A service account invited in Play Console (see [Google Play](#google-play)), through Workload Identity Federation with no key, or its JSON key. |
 | App Store Connect | `app.team` in `crossbind.config.js`, as this machine's `XCODE_DEVELOPMENT_TEAM` stays behind. An App Store Connect API key, its `.p8` as a secret: an Admin key, whose uploads Apple signs in the cloud and whose secret can do all an Admin can, or a key of another role with an Apple Distribution certificate imported into the runner's keychain before the publish. The archive is unsigned, so the runner needs no development certificate or device. |
+| Mac App Store | A macOS runner, `app.team` and an Admin App Store Connect API key, as for App Store Connect, whose uploads Apple signs in the cloud: the app and its installer package alike, so the runner's keychain needs no certificate. |
 | GitHub Releases | The workflow's own token, given as `GITHUB_TOKEN: ${{ github.token }}` with `permissions: contents: write`, and with `app.updater` its private key as a secret in `CROSSBIND_UPDATER_PRIVATE_KEY`. |
 | Microsoft Store | The Entra ID application's tenant and client ids, as `CROSSBIND_MICROSOFT_STORE_TENANT_ID` and `CROSSBIND_MICROSOFT_STORE_CLIENT_ID`, and its key as a secret in `CROSSBIND_MICROSOFT_STORE_CLIENT_SECRET`. The Windows app builds in crossbind's windows image, so a Linux runner with Docker publishes it. |
 

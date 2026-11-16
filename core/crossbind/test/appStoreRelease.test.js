@@ -7,7 +7,7 @@ import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 vi.mock('../src/state/index.js', () => ({ default: { config: {} } }));
 // The uploads of screenshots' bytes where App Store Connect reserved them.
 const parts = [];
-vi.mock('../../../extensions/app-store/src/appStoreApi.js', () => ({
+vi.mock('../../store-kit/app-store/appStoreApi.js', () => ({
     uploadParts: async (operations, bytes, file) => {
         parts.push({ operations, bytes: String(bytes), file });
     },
@@ -15,7 +15,7 @@ vi.mock('../../../extensions/app-store/src/appStoreApi.js', () => ({
 
 const {
     appStoreApp, assertReviewable, newestBuild, submitRelease,
-} = await import('../../../extensions/app-store/src/appStoreRelease.js');
+} = await import('../../store-kit/app-store/appStoreRelease.js');
 
 const EDITABLE = 'PREPARE_FOR_SUBMISSION,DEVELOPER_REJECTED,REJECTED,METADATA_REJECTED,INVALID_BINARY';
 const BUILDS = 'GET /builds?filter[app]=A1&filter[preReleaseVersion.version]=1.2.3&filter[preReleaseVersion.platform]=IOS&sort=-uploadedDate&limit=1';
@@ -159,6 +159,18 @@ describe("a version's submission to App Review", () => {
         expect(bodyOf('PATCH /reviewSubmissions/S1').data).toEqual({ type: 'reviewSubmissions', id: 'S1', attributes: { submitted: true } });
         expect(keys().filter((key) => key === BUILDS)).toHaveLength(3);
         expect(printed).toEqual(['crossbind: waiting for App Store Connect to process the build, usually 5 to 30 minutes.']);
+    });
+
+    test("takes a macOS version on its own platform, in every query and in what it makes", async () => {
+        const mac = (key) => key.replaceAll('IOS', 'MAC_OS');
+        Object.entries(DEFAULTS).filter(([key]) => key.includes('IOS')).forEach(([key, answer]) => { answers[mac(key)] = answer; });
+
+        expect(await release({ platform: 'MAC_OS' })).toEqual({ build: '42', listed: [], settled: [] });
+
+        expect(keys().filter((key) => key.includes('IOS'))).toEqual([]);
+        expect(keys()).toContain(mac(BUILDS));
+        expect(bodyOf('POST /appStoreVersions').data.attributes).toEqual({ platform: 'MAC_OS', versionString: '1.2.3' });
+        expect(bodyOf('POST /reviewSubmissions').data.attributes).toEqual({ platform: 'MAC_OS' });
     });
 
     test('takes the version of the number App Store Connect prepares, or renames the one it prepares under another', async () => {
