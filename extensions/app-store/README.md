@@ -8,11 +8,12 @@ An app has it by having `@crossbind/core-app-host`, which lists it as a dependen
 
 ```sh
 npx crossbind app store app-store
-npx crossbind app publish app-store -p ios --submit
+npx crossbind app publish app-store --submit
 npx crossbind app publish app-store -p macos --submit
 ```
 
-It takes iOS and macOS apps alike, so `-p` names the platform; an iOS publish that names no store comes here.
+It takes iOS and macOS apps alike: a publish sends the iOS app, then the macOS one, and `-p` names one to send alone;
+an iOS publish that names no store comes here.
 `crossbind app store` names what Apple alone takes of either. An iOS publish builds the app with the next build number,
 archives it and uploads it to App Store Connect, whose TestFlight hands it to testers. A macOS publish builds the app in
 the App Sandbox, without its updater and for macOS 13 or later, puts it in an archive as Xcode makes one, and has Xcode

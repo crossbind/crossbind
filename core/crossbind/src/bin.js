@@ -202,7 +202,7 @@ commandApp.command('upload-key')
 commandApp.command('publish')
     .usage('[store] [options]')
     .description("build the app and send it to a store, as its publisher does, one of crossbind's own or of an extension's")
-    .addOption(new Option('-p, --platform <platform>', "the app's platform: without a store, the one that goes first for it (default: CROSSBIND_APP_PLATFORM, else for a store of desktop apps this machine's)").choices(APP_PLATFORMS))
+    .addOption(new Option('-p, --platform <platform>', "the app's platform: without a store, the one that goes first for it (default: CROSSBIND_APP_PLATFORM, else for a store of desktop apps this machine's, else every one the store takes, as app-store's ios and macos)").choices(APP_PLATFORMS))
     .addHelpText('after', () => publishHelp(publishersOf(state.config?.extensions ?? [])))
     // The store's own options, and Vite's, as --mode, which go on to Vite.
     .allowUnknownOption()

@@ -4,11 +4,13 @@ import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 const state = { config: {} };
 vi.mock('../src/utils/appExtensions.js', async (importOriginal) => (await import('./ownTools.js')).default(importOriginal));
 vi.mock('../src/state/index.js', () => ({ default: state }));
-// The config read again with a publisher's changes, as the build reads it.
+// The config read again with a publisher's changes, as the build reads it, and whether each read took its files afresh.
 const reloads = [];
+const freshReads = [];
 vi.mock('../src/state/loadConfig.js', () => ({
-    default: async (configDir, configName, { changes }) => {
+    default: async (configDir, configName, { changes, isFresh }) => {
         reloads.push(changes);
+        freshReads.push(isFresh);
         return { ...state.config, changed: changes };
     },
 }));
@@ -30,7 +32,7 @@ vi.mock('../src/utils/ask.js', () => ({ hasTerminal: () => terminal.isThere }));
 
 const { checkedExtension } = await import('../src/utils/appExtensions.js');
 const {
-    builtInPublishers, default: publish, publishChain, publishHelp, publishOptions, publishPlatform, publishersOf, storeOf,
+    builtInPublishers, default: publish, publishChain, publishHelp, publishOptions, publishPlatforms, publishersOf, storeOf,
 } = await import('../src/actions/publish.js');
 
 // An app's extension with a publisher, as crossbind takes it from crossbind.config.js.
@@ -113,39 +115,39 @@ describe('the publishers an app has', () => {
     });
 });
 
-describe('the platform a publish builds for', () => {
+describe('the platforms a publish builds for', () => {
     const [, github, googlePlay] = builtInPublishers();
 
-    test('is the one -p names, which every publisher of the publish takes', () => {
-        expect(publishPlatform([github], 'windows', 'linux', 'darwin')).toBe('windows');
-        expect(() => publishPlatform([googlePlay], 'ios', undefined)).toThrow("crossbind: google-play takes android apps, not ios', which -p names.");
-        expect(() => publishPlatform([github], 'android', undefined)).toThrow("crossbind: github takes macos, linux or windows apps, not android's, which -p names.");
+    test('are the one -p names, which every publisher of the publish takes', () => {
+        expect(publishPlatforms([github], 'windows', 'linux', 'darwin')).toEqual(['windows']);
+        expect(() => publishPlatforms([googlePlay], 'ios', undefined)).toThrow("crossbind: google-play takes android apps, not ios', which -p names.");
+        expect(() => publishPlatforms([github], 'android', undefined)).toThrow("crossbind: github takes macos, linux or windows apps, not android's, which -p names.");
     });
 
-    test("is else a store's only one, whatever CROSSBIND_APP_PLATFORM says", () => {
-        expect(publishPlatform([googlePlay], undefined, 'ios')).toBe('android');
+    test("are else a store's only one, whatever CROSSBIND_APP_PLATFORM says", () => {
+        expect(publishPlatforms([googlePlay], undefined, 'ios')).toEqual(['android']);
     });
 
-    test("is else CROSSBIND_APP_PLATFORM's, else this machine's desktop one", () => {
-        expect(publishPlatform([github], undefined, 'linux', 'darwin')).toBe('linux');
-        expect(() => publishPlatform([github], undefined, 'android', 'darwin')).toThrow("crossbind: github takes macos, linux or windows apps, not android's, which CROSSBIND_APP_PLATFORM names.");
-        expect(['darwin', 'linux', 'win32'].map((host) => publishPlatform([github], undefined, undefined, host))).toEqual(['macos', 'linux', 'windows']);
+    test("are else CROSSBIND_APP_PLATFORM's, else this machine's desktop one for a store of desktop apps alone", () => {
+        expect(publishPlatforms([github], undefined, 'linux', 'darwin')).toEqual(['linux']);
+        expect(() => publishPlatforms([github], undefined, 'android', 'darwin')).toThrow("crossbind: github takes macos, linux or windows apps, not android's, which CROSSBIND_APP_PLATFORM names.");
+        expect(['darwin', 'linux', 'win32'].map((host) => publishPlatforms([github], undefined, undefined, host))).toEqual([['macos'], ['linux'], ['windows']]);
         const tap = extension('tap', { platform: ['linux', 'windows'] });
-        expect(() => publishPlatform([tap], undefined, undefined, 'darwin')).toThrow('crossbind: tap takes linux or windows apps: name one with -p.');
+        expect(() => publishPlatforms([tap], undefined, undefined, 'darwin')).toThrow('crossbind: tap takes linux or windows apps: name one with -p.');
     });
 
-    test("is never this machine's desktop one for a store that takes a phone's apps too", () => {
+    test("are else every one of a store that takes a phone's apps too, as App Store Connect keeps an app's iOS and macOS builds in one record", () => {
         const [appStore] = builtInPublishers();
-        expect(() => publishPlatform([appStore], undefined, undefined, 'darwin')).toThrow('crossbind: app-store takes ios or macos apps: name one with -p.');
-        expect(publishPlatform([appStore], 'macos', undefined, 'darwin')).toBe('macos');
-        expect(publishPlatform([appStore], undefined, 'ios', 'darwin')).toBe('ios');
+        expect(publishPlatforms([appStore], undefined, undefined, 'darwin')).toEqual(['ios', 'macos']);
+        expect(publishPlatforms([appStore], 'macos', undefined, 'darwin')).toEqual(['macos']);
+        expect(publishPlatforms([appStore], undefined, 'ios', 'darwin')).toEqual(['ios']);
     });
 
-    test('is one every publisher of a chain takes', () => {
+    test('are those every publisher of a chain takes', () => {
         const homebrew = extension('homebrew', { platform: 'macos', after: 'github' });
-        expect(publishPlatform([github, homebrew], undefined, undefined, 'linux')).toBe('macos');
+        expect(publishPlatforms([github, homebrew], undefined, undefined, 'linux')).toEqual(['macos']);
         const store = extension('store', { platform: 'android', after: 'github' });
-        expect(() => publishPlatform([github, store], undefined, undefined)).toThrow('crossbind: store comes after github, which takes apps of none of its platforms.');
+        expect(() => publishPlatforms([github, store], undefined, undefined)).toThrow('crossbind: store comes after github, which takes apps of none of its platforms.');
     });
 });
 
@@ -240,11 +242,16 @@ describe('a publish', () => {
         });
         state.config = { extensions: [] };
         reloads.length = 0;
+        freshReads.length = 0;
         outputs.cleared = 0;
         terminal.isThere = false;
+        vi.spyOn(console, 'log').mockImplementation(() => {});
     });
 
-    afterEach(() => vi.unstubAllEnvs());
+    afterEach(() => {
+        vi.unstubAllEnvs();
+        vi.restoreAllMocks();
+    });
 
     test('names every piece its publishers lack at once, before any build', async () => {
         state.config.extensions = [store('demo', { missing: ['no key'] }), after('mirror', 'demo', { missing: ['no account'] })];
@@ -349,6 +356,77 @@ describe('a publish', () => {
         await expect(publish(['demo'], { runVite })).rejects.toMatchObject({
             message: 'crossbind: the build ended with exit code 2, so nothing went to Demo Store.', exitCode: 2,
         });
+        expect(run.uploads).toEqual([]);
+    });
+
+    test("sends each platform of a store that takes a phone's apps in turn, with its own changes, after checking them all", async () => {
+        const events = [];
+        const changes = { app: { macos: { sandbox: true } } };
+        const changed = () => JSON.stringify(state.config.changed ?? null);
+        state.config.extensions = [store('demo', {
+            publisher: {
+                platform: ['ios', 'macos'],
+                build: (api) => (api.platform === 'macos' ? changes : null),
+                check: async (api) => {
+                    events.push(`check ${api.platform} ${changed()}`);
+                    return { session: { token: 'demo' } };
+                },
+                upload: async (api, session, output) => {
+                    events.push(`upload ${api.platform} ${output.project} ${changed()}`);
+                },
+            },
+        })];
+        await publish(['demo'], {
+            runVite: async (args, env) => {
+                events.push(`build ${env.CROSSBIND_APP_PLATFORM} ${env.CROSSBIND_CONFIG_CHANGES ?? null} ${env.CROSSBIND_APP_BUILD_NUMBER}`);
+                return 0;
+            },
+        });
+        const patch = JSON.stringify(changes);
+        expect(events).toEqual([
+            'check ios null',
+            `check macos ${patch}`,
+            'build ios null 42',
+            'upload ios /demo/dist/demo-ios null',
+            `build macos ${patch} 42`,
+            `upload macos /demo/dist/demo-macos ${patch}`,
+        ]);
+        // Each read of the config after the first platform's checks takes its files afresh, with what those wrote.
+        expect(freshReads.length).toBeGreaterThan(0);
+        expect(freshReads.every(Boolean)).toBe(true);
+        expect(console.log).toHaveBeenCalledWith('crossbind: publishing the app for ios then macos; -p publishes one alone.');
+    });
+
+    test('sends the platform -p names alone', async () => {
+        state.config.extensions = [store('demo', { publisher: { platform: ['ios', 'macos'] } })];
+        await publish(['demo'], { platform: 'macos', runVite });
+        expect(run.builds.map(({ env }) => env.CROSSBIND_APP_PLATFORM)).toEqual(['macos']);
+        expect(console.log).not.toHaveBeenCalled();
+    });
+
+    test('names what any platform lacks before the first build of all', async () => {
+        state.config.extensions = [store('demo', {
+            publisher: {
+                platform: ['ios', 'macos'],
+                check: async (api) => (api.platform === 'macos' ? { missing: ['no category'] } : { session: { token: 'demo' } }),
+            },
+        })];
+        await expect(publish(['demo'], { runVite })).rejects.toThrow(/^no category$/);
+        expect(run.builds).toEqual([]);
+    });
+
+    test('says what went to the store before a platform failed, and how to publish the rest', async () => {
+        state.config.extensions = [store('demo', { publisher: { platform: ['ios', 'macos'] } })];
+        const failing = (platform, exitCode) => async (args, env) => (env.CROSSBIND_APP_PLATFORM === platform ? exitCode : runVite(args, env));
+        await expect(publish(['demo'], { runVite: failing('macos', 2) })).rejects.toMatchObject({
+            message: 'crossbind: the build ended with exit code 2, so nothing went to Demo Store.\ncrossbind: ios went to Demo Store before macos stopped; publish macos alone, with -p macos.',
+            exitCode: 2,
+        });
+        expect(run.uploads.map(({ output }) => output.project)).toEqual(['/demo/dist/demo-ios']);
+
+        Object.assign(run, { builds: [], uploads: [] });
+        await expect(publish(['demo'], { runVite: failing('ios', 3) })).rejects.toThrow(/^crossbind: the build ended with exit code 3, so nothing went to Demo Store\.$/);
+        expect(run.builds).toEqual([]);
         expect(run.uploads).toEqual([]);
     });
 });

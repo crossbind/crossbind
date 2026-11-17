@@ -25,7 +25,7 @@ const NO_ENCRYPTION_TO_SUBMIT = 'crossbind: App Review takes no build without it
 const NO_KEY_TO_SUBMIT = "crossbind: --submit hands the version to App Review through App Store Connect's API, which takes an API key: set CROSSBIND_APPLE_API_KEY, CROSSBIND_APPLE_API_KEY_ID and CROSSBIND_APPLE_API_ISSUER, as app.md's Publishing says.";
 const TEAM_ID = /^[A-Z0-9]{10}$/;
 const noIcon = (platform) => `crossbind: App Store Connect takes no ${platform} app without an icon: set app.icon in crossbind.config.js to a square PNG, at best 1024 × 1024.`;
-const notOnMac = (id) => `crossbind: App Store Connect's app ${id} is not on macOS yet: add the platform there, with the + beside its platform in the sidebar, which makes it a universal purchase, then publish again.`;
+const notOnMac = (id) => `crossbind: App Store Connect's app ${id} is not on macOS yet: add the platform there, with the + beside its platform in the sidebar, which makes it a universal purchase, then publish again, or publish the iOS app alone with -p ios.`;
 
 async function pickTeam(api, teams) {
     if (teams.length === 1) {
@@ -194,9 +194,10 @@ async function uploadMac(api, { key, facts, release }, { apps }) {
     return { published: { appId: facts.id, version: api.app.appleVersion, build } };
 }
 
-// The publisher of an iOS or a macOS app to App Store Connect, whose TestFlight hands it out, for the platform -p names:
-// crossbind builds the app, a macOS one sandboxed, the upload archives it, an iOS one after showing what required reason
-// API it calls, and Xcode exports the archive to App Store Connect, which signs it in the cloud.
+// The publisher of an app's iOS and macOS builds to App Store Connect, whose TestFlight hands them out, both one after
+// the other or the one -p names: crossbind builds the app, a macOS one sandboxed, the upload archives it, an iOS one
+// after showing what required reason API it calls, and Xcode exports the archive to App Store Connect, which signs it in
+// the cloud.
 export default function appStore() {
     return {
         name: 'app-store',

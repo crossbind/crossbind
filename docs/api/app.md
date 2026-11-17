@@ -51,7 +51,7 @@ export default defineConfig({ plugins: [viteCrossbindPlugin()] });
 | `crossbind app updater-key` | Prints a new key pair for a desktop app's updates: the public key for `app.updater.publicKey`, the private one for `CROSSBIND_UPDATER_PRIVATE_KEY` (see [Updates](#updates)). |
 | `crossbind app upload-key` | Makes this machine's upload key, which signs an Android app's bundle for Google Play, and keeps its password in the system keychain; `--use <keystore>` takes a key you have instead (see [The upload key](#the-upload-key)). |
 | `crossbind app publish google-play` | Builds the Android app with the next versionCode Google Play takes and releases its bundle on a track, internal unless `--track` names another, to a share of its users with `--rollout`, and with the listing `store/google-play` holds; `-p android` names the same store (see [Publishing](#publishing)). |
-| `crossbind app publish app-store` | Builds the app of `-p ios` or `-p macos` and uploads it to App Store Connect, whose TestFlight hands it to testers, and with `--submit` to App Review too, with the listing `store/app-store` holds: the iOS app archived, the macOS app in the App Sandbox, which Xcode exports and Apple signs in the cloud with its installer package. Xcode numbers the build, and `crossbind app publish -p ios` names the same store (see [Publishing](#publishing)). |
+| `crossbind app publish app-store` | Builds the iOS app, then the macOS app, or the one `-p` names, and uploads each to App Store Connect, whose TestFlight hands it to testers, and with `--submit` to App Review too, with the listing `store/app-store` holds: the iOS app archived, the macOS app in the App Sandbox, which Xcode exports and Apple signs in the cloud with its installer package. Xcode numbers the builds, and `crossbind app publish -p ios` names the same store for the iOS app alone (see [Publishing](#publishing)). |
 | `crossbind app publish github` | Builds the desktop app of `-p macos`, `linux` or `windows`, else of this machine, and puts what installs it, and with `app.updater` its update, into the GitHub release of its version, `v<version>` (see [GitHub Releases](#github-releases)). |
 | `crossbind app publish microsoft-store` | Builds the Windows app's MSIX packages, x64 and arm64, and sends them to the Microsoft Store in a new submission of the app, with the listing `store/microsoft-store` holds, once Partner Center has the app's first submission (see [Microsoft Store](#microsoft-store)). |
 | `crossbind app store` | Says of each store, or the one it names, what a publish sends from `store/`, what the store would refuse of it, and the steps only the store's own site takes, with the values and files to enter there; it builds nothing, asks for no credentials, and exits with 1 at a problem (see [What each store takes](#what-each-store-takes)). |
@@ -1371,11 +1371,13 @@ its data, and leaves running it to you.
 ## Publishing
 
 `crossbind app publish <store>` builds the app and sends it to the store it names first, before any option of Vite's:
-`google-play` takes its bundle on a Google Play track, `app-store` the iOS or the macOS app to App Store Connect, whose
-TestFlight hands it to testers, `microsoft-store` a Windows app's MSIX packages to the Microsoft Store, and `github` a
+`google-play` takes its bundle on a Google Play track, `app-store` the iOS and the macOS app to App Store Connect, whose
+TestFlight hands them to testers, `microsoft-store` a Windows app's MSIX packages to the Microsoft Store, and `github` a
 desktop app's installers and update to a GitHub release. `-p android` and `-p ios` name the first two stores, as
 `CROSSBIND_APP_PLATFORM` does without either. For a store of more than one platform, `-p` names the platform:
-`app-store` takes `ios` or `macos` and stops without either, and `github` takes a desktop one, else this machine's.
+`app-store` sends the iOS app, then the macOS one, without it, and `github` takes a desktop one, else this machine's.
+A publish of more than one platform checks what each needs before its first build, and where one fails after another
+went to the store, its error says which went and the `-p` that publishes the rest.
 
 Each store is a publisher, as an extension adds one: [extensions.md](./extensions.md#publishers)' Publishers says how
 to write one, and an extension listed under the name of one of these four replaces it. A store's options go after its
@@ -1521,7 +1523,8 @@ The declaration goes first, so one Play refuses stops the publish before its bun
 
 `crossbind app publish app-store -p ios` builds the iOS app, archives it with `xcodebuild` and uploads it to App Store
 Connect, whose TestFlight hands it to testers once Apple has processed it, usually within 5 to 30 minutes; `-p macos`
-sends the macOS app (see [Mac App Store](#mac-app-store)). It runs on macOS, with Xcode. Before the build it checks all it needs:
+sends the macOS app (see [Mac App Store](#mac-app-store)), and without `-p` the publish sends the iOS app, then the
+macOS one. It runs on macOS, with Xcode. Before the build it checks all it needs:
 - `app.id`, set in `crossbind.config.js`, as App Store Connect keeps an app's bundle id for good;
 - the Apple Developer Program team, `app.team` or `XCODE_DEVELOPMENT_TEAM`;
 - and `app.icon`, as App Store Connect takes no app without an icon.
@@ -1537,7 +1540,8 @@ Settings › Accounts › Manage Certificates. `--track`, `--draft` and `--rollo
 iOS publish.
 
 Once, for each app, create it in App Store Connect, under Apps, as a new iOS app with `app.id` as its bundle ID; Apple's
-API makes none, and the upload fails until the app is there. A publish that finds no app registers the bundle id with
+API makes none, and the upload fails until the app is there. An app on iOS alone publishes with `-p ios` until its
+macOS platform is added there. A publish that finds no app registers the bundle id with
 Apple first, through an export that uploads nothing, so App Store Connect's form lists it.
 
 The archived app shows what of Apple's required reason API it calls, and a category its privacy manifest gives no reason
@@ -1730,7 +1734,7 @@ stays one once both platforms are approved: add the macOS platform to the app th
 the sidebar. It takes the app in the App Sandbox (see [The App Sandbox](#the-app-sandbox)), in an installer package,
 which Apple signs as it does an iOS app: `crossbind app store app-store` names what is left.
 
-`crossbind app publish app-store -p macos` builds the app sandboxed and signed ad hoc, without its updater or
+`crossbind app publish app-store -p macos`, or the publish without `-p` after the iOS app, builds the app sandboxed and signed ad hoc, without its updater or
 installers and for macOS 13 or a later `app.macos.minimumVersion`, puts it in an archive as Xcode makes one, and has
 Xcode export the archive to App Store Connect, as the iOS app's goes: Xcode's account or an Admin key signs the app and its
 installer package in the cloud with the team's distribution certificates, and makes the app's Mac App Store profile, so

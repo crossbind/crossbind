@@ -879,13 +879,15 @@ with one that names the publisher and the step, as `demo-store's check failed: â
 1. finds the publisher, after those it comes after, and says so of one an extension lists in the place of crossbind's
    own;
 2. builds for the platform `-p` names, else the publisher's only one, else `CROSSBIND_APP_PLATFORM`'s, else this
-   machine's desktop one;
+   machine's desktop one for a store of desktop apps alone, else each one it takes, one after the other, as
+   `app-store`'s iOS, then macOS;
 3. takes each publisher's options from the command line, after the store's name: one of another store's is refused,
    naming whose it is, and any other goes on to Vite, as `--mode` does;
-4. runs the first publisher's `build`, then every `check`: without a terminal, as in CI, every missing piece is named at
-   once;
-5. builds the app once, with the first publisher's changes, build number and environment;
-6. hands the build's output to each `upload` in turn.
+4. runs the first publisher's `build`, then every `check`, for each platform before the first build: without a
+   terminal, as in CI, every missing piece is named at once;
+5. builds each platform's app once, with the first publisher's changes, build number and environment;
+6. hands the build's output to each `upload` in turn. Where a platform fails after another went to the store, the
+   error says which went and the `-p` that publishes the rest.
 
 Without a name, `-p android` publishes to `google-play` and `-p ios` to `app-store`. `crossbind app publish --help`
 lists the app's stores, crossbind's own and its extensions', with their options.

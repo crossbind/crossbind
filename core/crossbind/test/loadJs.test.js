@@ -2,6 +2,7 @@ import { describe, test, expect, beforeEach, afterEach } from 'vitest';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import upath from 'upath';
 import loadJs from '../src/utils/loadJs.js';
 
 describe('loadJs', () => {
@@ -44,5 +45,15 @@ describe('loadJs', () => {
         fs.writeFileSync(path.join(tmpDir, 'cfg.mjs'), 'export default { from: "mjs" };');
         const result = await loadJs(tmpDir, 'cfg', ['mjs', 'json']);
         expect(result).toEqual({ from: 'mjs' });
+    });
+
+    test('reads an ES or a CommonJS module again for isFresh, as its file may have changed since the first read', async () => {
+        fs.writeFileSync(upath.join(tmpDir, 'esm.mjs'), 'export default { v: 1 };');
+        fs.writeFileSync(upath.join(tmpDir, 'cjs.cjs'), 'module.exports = { v: 1 };');
+        expect([await loadJs(tmpDir, 'esm'), await loadJs(tmpDir, 'cjs')]).toEqual([{ v: 1 }, { v: 1 }]);
+        fs.writeFileSync(upath.join(tmpDir, 'esm.mjs'), 'export default { v: 2 };');
+        fs.writeFileSync(upath.join(tmpDir, 'cjs.cjs'), 'module.exports = { v: 2 };');
+        expect([await loadJs(tmpDir, 'esm'), await loadJs(tmpDir, 'cjs')]).toEqual([{ v: 1 }, { v: 1 }]);
+        expect([await loadJs(tmpDir, 'esm', undefined, { isFresh: true }), await loadJs(tmpDir, 'cjs', undefined, { isFresh: true })]).toEqual([{ v: 2 }, { v: 2 }]);
     });
 });
