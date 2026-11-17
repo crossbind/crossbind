@@ -17,7 +17,7 @@ const PLATFORMS = {
 // The Mac App Store takes an Apple silicon app of macOS 13 or later.
 const MINIMUM_MACOS = '13.0';
 
-const NO_APP_ID = 'crossbind: App Store Connect knows an app by its bundle id, app.id, which crossbind.config.js does not set: set it, as com.example.myapp, before the first publish, as Apple keeps it for good.';
+const NO_APP_ID = 'crossbind: App Store Connect knows an app by its bundle id, app.id, which crossbind.config.js does not set: set it, as com.example.myapp, before the first upload, as Apple keeps it for good.';
 const NO_TEAM = "crossbind: App Store Connect takes uploads from an Apple Developer Program team, which neither app.team in crossbind.config.js nor this machine's XCODE_DEVELOPMENT_TEAM names: set either to its id, which developer.apple.com/account shows under Membership details.";
 const NO_CATEGORY = 'crossbind: the Mac App Store takes no app without its category: set app.category in crossbind.config.js.';
 const NO_ENCRYPTION = 'crossbind: app.encryption is not set, so App Store Connect asks whether this build uses encryption before TestFlight hands it out; set it in crossbind.config.js to answer for every build.';
@@ -27,7 +27,7 @@ const NO_KEY_TO_SEND = "crossbind: crossbind app store --send sends the page thr
 const NO_KEY_TO_SEE = "Set CROSSBIND_APPLE_API_KEY, CROSSBIND_APPLE_API_KEY_ID and CROSSBIND_APPLE_API_ISSUER, an App Store Connect API key's, to see what App Store Connect has.";
 const TEAM_ID = /^[A-Z0-9]{10}$/;
 const noIcon = (platform) => `crossbind: App Store Connect takes no ${platform} app without an icon: set app.icon in crossbind.config.js to a square PNG, at best 1024 × 1024.`;
-const notOnMac = (id, then = 'publish again, or publish the iOS app alone with -p ios') => `crossbind: App Store Connect's app ${id} is not on macOS yet: add the platform there, with the + beside its platform in the sidebar, which makes it a universal purchase, then ${then}.`;
+const notOnMac = (id, then = 'upload again, or upload the iOS app alone with -p ios') => `crossbind: App Store Connect's app ${id} is not on macOS yet: add the platform there, with the + beside its platform in the sidebar, which makes it a universal purchase, then ${then}.`;
 const SEND_AGAIN = "send again, or send the iOS app's page alone with -p ios";
 
 async function pickTeam(api, teams) {
@@ -85,7 +85,7 @@ async function isOnMac(call, appId) {
     return data.length > 0;
 }
 
-// What a publish with --submit hands to App Review through: the API, the app App Store Connect has, and the listing,
+// What an upload with --submit hands to App Review through: the API, the app App Store Connect has, and the listing,
 // once App Store Connect would take the version to review. A macOS app's record, which a key reads before the build, has
 // to be on macOS already.
 async function releaseOf(api, key, { shouldSubmit, listings, settings }) {
@@ -128,7 +128,7 @@ async function submitToReview(api, {
     api.log(`crossbind: ${api.app.id} ${api.app.appleVersion} (build ${build}) for ${platform.name} went to App Review${phases}; Apple mails as the review goes.`);
 }
 
-// An app extension's reasons are its target's, which its extension gives, so the publish names them and asks for none.
+// An app extension's reasons are its target's, which its extension gives, so the upload names them and asks for none.
 const unreasonedTargetError = ({ name, unreasoned }) => new Error(`crossbind: App Store Connect refuses an iOS app that calls required reason API without Apple's reasons for it (ITMS-91053), and the app's target ${name} calls ${unreasoned.map(({ category, symbols }) => `${category} (${symbols.join(', ')})`).join(' and ')} with no reason in its privacy manifest. Its extension gives the target Apple's reasons in its privacy, as { fileTimestamp: ['C617.1'] }. Nothing went to App Store Connect.`);
 const unreasonedError = (unreasoned) => new Error(`crossbind: App Store Connect refuses an iOS app that calls required reason API without Apple's reasons for it (ITMS-91053), and this app calls ${unreasoned.map(({ category, symbols }) => `${category} (${symbols.join(', ')})`).join(' and ')} with no reason in its privacy manifest. Give app.privacy Apple's reasons, as { fileTimestamp: ['C617.1'] }; Apple's "Describing use of required reason API" says what each covers. Nothing went to App Store Connect.`);
 

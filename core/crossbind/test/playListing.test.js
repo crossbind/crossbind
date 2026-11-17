@@ -135,7 +135,7 @@ describe("a release's notes", () => {
 });
 
 describe("a project's Google Play settings", () => {
-    test('are the contact details and Data safety declaration a publish sends, and what Play Console alone takes, beside the languages', () => {
+    test('are the contact details and Data safety declaration an upload sends, and what Play Console alone takes, beside the languages', () => {
         write('contact_email.txt', 'support@example.com\n');
         write('contact_website.txt', 'https://example.com');
         write('data_safety.csv', 'Question ID,Response ID\nPSL_DATA_COLLECTION_COLLECTS_PERSONAL_DATA,false\n');
@@ -188,7 +188,7 @@ describe("what Google Play would refuse of a listing's images", () => {
 });
 
 describe("crossbind app store's word on Google Play", () => {
-    test('names what a publish sends, what --send sends, what Play would refuse of it, and the steps Play Console alone takes', () => {
+    test('names what an upload sends, what --send sends, what Play would refuse of it, and the steps Play Console alone takes', () => {
         write('en-US/title.txt', 'Demo');
         write('en-US/short_description.txt', 'A demo');
         write('en-US/full_description.txt', 'The demo app.');

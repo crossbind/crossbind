@@ -15,7 +15,7 @@ const json = (status, body) => new Response(JSON.stringify(body), { status, head
 
 let project;
 let made;
-// Partner Center as a publish sees one app: the app given, or none, and the statuses of a committed submission in turn.
+// Partner Center as an upload sees one app: the app given, or none, and the statuses of a committed submission in turn.
 function partnerCenter(app, statuses = ['PreProcessing']) {
     vi.stubGlobal('fetch', async (url, init = {}) => {
         const address = String(url);
@@ -36,7 +36,7 @@ const appOf = (fields = {}) => ({
     id: '9N1', primaryName: 'Demo', packageIdentityName: IDENTITY.name, publisherName: IDENTITY.publisher, lastPublishedApplicationSubmission: PUBLISHED, ...fields,
 });
 
-// The api a publish gives the publisher: its options, the project, the app's config and the terminal's answers.
+// The api an upload gives the publisher: its options, the project, the app's config and the terminal's answers.
 function apiOf({
     options = {}, msix = IDENTITY, version = '1.2.3', isGuided = false, answers = [],
 } = {}) {
@@ -138,7 +138,7 @@ describe('the Microsoft Store publisher', () => {
         partnerCenter(appOf({ publisherName: 'CN=OTHER' }));
         await expect(publisher.check(apiOf().api)).rejects.toThrow("app.windows.msix names the publisher CN=1A2B3C4D, and Partner Center's app Demo has CN=OTHER");
         partnerCenter(appOf({ pendingApplicationSubmission: { id: 'S1' } }));
-        await expect(publisher.check(apiOf().api)).rejects.toThrow('crossbind: Partner Center has submission S1 of Demo in progress, and takes one at a time: submit or delete it there, then publish again.');
+        await expect(publisher.check(apiOf().api)).rejects.toThrow('crossbind: Partner Center has submission S1 of Demo in progress, and takes one at a time: submit or delete it there, then upload again.');
     });
 
     test('deletes a submission in progress where the terminal says so', async () => {
@@ -203,7 +203,7 @@ describe('the Microsoft Store publisher', () => {
             'First submission › Age ratings',
             'First submission › Pricing and availability',
             'First submission › Submission options › Notes for certification',
-            'For later versions, which a publish sends',
+            'For later versions, which an upload sends',
         ]);
         expect(steps[3].details.map(upath.toUnix)).toEqual([
             'Product name ← store/microsoft-store/en-US/title.txt',

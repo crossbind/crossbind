@@ -240,7 +240,7 @@ describe("an iOS app's upload", () => {
         for (let run = 0; run < 2; run += 1) {
             expect(() => uploadIosArchive(api, `${store}/demo.xcarchive`, { team: 'ABCDE12345', key: null, isBuildManaged: true, facts }))
                 .toThrow(expect.objectContaining({
-                    message: expect.stringContaining(`App Store Connect has no app dev.example.demo: create it at ${APP_STORE_CONNECT}, a new iOS app with dev.example.demo as its bundle ID, which this publish registered with Apple.`),
+                    message: expect.stringContaining(`App Store Connect has no app dev.example.demo: create it at ${APP_STORE_CONNECT}, a new iOS app with dev.example.demo as its bundle ID, which this upload registered with Apple.`),
                     isMendable: true,
                     page: APP_STORE_CONNECT,
                 }));
@@ -253,7 +253,7 @@ describe("an iOS app's upload", () => {
         const archive = `${store}/demo.xcarchive`;
         const said = vi.spyOn(console, 'log').mockImplementation(() => {});
         failureOf(() => uploadIosArchive(api, archive, { team: 'ABCDE12345', key: KEY, isBuildManaged: true, facts }));
-        expect(said.mock.calls).toEqual([['crossbind: App Store Connect has no app dev.example.demo yet, so this publish registers its bundle id with Apple first.']]);
+        expect(said.mock.calls).toEqual([['crossbind: App Store Connect has no app dev.example.demo yet, so this upload registers its bundle id with Apple first.']]);
         said.mockRestore();
         expect(xcode.runs[1]).toEqual(['-exportArchive', '-archivePath', archive, '-exportOptionsPlist', `${store}/RegisterOptions.plist`,
             '-exportPath', `${store}/register`, '-allowProvisioningUpdates', '-authenticationKeyPath', KEY.key, '-authenticationKeyID', 'ABC123',

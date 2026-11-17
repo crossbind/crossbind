@@ -9,7 +9,7 @@ import { pngOf } from './listingImages.js';
 // ditto, which copies the app into its archive, here as fs copies it.
 const spawnSync = vi.fn();
 vi.mock('node:child_process', async (importOriginal) => ({ ...await importOriginal(), spawnSync }));
-// App Store Connect, by the routes the publish calls, and the review's hand-over, which appStoreRelease's own tests cover.
+// App Store Connect, by the routes the upload calls, and the review's hand-over, which appStoreRelease's own tests cover.
 let connect;
 vi.mock('../../store-kit/app-store/appStoreApi.js', async (importOriginal) => ({ ...await importOriginal(), appStoreCaller: () => connect.call }));
 const submitted = [];
@@ -36,7 +36,7 @@ const KEY = { key: '/keys/AuthKey_ABC123.p8', keyId: 'ABC123', issuer: 'issuer-u
 let project;
 const hostPlatform = Object.getOwnPropertyDescriptor(process, 'platform');
 
-// App Store Connect as the publish sees an app with no version in review: on macOS or not.
+// App Store Connect as the upload sees an app with no version in review: on macOS or not.
 function appStoreConnect({ isOnMac = true } = {}) {
     const calls = [];
     const call = async (method, route) => {
@@ -137,7 +137,7 @@ describe("App Store Connect's publisher of a macOS app", () => {
     test("asks for the macOS platform on the app's record where a key reaches App Store Connect", async () => {
         appStoreConnect({ isOnMac: false });
         expect((await publisher.check(apiOf().api)).missing).toEqual([
-            "crossbind: App Store Connect's app com.example.demo is not on macOS yet: add the platform there, with the + beside its platform in the sidebar, which makes it a universal purchase, then publish again, or publish the iOS app alone with -p ios.",
+            "crossbind: App Store Connect's app com.example.demo is not on macOS yet: add the platform there, with the + beside its platform in the sidebar, which makes it a universal purchase, then upload again, or upload the iOS app alone with -p ios.",
         ]);
     });
 

@@ -137,7 +137,7 @@ function playError(status, message, method, url, appId, credentials, rights) {
     if (status === 404 && route === '/edits') {
         text = `crossbind: Play Console has no app ${appId}: create it there, with ${appId} as its package name, as Play's API makes none.`;
     } else if (status === 401 && credentials.token) {
-        text = `crossbind: Google Play takes ${PLAY.token} no more: it has expired, as access tokens do after an hour, or it is no access token; make it in the publish's own job.`;
+        text = `crossbind: Google Play takes ${PLAY.token} no more: it has expired, as access tokens do after an hour, or it is no access token; make it in the upload's own job.`;
     } else if (status === 403 && credentials.token && /insufficient authentication scopes/i.test(message)) {
         text = `crossbind: ${PLAY.token} lacks the scope ${PLAY_SCOPE}, which Google Play's API takes: ask for it where the token is made, as google-github-actions/auth's access_token_scopes does.`;
     } else if (status === 403 && credentials.refreshToken) {

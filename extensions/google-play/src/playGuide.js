@@ -47,7 +47,7 @@ function readAll(root) {
     return { listings, settings, problems };
 }
 
-// What crossbind app store says of Google Play: what a publish sends, which is the bundle and its release notes, what
+// What crossbind app store says of Google Play: what an upload sends, which is the bundle and its release notes, what
 // --send sends, which is the rest of the page, what Play would refuse of it, and the steps Play Console alone takes,
 // once for the app.
 export function playGuide(api) {
@@ -78,7 +78,7 @@ export function playGuide(api) {
             ? [{ text: `Grow users › Store presence › Store settings › Contact details: an e-mail at least, which ${file('contact_email.txt')} would send with crossbind app store google-play --send.` }]
             : []),
         { text: 'Test and release › Production › Countries / regions: pick where the app goes. A personal account opened after 13 November 2023 first runs a closed test with 12 testers for 14 days.' },
-        { text: 'Test and release: roll out the first release once, which the first publish leaves a draft; later publishes go out by themselves.' },
+        { text: 'Test and release: roll out the first release once, which the first upload leaves a draft; later uploads go out by themselves.' },
         { text: 'For CI: Users and permissions › invite the service account, with "Release apps to testing tracks", "Manage store presence" for the listing and details, and "Manage policy declarations" for the Data safety declaration.' },
     ];
     return {

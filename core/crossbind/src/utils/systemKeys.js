@@ -12,11 +12,11 @@ const systemKeys = {
         default: '',
     },
     GOOGLE_PLAY_SERVICE_ACCOUNT: {
-        description: "The e-mail of the service account crossbind app publish uploads to Google Play as, through this machine's gcloud login, so no key of it exists. The CROSSBIND_GOOGLE_PLAY_SERVICE_ACCOUNT environment variable overrides it.",
+        description: "The e-mail of the service account crossbind app upload uploads to Google Play as, through this machine's gcloud login, so no key of it exists. The CROSSBIND_GOOGLE_PLAY_SERVICE_ACCOUNT environment variable overrides it.",
         default: '',
     },
     GOOGLE_PLAY_KEY: {
-        description: 'The JSON key of the service account crossbind app publish uploads to Google Play as, where gcloud is not, as in CI. The CROSSBIND_GOOGLE_PLAY_KEY environment variable overrides it.',
+        description: 'The JSON key of the service account crossbind app upload uploads to Google Play as, where gcloud is not, as in CI. The CROSSBIND_GOOGLE_PLAY_KEY environment variable overrides it.',
         default: '',
     },
     RUNNER: {

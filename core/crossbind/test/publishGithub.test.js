@@ -164,7 +164,7 @@ describe('publishing a desktop app to a GitHub release', () => {
         expect([github.made, github.uploads]).toEqual([[], []]);
     });
 
-    test("takes the release another publish made during the build, leaves it a draft with --draft, and each arch's files go up", async () => {
+    test("takes the release another upload made during the build, leaves it a draft with --draft, and each arch's files go up", async () => {
         github.releases = [null, { id: 3, draft: true, assets: [], html_url: page('untagged-3') }];
         await publish(['github', '--draft'], { platform: 'linux', runVite });
         expect(github.made).toEqual([]);
@@ -173,7 +173,7 @@ describe('publishing a desktop app to a GitHub release', () => {
             { release: 3, file: 'demo-linux-arm64.deb', name: 'demo-linux-arm64.deb' },
         ]);
         expect(github.published).toEqual([]);
-        expect(printed.join('\n')).toContain(`crossbind: the linux app of 1.2.3 is on the draft release v1.2.3, which a publish without --draft, or GitHub's page, puts out: ${page('untagged-3')}`);
+        expect(printed.join('\n')).toContain(`crossbind: the linux app of 1.2.3 is on the draft release v1.2.3, which an upload without --draft, or GitHub's page, puts out: ${page('untagged-3')}`);
     });
 
     test("puts a Windows app's setup up once, as what installs it and as its update, into a release out already", async () => {

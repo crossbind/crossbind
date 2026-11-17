@@ -9,9 +9,9 @@ import { askAppId } from '@crossbind/core-store-kit';
 import { playGuide } from './src/playGuide.js';
 
 const PLAY_CONSOLE = 'https://play.google.com/console';
-const NO_APP_ID = 'crossbind: Google Play knows an app by its package name, app.id, which crossbind.config.js does not set: set it, as com.example.myapp, before the first publish, as Play keeps it for good.';
+const NO_APP_ID = 'crossbind: Google Play knows an app by its package name, app.id, which crossbind.config.js does not set: set it, as com.example.myapp, before the first upload, as Play keeps it for good.';
 const NO_UPLOAD_KEY = 'crossbind: Google Play takes bundles signed with your upload key: crossbind app key upload makes one, or CROSSBIND_ANDROID_KEYSTORE, CROSSBIND_ANDROID_KEY_ALIAS and CROSSBIND_ANDROID_KEYSTORE_PASSWORD name yours.';
-const NO_CREDENTIALS = `crossbind: Google Play takes uploads from your Google account, which a publish on a terminal signs in to, or from a service account: set ${PLAY.serviceAccount} to its e-mail, with gcloud signed in, ${PLAY.key} to its JSON key, or ${PLAY.token} to an access token of it; app.md's Publishing says how to make one.`;
+const NO_CREDENTIALS = `crossbind: Google Play takes uploads from your Google account, which an upload on a terminal signs in to, or from a service account: set ${PLAY.serviceAccount} to its e-mail, with gcloud signed in, ${PLAY.key} to its JSON key, or ${PLAY.token} to an access token of it; app.md's Publishing says how to make one.`;
 const SIGN_IN = 'Google Play takes uploads from your Google account once crossbind is signed in to it. Sign in now, in your browser? [Y/n] ';
 const ANOTHER_ACCOUNT = 'Sign in with another Google account? [Y/n] ';
 const PERCENT = /^\d+(\.\d{1,2})?%?$/;
@@ -161,7 +161,7 @@ export default function googlePlay() {
                 }
                 api.log(`crossbind: ${app} is a draft on Google Play's ${track} track.`);
                 if (status !== 'draft') {
-                    api.log("crossbind: Play takes drafts alone until an app's first release is out: roll it out once in Play Console, under Test and release, and later publishes go out by themselves.");
+                    api.log("crossbind: Play takes drafts alone until an app's first release is out: roll it out once in Play Console, under Test and release, and later uploads go out by themselves.");
                 }
                 if (status === 'inProgress') {
                     api.log(`crossbind: Play stages updates alone, so that first release reaches all of the track's users, not ${rollout}% of them.`);
@@ -205,7 +205,7 @@ export default function googlePlay() {
                 if (api.config.app.id === undefined) return ['Set app.id in crossbind.config.js, and Google Play tells what it has of the app.'];
                 const credentials = playCredentials(process.env, api.settings) ?? await keptSignIn(api.secrets);
                 if (!credentials) {
-                    return [`Sign in to Google on a terminal, as crossbind app store google-play --send or a publish does, or set ${PLAY.serviceAccount}, ${PLAY.key} or ${PLAY.token}, to see what Google Play has.`];
+                    return [`Sign in to Google on a terminal, as crossbind app store google-play --send or an upload does, or set ${PLAY.serviceAccount}, ${PLAY.key} or ${PLAY.token}, to see what Google Play has.`];
                 }
                 const released = (await playTracks(api.app.id, credentials)).filter(({ releases = [] }) => releases.length > 0);
                 if (released.length === 0) return [`no release of ${api.app.id} yet`];

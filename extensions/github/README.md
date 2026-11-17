@@ -7,7 +7,7 @@ It comes with `@crossbind/core-app-host`: there is nothing to install or list.
 ## Use
 
 ```sh
-npx crossbind app publish github -p macos
+npx crossbind app upload github -p macos
 ```
 
 It builds the desktop app and puts its installers, and with `app.updater` its update and the update's manifest, on the

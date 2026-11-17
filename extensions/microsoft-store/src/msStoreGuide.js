@@ -35,7 +35,7 @@ const TEXTS = {
 };
 const IMAGES = { Icon: 'tile', PromotionalArt16x9: 'hero' };
 
-// What a publish sends of a language: its texts, its lists and its images.
+// What an upload sends of a language: its texts, its lists and its images.
 function languageLine({ language, texts, images }) {
     const parts = [
         Object.entries(texts).map(([field, text]) => (Array.isArray(text) ? `${text.length} ${field === 'features' ? 'features' : 'search terms'}` : TEXTS[field])).join(', '),
@@ -102,7 +102,7 @@ function firstSubmission(api, listings, settings) {
     ];
 }
 
-// What crossbind app store says of the Microsoft Store: what a publish sends, which is the packages and the page, what
+// What crossbind app store says of the Microsoft Store: what an upload sends, which is the packages and the page, what
 // --send sends, which is the page alone, what Partner Center would refuse of it, and the steps Partner Center alone
 // takes: the app's name, the first submission and the application its API takes.
 export function msStoreGuide(api) {
@@ -124,7 +124,7 @@ export function msStoreGuide(api) {
         }]),
         ...firstSubmission(api, listings, settings),
         {
-            text: `For later versions, which a publish sends: Account settings › User management › Microsoft Entra applications: add one with the Manager role and make a key, which ${STORE_ENV.tenant}, ${STORE_ENV.client} and ${STORE_ENV.secret} name, or a publish on a terminal asks for once.`,
+            text: `For later versions, which an upload sends: Account settings › User management › Microsoft Entra applications: add one with the Manager role and make a key, which ${STORE_ENV.tenant}, ${STORE_ENV.client} and ${STORE_ENV.secret} name, or an upload on a terminal asks for once.`,
             url: USERS,
         },
     ];

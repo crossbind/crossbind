@@ -5,8 +5,8 @@ import { APP_STORE_CONNECT } from './appStoreRelease.js';
 const missingApp = (platform) => ({
     pattern: /No suitable application records were found|App record with bundle identifier .* not found/i,
     hint: ({ id }) => (platform === 'macOS'
-        ? `App Store Connect has no app ${id} on macOS: add the platform to its record at ${APP_STORE_CONNECT}, with the + beside its platform in the sidebar, or create a new macOS app there with ${id} as its bundle ID, which this publish registered with Apple.`
-        : `App Store Connect has no app ${id}: create it at ${APP_STORE_CONNECT}, a new iOS app with ${id} as its bundle ID, which this publish registered with Apple.`),
+        ? `App Store Connect has no app ${id} on macOS: add the platform to its record at ${APP_STORE_CONNECT}, with the + beside its platform in the sidebar, or create a new macOS app there with ${id} as its bundle ID, which this upload registered with Apple.`
+        : `App Store Connect has no app ${id}: create it at ${APP_STORE_CONNECT}, a new iOS app with ${id} as its bundle ID, which this upload registered with Apple.`),
     page: APP_STORE_CONNECT,
 });
 const MISSING_APP = { iOS: missingApp('iOS'), macOS: missingApp('macOS') };
@@ -67,7 +67,7 @@ export function uploadArchive(api, archive, {
         ], { log: `${api.workDir}/upload.log`, facts, causes: [MISSING_APP[platform]] });
     } catch (error) {
         if (error.reason === MISSING_APP[platform]) {
-            api.log(`crossbind: App Store Connect has no app ${facts.id} yet, so this publish registers its bundle id with Apple first.`);
+            api.log(`crossbind: App Store Connect has no app ${facts.id} yet, so this upload registers its bundle id with Apple first.`);
             registerBundleId(api, archive, {
                 team, key, facts, platform,
             });
@@ -80,7 +80,7 @@ export function uploadArchive(api, archive, {
 
 // A step that failed for what only the user can mend, in Xcode or on Apple's sites, runs again once they press Enter,
 // after crossbind opened the page that mends it where it knows one. Any other failure, or one without a terminal, stops
-// the publish.
+// the upload.
 export async function untilDone(api, step) {
     for (;;) {
         try {

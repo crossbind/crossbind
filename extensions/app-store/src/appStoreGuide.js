@@ -17,7 +17,7 @@ const TEXTS = {
 };
 const file = (name) => path.join(APP_STORE_LISTING, name);
 
-// What crossbind app store --send sends of a locale, as a publish with --submit does: its texts and its screenshots of
+// What crossbind app store --send sends of a locale, as an upload with --submit does: its texts and its screenshots of
 // each display type.
 function localeLine({
     locale, info, version, screenshots,
@@ -48,7 +48,7 @@ function readAll(root) {
     return { listings, settings, problems };
 }
 
-// What crossbind app store --send sends of the app's settings, as a publish with --submit does.
+// What crossbind app store --send sends of the app's settings, as an upload with --submit does.
 function settingsLines({
     copyright, categories, ageRating, review,
 }) {
@@ -76,8 +76,8 @@ function lackedSteps(listings, settings) {
     ].filter(Boolean).map((text) => ({ text }));
 }
 
-// What crossbind app store says of App Store Connect, of the iOS app and the macOS one alike: what a publish sends, what
-// --send sends, which a publish with --submit sends too, what App Store Connect would refuse of them, and the steps it
+// What crossbind app store says of App Store Connect, of the iOS app and the macOS one alike: what an upload sends, what
+// --send sends, which an upload with --submit sends too, what App Store Connect would refuse of them, and the steps it
 // alone takes.
 export function appStoreGuide(api) {
     const { listings, settings, problems: read } = readAll(api.project.root);
@@ -91,8 +91,8 @@ export function appStoreGuide(api) {
     const id = api.config.app.id;
     const steps = [
         id === undefined
-            ? { text: 'Set app.id in crossbind.config.js, as com.example.myapp, which App Store Connect keeps for good as the bundle ID; then create the app with it, under Apps, as a new app on iOS and macOS, as a publish without -p sends both.', url: APP_STORE_CONNECT }
-            : { text: `Apps › New App: an app with ${id} as its bundle ID, on iOS and macOS, as a publish without -p sends both, with its name, primary language and SKU, as Apple's API makes none; a publish without --submit registers the bundle ID first, so the form lists it. An app on iOS alone takes macOS later with the + beside its platform in the sidebar, as a universal purchase, which stays one once both platforms are approved, and publishes with -p ios until then.`, url: APP_STORE_CONNECT },
+            ? { text: 'Set app.id in crossbind.config.js, as com.example.myapp, which App Store Connect keeps for good as the bundle ID; then create the app with it, under Apps, as a new app on iOS and macOS, as an upload without -p sends both.', url: APP_STORE_CONNECT }
+            : { text: `Apps › New App: an app with ${id} as its bundle ID, on iOS and macOS, as an upload without -p sends both, with its name, primary language and SKU, as Apple's API makes none; an upload without --submit registers the bundle ID first, so the form lists it. An app on iOS alone takes macOS later with the + beside its platform in the sidebar, as a universal purchase, which stays one once both platforms are approved, and uploads with -p ios until then.`, url: APP_STORE_CONNECT },
         { text: "App Privacy: answer what data the app and the code it carries collect, as Data Not Collected where it collects none; Apple's API takes no answer." },
         { text: "Pricing and Availability: the price, free or one of Apple's, and the countries and regions the app goes to." },
         { text: "App Information › Content Rights: whether the app shows, holds or reaches others' content." },

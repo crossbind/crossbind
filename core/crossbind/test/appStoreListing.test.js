@@ -118,7 +118,7 @@ describe("a project's App Store listing", () => {
 });
 
 describe("a project's App Store settings", () => {
-    test('are the copyright, categories, age rating answers and App Review contact a publish with --submit sends', () => {
+    test('are the copyright, categories, age rating answers and App Review contact an upload with --submit sends', () => {
         write('copyright.txt', '2026 Example Ltd.\n');
         write('primary_category.txt', 'UTILITIES');
         write('secondary_category.txt', 'PRODUCTIVITY');
@@ -216,7 +216,7 @@ describe("a platform's version of the App Store listing", () => {
 });
 
 describe("crossbind app store's word on App Store Connect", () => {
-    test('names what a publish sends, what --send sends, and the steps App Store Connect alone takes', () => {
+    test('names what an upload sends, what --send sends, and the steps App Store Connect alone takes', () => {
         write('en-US/name.txt', 'Demo');
         write('en-US/privacy_url.txt', 'https://example.com/privacy');
         write('en-US/screenshots/APP_IPHONE_67/01.png', pngOf(1320, 2868));
@@ -238,7 +238,7 @@ describe("crossbind app store's word on App Store Connect", () => {
             'categories: UTILITIES',
         ]);
         const texts = guide.steps.map(({ text }) => text);
-        expect(texts[0]).toBe("Apps › New App: an app with dev.example.demo as its bundle ID, on iOS and macOS, as a publish without -p sends both, with its name, primary language and SKU, as Apple's API makes none; a publish without --submit registers the bundle ID first, so the form lists it. An app on iOS alone takes macOS later with the + beside its platform in the sidebar, as a universal purchase, which stays one once both platforms are approved, and publishes with -p ios until then.");
+        expect(texts[0]).toBe("Apps › New App: an app with dev.example.demo as its bundle ID, on iOS and macOS, as an upload without -p sends both, with its name, primary language and SKU, as Apple's API makes none; an upload without --submit registers the bundle ID first, so the form lists it. An app on iOS alone takes macOS later with the + beside its platform in the sidebar, as a universal purchase, which stays one once both platforms are approved, and uploads with -p ios until then.");
         expect(texts.map(upath.toUnix)).toEqual(expect.arrayContaining([
             "App Information › Age Rating: answer Apple's questions, which store/app-store/age_rating.json would send.",
             "The version's App Review Information: a contact's name, phone and e-mail, which store/app-store/review_information would send.",

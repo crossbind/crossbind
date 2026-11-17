@@ -74,7 +74,7 @@ export default function github() {
             platform: 'desktop',
             store: 'GitHub Releases',
             options: {
-                draft: { help: "leave the release a draft, which a publish without --draft, or GitHub's page, puts out" },
+                draft: { help: "leave the release a draft, which an upload without --draft, or GitHub's page, puts out" },
             },
 
             async check(api) {
@@ -123,7 +123,7 @@ export default function github() {
                     published: { repository, tag, url: out.html_url, files: uploaded.map(({ name, browser_download_url: url }) => ({ name, url })) },
                 });
                 if (release.draft && isDraft) {
-                    api.log(`crossbind: the ${platform} app of ${version} is on the draft release ${tag}, which a publish without --draft, or GitHub's page, puts out: ${release.html_url}`);
+                    api.log(`crossbind: the ${platform} app of ${version} is on the draft release ${tag}, which an upload without --draft, or GitHub's page, puts out: ${release.html_url}`);
                     return published(release);
                 }
                 const out = release.draft ? await publishRelease(call, release) : release;

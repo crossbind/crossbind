@@ -90,7 +90,7 @@ describe("an app host's own extensions", () => {
         expect(extensions[0].app.macos.frameworks).toEqual(['UniformTypeIdentifiers']);
     });
 
-    test('leave the publishers and the installers among those packages to the publish and the build', () => {
+    test('leave the publishers and the installers among those packages to the upload and the build', () => {
         const root = hostOf({
             dialog: DIALOG,
             store: { json: { name: 'store', publisher: true } },
@@ -752,10 +752,10 @@ describe("an extension's publisher", () => {
         expect(() => checked({ platform: 'ios', options: { version: { help: 'v', value: '<version>' } } })).toThrow('names version, which is no option of its own');
         expect(() => checked({ platform: 'ios', options: { 'release-notes': { help: 'n' } } })).toThrow('names release-notes, which is no option of its own');
         expect(() => checked({ platform: 'ios', options: { mode: { help: 'm', value: '<mode>' } } })).toThrow(
-            "crossbind: extensions[0].publisher.options names mode, which is an option of the Vite build the publish runs, the command line's --mode: name it otherwise.",
+            "crossbind: extensions[0].publisher.options names mode, which is an option of the Vite build the upload runs, the command line's --mode: name it otherwise.",
         );
         expect(() => checked({ platform: 'ios', options: { logLevel: { help: 'l', value: '<level>' } } })).toThrow("the command line's --log-level: name it otherwise.");
-        // The dev server's alone, which no publish runs.
+        // The dev server's alone, which no upload runs.
         expect(checked({ platform: 'ios', options: { open: { help: 'o' }, port: { help: 'p', value: '<port>' } } }).options).toMatchObject({ open: { help: 'o' }, port: { help: 'p' } });
         expect(() => checked({ platform: 'ios', options: { track: 'beta' } })).toThrow('crossbind: extensions[0].publisher.options.track is no option, which is { help } for a flag and { help, value } for one that takes a value.');
         expect(() => checked({ platform: 'ios', options: { track: { help: 't', type: 'string' } } })).toThrow('crossbind: extensions[0].publisher.options.track takes help, value, default; type is none of them.');

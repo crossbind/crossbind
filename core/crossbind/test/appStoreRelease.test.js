@@ -21,7 +21,7 @@ const EDITABLE = 'PREPARE_FOR_SUBMISSION,DEVELOPER_REJECTED,REJECTED,METADATA_RE
 const BUILDS = 'GET /builds?filter[app]=A1&filter[preReleaseVersion.version]=1.2.3&filter[preReleaseVersion.platform]=IOS&sort=-uploadedDate&limit=1';
 const build = (id, processingState, version = '42') => ({ id, attributes: { version, processingState } });
 const READY = 'GET /apps/A1/reviewSubmissions?filter[platform]=IOS&filter[state]=READY_FOR_REVIEW&include=items';
-const PREPARED = 'crossbind: App Store Connect prepares a review submission of the app with items in it already, as one a publish stopped in leaves: submit or remove them there, then publish again.';
+const PREPARED = 'crossbind: App Store Connect prepares a review submission of the app with items in it already, as one an upload stopped in leaves: submit or remove them there, then upload again.';
 // The submission App Store Connect prepares, with an item in the state given.
 const prepared = (state) => ({
     data: [{ id: 'S7', attributes: { state: 'READY_FOR_REVIEW' }, relationships: { items: { data: [{ type: 'reviewSubmissionItems', id: 'X1' }] } } }],
@@ -32,7 +32,7 @@ let calls;
 let answers;
 let builds;
 let printed;
-// App Store Connect as a publish sees one app: its answers by method and route, else those of an app with no version of
+// App Store Connect as an upload sees one app: its answers by method and route, else those of an app with no version of
 // 1.2.3 and none prepared, the upload's build B2 processed after B1, and nothing in review. What it is given it keeps.
 const DEFAULTS = {
     'GET /apps?filter[bundleId]=dev.example.demo': { data: [{ id: 'A0', attributes: { bundleId: 'dev.example.demo.widget' } }, { id: 'A1', attributes: { bundleId: 'dev.example.demo' } }] },
@@ -107,10 +107,10 @@ describe('an app on App Store Connect', () => {
             .toThrow("crossbind: App Review has the app's submission as WAITING_FOR_REVIEW, and takes one at a time: let it finish, or cancel it in App Store Connect.");
         answers[submissions] = { data: [{ id: 'S0', attributes: { state: 'UNRESOLVED_ISSUES' } }] };
         await expect(assertReviewable(call, 'A1', '1.2.3')).rejects
-            .toThrow("crossbind: App Review answered the app's last submission with issues, which App Store Connect resolves: publish without --submit, pick the new build there and resubmit");
+            .toThrow("crossbind: App Review answered the app's last submission with issues, which App Store Connect resolves: upload without --submit, pick the new build there and resubmit");
     });
 
-    test('stops before the build where a publish stopped in a submission App Store Connect prepares, which it names to mend', async () => {
+    test('stops before the build where an upload stopped in a submission App Store Connect prepares, which it names to mend', async () => {
         answers[READY] = prepared('READY_FOR_REVIEW');
         await expect(assertReviewable(call, 'A1', '1.2.3')).rejects.toThrow(PREPARED);
         delete answers[READY];
@@ -357,7 +357,7 @@ describe("a version's screenshots on App Store Connect", () => {
         expect(keys().filter((key) => key.includes('/appScreenshotSets/'))).toEqual([]);
     });
 
-    test('go up anew where App Store Connect shows the same files unprocessed, or refused, as a stopped publish leaves them', async () => {
+    test('go up anew where App Store Connect shows the same files unprocessed, or refused, as a stopped upload leaves them', async () => {
         answers[SETS] = shown(['first'], 'FAILED');
         processed('SET1', ['SS1']);
         expect((await release({ listings: listed({ APP_IPHONE_67: [file('1.png', 'first')] }) })).listed).toEqual(['en-US']);

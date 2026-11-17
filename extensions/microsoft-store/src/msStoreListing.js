@@ -4,7 +4,7 @@ import {
     imageOf, languageFolders, readSetting, readText, sizeOf, takenNames,
 } from '@crossbind/core-store-kit';
 
-// The settings beside the languages' folders: those Partner Center's submission API takes, which a publish sends, and
+// The settings beside the languages' folders: those Partner Center's submission API takes, which an upload sends, and
 // those of its Properties page, which the API takes no more, so crossbind app store names them to enter there.
 const SENT = {
     'category.txt': { field: 'category', most: 100 },

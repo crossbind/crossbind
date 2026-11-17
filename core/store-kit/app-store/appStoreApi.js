@@ -61,7 +61,7 @@ async function answerTo(url, init, isRepeatable, { what, where = 'App Store Conn
     }
 }
 
-// A caller of App Store Connect's API with an API key, which signs a token for each try, as a publish outlasts one.
+// A caller of App Store Connect's API with an API key, which signs a token for each try, as an upload outlasts one.
 export function appStoreCaller(key) {
     return async (method, route, body) => {
         const path = route.split('?')[0];

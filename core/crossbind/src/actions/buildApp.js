@@ -148,7 +148,7 @@ const BUILD_NUMBER = 'CROSSBIND_APP_BUILD_NUMBER';
 // Google Play takes no larger version code.
 export const MAX_VERSION_CODE = 2100000000;
 
-// The number CI or a publish gives a build, which iOS takes as its build and Android as its version code:
+// The number CI or an upload gives a build, which iOS takes as its build and Android as its version code:
 // CROSSBIND_APP_BUILD_NUMBER, a whole number both stores take, else none.
 export function appBuildNumber(env = process.env) {
     const value = env[BUILD_NUMBER];
@@ -228,7 +228,7 @@ const infoPlist = (name, version, hasIcon, urlSchemes, fileTypes, activityTypes)
     CFBundlePackageType: 'APPL',
     CFBundleShortVersionString: version,
     ...(urlSchemes.length > 0 ? { CFBundleURLTypes: [{ CFBundleURLName: appId(state.config), CFBundleURLSchemes: urlSchemes }] } : {}),
-    // The build number CI or a publish gives, as iOS takes it, else the version.
+    // The build number CI or an upload gives, as iOS takes it, else the version.
     CFBundleVersion: String(appBuildNumber() ?? version),
     ...(appEncryption(state.config) === null ? {} : { ITSAppUsesNonExemptEncryption: appEncryption(state.config) }),
     ...(appCategory(state.config) ? { LSApplicationCategoryType: appCategory(state.config).darwin } : {}),
@@ -366,7 +366,7 @@ function warnUnreasonedApis(project, privacy) {
     if (warning) console.warn(warning);
 }
 
-// Where publishApp last put this project's apps, for `crossbind app publish`, which runs Vite and so cannot know the
+// Where publishApp last put this project's apps, for `crossbind app upload`, which runs Vite and so cannot know the
 // outDir it builds into: an iOS or Android app's project, and each arch's desktop app under its platform's name on the
 // command line.
 const appOutputsFile = () => `${state.config.paths.build}/app-outputs.json`;
@@ -381,7 +381,7 @@ export const DESKTOP_PLATFORMS = { darwin: 'macos', linux: 'linux', win32: 'wind
 // else this machine's desktop.
 export const appPlatform = (env = process.env) => env.CROSSBIND_APP_PLATFORM || DESKTOP_PLATFORMS[process.platform];
 
-// Forgets what the builds wrote, as a publish's own build writes it anew, but for the installers' files, which a folder the
+// Forgets what the builds wrote, as an upload's own build writes it anew, but for the installers' files, which a folder the
 // bundler kept holds still, for the page to leave out.
 export function clearAppOutputs() {
     const earlier = [...shippedFiles()];

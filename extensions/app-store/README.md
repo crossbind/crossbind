@@ -9,18 +9,18 @@ It comes with `@crossbind/core-app-host`: there is nothing to install or list.
 ```sh
 npx crossbind app store app-store
 npx crossbind app store app-store --send
-npx crossbind app publish app-store --submit
-npx crossbind app publish app-store -p macos --submit
+npx crossbind app upload app-store --submit
+npx crossbind app upload app-store -p macos --submit
 ```
 
-A publish sends the iOS app, then the macOS one; `-p` sends one alone, and `crossbind app publish -p ios` with no
+An upload sends the iOS app, then the macOS one; `-p` sends one alone, and `crossbind app upload -p ios` with no
 store name comes here. `crossbind app store` lists what only Apple's sites take, and `crossbind app store app-store
 --send` sends the listing in `store/app-store` alone, with no build, into the version of `package.json`'s number,
 through the App Store Connect API key.
 
-- **iOS:** the publish builds the app with the next build number, archives it and uploads it to App Store Connect,
+- **iOS:** the upload builds the app with the next build number, archives it and uploads it to App Store Connect,
   whose TestFlight hands it to testers.
-- **macOS:** the publish builds the app in the App Sandbox, without its updater and for macOS 13 or later, and Xcode
+- **macOS:** the upload builds the app in the App Sandbox, without its updater and for macOS 13 or later, and Xcode
   exports it into the iOS app's record, as a universal purchase. Xcode's account or an Admin key signs the app and its
   installer package in the cloud, so you make no certificate by hand.
 

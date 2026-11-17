@@ -55,11 +55,11 @@ describe("a store's guide", () => {
         ],
     };
 
-    test('is written as what a publish sends, what --send sends, what to fix first, the steps by hand and what the store has, in order', () => {
+    test('is written as what an upload sends, what --send sends, what to fix first, the steps by hand and what the store has, in order', () => {
         expect(guideText({ name: 'demo-store', publisher: { store: 'Demo Store' } }, guide, 'Demo 1.2.3', ['crossbind: internal: versionCode 7, out'])).toBe([
             'Demo Store · Demo 1.2.3',
             '',
-            'crossbind app publish demo-store sends:',
+            'crossbind app upload demo-store sends:',
             '  ✓ the bundle',
             '',
             'crossbind app store demo-store --send sends:',

@@ -38,7 +38,7 @@ export function pagePlatforms({ name, publisher }, platform) {
     return [platform];
 }
 
-// A guide as its publisher gives it, which crossbind writes as it is: lines of what a publish sends, what --send sends,
+// A guide as its publisher gives it, which crossbind writes as it is: lines of what an upload sends, what --send sends,
 // what the store would refuse, and the steps its own site takes, each a text, maybe with a link and the lines of its
 // details.
 export function checkedGuide(name, guide) {
@@ -46,7 +46,7 @@ export function checkedGuide(name, guide) {
         && (step.details === undefined || isTexts(step.details));
     if (!isObject(guide) || !isTexts(guide.publishes) || !isTexts(guide.sends) || !isTexts(guide.problems) || typeof guide.where !== 'string'
         || !Array.isArray(guide.steps) || !guide.steps.every(isStep)) {
-        throw new Error(`crossbind: ${name}'s guide gives no { publishes, sends, problems, where, steps }: lines of what a publish sends, what crossbind app store --send sends, what the store would refuse, where the steps are done, and the steps, each { text, url, details }.`);
+        throw new Error(`crossbind: ${name}'s guide gives no { publishes, sends, problems, where, steps }: lines of what an upload sends, what crossbind app store --send sends, what the store would refuse, where the steps are done, and the steps, each { text, url, details }.`);
     }
     return guide;
 }
@@ -63,7 +63,7 @@ export function guideText({ name, publisher }, {
 }, app, now = []) {
     const store = publisher.store ?? name;
     const lines = [`${store} · ${app}`];
-    if (publishes.length > 0) lines.push('', `crossbind app publish ${name} sends:`, ...publishes.map((line) => `  ✓ ${line}`));
+    if (publishes.length > 0) lines.push('', `crossbind app upload ${name} sends:`, ...publishes.map((line) => `  ✓ ${line}`));
     if (sends.length > 0) lines.push('', `crossbind app store ${name} --send sends:`, ...sends.map((line) => `  ✓ ${line}`));
     if (problems.length > 0) lines.push('', `To fix first, as ${store} would refuse it:`, ...problems.map((problem) => `  ✗ ${unprefixed(problem)}`));
     if (steps.length > 0) {
@@ -110,7 +110,7 @@ async function sendPages(publishers, store, platform) {
     if (missing.length > 0) throw new Error([...new Set(missing)].join('\n'));
 }
 
-// Says of each store, or the one named, what crossbind app publish sends to it, what --send sends, what it would refuse
+// Says of each store, or the one named, what crossbind app upload sends to it, what --send sends, what it would refuse
 // of the project's page, the steps only its own site takes, and what it has now where crossbind can tell without asking,
 // with no build. Gives how many problems it found, so a check of the page fails on any. With send, sends each store's
 // page instead, with no build.
