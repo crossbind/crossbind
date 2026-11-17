@@ -97,7 +97,7 @@ test('what the pages say of roles, of when one enters and of app.without is what
     assert.match(packageOf('menu'), /holds: \['menu', 'notification', 'tray'\]/);
     assert.match(packageOf('updater'), /reads: \['updater'\]/);
     assert.match(packageOf('google-play'), /isDefault: true/);
-    assert.match(packageOf('app-store'), /isDefault: true/);
+    assert.match(packageOf('app-store'), /isDefault: \['ios'\]/);
     for (const name of EXTENSION_GROUPS.find((group) => group.id === 'launches').items.map(({ id }) => id)) {
         assert.match(packageOf(name), /fromApp/, name);
     }

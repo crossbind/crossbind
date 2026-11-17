@@ -223,18 +223,19 @@ describe("crossbind app store's word on App Store Connect", () => {
         write('copyright.txt', '2026 Example Ltd.');
         write('primary_category.txt', 'UTILITIES');
 
-        const guide = appStoreGuide({ project: { root: project }, config: { app: { id: 'dev.example.demo' } }, app: { encryption: false } });
+        const guide = appStoreGuide({ project: { root: project }, config: { app: { id: 'dev.example.demo' } }, app: { encryption: false, category: { macos: 'public.app-category.utilities' } } });
 
         expect(guide.where).toBe('App Store Connect');
         expect(guide.problems).toEqual([]);
         expect(guide.sends.map(upath.toUnix)).toEqual([
-            'the app, archived and uploaded, which TestFlight hands to testers once Apple has processed it',
+            'with -p ios, the iOS app, archived and uploaded, which TestFlight hands to testers once Apple has processed it',
+            'with -p macos, the macOS app, sandboxed, in an archive Xcode exports to App Store Connect, which signs it and its installer package in the cloud, and whose TestFlight hands it to Mac testers once Apple has processed it',
             'with --submit, store/app-store/en-US: name, privacy policy URL; 1 APP_IPHONE_67 screenshots',
             'with --submit, copyright: 2026 Example Ltd.',
             'with --submit, categories: UTILITIES',
         ]);
         const texts = guide.steps.map(({ text }) => text);
-        expect(texts[0]).toBe("Apps › New App: an iOS app with dev.example.demo as its bundle ID, its name, primary language and SKU, as Apple's API makes none; a publish without --submit registers the bundle ID first, so the form lists it.");
+        expect(texts[0]).toBe("Apps › New App: an app with dev.example.demo as its bundle ID, on iOS and, for -p macos, macOS, with its name, primary language and SKU, as Apple's API makes none; a publish without --submit registers the bundle ID first, so the form lists it. An app on iOS alone takes macOS later with the + beside its platform in the sidebar, as a universal purchase, which stays one once both platforms are approved.");
         expect(texts.map(upath.toUnix)).toEqual(expect.arrayContaining([
             "App Information › Age Rating: answer Apple's questions, which store/app-store/age_rating.json would send.",
             "The version's App Review Information: a contact's name, phone and e-mail, which store/app-store/review_information would send.",

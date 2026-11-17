@@ -14,7 +14,7 @@ project the packages of another package manager, as [Package sources](#package-s
 crossbind's own are packages of the same kind, in its repository's `extensions/`: the host's, `activities`, `dialog`,
 `files`, `instance`, `links`, `menu`, `page-dialogs`, `page-feel`, `page-files`, `page-downloads`, `page-drops`,
 `page-location`, `page-navigation`, `page-permissions`, `power`, `shell`, `shortcuts` and `updater`; the stores, `google-play`, `app-store`,
-`mac-app-store`, `microsoft-store` and `github`; and the installers, `dmg`, `deb`, `tar-gz`, `nsis`, `zip` and `msix`. An app has them without installing or listing
+`microsoft-store` and `github`; and the installers, `dmg`, `deb`, `tar-gz`, `nsis`, `zip` and `msix`. An app has them without installing or listing
 them, as `@crossbind/core-app-host` has them as its dependencies, and an app's extension takes the place of one, or of
 one of its roles, as [The host's own extensions](#the-hosts-own-extensions) says. The package source `conan` is
 crossbind's own too, and a dependency of `crossbind` itself, so every project has it.
@@ -709,7 +709,7 @@ struct Clock: Widget {
 ```
 
 Each target is signed as the app is: Xcode signs a development build with the app's team, and
-`crossbind app publish app-store` signs each target in the archive with its own entitlements before the app, checks its
+`crossbind app publish app-store -p ios` signs each target in the archive with its own entitlements before the app, checks its
 binary against its own privacy manifest, and uploads them together. Each takes an App ID of its own, of which a free
 team makes ten a week.
 
@@ -820,7 +820,7 @@ the path as a URL holds it: escaped where it must be, with a query of its own af
 ## Publishers
 
 An extension's `publisher` sends the app to a store: `crossbind app publish <name>` runs it, with the extension's
-name. crossbind's own `google-play`, `app-store`, `mac-app-store`, `microsoft-store` and `github` are publishers of this kind, which use the same
+name. crossbind's own `google-play`, `app-store`, `microsoft-store` and `github` are publishers of this kind, which use the same
 [`api`](#the-api) alone, and an extension `extensions` lists under one of their names, with a publisher, replaces it;
 one with an `app` alone leaves it as it is.
 
@@ -856,7 +856,7 @@ export default function demoStore() {
 | Key | Value |
 |---|---|
 | `platform` | The platform of the apps it takes: `android`, `ios`, `macos`, `linux`, `windows`, or `desktop` for the last three; or a list of them. |
-| `isDefault` | True for the store a publish of its platforms goes to where it names none: the last that says so, an app's after crossbind's, whose `google-play` and `app-store` do for Android and iOS. |
+| `isDefault` | True for the store a publish of its platforms goes to where it names none, or the list of those of them it does: the last that says so, an app's after crossbind's, whose `google-play` does for Android and `app-store`, `['ios']`, for iOS alone of its two. |
 | `store` | The name the store goes by in crossbind's messages; the extension's name without it. |
 | `options` | The options it takes after its name, by camelCase names the command line writes in `--kebab-case`: `{ help }` for a flag, which is true or false, and `{ help, value, default }` for one that takes a value, which `value` names as `'<channel>'`. `platform`, `help` and `version` are the command's own, and those of the Vite build the publish runs, as `mode` and `debug`, are Vite's, so no publisher takes their names; two publishers of one publish take an option of one name alike. |
 | `after` | The publisher it comes after: the publish runs that one first, from the same build. A publisher after another takes no `build`, `buildNumber` or `buildEnv`, and asks for no other build. |

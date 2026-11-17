@@ -86,5 +86,5 @@ export function addDsyms(archive, dsyms) {
     dsyms.forEach((dsym) => fs.cpSync(dsym, `${archive}/dSYMs/${path.basename(dsym)}`, { recursive: true }));
 }
 
-// Exports the archive for App Store Connect and uploads it, as the Mac App Store's publisher does a Mac app's.
+// Exports the iOS app's archive for App Store Connect and uploads it, as a macOS app's goes too.
 export const uploadIosArchive = (api, archive, options) => uploadArchive(api, archive, { ...options, platform: 'iOS' });

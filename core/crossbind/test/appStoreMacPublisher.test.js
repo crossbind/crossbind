@@ -21,8 +21,8 @@ vi.mock('../../store-kit/app-store/appStoreRelease.js', async (importOriginal) =
     },
 }));
 
-const { default: macAppStore } = await import('../../../extensions/mac-app-store/crossbind.extension.js');
-const { publisher } = macAppStore();
+const { default: appStore } = await import('../../../extensions/app-store/crossbind.extension.js');
+const { publisher } = appStore();
 
 const TEAM = 'ABCDE12345';
 const KEY = { key: '/keys/AuthKey_ABC123.p8', keyId: 'ABC123', issuer: 'issuer-uuid' };
@@ -53,12 +53,12 @@ function apiOf({
         logs,
         builds,
         api: {
-            name: 'mac-app-store',
+            name: 'app-store',
             platform: 'macos',
             isGuided: false,
             options: { submit: false, phased: false, ...options },
             project: { root: project, name: 'demo' },
-            workDir: upath.join(project, '.crossbind', 'build', 'mac-app-store'),
+            workDir: upath.join(project, '.crossbind', 'build', 'app-store'),
             config: { app: { id: 'com.example.demo', icon: 'icon.png', ...(macos ? { macos } : {}) } },
             app: {
                 id: 'com.example.demo', team, appleVersion: '1.2.3', buildNumber, encryption, category: category && { macos: category, linux: 'Utility' },
@@ -101,12 +101,13 @@ afterEach(() => {
     fs.rmSync(project, { recursive: true, force: true });
 });
 
-describe('the Mac App Store publisher', () => {
+describe("App Store Connect's publisher of a macOS app", () => {
     test("builds the app sandboxed, without its updater or installers, for macOS 13 or the app's later minimum", () => {
         const store = { updater: null, installers: [] };
         expect(publisher.build(apiOf().api)).toEqual({ app: { ...store, macos: { sandbox: true, minimumVersion: '13.0' } } });
         expect(publisher.build(apiOf({ macos: { minimumVersion: '14.2' } }).api).app.macos.minimumVersion).toBe('14.2');
         expect(publisher.build(apiOf({ macos: { minimumVersion: '12.0' } }).api).app.macos.minimumVersion).toBe('13.0');
+        expect(publisher.build({ platform: 'ios' })).toBeNull();
     });
 
     test('names what the app lacks before anything reaches App Store Connect, the key and the answer on encryption with --submit', async () => {
@@ -136,7 +137,8 @@ describe('the Mac App Store publisher', () => {
     test("leaves the build its number, which Xcode gives without one, and signs it ad hoc whatever Developer ID is named", () => {
         expect(publisher.buildNumber(apiOf().api)).toBeNull();
         expect(publisher.buildNumber(apiOf({ buildNumber: 42 }).api)).toBe(42);
-        expect(publisher.buildEnv()).toEqual({ CROSSBIND_APPLE_SIGNING_IDENTITY: undefined });
+        expect(publisher.buildEnv(apiOf().api)).toEqual({ CROSSBIND_APPLE_SIGNING_IDENTITY: undefined });
+        expect(publisher.buildEnv({ platform: 'ios' })).toEqual({});
     });
 
     test('puts the app in an archive Xcode exports to App Store Connect, which signs it and its package in the cloud', async () => {
@@ -198,14 +200,13 @@ describe('the Mac App Store publisher', () => {
         expect(logs.at(-1)).toBe('crossbind: com.example.demo 1.2.3 (build 7) for macOS went to App Review; Apple mails as the review goes.');
     });
 
-    test('tells crossbind app store the macOS platform and the Mac screenshots Apple alone takes, and no certificate', () => {
+    test("tells crossbind app store of the macOS app beside the iOS one: its upload, its category and the Mac screenshots Apple alone takes", () => {
         const { sends, problems, steps } = publisher.guide(apiOf({ category: null }).api);
-        expect(sends[0]).toContain('signs it and its installer package in the cloud');
+        expect(sends[1]).toBe('with -p macos, the macOS app, sandboxed, in an archive Xcode exports to App Store Connect, which signs it and its installer package in the cloud, and whose TestFlight hands it to Mac testers once Apple has processed it');
         expect(problems).toEqual(['crossbind: app.category is not set, and the Mac App Store takes no app without its category.']);
-        expect(steps.map(({ text }) => text.split(':')[0])).toEqual([
-            "The app's record on App Store Connect › the + beside its platform in the sidebar › macOS",
-            "The macOS version's screenshots, 16",
-            'For --submit and CI',
-        ]);
+        const texts = steps.map(({ text }) => text);
+        expect(texts[0]).toContain('An app on iOS alone takes macOS later with the + beside its platform in the sidebar');
+        expect(texts).toContain("The macOS version's screenshots, 16:10 ones of 1280 × 800 to 2880 × 1800, which a locale's screenshots/APP_DESKTOP would send.");
+        expect(texts.at(-1)).toContain('Apple signs the uploads of an Admin key in the cloud');
     });
 });

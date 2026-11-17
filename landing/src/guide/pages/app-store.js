@@ -46,7 +46,7 @@ export default {
     slug: 'app-store',
     title: 'App Store',
     description: 'Upload an iOS app to App Store Connect and TestFlight with one command, hand it to App Review, and keep its listing in files.',
-    lede: '`crossbind app publish app-store`, or `crossbind app publish -p ios`, builds the iOS app, archives it with `xcodebuild` and uploads it to App Store Connect, whose TestFlight hands it to testers once Apple has processed it, usually within 5 to 30 minutes. It runs on macOS, with Xcode. `--submit` sends the version on to App Review, with its listing.',
+    lede: '`crossbind app publish app-store -p ios`, or `crossbind app publish -p ios`, builds the iOS app, archives it with `xcodebuild` and uploads it to App Store Connect, whose TestFlight hands it to testers once Apple has processed it, usually within 5 to 30 minutes. It runs on macOS, with Xcode. `--submit` sends the version on to App Review, with its listing.',
     blocks: [
         { type: 'h2', id: 'needs', text: 'What it needs' },
         { type: 'p', text: 'Before the build, the publish checks that it has:' },
@@ -148,11 +148,11 @@ export default {
         { type: 'h2', id: 'mac-app-store', text: 'The Mac App Store' },
         {
             type: 'p',
-            text: `\`crossbind app publish mac-app-store\` sends the macOS app into the same record on App Store Connect, as a universal purchase, once its macOS platform is added there with the + beside the platform in the sidebar. It builds the app in the App Sandbox ([app.md](${REFERENCE}#the-app-sandbox)), without its updater and for macOS 13 or later, puts it in an archive as Xcode makes one, and has Xcode export it to App Store Connect, as the iOS app goes: Xcode's account or an Admin key signs the app and its installer package in the cloud, so no certificate is made by hand. TestFlight hands it to Mac testers, and \`--submit\` hands it to App Review with the listing's \`APP_DESKTOP\` screenshots; \`crossbind app store mac-app-store\` names what is left.`,
+            text: `\`crossbind app publish app-store -p macos\` sends the macOS app into the same record on App Store Connect, as a universal purchase, once its macOS platform is added there with the + beside the platform in the sidebar. It builds the app in the App Sandbox ([app.md](${REFERENCE}#the-app-sandbox)), without its updater and for macOS 13 or later, puts it in an archive as Xcode makes one, and has Xcode export it to App Store Connect, as the iOS app goes: Xcode's account or an Admin key signs the app and its installer package in the cloud, so no certificate is made by hand. TestFlight hands it to Mac testers, and \`--submit\` hands it to App Review with the listing's \`APP_DESKTOP\` screenshots; \`crossbind app store app-store\` names what is left.`,
         },
         {
             type: 'p',
-            text: `The [mac-app-store](${EXTENSIONS_URL}mac-app-store/) extension is that publisher, and [app.md](${REFERENCE}#mac-app-store) the reference behind it.`,
+            text: `The [app-store](${EXTENSIONS_URL}app-store/) extension publishes the macOS app too, and [app.md](${REFERENCE}#mac-app-store) is the reference behind it.`,
         },
 
         { type: 'h2', id: 'ci', text: 'From CI' },
