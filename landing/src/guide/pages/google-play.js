@@ -39,7 +39,7 @@ jobs:
           token_format: access_token
           access_token_scopes: https://www.googleapis.com/auth/androidpublisher
           create_credentials_file: false
-      - run: npx crossbind app publish -p android
+      - run: npx crossbind app upload -p android
         env:
           CROSSBIND_GOOGLE_PLAY_TOKEN: \${{ steps.google.outputs.access_token }}
           CROSSBIND_ANDROID_KEYSTORE: \${{ secrets.ANDROID_UPLOAD_KEY }}
@@ -50,10 +50,10 @@ export default {
     slug: 'google-play',
     title: 'Google Play',
     description: 'Release an Android app on a Google Play track with one command, signed in with your Google account or a service account, with its listing kept in files.',
-    lede: '`crossbind app publish google-play` (or `crossbind app publish -p android`) builds the Android app and releases it on a Google Play track, the internal one unless you name another. It signs in with your Google account on your machine, or with a service account in CI, and also updates the store listing from `store/google-play`, with the release\'s notes.',
+    lede: '`crossbind app upload google-play` (or `crossbind app upload -p android`) builds the Android app and releases it on a Google Play track, the internal one unless you name another. It signs in with your Google account on your machine, or with a service account in CI, and also updates the store listing from `store/google-play`, with the release\'s notes.',
     blocks: [
         { type: 'h2', id: 'needs', text: 'What it needs' },
-        { type: 'p', text: 'Before the build, which takes minutes, the publish checks that it has:' },
+        { type: 'p', text: 'Before the build, which takes minutes, the upload checks that it has:' },
         {
             type: 'ul',
             items: [
@@ -94,7 +94,7 @@ export default {
         { type: 'h2', id: 'sign-in', text: 'Signing in' },
         {
             type: 'p',
-            text: 'Google Play takes uploads from your Google account or from a service account. With no service account set, a publish in a terminal signs you in to Google in your browser, and the system keychain keeps the sign-in for later publishes. The browser has to run on the same machine.',
+            text: 'Google Play takes uploads from your Google account or from a service account. With no service account set, an upload in a terminal signs you in to Google in your browser, and the system keychain keeps the sign-in for later uploads. The browser has to run on the same machine.',
         },
         {
             type: 'p',
@@ -109,7 +109,7 @@ export default {
             items: [
                 {
                     name: '`CROSSBIND_GOOGLE_PLAY_SERVICE_ACCOUNT`',
-                    text: "The service account's e-mail. Your own gcloud login gets an hour-long token for it at each publish, so no key of it exists anywhere.",
+                    text: "The service account's e-mail. Your own gcloud login gets an hour-long token for it at each upload, so no key of it exists anywhere.",
                 },
                 { name: '`CROSSBIND_GOOGLE_PLAY_KEY`', text: "The service account's JSON key, where there is no gcloud, as in CI: its file, or its text from the environment." },
                 {
@@ -126,12 +126,12 @@ export default {
                 "In Play Console, create the app with `app.id` as its package name; Play's API cannot.",
                 `For a service account, enable the Google Play Android Developer API in a Google Cloud project and create the account there. For \`CROSSBIND_GOOGLE_PLAY_SERVICE_ACCOUNT\`, also enable the IAM Service Account Credentials API and give your gcloud account the Service Account Token Creator role on the service account: \`${TOKEN_CREATOR}\`. For \`CROSSBIND_GOOGLE_PLAY_KEY\`, make a JSON key of it; an organization may refuse keys (\`iam.disableServiceAccountKeyCreation\`), so use the first way there, or a project with no organization.`,
                 'For a service account, invite its e-mail in Play Console, under Users and permissions, with "Release apps to testing tracks" for the app; for the production track also "Release to production, exclude devices, and use Play App Signing", and for the listing "Manage store presence".',
-                "Until an app's first release is out, Play takes only drafts, so the first publish leaves a draft. Roll it out once in Play Console, under Test and release; later publishes go out by themselves.",
+                "Until an app's first release is out, Play takes only drafts, so the first upload leaves a draft. Roll it out once in Play Console, under Test and release; later uploads go out by themselves.",
             ],
         },
         {
             type: 'p',
-            text: 'In a terminal, the publish asks for whatever is missing (the package name, the upload key, the Google sign-in) and sets it up before the build. When a step needs Play Console, such as creating the app or inviting a service account, the publish opens Play Console and checks again when you press Enter. In CI it asks nothing and lists everything missing.',
+            text: 'In a terminal, the upload asks for whatever is missing (the package name, the upload key, the Google sign-in) and sets it up before the build. When a step needs Play Console, such as creating the app or inviting a service account, the upload opens Play Console and checks again when you press Enter. In CI it asks nothing and lists everything missing.',
         },
 
         { type: 'h2', id: 'tracks', text: 'Tracks and rollouts' },
@@ -159,7 +159,7 @@ export default {
         { type: 'code', file: 'store/google-play', code: LISTING },
         {
             type: 'p',
-            text: "`crossbind app store google-play --send` sends what differs from Play's listing, its texts and images, with no build. The listing is the app's, not the track's, so it goes alone, and a publish sends only the release's notes from `changelogs/`. What the folder leaves out stays as Play has it. A language Play has no listing in yet needs `title.txt`, `short_description.txt` and `full_description.txt`.",
+            text: "`crossbind app store google-play --send` sends what differs from Play's listing, its texts and images, with no build. The listing is the app's, not the track's, so it goes alone, and an upload sends only the release's notes from `changelogs/`. What the folder leaves out stays as Play has it. A language Play has no listing in yet needs `title.txt`, `short_description.txt` and `full_description.txt`.",
         },
         {
             type: 'p',
@@ -173,7 +173,7 @@ export default {
         { type: 'h2', id: 'ci', text: 'From CI' },
         {
             type: 'p',
-            text: "CI asks nothing, so publish once on your own machine first: it writes the app's settings into `crossbind.config.js`, which you commit. CI then needs the upload key as a base64 secret (`base64 < <keystore>`), its alias and its password (`crossbind app key upload --show-password`), and a service account invited in Play Console, through Workload Identity Federation with no key, or its JSON key:",
+            text: "CI asks nothing, so upload once on your own machine first: it writes the app's settings into `crossbind.config.js`, which you commit. CI then needs the upload key as a base64 secret (`base64 < <keystore>`), its alias and its password (`crossbind app key upload --show-password`), and a service account invited in Play Console, through Workload Identity Federation with no key, or its JSON key:",
         },
         { type: 'code', file: '.github/workflows/google-play.yml', code: WORKFLOW },
         {
@@ -182,7 +182,7 @@ export default {
         },
         {
             type: 'p',
-            text: "The token lasts an hour, so the publish's own job makes it, with the androidpublisher scope: the action's default, cloud-platform, does not cover Google Play. With a JSON key instead, pass its text from a secret in `CROSSBIND_GOOGLE_PLAY_KEY`. Keys go in as secret text, the upload key's as base64, so no step writes them to a file; where a tool takes a file, crossbind writes one only the job's user can read and removes it when the publish ends.",
+            text: "The token lasts an hour, so the upload's own job makes it, with the androidpublisher scope: the action's default, cloud-platform, does not cover Google Play. With a JSON key instead, pass its text from a secret in `CROSSBIND_GOOGLE_PLAY_KEY`. Keys go in as secret text, the upload key's as base64, so no step writes them to a file; where a tool takes a file, crossbind writes one only the job's user can read and removes it when the upload ends.",
         },
         {
             type: 'p',

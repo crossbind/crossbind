@@ -36,7 +36,7 @@ jobs:
         with:
           path: ~/.crossbind/hermes
           key: hermes-\${{ hashFiles('package-lock.json') }}
-      - run: npx crossbind app publish -p ios
+      - run: npx crossbind app upload -p ios
         env:
           CROSSBIND_APPLE_API_KEY: \${{ secrets.APPLE_API_KEY }}
           CROSSBIND_APPLE_API_KEY_ID: \${{ vars.APPLE_API_KEY_ID }}
@@ -46,10 +46,10 @@ export default {
     slug: 'app-store',
     title: 'App Store',
     description: 'Upload an iOS app to App Store Connect and TestFlight with one command, hand it to App Review, and keep its listing in files.',
-    lede: '`crossbind app publish app-store -p ios` (or `crossbind app publish -p ios`) builds the iOS app on a Mac with Xcode and uploads it to App Store Connect; TestFlight hands it to testers once Apple has processed it, usually within 5 to 30 minutes. Without `-p`, `crossbind app publish app-store` sends the macOS app after it. `--submit` also sends the version to App Review, with its listing.',
+    lede: '`crossbind app upload app-store -p ios` (or `crossbind app upload -p ios`) builds the iOS app on a Mac with Xcode and uploads it to App Store Connect; TestFlight hands it to testers once Apple has processed it, usually within 5 to 30 minutes. Without `-p`, `crossbind app upload app-store` sends the macOS app after it. `--submit` also sends the version to App Review, with its listing.',
     blocks: [
         { type: 'h2', id: 'needs', text: 'What it needs' },
-        { type: 'p', text: 'Before the build, the publish checks that it has:' },
+        { type: 'p', text: 'Before the build, the upload checks that it has:' },
         {
             type: 'ul',
             items: [
@@ -76,11 +76,11 @@ export default {
         },
         {
             type: 'p',
-            text: "Once per app, create it in App Store Connect, under Apps, as a new iOS app with `app.id` as its bundle ID: Apple's API cannot, and uploads fail until the app exists. A publish that finds no app registers the bundle id first, so App Store Connect's form lists it.",
+            text: "Once per app, create it in App Store Connect, under Apps, as a new iOS app with `app.id` as its bundle ID: Apple's API cannot, and uploads fail until the app exists. An upload that finds no app registers the bundle id first, so App Store Connect's form lists it.",
         },
         {
             type: 'p',
-            text: "In a terminal, the publish asks for whatever is missing: the bundle id, the icon, `app.encryption` and the reasons of `app.privacy`, which it writes into `crossbind.config.js` once you agree, and the team, which `~/.crossbind.json` keeps. When a step needs Xcode or Apple's website, such as signing in to Xcode again, accepting a new agreement or creating the app, the publish opens that page and retries the upload when you press Enter, without building again. In CI it asks nothing: it lists everything missing and stops.",
+            text: "In a terminal, the upload asks for whatever is missing: the bundle id, the icon, `app.encryption` and the reasons of `app.privacy`, which it writes into `crossbind.config.js` once you agree, and the team, which `~/.crossbind.json` keeps. When a step needs Xcode or Apple's website, such as signing in to Xcode again, accepting a new agreement or creating the app, the upload opens that page and retries the upload when you press Enter, without building again. In CI it asks nothing: it lists everything missing and stops.",
         },
 
         { type: 'h2', id: 'encryption-privacy', text: 'Encryption and privacy' },
@@ -94,7 +94,7 @@ export default {
         },
         {
             type: 'p',
-            text: 'Before the upload, the publish checks what the archived app calls and stops at a category without its reason. It finds C functions such as `stat` and `mach_absolute_time`, but not Objective-C selectors such as `systemUptime`.',
+            text: 'Before the upload, the upload checks what the archived app calls and stops at a category without its reason. It finds C functions such as `stat` and `mach_absolute_time`, but not Objective-C selectors such as `systemUptime`.',
         },
 
         { type: 'h2', id: 'signing', text: 'Signing and build numbers' },
@@ -114,7 +114,7 @@ export default {
         { type: 'h2', id: 'review', text: 'App Review' },
         {
             type: 'p',
-            text: "`--submit` also hands the version to App Review, through App Store Connect's API, with the API key above of the App Manager or Admin role. Before the build, the publish then also checks that App Store Connect has the app, that the version is not out or in review, and that App Review has no other submission of the app; `app.encryption` has to be set.",
+            text: "`--submit` also hands the version to App Review, through App Store Connect's API, with the API key above of the App Manager or Admin role. Before the build, the upload then also checks that App Store Connect has the app, that the version is not out or in review, and that App Review has no other submission of the app; `app.encryption` has to be set.",
         },
         {
             type: 'p',
@@ -126,7 +126,7 @@ export default {
         },
         {
             type: 'p',
-            text: 'After App Review answers with issues, send a new build with a publish without `--submit`. A submission left with items in it, as a publish that stopped midway leaves one, stops the next publish before its build: submit or remove its items in App Store Connect.',
+            text: 'After App Review answers with issues, send a new build with an upload without `--submit`. A submission left with items in it, as an upload that stopped midway leaves one, stops the next upload before its build: submit or remove its items in App Store Connect.',
         },
         { type: 'p', text: '`--track`, `--draft` and `--rollout` belong to other stores ([Google Play](/guide/google-play/#tracks) and [GitHub Releases](/guide/github-releases/)) and stop an App Store publish.' },
 
@@ -138,7 +138,7 @@ export default {
         { type: 'code', file: 'store/app-store', code: LISTING },
         {
             type: 'p',
-            text: "`--send`, or a publish with `--submit`, sends what differs from App Store Connect, and a locale it has none of gets a new localization; the name, subtitle and privacy policy URL go into the app's information. What the folder leaves out stays as it is, so it may hold the release notes alone. An empty `subtitle.txt`, `promotional_text.txt` or `marketing_url.txt` clears its text. Before anything goes, it stops at any other empty text, a text over App Store Connect's limit, and a file or folder it does not take.",
+            text: "`--send`, or an upload with `--submit`, sends what differs from App Store Connect, and a locale it has none of gets a new localization; the name, subtitle and privacy policy URL go into the app's information. What the folder leaves out stays as it is, so it may hold the release notes alone. An empty `subtitle.txt`, `promotional_text.txt` or `marketing_url.txt` clears its text. Before anything goes, it stops at any other empty text, a text over App Store Connect's limit, and a file or folder it does not take.",
         },
         {
             type: 'p',
@@ -146,7 +146,7 @@ export default {
         },
         {
             type: 'p',
-            text: 'Before anything goes, `--send` and a publish with `--submit` stop at a file that is no PNG or JPEG image, such as a Git LFS pointer; at a screenshot of a size its type does not take, portrait or turned (`APP_IPHONE_67` takes 1320 × 2868, `APP_IPAD_PRO_3GEN_129` 2064 × 2752); and at a screenshot with transparency. App Store Connect wants 13-inch iPad screenshots of every app that runs on iPads, as crossbind\'s apps do.',
+            text: 'Before anything goes, `--send` and an upload with `--submit` stop at a file that is no PNG or JPEG image, such as a Git LFS pointer; at a screenshot of a size its type does not take, portrait or turned (`APP_IPHONE_67` takes 1320 × 2868, `APP_IPAD_PRO_3GEN_129` 2064 × 2752); and at a screenshot with transparency. App Store Connect wants 13-inch iPad screenshots of every app that runs on iPads, as crossbind\'s apps do.',
         },
         {
             type: 'p',
@@ -156,17 +156,17 @@ export default {
         { type: 'h2', id: 'mac-app-store', text: 'The Mac App Store' },
         {
             type: 'p',
-            text: `\`crossbind app publish app-store -p macos\`, or the publish without \`-p\` after the iOS app, sends the macOS app into the same App Store Connect record, as a universal purchase, once you add its macOS platform there with the + beside the platform in the sidebar. It builds the app in the App Sandbox ([app.md](${REFERENCE}#the-app-sandbox)), without its updater and for macOS 13 or later, and Xcode exports it to App Store Connect as it does the iOS app: Xcode's account or an Admin key signs the app and its installer package in the cloud, so you make no certificate by hand. TestFlight hands it to Mac testers, and \`--submit\` to App Review with the listing's \`APP_DESKTOP\` screenshots; \`crossbind app store app-store\` lists what is left. Full reference: [app.md](${REFERENCE}#mac-app-store).`,
+            text: `\`crossbind app upload app-store -p macos\`, or the upload without \`-p\` after the iOS app, sends the macOS app into the same App Store Connect record, as a universal purchase, once you add its macOS platform there with the + beside the platform in the sidebar. It builds the app in the App Sandbox ([app.md](${REFERENCE}#the-app-sandbox)), without its updater and for macOS 13 or later, and Xcode exports it to App Store Connect as it does the iOS app: Xcode's account or an Admin key signs the app and its installer package in the cloud, so you make no certificate by hand. TestFlight hands it to Mac testers, and \`--submit\` to App Review with the listing's \`APP_DESKTOP\` screenshots; \`crossbind app store app-store\` lists what is left. Full reference: [app.md](${REFERENCE}#mac-app-store).`,
         },
 
         { type: 'h2', id: 'ci', text: 'From CI' },
         {
             type: 'p',
-            text: "CI asks nothing, so publish once on your own machine first: it writes the app's settings into `crossbind.config.js`, which you commit. Set `app.team` there yourself too, as the team the publish asked for stays in this machine's `~/.crossbind.json`.",
+            text: "CI asks nothing, so upload once on your own machine first: it writes the app's settings into `crossbind.config.js`, which you commit. Set `app.team` there yourself too, as the team the upload asked for stays in this machine's `~/.crossbind.json`.",
         },
         {
             type: 'p',
-            text: "CI has no Xcode account, so it uploads with an App Store Connect API key, its `.p8` as a secret: an Admin key, whose uploads Apple signs in the cloud and whose secret can do all an Admin can, or a key of another role with an Apple Distribution certificate imported into the runner's keychain before the publish. The runner needs no development certificate or device.",
+            text: "CI has no Xcode account, so it uploads with an App Store Connect API key, its `.p8` as a secret: an Admin key, whose uploads Apple signs in the cloud and whose secret can do all an Admin can, or a key of another role with an Apple Distribution certificate imported into the runner's keychain before the upload. The runner needs no development certificate or device.",
         },
         {
             type: 'p',
@@ -175,7 +175,7 @@ export default {
         { type: 'code', file: '.github/workflows/testflight.yml', code: TESTFLIGHT },
         {
             type: 'p',
-            text: "`CROSSBIND_RUNNER: LOCAL` keeps every build step, such as a Rust crate's, on the runner. The cache saves downloading Hermes and its debug symbols at each run. The key goes in as its secret's text, so no step writes it to a file; where a tool takes a file, crossbind writes one only the job's user can read and removes it when the publish ends.",
+            text: "`CROSSBIND_RUNNER: LOCAL` keeps every build step, such as a Rust crate's, on the runner. The cache saves downloading Hermes and its debug symbols at each run. The key goes in as its secret's text, so no step writes it to a file; where a tool takes a file, crossbind writes one only the job's user can read and removes it when the upload ends.",
         },
         {
             type: 'p',

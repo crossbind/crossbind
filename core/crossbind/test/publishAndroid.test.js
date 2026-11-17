@@ -79,7 +79,7 @@ async function runVite(args, env) {
     }));
     return 0;
 }
-// `crossbind app publish google-play` with these options.
+// `crossbind app upload google-play` with these options.
 const publishAndroid = (args) => publish(['google-play', ...args], { runVite });
 const KEY = { CROSSBIND_ANDROID_KEYSTORE: '/keys/upload.p12', CROSSBIND_ANDROID_KEY_ALIAS: 'upload', CROSSBIND_ANDROID_KEYSTORE_PASSWORD: 'kept' };
 

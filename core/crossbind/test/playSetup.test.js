@@ -60,10 +60,10 @@ describe('the Google sign-in Google Play takes uploads with', () => {
         expect(google.scopes).toHaveLength(2);
     });
 
-    test('is made again at the next publish where the machine has no keychain', async () => {
+    test('is made again at the next upload where the machine has no keychain', async () => {
         google.granted = [SCOPE];
         google.hasKeychain = false;
         expect(await signInToPlay(api, 'Sign in now? [Y/n] ')).toEqual({ refreshToken: 'refresh-1' });
-        expect(printed).toEqual(['crossbind: this machine has no keychain to keep the sign-in in, so the next publish signs in again.']);
+        expect(printed).toEqual(['crossbind: this machine has no keychain to keep the sign-in in, so the next upload signs in again.']);
     });
 });

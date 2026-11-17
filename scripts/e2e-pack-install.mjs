@@ -214,7 +214,7 @@ function checkProject(manager, project) {
 
     const key = inProject('crossbind', 'app', 'key', 'updater');
     report("runs an extension's command", key.isOk && key.text.includes('CROSSBIND_UPDATER_PRIVATE_KEY'), key.text);
-    const help = inProject('crossbind', 'app', 'publish', '--help');
+    const help = inProject('crossbind', 'app', 'upload', '--help');
     report("lists crossbind's own stores", help.isOk && STORES.every((store) => help.text.includes(`  ${store}: `)), help.text);
     const add = inProject('crossbind', 'add', '@crossbind/extension-dialog');
     report('refuses to add what the host brings', !add.isOk && add.text.includes('there is nothing to add'), add.text);

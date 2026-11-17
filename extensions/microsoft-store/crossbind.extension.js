@@ -10,8 +10,8 @@ import { msStoreGuide } from './src/msStoreGuide.js';
 
 const PARTNER_CENTER = 'https://partner.microsoft.com/dashboard/apps-and-games/overview';
 const NO_IDENTITY = "crossbind: the Microsoft Store takes the package of the app Partner Center reserved, whose identity app.windows.msix gives: copy { name, publisher, publisherDisplayName } from the app's Product identity page in Partner Center into crossbind.config.js.";
-const NO_CREDENTIALS = `crossbind: Partner Center's submission API takes an Entra ID application its account has with the Manager role: set ${STORE_ENV.tenant}, ${STORE_ENV.client} and ${STORE_ENV.secret} to its tenant id, client id and key, or publish once on a terminal, which asks for them; app.md's Microsoft Store says how to make one.`;
-const FIRST_SUBMISSION = "Partner Center's API makes no app's first submission, which takes the age ratings questionnaire: make it in Partner Center, with the packages crossbind app build -p windows makes; crossbind app store microsoft-store names each step. Later versions go with a publish.";
+const NO_CREDENTIALS = `crossbind: Partner Center's submission API takes an Entra ID application its account has with the Manager role: set ${STORE_ENV.tenant}, ${STORE_ENV.client} and ${STORE_ENV.secret} to its tenant id, client id and key, or upload once on a terminal, which asks for them; app.md's Microsoft Store says how to make one.`;
+const FIRST_SUBMISSION = "Partner Center's API makes no app's first submission, which takes the age ratings questionnaire: make it in Partner Center, with the packages crossbind app build -p windows makes; crossbind app store microsoft-store names each step. Later versions go with an upload.";
 const VERSION = /^\d+\.\d+\.\d+$/;
 const PERCENT = /^\d+(\.\d{1,2})?%?$/;
 
@@ -52,7 +52,7 @@ async function askCredentials(api, credentials) {
     const client = credentials.client ?? (await api.ask('Client id: ')).trim();
     const secret = credentials.secret ?? (await api.askHidden('Key: ')).trim();
     api.settings.set({ [STORE_SETTINGS.tenant]: tenant, [STORE_SETTINGS.client]: client });
-    if (!api.secrets.set(SECRET, secret)) api.warn('crossbind: this machine has no keychain to keep the key in, so the next publish asks for it again.');
+    if (!api.secrets.set(SECRET, secret)) api.warn('crossbind: this machine has no keychain to keep the key in, so the next upload asks for it again.');
     return { tenant, client, secret };
 }
 
@@ -79,7 +79,7 @@ async function reservedApp(api, call, identity) {
     }
 }
 
-// Stops a publish, before its build, that Partner Center's API would take no submission of: an app with no first
+// Stops an upload, before its build, that Partner Center's API would take no submission of: an app with no first
 // submission, or one another submission is in progress of, which a terminal may delete.
 async function assertSubmittable(api, call, app, identity) {
     if (app.publisherName && app.publisherName !== identity.publisher) {
@@ -88,13 +88,13 @@ async function assertSubmittable(api, call, app, identity) {
     if (!app.lastPublishedApplicationSubmission && !app.pendingApplicationSubmission) throw new Error(`crossbind: ${FIRST_SUBMISSION}`);
     const pending = app.pendingApplicationSubmission;
     if (!pending) return;
-    if (!app.lastPublishedApplicationSubmission) throw new Error(`crossbind: Partner Center has the app's first submission in progress, ${pending.id}; publish once it is out. ${FIRST_SUBMISSION}`);
-    const question = `Partner Center has submission ${pending.id} of ${app.primaryName} in progress, and takes one at a time. Delete it, for this publish to make its own? [y/N] `;
+    if (!app.lastPublishedApplicationSubmission) throw new Error(`crossbind: Partner Center has the app's first submission in progress, ${pending.id}; upload once it is out. ${FIRST_SUBMISSION}`);
+    const question = `Partner Center has submission ${pending.id} of ${app.primaryName} in progress, and takes one at a time. Delete it, for this upload to make its own? [y/N] `;
     if (api.isGuided && /^\s*y/i.test(await api.ask(question))) {
         await deleteSubmission(call, app.id, pending.id);
         return;
     }
-    throw new Error(`crossbind: Partner Center has submission ${pending.id} of ${app.primaryName} in progress, and takes one at a time: submit or delete it there, then publish again.`);
+    throw new Error(`crossbind: Partner Center has submission ${pending.id} of ${app.primaryName} in progress, and takes one at a time: submit or delete it there, then upload again.`);
 }
 
 // The publisher of a Windows app's MSIX packages, x64 and arm64, with its listing, to the Microsoft Store, through
@@ -200,7 +200,7 @@ export default function microsoftStore() {
                 const identity = api.config.app.windows?.msix;
                 if (!isIdentity(identity)) return ["Copy the app's Product identity into app.windows.msix, and the Microsoft Store tells what it has of the app."];
                 const credentials = storeCredentials(process.env, api.settings, api.secrets);
-                if (lacks(credentials)) return [`Set ${STORE_ENV.tenant}, ${STORE_ENV.client} and ${STORE_ENV.secret}, or publish once on a terminal, to see what the Microsoft Store has.`];
+                if (lacks(credentials)) return [`Set ${STORE_ENV.tenant}, ${STORE_ENV.client} and ${STORE_ENV.secret}, or upload once on a terminal, to see what the Microsoft Store has.`];
                 const call = partnerCenterCaller(credentials);
                 const app = await storeApp(call, identity.name);
                 if (!app) return [`no app whose package identity is ${identity.name} yet`];

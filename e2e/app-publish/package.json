@@ -6,8 +6,8 @@
     "license": "MIT",
     "type": "module",
     "scripts": {
-        "publish:android": "crossbind app publish -p android",
-        "publish:ios": "crossbind app publish -p ios"
+        "publish:android": "crossbind app upload -p android",
+        "publish:ios": "crossbind app upload -p ios"
     },
     "devDependencies": {
         "@crossbind/core-app-host": "workspace:^",

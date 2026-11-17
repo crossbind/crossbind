@@ -7,7 +7,7 @@ import { APP_STORE_LISTING } from './appStoreListing.js';
 // App Store Connect's page of the team's apps.
 export const APP_STORE_CONNECT = 'https://appstoreconnect.apple.com/apps';
 
-// How often a publish asks App Store Connect about a build it processes, and how long it waits for it at most; then
+// How often an upload asks App Store Connect about a build it processes, and how long it waits for it at most; then
 // how often it asks whether a version is ready for review, and how many times.
 const BUILD_POLL_SECONDS = 30;
 const PROCESSING_MINUTES = 60;
@@ -22,7 +22,7 @@ const EDITABLE = ['PREPARE_FOR_SUBMISSION', 'DEVELOPER_REJECTED', 'REJECTED', 'M
 const EDITABLE_INFO = ['PREPARE_FOR_SUBMISSION', 'DEVELOPER_REJECTED', 'REJECTED'];
 // The states of a review submission App Review has, one at a time, or answered with issues to resolve.
 const IN_REVIEW = ['WAITING_FOR_REVIEW', 'IN_REVIEW', 'UNRESOLVED_ISSUES'];
-const PREPARED_SUBMISSION = 'crossbind: App Store Connect prepares a review submission of the app with items in it already, as one a publish stopped in leaves: submit or remove them there, then publish again.';
+const PREPARED_SUBMISSION = 'crossbind: App Store Connect prepares a review submission of the app with items in it already, as one an upload stopped in leaves: submit or remove them there, then upload again.';
 
 const sleep = (seconds) => new Promise((resolve) => { setTimeout(resolve, seconds * 1000); });
 const query = (route, filters) => `${route}?${new URLSearchParams(filters)}`;
@@ -33,13 +33,13 @@ export async function appStoreApp(call, bundleId) {
     const { data } = await call('GET', query('/apps', { 'filter[bundleId]': bundleId }));
     const app = data.find(({ attributes }) => attributes.bundleId === bundleId);
     if (!app) {
-        throw new Error(`crossbind: App Store Connect has no app ${bundleId}: create it at ${APP_STORE_CONNECT}, a new iOS app with ${bundleId} as its bundle ID. A form that lists no such bundle ID lists it once a publish without --submit has registered it with Apple.`);
+        throw new Error(`crossbind: App Store Connect has no app ${bundleId}: create it at ${APP_STORE_CONNECT}, a new iOS app with ${bundleId} as its bundle ID. A form that lists no such bundle ID lists it once an upload without --submit has registered it with Apple.`);
     }
     return app.id;
 }
 
 // The app's version of a number on App Store Connect, on a platform, IOS or MAC_OS, or null without one; one App Store
-// Connect takes no other build in, as in review or out, stops the publish.
+// Connect takes no other build in, as in review or out, stops the upload.
 async function versionOf(call, appId, versionString, platform) {
     const { data: [version = null] } = await call('GET', query(`/apps/${appId}/appStoreVersions`, { 'filter[platform]': platform, 'filter[versionString]': versionString }));
     const state = version?.attributes.appVersionState;
@@ -60,13 +60,13 @@ async function preparedSubmission(call, appId, platform) {
     return { submission, items };
 }
 
-// Stops a publish, before its build, that App Store Connect would not review: one of a version it takes no other build
+// Stops an upload, before its build, that App Store Connect would not review: one of a version it takes no other build
 // in, while App Review has another submission of the app, or where it prepares one with items in it.
 export async function assertReviewable(call, appId, versionString, platform = 'IOS') {
     await versionOf(call, appId, versionString, platform);
     const { data: [submission] } = await call('GET', query(`/apps/${appId}/reviewSubmissions`, { 'filter[platform]': platform, 'filter[state]': IN_REVIEW.join(',') }));
     if (submission?.attributes.state === 'UNRESOLVED_ISSUES') {
-        throw new Error('crossbind: App Review answered the app\'s last submission with issues, which App Store Connect resolves: publish without --submit, pick the new build there and resubmit, or cancel that submission first.');
+        throw new Error('crossbind: App Review answered the app\'s last submission with issues, which App Store Connect resolves: upload without --submit, pick the new build there and resubmit, or cancel that submission first.');
     }
     if (submission) {
         throw new Error(`crossbind: App Review has the app's submission as ${submission.attributes.state}, and takes one at a time: let it finish, or cancel it in App Store Connect.`);
@@ -315,7 +315,7 @@ async function phaseRelease(call, versionId) {
 }
 
 // Hands the version to App Review in the app's submission App Store Connect prepares, or a new one, once the version
-// is ready for review; one prepared with items in it stops the publish, which knows none of them.
+// is ready for review; one prepared with items in it stops the upload, which knows none of them.
 async function submitForReview(call, appId, versionId, platform) {
     const prepared = await preparedSubmission(call, appId, platform);
     if (prepared?.items.length > 0) throw new Error(PREPARED_SUBMISSION);

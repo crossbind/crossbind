@@ -33,13 +33,13 @@ function assertSteps(where, object, steps) {
     const notSteps = steps.filter((step) => object[step] !== undefined && typeof object[step] !== 'function');
     if (notSteps.length > 0) throw new Error(`crossbind: ${where}'s ${notSteps.join(' and ')} ${notSteps.length > 1 ? 'are' : 'is'} no function.`);
 }
-// A publisher's steps: those of a publish; send, which crossbind app store --send runs to send the store's page alone;
+// A publisher's steps: those of an upload; send, which crossbind app store --send runs to send the store's page alone;
 // state, which tells what the store has now; and guide.
 const PUBLISHER_KEYS = ['platform', 'isDefault', 'store', 'options', 'after', 'build', 'check', 'buildNumber', 'buildEnv', 'upload', 'send', 'state', 'guide'];
 const PUBLISHER_STEPS = ['build', 'check', 'buildNumber', 'buildEnv', 'upload', 'send', 'state', 'guide'];
 // The steps of a publisher that builds, which one after another publisher leaves to that one.
 const BUILD_STEPS = ['build', 'buildNumber', 'buildEnv'];
-// The options `crossbind app publish` has of its own, with crossbind's, and those `vite build` takes, which the command
+// The options `crossbind app upload` has of its own, with crossbind's, and those `vite build` takes, which the command
 // line hands Vite: no publisher's takes the name of one.
 const COMMAND_OPTIONS = ['platform', 'help', 'version'];
 const VITE_OPTIONS = [
@@ -69,12 +69,12 @@ function checkedOption(where, name, option) {
 // A publisher's option, which takes no name of an option of the Vite build its publish runs.
 function checkedPublishOption(where, name, option) {
     if (VITE_OPTIONS.includes(name)) {
-        throw new Error(`crossbind: ${where}.options names ${name}, which is an option of the Vite build the publish runs, the command line's --${name.replace(/[A-Z]/g, (letter) => `-${letter.toLowerCase()}`)}: name it otherwise.`);
+        throw new Error(`crossbind: ${where}.options names ${name}, which is an option of the Vite build the upload runs, the command line's --${name.replace(/[A-Z]/g, (letter) => `-${letter.toLowerCase()}`)}: name it otherwise.`);
     }
     return checkedOption(where, name, option);
 }
 
-// A publisher as crossbind runs it: the platforms it takes apps of, those of them a publish that names no store goes to it
+// A publisher as crossbind runs it: the platforms it takes apps of, those of them an upload that names no store goes to it
 // for, the name its store goes by, the options it takes on the command line, the publisher it comes after, where it does, and its steps, which keep the object as their this.
 export function checkedPublisher(publisher, where) {
     if (!isObject(publisher)) throw new Error(`crossbind: ${where} is no object.`);

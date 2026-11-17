@@ -253,8 +253,8 @@ describe("crossbind app's commands of extensions", () => {
 
     test("stops at a name crossbind or another extension has, naming the extension and the owner, and takes the place of one whose role it replaces", () => {
         const key = (name) => hello(name).replace('commands:', 'keys:');
-        appWith(hello('publish'));
-        expect(crossbind('app', 'dev').stderr).toContain('crossbind: acme adds the command crossbind app publish, which crossbind has.');
+        appWith(hello('upload'));
+        expect(crossbind('app', 'dev').stderr).toContain('crossbind: acme adds the command crossbind app upload, which crossbind has.');
         appWith(key('upload'));
         expect(crossbind('app', 'dev').stderr).toContain('crossbind: acme adds the key crossbind app key upload, which crossbind has.');
         appWith(key('updater'));
@@ -288,7 +288,7 @@ describe("crossbind app's commands of extensions", () => {
     });
 });
 
-describe('crossbind app publish', () => {
+describe('crossbind app upload', () => {
     // An app whose one store, an extension's, names what the command line gave it as all it lacks, so nothing builds. Its
     // root is the folder's real path, which the process's own is too.
     const appWithStore = (options) => {
@@ -312,17 +312,17 @@ describe('crossbind app publish', () => {
 
     test("gives a store's options on the command line to its publisher, with the platform -p names", () => {
         appWithStore("{ channel: { help: 'the channel', value: '<channel>' }, draft: { help: 'a draft' } }");
-        const { status, stderr } = crossbind('app', 'publish', 'demo-store', '--channel', 'stable', '--draft', '-p', 'linux', '--mode', 'staging');
+        const { status, stderr } = crossbind('app', 'upload', 'demo-store', '--channel', 'stable', '--draft', '-p', 'linux', '--mode', 'staging');
         expect(status).toBe(1);
         expect(stderr).toContain('GIVEN linux {"channel":"stable","draft":true}');
     });
 
     test("refuses another store's option, a store named after the options, and an option named as crossbind's own", () => {
         appWithStore('{}');
-        expect(crossbind('app', 'publish', 'demo-store', '--track', 'beta').stderr).toContain("crossbind: --track is google-play's, which demo-store takes none of.");
-        expect(crossbind('app', 'publish', '-p', 'linux', '--draft', 'demo-store').stderr).toContain('crossbind: crossbind app publish takes the store first, before the options');
+        expect(crossbind('app', 'upload', 'demo-store', '--track', 'beta').stderr).toContain("crossbind: --track is google-play's, which demo-store takes none of.");
+        expect(crossbind('app', 'upload', '-p', 'linux', '--draft', 'demo-store').stderr).toContain('crossbind: crossbind app upload takes the store first, before the options');
         appWithStore("{ version: { help: 'the version', value: '<version>' } }");
-        const named = crossbind('app', 'publish', 'demo-store', '--version', '1');
+        const named = crossbind('app', 'upload', 'demo-store', '--version', '1');
         expect(named.status).toBe(1);
         expect(named.stderr).toContain('names version, which is no option of its own');
     });

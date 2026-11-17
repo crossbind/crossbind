@@ -21,7 +21,7 @@ const RETRY_SECONDS = 10;
 // The blocks the zip goes up in, and the version of Azure's storage API that takes a block list.
 const BLOCK_BYTES = 32 * 1024 * 1024;
 const BLOB_VERSION = '2021-08-06';
-// How often a publish asks how Partner Center takes the submission, and how long it waits at most.
+// How often an upload asks how Partner Center takes the submission, and how long it waits at most.
 const COMMIT_POLL_SECONDS = 30;
 const COMMIT_MINUTES = 30;
 const APPS_PAGE = 100;
@@ -85,7 +85,7 @@ function apiError(status, what, body) {
 }
 
 // A caller of Partner Center's submission API with the application's credentials, which buys a token anew as one runs
-// out, as a publish may outlast one.
+// out, as an upload may outlast one.
 export function partnerCenterCaller(credentials) {
     let current = null;
     return async (method, route, body) => {
@@ -215,7 +215,7 @@ export async function uploadBlob(sasUrl, file) {
 }
 
 // The status Partner Center gives the committed submission once it has taken it, or still takes it after 30 minutes;
-// one it refused stops the publish, naming why.
+// one it refused stops the upload, naming why.
 async function committedStatus(call, route) {
     for (let waited = 0; ; waited += COMMIT_POLL_SECONDS) {
         const { status, statusDetails } = await call('GET', `${route}/status`);
@@ -257,5 +257,5 @@ export async function submitPackages(call, {
     }
 }
 
-// Deletes the app's submission in progress, so a publish makes its own.
+// Deletes the app's submission in progress, so an upload makes its own.
 export const deleteSubmission = (call, appId, submissionId) => call('DELETE', `applications/${appId}/submissions/${submissionId}`);

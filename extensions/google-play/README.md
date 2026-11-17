@@ -7,15 +7,15 @@ It comes with `@crossbind/core-app-host`: there is nothing to install or list.
 ## Use
 
 ```sh
-npx crossbind app publish google-play --track beta --rollout 10
+npx crossbind app upload google-play --track beta --rollout 10
 npx crossbind app store google-play --send
 ```
 
 It builds the Android app with the next versionCode Google Play takes and releases its bundle on a track: `internal`
 unless `--track` names another. `--draft` leaves the release for Play Console to roll out, and `--rollout` gives it to a
-percent of the track's users first. `crossbind app publish -p android` with no store name uses it. The listing in
+percent of the track's users first. `crossbind app upload -p android` with no store name uses it. The listing in
 `store/google-play`, its texts, images and settings, goes alone, with no build, with `crossbind app store google-play
---send`; a publish sends the release's notes.
+--send`; an upload sends the release's notes.
 
 ## Platforms
 

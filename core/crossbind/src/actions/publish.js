@@ -17,7 +17,7 @@ const listed = (names, word = 'or') => (names.length > 1 ? `${names.slice(0, -1)
 const kebab = (name) => name.replace(/[A-Z]/g, (letter) => `-${letter.toLowerCase()}`);
 const camel = (name) => name.replace(/-([a-z0-9])/g, (dash, letter) => letter.toUpperCase());
 const storeName = ({ name, publisher }) => publisher.store ?? name;
-// How many builds a publish makes at most, as its first publisher may ask for another.
+// How many builds an upload makes at most, as its first publisher may ask for another.
 const MAX_BUILDS = 4;
 
 // A step of the publisher's, which its publisher may lack.
@@ -37,7 +37,7 @@ export function storeOf(args, platform, envPlatform, publishers = []) {
     const [first, ...rest] = args;
     const named = first !== undefined && !first.startsWith('-') ? first : null;
     const late = named ? null : args.find((arg) => publishers.some(({ name }) => name === arg));
-    if (late) throw new Error(`crossbind: crossbind app publish takes the store first, before the options: crossbind app publish ${late} ${args.filter((arg) => arg !== late).join(' ')}.`);
+    if (late) throw new Error(`crossbind: crossbind app upload takes the store first, before the options: crossbind app upload ${late} ${args.filter((arg) => arg !== late).join(' ')}.`);
     const where = platform ?? envPlatform;
     const usual = publishers.findLast(({ publisher }) => publisher.isDefault?.includes(where));
     return { store: named ?? usual?.name ?? null, rest: named ? rest : args };
@@ -46,7 +46,7 @@ export function storeOf(args, platform, envPlatform, publishers = []) {
 // The publisher of a store, after those it comes after, first to last.
 export function publishChain(publishers, store) {
     if (!publishers.some(({ name }) => name === store)) {
-        throw new Error(`crossbind: crossbind app publish takes the store it sends the app to first: ${listed(publishers.map(({ name }) => name))}${store ? `, not ${store}` : ''}.`);
+        throw new Error(`crossbind: crossbind app upload takes the store it sends the app to first: ${listed(publishers.map(({ name }) => name))}${store ? `, not ${store}` : ''}.`);
     }
     const chain = [];
     for (let current = store; current;) {
@@ -59,7 +59,7 @@ export function publishChain(publishers, store) {
     return chain;
 }
 
-// The platforms a publish builds for: the one -p names, which every publisher of it takes, else the only one they take,
+// The platforms an upload builds for: the one -p names, which every publisher of it takes, else the only one they take,
 // else CROSSBIND_APP_PLATFORM's, else this machine's desktop one where they take desktop apps alone, else every one
 // they take, as App Store Connect keeps an app's iOS and macOS builds in one record.
 export function publishPlatforms(chain, platform, envPlatform, host = process.platform) {
@@ -82,7 +82,7 @@ export function publishPlatforms(chain, platform, envPlatform, host = process.pl
     throw new Error(`crossbind: ${takes}: name one with -p.`);
 }
 
-// The options of each publisher of a publish, as the command line gives them, and the arguments Vite takes. An option
+// The options of each publisher of an upload, as the command line gives them, and the arguments Vite takes. An option
 // that another publisher takes is refused, naming whose it is; any other goes on to Vite.
 export function publishOptions(chain, args, publishers) {
     const kinds = new Map();
@@ -228,7 +228,7 @@ async function buildAndUpload(chain, {
             await uploadAfter(chain, apis, sessions, output, answer?.published);
             return;
         }
-        if (builds === MAX_BUILDS) throw new Error(`crossbind: ${first.name} asks for another build after ${MAX_BUILDS}, as many as a publish makes.`);
+        if (builds === MAX_BUILDS) throw new Error(`crossbind: ${first.name} asks for another build after ${MAX_BUILDS}, as many as an upload makes.`);
     }
 }
 
@@ -238,7 +238,7 @@ function afterSent(error, sent, rest, store) {
     return Object.assign(new Error(`${error.message}\n${told}`, { cause: error }), error.exitCode === undefined ? {} : { exitCode: error.exitCode });
 }
 
-// Sends an app to a store through its publisher, after those it comes after, for each platform the publish builds for,
+// Sends an app to a store through its publisher, after those it comes after, for each platform the upload builds for,
 // one after the other. All they need on every platform is checked before the first build, which takes minutes: on a
 // terminal they ask for what is missing and set it up; without one, as in CI, every missing piece is named at once.
 // crossbind then builds each platform's app once, with the first publisher's changes to the config, build number and

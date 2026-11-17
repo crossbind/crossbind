@@ -4,13 +4,13 @@ import {
     imageOf, isFolder, languageFolders, readSetting, readText, sizeOf, takenNames,
 } from '@crossbind/core-store-kit';
 
-// The app's contact details on Google Play, by their files beside the languages' folders, which a publish sends.
+// The app's contact details on Google Play, by their files beside the languages' folders, which an upload sends.
 const DETAILS = {
     'contact_email.txt': { field: 'contactEmail', most: 100 },
     'contact_website.txt': { field: 'contactWebsite', most: 2000 },
     'contact_phone.txt': { field: 'contactPhone', most: 30 },
 };
-// The declaration of the app's Data safety section, as Play Console exports it, which a publish sends.
+// The declaration of the app's Data safety section, as Play Console exports it, which an upload sends.
 const DATA_SAFETY = 'data_safety.csv';
 // What only Play Console takes, which crossbind app store names to enter there.
 const BY_HAND = {
@@ -82,7 +82,7 @@ function readLanguage(project, { language, folder }) {
 export const readPlayListing = (project) => languageFolders(STORE, project).map((folder) => readLanguage(project, folder))
     .filter(({ texts, notes, images }) => [texts, notes, images].some((part) => Object.keys(part).length > 0));
 
-// The release notes of each language that has some, which a publish sends with its bundle, read alone, as the rest of
+// The release notes of each language that has some, which an upload sends with its bundle, read alone, as the rest of
 // the folder goes with crossbind app store --send.
 export const readPlayNotes = (project) => languageFolders(STORE, project)
     .map(({ language, folder }) => ({ language, notes: readNotes(project, path.join(folder, 'changelogs')) }))
@@ -99,7 +99,7 @@ export const releaseNotesOf = (listings, versionCode) => listings
     .map(({ language, notes }) => ({ language, text: notes[versionCode] ?? notes.default }))
     .filter(({ text }) => text !== undefined);
 
-// The app's settings beside the listing's languages: the contact details and the Data safety declaration a publish
+// The app's settings beside the listing's languages: the contact details and the Data safety declaration an upload
 // sends, and what only Play Console takes, each left out without its file.
 export function readPlaySettings(project) {
     const textsOf = (files) => Object.fromEntries(Object.entries(files)

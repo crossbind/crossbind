@@ -15,9 +15,9 @@ const check = (isTrue, what) => {
     if (!isTrue) failures.push(what);
 };
 
-const run = spawnSync(process.execPath, [cli, 'app', 'publish', 'probe-mirror', '--note', 'from e2e'], { cwd: project, stdio: 'inherit' });
+const run = spawnSync(process.execPath, [cli, 'app', 'upload', 'probe-mirror', '--note', 'from e2e'], { cwd: project, stdio: 'inherit' });
 if (run.status !== 0) {
-    console.error(`PUBLISH ERR: crossbind app publish probe-mirror ended with ${run.status ?? run.signal}`);
+    console.error(`PUBLISH ERR: crossbind app upload probe-mirror ended with ${run.status ?? run.signal}`);
     process.exit(1);
 }
 const store = JSON.parse(readFileSync(join(workDir('probe'), 'received.json'), 'utf8'));

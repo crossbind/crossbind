@@ -148,7 +148,7 @@ function projectVite() {
 
 // The project's Vite, as `crossbind app dev`, `build` and `publish` run it, and its exit code once it ends. A signal sent
 // to crossbind alone reaches Vite too, which ends through its exit hooks; Ctrl-C reaches both. Once Vite has ended,
-// signals stop crossbind again, as at the questions a publish asks after its build.
+// signals stop crossbind again, as at the questions an upload asks after its build.
 function runVite(args, env) {
     const vite = spawn(process.execPath, [projectVite(), ...args], { stdio: 'inherit', cwd: state.config.paths.project, env });
     const forwards = ['SIGINT', 'SIGTERM', 'SIGHUP'].map((signal) => [signal, () => vite.kill(signal)]);
@@ -205,7 +205,7 @@ commandKey.command('upload')
         else await makeUploadKey({ isKeychain: keychain });
     });
 
-commandApp.command('publish')
+commandApp.command('upload')
     .usage('[store] [options]')
     .description("build the app and send it to a store, as its publisher does, one of crossbind's own or of an extension's")
     .addOption(new Option('-p, --platform <platform>', "the app's platform: without a store, the one that goes first for it (default: CROSSBIND_APP_PLATFORM, else for a store of desktop apps this machine's, else every one the store takes, as app-store's ios and macos)").choices(APP_PLATFORMS))
@@ -220,7 +220,7 @@ commandApp.command('publish')
 
 commandApp.command('store')
     .argument('[store]', 'the store, as google-play, app-store or microsoft-store (default: every one)')
-    .description("say what each store takes of the app and what it has now: what crossbind app publish sends, what --send sends from store/, what the store would refuse of it, and the steps only the store's own site takes")
+    .description("say what each store takes of the app and what it has now: what crossbind app upload sends, what --send sends from store/, what the store would refuse of it, and the steps only the store's own site takes")
     .option('--send', "send the app's page in store/ to each store, with no build: its listing, screenshots and settings")
     .addOption(new Option('-p, --platform <platform>', "the app's platform, whose page alone goes, as app-store's ios or macos (default: every one the store takes)").choices(APP_PLATFORMS))
     .action(async (store, { send, platform }) => {

@@ -35,7 +35,7 @@ const exports = new WeakMap();
 export const exportOf = (config) => exports.get(config) ?? null;
 
 // The project's config, with the changes a publisher makes for its build, as a JSON merge patch of the export; isFresh
-// reads its files again, as a publish of more than one platform does once a check may have written into them.
+// reads its files again, as an upload of more than one platform does once a check may have written into them.
 export default async function loadConfig(configDir = process.cwd(), configName = 'crossbind.config', { changes = null, isFresh = false } = {}) {
     const exported = await loadJs(configDir, configName, undefined, { isFresh }) || {};
     const config = changes ? mergePatch(exported, changes) : exported;

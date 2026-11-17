@@ -1,4 +1,4 @@
-// What only the project can answer, which a publish asks on a terminal and writes into crossbind.config.js once the
+// What only the project can answer, which an upload asks on a terminal and writes into crossbind.config.js once the
 // user says yes, through the api.
 
 const REASONS_PAGE = 'https://developer.apple.com/documentation/bundleresources/describing-use-of-required-reason-api';

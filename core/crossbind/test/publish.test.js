@@ -39,7 +39,7 @@ const {
 const extension = (name, publisher) => checkedExtension({ name, publisher: { upload: async () => {}, ...publisher } }, os.tmpdir(), `extensions[${name}]`);
 const names = (publishers) => publishers.map(({ name }) => name);
 
-describe('the store crossbind app publish sends an app to', () => {
+describe('the store crossbind app upload sends an app to', () => {
     test('is the one the command names first, before its options and the options Vite takes', () => {
         expect(storeOf(['google-play', '--track', 'beta', '--mode', 'staging'], undefined, undefined)).toEqual({ store: 'google-play', rest: ['--track', 'beta', '--mode', 'staging'] });
         expect(storeOf(['winget'], undefined, undefined)).toEqual({ store: 'winget', rest: [] });
@@ -71,14 +71,14 @@ describe('the store crossbind app publish sends an app to', () => {
     test('is named before the options, as one named after them would go on to Vite', () => {
         const publishers = builtInPublishers();
         expect(() => storeOf(['--track', 'beta', 'google-play'], 'android', undefined, publishers))
-            .toThrow('crossbind: crossbind app publish takes the store first, before the options: crossbind app publish google-play --track beta.');
+            .toThrow('crossbind: crossbind app upload takes the store first, before the options: crossbind app upload google-play --track beta.');
         expect(storeOf(['--mode', 'staging'], 'android', undefined, publishers).store).toBe('google-play');
     });
 
     test("is one of the app's publishers, which the command names when it names none of them", () => {
         const publishers = builtInPublishers();
-        expect(() => publishChain(publishers, 'winget')).toThrow('crossbind: crossbind app publish takes the store it sends the app to first: app-store, github, google-play or microsoft-store, not winget.');
-        expect(() => publishChain(publishers, null)).toThrow('crossbind: crossbind app publish takes the store it sends the app to first: app-store, github, google-play or microsoft-store.');
+        expect(() => publishChain(publishers, 'winget')).toThrow('crossbind: crossbind app upload takes the store it sends the app to first: app-store, github, google-play or microsoft-store, not winget.');
+        expect(() => publishChain(publishers, null)).toThrow('crossbind: crossbind app upload takes the store it sends the app to first: app-store, github, google-play or microsoft-store.');
     });
 });
 
@@ -115,10 +115,10 @@ describe('the publishers an app has', () => {
     });
 });
 
-describe('the platforms a publish builds for', () => {
+describe('the platforms an upload builds for', () => {
     const [, github, googlePlay] = builtInPublishers();
 
-    test('are the one -p names, which every publisher of the publish takes', () => {
+    test('are the one -p names, which every publisher of the upload takes', () => {
         expect(publishPlatforms([github], 'windows', 'linux', 'darwin')).toEqual(['windows']);
         expect(() => publishPlatforms([googlePlay], 'ios', undefined)).toThrow("crossbind: google-play takes android apps, not ios', which -p names.");
         expect(() => publishPlatforms([github], 'android', undefined)).toThrow("crossbind: github takes macos, linux or windows apps, not android's, which -p names.");
@@ -151,7 +151,7 @@ describe('the platforms a publish builds for', () => {
     });
 });
 
-describe('the options of a publish', () => {
+describe('the options of an upload', () => {
     const publishers = builtInPublishers();
     const [appStore, github, googlePlay] = publishers;
 
@@ -198,7 +198,7 @@ describe('the options of a publish', () => {
     });
 });
 
-describe('a publish', () => {
+describe('an upload', () => {
     const run = {};
     const runVite = async (args, env) => {
         run.builds.push({ args, env });
@@ -321,9 +321,9 @@ describe('a publish', () => {
         await expect(publish(['mirror'], { runVite })).rejects.toThrow('crossbind: mirror asks for another build, which demo, whose build it publishes from, alone can ask for.');
     });
 
-    test('stops once the first upload has asked for as many builds as a publish makes', async () => {
+    test('stops once the first upload has asked for as many builds as an upload makes', async () => {
         state.config.extensions = [store('demo', { uploads: 10 })];
-        await expect(publish(['demo'], { runVite })).rejects.toThrow('crossbind: demo asks for another build after 4, as many as a publish makes.');
+        await expect(publish(['demo'], { runVite })).rejects.toThrow('crossbind: demo asks for another build after 4, as many as an upload makes.');
         expect(run.builds).toHaveLength(4);
     });
 
