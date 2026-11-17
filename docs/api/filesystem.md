@@ -1,6 +1,6 @@
 # Filesystem — OPFS, memfs, node-fs, edge
 
-> Where do files live in crossbind? Depends on the runtime and your `init` options. This doc maps every combination.
+> Where files live depends on the runtime and your `initNative` options. This page covers every combination.
 
 ## The decision tree
 
@@ -38,12 +38,10 @@ Are you on the browser?
 
 ## The two virtual roots in browser
 
-crossbind mounts two namespaces under the Wasm filesystem root:
+crossbind mounts two folders at the root of the module's filesystem:
 
-| Mount | Backed by | Persistence | Available when |
-|-------|-----------|-------------|----------------|
-| `/opfs/<app>/` | Browser's Origin Private File System | Survives page reloads, browser restarts | `useWorker: true` + `fs.opfs` (the default in `mt` builds) + browser support |
-| `/memfs/<app>/` | In-memory (Emscripten MEMFS) | Tab session only | Always |
+- **`/opfs/<app>/`:** the browser's Origin Private File System. Files survive reloads and browser restarts. It needs `useWorker: true`, `fs.opfs` (the default in `mt` builds) and a browser that supports it.
+- **`/memfs/<app>/`:** memory. Files last for the tab's session. Always there.
 
 `<app>` is `general.name` from `crossbind.config.js` (the same name the CLI uses for `lib<name>.a`).
 
@@ -108,7 +106,7 @@ imgEl.src = url
 
 ## Common pitfalls
 
-1. **Mounting `/opfs` from main thread without `useWorker: true`** → throws synchronously inside `m.getFinalPath()`. The error message tells you to enable `useWorker` or mount under `/memfs/` instead.
+1. **Mounting `/opfs` on the main thread without `useWorker: true`** → throws; turn on `useWorker` or mount under `/memfs/`.
 2. **Forgetting the `<app>` prefix** → crossbind auto-creates `/memfs/<app>/automounted` at startup. If you write to `/memfs/foo` (no `<app>`) it works but won't be cleaned up on `terminate`.
 3. **Assuming OPFS persists across origins** — it doesn't. Files written from `app.example.com` are invisible to `other.example.com`. Standard origin isolation.
 4. **Using `m.FS` from before `onRuntimeInitialized`** — `m.FS` is undefined until init completes. Use the `onRuntimeInitialized: (m) => {…}` hook or await the `initNative(...)` promise first.
@@ -116,13 +114,11 @@ imgEl.src = url
 
 ## Per-runtime cheat sheet
 
-| Runtime | `useWorker` | `/opfs/...` | `/memfs/...` | Notes |
-|---------|-------------|-------------|--------------|-------|
-| Browser (no worker) | n/a | ❌ throws | ✅ | Tab-session memory only |
-| Browser + `useWorker: true` | ✅ | ✅ if browser supports OPFS, else fallback to `/memfs/` | ✅ | Persistent option |
-| Node.js | n/a | n/a | ✅ in memory; every other path is the host disk | `m.FS` reads real disk via fs-node adapter; `fsync` on a host file returns once the OS has the data, without forcing it to disk |
-| Cloudflare Worker / edge | ❌ unavailable | ❌ unavailable | ✅ in-memory equivalent | No persistence; per-invocation memory |
-| React Native (CLI / Expo) | n/a (uses JSI bridge) | n/a | n/a | App's sandbox storage via React Native APIs |
+- **Browser without a worker:** `/opfs/...` throws; `/memfs/...` works, for the tab's session.
+- **Browser with `useWorker: true`:** `/opfs/...` persists where the browser supports OPFS, else falls back to `/memfs/`; `/memfs/...` works.
+- **Node.js:** no worker and no `/opfs`. `/memfs/...` is in memory, and every other path is the host disk, through the fs-node adapter; `fsync` on a host file returns once the OS has the data, without forcing it to disk.
+- **Cloudflare Worker and other edge runtimes:** no worker and no `/opfs`. The whole filesystem, `/memfs` included, is in memory and does not persist.
+- **React Native (CLI and Expo):** no `/opfs` or `/memfs`; C++ uses the app's sandbox storage.
 
 ## See also
 

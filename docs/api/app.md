@@ -34,27 +34,65 @@ export default defineConfig({ plugins: [viteCrossbindPlugin()] });
 
 ## Develop and build
 
-| Command | What it does |
-|---|---|
-| `crossbind app dev` | Builds the host for this machine and opens the app on the dev server. An edit to the page reloads it; an edit to native code, or to what the page imports from it, rebuilds the host and opens the app again. The page's console shows in the terminal, and closing its last window ends the session. |
-| `crossbind app build` | Builds the page and the host and writes the app with what installs it (see [Installers](#installers)): `dist/<name>.app`, signed ad hoc or with a Developer ID (see [Signing a macOS app](#signing-a-macos-app)), and `dist/<name>.dmg` on macOS; `dist/<name>-linux-<arch>/`, the same as a `.tar.gz`, and its `.deb` on Linux. |
-| `crossbind app build -p linux` | Writes the Linux app for x64 and arm64, on a Mac as well: `dist/<name>-linux-x64/` and `dist/<name>-linux-arm64/`, each with its `.tar.gz` and `.deb`. A Linux app's development session runs on Linux. |
-| `crossbind app build -p windows` | Writes the Windows app for x64 and arm64, on a Mac or a Linux machine as well: `dist/<name>-win32-x64/` and `dist/<name>-win32-arm64/`, each with its `.zip` and `-setup.exe`. A Windows app's development session runs on Windows. |
-| `crossbind build -p host -e app` | Builds the host alone, with no page in it and nothing that installs it: `<paths.output>/<name>.darwin-<arch>.app` on macOS, `<paths.output>/<name>.linux-<arch>` on Linux. `-p linux` or `-p win32` builds a Linux or a Windows app from a Mac as well. |
-| `crossbind app dev -p ios` | Builds the host for the iOS Simulator and opens the app there on the dev server: in the Simulator already booted, else in an iPhone of the newest iOS. Edits reload the page or rebuild the host as on the desktop, and ending the app in the Simulator ends the session. |
-| `crossbind app dev -p ios --device` | Builds the host for devices and opens the app on the dev server on the iPhone or iPad connected, or on the one `--device <name>` names by its name or UDID: Xcode signs it for the app's team, and devicectl installs it. The phone reaches the dev server through its cable, or on the local network when it is paired over it. Edits reload the page or rebuild the host as in the Simulator, the page's console shows in the terminal, and ending the app on the phone ends the session (see [iOS](#ios)). |
-| `crossbind app build -p ios` | Builds the page and the host for devices and the Simulator and writes the app's Xcode project, `dist/<name>-ios/` (see [iOS](#ios)). |
-| `crossbind build -p ios -e app` | Writes the Xcode project with no page in it: `<paths.output>/<name>-ios`, or `<name>-ios.debug` for a debug build. |
-| `crossbind app dev -p android` | Builds the host for the attached Android device or emulator, installs the app as a debug APK and opens it on the dev server, which the device reaches through `adb reverse`. Edits reload the page or rebuild the host as on the desktop; the page's console shows in the terminal, and the end of the app's process, as when it is swiped away, ends the session (Back leaves the process running). crossbind starts no emulator: start one, or connect a phone with USB debugging on, and with several attached set `ANDROID_SERIAL`. |
-| `crossbind app build -p android` | Builds the page and the host for arm64-v8a and x86_64, writes the app's Gradle project, `dist/<name>-android/`, and packages it: `dist/<name>-android.apk`, and with an upload key `dist/<name>-android.aab` too (see [Android](#android)). |
-| `crossbind build -p android -e app` | Writes the Gradle project with no page in it: `<paths.output>/<name>-android`, or `<name>-android.debug` for a debug build. A release build packages it as `crossbind app build -p android` does. |
-| `crossbind app updater-key` | Prints a new key pair for a desktop app's updates: the public key for `app.updater.publicKey`, the private one for `CROSSBIND_UPDATER_PRIVATE_KEY` (see [Updates](#updates)). |
-| `crossbind app upload-key` | Makes this machine's upload key, which signs an Android app's bundle for Google Play, and keeps its password in the system keychain; `--use <keystore>` takes a key you have instead (see [The upload key](#the-upload-key)). |
-| `crossbind app publish google-play` | Builds the Android app with the next versionCode Google Play takes and releases its bundle on a track, internal unless `--track` names another, to a share of its users with `--rollout`, and with the listing `store/google-play` holds; `-p android` names the same store (see [Publishing](#publishing)). |
-| `crossbind app publish app-store` | Builds the iOS app, then the macOS app, or the one `-p` names, and uploads each to App Store Connect, whose TestFlight hands it to testers, and with `--submit` to App Review too, with the listing `store/app-store` holds: the iOS app archived, the macOS app in the App Sandbox, which Xcode exports and Apple signs in the cloud with its installer package. Xcode numbers the builds, and `crossbind app publish -p ios` names the same store for the iOS app alone (see [Publishing](#publishing)). |
-| `crossbind app publish github` | Builds the desktop app of `-p macos`, `linux` or `windows`, else of this machine, and puts what installs it, and with `app.updater` its update, into the GitHub release of its version, `v<version>` (see [GitHub Releases](#github-releases)). |
-| `crossbind app publish microsoft-store` | Builds the Windows app's MSIX packages, x64 and arm64, and sends them to the Microsoft Store in a new submission of the app, with the listing `store/microsoft-store` holds, once Partner Center has the app's first submission (see [Microsoft Store](#microsoft-store)). |
-| `crossbind app store` | Says of each store, or the one it names, what a publish sends from `store/`, what the store would refuse of it, and the steps only the store's own site takes, with the values and files to enter there; it builds nothing, asks for no credentials, and exits with 1 at a problem (see [What each store takes](#what-each-store-takes)). |
+- `crossbind app dev`: Builds the host for this machine and opens the app on the dev server. An edit to the page reloads
+  it; an edit to native code, or to what the page imports from it, rebuilds the host and opens the app again. The page's
+  console shows in the terminal, and closing its last window ends the session.
+- `crossbind app build`: Builds the page and the host and writes the app with what installs it (see
+  [Installers](#installers)): `dist/<name>.app`, signed ad hoc or with a Developer ID (see [Signing a macOS
+  app](#signing-a-macos-app)), and `dist/<name>.dmg` on macOS; `dist/<name>-linux-<arch>/`, the same as a `.tar.gz`, and
+  its `.deb` on Linux.
+- `crossbind app build -p linux`: Writes the Linux app for x64 and arm64, on a Mac as well: `dist/<name>-linux-x64/` and
+  `dist/<name>-linux-arm64/`, each with its `.tar.gz` and `.deb`. A Linux app's development session runs on Linux.
+- `crossbind app build -p windows`: Writes the Windows app for x64 and arm64, on a Mac or a Linux machine as well:
+  `dist/<name>-win32-x64/` and `dist/<name>-win32-arm64/`, each with its `.zip` and `-setup.exe`. A Windows app's
+  development session runs on Windows.
+- `crossbind build -p host -e app`: Builds the host alone, with no page in it and nothing that installs it:
+  `<paths.output>/<name>.darwin-<arch>.app` on macOS, `<paths.output>/<name>.linux-<arch>` on Linux. `-p linux` or
+  `-p win32` builds a Linux or a Windows app from a Mac as well.
+- `crossbind app dev -p ios`: Builds the host for the iOS Simulator and opens the app there on the dev server: in the
+  Simulator already booted, else in an iPhone of the newest iOS. Edits reload the page or rebuild the host as on the
+  desktop, and ending the app in the Simulator ends the session.
+- `crossbind app dev -p ios --device`: Builds the host for devices and opens the app on the dev server on the iPhone or
+  iPad connected, or on the one `--device <name>` names by its name or UDID: Xcode signs it for the app's team, and
+  devicectl installs it. The phone reaches the dev server through its cable, or on the local network when it is paired
+  over it. Edits reload the page or rebuild the host as in the Simulator, the page's console shows in the terminal, and
+  ending the app on the phone ends the session (see [iOS](#ios)).
+- `crossbind app build -p ios`: Builds the page and the host for devices and the Simulator and writes the app's Xcode
+  project, `dist/<name>-ios/` (see [iOS](#ios)).
+- `crossbind build -p ios -e app`: Writes the Xcode project with no page in it: `<paths.output>/<name>-ios`, or
+  `<name>-ios.debug` for a debug build.
+- `crossbind app dev -p android`: Builds the host for the attached Android device or emulator, installs the app as a
+  debug APK and opens it on the dev server, which the device reaches through `adb reverse`. Edits reload the page or
+  rebuild the host as on the desktop; the page's console shows in the terminal, and the end of the app's process, as
+  when it is swiped away, ends the session (Back leaves the process running). crossbind starts no emulator: start one,
+  or connect a phone with USB debugging on, and with several attached set `ANDROID_SERIAL`.
+- `crossbind app build -p android`: Builds the page and the host for arm64-v8a and x86_64, writes the app's Gradle
+  project, `dist/<name>-android/`, and packages it: `dist/<name>-android.apk`, and with an upload key
+  `dist/<name>-android.aab` too (see [Android](#android)).
+- `crossbind build -p android -e app`: Writes the Gradle project with no page in it: `<paths.output>/<name>-android`, or
+  `<name>-android.debug` for a debug build. A release build packages it as `crossbind app build -p android` does.
+- `crossbind app updater-key`: Prints a new key pair for a desktop app's updates: the public key for
+  `app.updater.publicKey`, the private one for `CROSSBIND_UPDATER_PRIVATE_KEY` (see [Updates](#updates)).
+- `crossbind app upload-key`: Makes this machine's upload key, which signs an Android app's bundle for Google Play, and
+  keeps its password in the system keychain; `--use <keystore>` takes a key you have instead (see [The upload
+  key](#the-upload-key)).
+- `crossbind app publish google-play`: Builds the Android app with the next versionCode Google Play takes and releases
+  its bundle on a track, internal unless `--track` names another, to a share of its users with `--rollout`, and with the
+  listing `store/google-play` holds; `-p android` names the same store (see [Publishing](#publishing)).
+- `crossbind app publish app-store`: Builds the iOS app, then the macOS app, or the one `-p` names, and uploads each to
+  App Store Connect, whose TestFlight hands it to testers, and with `--submit` to App Review too, with the listing
+  `store/app-store` holds: the iOS app archived, the macOS app in the App Sandbox, which Xcode exports and Apple signs
+  in the cloud with its installer package. Xcode numbers the builds, and `crossbind app publish -p ios` names the same
+  store for the iOS app alone (see [Publishing](#publishing)).
+- `crossbind app publish github`: Builds the desktop app of `-p macos`, `linux` or `windows`, else of this machine, and
+  puts what installs it, and with `app.updater` its update, into the GitHub release of its version, `v<version>` (see
+  [GitHub Releases](#github-releases)).
+- `crossbind app publish microsoft-store`: Builds the Windows app's MSIX packages, x64 and arm64, and sends them to the
+  Microsoft Store in a new submission of the app, with the listing `store/microsoft-store` holds, once Partner Center
+  has the app's first submission (see [Microsoft Store](#microsoft-store)).
+- `crossbind app store`: Says of each store, or the one it names, what a publish sends from `store/`, what the store
+  would refuse of it, and the steps only the store's own site takes, with the values and files to enter there; it builds
+  nothing, asks for no credentials, and exits with 1 at a problem (see [What each store takes](#what-each-store-takes)).
 
 `crossbind app` runs the project's Vite with `CROSSBIND_APP_PLATFORM` set to the platform `-p` names, `macos`, `linux`,
 `windows`, `ios` or `android`; without `-p` it keeps the variable the environment sets, and without that builds this
@@ -147,13 +185,15 @@ import { device } from 'crossbind/app';
 if (device.formFactor === 'phone') mountPhoneLayout();
 ```
 
-| Field | What it holds |
-|---|---|
-| `platform` | The platform the app is built for: `macos`, `windows`, `linux`, `ios` or `android` |
-| `arch` | The arch the app's process runs as: `arm64` or `x64` |
-| `formFactor` | What the device is to its user as the app starts: `phone`; `tablet`, an iPad or an Android device whose screen's shorter side has 600dp, as Android's own `sw600dp` resources take it; or `desktop`, a computer, a Chromebook, or a Mac that runs an iPhone or iPad app |
-| `os` | `{ name, version }` of the system, as its maker numbers it: `iOS` or `iPadOS` and `18.4`, `Android` and `15` with `apiLevel` `35`, `macOS` and `26.1`, `Windows` and `10.0.26100`, or a Linux distribution's from `/etc/os-release`, as `Ubuntu` and `24.04`, else `Linux` and the kernel's release |
-| `isVirtual` | Whether the iOS Simulator or an Android emulator runs the app |
+- `platform`: The platform the app is built for: `macos`, `windows`, `linux`, `ios` or `android`.
+- `arch`: The arch the app's process runs as: `arm64` or `x64`.
+- `formFactor`: What the device is to its user as the app starts: `phone`; `tablet`, an iPad or an Android device whose
+  screen's shorter side has 600dp, as Android's own `sw600dp` resources take it; or `desktop`, a computer, a Chromebook,
+  or a Mac that runs an iPhone or iPad app.
+- `os`: `{ name, version }` of the system, as its maker numbers it: `iOS` or `iPadOS` and `18.4`, `Android` and `15`
+  with `apiLevel` `35`, `macOS` and `26.1`, `Windows` and `10.0.26100`, or a Linux distribution's from
+  `/etc/os-release`, as `Ubuntu` and `24.04`, else `Linux` and the kernel's release.
+- `isVirtual`: Whether the iOS Simulator or an Android emulator runs the app.
 
 A foldable or a Chromebook keeps the `formFactor` it started with when it unfolds or resizes, so a page lays itself out
 by its window's size, with CSS, as on the web. Reading `device` outside an app throws, as the rest of `crossbind/app`
@@ -207,17 +247,20 @@ one.
 On the desktop the page shows an element full screen with `element.requestFullscreen()`, as in a browser: the window
 fills the screen until the page leaves it. On Windows and Linux a menu bar the page set stays above the element.
 
-A macOS app opens with the app, Edit, View and Window menus every Mac app has, so ⌘C, ⌘V, ⌘Z, ⌘A, ⌘W and ⌘Q reach
-it, and the page may set its own, as [Menus](#menus) tells. The
-page's `alert()`, `confirm()` and `prompt()` show as the system's own dialogs, titled with the app's name, and the page
-waits for their answer, as in a browser; its `beforeunload` never asks, and the page leaves at once. A file input shows
-the system's picker. The host's extensions `page-dialogs` and `page-files` show them, whose roles an extension may take
-(see [extensions.md](./extensions.md#the-pages-requests)). A
-download the page starts, such as an `<a download>` link, asks where to save: in a save panel on macOS, in the system's
-export sheet on iOS and in its save picker on Android; on Linux it goes to the user's Downloads folder, and on Windows
-WebView2 shows its own downloads. The host's extension `page-downloads` saves them so, whose role an extension may take
-(see [extensions.md](./extensions.md#downloads)). On Android, Back goes back in the page's history first, and
-leaves the app when there is none.
+A macOS app opens with the app, Edit, View and Window menus every Mac app has, so ⌘C, ⌘V, ⌘Z, ⌘A, ⌘W and ⌘Q reach it,
+and the page may set its own ([Menus](#menus)). The host's extensions answer the page's requests, and an extension may
+take their roles:
+
+- `alert()`, `confirm()` and `prompt()` show as the system's own dialogs, titled with the app's name, and the page waits
+  for their answer, as in a browser; `beforeunload` never asks, and the page leaves at once. A file input shows the
+  system's picker. The host's `page-dialogs` and `page-files` show them
+  ([extensions.md](./extensions.md#the-pages-requests)).
+- A download the page starts, such as an `<a download>` link, asks where to save: in a save panel on macOS, in the
+  system's export sheet on iOS and in its save picker on Android. On Linux it goes to the user's Downloads folder, and
+  on Windows WebView2 shows its own downloads. The host's `page-downloads` saves them
+  ([extensions.md](./extensions.md#downloads)).
+
+On Android, Back goes back in the page's history first, and leaves the app when there is none.
 
 An app that cannot start, for want of the WebView2 Runtime or of a file it carries, writes why to its output; a desktop
 app its user opened says so in a message box as well.
@@ -259,17 +302,21 @@ without them all the same: a Wayland compositor places a window and keeps it amo
 its name alone. A path of another origin, an option it does not know, limits `app.window` would refuse and a modal
 window without a parent reject.
 
-`windows.set()` changes the page's own window, or the one of an id given first: its `title`, its sizes and limits, `x`
-and `y`, or `center`, which moves it to the middle of its screen, `resizable`, `alwaysOnTop` and `fullscreen`, and
-resolves with what it went without, as `open()` does, a Wayland window's `center` among them. `close()` closes a window
-as its user does, which an extension may keep open; `focus()` brings one to the front, restored if it was minimized,
-which a Wayland compositor without the xdg-activation protocol, as Weston, does for no window;
-`minimize()` and `toggleMaximize()` do what they say. Each takes the id of a window, or none for the page's own.
+`windows.set()` changes the page's own window, or the window of an id given first, and resolves with what it went
+without, as `open()` does, a Wayland window's `center` among them. It takes `title`, the sizes and limits, `x` and `y`
+or `center`, which moves the window to the middle of its screen, `resizable`, `alwaysOnTop` and `fullscreen`. The others
+take the id of a window, or none for the page's own:
+
+- `close()` closes a window as its user does, which an extension may keep open;
+- `focus()` brings one to the front, restored if it was minimized; a Wayland compositor without the xdg-activation
+  protocol, as Weston, does this for no window;
+- `minimize()` and `toggleMaximize()` do what they say.
+
 `windows.list()` gives the open windows, the oldest first, and `windows.current()` the page's own, each as
 `{ id, name, title, x, y, width, height, isMaximized, isMinimized, isFullscreen, isFocused }`. Every page hears of each
 window that opens and closes, as the events `window-opened` and `window-closed` of `{ id, name }`. The app's native code
 reaches each function by name with an extension's `invoke`, as `invoke("windows.open", ...)`, and names a window by its
-id, as a call of its own comes from no page's window.
+id, as its own call comes from no page's window.
 
 A window without a frame moves as its page lets it: its user drags it by an element of `data-crossbind-drag`, and a
 double click there maximizes or restores it, as on a title bar, but for a press on what takes one, as a button, a link
@@ -377,12 +424,13 @@ Store Connect API key Apple also notarizes the app, whose ticket the build stapl
 image: the app then opens on any Mac, offline too. The disk image stays unsigned, so that Gatekeeper judges the app in
 it, which Apple has notarized. Both come from the environment alone:
 
-| Variable | Value |
-|---|---|
-| `CROSSBIND_APPLE_SIGNING_IDENTITY` | A code signing identity in the keychain, by name or hash, as `Developer ID Application: <name> (<team>)`. |
-| `CROSSBIND_APPLE_API_KEY` | The API key's `.p8` file, which App Store Connect gives once, or its text, as a CI secret holds it; with the text, `CROSSBIND_APPLE_API_KEY_ID` names the ID. |
-| `CROSSBIND_APPLE_API_KEY_ID` | The key's ID, which the file's name tells where it keeps the one App Store Connect gives it, `AuthKey_<key id>.p8`. |
-| `CROSSBIND_APPLE_API_ISSUER` | The issuer ID of the key's team. |
+- `CROSSBIND_APPLE_SIGNING_IDENTITY`: A code signing identity in the keychain, by name or hash, as
+  `Developer ID Application: <name> (<team>)`.
+- `CROSSBIND_APPLE_API_KEY`: The API key's `.p8` file, which App Store Connect gives once, or its text, as a CI secret
+  holds it; with the text, `CROSSBIND_APPLE_API_KEY_ID` names the ID.
+- `CROSSBIND_APPLE_API_KEY_ID`: The key's ID, which the file's name tells where it keeps the one App Store Connect gives
+  it, `AuthKey_<key id>.p8`.
+- `CROSSBIND_APPLE_API_ISSUER`: The issuer ID of the key's team.
 
 An identity the keychain does not hold or a name two of its identities share, as after a renewal, stops
 `crossbind app build` before anything compiles, and so does a key beside the identity that lacks one of its three
@@ -416,15 +464,14 @@ key is jsign's own: a cloud's key service whose credentials jsign takes as its p
 formerly Trusted Signing, Azure Key Vault, AWS or Google Cloud KMS, or SSL.com eSigner, or a PKCS#12 file. Its files
 reach the container read-only, and its passwords by name, never on a command line:
 
-| Variable | Value |
-|---|---|
-| `CROSSBIND_WINDOWS_SIGNING_STORETYPE` | jsign's store type, as `TRUSTEDSIGNING`, `AZUREKEYVAULT`, `AWS`, `GOOGLECLOUD`, `ESIGNER` or `PKCS12`. |
-| `CROSSBIND_WINDOWS_SIGNING_KEYSTORE` | The key store: the service's endpoint or name, or the PKCS#12 file. |
-| `CROSSBIND_WINDOWS_SIGNING_ALIAS` | The key's name in it. |
-| `CROSSBIND_WINDOWS_SIGNING_STOREPASS` | Its password, or the service's access token. |
-| `CROSSBIND_WINDOWS_SIGNING_KEYPASS` | The key's password, where it is not the store's. |
-| `CROSSBIND_WINDOWS_SIGNING_CERTFILE` | The certificate chain a cloud key comes without, as a `.p7b` file. |
-| `CROSSBIND_WINDOWS_SIGNING_TSAURL` | The timestamp server; `http://timestamp.digicert.com` without it. |
+- `CROSSBIND_WINDOWS_SIGNING_STORETYPE`: jsign's store type, as `TRUSTEDSIGNING`, `AZUREKEYVAULT`, `AWS`, `GOOGLECLOUD`,
+  `ESIGNER` or `PKCS12`.
+- `CROSSBIND_WINDOWS_SIGNING_KEYSTORE`: The key store: the service's endpoint or name, or the PKCS#12 file.
+- `CROSSBIND_WINDOWS_SIGNING_ALIAS`: The key's name in it.
+- `CROSSBIND_WINDOWS_SIGNING_STOREPASS`: Its password, or the service's access token.
+- `CROSSBIND_WINDOWS_SIGNING_KEYPASS`: The key's password, where it is not the store's.
+- `CROSSBIND_WINDOWS_SIGNING_CERTFILE`: The certificate chain a cloud key comes without, as a `.p7b` file.
+- `CROSSBIND_WINDOWS_SIGNING_TSAURL`: The timestamp server; `http://timestamp.digicert.com` without it.
 
 With Azure Artifact Signing, for one:
 
@@ -532,33 +579,51 @@ std::string databasePath() { return crossbind::app::paths().data + "/notes.sqlit
 #endif
 ```
 
-| Function | What it does | macOS, Linux, Windows | iOS | Android |
-|---|---|---|---|---|
-| `dialog.open({ title, defaultPath, filters, directory, multiple })` | The paths of the files or folders its user picks, or `null`; on a phone copies of the files, and on iOS a folder where it is | ✓ | ✓ | ✓ |
-| `dialog.save({ title, defaultPath, defaultName, filters })` | The path its user chooses to save to, or `null` | ✓ | | |
-| `dialog.message({ message, detail, kind, buttons })` | The index of the button its user clicks | ✓ | ✓ | ✓ |
-| `shell.openExternal(url)` | An http, https or mailto address in the default browser or mail app | ✓ | ✓ | |
-| `shell.openPath(path)` | A file in the app the system opens its kind with | ✓ | | |
-| `shell.revealInFolder(path)` | A file, selected, in the system's file manager, or on Linux without one its folder | ✓ | | |
-| `shell.trash(path)` | Moves a file or folder to the system's trash, and nothing where it has none | ✓ | | |
-| `app.paths()` | `{ data, cache, logs, resources, group }`, the app's own folders, made if missing, the read-only one of the files `app.files` lists, and an iOS app's App Group's, which the targets of its extensions' share, or `''` | ✓ | ✓ | ✓ |
-| `app.quit()` | Ends the app as closing its last window does, without asking the extensions that may keep a window open | ✓ | | |
-| `app.requestQuit()` | Asks the extensions, as its user's Quit does, then ends the app as `app.quit()` does, unless one keeps it running | ✓ | | |
-| `app.relaunch()` | Ends the app as `app.quit()` does, then opens it anew with no link | ✓ | | |
-| `app.launchUrls()` | The links of `app.urlSchemes` that opened the app and have not reached the page yet; the page alone | ✓ | ✓ | ✓ |
-| `app.launchFiles()` | The files the system opened the app with that have not reached the page yet, as [Files](#files) tells; the page alone | ✓ | ✓ | ✓ |
-| `app.launchArgs()` | `{ args, cwd }`, the launch that started the app, as [One instance](#one-instance) tells, empty on a phone; the page alone | ✓ | ✓ | ✓ |
-| `app.setUserActivity({ type, userInfo, webpageUrl })` | Makes a user activity of `app.activityTypes` the app's current one, which its user's other devices continue, as [User activities](#user-activities) tells, or none with `null`; iOS, macOS and the page alone | ✓ | ✓ | |
-| `menu.set(menus)` | Sets the menus of the page's window, whose clicks are the event `menu` its page hears; the page alone | ✓ | | |
-| `menu.popup(items, { x, y })` | Opens a menu at the page's point, as a right click's: the id of the item clicked, or `null`; the page alone | ✓ | | |
-| `menu.setDock(items)` | The menu of a macOS app's Dock icon, whose clicks are the event `menu`; macOS and the page alone | ✓ | | |
-| `tray.set({ tooltip, menu })` | The app's icon in the menu bar, notification area or status tray, whose clicks are the events `tray` and `menu`; the page alone | ✓ | | |
-| `tray.remove()` | Takes the tray's icon away; the page alone | ✓ | | |
-| `notification.show({ title, body })` | A notification of the system's, a click on which is the event `notification`; the page alone | ✓ | | |
-| `events.on(name, listener)` | Calls `listener` with each event of this name the app's C++ emits; returns what stops it | ✓ | ✓ | ✓ |
-| `events.held(name)` | The values of the events of this name the app's C++ held for the page, which came before it asked since it loaded; the page alone | ✓ | ✓ | ✓ |
-| `updater.check()` | `{ version }`, the newer version `app.updater.url` offers, or `null` | ✓ | | |
-| `updater.install()` | Installs that version once its signature holds, then quits the app and opens the new one | ✓ | | |
+- `dialog.open({ title, defaultPath, filters, directory, multiple })` (every platform): The paths of the files or
+  folders its user picks, or `null`; on a phone copies of the files, and on iOS a folder where it is.
+- `dialog.save({ title, defaultPath, defaultName, filters })` (desktop): The path its user chooses to save to, or
+  `null`.
+- `dialog.message({ message, detail, kind, buttons })` (every platform): The index of the button its user clicks.
+- `shell.openExternal(url)` (desktop, iOS): An http, https or mailto address in the default browser or mail app.
+- `shell.openPath(path)` (desktop): A file in the app the system opens its kind with.
+- `shell.revealInFolder(path)` (desktop): A file, selected, in the system's file manager, or on Linux without one its
+  folder.
+- `shell.trash(path)` (desktop): Moves a file or folder to the system's trash, and nothing where it has none.
+- `app.paths()` (every platform): `{ data, cache, logs, resources, group }`, the app's own folders, made if missing, the
+  read-only one of the files `app.files` lists, and an iOS app's App Group's, which the targets of its extensions'
+  share, or `''`.
+- `app.quit()` (desktop): Ends the app as closing its last window does, without asking the extensions that may keep a
+  window open.
+- `app.requestQuit()` (desktop): Asks the extensions, as its user's Quit does, then ends the app as `app.quit()` does,
+  unless one keeps it running.
+- `app.relaunch()` (desktop): Ends the app as `app.quit()` does, then opens it anew with no link.
+- `app.launchUrls()` (every platform): The links of `app.urlSchemes` that opened the app and have not reached the page
+  yet; the page alone.
+- `app.launchFiles()` (every platform): The files the system opened the app with that have not reached the page yet, as
+  [Files](#files) tells; the page alone.
+- `app.launchArgs()` (every platform): `{ args, cwd }`, the launch that started the app, as [One
+  instance](#one-instance) tells, empty on a phone; the page alone.
+- `app.setUserActivity({ type, userInfo, webpageUrl })` (macOS, iOS): Makes a user activity of `app.activityTypes` the
+  app's current one, which its user's other devices continue, as [User activities](#user-activities) tells, or none with
+  `null`; iOS, macOS and the page alone.
+- `menu.set(menus)` (desktop): Sets the menus of the page's window, whose clicks are the event `menu` its page hears;
+  the page alone.
+- `menu.popup(items, { x, y })` (desktop): Opens a menu at the page's point, as a right click's: the id of the item
+  clicked, or `null`; the page alone.
+- `menu.setDock(items)` (macOS): The menu of a macOS app's Dock icon, whose clicks are the event `menu`; macOS and the
+  page alone.
+- `tray.set({ tooltip, menu })` (desktop): The app's icon in the menu bar, notification area or status tray, whose
+  clicks are the events `tray` and `menu`; the page alone.
+- `tray.remove()` (desktop): Takes the tray's icon away; the page alone.
+- `notification.show({ title, body })` (desktop): A notification of the system's, a click on which is the event
+  `notification`; the page alone.
+- `events.on(name, listener)` (every platform): Calls `listener` with each event of this name the app's C++ emits;
+  returns what stops it.
+- `events.held(name)` (every platform): The values of the events of this name the app's C++ held for the page, which
+  came before it asked since it loaded; the page alone.
+- `updater.check()` (desktop): `{ version }`, the newer version `app.updater.url` offers, or `null`.
+- `updater.install()` (desktop): Installs that version once its signature holds, then quits the app and opens the new
+  one.
 
 In the page each returns a promise once `initNative()` has run, as what it loads carries the calls to the host, but
 `events.on`, which returns at once what stops it and throws where it cannot listen. A function a platform has not got
@@ -588,16 +653,21 @@ Escape for two buttons or more. Windows shows the buttons in their order, the ot
 place them, and Android shows the message and the detail as one text. `kind` is `info`, the default, `warning` or
 `error`: Windows shows its icon for each, and macOS a caution sign for `error`; Linux, iOS and Android show none.
 
-The page's `shell.openPath` opens files where `app.openPath` in `crossbind.config.js` lets it alone, and nowhere
-without it: in `data`, `cache` or `logs`, the app's folders, and in `picked`, what a dialog picked during this run, a
-picked folder with what is in it. Opening a program runs it, and a script that found its way into the page could
-name any path: list no folder the module writes a file to that the page names or fills. Its `shell.revealInFolder`
-shows the app's folders and what a dialog picked during this run, and its `shell.trash` moves what is in the app's
-folders, but none of the folders, and what a dialog picked during this run, both where the path is written and where
-the links of the folders above it lead. A path the page names holds no `.` or `..`, as the system follows a link before
-one elsewhere than the path reads. Where the system has no trash, as on a network share, the file stays and the call
-rejects: Windows would delete it for good, and crossbind stops it. The app's C++ reaches any path, calling these
-functions by their names with `invoke()` once the app's extensions have all started.
+The page's shell functions reach the app's folders and what a dialog picked during this run alone:
+
+- `shell.openPath` opens files only where `app.openPath` in `crossbind.config.js` lets it, and nowhere without it: in
+  `data`, `cache` or `logs`, the app's folders, and in `picked`, what a dialog picked during this run, a picked folder
+  with what is in it. Opening a program runs it, and a script that found its way into the page could name any path: list
+  no folder the module writes a file to that the page names or fills.
+- `shell.revealInFolder` shows the app's folders and what a dialog picked during this run.
+- `shell.trash` moves what is in the app's folders, but none of the folders themselves, and what a dialog picked during
+  this run.
+
+Each checks a path both as it is written and where the links of the folders above it lead. A path the page names holds
+no `.` or `..`, as the system follows a link before a `..`, which then leads elsewhere than the path reads. Where the
+system has no trash, as on a network share, the file stays and the call rejects: Windows would delete it for good, and
+crossbind stops it. The app's C++ reaches any path, calling these functions by their names with `invoke()` once the
+app's extensions have all started.
 
 On the desktop the folders take the name of `app.id`: under `~/Library` on macOS, under `$XDG_DATA_HOME`,
 `$XDG_CACHE_HOME` and `$XDG_STATE_HOME` on Linux, and under `%APPDATA%` and `%LOCALAPPDATA%` on Windows. An iOS
@@ -726,30 +796,40 @@ events.on('menu', ({ id, checked }) => {
 ```
 
 A menu is `{ label, items }`, or a standard one by its role, `editMenu` or `windowMenu`, which a label may rename. An
-item is `{ label, id, accelerator, enabled, checked }`, a submenu `{ label, items }`, `{ type: 'separator' }`, a
-standard menu, or a standard item by its role, which a label may rename: `undo`, `redo`, `cut`, `copy`, `paste` and
-`selectAll`, which keep the platform's keys, and `minimize`, `close` and `quit`, whose accelerator the page may change.
-A click of an item with an id is the event `menu` of `{ id }`, or of `{ id, checked }` for an item with `checked`,
-which the click turns over first, and reaches the page of the window whose menus they are; a standard item does what its
-role says, and the page hears nothing of it: `close` closes its window as its user does, which an extension may keep
-open, and `quit` asks to end the app as
-`app.requestQuit()` does, which an extension may refuse. An accelerator is a key with `CmdOrCtrl`, `Ctrl` or `Alt`, and
-maybe `Shift`, joined by `+`, as `CmdOrCtrl+Shift+O` is, or one of `F1` to `F12`, alone or with any of them. The key is
-a capital letter, a digit, a function key or one of `Enter`, `Escape`, `Tab`, `Space`, `Backspace`, `Delete`, `Up`,
-`Down`, `Left`, `Right`, `Home`, `End`, `PageUp`, `PageDown`, `Plus`, `Minus`, `Comma` and `Period`, and `CmdOrCtrl`
-is ⌘ on macOS and Ctrl elsewhere. A menu the page
-gets wrong fails before the host sees it, naming the item.
+item is one of:
+
+- `{ label, id, accelerator, enabled, checked }`;
+- a submenu, `{ label, items }`;
+- `{ type: 'separator' }`;
+- a standard menu;
+- a standard item by its role, which a label may rename: `undo`, `redo`, `cut`, `copy`, `paste` and `selectAll`, which
+  keep the platform's keys, and `minimize`, `close` and `quit`, whose accelerator the page may change.
+
+A click of an item with an id is the event `menu` of `{ id }`, or of `{ id, checked }` for an item with `checked`, which
+the click turns over first, and reaches the page of the window whose menus they are. A standard item does what its role
+says, and the page hears nothing of it: `close` closes its window as its user does, which an extension may keep open,
+and `quit` asks to end the app as `app.requestQuit()` does, which an extension may refuse.
+
+An accelerator is a key with `CmdOrCtrl`, `Ctrl` or `Alt`, and maybe `Shift`, joined by `+`, as `CmdOrCtrl+Shift+O` is,
+or one of `F1` to `F12`, alone or with any of them. The key is a capital letter, a digit, a function key or one of
+`Enter`, `Escape`, `Tab`, `Space`, `Backspace`, `Delete`, `Up`, `Down`, `Left`, `Right`, `Home`, `End`, `PageUp`,
+`PageDown`, `Plus`, `Minus`, `Comma` and `Period`. `CmdOrCtrl` is ⌘ on macOS and Ctrl elsewhere. A menu the page gets
+wrong fails before the host sees it, naming the item.
 
 Each call replaces the menus the window's page set last, so the page changes an item by setting them all again, and a
-reload keeps them. On macOS the menu bar shows the menus of the window in front after the app menu, which the app keeps
-with its ⌘H, ⌥⌘H and ⌘Q, in place of the Edit, View and Window menus it opens with, which a window whose page set none
-shows: ⌘C, ⌘V, ⌘Z and ⌘A reach the page through `editMenu` or the editing items alone, and ⌘M and ⌘W through
-`windowMenu` or `minimize` and `close`. On Windows and Linux they are a bar in their window, above the page, which keeps
-its size, as the window grows by the bar's height unless it fills the screen; `editMenu` and `windowMenu` are there the
-standard items of that platform's apps, and a window whose page set none has no bar, as `menu.set([])` takes it away.
-iOS and Android apps have no menu bar, and `menu.set` rejects there. The event `menu` is the menus' and the
-[tray's](#tray-and-notifications) alone: the app's C++ sets neither, and the events it emits, one of which the page may
-set them on, go by other names.
+reload keeps them.
+
+- On macOS the menu bar shows the menus of the window in front after the app menu, which the app keeps with its ⌘H, ⌥⌘H
+  and ⌘Q, in place of the Edit, View and Window menus it opens with, which a window whose page set none shows. ⌘C, ⌘V,
+  ⌘Z and ⌘A reach the page only through `editMenu` or the editing items, and ⌘M and ⌘W through `windowMenu` or
+  `minimize` and `close`.
+- On Windows and Linux the menus are a bar in their window, above the page, which keeps its size, as the window grows by
+  the bar's height unless it fills the screen. There `editMenu` and `windowMenu` are the standard items of that
+  platform's apps, and a window whose page set none has no bar, as `menu.set([])` takes it away.
+- iOS and Android apps have no menu bar, and `menu.set` rejects there.
+
+The event `menu` is the menus' and the [tray's](#tray-and-notifications) alone: the app's C++ sets neither, and the
+events it emits, on one of which the page may set them, go by other names.
 
 A desktop page opens a menu of its own where its user right clicks, of the items a menu takes, and gets the id of the
 item clicked, or `null` when the menu closes without one:
@@ -807,13 +887,16 @@ events.on('notification', () => showReport());
 
 The tray's menu takes the items of `menu.set` but for roles and accelerators: `{ label, id, enabled, checked }`, a
 submenu `{ label, items }` and `{ type: 'separator' }`. A click of an item with an id is the event `menu`, as one in the
-menus is, and turns an item with `checked` over first; it, and the event `tray`, reach the page in front that listens,
-of the window its user used last. The icon is the app's, from `app.icon`, or the system's for an app
-without one. The menu opens on a click on macOS, on a right click on Windows, and on Linux on the click its desktop
-opens menus on; a left or right click that opens none, as a left click does on Windows, is the event `tray`. `tray.set` again changes the tooltip and the menu of the same icon, `tray.remove()` takes the icon away,
-and the app takes it along as it quits. A Linux tray is a StatusNotifierItem, which the trays of KDE, Xfce, LXQt and
-others show, and GNOME's with its AppIndicator extension, which Ubuntu's comes with; on a desktop without one `tray.set`
-rejects, saying so.
+menus is, and turns an item with `checked` over first; it and the event `tray` reach the page in front that listens, of
+the window its user used last.
+
+- The icon is the app's, from `app.icon`, or the system's for an app without one.
+- The menu opens on a click on macOS, on a right click on Windows, and on Linux on the click its desktop opens menus on.
+  A left or right click that opens none, as a left click does on Windows, is the event `tray`.
+- `tray.set` again changes the tooltip and the menu of the same icon, `tray.remove()` takes the icon away, and the app
+  takes it along as it quits.
+- A Linux tray is a StatusNotifierItem, which the trays of KDE, Xfce, LXQt and others show, and GNOME's with its
+  AppIndicator extension, which Ubuntu's comes with; on a desktop without one `tray.set` rejects, saying so.
 
 `notification.show` answers once the system has taken the notification, and a click on it while the app runs is the
 event `notification`, without a value, for the page in front that listens. macOS asks the app's user first, and the call
@@ -860,15 +943,19 @@ before the page listens still brings the window to the front, and its event reac
 `second-instance` is the host's alone: the app's C++ emits others.
 
 On macOS and Linux only a launch by the same user reaches the instance, and on Windows any launch in the same signed-in
-session. A launch that comes while the instance quits waits for it to end, ten seconds at most, and becomes the next
-instance. One the instance does not take in that time, as when it has stopped answering, leaves with exit status 1 and
-says why, in a message box as well when its user opened it; where the app cannot make its lock, it runs as one more
-instance and says so. On Linux, Wayland and
-some window managers bring the window forward only for a launch that carries an activation token or a startup id, as a
-desktop's launcher gives it; a terminal's launch carries none. On macOS, Finder, the Dock and `open` bring the app that
-runs to the front themselves, so only a launch that starts the program anew, as a terminal or `open -n` does, reaches
-it. A development session keeps one instance of its own, apart from the built app. iOS and Android keep every app to
-one instance themselves.
+session.
+
+- A launch that comes while the instance quits waits for it to end, ten seconds at most, and becomes the next instance.
+  One the instance does not take in that time, as when it has stopped answering, leaves with exit status 1 and says why,
+  in a message box as well when its user opened it. Where the app cannot make its lock, it runs as one more instance and
+  says so.
+- On Linux, Wayland and some window managers bring the window forward only for a launch that carries an activation token
+  or a startup id, as a desktop's launcher gives it; a terminal's launch carries none.
+- On macOS, Finder, the Dock and `open` bring the app that runs to the front themselves, so only a launch that starts
+  the program anew, as a terminal or `open -n` does, reaches it.
+
+A development session keeps one instance of its own, apart from the built app. iOS and Android keep every app to one
+instance themselves.
 
 The host's `instance` extension does this, in an app that `app.singleInstance` keeps to one instance alone. With
 `app.singleInstance: false`, an extension of the app's own may take the launches instead, as
@@ -1109,13 +1196,15 @@ app: {
 The build writes them where each platform reads them: the reasons into the Info.plist of a macOS or iOS app, the devices
 into the entitlements a macOS app's signature claims and into an Android app's manifest. The page gets a device it asks
 for once the system's user gives it: macOS and iOS ask the first time, with the reason, and so does Android, without it;
-on Windows and Linux the page gets it at once. The webview asks nothing of its own, and the page gets nothing else it
-asks to use, on any platform, but the autoplay and the sensors Windows' WebView2 gives without asking: no device the
-list leaves out, no notifications, no MIDI, no downloads of several files at once on Windows and no iOS device's motion,
-nor anything for a frame of another origin on Android, which lets the page hold one. It reads the clipboard on its
-user's gesture alone, as in a browser. The host's extension `page-permissions` answers the page, whose role an extension
-may take (see [extensions.md](./extensions.md#the-pages-requests)). Without its reason, WebKit gives a macOS
-page no camera or microphone at all.
+on Windows and Linux the page gets it at once. Without its reason, WebKit gives a macOS page no camera or microphone at
+all.
+
+The webview asks nothing of its own, and on any platform the page gets nothing else it asks to use but the autoplay and
+the sensors Windows' WebView2 gives without asking: no device the list leaves out, no notifications, no MIDI, no
+downloads of several files at once on Windows, no iOS device's motion, and nothing for a frame of another origin on
+Android, which lets the page hold one. It reads the clipboard on its user's gesture alone, as in a browser. The host's
+extension `page-permissions` answers the page, whose role an extension may take (see
+[extensions.md](./extensions.md#the-pages-requests)).
 
 macOS asks for the app that opened on its own, from the Finder, the Dock or `open`. An app a terminal or an editor
 starts, as `crossbind app dev` does, is theirs to macOS, which asks for their permission instead. WebKit gives a macOS
@@ -1169,14 +1258,10 @@ from CoreLocation, which asks with the reason; a frame inside the page gets none
 <name>-android.apk                the release APK Gradle makes of it, and <name>-android.aab with an upload key
 ```
 
-The sample app is 6.7 MB on disk and 1.8 MB zipped (arm64): a 0.8 MB host and a 6 MB Hermes. It shows its first
-native result 0.34 s after launch on an M-series Mac. A Linux app links Hermes into its executable and runs on the
-system's WebKitGTK. A Windows app links it in too and runs on the system's WebView2: the sample's executable is 4.6 MB
-on x64, 1.8 MB zipped, and 4.1 MB on arm64, 1.6 MB zipped. Built for iOS devices, the sample is 4.7 MB, 1.3 MB
-zipped: a 1.3 MB executable and a 3.3 MB Hermes.
-The sample's Android release APK is 14.8 MB with both ABIs: each ABI's libraries take 5.5 MB of it (Hermes 2.4 MB, the
-NDK's libc++ 1.4 MB, the host 1 MB), and the Java side 2.9 MB, which R8, off by default, would shrink. Google Play
-delivers one ABI.
+A Linux app links Hermes into its executable and runs on the system's WebKitGTK; a Windows app links it in too and runs
+on the system's WebView2. An Android release APK carries the libraries of both ABIs, of which Google Play delivers one,
+and a Java side that R8, off by default, would shrink. What a sample app weighs on each platform is on
+[Performance](https://crossbind.dev/guide/performance/#size).
 
 ## Security
 
@@ -1358,15 +1443,17 @@ or `DOCKER_EXEC`).
 
 `crossbind app dev -p android` keeps one container of the image for the session, whose Gradle daemon packages each
 build, and removes it when the session ends. Every Android build on the machine shares Gradle's caches, which that
-daemon holds until its container goes, so the container carries the session's PID: one a session left behind without
-its exit hooks, as a crash or a SIGKILL leaves, is removed before the next Android build. A release that still cannot
-take the caches names the containers that hold them. The image is amd64 only, as the android image is, so it runs under
-emulation on an Apple silicon Mac: there the conformance app reopened about 25 s after an edit to its native code, and
-its page reloaded within 2 s of an edit. The app reaches the device through this machine's `adb`, from `PATH` or the
-Android SDK, which crossbind does not install: `brew install --cask android-platform-tools` on macOS,
-`sudo apt install adb` on Debian and Ubuntu, or Android Studio's. An app the device already has under another key,
-such as the one Google Play installed, cannot be updated; crossbind names the `adb uninstall` that removes it, with
-its data, and leaves running it to you.
+daemon holds until its container goes, so the container carries the session's PID: one a session left behind without its
+exit hooks, as a crash or a SIGKILL leaves, is removed before the next Android build. A release that still cannot take
+the caches names the containers that hold them.
+
+- The image is amd64 only, as the android image is, so it runs under emulation on an Apple silicon Mac, where an edit to
+  native code takes a while to reopen the app; an edit to the page still reloads it quickly.
+- The app reaches the device through this machine's `adb`, from `PATH` or the Android SDK, which crossbind does not
+  install: `brew install --cask android-platform-tools` on macOS, `sudo apt install adb` on Debian and Ubuntu, or
+  Android Studio's.
+- An app the device already has under another key, such as the one Google Play installed, cannot be updated; crossbind
+  names the `adb uninstall` that removes it, with its data, and leaves running it to you.
 
 ## Publishing
 
@@ -1442,11 +1529,12 @@ services; the next publish signs in again.
 A service account is for CI, where no one signs in, and wins over the sign-in where one is set, from the environment or
 from `~/.crossbind.json` under the same name without `CROSSBIND_` (`crossbind config set GOOGLE_PLAY_SERVICE_ACCOUNT …`):
 
-| Variable | Value |
-|---|---|
-| `CROSSBIND_GOOGLE_PLAY_SERVICE_ACCOUNT` | The service account's e-mail. Your own gcloud login buys an hour's token of it at each publish, so no key of it exists anywhere. |
-| `CROSSBIND_GOOGLE_PLAY_KEY` | The service account's JSON key, where gcloud is not, as in CI: its file, or, from the environment alone, its text. |
-| `CROSSBIND_GOOGLE_PLAY_TOKEN` | An access token of the service account with the androidpublisher scope, from the environment alone, as CI makes one with no key (see [From CI](#from-ci)). It lasts an hour. |
+- `CROSSBIND_GOOGLE_PLAY_SERVICE_ACCOUNT`: The service account's e-mail. Your own gcloud login buys an hour's token of
+  it at each publish, so no key of it exists anywhere.
+- `CROSSBIND_GOOGLE_PLAY_KEY`: The service account's JSON key, where gcloud is not, as in CI: its file, or, from the
+  environment alone, its text.
+- `CROSSBIND_GOOGLE_PLAY_TOKEN`: An access token of the service account with the androidpublisher scope, from the
+  environment alone, as CI makes one with no key (see [From CI](#from-ci)). It lasts an hour.
 
 Setting two of them stops the publish. Once, for each app or account:
 
@@ -1825,13 +1913,22 @@ A CI job publishes as a publish without a terminal does: it asks nothing. So pub
 where the publish asks for the app's settings and writes them into `crossbind.config.js`, and commit them. CI has no
 Xcode account and no one to sign in to Google, so it needs these besides, as the repository's secrets and variables:
 
-| Store | CI needs |
-|---|---|
-| Google Play | The upload key as a base64 secret, which `base64 < <keystore>` prints, with its alias and its password, which `crossbind app upload-key --show-password` prints. A service account invited in Play Console (see [Google Play](#google-play)), through Workload Identity Federation with no key, or its JSON key. |
-| App Store Connect | `app.team` in `crossbind.config.js`, as this machine's `XCODE_DEVELOPMENT_TEAM` stays behind. An App Store Connect API key, its `.p8` as a secret: an Admin key, whose uploads Apple signs in the cloud and whose secret can do all an Admin can, or a key of another role with an Apple Distribution certificate imported into the runner's keychain before the publish. The archive is unsigned, so the runner needs no development certificate or device. |
-| Mac App Store | A macOS runner, `app.team` and an Admin App Store Connect API key, as for App Store Connect, whose uploads Apple signs in the cloud: the app and its installer package alike, so the runner's keychain needs no certificate. |
-| GitHub Releases | The workflow's own token, given as `GITHUB_TOKEN: ${{ github.token }}` with `permissions: contents: write`, and with `app.updater` its private key as a secret in `CROSSBIND_UPDATER_PRIVATE_KEY`. |
-| Microsoft Store | The Entra ID application's tenant and client ids, as `CROSSBIND_MICROSOFT_STORE_TENANT_ID` and `CROSSBIND_MICROSOFT_STORE_CLIENT_ID`, and its key as a secret in `CROSSBIND_MICROSOFT_STORE_CLIENT_SECRET`. The Windows app builds in crossbind's windows image, so a Linux runner with Docker publishes it. |
+- **Google Play**: The upload key as a base64 secret, which `base64 < <keystore>` prints, with its alias and its
+  password, which `crossbind app upload-key --show-password` prints. A service account invited in Play Console (see
+  [Google Play](#google-play)), through Workload Identity Federation with no key, or its JSON key.
+- **App Store Connect**: `app.team` in `crossbind.config.js`, as this machine's `XCODE_DEVELOPMENT_TEAM` stays behind.
+  An App Store Connect API key, its `.p8` as a secret: an Admin key, whose uploads Apple signs in the cloud and whose
+  secret can do all an Admin can, or a key of another role with an Apple Distribution certificate imported into the
+  runner's keychain before the publish. The archive is unsigned, so the runner needs no development certificate or
+  device.
+- **Mac App Store**: A macOS runner, `app.team` and an Admin App Store Connect API key, as for App Store Connect, whose
+  uploads Apple signs in the cloud: the app and its installer package alike, so the runner's keychain needs no
+  certificate.
+- **GitHub Releases**: The workflow's own token, given as `GITHUB_TOKEN: ${{ github.token }}` with
+  `permissions: contents: write`, and with `app.updater` its private key as a secret in `CROSSBIND_UPDATER_PRIVATE_KEY`.
+- **Microsoft Store**: The Entra ID application's tenant and client ids, as `CROSSBIND_MICROSOFT_STORE_TENANT_ID` and
+  `CROSSBIND_MICROSOFT_STORE_CLIENT_ID`, and its key as a secret in `CROSSBIND_MICROSOFT_STORE_CLIENT_SECRET`. The
+  Windows app builds in crossbind's windows image, so a Linux runner with Docker publishes it.
 
 Each key goes in as its secret's text, the upload key's as base64, so no step writes it to a file: where a tool takes a
 file, crossbind writes one only the job's user reads, and removes it when the publish ends.
@@ -1967,10 +2064,11 @@ crossbind's runtime, the first two with the texts and versions the build copied 
 
 ## Environment variables of the app
 
-| Variable | Effect |
-|---|---|
-| `CROSSBIND_APP_URL` | Opens this page instead of `crossbind://app/`, in a debug build only; the Vite plugin sets it to the dev server. |
-| `CROSSBIND_APP_CONSOLE` | Writes the page's console and uncaught errors to the app's output; on during development. A Windows app has no console of its own, so it writes only to an output that is redirected, as a development session's is. With it, an app that cannot start says why in its output alone, without a message box. |
+- `CROSSBIND_APP_URL`: Opens this page instead of `crossbind://app/`, in a debug build only; the Vite plugin sets it to
+  the dev server.
+- `CROSSBIND_APP_CONSOLE`: Writes the page's console and uncaught errors to the app's output; on during development. A
+  Windows app has no console of its own, so it writes only to an output that is redirected, as a development session's
+  is. With it, an app that cannot start says why in its output alone, without a message box.
 
 An Android app takes them as its activity's string extras (`adb shell am start --es CROSSBIND_APP_CONSOLE 1 …`) and
 writes to logcat, under the tag `Crossbind`: the URL only on `localhost`, and the console only in a debuggable app.
@@ -1978,122 +2076,53 @@ writes to logcat, under the tag `Crossbind`: the URL only on `localhost`, and th
 ## Limits
 
 - macOS 11 or later, built on macOS.
-- Linux: a glibc system with WebKitGTK 4.1, release 2.40 or later (`libwebkit2gtk-4.1-0` on Debian and Ubuntu),
-  measured on Ubuntu 22.04. A Linux app builds in crossbind's linux image, so it needs Docker (`RUNNER=DOCKER_RUN` or
-  `DOCKER_EXEC`), on a Mac as well.
-- Signing with a Developer ID and notarizing have not been run with a real Developer ID yet. The app runs in the
-  hardened runtime, measured with an ad hoc signature without library validation, which a Developer ID passes when the
-  app and its framework carry the same team.
-- Windows, x64 and arm64, with the WebView2 Runtime, which Windows 11 includes; measured on GitHub's Windows Server
-  2025 runner with WebView2 154 and its Windows 11 arm64 runner with 155. A Windows app builds in crossbind's windows
-  image, so it needs Docker (`RUNNER=DOCKER_RUN` or `DOCKER_EXEC`), on a Mac or a Linux machine as well. Building
-  one or developing it on a Windows machine has not been measured yet.
-- Signing a Windows app has been measured with a throwaway PKCS#12 key, whose signatures and timestamp on the app, its
-  zip's copy and the setup program jsign reads back; not yet with a cloud's key service. Windows itself checks them,
-  and the uninstaller's, in CI alone.
-- The Windows setup program runs in CI on x64 and arm64: it installs the app with `/S`, the app it installed passes the
-  conformance runs, `/UPDATE` waits for the app to quit and opens it again, and the uninstaller takes the app, its
-  shortcut, its entry in Settings and its scheme. Its install of the WebView2 Runtime, for a system that has none,
-  cannot be measured on the Windows machines crossbind is tested on, which have the runtime. The check of the
-  bootstrapper's signature it runs first runs in CI on its own, as the setup program's script states it, on
-  Microsoft's bootstrapper and on files it refuses.
-- A desktop page's read of the clipboard without a gesture gets nothing in the conformance runs on Windows, macOS and
-  Linux. On macOS 27 it got nothing with WebKit's DOM paste setting on as well, so that run does not show what the
-  setting let through. One on a click reads it in CI on Windows alone, through WebView2's DevTools; on macOS and
-  Linux, where it waits on WebKit's Paste menu or WebKitGTK's request, it has not been measured, nor has an answer an
-  earlier crossbind left in a Windows profile, which the app forgets.
-- The updater's hold on an update to the app's signer has been measured on macOS with two self-signed identities: an
-  app signed with one took a bundle it signed and refused one the other signed and one signed ad hoc, and an app signed
-  ad hoc took all three. On Windows the conformance runs in CI trust the build's throwaway key and check that an update
-  without its signature is refused for want of it; a setup program by the same signer passing has not been run.
-- Several windows have been measured on macOS, on Linux under Xvfb without a window manager, and on an iPad Simulator
-  of iPadOS 27: a second window of another page of the app's, which reaches the module with objects of its own, talks
-  to the first through `BroadcastChannel` and the `storage` event, and hears the events for every page, for the page in
-  front and for one page as each says; and the app going on as each closes. On the desktop as well: the size a window
-  opened at and the one `set()` gave it, a modal window and one without a frame opening with their pages, and a
-  `startDrag()` with no press down moving nothing; on the iPad, a window closed in the background and one closed in
-  front, after which the first has the front. Windows builds them, and its conformance runs check them in CI. By hand,
-  on macOS, on Linux under Xvfb with openbox and on Wayland under Weston 14, and on Windows Server 2025: a frameless
-  window's move and its buttons, a modal window, a sheet on macOS and above its parent elsewhere, the menus of several
-  windows, each its own, and a window above the others and the place `x` and `y` give, which a Wayland compositor
-  takes for itself, as `open()`'s `ignored` says. An iPad itself has not been measured.
-- `app.window`'s place, limits and full screen have been measured on macOS, and on Linux under Xvfb with openbox, for a
-  window that resizes and one that does not: an element's full screen, which Escape leaves, and `fullscreen: true`. A
-  Wayland compositor places a window itself, and with WebKitGTK before 2.44 a window that opened full screen leaves it
-  when an element does. The background has been measured on macOS, Linux, iOS and Android. On Windows the conformance
-  runs check that the page may show an element full screen, and that a window filling its screen covers it again after
-  the message of a new scale, which the runs send it as Windows would; the rest is built there, not measured yet.
-- Devices have been measured on Linux, with WebKitGTK's mock devices; on an Android emulator, with its questions
-  answered both ways, with a page that asks for a device the app does not list, and with a frame of another origin; in
-  the iOS Simulator, which asks for the location with the reason and gives the camera and the microphone at once; and
-  on macOS, whose questions named the app and its reasons when `open` started it, and the terminal when the terminal
-  did, and were answered both ways. The conformance runs check on every platform that the page has `getUserMedia()`;
-  Windows has not been measured yet. Before iOS 27, WebKit asks for the location through a selector Apple does not
-  publish, which only an app that lists the location answers; App Store review of one has not been tried. Linux takes
-  the location from GeoClue, which the system has to run. On macOS the system's question for the location, with the
-  app's name and reason, has been measured; a position reaching the page has not, as the Mac it ran on found none, nor
-  did its Maps.
-- One instance has been measured on macOS and Linux: the hand-over, and the window coming back to the front from
-  minimized. On Windows the conformance runs in CI check the hand-over alone.
-- Links have been measured on macOS, from the command line and as the Apple Events `open -a` sends, to a launch and to
-  the app that runs; on Linux from the command line, and the Debian package's scheme as `xdg-mime` reports it; on an
-  Android emulator, to the app that runs. On Windows the conformance runs in CI check links from the command line and
-  the command the setup program registers for the scheme, not a link the system opens. On iOS the app is built with its
-  scheme, and no run answers the question iOS asks before a link opens it.
-- The functions the page passes have been measured on macOS and Linux, and the events of C++ on macOS alone; on
-  Windows, iOS and Android the conformance runs in CI check the functions.
-- On macOS the file dialogs, `shell.revealInFolder`, `app.paths` and `app.quit` have been measured, and so has
-  `shell.openExternal` refusing other addresses; `shell.openExternal` opening one and `shell.openPath` opening a file
-  have not. On Linux and Windows the file dialogs, `shell.openExternal` opening an address, `shell.openPath`,
-  `shell.revealInFolder` and `app.quit` are built, not measured yet.
-- The conformance runs of the desktop apps, in CI and installed, move a file of the data folder to the trash and find it
-  gone, see the page refused a path outside the app's folders, a folder of them and one with `..`, and relaunch the app,
-  which must leave with 0 and open anew. A file on a drive or mount without a trash has not been tried. On Windows the
-  runs tell the window the system sleeps and wakes, as Windows does, and the page hears both; the sleep of a macOS or
-  Linux system has not been measured.
-- Message dialogs have been measured from the page: on macOS, and on Linux under Xvfb with openbox, with
-  their buttons, Return and Escape; in the iOS Simulator with their buttons; on an Android emulator with their buttons,
-  Back and a tap outside. On Windows the conformance runs in CI check that the host refuses one no platform shows; the
-  dialog itself is built there, not measured yet.
-- A phone's `dialog.open` has been measured from the page: in the iOS Simulator two files at once, whose copies match
-  the files byte for byte, a filter, a folder and a cancel; on an Android emulator two files at once, a cancel and a
-  folder refused.
-- The two colors of `backgroundColor` have been measured in the iOS Simulator and on an Android emulator: the launch
-  screen of each appearance, and the page's background and the system bars' icons as the system switches while the app
-  runs.
-- `device` has been measured on macOS, in the iOS Simulator as an iPhone and as an iPad, and on an Android emulator as
-  a phone and, with its screen made larger, as a tablet. The Linux and Windows hosts build with it; neither has run it
-  yet.
-- `titleBar: 'hidden'` has been measured on macOS 27 with `app.window`: the window's buttons over the page's toolbar,
-  centred in a toolbar 38 pixels high, and a button of the page under them taking its click. The Linux and Windows
-  hosts build with it; neither has run it yet.
-- The tray and notifications: the conformance runs on Windows click the icon, an item of its menu and the notification
-  with the messages Windows sends the app, and those on Linux run against a tray and a notification server of the run's
-  own, which read the icon and its menu as KDE's tray does, and click them. On macOS the runs set the icon and take it
-  away, unclicked. Nobody has looked at the icon in a real KDE, GNOME or Windows tray yet, nor at a notification shown,
-  nor at macOS's question for notifications.
-- The icon has been seen in macOS's Finder, in the icon files of an iOS Simulator build and on Android's launcher;
-  Windows and Linux apps carry it, but nobody has looked at it there yet.
+- Linux: a glibc system with WebKitGTK 4.1, release 2.40 or later (`libwebkit2gtk-4.1-0` on Debian and Ubuntu). A Linux
+  app builds in crossbind's linux image, so it needs Docker (`RUNNER=DOCKER_RUN` or `DOCKER_EXEC`), on a Mac as well.
+- Windows, x64 and arm64, with the WebView2 Runtime, which Windows 11 includes. A Windows app builds in crossbind's
+  windows image, so it needs Docker (`RUNNER=DOCKER_RUN` or `DOCKER_EXEC`), on a Mac or a Linux machine as well.
+- iOS 15.1 or later, arm64 only: devices, and the Simulator of an Apple silicon Mac. It builds on macOS with Xcode.
+  During development an iOS app runs in the Simulator, or with `--device` on an iPhone or iPad on iOS 17 or later.
+- Android 13 (API 33) or later, the level crossbind's Android libraries build against, with Android System WebView 116
+  or later, the first that passes byte arrays as ArrayBuffer messages; an older WebView gets a message that names the
+  version it needs. arm64-v8a and x86_64. An Android app builds on macOS and Linux. Its one activity shows the page
+  under the system bars' insets.
+- Vite only.
+
+Where the platforms differ:
+
+- A desktop page's read of the clipboard without a gesture gets nothing on Windows, macOS and Linux.
+- A Wayland compositor places windows itself, so `x`, `y` and `alwaysOnTop` are `ignored` there, as [`open()`](#windows)
+  says. With WebKitGTK before 2.44 a window that opened full screen leaves it when an element does.
+- Linux takes the location from GeoClue, which the system has to run. Before iOS 27, WebKit asks for the location
+  through a selector Apple does not publish, which only an app that lists the location answers.
 - A download the page starts saves where its user picks on macOS, iOS and Android when it is a `Blob` or a `data:` URL
   the page holds. On macOS and iOS an `<a download>` link to one of the app's own files saves nothing yet, so the page
   fetches the file and saves it as a `Blob`; Android saves it. Of several downloads a page starts at once WebKit keeps
-  the last, as each replaces the one before; started one after another, each saves in turn.
+  the last, as each replaces the one before; started one after another, each saves in turn. WebView2 and WebKitGTK
+  handle downloads themselves on Windows and Linux.
 - Android's WebView hands the app neither a download link's name nor its bytes. So the host keeps, in the page's top
-  frame, the `Blob` behind each `blob:` URL and each download link's name as it is followed, which a page's CSP does
-  not hinder, and holds the download in memory while its user picks where it goes. A download that is no link of the
-  page's takes its name from its address. The save picker gets the type of the name's extension, or none Android
-  knows, as it gives a name the extension of its type where the two differ: the `text/plain` WebView guesses from a
-  CSV's bytes would make `report.csv` into `report.csv.txt`. A name without an extension takes WebView's type.
-- Downloads have been measured in the iOS Simulator and on an Android emulator, under a CSP of `default-src 'self'`:
-  a `Blob`, every byte value, a `data:` URL, a non-ASCII name, a `blob:` URL the page revoked at once, a link tapped,
-  one clicked outside the document, three in a row and a picker cancelled. On macOS a `Blob` has been. WebView2 and
-  WebKitGTK handle downloads themselves on Windows and Linux, which has not been measured yet.
-- iOS 15.1 or later, arm64 alone: devices, and the Simulator of an Apple silicon Mac. It builds on macOS with Xcode.
-- During development an iOS app runs in the Simulator, or with `--device` on an iPhone or iPad on iOS 17 or later. A
-  session on a device has been measured on an iPhone on iOS 27 on its cable with a paid team; a free Personal Team and
-  the local network were measured by hand.
-- Android 13 (API 33) or later, the level crossbind's Android libraries build against, with Android System WebView
-  116 or later, the first that passes byte arrays as ArrayBuffer messages; an older WebView gets a message that names
-  the version it needs. arm64-v8a and x86_64.
-- An Android app builds on macOS and Linux. Its one activity shows the page under the system bars' insets.
-- Vite only.
+  frame, the `Blob` behind each `blob:` URL and each download link's name as it is followed, which a page's CSP does not
+  hinder, and holds the download in memory while its user picks where it goes. A download that is no link of the page's
+  takes its name from its address. The save picker gets the type of the name's extension, or none Android knows, so
+  `report.csv` stays `report.csv` rather than becoming `report.csv.txt` by the `text/plain` WebView guesses from its
+  bytes. A name without an extension takes WebView's type.
+
+Not checked yet, by hand or in CI:
+
+- macOS: signing with a real Developer ID and notarizing (the app runs in the hardened runtime, whose library validation
+  a Developer ID passes when the app and its framework carry the same team); `shell.openExternal` opening an address and
+  `shell.openPath` opening a file; a clipboard read on a click, which waits on WebKit's Paste menu; a position reaching
+  the page; a download other than a `Blob`; the system's sleep; the tray icon clicked, a notification shown, and the
+  system's question for notifications.
+- Linux: the file dialogs, `shell.openExternal`, `shell.openPath`, `shell.revealInFolder` and `app.quit`; `device` and
+  `titleBar: 'hidden'`; downloads; a clipboard read on a click, which waits on WebKitGTK's request; the system's sleep;
+  the app's icon, and the tray icon and a notification in a real KDE or GNOME desktop.
+- Windows: building or developing an app on a Windows machine; signing with a cloud's key service; the setup program
+  installing the WebView2 Runtime on a system without it; an update by a setup program of the same signer; full screen
+  and the window's place, limits and background beyond what the conformance runs check; devices; the file and message
+  dialogs, `shell.openExternal`, `shell.openPath`, `shell.revealInFolder` and `app.quit`; `device` and
+  `titleBar: 'hidden'`; downloads; a link the system opens; a minimized window coming back to the front for a second
+  instance; the app's icon, and the tray icon and a notification in a real Windows desktop.
+- iOS: an iPad itself, beyond the iPad Simulator; the question iOS asks before a link opens the app; App Store review of
+  an app that lists the location for iOS before 27.
+- Everywhere: the events of C++ beyond macOS, and moving a file to the trash on a drive or mount without one.

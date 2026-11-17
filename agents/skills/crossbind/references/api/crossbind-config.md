@@ -2,9 +2,9 @@
 
 # `crossbind.config.js` — Build-time Configuration
 
-> **Build-time only.** Read once by the `crossbind build` CLI. NOT consumed at runtime. Runtime configuration lives in [`init.md`](./init.md).
+> **Build time only.** `crossbind build` and the bundler plugins read it; runtime options go to `initNative()` ([`init.md`](./init.md)).
 
-Every consumer (app or library) writes a `crossbind.config.js` at the project root. It declares dependencies, source paths, build target, and export shape — everything the CLI needs to compile and package your C++.
+Every app or library has a `crossbind.config.js` at its root, with its dependencies, source paths, build target and export shape.
 
 ## Shape
 
@@ -448,15 +448,15 @@ export default {
 
 ## Path resolution rules
 
-Paths are resolved in this order (from `loadConfig.js`):
+Paths resolve in this order:
 
 1. `paths.config` is set → `paths.project` defaults to its parent dir.
 2. `paths.project` is set → resolved as absolute via `getAbsolutePath`.
 3. Neither set → falls back to `process.cwd()`.
 
-Then everything else (`base`, `cache`, `build`, `output`, `native`, `module`, `header`, `bridge`, `cmake`) is resolved against `paths.project` using `getAbsolutePath(project, value)`.
+Every other path (`base`, `cache`, `build`, `output`, `native`, `module`, `header`, `bridge`, `cmake`) then resolves against `paths.project`.
 
-This means: **always set `paths.config: import.meta.url`** at minimum. Without it, `crossbind build` invoked from a different cwd will resolve paths against the wrong root.
+So **always set `paths.config: import.meta.url`**: without it, a build started from another folder resolves paths against the wrong root.
 
 ## Examples
 

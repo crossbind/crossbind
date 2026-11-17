@@ -21,13 +21,11 @@ Add crossbind to a Next.js app so:
 
 ## Files involved
 
-| File | Role |
-|------|------|
-| `package.json` | + `crossbind`, `@crossbind/plugin-webpack`, `@crossbind/plugin-webpack-loader`, optional `@crossbind/port-<name>` |
-| `next.config.{js,mjs,ts}` | Add crossbind plugin via `webpack(config)` callback; add `headers()` for COOP/COEP |
-| `crossbind.config.{js,mjs}` *(new at root)* | Project-level crossbind config |
-| `src/native/` *(if user wraps own C++)* | `.h` + `.cpp` source |
-| `public/` | Next serves `crossbind.js` / `crossbind.wasm` from `public/` if you copy them there post-build (alternative: webpack plugin's middleware) |
+- `package.json`: add `crossbind`, `@crossbind/plugin-webpack`, `@crossbind/plugin-webpack-loader`, optional `@crossbind/port-<name>`.
+- `next.config.{js,mjs,ts}`: Add crossbind plugin via `webpack(config)` callback; add `headers()` for COOP/COEP.
+- `crossbind.config.{js,mjs}` *(new at root)*: Project-level crossbind config.
+- `src/native/` *(if user wraps own C++)*: `.h` + `.cpp` source.
+- `public/`: Next serves `crossbind.js` / `crossbind.wasm` from `public/` if you copy them there post-build (alternative: webpack plugin's middleware).
 
 ## Commands
 

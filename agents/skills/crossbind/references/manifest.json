@@ -19,137 +19,137 @@
     {
       "source": "docs/api/README.md",
       "output": "api/README.md",
-      "sha256": "8cf91ed102abd720585e2fb90d46534c3bc18e327b1e6a3c7fb28d3114873eb4"
+      "sha256": "d15ce1d4acf94c118ba6bdc896ea13bab471b8cd15b231ab2e96b6781585cf3b"
     },
     {
       "source": "docs/api/app.md",
       "output": "api/app.md",
-      "sha256": "e20ff27d7f60a7859fbdd1673c132f13fbe7a9282fff88134951c2277b38995d"
+      "sha256": "a997c1f3a40651dbd447a0eebd75412bed0bb123b40e9090d207e909e7def5d8"
     },
     {
       "source": "docs/api/build-state.md",
       "output": "api/build-state.md",
-      "sha256": "8ed14b27b61dfdf31919871948bdd948eff900b41a0319d35db1df07ceef5876"
+      "sha256": "2df463846a9efaf855ecaa8d0f7c19b9047c8ecbc1fed44fae97893e906d92a7"
     },
     {
       "source": "docs/api/conan.md",
       "output": "api/conan.md",
-      "sha256": "7e468541804e4be3b782500b63ec0e6da4545fa553518dad6b659c822ae0d511"
+      "sha256": "5748af490a5109a4cd6a794557c5bf05c80989bcec5a5a100a6322de5da4aaaa"
     },
     {
       "source": "docs/api/cpp-binding-rules.md",
       "output": "api/cpp-binding-rules.md",
-      "sha256": "1bf00d7f6161844ada398902d8af6be290918d7195904a6cea052c6fca39f77c"
+      "sha256": "64c9a18abc5bc871d8e491888c6f3eb34e766c17e4d8d9d60e85654914a70b75"
     },
     {
       "source": "docs/api/crossbind-build.md",
       "output": "api/crossbind-build.md",
-      "sha256": "cab873db3a9b7676856f39b9169f184b74141aaf91fe748c194b0095ae6e1a6d"
+      "sha256": "cc8c367ff594e2b009651bb0940eef921eb02949d08b26881aab0535b714a501"
     },
     {
       "source": "docs/api/crossbind-config.md",
       "output": "api/crossbind-config.md",
-      "sha256": "bf3bf3052c7875c93e762588b6fadb9a1cdcbd7dd9aa5b6f5a8826d600ca90fe"
+      "sha256": "9ca09015782322db1622936625fcfc80de38470de4f8d1ae9cfffff3ba2705bf"
     },
     {
       "source": "docs/api/extensions.md",
       "output": "api/extensions.md",
-      "sha256": "0e53cb0738ab39497a43d18738a284ecba6c4d5100f817c54f947c25bfcbbcf1"
+      "sha256": "fc2befd35aa54860e484948c9c45bdd6b331912f2104dc5f34836b42448b7127"
     },
     {
       "source": "docs/api/filesystem.md",
       "output": "api/filesystem.md",
-      "sha256": "c697389ebf36d0626e9140df3e7c9554dae2f41a310c31b30902b650214af940"
+      "sha256": "bd79953a183b210ccab3ce38b551df36639f2506cfa35170992ae4f73afb52d2"
     },
     {
       "source": "docs/api/init.md",
       "output": "api/init.md",
-      "sha256": "2e2bb1460e339c911b7e958cd43d6b6cf94fc99c338c9bf39b07f5002d6bcf95"
+      "sha256": "74279ed366c677f13c20cf9b7244ed205015f05dcf8470a7594dbc77f6cf9ff2"
     },
     {
       "source": "docs/api/lifecycle-and-types.md",
       "output": "api/lifecycle-and-types.md",
-      "sha256": "f2a1e290654062b5bd955cc2acf128b2bac3ec7ac34898b334fb84f6a940ff1d"
+      "sha256": "dd052ea98f2e059da3945c035770f4afd6e7eeafedff2b7b62c5c52e8e6de96a"
     },
     {
       "source": "docs/api/native.md",
       "output": "api/native.md",
-      "sha256": "afc0ee1f43dab2ff473619d738a076ccdd9455007c1a2b190db2034b47d60e7a"
+      "sha256": "3c0d2153f5701688cb303c5efa4d5f8f9d4913a4248f57eabb0dcf2c1ab1b8e8"
     },
     {
       "source": "docs/api/overrides.md",
       "output": "api/overrides.md",
-      "sha256": "572185b7b95558c177def5ab1134d96d77139fdc1814cc674379ee201781fcb4"
+      "sha256": "5632d2d118631fe8a5d1b018ce0f3815c4f8a4148fe9023807024222ba5405d2"
     },
     {
       "source": "docs/api/performance.md",
       "output": "api/performance.md",
-      "sha256": "3a070edc88653277c421a49e61e981fe38dd05d18f02b3155c7c4901576f0483"
+      "sha256": "d4718187ea0e5ddf05adf085e534e6bde8d2e25d12cbb5a58f09f12c7c2d28d1"
     },
     {
       "source": "docs/api/remote-runner.md",
       "output": "api/remote-runner.md",
-      "sha256": "7c0d2ceebb0f6031ee5c508461d7db61805aa74dd8750dcc29c726eee09b63d5"
+      "sha256": "a474eb3e806c15d57a2b22f0b43d3c4daac1aee9b7f089498d9fcb9453c2853b"
     },
     {
       "source": "docs/api/rust.md",
       "output": "api/rust.md",
-      "sha256": "3ef872336bc2851deddd18aad612ba25f387b102d6acb2ad3dda65d6e8f54099"
+      "sha256": "5f535cce58d3bd57382dd34c382c2e1215b62317a41742f2005a7f86dfc6b57f"
     },
     {
       "source": "docs/api/swig-escape.md",
       "output": "api/swig-escape.md",
-      "sha256": "3e7b69c16a57b430c663c70b7dd783a5f372518cca819db9f1191590927caa91"
+      "sha256": "57d0e845ce4c471eb0af729bee29a20fa69b715a920db51a7520ea843d50bdcc"
     },
     {
       "source": "docs/api/threading.md",
       "output": "api/threading.md",
-      "sha256": "1fbfb5adfe32f07567ec3901be037ea1d17be5050ed75ed434598e8cac2692f8"
+      "sha256": "74399273499fb154deb6c0319f1c811562e5a4d6c7ed48dd4184e42bba3b4397"
     },
     {
       "source": "docs/api/troubleshooting.md",
       "output": "api/troubleshooting.md",
-      "sha256": "37990dad8ff0e0b399413837972c8f3823fb047a0e004d5e443000c34fe4d1b4"
+      "sha256": "bf47040a9ecfac85432c7172597cebaab0dfe0dafc67b66998392884e1c533a9"
     },
     {
       "source": "docs/api/wasi.md",
       "output": "api/wasi.md",
-      "sha256": "5ea5b4bdd9279c4a25817d991f3f697eaa7c9f0ab17cdc114d2b84100e2baa33"
+      "sha256": "6d4ce3e0ecb8654087baf4e8a5da0d155338e5a339fc2a70531eba9492cbd7a6"
     },
     {
       "source": "docs/playbooks/integration/README.md",
       "output": "integration/README.md",
-      "sha256": "212ce87811b99caeb38bf3740968c4e7b80a9adcd788822e47ecf8032a1600ab"
+      "sha256": "fe91fc076695979a98d3ece6329a2dd0b3d6045e70b09f574a94589959eb2718"
     },
     {
       "source": "docs/playbooks/integration/cloudflare-worker.md",
       "output": "integration/cloudflare-worker.md",
-      "sha256": "7d488f57db9ba39c526aa4eb14cafdfef319bbcdefd3e2342c15e3f774e86754"
+      "sha256": "c9e3c1827a5724a9dc362c22d9ce43452b317e80468478791670c7b9837cb680"
     },
     {
       "source": "docs/playbooks/integration/desktop-app.md",
       "output": "integration/desktop-app.md",
-      "sha256": "e3ede9eb5bc4db14cf407fbf814f2b8f1dc92bc12b184e9239e54ce1567d1984"
+      "sha256": "5bb4e8fdbe93575c9792f413039aaf952b7a6bd03fefff1c36825ee60fba9d6a"
     },
     {
       "source": "docs/playbooks/integration/nextjs.md",
       "output": "integration/nextjs.md",
-      "sha256": "02725a8b1f3e4d90ef19f44556fd1621d7cf5df7a39908c5dd4b1ad5a1244438"
+      "sha256": "a946f43d3d3f9c8a9d429c5c840fdf30da5d72097ef2b024afd5309e390a819c"
     },
     {
       "source": "docs/playbooks/integration/nodejs.md",
       "output": "integration/nodejs.md",
-      "sha256": "5451f3b49bd0253c78b1b68eb05c3e8a6d5b8c8bebe4cb68706203493eca9b0c"
+      "sha256": "21aab562be34f8fbc45f8603f08d31f8d07906e15821045c3cd1b3cc553223ae"
     },
     {
       "source": "docs/playbooks/integration/react-native-cli.md",
       "output": "integration/react-native-cli.md",
-      "sha256": "c3e61c81c2a3335fbbb3e432ee441b48903a88ae282047959487f85656a70dd9"
+      "sha256": "ac8356ca0421d3bc95ceaa04fd232effa27fbdcf941f05b223ce049940f8517a"
     },
     {
       "source": "docs/playbooks/integration/react-native-expo.md",
       "output": "integration/react-native-expo.md",
-      "sha256": "a25369d3d4eb4684cd923a67f630c9f862a6bbbca0aa9eeda8b919199a93fefd"
+      "sha256": "706aa33f05a47972f85294ca7e0a28557138732e3bf4805d13674e78fd9a0c01"
     },
     {
       "source": "docs/playbooks/integration/rollup.md",
@@ -159,17 +159,17 @@
     {
       "source": "docs/playbooks/integration/vanilla.md",
       "output": "integration/vanilla.md",
-      "sha256": "27ce59ccd6212cc2cd72b690119994ebeea8ef10ce5621ac63faf7911c3bdc38"
+      "sha256": "db03131dc21f8a85b98e13eb915d52d84c503d11dc5af8c493b338bb92502173"
     },
     {
       "source": "docs/playbooks/integration/vite.md",
       "output": "integration/vite.md",
-      "sha256": "6e603effbd410ee95fae82b73ddd3715c0393b4af21db4011c2a557681795de7"
+      "sha256": "2310f4f6aef4f424f9ec29994e25a0bc3db4cb370077a89e9fdbed07a0a7f168"
     },
     {
       "source": "docs/playbooks/integration/webpack-rspack.md",
       "output": "integration/webpack-rspack.md",
-      "sha256": "953303cac58787e530b935a15bf0051daf793cd9f3c852150ab89e4958b42601"
+      "sha256": "ad2f7b94024d16d1f85da004773e39adddc7abbb19658780fbf9d9f4feac20c4"
     },
     {
       "source": "ports/catalog.json + ports/*/package.json",

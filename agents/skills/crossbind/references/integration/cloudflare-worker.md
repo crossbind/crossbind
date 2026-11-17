@@ -117,7 +117,7 @@ If the user insists on multithread, route them to a Node backend (`docs/playbook
 - [ ] `pnpm build` produces `dist/<name>.edge.js` + `dist/<name>.edge.wasm`.
 - [ ] `pnpm wrangler dev` starts; `curl http://localhost:8787` returns the expected response (calls into C++).
 - [ ] `pnpm wrangler deploy` ships to Cloudflare without "module not found" errors.
-- [ ] Cold-start cost is acceptable (typical: 50-300ms for small wasm; benchmark in production).
+- [ ] Cold-start cost is acceptable (measure it in production).
 
 ## Common pitfalls
 

@@ -1,13 +1,8 @@
 # C++ Binding Rules — write C++ that crossbind can auto-bind
 
-> crossbind generates JS bindings automatically. There are no `EMSCRIPTEN_BINDINGS` macros to hand-write. But the generator only handles a constrained subset of C++. Stay inside that subset and you get binding-for-free; step outside and you'll need a wrapper or a SWIG escape (`swig-escape.md`).
+> crossbind generates the JavaScript bindings: there are no `EMSCRIPTEN_BINDINGS` macros to write. The generator handles a subset of C++. Inside it everything binds; outside it, write a wrapper or a SWIG interface ([`swig-escape.md`](./swig-escape.md)).
 
-This doc tells you the rules. **For the canonical type table** (which JS type maps to which C++ type, with `toArray`/`toVector` examples), use the website:
-
-- `https://crossbind.dev/docs/api/cpp-bindings/overview`
-- `https://crossbind.dev/docs/api/cpp-bindings/data-types`
-
-This page covers what the website doesn't: the **rules** an agent must follow when writing C++ that crossbind will bind.
+This page holds the **rules** for C++ that crossbind binds. The type table, with `toArray` and `toVector` examples, is in the guide: `https://crossbind.dev/guide/bindings/#types`.
 
 ## The hard rules
 
@@ -15,21 +10,28 @@ This page covers what the website doesn't: the **rules** an agent must follow wh
 
 Raw pointers bind. What the generator cannot turn into an object crosses as a `NativePointer` handle: an opaque JS object that carries the address and owns whatever crossbind allocated for it.
 
-| C++ | JS |
-|---|---|
-| `const char *` parameter | `string`, a handle, or `null` |
-| `const char *` return or callback argument without a following integer | `string` or `null` |
-| `const char *` callback argument immediately followed by an integer | handle or `null`; read with `readBuffer(pointer, length)` |
-| `char *`, `unsigned char *`, `void *`, `T **`, pointers to numbers, enums or types the bridge does not know | handle |
-| `T *` returning a class the bridge knows | instance |
-| `T *` parameter of a struct the imported header defines, `extern "C"` or not | instance |
-| `T *` parameter of a struct the bridge only sees declared (`sqlite3`, `PJ`) | handle |
-| `T *` field of a struct | reads as an instance when `T` is a struct the same header binds, otherwise as a handle; takes either, or `null` |
-| `int &`, `double &`, `std::string &` out-parameters | handle from `allocPointer` / `allocString`, read back afterwards |
-| function pointer parameter or field | a JS function, a handle another binding returned, or `null`; a field reads as a handle |
-| other pointer argument inside a callback | always a handle |
+- `const char *` parameter: a `string`, a handle or `null`.
+- `const char *` return, or callback argument without a following integer: a `string` or `null`.
+- `const char *` callback argument immediately followed by an integer: a handle or `null`; read it with `readBuffer(pointer, length)`.
+- `char *`, `unsigned char *`, `void *`, `T **`, and pointers to numbers, enums or types the bridge does not know: a handle.
+- `T *` returning a class the bridge knows: an instance.
+- `T *` parameter of a struct the imported header defines, `extern "C"` or not: an instance.
+- `T *` parameter of a struct the bridge only sees declared (`sqlite3`, `PJ`): a handle.
+- `T *` field of a struct: reads as an instance when `T` is a struct the same header binds, otherwise as a handle; takes either, or `null`.
+- `int &`, `double &`, `std::string &` out-parameters: a handle from `allocPointer` or `allocString`, read back afterwards.
+- Function pointer parameter or field: a JavaScript function, a handle another binding returned, or `null`; a field reads as a handle.
+- Any other pointer argument inside a callback: always a handle.
 
-Every module that binds a pointer also exports the helpers: `cstring(text)` and `readCString(handle)`, `allocBuffer(bytes)`, `allocPointer(count)` (both zero-filled), `allocString(text)` and `readString(handle)`, `readNumberAt(handle, index, kind)` / `writeNumberAt(handle, index, kind, value)` with kinds `int8` … `uint64`, `float32`, `float64`, `readPointerAt` / `writePointerAt`, `readBytes(handle, length)` / `writeBytes(handle, u16string)` with one byte per character, `readBuffer(handle, length)` returning a `Uint8Array` copy / `writeBuffer(handle, bytes)` copying any `ArrayBuffer` or view of one (a `Uint8Array`, a Node `Buffer`), and `releaseCallback(fn)` to free a callback slot.
+Every module that binds a pointer also exports these helpers:
+
+- `cstring(text)` and `readCString(handle)`;
+- `allocBuffer(bytes)` and `allocPointer(count)`, both zero-filled;
+- `allocString(text)` and `readString(handle)`;
+- `readNumberAt(handle, index, kind)` and `writeNumberAt(handle, index, kind, value)`, with kinds `int8` … `uint64`, `float32` and `float64`;
+- `readPointerAt` and `writePointerAt`;
+- `readBytes(handle, length)` and `writeBytes(handle, u16string)`, one byte per character;
+- `readBuffer(handle, length)`, which returns a `Uint8Array` copy, and `writeBuffer(handle, bytes)`, which copies any `ArrayBuffer` or view of one (a `Uint8Array`, a Node `Buffer`);
+- `releaseCallback(fn)`, which frees a callback slot.
 
 ```cpp
 void process(int* data, size_t len);            // handle in, e.g. from allocBuffer
@@ -62,17 +64,14 @@ Build defaults assume modern C++. Use:
 
 - `std::string`, `std::vector<T>`, `std::map<K,V>`, `std::unordered_map<K,V>`
 - `std::shared_ptr<T>` for heap-allocated objects you return to JS
-- `std::optional<T>` (C++17), `std::variant<...>` (C++17) — supported via website type table
+- `std::optional<T>` (C++17) and `std::variant<...>` (C++17); see the type table
 - Range-based for, `auto`, lambdas, `nullptr`
 
-Runtime notes from the cross-runtime conformance suite: a vector PARAMETER takes a vector
-instance, which `Module.toVector` builds. A wasm build also takes a plain JS array: for every
-vector parameter in worker mode, and for a module function's or constructor's in direct mode.
-By-value `std::vector` RETURNS are real vector proxies on direct runtimes (wasm and jsi), freed
-like any value JS owns (`lifecycle-and-types.md`), and arrive as plain JS arrays on
-worker-backed runtimes - that array conversion is the worker contract (`Module.toArray`
-accepts both shapes). `std::optional<T>` binds on every leg (the jsi fork registers optionals alongside
-each `register_vector<T>`, mirroring upstream embind).
+A vector parameter takes a vector instance, which `Module.toVector` builds. A wasm build also
+takes a plain array: for every vector parameter in worker mode, and for a module function's or
+constructor's in direct mode. A `std::vector` returned by value is a vector on direct runtimes
+(wasm and JSI), freed like any value JavaScript owns (`lifecycle-and-types.md`), and a plain array
+on worker runtimes; `Module.toArray` takes both. `std::optional<T>` binds on every runtime.
 
 Avoid:
 
@@ -93,13 +92,12 @@ class Matrix {
 };
 ```
 
-Private members are fine — they just won't appear in JS. Don't try to hide everything `private` and expect JS to call into your class.
+Private members simply do not appear in JavaScript.
 
-> Reality check (cross-runtime conformance suite): public VALUE fields (numbers, `bool`,
-> `std::string`) are bound on every leg — the generated bridge registers them as embind
-> properties, so `m.rows` reads and writes from JS on node, browser (worker runtimes go through
-> the proxy: `await b.rows`) and React Native alike. Fields of vector, `shared_ptr` or
-> class type still need accessor methods.
+> Public value fields (numbers, `bool`, `std::string`) bind on every runtime as properties, so
+> `m.rows` reads and writes from JavaScript on Node.js, in the browser (in worker mode through
+> the proxy: `await b.rows`) and on React Native. Fields of vector, `shared_ptr` or class type
+> need accessor methods.
 >
 > The same goes for C structs, `typedef struct { ... } Name;` and
 > `typedef struct tag { ... } alias;` included: fields of arithmetic types, directly or
@@ -140,7 +138,7 @@ An instance made with `new`, a value a call returns and a vector `toVector` buil
 
 ### 7. Exceptions: thrown C++ exceptions become JS exceptions
 
-`throw std::runtime_error("...")` in C++ surfaces as a thrown JS `Error` with the message. Use this rather than out-parameters or status codes — it's the binding-friendly path.
+`throw std::runtime_error("...")` in C++ arrives as a thrown JavaScript `Error` with the message. Report failures this way rather than with out-parameters or status codes.
 
 ```cpp
 double sqrt(double x) {
@@ -159,13 +157,10 @@ try {
 }
 ```
 
-> Reality check (cross-runtime conformance suite): the thrown exception surfaces as a JS
-> `Error` carrying the text on every leg. On wasm legs `.message` is
-> `"<type>: <what()>"` (e.g. `std::invalid_argument: sqrt of negative`), with the parts
-> also available as `e.cppType` / `e.cppMessage` — the runtime decodes the raw
-> `WebAssembly.Exception` via the exported `getExceptionMessage` helper. On the jsi (React
-> Native) path the fork rethrows `std::exception` as a `JSError`, so `.message` is the
-> plain `what()` text.
+> The exception arrives as a JavaScript `Error` with its text on every runtime. On wasm,
+> `.message` is `"<type>: <what()>"` (e.g. `std::invalid_argument: sqrt of negative`), with the
+> parts also in `e.cppType` and `e.cppMessage`. On React Native (JSI) and in a Node-API addon,
+> `.message` is the plain `what()` text.
 
 ### 8. Constants bind when the app imports them
 
@@ -355,4 +350,4 @@ Three escape hatches, in order of preference:
 - [`swig-escape.md`](./swig-escape.md) — when and how to write a manual SWIG `.i` file.
 - [`lifecycle-and-types.md`](./lifecycle-and-types.md) — what the garbage collector frees and when to call `.delete()`.
 - [`crossbind-config.md`](./crossbind-config.md) — `targetSpecs[]` for emccFlags overrides like `-sJSPI`.
-- Website: [Type table](https://crossbind.dev/docs/api/cpp-bindings/data-types), [Classes & functions](https://crossbind.dev/docs/api/cpp-bindings/overview).
+- Guide: [the type table](https://crossbind.dev/guide/bindings/#types), [classes and functions](https://crossbind.dev/guide/bindings/).

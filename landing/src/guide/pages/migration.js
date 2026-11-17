@@ -50,7 +50,7 @@ export default {
         { type: 'h2', id: 'requirements', text: '1. Requirements' },
         {
             type: 'p',
-            text: `crossbind needs **Node.js 24 or newer**; cpp.js needed 18. Docker, CMake 3.28+ for mobile, and Xcode with CocoaPods for iOS are unchanged.${suffix ? ` Until the first stable release, crossbind packages are on the npm \`${RELEASE.distTag}\` tag, so install commands carry \`${suffix}\`.` : ''}`,
+            text: `crossbind needs **Node.js 26 or newer**; cpp.js needed 18. Docker, CMake 3.28+ for mobile, and Xcode with CocoaPods for iOS are unchanged.${suffix ? ` Until the first stable release, crossbind packages are on the npm \`${RELEASE.distTag}\` tag, so install commands carry \`${suffix}\`.` : ''}`,
         },
 
         { type: 'h2', id: 'packages', text: '2. Replace the packages' },
@@ -214,7 +214,7 @@ console.log(MyClass.sample());`,
         {
             type: 'ol',
             items: [
-                'Node.js 24 or newer.',
+                'Node.js 26 or newer.',
                 'Packages swapped; one library variant per platform.',
                 '`crossbind.config.js` renamed, dependency imports and `targetSpecs` updated.',
                 'Bundler plugin import renamed.',

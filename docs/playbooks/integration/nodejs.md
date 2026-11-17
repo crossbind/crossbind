@@ -10,17 +10,15 @@ Build crossbind artifacts for the Node runtime (`-e node`) and `require`/`import
 
 - Backend service, CLI, script, or Node-native library.
 - No browser, no React Native, no edge runtime.
-- Multithread (`runtime: 'mt'`) is supported via Node's `worker_threads` on the supported Node 24+ runtime.
+- Multithread (`runtime: 'mt'`) is supported via Node's `worker_threads` on the supported Node 26+ runtime.
 
 ## Files involved
 
-| File | Role |
-|------|------|
-| `package.json` | + `crossbind`, optional `@crossbind/port-<name>`; declare a `build` script that runs `crossbind build -e node` |
-| `crossbind.config.{js,mjs}` *(new at root)* | Project-level crossbind config (deps to consume, paths) |
-| `src/native/` *(if user wraps own C++)* | `.h` + `.cpp` source |
-| `<entry>.js` (e.g. `index.js`) | `require`/`import` the built loader |
-| `dist/<name>-<target>.node.{js,wasm}` | Build output |
+- `package.json`: add `crossbind`, optional `@crossbind/port-<name>`; declare a `build` script that runs `crossbind build -e node`.
+- `crossbind.config.{js,mjs}` *(new at root)*: Project-level crossbind config (deps to consume, paths).
+- `src/native/` *(if user wraps own C++)*: `.h` + `.cpp` source.
+- `<entry>.js` (e.g. `index.js`): `require`/`import` the built loader.
+- `dist/<name>-<target>.node.{js,wasm}`: Build output.
 
 ## Commands
 
@@ -144,7 +142,7 @@ node --import ./dist/node/napi.register.mjs src/index.mjs
 
 - The build reads `import`, `export … from`, `import()` and `require()` with a string literal, in the app's own `.js`, `.mjs`, `.cjs`, `.ts`, `.mts` and `.cts` files, outside `node_modules`, `dist`, `build`, `target`, `ios`, `android`, `Pods` and dot directories. An import it did not see, such as a specifier computed at run time or one added since the build, fails with an error that says to build again. A name first imported since the build, a constant or a dependency's function, stops Node at the import with `does not provide an export named` until the next build. A `cargo:` or `conan:` import the config does not declare fails the build.
 - A relative import needs its file on disk when the app runs, because Node checks that it exists; a package, `conan:` or `cargo:` import does not.
-- `require()` returns the same module. Read its names after `initNative()` resolves: destructuring at `require` time keeps the `null` they hold until then. `require()` takes the whole module, so the header binds every constant and function it has. On Node.js 24.9, a CommonJS app started with `--import` cannot `require()` a header (`ERR_VM_MODULE_LINK_FAILURE`); `--require ./dist/node/<format>.register.mjs` works there, and both work on 24.20.
+- `require()` returns the same module. Read its names after `initNative()` resolves: destructuring at `require` time keeps the `null` they hold until then. `require()` takes the whole module, so the header binds every constant and function it has.
 - A build whose sources import nothing native writes no hooks, and removes the ones an earlier build wrote.
 
 ## Multithread
@@ -153,8 +151,8 @@ Node multithread (`runtime: 'mt'`) uses `worker_threads`. **No COOP/COEP needed*
 
 Caveats:
 
-- Node 24+ is required; its `worker_threads` and WASM SharedArrayBuffer behavior is the supported baseline.
-- Worker threads warm up; expect ~50-200ms cold-start overhead the first time you `init`.
+- Node 26+ is required, as crossbind's `engines` says; its `worker_threads` and WASM SharedArrayBuffer behavior is the supported baseline.
+- The first `init` takes longer while the worker threads start.
 - If you have CPU-bound code, `mt` is a meaningful speedup. For I/O-bound services, stick with `st`.
 
 ## Native addon (Node-API)
@@ -171,12 +169,10 @@ pnpm crossbind build -p darwin,linux,linuxmusl,win32 -e node -b release   # ever
 
 The desktop platforms are opt-in: a plain `crossbind build` skips them. `-p host` names the one of this machine: `darwin` on macOS, `win32` on Windows, and on Linux `linux` or `linuxmusl` by the C library Node.js runs on.
 
-| Output | Role |
-|--------|------|
-| `dist/<name>.<platform>-<arch>.node`, e.g. `<name>.darwin-arm64.node`, `<name>.linux-x64.node`, `<name>.linuxmusl-x64.node`, `<name>.win32-x64.node` | One addon per platform and architecture |
-| `dist/<name>.native.cjs` | Loader: picks the addon for `process.platform`/`process.arch`, and on Linux for the C library the process runs on (`linuxmusl` under musl). CommonJS on purpose, so `require` and `import` both load it whatever the package `type` is |
-| `dist/node/napi.mjs`, `dist/node/napi.d.mts` | Entry: every bound class, function and constant as an export that `initNative()` fills; a package publishes it as its root or under a path of its own. `require()` of it needs Node.js 22.12 or later |
-| `dist/node/napi.register.mjs`, `dist/node/hooks.mjs` | The import hooks, when the app's sources import a header, a `.rs` file or a crate: `node --import ./dist/node/napi.register.mjs`, or `--import crossbind/node/dev` while developing (see [Importing headers and Rust directly](#importing-headers-and-rust-directly)) |
+- `dist/<name>.<platform>-<arch>.node`, e.g. `<name>.darwin-arm64.node`, `<name>.linux-x64.node`, `<name>.linuxmusl-x64.node`, `<name>.win32-x64.node`: One addon per platform and architecture.
+- `dist/<name>.native.cjs`: Loader: picks the addon for `process.platform`/`process.arch`, and on Linux for the C library the process runs on (`linuxmusl` under musl). CommonJS on purpose, so `require` and `import` both load it whatever the package `type` is.
+- `dist/node/napi.mjs`, `dist/node/napi.d.mts`: Entry: every bound class, function and constant as an export that `initNative()` fills; a package publishes it as its root or under a path of its own. `require()` of it needs Node.js 22.12 or later.
+- `dist/node/napi.register.mjs`, `dist/node/hooks.mjs`: The import hooks, when the app's sources import a header, a `.rs` file or a crate: `node --import ./dist/node/napi.register.mjs`, or `--import crossbind/node/dev` while developing (see [Importing headers and Rust directly](#importing-headers-and-rust-directly)).
 
 ```js
 const initNative = require('./dist/<name>.native.cjs');
@@ -186,12 +182,10 @@ initNative().then(({ Native }) => console.log(Native.sample()));
 
 `initNative()` keeps the wasm build's contract, `initNative.terminate()` included; `addonPath` and `dataPath` override where the addon and its data are read from. A debug build (`-b debug`) writes `<name>.native.debug.cjs` and `<name>.<platform>-<arch>.debug.node`.
 
-| Platform | Built on | Runs on |
-|----------|----------|---------|
-| `darwin` | a macOS host with Xcode's command line tools; skipped elsewhere | macOS 11 or later |
-| `linux` | any host with Docker, in the `linux` toolchain image | glibc 2.28 or later (RHEL 8, Debian 10, Ubuntu 20.04 and newer). The addon needs libc, libm, libdl, libpthread, librt and libgcc_s only |
-| `linuxmusl` | any host with Docker, in the `linux` toolchain image | musl 1.2.5 or later (Alpine 3.21 and newer). The addon needs musl's libc and libgcc_s only, both of which Node.js on Alpine already has |
-| `win32` | any host with Docker, in the `windows` toolchain image | Windows 10 or later, through the Universal C Runtime. The addon finds Node-API in the process that loads it, so `node.exe` and `electron.exe` load the same file |
+- `darwin`: built on a macOS host with Xcode's command line tools; skipped elsewhere; runs on macOS 11 or later.
+- `linux`: built on any host with Docker, in the `linux` toolchain image; runs on glibc 2.28 or later (RHEL 8, Debian 10, Ubuntu 20.04 and newer). The addon needs libc, libm, libdl, libpthread, librt and libgcc_s only.
+- `linuxmusl`: built on any host with Docker, in the `linux` toolchain image; runs on musl 1.2.5 or later (Alpine 3.21 and newer). The addon needs musl's libc and libgcc_s only, both of which Node.js on Alpine already has.
+- `win32`: built on any host with Docker, in the `windows` toolchain image; runs on Windows 10 or later, through the Universal C Runtime. The addon finds Node-API in the process that loads it, so `node.exe` and `electron.exe` load the same file.
 
 A Linux addon loads only on the C library it was built for, so ship both when the app may run on Alpine: the loader picks between them, while a glibc addon loaded under musl by hand crashes the process instead of failing with an error.
 
@@ -206,7 +200,7 @@ Requirements:
 
 Not supported yet: `worker_threads` (one addon runtime per process; a second environment's `initNative()` rejects with a clear error).
 
-Native is not automatically faster. On an M-series Mac a call returning or taking a short `std::string` took about 70 and 85 ns natively against 160 and 155 ns on wasm, but a `const char*` argument took about 1.2 µs against 0.33 µs, a callback into JavaScript about 2.1 µs against 0.5 µs, and compute-bound runs went either way; measure the real workload before switching.
+Native is not automatically faster: some calls are quicker in an addon and some on wasm ([measurements](https://crossbind.dev/guide/performance/#speed)), so measure the real workload before switching.
 
 ### Electron
 

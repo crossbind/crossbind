@@ -1,10 +1,10 @@
 # Override mechanisms catalog
 
-> crossbind picks sane defaults for every build flag, env var, path, and toolchain. When a default doesn't fit your case, there are **16 documented override points**. This doc lists them in order of preference: **start with the least invasive that solves your problem**.
+> crossbind picks defaults for every build flag, environment variable, path and toolchain. When one does not fit, this page lists the override points in order of preference: **start with the least invasive one that solves your problem**.
 
 ## Why "least invasive first"
 
-Every override point exists for a reason — but each adds a layer of "this build differs from the default in a non-obvious way". Reaching for a `crossbind.build.js` hook to override what `targetSpecs[].specs.binary.emccFlags` could do makes the project harder to maintain and harder for AI agents (or future-you) to reason about.
+Each override makes the build differ from the default in a way that is easy to miss. A `crossbind.build.js` hook doing what `targetSpecs[].specs.binary.emccFlags` could do makes the project harder to maintain and to reason about.
 
 Order of preference, from least to most invasive:
 
@@ -19,7 +19,7 @@ Order of preference, from least to most invasive:
 
 #### 1. `crossbind.config.js` `target.{platform,arch,runtime,buildType,runtimeEnv}`
 
-Restrict which of the 30 built-in targets actually build. Doesn't *change* defaults — just skips targets you don't need.
+Restrict which built-in targets build. It changes no default; it skips the targets you do not need.
 
 ```js
 target: { platform: 'wasm', runtime: 'st' }   // skip android, ios, all mt builds
@@ -53,7 +53,7 @@ targetSpecs: [{
 
 #### 4. `targetSpecs[].specs.env`
 
-Env vars for the running module. A value can be a function of `(state, target)` — keep it pure, crossbind calls it wherever it reads the env; see [ADR-0003](../adr/0003-function-typed-env-values.md) — and `_CROSSBIND_DATA_PATH_` in a value becomes the runtime data path. `crossbind.config.js` has no top-level `env`.
+Environment variables of the running module. A value can be a pure function of `(state, target)`, which crossbind calls wherever it reads the env ([ADR-0003](../adr/0003-function-typed-env-values.md)), and `_CROSSBIND_DATA_PATH_` in a value becomes the runtime data folder. `crossbind.config.js` has no top-level `env`.
 
 ```js
 targetSpecs: [{
@@ -171,22 +171,30 @@ copyToDist: { 'assets/cacert.pem': ['ssl/certs/cacert.pem'] }
 
 #### `~/.crossbind.json` — host-wide keys
 
-| Key | Default | Notes |
-|-----|---------|-------|
-| `XCODE_DEVELOPMENT_TEAM` | `''` | Required for iOS device (not simulator) builds |
-| `ANDROID_KEYSTORE` | `''` | This machine's upload key, which signs an Android app's release and its bundle; `crossbind app upload-key` sets it ([app.md](./app.md#the-upload-key)). Env: `CROSSBIND_ANDROID_KEYSTORE` |
-| `ANDROID_KEY_ALIAS` | `''` | The upload key's alias in `ANDROID_KEYSTORE`. Env: `CROSSBIND_ANDROID_KEY_ALIAS` |
-| `RUNNER` | `'DOCKER_RUN'` | `'DOCKER_EXEC'` reuses a long-lived container that you create yourself — crossbind never creates one, and tells you the exact `docker run` command (name and both mounts) if it is missing or wrong; `'LOCAL'` skips Docker entirely (only works if you have all toolchains installed); `'REMOTE'` sends each image's steps to the runner at that image's address, without waiting on the lock below, and stops a step whose image has no address ([`remote-runner.md`](./remote-runner.md)). On a Mac, `@crossbind/bridge-tools` makes every bridge but Android's whatever it says, so a macOS or iOS build, which Xcode compiles, runs on the Mac alone. Under either Docker runner, builds running at the same time compile one at a time, because their containers share the memory of Docker's VM; a build that waits says so and names `~/.crossbind/docker-compile.lock`. Env: `CROSSBIND_RUNNER` |
-| `REMOTE_URL_WEB`, `REMOTE_URL_ANDROID`, `REMOTE_URL_LINUX`, `REMOTE_URL_WINDOWS` | `''` | Under `RUNNER=REMOTE`, the address of that image's runner. Its token comes only from `CROSSBIND_TOKEN_<IMAGE>` in the environment. Env: `CROSSBIND_REMOTE_URL_<IMAGE>` |
-| `REMOTE_URL` | `''` | Under `RUNNER=REMOTE`, the runner of every image without an address of its own; its token comes from `CROSSBIND_TOKEN`. Env: `CROSSBIND_REMOTE_URL` |
-| `DOCKER_REGISTRY_MIRROR` | `''` | Registry prefix to pull the build images from, e.g. `registry.example.dev/crossbind`. crossbind appends the release digest itself, so builds stay reproducible. Env: `CROSSBIND_REGISTRY_MIRROR` |
-| `DOCKER_IMAGE_WEB` | `''` | Image used for wasm and wasi builds instead of the pinned one. A reference without the release digest disables the reproducibility guarantee. Env: `CROSSBIND_IMAGE_WEB` |
-| `DOCKER_IMAGE_ANDROID` | `''` | Same, for android builds. Env: `CROSSBIND_IMAGE_ANDROID` |
-| `DOCKER_IMAGE_ANDROID_APP` | `''` | Same, for Android apps, which build and package in the android-app image. Env: `CROSSBIND_IMAGE_ANDROID_APP` |
+- **`XCODE_DEVELOPMENT_TEAM`**, default `''`: required for iOS device builds (not the simulator).
+- **`ANDROID_KEYSTORE`**, default `''`: this machine's upload key, which signs an Android app's release and its bundle; `crossbind app upload-key` sets it ([app.md](./app.md#the-upload-key)). Env: `CROSSBIND_ANDROID_KEYSTORE`.
+- **`ANDROID_KEY_ALIAS`**, default `''`: the upload key's alias in `ANDROID_KEYSTORE`. Env: `CROSSBIND_ANDROID_KEY_ALIAS`.
+- **`RUNNER`**, default `'DOCKER_RUN'`: where toolchain steps run. Env: `CROSSBIND_RUNNER`.
+  - `'DOCKER_EXEC'` reuses a long-lived container that you create yourself. crossbind never creates one; when it is missing or wrong, it prints the exact `docker run` command, name and both mounts.
+  - `'LOCAL'` skips Docker and needs every toolchain installed.
+  - `'REMOTE'` sends each image's steps to that image's runner, without waiting on the lock below, and stops a step whose image has no address ([`remote-runner.md`](./remote-runner.md)).
+  - On a Mac, `@crossbind/bridge-tools` makes every bridge but Android's under any runner, so a macOS or iOS build, which Xcode compiles, runs on the Mac alone.
+  - Under either Docker runner, builds running at the same time compile one at a time, as their containers share the memory of Docker's VM; a waiting build says so and names `~/.crossbind/docker-compile.lock`.
+- **`REMOTE_URL_WEB`, `REMOTE_URL_ANDROID`, `REMOTE_URL_LINUX`, `REMOTE_URL_WINDOWS`**, default `''`: under `RUNNER=REMOTE`, the address of that image's runner. Its token comes only from `CROSSBIND_TOKEN_<IMAGE>` in the environment. Env: `CROSSBIND_REMOTE_URL_<IMAGE>`.
+- **`REMOTE_URL`**, default `''`: under `RUNNER=REMOTE`, the runner of every image without an address of its own; its token comes from `CROSSBIND_TOKEN`. Env: `CROSSBIND_REMOTE_URL`.
+- **`DOCKER_REGISTRY_MIRROR`**, default `''`: a registry prefix to pull the build images from, such as `registry.example.dev/crossbind`. crossbind appends the release digest, so builds stay reproducible. Env: `CROSSBIND_REGISTRY_MIRROR`.
+- **`DOCKER_IMAGE_WEB`**, default `''`: the image for wasm and wasi builds instead of the pinned one. A reference without the release digest loses the reproducibility guarantee. Env: `CROSSBIND_IMAGE_WEB`.
+- **`DOCKER_IMAGE_ANDROID`**, default `''`: the same, for android builds. Env: `CROSSBIND_IMAGE_ANDROID`.
+- **`DOCKER_IMAGE_ANDROID_APP`**, default `''`: the same, for Android apps, which build and package in the android-app image. Env: `CROSSBIND_IMAGE_ANDROID_APP`.
 
 These apply to every crossbind project on the machine. Use sparingly — they don't travel with the project.
 
-`CROSSBIND_SCCACHE=1`, set in the environment alone, sends every C and C++ compile through [sccache](https://github.com/mozilla/sccache), which its own `SCCACHE_*` variables point at a cache: a folder by default, or S3 and R2 with `SCCACHE_BUCKET`, `SCCACHE_ENDPOINT`, `SCCACHE_REGION` and the `AWS_*` keys. CMake's compiler launchers carry it to every CMake project but a wasm one, which compiles without it: sccache can cache none of emscripten's compiles. crossbind appends the target's platform and architecture to `SCCACHE_C_CUSTOM_CACHE_BUSTER`, which sccache hashes into every key: the Windows image's compilers take their target from their own names, which the keys leave out. A Mac needs sccache on the `PATH` (`brew install sccache`); Docker builds run the image's own, from image family 1.0.21, and get the settings by name, so no key sits on the command line; a `docker run` mounts `SCCACHE_DIR`, which under `DOCKER_EXEC` must sit inside the project. `RUNNER=REMOTE` refuses it, as the runner would need your cache's keys.
+`CROSSBIND_SCCACHE=1`, set in the environment only, sends every C and C++ compile through [sccache](https://github.com/mozilla/sccache), which its own `SCCACHE_*` variables point at a cache: a folder by default, or S3 and R2 with `SCCACHE_BUCKET`, `SCCACHE_ENDPOINT`, `SCCACHE_REGION` and the `AWS_*` keys.
+
+- A wasm build compiles without it: sccache can cache none of emscripten's compiles.
+- crossbind appends the target's platform and architecture to `SCCACHE_C_CUSTOM_CACHE_BUSTER`, which sccache hashes into every key, as the Windows image's compilers take their target from their own names.
+- A Mac needs sccache on the `PATH` (`brew install sccache`). Docker builds run the image's own, from image family 1.0.21, and get the settings by name, so no key sits on the command line; `SCCACHE_DIR` is mounted, and under `DOCKER_EXEC` it must be inside the project.
+- `RUNNER=REMOTE` refuses it, as the runner would need your cache's keys.
 
 ## Decision flowchart
 

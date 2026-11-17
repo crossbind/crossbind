@@ -1,6 +1,6 @@
 # SWIG escape hatch — manual `.i` files
 
-> crossbind auto-generates SWIG `.i` interface files for every header it sees. You only write a manual `.i` file when the auto-generated one isn't enough. **Default to letting crossbind generate** — fall back to manual only when forced.
+> crossbind generates a SWIG `.i` interface file for every header. Write one by hand only when the generated one is not enough.
 
 ## How auto-generation works
 
@@ -14,11 +14,11 @@ For each header in `paths.header` (defaults to `paths.native`, defaults to `src/
 %include "path/to/header.h"
 ```
 
-That's it. Header included verbatim, `shared_ptr` features enabled, module name derived from filename. For 95% of cases this is correct.
+The header is included as it is, `shared_ptr` support is on, and the module is named after the file. That is right for almost every header.
 
 ## When you need to write your own
 
-You're forced into manual `.i` only when one of these is true:
+Write your own `.i` only for one of these:
 
 1. **Custom type mappings** (`%typemap` directives) — e.g. converting an exotic upstream type to a JS-friendly one.
 2. **Selective symbol export** — your header has 100 symbols and you want to expose 10. Auto-generated `.i` exposes everything.
@@ -30,11 +30,11 @@ For everything else: write a C++ wrapper instead. Wrappers are easier to reason 
 
 ## How to wire a manual `.i` into your project
 
-crossbind looks for an `.i` file using two mechanisms (in order):
+crossbind finds a hand-written `.i` file in one of two ways, in this order:
 
 ### Option 1 — sibling next to header
 
-If `src/native/foo.h` has a sibling `src/native/foo.i`, crossbind uses the `.i` instead of auto-generating. Same path + `.i` extension is the trigger.
+If `src/native/foo.h` has a `src/native/foo.i` beside it, crossbind uses that file instead of generating one.
 
 ```
 src/native/
@@ -81,7 +81,7 @@ crossbind reads `paths.module` (defaults to `paths.native`) for `.i` files. The 
 %include "myheader.h"
 ```
 
-Replace `mymodule` with `FILENAME_UPPER` (the convention auto-gen uses). Drop into `src/native/myheader.i` next to `myheader.h`.
+Name the module after the file in upper case (`FILENAME_UPPER`), as generated files do, and save it as `src/native/myheader.i` beside `myheader.h`.
 
 ## Caveats
 
@@ -98,4 +98,4 @@ If a `.i` file isn't enough either, the only remaining option is to **wrap in C+
 - [`cpp-binding-rules.md`](./cpp-binding-rules.md) — what auto-generated bindings can and can't handle.
 - [`crossbind-config.md`](./crossbind-config.md) — `paths.module` and `ext.module` fields.
 - Source: `core/crossbind/src/actions/createInterface.js` — auto-generation logic.
-- Website type table: `https://crossbind.dev/docs/api/cpp-bindings/data-types`.
+- The type table: `https://crossbind.dev/guide/bindings/#types`.

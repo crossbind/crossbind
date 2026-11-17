@@ -1,6 +1,9 @@
 # WASI — `platform: 'wasi'` commands and HTTP components
 
-> Compiles the project into a single **WASI command component** (`<name>-wasi-wasm32-st-<buildType>.wasm`, target `wasm32-wasip3`): no JS glue, no embind bridge, runnable under any WASI 0.3 runtime with Wasm 3.0 exception support (wasmtime 47+). With `-e http` it compiles into an **HTTP component** instead, which Spin, wasmCloud and `wasmtime serve` run ([HTTP components](#http-components--e-http)).
+> Builds the project into one **WASI command component** (`<name>-wasi-wasm32-st-<buildType>.wasm`, target
+`wasm32-wasip3`): no JavaScript glue and no bindings, for any WASI 0.3 runtime with Wasm 3.0 exceptions, such as
+wasmtime 47+. With `-e http` it builds an **HTTP component** instead, which Spin, wasmCloud and `wasmtime serve` run
+([HTTP components](#http-components--e-http)).
 
 ## Quick start
 
@@ -134,15 +137,10 @@ builds. GDAL's `__wasi__` source patches (no processes, no `mkstemp`)
 travel inside its recipe, so a plain `crossbind build -p wasi` is all that is
 needed.
 
-Each `-wasi` package ships a standalone use case under `e2e/` (`pnpm e2e`,
-or `pnpm e2e:wasi` at the repo root): a small C program is compiled against
-the shipped archives and run under wasmtime - zlib/zstd roundtrips, a
-sqlite file database, a deflate tif, geokeys, an EPSG:4326→3857 transform
-through proj.db, jpeg/webp encodes, an expat parse, a geos intersection, an
-iconv conversion, a spatialite `MakePoint`, an openssl sha256 digest and a
-curl fetch against a local HTTP server (hermetic - the only e2e that needs
-the wasmtime socket grants). The scripts SKIP politely when the wasi-sdk
-(>= 34, wasm32-wasip3), wasmtime or the prebuilt is absent.
+Each `-wasi` package has an e2e check (`pnpm e2e`, or `pnpm e2e:wasi` at the repo root) that
+compiles a small C program against its archives and runs it under wasmtime. curl's fetches from a
+local HTTP server, the only one that needs the wasmtime socket grants. A check is skipped when the
+wasi-sdk (34 or later, wasm32-wasip3), wasmtime or the prebuilt is missing.
 
 ## Prebuilt CLI tools (`-standalone-wasi` packages)
 
@@ -155,18 +153,13 @@ npm i -g @crossbind/port-gdal-standalone-wasi@beta   # or npx/pnpm dlx
 gdalinfo-wasi --version                  # wasmtime must be on PATH
 ```
 
-Every tool is exposed as a `<tool>-wasi` npm command (the suffix keeps a
-native install unshadowed). The launcher is not hand-written per package:
-each shim imports the runner from crossbind itself
-(`crossbind/src/runtime/wasiRun.mjs`), which resolves the target path, the
-`--dir` mounts and the guest env at call time from the package's
-`crossbind.config.js` graph (the same `targetSpecs` `data`/`env` declarations
-used for builds — e.g. the proj family declares `PROJ_DATA`, the gdal
-family `GDAL_DATA`, openssl `CURL_CA_BUNDLE`). Tool surfaces are declared
-once, as data, in the recipe's `bin` map; the engine derives the npm
-commands, `.npmignore`, a pure-data `crossbind-bin.json` and — when the map
-marks multicall entries — a single multitool binary that carries every
-tool (gdal packs 29 tools into one `bin/gdal` for +240 KB).
+Every tool is a `<tool>-wasi` npm command, so it never shadows a native install. Each launcher
+runs crossbind's own runner (`crossbind/src/runtime/wasiRun.mjs`), which takes the `--dir` mounts and
+the guest environment from the package's `targetSpecs` `data` and `env` at call time: the proj
+family's `PROJ_DATA`, gdal's `GDAL_DATA`, openssl's `CURL_CA_BUNDLE`. A recipe declares its tools
+once, in its `bin` map; the engine derives the npm commands, `.npmignore`, `crossbind-bin.json` and,
+for multicall entries, one multitool binary that carries every tool (gdal packs 29 into one
+`bin/gdal`).
 
 The rules, schemas and enforcement behind these packages (bin map,
 derived NOTICE/SBOM, `crossbind.provenance`, the derived compound `license`

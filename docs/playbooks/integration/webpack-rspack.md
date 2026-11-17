@@ -16,13 +16,11 @@ Wire `@crossbind/plugin-webpack` into the bundler config so dev-server serves wa
 
 ## Files involved
 
-| File | Role |
-|------|------|
-| `package.json` | + `@crossbind/plugin-webpack`, `@crossbind/plugin-webpack-loader` (devDependencies), optional `@crossbind/port-<name>` |
-| `webpack.config.*` / `rspack.config.*` | Construct plugin, register loader rule, plug `devServer` config |
-| `crossbind.config.js` *(new at root)* | Project-level crossbind config |
-| `src/native/` *(only if user wraps own C++)* | `.h` + `.cpp` source files |
-| Production headers config | Hosting layer (only for multithread) |
+- `package.json`: add `@crossbind/plugin-webpack`, `@crossbind/plugin-webpack-loader` (devDependencies), optional `@crossbind/port-<name>`.
+- `webpack.config.*` / `rspack.config.*`: Construct plugin, register loader rule, plug `devServer` config.
+- `crossbind.config.js` *(new at root)*: Project-level crossbind config.
+- `src/native/` *(only if user wraps own C++)*: `.h` + `.cpp` source files.
+- Production headers config: Hosting layer (only for multithread).
 
 ## Commands
 

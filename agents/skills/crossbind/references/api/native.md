@@ -2,7 +2,7 @@
 
 # Native platforms — `darwin`, `linux`, `linuxmusl`, `win32`
 
-> The desktop platforms build Node.js addons (see [`nodejs.md`](../playbooks/integration/nodejs.md)). This page covers what else their output is good for: native executables, and the prebuilt archives of every `@crossbind/port-*` package in a C or C++ build that is not crossbind.
+> The desktop platforms build Node.js addons ([`nodejs.md`](../playbooks/integration/nodejs.md)). This page covers the rest: native executables, and the prebuilt archives of every `@crossbind/port-*` package in a C or C++ build of your own.
 
 ## Native executables
 
@@ -15,12 +15,10 @@ crossbind build -p linux,linuxmusl,darwin,win32 -e native -b release
 
 `-p host` builds only this machine's platform: `darwin` on macOS, `win32` on Windows, and on Linux `linux` or `linuxmusl` by the C library Node.js runs on.
 
-| Platform | Output | Runs on |
-|---|---|---|
-| `linux` | `dist/<name>.linux-<arch>` | glibc 2.28 or later; it needs libc, libm, libdl, libpthread and libgcc_s only |
-| `linuxmusl` | `dist/<name>.linuxmusl-<arch>` | any Linux, musl or glibc: the executable is fully static |
-| `darwin` | `dist/<name>.darwin-<arch>` | macOS 11 or later |
-| `win32` | `dist/<name>.win32-<arch>.exe` | Windows 10 or later, with the C++ runtime linked in |
+- **`linux`:** `dist/<name>.linux-<arch>`. Runs on glibc 2.28 or later and needs only libc, libm, libdl, libpthread and libgcc_s.
+- **`linuxmusl`:** `dist/<name>.linuxmusl-<arch>`, fully static. Runs on any Linux, musl or glibc.
+- **`darwin`:** `dist/<name>.darwin-<arch>`. Runs on macOS 11 or later.
+- **`win32`:** `dist/<name>.win32-<arch>.exe`, with the C++ runtime linked in. Runs on Windows 10 or later.
 
 A debug build (`-b debug`) adds `.debug` before the extension.
 
@@ -29,7 +27,7 @@ A debug build (`-b debug`) adds `.debug` before the extension.
 - A port's data, such as `GDAL_DATA` and `proj.db`, is copied to `dist/data`, but nothing points the executable at it: set `GDAL_DATA` and `PROJ_DATA` before running it.
 - `-e node,native` makes the addon and the executable from the same archives. Rust packages (`export.type: 'cargo'`) make no executable.
 
-Beside the packages it links, an executable carries code of the toolchain: LLVM's C++ runtime on Linux and Windows, parts of the mingw-w64 runtime and winpthreads on Windows, and musl's C library in the static musl build; a macOS executable uses the system's C++ runtime. Its link copies their license texts and versions out of its image, and `crossbind licenses --platform <platform> -e native --notices` writes them with the packages' into the notices to ship beside the executable. With `-e native`, `--check` fails while the mingw-w64 or musl notice, which their licenses ask a binary's distribution for, is missing: build the executable first.
+An executable also carries toolchain code: LLVM's C++ runtime on Linux and Windows, parts of the mingw-w64 runtime and winpthreads on Windows, and musl's C library in the static musl build; a macOS executable uses the system's C++ runtime. `crossbind licenses --platform <platform> -e native --notices` writes their notices with the packages', to ship beside the executable. The mingw-w64 and musl licenses ask for their notice, so with `-e native`, `--check` fails until the executable is built.
 
 `npm create crossbind@beta -- <dir> Native Executable` scaffolds a project whose `main()` links a library, from `examples/native-executable`.
 

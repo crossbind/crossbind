@@ -14,14 +14,12 @@ Build crossbind artifacts for the browser, ship them as static files, and load v
 
 ## Files involved
 
-| File | Role |
-|------|------|
-| `package.json` | + `crossbind`, optional `@crossbind/port-<name>`, optional `serve` for local preview. Declare a `build` script that runs `crossbind build -e browser` |
-| `crossbind.config.{js,mjs}` *(new at root)* | Project-level crossbind config |
-| `index.html` | Loads `<script src="./dist/<name>...browser.js"></script>` and calls `initNative({ path: './dist' })` |
-| `src/native/` *(if user wraps own C++)* | `.h` + `.cpp` source |
-| `serve.json` *(local preview, optional)* | COOP/COEP headers for `serve` |
-| `dist/<name>-<target>.browser.{js,wasm}` | Build output |
+- `package.json`: add `crossbind`, optional `@crossbind/port-<name>`, optional `serve` for local preview. Declare a `build` script that runs `crossbind build -e browser`.
+- `crossbind.config.{js,mjs}` *(new at root)*: Project-level crossbind config.
+- `index.html`: Loads `<script src="./dist/<name>...browser.js"></script>` and calls `initNative({ path: './dist' })`.
+- `src/native/` *(if user wraps own C++)*: `.h` + `.cpp` source.
+- `serve.json` *(local preview, optional)*: COOP/COEP headers for `serve`.
+- `dist/<name>-<target>.browser.{js,wasm}`: Build output.
 
 ## Commands
 
@@ -116,14 +114,12 @@ Cross-Origin-Opener-Policy: same-origin
 Cross-Origin-Embedder-Policy: require-corp
 ```
 
-| Host | How |
-|------|-----|
-| Local `serve` | `serve.json` (above) |
-| Netlify / Cloudflare Pages | `public/_headers` with same content |
-| GitHub Pages | **Doesn't support custom headers.** Multithread won't work on GH Pages — use Cloudflare Pages or Netlify instead. |
-| Vercel | `vercel.json` `headers` array |
-| nginx | `add_header Cross-Origin-... always;` in `location` |
-| S3 + CloudFront | CloudFront response header policy |
+- Local `serve`: `serve.json` (above).
+- Netlify / Cloudflare Pages: `public/_headers` with same content.
+- GitHub Pages: **Doesn't support custom headers.** Multithread won't work on GH Pages — use Cloudflare Pages or Netlify instead.
+- Vercel: `vercel.json` `headers` array.
+- nginx: `add_header Cross-Origin-... always;` in `location`.
+- S3 + CloudFront: CloudFront response header policy.
 
 For `runtime: 'st'`, no headers needed — works on any static host including GH Pages.
 

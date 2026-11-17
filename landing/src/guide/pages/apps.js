@@ -199,7 +199,7 @@ const { data, cache, logs } = await app.paths();`,
                 '**Vite** for the page.',
                 '**macOS 11, iOS 15.1 and Android 13** or later: iOS on arm64 alone, Android on arm64-v8a and x86_64 with Android System WebView 116 or later.',
                 '**Linux** needs a glibc system with WebKitGTK 4.1, release 2.40 or later. **Windows** needs the WebView2 Runtime, which Windows 11 includes.',
-                `**Not everything is checked everywhere yet:** signing with a real Developer ID and notarizing, Windows signing with a cloud key service, building on a Windows machine, and several desktop functions on Linux and Windows. The [reference](${REFERENCE}#limits) lists what has been checked on each platform.`,
+                `**Not everything is checked everywhere yet:** signing with a real Developer ID and notarizing, Windows signing with a cloud key service, building on a Windows machine, and several desktop functions on Linux and Windows. The [reference](${REFERENCE}#limits) lists what is still unchecked on each platform.`,
             ],
         },
         {
