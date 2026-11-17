@@ -10,7 +10,7 @@ const REASON_LINES = 15;
 // Xcode or on Apple's sites, and the page where. A cause may need another build, as one in what was built does.
 const CAUSES = [
     {
-        pattern: /login details for account .* were rejected|No Accounts?\b|No Account for Team/i,
+        pattern: /login details for account .* were rejected|No Accounts?\b|No Account for Team|Failed to Use Accounts/i,
         hint: ({ team }) => `Xcode is signed in to no account of team ${team}, or its sign-in has lapsed: sign in again in Xcode, under Settings › Accounts.`,
     },
     {
