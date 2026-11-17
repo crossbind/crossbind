@@ -2,7 +2,10 @@
 
 # WASI — `platform: 'wasi'` commands and HTTP components
 
-> Builds the project into one **WASI command component** (`<name>-wasi-wasm32-st-<buildType>.wasm`, target `wasm32-wasip3`): no JavaScript glue and no bindings, for any WASI 0.3 runtime with Wasm 3.0 exceptions, such as wasmtime 47+. With `-e http` it builds an **HTTP component** instead, which Spin, wasmCloud and `wasmtime serve` run ([HTTP components](#http-components--e-http)).
+> Builds the project into one **WASI command component** (`<name>-wasi-wasm32-st-<buildType>.wasm`, target
+`wasm32-wasip3`): no JavaScript glue and no bindings, for any WASI 0.3 runtime with Wasm 3.0 exceptions, such as
+wasmtime 47+. With `-e http` it builds an **HTTP component** instead, which Spin, wasmCloud and `wasmtime serve` run
+([HTTP components](#http-components--e-http)).
 
 ## Quick start
 

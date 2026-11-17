@@ -132,9 +132,12 @@ its own `.rs` and `cargo:` imports through the import hooks the build writes
 - `struct` + `impl` methods: class with methods (`Type::new` → constructor).
 - a struct with `Default` (derived or `impl Default`) and no `new`: a constructor with no arguments.
 - an associated fn that does not return `Self`: a static function on the class (`Class.name(..)`).
-- a method that takes `self` on a `Clone` or `Copy` struct: runs on a copy, so the JS instance keeps its value; a builder chain returns a new instance at each step.
-- a struct passed by value (`fn new(params: Params)`): pass the instance; it is copied, so the struct must be `Clone` or `Copy`.
-- a struct generic over one `W: Write` or `R: Read` (`XzWriter<W>`, `XzReader<R>`): a stream class over bytes in memory (see below).
+- a method that takes `self` on a `Clone` or `Copy` struct: runs on a copy, so the JS instance keeps its value; a
+  builder chain returns a new instance at each step.
+- a struct passed by value (`fn new(params: Params)`): pass the instance; it is copied, so the struct must be `Clone` or
+  `Copy`.
+- a struct generic over one `W: Write` or `R: Read` (`XzWriter<W>`, `XzReader<R>`): a stream class over bytes in memory
+  (see below).
 - `pub` fields on a class: JS properties (read and write).
 - a method returning `Self` or another class: a new JS instance the caller owns.
 - a method returning `&mut Self`: the same instance back, for chaining.
@@ -145,27 +148,36 @@ its own `.rs` and `cargo:` imports through the import hooks the build writes
 - `i32` / `f64` / `bool`: number / boolean.
 - `i64` / `u64`: `BigInt` (both directions).
 - `Option<T>` params and returns: `null`/`undefined` → `None` on the way in; `None` → `null` on the way out.
-- `Option<i64>` / `Option<u64>`, `Option<&[u8]>` / `Option<&[f64]>` params: a `BigInt` (or safe-integer number) or typed array, or `null`/`undefined` for `None`; parameters only.
-- `NonZeroU32`, `NonZeroU64` and the other `NonZero` integers as params, also inside `Option` where the plain integer's `Option` crosses: the integer (a `BigInt` for 64 bits); `0` throws before the call.
-- `Result<T, E>` returns: throws a JS `Error` on `Err`; an error type that is also `AsRef<str>` puts that string on `error.code`.
+- `Option<i64>` / `Option<u64>`, `Option<&[u8]>` / `Option<&[f64]>` params: a `BigInt` (or safe-integer number) or typed
+  array, or `null`/`undefined` for `None`; parameters only.
+- `NonZeroU32`, `NonZeroU64` and the other `NonZero` integers as params, also inside `Option` where the plain integer's
+  `Option` crosses: the integer (a `BigInt` for 64 bits); `0` throws before the call.
+- `Result<T, E>` returns: throws a JS `Error` on `Err`; an error type that is also `AsRef<str>` puts that string on
+  `error.code`.
 - `impl Display`: `toString()`.
 - free `pub fn`: plain exported function.
 - `&OtherClass` params: pass the other class's instance.
-- `&[u8]` / `&[f64]` params: `Uint8Array` / `Float64Array`, read in place on native runtimes and copied once into wasm memory; a subarray keeps its offset, another typed array or a plain array is converted, anything else throws.
+- `&[u8]` / `&[f64]` params: `Uint8Array` / `Float64Array`, read in place on native runtimes and copied once into wasm
+  memory; a subarray keeps its offset, another typed array or a plain array is converted, anything else throws.
 - `Vec<u8>` / `Vec<f64>`: `Uint8Array` / `Float64Array` (one copy each way).
-- `Vec<T>`, `&[T]`, `[T; N]`, `&[T; N]`, tuples: JS array (deep copy); a fixed array needs a literal length of at most 32 (serde's limit), so `[u8; 64]` or `[u8; SIZE]` leaves the function out.
+- `Vec<T>`, `&[T]`, `[T; N]`, `&[T; N]`, tuples: JS array (deep copy); a fixed array needs a literal length of at most
+  32 (serde's limit), so `[u8; 64]` or `[u8; SIZE]` leaves the function out.
 - `HashMap`/`BTreeMap` with string keys: JS object (deep copy).
 - `HashSet`/`BTreeSet`: a JS `Set` is accepted; returns come back as an array.
 - `impl Iterator<Item = T>` return: the collected array.
 - `Option<collection>`: the array/object, or `null`.
 - a struct that derives `Serialize` + `Deserialize`: plain JS object (data, not a class - its methods stay native).
-- a data-carrying `enum` that derives them: serde's own representation (`{ Variant: value }`), reshaped by serde attributes.
+- a data-carrying `enum` that derives them: serde's own representation (`{ Variant: value }`), reshaped by serde
+  attributes.
 - `Option<record>` / `Option<value object>`: the object, or `null`.
 - a struct inside a collection: needs `#[derive(Serialize, Deserialize)]`; it travels as JSON.
 - `serde_json::Value` params and returns: real JS values (objects/arrays/primitives), deep-copied at the boundary.
-- `Arc<Class>` factories, params and returns: shared ownership: several JS handles co-own one instance, the last `delete()` frees it (shared classes use `&self` methods and Arc factories).
-- `impl Fn(..) -> R` / `Box<dyn Fn(..) -> R>` parameter: a JS function; the Rust side calls it back during the call (arguments and result: numbers, booleans, strings).
-- `embind_rs::JsValue` / `JsFunction` params and returns: live JS values by identity (no copy) and callbacks into JS; a JS throw surfaces as `Err` (import them from `embind_rs` — the one engine import in user code).
+- `Arc<Class>` factories, params and returns: shared ownership: several JS handles co-own one instance, the last
+  `delete()` frees it (shared classes use `&self` methods and Arc factories).
+- `impl Fn(..) -> R` / `Box<dyn Fn(..) -> R>` parameter: a JS function; the Rust side calls it back during the call
+  (arguments and result: numbers, booleans, strings).
+- `embind_rs::JsValue` / `JsFunction` params and returns: live JS values by identity (no copy) and callbacks into JS; a
+  JS throw surfaces as `Err` (import them from `embind_rs` — the one engine import in user code).
 
 `#[cfg]` attributes are read against the crate's enabled features: an item behind a feature you
 enabled is bound, one behind a disabled feature is not, and one that only some targets compile
