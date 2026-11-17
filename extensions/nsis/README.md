@@ -2,7 +2,7 @@
 
 A Windows setup program, which a Windows app updates itself from.
 
-An app has it by having `@crossbind/core-app-host`, which lists it as a dependency: there is nothing to install or list.
+It comes with `@crossbind/core-app-host`: there is nothing to install or list.
 
 ## Use
 
@@ -10,11 +10,10 @@ An app has it by having `@crossbind/core-app-host`, which lists it as a dependen
 npx crossbind app build -p windows
 ```
 
-A Windows build writes a `-setup.exe` named after the app beside its folder, which NSIS makes in crossbind's windows image. It
-installs the app for its user, with a Start menu shortcut, its URL schemes and file types, and an uninstaller, which the
-apps Settings lists show with package.json's `author` as the publisher. With a key
-in the environment, the setup program and its uninstaller are signed. A Windows app with `app.updater` updates itself
-from it.
+A Windows build writes a `-setup.exe` named after the app beside its folder. It installs the app for the current user,
+with a Start menu shortcut, its URL schemes and file types, and an uninstaller; Settings lists the app with
+`package.json`'s `author` as its publisher. With a signing key in the environment, the setup program and its uninstaller
+are signed. A Windows app with `app.updater` updates itself from it.
 
 ## Platforms
 

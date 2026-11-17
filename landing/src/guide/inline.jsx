@@ -5,7 +5,7 @@
 const TOKEN = /(`[^`]+`|\*\*[^*]+\*\*|\[[^\]]+\]\([^)\s]+\))/g;
 const LINK = /^\[([^\]]+)\]\(([^)\s]+)\)$/;
 
-function CodeSpan({ tokens, children }) {
+function CodeSpan({ tokens, style, children }) {
     return (
         <code style={{
             fontFamily: tokens.mono,
@@ -14,7 +14,9 @@ function CodeSpan({ tokens, children }) {
             border: `1px solid ${tokens.border}`,
             borderRadius: 4,
             padding: '1px 5px',
-            wordBreak: 'break-word',
+            // Breaks a span only where it cannot fit a line, so a table cell never shrinks to one letter.
+            overflowWrap: 'break-word',
+            ...style,
         }}
         >
             {children}
@@ -37,11 +39,11 @@ function Link({ tokens, href, children }) {
     );
 }
 
-export function inline(text, tokens) {
+export function inline(text, tokens, codeStyle) {
     return String(text).split(TOKEN).filter(Boolean).map((part, i) => {
         const key = `${i}-${part}`;
         if (part.startsWith('`') && part.endsWith('`')) {
-            return <CodeSpan key={key} tokens={tokens}>{part.slice(1, -1)}</CodeSpan>;
+            return <CodeSpan key={key} tokens={tokens} style={codeStyle}>{part.slice(1, -1)}</CodeSpan>;
         }
         if (part.startsWith('**') && part.endsWith('**')) {
             return <strong key={key} style={{ color: tokens.text, fontWeight: 600 }}>{part.slice(2, -2)}</strong>;

@@ -2,7 +2,7 @@
 
 Sends an Android bundle to a Google Play track, as a draft or a staged rollout.
 
-An app has it by having `@crossbind/core-app-host`, which lists it as a dependency: there is nothing to install or list.
+It comes with `@crossbind/core-app-host`: there is nothing to install or list.
 
 ## Use
 
@@ -12,7 +12,7 @@ npx crossbind app publish google-play --track beta --rollout 10
 
 It builds the Android app with the next versionCode Google Play takes and releases its bundle on a track: `internal`
 unless `--track` names another. `--draft` leaves the release for Play Console to roll out, and `--rollout` gives it to a
-percent of the track's users first. An Android publish that names no store comes here.
+percent of the track's users first. `crossbind app publish -p android` with no store name uses it.
 
 ## Platforms
 

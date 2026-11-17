@@ -79,6 +79,22 @@ test('escapes backslashes in table cells so an escaped pipe cannot split the row
     assert.equal(markdown.split('\n').at(-1), String.raw`| a\\\|b | C:\\tmp |`);
 });
 
+test('renders entries as list items with their type, and a default on a line of its own', () => {
+    const markdown = renderBlocks([{
+        type: 'entries',
+        items: [
+            { name: '`useWorker`', type: 'boolean', text: 'Runs the module in a [worker](/guide/threading/).', default: '`true` in browsers' },
+            { name: '`paths.native`', text: 'Where the headers are.' },
+        ],
+    }], absolute);
+
+    assert.equal(markdown, [
+        '- `useWorker` (`boolean`): Runs the module in a [worker](https://example.test/guide/threading/).',
+        '  Default: `true` in browsers',
+        '- `paths.native`: Where the headers are.',
+    ].join('\n'));
+});
+
 test('demotes a page under a prefixed section title without touching code fences', () => {
     const page = [
         '# Quick start',

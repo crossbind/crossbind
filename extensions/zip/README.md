@@ -2,7 +2,7 @@
 
 A Windows zip, for those who take no setup program.
 
-An app has it by having `@crossbind/core-app-host`, which lists it as a dependency: there is nothing to install or list.
+It comes with `@crossbind/core-app-host`: there is nothing to install or list.
 
 ## Use
 
@@ -10,7 +10,7 @@ An app has it by having `@crossbind/core-app-host`, which lists it as a dependen
 npx crossbind app build -p windows
 ```
 
-A Windows build writes a `.zip` named after the app beside its folder, of the app as signed, which registers nothing.
+A Windows build writes a `.zip` of the signed app beside its folder. It registers nothing on the system.
 
 ## Platforms
 

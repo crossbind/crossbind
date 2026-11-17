@@ -8,17 +8,17 @@ export default {
     slug: 'browser',
     title: 'Browser',
     description: 'WebAssembly in the browser: setup, a page without a bundler, workers and production hosting.',
-    lede: 'In the browser your C++ runs as WebAssembly behind a JavaScript loader. A [bundler plugin](/guide/bundler-plugins/) turns each header you import into a JavaScript module, compiles the wasm while you develop and emits it with your bundle; without a bundler, the CLI builds the loader and the wasm for a `<script>` tag.',
+    lede: 'In the browser your C++ runs as WebAssembly behind a JavaScript loader. A [bundler plugin](/guide/bundler-plugins/) turns each header you import into a module and ships the wasm with your bundle; without a bundler, the CLI builds both for a `<script>` tag.',
     blocks: [
         { type: 'h2', id: 'setup', text: 'Setup' },
         {
             type: 'p',
-            text: 'A browser project needs three things: the plugin for its bundler, a `crossbind.config.js` at the project root and a header imported from app code. The scaffolder sets up all three - React, Vue or Svelte on Vite, React on Rspack, or a page with no bundler:',
+            text: 'A browser project needs the plugin for its bundler, a `crossbind.config.js` at the root and a header imported from app code. The scaffolder sets up all three for React, Vue or Svelte on Vite, React on Rspack, or a page with no bundler:',
         },
         { type: 'code', file: 'shell', code: `${CREATE_COMMAND} my-app Web React Vite` },
         {
             type: 'p',
-            text: 'In an existing app, add the plugin for your bundler, as [Bundler plugins](/guide/bundler-plugins/) shows, and this config; [Configuration](/guide/configuration/) has the rest of what the file takes.',
+            text: 'In an existing app, add the plugin ([Bundler plugins](/guide/bundler-plugins/)) and this config:',
         },
         {
             type: 'code',
@@ -31,7 +31,7 @@ export default {
         },
         {
             type: 'p',
-            text: 'C++ lives in `src/native`. Import a header and call `initNative()` once: it boots the module and binds every header the app imports.',
+            text: 'C++ lives in `src/native`. Import a header and call `initNative()` once:',
         },
         {
             type: 'code',
@@ -44,7 +44,7 @@ initNative().then(async () => {
         },
         {
             type: 'p',
-            text: 'The call returns a promise because the module runs in a Web Worker by default - see [Workers and storage](#runtime).',
+            text: 'Calls return promises because the module runs in a Web Worker by default; see [Workers and storage](#runtime).',
         },
 
         { type: 'h2', id: 'no-bundler', text: 'No bundler' },
@@ -71,7 +71,7 @@ npx crossbind build -p wasm -a wasm32 -r st -e browser -b release`,
         },
         {
             type: 'p',
-            text: 'That writes `dist/my-app-wasm-wasm32-st-release.browser.js` and its `.wasm`. The script is a UMD bundle that defines a global `initNative`, so load it with a classic `<script>` tag; `path` says where the files are, relative to the page.',
+            text: 'That writes `dist/my-app-wasm-wasm32-st-release.browser.js` and its `.wasm`. Load the script with a classic `<script>` tag: it defines a global `initNative`. `path` says where the files are, relative to the page.',
         },
         {
             type: 'code',
@@ -85,13 +85,13 @@ npx crossbind build -p wasm -a wasm32 -r st -e browser -b release`,
         },
         {
             type: 'p',
-            text: 'Nothing reads your imports here, so the build binds every `.h` file under `src/native`, and a library reaches the page through a header of your own. There is no dev server and no rebuild on save.',
+            text: 'Without a bundler, the build binds every `.h` file in `src/native`, and a library reaches the page through a header of your own. There is no dev server and no rebuild on save.',
         },
 
         { type: 'h2', id: 'runtime', text: 'Workers and storage' },
         {
             type: 'p',
-            text: 'In a browser, `initNative()` starts the module in a Web Worker: `useWorker` defaults to on wherever `Worker` exists. The page thread never blocks on C++, and every call returns a promise, construction included (`await new X()`). Set `dts: \'promise\'` in `crossbind.config.js` so the generated TypeScript says the same.',
+            text: 'In a browser, `initNative()` starts the module in a Web Worker. The page never blocks on C++, and every call returns a promise, construction included (`await new X()`). Set `dts: \'promise\'` in `crossbind.config.js` so the generated types say the same.',
         },
         {
             type: 'p',
@@ -106,23 +106,23 @@ npx crossbind build -p wasm -a wasm32 -r st -e browser -b release`,
         },
         {
             type: 'p',
-            text: 'Files under `/opfs/<app>/` survive a reload; OPFS needs the worker, and the generated loader turns it on by default only for `mt` builds. Files under `/memfs/<app>/` live in memory for the session. [Files](/guide/filesystem/) covers both, and [Threads and workers](/guide/threading/) how `useWorker` and `runtime: \'mt\'` combine - they are independent.',
+            text: 'Files under `/opfs/<app>/` survive a reload; OPFS needs the worker and is on by default only in `mt` builds. Files under `/memfs/<app>/` last for the session. More in [Files](/guide/filesystem/). `useWorker` and `runtime: \'mt\'` are independent choices ([Threads and workers](/guide/threading/)).',
         },
 
         { type: 'h2', id: 'dev', text: 'Development' },
         {
             type: 'p',
-            text: 'The first dev start compiles the wasm in Docker, or on a [remote runner](/guide/remote-builds/), and takes a while; later starts reuse the cache in `.crossbind/`. Dev servers build the debug variant, production builds the release one.',
+            text: 'The first dev start compiles in Docker (or on a [remote runner](/guide/remote-builds/)) and takes a while; later starts reuse the cache in `.crossbind/`. Dev servers build debug, production builds release.',
         },
         {
             type: 'p',
-            text: 'Saving a header, a C++ source or a `.rs` file in `src/native` rebuilds the wasm and reloads the page, and a function you newly import from a [library header](/guide/bindings/#imports) binds when you save the importing file. The Vite and webpack dev servers, and `vite preview`, send the COOP/COEP headers, so a multithreaded build runs locally as it is.',
+            text: 'Saving a header, a C++ source or a `.rs` file in `src/native` rebuilds and reloads the page. The Vite and webpack dev servers, and `vite preview`, send the COOP/COEP headers, so a multithreaded build runs locally.',
         },
 
         { type: 'h2', id: 'production', text: 'Production build' },
         {
             type: 'p',
-            text: '`vite build`, `rspack build` or a production webpack build compiles the release variant and writes `crossbind.js`, `crossbind.wasm` and, when the project packs [data files](/guide/assets/), `crossbind.data.txt` into the output directory. Deploy them with the bundle. The generated code loads them from Vite\'s `base` or webpack\'s `output.publicPath` (`auto` included), so an app served from a sub-path finds them.',
+            text: 'A production build (`vite build`, `rspack build` or webpack) writes `crossbind.js`, `crossbind.wasm` and, with [data files](/guide/assets/), `crossbind.data.txt` to the output folder. Deploy them with the bundle. They load from Vite\'s `base` or webpack\'s `output.publicPath`, so an app on a sub-path finds them.',
         },
         {
             type: 'p',
@@ -136,7 +136,7 @@ Cross-Origin-Embedder-Policy: require-corp`,
         },
         {
             type: 'p',
-            text: 'Without them `SharedArrayBuffer` is undefined and the module fails to start; `crossOriginIsolated` must be `true` in the console of the deployed page. [Threads and workers](/guide/threading/#coop-coep) shows where each host takes the headers. GitHub Pages cannot send them, so a multithreaded build does not run there.',
+            text: 'Without them the module fails to start; `crossOriginIsolated` must be `true` in the console of the deployed page. [Threads and workers](/guide/threading/#coop-coep) shows how each host sends them. GitHub Pages cannot, so a multithreaded build does not run there.',
         },
 
         { type: 'h2', id: 'limits', text: 'Limits' },
@@ -150,7 +150,7 @@ Cross-Origin-Embedder-Policy: require-corp`,
         },
         {
             type: 'p',
-            text: `Complete apps: ${example('web-react-vite')}, ${example('web-vue-vite')}, ${example('web-svelte-vite')}, ${example('web-react-rspack')} and ${example('web-vanilla')} - each one is also a scaffolder template.`,
+            text: `Complete apps, each also a scaffolder template: ${example('web-react-vite')}, ${example('web-vue-vite')}, ${example('web-svelte-vite')}, ${example('web-react-rspack')} and ${example('web-vanilla')}.`,
         },
     ],
 };

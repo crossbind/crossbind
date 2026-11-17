@@ -81,7 +81,7 @@ console.log(await greet('crossbind')); // Hello, crossbind, from <the app's name
 
 export const ANATOMY_TEXT = [
     'A package with three parts: a descriptor the build reads, native code the app\'s host compiles in, and functions your page imports. Below is a whole one, from `examples/app-extension`.',
-    'There is no plugin loader and no schema to keep in sync. The build reads the descriptor as it loads your config and compiles the sources into the app, with the toolchain that platform\'s app builds with. A call from the page goes by name, `starter.greet`, to the function the entry registered, with JSON values and bytes either way.',
+    'The build reads the descriptor with your config and compiles the sources into the app. A call from the page goes by name, `starter.greet`, to the function the extension registered, with JSON values and bytes either way.',
     'Code that is the same everywhere goes in `app.sources`. What one platform needs goes under `app.macos`, `app.ios`, `app.linux`, `app.windows` or `app.android`, in Objective-C, Swift, Java or Kotlin where that is what the platform speaks.',
 ];
 
@@ -104,12 +104,11 @@ export const REACH = [
     ['The build itself: what installs the app, store uploads, commands under `crossbind app`', '`installer`, `publisher`, `commands`, each with an `api` in place of crossbind\'s own modules'],
 ];
 
-export const REACH_HEAD = ['What', 'Through'];
-export const REACH_TEXT = `An extension reaches what the defaults do, through the same calls. [extensions.md](${CONTRACT_URL}) gives each in full, with the thread it runs on and what its failure does.`;
+export const REACH_TEXT = `An extension reaches what the defaults do, through the same calls. [extensions.md](${CONTRACT_URL}) describes each in full.`;
 
 export const CONTRACT_TEXT = [
-    `An extension says which version of the contract it is written for, \`contract: 1\`, and a build stops on one it does not take, naming what to update. The contract is [extensions.md](${CONTRACT_URL}), \`<crossbind/extension.h>\`, \`<crossbind/app.h>\` and Android's \`dev.crossbind.app.Extension\` and \`ExtensionHost\`: anything else of crossbind's is not part of it.`,
-    'What is new adds to the contract and raises its newest version, and extensions written for the older ones go on building. What breaks one raises the oldest as well. Until crossbind 2.0.0 such a change may come in any release, marked as breaking in its notes; from 2.0.0 it waits for a major version.',
+    `An extension names the contract version it is written for, \`contract: 1\`, and a build stops on one it does not take. The contract is [extensions.md](${CONTRACT_URL}), \`<crossbind/extension.h>\`, \`<crossbind/app.h>\` and Android's \`dev.crossbind.app.Extension\` and \`ExtensionHost\`; nothing else of crossbind's is part of it.`,
+    'Additions raise the newest version, and extensions written for older ones keep building. A breaking change raises the oldest version too: until crossbind 2.0.0 it may come in any release, marked as breaking in the notes; from 2.0.0 only in a major version.',
 ];
 
 export const GOOD_TO_KNOW = [
@@ -117,7 +116,7 @@ export const GOOD_TO_KNOW = [
     '**What stays in the host.** The windows, the app\'s folders, quitting, events, calls by name and handing links and files to their owners: `crossbind/app/core` is what a page gets of it, and every extension builds on it.',
     '**Compiled in, not loaded.** Adding or removing one takes a rebuild, and nothing loads at run time, so what an app ships is what its config listed.',
     `**Yours to vet.** An extension's native code runs in your app's process with your app's rights. crossbind has not reviewed the ones others publish under [crossbind-extension](${NPM_KEYWORD_URL}): read one as you would any native dependency.`,
-    '**Leave one out for what an app exposes, not for size.** On a small app, leaving out every default a plain app has took 0.22 MB off 12.82 MB on macOS and 0.23 MB off 5.20 MB on Linux.',
+    '**Leave one out for what an app exposes, not for size:** the defaults add little ([measured](/guide/performance/#size)).',
     '**A TypeScript page** reads the defaults\' types with `/// <reference types="@crossbind/core-app-host/app" />`, as it reads `vite/client`\'s, because a bundler plugin puts `crossbind/app` together.',
 ];
 
@@ -125,7 +124,7 @@ export default {
     slug: 'extensions',
     title: 'Extensions',
     description: 'What an extension of a crossbind app is, how to add, replace, leave out or write one, what it reaches and what the contract promises.',
-    lede: `Almost everything a crossbind app does beyond running your page and your native code is an npm package: the dialogs, the menus, the updater, the installers, the store uploads. Yours are written to the same contract, so you can add to an app, replace a part of it or take a part out. [The catalog](${EXTENSIONS_URL}) lists crossbind's own.`,
+    lede: `Almost everything a crossbind app does beyond running your page and native code comes from npm packages: the dialogs, the menus, the updater, the installers, the store uploads. Yours use the same contract, so you can add to an app, replace a part or take one out. [The catalog](${EXTENSIONS_URL}) lists crossbind's own.`,
     blocks: [
         { type: 'h2', id: 'what', text: 'What an extension is' },
         ...ANATOMY_TEXT.map((text) => ({ type: 'p', text })),
@@ -146,7 +145,7 @@ export default {
         },
 
         { type: 'h2', id: 'replace', text: 'Replace one' },
-        { type: 'p', text: 'Each default holds roles. Take a role with `replaces` and the default steps aside for that role alone: `menu` keeps the menus and the notifications while this one answers `tray.set` and `tray.remove`, so the page\'s code stays as it is. The `page-*` extensions are roles as well: a browser-like app takes `page-navigation` and decides where its pages go.' },
+        { type: 'p', text: 'Each default holds roles. Take a role with `replaces` and the default gives up that role alone: here `menu` keeps the menus and notifications while this extension answers `tray.set` and `tray.remove`, and the page\'s code stays as it is. The `page-*` extensions are roles too: a browser-like app takes `page-navigation` to decide where its pages go.' },
         {
             type: 'code',
             file: 'crossbind.extension.js',
@@ -160,10 +159,10 @@ export default {
     };
 }`,
         },
-        { type: 'p', text: "Or list an extension under the name of a default other than the `page-*` ones, which `replaces` alone takes: it takes that default's place, with a warning. A store or an installer is replaced this way, by an extension named `google-play`, `dmg` or another of theirs, with a publisher or an installer of its own." },
+        { type: 'p', text: "Or give an extension the name of a default other than a `page-*` one: it takes that default's whole place, with a warning. This is how to replace a store or an installer, with an extension named `google-play`, `dmg` and so on." },
 
         { type: 'h2', id: 'leave-out', text: 'Leave one out' },
-        { type: 'p', text: 'Its native code, its commands and its stores or installers go with it. A setting nothing would honor stops the build rather than doing nothing: `without: [\'updater\']` beside `app.updater` is an error. To run only some installers, `app.installers` names them.' },
+        { type: 'p', text: 'Its native code, commands, stores and installers go with it. A setting that nothing would honor stops the build: `without: [\'updater\']` beside `app.updater` is an error. To run only some installers, list them in `app.installers`.' },
         {
             type: 'code',
             file: 'crossbind.config.js',
@@ -174,12 +173,12 @@ export default {
         },
 
         { type: 'h2', id: 'write', text: 'Write one' },
-        { type: 'p', text: `The template is the extension above, ready to rename. [The playbook](${PLAYBOOK_URL}) is the order of the work, from a name to a publish. Publish it with the npm keyword \`crossbind-extension\`, so that others can [find it](${NPM_KEYWORD_URL}).` },
+        { type: 'p', text: `The template is the extension above, ready to rename; [the playbook](${PLAYBOOK_URL}) takes it from a name to a publish. Publish it with the npm keyword \`crossbind-extension\` so others can [find it](${NPM_KEYWORD_URL}).` },
         { type: 'code', file: 'shell', code: `${CREATE_COMMAND} -- my-extension Extension` },
 
         { type: 'h2', id: 'reach', text: 'What it reaches' },
         { type: 'p', text: REACH_TEXT },
-        { type: 'table', head: REACH_HEAD, rows: REACH },
+        { type: 'entries', items: REACH.map(([name, text]) => ({ name, text })) },
 
         { type: 'h2', id: 'contract', text: 'The contract' },
         ...CONTRACT_TEXT.map((text) => ({ type: 'p', text })),

@@ -1,5 +1,5 @@
 # @crossbind/port-tiff
-**Precompiled TIFF (libtiff) image library built with crossbind for seamless integration in JavaScript, WebAssembly and React Native projects.**
+**The TIFF (libtiff) image library, prebuilt with crossbind for JavaScript, WebAssembly and React Native projects.**
 
 <a href="https://www.npmjs.com/package/@crossbind/port-tiff">
     <img alt="NPM version" src="https://img.shields.io/npm/v/@crossbind/port-tiff/beta?style=for-the-badge" />
@@ -11,7 +11,7 @@
     <img alt="License" src="https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fregistry.npmjs.org%2F%40crossbind%2Fport-tiff%2Fbeta&query=%24.license&style=for-the-badge&label=license" />
 </a>
 
-> Use it together with **[crossbind](https://crossbind.dev)** — the toolchain for using C++ libraries from JavaScript, TypeScript, WebAssembly, Node.js and React Native. Learn more at **[crossbind.dev](https://crossbind.dev)**.
+> Use it with **[crossbind](https://crossbind.dev)**, which lets JavaScript, TypeScript, Node.js and React Native code import C and C++ headers.
 
 ## See it run
 Three apps on **[crossbind.dev/ports/tiff](https://crossbind.dev/ports/tiff/#apps)** run this package in your browser, on the same generated files every time:
@@ -20,7 +20,7 @@ Three apps on **[crossbind.dev/ports/tiff](https://crossbind.dev/ports/tiff/#app
 - **Page photos to one archival TIFF.** Two A4 page photos, turned black and white with Otsu's threshold and stored as CCITT Group 4, take 19,640 bytes in one multi-page file.
 - **Codec comparison.** A 512 × 512 float elevation model written with every codec in the build and read back: ZSTD with the floating-point predictor keeps every sample in 3.8× less space than raw, and LERC within 0.1 m takes 4.0× less.
 
-Their C++ wrappers, and the self-check the site build runs against numbers verified independently of this package, are in [`landing/demos/lib-tiff`](https://github.com/crossbind/crossbind/tree/main/landing/demos/lib-tiff).
+Their C++ wrappers are in [`landing/demos/lib-tiff`](https://github.com/crossbind/crossbind/tree/main/landing/demos/lib-tiff).
 
 ## Integration
 Install the main package together with the platform builds:
@@ -29,7 +29,7 @@ Install the main package together with the platform builds:
 npm install @crossbind/port-tiff@beta @crossbind/port-tiff-wasm@beta @crossbind/port-tiff-android@beta @crossbind/port-tiff-ios@beta
 ```
 
-Then import all three platforms in `crossbind.config.js` — crossbind compiles only the one matching each build target:
+Then list all three in `crossbind.config.js`; each build uses the one for its target:
 
 ```diff
 +import tiffWasm from '@crossbind/port-tiff-wasm/crossbind.config.js';
@@ -48,7 +48,7 @@ export default {
 };
 ```
 
-A native Node.js addon (`crossbind build -e node`) links the build of its platform: `-p darwin`, `-p linux`, `-p linuxmusl` or `-p win32` takes `@crossbind/port-tiff-darwin`, `-linux`, `-linuxmusl` or `-win32`; `-linuxmusl` is the one for Alpine and other musl distributions. Install it and import its `crossbind.config.js` the same way.
+A Node.js addon (`crossbind build -e node`) links the desktop build of its platform instead: `@crossbind/port-tiff-darwin`, `-linux`, `-linuxmusl` (Alpine and other musl systems) or `-win32`. Install and list it the same way.
 
 ## Usage
 crossbind binds your C++ headers to JavaScript, so the usual pattern is a small wrapper around the library. This one writes pixels as a TIFF and reads them back, in memory. Put it in your project's native folder (`src/native/` by default):
@@ -216,20 +216,18 @@ Setup for every platform: [crossbind.dev/ports/tiff](https://crossbind.dev/ports
 - On WASI, a multi-page TIFF written straight to a file with `TIFFOpen` comes out corrupt: with wasi-sdk 34's `wasm32-wasip2` and `-wasip3` libc, a write after `lseek(fd, 0, SEEK_END)` lands at the previous position, and libtiff seeks that way before each page after the first. One-page files are not affected, and neither is a file built in memory with `TIFFClientOpen` and saved in one write, as the [WASI program](https://crossbind.dev/ports/tiff/#wasi-program) does.
 
 ## Supported platforms
-This is the main package; the precompiled binaries are shipped per platform:
+This is the main package; the binaries ship in one package per platform:
 
-| Platform | Package | Targets |
-|---|---|---|
-| WebAssembly | [`@crossbind/port-tiff-wasm`](https://www.npmjs.com/package/@crossbind/port-tiff-wasm) | `wasm32` — single-threaded & multi-threaded |
-| Android | [`@crossbind/port-tiff-android`](https://www.npmjs.com/package/@crossbind/port-tiff-android) | `arm64-v8a` (64-bit ARM), `x86_64` (emulator) |
-| iOS | [`@crossbind/port-tiff-ios`](https://www.npmjs.com/package/@crossbind/port-tiff-ios) | device (`arm64`), simulator (`arm64`) |
-| macOS | [`@crossbind/port-tiff-darwin`](https://www.npmjs.com/package/@crossbind/port-tiff-darwin) | `arm64` (Apple silicon), `x64` (Intel) — native Node.js addons |
-| Linux | [`@crossbind/port-tiff-linux`](https://www.npmjs.com/package/@crossbind/port-tiff-linux) | `x64`, `arm64` — glibc 2.28 or later, native Node.js addons |
-| Linux (musl) | [`@crossbind/port-tiff-linuxmusl`](https://www.npmjs.com/package/@crossbind/port-tiff-linuxmusl) | `x64`, `arm64` — musl 1.2.5 or later (Alpine 3.21 and later), native Node.js addons |
-| Windows | [`@crossbind/port-tiff-win32`](https://www.npmjs.com/package/@crossbind/port-tiff-win32) | `x64`, `arm64` — Windows 10 or later, native Node.js addons |
-| WASI library | [`@crossbind/port-tiff-wasi`](https://www.npmjs.com/package/@crossbind/port-tiff-wasi) | `wasm32-wasip3` — single-threaded |
-| WASI command | [`@crossbind/port-tiff-standalone-wasi`](https://www.npmjs.com/package/@crossbind/port-tiff-standalone-wasi) | the 18 tools libtiff installs, from `tiffinfo` to `tiff2pdf`, as `<tool>-wasi` commands (wasmtime 47+) |
-| Node.js, ready-made | [`@crossbind/port-tiff-standalone-napi`](https://www.npmjs.com/package/@crossbind/port-tiff-standalone-napi) | prebuilt addons for macOS, Linux (glibc and musl) and Windows, `arm64` and `x64`: nothing to build |
+- **WebAssembly**, [`@crossbind/port-tiff-wasm`](https://www.npmjs.com/package/@crossbind/port-tiff-wasm): `wasm32`; single-threaded and multi-threaded.
+- **Android**, [`@crossbind/port-tiff-android`](https://www.npmjs.com/package/@crossbind/port-tiff-android): `arm64-v8a` (64-bit ARM), `x86_64` (emulator).
+- **iOS**, [`@crossbind/port-tiff-ios`](https://www.npmjs.com/package/@crossbind/port-tiff-ios): device (`arm64`), simulator (`arm64`).
+- **macOS**, [`@crossbind/port-tiff-darwin`](https://www.npmjs.com/package/@crossbind/port-tiff-darwin): `arm64` (Apple silicon), `x64` (Intel); native Node.js addons.
+- **Linux**, [`@crossbind/port-tiff-linux`](https://www.npmjs.com/package/@crossbind/port-tiff-linux): `x64`, `arm64`; glibc 2.28 or later, native Node.js addons.
+- **Linux (musl)**, [`@crossbind/port-tiff-linuxmusl`](https://www.npmjs.com/package/@crossbind/port-tiff-linuxmusl): `x64`, `arm64`; musl 1.2.5 or later (Alpine 3.21 and later), native Node.js addons.
+- **Windows**, [`@crossbind/port-tiff-win32`](https://www.npmjs.com/package/@crossbind/port-tiff-win32): `x64`, `arm64`; Windows 10 or later, native Node.js addons.
+- **WASI library**, [`@crossbind/port-tiff-wasi`](https://www.npmjs.com/package/@crossbind/port-tiff-wasi): `wasm32-wasip3`; single-threaded.
+- **WASI command**, [`@crossbind/port-tiff-standalone-wasi`](https://www.npmjs.com/package/@crossbind/port-tiff-standalone-wasi): the 18 tools libtiff installs, from `tiffinfo` to `tiff2pdf`, as `<tool>-wasi` commands (wasmtime 47+).
+- **Node.js, ready-made**, [`@crossbind/port-tiff-standalone-napi`](https://www.npmjs.com/package/@crossbind/port-tiff-standalone-napi): prebuilt addons for macOS, Linux (glibc and musl) and Windows, `arm64` and `x64`: nothing to build.
 
 ## License
 This project includes the precompiled libtiff library, which is distributed under the [libtiff License](https://libtiff.gitlab.io/libtiff/project/license.html).

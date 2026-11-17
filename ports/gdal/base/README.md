@@ -1,5 +1,5 @@
 # @crossbind/port-gdal
-**Precompiled GDAL geospatial library built with crossbind for seamless integration in JavaScript, WebAssembly and React Native projects.**
+**The GDAL geospatial library, prebuilt with crossbind for JavaScript, WebAssembly and React Native projects.**
 
 <a href="https://www.npmjs.com/package/@crossbind/port-gdal">
     <img alt="NPM version" src="https://img.shields.io/npm/v/@crossbind/port-gdal/beta?style=for-the-badge" />
@@ -11,7 +11,7 @@
     <img alt="License" src="https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fregistry.npmjs.org%2F%40crossbind%2Fport-gdal%2Fbeta&query=%24.license&style=for-the-badge&label=license" />
 </a>
 
-> Use it together with **[crossbind](https://crossbind.dev)** — the toolchain for using C++ libraries from JavaScript, TypeScript, WebAssembly, Node.js and React Native. Learn more at **[crossbind.dev](https://crossbind.dev)**.
+> Use it with **[crossbind](https://crossbind.dev)**, which lets JavaScript, TypeScript, Node.js and React Native code import C and C++ headers.
 
 ## See it run
 Three apps on **[crossbind.dev/ports/gdal](https://crossbind.dev/ports/gdal/#apps)** run this package in your browser:
@@ -20,7 +20,7 @@ Three apps on **[crossbind.dev/ports/gdal](https://crossbind.dev/ports/gdal/#app
 - **Terrain studio.** Hillshade, slope, aspect, roughness, TPI, contour lines and a viewshed on a generated 512 × 512 landscape of 30 m cells. It has 346 contour lines every 100 m, and from its centre, 10 m above the ground, 3,123 of its 262,144 cells are seen.
 - **Pixels to polygons.** Paint on a grid and GDAL traces it. The sample grid, with specks under 5 pixels sieved out, becomes 3 polygons with 1 hole, of 1,500, 1,400 and 1,257 pixels, as the host's gdal_sieve.py and gdal_polygonize.py make them.
 
-Their C++ wrappers, and the self-check the site build runs against values from the host's own GDAL 3.13.0 on the same inputs, are in [`landing/demos/lib-gdal`](https://github.com/crossbind/crossbind/tree/main/landing/demos/lib-gdal).
+Their C++ wrappers are in [`landing/demos/lib-gdal`](https://github.com/crossbind/crossbind/tree/main/landing/demos/lib-gdal).
 
 ## Integration
 Install the main package together with the platform builds:
@@ -29,7 +29,7 @@ Install the main package together with the platform builds:
 npm install @crossbind/port-gdal@beta @crossbind/port-gdal-wasm@beta @crossbind/port-gdal-android@beta @crossbind/port-gdal-ios@beta
 ```
 
-Then import all three platforms in `crossbind.config.js` — crossbind compiles only the one matching each build target:
+Then list all three in `crossbind.config.js`; each build uses the one for its target:
 
 ```diff
 +import gdalWasm from '@crossbind/port-gdal-wasm/crossbind.config.js';
@@ -48,7 +48,7 @@ export default {
 };
 ```
 
-A native Node.js addon (`crossbind build -e node`) links the build of its platform: `-p darwin`, `-p linux`, `-p linuxmusl` or `-p win32` takes `@crossbind/port-gdal-darwin`, `-linux`, `-linuxmusl` or `-win32`; `-linuxmusl` is the one for Alpine and other musl distributions. Install it and import its `crossbind.config.js` the same way.
+A Node.js addon (`crossbind build -e node`) links the desktop build of its platform instead: `@crossbind/port-gdal-darwin`, `-linux`, `-linuxmusl` (Alpine and other musl systems) or `-win32`. Install and list it the same way.
 
 ## Usage
 crossbind binds your C++ headers to JavaScript, so the usual pattern is a small wrapper around the library. This one converts GeoJSON text to other vector formats, reprojected, as the ogr2ogr tool does. Put it in your project's native folder (`src/native/` by default):
@@ -159,8 +159,8 @@ Setup for every platform: [crossbind.dev/ports/gdal](https://crossbind.dev/ports
 ## What this build includes
 - GDAL 3.13.3 as one static library, `libgdal`, with its dependencies from their own crossbind packages: PROJ 9.9.0, GEOS 3.15.0, SQLite 3.53.4, SpatiaLite 5.1.0, libtiff 4.7.2, libgeotiff 1.7.4, libjpeg-turbo 3.2.0, libwebp 1.6.0, zstd 1.5.7, LERC 4.2.0, zlib 1.3.2, Expat 2.8.5, libiconv 1.19, curl 8.22.0 and OpenSSL 4.0.2.
 - 180 drivers: `GDALAllRegister()` registers 180, 127 of them for rasters and 62 for vectors (some do both), among them GTiff and COG, GPKG, OpenFileGDB, Shapefile, KML, PMTiles, MBTiles, Zarr and GRIB. There is no Arrow or Parquet (GeoParquet), JPEG 2000, netCDF, HDF4, HDF5 or LIBKML driver.
-- GDAL's data files (155 files, 2,855,622 bytes) and PROJ's, with `proj.db` (16 files, 10,690,537 bytes). A browser build preloads both as one 13,546,159-byte `<name>-….browser.data.txt` next to its `.wasm`, however few drivers it registers; a WASI build copies them to `dist/data`.
-- Size on WebAssembly: registering drivers one by one is not enough on its own, because `GDALDataset::ExecuteSQL` reaches `GDALAllRegister` through the SQLite dialect and links every driver. The module behind the apps above registers 5 raster and 20 vector drivers, redirects that call with the linker's `--wrap` and leaves curl, OpenSSL, SpatiaLite, WebP, LERC and JPEG out with `crossbind.overrides.js` ([its config](https://github.com/crossbind/crossbind/tree/main/landing/demos/lib-gdal)). It is 16,451,235 bytes of WebAssembly and 166,019 bytes of JavaScript; the same headers without those steps link to 38,702,527 bytes.
+- GDAL's data files (about 2.9 MB) and PROJ's, with `proj.db` (about 10.7 MB). A browser build preloads both as one `<name>-….browser.data.txt` of about 13.5 MB next to its `.wasm`, however few drivers it registers; a WASI build copies them to `dist/data`.
+- Size on WebAssembly: registering drivers one by one is not enough on its own, because `GDALDataset::ExecuteSQL` reaches `GDALAllRegister` through the SQLite dialect and links every driver. The module behind the apps above registers 5 raster and 20 vector drivers, redirects that call with the linker's `--wrap` and leaves curl, OpenSSL, SpatiaLite, WebP, LERC and JPEG out with `crossbind.overrides.js` ([its config](https://github.com/crossbind/crossbind/tree/main/landing/demos/lib-gdal)). It is about 16.5 MB of WebAssembly; the same headers without those steps link to about 38.7 MB.
 
   | Step, applied to the full link | WebAssembly |
   |---|---:|
@@ -175,20 +175,18 @@ Setup for every platform: [crossbind.dev/ports/gdal](https://crossbind.dev/ports
 - The GDAL command-line tools are not in the library packages; `@crossbind/port-gdal-standalone-wasi` ships the `gdal` program with the classic tools, `gdalinfo` and `ogr2ogr` among them, as WASI commands.
 
 ## Supported platforms
-This is the main package; the precompiled binaries are shipped per platform:
+This is the main package; the binaries ship in one package per platform:
 
-| Platform | Package | Targets |
-|---|---|---|
-| WebAssembly | [`@crossbind/port-gdal-wasm`](https://www.npmjs.com/package/@crossbind/port-gdal-wasm) | `wasm32` — single-threaded & multi-threaded |
-| Android | [`@crossbind/port-gdal-android`](https://www.npmjs.com/package/@crossbind/port-gdal-android) | `arm64-v8a` (64-bit ARM), `x86_64` (emulator) |
-| iOS | [`@crossbind/port-gdal-ios`](https://www.npmjs.com/package/@crossbind/port-gdal-ios) | device (`arm64`), simulator (`arm64`) |
-| macOS | [`@crossbind/port-gdal-darwin`](https://www.npmjs.com/package/@crossbind/port-gdal-darwin) | `arm64` (Apple silicon), `x64` (Intel) — native Node.js addons |
-| Linux | [`@crossbind/port-gdal-linux`](https://www.npmjs.com/package/@crossbind/port-gdal-linux) | `x64`, `arm64` — glibc 2.28 or later, native Node.js addons |
-| Linux (musl) | [`@crossbind/port-gdal-linuxmusl`](https://www.npmjs.com/package/@crossbind/port-gdal-linuxmusl) | `x64`, `arm64` — musl 1.2.5 or later (Alpine 3.21 and later), native Node.js addons |
-| Windows | [`@crossbind/port-gdal-win32`](https://www.npmjs.com/package/@crossbind/port-gdal-win32) | `x64`, `arm64` — Windows 10 or later, native Node.js addons |
-| WASI library | [`@crossbind/port-gdal-wasi`](https://www.npmjs.com/package/@crossbind/port-gdal-wasi) | `wasm32-wasip3` — single-threaded |
-| WASI command | [`@crossbind/port-gdal-standalone-wasi`](https://www.npmjs.com/package/@crossbind/port-gdal-standalone-wasi) | the upstream `gdal` CLI and its classic tools as `<tool>-wasi` commands (wasmtime 47+) |
-| Node.js, ready-made | [`@crossbind/port-gdal-standalone-napi`](https://www.npmjs.com/package/@crossbind/port-gdal-standalone-napi) | prebuilt addons for macOS, Linux (glibc and musl) and Windows, `arm64` and `x64`: nothing to build |
+- **WebAssembly**, [`@crossbind/port-gdal-wasm`](https://www.npmjs.com/package/@crossbind/port-gdal-wasm): `wasm32`; single-threaded and multi-threaded.
+- **Android**, [`@crossbind/port-gdal-android`](https://www.npmjs.com/package/@crossbind/port-gdal-android): `arm64-v8a` (64-bit ARM), `x86_64` (emulator).
+- **iOS**, [`@crossbind/port-gdal-ios`](https://www.npmjs.com/package/@crossbind/port-gdal-ios): device (`arm64`), simulator (`arm64`).
+- **macOS**, [`@crossbind/port-gdal-darwin`](https://www.npmjs.com/package/@crossbind/port-gdal-darwin): `arm64` (Apple silicon), `x64` (Intel); native Node.js addons.
+- **Linux**, [`@crossbind/port-gdal-linux`](https://www.npmjs.com/package/@crossbind/port-gdal-linux): `x64`, `arm64`; glibc 2.28 or later, native Node.js addons.
+- **Linux (musl)**, [`@crossbind/port-gdal-linuxmusl`](https://www.npmjs.com/package/@crossbind/port-gdal-linuxmusl): `x64`, `arm64`; musl 1.2.5 or later (Alpine 3.21 and later), native Node.js addons.
+- **Windows**, [`@crossbind/port-gdal-win32`](https://www.npmjs.com/package/@crossbind/port-gdal-win32): `x64`, `arm64`; Windows 10 or later, native Node.js addons.
+- **WASI library**, [`@crossbind/port-gdal-wasi`](https://www.npmjs.com/package/@crossbind/port-gdal-wasi): `wasm32-wasip3`; single-threaded.
+- **WASI command**, [`@crossbind/port-gdal-standalone-wasi`](https://www.npmjs.com/package/@crossbind/port-gdal-standalone-wasi): the upstream `gdal` CLI and its classic tools as `<tool>-wasi` commands (wasmtime 47+).
+- **Node.js, ready-made**, [`@crossbind/port-gdal-standalone-napi`](https://www.npmjs.com/package/@crossbind/port-gdal-standalone-napi): prebuilt addons for macOS, Linux (glibc and musl) and Windows, `arm64` and `x64`: nothing to build.
 
 ## License
 This project includes the precompiled GDAL library, which is distributed under the [MIT License](https://github.com/OSGeo/gdal/blob/master/LICENSE.TXT).

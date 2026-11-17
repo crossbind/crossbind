@@ -20,6 +20,8 @@ function blockText(block) {
             return `${block.title || ''} ${block.text}`;
         case 'table':
             return [...block.head, ...block.rows.flat()].join(' ');
+        case 'entries':
+            return block.items.flatMap((item) => [item.name, item.type, item.text, item.default]).filter(Boolean).join(' ');
         // Code is skipped: matching on snippets buries the prose that explains them.
         default:
             return '';

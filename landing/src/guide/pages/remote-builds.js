@@ -4,7 +4,7 @@ export default {
     slug: 'remote-builds',
     title: 'Remote builds',
     description: 'Run the toolchain steps on crossbind cloud or on a runner of your own instead of the local Docker.',
-    lede: 'Each compile, link, SWIG, cargo and Conan step of a build normally runs in a pinned Docker image on your machine. With `RUNNER=REMOTE` those steps run on a runner instead - crossbind cloud, or one you start or deploy - and the machine neither pulls an image nor starts a container.',
+    lede: 'Each toolchain step of a build (compile, link, bindings, cargo, Conan) normally runs in a pinned Docker image on your machine. With `RUNNER=REMOTE` those steps run on a runner instead, crossbind cloud or one of your own, and your machine needs no Docker.',
     blocks: [
         { type: 'h2', id: 'why', text: 'When it helps' },
         {
@@ -21,13 +21,13 @@ export default {
         },
         {
             type: 'p',
-            text: 'Apps for Android, Linux and Windows are the exception: `crossbind app` builds them only in the local Docker, under `RUNNER=DOCKER_RUN` or `DOCKER_EXEC`, and any other runner stops it before the first step.',
+            text: 'Apps for Android, Linux and Windows are the exception: `crossbind app` builds them only in the local Docker, under `RUNNER=DOCKER_RUN` or `DOCKER_EXEC`.',
         },
 
         { type: 'h2', id: 'cloud', text: 'crossbind cloud' },
         {
             type: 'p',
-            text: 'Sign in with GitHub, and every toolchain image - web, android, linux and windows - builds on crossbind cloud:',
+            text: 'Sign in with GitHub, and every toolchain image (web, android, linux and windows) builds on crossbind cloud:',
         },
         {
             type: 'code',
@@ -39,27 +39,27 @@ crossbind usage`,
         },
         {
             type: 'p',
-            text: '`crossbind login` shows a code to enter on github.com and asks GitHub for no permission; GitHub accounts younger than 30 days are turned away. The token is kept for that cloud address in `~/.crossbind/credentials.json`, readable only by you, and stops working after 90 days unused. The cloud is used only while the machine names no runner address at all: naming one, for any image, keeps every image off it.',
+            text: '`crossbind login` shows a code to enter on github.com and asks GitHub for no permissions; GitHub accounts younger than 30 days are refused. The token is kept in `~/.crossbind/credentials.json`, readable only by you, and stops working after 90 days unused. The cloud is used only while no runner address is set: setting one, for any image, keeps every image off the cloud.',
         },
         {
             type: 'ul',
             items: [
-                "**Time.** 60 build minutes a month per GitHub account, counted while your runner is up: from a build's first step until a minute after its last, so the steps of one build share a warm runner. They come back on the 1st (UTC); `crossbind usage` shows them by image.",
-                "**Shared caps.** Everyone's build time together is capped per day and per month. When your minutes or a shared cap run out, steps stop with a message saying so; `CROSSBIND_RUNNER=DOCKER_RUN` runs that build in the local Docker.",
-                "**Isolation.** Each account's runner of each image is a Firecracker microVM of its own, stopped and wiped a minute after its last step; the first step after a pause uploads its inputs again.",
+                "**Time.** 60 build minutes a month per GitHub account, counted from a build's first step until a minute after its last. They reset on the 1st (UTC); `crossbind usage` shows them by image.",
+                "**Shared caps.** Everyone's build time together is capped per day and per month. When your minutes or a cap run out, steps stop with a message; `CROSSBIND_RUNNER=DOCKER_RUN` builds in the local Docker instead.",
+                '**Isolation.** Each account gets a microVM of its own per image, stopped and wiped a minute after its last step.',
                 '**Network.** A cloud runner downloads from crates.io, ConanCenter and GitHub and reaches nothing else, so a Conan recipe whose sources live on another host, or a step that uploads, fails there.',
                 '**Versions.** The cloud runs the toolchain images of the current crossbind release; a crossbind that pins other images stops with `toolchain mismatch` until you upgrade.',
             ],
         },
         {
             type: 'p',
-            text: "The cloud keeps your GitHub id and name, when you signed in, your tokens' hashes and how long your runners were up - no email, and none of your sources once a runner stops. `crossbind logout` revokes this machine's token, `--all` every machine's, and `crossbind account delete --yes` deletes the account; see [Privacy](/privacy/).",
+            text: "The cloud keeps your GitHub id and name, when you signed in, your tokens' hashes and how long your runners were up: no email, and none of your sources once a runner stops. `crossbind logout` revokes this machine's token (`--all` every machine's), and `crossbind account delete --yes` deletes the account; see [Privacy](/privacy/).",
         },
 
         { type: 'h2', id: 'own-runner', text: 'A runner of your own' },
         {
             type: 'p',
-            text: 'A runner is the toolchain image your crossbind pins plus a small server that ships inside the CLI; no runner image is published. Start one in the local Docker to try it, or to build for other machines:',
+            text: 'A runner is the toolchain image your crossbind pins, plus a small server that ships inside the CLI. Start one in the local Docker to try it, or to build for other machines:',
         },
         {
             type: 'code',
@@ -72,35 +72,30 @@ crossbind build -p wasm`,
         },
         {
             type: 'p',
-            text: '`runner start` prints the three commands after it, with its token. It listens on `127.0.0.1`; `--host 0.0.0.0` opens it to other machines over plain HTTP, so keep it on a network you trust or put TLS in front of it, and `--port` moves it. `--role android`, `linux` or `windows` starts the other images on ports 8788 to 8790, and `runner delete` removes a runner again.',
+            text: '`runner start` prints the next three commands, with its token. It listens on `127.0.0.1`; `--host 0.0.0.0` opens it to other machines over plain HTTP, so keep it on a network you trust or put TLS in front of it. `--role android`, `linux` or `windows` starts the other images, on ports 8788 to 8790; `runner delete` removes a runner.',
         },
         {
             type: 'p',
-            text: 'To run one elsewhere, `crossbind runner init <platform>` writes a folder - the files below and a `runner/` folder with the server - and prints its deploy steps with a new token. The idle times below were measured in October 2026:',
+            text: 'To run one elsewhere, `crossbind runner init <platform>` writes a deploy folder and prints its steps with a new token:',
         },
         {
-            type: 'table',
-            head: ['Platform', 'Writes', 'Machine', 'When idle'],
-            rows: [
-                ['`fly` - Fly.io', '`Dockerfile`, `fly.toml`', 'one `performance-4x`, 16 GB', 'stops; woke in about 2 s'],
-                [
-                    '`cloudflare` - Cloudflare Containers',
-                    '`Dockerfile`, `wrangler.jsonc`, `src/worker.js`',
-                    '`standard-4`, or 1 to 4 vCPUs with `--vcpu`',
-                    'sleeps a minute after the last step; woke in about 2 s',
-                ],
-                ['`cloudrun` - Google Cloud Run', '`env.yaml`', '4 vCPU, 8 GiB, one instance', 'scales to zero; woke in 2.5 s'],
-                [
-                    '`azure` - Azure Container Apps',
-                    '`containerapp.yaml`',
-                    '4 vCPU, 8 GiB, one replica',
-                    'scales to zero about five minutes after the last request; the next request waited 33 s',
-                ],
+            type: 'entries',
+            items: [
+                { name: '`fly`: Fly.io', text: 'Writes `Dockerfile` and `fly.toml`. One `performance-4x` machine with 16 GB, stopped when idle.' },
+                {
+                    name: '`cloudflare`: Cloudflare Containers',
+                    text: 'Writes `Dockerfile`, `wrangler.jsonc` and `src/worker.js`. A `standard-4` container, or 1 to 4 vCPUs with `--vcpu`; it sleeps a minute after the last step.',
+                },
+                { name: '`cloudrun`: Google Cloud Run', text: 'Writes `env.yaml`. 4 vCPU and 8 GiB, one instance, scaled to zero when idle.' },
+                {
+                    name: '`azure`: Azure Container Apps',
+                    text: 'Writes `containerapp.yaml`. 4 vCPU and 8 GiB, one replica, scaled to zero about five minutes after the last request; it wakes slower than the others.',
+                },
             ],
         },
         {
             type: 'p',
-            text: 'Only the Cloudflare deploy needs the local Docker: `wrangler deploy` builds the image there. In the same measurements, a 4-vCPU runner on Fly, Cloud Run or Azure built zlib in 30-42 s and SQLite in 70-85 s. Fly, Cloud Run and Azure start a machine for any request, one without the token too, so keep the address private; the Cloudflare Worker refuses such a request before the container wakes.',
+            text: 'Only the Cloudflare deploy needs the local Docker: `wrangler deploy` builds the image there. Fly, Cloud Run and Azure start a machine for any request, even one without the token, so keep the address private; the Cloudflare Worker refuses such a request before the container wakes.',
         },
 
         { type: 'h2', id: 'choosing', text: 'How a build picks its runner' },
@@ -109,18 +104,17 @@ crossbind build -p wasm`,
             text: '`RUNNER` in `~/.crossbind.json` decides where every toolchain step runs, and the `CROSSBIND_RUNNER` environment variable overrides it for one shell or CI job. `crossbind.config.js` has no runner setting; a project that should always build remotely sets the variables in the script that runs the build.',
         },
         {
-            type: 'table',
-            head: ['RUNNER', 'Steps run'],
-            rows: [
-                ['`DOCKER_RUN`', 'the default: a fresh container of the pinned image for each step'],
-                ['`DOCKER_EXEC`', 'in the long-lived container `crossbind docker create` made'],
-                ['`LOCAL`', 'with the toolchain installed on the machine'],
-                ['`REMOTE`', "on a runner: the image's own address, else the shared one; with no address named at all, crossbind cloud"],
+            type: 'entries',
+            items: [
+                { name: '`DOCKER_RUN`', text: 'The default: a fresh container of the pinned image for each step.' },
+                { name: '`DOCKER_EXEC`', text: 'In the long-lived container `crossbind docker create` made.' },
+                { name: '`LOCAL`', text: 'With the toolchain installed on the machine.' },
+                { name: '`REMOTE`', text: "On a runner: the image's own address, else the shared one; with no address set at all, crossbind cloud." },
             ],
         },
         {
             type: 'p',
-            text: 'Under `REMOTE` each toolchain image has its own address. Addresses are keys of `~/.crossbind.json`, each overridden by the environment variable of the same name with a `CROSSBIND_` prefix (`CROSSBIND_REMOTE_URL_WEB`). Tokens are secrets and never live in the file: each comes only from the variable paired with its address, so a shared token never reaches the runner of another image.',
+            text: 'Under `REMOTE` each toolchain image has its own address: a key of `~/.crossbind.json`, overridden by the environment variable of the same name with a `CROSSBIND_` prefix (`CROSSBIND_REMOTE_URL_WEB`). Tokens are secrets and never live in the file: each comes only from the variable paired with its address, so one image\'s token never reaches another image\'s runner.',
         },
         {
             type: 'table',
@@ -136,8 +130,7 @@ crossbind build -p wasm`,
         {
             type: 'ul',
             items: [
-                'A step whose image has no address stops before anything is sent and names the setting that would give it one: `crossbind: RUNNER=REMOTE, but the web image has no runner address - set REMOTE_URL_WEB (or REMOTE_URL), or build with CROSSBIND_RUNNER=DOCKER_RUN. A machine that names no runner address builds on crossbind cloud after crossbind login.` It never falls back to the local Docker or to the cloud.',
-                'A step whose address comes without its token stops before anything travels and names the variable to set; an address that is not http or https stops the build.',
+                'A step whose image has no address stops before anything is sent; it never falls back to the local Docker or to the cloud.',
                 'A desktop build takes its bridges from the web image, so `-p linux` needs a web runner and a linux runner.',
                 'Once per image, the build prints which runner its steps go to and which settings chose it.',
             ],
@@ -160,9 +153,9 @@ crossbind build -p wasm`,
         {
             type: 'ul',
             items: [
-                "**Up:** the folders the step reads below `paths.base` - native sources and headers, the `.crossbind` cache, the output folder, the dependencies' prebuilt and header folders, crossbind's assets, and any file the command line names. JavaScript and TypeScript files, `.env` and `.env.*`, `.npmrc`, `.yarnrc`, `.yarnrc.yml`, `.netrc`, `node_modules` and `.git` stay behind.",
-                '**Once:** the runner keeps every file under its SHA-256 and asks only for what it lacks, so an unchanged file never travels twice. A large file goes in 16 MB parts, and an upload cut off resumes from the parts the runner holds.',
-                '**Down:** what the step created or changed in the cache and output folders, checked against its hash; files the step deleted are deleted locally too. Cargo `target` folders stay on the runner, and only the release static libraries come back.',
+                "**Up:** the folders the step reads under `paths.base`: native sources and headers, the `.crossbind` cache, the output folder, the dependencies' prebuilt and header folders, crossbind's assets, and any file the command line names. JavaScript and TypeScript files, `.env` and `.env.*`, `.npmrc`, `.yarnrc`, `.yarnrc.yml`, `.netrc`, `node_modules` and `.git` never leave.",
+                '**Once:** the runner keeps files by their hash and asks only for what it lacks, so an unchanged file never travels twice, and a cut-off upload resumes.',
+                '**Down:** what the step created or changed in the cache and output folders, checked by hash; files it deleted are deleted locally too. Cargo `target` folders stay on the runner; only the release static libraries come back.',
             ],
         },
 
@@ -170,16 +163,16 @@ crossbind build -p wasm`,
         {
             type: 'ul',
             items: [
-                'A runner serves the image digest of the crossbind that started or generated it. A build that pins another stops with `toolchain mismatch: runner has <image>, build pins <image>`; after upgrading crossbind, run `runner delete` and `runner start` again, or rerun `runner init` and redeploy.',
+                'A runner serves the toolchain of the crossbind that started or generated it. After upgrading crossbind, run `runner delete` and `runner start` again, or rerun `runner init` and redeploy; until then builds stop with `toolchain mismatch`.',
                 'A runner runs any command a token holder sends, with internet access, and keeps what earlier builds left: treat the token like a deploy key, and restart the runner after building something you do not trust.',
-                'The runner refuses to start with a token shorter than 16 characters and checks it in constant time. The client follows no redirect and warns when an address is plain http to another machine.',
+                'A runner token has at least 16 characters. The client follows no redirect and warns when an address is plain http to another machine.',
                 'A runner runs one step at a time, so concurrent builds queue. Its disk is a cache: a container started fresh takes its inputs again.',
-                "C and C++ outputs match a local build byte for byte. Rust archives built on an amd64 runner differ in bytes from ones built on arm64, because a crate's metadata hash includes the machine that compiled it.",
+                "C and C++ outputs match a local build byte for byte. Rust archives built on an amd64 runner differ from ones built on arm64: a crate's metadata hash includes the machine that compiled it.",
             ],
         },
         {
             type: 'p',
-            text: `[remote-runner.md](${REPO_URL}/blob/main/docs/api/remote-runner.md) has the protocol, the per-platform details and every limit.`,
+            text: `Full reference, with the protocol: [remote-runner.md](${REPO_URL}/blob/main/docs/api/remote-runner.md).`,
         },
     ],
 };

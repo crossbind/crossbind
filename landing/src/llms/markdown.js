@@ -46,6 +46,13 @@ function table({ head, rows }, resolveLink) {
     return [line(head), `| ${head.map(() => '---').join(' | ')} |`, ...rows.map(line)].join('\n');
 }
 
+function entries({ items }, resolveLink) {
+    return items.map(({ name, type, text, default: fallback }) => [
+        `- ${links(name, resolveLink)}${type ? ` (\`${type}\`)` : ''}: ${links(text, resolveLink)}`,
+        ...(fallback ? [`  Default: ${links(fallback, resolveLink)}`] : []),
+    ].join('\n')).join('\n');
+}
+
 const list = (items, ordered, resolveLink) => items
     .map((item, i) => `${ordered ? `${i + 1}.` : '-'} ${links(item, resolveLink)}`)
     .join('\n');
@@ -87,6 +94,7 @@ const RENDERERS = {
     code: (block) => fence(block.code, block.file),
     callout,
     table,
+    entries,
     release: (block) => release(block.release),
     example,
     // Markdown has no tabs: each panel becomes a heading of its own.

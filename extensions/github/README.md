@@ -2,7 +2,7 @@
 
 Puts a desktop app's installers and update on a GitHub release.
 
-An app has it by having `@crossbind/core-app-host`, which lists it as a dependency: there is nothing to install or list.
+It comes with `@crossbind/core-app-host`: there is nothing to install or list.
 
 ## Use
 

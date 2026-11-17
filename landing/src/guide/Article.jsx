@@ -128,6 +128,38 @@ function Table({ tokens, head, rows }) {
     );
 }
 
+// A name and what it does, one under the other, at the full width of the page: a table's cells left
+// a long description a narrow column. A name's code drops its chip, as the line is the name.
+const NAME_CODE = { background: 'none', border: 0, padding: 0 };
+
+function Entries({ tokens, items }) {
+    return (
+        <dl style={{ margin: '16px 0 28px', borderTop: `1px solid ${tokens.borderStrong}` }}>
+            {items.map((item, i) => (
+                <div key={`${i}-${item.name}`} style={{ padding: '13px 0 14px', borderBottom: `1px solid ${tokens.border}` }}>
+                    <dt style={{ marginBottom: 5, fontSize: 14.5, fontWeight: 600, lineHeight: 1.55, color: tokens.text }}>
+                        {inline(item.name, tokens, NAME_CODE)}
+                        {item.type && (
+                            <span style={{ marginLeft: 10, fontFamily: tokens.mono, fontSize: 12.5, fontWeight: 400, color: tokens.textMuted }}>
+                                {item.type}
+                            </span>
+                        )}
+                    </dt>
+                    <dd style={{ margin: 0, fontSize: 14.5, lineHeight: 1.7, color: tokens.textDim }}>{inline(item.text, tokens)}</dd>
+                    {item.default && (
+                        <dd style={{ margin: '3px 0 0', fontSize: 13.5, lineHeight: 1.6, color: tokens.textDim }}>
+                            <span style={{ marginRight: 8, fontFamily: tokens.mono, fontSize: 11.5, letterSpacing: 0.3, color: tokens.textMuted }}>
+                                Default
+                            </span>
+                            {inline(item.default, tokens)}
+                        </dd>
+                    )}
+                </div>
+            ))}
+        </dl>
+    );
+}
+
 // Platform by platform: every panel is in the markup, so a reader without JavaScript and a crawler
 // see all of them; the buttons only choose which one is visible.
 function Tabs({ tokens, tabs }) {
@@ -188,6 +220,8 @@ export default function Article({ tokens, blocks }) {
                 return <Callout key={key} tokens={tokens} tone={block.tone} title={block.title} text={block.text} />;
             case 'table':
                 return <Table key={key} tokens={tokens} head={block.head} rows={block.rows} />;
+            case 'entries':
+                return <Entries key={key} tokens={tokens} items={block.items} />;
             case 'release':
                 return <ReleaseMeta key={key} tokens={tokens} release={block.release} />;
             case 'example':

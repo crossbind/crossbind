@@ -2,7 +2,7 @@
 
 A Debian package for Linux, whose dependencies bring WebKitGTK.
 
-An app has it by having `@crossbind/core-app-host`, which lists it as a dependency: there is nothing to install or list.
+It comes with `@crossbind/core-app-host`: there is nothing to install or list.
 
 ## Use
 
@@ -10,8 +10,8 @@ An app has it by having `@crossbind/core-app-host`, which lists it as a dependen
 npx crossbind app build -p linux
 ```
 
-A Linux build writes a `.deb` named after the app beside its folder, which `dpkg-deb` makes in crossbind's linux image. Its
-dependencies bring the WebKitGTK and GTK the app runs on, and those its extensions list.
+A Linux build writes a `.deb` named after the app beside its folder. Its dependencies bring the WebKitGTK and GTK the
+app runs on, and whatever its extensions list.
 
 ## Platforms
 

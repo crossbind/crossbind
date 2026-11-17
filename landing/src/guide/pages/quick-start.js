@@ -14,7 +14,7 @@ export default {
     slug: 'quick-start',
     title: 'Quick start',
     description: 'Prerequisites, a new project or an existing one, and your first call into C++.',
-    lede: `Two paths lead to the same place: scaffold a fresh project, or add ${BRAND} to an app you already have. Either way you end up with a bundler plugin, a \`crossbind.config.js\`, and a header you can import from JavaScript.`,
+    lede: `Scaffold a new project, or add ${BRAND} to an app you already have. Either way you end up with a bundler plugin, a \`crossbind.config.js\` and a header you import from JavaScript.`,
     blocks: [
         {
             type: 'callout',
@@ -24,17 +24,17 @@ export default {
         { type: 'h2', id: 'prerequisites', text: 'Prerequisites' },
         {
             type: 'p',
-            text: `The web, WASI and Android toolchains ship as Docker images, so ${BRAND} needs very little installed on your machine:`,
+            text: 'The toolchains come as Docker images, so you need little on your machine:',
         },
         {
             type: 'ul',
             items: [
-                '**Docker** - runs the `web` image for WebAssembly and WASI and the `android` image for Android. Both are pulled automatically on the first build. Without Docker, [Remote builds](/guide/remote-builds/) run the images on another machine.',
+                '**Docker**, for the WebAssembly, WASI and Android toolchains. The first build pulls the images. Without Docker, [Remote builds](/guide/remote-builds/) run them on another machine.',
                 '**Node.js 24+**.',
-                '**CMake 3.28+** - mobile only.',
-                '**Xcode** and **CocoaPods** - iOS only, macOS only.',
-                '**A Rust toolchain** (`cargo` plus the platform targets) - only to bind Rust for iOS or macOS, or with `RUNNER=LOCAL`; other builds run cargo in the image. See [Rust](/guide/rust/).',
-                '**wasmtime** - only to run `platform: \'wasi\'` output and the prebuilt `-standalone-wasi` tools.',
+                '**CMake 3.28+**, for mobile only.',
+                '**Xcode** and **CocoaPods**, for iOS only, on a Mac. Xcode must find Node.js; see [React Native](/guide/react-native/#ios).',
+                '**A Rust toolchain** (`cargo` and the platform targets), only for Rust on iOS or macOS, or with `RUNNER=LOCAL`. Other builds run cargo in the image. See [Rust](/guide/rust/).',
+                '**wasmtime**, only to run WASI output and the prebuilt `-standalone-wasi` tools.',
             ],
         },
         {
@@ -44,17 +44,11 @@ export default {
 node --version
 docker pull ${WEB_IMAGE}   # optional: the first build pulls it anyway`,
         },
-        {
-            type: 'callout',
-            tone: 'warn',
-            title: 'iOS',
-            text: 'Xcode looks for Node.js in the system environment. If it is not there, link it once: `ln -s $(which node) /usr/local/bin/node`.',
-        },
 
         { type: 'h2', id: 'ai', text: 'Set it up with a coding agent' },
         {
             type: 'p',
-            text: `Using Claude Code, Codex, Cursor, Copilot or similar? Paste this line into it: the agent installs the ${BRAND} skill, adds ${BRAND} to the project and checks one call from JavaScript, following [these instructions](${AGENT_PROMPT_PATH}).`,
+            text: `Using a coding agent such as Claude Code, Codex, Cursor or Copilot? Paste this line into it. The agent installs the ${BRAND} skill, adds ${BRAND} to the project and checks one call from JavaScript, following [these instructions](${AGENT_PROMPT_PATH}).`,
         },
         { type: 'code', file: 'prompt', code: SETUP_LINE },
         { type: 'p', text: 'Prefer to do it yourself? Keep going.' },
@@ -62,7 +56,7 @@ docker pull ${WEB_IMAGE}   # optional: the first build pulls it anyway`,
         { type: 'h2', id: 'new-project', text: 'A new project' },
         {
             type: 'p',
-            text: 'The scaffolder wires the bundler, its plugin and a starter `crossbind.config.js` for you. Answer the prompts - if you are unsure, pick Web, React and Vite. For a desktop or mobile app of your own, pick Desktop and App, then follow [Apps](/guide/apps/).',
+            text: 'The scaffolder sets up the bundler, its plugin and a starter `crossbind.config.js`. Answer the prompts; if unsure, pick Web, React and Vite. For a desktop or mobile app, pick Desktop and App, then follow [Apps](/guide/apps/).',
         },
         { type: 'code', file: 'shell', code: CREATE_COMMAND },
         {
@@ -76,12 +70,12 @@ docker pull ${WEB_IMAGE}   # optional: the first build pulls it anyway`,
         },
         {
             type: 'p',
-            text: 'Every prompt can be preselected positionally, which is how CI and scripted setups create a project:',
+            text: 'Arguments answer the prompts in order, for CI and scripts:',
         },
         { type: 'code', file: 'shell', code: `${CREATE_COMMAND} my-app Web React Vite` },
         {
             type: 'p',
-            text: 'Then install and start the dev server - and skip to [your first call](#first-call).',
+            text: 'Then install, start the dev server, and skip to [your first call](#first-call).',
         },
         {
             type: 'code',
@@ -94,17 +88,17 @@ npm run dev`,
         { type: 'h2', id: 'existing-project', text: 'An existing project' },
         {
             type: 'p',
-            text: 'Already have an app? Install the plugin for your bundler and register it. Vite is shown here; Webpack, Rspack and Rollup follow the same shape on the [Bundler plugins](/guide/bundler-plugins/) page, Metro on [React Native](/guide/react-native/#metro).',
+            text: 'Install the plugin for your bundler and register it. Vite is shown here; Webpack, Rspack and Rollup are on [Bundler plugins](/guide/bundler-plugins/), Metro on [React Native](/guide/react-native/#metro).',
         },
         { type: 'code', file: 'shell', code: installCommand('@crossbind/plugin-vite') },
         {
             type: 'callout',
             tone: 'note',
             title: 'Versions on this page',
-            text: `${RELEASE.distTagSuffix ? `Every install command here follows the npm \`${RELEASE.distTag}\` tag` : 'Every install command here follows the default npm tag'}. `
-                + `When this page was built it resolved to \`${BRAND}@${RELEASE.version}\` ([changelog](${changelogHref(RELEASE.version)})), `
-                + `\`@crossbind/plugin-vite@${PLUGIN.version}\` (which requires \`${BRAND} ${PLUGIN.crossbindRange}\`) and \`create-crossbind@${CREATOR.version}\`. `
-                + 'Each package keeps its own version; for a setup you can reproduce later, pin those exact ones:',
+            text: `${RELEASE.distTagSuffix ? `Install commands here follow the npm \`${RELEASE.distTag}\` tag` : 'Install commands here follow the default npm tag'}. `
+                + `When this page was built, that meant \`${BRAND}@${RELEASE.version}\` ([changelog](${changelogHref(RELEASE.version)})), `
+                + `\`@crossbind/plugin-vite@${PLUGIN.version}\` (for \`${BRAND} ${PLUGIN.crossbindRange}\`) and \`create-crossbind@${CREATOR.version}\`. `
+                + 'To set up the same versions later, pin them:',
         },
         {
             type: 'code',
@@ -123,7 +117,7 @@ export default defineConfig({
         },
         {
             type: 'p',
-            text: 'The plugin reads a `crossbind.config.js` from your project root. The minimal one is two lines - `paths.config` anchors every other path to this file, so it is never optional:',
+            text: 'The plugin reads `crossbind.config.js` from your project root. The minimal one sets `paths.config`, which every other path resolves from:',
         },
         {
             type: 'code',
@@ -136,13 +130,13 @@ export default defineConfig({
         },
         {
             type: 'p',
-            text: 'Everything else this file can carry is in [Configuration](/guide/configuration/).',
+            text: 'Everything else it takes: [Configuration](/guide/configuration/).',
         },
 
         { type: 'h2', id: 'first-call', text: 'Your first call' },
         {
             type: 'p',
-            text: 'C++ lives under `src/native`. Declare the class in a header - the public surface has to be in the header, because that is what the binder reads.',
+            text: 'C++ lives in `src/native`. Declare the class in a header: the binder reads only headers.',
         },
         {
             type: 'code',
@@ -159,7 +153,7 @@ public:
         },
         {
             type: 'p',
-            text: 'Now import that header from your app code and call it. `initNative()` is exported by the header module itself; one call boots every native module you imported. In a browser the module runs in a Web Worker by default, so each call returns a promise.',
+            text: 'Import the header from your app and call it. The header module exports `initNative()`; one call starts every native module you imported. In a browser the module runs in a Web Worker by default, so each call returns a promise.',
         },
         {
             type: 'code',
@@ -173,13 +167,13 @@ console.log(await MySampleClass.sample());`,
             type: 'callout',
             tone: 'note',
             title: 'First build',
-            text: 'The first `npm run dev` compiles the wasm inside Docker and can take a while. After that the cache makes rebuilds incremental, and editing the header hot-reloads the page.',
+            text: 'The first `npm run dev` compiles in Docker and takes a while. Later builds reuse the cache, and editing the header reloads the page.',
         },
 
         { type: 'h2', id: 'build', text: 'Build for production' },
         {
             type: 'p',
-            text: 'Nothing special: your bundler build triggers the release compile through the plugin.',
+            text: "Your bundler's build compiles a release build through the plugin.",
         },
         { type: 'code', file: 'shell', code: 'npm run build' },
         {
@@ -191,10 +185,10 @@ console.log(await MySampleClass.sample());`,
         {
             type: 'ul',
             items: [
-                '[C++](/guide/bindings/) - what the auto-binder accepts, and the C++ ↔ JS type table.',
-                '[crossbind ports](/guide/libraries/) - use a prebuilt library instead of compiling one.',
-                '[Files](/guide/filesystem/) - where files live in the browser, Node and on edge.',
-                '[Troubleshooting](/guide/troubleshooting/) - when the first build does not go to plan.',
+                '[C++](/guide/bindings/): what binds, and the C++ and JavaScript types.',
+                '[crossbind ports](/guide/libraries/): use a prebuilt library instead of compiling one.',
+                '[Files](/guide/filesystem/): where files live in the browser, in Node.js and on the edge.',
+                '[Troubleshooting](/guide/troubleshooting/): when the first build fails.',
             ],
         },
     ],

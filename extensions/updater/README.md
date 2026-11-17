@@ -2,7 +2,7 @@
 
 A desktop app's own updates, each checked against its Ed25519 signature.
 
-An app has it by having `@crossbind/core-app-host`, which lists it as a dependency: there is nothing to install or list.
+It comes with `@crossbind/core-app-host`: there is nothing to install or list.
 
 ## Use
 
@@ -24,11 +24,11 @@ public key that checks it. `npx crossbind app updater-key` makes the key pair; a
 
 ## Platforms
 
-macOS, Linux and Windows. A Linux app updates itself from what `tar-gz` makes, and a Windows app from what `nsis` makes. An iOS or Android app updates through its store, and a Windows app installed from its MSIX package as Windows installs a newer package: `updater.check()` rejects there.
+macOS, Linux and Windows. A Linux app updates itself from what `tar-gz` makes, and a Windows app from what `nsis` makes. An iOS or Android app updates through its store, and a Windows app installed from its MSIX package through Windows: `updater.check()` rejects there.
 
 ## Replace or leave out
 
-It holds the role `updater`. An extension that gives `replaces: 'updater'` takes it; `app: { without: ['updater'] }` in `crossbind.config.js` leaves it out. Its update goes with it. Leaving it out while `app.updater` is set stops the build. [The guide](https://crossbind.dev/guide/extensions/#replace) shows how, and [extensions.md](https://github.com/crossbind/crossbind/blob/main/docs/api/extensions.md#the-hosts-own-extensions) what a replacement answers.
+It holds the role `updater`. An extension with `replaces: 'updater'` takes it; `app: { without: ['updater'] }` in `crossbind.config.js` leaves it out. Its update goes with it. Leaving it out while `app.updater` is set stops the build. [The guide](https://crossbind.dev/guide/extensions/#replace) shows how, and [extensions.md](https://github.com/crossbind/crossbind/blob/main/docs/api/extensions.md#the-hosts-own-extensions) what a replacement answers.
 
 [app.md](https://github.com/crossbind/crossbind/blob/main/docs/api/app.md#updates) has the manifest and where to put it.
 

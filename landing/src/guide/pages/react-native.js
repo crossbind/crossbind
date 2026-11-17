@@ -18,7 +18,7 @@ export default {
     slug: 'react-native',
     title: 'React Native',
     description: 'Call C++ from React Native and Expo apps over JSI: install, Metro, iOS, Android and Expo.',
-    lede: 'On Android and iOS your C++ compiles to native libraries inside the app\'s own Gradle and Xcode builds, and JavaScript calls them over JSI: no WebAssembly and no `SharedArrayBuffer`. You import a header from a component, as on the web, and call it after `initNative()`.',
+    lede: 'On Android and iOS your C++ compiles to native libraries inside the app\'s Gradle and Xcode builds, and JavaScript calls them over JSI, with no WebAssembly. You import a header from a component, as on the web, and call it after `initNative()`.',
     blocks: [
         { type: 'h2', id: 'setup', text: 'Set up' },
         {
@@ -35,7 +35,7 @@ npm install --save-dev @crossbind/plugin-metro${tag}`,
         },
         {
             type: 'p',
-            text: 'Android builds need Docker, or a [remote runner](/guide/remote-builds/), to generate their bridges; on a Mac, an iOS build generates them with `@crossbind/bridge-tools`, which npm installs with crossbind there. Both need the mobile tools in [Prerequisites](/guide/quick-start/#prerequisites). Add a `crossbind.config.mjs` at the project root; a port joins with its `-android` and `-ios` packages, both installed and listed:',
+            text: 'Android builds need Docker or a [remote runner](/guide/remote-builds/); iOS builds run on the Mac. Both need the mobile tools in [Prerequisites](/guide/quick-start/#prerequisites). Add a `crossbind.config.mjs` at the project root; a port needs its `-android` and `-ios` packages, both installed and listed:',
         },
         {
             type: 'code',
@@ -50,7 +50,7 @@ export default {
         },
         {
             type: 'p',
-            text: 'Your own C++ goes under `src/native`. Import its header from a component and call it once `initNative()` resolves; here `Native` is a class declared in `src/native/native.h`:',
+            text: 'Your C++ goes in `src/native`. Import its header from a component and call it once `initNative()` resolves (`Native` is a class in `src/native/native.h`):',
         },
         {
             type: 'code',
@@ -98,7 +98,7 @@ npm run ios`,
         },
         {
             type: 'p',
-            text: '`pod install` compiles your C++ and its bridges into the xcframework of the `react-native-crossbind` pod, and a `crossbind` build phase rebuilds what changed before every Xcode build. Each port arrives as a prebuilt pod of its own. Run `pod install` again when `packages.conan` changes.',
+            text: '`pod install` compiles your C++ into the `react-native-crossbind` pod, and a `crossbind` build phase rebuilds what changed before every Xcode build. Run `pod install` again when `packages.conan` changes.',
         },
         {
             type: 'callout',
@@ -110,7 +110,7 @@ npm run ios`,
         { type: 'h2', id: 'android', text: 'Android' },
         {
             type: 'p',
-            text: 'There is no separate step: `npm run android` starts Gradle, whose crossbind tasks write the bridges and stage the ports\' data files before `preBuild`, and whose CMake build compiles your C++ for each ABI.',
+            text: 'There is no separate step: `npm run android` builds the bridges and your C++ inside Gradle.',
         },
         { type: 'code', file: 'shell', code: 'npm run android' },
         {
@@ -125,7 +125,7 @@ npm run ios`,
         { type: 'h2', id: 'expo', text: 'Expo' },
         {
             type: 'p',
-            text: 'Expo Go ships a fixed native binary and cannot load your C++, so the app needs native projects of its own, which `expo prebuild` generates. Install the same packages as above, and add the config plugin to `app.json` before prebuilding:',
+            text: 'Expo Go cannot load your C++, so the app needs native projects of its own, which `expo prebuild` generates. Install the same packages as above and add the config plugin to `app.json` before prebuilding:',
         },
         {
             type: 'code',
@@ -138,7 +138,7 @@ npm run ios`,
         },
         {
             type: 'p',
-            text: 'During prebuild it drops the x86_64 simulator architecture from every pod and the app target, raises any pod below iOS 15.1 to 15.1, and adopts the UIScene lifecycle iOS 27 requires, unless the app already declares a scene manifest. Wrap Expo\'s own Metro config rather than `@react-native/metro-config`; `expo/metro-config` exports no `mergeConfig`, so install `metro-config` as a dev dependency too (`npm install --save-dev metro-config`):',
+            text: 'During prebuild the plugin sets up the iOS project for crossbind: arm64 simulators only, iOS 15.1 at least, and the UIScene lifecycle iOS 27 requires. Wrap Expo\'s own Metro config; it exports no `mergeConfig`, so also install `metro-config` as a dev dependency (`npm install --save-dev metro-config`):',
         },
         {
             type: 'code',
@@ -155,7 +155,7 @@ npx expo run:android`,
         },
         {
             type: 'p',
-            text: 'The web build compiles the same imports to WebAssembly: the browser build, single-threaded unless `target.runtime` is `\'mt\'`, which then needs COOP/COEP headers from the host. Metro resolves imports against the files it found at startup, so stage the web dependencies first; an export also needs the wasm linked in after Expo bundles:',
+            text: 'Expo\'s web build compiles the same imports to WebAssembly, single-threaded unless `target.runtime` is `\'mt\'`, which needs COOP/COEP headers from the host. Stage the web dependencies before Metro starts, and link the wasm in after an export:',
         },
         {
             type: 'code',
@@ -167,11 +167,11 @@ npx crossbind-metro prepare-web && npx expo export -p web --clear && npx crossbi
         { type: 'h2', id: 'threads-files', text: 'Threads and files' },
         {
             type: 'p',
-            text: 'Android and iOS builds are always multithreaded: C++ threads are the device\'s own, with no `SharedArrayBuffer` or COOP/COEP headers involved, and `useWorker` does not apply. `target.runtime` changes only the Expo web build; [Threads and workers](/guide/threading/) covers that side.',
+            text: 'Android and iOS builds are always multithreaded with the device\'s own threads: no headers are needed, and `useWorker` does not apply. `target.runtime` changes only the Expo web build.',
         },
         {
             type: 'p',
-            text: 'C++ opens real files in the app\'s sandbox, so there are no `/opfs` or `/memfs` mounts: give it paths your app already uses. [Files](/guide/filesystem/) covers the other platforms.',
+            text: 'C++ opens real files in the app\'s sandbox; there are no `/opfs` or `/memfs` mounts.',
         },
 
         { type: 'h2', id: 'release', text: 'Release builds' },
@@ -189,9 +189,9 @@ npx expo run:android --variant release`,
         {
             type: 'ul',
             items: [
-                'React Native 0.81 or newer: the bindings keep JavaScript callbacks in JSI runtime data, which 0.81 added.',
+                'React Native 0.81 or newer.',
                 'iOS simulator builds are arm64 only, so they need an Apple silicon Mac.',
-                'A port\'s header binds only the functions the app imports. Metro sees a new import as soon as the file is saved, but the app has the function only after its next native build; until then the call fails with `... is not bound in the native module`.',
+                'A function newly imported from a port\'s header works only after the next native build; until then the call fails with `... is not bound in the native module`.',
             ],
         },
 

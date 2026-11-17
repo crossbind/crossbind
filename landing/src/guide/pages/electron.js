@@ -71,13 +71,13 @@ contextBridge.exposeInMainWorld('native', {
         },
         {
             type: 'p',
-            text: 'Nothing is rebuilt per Electron version. Node-API is ABI-stable, so the addon Node.js loads also loads in Electron, and `electron-rebuild` has nothing to do; a Windows addon looks Node-API up in the process that loads it, so `node.exe` and `electron.exe` load the same file. Values cross the boundary already converted, so JavaScript never holds an `ArrayBuffer` over native memory, which Electron\'s V8 memory cage refuses.',
+            text: 'Nothing is rebuilt per Electron version: Node-API is ABI-stable, so the same addon loads in Node.js and in Electron, on Windows too, and `electron-rebuild` is not needed.',
         },
 
         { type: 'h2', id: 'packaging', text: 'Packaging' },
         {
             type: 'p',
-            text: 'A packaged app keeps crossbind\'s output outside its asar archive. Electron loads an addon from there as it is, and a library\'s native code reads its data, such as `proj.db`, with file APIs that cannot open a file inside the archive; in a packaged app the loader reads the data from `app.asar.unpacked`. With electron-builder:',
+            text: 'Keep crossbind\'s output outside the asar archive: a library\'s native code reads its data, such as `proj.db`, with file APIs that cannot open a file inside the archive. With electron-builder:',
         },
         {
             type: 'code',
@@ -93,7 +93,7 @@ asarUnpack:
         },
         {
             type: 'p',
-            text: '`directories.output` moves electron-builder\'s own output out of `dist`, its default, where crossbind writes; `dist/prebuilt` holds the static archives the addon was linked from, which the app does not need. `electron-builder --dir` writes the app to `out/`, and `electron-builder` alone makes the installers. Package each platform with its addons in `dist`: the loader picks the one for the machine it runs on.',
+            text: '`directories.output` moves electron-builder\'s output out of `dist`, where crossbind writes, and `dist/prebuilt` (the static archives the addon was linked from) stays out of the app. Package each platform with its addons in `dist`; the loader picks the one for the machine.',
         },
         {
             type: 'p',
@@ -110,7 +110,7 @@ asarUnpack:
         },
         {
             type: 'p',
-            text: `[examples/desktop-electron](${REPO_URL}/tree/main/examples/desktop-electron) is a complete app: the addon in the main process, the preload, electron-builder packaging and a Playwright test that opens the app from its sources and packaged. CI runs it with Electron 44 on macOS, Linux and Windows.`,
+            text: `[examples/desktop-electron](${REPO_URL}/tree/main/examples/desktop-electron) is a complete app with electron-builder packaging, and a test that CI runs on macOS, Linux and Windows.`,
         },
     ],
 };

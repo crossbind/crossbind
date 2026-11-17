@@ -3,7 +3,7 @@
 A Windows app's MSIX package: for the Microsoft Store, which signs, hosts and updates it, or handed out, signed with the
 app's key.
 
-An app has it by having `@crossbind/core-app-host`, which lists it as a dependency: there is nothing to install or list.
+It comes with `@crossbind/core-app-host`: there is nothing to install or list.
 
 ## Use
 
@@ -26,14 +26,14 @@ npx crossbind app build -p windows
 A Windows build then writes an `.msix` named after the app and its architecture beside the app's folder, unsigned,
 which Partner Center takes and the Store signs.
 
-A package handed out instead, where `app.installers` names `msix` and `app.windows.msix` is not set, takes the app's id
-as its name and its publisher from the certificate of the key that signs the app, `CROSSBIND_WINDOWS_SIGNING_*`, with
-which the build signs it. Windows installs it where that certificate is trusted.
+A package to hand out instead, with `msix` in `app.installers` and no `app.windows.msix`, takes the app's id as its name
+and its publisher from the certificate of the app's signing key (`CROSSBIND_WINDOWS_SIGNING_*`), which signs it too.
+Windows installs it where that certificate is trusted.
 
-- The version is package.json's as `1.2.3.0`. A prerelease, as `1.2.3-beta.1`, stops the build, as the Store cannot
-  tell it from its release.
+- The version is `package.json`'s, as `1.2.3.0`. A prerelease such as `1.2.3-beta.1` stops the build, as the Store
+  cannot tell it from the release.
 - The logos come from `app.icon`, and the URL schemes and file types from `app.urlSchemes` and `app.fileTypes`. The app
-  opens by its executable's name, an alias, too.
+  also opens by its executable's name, as an alias.
 - An app from its package does not update itself: `updater.check()` rejects there, and the Store, or a newer package,
   updates it.
 

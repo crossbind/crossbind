@@ -8,7 +8,7 @@
 Are you on the browser?
 ├── No (Node.js)
 │   └── m.FS reads/writes the host filesystem via fs-node adapter.
-│       No /opfs vs /memfs distinction; paths are real filesystem paths.
+│       Paths are real filesystem paths, except /memfs, which lives in memory.
 │
 ├── No (Cloudflare Worker / Deno Deploy / Vercel Edge)
 │   └── m.FS is in-memory only.
@@ -120,7 +120,7 @@ imgEl.src = url
 |---------|-------------|-------------|--------------|-------|
 | Browser (no worker) | n/a | ❌ throws | ✅ | Tab-session memory only |
 | Browser + `useWorker: true` | ✅ | ✅ if browser supports OPFS, else fallback to `/memfs/` | ✅ | Persistent option |
-| Node.js | n/a | n/a | n/a (uses host fs) | `m.FS` reads real disk via fs-node adapter; `fsync` on a host file returns once the OS has the data, without forcing it to disk |
+| Node.js | n/a | n/a | ✅ in memory; every other path is the host disk | `m.FS` reads real disk via fs-node adapter; `fsync` on a host file returns once the OS has the data, without forcing it to disk |
 | Cloudflare Worker / edge | ❌ unavailable | ❌ unavailable | ✅ in-memory equivalent | No persistence; per-invocation memory |
 | React Native (CLI / Expo) | n/a (uses JSI bridge) | n/a | n/a | App's sandbox storage via React Native APIs |
 

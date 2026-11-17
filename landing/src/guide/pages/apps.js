@@ -14,14 +14,14 @@ export const extensionBlocks = (extensions) => {
         { type: 'h2', id: 'extensions', text: 'Extensions' },
         {
             type: 'p',
-            text: "An extension gives the page more of the app's functions, from a package of its own: `crossbind add <package>` installs one with the project's package manager and lists it in `crossbind.config.js`, and the app's host builds its native code in.",
+            text: "An extension is a package that gives the page more of the app's functions. `crossbind add <package>` installs one and lists it in `crossbind.config.js`; the app's host builds its native code in.",
         },
         ...(published.length > 0
             ? [{ type: 'ul', items: published.map((extension) => `[${extension.name}](https://www.npmjs.com/package/${extension.name}): ${extension.summary}`) }]
             : []),
         {
             type: 'p',
-            text: `Every extension carries the npm keyword [crossbind-extension](${NPM_KEYWORD_SEARCH}), crossbind's own as well, and crossbind has not reviewed the ones others publish. \`${CREATE_COMMAND} -- my-extension Extension\` starts one of your own, and [extensions.md](${REPO_URL}/blob/main/docs/api/extensions.md) is the contract it is written to. [Extensions](/guide/extensions/) shows how to use and write one, and [the catalog](${EXTENSIONS_URL}) lists crossbind's own.`,
+            text: `Every extension carries the npm keyword [crossbind-extension](${NPM_KEYWORD_SEARCH}), crossbind's own as well, and crossbind has not reviewed the ones others publish. \`${CREATE_COMMAND} -- my-extension Extension\` starts one of your own. [Extensions](/guide/extensions/) shows how to use and write one, and [the catalog](${EXTENSIONS_URL}) lists crossbind's own.`,
         },
     ];
 };
@@ -64,36 +64,38 @@ document.querySelector('#result').textContent = await Native.sample();`,
         },
         {
             type: 'p',
-            text: 'Every call, `new` and property read returns a promise, as in a web build that runs its module in a [worker](/guide/threading/). An object stays in the app\'s process while the page holds a handle to it, which the garbage collector releases, and an error keeps its own fields, such as `code`.',
+            text: 'Every call, `new` and property read returns a promise, as in a browser [worker](/guide/threading/). An object lives in the app\'s process while the page holds its handle, and an error keeps its own fields, such as `code`.',
         },
 
         { type: 'h2', id: 'develop', text: 'Develop and build' },
         {
-            type: 'table',
-            head: ['Command', 'What it does'],
-            rows: [
-                [
-                    '`crossbind app dev`',
-                    "Opens this machine's app on Vite's dev server. An edit to the page reloads it; an edit to native code rebuilds the app and opens it again. The page's console shows in the terminal.",
-                ],
-                ['`crossbind app build`', 'Writes the app and what installs it: `dist/<name>.app` and its `.dmg` on macOS; a folder, its `.tar.gz` and its `.deb` on Linux.'],
-                ['`crossbind app build -p linux`', 'The Linux app for x64 and arm64, from a Mac as well.'],
-                ['`crossbind app build -p windows`', 'The Windows app for x64 and arm64, each with its `.zip` and `-setup.exe`, from a Mac or a Linux machine as well.'],
-                ['`crossbind app dev -p ios`', 'Opens the app in the iOS Simulator on the dev server.'],
-                ['`crossbind app dev -p ios --device`', "Opens the app on the iPhone or iPad connected, signed by Xcode for the app's team, a free Personal Team among them. The phone reaches the dev server through its cable."],
-                ['`crossbind app build -p ios`', "Writes the app's Xcode project, `dist/<name>-ios/`."],
-                ['`crossbind app dev -p android`', 'Installs the app on the attached Android device or emulator and opens it on the dev server.'],
-                ['`crossbind app build -p android`', "Writes the app's Gradle project and its release `.apk`, and an `.aab` with an upload key."],
+            type: 'entries',
+            items: [
+                {
+                    name: '`crossbind app dev`',
+                    text: "Opens this machine's app on Vite's dev server. Editing the page reloads it; editing native code rebuilds the app and opens it again. The page's console shows in the terminal.",
+                },
+                { name: '`crossbind app build`', text: 'Writes the app and what installs it: `dist/<name>.app` and its `.dmg` on macOS; a folder, its `.tar.gz` and its `.deb` on Linux.' },
+                { name: '`crossbind app build -p linux`', text: 'The Linux app for x64 and arm64, from a Mac too.' },
+                { name: '`crossbind app build -p windows`', text: 'The Windows app for x64 and arm64, each with its `.zip` and `-setup.exe`, from a Mac or Linux too.' },
+                { name: '`crossbind app dev -p ios`', text: 'Opens the app in the iOS Simulator on the dev server.' },
+                {
+                    name: '`crossbind app dev -p ios --device`',
+                    text: "Opens the app on the connected iPhone or iPad, signed by Xcode for the app's team (a free Personal Team works). The phone reaches the dev server through its cable.",
+                },
+                { name: '`crossbind app build -p ios`', text: "Writes the app's Xcode project, `dist/<name>-ios/`." },
+                { name: '`crossbind app dev -p android`', text: 'Installs the app on the attached Android device or emulator and opens it on the dev server.' },
+                { name: '`crossbind app build -p android`', text: "Writes the app's Gradle project and its release `.apk`, and an `.aab` with an upload key." },
             ],
         },
         {
             type: 'p',
-            text: 'The template runs each as an npm script: `npm run dev`, `npm run build:windows`, `npm run dev:android` and so on. macOS apps build with Xcode\'s command line tools, iOS apps with Xcode. Linux, Windows and Android apps build in crossbind\'s Docker images on this machine, with the default runner or `RUNNER=DOCKER_EXEC`; a [remote](/guide/remote-builds/) or local runner stops them.',
+            text: 'The template has an npm script for each: `npm run dev`, `npm run build:windows`, `npm run dev:android` and so on. macOS apps build with Xcode\'s command line tools, iOS apps with Xcode. Linux, Windows and Android apps build in crossbind\'s Docker images on this machine, under the default runner or `RUNNER=DOCKER_EXEC`; a [remote](/guide/remote-builds/) or local runner cannot build them.',
         },
 
         {
             type: 'p',
-            text: 'One project can be the web page as well. Leave `target.runtimeEnv` out of `crossbind.config.js` and list a WebAssembly build of each dependency: `crossbind app build` then makes the app and `vite build` the web page, whose code tells them apart by `import.meta.env.CROSSBIND_APP_PLATFORM`, undefined on the web.',
+            text: 'One project can also be a web page. Leave `target.runtimeEnv` out of `crossbind.config.js` and list a WebAssembly build of each dependency: `crossbind app build` then makes the app and `vite build` the web page. `import.meta.env.CROSSBIND_APP_PLATFORM` tells them apart; it is undefined on the web.',
         },
 
         { type: 'h2', id: 'functions', text: 'What the app does for the page' },
@@ -142,27 +144,33 @@ const { data, cache, logs } = await app.paths();`,
 };`,
         },
         {
-            type: 'table',
-            head: ['Key', 'What it does'],
-            rows: [
-                ['`name`', "the name the app shows: its window's title, its menus, the label under its icon; `general.name` without it"],
-                ['`id`', 'the bundle id on Apple platforms, the application id on Android; `dev.crossbind.<name>` without it'],
-                ['`icon`', "a square PNG, at best 1024 × 1024, made into each platform's icon"],
-                ['`window`', "the first desktop window's size and limits, `resizable`, `fullscreen` and `titleBar`, which lays a macOS page under its title bar's buttons, and every window's `backgroundColor`"],
-                ['`category`, `copyright`', 'the category macOS and Linux menus list the app under, and the line its About panel shows'],
-                ['`urlSchemes`', 'the schemes whose links open the app'],
-                ['`singleInstance`', 'hands a second launch to the app that runs'],
-                ['`permissions`', 'the reason the app gives for the camera, the microphone and the location'],
-                ['`openPath`', "where the page's `shell.openPath` may open files: `data`, `cache` and `logs`, the app's folders, and `picked`, what a dialog picked; nowhere without it"],
-                ['`updater`', 'where a desktop app finds its updates, and the public key that checks them'],
-                ['`team`', 'the Apple team that signs an iOS app'],
+            type: 'entries',
+            items: [
+                { name: '`name`', text: "The name the app shows: its window's title, its menus, the label under its icon.", default: '`general.name`' },
+                { name: '`id`', text: 'The bundle id on Apple platforms, the application id on Android.', default: '`dev.crossbind.<name>`' },
+                { name: '`icon`', text: "A square PNG, best at 1024 × 1024, made into each platform's icon." },
+                {
+                    name: '`window`',
+                    text: "The first desktop window's size and limits, `resizable`, `fullscreen` and `titleBar` (which lays a macOS page under the title bar's buttons), and every window's `backgroundColor`.",
+                },
+                { name: '`category`, `copyright`', text: 'The category macOS and Linux menus list the app under, and the line its About panel shows.' },
+                { name: '`urlSchemes`', text: 'The schemes whose links open the app.' },
+                { name: '`singleInstance`', text: 'Hands a second launch to the app that runs.' },
+                { name: '`permissions`', text: 'The reason the app gives for the camera, the microphone and the location.' },
+                {
+                    name: '`openPath`',
+                    text: "Where the page's `shell.openPath` may open files: `data`, `cache` and `logs` (the app's folders), and `picked` (what a dialog picked).",
+                    default: 'nowhere',
+                },
+                { name: '`updater`', text: 'Where a desktop app finds its updates, and the public key that checks them.' },
+                { name: '`team`', text: 'The Apple team that signs an iOS app.' },
             ],
         },
 
         { type: 'h2', id: 'distribute', text: 'Distribute' },
         {
             type: 'p',
-            text: '`crossbind app build` writes what installs a desktop app beside it, and `crossbind app publish <store>` builds the app and sends it to a store: `app-store` to App Store Connect and TestFlight, `google-play` to a Google Play track, and `github` a desktop app\'s installers and update to a GitHub release. `-p ios` and `-p android` name the first two. Each has its page:',
+            text: '`crossbind app build` writes what installs a desktop app beside it, and `crossbind app publish <store>` builds the app and sends it to a store: `app-store` to App Store Connect and TestFlight, `google-play` to a Google Play track, and `github` a desktop app\'s installers and update to a GitHub release. Each has its page:',
         },
         {
             type: 'ul',
@@ -175,13 +183,13 @@ const { data, cache, logs } = await app.paths();`,
         },
         {
             type: 'p',
-            text: 'Each store is a publisher an [extension](/guide/extensions/) adds, and one listed under the name of crossbind\'s takes its place.',
+            text: 'Each store is a publisher that an [extension](/guide/extensions/) adds; an extension of yours with the same name replaces crossbind\'s.',
         },
 
         { type: 'h2', id: 'size', text: 'Size' },
         {
             type: 'p',
-            text: 'No browser engine ships inside. The sample app is 6.7 MB on an arm64 Mac, 1.8 MB zipped, 6 MB of it Hermes, the JavaScript engine the bindings run in, and it shows its first native result 0.34 s after launch on an M-series Mac. Its Windows executable is 4.6 MB on x64, its iOS app 4.7 MB, and its Android release APK 14.8 MB with both ABIs, of which Google Play delivers one.',
+            text: 'No browser engine ships inside, so an app stays small: see [the sample app\'s sizes](/guide/performance/#size).',
         },
 
         { type: 'h2', id: 'limits', text: 'Limits' },
@@ -191,12 +199,12 @@ const { data, cache, logs } = await app.paths();`,
                 '**Vite** for the page.',
                 '**macOS 11, iOS 15.1 and Android 13** or later: iOS on arm64 alone, Android on arm64-v8a and x86_64 with Android System WebView 116 or later.',
                 '**Linux** needs a glibc system with WebKitGTK 4.1, release 2.40 or later. **Windows** needs the WebView2 Runtime, which Windows 11 includes.',
-                `**Not everything is measured everywhere yet.** Signing with a real Developer ID and notarizing, Windows signing with a cloud key service, building on a Windows machine and several desktop functions on Linux and Windows have not been run; the [reference](${REFERENCE}#limits) lists what has been measured on each platform.`,
+                `**Not everything is checked everywhere yet:** signing with a real Developer ID and notarizing, Windows signing with a cloud key service, building on a Windows machine, and several desktop functions on Linux and Windows. The [reference](${REFERENCE}#limits) lists what has been checked on each platform.`,
             ],
         },
         {
             type: 'p',
-            text: `[examples/desktop-app](${REPO_URL}/tree/main/examples/desktop-app) is the template: a page, C++ and a prebuilt library, with a script for every platform. [app.md](${REFERENCE}) is the reference behind this page.`,
+            text: `[examples/desktop-app](${REPO_URL}/tree/main/examples/desktop-app) is the template: a page, C++ and a prebuilt library, with a script for every platform. Full reference: [app.md](${REFERENCE}).`,
         },
     ],
 };

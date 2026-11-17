@@ -22,7 +22,7 @@ await initNative();
 zlibVersion(); // '1.3.2'
 ```
 
-A build runs `conan install` for each of its targets, with a profile of the compilers, flags and C++ standard crossbind builds that target with, and writes the versions it took to `conan.lock`. [conan.md](https://github.com/crossbind/crossbind/blob/main/docs/api/conan.md#declare-then-import) has the options a package takes, what a build does and the license rows.
+A build installs the packages for each of its targets with crossbind's compilers and flags, and writes the versions it took to `conan.lock`. [conan.md](https://github.com/crossbind/crossbind/blob/main/docs/api/conan.md#declare-then-import) has the options a package takes, what a build does and the license rows.
 
 ## Platforms
 
