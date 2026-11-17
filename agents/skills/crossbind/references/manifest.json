@@ -24,7 +24,7 @@
     {
       "source": "docs/api/app.md",
       "output": "api/app.md",
-      "sha256": "4b3ec9e25f4406f37a163114a313b6af45703d1cde2ff75ea0da03d5391f8583"
+      "sha256": "e9ae03be54ce216a3dfad87b8ae810f9e8bdca6525692926bd2e87b720706aa4"
     },
     {
       "source": "docs/api/build-state.md",
@@ -49,12 +49,12 @@
     {
       "source": "docs/api/crossbind-config.md",
       "output": "api/crossbind-config.md",
-      "sha256": "9ca09015782322db1622936625fcfc80de38470de4f8d1ae9cfffff3ba2705bf"
+      "sha256": "47369dfb8e52bb57a4dbcd9b8b9898baaa97a37636b555eb9222b28a2732d1f7"
     },
     {
       "source": "docs/api/extensions.md",
       "output": "api/extensions.md",
-      "sha256": "ca47aadf3de1401ab4e906b9e47ee4726f899a62ee1951d9816bb0af7a1ff2b1"
+      "sha256": "568e6ba9c999363197ddb453620c77ca3994737a641e5fcfa3b6f88391f51333"
     },
     {
       "source": "docs/api/filesystem.md",
@@ -79,7 +79,7 @@
     {
       "source": "docs/api/overrides.md",
       "output": "api/overrides.md",
-      "sha256": "5632d2d118631fe8a5d1b018ce0f3815c4f8a4148fe9023807024222ba5405d2"
+      "sha256": "a6f30fc99bff58de89f5b33f232b43017e1c6faa8665831a8c449a357cb3c6da"
     },
     {
       "source": "docs/api/performance.md",
@@ -129,7 +129,7 @@
     {
       "source": "docs/playbooks/integration/desktop-app.md",
       "output": "integration/desktop-app.md",
-      "sha256": "5bb4e8fdbe93575c9792f413039aaf952b7a6bd03fefff1c36825ee60fba9d6a"
+      "sha256": "2678cd57935a02bd167f92d33a51b2c981a0f6655e6571df08051b17c3be2fed"
     },
     {
       "source": "docs/playbooks/integration/nextjs.md",

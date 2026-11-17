@@ -19,7 +19,8 @@ import { assertAppProject } from './utils/appProject.js';
 import {
     makeUploadKey, releaseSigningEnv, showUploadKeyPassword, useUploadKey,
 } from './actions/uploadKey.js';
-import publish, { publishHelp, publishersOf } from './actions/publish.js';
+import { publishHelp, publishersOf, uploadStores } from './actions/publish.js';
+import release from './actions/release.js';
 import storeGuide from './actions/storeGuide.js';
 import appKeys from './actions/appKeys.js';
 import { iosDeviceOption } from './actions/iosDevice.js';
@@ -207,7 +208,7 @@ commandKey.command('upload')
 
 commandApp.command('upload')
     .usage('[store] [options]')
-    .description("build the app and send it to a store, as its publisher does, one of crossbind's own or of an extension's")
+    .description("build the app and upload it to a store's testers, as its publisher does, one of crossbind's own or of an extension's; without a store, to each one app.stores names")
     .addOption(new Option('-p, --platform <platform>', "the app's platform: without a store, the one that goes first for it (default: CROSSBIND_APP_PLATFORM, else for a store of desktop apps this machine's, else every one the store takes, as app-store's ios and macos)").choices(APP_PLATFORMS))
     .addHelpText('after', () => publishHelp(publishersOf(state.config?.extensions ?? [])))
     // The store's own options, and Vite's, as --mode, which go on to Vite.
@@ -215,7 +216,17 @@ commandApp.command('upload')
     .allowExcessArguments()
     .action(async ({ platform }, command) => {
         assertAppCommand();
-        await publish(command.args, { platform, envPlatform: process.env.CROSSBIND_APP_PLATFORM, runVite });
+        await uploadStores(command.args, { platform, envPlatform: process.env.CROSSBIND_APP_PLATFORM, runVite });
+    });
+
+commandApp.command('release')
+    .argument('[store]', 'the store, as google-play, app-store, microsoft-store or github (default: each one app.stores names, else the one -p goes first for)')
+    .description("put out to everyone what a store's testers have, with no build: Google Play's production, App Review, the Microsoft Store's certification or the GitHub release")
+    .addOption(new Option('-p, --platform <platform>', "the app's platform, whose release alone goes out, as app-store's ios or macos (default: CROSSBIND_APP_PLATFORM, else for a store of desktop apps this machine's, else every one the store takes)").choices(APP_PLATFORMS))
+    .option('--rollout <percent>', 'start with this percent of the users, as 10 or 10%, which Google Play and the Microsoft Store raise; App Store Connect releases in its own phases over 7 days, and a store that reaches every user at once, as github, takes none')
+    .action(async (store, { platform, rollout }) => {
+        assertAppCommand();
+        await release(store === undefined ? [] : [store], { platform, envPlatform: process.env.CROSSBIND_APP_PLATFORM, rollout: rollout ?? null });
     });
 
 commandApp.command('store')

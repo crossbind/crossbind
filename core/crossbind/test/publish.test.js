@@ -32,7 +32,7 @@ vi.mock('../src/utils/ask.js', () => ({ hasTerminal: () => terminal.isThere }));
 
 const { checkedExtension } = await import('../src/utils/appExtensions.js');
 const {
-    builtInPublishers, default: publish, publishChain, publishHelp, publishOptions, publishPlatforms, publishersOf, storeOf,
+    builtInPublishers, default: publish, publishChain, publishHelp, publishOptions, publishPlatforms, publishersOf, storeOf, uploadStores,
 } = await import('../src/actions/publish.js');
 
 // An app's extension with a publisher, as crossbind takes it from crossbind.config.js.
@@ -86,10 +86,10 @@ describe('the publishers an app has', () => {
     test("are crossbind's own, each a publisher of its platforms with its options, from a folder of its own", () => {
         const publishers = builtInPublishers();
         expect(publishers.map(({ name, publisher }) => [name, publisher.platforms, Object.keys(publisher.options)])).toEqual([
-            ['app-store', ['ios', 'macos'], ['submit', 'phased']],
-            ['github', ['macos', 'linux', 'windows'], ['draft']],
-            ['google-play', ['android'], ['track', 'draft', 'rollout']],
-            ['microsoft-store', ['windows'], ['draft', 'rollout']],
+            ['app-store', ['ios', 'macos'], []],
+            ['github', ['macos', 'linux', 'windows'], []],
+            ['google-play', ['android'], ['track']],
+            ['microsoft-store', ['windows'], []],
         ]);
         expect(publishers.map(({ root }) => root.split(/[\\/]/).slice(-2).join('/'))).toEqual([
             'extensions/app-store', 'extensions/github', 'extensions/google-play', 'extensions/microsoft-store',
@@ -152,47 +152,54 @@ describe('the platforms an upload builds for', () => {
 });
 
 describe('the options of an upload', () => {
-    const publishers = builtInPublishers();
-    const [appStore, github, googlePlay] = publishers;
+    // Stores whose publishers take a value with a default, a flag and a value, or a flag alone, and one that takes none.
+    const tracked = extension('demo-store', {
+        platform: 'android',
+        options: { track: { help: 'the track', value: '<track>', default: 'internal' }, draft: { help: 'a draft' }, rollout: { help: 'the share', value: '<percent>' } },
+    });
+    const reviewed = extension('fruit-store', { platform: 'ios', options: { submit: { help: 'to review' } } });
+    const drafted = extension('desk-store', { platform: 'macos', options: { draft: { help: 'a draft' } } });
+    const plain = extension('plain-store', { platform: 'linux' });
+    const publishers = [tracked, reviewed, drafted, plain];
 
     test("are its publishers' own, as values or flags, with their defaults, and the rest goes on to Vite", () => {
-        expect(publishOptions([googlePlay], ['--track', 'beta', '--mode', 'staging', '--rollout=10'], publishers)).toEqual({
-            options: { 'google-play': { track: 'beta', draft: false, rollout: '10' } },
+        expect(publishOptions([tracked], ['--track', 'beta', '--mode', 'staging', '--rollout=10'], publishers)).toEqual({
+            options: { 'demo-store': { track: 'beta', draft: false, rollout: '10' } },
             viteArgs: ['--mode', 'staging'],
         });
-        expect(publishOptions([googlePlay], ['--draft'], publishers).options['google-play']).toEqual({ track: 'internal', draft: true, rollout: null });
+        expect(publishOptions([tracked], ['--draft'], publishers).options['demo-store']).toEqual({ track: 'internal', draft: true, rollout: null });
     });
 
     test("are refused where they are another store's, naming whose they are", () => {
-        expect(() => publishOptions([github], ['--track', 'beta', '--rollout', '5', '--submit'], publishers))
-            .toThrow("crossbind: --track and --rollout are google-play's and --submit is app-store's, which github takes none of.");
-        expect(() => publishOptions([appStore], ['--draft'], publishers)).toThrow("crossbind: --draft is github's, which app-store takes none of.");
+        expect(() => publishOptions([plain], ['--track', 'beta', '--rollout', '5', '--submit'], publishers))
+            .toThrow("crossbind: --track and --rollout are demo-store's and --submit is fruit-store's, which plain-store takes none of.");
+        expect(() => publishOptions([reviewed], ['--draft'], publishers)).toThrow("crossbind: --draft is demo-store's, which fruit-store takes none of.");
     });
 
     test('take a value where they take one, and none where they are a flag', () => {
-        expect(() => publishOptions([googlePlay], ['--track'], publishers)).toThrow('crossbind: --track takes a value, as <track>.');
-        expect(() => publishOptions([googlePlay], ['--track', '--draft'], publishers)).toThrow('crossbind: --track takes a value, as <track>.');
-        expect(() => publishOptions([googlePlay], ['--draft=yes'], publishers)).toThrow('crossbind: --draft takes no value.');
+        expect(() => publishOptions([tracked], ['--track'], publishers)).toThrow('crossbind: --track takes a value, as <track>.');
+        expect(() => publishOptions([tracked], ['--track', '--draft'], publishers)).toThrow('crossbind: --track takes a value, as <track>.');
+        expect(() => publishOptions([tracked], ['--draft=yes'], publishers)).toThrow('crossbind: --draft takes no value.');
     });
 
     test('go to every publisher of a chain that takes them, as camelCase names of their --kebab-case', () => {
-        const notes = extension('notes', { platform: 'macos', after: 'github', options: { releaseNotes: { help: 'the notes', value: '<file>' }, draft: { help: 'a draft' } } });
-        expect(publishOptions([github, notes], ['--draft', '--release-notes', 'notes.md'], [...publishers, notes]).options).toEqual({
-            github: { draft: true },
+        const notes = extension('notes', { platform: 'macos', after: 'desk-store', options: { releaseNotes: { help: 'the notes', value: '<file>' }, draft: { help: 'a draft' } } });
+        expect(publishOptions([drafted, notes], ['--draft', '--release-notes', 'notes.md'], [...publishers, notes]).options).toEqual({
+            'desk-store': { draft: true },
             notes: { releaseNotes: 'notes.md', draft: true },
         });
     });
 
     test('are taken alike by the publishers of a chain that take one of a name', () => {
-        const notes = extension('notes', { platform: 'macos', after: 'github', options: { draft: { help: 'the draft to replace', value: '<id>' } } });
-        expect(() => publishOptions([github, notes], ['--draft'], [...publishers, notes]))
-            .toThrow('crossbind: github and notes both take --draft, one as a flag and one with a value: one of them names it otherwise.');
+        const notes = extension('notes', { platform: 'macos', after: 'desk-store', options: { draft: { help: 'the draft to replace', value: '<id>' } } });
+        expect(() => publishOptions([drafted, notes], ['--draft'], [...publishers, notes]))
+            .toThrow('crossbind: desk-store and notes both take --draft, one as a flag and one with a value: one of them names it otherwise.');
     });
 
     test("are listed in the command's help, store by store", () => {
         const help = publishHelp();
         expect(help).toContain('  google-play: Google Play, for android apps');
-        expect(help).toContain('    --track <track>      the Google Play track the release goes on: internal, alpha, beta, production or one of your own (default: internal)');
+        expect(help).toContain('    --track <track>  the Google Play testing track the bundle goes on: internal, alpha, beta or one of your own (default: internal)');
         expect(help).toContain('  github: GitHub Releases, for macos, linux or windows apps');
         expect(help).toContain("An app's extensions add stores of their own");
     });
@@ -251,6 +258,19 @@ describe('an upload', () => {
     afterEach(() => {
         vi.unstubAllEnvs();
         vi.restoreAllMocks();
+    });
+
+    test('goes to each store app.stores names, in its order, those of them that take the platform -p names, or the one named', async () => {
+        state.config.extensions = [store('demo'), store('fruit', { publisher: { platform: 'ios' } })];
+        state.config.app = { stores: ['fruit', 'demo'] };
+        await uploadStores([], { runVite });
+        expect(run.uploads.map(({ name }) => name)).toEqual(['fruit', 'demo']);
+        run.uploads.length = 0;
+        await uploadStores([], { platform: 'android', runVite });
+        expect(run.uploads.map(({ name }) => name)).toEqual(['demo']);
+        run.uploads.length = 0;
+        await uploadStores(['fruit'], { runVite });
+        expect(run.uploads.map(({ name }) => name)).toEqual(['fruit']);
     });
 
     test('names every piece its publishers lack at once, before any build', async () => {

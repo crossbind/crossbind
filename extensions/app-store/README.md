@@ -9,8 +9,8 @@ It comes with `@crossbind/core-app-host`: there is nothing to install or list.
 ```sh
 npx crossbind app store app-store
 npx crossbind app store app-store --send
-npx crossbind app upload app-store --submit
-npx crossbind app upload app-store -p macos --submit
+npx crossbind app upload app-store
+npx crossbind app release app-store -p macos --rollout 10
 ```
 
 An upload sends the iOS app, then the macOS one; `-p` sends one alone, and `crossbind app upload -p ios` with no
@@ -24,9 +24,9 @@ through the App Store Connect API key.
   exports it into the iOS app's record, as a universal purchase. Xcode's account or an Admin key signs the app and its
   installer package in the cloud, so you make no certificate by hand.
 
-`--submit` also hands the version to App Review, with the listing in `store/app-store`: its `APP_DESKTOP` screenshots
-go with the macOS version, the others with the iOS one. `--phased` releases what App Review approves in phases over 7
-days.
+A release hands the version to App Review, with no build, with the newest build of it TestFlight's testers have and the
+listing in `store/app-store`: its `APP_DESKTOP` screenshots go with the macOS version, the others with the iOS one.
+`--rollout` releases what App Review approves in phases over 7 days.
 
 ## Platforms
 

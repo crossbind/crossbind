@@ -141,6 +141,6 @@ export {
     APP_STORE_LISTING, appStoreListingProblems, listingOf, readAppStoreListing, readAppStoreSettings,
 } from './app-store/appStoreListing.js';
 export {
-    APP_STORE_CONNECT, appStoreApp, appStoreState, assertReviewable, newestBuild, sendListing, submitRelease,
+    APP_STORE_CONNECT, appStoreApp, appStoreState, releaseVersion, sendListing,
 } from './app-store/appStoreRelease.js';
 export { untilDone, uploadArchive } from './app-store/appStoreExport.js';

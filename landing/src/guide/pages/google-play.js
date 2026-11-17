@@ -50,7 +50,7 @@ export default {
     slug: 'google-play',
     title: 'Google Play',
     description: 'Release an Android app on a Google Play track with one command, signed in with your Google account or a service account, with its listing kept in files.',
-    lede: '`crossbind app upload google-play` (or `crossbind app upload -p android`) builds the Android app and releases it on a Google Play track, the internal one unless you name another. It signs in with your Google account on your machine, or with a service account in CI, and also updates the store listing from `store/google-play`, with the release\'s notes.',
+    lede: '`crossbind app upload google-play` (or `crossbind app upload -p android`) builds the Android app and puts it out to the testers of a Google Play testing track, the internal one unless you name another, with the release\'s notes; `crossbind app release google-play` then puts it out on production. It signs in with your Google account on your machine, or with a service account in CI.',
     blocks: [
         { type: 'h2', id: 'needs', text: 'What it needs' },
         { type: 'p', text: 'Before the build, which takes minutes, the upload checks that it has:' },
@@ -125,8 +125,8 @@ export default {
             items: [
                 "In Play Console, create the app with `app.id` as its package name; Play's API cannot.",
                 `For a service account, enable the Google Play Android Developer API in a Google Cloud project and create the account there. For \`CROSSBIND_GOOGLE_PLAY_SERVICE_ACCOUNT\`, also enable the IAM Service Account Credentials API and give your gcloud account the Service Account Token Creator role on the service account: \`${TOKEN_CREATOR}\`. For \`CROSSBIND_GOOGLE_PLAY_KEY\`, make a JSON key of it; an organization may refuse keys (\`iam.disableServiceAccountKeyCreation\`), so use the first way there, or a project with no organization.`,
-                'For a service account, invite its e-mail in Play Console, under Users and permissions, with "Release apps to testing tracks" for the app; for the production track also "Release to production, exclude devices, and use Play App Signing", and for the listing "Manage store presence".',
-                "Until an app's first release is out, Play takes only drafts, so the first upload leaves a draft. Roll it out once in Play Console, under Test and release; later uploads go out by themselves.",
+                'For a service account, invite its e-mail in Play Console, under Users and permissions, with "Release apps to testing tracks" for the app; for releases also "Release to production, exclude devices, and use Play App Signing", and for the listing "Manage store presence".',
+                "Until an app's first release is out, Play takes only drafts, so the first upload leaves a draft. Roll it out once in Play Console, under Test and release; later uploads go out to their testers by themselves.",
             ],
         },
         {
@@ -138,17 +138,12 @@ export default {
         {
             type: 'entries',
             items: [
-                { name: '`--track`', text: 'The track the release goes on: `alpha`, `beta`, `production` or one of your own.', default: '`internal`' },
-                { name: '`--draft`', text: "Leaves the release a draft to roll out in Play Console, instead of sending it to the track's testers at once." },
-                {
-                    name: '`--rollout`',
-                    text: "A staged rollout: `--rollout 10` (or `10%`) gives the release to that share of the track's users first; raise it later in Play Console, under Test and release. `100` releases to every user, as no `--rollout` does.",
-                },
+                { name: '`--track`', text: "The testing track an upload puts the bundle on, out to its testers at once: `alpha`, `beta` or one of your own. `production` is refused, as a release puts out on production what the testers have had.", default: '`internal`' },
             ],
         },
         {
             type: 'p',
-            text: "Play stages only updates, so an app's first release reaches all of its users. `--draft` and `--rollout` do not go together. A store's options go after its name.",
+            text: "`crossbind app release google-play` puts the newest release the testing tracks have out to testers on the production track, with no build, with its name and release notes, after the [listing](#listing). `--rollout 10` (or `10%`) makes it a staged rollout, which gives it to that share of the users first; raise it later in Play Console, under Test and release. `100` releases to every user, as no `--rollout` does. Play stages only updates, so an app's first release reaches all of its users.",
         },
 
         { type: 'h2', id: 'listing', text: 'The listing' },
@@ -159,7 +154,7 @@ export default {
         { type: 'code', file: 'store/google-play', code: LISTING },
         {
             type: 'p',
-            text: "`crossbind app store google-play --send` sends what differs from Play's listing, its texts and images, with no build. The listing is the app's, not the track's, so it goes alone, and an upload sends only the release's notes from `changelogs/`. What the folder leaves out stays as Play has it. A language Play has no listing in yet needs `title.txt`, `short_description.txt` and `full_description.txt`.",
+            text: "`crossbind app store google-play --send` sends what differs from Play's listing, its texts and images, with no build. The listing is the app's, not the track's, so it goes alone or with a release, and an upload sends only the release's notes from `changelogs/`. What the folder leaves out stays as Play has it. A language Play has no listing in yet needs `title.txt`, `short_description.txt` and `full_description.txt`.",
         },
         {
             type: 'p',

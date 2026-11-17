@@ -309,3 +309,42 @@ export async function sendListing(appId, credentials, { listings = [], details =
         throw error;
     }
 }
+
+// Puts out on the production track the newest release Play's testing tracks have out to testers, the one of the highest
+// versionCode, with its name and notes, to the share of users userFraction gives while in progress. An app never
+// released takes a draft alone, which Play Console rolls out, so its release becomes one. Gives its versionCode, its
+// name, the track it came from and the status it took.
+export async function promoteRelease(appId, credentials, { status, userFraction = null }) {
+    const call = await playCaller(appId, credentials, [PRODUCTION_RIGHTS]);
+    const editUrl = `${API}/${appId}/edits/${(await call('POST', `${API}/${appId}/edits`, {})).id}`;
+    try {
+        const { tracks = [] } = await call('GET', `${editUrl}/tracks`);
+        const [newest] = tracks.filter(({ track }) => !PRODUCTION.test(track))
+            .flatMap(({ track, releases = [] }) => releases.filter((one) => one.status !== 'draft')
+                .map((one) => ({ track, release: one, versionCode: Math.max(...(one.versionCodes ?? []).map(Number)) })))
+            .sort((a, b) => b.versionCode - a.versionCode);
+        if (!newest) {
+            throw new Error(`crossbind: Google Play's testing tracks have no release of ${appId} out to testers: crossbind app upload google-play puts one there, and Play Console rolls a draft out.`);
+        }
+        const { versionCodes, name, releaseNotes } = newest.release;
+        const promote = async (releaseStatus) => {
+            const share = releaseStatus === 'inProgress' ? { userFraction } : {};
+            const named = name ? { name } : {};
+            const noted = releaseNotes?.length > 0 ? { releaseNotes } : {};
+            await call('PUT', `${editUrl}/tracks/production`, { track: 'production', releases: [{ versionCodes, status: releaseStatus, ...share, ...named, ...noted }] });
+            await call('POST', `${editUrl}:commit`);
+            return {
+                versionCode: newest.versionCode, name: name ?? null, from: newest.track, status: releaseStatus,
+            };
+        };
+        try {
+            return await promote(status);
+        } catch (error) {
+            if (status === 'draft' || !DRAFT_APP.test(error.playMessage ?? '')) throw error;
+            return await promote('draft');
+        }
+    } catch (error) {
+        await call('DELETE', editUrl).catch(() => {});
+        throw error;
+    }
+}

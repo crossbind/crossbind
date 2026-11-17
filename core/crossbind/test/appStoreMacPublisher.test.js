@@ -9,15 +9,15 @@ import { pngOf } from './listingImages.js';
 // ditto, which copies the app into its archive, here as fs copies it.
 const spawnSync = vi.fn();
 vi.mock('node:child_process', async (importOriginal) => ({ ...await importOriginal(), spawnSync }));
-// App Store Connect, by the routes the upload calls, and the review's hand-over, which appStoreRelease's own tests cover.
+// App Store Connect, by the routes the upload calls, and the release's hand-over, which appStoreRelease's own tests cover.
 let connect;
 vi.mock('../../store-kit/app-store/appStoreApi.js', async (importOriginal) => ({ ...await importOriginal(), appStoreCaller: () => connect.call }));
-const submitted = [];
+const released = [];
 const sentPages = [];
 vi.mock('../../store-kit/app-store/appStoreRelease.js', async (importOriginal) => ({
     ...await importOriginal(),
-    submitRelease: async (call, options) => {
-        submitted.push(options);
+    releaseVersion: async (call, options) => {
+        released.push(options);
         return { build: '7', listed: ['en-US'], settled: [] };
     },
     sendListing: async (call, options) => {
@@ -62,7 +62,7 @@ function apiOf({
             name: 'app-store',
             platform: 'macos',
             isGuided: false,
-            options: { submit: false, phased: false, ...options },
+            options: { rollout: null, ...options },
             project: { root: project, name: 'demo' },
             workDir: upath.join(project, '.crossbind', 'build', 'app-store'),
             config: { app: { id: 'com.example.demo', icon: 'icon.png', ...(macos ? { macos } : {}) } },
@@ -97,7 +97,7 @@ beforeEach(() => {
         if (command === 'ditto') fs.cpSync(from, to, { recursive: true });
         return { status: 0, stdout: '', stderr: '' };
     });
-    submitted.length = 0;
+    released.length = 0;
     sentPages.length = 0;
     appStoreConnect();
     write('dist/Demo.app/Contents/Info.plist', '<plist/>');
@@ -117,19 +117,17 @@ describe("App Store Connect's publisher of a macOS app", () => {
         expect(publisher.build({ platform: 'ios' })).toBeNull();
     });
 
-    test('names what the app lacks before anything reaches App Store Connect, the key and the answer on encryption with --submit', async () => {
+    test('names what the app lacks before anything reaches App Store Connect, and warns of the answer on encryption it lacks', async () => {
         const { missing } = await publisher.check(apiOf({
-            key: null, team: null, category: null, encryption: null, options: { submit: true },
+            key: null, team: null, category: null, encryption: null,
         }).api);
         expect(missing).toEqual([
-            expect.stringContaining('--submit hands the version to App Review through App Store Connect\'s API, which takes an API key'),
             expect.stringContaining('App Store Connect takes uploads from an Apple Developer Program team'),
             'crossbind: the Mac App Store takes no app without its category: set app.category in crossbind.config.js.',
-            'crossbind: App Review takes no build without its answer to whether it uses encryption: set app.encryption in crossbind.config.js.',
         ]);
 
         const { api, logs } = apiOf({ key: null, encryption: null });
-        expect(await publisher.check(api)).toEqual({ session: { key: null, facts: { id: 'com.example.demo', team: TEAM }, release: null } });
+        expect(await publisher.check(api)).toEqual({ session: { key: null, facts: { id: 'com.example.demo', team: TEAM } } });
         expect(logs[0]).toContain('app.encryption is not set, so App Store Connect asks whether this build uses encryption');
         expect(connect.calls).toEqual([]);
     });
@@ -191,25 +189,34 @@ describe("App Store Connect's publisher of a macOS app", () => {
         expect(builds[0].options.causes[0].hint({ id: 'com.example.demo' })).toContain('App Store Connect has no app com.example.demo on macOS: add the platform to its record');
     });
 
-    test("with --submit, hands the macOS version to App Review with the listing's Mac screenshots alone", async () => {
+    test("hands the macOS version to App Review on a release, with the listing's Mac screenshots alone and no build", async () => {
         write('store/app-store/en-US/name.txt', 'Demo');
         write('store/app-store/en-US/screenshots/APP_DESKTOP/01.png', pngOf(2560, 1600));
         write('store/app-store/en-US/screenshots/APP_IPHONE_67/01.png', pngOf(1320, 2868));
-        const { api, logs } = apiOf({ options: { submit: true } });
-        const { session } = await publisher.check(api);
+        const { api, logs } = apiOf();
 
-        await publisher.upload(api, session, { apps: [{ app: `${project}/dist/Demo.app`, arch: 'arm64', installers: [] }] });
+        expect(await publisher.release(api)).toEqual({});
 
-        expect(submitted).toHaveLength(1);
-        expect(submitted[0]).toMatchObject({ appId: 'A1', versionString: '1.2.3', before: 'B1', platform: 'MAC_OS' });
-        expect(Object.keys(submitted[0].listings[0].screenshots)).toEqual(['APP_DESKTOP']);
-        expect(connect.calls).toContain('GET /apps/A1/reviewSubmissions');
+        expect(released).toHaveLength(1);
+        expect(released[0]).toMatchObject({
+            appId: 'A1', versionString: '1.2.3', isPhased: false, usesEncryption: false, platform: 'MAC_OS',
+        });
+        expect(Object.keys(released[0].listings[0].screenshots)).toEqual(['APP_DESKTOP']);
+        expect(spawnSync).not.toHaveBeenCalled();
         expect(logs.at(-1)).toBe('crossbind: com.example.demo 1.2.3 (build 7) for macOS went to App Review; Apple mails as the review goes.');
     });
 
+    test("names a record not on macOS on a release, before anything goes", async () => {
+        appStoreConnect({ isOnMac: false });
+        expect(await publisher.release(apiOf().api)).toEqual({
+            missing: [expect.stringContaining('then release again, or release the iOS app alone with -p ios.')],
+        });
+        expect(released).toEqual([]);
+    });
+
     test("tells crossbind app store of the macOS app beside the iOS one: its upload, its category and the Mac screenshots Apple alone takes", () => {
-        const { publishes, problems, steps } = publisher.guide(apiOf({ category: null }).api);
-        expect(publishes[1]).toBe('then the macOS app, sandboxed, in an archive Xcode exports to App Store Connect, which signs it and its installer package in the cloud, and whose TestFlight hands it to Mac testers once Apple has processed it; -p macos sends it alone');
+        const { uploads, problems, steps } = publisher.guide(apiOf({ category: null }).api);
+        expect(uploads[1]).toBe('then the macOS app, sandboxed, in an archive Xcode exports to App Store Connect, which signs it and its installer package in the cloud, and whose TestFlight hands it to Mac testers once Apple has processed it; -p macos sends it alone');
         expect(problems).toEqual(['crossbind: app.category is not set, and the Mac App Store takes no app without its category.']);
         const texts = steps.map(({ text }) => text);
         expect(texts[0]).toContain('An app on iOS alone takes macOS later with the + beside its platform in the sidebar');

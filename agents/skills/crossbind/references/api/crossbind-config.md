@@ -329,7 +329,7 @@ export default {
         // The manifest a desktop app checks for a newer version: https, or http on localhost. {platform} and {arch}
         // stand for darwin, linux or win32 and x64 or arm64; the update's file goes beside it (see app.md).
       publicKey: '…',
-        // The Ed25519 key that checks an update's signature, which `crossbind app updater-key` prints. Its private
+        // The Ed25519 key that checks an update's signature, which `crossbind app key updater` prints. Its private
         // half, in CROSSBIND_UPDATER_PRIVATE_KEY, signs the updates the build writes.
     },
       // Default: none, and the app does not update itself.

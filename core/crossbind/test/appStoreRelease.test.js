@@ -14,14 +14,15 @@ vi.mock('../../store-kit/app-store/appStoreApi.js', () => ({
 }));
 
 const {
-    appStoreApp, appStoreState, assertReviewable, newestBuild, sendListing, submitRelease,
+    appStoreApp, appStoreState, assertReviewable, releaseVersion, sendListing,
 } = await import('../../store-kit/app-store/appStoreRelease.js');
 
 const EDITABLE = 'PREPARE_FOR_SUBMISSION,DEVELOPER_REJECTED,REJECTED,METADATA_REJECTED,INVALID_BINARY';
 const BUILDS = 'GET /builds?filter[app]=A1&filter[preReleaseVersion.version]=1.2.3&filter[preReleaseVersion.platform]=IOS&sort=-uploadedDate&limit=1';
-const build = (id, processingState, version = '42') => ({ id, attributes: { version, processingState } });
+// A build of 1.2.3, whose upload answered that it uses no encryption unless usesNonExemptEncryption says otherwise.
+const build = (id, processingState, version = '42', usesNonExemptEncryption = false) => ({ id, attributes: { version, processingState, usesNonExemptEncryption } });
 const READY = 'GET /apps/A1/reviewSubmissions?filter[platform]=IOS&filter[state]=READY_FOR_REVIEW&include=items';
-const PREPARED = 'crossbind: App Store Connect prepares a review submission of the app with items in it already, as one an upload stopped in leaves: submit or remove them there, then upload again.';
+const PREPARED = 'crossbind: App Store Connect prepares a review submission of the app with items in it already, as one a release stopped in leaves: submit or remove them there, then release again.';
 // The submission App Store Connect prepares, with an item in the state given.
 const prepared = (state) => ({
     data: [{ id: 'S7', attributes: { state: 'READY_FOR_REVIEW' }, relationships: { items: { data: [{ type: 'reviewSubmissionItems', id: 'X1' }] } } }],
@@ -32,8 +33,8 @@ let calls;
 let answers;
 let builds;
 let printed;
-// App Store Connect as an upload sees one app: its answers by method and route, else those of an app with no version of
-// 1.2.3 and none prepared, the upload's build B2 processed after B1, and nothing in review. What it is given it keeps.
+// App Store Connect as a release sees one app: its answers by method and route, else those of an app with no version of
+// 1.2.3 and none prepared, its newest build B2 processed, and nothing in review. What it is given it keeps.
 const DEFAULTS = {
     'GET /apps?filter[bundleId]=dev.example.demo': { data: [{ id: 'A0', attributes: { bundleId: 'dev.example.demo.widget' } }, { id: 'A1', attributes: { bundleId: 'dev.example.demo' } }] },
     'GET /apps/A1/appStoreVersions?filter[platform]=IOS&filter[versionString]=1.2.3': { data: [] },
@@ -68,8 +69,8 @@ async function settled(promise) {
     if (result.error) throw result.error;
     return result.value;
 }
-const release = (options = {}) => settled(submitRelease(call, {
-    appId: 'A1', versionString: '1.2.3', before: 'B1', listings: [], isPhased: false, ...options,
+const release = (options = {}) => settled(releaseVersion(call, {
+    appId: 'A1', versionString: '1.2.3', listings: [], isPhased: false, ...options,
 }));
 
 beforeEach(() => {
@@ -77,7 +78,7 @@ beforeEach(() => {
     parts.length = 0;
     calls = [];
     answers = {};
-    builds = [build('B1', 'VALID', '41'), build('B2', 'PROCESSING'), build('B2', 'VALID')];
+    builds = [build('B2', 'VALID')];
     printed = [];
     vi.spyOn(console, 'log').mockImplementation((line) => printed.push(line));
 });
@@ -107,21 +108,15 @@ describe('an app on App Store Connect', () => {
             .toThrow("crossbind: App Review has the app's submission as WAITING_FOR_REVIEW, and takes one at a time: let it finish, or cancel it in App Store Connect.");
         answers[submissions] = { data: [{ id: 'S0', attributes: { state: 'UNRESOLVED_ISSUES' } }] };
         await expect(assertReviewable(call, 'A1', '1.2.3')).rejects
-            .toThrow("crossbind: App Review answered the app's last submission with issues, which App Store Connect resolves: upload without --submit, pick the new build there and resubmit");
+            .toThrow("crossbind: App Review answered the app's last submission with issues: resolve them in App Store Connect, which takes a new build there, or cancel that submission and release again.");
     });
 
-    test('stops before the build where an upload stopped in a submission App Store Connect prepares, which it names to mend', async () => {
+    test('stops where a release stopped in a submission App Store Connect prepares, which it names to mend', async () => {
         answers[READY] = prepared('READY_FOR_REVIEW');
         await expect(assertReviewable(call, 'A1', '1.2.3')).rejects.toThrow(PREPARED);
         delete answers[READY];
         answers['GET /apps/A1/appStoreVersions?filter[platform]=IOS&filter[versionString]=1.2.3'] = { data: [{ id: 'V1', attributes: { versionString: '1.2.3', appVersionState: 'READY_FOR_REVIEW' } }] };
         await expect(assertReviewable(call, 'A1', '1.2.3')).rejects.toThrow(PREPARED);
-    });
-
-    test("has a newest build of a version, or none, which tells the upload's from it", async () => {
-        expect(await newestBuild(call, 'A1', '1.2.3')).toBe('B1');
-        answers[BUILDS] = { data: [] };
-        expect(await newestBuild(call, 'A1', '1.2.3')).toBeNull();
     });
 });
 
@@ -175,7 +170,7 @@ describe('what App Store Connect has of an app', () => {
 });
 
 describe("a version's submission to App Review", () => {
-    test('makes the version, puts the listing in, waits for the build to be processed, picks it and submits it', async () => {
+    test('makes the version, puts the listing in, picks the newest build TestFlight has processed and submits it', async () => {
         const listings = [
             { locale: 'en-US', info: { name: 'Demo', subtitle: 'A demo' }, version: { description: 'The demo app.', whatsNew: 'Fixes.' }, screenshots: {} },
             { locale: 'tr', info: {}, version: { whatsNew: 'Düzeltmeler.' }, screenshots: {} },
@@ -206,8 +201,8 @@ describe("a version's submission to App Review", () => {
             reviewSubmission: { data: { type: 'reviewSubmissions', id: 'S1' } }, appStoreVersion: { data: { type: 'appStoreVersions', id: 'V1' } },
         });
         expect(bodyOf('PATCH /reviewSubmissions/S1').data).toEqual({ type: 'reviewSubmissions', id: 'S1', attributes: { submitted: true } });
-        expect(keys().filter((key) => key === BUILDS)).toHaveLength(3);
-        expect(printed).toEqual(['crossbind: waiting for App Store Connect to process the build, usually 5 to 30 minutes.']);
+        expect(keys().filter((key) => key === BUILDS)).toHaveLength(1);
+        expect(printed).toEqual([]);
     });
 
     test("takes a macOS version on its own platform, in every query and in what it makes", async () => {
@@ -256,16 +251,32 @@ describe("a version's submission to App Review", () => {
         expect(keys().filter((key) => !key.startsWith('GET'))).toEqual(['POST /appStoreVersions']);
     });
 
-    test('stops where the build fails processing, or is not processed within an hour, saying how long it waited', async () => {
-        builds = [build('B2', 'INVALID')];
-        await expect(release()).rejects.toThrow('crossbind: App Store Connect could not process build 42 of 1.2.3, which it marked INVALID; Apple mails why.');
-
-        builds = [build('B1', 'VALID', '41')];
+    test('stops before it changes anything where the newest build is not processed, or failed, or there is none', async () => {
+        builds = [build('B2', 'PROCESSING')];
         await expect(release()).rejects
-            .toThrow('crossbind: App Store Connect has not processed the build in 60 minutes, so it went to no review: once it has, pick it for 1.2.3 in App Store Connect and submit it there.');
-        expect(printed).toContain('crossbind: App Store Connect is still processing the build, 5 minutes on.');
-        expect(printed).toContain('crossbind: App Store Connect is still processing the build, 55 minutes on.');
-        expect(keys()).not.toContain('PATCH /appStoreVersions/V1/relationships/build');
+            .toThrow('crossbind: App Store Connect is still processing build 42 of 1.2.3, usually for 5 to 30 minutes: release it once Apple mails that it has.');
+        builds = [build('B2', 'INVALID')];
+        await expect(release()).rejects
+            .toThrow('crossbind: App Store Connect could not process build 42 of 1.2.3, which it marked INVALID; Apple mails why. crossbind app upload app-store puts another on TestFlight.');
+        answers[BUILDS] = { data: [] };
+        await expect(release()).rejects
+            .toThrow('crossbind: App Store Connect has no iOS build of 1.2.3: crossbind app upload app-store puts one on TestFlight, and once Apple has processed it, crossbind app release app-store hands it to App Review.');
+        expect(keys().filter((key) => !key.startsWith('GET'))).toEqual([]);
+    });
+
+    test("answers whether a build uses encryption as the app does where its upload gave no answer, and stops where the app gives none", async () => {
+        builds = [build('B2', 'VALID', '42', null)];
+        await release({ usesEncryption: false });
+        expect(bodyOf('PATCH /builds/B2').data).toEqual({ type: 'builds', id: 'B2', attributes: { usesNonExemptEncryption: false } });
+
+        calls = [];
+        await expect(release()).rejects
+            .toThrow('crossbind: App Review takes no build without its answer to whether it uses encryption, which build 42 of 1.2.3 went up without: set app.encryption in crossbind.config.js, which answers it, or answer it for the build in App Store Connect.');
+        expect(keys().filter((key) => !key.startsWith('GET'))).toEqual([]);
+
+        builds = [build('B2', 'VALID', '42', true)];
+        await release({ usesEncryption: false });
+        expect(keys()).not.toContain('PATCH /builds/B2');
     });
 
     test('goes in the submission App Store Connect prepares, whose removed items do not count, unless that has items in it', async () => {
@@ -293,13 +304,6 @@ describe("a version's submission to App Review", () => {
         await release();
         expect(keys().filter((key) => key === 'GET /appStoreVersions/V1')).toHaveLength(10);
         expect(keys().at(-1)).toBe('PATCH /reviewSubmissions/S1');
-    });
-
-    test("looks for the build of its number where the upload has one", async () => {
-        answers[`${BUILDS.replace('&sort=', '&filter[version]=42&sort=')}`] = { data: [build('B2', 'VALID')] };
-        await release({ buildNumber: 42 });
-        expect(keys()).toContain(BUILDS.replace('&sort=', '&filter[version]=42&sort='));
-        expect(keys()).not.toContain(BUILDS);
     });
 
     test('clears a text the listing leaves empty, and gives a new localization none of its empty texts', async () => {
@@ -399,7 +403,7 @@ describe("a version's screenshots on App Store Connect", () => {
         ]);
         expect(bodyOf('PATCH /appScreenshots/SS1').data.attributes).toEqual({ uploaded: true, sourceFileChecksum: md5('second') });
         expect(bodyOf('PATCH /appScreenshotSets/SET1/relationships/appScreenshots')).toEqual({ data: [{ type: 'appScreenshots', id: 'SS1' }, { type: 'appScreenshots', id: 'SS2' }] });
-        expect(keys().indexOf('PATCH /appScreenshotSets/SET1/relationships/appScreenshots')).toBeLessThan(keys().indexOf(BUILDS));
+        expect(keys().indexOf('PATCH /appScreenshotSets/SET1/relationships/appScreenshots')).toBeLessThan(keys().indexOf('PATCH /appStoreVersions/V1/relationships/build'));
     });
 
     test("make the set of a display type App Store Connect lacks, in a new localization for a locale of screenshots alone", async () => {
@@ -416,7 +420,7 @@ describe("a version's screenshots on App Store Connect", () => {
         expect(bodyOf('POST /appScreenshots').data.relationships.appScreenshotSet).toEqual({ data: { type: 'appScreenshotSets', id: 'SET2' } });
     });
 
-    test('name a screenshot App Store Connect refuses, before the build is waited for', async () => {
+    test('name a screenshot App Store Connect refuses, before the version takes the build', async () => {
         answers[SETS] = { data: [] };
         answers['POST /appScreenshotSets'] = ({ data }) => ({ data: { id: 'SET1', ...data } });
         answers['GET /appScreenshotSets/SET1/appScreenshots?limit=200'] = {
@@ -425,7 +429,7 @@ describe("a version's screenshots on App Store Connect", () => {
         const shot = file('1.png', 'first');
         await expect(release({ listings: listed({ APP_IPHONE_67: [shot] }) })).rejects
             .toThrow(`crossbind: App Store Connect refused ${shot}: The dimensions of one or more screenshots are wrong.`);
-        expect(keys()).not.toContain(BUILDS);
+        expect(keys()).not.toContain('PATCH /appStoreVersions/V1/relationships/build');
 
         processed('SET1', ['SS2'], 'FAILED');
         await expect(release({ listings: listed({ APP_IPHONE_67: [shot] }) })).rejects.toThrow(`crossbind: App Store Connect refused ${shot}.`);
@@ -448,7 +452,7 @@ describe("a version's screenshots on App Store Connect", () => {
         answers['POST /appScreenshotSets'] = ({ data }) => ({ data: { id: 'SET1', ...data } });
         processed('SET1', ['SS1'], 'UPLOAD_COMPLETE');
         await expect(release({ listings: listed({ APP_IPHONE_67: [file('1.png', 'first')] }) })).rejects
-            .toThrow('crossbind: App Store Connect has not processed the screenshots in 10 minutes, so the version went to no review: once it has, pick the build for 1.2.3 in App Store Connect and submit it there.');
+            .toThrow('crossbind: App Store Connect has not processed the screenshots in 10 minutes, so the version went to no review: once it has, release again.');
         expect(keys().filter((key) => key === 'GET /appScreenshotSets/SET1/appScreenshots?limit=200')).toHaveLength(121);
     });
 

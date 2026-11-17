@@ -48,20 +48,24 @@ function readAll(root) {
 }
 
 // What crossbind app store says of Google Play: what an upload sends, which is the bundle and its release notes, what
-// --send sends, which is the rest of the page, what Play would refuse of it, and the steps Play Console alone takes,
-// once for the app.
+// a release puts out, what --send sends, which is the rest of the page, what Play would refuse of it, and the steps Play
+// Console alone takes, once for the app.
 export function playGuide(api) {
     const { listings, settings, problems } = readAll(api.project.root);
     const details = Object.entries(settings.details);
     const noted = listings.filter(({ notes }) => Object.keys(notes).length > 0);
-    const publishes = [
-        'the bundle, signed with the upload key, with its native debug symbols, on a track',
+    const uploads = [
+        'the bundle, signed with the upload key, with its native debug symbols, on a testing track: internal, or the one --track names',
         ...(noted.length > 0 ? [`its release notes in ${noted.map(({ language }) => path.join(PLAY_LISTING, language, 'changelogs')).join(', ')}`] : []),
     ];
     const sends = [
         ...listings.filter(isListed).map(languageLine),
         ...(details.length > 0 ? [`contact details: ${details.map(([field, text]) => `${DETAILS[field]} ${text}`).join(', ')}`] : []),
         ...(settings.dataSafety === undefined ? [] : [`the Data safety declaration in ${file('data_safety.csv')}`]),
+    ];
+    const releases = [
+        "the newest release the testing tracks have out to testers, on production, to the share of users --rollout gives at first",
+        'with it, the page --send sends',
     ];
     const id = api.config.app.id;
     const steps = [
@@ -78,10 +82,10 @@ export function playGuide(api) {
             ? [{ text: `Grow users › Store presence › Store settings › Contact details: an e-mail at least, which ${file('contact_email.txt')} would send with crossbind app store google-play --send.` }]
             : []),
         { text: 'Test and release › Production › Countries / regions: pick where the app goes. A personal account opened after 13 November 2023 first runs a closed test with 12 testers for 14 days.' },
-        { text: 'Test and release: roll out the first release once, which the first upload leaves a draft; later uploads go out by themselves.' },
-        { text: 'For CI: Users and permissions › invite the service account, with "Release apps to testing tracks", "Manage store presence" for the listing and details, and "Manage policy declarations" for the Data safety declaration.' },
+        { text: 'Test and release: roll out the first release once, which the first upload leaves a draft; later uploads go out to their testers by themselves, as releases do on production.' },
+        { text: 'For CI: Users and permissions › invite the service account, with "Release apps to testing tracks", "Release to production, exclude devices, and use Play App Signing" for releases, "Manage store presence" for the listing and details, and "Manage policy declarations" for the Data safety declaration.' },
     ];
     return {
-        publishes, sends, problems, where: 'Play Console', steps,
+        uploads, sends, releases, problems, where: 'Play Console', steps,
     };
 }

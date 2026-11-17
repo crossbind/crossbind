@@ -154,11 +154,12 @@ function listingOf(shownListings, { language, texts, images }) {
     return { key, value: { platformOverrides: {}, ...shown, baseListing: { ...shown?.baseListing, ...texts, images: list } }, uploads };
 }
 
-// The submission Partner Center made, a copy of the app's last, with the build's packages in place of the old ones and
-// the rollout to a percent of the app's users or to all, or, where packages is null, the packages and rollout it has;
-// with the project's listing and settings; and the files that go up for it, by the names it gives them.
+// A submission of Partner Center's, with the build's packages in place of the old ones, or, where packages is null, the
+// packages it has; the rollout to a percent of the app's users, or to all where rollout is null, or, where it is not
+// given, the rollout it has; with the project's listing and settings; and the files that go up for it, by the names it
+// gives them.
 export function changedSubmission(submission, {
-    packages = null, listings = [], settings = {}, rollout = null,
+    packages = null, listings = [], settings = {}, rollout,
 }) {
     const packageUploads = (packages ?? []).map((file) => ({ name: path.basename(file), file }));
     const listed = listings.map((listing) => listingOf(submission.listings ?? {}, listing));
@@ -170,6 +171,8 @@ export function changedSubmission(submission, {
                 fileName: name, fileStatus: 'PendingUpload', minimumDirectXVersion: 'None', minimumSystemRam: 'None',
             })),
         ],
+    };
+    const rolledOut = rollout === undefined ? {} : {
         packageDeliveryOptions: {
             ...delivery,
             packageRollout: { ...delivery.packageRollout, isPackageRollout: rollout !== null, packageRolloutPercentage: rollout ?? 0 },
@@ -179,6 +182,7 @@ export function changedSubmission(submission, {
         submission: {
             ...submission,
             ...packaged,
+            ...rolledOut,
             listings: { ...submission.listings, ...Object.fromEntries(listed.map(({ key, value }) => [key, value])) },
             ...(settings.category === undefined ? {} : { applicationCategory: settings.category }),
             ...(settings.notesForCertification === undefined ? {} : { notesForCertification: settings.notesForCertification }),
@@ -228,33 +232,61 @@ async function committedStatus(call, route) {
     }
 }
 
+// Puts what goes in a submission of the app into it, uploads the files that go up in one zip, and commits it for
+// certification, unless isDraft leaves it for a release to submit. Gives its status, once Partner Center has taken a
+// committed one; a failure after the commit says so.
+async function fillSubmission(call, route, made, { isDraft, zip, ...changes }) {
+    const { submission, uploads } = changedSubmission(made, changes);
+    await call('PUT', route, submission);
+    if (uploads.length > 0) {
+        writeZip(uploads, zip);
+        await uploadBlob(made.fileUploadUrl, zip);
+    }
+    if (isDraft) return 'PendingCommit';
+    await call('POST', `${route}/commit`);
+    try {
+        return await committedStatus(call, route);
+    } catch (error) {
+        throw Object.assign(error, { isCommitted: true });
+    }
+}
+
 // Makes a submission of the app with the build's packages, or, where packages is null, those it has, and the project's
 // listing and settings, uploads the files that go up in one zip, and commits it for certification, unless isDraft
-// leaves it for Partner Center to submit. A submission that fails before Partner Center takes it is deleted, so the
-// next one is made anew. Gives its id and status.
+// leaves it for a release to submit. A submission that fails before Partner Center takes it is deleted, so the next one
+// is made anew. Gives its id and status.
 export async function submitPackages(call, {
-    appId, packages = null, listings, settings, rollout = null, isDraft = false, zip,
+    appId, packages = null, listings = [], settings = {}, isDraft = false, zip,
 }) {
     const created = await call('POST', `applications/${appId}/submissions`);
     const route = `applications/${appId}/submissions/${created.id}`;
-    let isCommitted = false;
     try {
-        const { submission, uploads } = changedSubmission(created, {
-            packages, listings, settings, rollout,
-        });
-        await call('PUT', route, submission);
-        if (uploads.length > 0) {
-            writeZip(uploads, zip);
-            await uploadBlob(created.fileUploadUrl, zip);
-        }
-        if (isDraft) return { id: created.id, status: 'PendingCommit' };
-        await call('POST', `${route}/commit`);
-        isCommitted = true;
-        return { id: created.id, status: await committedStatus(call, route) };
+        return {
+            id: created.id,
+            status: await fillSubmission(call, route, created, {
+                packages, listings, settings, isDraft, zip,
+            }),
+        };
     } catch (error) {
-        if (!isCommitted || error.isCommitFailed) await call('DELETE', route).catch(() => {});
+        if (!error.isCommitted || error.isCommitFailed) await call('DELETE', route).catch(() => {});
         throw error;
     }
+}
+
+// Commits for certification the app's submission an upload left, with its packages, the project's listing and settings,
+// and the rollout to a percent of the app's users, or to all where rollout is null. One Partner Center has taken already
+// is none to commit. Gives its status once Partner Center has taken it.
+export async function releaseSubmission(call, {
+    appId, submissionId, listings = [], settings = {}, rollout = null, zip,
+}) {
+    const route = `applications/${appId}/submissions/${submissionId}`;
+    const pending = await call('GET', route);
+    if (pending.status !== 'PendingCommit') {
+        throw new Error(`crossbind: Partner Center has submission ${submissionId} as ${pending.status} already, which goes on as Partner Center mails: crossbind app upload microsoft-store leaves the next one to release.`);
+    }
+    return fillSubmission(call, route, pending, {
+        listings, settings, rollout, isDraft: false, zip,
+    });
 }
 
 // Deletes the app's submission in progress, so an upload makes its own.

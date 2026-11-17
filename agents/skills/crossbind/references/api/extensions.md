@@ -1008,7 +1008,7 @@ struct Clock: Widget {
 ```
 
 Each target is signed as the app is: Xcode signs a development build with the app's team, and
-`crossbind app publish app-store -p ios` signs each target in the archive with its own entitlements before the app, checks its
+`crossbind app upload app-store -p ios` signs each target in the archive with its own entitlements before the app, checks its
 binary against its own privacy manifest, and uploads them together. Each takes an App ID of its own, of which a free
 team makes ten a week.
 
@@ -1129,8 +1129,9 @@ the path as a URL holds it: escaped where it must be, with a query of its own af
 
 ## Publishers
 
-An extension's `publisher` sends the app to a store: `crossbind app publish <name>` runs it, with the extension's
-name. crossbind's own `google-play`, `app-store`, `microsoft-store` and `github` are publishers of this kind, which use the same
+An extension's `publisher` sends the app to a store: `crossbind app upload <name>` runs it, with the extension's
+name, to the store's testers, and `crossbind app release <name>` puts out to everyone what they have. crossbind's own
+`google-play`, `app-store`, `microsoft-store` and `github` are publishers of this kind, which use the same
 [`api`](#the-api) alone, and an extension `extensions` lists under one of their names, with a publisher, replaces it;
 one with an `app` alone leaves it as it is.
 
@@ -1144,9 +1145,9 @@ export default function demoStore() {
         publisher: {
             platform: 'android',
             store: 'Demo Store',
+            canStage: true,
             options: {
-                channel: { help: 'the channel the release goes to', value: '<channel>', default: 'beta' },
-                draft: { help: 'leave the release a draft' },
+                channel: { help: 'the testing channel the build goes to', value: '<channel>', default: 'beta' },
             },
             async check(api) {
                 const token = process.env.DEMO_STORE_TOKEN ?? api.secrets.get('token');
@@ -1158,6 +1159,14 @@ export default function demoStore() {
                 // The store's own API takes it here.
                 return { published: { url: 'https://store.example/apps/demo' } };
             },
+            async release(api) {
+                const token = process.env.DEMO_STORE_TOKEN ?? api.secrets.get('token');
+                if (!token) return { missing: ['Demo Store takes releases with a token: set DEMO_STORE_TOKEN.'] };
+                const share = api.options.rollout ?? 100;
+                api.log(`putting the testers' build out to ${share}% of Demo Store's users.`);
+                // The store's own API takes it here.
+                return {};
+            },
         },
     };
 }
@@ -1165,18 +1174,20 @@ export default function demoStore() {
 
 - `platform`: The platform of the apps it takes: `android`, `ios`, `macos`, `linux`, `windows`, or `desktop` for the
   last three; or a list of them.
-- `isDefault`: True for the store a publish of its platforms goes to where it names none, or the list of those of them
+- `isDefault`: True for the store an upload of its platforms goes to where it names none, or the list of those of them
   it does: the last that says so, an app's after crossbind's, whose `google-play` does for Android and `app-store`,
   `['ios']`, for iOS alone of its two.
 - `store`: The name the store goes by in crossbind's messages; the extension's name without it.
 - `options`: The options it takes after its name, by camelCase names the command line writes in `--kebab-case`:
   `{ help }` for a flag, which is true or false, and `{ help, value, default }` for one that takes a value, which
   `value` names as `'<channel>'`. `platform`, `help` and `version` are the command's own, and those of the Vite build
-  the publish runs, as `mode` and `debug`, are Vite's, so no publisher takes their names; two publishers of one publish
+  the upload runs, as `mode` and `debug`, are Vite's, so no publisher takes their names; two publishers of one upload
   take an option of one name alike.
-- `after`: The publisher it comes after: the publish runs that one first, from the same build. A publisher after
+- `after`: The publisher it comes after: the upload runs that one first, from the same build. A publisher after
   another takes no `build`, `buildNumber` or `buildEnv`, and asks for no other build.
-- `build(api)`: The changes the publish's build makes to `crossbind.config.js`, the app's other builds keeping it as it
+- `canStage`: True where its `release` reaches a share of the users at first, as `--rollout` asks. A release with
+  `--rollout` below 100 stops before any store releases where one of its stores has none.
+- `build(api)`: The changes the upload's build makes to `crossbind.config.js`, the app's other builds keeping it as it
   is: a JSON merge patch of its export, in which objects merge, `null` removes a key and any other value takes the place
   of the one there. `{ app: { updater: null } }` builds the app without its updater, as a store that updates apps itself
   takes it, and signs no update whatever `CROSSBIND_UPDATER_PRIVATE_KEY` holds.
@@ -1185,28 +1196,32 @@ export default function demoStore() {
 - `buildNumber(api, session)`: The build number, a whole number from 1 to 2100000000, as both stores take, which the
   build gets as `CROSSBIND_APP_BUILD_NUMBER`, or null for the app's own.
 - `buildEnv(api, session)`: Variables the build runs with beside crossbind's; one set to `undefined` is left out.
-- `upload(api, session, output, published)`: Sends what the build made to the store. It returns
-  `{ isRebuildAsked: true }` for another build, after which it runs again, four builds in all at most, or
-  `{ published }`: what it put out, which a publisher after it gets as `published`.
+- `upload(api, session, output, published)`: Sends what the build made to the store's testers, changing nothing its
+  users see. It returns `{ isRebuildAsked: true }` for another build, after which it runs again, four builds in all at
+  most, or `{ published }`: what it put out, which a publisher after it gets as `published`.
+- `release(api)`: Puts out to everyone what the store's testers have, with no build, and the page `store/` holds with
+  it, as `crossbind app release` runs it for each platform the publisher takes, or the one `-p` names.
+  `api.options.rollout` is the share of the users it reaches at first, a percent below 100, or null for all of them. It
+  returns `{ missing }` as `send` does.
 - `send(api)`: Sends the store's page, the listing, screenshots and settings the project's `store/` folder holds, with no
   build, as `crossbind app store --send` runs it for each platform the publisher takes, or the one `-p` names. It returns
   `{ missing }` for what is not there, which the command names with every other store's at once, and asks for it and
   sets it up on a terminal, `api.isGuided`, as `check` does.
 - `state(api)`: What the store has of the app now, as lines `crossbind app store` writes under its guide: it asks for
-  nothing, and tells with the credentials a publish takes where they are at hand, or how to see it where they are not.
+  nothing, and tells with the credentials an upload takes where they are at hand, or how to see it where they are not.
   A failure is written as a line of its own.
 - `guide(api)`: What `crossbind app store` says of the store, with no build and no credentials:
-  `{ publishes, sends, problems, where, steps }`, the lines of what a publish sends and of what `--send` sends, every
-  problem the store would refuse of the project's files, where the steps are done, and the steps only the store's own
-  site takes, once for the app, each `{ text, url, details }`, its details a list of lines. A store whose publisher has
-  none is left out of `crossbind app store`.
+  `{ uploads, sends, releases, problems, where, steps }`, the lines of what an upload sends, of what `--send` sends and
+  of what a release puts out, every problem the store would refuse of the project's files, where the steps are done,
+  and the steps only the store's own site takes, once for the app, each `{ text, url, details }`, its details a list of
+  lines. A store whose publisher has none is left out of `crossbind app store`.
 
-All but `platform` and `upload` are optional. A step that fails with a message not crossbind's own stops the publish
+All but `platform` and `upload` are optional. A step that fails with a message not crossbind's own stops the upload
 with one that names the publisher and the step, as `demo-store's check failed: â€¦`.
 
-### A publish
+### An upload
 
-`crossbind app publish demo-store --channel stable --mode staging`:
+`crossbind app upload demo-store --channel stable --mode staging`:
 
 1. finds the publisher, after those it comes after, and says so of one an extension lists in the place of crossbind's
    own;
@@ -1221,8 +1236,9 @@ with one that names the publisher and the step, as `demo-store's check failed: â
 6. hands the build's output to each `upload` in turn. Where a platform fails after another went to the store, the
    error says which went and the `-p` that publishes the rest.
 
-Without a name, `-p android` publishes to `google-play` and `-p ios` to `app-store`. `crossbind app publish --help`
-lists the app's stores, crossbind's own and its extensions', with their options.
+Without a name, `-p android` publishes to `google-play` and `-p ios` to `app-store`. `crossbind app upload --help`
+lists the app's stores, crossbind's own and its extensions', with their options. Without a name, an upload goes to each
+store `app.stores` names, as a release does.
 
 ### What the build made
 
@@ -1299,7 +1315,7 @@ manifest that signs it. Without the key it makes none.
 ## Commands
 
 An extension's `commands` add commands under `crossbind app`, which run in crossbind's process with the
-[`api`](#the-api). crossbind's own `updater` gives `crossbind app updater-key` this way.
+[`api`](#the-api).
 
 ```js
 // crossbind.extension.js
@@ -1334,6 +1350,34 @@ A command has no platform, so its `api.platform` is null and `api.run`, an insta
 a project whose `target.runtimeEnv` names no environment but `app`. A name that `crossbind app` has already, of crossbind's or of another
 extension's, stops `crossbind app` in the project, naming both; an extension that takes the place of one of
 crossbind's own, by its name or with `replaces`, takes the place of that one's commands too.
+
+## Keys
+
+An extension's `keys` add the keys it signs with under `crossbind app key`, which makes one by its name and, with no
+name, says where each is kept, beside this machine's upload key. crossbind's own `updater` gives
+`crossbind app key updater` this way.
+
+```js
+keys: {
+    updater: {
+        help: "make the key pair that signs a desktop app's updates",
+        run(api) {
+            // makes the pair and prints where each half goes
+        },
+        state(api) {
+            return [api.config.app.updater?.publicKey ? 'app.updater.publicKey in crossbind.config.js' : 'none yet'];
+        },
+    },
+},
+```
+
+- `help`, `options` and `run(api)`: As a command's, its line in `crossbind app key --help` and the step that makes the
+  key.
+- `state(api)`: Optional: lines of where the key is kept, which `crossbind app key` writes after its name, with no
+  question; without it, the line says that `crossbind app key <name>` makes it.
+
+A name `crossbind app key` has already, `upload` or another extension's, stops `crossbind app` in the project, naming
+both, and an extension that takes the place of one of crossbind's own takes the place of its keys too.
 
 ## Package sources
 
@@ -1536,7 +1580,7 @@ extension and its run, and frozen. A package source's steps get [their own](#pac
   that signs a file in the windows image with the key the environment names, which a tool that signs as it builds runs,
   as NSIS does, or null without a key.
 - `android`: `signing()`, the environment a release builds in with this machine's upload key, as `{ env, isSigned }`,
-  and `makeUploadKey()`, as `crossbind app upload-key` makes it.
+  and `makeUploadKey()`, as `crossbind app key upload` makes it.
 - `apple`: `key()`, the App Store Connect API key the environment names, or null; `teams()`, the teams Xcode is signed
   in to; `xcodebuild(what, args, { log, facts, causes })`, which writes xcodebuild's output to the file `log` names and
   returns it, and whose failure names xcodebuild's reasons and the fix of the cause it finds, crossbind's first, then

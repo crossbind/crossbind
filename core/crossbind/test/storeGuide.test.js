@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'vitest';
 import {
-    checkedGuide, checkedState, guideText, guidedPublishers, pagePlatforms, sendingPublishers,
+    checkedGuide, checkedState, guideText, guidedPublishers, ofStores, pagePlatforms, sendingPublishers,
 } from '../src/actions/storeGuide.js';
 
 const publisherOf = (name, { guide = false, send = false, platforms = ['android'] } = {}) => ({
@@ -35,6 +35,11 @@ describe('the stores crossbind app store --send sends the page of', () => {
         expect(() => sendingPublishers(PUBLISHERS, 'github')).toThrow("crossbind: github's publisher sends no page of its store.");
     });
 
+    test('are those app.stores names, in its order, where it is set', () => {
+        expect(ofStores(PUBLISHERS, ['google-play', 'app-store']).map(({ name }) => name)).toEqual(['google-play', 'app-store']);
+        expect(ofStores(PUBLISHERS, null)).toBe(PUBLISHERS);
+    });
+
     test('go for every platform the publisher takes, or the one -p names', () => {
         const [appStore] = PUBLISHERS;
         expect(pagePlatforms(appStore)).toEqual(['ios', 'macos']);
@@ -45,8 +50,9 @@ describe('the stores crossbind app store --send sends the page of', () => {
 
 describe("a store's guide", () => {
     const guide = {
-        publishes: ['the bundle'],
+        uploads: ['the bundle'],
         sends: ['store/demo/en-US: title'],
+        releases: ['the newest testing build, on production'],
         problems: ['crossbind: store/demo/en-US/icon.png is 500 × 500, and Demo Store takes an icon of 512 × 512.'],
         where: 'Demo Console',
         steps: [
@@ -55,12 +61,15 @@ describe("a store's guide", () => {
         ],
     };
 
-    test('is written as what an upload sends, what --send sends, what to fix first, the steps by hand and what the store has, in order', () => {
+    test('is written as what an upload sends, what a release puts out, what --send sends, what to fix first, the steps by hand and what the store has, in order', () => {
         expect(guideText({ name: 'demo-store', publisher: { store: 'Demo Store' } }, guide, 'Demo 1.2.3', ['crossbind: internal: versionCode 7, out'])).toBe([
             'Demo Store · Demo 1.2.3',
             '',
             'crossbind app upload demo-store sends:',
             '  ✓ the bundle',
+            '',
+            'crossbind app release demo-store puts out:',
+            '  ✓ the newest testing build, on production',
             '',
             'crossbind app store demo-store --send sends:',
             '  ✓ store/demo/en-US: title',
@@ -81,15 +90,16 @@ describe("a store's guide", () => {
 
     test('leaves out a part it has nothing of, and names the store by its extension where it has no name', () => {
         expect(guideText({ name: 'demo-store', publisher: { store: null } }, {
-            publishes: [], sends: [], problems: [], where: 'Demo Console', steps: [],
+            uploads: [], sends: [], releases: [], problems: [], where: 'Demo Console', steps: [],
         }, 'Demo 1.2.3')).toBe('demo-store · Demo 1.2.3');
     });
 
     test('is refused where it is not the shape crossbind writes, naming the publisher', () => {
         expect(checkedGuide('demo-store', guide)).toBe(guide);
-        const message = "crossbind: demo-store's guide gives no { publishes, sends, problems, where, steps }";
+        const message = "crossbind: demo-store's guide gives no { uploads, sends, releases, problems, where, steps }";
         expect(() => checkedGuide('demo-store', null)).toThrow(message);
-        expect(() => checkedGuide('demo-store', { ...guide, publishes: 'the bundle' })).toThrow(message);
+        expect(() => checkedGuide('demo-store', { ...guide, uploads: 'the bundle' })).toThrow(message);
+        expect(() => checkedGuide('demo-store', { ...guide, releases: undefined })).toThrow(message);
         expect(() => checkedGuide('demo-store', { ...guide, sends: undefined })).toThrow(message);
         expect(() => checkedGuide('demo-store', { ...guide, steps: [{ text: 'Create the app.', details: 'Title' }] })).toThrow(message);
         expect(() => checkedGuide('demo-store', { ...guide, where: undefined })).toThrow(message);

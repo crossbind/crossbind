@@ -35,7 +35,7 @@ const TEXTS = {
 };
 const IMAGES = { Icon: 'tile', PromotionalArt16x9: 'hero' };
 
-// What an upload sends of a language: its texts, its lists and its images.
+// What crossbind app store --send sends of a language, as a release does: its texts, its lists and its images.
 function languageLine({ language, texts, images }) {
     const parts = [
         Object.entries(texts).map(([field, text]) => (Array.isArray(text) ? `${text.length} ${field === 'features' ? 'features' : 'search terms'}` : TEXTS[field])).join(', '),
@@ -102,14 +102,17 @@ function firstSubmission(api, listings, settings) {
     ];
 }
 
-// What crossbind app store says of the Microsoft Store: what an upload sends, which is the packages and the page, what
-// --send sends, which is the page alone, what Partner Center would refuse of it, and the steps Partner Center alone
-// takes: the app's name, the first submission and the application its API takes.
+// What crossbind app store says of the Microsoft Store: what an upload sends, which is the packages, what a release puts
+// out, which is them with the page, what --send sends, which is the page alone, what Partner Center would refuse of it,
+// and the steps Partner Center alone takes: the app's name, the first submission and the application its API takes.
 export function msStoreGuide(api) {
     const { listings, settings, problems } = readAll(api.project.root);
     const identity = api.config.app.windows?.msix;
-    const publishes = [
-        "the app's MSIX packages, x64 and arm64, in place of the last submission's, which Partner Center certifies and signs",
+    const uploads = [
+        "the app's MSIX packages, x64 and arm64, in place of the last submission's, in a submission left for the release",
+    ];
+    const releases = [
+        'the submission an upload left, for certification, after which Partner Center signs the packages and puts them out to the share of users --rollout gives at first',
         'with them, the page --send sends',
     ];
     const sends = [
@@ -124,11 +127,11 @@ export function msStoreGuide(api) {
         }]),
         ...firstSubmission(api, listings, settings),
         {
-            text: `For later versions, which an upload sends: Account settings › User management › Microsoft Entra applications: add one with the Manager role and make a key, which ${STORE_ENV.tenant}, ${STORE_ENV.client} and ${STORE_ENV.secret} name, or an upload on a terminal asks for once.`,
+            text: `For later versions, which uploads and releases send: Account settings › User management › Microsoft Entra applications: add one with the Manager role and make a key, which ${STORE_ENV.tenant}, ${STORE_ENV.client} and ${STORE_ENV.secret} name, or an upload on a terminal asks for once.`,
             url: USERS,
         },
     ];
     return {
-        publishes, sends, problems, where: 'Partner Center', steps,
+        uploads, sends, releases, problems, where: 'Partner Center', steps,
     };
 }

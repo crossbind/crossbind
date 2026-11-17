@@ -29,12 +29,13 @@ test('every CROSSBIND_ name the Distribute pages use is one the code of crossbin
     }
 });
 
-test("each store's page names every option its publisher takes", async () => {
+test("each store's page names every option its publisher takes, and its release", async () => {
     for (const [slug, name] of Object.entries(PUBLISHERS)) {
         const { default: extension } = await import(new URL(`extensions/${name}/crossbind.extension.js`, ROOT));
         const page = DISTRIBUTE.find((candidate) => candidate.slug === slug);
-        for (const option of Object.keys(extension().publisher.options)) {
+        for (const option of Object.keys(extension().publisher.options ?? {})) {
             assert.ok(textOf(page).includes(`--${option}`), `${slug} does not name --${option}`);
         }
+        assert.ok(textOf(page).includes(`crossbind app release ${name}`), `${slug} does not name crossbind app release ${name}`);
     }
 });

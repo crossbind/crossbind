@@ -8,10 +8,11 @@ It comes with `@crossbind/core-app-host`: there is nothing to install or list.
 
 ```sh
 npx crossbind app upload github -p macos
+npx crossbind app release github
 ```
 
-It builds the desktop app and puts its installers, and with `app.updater` its update and the update's manifest, on the
-GitHub release of the version `package.json` gives. `--draft` leaves the release a draft.
+An upload builds the desktop app and puts its installers, and with `app.updater` its update and the update's manifest,
+on the draft GitHub release of the version `package.json` gives. A release puts the draft out, with no build.
 
 ## Platforms
 
