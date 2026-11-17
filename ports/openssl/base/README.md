@@ -1,5 +1,5 @@
 # @crossbind/port-openssl
-**Precompiled OpenSSL library built with crossbind for seamless integration in JavaScript, WebAssembly and React Native projects.**
+**The OpenSSL library, prebuilt with crossbind for JavaScript, WebAssembly and React Native projects.**
 
 <a href="https://www.npmjs.com/package/@crossbind/port-openssl">
     <img alt="NPM version" src="https://img.shields.io/npm/v/@crossbind/port-openssl/beta?style=for-the-badge" />
@@ -11,7 +11,7 @@
     <img alt="License" src="https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fregistry.npmjs.org%2F%40crossbind%2Fport-openssl%2Fbeta&query=%24.license&style=for-the-badge&label=license" />
 </a>
 
-> Use it together with **[crossbind](https://crossbind.dev)** — the toolchain for using C++ libraries from JavaScript, TypeScript, WebAssembly, Node.js and React Native. Learn more at **[crossbind.dev](https://crossbind.dev)**.
+> Use it with **[crossbind](https://crossbind.dev)**, which lets JavaScript, TypeScript, Node.js and React Native code import C and C++ headers.
 
 ## See it run
 Three apps on **[crossbind.dev/ports/openssl](https://crossbind.dev/ports/openssl/#apps)** run this package in your browser:
@@ -20,7 +20,7 @@ Three apps on **[crossbind.dev/ports/openssl](https://crossbind.dev/ports/openss
 - **TLS lab.** An OpenSSL client and server shake hands inside the tab over memory BIOs while the page lists every message. By default they agree on TLS 1.3, `TLS_AES_256_GCM_SHA384` and the hybrid post-quantum group `X25519MLKEM768`: a 1,216-byte key share out and 1,120 bytes back. With Encrypted Client Hello on, `secret.example` is in none of the bytes on the wire; one flipped bit ends the handshake with a `bad record mac` alert.
 - **PFX unpacker.** A `.p12` or `.pfx` opened into PEM, with the ciphers and MAC that protect each part named as `openssl pkcs12 -info` names them. A file exported with `-legacy` stops with `error:0308010C:digital envelope routines::unsupported` until the legacy provider is loaded; the app loads it for such files only and can pack the contents back as a modern AES-256 file.
 
-Their C++ wrappers, and the self-check the site build runs against published test vectors, the host's OpenSSL 3.6.2, Python's `cryptography` and the browser's own WebCrypto, are in [`landing/demos/lib-openssl`](https://github.com/crossbind/crossbind/tree/main/landing/demos/lib-openssl).
+Their C++ wrappers are in [`landing/demos/lib-openssl`](https://github.com/crossbind/crossbind/tree/main/landing/demos/lib-openssl).
 
 ## Integration
 Install the main package together with the platform builds:
@@ -29,7 +29,7 @@ Install the main package together with the platform builds:
 npm install @crossbind/port-openssl@beta @crossbind/port-openssl-wasm@beta @crossbind/port-openssl-android@beta @crossbind/port-openssl-ios@beta
 ```
 
-Then import all three platforms in `crossbind.config.js` — crossbind compiles only the one matching each build target:
+Then list all three in `crossbind.config.js`; each build uses the one for its target:
 
 ```diff
 +import opensslWasm from '@crossbind/port-openssl-wasm/crossbind.config.js';
@@ -48,7 +48,7 @@ export default {
 };
 ```
 
-A native Node.js addon (`crossbind build -e node`) links the build of its platform: `-p darwin`, `-p linux`, `-p linuxmusl` or `-p win32` takes `@crossbind/port-openssl-darwin`, `-linux`, `-linuxmusl` or `-win32`; `-linuxmusl` is the one for Alpine and other musl distributions. Install it and import its `crossbind.config.js` the same way.
+A Node.js addon (`crossbind build -e node`) links the desktop build of its platform instead: `@crossbind/port-openssl-darwin`, `-linux`, `-linuxmusl` (Alpine and other musl systems) or `-win32`. Install and list it the same way.
 
 ## Usage
 crossbind binds your C++ headers to JavaScript, so the usual pattern is a small wrapper around the library. This one reads a certificate from PEM text and answers what people open certificates for: whom it is for, who issued it, when it expires, which host names it covers and its fingerprint. Put it in your project's native folder (`src/native/` by default):
@@ -228,25 +228,23 @@ Setup for every platform: [crossbind.dev/ports/openssl](https://crossbind.dev/po
 - The legacy provider, which has RC2, the cipher of old PKCS#12 files, is compiled in and off until `OSSL_PROVIDER_load(NULL, "legacy")`. Loading any provider by name stops OpenSSL from loading its default provider on its own, so load `"default"` explicitly as well.
 - No CA certificates in the browser: the WebAssembly package carries Mozilla's bundle as of 15 July 2025 (143 roots, `ssl/certs/cacert.pem`), but only the Android, iOS, macOS, Linux, Windows and WASI builds declare it as runtime data, and those set `CURL_CA_BUNDLE` to it. A browser app that verifies public certificates brings its own roots.
 - No `openssl.cnf` either: OpenSSL runs on its built-in defaults. Keys and nonces draw on the browser's `crypto.getRandomValues`.
-- The module behind the five examples and three apps is 4,037,192 bytes of WebAssembly and 137,522 bytes of JavaScript. Most of it is libcrypto with its default provider, which any use of EVP brings in: a module that only hashed and encrypted measured 2,761,152 bytes, one that only read the version 224,494, and libssl adds about 0.9 MB.
+- The module behind the examples and apps is about 4 MB of WebAssembly. Most of it is libcrypto with its default provider, which any use of EVP brings in; libssl adds about 0.9 MB.
 - OpenSSL 4 changes met on the way: `X509_get_subject_name` returns a `const X509_NAME*`, so build a name with `X509_NAME_new` and set it with `X509_set_subject_name`; and `-text` output now wraps hex dumps at 16 bytes, 24 for signatures, and gives an EC key's size as `256 bit field, 128 bit security level`.
 - The `openssl` command is not in the library packages; `@crossbind/port-openssl-standalone-wasi` ships it as an `openssl-wasi` command for offline work, without `s_client` and `s_server`.
 
 ## Supported platforms
-This is the main package; the precompiled binaries are shipped per platform:
+This is the main package; the binaries ship in one package per platform:
 
-| Platform | Package | Targets |
-|---|---|---|
-| WebAssembly | [`@crossbind/port-openssl-wasm`](https://www.npmjs.com/package/@crossbind/port-openssl-wasm) | `wasm32` — single-threaded & multi-threaded |
-| Android | [`@crossbind/port-openssl-android`](https://www.npmjs.com/package/@crossbind/port-openssl-android) | `arm64-v8a` (64-bit ARM), `x86_64` (emulator) |
-| iOS | [`@crossbind/port-openssl-ios`](https://www.npmjs.com/package/@crossbind/port-openssl-ios) | device (`arm64`), simulator (`arm64`) |
-| macOS | [`@crossbind/port-openssl-darwin`](https://www.npmjs.com/package/@crossbind/port-openssl-darwin) | `arm64` (Apple silicon), `x64` (Intel) — native Node.js addons |
-| Linux | [`@crossbind/port-openssl-linux`](https://www.npmjs.com/package/@crossbind/port-openssl-linux) | `x64`, `arm64` — glibc 2.28 or later, native Node.js addons |
-| Linux (musl) | [`@crossbind/port-openssl-linuxmusl`](https://www.npmjs.com/package/@crossbind/port-openssl-linuxmusl) | `x64`, `arm64` — musl 1.2.5 or later (Alpine 3.21 and later), native Node.js addons |
-| Windows | [`@crossbind/port-openssl-win32`](https://www.npmjs.com/package/@crossbind/port-openssl-win32) | `x64`, `arm64` — Windows 10 or later, native Node.js addons |
-| WASI library | [`@crossbind/port-openssl-wasi`](https://www.npmjs.com/package/@crossbind/port-openssl-wasi) | `wasm32-wasip3` — single-threaded |
-| WASI command | [`@crossbind/port-openssl-standalone-wasi`](https://www.npmjs.com/package/@crossbind/port-openssl-standalone-wasi) | the upstream `openssl` CLI as an `openssl-wasi` command (wasmtime 47+) |
-| Node.js, ready-made | [`@crossbind/port-openssl-standalone-napi`](https://www.npmjs.com/package/@crossbind/port-openssl-standalone-napi) | prebuilt addons for macOS, Linux (glibc and musl) and Windows, `arm64` and `x64`: nothing to build |
+- **WebAssembly**, [`@crossbind/port-openssl-wasm`](https://www.npmjs.com/package/@crossbind/port-openssl-wasm): `wasm32`; single-threaded and multi-threaded.
+- **Android**, [`@crossbind/port-openssl-android`](https://www.npmjs.com/package/@crossbind/port-openssl-android): `arm64-v8a` (64-bit ARM), `x86_64` (emulator).
+- **iOS**, [`@crossbind/port-openssl-ios`](https://www.npmjs.com/package/@crossbind/port-openssl-ios): device (`arm64`), simulator (`arm64`).
+- **macOS**, [`@crossbind/port-openssl-darwin`](https://www.npmjs.com/package/@crossbind/port-openssl-darwin): `arm64` (Apple silicon), `x64` (Intel); native Node.js addons.
+- **Linux**, [`@crossbind/port-openssl-linux`](https://www.npmjs.com/package/@crossbind/port-openssl-linux): `x64`, `arm64`; glibc 2.28 or later, native Node.js addons.
+- **Linux (musl)**, [`@crossbind/port-openssl-linuxmusl`](https://www.npmjs.com/package/@crossbind/port-openssl-linuxmusl): `x64`, `arm64`; musl 1.2.5 or later (Alpine 3.21 and later), native Node.js addons.
+- **Windows**, [`@crossbind/port-openssl-win32`](https://www.npmjs.com/package/@crossbind/port-openssl-win32): `x64`, `arm64`; Windows 10 or later, native Node.js addons.
+- **WASI library**, [`@crossbind/port-openssl-wasi`](https://www.npmjs.com/package/@crossbind/port-openssl-wasi): `wasm32-wasip3`; single-threaded.
+- **WASI command**, [`@crossbind/port-openssl-standalone-wasi`](https://www.npmjs.com/package/@crossbind/port-openssl-standalone-wasi): the upstream `openssl` CLI as an `openssl-wasi` command (wasmtime 47+).
+- **Node.js, ready-made**, [`@crossbind/port-openssl-standalone-napi`](https://www.npmjs.com/package/@crossbind/port-openssl-standalone-napi): prebuilt addons for macOS, Linux (glibc and musl) and Windows, `arm64` and `x64`: nothing to build.
 
 ## License
 This project includes the precompiled OpenSSL library, which is distributed under the [Apache License 2.0](https://github.com/openssl/openssl/blob/master/LICENSE.txt).

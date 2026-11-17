@@ -4,18 +4,18 @@ export default {
     slug: 'bindings',
     title: 'C++',
     description: 'The subset of C++ that binds automatically, the type table, and how to wrap the rest.',
-    lede: 'There are no binding macros to write: the generator reads your header and produces the bridge. In exchange it handles a constrained subset of C++. Stay inside it and everything binds for free; step outside and you wrap the offending API in something that does.',
+    lede: 'There are no binding macros to write: the generator reads your header and writes the bridge. It handles a subset of C++. Inside it everything binds; outside it, wrap the API in something that does.',
     blocks: [
         { type: 'h2', id: 'rules', text: 'The rules' },
         { type: 'h3', text: 'The public surface belongs in the header' },
         {
             type: 'p',
-            text: 'The binder reads headers. A class declared in the `.h` but defined only in the `.cpp`, an anonymous namespace around the API, or a file-scope `static` function is invisible to it. Public members bind; private ones stay internal, which is fine.',
+            text: 'The binder reads only headers: a class defined only in the `.cpp`, an anonymous namespace around the API or a file-scope `static` function is invisible to it. Public members bind; private ones do not.',
         },
         { type: 'h3', text: 'Single inheritance only' },
         {
             type: 'p',
-            text: 'Single-base `virtual` polymorphism is supported. Multiple inheritance - diamonds especially - breaks the auto-binder; refactor to composition or wrap it.',
+            text: 'Single-base `virtual` polymorphism works. Multiple inheritance, diamonds especially, breaks the binder: use composition or a wrapper.',
         },
         { type: 'h3', text: 'Templates need explicit instantiation' },
         {
@@ -36,7 +36,7 @@ template class Buffer<float>;`,
             type: 'callout',
             tone: 'warn',
             title: 'Returning unique_ptr',
-            text: 'A `std::unique_ptr` returned across the boundary fails silently - the call comes back `null` or `undefined`. Use `std::shared_ptr` for anything JavaScript will own a handle to.',
+            text: 'A `std::unique_ptr` returned across the boundary fails silently: the call returns `null` or `undefined`. Use `std::shared_ptr` for anything JavaScript holds.',
         },
 
         { type: 'h2', id: 'types', text: 'Primitive types' },
@@ -52,7 +52,7 @@ template class Buffer<float>;`,
                 ['`long`, `size_t`', '`Number` on wasm32, `BigInt` on React Native', ''],
                 ['`std::string`', '`String`', ''],
                 ['`const char *`', '`String`', 'see [pointers](#pointers)'],
-                ['`std::optional<T>`', 'the value or `null`', 'C++17, supported on every runtime'],
+                ['`std::optional<T>`', 'the value or `null`', 'C++17, every runtime'],
                 ['`emscripten::val`', 'anything', 'the untyped escape hatch'],
             ],
         },
@@ -64,7 +64,7 @@ template class Buffer<float>;`,
         { type: 'h2', id: 'containers', text: 'Vectors, maps and enums' },
         {
             type: 'p',
-            text: 'Vectors of the primitive types are bound under generated names - `VectorInt`, `VectorDouble`, `VectorString`, `VectorInt64` and friends. A vector of your own class follows the same rule: `std::vector<MyClass>` becomes `VectorMyClass`.',
+            text: 'Vectors bind under generated names: `VectorInt`, `VectorDouble`, `VectorString`, `VectorInt64` and so on. `std::vector<MyClass>` becomes `VectorMyClass`.',
         },
         {
             type: 'code',
@@ -81,7 +81,7 @@ setMyVector(next);`,
         },
         {
             type: 'p',
-            text: 'Two module helpers convert between the two worlds when you would rather work with plain arrays:',
+            text: 'To work with plain arrays, convert with two module helpers:',
         },
         {
             type: 'code',
@@ -92,19 +92,19 @@ setMyVector(m.toVector(VectorInt, values)); // Array -> vector`,
         },
         {
             type: 'p',
-            text: 'Maps bind the same way (`MapIntInt`, `MapStringString`, `MapStringInt`, `MapIntString`), enums arrive as objects with the enumerator names as keys, and both `enum` and `enum class` are supported.',
+            text: 'Maps bind the same way (`MapIntInt`, `MapStringString`, `MapStringInt`, `MapIntString`). Enums, `enum` and `enum class` alike, arrive as objects keyed by their member names.',
         },
         {
             type: 'callout',
             tone: 'note',
-            title: 'Worker runtimes differ slightly',
-            text: 'On direct runtimes a `std::vector` return is a real vector proxy; through a worker bridge it arrives as a plain JavaScript array. `m.toArray()` accepts both shapes, so code written against it works either way.',
+            title: 'Worker mode returns arrays',
+            text: 'In worker mode a returned `std::vector` arrives as a plain array instead of a vector. `m.toArray()` takes both, so code that uses it works either way.',
         },
 
         { type: 'h2', id: 'pointers', text: 'Pointers' },
         {
             type: 'p',
-            text: 'Raw pointers bind. What the generator cannot turn into an object crosses as a handle: an opaque `NativePointer` that carries the address and owns whatever crossbind allocated for it.',
+            text: 'Raw pointers bind. What cannot become an object crosses as a handle: an opaque `NativePointer` that holds the address and owns what crossbind allocated for it.',
         },
         {
             type: 'table',
@@ -121,7 +121,7 @@ setMyVector(m.toVector(VectorInt, values)); // Array -> vector`,
         },
         {
             type: 'p',
-            text: 'Every module that binds a pointer also exports the helpers that make and read handles: `cstring` and `readCString`, `allocBuffer` and `allocPointer` (zero-filled), `allocString` and `readString`, `readNumberAt` and `writeNumberAt`, `readPointerAt` and `writePointerAt`, `readBuffer` (a `Uint8Array` copy) and `writeBuffer`, and `releaseCallback`.',
+            text: 'Every module that binds a pointer also exports helpers to make and read handles: `cstring` and `readCString`, `allocBuffer` and `allocPointer` (zero-filled), `allocString` and `readString`, `readNumberAt` and `writeNumberAt`, `readPointerAt` and `writePointerAt`, `readBuffer` (a `Uint8Array` copy) and `writeBuffer`, and `releaseCallback`.',
         },
         {
             type: 'code',
@@ -144,7 +144,7 @@ const bytes = readBuffer(out, encode(out, 1024));`,
         },
         {
             type: 'p',
-            text: 'Only `const char *` converts. A `char *` result is memory the library handed over, so it stays a handle you read and then free the library\'s way. A string passed for a `const char *` lives for the call; when C keeps the pointer, pass a `cstring` handle and keep it until C is done.',
+            text: 'Only `const char *` converts to a string. A `char *` result is memory the library hands over: it stays a handle you read and then free the library\'s way. A string passed for a `const char *` lives only for the call; if C keeps the pointer, pass a `cstring` handle and keep it until C is done.',
         },
         {
             type: 'p',
@@ -154,7 +154,7 @@ const bytes = readBuffer(out, encode(out, 1024));`,
         { type: 'h2', id: 'constants', text: 'Constants and macros' },
         {
             type: 'p',
-            text: 'A `#define` with a number, character, string or boolean value, and a `const` or `constexpr` global of those types, bind as module constants. Only the names you import bind, so a header with thousands of macros costs nothing until one is used:',
+            text: 'A `#define` with a number, character, string or boolean value, and a `const` or `constexpr` global of those types, bind as module constants. Only the names you import bind, so thousands of macros cost nothing until you use one:',
         },
         {
             type: 'code',
@@ -163,13 +163,13 @@ const bytes = readBuffer(out, encode(out, 1024));`,
         },
         {
             type: 'p',
-            text: `A function-like macro that calls one bound function, a macro that renames one, a variadic function and a mutable global bind as well, but only when you name them in an \`import { ... }\`; \`import * as\` reaches none of them. [cpp-binding-rules.md](${REPO_URL}/blob/main/docs/api/cpp-binding-rules.md) has the details.`,
+            text: `A function-like macro that calls one bound function, a macro that renames one, a variadic function and a mutable global bind as well, but only when you name them in an \`import { ... }\`; \`import * as\` reaches none of them. Details: [cpp-binding-rules.md](${REPO_URL}/blob/main/docs/api/cpp-binding-rules.md).`,
         },
 
         { type: 'h2', id: 'imports', text: 'What a library header binds' },
         {
             type: 'p',
-            text: 'Your own headers bind every function and class. A header from a dependency - a [port](/guide/libraries/) or a [ConanCenter](/guide/conan/) package - binds its enums, the free functions you import from it and the classes those reach, with their bases and the classes their methods use; a function or class nothing you import reaches is left out, and so is the library code only it reaches.',
+            text: "Your own headers bind every function and class. A dependency's header (a [port](/guide/libraries/) or a [ConanCenter](/guide/conan/) package) binds its enums, the functions you import and the classes they reach, with their bases. What nothing you import reaches is left out, and so is the library code only it uses.",
         },
         {
             type: 'code',
@@ -184,7 +184,7 @@ const bytes = readBuffer(out, encode(out, 1024));`,
         { type: 'h2', id: 'exceptions', text: 'Exceptions' },
         {
             type: 'p',
-            text: 'Throw from C++ and catch in JavaScript - that is the binding-friendly way to report failure, rather than status codes or out-parameters.',
+            text: 'Report a failure by throwing in C++ and catching in JavaScript, rather than with status codes or out-parameters.',
         },
         {
             type: 'code',
@@ -211,13 +211,13 @@ const bytes = readBuffer(out, encode(out, 1024));`,
         { type: 'h2', id: 'memory', text: 'Memory' },
         {
             type: 'p',
-            text: 'An instance made with `new`, a struct or vector a call returns and a vector `toVector` builds are freed when the garbage collector reclaims their handle, and `.delete()` frees one at once: call it on an object that holds a lot of memory, and on objects made in a loop. On React Native before 0.88, whose Hermes has no `FinalizationRegistry`, `.delete()` is the only way. A handle frees what crossbind allocated for it. An object a function returns through a raw pointer, and memory a library returns through one, stay the library\'s: free them with the library\'s own function.',
+            text: 'A handle frees only what crossbind allocated for it. When objects are freed, and when to call `.delete()`: [Object lifetime](/guide/runtime-api/#lifecycle).',
         },
 
         { type: 'h2', id: 'wrapper', text: 'Wrapping what does not fit' },
         {
             type: 'p',
-            text: 'A library full of templates, multiple inheritance or pointer-heavy calls you would rather not drive through handles? Put a clean class in front of it. The wrapper is what binds; the upstream type stays internal.',
+            text: 'For a library full of templates, multiple inheritance or pointer-heavy calls, put a clean class in front of it. The wrapper binds; the upstream type stays inside it.',
         },
         {
             type: 'code',
@@ -237,22 +237,13 @@ private:
         },
         {
             type: 'p',
-            text: 'App-side wrappers live in your own `src/native`; if you are publishing a package, put the wrapper inside the package so every consumer benefits.',
+            text: 'An app keeps its wrappers in `src/native`. A published package carries its own, so everyone who installs it gets them.',
         },
 
         { type: 'h2', id: 'typescript', text: 'TypeScript' },
         {
             type: 'p',
-            text: 'Declarations are generated for every header and Rust import, outside your source tree under `.crossbind/`. Add the shared config as a dev dependency and extend it once:',
-        },
-        {
-            type: 'code',
-            file: 'tsconfig.json',
-            code: '{ "extends": "@crossbind/typescript-config" }',
-        },
-        {
-            type: 'p',
-            text: 'Running with `initNative({ useWorker: true })`? Set `dts: \'promise\'` in `crossbind.config.js` so every generated signature returns `Promise<...>`, matching the async runtime - and write `await new X(...)` for construction.',
+            text: "Types for every header and Rust import are generated under `.crossbind/`. Setting them up, and `dts: 'promise'` for worker mode: [Runtime API](/guide/runtime-api/#types).",
         },
 
         { type: 'h2', id: 'escape', text: 'The escape hatch' },

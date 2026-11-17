@@ -1,27 +1,29 @@
 export default {
     slug: 'filesystem',
     title: 'Files',
-    description: 'Where files live per runtime: OPFS, in-memory, the host disk - and how to mount user files.',
-    lede: 'C++ wants paths. What a path means depends on where the module runs: real disk in Node, an origin-private store or plain memory in the browser, and the isolate\'s memory on the edge. This page maps every combination, including how a file from an `<input>` element becomes a path your C++ can open.',
+    description: 'Where files live per runtime (OPFS, memory, the host disk) and how to open the files a user picks.',
+    lede: 'C++ wants paths. What a path means depends on where the module runs: the real disk in Node.js, an origin-private store or memory in the browser, and the isolate\'s memory on the edge.',
     blocks: [
         { type: 'h2', id: 'roots', text: 'The two browser roots' },
         {
-            type: 'table',
-            head: ['Mount', 'Backed by', 'Survives a reload', 'Available when'],
-            rows: [
-                ['`/opfs/<app>/`', 'the Origin Private File System', 'yes', '`fs.opfs` on (the default in `mt` builds), the module in a worker, browser support'],
-                ['`/memfs/<app>/`', 'in-memory', 'no - tab session only', 'always'],
+            type: 'entries',
+            items: [
+                {
+                    name: '`/opfs/<app>/`',
+                    text: 'The Origin Private File System: files survive a reload. It needs `fs.opfs` on (the default in `mt` builds), the module in a worker, and a browser that supports it.',
+                },
+                { name: '`/memfs/<app>/`', text: "Memory: files last for the tab's session. Always there." },
             ],
         },
         {
             type: 'p',
-            text: '`<app>` is `general.name` from `crossbind.config.js`. OPFS is a Worker-scope-only API, which is the single most important consequence on this page:',
+            text: '`<app>` is `general.name` from `crossbind.config.js`. Browsers give OPFS its synchronous file access only in workers, so:',
         },
         {
             type: 'callout',
             tone: 'warn',
             title: 'OPFS requires useWorker: true',
-            text: 'Mounting `/opfs/...` from the main thread throws. If the browser has no OPFS support - or the backend is blocked - the path is redirected to `/memfs/` and the reason is logged, so writes keep working but stop persisting.',
+            text: 'Mounting `/opfs/...` on the page thread throws. Where the browser has no OPFS, or blocks it, the path falls back to `/memfs/` and the reason is logged: writes keep working but no longer persist.',
         },
         {
             type: 'code',
@@ -37,16 +39,15 @@ m.FS.writeFile('/opfs/myapp/data.bin', new Uint8Array([1, 2, 3]));`,
 
         { type: 'h2', id: 'helpers', text: 'Module helpers' },
         {
-            type: 'table',
-            head: ['Helper', 'Does'],
-            rows: [
-                ['`m.FS`', 'the standard virtual filesystem: `mkdirTree`, `writeFile`, `readFile`, …'],
-                ['`m.getDefaultPath()`', 'returns `/opfs` or `/memfs` for the current configuration'],
-                ['`m.getFinalPath(path)`', 'validates a path, falling back when OPFS is unavailable'],
-                ['`m.getRandomPath(startPath?)`', 'creates `<start>/<app>/automounted/<random>` and returns it'],
-                ['`m.autoMountFiles(files, parentPath?)`', 'streams `File[]` into the filesystem, returns the mounted paths'],
-                ['`m.getFileBytes(path)`', 'file contents as a `Uint8Array`'],
-                ['`m.getFileList(startPath?)`', 'recursive listing as `[{ path, size }]`'],
+            type: 'entries',
+            items: [
+                { name: '`m.FS`', text: 'The virtual filesystem: `mkdirTree`, `writeFile`, `readFile` and the rest.' },
+                { name: '`m.getDefaultPath()`', text: 'Returns `/opfs` or `/memfs`, for the current configuration.' },
+                { name: '`m.getFinalPath(path)`', text: 'Checks a path, falling back when OPFS is unavailable.' },
+                { name: '`m.getRandomPath(startPath?)`', text: 'Creates `<start>/<app>/automounted/<random>` and returns it.' },
+                { name: '`m.autoMountFiles(files, parentPath?)`', text: 'Streams `File[]` into the filesystem and returns their paths.' },
+                { name: '`m.getFileBytes(path)`', text: "A file's contents as a `Uint8Array`." },
+                { name: '`m.getFileList(startPath?)`', text: 'A recursive listing as `[{ path, size }]`.' },
             ],
         },
         {
@@ -60,13 +61,13 @@ const bytes = m.FS.readFile('/memfs/myapp/cache/data.bin');`,
             type: 'callout',
             tone: 'note',
             title: 'm.FS exists only after init',
-            text: 'Await the `initNative(...)` promise (or use the `onRuntimeInitialized` hook) before touching it.',
+            text: 'Use it after `initNative()` resolves, or in `onRuntimeInitialized`.',
         },
 
         { type: 'h2', id: 'user-files', text: 'Files the user picked' },
         {
             type: 'p',
-            text: 'A `File` from an `<input type=file>` never has a path your C++ can open. `autoMountFiles` streams it in and hands back paths that do - no size limit beyond storage, so multi-gigabyte inputs are fine.',
+            text: 'A `File` from an `<input type=file>` has no path your C++ can open. `autoMountFiles` streams it in and returns paths that work, with no size limit beyond storage.',
         },
         {
             type: 'code',
@@ -83,13 +84,13 @@ input.addEventListener('change', async () => {
         },
         {
             type: 'p',
-            text: 'Pass a second argument to mount into a known directory instead of a random one: `await m.autoMountFiles(files, \'/opfs/myapp/uploads\')`.',
+            text: 'Pass a second argument to mount into a known folder instead of a random one: `await m.autoMountFiles(files, \'/opfs/myapp/uploads\')`.',
         },
 
         { type: 'h2', id: 'reading-back', text: 'Getting results back to JavaScript' },
         {
             type: 'p',
-            text: 'C++ writes to a path; JavaScript reads the bytes and does something browser-shaped with them.',
+            text: 'C++ writes to a path; JavaScript reads the bytes back:',
         },
         {
             type: 'code',
@@ -103,14 +104,13 @@ imgEl.src = url;`,
 
         { type: 'h2', id: 'per-runtime', text: 'Per-runtime cheat sheet' },
         {
-            type: 'table',
-            head: ['Runtime', '/opfs/...', '/memfs/...', 'Notes'],
-            rows: [
-                ['Browser, `useWorker: false`', 'throws', 'yes', 'tab-session memory only'],
-                ['Browser, in a worker (the default)', 'in `mt` builds, or falls back to `/memfs/`', 'yes', 'the persistent option'],
-                ['Node.js', 'n/a', 'n/a', '`m.FS` reads and writes real disk'],
-                ['Cloudflare Workers / edge', 'n/a', 'n/a', '`m.FS` in memory, gone with the isolate'],
-                ['React Native', 'n/a', 'n/a', 'the app sandbox, through the platform APIs'],
+            type: 'entries',
+            items: [
+                { name: 'Browser, `useWorker: false`', text: "`/opfs` throws; `/memfs` lasts for the tab's session." },
+                { name: 'Browser, in a worker (the default)', text: "`/opfs` persists in `mt` builds, or falls back to `/memfs`; `/memfs` lasts for the tab's session." },
+                { name: 'Node.js', text: '`m.FS` reads and writes the real disk; `/memfs` is a folder in memory.' },
+                { name: 'Cloudflare Workers and other edge runtimes', text: '`m.FS` lives in memory and is gone with the isolate; there is no `/opfs`.' },
+                { name: 'React Native', text: "C++ opens real files in the app's sandbox; there is no `m.FS`." },
             ],
         },
 
@@ -118,11 +118,10 @@ imgEl.src = url;`,
         {
             type: 'ul',
             items: [
-                '**Mounting `/opfs` without a worker** throws inside `getFinalPath()`. Keep the worker on - the browser default - or write under `/memfs/`.',
-                '**Using `/opfs/...` with OPFS off** - the default in `st` builds, or `fs: { opfs: false }` - throws too: it is disabled, not missing.',
-                '**Dropping the `<app>` segment.** Writes to `/memfs/foo` work but sit outside the tree that gets cleaned up on terminate.',
+                '**No worker, no OPFS.** Mounting `/opfs` on the page thread throws: keep the worker on (the browser default), or write under `/memfs/`.',
+                '**OPFS off.** An `/opfs/...` path throws too while OPFS is off: the default in `st` builds, or with `fs: { opfs: false }`.',
+                '**A path outside the app folder.** Writes to `/memfs/foo` work but sit outside `/memfs/<app>/`, which is cleaned up on terminate.',
                 '**Expecting OPFS to cross origins.** It does not: files written by one origin are invisible to another.',
-                '**Expecting files to last on the edge.** `m.FS` there lives in the isolate\'s memory; keep what must last in R2, KV or S3.',
             ],
         },
     ],

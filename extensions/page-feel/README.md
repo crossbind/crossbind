@@ -2,7 +2,7 @@
 
 A page that behaves as an app's own view, not as a web page.
 
-An app has it by having `@crossbind/core-app-host`, which lists it as a dependency: there is nothing to install or list.
+It comes with `@crossbind/core-app-host`: there is nothing to install or list.
 
 ## What it does
 
@@ -19,7 +19,7 @@ An app has it by having `@crossbind/core-app-host`, which lists it as a dependen
 
 A build for development keeps the right-click menu, for Inspect Element, and on Windows the browser's keys.
 
-Every style it adds loses to any rule of the app's, so the app chooses again where it wants the other:
+Every style it adds loses to any rule of the app's, so the app can undo it where it wants:
 
 ```css
 .article {
@@ -40,4 +40,4 @@ macOS, iOS, Android, Linux and Windows.
 
 ## Replace or leave out
 
-It holds the role `page-feel`. An extension that gives `replaces: 'page-feel'` takes it; `app: { without: ['page-feel'] }` in `crossbind.config.js` leaves it out, and the page behaves as in a browser.
+It holds the role `page-feel`. An extension with `replaces: 'page-feel'` takes it; `app: { without: ['page-feel'] }` in `crossbind.config.js` leaves it out, and the page behaves as in a browser.

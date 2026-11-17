@@ -3,20 +3,20 @@
 // backed by the repository: the bullets by README.md "Why crossbind", the limits by the runtime
 // constraints in AGENTS.md, the feature caveats in data.js and the current release notes.
 export const WHY_POINTS = [
-    ['Target-aware distribution', 'a package family carries WebAssembly, iOS, Android and WASI variants, and each build consumes only the artifact valid for its platform, architecture, runtime and build type.'],
-    ['Native dependency resolution', 'package manifests and crossbind configs carry the transitive native graph, so prerequisites are built and linked in the right order.'],
-    ['A reproducible package contract', 'port recipes record upstream versions, source integrity, licenses, dependencies and target-specific artifacts.'],
-    ['No hand-written binding glue', 'public functions, classes, methods, enums, containers and the supported standard-library types are generated from the header you already own.'],
-    ['C++ and Rust', 'import local native sources, a `cargo:` crate or a reusable native package through the same project.'],
-    ['First-party integrations and ports', 'bundler plugins give incremental builds, and version-pinned ports make GDAL, SQLite, OpenSSL, GEOS, PROJ and more available without rebuilding upstream.'],
+    ['Target-aware distribution', 'one package family carries WebAssembly, iOS, Android, desktop and WASI variants, and each build takes only the one for its target.'],
+    ['Native dependency resolution', 'packages declare their native dependencies, so they are built and linked in the right order.'],
+    ['A reproducible package contract', 'port recipes pin upstream versions, source hashes and licenses.'],
+    ['No hand-written binding glue', 'functions, classes, enums, containers and standard-library types bind from the header you already have.'],
+    ['C++ and Rust', 'import your own sources, a `cargo:` crate or a native package the same way.'],
+    ['First-party integrations and ports', 'bundler plugins rebuild only what changed, and prebuilt ports bring GDAL, SQLite, OpenSSL, GEOS, PROJ and more.'],
 ];
 
 export const LIMITS = [
-    "Browser OPFS persistence requires `useWorker: true`: crossbind's OPFS integration relies on synchronous access handles, which browsers expose only in worker scope.",
-    "Browser multithread builds (`runtime: 'mt'`) need COOP/COEP headers in production, and the pthread pool defaults to two workers; the size and the exhaustion policy are configurable.",
+    'Browser OPFS needs `useWorker: true`: browsers give synchronous file access only in workers.',
+    "Browser multithread builds (`runtime: 'mt'`) need COOP/COEP headers in production. The thread pool has two workers by default; its size is configurable.",
     'Edge runtimes such as Cloudflare Workers run single-threaded with an in-memory filesystem: no workers, no OPFS.',
-    'Android builds link whole archives; dead-code elimination is not implemented there.',
-    'iOS and macOS builds need a local Xcode, iOS also CocoaPods, and Rust bindings for them a local cargo; WASI commands need wasmtime on PATH.',
+    'Android builds link whole archives: unused code is not dropped there.',
+    'iOS and macOS builds need Xcode on a Mac, and iOS also CocoaPods. Rust for those platforms needs a local cargo. WASI commands need wasmtime on PATH.',
     'There is no performance claim: a hand-written loop in JIT JavaScript can match the same algorithm in Wasm. The value is the libraries you would otherwise rewrite.',
-    'The 2.0 line is a beta; prereleases carry no compatibility guarantee until the first stable train.',
+    'crossbind 2.0 is in beta: prereleases carry no compatibility guarantee until the first stable release.',
 ];

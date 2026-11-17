@@ -27,23 +27,19 @@
   </p>
 </div>
 
-crossbind makes native libraries as easy to distribute and consume as
-JavaScript packages. A C++ header, an app-local Rust file, a declared Cargo
-crate, or a ConanCenter package becomes an importable module; crossbind
-generates the binding layer, resolves the transitive native dependency graph,
-and selects the right artifact for every target. It also builds a web page and
-the native code it imports into an app for macOS, Linux, Windows, iOS, and
-Android.
+crossbind makes native libraries as easy to use as JavaScript packages. Import a
+C++ header, a Rust file, a crate or a ConanCenter package, and crossbind
+generates the bindings, builds the native dependencies in order and picks the
+right binary for every target. It also builds a web page and the native code it
+imports into an app for macOS, Linux, Windows, iOS and Android.
 
-> **Note** — crossbind 2.0 is currently published on the npm `beta` channel.
-> The commands below use `@beta` deliberately.
+> **Note:** crossbind 2.0 is on the npm `beta` channel, so the commands below
+> use `@beta`.
 
 ## Start with a coding agent
 
 The shortest path is to give your coding agent the crossbind skill. It inspects
-the existing project, detects the package manager, bundler, target runtime, and
-native sources, checks whether a prebuilt port already exists, wires the right
-integration, and verifies the build.
+your project, picks the right integration, wires it up and verifies the build.
 
 ```bash
 npx skills add https://github.com/crossbind/crossbind/tree/main/agents/skills --global --yes
@@ -57,43 +53,35 @@ Inspect the repository, choose the correct integration, make the smallest
 required changes, and verify the build.
 ```
 
-The skill uses the agent's existing filesystem and terminal access; no
-crossbind-specific background service is required. Its behavior and sources of
-truth are documented in the
+The skill uses the agent's own file and terminal access; nothing else runs in
+the background. See the
 [agent guide](https://github.com/crossbind/crossbind/blob/main/docs/agent-overview.md).
 
 ## Why crossbind
 
-The header import is the front door. Underneath it, crossbind provides the
-native library distribution layer for JavaScript runtimes: versioned packages,
-target-specific artifacts, transitive dependencies, build recipes, and runtime
-adapters.
+Beneath the header import, crossbind distributes native libraries for
+JavaScript runtimes: versioned packages, binaries per target, their
+dependencies, build recipes and runtime adapters.
 
-- **Target-aware distribution.** A package family can carry WebAssembly, iOS,
-  Android, macOS, Linux, Windows, and WASI variants; each build consumes only the
-  artifact valid for its platform, architecture, runtime, environment, and build
-  type.
-- **Native dependency resolution.** Package manifests and crossbind configs
-  carry the transitive native graph, so prerequisites are built and linked in
-  the correct order.
-- **A reproducible package contract.** Port recipes record upstream versions,
-  source integrity, licenses, dependencies, and target-specific artifacts.
-- **No hand-written binding glue.** Public functions, classes, methods, enums,
-  containers, and supported standard-library types are generated from the
-  interface you already own.
-- **C++ and Rust.** Import local native sources, a `cargo:` crate, or a reusable
-  native package through the same project.
-- **First-party integrations and ports.** Bundler plugins provide incremental
-  builds, while version-pinned ports make libraries such as GDAL, SQLite,
-  OpenSSL, GEOS, and PROJ available without rebuilding upstream source.
+- **Target-aware distribution.** One package family carries WebAssembly, iOS,
+  Android, desktop and WASI variants, and each build takes only the one for its
+  target.
+- **Native dependency resolution.** Packages declare their native dependencies,
+  so they are built and linked in the right order.
+- **A reproducible package contract.** Port recipes pin upstream versions,
+  source hashes and licenses.
+- **No hand-written binding glue.** Functions, classes, enums, containers and
+  standard-library types bind from the header you already have.
+- **C++ and Rust.** Import your own sources, a `cargo:` crate or a native
+  package the same way.
+- **First-party integrations and ports.** Bundler plugins rebuild only what
+  changed, and prebuilt ports bring GDAL, SQLite, OpenSSL, GEOS, PROJ and more.
 
 ## Quick start
 
-Prefer to scaffold and configure the project yourself? You need
-[Node.js 24+](https://nodejs.org/) and
-[Docker](https://www.docker.com/). Docker carries the browser, Android, and
-WASI toolchains and is pulled automatically on the first build. iOS additionally
-requires macOS, CMake 3.28+, Xcode, and CocoaPods.
+To set up a project yourself, you need [Node.js 24+](https://nodejs.org/) and
+[Docker](https://www.docker.com/), which carries the browser, Android and WASI
+toolchains. iOS also needs macOS, CMake 3.28+, Xcode and CocoaPods.
 
 Create a project:
 
@@ -101,8 +89,8 @@ Create a project:
 npm create crossbind@beta
 ```
 
-If you are unsure which template to choose, start with **Web → React → Vite**.
-Then run the commands printed by the scaffolder:
+If you are unsure, pick **Web → React → Vite**, then run the commands the
+scaffolder prints:
 
 ```bash
 cd my-app
@@ -110,12 +98,12 @@ npm install
 npm run dev
 ```
 
-The first native build takes longer because it pulls the toolchain and fills the
-build cache. Later rebuilds are incremental.
+The first build pulls the toolchain and takes a while; later builds reuse the
+cache.
 
 ### Your first native call
 
-Put the public C++ interface under `src/native`:
+Put the C++ in `src/native`:
 
 ```cpp
 // src/native/hello.h
@@ -127,8 +115,7 @@ inline std::string hello(const std::string& name) {
 }
 ```
 
-Import the header from JavaScript and initialize the runtime before the first
-native call:
+Import the header from JavaScript and call `initNative()` once:
 
 ```js
 // src/main.js
@@ -138,9 +125,7 @@ await initNative();
 console.log(await hello('crossbind'));
 ```
 
-`initNative()` is exported by every generated native module. One call starts
-the runtime and binds all native modules imported by the application. In a
-browser the module runs in a Web Worker by default, so each call returns a
+In a browser the module runs in a Web Worker by default, so each call returns a
 promise.
 
 ## Add crossbind to an existing Vite app
@@ -162,7 +147,7 @@ export default defineConfig({
 });
 ```
 
-Add the build-time configuration at the project root:
+Add the build configuration at the project root:
 
 ```js
 // crossbind.config.js
@@ -173,9 +158,8 @@ export default {
 };
 ```
 
-You can now add the header and JavaScript import from the quick-start example.
-For React, Vue, Svelte, Webpack, Rspack, Rollup, Metro, and framework-specific
-setups, use the [integration playbooks](https://github.com/crossbind/crossbind/blob/main/docs/playbooks/integration/README.md)
+Then add the header and the import from the example above. For other bundlers
+and frameworks, see the [integration playbooks](https://github.com/crossbind/crossbind/blob/main/docs/playbooks/integration/README.md)
 or start from the closest project in [`examples/`](https://github.com/crossbind/crossbind/tree/main/examples).
 
 ## How it works
@@ -204,33 +188,37 @@ or start from the closest project in [`examples/`](https://github.com/crossbind/
   WASI runtimes              command component
 ```
 
-There are two configuration surfaces:
+There are two places to configure:
 
-| Surface               | When it is read | What belongs there                                                                     |
-| --------------------- | --------------- | -------------------------------------------------------------------------------------- |
-| `crossbind.config.js` | Build time      | Native paths, dependencies, target, runtime (`st`/`mt`), output, and compiler settings |
-| `initNative(options)` | Runtime         | Worker mode, filesystem behavior, environment, asset resolution, and lifecycle hooks   |
+- **`crossbind.config.js`**, read at build time: native paths, dependencies,
+  target, runtime (`st`/`mt`), output and compiler settings.
+- **`initNative(options)`**, read at run time: worker mode, files, environment,
+  asset paths and lifecycle hooks.
 
-Do not put runtime options such as `useWorker` in `crossbind.config.js`; they
-only take effect when passed to `initNative(...)`. See the
-[runtime and configuration reference](https://github.com/crossbind/crossbind/blob/main/docs/api/README.md) for the complete
-contract.
+Runtime options such as `useWorker` do nothing in `crossbind.config.js`. The
+full contract is in the
+[runtime and configuration reference](https://github.com/crossbind/crossbind/blob/main/docs/api/README.md).
 
 ## Runtimes
 
-| Runtime      | Output                                               | Important behavior                                                                      |
-| ------------ | ---------------------------------------------------- | --------------------------------------------------------------------------------------- |
-| Browser      | JavaScript loader + WebAssembly                      | Single-threaded by default; multithreaded builds need COOP/COEP headers in production   |
-| Node.js      | JavaScript loader + WebAssembly, or a Node-API addon | Supports CommonJS or ESM and reads the host filesystem; the addon loads in Electron too |
-| Edge         | JavaScript loader + WebAssembly                      | Single-threaded, memory-backed, with no OPFS or nested worker mode                      |
-| React Native | Native iOS/Android libraries over JSI                | No WebAssembly or browser isolation headers                                             |
-| Apps         | An app for macOS, Linux, Windows, iOS, and Android   | The page runs in the system webview, native code in the app's own process; no Node.js   |
-| Executables  | Native programs for macOS, Linux, and Windows        | No JavaScript host                                                                      |
-| WASI         | One `wasm32-wasip3` command component                | No JavaScript host; run with a compatible WASI runtime such as wasmtime 47+             |
+- **Browser:** a JavaScript loader and WebAssembly. Single-threaded by default;
+  multithreaded builds need COOP/COEP headers in production.
+- **Node.js:** a loader and WebAssembly, or a Node-API addon, which also loads
+  in Electron. CommonJS or ESM, with the host filesystem.
+- **Edge:** a loader and WebAssembly. Single-threaded and in memory, with no
+  OPFS and no worker mode.
+- **React Native:** native iOS and Android libraries over JSI, with no
+  WebAssembly and no isolation headers.
+- **Apps:** an app for macOS, Linux, Windows, iOS and Android. The page runs in
+  the system webview and the native code in the app's own process; no Node.js.
+- **Executables:** native programs for macOS, Linux and Windows, with no
+  JavaScript host.
+- **WASI:** a `wasm32-wasip3` command component, with no JavaScript host, for a
+  WASI runtime such as wasmtime 47+.
 
-Threading and worker execution are independent choices:
+Threads and the worker are independent choices:
 
-- `target.runtime: 'mt'` enables a multithreaded build.
+- `target.runtime: 'mt'` makes a multithreaded build.
 - Browsers run the module in a Web Worker by default;
   `initNative({ useWorker: false })` keeps it on the page thread.
 - Browser OPFS persistence requires `useWorker: true`.
@@ -238,7 +226,7 @@ Threading and worker execution are independent choices:
 
 Read [Threading and workers](https://github.com/crossbind/crossbind/blob/main/docs/api/threading.md)
 and [Filesystem](https://github.com/crossbind/crossbind/blob/main/docs/api/filesystem.md)
-before enabling those features.
+before you turn those on.
 
 ## Build integrations
 
@@ -250,10 +238,9 @@ before enabling those features.
 | React Native / Metro  | `@crossbind/plugin-react-native`, `@crossbind/plugin-metro`     |
 | No bundler            | `crossbind` CLI                                                 |
 
-The plugins resolve native imports, generate bridges, trigger builds, watch
-native source directories, and place the produced assets into the application
-bundle. The CLI exposes the same build pipeline for Node.js, edge, library, and
-WASI projects.
+The plugins turn native imports into modules, build and watch the native
+sources, and put the output in your bundle. The CLI runs the same build for
+Node.js, edge, library and WASI projects.
 
 ## Prebuilt libraries and commands
 
@@ -262,11 +249,10 @@ The repository contains 16 port families:
 **cURL · Expat · GDAL · GEOS · GeoTIFF · iconv · libjpeg-turbo · LERC ·
 OpenSSL · PROJ · SpatiaLite · SQLite · libTIFF · WebP · zlib · Zstandard**
 
-Each family has target-specific packages. For example, a browser or Node.js
-project uses `@crossbind/port-gdal-wasm`, while mobile, native Node.js addon and
-WASI builds use the matching `-android`, `-ios`, `-darwin`, `-linux`, `-linuxmusl`, `-win32`,
-or `-wasi` variant. Import the variant's `crossbind.config.js` into the
-application's dependency list:
+Each library ships one package per platform. A browser or Node.js project uses
+`@crossbind/port-gdal-wasm`; mobile apps, Node.js addons and WASI builds use the
+`-android`, `-ios`, `-darwin`, `-linux`, `-linuxmusl`, `-win32` or `-wasi`
+variant. List the variant's `crossbind.config.js` in `dependencies`:
 
 ```bash
 npm install @crossbind/port-gdal-wasm@beta
@@ -284,14 +270,13 @@ export default {
 };
 ```
 
-The variant declares its transitive native dependency graph, so link order is
-derived automatically. Install and register every platform variant your
-project actually builds. See the [library guide](https://crossbind.dev/guide/libraries/)
-and [`ports/README.md`](https://github.com/crossbind/crossbind/blob/main/ports/README.md)
-for the package and license contracts.
+Each variant declares its own native dependencies, so they link in the right
+order. Install and list a variant for every platform you build. More in the
+[library guide](https://crossbind.dev/guide/libraries/) and
+[`ports/README.md`](https://github.com/crossbind/crossbind/blob/main/ports/README.md).
 
-Some upstream command-line tools are also published as WASI-powered npm
-commands. They require `wasmtime` on `PATH`, but no compiler:
+Some upstream command-line tools are also npm commands that run on WASI. They
+need `wasmtime` on `PATH`, but no compiler:
 
 ```bash
 npm install --global @crossbind/port-gdal-standalone-wasi@beta
@@ -300,32 +285,29 @@ gdalinfo-wasi --version
 
 ## Rust
 
-crossbind supports app-local `.rs` files, direct crates.io imports through the
-`cargo:` scheme, and reusable Cargo-backed packages. Rust uses the same
-generated-module and `initNative()` model as C++.
+Import a `.rs` file of your app, a crates.io crate with `cargo:`, or a published
+Rust package. Rust works like C++, with the same `initNative()`.
 
-A local Rust toolchain is required. WebAssembly multithreading currently needs
-nightly Rust, and WASI command builds do not yet support Rust because there is
-no `wasm32-wasip3` Rust target. Start with the
-[Rust guide](https://github.com/crossbind/crossbind/blob/main/docs/api/rust.md)
-for the supported type surface and configuration.
+With the default Docker runner you need Rust on your machine only for iOS and
+macOS builds. WASI builds skip Rust: there is no `wasm32-wasip3` Rust target
+yet. See the [Rust guide](https://crossbind.dev/guide/rust/).
 
 ## Documentation
 
-- [Guide](https://crossbind.dev/guide/) — product concepts, quick start,
-  runtimes, apps, bundlers, bindings, packages, and troubleshooting.
-- [Runtime and configuration API](https://github.com/crossbind/crossbind/blob/main/docs/api/README.md)
-  — canonical build-time and runtime behavior.
-- [Integration playbooks](https://github.com/crossbind/crossbind/blob/main/docs/playbooks/integration/README.md)
-  — Vite, Webpack/Rspack, Rollup, Node.js, edge, React Native, and more.
-- [Examples](https://github.com/crossbind/crossbind/tree/main/examples) —
-  runnable reference applications and library templates.
+- [Guide](https://crossbind.dev/guide/): concepts, quick start, runtimes, apps,
+  bundlers, bindings, packages and troubleshooting.
+- [Runtime and configuration API](https://github.com/crossbind/crossbind/blob/main/docs/api/README.md):
+  the full build-time and runtime reference.
+- [Integration playbooks](https://github.com/crossbind/crossbind/blob/main/docs/playbooks/integration/README.md):
+  Vite, Webpack/Rspack, Rollup, Node.js, edge, React Native and more.
+- [Examples](https://github.com/crossbind/crossbind/tree/main/examples):
+  runnable reference apps and library templates.
 - [Architecture](https://github.com/crossbind/crossbind/blob/main/docs/ARCHITECTURE.md)
-  and [codemap](https://github.com/crossbind/crossbind/blob/main/docs/CODEMAP.md)
-  — how the monorepo is organized and where each subsystem lives.
-- [Troubleshooting](https://github.com/crossbind/crossbind/blob/main/docs/api/troubleshooting.md)
-  — common errors and their standard fixes.
-- [Changelog](https://github.com/crossbind/crossbind/blob/main/CHANGELOG.md) —
+  and [codemap](https://github.com/crossbind/crossbind/blob/main/docs/CODEMAP.md):
+  how the monorepo is organized and where each part lives.
+- [Troubleshooting](https://github.com/crossbind/crossbind/blob/main/docs/api/troubleshooting.md):
+  common errors and their fixes.
+- [Changelog](https://github.com/crossbind/crossbind/blob/main/CHANGELOG.md):
   release history.
 
 ## Contributing

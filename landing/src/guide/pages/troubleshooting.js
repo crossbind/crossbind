@@ -2,19 +2,19 @@ export default {
     slug: 'troubleshooting',
     title: 'Troubleshooting',
     description: 'The errors people actually hit, and the standard fix for each.',
-    lede: 'Almost every common failure has a designated fix that does not involve editing generated artifacts. Read the error literally, work out which layer it belongs to - build, link, binding, runtime, hosting - and apply the least invasive fix that layer offers.',
+    lede: 'Most failures have a standard fix that does not touch generated files. Read the error, find its layer (build, link, binding, runtime or hosting) and apply the smallest fix that layer offers.',
     blocks: [
         { type: 'h2', id: 'build', text: 'Build errors' },
         { type: 'h3', text: 'ENOENT: no such file or directory … /dist/…' },
         {
             type: 'p',
-            text: 'A dependency has not been built yet. Build the whole graph (`npm install && npm run build`) or build that dependency first - a filtered single-package build skips its dependencies.',
+            text: 'A dependency is not built yet. Build the whole graph (`npm install && npm run build`), or that dependency first: a filtered build of one package skips its dependencies.',
         },
         { type: 'h3', text: 'undefined symbol: <name>' },
         {
             type: 'ul',
             items: [
-                '**A missing dependency.** The package providing the symbol is not in `dependencies` - add it to both `crossbind.config.js` and `package.json`.',
+                '**A missing dependency.** The package providing the symbol is not in `dependencies`: add it to both `crossbind.config.js` and `package.json`.',
                 '**A symbol clash.** Two libraries export the same name (classically `iconv`). Rename one set with a `replaceList` entry in `crossbind.build.js`, or drop the duplicate archive with `targetSpecs[].specs.ignoreLibName`.',
             ],
         },
@@ -40,7 +40,7 @@ export default {
         { type: 'h3', text: 'shared-memory is disallowed … not compiled with atomics' },
         {
             type: 'p',
-            text: 'A multithreaded link pulled in a Rust archive built without the atomics features - almost always a stale cargo-type prebuilt. Rebuild that package\'s wasm output (after `rustup toolchain install nightly --component rust-src`), or update to a version whose `mt` prebuilt was produced that way.',
+            text: 'A multithreaded link pulled in a Rust archive built without atomics, almost always an old prebuilt of a Rust package. Rebuild that package\'s wasm output (after `rustup toolchain install nightly --component rust-src`), or update to a version whose `mt` prebuilt has them.',
         },
         { type: 'h3', text: 'RuntimeError: index out of bounds during the build' },
         {
@@ -58,7 +58,6 @@ export default {
             type: 'ul',
             items: [
                 'Returning `unique_ptr` instead of `shared_ptr`.',
-                'Returning a raw pointer - wrap it, or return by value.',
                 'Multiple inheritance in the bound class.',
                 'A template with no explicit instantiation.',
                 'The definition lives only in the `.cpp`; the public surface has to be in the header.',
@@ -72,58 +71,38 @@ export default {
 
         { type: 'h2', id: 'runtime', text: 'Runtime errors' },
         {
-            type: 'table',
-            head: ['Message', 'Cause', 'Fix'],
-            rows: [
-                [
-                    '`crossOriginIsolated is false`, `SharedArrayBuffer is not defined`',
-                    'multithreaded build, production host not sending the isolation headers',
-                    'add COOP/COEP - see [Threads and workers](/guide/threading/#coop-coep)',
-                ],
-                [
-                    '`OPFS is only available inside a Worker scope`',
-                    'mounting `/opfs/...` from the main thread',
-                    '`initNative({ useWorker: true })`',
-                ],
-                [
-                    '`OPFS is disabled. Enable fs.opfs in config`',
-                    '`fs: { opfs: false }` was set explicitly',
-                    'remove it, or write under `/memfs/...`',
-                ],
-                [
-                    '`RuntimeError: out of memory`',
-                    'the wasm heap hit its ceiling',
-                    'raise `-sINITIAL_MEMORY` / `-sMAXIMUM_MEMORY`, or stream the input instead of holding it all',
-                ],
-                [
-                    '`m.someFunc is undefined`',
-                    'a binding rule violation, or a call made before `await initNative(...)` resolved',
-                    'check the rules first, then the ordering',
-                ],
-                [
-                    '`instance.method is not a function`',
-                    'a worker runtime: construction returned a promise',
-                    '`const c = await new X(...)`, and set `dts: \'promise\'`',
-                ],
+            type: 'entries',
+            items: [
+                {
+                    name: '`crossOriginIsolated is false`, `SharedArrayBuffer is not defined`',
+                    text: 'A multithreaded build on a host that does not send the isolation headers. Add COOP/COEP; see [Threads and workers](/guide/threading/#coop-coep).',
+                },
+                { name: '`OPFS is only available inside a Worker scope`', text: 'Mounting `/opfs/...` on the page thread. Use `initNative({ useWorker: true })`.' },
+                {
+                    name: '`OPFS is disabled. Enable fs.opfs in config`',
+                    text: 'OPFS is off: the default in `st` builds, or `fs: { opfs: false }`. Turn it on with `fs: { opfs: true }`, or write under `/memfs/...`.',
+                },
+                {
+                    name: '`RuntimeError: out of memory`',
+                    text: 'The wasm heap hit its ceiling. Raise `-sINITIAL_MEMORY` or `-sMAXIMUM_MEMORY`, or stream the input instead of holding it all. Memory grows by default, so this usually means the design holds too much at once.',
+                },
+                { name: '`m.someFunc is undefined`', text: 'A [binding rule](/guide/bindings/#rules) is broken, or the call came before `initNative()` resolved. Check the rules first, then the order.' },
+                { name: '`instance.method is not a function`', text: "In worker mode, construction returned a promise. Write `const c = await new X(...)`, and set `dts: 'promise'`." },
             ],
-        },
-        {
-            type: 'p',
-            text: 'Memory growth is enabled by default, so an out-of-memory error usually means the design holds too much at once rather than that a limit is set too low.',
         },
         { type: 'h3', text: 'Calls hang forever with useWorker: true' },
         {
             type: 'p',
-            text: 'Either the worker never spawned - check the Network tab for a request to the worker script - or the C++ inside it is in an infinite loop, which the Sources tab on the worker context will show.',
+            text: 'Either the worker never started (check the Network tab for the worker script), or the C++ in it is stuck in a loop (the Sources tab shows the worker).',
         },
 
         { type: 'h2', id: 'cross-cutting', text: 'Cross-cutting symptoms' },
         {
             type: 'ul',
             items: [
-                '**`wasm streaming compile failed`.** Either the host serves `.wasm` as `application/octet-stream` instead of `application/wasm`, or `mt` and `st` artifacts got mixed - clean and rebuild after switching runtime.',
+                '**The streaming compile fails.** `wasm streaming compile failed` means either the host serves `.wasm` as `application/octet-stream` instead of `application/wasm`, or `mt` and `st` builds got mixed: clean and rebuild after switching.',
                 '**The build succeeds but produces nothing.** Look for `Skipping target: ...` in the log: a `functions.isEnabled` override or a `target.platform` filter is excluding everything.',
-                '**Hot reload ignores a `.cpp` change.** Restart the dev server, then verify `paths.native` resolves where you think it does - the plugins add exactly those files to the watcher.',
+                '**Hot reload ignores a C++ change.** Restart the dev server, then check where `paths.native` points: the plugins watch exactly those files.',
             ],
         },
 
@@ -131,7 +110,7 @@ export default {
         {
             type: 'ol',
             items: [
-                'Check the [prerequisites](/guide/quick-start/#prerequisites) - most "weird" build failures are a missing toolchain.',
+                'Check the [prerequisites](/guide/quick-start/#prerequisites): most odd build failures are a missing tool.',
                 'Rerun the `crossbind` command with `DEBUG=1`: a failure prints its full error, stack and cause chain, which usually names the failing step.',
                 'Reduce to the smallest reproducer: a fresh project with only the failing dependency.',
                 'Search the error text in the source - error messages are unique enough to find where they are thrown.',

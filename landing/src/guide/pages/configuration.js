@@ -2,7 +2,7 @@ export default {
     slug: 'configuration',
     title: 'Configuration',
     description: 'Everything crossbind.config.js can declare, and how its paths resolve.',
-    lede: '`crossbind.config.js` sits at your project root and is read once by the build. It is **build-time only** - runtime options belong in the `initNative(opts)` call instead. Most projects need three lines of it; the rest of this page is what the remaining keys do when you need them.',
+    lede: '`crossbind.config.js` sits at your project root and configures the build. Runtime options go to `initNative(opts)` instead. Most projects need only the lines below.',
     blocks: [
         { type: 'h2', id: 'minimal', text: 'The minimum' },
         {
@@ -18,26 +18,22 @@ export default {
             type: 'callout',
             tone: 'warn',
             title: 'Always set paths.config',
-            text: 'It anchors every relative path to this file. Without it, a build started from another working directory resolves your sources against the wrong root.',
+            text: 'Relative paths resolve from this file. Without it, a build started from another folder looks for your sources in the wrong place.',
         },
 
         { type: 'h2', id: 'identity', text: 'Identity and dependencies' },
         {
-            type: 'table',
-            head: ['Key', 'What it does'],
-            rows: [
-                [
-                    '`general.name`',
-                    'the logical name: output binaries (`lib<name>.a`), and the browser filesystem namespace `/opfs/<name>/`. Defaults to your package name.',
-                ],
-                [
-                    '`dependencies`',
-                    "an array of other packages' configs, imported from a platform variant such as `@crossbind/port-*-wasm/crossbind.config.js`, one per platform you build. Transitive dependencies are flattened automatically.",
-                ],
-                [
-                    '`packages`',
-                    'what the project takes from outside npm, under the name its imports open with. `packages.cargo` holds the crates `cargo:` imports - keys are crate names, values are Cargo dependency specs - and `packages.conan` what `conan:` imports. See [Rust](/guide/rust/) and [Conan](/guide/conan/).',
-                ],
+            type: 'entries',
+            items: [
+                { name: '`general.name`', text: 'Names the output (`lib<name>.a`) and the browser folder `/opfs/<name>/`.', default: 'your package name' },
+                {
+                    name: '`dependencies`',
+                    text: "Other packages' configs, each imported from a platform variant such as `@crossbind/port-*-wasm/crossbind.config.js`, one per platform you build. Their own dependencies come along, and a multithreaded one makes your build `mt` ([Threads and workers](/guide/threading/#mt)).",
+                },
+                {
+                    name: '`packages`',
+                    text: 'What the project takes from outside npm: `packages.cargo` holds the crates `cargo:` imports (crate name and Cargo dependency spec), `packages.conan` the packages `conan:` imports. See [Rust](/guide/rust/) and [Conan](/guide/conan/).',
+                },
             ],
         },
         {
@@ -55,29 +51,24 @@ export default {
     paths: { config: import.meta.url },
 };`,
         },
-        {
-            type: 'p',
-            text: 'One consequence worth remembering: if any dependency is built multithreaded, your project is promoted to `mt` as well.',
-        },
 
         { type: 'h2', id: 'paths', text: 'Paths' },
         {
-            type: 'table',
-            head: ['Key', 'Default', 'What it points at'],
-            rows: [
-                ['`config`', '-', 'always `import.meta.url`'],
-                ['`project`', 'the directory of `config`', 'the project root'],
-                ['`base`', '-', 'an alternative root - use it in a monorepo so Docker can see the whole workspace'],
-                ['`native`', "`['src/native']`", '**an array** of C++ source roots; order sets include precedence'],
-                ['`cache`', '`.crossbind`', 'build cache'],
-                ['`build`', '`.crossbind/build`', 'staging directory'],
-                ['`output`', 'same as `build`', 'where dist artifacts are written'],
-                ['`header`, `module`, `bridge`, `cmake`', 'derived from `native`', 'override only when your layout differs'],
+            type: 'entries',
+            items: [
+                { name: '`config`', text: 'Always `import.meta.url`.' },
+                { name: '`project`', text: 'The project root.', default: 'the folder of `config`' },
+                { name: '`base`', text: 'A root above the project, for a monorepo (see below).' },
+                { name: '`native`', text: 'The C++ source roots, **an array**. Their order sets include precedence.', default: "`['src/native']`" },
+                { name: '`cache`', text: 'The build cache.', default: '`.crossbind`' },
+                { name: '`build`', text: 'The staging folder.', default: '`.crossbind/build`' },
+                { name: '`output`', text: 'Where the built files go.', default: 'the same as `build`' },
+                { name: '`header`, `module`, `bridge`, `cmake`', text: 'Set them only when your layout differs.', default: 'derived from `native`' },
             ],
         },
         {
             type: 'p',
-            text: 'Docker mounts the project path as its working directory and cannot see anything above it. In a monorepo, point `base` at the repository root:',
+            text: 'Docker sees nothing above the project folder. In a monorepo, point `base` at the repository root:',
         },
         {
             type: 'code',
@@ -93,7 +84,7 @@ export default {
         { type: 'h2', id: 'target', text: 'Target' },
         {
             type: 'p',
-            text: "`target` narrows what gets built. `runtime` is the one people set most - `'st'` (default) or `'mt'`; see [Threads and workers](/guide/threading/) for what `mt` demands from your host.",
+            text: "`target` narrows what gets built. Most projects set only `runtime`: `'st'` (the default) or `'mt'`. `mt` asks more of the host; see [Threads and workers](/guide/threading/).",
         },
         {
             type: 'code',
@@ -107,7 +98,7 @@ export default {
         { type: 'h2', id: 'target-specs', text: 'targetSpecs' },
         {
             type: 'p',
-            text: 'Per-target overrides, expressed as filter plus specs. Any of `platform`, `arch`, `runtime`, `buildType` and `runtimeEnv` may appear in the filter; an entry applies when every field you set matches.',
+            text: 'Settings for some targets only. An entry applies when every field it sets (`platform`, `arch`, `runtime`, `buildType`, `runtimeEnv`) matches the target.',
         },
         {
             type: 'code',
@@ -127,13 +118,13 @@ export default {
         },
         {
             type: 'p',
-            text: 'Shipping data files is the most common use - that has its own page, [Data files](/guide/assets/).',
+            text: 'Its most common use, shipping data files, has its own page: [Data files](/guide/assets/).',
         },
 
         { type: 'h2', id: 'app', text: 'App' },
         {
             type: 'p',
-            text: "`app` describes an app that `target: { runtimeEnv: 'app' }` builds: the name it shows, its id, icon and window, the links that open it, the reasons it gives for devices and where it finds its updates. [Apps](/guide/apps/#config) lists every key. `extensions` lists the app extensions whose native functions the app's host builds in, each as its package's `crossbind.extension.js` gives it.",
+            text: "`app` describes an app (`target: { runtimeEnv: 'app' }`): its name, id, icon and window, the links that open it, the reasons it gives for devices, and its updates. [Apps](/guide/apps/#config) lists every key. `extensions` lists the app's extensions, each from its package's `crossbind.extension.js`.",
         },
         {
             type: 'code',
@@ -148,56 +139,50 @@ export default {
         { type: 'h2', id: 'export', text: 'Export' },
         {
             type: 'p',
-            text: 'Only relevant when you publish a package. It describes what consumers receive.',
+            text: '`export` matters only when you publish a package: it describes what its users receive.',
         },
         {
-            type: 'table',
-            head: ['Key', 'What it does'],
-            rows: [
-                ['`type`', "`'cmake'` (default, the C/C++ pipeline) or `'cargo'` (a Rust crate built per platform)"],
-                ['`crate`', '`cargo` only: the directory holding `Cargo.toml`'],
-                ['`libName`', 'the `.a` basenames produced, one per entry'],
-                ['`header`, `libPath`', 'the include and library directory names inside dist'],
-                ['`bindings.vectors`', 'extra `Vec<T>` classes to expose without touching Rust source'],
-                [
-                    '`wholeArchive`',
-                    'link every archive wholesale instead of eliminating dead code - only when members self-register from static initialisers',
-                ],
+            type: 'entries',
+            items: [
+                { name: '`type`', text: "`'cmake'` for C and C++, or `'cargo'` for a Rust crate built per platform.", default: "`'cmake'`" },
+                { name: '`crate`', text: '`cargo` only: the folder that holds `Cargo.toml`.' },
+                { name: '`libName`', text: 'The `.a` basenames the build makes, one per entry.' },
+                { name: '`header`, `libPath`', text: 'The include and library folder names inside `dist`.' },
+                { name: '`bindings.vectors`', text: 'Extra `Vec<T>` classes to expose without touching the Rust source.' },
+                { name: '`wholeArchive`', text: 'Links every archive whole instead of dropping unused code. Use it only when members register themselves from static initializers.' },
             ],
         },
 
         { type: 'h2', id: 'types', text: 'TypeScript output' },
         {
-            type: 'table',
-            head: ['Key', 'What it does'],
-            rows: [
-                ['`dts`', "`'sync'` (default) or `'promise'`, which wraps every generated return in `Promise<...>` for worker runtimes"],
-                [
-                    '`types`',
-                    'package authors: emit one combined `.d.ts` over the public headers and wire `package.json` so consumers importing `<pkg>/<any>.h` get types',
-                ],
+            type: 'entries',
+            items: [
+                { name: '`dts`', text: "`'promise'` wraps every generated return type in `Promise<...>`, for worker runtimes.", default: "`'sync'`" },
+                {
+                    name: '`types`',
+                    text: 'For package authors: writes one `.d.ts` over the public headers and sets up `package.json`, so imports of `<pkg>/<any>.h` get types.',
+                },
             ],
         },
 
         { type: 'h2', id: 'advanced', text: 'The rest' },
         {
-            type: 'table',
-            head: ['Key', 'What it does'],
-            rows: [
-                ['`ext`', 'which extensions count as headers, sources and SWIG modules'],
-                ['`build`', 'do not set this directly - build hooks live in `crossbind.build.js` and are merged in'],
-                ['`functions.isEnabled`', 'override the "is this target enabled?" check, which by default asks whether the output already exists'],
+            type: 'entries',
+            items: [
+                { name: '`ext`', text: 'Which file extensions count as headers, sources and SWIG modules.' },
+                { name: '`build`', text: 'Do not set it here: build hooks live in `crossbind.build.js`, which is merged in.' },
+                { name: '`functions.isEnabled`', text: 'Overrides the check whether a target is enabled, which by default asks whether its output exists.' },
             ],
         },
         {
             type: 'p',
-            text: 'Reach for the highest layer that solves your problem - see the [override hierarchy](/guide/architecture/#overrides). Machine-wide settings (runner, Xcode team, local wasi-sdk) live in `~/.crossbind.json` and never belong in the project config.',
+            text: 'Machine settings (runner, Xcode team, local wasi-sdk) live in `~/.crossbind.json`, never in the project config. When more than one layer can change a setting, use the highest one: see the [override hierarchy](/guide/architecture/#overrides).',
         },
 
         { type: 'h2', id: 'runtime', text: 'Not in this file: runtime options' },
         {
             type: 'p',
-            text: 'A frequent mistake is putting `useWorker: true` in `crossbind.config.js`, where it does nothing. Runtime options are arguments to the boot call:',
+            text: '`useWorker: true` in `crossbind.config.js` does nothing. Runtime options go to `initNative`:',
         },
         {
             type: 'code',
@@ -210,7 +195,7 @@ export default {
         },
         {
             type: 'p',
-            text: 'The full option list is in [Runtime API](/guide/runtime-api/#options); the ones that change behaviour most are covered in [Threads and workers](/guide/threading/) and [Files](/guide/filesystem/).',
+            text: 'Every option is in [Runtime API](/guide/runtime-api/#options). The ones that change behavior most: [Threads and workers](/guide/threading/) and [Files](/guide/filesystem/).',
         },
     ],
 };

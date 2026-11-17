@@ -1,5 +1,5 @@
 # @crossbind/port-expat
-**Precompiled Expat XML parser library built with crossbind for seamless integration in JavaScript, WebAssembly and React Native projects.**
+**The Expat XML parser library, prebuilt with crossbind for JavaScript, WebAssembly and React Native projects.**
 
 <a href="https://www.npmjs.com/package/@crossbind/port-expat">
     <img alt="NPM version" src="https://img.shields.io/npm/v/@crossbind/port-expat/beta?style=for-the-badge" />
@@ -11,7 +11,7 @@
     <img alt="License" src="https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fregistry.npmjs.org%2F%40crossbind%2Fport-expat%2Fbeta&query=%24.license&style=for-the-badge&label=license" />
 </a>
 
-> Use it together with **[crossbind](https://crossbind.dev)** — the toolchain for using C++ libraries from JavaScript, TypeScript, WebAssembly, Node.js and React Native. Learn more at **[crossbind.dev](https://crossbind.dev)**.
+> Use it with **[crossbind](https://crossbind.dev)**, which lets JavaScript, TypeScript, Node.js and React Native code import C and C++ headers.
 
 ## See it run
 Three apps on **[crossbind.dev/ports/expat](https://crossbind.dev/ports/expat/#apps)** run this package in your browser, on the same generated data every time:
@@ -20,7 +20,7 @@ Three apps on **[crossbind.dev/ports/expat](https://crossbind.dev/ports/expat/#a
 - **Attack lab.** A 784-byte billion-laughs document that would expand to 3 GB stops at line 14, column 6, before any of its text comes through. A quadratic blowup, an external entity pointing at `file:///etc/passwd` (reported to a handler, never loaded) and 100,000 levels of nesting run the same way, with the limits adjustable.
 - **GPX reader.** A namespace-aware parse finds Garmin's heart-rate extension whether a file spells it `gpxtpx:` or `ns3:`; the reader draws the track and exports GeoJSON. The generated sample ride comes out at 64.043 km, 9,113 points, 803.3 m of climb and an average heart rate of 126.7 bpm.
 
-Their C++ wrappers, and the self-check the site build runs against results computed independently of this package, are in [`landing/demos/lib-expat`](https://github.com/crossbind/crossbind/tree/main/landing/demos/lib-expat).
+Their C++ wrappers are in [`landing/demos/lib-expat`](https://github.com/crossbind/crossbind/tree/main/landing/demos/lib-expat).
 
 ## Integration
 Install the main package together with the platform builds:
@@ -29,7 +29,7 @@ Install the main package together with the platform builds:
 npm install @crossbind/port-expat@beta @crossbind/port-expat-wasm@beta @crossbind/port-expat-android@beta @crossbind/port-expat-ios@beta
 ```
 
-Then import all three platforms in `crossbind.config.js` — crossbind compiles only the one matching each build target:
+Then list all three in `crossbind.config.js`; each build uses the one for its target:
 
 ```diff
 +import expatWasm from '@crossbind/port-expat-wasm/crossbind.config.js';
@@ -48,7 +48,7 @@ export default {
 };
 ```
 
-A native Node.js addon (`crossbind build -e node`) links the build of its platform: `-p darwin`, `-p linux`, `-p linuxmusl` or `-p win32` takes `@crossbind/port-expat-darwin`, `-linux`, `-linuxmusl` or `-win32`; `-linuxmusl` is the one for Alpine and other musl distributions. Install it and import its `crossbind.config.js` the same way.
+A Node.js addon (`crossbind build -e node`) links the desktop build of its platform instead: `@crossbind/port-expat-darwin`, `-linux`, `-linuxmusl` (Alpine and other musl systems) or `-win32`. Install and list it the same way.
 
 ## Usage
 crossbind binds your C++ headers to JavaScript, so the usual pattern is a small wrapper around the library. This one turns XML into plain objects with Expat's element and character data handlers, and reports errors with their line and column. Put it in your project's native folder (`src/native/` by default):
@@ -197,20 +197,18 @@ Setup for every platform: [crossbind.dev/ports/expat](https://crossbind.dev/port
 - Upstream's README warns that Expat has unfixed security issues ([libexpat#1160](https://github.com/libexpat/libexpat/issues/1160)). Keep the limits on for untrusted input and update with upstream releases.
 
 ## Supported platforms
-This is the main package; the precompiled binaries are shipped per platform:
+This is the main package; the binaries ship in one package per platform:
 
-| Platform | Package | Targets |
-|---|---|---|
-| WebAssembly | [`@crossbind/port-expat-wasm`](https://www.npmjs.com/package/@crossbind/port-expat-wasm) | `wasm32` — single-threaded & multi-threaded |
-| Android | [`@crossbind/port-expat-android`](https://www.npmjs.com/package/@crossbind/port-expat-android) | `arm64-v8a` (64-bit ARM), `x86_64` (emulator) |
-| iOS | [`@crossbind/port-expat-ios`](https://www.npmjs.com/package/@crossbind/port-expat-ios) | device (`arm64`), simulator (`arm64`) |
-| macOS | [`@crossbind/port-expat-darwin`](https://www.npmjs.com/package/@crossbind/port-expat-darwin) | `arm64` (Apple silicon), `x64` (Intel) — native Node.js addons |
-| Linux | [`@crossbind/port-expat-linux`](https://www.npmjs.com/package/@crossbind/port-expat-linux) | `x64`, `arm64` — glibc 2.28 or later, native Node.js addons |
-| Linux (musl) | [`@crossbind/port-expat-linuxmusl`](https://www.npmjs.com/package/@crossbind/port-expat-linuxmusl) | `x64`, `arm64` — musl 1.2.5 or later (Alpine 3.21 and later), native Node.js addons |
-| Windows | [`@crossbind/port-expat-win32`](https://www.npmjs.com/package/@crossbind/port-expat-win32) | `x64`, `arm64` — Windows 10 or later, native Node.js addons |
-| WASI library | [`@crossbind/port-expat-wasi`](https://www.npmjs.com/package/@crossbind/port-expat-wasi) | `wasm32-wasip3` — single-threaded |
-| WASI command | [`@crossbind/port-expat-standalone-wasi`](https://www.npmjs.com/package/@crossbind/port-expat-standalone-wasi) | the upstream `xmlwf` well-formedness checker as an `xmlwf-wasi` command (wasmtime 47+) |
-| Node.js, ready-made | [`@crossbind/port-expat-standalone-napi`](https://www.npmjs.com/package/@crossbind/port-expat-standalone-napi) | prebuilt addons for macOS, Linux (glibc and musl) and Windows, `arm64` and `x64`: nothing to build |
+- **WebAssembly**, [`@crossbind/port-expat-wasm`](https://www.npmjs.com/package/@crossbind/port-expat-wasm): `wasm32`; single-threaded and multi-threaded.
+- **Android**, [`@crossbind/port-expat-android`](https://www.npmjs.com/package/@crossbind/port-expat-android): `arm64-v8a` (64-bit ARM), `x86_64` (emulator).
+- **iOS**, [`@crossbind/port-expat-ios`](https://www.npmjs.com/package/@crossbind/port-expat-ios): device (`arm64`), simulator (`arm64`).
+- **macOS**, [`@crossbind/port-expat-darwin`](https://www.npmjs.com/package/@crossbind/port-expat-darwin): `arm64` (Apple silicon), `x64` (Intel); native Node.js addons.
+- **Linux**, [`@crossbind/port-expat-linux`](https://www.npmjs.com/package/@crossbind/port-expat-linux): `x64`, `arm64`; glibc 2.28 or later, native Node.js addons.
+- **Linux (musl)**, [`@crossbind/port-expat-linuxmusl`](https://www.npmjs.com/package/@crossbind/port-expat-linuxmusl): `x64`, `arm64`; musl 1.2.5 or later (Alpine 3.21 and later), native Node.js addons.
+- **Windows**, [`@crossbind/port-expat-win32`](https://www.npmjs.com/package/@crossbind/port-expat-win32): `x64`, `arm64`; Windows 10 or later, native Node.js addons.
+- **WASI library**, [`@crossbind/port-expat-wasi`](https://www.npmjs.com/package/@crossbind/port-expat-wasi): `wasm32-wasip3`; single-threaded.
+- **WASI command**, [`@crossbind/port-expat-standalone-wasi`](https://www.npmjs.com/package/@crossbind/port-expat-standalone-wasi): the upstream `xmlwf` well-formedness checker as an `xmlwf-wasi` command (wasmtime 47+).
+- **Node.js, ready-made**, [`@crossbind/port-expat-standalone-napi`](https://www.npmjs.com/package/@crossbind/port-expat-standalone-napi): prebuilt addons for macOS, Linux (glibc and musl) and Windows, `arm64` and `x64`: nothing to build.
 
 ## License
 This project includes the precompiled Expat library, which is distributed under the [MIT License](https://github.com/libexpat/libexpat/blob/master/COPYING).

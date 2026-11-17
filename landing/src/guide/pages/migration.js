@@ -11,7 +11,7 @@ export default {
     title: 'Migrating from cpp.js 1.x',
     description:
         'What changed between cpp.js 1.0.4 and crossbind 2.0: names, packages, config, CLI and runtime API, with the steps to move a project.',
-    lede: `crossbind is cpp.js under a new name, with the same header-import model. Every rename below was checked against the last cpp.js release, 1.0.4, and the current tree. Work through the steps in order; most projects need the first five. The [cpp.js 1.x documentation](${V1_DOCS_URL}) stays online.`,
+    lede: `crossbind is cpp.js under a new name, with the same header-import model. Work through the steps in order; most projects need the first five. The [cpp.js 1.x documentation](${V1_DOCS_URL}) stays online.`,
     blocks: [
         { type: 'h2', id: 'names', text: 'What was renamed' },
         {
@@ -20,15 +20,9 @@ export default {
             rows: [
                 ['`cpp.js`, the CLI and core', '`crossbind`'],
                 ['`create-cpp.js`', '`create-crossbind`'],
-                [
-                    '`@cpp.js/plugin-vite`, `-rollup`, `-webpack`, `-webpack-loader`, `-metro`, `-react-native`, `-react-native-ios-helper`',
-                    '`@crossbind/plugin-*`, the same seven names',
-                ],
+                ['`@cpp.js/plugin-*`, the seven plugins', '`@crossbind/plugin-*`, the same seven names'],
                 ['`@cpp.js/core-embind-jsi`', '`@crossbind/core-embind-jsi`'],
-                [
-                    '`@cpp.js/package-<name>`, one package with every platform inside',
-                    '`@crossbind/port-<name>` plus one package per platform: `-wasm`, `-android`, `-ios`, `-wasi`; see [crossbind ports](/guide/libraries/)',
-                ],
+                ['`@cpp.js/package-<name>`, every platform in one package', '`@crossbind/port-<name>`, split per platform: `-wasm`, `-android`, `-ios`, `-wasi`'],
                 ['`cppjs.config.js`', '`crossbind.config.js`'],
                 ['`cppjs.build.js`, package authors only', '`crossbind.build.js`'],
                 ['`.cppjs/` cache directory', '`.crossbind/`'],
@@ -50,13 +44,13 @@ export default {
             type: 'callout',
             tone: 'note',
             title: 'Coming from a cpp.js 2.0 beta?',
-            text: 'The 2.0 betas published under the cpp.js name already had the config shape, CLI flags and runtime API described here; what changes for you is the renames in the table: package names, the config file name, the CLI name and the native identifiers. The last cpp.js documentation stays online at [cpp.js.org](https://cpp.js.org/).',
+            text: 'The 2.0 betas published as cpp.js already had the config, CLI and runtime API described here; only the renames in the table apply to you: package names, the config file name, the CLI name and the native identifiers. The last cpp.js documentation stays online at [cpp.js.org](https://cpp.js.org/).',
         },
 
         { type: 'h2', id: 'requirements', text: '1. Requirements' },
         {
             type: 'p',
-            text: `Node.js 18 was enough for cpp.js; crossbind needs **Node.js 24 or newer**. Docker, CMake 3.28+ for mobile, and Xcode with CocoaPods for iOS are unchanged.${suffix ? ` Until the first stable train every crossbind package is on the npm \`${RELEASE.distTag}\` tag, so install commands carry \`${suffix}\`.` : ''}`,
+            text: `crossbind needs **Node.js 24 or newer**; cpp.js needed 18. Docker, CMake 3.28+ for mobile, and Xcode with CocoaPods for iOS are unchanged.${suffix ? ` Until the first stable release, crossbind packages are on the npm \`${RELEASE.distTag}\` tag, so install commands carry \`${suffix}\`.` : ''}`,
         },
 
         { type: 'h2', id: 'packages', text: '2. Replace the packages' },
@@ -69,11 +63,11 @@ npm install @crossbind/port-gdal-wasm${suffix}`,
         },
         {
             type: 'p',
-            text: 'A 1.x prebuilt package carried the Web, Android and iOS binaries in one tarball. A 2.x family is split per platform: `-wasm` for the browser, Node.js and edge, `-android` and `-ios` for React Native, `-wasi` for WASI builds. Install one variant per platform you build. The meta package `@crossbind/port-gdal` arrives as a dependency of each variant and is not installed on its own.',
+            text: 'A 1.x package carried the Web, Android and iOS binaries together. A 2.x library is split per platform: `-wasm` for the browser, Node.js and edge, `-android` and `-ios` for React Native, `-wasi` for WASI. Install one variant per platform you build; the meta package `@crossbind/port-gdal` comes with each.',
         },
         {
             type: 'p',
-            text: 'The eleven 1.x libraries - expat, GDAL, GEOS, GeoTIFF, iconv, PROJ, SpatiaLite, SQLite3, libTIFF, WebP and zlib - are all published as families, with new ones beside them; [Libraries](/ports/) lists what is on npm.',
+            text: 'All eleven 1.x libraries (expat, GDAL, GEOS, GeoTIFF, iconv, PROJ, SpatiaLite, SQLite3, libTIFF, WebP and zlib) are published, with new ones beside them; [Libraries](/ports/) lists them.',
         },
 
         { type: 'h2', id: 'config', text: '3. Rename and update the config' },
@@ -85,7 +79,7 @@ npm install @crossbind/port-gdal-wasm${suffix}`,
             type: 'ul',
             items: [
                 '**Dependency imports point at a platform variant.** `@cpp.js/package-proj/cppjs.config.js` becomes `@crossbind/port-proj-wasm/crossbind.config.js`, one import per platform you build.',
-                "**`platform` becomes `targetSpecs`.** The 1.x keys `Emscripten-x86_64`, `Android-arm64-v8a` and `iOS-iphoneos` are now filters - `platform: 'wasm' | 'android' | 'ios' | 'wasi'` with optional `arch`, `runtime`, `buildType` and `runtimeEnv` - and `data`, `env` and `ignoreLibName` move under `specs`, next to the new `cmake.compileOptions` and `binary.emccFlags` lists.",
+                "**Per-platform settings move.** `platform` becomes `targetSpecs`: its 1.x keys `Emscripten-x86_64`, `Android-arm64-v8a` and `iOS-iphoneos` become filters (`platform: 'wasm' | 'android' | 'ios' | 'wasi'`, with optional `arch`, `runtime`, `buildType` and `runtimeEnv`), and `data`, `env` and `ignoreLibName` move under `specs`.",
             ],
         },
         {
@@ -126,7 +120,7 @@ export default {
         },
         {
             type: 'p',
-            text: "Everything else in the file is new and optional: `target.runtime` for multithreaded wasm, `packages.cargo` and `export.type: 'cargo'` for Rust, `dts` for generated types, `extensions` for an app's native extensions, `functions.isEnabled` to override which build targets are enabled. The full list is in [Configuration](/guide/configuration/).",
+            text: 'Everything else in the file is new and optional; see [Configuration](/guide/configuration/).',
         },
 
         { type: 'h2', id: 'bundler', text: '4. Swap the bundler plugin' },
@@ -158,7 +152,7 @@ console.log(MyClass.sample());`,
         },
         {
             type: 'p',
-            text: 'Header import paths are unchanged, for your own headers and for library headers such as `@crossbind/port-gdal/gdal.h`. `initNative()` takes options where `initCppJs()` took none - worker mode, persistent storage, environment variables - all listed in [Runtime API](/guide/runtime-api/#options).',
+            text: 'Header imports keep their paths, with the new package names for libraries, such as `@crossbind/port-gdal/gdal.h`. `initNative()` takes options, which `initCppJs()` did not: worker mode, persistent storage, environment variables ([Runtime API](/guide/runtime-api/#options)).',
         },
         {
             type: 'p',
@@ -168,30 +162,29 @@ console.log(MyClass.sample());`,
             type: 'ul',
             items: [
                 '`generateVirtualPath()` is now `getRandomPath()`.',
-                'Browser files no longer live under `/virtual/`. They mount under `/memfs/<app>/`, or `/opfs/<app>/` once you opt into persistent storage with `useWorker: true`. `autoMountFiles` returns the new paths, so code that only uses what it returns keeps working; hard-coded `/virtual/...` paths do not. See [Files](/guide/filesystem/).',
+                'Browser files no longer live under `/virtual/`. They mount under `/memfs/<app>/`, or `/opfs/<app>/` with persistent storage ([Files](/guide/filesystem/)). `autoMountFiles` returns the new paths, so code that only uses what it returns keeps working; hard-coded `/virtual/...` paths do not.',
             ],
         },
 
         { type: 'h2', id: 'cli', text: '6. CLI and output names' },
         {
-            type: 'table',
-            head: ['cpp.js 1.x', 'crossbind 2.x'],
-            rows: [
-                [
-                    '`cppjs build -p WebAssembly|Android|iOS|All`',
-                    '`crossbind build -p wasm|android|ios|wasi`, with `-a` arch, `-r` runtime (`st`, `mt`), `-e` runtime env (`browser`, `node`, `edge`, `wasi`: the binary to make) and `-b` build type',
-                ],
-                ['`cppjs config get|set|delete|list|keys`', '`crossbind config ...`, the same subcommands'],
-                ['`cppjs docker run|create|start|stop|delete`', '`crossbind docker ...`, the same subcommands'],
-                ['-', '`crossbind licenses` and `crossbind clean-deps` are new'],
-                [
-                    '`dist/mylib.browser.js`, `mylib.node.js`, `mylib.wasm`',
-                    '`dist/<name>-wasm-wasm32-st-release.browser.js`, `.node.js`, `.edge.js`: the target is part of the file name',
-                ],
-                [
-                    '`dist/prebuilt/Emscripten-x86_64/`, `Android-arm64-v8a/`, `iOS-iphoneos/`',
-                    '`dist/prebuilt/<platform>-<arch>-<runtime>-<buildType>/`, for example `wasm-wasm32-mt-release` or `android-arm64-v8a-mt-release`',
-                ],
+            type: 'entries',
+            items: [
+                {
+                    name: '`cppjs build -p WebAssembly|Android|iOS|All`',
+                    text: '`crossbind build -p wasm|android|ios|wasi`, with `-a` arch, `-r` runtime (`st`, `mt`), `-e` runtime env (`browser`, `node`, `edge`, `wasi`: the binary to make) and `-b` build type.',
+                },
+                { name: '`cppjs config get|set|delete|list|keys`', text: '`crossbind config ...`, the same subcommands.' },
+                { name: '`cppjs docker run|create|start|stop|delete`', text: '`crossbind docker ...`, the same subcommands.' },
+                { name: '`crossbind licenses`, `crossbind clean-deps`', text: 'New in 2.x.' },
+                {
+                    name: '`dist/mylib.browser.js`, `mylib.node.js`, `mylib.wasm`',
+                    text: '`dist/<name>-wasm-wasm32-st-release.browser.js`, `.node.js`, `.edge.js`: the target is part of the file name.',
+                },
+                {
+                    name: '`dist/prebuilt/Emscripten-x86_64/`, `Android-arm64-v8a/`, `iOS-iphoneos/`',
+                    text: '`dist/prebuilt/<platform>-<arch>-<runtime>-<buildType>/`, for example `wasm-wasm32-mt-release` or `android-arm64-v8a-mt-release`.',
+                },
             ],
         },
         {

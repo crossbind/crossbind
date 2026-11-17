@@ -4,16 +4,16 @@ export default {
     slug: 'performance',
     title: 'Performance and size',
     description: 'What ships in a crossbind binary, the build defaults, the flags safe to change, and how to measure speed.',
-    lede: 'Every build links only what your imports reach and compiles with production flags. Most apps should change none of the defaults; this page shows what ships, the few flags worth tuning, and why native code has to earn its place with a measurement.',
+    lede: 'Every build links only what your imports reach and compiles with production flags. Most apps need none of the settings below, and native code is faster only where a measurement says so.',
     blocks: [
         { type: 'h2', id: 'size', text: 'What ends up in the binary' },
         {
             type: 'p',
-            text: 'Libraries link as static archives, and a static link takes only the parts of an archive your bindings reach. Release builds compile with `-O3`; debug builds skip optimization, and the bundler dev servers serve debug builds, so measure size and speed on a production build.',
+            text: 'Libraries link statically, so only the parts your bindings reach ship. Release builds compile with `-O3`; dev servers serve debug builds, so measure size and speed on a production build.',
         },
         {
             type: 'p',
-            text: 'The bindings decide what is reachable. Your own headers bind every function and class. A header from a dependency - a [port](/guide/libraries/) or a [ConanCenter](/guide/conan/) package - binds all its enums but only the free functions you import from it by name and the classes those reach, so a function or class your imports never reach, and the library code only it reaches, stays out:',
+            text: "The bindings decide what is reachable. From a dependency's header only what you import binds ([C++](/guide/bindings/#imports)), and library code that nothing you import reaches stays out:",
         },
         {
             type: 'code',
@@ -22,7 +22,7 @@ export default {
         },
         {
             type: 'p',
-            text: "`import * as`, `import()`, `require` and a bare `import 'x.h'` take the header whole and bind every function. Measured for the 2.0.0-beta.63 release on this site's library demos, which call a port straight from JavaScript, binding only the imported functions shrank the wasm by 47% for GEOS, 40% for OpenSSL, 11% for zlib and 4% for GDAL. [C++](/guide/bindings/#imports) has the binding rules.",
+            text: "`import * as`, `import()`, `require` and a bare `import 'x.h'` bind the whole header. On this site's library demos (2.0.0-beta.63), binding only the imported functions shrank the wasm by 47% for GEOS, 40% for OpenSSL, 11% for zlib and 4% for GDAL.",
         },
         {
             type: 'callout',
@@ -32,13 +32,32 @@ export default {
         },
         {
             type: 'p',
-            text: 'Two more things add to what ships. Data files you declare travel with the module ([Data files](/guide/assets/)). `export.wholeArchive: true` links every archive whole instead of only the parts it needs - meant for libraries whose members register themselves from static initializers.',
+            text: 'Two more things add to what ships: the [data files](/guide/assets/) you declare, and `export.wholeArchive: true`, which links every archive whole (for libraries whose members register themselves from static initializers).',
+        },
+        { type: 'h3', text: 'Apps' },
+        {
+            type: 'p',
+            text: 'An [app](/guide/apps/) ships no browser engine. The sample app is 6.7 MB on an arm64 Mac, 1.8 MB zipped, 6 MB of it Hermes, the JavaScript engine the bindings run in; it shows its first native result 0.34 s after launch on an M-series Mac. Its Windows executable is 4.6 MB on x64, its iOS app 4.7 MB, and its Android release APK 14.8 MB with both ABIs, of which Google Play delivers one. Leaving out every default extension a plain app has saved 0.22 MB of 12.82 MB on macOS and 0.23 MB of 5.20 MB on Linux.',
         },
 
         { type: 'h2', id: 'speed', text: 'Speed: measure, do not assume' },
         {
             type: 'p',
-            text: 'Native code is not automatically faster than JavaScript. Every call crosses a boundary that converts its arguments and results, and for a small function the crossing can cost more than the work. What a call costs depends on what crosses - a number, a string, a `const char*`, a callback into JavaScript - and [Node.js](/guide/node/#which) has measured numbers for wasm against a Node-API addon.',
+            text: 'Native code is not automatically faster than JavaScript. Every call converts its arguments and results, and for a small function that can cost more than the work. What a call costs depends on what crosses. Measured in Node.js on an M-series Mac:',
+        },
+        {
+            type: 'table',
+            head: ['Call', 'wasm', 'Node-API addon'],
+            rows: [
+                ['returns a short `std::string`', 'about 160 ns', 'about 70 ns'],
+                ['takes a short `std::string`', 'about 155 ns', 'about 85 ns'],
+                ['takes a `const char*`', 'about 0.33 µs', 'about 1.2 µs'],
+                ['calls back into JavaScript', 'about 0.5 µs', 'about 2.1 µs'],
+            ],
+        },
+        {
+            type: 'p',
+            text: 'Compute-bound runs went either way. Before moving work to native code:',
         },
         {
             type: 'ul',
@@ -53,37 +72,32 @@ export default {
         { type: 'h2', id: 'defaults', text: 'The defaults' },
         {
             type: 'p',
-            text: 'Every wasm build gets these. If the build runs and the app works, leave them as they are.',
+            text: 'Every wasm build gets these. If the app works, leave them.',
         },
         {
-            type: 'table',
-            head: ['Setting', 'Default', 'Notes'],
-            rows: [
-                ['Optimization', '`-O3` in release builds, none in debug', 'an `-O` flag of your own comes later and replaces it'],
-                ['SIMD', '`-msimd128`', 'on every wasm build'],
-                ['Exceptions', '`-fwasm-exceptions`', 'a C++ throw reaches JavaScript as an `Error`'],
-                ['Heap', '`ALLOW_MEMORY_GROWTH=1`', "starts at Emscripten's initial size and grows on demand"],
-                ['Stack', '64 KB, or 1 MB when the link includes Rust', 'fixed size, no guard page'],
-                [
-                    'Threads (`mt` builds)',
-                    '`-pthread`, a pool of `Math.min(navigator.hardwareConcurrency || 1, 2)` workers, `PTHREAD_POOL_SIZE_STRICT=2`',
-                    'at most two pthread workers; asking for more aborts',
-                ],
-                ['Function table', '`RESERVED_FUNCTION_POINTERS=200`', 'raise it on `Cannot enlarge function table`'],
-                ['Filesystem', '`FORCE_FILESYSTEM=1` in every build, `WASMFS` in browser and Node.js builds', '`m.FS`, OPFS and data files rely on them'],
-                ['No eval', '`DYNAMIC_EXECUTION=0`', 'the module runs under a strict Content Security Policy'],
-                [
-                    'Array buffers',
-                    '`GROWABLE_ARRAYBUFFERS=0`',
-                    "Firefox's and WebKit's `TextDecoder` reject views over resizable buffers, which would break every string crossing the boundary",
-                ],
+            type: 'entries',
+            items: [
+                { name: 'Optimization', text: 'An `-O` flag of your own comes later and replaces it.', default: '`-O3` in release builds, none in debug' },
+                { name: 'SIMD', text: 'On in every wasm build.', default: '`-msimd128`' },
+                { name: 'Exceptions', text: 'A C++ throw reaches JavaScript as an `Error`.', default: '`-fwasm-exceptions`' },
+                { name: 'Heap', text: "Starts at Emscripten's initial size and grows on demand.", default: '`ALLOW_MEMORY_GROWTH=1`' },
+                { name: 'Stack', text: 'A fixed size with no guard page.', default: '64 KB, or 1 MB when the link includes Rust' },
+                {
+                    name: 'Threads (`mt` builds)',
+                    text: 'At most two pthread workers; asking for more aborts.',
+                    default: '`-pthread`, a pool of `Math.min(navigator.hardwareConcurrency || 1, 2)` workers, `PTHREAD_POOL_SIZE_STRICT=2`',
+                },
+                { name: 'Function table', text: 'Raise it on `Cannot enlarge function table`.', default: '`RESERVED_FUNCTION_POINTERS=200`' },
+                { name: 'Filesystem', text: '`m.FS`, OPFS and data files rely on them.', default: '`FORCE_FILESYSTEM=1` in every build, `WASMFS` in browser and Node.js builds' },
+                { name: 'No eval', text: 'The module runs under a strict Content Security Policy.', default: '`DYNAMIC_EXECUTION=0`' },
+                { name: 'Array buffers', text: 'Strings crossing the boundary need it in Firefox and WebKit.', default: '`GROWABLE_ARRAYBUFFERS=0`' },
             ],
         },
 
         { type: 'h2', id: 'overrides', text: 'Safe overrides' },
         {
             type: 'p',
-            text: 'Emscripten flags go under `binary.emccFlags` in a `targetSpecs` entry and apply to wasm builds. Filter the entry by `platform`, `arch`, `runtime`, `buildType` or `runtimeEnv` so a flag reaches only the builds that need it.',
+            text: 'Emscripten flags go in `binary.emccFlags` of a `targetSpecs` entry. Filter the entry by `platform`, `arch`, `runtime`, `buildType` or `runtimeEnv` so a flag reaches only the builds that need it.',
         },
         {
             type: 'code',
@@ -98,25 +112,25 @@ export default {
     ],
 };`,
         },
+        { type: 'p', text: 'Flags worth changing, and when:' },
         {
-            type: 'table',
-            head: ['Flag', 'Reach for it when'],
-            rows: [
-                ['`-sINITIAL_MEMORY=64MB`', 'startup allocates a lot - a model, a large dataset - and you see pauses while the heap grows'],
-                [
-                    '`-sSTACK_SIZE=1MB`',
-                    'the C++ uses large local arrays or deep recursion. An overflow is silent in a release build: it overwrites static data, and later, unrelated calls fail with `unreachable` or `memory access out of bounds`. Add `-sSTACK_OVERFLOW_CHECK=2` to find the function.',
-                ],
-                [
-                    '`-sPTHREAD_POOL_SIZE=8` with `-sPTHREAD_POOL_SIZE_STRICT=1`',
-                    'an `mt` build measurably scales past two threads. Strict mode 1 warns and grows the pool instead of aborting.',
-                ],
-                ['`-sRESERVED_FUNCTION_POINTERS=1024`', 'a run fails with `Cannot enlarge function table`'],
+            type: 'entries',
+            items: [
+                { name: '`-sINITIAL_MEMORY=64MB`', text: 'Startup allocates a lot, such as a model or a large dataset, and you see pauses while the heap grows.' },
+                {
+                    name: '`-sSTACK_SIZE=1MB`',
+                    text: 'The C++ uses large local arrays or deep recursion. An overflow is silent in a release build: later, unrelated calls fail with `unreachable` or `memory access out of bounds`. Add `-sSTACK_OVERFLOW_CHECK=2` to find the function.',
+                },
+                {
+                    name: '`-sPTHREAD_POOL_SIZE=8` with `-sPTHREAD_POOL_SIZE_STRICT=1`',
+                    text: 'An `mt` build measurably scales past two threads. Strict mode 1 warns and grows the pool instead of aborting.',
+                },
+                { name: '`-sRESERVED_FUNCTION_POINTERS=1024`', text: 'A run fails with `Cannot enlarge function table`.' },
             ],
         },
         {
             type: 'p',
-            text: `A wasm32 heap cannot pass 4 GB. For more, build the \`wasm64\` arch: \`crossbind build -a wasm64\`, which a plain build skips, or \`target: { arch: 'wasm64' }\` with a bundler plugin. Every flag crossbind sets, with what each one is for, is listed in [performance.md](${REPO_URL}/blob/main/docs/api/performance.md).`,
+            text: `A wasm32 heap cannot pass 4 GB. For more, build \`wasm64\`: \`crossbind build -a wasm64\` (a plain build skips it), or \`target: { arch: 'wasm64' }\` with a bundler plugin. Every flag crossbind sets is in [performance.md](${REPO_URL}/blob/main/docs/api/performance.md).`,
         },
 
         { type: 'h2', id: 'leave-alone', text: 'What to leave alone' },
@@ -125,8 +139,8 @@ export default {
             items: [
                 '`-Os` or `-Oz` for a smaller file: an `-O` flag in `emccFlags` comes after the default `-O3` and replaces it, trading speed for size. Measure both on your own binary before keeping it.',
                 'Turning off `ALLOW_MEMORY_GROWTH` for predictable allocation: the first allocation past the initial heap then fails with out of memory instead of growing.',
-                'A pool of 32 pthreads for parallelism: each pthread is a Web Worker with its own startup time, JavaScript runtime and stack - only the heap is shared - so raise the pool only as far as a measurement shows the work scales.',
-                'Flags that fight the defaults: the loader, `m.FS`, OPFS and data files depend on `MODULARIZE`, `WASMFS` and `FORCE_FILESYSTEM`, strict-CSP pages on `DYNAMIC_EXECUTION=0`, and C++ errors in JavaScript on `-fwasm-exceptions` - `std::vector`, `std::string` and `std::map` throw even when your own code does not.',
+                'A pool of 32 pthreads for parallelism: each pthread is a Web Worker with its own startup, runtime and stack (only the heap is shared), so raise the pool only as far as a measurement shows the work scales.',
+                'Flags that fight the defaults: the loader, `m.FS`, OPFS and data files depend on `MODULARIZE`, `WASMFS` and `FORCE_FILESYSTEM`; strict-CSP pages on `DYNAMIC_EXECUTION=0`; and C++ errors in JavaScript on `-fwasm-exceptions` (the standard library throws even when your own code does not).',
             ],
         },
     ],

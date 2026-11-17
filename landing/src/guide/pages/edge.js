@@ -10,12 +10,12 @@ export default {
     slug: 'edge',
     title: 'Edge',
     description: 'Run C++ in Cloudflare Workers, or as a WASI HTTP component under wasmtime serve, Spin or wasmCloud.',
-    lede: 'Two builds reach the edge. `-e edge` makes a single-threaded WebAssembly module and its loader, which a Cloudflare Worker imports and boots with `initNative()`. `-e http` makes a WASI HTTP component: a C++ request handler with no JavaScript at all, which `wasmtime serve`, Spin and wasmCloud run.',
+    lede: 'Two builds reach the edge. `-e edge` makes a single-threaded WebAssembly module and loader for a Cloudflare Worker. `-e http` makes a WASI HTTP component, a C++ request handler with no JavaScript, for `wasmtime serve`, Spin and wasmCloud.',
     blocks: [
         { type: 'h2', id: 'cloudflare-workers', text: 'Cloudflare Workers' },
         {
             type: 'p',
-            text: 'Workers, and the edge runtimes that follow their model, run JavaScript in V8 isolates: no Web Workers, no `SharedArrayBuffer` and no bundler plugin, so the Worker imports the build output itself. Install the CLI and name the project, which names the output files:',
+            text: 'Workers run JavaScript in V8 isolates, with no Web Workers and no `SharedArrayBuffer`, and there is no bundler plugin: the Worker imports the build output itself. Install the CLI and name the project, which names the output files:',
         },
         { type: 'code', file: 'shell', code: `npm install --save-dev crossbind${RELEASE.distTagSuffix}` },
         {
@@ -28,7 +28,7 @@ export default {
         },
         {
             type: 'p',
-            text: 'With no bundler to see your imports, the build binds every `.h` file under `src/native`, so a port is reached through a header of your own. Build, and the loader and its wasm land in `dist`:',
+            text: 'Without a bundler, the build binds every `.h` file in `src/native`, so a port is reached through a header of your own. Build; the loader and its wasm land in `dist`:',
         },
         { type: 'code', file: 'shell', code: 'npx crossbind build -p wasm -a wasm32 -r st -e edge -b release' },
         {
@@ -46,11 +46,11 @@ export default {
         },
         {
             type: 'p',
-            text: '`Native` is a class declared in `src/native/native.h`. Edge runtimes cannot compile WebAssembly from bytes, so the Worker imports the `.wasm` as a module and `getWasmFunction` ([Runtime API](/guide/runtime-api/#options)) hands it to the loader. `initNative()` boots once per isolate and returns the same module on every later call.',
+            text: '`Native` is a class in `src/native/native.h`. Workers cannot compile WebAssembly from bytes, so the Worker imports the `.wasm` as a module and `getWasmFunction` ([Runtime API](/guide/runtime-api/#options)) hands it to the loader. `initNative()` starts once per isolate.',
         },
         {
             type: 'p',
-            text: 'Boot from the handler rather than with a top-level `await`: Workers forbid random number generation in global scope, and Rust\'s standard library asks for random bytes while the module starts. The build also writes `dist/edge/wasm.mjs`, which does both imports itself and exports `initNative` and every bound name; it is the entry a package publishes for edge runtimes ([Publishing packages](/guide/publishing/#package-types)).',
+            text: 'Start it in the handler, not with a top-level `await`: Workers forbid random numbers in global scope, and Rust\'s standard library asks for some as the module starts. The build also writes `dist/edge/wasm.mjs`, which does both imports and exports `initNative` and every bound name; a package publishes it as its edge entry ([Publishing packages](/guide/publishing/#package-types)).',
         },
         { type: 'p', text: 'Wrangler bundles the `.wasm` import with no extra rules:' },
         {
@@ -75,16 +75,16 @@ npx wrangler deploy`,
             type: 'ul',
             items: [
                 '**Single-threaded only.** `-r mt` and `useWorker` need Web Workers, which an isolate does not have.',
-                '**Files live in memory.** `m.FS` keeps them only as long as the isolate, and there is no OPFS. Keep durable data in a store such as R2 or KV, read it in JavaScript and write it to `m.FS` or pass it to your bound functions.',
+                '**Files live in memory.** `m.FS` keeps them only as long as the isolate, and there is no OPFS. Keep durable data in a store such as R2 or KV and pass it in from JavaScript.',
                 '**No header constants.** `#define` and `const` values bind only for names an app imports, and a Worker imports no header.',
-                '**Platform caps.** A free Worker gets 10 ms of CPU per request, and every plan caps a Worker\'s size: check your `.wasm` against yours.',
+                '**Platform caps.** A free Worker gets 10 ms of CPU per request, and every plan caps a Worker\'s size; check your `.wasm` against yours.',
             ],
         },
 
         { type: 'h2', id: 'http', text: 'WASI HTTP components' },
         {
             type: 'p',
-            text: '`-e http` links your C++ into a component that exports `wasi:http/handler@0.3.0`, the export of the `wasi:http/service` world. There is no `main()` and no JavaScript: `src/native` defines the one function `<crossbind/http.h>` declares, and the host calls it once per request.',
+            text: '`-e http` links your C++ into a component that exports `wasi:http/handler@0.3.0` (the `wasi:http/service` world). There is no `main()` and no JavaScript: `src/native` defines the one function `<crossbind/http.h>` declares, and the host calls it for each request.',
         },
         { type: 'code', file: 'src/native/handler.cpp', code: httpHandlerCode('Called once per request, after its whole body has arrived.') },
         {
@@ -105,7 +105,7 @@ wasmtime serve dist/${httpComponentName(SERVICE)}`,
         { type: 'code', file: 'spin.toml', code: spinManifestCode(SERVICE) },
         {
             type: 'p',
-            text: 'wasmCloud\'s `wash dev` takes it as `build.component_path` in `.wash/config.yaml` (checked by hand with wash 2.10). The build compiles like any [WASI command](/guide/executables/#wasi), and ports link in from their `-wasi` packages.',
+            text: 'wasmCloud\'s `wash dev` takes it as `build.component_path` in `.wash/config.yaml`. The build compiles like a [WASI command](/guide/executables/#wasi), and ports link from their `-wasi` packages.',
         },
         {
             type: 'ul',
@@ -123,7 +123,7 @@ wasmtime serve dist/${httpComponentName(SERVICE)}`,
 
         {
             type: 'p',
-            text: `[examples/cloud-cloudflare-worker](${REPO_URL}/tree/main/examples/cloud-cloudflare-worker) is a complete Worker, and [e2e/cloud-wasi-http](${REPO_URL}/tree/main/e2e/cloud-wasi-http) builds a component and tests it under \`wasmtime serve\` 47 and Spin 4.2.`,
+            text: `[examples/cloud-cloudflare-worker](${REPO_URL}/tree/main/examples/cloud-cloudflare-worker) is a complete Worker; [e2e/cloud-wasi-http](${REPO_URL}/tree/main/e2e/cloud-wasi-http) builds a component and tests it under \`wasmtime serve\` and Spin.`,
         },
     ],
 };

@@ -121,7 +121,7 @@ export default {
         { type: 'h2', id: 'metro', text: 'Metro' },
         {
             type: 'p',
-            text: '`@crossbind/plugin-metro` turns header, `.i` and `.rs` imports into modules and writes the C++ bridge for each header while Metro bundles a React Native or Expo app; on iOS and Android the app\'s Xcode and Gradle builds compile the C++, through `@crossbind/plugin-react-native`. [React Native](/guide/react-native/#metro) shows its config, and [Expo](/guide/react-native/#expo) the web build it makes as well.',
+            text: 'The Metro plugin is set up with the rest of a React Native app: see [React Native](/guide/react-native/#metro), and [Expo](/guide/react-native/#expo) for the web build it makes as well.',
         },
 
         { type: 'h2', id: 'own-plugin', text: 'Another bundler' },

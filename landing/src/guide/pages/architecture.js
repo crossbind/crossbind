@@ -4,18 +4,18 @@ export default {
     slug: 'architecture',
     title: 'How it works',
     description: 'What runs when you build: targets, bridges, the toolchain boundary, and the cache.',
-    lede: `You never call the compiler yourself, which is exactly why it helps to know what happens when you do. This is the one-screen model of a ${BRAND} build - from \`crossbind build\` to the files your bundler picks up.`,
+    lede: `You never call the compiler yourself, so it helps to know what a ${BRAND} build does, from \`crossbind build\` to the files your bundler picks up.`,
     blocks: [
         { type: 'h2', id: 'pipeline', text: 'The pipeline' },
         {
             type: 'ol',
             items: [
-                '**Config load.** `crossbind.config.js` is read and merged with `crossbind.build.js` (packages only) and machine settings from `~/.crossbind.json`. Transitive dependencies are flattened; if any of them is multithreaded, the project is promoted to `mt`.',
-                '**Target expansion.** CLI flags filter the target matrix down to the `{platform, arch, runtime, runtimeEnv, buildType}` tuples this host can actually build.',
-                '**`createLib`.** Per target, your C++ is compiled to a static library - cmake or configure, inside Docker for wasm/Android/WASI, through Xcode for iOS.',
-                '**Bridge generation.** Each imported header becomes a bridge translation unit that registers the binding surface; that is what makes classes and functions appear in JavaScript.',
-                '**Link.** `buildWasm` links the archives with `emcc`; `buildWasiCommand` links a wasi command; `buildCargo` stages a Rust crate\'s `.a`; `createXCFramework` combines the iOS slices.',
-                '**`buildJs`.** Rollup assembles the loader for the chosen runtime environment and writes the final artifacts.',
+                '**Config.** `crossbind.config.js` is read and merged with `crossbind.build.js` (packages only) and the machine settings in `~/.crossbind.json`. Dependencies of dependencies come along; if any is multithreaded, the project builds `mt`.',
+                '**Targets.** CLI options narrow the target matrix to the `{platform, arch, runtime, runtimeEnv, buildType}` combinations this machine can build.',
+                '**Library.** Per target, your C++ compiles to a static library with CMake or configure: in Docker for wasm, Android and WASI, through Xcode for iOS.',
+                '**Bridges.** Each imported header becomes a bridge source that registers its bindings; that is what makes classes and functions appear in JavaScript.',
+                "**Link.** The archives link into the wasm module or the WASI command, a Rust crate's archive is staged, and the iOS slices become an xcframework.",
+                '**Loader.** The JavaScript loader for the runtime environment is written next to the binary.',
             ],
         },
         {
@@ -33,13 +33,13 @@ export default {
         { type: 'h2', id: 'targets', text: 'Targets are the unit of work' },
         {
             type: 'p',
-            text: 'Everything downstream of config load is per target, and the target name is stamped into every artifact - `myapp-wasm-wasm32-st-release.browser.js` is platform, arch, runtime, build type and runtime environment in one string. That is why `st` and `mt` artifacts can never be confused for one another, and why mixing them in one bundle fails loudly.',
+            text: 'Everything after the config is per target, and the target is in every file name: `myapp-wasm-wasm32-st-release.browser.js` is platform, arch, runtime, build type and runtime environment. So `st` and `mt` builds cannot be confused, and mixing them in one bundle fails loudly.',
         },
 
         { type: 'h2', id: 'runtime', text: 'The JavaScript runtime layer' },
         {
             type: 'p',
-            text: 'The loader is a shared core plus thin per-environment adapters: URL-based asset resolution in the browser, filesystem-based in Node and on edge; OPFS mounting and file auto-mount in the browser; a Comlink bridge when the module runs in a worker. Supporting a new runtime is one more shim over the same core, which is why `initNative()` behaves identically everywhere.',
+            text: 'The loader is one core with a small adapter per environment: how files are found (URLs in the browser, the filesystem in Node.js and on the edge), OPFS and file mounting in the browser, and the bridge to a worker. So `initNative()` behaves the same everywhere.',
         },
 
         { type: 'h2', id: 'toolchain', text: 'Where the toolchain lives' },
@@ -55,7 +55,7 @@ export default {
         },
         {
             type: 'p',
-            text: 'Docker mounts the project path as its working directory, so nothing above that path is visible to the build. In a monorepo, point `paths.base` at the repository root - see [Configuration](/guide/configuration/#paths).',
+            text: 'Docker sees nothing above the project folder; in a monorepo, set `paths.base` ([Configuration](/guide/configuration/#paths)).',
         },
 
         { type: 'h2', id: 'cache', text: 'Cache and rebuilds' },
@@ -63,14 +63,14 @@ export default {
             type: 'table',
             head: ['Path', 'What it holds', 'Safe to delete'],
             rows: [
-                ['`.crossbind/`', 'build cache: cmake output, generated bridges, generated types', 'yes - rebuilt on the next build'],
+                ['`.crossbind/`', 'build cache: CMake output, generated bridges, generated types', 'yes; the next build remakes it'],
                 ['`dist/prebuilt/<target>/`', 'the static library and headers other packages link against', 'yes, but dependents must rebuild'],
                 ['`dist/<name>.<env>.{js,wasm,data.txt}`', 'what your app loads', 'yes'],
             ],
         },
         {
             type: 'p',
-            text: 'A build short-circuits when the artifact is newer than the sources, which is what keeps incremental builds cheap. Bundler plugins compare source timestamps for you and force a rebuild in dev when a `.h` or `.cpp` changes - that is the hot-reload path.',
+            text: 'A build is skipped when its output is newer than the sources. In dev, the bundler plugins rebuild when a `.h` or `.cpp` changes.',
         },
         {
             type: 'callout',
@@ -82,7 +82,7 @@ export default {
         { type: 'h2', id: 'overrides', text: 'The override hierarchy' },
         {
             type: 'p',
-            text: 'When you need to change what the build does, reach for the **highest** layer that solves it - the higher the layer, the less of the pipeline you take ownership of.',
+            text: 'To change what the build does, use the **highest** layer that works: the higher the layer, the less of the build you own.',
         },
         {
             type: 'ol',
@@ -96,7 +96,7 @@ export default {
         },
         {
             type: 'p',
-            text: `Layers one to three live in [Configuration](/guide/configuration/); the rest are package-author territory: [Publishing packages](/guide/publishing/#build-hooks), and every layer in [overrides.md](${REPO_URL}/blob/main/docs/api/overrides.md).`,
+            text: `Layers one to three are in [Configuration](/guide/configuration/), the fourth in [Publishing packages](/guide/publishing/#build-hooks). Every layer in full: [overrides.md](${REPO_URL}/blob/main/docs/api/overrides.md).`,
         },
     ],
 };

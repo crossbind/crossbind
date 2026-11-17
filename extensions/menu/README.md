@@ -2,7 +2,7 @@
 
 The app's menus and context menus, the tray icon and system notifications.
 
-An app has it by having `@crossbind/core-app-host`, which lists it as a dependency: there is nothing to install or list.
+It comes with `@crossbind/core-app-host`: there is nothing to install or list.
 
 ## Use
 
@@ -23,6 +23,6 @@ macOS, Linux and Windows; `menu.setDock` is macOS's alone. On a phone each call 
 
 ## Replace or leave out
 
-It holds the roles `menu`, `notification` and `tray`. An extension that gives `replaces: 'menu'` takes that role alone, and this one goes on with the rest; `app: { without: ['menu'] }` in `crossbind.config.js` leaves it out. [The guide](https://crossbind.dev/guide/extensions/#replace) shows how, and [extensions.md](https://github.com/crossbind/crossbind/blob/main/docs/api/extensions.md#the-hosts-own-extensions) what a replacement answers.
+It holds the roles `menu`, `notification` and `tray`. An extension with `replaces: 'menu'` takes that role alone, and this one keeps the rest; `app: { without: ['menu'] }` in `crossbind.config.js` leaves it out. [The guide](https://crossbind.dev/guide/extensions/#replace) shows how, and [extensions.md](https://github.com/crossbind/crossbind/blob/main/docs/api/extensions.md#the-hosts-own-extensions) what a replacement answers.
 
 [app.md](https://github.com/crossbind/crossbind/blob/main/docs/api/app.md#menus) has the menus' items, and [Tray and notifications](https://github.com/crossbind/crossbind/blob/main/docs/api/app.md#tray-and-notifications) the rest.

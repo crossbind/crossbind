@@ -1,5 +1,5 @@
 # @crossbind/port-lerc
-**Precompiled LERC (Limited Error Raster Compression) library built with crossbind for seamless integration in JavaScript, WebAssembly and React Native projects.**
+**The LERC (Limited Error Raster Compression) library, prebuilt with crossbind for JavaScript, WebAssembly and React Native projects.**
 
 <a href="https://www.npmjs.com/package/@crossbind/port-lerc">
     <img alt="NPM version" src="https://img.shields.io/npm/v/@crossbind/port-lerc/beta?style=for-the-badge" />
@@ -11,7 +11,7 @@
     <img alt="License" src="https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fregistry.npmjs.org%2F%40crossbind%2Fport-lerc%2Fbeta&query=%24.license&style=for-the-badge&label=license" />
 </a>
 
-> Use it together with **[crossbind](https://crossbind.dev)** — the toolchain for using C++ libraries from JavaScript, TypeScript, WebAssembly, Node.js and React Native. Learn more at **[crossbind.dev](https://crossbind.dev)**.
+> Use it with **[crossbind](https://crossbind.dev)**, which lets JavaScript, TypeScript, Node.js and React Native code import C and C++ headers.
 
 LERC, from Esri, compresses rasters such as elevation models so that no value moves by more than the error you choose, or by nothing at all. ArcGIS elevation services send their tiles as LERC, and GDAL's GeoTIFF and MRF drivers read and write it.
 
@@ -22,7 +22,7 @@ Three apps on **[crossbind.dev/ports/lerc](https://crossbind.dev/ports/lerc/#app
 - **Tile inspector.** Reads a LERC blob's header without decoding it (size, data type, bands, valid pixels, value range and the error it was stored with), then decodes a band and draws it. Legacy Lerc1 tiles open too.
 - **LERC or gzip.** Four rasters through the browser's own gzip and through LERC. Lossless, LERC is smaller on terrain (576,760 B against 888,786 B from Chrome's gzip), on temperature readings and on random values; on a map of whole-number classes gzip wins (17,302 B against 39,300 B).
 
-Their C++ wrappers, and the self-check the site build runs against numbers computed independently of this package, are in [`landing/demos/lib-lerc`](https://github.com/crossbind/crossbind/tree/main/landing/demos/lib-lerc).
+Their C++ wrappers are in [`landing/demos/lib-lerc`](https://github.com/crossbind/crossbind/tree/main/landing/demos/lib-lerc).
 
 ## Integration
 Install the main package together with the platform builds:
@@ -31,7 +31,7 @@ Install the main package together with the platform builds:
 npm install @crossbind/port-lerc@beta @crossbind/port-lerc-wasm@beta @crossbind/port-lerc-android@beta @crossbind/port-lerc-ios@beta
 ```
 
-Then import all three platforms in `crossbind.config.js` — crossbind compiles only the one matching each build target:
+Then list all three in `crossbind.config.js`; each build uses the one for its target:
 
 ```diff
 +import lercWasm from '@crossbind/port-lerc-wasm/crossbind.config.js';
@@ -50,7 +50,7 @@ export default {
 };
 ```
 
-A native Node.js addon (`crossbind build -e node`) links the build of its platform: `-p darwin`, `-p linux`, `-p linuxmusl` or `-p win32` takes `@crossbind/port-lerc-darwin`, `-linux`, `-linuxmusl` or `-win32`; `-linuxmusl` is the one for Alpine and other musl distributions. Install it and import its `crossbind.config.js` the same way.
+A Node.js addon (`crossbind build -e node`) links the desktop build of its platform instead: `@crossbind/port-lerc-darwin`, `-linux`, `-linuxmusl` (Alpine and other musl systems) or `-win32`. Install and list it the same way.
 
 ## Usage
 crossbind binds your C++ headers to JavaScript, so the usual pattern is a small wrapper around the library. This one stores one band of float32 heights within the error you allow and reads them back. Put it in your project's native folder (`src/native/` by default):
@@ -202,19 +202,17 @@ Setup for every platform: [crossbind.dev/ports/lerc](https://crossbind.dev/ports
 - Lossless float blobs are not byte-reproducible: LERC 4.2.0 leaves four bytes after each Huffman-coded byte plane uninitialized (`fpl_EsriHuffman.cpp`). Decoding ignores them, but two encodes of the same data can differ in those bytes and in the checksum, so do not compare such blobs by hash.
 
 ## Supported platforms
-This is the main package; the precompiled binaries are shipped per platform:
+This is the main package; the binaries ship in one package per platform:
 
-| Platform | Package | Targets |
-|---|---|---|
-| WebAssembly | [`@crossbind/port-lerc-wasm`](https://www.npmjs.com/package/@crossbind/port-lerc-wasm) | `wasm32` — single-threaded & multi-threaded |
-| Android | [`@crossbind/port-lerc-android`](https://www.npmjs.com/package/@crossbind/port-lerc-android) | `arm64-v8a` (64-bit ARM), `x86_64` (emulator) |
-| iOS | [`@crossbind/port-lerc-ios`](https://www.npmjs.com/package/@crossbind/port-lerc-ios) | device (`arm64`), simulator (`arm64`) |
-| macOS | [`@crossbind/port-lerc-darwin`](https://www.npmjs.com/package/@crossbind/port-lerc-darwin) | `arm64` (Apple silicon), `x64` (Intel) — native Node.js addons |
-| Linux | [`@crossbind/port-lerc-linux`](https://www.npmjs.com/package/@crossbind/port-lerc-linux) | `x64`, `arm64` — glibc 2.28 or later, native Node.js addons |
-| Linux (musl) | [`@crossbind/port-lerc-linuxmusl`](https://www.npmjs.com/package/@crossbind/port-lerc-linuxmusl) | `x64`, `arm64` — musl 1.2.5 or later (Alpine 3.21 and later), native Node.js addons |
-| Windows | [`@crossbind/port-lerc-win32`](https://www.npmjs.com/package/@crossbind/port-lerc-win32) | `x64`, `arm64` — Windows 10 or later, native Node.js addons |
-| WASI library | [`@crossbind/port-lerc-wasi`](https://www.npmjs.com/package/@crossbind/port-lerc-wasi) | `wasm32-wasip3` — single-threaded |
-| Node.js, ready-made | [`@crossbind/port-lerc-standalone-napi`](https://www.npmjs.com/package/@crossbind/port-lerc-standalone-napi) | prebuilt addons for macOS, Linux (glibc and musl) and Windows, `arm64` and `x64`: nothing to build |
+- **WebAssembly**, [`@crossbind/port-lerc-wasm`](https://www.npmjs.com/package/@crossbind/port-lerc-wasm): `wasm32`; single-threaded and multi-threaded.
+- **Android**, [`@crossbind/port-lerc-android`](https://www.npmjs.com/package/@crossbind/port-lerc-android): `arm64-v8a` (64-bit ARM), `x86_64` (emulator).
+- **iOS**, [`@crossbind/port-lerc-ios`](https://www.npmjs.com/package/@crossbind/port-lerc-ios): device (`arm64`), simulator (`arm64`).
+- **macOS**, [`@crossbind/port-lerc-darwin`](https://www.npmjs.com/package/@crossbind/port-lerc-darwin): `arm64` (Apple silicon), `x64` (Intel); native Node.js addons.
+- **Linux**, [`@crossbind/port-lerc-linux`](https://www.npmjs.com/package/@crossbind/port-lerc-linux): `x64`, `arm64`; glibc 2.28 or later, native Node.js addons.
+- **Linux (musl)**, [`@crossbind/port-lerc-linuxmusl`](https://www.npmjs.com/package/@crossbind/port-lerc-linuxmusl): `x64`, `arm64`; musl 1.2.5 or later (Alpine 3.21 and later), native Node.js addons.
+- **Windows**, [`@crossbind/port-lerc-win32`](https://www.npmjs.com/package/@crossbind/port-lerc-win32): `x64`, `arm64`; Windows 10 or later, native Node.js addons.
+- **WASI library**, [`@crossbind/port-lerc-wasi`](https://www.npmjs.com/package/@crossbind/port-lerc-wasi): `wasm32-wasip3`; single-threaded.
+- **Node.js, ready-made**, [`@crossbind/port-lerc-standalone-napi`](https://www.npmjs.com/package/@crossbind/port-lerc-standalone-napi): prebuilt addons for macOS, Linux (glibc and musl) and Windows, `arm64` and `x64`: nothing to build.
 
 ## License
 This project includes the precompiled LERC library, which is distributed under the [Apache License 2.0](https://github.com/Esri/lerc/blob/master/LICENSE). Esri's [NOTICE](https://github.com/Esri/lerc/blob/master/NOTICE) grants the right to practise the LERC patent (US 9,002,126) under the same licence.

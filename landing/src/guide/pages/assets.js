@@ -2,12 +2,12 @@ export default {
     slug: 'assets',
     title: 'Data files',
     description: 'Ship the data files a native library needs, and point it at them on every platform.',
-    lede: 'Plenty of C++ libraries refuse to work without their data: PROJ wants its coordinate database, GDAL its format tables, OpenSSL a CA bundle. Declare those files once in `targetSpecs` and they are copied to the right place on every platform, with the environment variables wired to match.',
+    lede: 'Many C++ libraries need data files: PROJ its coordinate database, GDAL its format tables, OpenSSL a CA bundle. Declare them once in `targetSpecs`, and they are copied to the right place on every platform, with matching environment variables.',
     blocks: [
         { type: 'h2', id: 'shape', text: 'The shape' },
         {
             type: 'p',
-            text: 'Each entry in `targetSpecs` is a filter plus overrides. The filter fields - `platform`, `arch`, `runtime`, `buildType`, `runtimeEnv` - are all optional; an entry applies to every build target that matches the fields you did set. `specs.data` copies files, `specs.env` sets environment variables inside the running module.',
+            text: 'In a `targetSpecs` entry ([how entries match](/guide/configuration/#target-specs)), `specs.data` copies files and `specs.env` sets environment variables in the running module:',
         },
         {
             type: 'code',
@@ -57,48 +57,41 @@ export default {
         {
             type: 'ul',
             items: [
-                'A value starting with `/` is an absolute path inside the module\'s virtual filesystem - `/usr/share/proj` in the browser example.',
-                'A value without a leading slash is relative to the platform\'s data directory, the one `_CROSSBIND_DATA_PATH_` expands to.',
+                'A value starting with `/` is an absolute path in the module\'s virtual filesystem, as `/usr/share/proj` in the browser entry.',
+                'A value without a leading slash is relative to the platform\'s data folder, which `_CROSSBIND_DATA_PATH_` expands to.',
             ],
         },
         {
             type: 'p',
-            text: 'That is why the browser entry differs from the others: in the browser everything lives in the virtual filesystem, while Node and mobile have a real directory on disk that the runtime resolves at load time.',
+            text: 'So the browser entry differs: in the browser everything lives in the virtual filesystem, while Node.js and mobile apps have a real data folder on disk.',
         },
 
         { type: 'h2', id: 'env', text: 'Environment variables' },
         {
             type: 'p',
-            text: '`specs.env` values are passed into the wasm (or native) process, and `_CROSSBIND_DATA_PATH_` inside any value is replaced with the runtime data path. Values can also be functions of `(state, target)` when the path is only known at build time - they resolve lazily and produce a string.',
+            text: '`specs.env` values reach the running module, with `_CROSSBIND_DATA_PATH_` replaced by the data folder. A value can also be a function of `(state, target)` that returns a string, for a path known only at build time.',
         },
         {
             type: 'p',
-            text: 'Runtime `env` can also be set per call, which is handy for anything that is not a build-time constant:',
-        },
-        {
-            type: 'code',
-            file: 'src/main.js',
-            code: `const m = await initNative({
-    env: { TMPDIR: '_CROSSBIND_DATA_PATH_/scratch' },
-});`,
+            text: '`initNative()` takes `env` as well, for values not known at build time ([Runtime API](/guide/runtime-api/#logging)).',
         },
 
         { type: 'h2', id: 'packages', text: 'Assets that come with a package' },
         {
             type: 'p',
-            text: 'A prebuilt package carries its own data declarations, so installing `@crossbind/port-proj` brings the coordinate database and its `PROJ_LIB` wiring along with it. You only write `targetSpecs` for data of your own - or to override where a dependency\'s data goes.',
+            text: 'A prebuilt package declares its own data, so installing `@crossbind/port-proj` brings the coordinate database and its `PROJ_LIB` setting along. Write `targetSpecs` only for data of your own, or to change where a dependency\'s data goes.',
         },
         {
             type: 'callout',
             tone: 'note',
-            title: 'WASI is the same declaration, different mechanics',
-            text: 'On `platform: \'wasi\'` the `data` and `env` entries double as the runtime contract of the prebuilt command-line tools: their launcher turns data directories into `--dir` preopens and `env` into the guest environment, with `_CROSSBIND_DATA_PATH_` pointing at the mounted directory. A command of your own gets a real `data/` folder beside it; pass `--dir` and `--env` to `wasmtime run` yourself. See [Executables](/guide/executables/#wasi).',
+            title: 'WASI',
+            text: 'A WASI command of your own gets a `data/` folder beside it: pass `--dir` and `--env` to `wasmtime run` yourself ([Executables](/guide/executables/#wasi)). The prebuilt command-line tools set both up for you.',
         },
 
         { type: 'h2', id: 'other-specs', text: 'What else targetSpecs carries' },
         {
             type: 'p',
-            text: 'The same entries are where per-target build flags live, which keeps every platform-specific tweak in one list:',
+            text: 'The same entries hold the build settings of each target:',
         },
         {
             type: 'table',
@@ -114,7 +107,7 @@ export default {
         },
         {
             type: 'p',
-            text: 'The full list of configuration keys is in [Configuration](/guide/configuration/#target-specs).',
+            text: 'More in [Configuration](/guide/configuration/#target-specs).',
         },
     ],
 };

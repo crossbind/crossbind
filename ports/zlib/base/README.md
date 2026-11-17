@@ -1,5 +1,5 @@
 # @crossbind/port-zlib
-**Precompiled zlib library built with crossbind for seamless integration in JavaScript, WebAssembly and React Native projects.**
+**The zlib library, prebuilt with crossbind for JavaScript, WebAssembly and React Native projects.**
 
 <a href="https://www.npmjs.com/package/@crossbind/port-zlib">
     <img alt="NPM version" src="https://img.shields.io/npm/v/@crossbind/port-zlib/beta?style=for-the-badge" />
@@ -11,7 +11,7 @@
     <img alt="License" src="https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fregistry.npmjs.org%2F%40crossbind%2Fport-zlib%2Fbeta&query=%24.license&style=for-the-badge&label=license" />
 </a>
 
-> Use it together with **[crossbind](https://crossbind.dev)** — the toolchain for using C++ libraries from JavaScript, TypeScript, WebAssembly, Node.js and React Native. Learn more at **[crossbind.dev](https://crossbind.dev)**.
+> Use it with **[crossbind](https://crossbind.dev)**, which lets JavaScript, TypeScript, Node.js and React Native code import C and C++ headers.
 
 ## See it run
 Three apps on **[crossbind.dev/ports/zlib](https://crossbind.dev/ports/zlib/#apps)** run this package in your browser, on the same generated data every time:
@@ -20,7 +20,7 @@ Three apps on **[crossbind.dev/ports/zlib](https://crossbind.dev/ports/zlib/#app
 - **PNG squeezer.** Filters a PNG's rows again and deflates them at level 9, copying every other chunk as it was. The sample chart goes from 17,191 B to 4,989 B, and both zlib and the browser's own PNG decoder confirm the pixels are unchanged.
 - **ZIP inspector.** Reads a ZIP's central directory, inflates one entry with raw deflate and checks every CRC-32, as `unzip -t` does. A .docx, .xlsx, .epub or .jar opens the same way.
 
-Their C++ wrappers, and the self-check the site build runs against values computed independently of this package, are in [`landing/demos/lib-zlib`](https://github.com/crossbind/crossbind/tree/main/landing/demos/lib-zlib).
+Their C++ wrappers are in [`landing/demos/lib-zlib`](https://github.com/crossbind/crossbind/tree/main/landing/demos/lib-zlib).
 
 ## Integration
 Install the main package together with the platform builds:
@@ -29,7 +29,7 @@ Install the main package together with the platform builds:
 npm install @crossbind/port-zlib@beta @crossbind/port-zlib-wasm@beta @crossbind/port-zlib-android@beta @crossbind/port-zlib-ios@beta
 ```
 
-Then import all three platforms in `crossbind.config.js` — crossbind compiles only the one matching each build target:
+Then list all three in `crossbind.config.js`; each build uses the one for its target:
 
 ```diff
 +import zlibWasm from '@crossbind/port-zlib-wasm/crossbind.config.js';
@@ -48,7 +48,7 @@ export default {
 };
 ```
 
-A native Node.js addon (`crossbind build -e node`) links the build of its platform: `-p darwin`, `-p linux`, `-p linuxmusl` or `-p win32` takes `@crossbind/port-zlib-darwin`, `-linux`, `-linuxmusl` or `-win32`; `-linuxmusl` is the one for Alpine and other musl distributions. Install it and import its `crossbind.config.js` the same way.
+A Node.js addon (`crossbind build -e node`) links the desktop build of its platform instead: `@crossbind/port-zlib-darwin`, `-linux`, `-linuxmusl` (Alpine and other musl systems) or `-win32`. Install and list it the same way.
 
 ## Usage
 crossbind binds your C++ headers to JavaScript, so the usual pattern is a small wrapper around the library. This one compresses and decompresses in one call. Put it in your project's native folder (`src/native/` by default):
@@ -132,19 +132,17 @@ Setup for every platform: [crossbind.dev/ports/zlib](https://crossbind.dev/ports
 - Every compressed byte the examples and apps above produce is identical to what stock zlib 1.4, built natively from the same tarball, produces, except the operating-system byte in a gzip header: zlib writes 3 (Unix) in the WebAssembly and WASI builds, and its `zutil.h` writes 19 wherever `__APPLE__` is defined, which includes iOS. Set the byte with `deflateSetHeader` when files must match across platforms.
 
 ## Supported platforms
-This is the main package; the precompiled binaries are shipped per platform:
+This is the main package; the binaries ship in one package per platform:
 
-| Platform | Package | Targets |
-|---|---|---|
-| WebAssembly | [`@crossbind/port-zlib-wasm`](https://www.npmjs.com/package/@crossbind/port-zlib-wasm) | `wasm32` — single-threaded & multi-threaded |
-| Android | [`@crossbind/port-zlib-android`](https://www.npmjs.com/package/@crossbind/port-zlib-android) | `arm64-v8a` (64-bit ARM), `x86_64` (emulator) |
-| iOS | [`@crossbind/port-zlib-ios`](https://www.npmjs.com/package/@crossbind/port-zlib-ios) | device (`arm64`), simulator (`arm64`) |
-| macOS | [`@crossbind/port-zlib-darwin`](https://www.npmjs.com/package/@crossbind/port-zlib-darwin) | `arm64` (Apple silicon), `x64` (Intel) — native Node.js addons |
-| Linux | [`@crossbind/port-zlib-linux`](https://www.npmjs.com/package/@crossbind/port-zlib-linux) | `x64`, `arm64` — glibc 2.28 or later, native Node.js addons |
-| Linux (musl) | [`@crossbind/port-zlib-linuxmusl`](https://www.npmjs.com/package/@crossbind/port-zlib-linuxmusl) | `x64`, `arm64` — musl 1.2.5 or later (Alpine 3.21 and later), native Node.js addons |
-| Windows | [`@crossbind/port-zlib-win32`](https://www.npmjs.com/package/@crossbind/port-zlib-win32) | `x64`, `arm64` — Windows 10 or later, native Node.js addons |
-| WASI library | [`@crossbind/port-zlib-wasi`](https://www.npmjs.com/package/@crossbind/port-zlib-wasi) | `wasm32-wasip3` — single-threaded |
-| Node.js, ready-made | [`@crossbind/port-zlib-standalone-napi`](https://www.npmjs.com/package/@crossbind/port-zlib-standalone-napi) | prebuilt addons for macOS, Linux (glibc and musl) and Windows, `arm64` and `x64`: nothing to build |
+- **WebAssembly**, [`@crossbind/port-zlib-wasm`](https://www.npmjs.com/package/@crossbind/port-zlib-wasm): `wasm32`; single-threaded and multi-threaded.
+- **Android**, [`@crossbind/port-zlib-android`](https://www.npmjs.com/package/@crossbind/port-zlib-android): `arm64-v8a` (64-bit ARM), `x86_64` (emulator).
+- **iOS**, [`@crossbind/port-zlib-ios`](https://www.npmjs.com/package/@crossbind/port-zlib-ios): device (`arm64`), simulator (`arm64`).
+- **macOS**, [`@crossbind/port-zlib-darwin`](https://www.npmjs.com/package/@crossbind/port-zlib-darwin): `arm64` (Apple silicon), `x64` (Intel); native Node.js addons.
+- **Linux**, [`@crossbind/port-zlib-linux`](https://www.npmjs.com/package/@crossbind/port-zlib-linux): `x64`, `arm64`; glibc 2.28 or later, native Node.js addons.
+- **Linux (musl)**, [`@crossbind/port-zlib-linuxmusl`](https://www.npmjs.com/package/@crossbind/port-zlib-linuxmusl): `x64`, `arm64`; musl 1.2.5 or later (Alpine 3.21 and later), native Node.js addons.
+- **Windows**, [`@crossbind/port-zlib-win32`](https://www.npmjs.com/package/@crossbind/port-zlib-win32): `x64`, `arm64`; Windows 10 or later, native Node.js addons.
+- **WASI library**, [`@crossbind/port-zlib-wasi`](https://www.npmjs.com/package/@crossbind/port-zlib-wasi): `wasm32-wasip3`; single-threaded.
+- **Node.js, ready-made**, [`@crossbind/port-zlib-standalone-napi`](https://www.npmjs.com/package/@crossbind/port-zlib-standalone-napi): prebuilt addons for macOS, Linux (glibc and musl) and Windows, `arm64` and `x64`: nothing to build.
 
 ## License
 This project includes the precompiled zlib library, which is distributed under the [zlib License](https://zlib.net/zlib_license.html).

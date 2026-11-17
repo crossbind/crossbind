@@ -1,5 +1,5 @@
 # @crossbind/port-spatialite
-**Precompiled SpatiaLite (spatial SQLite extension) library built with crossbind for seamless integration in JavaScript, WebAssembly and React Native projects.**
+**The SpatiaLite (spatial SQLite extension) library, prebuilt with crossbind for JavaScript, WebAssembly and React Native projects.**
 
 <a href="https://www.npmjs.com/package/@crossbind/port-spatialite">
     <img alt="NPM version" src="https://img.shields.io/npm/v/@crossbind/port-spatialite/beta?style=for-the-badge" />
@@ -11,7 +11,7 @@
     <img alt="License" src="https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fregistry.npmjs.org%2F%40crossbind%2Fport-spatialite%2Fbeta&query=%24.license&style=for-the-badge&label=license" />
 </a>
 
-> Use it together with **[crossbind](https://crossbind.dev)** — the toolchain for using C++ libraries from JavaScript, TypeScript, WebAssembly, Node.js and React Native. Learn more at **[crossbind.dev](https://crossbind.dev)**.
+> Use it with **[crossbind](https://crossbind.dev)**, which lets JavaScript, TypeScript, Node.js and React Native code import C and C++ headers.
 
 ## See it run
 Three apps on **[crossbind.dev/ports/spatialite](https://crossbind.dev/ports/spatialite/#apps)** run this package in your browser:
@@ -20,7 +20,7 @@ Three apps on **[crossbind.dev/ports/spatialite](https://crossbind.dev/ports/spa
 - **Routing in SQL.** `CreateRouting` turns 718 streets into a network, and a `SELECT` returns the shortest path: 47.5 minutes over 38 streets across a 20 × 20 grid, and 47.75 once three of its streets are closed.
 - **GeoPackage builder.** The points, their count per hexagon and the pins you drop on a map, written to one `.gpkg` with SpatiaLite's `gpkg` functions. GDAL's `validate_gpkg.py` passes the file and `ogrinfo` reads its three layers.
 
-Their C++ wrappers, and the self-check the site build runs against values computed independently of this package, are in [`landing/demos/lib-spatialite`](https://github.com/crossbind/crossbind/tree/main/landing/demos/lib-spatialite).
+Their C++ wrappers are in [`landing/demos/lib-spatialite`](https://github.com/crossbind/crossbind/tree/main/landing/demos/lib-spatialite).
 
 ## Integration
 Install the main package together with the platform builds:
@@ -29,7 +29,7 @@ Install the main package together with the platform builds:
 npm install @crossbind/port-spatialite@beta @crossbind/port-spatialite-wasm@beta @crossbind/port-spatialite-android@beta @crossbind/port-spatialite-ios@beta
 ```
 
-Then import all three platforms in `crossbind.config.js` — crossbind compiles only the one matching each build target:
+Then list all three in `crossbind.config.js`; each build uses the one for its target:
 
 ```diff
 +import spatialiteWasm from '@crossbind/port-spatialite-wasm/crossbind.config.js';
@@ -48,7 +48,7 @@ export default {
 };
 ```
 
-A native Node.js addon (`crossbind build -e node`) links the build of its platform: `-p darwin`, `-p linux`, `-p linuxmusl` or `-p win32` takes `@crossbind/port-spatialite-darwin`, `-linux`, `-linuxmusl` or `-win32`; `-linuxmusl` is the one for Alpine and other musl distributions. Install it and import its `crossbind.config.js` the same way.
+A Node.js addon (`crossbind build -e node`) links the desktop build of its platform instead: `@crossbind/port-spatialite-darwin`, `-linux`, `-linuxmusl` (Alpine and other musl systems) or `-win32`. Install and list it the same way.
 
 ## Usage
 crossbind binds your C++ headers to JavaScript, so the usual pattern is a small wrapper around the library. SpatiaLite is used through SQL: this wrapper opens an in-memory SQLite database, registers SpatiaLite's functions on it, and runs SQL. Put it in your project's native folder (`src/native/` by default):
@@ -151,23 +151,21 @@ Setup for every platform: [crossbind.dev/ports/spatialite](https://crossbind.dev
 - `ST_Transform` runs PROJ, which reads `proj.db`. The WebAssembly build preloads PROJ's data folder, 10,690,537 bytes, next to the module. A WASI build copies it to its output folder's `data/proj`, which the program needs mounted, with `PROJ_DATA` pointing at it; without it `ST_Transform` fails with `proj_create: no database context specified`.
 - File functions only with `SPATIALITE_SECURITY=relaxed`: SpatiaLite registers `ExportGeoJSON2`, `ImportGeoJSON`, `BlobFromFile` and the other functions that touch files only when that variable is set as a connection initialises, and they read "no such function" otherwise. In the browser, `initNative({ env: { SPATIALITE_SECURITY: 'relaxed' } })` sets it; `ExportGeoJSON2` and `ImportGeoJSON` then write and read files in the module's file system.
 - Spatial indexes (`CreateSpatialIndex`, the `SpatialIndex` and `KNN2` virtual tables), routing (`CreateRouting` and `VirtualRouting`), GEOS operations such as `ST_Union`, `ST_Buffer` and `VoronojDiagram`, and GeoPackage functions. `KNN2` ranks the rows inside a square of plus or minus `radius` CRS units around the point, so a radius too small for the nearest rows returns the wrong ones rather than none. `gpkgCreateBaseTables()` writes GeoPackage 1.0 (application id `GP10`), and GDAL's `validate_gpkg.py` rejects two details of its tables; the builder in `landing/demos/lib-spatialite` corrects them.
-- The module behind the five examples and three apps is 14,103,626 bytes of WebAssembly and 145,505 bytes of JavaScript, plus the 10,690,537-byte PROJ preload: 24,939,668 bytes, or 6,005,191 with gzip.
+- The module behind the examples and apps is about 14 MB of WebAssembly, plus about 10.7 MB of PROJ data: about 25 MB in all, or 6 MB with gzip.
 - On WASI, SQLite is built without extension loading, which SpatiaLite still refers to: a program defines `sqlite3_enable_load_extension` itself, as the WASI example on crossbind.dev does.
 
 ## Supported platforms
-This is the main package; the precompiled binaries are shipped per platform:
+This is the main package; the binaries ship in one package per platform:
 
-| Platform | Package | Targets |
-|---|---|---|
-| WebAssembly | [`@crossbind/port-spatialite-wasm`](https://www.npmjs.com/package/@crossbind/port-spatialite-wasm) | `wasm32` — single-threaded & multi-threaded |
-| Android | [`@crossbind/port-spatialite-android`](https://www.npmjs.com/package/@crossbind/port-spatialite-android) | `arm64-v8a` (64-bit ARM), `x86_64` (emulator) |
-| iOS | [`@crossbind/port-spatialite-ios`](https://www.npmjs.com/package/@crossbind/port-spatialite-ios) | device (`arm64`), simulator (`arm64`) |
-| macOS | [`@crossbind/port-spatialite-darwin`](https://www.npmjs.com/package/@crossbind/port-spatialite-darwin) | `arm64` (Apple silicon), `x64` (Intel) — native Node.js addons |
-| Linux | [`@crossbind/port-spatialite-linux`](https://www.npmjs.com/package/@crossbind/port-spatialite-linux) | `x64`, `arm64` — glibc 2.28 or later, native Node.js addons |
-| Linux (musl) | [`@crossbind/port-spatialite-linuxmusl`](https://www.npmjs.com/package/@crossbind/port-spatialite-linuxmusl) | `x64`, `arm64` — musl 1.2.5 or later (Alpine 3.21 and later), native Node.js addons |
-| Windows | [`@crossbind/port-spatialite-win32`](https://www.npmjs.com/package/@crossbind/port-spatialite-win32) | `x64`, `arm64` — Windows 10 or later, native Node.js addons |
-| WASI library | [`@crossbind/port-spatialite-wasi`](https://www.npmjs.com/package/@crossbind/port-spatialite-wasi) | `wasm32-wasip3` — single-threaded |
-| Node.js, ready-made | [`@crossbind/port-spatialite-standalone-napi`](https://www.npmjs.com/package/@crossbind/port-spatialite-standalone-napi) | prebuilt addons for macOS, Linux (glibc and musl) and Windows, `arm64` and `x64`: nothing to build |
+- **WebAssembly**, [`@crossbind/port-spatialite-wasm`](https://www.npmjs.com/package/@crossbind/port-spatialite-wasm): `wasm32`; single-threaded and multi-threaded.
+- **Android**, [`@crossbind/port-spatialite-android`](https://www.npmjs.com/package/@crossbind/port-spatialite-android): `arm64-v8a` (64-bit ARM), `x86_64` (emulator).
+- **iOS**, [`@crossbind/port-spatialite-ios`](https://www.npmjs.com/package/@crossbind/port-spatialite-ios): device (`arm64`), simulator (`arm64`).
+- **macOS**, [`@crossbind/port-spatialite-darwin`](https://www.npmjs.com/package/@crossbind/port-spatialite-darwin): `arm64` (Apple silicon), `x64` (Intel); native Node.js addons.
+- **Linux**, [`@crossbind/port-spatialite-linux`](https://www.npmjs.com/package/@crossbind/port-spatialite-linux): `x64`, `arm64`; glibc 2.28 or later, native Node.js addons.
+- **Linux (musl)**, [`@crossbind/port-spatialite-linuxmusl`](https://www.npmjs.com/package/@crossbind/port-spatialite-linuxmusl): `x64`, `arm64`; musl 1.2.5 or later (Alpine 3.21 and later), native Node.js addons.
+- **Windows**, [`@crossbind/port-spatialite-win32`](https://www.npmjs.com/package/@crossbind/port-spatialite-win32): `x64`, `arm64`; Windows 10 or later, native Node.js addons.
+- **WASI library**, [`@crossbind/port-spatialite-wasi`](https://www.npmjs.com/package/@crossbind/port-spatialite-wasi): `wasm32-wasip3`; single-threaded.
+- **Node.js, ready-made**, [`@crossbind/port-spatialite-standalone-napi`](https://www.npmjs.com/package/@crossbind/port-spatialite-standalone-napi): prebuilt addons for macOS, Linux (glibc and musl) and Windows, `arm64` and `x64`: nothing to build.
 
 ## License
 This project includes the precompiled SpatiaLite library, which is distributed under the [MPL tri-license](https://website-archive.mozilla.org/www.mozilla.org/mpl/MPL/boilerplate-1.1/mpl-tri-license-html): MPL-1.1, GPL-2.0-or-later or LGPL-2.1-or-later, at your choice. RTTOPO and GCP are left out of this build because either would make it GPL-only.

@@ -1,5 +1,5 @@
 # @crossbind/port-geotiff
-**Precompiled libgeotiff (GeoTIFF) library built with crossbind for seamless integration in JavaScript, WebAssembly and React Native projects.**
+**The libgeotiff (GeoTIFF) library, prebuilt with crossbind for JavaScript, WebAssembly and React Native projects.**
 
 <a href="https://www.npmjs.com/package/@crossbind/port-geotiff">
     <img alt="NPM version" src="https://img.shields.io/npm/v/@crossbind/port-geotiff/beta?style=for-the-badge" />
@@ -11,7 +11,7 @@
     <img alt="License" src="https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fregistry.npmjs.org%2F%40crossbind%2Fport-geotiff%2Fbeta&query=%24.license&style=for-the-badge&label=license" />
 </a>
 
-> Use it together with **[crossbind](https://crossbind.dev)** — the toolchain for using C++ libraries from JavaScript, TypeScript, WebAssembly, Node.js and React Native. Learn more at **[crossbind.dev](https://crossbind.dev)**.
+> Use it with **[crossbind](https://crossbind.dev)**, which lets JavaScript, TypeScript, Node.js and React Native code import C and C++ headers.
 
 ## See it run
 Three apps on **[crossbind.dev/ports/geotiff](https://crossbind.dev/ports/geotiff/#apps)** run this package in your browser:
@@ -20,7 +20,7 @@ Three apps on **[crossbind.dev/ports/geotiff](https://crossbind.dev/ports/geotif
 - **Georeference any picture.** A picture and a longitude and latitude box, or an EPSG code, a corner and a pixel size, become a GeoTIFF in five compressions. The 384 × 256 sample placed over Istanbul takes 295,368 bytes uncompressed, 101,434 with Deflate, 105,162 with ZSTD, 132,690 with LZW and 21,002 as JPEG, and GDAL reads each of them back at the same corners.
 - **Elevation probe.** A float elevation model shaded as relief, with the longitude, latitude and height under the cursor, then saved again losslessly or with LERC. The 512 × 512 sample takes 607,670 bytes with Deflate and 283,298 with LERC within 10 cm, where the largest change read back is 0.100006 m. A cloud-optimized file is read from the smallest overview that fills the view.
 
-Their C++ wrappers, and the self-check the site build runs against values computed independently of this package, are in [`landing/demos/lib-geotiff`](https://github.com/crossbind/crossbind/tree/main/landing/demos/lib-geotiff).
+Their C++ wrappers are in [`landing/demos/lib-geotiff`](https://github.com/crossbind/crossbind/tree/main/landing/demos/lib-geotiff).
 
 ## Integration
 Install the main package together with the platform builds:
@@ -29,7 +29,7 @@ Install the main package together with the platform builds:
 npm install @crossbind/port-geotiff@beta @crossbind/port-geotiff-wasm@beta @crossbind/port-geotiff-android@beta @crossbind/port-geotiff-ios@beta
 ```
 
-Then import all three platforms in `crossbind.config.js` — crossbind compiles only the one matching each build target:
+Then list all three in `crossbind.config.js`; each build uses the one for its target:
 
 ```diff
 +import geotiffWasm from '@crossbind/port-geotiff-wasm/crossbind.config.js';
@@ -48,7 +48,7 @@ export default {
 };
 ```
 
-A native Node.js addon (`crossbind build -e node`) links the build of its platform: `-p darwin`, `-p linux`, `-p linuxmusl` or `-p win32` takes `@crossbind/port-geotiff-darwin`, `-linux`, `-linuxmusl` or `-win32`; `-linuxmusl` is the one for Alpine and other musl distributions. Install it and import its `crossbind.config.js` the same way.
+A Node.js addon (`crossbind build -e node`) links the desktop build of its platform instead: `@crossbind/port-geotiff-darwin`, `-linux`, `-linuxmusl` (Alpine and other musl systems) or `-win32`. Install and list it the same way.
 
 ## Usage
 crossbind binds your C++ headers to JavaScript, so the usual pattern is a small wrapper around the library. This one writes a GeoTIFF in memory and reads back where it is: the coordinate system its GeoKeys name, and two corners in map units and in degrees. Put it in your project's native folder (`src/native/` by default):
@@ -172,7 +172,7 @@ console.log(`lower right ${where.lowerRight.join(', ')} = ${degrees(where.lowerR
 ```
 
 - Files cross the binding as bytes, one per character, and libtiff's C++ stream API (`TIFFStreamOpen` from `tiffio.hxx`, after `XTIFFInitialize` has registered the GeoTIFF tags) reads and writes them in memory, the same way on every platform. A file on disk opens with `XTIFFOpen(path, "r")` instead.
-- `GTIFGetDefn` and the EPSG names read PROJ's `proj.db`. A WebAssembly build that depends on this package preloads PROJ's data, 10,690,537 bytes, next to its `.wasm`; the WASI page shows a command-line program mounting it.
+- `GTIFGetDefn` and the EPSG names read PROJ's `proj.db`. A WebAssembly build that depends on this package preloads PROJ's data, about 10.7 MB, next to its `.wasm`; the WASI page shows a command-line program mounting it.
 - `GTIFProj4ToLatLong` gives degrees on the file's own datum, through the PROJ string libgeotiff builds. The corners above match the Krüger series for transverse Mercator to 1e-13°. libgeotiff 1.7.4 writes transverse Mercator scale factors into that string with six decimals, `+k=0.999601` for British National Grid's 0.9996012717, which moves the corners of the London sample by up to 9 cm.
 
 ### More examples
@@ -188,24 +188,22 @@ Setup for every platform: [crossbind.dev/ports/geotiff](https://crossbind.dev/po
 ## What this build includes
 - libgeotiff 1.7.4 as the static library `libgeotiff`, linked against libtiff 4.7.2 and PROJ 9.9.0 from their own crossbind packages. libtiff's C++ stream API, which the examples use, ships as `libtiffxx`.
 - In the WebAssembly build, libtiff writes and reads Deflate, LZW, JPEG, ZSTD and LERC: the apps above use all five, and GDAL, or tifffile for LERC, reads their files back.
-- PROJ's data: `GTIFGetDefn` and the EPSG name lookups read `proj.db`, so every WebAssembly build that uses this package preloads PROJ's `share/proj`, 16 files and 10,690,537 bytes of which `proj.db` is 10,551,296, as a `.data.txt` file next to the module. The module behind the five examples and three apps is 6,139,509 bytes of WebAssembly, 144,658 bytes of JavaScript and that data file.
+- PROJ's data: `GTIFGetDefn` and the EPSG name lookups read `proj.db`, so every WebAssembly build that uses this package preloads PROJ's `share/proj` (about 10.7 MB, nearly all of it `proj.db`) as a `.data.txt` file next to the module. The module behind the examples and apps is about 6.1 MB of WebAssembly, plus that data file.
 - libgeotiff's own `listgeo`, `geotifcp` and `applygeo` tools are not in the library packages; `@crossbind/port-geotiff-standalone-wasi` ships them as WASI commands.
 
 ## Supported platforms
-This is the main package; the precompiled binaries are shipped per platform:
+This is the main package; the binaries ship in one package per platform:
 
-| Platform | Package | Targets |
-|---|---|---|
-| WebAssembly | [`@crossbind/port-geotiff-wasm`](https://www.npmjs.com/package/@crossbind/port-geotiff-wasm) | `wasm32` — single-threaded & multi-threaded |
-| Android | [`@crossbind/port-geotiff-android`](https://www.npmjs.com/package/@crossbind/port-geotiff-android) | `arm64-v8a` (64-bit ARM), `x86_64` (emulator) |
-| iOS | [`@crossbind/port-geotiff-ios`](https://www.npmjs.com/package/@crossbind/port-geotiff-ios) | device (`arm64`), simulator (`arm64`) |
-| macOS | [`@crossbind/port-geotiff-darwin`](https://www.npmjs.com/package/@crossbind/port-geotiff-darwin) | `arm64` (Apple silicon), `x64` (Intel) — native Node.js addons |
-| Linux | [`@crossbind/port-geotiff-linux`](https://www.npmjs.com/package/@crossbind/port-geotiff-linux) | `x64`, `arm64` — glibc 2.28 or later, native Node.js addons |
-| Linux (musl) | [`@crossbind/port-geotiff-linuxmusl`](https://www.npmjs.com/package/@crossbind/port-geotiff-linuxmusl) | `x64`, `arm64` — musl 1.2.5 or later (Alpine 3.21 and later), native Node.js addons |
-| Windows | [`@crossbind/port-geotiff-win32`](https://www.npmjs.com/package/@crossbind/port-geotiff-win32) | `x64`, `arm64` — Windows 10 or later, native Node.js addons |
-| WASI library | [`@crossbind/port-geotiff-wasi`](https://www.npmjs.com/package/@crossbind/port-geotiff-wasi) | `wasm32-wasip3` — single-threaded |
-| WASI command | [`@crossbind/port-geotiff-standalone-wasi`](https://www.npmjs.com/package/@crossbind/port-geotiff-standalone-wasi) | the upstream `listgeo`, `geotifcp` and `applygeo` CLIs as `listgeo-wasi`, `geotifcp-wasi` and `applygeo-wasi` commands (wasmtime 47+) |
-| Node.js, ready-made | [`@crossbind/port-geotiff-standalone-napi`](https://www.npmjs.com/package/@crossbind/port-geotiff-standalone-napi) | prebuilt addons for macOS, Linux (glibc and musl) and Windows, `arm64` and `x64`: nothing to build |
+- **WebAssembly**, [`@crossbind/port-geotiff-wasm`](https://www.npmjs.com/package/@crossbind/port-geotiff-wasm): `wasm32`; single-threaded and multi-threaded.
+- **Android**, [`@crossbind/port-geotiff-android`](https://www.npmjs.com/package/@crossbind/port-geotiff-android): `arm64-v8a` (64-bit ARM), `x86_64` (emulator).
+- **iOS**, [`@crossbind/port-geotiff-ios`](https://www.npmjs.com/package/@crossbind/port-geotiff-ios): device (`arm64`), simulator (`arm64`).
+- **macOS**, [`@crossbind/port-geotiff-darwin`](https://www.npmjs.com/package/@crossbind/port-geotiff-darwin): `arm64` (Apple silicon), `x64` (Intel); native Node.js addons.
+- **Linux**, [`@crossbind/port-geotiff-linux`](https://www.npmjs.com/package/@crossbind/port-geotiff-linux): `x64`, `arm64`; glibc 2.28 or later, native Node.js addons.
+- **Linux (musl)**, [`@crossbind/port-geotiff-linuxmusl`](https://www.npmjs.com/package/@crossbind/port-geotiff-linuxmusl): `x64`, `arm64`; musl 1.2.5 or later (Alpine 3.21 and later), native Node.js addons.
+- **Windows**, [`@crossbind/port-geotiff-win32`](https://www.npmjs.com/package/@crossbind/port-geotiff-win32): `x64`, `arm64`; Windows 10 or later, native Node.js addons.
+- **WASI library**, [`@crossbind/port-geotiff-wasi`](https://www.npmjs.com/package/@crossbind/port-geotiff-wasi): `wasm32-wasip3`; single-threaded.
+- **WASI command**, [`@crossbind/port-geotiff-standalone-wasi`](https://www.npmjs.com/package/@crossbind/port-geotiff-standalone-wasi): the upstream `listgeo`, `geotifcp` and `applygeo` CLIs as `listgeo-wasi`, `geotifcp-wasi` and `applygeo-wasi` commands (wasmtime 47+).
+- **Node.js, ready-made**, [`@crossbind/port-geotiff-standalone-napi`](https://www.npmjs.com/package/@crossbind/port-geotiff-standalone-napi): prebuilt addons for macOS, Linux (glibc and musl) and Windows, `arm64` and `x64`: nothing to build.
 
 ## License
 This project includes the precompiled libgeotiff library, which is distributed under the [MIT License](https://github.com/OSGeo/libgeotiff/blob/master/libgeotiff/LICENSE). It links libtiff (libtiff licence) and PROJ (MIT) from their own packages, and through them SQLite, zlib, libjpeg-turbo, zstd and LERC, each under its own licence.

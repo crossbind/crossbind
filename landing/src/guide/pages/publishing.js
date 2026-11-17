@@ -11,18 +11,17 @@ export default {
     blocks: [
         { type: 'h2', id: 'package-types', text: 'Package types' },
         {
-            type: 'table',
-            head: ['Type', 'In crossbind.config.js', 'What an app gets'],
-            rows: [
-                ['Prebuilt', "`export.type: 'cmake'`, the default", 'compiled libraries per platform under `dist/prebuilt/` - nothing to compile'],
-                ['Source', "`export.type: 'source'`", "your headers and sources, compiled into the app's own build"],
-                ['CMake', "`export.type: 'cmake'` with your own `CMakeLists.txt` and `paths.output: '.'`", 'your CMake project, added with `add_subdirectory` and built with the app'],
-                ['Cargo', "`export.type: 'cargo'`", 'a Rust crate built per platform - see [Rust crates](#rust)'],
+            type: 'entries',
+            items: [
+                { name: 'Prebuilt', type: "export.type: 'cmake'", text: 'The default. Compiled libraries per platform under `dist/prebuilt/`, so the app compiles nothing of yours. The ports are prebuilt, and so is what the rest of this page builds.' },
+                { name: 'Source', type: "export.type: 'source'", text: "Your headers and sources, compiled in the app's own build." },
+                {
+                    name: 'CMake',
+                    type: "export.type: 'cmake'",
+                    text: "Your own `CMakeLists.txt`, with `paths.output: '.'`: the app adds it with `add_subdirectory` and builds it. Name the library target after the `CROSSBIND_LIB_NAME` the app's build passes in, since only that target's `PUBLIC` include directories reach the app.",
+                },
+                { name: 'Cargo', type: "export.type: 'cargo'", text: 'A Rust crate built per platform; see [Rust crates](#rust).' },
             ],
-        },
-        {
-            type: 'p',
-            text: "Prebuilt is what the ports are, and what the rest of this page builds. Source and CMake packages move the compile into every app's build. A CMake package names its library target after the `CROSSBIND_LIB_NAME` the app's build passes in, since only that target's `PUBLIC` include directories reach the app.",
         },
         {
             type: 'p',
@@ -48,7 +47,7 @@ export default {
         },
         {
             type: 'p',
-            text: "`export.libName` lists the archives the package ships, one per library (`['ssl', 'crypto']` for OpenSSL), and defaults to `general.name`; `paths.output` is the folder you publish. `types: true` also writes one declaration file over the package's headers and points `types` in `package.json` at it, so an app importing `mylib/<header>.h` gets types. The other `export` fields are under [Configuration](/guide/configuration/#export).",
+            text: "`export.libName` lists the archives the package ships, one per library (`['ssl', 'crypto']` for OpenSSL); it defaults to `general.name`. `paths.output` is the folder you publish. `types: true` writes one declaration file for the package's headers and points `package.json`'s `types` at it, so imports of `mylib/<header>.h` get types. The other `export` fields are in [Configuration](/guide/configuration/#export).",
         },
         {
             type: 'p',
@@ -70,7 +69,7 @@ crossbind build -p darwin,linux,linuxmusl,win32`,
         },
         {
             type: 'p',
-            text: 'With no `-p` it builds wasm, WASI, Android and iOS; macOS, Linux and Windows build only when named. Each target gets a folder named `<platform>-<arch>-<runtime>-<buildType>`:',
+            text: 'Each target gets a folder named `<platform>-<arch>-<runtime>-<buildType>`:',
         },
         {
             type: 'code',
@@ -85,7 +84,7 @@ crossbind build -p darwin,linux,linuxmusl,win32`,
         },
         {
             type: 'p',
-            text: "`dist/prebuilt/CMakeLists.txt` lists every target present and is how an app's build finds your libraries; an import path after your package name resolves inside the target's `include/`. An iOS build also writes `<libName>.xcframework` at the package root, with a `.podspec` beside it when the package has none.",
+            text: "`dist/prebuilt/CMakeLists.txt` is how an app's build finds your libraries, and an import path after your package name resolves in the target's `include/`. An iOS build also writes `<libName>.xcframework` at the package root, and a `.podspec` beside it when the package has none.",
         },
         {
             type: 'p',
@@ -95,11 +94,11 @@ crossbind build -p darwin,linux,linuxmusl,win32`,
         { type: 'h2', id: 'family', text: 'One package, or a family' },
         {
             type: 'p',
-            text: `One package can carry every platform, as [lib-prebuilt-matrix](${REPO_URL}/tree/main/examples/lib-prebuilt-matrix) does, but then every app downloads all of them. The ports split each library into a family instead: a meta package, \`@crossbind/port-zlib\`, with the shared recipe and config, and one package per platform - \`-wasm\`, \`-android\`, \`-ios\`, \`-darwin\`, \`-linux\`, \`-linuxmusl\`, \`-win32\`, \`-wasi\` - each depending on the meta package and built with its own \`crossbind build -p <platform>\`.`,
+            text: `One package can carry every platform, as [lib-prebuilt-matrix](${REPO_URL}/tree/main/examples/lib-prebuilt-matrix) does, but then every app downloads all of them. The ports split each library into a family instead: a meta package, \`@crossbind/port-zlib\`, with the shared recipe and config, and one package per platform (\`-wasm\`, \`-android\`, \`-ios\`, \`-darwin\`, \`-linux\`, \`-linuxmusl\`, \`-win32\`, \`-wasi\`), each depending on the meta package and built with its own \`crossbind build -p <platform>\`.`,
         },
         {
             type: 'p',
-            text: "What makes the variants one library to an app is `general.alias`. Every variant names the meta package there, so `@crossbind/port-zlib/zlib.h` resolves to whichever variant in the app's `dependencies` has libraries for the target being built. For zlib's wasm variant the config comes down to:",
+            text: "`general.alias` makes the variants one library to an app: every variant names the meta package there, so `@crossbind/port-zlib/zlib.h` resolves to the variant in the app's `dependencies` that has libraries for the target. The config of zlib's wasm variant comes down to:",
         },
         {
             type: 'code',
@@ -121,7 +120,7 @@ crossbind build -p darwin,linux,linuxmusl,win32`,
         { type: 'h2', id: 'build-hooks', text: 'Wrapping an upstream project' },
         {
             type: 'p',
-            text: "To package a library you do not maintain, put a `crossbind.build.js` next to the config; the CLI merges its exports into the build. `crossbind build` then downloads the tarball of the `nativeVersion` in `package.json`, checks its SHA-256, applies your patches and builds it with the upstream's own build system for each target. zlib's recipe, shortened:",
+            text: "To package a library you do not maintain, put a `crossbind.build.js` next to the config. `crossbind build` then downloads the tarball of the `nativeVersion` in `package.json`, checks its SHA-256, applies your patches and builds it with the upstream's own build system for each target. zlib's recipe, shortened:",
         },
         {
             type: 'code',
@@ -134,30 +133,29 @@ crossbind build -p darwin,linux,linuxmusl,win32`,
 };`,
         },
         {
-            type: 'table',
-            head: ['Hook', 'Use it to'],
-            rows: [
-                ['`getURL(version)`, `sha256`', 'name the upstream tarball and pin it; a different download refuses to build'],
-                ['`buildType`', "`'cmake'`, the default, or `'configure'` for autotools; `configureProgram` and `makePhases` adjust the two steps"],
-                ['`getBuildParams(target, depPaths)`', 'pass `-D` flags or configure arguments, per target'],
-                ['`env`', 'set `CFLAGS`, `LDFLAGS` and the like for the upstream build, as a list or a function of the target'],
-                ['`patches`', 'apply upstream fixes the pinned release lacks, as the diffs upstream published; one that no longer applies stops the build'],
-                ['`replaceList`, `sourceReplaceList(target, depPaths)`', "patch the extracted source once, or each target's copy"],
-                ['`copyToSource`, `copyToDist`', "add a file to the source before the build, or ship one in each target's folder"],
-                ['`beforeRun(cmakeDir)`', 'run commands first, such as `autoreconf -fi`'],
-                ['`getExtraLibs(target)`', 'add link libraries the dependencies do not bring'],
-                ['`bundled`', 'declare third-party code the upstream compiles in, per platform, so its license is listed and shipped'],
+            type: 'entries',
+            items: [
+                { name: '`getURL(version)`, `sha256`', text: 'Name the upstream tarball and pin it; a different download refuses to build.' },
+                { name: '`buildType`', text: "`'cmake'` (the default) or `'configure'` for autotools; `configureProgram` and `makePhases` adjust the two steps." },
+                { name: '`getBuildParams(target, depPaths)`', text: '`-D` flags or configure arguments, per target.' },
+                { name: '`env`', text: '`CFLAGS`, `LDFLAGS` and the like for the upstream build, as a list or a function of the target.' },
+                { name: '`patches`', text: 'Upstream fixes the pinned release lacks, as the diffs upstream published; one that no longer applies stops the build.' },
+                { name: '`replaceList`, `sourceReplaceList(target, depPaths)`', text: "Patch the extracted source once, or each target's copy." },
+                { name: '`copyToSource`, `copyToDist`', text: "Add a file to the source before the build, or ship one in each target's folder." },
+                { name: '`beforeRun(cmakeDir)`', text: 'Commands to run first, such as `autoreconf -fi`.' },
+                { name: '`getExtraLibs(target)`', text: 'Link libraries the dependencies do not bring.' },
+                { name: '`bundled`', text: 'Third-party code the upstream compiles in, per platform, so its license is listed and shipped.' },
             ],
         },
         {
             type: 'p',
-            text: `The build already puts your native dependencies' include and library folders on \`CFLAGS\` and \`LDFLAGS\`; \`depPaths.<libName>.header\` and \`.lib\` name them per target for flags like GDAL's \`-DZLIB_INCLUDE_DIR\`. When a recipe builds a static library on Android, say so in the config with \`targetSpecs: [{ platform: 'android', specs: { libType: 'static' } }]\`, as zlib does, so apps link the archive instead of looking for a \`.so\`. Every argument is in [crossbind-build.md](${REPO_URL}/blob/main/docs/api/crossbind-build.md).`,
+            text: `The build already puts your native dependencies' include and library folders on \`CFLAGS\` and \`LDFLAGS\`; \`depPaths.<libName>.header\` and \`.lib\` name them per target for flags like GDAL's \`-DZLIB_INCLUDE_DIR\`. When a recipe builds a static library on Android, say so in the config with \`targetSpecs: [{ platform: 'android', specs: { libType: 'static' } }]\`, as zlib does, so apps link the archive instead of looking for a \`.so\`. Every argument: [crossbind-build.md](${REPO_URL}/blob/main/docs/api/crossbind-build.md).`,
         },
 
         { type: 'h2', id: 'dependencies', text: 'Native dependencies' },
         {
             type: 'p',
-            text: "A package that links another declares it twice, each time with the platform variant that matches its own - a `-wasm` package depends on `-wasm` packages. The config's `dependencies` is what crossbind links and puts on the include path. The `package.json` `dependencies` is what installs it along with your package and, in a workspace, orders the builds so its libraries exist before yours link against them. Neither entry does the other's job.",
+            text: "A package that links another declares it twice, each time with the variant that matches its own (a `-wasm` package depends on `-wasm` packages). The config's `dependencies` is what crossbind links and puts on the include path. The `dependencies` of `package.json` install it with your package and, in a workspace, build it before yours. Neither does the other's job.",
         },
         {
             type: 'code',
@@ -187,7 +185,7 @@ export default mergeConfig({
         { type: 'h2', id: 'rust', text: 'Rust crates' },
         {
             type: 'p',
-            text: "A Rust crate ships as one package that carries every platform. Set `export.type: 'cargo'` and point `export.crate` at the folder holding `Cargo.toml`. The crate stays plain Rust: crossbind generates a companion bridge crate from the public surface of its `src/lib.rs`.",
+            text: "A Rust crate ships as one package for every platform. Set `export.type: 'cargo'` and point `export.crate` at the folder holding `Cargo.toml`. The crate stays plain Rust: crossbind generates the bindings from the public items of its `src/lib.rs`.",
         },
         {
             type: 'code',
@@ -210,11 +208,11 @@ export default mergeConfig({
         },
         {
             type: 'p',
-            text: '`crossbind build -p <platform>` runs `cargo build --release --target <triple>` for each target and stages the static library in `dist/prebuilt/<target>/lib/` like any prebuilt; WASI is skipped. The bridge builds against `@crossbind/core-embind-rust`, so add it as a dev dependency. `bindings.vectors` declares standalone `Vec<T>` classes of `i32`, `f64` or `bool`.',
+            text: '`crossbind build -p <platform>` builds the crate for each target and puts the static library in `dist/prebuilt/<target>/lib/`, like any prebuilt; WASI is skipped. Add `@crossbind/core-embind-rust` as a dev dependency. `bindings.vectors` declares standalone `Vec<T>` classes of `i32`, `f64` or `bool`.',
         },
         {
             type: 'p',
-            text: "Apps import the package by its name - `import { initNative, RustyCounter } from '@crossbind/embind-rust-demo'` - with types mapped as on the [Rust](/guide/rust/#mapping) page. An app that finds no prebuilt for its target, or one built against another embind-rs, builds it in the package's own folder first, with the toolchain any Rust build needs ([Rust](/guide/rust/#setup)).",
+            text: "Apps import the package by name, as in `import { initNative, RustyCounter } from '@crossbind/embind-rust-demo'`, with types mapped as on the [Rust](/guide/rust/#mapping) page. An app that finds no prebuilt for its target, or one built against another embind-rs, builds it first, with the toolchain any Rust build needs ([Rust](/guide/rust/#setup)).",
         },
 
         { type: 'h2', id: 'licenses', text: 'Licenses' },
@@ -233,7 +231,7 @@ export default mergeConfig({
         },
         {
             type: 'p',
-            text: 'Run `crossbind licenses --check` in each platform package before you publish; it fails when a license field it lists is missing or not valid SPDX. Apps then write notices and a CycloneDX SBOM for everything they link with `--notices` and `--sbom` ([CLI](/guide/cli/#licenses)).',
+            text: 'Run `crossbind licenses --check` in each platform package before you publish. Apps then write notices and an SBOM for everything they link with `--notices` and `--sbom` ([CLI](/guide/cli/#licenses)).',
         },
     ],
 };

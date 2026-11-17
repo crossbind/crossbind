@@ -1,5 +1,5 @@
 # @crossbind/port-iconv
-**Precompiled GNU libiconv (character encoding conversion) library built with crossbind for seamless integration in JavaScript, WebAssembly and React Native projects.**
+**The GNU libiconv (character encoding conversion) library, prebuilt with crossbind for JavaScript, WebAssembly and React Native projects.**
 
 <a href="https://www.npmjs.com/package/@crossbind/port-iconv">
     <img alt="NPM version" src="https://img.shields.io/npm/v/@crossbind/port-iconv/beta?style=for-the-badge" />
@@ -11,7 +11,7 @@
     <img alt="License" src="https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fregistry.npmjs.org%2F%40crossbind%2Fport-iconv%2Fbeta&query=%24.license&style=for-the-badge&label=license" />
 </a>
 
-> Use it together with **[crossbind](https://crossbind.dev)** — the toolchain for using C++ libraries from JavaScript, TypeScript, WebAssembly, Node.js and React Native. Learn more at **[crossbind.dev](https://crossbind.dev)**.
+> Use it with **[crossbind](https://crossbind.dev)**, which lets JavaScript, TypeScript, Node.js and React Native code import C and C++ headers.
 
 ## See it run
 Three apps on **[crossbind.dev/ports/iconv](https://crossbind.dev/ports/iconv/#apps)** run this package in your browser:
@@ -20,7 +20,7 @@ Three apps on **[crossbind.dev/ports/iconv](https://crossbind.dev/ports/iconv/#a
 - **Legacy exporter.** Writes a two-line Japanese customer list as 86 bytes of Windows Shift_JIS (132 bytes in UTF-8). It names the one character CP932 lacks (`€` at line 2, column 31), flags `表` and `ソ`, whose second byte is the backslash `5C`, and pads fixed-width fields by bytes.
 - **Beyond TextDecoder.** Reads nine samples that `TextDecoder` rejects with a `RangeError`: ISO-2022-KR, HZ, ISO-2022-CN, UTF-7, UTF-32LE, EUC-TW, DOS 850, Mac Central European and VISCII. It also tries 106 encodings on a file you open.
 
-Their C++ wrappers are in [`landing/demos/lib-iconv`](https://github.com/crossbind/crossbind/tree/main/landing/demos/lib-iconv), together with the self-check the site build runs. That check compares their output with values from CPython's codecs, the WHATWG Encoding Standard's indexes, RFC examples and Unicode's mapping tables.
+Their C++ wrappers are in [`landing/demos/lib-iconv`](https://github.com/crossbind/crossbind/tree/main/landing/demos/lib-iconv).
 
 ## Integration
 Install the main package together with the platform builds:
@@ -29,7 +29,7 @@ Install the main package together with the platform builds:
 npm install @crossbind/port-iconv@beta @crossbind/port-iconv-wasm@beta @crossbind/port-iconv-android@beta @crossbind/port-iconv-ios@beta
 ```
 
-Then import all three platforms in `crossbind.config.js` — crossbind compiles only the one matching each build target:
+Then list all three in `crossbind.config.js`; each build uses the one for its target:
 
 ```diff
 +import iconvWasm from '@crossbind/port-iconv-wasm/crossbind.config.js';
@@ -48,7 +48,7 @@ export default {
 };
 ```
 
-A native Node.js addon (`crossbind build -e node`) links the build of its platform: `-p darwin`, `-p linux`, `-p linuxmusl` or `-p win32` takes `@crossbind/port-iconv-darwin`, `-linux`, `-linuxmusl` or `-win32`; `-linuxmusl` is the one for Alpine and other musl distributions. Install it and import its `crossbind.config.js` the same way.
+A Node.js addon (`crossbind build -e node`) links the desktop build of its platform instead: `@crossbind/port-iconv-darwin`, `-linux`, `-linuxmusl` (Alpine and other musl systems) or `-win32`. Install and list it the same way.
 
 ## Usage
 crossbind binds your C++ headers to JavaScript, so the usual pattern is a small wrapper around the library. This one converts strictly between UTF-8 and any encoding libiconv knows. Put it in your project's native folder (`src/native/` by default), and don't call it `iconv.h`, which would hide the library's own header:
@@ -180,22 +180,20 @@ Setup for every platform: [crossbind.dev/ports/iconv](https://crossbind.dev/port
   - BIG5-2003, TDS565, ATARIST and RISCOS-LATIN1.
 - `UTF8` without the hyphen is not a name this build knows; write `UTF-8`.
 - `//TRANSLIT` follows libiconv's own table in every locale, so `ASCII//TRANSLIT` writes `è` as `` `e ``.
-- A module whose only wrapper is `charset.h` is 1,197,470 bytes of WebAssembly, 731,915 gzipped. `iconv_open` picks converters by name at run time, so every conversion table is linked.
+- A module whose only wrapper is `charset.h` is about 1.2 MB of WebAssembly, 0.7 MB gzipped. `iconv_open` picks converters by name at run time, so every conversion table is linked.
 
 ## Supported platforms
-This is the main package; the precompiled binaries are shipped per platform:
+This is the main package; the binaries ship in one package per platform:
 
-| Platform | Package | Targets |
-|---|---|---|
-| WebAssembly | [`@crossbind/port-iconv-wasm`](https://www.npmjs.com/package/@crossbind/port-iconv-wasm) | `wasm32` — single-threaded & multi-threaded |
-| Android | [`@crossbind/port-iconv-android`](https://www.npmjs.com/package/@crossbind/port-iconv-android) | `arm64-v8a` (64-bit ARM), `x86_64` (emulator) |
-| iOS | [`@crossbind/port-iconv-ios`](https://www.npmjs.com/package/@crossbind/port-iconv-ios) | device (`arm64`), simulator (`arm64`) |
-| macOS | [`@crossbind/port-iconv-darwin`](https://www.npmjs.com/package/@crossbind/port-iconv-darwin) | `arm64` (Apple silicon), `x64` (Intel) — native Node.js addons |
-| Linux | [`@crossbind/port-iconv-linux`](https://www.npmjs.com/package/@crossbind/port-iconv-linux) | `x64`, `arm64` — glibc 2.28 or later, native Node.js addons |
-| Linux (musl) | [`@crossbind/port-iconv-linuxmusl`](https://www.npmjs.com/package/@crossbind/port-iconv-linuxmusl) | `x64`, `arm64` — musl 1.2.5 or later (Alpine 3.21 and later), native Node.js addons |
-| Windows | [`@crossbind/port-iconv-win32`](https://www.npmjs.com/package/@crossbind/port-iconv-win32) | `x64`, `arm64` — Windows 10 or later, native Node.js addons |
-| WASI | [`@crossbind/port-iconv-wasi`](https://www.npmjs.com/package/@crossbind/port-iconv-wasi) | `wasm32-wasip3` — single-threaded |
-| Node.js, ready-made | [`@crossbind/port-iconv-standalone-napi`](https://www.npmjs.com/package/@crossbind/port-iconv-standalone-napi) | prebuilt addons for macOS, Linux (glibc and musl) and Windows, `arm64` and `x64`: nothing to build |
+- **WebAssembly**, [`@crossbind/port-iconv-wasm`](https://www.npmjs.com/package/@crossbind/port-iconv-wasm): `wasm32`; single-threaded and multi-threaded.
+- **Android**, [`@crossbind/port-iconv-android`](https://www.npmjs.com/package/@crossbind/port-iconv-android): `arm64-v8a` (64-bit ARM), `x86_64` (emulator).
+- **iOS**, [`@crossbind/port-iconv-ios`](https://www.npmjs.com/package/@crossbind/port-iconv-ios): device (`arm64`), simulator (`arm64`).
+- **macOS**, [`@crossbind/port-iconv-darwin`](https://www.npmjs.com/package/@crossbind/port-iconv-darwin): `arm64` (Apple silicon), `x64` (Intel); native Node.js addons.
+- **Linux**, [`@crossbind/port-iconv-linux`](https://www.npmjs.com/package/@crossbind/port-iconv-linux): `x64`, `arm64`; glibc 2.28 or later, native Node.js addons.
+- **Linux (musl)**, [`@crossbind/port-iconv-linuxmusl`](https://www.npmjs.com/package/@crossbind/port-iconv-linuxmusl): `x64`, `arm64`; musl 1.2.5 or later (Alpine 3.21 and later), native Node.js addons.
+- **Windows**, [`@crossbind/port-iconv-win32`](https://www.npmjs.com/package/@crossbind/port-iconv-win32): `x64`, `arm64`; Windows 10 or later, native Node.js addons.
+- **WASI**, [`@crossbind/port-iconv-wasi`](https://www.npmjs.com/package/@crossbind/port-iconv-wasi): `wasm32-wasip3`; single-threaded.
+- **Node.js, ready-made**, [`@crossbind/port-iconv-standalone-napi`](https://www.npmjs.com/package/@crossbind/port-iconv-standalone-napi): prebuilt addons for macOS, Linux (glibc and musl) and Windows, `arm64` and `x64`: nothing to build.
 
 ## License
 This project includes the precompiled GNU libiconv library, which is distributed under the [GNU Lesser General Public License v2.1 or later](https://spdx.org/licenses/LGPL-2.1-or-later.html) (LGPL-2.1-or-later). A closed-source app can use it by following the [LGPL playbook](https://github.com/crossbind/crossbind/blob/main/docs/playbooks/licensing-lgpl.md):

@@ -1,5 +1,5 @@
 # @crossbind/port-geos
-**Precompiled GEOS geometry library built with crossbind for seamless integration in JavaScript, WebAssembly and React Native projects.**
+**The GEOS geometry library, prebuilt with crossbind for JavaScript, WebAssembly and React Native projects.**
 
 <a href="https://www.npmjs.com/package/@crossbind/port-geos">
     <img alt="NPM version" src="https://img.shields.io/npm/v/@crossbind/port-geos/beta?style=for-the-badge" />
@@ -11,7 +11,7 @@
     <img alt="License" src="https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fregistry.npmjs.org%2F%40crossbind%2Fport-geos%2Fbeta&query=%24.license&style=for-the-badge&label=license" />
 </a>
 
-> Use it together with **[crossbind](https://crossbind.dev)** — the toolchain for using C++ libraries from JavaScript, TypeScript, WebAssembly, Node.js and React Native. Learn more at **[crossbind.dev](https://crossbind.dev)**.
+> Use it with **[crossbind](https://crossbind.dev)**, which lets JavaScript, TypeScript, Node.js and React Native code import C and C++ headers.
 
 ## See it run
 Three apps on **[crossbind.dev/ports/geos](https://crossbind.dev/ports/geos/#apps)** run this package in your browser:
@@ -20,7 +20,7 @@ Three apps on **[crossbind.dev/ports/geos](https://crossbind.dev/ports/geos/#app
 - **Validity doctor.** Seven broken polygons, what GEOS finds wrong and where, and both of its repair methods side by side. A hole that leaks out of its shell repairs to 150 square units with the linework method and to 75 with the structure method.
 - **Coverage simplifier.** A generated map of 36 regions simplified at tolerance 2. One region at a time, 356.917 square units of gaps and 186.433 of overlaps open between neighbours; simplified as one coverage, none do.
 
-Their C++ wrappers, and the self-check the site build runs against values computed independently of this package, are in [`landing/demos/lib-geos`](https://github.com/crossbind/crossbind/tree/main/landing/demos/lib-geos).
+Their C++ wrappers are in [`landing/demos/lib-geos`](https://github.com/crossbind/crossbind/tree/main/landing/demos/lib-geos).
 
 ## Integration
 Install the main package together with the platform builds:
@@ -29,7 +29,7 @@ Install the main package together with the platform builds:
 npm install @crossbind/port-geos@beta @crossbind/port-geos-wasm@beta @crossbind/port-geos-android@beta @crossbind/port-geos-ios@beta
 ```
 
-Then import all three platforms in `crossbind.config.js` — crossbind compiles only the one matching each build target:
+Then list all three in `crossbind.config.js`; each build uses the one for its target:
 
 ```diff
 +import geosWasm from '@crossbind/port-geos-wasm/crossbind.config.js';
@@ -48,7 +48,7 @@ export default {
 };
 ```
 
-A native Node.js addon (`crossbind build -e node`) links the build of its platform: `-p darwin`, `-p linux`, `-p linuxmusl` or `-p win32` takes `@crossbind/port-geos-darwin`, `-linux`, `-linuxmusl` or `-win32`; `-linuxmusl` is the one for Alpine and other musl distributions. Install it and import its `crossbind.config.js` the same way.
+A Node.js addon (`crossbind build -e node`) links the desktop build of its platform instead: `@crossbind/port-geos-darwin`, `-linux`, `-linuxmusl` (Alpine and other musl systems) or `-win32`. Install and list it the same way.
 
 ## Usage
 crossbind binds your C++ headers to JavaScript, so the usual pattern is a small wrapper around the library. This one runs GEOS overlays on shapes written as WKT, through GEOS's reentrant C API. Put it in your project's native folder (`src/native/` by default):
@@ -173,24 +173,22 @@ Setup for every platform: [crossbind.dev/ports/geos](https://crossbind.dev/ports
 ## What this build includes
 - GEOS 3.15.0 (C API 1.21.0) as two static libraries: `libgeos_c`, the stable C API the examples use, and `libgeos`, the C++ library behind it.
 - The C API the apps above run: overlays, prepared predicates and DE-9IM, buffers and offset curves, validity checks and both repair methods, coverage simplification and validation, Delaunay and Voronoi, hulls, and WKT and GeoJSON output.
-- No data files: a GEOS module is its `.wasm` and loader alone. The module behind the five examples and three apps is 1,612,592 bytes of WebAssembly and 138,052 bytes of JavaScript.
+- No data files: a GEOS module is its `.wasm` and loader alone. The one behind the examples and apps is about 1.6 MB of WebAssembly.
 - GEOS's own `geosop` tool is not in the library packages; `@crossbind/port-geos-standalone-wasi` ships it as a WASI command.
 
 ## Supported platforms
-This is the main package; the precompiled binaries are shipped per platform:
+This is the main package; the binaries ship in one package per platform:
 
-| Platform | Package | Targets |
-|---|---|---|
-| WebAssembly | [`@crossbind/port-geos-wasm`](https://www.npmjs.com/package/@crossbind/port-geos-wasm) | `wasm32` — single-threaded & multi-threaded |
-| Android | [`@crossbind/port-geos-android`](https://www.npmjs.com/package/@crossbind/port-geos-android) | `arm64-v8a` (64-bit ARM), `x86_64` (emulator) |
-| iOS | [`@crossbind/port-geos-ios`](https://www.npmjs.com/package/@crossbind/port-geos-ios) | device (`arm64`), simulator (`arm64`) |
-| macOS | [`@crossbind/port-geos-darwin`](https://www.npmjs.com/package/@crossbind/port-geos-darwin) | `arm64` (Apple silicon), `x64` (Intel) — native Node.js addons |
-| Linux | [`@crossbind/port-geos-linux`](https://www.npmjs.com/package/@crossbind/port-geos-linux) | `x64`, `arm64` — glibc 2.28 or later, native Node.js addons |
-| Linux (musl) | [`@crossbind/port-geos-linuxmusl`](https://www.npmjs.com/package/@crossbind/port-geos-linuxmusl) | `x64`, `arm64` — musl 1.2.5 or later (Alpine 3.21 and later), native Node.js addons |
-| Windows | [`@crossbind/port-geos-win32`](https://www.npmjs.com/package/@crossbind/port-geos-win32) | `x64`, `arm64` — Windows 10 or later, native Node.js addons |
-| WASI library | [`@crossbind/port-geos-wasi`](https://www.npmjs.com/package/@crossbind/port-geos-wasi) | `wasm32-wasip3` — single-threaded |
-| WASI command | [`@crossbind/port-geos-standalone-wasi`](https://www.npmjs.com/package/@crossbind/port-geos-standalone-wasi) | the upstream `geosop` CLI as a `geosop-wasi` command (wasmtime 47+) |
-| Node.js, ready-made | [`@crossbind/port-geos-standalone-napi`](https://www.npmjs.com/package/@crossbind/port-geos-standalone-napi) | prebuilt addons for macOS, Linux (glibc and musl) and Windows, `arm64` and `x64`: nothing to build |
+- **WebAssembly**, [`@crossbind/port-geos-wasm`](https://www.npmjs.com/package/@crossbind/port-geos-wasm): `wasm32`; single-threaded and multi-threaded.
+- **Android**, [`@crossbind/port-geos-android`](https://www.npmjs.com/package/@crossbind/port-geos-android): `arm64-v8a` (64-bit ARM), `x86_64` (emulator).
+- **iOS**, [`@crossbind/port-geos-ios`](https://www.npmjs.com/package/@crossbind/port-geos-ios): device (`arm64`), simulator (`arm64`).
+- **macOS**, [`@crossbind/port-geos-darwin`](https://www.npmjs.com/package/@crossbind/port-geos-darwin): `arm64` (Apple silicon), `x64` (Intel); native Node.js addons.
+- **Linux**, [`@crossbind/port-geos-linux`](https://www.npmjs.com/package/@crossbind/port-geos-linux): `x64`, `arm64`; glibc 2.28 or later, native Node.js addons.
+- **Linux (musl)**, [`@crossbind/port-geos-linuxmusl`](https://www.npmjs.com/package/@crossbind/port-geos-linuxmusl): `x64`, `arm64`; musl 1.2.5 or later (Alpine 3.21 and later), native Node.js addons.
+- **Windows**, [`@crossbind/port-geos-win32`](https://www.npmjs.com/package/@crossbind/port-geos-win32): `x64`, `arm64`; Windows 10 or later, native Node.js addons.
+- **WASI library**, [`@crossbind/port-geos-wasi`](https://www.npmjs.com/package/@crossbind/port-geos-wasi): `wasm32-wasip3`; single-threaded.
+- **WASI command**, [`@crossbind/port-geos-standalone-wasi`](https://www.npmjs.com/package/@crossbind/port-geos-standalone-wasi): the upstream `geosop` CLI as a `geosop-wasi` command (wasmtime 47+).
+- **Node.js, ready-made**, [`@crossbind/port-geos-standalone-napi`](https://www.npmjs.com/package/@crossbind/port-geos-standalone-napi): prebuilt addons for macOS, Linux (glibc and musl) and Windows, `arm64` and `x64`: nothing to build.
 
 ## License
 This project includes the precompiled GEOS library, which is distributed under the [GNU LGPL 2.1](https://github.com/libgeos/geos/blob/main/COPYING).

@@ -7,17 +7,17 @@ export default {
     // /guide/ is what the Docs menu calls Guide, so its tab says so.
     headTitle: 'Guide',
     description: 'What crossbind does, what one import buys you, and where the output runs.',
-    lede: `${BRAND} compiles C++ and Rust into WebAssembly, Node-API addons and native iOS and Android libraries, then hands the result to JavaScript as an ordinary module; the same sources also build into desktop and mobile apps around a page of yours, and into executables that need no JavaScript at all. You import a header; the bindings are generated from it.`,
+    lede: `${BRAND} compiles C++ and Rust into WebAssembly, Node-API addons and native iOS and Android libraries, and hands them to JavaScript as an ordinary module. You import a header; the bindings are generated from it. The same sources also build into apps around a page of yours, and into executables that need no JavaScript.`,
     blocks: [
         {
             type: 'p',
-            text: 'There is no glue code to write and no second build system to run. The header you already have is the interface: whatever it declares - functions, classes, inheritance, overloads, vectors, maps, enums - shows up on the JavaScript side under the same names.',
+            text: 'No glue code, no second build system. Whatever the header declares (functions, classes, inheritance, overloads, vectors, maps, enums) shows up in JavaScript under the same names.',
         },
 
         { type: 'h2', id: 'one-import', text: 'One import, no glue' },
         {
             type: 'p',
-            text: 'Put your C++ under `src/native`, then import the header from JavaScript. `initNative()` boots the runtime once; after it resolves, every symbol the header exposes is callable. In a browser the module runs in a Web Worker by default, so calls return promises.',
+            text: 'Put your C++ in `src/native` and import the header from JavaScript. Call `initNative()` once; after it resolves, everything the header declares is callable. In a browser the module runs in a Web Worker by default, so calls return promises.',
         },
         {
             type: 'code',
@@ -39,13 +39,13 @@ console.log(await getHelloWorldMessage());`,
         },
         {
             type: 'p',
-            text: 'The same shape works for Rust: an app-local `.rs` file, or a crates.io crate imported through the `cargo:` scheme. See [Rust](/guide/rust/).',
+            text: 'Rust works the same way: import a `.rs` file of the app, or a crates.io crate with `cargo:`. See [Rust](/guide/rust/).',
         },
 
         { type: 'h2', id: 'prebuilt', text: 'Libraries you do not have to build' },
         {
             type: 'p',
-            text: `${SHOWCASE_COUNT} C and C++ libraries ship prebuilt as \`@crossbind/port-*\` - GDAL, OpenSSL, SQLite, GEOS, PROJ and more, compiled from the real upstream sources at pinned versions. Install the variant for your platform and import its header directly; the upstream library is precompiled, and only your own code, the bindings and the final link go through the build toolchain.`,
+            text: `${SHOWCASE_COUNT} C and C++ libraries ship prebuilt as \`@crossbind/port-*\`: GDAL, OpenSSL, SQLite, GEOS, PROJ and more, built from upstream sources at pinned versions. Install the variant for your platform and import its header; only your own code, the bindings and the final link are compiled.`,
         },
         {
             type: 'code',
@@ -57,11 +57,11 @@ console.log(await GDALVersionInfo('RELEASE_NAME'));`,
         },
         {
             type: 'p',
-            text: 'One `initNative()` covers every module on the page: each imported header registers its bindings, the call boots the runtime and resolves all of them together. Full details in [crossbind ports](/guide/libraries/); every library is listed under [Libraries](/ports/).',
+            text: 'One `initNative()` covers every header you import. More in [crossbind ports](/guide/libraries/); every library is listed under [Libraries](/ports/).',
         },
         {
             type: 'p',
-            text: 'The same one-line import reaches two registries: a Rust crate from [crates.io](/guide/crates-io/) with `cargo:`, and a C or C++ package from [ConanCenter](/guide/conan/) with `conan:`.',
+            text: 'The same import reaches two registries: a Rust crate from [crates.io](/guide/crates-io/) with `cargo:`, and a C or C++ package from [ConanCenter](/guide/conan/) with `conan:`.',
         },
 
         { type: 'h2', id: 'platforms', text: 'Where the output runs' },
@@ -73,46 +73,40 @@ console.log(await GDALVersionInfo('RELEASE_NAME'));`,
                 ['[Node.js](/guide/node/)', 'WebAssembly, or a native Node-API addon'],
                 ['[Edge](/guide/edge/)', 'WebAssembly for Cloudflare Workers, or a `wasi:http` component'],
                 ['[Electron](/guide/electron/)', 'The Node-API addon, loaded in the main process'],
-                ['[Apps](/guide/apps/)', 'An app for macOS, Linux, Windows, iOS or Android: your page in the system webview, native code in its own process'],
-                ['[React Native](/guide/react-native/)', 'Native iOS and Android code over JSI - no wasm'],
+                ['[Apps](/guide/apps/)', 'A macOS, Linux, Windows, iOS or Android app around your page'],
+                ['[React Native](/guide/react-native/)', 'Native iOS and Android code over JSI, no wasm'],
                 ['[Executables](/guide/executables/)', 'Native programs for macOS, Linux and Windows, or a WASI command'],
             ],
         },
         {
             type: 'p',
-            text: 'The JavaScript you write does not change between the JavaScript platforms; the build target does. Executables and `wasi:http` components run with no JavaScript host.',
+            text: 'Your JavaScript stays the same across these platforms; only the build target changes. Executables and `wasi:http` components run without a JavaScript host.',
         },
 
         { type: 'h2', id: 'bundle', text: 'What ends up in your bundle' },
         {
             type: 'p',
-            text: 'Only the code reachable from the headers you imported is linked in: dead-code elimination on top of -O3 is on by default, so pulling two functions out of a large library costs those functions and what they reach, not the whole library.',
+            text: 'Only the code your imported headers reach is linked in: two functions of a large library cost those functions, not the whole library. Android is the exception: its builds link whole archives.',
         },
-        {
-            type: 'callout',
-            tone: 'warn',
-            title: 'Android',
-            text: 'Dead-code elimination is not implemented for Android builds; those link the full archive.',
-        },
-        { type: 'p', text: '[Performance and size](/guide/performance/) has the rest: what you can tune and what to leave alone.' },
+        { type: 'p', text: 'What you can tune: [Performance and size](/guide/performance/).' },
 
         { type: 'h2', id: 'two-ways', text: 'Two ways to use it' },
         {
             type: 'ul',
             items: [
-                '**Write C++ (or Rust) yourself.** Your own sources under `src/native`, imported by header. Best when the work belongs on the native side - a whole pipeline in one call, no boundary crossing per step.',
-                '**Drive a prebuilt library from JavaScript.** Import the package header and call into it directly. Quickest to wire up, and the way most people start.',
+                '**Write C++ or Rust yourself.** Your own sources in `src/native`, imported by header. Best when the work belongs on the native side: a whole pipeline in one call.',
+                "**Call a prebuilt library from JavaScript.** Import the package's header and call it. The quickest start.",
             ],
         },
         {
             type: 'p',
-            text: 'Both paths use the same runtime and the same `initNative()` call, and they mix freely in one project.',
+            text: 'Both use the same `initNative()` and mix freely in one project.',
         },
 
         { type: 'h2', id: 'why', text: 'Why crossbind' },
         {
             type: 'p',
-            text: 'The header import is the front door. Underneath it, crossbind is the native library distribution layer for JavaScript runtimes: versioned packages, target-specific artifacts, transitive dependencies, build recipes and runtime adapters.',
+            text: 'Beneath the header import, crossbind distributes native libraries for JavaScript runtimes: versioned packages, binaries per target, their dependencies, build recipes and runtime adapters.',
         },
         { type: 'ul', items: WHY_POINTS.map(([title, text]) => `**${title}.** ${text.charAt(0).toUpperCase()}${text.slice(1)}`) },
 
@@ -127,10 +121,10 @@ console.log(await GDALVersionInfo('RELEASE_NAME'));`,
         {
             type: 'ul',
             items: [
-                '[Quick start](/guide/quick-start/) - from an empty directory to a running app.',
-                '[Tutorial](/tutorial/) - short steps that run in your browser, with nothing to install.',
-                '[C++](/guide/bindings/) - the rules your headers have to follow, and the type table.',
-                '[Troubleshooting](/guide/troubleshooting/) - the errors people hit most, with the standard fix for each.',
+                '[Quick start](/guide/quick-start/): from an empty folder to a running app.',
+                '[Tutorial](/tutorial/): short steps that run in your browser, with nothing to install.',
+                '[C++](/guide/bindings/): the rules your headers follow, and the type table.',
+                '[Troubleshooting](/guide/troubleshooting/): the most common errors and their fixes.',
             ],
         },
     ],

@@ -15,7 +15,7 @@ export default {
             type: 'table',
             head: ['', 'WebAssembly', 'Node-API addon'],
             rows: [
-                ['Output', 'one `.wasm` and a loader, for every OS and CPU', 'a `.node` file per platform and architecture, and a loader that picks one'],
+                ['Output', 'one `.wasm` and a loader, for every OS and CPU', 'a `.node` file per platform, and a loader that picks one'],
                 ['Built on', 'any machine with Docker', 'Linux and Windows addons in Docker on any host, macOS addons on a Mac'],
                 ['Files', '`m.FS` reads and writes the host disk', 'C++ uses the OS directly; there is no `m.FS`'],
                 ['Threads', '`-r mt` runs pthreads, with no setup', 'one Node environment per process, so no `worker_threads`'],
@@ -23,7 +23,7 @@ export default {
         },
         {
             type: 'p',
-            text: 'Take the addon for [Electron](/guide/electron/)\'s main process, for native memory or system access, or to use a port with nothing to build. It is not automatically faster: on an M-series Mac a call returning or taking a short `std::string` took about 70 and 85 ns as an addon against 160 and 155 ns on wasm, but a `const char*` argument took about 1.2 µs against 0.33 µs and a callback into JavaScript about 2.1 µs against 0.5 µs, and compute-bound runs went either way. Measure your workload before switching.',
+            text: 'Take the addon for [Electron](/guide/electron/)\'s main process, for native memory or system access, or to use a port with nothing to build. It is not automatically faster: some calls are quicker as an addon and some on wasm ([measured](/guide/performance/#speed)), so measure your workload before switching.',
         },
 
         { type: 'h2', id: 'wasm', text: 'WebAssembly' },
@@ -47,7 +47,7 @@ npx crossbind build -p wasm -a wasm32 -r st -e node -b release`,
         },
         {
             type: 'p',
-            text: 'The loader, `dist/my-app-wasm-wasm32-st-release.node.js`, is CommonJS, so `require` and `import` both load it; the build gives `dist` a `package.json` that says so, unless it has one. Calls are synchronous - Node has no Web Worker.',
+            text: 'The loader, `dist/my-app-wasm-wasm32-st-release.node.js`, is CommonJS, so `require` and `import` both load it. Calls are synchronous: Node.js runs the module without a worker.',
         },
         {
             type: 'code',
@@ -76,7 +76,7 @@ console.log(Native.sample());`,
         },
         {
             type: 'p',
-            text: 'While developing, start Node through `crossbind/node/dev`. Before the app starts, it builds whenever the native sources, the config or the native imports changed since its last build; the second line also restarts the app, and so rebuilds, when a file in `src/native` changes:',
+            text: 'While developing, start Node through `crossbind/node/dev`: it builds before the app starts when the native sources, the config or the imports changed. The second line also restarts the app when a file in `src/native` changes:',
         },
         {
             type: 'code',
@@ -91,23 +91,23 @@ node --watch --watch-path=src/native --import crossbind/node/dev src/index.mjs`,
         { type: 'code', file: 'shell', code: 'node --import ./dist/node/wasm.register.mjs src/index.mjs' },
         {
             type: 'p',
-            text: 'An import the build did not see - a specifier computed at run time, or one added since - fails with an error that says to build again. `require()` of a header works too; read its names after `initNative()` resolves.',
+            text: 'An import the build did not see, such as a specifier computed at run time, fails until you build again. `require()` of a header works too; read its names after `initNative()` resolves.',
         },
         { type: 'h3', text: 'Files and threads' },
         {
             type: 'p',
-            text: '`m.FS` is the host filesystem: C++ opens real paths, relative ones resolve against `process.cwd()`, and `/memfs/` is an in-memory directory. Data files a library reads land in `dist/data`; ship them with the loader. Build with `-r mt` for a multithreaded module, which Node runs with no headers or flags; `dist/node/wasm.mjs` follows the single-threaded build only.',
+            text: '`m.FS` is the host filesystem: C++ opens real paths, relative to `process.cwd()`, and `/memfs/` is in memory. Data files a library reads land in `dist/data`; ship them with the loader. Build with `-r mt` for a multithreaded module, which Node runs with no setup; `dist/node/wasm.mjs` covers the single-threaded build only.',
         },
 
         { type: 'h2', id: 'addon', text: 'Node-API addon' },
         {
             type: 'p',
-            text: 'An addon is native code inside the Node process: one `.node` file per platform and architecture, and a CommonJS loader that picks the one for `process.platform` and `process.arch` - on Linux, for the C library too.',
+            text: 'An addon is native code inside the Node process: a `.node` file per platform and architecture, and a CommonJS loader that picks the right one (on Linux, also by C library).',
         },
         { type: 'h3', text: 'Prebuilt' },
         {
             type: 'p',
-            text: 'The ports publish their addons prebuilt as `@crossbind/port-<name>-standalone-napi`: no build, no Docker, no crossbind. npm installs only the addon of the machine, and the package root exports every binding. The packages need Node.js 22.12 or later.',
+            text: 'Each port publishes its addon prebuilt as `@crossbind/port-<name>-standalone-napi`: no build, no Docker, no crossbind. npm installs only the addon for the machine. These packages need Node.js 22.12 or later.',
         },
         { type: 'code', file: 'shell', code: `npm install @crossbind/port-zlib-standalone-napi${suffix}` },
         {
@@ -131,7 +131,7 @@ npx crossbind build -p host -e node -b release`,
         },
         {
             type: 'p',
-            text: 'That writes an addon per architecture, such as `dist/my-app.darwin-arm64.node`, the loader `dist/my-app.native.cjs`, `dist/node/napi.mjs` with every bound name, and the data files a library reads in `dist/data`. A port you link needs the desktop packages you build for, such as `@crossbind/port-zlib-linux`, installed and listed in the config\'s `dependencies` - see [crossbind ports](/guide/libraries/).',
+            text: 'That writes an addon per architecture (such as `dist/my-app.darwin-arm64.node`), the loader `dist/my-app.native.cjs`, `dist/node/napi.mjs` with every bound name, and library data files in `dist/data`. A port needs its desktop packages, such as `@crossbind/port-zlib-linux`, installed and listed in `dependencies`; see [crossbind ports](/guide/libraries/).',
         },
         {
             type: 'code',
@@ -157,7 +157,7 @@ console.log(Native.sample());`,
         },
         {
             type: 'p',
-            text: '`-p host` picks `darwin`, `win32`, or on Linux `linux` or `linuxmusl` by the C library Node.js runs on; `-p darwin,linux,linuxmusl,win32` builds all four, each for arm64 and x64. A Mac builds its own addons without Docker: Xcode compiles them, and `@crossbind/bridge-tools`, which npm installs with crossbind there, generates the bindings as the image the wasm build uses would. To publish addons so that npm installs only the one a machine needs, see [Publishing packages](/guide/publishing/#package-types).',
+            text: '`-p host` picks this machine\'s platform (on Linux, `linux` or `linuxmusl` by its C library); `-p darwin,linux,linuxmusl,win32` builds all four, each for arm64 and x64. A Mac builds its own addons without Docker. To publish addons so npm installs only the one a machine needs, see [Publishing packages](/guide/publishing/#package-types).',
         },
 
         { type: 'h2', id: 'limits', text: 'Limits' },
@@ -171,7 +171,7 @@ console.log(Native.sample());`,
         },
         {
             type: 'p',
-            text: `Complete apps: ${example('backend-nodejs-wasm')}, ${example('backend-nodejs-native')} and ${example('backend-nodejs-standalone')}. Each is also a template - \`${CREATE_COMMAND} my-app Backend Node.js WebAssembly\`, with \`Node-API\` or \`Standalone\` as the last word.`,
+            text: `Complete apps: ${example('backend-nodejs-wasm')}, ${example('backend-nodejs-native')} and ${example('backend-nodejs-standalone')}. Each is also a template: \`${CREATE_COMMAND} my-app Backend Node.js WebAssembly\`, with \`Node-API\` or \`Standalone\` as the last word.`,
         },
     ],
 };

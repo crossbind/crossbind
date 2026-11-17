@@ -27,27 +27,27 @@ export default {
     slug: 'winget-microsoft-store',
     title: 'winget and Microsoft Store',
     description: 'List a Windows app in winget from its GitHub releases, and in the Microsoft Store as its MSIX packages, which crossbind app publish sends.',
-    lede: "winget takes the Windows setup from the [GitHub release](/guide/github-releases/) that `crossbind app publish github` puts out, which a workflow on each release hands on as a pull request to winget's community repository. The Microsoft Store takes the app's MSIX packages, which a Windows build makes with the identity Partner Center gives the app, and `crossbind app publish microsoft-store` sends each version after the first with the app's listing.",
+    lede: "winget takes the Windows setup from the [GitHub release](/guide/github-releases/) that `crossbind app publish github` makes: a workflow sends each release to winget's community repository as a pull request. The Microsoft Store takes the app's MSIX packages, built with the identity Partner Center gives the app; `crossbind app publish microsoft-store` sends each version after the first, with the listing.",
     blocks: [
         { type: 'h2', id: 'winget', text: 'winget' },
         {
             type: 'p',
-            text: 'The Windows Package Manager installs an app from its community repository, `microsoft/winget-pkgs`, which takes each version as a pull request its moderators check. [WinGet Releaser](https://github.com/vedantmgoyal9/winget-releaser), which [Komac](https://github.com/russellbanks/Komac) drives, makes that pull request for each release, from the Windows setups it holds:',
+            text: 'winget installs apps from its community repository, `microsoft/winget-pkgs`, which takes each version as a pull request its moderators check. [WinGet Releaser](https://github.com/vedantmgoyal9/winget-releaser) opens that pull request for each release:',
         },
         { type: 'code', file: '.github/workflows/winget.yml', code: WINGET },
         {
             type: 'p',
-            text: "Once, for the app: submit its first version to `microsoft/winget-pkgs` yourself, as Komac's `komac new` does, since the action makes each new version from the last one there. Fork `microsoft/winget-pkgs` under the account of the app's repository, or name another account with the action's `fork-user`, and keep a classic token with the `public_repo` and `workflow` scopes in the `WINGET_TOKEN` secret, as a workflow's own token opens no pull request in another repository.",
+            text: "Once per app, submit the first version to `microsoft/winget-pkgs` yourself, for example with [Komac](https://github.com/russellbanks/Komac)'s `komac new`: the action makes each new version from the last one there. Fork `microsoft/winget-pkgs` under the account of the app's repository (or name another with the action's `fork-user`), and keep a classic token with the `public_repo` and `workflow` scopes in the `WINGET_TOKEN` secret, since a workflow's own token cannot open a pull request in another repository.",
         },
         {
             type: 'p',
-            text: "The setup installs the app for its user alone, as winget's `--scope user` does, and `/S` installs it without a window. `types: [released]` waits for a release that is out, as GitHub gives its files to no one before: a draft or a prerelease sends nothing.",
+            text: "The setup installs the app for the current user, as winget's `--scope user` does, and `/S` installs it without a window. `types: [released]` waits for a published release: a draft or a prerelease sends nothing.",
         },
         {
             type: 'callout',
             tone: 'warn',
-            title: 'A release a workflow puts out starts no other workflow',
-            text: 'A release put out with a workflow\'s own `GITHUB_TOKEN` starts no other workflow, as GitHub keeps such events from starting one. There, run the action as a job after the one that puts the release out, with `release-tag: v<version>`; a release put out by hand, or with another token, starts the workflow above.',
+            title: "A workflow's release starts no other workflow",
+            text: "A release published with a workflow's own `GITHUB_TOKEN` starts no other workflow. Then run the action as a job after the one that publishes, with `release-tag: v<version>`. A release published by hand, or with another token, starts the workflow above.",
         },
 
         { type: 'h2', id: 'microsoft-store', text: 'Microsoft Store' },
@@ -58,17 +58,21 @@ export default {
         { type: 'code', file: 'crossbind.config.js', code: STORE_IDENTITY },
         {
             type: 'p',
-            text: "`crossbind app build -p windows` then writes `dist/<name>-win32-x64.msix` and `dist/<name>-win32-arm64.msix`, unsigned. Partner Center's API makes no app's first submission, which takes the age ratings questionnaire: make it there, with these packages and the listing `store/microsoft-store` holds, and say why the app asks for `runFullTrust`, as every Win32 app in a package does: it runs as the app does outside one. `crossbind app store microsoft-store` names each step, with the field and the file it comes from.",
+            text: "`crossbind app build -p windows` then writes `dist/<name>-win32-x64.msix` and `dist/<name>-win32-arm64.msix`, unsigned. Partner Center's API cannot make an app's first submission, which takes the age ratings questionnaire: make it there, with these packages and the listing in `store/microsoft-store`, and say why the app asks for `runFullTrust`, as every packaged Win32 app does (it runs as it does outside a package). `crossbind app store microsoft-store` lists each step, with the field and the file it comes from.",
         },
         { type: 'code', file: 'shell', code: 'npx crossbind app store microsoft-store\nnpx crossbind app publish microsoft-store --rollout 10' },
         {
             type: 'p',
-            text: "Each later version goes with `crossbind app publish microsoft-store`: it builds the app's MSIX packages alone, makes a submission with them and the listing, uploads its files and commits it for certification, which takes up to three business days. `--draft` leaves the submission for Partner Center to submit, and `--rollout` gives the packages to a percent of the app's users first. Partner Center's API takes an Entra ID application its account has with the Manager role, under Account settings › User management › Microsoft Entra applications: `CROSSBIND_MICROSOFT_STORE_TENANT_ID`, `CROSSBIND_MICROSOFT_STORE_CLIENT_ID` and `CROSSBIND_MICROSOFT_STORE_CLIENT_SECRET` name it, or a publish on a terminal asks for them once.",
+            text: "Later versions go with `crossbind app publish microsoft-store`: it builds the MSIX packages, makes a submission with them and the listing, and commits it for certification, which takes up to three business days. `--draft` leaves the submission for you to submit in Partner Center, and `--rollout` gives the packages to a share of the app's users first.",
         },
         {
             type: 'p',
-            text: "The Store updates the app it installed, and the app's own [updater](/guide/updates/) refuses there. An app from its package uses the WebView2 Runtime that Windows 11 comes with and Windows 10 has from Edge's updates. The setup program does not pass the Store's certification: its policy 10.2.9 takes no installer that downloads what the app needs as it runs, and the setup downloads Microsoft's WebView2 bootstrapper on a system without the runtime.",
+            text: 'Partner Center\'s API takes an Entra ID application with the Manager role (Account settings › User management › Microsoft Entra applications), named by `CROSSBIND_MICROSOFT_STORE_TENANT_ID`, `CROSSBIND_MICROSOFT_STORE_CLIENT_ID` and `CROSSBIND_MICROSOFT_STORE_CLIENT_SECRET`; a publish in a terminal asks for them once.',
         },
-        { type: 'p', text: `[app.md](${REFERENCE}#winget) is the reference behind this page.` },
+        {
+            type: 'p',
+            text: "The Store updates the apps it installs, and the app's own [updater](/guide/updates/) refuses there. A packaged app uses the WebView2 Runtime that Windows 11 includes and Windows 10 gets with Edge's updates. Submit the MSIX packages, not the setup program: the Store's policy 10.2.9 refuses an installer that downloads what the app needs, as the setup does for WebView2.",
+        },
+        { type: 'p', text: `Full reference: [app.md](${REFERENCE}#winget).` },
     ],
 };

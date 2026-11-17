@@ -8,12 +8,12 @@ export default {
     slug: 'libraries',
     title: 'crossbind ports',
     description: 'Use a prebuilt C or C++ library from npm: install it per platform, list it, import its headers.',
-    lede: `${SHOWCASE_COUNT} native libraries are published as prebuilt npm packages - GDAL, OpenSSL, SQLite, GEOS, PROJ, libTIFF and more. Install the build for each platform you target, list it in \`crossbind.config.js\` and import the library's own headers; the library itself comes compiled.`,
+    lede: `${SHOWCASE_COUNT} native libraries are published as prebuilt npm packages: GDAL, OpenSSL, SQLite, GEOS, PROJ, libTIFF and more. Install the package for each platform you target, list it in \`crossbind.config.js\` and import the library's own headers.`,
     blocks: [
         { type: 'h2', id: 'use', text: 'Install, list, import' },
         {
             type: 'p',
-            text: 'Install the package for the platform you build and list its config in `dependencies`; your build then compiles the bindings for the headers you import and links the prebuilt library.',
+            text: 'Install the package for your platform and list its config in `dependencies`. Your build compiles only the bindings for the headers you import, and links the prebuilt library.',
         },
         { type: 'code', file: 'shell', code: `npm install @crossbind/port-gdal-wasm${DIST_TAG_SUFFIX}` },
         {
@@ -37,13 +37,13 @@ console.log(await GDALVersionInfo('RELEASE_NAME'));`,
         },
         {
             type: 'p',
-            text: "The import path after `@crossbind/port-gdal/` is relative to the library's include directory: `@crossbind/port-gdal/gdal.h` is GDAL's own `gdal.h`. The header binds its enums whole, a free function only when your code imports it by name, and a class only when an import reaches it - see [what a library header binds](/guide/bindings/#imports).",
+            text: "The path after `@crossbind/port-gdal/` is relative to the library's include folder: `@crossbind/port-gdal/gdal.h` is GDAL's own `gdal.h`. Only what you import binds; see [what a library header binds](/guide/bindings/#imports).",
         },
 
         { type: 'h2', id: 'platform-split', text: 'Meta package and platform variants' },
         {
             type: 'p',
-            text: 'Each library is a family. The meta package, `@crossbind/port-gdal`, holds the build recipe and the license metadata and gives the family the name you import headers by; every platform package depends on it. Install the platform packages you build for and list each one: crossbind links the one with libraries for the target being built and leaves the others out. A React Native app lists two:',
+            text: 'Each library is a family. The meta package, `@crossbind/port-gdal`, holds the recipe and the license metadata and gives the name you import headers by; every platform package depends on it. Install and list the platform packages you build for: each build links the one for its target. A React Native app lists two:',
         },
         {
             type: 'code',
@@ -57,24 +57,26 @@ export default {
 };`,
         },
         {
-            type: 'table',
-            head: ['Package', 'Carries', 'For'],
-            rows: [
-                ['`@crossbind/port-gdal`', 'the recipe, the license metadata and the header alias', 'installed with every variant'],
-                ['`-wasm`', 'wasm32 libraries, `st` and `mt`', 'the browser, Node.js and edge runtimes'],
-                ['`-android`', 'arm64-v8a and x86_64 libraries', '[React Native](/guide/react-native/)'],
-                ['`-ios`', 'device and simulator libraries, as an xcframework', '[React Native](/guide/react-native/)'],
-                ['`-darwin`, `-linux`, `-linuxmusl`, `-win32`', 'arm64 and x64 libraries', '[Node.js addons](/guide/node/#addon), [Electron](/guide/electron/) and [native executables](/guide/executables/#native)'],
-                ['`-wasi`', '`wasm32-wasip3` libraries', '[WASI](/guide/executables/#wasi) commands and components'],
-                ['`-standalone-napi`', 'prebuilt Node-API addons', 'Node.js, with nothing to build'],
-                ['`-standalone-wasi`', 'the upstream command-line tools', 'npm commands that run on wasmtime'],
+            type: 'entries',
+            items: [
+                { name: '`@crossbind/port-gdal`', text: 'The recipe, the license metadata and the header name. Installed with every variant.' },
+                { name: '`-wasm`', text: 'wasm32 libraries, `st` and `mt`, for the browser, Node.js and edge.' },
+                { name: '`-android`', text: 'arm64-v8a and x86_64 libraries, for [React Native](/guide/react-native/).' },
+                { name: '`-ios`', text: 'Device and simulator libraries as an xcframework, for [React Native](/guide/react-native/).' },
+                {
+                    name: '`-darwin`, `-linux`, `-linuxmusl`, `-win32`',
+                    text: 'arm64 and x64 libraries, for [Node.js addons](/guide/node/#addon), [Electron](/guide/electron/) and [native executables](/guide/executables/#native).',
+                },
+                { name: '`-wasi`', text: '`wasm32-wasip3` libraries, for [WASI](/guide/executables/#wasi) commands and components.' },
+                { name: '`-standalone-napi`', text: 'Prebuilt Node-API addons: Node.js with nothing to build.' },
+                { name: '`-standalone-wasi`', text: 'The upstream command-line tools, as npm commands that run on wasmtime.' },
             ],
         },
         {
             type: 'callout',
             tone: 'note',
-            title: 'What a package carries',
-            text: "Every port pins its upstream source by URL and SHA-256 in its recipe, and its npm `license` field is the wrapped library's license. A platform package ships the upstream license text as `LICENSE` - GDAL's also the texts of the libraries it compiles in, under `dist/licenses/` - but no notices file or SBOM. Write those for what your build links with `crossbind licenses --notices --sbom`, which also flags copyleft licenses such as the LGPL of GEOS and libiconv ([CLI](/guide/cli/#licenses)).",
+            title: 'Licenses',
+            text: "A port's npm `license` field is the wrapped library's license, and each platform package ships its license text as `LICENSE` (GDAL's also those of the libraries it compiles in, in `dist/licenses/`). Packages carry no notices file or SBOM: write them for what your build links with `crossbind licenses --notices --sbom`, which also flags copyleft licenses such as the LGPL of GEOS and libiconv ([CLI](/guide/cli/#licenses)).",
         },
         {
             type: 'p',
@@ -90,13 +92,13 @@ export default {
         { type: 'h2', id: 'standalone', text: 'Nothing to build' },
         {
             type: 'p',
-            text: `Two kinds of package need no crossbind build at all. Every port has a \`-standalone-napi\` package for Node.js: npm installs the prebuilt addon for your machine, and the package root exports every function, class and constant of the public headers ([Node.js](/guide/node/#addon)). For ${WASI_TOOL_PORTS.length} of them, a \`-standalone-wasi\` package also publishes the upstream command-line tools as npm commands - \`gdalinfo-wasi\`, \`ogr2ogr-wasi\`, \`sqlite3-wasi\` - which run on wasmtime ([Executables](/guide/executables/#tools)). Both ship an SBOM and a \`license\` field derived from everything linked in.`,
+            text: `Two kinds of package need no crossbind build. Every port has a \`-standalone-napi\` package for Node.js: npm installs the prebuilt addon for your machine, and the package exports every function, class and constant of the public headers ([Node.js](/guide/node/#addon)). For ${WASI_TOOL_PORTS.length} ports, a \`-standalone-wasi\` package publishes the upstream command-line tools as npm commands (\`gdalinfo-wasi\`, \`ogr2ogr-wasi\`, \`sqlite3-wasi\`) that run on wasmtime ([Executables](/guide/executables/#tools)). Both ship an SBOM and a \`license\` field covering everything linked in.`,
         },
 
         { type: 'h2', id: 'rebuild', text: 'Rebuilding from source' },
         {
             type: 'p',
-            text: "Each port is built with its recipe's defaults. To change a version, a flag or a patch, add `crossbind.overrides.js` next to your config: crossbind then rebuilds that dependency from its pinned source into `.crossbind/deps/`, for each platform you build, and links the result in its place.",
+            text: "To change a port's version, a flag or a patch, add `crossbind.overrides.js` next to your config. crossbind then rebuilds that dependency from source into `.crossbind/deps/` for each platform you build, and links it instead.",
         },
         {
             type: 'code',

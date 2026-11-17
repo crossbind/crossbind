@@ -2,7 +2,7 @@
 
 Keeps a desktop app to one instance, handing later launches to the one running.
 
-An app has it by having `@crossbind/core-app-host`, which lists it as a dependency: there is nothing to install or list.
+It comes with `@crossbind/core-app-host`: there is nothing to install or list.
 
 ## Use
 
@@ -25,6 +25,6 @@ macOS, Linux and Windows. A phone keeps every app to one instance itself.
 
 ## Replace or leave out
 
-It holds the role `instance`. An extension that gives `replaces: 'instance'` takes it; `app: { without: ['instance'] }` in `crossbind.config.js` leaves it out. Leaving it out while `app.singleInstance` is true stops the build. [The guide](https://crossbind.dev/guide/extensions/#replace) shows how, and [extensions.md](https://github.com/crossbind/crossbind/blob/main/docs/api/extensions.md#the-hosts-own-extensions) what a replacement answers.
+It holds the role `instance`. An extension with `replaces: 'instance'` takes it; `app: { without: ['instance'] }` in `crossbind.config.js` leaves it out. Leaving it out while `app.singleInstance` is true stops the build. [The guide](https://crossbind.dev/guide/extensions/#replace) shows how, and [extensions.md](https://github.com/crossbind/crossbind/blob/main/docs/api/extensions.md#the-hosts-own-extensions) what a replacement answers.
 
 [app.md](https://github.com/crossbind/crossbind/blob/main/docs/api/app.md#one-instance) has how a launch is handed over.

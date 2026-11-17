@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { readdirSync, readFileSync } from 'node:fs';
 import { test } from 'node:test';
 import { HERO_TERMINAL, SITE_TITLE } from '../src/data.js';
+import { GUIDE_PAGES } from '../src/guide/nav.js';
 import { markdownPages } from '../src/llms/index.js';
 import { SUMMARY } from '../src/llms/overview.js';
 
@@ -13,6 +14,49 @@ test('no page of the site uses an em dash', () => {
     for (const page of markdownPages().filter((entry) => !entry.path.startsWith('/api/'))) {
         const at = page.markdown.indexOf(EM_DASH);
         assert.equal(at, -1, `${page.path}: …${page.markdown.slice(Math.max(0, at - 40), at + 40)}…`);
+    }
+});
+
+const blocksOf = (blocks) => blocks.flatMap((block) => [block, ...blocksOf(block.blocks ?? []), ...(block.tabs ?? []).flatMap((tab) => blocksOf(tab.blocks))]);
+const GUIDE_BLOCKS = GUIDE_PAGES.flatMap((page) => blocksOf(page.blocks).map((block) => ({ page: page.slug || 'introduction', block })));
+
+// The guide's column is under 600 px wide, so a table with long cells wraps them into narrow strips; a name with a
+// description reads as entries instead, at the column's full width.
+const MAX_TABLE_COLUMNS = 3;
+const MAX_TABLE_CELL = 100;
+
+test('a guide table is short: at most three columns, and no long cell', () => {
+    for (const { page, block } of GUIDE_BLOCKS.filter(({ block }) => block.type === 'table')) {
+        assert.ok(block.head.length <= MAX_TABLE_COLUMNS, `${page}: ${block.head.join(' | ')}`);
+        for (const cell of [...block.head, ...block.rows.flat()]) assert.ok(cell.length <= MAX_TABLE_CELL, `${page}: ${cell}`);
+    }
+});
+
+// inline() reads `code` and **bold** one at a time, so code inside bold would show its backticks.
+const INLINE_TOKEN = /(`[^`]+`|\*\*[^*]+\*\*|\[[^\]]+\]\([^)\s]+\))/g;
+const textsOf = (block) => {
+    switch (block.type) {
+        case 'p':
+        case 'callout':
+            return [block.text];
+        case 'ul':
+        case 'ol':
+            return block.items;
+        case 'table':
+            return [...block.head, ...block.rows.flat()];
+        case 'entries':
+            return block.items.flatMap((item) => [item.name, item.text, item.default ?? '']);
+        default:
+            return [];
+    }
+};
+
+test('no bold text in the guide holds code', () => {
+    for (const { page, block } of GUIDE_BLOCKS) {
+        for (const text of textsOf(block)) {
+            const bold = String(text).split(INLINE_TOKEN).find((part) => part.startsWith('**') && part.includes('`'));
+            assert.equal(bold, undefined, `${page}: ${bold}`);
+        }
     }
 });
 
