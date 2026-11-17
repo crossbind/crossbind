@@ -130,7 +130,7 @@ describe("App Store Connect's publisher of a macOS app", () => {
     test("asks for the macOS platform on the app's record where a key reaches App Store Connect", async () => {
         appStoreConnect({ isOnMac: false });
         expect((await publisher.check(apiOf().api)).missing).toEqual([
-            "crossbind: App Store Connect's app com.example.demo is not on macOS yet: add the platform there, with the + beside its platform in the sidebar, which makes it a universal purchase, then publish again.",
+            "crossbind: App Store Connect's app com.example.demo is not on macOS yet: add the platform there, with the + beside its platform in the sidebar, which makes it a universal purchase, then publish again, or publish the iOS app alone with -p ios.",
         ]);
     });
 
@@ -202,7 +202,7 @@ describe("App Store Connect's publisher of a macOS app", () => {
 
     test("tells crossbind app store of the macOS app beside the iOS one: its upload, its category and the Mac screenshots Apple alone takes", () => {
         const { sends, problems, steps } = publisher.guide(apiOf({ category: null }).api);
-        expect(sends[1]).toBe('with -p macos, the macOS app, sandboxed, in an archive Xcode exports to App Store Connect, which signs it and its installer package in the cloud, and whose TestFlight hands it to Mac testers once Apple has processed it');
+        expect(sends[1]).toBe('then the macOS app, sandboxed, in an archive Xcode exports to App Store Connect, which signs it and its installer package in the cloud, and whose TestFlight hands it to Mac testers once Apple has processed it; -p macos sends it alone');
         expect(problems).toEqual(['crossbind: app.category is not set, and the Mac App Store takes no app without its category.']);
         const texts = steps.map(({ text }) => text);
         expect(texts[0]).toContain('An app on iOS alone takes macOS later with the + beside its platform in the sidebar');

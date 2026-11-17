@@ -34,14 +34,15 @@ export function assertBinarySelection(config) {
 const exports = new WeakMap();
 export const exportOf = (config) => exports.get(config) ?? null;
 
-// The project's config, with the changes a publisher makes for its build, as a JSON merge patch of the export.
-export default async function loadConfig(configDir = process.cwd(), configName = 'crossbind.config', { changes = null } = {}) {
-    const exported = await loadJs(configDir, configName) || {};
+// The project's config, with the changes a publisher makes for its build, as a JSON merge patch of the export; isFresh
+// reads its files again, as a publish of more than one platform does once a check may have written into them.
+export default async function loadConfig(configDir = process.cwd(), configName = 'crossbind.config', { changes = null, isFresh = false } = {}) {
+    const exported = await loadJs(configDir, configName, undefined, { isFresh }) || {};
     const config = changes ? mergePatch(exported, changes) : exported;
     if (config.excludedDependencies?.length) {
         logger.info('crossbind: `excludedDependencies` in crossbind.config.js is no longer read — declare exclusions in crossbind.overrides.js as { <name>: { exclude: true } }.');
     }
-    const overrides = await loadJs(configDir, 'crossbind.overrides');
+    const overrides = await loadJs(configDir, 'crossbind.overrides', undefined, { isFresh });
     const exclude = resolveExcludedNames(overrides);
     const seen = new Set();
     const output = getFilledConfig(config, {
@@ -49,7 +50,7 @@ export default async function loadConfig(configDir = process.cwd(), configName =
     });
     output.excludedDependencies = exclude;
 
-    const build = await loadJs(configDir, 'crossbind.build');
+    const build = await loadJs(configDir, 'crossbind.build', undefined, { isFresh });
 
     if (build) {
         build.withBuildConfig = true;

@@ -81,16 +81,16 @@ export function appStoreGuide(api) {
     const { listings, settings, problems: read } = readAll(api.project.root);
     const problems = [...read, ...(api.app.category?.macos ? [] : ['crossbind: app.category is not set, and the Mac App Store takes no app without its category.'])];
     const sends = [
-        'with -p ios, the iOS app, archived and uploaded, which TestFlight hands to testers once Apple has processed it',
-        'with -p macos, the macOS app, sandboxed, in an archive Xcode exports to App Store Connect, which signs it and its installer package in the cloud, and whose TestFlight hands it to Mac testers once Apple has processed it',
+        'the iOS app, archived and uploaded, which TestFlight hands to testers once Apple has processed it; -p ios sends it alone',
+        'then the macOS app, sandboxed, in an archive Xcode exports to App Store Connect, which signs it and its installer package in the cloud, and whose TestFlight hands it to Mac testers once Apple has processed it; -p macos sends it alone',
         ...listings.map(localeLine),
         ...settingsLines(settings),
     ];
     const id = api.config.app.id;
     const steps = [
         id === undefined
-            ? { text: 'Set app.id in crossbind.config.js, as com.example.myapp, which App Store Connect keeps for good as the bundle ID; then create the app with it, under Apps, as a new app on iOS and, for -p macos, macOS.', url: APP_STORE_CONNECT }
-            : { text: `Apps › New App: an app with ${id} as its bundle ID, on iOS and, for -p macos, macOS, with its name, primary language and SKU, as Apple's API makes none; a publish without --submit registers the bundle ID first, so the form lists it. An app on iOS alone takes macOS later with the + beside its platform in the sidebar, as a universal purchase, which stays one once both platforms are approved.`, url: APP_STORE_CONNECT },
+            ? { text: 'Set app.id in crossbind.config.js, as com.example.myapp, which App Store Connect keeps for good as the bundle ID; then create the app with it, under Apps, as a new app on iOS and macOS, as a publish without -p sends both.', url: APP_STORE_CONNECT }
+            : { text: `Apps › New App: an app with ${id} as its bundle ID, on iOS and macOS, as a publish without -p sends both, with its name, primary language and SKU, as Apple's API makes none; a publish without --submit registers the bundle ID first, so the form lists it. An app on iOS alone takes macOS later with the + beside its platform in the sidebar, as a universal purchase, which stays one once both platforms are approved, and publishes with -p ios until then.`, url: APP_STORE_CONNECT },
         { text: "App Privacy: answer what data the app and the code it carries collect, as Data Not Collected where it collects none; Apple's API takes no answer." },
         { text: "Pricing and Availability: the price, free or one of Apple's, and the countries and regions the app goes to." },
         { text: "App Information › Content Rights: whether the app shows, holds or reaches others' content." },

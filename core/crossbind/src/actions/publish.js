@@ -59,24 +59,26 @@ export function publishChain(publishers, store) {
     return chain;
 }
 
-// The platform a publish builds for: the one -p names, which every publisher of it takes, else the only one they take,
-// else CROSSBIND_APP_PLATFORM's, else this machine's desktop one where they take desktop apps alone.
-export function publishPlatform(chain, platform, envPlatform, host = process.platform) {
+// The platforms a publish builds for: the one -p names, which every publisher of it takes, else the only one they take,
+// else CROSSBIND_APP_PLATFORM's, else this machine's desktop one where they take desktop apps alone, else every one
+// they take, as App Store Connect keeps an app's iOS and macOS builds in one record.
+export function publishPlatforms(chain, platform, envPlatform, host = process.platform) {
     const store = chain.at(-1).name;
     const platforms = chain.reduce((taken, { publisher }) => taken.filter((one) => publisher.platforms.includes(one)), PUBLISH_PLATFORMS);
     if (platforms.length === 0) throw new Error(`crossbind: ${store} comes after ${chain[0].name}, which takes apps of none of its platforms.`);
     const takes = `${store} takes ${listed(platforms)} apps`;
     if (platform) {
         if (!platforms.includes(platform)) throw new Error(`crossbind: ${takes}, not ${possessive(platform)}, which -p names.`);
-        return platform;
+        return [platform];
     }
-    if (platforms.length === 1) return platforms[0];
+    if (platforms.length === 1) return platforms;
     if (envPlatform) {
         if (!platforms.includes(envPlatform)) throw new Error(`crossbind: ${takes}, not ${possessive(envPlatform)}, which CROSSBIND_APP_PLATFORM names.`);
-        return envPlatform;
+        return [envPlatform];
     }
     const isDesktop = platforms.every((one) => Object.values(DESKTOP_PLATFORMS).includes(one));
-    if (isDesktop && platforms.includes(DESKTOP_PLATFORMS[host])) return DESKTOP_PLATFORMS[host];
+    if (!isDesktop) return platforms;
+    if (platforms.includes(DESKTOP_PLATFORMS[host])) return [DESKTOP_PLATFORMS[host]];
     throw new Error(`crossbind: ${takes}: name one with -p.`);
 }
 
@@ -172,37 +174,41 @@ async function uploadAfter(chain, apis, sessions, output, firstPublished) {
     }
 }
 
-// Sends an app to a store through its publisher, after those it comes after. All they need is checked before the build,
-// which takes minutes: on a terminal they ask for what is missing and set it up; without one, as in CI, every missing
-// piece is named at once. crossbind then builds the app once, with the first publisher's changes to the config, build
-// number and environment, and hands its output to each one's upload in turn. The first may ask for another build, as
-// an iOS app's does once its user has given Apple's reasons for an API it calls.
-export default async function publish(args, { platform, envPlatform, runVite }) {
-    const publishers = publishersOf(state.config.extensions);
-    const { store, rest } = storeOf(args, platform, envPlatform, publishers);
-    const chain = publishChain(publishers, store);
-    const own = builtInPublishers().map(({ name }) => name);
-    chain.filter((extension) => own.includes(extension.name) && state.config.extensions.includes(extension))
-        .forEach(({ name, root }) => console.log(`crossbind: the extension ${name} of ${root} replaces crossbind's own publisher of its name.`));
-    const target = publishPlatform(chain, platform, envPlatform);
-    const { options, viteArgs } = publishOptions(chain, rest, publishers);
+// The build number the first publisher gives, or null for the app's own.
+async function buildNumberOf(first, api, session) {
+    const number = (await step(first, 'buildNumber', api, session)) ?? null;
+    if (number !== null && !(Number.isInteger(number) && number >= 1 && number <= MAX_VERSION_CODE)) {
+        throw new Error(`crossbind: ${first.name}'s buildNumber gives ${JSON.stringify(number)}, which is no build number: a whole number from 1 to ${MAX_VERSION_CODE}, as both stores take, or null for the app's own.`);
+    }
+    return number;
+}
+
+// A platform's publish up to its build: each publisher's api, the first one's changes to the config, which the run
+// reads from then on, what every check found, and, where nothing is missing, the build number.
+async function checkPlatform(chain, target, { options, isGuided }) {
     const run = { buildNumber: undefined };
-    const isGuided = hasTerminal();
     const apis = chain.map(({ name }) => extensionApi(name, {
         platform: target, options: options[name], isGuided, run,
     }));
     const [first] = chain;
     const changes = await buildChanges(first, apis[0]);
-    if (changes) state.config = await loadConfig(undefined, undefined, { changes });
+    if (changes) state.config = await loadConfig(undefined, undefined, { changes, isFresh: true });
     const checked = [];
     for (const [index, extension] of chain.entries()) checked.push((await step(extension, 'check', apis[index])) ?? {});
     const missing = checked.flatMap((result) => result.missing ?? []);
-    if (missing.length > 0) throw new Error(missing.join('\n'));
     const sessions = checked.map(({ session }) => session);
-    run.buildNumber = (await step(first, 'buildNumber', apis[0], sessions[0])) ?? null;
-    if (run.buildNumber !== null && !(Number.isInteger(run.buildNumber) && run.buildNumber >= 1 && run.buildNumber <= MAX_VERSION_CODE)) {
-        throw new Error(`crossbind: ${first.name}'s buildNumber gives ${JSON.stringify(run.buildNumber)}, which is no build number: a whole number from 1 to ${MAX_VERSION_CODE}, as both stores take, or null for the app's own.`);
-    }
+    if (missing.length === 0) run.buildNumber = await buildNumberOf(first, apis[0], sessions[0]);
+    return {
+        target, run, apis, changes, sessions, missing,
+    };
+}
+
+// Builds a platform's app with the first publisher's changes, build number and environment, and hands its output to
+// each upload in turn, building again as long as the first upload asks for it.
+async function buildAndUpload(chain, {
+    target, run, apis, changes, sessions,
+}, { viteArgs, runVite }) {
+    const [first] = chain;
     for (let builds = 1; ; builds += 1) {
         clearAppOutputs();
         const buildEnv = await step(first, 'buildEnv', apis[0], sessions[0]);
@@ -223,5 +229,47 @@ export default async function publish(args, { platform, envPlatform, runVite }) 
             return;
         }
         if (builds === MAX_BUILDS) throw new Error(`crossbind: ${first.name} asks for another build after ${MAX_BUILDS}, as many as a publish makes.`);
+    }
+}
+
+// A platform's failure after others went to the store, saying which did and how to publish the rest.
+function afterSent(error, sent, rest, store) {
+    const told = `crossbind: ${listed(sent, 'and')} went to ${store} before ${rest[0]} stopped; publish ${listed(rest, 'and')} alone, with ${listed(rest.map((one) => `-p ${one}`), 'then')}.`;
+    return Object.assign(new Error(`${error.message}\n${told}`, { cause: error }), error.exitCode === undefined ? {} : { exitCode: error.exitCode });
+}
+
+// Sends an app to a store through its publisher, after those it comes after, for each platform the publish builds for,
+// one after the other. All they need on every platform is checked before the first build, which takes minutes: on a
+// terminal they ask for what is missing and set it up; without one, as in CI, every missing piece is named at once.
+// crossbind then builds each platform's app once, with the first publisher's changes to the config, build number and
+// environment, and hands its output to each one's upload in turn. The first may ask for another build, as an iOS app's
+// does once its user has given Apple's reasons for an API it calls.
+export default async function publish(args, { platform, envPlatform, runVite }) {
+    const publishers = publishersOf(state.config.extensions);
+    const { store, rest } = storeOf(args, platform, envPlatform, publishers);
+    const chain = publishChain(publishers, store);
+    const own = builtInPublishers().map(({ name }) => name);
+    chain.filter((extension) => own.includes(extension.name) && state.config.extensions.includes(extension))
+        .forEach(({ name, root }) => console.log(`crossbind: the extension ${name} of ${root} replaces crossbind's own publisher of its name.`));
+    const targets = publishPlatforms(chain, platform, envPlatform);
+    const { options, viteArgs } = publishOptions(chain, rest, publishers);
+    const isGuided = hasTerminal();
+    if (targets.length > 1) console.log(`crossbind: publishing the app for ${listed(targets, 'then')}; -p publishes one alone.`);
+    const checks = [];
+    for (const [index, target] of targets.entries()) {
+        // A platform's changes go onto the config as the project has it, with what the checks before wrote into it.
+        if (index > 0) state.config = await loadConfig(undefined, undefined, { changes: null, isFresh: true });
+        checks.push(await checkPlatform(chain, target, { options, isGuided }));
+    }
+    const missing = checks.flatMap((check) => check.missing);
+    if (missing.length > 0) throw new Error(missing.join('\n'));
+    for (const [index, check] of checks.entries()) {
+        try {
+            if (checks.length > 1) state.config = await loadConfig(undefined, undefined, { changes: check.changes, isFresh: true });
+            await buildAndUpload(chain, check, { viteArgs, runVite });
+        } catch (error) {
+            if (index === 0) throw error;
+            throw afterSent(error, targets.slice(0, index), targets.slice(index), storeName(chain[0]));
+        }
     }
 }
