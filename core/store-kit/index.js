@@ -134,8 +134,8 @@ export async function askAppId(api, store, term) {
     }
 }
 
-// App Store Connect's API, the app's versions and their review, and the listing in store/app-store, which the iOS app's
-// publisher and the Mac App Store's share.
+// App Store Connect's API, the app's versions and their review, and the listing in store/app-store, of the iOS app and
+// the macOS one alike.
 export { appStoreCaller, appStoreToken, uploadParts } from './app-store/appStoreApi.js';
 export {
     APP_STORE_LISTING, appStoreListingProblems, listingOf, readAppStoreListing, readAppStoreSettings,

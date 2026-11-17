@@ -39,7 +39,7 @@ export function storeOf(args, platform, envPlatform, publishers = []) {
     const late = named ? null : args.find((arg) => publishers.some(({ name }) => name === arg));
     if (late) throw new Error(`crossbind: crossbind app publish takes the store first, before the options: crossbind app publish ${late} ${args.filter((arg) => arg !== late).join(' ')}.`);
     const where = platform ?? envPlatform;
-    const usual = publishers.findLast(({ publisher }) => publisher.isDefault && publisher.platforms.includes(where));
+    const usual = publishers.findLast(({ publisher }) => publisher.isDefault?.includes(where));
     return { store: named ?? usual?.name ?? null, rest: named ? rest : args };
 }
 
@@ -60,7 +60,7 @@ export function publishChain(publishers, store) {
 }
 
 // The platform a publish builds for: the one -p names, which every publisher of it takes, else the only one they take,
-// else CROSSBIND_APP_PLATFORM's, else this machine's desktop one.
+// else CROSSBIND_APP_PLATFORM's, else this machine's desktop one where they take desktop apps alone.
 export function publishPlatform(chain, platform, envPlatform, host = process.platform) {
     const store = chain.at(-1).name;
     const platforms = chain.reduce((taken, { publisher }) => taken.filter((one) => publisher.platforms.includes(one)), PUBLISH_PLATFORMS);
@@ -75,7 +75,8 @@ export function publishPlatform(chain, platform, envPlatform, host = process.pla
         if (!platforms.includes(envPlatform)) throw new Error(`crossbind: ${takes}, not ${possessive(envPlatform)}, which CROSSBIND_APP_PLATFORM names.`);
         return envPlatform;
     }
-    if (platforms.includes(DESKTOP_PLATFORMS[host])) return DESKTOP_PLATFORMS[host];
+    const isDesktop = platforms.every((one) => Object.values(DESKTOP_PLATFORMS).includes(one));
+    if (isDesktop && platforms.includes(DESKTOP_PLATFORMS[host])) return DESKTOP_PLATFORMS[host];
     throw new Error(`crossbind: ${takes}: name one with -p.`);
 }
 
@@ -125,6 +126,12 @@ export function publishOptions(chain, args, publishers) {
     return { options, viteArgs };
 }
 
+// The platforms a store goes first for, as its help line ends.
+function goesFirst({ platforms, isDefault }) {
+    if (!isDefault) return '';
+    return isDefault.length === platforms.length ? ', which goes first for them' : `, which goes first for ${listed(isDefault, 'and')} ones`;
+}
+
 // The help of the stores crossbind publishes to itself, with the options each takes after its name.
 export function publishHelp(publishers = builtInPublishers()) {
     const signature = (option, { value }) => `--${kebab(option)}${value ? ` ${value}` : ''}`;
@@ -133,7 +140,7 @@ export function publishHelp(publishers = builtInPublishers()) {
         '',
         'Stores, each with the options it takes after its name:',
         ...publishers.flatMap(({ name, publisher }) => [
-            `  ${name}: ${storeName({ name, publisher })}, for ${listed(publisher.platforms)} apps${publisher.isDefault ? ', which goes first for them' : ''}`,
+            `  ${name}: ${storeName({ name, publisher })}, for ${listed(publisher.platforms)} apps${goesFirst(publisher)}`,
             ...Object.entries(publisher.options).map(([option, declared]) => `    ${signature(option, declared).padEnd(width)}  ${declared.help}${declared.default ? ` (default: ${declared.default})` : ''}`),
         ]),
         "An app's extensions add stores of their own, each with the options its package gives.",

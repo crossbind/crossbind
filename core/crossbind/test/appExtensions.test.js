@@ -723,6 +723,15 @@ describe("an extension's publisher", () => {
         expect(() => checked({ platform: 'ios', after: 'GitHub' })).toThrow('crossbind: extensions[0].publisher.after is no name of a publisher.');
     });
 
+    test('goes first for all its platforms, or for those it lists of them', () => {
+        expect(checked({ platform: 'android', isDefault: true }).isDefault).toEqual(['android']);
+        expect(checked({ platform: ['ios', 'macos'], isDefault: ['ios'] }).isDefault).toEqual(['ios']);
+        expect(checked({ platform: 'ios' }).isDefault).toBeUndefined();
+        expect(() => checked({ platform: ['ios', 'macos'], isDefault: ['android'] }))
+            .toThrow('crossbind: extensions[0].publisher.isDefault is neither true nor a list of its platforms, of ios, macos.');
+        expect(() => checked({ platform: 'ios', isDefault: 'yes' })).toThrow('crossbind: extensions[0].publisher.isDefault is neither true nor a list of its platforms, of ios.');
+    });
+
     test('that comes after another takes no build of its own', () => {
         expect(() => checked({ platform: 'macos', after: 'github', build: () => ({}), buildEnv: () => ({}) }))
             .toThrow('crossbind: extensions[0].publisher comes after github, whose build it publishes from, so it takes no build or buildEnv.');

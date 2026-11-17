@@ -18,6 +18,16 @@ function checkedPlatforms(where, platform, allowed) {
     return [...new Set(named.flatMap((one) => (one === 'desktop' ? DESKTOP_PLATFORMS : [one])))];
 }
 
+// The platforms a publisher goes first for: all of its own for true, else those it lists of them.
+function defaultPlatforms(where, isDefault, platforms) {
+    if (isDefault === undefined || isDefault === false) return [];
+    if (isDefault === true) return platforms;
+    if (!Array.isArray(isDefault) || isDefault.length === 0 || !isDefault.every((one) => platforms.includes(one))) {
+        throw new Error(`crossbind: ${where}.isDefault is neither true nor a list of its platforms, of ${platforms.join(', ')}.`);
+    }
+    return [...new Set(isDefault)];
+}
+
 // The steps an object gives are functions.
 function assertSteps(where, object, steps) {
     const notSteps = steps.filter((step) => object[step] !== undefined && typeof object[step] !== 'function');
@@ -62,14 +72,14 @@ function checkedPublishOption(where, name, option) {
     return checkedOption(where, name, option);
 }
 
-// A publisher as crossbind runs it: the platforms it takes apps of, whether a publish of those platforms that names no
-// store goes to it, the name its store goes by, the options it takes on the command line, the publisher it comes after, where it does, and its steps, which keep the object as their this.
+// A publisher as crossbind runs it: the platforms it takes apps of, those of them a publish that names no store goes to it
+// for, the name its store goes by, the options it takes on the command line, the publisher it comes after, where it does, and its steps, which keep the object as their this.
 export function checkedPublisher(publisher, where) {
     if (!isObject(publisher)) throw new Error(`crossbind: ${where} is no object.`);
     const unknown = Object.keys(publisher).find((key) => !PUBLISHER_KEYS.includes(key));
     if (unknown) throw new Error(`crossbind: ${where} takes ${PUBLISHER_KEYS.join(', ')}; ${unknown} is none of them.`);
     const platforms = checkedPlatforms(where, publisher.platform, PUBLISH_PLATFORMS);
-    if (publisher.isDefault !== undefined && typeof publisher.isDefault !== 'boolean') throw new Error(`crossbind: ${where}.isDefault is no boolean.`);
+    const isDefault = defaultPlatforms(where, publisher.isDefault, platforms);
     if (publisher.store !== undefined && typeof publisher.store !== 'string') throw new Error(`crossbind: ${where}.store is no name.`);
     if (publisher.after !== undefined && (typeof publisher.after !== 'string' || !NAME.test(publisher.after))) {
         throw new Error(`crossbind: ${where}.after is no name of a publisher.`);
@@ -85,7 +95,7 @@ export function checkedPublisher(publisher, where) {
     const steps = PUBLISHER_STEPS.filter((step) => publisher[step]).map((step) => [step, publisher[step].bind(publisher)]);
     return {
         platforms,
-        ...(publisher.isDefault ? { isDefault: true } : {}),
+        ...(isDefault.length > 0 ? { isDefault } : {}),
         store: publisher.store ?? null,
         options: Object.fromEntries(Object.entries(options).map(([name, option]) => [name, checkedPublishOption(where, name, option)])),
         after: publisher.after ?? null,

@@ -60,7 +60,7 @@ export const CREATE_COMMANDS = ['npm', 'pnpm', 'bun'].map((manager) => ({ id: ma
 // The hero's terminal: one command for each kind of project, as typed in it. docs/api documents both.
 export const HERO_TERMINAL = Object.freeze([
     { comment: 'For library projects', command: 'npx crossbind build' },
-    { comment: 'For app projects', command: 'npx crossbind app publish app-store' },
+    { comment: 'For app projects', command: 'npx crossbind app publish app-store -p ios' },
 ]);
 export const installCommand = (packageName) => `npm install -D ${packageName}${RELEASE.distTagSuffix}`;
 

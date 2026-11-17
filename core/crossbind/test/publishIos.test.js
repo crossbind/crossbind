@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { PNG } from 'pngjs';
+import upath from 'upath';
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 
 const state = { config: {}, targets: [] };
@@ -91,7 +92,7 @@ async function runVite(args, env) {
     fs.writeFileSync(path.join(state.config.paths.build, 'app-outputs.json'), JSON.stringify({ ios: { project: path.join(base, 'dist', 'demo-ios') } }));
     return 0;
 }
-const publish = () => runPublish(['app-store', '--mode', 'production'], { runVite });
+const publish = () => runPublish(['app-store', '--mode', 'production'], { platform: 'ios', runVite });
 const xcodebuildFailure = (message, { isMendable = true, page = null } = {}) => Object.assign(new Error(message), { isMendable, page });
 
 beforeEach(() => {
@@ -138,7 +139,7 @@ describe('publishing an iOS app', () => {
         expect(store.dsyms).toEqual([['/build/app-store/demo.xcarchive', ['/hermes/hermesvm.framework.dSYM']]]);
         expect(store.uploads).toEqual([{ archive: '/build/app-store/demo.xcarchive', team: TEAM.id, key: null, isBuildManaged: true, facts }]);
         const said = printed.join('\n');
-        expect(said).toContain(`crossbind: publishing dev.example.demo 1.2.3 to App Store Connect for team ${TEAM.id}; building the app first.`);
+        expect(said).toContain(`crossbind: publishing dev.example.demo 1.2.3 for iOS to App Store Connect for team ${TEAM.id}; building the app first.`);
         expect(said).toContain('crossbind: archiving the app, which takes a few minutes.');
         expect(said).toContain(`crossbind: uploading the app to App Store Connect for team ${TEAM.id} with Xcode's account, which signs it.`);
         expect(said).toContain('dev.example.demo 1.2.3, numbered by Xcode after the builds App Store Connect has of it, is on App Store Connect.');
@@ -312,7 +313,7 @@ describe('publishing an iOS app on a terminal', () => {
 });
 
 describe('publishing an iOS app to App Review', () => {
-    const submit = ({ isPhased = false } = {}) => runPublish(['app-store', '--submit', ...(isPhased ? ['--phased'] : [])], { runVite });
+    const submit = ({ isPhased = false } = {}) => runPublish(['app-store', '--submit', ...(isPhased ? ['--phased'] : [])], { platform: 'ios', runVite });
     let key;
 
     beforeEach(() => {
@@ -333,14 +334,14 @@ describe('publishing an iOS app to App Review', () => {
             ['reviewable', 'A1', '1.2.3', 'builds 0'],
             ['newest', 'A1', '1.2.3', 'uploads 0'],
             ['submit', {
-                appId: 'A1', versionString: '1.2.3', before: 'B1', buildNumber: null, listings: [{ locale: 'en-US', info: {}, version: { whatsNew: 'Fixes.' }, screenshots: {} }], settings: { categories: {}, review: {} }, isPhased: true,
+                appId: 'A1', versionString: '1.2.3', before: 'B1', buildNumber: null, listings: [{ locale: 'en-US', info: {}, version: { whatsNew: 'Fixes.' }, screenshots: {} }], settings: { categories: {}, review: {} }, isPhased: true, platform: 'IOS',
             }],
         ]);
         expect(store.uploads).toHaveLength(1);
         const said = printed.join('\n');
-        expect(said).toContain(`crossbind: publishing dev.example.demo 1.2.3 to App Store Connect for team ${TEAM.id} and App Review; building the app first.`);
-        expect(said).toContain(`crossbind: App Store Connect's listing changed in en-US, as ${path.join('store', 'app-store')} has it.`);
-        expect(said).toContain('crossbind: dev.example.demo 1.2.3 (build 42) went to App Review, to go out in phases over 7 days once released; Apple mails as the review goes.');
+        expect(said).toContain(`crossbind: publishing dev.example.demo 1.2.3 for iOS to App Store Connect for team ${TEAM.id} and App Review; building the app first.`);
+        expect(upath.toUnix(said)).toContain("crossbind: App Store Connect's iOS listing changed in en-US, as store/app-store has it.");
+        expect(said).toContain('crossbind: dev.example.demo 1.2.3 (build 42) for iOS went to App Review, to go out in phases over 7 days once released; Apple mails as the review goes.');
     });
 
     test('takes an API key and app.encryption, named with every other missing piece before the build', async () => {

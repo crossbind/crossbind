@@ -48,6 +48,7 @@ describe('the store crossbind app publish sends an app to', () => {
         expect(storeOf(['--mode', 'staging'], 'ios', 'android', publishers)).toEqual({ store: 'app-store', rest: ['--mode', 'staging'] });
         expect(storeOf([], undefined, 'android', publishers).store).toBe('google-play');
         expect(storeOf([], 'linux', undefined, publishers).store).toBeNull();
+        expect(storeOf([], 'macos', undefined, publishers).store).toBeNull();
         expect(storeOf([], undefined, undefined, publishers).store).toBeNull();
     });
 
@@ -59,6 +60,12 @@ describe('the store crossbind app publish sends an app to', () => {
         expect(storeOf([], 'ios', undefined, [own, listed, other]).store).toBeNull();
     });
 
+    test('is one that goes first for the platforms it lists alone, of those it takes', () => {
+        const store = extension('dual-store', { platform: ['ios', 'macos'], isDefault: ['ios'] });
+        expect(storeOf([], 'ios', undefined, [store]).store).toBe('dual-store');
+        expect(storeOf([], 'macos', undefined, [store]).store).toBeNull();
+    });
+
     test('is named before the options, as one named after them would go on to Vite', () => {
         const publishers = builtInPublishers();
         expect(() => storeOf(['--track', 'beta', 'google-play'], 'android', undefined, publishers))
@@ -68,8 +75,8 @@ describe('the store crossbind app publish sends an app to', () => {
 
     test("is one of the app's publishers, which the command names when it names none of them", () => {
         const publishers = builtInPublishers();
-        expect(() => publishChain(publishers, 'winget')).toThrow('crossbind: crossbind app publish takes the store it sends the app to first: app-store, github, google-play, mac-app-store or microsoft-store, not winget.');
-        expect(() => publishChain(publishers, null)).toThrow('crossbind: crossbind app publish takes the store it sends the app to first: app-store, github, google-play, mac-app-store or microsoft-store.');
+        expect(() => publishChain(publishers, 'winget')).toThrow('crossbind: crossbind app publish takes the store it sends the app to first: app-store, github, google-play or microsoft-store, not winget.');
+        expect(() => publishChain(publishers, null)).toThrow('crossbind: crossbind app publish takes the store it sends the app to first: app-store, github, google-play or microsoft-store.');
     });
 });
 
@@ -77,14 +84,13 @@ describe('the publishers an app has', () => {
     test("are crossbind's own, each a publisher of its platforms with its options, from a folder of its own", () => {
         const publishers = builtInPublishers();
         expect(publishers.map(({ name, publisher }) => [name, publisher.platforms, Object.keys(publisher.options)])).toEqual([
-            ['app-store', ['ios'], ['submit', 'phased']],
+            ['app-store', ['ios', 'macos'], ['submit', 'phased']],
             ['github', ['macos', 'linux', 'windows'], ['draft']],
             ['google-play', ['android'], ['track', 'draft', 'rollout']],
-            ['mac-app-store', ['macos'], ['submit', 'phased']],
             ['microsoft-store', ['windows'], ['draft', 'rollout']],
         ]);
         expect(publishers.map(({ root }) => root.split(/[\\/]/).slice(-2).join('/'))).toEqual([
-            'extensions/app-store', 'extensions/github', 'extensions/google-play', 'extensions/mac-app-store', 'extensions/microsoft-store',
+            'extensions/app-store', 'extensions/github', 'extensions/google-play', 'extensions/microsoft-store',
         ]);
     });
 
@@ -92,7 +98,7 @@ describe('the publishers an app has', () => {
         const github = extension('github', { platform: 'macos' });
         const appOnly = checkedExtension({ name: 'google-play', app: {} }, os.tmpdir(), 'extensions[0]');
         const publishers = publishersOf([appOnly, extension('homebrew', { platform: 'macos', after: 'github' }), github]);
-        expect(names(publishers)).toEqual(['app-store', 'github', 'google-play', 'mac-app-store', 'microsoft-store', 'homebrew']);
+        expect(names(publishers)).toEqual(['app-store', 'github', 'google-play', 'microsoft-store', 'homebrew']);
         expect(publishers[1]).toBe(github);
         expect(publishers[2].publisher.store).toBe('Google Play');
     });
@@ -126,6 +132,13 @@ describe('the platform a publish builds for', () => {
         expect(['darwin', 'linux', 'win32'].map((host) => publishPlatform([github], undefined, undefined, host))).toEqual(['macos', 'linux', 'windows']);
         const tap = extension('tap', { platform: ['linux', 'windows'] });
         expect(() => publishPlatform([tap], undefined, undefined, 'darwin')).toThrow('crossbind: tap takes linux or windows apps: name one with -p.');
+    });
+
+    test("is never this machine's desktop one for a store that takes a phone's apps too", () => {
+        const [appStore] = builtInPublishers();
+        expect(() => publishPlatform([appStore], undefined, undefined, 'darwin')).toThrow('crossbind: app-store takes ios or macos apps: name one with -p.');
+        expect(publishPlatform([appStore], 'macos', undefined, 'darwin')).toBe('macos');
+        expect(publishPlatform([appStore], undefined, 'ios', 'darwin')).toBe('ios');
     });
 
     test('is one every publisher of a chain takes', () => {
