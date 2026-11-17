@@ -277,6 +277,25 @@ describe("an iOS app's upload", () => {
         expect(xcode.runs).toHaveLength(1);
     });
 
+    test('names a lapsed sign-in as Xcode 27 words it, which another sign-in mends', () => {
+        fs.mkdirSync(store, { recursive: true });
+        xcode.answers.push({
+            status: 70,
+            output: [
+                'xcodebuild[1:2]  DVTDeveloperAccountManager: Failed to load credentials for ada@example.com: Error Domain=DVTDeveloperAccountCredentialsError Code=0 "Invalid credentials in keychain for ada@example.com, missing Xcode-Token"',
+                'error: exportArchive Failed to Use Accounts',
+                '  App Store Connect access for “ABCDE12345” is required. Ensure that your Apple Account usernames and passwords are correct in Accounts settings.',
+                '',
+                '** EXPORT FAILED **',
+                '',
+            ].join('\n'),
+        });
+        const failure = failureOf(() => uploadIosArchive(api, `${store}/demo.xcarchive`, { team: 'ABCDE12345', key: null, isBuildManaged: true, facts }));
+        expect(failure.message.split('\n').at(-1)).toBe('crossbind: Xcode is signed in to no account of team ABCDE12345, or its sign-in has lapsed: sign in again in Xcode, under Settings › Accounts.');
+        expect(failure).toMatchObject({ isMendable: true, page: null });
+        expect(xcode.runs).toHaveLength(1);
+    });
+
     test('names why the bundle id could not be registered, where that fails too', () => {
         fs.mkdirSync(store, { recursive: true });
         xcode.answers.push(
