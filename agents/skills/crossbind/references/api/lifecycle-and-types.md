@@ -2,13 +2,11 @@
 
 # Lifecycle & TypeScript notes
 
-> Two short topics in one doc, because each is small enough not to deserve its own.
-
 ## Memory & object lifecycle
 
 An object crossbind hands to JavaScript is freed when the garbage collector reclaims its last handle, and `.delete()` frees it at once.
 
-Wherever the runtime has `FinalizationRegistry` (browsers, on the page thread and in a worker, Node.js, in a wasm build and in a Node-API addon, and React Native 0.88 and later), the collector frees:
+Where the runtime has `FinalizationRegistry` (browsers, on the page thread and in a worker; Node.js, in wasm and Node-API builds; React Native 0.88 and later), the collector frees:
 
 - an instance of a C++ class made with `new`, which C++ holds through a `std::shared_ptr`;
 - a value a function or a method returns, a struct, a class or a `std::vector`, which crosses as a copy;
@@ -57,7 +55,7 @@ reader.delete()   // ~FileReader runs now and closes the file
 
 ### Reference cycles
 
-Standard JS rules apply. If a JS proxy of a C++ shared_ptr captures a closure that holds the same proxy, you have a cycle that GC won't break. Solution: same as in regular JS — don't capture self-references in long-lived closures, or break the cycle explicitly when done.
+Standard JavaScript rules apply. A handle of a C++ `shared_ptr` whose closure holds the same handle makes a cycle the collector will not break: do not capture self-references in long-lived closures, or break the cycle when done.
 
 ## TypeScript: `.d.ts` is generated for your imports
 
@@ -111,6 +109,6 @@ export list itself always comes from the bridge, so names are never missing.
 
 ## See also
 
-- [`cpp-binding-rules.md`](./cpp-binding-rules.md) — why no raw pointers means no manual deletion.
+- [`cpp-binding-rules.md`](./cpp-binding-rules.md) — pointers, handles and what frees them.
 - [`init.md`](./init.md) — `Module` shape, helper methods.
 - [`filesystem.md`](./filesystem.md) — long-lived FS resources (mounts, OPFS handles).

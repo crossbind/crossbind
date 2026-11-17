@@ -9,15 +9,16 @@
 
 ## Requirement
 
-Nothing to install for web, Android, Linux addon and Windows addon builds with the default Docker
-runner: the toolchain images carry Conan 2.33 from image family 1.0.11 on. iOS and macOS packages
-build on your Mac with Xcode whatever the runner, so those builds need Conan 2.19 or later and
-CMake on the `PATH` (`brew install conan` or `brew upgrade conan`, or `pipx install conan`); a
-Conan release older than your Xcode still takes its clang. The first build of a package needs the
-network, to reach ConanCenter and the sources its recipe downloads. Under `RUNNER=LOCAL`, web
-builds need Conan 2.19 or later, Emscripten and CMake on the `PATH`, and Android, Linux and Windows
-packages are refused: they need the android image's NDK, the linux image's sysroots and the
-windows image's llvm-mingw.
+With the default Docker runner, web, Android, Linux addon and Windows addon builds need nothing
+installed: the toolchain images carry Conan (2.33, from image family 1.0.11). iOS and macOS
+packages build on your Mac with Xcode on any runner, so they need Conan 2.19 or later and CMake on
+the `PATH` (`brew install conan`, or `pipx install conan`); a Conan release older than your Xcode
+still takes its clang. The first build of a package needs the network, for ConanCenter and the
+sources its recipe downloads.
+
+Under `RUNNER=LOCAL`, web builds need Conan 2.19 or later, Emscripten and CMake on the `PATH`.
+Android, Linux and Windows packages are refused there: they need the images' NDK, sysroots and
+llvm-mingw.
 
 ## Declare, then import
 
@@ -41,19 +42,15 @@ zlibVersion(); // '1.3.2'
 ```
 
 - `packages.conan` holds what `conan:` imports. A key is the Conan package name. Its value is a
-  version, a Conan version range, or `{ version, options }` with options the recipe defines. Any
-  other key in that object stops the build with an error that names it.
-- An option name the recipe does not have stops the build after `conan install`, with an error that
-  lists the names it has. A name among the recipe's default options that the recipe drops for a
-  target, as zlib drops `fPIC` on Windows, is skipped there.
+  version, a Conan version range, or `{ version, options }` with options the recipe defines.
+- An option the recipe does not have stops the build after `conan install`. A default option the
+  recipe drops for a target, as zlib drops `fPIC` on Windows, is skipped there.
 - `conan:<package>/<header>` names a header under the package's include directory,
   subdirectories included: `conan:libxml2/libxml/parser.h`.
-- Importing a package that `packages.conan` does not declare is a hard error. A package that
+- Importing a package that `packages.conan` does not declare fails the build. A package that
   another one requires (zlib under libpng) is built and linked either way, and importable once it
   is declared.
 - `shared` is not an option you can set: every package links statically into the module.
-- Earlier releases spelled the declaration `conanDependencies`; that key now stops the build with
-  an error that names `packages.conan`.
 
 ## Through your own header
 
@@ -139,9 +136,9 @@ addons on x64 and arm64 Windows.
 
    Every package is a static library.
 2. ConanCenter publishes no binaries built with these toolchains, so each package builds from
-   source the first time; zlib, libpng and fmt take seconds, or about half a minute in the android
-   image, which runs emulated on Apple silicon. Built packages stay in `~/.crossbind/conan/store`,
-   shared by every project, and any build with the same profile reuses them. Under `RUNNER=LOCAL`,
+   source the first time, slower in the android image, which runs emulated on Apple silicon. Built
+   packages stay in `~/.crossbind/conan/store`, shared by every project, and any build with the
+   same profile reuses them. Under `RUNNER=LOCAL`,
    and for iOS and macOS, the store is `~/.crossbind/conan-local/store`, apart from the one
    containers write to.
 3. crossbind copies each package to `.crossbind/conan/packages/<package>/dist/prebuilt/<target>/`,
@@ -185,9 +182,9 @@ everything else:
 
 ## `conan.lock`
 
-The first install writes `conan.lock` next to `crossbind.config.js`. It pins the exact version and
-recipe revision of every package, so commit it. Later installs follow it and add any requirement
-it does not list yet; delete it to resolve every version again.
+The first install writes `conan.lock` next to `crossbind.config.js`. It pins the version and recipe
+revision of every package: commit it. Later installs follow it and add requirements it does not
+list yet; delete it to resolve every version again.
 
 ## Types
 
@@ -195,9 +192,8 @@ Each `conan:` import is typed by an ambient module, `declare module 'conan:zlib/
 `.crossbind/conan/types/`, which `@crossbind/typescript-config` includes (see
 [`lifecycle-and-types.md`](./lifecycle-and-types.md)).
 
-The declarations list every bindable function in the header, even before the app imports it.
-Only the requested functions enter the compiled bridge; generating the editor's full catalog
-does not add them to the runtime binary. Package `ignoredDeclarations` still apply.
+The declarations list every bindable function of the header, even before the app imports it;
+only the imported ones are compiled in. A package's `ignoredDeclarations` still apply.
 
 ## Licenses
 

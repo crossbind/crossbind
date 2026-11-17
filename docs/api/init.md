@@ -1,8 +1,8 @@
 # `initNative(opts)` — Runtime API
 
-The single entry point for calling into your Wasm module from JavaScript. Produced by the crossbind build pipeline; consumed by your application code.
+The one entry point into your native module from JavaScript.
 
-> The same function is exported by browser, Node, and Edge runtime entries. The `opts` shape is identical; only the available *defaults* differ per runtime.
+> Browser, Node.js and edge builds export the same function with the same options; only the defaults differ.
 
 ## Where it comes from
 
@@ -17,9 +17,9 @@ import { zlibVersion } from 'conan:zlib/zlib.h';
 await initNative();
 ```
 
-One call binds every imported module: each proxy module registers its bindings when it is imported, and `initNative()` boots the runtime once and then resolves all of them. Node, Edge and standalone builds have no bundler plugin: there you import the built artifact directly and call its default export.
+One call binds every imported module. Node.js, edge and standalone builds have no bundler plugin: there you import the built file directly and call its default export.
 
-Those builds also write one ES module per runtime, `dist/node/napi.mjs` (`-e node` on darwin, linux, linuxmusl or win32), `dist/node/wasm.mjs` and `dist/edge/wasm.mjs` (the st-release wasm32 builds), that exports `initNative` and every bound name the same way. A package publishes them under paths of its own, and a standalone package as its root:
+Those builds also write an ES module per runtime that exports `initNative` and every bound name: `dist/node/napi.mjs` (`-e node` on darwin, linux, linuxmusl or win32), and `dist/node/wasm.mjs` and `dist/edge/wasm.mjs` (the st release wasm32 builds). A package publishes them under paths of its own, a standalone package as its root:
 
 ```js
 import { initNative, Matrix } from '@crossbind/example-lib-prebuilt-matrix/node/napi';
@@ -147,7 +147,7 @@ initNative.terminate(): void   // browser-only when useWorker:true
 
 ## Return value: `Module`
 
-The Emscripten runtime module, plus crossbind extensions. Embind exports from your C++ code are attached as named members.
+The Emscripten module with crossbind's helpers; your C++ bindings are its members.
 
 ### Module helpers
 
@@ -171,11 +171,11 @@ m.unmount()               // placeholder, no-op
 
 ### Worker mode (`useWorker: true`)
 
-When `useWorker: true`, `Module` is a Comlink-wrapped proxy. Behavior is identical from your code's perspective with one caveat: every call crosses a worker boundary, so:
+With `useWorker: true`, `Module` is a Comlink proxy to the worker, and every call crosses into it:
 
-- All embind objects are auto-proxied (via crossbind's custom Comlink transfer handlers).
-- Calls are async by nature even when the underlying C++ is synchronous.
-- Returned `vector`s arrive as proxies; treat them the same — `m.toArray(vec)` still works.
+- Bound objects are proxied too.
+- Every call returns a promise, even when the C++ is synchronous.
+- `m.toArray(vec)` works on a returned vector, as on the page thread.
 
 Call `initNative.terminate()` to kill the worker and release resources.
 
@@ -234,7 +234,7 @@ const m = await initNative({
 })
 ```
 
-The Node-API build (`crossbind build -p darwin -e node`, or `-p linux`, `linuxmusl` or `win32`) takes only `env`, `addonPath` and `dataPath`: there is no Emscripten runtime, so no worker, virtual filesystem or log redirection. `m` holds the bound classes and functions plus `toArray`/`toVector`. `initNative.terminate()` forgets the booted module, but Node cannot unload an addon, so the next `initNative()` resolves the same one with its native state intact.
+The Node-API build (`crossbind build -p darwin -e node`, or `-p linux`, `linuxmusl` or `win32`) takes only `env`, `addonPath` and `dataPath`. It has no Emscripten runtime, so no worker, virtual filesystem or log redirection; `m` holds the bound classes and functions plus `toArray` and `toVector`. `initNative.terminate()` forgets the module, but Node cannot unload an addon, so the next `initNative()` resolves the same one, its native state intact.
 
 ### Cloudflare Worker
 

@@ -89,7 +89,7 @@ now.
 - An Android app needs Docker alone to build: the android-app image carries the JDK, the SDK and Gradle. To run it,
   it needs `adb` and an attached device or a running emulator, and crossbind installs and starts neither. It runs on
   Android 13 or later with Android System WebView 116 or later. On an Apple silicon Mac the amd64 image runs under
-  emulation, so the app reopens about 25 s after an edit to native code.
+  emulation, so the app takes a while to reopen after an edit to native code.
 
 ## Reference
 

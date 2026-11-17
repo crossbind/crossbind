@@ -30,7 +30,7 @@ export default {
             type: 'ul',
             items: [
                 '**Docker**, for the WebAssembly, WASI and Android toolchains. The first build pulls the images. Without Docker, [Remote builds](/guide/remote-builds/) run them on another machine.',
-                '**Node.js 24+**.',
+                '**Node.js 26+**.',
                 '**CMake 3.28+**, for mobile only.',
                 '**Xcode** and **CocoaPods**, for iOS only, on a Mac. Xcode must find Node.js; see [React Native](/guide/react-native/#ios).',
                 '**A Rust toolchain** (`cargo` and the platform targets), only for Rust on iOS or macOS, or with `RUNNER=LOCAL`. Other builds run cargo in the image. See [Rust](/guide/rust/).',

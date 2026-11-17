@@ -22,15 +22,13 @@ Add crossbind to a React Native CLI app so:
 
 ## Files involved
 
-| File | Role |
-|------|------|
-| `package.json` | + `@crossbind/plugin-react-native`, `@crossbind/plugin-react-native-ios-helper` (dependencies, autolinked), `@crossbind/plugin-metro` (devDependency), optional `@crossbind/port-<name>` |
-| `metro.config.js` | Wrap `getDefaultConfig` output with `CrossbindMetroPlugin(...)` |
-| `crossbind.config.{js,mjs}` *(new at project root)* | Project-level crossbind config: deps to consume, paths |
-| `src/native/` *(if user wraps own C++)* | `.h` + `.cpp` source files |
-| `android/app/build.gradle` | Auto-wired by `@crossbind/plugin-react-native`'s native CMake hook (no manual edits) |
-| `ios/Podfile.lock` | Updated by `pod install` after adding the plugin |
-| `ios/<App>.xcodeproj` | Native iOS link picks up the auto-generated podspec |
+- `package.json`: add `@crossbind/plugin-react-native`, `@crossbind/plugin-react-native-ios-helper` (dependencies, autolinked), `@crossbind/plugin-metro` (devDependency), optional `@crossbind/port-<name>`.
+- `metro.config.js`: Wrap `getDefaultConfig` output with `CrossbindMetroPlugin(...)`.
+- `crossbind.config.{js,mjs}` *(new at project root)*: Project-level crossbind config: deps to consume, paths.
+- `src/native/` *(if user wraps own C++)*: `.h` + `.cpp` source files.
+- `android/app/build.gradle`: Auto-wired by `@crossbind/plugin-react-native`'s native CMake hook (no manual edits).
+- `ios/Podfile.lock`: Updated by `pod install` after adding the plugin.
+- `ios/<App>.xcodeproj`: Native iOS link picks up the auto-generated podspec.
 
 ## Commands
 

@@ -2,7 +2,7 @@
 
 # `state` and `target` shapes — what build hooks receive
 
-> When you write a `crossbind.build.js` hook (`getBuildParams(target, depPaths, ext, buildPath)`, `sourceReplaceList(target, depPaths)`, etc.), you receive a `state` object and a `target` object. This doc enumerates every key on both. Source: `core/crossbind/src/state/index.js`.
+> A `crossbind.build.js` hook (`getBuildParams(target, depPaths, ext, buildPath)`, `sourceReplaceList(target, depPaths)` and the rest) receives a `state` object and a `target` object. This page lists every key of both. Source: `core/crossbind/src/state/index.js`.
 
 ## `state` — top-level keys
 
@@ -131,12 +131,10 @@ treats a mismatch as a cache miss even when the artifact exists:
   link layout (which archives are `--whole-archive`d — flipping `export.wholeArchive`
   relinks automatically).
 
-Practical consequence: changing `emccFlags`, adding/removing a `.h` import, rebuilding a
-dependency package, or editing the crossbind runtime itself re-links automatically — no manual
-`.crossbind` clear needed for those. The CLI's `crossbind build` also no longer short-circuits on a
-merely existing dist artifact; the link fingerprint decides there too (a wiped dist forces
-a fresh link). A clear is still the answer when the toolchain itself changes (Docker
-image / emsdk).
+So changing `emccFlags`, adding or removing a `.h` import, rebuilding a dependency package or
+editing the crossbind runtime relinks by itself, with no `.crossbind` clear. `crossbind build` does
+not stop at an existing dist file either: the link fingerprint decides, and a wiped dist forces a
+fresh link. Clear `.crossbind` only when the toolchain itself changes (the Docker image or emsdk).
 
 ### `state.system`
 

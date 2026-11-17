@@ -1,6 +1,6 @@
 # Troubleshooting — common errors and which override to reach for
 
-> When a crossbind build or runtime fails, **don't bypass the system** — almost every common error has a designated override mechanism. This doc lists the errors agents actually hit and routes each to the right override (catalogued in [`overrides.md`](./overrides.md)).
+> When a build or a run fails, **do not work around crossbind**: almost every common error has an override that fixes it. This page lists the errors people and agents hit, each with its fix ([`overrides.md`](./overrides.md) lists every override).
 
 The recovery rule:
 
@@ -44,15 +44,15 @@ Two libs define the same function.
 
 ### `wasm-ld: error: --shared-memory is disallowed by ... not compiled with 'atomics' or 'bulk-memory' features`
 
-A multithread (`mt`) wasm link pulled in a Rust archive whose objects (std
-included) were built without the atomics features. Current crossbind cannot
-produce such an archive — mt Rust builds go through nightly `-Zbuild-std` or
-fail with install instructions — so the usual source is a **stale cargo-type
-package prebuilt** built before mt support.
+A multithreaded (`mt`) wasm link pulled in a Rust archive whose objects, std
+included, were built without the atomics features. Current crossbind cannot
+produce such an archive, so the usual source is a **stale prebuilt of a Rust
+package** built before mt support.
 
 - **Fix:** rebuild the package's wasm prebuilts (`crossbind build -p wasm` in the
-  package, with `rustup toolchain install nightly --component rust-src` done
-  once) or update to a package version whose mt prebuilt was built that way.
+  package; outside the toolchain images, after `rustup toolchain install nightly
+  --component rust-src` once), or update to a package version whose mt prebuilt
+  was built with atomics.
 
 ### `__wasm__` / `CPL_CPUID` / `__asm__` / SIMD intrinsic compile errors
 
@@ -173,10 +173,10 @@ The C++ function exists but didn't bind to JS.
 - **Cause:** binding rule violation. See "Binding-time errors" above.
 - **Cause:** the JS module finished loading but `init` hasn't completed. Make sure you're calling `m.someFunc` *after* `await initNative(...)`.
 - **Cause (worker runtime, e.g. `instance.method is not a function`):** the module
-  runs in a worker — the wasm `mt` runtime defaults to one, as does
-  `initNative({ useWorker: true })` — so construction returns a promise and sync-style
-  code holds a `Promise`, not the instance. Write `const c = await new X(...);
-  await c.method(...)` and set `dts: 'promise'` so the generated types match.
+  runs in a worker (`useWorker: true`, the browser default), so construction returns
+  a promise and synchronous-style code holds a `Promise`, not the instance. Write
+  `const c = await new X(...); await c.method(...)` and set `dts: 'promise'` so the
+  generated types match.
 
 ### Calls hang forever when `useWorker: true`
 
@@ -212,7 +212,7 @@ Comlink call posted to worker but no response.
 
 ## Tribal-knowledge gotchas (from real packages)
 
-These are patterns the source code uses but aren't obvious. Flag them to users early:
+Patterns from real packages that are easy to miss; point them out early:
 
 ### 1. `iconv` symbol collision in gdal
 

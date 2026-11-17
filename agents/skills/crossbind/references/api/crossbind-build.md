@@ -2,9 +2,9 @@
 
 # `crossbind.build.js` — Package-author Build Hooks
 
-> **Port authors only.** Apps and libraries consuming `@crossbind/port-*` do not write this file. Each platform variant owns one at `ports/<name>/<platform>/crossbind.build.js`; the shared recipe lives at `ports/<name>/base/build.mjs`, and variants import or extend it.
+> **For port authors only.** Apps never write this file. Each platform variant has one at `ports/<name>/<platform>/crossbind.build.js`, which imports or extends the shared recipe in `ports/<name>/base/build.mjs`.
 
-`crossbind.build.js` describes how to fetch and build the upstream C++ library that this package wraps. The CLI auto-merges its exports into `config.build` of the sibling `crossbind.config.js` at build time.
+`crossbind.build.js` describes how to fetch and build the upstream library the package wraps. The build merges its exports into `config.build` of the `crossbind.config.js` beside it.
 
 ## Shape
 
@@ -174,7 +174,7 @@ export default {
 
 ## How the CLI uses these hooks
 
-For each architecture sub-package (`-wasm`, `-android`, `-ios`), the CLI:
+For each platform package (`-wasm`, `-android`, `-ios` and the rest), the build:
 
 1. Reads the package's `nativeVersion` from `package.json`.
 2. Calls `getURL(version)` to populate `state.config.paths.build`, then each of `getMirrors(version)` in turn while a download fails or misses the `sha256`.
@@ -239,7 +239,7 @@ export default {
 | Patch source files between fetch and build | `replaceList`, or `sourceReplaceList` per target in a `configure` build |
 | Backport an upstream fix the pinned release lacks | `patches` |
 
-Start with the simplest hook that works. Most packages need only `getURL` + `buildType` + `getBuildParams`.
+Start with the simplest hook that works: most packages need only `getURL`, `buildType` and `getBuildParams`.
 
 ## See also
 

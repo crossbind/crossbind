@@ -1,34 +1,34 @@
 # Performance — defaults, what's safe to override, what to leave alone
 
-> crossbind picks production-grade defaults for every Emscripten and CMake flag. **Most apps should change nothing.** This doc lists every default crossbind sets, marks each as "safe to override" or "don't touch", and shows when to reach for a tweak.
+> crossbind sets production defaults for every Emscripten and CMake flag, and **most apps should change none**. This page lists each default, whether it is safe to override, and when to.
 
-The rule: **if your build runs and your app works, the defaults are fine**. Only touch performance flags after measuring. AI agents should resist the urge to "optimize" defaults proactively.
+The rule: **if the build runs and the app works, the defaults are fine**. Change a flag only after measuring; a coding agent should not "optimize" the defaults on its own.
 
 ## Defaults reference
 
 ### Emscripten flags (always-on, set by `buildWasm.js`)
 
-| Flag | Value | Purpose | Safe to override? |
-|------|-------|---------|--|
-| `-O3` | (release) | Max optimization | 🔒 Don't override unless debugging a codegen issue |
-| `-O0` | (debug) | No optimization | ✅ Already debug — fine |
-| `-msimd128` | wasm | SIMD128 instruction set | 🔒 Already optimal |
-| `-sMEMORY64=1` | wasm64 only | 64-bit memory | 🔒 Set by target.arch, not flag override |
-| `-sSTACK_SIZE=1MB` (+ `-sSTACK_OVERFLOW_CHECK=1` in debug) | links with Rust | Stack for Rust code; a C++ build keeps Emscripten's 64KB | ✅ A size in the config wins (read § `STACK_SIZE`) |
-| `-pthread` + `-sPTHREAD_POOL_SIZE=Math.min(navigator.hardwareConcurrency \|\| 1, 2)` | mt only | Thread pool capped at 2 workers (1 if `hardwareConcurrency` is unavailable) | ✅ `PTHREAD_POOL_SIZE` is tunable (see below) |
-| `-sPTHREAD_POOL_SIZE_STRICT=2` | mt only | Abort if more pthreads requested than pool (no dynamic growth) | ⚠️ Drop to `1` (warn + grow) or `0` (silent grow) only if your code spawns unbounded threads |
-| `-lembind` | always | Embind binding lib | 🔒 Required |
-| `-Wl,--whole-archive` | Bridge archive only | Keep embind registrations (static initializers) alive | ✅ `export.wholeArchive: true` on the app restores the legacy all-archives layout; a library can declare the same in its own config |
-| `-fwasm-exceptions` | always | C++ exceptions via Wasm EH | 🔒 Required for proper `throw` semantics |
-| `-sWASM=1` | always | Output wasm (not asm.js) | 🔒 Don't touch |
-| `-sMODULARIZE=1` | always | ES module wrapper | 🔒 crossbind bundling depends on this |
-| `-sDYNAMIC_EXECUTION=0` | always | Disable eval / new Function | 🔒 Required for CSP-strict environments |
-| `-sRESERVED_FUNCTION_POINTERS=200` | always | Function table size | ⚠️ Increase if "Cannot enlarge function table" error |
-| `-sALLOW_MEMORY_GROWTH=1` | always | Heap can grow at runtime | 🔒 Don't disable |
-| `-sFORCE_FILESYSTEM=1` | always | Always include FS | 🔒 crossbind fs adapters depend on this |
-| `-sWASMFS` | browser, node | New filesystem backend | 🔒 OPFS depends on this |
-| `-Wl,--wrap=__wasi_fd_sync`, `-Wl,--wrap=__syscall_fdatasync` | node | `fsync` and `fdatasync` on a host file succeed instead of trapping in WasmFS's Node backend | 🔒 Don't touch |
-| `-sEXPORT_NAME=Module2` | always | JS namespace name | 🔒 crossbind bundling depends on this |
+🔒 leave it, ✅ safe to override, ⚠️ change it only for the reason given.
+
+- 🔒 **`-O3`**, release: maximum optimization. Leave it unless you are debugging a codegen issue.
+- ✅ **`-O0`**, debug: no optimization.
+- 🔒 **`-msimd128`**, wasm: the SIMD128 instruction set.
+- 🔒 **`-sMEMORY64=1`**, wasm64 only: 64-bit memory, set by `target.arch`, not by a flag.
+- ✅ **`-sSTACK_SIZE=1MB`** (and `-sSTACK_OVERFLOW_CHECK=1` in debug), when the link includes Rust: the stack for Rust code; a C++ build keeps Emscripten's 64KB. A size in the config wins (see `STACK_SIZE` below).
+- ✅ **`-pthread`** and **`-sPTHREAD_POOL_SIZE=Math.min(navigator.hardwareConcurrency || 1, 2)`**, mt only: a thread pool of at most 2 workers, 1 where `hardwareConcurrency` is unavailable. `PTHREAD_POOL_SIZE` is tunable (see below).
+- ⚠️ **`-sPTHREAD_POOL_SIZE_STRICT=2`**, mt only: abort when more pthreads are asked for than the pool holds; no growth. Lower it to `1` (warn and grow) or `0` (grow silently) only if your code starts threads without bound.
+- 🔒 **`-lembind`**, always: the embind binding library. Required.
+- ✅ **`-Wl,--whole-archive`**, the Bridge archive only: keeps embind registrations (static initializers) alive. `export.wholeArchive: true` on the app restores the old all-archives layout; a library can declare the same in its own config.
+- 🔒 **`-fwasm-exceptions`**, always: C++ exceptions through Wasm EH. Required for `throw` to work.
+- 🔒 **`-sWASM=1`**, always: wasm output, not asm.js.
+- 🔒 **`-sMODULARIZE=1`**, always: the ES module wrapper crossbind's bundling depends on.
+- 🔒 **`-sDYNAMIC_EXECUTION=0`**, always: no `eval` or `new Function`. Required under a strict Content Security Policy.
+- ⚠️ **`-sRESERVED_FUNCTION_POINTERS=200`**, always: the function table size. Raise it on "Cannot enlarge function table".
+- 🔒 **`-sALLOW_MEMORY_GROWTH=1`**, always: the heap grows at run time. Do not disable it.
+- 🔒 **`-sFORCE_FILESYSTEM=1`**, always: always includes the filesystem, which crossbind's fs adapters depend on.
+- 🔒 **`-sWASMFS`**, browser and node: the new filesystem backend, which OPFS depends on.
+- 🔒 **`-Wl,--wrap=__wasi_fd_sync`, `-Wl,--wrap=__syscall_fdatasync`**, node: `fsync` and `fdatasync` on a host file succeed instead of trapping in WasmFS's Node backend.
+- 🔒 **`-sEXPORT_NAME=Module2`**, always: the JavaScript namespace crossbind's bundling depends on.
 
 Emscripten 6.0.13 enables WebAssembly BigInt integration for every supported engine. Crossbind
 therefore relies on that toolchain default instead of passing the deprecated `WASM_BIGINT` setting;
@@ -44,17 +44,15 @@ therefore relies on that toolchain default instead of passing the deprecated `WA
 
 ### CMake flags (set by `getCmakeParameters.js`)
 
-| Flag | Value | Purpose | Safe to override? |
-|------|-------|---------|--|
-| `-DPROJECT_NAME` | `general.name` | Internal | 🔒 Don't change |
-| `-DPROJECT_TARGET_*` | platform/arch/runtime/buildType | Routing | 🔒 Don't change |
-| `-DBUILD_TYPE=STATIC` | wasm, ios | Static libs | 🔒 Required by emcc / iOS frameworks |
-| `-DBUILD_TYPE=SHARED` | android | Shared libs | 🔒 Required by Android dynamic loading |
-| `-DBUILD_SHARED_LIBS=OFF` | wasm, ios | Inverse of above | 🔒 Don't override |
-| `-DCMAKE_TOOLCHAIN_FILE` | per-platform | toolchain pin | 🔒 Don't override |
-| `-DANDROID_PLATFORM=android-33` | android | NDK API level | ⚠️ Lower if targeting older devices (read § Android API level) |
-| `-DANDROID_STL=c++_shared` | android | One C++ runtime | 🔒 Every library of an app links the one `libc++_shared.so` it ships; Android compares `type_info` by address |
-| `-DCMAKE_OSX_DEPLOYMENT_TARGET=15.1` | ios | iOS minimum | Fixed (read § iOS deployment target) |
+- 🔒 **`-DPROJECT_NAME`**: `general.name`; internal.
+- 🔒 **`-DPROJECT_TARGET_*`**: the platform, arch, runtime and buildType, for routing.
+- 🔒 **`-DBUILD_TYPE=STATIC`**, wasm and ios: static libraries, which emcc and iOS frameworks require.
+- 🔒 **`-DBUILD_TYPE=SHARED`**, android: shared libraries, which Android's dynamic loading requires.
+- 🔒 **`-DBUILD_SHARED_LIBS=OFF`**, wasm and ios: the inverse of the above.
+- 🔒 **`-DCMAKE_TOOLCHAIN_FILE`**, per platform: the toolchain pin.
+- 🔒 **`-DANDROID_PLATFORM=android-33`**, android: the NDK API level, fixed (see Android API level below).
+- 🔒 **`-DANDROID_STL=c++_shared`**, android: one C++ runtime. Every library of an app links the one `libc++_shared.so` it ships, as Android compares `type_info` by address.
+- 🔒 **`-DCMAKE_OSX_DEPLOYMENT_TARGET=15.1`**, ios: the iOS minimum, fixed (see iOS deployment target below).
 
 ### System defaults
 
@@ -221,7 +219,7 @@ Before reaching for any override, measure:
 3. **Memory tab** — heap profile to see allocation patterns.
 4. **Lighthouse / PageSpeed** — Wasm bundle download is part of FCP / LCP.
 
-Don't optimize speculatively. The defaults handle 99% of workloads.
+Do not optimize speculatively: the defaults fit almost every workload.
 
 ## See also
 

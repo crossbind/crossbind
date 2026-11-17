@@ -79,7 +79,7 @@ dependencies, build recipes and runtime adapters.
 
 ## Quick start
 
-To set up a project yourself, you need [Node.js 24+](https://nodejs.org/) and
+To set up a project yourself, you need [Node.js 26+](https://nodejs.org/) and
 [Docker](https://www.docker.com/), which carries the browser, Android and WASI
 toolchains. iOS also needs macOS, CMake 3.28+, Xcode and CocoaPods.
 

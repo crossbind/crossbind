@@ -131,7 +131,7 @@ pnpm dev   # or `pnpm start`, framework-dependent
 pnpm build
 ```
 
-The framework playbook lists what to look for in the dev/build output (e.g. "you should see `crossbind compiled for browser` in the log", "`/crossbind.wasm` should be served at runtime").
+The framework playbook lists what to check, such as `/crossbind.wasm` being served at run time.
 
 ## Validation
 
@@ -150,7 +150,7 @@ The framework playbook lists what to look for in the dev/build output (e.g. "you
 - **Mixing `mt` and `st` artifacts.** Once the user picks a runtime, config it consistently. Don't half-migrate.
 - **TypeScript in user project, expecting types from crossbind.** Types ship per-package; if a `@crossbind/port-*` lacks `.d.ts`, file an issue.
 - **Editing config blindly.** Show the diff. Bundler configs are the user's source of truth — bad edits break their whole app, not just crossbind.
-- **Not using filter-detect on monorepos.** If the user's repo has multiple apps, run detection in the right subdir.
+- **Detecting from a monorepo's root.** If the repo has several apps, run the inspector in the app's own folder.
 
 ## Reference
 

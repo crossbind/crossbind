@@ -103,7 +103,6 @@ If the user picks `runtime: 'st'` (single-thread), none of this applies — no h
 
 - [ ] `pnpm install` succeeds.
 - [ ] `pnpm dev` starts; opening the page shows no 404s for `/crossbind.js`, `/crossbind.wasm`, `/crossbind.data.txt` in DevTools Network tab.
-- [ ] Console log shows the crossbind loader initializing (`wasm compiled for browser…` in dev terminal).
 - [ ] User-side: `await initNative(); Module.someFn(...)` returns expected result.
 - [ ] `pnpm build` produces `dist/` with the wasm + js artifacts.
 - [ ] `pnpm preview` serves the build; multithread features still work (verify `crossOriginIsolated === true` in console).
@@ -113,9 +112,9 @@ If the user picks `runtime: 'st'` (single-thread), none of this applies — no h
 
 - **Setting COOP/COEP manually on top of the plugin.** Plugin already does this in dev/preview. Don't add another layer; you'll just confuse the next person reading the config.
 - **Editing `vite.config` to inline crossbind paths.** Don't. The plugin resolves paths via `crossbind.config.js`. Touch that file instead.
-- **Forgetting production headers** on hosts other than `vercel`/`netlify` (which the plugin doesn't touch). Multithread works in `pnpm preview` but breaks in production with no error in the build output.
+- **Forgetting production headers.** The plugin sets them in dev and preview only: multithread works in `pnpm preview` but breaks in production with no error in the build output.
 - **Mismatched runtime.** If `crossbind.config.js` says `runtime: 'st'` but the user expected threading, threads won't run. Check both.
-- **`pnpm dev` shows `crossbind build` errors but page loads.** The plugin reports build failures via the dev server overlay; if the page loads anyway, it's a stale cached artifact. Run `pnpm --filter=<example-name> run build` once explicitly to surface the error.
+- **`pnpm dev` shows `crossbind build` errors but page loads.** The plugin reports build failures via the dev server overlay; if the page loads anyway, it's a stale cached artifact. Run `pnpm build` once to surface the error.
 - **HMR doesn't rebuild after `.cpp` edit.** Check `paths.native` in the project's `crossbind.config.js`. Default `src/native/` works; if the user moved C++ files elsewhere, point at the new location.
 
 ## Reference examples
