@@ -604,7 +604,7 @@ describe('an extension crossbind.config.js lists', () => {
             'crossbind: extensions[0] has the hooks loadConfig, buildWasm, which crossbind no longer runs: an extension adds native code to an app. Set build flags in targetSpecs or crossbind.build.js.',
         );
         expect(() => listedExtension({ contract: 1, name: 'clipboard', root, app: {}, version: 1 }, 'extensions[0]', base))
-            .toThrow('crossbind: extensions[0] takes name, contract, root, app, options, fromApp, publisher, installer, commands, packageSource, replaces; version is none of them.');
+            .toThrow('crossbind: extensions[0] takes name, contract, root, app, options, fromApp, publisher, installer, commands, keys, packageSource, replaces; version is none of them.');
         expect(() => listedExtension('clipboard', 'extensions[0]', base))
             .toThrow("crossbind: extensions[0] is no extension, as an extension package's crossbind.extension.js gives one.");
     });
@@ -898,6 +898,31 @@ describe("an extension's commands", () => {
         expect(() => checked({ hello: { help: 'h' } })).toThrow(`${at}.hello has no run, the step that does its work.`);
         expect(() => checked({ hello: { help: 'h', run, options: 'x' } })).toThrow(`${at}.hello.options is no object of options.`);
         expect(() => checked({ hello: { help: 'h', run, options: { help: { help: 'x' } } } })).toThrow('which is no option of its own');
+    });
+});
+
+describe("an extension's keys", () => {
+    const checked = (keys) => checkedExtension({ name: 'tool', keys }, os.tmpdir(), 'extensions[0]').keys;
+    const run = () => {};
+
+    test('are each its help, its options, what makes it and what says where it is kept, which keep the object as their this', () => {
+        const key = { help: 'makes the key pair', run, state() { return [this.help]; } };
+        const keys = checked({ updater: key, signing: { help: 'makes a signing key', run, options: { force: { help: 'anew' } } } });
+        expect(Object.keys(keys)).toEqual(['updater', 'signing']);
+        expect(keys.updater.state()).toEqual(['makes the key pair']);
+        expect(keys.signing).toMatchObject({ help: 'makes a signing key', options: { force: { help: 'anew', value: null, default: null } } });
+        expect(keys.signing).not.toHaveProperty('state');
+        expect(checkedExtension({ name: 'tool' }, os.tmpdir(), 'extensions[0]')).not.toHaveProperty('keys');
+    });
+
+    test('are refused where they are not so', () => {
+        const at = "crossbind: extensions[0]'s keys";
+        expect(() => checked('updater')).toThrow(`${at} is no object of keys, as { updater: { help, run } }.`);
+        expect(() => checked({ Updater: { help: 'h', run } })).toThrow(`${at} names Updater, which is no key of lowercase letters and digits, which dashes may join.`);
+        expect(() => checked({ updater: { help: 'h', run, about: 'x' } })).toThrow(`${at}.updater takes help, options, run, state; about is none of them.`);
+        expect(() => checked({ updater: { run } })).toThrow(`${at}.updater has no help, its line in crossbind app key --help.`);
+        expect(() => checked({ updater: { help: 'h' } })).toThrow(`${at}.updater has no run, the step that makes it.`);
+        expect(() => checked({ updater: { help: 'h', run, state: 'kept' } })).toThrow(`${at}.updater's state is no function.`);
     });
 });
 

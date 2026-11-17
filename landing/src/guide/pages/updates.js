@@ -11,7 +11,7 @@ export default {
         { type: 'h2', id: 'key', text: 'The key' },
         {
             type: 'p',
-            text: '`crossbind app updater-key` makes the key pair. The public key goes in `app.updater.publicKey`, beside the address of the update\'s manifest:',
+            text: '`crossbind app key updater` makes the key pair. The public key goes in `app.updater.publicKey`, beside the address of the update\'s manifest:',
         },
         {
             type: 'code',
@@ -22,7 +22,7 @@ export default {
     app: {
         updater: {
             url: 'https://example.com/updates/my-app-{platform}-{arch}.update.json',
-            publicKey: '<what crossbind app updater-key prints>',
+            publicKey: '<what crossbind app key updater prints>',
         },
     },
     paths: { config: import.meta.url },

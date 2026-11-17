@@ -21,7 +21,7 @@ const NAME = 'CN=Android upload key';
 // Google Play wants a key valid past 2033; 10,000 days is 27 years.
 const VALIDITY_DAYS = 10000;
 
-// Where `crossbind app upload-key` makes this machine's upload key.
+// Where `crossbind app key upload` makes this machine's upload key.
 export const uploadKeyFile = () => path.join(os.homedir(), '.crossbind', 'keys', 'android-upload.p12');
 
 // keytool in crossbind's android-app image, which an Android app's build pulls anyway: with no network, the key's folder
@@ -88,7 +88,7 @@ export async function makeUploadKey({ isKeychain = true } = {}) {
     }
     const file = uploadKeyFile();
     if (fs.existsSync(file)) {
-        throw new Error(`crossbind: ${file} is there already, and crossbind never replaces an upload key: use it with crossbind app upload-key --use ${file}.`);
+        throw new Error(`crossbind: ${file} is there already, and crossbind never replaces an upload key: use it with crossbind app key upload --use ${file}.`);
     }
     const canKeep = isKeychain && hasKeychain();
     const { password, isMade } = await newPassword(canKeep);
@@ -127,7 +127,7 @@ export async function releaseSigningEnv() {
 // The password the keychain keeps for this machine's upload key, for another machine or CI.
 export function showUploadKeyPassword() {
     const { ANDROID_KEYSTORE: keystore } = loadSystemConfig();
-    if (!keystore) throw new Error('crossbind: this machine has no upload key: crossbind app upload-key makes one.');
+    if (!keystore) throw new Error('crossbind: this machine has no upload key: crossbind app key upload makes one.');
     const password = readSecret(keystore);
     if (!password) throw new Error(`crossbind: no keychain keeps the password of ${keystore}.`);
     console.log(password);

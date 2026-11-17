@@ -145,7 +145,7 @@ describe("a machine's upload key", () => {
     });
 
     test("shows the password the keychain keeps, for another machine or CI", async () => {
-        expect(() => showUploadKeyPassword()).toThrow("this machine has no upload key: crossbind app upload-key makes one");
+        expect(() => showUploadKeyPassword()).toThrow("this machine has no upload key: crossbind app key upload makes one");
         terminal.lines = ['1'];
         await makeUploadKey();
         printed = [];

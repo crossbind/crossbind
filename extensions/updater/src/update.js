@@ -51,10 +51,10 @@ export function appUpdater(api) {
     }
     const publicKey = Buffer.from(typeof updater.publicKey === 'string' ? updater.publicKey : '', 'base64');
     if (publicKey.length !== 32 || publicKey.toString('base64') !== updater.publicKey) {
-        throw new Error(`crossbind: app.updater.publicKey ${JSON.stringify(updater.publicKey)} is no Ed25519 public key, which \`crossbind app updater-key\` prints.`);
+        throw new Error(`crossbind: app.updater.publicKey ${JSON.stringify(updater.publicKey)} is no Ed25519 public key, which \`crossbind app key updater\` prints.`);
     }
     if (isSmallOrder(publicKey)) {
-        throw new Error(`crossbind: app.updater.publicKey ${JSON.stringify(updater.publicKey)} is a key anyone can forge signatures for, which no key pair has. Use the one \`crossbind app updater-key\` prints.`);
+        throw new Error(`crossbind: app.updater.publicKey ${JSON.stringify(updater.publicKey)} is a key anyone can forge signatures for, which no key pair has. Use the one \`crossbind app key updater\` prints.`);
     }
     const { version } = api.app;
     if (typeof version !== 'string' || !SEMVER.test(version)) {
@@ -86,7 +86,7 @@ export function updaterSigning(api, env = process.env) {
     if (!updater && changes && (changes.app === null || changes.app?.updater === null)) return null;
     if (!updater) throw new Error(`crossbind: ${UPDATER_KEY} is set, but crossbind.config.js has no app.updater, which tells an app where its updates are.`);
     const seed = Buffer.from(env[UPDATER_KEY], 'base64');
-    if (seed.length !== 32) throw new Error(`crossbind: ${UPDATER_KEY} is no Ed25519 private key, which \`crossbind app updater-key\` prints.`);
+    if (seed.length !== 32) throw new Error(`crossbind: ${UPDATER_KEY} is no Ed25519 private key, which \`crossbind app key updater\` prints.`);
     const privateKey = crypto.createPrivateKey({ key: Buffer.concat([PRIVATE_DER, seed]), format: 'der', type: 'pkcs8' });
     if (!publicKeyOf(privateKey).equals(Buffer.from(updater.publicKey, 'base64'))) {
         throw new Error(`crossbind: ${UPDATER_KEY} is not the private key of app.updater.publicKey, so the app would refuse the updates it signs.`);

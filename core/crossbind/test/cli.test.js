@@ -227,12 +227,21 @@ describe("crossbind app's commands of extensions", () => {
     const root = () => JSON.stringify(fs.realpathSync(dir));
     const hello = (name) => `{ name: 'acme', contract: 1, root: ${root()}, commands: { '${name}': { help: 'says hello', options: { to: { help: 'whom', value: '<name>', default: 'you' }, loud: { help: 'louder' } }, run: (api) => api.log(\`hello \${api.options.to} \${api.options.loud === true} \${api.project.name}\`) } } }`;
 
-    test("gives crossbind's own updater-key, which prints a key pair", () => {
+    test("gives crossbind's own key updater, which prints a key pair", () => {
         appWith('');
-        const { status, stdout } = crossbind('app', 'updater-key');
+        const { status, stdout } = crossbind('app', 'key', 'updater');
         expect(status).toBe(0);
         expect(stdout).toMatch(/app\.updater\.publicKey in crossbind\.config\.js: \S{44}\n/);
         expect(stdout).toMatch(/CROSSBIND_UPDATER_PRIVATE_KEY, kept secret where the app is built: \S{44}\n/);
+    });
+
+    test('says which keys the app has and where each is kept, and names those it makes', () => {
+        appWith('');
+        const { status, stdout } = crossbind('app', 'key');
+        expect(status).toBe(0);
+        expect(stdout).toContain('upload: none on this machine; crossbind app key upload makes one, or takes yours with --use');
+        expect(stdout).toContain('updater: none, as app.updater.publicKey is not set; crossbind app key updater makes the pair');
+        expect(crossbind('app', 'key', 'signing').stderr).toContain('crossbind: crossbind app key makes upload or updater, not signing.');
     });
 
     test("runs a listed extension's with its options, and lists it in the help", () => {
@@ -243,13 +252,15 @@ describe("crossbind app's commands of extensions", () => {
     });
 
     test("stops at a name crossbind or another extension has, naming the extension and the owner, and takes the place of one whose role it replaces", () => {
+        const key = (name) => hello(name).replace('commands:', 'keys:');
         appWith(hello('publish'));
         expect(crossbind('app', 'dev').stderr).toContain('crossbind: acme adds the command crossbind app publish, which crossbind has.');
-        appWith(hello('updater-key'));
-        expect(crossbind('app', 'dev').stderr).toContain('crossbind: acme adds the command crossbind app updater-key, which updater has.');
-        const replacing = hello('updater-key').replace("name: 'acme',", "name: 'acme', replaces: 'updater',");
-        appWith(replacing);
-        expect(crossbind('app', 'updater-key').stdout).toContain('hello you false demo');
+        appWith(key('upload'));
+        expect(crossbind('app', 'dev').stderr).toContain('crossbind: acme adds the key crossbind app key upload, which crossbind has.');
+        appWith(key('updater'));
+        expect(crossbind('app', 'dev').stderr).toContain('crossbind: acme adds the key crossbind app key updater, which updater has.');
+        appWith(key('updater').replace("name: 'acme',", "name: 'acme', replaces: 'updater',"));
+        expect(crossbind('app', 'key', 'updater').stdout).toContain('hello you false demo');
     });
 
     test('names the extension where a command fails', () => {
@@ -264,7 +275,7 @@ describe("crossbind app's commands of extensions", () => {
         const host = path.join(dir, 'node_modules', '@crossbind', 'core-app-host');
         fs.mkdirSync(host, { recursive: true });
         fs.writeFileSync(path.join(host, 'package.json'), JSON.stringify({ name: '@crossbind/core-app-host', dependencies: { '@crossbind/extension-gone': '1.0.0' } }));
-        expect(crossbind('app', 'updater-key').stderr).toContain("crossbind: cannot read @crossbind/extension-gone's crossbind.extension.js");
+        expect(crossbind('app', 'key').stderr).toContain("crossbind: cannot read @crossbind/extension-gone's crossbind.extension.js");
         expect(crossbind('config', 'keys').status).toBe(0);
         const { status, stderr } = crossbind('licenses');
         expect(stderr).not.toContain('extension-gone');
@@ -273,7 +284,7 @@ describe("crossbind app's commands of extensions", () => {
 
     test('has none outside an app project', () => {
         fs.writeFileSync(path.join(dir, 'package.json'), JSON.stringify({ name: 'demo' }));
-        expect(crossbind('app', 'updater-key').stderr).toContain("unknown command 'updater-key'");
+        expect(crossbind('app', 'key', 'updater').stderr).toContain('crossbind: crossbind app key makes upload, not updater.');
     });
 });
 

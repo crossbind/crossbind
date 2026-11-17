@@ -154,7 +154,7 @@ describe('publishing an Android app', () => {
         state.config.app = { id: 'dev.example.demo' };
         signing.isSigned = false;
         await expect(publishAndroid(['--track', 'internal']))
-            .rejects.toThrow('Google Play takes bundles signed with your upload key: crossbind app upload-key makes one');
+            .rejects.toThrow('Google Play takes bundles signed with your upload key: crossbind app key upload makes one');
         signing.isSigned = true;
         play.credentials = null;
         await expect(publishAndroid(['--track', 'internal']))

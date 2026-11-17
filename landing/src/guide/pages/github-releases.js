@@ -47,7 +47,7 @@ crossbind app publish github -p windows`,
     app: {
         updater: {
             url: 'https://github.com/<owner>/<repo>/releases/latest/download/my-app-{platform}-{arch}.update.json',
-            publicKey: '<what crossbind app updater-key prints>',
+            publicKey: '<what crossbind app key updater prints>',
         },
     },
     paths: { config: import.meta.url },

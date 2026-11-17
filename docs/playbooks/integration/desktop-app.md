@@ -34,7 +34,7 @@ now.
    `CROSSBIND_APPLE_API_KEY_ID` and `CROSSBIND_APPLE_API_ISSUER` to an App Store Connect API key: the build then signs
    the app and Apple notarizes it. A Windows app is signed with `CROSSBIND_WINDOWS_SIGNING_STORETYPE` and the key it
    names, as `docs/api/app.md` tells.
-6. For a desktop app that updates itself, run `pnpm crossbind app updater-key`: its public key goes in
+6. For a desktop app that updates itself, run `pnpm crossbind app key updater`: its public key goes in
    `crossbind.config.js` with the address of the updates (`app: { updater: { url, publicKey } }`), its private key in
    `CROSSBIND_UPDATER_PRIVATE_KEY` where the app is built. The build then writes each app's signed update beside it, to
    upload where `url` points, and the page calls `updater.check()` and `updater.install()` from `crossbind/app`.

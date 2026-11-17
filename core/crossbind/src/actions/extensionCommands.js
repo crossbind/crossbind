@@ -1,4 +1,5 @@
 import { Option } from 'commander';
+import appKeys from './appKeys.js';
 import extensionApi from './extensionApi.js';
 import state from '../state/index.js';
 import { hasTerminal } from '../utils/ask.js';
@@ -21,22 +22,37 @@ function ownOf(listed, app) {
     return withoutNamed(ownExtensions(root), app).filter(({ name }) => !taken.has(name));
 }
 
-// Adds to crossbind app the commands of an app's extensions, crossbind's own and those crossbind.config.js lists: a name
-// another has stops the run, naming both.
+// Gives a command an extension adds its help, its options and the step it runs, which a failure names.
+function addRunnable(added, extension, step, { help, options, run }) {
+    added.description(help);
+    Object.entries(options).forEach(([option, { help: line, value, default: fallback }]) => {
+        const flag = new Option(`--${kebab(option)}${value ? ` ${value}` : ''}`, line);
+        added.addOption(fallback === null ? flag : flag.default(fallback));
+    });
+    added.action((given) => extensionStep(extension, step, () => run(extensionApi(extension, { platform: null, options: given, isGuided: hasTerminal() }))));
+}
+
+// Adds to crossbind app the commands of an app's extensions, crossbind's own and those crossbind.config.js lists, and
+// their keys to crossbind app key, which then says where each is kept: a name another has stops the run, naming both.
 export default function addExtensionCommands(parent, config = state.config) {
     if (!config?.target || !isAppProject(config)) return;
     const listed = config.extensions ?? [];
     const owners = new Map(parent.commands.map((command) => [command.name(), 'crossbind']));
-    for (const { name: extension, commands = {} } of [...ownOf(listed, config.app), ...listed]) {
+    const keyCommand = parent.commands.find((command) => command.name() === 'key');
+    const keyOwners = new Map((keyCommand?.commands ?? []).map((command) => [command.name(), 'crossbind']));
+    const keys = [];
+    for (const { name: extension, commands = {}, keys: own = {} } of [...ownOf(listed, config.app), ...listed]) {
         for (const [name, command] of Object.entries(commands)) {
             if (owners.has(name)) throw new Error(`crossbind: ${extension} adds the command crossbind app ${name}, which ${owners.get(name)} has.`);
             owners.set(name, extension);
-            const added = parent.command(name).description(command.help);
-            Object.entries(command.options).forEach(([option, { help, value, default: fallback }]) => {
-                const flag = new Option(`--${kebab(option)}${value ? ` ${value}` : ''}`, help);
-                added.addOption(fallback === null ? flag : flag.default(fallback));
-            });
-            added.action((options) => extensionStep(extension, name, () => command.run(extensionApi(extension, { platform: null, options, isGuided: hasTerminal() }))));
+            addRunnable(parent.command(name), extension, name, command);
+        }
+        for (const [name, key] of Object.entries(keyCommand ? own : {})) {
+            if (keyOwners.has(name)) throw new Error(`crossbind: ${extension} adds the key crossbind app key ${name}, which ${keyOwners.get(name)} has.`);
+            keyOwners.set(name, extension);
+            addRunnable(keyCommand.command(name), extension, `key ${name}`, key);
+            keys.push({ extension, name, key });
         }
     }
+    keyCommand?.action((name) => appKeys(name, keys));
 }
