@@ -1,9 +1,9 @@
 :root {
-    --page-max: 1280px;
+    --page-max: 1440px;
     /* Every band uses this as its horizontal padding, so growing it past the gutter on wide
        screens both caps the content at --page-max and centres it. The % resolves against the
        containing block rather than the viewport, which keeps it scrollbar-safe. */
-    --page-x: max(56px, calc((100% - var(--page-max)) / 2));
+    --page-x: max(24px, calc((100% - var(--page-max)) / 2));
     --card-p: 48px;
     /* THE column: every band - plain text, card outlines, the hero code block - starts here,
        so all big blocks share one width. Card text insets a further --card-p inside its box.
@@ -750,6 +750,13 @@ button {
     align-items: start;
 }
 
+/* A wide screen gives its room to the sidebar, not to longer lines. */
+@media (min-width: 1440px) {
+    .doc-grid {
+        grid-template-columns: 272px minmax(0, 1fr) 200px;
+    }
+}
+
 .doc-side,
 .doc-toc {
     position: sticky;
@@ -760,7 +767,7 @@ button {
 }
 
 .doc-main {
-    max-width: 760px;
+    max-width: 700px;
     min-width: 0;
 }
 
