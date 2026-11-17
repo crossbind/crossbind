@@ -13,12 +13,18 @@ vi.mock('node:child_process', async (importOriginal) => ({ ...await importOrigin
 let connect;
 vi.mock('../../store-kit/app-store/appStoreApi.js', async (importOriginal) => ({ ...await importOriginal(), appStoreCaller: () => connect.call }));
 const submitted = [];
+const sentPages = [];
 vi.mock('../../store-kit/app-store/appStoreRelease.js', async (importOriginal) => ({
     ...await importOriginal(),
     submitRelease: async (call, options) => {
         submitted.push(options);
         return { build: '7', listed: ['en-US'], settled: [] };
     },
+    sendListing: async (call, options) => {
+        sentPages.push(options);
+        return { listed: ['en-US'], settled: ['copyright'] };
+    },
+    appStoreState: async (call, appId) => [`iOS 1.2.3 of ${appId}: being prepared for submission`],
 }));
 
 const { default: appStore } = await import('../../../extensions/app-store/crossbind.extension.js');
@@ -92,6 +98,7 @@ beforeEach(() => {
         return { status: 0, stdout: '', stderr: '' };
     });
     submitted.length = 0;
+    sentPages.length = 0;
     appStoreConnect();
     write('dist/Demo.app/Contents/Info.plist', '<plist/>');
 });
@@ -201,12 +208,58 @@ describe("App Store Connect's publisher of a macOS app", () => {
     });
 
     test("tells crossbind app store of the macOS app beside the iOS one: its upload, its category and the Mac screenshots Apple alone takes", () => {
-        const { sends, problems, steps } = publisher.guide(apiOf({ category: null }).api);
-        expect(sends[1]).toBe('then the macOS app, sandboxed, in an archive Xcode exports to App Store Connect, which signs it and its installer package in the cloud, and whose TestFlight hands it to Mac testers once Apple has processed it; -p macos sends it alone');
+        const { publishes, problems, steps } = publisher.guide(apiOf({ category: null }).api);
+        expect(publishes[1]).toBe('then the macOS app, sandboxed, in an archive Xcode exports to App Store Connect, which signs it and its installer package in the cloud, and whose TestFlight hands it to Mac testers once Apple has processed it; -p macos sends it alone');
         expect(problems).toEqual(['crossbind: app.category is not set, and the Mac App Store takes no app without its category.']);
         const texts = steps.map(({ text }) => text);
         expect(texts[0]).toContain('An app on iOS alone takes macOS later with the + beside its platform in the sidebar');
         expect(texts).toContain("The macOS version's screenshots, 16:10 ones of 1280 × 800 to 2880 × 1800, which a locale's screenshots/APP_DESKTOP would send.");
         expect(texts.at(-1)).toContain('Apple signs the uploads of an Admin key in the cloud');
+    });
+});
+
+describe("App Store Connect's page of an app, sent alone", () => {
+    test('goes into the version of its number with the API key, with no build, and says what changed', async () => {
+        write('store/app-store/en-US/name.txt', 'Demo');
+        write('store/app-store/en-US/screenshots/APP_DESKTOP/01.png', pngOf(2880, 1800));
+        write('store/app-store/en-US/screenshots/APP_IPHONE_67/01.png', pngOf(1320, 2868));
+        write('store/app-store/copyright.txt', '2026 Example Ltd.');
+        const { api, logs, builds } = apiOf();
+
+        expect(await publisher.send(api)).toEqual({});
+
+        expect(sentPages).toHaveLength(1);
+        expect(sentPages[0]).toMatchObject({
+            appId: 'A1', versionString: '1.2.3', platform: 'MAC_OS', settings: { copyright: '2026 Example Ltd.' },
+        });
+        expect(Object.keys(sentPages[0].listings[0].screenshots)).toEqual(['APP_DESKTOP']);
+        expect(builds).toEqual([]);
+        expect(logs.map(upath.toUnix)).toEqual(expect.arrayContaining([
+            "crossbind: App Store Connect's macOS listing changed in en-US, as store/app-store has it.",
+            "crossbind: App Store Connect's copyright changed, as store/app-store has them.",
+        ]));
+    });
+
+    test('names the API key it lacks, and a record not on macOS, before anything goes', async () => {
+        write('store/app-store/en-US/name.txt', 'Demo');
+        expect(await publisher.send(apiOf({ key: null }).api)).toEqual({
+            missing: [expect.stringContaining("crossbind app store --send sends the page through App Store Connect's API, which takes an API key")],
+        });
+        appStoreConnect({ isOnMac: false });
+        expect(await publisher.send(apiOf().api)).toEqual({
+            missing: ["crossbind: App Store Connect's app com.example.demo is not on macOS yet: add the platform there, with the + beside its platform in the sidebar, which makes it a universal purchase, then send again, or send the iOS app's page alone with -p ios."],
+        });
+        expect(sentPages).toEqual([]);
+    });
+
+    test('sends nothing of a project with no page, asking for no key', async () => {
+        const { api, logs } = apiOf({ key: null });
+        expect(await publisher.send(api)).toEqual({});
+        expect(logs.map(upath.toUnix)).toEqual(['crossbind: store/app-store holds no page of the app, so nothing went to App Store Connect for macOS.']);
+    });
+
+    test('tells what App Store Connect has with the API key, and how to see it without one', async () => {
+        expect(await publisher.state(apiOf().api)).toEqual(['iOS 1.2.3 of A1: being prepared for submission']);
+        expect(await publisher.state(apiOf({ key: null }).api)).toEqual([expect.stringContaining('to see what App Store Connect has')]);
     });
 });

@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import upath from 'upath';
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 
 const state = { config: { general: { name: 'demo' }, app: {}, paths: {}, system: {} }, targets: [] };
@@ -22,8 +23,13 @@ vi.mock('../../../extensions/google-play/src/googlePlay.js', () => ({
     },
     uploadBundle: async (appId, credentials, options) => {
         play.uploads.push({ appId, credentials, ...options });
-        return play.result ?? { versionCode: Number(vite.env.CROSSBIND_APP_BUILD_NUMBER), status: options.status, listed: [] };
+        return play.result ?? { versionCode: Number(vite.env.CROSSBIND_APP_BUILD_NUMBER), status: options.status };
     },
+    sendListing: async (appId, credentials, options) => {
+        play.sends.push({ appId, credentials, ...options });
+        return play.sent ?? { listed: [], isDetailed: false, isDeclared: false };
+    },
+    playTracks: async () => play.tracks,
 }));
 const signing = {};
 vi.mock('../src/actions/uploadKey.js', () => ({
@@ -54,6 +60,7 @@ vi.mock('../src/utils/systemConfig.js', () => ({ default: () => ({}) }));
 
 const { playRelease, rolloutPercent } = await import('../../../extensions/google-play/crossbind.extension.js');
 const { default: publish } = await import('../src/actions/publish.js');
+const { default: storeGuide } = await import('../src/actions/storeGuide.js');
 
 let base;
 let printed;
@@ -79,7 +86,9 @@ const KEY = { CROSSBIND_ANDROID_KEYSTORE: '/keys/upload.p12', CROSSBIND_ANDROID_
 beforeEach(() => {
     base = fs.mkdtempSync(path.join(os.tmpdir(), 'crossbind-publish-'));
     Object.assign(state.config, { app: { id: 'dev.example.demo' }, extensions: [], package: { version: '1.2.3' }, paths: { project: base, build: path.join(base, '.crossbind', 'build') } });
-    Object.assign(play, { credentials: { account: 'play@demo.iam.gserviceaccount.com' }, kept: null, highest: 1002005, answers: [], result: null, uploads: [] });
+    Object.assign(play, {
+        credentials: { account: 'play@demo.iam.gserviceaccount.com' }, kept: null, highest: 1002005, answers: [], result: null, uploads: [], sends: [], sent: null, tracks: [],
+    });
     Object.assign(signing, { env: KEY, isSigned: true, made: 0 });
     Object.assign(terminal, { isThere: false, lines: [], yes: [] });
     Object.assign(setup, { questions: [], signIns: [] });
@@ -110,9 +119,7 @@ describe('publishing an Android app', () => {
             track: 'internal',
             status: 'completed',
             userFraction: null,
-            listings: [],
-            details: {},
-            dataSafety: null,
+            notes: [],
         }]);
         const said = printed.join('\n');
         expect(said).toContain("crossbind: publishing dev.example.demo 1.2.3 to Google Play's internal track.");
@@ -172,7 +179,7 @@ describe('publishing an Android app', () => {
 });
 
 describe('a release on Google Play', () => {
-    const listing = path.join('store', 'google-play', 'en-US');
+    const listing = 'store/google-play/en-US';
 
     test('rolls out to the percent --rollout gives, and to everyone at 100%, but never as a draft', () => {
         expect(['10', '12.5%', '0.01', '100'].map(rolloutPercent)).toEqual([10, 12.5, 0.01, 100]);
@@ -185,21 +192,18 @@ describe('a release on Google Play', () => {
         expect(() => playRelease(true, 10)).toThrow('crossbind: --draft and --rollout do not go together');
     });
 
-    test("goes up with the project's listing, at the share of users a staged rollout reaches, and says what changed", async () => {
+    test("goes up at the share of users a staged rollout reaches, and leaves Play's listing to crossbind app store --send", async () => {
         fs.mkdirSync(path.join(base, listing), { recursive: true });
         fs.writeFileSync(path.join(base, listing, 'title.txt'), 'Demo\n');
-        play.result = { versionCode: 1002006, status: 'inProgress', listed: ['en-US'] };
+        play.result = { versionCode: 1002006, status: 'inProgress' };
 
         await publishAndroid(['--track', 'production', '--rollout', '10']);
 
-        expect(play.uploads[0]).toMatchObject({ track: 'production', status: 'inProgress', userFraction: 0.1, listings: [{ language: 'en-US', texts: { title: 'Demo' }, notes: {}, images: {} }] });
+        expect(play.uploads[0]).toMatchObject({ track: 'production', status: 'inProgress', userFraction: 0.1, notes: [] });
+        expect(play.sends).toEqual([]);
         const said = printed.join('\n');
-        expect(said).toContain(`crossbind: Google Play's listing changed in en-US, as ${path.join('store', 'google-play')} has it.`);
+        expect(said).not.toContain('listing');
         expect(said).toContain("dev.example.demo 1.2.3 (versionCode 1002006) is out to 10% of the users of Google Play's production track: Play Console raises the share");
-
-        play.result = { versionCode: 1002007, status: 'completed', listed: [] };
-        await publishAndroid(['--track', 'production']);
-        expect(printed.join('\n')).toContain(`crossbind: Google Play's listing is the one ${path.join('store', 'google-play')} has already.`);
     });
 
     test("gives Play a staged rollout's share as a fraction with four decimals at most", async () => {
@@ -215,22 +219,103 @@ describe('a release on Google Play', () => {
         expect(said).toContain("crossbind: Play stages updates alone, so that first release reaches all of the track's users, not 10% of them.");
     });
 
-    test('says nothing of a listing whose folder holds release notes alone', async () => {
-        fs.mkdirSync(path.join(base, listing, 'changelogs'), { recursive: true });
+    test("sends the release notes of the listing's folder with the bundle, and nothing of the listing itself", async () => {
+        fs.mkdirSync(upath.join(base, listing, 'changelogs'), { recursive: true });
         fs.writeFileSync(path.join(base, listing, 'changelogs', 'default.txt'), 'Fixes.');
+        fs.writeFileSync(upath.join(base, listing, 'title.txt'), 'A title longer than Google Play takes');
         await publishAndroid(['--track', 'internal']);
-        expect(play.uploads[0].listings).toEqual([{ language: 'en-US', texts: {}, notes: { default: 'Fixes.' }, images: {} }]);
+        expect(play.uploads[0].notes).toEqual([{ language: 'en-US', notes: { default: 'Fixes.' } }]);
         expect(printed.join('\n')).not.toContain('listing');
     });
 
-    test('stops at a listing file Play would refuse, before anything is asked or built', async () => {
+    test('stops at release notes Play would refuse, before anything is asked or built', async () => {
         terminal.isThere = true;
-        fs.mkdirSync(path.join(base, listing), { recursive: true });
-        fs.writeFileSync(path.join(base, listing, 'title.txt'), 'A title longer than Google Play takes');
-        await expect(publishAndroid(['--track', 'internal']))
-            .rejects.toThrow(`crossbind: ${path.join(listing, 'title.txt')} has 37 characters, and Google Play takes 30 at most.`);
+        fs.mkdirSync(upath.join(base, listing, 'changelogs'), { recursive: true });
+        fs.writeFileSync(upath.join(base, listing, 'changelogs', 'default.txt'), 'x'.repeat(501));
+        const failure = await publishAndroid(['--track', 'internal']).then(() => null, (error) => error);
+        expect(upath.toUnix(failure.message)).toContain('crossbind: store/google-play/en-US/changelogs/default.txt has 501 characters, and Google Play takes 500 at most.');
         expect(vite.runs).toBe(0);
         expect(setup.questions).toEqual([]);
+    });
+});
+
+describe("Google Play's page, sent alone", () => {
+    const listing = 'store/google-play/en-US';
+    const write = (file, text) => {
+        fs.mkdirSync(upath.dirname(upath.join(base, file)), { recursive: true });
+        fs.writeFileSync(upath.join(base, file), text);
+    };
+
+    test('goes with no build: the listing, the contact details and the Data safety declaration, saying what changed', async () => {
+        write(`${listing}/title.txt`, 'Demo\n');
+        write('store/google-play/contact_email.txt', 'support@example.com\n');
+        write('store/google-play/data_safety.csv', 'Question ID,Response ID\n');
+        play.sent = { listed: ['en-US'], isDetailed: true, isDeclared: true };
+
+        await storeGuide('google-play', { send: true });
+
+        expect(play.sends).toEqual([{
+            appId: 'dev.example.demo',
+            credentials: play.credentials,
+            listings: [{ language: 'en-US', texts: { title: 'Demo' }, notes: {}, images: {} }],
+            details: { contactEmail: 'support@example.com' },
+            dataSafety: 'Question ID,Response ID',
+        }]);
+        expect(vite.runs).toBe(0);
+        expect(play.uploads).toEqual([]);
+        const said = printed.join('\n');
+        expect(upath.toUnix(said)).toContain("crossbind: Google Play's listing changed in en-US, as store/google-play has it.");
+        expect(said).toContain("crossbind: Google Play's contact details changed");
+        expect(said).toContain('crossbind: Google Play has the Data safety declaration');
+
+        play.sent = null;
+        await storeGuide('google-play', { send: true });
+        expect(upath.toUnix(printed.join('\n'))).toContain("crossbind: Google Play's listing is the one store/google-play has already.");
+    });
+
+    test('sends nothing of a project with no page, asking for nothing', async () => {
+        terminal.isThere = true;
+        play.credentials = null;
+        await storeGuide('google-play', { send: true });
+        expect(play.sends).toEqual([]);
+        expect(setup.questions).toEqual([]);
+        expect(upath.toUnix(printed.join('\n'))).toContain('crossbind: store/google-play holds no page of the app, so nothing went to Google Play.');
+    });
+
+    test('names every missing piece at once without a terminal, and asks for the sign-in on one', async () => {
+        write(`${listing}/title.txt`, 'Demo\n');
+        state.config.app = {};
+        play.credentials = null;
+        const sent = storeGuide('google-play', { send: true });
+        await expect(sent).rejects.toThrow('Google Play knows an app by its package name, app.id');
+        await expect(sent).rejects.toThrow('set CROSSBIND_GOOGLE_PLAY_SERVICE_ACCOUNT to its e-mail');
+        expect(play.sends).toEqual([]);
+
+        state.config.app = { id: 'dev.example.demo' };
+        terminal.isThere = true;
+        setup.signIns = [{ refreshToken: 'new' }];
+        await storeGuide('google-play', { send: true });
+        expect(setup.questions).toHaveLength(1);
+        expect(play.sends[0].credentials).toEqual({ refreshToken: 'new' });
+    });
+
+    test('says what each track of Google Play has, asking for nothing, and how to see it with no credentials', async () => {
+        play.tracks = [
+            { track: 'internal', releases: [{ versionCodes: ['1002006'], name: '1.2.3', status: 'draft' }] },
+            { track: 'production', releases: [{ versionCodes: ['1002005'], status: 'inProgress', userFraction: 0.1 }] },
+            { track: 'beta' },
+        ];
+        terminal.isThere = true;
+        await storeGuide('google-play');
+        const said = printed.join('\n');
+        expect(said).toContain(['Google Play has now:', '  internal: versionCode 1002006 (1.2.3), a draft', '  production: versionCode 1002005, rolling out to 10% of its users'].join('\n'));
+        expect(said).not.toContain('beta');
+        expect(setup.questions).toEqual([]);
+
+        printed.length = 0;
+        play.credentials = null;
+        await storeGuide('google-play');
+        expect(printed.join('\n')).toContain('Google Play has now:\n  Sign in to Google on a terminal');
     });
 });
 

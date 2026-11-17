@@ -150,6 +150,19 @@ describe('a submission Partner Center made', () => {
             .toMatchObject({ isPackageRollout: true, packageRolloutPercentage: 12.5 });
     });
 
+    test('keeps the packages and the rollout Partner Center has where the listing goes alone', () => {
+        const tile = writeUnder(dir, 'tile.png', pngOf(300, 300));
+        const tileName = `en-us-Icon-${digest(fs.readFileSync(tile))}.png`;
+        const made = created('old.png');
+        const { submission, uploads } = changedSubmission(made, {
+            packages: null, listings: [{ language: 'en-US', texts: { description: 'New.' }, images: { Icon: [{ file: tile }] } }],
+        });
+        expect(submission.applicationPackages).toEqual(made.applicationPackages);
+        expect(submission.packageDeliveryOptions).toEqual(made.packageDeliveryOptions);
+        expect(submission.listings['en-us'].baseListing.description).toBe('New.');
+        expect(uploads.map(({ name }) => name)).toEqual([tileName]);
+    });
+
     test('makes a listing in a new language of its description, and names the file a new one lacks', () => {
         const packages = [writeUnder(dir, 'dist/demo-win32-x64.msix', 'x64')];
         expect(failureOf(() => changedSubmission(created('old.png'), { packages, listings: [{ language: 'tr-TR', texts: { title: 'Deneme' }, images: {} }] })))
@@ -224,6 +237,13 @@ describe("an app's submission through Partner Center's API", () => {
             ['GET', 'applications/9N1/submissions/S2/status'],
         ]);
         expect(requests.map(({ url }) => url.replace(/blockid=.*$/, 'blockid=…'))).toEqual([`${SAS}&comp=block&blockid=…`, `${SAS}&comp=blocklist`]);
+    });
+
+    test('uploads no zip where nothing goes up, as a listing of texts alone', async () => {
+        vi.useFakeTimers();
+        expect(await settled(submit({ packages: null, listings: [{ language: 'en-US', texts: { description: 'New.' }, images: {} }] }))).toEqual({ id: 'S2', status: 'PreProcessing' });
+        expect(requests).toEqual([]);
+        expect(calls.map(([method]) => method)).toEqual(['POST', 'PUT', 'POST', 'GET', 'GET']);
     });
 
     test('leaves a draft uncommitted, for Partner Center to submit', async () => {

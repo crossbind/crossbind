@@ -216,7 +216,7 @@ describe("a platform's version of the App Store listing", () => {
 });
 
 describe("crossbind app store's word on App Store Connect", () => {
-    test('names what a publish sends, with --submit the listing and settings too, and the steps App Store Connect alone takes', () => {
+    test('names what a publish sends, what --send sends, and the steps App Store Connect alone takes', () => {
         write('en-US/name.txt', 'Demo');
         write('en-US/privacy_url.txt', 'https://example.com/privacy');
         write('en-US/screenshots/APP_IPHONE_67/01.png', pngOf(1320, 2868));
@@ -227,12 +227,15 @@ describe("crossbind app store's word on App Store Connect", () => {
 
         expect(guide.where).toBe('App Store Connect');
         expect(guide.problems).toEqual([]);
-        expect(guide.sends.map(upath.toUnix)).toEqual([
+        expect(guide.publishes).toEqual([
             'the iOS app, archived and uploaded, which TestFlight hands to testers once Apple has processed it; -p ios sends it alone',
             'then the macOS app, sandboxed, in an archive Xcode exports to App Store Connect, which signs it and its installer package in the cloud, and whose TestFlight hands it to Mac testers once Apple has processed it; -p macos sends it alone',
-            'with --submit, store/app-store/en-US: name, privacy policy URL; 1 APP_IPHONE_67 screenshots',
-            'with --submit, copyright: 2026 Example Ltd.',
-            'with --submit, categories: UTILITIES',
+            'with --submit, the page --send sends too, and the version to App Review',
+        ]);
+        expect(guide.sends.map(upath.toUnix)).toEqual([
+            'store/app-store/en-US: name, privacy policy URL; 1 APP_IPHONE_67 screenshots',
+            'copyright: 2026 Example Ltd.',
+            'categories: UTILITIES',
         ]);
         const texts = guide.steps.map(({ text }) => text);
         expect(texts[0]).toBe("Apps › New App: an app with dev.example.demo as its bundle ID, on iOS and macOS, as a publish without -p sends both, with its name, primary language and SKU, as Apple's API makes none; a publish without --submit registers the bundle ID first, so the form lists it. An app on iOS alone takes macOS later with the + beside its platform in the sidebar, as a universal purchase, which stays one once both platforms are approved, and publishes with -p ios until then.");

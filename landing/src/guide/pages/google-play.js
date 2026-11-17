@@ -159,15 +159,15 @@ export default {
         { type: 'code', file: 'store/google-play', code: LISTING },
         {
             type: 'p',
-            text: "Each publish sends what differs from Play's listing: texts, images and the release's notes. The listing is the app's, not the track's, so a publish to the internal track sends it too. What the folder leaves out stays as Play has it. A language Play has no listing in yet needs `title.txt`, `short_description.txt` and `full_description.txt`.",
+            text: "`crossbind app store google-play --send` sends what differs from Play's listing, its texts and images, with no build. The listing is the app's, not the track's, so it goes alone, and a publish sends only the release's notes from `changelogs/`. What the folder leaves out stays as Play has it. A language Play has no listing in yet needs `title.txt`, `short_description.txt` and `full_description.txt`.",
         },
         {
             type: 'p',
-            text: 'Before the build, the publish stops at anything Play would refuse: an empty or too long text (an empty `video.txt` removes the video), two files of one image, a file Play takes none of, an icon other than 512 × 512, a feature graphic other than 1024 × 500, a screenshot whose long side is more than twice its short one (as a 20:9 phone\'s is), and transparency in any image but the icon.',
+            text: 'Before anything goes, `--send` stops at anything Play would refuse: an empty or too long text (an empty `video.txt` removes the video), two files of one image, a file Play takes none of, an icon other than 512 × 512, a feature graphic other than 1024 × 500, a screenshot whose long side is more than twice its short one (as a 20:9 phone\'s is), and transparency in any image but the icon.',
         },
         {
             type: 'p',
-            text: 'Beside the languages, `contact_email.txt`, `contact_website.txt` and `contact_phone.txt` hold the contact details, and `data_safety.csv` the Data safety declaration as Play Console exports it; a publish sends them. `privacy_url.txt` and `category.txt` hold what only Play Console takes: `crossbind app store google-play` lists those steps with the value to enter.',
+            text: 'Beside the languages, `contact_email.txt`, `contact_website.txt` and `contact_phone.txt` hold the contact details, and `data_safety.csv` the Data safety declaration as Play Console exports it; `--send` sends them. `privacy_url.txt` and `category.txt` hold what only Play Console takes: `crossbind app store google-play` lists those steps with the value to enter.',
         },
 
         { type: 'h2', id: 'ci', text: 'From CI' },

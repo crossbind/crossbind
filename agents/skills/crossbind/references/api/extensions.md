@@ -1188,11 +1188,18 @@ export default function demoStore() {
 - `upload(api, session, output, published)`: Sends what the build made to the store. It returns
   `{ isRebuildAsked: true }` for another build, after which it runs again, four builds in all at most, or
   `{ published }`: what it put out, which a publisher after it gets as `published`.
+- `send(api)`: Sends the store's page, the listing, screenshots and settings the project's `store/` folder holds, with no
+  build, as `crossbind app store --send` runs it for each platform the publisher takes, or the one `-p` names. It returns
+  `{ missing }` for what is not there, which the command names with every other store's at once, and asks for it and
+  sets it up on a terminal, `api.isGuided`, as `check` does.
+- `state(api)`: What the store has of the app now, as lines `crossbind app store` writes under its guide: it asks for
+  nothing, and tells with the credentials a publish takes where they are at hand, or how to see it where they are not.
+  A failure is written as a line of its own.
 - `guide(api)`: What `crossbind app store` says of the store, with no build and no credentials:
-  `{ sends, problems, where, steps }`, the lines of what a publish sends, every problem the store would refuse of the
-  project's files, where the steps are done, and the steps only the store's own site takes, once for the app, each
-  `{ text, url, details }`, its details a list of lines. A store whose publisher has none is left out of
-  `crossbind app store`.
+  `{ publishes, sends, problems, where, steps }`, the lines of what a publish sends and of what `--send` sends, every
+  problem the store would refuse of the project's files, where the steps are done, and the steps only the store's own
+  site takes, once for the app, each `{ text, url, details }`, its details a list of lines. A store whose publisher has
+  none is left out of `crossbind app store`.
 
 All but `platform` and `upload` are optional. A step that fails with a message not crossbind's own stops the publish
 with one that names the publisher and the step, as `demo-store's check failed: …`.

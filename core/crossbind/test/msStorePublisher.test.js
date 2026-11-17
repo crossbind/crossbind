@@ -182,12 +182,15 @@ describe('the Microsoft Store publisher', () => {
         writeUnder(project, 'store/microsoft-store/en-US/title.txt', 'Demo');
         writeUnder(project, 'store/microsoft-store/category.txt', 'UtilitiesAndTools');
         const {
-            sends, problems, where, steps,
+            publishes, sends, problems, where, steps,
         } = publisher.guide(apiOf({ msix: null }).api);
         expect(where).toBe('Partner Center');
         expect(problems).toEqual([]);
-        expect(sends.map(upath.toUnix)).toEqual([
+        expect(publishes).toEqual([
             "the app's MSIX packages, x64 and arm64, in place of the last submission's, which Partner Center certifies and signs",
+            'with them, the page --send sends',
+        ]);
+        expect(sends.map(upath.toUnix)).toEqual([
             'store/microsoft-store/en-US: title',
             'category: UtilitiesAndTools',
         ]);
@@ -213,5 +216,39 @@ describe('the Microsoft Store publisher', () => {
             'Website: (store/microsoft-store/website_url.txt would name it)',
             'Support contact info: (store/microsoft-store/support_contact.txt would name it)',
         ]);
+    });
+});
+
+describe("the Microsoft Store's page, sent alone", () => {
+    test('goes in a submission of the packages Partner Center has, committed for certification, with no build', async () => {
+        credentials();
+        partnerCenter(appOf());
+        writeUnder(project, 'store/microsoft-store/en-US/description.txt', 'The demo app.');
+        const { api, logs } = apiOf();
+
+        expect(await publisher.send(api)).toEqual({});
+
+        expect(made).toEqual(expect.arrayContaining(['POST applications/9N1/submissions', 'PUT applications/9N1/submissions/S2', 'POST applications/9N1/submissions/S2/commit']));
+        expect(made.some((request) => request.includes('storage.example.test'))).toBe(false);
+        expect(upath.toUnix(logs.at(-1))).toBe('crossbind: the page in store/microsoft-store went to the Microsoft Store as submission S2, PreProcessing. Certification takes up to three business days, and Partner Center mails as it goes.');
+    });
+
+    test('names every missing piece at once without a terminal, and sends nothing of a project with no page', async () => {
+        writeUnder(project, 'store/microsoft-store/en-US/description.txt', 'The demo app.');
+        expect(await publisher.send(apiOf({ msix: null }).api)).toEqual({
+            missing: [expect.stringContaining('copy { name, publisher, publisherDisplayName }'), expect.stringContaining("Partner Center's submission API takes an Entra ID application")],
+        });
+        fs.rmSync(upath.join(project, 'store'), { recursive: true, force: true });
+        const { api, logs } = apiOf();
+        expect(await publisher.send(api)).toEqual({});
+        expect(logs.map(upath.toUnix)).toEqual(['crossbind: store/microsoft-store holds no page of the app, so nothing went to the Microsoft Store.']);
+    });
+
+    test('tells the submissions Partner Center has, and how to see them without credentials', async () => {
+        credentials();
+        partnerCenter(appOf({ pendingApplicationSubmission: { id: 'S2' } }), ['Certification']);
+        expect(await publisher.state(apiOf().api)).toEqual(['submission S2: in certification', 'submission 1: out']);
+        vi.unstubAllEnvs();
+        expect(await publisher.state(apiOf().api)).toEqual([expect.stringContaining('to see what the Microsoft Store has')]);
     });
 });

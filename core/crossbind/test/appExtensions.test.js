@@ -702,6 +702,12 @@ describe("an extension's publisher", () => {
                 return { session: this.store };
             },
             upload,
+            send() {
+                return { sent: this.store };
+            },
+            state() {
+                return [`${this.store} has nothing yet.`];
+            },
         };
         const result = checkedPublisher(publisher, 'extensions[0].publisher');
         expect(result).toMatchObject({
@@ -711,11 +717,14 @@ describe("an extension's publisher", () => {
             after: null,
         });
         expect(result.check()).toEqual({ session: 'Demo Store' });
+        expect(result.send()).toEqual({ sent: 'Demo Store' });
+        expect(result.state()).toEqual(['Demo Store has nothing yet.']);
         expect(checked({ platform: 'ios' })).toMatchObject({ platforms: ['ios'], store: null, options: {} });
     });
 
     test('refuses what it does not take, a step that is no function, and a publisher without an upload', () => {
-        expect(() => checked({ platform: 'ios', publish: upload })).toThrow('crossbind: extensions[0].publisher takes platform, isDefault, store, options, after, build, check, buildNumber, buildEnv, upload, guide; publish is none of them.');
+        expect(() => checked({ platform: 'ios', publish: upload })).toThrow('crossbind: extensions[0].publisher takes platform, isDefault, store, options, after, build, check, buildNumber, buildEnv, upload, send, state, guide; publish is none of them.');
+        expect(() => checked({ platform: 'ios', send: 'the page', state: [] })).toThrow("crossbind: extensions[0].publisher's send and state are no function.");
         expect(() => checked({ platform: 'web' })).toThrow('crossbind: extensions[0].publisher.platform is no platform or list of them, of android, ios, macos, linux, windows, desktop.');
         expect(() => checked({ platform: [] })).toThrow('is no platform or list of them');
         expect(() => checked({ platform: 'ios', check: 'yes', buildEnv: {} })).toThrow("crossbind: extensions[0].publisher's check and buildEnv are no function.");

@@ -172,21 +172,29 @@ async function playCaller(appId, credentials, rights = [TESTING_RIGHTS]) {
     };
 }
 
-// The highest versionCode Play has seen of an app, in its bundles, its APKs and its tracks' releases; 0 for none.
-export async function highestVersionCode(appId, credentials) {
+// What an edit of an app reads, with the edit deleted after, as it changes nothing.
+async function readEdit(appId, credentials, read) {
     const call = await playCaller(appId, credentials);
     const edits = `${API}/${appId}/edits`;
     const edit = await call('POST', edits, {});
     try {
-        const { tracks = [] } = await call('GET', `${edits}/${edit.id}/tracks`);
-        const { bundles = [] } = await call('GET', `${edits}/${edit.id}/bundles`);
-        const { apks = [] } = await call('GET', `${edits}/${edit.id}/apks`);
-        const released = tracks.flatMap(({ releases = [] }) => releases.flatMap(({ versionCodes = [] }) => versionCodes));
-        return Math.max(0, ...[...bundles, ...apks].map(({ versionCode }) => versionCode), ...released.map(Number));
+        return await read((route) => call('GET', `${edits}/${edit.id}/${route}`));
     } finally {
         await call('DELETE', `${edits}/${edit.id}`).catch(() => {});
     }
 }
+
+// The highest versionCode Play has seen of an app, in its bundles, its APKs and its tracks' releases; 0 for none.
+export const highestVersionCode = (appId, credentials) => readEdit(appId, credentials, async (get) => {
+    const { tracks = [] } = await get('tracks');
+    const { bundles = [] } = await get('bundles');
+    const { apks = [] } = await get('apks');
+    const released = tracks.flatMap(({ releases = [] }) => releases.flatMap(({ versionCodes = [] }) => versionCodes));
+    return Math.max(0, ...[...bundles, ...apks].map(({ versionCode }) => versionCode), ...released.map(Number));
+});
+
+// An app's tracks, each with its releases, as Play has them.
+export const playTracks = (appId, credentials) => readEdit(appId, credentials, async (get) => (await get('tracks')).tracks ?? []);
 
 const sha256 = (bytes) => createHash('sha256').update(bytes).digest('hex');
 const contentTypeOf = (file) => (/\.png$/i.test(file) ? 'image/png' : 'image/jpeg');
@@ -242,21 +250,13 @@ async function updateDetails(call, editUrl, details) {
 }
 
 // Uploads a bundle, with the zip of its native debug symbols if there is one, and releases it on a track, as status
-// says, to the share of users userFraction gives while it is in progress, in one edit with the project's listing, the
-// app's contact details and the release's notes it has. An app never released takes a draft alone, which its first
-// rollout in Play Console makes live, so its release becomes one. The Data safety declaration, which Play takes outside
-// an edit, goes first, so a declaration Play refuses stops the publish before the bundle goes up. Gives the languages
-// whose listing changed too, and whether the details did.
+// says, to the share of users userFraction gives while it is in progress, with the notes each language has for it. An
+// app never released takes a draft alone, which its first rollout in Play Console makes live, so its release becomes
+// one. Play's listing stays as it is, as sendListing alone changes it.
 export async function uploadBundle(appId, credentials, {
-    aab, symbols = null, track, status, userFraction = null, listings = [], details = {}, dataSafety = null,
+    aab, symbols = null, track, status, userFraction = null, notes = [],
 }) {
-    const rights = [
-        PRODUCTION.test(track) ? PRODUCTION_RIGHTS : TESTING_RIGHTS,
-        ...(listings.some(isListed) || Object.keys(details).length > 0 ? [LISTING_RIGHTS] : []),
-        ...(dataSafety === null ? [] : [POLICY_RIGHTS]),
-    ];
-    const call = await playCaller(appId, credentials, rights);
-    if (dataSafety !== null) await call('POST', `${API}/${appId}/dataSafety`, { safetyLabels: dataSafety });
+    const call = await playCaller(appId, credentials, [PRODUCTION.test(track) ? PRODUCTION_RIGHTS : TESTING_RIGHTS]);
     const edits = `${API}/${appId}/edits`;
     const edit = await call('POST', edits, {});
     const uploadUrl = `${UPLOAD}/${appId}/edits/${edit.id}`;
@@ -265,17 +265,13 @@ export async function uploadBundle(appId, credentials, {
         if (symbols) {
             await call('POST', `${uploadUrl}/apks/${versionCode}/deobfuscationFiles/nativeCode?uploadType=media`, fs.readFileSync(symbols));
         }
-        const listed = await updateListings(call, { editUrl: `${edits}/${edit.id}`, uploadUrl }, listings);
-        const isDetailed = await updateDetails(call, `${edits}/${edit.id}`, details);
-        const releaseNotes = releaseNotesOf(listings, versionCode);
+        const releaseNotes = releaseNotesOf(notes, versionCode);
         const release = async (releaseStatus) => {
             const share = releaseStatus === 'inProgress' ? { userFraction } : {};
-            const notes = releaseNotes.length > 0 ? { releaseNotes } : {};
-            await call('PUT', `${edits}/${edit.id}/tracks/${track}`, { track, releases: [{ versionCodes: [String(versionCode)], status: releaseStatus, ...share, ...notes }] });
+            const noted = releaseNotes.length > 0 ? { releaseNotes } : {};
+            await call('PUT', `${edits}/${edit.id}/tracks/${track}`, { track, releases: [{ versionCodes: [String(versionCode)], status: releaseStatus, ...share, ...noted }] });
             await call('POST', `${edits}/${edit.id}:commit`);
-            return {
-                versionCode, status: releaseStatus, listed, isDetailed,
-            };
+            return { versionCode, status: releaseStatus };
         };
         try {
             return await release(status);
@@ -286,6 +282,30 @@ export async function uploadBundle(appId, credentials, {
     } catch (error) {
         // An edit left open expires by itself; the first failure is the one to report.
         await call('DELETE', `${edits}/${edit.id}`).catch(() => {});
+        throw error;
+    }
+}
+
+// Sends the project's page of the app alone, with no bundle: the Data safety declaration first, which Play takes outside
+// an edit, so one it refuses stops before the edit; then, in one edit, the listing's texts and images and the contact
+// details where Play's differ, committed only where one did. Gives the languages whose listing changed, whether the
+// details did, and whether the declaration went.
+export async function sendListing(appId, credentials, { listings = [], details = {}, dataSafety = null }) {
+    const isListing = listings.some(isListed) || Object.keys(details).length > 0;
+    const sent = { listed: [], isDetailed: false, isDeclared: dataSafety !== null };
+    if (!isListing && dataSafety === null) return sent;
+    const call = await playCaller(appId, credentials, [...(isListing ? [LISTING_RIGHTS] : []), ...(dataSafety === null ? [] : [POLICY_RIGHTS])]);
+    if (dataSafety !== null) await call('POST', `${API}/${appId}/dataSafety`, { safetyLabels: dataSafety });
+    if (!isListing) return sent;
+    const editUrl = `${API}/${appId}/edits/${(await call('POST', `${API}/${appId}/edits`, {})).id}`;
+    try {
+        const listed = await updateListings(call, { editUrl, uploadUrl: editUrl.replace(API, UPLOAD) }, listings);
+        const isDetailed = await updateDetails(call, editUrl, details);
+        if (listed.length > 0 || isDetailed) await call('POST', `${editUrl}:commit`);
+        else await call('DELETE', editUrl).catch(() => {});
+        return { ...sent, listed, isDetailed };
+    } catch (error) {
+        await call('DELETE', editUrl).catch(() => {});
         throw error;
     }
 }

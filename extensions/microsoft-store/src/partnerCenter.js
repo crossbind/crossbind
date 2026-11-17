@@ -154,31 +154,34 @@ function listingOf(shownListings, { language, texts, images }) {
     return { key, value: { platformOverrides: {}, ...shown, baseListing: { ...shown?.baseListing, ...texts, images: list } }, uploads };
 }
 
-// The submission Partner Center made, a copy of the app's last, with the build's packages in place of the old ones,
-// the project's listing and settings, and the rollout to a percent of the app's users or to all; and the files that go
-// up for it, by the names it gives them.
+// The submission Partner Center made, a copy of the app's last, with the build's packages in place of the old ones and
+// the rollout to a percent of the app's users or to all, or, where packages is null, the packages and rollout it has;
+// with the project's listing and settings; and the files that go up for it, by the names it gives them.
 export function changedSubmission(submission, {
-    packages, listings = [], settings = {}, rollout = null,
+    packages = null, listings = [], settings = {}, rollout = null,
 }) {
-    const packageUploads = packages.map((file) => ({ name: path.basename(file), file }));
+    const packageUploads = (packages ?? []).map((file) => ({ name: path.basename(file), file }));
     const listed = listings.map((listing) => listingOf(submission.listings ?? {}, listing));
     const delivery = submission.packageDeliveryOptions ?? {};
+    const packaged = packages === null ? {} : {
+        applicationPackages: [
+            ...(submission.applicationPackages ?? []).map((one) => ({ ...one, fileStatus: 'PendingDelete' })),
+            ...packageUploads.map(({ name }) => ({
+                fileName: name, fileStatus: 'PendingUpload', minimumDirectXVersion: 'None', minimumSystemRam: 'None',
+            })),
+        ],
+        packageDeliveryOptions: {
+            ...delivery,
+            packageRollout: { ...delivery.packageRollout, isPackageRollout: rollout !== null, packageRolloutPercentage: rollout ?? 0 },
+        },
+    };
     return {
         submission: {
             ...submission,
-            applicationPackages: [
-                ...(submission.applicationPackages ?? []).map((one) => ({ ...one, fileStatus: 'PendingDelete' })),
-                ...packageUploads.map(({ name }) => ({
-                    fileName: name, fileStatus: 'PendingUpload', minimumDirectXVersion: 'None', minimumSystemRam: 'None',
-                })),
-            ],
+            ...packaged,
             listings: { ...submission.listings, ...Object.fromEntries(listed.map(({ key, value }) => [key, value])) },
             ...(settings.category === undefined ? {} : { applicationCategory: settings.category }),
             ...(settings.notesForCertification === undefined ? {} : { notesForCertification: settings.notesForCertification }),
-            packageDeliveryOptions: {
-                ...delivery,
-                packageRollout: { ...delivery.packageRollout, isPackageRollout: rollout !== null, packageRolloutPercentage: rollout ?? 0 },
-            },
         },
         uploads: [...packageUploads, ...listed.flatMap(({ uploads }) => uploads)],
     };
@@ -225,11 +228,12 @@ async function committedStatus(call, route) {
     }
 }
 
-// Makes a submission of the app with the build's packages and the project's listing and settings, uploads their files
-// in one zip, and commits it for certification, unless isDraft leaves it for Partner Center to submit. A submission
-// that fails before Partner Center takes it is deleted, so the next publish makes its own. Gives its id and status.
+// Makes a submission of the app with the build's packages, or, where packages is null, those it has, and the project's
+// listing and settings, uploads the files that go up in one zip, and commits it for certification, unless isDraft
+// leaves it for Partner Center to submit. A submission that fails before Partner Center takes it is deleted, so the
+// next one is made anew. Gives its id and status.
 export async function submitPackages(call, {
-    appId, packages, listings, settings, rollout = null, isDraft = false, zip,
+    appId, packages = null, listings, settings, rollout = null, isDraft = false, zip,
 }) {
     const created = await call('POST', `applications/${appId}/submissions`);
     const route = `applications/${appId}/submissions/${created.id}`;
@@ -239,8 +243,10 @@ export async function submitPackages(call, {
             packages, listings, settings, rollout,
         });
         await call('PUT', route, submission);
-        writeZip(uploads, zip);
-        await uploadBlob(created.fileUploadUrl, zip);
+        if (uploads.length > 0) {
+            writeZip(uploads, zip);
+            await uploadBlob(created.fileUploadUrl, zip);
+        }
         if (isDraft) return { id: created.id, status: 'PendingCommit' };
         await call('POST', `${route}/commit`);
         isCommitted = true;

@@ -82,6 +82,12 @@ function readLanguage(project, { language, folder }) {
 export const readPlayListing = (project) => languageFolders(STORE, project).map((folder) => readLanguage(project, folder))
     .filter(({ texts, notes, images }) => [texts, notes, images].some((part) => Object.keys(part).length > 0));
 
+// The release notes of each language that has some, which a publish sends with its bundle, read alone, as the rest of
+// the folder goes with crossbind app store --send.
+export const readPlayNotes = (project) => languageFolders(STORE, project)
+    .map(({ language, folder }) => ({ language, notes: readNotes(project, path.join(folder, 'changelogs')) }))
+    .filter(({ notes }) => Object.keys(notes).length > 0);
+
 // Whether a language has texts or images for Play's listing, beside the notes of its releases.
 export const isListed = ({ texts, images }) => Object.keys(texts).length > 0 || Object.keys(images).length > 0;
 

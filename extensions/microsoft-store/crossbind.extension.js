@@ -24,6 +24,25 @@ export function rolloutPercent(value) {
     return percent;
 }
 
+// How Partner Center's statuses of a submission read, as crossbind app store says what the Microsoft Store has.
+const STATUSES = {
+    PendingCommit: 'not submitted yet',
+    CommitStarted: 'being taken',
+    CommitFailed: 'refused',
+    PreProcessing: 'in pre-processing',
+    Certification: 'in certification',
+    CertificationFailed: 'failed certification',
+    PendingPublication: 'certified, waiting for its publication',
+    Release: 'being released',
+    ReleaseFailed: 'failed its release',
+    Publishing: 'being published',
+    Published: 'out',
+    Canceled: 'canceled',
+};
+
+const isIdentity = (identity) => Boolean(identity?.name && identity.publisher && identity.publisherDisplayName);
+const lacks = (credentials) => Object.values(credentials).some((value) => !value);
+
 // The application's credentials, asked for on a terminal where this machine lacks them: its tenant and client ids,
 // which this machine's settings keep, and its key, which its keychain keeps.
 async function askCredentials(api, credentials) {
@@ -35,6 +54,14 @@ async function askCredentials(api, credentials) {
     api.settings.set({ [STORE_SETTINGS.tenant]: tenant, [STORE_SETTINGS.client]: client });
     if (!api.secrets.set(SECRET, secret)) api.warn('crossbind: this machine has no keychain to keep the key in, so the next publish asks for it again.');
     return { tenant, client, secret };
+}
+
+// The application's credentials, which a terminal asks for where this machine lacks them; null without them all.
+async function credentialsOf(api) {
+    const credentials = storeCredentials(process.env, api.settings, api.secrets);
+    if (!lacks(credentials)) return credentials;
+    const asked = api.isGuided ? await askCredentials(api, credentials) : credentials;
+    return lacks(asked) ? null : asked;
 }
 
 // The app Partner Center reserved, once the user has done what only Partner Center does: reserving the app, which
@@ -97,15 +124,12 @@ export default function microsoftStore() {
                 const settings = readStoreSettings(root);
                 const missing = storeListingProblems(root, listings);
                 const identity = api.config.app.windows?.msix;
-                const hasIdentity = Boolean(identity?.name && identity.publisher && identity.publisherDisplayName);
-                if (!hasIdentity) missing.push(NO_IDENTITY);
+                if (!isIdentity(identity)) missing.push(NO_IDENTITY);
                 if (!VERSION.test(api.app.version)) {
                     missing.push(`crossbind: the Microsoft Store takes ${api.app.version} as no version of a package, which is three numbers, as 1.2.3, with no prerelease, which it cannot tell from its release.`);
                 }
-                let credentials = storeCredentials(process.env, api.settings, api.secrets);
-                const lacks = (current) => Object.values(current).some((value) => !value);
-                if (lacks(credentials) && api.isGuided) credentials = await askCredentials(api, credentials);
-                if (lacks(credentials)) missing.push(NO_CREDENTIALS);
+                const credentials = await credentialsOf(api);
+                if (!credentials) missing.push(NO_CREDENTIALS);
                 if (missing.length > 0) return { missing };
                 const call = partnerCenterCaller(credentials);
                 const app = await reservedApp(api, call, identity);
@@ -140,6 +164,54 @@ export default function microsoftStore() {
                 const share = rollout === null ? '' : `, to reach ${rollout}% of the app's users at first, which Partner Center raises`;
                 api.log(`crossbind: ${app.primaryName} ${api.app.version} went to the Microsoft Store as submission ${id}, ${status}${share}. Certification takes up to three business days, and Partner Center mails as it goes.`);
                 return published;
+            },
+
+            // Sends the page store/microsoft-store holds, with no build, in a submission of the packages Partner Center
+            // has, committed for certification, after what Partner Center would refuse of it and what is missing.
+            async send(api) {
+                const root = api.project.root;
+                const listings = readStoreListing(root);
+                const settings = readStoreSettings(root);
+                if (listings.length === 0 && settings.category === undefined && settings.notesForCertification === undefined) {
+                    api.log(`crossbind: ${STORE_LISTING} holds no page of the app, so nothing went to the Microsoft Store.`);
+                    return {};
+                }
+                const missing = storeListingProblems(root, listings);
+                const identity = api.config.app.windows?.msix;
+                if (!isIdentity(identity)) missing.push(NO_IDENTITY);
+                const credentials = await credentialsOf(api);
+                if (!credentials) missing.push(NO_CREDENTIALS);
+                if (missing.length > 0) return { missing };
+                const call = partnerCenterCaller(credentials);
+                const app = await reservedApp(api, call, identity);
+                await assertSubmittable(api, call, app, identity);
+                fs.mkdirSync(api.workDir, { recursive: true });
+                api.log(`crossbind: sending the page ${STORE_LISTING} holds of ${app.primaryName} to the Microsoft Store, with the packages Partner Center has.`);
+                const { id, status } = await submitPackages(call, {
+                    appId: app.id, listings, settings, zip: path.join(api.workDir, 'submission.zip'),
+                });
+                api.log(`crossbind: the page in ${STORE_LISTING} went to the Microsoft Store as submission ${id}, ${status}. Certification takes up to three business days, and Partner Center mails as it goes.`);
+                return {};
+            },
+
+            // What Partner Center has of the app, asking for nothing: the submission in progress, as its status reads,
+            // and the last one out.
+            async state(api) {
+                const identity = api.config.app.windows?.msix;
+                if (!isIdentity(identity)) return ["Copy the app's Product identity into app.windows.msix, and the Microsoft Store tells what it has of the app."];
+                const credentials = storeCredentials(process.env, api.settings, api.secrets);
+                if (lacks(credentials)) return [`Set ${STORE_ENV.tenant}, ${STORE_ENV.client} and ${STORE_ENV.secret}, or publish once on a terminal, to see what the Microsoft Store has.`];
+                const call = partnerCenterCaller(credentials);
+                const app = await storeApp(call, identity.name);
+                if (!app) return [`no app whose package identity is ${identity.name} yet`];
+                const lines = [];
+                const pending = app.pendingApplicationSubmission;
+                if (pending) {
+                    const { status } = await call('GET', `applications/${app.id}/submissions/${pending.id}/status`);
+                    lines.push(`submission ${pending.id}: ${STATUSES[status] ?? status}`);
+                }
+                if (app.lastPublishedApplicationSubmission) lines.push(`submission ${app.lastPublishedApplicationSubmission.id}: out`);
+                return lines.length > 0 ? lines : ['no submission yet'];
             },
 
             guide: (api) => msStoreGuide(api),

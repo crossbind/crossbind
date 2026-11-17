@@ -33,8 +33,10 @@ function assertSteps(where, object, steps) {
     const notSteps = steps.filter((step) => object[step] !== undefined && typeof object[step] !== 'function');
     if (notSteps.length > 0) throw new Error(`crossbind: ${where}'s ${notSteps.join(' and ')} ${notSteps.length > 1 ? 'are' : 'is'} no function.`);
 }
-const PUBLISHER_KEYS = ['platform', 'isDefault', 'store', 'options', 'after', 'build', 'check', 'buildNumber', 'buildEnv', 'upload', 'guide'];
-const PUBLISHER_STEPS = ['build', 'check', 'buildNumber', 'buildEnv', 'upload', 'guide'];
+// A publisher's steps: those of a publish; send, which crossbind app store --send runs to send the store's page alone;
+// state, which tells what the store has now; and guide.
+const PUBLISHER_KEYS = ['platform', 'isDefault', 'store', 'options', 'after', 'build', 'check', 'buildNumber', 'buildEnv', 'upload', 'send', 'state', 'guide'];
+const PUBLISHER_STEPS = ['build', 'check', 'buildNumber', 'buildEnv', 'upload', 'send', 'state', 'guide'];
 // The steps of a publisher that builds, which one after another publisher leaves to that one.
 const BUILD_STEPS = ['build', 'buildNumber', 'buildEnv'];
 // The options `crossbind app publish` has of its own, with crossbind's, and those `vite build` takes, which the command
