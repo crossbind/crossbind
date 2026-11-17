@@ -174,7 +174,7 @@ copyToDist: { 'assets/cacert.pem': ['ssl/certs/cacert.pem'] }
 #### `~/.crossbind.json` — host-wide keys
 
 - **`XCODE_DEVELOPMENT_TEAM`**, default `''`: required for iOS device builds (not the simulator).
-- **`ANDROID_KEYSTORE`**, default `''`: this machine's upload key, which signs an Android app's release and its bundle; `crossbind app upload-key` sets it ([app.md](./app.md#the-upload-key)). Env: `CROSSBIND_ANDROID_KEYSTORE`.
+- **`ANDROID_KEYSTORE`**, default `''`: this machine's upload key, which signs an Android app's release and its bundle; `crossbind app key upload` sets it ([app.md](./app.md#the-upload-key)). Env: `CROSSBIND_ANDROID_KEYSTORE`.
 - **`ANDROID_KEY_ALIAS`**, default `''`: the upload key's alias in `ANDROID_KEYSTORE`. Env: `CROSSBIND_ANDROID_KEY_ALIAS`.
 - **`RUNNER`**, default `'DOCKER_RUN'`: where toolchain steps run. Env: `CROSSBIND_RUNNER`.
   - `'DOCKER_EXEC'` reuses a long-lived container that you create yourself. crossbind never creates one; when it is missing or wrong, it prints the exact `docker run` command, name and both mounts.

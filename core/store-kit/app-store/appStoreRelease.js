@@ -7,11 +7,7 @@ import { APP_STORE_LISTING } from './appStoreListing.js';
 // App Store Connect's page of the team's apps.
 export const APP_STORE_CONNECT = 'https://appstoreconnect.apple.com/apps';
 
-// How often an upload asks App Store Connect about a build it processes, and how long it waits for it at most; then
-// how often it asks whether a version is ready for review, and how many times.
-const BUILD_POLL_SECONDS = 30;
-const PROCESSING_MINUTES = 60;
-const SAY_EVERY_MINUTES = 5;
+// How often a release asks App Store Connect whether a version is ready for review, and how many times.
 const READY_POLL_SECONDS = 15;
 const READY_LOOKS = 10;
 const SCREENSHOT_POLL_SECONDS = 5;
@@ -22,7 +18,8 @@ const EDITABLE = ['PREPARE_FOR_SUBMISSION', 'DEVELOPER_REJECTED', 'REJECTED', 'M
 const EDITABLE_INFO = ['PREPARE_FOR_SUBMISSION', 'DEVELOPER_REJECTED', 'REJECTED'];
 // The states of a review submission App Review has, one at a time, or answered with issues to resolve.
 const IN_REVIEW = ['WAITING_FOR_REVIEW', 'IN_REVIEW', 'UNRESOLVED_ISSUES'];
-const PREPARED_SUBMISSION = 'crossbind: App Store Connect prepares a review submission of the app with items in it already, as one an upload stopped in leaves: submit or remove them there, then upload again.';
+const PREPARED_SUBMISSION = 'crossbind: App Store Connect prepares a review submission of the app with items in it already, as one a release stopped in leaves: submit or remove them there, then release again.';
+const PLATFORM_NAMES = { IOS: 'iOS', MAC_OS: 'macOS' };
 
 const sleep = (seconds) => new Promise((resolve) => { setTimeout(resolve, seconds * 1000); });
 const query = (route, filters) => `${route}?${new URLSearchParams(filters)}`;
@@ -33,7 +30,7 @@ export async function appStoreApp(call, bundleId) {
     const { data } = await call('GET', query('/apps', { 'filter[bundleId]': bundleId }));
     const app = data.find(({ attributes }) => attributes.bundleId === bundleId);
     if (!app) {
-        throw new Error(`crossbind: App Store Connect has no app ${bundleId}: create it at ${APP_STORE_CONNECT}, a new iOS app with ${bundleId} as its bundle ID. A form that lists no such bundle ID lists it once an upload without --submit has registered it with Apple.`);
+        throw new Error(`crossbind: App Store Connect has no app ${bundleId}: create it at ${APP_STORE_CONNECT}, a new iOS app with ${bundleId} as its bundle ID. A form that lists no such bundle ID lists it once an upload has registered it with Apple.`);
     }
     return app.id;
 }
@@ -60,13 +57,13 @@ async function preparedSubmission(call, appId, platform) {
     return { submission, items };
 }
 
-// Stops an upload, before its build, that App Store Connect would not review: one of a version it takes no other build
-// in, while App Review has another submission of the app, or where it prepares one with items in it.
+// Stops a release that App Store Connect would not review, before it changes anything: one of a version it takes no
+// other build in, while App Review has another submission of the app, or where it prepares one with items in it.
 export async function assertReviewable(call, appId, versionString, platform = 'IOS') {
     await versionOf(call, appId, versionString, platform);
     const { data: [submission] } = await call('GET', query(`/apps/${appId}/reviewSubmissions`, { 'filter[platform]': platform, 'filter[state]': IN_REVIEW.join(',') }));
     if (submission?.attributes.state === 'UNRESOLVED_ISSUES') {
-        throw new Error('crossbind: App Review answered the app\'s last submission with issues, which App Store Connect resolves: upload without --submit, pick the new build there and resubmit, or cancel that submission first.');
+        throw new Error('crossbind: App Review answered the app\'s last submission with issues: resolve them in App Store Connect, which takes a new build there, or cancel that submission and release again.');
     }
     if (submission) {
         throw new Error(`crossbind: App Review has the app's submission as ${submission.attributes.state}, and takes one at a time: let it finish, or cancel it in App Store Connect.`);
@@ -74,40 +71,31 @@ export async function assertReviewable(call, appId, versionString, platform = 'I
     if ((await preparedSubmission(call, appId, platform))?.items.length > 0) throw new Error(PREPARED_SUBMISSION);
 }
 
-// The newest build App Store Connect has of the version, or of its number where the build has one already.
-const newestQuery = (appId, versionString, buildNumber, platform) => query('/builds', {
-    'filter[app]': appId,
-    'filter[preReleaseVersion.version]': versionString,
-    'filter[preReleaseVersion.platform]': platform,
-    ...(buildNumber === null ? {} : { 'filter[version]': String(buildNumber) }),
-    sort: '-uploadedDate',
-    limit: '1',
-});
-
-// The newest build App Store Connect has of the version, which tells the upload's own from those before it.
-export async function newestBuild(call, appId, versionString, platform = 'IOS') {
-    const { data: [build] } = await call('GET', newestQuery(appId, versionString, null, platform));
-    return build?.id ?? null;
-}
-
-// The upload's build once App Store Connect has processed it: the newest of the version, after the one it had before.
-async function processedBuild(call, {
-    appId, versionString, before, buildNumber, platform,
+// The newest build App Store Connect has of the version, which TestFlight's testers have once Apple has processed it,
+// with its answer to whether it uses encryption, usesEncryption's where the upload gave none, as App Review takes no
+// build without one. One not processed, or none, stops the release: App Review gets what the testers could have.
+async function testedBuild(call, {
+    appId, versionString, usesEncryption, platform,
 }) {
-    console.log('crossbind: waiting for App Store Connect to process the build, usually 5 to 30 minutes.');
-    for (let waited = 0; ; waited += BUILD_POLL_SECONDS) {
-        const { data: [build] } = await call('GET', newestQuery(appId, versionString, buildNumber, platform));
-        const state = build && build.id !== before ? build.attributes.processingState : null;
-        if (state === 'VALID') return build;
-        if (state === 'FAILED' || state === 'INVALID') {
-            throw new Error(`crossbind: App Store Connect could not process build ${build.attributes.version} of ${versionString}, which it marked ${state}; Apple mails why.`);
-        }
-        if (waited >= PROCESSING_MINUTES * 60) {
-            throw new Error(`crossbind: App Store Connect has not processed the build in ${PROCESSING_MINUTES} minutes, so it went to no review: once it has, pick it for ${versionString} in App Store Connect and submit it there.`);
-        }
-        if (waited > 0 && waited % (SAY_EVERY_MINUTES * 60) === 0) console.log(`crossbind: App Store Connect is still processing the build, ${waited / 60} minutes on.`);
-        await sleep(BUILD_POLL_SECONDS);
+    const { data: [build] } = await call('GET', query('/builds', {
+        'filter[app]': appId, 'filter[preReleaseVersion.version]': versionString, 'filter[preReleaseVersion.platform]': platform, sort: '-uploadedDate', limit: '1',
+    }));
+    if (!build) {
+        throw new Error(`crossbind: App Store Connect has no ${PLATFORM_NAMES[platform]} build of ${versionString}: crossbind app upload app-store puts one on TestFlight, and once Apple has processed it, crossbind app release app-store hands it to App Review.`);
     }
+    const { version, processingState: state, usesNonExemptEncryption: answer = null } = build.attributes;
+    if (state === 'PROCESSING') {
+        throw new Error(`crossbind: App Store Connect is still processing build ${version} of ${versionString}, usually for 5 to 30 minutes: release it once Apple mails that it has.`);
+    }
+    if (state !== 'VALID') {
+        throw new Error(`crossbind: App Store Connect could not process build ${version} of ${versionString}, which it marked ${state}; Apple mails why. crossbind app upload app-store puts another on TestFlight.`);
+    }
+    if (answer !== null) return build;
+    if (usesEncryption === null) {
+        throw new Error(`crossbind: App Review takes no build without its answer to whether it uses encryption, which build ${version} of ${versionString} went up without: set app.encryption in crossbind.config.js, which answers it, or answer it for the build in App Store Connect.`);
+    }
+    await call('PATCH', `/builds/${build.id}`, { data: { type: 'builds', id: build.id, attributes: { usesNonExemptEncryption: usesEncryption } } });
+    return build;
 }
 
 // The app's version to submit: its own, the one App Store Connect prepares under another number, renamed, or a new one.
@@ -373,7 +361,6 @@ const VERSION_STATES = {
 const BUILD_STATES = {
     PROCESSING: 'processing', VALID: 'processed', FAILED: 'failed', INVALID: 'invalid',
 };
-const PLATFORM_NAMES = { IOS: 'iOS', MAC_OS: 'macOS' };
 const wordsOf = (states, state) => states[state] ?? state.toLowerCase().replaceAll('_', ' ');
 
 // What App Store Connect has of the app on each platform it is on: its latest versions, as their states read, and its
@@ -396,19 +383,20 @@ export async function appStoreState(call, appId) {
     return lines;
 }
 
-// Hands the upload's build to App Review as the app's version on its platform, IOS or MAC_OS, with the project's listing
-// and settings, once App Store Connect has processed it, to go out in phases over 7 days once released where isPhased
-// says so. Gives the build's number, the locales whose listing changed and the settings that did.
-export async function submitRelease(call, {
-    appId, versionString, before, buildNumber = null, listings, settings, isPhased, platform = 'IOS',
+// Hands App Review the app's version of a number on its platform, IOS or MAC_OS, with the newest build of it TestFlight's
+// testers have and the project's listing and settings, with no build, to go out in phases over 7 days once approved where
+// isPhased says so. Gives the build's number, the locales whose listing changed and the settings that did.
+export async function releaseVersion(call, {
+    appId, versionString, listings, settings, isPhased, usesEncryption = null, platform = 'IOS',
 }) {
+    await assertReviewable(call, appId, versionString, platform);
+    const build = await testedBuild(call, {
+        appId, versionString, usesEncryption, platform,
+    });
     const { version, listed, settled } = await preparePage(call, {
-        appId, versionString, listings, settings, platform, afterwards: `, so the version went to no review: once it has, pick the build for ${versionString} in App Store Connect and submit it there.`,
+        appId, versionString, listings, settings, platform, afterwards: ', so the version went to no review: once it has, release again.',
     });
     if (isPhased) await phaseRelease(call, version.id);
-    const build = await processedBuild(call, {
-        appId, versionString, before, buildNumber, platform,
-    });
     await call('PATCH', `/appStoreVersions/${version.id}/relationships/build`, to('builds', build.id));
     await submitForReview(call, appId, version.id, platform);
     return { build: build.attributes.version, listed, settled };

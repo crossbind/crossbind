@@ -4,7 +4,7 @@ import upath from 'upath';
 import {
     afterEach, beforeEach, describe, expect, test, vi,
 } from 'vitest';
-import microsoftStore, { rolloutPercent } from '../../../extensions/microsoft-store/crossbind.extension.js';
+import microsoftStore from '../../../extensions/microsoft-store/crossbind.extension.js';
 import { pngOf, writeUnder } from './listingImages.js';
 
 const { publisher } = microsoftStore();
@@ -15,11 +15,19 @@ const json = (status, body) => new Response(JSON.stringify(body), { status, head
 
 let project;
 let made;
-// Partner Center as an upload sees one app: the app given, or none, and the statuses of a committed submission in turn.
-function partnerCenter(app, statuses = ['PreProcessing']) {
+let put;
+// Partner Center as an upload sees one app: the app given, or none, the statuses of a committed submission in turn, and
+// the status of the one an upload left.
+function partnerCenter(app, statuses = ['PreProcessing'], pendingStatus = 'PendingCommit') {
     vi.stubGlobal('fetch', async (url, init = {}) => {
         const address = String(url);
         made.push(`${init.method ?? 'GET'} ${address.replace('https://manage.devcenter.microsoft.com/v1.0/my/', '')}`);
+        if (init.method === 'PUT' && address.includes('/submissions/')) put = JSON.parse(init.body);
+        if ((init.method ?? 'GET') === 'GET' && address.endsWith('/submissions/S2')) {
+            return json(200, {
+                id: 'S2', status: pendingStatus, fileUploadUrl: SAS, applicationPackages: [{ fileName: 'demo-win32-x64.msix', fileStatus: 'Uploaded' }], listings: {}, packageDeliveryOptions: {},
+            });
+        }
         if (address.startsWith('https://login.microsoftonline.com/')) return json(200, { access_token: 'store-token', expires_in: 3600 });
         if (address.includes('applications?$top=')) return json(200, { value: app ? [app] : [], totalCount: app ? 1 : 0 });
         if (init.method === 'POST' && address.endsWith('/submissions')) {
@@ -49,7 +57,7 @@ function apiOf({
             name: 'microsoft-store',
             platform: 'windows',
             isGuided,
-            options: { draft: false, rollout: null, ...options },
+            options: { rollout: null, ...options },
             project: { root: project, name: 'demo' },
             workDir: upath.join(project, '.crossbind', 'build', 'microsoft-store'),
             config: { app: { windows: msix === null ? undefined : { msix } } },
@@ -74,6 +82,7 @@ const credentials = () => {
 beforeEach(() => {
     project = upath.normalize(fs.mkdtempSync(upath.join(os.tmpdir(), 'crossbind-ms-publisher-')));
     made = [];
+    put = null;
     vi.stubEnv('CROSSBIND_MICROSOFT_STORE_TENANT_ID', '');
     vi.stubEnv('CROSSBIND_MICROSOFT_STORE_CLIENT_ID', '');
     vi.stubEnv('CROSSBIND_MICROSOFT_STORE_CLIENT_SECRET', '');
@@ -91,23 +100,14 @@ describe('the Microsoft Store publisher', () => {
         expect(publisher.platform).toBe('windows');
     });
 
-    test('takes a rollout of a percent above 0 and below 100', () => {
-        expect(rolloutPercent('10')).toBe(10);
-        expect(rolloutPercent('12.5%')).toBe(12.5);
-        expect(() => rolloutPercent('100')).toThrow("crossbind: --rollout takes the percent of the app's users the packages reach at first, above 0 and below 100");
-        expect(() => rolloutPercent('ten')).toThrow('not ten.');
-    });
-
-    test('names every missing piece at once without a terminal: the identity, the version, the credentials and the listing', async () => {
+    test('names every missing piece at once without a terminal: the identity, the version and the credentials, and not the page', async () => {
         writeUnder(project, 'store/microsoft-store/en-US/images/tile.png', pngOf(512, 512));
         const { missing } = await publisher.check(apiOf({ msix: null, version: '1.2.3-beta.1' }).api);
         expect(missing.map(upath.toUnix)).toEqual([
-            'crossbind: store/microsoft-store/en-US/images/tile.png is 512 × 512, and the Microsoft Store takes a 1:1 app tile icon of 300 × 300.',
             expect.stringContaining('crossbind: the Microsoft Store takes the package of the app Partner Center reserved, whose identity app.windows.msix gives'),
             'crossbind: the Microsoft Store takes 1.2.3-beta.1 as no version of a package, which is three numbers, as 1.2.3, with no prerelease, which it cannot tell from its release.',
             expect.stringContaining('CROSSBIND_MICROSOFT_STORE_TENANT_ID, CROSSBIND_MICROSOFT_STORE_CLIENT_ID and CROSSBIND_MICROSOFT_STORE_CLIENT_SECRET'),
         ]);
-        await expect(publisher.check(apiOf({ options: { draft: true, rollout: '10' } }).api)).rejects.toThrow('crossbind: --draft and --rollout do not go together');
     });
 
     test('asks a terminal for the credentials once, keeping the ids in the settings and the key in the keychain', async () => {
@@ -121,11 +121,10 @@ describe('the Microsoft Store publisher', () => {
     test("finds the app Partner Center reserved by its package's identity, which takes a submission", async () => {
         credentials();
         partnerCenter(appOf());
-        const { api, logs } = apiOf({ options: { rollout: '25' } });
+        const { api, logs } = apiOf();
         const { session } = await publisher.check(api);
-        expect(session).toMatchObject({
-            app: { id: '9N1' }, listings: [], settings: {}, rollout: 25,
-        });
+        expect(Object.keys(session)).toEqual(['call', 'app']);
+        expect(session.app.id).toBe('9N1');
         expect(logs).toContain('crossbind: publishing Demo 1.2.3 to the Microsoft Store; building the app first.');
     });
 
@@ -148,7 +147,7 @@ describe('the Microsoft Store publisher', () => {
         expect(made).toContain('DELETE applications/9N1/submissions/S1');
     });
 
-    test("sends the build's packages, with the listing, and commits the submission for certification", async () => {
+    test("uploads the build's packages in a submission it leaves for the release, without the page", async () => {
         credentials();
         partnerCenter(appOf());
         writeUnder(project, 'store/microsoft-store/en-US/description.txt', 'The demo app.');
@@ -163,7 +162,7 @@ describe('the Microsoft Store publisher', () => {
 
         expect(await publisher.upload(api, session, { apps })).toEqual({
             published: {
-                appId: '9N1', version: '1.2.3', submission: 'S2', status: 'PreProcessing',
+                appId: '9N1', version: '1.2.3', submission: 'S2', status: 'PendingCommit',
             },
         });
         // Partner Center's calls, which the record keeps without its address, beside the sign-in's and the blob's.
@@ -171,10 +170,9 @@ describe('the Microsoft Store publisher', () => {
             'GET applications?$top=100&$skip=0',
             'POST applications/9N1/submissions',
             'PUT applications/9N1/submissions/S2',
-            'POST applications/9N1/submissions/S2/commit',
-            'GET applications/9N1/submissions/S2/status',
         ]);
-        expect(logs).toContain('crossbind: Demo 1.2.3 went to the Microsoft Store as submission S2, PreProcessing. Certification takes up to three business days, and Partner Center mails as it goes.');
+        expect(put.listings).toEqual({});
+        expect(logs.map(upath.toUnix)).toContain('crossbind: Partner Center has Demo 1.2.3 as submission S2, not submitted yet: crossbind app release microsoft-store submits it for certification, with the page in store/microsoft-store.');
         await expect(publisher.upload(api, session, { apps: [{ app: 'x64', arch: 'x64', installers: [] }] })).rejects.toThrow('crossbind: the build made no MSIX package, so nothing went to the Microsoft Store.');
     });
 
@@ -182,12 +180,13 @@ describe('the Microsoft Store publisher', () => {
         writeUnder(project, 'store/microsoft-store/en-US/title.txt', 'Demo');
         writeUnder(project, 'store/microsoft-store/category.txt', 'UtilitiesAndTools');
         const {
-            publishes, sends, problems, where, steps,
+            uploads, sends, releases, problems, where, steps,
         } = publisher.guide(apiOf({ msix: null }).api);
         expect(where).toBe('Partner Center');
         expect(problems).toEqual([]);
-        expect(publishes).toEqual([
-            "the app's MSIX packages, x64 and arm64, in place of the last submission's, which Partner Center certifies and signs",
+        expect(uploads).toEqual(["the app's MSIX packages, x64 and arm64, in place of the last submission's, in a submission left for the release"]);
+        expect(releases).toEqual([
+            'the submission an upload left, for certification, after which Partner Center signs the packages and puts them out to the share of users --rollout gives at first',
             'with them, the page --send sends',
         ]);
         expect(sends.map(upath.toUnix)).toEqual([
@@ -203,7 +202,7 @@ describe('the Microsoft Store publisher', () => {
             'First submission › Age ratings',
             'First submission › Pricing and availability',
             'First submission › Submission options › Notes for certification',
-            'For later versions, which an upload sends',
+            'For later versions, which uploads and releases send',
         ]);
         expect(steps[3].details.map(upath.toUnix)).toEqual([
             'Product name ← store/microsoft-store/en-US/title.txt',
@@ -215,6 +214,52 @@ describe('the Microsoft Store publisher', () => {
             'Privacy policy URL: (store/microsoft-store/privacy_url.txt would name it)',
             'Website: (store/microsoft-store/website_url.txt would name it)',
             'Support contact info: (store/microsoft-store/support_contact.txt would name it)',
+        ]);
+    });
+});
+
+describe('a release on the Microsoft Store', () => {
+    test('submits what an upload left for certification, with the page and the share --rollout gives, with no build', async () => {
+        credentials();
+        partnerCenter(appOf({ pendingApplicationSubmission: { id: 'S2' } }));
+        writeUnder(project, 'store/microsoft-store/en-US/description.txt', 'The demo app.');
+        const { api, logs } = apiOf({ options: { rollout: 10 } });
+
+        expect(await publisher.release(api)).toEqual({});
+
+        expect(made.filter((request) => !/^\w+ https:\/\//.test(request))).toEqual([
+            'GET applications?$top=100&$skip=0',
+            'GET applications/9N1/submissions/S2',
+            'PUT applications/9N1/submissions/S2',
+            'POST applications/9N1/submissions/S2/commit',
+            'GET applications/9N1/submissions/S2/status',
+        ]);
+        expect(put.applicationPackages).toEqual([{ fileName: 'demo-win32-x64.msix', fileStatus: 'Uploaded' }]);
+        expect(put.listings['en-us'].baseListing.description).toBe('The demo app.');
+        expect(put.packageDeliveryOptions.packageRollout).toEqual({ isPackageRollout: true, packageRolloutPercentage: 10 });
+        expect(logs.at(-1)).toBe("crossbind: Demo's submission S2 went to the Microsoft Store, PreProcessing, to reach 10% of the app's users at first, which Partner Center raises. Certification takes up to three business days, and Partner Center mails as it goes.");
+    });
+
+    test("names the submission it lacks: none an upload left, one Partner Center took already, or the app's first", async () => {
+        credentials();
+        partnerCenter(appOf());
+        await expect(publisher.release(apiOf().api)).rejects
+            .toThrow("crossbind: Partner Center has no submission of Demo in progress to release: crossbind app upload microsoft-store leaves one, with the build's packages.");
+        partnerCenter(appOf({ pendingApplicationSubmission: { id: 'S2' } }), [], 'Certification');
+        await expect(publisher.release(apiOf().api)).rejects
+            .toThrow('crossbind: Partner Center has submission S2 as Certification already, which goes on as Partner Center mails: crossbind app upload microsoft-store leaves the next one to release.');
+        partnerCenter(appOf({ lastPublishedApplicationSubmission: null, pendingApplicationSubmission: { id: 'S1' } }));
+        await expect(publisher.release(apiOf().api)).rejects.toThrow("crossbind: Partner Center's API makes no app's first submission");
+        expect(made.filter((request) => request.endsWith('/commit'))).toEqual([]);
+    });
+
+    test("names every missing piece at once without a terminal, the page's first", async () => {
+        writeUnder(project, 'store/microsoft-store/en-US/images/tile.png', pngOf(512, 512));
+        const { missing } = await publisher.release(apiOf({ msix: null }).api);
+        expect(missing.map(upath.toUnix)).toEqual([
+            'crossbind: store/microsoft-store/en-US/images/tile.png is 512 × 512, and the Microsoft Store takes a 1:1 app tile icon of 300 × 300.',
+            expect.stringContaining('copy { name, publisher, publisherDisplayName }'),
+            expect.stringContaining("Partner Center's submission API takes an Entra ID application"),
         ]);
     });
 });
@@ -231,6 +276,18 @@ describe("the Microsoft Store's page, sent alone", () => {
         expect(made).toEqual(expect.arrayContaining(['POST applications/9N1/submissions', 'PUT applications/9N1/submissions/S2', 'POST applications/9N1/submissions/S2/commit']));
         expect(made.some((request) => request.includes('storage.example.test'))).toBe(false);
         expect(upath.toUnix(logs.at(-1))).toBe('crossbind: the page in store/microsoft-store went to the Microsoft Store as submission S2, PreProcessing. Certification takes up to three business days, and Partner Center mails as it goes.');
+    });
+
+    test('stops where an upload left a submission not submitted yet, naming the release, and deletes nothing', async () => {
+        credentials();
+        partnerCenter(appOf({ pendingApplicationSubmission: { id: 'S2' } }), ['PendingCommit']);
+        writeUnder(project, 'store/microsoft-store/en-US/description.txt', 'The demo app.');
+        await expect(publisher.send(apiOf({ isGuided: true, answers: ['y'] }).api)).rejects
+            .toThrow("crossbind: Partner Center has submission S2 of Demo not submitted yet, as an upload leaves the build's packages, and takes one submission at a time: crossbind app release microsoft-store sends the page with them, or deleting the submission in Partner Center lets the page go alone.");
+        expect(made.filter((request) => /^(DELETE|POST|PUT) applications/.test(request))).toEqual([]);
+
+        partnerCenter(appOf({ pendingApplicationSubmission: { id: 'S1' } }), ['Certification']);
+        await expect(publisher.send(apiOf().api)).rejects.toThrow('crossbind: Partner Center has submission S1 of Demo in progress, and takes one at a time');
     });
 
     test('names every missing piece at once without a terminal, and sends nothing of a project with no page', async () => {

@@ -60,10 +60,10 @@ export default {
             type: 'p',
             text: "`crossbind app build -p windows` then writes `dist/<name>-win32-x64.msix` and `dist/<name>-win32-arm64.msix`, unsigned. Partner Center's API cannot make an app's first submission, which takes the age ratings questionnaire: make it there, with these packages and the listing in `store/microsoft-store`, and say why the app asks for `runFullTrust`, as every packaged Win32 app does (it runs as it does outside a package). `crossbind app store microsoft-store` lists each step, with the field and the file it comes from.",
         },
-        { type: 'code', file: 'shell', code: 'npx crossbind app store microsoft-store\nnpx crossbind app upload microsoft-store --rollout 10' },
+        { type: 'code', file: 'shell', code: 'npx crossbind app store microsoft-store\nnpx crossbind app upload microsoft-store\nnpx crossbind app release microsoft-store --rollout 10' },
         {
             type: 'p',
-            text: "Later versions go with `crossbind app upload microsoft-store`: it builds the MSIX packages, makes a submission with them and the listing, and commits it for certification, which takes up to three business days. `--draft` leaves the submission for you to submit in Partner Center, and `--rollout` gives the packages to a share of the app's users first. `crossbind app store microsoft-store --send` sends the listing alone, with no build, in a submission of the packages Partner Center has.",
+            text: "Later versions go with `crossbind app upload microsoft-store`: it builds the MSIX packages and leaves them in a submission of the app, not submitted yet. `crossbind app release microsoft-store` puts the listing into that submission and commits it for certification, with no build, which takes up to three business days, and `--rollout` gives the packages to a share of the app's users first. `crossbind app store microsoft-store --send` sends the listing alone, with no build, in a submission of the packages Partner Center has; where an upload left a submission not submitted yet, it stops and names the release, which sends the listing with the upload's packages.",
         },
         {
             type: 'p',

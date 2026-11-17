@@ -400,6 +400,17 @@ export function appInstallers(config) {
     return installers;
 }
 
+// The stores app.stores names, in order, which crossbind app upload, release and store go to where they name none;
+// null without it.
+export function appStores(config) {
+    const stores = config.app?.stores;
+    if (stores === undefined) return null;
+    if (!Array.isArray(stores) || stores.length === 0 || !stores.every((name) => typeof name === 'string') || new Set(stores).size !== stores.length) {
+        throw new Error(`crossbind: app.stores ${JSON.stringify(stores)} is no list of stores' names, each once, as ['google-play', 'app-store'].`);
+    }
+    return stores;
+}
+
 // A desktop host's window: its page's size and limits, whether it resizes, whether it opens full screen and whether its
 // page lies under its title bar. A maximum of one side alone leaves the other as large as any display.
 function windowDefines(window) {

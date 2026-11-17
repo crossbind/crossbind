@@ -2,7 +2,7 @@ import state from '../state/index.js';
 import extensionApi from './extensionApi.js';
 import { publishersOf } from './publish.js';
 import { extensionStep } from '../utils/appExtensions.js';
-import { appDisplayName } from '../utils/appOptions.js';
+import { appDisplayName, appStores } from '../utils/appOptions.js';
 import { hasTerminal } from '../utils/ask.js';
 
 const isObject = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
@@ -39,14 +39,14 @@ export function pagePlatforms({ name, publisher }, platform) {
 }
 
 // A guide as its publisher gives it, which crossbind writes as it is: lines of what an upload sends, what --send sends,
-// what the store would refuse, and the steps its own site takes, each a text, maybe with a link and the lines of its
-// details.
+// what a release puts out, what the store would refuse, and the steps its own site takes, each a text, maybe with a
+// link and the lines of its details.
 export function checkedGuide(name, guide) {
     const isStep = (step) => isObject(step) && typeof step.text === 'string' && (step.url === undefined || typeof step.url === 'string')
         && (step.details === undefined || isTexts(step.details));
-    if (!isObject(guide) || !isTexts(guide.publishes) || !isTexts(guide.sends) || !isTexts(guide.problems) || typeof guide.where !== 'string'
+    if (!isObject(guide) || !isTexts(guide.uploads) || !isTexts(guide.sends) || !isTexts(guide.releases) || !isTexts(guide.problems) || typeof guide.where !== 'string'
         || !Array.isArray(guide.steps) || !guide.steps.every(isStep)) {
-        throw new Error(`crossbind: ${name}'s guide gives no { publishes, sends, problems, where, steps }: lines of what an upload sends, what crossbind app store --send sends, what the store would refuse, where the steps are done, and the steps, each { text, url, details }.`);
+        throw new Error(`crossbind: ${name}'s guide gives no { uploads, sends, releases, problems, where, steps }: lines of what an upload sends, what crossbind app store --send sends, what a release puts out, what the store would refuse, where the steps are done, and the steps, each { text, url, details }.`);
     }
     return guide;
 }
@@ -59,11 +59,12 @@ export function checkedState(name, lines) {
 
 // The text crossbind app store writes of a store, with what it has now.
 export function guideText({ name, publisher }, {
-    publishes, sends, problems, where, steps,
+    uploads, sends, releases, problems, where, steps,
 }, app, now = []) {
     const store = publisher.store ?? name;
     const lines = [`${store} · ${app}`];
-    if (publishes.length > 0) lines.push('', `crossbind app upload ${name} sends:`, ...publishes.map((line) => `  ✓ ${line}`));
+    if (uploads.length > 0) lines.push('', `crossbind app upload ${name} sends:`, ...uploads.map((line) => `  ✓ ${line}`));
+    if (releases.length > 0) lines.push('', `crossbind app release ${name} puts out:`, ...releases.map((line) => `  ✓ ${line}`));
     if (sends.length > 0) lines.push('', `crossbind app store ${name} --send sends:`, ...sends.map((line) => `  ✓ ${line}`));
     if (problems.length > 0) lines.push('', `To fix first, as ${store} would refuse it:`, ...problems.map((problem) => `  ✗ ${unprefixed(problem)}`));
     if (steps.length > 0) {
@@ -95,12 +96,15 @@ function forPlatform(chosen, store, platform) {
     return taking;
 }
 
+// The publishers of the stores app.stores names, in its order, of those chosen; all of them without it.
+export const ofStores = (chosen, stores) => (stores ? stores.map((name) => chosen.find((one) => one.name === name)).filter(Boolean) : chosen);
+
 // Sends the page of each store, or the one named, for each platform its publisher takes, or the one -p names, with no
 // build. A terminal asks for what is missing; without one every missing piece is named at once.
-async function sendPages(publishers, store, platform) {
+async function sendPages(publishers, store, platform, stores) {
     const isGuided = hasTerminal();
     const missing = [];
-    for (const extension of forPlatform(sendingPublishers(publishers, store), store, platform)) {
+    for (const extension of forPlatform(ofStores(sendingPublishers(publishers, store), stores), store, platform)) {
         for (const target of pagePlatforms(extension, platform)) {
             const api = extensionApi(extension.name, { platform: target, isGuided });
             const result = await extensionStep(extension.name, 'send', () => extension.publisher.send(api));
@@ -110,19 +114,20 @@ async function sendPages(publishers, store, platform) {
     if (missing.length > 0) throw new Error([...new Set(missing)].join('\n'));
 }
 
-// Says of each store, or the one named, what crossbind app upload sends to it, what --send sends, what it would refuse
-// of the project's page, the steps only its own site takes, and what it has now where crossbind can tell without asking,
-// with no build. Gives how many problems it found, so a check of the page fails on any. With send, sends each store's
+// Says of each store, or the one named, what crossbind app upload sends to it, what crossbind app release puts out, what
+// --send sends, what it would refuse of the project's page, the steps only its own site takes, and what it has now where
+// crossbind can tell without asking, with no build. Gives how many problems it found, so a check of the page fails on any. With send, sends each store's
 // page instead, with no build.
 export default async function storeGuide(store, { send = false, platform } = {}) {
     const publishers = publishersOf(state.config.extensions);
+    const stores = store === undefined ? appStores(state.config) : null;
     if (send) {
-        await sendPages(publishers, store, platform);
+        await sendPages(publishers, store, platform, stores);
         return 0;
     }
     const app = `${appDisplayName(state.config)} ${state.config.package?.version ?? '1.0.0'}`;
     let problems = 0;
-    for (const [index, extension] of forPlatform(guidedPublishers(publishers, store), store, platform).entries()) {
+    for (const [index, extension] of forPlatform(ofStores(guidedPublishers(publishers, store), stores), store, platform).entries()) {
         const api = extensionApi(extension.name, { platform: platform ?? extension.publisher.platforms[0], isGuided: false });
         const guide = checkedGuide(extension.name, await extensionStep(extension.name, 'guide', () => extension.publisher.guide(api)));
         const now = extension.publisher.state ? await stateOf(extension, api) : [];

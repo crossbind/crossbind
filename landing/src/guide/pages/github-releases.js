@@ -16,9 +16,10 @@ export default {
         {
             type: 'code',
             file: 'shell',
-            code: `crossbind app upload github -p macos --draft
-crossbind app upload github -p linux --draft
-crossbind app upload github -p windows`,
+            code: `crossbind app upload github -p macos
+crossbind app upload github -p linux
+crossbind app upload github -p windows
+crossbind app release github`,
         },
         {
             type: 'p',
@@ -26,7 +27,7 @@ crossbind app upload github -p windows`,
         },
         {
             type: 'p',
-            text: "Without a release for the tag, the upload makes one, a draft until its files are up. The tag points at `GITHUB_SHA` in a workflow of the repository, else at the project's commit when its git origin is the repository, else at the default branch. GitHub writes the notes from the changes since the last release, and a version such as 1.2.3-beta.1 makes a prerelease.",
+            text: "Without a release for the tag, the upload makes one, a draft, which the repository's collaborators see and `crossbind app release github` puts out with no build. The tag points at `GITHUB_SHA` in a workflow of the repository, else at the project's commit when its git origin is the repository, else at the default branch. GitHub writes the notes from the changes since the last release, and a version such as 1.2.3-beta.1 makes a prerelease.",
         },
         {
             type: 'p',
@@ -55,7 +56,7 @@ crossbind app upload github -p windows`,
         },
         {
             type: 'p',
-            text: 'Apps update from the newest published release, so upload each platform with `--draft` first, as above, and publish the release with the last upload, without `--draft`. To publish a draft by hand the way an upload does, run `gh api --method PATCH repos/<owner>/<repo>/releases/<id> -f draft=false -f make_latest=legacy`, with the id `gh release view v<version> --json databaseId -q .databaseId` prints. (`gh release edit --draft=false` and GitHub\'s page make it the latest whatever its version.)',
+            text: 'Apps update from the newest published release, so upload each platform first, as above, and then put the release out with `crossbind app release github`. An upload to a release that is out already stops before its build, as it would change what every user has. (`gh release edit --draft=false` and GitHub\'s page make a release the latest whatever its version.)',
         },
         {
             type: 'p',

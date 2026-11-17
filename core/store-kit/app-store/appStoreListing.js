@@ -4,7 +4,7 @@ import {
     assertImage, imageOf, isFolder, languageFolders, readSetting, readText, sizeOf, takenNames,
 } from '../index.js';
 
-// The app's settings beside the locales' folders, by fastlane deliver's names, which an upload with --submit sends: the
+// The app's settings beside the locales' folders, by fastlane deliver's names, which a release and --send send: the
 // version's copyright, the app's categories, its age rating's answers and App Review's contact.
 const COPYRIGHT = 'copyright.txt';
 const CATEGORIES = { 'primary_category.txt': 'primaryCategory', 'secondary_category.txt': 'secondaryCategory' };
@@ -143,7 +143,7 @@ function readReview(project) {
     return texts.demoAccountName === undefined ? texts : { ...texts, demoAccountRequired: true };
 }
 
-// The app's settings beside the listing's locales, which an upload with --submit sends, each left out without its file:
+// The app's settings beside the listing's locales, which a release and --send send, each left out without its file:
 // the version's copyright, the app's categories, its age rating's answers and App Review's contact.
 export function readAppStoreSettings(project) {
     const copyright = readSetting(STORE, project, COPYRIGHT, { most: Infinity });

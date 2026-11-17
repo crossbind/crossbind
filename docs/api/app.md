@@ -78,25 +78,31 @@ export default defineConfig({ plugins: [viteCrossbindPlugin()] });
 - `crossbind app key upload`: Makes this machine's upload key, which signs an Android app's bundle for Google Play, and
   keeps its password in the system keychain; `--use <keystore>` takes a key you have instead (see [The upload
   key](#the-upload-key)).
-- `crossbind app upload google-play`: Builds the Android app with the next versionCode Google Play takes and releases
-  its bundle on a track, internal unless `--track` names another, to a share of its users with `--rollout`, with the
-  release notes `store/google-play` holds; `-p android` names the same store (see [Publishing](#publishing)).
+- `crossbind app upload google-play`: Builds the Android app with the next versionCode Google Play takes and puts its
+  bundle out to the testers of a testing track, internal unless `--track` names another, with the release notes
+  `store/google-play` holds; `-p android` names the same store (see [Publishing](#publishing)).
 - `crossbind app upload app-store`: Builds the iOS app, then the macOS app, or the one `-p` names, and uploads each to
-  App Store Connect, whose TestFlight hands it to testers, and with `--submit` to App Review too, with the listing
-  `store/app-store` holds: the iOS app archived, the macOS app in the App Sandbox, which Xcode exports and Apple signs
-  in the cloud with its installer package. Xcode numbers the builds, and `crossbind app upload -p ios` names the same
-  store for the iOS app alone (see [Publishing](#publishing)).
+  App Store Connect, whose TestFlight hands it to testers: the iOS app archived, the macOS app in the App Sandbox, which
+  Xcode exports and Apple signs in the cloud with its installer package. Xcode numbers the builds, and `crossbind app
+  upload -p ios` names the same store for the iOS app alone (see [Publishing](#publishing)).
 - `crossbind app upload github`: Builds the desktop app of `-p macos`, `linux` or `windows`, else of this machine, and
-  puts what installs it, and with `app.updater` its update, into the GitHub release of its version, `v<version>` (see
-  [GitHub Releases](#github-releases)).
-- `crossbind app upload microsoft-store`: Builds the Windows app's MSIX packages, x64 and arm64, and sends them to the
-  Microsoft Store in a new submission of the app, with the listing `store/microsoft-store` holds, once Partner Center
-  has the app's first submission (see [Microsoft Store](#microsoft-store)).
-- `crossbind app store`: Says of each store, or the one it names, what an upload sends, what `--send` sends from
-  `store/`, what the store would refuse of it, the steps only the store's own site takes, with the values and files to
-  enter there, and what the store has now where the credentials an upload takes are at hand; it builds nothing and
-  exits with 1 at a problem. `--send` sends each store's page alone, its listing, screenshots and settings, with no
-  build, and `-p` the page of one platform (see [What each store takes](#what-each-store-takes)).
+  puts what installs it, and with `app.updater` its update, into the draft GitHub release of its version, `v<version>`
+  (see [GitHub Releases](#github-releases)).
+- `crossbind app upload microsoft-store`: Builds the Windows app's MSIX packages, x64 and arm64, and leaves them in a
+  new submission of the app, not submitted yet, once Partner Center has the app's first submission (see [Microsoft
+  Store](#microsoft-store)).
+- `crossbind app upload`: Uploads to each store `app.stores` names, in its order, as `app.stores: ['google-play',
+  'app-store']`, for the platforms each one takes.
+- `crossbind app release [store]`: Puts out to everyone what a store's testers have, with no build, and the page
+  `store/<store>` holds with it: Google Play's newest testing release on production, the newest TestFlight build to App
+  Review, the Microsoft Store's submission to certification, the GitHub release out of its draft. Without a store, it
+  goes to each one `app.stores` names; `--rollout 10`, or `10%`, starts with that share of the users (see [Releasing to
+  everyone](#releasing-to-everyone)).
+- `crossbind app store`: Says of each store, or the one it names, what an upload sends, what a release puts out, what
+  `--send` sends from `store/`, what the store would refuse of it, the steps only the store's own site takes, with the
+  values and files to enter there, and what the store has now where the credentials an upload takes are at hand; it
+  builds nothing and exits with 1 at a problem. `--send` sends each store's page alone, its listing, screenshots and
+  settings, with no build, and `-p` the page of one platform (see [What each store takes](#what-each-store-takes)).
 
 `crossbind app` runs the project's Vite with `CROSSBIND_APP_PLATFORM` set to the platform `-p` names, `macos`, `linux`,
 `windows`, `ios` or `android`; without `-p` it keeps the variable the environment sets, and without that builds this
@@ -1461,43 +1467,81 @@ the caches names the containers that hold them.
 
 ## Publishing
 
-`crossbind app upload <store>` builds the app and sends it to the store it names first, before any option of Vite's:
-`google-play` takes its bundle on a Google Play track, `app-store` the iOS and the macOS app to App Store Connect, whose
-TestFlight hands them to testers, `microsoft-store` a Windows app's MSIX packages to the Microsoft Store, and `github` a
-desktop app's installers and update to a GitHub release. `-p android` and `-p ios` name the first two stores, as
-`CROSSBIND_APP_PLATFORM` does without either. For a store of more than one platform, `-p` names the platform:
+`crossbind app upload <store>` builds the app and sends it to the testers of the store it names first, before any option
+of Vite's: `google-play` puts its bundle out to the testers of a Google Play testing track, `app-store` the iOS and the
+macOS app to App Store Connect, whose TestFlight hands them to testers, `microsoft-store` a Windows app's MSIX packages
+into a submission it leaves for the release, and `github` a desktop app's installers and update into a draft GitHub
+release. An upload changes nothing the store shows its users: `crossbind app release` puts out what the testers have,
+with no build (see [Releasing to everyone](#releasing-to-everyone)). `-p android` and `-p ios` name the first two
+stores, as `CROSSBIND_APP_PLATFORM` does without either. For a store of more than one platform, `-p` names the platform:
 `app-store` sends the iOS app, then the macOS one, without it, and `github` takes a desktop one, else this machine's.
 An upload of more than one platform checks what each needs before its first build, and where one fails after another
 went to the store, its error says which went and the `-p` that publishes the rest.
+
+Without a store, `crossbind app upload`, `crossbind app release` and `crossbind app store` go to each store
+`app.stores` names in `crossbind.config.js`, in its order, or to those of them that take the platform `-p` names; without
+`app.stores`, an upload and a release go to the store that goes first for the platform.
+
+```js
+export default {
+    app: { stores: ['google-play', 'app-store'] },
+};
+```
 
 Each store is a publisher, as an extension adds one: [extensions.md](./extensions.md#publishers)' Publishers says how
 to write one, and an extension listed under the name of one of these four replaces it. A store's options go after its
 name, and one of another store's is refused.
 
-A store's page, the listing, screenshots and settings `store/` holds, goes alone with `crossbind app store --send`, with
-no build (see [What each store takes](#what-each-store-takes)), so a build for testers changes no page the store shows.
-An upload to Google Play sends the bundle and its release notes alone, one to App Store Connect the page too with
-`--submit`, and one to the Microsoft Store the page with the packages, as its submission is the release.
+A store's page, the listing, screenshots and settings `store/` holds, goes with a release, or alone with `crossbind app
+store --send`, with no build (see [What each store takes](#what-each-store-takes)), so a build for testers changes no
+page the store shows. An upload to Google Play sends the bundle and its release notes alone.
+
+### Releasing to everyone
+
+`crossbind app release [store]` puts out to everyone what the store's testers have, with no build, and sends the page
+`store/<store>` holds with it, as `--send` would. Each store does it its own way:
+- Google Play puts the newest release its testing tracks have out to testers on the production track, with its name
+  and release notes.
+- App Store Connect hands App Review the version of `package.json`'s number, with the newest build of it TestFlight's
+  testers have; App Review puts it out once approved. A build still processing, or none, stops the release.
+- The Microsoft Store submits the submission an upload left for certification, after which Partner Center signs the
+  packages and puts them out.
+- GitHub puts the version's draft release out, which GitHub makes the latest unless it has a newer version out.
+
+`--rollout 10`, or `10%`, starts with that share of the users: Google Play stages the release and the Microsoft Store
+rolls its packages out gradually, each raising the share later in Play Console or Partner Center, and App Store Connect
+releases the version in its own phases over 7 days once approved. `--rollout 100` reaches every user at once, as no
+`--rollout` does. GitHub reaches every user at once, so a release that goes to it takes no `--rollout` below 100, and
+stops before any store releases.
+
+```sh
+crossbind app upload                 # each store app.stores names, to its testers
+crossbind app release --rollout 10   # then to everyone, starting with a tenth of the users
+```
 
 ### What each store takes
 
 A project's `store/` folder holds what the stores show of the app, a folder per store: `store/google-play`,
 `store/app-store`, for the iOS app and the macOS one alike, and `store/microsoft-store`. In each, a folder per language holds the listing's texts and images, by
 the names the sections below give, and the files beside them the app's settings, in that store's own terms.
-`crossbind app store --send` sends what the store's API takes, with no build, and stops before anything goes at what the
+`crossbind app store --send`, and a release, send what the store's API takes, and stop before anything goes at what the
 store would refuse: a text longer than it takes, an image of another size, or a PNG with transparency where it takes
 none.
 
-`crossbind app store` says, of each store or the one it names, what an upload sends, what `--send` sends, what to fix
-first, the steps only the store's own site takes, once for the app, each with the page, the value and the file to enter
-there, and what the store has now:
+`crossbind app store` says, of each store or the one it names, what an upload sends, what a release puts out, what
+`--send` sends, what to fix first, the steps only the store's own site takes, once for the app, each with the page, the
+value and the file to enter there, and what the store has now:
 
 ```text
 $ crossbind app store google-play
 Google Play · Geosmith 1.0.0
 
 crossbind app upload google-play sends:
-  ✓ the bundle, signed with the upload key, with its native debug symbols, on a track
+  ✓ the bundle, signed with the upload key, with its native debug symbols, on a testing track: internal, or the one --track names
+
+crossbind app release google-play puts out:
+  ✓ the newest release the testing tracks have out to testers, on production, to the share of users --rollout gives at first
+  ✓ with it, the page --send sends
 
 crossbind app store google-play --send sends:
   ✓ store/google-play/en-US: full description, short description, title; icon, feature graphic, 5 phone screenshots
@@ -1519,8 +1563,8 @@ names every missing piece at once. `-p` sends one platform's page, as `-p ios` A
 
 ### Google Play
 
-`crossbind app upload google-play` builds the Android app and releases its bundle on a Google Play track. Before the
-build, which takes minutes, it checks all it needs:
+`crossbind app upload google-play` builds the Android app and puts its bundle out to the testers of a Google Play
+testing track. Before the build, which takes minutes, it checks all it needs:
 - `app.id`, set in `crossbind.config.js`, as Play keeps an app's package name for good;
 - an upload key;
 - credentials Play takes uploads with;
@@ -1528,12 +1572,15 @@ build, which takes minutes, it checks all it needs:
 
 The build's versionCode is then one above that, or the version's own when that is higher, and
 `CROSSBIND_APP_BUILD_NUMBER` overrides both, so one `package.json` version uploads as often as needed. The release goes
-on the internal track unless `--track` names another (`alpha`, `beta`, `production` or one of your own), and out to its
-testers at once, unless `--draft` leaves it for Play Console to roll out.
+on the internal track unless `--track` names another testing track (`alpha`, `beta` or one of your own), and out to
+its testers at once; `--track production` is refused, as `crossbind app release google-play` puts out on production
+what the testers have had.
 
-`--rollout 10`, or `10%`, makes the release a staged rollout: Play gives it to that percent of the track's users at
-first, and Play Console raises the share later, under Test and release. Play stages updates alone, so an app's first
-release reaches all of them. `--rollout 100` releases to every user, as no `--rollout` does, and a draft takes none.
+`crossbind app release google-play` sends the page `store/google-play` holds, then puts the newest release the testing
+tracks have out to testers on the production track, the one of the highest versionCode, with its name and release
+notes. `--rollout 10` makes it a staged rollout: Play gives it to that percent of the users at first, and Play Console
+raises the share later, under Test and release. Play stages updates alone, so an app's first release reaches all of
+them.
 
 Google Play takes uploads from your Google account or from a service account.
 
@@ -1565,10 +1612,10 @@ Setting two of them stops the upload. Once, for each app or account:
    - For `CROSSBIND_GOOGLE_PLAY_KEY`, make a JSON key of it. An organization may refuse keys
      (`iam.disableServiceAccountKeyCreation`): use the first way, or a project with no organization.
 3. For a service account, invite its e-mail in Play Console, under Users and permissions, with "Release apps to testing
-   tracks" for the app; for the production track also "Release to production, exclude devices, and use Play App
-   Signing", and for the listing "Manage store presence".
+   tracks" for the app; for releases also "Release to production, exclude devices, and use Play App Signing", and for
+   the listing "Manage store presence".
 4. Play takes draft releases alone until an app's first release is out. So the first upload leaves its release a draft;
-   roll it out once in Play Console, under Test and release, and later uploads go out by themselves.
+   roll it out once in Play Console, under Test and release, and later uploads go out to their testers by themselves.
 
 On a terminal, the upload asks for what is missing and sets it up before the build:
 - the package name, one both stores take, which it writes into `crossbind.config.js` once you say yes;
@@ -1645,8 +1692,7 @@ upload of that version, unless `CROSSBIND_APP_BUILD_NUMBER` gives one. With
 `CROSSBIND_APPLE_API_KEY`, `CROSSBIND_APPLE_API_KEY_ID` and `CROSSBIND_APPLE_API_ISSUER` set, as for notarizing a macOS
 app, an App Store Connect API key does it in place of the account, as in CI. Apple signs in the cloud for an Admin key
 alone; a key of another role needs an Apple Distribution certificate in the keychain, which Xcode makes once under
-Settings › Accounts › Manage Certificates. `--track`, `--draft` and `--rollout` are other stores', and stop an
-iOS publish.
+Settings › Accounts › Manage Certificates. `--track` is Google Play's, and stops an iOS upload.
 
 Once, for each app, create it in App Store Connect, under Apps, as a new iOS app with `app.id` as its bundle ID; Apple's
 API makes none, and the upload fails until the app is there. An app on iOS alone publishes with `-p ios` until its
@@ -1675,15 +1721,16 @@ On a terminal, the upload asks for what is missing and sets it up:
 Without a terminal, as in CI, nothing is asked: the upload names every missing piece at once, warns without
 `app.encryption`, and stops at the first failure.
 
-`--submit` hands the version to App Review too, through App Store Connect's API, which takes the API key: one of the App
-Manager or Admin role, set as above. Before the build, the upload also checks that App Store Connect has the app, that
-the version takes another build, which none out or in review does, and that App Review has no other submission of the
-app, and it stops without `app.encryption`, whose answer App Review takes with every build. After the upload it takes
-the version of `package.json`'s number, the one App Store Connect prepares under another number, renamed, or a new one,
-and puts the listing `store/app-store` holds into it. It then waits for App Store Connect to process the build, an hour
-at most, picks it for the version and submits the version for review. `--phased` releases the version App Review
-approves in phases over 7 days, as App Store Connect's phased release does; without it the version goes out as App Store
-Connect's release option for it says.
+`crossbind app release app-store` hands the version to App Review, with no build, through App Store Connect's API, which
+takes the API key: one of the App Manager or Admin role, set as above. It runs on any machine. It checks that App Store
+Connect has the app, that the version takes another build, which none out or in review does, and that App Review has
+no other submission of the app, and it takes the newest build of the version TestFlight's testers have: a build still
+processing, or none, stops it before anything changes. A build uploaded without an answer on encryption takes
+`app.encryption`'s, and stops the release without it, as App Review takes no build without one. It then takes the
+version of `package.json`'s number, the one App Store Connect prepares under another number, renamed, or a new one, puts
+the listing `store/app-store` holds into it, picks the build and submits the version for review. `--rollout` releases
+the version App Review approves in phases over 7 days, as App Store Connect's phased release does; without it the
+version goes out as App Store Connect's release option for it says.
 
 `crossbind app store app-store --send` puts the listing and the settings into that version with no build and no
 review, through the same API key, for each platform or the one `-p` names, so the page is ready before a build is.
@@ -1691,15 +1738,16 @@ App Store Connect shows it once the version is out.
 
 What only App Store Connect does stays there: the screenshots of devices other than iPhones and iPads, app previews,
 App Privacy answers, price and availability, content rights, the export compliance documents an app that uses
-encryption takes, a reply to App Review, and a submission it answered with issues, which an upload without `--submit`
-gives a new build to pick. The age rating, categories, copyright and App Review's contact go with `--submit` from the
-files [The App Store listing](#the-app-store-listing) names, and stay as App Store Connect has them without those. A submission App Store Connect prepares with items in it,
-as an upload stopped midway leaves, stops the next one before its build: submit or remove them there. A call that finds
+encryption takes, a reply to App Review, and a submission it answered with issues, which an upload gives a new build to
+pick. The age rating, categories, copyright and App Review's contact go with a release, or `--send`, from the files [The
+App Store listing](#the-app-store-listing) names, and stay as App Store Connect has them without those. A submission
+App Store Connect prepares with items in it, as a release stopped midway leaves, stops the next one before it changes
+anything: submit or remove them there. A call that finds
 App Store Connect busy or out of reach for a moment tries again.
 
 ### The App Store listing
 
-A project's `store/app-store` folder holds its App Store listing, which goes with `--send`, and with `--submit`: a folder per locale, named
+A project's `store/app-store` folder holds its App Store listing, which goes with `--send` and with a release: a folder per locale, named
 as App Store Connect names it (`en-US`, `tr`, `zh-Hans`), with the texts' files fastlane's deliver reads and a folder of
 screenshots per display type:
 
@@ -1724,16 +1772,16 @@ The version takes what the folder has where App Store Connect's own differs, in 
 none of; the name, subtitle and privacy policy URL go into the app's information that changes with the version, which
 App Store Connect makes for a new locale of its name alone. What the folder leaves out stays as App Store Connect has
 it, so it may hold the release notes alone. An empty `subtitle.txt`, `promotional_text.txt` or `marketing_url.txt`
-clears its text. `--send`, and an upload with `--submit` before its build, stops at another empty text, at a text longer
-than App Store Connect takes, and at a file or folder it takes none of, naming it.
+clears its text. `--send` and a release stop before anything changes at another empty text, at a text longer than App
+Store Connect takes, and at a file or folder it takes none of, naming it.
 
 A folder of `screenshots/` per display type, named as App Store Connect's API names it, holds the type's .png, .jpg or
 .jpeg files, 10 at most, in the order of their names as text, so 01.png, 02.png and on to 10.png: `APP_IPHONE_67` for
 the 6.9-inch and 6.7-inch iPhones, `APP_IPHONE_65`, `APP_IPHONE_61`, `APP_IPHONE_58`, `APP_IPHONE_55`, `APP_IPHONE_47`,
 `APP_IPHONE_40` and `APP_IPHONE_35`, `APP_IPAD_PRO_3GEN_129` for the 13-inch iPads, `APP_IPAD_PRO_3GEN_11`,
 `APP_IPAD_PRO_129`, `APP_IPAD_105` and `APP_IPAD_97`, and `APP_DESKTOP` for a Mac, whose screenshots go to the macOS
-version alone, as the others go to the iOS one alone. `--send` and an upload with `--submit` stop at a file that holds
-no PNG or JPEG image, as an empty one or a Git LFS pointer does. A type's screenshots go up anew where App Store Connect
+version alone, as the others go to the iOS one alone. `--send` and a release stop at a file that holds no PNG or JPEG
+image, as an empty one or a Git LFS pointer does. A type's screenshots go up anew where App Store Connect
 shows others, in another order or unprocessed, and crossbind waits for it to process them; a type the folder has none
 of stays as it is.
 
@@ -1743,8 +1791,8 @@ Connect's specifications give them, `APP_IPHONE_67` taking 1320 × 2868, 1290 ×
 or 2880 × 1800 alone, and at one with transparency, which App Store Connect takes in no image. It takes a 13-inch iPad's screenshots of every app that runs on iPads, as crossbind's iOS apps do, and scales the
 6.9-inch iPhone's down for smaller ones.
 
-Beside the locales, the folder holds the app's settings, by the names fastlane's deliver gives them, which an upload
-with `--submit` sends where App Store Connect's differ:
+Beside the locales, the folder holds the app's settings, by the names fastlane's deliver gives them, which a release and
+`--send` send where App Store Connect's differ:
 
 ```text
 store/app-store/
@@ -1783,22 +1831,22 @@ app: {
 },
 ```
 
-A repository without a release of the tag gets one, a draft until its files are up, tagged at the commit `GITHUB_SHA`
+A repository without a release of the tag gets one, a draft, tagged at the commit `GITHUB_SHA`
 names where `GITHUB_REPOSITORY` is the repository, else at the project's own where its git origin is, else at the
 repository's default branch, with the notes GitHub writes of the changes since the last release, and a prerelease for a
 version such as 1.2.3-beta.1. An upload takes a release another one made during its build, as the jobs of a matrix do,
 and publishes that make theirs at once agree on the oldest. A file of a name the release has already takes the old one's
 place, so an upload runs again as it did, unless the repository makes its releases immutable.
 
-A release put out holds the files its publishes have put up so far, and the newest one out is the one apps update from:
-put each platform's app up with `--draft` first, and then the release out with an upload without it. GitHub then makes
-the release the latest unless it has a newer version out, so a fix of an older line leaves the newest one latest.
-`gh release edit v<version> --draft=false` makes it the latest whatever its version, and so may GitHub's page, as its
-"Set as the latest release" box says; `gh api --method PATCH repos/<owner>/<repo>/releases/<id> -f draft=false -f
-make_latest=legacy` puts it out as an upload does, with the id `gh release view v<version> --json databaseId -q
-.databaseId` prints. GitHub makes no prerelease the latest, so apps update to none, and an app fetches no release of a
-private repository, which takes a token; the upload warns of both, and where `app.updater.url` is not the newest
-release's address.
+An upload leaves the release a draft, which the repository's collaborators see, so each platform's app goes up first,
+and `crossbind app release github` then puts the release out with no build; the newest one out is the one apps update
+from. An upload to a release out already stops before its build, as it would change what every user has: raise the
+version for the next one. GitHub makes the release the latest unless it has a newer version out, so a fix of an older
+line leaves the newest one latest. `gh release edit v<version> --draft=false` makes it the latest whatever its version,
+and so may GitHub's page, as its "Set as the latest release" box says. GitHub makes no prerelease the latest, so apps
+update to none, and an app fetches no release of a private repository, which takes a token; the upload warns of both,
+and where `app.updater.url` is not the newest release's address. A GitHub release reaches every user at once, so it
+takes no `--rollout`.
 
 GitHub takes the release from a token with write access to the repository's contents: `GH_TOKEN` or `GITHUB_TOKEN`,
 which a workflow's step takes as `GITHUB_TOKEN: ${{ github.token }}` with the job's `permissions: contents: write`, else
@@ -1811,7 +1859,7 @@ Before the build, the upload names every one of them that is missing, and the up
 The Windows Package Manager installs an app from its community repository, `microsoft/winget-pkgs`, which takes each
 version as a pull request its moderators check. [WinGet Releaser](https://github.com/vedantmgoyal9/winget-releaser),
 which [Komac](https://github.com/russellbanks/Komac) drives, makes that pull request for each GitHub release `crossbind
-app upload github` puts out, from the Windows setups the release holds:
+app release github` puts out, from the Windows setups the release holds:
 
 ```yaml
 name: Publish to winget
@@ -1852,10 +1900,10 @@ installers and for macOS 13 or a later `app.macos.minimumVersion`, puts it in an
 Xcode export the archive to App Store Connect, as the iOS app's goes: Xcode's account or an Admin key signs the app and its
 installer package in the cloud with the team's distribution certificates, and makes the app's Mac App Store profile, so
 no certificate goes into the keychain. Xcode numbers the build after the builds App Store Connect has of it, unless
-`CROSSBIND_APP_BUILD_NUMBER` gives one, and TestFlight hands it to Mac testers once Apple has processed it. `--submit`
-hands the version to App Review too, through the App Store Connect API key, with the listing `store/app-store` holds,
-its `APP_DESKTOP` screenshots for macOS, and `--phased` releases it in phases over 7 days. It takes `app.team`,
-`app.category`, and `app.encryption`, which App Store Connect asks of every Mac build.
+`CROSSBIND_APP_BUILD_NUMBER` gives one, and TestFlight hands it to Mac testers once Apple has processed it. `crossbind
+app release app-store -p macos` hands the macOS version to App Review, through the App Store Connect API key, with the
+listing `store/app-store` holds, its `APP_DESKTOP` screenshots for macOS, and `--rollout` releases it in phases over 7
+days. It takes `app.team`, `app.category`, and `app.encryption`, which App Store Connect asks of every Mac build.
 
 ### Microsoft Store
 
@@ -1879,13 +1927,14 @@ Center, with these packages under Packages and the listing `store/microsoft-stor
 package does: it runs as the app does outside one.
 
 Each later version goes with `crossbind app upload microsoft-store`. It builds the app's MSIX packages alone, with no
-updater, and makes a submission of the app, a copy of its last, with the packages in place of the old ones, the listing
-and the settings `store/microsoft-store` holds; it uploads their files in one zip and commits the submission for
-certification, which takes up to three business days. `--draft` leaves the submission for Partner Center to submit, and
-`--rollout 10`, or `10%`, gives its packages to that percent of the app's users first, a gradual rollout that Partner
-Center raises. A submission in progress stops the upload, which on a terminal asks to delete it. Each version is above
-the last one the Store has, as package.json's next release is, and none is a prerelease, which the Store cannot tell
-from its release.
+updater, and makes a submission of the app, a copy of its last, with the packages in place of the old ones, uploaded in
+one zip, which it leaves for the release, not submitted yet. `crossbind app release microsoft-store` puts the listing
+and the settings `store/microsoft-store` holds into that submission, with no build, and commits it for certification,
+which takes up to three business days; `--rollout 10`, or `10%`, gives its packages to that percent of the app's users
+first, a gradual rollout that Partner Center raises. A release with no such submission, or one Partner Center took
+already, stops, naming the upload. A submission in progress stops the upload, which on a terminal asks to delete it.
+Each version is above the last one the Store has, as package.json's next release is, and none is a prerelease, which
+the Store cannot tell from its release.
 
 Partner Center's API takes an Entra ID application its account has with the Manager role: in Partner Center, Account
 settings › User management › Microsoft Entra applications adds one, shows its tenant and client ids and makes a key,
@@ -1917,16 +1966,17 @@ store/microsoft-store/en-US/
 ```
 
 Beside the languages, `category.txt` names the app's category as Partner Center's API does, as `UtilitiesAndTools`, and
-`notes_for_certification.txt` holds the notes for certification, which an upload and `--send` send; `privacy_url.txt`,
+`notes_for_certification.txt` holds the notes for certification, which a release and `--send` send; `privacy_url.txt`,
 `website_url.txt` and `support_contact.txt` hold what Partner Center's Properties page alone takes, as its API takes them
 no more, so `crossbind app store` names them to enter there. `crossbind app store microsoft-store --send` sends the
 listing and these settings alone, in a submission of the packages Partner Center has, which it certifies as it does a
-publish's.
+release's. Where an upload left a submission not submitted yet, `--send` stops and names the release, which sends the
+page with the upload's packages, as Partner Center takes one submission at a time.
 
 Every image is a PNG, as the Store takes no other. A language's images of a type go up anew where Partner Center shows
 others, the names they go up under telling them apart by their bytes, and a type the folder has none of stays as it is;
-a language Partner Center has no listing in takes a description, which it makes one of. Before the build, the upload
-stops at a text longer than the Store takes and at every image of another size or kind, naming it.
+a language Partner Center has no listing in takes a description, which it makes one of. A release and `--send` stop
+before anything goes at a text longer than the Store takes and at every image of another size or kind, naming it.
 
 The Store updates the app it installed, and the app's own updater refuses there (see [Updates](#updates)). An app from
 its package uses the WebView2 Runtime that Windows 11 comes with and Windows 10 has from Edge's updates. The setup
@@ -2033,6 +2083,10 @@ jobs:
 
 `CROSSBIND_RUNNER: LOCAL` keeps the build's other steps, such as a Rust crate's, on the runner and its Xcode. The cache
 keeps Hermes and its dSYM, which every upload carries, from downloading again at each run.
+
+A release is a job of its own, run once the testers have had the build, as `npx crossbind app release google-play` or
+`npx crossbind app release app-store -p ios --rollout 10` with the upload's credentials. It builds nothing, so it runs
+on any runner, with no upload key, Xcode or Docker.
 
 ## Hermes
 

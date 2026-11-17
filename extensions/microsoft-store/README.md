@@ -1,6 +1,7 @@
 # @crossbind/extension-microsoft-store
 
-Sends a Windows app's MSIX packages and listing to the Microsoft Store through Partner Center's submission API.
+Sends a Windows app's MSIX packages and listing to the Microsoft Store through Partner Center's submission API, and
+submits them for certification.
 
 It comes with `@crossbind/core-app-host`: there is nothing to install or list.
 
@@ -9,15 +10,17 @@ It comes with `@crossbind/core-app-host`: there is nothing to install or list.
 ```sh
 npx crossbind app store microsoft-store
 npx crossbind app store microsoft-store --send
-npx crossbind app upload microsoft-store --rollout 10
+npx crossbind app upload microsoft-store
+npx crossbind app release microsoft-store --rollout 10
 ```
 
 `crossbind app store` lists what only Partner Center does: reserving the app's name as an "MSIX or PWA app", whose
 identity goes in `app.windows.msix`; the first submission, with its age ratings; and the Entra ID application its API
-takes. Each later version goes with an upload: it builds the MSIX packages, x64 and arm64, makes a submission with them
-and the listing in `store/microsoft-store`, and commits it for certification. `--draft` leaves the submission for you to
-submit in Partner Center, and `--rollout` gives the packages to a share of the app's users first. `crossbind app store
-microsoft-store --send` sends the listing alone, with no build, in a submission of the packages Partner Center has.
+takes. Each later version goes with an upload: it builds the MSIX packages, x64 and arm64, and leaves them in a
+submission of the app, not submitted yet. A release puts the listing in `store/microsoft-store` into that submission
+and commits it for certification, with no build, and `--rollout` gives the packages to a share of the app's users
+first. `crossbind app store microsoft-store --send` sends the listing alone, with no build, in a submission of the
+packages Partner Center has, and stops at one an upload left, naming the release.
 
 ## Platforms
 

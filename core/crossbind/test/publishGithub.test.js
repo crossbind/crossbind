@@ -37,6 +37,7 @@ vi.mock('../../../extensions/github/src/githubReleases.js', () => ({
 vi.mock('../src/utils/ask.js', () => ({ hasTerminal: () => false }));
 
 const { default: publish } = await import('../src/actions/publish.js');
+const { default: release } = await import('../src/actions/release.js');
 const { newUpdaterKey } = await import('../../../extensions/updater/src/update.js');
 
 const keys = newUpdaterKey();
@@ -105,8 +106,41 @@ afterEach(() => {
     fs.rmSync(base, { recursive: true, force: true });
 });
 
+describe('a release on GitHub', () => {
+    test("puts the version's draft out, with no build, and says where", async () => {
+        github.releases = [{ id: 3, draft: true, assets: [], html_url: page('untagged-3') }];
+        await release(['github'], { platform: 'linux' });
+        expect(github.published).toEqual([3]);
+        expect(vite.runs).toBe(0);
+        expect(printed).toContain(`crossbind: demo/app's release v1.2.3 is out: ${page('tag/v1.2.3')}`);
+    });
+
+    test('says a release is out already, and names the upload where the version has none', async () => {
+        github.releases = [{ id: 4, draft: false, assets: [], html_url: page('tag/v1.2.3') }];
+        await release(['github'], { platform: 'linux' });
+        expect(github.published).toEqual([]);
+        expect(printed).toContain(`crossbind: demo/app's release v1.2.3 is out already: ${page('tag/v1.2.3')}`);
+        github.releases = [null];
+        await expect(release(['github'], { platform: 'linux' })).rejects
+            .toThrow("crossbind: demo/app has no release v1.2.3: crossbind app upload github makes it a draft, with the app's installers.");
+    });
+
+    test('names the repository and the token it lacks at once, and stages no --rollout, as a release reaches every user', async () => {
+        github.repository = null;
+        github.token = null;
+        const failure = await release(['github'], { platform: 'linux' }).catch((error) => error);
+        expect(failure.message.split('\n').map((line) => line.slice(0, 50))).toEqual([
+            'crossbind: GitHub Releases takes the app to a repo',
+            'crossbind: GitHub takes a release from a token wit',
+        ]);
+        await expect(release(['github'], { platform: 'linux', rollout: '10' })).rejects
+            .toThrow('crossbind: github puts the app out to every user at once, which --rollout 10 cannot stage: release github without --rollout.');
+        expect(github.looked).toEqual([]);
+    });
+});
+
 describe('publishing a desktop app to a GitHub release', () => {
-    test("puts a macOS app's disk image under its platform and arch, its update and manifest, into a new draft it then puts out", async () => {
+    test("puts a macOS app's disk image under its platform and arch, its update and manifest, into a new draft the release puts out", async () => {
         withUpdater();
 
         await publish(['github'], { platform: 'macos', runVite });
@@ -120,10 +154,10 @@ describe('publishing a desktop app to a GitHub release', () => {
             { release: 7, file: 'demo-darwin-arm64.app.zip', name: 'demo-darwin-arm64.app.zip' },
             { release: 7, file: 'demo-darwin-arm64.update.json', name: 'demo-darwin-arm64.update.json' },
         ]);
-        expect(github.published).toEqual([7]);
+        expect(github.published).toEqual([]);
         const said = printed.join('\n');
-        expect(said).toContain("crossbind: publishing the macos app of 1.2.3 to demo/app's new release v1.2.3; building the app first.");
-        expect(said).toContain("crossbind: the macos app of 1.2.3 is out on GitHub's release v1.2.3: https://github.com/demo/app/releases/tag/v1.2.3");
+        expect(said).toContain("crossbind: publishing the macos app of 1.2.3 to demo/app's new draft release v1.2.3; building the app first.");
+        expect(said).toContain(`crossbind: the macos app of 1.2.3 is on the draft release v1.2.3, which crossbind app release github puts out: ${page('untagged-7')}`);
         expect(warned).toEqual([]);
     });
 
@@ -164,26 +198,36 @@ describe('publishing a desktop app to a GitHub release', () => {
         expect([github.made, github.uploads]).toEqual([[], []]);
     });
 
-    test("takes the release another upload made during the build, leaves it a draft with --draft, and each arch's files go up", async () => {
+    test("takes the draft another upload made during the build, and each arch's files go up", async () => {
         github.releases = [null, { id: 3, draft: true, assets: [], html_url: page('untagged-3') }];
-        await publish(['github', '--draft'], { platform: 'linux', runVite });
+        await publish(['github'], { platform: 'linux', runVite });
         expect(github.made).toEqual([]);
         expect(github.uploads).toEqual([
             { release: 3, file: 'demo-linux-x64.deb', name: 'demo-linux-x64.deb' },
             { release: 3, file: 'demo-linux-arm64.deb', name: 'demo-linux-arm64.deb' },
         ]);
         expect(github.published).toEqual([]);
-        expect(printed.join('\n')).toContain(`crossbind: the linux app of 1.2.3 is on the draft release v1.2.3, which an upload without --draft, or GitHub's page, puts out: ${page('untagged-3')}`);
+        expect(printed.join('\n')).toContain(`crossbind: the linux app of 1.2.3 is on the draft release v1.2.3, which crossbind app release github puts out: ${page('untagged-3')}`);
     });
 
-    test("puts a Windows app's setup up once, as what installs it and as its update, into a release out already", async () => {
+    test("puts a Windows app's setup up once, as what installs it and as its update, into the version's draft", async () => {
         withUpdater();
-        github.releases = [{ id: 4, draft: false, assets: [], html_url: page('tag/v1.2.3') }];
-        await publish(['github', '--draft'], { platform: 'windows', runVite });
+        github.releases = [{ id: 4, draft: true, assets: [], html_url: page('untagged-4') }];
+        await publish(['github'], { platform: 'windows', runVite });
         expect(github.uploads.map(({ name }) => name)).toEqual(['demo-win32-x64-setup.exe', 'demo-win32-x64.update.json', 'demo-win32-arm64-setup.exe', 'demo-win32-arm64.update.json']);
         expect(github.published).toEqual([]);
-        expect(printed.join('\n')).toContain("crossbind: publishing the windows app of 1.2.3 to demo/app's release v1.2.3");
-        expect(printed.join('\n')).toContain("is out on GitHub's release v1.2.3, which was out already");
+        expect(printed.join('\n')).toContain("crossbind: publishing the windows app of 1.2.3 to demo/app's draft release v1.2.3");
+    });
+
+    test('changes no release out already, before the build, or once another put it out during the build', async () => {
+        const out = { id: 4, draft: false, assets: [], html_url: page('tag/v1.2.3') };
+        const message = "crossbind: demo/app's release v1.2.3 is out already, and an upload changes nothing public: raise the version in package.json for the next release.";
+        github.releases = [out];
+        await expect(publish(['github'], { platform: 'linux', runVite })).rejects.toThrow(message);
+        expect(vite.runs).toBe(0);
+        github.releases = [null, out];
+        await expect(publish(['github'], { platform: 'linux', runVite })).rejects.toThrow(message);
+        expect(github.uploads).toEqual([]);
     });
 
     test("tags a new release at the workflow's commit where it is the repository's alone, and a prerelease of a prerelease's version", async () => {

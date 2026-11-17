@@ -30,6 +30,10 @@ vi.mock('../../../extensions/google-play/src/googlePlay.js', () => ({
         return play.sent ?? { listed: [], isDetailed: false, isDeclared: false };
     },
     playTracks: async () => play.tracks,
+    promoteRelease: async (appId, credentials, options) => {
+        play.promotions.push({ appId, credentials, ...options });
+        return play.promoted;
+    },
 }));
 const signing = {};
 vi.mock('../src/actions/uploadKey.js', () => ({
@@ -58,9 +62,9 @@ const opened = [];
 vi.mock('../src/utils/openUrl.js', () => ({ default: (url) => opened.push(url) }));
 vi.mock('../src/utils/systemConfig.js', () => ({ default: () => ({}) }));
 
-const { playRelease, rolloutPercent } = await import('../../../extensions/google-play/crossbind.extension.js');
 const { default: publish } = await import('../src/actions/publish.js');
 const { default: storeGuide } = await import('../src/actions/storeGuide.js');
+const { default: release } = await import('../src/actions/release.js');
 
 let base;
 let printed;
@@ -88,6 +92,9 @@ beforeEach(() => {
     Object.assign(state.config, { app: { id: 'dev.example.demo' }, extensions: [], package: { version: '1.2.3' }, paths: { project: base, build: path.join(base, '.crossbind', 'build') } });
     Object.assign(play, {
         credentials: { account: 'play@demo.iam.gserviceaccount.com' }, kept: null, highest: 1002005, answers: [], result: null, uploads: [], sends: [], sent: null, tracks: [],
+        promotions: [], promoted: {
+            versionCode: 1002005, name: null, from: 'internal', status: 'completed',
+        },
     });
     Object.assign(signing, { env: KEY, isSigned: true, made: 0 });
     Object.assign(terminal, { isThere: false, lines: [], yes: [] });
@@ -118,14 +125,13 @@ describe('publishing an Android app', () => {
             symbols: path.join(base, 'dist', 'demo-android-symbols.zip'),
             track: 'internal',
             status: 'completed',
-            userFraction: null,
             notes: [],
         }]);
         const said = printed.join('\n');
         expect(said).toContain("crossbind: publishing dev.example.demo 1.2.3 to Google Play's internal track.");
         expect(said).toContain('Google Play has seen versionCode 1002005 at most, so this build is 1002006.');
         expect(said).toContain('crossbind: uploading the bundle and its native debug symbols to Google Play.');
-        expect(said).toContain("dev.example.demo 1.2.3 (versionCode 1002006) is out on Google Play's internal track.");
+        expect(said).toContain("dev.example.demo 1.2.3 (versionCode 1002006) is out to the testers of Google Play's internal track; crossbind app release google-play puts it out to everyone.");
     });
 
     test("takes the version's own code when Play has seen none as high, and CROSSBIND_APP_BUILD_NUMBER over both", async () => {
@@ -181,42 +187,40 @@ describe('publishing an Android app', () => {
 describe('a release on Google Play', () => {
     const listing = 'store/google-play/en-US';
 
-    test('rolls out to the percent --rollout gives, and to everyone at 100%, but never as a draft', () => {
-        expect(['10', '12.5%', '0.01', '100'].map(rolloutPercent)).toEqual([10, 12.5, 0.01, 100]);
-        ['0', '101', 'ten', '-5', '10%%', '12.345', ''].forEach((value) => expect(() => rolloutPercent(value))
-            .toThrow(`--rollout takes the percent of the track's users a release reaches at first, above 0 and at most 100 with two decimals at most, as 10 or 12.5%, not ${value}.`));
-        expect(playRelease(undefined, undefined)).toEqual({ status: 'completed', rollout: null });
-        expect(playRelease(true, undefined)).toEqual({ status: 'draft', rollout: null });
-        expect(playRelease(undefined, 10)).toEqual({ status: 'inProgress', rollout: 10 });
-        expect(playRelease(undefined, 100)).toEqual({ status: 'completed', rollout: null });
-        expect(() => playRelease(true, 10)).toThrow('crossbind: --draft and --rollout do not go together');
+    test('takes no production track on an upload, which crossbind app release puts out on', async () => {
+        await expect(publishAndroid(['--track', 'production']))
+            .rejects.toThrow('crossbind: --track production puts the bundle out to everyone, which crossbind app release does once testers have had it');
+        expect(vite.runs).toBe(0);
     });
 
-    test("goes up at the share of users a staged rollout reaches, and leaves Play's listing to crossbind app store --send", async () => {
-        fs.mkdirSync(path.join(base, listing), { recursive: true });
-        fs.writeFileSync(path.join(base, listing, 'title.txt'), 'Demo\n');
-        play.result = { versionCode: 1002006, status: 'inProgress' };
+    test("puts out on production what the testing tracks have, after the page, at --rollout's share, with no build", async () => {
+        fs.mkdirSync(upath.join(base, listing), { recursive: true });
+        fs.writeFileSync(upath.join(base, listing, 'title.txt'), 'Demo\n');
+        play.promoted = {
+            versionCode: 1002006, name: '1.2.3', from: 'internal', status: 'inProgress',
+        };
 
-        await publishAndroid(['--track', 'production', '--rollout', '10']);
+        await release(['google-play'], { rollout: '33.3' });
 
-        expect(play.uploads[0]).toMatchObject({ track: 'production', status: 'inProgress', userFraction: 0.1, notes: [] });
+        expect(play.sends).toHaveLength(1);
+        expect(play.promotions).toEqual([{
+            appId: 'dev.example.demo', credentials: play.credentials, status: 'inProgress', userFraction: 0.333,
+        }]);
+        expect(vite.runs).toBe(0);
+        const said = printed.join('\n');
+        expect(said.indexOf('crossbind: sending the page')).toBeLessThan(said.indexOf('is out to 33.3%'));
+        expect(said).toContain("crossbind: dev.example.demo versionCode 1002006 (1.2.3), from the internal track, is out to 33.3% of the users of Google Play's production track: Play Console raises the share, under Test and release.");
+    });
+
+    test("says a release Play took as a draft, as an app's first one, goes out once Play Console rolls it out, and sends no page it lacks", async () => {
+        play.promoted = {
+            versionCode: 1002006, name: null, from: 'beta', status: 'draft',
+        };
+        await release(['google-play'], {});
         expect(play.sends).toEqual([]);
         const said = printed.join('\n');
-        expect(said).not.toContain('listing');
-        expect(said).toContain("dev.example.demo 1.2.3 (versionCode 1002006) is out to 10% of the users of Google Play's production track: Play Console raises the share");
-    });
-
-    test("gives Play a staged rollout's share as a fraction with four decimals at most", async () => {
-        await publishAndroid(['--track', 'production', '--rollout', '33.3']);
-        expect(play.uploads[0].userFraction).toBe(0.333);
-    });
-
-    test("says a staged rollout Play made a draft of, as an app's first release, reaches all of the track's users", async () => {
-        play.result = { versionCode: 1002006, status: 'draft', listed: [] };
-        await publishAndroid(['--track', 'production', '--rollout', '10']);
-        const said = printed.join('\n');
-        expect(said).toContain("dev.example.demo 1.2.3 (versionCode 1002006) is a draft on Google Play's production track.");
-        expect(said).toContain("crossbind: Play stages updates alone, so that first release reaches all of the track's users, not 10% of them.");
+        expect(said).not.toContain('holds no page');
+        expect(said).toContain("crossbind: dev.example.demo versionCode 1002006, from the beta track, is a draft on Google Play's production track: Play takes drafts alone until an app's first release is out, so roll it out once in Play Console, under Test and release.");
     });
 
     test("sends the release notes of the listing's folder with the bundle, and nothing of the listing itself", async () => {

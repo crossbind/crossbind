@@ -170,7 +170,7 @@ const { data, cache, logs } = await app.paths();`,
         { type: 'h2', id: 'distribute', text: 'Distribute' },
         {
             type: 'p',
-            text: '`crossbind app build` writes what installs a desktop app beside it, and `crossbind app upload <store>` builds the app and sends it to a store: `app-store` to App Store Connect and TestFlight, `google-play` to a Google Play track, and `github` a desktop app\'s installers and update to a GitHub release. Each has its page:',
+            text: '`crossbind app build` writes what installs a desktop app beside it, and `crossbind app upload <store>` builds the app and sends it to a store\'s testers: `app-store` to App Store Connect and TestFlight, `google-play` to a Google Play testing track, and `github` a desktop app\'s installers and update to a draft GitHub release; `crossbind app release <store>` then puts it out to everyone. Each has its page:',
         },
         {
             type: 'ul',

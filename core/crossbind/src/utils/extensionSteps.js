@@ -33,10 +33,11 @@ function assertSteps(where, object, steps) {
     const notSteps = steps.filter((step) => object[step] !== undefined && typeof object[step] !== 'function');
     if (notSteps.length > 0) throw new Error(`crossbind: ${where}'s ${notSteps.join(' and ')} ${notSteps.length > 1 ? 'are' : 'is'} no function.`);
 }
-// A publisher's steps: those of an upload; send, which crossbind app store --send runs to send the store's page alone;
-// state, which tells what the store has now; and guide.
-const PUBLISHER_KEYS = ['platform', 'isDefault', 'store', 'options', 'after', 'build', 'check', 'buildNumber', 'buildEnv', 'upload', 'send', 'state', 'guide'];
-const PUBLISHER_STEPS = ['build', 'check', 'buildNumber', 'buildEnv', 'upload', 'send', 'state', 'guide'];
+// A publisher's steps: those of an upload; release, which crossbind app release runs to put out what testers have;
+// send, which crossbind app store --send runs to send the store's page alone; state, which tells what the store has
+// now; and guide.
+const PUBLISHER_KEYS = ['platform', 'isDefault', 'store', 'options', 'after', 'canStage', 'build', 'check', 'buildNumber', 'buildEnv', 'upload', 'release', 'send', 'state', 'guide'];
+const PUBLISHER_STEPS = ['build', 'check', 'buildNumber', 'buildEnv', 'upload', 'release', 'send', 'state', 'guide'];
 // The steps of a publisher that builds, which one after another publisher leaves to that one.
 const BUILD_STEPS = ['build', 'buildNumber', 'buildEnv'];
 // The options `crossbind app upload` has of its own, with crossbind's, and those `vite build` takes, which the command
@@ -75,7 +76,7 @@ function checkedPublishOption(where, name, option) {
 }
 
 // A publisher as crossbind runs it: the platforms it takes apps of, those of them an upload that names no store goes to it
-// for, the name its store goes by, the options it takes on the command line, the publisher it comes after, where it does, and its steps, which keep the object as their this.
+// for, the name its store goes by, the options it takes on the command line, the publisher it comes after, where it does, whether its release reaches a share of the users at first, as --rollout asks, and its steps, which keep the object as their this.
 export function checkedPublisher(publisher, where) {
     if (!isObject(publisher)) throw new Error(`crossbind: ${where} is no object.`);
     const unknown = Object.keys(publisher).find((key) => !PUBLISHER_KEYS.includes(key));
@@ -86,6 +87,7 @@ export function checkedPublisher(publisher, where) {
     if (publisher.after !== undefined && (typeof publisher.after !== 'string' || !NAME.test(publisher.after))) {
         throw new Error(`crossbind: ${where}.after is no name of a publisher.`);
     }
+    if (publisher.canStage !== undefined && typeof publisher.canStage !== 'boolean') throw new Error(`crossbind: ${where}.canStage is neither true nor false.`);
     assertSteps(where, publisher, PUBLISHER_STEPS);
     if (!publisher.upload) throw new Error(`crossbind: ${where} has no upload, the step that sends the app to its store.`);
     const ownBuild = BUILD_STEPS.filter((step) => publisher[step]);
@@ -101,6 +103,7 @@ export function checkedPublisher(publisher, where) {
         store: publisher.store ?? null,
         options: Object.fromEntries(Object.entries(options).map(([name, option]) => [name, checkedPublishOption(where, name, option)])),
         after: publisher.after ?? null,
+        ...(publisher.canStage ? { canStage: true } : {}),
         ...Object.fromEntries(steps),
     };
 }

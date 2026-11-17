@@ -18,7 +18,7 @@ const secrets = {
 const settings = (values) => ({ get: (key) => values[key] });
 
 const {
-    PLAY, highestVersionCode, keepSignIn, keptSignIn, playCredentials, playToken, playTracks, sendListing, uploadBundle,
+    PLAY, highestVersionCode, keepSignIn, keptSignIn, playCredentials, playToken, playTracks, promoteRelease, sendListing, uploadBundle,
 } = await import('../../../extensions/google-play/src/googlePlay.js');
 
 const { privateKey, publicKey } = generateKeyPairSync('rsa', { modulusLength: 2048 });
@@ -427,5 +427,48 @@ describe("an app's contact details and Data safety declaration on Google Play", 
         answers['POST /dataSafety'] = () => failure(403, 'The caller does not have permission');
         await expect(sendListing('dev.example.app', credentials(), { dataSafety: 'csv' })).rejects.toThrow('"Manage policy declarations"');
         expect(requests.some(({ route }) => route === 'POST /edits')).toBe(false);
+    });
+});
+
+describe('a release on Google Play put out on production', () => {
+    const credentials = () => playCredentials({ [PLAY.key]: keyFile }, settings({}));
+    const tested = {
+        tracks: [
+            { track: 'internal', releases: [{ status: 'completed', versionCodes: ['1000004'], name: '1.0.4', releaseNotes: [{ language: 'en-US', text: 'Fixes.' }] }] },
+            { track: 'beta', releases: [{ status: 'completed', versionCodes: ['1000006'], name: '1.0.6' }, { status: 'draft', versionCodes: ['1000007'] }] },
+            { track: 'production' },
+        ],
+    };
+    const productionOf = () => requests.filter(({ route }) => route === 'PUT /edits/E1/tracks/production').map(({ init }) => JSON.parse(init.body).releases[0]);
+
+    test("is the newest release the testing tracks have out to testers, with its name and notes, at the share given", async () => {
+        answers['GET /edits/E1/tracks'] = () => json(200, tested);
+        expect(await promoteRelease('dev.example.app', credentials(), { status: 'inProgress', userFraction: 0.1 }))
+            .toEqual({ versionCode: 1000006, name: '1.0.6', from: 'beta', status: 'inProgress' });
+        expect(productionOf()).toEqual([{ versionCodes: ['1000006'], status: 'inProgress', userFraction: 0.1, name: '1.0.6' }]);
+        expect(requests.at(-1).route).toBe('POST /edits/E1:commit');
+
+        requests.length = 0;
+        answers['GET /edits/E1/tracks'] = () => json(200, { tracks: [tested.tracks[0]] });
+        await promoteRelease('dev.example.app', credentials(), { status: 'completed' });
+        expect(productionOf()).toEqual([{ versionCodes: ['1000004'], status: 'completed', name: '1.0.4', releaseNotes: [{ language: 'en-US', text: 'Fixes.' }] }]);
+    });
+
+    test("of an app never released is a draft, which Play Console rolls out", async () => {
+        let commits = 0;
+        answers['POST /edits/E1:commit'] = () => (++commits === 1 ? failure(400, 'Only releases with status draft may be created on draft app.') : json(200, { id: 'E1' }));
+        expect((await promoteRelease('dev.example.app', credentials(), { status: 'completed' })).status).toBe('draft');
+        expect(productionOf().map(({ status }) => status)).toEqual(['completed', 'draft']);
+    });
+
+    test('stops where no testing track has a release out to testers, and names the rights production takes', async () => {
+        answers['GET /edits/E1/tracks'] = () => json(200, { tracks: [{ track: 'internal', releases: [{ status: 'draft', versionCodes: ['1000004'] }] }, { track: 'production' }] });
+        await expect(promoteRelease('dev.example.app', credentials(), { status: 'completed' }))
+            .rejects.toThrow("crossbind: Google Play's testing tracks have no release of dev.example.app out to testers: crossbind app upload google-play puts one there, and Play Console rolls a draft out.");
+        expect(requests.at(-1).route).toBe('DELETE /edits/E1');
+        delete answers['GET /edits/E1/tracks'];
+        answers['PUT /edits/E1/tracks/production'] = () => failure(403, 'The caller does not have permission');
+        await expect(promoteRelease('dev.example.app', credentials(), { status: 'completed' }))
+            .rejects.toThrow('with "Release to production, exclude devices, and use Play App Signing" for the app.');
     });
 });

@@ -118,7 +118,7 @@ describe("a project's App Store listing", () => {
 });
 
 describe("a project's App Store settings", () => {
-    test('are the copyright, categories, age rating answers and App Review contact an upload with --submit sends', () => {
+    test('are the copyright, categories, age rating answers and App Review contact a release sends', () => {
         write('copyright.txt', '2026 Example Ltd.\n');
         write('primary_category.txt', 'UTILITIES');
         write('secondary_category.txt', 'PRODUCTIVITY');
@@ -227,10 +227,13 @@ describe("crossbind app store's word on App Store Connect", () => {
 
         expect(guide.where).toBe('App Store Connect');
         expect(guide.problems).toEqual([]);
-        expect(guide.publishes).toEqual([
+        expect(guide.uploads).toEqual([
             'the iOS app, archived and uploaded, which TestFlight hands to testers once Apple has processed it; -p ios sends it alone',
             'then the macOS app, sandboxed, in an archive Xcode exports to App Store Connect, which signs it and its installer package in the cloud, and whose TestFlight hands it to Mac testers once Apple has processed it; -p macos sends it alone',
-            'with --submit, the page --send sends too, and the version to App Review',
+        ]);
+        expect(guide.releases).toEqual([
+            "the newest build of the version TestFlight's testers have, to App Review, which puts it out once approved, in phases over 7 days with --rollout",
+            'with it, the page --send sends',
         ]);
         expect(guide.sends.map(upath.toUnix)).toEqual([
             'store/app-store/en-US: name, privacy policy URL; 1 APP_IPHONE_67 screenshots',
@@ -238,7 +241,7 @@ describe("crossbind app store's word on App Store Connect", () => {
             'categories: UTILITIES',
         ]);
         const texts = guide.steps.map(({ text }) => text);
-        expect(texts[0]).toBe("Apps › New App: an app with dev.example.demo as its bundle ID, on iOS and macOS, as an upload without -p sends both, with its name, primary language and SKU, as Apple's API makes none; an upload without --submit registers the bundle ID first, so the form lists it. An app on iOS alone takes macOS later with the + beside its platform in the sidebar, as a universal purchase, which stays one once both platforms are approved, and uploads with -p ios until then.");
+        expect(texts[0]).toBe("Apps › New App: an app with dev.example.demo as its bundle ID, on iOS and macOS, as an upload without -p sends both, with its name, primary language and SKU, as Apple's API makes none; an upload registers the bundle ID first, so the form lists it. An app on iOS alone takes macOS later with the + beside its platform in the sidebar, as a universal purchase, which stays one once both platforms are approved, and uploads with -p ios until then.");
         expect(texts.map(upath.toUnix)).toEqual(expect.arrayContaining([
             "App Information › Age Rating: answer Apple's questions, which store/app-store/age_rating.json would send.",
             "The version's App Review Information: a contact's name, phone and e-mail, which store/app-store/review_information would send.",

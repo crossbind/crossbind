@@ -19,6 +19,21 @@ const git = (api, args) => {
 };
 const isPrerelease = (version) => version.split('+')[0].includes('-');
 
+// Stops an upload to a release that is out already, as an upload changes nothing public.
+function assertDraft(release, repository, tag) {
+    if (release && !release.draft) {
+        throw new Error(`crossbind: ${repository}'s release ${tag} is out already, and an upload changes nothing public: raise the version in package.json for the next release.`);
+    }
+}
+
+// The repository a release goes to and the token GitHub takes it from, or what is missing of them.
+function accessOf(api) {
+    const repository = githubRepository(api.project.package);
+    const token = githubToken();
+    const missing = [...(repository ? [] : [NO_REPOSITORY]), ...(token ? [] : [NO_TOKEN])];
+    return missing.length > 0 ? { missing } : { repository, call: githubCaller(repository, token) };
+}
+
 // The commit a new release's tag is made at where the repository has no such tag yet: the one a workflow of that
 // repository runs for, else the project's own where its origin is that repository; else none, and GitHub makes it at its
 // default branch.
@@ -62,9 +77,9 @@ async function warnUpdates(api, call, repository, updater) {
     if ((await call('GET', '')).private) api.warn(`crossbind: ${repository} is private, whose releases GitHub gives no app without a token, so none updates from them.`);
 }
 
-// The publisher of a desktop app's installers, and its update with app.updater, to a GitHub release of its version, as
-// its tag v<version> names it: a release made or taken as it is, where an asset of the same name gives way. It puts out
-// the release's page and each file's address, for a publisher after it.
+// The publisher of a desktop app's installers, and its update with app.updater, to a draft GitHub release of its
+// version, as its tag v<version> names it, made or taken as it is, where an asset of the same name gives way; the release
+// puts the draft out. It puts out the release's page and each file's address, for a publisher after it.
 export default function github() {
     return {
         name: 'github',
@@ -73,25 +88,18 @@ export default function github() {
         publisher: {
             platform: 'desktop',
             store: 'GitHub Releases',
-            options: {
-                draft: { help: "leave the release a draft, which an upload without --draft, or GitHub's page, puts out" },
-            },
 
             async check(api) {
-                const missing = [];
-                const repository = githubRepository(api.project.package);
-                if (!repository) missing.push(NO_REPOSITORY);
-                const token = githubToken();
-                if (!token) missing.push(NO_TOKEN);
+                const access = accessOf(api);
                 const { updater } = api.config.app;
-                if (updater && !process.env[UPDATER_KEY]) missing.push(NO_UPDATE_KEY);
+                const missing = [...(access.missing ?? []), ...(updater && !process.env[UPDATER_KEY] ? [NO_UPDATE_KEY] : [])];
                 if (missing.length > 0) return { missing };
+                const { call, repository } = access;
                 const { version } = api.app;
-                const call = githubCaller(repository, token);
                 if (updater) await warnUpdates(api, call, repository, updater);
                 const release = await releaseOf(call, `v${version}`);
-                const kind = release ? `${release.draft ? 'draft ' : ''}release` : 'new release';
-                api.log(`crossbind: publishing the ${api.platform} app of ${version} to ${repository}'s ${kind} v${version}; building the app first.`);
+                assertDraft(release, repository, `v${version}`);
+                api.log(`crossbind: publishing the ${api.platform} app of ${version} to ${repository}'s ${release ? 'draft' : 'new draft'} release v${version}; building the app first.`);
                 return { session: { call, repository, hasUpdate: Boolean(updater) } };
             },
 
@@ -99,7 +107,7 @@ export default function github() {
             buildEnv: () => ({ GH_TOKEN: undefined, GITHUB_TOKEN: undefined }),
 
             async upload(api, { call, repository, hasUpdate }, { apps }) {
-                const { platform, app: { version }, options: { draft: isDraft } } = api;
+                const { platform, app: { version } } = api;
                 const files = apps.flatMap((app) => releaseFiles(api, app, hasUpdate));
                 const twice = files.find(({ name }, index) => files.findIndex((other) => other.name === name) !== index);
                 if (twice) {
@@ -109,6 +117,7 @@ export default function github() {
                 const tag = `v${version}`;
                 // Another publish of the version may have made its release during this one's build.
                 let release = await releaseOf(call, tag);
+                assertDraft(release, repository, tag);
                 if (!release) {
                     const commit = releaseCommit(api, repository);
                     if (!commit) api.log(`crossbind: ${repository} gets the tag ${tag} where it has none at its default branch, as it has no commit of this build's.`);
@@ -119,16 +128,28 @@ export default function github() {
                     api.log(`crossbind: uploading ${name} to ${tag}.`);
                     uploaded.push(await uploadAsset(call, release, file, name));
                 }
-                const published = (out) => ({
-                    published: { repository, tag, url: out.html_url, files: uploaded.map(({ name, browser_download_url: url }) => ({ name, url })) },
-                });
-                if (release.draft && isDraft) {
-                    api.log(`crossbind: the ${platform} app of ${version} is on the draft release ${tag}, which an upload without --draft, or GitHub's page, puts out: ${release.html_url}`);
-                    return published(release);
+                api.log(`crossbind: the ${platform} app of ${version} is on the draft release ${tag}, which crossbind app release github puts out: ${release.html_url}`);
+                return {
+                    published: { repository, tag, url: release.html_url, files: uploaded.map(({ name, browser_download_url: url }) => ({ name, url })) },
+                };
+            },
+
+            // Puts out the draft release of the app's version, with no build, which GitHub makes the latest unless it
+            // has a newer version out.
+            async release(api) {
+                const access = accessOf(api);
+                if (access.missing) return access;
+                const { call, repository } = access;
+                const tag = `v${api.app.version}`;
+                const release = await releaseOf(call, tag);
+                if (!release) throw new Error(`crossbind: ${repository} has no release ${tag}: crossbind app upload github makes it a draft, with the app's installers.`);
+                if (!release.draft) {
+                    api.log(`crossbind: ${repository}'s release ${tag} is out already: ${release.html_url}`);
+                    return {};
                 }
-                const out = release.draft ? await publishRelease(call, release) : release;
-                api.log(`crossbind: the ${platform} app of ${version} is out on GitHub's release ${tag}${isDraft ? ', which was out already' : ''}: ${out.html_url}`);
-                return published(out);
+                const out = await publishRelease(call, release);
+                api.log(`crossbind: ${repository}'s release ${tag} is out: ${out.html_url}`);
+                return {};
             },
         },
     };

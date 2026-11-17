@@ -8,6 +8,7 @@ import {
     PUBLISH_PLATFORMS, extensionStep, isJsonValue, ownExtensions, withListed, withoutNamed,
 } from '../utils/appExtensions.js';
 import { CONFIG_CHANGES } from '../utils/configChanges.js';
+import { appStores } from '../utils/appOptions.js';
 import { hasTerminal } from '../utils/ask.js';
 import resolveAppHostRoot from '../utils/resolveAppHost.js';
 
@@ -272,4 +273,24 @@ export default async function publish(args, { platform, envPlatform, runVite }) 
             throw afterSent(error, targets.slice(0, index), targets.slice(index), storeName(chain[0]));
         }
     }
+}
+
+// Uploads to the store the command names, else to each one app.stores names, in its order, that takes apps of the
+// platform -p or CROSSBIND_APP_PLATFORM names, or all of them without one; else to the one the platform goes first for,
+// as an upload does.
+export async function uploadStores(args, options) {
+    const stores = appStores(state.config);
+    const isNamed = args[0] !== undefined && !args[0].startsWith('-');
+    const where = options.platform ?? options.envPlatform;
+    const publishers = publishersOf(state.config.extensions);
+    const takes = (name) => {
+        const extension = publishers.find((one) => one.name === name);
+        return !where || !extension || extension.publisher.platforms.includes(where);
+    };
+    const chosen = isNamed || !stores ? [] : stores.filter(takes);
+    if (chosen.length === 0) {
+        await publish(args, options);
+        return;
+    }
+    for (const store of chosen) await publish([store, ...args], options);
 }

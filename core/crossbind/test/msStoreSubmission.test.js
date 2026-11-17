@@ -7,7 +7,7 @@ import {
     afterEach, beforeEach, describe, expect, test, vi,
 } from 'vitest';
 import {
-    changedSubmission, partnerCenterCaller, storeApp, submitPackages, uploadBlob,
+    changedSubmission, partnerCenterCaller, releaseSubmission, storeApp, submitPackages, uploadBlob,
 } from '../../../extensions/microsoft-store/src/partnerCenter.js';
 import { writeZip } from '../../../extensions/microsoft-store/src/submissionZip.js';
 import { pngOf, writeUnder } from './listingImages.js';
@@ -145,9 +145,11 @@ describe('a submission Partner Center made', () => {
             ['demo-win32-x64.msix', packages[0]], ['demo-win32-arm64.msix', packages[1]], [tileName, tile],
         ]);
         expect(submission).toMatchObject({ applicationCategory: 'UtilitiesAndTools', notesForCertification: 'No sign-in.' });
-        expect(submission.packageDeliveryOptions.packageRollout).toEqual({ isPackageRollout: false, packageRolloutPercentage: 0, fallbackSubmissionId: '1' });
-        expect(changedSubmission(created(shotName), { packages, rollout: 12.5 }).submission.packageDeliveryOptions.packageRollout)
-            .toMatchObject({ isPackageRollout: true, packageRolloutPercentage: 12.5 });
+        expect(submission.packageDeliveryOptions).toEqual(created(shotName).packageDeliveryOptions);
+        expect(changedSubmission(created(shotName), { rollout: 12.5 }).submission.packageDeliveryOptions)
+            .toEqual({ packageRollout: { isPackageRollout: true, packageRolloutPercentage: 12.5, fallbackSubmissionId: '1' }, isMandatoryUpdate: false });
+        expect(changedSubmission(created(shotName), { rollout: null }).submission.packageDeliveryOptions.packageRollout)
+            .toEqual({ isPackageRollout: false, packageRolloutPercentage: 0, fallbackSubmissionId: '1' });
     });
 
     test('keeps the packages and the rollout Partner Center has where the listing goes alone', () => {
@@ -246,7 +248,7 @@ describe("an app's submission through Partner Center's API", () => {
         expect(calls.map(([method]) => method)).toEqual(['POST', 'PUT', 'POST', 'GET', 'GET']);
     });
 
-    test('leaves a draft uncommitted, for Partner Center to submit', async () => {
+    test('leaves a draft uncommitted, for the release to submit', async () => {
         expect(await submit({ isDraft: true })).toEqual({ id: 'S2', status: 'PendingCommit' });
         expect(calls.map(([method]) => method)).toEqual(['POST', 'PUT']);
     });
@@ -260,6 +262,61 @@ describe("an app's submission through Partner Center's API", () => {
         statuses = [{ status: 'CommitFailed', statusDetails: { errors: [{ code: 'InvalidParameterValue', details: 'The title is no reserved name.' }] } }];
         await expect(submit()).rejects.toThrow('crossbind: Partner Center refused the submission: InvalidParameterValue: The title is no reserved name.');
         expect(calls.at(-1)).toEqual(['DELETE', 'applications/9N1/submissions/S2']);
+    });
+});
+
+describe("the release of an app's submission an upload left", () => {
+    let calls;
+    let statuses;
+    let pending;
+    let put;
+    const call = async (method, route, body) => {
+        calls.push([method, route]);
+        if (method === 'PUT') put = body;
+        if (method === 'GET' && route === 'applications/9N1/submissions/S2') return pending;
+        if (route.endsWith('/status')) return statuses.shift();
+        return body ?? {};
+    };
+    const release = (options = {}) => releaseSubmission(call, {
+        appId: '9N1', submissionId: 'S2', listings: [{ language: 'en-US', texts: { description: 'New.' }, images: {} }], rollout: 10, zip: upath.join(dir, 'submission.zip'), ...options,
+    });
+
+    beforeEach(() => {
+        calls = [];
+        statuses = [{ status: 'CommitStarted' }, { status: 'PreProcessing' }];
+        pending = {
+            id: 'S2', status: 'PendingCommit', fileUploadUrl: SAS, applicationPackages: [{ fileName: 'demo-win32-x64.msix', fileStatus: 'Uploaded' }], listings: {}, packageDeliveryOptions: { packageRollout: { fallbackSubmissionId: '1' } },
+        };
+        put = null;
+    });
+
+    test('commits it with its packages, the listing and the rollout, and waits for Partner Center to take it', async () => {
+        vi.useFakeTimers();
+        expect(await settled(release())).toBe('PreProcessing');
+        expect(calls).toEqual([
+            ['GET', 'applications/9N1/submissions/S2'],
+            ['PUT', 'applications/9N1/submissions/S2'],
+            ['POST', 'applications/9N1/submissions/S2/commit'],
+            ['GET', 'applications/9N1/submissions/S2/status'],
+            ['GET', 'applications/9N1/submissions/S2/status'],
+        ]);
+        expect(put.applicationPackages).toEqual(pending.applicationPackages);
+        expect(put.listings['en-us'].baseListing.description).toBe('New.');
+        expect(put.packageDeliveryOptions.packageRollout).toEqual({ fallbackSubmissionId: '1', isPackageRollout: true, packageRolloutPercentage: 10 });
+        expect(requests).toEqual([]);
+    });
+
+    test('commits none Partner Center took already, and deletes none it refuses, as the upload made it', async () => {
+        pending = { ...pending, status: 'Certification' };
+        await expect(release()).rejects
+            .toThrow('crossbind: Partner Center has submission S2 as Certification already, which goes on as Partner Center mails: crossbind app upload microsoft-store leaves the next one to release.');
+        expect(calls).toEqual([['GET', 'applications/9N1/submissions/S2']]);
+
+        pending = { ...pending, status: 'PendingCommit' };
+        calls = [];
+        statuses = [{ status: 'CommitFailed', statusDetails: { errors: [{ code: 'InvalidParameterValue', details: 'The title is no reserved name.' }] } }];
+        await expect(release()).rejects.toThrow('crossbind: Partner Center refused the submission: InvalidParameterValue: The title is no reserved name.');
+        expect(calls.map(([method]) => method)).not.toContain('DELETE');
     });
 });
 

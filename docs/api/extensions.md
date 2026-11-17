@@ -1128,7 +1128,8 @@ the path as a URL holds it: escaped where it must be, with a query of its own af
 ## Publishers
 
 An extension's `publisher` sends the app to a store: `crossbind app upload <name>` runs it, with the extension's
-name. crossbind's own `google-play`, `app-store`, `microsoft-store` and `github` are publishers of this kind, which use the same
+name, to the store's testers, and `crossbind app release <name>` puts out to everyone what they have. crossbind's own
+`google-play`, `app-store`, `microsoft-store` and `github` are publishers of this kind, which use the same
 [`api`](#the-api) alone, and an extension `extensions` lists under one of their names, with a publisher, replaces it;
 one with an `app` alone leaves it as it is.
 
@@ -1142,9 +1143,9 @@ export default function demoStore() {
         publisher: {
             platform: 'android',
             store: 'Demo Store',
+            canStage: true,
             options: {
-                channel: { help: 'the channel the release goes to', value: '<channel>', default: 'beta' },
-                draft: { help: 'leave the release a draft' },
+                channel: { help: 'the testing channel the build goes to', value: '<channel>', default: 'beta' },
             },
             async check(api) {
                 const token = process.env.DEMO_STORE_TOKEN ?? api.secrets.get('token');
@@ -1155,6 +1156,14 @@ export default function demoStore() {
                 api.log(`uploading ${bundle} to Demo Store's ${api.options.channel} channel.`);
                 // The store's own API takes it here.
                 return { published: { url: 'https://store.example/apps/demo' } };
+            },
+            async release(api) {
+                const token = process.env.DEMO_STORE_TOKEN ?? api.secrets.get('token');
+                if (!token) return { missing: ['Demo Store takes releases with a token: set DEMO_STORE_TOKEN.'] };
+                const share = api.options.rollout ?? 100;
+                api.log(`putting the testers' build out to ${share}% of Demo Store's users.`);
+                // The store's own API takes it here.
+                return {};
             },
         },
     };
@@ -1174,6 +1183,8 @@ export default function demoStore() {
   take an option of one name alike.
 - `after`: The publisher it comes after: the upload runs that one first, from the same build. A publisher after
   another takes no `build`, `buildNumber` or `buildEnv`, and asks for no other build.
+- `canStage`: True where its `release` reaches a share of the users at first, as `--rollout` asks. A release with
+  `--rollout` below 100 stops before any store releases where one of its stores has none.
 - `build(api)`: The changes the upload's build makes to `crossbind.config.js`, the app's other builds keeping it as it
   is: a JSON merge patch of its export, in which objects merge, `null` removes a key and any other value takes the place
   of the one there. `{ app: { updater: null } }` builds the app without its updater, as a store that updates apps itself
@@ -1183,9 +1194,13 @@ export default function demoStore() {
 - `buildNumber(api, session)`: The build number, a whole number from 1 to 2100000000, as both stores take, which the
   build gets as `CROSSBIND_APP_BUILD_NUMBER`, or null for the app's own.
 - `buildEnv(api, session)`: Variables the build runs with beside crossbind's; one set to `undefined` is left out.
-- `upload(api, session, output, published)`: Sends what the build made to the store. It returns
-  `{ isRebuildAsked: true }` for another build, after which it runs again, four builds in all at most, or
-  `{ published }`: what it put out, which a publisher after it gets as `published`.
+- `upload(api, session, output, published)`: Sends what the build made to the store's testers, changing nothing its
+  users see. It returns `{ isRebuildAsked: true }` for another build, after which it runs again, four builds in all at
+  most, or `{ published }`: what it put out, which a publisher after it gets as `published`.
+- `release(api)`: Puts out to everyone what the store's testers have, with no build, and the page `store/` holds with
+  it, as `crossbind app release` runs it for each platform the publisher takes, or the one `-p` names.
+  `api.options.rollout` is the share of the users it reaches at first, a percent below 100, or null for all of them. It
+  returns `{ missing }` as `send` does.
 - `send(api)`: Sends the store's page, the listing, screenshots and settings the project's `store/` folder holds, with no
   build, as `crossbind app store --send` runs it for each platform the publisher takes, or the one `-p` names. It returns
   `{ missing }` for what is not there, which the command names with every other store's at once, and asks for it and
@@ -1194,10 +1209,10 @@ export default function demoStore() {
   nothing, and tells with the credentials an upload takes where they are at hand, or how to see it where they are not.
   A failure is written as a line of its own.
 - `guide(api)`: What `crossbind app store` says of the store, with no build and no credentials:
-  `{ publishes, sends, problems, where, steps }`, the lines of what an upload sends and of what `--send` sends, every
-  problem the store would refuse of the project's files, where the steps are done, and the steps only the store's own
-  site takes, once for the app, each `{ text, url, details }`, its details a list of lines. A store whose publisher has
-  none is left out of `crossbind app store`.
+  `{ uploads, sends, releases, problems, where, steps }`, the lines of what an upload sends, of what `--send` sends and
+  of what a release puts out, every problem the store would refuse of the project's files, where the steps are done,
+  and the steps only the store's own site takes, once for the app, each `{ text, url, details }`, its details a list of
+  lines. A store whose publisher has none is left out of `crossbind app store`.
 
 All but `platform` and `upload` are optional. A step that fails with a message not crossbind's own stops the upload
 with one that names the publisher and the step, as `demo-store's check failed: â€¦`.
@@ -1220,7 +1235,8 @@ with one that names the publisher and the step, as `demo-store's check failed: â
    error says which went and the `-p` that publishes the rest.
 
 Without a name, `-p android` publishes to `google-play` and `-p ios` to `app-store`. `crossbind app upload --help`
-lists the app's stores, crossbind's own and its extensions', with their options.
+lists the app's stores, crossbind's own and its extensions', with their options. Without a name, an upload goes to each
+store `app.stores` names, as a release does.
 
 ### What the build made
 

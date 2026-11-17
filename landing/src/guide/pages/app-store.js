@@ -46,7 +46,7 @@ export default {
     slug: 'app-store',
     title: 'App Store',
     description: 'Upload an iOS app to App Store Connect and TestFlight with one command, hand it to App Review, and keep its listing in files.',
-    lede: '`crossbind app upload app-store -p ios` (or `crossbind app upload -p ios`) builds the iOS app on a Mac with Xcode and uploads it to App Store Connect; TestFlight hands it to testers once Apple has processed it, usually within 5 to 30 minutes. Without `-p`, `crossbind app upload app-store` sends the macOS app after it. `--submit` also sends the version to App Review, with its listing.',
+    lede: '`crossbind app upload app-store -p ios` (or `crossbind app upload -p ios`) builds the iOS app on a Mac with Xcode and uploads it to App Store Connect; TestFlight hands it to testers once Apple has processed it, usually within 5 to 30 minutes. Without `-p`, `crossbind app upload app-store` sends the macOS app after it. `crossbind app release app-store` then hands the version to App Review, with its listing and no build.',
     blocks: [
         { type: 'h2', id: 'needs', text: 'What it needs' },
         { type: 'p', text: 'Before the build, the upload checks that it has:' },
@@ -114,31 +114,31 @@ export default {
         { type: 'h2', id: 'review', text: 'App Review' },
         {
             type: 'p',
-            text: "`--submit` also hands the version to App Review, through App Store Connect's API, with the API key above of the App Manager or Admin role. Before the build, the upload then also checks that App Store Connect has the app, that the version is not out or in review, and that App Review has no other submission of the app; `app.encryption` has to be set.",
+            text: "`crossbind app release app-store` hands the version to App Review, with no build, through App Store Connect's API, with the API key above of the App Manager or Admin role, on any machine. It checks that App Store Connect has the app, that the version is not out or in review, and that App Review has no other submission of the app, and it takes the newest build of the version TestFlight's testers have: one still processing, or none, stops it before anything changes. A build uploaded without an answer on encryption takes `app.encryption`'s.",
         },
         {
             type: 'p',
-            text: "After the upload, it takes the App Store version of `package.json`'s number, renaming the one App Store Connect prepared or making one, and puts the [listing](#listing) into it. It then waits up to an hour for the build to be processed, picks it for the version and submits the version for review. `--phased` releases the approved version in phases over 7 days; without it the version goes out as its release option in App Store Connect says.",
+            text: "It then takes the App Store version of `package.json`'s number, renaming the one App Store Connect prepared or making one, puts the [listing](#listing) into it, picks the build and submits the version for review. `--rollout` releases the approved version in phases over 7 days; without it the version goes out as its release option in App Store Connect says.",
         },
         {
             type: 'p',
-            text: "What only App Store Connect does stays there: screenshots of devices the listing has no folder for, app previews, App Privacy answers, price and availability, content rights, export compliance documents, and replies to App Review. `crossbind app store app-store` lists each, with what to enter. The age rating, categories, copyright and App Review's contact go with `--send` and with `--submit`, from the [listing](#listing)'s files.",
+            text: "What only App Store Connect does stays there: screenshots of devices the listing has no folder for, app previews, App Privacy answers, price and availability, content rights, export compliance documents, and replies to App Review. `crossbind app store app-store` lists each, with what to enter. The age rating, categories, copyright and App Review's contact go with `--send` and with a release, from the [listing](#listing)'s files.",
         },
         {
             type: 'p',
-            text: 'After App Review answers with issues, send a new build with an upload without `--submit`. A submission left with items in it, as an upload that stopped midway leaves one, stops the next upload before its build: submit or remove its items in App Store Connect.',
+            text: 'After App Review answers with issues, send a new build with an upload. A submission left with items in it, as a release that stopped midway leaves one, stops the next release before it changes anything: submit or remove its items in App Store Connect.',
         },
-        { type: 'p', text: '`--track`, `--draft` and `--rollout` belong to other stores ([Google Play](/guide/google-play/#tracks) and [GitHub Releases](/guide/github-releases/)) and stop an App Store publish.' },
+        { type: 'p', text: '`--track` belongs to [Google Play](/guide/google-play/#tracks) and stops an App Store upload.' },
 
         { type: 'h2', id: 'listing', text: 'The listing' },
         {
             type: 'p',
-            text: "A project's `store/app-store` folder holds its App Store listing, which goes up with `crossbind app store app-store --send`, with no build, through the API key above, and with `--submit`: a folder per locale, named as App Store Connect names it (`en-US`, `tr`, `zh-Hans`), with these text files and a folder of screenshots per display type:",
+            text: "A project's `store/app-store` folder holds its App Store listing, which goes up with `crossbind app store app-store --send`, with no build, through the API key above, and with a release: a folder per locale, named as App Store Connect names it (`en-US`, `tr`, `zh-Hans`), with these text files and a folder of screenshots per display type:",
         },
         { type: 'code', file: 'store/app-store', code: LISTING },
         {
             type: 'p',
-            text: "`--send`, or an upload with `--submit`, sends what differs from App Store Connect, and a locale it has none of gets a new localization; the name, subtitle and privacy policy URL go into the app's information. What the folder leaves out stays as it is, so it may hold the release notes alone. An empty `subtitle.txt`, `promotional_text.txt` or `marketing_url.txt` clears its text. Before anything goes, it stops at any other empty text, a text over App Store Connect's limit, and a file or folder it does not take.",
+            text: "`--send`, or a release, sends what differs from App Store Connect, and a locale it has none of gets a new localization; the name, subtitle and privacy policy URL go into the app's information. What the folder leaves out stays as it is, so it may hold the release notes alone. An empty `subtitle.txt`, `promotional_text.txt` or `marketing_url.txt` clears its text. Before anything goes, it stops at any other empty text, a text over App Store Connect's limit, and a file or folder it does not take.",
         },
         {
             type: 'p',
@@ -146,17 +146,17 @@ export default {
         },
         {
             type: 'p',
-            text: 'Before anything goes, `--send` and an upload with `--submit` stop at a file that is no PNG or JPEG image, such as a Git LFS pointer; at a screenshot of a size its type does not take, portrait or turned (`APP_IPHONE_67` takes 1320 × 2868, `APP_IPAD_PRO_3GEN_129` 2064 × 2752); and at a screenshot with transparency. App Store Connect wants 13-inch iPad screenshots of every app that runs on iPads, as crossbind\'s apps do.',
+            text: 'Before anything goes, `--send` and a release stop at a file that is no PNG or JPEG image, such as a Git LFS pointer; at a screenshot of a size its type does not take, portrait or turned (`APP_IPHONE_67` takes 1320 × 2868, `APP_IPAD_PRO_3GEN_129` 2064 × 2752); and at a screenshot with transparency. App Store Connect wants 13-inch iPad screenshots of every app that runs on iPads, as crossbind\'s apps do.',
         },
         {
             type: 'p',
-            text: "Beside the locales, `copyright.txt`, `primary_category.txt` and `secondary_category.txt` (such as `UTILITIES`), `age_rating.json` with the answers by the API's names, and `review_information/` with App Review's contact go with `--submit` where App Store Connect's differ.",
+            text: "Beside the locales, `copyright.txt`, `primary_category.txt` and `secondary_category.txt` (such as `UTILITIES`), `age_rating.json` with the answers by the API's names, and `review_information/` with App Review's contact go with `--send` and a release where App Store Connect's differ.",
         },
 
         { type: 'h2', id: 'mac-app-store', text: 'The Mac App Store' },
         {
             type: 'p',
-            text: `\`crossbind app upload app-store -p macos\`, or the upload without \`-p\` after the iOS app, sends the macOS app into the same App Store Connect record, as a universal purchase, once you add its macOS platform there with the + beside the platform in the sidebar. It builds the app in the App Sandbox ([app.md](${REFERENCE}#the-app-sandbox)), without its updater and for macOS 13 or later, and Xcode exports it to App Store Connect as it does the iOS app: Xcode's account or an Admin key signs the app and its installer package in the cloud, so you make no certificate by hand. TestFlight hands it to Mac testers, and \`--submit\` to App Review with the listing's \`APP_DESKTOP\` screenshots; \`crossbind app store app-store\` lists what is left. Full reference: [app.md](${REFERENCE}#mac-app-store).`,
+            text: `\`crossbind app upload app-store -p macos\`, or the upload without \`-p\` after the iOS app, sends the macOS app into the same App Store Connect record, as a universal purchase, once you add its macOS platform there with the + beside the platform in the sidebar. It builds the app in the App Sandbox ([app.md](${REFERENCE}#the-app-sandbox)), without its updater and for macOS 13 or later, and Xcode exports it to App Store Connect as it does the iOS app: Xcode's account or an Admin key signs the app and its installer package in the cloud, so you make no certificate by hand. TestFlight hands it to Mac testers, and \`crossbind app release app-store -p macos\` to App Review with the listing's \`APP_DESKTOP\` screenshots; \`crossbind app store app-store\` lists what is left. Full reference: [app.md](${REFERENCE}#mac-app-store).`,
         },
 
         { type: 'h2', id: 'ci', text: 'From CI' },

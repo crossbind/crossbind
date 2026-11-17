@@ -200,9 +200,13 @@ describe("crossbind app store's word on Google Play", () => {
         const guide = playGuide({ project: { root: project }, config: { app: { id: 'dev.example.demo' } } });
 
         expect(guide.where).toBe('Play Console');
-        expect(guide.publishes.map(upath.toUnix)).toEqual([
-            'the bundle, signed with the upload key, with its native debug symbols, on a track',
+        expect(guide.uploads.map(upath.toUnix)).toEqual([
+            'the bundle, signed with the upload key, with its native debug symbols, on a testing track: internal, or the one --track names',
             'its release notes in store/google-play/en-US/changelogs',
+        ]);
+        expect(guide.releases).toEqual([
+            'the newest release the testing tracks have out to testers, on production, to the share of users --rollout gives at first',
+            'with it, the page --send sends',
         ]);
         expect(guide.sends.map(upath.toUnix)).toEqual([
             'store/google-play/en-US: full description, short description, title; icon',
