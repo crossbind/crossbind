@@ -1,6 +1,6 @@
 {
     "name": "@crossbind/extension-msix",
-    "version": "2.0.0-beta.77",
+    "version": "2.0.0-beta.78",
     "description": "crossbind app extension: a Windows app's MSIX package, for the Microsoft Store or handed out signed.",
     "homepage": "https://github.com/crossbind/crossbind/tree/main/extensions/msix#readme",
     "repository": "https://github.com/crossbind/crossbind.git",
