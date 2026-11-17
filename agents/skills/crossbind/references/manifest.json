@@ -94,7 +94,7 @@
     {
       "source": "docs/api/rust.md",
       "output": "api/rust.md",
-      "sha256": "5f535cce58d3bd57382dd34c382c2e1215b62317a41742f2005a7f86dfc6b57f"
+      "sha256": "d9d262b3be04ab4dbe59f71494f51fc520a8f9cd8caff6b907baf9b3e88b24e2"
     },
     {
       "source": "docs/api/swig-escape.md",
@@ -114,7 +114,7 @@
     {
       "source": "docs/api/wasi.md",
       "output": "api/wasi.md",
-      "sha256": "6d4ce3e0ecb8654087baf4e8a5da0d155338e5a339fc2a70531eba9492cbd7a6"
+      "sha256": "e5461c6f3e20ea54947fc8f3da7f14e9fc1206f8c3bc4bd784db80f2a94db03e"
     },
     {
       "source": "docs/playbooks/integration/README.md",
