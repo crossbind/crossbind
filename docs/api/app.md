@@ -71,9 +71,11 @@ export default defineConfig({ plugins: [viteCrossbindPlugin()] });
   `dist/<name>-android.aab` too (see [Android](#android)).
 - `crossbind build -p android -e app`: Writes the Gradle project with no page in it: `<paths.output>/<name>-android`, or
   `<name>-android.debug` for a debug build. A release build packages it as `crossbind app build -p android` does.
-- `crossbind app updater-key`: Prints a new key pair for a desktop app's updates: the public key for
+- `crossbind app key`: Says which keys sign the app and where each is kept: this machine's upload key, and each key an
+  extension adds, as the updater's pair, which the two below make.
+- `crossbind app key updater`: Prints a new key pair for a desktop app's updates: the public key for
   `app.updater.publicKey`, the private one for `CROSSBIND_UPDATER_PRIVATE_KEY` (see [Updates](#updates)).
-- `crossbind app upload-key`: Makes this machine's upload key, which signs an Android app's bundle for Google Play, and
+- `crossbind app key upload`: Makes this machine's upload key, which signs an Android app's bundle for Google Play, and
   keeps its password in the system keychain; `--use <keystore>` takes a key you have instead (see [The upload
   key](#the-upload-key)).
 - `crossbind app publish google-play`: Builds the Android app with the next versionCode Google Play takes and releases
@@ -496,12 +498,12 @@ A desktop app updates itself from where `app.updater` says, with updates the key
 app: {
     updater: {
         url: 'https://example.com/updates/<name>-{platform}-{arch}.update.json',
-        publicKey: '<what crossbind app updater-key prints>',
+        publicKey: '<what crossbind app key updater prints>',
     },
 },
 ```
 
-`crossbind app updater-key` makes the key pair. The public key goes in `app.updater.publicKey`; the private one goes in
+`crossbind app key updater` makes the key pair. The public key goes in `app.updater.publicKey`; the private one goes in
 `CROSSBIND_UPDATER_PRIVATE_KEY` where the app is built, and nowhere else, as whoever has it can sign an update the app
 installs. With it, `crossbind app build` writes each desktop app's update beside the app, signed with Ed25519:
 
@@ -1404,7 +1406,7 @@ shows function names. Hermes and fbjni come stripped from their releases, so the
 
 ### The upload key
 
-`crossbind app upload-key` makes one, so neither a JDK nor any knowledge of keystores is needed. It runs `keytool` in
+`crossbind app key upload` makes one, so neither a JDK nor any knowledge of keystores is needed. It runs `keytool` in
 the android-app image, with no network, and writes `~/.crossbind/keys/android-upload.p12`, an RSA 2048 key valid for
 10,000 days, which `~/.crossbind.json` then names as `ANDROID_KEYSTORE` and `ANDROID_KEY_ALIAS`. Its password is one
 crossbind makes, 24 random characters shown once, or one you type. A typed one needs 15 characters or more, as NIST SP
@@ -1421,7 +1423,7 @@ as a password manager: Google Play keeps only the upload key's certificate, and 
 Play Console, which takes effect 72 hours later. The app's own signing key stays with Google, so its users see no
 change.
 
-A key you have, from Android Studio or `keytool`, signs as well. `crossbind app upload-key --use <keystore> [--alias
+A key you have, from Android Studio or `keytool`, signs as well. `crossbind app key upload --use <keystore> [--alias
 <alias>]` checks that it opens with its password and keeps it the same way. Or the environment names it for each build,
 as CI does, and comes before the machine's:
 
@@ -1570,7 +1572,7 @@ Setting two of them stops the publish. Once, for each app or account:
 
 On a terminal, the publish asks for what is missing and sets it up before the build:
 - the package name, one both stores take, which it writes into `crossbind.config.js` once you say yes;
-- the upload key, which it makes as `crossbind app upload-key` does;
+- the upload key, which it makes as `crossbind app key upload` does;
 - the Google sign-in, after a yes, and another account's when the one signed in has no release rights for the app;
 - what only Play Console does, creating the app and inviting a service account: the publish names it, opens Play
   Console, and checks again when you press Enter.
@@ -1776,7 +1778,7 @@ release updates from the newest one GitHub has out:
 app: {
     updater: {
         url: 'https://github.com/<owner>/<repo>/releases/latest/download/<name>-{platform}-{arch}.update.json',
-        publicKey: '<what crossbind app updater-key prints>',
+        publicKey: '<what crossbind app key updater prints>',
     },
 },
 ```
@@ -1939,7 +1941,7 @@ where the publish asks for the app's settings and writes them into `crossbind.co
 Xcode account and no one to sign in to Google, so it needs these besides, as the repository's secrets and variables:
 
 - **Google Play**: The upload key as a base64 secret, which `base64 < <keystore>` prints, with its alias and its
-  password, which `crossbind app upload-key --show-password` prints. A service account invited in Play Console (see
+  password, which `crossbind app key upload --show-password` prints. A service account invited in Play Console (see
   [Google Play](#google-play)), through Workload Identity Federation with no key, or its JSON key.
 - **App Store Connect**: `app.team` in `crossbind.config.js`, as this machine's `XCODE_DEVELOPMENT_TEAM` stays behind.
   An App Store Connect API key, its `.p8` as a secret: an Admin key, whose uploads Apple signs in the cloud and whose

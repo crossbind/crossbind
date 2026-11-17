@@ -71,7 +71,7 @@ export default {
         { type: 'h2', id: 'upload-key', text: 'The upload key' },
         {
             type: 'p',
-            text: '`crossbind app upload-key` makes one, with no JDK needed: an RSA 2048 key valid for 10,000 days, in `~/.crossbind/keys/android-upload.p12`. Its password is 24 random characters, shown once, or one you type of 15 characters or more. The system keychain keeps the password, so builds sign without asking; `--show-password` prints it again, for another machine or CI.',
+            text: '`crossbind app key upload` makes one, with no JDK needed: an RSA 2048 key valid for 10,000 days, in `~/.crossbind/keys/android-upload.p12`. Its password is 24 random characters, shown once, or one you type of 15 characters or more. The system keychain keeps the password, so builds sign without asking; `--show-password` prints it again, for another machine or CI.',
         },
         {
             type: 'p',
@@ -79,7 +79,7 @@ export default {
         },
         {
             type: 'p',
-            text: 'A key you already have, from Android Studio or `keytool`, works too: `crossbind app upload-key --use <keystore> [--alias <alias>]` checks it and keeps it the same way. Or name it in the environment, which wins over the machine\'s, as in CI:',
+            text: 'A key you already have, from Android Studio or `keytool`, works too: `crossbind app key upload --use <keystore> [--alias <alias>]` checks it and keeps it the same way. Or name it in the environment, which wins over the machine\'s, as in CI:',
         },
         {
             type: 'entries',
@@ -173,7 +173,7 @@ export default {
         { type: 'h2', id: 'ci', text: 'From CI' },
         {
             type: 'p',
-            text: "CI asks nothing, so publish once on your own machine first: it writes the app's settings into `crossbind.config.js`, which you commit. CI then needs the upload key as a base64 secret (`base64 < <keystore>`), its alias and its password (`crossbind app upload-key --show-password`), and a service account invited in Play Console, through Workload Identity Federation with no key, or its JSON key:",
+            text: "CI asks nothing, so publish once on your own machine first: it writes the app's settings into `crossbind.config.js`, which you commit. CI then needs the upload key as a base64 secret (`base64 < <keystore>`), its alias and its password (`crossbind app key upload --show-password`), and a service account invited in Play Console, through Workload Identity Federation with no key, or its JSON key:",
         },
         { type: 'code', file: '.github/workflows/google-play.yml', code: WORKFLOW },
         {

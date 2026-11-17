@@ -21,6 +21,7 @@ import {
 } from './actions/uploadKey.js';
 import publish, { publishHelp, publishersOf } from './actions/publish.js';
 import storeGuide from './actions/storeGuide.js';
+import appKeys from './actions/appKeys.js';
 import { iosDeviceOption } from './actions/iosDevice.js';
 import addExtension from './actions/addExtension.js';
 import addExtensionCommands from './actions/extensionCommands.js';
@@ -187,7 +188,12 @@ const commandApp = program.command('app').description('build the project as an a
         });
 });
 
-commandApp.command('upload-key')
+const commandKey = commandApp.command('key')
+    .argument('[key]', 'the key to make: upload, or one an extension adds, as updater')
+    .description('say which keys sign the app and where each is kept, or make one: crossbind app key <key>')
+    .action((name) => appKeys(name));
+
+commandKey.command('upload')
     .description("make this machine's upload key, which signs an Android app's bundle for Google Play")
     .option('--use <keystore>', 'make a key you have the upload key instead, once it opens with its password')
     .option('--alias <alias>', 'the alias of the key in the keystore --use names', 'upload')

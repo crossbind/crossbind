@@ -4,7 +4,7 @@ const systemKeys = {
         default: '',
     },
     ANDROID_KEYSTORE: {
-        description: "This machine's upload key, which signs an Android app's release and its bundle for Google Play; crossbind app upload-key sets it. The CROSSBIND_ANDROID_KEYSTORE environment variable overrides it.",
+        description: "This machine's upload key, which signs an Android app's release and its bundle for Google Play; crossbind app key upload sets it. The CROSSBIND_ANDROID_KEYSTORE environment variable overrides it.",
         default: '',
     },
     ANDROID_KEY_ALIAS: {

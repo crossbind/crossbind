@@ -19,7 +19,7 @@ and opens the new one.
 ## Options
 
 `app.updater` turns it on: `{ url, publicKey }`, the address of the manifest an update is listed in and the Ed25519
-public key that checks it. `npx crossbind app updater-key` makes the key pair; a build with the private key in
+public key that checks it. `npx crossbind app key updater` makes the key pair; a build with the private key in
 `CROSSBIND_UPDATER_PRIVATE_KEY` writes each platform's update and its signed manifest beside the app.
 
 ## Platforms

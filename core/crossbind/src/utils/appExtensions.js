@@ -3,7 +3,7 @@ import { createRequire } from 'node:module';
 import path from 'node:path';
 import { carriedPath, isOutside } from './appFiles.js';
 import {
-    NAME, checkedCommands, checkedInstaller, checkedPackageSource, checkedPublisher,
+    NAME, checkedCommands, checkedInstaller, checkedKeys, checkedPackageSource, checkedPublisher,
 } from './extensionSteps.js';
 import { checkedActivityTypes, checkedFileTypes, checkedLinks, checkedShortcutItems } from './appLaunches.js';
 import { checkedPrivacy, checkedUrlSchemes } from './appOptions.js';
@@ -339,6 +339,7 @@ export function checkedExtension(extension, root, where) {
             },
         }),
         ...(extension.commands === undefined ? {} : { commands: checkedCommands(extension.commands, `${where}'s commands`) }),
+        ...(extension.keys === undefined ? {} : { keys: checkedKeys(extension.keys, `${where}'s keys`) }),
         ...(extension.packageSource === undefined ? {} : {
             packageSource: checkedPackageSource(extension.packageSource, `${where}'s packageSource`, extension.name),
         }),
@@ -418,7 +419,7 @@ export function extensionPackage(root, base) {
 
 // What an extension of crossbind's build once hooked into, which no build runs.
 const OLD_HOOKS = ['loadConfig', 'buildWasm', 'createLib'];
-const LISTED_KEYS = ['name', 'contract', 'root', 'app', 'options', 'fromApp', 'publisher', 'installer', 'commands', 'packageSource', 'replaces'];
+const LISTED_KEYS = ['name', 'contract', 'root', 'app', 'options', 'fromApp', 'publisher', 'installer', 'commands', 'keys', 'packageSource', 'replaces'];
 
 // An extension crossbind.config.js lists, as its package's crossbind.extension.js gives it: its name, the folder its
 // files are in, which a build sees under the project's base alone, and what it adds to an app.

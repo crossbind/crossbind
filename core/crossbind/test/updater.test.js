@@ -199,7 +199,7 @@ describe("a desktop app's updater", () => {
         }
     });
 
-    test('takes the Ed25519 public key `crossbind app updater-key` prints, as it prints it', () => {
+    test('takes the Ed25519 public key `crossbind app key updater` prints, as it prints it', () => {
         for (const bad of [Buffer.alloc(31).toString('base64'), `${publicKey} `, publicKey.replace(/=$/, ''), undefined]) {
             expect(() => appUpdater(config({ updater: { url, publicKey: bad } }))).toThrow('is no Ed25519 public key');
         }

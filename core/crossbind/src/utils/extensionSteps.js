@@ -159,26 +159,41 @@ export function checkedPackageSource(packageSource, where, name) {
     return { storeUnits: [...storeUnits], ...Object.fromEntries(steps) };
 }
 
-const COMMAND_KEYS = ['help', 'options', 'run'];
-
-// The commands an extension adds under crossbind app, by their names: each its line of help, the options it takes, as a
-// publisher's, and the step that does its work, which keeps the object as its this.
-export function checkedCommands(commands, where) {
-    if (!isObject(commands)) throw new Error(`crossbind: ${where} is no object of commands, as { 'my-key': { help, run } }.`);
-    return Object.fromEntries(Object.entries(commands).map(([name, command]) => {
+// What an extension adds that runs from the command line, commands or keys, by their names: each its line of help, the
+// options it takes, as a publisher's, the step that does its work, and the other steps its kind takes, which keep the
+// object as their this.
+function checkedRunnables(entries, where, {
+    noun, example, help, work, steps = [],
+}) {
+    if (!isObject(entries)) throw new Error(`crossbind: ${where} is no object of ${noun}s, as ${example}.`);
+    const fields = ['help', 'options', 'run', ...steps];
+    return Object.fromEntries(Object.entries(entries).map(([name, entry]) => {
         const at = `${where}.${name}`;
-        if (!NAME.test(name)) throw new Error(`crossbind: ${where} names ${name}, which is no command of lowercase letters and digits, which dashes may join.`);
-        if (!isObject(command)) throw new Error(`crossbind: ${at} is no command, which is { help, run }.`);
-        const unknown = Object.keys(command).find((key) => !COMMAND_KEYS.includes(key));
-        if (unknown) throw new Error(`crossbind: ${at} takes ${COMMAND_KEYS.join(', ')}; ${unknown} is none of them.`);
-        if (typeof command.help !== 'string' || command.help === '') throw new Error(`crossbind: ${at} has no help, its line in crossbind app --help.`);
-        if (typeof command.run !== 'function') throw new Error(`crossbind: ${at} has no run, the step that does its work.`);
-        const options = command.options ?? {};
+        if (!NAME.test(name)) throw new Error(`crossbind: ${where} names ${name}, which is no ${noun} of lowercase letters and digits, which dashes may join.`);
+        if (!isObject(entry)) throw new Error(`crossbind: ${at} is no ${noun}, which is { help, run }.`);
+        const unknown = Object.keys(entry).find((key) => !fields.includes(key));
+        if (unknown) throw new Error(`crossbind: ${at} takes ${fields.join(', ')}; ${unknown} is none of them.`);
+        if (typeof entry.help !== 'string' || entry.help === '') throw new Error(`crossbind: ${at} has no help, its line in ${help}.`);
+        if (typeof entry.run !== 'function') throw new Error(`crossbind: ${at} has no run, the step that ${work}.`);
+        assertSteps(at, entry, steps);
+        const options = entry.options ?? {};
         if (!isObject(options)) throw new Error(`crossbind: ${at}.options is no object of options.`);
         return [name, {
-            help: command.help,
+            help: entry.help,
             options: Object.fromEntries(Object.entries(options).map(([option, value]) => [option, checkedOption(at, option, value)])),
-            run: command.run.bind(command),
+            run: entry.run.bind(entry),
+            ...Object.fromEntries(steps.filter((step) => entry[step]).map((step) => [step, entry[step].bind(entry)])),
         }];
     }));
 }
+
+// The commands an extension adds under crossbind app.
+export const checkedCommands = (commands, where) => checkedRunnables(commands, where, {
+    noun: 'command', example: "{ 'my-key': { help, run } }", help: 'crossbind app --help', work: 'does its work',
+});
+
+// The keys an extension adds under crossbind app key, each with the step that makes it and maybe state, which says
+// where it is kept, as lines crossbind app key writes.
+export const checkedKeys = (keys, where) => checkedRunnables(keys, where, {
+    noun: 'key', example: '{ updater: { help, run } }', help: 'crossbind app key --help', work: 'makes it', steps: ['state'],
+});

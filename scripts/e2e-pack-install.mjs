@@ -212,7 +212,7 @@ function checkProject(manager, project) {
     const isHoisted = fs.existsSync(path.join(project, 'node_modules', '@crossbind', 'extension-dialog'));
     report(`lays out the host's extensions as ${manager} does`, isHoisted === (manager === 'npm'));
 
-    const key = inProject('crossbind', 'app', 'updater-key');
+    const key = inProject('crossbind', 'app', 'key', 'updater');
     report("runs an extension's command", key.isOk && key.text.includes('CROSSBIND_UPDATER_PRIVATE_KEY'), key.text);
     const help = inProject('crossbind', 'app', 'publish', '--help');
     report("lists crossbind's own stores", help.isOk && STORES.every((store) => help.text.includes(`  ${store}: `)), help.text);

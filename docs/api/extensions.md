@@ -1297,7 +1297,7 @@ manifest that signs it. Without the key it makes none.
 ## Commands
 
 An extension's `commands` add commands under `crossbind app`, which run in crossbind's process with the
-[`api`](#the-api). crossbind's own `updater` gives `crossbind app updater-key` this way.
+[`api`](#the-api).
 
 ```js
 // crossbind.extension.js
@@ -1332,6 +1332,34 @@ A command has no platform, so its `api.platform` is null and `api.run`, an insta
 a project whose `target.runtimeEnv` names no environment but `app`. A name that `crossbind app` has already, of crossbind's or of another
 extension's, stops `crossbind app` in the project, naming both; an extension that takes the place of one of
 crossbind's own, by its name or with `replaces`, takes the place of that one's commands too.
+
+## Keys
+
+An extension's `keys` add the keys it signs with under `crossbind app key`, which makes one by its name and, with no
+name, says where each is kept, beside this machine's upload key. crossbind's own `updater` gives
+`crossbind app key updater` this way.
+
+```js
+keys: {
+    updater: {
+        help: "make the key pair that signs a desktop app's updates",
+        run(api) {
+            // makes the pair and prints where each half goes
+        },
+        state(api) {
+            return [api.config.app.updater?.publicKey ? 'app.updater.publicKey in crossbind.config.js' : 'none yet'];
+        },
+    },
+},
+```
+
+- `help`, `options` and `run(api)`: As a command's, its line in `crossbind app key --help` and the step that makes the
+  key.
+- `state(api)`: Optional: lines of where the key is kept, which `crossbind app key` writes after its name, with no
+  question; without it, the line says that `crossbind app key <name>` makes it.
+
+A name `crossbind app key` has already, `upload` or another extension's, stops `crossbind app` in the project, naming
+both, and an extension that takes the place of one of crossbind's own takes the place of its keys too.
 
 ## Package sources
 
@@ -1534,7 +1562,7 @@ extension and its run, and frozen. A package source's steps get [their own](#pac
   that signs a file in the windows image with the key the environment names, which a tool that signs as it builds runs,
   as NSIS does, or null without a key.
 - `android`: `signing()`, the environment a release builds in with this machine's upload key, as `{ env, isSigned }`,
-  and `makeUploadKey()`, as `crossbind app upload-key` makes it.
+  and `makeUploadKey()`, as `crossbind app key upload` makes it.
 - `apple`: `key()`, the App Store Connect API key the environment names, or null; `teams()`, the teams Xcode is signed
   in to; `xcodebuild(what, args, { log, facts, causes })`, which writes xcodebuild's output to the file `log` names and
   returns it, and whose failure names xcodebuild's reasons and the fix of the cause it finds, crossbind's first, then

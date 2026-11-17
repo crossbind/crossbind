@@ -140,7 +140,7 @@ export function packageAndroidRelease(project) {
     if (signing) {
         fs.copyFileSync(`${outputs}/bundle/release/app-release.aab`, `${project}.aab`);
     } else {
-        console.warn(`crossbind: ${path.basename(project)}.apk is signed with this machine's debug key: it installs for testing, and Google Play takes no app signed so. crossbind app upload-key makes an upload key, which signs it and makes the bundle too; or set ${SIGNING.keystore}, ${SIGNING.alias} and ${SIGNING.password} to sign it with yours.`);
+        console.warn(`crossbind: ${path.basename(project)}.apk is signed with this machine's debug key: it installs for testing, and Google Play takes no app signed so. crossbind app key upload makes an upload key, which signs it and makes the bundle too; or set ${SIGNING.keystore}, ${SIGNING.alias} and ${SIGNING.password} to sign it with yours.`);
     }
 }
 
