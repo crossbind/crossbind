@@ -8,6 +8,7 @@ It comes with `@crossbind/core-app-host`: there is nothing to install or list.
 
 ```sh
 npx crossbind app store microsoft-store
+npx crossbind app store microsoft-store --send
 npx crossbind app publish microsoft-store --rollout 10
 ```
 
@@ -15,7 +16,8 @@ npx crossbind app publish microsoft-store --rollout 10
 identity goes in `app.windows.msix`; the first submission, with its age ratings; and the Entra ID application its API
 takes. Each later version goes with a publish: it builds the MSIX packages, x64 and arm64, makes a submission with them
 and the listing in `store/microsoft-store`, and commits it for certification. `--draft` leaves the submission for you to
-submit in Partner Center, and `--rollout` gives the packages to a share of the app's users first.
+submit in Partner Center, and `--rollout` gives the packages to a share of the app's users first. `crossbind app store
+microsoft-store --send` sends the listing alone, with no build, in a submission of the packages Partner Center has.
 
 ## Platforms
 

@@ -77,8 +77,8 @@ export default defineConfig({ plugins: [viteCrossbindPlugin()] });
   keeps its password in the system keychain; `--use <keystore>` takes a key you have instead (see [The upload
   key](#the-upload-key)).
 - `crossbind app publish google-play`: Builds the Android app with the next versionCode Google Play takes and releases
-  its bundle on a track, internal unless `--track` names another, to a share of its users with `--rollout`, and with the
-  listing `store/google-play` holds; `-p android` names the same store (see [Publishing](#publishing)).
+  its bundle on a track, internal unless `--track` names another, to a share of its users with `--rollout`, with the
+  release notes `store/google-play` holds; `-p android` names the same store (see [Publishing](#publishing)).
 - `crossbind app publish app-store`: Builds the iOS app, then the macOS app, or the one `-p` names, and uploads each to
   App Store Connect, whose TestFlight hands it to testers, and with `--submit` to App Review too, with the listing
   `store/app-store` holds: the iOS app archived, the macOS app in the App Sandbox, which Xcode exports and Apple signs
@@ -90,9 +90,11 @@ export default defineConfig({ plugins: [viteCrossbindPlugin()] });
 - `crossbind app publish microsoft-store`: Builds the Windows app's MSIX packages, x64 and arm64, and sends them to the
   Microsoft Store in a new submission of the app, with the listing `store/microsoft-store` holds, once Partner Center
   has the app's first submission (see [Microsoft Store](#microsoft-store)).
-- `crossbind app store`: Says of each store, or the one it names, what a publish sends from `store/`, what the store
-  would refuse of it, and the steps only the store's own site takes, with the values and files to enter there; it builds
-  nothing, asks for no credentials, and exits with 1 at a problem (see [What each store takes](#what-each-store-takes)).
+- `crossbind app store`: Says of each store, or the one it names, what a publish sends, what `--send` sends from
+  `store/`, what the store would refuse of it, the steps only the store's own site takes, with the values and files to
+  enter there, and what the store has now where the credentials a publish takes are at hand; it builds nothing and
+  exits with 1 at a problem. `--send` sends each store's page alone, its listing, screenshots and settings, with no
+  build, and `-p` the page of one platform (see [What each store takes](#what-each-store-takes)).
 
 `crossbind app` runs the project's Vite with `CROSSBIND_APP_PLATFORM` set to the platform `-p` names, `macos`, `linux`,
 `windows`, `ios` or `android`; without `-p` it keeps the variable the environment sets, and without that builds this
@@ -1470,33 +1472,48 @@ Each store is a publisher, as an extension adds one: [extensions.md](./extension
 to write one, and an extension listed under the name of one of these four replaces it. A store's options go after its
 name, and one of another store's is refused.
 
+A store's page, the listing, screenshots and settings `store/` holds, goes alone with `crossbind app store --send`, with
+no build (see [What each store takes](#what-each-store-takes)), so a build for testers changes no page the store shows.
+A publish to Google Play sends the bundle and its release notes alone, one to App Store Connect the page too with
+`--submit`, and one to the Microsoft Store the page with the packages, as its submission is the release.
+
 ### What each store takes
 
 A project's `store/` folder holds what the stores show of the app, a folder per store: `store/google-play`,
 `store/app-store`, for the iOS app and the macOS one alike, and `store/microsoft-store`. In each, a folder per language holds the listing's texts and images, by
-the names the sections below give, and the files beside them the app's settings, in that store's own terms. A publish
-sends what the store's API takes, and stops before its build at what the store would refuse: a text longer than it
-takes, an image of another size, or a PNG with transparency where it takes none.
+the names the sections below give, and the files beside them the app's settings, in that store's own terms.
+`crossbind app store --send` sends what the store's API takes, with no build, and stops before anything goes at what the
+store would refuse: a text longer than it takes, an image of another size, or a PNG with transparency where it takes
+none.
 
-`crossbind app store` says, of each store or the one it names, what a publish sends, what to fix first, and the steps
-only the store's own site takes, once for the app, each with the page, the value and the file to enter there:
+`crossbind app store` says, of each store or the one it names, what a publish sends, what `--send` sends, what to fix
+first, the steps only the store's own site takes, once for the app, each with the page, the value and the file to enter
+there, and what the store has now:
 
 ```text
-$ crossbind app store microsoft-store
-Microsoft Store · Geosmith 1.0.0
+$ crossbind app store google-play
+Google Play · Geosmith 1.0.0
 
-crossbind app publish microsoft-store sends:
-  ✓ the app's MSIX packages, x64 and arm64, in place of the last submission's, which Partner Center certifies and signs
-  ✓ store/microsoft-store/en-US: title, description, 6 features, 7 search terms; 4 desktop screenshots, tile, hero
+crossbind app publish google-play sends:
+  ✓ the bundle, signed with the upload key, with its native debug symbols, on a track
 
-By hand in Partner Center, once for the app:
-  1. Apps and games › New product › MSIX or PWA app: reserve the app's name, as Geosmith.
-     https://partner.microsoft.com/dashboard/apps-and-games/overview
+crossbind app store google-play --send sends:
+  ✓ store/google-play/en-US: full description, short description, title; icon, feature graphic, 5 phone screenshots
+
+By hand in Play Console, once for the app:
+  1. Create the app, with dev.geosmith.app as its package name, as Play's API makes none.
+     https://play.google.com/console
   …
+
+Google Play has now:
+  internal: versionCode 1000001 (1.0.0), a draft
 ```
 
-It builds nothing and asks for no credentials, so it runs on any machine, and it exits with 1 at a problem, as a check
-of the listing in CI would.
+It builds nothing and asks for nothing, so it runs on any machine, and it exits with 1 at a problem, as a check of the
+listing in CI would. What a store has it tells with the credentials a publish takes where they are at hand, as the
+Google sign-in the keychain keeps, and else how to see it. `crossbind app store --send`, or `crossbind app store <store>
+--send`, sends the page with no build: on a terminal it asks for what is missing, as a publish does, and without one it
+names every missing piece at once. `-p` sends one platform's page, as `-p ios` App Store Connect's iOS one.
 
 ### Google Play
 
@@ -1580,12 +1597,14 @@ store/google-play/en-US/
                               tenInchScreenshots/, tvScreenshots/ and wearScreenshots/ the same
 ```
 
-Each publish puts into its edit what the folder has and Play's listing lacks: a language's texts where one differs, its
-images of a type where Play shows others or in another order, and the notes in the release. What the folder leaves out
-stays as Play has it, so it may hold the notes alone, or the screenshots. A language Play has no listing in yet takes
-`title.txt`, `short_description.txt` and `full_description.txt`, which Play makes a listing of. Before the build, the
-publish stops at an empty text but a video's, which takes the video away, at a text longer than Play takes, at two files
-of one image, and at a file or folder Play takes none of, naming it.
+`crossbind app store google-play --send` puts into an edit of no bundle what the folder has and Play's listing lacks: a
+language's texts where one differs and its images of a type where Play shows others or in another order, with the
+contact details and the Data safety declaration below, and commits it where one did. A publish sends the notes alone,
+in its release. What the folder leaves out stays as Play has it, so it may hold the notes alone, or the screenshots. A
+language Play has no listing in yet takes `title.txt`, `short_description.txt` and `full_description.txt`, which Play
+makes a listing of. `--send` stops at an empty text but a video's, which takes the video away, at a text longer than
+Play takes, at two files of one image, and at a file or folder Play takes none of, naming it; a publish stops before its
+build at release notes Play would refuse.
 
 It stops there too at every image Play would refuse: an icon of other than 512 × 512 or above 1024 KB, a feature graphic
 of other than 1024 × 500, a TV banner of other than 1280 × 720, a screenshot with a side outside 320 to 3840 pixels, or
@@ -1596,16 +1615,16 @@ Beside the languages, the folder holds the app's settings:
 
 ```text
 store/google-play/
-├── contact_email.txt         the contact details a publish sends where Play's differ
+├── contact_email.txt         the contact details --send sends where Play's differ
 ├── contact_website.txt
 ├── contact_phone.txt
-├── data_safety.csv           the Data safety declaration as Play Console exports it, which a publish sends
+├── data_safety.csv           the Data safety declaration as Play Console exports it, which --send sends
 ├── privacy_url.txt           what Play Console alone takes, which crossbind app store names to enter there
 └── category.txt
 ```
 
-The declaration goes first, so one Play refuses stops the publish before its bundle goes up. The contact details take
-"Manage store presence" in Play Console, and the declaration "Manage policy declarations".
+The declaration goes first, so one Play refuses stops `--send` before its edit. The contact details take "Manage store
+presence" in Play Console, and the declaration "Manage policy declarations".
 
 ### App Store Connect
 
@@ -1664,6 +1683,10 @@ at most, picks it for the version and submits the version for review. `--phased`
 approves in phases over 7 days, as App Store Connect's phased release does; without it the version goes out as App Store
 Connect's release option for it says.
 
+`crossbind app store app-store --send` puts the listing and the settings into that version with no build and no
+review, through the same API key, for each platform or the one `-p` names, so the page is ready before a build is.
+App Store Connect shows it once the version is out.
+
 What only App Store Connect does stays there: the screenshots of devices other than iPhones and iPads, app previews,
 App Privacy answers, price and availability, content rights, the export compliance documents an app that uses
 encryption takes, a reply to App Review, and a submission it answered with issues, which a publish without `--submit`
@@ -1674,7 +1697,7 @@ App Store Connect busy or out of reach for a moment tries again.
 
 ### The App Store listing
 
-A project's `store/app-store` folder holds its App Store listing, which goes with `--submit`: a folder per locale, named
+A project's `store/app-store` folder holds its App Store listing, which goes with `--send`, and with `--submit`: a folder per locale, named
 as App Store Connect names it (`en-US`, `tr`, `zh-Hans`), with the texts' files fastlane's deliver reads and a folder of
 screenshots per display type:
 
@@ -1699,18 +1722,18 @@ The version takes what the folder has where App Store Connect's own differs, in 
 none of; the name, subtitle and privacy policy URL go into the app's information that changes with the version, which
 App Store Connect makes for a new locale of its name alone. What the folder leaves out stays as App Store Connect has
 it, so it may hold the release notes alone. An empty `subtitle.txt`, `promotional_text.txt` or `marketing_url.txt`
-clears its text. Before the build, the publish stops at another empty text, at a text longer than App Store Connect
-takes, and at a file or folder it takes none of, naming it.
+clears its text. `--send`, and a publish with `--submit` before its build, stops at another empty text, at a text longer
+than App Store Connect takes, and at a file or folder it takes none of, naming it.
 
 A folder of `screenshots/` per display type, named as App Store Connect's API names it, holds the type's .png, .jpg or
 .jpeg files, 10 at most, in the order of their names as text, so 01.png, 02.png and on to 10.png: `APP_IPHONE_67` for
 the 6.9-inch and 6.7-inch iPhones, `APP_IPHONE_65`, `APP_IPHONE_61`, `APP_IPHONE_58`, `APP_IPHONE_55`, `APP_IPHONE_47`,
 `APP_IPHONE_40` and `APP_IPHONE_35`, `APP_IPAD_PRO_3GEN_129` for the 13-inch iPads, `APP_IPAD_PRO_3GEN_11`,
 `APP_IPAD_PRO_129`, `APP_IPAD_105` and `APP_IPAD_97`, and `APP_DESKTOP` for a Mac, whose screenshots go to the macOS
-version alone, as the others go to the iOS one alone. Before the build, the publish stops at a file that holds no PNG or
-JPEG image, as an empty one or a Git LFS pointer does. A type's screenshots go up anew where App Store Connect shows
-others, in another order or unprocessed, and the publish waits for it to process them before the build's turn; a type
-the folder has none of stays as it is.
+version alone, as the others go to the iOS one alone. `--send` and a publish with `--submit` stop at a file that holds
+no PNG or JPEG image, as an empty one or a Git LFS pointer does. A type's screenshots go up anew where App Store Connect
+shows others, in another order or unprocessed, and crossbind waits for it to process them; a type the folder has none
+of stays as it is.
 
 It stops there too at every screenshot of a size its display type takes none of, portrait or turned, as App Store
 Connect's specifications give them, `APP_IPHONE_67` taking 1320 × 2868, 1290 × 2796, 1260 × 2736 or 1284 × 2778 and
@@ -1892,9 +1915,11 @@ store/microsoft-store/en-US/
 ```
 
 Beside the languages, `category.txt` names the app's category as Partner Center's API does, as `UtilitiesAndTools`, and
-`notes_for_certification.txt` holds the notes for certification, which a publish sends; `privacy_url.txt`,
+`notes_for_certification.txt` holds the notes for certification, which a publish and `--send` send; `privacy_url.txt`,
 `website_url.txt` and `support_contact.txt` hold what Partner Center's Properties page alone takes, as its API takes them
-no more, so `crossbind app store` names them to enter there.
+no more, so `crossbind app store` names them to enter there. `crossbind app store microsoft-store --send` sends the
+listing and these settings alone, in a submission of the packages Partner Center has, which it certifies as it does a
+publish's.
 
 Every image is a PNG, as the Store takes no other. A language's images of a type go up anew where Partner Center shows
 others, the names they go up under telling them apart by their bytes, and a type the folder has none of stays as it is;

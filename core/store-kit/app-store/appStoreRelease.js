@@ -45,7 +45,7 @@ async function versionOf(call, appId, versionString, platform) {
     const state = version?.attributes.appVersionState;
     if (state === 'READY_FOR_REVIEW') throw new Error(PREPARED_SUBMISSION);
     if (version && !EDITABLE.includes(state)) {
-        throw new Error(`crossbind: App Store Connect has ${versionString} as ${state} already, which takes no other build: raise the version in package.json, or, while App Review has it, cancel its review in App Store Connect.`);
+        throw new Error(`crossbind: App Store Connect has ${versionString} as ${state} already, which takes no other build or listing: raise the version in package.json, or, while App Review has it, cancel its review in App Store Connect.`);
     }
     return version;
 }
@@ -251,8 +251,9 @@ async function updateScreenshots(call, localizationId, screenshots) {
     return changed;
 }
 
-// Waits for App Store Connect to process the screenshots uploaded, a set at a time, naming one it refuses.
-async function processedScreenshots(call, sets, versionString) {
+// Waits for App Store Connect to process the screenshots uploaded, a set at a time, naming one it refuses; afterwards
+// says what then where it has not in time.
+async function processedScreenshots(call, sets, afterwards) {
     for (let waited = 0; ; waited += SCREENSHOT_POLL_SECONDS) {
         let isProcessed = true;
         for (const { setId, uploaded } of sets) {
@@ -268,7 +269,7 @@ async function processedScreenshots(call, sets, versionString) {
         }
         if (isProcessed) return;
         if (waited >= SCREENSHOT_MINUTES * 60) {
-            throw new Error(`crossbind: App Store Connect has not processed the screenshots in ${SCREENSHOT_MINUTES} minutes, so the version went to no review: once it has, pick the build for ${versionString} in App Store Connect and submit it there.`);
+            throw new Error(`crossbind: App Store Connect has not processed the screenshots in ${SCREENSHOT_MINUTES} minutes${afterwards}`);
         }
         await sleep(SCREENSHOT_POLL_SECONDS);
     }
@@ -276,7 +277,7 @@ async function processedScreenshots(call, sets, versionString) {
 
 // Puts the project's listing into the version and the app's information that changes with it, and gives the locales it
 // changed. App Store Connect makes a locale's information of its name.
-async function updateListing(call, appId, version, listings) {
+async function updateListing(call, appId, version, listings, afterwards) {
     if (listings.length === 0) return [];
     const { data: versionTexts } = await call('GET', query(`/appStoreVersions/${version.id}/appStoreVersionLocalizations`, { limit: '200' }));
     const info = listings.some((listing) => Object.keys(listing.info).length > 0)
@@ -295,7 +296,7 @@ async function updateListing(call, appId, version, listings) {
         sets.push(...shotSets);
         if (versionText.isChanged || infoText.isChanged || shotSets.length > 0) changed.push(listing.locale);
     }
-    await processedScreenshots(call, sets, version.attributes.versionString);
+    await processedScreenshots(call, sets, afterwards);
     for (const { setId, uploaded } of sets) {
         await call('PATCH', `/appScreenshotSets/${setId}/relationships/appScreenshots`, { data: uploaded.map(({ id }) => ({ type: 'appScreenshots', id })) });
     }
@@ -329,15 +330,81 @@ async function submitForReview(call, appId, versionId, platform) {
     await call('PATCH', `/reviewSubmissions/${submission.id}`, { data: { type: 'reviewSubmissions', id: submission.id, attributes: { submitted: true } } });
 }
 
+// Puts the project's listing and settings into the app's version of a number on its platform, and gives the version,
+// the locales whose listing changed and the settings that did; afterwards says what then where its screenshots are not
+// processed in time.
+async function preparePage(call, {
+    appId, versionString, listings, settings, platform, afterwards,
+}) {
+    const version = await openVersion(call, appId, versionString, platform);
+    const listed = await updateListing(call, appId, version, listings, afterwards);
+    const settled = await updateSettings(call, appId, version, settings);
+    return { version, listed, settled };
+}
+
+// Puts the project's page into the app's version of a number on its platform, IOS or MAC_OS: its own, the one App Store
+// Connect prepares under another number, renamed, or a new one, which shows it once out; with no build and no review.
+// Gives the locales whose listing changed and the settings that did.
+export async function sendListing(call, {
+    appId, versionString, listings, settings, platform = 'IOS',
+}) {
+    const { listed, settled } = await preparePage(call, {
+        appId, versionString, listings, settings, platform, afterwards: `: once it has, they show in ${versionString}'s listing there.`,
+    });
+    return { listed, settled };
+}
+
+// How App Store Connect's states of a version and of a build read, as crossbind app store says what it has.
+const VERSION_STATES = {
+    PREPARE_FOR_SUBMISSION: 'being prepared for submission',
+    READY_FOR_REVIEW: 'ready for review',
+    WAITING_FOR_REVIEW: 'waiting for review',
+    IN_REVIEW: 'in review',
+    PENDING_DEVELOPER_RELEASE: 'approved, waiting for you to release it',
+    PENDING_APPLE_RELEASE: 'approved, waiting for Apple to release it',
+    PROCESSING_FOR_DISTRIBUTION: 'approved, processing for distribution',
+    READY_FOR_DISTRIBUTION: 'out',
+    READY_FOR_SALE: 'out',
+    REJECTED: 'rejected by App Review',
+    METADATA_REJECTED: 'rejected by App Review for its listing',
+    DEVELOPER_REJECTED: 'withdrawn from review',
+    INVALID_BINARY: 'refused for its build',
+};
+const BUILD_STATES = {
+    PROCESSING: 'processing', VALID: 'processed', FAILED: 'failed', INVALID: 'invalid',
+};
+const PLATFORM_NAMES = { IOS: 'iOS', MAC_OS: 'macOS' };
+const wordsOf = (states, state) => states[state] ?? state.toLowerCase().replaceAll('_', ' ');
+
+// What App Store Connect has of the app on each platform it is on: its latest versions, as their states read, and its
+// newest build, processed or not.
+export async function appStoreState(call, appId) {
+    const lines = [];
+    for (const [platform, name] of Object.entries(PLATFORM_NAMES)) {
+        const { data: versions } = await call('GET', query(`/apps/${appId}/appStoreVersions`, { 'filter[platform]': platform, limit: '3' }));
+        lines.push(...versions.map(({ attributes }) => `${name} ${attributes.versionString}: ${wordsOf(VERSION_STATES, attributes.appVersionState)}`));
+        const { data: [build], included = [] } = await call('GET', query('/builds', {
+            'filter[app]': appId, 'filter[preReleaseVersion.platform]': platform, sort: '-uploadedDate', limit: '1', include: 'preReleaseVersion',
+        }));
+        if (build) {
+            const prerelease = build.relationships?.preReleaseVersion?.data?.id;
+            const version = included.find(({ type, id }) => type === 'preReleaseVersions' && id === prerelease)?.attributes.version;
+            const number = version ? `${version} (${build.attributes.version})` : build.attributes.version;
+            lines.push(`${name} newest build: ${number}, ${wordsOf(BUILD_STATES, build.attributes.processingState)}`);
+        }
+    }
+    return lines;
+}
+
 // Hands the upload's build to App Review as the app's version on its platform, IOS or MAC_OS, with the project's listing
 // and settings, once App Store Connect has processed it, to go out in phases over 7 days once released where isPhased
 // says so. Gives the build's number, the locales whose listing changed and the settings that did.
 export async function submitRelease(call, {
     appId, versionString, before, buildNumber = null, listings, settings, isPhased, platform = 'IOS',
 }) {
-    const version = await openVersion(call, appId, versionString, platform);
-    const listed = await updateListing(call, appId, version, listings);
-    const settled = await updateSettings(call, appId, version, settings);
+    const { version, listed, settled } = await preparePage(call, {
+        appId, versionString, listings, settings, platform, afterwards: `, so the version went to no review: once it has, pick the build for ${versionString} in App Store Connect and submit it there.`,
+    });
     if (isPhased) await phaseRelease(call, version.id);
     const build = await processedBuild(call, {
         appId, versionString, before, buildNumber, platform,

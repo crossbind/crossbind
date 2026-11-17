@@ -102,13 +102,17 @@ function firstSubmission(api, listings, settings) {
     ];
 }
 
-// What crossbind app store says of the Microsoft Store: what a publish sends, what Partner Center would refuse of it,
-// and the steps Partner Center alone takes: the app's name, the first submission and the application its API takes.
+// What crossbind app store says of the Microsoft Store: what a publish sends, which is the packages and the page, what
+// --send sends, which is the page alone, what Partner Center would refuse of it, and the steps Partner Center alone
+// takes: the app's name, the first submission and the application its API takes.
 export function msStoreGuide(api) {
     const { listings, settings, problems } = readAll(api.project.root);
     const identity = api.config.app.windows?.msix;
-    const sends = [
+    const publishes = [
         "the app's MSIX packages, x64 and arm64, in place of the last submission's, which Partner Center certifies and signs",
+        'with them, the page --send sends',
+    ];
+    const sends = [
         ...listings.map(languageLine),
         ...(settings.category === undefined ? [] : [`category: ${settings.category}`]),
         ...(settings.notesForCertification === undefined ? [] : [`the notes for certification in ${path.join(STORE_LISTING, 'notes_for_certification.txt')}`]),
@@ -125,6 +129,6 @@ export function msStoreGuide(api) {
         },
     ];
     return {
-        sends, problems, where: 'Partner Center', steps,
+        publishes, sends, problems, where: 'Partner Center', steps,
     };
 }

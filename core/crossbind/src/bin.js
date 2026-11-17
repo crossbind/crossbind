@@ -214,10 +214,12 @@ commandApp.command('publish')
 
 commandApp.command('store')
     .argument('[store]', 'the store, as google-play, app-store or microsoft-store (default: every one)')
-    .description("say what each store takes of the app: what crossbind app publish sends from store/, what the store would refuse of it, and the steps only the store's own site takes")
-    .action(async (store) => {
+    .description("say what each store takes of the app and what it has now: what crossbind app publish sends, what --send sends from store/, what the store would refuse of it, and the steps only the store's own site takes")
+    .option('--send', "send the app's page in store/ to each store, with no build: its listing, screenshots and settings")
+    .addOption(new Option('-p, --platform <platform>', "the app's platform, whose page alone goes, as app-store's ios or macos (default: every one the store takes)").choices(APP_PLATFORMS))
+    .action(async (store, { send, platform }) => {
         assertAppCommand();
-        if (await storeGuide(store) > 0) process.exitCode = 1;
+        if (await storeGuide(store, { send, platform }) > 0) process.exitCode = 1;
     });
 
 // crossbind app alone reads them, so that an extension's package that cannot be read stops no other command.

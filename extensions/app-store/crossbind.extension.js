@@ -1,6 +1,6 @@
 import {
-    APP_STORE_LISTING, appStoreApp, appStoreCaller, appStoreListingProblems, askAppId, assertReviewable, listingOf, newestBuild,
-    readAppStoreListing, readAppStoreSettings, submitRelease, untilDone, uploadArchive,
+    APP_STORE_LISTING, appStoreApp, appStoreCaller, appStoreListingProblems, appStoreState, askAppId, assertReviewable, listingOf,
+    newestBuild, readAppStoreListing, readAppStoreSettings, sendListing, submitRelease, untilDone, uploadArchive,
 } from '@crossbind/core-store-kit';
 import {
     addDsyms, archiveIosApp, archivedBinary, archivedPrivacy, archivedTargets, uploadIosArchive,
@@ -23,9 +23,12 @@ const NO_CATEGORY = 'crossbind: the Mac App Store takes no app without its categ
 const NO_ENCRYPTION = 'crossbind: app.encryption is not set, so App Store Connect asks whether this build uses encryption before TestFlight hands it out; set it in crossbind.config.js to answer for every build.';
 const NO_ENCRYPTION_TO_SUBMIT = 'crossbind: App Review takes no build without its answer to whether it uses encryption: set app.encryption in crossbind.config.js.';
 const NO_KEY_TO_SUBMIT = "crossbind: --submit hands the version to App Review through App Store Connect's API, which takes an API key: set CROSSBIND_APPLE_API_KEY, CROSSBIND_APPLE_API_KEY_ID and CROSSBIND_APPLE_API_ISSUER, as app.md's Publishing says.";
+const NO_KEY_TO_SEND = "crossbind: crossbind app store --send sends the page through App Store Connect's API, which takes an API key: set CROSSBIND_APPLE_API_KEY, CROSSBIND_APPLE_API_KEY_ID and CROSSBIND_APPLE_API_ISSUER, as app.md's Publishing says.";
+const NO_KEY_TO_SEE = "Set CROSSBIND_APPLE_API_KEY, CROSSBIND_APPLE_API_KEY_ID and CROSSBIND_APPLE_API_ISSUER, an App Store Connect API key's, to see what App Store Connect has.";
 const TEAM_ID = /^[A-Z0-9]{10}$/;
 const noIcon = (platform) => `crossbind: App Store Connect takes no ${platform} app without an icon: set app.icon in crossbind.config.js to a square PNG, at best 1024 × 1024.`;
-const notOnMac = (id) => `crossbind: App Store Connect's app ${id} is not on macOS yet: add the platform there, with the + beside its platform in the sidebar, which makes it a universal purchase, then publish again, or publish the iOS app alone with -p ios.`;
+const notOnMac = (id, then = 'publish again, or publish the iOS app alone with -p ios') => `crossbind: App Store Connect's app ${id} is not on macOS yet: add the platform there, with the + beside its platform in the sidebar, which makes it a universal purchase, then ${then}.`;
+const SEND_AGAIN = "send again, or send the iOS app's page alone with -p ios";
 
 async function pickTeam(api, teams) {
     if (teams.length === 1) {
@@ -100,6 +103,16 @@ async function releaseOf(api, key, { shouldSubmit, listings, settings }) {
     };
 }
 
+// Says what of the page changed on App Store Connect, as the project has it.
+function saySent(api, platform, listings, { listed, settled }) {
+    if (listings.length > 0) {
+        api.log(listed.length > 0
+            ? `crossbind: App Store Connect's ${platform.name} listing changed in ${listed.join(', ')}, as ${APP_STORE_LISTING} has it.`
+            : `crossbind: App Store Connect's ${platform.name} listing is the one ${APP_STORE_LISTING} has already.`);
+    }
+    if (settled.length > 0) api.log(`crossbind: App Store Connect's ${settled.join(', ')} changed, as ${APP_STORE_LISTING} has them.`);
+}
+
 // Hands the uploaded build to App Review as the app's version of its platform, with the listing and the settings, and
 // says how it went.
 async function submitToReview(api, {
@@ -110,12 +123,7 @@ async function submitToReview(api, {
     const { build, listed, settled } = await submitRelease(call, {
         appId: appStoreId, versionString: api.app.appleVersion, before, buildNumber: api.app.buildNumber, listings, settings, isPhased, platform: platform.api,
     });
-    if (listings.length > 0) {
-        api.log(listed.length > 0
-            ? `crossbind: App Store Connect's ${platform.name} listing changed in ${listed.join(', ')}, as ${APP_STORE_LISTING} has it.`
-            : `crossbind: App Store Connect's ${platform.name} listing is the one ${APP_STORE_LISTING} has already.`);
-    }
-    if (settled.length > 0) api.log(`crossbind: App Store Connect's ${settled.join(', ')} changed, as ${APP_STORE_LISTING} has them.`);
+    saySent(api, platform, listings, { listed, settled });
     const phases = isPhased ? ', to go out in phases over 7 days once released' : '';
     api.log(`crossbind: ${api.app.id} ${api.app.appleVersion} (build ${build}) for ${platform.name} went to App Review${phases}; Apple mails as the review goes.`);
 }
@@ -194,10 +202,56 @@ async function uploadMac(api, { key, facts, release }, { apps }) {
     return { published: { appId: facts.id, version: api.app.appleVersion, build } };
 }
 
+// Whether the project's settings give App Store Connect anything.
+const hasSettings = ({
+    copyright, categories, ageRating, review,
+}) => copyright !== undefined || Object.keys(categories).length > 0 || Boolean(ageRating) || Object.keys(review).length > 0;
+
+// Sends the page store/app-store holds of the app on its platform, with no build: its listing, screenshots and settings,
+// through App Store Connect's API, into the version of package.json's number, which shows them once out.
+async function sendPage(api) {
+    const platform = PLATFORMS[api.platform];
+    const root = api.project.root;
+    const listings = listingOf(readAppStoreListing(root), platform.api);
+    const settings = readAppStoreSettings(root);
+    if (listings.length === 0 && !hasSettings(settings)) {
+        api.log(`crossbind: ${APP_STORE_LISTING} holds no page of the app, so nothing went to App Store Connect for ${platform.name}.`);
+        return {};
+    }
+    const problems = appStoreListingProblems(root, listings);
+    if (problems.length > 0) return { missing: problems };
+    const key = api.apple.key();
+    const missing = key ? [] : [NO_KEY_TO_SEND];
+    if (api.config.app.id === undefined) {
+        if (api.isGuided) await askAppId(api, 'App Store Connect', 'bundle id');
+        else missing.push(NO_APP_ID);
+    }
+    if (missing.length > 0) return { missing };
+    const call = appStoreCaller(key);
+    const appStoreId = await appStoreApp(call, api.app.id);
+    if (api.platform === 'macos' && !await isOnMac(call, appStoreId)) return { missing: [notOnMac(api.app.id, SEND_AGAIN)] };
+    api.log(`crossbind: sending the ${platform.name} page ${APP_STORE_LISTING} holds of ${api.app.id} ${api.app.appleVersion} to App Store Connect.`);
+    const sent = await sendListing(call, {
+        appId: appStoreId, versionString: api.app.appleVersion, listings, settings, platform: platform.api,
+    });
+    saySent(api, platform, listings, sent);
+    return {};
+}
+
+// What App Store Connect has of the app on each platform, asking for nothing.
+async function pageState(api) {
+    const key = api.apple.key();
+    if (!key) return [NO_KEY_TO_SEE];
+    if (api.config.app.id === undefined) return ['Set app.id in crossbind.config.js, and App Store Connect tells what it has of the app.'];
+    const call = appStoreCaller(key);
+    const lines = await appStoreState(call, await appStoreApp(call, api.app.id));
+    return lines.length > 0 ? lines : [`no version or build of ${api.app.id} yet`];
+}
+
 // The publisher of an app's iOS and macOS builds to App Store Connect, whose TestFlight hands them out, both one after
 // the other or the one -p names: crossbind builds the app, a macOS one sandboxed, the upload archives it, an iOS one
 // after showing what required reason API it calls, and Xcode exports the archive to App Store Connect, which signs it in
-// the cloud.
+// the cloud. The app's page in store/app-store goes alone, or with --submit.
 export default function appStore() {
     return {
         name: 'app-store',
@@ -252,6 +306,10 @@ export default function appStore() {
             buildEnv: (api) => (api.platform === 'macos' ? { CROSSBIND_APPLE_SIGNING_IDENTITY: undefined } : {}),
 
             upload: (api, session, output) => (api.platform === 'macos' ? uploadMac(api, session, output) : uploadIos(api, session, output)),
+
+            send: (api) => sendPage(api),
+
+            state: (api) => pageState(api),
 
             guide: (api) => appStoreGuide(api),
         },

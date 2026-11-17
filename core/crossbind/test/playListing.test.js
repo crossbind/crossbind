@@ -188,7 +188,7 @@ describe("what Google Play would refuse of a listing's images", () => {
 });
 
 describe("crossbind app store's word on Google Play", () => {
-    test('names what a publish sends, what Play would refuse of it, and the steps Play Console alone takes', () => {
+    test('names what a publish sends, what --send sends, what Play would refuse of it, and the steps Play Console alone takes', () => {
         write('en-US/title.txt', 'Demo');
         write('en-US/short_description.txt', 'A demo');
         write('en-US/full_description.txt', 'The demo app.');
@@ -200,16 +200,19 @@ describe("crossbind app store's word on Google Play", () => {
         const guide = playGuide({ project: { root: project }, config: { app: { id: 'dev.example.demo' } } });
 
         expect(guide.where).toBe('Play Console');
-        expect(guide.sends.map(upath.toUnix)).toEqual([
+        expect(guide.publishes.map(upath.toUnix)).toEqual([
             'the bundle, signed with the upload key, with its native debug symbols, on a track',
-            'store/google-play/en-US: full description, short description, title; icon; release notes',
+            'its release notes in store/google-play/en-US/changelogs',
+        ]);
+        expect(guide.sends.map(upath.toUnix)).toEqual([
+            'store/google-play/en-US: full description, short description, title; icon',
             'contact details: e-mail support@example.com',
         ]);
         expect(guide.problems.map(upath.toUnix)).toEqual(['crossbind: store/google-play/en-US/images/icon.png is 500 × 500, and Google Play takes an icon of 512 × 512.']);
         expect(guide.steps[0]).toEqual({ text: "Create the app, with dev.example.demo as its package name, as Play's API makes none.", url: 'https://play.google.com/console' });
         const texts = guide.steps.map(({ text }) => text);
         expect(texts).toContain('Policy and programs › App content › Privacy policy: https://example.com/privacy.');
-        expect(texts.map(upath.toUnix)).toContain('Policy and programs › App content › Data safety: answer it; to keep it in the project, export it to CSV as store/google-play/data_safety.csv, which later publishes then send.');
+        expect(texts.map(upath.toUnix)).toContain('Policy and programs › App content › Data safety: answer it; to keep it in the project, export it to CSV as store/google-play/data_safety.csv, which crossbind app store google-play --send then sends.');
         expect(texts.some((text) => text.includes('Contact details'))).toBe(false);
     });
 });

@@ -63,7 +63,7 @@ export default {
         { type: 'code', file: 'shell', code: 'npx crossbind app store microsoft-store\nnpx crossbind app publish microsoft-store --rollout 10' },
         {
             type: 'p',
-            text: "Later versions go with `crossbind app publish microsoft-store`: it builds the MSIX packages, makes a submission with them and the listing, and commits it for certification, which takes up to three business days. `--draft` leaves the submission for you to submit in Partner Center, and `--rollout` gives the packages to a share of the app's users first.",
+            text: "Later versions go with `crossbind app publish microsoft-store`: it builds the MSIX packages, makes a submission with them and the listing, and commits it for certification, which takes up to three business days. `--draft` leaves the submission for you to submit in Partner Center, and `--rollout` gives the packages to a share of the app's users first. `crossbind app store microsoft-store --send` sends the listing alone, with no build, in a submission of the packages Partner Center has.",
         },
         {
             type: 'p',

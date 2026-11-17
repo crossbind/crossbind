@@ -17,7 +17,8 @@ const TEXTS = {
 };
 const file = (name) => path.join(APP_STORE_LISTING, name);
 
-// What a publish with --submit sends of a locale: its texts and its screenshots of each display type.
+// What crossbind app store --send sends of a locale, as a publish with --submit does: its texts and its screenshots of
+// each display type.
 function localeLine({
     locale, info, version, screenshots,
 }) {
@@ -25,7 +26,7 @@ function localeLine({
         Object.keys({ ...info, ...version }).map((field) => TEXTS[field]).join(', '),
         Object.entries(screenshots).map(([type, files]) => `${files.length} ${type} screenshots`).join(', '),
     ].filter(Boolean);
-    return `with --submit, ${path.join(APP_STORE_LISTING, locale)}: ${parts.join('; ')}`;
+    return `${path.join(APP_STORE_LISTING, locale)}: ${parts.join('; ')}`;
 }
 
 // The project's listing and settings, with what stops reading them as a problem of its own.
@@ -47,7 +48,7 @@ function readAll(root) {
     return { listings, settings, problems };
 }
 
-// What a publish with --submit sends of the app's settings.
+// What crossbind app store --send sends of the app's settings, as a publish with --submit does.
 function settingsLines({
     copyright, categories, ageRating, review,
 }) {
@@ -56,7 +57,7 @@ function settingsLines({
         Object.keys(categories).length === 0 ? null : `categories: ${Object.values(categories).join(', ')}`,
         ageRating ? `the age rating's answers in ${file('age_rating.json')}` : null,
         Object.keys(review).length === 0 ? null : `App Review's contact in ${file('review_information')}`,
-    ].filter(Boolean).map((line) => `with --submit, ${line}`);
+    ].filter(Boolean);
 }
 
 // The steps App Store Connect alone takes of what the project's files leave out.
@@ -75,17 +76,18 @@ function lackedSteps(listings, settings) {
     ].filter(Boolean).map((text) => ({ text }));
 }
 
-// What crossbind app store says of App Store Connect, of the iOS app and the macOS one alike: what a publish sends, with
-// --submit the listing and settings too, what App Store Connect would refuse of them, and the steps it alone takes.
+// What crossbind app store says of App Store Connect, of the iOS app and the macOS one alike: what a publish sends, what
+// --send sends, which a publish with --submit sends too, what App Store Connect would refuse of them, and the steps it
+// alone takes.
 export function appStoreGuide(api) {
     const { listings, settings, problems: read } = readAll(api.project.root);
     const problems = [...read, ...(api.app.category?.macos ? [] : ['crossbind: app.category is not set, and the Mac App Store takes no app without its category.'])];
-    const sends = [
+    const publishes = [
         'the iOS app, archived and uploaded, which TestFlight hands to testers once Apple has processed it; -p ios sends it alone',
         'then the macOS app, sandboxed, in an archive Xcode exports to App Store Connect, which signs it and its installer package in the cloud, and whose TestFlight hands it to Mac testers once Apple has processed it; -p macos sends it alone',
-        ...listings.map(localeLine),
-        ...settingsLines(settings),
+        'with --submit, the page --send sends too, and the version to App Review',
     ];
+    const sends = [...listings.map(localeLine), ...settingsLines(settings)];
     const id = api.config.app.id;
     const steps = [
         id === undefined
@@ -97,9 +99,9 @@ export function appStoreGuide(api) {
         ...lackedSteps(listings, settings),
         ...(api.app.encryption === null ? [{ text: 'Set app.encryption in crossbind.config.js, whose answer App Store Connect takes of every build and App Review of every submission.' }] : []),
         ...(api.app.encryption === true ? [{ text: 'App Information › App Encryption Documentation: what export compliance takes of an app that uses encryption.' }] : []),
-        { text: "For --submit and CI: Users and Access › Integrations › App Store Connect API: a key of the App Manager or Admin role, as CROSSBIND_APPLE_API_KEY, CROSSBIND_APPLE_API_KEY_ID and CROSSBIND_APPLE_API_ISSUER; Apple signs the uploads of an Admin key in the cloud, as it does those of Xcode's account on your Mac.", url: API_KEYS },
+        { text: "For --send, --submit and CI: Users and Access › Integrations › App Store Connect API: a key of the App Manager or Admin role, as CROSSBIND_APPLE_API_KEY, CROSSBIND_APPLE_API_KEY_ID and CROSSBIND_APPLE_API_ISSUER; Apple signs the uploads of an Admin key in the cloud, as it does those of Xcode's account on your Mac.", url: API_KEYS },
     ];
     return {
-        sends, problems, where: 'App Store Connect', steps,
+        publishes, sends, problems, where: 'App Store Connect', steps,
     };
 }

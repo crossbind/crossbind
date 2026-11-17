@@ -19,14 +19,11 @@ const SCREENSHOTS = {
 const DETAILS = { contactEmail: 'e-mail', contactWebsite: 'website', contactPhone: 'phone' };
 const file = (name) => path.join(PLAY_LISTING, name);
 
-// What a publish sends of a language: its texts, its images and its release notes.
-function languageLine({
-    language, texts, images, notes,
-}) {
+// What crossbind app store --send sends of a language: its texts and its images.
+function languageLine({ language, texts, images }) {
     const parts = [
         Object.keys(texts).map((field) => TEXTS[field]).join(', '),
         Object.entries(images).map(([type, files]) => IMAGES[type] ?? `${files.length} ${SCREENSHOTS[type]}`).join(', '),
-        Object.keys(notes).length > 0 ? 'release notes' : '',
     ].filter(Boolean);
     return `${path.join(PLAY_LISTING, language)}: ${parts.join('; ')}`;
 }
@@ -50,14 +47,19 @@ function readAll(root) {
     return { listings, settings, problems };
 }
 
-// What crossbind app store says of Google Play: what a publish sends, what Play would refuse of it, and the steps Play
-// Console alone takes, once for the app.
+// What crossbind app store says of Google Play: what a publish sends, which is the bundle and its release notes, what
+// --send sends, which is the rest of the page, what Play would refuse of it, and the steps Play Console alone takes,
+// once for the app.
 export function playGuide(api) {
     const { listings, settings, problems } = readAll(api.project.root);
     const details = Object.entries(settings.details);
-    const sends = [
+    const noted = listings.filter(({ notes }) => Object.keys(notes).length > 0);
+    const publishes = [
         'the bundle, signed with the upload key, with its native debug symbols, on a track',
-        ...listings.filter((listing) => isListed(listing) || Object.keys(listing.notes).length > 0).map(languageLine),
+        ...(noted.length > 0 ? [`its release notes in ${noted.map(({ language }) => path.join(PLAY_LISTING, language, 'changelogs')).join(', ')}`] : []),
+    ];
+    const sends = [
+        ...listings.filter(isListed).map(languageLine),
         ...(details.length > 0 ? [`contact details: ${details.map(([field, text]) => `${DETAILS[field]} ${text}`).join(', ')}`] : []),
         ...(settings.dataSafety === undefined ? [] : [`the Data safety declaration in ${file('data_safety.csv')}`]),
     ];
@@ -69,17 +71,17 @@ export function playGuide(api) {
         { text: `Policy and programs › App content › Privacy policy: ${settings.privacyUrl ?? `the policy's URL, which ${file('privacy_url.txt')} would name here`}.` },
         { text: 'Policy and programs › App content: answer App access, Ads, Content rating (the IARC questionnaire), Target audience and content, and each other declaration Play lists for the app.' },
         ...(settings.dataSafety === undefined
-            ? [{ text: `Policy and programs › App content › Data safety: answer it; to keep it in the project, export it to CSV as ${file('data_safety.csv')}, which later publishes then send.` }]
+            ? [{ text: `Policy and programs › App content › Data safety: answer it; to keep it in the project, export it to CSV as ${file('data_safety.csv')}, which crossbind app store google-play --send then sends.` }]
             : []),
         { text: `Grow users › Store presence › Store settings › App category: ${settings.category ?? `pick one, which ${file('category.txt')} would name here`}.` },
         ...(settings.details.contactEmail === undefined
-            ? [{ text: `Grow users › Store presence › Store settings › Contact details: an e-mail at least, which ${file('contact_email.txt')} would send from the next publish.` }]
+            ? [{ text: `Grow users › Store presence › Store settings › Contact details: an e-mail at least, which ${file('contact_email.txt')} would send with crossbind app store google-play --send.` }]
             : []),
         { text: 'Test and release › Production › Countries / regions: pick where the app goes. A personal account opened after 13 November 2023 first runs a closed test with 12 testers for 14 days.' },
         { text: 'Test and release: roll out the first release once, which the first publish leaves a draft; later publishes go out by themselves.' },
         { text: 'For CI: Users and permissions › invite the service account, with "Release apps to testing tracks", "Manage store presence" for the listing and details, and "Manage policy declarations" for the Data safety declaration.' },
     ];
     return {
-        sends, problems, where: 'Play Console', steps,
+        publishes, sends, problems, where: 'Play Console', steps,
     };
 }

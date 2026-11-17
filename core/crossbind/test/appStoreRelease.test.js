@@ -14,7 +14,7 @@ vi.mock('../../store-kit/app-store/appStoreApi.js', () => ({
 }));
 
 const {
-    appStoreApp, assertReviewable, newestBuild, submitRelease,
+    appStoreApp, appStoreState, assertReviewable, newestBuild, sendListing, submitRelease,
 } = await import('../../store-kit/app-store/appStoreRelease.js');
 
 const EDITABLE = 'PREPARE_FOR_SUBMISSION,DEVELOPER_REJECTED,REJECTED,METADATA_REJECTED,INVALID_BINARY';
@@ -99,7 +99,7 @@ describe('an app on App Store Connect', () => {
         await assertReviewable(call, 'A1', '1.2.3');
         answers['GET /apps/A1/appStoreVersions?filter[platform]=IOS&filter[versionString]=1.2.3'] = { data: [{ id: 'V0', attributes: { versionString: '1.2.3', appVersionState: 'READY_FOR_DISTRIBUTION' } }] };
         await expect(assertReviewable(call, 'A1', '1.2.3')).rejects
-            .toThrow('crossbind: App Store Connect has 1.2.3 as READY_FOR_DISTRIBUTION already, which takes no other build: raise the version in package.json');
+            .toThrow('crossbind: App Store Connect has 1.2.3 as READY_FOR_DISTRIBUTION already, which takes no other build or listing: raise the version in package.json');
         delete answers['GET /apps/A1/appStoreVersions?filter[platform]=IOS&filter[versionString]=1.2.3'];
         const submissions = 'GET /apps/A1/reviewSubmissions?filter[platform]=IOS&filter[state]=WAITING_FOR_REVIEW,IN_REVIEW,UNRESOLVED_ISSUES';
         answers[submissions] = { data: [{ id: 'S0', attributes: { state: 'WAITING_FOR_REVIEW' } }] };
@@ -122,6 +122,55 @@ describe('an app on App Store Connect', () => {
         expect(await newestBuild(call, 'A1', '1.2.3')).toBe('B1');
         answers[BUILDS] = { data: [] };
         expect(await newestBuild(call, 'A1', '1.2.3')).toBeNull();
+    });
+});
+
+describe("a version's page on App Store Connect, sent alone", () => {
+    test('makes the version and puts the listing and settings in, with no build and nothing for App Review', async () => {
+        const listings = [
+            { locale: 'en-US', info: { name: 'Demo', subtitle: 'A demo' }, version: { description: 'The demo app.', whatsNew: 'Fixes.' }, screenshots: {} },
+            { locale: 'tr', info: {}, version: { whatsNew: 'Düzeltmeler.' }, screenshots: {} },
+        ];
+
+        expect(await settled(sendListing(call, {
+            appId: 'A1', versionString: '1.2.3', listings, settings: { copyright: '2026 Example Ltd.' },
+        }))).toEqual({ listed: ['en-US', 'tr'], settled: ['copyright'] });
+
+        expect(keys().filter((key) => !key.startsWith('GET'))).toEqual([
+            'POST /appStoreVersions',
+            'PATCH /appStoreVersionLocalizations/L1',
+            'PATCH /appInfoLocalizations/N1',
+            'POST /appStoreVersionLocalizations',
+            'PATCH /appStoreVersions/V1',
+        ]);
+        expect(keys().some((key) => /builds|reviewSubmission|PhasedRelease/.test(key))).toBe(false);
+        expect(printed).toEqual([]);
+    });
+});
+
+describe('what App Store Connect has of an app', () => {
+    const versions = (platform) => `GET /apps/A1/appStoreVersions?filter[platform]=${platform}&limit=3`;
+    const newest = (platform) => `GET /builds?filter[app]=A1&filter[preReleaseVersion.platform]=${platform}&sort=-uploadedDate&limit=1&include=preReleaseVersion`;
+
+    test("is each platform's versions and newest build, as App Store Connect words their states, and nothing of a platform the app is not on", async () => {
+        answers[versions('IOS')] = {
+            data: [
+                { id: 'V2', attributes: { versionString: '1.2.3', appVersionState: 'PREPARE_FOR_SUBMISSION' } },
+                { id: 'V1', attributes: { versionString: '1.2.2', appVersionState: 'READY_FOR_DISTRIBUTION' } },
+            ],
+        };
+        answers[newest('IOS')] = {
+            data: [{ id: 'B2', attributes: { version: '42', processingState: 'PROCESSING' }, relationships: { preReleaseVersion: { data: { type: 'preReleaseVersions', id: 'P1' } } } }],
+            included: [{ type: 'preReleaseVersions', id: 'P1', attributes: { version: '1.2.3' } }],
+        };
+        answers[versions('MAC_OS')] = { data: [] };
+        answers[newest('MAC_OS')] = { data: [] };
+
+        expect(await appStoreState(call, 'A1')).toEqual([
+            'iOS 1.2.3: being prepared for submission',
+            'iOS 1.2.2: out',
+            'iOS newest build: 1.2.3 (42), processing',
+        ]);
     });
 });
 
@@ -401,6 +450,14 @@ describe("a version's screenshots on App Store Connect", () => {
         await expect(release({ listings: listed({ APP_IPHONE_67: [file('1.png', 'first')] }) })).rejects
             .toThrow('crossbind: App Store Connect has not processed the screenshots in 10 minutes, so the version went to no review: once it has, pick the build for 1.2.3 in App Store Connect and submit it there.');
         expect(keys().filter((key) => key === 'GET /appScreenshotSets/SET1/appScreenshots?limit=200')).toHaveLength(121);
+    });
+
+    test('stop a page sent alone where App Store Connect has not processed them within 10 minutes, saying where they show once it has', async () => {
+        answers[SETS] = { data: [] };
+        answers['POST /appScreenshotSets'] = ({ data }) => ({ data: { id: 'SET1', ...data } });
+        processed('SET1', ['SS1'], 'UPLOAD_COMPLETE');
+        await expect(settled(sendListing(call, { appId: 'A1', versionString: '1.2.3', listings: listed({ APP_IPHONE_67: [file('1.png', 'first')] }) }))).rejects
+            .toThrow("crossbind: App Store Connect has not processed the screenshots in 10 minutes: once it has, they show in 1.2.3's listing there.");
     });
 });
 

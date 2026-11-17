@@ -1,8 +1,8 @@
 import {
-    PLAY, highestVersionCode, keptSignIn, playCredentials, uploadBundle,
+    PLAY, highestVersionCode, keptSignIn, playCredentials, playTracks, sendListing, uploadBundle,
 } from './src/googlePlay.js';
 import {
-    PLAY_LISTING, isListed, playListingProblems, readPlayListing, readPlaySettings,
+    PLAY_LISTING, isListed, playListingProblems, readPlayListing, readPlayNotes, readPlaySettings,
 } from './src/playListing.js';
 import { signInToPlay } from './src/playSetup.js';
 import { askAppId } from '@crossbind/core-store-kit';
@@ -15,6 +15,10 @@ const NO_CREDENTIALS = `crossbind: Google Play takes uploads from your Google ac
 const SIGN_IN = 'Google Play takes uploads from your Google account once crossbind is signed in to it. Sign in now, in your browser? [Y/n] ';
 const ANOTHER_ACCOUNT = 'Sign in with another Google account? [Y/n] ';
 const PERCENT = /^\d+(\.\d{1,2})?%?$/;
+// A release's status as crossbind app store says Google Play has it.
+const STATUSES = {
+    draft: 'a draft', inProgress: 'rolling out', halted: 'halted', completed: 'out',
+};
 
 // The percent of a track's users a release reaches at first, as --rollout gives it: 10, or 10%.
 export function rolloutPercent(value) {
@@ -32,15 +36,29 @@ export function playRelease(isDraft, rollout = null) {
     return rollout !== null && rollout < 100 ? { status: 'inProgress', rollout } : { status: 'completed', rollout: null };
 }
 
-// The highest versionCode Play has seen, and the credentials that saw it, once the user has done what Play asks for,
-// which only the user can do: in Play Console, which crossbind opens before it waits for Enter and checks again, or, for
-// a Google account without release rights, by signing in with another.
-async function highestWithPlayConsole(api, appId, credentials) {
+// The package name, which a terminal asks for where crossbind.config.js sets none; null without one.
+async function appIdOf(api) {
+    if (api.config.app.id !== undefined) return api.app.id;
+    return api.isGuided ? askAppId(api, 'Google Play', 'package name') : null;
+}
+
+// The credentials Play takes: those the environment or this machine names, else the Google sign-in its keychain keeps,
+// else, on a terminal, a new one; null without any.
+async function credentialsOf(api) {
+    const credentials = playCredentials(process.env, api.settings) ?? await keptSignIn(api.secrets);
+    return credentials || !api.isGuided ? credentials : signInToPlay(api, SIGN_IN);
+}
+
+// What a call to Play gives, with the credentials that got it, once the user has done what Play asks for, which only
+// the user can do: in Play Console, which crossbind opens before it waits for Enter and calls again, or, for a Google
+// account without the rights, by signing in with another. Without a terminal, the first failure stops it.
+async function withPlayConsole(api, credentials, call) {
     let current = credentials;
     for (;;) {
         try {
-            return { highest: await highestVersionCode(appId, current), credentials: current };
+            return { result: await call(current), credentials: current };
         } catch (error) {
+            if (!api.isGuided) throw error;
             api.log(error.message);
             if (error.status === 403 && current.refreshToken) {
                 current = await signInToPlay(api, ANOTHER_ACCOUNT);
@@ -56,8 +74,16 @@ async function highestWithPlayConsole(api, appId, credentials) {
     }
 }
 
+// A release on a track, as crossbind app store says Google Play has it.
+function releaseLine(track, {
+    versionCodes = [], name, status, userFraction,
+}) {
+    const share = status === 'inProgress' && userFraction ? ` to ${Number((userFraction * 100).toFixed(2))}% of its users` : '';
+    return `${track}: versionCode ${versionCodes.join(', ')}${name ? ` (${name})` : ''}, ${STATUSES[status] ?? status}${share}`;
+}
+
 // The publisher of an Android app's bundle, signed with the upload key, to a Google Play track, with the next versionCode
-// Play takes.
+// Play takes, and of the app's page in store/google-play, which goes alone.
 export default function googlePlay() {
     return {
         name: 'google-play',
@@ -76,11 +102,9 @@ export default function googlePlay() {
             async check(api) {
                 const { track, draft, rollout } = api.options;
                 const release = playRelease(draft, rollout === null ? null : rolloutPercent(rollout));
-                const listings = readPlayListing(api.project.root);
-                const settings = readPlaySettings(api.project.root);
-                const missing = playListingProblems(api.project.root, listings);
-                let appId = api.config.app.id === undefined ? null : api.app.id;
-                if (!appId && api.isGuided) appId = await askAppId(api, 'Google Play', 'package name');
+                const notes = readPlayNotes(api.project.root);
+                const missing = [];
+                const appId = await appIdOf(api);
                 if (!appId) missing.push(NO_APP_ID);
 
                 let signing = await api.android.signing();
@@ -90,18 +114,15 @@ export default function googlePlay() {
                 }
                 if (!signing.isSigned) missing.push(NO_UPLOAD_KEY);
 
-                let credentials = playCredentials(process.env, api.settings) ?? await keptSignIn(api.secrets);
-                if (!credentials && api.isGuided) credentials = await signInToPlay(api, SIGN_IN);
+                const credentials = await credentialsOf(api);
                 if (!credentials) missing.push(NO_CREDENTIALS);
                 if (missing.length > 0) return { missing };
                 api.log(`crossbind: publishing ${appId} ${api.app.version} to Google Play's ${track} track.`);
 
-                let highest;
-                if (api.isGuided) ({ highest, credentials } = await highestWithPlayConsole(api, appId, credentials));
-                else highest = await highestVersionCode(appId, credentials);
+                const seen = await withPlayConsole(api, credentials, (current) => highestVersionCode(appId, current));
                 return {
                     session: {
-                        appId, release, signing, credentials, highest, listings, settings,
+                        appId, release, signing, credentials: seen.credentials, highest: seen.result, notes,
                     },
                 };
             },
@@ -117,25 +138,17 @@ export default function googlePlay() {
             buildEnv: (api, { signing }) => signing.env,
 
             async upload(api, {
-                appId, release: { status, rollout }, credentials, listings, settings,
+                appId, release: { status, rollout }, credentials, notes,
             }, { project, bundle, symbols }) {
                 const { track } = api.options;
                 if (!bundle) throw new Error(`crossbind: the build of ${project} made no bundle, so nothing went to Google Play.`);
-                const { details, dataSafety = null } = settings;
-                if (dataSafety !== null) api.log(`crossbind: sending the Data safety declaration ${PLAY_LISTING}/data_safety.csv holds to Google Play.`);
                 api.log(`crossbind: uploading the bundle${symbols ? ' and its native debug symbols' : ''} to Google Play.`);
                 // A percent's two decimals are a fraction's four, which the division alone would leave as
                 // 0.33299999999999996.
                 const userFraction = status === 'inProgress' ? Number((rollout / 100).toFixed(4)) : null;
                 const released = await uploadBundle(appId, credentials, {
-                    aab: bundle, symbols, track, status, userFraction, listings, details, dataSafety,
+                    aab: bundle, symbols, track, status, userFraction, notes,
                 });
-                if (listings.some(isListed)) {
-                    api.log(released.listed.length > 0
-                        ? `crossbind: Google Play's listing changed in ${released.listed.join(', ')}, as ${PLAY_LISTING} has it.`
-                        : `crossbind: Google Play's listing is the one ${PLAY_LISTING} has already.`);
-                }
-                if (released.isDetailed) api.log(`crossbind: Google Play's contact details changed, as ${PLAY_LISTING} has them.`);
                 const app = `${appId} ${api.app.version} (versionCode ${released.versionCode})`;
                 const published = { published: { appId, track, versionCode: released.versionCode, status: released.status } };
                 if (released.status === 'inProgress') {
@@ -154,6 +167,49 @@ export default function googlePlay() {
                     api.log(`crossbind: Play stages updates alone, so that first release reaches all of the track's users, not ${rollout}% of them.`);
                 }
                 return published;
+            },
+
+            // Sends the page store/google-play holds, with no build: the listing, the contact details and the Data
+            // safety declaration, after what Play would refuse of it and what is missing, which a terminal asks for.
+            async send(api) {
+                const root = api.project.root;
+                const listings = readPlayListing(root);
+                const { details, dataSafety = null } = readPlaySettings(root);
+                const isListing = listings.some(isListed);
+                if (!isListing && Object.keys(details).length === 0 && dataSafety === null) {
+                    api.log(`crossbind: ${PLAY_LISTING} holds no page of the app, so nothing went to Google Play.`);
+                    return {};
+                }
+                const problems = playListingProblems(root, listings);
+                if (problems.length > 0) return { missing: problems };
+                const missing = [];
+                const appId = await appIdOf(api);
+                if (!appId) missing.push(NO_APP_ID);
+                const credentials = await credentialsOf(api);
+                if (!credentials) missing.push(NO_CREDENTIALS);
+                if (missing.length > 0) return { missing };
+                api.log(`crossbind: sending the page ${PLAY_LISTING} holds of ${appId} to Google Play.`);
+                const { result: sent } = await withPlayConsole(api, credentials, (current) => sendListing(appId, current, { listings, details, dataSafety }));
+                if (sent.isDeclared) api.log(`crossbind: Google Play has the Data safety declaration ${PLAY_LISTING}/data_safety.csv holds.`);
+                if (isListing) {
+                    api.log(sent.listed.length > 0
+                        ? `crossbind: Google Play's listing changed in ${sent.listed.join(', ')}, as ${PLAY_LISTING} has it.`
+                        : `crossbind: Google Play's listing is the one ${PLAY_LISTING} has already.`);
+                }
+                if (sent.isDetailed) api.log(`crossbind: Google Play's contact details changed, as ${PLAY_LISTING} has them.`);
+                return {};
+            },
+
+            // What each track of Google Play has of the app, asking for nothing.
+            async state(api) {
+                if (api.config.app.id === undefined) return ['Set app.id in crossbind.config.js, and Google Play tells what it has of the app.'];
+                const credentials = playCredentials(process.env, api.settings) ?? await keptSignIn(api.secrets);
+                if (!credentials) {
+                    return [`Sign in to Google on a terminal, as crossbind app store google-play --send or a publish does, or set ${PLAY.serviceAccount}, ${PLAY.key} or ${PLAY.token}, to see what Google Play has.`];
+                }
+                const released = (await playTracks(api.app.id, credentials)).filter(({ releases = [] }) => releases.length > 0);
+                if (released.length === 0) return [`no release of ${api.app.id} yet`];
+                return released.flatMap(({ track, releases }) => releases.map((release) => releaseLine(track, release)));
             },
 
             guide: (api) => playGuide(api),

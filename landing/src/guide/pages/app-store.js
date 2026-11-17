@@ -122,7 +122,7 @@ export default {
         },
         {
             type: 'p',
-            text: "What only App Store Connect does stays there: screenshots of devices the listing has no folder for, app previews, App Privacy answers, price and availability, content rights, export compliance documents, and replies to App Review. `crossbind app store app-store` lists each, with what to enter. The age rating, categories, copyright and App Review's contact go with `--submit`, from the [listing](#listing)'s files.",
+            text: "What only App Store Connect does stays there: screenshots of devices the listing has no folder for, app previews, App Privacy answers, price and availability, content rights, export compliance documents, and replies to App Review. `crossbind app store app-store` lists each, with what to enter. The age rating, categories, copyright and App Review's contact go with `--send` and with `--submit`, from the [listing](#listing)'s files.",
         },
         {
             type: 'p',
@@ -133,12 +133,12 @@ export default {
         { type: 'h2', id: 'listing', text: 'The listing' },
         {
             type: 'p',
-            text: "A project's `store/app-store` folder holds its App Store listing, which goes up with `--submit`: a folder per locale, named as App Store Connect names it (`en-US`, `tr`, `zh-Hans`), with these text files and a folder of screenshots per display type:",
+            text: "A project's `store/app-store` folder holds its App Store listing, which goes up with `crossbind app store app-store --send`, with no build, through the API key above, and with `--submit`: a folder per locale, named as App Store Connect names it (`en-US`, `tr`, `zh-Hans`), with these text files and a folder of screenshots per display type:",
         },
         { type: 'code', file: 'store/app-store', code: LISTING },
         {
             type: 'p',
-            text: "A publish sends what differs from App Store Connect, and a locale it has none of gets a new localization; the name, subtitle and privacy policy URL go into the app's information. What the folder leaves out stays as it is, so it may hold the release notes alone. An empty `subtitle.txt`, `promotional_text.txt` or `marketing_url.txt` clears its text. Before the build, the publish stops at any other empty text, a text over App Store Connect's limit, and a file or folder it does not take.",
+            text: "`--send`, or a publish with `--submit`, sends what differs from App Store Connect, and a locale it has none of gets a new localization; the name, subtitle and privacy policy URL go into the app's information. What the folder leaves out stays as it is, so it may hold the release notes alone. An empty `subtitle.txt`, `promotional_text.txt` or `marketing_url.txt` clears its text. Before anything goes, it stops at any other empty text, a text over App Store Connect's limit, and a file or folder it does not take.",
         },
         {
             type: 'p',
@@ -146,7 +146,7 @@ export default {
         },
         {
             type: 'p',
-            text: 'Before the build, the publish stops at a file that is no PNG or JPEG image, such as a Git LFS pointer; at a screenshot of a size its type does not take, portrait or turned (`APP_IPHONE_67` takes 1320 × 2868, `APP_IPAD_PRO_3GEN_129` 2064 × 2752); and at a screenshot with transparency. App Store Connect wants 13-inch iPad screenshots of every app that runs on iPads, as crossbind\'s apps do.',
+            text: 'Before anything goes, `--send` and a publish with `--submit` stop at a file that is no PNG or JPEG image, such as a Git LFS pointer; at a screenshot of a size its type does not take, portrait or turned (`APP_IPHONE_67` takes 1320 × 2868, `APP_IPAD_PRO_3GEN_129` 2064 × 2752); and at a screenshot with transparency. App Store Connect wants 13-inch iPad screenshots of every app that runs on iPads, as crossbind\'s apps do.',
         },
         {
             type: 'p',
