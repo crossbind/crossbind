@@ -182,7 +182,26 @@ With `useWorker: true`, `Module` is a Comlink proxy to the worker, and every cal
 - Every call returns a promise, even when the C++ is synchronous.
 - `m.toArray(vec)` works on a returned vector, as on the page thread.
 
-Call `initNative.terminate()` to kill the worker and release resources.
+Call `initNative.terminate()` to kill the worker and release resources. It is also how a page stops a call that is still running:
+
+- Every call the worker has not answered rejects with an `AbortError`, and so does an `initNative()` that is still starting. A call made later on the old module, or on an object it handed out, rejects the same way.
+- The next `initNative()` starts a new worker. Nothing of the old one carries over: open the data again.
+- The browser decides when the worker's code stops. Chromium lets the call the worker is in run for about two seconds more, so a shorter job still finishes and writes its output, although its call has rejected.
+- What the stopped call wrote stays in the file system, a half-written output included. Remove it before the job runs again.
+
+```js
+const job = m.convert(source, target)
+stopButton.onclick = () => initNative.terminate()
+
+try {
+  await job
+} catch (error) {
+  if (error.name !== 'AbortError') throw error
+  // Stopped. The next initNative() starts a new worker.
+}
+```
+
+Without a worker there is nothing to stop: a call holds the thread it was made on until it returns, on the page thread and in a Node-API addon alike.
 
 ## Examples
 
