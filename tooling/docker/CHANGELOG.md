@@ -1,5 +1,17 @@
 # @crossbind/docker
 
+## Image family 1.0.23
+
+### Patch Changes
+
+- Moved swig to crossbind/swig `63612ba3`. A function, method or constructor that takes a
+  `std::unique_ptr` (by value, as an rvalue or through a const reference, through a typedef such as
+  GEOS's `Geometry::Ptr` too) is left out of the bridge, with a line in the build: embind built the
+  argument around the object a JavaScript handle still held, so the call destroyed that object and
+  the handle destroyed it again. A `%template` instance in a hand-written interface now binds: the
+  bridge spelled it as SWIG does (`Box<(int)>`) and did not compile. The bridges of interfaces
+  without either are byte-identical to those of `8a568e37`.
+
 ## Image family 1.0.22
 
 ### Patch Changes
