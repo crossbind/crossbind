@@ -4,14 +4,10 @@ import {
 
 await initNative();
 
-let here = new Point();
-here.x = 1;
-here.y = 1;
-
-let facing = Direction.North;
-for (let turn = 0; turn < 4; turn++) {
-    here = step(here, facing, 2);
-    console.log(`${nameOf(facing)} to (${here.x}, ${here.y})`);
-    facing = turnRight(facing);
+let at = await new Point();
+let facing = await Direction.North;
+for (let turn = 0; turn < 4; turn += 1) {
+    at = await step(at, facing, 2);
+    console.log(await nameOf(facing), await at.x, await at.y);
+    facing = await turnRight(facing);
 }
-console.log('north again:', facing === Direction.North);

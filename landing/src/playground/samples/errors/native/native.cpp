@@ -1,13 +1,11 @@
 #include "native.h"
 
-#include <cmath>
 #include <stdexcept>
 
-double squareRoot(double value) {
-    if (value < 0) {
-        throw std::invalid_argument("negative value");
-    }
-    return std::sqrt(value);
+std::optional<int> indexOf(const std::string &text, char letter) {
+    const auto at = text.find(letter);
+    if (at == std::string::npos) return std::nullopt;
+    return static_cast<int>(at);
 }
 
 int parsePercent(const std::string &text) {

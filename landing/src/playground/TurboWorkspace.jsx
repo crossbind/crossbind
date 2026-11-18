@@ -1,4 +1,4 @@
-import { TURBO, TurboWindow, turboTokens } from '../components/turbo.jsx';
+import { TURBO, TurboWindow, turboOutputTokens, turboTokens } from '../components/turbo.jsx';
 import { FileList, PackageList, plainButton } from './ProjectPanel.jsx';
 import { ConsoleLines, runInfo } from './parts.jsx';
 import { OpenFile, ViewSwitch, shortName } from './workspace.jsx';
@@ -20,7 +20,7 @@ export default function TurboWorkspace({
     onView, onOpen, onCreating, onCreateFile, onRemoveFile, onAddPackage, onRemovePackage, onEdit,
 }) {
     const turbo = turboTokens(tokens);
-    const output = { ...turbo, codeText: TURBO.gray, codeMuted: TURBO.gray };
+    const output = turboOutputTokens(tokens);
     const content = { flex: 1, minHeight: 0, overflowY: 'auto', padding: '10px 4px 6px' };
     const viewButton = (selected) => ({
         flex: 1, padding: '2px 8px', fontFamily: tokens.mono, fontSize: 13, cursor: 'pointer', border: 'none', color: TURBO.black, background: selected ? TURBO.green : 'transparent',

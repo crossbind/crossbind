@@ -1,13 +1,16 @@
-import { initNative, countdown, applyTwice } from './native/native.h';
+import {
+    initNative, countdown, applyTwice, releaseCallback,
+} from './native/native.h';
 
-const m = await initNative();
+// A function cannot cross into a worker: use the page thread.
+await initNative({ useWorker: false });
 
 const tick = (value) => console.log('tick', value);
 const timesTen = (value) => value * 10;
 
-countdown(3, tick);
-console.log('applied twice:', applyTwice(timesTen, 4));
+await countdown(3, tick);
+console.log('applied twice:', await applyTwice(timesTen, 4));
 
 // Each function passed to C++ holds a slot until it is released.
-m.releaseCallback(tick);
-m.releaseCallback(timesTen);
+await releaseCallback(tick);
+await releaseCallback(timesTen);

@@ -27,47 +27,6 @@ export function highlight(raw, tokens) {
     });
 }
 
-export function CodeWindow({ tokens, title, children, glass, padded = true }) {
-    return (
-        <div style={{
-            borderRadius: 14,
-            overflow: 'hidden',
-            // Column flex so a stretched parent hands the leftover height to the code body.
-            display: 'flex',
-            flexDirection: 'column',
-            background: glass
-                ? (tokens.isLight ? 'rgba(255,255,255,0.7)' : 'rgba(13,19,34,0.7)')
-                : tokens.codeBg,
-            border: `1px solid ${tokens.borderStrong}`,
-            color: tokens.codeText,
-        }}
-        >
-            <div style={{
-                padding: '10px 14px',
-                background: tokens.codeSurface,
-                borderBottom: `1px solid ${tokens.isLight ? 'rgba(0,0,0,0.06)' : 'rgba(255,255,255,0.06)'}`,
-                fontSize: 12,
-                color: tokens.codeMuted,
-                fontFamily: tokens.mono,
-            }}
-            >
-                {title}
-            </div>
-            <div style={{
-                padding: padded ? 18 : 0,
-                fontFamily: tokens.mono,
-                fontSize: 13,
-                lineHeight: 1.7,
-                overflowX: 'auto',
-                flex: 1,
-            }}
-            >
-                {children}
-            </div>
-        </div>
-    );
-}
-
 export function Pill({ tokens, children, color, style }) {
     return (
         <span style={{

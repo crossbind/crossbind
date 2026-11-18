@@ -1,6 +1,7 @@
 // The way on through a reading order: the guide's pages, the tutorial's steps. A page outside the order has neither.
 // On phones the .tap-target rule makes each link a flex row, so the column direction keeps its caption above it.
-export default function PrevNext({ tokens, label, prev, next }) {
+// `style` lets a page with less room tighten the space above the links.
+export default function PrevNext({ tokens, label, prev, next, style }) {
     if (!prev && !next) return null;
     const caption = {
         fontFamily: tokens.mono,
@@ -22,6 +23,7 @@ export default function PrevNext({ tokens, label, prev, next }) {
                 paddingTop: 20,
                 borderTop: `1px solid ${tokens.border}`,
                 fontSize: 13.5,
+                ...style,
             }}
         >
             {prev ? (

@@ -47,6 +47,11 @@ test('every sample, as a compile sends it, is a project the compiler accepts', (
     SAMPLE_LIST.forEach(({ id }) => assert.doesNotThrow(() => validateRequest(compileRequest(sampleProject(id))), id));
 });
 
+// The Turbo bar's Samples menu is 220px wide and opens leftwards from its button, some 220px from the screen's edge.
+test("a sample's title fits the playground's Samples menu", () => {
+    SAMPLE_LIST.forEach(({ id, title }) => assert.ok(title.length <= 21, `${id}: "${title}" is ${title.length} characters`));
+});
+
 test('a compile sends main.js and the native files; the project\'s other scripts stay in the page', () => {
     const project = { files: { 'main.js': '', 'catalog.js': 'export const a = 1;', 'native/a.h': '' }, packages: ['port:zlib'] };
     assert.deepEqual(compileRequest(project), { files: { 'main.js': '', 'native/a.h': '' }, packages: ['port:zlib'] });

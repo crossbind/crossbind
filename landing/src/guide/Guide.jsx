@@ -1,6 +1,7 @@
 import { Fragment, useEffect, useRef, useState } from 'react';
 import { Chevron } from '../components/menu.jsx';
 import PrevNext from '../components/PrevNext.jsx';
+import { SideHeading, SideLink } from '../components/side.jsx';
 import Article from './Article.jsx';
 import { inline } from './inline.jsx';
 import { getNeighbours, GUIDE_SECTIONS } from './nav.js';
@@ -40,30 +41,6 @@ function useActiveHeading(headings) {
     }, [ids]);
 
     return active;
-}
-
-function SideLink({ tokens, href, label, active, current = 'page' }) {
-    return (
-        <a
-            href={href}
-            className="tap-target"
-            aria-current={active ? current : undefined}
-            style={{
-                fontSize: 13,
-                lineHeight: 1.5,
-                padding: '3px 0 3px 10px',
-                marginLeft: -12,
-                borderLeft: `2px solid ${active ? tokens.accentText : 'transparent'}`,
-                color: active ? tokens.text : tokens.textDim,
-            }}
-        >
-            {label}
-        </a>
-    );
-}
-
-function SideHeading({ tokens, children }) {
-    return <div style={{ fontSize: 13, fontWeight: 600, color: tokens.text, margin: '18px 0 6px' }}>{children}</div>;
 }
 
 // Scrolls the sidebar itself, never the window, so an anchor jump stays where it landed.

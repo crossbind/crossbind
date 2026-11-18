@@ -163,7 +163,7 @@ test('a tree hash follows the content of the files a checkout holds and skips wh
 test('a demo fingerprint moves with what the demo is built from, and nothing else', () => {
     const inputs = { distTag: 'beta', builder: 'builder', samples: 'samples' };
     const byId = (id) => DEMOS.find((demo) => demo.id === id);
-    const [lib, template, sample] = ['lib-zstd', 'web-vanilla', 'sample-hello'].map(byId);
+    const [lib, template, sample] = ['lib-zstd', 'web-vanilla', 'sample-class'].map(byId);
     assert.equal(demoFingerprint(lib, inputs), demoFingerprint(lib, inputs));
     assert.notEqual(demoFingerprint(lib, inputs), demoFingerprint(byId('lib-zstd-direct'), inputs));
     assert.notEqual(demoFingerprint(lib, inputs), demoFingerprint(lib, { ...inputs, builder: 'changed' }));

@@ -87,8 +87,10 @@ test('the hero terminal types only commands docs/api documents, each under the k
 });
 
 test('the code window links the playground as "Try in Playground", and as "Try" alone on a phone', () => {
-    assert.match(readFileSync(new URL('../src/sections/Hero.jsx', import.meta.url), 'utf8'), /aria-label="Try in Playground"[^>]*>[\s\S]*?className="hero-try-rest"/);
-    assert.match(readFileSync(new URL('../src/styles.css', import.meta.url), 'utf8'), /\.hero-try-rest \{\s*display: none;\s*\}/);
+    const read = (path) => readFileSync(new URL(path, import.meta.url), 'utf8');
+    assert.match(read('../src/sections/Hero.jsx'), /<TurboMenuLink[^>]*aria-label="Try in Playground"[^>]*lead="Try"[^>]*rest=" in Playground"/);
+    assert.match(read('../src/components/turbo.jsx'), /\{lead\}\s*<span className="turbo-link-rest">\{rest\}<\/span>/);
+    assert.match(read('../src/styles.css'), /\.turbo-link-rest \{\s*display: none;\s*\}/);
 });
 
 test('the summary agents read names the apps the headline promises', () => {
