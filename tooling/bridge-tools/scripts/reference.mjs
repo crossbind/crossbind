@@ -59,16 +59,20 @@ function referenceFor(header, predefined) {
                   constants: ALL_NAMES,
               })
             : [];
+    // An interface the kit ships beside a header stands in for the generated one, as in crossbind.
+    const shipped = path.join(NATIVE, `${nameOf(header)}.i`);
     fs.writeFileSync(
         path.join(dir, `${nameOf(header)}.i`),
-        buildInterfaceContent({
-            moduleName: nameOf(header).toUpperCase(),
-            headerPath: header,
-            prelude,
-            swigMacros,
-            ignored: conformanceExport.ignoredDeclarations[header] ?? [],
-            constants: ALL_NAMES,
-        }),
+        fs.existsSync(shipped)
+            ? fs.readFileSync(shipped)
+            : buildInterfaceContent({
+                  moduleName: nameOf(header).toUpperCase(),
+                  headerPath: header,
+                  prelude,
+                  swigMacros,
+                  ignored: conformanceExport.ignoredDeclarations[header] ?? [],
+                  constants: ALL_NAMES,
+              }),
     );
     const bridge = inImage(imageDir, ['swig', ...swigArgs(header, imageDir)]);
     fs.writeFileSync(path.join(imageDir, 'swig.output'), bridge.output);

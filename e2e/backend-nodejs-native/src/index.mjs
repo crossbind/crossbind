@@ -80,6 +80,7 @@ initNative().then(async (m) => {
             strings: proxy,
             wrappers: proxy,
             types: proxy,
+            extend: proxy,
             constants,
             extras,
             rustKit: proxy,

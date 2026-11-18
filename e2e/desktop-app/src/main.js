@@ -1151,6 +1151,7 @@ else initNative().then(async (m) => {
             strings: m,
             wrappers: m,
             types: m,
+            extend: m,
             constants: {
                 CONF_BASE, CONF_BASE_NAME, CONF_CHAR, CONF_DOUBLE, CONF_EXPRESSION, CONF_HEX, CONF_INT, CONF_NEGATIVE,
                 CONF_PLATFORM, CONF_STRING, CONF_TRUE, CONF_WIDE, confGlobal, confGlobalName, module: confConstantsModule,

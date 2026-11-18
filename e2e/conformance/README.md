@@ -45,6 +45,11 @@ skips (search `KNOWN ENGINE GAP` in `spec/run.mjs`).
   one taking a struct pointer and returning a string, function-like macros typed by the function they
   call, a macro naming a function, and mutable globals as handles to their storage. The Vite and
   React Native legs import them by name; the others skip the section.
+- `native/confextend.h` with `confextend.i` beside it, and `spec/sections/extend.mjs` — a hand-written
+  interface, which crossbind uses in place of the one it generates: the methods `%extend` adds to a
+  class, bound as the function itself or through an adapter, called on an object the constructor
+  makes and on one a factory returns in a `shared_ptr`, an overload of a method the class has, and
+  a static one. Every leg runs the section.
 - `../conformance-rust/` — the Rust half: one plain crate (`src/lib.rs`, every construct in
   sections) built as a cargo package like `core/embind-rust/demo`; `spec/sections/rust/*.mjs` hold
   its checks. Constructs the generator does not carry yet are `todo` entries: a miss prints a

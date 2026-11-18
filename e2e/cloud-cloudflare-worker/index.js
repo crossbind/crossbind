@@ -53,6 +53,7 @@ async function bootNow() {
         strings: m,
         wrappers: m,
         types: m,
+        extend: m,
         rustKit: m,
         caps: {},
     });
