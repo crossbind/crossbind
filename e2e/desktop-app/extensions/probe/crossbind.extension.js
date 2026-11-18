@@ -41,12 +41,14 @@ const installer = {
 // The e2e app's probe of the host's services, which src/main.js calls through crossbind/app's invoke, and which gets
 // the links of a scheme of its own, with what an extension adds to an app on each platform: C beside its C++, from
 // folders of its own, with its own macros, an Apple app's Info.plist key and an iOS app's privacy reasons, and an
-// Android app's permission, manifest elements and resources; and a store and an installer of its own.
+// Android app's permission, manifest elements and resources; and a store and an installer of its own. It serves origins
+// of a project's role, whose proxy fetches e2e/run.mjs's endpoint over plain http, which App Transport Security lets
+// through to a local address, and Android with the extension's cleartext.
 export default function probe() {
-    const plist = { CrossbindProbe: 'plist' };
+    const plist = { CrossbindProbe: 'plist', NSAppTransportSecurity: { NSAllowsLocalNetworking: true } };
     return {
         name: 'probe',
-        contract: 1,
+        contract: 3,
         root: import.meta.dirname,
         app: {
             urlSchemes: [PROBE_SCHEME],
@@ -56,7 +58,7 @@ export default function probe() {
             activityTypes: [ACTIVITIES.probe],
             // A quick action of its own, whose taps its native code gets on a phone.
             shortcutItems: [{ type: SHORTCUTS.probe, title: 'Probe' }],
-            sources: ['probe.cpp', 'compiled.c'],
+            sources: ['probe.cpp', 'origins.cpp', 'compiled.c'],
             // A file of its own the app carries, which probe.carried reads.
             files: ['carried/'],
             includes: ['include'],
@@ -112,6 +114,8 @@ export default function probe() {
                 // A library of Maven's the image's cache lacks, which the app's Gradle project resolves online, checked.
                 maven: ['org.jsoup:jsoup:1.18.1'],
                 verification: 'android/verification-metadata.xml',
+                // src/main.js checks a project's page reaches the run's machine over plain http and ws.
+                cleartext: true,
             },
         },
         publisher: store,

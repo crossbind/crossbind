@@ -11,6 +11,7 @@ import {
     PROBE_URLS, REACH_PORT, TRASHED_FILE, TRAY,
 } from './launch.mjs';
 import { UPDATE_PORT, signUpdate } from './updates.mjs';
+import { answerFetch, answerPage } from './endpoint.mjs';
 
 // Opens the app `pnpm build` made, whose page runs the conformance suite and logs its summary last, and closes it
 // once the summary is in, or a desktop app once it has opened anew, as its page asks then. With
@@ -543,7 +544,9 @@ function networkAddress() {
 // The plain http and ws endpoint src/web-features.js tries at 127.0.0.1 and at the machine's address on its network. It
 // answers any origin, and the private network preflight Chromium may send, so that a request that fails is one the web
 // view refused; each one it hears before the suite's summary is shown, so one the web view never sent shows as none.
+// It serves the page and the fetch's checks of e2e/endpoint.mjs as well, which it does not show.
 const reached = [];
+const fetchCounts = {};
 function serveReach() {
     const heard = (request, kind) => {
         if (FINISHED.test(out)) return;
@@ -551,6 +554,7 @@ function serveReach() {
         reached.push(`${kind} ${request.url} from ${request.socket.remoteAddress}, origin ${request.headers.origin}${preflight}`);
     };
     const server = createServer((request, response) => {
+        if (answerPage(request, response, join(root, 'dist')) || answerFetch(request, response, fetchCounts)) return;
         heard(request, request.method);
         response.writeHead(200, { 'content-type': 'text/plain', 'access-control-allow-origin': '*', 'access-control-allow-private-network': 'true' });
         response.end('ok');

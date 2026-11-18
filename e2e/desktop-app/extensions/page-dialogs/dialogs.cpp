@@ -1,5 +1,5 @@
 // The page's dialogs, which src/main.js opens: a dialog of the message "cancel" is cancelled, a prompt() answered with
-// what it was asked, and the rest accepted.
+// what it was asked and the role of the page that asked, and the rest accepted.
 #include "crossbind/extension.h"
 
 void crossbind_extension_e2e_page_dialogs(crossbind::Registry &registry) {
@@ -9,7 +9,7 @@ void crossbind_extension_e2e_page_dialogs(crossbind::Registry &registry) {
         if (dialog.message() == "cancel") {
             dialog.cancel();
         } else if (dialog.kind() == PageDialog::Kind::prompt) {
-            dialog.accept(Value(Value::Object{{"message", dialog.message()}, {"defaultText", dialog.defaultText()}}).json());
+            dialog.accept(Value(Value::Object{{"message", dialog.message()}, {"defaultText", dialog.defaultText()}, {"role", dialog.page().role()}}).json());
         } else {
             dialog.accept();
         }

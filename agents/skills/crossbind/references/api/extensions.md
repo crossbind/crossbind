@@ -59,7 +59,7 @@ keys and Android manifests, as it writes each platform's project (see [crossbind
 ## Versions
 
 An extension names the versions of the contract it is written for: `contract: 1`, or a list, as `[1, 2]` for one
-written for both. Each crossbind takes a range of them, from the oldest it still builds to the newest, `1` to `2`
+written for both. Each crossbind takes a range of them, from the oldest it still builds to the newest, `1` to `3`
 in this one: a build stops on an extension that names none of them, saying what to update, crossbind where the
 extension names newer ones alone, else the extension's package, or `@crossbind/core-app-host` where the host's own
 extensions are of another crossbind. Native code tells the versions apart with `CROSSBIND_EXTENSION_CONTRACT`, the
@@ -68,6 +68,10 @@ newest its host is built for, as `#if CROSSBIND_EXTENSION_CONTRACT >= 2` does, a
 
 Version 2 added [package sources](#package-sources) and changed nothing else: an extension written for 1 builds as it
 did, and one that gives a `packageSource` names 2, or a build stops, saying so.
+
+Version 3 added [origins](#origins) an extension serves, the roles of the pages that call, `fetch()` and Android's
+`cleartext`, and changed nothing else: the app's own pages are of the role `app`, which every function and event of an
+extension written for 1 or 2 reaches as before, and one that gives `app.android.cleartext` names 3.
 
 A change that every extension written for the contract keeps working with raises only the newest version: a new
 function, hook, member of a struct or of a request, key of the descriptor or member of the api, and a role a new
@@ -207,6 +211,12 @@ What a platform adds:
   takes `${applicationId}` as Gradle gives it, as for a `<provider>`'s authorities.
 - `resources` (`android`): A folder of Android resources, as `res/` holds them, which join the app's: one at a path the
   app has stops the build, naming the extension. Its Java reads them through the app's `dev.crossbind.app.R`.
+- `cleartext` (`android`): `true` lets the app send plain http to any address, its native code and its webview alike,
+  as its network security config's `<base-config cleartextTrafficPermitted="true" />` does: without it, the app sends
+  plain http to `localhost` and `127.0.0.1` alone. A page of the app's own origin, an https one, still sends none to
+  another address, as mixed content; a page of an origin an extension serves, `http://<name>.localhost`, reaches a dev
+  server on the network with it. Version 3 of the contract added it; it is for an extension whose pages come from a
+  computer on the app's network, as a project's, since every other app keeps the default.
 - `java`, `class` (`android`): The folder of the extension's Java, relative to `root`, whose `.java` and Kotlin `.kt`
   files alone join the app's sources, which the Android Gradle plugin compiles together, so that it may hold the
   manifest and resources as well, and the class in it the app calls, in Java or Kotlin, which implements
@@ -260,23 +270,29 @@ void crossbind_extension_clipboard(crossbind::Registry &registry) {
   as a reload does: the call answers nothing from then on. Each `fn` given runs, in the order given, and an answered
   call lets go of them.
 - `Page`, `Window`: A page of the app's, from its start, as `onPage` tells, until the next replaces it: its `id()`
-  within the run, never 0, and the `windowId()` of the window it is in; a call of the app's own code is of none, 0 for
-  both, and an Android page of no window an extension reaches, 0. A window of the app's, for the main thread while it is
+  within the run, never 0, the `windowId()` of the window it is in, and its `role()`: `"app"` for a page of the app's
+  own origins, the role of an origin an extension serves for a page of it, and `""` for a page of any other origin; a
+  call of the app's own code is of none, 0 for both and the role `""`, and an Android page of no window an extension
+  reaches, 0. A window of the app's, for the main thread while it is
   open: its `id()` within the run, from 1, the platform's `native()` window, as `appWindow()` gives the oldest one's,
   its `webView()`, as `appWebView()` does, and from any thread the `page()` it shows now, which a reload replaces, of id
   0 once it closed.
 - `Registry::function(name, fn)`: Adds a function the page calls by that name, which starts with the extension's own
   and a dot, or with a role's it takes, as `tray.` for one that takes `tray`. The page's calls run it on the module's
   thread, which it must not hold up: it answers there, or hands the call on. A call of the app's native code runs it on
-  the caller's thread, so it may run on several at once. What it throws fails the call.
+  the caller's thread, so it may run on several at once. What it throws fails the call. Pages of the role `app` alone
+  call it; `Registry::function(name, roles, fn)` names the roles whose pages call it, as `{"app", "project"}`, and the
+  host refuses a page of another role before the function runs, saying which roles call it. The app's own code calls
+  either.
 - `Registry::route(fn)`: Answers the page's requests for the extension's URLs, as [Routes](#routes) tells.
 - `Registry::options()`: The extension's `options`, a `Value`: null without any.
 - `Registry::events()`: What the extension sends the pages as its events, from any thread, each named after the
   extension, as an event `changed` of `clipboard`'s reaches the pages' listeners of `clipboard.changed`:
-  `emit(name, value)` reaches every page that listens to the name, and `emit(name, value, page)` that page alone;
-  `emitToFront(name, value)` reaches the page in front that listens, of the window its user used last, for what one page
-  is to act on once, as a click; and `hold(name, value)` keeps each until a page asks with `events.held()`, as what came
-  before it listened, then hands it to the page in front that asked. A value with bytes throws.
+  `emit(name, value)` reaches every page of the role `app` that listens to the name, and `emit(name, value, page)` that
+  page alone, whatever its role; `emitToFront(name, value)` reaches the page of the role `app` in front that listens, of
+  the window its user used last, for what one page is to act on once, as a click; and `hold(name, value)` keeps each
+  until a page of the role `app` asks with `events.held()`, as what came before it listened, then hands it to the page
+  in front that asked. A value with bytes throws.
 - `Registry::onLaunch(fn)`: Takes a desktop app's launches, as one extension alone does: `fn` gets the `Launch` of this
   process, its `args`, `cwd` and the `token` that lets a Linux window take the front, on the main thread before the
   module starts, and hands the app later ones with `launchedAgain()`. `false` ends the launch with exit status 0; what
@@ -534,6 +550,69 @@ unanswered gets 500.
   as the route gave them. It measures an answer in an int, so it takes no file of 2 GiB or more.
 - During development the page comes from the dev server, so the routes answer any origin, as the page's files do.
 
+## Origins
+
+An extension serves an origin of the app's own beside the app's, as the page of a project the app shows, with
+`serveOrigin(name, role, handler)`: a page of it reaches the app's functions that name its role, and nothing else of the
+app's. It is `crossbind://<name>` on Apple's platforms and Linux, and `http://<name>.localhost` on Android and Windows,
+where the webviews keep a scheme of the app's from storage of its own: a page of it is a secure context, with storage of
+its origin's own, which stays from one run to the next as the same name is served again. A page of the role `app`
+loads it, in its window or in a frame, as `location.href = url` does with the `url()` a function gave it.
+
+```cpp
+// The notes of acme's, as pages of their own role: notes.open serves them and gives the page their URL.
+registry.function("acme.open", [](crossbind::Call call) {
+    crossbind::Origin origin = crossbind::serveOrigin("acme-notes", "notes", [](crossbind::Request request) {
+        request.respond(200, {{"Content-Type", "text/html; charset=utf-8"}}, "<h1>Notes</h1>");
+    });
+    call.resolve(origin.url());
+    keep(std::move(origin));
+});
+```
+
+- `serveOrigin(name, role, handler)`: From any thread, once the app's extensions have all started, as from `onStart`
+  or a function. `name`, its host: lowercase letters and digits, which dashes may join, 63 at most, neither `app` nor a
+  name served now; `role`, what its pages are, of the same letters, not `app`. What it refuses throws, saying why.
+  `handler` gets each GET and HEAD of the origin as a route gets its own (a `Request`, as [Routes](#routes) tells), its
+  path from the origin's `/`, on the thread the webview asks on, which it must not hold up. The host answers another
+  method with 405, what `handler` throws with 500, and the paths under `/__crossbind/b/` itself: the bytes its pages'
+  calls send and take, with their token.
+- `Origin`: Any thread may hold a copy. `url()`, its URL with the path `/`, as `crossbind://acme-notes/`. `end()`, from
+  any thread, once: its pages' calls fail from then on, saying it ended, and those that wait for their answers are
+  cancelled; each window that shows one of its pages shows the app's first page again; and its requests get 404
+  without its handler. The last copy that lets it go ends it as well.
+
+What its pages reach:
+
+- The top frame of each of its pages gets a token of the origin's own, in every window, which no frame of it and no
+  page of another origin gets: its calls reach the functions that list its role, in `function(name, roles, fn)`, with a
+  `Call::page()` of that `role()`, its bytes go to its own origin's `/__crossbind/b/`, and the host refuses its token
+  anywhere else, as it refuses the app's own at a served origin.
+- The app's module, `events.held()` and the functions of the role `app`, which `function(name, fn)` adds and
+  `crossbind/app`'s own functions are, refuse it. Of the events, it hears the ones `emit(name, value, page)` sends it.
+- Its dialogs, file inputs, downloads, drops and the devices it asks for reach their holders with its page, whose
+  `role()` they read. The host's own `page-permissions` allows the devices of `app.permissions` to pages of the role
+  `app` alone.
+- It stays on its origin: the app's own origins and the other served ones are refused it, as [Navigation](#navigation)
+  tells.
+
+`fetch(method, url, headers, done)` is the host's fetch, which a handler asks its pages' source with, from any thread:
+
+- `GET` or `HEAD` of an http or https URL with these headers, without cookies, a cache or credentials, and with
+  `Accept-Encoding: identity`, so a body comes as the server sent it. It follows a redirect within the URL's origin, 20
+  at most, and gives back one elsewhere as its 3xx, which no webview follows for an app's origin. TLS is checked as the
+  system checks it, with no trust of the host's own.
+- `done` gets once, on a thread of the fetch's, the main thread on Linux, why it failed, in the system's words or as one
+  of the host's limits — a length declared over 256 MiB, at once; an answer past 256 MiB; over 60 s in all — or the
+  answer: a `FetchResponse` of its `status`, its `headers`, their names in lower case, and its `body`.
+- Another method, another scheme, a URL with a user's name or a password, with spaces or with bytes outside ASCII, a
+  header that would end its line, and no `done`, throw.
+- Plain http goes where the platform lets the app send it: on Apple's platforms App Transport Security decides, which
+  lets it through to a local address in an app whose Info.plist gives
+  `NSAppTransportSecurity: { NSAllowsLocalNetworking: true }` (an extension's `plist` on `macos` and `ios`); on Android
+  to `localhost` and `127.0.0.1`, and to any address in an app an extension of whose asks for `cleartext`; on Linux and
+  Windows to any address.
+
 ## Launches and links
 
 The host's `instance` keeps a desktop app to one instance through `onLaunch`, `onQuit` and `launchedAgain()`, where
@@ -747,6 +826,11 @@ is refused. Android's WebView asks about no frame's first load, which goes on wi
 later navigations do not. An authentication and a certificate error are answered once, from any thread: one that every
 copy lets go of unanswered, or whose `fn` throws, is cancelled or refused. Their `fn` runs on the main thread as well,
 where it may show a modal dialog, which on Windows runs once WebView2's event has returned.
+
+A page of the role `app` loads the origins extensions serve, in any frame. A page of a served origin loads its own,
+and the host refuses it the app's own origins and every other served origin before any holder hears of them, as such a
+URL means nothing outside the app; Android's WebView loads a frame of them without asking, which gets nothing of the
+app's. Every other URL reaches `page-navigation` with the page, whose `role()` tells them apart.
 
 The host's own `page-navigation` loads the origins `app.navigation.load` lists, opens any other link its user follows
 outside and refuses the rest. As the holder of `page-authentication` it takes neither authentications nor certificate
@@ -1632,7 +1716,10 @@ asks, calls with messages, cancels and bytes, of its C++ and on Android of its J
 menu, the user activities and quick action taps it hands the app's delegates, as the system does, the host's
 notification center, as a notification is shown and answered, the push token and a silent push, and its events
 through `registry.events()`, for every page, for the page in front, for one page and held, as a desktop page opens a
-second window and the probe sees each close.
+second window and the probe sees each close. It serves origins of the role `project` too, whose proxy fetches the
+built page from the run's endpoint, as from a dev server, and the page opens one in its window: what the page gets
+there, the roles of its calls, the tokens, frames and navigations of each origin, the origin's end and its storage when
+served again, the host's `fetch()` and the proxy.
 `e2e/app-page-requests` keeps the host's own, whose dialogs its run answers as the app's user would, on Linux and
 Windows. The JavaScript is unit-tested as any package's.
 
@@ -1641,7 +1728,8 @@ Windows. The JavaScript is unit-tested as any package's.
 The host's core does what every extension stands on, and no extension takes its place:
 
 - the app's windows and their webviews, the first at `app.window`'s size, and their pages, whose own origins load
-  without asking and alone reach the app's functions, and which open windows through `windows.open()` alone;
+  without asking and alone reach the app's functions, and which open windows through `windows.open()` alone; the
+  origins extensions serve, the token of each page by window and origin, and the role each page calls with;
 - the channel between the page and the native code: `crossbind/app`'s calls by name, their messages, cancels and
   answers, and the events, with those held for the page; and the app's own URLs, under which each extension's route
   serves its own;
@@ -1674,6 +1762,9 @@ The host's core does what every extension stands on, and no extension takes its 
 - **Package sources** give static libraries alone, as `lib<name>.a`, for every target but WASI, and a package's header
   binds as far as a port's does ([`cpp-binding-rules.md`](./cpp-binding-rules.md)). Web and React Native builds link a
   package's own archives only: the system libraries and Apple frameworks it asks for are not added there.
+- **Origins** take GET and HEAD alone, as routes do, and `fetch()` no other method, no request's body and no answer
+  read in parts. On Windows a served origin is `http://<name>.localhost`, which WebView2 gives OPFS, while the app's
+  own `crossbind://app` has none ([known issues](../known-issues.md)).
 - **Routes** answer whole, with a body or a file, as WebView2 reads a response only once all of it is there, and take
   GET and HEAD alone, as Android's WebView gives no request's body: a stream goes as a call's messages, and what the
   page sends as a call's options.

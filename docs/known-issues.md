@@ -8,6 +8,22 @@ than no entry. Scope each check so it cannot match this file, which quotes what 
 
 Fixing something here is not a prerequisite for anything else; this is a list, not a queue.
 
+## A Windows app's own page has no OPFS
+
+Chromium's file system API takes http and https origins alone, and WebView2 gives a custom scheme no setting for it: at
+`crossbind://app` a built Windows app's page, and its Workers, get a `SecurityError` from
+`navigator.storage.getDirectory()` ("It was determined that certain files are unsafe for access within a Web
+application, or that too many calls are being made on file resources."), which the Windows spike of 18 Nov 2026
+measured on WebView2 156 and 157. The origins an extension serves are `http://<name>.localhost` on Windows, which have
+OPFS and its sync handle; a development session's page comes from the dev server, which has it too.
+
+- Seen: 2026-11-18
+- Check: the last conformance run on main prints the app's own page's OPFS failing on Windows:
+  `gh run view "$(gh run list --workflow test-node-addon-conformance.yml --branch main --limit 1 --json databaseId --jq '.[0].databaseId')" --log | grep 'app-windows-run' | grep -m1 'PAGE GETS opfs "error: SecurityError'`
+  prints a line.
+- Remove when WebView2 gives a custom scheme OPFS, or a Windows app's own page moves to an http or https origin of its
+  own; then drop the Windows sentence of `docs/api/extensions.md`'s Limits.
+
 ## fsync in a Node.js wasm build does not reach the disk
 
 Emscripten's WasmFS Node backend has no `NodeFile::flush`, so an `fsync` or `fdatasync` on a host file used to

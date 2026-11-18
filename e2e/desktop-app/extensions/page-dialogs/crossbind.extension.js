@@ -4,7 +4,7 @@ export default function pageDialogs() {
     const native = { sources: ['dialogs.cpp'] };
     return {
         name: 'e2e-page-dialogs',
-        contract: 1,
+        contract: 3,
         replaces: 'page-dialogs',
         root: import.meta.dirname,
         app: {
