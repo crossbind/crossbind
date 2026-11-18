@@ -1764,7 +1764,7 @@ The host's core does what every extension stands on, and no extension takes its 
   package's own archives only: the system libraries and Apple frameworks it asks for are not added there.
 - **Origins** take GET and HEAD alone, as routes do, and `fetch()` no other method, no request's body and no answer
   read in parts. On Windows a served origin is `http://<name>.localhost`, which WebView2 gives OPFS, while the app's
-  own `crossbind://app` has none ([known issues](../known-issues.md)).
+  own `crossbind://app` has none; on Linux no page has it, as WebKitGTK keeps it off ([known issues](../known-issues.md)).
 - **Routes** answer whole, with a body or a file, as WebView2 reads a response only once all of it is there, and take
   GET and HEAD alone, as Android's WebView gives no request's body: a stream goes as a call's messages, and what the
   page sends as a call's options.
