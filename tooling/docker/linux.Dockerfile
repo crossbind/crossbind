@@ -150,7 +150,9 @@ RUN set -eu; \
 # What a Linux app's host compiles and links against: WebKitGTK and the libraries its headers name, from the Ubuntu
 # 22.04 packages webkitgtk-sysroot.txt pins by the SHA-256 of the Packages index. The app only links against them; the
 # system's own load at run time. Nothing under usr/share is read. Launchpad now and then answers with an error, so each
-# package is fetched with retries.
+# package is fetched with retries, in a stage of its own that the Hermes build does not wait for.
+FROM sysroots AS webkitgtk
+
 COPY webkitgtk-sysroot.txt /tmp/webkitgtk-sysroot.txt
 RUN set -eu; \
     grep -v -e '^#' -e '^$' /tmp/webkitgtk-sysroot.txt | while read -r arch file sha256; do \
@@ -255,8 +257,8 @@ RUN set -eu; \
 
 FROM toolchains AS linux
 
-COPY --from=sysroots /opt/crossbind/webkitgtk /opt/crossbind/webkitgtk
-COPY --from=sysroots /opt/licenses/webkitgtk /opt/licenses/webkitgtk
+COPY --from=webkitgtk /opt/crossbind/webkitgtk /opt/crossbind/webkitgtk
+COPY --from=webkitgtk /opt/licenses/webkitgtk /opt/licenses/webkitgtk
 COPY --from=hermes /opt/crossbind/hermes /opt/crossbind/hermes
 COPY --from=hermes /opt/licenses/hermes-LICENSE /opt/licenses/hermes-LICENSE
 
