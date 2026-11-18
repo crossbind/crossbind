@@ -64,20 +64,33 @@ Integer and enum parameters take numbers. An enum parameter also takes a member 
 
 Build defaults assume modern C++. Use:
 
-- `std::string`, `std::vector<T>`, `std::map<K,V>`, `std::unordered_map<K,V>`
+- `std::string`
+- `std::vector` of `char`, `unsigned char`, `short`, `int`, `int64_t`, `float`, `double` or `std::string`, and of `std::shared_ptr<T>` for a class the header binds
+- `std::map` from `int` or `std::string` to `int` or `std::string`
 - `std::shared_ptr<T>` for heap-allocated objects you return to JS
-- `std::optional<T>` (C++17) and `std::variant<...>` (C++17); see the type table
+- `std::optional<T>` (C++17) of a type the vector line names
 - Range-based for, `auto`, lambdas, `nullptr`
 
 A vector parameter takes a vector instance, which `Module.toVector` builds. A wasm build also
 takes a plain array: for every vector parameter in worker mode, and for a module function's or
 constructor's in direct mode. A `std::vector` returned by value is a vector on direct runtimes
 (wasm and JSI), freed like any value JavaScript owns (`lifecycle-and-types.md`), and a plain array
-on worker runtimes; `Module.toArray` takes both. `std::optional<T>` binds on every runtime.
+on worker runtimes; `Module.toArray` takes both.
+
+An empty `std::optional` arrives as `undefined` on wasm and as `null` on React Native and in a
+Node-API addon: test it with `== null` or `??`. For an empty optional parameter pass `undefined`,
+which every runtime takes; wasm refuses `null` for an optional number.
+
+A function whose signature names another type still binds, and throws when it is called:
+`Cannot call minMax due to unbound types`. That goes for `std::pair`, `std::tuple`, `std::array`,
+`std::set`, `std::unordered_map` and `std::variant`, and for a vector, map or optional the list
+above leaves out, such as a vector of `bool`, of vectors, or of a class by value. Return a struct
+or a listed container, or register the type by hand
+([`swig-escape.md`](./swig-escape.md#registering-a-type-by-hand)).
 
 Avoid:
 
-- `std::unique_ptr` returned by value across the binding (use `shared_ptr` for cross-boundary ownership)
+- A `std::unique_ptr` parameter. C++ frees the object when the call ends while the JavaScript handle still claims it, so freeing that handle afterwards, with `.delete()` or by the garbage collector, destroys the object a second time: a Node-API addon and a debug wasm build abort there, and a release wasm build runs the destructor again and goes on. Take a reference, or a `std::shared_ptr` when C++ keeps the object. Returning a `std::unique_ptr` is fine: JavaScript gets the instance and owns it.
 - C-style strings (`char*`) and C-style arrays (`int[]`) in public API
 - Custom allocators, placement new, manual `malloc`/`free` exposed to JS
 
@@ -117,22 +130,35 @@ Private members simply do not appear in JavaScript.
 > a JavaScript function on direct runtimes, or `null`. Clear a retained JavaScript callback from
 > the field before calling `releaseCallback(fn)`. Arrays and struct fields are not bound.
 
-### 4. Inheritance + virtual works; multiple inheritance doesn't
+### 4. A class binds with its first base
 
-Single-base `virtual` polymorphism is supported. Multiple inheritance (especially diamond) breaks the auto-binder. Refactor to composition or use a `.i` wrapper.
+Single-base inheritance binds, `virtual` methods and a `virtual` base included.
 
-### 5. Templates must be explicitly instantiated
+Of several bases only the first is bound. The class still binds and the build says nothing, but the members of its other bases are missing in JavaScript (`both.size is not a function`), `instanceof` holds for the first base only, and passing the object where another base is expected throws. A diamond binds the same way, along its first base. For a member of another base, give the class a method of its own that calls it, or use composition.
+
+### 5. Templates bind through a plain class or function
+
+A class or function template does not bind, and naming an instantiation does not change that: an explicit instantiation (`template class Buffer<int>;`) and an alias (`using IntBuffer = Buffer<int>;`) bind nothing, and a class derived from `Buffer<int>` binds with its own members only. The build says nothing. A function that takes or returns a `Buffer<int>` binds, and throws when it is called: `Cannot call makeBuffer due to unbound types`.
+
+Put a plain class or function over the instantiation:
 
 ```cpp
-// ❌ Won't bind — template only
+// ❌ Won't bind — templates
 template<typename T> class Buffer { ... };
+template<typename T> T larger(T a, T b) { return a > b ? a : b; }
 
-// ✅ Bind these specific instantiations
-template class Buffer<int>;
-template class Buffer<float>;
+// ✅ Bind — a plain class and a plain function over them
+class IntBuffer {
+  public:
+    void push(int value) { buffer.push(value); }
+    int at(int index) const { return buffer.at(index); }
+  private:
+    Buffer<int> buffer;
+};
+int largerInt(int a, int b);
 ```
 
-The auto-binder needs concrete types. Add `template class Buffer<T>;` declarations for every instantiation you want to expose.
+To bind `Buffer<int>` itself under a name, register it by hand: [`swig-escape.md`](./swig-escape.md#registering-a-type-by-hand).
 
 ### 6. The garbage collector frees what JS owns; `.delete()` frees it now
 
@@ -224,6 +250,22 @@ import { deflateInit2, iconv_open, _libiconv_version, TIFFSetField, vaDouble } f
   `vaDouble`, which the module exports beside the function, marks a double whose value is a whole number: `TIFFSetField(tif, TIFFTAG_XRESOLUTION, vaDouble(72))`. A `float` is read as a `double`, as C promotes it. A `long` is 32 bits on wasm32 and Windows, so a larger integer takes a BigInt, which passes its 64 bits whether the function reads them signed or not. Each variadic function adds about 25 KB to a wasm module.
 - A global that is not `const` arrives as a handle to its storage: read and write it with `readNumberAt` and `writeNumberAt`, or `readPointerAt` and `writePointerAt` for a pointer, and keep a handle written into it alive while C uses it.
 - The parameters and results of these bindings are numbers, enums, booleans, strings (`const char *`) and pointers; a function taking or returning another type throws when called. An integer out of its parameter's range, a BigInt included, throws instead of wrapping. A string argument is a copy that lives for the call, as in rule 1, so a pointer the function returns into it is not valid afterwards.
+
+### 11. Overloads are told apart by their number of arguments
+
+A call reaches the overload that takes as many arguments as it passes, whatever their types. Of the overloads with the same number of parameters the first one declared binds, and the build prints a line for each of the others:
+
+```text
+crossbind: native.h:5: embind cannot bind another overload of describe taking 1 arguments, ignored.
+```
+
+```cpp
+std::string describe(int value);                           // describe(7)
+std::string describe(const std::string &text);             // left out: one parameter, as the first
+std::string describe(int value, const std::string &unit);  // describe(7, 'km')
+```
+
+That goes for functions, methods, static methods and constructors. A call meant for an overload that was left out reaches the bound one and fails on its argument with a `TypeError`: `describe('seven')` throws `int takes a number, got "seven"` in a release wasm build, and `Cannot convert "seven" to int` in a debug one and in a Node-API addon. Give that overload another name, in the header or in a wrapper.
 
 ## Wrapper pattern
 
@@ -332,7 +374,7 @@ Use cases: callbacks into JS that fetch network data, awaiting JS promises mid-C
 
 ## Common mistakes (from the build-pipeline source code)
 
-1. **Returning a `unique_ptr` from a bindable function** → binding silently fails or returns null. Use `shared_ptr`.
+1. **Taking a `std::unique_ptr` parameter** → C++ frees the object while the JavaScript handle still claims it, and freeing the handle afterwards destroys it a second time. Take a reference or a `std::shared_ptr`; returning a `unique_ptr` is fine.
 2. **Defining the class in the `.cpp` only** (forward-declared in `.h`, full definition hidden) → binder needs the full definition in the header it scans.
 3. **Anonymous namespaces wrapping the public API** → not exposed. Public API stays in named or no namespace.
 4. **`extern "C"` decoration on C++ class methods** → invalid. Only use `extern "C"` for C-style free functions.

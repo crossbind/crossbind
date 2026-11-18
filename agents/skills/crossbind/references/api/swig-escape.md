@@ -27,6 +27,7 @@ Write your own `.i` only for one of these:
 3. **Renaming** (`%rename`) — your C++ symbol clashes with a JS reserved word, or you want a more idiomatic JS name.
 4. **Ignoring members** (`%ignore`) — a declaration the library never defines, or a member you do not want exposed, and you can't refactor the upstream header. For whole names, `export.ignoredDeclarations` in the config does the same without a `.i` file.
 5. **Custom directors** for cross-language polymorphism (rare).
+6. **A type the generator leaves out** — a template instantiation, or a container outside the type table, registered by hand ([below](#registering-a-type-by-hand)).
 
 For everything else: write a C++ wrapper instead. Wrappers are easier to reason about and won't drift if SWIG semantics change.
 
@@ -84,6 +85,44 @@ crossbind reads `paths.module` (defaults to `paths.native`) for `.i` files. The 
 ```
 
 Name the module after the file in upper case (`FILENAME_UPPER`), as generated files do, and save it as `src/native/myheader.i` beside `myheader.h`.
+
+## Registering a type by hand
+
+A `.i` file can carry embind registrations of its own, for a type the generator leaves out: a template instantiation, or a container outside the type table. This one stands beside `box.h`, whose `Box<T>` is a template, as `src/native/boxes.i`:
+
+```swig
+#pragma once
+
+%module boxes
+
+%{
+#include <map>
+#include <string>
+#include "box.h"
+
+EMSCRIPTEN_BINDINGS(boxes) {
+    emscripten::class_<Box<int>>("BoxInt")
+        .constructor<>()
+        .function("set", &Box<int>::set)
+        .function("get", &Box<int>::get);
+    emscripten::register_map<std::string, double>("MapStringDouble");
+}
+%}
+
+%feature("shared_ptr");
+%feature("polymorphic_shared_ptr");
+```
+
+Import it from JavaScript, beside the header:
+
+```js
+import { initNative } from './native/box.h';
+import './native/boxes.i';
+
+const m = await initNative();   // m.BoxInt, m.MapStringDouble
+```
+
+The module then has the classes `BoxInt` and `MapStringDouble`, and a function of `box.h` that takes or returns a `Box<int>` can be called. SWIG's own `%template(BoxInt) Box<int>;` does not do this: the bridge it generates does not compile.
 
 ## Caveats
 

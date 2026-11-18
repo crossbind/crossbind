@@ -39,7 +39,7 @@
     {
       "source": "docs/api/cpp-binding-rules.md",
       "output": "api/cpp-binding-rules.md",
-      "sha256": "64c9a18abc5bc871d8e491888c6f3eb34e766c17e4d8d9d60e85654914a70b75"
+      "sha256": "105e4fd99b22192b8ea65fcdddcfeb5967d408c9a3f877c00df4eccebf4f0503"
     },
     {
       "source": "docs/api/crossbind-build.md",
@@ -99,7 +99,7 @@
     {
       "source": "docs/api/swig-escape.md",
       "output": "api/swig-escape.md",
-      "sha256": "57d0e845ce4c471eb0af729bee29a20fa69b715a920db51a7520ea843d50bdcc"
+      "sha256": "9d69e8f474bcf31ac25fe462077f28a636061d47151c8ab765e2c877dededb1e"
     },
     {
       "source": "docs/api/threading.md",
@@ -109,7 +109,7 @@
     {
       "source": "docs/api/troubleshooting.md",
       "output": "api/troubleshooting.md",
-      "sha256": "bf47040a9ecfac85432c7172597cebaab0dfe0dafc67b66998392884e1c533a9"
+      "sha256": "a18e2f81fdb84b388e794a8c21aafd1faa7cabd77b967adb5ffcbf80545a93fa"
     },
     {
       "source": "docs/api/wasi.md",
