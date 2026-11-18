@@ -63,6 +63,15 @@ function frameSays(frame, matches) {
     });
 }
 
+// Where a frame is: its own first document, which the page reads, or another origin's, which it cannot.
+function placeOf(frame) {
+    try {
+        return frame.contentWindow.location.href;
+    } catch {
+        return "a document of another origin's";
+    }
+}
+
 // A frame of frame-probe.html at this origin in the page, with what it said it got, or null if it said nothing in time.
 async function frameAt(origin, waitMs) {
     const frame = document.createElement('iframe');
@@ -132,7 +141,7 @@ async function checkFetch() {
 // 3. The app's token at a served origin's calls, and a served origin's at the app's and at another served origin's.
 async function checkTokens(isAndroid, otherUrl, token, owner) {
     const { frame, said } = await frameAt(otherUrl, ANSWER_MS);
-    if (!said) throw new Error(`a frame of ${OTHER} said nothing`);
+    if (!said) throw new Error(`a frame of ${OTHER} said nothing: its handler took ${await invoke('probe.handled', { name: OTHER })} requests, the frame shows ${placeOf(frame)}`);
     checkFrameGotNothing(said, `a frame of ${OTHER} in the app's page`);
     const atOther = await fetchInFrame(frame, `/__crossbind/b/result?id=1&t=${token}`);
     frame.remove();
@@ -173,7 +182,7 @@ async function afterTheEnd(isAndroid, reports) {
     const cancels = await invoke('probe.projectCancels');
     if (cancels !== 1) throw new Error(`the project's open call heard of ${cancels} cancels as its origin ended, not one`);
     const { frame, said } = await frameAt(await invoke('probe.serveOrigin', { name: ENDED, source: SOURCE }), ANSWER_MS);
-    if (!said) throw new Error(`a frame of ${ENDED} said nothing`);
+    if (!said) throw new Error(`a frame of ${ENDED} said nothing: its handler took ${await invoke('probe.handled', { name: ENDED })} requests, the frame shows ${placeOf(frame)}`);
     // 7 of the note's section 8: the project's page left a mark in its storage, which no other origin sees.
     if (said.keys.includes('e2e-mark') || localStorage.getItem('e2e-mark') !== null) throw new Error("another origin saw the project's storage");
     const before = await fetchInFrame(frame, `/${FRAME_PAGE}`);
