@@ -167,10 +167,11 @@ Setup for every platform: [crossbind.dev/ports/gdal](https://crossbind.dev/ports
   | Every driver, as linked by `GDALAllRegister` | 38,702,527 B |
   | `--wrap=GDALAllRegister`: only the drivers registered | 30,118,507 B |
   | also without the `gdal` command-line framework, which GPKG, OpenFileGDB and COG declare | 27,786,568 B |
-  | also without curl and OpenSSL, which a page cannot use | 23,565,075 B |
+  | also without curl and OpenSSL, which the apps do not use | 23,565,075 B |
   | also without SpatiaLite, with `SPATIALITE_LOAD=FALSE` | 17,296,769 B |
   | also without WebP, LERC and JPEG | 16,451,235 B |
 
+- Remote files on WebAssembly: `/vsicurl/` reads through fetch, as [`@crossbind/port-curl`](https://www.npmjs.com/package/@crossbind/port-curl) sends every transfer there, so GDAL's parallel range requests run one after another. `/vsis3/` and the WMS driver's tile requests go the same way. All three are checked in a Web Worker, where crossbind's browser runtime runs by default. The server has to allow the page's origin (CORS), and Safari asks it with a preflight request first. A server that ignores `Range` or refuses `HEAD` still works: GDAL then reads the whole file. `/vsis3/` asks more of a bucket's CORS rules: GDAL reads an object's size from `Content-Range`, which a page sees only when the rules expose that header, and signed requests need `authorization`, `x-amz-content-sha256` and `x-amz-date` among the allowed headers.
 - Single-threaded WebAssembly has no threads. The single-threaded build runs a job of GDAL's thread pool where it is submitted, so `GDALViewshedGenerate` returns, but the GeoPackage driver starts threads of its own: ogr2ogr's Arrow path fails on GeoPackage input unless `OGR2OGR_USE_ARROW_API=NO` is set, as the module above does.
 - The GDAL command-line tools are not in the library packages; `@crossbind/port-gdal-standalone-wasi` ships the `gdal` program with the classic tools, `gdalinfo` and `ogr2ogr` among them, as WASI commands.
 

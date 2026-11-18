@@ -45,8 +45,9 @@ export default {
         base: '../..', /* Delete this line for create-crossbind */
         output: 'dist',
         // The conformance kit's header lives in its own workspace package; the standalone
-        // build bridges every .h found on this list.
-        header: ['src/native', '../conformance/native'],
+        // build bridges every .h found on this list. src/remote calls GDAL, which the
+        // fixtures that share src/native do not link.
+        header: ['src/native', 'src/remote', '../conformance/native'],
     },
     // No -sJSPI here: this playground builds the mt (pthreads) browser runtime,
     // and JSPI cannot ride along (pthread-mailbox suspends throw SuspendError in
