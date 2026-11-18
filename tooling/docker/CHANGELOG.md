@@ -1,5 +1,16 @@
 # @crossbind/docker
 
+## Image family 1.0.22
+
+### Patch Changes
+
+- Moved swig to crossbind/swig `8a568e37`. A method that `%extend` adds to a class in a hand-written
+  interface now binds. Such a method is a function that takes the object as a raw pointer: its
+  registration lacked `allow_raw_pointers()` unless another argument was a pointer, so the bridge
+  did not compile ("Implicitly binding raw pointers is illegal"), and one that goes through an
+  adapter was called as a member the class does not have. The bridges of interfaces without
+  `%extend` are byte-identical to those of `a93ac710`.
+
 ## Image family 1.0.21
 
 ### Patch Changes
