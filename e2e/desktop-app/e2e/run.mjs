@@ -1,13 +1,14 @@
 import { execFileSync, spawn, spawnSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
 import { createServer } from 'node:http';
-import { homedir, tmpdir } from 'node:os';
+import { homedir, networkInterfaces, tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import config from '../crossbind.config.mjs';
 import {
     AGAIN_FILE, FIRST_ARGS, FIRST_FILES, LAUNCH_ARGS, LAUNCH_URL, NOTIFICATION, OPENED_FILE, PHONE_FILES, PHONE_LINKS, PHONE_URL, PROBE_SCHEME,
-    PROBE_URLS, TRASHED_FILE, TRAY,
+    PROBE_URLS, REACH_PORT, TRASHED_FILE, TRAY,
 } from './launch.mjs';
 import { UPDATE_PORT, signUpdate } from './updates.mjs';
 
@@ -34,6 +35,9 @@ const NO_NOTIFICATION_AREA = /^NO NOTIFICATION AREA: .*\r?\n/m;
 const TRAY_HOST_READY = /^TRAY HOST READY$/m;
 const TRAY_HOST_FAIL = /^TRAY HOST FAIL: (.*)$/m;
 const TRAY_HOST_REMOVED = 'TRAY HOST REMOVED';
+// What src/web-features.js reports, which the run shows whatever the suite's result.
+const PAGE_GETS = /^PAGE GETS .*$/gm;
+const WEBSOCKET_GUID = '258EAFA5-E914-47DA-95CA-C5AB0DC85B11';
 // Below the page's wait for the launch or the link, so a launch that stays or an adb that hangs says so.
 const ASKED_TIMEOUT_MS = 20000;
 // How long PowerShell's first compile may take, before the app opens.
@@ -232,6 +236,8 @@ const id = `dev.crossbind.${name}`;
 const platform = process.env.CROSSBIND_APP_PLATFORM;
 const env = { CROSSBIND_APP_CONSOLE: '1' };
 if (process.platform === 'win32' && !platform) env.WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS = `--remote-debugging-port=${DEVTOOLS_PORT}`;
+const address = networkAddress();
+if (address) env.CROSSBIND_E2E_NETWORK_ADDRESS = address;
 
 function missing(file) {
     console.error(`FAIL: ${file} is missing - run \`pnpm build\` first.`);
@@ -528,6 +534,41 @@ function serveUpdates() {
     });
 }
 
+// The machine's own address on its network, which no web view takes for loopback.
+function networkAddress() {
+    return Object.values(networkInterfaces()).flat()
+        .find((one) => one.family === 'IPv4' && !one.internal && !one.address.startsWith('169.254.'))?.address;
+}
+
+// The plain http and ws endpoint src/web-features.js tries at 127.0.0.1 and at the machine's address on its network. It
+// answers any origin, and the private network preflight Chromium may send, so that a request that fails is one the web
+// view refused; each one it hears before the suite's summary is shown, so one the web view never sent shows as none.
+const reached = [];
+function serveReach() {
+    const heard = (request, kind) => {
+        if (FINISHED.test(out)) return;
+        const preflight = request.headers['access-control-request-private-network'] ? ', private network preflight' : '';
+        reached.push(`${kind} ${request.url} from ${request.socket.remoteAddress}, origin ${request.headers.origin}${preflight}`);
+    };
+    const server = createServer((request, response) => {
+        heard(request, request.method);
+        response.writeHead(200, { 'content-type': 'text/plain', 'access-control-allow-origin': '*', 'access-control-allow-private-network': 'true' });
+        response.end('ok');
+    });
+    server.on('upgrade', (request, socket) => {
+        heard(request, 'upgrade');
+        socket.on('error', () => {});
+        const accept = createHash('sha1').update(`${request.headers['sec-websocket-key']}${WEBSOCKET_GUID}`).digest('base64');
+        socket.write(`HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: ${accept}\r\n\r\n`);
+        // A text frame of "ok", unmasked, as a server sends one.
+        socket.write(Buffer.from([0x81, 2, 0x6f, 0x6b]));
+    });
+    return new Promise((resolve, reject) => {
+        server.once('error', reject);
+        server.listen(REACH_PORT, '0.0.0.0', resolve);
+    });
+}
+
 // What a child of the run writes until it matches, within ASKED_TIMEOUT_MS.
 function awaitOutput(child, pattern) {
     return new Promise((resolve, reject) => {
@@ -582,16 +623,19 @@ checkDepends();
 leaveFileToTrash();
 // A phone's app does not update itself.
 if (!platform) await serveUpdates();
+await serveReach();
 const trayHost = await startTrayHost();
 warmPowerShell();
 // The Simulator shares its clipboard with the Mac's, which the page writes and cannot put back: iOS asks its user before
 // an app reads another app's text. The run puts the Mac's back once it is done.
 const macClipboard = platform === 'ios' ? spawnSync('pbpaste', { encoding: 'utf8' }).stdout : null;
+// The adb crossbind opens the Android app with, which opens it with a link as well, and through which the device's
+// loopback reaches the run's endpoint, as a dev server's port does.
+const adb = platform === 'android' ? (await import('crossbind')).adbPath() : undefined;
+if (adb) execFileSync(adb, ['reverse', `tcp:${REACH_PORT}`, `tcp:${REACH_PORT}`]);
 const { child: app, close, executable, built, device } = await open();
 // An iOS app's extensions, which the run checks as it ends, once the app has run.
 const extensionsProblem = () => (built ? installedProblem(built, device) ?? groupProblem(device) : undefined);
-// The adb crossbind opened the Android app with, which opens it with a link as well.
-const adb = platform === 'android' ? (await import('crossbind')).adbPath() : undefined;
 
 // The page asks for it once it listens: the app, launched again with LAUNCH_ARGS, the probe's link and the folder it is
 // launched in, which the first app does not share, hands them to that app and leaves.
@@ -819,6 +863,8 @@ function finish(problem) {
         console.error(`warning: ${error.message}`);
     }
     const summary = out.match(CONFORMANCE);
+    const features = (out.match(PAGE_GETS) ?? []).map((line) => line.trimEnd());
+    if (features.length > 0) console.log(`what the page gets:\n${features.join('\n')}\nwhat reached the run's endpoint:\n${reached.join('\n') || 'nothing'}`);
     // A runner that trusts the key the app is signed with has the updater hold an update to that signer.
     const signer = process.env.CROSSBIND_E2E_UPDATE_SIGNER;
     // The tray took the icon away as the page asked, before the app quit to open anew.

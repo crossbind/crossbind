@@ -48,3 +48,6 @@ export const TRAY = {
     ],
 };
 export const NOTIFICATION = { title: 'crossbind e2e', body: 'Saved & done <now>' };
+// The port of e2e/run.mjs's plain http and ws endpoint, which src/web-features.js tries at 127.0.0.1 and at the run
+// machine's own address on its network.
+export const REACH_PORT = 47831;
