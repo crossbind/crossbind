@@ -31,3 +31,38 @@ test('curl transfers go through fetch in the worker', async ({ page }) => {
         await server.close();
     }
 });
+
+// What GDAL reads in the worker from `source(server)`, a dataset name and its configuration options.
+async function readRemote(page, source) {
+    const probe = await import('../../config/curl-probe-server.mjs');
+    const server = await probe.startCurlProbeServer();
+    try {
+        await page.goto('/')
+        const read = await page.evaluate(async ([name, options]) => {
+            const { RemoteRaster } = await globalThis.initNative({ path: './dist' });
+            return RemoteRaster.read(name, options);
+        }, source(server, probe));
+        return { read, server, raster: probe.remoteRaster };
+    } finally {
+        await server.close();
+    }
+}
+
+test('GDAL reads a remote raster through /vsicurl/ in the worker', async ({ page }) => {
+    const { read, server, raster } = await readRemote(page, ({ url }) => [`/vsicurl/${url}/raster.tif`, '']);
+    expect(read).toBe(`${raster.side}x${raster.side} sum=${raster.sum}`)
+    // GDAL asked for parts of the file, not for the whole of it.
+    expect(server.rasterRanges()).toBeGreaterThan(1)
+});
+
+test('GDAL reads a raster from a signed /vsis3/ bucket in the worker', async ({ page }) => {
+    const { read, server, raster } = await readRemote(page, ({ url }, { remoteBucket }) => ['/vsis3/bucket/raster.tif', remoteBucket(url)]);
+    expect(read).toBe(`${raster.side}x${raster.side} sum=${raster.sum}`)
+    expect(server.signedReads()).toBeGreaterThan(1)
+});
+
+test('GDAL reads the tiles of a WMS server in the worker', async ({ page }) => {
+    const { read, server, raster } = await readRemote(page, ({ url }, { remoteWms }) => [remoteWms(url), '']);
+    expect(read).toBe(`${raster.side * 2}x${raster.side} sum=${raster.sum * 2}`)
+    expect(server.wmsTiles()).toBe(2)
+});

@@ -5,6 +5,85 @@ import http from 'node:http';
 const BIG_BYTES = 40000;
 const SLOW_MS = 1500;
 const MAX_WRITE_SIZE = 16384;
+const RASTER_SIDE = 256;
+const TIFF_SHORT = 3;
+const TIFF_LONG = 4;
+const TIFF_HEADER_BYTES = 8;
+const TIFF_ENTRY_BYTES = 12;
+
+// A plain little-endian TIFF of one byte band, its directory after the pixels, so that a reader has to ask for
+// more than the file's start.
+function rasterFile() {
+    const pixels = Uint8Array.from({ length: RASTER_SIDE * RASTER_SIDE }, (_, i) => (i * 7) % 251);
+    const directory = TIFF_HEADER_BYTES + pixels.length;
+    const entries = [
+        [256, TIFF_SHORT, RASTER_SIDE], // ImageWidth
+        [257, TIFF_SHORT, RASTER_SIDE], // ImageLength
+        [258, TIFF_SHORT, 8], // BitsPerSample
+        [259, TIFF_SHORT, 1], // Compression: none
+        [262, TIFF_SHORT, 1], // PhotometricInterpretation: black is zero
+        [273, TIFF_LONG, TIFF_HEADER_BYTES], // StripOffsets
+        [277, TIFF_SHORT, 1], // SamplesPerPixel
+        [278, TIFF_SHORT, RASTER_SIDE], // RowsPerStrip
+        [279, TIFF_LONG, pixels.length], // StripByteCounts
+    ];
+    const bytes = Buffer.alloc(directory + 2 + entries.length * TIFF_ENTRY_BYTES + 4);
+    bytes.write('II', 0, 'latin1');
+    bytes.writeUInt16LE(42, 2);
+    bytes.writeUInt32LE(directory, 4);
+    bytes.set(pixels, TIFF_HEADER_BYTES);
+    bytes.writeUInt16LE(entries.length, directory);
+    entries.forEach(([tag, type, value], index) => {
+        const at = directory + 2 + index * TIFF_ENTRY_BYTES;
+        bytes.writeUInt16LE(tag, at);
+        bytes.writeUInt16LE(type, at + 2);
+        bytes.writeUInt32LE(1, at + 4);
+        if (type === TIFF_SHORT) bytes.writeUInt16LE(value, at + 8);
+        else bytes.writeUInt32LE(value, at + 8);
+    });
+    return { bytes, sum: pixels.reduce((total, value) => total + value, 0) };
+}
+
+const RASTER = rasterFile();
+
+// What RemoteRaster (web-vanilla/src/remote/remote_raster.h) reads from /raster.tif.
+export const remoteRaster = { side: RASTER_SIDE, sum: RASTER.sum };
+
+// GDAL's description of a WMS server at `url` whose map is the raster twice, side by side, one tile each.
+export function remoteWms(url) {
+    const window = `<UpperLeftX>-180</UpperLeftX><UpperLeftY>90</UpperLeftY><LowerRightX>180</LowerRightX><LowerRightY>-90</LowerRightY><SizeX>${RASTER_SIDE * 2}</SizeX><SizeY>${RASTER_SIDE}</SizeY>`;
+    const service = `<Version>1.1.1</Version><ServerUrl>${url}/wms?</ServerUrl><SRS>EPSG:4326</SRS><ImageFormat>image/tiff</ImageFormat><Layers>base</Layers>`;
+    const tiles = `<BandsCount>1</BandsCount><DataType>Byte</DataType><BlockSizeX>${RASTER_SIDE}</BlockSizeX><BlockSizeY>${RASTER_SIDE}</BlockSizeY><OverviewCount>0</OverviewCount>`;
+    return `<GDAL_WMS><Service name="WMS">${service}</Service><DataWindow>${window}</DataWindow>${tiles}</GDAL_WMS>`;
+}
+
+// GDAL configuration that makes the server at `url` the S3 endpoint /vsis3/bucket/raster.tif is read from, signed.
+export function remoteBucket(url) {
+    const endpoint = [`AWS_S3_ENDPOINT=${new URL(url).host}`, 'AWS_HTTPS=NO', 'AWS_VIRTUAL_HOSTING=FALSE'];
+    const account = ['AWS_ACCESS_KEY_ID=probe', 'AWS_SECRET_ACCESS_KEY=probe', 'AWS_REGION=us-east-1'];
+    return [...endpoint, ...account, 'GDAL_DISABLE_READDIR_ON_OPEN=EMPTY_DIR'].join('|');
+}
+
+// The raster, whole or the part a Range header names, as a static host answers.
+function sendRaster(req, res, cors, stats) {
+    const { bytes } = RASTER;
+    const headers = { ...cors, 'Content-Type': 'image/tiff', 'Accept-Ranges': 'bytes' };
+    const range = /^bytes=(\d+)-(\d*)$/.exec(req.headers.range ?? '');
+    if (!range) {
+        res.writeHead(200, { ...headers, 'Content-Length': bytes.length });
+        res.end(req.method === 'HEAD' ? undefined : bytes);
+        return;
+    }
+    const start = Number(range[1]);
+    const end = Math.min(range[2] === '' ? Infinity : Number(range[2]), bytes.length - 1);
+    stats.rasterRanges += 1;
+    res.writeHead(206, {
+        ...headers,
+        'Content-Range': `bytes ${start}-${end}/${bytes.length}`,
+        'Content-Length': end - start + 1,
+    });
+    res.end(bytes.subarray(start, end + 1));
+}
 
 function header(req, name) {
     const value = req.headers[name];
@@ -17,9 +96,19 @@ function echo(req, body) {
     return [req.method, ...parts, `body=${body.toString('hex')}`].join(' ');
 }
 
-function respond(req, res, body) {
+function respond(req, res, body, stats) {
     const cors = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Expose-Headers': 'X-Reply' };
-    if (req.url === '/echo') {
+    if (req.url === '/raster.tif') {
+        sendRaster(req, res, cors, stats);
+    } else if (req.url === '/bucket/raster.tif') {
+        // GDAL learns an S3 object's size from Content-Range, which a page reads only when the bucket exposes it.
+        if ((req.headers.authorization ?? '').startsWith('AWS4-HMAC-SHA256 ')) stats.signedReads += 1;
+        sendRaster(req, res, { ...cors, 'Access-Control-Expose-Headers': 'Content-Range' }, stats);
+    } else if (req.url.startsWith('/wms?')) {
+        stats.wmsTiles += 1;
+        res.writeHead(200, { ...cors, 'Content-Type': 'image/tiff', 'Content-Length': RASTER.bytes.length });
+        res.end(RASTER.bytes);
+    } else if (req.url === '/echo') {
         res.writeHead(200, { ...cors, 'Content-Type': 'text/plain', 'X-Reply': 'yes' });
         res.end(echo(req, body));
     } else if (req.url.startsWith('/path')) {
@@ -39,7 +128,7 @@ function respond(req, res, body) {
     }
 }
 
-function handle(req, res) {
+function handle(req, res, stats) {
     if (req.method === 'OPTIONS') {
         res.writeHead(204, {
             'Access-Control-Allow-Origin': '*',
@@ -51,7 +140,7 @@ function handle(req, res) {
     }
     const chunks = [];
     req.on('data', (chunk) => chunks.push(chunk));
-    req.on('end', () => respond(req, res, Buffer.concat(chunks)));
+    req.on('end', () => respond(req, res, Buffer.concat(chunks), stats));
 }
 
 function listen(server) {
@@ -76,11 +165,18 @@ async function deadPort() {
 }
 
 export async function startCurlProbeServer() {
-    const server = http.createServer(handle);
+    const stats = { rasterRanges: 0, signedReads: 0, wmsTiles: 0 };
+    const server = http.createServer((req, res) => handle(req, res, stats));
     const port = await listen(server);
     return {
         url: `http://127.0.0.1:${port}`,
         deadUrl: `http://127.0.0.1:${await deadPort()}/`,
+        // How many times a part of the raster was asked for.
+        rasterRanges: () => stats.rasterRanges,
+        // How many requests for the bucket's raster carried an AWS signature.
+        signedReads: () => stats.signedReads,
+        // How many WMS tiles were asked for.
+        wmsTiles: () => stats.wmsTiles,
         close: () => close(server),
     };
 }
@@ -124,7 +220,10 @@ export function expectedCurlReport({ blocking }) {
         ['timeout', blocking ? 'rc=0 code=200 late' : 'rc=28 code=0'],
         ['file', 'rc=1 code=0 err=Protocol "file" is not supported by the fetch transport'],
         ['badurl', 'rc=3 code=0 err=URL rejected: Bad hostname'],
-        ['multi', 'handle'],
+        // A multi handle's transfers run through fetch too, one after another.
+        ['multi', 'first=rc=0 code=200 /path?one second=rc=0 code=200 /path?two reported=2'],
+        ['multirange', `rc=0 code=200 ${echoed('GET', { range: '[bytes=0-3]' })}`],
+        ['multidead', 'rc=7 code=0 err=Could not connect: fetch failed (network error, CORS or a blocked request)'],
         // /big has no Content-Length, so the total stays 0 as in curl.
         ['progress', `rc=0 code=200 calls=some last=${BIG_BYTES}/0`],
         ['abort', 'rc=42 code=0 err=Callback aborted'],

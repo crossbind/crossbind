@@ -8,11 +8,13 @@
 #include <cstdint>
 #include <cstring>
 #include <functional>
+#include <map>
 #include <string>
 
 namespace {
 
 constexpr long kTimeoutMs = 300;
+constexpr int kMultiPollMs = 50;
 constexpr size_t kLongMethod = 40;
 constexpr auto kCancelAfter = std::chrono::milliseconds(200);
 
@@ -237,12 +239,88 @@ std::string cancelSlow(const std::string &base) {
   return withError(out) + " bytes=" + std::to_string(res.body.size());
 }
 
-// curl's own engine has no sockets in the wasm build. Its multi handle opens anyway: emscripten 6.0.13's
-// WasmFS implements pipe2.
-std::string multiHandle() {
+// A transfer set up for a multi handle: its response and error text outlive the perform.
+struct Queued {
+  CURL *curl = curl_easy_init();
+  Response res;
+  char err[CURL_ERROR_SIZE] = "";
+
+  explicit Queued(const std::string &url) {
+    curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
+    curl_easy_setopt(curl, CURLOPT_ERRORBUFFER, err);
+    curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, onBody);
+    curl_easy_setopt(curl, CURLOPT_WRITEDATA, &res);
+  }
+  Queued(const Queued &) = delete;
+  Queued &operator=(const Queued &) = delete;
+  ~Queued() { curl_easy_cleanup(curl); }
+};
+
+using MultiResults = std::map<CURL *, CURLcode>;
+
+// What a multi handle reports once nothing runs, driven as GDAL's /vsicurl/ drives its own:
+// perform, and wait while a transfer is under way.
+MultiResults finished(CURLM *multi) {
+  int running = 0;
+  do {
+    curl_multi_perform(multi, &running);
+    if (running) curl_multi_poll(multi, nullptr, 0, kMultiPollMs, nullptr);
+  } while (running);
+  MultiResults results;
+  int left = 0;
+  while (CURLMsg *msg = curl_multi_info_read(multi, &left)) {
+    if (msg->msg == CURLMSG_DONE) results[msg->easy_handle] = msg->data.result;
+  }
+  return results;
+}
+
+std::string multiLine(const MultiResults &results, const Queued &queued) {
+  auto found = results.find(queued.curl);
+  if (found == results.end()) return "unreported";
+  Outcome out;
+  out.rc = found->second;
+  curl_easy_getinfo(queued.curl, CURLINFO_RESPONSE_CODE, &out.code);
+  out.err = queued.err;
+  std::string line = out.err.empty() ? status(out) : withError(out);
+  return queued.res.body.empty() ? line : line + " " + queued.res.body;
+}
+
+// One multi handle takes two transfers at once, then a ranged one and one that cannot connect, as a
+// remote file's reads follow one another.
+void multiCases(std::string &out, const std::string &base, const std::string &deadUrl) {
+  auto add = [&out](const char *name, const std::string &line) {
+    out += std::string(name) + ": " + line + "\n";
+  };
   CURLM *multi = curl_multi_init();
+  if (!multi) {
+    add("multi", "null");
+    return;
+  }
+  {
+    Queued first(base + "/path?one");
+    Queued second(base + "/path?two");
+    curl_multi_add_handle(multi, first.curl);
+    curl_multi_add_handle(multi, second.curl);
+    MultiResults results = finished(multi);
+    add("multi", "first=" + multiLine(results, first) + " second=" + multiLine(results, second) +
+                     " reported=" + std::to_string(results.size()));
+    curl_multi_remove_handle(multi, first.curl);
+    curl_multi_remove_handle(multi, second.curl);
+  }
+  {
+    Queued ranged(base + "/echo");
+    curl_easy_setopt(ranged.curl, CURLOPT_RANGE, "0-3");
+    curl_multi_add_handle(multi, ranged.curl);
+    add("multirange", multiLine(finished(multi), ranged));
+    curl_multi_remove_handle(multi, ranged.curl);
+  }
+  {
+    Queued dead(deadUrl);
+    curl_multi_add_handle(multi, dead.curl);
+    add("multidead", multiLine(finished(multi), dead));
+    curl_multi_remove_handle(multi, dead.curl);
+  }
   curl_multi_cleanup(multi);
-  return multi ? "handle" : "null";
 }
 
 void requestCases(std::string &out, const std::string &base) {
@@ -296,7 +374,6 @@ void responseCases(std::string &out, const std::string &base, const std::string 
       }));
   add("file", errorLine("file:///tmp/curl-probe.txt"));
   add("badurl", errorLine("http://exa mple.com/"));
-  add("multi", multiHandle());
 }
 
 void progressCases(std::string &out, const std::string &base) {
@@ -312,6 +389,7 @@ std::string report(const std::string &base, const std::string &deadUrl) {
   std::string out;
   requestCases(out, base);
   responseCases(out, base, deadUrl);
+  multiCases(out, base, deadUrl);
   progressCases(out, base);
   return out;
 }
