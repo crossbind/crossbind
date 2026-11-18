@@ -111,7 +111,7 @@ void crossbind_extension_probe(crossbind::Registry &registry) {
     // container unless the Mac's user allows it, so the app's own code leaves there what the run leaves elsewhere.
     registry.function("probe.sandboxed", [](Call call) { call.resolve(Value(std::getenv("APP_SANDBOX_CONTAINER_ID") != nullptr)); });
     // The run's machine's own address on its network, which e2e/run.mjs gives the app and the page cannot read itself.
-    registry.function("probe.networkAddress", [](Call call) { call.resolve(Value(std::getenv("CROSSBIND_E2E_NETWORK_ADDRESS"))); });
+    registry.function("probe.networkAddress", {"app", "project"}, [](Call call) { call.resolve(Value(std::getenv("CROSSBIND_E2E_NETWORK_ADDRESS"))); });
     registry.function("probe.leaveFile", [](Call call) {
         crossbind::inBackground(call, [path = call.options()["path"].asString()] {
             std::ofstream file(std::filesystem::path(std::u8string(path.begin(), path.end())));
@@ -269,14 +269,14 @@ void crossbind_extension_probe(crossbind::Registry &registry) {
         waiting.push_back(call);
     });
     registry.function("probe.cancels", [](Call call) { call.resolve(cancels.load()); });
-    // The bytes the page passed, reversed, and how many.
-    registry.function("probe.bytes", [](Call call) {
+    // The bytes the page passed, reversed, and how many, to a page of the app's and of a project's.
+    registry.function("probe.bytes", {"app", "project"}, [](Call call) {
         Value::Bytes back = call.options()["data"].asBytes();
         std::reverse(back.begin(), back.end());
         call.resolve(Value::Object{{"size", static_cast<double>(back.size())}, {"back", std::move(back)}});
     });
     // Enough bytes to come back as a large result of their own.
-    registry.function("probe.bigBytes", [](Call call) {
+    registry.function("probe.bigBytes", {"app", "project"}, [](Call call) {
         Value::Bytes bytes(100000);
         for (size_t i = 0; i < bytes.size(); i += 1) bytes[i] = static_cast<uint8_t>(i % 251);
         call.resolve(std::move(bytes));
@@ -317,5 +317,6 @@ void crossbind_extension_probe(crossbind::Registry &registry) {
         crossbind::onMainThread([call] { throw std::runtime_error("the probe's task fails"); });
     });
 #endif
+    probeOrigins(registry);
     probePlatform(registry);
 }

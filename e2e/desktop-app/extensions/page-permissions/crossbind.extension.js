@@ -3,7 +3,7 @@
 export default function pagePermissions() {
     return {
         name: 'e2e-page-permissions',
-        contract: 1,
+        contract: 3,
         replaces: 'page-permissions',
         root: import.meta.dirname,
         app: {

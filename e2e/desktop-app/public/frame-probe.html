@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>frame probe</title>
+</head>
+<body>
+<script>
+// A frame src/served-origins.js puts in a page of another origin: it tells the page which of a top frame's globals it
+// got and whether it reached the host, and fetches of its own origin what the page asks for.
+(() => {
+    const post = (message) => parent.postMessage({ frameProbe: true, ...message }, '*');
+    const WAIT_MS = 2000;
+    const late = (answer) => new Promise((resolve) => { setTimeout(() => resolve(answer), WAIT_MS); });
+
+    // WebKit's handler, which refuses a message without the page's token, and Android's objects a top frame asks for its
+    // port with, which hand a frame none.
+    async function reach() {
+        const handler = globalThis.webkit?.messageHandlers?.crossbind;
+        if (handler) {
+            const sent = Promise.resolve().then(() => handler.postMessage('["app",1,"probe.role",{}]'));
+            return Promise.race([sent.then((answer) => `answered ${answer}`, () => 'refused'), late('no answer')]);
+        }
+        const ready = Object.getOwnPropertyNames(globalThis).filter((name) => name.startsWith('__crossbind_ready'));
+        if (ready.length === 0) return 'nothing to reach the host with';
+        const port = new Promise((resolve) => {
+            addEventListener('message', (event) => { if (event.ports[0]) resolve(`a port from ${ready.join()}`); });
+        });
+        ready.forEach((name) => globalThis[name].postMessage('frame'));
+        return Promise.race([port, late('no port')]);
+    }
+
+    addEventListener('message', async ({ data }) => {
+        if (!data?.fetch) return;
+        try {
+            const response = await fetch(data.fetch, data.init);
+            post({ id: data.id, status: response.status, text: await response.text() });
+        } catch (error) {
+            post({ id: data.id, error: `${error.name}: ${error.message}` });
+        }
+    });
+
+    const globals = ['__crossbind_token', '__crossbind_calls', '__crossbind_port', '__crossbind_device', 'Crossbind'].filter((name) => name in globalThis);
+    reach().then((reached) => post({ loaded: location.origin, globals, reached, keys: Object.keys(localStorage) }));
+})();
+</script>
+</body>
+</html>

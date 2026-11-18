@@ -24,7 +24,7 @@
     {
       "source": "docs/api/app.md",
       "output": "api/app.md",
-      "sha256": "a975830d35fbe9f9e21c8ead4fb78a6ed246d2b596ede67299d5296b99707fe1"
+      "sha256": "ace7aa3e8b425d6223a5c5cced1640b639f313717e1e0cd5420b60aaca1e4018"
     },
     {
       "source": "docs/api/build-state.md",
@@ -54,7 +54,7 @@
     {
       "source": "docs/api/extensions.md",
       "output": "api/extensions.md",
-      "sha256": "568e6ba9c999363197ddb453620c77ca3994737a641e5fcfa3b6f88391f51333"
+      "sha256": "1d8daac389c713d38bb68f4c8ed2c751725e694752daf52bf2ff0b8897f6b737"
     },
     {
       "source": "docs/api/filesystem.md",

@@ -19,7 +19,7 @@ public final class PageDialogsExtension implements Extension {
         if (dialog.message().equals("cancel")) {
             dialog.cancel();
         } else if (dialog.kind() == PageDialog.Kind.PROMPT) {
-            dialog.accept(new JSONObject(Map.of("message", dialog.message(), "defaultText", dialog.defaultText())).toString());
+            dialog.accept(new JSONObject(Map.of("message", dialog.message(), "defaultText", dialog.defaultText(), "role", dialog.role())).toString());
         } else {
             dialog.accept();
         }

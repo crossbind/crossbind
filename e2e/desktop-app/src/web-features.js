@@ -1,5 +1,6 @@
-// What the web view gives a page of the app's own origin, as a web build there would use it, printed for e2e/run.mjs to
-// show and asserted nowhere: the platforms differ, and the loop's time differs by machine.
+// What the web view gives a page, as a web build there would use it, printed for e2e/run.mjs to show: at the app's own
+// origin asserted nowhere, as the platforms differ and the loop's time differs by machine, and at a project's by
+// src/served-origins.js.
 import { device, invoke } from 'crossbind/app';
 import { REACH_PORT } from '../e2e/launch.mjs';
 
@@ -94,8 +95,14 @@ function networkHost(isAndroid) {
     return invoke('probe.networkAddress');
 }
 
-export async function reportWebFeatures(isAndroid) {
-    report('page', {
+// What the page gets, each printed under its name, with the prefix a project's page gives, and given back by name.
+export async function reportWebFeatures(isAndroid, prefix = '') {
+    const got = {};
+    const put = (name, value) => {
+        got[name] = value;
+        report(`${prefix}${name}`, value);
+    };
+    put('page', {
         origin: location.origin,
         userAgent: navigator.userAgent,
         isSecureContext: globalThis.isSecureContext,
@@ -106,22 +113,23 @@ export async function reportWebFeatures(isAndroid) {
         serviceWorker: 'serviceWorker' in navigator,
         hardwareConcurrency: navigator.hardwareConcurrency,
     });
-    report('webassembly', await settled(() => WebAssembly.instantiate(EMPTY_MODULE).then(() => 'ok')));
-    report('opfs', await settled(useOpfs));
-    report('indexeddb', await settled(openIndexedDb));
-    report('subtle', await settled(() => crypto.subtle.digest('SHA-256', EMPTY_MODULE).then(() => 'ok')));
-    report('locks', await settled(() => navigator.locks.request('page-gets', () => 'ok')));
-    report('worker-classic', await settled(() => askWorker()));
-    report('worker-module', await settled(() => askWorker({ type: 'module' })));
-    report('js-loop', timeLoop());
+    put('webassembly', await settled(() => WebAssembly.instantiate(EMPTY_MODULE).then(() => 'ok')));
+    put('opfs', await settled(useOpfs));
+    put('indexeddb', await settled(openIndexedDb));
+    put('subtle', await settled(() => crypto.subtle.digest('SHA-256', EMPTY_MODULE).then(() => 'ok')));
+    put('locks', await settled(() => navigator.locks.request('page-gets', () => 'ok')));
+    put('worker-classic', await settled(() => askWorker()));
+    put('worker-module', await settled(() => askWorker({ type: 'module' })));
+    put('js-loop', timeLoop());
     const hosts = { loopback: '127.0.0.1', network: await settled(() => networkHost(isAndroid)) };
     for (const [name, host] of Object.entries(hosts)) {
         if (!host || host.startsWith('error')) {
-            report(`reach-${name}`, `not tried: no address (${host})`);
+            put(`reach-${name}`, `not tried: no address (${host})`);
             continue;
         }
         const at = `${host}:${REACH_PORT}`;
-        report(`http-${name}`, { url: `http://${at}/reach`, result: await settled(() => fetchText(`http://${at}/reach`)) });
-        report(`ws-${name}`, { url: `ws://${at}/reach`, result: await settled(() => openSocket(`ws://${at}/reach`)) });
+        put(`http-${name}`, { url: `http://${at}/reach`, result: await settled(() => fetchText(`http://${at}/reach`)) });
+        put(`ws-${name}`, { url: `ws://${at}/reach`, result: await settled(() => openSocket(`ws://${at}/reach`)) });
     }
+    return got;
 }
