@@ -319,6 +319,16 @@ void registerSchemeHandler(void *target, const char *scheme, SchemeHandler handl
     core2->get_Environment(&environment);
     core2->Release();
     core->AddWebResourceRequestedFilter(wide(std::string(scheme) + "://*").c_str(), COREWEBVIEW2_WEB_RESOURCE_CONTEXT_ALL);
+    // The origins extensions serve, http://<name>.localhost, with their workers' requests: a service worker's script and
+    // its fetches would go to the machine's port 80 else, where any program may listen, and take the origin.
+    ICoreWebView2_22 *core22 = nullptr;
+    if (SUCCEEDED(core->QueryInterface(IID_ICoreWebView2_22, reinterpret_cast<void **>(&core22)))) {
+        core22->AddWebResourceRequestedFilterWithRequestSourceKinds(L"http://*.localhost/*", COREWEBVIEW2_WEB_RESOURCE_CONTEXT_ALL,
+            COREWEBVIEW2_WEB_RESOURCE_REQUEST_SOURCE_KINDS_ALL);
+        core22->Release();
+    } else {
+        std::fprintf(stderr, "crossbind: this WebView2 runtime does not hand the host its workers' requests, so it serves no extension's origin\n");
+    }
     auto *serve = new SchemeHandler(std::move(handler));
     auto *requested = new Handler<ICoreWebView2WebResourceRequestedEventHandler, ICoreWebView2 *, ICoreWebView2WebResourceRequestedEventArgs *>(
         IID_ICoreWebView2WebResourceRequestedEventHandler,
@@ -338,6 +348,7 @@ void registerSchemeHandler(void *target, const char *scheme, SchemeHandler handl
             const size_t query = url.find('?', path == std::string::npos ? 0 : path);
             incoming.path = path == std::string::npos ? "/" : url.substr(path, query == std::string::npos ? std::string::npos : query - path);
             incoming.query = query == std::string::npos ? "" : url.substr(query + 1, url.find('#', query) - query - 1);
+            if (authority != std::string::npos) incoming.host = url.substr(authority + 3, url.find_first_of("/?#:", authority + 3) - authority - 3);
             IStream *content = nullptr;
             if (SUCCEEDED(request->get_Content(&content)) && content) {
                 incoming.body = readAll(content);

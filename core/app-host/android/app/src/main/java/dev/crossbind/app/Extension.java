@@ -31,7 +31,7 @@ import org.json.JSONStringer;
 public interface Extension {
     // The version of crossbind's extension contract this host is built for, as CROSSBIND_EXTENSION_CONTRACT is to native
     // code.
-    int CONTRACT = 2;
+    int CONTRACT = 3;
 
     // One of the extension's functions, which answers call once, from any thread. What it throws fails the call.
     void call(ExtensionHost host, String function, JSONObject options, Call call);
@@ -221,17 +221,25 @@ public interface Extension {
         private final String message;
         private final String defaultText;
         private final JsResult result;
+        private final String role;
         private final AnswerOnce once = new AnswerOnce();
 
-        PageDialog(Kind kind, String message, String defaultText, JsResult result) {
+        PageDialog(Kind kind, String message, String defaultText, JsResult result, String role) {
             this.kind = kind;
             this.message = message;
             this.defaultText = defaultText;
             this.result = result;
+            this.role = role;
         }
 
         public Kind kind() {
             return kind;
+        }
+
+        // The role of the page that opened it, as a native page's role() names it: "app", or the role of an origin an
+        // extension serves.
+        public String role() {
+            return role;
         }
 
         public String message() {
@@ -275,13 +283,15 @@ public interface Extension {
         private final String origin;
         private final boolean isListed;
         private final Consumer<Boolean> answer;
+        private final String role;
         private final AtomicBoolean isAnswered = new AtomicBoolean();
 
-        PagePermission(List<String> kinds, String origin, boolean isListed, Consumer<Boolean> answer) {
+        PagePermission(List<String> kinds, String origin, boolean isListed, Consumer<Boolean> answer, String role) {
             this.kinds = kinds;
             this.origin = origin;
             this.isListed = isListed;
             this.answer = answer;
+            this.role = role;
         }
 
         public List<String> kinds() {
@@ -290,6 +300,12 @@ public interface Extension {
 
         public String origin() {
             return origin;
+        }
+
+        // The role of the page that asks, as a native page's role() names it: "app", or the role of an origin an
+        // extension serves.
+        public String role() {
+            return role;
         }
 
         // Whether app.permissions lists each of the devices it asks for; false for a kind that is no device.
@@ -320,11 +336,19 @@ public interface Extension {
     final class FileInput {
         private final WebChromeClient.FileChooserParams params;
         private final ValueCallback<Uri[]> files;
+        private final String role;
         private final AnswerOnce once = new AnswerOnce();
 
-        FileInput(WebChromeClient.FileChooserParams params, ValueCallback<Uri[]> files) {
+        FileInput(WebChromeClient.FileChooserParams params, ValueCallback<Uri[]> files, String role) {
             this.params = params;
             this.files = files;
+            this.role = role;
+        }
+
+        // The role of the page whose input it is, as a native page's role() names it: "app", or the role of an origin
+        // an extension serves.
+        public String role() {
+            return role;
         }
 
         public boolean allowsMultiple() {

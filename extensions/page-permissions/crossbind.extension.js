@@ -1,7 +1,7 @@
 export default function pagePermissions() {
     return {
         name: 'page-permissions',
-        contract: 1,
+        contract: 3,
         root: import.meta.dirname,
         reads: ['permissions'],
         app: {

@@ -83,7 +83,7 @@ let nextCall = 0;
 let page = 1;
 const pending = new Map();
 const sent = [];
-const sendAs = (from, text) => new Promise((resolve) => {
+const sendAs = (from, text, role = 'app') => new Promise((resolve) => {
     sent.push(text);
     if (!text.startsWith(TOKEN)) {
         resolve(REFUSED);
@@ -92,7 +92,7 @@ const sendAs = (from, text) => new Promise((resolve) => {
     const call = String(nextCall);
     nextCall += 1;
     pending.set(call, resolve);
-    setImmediate(() => globalThis.__crossbind_receive(call, text.slice(TOKEN.length), from));
+    setImmediate(() => globalThis.__crossbind_receive(call, text.slice(TOKEN.length), from, role));
 });
 // A new page replaces the window's, as a reload does, and the host lets go of the one before.
 const reload = () => {
@@ -111,7 +111,7 @@ const transport = {
         const call = String(nextCall);
         nextCall += 1;
         pending.set(call, resolve);
-        globalThis.__crossbind_frame(call, query, body.buffer.slice(body.byteOffset, body.byteOffset + body.byteLength), page);
+        globalThis.__crossbind_frame(call, query, body.buffer.slice(body.byteOffset, body.byteOffset + body.byteLength), page, 'app');
     }),
     result: async (query) => {
         requests.push('result');
@@ -521,5 +521,31 @@ describe('what the host pushes to the page', () => {
         const reply = JSON.parse(await transport.send(`${TOKEN}["call",0,["add"],[{"\\u0001t":"cb","v":1e999},1]]`));
 
         expect(reply).toEqual([1, expect.objectContaining({ message: 'crossbind: no function of the page goes as Infinity' })]);
+    });
+});
+
+describe('a page of another role than the app\'s, as one of an origin an extension serves', () => {
+    const project = 900000;
+    const asProject = (message) => sendAs(project, TOKEN + JSON.stringify(message), 'project');
+
+    test("reaches neither the module nor the events the app holds for its own pages", async () => {
+        const called = JSON.parse(await asProject(['call', 0, ['add'], [1, 2]]));
+        const held = JSON.parse(await asProject(['app', 0, ['events.held'], [{ name: 'news' }]]));
+
+        expect(called).toEqual([1, expect.objectContaining({ message: "crossbind: a page of the role project reaches the app's functions alone, not its module" })]);
+        expect(held).toEqual([1, expect.objectContaining({ message: 'crossbind: a page of the role project takes no events the app holds for its own pages' })]);
+    });
+
+    test('hears the events sent to it alone, not those for every page or the one in front', async () => {
+        await asProject(['listen', 0, ['news'], [1]]);
+        const waiting = asProject(['events', 0, [], []]);
+        await new Promise(setImmediate);
+
+        globalThis.__crossbind_event('news', '1', false, null);
+        globalThis.__crossbind_event('news', '2', false, [project]);
+        globalThis.__crossbind_event('news', '3', false, project);
+
+        expect(JSON.parse(await waiting)).toEqual([0, [['event', 'news', 3]]]);
+        globalThis.__crossbind_gone(project);
     });
 });

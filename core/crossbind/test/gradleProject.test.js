@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import upath from 'upath';
 import { describe, expect, test, vi } from 'vitest';
 
 const state = { config: { general: { name: 'demo-app' }, target: {}, app: {}, paths: {}, extensions: [] }, targets: [] };
@@ -48,6 +49,20 @@ describe("an Android app's Gradle project", () => {
         // Android's default pattern would leave out the page's _app and .well-known directories.
         expect(gradle).toContain("ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:!CVS:!thumbs.db:!picasa.ini:!*~'");
         if (process.platform !== 'win32') expect(fs.statSync(path.join(to, 'gradlew')).mode & 0o111).not.toBe(0);
+        fs.rmSync(root, { recursive: true, force: true });
+    });
+
+    test("sends plain http to any address where an extension asks for it, and else to the device's own loopback alone", () => {
+        const root = upath.normalize(fs.mkdtempSync(upath.join(os.tmpdir(), 'crossbind-gradle-')));
+        const config = (to) => fs.readFileSync(upath.join(to, 'app', 'src', 'main', 'res', 'xml', 'network_security_config.xml'), 'utf8');
+        const plain = upath.join(root, 'plain-android');
+        writeGradleProject(plain, { parts: [part(root, 'x86_64')], id: 'com.example.demo', label: 'Demo', version: { name: '1.0.0', code: 1 } });
+        expect(config(plain)).not.toContain('<base-config');
+        expect(config(plain)).toContain('<domain includeSubdomains="false">127.0.0.1</domain>');
+        const cleartext = upath.join(root, 'cleartext-android');
+        writeGradleProject(cleartext, { parts: [part(root, 'x86_64')], id: 'com.example.demo', label: 'Demo', version: { name: '1.0.0', code: 1 }, cleartext: true });
+        expect(config(cleartext)).toContain('<base-config cleartextTrafficPermitted="true" />');
+        expect(fs.readFileSync(upath.join(cleartext, 'app', 'src', 'main', 'AndroidManifest.xml'), 'utf8')).toContain('android:networkSecurityConfig="@xml/network_security_config"');
         fs.rmSync(root, { recursive: true, force: true });
     });
 

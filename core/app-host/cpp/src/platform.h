@@ -26,6 +26,8 @@ struct SchemeRequest {
     std::vector<std::pair<std::string, std::string>> headers;
     // The webview that asks, as windowOpened() was given it; null on Android, whose page is of no window.
     const void *webView = nullptr;
+    // The URL's host, as app or a served origin's, which the core answers by; none for an Android page's port.
+    std::string host;
 };
 
 struct SchemeResponse {
@@ -63,15 +65,18 @@ System appSystem();
 // Serves <scheme>:// requests: on macOS of the webview made from this configuration, on Linux of this web view.
 // respond() may be called from any thread.
 void registerSchemeHandler(void *target, const char *scheme, SchemeHandler handler);
-// These origins load in any frame without asking; the extension page-navigation decides every other URL, the page's
-// own windows, and the HTTP authentication and certificate errors of its requests. newPage runs when the main frame
-// commits another document.
-void restrictNavigation(void *webView, std::vector<std::string> origins, std::function<void()> newPage);
+// Each navigation of the page's, in any frame, goes as the core's navigationRule() has it: loaded without asking,
+// refused, or decided by the extension page-navigation, as are the page's own windows, and the HTTP authentication and
+// certificate errors of its requests. newPage runs with its URL when the main frame commits another document.
+void restrictNavigation(void *webView, std::function<void(const std::string &url)> newPage);
+// Loads url in the webview's main frame as the host's own load, which the navigation rule lets through: the app's first
+// page as an origin its page was of ends. On the main thread.
+void loadOwnPage(void *webView, const std::string &url);
 // The page's downloads go to the extension page-downloads, before any of each arrives.
 void takeDownloads(void *webView);
-// The files the app's user drops on a page of these origins go to the extension page-drops, on the desktop, as the
-// page's own drop goes on.
-void takeDrops(void *webView, std::vector<std::string> origins);
+// The files the app's user drops on a page of the app's own origins or one served go to the extension page-drops, on
+// the desktop, as the page's own drop goes on.
+void takeDrops(void *webView);
 // Runs when the app is quit other than by closing its window (the Dock on macOS, the system on iOS, the end of the
 // session on Windows), before it would exit.
 void onQuit(std::function<void()> quit);

@@ -43,6 +43,15 @@ const darkBackgroundValues = (color) => `<?xml version="1.0" encoding="utf-8"?>
 </resources>
 `;
 
+// The network security config of an app whose extension asks for plain http, as one that loads a dev server's pages
+// from the network does: the app sends it to any address, which no list of domains can name in advance.
+const CLEARTEXT_CONFIG = `<?xml version="1.0" encoding="utf-8"?>
+<!-- An extension of the app's asks for plain http (app.android.cleartext): the app sends it to any address. -->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="true" />
+</network-security-config>
+`;
+
 // The devices of app.permissions, which alone the page may ask for, whatever an extension's Java asks Android for.
 const permissionValues = (permissions) => `<?xml version="1.0" encoding="utf-8"?>
 <resources>
@@ -277,7 +286,7 @@ ${libraries.map((library) => `    implementation '${library}'\n`).join('')}}
 // class in it the activity calls.
 export default function writeGradleProject(to, {
     parts, id, label, version, icons = null, urlSchemes = [], fileTypes = [], links = [], shortcutItems = [], background = null, darkBackground = null,
-    permissions = [], java = [], extensionPermissions = [], manifests = [], resources = [], maven = [],
+    permissions = [], java = [], extensionPermissions = [], manifests = [], resources = [], maven = [], cleartext = false,
 }) {
     const { name } = state.config.general;
     if (parts.length === 0) throw new Error(`crossbind: no part of the Android app ${name} is built, so there is no Gradle project to write.`);
@@ -340,6 +349,7 @@ export default function writeGradleProject(to, {
         fs.writeFileSync(path.join(main, 'res', 'values-night', 'background.xml'), darkBackgroundValues(darkBackground));
     }
     fs.writeFileSync(path.join(main, 'res', 'values', 'permissions.xml'), permissionValues(permissions));
+    if (cleartext) fs.writeFileSync(path.join(main, 'res', 'xml', 'network_security_config.xml'), CLEARTEXT_CONFIG);
     if (shortcutItems.length > 0) {
         fs.mkdirSync(path.join(main, 'res', 'xml'), { recursive: true });
         fs.writeFileSync(path.join(main, 'res', 'xml', 'shortcuts.xml'), shortcutsXml(shortcutItems, id, icons ? '@mipmap/ic_launcher' : null));

@@ -4,37 +4,23 @@
 
 #include <webkit2/webkit2.h>
 
-#include <algorithm>
-
 using crossbind::CertificateError;
 using crossbind::HttpAuthentication;
 namespace app = crossbind::app;
 
-// The app's own origins load in any frame, but a window the page asks for at one of them opens nowhere, as the app's
-// windows open through windows.open(); the extension page-navigation decides every other URL, windows too, which load
-// in the page's place if they load. A page of another origin gets no token, so it reaches none of the app's functions.
-// WebKitGTK tells no frame, so each navigation is the top frame's to page-navigation.
+// A navigation the core's rule loads goes on in any frame, but a window the page asks for there opens nowhere, as the
+// app's windows open through windows.open(); one it refuses loads nothing, and the extension page-navigation decides
+// every other URL, windows too, which load in the page's place if they load. A page of another origin gets no token, so
+// it reaches none of the app's functions. WebKitGTK tells no frame, so each navigation is the top frame's to
+// page-navigation.
 namespace {
 
 struct Lock {
-    std::vector<std::string> origins;
-    std::function<void()> newPage;
-    // A window's URL page-navigation loaded in the page's place, whose navigation it does not decide again.
+    std::function<void(const std::string &)> newPage;
+    // A window's URL page-navigation loaded in the page's place, or the host's own load, whose navigation it does not
+    // decide again.
     std::string approved;
 };
-
-std::string originOf(const std::string &uri) {
-    const auto scheme = uri.find("://");
-    if (scheme == std::string::npos) return uri;
-    return uri.substr(0, uri.find_first_of("/?#", scheme + 3));
-}
-
-bool allows(const Lock &lock, const std::string &uri) {
-    if (uri.rfind("about:", 0) == 0) return true;
-    // A blob URL carries the origin of the page that made it.
-    if (uri.rfind("blob:", 0) == 0) return allows(lock, uri.substr(5));
-    return std::find(lock.origins.begin(), lock.origins.end(), originOf(uri)) != lock.origins.end();
-}
 
 bool isApproved(Lock &lock, const std::string &uri) {
     if (lock.approved.empty() || uri != lock.approved) return false;
@@ -49,9 +35,11 @@ gboolean onDecidePolicy(WebKitWebView *view, WebKitPolicyDecision *decision, Web
     const char *requested = webkit_uri_request_get_uri(webkit_navigation_action_get_request(action));
     const std::string uri = requested ? requested : "";
     const bool isNewWindow = type == WEBKIT_POLICY_DECISION_TYPE_NEW_WINDOW_ACTION;
-    if (!isNewWindow && (isApproved(*lock, uri) || allows(*lock, uri))) return FALSE;
-    const app::NavigationAnswer answer =
-        allows(*lock, uri) ? app::NavigationAnswer::refuse : app::decideNavigation(view, uri, true, webkit_navigation_action_is_user_gesture(action), isNewWindow);
+    const app::NavigationRule rule = app::navigationRule(view, uri);
+    if (!isNewWindow && (isApproved(*lock, uri) || rule == app::NavigationRule::load)) return FALSE;
+    const app::NavigationAnswer answer = rule != app::NavigationRule::ask
+        ? app::NavigationAnswer::refuse
+        : app::decideNavigation(view, uri, true, webkit_navigation_action_is_user_gesture(action), isNewWindow);
     if (answer == app::NavigationAnswer::load && !isNewWindow) return FALSE;
     webkit_policy_decision_ignore(decision);
     if (answer == app::NavigationAnswer::load) {
@@ -63,11 +51,12 @@ gboolean onDecidePolicy(WebKitWebView *view, WebKitPolicyDecision *decision, Web
 }
 
 // An approval no load in place took goes with the page it came from.
-void onLoadChanged(WebKitWebView *, WebKitLoadEvent event, gpointer data) {
+void onLoadChanged(WebKitWebView *view, WebKitLoadEvent event, gpointer data) {
     if (event != WEBKIT_LOAD_COMMITTED) return;
     auto *lock = static_cast<Lock *>(data);
     lock->approved.clear();
-    lock->newPage();
+    const char *uri = webkit_web_view_get_uri(view);
+    lock->newPage(uri ? uri : "");
 }
 
 // A host as an origin names it: with its port, but for http's and https' own.
@@ -142,10 +131,18 @@ gboolean onTlsErrors(WebKitWebView *view, gchar *failing, GTlsCertificate *certi
 
 }  // namespace
 
-void restrictNavigation(void *webView, std::vector<std::string> origins, std::function<void()> newPage) {
-    auto *lock = new Lock{std::move(origins), std::move(newPage)};
+void restrictNavigation(void *webView, std::function<void(const std::string &)> newPage) {
+    auto *lock = new Lock{std::move(newPage)};
+    g_object_set_data(G_OBJECT(webView), "crossbind-lock", lock);
     g_signal_connect(WEBKIT_WEB_VIEW(webView), "decide-policy", G_CALLBACK(onDecidePolicy), lock);
     g_signal_connect(WEBKIT_WEB_VIEW(webView), "load-changed", G_CALLBACK(onLoadChanged), lock);
     g_signal_connect(WEBKIT_WEB_VIEW(webView), "authenticate", G_CALLBACK(onAuthenticate), nullptr);
     g_signal_connect(WEBKIT_WEB_VIEW(webView), "load-failed-with-tls-errors", G_CALLBACK(onTlsErrors), lock);
+}
+
+void loadOwnPage(void *webView, const std::string &url) {
+    auto *lock = static_cast<Lock *>(g_object_get_data(G_OBJECT(webView), "crossbind-lock"));
+    if (!lock) return;
+    lock->approved = url;
+    webkit_web_view_load_uri(WEBKIT_WEB_VIEW(webView), url.c_str());
 }

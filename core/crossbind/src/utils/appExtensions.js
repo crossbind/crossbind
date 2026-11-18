@@ -18,13 +18,13 @@ const COMPILED = ['sources', 'includes', 'defines'];
 // compiles with and the files it carries: the frameworks an Apple host links, the libraries another links, an Apple
 // app's entitlements and Info.plist keys, an iOS app's reasons for Apple's required reason API and the targets of Apple's
 // app extensions it adds, and of an Android app the folder of its Java with the class in it the app calls, the
-// permissions it asks for, a manifest of its own and the resources the app takes.
+// permissions it asks for, a manifest of its own, the resources the app takes and whether the app sends plain http.
 const PLATFORM_PARTS = {
     macos: [...COMPILED, 'files', 'frameworks', 'entitlements', 'plist'],
     ios: [...COMPILED, 'files', 'frameworks', 'entitlements', 'plist', 'privacy', 'targets'],
     linux: [...COMPILED, 'files', 'libraries', 'packages', 'depends'],
     windows: [...COMPILED, 'files', 'libraries'],
-    android: [...COMPILED, 'files', 'libraries', 'java', 'class', 'permissions', 'manifest', 'resources', 'maven', 'verification'],
+    android: [...COMPILED, 'files', 'libraries', 'java', 'class', 'permissions', 'manifest', 'resources', 'maven', 'verification', 'cleartext'],
 };
 // An Android permission, as its manifest names it.
 const PERMISSION = /^[A-Za-z_][\w]*(\.[A-Za-z_][\w]*)+$/;
@@ -274,6 +274,10 @@ function checkedPlatform(where, root, platform, part) {
         if (key === 'depends') return [key, checkedDepends(at, value)];
         if (key === 'maven') return [key, checkedMaven(at, value)];
         if (key === 'verification') return [key, ownPath(at, root, value)];
+        if (key === 'cleartext') {
+            if (typeof value !== 'boolean') throw new Error(`crossbind: ${at} is true or false: whether the app may send plain http to any address, as an extension that loads a dev server's pages from the network asks.`);
+            return [key, value];
+        }
         return [key, checkedNames(at, value)];
     }));
     if ('java' in checked || 'class' in checked) checkedJava(where, root, checked);
@@ -357,9 +361,10 @@ export function checkedExtension(extension, root, where) {
 // extension written for any of them builds. A minor version that adds to the contract raises the newest, and a major
 // version that breaks it the oldest.
 export const OLDEST_EXTENSION_CONTRACT = 1;
-export const EXTENSION_CONTRACT = 2;
-// What a later version added to an extension, by the version that did.
-const ADDED_IN = { packageSource: 2 };
+export const EXTENSION_CONTRACT = 3;
+// What a later version added to an extension, by its path in the extension and the version that did.
+const ADDED_IN = { packageSource: 2, 'app.android.cleartext': 3 };
+const valueAt = (extension, key) => key.split('.').reduce((value, part) => (isObject(value) ? value[part] : undefined), extension);
 
 // The contract an extension is written for, or the several it is written for alike, is one this crossbind takes: one
 // written for others alone stops the build, naming what to update, as one that gives what its contract has not.
@@ -373,9 +378,9 @@ function checkedContract(extension, where, update) {
         throw new Error(`crossbind: ${where}'s contract ${JSON.stringify(contract)} is no version of crossbind's extension contract, as 1 or [1, 2] is.`);
     }
     const named = versions.join(' and ');
-    const early = Object.entries(ADDED_IN).find(([key, since]) => extension[key] !== undefined && versions.some((version) => version < since));
+    const early = Object.entries(ADDED_IN).find(([key, since]) => valueAt(extension, key) !== undefined && versions.some((version) => version < since));
     if (early) {
-        throw new Error(`crossbind: ${where} gives a ${early[0]}, which crossbind's extension contract has from its version ${early[1]} on, and is written for ${named}: name contract: ${early[1]}.`);
+        throw new Error(`crossbind: ${where} gives ${early[0]}, which crossbind's extension contract has from its version ${early[1]} on, and is written for ${named}: name contract: ${early[1]}.`);
     }
     if (versions.some((version) => version >= OLDEST_EXTENSION_CONTRACT && version <= EXTENSION_CONTRACT)) return;
     if (versions.every((version) => version > EXTENSION_CONTRACT)) {
@@ -685,6 +690,8 @@ export function extensionPart(extensions, platform) {
         plist: owned('plist'),
         privacy: owned('privacy'),
         permissions: unique(extensions.flatMap((extension) => own(extension).permissions ?? [])),
+        // Whether an Android app's extension asks for plain http to any address.
+        cleartext: extensions.some((extension) => own(extension).cleartext === true),
         manifests: extensions.filter((extension) => own(extension).manifest)
             .map((extension) => ({ name: extension.name, file: path.join(extension.root, own(extension).manifest) })),
         resources: extensions.filter((extension) => own(extension).resources)

@@ -174,6 +174,7 @@ static void sendFile(id<WKURLSchemeTask> task, NSHTTPURLResponse *response, NSSt
     NSDictionary<NSString *, NSString *> *fields = request.allHTTPHeaderFields;
     for (NSString *name in fields) incoming.headers.emplace_back(name.UTF8String ?: "", fields[name].UTF8String ?: "");
     incoming.webView = (__bridge const void *)webView;
+    incoming.host = request.URL.host.UTF8String ?: "";
 
     id<WKURLSchemeTask> held = task;
     NSURL *url = request.URL;
