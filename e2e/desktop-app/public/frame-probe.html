@@ -41,7 +41,15 @@
     });
 
     const globals = ['__crossbind_token', '__crossbind_calls', '__crossbind_port', '__crossbind_device', 'Crossbind'].filter((name) => name in globalThis);
-    reach().then((reached) => post({ loaded: location.origin, globals, reached, keys: Object.keys(localStorage) }));
+    // A webview may keep a frame of another site from storage, which then throws.
+    const keysOf = () => {
+        try {
+            return Object.keys(localStorage);
+        } catch (error) {
+            return [`${error.name}: ${error.message}`];
+        }
+    };
+    reach().then((reached) => reached, (error) => `failed: ${error}`).then((reached) => post({ loaded: location.origin, globals, reached, keys: keysOf() }));
 })();
 </script>
 </body>
