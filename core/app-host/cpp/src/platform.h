@@ -26,6 +26,8 @@ struct SchemeRequest {
     std::vector<std::pair<std::string, std::string>> headers;
     // The webview that asks, as windowOpened() was given it; null on Android, whose page is of no window.
     const void *webView = nullptr;
+    // Spike: the URL's host, as k1.localhost.
+    std::string host;
 };
 
 struct SchemeResponse {

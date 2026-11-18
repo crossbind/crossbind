@@ -1,502 +1,13 @@
 name: test node addon conformance
+# Spike of test/app-host/windows-project-origin-spike, which is never a pull request: Windows' origin for a project,
+# http://<key>.localhost/, in the e2e app, on both Windows runners, from the app's folder and from its MSIX package.
 on:
     workflow_dispatch:
-    push:
-        branches:
-            - main
-        paths:
-            - core/crossbind/**
-            - core/embind-jsi/**
-            - core/embind-napi/**
-            - core/embind-rust/**
-            - core/app-host/**
-            - extensions/**
-            - plugins/vite/**
-            - plugins/rollup/**
-            - e2e/backend-nodejs-native/**
-            - e2e/desktop-app/**
-            - e2e/app-page-requests/**
-            - e2e/app-bare/**
-            - e2e/conformance/**
-            - e2e/conformance-rust/**
-            - tooling/bridge-tools/**
-            - .nvmrc
-            - .github/workflows/test-node-addon-conformance.yml
-            - .github/workflows/build-bridge-tools.yml
-            - '!**/*.md'
-    pull_request:
-        branches:
-            - main
-        paths:
-            - core/crossbind/**
-            - core/embind-jsi/**
-            - core/embind-napi/**
-            - core/embind-rust/**
-            - core/app-host/**
-            - extensions/**
-            - plugins/vite/**
-            - plugins/rollup/**
-            - e2e/backend-nodejs-native/**
-            - e2e/desktop-app/**
-            - e2e/app-page-requests/**
-            - e2e/app-bare/**
-            - e2e/conformance/**
-            - e2e/conformance-rust/**
-            - tooling/bridge-tools/**
-            - .nvmrc
-            - .github/workflows/test-node-addon-conformance.yml
-            - .github/workflows/build-bridge-tools.yml
-            - '!**/*.md'
 
 permissions: {}
-concurrency:
-    # A newer push to the same pull request or branch supersedes the running checks.
-    group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
-    cancel-in-progress: true
 jobs:
-    tested:
-        uses: ./.github/workflows/tested-tree.yml
-        permissions:
-            actions: read
-            contents: read
-            pull-requests: read
-        with:
-            workflow: test-node-addon-conformance.yml
-    build:
-        needs: tested
-        if: needs.tested.outputs.tested != 'true'
-        runs-on: ubuntu-latest
-        # main's pushes alone reach the ci-cache environment, whose secrets write the compiler cache; it records no deployment.
-        environment:
-            name: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && 'ci-cache' || '' }}
-            deployment: false
-        timeout-minutes: 60
-        steps:
-            - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-            - name: Install pnpm
-              uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
-            - name: Use Node.js
-              uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
-              with:
-                  node-version-file: .nvmrc
-                  cache: 'pnpm'
-            - name: Install dependencies
-              run: pnpm install
-            - name: Set up the compiler cache
-              uses: ./.github/actions/setup-sccache
-              with:
-                  read-key-id: ${{ secrets.SCCACHE_R2_READ_KEY_ID }}
-                  read-secret: ${{ secrets.SCCACHE_R2_READ_SECRET }}
-                  write-key-id: ${{ secrets.SCCACHE_R2_WRITE_KEY_ID }}
-                  write-secret: ${{ secrets.SCCACHE_R2_WRITE_SECRET }}
-                  endpoint: ${{ vars.SCCACHE_R2_ENDPOINT }}
-            - name: Build the Linux and Windows addons
-              # C++ and Rust alike: the kit's Rust packages and the crates the suite imports build in the
-              # linux and windows images too.
-              run: pnpm run ci:linux:build:conformance
-            - name: Keep the addons for the runners that load them
-              uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
-              with:
-                  name: node-addon-conformance
-                  if-no-files-found: error
-                  # A re-run of this job uploads under the same name again.
-                  overwrite: true
-                  # The suite checks that every kit export it reaches was bound, from the build's bridge exports;
-                  # the app leg builds from the bridges and interfaces themselves.
-                  include-hidden-files: true
-                  # dist/node holds the addon's entry and the import hooks the suite runs under.
-                  path: |
-                      e2e/backend-nodejs-native/dist/*.node
-                      e2e/backend-nodejs-native/dist/*.cjs
-                      e2e/backend-nodejs-native/dist/node/
-                      e2e/backend-nodejs-native/.crossbind/cache.json
-                      e2e/backend-nodejs-native/.crossbind/build/bridge/
-                      e2e/backend-nodejs-native/.crossbind/build/interface/
-                  retention-days: 1
-    # The macOS legs make their bridges with bridge-tools, as a developer's Mac does.
-    bridge-tools:
-        needs: tested
-        if: needs.tested.outputs.tested != 'true'
-        uses: ./.github/workflows/build-bridge-tools.yml
-    run:
-        # Linux runs the glibc and musl addons in containers; a hosted Windows runner cannot run the
-        # Linux images, so each Windows runner loads the addon built for it.
-        needs: build
-        strategy:
-            fail-fast: false
-            matrix:
-                include:
-                    - { runner: ubuntu-latest, arch: x64 }
-                    - { runner: windows-latest, arch: x64 }
-                    - { runner: windows-11-arm, arch: arm64 }
-        runs-on: ${{ matrix.runner }}
-        steps:
-            - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-            - name: Install pnpm
-              uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
-            - name: Use Node.js
-              uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
-              with:
-                  node-version-file: .nvmrc
-                  # An emulated x64 Node.js would load the x64 addon on the arm64 runner.
-                  architecture: ${{ matrix.arch }}
-            - name: Install the conformance kit
-              # The suite imports the kit; nothing is built on these runners.
-              run: pnpm install --frozen-lockfile --prod --filter "@crossbind/e2e-backend-nodejs-native..."
-            - name: Restore the addons
-              uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
-              with:
-                  name: node-addon-conformance
-                  path: e2e/backend-nodejs-native
-            - name: Run the conformance suite
-              run: node e2e/backend-nodejs-native/e2e/run.mjs
-    app:
-        # The app leg makes its bridges with bridge-tools, with no Docker, SWIG or emscripten to fall back on; the bridges
-        # job checks they are the addon's.
-        needs: bridge-tools
-        runs-on: macos-latest
-        # main's pushes alone reach the ci-cache environment, whose secrets write the compiler cache; it records no deployment.
-        environment:
-            name: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && 'ci-cache' || '' }}
-            deployment: false
-        timeout-minutes: 60
-        env:
-            # The leg's crate imports are resolved with cargo metadata, which runs in the image unless the runner
-            # is LOCAL.
-            CROSSBIND_RUNNER: LOCAL
-        steps:
-            - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-            - name: Install pnpm
-              uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
-            - name: Use Node.js
-              uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
-              with:
-                  node-version-file: .nvmrc
-                  cache: 'pnpm'
-            - name: Install dependencies
-              run: pnpm install
-            - name: Set up the compiler cache
-              uses: ./.github/actions/setup-sccache
-              with:
-                  read-key-id: ${{ secrets.SCCACHE_R2_READ_KEY_ID }}
-                  read-secret: ${{ secrets.SCCACHE_R2_READ_SECRET }}
-                  write-key-id: ${{ secrets.SCCACHE_R2_WRITE_KEY_ID }}
-                  write-secret: ${{ secrets.SCCACHE_R2_WRITE_SECRET }}
-                  endpoint: ${{ vars.SCCACHE_R2_ENDPOINT }}
-            # Fetched once per version and kept: React Native's Maven repository has served Hermes at a crawl.
-            - name: Restore Hermes
-              id: hermes
-              uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-              with:
-                  path: ~/.crossbind/hermes
-                  key: hermes-${{ runner.os }}-${{ hashFiles('core/crossbind/src/utils/hermes.js') }}
-            - name: Fetch Hermes
-              if: steps.hermes.outputs.cache-hit != 'true'
-              timeout-minutes: 15
-              run: node --input-type=module -e "await (await import('./core/crossbind/src/utils/hermes.js')).default()"
-            - name: Save Hermes
-              if: steps.hermes.outputs.cache-hit != 'true'
-              uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-              with:
-                  path: ~/.crossbind/hermes
-                  key: ${{ steps.hermes.outputs.cache-primary-key }}
-            - name: Restore the bridge tools
-              uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
-              with:
-                  name: bridge-tools
-                  path: tooling/bridge-tools/dist
-            - name: Stand in for Docker, SWIG and emscripten, which the leg must not use
-              run: |
-                  mkdir -p "$RUNNER_TEMP/stand-ins"
-                  for tool in docker swig em++ emcc; do
-                      printf '#!/bin/sh\necho "%s must not run on this leg" >&2\nexit 1\n' "$tool" > "$RUNNER_TEMP/stand-ins/$tool"
-                      chmod +x "$RUNNER_TEMP/stand-ins/$tool"
-                  done
-                  echo "$RUNNER_TEMP/stand-ins" >> "$GITHUB_PATH"
-            - name: Build the app and run the conformance suite in it
-              run: |
-                  pnpm --filter=@crossbind/e2e-desktop-app run build
-                  pnpm --filter=@crossbind/e2e-desktop-app run e2e:prod
-            - name: Keep its bridges for the bridges job
-              uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
-              with:
-                  name: node-addon-conformance-bridges-macos
-                  if-no-files-found: error
-                  overwrite: true
-                  include-hidden-files: true
-                  path: |
-                      e2e/desktop-app/.crossbind/build/interface/*.i
-                      e2e/desktop-app/.crossbind/build/bridge/*.i.cpp
-                      e2e/desktop-app/.crossbind/build/bridge/*.i.cpp.exports.json
-                  retention-days: 1
-            - name: Run the conformance suite in the app as its disk image holds it
-              run: node e2e/desktop-app/e2e/run.mjs --installed
-            # The e2e app above has app.updater, whose extension links what an app without it would lack.
-            - name: Build an app without the host's optional extensions
-              run: pnpm --filter=@crossbind/e2e-app-page-requests run build
-            - name: Build an app with none of crossbind's own extensions
-              run: pnpm --filter=@crossbind/e2e-app-bare run build
-            # sccache finishes the cache writes it still holds as it stops, and reports what the job took from the cache.
-            - name: Stop the compiler cache
-              if: ${{ always() && env.CROSSBIND_SCCACHE == '1' }}
-              run: sccache --stop-server || echo "No sccache server ran in this job."
-    app-ios:
-        # The iOS app makes its bridges as the macOS app does, builds its Rust for both iOS SDKs, and runs in the
-        # Simulator.
-        needs: bridge-tools
-        runs-on: macos-latest
-        # main's pushes alone reach the ci-cache environment, whose secrets write the compiler cache; it records no deployment.
-        environment:
-            name: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && 'ci-cache' || '' }}
-            deployment: false
-        timeout-minutes: 60
-        env:
-            CROSSBIND_RUNNER: LOCAL
-            CROSSBIND_APP_PLATFORM: ios
-        steps:
-            - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-            # crossbind opens the app in a Simulator already booted, so it boots while the app builds.
-            - name: Boot an iPhone Simulator of the newest iOS
-              run: |
-                  udid=$(xcrun simctl list devices available --json | jq -r '[.devices | to_entries[] | select(.key | contains(".SimRuntime.iOS-")) | (.key | split(".SimRuntime.iOS-")[1] | split("-") | map(tonumber)) as $version | .value[] | select(.name | startswith("iPhone")) | {udid, $version}] | sort_by(.version) | last | .udid')
-                  xcrun simctl boot "$udid"
-                  echo "SIMULATOR_UDID=$udid" >> "$GITHUB_ENV"
-            - name: Install pnpm
-              uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
-            - name: Use Node.js
-              uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
-              with:
-                  node-version-file: .nvmrc
-                  cache: 'pnpm'
-            - name: Install dependencies
-              run: pnpm install
-            - name: Set up the compiler cache
-              uses: ./.github/actions/setup-sccache
-              with:
-                  read-key-id: ${{ secrets.SCCACHE_R2_READ_KEY_ID }}
-                  read-secret: ${{ secrets.SCCACHE_R2_READ_SECRET }}
-                  write-key-id: ${{ secrets.SCCACHE_R2_WRITE_KEY_ID }}
-                  write-secret: ${{ secrets.SCCACHE_R2_WRITE_SECRET }}
-                  endpoint: ${{ vars.SCCACHE_R2_ENDPOINT }}
-            # Fetched once per version and kept: React Native's Maven repository has served Hermes at a crawl.
-            - name: Restore Hermes
-              id: hermes
-              uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-              with:
-                  path: ~/.crossbind/hermes
-                  key: hermes-${{ runner.os }}-${{ hashFiles('core/crossbind/src/utils/hermes.js') }}
-            - name: Fetch Hermes
-              if: steps.hermes.outputs.cache-hit != 'true'
-              timeout-minutes: 15
-              run: node --input-type=module -e "await (await import('./core/crossbind/src/utils/hermes.js')).default()"
-            - name: Save Hermes
-              if: steps.hermes.outputs.cache-hit != 'true'
-              uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-              with:
-                  path: ~/.crossbind/hermes
-                  key: ${{ steps.hermes.outputs.cache-primary-key }}
-            - name: Add Rust's iOS targets
-              run: rustup target add aarch64-apple-ios aarch64-apple-ios-sim
-            - name: Restore the bridge tools
-              uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
-              with:
-                  name: bridge-tools
-                  path: tooling/bridge-tools/dist
-            - name: Stand in for Docker, SWIG and emscripten, which the leg must not use
-              run: |
-                  mkdir -p "$RUNNER_TEMP/stand-ins"
-                  for tool in docker swig em++ emcc; do
-                      printf '#!/bin/sh\necho "%s must not run on this leg" >&2\nexit 1\n' "$tool" > "$RUNNER_TEMP/stand-ins/$tool"
-                      chmod +x "$RUNNER_TEMP/stand-ins/$tool"
-                  done
-                  echo "$RUNNER_TEMP/stand-ins" >> "$GITHUB_PATH"
-            # simctl boot returns while the device is still booting, which crossbind would boot again.
-            - name: Wait for the Simulator to finish booting
-              run: xcrun simctl bootstatus "$SIMULATOR_UDID" -b
-            - name: Build the app and run the conformance suite in the Simulator
-              run: |
-                  pnpm --filter=@crossbind/e2e-desktop-app run build
-                  pnpm --filter=@crossbind/e2e-desktop-app run e2e:prod
-            - name: Keep its bridges for the bridges job
-              uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
-              with:
-                  name: node-addon-conformance-bridges-ios
-                  if-no-files-found: error
-                  overwrite: true
-                  include-hidden-files: true
-                  path: |
-                      e2e/desktop-app/.crossbind/build/interface/*.i
-                      e2e/desktop-app/.crossbind/build/bridge/*.i.cpp
-                      e2e/desktop-app/.crossbind/build/bridge/*.i.cpp.exports.json
-                  retention-days: 1
-            # sccache finishes the cache writes it still holds as it stops, and reports what the job took from the cache.
-            - name: Stop the compiler cache
-              if: ${{ always() && env.CROSSBIND_SCCACHE == '1' }}
-              run: sccache --stop-server || echo "No sccache server ran in this job."
-    app-bare-ios:
-        # An app with none of crossbind's own extensions builds and links for iOS.
-        needs: bridge-tools
-        runs-on: macos-latest
-        # main's pushes alone reach the ci-cache environment, whose secrets write the compiler cache; it records no deployment.
-        environment:
-            name: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && 'ci-cache' || '' }}
-            deployment: false
-        timeout-minutes: 60
-        env:
-            CROSSBIND_RUNNER: LOCAL
-            CROSSBIND_APP_PLATFORM: ios
-        steps:
-            - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-            - name: Install pnpm
-              uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
-            - name: Use Node.js
-              uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
-              with:
-                  node-version-file: .nvmrc
-                  cache: 'pnpm'
-            - name: Install dependencies
-              run: pnpm install
-            - name: Set up the compiler cache
-              uses: ./.github/actions/setup-sccache
-              with:
-                  read-key-id: ${{ secrets.SCCACHE_R2_READ_KEY_ID }}
-                  read-secret: ${{ secrets.SCCACHE_R2_READ_SECRET }}
-                  write-key-id: ${{ secrets.SCCACHE_R2_WRITE_KEY_ID }}
-                  write-secret: ${{ secrets.SCCACHE_R2_WRITE_SECRET }}
-                  endpoint: ${{ vars.SCCACHE_R2_ENDPOINT }}
-            # Fetched once per version and kept: React Native's Maven repository has served Hermes at a crawl.
-            - name: Restore Hermes
-              id: hermes
-              uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-              with:
-                  path: ~/.crossbind/hermes
-                  key: hermes-${{ runner.os }}-${{ hashFiles('core/crossbind/src/utils/hermes.js') }}
-            - name: Fetch Hermes
-              if: steps.hermes.outputs.cache-hit != 'true'
-              timeout-minutes: 15
-              run: node --input-type=module -e "await (await import('./core/crossbind/src/utils/hermes.js')).default()"
-            - name: Save Hermes
-              if: steps.hermes.outputs.cache-hit != 'true'
-              uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-              with:
-                  path: ~/.crossbind/hermes
-                  key: ${{ steps.hermes.outputs.cache-primary-key }}
-            - name: Restore the bridge tools
-              uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
-              with:
-                  name: bridge-tools
-                  path: tooling/bridge-tools/dist
-            - name: Stand in for Docker, SWIG and emscripten, which the leg must not use
-              run: |
-                  mkdir -p "$RUNNER_TEMP/stand-ins"
-                  for tool in docker swig em++ emcc; do
-                      printf '#!/bin/sh\necho "%s must not run on this leg" >&2\nexit 1\n' "$tool" > "$RUNNER_TEMP/stand-ins/$tool"
-                      chmod +x "$RUNNER_TEMP/stand-ins/$tool"
-                  done
-                  echo "$RUNNER_TEMP/stand-ins" >> "$GITHUB_PATH"
-            - name: Build and link the app
-              run: |
-                  pnpm --filter=@crossbind/e2e-app-bare run build
-                  pnpm --filter=@crossbind/e2e-app-bare run link:ios
-            # sccache finishes the cache writes it still holds as it stops, and reports what the job took from the cache.
-            - name: Stop the compiler cache
-              if: ${{ always() && env.CROSSBIND_SCCACHE == '1' }}
-              run: sccache --stop-server || echo "No sccache server ran in this job."
-    bridges:
-        # The apps make their bridges with bridge-tools and the addon its own with the web image's SWIG; the two bind the
-        # same headers with the same names.
-        needs: [build, app, app-ios]
-        runs-on: ubuntu-latest
-        timeout-minutes: 10
-        steps:
-            - name: Restore the addon build
-              uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
-              with:
-                  name: node-addon-conformance
-                  path: addon
-            - name: Restore the macOS app's bridges
-              uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
-              with:
-                  name: node-addon-conformance-bridges-macos
-                  path: macos
-            - name: Restore the iOS app's bridges
-              uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
-              with:
-                  name: node-addon-conformance-bridges-ios
-                  path: ios
-            - name: Check the apps' bridges are the ones the web image made for the addon
-              run: |
-                  made() { (cd "$1" && ls interface/*.i bridge/*.i.cpp bridge/*.i.cpp.exports.json); }
-                  for app in macos ios; do
-                      diff <(made "$app") <(made addon/.crossbind/build)
-                      for file in $(made "$app"); do cmp "$app/$file" "addon/.crossbind/build/$file"; done
-                  done
-    app-linux:
-        needs: tested
-        if: needs.tested.outputs.tested != 'true'
-        # The app builds in crossbind's linux image, as the addons do, against the Hermes and the WebKitGTK headers and
-        # libraries the image carries, and runs on the runner's own WebKitGTK.
-        runs-on: ubuntu-latest
-        # main's pushes alone reach the ci-cache environment, whose secrets write the compiler cache; it records no deployment.
-        environment:
-            name: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && 'ci-cache' || '' }}
-            deployment: false
-        timeout-minutes: 60
-        steps:
-            - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-            - name: Install pnpm
-              uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
-            - name: Use Node.js
-              uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
-              with:
-                  node-version-file: .nvmrc
-                  cache: 'pnpm'
-            - name: Install dependencies
-              run: pnpm install
-            - name: Set up the compiler cache
-              uses: ./.github/actions/setup-sccache
-              with:
-                  read-key-id: ${{ secrets.SCCACHE_R2_READ_KEY_ID }}
-                  read-secret: ${{ secrets.SCCACHE_R2_READ_SECRET }}
-                  write-key-id: ${{ secrets.SCCACHE_R2_WRITE_KEY_ID }}
-                  write-secret: ${{ secrets.SCCACHE_R2_WRITE_SECRET }}
-                  endpoint: ${{ vars.SCCACHE_R2_ENDPOINT }}
-            - name: Build the app
-              run: pnpm --filter=@crossbind/e2e-desktop-app run build
-            # The app's own page-dialogs and page-permissions take the place of the host's, which this app keeps.
-            - name: Build e2e/app-page-requests
-              run: pnpm --filter=@crossbind/e2e-app-page-requests run build
-            - name: Build an app with none of crossbind's own extensions
-              run: pnpm --filter=@crossbind/e2e-app-bare run build
-            - name: Install the app's Debian package, whose dependencies bring the WebKitGTK it runs on
-              # The run starts a session bus of its own, on which e2e/tray-host.py plays a tray and a notification
-              # server.
-              run: |
-                  sudo apt-get update
-                  sudo apt-get install -y --no-install-recommends ./e2e/desktop-app/dist/crossbind-e2e-desktop-app-linux-x64.deb dbus python3-gi xdotool x11-utils
-            - name: Run the conformance suite in the app and in the installed app
-              # WebKitGTK runs without its sandbox and GPU compositing, as in the containers the app was measured in.
-              env:
-                  WEBKIT_DISABLE_SANDBOX_THIS_IS_DANGEROUS: '1'
-                  WEBKIT_DISABLE_COMPOSITING_MODE: '1'
-              run: |
-                  xvfb-run -a pnpm --filter=@crossbind/e2e-desktop-app run e2e:prod
-                  xvfb-run -a node e2e/desktop-app/e2e/run.mjs --installed
-            - name: Answer the host's own page dialogs as the app's user would
-              env:
-                  WEBKIT_DISABLE_SANDBOX_THIS_IS_DANGEROUS: '1'
-                  WEBKIT_DISABLE_COMPOSITING_MODE: '1'
-              run: xvfb-run -a pnpm --filter=@crossbind/e2e-app-page-requests run e2e:prod
     app-windows:
-        needs: tested
-        if: needs.tested.outputs.tested != 'true'
-        # A hosted Windows runner cannot run crossbind's windows image, a Linux one, so this runner builds the app in it,
-        # against the Hermes and the WebView2 SDK headers the image carries.
         runs-on: ubuntu-latest
-        # main's pushes alone reach the ci-cache environment, whose secrets write the compiler cache; it records no deployment.
-        environment:
-            name: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && 'ci-cache' || '' }}
-            deployment: false
         timeout-minutes: 60
         env:
             CROSSBIND_APP_PLATFORM: windows
@@ -519,7 +30,7 @@ jobs:
                   write-key-id: ${{ secrets.SCCACHE_R2_WRITE_KEY_ID }}
                   write-secret: ${{ secrets.SCCACHE_R2_WRITE_SECRET }}
                   endpoint: ${{ vars.SCCACHE_R2_ENDPOINT }}
-            - name: Make a throwaway key, with which the build signs the app and its setup program
+            - name: Make a throwaway key, with which the build signs the app and its MSIX package
               run: >-
                   keytool -genkeypair -alias "crossbind e2e" -keyalg RSA -keysize 2048 -validity 2 -dname "CN=crossbind e2e"
                   -ext EKU=codeSigning -keystore "$RUNNER_TEMP/e2e.p12" -storetype PKCS12 -storepass e2e-pass
@@ -530,209 +41,18 @@ jobs:
                   CROSSBIND_WINDOWS_SIGNING_ALIAS: crossbind e2e
                   CROSSBIND_WINDOWS_SIGNING_STOREPASS: e2e-pass
               run: pnpm --filter=@crossbind/e2e-desktop-app run build
-            # The app's own page-dialogs and page-permissions take the place of the host's, which this app keeps.
-            - name: Build e2e/app-page-requests
-              run: pnpm --filter=@crossbind/e2e-app-page-requests run build
-            - name: Build an app with none of crossbind's own extensions
-              run: pnpm --filter=@crossbind/e2e-app-bare run build
-            - name: Check that the app loads the system DLLs it imports from System32 alone
-              # A file of their name in the app's folder, as in one it was downloaded to, would otherwise run inside it.
-              run: |
-                  image="ghcr.io/crossbind/windows@$(node -p "require('./core/crossbind/src/assets/toolchain-digests.json').images.windows.index")"
-                  for exe in e2e/desktop-app/dist/crossbind-e2e-desktop-app-win32-*/crossbind-e2e-desktop-app.exe; do
-                      docker run --rm --entrypoint /opt/llvm-mingw/bin/llvm-readobj -v "$PWD:/w" -w /w "$image" --coff-load-config "$exe" \
-                          | grep -q 'DependentLoadFlags: 0x800' || { echo "$exe looks for its DLLs in its own folder first"; exit 1; }
-                  done
             - name: Keep the app for the runners that open it
               uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
               with:
                   name: windows-app
                   if-no-files-found: error
-                  # A re-run of this job uploads under the same name again.
                   overwrite: true
                   path: |
                       e2e/desktop-app/dist/crossbind-e2e-desktop-app-win32-x64/
                       e2e/desktop-app/dist/crossbind-e2e-desktop-app-win32-arm64/
-                      e2e/desktop-app/dist/crossbind-e2e-desktop-app-win32-*-setup.exe
                       e2e/desktop-app/dist/crossbind-e2e-desktop-app-win32-*.msix
-                      e2e/desktop-app/dist/crossbind-e2e-desktop-app-win32-*.probe.json
-                  retention-days: 1
-            - name: Keep e2e/app-page-requests for the runners that open it
-              uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
-              with:
-                  name: windows-page-requests
-                  if-no-files-found: error
-                  overwrite: true
-                  path: |
-                      e2e/app-page-requests/dist/crossbind-e2e-app-page-requests-win32-x64/
-                      e2e/app-page-requests/dist/crossbind-e2e-app-page-requests-win32-arm64/
-                  retention-days: 1
+                  retention-days: 3
     app-windows-run:
-        # Each Windows runner opens the app built for it, on its own WebView2 Runtime. The checkout's directory has a
-        # non-ASCII name, as a user's folder may: the app finds its files by a UTF-8 path.
-        needs: app-windows
-        strategy:
-            fail-fast: false
-            matrix:
-                include:
-                    - { runner: windows-latest, arch: x64 }
-                    - { runner: windows-11-arm, arch: arm64 }
-        runs-on: ${{ matrix.runner }}
-        timeout-minutes: 15
-        env:
-            # The common name of the signer the updater holds an update to, once the runner trusts the build's key:
-            # e2e/run.mjs checks the app named it.
-            CROSSBIND_E2E_UPDATE_SIGNER: crossbind e2e
-        defaults:
-            run:
-                working-directory: ünicode
-        steps:
-            - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-              with:
-                  path: ünicode
-            - name: Install pnpm
-              uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
-              with:
-                  package_json_file: ünicode/package.json
-            - name: Use Node.js
-              uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
-              with:
-                  node-version-file: ünicode/.nvmrc
-                  # The runner opens the app of Node's arch: an emulated x64 Node.js would open the x64 app on the
-                  # arm64 runner.
-                  architecture: ${{ matrix.arch }}
-            - name: Install the conformance kit
-              # The leg's config imports the kit; nothing is built on these runners.
-              run: pnpm install --frozen-lockfile --prod --filter "@crossbind/e2e-desktop-app..."
-            - name: Restore the app
-              uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
-              with:
-                  name: windows-app
-                  path: ünicode/e2e/desktop-app/dist
-            - name: Trust the key the build signed with, so that the app's updater holds an update to the app's signer
-              run: |
-                  $certificate = (Get-AuthenticodeSignature e2e\desktop-app\dist\crossbind-e2e-desktop-app-win32-${{ matrix.arch }}\crossbind-e2e-desktop-app.exe).SignerCertificate
-                  if (-not $certificate) { throw 'the app carries no signature' }
-                  $store = [System.Security.Cryptography.X509Certificates.X509Store]::new('Root', 'LocalMachine')
-                  $store.Open('ReadWrite')
-                  $store.Add($certificate)
-                  $store.Close()
-            - name: Leave a WebView2 profile where a release before kept it, under the executable's name in the roaming folder
-              run: New-Item -ItemType File -Force -Path "$env:APPDATA\crossbind-e2e-desktop-app.exe\crossbind-profile" | Out-Null
-            - name: Run the conformance suite in the app
-              run: node e2e/desktop-app/e2e/run.mjs
-            - name: Restore e2e/app-page-requests
-              uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
-              with:
-                  name: windows-page-requests
-                  path: ünicode/e2e/app-page-requests/dist
-            - name: Answer the host's own page dialogs as the app's user would
-              run: node e2e/app-page-requests/e2e/run.mjs
-            - name: Check that the profile moved to the app's own local folder
-              run: |
-                  if (-not (Test-Path "$env:LOCALAPPDATA\dev.crossbind.crossbind-e2e-desktop-app\WebView2\crossbind-profile")) { throw 'the profile of a release before did not move' }
-                  if (Test-Path "$env:APPDATA\crossbind-e2e-desktop-app.exe") { throw 'the profile of a release before stayed in the roaming folder' }
-            - name: Check what the setup program asks of the WebView2 bootstrapper before running it
-              # The command installer.nsi runs, with the system's own PowerShell, which its 32-bit setup program finds
-              # through Sysnative and this step in System32: Microsoft's bootstrapper passes, a file another signed or
-              # none signed fails.
-              run: |
-                  $line = Select-String -Path extensions\nsis\installer.nsi -Pattern 'nsExec::ExecToStack (?:/TIMEOUT=\d+ )?`"([^"]+)" (.*)`'
-                  if (-not $line) { throw 'installer.nsi runs no check of the bootstrapper' }
-                  $program = $line.Matches[0].Groups[1].Value.Replace('$WINDIR\Sysnative', "$env:SystemRoot\System32")
-                  $arguments = $line.Matches[0].Groups[2].Value.Replace('$$', '$')
-                  $bootstrapper = "$env:RUNNER_TEMP\MicrosoftEdgeWebview2Setup.exe"
-                  Invoke-WebRequest -Uri 'https://go.microsoft.com/fwlink/p/?LinkId=2124703' -OutFile $bootstrapper -MaximumRetryCount 3 -RetryIntervalSec 5
-                  Set-Content -Path "$env:RUNNER_TEMP\unsigned.exe" -Value 'not a program'
-                  $expected = @{ $bootstrapper = 0; "$env:RUNNER_TEMP\unsigned.exe" = 1; "$PWD\e2e\desktop-app\dist\crossbind-e2e-desktop-app-win32-${{ matrix.arch }}\crossbind-e2e-desktop-app.exe" = 1 }
-                  foreach ($file in $expected.Keys) {
-                      $env:CROSSBIND_WEBVIEW2_BOOTSTRAPPER = $file
-                      $check = Start-Process -FilePath $program -ArgumentList $arguments -NoNewWindow -Wait -PassThru
-                      if ($check.ExitCode -ne $expected[$file]) { throw "the check answered $($check.ExitCode) for $file, not $($expected[$file])" }
-                  }
-            - name: Install the app with its setup program, whose Settings entry names package.json's author as the publisher
-              run: |
-                  $setup = Start-Process -Wait -PassThru -FilePath e2e\desktop-app\dist\crossbind-e2e-desktop-app-win32-${{ matrix.arch }}-setup.exe -ArgumentList /S
-                  if ($setup.ExitCode -ne 0) { throw "the setup program exited with $($setup.ExitCode)" }
-                  $entry = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\dev.crossbind.crossbind-e2e-desktop-app'
-                  $publisher = (Get-ItemProperty -LiteralPath $entry).Publisher
-                  if ($publisher -ne 'crossbind e2e') { throw "the Settings entry names '$publisher' as the publisher, not package.json's author by name" }
-            - name: Check that the app, its setup program and its uninstaller carry the build's signature
-              run: |
-                  $files = "e2e\desktop-app\dist\crossbind-e2e-desktop-app-win32-${{ matrix.arch }}\crossbind-e2e-desktop-app.exe",
-                      "e2e\desktop-app\dist\crossbind-e2e-desktop-app-win32-${{ matrix.arch }}-setup.exe",
-                      "$env:LOCALAPPDATA\Programs\crossbind-e2e-desktop-app\uninstall.exe"
-                  foreach ($file in $files) {
-                      # The runner trusts the throwaway key, so a sound signature by it is valid, as the updater asks.
-                      $signature = Get-AuthenticodeSignature $file
-                      if ($signature.Status -ne 'Valid') { throw "$file has no valid signature: $($signature.Status)" }
-                      if ($signature.SignerCertificate.Subject -ne 'CN=crossbind e2e') { throw "$file is not signed by the build's key: $($signature.SignerCertificate.Subject)" }
-                      if (-not $signature.TimeStamperCertificate) { throw "$file has no timestamp" }
-                  }
-            - name: Run the conformance suite in the installed app
-              run: node e2e/desktop-app/e2e/run.mjs --installed
-            - name: Update the installed app as its updater does, which waits for the app to quit, opens it again and removes the URL schemes it no longer lists
-              run: |
-                  $app = "$env:LOCALAPPDATA\Programs\crossbind-e2e-desktop-app"
-                  $exe = "$app\crossbind-e2e-desktop-app.exe"
-                  # A scheme a release before registered and this one no longer lists, and another app's.
-                  $dropped = 'HKCU:\Software\Classes\crossbind-e2e-dropped'
-                  $foreign = 'HKCU:\Software\Classes\crossbind-e2e-foreign'
-                  foreach ($scheme in $dropped, $foreign) {
-                      New-Item -Path "$scheme\shell\open\command" -Force | Out-Null
-                      Set-ItemProperty -LiteralPath $scheme -Name 'URL Protocol' -Value ''
-                  }
-                  Set-Item -LiteralPath "$dropped\shell\open\command" -Value "`"$exe`" `"%1`""
-                  Set-Item -LiteralPath "$foreign\shell\open\command" -Value '"C:\elsewhere\app.exe" "%1"'
-                  $running = Start-Process -PassThru -FilePath $exe
-                  $setup = Start-Process -PassThru -FilePath e2e\desktop-app\dist\crossbind-e2e-desktop-app-win32-${{ matrix.arch }}-setup.exe -ArgumentList "/S /UPDATE /D=$app"
-                  # PowerShell reads a process's exit code through a handle it took while the process ran.
-                  $null = $setup.Handle
-                  Start-Sleep -Seconds 3
-                  if ($setup.HasExited) { throw "the update did not wait for the app to quit" }
-                  Stop-Process -Id $running.Id -Force
-                  if (-not $setup.WaitForExit(60000)) { throw 'the update did not finish once the app had quit' }
-                  if ($setup.ExitCode -ne 0) { throw "the update exited with $($setup.ExitCode)" }
-                  if (Test-Path $dropped) { throw "the update left $dropped, which the app no longer lists" }
-                  foreach ($path in $foreign, 'HKCU:\Software\Classes\crossbind-e2e') { if (-not (Test-Path $path)) { throw "the update removed $path" } }
-                  $opened = $null
-                  for ($i = 0; $i -lt 30 -and -not $opened; $i++) {
-                      Start-Sleep -Seconds 1
-                      $opened = Get-Process -Name crossbind-e2e-desktop-app -ErrorAction SilentlyContinue | Where-Object { $_.Path -eq $exe -and $_.Id -ne $running.Id }
-                  }
-                  if (-not $opened) { throw 'the update did not open the app again' }
-                  # The uninstaller stops while the app runs.
-                  $opened | Stop-Process -Force
-                  $opened | Wait-Process -Timeout 30
-            - name: Uninstall the app, which takes its shortcut, its files, its entry in Settings and its URL schemes
-              run: |
-                  $app = "$env:LOCALAPPDATA\Programs\crossbind-e2e-desktop-app"
-                  $shortcut = "$env:APPDATA\Microsoft\Windows\Start Menu\Programs\crossbind-e2e-desktop-app.lnk"
-                  $entry = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\dev.crossbind.crossbind-e2e-desktop-app'
-                  $scheme = 'HKCU:\Software\Classes\crossbind-e2e'
-                  # The probe extension's scheme, which the setup program registers beside the app's.
-                  $probe = 'HKCU:\Software\Classes\crossbind-probe'
-                  # A scheme of the app it no longer lists, as an uninstaller before this one left behind.
-                  $dropped = 'HKCU:\Software\Classes\crossbind-e2e-dropped'
-                  $foreign = 'HKCU:\Software\Classes\crossbind-e2e-foreign'
-                  New-Item -Path "$dropped\shell\open\command" -Force | Out-Null
-                  Set-ItemProperty -LiteralPath $dropped -Name 'URL Protocol' -Value ''
-                  Set-Item -LiteralPath "$dropped\shell\open\command" -Value "`"$app\crossbind-e2e-desktop-app.exe`" `"%1`""
-                  foreach ($path in $shortcut, $entry, $scheme, $probe) { if (-not (Test-Path $path)) { throw "the setup program left out $path" } }
-                  # A link of app.urlSchemes opens the app with the link as its argument, as the suite launches it.
-                  $command = (Get-Item -LiteralPath "$scheme\shell\open\command").GetValue('')
-                  if ($command -ne "`"$app\crossbind-e2e-desktop-app.exe`" `"%1`"") { throw "a link of the scheme runs $command" }
-                  $uninstall = Start-Process -Wait -PassThru -FilePath "$app\uninstall.exe" -ArgumentList /S
-                  if ($uninstall.ExitCode -ne 0) { throw "the uninstaller exited with $($uninstall.ExitCode)" }
-                  # It finishes from a copy of itself, whose last step removes the folder.
-                  for ($i = 0; $i -lt 30 -and (Test-Path $app); $i++) { Start-Sleep -Seconds 1 }
-                  foreach ($path in $app, $shortcut, $entry, $scheme, $probe, $dropped) { if (Test-Path $path) { throw "the uninstaller left $path" } }
-                  if (-not (Test-Path $foreign)) { throw "the uninstaller removed $foreign, another app's" }
-                  Remove-Item -LiteralPath $foreign -Recurse
-    app-windows-msix:
-        # Each Windows runner installs the MSIX package built for it, signed with the build's key, and opens the app
-        # through the package's alias, with the package's identity, on a runner of its own, which no setup program
-        # changed.
         needs: app-windows
         strategy:
             fail-fast: false
@@ -744,15 +64,48 @@ jobs:
         timeout-minutes: 15
         steps:
             - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-            - name: Install pnpm
-              uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
             - name: Use Node.js
               uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
               with:
                   node-version-file: .nvmrc
                   architecture: ${{ matrix.arch }}
-            - name: Install the conformance kit
-              run: pnpm install --frozen-lockfile --prod --filter "@crossbind/e2e-desktop-app..."
+            - name: Restore the app
+              uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+              with:
+                  name: windows-app
+                  path: e2e/desktop-app/dist
+            - name: The spike, with nothing listening on the machine's port 80
+              continue-on-error: true
+              run: node e2e/desktop-app/e2e/spike-windows.mjs
+            - name: The spike, with a listener of the run's own on the machine's port 80
+              continue-on-error: true
+              run: |
+                  Start-Sleep -Seconds 5
+                  node e2e/desktop-app/e2e/spike-windows.mjs --listen
+            - name: Keep what the spike printed
+              if: always()
+              uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+              with:
+                  name: spike-plain-${{ matrix.arch }}
+                  path: e2e/desktop-app/dist/spike-*.log
+                  retention-days: 30
+    app-windows-msix:
+        needs: app-windows
+        strategy:
+            fail-fast: false
+            matrix:
+                include:
+                    - { runner: windows-latest, arch: x64 }
+                    - { runner: windows-11-arm, arch: arm64 }
+        runs-on: ${{ matrix.runner }}
+        timeout-minutes: 15
+        steps:
+            - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+            - name: Use Node.js
+              uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+              with:
+                  node-version-file: .nvmrc
+                  architecture: ${{ matrix.arch }}
             - name: Restore the app
               uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
               with:
@@ -760,72 +113,26 @@ jobs:
                   path: e2e/desktop-app/dist
             - name: Trust the key the build signed with, as a user who installs a package handed out does
               run: |
-                  # The build signs the app's executable with the same key.
                   $certificate = (Get-AuthenticodeSignature e2e\desktop-app\dist\crossbind-e2e-desktop-app-win32-${{ matrix.arch }}\crossbind-e2e-desktop-app.exe).SignerCertificate
                   if (-not $certificate) { throw 'the app carries no signature' }
                   $store = [System.Security.Cryptography.X509Certificates.X509Store]::new('TrustedPeople', 'LocalMachine')
                   $store.Open('ReadWrite')
                   $store.Add($certificate)
                   $store.Close()
-            - name: Install the package, which names the build's key as its publisher
+            - name: Install the package
+              run: Add-AppxPackage -Path e2e\desktop-app\dist\crossbind-e2e-desktop-app-win32-${{ matrix.arch }}.msix
+            - name: The spike in the app from its package, with nothing listening on the machine's port 80
+              continue-on-error: true
+              run: node e2e/desktop-app/e2e/spike-windows.mjs --msix
+            - name: The spike in the app from its package, with a listener of the run's own on the machine's port 80
+              continue-on-error: true
               run: |
-                  Add-AppxPackage -Path e2e\desktop-app\dist\crossbind-e2e-desktop-app-win32-${{ matrix.arch }}.msix
-                  $package = Get-AppxPackage dev.crossbind.crossbind-e2e-desktop-app
-                  if ($package.Status -ne 'Ok') { throw "the package is $($package.Status)" }
-                  if ($package.Publisher -ne 'CN=crossbind e2e') { throw "the package names $($package.Publisher) as its publisher, not the build's key" }
-                  if ($package.Architecture -ne '${{ matrix.arch }}') { throw "the package is for $($package.Architecture)" }
-            - name: Run the conformance suite in the app from its package
-              run: node e2e/desktop-app/e2e/run.mjs --msix
-            - name: Show what Windows logged about the package
-              if: failure()
-              run: Get-WinEvent -LogName Microsoft-Windows-AppXDeploymentServer/Operational -MaxEvents 40 | Format-List TimeCreated, Id, LevelDisplayName, Message
-    app-android:
-        needs: tested
-        if: needs.tested.outputs.tested != 'true'
-        # The Android app's host and Rust build in crossbind's android-app image, its bridges in the web image, and Gradle
-        # packages the app in the android-app image too; it runs on an emulator.
-        runs-on: ubuntu-latest
-        # main's pushes alone reach the ci-cache environment, whose secrets write the compiler cache; it records no deployment.
-        environment:
-            name: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && 'ci-cache' || '' }}
-            deployment: false
-        timeout-minutes: 60
-        env:
-            CROSSBIND_APP_PLATFORM: android
-        steps:
-            - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-            - name: Install pnpm
-              uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
-            - name: Use Node.js
-              uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+                  Start-Sleep -Seconds 5
+                  node e2e/desktop-app/e2e/spike-windows.mjs --msix --listen
+            - name: Keep what the spike printed
+              if: always()
+              uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
               with:
-                  node-version-file: .nvmrc
-                  cache: 'pnpm'
-            - name: Install dependencies
-              run: pnpm install
-            - name: Set up the compiler cache
-              uses: ./.github/actions/setup-sccache
-              with:
-                  read-key-id: ${{ secrets.SCCACHE_R2_READ_KEY_ID }}
-                  read-secret: ${{ secrets.SCCACHE_R2_READ_SECRET }}
-                  write-key-id: ${{ secrets.SCCACHE_R2_WRITE_KEY_ID }}
-                  write-secret: ${{ secrets.SCCACHE_R2_WRITE_SECRET }}
-                  endpoint: ${{ vars.SCCACHE_R2_ENDPOINT }}
-            - name: Build the app
-              run: pnpm --filter=@crossbind/e2e-desktop-app run build
-            - name: Build an app with none of crossbind's own extensions
-              run: pnpm --filter=@crossbind/e2e-app-bare run build
-            - name: Enable KVM
-              run: |
-                  echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
-                  sudo udevadm control --reload-rules
-                  sudo udevadm trigger --name-match=kvm
-            - name: Run the conformance suite in the app on an emulator
-              uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2.38.0
-              with:
-                  api-level: 36
-                  target: default
-                  arch: x86_64
-                  emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
-                  disable-animations: true
-                  script: pnpm --filter=@crossbind/e2e-desktop-app run e2e:prod
+                  name: spike-msix-${{ matrix.arch }}
+                  path: e2e/desktop-app/dist/spike-*.log
+                  retention-days: 30

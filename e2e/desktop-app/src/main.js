@@ -16,6 +16,7 @@ import {
 } from '@crossbind/conformance/native/confextras.h';
 import { Counter } from './native/counter.rs';
 import { reportWebFeatures } from './web-features.js';
+import { runSpike } from './spike.js';
 import {
     ACTIVITIES, AGAIN_FILE, FIRST_ARGS, FIRST_FILES, LAUNCH_ARGS, LAUNCH_URL, NOTIFICATION, OPENED_FILE, PHONE_FILE_TEXT, PHONE_FILES, PHONE_LINKS,
     PHONE_URL, PROBE_URLS, SHORTCUTS, TRASHED_FILE, TRAY,
@@ -975,7 +976,10 @@ async function checkWindows(m, isDesktop, isAndroid) {
 }
 
 const otherWindow = new URLSearchParams(location.search).get('window');
+// Spike: the keys' origins take the suite's place.
+const IS_SPIKE = true;
 if (otherWindow) runOtherWindow(otherWindow);
+else if (IS_SPIKE) runSpike().catch((error) => console.log(`SPIKE failed ${error?.message ?? error}`));
 else initNative().then(async (m) => {
     try {
         // Markup can make a crossbind:// request as well, so one without the page's token must be refused. On Android the

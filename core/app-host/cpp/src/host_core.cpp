@@ -575,6 +575,15 @@ void Core::serve(SchemeRequest request, SchemeRespond answer) {
         return;
     }
     request.path = std::move(*path);
+    // Spike: a key's origin, http://<key>.localhost, serves the page's own files, and its calls' bytes under
+    // /__crossbind/b/ with the window's token.
+    if (request.host.size() > 10 && request.host.compare(request.host.size() - 10, 10, ".localhost") == 0) {
+        if (request.path.compare(0, 15, "/__crossbind/b/") != 0) {
+            respond(pageFile(pageDir_, request.path));
+            return;
+        }
+        request.path = request.path.substr(12);
+    }
     if (request.path.compare(0, 5, "/ext/") == 0) {
         serveRoute(std::move(request), std::move(respond));
         return;

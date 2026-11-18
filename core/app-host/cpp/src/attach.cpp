@@ -49,7 +49,8 @@ std::string deviceScript() {
 }  // namespace
 
 std::string attach(Core &core, void *webView, const char *devUrl, uint64_t window) {
-    std::vector<std::string> origins{APP_ORIGIN};
+    // Spike: the two keys' origins load, get the window's token and reach its channel, as the app's own.
+    std::vector<std::string> origins{APP_ORIGIN, "http://k1.localhost", "http://k2.localhost"};
     if (devUrl) origins.push_back(originOf(devUrl));
     setOwnOrigins(origins);
     // Only the top frame of the app's own origins gets the token of the window's channel, which every message and
