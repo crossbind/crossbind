@@ -35,7 +35,7 @@ function(crossbind_platform_headers target)
     endif()
 endfunction()
 if(CMAKE_SYSTEM_NAME STREQUAL "iOS")
-    set(PLATFORM_SOURCES src/ios/main.mm src/ios/bundle.mm src/ios/windows.mm src/darwin/activities.mm src/darwin/app_api.mm src/darwin/channels.mm
+    set(PLATFORM_SOURCES src/ios/main.mm src/ios/bundle.mm src/ios/relay.mm src/ios/windows.mm src/darwin/activities.mm src/darwin/app_api.mm src/darwin/channels.mm
         src/darwin/dialogs.mm src/darwin/drops.mm src/darwin/navigation.mm src/darwin/notifications.mm src/darwin/values.mm)
 elseif(APPLE)
     set(PLATFORM_SOURCES src/darwin/activities.mm src/darwin/app_api.mm src/darwin/bundle.mm src/darwin/channels.mm src/darwin/dialogs.mm

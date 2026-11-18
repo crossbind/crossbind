@@ -54,9 +54,10 @@ export default defineConfig({ plugins: [viteCrossbindPlugin()] });
   desktop, and ending the app in the Simulator ends the session.
 - `crossbind app dev -p ios --device`: Builds the host for devices and opens the app on the dev server on the iPhone or
   iPad connected, or on the one `--device <name>` names by its name or UDID: Xcode signs it for the app's team, and
-  devicectl installs it. The phone reaches the dev server through its cable, or on the local network when it is paired
-  over it. Edits reload the page or rebuild the host as in the Simulator, the page's console shows in the terminal, and
-  ending the app on the phone ends the session (see [iOS](#ios)).
+  devicectl installs it. The app loads the page from the phone's own `localhost`, which it carries to the dev server
+  through the cable, or on the local network when the phone is paired over it. Edits reload the page or rebuild the
+  host as in the Simulator, the page's console shows in the terminal, and ending the app on the phone ends the session
+  (see [iOS](#ios)).
 - `crossbind app build -p ios`: Builds the page and the host for devices and the Simulator and writes the app's Xcode
   project, `dist/<name>-ios/` (see [iOS](#ios)).
 - `crossbind build -p ios -e app`: Writes the Xcode project with no page in it: `<paths.output>/<name>-ios`, or
@@ -1298,7 +1299,8 @@ and a Java side that R8, off by default, would shrink. What a sample app weighs 
   and what its dialogs picked alone. Its `shell.trash` moves what is in those, none of the app's folders itself, and
   checks where the links of the folders above a path lead as well, as the system's trash follows them; nothing goes
   where no trash keeps it. Each takes a path without `.` or `..`.
-- Only the debug host the dev server opens reads `CROSSBIND_APP_URL`; a release build always loads its own page.
+- Only the debug host the dev server opens reads `CROSSBIND_APP_URL` and `CROSSBIND_APP_DEV_SERVER`; a release build
+  always loads its own page and listens on no port.
 - An update installs only when the key of `app.updater.publicKey` signed it, over the app's id, its platform and
   architecture, its version and its file. A server can offer any version to `updater.check()`, and can serve an older
   signed update that is still newer than the installed app, but it installs nothing unsigned, nothing built for another
@@ -1365,9 +1367,23 @@ time on a device:
 - Xcode registers the device and the app's id with the team as it builds. An id belongs to the team that registered it
   first, which for `dev.crossbind.<name>` may be another developer's: `app.id` then gives the app an id of its own.
 
-The phone reaches the dev server at this Mac's address on the network the cable makes between them, with no Wi-Fi; a
+The page loads from the phone's own `http://localhost:<port>/`, as an Android device's does through `adb reverse`: the
+debug app listens there, on IPv4 and IPv6, at the dev server's port, and carries every connection, byte for byte, to
+the dev server on this Mac, so Vite's hot updates pass as well. WebKit compiles the JavaScript and wasm of a page from
+`localhost` and makes it a secure context; a page from this Mac's address on the network ran without its compiler,
+about thirty times slower on an iPhone, and without OPFS, `crypto.subtle` or the clipboard.
+
+The app reaches the dev server at this Mac's address on the network the cable makes between them, with no Wi-Fi; a
 phone paired over the network reaches it on the local network both are on. The dev server listens on that one address,
-and Vite's own `--host <address>` picks another. A `.local` name reaches nothing from the app.
+and Vite's own `--host <address>` picks another, though no link-local IPv6 one, which names an interface of this Mac.
+A `.local` name reaches nothing from the app.
+
+The first time, iOS asks on the phone whether the app may use the local network, with the reason the development
+build's Info.plist gives (`NSLocalNetworkUsageDescription`); a release build has none of it. Until the phone allows
+it, the app reaches the dev server no more than from another network: the terminal says so, and the page loads once
+the dev server answers. Settings › Privacy & Security › Local Network allows it later. Where another app on the phone
+listens on the dev server's port, the app ends saying so, and Vite's `--port` picks another. The app closes that port
+while it is in the background and opens it again as it comes back, as iOS may take it from an app it suspends.
 
 `app.encryption` tells App Store Connect whether the app uses encryption that export rules do not exempt, as the
 Info.plist's `ITSAppUsesNonExemptEncryption`; without it, App Store Connect asks for every build before TestFlight
@@ -2147,6 +2163,10 @@ crossbind's runtime, the first two with the texts and versions the build copied 
 
 - `CROSSBIND_APP_URL`: Opens this page instead of `crossbind://app/`, in a debug build only; the Vite plugin sets it to
   the dev server.
+- `CROSSBIND_APP_DEV_SERVER`: In a debug build on an iPhone or iPad, the dev server's address and port, as
+  `192.168.1.6:5173` or `[2001:db8::5]:5173`: the app listens on the device's `localhost` at the port of
+  `CROSSBIND_APP_URL` and carries every connection there to it. `crossbind app dev -p ios --device` sets it, and
+  `CROSSBIND_APP_URL` to `http://localhost:<port>/`.
 - `CROSSBIND_APP_CONSOLE`: Writes the page's console and uncaught errors to the app's output; on during development. A
   Windows app has no console of its own, so it writes only to an output that is redirected, as a development session's
   is. With it, an app that cannot start says why in its output alone, without a message box.

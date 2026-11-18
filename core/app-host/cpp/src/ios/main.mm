@@ -7,6 +7,7 @@
 #include "app.h"
 #include "crossbind_app.h"
 #include "darwin/values.h"
+#include "ios/relay.h"
 #include "ios/scenes.h"
 
 #include <cmath>
@@ -110,7 +111,12 @@ UIColor *backgroundColor() {
     sceneOpened((UIWindowScene *)scene, windowId, opening);
     const std::string url = app::attach(*core, (__bridge void *)webView, devUrl, windowId);
     const std::string page = opening.path == "/" ? url : app::originOf(url) + opening.path;
-    [webView loadRequest:[NSURLRequest requestWithURL:[NSURL URLWithString:@(page.c_str())]]];
+    NSURLRequest *request = [NSURLRequest requestWithURL:[NSURL URLWithString:@(page.c_str())]];
+#ifdef CROSSBIND_APP_DEV
+    whenDevServerAnswers([webView, request] { [webView loadRequest:request]; });
+#else
+    [webView loadRequest:request];
+#endif
     // A link or a document that launched the app reaches the owner of its scheme or type: the page once it asks for it,
     // or an extension; so do a site's link, a user activity and a quick action's tap.
     [self scene:scene openURLContexts:options.URLContexts];
@@ -169,6 +175,10 @@ UIColor *backgroundColor() {
 - (BOOL)application:(UIApplication *)application didFinishLaunchingWithOptions:(NSDictionary *)options {
     devUrl = app::devUrl();
     core = &app::start(devUrl);
+#ifdef CROSSBIND_APP_DEV
+    // On a device, the page's localhost reaches the dev server through the app, before the page loads.
+    relayDevServer(*core, devUrl);
+#endif
     // The extensions have started, so the notification that launched the app, which comes next, reaches them.
     ownNotificationCenter();
     onQuit([] { app::quit(*core, 0); });

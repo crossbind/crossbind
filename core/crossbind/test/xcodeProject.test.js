@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import upath from 'upath';
 import { describe, expect, test, vi } from 'vitest';
 
 const state = {
@@ -286,6 +287,22 @@ describe('an iOS app\'s Xcode project', () => {
         });
 
         expect(fs.readFileSync(path.join(to, 'Info.plist'), 'utf8')).toContain('<key>NSCameraUsageDescription</key>\n    <string>To scan &amp; read barcodes</string>');
+        fs.rmSync(root, { recursive: true, force: true });
+    });
+
+    test("asks to reach the local network in a development build alone, where the dev server is, with an extension's reason where one gives it", () => {
+        const root = upath.normalize(fs.mkdtempSync(upath.join(os.tmpdir(), 'crossbind-xcode-')));
+        const to = upath.join(root, 'demo-ios');
+        const info = (options) => {
+            writeXcodeProject(to, { parts: [part(root, 'iphoneos')], identity: { id: 'com.example.demo', team: '' }, label: 'Demo', version: '1', ...options });
+            return fs.readFileSync(upath.join(to, 'Info.plist'), 'utf8');
+        };
+
+        expect(info({ isDevelopment: true })).toContain('<key>NSLocalNetworkUsageDescription</key>\n    <string>The development build loads its page from the dev server on your Mac.</string>');
+        expect(info({})).not.toContain('NSLocalNetworkUsageDescription');
+        const given = info({ isDevelopment: true, plist: [['the extension printers', { NSLocalNetworkUsageDescription: 'To find printers' }]] });
+        expect(given).toContain('<key>NSLocalNetworkUsageDescription</key>\n    <string>To find printers</string>');
+        expect(given).not.toContain('dev server');
         fs.rmSync(root, { recursive: true, force: true });
     });
 
