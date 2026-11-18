@@ -13,9 +13,10 @@ import org.json.JSONObject;
 import dev.crossbind.app.Extension;
 import dev.crossbind.app.ExtensionHost;
 
-// The host's page-permissions on Android: the page gets the devices the manifest asks for, which crossbind writes from
-// app.permissions, once the app's user gives them, and nothing else, so that the WebView asks nothing of its own. The
-// location is the approximate one at least, which its user may give alone.
+// The host's page-permissions on Android: the app's own page gets the devices the manifest asks for, which crossbind
+// writes from app.permissions, once the app's user gives them, and nothing else, so that the WebView asks nothing of its
+// own. The location is the approximate one at least, which its user may give alone. A page of an origin an extension
+// serves gets no device, which a consent of its own would give it.
 public final class PagePermissionsExtension implements Extension {
     private static final String COARSE = Manifest.permission.ACCESS_COARSE_LOCATION;
     private static final Map<String, String> DEVICES = Map.of(
@@ -30,7 +31,7 @@ public final class PagePermissionsExtension implements Extension {
     @Override
     public void onPagePermission(ExtensionHost host, PagePermission request) {
         Activity activity = host.activity();
-        if (!request.isListed()) {
+        if (!request.isListed() || !"app".equals(request.role())) {
             request.deny();
         } else if (request.kinds().equals(List.of("location"))) {
             // Asked for the precise location again, a user who gave the approximate one is asked to change it.

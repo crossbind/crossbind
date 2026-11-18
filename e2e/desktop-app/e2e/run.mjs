@@ -11,6 +11,7 @@ import {
     PROBE_URLS, REACH_PORT, TRASHED_FILE, TRAY,
 } from './launch.mjs';
 import { UPDATE_PORT, signUpdate } from './updates.mjs';
+import { answerFetch, answerPage } from './endpoint.mjs';
 
 // Opens the app `pnpm build` made, whose page runs the conformance suite and logs its summary last, and closes it
 // once the summary is in, or a desktop app once it has opened anew, as its page asks then. With
@@ -543,14 +544,25 @@ function networkAddress() {
 // The plain http and ws endpoint src/web-features.js tries at 127.0.0.1 and at the machine's address on its network. It
 // answers any origin, and the private network preflight Chromium may send, so that a request that fails is one the web
 // view refused; each one it hears before the suite's summary is shown, so one the web view never sent shows as none.
+// It serves the page and the fetch's checks of e2e/endpoint.mjs as well, which it does not show.
 const reached = [];
+const fetchCounts = {};
+// The page the endpoint serves the probe's origins: the built page at dist's top, which a runner that took the desktop app
+// from another job lacks, else the page the desktop app carries.
+function servedPage() {
+    const top = join(root, 'dist');
+    if (existsSync(join(top, 'index.html'))) return top;
+    return join(top, process.platform === 'darwin' ? `${name}.app/Contents/Resources` : `${name}-${process.platform}-${process.arch}/resources`, 'page');
+}
 function serveReach() {
+    const page = servedPage();
     const heard = (request, kind) => {
         if (FINISHED.test(out)) return;
         const preflight = request.headers['access-control-request-private-network'] ? ', private network preflight' : '';
         reached.push(`${kind} ${request.url} from ${request.socket.remoteAddress}, origin ${request.headers.origin}${preflight}`);
     };
     const server = createServer((request, response) => {
+        if (answerPage(request, response, page) || answerFetch(request, response, fetchCounts)) return;
         heard(request, request.method);
         response.writeHead(200, { 'content-type': 'text/plain', 'access-control-allow-origin': '*', 'access-control-allow-private-network': 'true' });
         response.end('ok');

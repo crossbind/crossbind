@@ -1,5 +1,6 @@
-// The URLs an extension serves the page under /ext/<its name>/, which its route answers (<crossbind/extension.h>): the
-// whole body it gives, or a file the host reads, in the part a Range header asks for.
+// The URLs an extension serves the page under /ext/<its name>/, which its route answers, and those of an origin an
+// extension serves, which its handler answers (<crossbind/extension.h>): the whole body each gives, or a file the host
+// reads, in the part a Range header asks for.
 #include "crossbind/extension.h"
 #include "host_core.h"
 
@@ -13,7 +14,21 @@
 
 namespace crossbind {
 
+namespace app {
+
+bool breaksHeaders(const std::string &text) { return text.find_first_of(std::string("\r\n\0", 3)) != std::string::npos; }
+
+bool isToken(const std::string &name) {
+    constexpr std::string_view MARKS = "!#$%&'*+-.^_`|~";
+    return !name.empty() && std::all_of(name.begin(), name.end(), [&](unsigned char c) { return std::isalnum(c) || MARKS.find(static_cast<char>(c)) != std::string_view::npos; });
+}
+
+}  // namespace app
+
 namespace {
+
+using app::breaksHeaders;
+using app::isToken;
 
 // A video's player asks for the next part where one ends.
 constexpr std::uint64_t MAX_RANGE_BYTES = 4 * 1024 * 1024;
@@ -26,15 +41,6 @@ std::string lower(std::string text) {
 }
 
 SchemeResponse textResponse(int status, const std::string &text) { return SchemeResponse{status, "text/plain; charset=utf-8", bytesOf(text)}; }
-
-// A header's value that would end it, or start another, where a platform writes headers as text.
-bool breaksHeaders(const std::string &text) { return text.find_first_of(std::string("\r\n\0", 3)) != std::string::npos; }
-
-// A header's name is a token of RFC 9110's.
-bool isToken(const std::string &name) {
-    constexpr std::string_view MARKS = "!#$%&'*+-.^_`|~";
-    return !name.empty() && std::all_of(name.begin(), name.end(), [&](unsigned char c) { return std::isalnum(c) || MARKS.find(static_cast<char>(c)) != std::string_view::npos; });
-}
 
 // Whether the path, joined to a folder, could lead out of it: a part "..", an empty part, which std::filesystem joins as
 // a root, and on Windows a backslash or a colon, another separator, a drive's and a file's other streams.
@@ -92,7 +98,8 @@ ByteRange rangeOf(const std::string &header, std::uint64_t size) {
 struct Request::State {
     explicit State(Page page) : page(page) {}
 
-    std::string extension;
+    // Who answers it, as messages name them: the extension of a route, or a served origin.
+    std::string owner;
     std::string method;
     std::string path;
     std::string query;
@@ -114,9 +121,9 @@ struct Request::State {
     ~State() {
         if (!answers()) return;
         try {
-            respond(textResponse(500, "crossbind: the extension " + extension + " gave no answer to " + path));
+            respond(textResponse(500, "crossbind: " + owner + " gave no answer to " + path));
         } catch (const std::exception &error) {
-            std::fprintf(stderr, "crossbind: the answer to %s of %s failed: %s\n", path.c_str(), extension.c_str(), error.what());
+            std::fprintf(stderr, "crossbind: the answer to %s of %s failed: %s\n", path.c_str(), owner.c_str(), error.what());
         }
     }
 };
@@ -129,7 +136,7 @@ SchemeResponse fileResponse(const app::StateOf<Request> &request, const std::str
     // A device, such as Windows' CON, or a pipe would hold the read up.
     const bool isFile = std::filesystem::is_regular_file(file, error);
     const std::uint64_t size = isFile ? std::filesystem::file_size(file, error) : 0;
-    if (!isFile || error) return textResponse(404, "crossbind: the extension " + request.extension + " has no file for " + request.path);
+    if (!isFile || error) return textResponse(404, "crossbind: " + request.owner + " has no file for " + request.path);
     const ByteRange range = rangeOf(request.header("range"), size);
     if (range.kind == ByteRange::Kind::unsatisfiable) {
         SchemeResponse refused = textResponse(416, "crossbind: the file of " + request.path + " holds no such range");
@@ -159,7 +166,7 @@ SchemeResponse fileResponse(const app::StateOf<Request> &request, const std::str
     response.body.resize(static_cast<size_t>(end - range.start + 1));
     stream.seekg(static_cast<std::streamoff>(range.start));
     stream.read(reinterpret_cast<char *>(response.body.data()), static_cast<std::streamsize>(response.body.size()));
-    if (!stream) return textResponse(500, "crossbind: the extension " + request.extension + " could not read the file of " + request.path);
+    if (!stream) return textResponse(500, "crossbind: " + request.owner + " could not read the file of " + request.path);
     return response;
 }
 
@@ -216,20 +223,46 @@ void Request::respondFile(const std::string &path) const {
 
 namespace app {
 
+namespace {
+
+// What the host answers itself of a request for a route or a served origin: 400 for a path that could leave a folder,
+// and 405, saying why, for another method than GET and HEAD.
+std::optional<SchemeResponse> refusalOf(const std::string &path, const std::string &method, const std::string &why) {
+    if (leavesItsFolder(path)) return textResponse(400, "crossbind: the path of a route's URL has no part \"..\", no empty part and, on Windows, no \\ or :");
+    if (method == "GET" || method == "HEAD") return std::nullopt;
+    SchemeResponse refused = textResponse(405, why);
+    refused.headers.emplace_back("Allow", "GET, HEAD");
+    return refused;
+}
+
+// Hands a request to its owner's route or handler, which answers it on the thread the webview asks on.
+void answerRequest(const std::string &owner, std::string path, const std::function<void(Request)> &fn, SchemeRequest request, SchemeRespond respond) {
+    auto state = std::make_shared<StateOf<Request>>(app::pageOf(request.webView));
+    state->owner = owner;
+    state->method = std::move(request.method);
+    state->path = std::move(path);
+    state->query = std::move(request.query);
+    for (auto &[name, value] : request.headers) state->headers.emplace_back(lower(name), std::move(value));
+    state->respond = std::move(respond);
+    try {
+        fn(make<Request>(state));
+    } catch (const std::exception &error) {
+        if (state->answers()) state->respond(textResponse(500, error.what()));
+    } catch (...) {
+        if (state->answers()) state->respond(textResponse(500, "crossbind: " + owner + " failed on " + state->path));
+    }
+}
+
+}  // namespace
+
 void serveRoute(SchemeRequest request, SchemeRespond respond) {
     // "/ext/", the extension's name and the path of its own that follows it.
     constexpr size_t NAME_AT = 5;
     const size_t slash = request.path.find('/', NAME_AT);
     const std::string extension = request.path.substr(NAME_AT, slash == std::string::npos ? std::string::npos : slash - NAME_AT);
     std::string path = slash == std::string::npos ? "/" : request.path.substr(slash);
-    if (leavesItsFolder(path)) {
-        respond(textResponse(400, "crossbind: the path of a route's URL has no part \"..\", no empty part and, on Windows, no \\ or :"));
-        return;
-    }
-    if (request.method != "GET" && request.method != "HEAD") {
-        SchemeResponse refused = textResponse(405, "crossbind: a route answers GET and HEAD alone; a call of the app's functions takes what the page sends");
-        refused.headers.emplace_back("Allow", "GET, HEAD");
-        respond(std::move(refused));
+    if (auto refused = refusalOf(path, request.method, "crossbind: a route answers GET and HEAD alone; a call of the app's functions takes what the page sends")) {
+        respond(std::move(*refused));
         return;
     }
     const std::function<void(Request)> *route = routeOf(extension);
@@ -237,20 +270,16 @@ void serveRoute(SchemeRequest request, SchemeRespond respond) {
         respond(textResponse(404, "crossbind: no extension of the app serves /ext/" + extension + "/"));
         return;
     }
-    auto state = std::make_shared<StateOf<Request>>(app::pageOf(request.webView));
-    state->extension = extension;
-    state->method = std::move(request.method);
-    state->path = std::move(path);
-    state->query = std::move(request.query);
-    for (auto &[name, value] : request.headers) state->headers.emplace_back(lower(name), std::move(value));
-    state->respond = std::move(respond);
-    try {
-        (*route)(make<Request>(state));
-    } catch (const std::exception &error) {
-        if (state->answers()) state->respond(textResponse(500, error.what()));
-    } catch (...) {
-        if (state->answers()) state->respond(textResponse(500, "crossbind: the route of " + extension + " failed"));
+    answerRequest("the extension " + extension, std::move(path), *route, std::move(request), std::move(respond));
+}
+
+void answerOriginRequest(const std::string &name, std::function<void(Request)> handler, SchemeRequest request, SchemeRespond respond) {
+    if (auto refused = refusalOf(request.path, request.method, "crossbind: the origin " + name + " answers GET and HEAD alone")) {
+        respond(std::move(*refused));
+        return;
     }
+    std::string path = request.path;
+    answerRequest("the origin " + name, std::move(path), handler, std::move(request), std::move(respond));
 }
 
 }  // namespace app

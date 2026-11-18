@@ -108,10 +108,10 @@ describe("an app host's own extensions", () => {
     test("are written for this crossbind's extension contract, else name the app host to update", () => {
         const root = hostOf({ dialog: { json: { contract: undefined, name: 'dialog' } } });
         expect(() => hostExtensions(root)).toThrow(
-            "crossbind: @crossbind/extension-dialog's crossbind.extension.js names no contract, the version of crossbind's extension contract it is written for, as contract: 2 is for this crossbind: update @crossbind/core-app-host to match crossbind.",
+            "crossbind: @crossbind/extension-dialog's crossbind.extension.js names no contract, the version of crossbind's extension contract it is written for, as contract: 3 is for this crossbind: update @crossbind/core-app-host to match crossbind.",
         );
-        const newer = hostOf({ dialog: { json: { contract: 3, name: 'dialog' } } });
-        expect(() => hostExtensions(newer)).toThrow("is written for crossbind's extension contract 3, newer than this crossbind's 2: update crossbind.");
+        const newer = hostOf({ dialog: { json: { contract: 4, name: 'dialog' } } });
+        expect(() => hostExtensions(newer)).toThrow("is written for crossbind's extension contract 4, newer than this crossbind's 3: update crossbind.");
     });
 
     test("of crossbind's own host are the activities', the dialog's, the files', the instance's, the links', the menu's, the page's dialogs, downloads, drops, files, location, navigation and permissions, the power's, the shell's, the shortcuts' and the updater's, which each platform's sources show", () => {
@@ -335,7 +335,7 @@ describe('an extension', () => {
     test('adds parts of the platforms an app builds for alone, each of what that platform takes', () => {
         expect(check({ web: {} })).toThrow("crossbind: dialog's app takes sources, includes, defines, files, urlSchemes, fileTypes, links, activityTypes, shortcutItems, licenses and macos, ios, linux, windows, android; web is none of them.");
         expect(check({ linux: { frameworks: ['Gtk'] } })).toThrow("crossbind: dialog's app.linux takes sources, includes, defines, files, libraries, packages, depends; frameworks is none of them.");
-        expect(check({ android: { entitlements: {} } })).toThrow("crossbind: dialog's app.android takes sources, includes, defines, files, libraries, java, class, permissions, manifest, resources, maven, verification; entitlements is none of them.");
+        expect(check({ android: { entitlements: {} } })).toThrow("crossbind: dialog's app.android takes sources, includes, defines, files, libraries, java, class, permissions, manifest, resources, maven, verification, cleartext; entitlements is none of them.");
     });
 
     test("carries files and folders of its own, every platform's and each one's, which keep their places, and no link", () => {
@@ -556,6 +556,13 @@ describe('an extension', () => {
         expect(check({ android: { resources: 'android/AndroidManifest.xml' } })).toThrow("crossbind: dialog's app.android.resources names android/AndroidManifest.xml, which is no folder of the extension's.");
     });
 
+    test('asks an Android app for plain http to any address with true or false', () => {
+        expect(check({ android: { cleartext: true } })()).toMatchObject({ app: { android: { cleartext: true } } });
+        for (const cleartext of ['true', 1, null]) {
+            expect(check({ android: { cleartext } })).toThrow("crossbind: dialog's app.android.cleartext is true or false: whether the app may send plain http to any address");
+        }
+    });
+
     test("lists the code of others it carries, with the file of its license's text", () => {
         const vendored = { name: 'tinyexpr', version: '1.0.0', license: 'Zlib', file: 'third_party/LICENSE', source: 'https://github.com/codeplea/tinyexpr' };
         const pinned = { ...vendored, name: 'other', sha256: 'a'.repeat(64) };
@@ -667,23 +674,28 @@ describe('an extension crossbind.config.js lists', () => {
         const { base, root } = project();
         const extension = { name: 'clipboard', root, app: {} };
         expect(() => listedExtension(extension, 'extensions[0]', base)).toThrow(
-            "crossbind: extensions[0] names no contract, the version of crossbind's extension contract it is written for, as contract: 2 is for this crossbind: update it to a version written for this crossbind.",
+            "crossbind: extensions[0] names no contract, the version of crossbind's extension contract it is written for, as contract: 3 is for this crossbind: update it to a version written for this crossbind.",
         );
-        expect(() => listedExtension({ ...extension, contract: 3 }, 'extensions[0]', base))
-            .toThrow("crossbind: extensions[0] is written for crossbind's extension contract 3, newer than this crossbind's 2: update crossbind.");
+        expect(() => listedExtension({ ...extension, contract: 4 }, 'extensions[0]', base))
+            .toThrow("crossbind: extensions[0] is written for crossbind's extension contract 4, newer than this crossbind's 3: update crossbind.");
         // A newer contract may give keys this crossbind does not know, and an app part of a new shape.
-        expect(() => listedExtension({ ...extension, contract: 3, hooks: {}, app: { swift: ['a.swift'] } }, 'extensions[0]', base))
-            .toThrow('newer than this crossbind\'s 2: update crossbind.');
+        expect(() => listedExtension({ ...extension, contract: 4, hooks: {}, app: { swift: ['a.swift'] } }, 'extensions[0]', base))
+            .toThrow('newer than this crossbind\'s 3: update crossbind.');
         // One written for an older version this crossbind still takes builds as it is.
-        expect([1, 2].map((contract) => listedExtension({ ...extension, contract }, 'extensions[0]', base).name)).toEqual(['clipboard', 'clipboard']);
+        expect([1, 2, 3].map((contract) => listedExtension({ ...extension, contract }, 'extensions[0]', base).name)).toEqual(['clipboard', 'clipboard', 'clipboard']);
         for (const contract of ['1', [], [1, 1], [0], 1.5]) {
             expect(() => listedExtension({ ...extension, contract }, 'extensions[0]', base))
                 .toThrow(`crossbind: extensions[0]'s contract ${JSON.stringify(contract)} is no version of crossbind's extension contract, as 1 or [1, 2] is.`);
         }
         // One written for several builds where this crossbind takes one of them.
         expect(listedExtension({ ...extension, contract: [2, 3] }, 'extensions[0]', base).name).toBe('clipboard');
-        expect(() => listedExtension({ ...extension, contract: [3, 4] }, 'extensions[0]', base))
-            .toThrow("crossbind: extensions[0] is written for crossbind's extension contract 3 and 4, newer than this crossbind's 2: update crossbind.");
+        expect(() => listedExtension({ ...extension, contract: [4, 5] }, 'extensions[0]', base))
+            .toThrow("crossbind: extensions[0] is written for crossbind's extension contract 4 and 5, newer than this crossbind's 3: update crossbind.");
+        // What version 3 added, an Android app's plain http, takes an extension written for it.
+        const cleartext = { ...extension, app: { android: { cleartext: true } } };
+        expect(listedExtension({ ...cleartext, contract: 3 }, 'extensions[0]', base).app.android.cleartext).toBe(true);
+        expect(() => listedExtension({ ...cleartext, contract: [1, 2] }, 'extensions[0]', base))
+            .toThrow("crossbind: extensions[0] gives app.android.cleartext, which crossbind's extension contract has from its version 3 on, and is written for 1 and 2: name contract: 3.");
         fs.writeFileSync(path.join(base, 'package.json'), JSON.stringify({ name: '@acme/extension-clipboard', crossbind: { extension: './crossbind.extension.js' } }));
         expect(() => listedExtension(extension, 'extensions[0]', base)).toThrow(': update @acme/extension-clipboard to a version written for this crossbind.');
     });
@@ -862,7 +874,7 @@ describe("an extension's package source", () => {
             .toThrow("crossbind: extensions[0]'s packageSource has no install");
         for (const contract of [1, [1, 2]]) {
             expect(() => listedExtension({ contract, name: 'vcpkg', root, packageSource: { check, install } }, 'extensions[0]', base))
-                .toThrow(`crossbind: extensions[0] gives a packageSource, which crossbind's extension contract has from its version 2 on, and is written for ${[contract].flat().join(' and ')}: name contract: 2.`);
+                .toThrow(`crossbind: extensions[0] gives packageSource, which crossbind's extension contract has from its version 2 on, and is written for ${[contract].flat().join(' and ')}: name contract: 2.`);
         }
     });
 });
@@ -967,6 +979,17 @@ describe("what an app's extensions add on a platform", () => {
         const all = hostExtensions(root);
         expect(extensionPart(all, 'ios').files).toEqual([{ name: 'models', root: all[0].root, paths: ['data', 'ios.bin'] }]);
         expect(extensionPart(all, 'darwin').files).toEqual([{ name: 'models', root: all[0].root, paths: ['data'] }]);
+    });
+
+    test("is whether an Android app's extension asks for plain http to any address", () => {
+        const root = hostOf({
+            dev: { json: { contract: 3, name: 'dev', app: { android: { cleartext: true } } } },
+            plain: { json: { contract: 3, name: 'plain', app: { android: { cleartext: false } } } },
+        });
+        const all = hostExtensions(root);
+        expect(extensionPart(all, 'android').cleartext).toBe(true);
+        expect(extensionPart(all.slice(1), 'android').cleartext).toBe(false);
+        expect(extensions().map((extension) => extensionPart([extension], 'android').cleartext)).toEqual([false, false]);
     });
 
     test("is an Android app's Java folders with their classes and an Apple app's entitlements, by their owners", () => {

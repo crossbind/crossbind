@@ -28,6 +28,7 @@ import * as confPointers from '@crossbind/conformance/native/confpointers.h'
 import * as confCallbacks from '@crossbind/conformance/native/confcallbacks.h'
 import * as confText from '@crossbind/conformance/native/conftext.h'
 import * as confWrappers from '@crossbind/conformance/native/confwrappers.h'
+import * as confExtend from '@crossbind/conformance/native/confextend.h'
 import * as confTypes from '@crossbind/conformance/native/conftypes.h'
 import * as confTypes2 from '@crossbind/conformance/native/conftypes2.h'
 import * as confKindA from '@crossbind/conformance/native/confkinda.h'
@@ -163,6 +164,7 @@ initNative().then(async () => {
             callbacks: confCallbacks,
             strings: confText,
             wrappers: confWrappers,
+            extend: confExtend,
             // The type checks reach across headers; the namespaces merge after initNative bound them.
             types: { ...confTypes, ...confTypes2, ...confKindA, ...confKindB, ...confPrelude, ...confPreludeDeps },
             packageFields: { zlib: zlibHeader, webp: webpEncode },

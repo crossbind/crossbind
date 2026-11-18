@@ -489,6 +489,7 @@ export function publishApp(target, { to = appOutputPath(target), page = null } =
         const extensions = extensionsOf('android');
         writeGradleProject(to, {
             ...options, java: extensions.java, extensionPermissions: extensions.permissions, manifests: extensions.manifests, resources: extensions.resources, maven: extensions.maven,
+            cleartext: extensions.cleartext,
         });
     } else if (path.resolve(to) !== path.resolve(built)) {
         fs.rmSync(to, { recursive: true, force: true });

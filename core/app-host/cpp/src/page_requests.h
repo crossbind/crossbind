@@ -131,6 +131,13 @@ struct Download::State {
 
 namespace crossbind::app {
 
+// How the host takes a navigation of this webview's page, on the main thread: it loads, without asking, one of the app's
+// own origins for a page of the role app, and a served origin for a page of the role app or of that origin; it refuses
+// another of the app's origins for a page of a served origin, as such a URL means nothing outside the app; and it asks
+// page-navigation of every other. about: loads, and a blob: URL goes as its page's origin does.
+enum class NavigationRule { load, refuse, ask };
+NavigationRule navigationRule(const void *webView, const std::string &url);
+
 // The holder of each role's hook, or an empty function without one.
 const std::function<NavigationAnswer(const Navigation &)> &navigationOwner();
 const std::function<void(HttpAuthentication)> &httpAuthenticationOwner();
@@ -254,9 +261,8 @@ inline std::string originOf(WKSecurityOrigin *origin) {
 }
 #endif
 
-// The app's own origins, which attach() gives as the page's first loads: a page of another origin, which page-navigation
+// Whether an origin is the app's own or one an extension serves now: a page of another origin, which page-navigation
 // may load, gets no dialog and nothing it asks to use, as each would show under the app's name.
-void setOwnOrigins(std::vector<std::string> origins);
 bool isOwnOrigin(const std::string &origin);
 
 // A request of this page's for these kinds, which knows whether app.permissions lists each.

@@ -1290,6 +1290,19 @@ and a Java side that R8, off by default, would shrink. What a sample app weighs 
   origin, which WebKitGTK does not tell.
 - Responses from `crossbind://` let another origin read them only during development, the dev server's alone, as the
   page comes from it.
+- An extension may serve origins of its own beside the app's, as the pages of a project the app shows
+  ([Origins](./extensions.md#origins)): `crossbind://<name>` on Apple's platforms and Linux, `http://<name>.localhost`
+  on Android and Windows. The top frame of each page of one gets a token of that origin's in each window, which the
+  host takes at that origin alone, and calls with the origin's role: it reaches the functions that name the role, and
+  never the module, the events the app holds, `crossbind/app`'s functions or another function of the role `app`; it
+  hears only the events sent to its page. It loads neither the app's own origins nor another served one, which the host
+  refuses it before any holder of `page-navigation` hears of them. Its dialogs, file inputs, downloads, drops and device
+  requests reach their holders with its role, and the host's own `page-permissions` allows `app.permissions`' devices to
+  pages of the role `app` alone.
+- The host's `fetch()`, with which such an origin's handler asks its source, sends no cookies or credentials, keeps no
+  cache, checks TLS as the system does, and follows no redirect out of the URL's origin. On Android an app sends plain
+  http to `localhost` and `127.0.0.1` alone, unless an extension of its asks for `app.android.cleartext`
+  ([What an extension is](./extensions.md#what-an-extension-is)), which lets it send plain http to any address.
 - An extension's route serves URLs of its own, under `crossbind://app/ext/<extension>/`, which any of the app's pages
   and markup load without the token, as the page's files: it serves what the page may see, and the host refuses a path
   with a part `..` and any method but GET and HEAD

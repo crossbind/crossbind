@@ -1,8 +1,9 @@
 #include "app.h"
 #include "page_requests.h"
 
-#include <algorithm>
 #include <cstdlib>
+#include <map>
+#include <set>
 
 #if defined(__APPLE__)
 #include <TargetConditionals.h>
@@ -46,35 +47,74 @@ std::string deviceScript() {
            device.json() + ") });";
 }
 
+// The core whose windows attach() readied, and the page each shows first; on the main thread.
+Core *attached = nullptr;
+std::string firstUrl;
+// The served origins whose script each window's top frames run, by the window's id; on the main thread.
+std::map<uint64_t, std::set<std::string>> scripted;
+
+// A served origin's script, once in each window: it gives the top frame of a page of the origin the origin's token for
+// the window, where the app runs, and the base of its calls, its own origin's, which needs no other origin's leave.
+// Whether an origin is of the form a served one has, served now or not.
+bool isServedForm(const std::string &origin) {
+    const auto scheme = origin.find("://");
+    const std::string name = scheme == std::string::npos ? "" : nameOfHost(origin.substr(scheme + 3));
+    return !name.empty() && servedOriginOf(name) == origin;
+}
+
+void addOriginScript(void *webView, uint64_t window, const std::string &name) {
+    if (!scripted[window].insert(name).second) return;
+    const std::string origin = servedOriginOf(name);
+    addTopFrameScript(webView, "if (location.protocol + '//' + location.host === '" + origin + "') { Object.defineProperty(globalThis, '__crossbind_token', { value: '" +
+                                   attached->tokenOf(window, name) + "' }); Object.defineProperty(globalThis, '__crossbind_calls', { value: '" + origin +
+                                   "/__crossbind/b' }); " + deviceScript() + " }");
+}
+
 }  // namespace
 
 std::string attach(Core &core, void *webView, const char *devUrl, uint64_t window) {
-    // Spike: the two keys' origins load, get the window's token and reach its channel, as the app's own.
-    std::vector<std::string> origins{APP_ORIGIN, "http://k1.localhost", "http://k2.localhost"};
+    attached = &core;
+    std::vector<std::string> origins{APP_ORIGIN};
     if (devUrl) origins.push_back(originOf(devUrl));
-    setOwnOrigins(origins);
+    setAppOrigins(origins);
+    firstUrl = devUrl ? devUrl : APP_URL;
     // Only the top frame of the app's own origins gets the token of the window's channel, which every message and
     // crossbind:// call carries, and where the app runs: a frame of another origin, or a sandboxed one, cannot read
-    // them, and a page of another origin page-navigation loads gets neither.
+    // them, and a page of another origin page-navigation loads gets neither. A served origin's top frame gets a token of
+    // its own.
     std::string own;
     for (const auto &origin : origins) own += (own.empty() ? "'" : ",'") + origin + "'";
     addTopFrameScript(webView, "if ([" + own + "].includes(location.protocol + '//' + location.host)) { Object.defineProperty(globalThis, '__crossbind_token', { value: '" +
                                    core.addWindow(window) + "' }); " + deviceScript() + " }");
-    installReplyChannel(webView, "crossbind", [&core, origins](std::string origin, std::string message, ReplyFn reply) {
-        if (!origin.empty() && std::find(origins.begin(), origins.end(), origin) == origins.end()) {
+    for (const auto &name : servedNames()) addOriginScript(webView, window, name);
+    installReplyChannel(webView, "crossbind", [&core](std::string origin, std::string message, ReplyFn reply) {
+        // A page of a served origin that ended still sends its token, which the core refuses, saying it ended.
+        if (!origin.empty() && !isOwnOrigin(origin) && !isServedForm(origin)) {
             reply(REFUSED);
             return;
         }
-        core.receive(std::move(message), std::move(reply));
+        core.receive(std::move(origin), std::move(message), std::move(reply));
     });
     if (devUrl || std::getenv("CROSSBIND_APP_CONSOLE")) forwardConsole(webView);
     showPageDialogs(webView);
-    // The app's own origins load without asking, and page-navigation decides every other URL.
     answerPermissions(webView);
-    restrictNavigation(webView, origins, [&core, window] { core.reset(window); });
+    restrictNavigation(webView, [&core, window](const std::string &url) { core.reset(window, url); });
     takeDownloads(webView);
-    takeDrops(webView, origins);
-    return devUrl ? devUrl : APP_URL;
+    takeDrops(webView);
+    return firstUrl;
+}
+
+void originServed(const std::string &name) {
+    onMainThread([name] {
+        if (!attached) return;
+        for (const Window &window : openWindows()) addOriginScript(window.webView(), window.id(), name);
+    });
+}
+
+void originEnded(const std::string &name) {
+    onMainThread([name] {
+        for (const void *webView : webViewsShowing(name)) loadOwnPage(const_cast<void *>(webView), firstUrl);
+    });
 }
 
 }  // namespace crossbind::app

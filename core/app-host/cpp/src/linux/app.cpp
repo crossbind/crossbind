@@ -1,6 +1,3 @@
-#include <dlfcn.h>
-#include <cstdio>
-#include <string>
 #include "app.h"
 #include "crossbind_app.h"
 #include "host_core.h"
@@ -148,37 +145,6 @@ void showPageDialogs(void *webView) {
 // What the page asks to use goes to page-permissions; without it, WebKitGTK denies everything. A page has neither
 // camera nor microphone without WebKitGTK's media streams, which are off by default.
 void answerPermissions(void *webView) {
-    {
-        using List = void *;
-        using Feature = void *;
-        auto all = reinterpret_cast<List (*)()>(dlsym(RTLD_DEFAULT, "webkit_settings_get_all_features"));
-        auto length = reinterpret_cast<gsize (*)(List)>(dlsym(RTLD_DEFAULT, "webkit_feature_list_get_length"));
-        auto at = reinterpret_cast<Feature (*)(List, gsize)>(dlsym(RTLD_DEFAULT, "webkit_feature_list_get"));
-        auto identifier = reinterpret_cast<const char *(*)(Feature)>(dlsym(RTLD_DEFAULT, "webkit_feature_get_identifier"));
-        auto status = reinterpret_cast<int (*)(Feature)>(dlsym(RTLD_DEFAULT, "webkit_feature_get_status"));
-        auto isOn = reinterpret_cast<gboolean (*)(WebKitSettings *, Feature)>(dlsym(RTLD_DEFAULT, "webkit_settings_get_feature_enabled"));
-        auto turn = reinterpret_cast<void (*)(WebKitSettings *, Feature, gboolean)>(dlsym(RTLD_DEFAULT, "webkit_settings_set_feature_enabled"));
-        fprintf(stderr, "SCRATCH webkitgtk %u.%u.%u\n", webkit_get_major_version(), webkit_get_minor_version(), webkit_get_micro_version());
-        if (!all || !length || !at || !identifier || !status || !isOn || !turn) {
-            fprintf(stderr, "SCRATCH no feature API\n");
-        } else {
-            WebKitSettings *settings = webkit_web_view_get_settings(WEBKIT_WEB_VIEW(webView));
-            const bool isTurning = getenv("CROSSBIND_SCRATCH_OPFS") != nullptr;
-            List list = all();
-            for (gsize i = 0; i < length(list); i += 1) {
-                Feature feature = at(list, i);
-                const std::string id = identifier(feature);
-                if (id.find("Storage") == std::string::npos && id.find("FileSystem") == std::string::npos && id.find("AccessHandle") == std::string::npos) continue;
-                const gboolean before = isOn(settings, feature);
-                if (isTurning) turn(settings, feature, TRUE);
-                fprintf(stderr, "SCRATCH feature %s status %d before %d after %d\n", id.c_str(), status(feature), before, isOn(settings, feature));
-                if (FILE *kept = fopen("/tmp/crossbind-scratch-features.txt", "a")) {
-                    fprintf(kept, "SCRATCH feature %s status %d before %d after %d\n", id.c_str(), status(feature), before, isOn(settings, feature));
-                    fclose(kept);
-                }
-            }
-        }
-    }
     if (CROSSBIND_APP_PERMISSION_CAMERA || CROSSBIND_APP_PERMISSION_MICROPHONE) {
         webkit_settings_set_enable_media_stream(webkit_web_view_get_settings(WEBKIT_WEB_VIEW(webView)), TRUE);
     }

@@ -319,20 +319,16 @@ void registerSchemeHandler(void *target, const char *scheme, SchemeHandler handl
     core2->get_Environment(&environment);
     core2->Release();
     core->AddWebResourceRequestedFilter(wide(std::string(scheme) + "://*").c_str(), COREWEBVIEW2_WEB_RESOURCE_CONTEXT_ALL);
-    // Spike: http://k1.localhost with the filter of documents alone, as the scheme's; http://k2.localhost with every
-    // source kind, shared and service workers' among them.
-    core->AddWebResourceRequestedFilter(L"http://k1.localhost/*", COREWEBVIEW2_WEB_RESOURCE_CONTEXT_ALL);
+    // The origins extensions serve, http://<name>.localhost, with their workers' requests: a service worker's script and
+    // its fetches would go to the machine's port 80 else, where any program may listen, and take the origin.
     ICoreWebView2_22 *core22 = nullptr;
     if (SUCCEEDED(core->QueryInterface(IID_ICoreWebView2_22, reinterpret_cast<void **>(&core22)))) {
-        const HRESULT added = core22->AddWebResourceRequestedFilterWithRequestSourceKinds(L"http://k2.localhost/*", COREWEBVIEW2_WEB_RESOURCE_CONTEXT_ALL,
+        core22->AddWebResourceRequestedFilterWithRequestSourceKinds(L"http://*.localhost/*", COREWEBVIEW2_WEB_RESOURCE_CONTEXT_ALL,
             COREWEBVIEW2_WEB_RESOURCE_REQUEST_SOURCE_KINDS_ALL);
-        std::printf("SPIKE host: the filter of every source kind for k2 answered 0x%08lx\n", static_cast<unsigned long>(added));
         core22->Release();
     } else {
-        std::printf("SPIKE host: no ICoreWebView2_22, k2 takes the documents' filter\n");
-        core->AddWebResourceRequestedFilter(L"http://k2.localhost/*", COREWEBVIEW2_WEB_RESOURCE_CONTEXT_ALL);
+        std::fprintf(stderr, "crossbind: this WebView2 runtime does not hand the host its workers' requests, so it serves no extension's origin\n");
     }
-    std::fflush(stdout);
     auto *serve = new SchemeHandler(std::move(handler));
     auto *requested = new Handler<ICoreWebView2WebResourceRequestedEventHandler, ICoreWebView2 *, ICoreWebView2WebResourceRequestedEventArgs *>(
         IID_ICoreWebView2WebResourceRequestedEventHandler,
@@ -352,24 +348,7 @@ void registerSchemeHandler(void *target, const char *scheme, SchemeHandler handl
             const size_t query = url.find('?', path == std::string::npos ? 0 : path);
             incoming.path = path == std::string::npos ? "/" : url.substr(path, query == std::string::npos ? std::string::npos : query - path);
             incoming.query = query == std::string::npos ? "" : url.substr(query + 1, url.find('#', query) - query - 1);
-            if (authority != std::string::npos) {
-                const size_t hostEnd = url.find_first_of("/?#:", authority + 3);
-                incoming.host = url.substr(authority + 3, hostEnd == std::string::npos ? std::string::npos : hostEnd - authority - 3);
-            }
-            // Spike: each request the host takes for a key's origin, by its resource context and its source kind.
-            if (incoming.host.size() > 10 && incoming.host.compare(incoming.host.size() - 10, 10, ".localhost") == 0) {
-                COREWEBVIEW2_WEB_RESOURCE_CONTEXT context = COREWEBVIEW2_WEB_RESOURCE_CONTEXT_ALL;
-                args->get_ResourceContext(&context);
-                long source = -1;
-                ICoreWebView2WebResourceRequestedEventArgs2 *args2 = nullptr;
-                if (SUCCEEDED(args->QueryInterface(IID_ICoreWebView2WebResourceRequestedEventArgs2, reinterpret_cast<void **>(&args2)))) {
-                    COREWEBVIEW2_WEB_RESOURCE_REQUEST_SOURCE_KINDS kind = COREWEBVIEW2_WEB_RESOURCE_REQUEST_SOURCE_KINDS_NONE;
-                    if (SUCCEEDED(args2->get_RequestedSourceKind(&kind))) source = static_cast<long>(kind);
-                    args2->Release();
-                }
-                std::printf("SPIKE host intercepted %s %s context=%d source=%ld\n", incoming.method.c_str(), url.c_str(), static_cast<int>(context), source);
-                std::fflush(stdout);
-            }
+            if (authority != std::string::npos) incoming.host = url.substr(authority + 3, url.find_first_of("/?#:", authority + 3) - authority - 3);
             IStream *content = nullptr;
             if (SUCCEEDED(request->get_Content(&content)) && content) {
                 incoming.body = readAll(content);

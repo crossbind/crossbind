@@ -55,13 +55,82 @@ std::string errorReply(const std::string &message, const std::string &name = "Er
 // Text as UTF-8, with U+FFFD in place of each run of bytes that makes no character, as every webview would read it.
 std::string validUtf8(const std::string &text);
 // A call of the page's to one of the app's functions: its answer, with how many of its messages went before it, and,
-// where the page takes them, its messages, each from any thread; and the page that made it, in its window.
+// where the page takes them, its messages, each from any thread; and the page that made it, in its window, and its role.
 struct PageCall {
     std::function<void(Failure, Value, double sent)> answer;
     std::function<void(Value)> message;
     uint64_t page = 0;
     uint64_t window = 0;
+    std::string role;
 };
+// Whether text is a name a served origin or a role takes: lowercase letters and digits, which dashes may join but not
+// start or end, 63 at most, as a host's label is.
+bool isLabel(const std::string &text);
+// The app's own origins, as a page's scripts name them: crossbind://app, or Android's, and the dev server's during
+// development; from any thread.
+void setAppOrigins(std::vector<std::string> origins);
+bool isAppOrigin(const std::string &origin);
+// A served origin, without its path, as a page's scripts name it: crossbind://<name>, or http://<name>.localhost on
+// Android and Windows.
+std::string servedOriginOf(const std::string &name);
+// The name of the origin an extension serves now, of an origin as a page's scripts name it, or "" for none.
+std::string servedNameOf(const std::string &origin);
+// The name of a served origin a request's host names, as SchemeRequest gives it, served now or not; "" for another.
+std::string nameOfHost(const std::string &host);
+// Whether a request's host is the app's own: app, Android's, or none for an Android page's port.
+bool isAppHost(const std::string &host);
+// A served origin's role and its handler, while it is served.
+struct ServedOrigin {
+    std::string role;
+    std::function<void(Request)> handler;
+};
+std::optional<ServedOrigin> servedOrigin(const std::string &name);
+// The names of the origins served now.
+std::vector<std::string> servedNames();
+// The origin a page of this URL is of, "app" for the app's own, the name of an origin served now, or "" for another,
+// with its role, "app", the served origin's, or "".
+struct PageOrigin {
+    std::string origin;
+    std::string role;
+};
+PageOrigin pageOriginOf(const std::string &url);
+// Whether the app's extensions have all started, which serveOrigin() and invoke() wait for.
+bool hasStarted();
+// Answers a request of a served origin's with its handler, as a route answers its own: respond() may be called from any
+// thread.
+void answerOriginRequest(const std::string &name, std::function<void(Request)> handler, SchemeRequest request, SchemeRespond respond);
+// The running module cancels each call that waits for its answer of a page of an origin that ended; from any thread.
+void endCallsOf(const std::string &name);
+// Ends the origin of this name that this serveOrigin() of it made, once, from any thread: its pages' calls are cancelled
+// and refused from then on, its windows show the app's first page, and its requests get 404.
+void endOrigin(const std::string &name, uint64_t generation);
+// The app's windows take the origin of this name, which an extension serves from now on: its pages' top frame gets a
+// script of its own, with the origin's token for the window, in each window open now and each that opens later. From
+// any thread.
+void originServed(const std::string &name);
+// Each window that shows a page of the origin of this name, which ended, shows the app's own first page again. From any
+// thread.
+void originEnded(const std::string &name);
+// A header's value that would end it, or start another, where a platform writes headers as text; and whether a header's
+// name is a token of RFC 9110's.
+bool breaksHeaders(const std::string &text);
+bool isToken(const std::string &name);
+// What a fetch() takes at most: an answer of so many bytes, within so many seconds, after so many redirects.
+constexpr std::uint64_t MAX_FETCH_BYTES = 256ull * 1024 * 1024;
+constexpr int FETCH_SECONDS = 60;
+constexpr int MAX_FETCH_REDIRECTS = 20;
+using FetchDone = std::function<void(std::optional<std::string> failure, FetchResponse response)>;
+// Asks a server with the platform's own client, as fetch() checked the request: it asks for the body uncompressed, keeps
+// no cookie, cache or credential, follows a redirect within the URL's origin and gives one elsewhere as its 3xx, and
+// fails an answer over MAX_FETCH_BYTES or FETCH_SECONDS. done gets why it failed, or the answer, its headers' names in
+// lower case, once, on a thread of the platform's.
+void fetchOnPlatform(const std::string &method, const std::string &url, const Request::Headers &headers, FetchDone done);
+// Why a fetch failed, in the same words on every platform: an answer that declares more bytes than it takes, one that
+// passes them without declaring it, one that takes too long, and one that redirects too often.
+std::string declaredTooLarge(std::uint64_t declared);
+std::string passedTheLimit();
+std::string tookTooLong();
+std::string redirectedTooOften();
 // A call of the page's to one of the app's functions through crossbind/app, for runCall() to hand its function; null for
 // options of no Value, which the call's answer then refuses.
 std::shared_ptr<StateOf<Call>> pageCall(jsi::Runtime &rt, const std::string &name, const jsi::Value &options, PageCall page);
@@ -209,18 +278,26 @@ public:
 
     // Loads the host bundle, Hermes bytecode or source, and starts the module. Returns an error, or nothing.
     std::string boot(std::string bundle, const std::string &sourceUrl, const std::string &dataPath);
-    // The token of the channel of a window's pages, 0 for an Android page's, for its top frame alone: every message and
-    // every call made as a crossbind:// request carries it, which names the window, so markup and frames that cannot read
-    // the top frame's globals cannot make one. From any thread, before the window's page loads.
+    // The token of the channel of a window's pages of the app's own origins, 0 for an Android page's, for their top frame
+    // alone: every message and every call made as a crossbind:// request carries it, which names the window and the
+    // origin, so markup and frames that cannot read the top frame's globals cannot make one. From any thread, before the
+    // window's page loads.
     std::string addWindow(uint64_t window);
-    // A page message, which the host bundle answers through __host_reply.
-    void receive(std::string message, ReplyFn reply);
-    // The page's files, and the calls whose bytes are the request or response body.
+    // The token of the window's pages of a served origin, by its name, the same one each time within the run; from any
+    // thread.
+    std::string tokenOf(uint64_t window, const std::string &origin);
+    // A page message, from a frame of this origin, "" where the webview does not tell it, which the host bundle answers
+    // through __host_reply.
+    void receive(std::string origin, std::string message, ReplyFn reply);
+    // The page's files, a served origin's requests, and the calls whose bytes are the request or response body.
     void serve(SchemeRequest request, SchemeRespond respond);
-    // A new page replaced the one that held the module's objects in the window of this id, as the webview committed it.
-    void reset(uint64_t window);
+    // A new page of this URL replaced the one that held the module's objects in the window of this id, as the webview
+    // committed it: its origin gives it its role.
+    void reset(uint64_t window, const std::string &url);
     // The window of this id closed: its page's calls are cancelled, and what it held let go of.
     void closed(uint64_t window);
+    // The served origin of this name ended: the calls that wait for their answers of its pages are cancelled.
+    void ended(const std::string &name);
     // An event for the pages, from any thread.
     void postEvent(std::string event, std::string json, bool isHeld, Reach reach, uint64_t page);
     void stop() {
@@ -246,6 +323,9 @@ private:
     // cancel. A new page counts anew, and what the one before passed reaches no page.
     struct Channel {
         long long page = 0;
+        // The origin of the page, "app", a served origin's name or "", and its role.
+        std::string origin;
+        std::string role;
         std::unordered_map<long long, std::pair<std::weak_ptr<PageFunction>, jsi::WeakObject>> pageFunctions;
         std::unordered_map<long long, OpenCall> openCalls;
         std::unordered_set<long long> cancelledEarly;
@@ -255,12 +335,21 @@ private:
         ReplyFn answer;
         uint64_t window;
     };
+    // The window and the origin, "app" or a served origin's name, whose pages a token is of.
+    struct TokenOwner {
+        uint64_t window;
+        std::string origin;
+    };
 
     void installHostFunctions(jsi::Runtime &rt);
     // Hands the reply of this call of the page's its text, once; on the JS thread.
     void reply(const std::string &call, const std::string &text);
-    // The window whose token this is, on the JS thread; none for a token of no open window's.
-    std::optional<uint64_t> windowOfToken(const std::string &token) const;
+    // The window and origin whose token this is, from any thread; none for a token of no open window's.
+    std::optional<TokenOwner> ownerOfToken(const std::string &token);
+    // Why a page of the window that owner names may not make a call with its token, of a request's origin, "" where that
+    // is not known, on the JS thread: the origin it names ended, or the window shows a page of another origin now, or
+    // the request comes from another origin than the token's. Empty where it may.
+    std::string refusalOf(const TokenOwner &owner, const std::string &origin);
     // The window that shows the page of this id, on the JS thread; none once it went.
     std::optional<uint64_t> windowOfPage(long long page) const;
     // A call of the page's to one of the app's functions, which call names the reply of, and id the page's own.
@@ -270,6 +359,12 @@ private:
     void cancelCall(const std::string &call, long long id, bool isFramed);
     // Cancels each call of a channel's page that waits for its answer.
     void cancelOpenCalls(Channel &channel);
+    // A request of the origin of this name, which an extension serves: its calls' bytes under /__crossbind/b/, and the
+    // rest its handler answers.
+    void serveServed(const std::string &name, SchemeRequest request, SchemeRespond respond);
+    // A request for the bytes of a call, which the host bundle's function of this name answers, with a token of this
+    // origin's, "app" or a served origin's name, or of any where the request has no URL, as an Android page's port.
+    void serveCall(SchemeRequest request, SchemeRespond respond, const std::string &function, const std::string &origin);
     // The frame of a call of the window's page, whose reply answers the request; on the JS thread.
     void serveFrame(jsi::Runtime &rt, uint64_t window, SchemeRequest request, SchemeRespond respond);
     // The module's function for one the page passed: the same one while the module holds it.
@@ -277,9 +372,12 @@ private:
     void dropped(long long page, long long id, double passed);
 
     JsThread js_;
-    // The windows' channels, by their ids, and their tokens, on the JS thread.
+    // The windows' channels, by their ids, on the JS thread.
     std::unordered_map<uint64_t, Channel> channels_;
-    std::unordered_map<std::string, uint64_t> tokens_;
+    // The tokens, each with its owner, and each by its window and origin, kept for the run.
+    std::mutex tokensMutex_;
+    std::unordered_map<std::string, TokenOwner> tokens_;
+    std::map<std::pair<uint64_t, std::string>, std::string> tokenOf_;
     std::string pageDir_;
     std::unordered_map<std::string, Reply> replies_;
     long long nextReply_ = 0;

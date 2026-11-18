@@ -11,7 +11,6 @@
 #include "page_requests.h"
 #include "platform.h"
 
-#include <algorithm>
 #include <cstdio>
 
 using crossbind::CertificateError;
@@ -382,15 +381,15 @@ API_AVAILABLE(macos(11.3), ios(14.5))
 
 @end
 
-// The app's own origins load in any frame, but a window the page asks for at one of them opens nowhere, as the app's
-// windows open through windows.open(); the extension page-navigation decides every other URL, windows too, which load
-// in the page's place if they load. A page of another origin gets no token, so it reaches none of the app's functions.
+// A navigation the core's rule loads goes on in any frame, but a window the page asks for there opens nowhere, as the
+// app's windows open through windows.open(); one it refuses loads nothing, and the extension page-navigation decides
+// every other URL, windows too, which load in the page's place if they load. A page of another origin gets no token, so
+// it reaches none of the app's functions.
 @interface CBNavigationLock : NSObject <WKNavigationDelegate> {
 @public
     // The webview it decides for, whose page asks.
     __weak WKWebView *view;
-    std::vector<std::string> origins;
-    std::function<void()> newPage;
+    std::function<void(const std::string &)> newPage;
     id downloads;
     // A window's URL page-navigation loaded in the page's place, whose navigation it does not decide again.
     std::string approved;
@@ -406,14 +405,8 @@ API_AVAILABLE(macos(11.3), ios(14.5))
     return YES;
 }
 
-- (BOOL)allows:(NSURL *)url {
-    NSString *scheme = url.scheme.lowercaseString;
-    if ([scheme isEqualToString:@"about"]) return YES;
-    // A blob URL carries the origin of the page that made it.
-    if ([scheme isEqualToString:@"blob"]) return [self allows:[NSURL URLWithString:url.resourceSpecifier]];
-    std::string origin = std::string(scheme.UTF8String ?: "") + "://" + (url.host.UTF8String ?: "");
-    if (url.port) origin += ":" + std::to_string(url.port.intValue);
-    return std::find(origins.begin(), origins.end(), origin) != origins.end();
+- (app::NavigationRule)ruleFor:(NSURL *)url {
+    return app::navigationRule((__bridge const void *)view, text(url.absoluteString));
 }
 
 - (void)webView:(WKWebView *)webView
@@ -423,21 +416,22 @@ API_AVAILABLE(macos(11.3), ios(14.5))
     if (@available(macOS 11.3, iOS 14.5, *)) {
         // A link's download attribute saves what it points at instead of showing it: the page's own files, and data
         // the page holds as a data: URL.
-        if (action.shouldPerformDownload && ([self allows:url] || [url.scheme.lowercaseString isEqualToString:@"data"])) {
+        if (action.shouldPerformDownload && ([self ruleFor:url] == app::NavigationRule::load || [url.scheme.lowercaseString isEqualToString:@"data"])) {
             decide(WKNavigationActionPolicyDownload);
             return;
         }
     }
     // A link of target="_blank" asks for a window of its own, which the app opens none of.
     const BOOL isNewWindow = action.targetFrame == nil;
-    if (!isNewWindow && ([self isApproved:url] || [self allows:url])) {
+    const app::NavigationRule rule = [self ruleFor:url];
+    if (!isNewWindow && ([self isApproved:url] || rule == app::NavigationRule::load)) {
         decide(WKNavigationActionPolicyAllow);
         return;
     }
     const BOOL isUserInitiated = action.navigationType == WKNavigationTypeLinkActivated || action.navigationType == WKNavigationTypeFormSubmitted;
-    const app::NavigationAnswer answer = [self allows:url] ? app::NavigationAnswer::refuse
-                                                           : app::decideNavigation((__bridge const void *)webView, text(url.absoluteString), isNewWindow || action.targetFrame.isMainFrame,
-                                                               isUserInitiated, isNewWindow);
+    const app::NavigationAnswer answer = rule != app::NavigationRule::ask
+        ? app::NavigationAnswer::refuse
+        : app::decideNavigation((__bridge const void *)webView, text(url.absoluteString), isNewWindow || action.targetFrame.isMainFrame, isUserInitiated, isNewWindow);
     if (answer == app::NavigationAnswer::load && !isNewWindow) {
         decide(WKNavigationActionPolicyAllow);
         return;
@@ -555,7 +549,7 @@ API_AVAILABLE(macos(11.3), ios(14.5))
 - (void)webView:(WKWebView *)webView didCommitNavigation:(WKNavigation *)navigation {
     // An approval no load in place took goes with the page it came from.
     approved.clear();
-    newPage();
+    newPage(text(webView.URL.absoluteString));
 }
 
 // A response the webview cannot show, such as a zip, downloads as it does in a browser.
@@ -593,11 +587,10 @@ namespace {
 char lockKey;
 }
 
-void restrictNavigation(void *webView, std::vector<std::string> origins, std::function<void()> newPage) {
+void restrictNavigation(void *webView, std::function<void(const std::string &)> newPage) {
     WKWebView *view = (__bridge WKWebView *)webView;
     CBNavigationLock *lock = [CBNavigationLock new];
     lock->view = view;
-    lock->origins = std::move(origins);
     lock->newPage = std::move(newPage);
     // The webview holds its navigation delegate weakly.
     objc_setAssociatedObject(view, &lockKey, lock, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
@@ -612,7 +605,7 @@ void openPageWindow(void *webView, void *navigationAction) {
     WKNavigationAction *action = (__bridge WKNavigationAction *)navigationAction;
     CBNavigationLock *lock = objc_getAssociatedObject(view, &lockKey);
     NSURL *url = action.request.URL;
-    const app::NavigationAnswer answer = !lock || [lock allows:url]
+    const app::NavigationAnswer answer = !lock || [lock ruleFor:url] != app::NavigationRule::ask
         ? app::NavigationAnswer::refuse
         : app::decideNavigation((__bridge const void *)view, text(url.absoluteString), true, action.navigationType == WKNavigationTypeLinkActivated, true);
     if (answer == app::NavigationAnswer::load) {
@@ -620,4 +613,13 @@ void openPageWindow(void *webView, void *navigationAction) {
         [view loadRequest:action.request];
     }
     if (answer == app::NavigationAnswer::openOutside) openOutside(url);
+}
+
+void loadOwnPage(void *webView, const std::string &url) {
+    WKWebView *view = (__bridge WKWebView *)webView;
+    CBNavigationLock *lock = objc_getAssociatedObject(view, &lockKey);
+    NSURL *page = [NSURL URLWithString:ns(url)];
+    if (!lock || !page) return;
+    lock->approved = text(page.absoluteString);
+    [view loadRequest:[NSURLRequest requestWithURL:page]];
 }

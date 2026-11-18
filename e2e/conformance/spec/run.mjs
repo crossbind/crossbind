@@ -20,6 +20,8 @@
 //                   on worker-backed legs functions cannot cross and identity dies)
 //   pointers, callbacks, strings, wrappers, types: the module namespace of the matching kit
 //                   header (any leg; the checks that pass JS functions skip on worker legs)
+//   extend:       the module namespace of native/confextend.h, whose own interface (confextend.i)
+//                   adds methods to a class with %extend (any leg)
 //   packageFields: { zlib, webp }, the namespaces of @crossbind/port-zlib/zlib.h and
 //                   @crossbind/port-webp/encode.h (bundler legs that link both ports)
 //   constants:    the names a leg imports from native/confconstants.h, plus `module` (its AllSymbols);
@@ -34,6 +36,7 @@
 
 import { callbackChecks } from './sections/callbacks.mjs';
 import { constantChecks } from './sections/constants.mjs';
+import { extendChecks } from './sections/extend.mjs';
 import { extrasChecks } from './sections/extras.mjs';
 import { packageFieldChecks } from './sections/packageFields.mjs';
 import { pointerChecks } from './sections/pointers.mjs';
@@ -501,6 +504,7 @@ export function buildChecks(s) {
     section(list, 'strings', 'no string surface wired on this leg', s.strings && (() => stringChecks({ add }, s.strings)));
     section(list, 'wrappers', 'no wrapper surface wired on this leg', s.wrappers && (() => wrapperChecks({ add, skip }, s.wrappers, { worker })));
     section(list, 'types', 'no type surface wired on this leg', s.types && (() => typeChecks({ add }, s.types, { worker })));
+    section(list, 'extend', 'no %extend surface wired on this leg', s.extend && (() => extendChecks({ add }, s.extend)));
     section(list, 'packageFields', 'no package header surface wired on this leg (standalone builds bridge only paths.header)', s.packageFields && (() => packageFieldChecks({ add }, s.packageFields, { worker })));
     section(list, 'constants', 'no header import on this leg (constants bind only for the names an app imports)', s.constants && (() => constantChecks({ add }, s.constants, { native: Boolean(s.caps?.jsiNative) })));
     section(list, 'extras', 'no header import on this leg (variadic functions, macros and mutable globals bind only for the names an app imports)', (s.extras || s.extrasWhole) && (() => extrasChecks({ add }, s.extras ?? s.extrasWhole, { byName: Boolean(s.extras) })));

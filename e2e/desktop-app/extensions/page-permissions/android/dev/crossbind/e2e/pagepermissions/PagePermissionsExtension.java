@@ -27,7 +27,7 @@ public final class PagePermissionsExtension implements Extension {
 
     @Override
     public void onPagePermission(ExtensionHost host, PagePermission request) {
-        asked.put(new JSONObject(Map.of("kinds", new JSONArray(request.kinds()), "origin", request.origin(), "isListed", request.isListed())));
+        asked.put(new JSONObject(Map.of("kinds", new JSONArray(request.kinds()), "origin", request.origin(), "isListed", request.isListed(), "role", request.role())));
         request.deny();
     }
 }

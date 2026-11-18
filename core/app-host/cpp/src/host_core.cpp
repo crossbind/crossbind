@@ -107,6 +107,8 @@ const std::map<std::string, std::string> ROUTES{
     {"/b/frame", "__crossbind_frame"},
     {"/b/result", "__crossbind_result"},
 };
+// What a served origin's pages send their calls' bytes under, the app's own /b/ paths after it.
+constexpr std::string_view CALLS_PREFIX = "/__crossbind";
 
 const std::map<std::string, std::string> MIME_TYPES{
     {"html", "text/html; charset=utf-8"},
@@ -397,10 +399,22 @@ void Core::reply(const std::string &call, const std::string &text) {
     reply(text);
 }
 
-std::optional<uint64_t> Core::windowOfToken(const std::string &token) const {
-    const auto window = tokens_.find(token);
-    if (window == tokens_.end()) return std::nullopt;
-    return window->second;
+std::optional<Core::TokenOwner> Core::ownerOfToken(const std::string &token) {
+    std::lock_guard<std::mutex> lock(tokensMutex_);
+    const auto owner = tokens_.find(token);
+    if (owner == tokens_.end()) return std::nullopt;
+    return owner->second;
+}
+
+std::string Core::refusalOf(const TokenOwner &owner, const std::string &origin) {
+    if (owner.origin != "app" && !servedOrigin(owner.origin)) return "crossbind: the origin " + owner.origin + " has ended";
+    // A token goes with its origin's top frame alone, which the webview names where it tells the sender.
+    if (!origin.empty() && !(owner.origin == "app" ? isAppOrigin(origin) : origin == servedOriginOf(owner.origin))) {
+        return "crossbind: this message does not carry the page's token";
+    }
+    const auto channel = channels_.find(owner.window);
+    if (channel == channels_.end() || channel->second.origin != owner.origin) return "crossbind: the page that made the call went away";
+    return "";
 }
 
 std::optional<uint64_t> Core::windowOfPage(long long page) const {
@@ -457,6 +471,7 @@ void Core::callApp(jsi::Runtime &rt, std::string call, const std::string &name, 
     }
     answers.page = static_cast<uint64_t>(page);
     answers.window = window;
+    answers.role = channels_[window].role;
     std::shared_ptr<StateOf<Call>> state = pageCall(rt, name, options, std::move(answers));
     if (!state) return;
     Channel &channel = channels_[window];
@@ -498,11 +513,17 @@ void Core::cancelOpenCalls(Channel &channel) {
 }
 
 std::string Core::addWindow(uint64_t window) {
-    std::string token = randomToken();
-    js_.post([this, window, token](jsi::Runtime &) {
-        channels_[window];
-        tokens_[token] = window;
-    });
+    js_.post([this, window](jsi::Runtime &) { channels_[window]; });
+    return tokenOf(window, "app");
+}
+
+std::string Core::tokenOf(uint64_t window, const std::string &origin) {
+    std::lock_guard<std::mutex> lock(tokensMutex_);
+    const auto known = tokenOf_.find({window, origin});
+    if (known != tokenOf_.end()) return known->second;
+    const std::string token = randomToken();
+    tokens_[token] = TokenOwner{window, origin};
+    tokenOf_[{window, origin}] = token;
     return token;
 }
 
@@ -533,19 +554,24 @@ std::string Core::boot(std::string bundle, const std::string &sourceUrl, const s
     return error;
 }
 
-void Core::receive(std::string message, ReplyFn reply) {
-    js_.post([this, message = std::move(message), reply = std::move(reply)](jsi::Runtime &rt) {
-        const std::optional<uint64_t> window = windowOfToken(message.substr(0, TOKEN_LENGTH));
-        if (!window) {
+void Core::receive(std::string origin, std::string message, ReplyFn reply) {
+    js_.post([this, origin = std::move(origin), message = std::move(message), reply = std::move(reply)](jsi::Runtime &rt) {
+        const std::optional<TokenOwner> owner = ownerOfToken(message.substr(0, TOKEN_LENGTH));
+        if (!owner) {
             reply(errorReply("crossbind: this message does not carry the page's token"));
             return;
         }
+        if (const std::string refusal = refusalOf(*owner, origin); !refusal.empty()) {
+            reply(errorReply(refusal));
+            return;
+        }
+        const Channel &channel = channels_[owner->window];
         const std::string call = std::to_string(nextReply_++);
-        replies_.emplace(call, Reply{reply, *window});
+        replies_.emplace(call, Reply{reply, owner->window});
         try {
             rt.global().getPropertyAsFunction(rt, "__crossbind_receive")
                 .call(rt, jsi::String::createFromUtf8(rt, call), jsi::String::createFromUtf8(rt, message.substr(TOKEN_LENGTH)),
-                    static_cast<double>(channels_[*window].page));
+                    static_cast<double>(channel.page), jsi::String::createFromUtf8(rt, channel.role));
         } catch (const std::exception &error) {
             replies_.erase(call);
             reply(errorReply(error.what()));
@@ -554,6 +580,14 @@ void Core::receive(std::string message, ReplyFn reply) {
 }
 
 void Core::serve(SchemeRequest request, SchemeRespond answer) {
+    if (const std::string name = nameOfHost(request.host); !name.empty()) {
+        serveServed(name, std::move(request), std::move(answer));
+        return;
+    }
+    if (!isAppHost(request.host)) {
+        answer(SchemeResponse{404, "text/plain", bytesOf("crossbind: the app serves no origin " + request.host)});
+        return;
+    }
     SchemeRespond respond = !corsOrigin.empty() ? SchemeRespond([answer = std::move(answer), origin = corsOrigin](SchemeResponse response) {
         response.headers.emplace_back("Access-Control-Allow-Origin", origin);
         response.headers.emplace_back("Access-Control-Expose-Headers", "*");
@@ -575,15 +609,6 @@ void Core::serve(SchemeRequest request, SchemeRespond answer) {
         return;
     }
     request.path = std::move(*path);
-    // Spike: a key's origin, http://<key>.localhost, serves the page's own files, and its calls' bytes under
-    // /__crossbind/b/ with the window's token.
-    if (request.host.size() > 10 && request.host.compare(request.host.size() - 10, 10, ".localhost") == 0) {
-        if (request.path.compare(0, 15, "/__crossbind/b/") != 0) {
-            respond(pageFile(pageDir_, request.path));
-            return;
-        }
-        request.path = request.path.substr(12);
-    }
     if (request.path.compare(0, 5, "/ext/") == 0) {
         serveRoute(std::move(request), std::move(respond));
         return;
@@ -593,22 +618,62 @@ void Core::serve(SchemeRequest request, SchemeRespond answer) {
         respond(pageFile(pageDir_, request.path));
         return;
     }
-    // The token names the window whose page asks, which the JS thread knows.
+    // An Android page's bytes come over its port, of no URL, which its token alone names.
+    const std::string origin = request.host.empty() ? "" : "app";
+    serveCall(std::move(request), std::move(respond), route->second, origin);
+}
+
+void Core::serveServed(const std::string &name, SchemeRequest request, SchemeRespond respond) {
+    std::optional<std::string> path = decodedPath(request.path);
+    if (!path) {
+        respond(SchemeResponse{400, "text/plain", bytesOf("crossbind: the request's path holds a NUL")});
+        return;
+    }
+    request.path = std::move(*path);
+    const std::optional<ServedOrigin> served = servedOrigin(name);
+    if (!served) {
+        respond(SchemeResponse{404, "text/plain", bytesOf("crossbind: the origin " + name + " is not served")});
+        return;
+    }
+    if (request.path.rfind(std::string(CALLS_PREFIX) + "/b/", 0) == 0) {
+        const auto route = ROUTES.find(request.path.substr(CALLS_PREFIX.size()));
+#if defined(__ANDROID__)
+        // An Android page's calls and their bytes travel over its port alone.
+        const bool isRefused = true;
+#else
+        const bool isRefused = route == ROUTES.end();
+#endif
+        if (isRefused) {
+            respond(SchemeResponse{404, "text/plain", bytesOf("crossbind: the origin " + name + " serves no " + request.path)});
+            return;
+        }
+        serveCall(std::move(request), std::move(respond), route->second, name);
+        return;
+    }
+    answerOriginRequest(name, served->handler, std::move(request), std::move(respond));
+}
+
+// The token names the window whose page asks, and the origin it is of, which the request's must be, where known.
+void Core::serveCall(SchemeRequest request, SchemeRespond respond, const std::string &function, const std::string &origin) {
     const std::string query = "&" + request.query + "&";
     const size_t at = query.find("&t=");
     const std::string token = at == std::string::npos ? "" : query.substr(at + 3, query.find('&', at + 3) - at - 3);
-    js_.post([this, token, function = route->second, request = std::move(request), respond = std::move(respond)](jsi::Runtime &rt) mutable {
-        const std::optional<uint64_t> window = windowOfToken(token);
-        if (!window) {
+    js_.post([this, token, function, origin, request = std::move(request), respond = std::move(respond)](jsi::Runtime &rt) mutable {
+        const std::optional<TokenOwner> owner = ownerOfToken(token);
+        if (!owner || (!origin.empty() && owner->origin != origin)) {
             respond(SchemeResponse{403, "text/plain", bytesOf("crossbind: this request does not carry the page's token")});
             return;
         }
-        if (request.path == "/b/frame") {
-            serveFrame(rt, *window, std::move(request), std::move(respond));
+        if (const std::string refusal = refusalOf(*owner, ""); !refusal.empty()) {
+            respond(SchemeResponse{403, "text/plain", bytesOf(refusal)});
+            return;
+        }
+        if (function == "__crossbind_frame") {
+            serveFrame(rt, owner->window, std::move(request), std::move(respond));
             return;
         }
         try {
-            respond(binaryCall(rt, function, request, channels_[*window].page));
+            respond(binaryCall(rt, function, request, channels_[owner->window].page));
         } catch (const std::exception &error) {
             respond(SchemeResponse{500, "text/plain", bytesOf(error.what())});
         }
@@ -623,21 +688,24 @@ void Core::serveFrame(jsi::Runtime &rt, uint64_t window, SchemeRequest request, 
         jsi::ArrayBuffer body(rt, std::make_shared<VectorBuffer>(std::move(request.body)));
         rt.global().getPropertyAsFunction(rt, "__crossbind_frame")
             .call(rt, jsi::String::createFromUtf8(rt, call), jsi::String::createFromUtf8(rt, request.query), std::move(body),
-                static_cast<double>(channels_[window].page));
+                static_cast<double>(channels_[window].page), jsi::String::createFromUtf8(rt, channels_[window].role));
     } catch (const std::exception &error) {
         if (replies_.erase(call) > 0) respond(SchemeResponse{500, "text/plain", bytesOf(error.what())});
     }
 }
 
-void Core::reset(uint64_t window) {
-    const Page page = newPage(window);
+void Core::reset(uint64_t window, const std::string &url) {
+    const PageOrigin origin = pageOriginOf(url);
+    const Page page = newPage(window, origin.role, origin.origin);
     // After the calls the page before made, which the module's thread takes in order, and before the new page's.
-    js_.post([this, window, page](jsi::Runtime &rt) {
+    js_.post([this, window, page, origin](jsi::Runtime &rt) {
         const auto open = channels_.find(window);
         if (open == channels_.end()) return;
         Channel &channel = open->second;
         const long long before = channel.page;
         channel.page = static_cast<long long>(page.id());
+        channel.origin = origin.origin;
+        channel.role = origin.role;
         channel.pageFunctions.clear();
         // The page before's calls reach no page: each that waits is cancelled.
         cancelOpenCalls(channel);
@@ -653,8 +721,20 @@ void Core::closed(uint64_t window) {
         const long long page = open->second.page;
         cancelOpenCalls(open->second);
         channels_.erase(open);
-        for (auto token = tokens_.begin(); token != tokens_.end();) token = token->second == window ? tokens_.erase(token) : std::next(token);
+        {
+            std::lock_guard<std::mutex> lock(tokensMutex_);
+            for (auto token = tokens_.begin(); token != tokens_.end();) token = token->second.window == window ? tokens_.erase(token) : std::next(token);
+            for (auto known = tokenOf_.begin(); known != tokenOf_.end();) known = known->first.first == window ? tokenOf_.erase(known) : std::next(known);
+        }
         if (page != 0) rt.global().getPropertyAsFunction(rt, "__crossbind_gone").call(rt, static_cast<double>(page));
+    });
+}
+
+void Core::ended(const std::string &name) {
+    js_.post([this, name](jsi::Runtime &) {
+        for (auto &[window, channel] : channels_) {
+            if (channel.origin == name) cancelOpenCalls(channel);
+        }
     });
 }
 
@@ -734,6 +814,10 @@ void Core::dropped(long long page, long long id, double passed) {
 
 void closeChannel(uint64_t window) {
     if (Core *core = running.load()) core->closed(window);
+}
+
+void endCallsOf(const std::string &name) {
+    if (Core *core = running.load()) core->ended(name);
 }
 
 void postEvent(std::string event, std::string json, bool isHeld, Reach reach, uint64_t page) {

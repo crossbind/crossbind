@@ -3,8 +3,6 @@
 
 #include <webkit2/webkit2.h>
 
-#include <algorithm>
-
 namespace app = crossbind::app;
 
 // WebKitGTK asks for a drag's data as it moves over the page, so the files a drop carries are those its drag brought
@@ -12,7 +10,6 @@ namespace app = crossbind::app;
 namespace {
 
 struct Drops {
-    std::vector<std::string> origins;
     // The drag whose files came last, which the host holds while it may drop them.
     GdkDragContext *drag = nullptr;
     std::vector<std::string> paths;
@@ -49,7 +46,7 @@ void onDragData(GtkWidget *, GdkDragContext *drag, gint, gint, GtkSelectionData 
 gboolean onDragDrop(GtkWidget *widget, GdkDragContext *drag, gint x, gint y, guint, gpointer state) {
     auto &drops = *static_cast<Drops *>(state);
     WebKitWebView *view = WEBKIT_WEB_VIEW(widget);
-    const bool isOwn = std::find(drops.origins.begin(), drops.origins.end(), originOf(webkit_web_view_get_uri(view))) != drops.origins.end();
+    const bool isOwn = app::isOwnOrigin(originOf(webkit_web_view_get_uri(view)));
     // The owner may run a dialog's loop, in which the next drag's data comes.
     const std::vector<std::string> paths = drops.drag == drag && isOwn ? drops.paths : std::vector<std::string>();
     forget(drops);
@@ -62,8 +59,8 @@ gboolean onDragDrop(GtkWidget *widget, GdkDragContext *drag, gint x, gint y, gui
 
 }  // namespace
 
-void takeDrops(void *webView, std::vector<std::string> origins) {
-    auto *drops = new Drops{std::move(origins)};
+void takeDrops(void *webView) {
+    auto *drops = new Drops{};
     // The webview's drops go with it.
     g_object_set_data_full(G_OBJECT(webView), "crossbind-drops", drops, [](gpointer owned) {
         auto *gone = static_cast<Drops *>(owned);

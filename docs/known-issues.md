@@ -8,6 +8,38 @@ than no entry. Scope each check so it cannot match this file, which quotes what 
 
 Fixing something here is not a prerequisite for anything else; this is a list, not a queue.
 
+## A Windows app's own page has no OPFS
+
+Chromium's file system API takes http and https origins alone, and WebView2 gives a custom scheme no setting for it: at
+`crossbind://app` a built Windows app's page, and its Workers, get a `SecurityError` from
+`navigator.storage.getDirectory()` ("It was determined that certain files are unsafe for access within a Web
+application, or that too many calls are being made on file resources."), which the Windows spike of 18 Nov 2026
+measured on WebView2 156 and 157. The origins an extension serves are `http://<name>.localhost` on Windows, which have
+OPFS and its sync handle; a development session's page comes from the dev server, which has it too.
+
+- Seen: 2026-11-18
+- Check: the last conformance run on main prints the app's own page's OPFS failing on Windows:
+  `gh run view "$(gh run list --workflow test-node-addon-conformance.yml --branch main --limit 1 --json databaseId --jq '.[0].databaseId')" --log | grep 'app-windows-run' | grep -m1 'PAGE GETS opfs "error: SecurityError'`
+  prints a line.
+- Remove when WebView2 gives a custom scheme OPFS, or a Windows app's own page moves to an http or https origin of its
+  own; then drop the Windows sentence of `docs/api/extensions.md`'s Limits.
+
+## A Linux app's pages have no OPFS
+
+WebKitGTK keeps the Storage API (`navigator.storage`), the File System API and its access handles off by default, so
+neither a Linux app's own page nor an origin an extension serves gets OPFS: `navigator.storage.getDirectory` is
+undefined, in Workers too. Turned on with `webkit_settings_set_feature_enabled()` (`StorageAPI`, `FileSystem`,
+`AccessHandle`), on WebKitGTK 2.52.6 (Ubuntu 26.04, CI) and 2.54.0 (Debian 13) alike, a page gets its directory, but a
+Worker's `createSyncAccessHandle()` fails ("NotSupportedError: Backend does not support this operation"), which
+crossbind's OPFS backend needs; so nothing is turned on (measured 18 Nov 2026).
+
+- Seen: 2026-11-18
+- Check: the last conformance run on main prints the Linux app's own page's OPFS failing:
+  `gh run view "$(gh run list --workflow test-node-addon-conformance.yml --branch main --limit 1 --json databaseId --jq '.[0].databaseId')" --log | grep 'app-linux' | grep -m1 'PAGE GETS opfs "error: TypeError'`
+  prints a line.
+- Remove when a WebKitGTK the app runs on gives a Worker the sync access handle with the features on, and the host
+  turns them on; then drop the Linux sentence of `docs/api/extensions.md`'s Limits.
+
 ## fsync in a Node.js wasm build does not reach the disk
 
 Emscripten's WasmFS Node backend has no `NodeFile::flush`, so an `fsync` or `fdatasync` on a host file used to

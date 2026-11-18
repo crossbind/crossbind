@@ -16,7 +16,7 @@ import {
 } from '@crossbind/conformance/native/confextras.h';
 import { Counter } from './native/counter.rs';
 import { reportWebFeatures } from './web-features.js';
-import { runSpike } from './spike.js';
+import { checkServedReports, isServedPage, runProjectPage, runServedRoundTrip } from './served-origins.js';
 import {
     ACTIVITIES, AGAIN_FILE, FIRST_ARGS, FIRST_FILES, LAUNCH_ARGS, LAUNCH_URL, NOTIFICATION, OPENED_FILE, PHONE_FILE_TEXT, PHONE_FILES, PHONE_LINKS,
     PHONE_URL, PROBE_URLS, SHORTCUTS, TRASHED_FILE, TRAY,
@@ -976,10 +976,8 @@ async function checkWindows(m, isDesktop, isAndroid) {
 }
 
 const otherWindow = new URLSearchParams(location.search).get('window');
-// Spike: the keys' origins take the suite's place.
-const IS_SPIKE = false;
 if (otherWindow) runOtherWindow(otherWindow);
-else if (IS_SPIKE) runSpike().catch((error) => console.log(`SPIKE failed ${error?.message ?? error}`));
+else if (isServedPage()) runProjectPage();
 else initNative().then(async (m) => {
     try {
         // Markup can make a crossbind:// request as well, so one without the page's token must be refused. On Android the
@@ -994,7 +992,12 @@ else initNative().then(async (m) => {
         if (isDesktop && (innerWidth !== 800 || innerHeight !== 600)) {
             throw new Error(`the page is ${innerWidth} × ${innerHeight}, not the 800 × 600 app.window gives`);
         }
-        await reportWebFeatures(isAndroid);
+        // The probe's origins first, whose round trip sends the window to a project's page and back, each time to this page
+        // anew; a development session has no endpoint to serve the project's page.
+        const served = import.meta.env.DEV ? null : await runServedRoundTrip(isAndroid);
+        if (served === false) return;
+        const features = await reportWebFeatures(isAndroid);
+        if (served) checkServedReports(served, features);
         await checkPageFeel(isAndroid);
         // A desktop page may show an element full screen.
         if (isDesktop && !(document.fullscreenEnabled ?? document.webkitFullscreenEnabled)) throw new Error('the page cannot show an element full screen');
@@ -1155,6 +1158,7 @@ else initNative().then(async (m) => {
             strings: m,
             wrappers: m,
             types: m,
+            extend: m,
             constants: {
                 CONF_BASE, CONF_BASE_NAME, CONF_CHAR, CONF_DOUBLE, CONF_EXPRESSION, CONF_HEX, CONF_INT, CONF_NEGATIVE,
                 CONF_PLATFORM, CONF_STRING, CONF_TRUE, CONF_WIDE, confGlobal, confGlobalName, module: confConstantsModule,

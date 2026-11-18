@@ -3,7 +3,7 @@
 export default function pageNavigation() {
     return {
         name: 'e2e-page-navigation',
-        contract: 1,
+        contract: 3,
         replaces: 'page-navigation',
         root: import.meta.dirname,
         app: { sources: ['navigation.cpp'] },
