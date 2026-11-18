@@ -58,7 +58,9 @@ destination only after a complete download. The existing checksum checks still g
 Android app assembly retries at most three times, waiting five and ten seconds, only when Gradle
 reports a network timeout, connection failure or HTTP 429/5xx. Compile and integrity failures stop
 immediately. Trivy is installed once per CI job at the reviewed version, with at most three setup
-attempts; vulnerability scans keep their existing failure policy.
+attempts. A failed vulnerability scan fails its job. Only the daily scan of published digests
+tries once more, ten seconds later, since a dropped registry connection can fail a scan without a
+finding; a finding fails both attempts.
 
 ## Publishing
 

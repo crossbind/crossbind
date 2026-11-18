@@ -57,7 +57,29 @@ jobs:
               uses: ./.github/actions/setup-trivy
               with:
                   version: v0.74.0
-            - name: Scan ${{ matrix.image }} ${{ matrix.platform }} by immutable digest
+            # A dropped registry connection fails a scan without a finding, so a failed scan runs once more. A finding
+            # fails both attempts, and a failed second attempt fails the job.
+            - name: Scan ${{ matrix.image }} ${{ matrix.platform }} by immutable digest (attempt 1/2)
+              id: first
+              continue-on-error: true
+              uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+              with:
+                  version: v0.74.0
+                  skip-setup-trivy: true
+                  scan-type: image
+                  scan-ref: ${{ matrix.ref }}
+                  scanners: vuln
+                  vuln-type: os,library
+                  severity: HIGH,CRITICAL
+                  ignore-unfixed: true
+                  exit-code: 1
+                  timeout: 20m
+                  github-pat: ${{ github.token }}
+            - name: Wait before the final scan attempt
+              if: ${{ steps.first.outcome == 'failure' }}
+              run: sleep 10
+            - name: Scan ${{ matrix.image }} ${{ matrix.platform }} by immutable digest (attempt 2/2)
+              if: ${{ steps.first.outcome == 'failure' }}
               uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
               with:
                   version: v0.74.0

@@ -67,6 +67,7 @@ test('every Trivy scan uses a real reviewed scanner release', () => {
 
 test('Trivy is installed once before each job scans and scanner failures remain fatal', () => {
     const workflowDirectory = path.join(ROOT, '.github', 'workflows');
+    const scanInputs = (step) => step.match(/^ {14}with:\n(?: {18}.*\n)+/m)?.[0];
     let jobs = 0;
     for (const workflow of fs.readdirSync(workflowDirectory).filter((name) => name.endsWith('.yml'))) {
         const source = fs.readFileSync(path.join(workflowDirectory, workflow), 'utf8');
@@ -80,12 +81,25 @@ test('Trivy is installed once before each job scans and scanner failures remain 
             assert.match(setup[0], /version: v0\.74\.0/);
             assert.doesNotMatch(setup[0], /continue-on-error:/);
             assert.ok(job.indexOf('uses: ./.github/actions/setup-trivy') < job.indexOf('uses: aquasecurity/trivy-action@'));
-            for (const scan of steps.filter((step) => step.includes('uses: aquasecurity/trivy-action@'))) {
+            const scans = steps.filter((step) => step.includes('uses: aquasecurity/trivy-action@'));
+            for (const [index, scan] of scans.entries()) {
                 assert.match(scan, /skip-setup-trivy: true/);
                 assert.match(scan, /severity: HIGH,CRITICAL/);
                 assert.match(scan, /ignore-unfixed: true/);
                 assert.match(scan, /exit-code: 1/);
-                assert.doesNotMatch(scan, /continue-on-error:/);
+                if (!scan.includes('continue-on-error:')) continue;
+                const id = scan.match(/^ {14}id: ([\w-]+)$/m)?.[1];
+                const retry = scans[index + 1] ?? '';
+                assert.ok(
+                    id && scan.includes('\n              continue-on-error: true\n'),
+                    `${workflow}: a scan that may fail is a first attempt with an id`,
+                );
+                assert.ok(
+                    retry.includes(`\n              if: \${{ steps.${id}.outcome == 'failure' }}\n`),
+                    `${workflow}: a second attempt runs when ${id} fails`,
+                );
+                assert.equal(scanInputs(retry), scanInputs(scan), `${workflow}: the second attempt repeats ${id}'s scan`);
+                assert.doesNotMatch(retry, /continue-on-error:/, `${workflow}: the second attempt's failure fails the job`);
             }
         }
     }
