@@ -115,6 +115,48 @@ public static class Power {
 '@
 [Power]::Sleep((Get-Process -Id APP_PID).MainWindowHandle)
 `;
+// Prints which window is in front, and brings the app's window there when another is, as its user's click would.
+const FOREGROUND_SCRIPT = `
+$ErrorActionPreference = 'Stop'
+Add-Type -TypeDefinition @'
+using System;
+using System.Text;
+using System.Runtime.InteropServices;
+public static class Foreground {
+    [DllImport("user32.dll")] static extern IntPtr GetForegroundWindow();
+    [DllImport("user32.dll")] static extern uint GetWindowThreadProcessId(IntPtr window, out uint process);
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern int GetWindowText(IntPtr window, StringBuilder text, int length);
+    [DllImport("user32.dll")] static extern bool AttachThreadInput(uint from, uint to, bool attach);
+    [DllImport("kernel32.dll")] static extern uint GetCurrentThreadId();
+    [DllImport("user32.dll")] static extern bool BringWindowToTop(IntPtr window);
+    [DllImport("user32.dll")] static extern bool SetForegroundWindow(IntPtr window);
+    [DllImport("user32.dll")] static extern bool ShowWindow(IntPtr window, int command);
+    static string Describe(IntPtr window) {
+        uint process;
+        GetWindowThreadProcessId(window, out process);
+        StringBuilder text = new StringBuilder(256);
+        GetWindowText(window, text, text.Capacity);
+        return string.Format("the window of process {0}, '{1}'", process, text);
+    }
+    public static string Bring(IntPtr app) {
+        IntPtr front = GetForegroundWindow();
+        if (front == app) return "the app's window was in front";
+        string was = front == IntPtr.Zero ? "no window" : Describe(front);
+        uint process;
+        uint thread = GetWindowThreadProcessId(front, out process);
+        uint own = GetCurrentThreadId();
+        // Windows lets a process take the front from the one that has it once their input is joined.
+        AttachThreadInput(own, thread, true);
+        ShowWindow(app, 5);
+        BringWindowToTop(app);
+        SetForegroundWindow(app);
+        AttachThreadInput(own, thread, false);
+        return string.Format("{0} was in front; the app's window {1}", was, GetForegroundWindow() == app ? "came to the front" : "could not be brought to the front");
+    }
+}
+'@
+[Foreground]::Bring((Get-Process -Id APP_PID).MainWindowHandle)
+`;
 // Asks the window whether its user's session may end, as Windows does with WM_QUERYENDSESSION as its user signs out,
 // and prints its answer, 0 for no. A window that takes 5 s to answer fails.
 const END_SESSION_SCRIPT = `
@@ -745,13 +787,13 @@ function openLink() {
 }
 
 // Sends commands to the page through WebView2's DevTools, in order, and gives the last one's result. The page has the
-// focus a user's click gives it.
-async function devTools(...commands) {
+// focus a user's click gives it, unless isFocusEmulated is false.
+async function devTools(commands, { isFocusEmulated = true } = {}) {
     const signal = AbortSignal.timeout(ASKED_TIMEOUT_MS);
     const targets = await (await fetch(`http://127.0.0.1:${DEVTOOLS_PORT}/json`, { signal })).json();
     const page = targets.find((target) => target.type === 'page');
     if (!page) throw new Error('WebView2 lists no page');
-    const sent = [{ method: 'Emulation.setFocusEmulationEnabled', params: { enabled: true } }, ...commands];
+    const sent = [...(isFocusEmulated ? [{ method: 'Emulation.setFocusEmulationEnabled', params: { enabled: true } }] : []), ...commands];
     const socket = new WebSocket(page.webSocketDebuggerUrl);
     try {
         const { error, result } = await new Promise((done, fail) => {
@@ -773,7 +815,7 @@ async function devTools(...commands) {
 // Runs an expression in the page, after the commands given before it, as a user's click would unless userGesture is
 // false, and gives its value.
 async function inPage(expression, userGesture = true, ...before) {
-    const { result } = await devTools(...before, { method: 'Runtime.evaluate', params: { expression, userGesture, awaitPromise: true, returnByValue: true } });
+    const { result } = await devTools([...before, { method: 'Runtime.evaluate', params: { expression, userGesture, awaitPromise: true, returnByValue: true } }]);
     return result.value;
 }
 
@@ -822,7 +864,16 @@ async function fillScreen() {
     await readClipboard();
     try {
         const entered = await onClick(FULL_SCREEN);
-        if (entered !== 'full') throw new Error(entered);
+        if (entered !== 'full') {
+            // What the page's focus is without DevTools', and which window is in front, which comes there if it was
+            // another; then the click once more, whose answer the run shows either way.
+            const isFocused = (await devTools([{ method: 'Runtime.evaluate', params: { expression: 'document.hasFocus()', returnByValue: true } }], { isFocusEmulated: false })).result.value;
+            const front = execFileSync('powershell', ['-NoProfile', '-Command', FOREGROUND_SCRIPT.replace('APP_PID', String(app.pid))], { encoding: 'utf8', timeout: ASKED_TIMEOUT_MS }).trim();
+            const again = await onClick(FULL_SCREEN);
+            const told = `${entered}; the page's own focus ${isFocused}; ${front}; asked again: ${again}`;
+            if (again !== 'full') throw new Error(told);
+            console.log(`crossbind e2e: full screen came at the second click: ${told}`);
+        }
         await new Promise((done) => { setTimeout(done, SETTLE_MS); });
         const script = SCALE_SCRIPT.replace('APP_PID', String(app.pid));
         const covered = execFileSync('powershell', ['-NoProfile', '-Command', script], { encoding: 'utf8', timeout: ASKED_TIMEOUT_MS }).trim();
