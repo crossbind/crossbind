@@ -32,6 +32,7 @@ import opensslConfig from '../../../ports/openssl/base/mergeConfig.mjs';
 import sqliteBuild from '../../../ports/sqlite3/base/build.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
+const workflowJob = (workflow, name) => workflow.split(/\n(?= {4}[a-z][a-z-]*:\n)/).find((block) => block.startsWith(`    ${name}:\n`)) ?? '';
 
 test('native validation builds the workspace dependency closure in topological order', () => {
     const entry = (name, dependencies = {}) => ({ directory: name, manifest: { name, dependencies } });
@@ -246,7 +247,7 @@ test('the native validation CLI runs one target group and refuses unknown, unsaf
 test('the dependency PR workflow hands changed-units outputs and target groups to the matching native jobs', () => {
     const workflow = fs.readFileSync(path.join(ROOT, '.github/workflows/validate-dependency-pr.yml'), 'utf8');
     const units = fs.readFileSync(path.join(ROOT, 'scripts/dependencies/changed-units.mjs'), 'utf8');
-    const job = (name) => workflow.split(/\n(?= {4}[a-z][a-z-]*:\n)/).find((block) => block.startsWith(`    ${name}:\n`)) ?? '';
+    const job = (name) => workflowJob(workflow, name);
     const written = [...units.matchAll(/GITHUB_OUTPUT, `([a-z_]+)=/g)].map((match) => match[1]).sort();
     const mapped = [...job('changes').matchAll(/\n {12}([a-z_]+): \$\{\{ steps\.units\.outputs\.([a-z_]+) \}\}/g)];
     assert.deepEqual(mapped.map((match) => match[1]).sort(), written);
@@ -856,7 +857,7 @@ test('generated dependency PRs are draft-reviewable release-neutral changes', ()
 
 test('pull-request validation derives native families and toolchain impact from paths', () => {
     const units = changedDependencyUnits(['ports/zlib/base/build.mjs', 'ports/zlib/wasm/package.json', 'tooling/docker/base.Dockerfile']);
-    assert.equal(units.toolchain, true);
+    assert.equal(units.toolchain, 'build');
     assert.deepEqual(units.families, ['zlib']);
     assert.deepEqual(
         units.linuxGroups.include.map((entry) => entry.group),
@@ -872,19 +873,81 @@ test('pull-request validation derives native families and toolchain impact from 
     assert.deepEqual(toolchainOnly.macosGroups.include, []);
 });
 
-test("the linux and windows images' toolchain paths the CLI names are a toolchain change", () => {
-    assert.equal(changedDependencyUnits(['core/crossbind/src/utils/linuxToolchain.js']).toolchain, true);
-    assert.equal(changedDependencyUnits(['core/crossbind/src/utils/windowsToolchain.js']).toolchain, true);
+test('a change to the CLI that drives the images is checked on the pinned images, without a rebuild', () => {
+    for (const file of [
+        'core/crossbind/src/actions/run.js',
+        'core/crossbind/src/utils/linuxToolchain.js',
+        'core/crossbind/src/utils/windowsToolchain.js',
+        '.github/workflows/build-linux.yml',
+    ]) {
+        assert.equal(changedDependencyUnits([file]).toolchain, 'pinned', file);
+    }
+    assert.equal(changedDependencyUnits(['core/crossbind/src/actions/run.js', 'tooling/docker/base.Dockerfile']).toolchain, 'build');
 });
 
 test('shared Trivy setup changes select toolchain validation', () => {
-    assert.equal(changedDependencyUnits(['.github/actions/setup-trivy/action.yml']).toolchain, true);
-    assert.equal(changedDependencyUnits(['.github/actions/unrelated/action.yml']).toolchain, false);
+    assert.equal(changedDependencyUnits(['.github/actions/setup-trivy/action.yml']).toolchain, 'build');
+    assert.equal(changedDependencyUnits(['.github/actions/unrelated/action.yml']).toolchain, '');
+});
+
+test("the Node version the images must carry and the toolchain gate's own workflow rebuild the family", () => {
+    assert.equal(changedDependencyUnits(['.nvmrc']).toolchain, 'build');
+    assert.equal(changedDependencyUnits(['.github/workflows/validate-dependency-pr.yml']).toolchain, 'build');
 });
 
 test('docker docs that no image copies do not select toolchain validation', () => {
-    assert.equal(changedDependencyUnits(['tooling/docker/CHANGELOG.md', 'tooling/docker/README.md']).toolchain, false);
-    assert.equal(changedDependencyUnits(['tooling/docker/licenses-README.md']).toolchain, true);
+    assert.equal(changedDependencyUnits(['tooling/docker/CHANGELOG.md', 'tooling/docker/README.md']).toolchain, '');
+    assert.equal(changedDependencyUnits(['tooling/docker/licenses-README.md']).toolchain, 'build');
+});
+
+test('the toolchain gate builds, smoke-tests and scans each image of the family in a job of its own', () => {
+    const workflow = fs.readFileSync(path.join(ROOT, '.github/workflows/validate-dependency-pr.yml'), 'utf8');
+    const smoke = fs.readFileSync(path.join(ROOT, 'scripts/smoke-images.js'), 'utf8');
+    const { scripts } = JSON.parse(fs.readFileSync(path.join(ROOT, 'tooling/docker/package.json'), 'utf8'));
+    const build = workflowJob(workflow, 'toolchain');
+    const smokeTags = Object.fromEntries(
+        [...smoke.matchAll(/\{ name: '([a-z-]+)', ref: refFor\('\1', '([^']+)'\), arch: 'amd64'/g)].map((match) => [match[1], match[2]]),
+    );
+    const legs = [...build.matchAll(/- image: ([a-z-]+)\n\s+builds: ([^\n]+)\n\s+tag: ([^\n]+)\n/g)].map((match) => ({
+        image: match[1],
+        builds: match[2].split(' '),
+        tag: match[3],
+    }));
+    const tagOf = (script) => / -t (\S+)/.exec(scripts[script] ?? '')?.[1];
+    assert.deepEqual(legs.map((leg) => leg.image).sort(), Object.keys(smokeTags).sort());
+    for (const leg of legs) {
+        assert.equal(leg.tag, smokeTags[leg.image], `${leg.image}: the job scans what the smoke test checks`);
+        assert.equal(tagOf(leg.builds.at(-1)), leg.tag, `${leg.image}: the last build makes the image the job tests`);
+        leg.builds.forEach((script, index) => {
+            assert.ok(scripts[script], `${leg.image}: tooling/docker has no ${script} script`);
+            const made = leg.builds.slice(0, index).map(tagOf);
+            const dockerfile = fs.readFileSync(path.join(ROOT, 'tooling/docker', / -f (\S+)/.exec(scripts[script])[1]), 'utf8');
+            for (const [, name, fallback] of dockerfile.matchAll(/^ARG ([A-Z_]+_IMAGE)=(\S+)$/gm)) {
+                const needed = new RegExp(`--build-arg ${name}=(\\S+)`).exec(scripts[script])?.[1] ?? fallback;
+                assert.ok(made.includes(needed), `${leg.image}: ${script} starts from ${needed}, which no earlier build makes`);
+            }
+        });
+    }
+    const steps = build.split(/\n(?= {12}- )/);
+    const buildSteps = steps.filter((step) => step.includes('for script in $BUILDS'));
+    const cliSteps = steps.filter((step) => step.includes('pnpm run check:release:web'));
+    assert.equal(buildSteps.length, 1);
+    assert.equal(cliSteps.length, 1);
+    assert.doesNotMatch(buildSteps[0], /\n {14}if:/);
+    assert.match(buildSteps[0], /node scripts\/smoke-images\.js "\$IMAGE:amd64"/);
+    assert.match(cliSteps[0], /\n {14}if: \$\{\{ matrix\.image == 'web' \}\}\n/);
+    assert.match(cliSteps[0], /\n {18}CROSSBIND_IMAGE_WEB: crossbind\/web:dev-amd64\n/);
+    assert.match(build, /\n {8}if: \$\{\{ needs\.changes\.outputs\.toolchain == 'build' \}\}\n/);
+    assert.match(build, /\n {12}fail-fast: false\n/);
+    assert.match(build, /scan-ref: \$\{\{ matrix\.tag \}\}/);
+});
+
+test('the pinned-image check builds nothing and runs only when no image input changed', () => {
+    const workflow = fs.readFileSync(path.join(ROOT, '.github/workflows/validate-dependency-pr.yml'), 'utf8');
+    const pinned = workflowJob(workflow, 'toolchain-pinned');
+    assert.match(pinned, /\n {8}if: \$\{\{ needs\.changes\.outputs\.toolchain == 'pinned' \}\}\n/);
+    assert.match(pinned, /pnpm run gate:pinned-local-sysroot\n\s+pnpm run check:release:web\n/);
+    assert.doesNotMatch(pinned, /docker build|tooling\/docker|smoke-images|CROSSBIND_IMAGE_/);
 });
 
 test('daily workflows keep write authority after validation and pin every action', () => {
@@ -907,7 +970,7 @@ test('daily workflows keep write authority after validation and pin every action
     assert.match(watch, /report\.notices/);
     assert.match(scan, /published toolchain image scan failed/);
     assert.match(pullRequestValidation, /validate-native-family\.mjs/);
-    assert.match(pullRequestValidation, /pnpm --dir tooling\/docker build:family/);
+    assert.match(pullRequestValidation, /for script in \$BUILDS; do pnpm --dir tooling\/docker run "\$script"; done/);
     assert.match(pullRequestValidation, /CROSSBIND_IMAGE_WEB: crossbind\/web:dev-amd64/);
     assert.match(pullRequestValidation, /pnpm run check:release:web/);
     assert.match(pullRequestValidation, /native-linux:[\s\S]*?max-parallel: 4\n[\s\S]*?native-macos:[\s\S]*?max-parallel: 2\n/);

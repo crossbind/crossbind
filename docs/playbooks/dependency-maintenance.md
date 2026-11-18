@@ -57,7 +57,11 @@ actual PR head, including Dependabot's Debian digest PRs, so branch protection s
 It runs one job per target group (`wasm`, `wasi`, `linux`, `linuxmusl`, `android`, `win32` and
 `base` on Linux, `ios` and `darwin` on macOS), and each job builds every package the changed
 families need once: a release train that touches every family compiles each library once per group,
-not once for every family that depends on it.
+not once for every family that depends on it. The toolchain gate builds, smoke-tests and scans each
+image in its own job, and each job first builds the base image its image starts from. When a PR
+changes only the CLI files that drive the images (`run.js`, `linuxToolchain.js`, `windowsToolchain.js`
+or `build-linux.yml`), no image is built: `gate:pinned-local-sysroot` and `check:release:web` run
+against the pinned images, which are the images that code uses after the merge.
 
 ## Security checks
 
