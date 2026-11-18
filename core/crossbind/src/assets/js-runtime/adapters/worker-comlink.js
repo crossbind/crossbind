@@ -1,6 +1,6 @@
 /* global WorkerGlobalScope */
 import * as Comlink from 'comlink';
-import { mergeDeep } from '../core.js';
+import { mergeDeep, placeOf } from '../core.js';
 import {
     callWithVectorCoercion, wrapWithVectorCoercion, setCoercionModule, unwrapCoercionProxy,
 } from './vector-coercion.js';
@@ -325,12 +325,7 @@ export function adoptModule(remote) {
 
 function resolveScriptUrl(config) {
     const fileName = config.paths.js || config.paths.worker;
-    let prefix = urlPath.getDefaultPathPrefix();
-    if (config.path) {
-        prefix = config.path;
-        if (prefix.slice(-1) !== '/') prefix += '/';
-    }
-    return urlPath.finalizePath(prefix + fileName);
+    return urlPath.finalizePath(placeOf(fileName, config, urlPath.getDefaultPathPrefix()));
 }
 
 function exposeWorker(systemConfig, createModule) {

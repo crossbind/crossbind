@@ -142,6 +142,9 @@ initNative.terminate(): void   // browser-only when useWorker:true
     js:     undefined,  // override main script URL
     worker: undefined,  // override worker script URL
   },
+    // A name is looked up under `path`. A full address (https:, blob:)
+    // or a root path is used as it is, so a file can come from another
+    // host or from URL.createObjectURL().
   path: '',             // where the assets are: a URL, a root path or a path relative to the page;
                         // the bundler plugins pass the base they serve the app from
 }

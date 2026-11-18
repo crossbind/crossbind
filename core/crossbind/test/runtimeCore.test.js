@@ -1,5 +1,6 @@
 import { describe, test, expect, vi } from 'vitest';
 import { isObject, mergeDeep, createInitCrossbind } from '../src/assets/js-runtime/core.js';
+import pathUrl from '../src/assets/js-runtime/adapters/path-url.js';
 
 const workerStub = (overrides = {}) => ({
     isWorkerScope: false,
@@ -13,10 +14,10 @@ const moduleFactory = () => vi.fn(async () => ({ ready: true }));
 
 // The emscripten factory receives the options object the runtime assembles; grabbing it is the
 // only way to exercise locateFile / toArray / toVector / the stdout routing.
-async function captureModuleOptions(config) {
+async function captureModuleOptions(config, adapter = {}) {
     let captured;
     const Module = vi.fn(async (m) => { captured = m; return m; });
-    const initNative = createInitCrossbind({ Module, systemConfig: { useWorker: false }, adapter: {}, worker: workerStub() });
+    const initNative = createInitCrossbind({ Module, systemConfig: { useWorker: false }, adapter, worker: workerStub() });
     await initNative(config);
     return { captured, config };
 }
@@ -124,6 +125,31 @@ describe('createInitCrossbind', () => {
         // .data always resolves to the .txt payload the loader actually serves.
         expect(captured.locateFile('anything.data')).toBe('/assets/x.data.txt');
         expect(captured.locateFile('plain.js')).toBe('/assets/plain.js');
+    });
+
+    test('locateFile leaves a wasm or data file with a full address where it is', async () => {
+        const wasm = 'blob:https://app.example/0b9d6bcd-1c1a-4e1d-9f6a-2a5e7a8b9c0d';
+        const { captured } = await captureModuleOptions({ path: '/assets', paths: { wasm, data: 'https://cdn.example/x.data' } });
+
+        expect(captured.locateFile('anything.wasm')).toBe(wasm);
+        expect(captured.locateFile('anything.data')).toBe('https://cdn.example/x.data.txt');
+        expect(captured.locateFile('plain.js')).toBe('/assets/plain.js');
+    });
+
+    test('locateFile leaves a wasm file with a root path or a drive where it is', async () => {
+        const rooted = await captureModuleOptions({ path: '/assets', paths: { wasm: '/static/x.wasm' } });
+        const onDrive = await captureModuleOptions({ path: '/assets', paths: { wasm: 'C:\\app\\x.wasm' } });
+
+        expect(rooted.captured.locateFile('anything.wasm')).toBe('/static/x.wasm');
+        expect(onDrive.captured.locateFile('anything.wasm')).toBe('C:\\app\\x.wasm');
+    });
+
+    test('locateFile keeps a full address under the page adapter and its default prefix', async () => {
+        const wasm = 'blob:https://app.example/0b9d6bcd-1c1a-4e1d-9f6a-2a5e7a8b9c0d';
+        const { captured } = await captureModuleOptions({ paths: { wasm } }, pathUrl);
+
+        expect(captured.locateFile('anything.wasm')).toBe(wasm);
+        expect(captured.locateFile('crossbind.data')).toBe('/crossbind.data.txt');
     });
 
     test('toArray drains an embind vector and passes plain arrays through', async () => {
