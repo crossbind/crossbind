@@ -62,6 +62,26 @@ struct PageCall {
     uint64_t page = 0;
     uint64_t window = 0;
 };
+// A header's value that would end it, or start another, where a platform writes headers as text; and whether a header's
+// name is a token of RFC 9110's.
+bool breaksHeaders(const std::string &text);
+bool isToken(const std::string &name);
+// What a fetch() takes at most: an answer of so many bytes, within so many seconds, after so many redirects.
+constexpr std::uint64_t MAX_FETCH_BYTES = 256ull * 1024 * 1024;
+constexpr int FETCH_SECONDS = 60;
+constexpr int MAX_FETCH_REDIRECTS = 20;
+using FetchDone = std::function<void(std::optional<std::string> failure, FetchResponse response)>;
+// Asks a server with the platform's own client, as fetch() checked the request: it asks for the body uncompressed, keeps
+// no cookie, cache or credential, follows a redirect within the URL's origin and gives one elsewhere as its 3xx, and
+// fails an answer over MAX_FETCH_BYTES or FETCH_SECONDS. done gets why it failed, or the answer, its headers' names in
+// lower case, once, on a thread of the platform's.
+void fetchOnPlatform(const std::string &method, const std::string &url, const Request::Headers &headers, FetchDone done);
+// Why a fetch failed, in the same words on every platform: an answer that declares more bytes than it takes, one that
+// passes them without declaring it, one that takes too long, and one that redirects too often.
+std::string declaredTooLarge(std::uint64_t declared);
+std::string passedTheLimit();
+std::string tookTooLong();
+std::string redirectedTooOften();
 // A call of the page's to one of the app's functions through crossbind/app, for runCall() to hand its function; null for
 // options of no Value, which the call's answer then refuses.
 std::shared_ptr<StateOf<Call>> pageCall(jsi::Runtime &rt, const std::string &name, const jsi::Value &options, PageCall page);

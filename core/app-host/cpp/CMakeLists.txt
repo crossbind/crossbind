@@ -36,16 +36,16 @@ function(crossbind_platform_headers target)
 endfunction()
 if(CMAKE_SYSTEM_NAME STREQUAL "iOS")
     set(PLATFORM_SOURCES src/ios/main.mm src/ios/bundle.mm src/ios/relay.mm src/ios/windows.mm src/darwin/activities.mm src/darwin/app_api.mm src/darwin/channels.mm
-        src/darwin/dialogs.mm src/darwin/drops.mm src/darwin/navigation.mm src/darwin/notifications.mm src/darwin/values.mm)
+        src/darwin/dialogs.mm src/darwin/drops.mm src/darwin/fetch.mm src/darwin/navigation.mm src/darwin/notifications.mm src/darwin/values.mm)
 elseif(APPLE)
     set(PLATFORM_SOURCES src/darwin/activities.mm src/darwin/app_api.mm src/darwin/bundle.mm src/darwin/channels.mm src/darwin/dialogs.mm
-        src/darwin/drops.mm src/darwin/menu.mm src/darwin/navigation.mm src/darwin/notifications.mm src/darwin/values.mm src/darwin/windows.mm)
+        src/darwin/drops.mm src/darwin/fetch.mm src/darwin/menu.mm src/darwin/navigation.mm src/darwin/notifications.mm src/darwin/values.mm src/darwin/windows.mm)
 elseif(ANDROID)
     set(PLATFORM_SOURCES src/android/jni.cpp)
 elseif(WIN32)
     enable_language(RC)
     set(PLATFORM_SOURCES src/windows/app.cpp src/windows/app_api.cpp src/windows/channels.cpp src/windows/com.cpp
-        src/windows/downloads.cpp src/windows/drops.cpp src/windows/navigation.cpp src/windows/windows.cpp src/windows/app.rc)
+        src/windows/downloads.cpp src/windows/drops.cpp src/windows/fetch.cpp src/windows/navigation.cpp src/windows/windows.cpp src/windows/app.rc)
     # llvm-windres reads a script as Windows-1252, whatever #pragma code_page it holds, and the app's name is UTF-8. It
     # reports no headers either, so a new name, version, manifest or icon would leave the old resources.
     set(RESOURCE_INPUTS "${CMAKE_BINARY_DIR}/crossbind_app.h;${CMAKE_CURRENT_SOURCE_DIR}/src/windows/app.manifest")
@@ -55,7 +55,7 @@ elseif(WIN32)
     set_source_files_properties(src/windows/app.rc PROPERTIES COMPILE_OPTIONS --codepage=65001 OBJECT_DEPENDS "${RESOURCE_INPUTS}")
 else()
     set(PLATFORM_SOURCES src/linux/app.cpp src/linux/app_api.cpp src/linux/channels.cpp src/linux/downloads.cpp src/linux/drops.cpp
-        src/linux/navigation.cpp src/linux/windows.cpp)
+        src/linux/fetch.cpp src/linux/navigation.cpp src/linux/windows.cpp)
 endif()
 if(APPLE)
     set(CMAKE_OBJCXX_STANDARD 20)
@@ -66,6 +66,7 @@ set(SOURCES
     src/app_api.cpp
     src/app_windows.cpp
     src/extension.cpp
+    src/fetch.cpp
     src/host_core.cpp
     src/page_downloads.cpp
     src/page_navigation.cpp
@@ -165,7 +166,7 @@ elseif(WIN32)
     # A window app, linked whole: the system's UCRT is all it loads beside WebView2, which webview finds itself, so no
     # loader DLL ships.
     target_link_libraries(app PRIVATE "${CROSSBIND_HERMES}/lib/libhermesvm_a.a"
-        ole32 oleaut32 uuid shell32 shlwapi user32 gdi32 advapi32 version dwmapi winmm)
+        ole32 oleaut32 uuid shell32 shlwapi user32 gdi32 advapi32 version dwmapi winmm winhttp)
     set_target_properties(app PROPERTIES WIN32_EXECUTABLE ON)
     # Some DLLs the app imports, as version, winhttp and wintrust, are no known DLLs, which Windows looks for in the app's
     # folder first: a file of their name there, as in a folder the app was downloaded to, would run inside the app. They

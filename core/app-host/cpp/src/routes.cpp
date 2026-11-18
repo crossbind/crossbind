@@ -13,7 +13,21 @@
 
 namespace crossbind {
 
+namespace app {
+
+bool breaksHeaders(const std::string &text) { return text.find_first_of(std::string("\r\n\0", 3)) != std::string::npos; }
+
+bool isToken(const std::string &name) {
+    constexpr std::string_view MARKS = "!#$%&'*+-.^_`|~";
+    return !name.empty() && std::all_of(name.begin(), name.end(), [&](unsigned char c) { return std::isalnum(c) || MARKS.find(static_cast<char>(c)) != std::string_view::npos; });
+}
+
+}  // namespace app
+
 namespace {
+
+using app::breaksHeaders;
+using app::isToken;
 
 // A video's player asks for the next part where one ends.
 constexpr std::uint64_t MAX_RANGE_BYTES = 4 * 1024 * 1024;
@@ -26,15 +40,6 @@ std::string lower(std::string text) {
 }
 
 SchemeResponse textResponse(int status, const std::string &text) { return SchemeResponse{status, "text/plain; charset=utf-8", bytesOf(text)}; }
-
-// A header's value that would end it, or start another, where a platform writes headers as text.
-bool breaksHeaders(const std::string &text) { return text.find_first_of(std::string("\r\n\0", 3)) != std::string::npos; }
-
-// A header's name is a token of RFC 9110's.
-bool isToken(const std::string &name) {
-    constexpr std::string_view MARKS = "!#$%&'*+-.^_`|~";
-    return !name.empty() && std::all_of(name.begin(), name.end(), [&](unsigned char c) { return std::isalnum(c) || MARKS.find(static_cast<char>(c)) != std::string_view::npos; });
-}
 
 // Whether the path, joined to a folder, could lead out of it: a part "..", an empty part, which std::filesystem joins as
 // a root, and on Windows a backslash or a colon, another separator, a drive's and a file's other streams.
