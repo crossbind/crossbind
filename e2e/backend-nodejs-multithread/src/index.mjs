@@ -81,6 +81,7 @@ initNative().then(async (m) => {
             strings: proxy,
             wrappers: proxy,
             types: proxy,
+            extend: proxy,
             rustKit: proxy,
             extrasWhole: proxy,
             coverage: { exports: kitExports(new URL('../.crossbind/build/bridge/', import.meta.url).pathname), seen },
