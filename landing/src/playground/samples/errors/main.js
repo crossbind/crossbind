@@ -1,13 +1,18 @@
-import { initNative, squareRoot, parsePercent } from './native/native.h';
+import {
+    initNative, indexOf, parsePercent,
+} from './native/native.h';
 
 await initNative();
 
-console.log('squareRoot(16) =', squareRoot(16));
+const s = await indexOf('crossbind', 's');
+const z = await indexOf('crossbind', 'z');
+console.log('s is at', s);
+console.log('z is at', z ?? 'no place');
 
-for (const text of ['42', '250', 'abc']) {
+for (const text of ['42', '250']) {
     try {
-        console.log(`${text} -> ${parsePercent(text)}`);
+        console.log(text, 'is', await parsePercent(text));
     } catch (error) {
-        console.log(`${text} -> ${error.message}`);
+        console.log(text, 'throws', error.message);
     }
 }

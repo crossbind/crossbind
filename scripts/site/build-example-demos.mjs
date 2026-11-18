@@ -80,15 +80,29 @@ export const DEMOS = [
     // The playground's samples (landing/src/playground/samples), built ahead of time so an unedited one runs in the
     // tutorial and the playground without a compile. `sample-<name>` builds that sample as the playground compiler
     // would, and its page (landing/demos/sample) runs the sample's main.js in the playground's sandbox.
-    { id: 'sample-hello', kind: 'sample', expect: 'the counter is at 42' },
+    { id: 'sample-function', kind: 'sample', expect: '2 + 3 = 5' },
+    { id: 'sample-class', kind: 'sample', expect: 'the counter is at 42' },
+    { id: 'sample-rustfile', kind: 'sample', expect: 'in Fahrenheit: 70.7' },
+    { id: 'sample-library', kind: 'sample', expect: 'select 1; is complete: 1' },
     { id: 'sample-numbers', kind: 'sample', expect: 'fibonacci(90) = 2880067194370816120' },
-    { id: 'sample-strings', kind: 'sample', expect: 'total: 10' },
-    { id: 'sample-structs', kind: 'sample', expect: 'north again: true' },
-    { id: 'sample-inheritance', kind: 'sample', expect: 'is a Shape: true' },
+    { id: 'sample-vectors', kind: 'sample', expect: 'the: 2' },
+    { id: 'sample-structs', kind: 'sample', expect: 'west 0 0' },
+    { id: 'sample-lifetime', kind: 'sample', expect: 'after delete: 1' },
+    { id: 'sample-inheritance', kind: 'sample', expect: 'the larger: 4' },
     { id: 'sample-callbacks', kind: 'sample', expect: 'applied twice: 400' },
     { id: 'sample-errors', kind: 'sample', expect: 'std::out_of_range: not between 0 and 100' },
-    { id: 'sample-rust', kind: 'sample', expect: 'in a new tally: null' },
-    { id: 'sample-packages', kind: 'sample', expect: '1.4.2 true' },
+    { id: 'sample-buffers', kind: 'sample', expect: '[255,191,127,0]' },
+    { id: 'sample-limits', kind: 'sample', expect: 'int takes a number, got "seven"' },
+    { id: 'sample-collections', kind: 'sample', expect: '{"Rust":4,"a":1,"file":4,"import":6}' },
+    { id: 'sample-results', kind: 'sample', expect: 'abc throws abc is not a number' },
+    { id: 'sample-zstd', kind: 'sample', expect: '1000 bytes become' },
+    { id: 'sample-capi', kind: 'sample', expect: 'rows added: 2' },
+    { id: 'sample-wrapper', kind: 'sample', expect: 'rows added: 2' },
+    { id: 'sample-crate', kind: 'sample', expect: '1.4.2 true' },
+    { id: 'sample-conan', kind: 'sample', expect: '1000 bytes pack into 1013' },
+    { id: 'sample-files', kind: 'sample', expect: 'lines: 3' },
+    { id: 'sample-worker', kind: 'sample', expect: 'timer ticks while C++ ran: 0' },
+    { id: 'sample-calls', kind: 'sample', expect: 'sum 1250025000' },
     { id: 'sample-sqlite', kind: 'sample', expect: 'Geospatial: 4' },
     { id: 'sample-hero', kind: 'sample', expect: '2880067194370816120n' },
 ];
@@ -202,7 +216,7 @@ async function buildSource(project, id, out) {
 
 const SAMPLES_ROOT = path.join(REPOSITORY_ROOT, 'landing', 'src', 'playground', 'samples');
 // The playground compiler's template: what every compile starts from, with the locks that pin its Conan recipes and
-// crates. A sample without native files of its own runs the template's, as landing/src/playground/samples.js does.
+// crates. A sample with no native file and no package runs the template's C++, as landing/src/playground/samples.js does.
 const COMPILER_TEMPLATE = path.join(REPOSITORY_ROOT, 'tooling', 'cloud', 'compiler', 'template');
 const SAMPLE_PAGE = path.join(REPOSITORY_ROOT, 'landing', 'demos', 'sample', 'index.html');
 // The playground's own runner, beside each sample's page, so the page runs the sample as the playground does.
@@ -225,10 +239,9 @@ function filesUnder(dir, prefix = '') {
 // A sample as the playground holds it: main.js, its native files and the ids of its packages.
 export function sampleProject(sample) {
     const own = Object.fromEntries(filesUnder(path.join(SAMPLES_ROOT, sample)));
-    const native = Object.keys(own).some((name) => name.startsWith('native/'))
-        ? {}
-        : Object.fromEntries(filesUnder(path.join(COMPILER_TEMPLATE, 'src', 'native'), 'native/'));
     const { packages } = SAMPLE_LIST.find(({ id }) => id === sample);
+    const binds = packages.length > 0 || Object.keys(own).some((name) => name.startsWith('native/'));
+    const native = binds ? {} : Object.fromEntries(filesUnder(path.join(COMPILER_TEMPLATE, 'src', 'native'), 'native/'));
     return { files: { ...own, ...native }, packages: [...packages] };
 }
 

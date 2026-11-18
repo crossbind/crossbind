@@ -196,36 +196,175 @@
         color: #55ff55;
     }
 
-    .turbo-menu a:hover {
+    .turbo-menu a:hover,
+    .turbo-action:hover:not(:disabled) {
         background: var(--hover);
     }
 }
 
-/* A tutorial step: the lesson beside its code where both fit, the lesson first below that. The way on to the
-   next step closes the lesson's column, and below that the page, after the code. */
-.tutorial-grid {
+/* A tutorial step is a workbench one screen tall: the contents, the lesson with Run and the output under it, and
+   the code's two windows. The contents and the code stay in view while a longer lesson scrolls. Under 1380px three
+   columns no longer hold a line of code, so the contents fold into the step menu; under 1100px it is one column, the
+   code between the lesson and Run. */
+.tutorial-page {
+    --tutorial-pane: calc(100svh - var(--nav-h) - 48px);
     display: grid;
-    grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+    grid-template-columns: 226px minmax(0, 4fr) minmax(0, 6fr);
     grid-template-rows: auto 1fr;
-    column-gap: 48px;
-    align-items: start;
+    column-gap: 36px;
+    box-sizing: border-box;
+    min-height: calc(100svh - var(--nav-h));
 }
 
-.tutorial-grid > section {
-    grid-column: 2;
+.tutorial-rail,
+.tutorial-desk {
     grid-row: 1 / span 2;
+    align-self: start;
+    position: sticky;
+    top: calc(var(--nav-h) + 28px);
+}
+
+/* The current step's bar sits left of the links, inside the list's own scroll box. */
+.tutorial-rail {
+    grid-column: 1;
+    display: flex;
+    flex-direction: column;
+    max-height: var(--tutorial-pane);
+    margin-left: -12px;
+    padding-left: 12px;
+    overflow-y: auto;
+}
+
+.tutorial-menu {
+    display: none;
+}
+
+.tutorial-lesson {
+    grid-column: 2;
+    grid-row: 1;
+    min-width: 0;
+}
+
+.tutorial-run {
+    grid-column: 2;
+    grid-row: 2;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+}
+
+.tutorial-desk {
+    grid-column: 3;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    height: var(--tutorial-pane);
+    min-height: 480px;
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+/* Each window asks for the height of its text. What is left over goes to both; what is missing comes out of the
+   tabbed one, down to a few lines, so main.js, the file a lesson changes, shows whole wherever it can. */
+.tutorial-windows {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    min-height: 0;
+    padding: 14px 6px 6px;
+}
+
+.tutorial-window {
+    flex: 1 1 var(--window-h);
+    min-height: 128px;
+}
+
+.tutorial-main {
+    flex-shrink: 0;
+    max-height: calc(100% - 142px);
+}
+
+.tutorial-output {
+    flex: 1 0 146px;
+    display: flex;
+    min-height: 146px;
+    padding: 14px 6px 6px;
+    border-radius: 4px;
+}
+
+/* The contents inside the step menu: side by side where there is room, one scrolling list on a phone, its links
+   flush left as in the guide's menu. */
+.tutorial-contents {
+    display: grid;
+    grid-template-columns: repeat(var(--columns), 232px);
+    gap: 10px 34px;
+}
+
+.tutorial-contents a {
+    justify-content: flex-start;
+}
+
+@media (max-width: 1379px) {
+    .tutorial-page {
+        grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+        column-gap: 44px;
+    }
+
+    .tutorial-rail {
+        display: none;
+    }
+
+    .tutorial-menu {
+        display: block;
+    }
+
+    .tutorial-lesson,
+    .tutorial-run {
+        grid-column: 1;
+    }
+
+    .tutorial-desk {
+        grid-column: 2;
+    }
 }
 
 @media (max-width: 1100px) {
-    .tutorial-grid {
+    .tutorial-page {
         grid-template-columns: minmax(0, 1fr);
         grid-template-rows: none;
-        gap: 32px;
+        row-gap: 22px;
+        min-height: 0;
     }
 
-    .tutorial-grid > section {
+    .tutorial-lesson,
+    .tutorial-run,
+    .tutorial-desk {
         grid-column: auto;
         grid-row: auto;
+    }
+
+    .tutorial-desk {
+        position: static;
+        height: auto;
+        min-height: 0;
+    }
+
+    .tutorial-window,
+    .tutorial-main {
+        flex: none;
+        height: var(--window-h);
+        min-height: 0;
+        max-height: none;
+    }
+}
+
+@media (max-width: 640px) {
+    .tutorial-contents {
+        grid-template-columns: minmax(0, 1fr);
+        width: min(260px, calc(100vw - 96px));
+        max-height: calc(100svh - var(--nav-h) - 120px);
+        overflow-y: auto;
     }
 }
 
@@ -302,7 +441,8 @@
 
 /* The hero's Turbo C++ menu: a tab has no inline background unless it is selected, so a hovered
    one can light up. The colour comes in as a custom property. */
-.turbo-menu [role="tab"] {
+.turbo-menu [role="tab"],
+.turbo-action {
     background: transparent;
 }
 
@@ -584,8 +724,8 @@ li > .map-link:hover {
         display: none;
     }
 
-    /* The hero code window's link keeps "Try" alone, as the whole label would wrap its menu. */
-    .hero-try-rest {
+    /* A Turbo menu's link keeps its first word alone, as the whole label would wrap the menu. */
+    .turbo-link-rest {
         display: none;
     }
 }

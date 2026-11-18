@@ -127,8 +127,9 @@ const menuItemStyle = (tokens, current) => ({
 });
 
 // A <details> opens without JavaScript too, so the links stay one click away before the page hydrates and without it.
-// Whether it is open lives on the element alone, so no state can fall behind a click.
-export function NavMenu({ tokens, label, active, items, className = '', style, summaryStyle, panelStyle }) {
+// Whether it is open lives on the element alone, so no state can fall behind a click. `children` take the place of
+// the list of `items`, for a panel that is more than one list of links.
+export function NavMenu({ tokens, label, active, items, className = '', style, summaryStyle, panelStyle, children }) {
     const root = useMenu();
     const { trigger, ...hover } = useHoverOpen(root);
 
@@ -139,23 +140,25 @@ export function NavMenu({ tokens, label, active, items, className = '', style, s
                 <Chevron />
             </summary>
             <div className="nav-dropdown-panel" style={{ ...menuPanelStyle(tokens), ...panelStyle }}>
-                <ul style={{ margin: 0, padding: 0, listStyle: 'none' }}>
-                    {items.map((item) => (
-                        <li key={item.label}>
-                            <a
-                                href={item.href}
-                                target={item.external ? '_blank' : undefined}
-                                rel={item.external ? 'noreferrer' : undefined}
-                                aria-current={item.current ? 'page' : undefined}
-                                className="tap-target menu-item"
-                                style={menuItemStyle(tokens, item.current)}
-                            >
-                                {item.label}
-                                {item.external && <span style={{ fontFamily: tokens.mono, fontSize: 11, color: tokens.textMuted }}>↗</span>}
-                            </a>
-                        </li>
-                    ))}
-                </ul>
+                {children ?? (
+                    <ul style={{ margin: 0, padding: 0, listStyle: 'none' }}>
+                        {items.map((item) => (
+                            <li key={item.label}>
+                                <a
+                                    href={item.href}
+                                    target={item.external ? '_blank' : undefined}
+                                    rel={item.external ? 'noreferrer' : undefined}
+                                    aria-current={item.current ? 'page' : undefined}
+                                    className="tap-target menu-item"
+                                    style={menuItemStyle(tokens, item.current)}
+                                >
+                                    {item.label}
+                                    {item.external && <span style={{ fontFamily: tokens.mono, fontSize: 11, color: tokens.textMuted }}>↗</span>}
+                                </a>
+                            </li>
+                        ))}
+                    </ul>
+                )}
             </div>
         </details>
     );

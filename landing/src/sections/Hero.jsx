@@ -4,7 +4,7 @@ import PlatformScene from '../components/PlatformScene.jsx';
 import PromptModal from '../components/PromptModal.jsx';
 import Tabs from '../components/Tabs.jsx';
 import {
-    TURBO, TURBO_SYNTAX, TitlePart, TurboWindow,
+    TURBO, TURBO_SYNTAX, TitlePart, TurboMenu, TurboMenuLink, TurboWindow,
 } from '../components/turbo.jsx';
 import { highlight, primaryButtonStyle, secondaryButtonStyle } from '../components/ui.jsx';
 import {
@@ -63,8 +63,6 @@ const HERO_FILES = Object.freeze([
     { id: 'math.rs', label: 'math.rs', code: heroMath.trimEnd() },
 ]);
 const HERO_RUN = `${PLAYGROUND_URL}?sample=hero`;
-// The brightest red that reads on the menu's gray, at 4.5:1; Turbo's own #aa0000 gives 3.3:1.
-const TRY_RED = '#850000';
 
 // The headline claims C++ and Rust, so the proof sits right beside it: main.js imports both, shown
 // in Turbo C++, the IDE a generation first wrote C++ in: the files are its menu, the code is in its
@@ -84,35 +82,9 @@ function UniversalCode({ tokens }) {
             lineHeight: '20px',
         }}
         >
-            <div className="turbo-menu" style={{ display: 'flex', alignItems: 'flex-start', padding: '0 4px', background: TURBO.gray, color: '#000', '--hover': TURBO.white }}>
-                {/* Sized like a tab, so it stays on the first row when the menu wraps on a phone. */}
-                <span aria-hidden="true" className="tap-target" style={{ padding: '0 8px' }}>≡</span>
-                <Tabs
-                    tokens={tokens}
-                    label="Files"
-                    tabs={HERO_FILES}
-                    panelId="hero-file"
-                    active={active}
-                    onSelect={setActive}
-                    style={{ flexWrap: 'wrap', gap: 0, marginBottom: 0 }}
-                    tabStyle={(selected) => ({
-                        // Unset unless selected: .turbo-menu in styles.css owns it, so a hover can light it.
-                        background: selected ? TURBO.green : undefined,
-                        border: 'none',
-                        borderRadius: 0,
-                        color: '#000',
-                        padding: '0 8px',
-                        fontSize: 13,
-                    })}
-                />
-                <a href={HERO_RUN} aria-label="Try in Playground" className="tap-target" style={{ marginLeft: 'auto', padding: '0 8px', color: TRY_RED, fontWeight: 700, textDecoration: 'none' }}>
-                    {/* One inline run, so the flex link keeps the space before "in". */}
-                    <span>
-                        Try
-                        <span className="hero-try-rest">{' in Playground'}</span>
-                    </span>
-                </a>
-            </div>
+            <TurboMenu tokens={tokens} label="Files" tabs={HERO_FILES} panelId="hero-file" active={active} onSelect={setActive}>
+                <TurboMenuLink href={HERO_RUN} aria-label="Try in Playground" lead="Try" rest=" in Playground" />
+            </TurboMenu>
             <div style={{ padding: '14px 6px 6px' }}>
                 <div style={{ position: 'relative', border: `3px double ${TURBO.white}` }}>
                     <TitlePart style={{ left: 8 }}>[<span style={{ color: TURBO.lime }}>■</span>]</TitlePart>

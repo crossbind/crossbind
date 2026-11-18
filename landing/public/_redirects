@@ -99,3 +99,14 @@
 /guide/bundlers.md /guide/bundler-plugins.md 301
 /guide/runtimes.md /guide.md 301
 /guide/wasi.md /guide/executables.md 301
+
+# Tutorial steps whose lessons moved when the tutorial was rewritten in parts.
+/tutorial/strings /tutorial/vectors/ 301
+/tutorial/strings/* /tutorial/vectors/ 301
+/tutorial/strings.md /tutorial/vectors.md 301
+/tutorial/rust /tutorial/rustfile/ 301
+/tutorial/rust/* /tutorial/rustfile/ 301
+/tutorial/rust.md /tutorial/rustfile.md 301
+/tutorial/packages /tutorial/library/ 301
+/tutorial/packages/* /tutorial/library/ 301
+/tutorial/packages.md /tutorial/library.md 301

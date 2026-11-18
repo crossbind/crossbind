@@ -1,9 +1,8 @@
 import { useState } from 'react';
 import { highlight } from '../components/ui.jsx';
 
-// Docs code block. Deliberately not ui.jsx's CodeWindow: that one is the hero's product shot -
-// traffic lights, centred filename - and forty of them down a reference page is noise. This is
-// the slim bar gdal3.js uses on its doc pages: what file you are looking at, and a copy button.
+// Docs code block. Forty framed windows down a reference page would be noise, so this is the slim bar
+// gdal3.js uses on its doc pages: what file you are looking at, and a copy button.
 export default function DocCode({ tokens, file, code, maxHeight }) {
     const [copied, setCopied] = useState(false);
 

@@ -1,10 +1,10 @@
-import { CodeWindow, primaryButtonStyle, secondaryButtonStyle } from '../components/ui.jsx';
+import { primaryButtonStyle, secondaryButtonStyle } from '../components/ui.jsx';
 import { PLAYGROUND_URL } from '../data.js';
 import { inline } from '../guide/inline.jsx';
 import { LOGIN_URL } from './client.js';
 import { PAUSED } from './runReason.js';
 
-// The run controls and the console the playground and the tutorial share; useRunner.js holds their state.
+// The run controls and the console's lines the playground and the tutorial share; useRunner.js holds their state.
 
 const ERROR_STREAMS = new Set(['stderr', 'warn', 'error']);
 
@@ -28,7 +28,8 @@ export function statusText(phase, session, prebuilt) {
     return `${session.remaining} of ${session.limit} compiles left today`;
 }
 
-export const runInfo = (lastRun) => (lastRun ? `Ran in ${lastRun.seconds.toFixed(1)} s · ${lastRun.prebuilt ? 'prebuilt' : 'compiled'}` : '');
+// `lead` is left out where the text sits on a narrow window's frame, beside its title.
+export const runInfo = (lastRun, lead = 'Ran in ') => (lastRun ? `${lead}${lastRun.seconds.toFixed(1)} s · ${lastRun.prebuilt ? 'prebuilt' : 'compiled'}` : '');
 
 // Signing in always returns to the playground page (tooling/cloud/worker/oauth.js), so a page elsewhere (`away`)
 // sends the visitor there to do it.
@@ -63,39 +64,43 @@ export function Account({
     );
 }
 
+// Run closes the row, after what it says; `runFirst` leads with it and lets the text take the rest of the row, for a
+// toolbar under a text rather than over a window.
 export function Toolbar({
-    tokens, phase, session, ready, runOff, prebuilt, away, onRun, onStop, onSignOut, onDeleteAccount, children, style,
+    tokens, phase, session, ready, runOff, prebuilt, away, runFirst = false, onRun, onStop, onSignOut, onDeleteAccount, children, style,
 }) {
     const button = { padding: '10px 20px', fontSize: 14, cursor: 'pointer' };
     const busy = { loading: 'Loading…', compiling: 'Compiling…' }[phase];
+    const run = phase === 'running' ? (
+        <button type="button" onClick={onStop} className="tap-target" style={{ ...secondaryButtonStyle(tokens), ...button }}>Stop</button>
+    ) : (
+        // Some browsers give a disabled button no pointer, so the reason sits on a wrapper the pointer reaches.
+        <span title={runOff ?? undefined} style={{ display: 'inline-flex' }}>
+            <button
+                type="button"
+                onClick={onRun}
+                disabled={!ready}
+                className="tap-target"
+                aria-keyshortcuts="Control+Enter Meta+Enter"
+                style={{
+                    ...primaryButtonStyle(tokens), ...button, opacity: ready ? 1 : 0.55, cursor: ready ? 'pointer' : 'default', pointerEvents: runOff ? 'none' : undefined,
+                }}
+            >
+                {busy ?? 'Run'}
+            </button>
+        </span>
+    );
     return (
         <div style={{
             display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 14, marginBottom: 16, ...style,
         }}
         >
+            {runFirst && run}
             {children}
-            <span style={{ flex: 1 }} />
-            <span aria-live="polite" style={{ fontSize: 13, color: tokens.textDim }}>{statusText(phase, session, prebuilt)}</span>
+            {!runFirst && <span style={{ flex: 1 }} />}
+            <span aria-live="polite" style={{ fontSize: 13, color: tokens.textDim, ...(runFirst ? { flex: 1, minWidth: 180 } : {}) }}>{statusText(phase, session, prebuilt)}</span>
             <Account tokens={tokens} session={session} away={away} onSignOut={onSignOut} onDeleteAccount={onDeleteAccount} />
-            {phase === 'running' ? (
-                <button type="button" onClick={onStop} className="tap-target" style={{ ...secondaryButtonStyle(tokens), ...button }}>Stop</button>
-            ) : (
-                // Some browsers give a disabled button no pointer, so the reason sits on a wrapper the pointer reaches.
-                <span title={runOff ?? undefined} style={{ display: 'inline-flex' }}>
-                    <button
-                        type="button"
-                        onClick={onRun}
-                        disabled={!ready}
-                        className="tap-target"
-                        aria-keyshortcuts="Control+Enter Meta+Enter"
-                        style={{
-                            ...primaryButtonStyle(tokens), ...button, opacity: ready ? 1 : 0.55, cursor: ready ? 'pointer' : 'default', pointerEvents: runOff ? 'none' : undefined,
-                        }}
-                    >
-                        {busy ?? 'Run'}
-                    </button>
-                </span>
-            )}
+            {!runFirst && run}
         </div>
     );
 }
@@ -138,23 +143,5 @@ export function ConsoleLines({ tokens, lines, buildLog, intro }) {
                 </>
             )}
         </div>
-    );
-}
-
-export function Console({
-    tokens, lines, buildLog, lastRun,
-}) {
-    const title = (
-        <span style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}>
-            <span>Console</span>
-            <span>{runInfo(lastRun)}</span>
-        </span>
-    );
-    return (
-        <CodeWindow tokens={tokens} title={title}>
-            <div style={{ minHeight: 140 }}>
-                <ConsoleLines tokens={tokens} lines={lines} buildLog={buildLog} />
-            </div>
-        </CodeWindow>
     );
 }
