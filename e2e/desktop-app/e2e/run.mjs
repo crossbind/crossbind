@@ -547,14 +547,22 @@ function networkAddress() {
 // It serves the page and the fetch's checks of e2e/endpoint.mjs as well, which it does not show.
 const reached = [];
 const fetchCounts = {};
+// The page the endpoint serves the probe's origins: the built page at dist's top, which a runner that took the desktop app
+// from another job lacks, else the page the desktop app carries.
+function servedPage() {
+    const top = join(root, 'dist');
+    if (existsSync(join(top, 'index.html'))) return top;
+    return join(top, process.platform === 'darwin' ? `${name}.app/Contents/Resources` : `${name}-${process.platform}-${process.arch}/resources`, 'page');
+}
 function serveReach() {
+    const page = servedPage();
     const heard = (request, kind) => {
         if (FINISHED.test(out)) return;
         const preflight = request.headers['access-control-request-private-network'] ? ', private network preflight' : '';
         reached.push(`${kind} ${request.url} from ${request.socket.remoteAddress}, origin ${request.headers.origin}${preflight}`);
     };
     const server = createServer((request, response) => {
-        if (answerPage(request, response, join(root, 'dist')) || answerFetch(request, response, fetchCounts)) return;
+        if (answerPage(request, response, page) || answerFetch(request, response, fetchCounts)) return;
         heard(request, request.method);
         response.writeHead(200, { 'content-type': 'text/plain', 'access-control-allow-origin': '*', 'access-control-allow-private-network': 'true' });
         response.end('ok');
