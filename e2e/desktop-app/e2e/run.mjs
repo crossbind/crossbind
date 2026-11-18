@@ -115,7 +115,8 @@ public static class Power {
 '@
 [Power]::Sleep((Get-Process -Id APP_PID).MainWindowHandle)
 `;
-// Prints which window is in front, and brings the app's window there when another is, as its user's click would.
+// Prints which window is in front, with ACTION Report, and with Bring brings the app's window there when another is, as
+// its user's click would.
 const FOREGROUND_SCRIPT = `
 $ErrorActionPreference = 'Stop'
 Add-Type -TypeDefinition @'
@@ -138,6 +139,11 @@ public static class Foreground {
         GetWindowText(window, text, text.Capacity);
         return string.Format("the window of process {0}, '{1}'", process, text);
     }
+    public static string Report(IntPtr app) {
+        IntPtr front = GetForegroundWindow();
+        if (front == app) return "the app's window is in front";
+        return (front == IntPtr.Zero ? "no window" : Describe(front)) + " is in front";
+    }
     public static string Bring(IntPtr app) {
         IntPtr front = GetForegroundWindow();
         if (front == app) return "the app's window was in front";
@@ -155,7 +161,7 @@ public static class Foreground {
     }
 }
 '@
-[Foreground]::Bring((Get-Process -Id APP_PID).MainWindowHandle)
+[Foreground]::ACTION((Get-Process -Id APP_PID).MainWindowHandle)
 `;
 // Asks the window whether its user's session may end, as Windows does with WM_QUERYENDSESSION as its user signs out,
 // and prints its answer, 0 for no. A window that takes 5 s to answer fails.
@@ -853,6 +859,17 @@ let isScreenFilled = false;
 // asked, its focus, its visibility and whether the click's activation reached it.
 const FULL_SCREEN = `((stood) => document.documentElement.requestFullscreen().then(() => 'full', (error) => error.message + ' (' + stood + ')'))(
     'focus ' + document.hasFocus() + ', ' + document.visibilityState + ', activation ' + navigator.userActivation?.isActive)`;
+// What FOREGROUND_SCRIPT says, doing what action names, or why it could not.
+function foreground(action) {
+    try {
+        const script = FOREGROUND_SCRIPT.replace('ACTION', action).replace('APP_PID', String(app.pid));
+        return execFileSync('powershell', ['-NoProfile', '-Command', script], { encoding: 'utf8', timeout: ASKED_TIMEOUT_MS }).trim();
+    } catch (error) {
+        return `the window in front is unknown: ${error.message}`;
+    }
+}
+// The full screen click's answer, or why it gave none, as DevTools may go with the page.
+const clickedFull = () => onClick(FULL_SCREEN).catch((error) => `the click failed: ${error.message}`);
 async function fillScreen() {
     if (isScreenFilled || !FILL_SCREEN.test(out)) return;
     isScreenFilled = true;
@@ -863,14 +880,18 @@ async function fillScreen() {
     }
     await readClipboard();
     try {
-        const entered = await onClick(FULL_SCREEN);
+        // The run's own times beside the page's FULL SCREEN lines, which a failed run shows.
+        console.log(`crossbind e2e: full screen clicked at ${new Date().toISOString()}; ${foreground('Report')}`);
+        const entered = await clickedFull();
         if (entered !== 'full') {
             // What the page's focus is without DevTools', and which window is in front, which comes there if it was
             // another; then the click once more, whose answer the run shows either way.
-            const isFocused = (await devTools([{ method: 'Runtime.evaluate', params: { expression: 'document.hasFocus()', returnByValue: true } }], { isFocusEmulated: false })).result.value;
-            const front = execFileSync('powershell', ['-NoProfile', '-Command', FOREGROUND_SCRIPT.replace('APP_PID', String(app.pid))], { encoding: 'utf8', timeout: ASKED_TIMEOUT_MS }).trim();
-            const again = await onClick(FULL_SCREEN);
-            const told = `${entered}; the page's own focus ${isFocused}; ${front}; asked again: ${again}`;
+            const at = new Date().toISOString();
+            const isFocused = await devTools([{ method: 'Runtime.evaluate', params: { expression: 'document.hasFocus()', returnByValue: true } }], { isFocusEmulated: false })
+                .then(({ result }) => result.value, (error) => `unknown: ${error.message}`);
+            const front = foreground('Bring');
+            const again = await clickedFull();
+            const told = `${entered}, answered at ${at}; the page's own focus ${isFocused}; ${front}; asked again: ${again}`;
             if (again !== 'full') throw new Error(told);
             console.log(`crossbind e2e: full screen came at the second click: ${told}`);
         }
