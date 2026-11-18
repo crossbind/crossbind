@@ -110,6 +110,8 @@ void crossbind_extension_probe(crossbind::Registry &registry) {
     // Whether the app runs in the App Sandbox, which macOS names in its environment: no other process reaches its
     // container unless the Mac's user allows it, so the app's own code leaves there what the run leaves elsewhere.
     registry.function("probe.sandboxed", [](Call call) { call.resolve(Value(std::getenv("APP_SANDBOX_CONTAINER_ID") != nullptr)); });
+    // The run's machine's own address on its network, which e2e/run.mjs gives the app and the page cannot read itself.
+    registry.function("probe.networkAddress", [](Call call) { call.resolve(Value(std::getenv("CROSSBIND_E2E_NETWORK_ADDRESS"))); });
     registry.function("probe.leaveFile", [](Call call) {
         crossbind::inBackground(call, [path = call.options()["path"].asString()] {
             std::ofstream file(std::filesystem::path(std::u8string(path.begin(), path.end())));

@@ -15,6 +15,7 @@ import {
     allocBuffer, cstring, readCString, readNumberAt, readPointerAt, writeNumberAt, writePointerAt,
 } from '@crossbind/conformance/native/confextras.h';
 import { Counter } from './native/counter.rs';
+import { reportWebFeatures } from './web-features.js';
 import {
     ACTIVITIES, AGAIN_FILE, FIRST_ARGS, FIRST_FILES, LAUNCH_ARGS, LAUNCH_URL, NOTIFICATION, OPENED_FILE, PHONE_FILE_TEXT, PHONE_FILES, PHONE_LINKS,
     PHONE_URL, PROBE_URLS, SHORTCUTS, TRASHED_FILE, TRAY,
@@ -989,6 +990,7 @@ else initNative().then(async (m) => {
         if (isDesktop && (innerWidth !== 800 || innerHeight !== 600)) {
             throw new Error(`the page is ${innerWidth} × ${innerHeight}, not the 800 × 600 app.window gives`);
         }
+        await reportWebFeatures(isAndroid);
         await checkPageFeel(isAndroid);
         // A desktop page may show an element full screen.
         if (isDesktop && !(document.fullscreenEnabled ?? document.webkitFullscreenEnabled)) throw new Error('the page cannot show an element full screen');
