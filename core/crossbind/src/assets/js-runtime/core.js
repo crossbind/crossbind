@@ -48,6 +48,16 @@ export function composeAdapters(adapters) {
     return composed;
 }
 
+// A file that names its own place: a URL with a scheme (https:, blob:), a Windows drive or a path from the root.
+export const isAbsolutePath = (path) => /^[a-z][a-z\d+.-]*:/i.test(path) || path[0] === '/';
+
+// Where a file is: one that names its own place stays there, another goes under config.path, else the default prefix.
+export function placeOf(fileName, config, defaultPrefix = '') {
+    if (isAbsolutePath(fileName)) return fileName;
+    if (!config.path) return defaultPrefix + fileName;
+    return (config.path.slice(-1) === '/' ? config.path : `${config.path}/`) + fileName;
+}
+
 function buildLocateFile(config, adapter) {
     return function locateFile(fileName) {
         let path = fileName;
@@ -57,15 +67,7 @@ function buildLocateFile(config, adapter) {
             path = config.paths.data;
         }
 
-        let prefix = '';
-        if (config.path) {
-            prefix = config.path;
-            if (prefix.slice(-1) !== '/') prefix += '/';
-        } else if (adapter.getDefaultPathPrefix) {
-            prefix = adapter.getDefaultPathPrefix();
-        }
-
-        let output = prefix + path;
+        let output = placeOf(path, config, adapter.getDefaultPathPrefix ? adapter.getDefaultPathPrefix() : '');
         if (output.endsWith('.data')) output += '.txt';
         if (adapter.finalizePath) output = adapter.finalizePath(output);
 

@@ -64,7 +64,7 @@
     {
       "source": "docs/api/init.md",
       "output": "api/init.md",
-      "sha256": "74279ed366c677f13c20cf9b7244ed205015f05dcf8470a7594dbc77f6cf9ff2"
+      "sha256": "09a82b708263094fd7ba8304b097d44a56590422ed9941b210c5821d861e0ff4"
     },
     {
       "source": "docs/api/lifecycle-and-types.md",

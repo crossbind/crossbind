@@ -49,6 +49,14 @@ describe('initWithWorker', () => {
         expect(created).toEqual(['/crossbind.js', 'https://cdn.example/w.js']);
     });
 
+    test('takes a script with a full address as it is', async () => {
+        const script = 'blob:https://app.example/0b9d6bcd-1c1a-4e1d-9f6a-2a5e7a8b9c0d';
+        await workerAdapter.initWithWorker({ path: '/assets', paths: { js: script } }, {});
+        await workerAdapter.initWithWorker({ paths: { js: 'https://cdn.example/crossbind.js' } }, {});
+
+        expect(created).toEqual([script, 'https://cdn.example/crossbind.js']);
+    });
+
     test('strips the non-cloneable config before it crosses the worker boundary', async () => {
         // Functions cannot be structured-cloned; sending them would fail with DataCloneError.
         await workerAdapter.initWithWorker({ paths: { js: 'w.js' } }, {
