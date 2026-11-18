@@ -2,8 +2,8 @@
 import {
     state, createLib, createBridgeFile, buildWasm, buildDependencies, getTargetParams, getFilteredBuildTargets, isSourceNewer, getRustJsScript,
     isAppSource, getFileHash, buildProjectApp, appLayout, appOutputName, appPlatform, appTargetParams, publishApp, buildForSimulator,
-    openInSimulator, buildApk, openOnDevice, buildForIosDevice, openOnIosDevice, connectedIosDevice, iosDevServer, resolveAppPageApi,
-    findAppPageApi, isAppBuild, emptyAppOutDir,
+    openInSimulator, buildApk, openOnDevice, buildForIosDevice, openOnIosDevice, connectedIosDevice, iosDevServer, iosDeviceAppEnv,
+    resolveAppPageApi, findAppPageApi, isAppBuild, emptyAppOutDir,
 } from 'crossbind';
 import rollupCrossbindPlugin from '@crossbind/plugin-rollup';
 
@@ -36,9 +36,9 @@ function appDevPlugin() {
     let isEmptiedHere = false;
     let outDir = null;
     let server = null;
-    let appUrl = null;
+    let appEnv = null;
     let iosDevice = null;
-    let address = 'localhost';
+    let address = null;
     let app = null;
     let closeApp = null;
     let mobileApp = null;
@@ -68,10 +68,10 @@ function appDevPlugin() {
     function open() {
         if (!isMobile()) {
             const executable = `${state.config.paths.build}/${target.appName}/${appLayout(target).executable}`;
-            return spawn(executable, [], { stdio: 'inherit', env: { ...process.env, CROSSBIND_APP_URL: appUrl } });
+            return spawn(executable, [], { stdio: 'inherit', env: { ...process.env, ...appEnv } });
         }
         // The terminal's input stays Vite's: simctl, devicectl and adb would forward it to the device.
-        const options = { env: { CROSSBIND_APP_URL: appUrl }, stdio: ['ignore', 'inherit', 'inherit'] };
+        const options = { env: appEnv, stdio: ['ignore', 'inherit', 'inherit'] };
         let opened;
         if (target.platform === 'android') opened = openOnDevice(mobileApp, options);
         else opened = iosDevice ? openOnIosDevice(mobileApp, { ...options, device: iosDevice }) : openInSimulator(mobileApp, { ...options, show: true });
@@ -175,8 +175,11 @@ function appDevPlugin() {
             [target] = getFilteredBuildTargets(devParams, { buildType: 'debug', runtimeEnv: 'app' });
             server = devServer;
             devServer.httpServer?.once('listening', () => {
-                const host = address.includes(':') ? `[${address}]` : address;
-                appUrl = `http://${host}:${devServer.httpServer.address().port}${devServer.config.base}`;
+                const { port } = devServer.httpServer.address();
+                const { base } = devServer.config;
+                // An iPhone or iPad opens its own localhost, which its debug host relays to the dev server at this Mac's
+                // address.
+                appEnv = iosDevice ? iosDeviceAppEnv(address, port, base) : { CROSSBIND_APP_URL: `http://localhost:${port}${base}` };
                 refresh({ always: true }).catch((error) => devServer.config.logger.error(error.message));
             });
             devServer.httpServer?.once('close', stop);

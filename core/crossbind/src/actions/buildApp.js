@@ -475,7 +475,7 @@ export function publishApp(target, { to = appOutputPath(target), page = null } =
         const privacy = mergedPrivacy(ownPrivacy, extensions.privacy);
         writeXcodeProject(to, {
             ...options, privacy, entitlements: mergedEntitlements(extensions.entitlements), plist: extensions.plist, targets: extensions.targets,
-            appGroup: appGroupOf('ios', extensions),
+            appGroup: appGroupOf('ios', extensions), isDevelopment: target.buildType === 'debug',
         });
         if (target.buildType === 'release') warnUnreasonedApis(to, privacy);
     } else if (target.platform === 'android') {

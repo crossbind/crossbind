@@ -62,7 +62,7 @@ vi.mock('node:os', async (importOriginal) => {
 });
 
 const {
-    buildForIosDevice, connectedIosDevice, iosDeviceAddress, iosDeviceOption, iosDevServer, default: openOnIosDevice,
+    buildForIosDevice, connectedIosDevice, iosDeviceAddress, iosDeviceAppEnv, iosDeviceOption, iosDevServer, default: openOnIosDevice,
 } = await import('../src/actions/iosDevice.js');
 
 const DEVICE = { name: "Ada's iPhone", udid: PHONE.udid, isWired: true };
@@ -219,6 +219,30 @@ describe('the dev server an iPhone opens', () => {
         expect(() => iosDevServer(DEVICE, 'localhost')).toThrow("Ada's iPhone cannot reach this Mac at localhost: give --host an address the phone reaches");
         expect(() => iosDevServer(DEVICE, '127.0.0.1')).toThrow('cannot reach this Mac at 127.0.0.1');
     });
+
+    test('is at an IPv6 address --host names, but never at a link-local one, whose zone is an interface of this Mac', () => {
+        expect(iosDevServer(DEVICE, '2001:db8::5')).toEqual({ address: '2001:db8::5', host: '2001:db8::5' });
+        expect(() => iosDevServer(DEVICE, 'fe80::1c2b:3d4e:5f60:7182%en9'))
+            .toThrow("Ada's iPhone cannot reach this Mac at fe80::1c2b:3d4e:5f60:7182%en9, a link-local IPv6 address, which names an interface of this Mac: give --host");
+        expect(() => iosDevServer(DEVICE, 'FEBF::1')).toThrow('a link-local IPv6 address');
+    });
+});
+
+describe('what the app on an iPhone opens', () => {
+    test("is the dev server's port on its own localhost, where WebKit compiles the page, and this Mac's address, where the debug host relays that port", () => {
+        expect(iosDeviceAppEnv('169.254.115.27', 5173, '/')).toEqual({
+            CROSSBIND_APP_URL: 'http://localhost:5173/',
+            CROSSBIND_APP_DEV_SERVER: '169.254.115.27:5173',
+        });
+        expect(iosDeviceAppEnv('192.168.1.6', 5174, '/app/')).toEqual({
+            CROSSBIND_APP_URL: 'http://localhost:5174/app/',
+            CROSSBIND_APP_DEV_SERVER: '192.168.1.6:5174',
+        });
+    });
+
+    test('names an IPv6 address of this Mac in brackets, apart from its port, as a URL does', () => {
+        expect(iosDeviceAppEnv('2001:db8::5', 5173, '/').CROSSBIND_APP_DEV_SERVER).toBe('[2001:db8::5]:5173');
+    });
 });
 
 describe("an iOS app's build for the device", () => {
@@ -255,12 +279,12 @@ describe("an iOS app's build for the device", () => {
 
 describe('an iOS app opened on the iPhone', () => {
     test('installs, then launches with its console and its environment, as the app its Info.plist names', () => {
-        const { child } = openOnIosDevice('/x/demo.app', { env: { CROSSBIND_APP_URL: 'http://169.254.115.27:5173/' }, device: DEVICE });
+        const { child } = openOnIosDevice('/x/demo.app', { env: iosDeviceAppEnv('169.254.115.27', 5173, '/'), device: DEVICE });
 
         expect(apple.calls).toContainEqual(['xcrun', 'devicectl', 'device', 'install', 'app', '--device', PHONE.udid, '/x/demo.app']);
         expect(spawn).toHaveBeenLastCalledWith('xcrun', [
             'devicectl', 'device', 'process', 'launch', '--device', PHONE.udid, '--console', '--terminate-existing',
-            '--environment-variables', '{"CROSSBIND_APP_URL":"http://169.254.115.27:5173/"}', 'com.example.demo',
+            '--environment-variables', '{"CROSSBIND_APP_URL":"http://localhost:5173/","CROSSBIND_APP_DEV_SERVER":"169.254.115.27:5173"}', 'com.example.demo',
         ], expect.anything());
         expect(child).toBe(apple.launched);
     });

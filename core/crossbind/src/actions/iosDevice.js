@@ -14,6 +14,8 @@ const LAUNCHED = /Launched application with/;
 const LOOPBACK = ['localhost', '127.0.0.1', '::1'];
 // Vite's --host for every address of this Mac.
 const EVERY_ADDRESS = [true, '0.0.0.0', '::'];
+// fe80::/10, whose zone is an interface of the machine that names it.
+const LINK_LOCAL_IPV6 = /^fe[89ab][0-9a-f]:/i;
 
 const developerModeFix = (name) => `Developer Mode is off on ${name}: turn it on in Settings › Privacy & Security › Developer Mode, which restarts ${name}, and run again.`;
 
@@ -146,9 +148,20 @@ export function iosDevServer(device, requested) {
     if (LOOPBACK.includes(requested)) {
         throw new Error(`crossbind: ${device.name} cannot reach this Mac at ${requested}: give --host an address the phone reaches, or leave --host out.`);
     }
+    if (typeof requested === 'string' && LINK_LOCAL_IPV6.test(requested)) {
+        throw new Error(`crossbind: ${device.name} cannot reach this Mac at ${requested}, a link-local IPv6 address, which names an interface of this Mac: give --host another address the phone reaches, or leave --host out.`);
+    }
     if (EVERY_ADDRESS.includes(requested)) return { address: iosDeviceAddress(device), host: requested };
     const address = typeof requested === 'string' ? requested : iosDeviceAddress(device);
     return { address, host: address };
+}
+
+// What the app on the device opens: the dev server's port on its own localhost, whose page WebKit compiles and makes a
+// secure context, which it does for no page from this Mac's address, and where the dev server is, to which the debug
+// host relays that port, as adb reverse does an Android device's.
+export function iosDeviceAppEnv(address, port, base) {
+    const host = address.includes(':') ? `[${address}]` : address;
+    return { CROSSBIND_APP_URL: `http://localhost:${port}${base}`, CROSSBIND_APP_DEV_SERVER: `${host}:${port}` };
 }
 
 function noTeam() {

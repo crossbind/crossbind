@@ -47,9 +47,13 @@ const LAUNCH_COLOR = 'LaunchBackground';
 const ASSOCIATED_DOMAINS = 'com.apple.developer.associated-domains';
 const APP_GROUPS = 'com.apple.security.application-groups';
 
+// A development build on a device loads its page from the dev server on the Mac, which iOS lets the app reach once the
+// device's user allows it on the local network, with this reason, unless an extension gives the app's own.
+const DEV_LOCAL_NETWORK = { NSLocalNetworkUsageDescription: 'The development build loads its page from the dev server on your Mac.' };
+
 // The app's Info.plist, with the keys its extensions give, and the App Group its native code reads where the targets of
 // its extensions' share one.
-const infoPlist = (name, urlSchemes, fileTypes, activityTypes, shortcutItems, hasBackground, usage, encryption, multipleWindows, appGroup, plist) => xmlPlist(mergedPlist({
+const infoPlist = (name, urlSchemes, fileTypes, activityTypes, shortcutItems, hasBackground, usage, encryption, multipleWindows, appGroup, plist) => mergedPlist({
     CFBundleDevelopmentRegion: 'en',
     CFBundleDisplayName: name,
     CFBundleExecutable: '$(EXECUTABLE_NAME)',
@@ -72,7 +76,7 @@ const infoPlist = (name, urlSchemes, fileTypes, activityTypes, shortcutItems, ha
     // The reasons of app.permissions, without which iOS lets the app use none of those devices.
     ...usage,
     ...(appGroup ? { CrossbindAppGroup: appGroup } : {}),
-}, plist));
+}, plist);
 
 // The project's objects: the app's target, and the targets its extensions add, which the app depends on and embeds.
 function objects(name, targetSettings, hasAssets, hasPrivacy, added) {
@@ -182,7 +186,7 @@ function writeAssets(catalog, icon, background, darkBackground) {
 export default function writeXcodeProject(to, {
     parts, identity, label, version, build = version, icon = null, urlSchemes = [], fileTypes = [], links = [], activityTypes = [], shortcutItems = [],
     background = null, darkBackground = null, usage = {}, encryption = null, multipleWindows = false, privacy = {}, entitlements = {}, plist = [], targets = [],
-    appGroup = null,
+    appGroup = null, isDevelopment = false,
 }) {
     const { name } = state.config.general;
     if (parts.length === 0) throw new Error(`crossbind: no part of the iOS app ${name} is built, so there is no Xcode project to write.`);
@@ -191,7 +195,10 @@ export default function writeXcodeProject(to, {
     if (named) throw new Error(`crossbind: the extension ${named.owner} names an iOS target ${named.name}, as the app itself is named: Xcode builds no two targets of one name.`);
     // The extensions' keys merge before the project goes, which a conflict between them then leaves as it was.
     const group = appGroup && targets.some((target) => target.appGroup) ? appGroup : null;
-    const info = infoPlist(label, urlSchemes, fileTypes, activityTypes, shortcutItems, Boolean(background), usage, encryption, multipleWindows, group, plist);
+    const info = xmlPlist({
+        ...(isDevelopment ? DEV_LOCAL_NETWORK : {}),
+        ...infoPlist(label, urlSchemes, fileTypes, activityTypes, shortcutItems, Boolean(background), usage, encryption, multipleWindows, group, plist),
+    });
     const domains = links.map((link) => `applinks:${appLinkParts(link).host}`);
     const joinedTo = (given, key, values) => (values.length > 0 ? { ...given, [key]: [...new Set([...(given[key] ?? []), ...values])] } : given);
     const signed = joinedTo(joinedTo(entitlements, ASSOCIATED_DOMAINS, domains), APP_GROUPS, group ? [group] : []);

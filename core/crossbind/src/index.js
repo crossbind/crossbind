@@ -12,7 +12,7 @@ export { default as isAppBuild } from './utils/appBuild.js';
 export { default as pageLicensesAsset } from './actions/pageLicenses.js';
 export { default as openInSimulator, buildForSimulator } from './actions/iosSimulator.js';
 export {
-    default as openOnIosDevice, buildForIosDevice, connectedIosDevice, iosDeviceAddress, iosDevServer,
+    default as openOnIosDevice, buildForIosDevice, connectedIosDevice, iosDeviceAddress, iosDeviceAppEnv, iosDevServer,
 } from './actions/iosDevice.js';
 export { default as openOnDevice, adbPath } from './actions/androidDevice.js';
 export { buildApk } from './actions/androidGradle.js';
