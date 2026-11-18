@@ -9,11 +9,30 @@ import { TARGET_GROUPS } from './validate-native-family.mjs';
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 // No image copies these, so they cannot change one.
 const DOCKER_DOCS = ['tooling/docker/CHANGELOG.md', 'tooling/docker/README.md'];
+// A change to these alone meets the images it runs with after the merge: the pinned ones.
+const IMAGE_CONSUMERS = [
+    'core/crossbind/src/actions/run.js',
+    'core/crossbind/src/utils/linuxToolchain.js',
+    'core/crossbind/src/utils/windowsToolchain.js',
+    '.github/workflows/build-linux.yml',
+];
 
 function option(name) {
     const index = process.argv.indexOf(name);
     if (index === -1 || !process.argv[index + 1]) throw new Error(`Missing ${name}.`);
     return process.argv[index + 1];
+}
+
+function toolchainMode(files) {
+    const rebuild = files.some(
+        (file) =>
+            file === '.nvmrc' ||
+            (file.startsWith('tooling/docker/') && !DOCKER_DOCS.includes(file)) ||
+            file.startsWith('.github/actions/setup-trivy/') ||
+            file === '.github/workflows/validate-dependency-pr.yml',
+    );
+    if (rebuild) return 'build';
+    return files.some((file) => IMAGE_CONSUMERS.includes(file)) ? 'pinned' : '';
 }
 
 export function changedDependencyUnits(files, root = ROOT) {
@@ -26,16 +45,7 @@ export function changedDependencyUnits(files, root = ROOT) {
             .map(([group]) => ({ group })),
     });
     return {
-        toolchain: files.some(
-            (file) =>
-                file === '.nvmrc' ||
-                (file.startsWith('tooling/docker/') && !DOCKER_DOCS.includes(file)) ||
-                file.startsWith('.github/actions/setup-trivy/') ||
-                file === 'core/crossbind/src/actions/run.js' ||
-                file === 'core/crossbind/src/utils/linuxToolchain.js' ||
-                file === 'core/crossbind/src/utils/windowsToolchain.js' ||
-                file === '.github/workflows/build-linux.yml',
-        ),
+        toolchain: toolchainMode(files),
         families,
         linuxGroups: groups('linux'),
         macosGroups: groups('macos'),
@@ -52,7 +62,7 @@ function main() {
         .filter(Boolean);
     const units = changedDependencyUnits(files);
     process.stdout.write(
-        `${files.length} changed file(s): ${units.families.length} native family/families in ${units.linuxGroups.include.length} Linux and ${units.macosGroups.include.length} macOS target group(s); toolchain=${units.toolchain}.\n`,
+        `${files.length} changed file(s): ${units.families.length} native family/families in ${units.linuxGroups.include.length} Linux and ${units.macosGroups.include.length} macOS target group(s); toolchain=${units.toolchain || 'none'}.\n`,
     );
     if (process.env.GITHUB_OUTPUT) {
         fs.appendFileSync(process.env.GITHUB_OUTPUT, `families=${units.families.join(',')}\n`);
