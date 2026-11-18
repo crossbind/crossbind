@@ -777,21 +777,26 @@ async function inPage(expression, userGesture = true, ...before) {
     return result.value;
 }
 
-// The page reads the clipboard on its user's click alone: a button at its corner reads it when DevTools clicks it with
-// the mouse, as the page's user would, and the run waits for the read, which may come after the click's answer.
+// What the expression gives that a button at the page's corner runs as DevTools clicks it with the mouse, as the page's
+// user would, which the run waits for, as it may come after the click's answer.
+async function onClick(expression) {
+    const mouse = (type) => ({ method: 'Input.dispatchMouseEvent', params: { type, x: 20, y: 20, button: 'left', clickCount: 1 } });
+    await inPage(`void (globalThis.crossbindClicked = new Promise((resolve) => {
+        const button = document.body.appendChild(document.createElement('button'));
+        button.style.cssText = 'position: fixed; left: 0; top: 0; width: 40px; height: 40px; z-index: 2147483647';
+        button.onclick = () => { resolve(${expression}); button.remove(); };
+        setTimeout(() => resolve('the click missed its button'), ${CLICK_TIMEOUT_MS});
+    }))`, false);
+    return inPage('globalThis.crossbindClicked', false, mouse('mousePressed'), mouse('mouseReleased'));
+}
+
+// The page reads the clipboard on its user's click alone.
 async function readClipboard() {
     const read = "navigator.clipboard.readText().then(() => 'read', (error) => error.message)";
-    const mouse = (type) => ({ method: 'Input.dispatchMouseEvent', params: { type, x: 20, y: 20, button: 'left', clickCount: 1 } });
     try {
         const unclicked = await inPage(read, false);
         if (unclicked === 'read') finish("the page read the clipboard without its user's click");
-        await inPage(`void (globalThis.crossbindRead = new Promise((resolve) => {
-            const button = document.body.appendChild(document.createElement('button'));
-            button.style.cssText = 'position: fixed; left: 0; top: 0; width: 40px; height: 40px; z-index: 2147483647';
-            button.onclick = () => { resolve(${read}); button.remove(); };
-            setTimeout(() => resolve('the click missed its button'), ${CLICK_TIMEOUT_MS});
-        }))`, false);
-        const clicked = await inPage('globalThis.crossbindRead', false, mouse('mousePressed'), mouse('mouseReleased'));
+        const clicked = await onClick(read);
         if (clicked !== 'read') finish(`the page could not read the clipboard on its user's click: ${clicked}`);
     } catch (error) {
         finish(`the clipboard could not be checked: ${error.message}`);
@@ -802,6 +807,10 @@ async function readClipboard() {
 // full screen, then a new scale of the screen, after which the window must cover the screen still, then the page out of
 // full screen.
 let isScreenFilled = false;
+// The element full screen on the user's click, as a page asks for it: one WebView2 refuses says how the page stood as it
+// asked, its focus, its visibility and whether the click's activation reached it.
+const FULL_SCREEN = `((stood) => document.documentElement.requestFullscreen().then(() => 'full', (error) => error.message + ' (' + stood + ')'))(
+    'focus ' + document.hasFocus() + ', ' + document.visibilityState + ', activation ' + navigator.userActivation?.isActive)`;
 async function fillScreen() {
     if (isScreenFilled || !FILL_SCREEN.test(out)) return;
     isScreenFilled = true;
@@ -812,7 +821,8 @@ async function fillScreen() {
     }
     await readClipboard();
     try {
-        await inPage('document.documentElement.requestFullscreen()');
+        const entered = await onClick(FULL_SCREEN);
+        if (entered !== 'full') throw new Error(entered);
         await new Promise((done) => { setTimeout(done, SETTLE_MS); });
         const script = SCALE_SCRIPT.replace('APP_PID', String(app.pid));
         const covered = execFileSync('powershell', ['-NoProfile', '-Command', script], { encoding: 'utf8', timeout: ASKED_TIMEOUT_MS }).trim();
