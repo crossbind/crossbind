@@ -42,14 +42,18 @@ const MAX_HELD = 1000;
 // - the call of its request for pushes, which waits for the next. One that another request replaced, or a page that
 //   went, is answered null: it stops asking;
 // - the names it listens to, and those it asked for the held events of;
-// - the held events pushed for it, which wait for the next ask if it goes before it gets them.
+// - the held events pushed for it, which wait for the next ask if it goes before it gets them;
+// - its role, as its origin makes it, which each of its messages tells: a page of another role than the app's reaches
+//   the app's functions alone, and hears the events addressed to it alone.
 const pages = new Map();
 
-function pageOf(id) {
+function pageOf(id, role) {
     let page = pages.get(id);
+    if (page && role !== undefined) page.role = role;
     if (!page) {
         page = {
             id,
+            role: role ?? '',
             handles: new Set(),
             bigResults: new Map(),
             pushes: [],
@@ -308,12 +312,26 @@ function answer(page, message, attachments) {
     }
 }
 
-// The page that listens to the events of this name, and for a held one asked for them, that is first in front among
-// these pages.
+// The messages of crossbind/app, which a page of another role than the app's may send: its calls of the app's
+// functions, which name the roles they take, their cancels, and its events.
+const APP_MESSAGES = new Set(['app', 'cancel', 'listen', 'events']);
+
+// Why the host refuses a page's message, or nothing: a page of another role reaches neither the module nor the events
+// held for the app's own pages.
+function refusalOf(page, message) {
+    if (page.role === 'app') return null;
+    const role = page.role ? `the role ${page.role}` : 'no role';
+    if (!APP_MESSAGES.has(message[0])) return `crossbind: a page of ${role} reaches the app's functions alone, not its module`;
+    if (message[0] === 'app' && message[2][0] === 'events.held') return `crossbind: a page of ${role} takes no events the app holds for its own pages`;
+    return null;
+}
+
+// The page of the role app that listens to the events of this name, and for a held one asked for them, that is first in
+// front among these pages.
 function frontOf(ids, name, isHeld) {
     for (const id of ids) {
         const page = pages.get(id);
-        if (page && (isHeld ? isAsking(page, name) : page.isListening && page.listensTo.has(name))) return page;
+        if (page?.role === 'app' && (isHeld ? isAsking(page, name) : page.isListening && page.listensTo.has(name))) return page;
     }
     return null;
 }
@@ -329,7 +347,7 @@ function pushHeld(page, name, value) {
     push(page, entry);
 }
 
-const isAsking = (page, name) => page.isListening && page.listensTo.has(name) && page.askedFor.has(name);
+const isAsking = (page, name) => page.role === 'app' && page.isListening && page.listensTo.has(name) && page.askedFor.has(name);
 
 // A page went, by a reload or with its window: what it held, the module lets go of, and what was pushed for it
 // reaches no page, but a held event it may not have got, which another page that asked for those of its name gets.
@@ -374,6 +392,11 @@ export function installHost(embindModule, env) {
 
     // A message of a page's, with the byte arrays its frame carried.
     const receive = (call, message, attachments, page) => {
+        const refusal = refusalOf(page, message);
+        if (refusal) {
+            __host_reply(call, JSON.stringify([1, encodeError(new Error(refusal))]));
+            return;
+        }
         // One of the app's own functions, which the host answers once its function has, after the messages it sent
         // before, which go with the pushes.
         if (message[0] === 'app' && message[2][0] === 'events.held') {
@@ -410,7 +433,7 @@ export function installHost(embindModule, env) {
         }
     };
 
-    globalThis.__crossbind_receive = (call, text, page) => receive(call, JSON.parse(text), [], pageOf(page));
+    globalThis.__crossbind_receive = (call, text, page, role) => receive(call, JSON.parse(text), [], pageOf(page, role));
 
     // The result of a call of one of the app's functions, with how many messages it sent before it.
     globalThis.__crossbind_answered = (call, value, sent, page) => {
@@ -445,7 +468,7 @@ export function installHost(embindModule, env) {
             return;
         }
         let reached;
-        if (to === null) reached = [...pages.values()];
+        if (to === null) reached = [...pages.values()].filter((page) => page.role === 'app');
         else if (Array.isArray(to)) reached = [frontOf(to, name, false)];
         else reached = [pages.get(to)];
         for (const page of reached) {
@@ -458,7 +481,7 @@ export function installHost(embindModule, env) {
     globalThis.__crossbind_gone = (page) => pageWent(page);
 
     // A message in the query, its attachments one after another in the body, which the reply of call answers.
-    globalThis.__crossbind_frame = (call, query, buffer, page) => {
+    globalThis.__crossbind_frame = (call, query, buffer, page, role) => {
         const message = JSON.parse(parseQuery(query).m);
         const attachments = [];
         let offset = 0;
@@ -466,7 +489,7 @@ export function installHost(embindModule, env) {
             attachments.push(viewOf(kind, buffer, offset, length));
             offset += length;
         }
-        receive(call, message.slice(0, 4), attachments, pageOf(page));
+        receive(call, message.slice(0, 4), attachments, pageOf(page, role));
     };
 
     globalThis.__crossbind_result = (query, body, page) => {

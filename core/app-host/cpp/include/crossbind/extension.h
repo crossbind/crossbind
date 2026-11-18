@@ -21,7 +21,7 @@
 // The newest version of the contract between crossbind and its extensions this host is built for, which an extension's
 // crossbind.extension.js names: one written for several tells them apart with it, as #if CROSSBIND_EXTENSION_CONTRACT >=
 // 2 does.
-#define CROSSBIND_EXTENSION_CONTRACT 2
+#define CROSSBIND_EXTENSION_CONTRACT 3
 
 namespace crossbind {
 
@@ -94,13 +94,18 @@ class Page {
 public:
     uint64_t id() const { return id_; }
     uint64_t windowId() const { return windowId_; }
+    // What the page's origin makes it, as its calls name it: "app" for a page of the app's own origins, the role an
+    // extension gave an origin it serves for a page of that origin, and "" for a page of any other origin, which
+    // page-navigation may load and which reaches none of the app's functions. A call of the app's own code is of none.
+    const std::string &role() const { return role_; }
 
 private:
     friend struct app::RegistryAccess;
-    Page(uint64_t id, uint64_t windowId) : id_(id), windowId_(windowId) {}
+    Page(uint64_t id, uint64_t windowId, std::string role = {}) : id_(id), windowId_(windowId), role_(std::move(role)) {}
 
     uint64_t id_;
     uint64_t windowId_;
+    std::string role_;
 };
 
 // A window of the app's, which onWindow and onWindowClosed get, for the main thread while it is open: its id within
@@ -156,9 +161,10 @@ private:
 };
 
 // A request of the page's for one of an extension's URLs, as crossbind/app's routeUrl() names them:
-// crossbind://app/ext/<extension>/<path>, on Android https://appassets.androidplatform.net/ext/<extension>/<path>. Its
-// owner answers it once, from any thread; one that every copy lets go of unanswered gets 500. Any of the app's pages
-// may load the URL, as it loads the page's own files, without the token its calls carry.
+// crossbind://app/ext/<extension>/<path>, on Android https://appassets.androidplatform.net/ext/<extension>/<path>; or
+// for one of an origin an extension serves (serveOrigin()). Its owner answers it once, from any thread; one that every
+// copy lets go of unanswered gets 500. Any of the app's pages may load the URL, as it loads the page's own files,
+// without the token its calls carry.
 class Request {
 public:
     using Headers = std::vector<std::pair<std::string, std::string>>;
@@ -395,8 +401,10 @@ private:
 // refuses it.
 enum class NavigationAnswer { load, openOutside, refuse, useDefault };
 
-// A navigation of the page's to a URL beyond the app's own origins, which load without asking, which its owner answers
-// as its hook returns. A page another origin loads in the app reaches none of the app's functions. Android's WebView
+// A navigation of the page's that the host does not take itself, which its owner answers as its hook returns. The app's
+// own origins load without asking for a page of the role app, and an origin an extension serves for a page of the role
+// app or of that origin; a page of a served origin goes to no other of the app's origins, which the host refuses before
+// any owner hears of it. A page another origin loads in the app reaches none of the app's functions. Android's WebView
 // asks about no frame's first load, which goes on without one.
 class Navigation {
 public:
@@ -513,11 +521,11 @@ private:
 
 // What an extension sends the pages as events, each named after the extension, as clipboard.changed is an event changed
 // of the extension clipboard's: a page's listeners of that name get its value through crossbind/app's events.on(). Any
-// thread may hold a copy and send. emit() reaches every page that listens to the name, or the one page given;
-// emitToFront() the page in front that listens, of the window its user used last, for what one page is to act on once.
-// hold() keeps each until a page asks for the events of its name with events.held(), as what came before it listened,
-// then hands it to the page in front that asked. A value with bytes, which JSON has none of, throws; so does an empty
-// name.
+// thread may hold a copy and send. emit() reaches every page of the role app that listens to the name, or the one page
+// given, whatever its role; emitToFront() the page of the role app in front that listens, of the window its user used
+// last, for what one page is to act on once. hold() keeps each until a page of the role app asks for the events of its
+// name with events.held(), as what came before it listened, then hands it to the page in front that asked. A value with
+// bytes, which JSON has none of, throws; so does an empty name.
 class Events {
 public:
     void emit(const std::string &name, const Value &value = {}) const;
@@ -553,6 +561,10 @@ public:
     // which it must not hold up: it answers there, or hands the call on, as to inBackground(). A call of the app's own,
     // through invoke(), runs it on the caller's thread, so it may run on several at once. What it throws fails the call.
     void function(const std::string &name, Function fn);
+    // A function the pages of these roles call, "app" for the app's own pages: function(name, fn) is this one with
+    // {"app"} alone. A call of a page of another role fails before the function hears of it; a call of the app's own
+    // code reaches it whatever the roles.
+    void function(const std::string &name, std::vector<std::string> roles, Function fn);
     // Answers the page's requests for the extension's URLs: fn gets each GET and HEAD on the thread the webview asks on,
     // the main thread but on Android, where it is one of the WebView's, which waits for the answer, and several may ask
     // at once: fn must not hold it up, and answers there or hands the request on, as respondFile() does to a thread of
@@ -708,6 +720,36 @@ void inBackground(Call call, std::function<Value()> work);
 // why the call failed, or its result, once, on the thread that answers: the caller's, before invoke returns, for a
 // call that fails at once or that its function answers there.
 void invoke(const std::string &name, Value options, std::function<void(std::optional<std::string> failure, Value result)> done);
+
+// An origin of the app's own that an extension serves from serveOrigin() on, until end(): crossbind://<name> on Apple's
+// platforms and Linux, and http://<name>.localhost on Android and Windows. Its pages are secure contexts; their storage is
+// the origin's own, which stays from one run to the next as the same name is served again; the top frame of each gets a
+// token of the origin's role, with which it reaches the functions that name the role. Any thread may hold a copy.
+class Origin {
+public:
+    // Its URL with the path "/", which a page of the app's loads to show it, as crossbind://3fa9c2e1/, or on Android and
+    // Windows http://3fa9c2e1.localhost/.
+    const std::string &url() const;
+    // Ends it, once, from any thread: every call of its pages fails from then on, saying it ended, and those that wait
+    // for their answers are cancelled, as a reload cancels them; each window that shows one of them shows the app's own
+    // first page again; and its requests get 404 without its handler. The last copy that lets it go ends it as well.
+    void end() const;
+
+private:
+    friend struct app::RegistryAccess;
+    struct State;
+    explicit Origin(std::shared_ptr<State> state) : state_(std::move(state)) {}
+
+    std::shared_ptr<State> state_;
+};
+
+// Serves an origin from now on, from any thread once the app's extensions have all started. name is its host: lowercase
+// letters and digits, which dashes may join, 63 at most, neither "app" nor a name served now. role is what its pages
+// are, of the same letters, not "app". handler gets each GET and HEAD of the origin as a route gets its own: a Request
+// whose path starts at the origin's "/", on the thread the webview asks on, which it must not hold up. The host answers
+// another method with 405 and the paths under /__crossbind/b/ itself, the calls its pages make with their token; what
+// handler throws answers 500.
+Origin serveOrigin(const std::string &name, const std::string &role, std::function<void(Request)> handler);
 
 // What a server answered a fetch(): its status, its headers, their names in lower case, and its body.
 struct FetchResponse {

@@ -124,6 +124,9 @@ void onSchemeRequest(WebKitURISchemeRequest *request, gpointer data) {
     const char *uri = webkit_uri_scheme_request_get_uri(request);
     const char *query = uri ? std::strchr(uri, '?') : nullptr;
     incoming.query = query ? query + 1 : "";
+    const std::string address = uri ? uri : "";
+    const size_t authority = address.find("://");
+    if (authority != std::string::npos) incoming.host = address.substr(authority + 3, address.find_first_of("/?#:", authority + 3) - authority - 3);
     incoming.body = readBody(request);
     incoming.webView = webkit_uri_scheme_request_get_web_view(request);
     if (SoupMessageHeaders *headers = webkit_uri_scheme_request_get_http_headers(request)) {

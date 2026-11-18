@@ -68,6 +68,7 @@ set(SOURCES
     src/extension.cpp
     src/fetch.cpp
     src/host_core.cpp
+    src/origins.cpp
     src/page_downloads.cpp
     src/page_navigation.cpp
     src/reopen.cpp

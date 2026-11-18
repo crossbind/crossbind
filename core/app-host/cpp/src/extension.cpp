@@ -25,9 +25,10 @@ struct Call::State {
     Value options;
     // A call is the page's, which the scope checks hold to, unless the host's own code made it.
     bool isFromApp = false;
-    // The page that made it, in its window; none for the host's own code.
+    // The page that made it, in its window, and its role; none for the host's own code.
     uint64_t page = 0;
     uint64_t window = 0;
+    std::string role;
     // The answer, with how many messages went before it, and the messages of a call whose page takes them.
     std::function<void(Failure, Value, double sent)> answer;
     std::function<void(Value)> message;
@@ -70,7 +71,12 @@ struct Call::State {
 namespace {
 
 namespace jsi = facebook::jsi;
-using Functions = std::map<std::string, Registry::Function>;
+// Each function by its name, with the roles of the pages that call it.
+struct Added {
+    std::vector<std::string> roles;
+    Registry::Function fn;
+};
+using Functions = std::map<std::string, Added>;
 
 Functions &added() {
     static Functions functions;
@@ -547,7 +553,7 @@ const Value &Call::options() const { return state_->options; }
 
 bool Call::isFromPage() const { return !state_->isFromApp; }
 
-Page Call::page() const { return app::make<Page>(state_->page, state_->window); }
+Page Call::page() const { return app::make<Page>(state_->page, state_->window, state_->role); }
 
 void Call::resolve(Value result) const {
     double before = 0;
@@ -591,8 +597,16 @@ void Events::hold(const std::string &name, const Value &value) const { sendEvent
 
 std::string Registry::files() const { return resourceDir() + "/ext/" + extension_; }
 
-void Registry::function(const std::string &name, Function fn) {
+void Registry::function(const std::string &name, Function fn) { function(name, {"app"}, std::move(fn)); }
+
+void Registry::function(const std::string &name, std::vector<std::string> roles, Function fn) {
     checkStarting("the function " + name);
+    for (const auto &role : roles) {
+        if (!app::isLabel(role)) {
+            throw std::invalid_argument("crossbind: the function " + name + " names the role \"" + role +
+                                        "\", where a role is of lowercase letters and digits, which dashes may join, 63 at most");
+        }
+    }
     if (!extension_.empty()) {
         const size_t dot = name.find('.');
         const std::string prefix = dot == std::string::npos || dot + 1 == name.size() ? "" : name.substr(0, dot);
@@ -603,7 +617,7 @@ void Registry::function(const std::string &name, Function fn) {
                                         extension_ + "." + name + " does, or with a role's of the host's it takes");
         }
     }
-    if (!added().emplace(name, std::move(fn)).second) throw std::logic_error("crossbind: the app has two functions named " + name);
+    if (!added().emplace(name, Added{std::move(roles), std::move(fn)}).second) throw std::logic_error("crossbind: the app has two functions named " + name);
 }
 
 void Registry::route(std::function<void(Request)> fn) {
@@ -918,13 +932,26 @@ namespace crossbind::app {
 
 namespace {
 
-// What the function of the call's name throws fails the call.
+// Why a page of this role does not reach a function of these roles.
+std::string roleRefusal(const std::string &name, const std::string &role, const std::vector<std::string> &roles) {
+    std::string listed;
+    for (const auto &each : roles) listed += (listed.empty() ? "" : " and ") + each;
+    const std::string page = role.empty() ? "a page of no role" : "a page of the role " + role;
+    if (roles.empty()) return "crossbind: " + page + " does not reach " + name + ", which no page reaches";
+    return "crossbind: " + page + " does not reach " + name + ", which pages of the role" + (roles.size() > 1 ? "s " : " ") + listed + " call";
+}
+
+// A page's call reaches a function that names its page's role; what the function throws fails the call.
 void run(const Call &call) {
     try {
         const Functions &table = added();
         const auto function = table.find(call.name());
         if (function == table.end()) throw std::invalid_argument("crossbind: an app has no function " + call.name());
-        function->second(call);
+        const std::vector<std::string> &roles = function->second.roles;
+        if (call.isFromPage() && std::find(roles.begin(), roles.end(), call.page().role()) == roles.end()) {
+            throw std::invalid_argument(roleRefusal(call.name(), call.page().role(), roles));
+        }
+        function->second.fn(call);
     } catch (const std::exception &error) {
         call.reject(error.what());
     } catch (...) {
@@ -941,6 +968,7 @@ std::shared_ptr<StateOf<Call>> pageCall(jsi::Runtime &rt, const std::string &nam
     state->message = std::move(page.message);
     state->page = page.page;
     state->window = page.window;
+    state->role = std::move(page.role);
     try {
         state->options = valueOf(rt, options, 0);
     } catch (const std::exception &error) {
@@ -1059,6 +1087,8 @@ void startExtension(const char *name, const char *options, void (*entry)(Registr
     }
 }
 
+bool hasStarted() { return isSealed; }
+
 std::string holderOf(const std::string &role) {
     const auto holder = hooks().holders.find(role);
     return holder == hooks().holders.end() ? "" : holder->second;
@@ -1157,20 +1187,25 @@ bool isAllowedByEach(const std::vector<std::pair<std::string, std::function<bool
     return true;
 }
 
-// What the app shows: its open windows, the oldest first, which appWindow() gives, each with the page it shows and the
-// name crossbind/app's windows.open() gave it; their ids from the one in front, of the window its user used last; and
-// an Android page, of no window. Ids count from 1 within the run.
+// What the app shows: its open windows, the oldest first, which appWindow() gives, each with the page it shows, that
+// page's role and origin, and the name crossbind/app's windows.open() gave it; their ids from the one in front, of the
+// window its user used last; and an Android page, of no window. Ids count from 1 within the run. Before its first page
+// a window shows the host's own load, of the app's origin and no page.
 struct OpenWindow {
     uint64_t id;
     void *native;
     void *webView;
     std::string name;
     uint64_t page = 0;
+    std::string role;
+    std::string origin = "app";
 };
 std::mutex shownMutex;
 std::vector<OpenWindow> openWindows;
 std::vector<uint64_t> frontOrder;
 uint64_t windowlessPage = 0;
+std::string windowlessRole;
+std::string windowlessOrigin = "app";
 uint64_t windowCount = 0;
 uint64_t pageCount = 0;
 
@@ -1252,32 +1287,58 @@ void windowFocused(uint64_t id) {
     if (at != frontOrder.end()) std::rotate(frontOrder.begin(), at, at + 1);
 }
 
-Page newPage(uint64_t window) {
+Page newPage(uint64_t window, std::string role, std::string origin) {
     std::lock_guard<std::mutex> lock(shownMutex);
     const uint64_t page = ++pageCount;
-    if (window == 0) windowlessPage = page;
-    for (auto &open : openWindows) {
-        if (open.id == window) open.page = page;
+    if (window == 0) {
+        windowlessPage = page;
+        windowlessRole = role;
+        windowlessOrigin = origin;
     }
-    return make<Page>(page, window);
+    for (auto &open : openWindows) {
+        if (open.id != window) continue;
+        open.page = page;
+        open.role = role;
+        open.origin = origin;
+    }
+    return make<Page>(page, window, std::move(role));
 }
 
 Page pageOf(const void *webView) {
     std::lock_guard<std::mutex> lock(shownMutex);
-    if (!webView) return make<Page>(windowlessPage, uint64_t{0});
+    if (!webView) return make<Page>(windowlessPage, uint64_t{0}, windowlessRole);
     for (const auto &open : openWindows) {
-        if (open.webView == webView) return make<Page>(open.page, open.id);
+        if (open.webView == webView) return make<Page>(open.page, open.id, open.role);
     }
     return make<Page>(uint64_t{0}, uint64_t{0});
 }
 
 Page pageOfWindow(uint64_t window) {
     std::lock_guard<std::mutex> lock(shownMutex);
-    if (window == 0) return make<Page>(windowlessPage, uint64_t{0});
+    if (window == 0) return make<Page>(windowlessPage, uint64_t{0}, windowlessRole);
     for (const auto &open : openWindows) {
-        if (open.id == window) return make<Page>(open.page, open.id);
+        if (open.id == window) return make<Page>(open.page, open.id, open.role);
     }
     return make<Page>(uint64_t{0}, uint64_t{0});
+}
+
+std::string originOfPage(const void *webView) {
+    std::lock_guard<std::mutex> lock(shownMutex);
+    if (!webView) return windowlessOrigin;
+    for (const auto &open : openWindows) {
+        if (open.webView == webView) return open.origin;
+    }
+    return "";
+}
+
+std::vector<const void *> webViewsShowing(const std::string &origin) {
+    std::lock_guard<std::mutex> lock(shownMutex);
+    std::vector<const void *> showing;
+    if (windowlessPage != 0 && windowlessOrigin == origin) showing.push_back(nullptr);
+    for (const auto &open : openWindows) {
+        if (open.origin == origin) showing.push_back(open.webView);
+    }
+    return showing;
 }
 
 std::vector<uint64_t> frontPages() {
@@ -1474,14 +1535,7 @@ bool hasFileInputs() { return static_cast<bool>(hooks().fileInputs); }
 
 bool askPageDialog(PageDialog dialog) { return askOwner(hooks().pageDialogs, dialog, "page-dialogs"); }
 
-std::vector<std::string> &ownOrigins() {
-    static std::vector<std::string> all;
-    return all;
-}
-
-void setOwnOrigins(std::vector<std::string> origins) { ownOrigins() = std::move(origins); }
-
-bool isOwnOrigin(const std::string &origin) { return std::find(ownOrigins().begin(), ownOrigins().end(), origin) != ownOrigins().end(); }
+bool isOwnOrigin(const std::string &origin) { return isAppOrigin(origin) || !servedNameOf(origin).empty(); }
 
 void askPagePermission(PagePermission request) {
     if (!isOwnOrigin(request.origin())) {

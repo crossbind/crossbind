@@ -35,6 +35,8 @@ jmethodID responseOf;
 jmethodID answerHttpAuthentication;
 jmethodID answerDownload;
 jmethodID stopDownload;
+jmethodID serveOriginMethod;
+jmethodID endOriginMethod;
 // HostFetch, the fetch() of the activity's Java, which a thread of the host's own finds by the activity's class loader.
 jclass fetchClass;
 jmethodID fetchMethod;
@@ -332,6 +334,8 @@ extern "C" JNIEXPORT jobjectArray JNICALL Java_dev_crossbind_app_CrossbindActivi
         answerHttpAuthentication = env->GetStaticMethodID(type, "answerHttpAuthentication", "(I[B[B)V");
         answerDownload = env->GetStaticMethodID(type, "answerDownload", "(II[B)V");
         stopDownload = env->GetStaticMethodID(type, "stopDownload", "(I)V");
+        serveOriginMethod = env->GetStaticMethodID(type, "serveOrigin", "([B[B[B[B)V");
+        endOriginMethod = env->GetStaticMethodID(type, "endOrigin", "([B)V");
         fetchClass = static_cast<jclass>(env->NewGlobalRef(env->FindClass("dev/crossbind/app/HostFetch")));
         fetchMethod = env->GetStaticMethodID(fetchClass, "fetch", "(I[B[B[[BII)V");
         resources = asciiOf(env, files);
@@ -341,6 +345,9 @@ extern "C" JNIEXPORT jobjectArray JNICALL Java_dev_crossbind_app_CrossbindActivi
         core = &app::start(app::devUrl());
     }
     const char *devUrl = app::devUrl();
+    std::vector<std::string> origins{"https://appassets.androidplatform.net"};
+    if (devUrl) origins.push_back(app::originOf(devUrl));
+    app::setAppOrigins(origins);
     // The activity's one WebView shows a page of no window, 0, whose channel every activity of the process shares.
     static const std::string token = core->addWindow(0);
     jobjectArray started = env->NewObjectArray(2, env->FindClass("java/lang/String"), nullptr);
@@ -351,7 +358,8 @@ extern "C" JNIEXPORT jobjectArray JNICALL Java_dev_crossbind_app_CrossbindActivi
 
 extern "C" JNIEXPORT void JNICALL Java_dev_crossbind_app_CrossbindActivity_nativeMessage(JNIEnv *env, jclass, jint call,
     jbyteArray text) {
-    core->receive(textOf(env, text), [call](const std::string &reply) { answer(call, true, reply); });
+    // The port the message came over is its page's, which its token alone names.
+    core->receive("", textOf(env, text), [call](const std::string &reply) { answer(call, true, reply); });
 }
 
 // The byte arrays of one message, answered as a crossbind:// POST to /b/frame is on the other platforms.
@@ -371,10 +379,12 @@ extern "C" JNIEXPORT void JNICALL Java_dev_crossbind_app_CrossbindActivity_nativ
     });
 }
 
-// A file of the page or an extension's URL, which the WebView's thread waits for, as the WebView asks it to.
+// A file of the page, an extension's URL or one of a served origin, which the WebView's thread waits for, as the WebView
+// asks it to.
 extern "C" JNIEXPORT jobject JNICALL Java_dev_crossbind_app_CrossbindActivity_nativeRequest(JNIEnv *env, jclass type, jstring method,
-    jstring path, jstring query, jobjectArray headers) {
+    jstring host, jstring path, jstring query, jobjectArray headers) {
     SchemeRequest request{asciiOf(env, method), asciiOf(env, path), asciiOf(env, query), {}};
+    request.host = asciiOf(env, host);
     const std::vector<std::string> fields = textsOf(env, headers);
     // The activity measures the answer's stream to the Range the WebView takes to it.
     std::optional<std::string> range;
@@ -410,8 +420,10 @@ extern "C" JNIEXPORT jobject JNICALL Java_dev_crossbind_app_CrossbindActivity_na
     return made;
 }
 
-// A new page replaced the one that held the module's objects.
-extern "C" JNIEXPORT void JNICALL Java_dev_crossbind_app_CrossbindActivity_nativeNewPage(JNIEnv *, jclass) { core->reset(0); }
+// A new page of this URL replaced the one that held the module's objects.
+extern "C" JNIEXPORT void JNICALL Java_dev_crossbind_app_CrossbindActivity_nativeNewPage(JNIEnv *env, jclass, jbyteArray url) {
+    core->reset(0, textOf(env, url));
+}
 
 extern "C" JNIEXPORT void JNICALL Java_dev_crossbind_app_CrossbindActivity_nativeOpenUrl(JNIEnv *env, jclass, jbyteArray url) {
     app::openedUrl(textOf(env, url));
@@ -444,11 +456,41 @@ extern "C" JNIEXPORT void JNICALL Java_dev_crossbind_app_CrossbindActivity_nativ
     javaSent(call, textOf(env, text), bytesListOf(env, bytes));
 }
 
-// page-navigation's answer, as the activity's LOAD and OUTSIDE number NavigationAnswer's. The WebView opens no window of
-// the page's: it loads a link of target="_blank" in the page's place.
+// The host's navigation rule, and for what it leaves to page-navigation that holder's answer, as the activity's LOAD and
+// OUTSIDE number NavigationAnswer's. The WebView opens no window of the page's: it loads a link of target="_blank" in the
+// page's place.
 extern "C" JNIEXPORT jint JNICALL Java_dev_crossbind_app_CrossbindActivity_nativeNavigation(JNIEnv *env, jclass, jbyteArray url,
     jboolean isMainFrame, jboolean isUserInitiated) {
-    return static_cast<jint>(app::decideNavigation(nullptr, textOf(env, url), isMainFrame == JNI_TRUE, isUserInitiated == JNI_TRUE, false));
+    const std::string address = textOf(env, url);
+    const app::NavigationRule rule = app::navigationRule(nullptr, address);
+    if (rule == app::NavigationRule::load) return static_cast<jint>(app::NavigationAnswer::load);
+    if (rule == app::NavigationRule::refuse) return static_cast<jint>(app::NavigationAnswer::refuse);
+    return static_cast<jint>(app::decideNavigation(nullptr, address, isMainFrame == JNI_TRUE, isUserInitiated == JNI_TRUE, false));
+}
+
+// The activity's WebView takes a served origin: its scripts and objects, with the origin's token, from now on.
+void crossbind::app::originServed(const std::string &name) {
+    const std::optional<ServedOrigin> served = servedOrigin(name);
+    if (!served) return;
+    JNIEnv *env = attachedEnv();
+    jbyteArray origin = bytesOf(env, servedOriginOf(name));
+    jbyteArray named = bytesOf(env, name);
+    jbyteArray role = bytesOf(env, served->role);
+    jbyteArray token = bytesOf(env, core->tokenOf(0, name));
+    env->CallStaticVoidMethod(activityClass, serveOriginMethod, origin, named, role, token);
+    clearException(env);
+    env->DeleteLocalRef(token);
+    env->DeleteLocalRef(role);
+    env->DeleteLocalRef(named);
+    env->DeleteLocalRef(origin);
+}
+
+void crossbind::app::originEnded(const std::string &name) {
+    JNIEnv *env = attachedEnv();
+    jbyteArray origin = bytesOf(env, servedOriginOf(name));
+    env->CallStaticVoidMethod(activityClass, endOriginMethod, origin);
+    clearException(env);
+    env->DeleteLocalRef(origin);
 }
 
 namespace {

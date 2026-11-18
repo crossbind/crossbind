@@ -2,7 +2,6 @@
 #include "platform.h"
 #include "windows/com.h"
 
-#include <algorithm>
 #include <cstdlib>
 
 using namespace crossbind::windows;
@@ -21,18 +20,15 @@ std::string originOf(const std::string &uri) {
     return uri.substr(0, uri.find_first_of("/?#", scheme + 3));
 }
 
-std::string dropScript(const std::vector<std::string> &origins) {
-    std::string own;
-    for (const auto &origin : origins) own += (own.empty() ? "'" : ",'") + origin + "'";
-    return "if (window.top === window && [" + own + "].includes(location.protocol + '//' + location.host)) {"
-           " const isFiles = (event) => !!event.dataTransfer && event.dataTransfer.types.includes('Files');"
-           " for (const name of ['dragenter', 'dragover']) addEventListener(name, (event) => { if (isFiles(event)) event.preventDefault(); }, true);"
-           " addEventListener('drop', (event) => {"
-           "  if (!isFiles(event) || event.dataTransfer.files.length === 0) return;"
-           "  chrome.webview.postMessageWithAdditionalObjects('crossbind:drop\\n' + event.clientX + '\\n' + event.clientY, event.dataTransfer.files);"
-           " }, true);"
-           "}";
-}
+// On the app's own pages and those of the origins served, which the host's token marks.
+constexpr const char *DROP_SCRIPT = "(() => {"
+    " const isOwn = (event) => !!globalThis.__crossbind_token && !!event.dataTransfer && event.dataTransfer.types.includes('Files');"
+    " for (const name of ['dragenter', 'dragover']) addEventListener(name, (event) => { if (isOwn(event)) event.preventDefault(); }, true);"
+    " addEventListener('drop', (event) => {"
+    "  if (!isOwn(event) || event.dataTransfer.files.length === 0) return;"
+    "  chrome.webview.postMessageWithAdditionalObjects('crossbind:drop\\n' + event.clientX + '\\n' + event.clientY, event.dataTransfer.files);"
+    " }, true);"
+    "})();";
 
 std::vector<std::string> pathsOf(ICoreWebView2WebMessageReceivedEventArgs *args) {
     std::vector<std::string> paths;
@@ -62,7 +58,7 @@ std::vector<std::string> pathsOf(ICoreWebView2WebMessageReceivedEventArgs *args)
 }
 
 // webView is the controller of the window the files were dropped on.
-HRESULT onMessage(void *webView, const std::vector<std::string> &origins, ICoreWebView2WebMessageReceivedEventArgs *args) {
+HRESULT onMessage(void *webView, ICoreWebView2WebMessageReceivedEventArgs *args) {
     LPWSTR raw = nullptr;
     if (FAILED(args->TryGetWebMessageAsString(&raw))) return S_OK;
     const std::string text = take(raw);
@@ -70,7 +66,7 @@ HRESULT onMessage(void *webView, const std::vector<std::string> &origins, ICoreW
     const auto second = text.find('\n', head.size());
     if (text.compare(0, head.size(), head) != 0 || second == std::string::npos) return S_OK;
     LPWSTR source = nullptr;
-    if (FAILED(args->get_Source(&source)) || std::find(origins.begin(), origins.end(), originOf(take(source))) == origins.end()) return S_OK;
+    if (FAILED(args->get_Source(&source)) || !app::isOwnOrigin(originOf(take(source)))) return S_OK;
     const double x = std::strtod(text.c_str() + head.size(), nullptr);
     const double y = std::strtod(text.c_str() + second + 1, nullptr);
     std::vector<std::string> paths = pathsOf(args);
@@ -81,13 +77,11 @@ HRESULT onMessage(void *webView, const std::vector<std::string> &origins, ICoreW
 
 }  // namespace
 
-void takeDrops(void *webView, std::vector<std::string> origins) {
-    addTopFrameScript(webView, dropScript(origins));
+void takeDrops(void *webView) {
+    addTopFrameScript(webView, DROP_SCRIPT);
     auto *received = new Handler<ICoreWebView2WebMessageReceivedEventHandler, ICoreWebView2 *, ICoreWebView2WebMessageReceivedEventArgs *>(
         IID_ICoreWebView2WebMessageReceivedEventHandler,
-        [webView, origins = std::move(origins)](ICoreWebView2 *, ICoreWebView2WebMessageReceivedEventArgs *args) -> HRESULT {
-            return onMessage(webView, origins, args);
-        });
+        [webView](ICoreWebView2 *, ICoreWebView2WebMessageReceivedEventArgs *args) -> HRESULT { return onMessage(webView, args); });
     EventRegistrationToken token;
     coreWebView(webView)->add_WebMessageReceived(received, &token);
     received->Release();

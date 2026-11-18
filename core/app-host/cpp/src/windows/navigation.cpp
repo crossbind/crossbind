@@ -2,7 +2,7 @@
 #include "platform.h"
 #include "windows/com.h"
 
-#include <algorithm>
+#include <map>
 #include <memory>
 
 using namespace crossbind::windows;
@@ -10,31 +10,28 @@ using crossbind::CertificateError;
 using crossbind::HttpAuthentication;
 namespace app = crossbind::app;
 
-// The app's own origins load in any frame, but a window the page asks for at one of them opens nowhere, as the app's
-// windows open through windows.open(); the extension page-navigation decides every other URL, windows too, which load
-// in the page's place if they load. A page of another origin gets no token, so it reaches none of the app's functions.
+// A navigation the core's rule loads goes on in any frame, but a window the page asks for there opens nowhere, as the
+// app's windows open through windows.open(); one it refuses loads nothing, and the extension page-navigation decides
+// every other URL, windows too, which load in the page's place if they load. A page of another origin gets no token, so
+// it reaches none of the app's functions.
 namespace {
 
 struct Lock {
     // The controller of the window whose page navigates.
     void *webView;
-    std::vector<std::string> origins;
-    std::function<void()> newPage;
-    // A window's URL page-navigation loaded in the page's place, whose navigation it does not decide again.
+    std::function<void(const std::string &)> newPage;
+    // A window's URL page-navigation loaded in the page's place, or the host's own load, whose navigation it does not
+    // decide again.
     std::string approved;
 };
+
+// Each webview's lock, by its controller, on the UI thread.
+std::map<void *, std::shared_ptr<Lock>> locks;
 
 std::string originOf(const std::string &uri) {
     const auto scheme = uri.find("://");
     if (scheme == std::string::npos) return uri;
     return uri.substr(0, uri.find_first_of("/?#", scheme + 3));
-}
-
-bool allows(const Lock &lock, const std::string &uri) {
-    if (uri.rfind("about:", 0) == 0) return true;
-    // A blob URL carries the origin of the page that made it.
-    if (uri.rfind("blob:", 0) == 0) return allows(lock, uri.substr(5));
-    return std::find(lock.origins.begin(), lock.origins.end(), originOf(uri)) != lock.origins.end();
 }
 
 bool isApproved(Lock &lock, const std::string &uri) {
@@ -59,10 +56,13 @@ Starting *decide(const std::shared_ptr<Lock> &lock, bool isMainFrame) {
             LPWSTR requested = nullptr;
             args->get_Uri(&requested);
             const std::string uri = take(requested);
-            if (isApproved(*lock, uri) || allows(*lock, uri)) return S_OK;
+            const app::NavigationRule rule = app::navigationRule(lock->webView, uri);
+            if (isApproved(*lock, uri) || rule == app::NavigationRule::load) return S_OK;
             BOOL followed = FALSE;
             args->get_IsUserInitiated(&followed);
-            const app::NavigationAnswer answer = app::decideNavigation(lock->webView, uri, isMainFrame, followed != FALSE, false);
+            const app::NavigationAnswer answer = rule != app::NavigationRule::ask
+                ? app::NavigationAnswer::refuse
+                : app::decideNavigation(lock->webView, uri, isMainFrame, followed != FALSE, false);
             if (answer == app::NavigationAnswer::load) return S_OK;
             if (answer == app::NavigationAnswer::openOutside) openOutside(uri);
             args->put_Cancel(TRUE);
@@ -171,10 +171,11 @@ void takeCertificateErrors(void *webView, ICoreWebView2 *core) {
 
 }  // namespace
 
-void restrictNavigation(void *webView, std::vector<std::string> origins, std::function<void()> newPage) {
+void restrictNavigation(void *webView, std::function<void(const std::string &)> newPage) {
     ICoreWebView2 *core = coreWebView(webView);
     // The webview's handlers hold its lock, which goes once WebView2 lets go of them.
-    const auto lock = std::make_shared<Lock>(Lock{webView, std::move(origins), std::move(newPage), {}});
+    const auto lock = std::make_shared<Lock>(Lock{webView, std::move(newPage), {}});
+    locks[webView] = lock;
     EventRegistrationToken token;
     Starting *top = decide(lock, true);
     core->add_NavigationStarting(top, &token);
@@ -190,7 +191,9 @@ void restrictNavigation(void *webView, std::vector<std::string> origins, std::fu
             BOOL followed = FALSE;
             args->get_IsUserInitiated(&followed);
             args->put_Handled(TRUE);
-            const app::NavigationAnswer answer = allows(*lock, uri) ? app::NavigationAnswer::refuse : app::decideNavigation(lock->webView, uri, true, followed != FALSE, true);
+            const app::NavigationAnswer answer = app::navigationRule(lock->webView, uri) != app::NavigationRule::ask
+                ? app::NavigationAnswer::refuse
+                : app::decideNavigation(lock->webView, uri, true, followed != FALSE, true);
             if (answer == app::NavigationAnswer::load) {
                 lock->approved = uri;
                 sender->Navigate(wide(uri).c_str());
@@ -201,14 +204,22 @@ void restrictNavigation(void *webView, std::vector<std::string> origins, std::fu
     core->add_NewWindowRequested(windows, &token);
     windows->Release();
     auto *loading = new Handler<ICoreWebView2ContentLoadingEventHandler, ICoreWebView2 *, ICoreWebView2ContentLoadingEventArgs *>(
-        IID_ICoreWebView2ContentLoadingEventHandler, [lock](ICoreWebView2 *, ICoreWebView2ContentLoadingEventArgs *) -> HRESULT {
+        IID_ICoreWebView2ContentLoadingEventHandler, [lock](ICoreWebView2 *sender, ICoreWebView2ContentLoadingEventArgs *) -> HRESULT {
             // An approval no load in place took goes with the page it came from.
             lock->approved.clear();
-            lock->newPage();
+            LPWSTR source = nullptr;
+            lock->newPage(SUCCEEDED(sender->get_Source(&source)) ? take(source) : "");
             return S_OK;
         });
     core->add_ContentLoading(loading, &token);
     loading->Release();
     takeAuthentication(webView, core);
     takeCertificateErrors(webView, core);
+}
+
+void loadOwnPage(void *webView, const std::string &url) {
+    const auto lock = locks.find(webView);
+    if (lock == locks.end()) return;
+    lock->second->approved = url;
+    coreWebView(webView)->Navigate(wide(url).c_str());
 }

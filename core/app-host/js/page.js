@@ -5,8 +5,10 @@ import {
 } from './codec.js';
 import { connect } from './lean-client.js';
 
-// The app's host gives this to the top frame of its page alone.
+// The app's host gives this to the top frame of its page alone, and to a page of an origin an extension serves the base
+// of its calls, its own origin's.
 const token = globalThis.__crossbind_token;
+const callBase = globalThis.__crossbind_calls ?? 'crossbind://app/b';
 
 // A request the host refuses fails its call with what the host answered.
 async function checked(response) {
@@ -17,8 +19,8 @@ async function checked(response) {
 // macOS, iOS and Linux: WebKit's message handler, and crossbind:// requests for the bytes.
 const WEBKIT = {
     send: (text) => window.webkit.messageHandlers.crossbind.postMessage(text),
-    frame: (query, body) => fetch(`crossbind://app/b/frame?${query}`, { method: 'POST', body }).then(checked).then((response) => response.text()),
-    result: (query) => fetch(`crossbind://app/b/result?${query}`).then(checked).then((response) => response.arrayBuffer()),
+    frame: (query, body) => fetch(`${callBase}/frame?${query}`, { method: 'POST', body }).then(checked).then((response) => response.text()),
+    result: (query) => fetch(`${callBase}/result?${query}`).then(checked).then((response) => response.arrayBuffer()),
     attachBytes: 16384,
     token,
 };

@@ -10,6 +10,7 @@ import android.content.pm.PackageManager;
 import android.content.pm.ProviderInfo;
 import android.content.res.Configuration;
 import android.database.Cursor;
+import android.graphics.Bitmap;
 import android.graphics.Color;
 import android.graphics.Insets;
 import android.graphics.drawable.ColorDrawable;
@@ -103,63 +104,66 @@ public class CrossbindActivity extends Activity implements ExtensionHost {
     // In the top frame. WebView hands no one a download link's name, and the page may revoke a blob: URL at once, or
     // keep its CSP from fetching blob: and data: URLs. So the page keeps the Blob behind each blob: URL it makes, and a
     // link's name as it is followed, a link outside the document by its click() or dispatchEvent(), which no window
-    // hears. The host asks for both by a download's id once WebView starts the download, and gets them framed.
-    private static final String DOWNLOAD_SCRIPT = "if (window.top === window) {"
-            + " const blobs = new Map();"
-            + " const createObjectURL = URL.createObjectURL;"
-            + " const revokeObjectURL = URL.revokeObjectURL;"
-            + " URL.createObjectURL = (object) => {"
-            + "  const url = createObjectURL.call(URL, object);"
-            + "  if (object instanceof Blob) blobs.set(url, object);"
-            + "  return url;"
-            + " };"
-            + " URL.revokeObjectURL = (url) => {"
-            + "  blobs.delete(url);"
-            + "  revokeObjectURL.call(URL, url);"
-            + " };"
-            + " const kept = new Map();"
-            + " const keep = (link) => {"
-            + "  if (!(link instanceof HTMLAnchorElement) || !link.hasAttribute('download')) return;"
-            + "  const href = link.href;"
-            + "  const entry = { name: link.download, blob: blobs.get(href) };"
-            + "  kept.set(href, entry);"
-            + "  setTimeout(() => { if (kept.get(href) === entry) kept.delete(href); }, " + LINK_KEPT_MS + ");"
-            + " };"
-            + " addEventListener('click', (event) => keep(event.target.closest?.('a')), true);"
-            + " const click = HTMLElement.prototype.click;"
-            + " HTMLAnchorElement.prototype.click = function () { if (!this.isConnected) keep(this); return click.call(this); };"
-            + " const dispatch = EventTarget.prototype.dispatchEvent;"
-            + " HTMLAnchorElement.prototype.dispatchEvent = function (event) {"
-            + "  if (!this.isConnected && event.type === 'click') keep(this);"
-            + "  return dispatch.call(this, event);"
-            + " };"
-            + " const fromData = (url) => {"
-            + "  const comma = url.indexOf(',');"
-            + "  const body = unescape(url.slice(comma + 1));"
-            + "  const text = /;base64$/i.test(url.slice(0, comma)) ? atob(body) : body;"
-            + "  return Uint8Array.from(text, (c) => c.charCodeAt(0)).buffer;"
-            + " };"
-            + " const read = (url, blob) => blob ? blob.arrayBuffer()"
-            + "  : url.startsWith('data:') ? Promise.resolve().then(() => fromData(url))"
-            + "  : fetch(url).then((response) => {"
-            + "   if (!response.ok) throw new Error(response.status + ' ' + response.statusText);"
-            + "   return response.arrayBuffer();"
-            + "  });"
-            + " Object.defineProperty(globalThis, '" + TAKE_DOWNLOAD + "', { value: (id, url) => {"
-            + "  const entry = kept.get(url);"
-            + "  kept.delete(url);"
-            + "  read(url, entry?.blob ?? blobs.get(url)).then((bytes) => {"
-            + "   const name = new TextEncoder().encode(entry?.name ?? '');"
-            + "   const frame = new Uint8Array(8 + name.length + bytes.byteLength);"
-            + "   const view = new DataView(frame.buffer);"
-            + "   view.setUint32(0, id, true);"
-            + "   view.setUint32(4, name.length, true);"
-            + "   frame.set(name, 8);"
-            + "   frame.set(new Uint8Array(bytes), 8 + name.length);"
-            + "   " + DOWNLOAD + ".postMessage(frame.buffer);"
-            + "  }).catch((error) => " + DOWNLOAD + ".postMessage(id + '|' + error));"
-            + " } });"
-            + "}";
+    // hears. The host asks for both by a download's id once WebView starts the download, and gets them framed, through
+    // the object of this name, its origin's.
+    private static String downloadScript(String object) {
+        return "if (window.top === window) {"
+                + " const blobs = new Map();"
+                + " const createObjectURL = URL.createObjectURL;"
+                + " const revokeObjectURL = URL.revokeObjectURL;"
+                + " URL.createObjectURL = (object) => {"
+                + "  const url = createObjectURL.call(URL, object);"
+                + "  if (object instanceof Blob) blobs.set(url, object);"
+                + "  return url;"
+                + " };"
+                + " URL.revokeObjectURL = (url) => {"
+                + "  blobs.delete(url);"
+                + "  revokeObjectURL.call(URL, url);"
+                + " };"
+                + " const kept = new Map();"
+                + " const keep = (link) => {"
+                + "  if (!(link instanceof HTMLAnchorElement) || !link.hasAttribute('download')) return;"
+                + "  const href = link.href;"
+                + "  const entry = { name: link.download, blob: blobs.get(href) };"
+                + "  kept.set(href, entry);"
+                + "  setTimeout(() => { if (kept.get(href) === entry) kept.delete(href); }, " + LINK_KEPT_MS + ");"
+                + " };"
+                + " addEventListener('click', (event) => keep(event.target.closest?.('a')), true);"
+                + " const click = HTMLElement.prototype.click;"
+                + " HTMLAnchorElement.prototype.click = function () { if (!this.isConnected) keep(this); return click.call(this); };"
+                + " const dispatch = EventTarget.prototype.dispatchEvent;"
+                + " HTMLAnchorElement.prototype.dispatchEvent = function (event) {"
+                + "  if (!this.isConnected && event.type === 'click') keep(this);"
+                + "  return dispatch.call(this, event);"
+                + " };"
+                + " const fromData = (url) => {"
+                + "  const comma = url.indexOf(',');"
+                + "  const body = unescape(url.slice(comma + 1));"
+                + "  const text = /;base64$/i.test(url.slice(0, comma)) ? atob(body) : body;"
+                + "  return Uint8Array.from(text, (c) => c.charCodeAt(0)).buffer;"
+                + " };"
+                + " const read = (url, blob) => blob ? blob.arrayBuffer()"
+                + "  : url.startsWith('data:') ? Promise.resolve().then(() => fromData(url))"
+                + "  : fetch(url).then((response) => {"
+                + "   if (!response.ok) throw new Error(response.status + ' ' + response.statusText);"
+                + "   return response.arrayBuffer();"
+                + "  });"
+                + " Object.defineProperty(globalThis, '" + TAKE_DOWNLOAD + "', { value: (id, url) => {"
+                + "  const entry = kept.get(url);"
+                + "  kept.delete(url);"
+                + "  read(url, entry?.blob ?? blobs.get(url)).then((bytes) => {"
+                + "   const name = new TextEncoder().encode(entry?.name ?? '');"
+                + "   const frame = new Uint8Array(8 + name.length + bytes.byteLength);"
+                + "   const view = new DataView(frame.buffer);"
+                + "   view.setUint32(0, id, true);"
+                + "   view.setUint32(4, name.length, true);"
+                + "   frame.set(name, 8);"
+                + "   frame.set(new Uint8Array(bytes), 8 + name.length);"
+                + "   " + object + ".postMessage(frame.buffer);"
+                + "  }).catch((error) => " + object + ".postMessage(id + '|' + error));"
+                + " } });"
+                + "}";
+    }
     // The relative luminance of a color that black and white contrast with as much.
     private static final float EVEN_CONTRAST = 0.179f;
     // The shorter side a tablet's screen has at least, as Android's own sw600dp resources take it.
@@ -206,11 +210,32 @@ public class CrossbindActivity extends Activity implements ExtensionHost {
     // The activity that the calls of extensions' Java get while it lives.
     private static volatile CrossbindActivity current;
 
+    // An origin an extension serves, http://<name>.localhost: its name, its pages' role and their token.
+    private static final class Served {
+        final String name;
+        final String role;
+        final String token;
+
+        Served(String name, String role, String token) {
+            this.name = name;
+            this.role = role;
+            this.token = token;
+        }
+    }
+
+    // The origins served now, by their origins, which each activity's WebView takes, the one made anew as well; on the UI
+    // thread.
+    private static final Map<String, Served> SERVED = new HashMap<>();
+
     private WebView webView;
     private Handler ipc;
     private WebMessagePortCompat port;
     private String token;
     private final Set<String> origins = new HashSet<>();
+    // The page the activity shows first, which it shows again as a served origin its page is of ends.
+    private String firstUrl;
+    // The served origins whose scripts and objects the WebView has, which it keeps as long as it lives.
+    private final Set<String> scripted = new HashSet<>();
     // What waits for the result of each activity this one started, under its request code.
     private final Map<Integer, ActivityResult> results = new HashMap<>();
     private int nextRequest;
@@ -264,9 +289,10 @@ public class CrossbindActivity extends Activity implements ExtensionHost {
 
     // A request of the page's for a file of its own or an extension's URL: the path and the query as the URL has them, and
     // each header's name and value in UTF-8, one after the other. The answer is what responseOf() makes.
-    private static native WebResourceResponse nativeRequest(String method, String path, String query, byte[][] headers);
+    private static native WebResourceResponse nativeRequest(String method, String host, String path, String query, byte[][] headers);
 
-    private static native void nativeNewPage();
+    // A new page of this URL, in UTF-8, replaced the one whose objects the module holds.
+    private static native void nativeNewPage(byte[] url);
 
     // A link of app.urlSchemes the system opened the app with, in UTF-8.
     private static native void nativeOpenUrl(byte[] url);
@@ -442,14 +468,8 @@ public class CrossbindActivity extends Activity implements ExtensionHost {
         if (Color.alpha(background) != 0) webView.setBackgroundColor(background);
         webView.getSettings().setJavaScriptEnabled(true);
         webView.getSettings().setDomStorageEnabled(true);
-        WebViewCompat.addDocumentStartJavaScript(webView, topFrameScript(token, deviceJson()), origins);
-        WebViewCompat.addDocumentStartJavaScript(webView, DOWNLOAD_SCRIPT, origins);
-        WebViewCompat.addWebMessageListener(webView, READY, origins, (view, message, origin, isMainFrame, reply) -> {
-            if (isMainFrame) handOverPort(origin, message.getData());
-        });
-        WebViewCompat.addWebMessageListener(webView, DOWNLOAD, origins, (view, message, origin, isMainFrame, reply) -> {
-            if (isMainFrame) handedOver(message);
-        });
+        takeOrigins(origins, token, READY, DOWNLOAD);
+        for (Map.Entry<String, Served> served : SERVED.entrySet()) takeServed(served.getKey(), served.getValue());
         webView.setDownloadListener((address, userAgent, disposition, mime, length) -> {
             download(address, URLUtil.guessFileName(address, disposition, mime), mime);
         });
@@ -468,7 +488,7 @@ public class CrossbindActivity extends Activity implements ExtensionHost {
         // A link that launched the activity waits for the page to ask for it. The module may have outlived an activity
         // before this one, whose page it forgets first; an activity the system restores, or Recents reopens, brings its
         // old link, which the page had.
-        nativeNewPage();
+        nativeNewPage(new byte[0]);
         if (!isOpenedCleared) {
             isOpenedCleared = true;
             File opened = new File(getCacheDir(), "opened");
@@ -479,7 +499,65 @@ public class CrossbindActivity extends Activity implements ExtensionHost {
             shortcutOf(getIntent());
         }
         tellExtensions((extension) -> extension.onCreate(this));
-        webView.loadUrl(devUrl.isEmpty() ? APP_ORIGIN + "/" : devUrl);
+        firstUrl = devUrl.isEmpty() ? APP_ORIGIN + "/" : devUrl;
+        webView.loadUrl(firstUrl);
+    }
+
+    // The scripts and objects of the top frame of a page of these origins: its token, where the app runs and the port
+    // it asks for with the object of the name ready, and its downloads, which it hands over through the object of the
+    // name download.
+    private void takeOrigins(Set<String> taking, String pageToken, String ready, String download) {
+        WebViewCompat.addDocumentStartJavaScript(webView, topFrameScript(pageToken, deviceJson(), ready), taking);
+        WebViewCompat.addDocumentStartJavaScript(webView, downloadScript(download), taking);
+        WebViewCompat.addWebMessageListener(webView, ready, taking, (view, message, origin, isMainFrame, reply) -> {
+            if (isMainFrame) handOverPort(origin, message.getData());
+        });
+        WebViewCompat.addWebMessageListener(webView, download, taking, (view, message, origin, isMainFrame, reply) -> {
+            if (isMainFrame) handedOver(message);
+        });
+    }
+
+    // A served origin's own, once in the WebView, as an object's name is taken once: the scripts a script added stay as
+    // long as the WebView, and the tokens are the run's.
+    private void takeServed(String origin, Served served) {
+        if (webView == null || !scripted.add(origin)) return;
+        String suffix = "_" + served.name.replace('-', '_');
+        takeOrigins(Set.of(origin), served.token, READY + suffix, DOWNLOAD + suffix);
+    }
+
+    // Native code serves an origin from now on, http://<name>.localhost, from whichever thread it is: its origin, name,
+    // role and token, in UTF-8.
+    static void serveOrigin(byte[] origin, byte[] name, byte[] role, byte[] originToken) {
+        String served = new String(origin, StandardCharsets.UTF_8);
+        Served entry = new Served(new String(name, StandardCharsets.UTF_8), new String(role, StandardCharsets.UTF_8), new String(originToken, StandardCharsets.UTF_8));
+        MAIN.post(() -> {
+            SERVED.put(served, entry);
+            CrossbindActivity activity = current;
+            if (activity != null) activity.takeServed(served, entry);
+        });
+    }
+
+    // A served origin ended, from whichever thread: a page of it the WebView shows gives way to the app's first page.
+    static void endOrigin(byte[] origin) {
+        String ended = new String(origin, StandardCharsets.UTF_8);
+        MAIN.post(() -> {
+            SERVED.remove(ended);
+            CrossbindActivity activity = current;
+            if (activity == null || activity.webView == null || activity.webView.getUrl() == null) return;
+            if (ended.equals(originOf(Uri.parse(activity.webView.getUrl())))) activity.webView.loadUrl(activity.firstUrl);
+        });
+    }
+
+    // Whether an origin is the app's own or one served now, whose pages' requests reach the holders of their roles.
+    private boolean isOwn(String origin) {
+        return origins.contains(origin) || SERVED.containsKey(origin);
+    }
+
+    // The role of a page of this origin, as a native page's role() names it.
+    private String roleOf(String origin) {
+        if (origins.contains(origin)) return "app";
+        Served served = SERVED.get(origin);
+        return served == null ? "" : served.role;
     }
 
     // A link or a quick action's tap that opens the app while it runs comes here, as an app with app.urlSchemes or
@@ -650,14 +728,14 @@ public class CrossbindActivity extends Activity implements ExtensionHost {
     private void download(String url, String name, String mime) {
         Download download = new Download(nextDownload.getAndIncrement(), url, name, mime);
         downloads.add(download);
-        // A page yet to run DOWNLOAD_SCRIPT, as one of another origin, hands over nothing.
+        // A page yet to run downloadScript(), as one of another origin, hands over nothing.
         String take = TAKE_DOWNLOAD + "(" + download.id + ", " + JSONObject.quote(url) + ")";
         webView.evaluateJavascript("typeof " + TAKE_DOWNLOAD + " === 'function' && (" + take + ", true)", (taken) -> {
             if (!"true".equals(taken)) notSaved(download, "the page did not hand it over");
         });
     }
 
-    // What DOWNLOAD_SCRIPT hands over: a download's id and why the page could not read it, or a frame of its id and its
+    // What downloadScript() hands over: a download's id and why the page could not read it, or a frame of its id and its
     // name's length, little-endian, its name and its bytes. Anything else goes unheard.
     private void handedOver(WebMessageCompat message) {
         if (message.getType() != WebMessageCompat.TYPE_ARRAY_BUFFER) {
@@ -884,7 +962,7 @@ public class CrossbindActivity extends Activity implements ExtensionHost {
     // its token, where the app runs and the port its crossbind.js waits for: the one that comes with the token, which no
     // other frame knows, and with the ask of this page, which a port handed over for the page before cannot carry. The
     // page asks for the port once it waits for it, as a port handed over before would find no one.
-    private static String topFrameScript(String token, String device) {
+    private static String topFrameScript(String token, String device, String ready) {
         return "if (window.top === window) {"
                 + " const token = '" + token + "';"
                 + " const ask = crypto.randomUUID();"
@@ -897,7 +975,7 @@ public class CrossbindActivity extends Activity implements ExtensionHost {
                 + "   removeEventListener('message', handshake);"
                 + "   resolve(event.ports[0]);"
                 + "  });"
-                + "  " + READY + ".postMessage(ask);"
+                + "  " + ready + ".postMessage(ask);"
                 + " }) });"
                 + "}";
     }
@@ -924,13 +1002,6 @@ public class CrossbindActivity extends Activity implements ExtensionHost {
 
     private static String originOf(Uri url) {
         return url.getScheme() + "://" + url.getHost() + (url.getPort() == -1 ? "" : ":" + url.getPort());
-    }
-
-    private boolean allows(Uri url) {
-        if ("about".equals(url.getScheme())) return true;
-        // A blob URL carries the origin of the page that made it.
-        if ("blob".equals(url.getScheme())) return allows(Uri.parse(url.getSchemeSpecificPart()));
-        return origins.contains(originOf(url));
     }
 
     // "<id>|m|<message>" or "<id>|r|<query>", or as an ArrayBuffer "<header length><id>|<query>" and the bytes.
@@ -963,12 +1034,12 @@ public class CrossbindActivity extends Activity implements ExtensionHost {
     }
 
     private final class PageClient extends WebViewClient {
-        // The app's origins load without asking; the extension page-navigation decides every other URL. A page of
-        // another origin gets no token, so it reaches none of the app's functions.
+        // What the host's navigation rule loads goes on, what it refuses loads nothing, and the extension
+        // page-navigation decides every other URL, as native code answers. A page of another origin gets no token, so
+        // it reaches none of the app's functions.
         @Override
         public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
             Uri url = request.getUrl();
-            if (allows(url)) return false;
             int answer = nativeNavigation(url.toString().getBytes(StandardCharsets.UTF_8), request.isForMainFrame(), request.hasGesture());
             if (answer == LOAD) return false;
             if (answer == OUTSIDE) {
@@ -997,17 +1068,28 @@ public class CrossbindActivity extends Activity implements ExtensionHost {
         @Override
         public WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest request) {
             Uri url = request.getUrl();
-            if (!"https".equals(url.getScheme()) || !HOST.equals(url.getHost())) return null;
+            String host = url.getHost();
+            boolean isApp = "https".equals(url.getScheme()) && HOST.equals(host);
+            // Every one of http://<name>.localhost, served or not, as one of them would reach the device's port 80.
+            boolean isServed = "http".equals(url.getScheme()) && host != null && host.endsWith(".localhost") && url.getPort() == -1;
+            if (!isApp && !isServed) return null;
             String path = url.getEncodedPath() == null ? "/" : url.getEncodedPath();
             // The host decodes the path, as Uri does here.
-            if (url.getPath() != null && url.getPath().startsWith("/b/")) return responseOf(404, "text/plain", new byte[0][], new byte[0], null, null);
+            if (isApp && url.getPath() != null && url.getPath().startsWith("/b/")) return responseOf(404, "text/plain", new byte[0][], new byte[0], null, null);
             String query = url.getEncodedQuery();
             List<byte[]> headers = new ArrayList<>();
             for (Map.Entry<String, String> header : request.getRequestHeaders().entrySet()) {
                 headers.add(header.getKey().getBytes(StandardCharsets.UTF_8));
                 headers.add(header.getValue().getBytes(StandardCharsets.UTF_8));
             }
-            return nativeRequest(request.getMethod(), path, query == null ? "" : query, headers.toArray(new byte[0][]));
+            return nativeRequest(request.getMethod(), host, path, query == null ? "" : query, headers.toArray(new byte[0][]));
+        }
+
+        // A page of the app's origins or of a served one asks for its port, which tells native code of it; a page of
+        // another origin, which page-navigation loaded, asks for none.
+        @Override
+        public void onPageStarted(WebView view, String url, Bitmap favicon) {
+            if (url != null && !isOwn(originOf(Uri.parse(url)))) nativeNewPage(url.getBytes(StandardCharsets.UTF_8));
         }
 
         @Override
@@ -1020,11 +1102,17 @@ public class CrossbindActivity extends Activity implements ExtensionHost {
     // closed, so an answer to a call it made goes nowhere.
     private void handOverPort(Uri origin, String ask) {
         if (port != null) close(port);
-        nativeNewPage();
+        port = null;
+        String asking = originOf(origin);
+        nativeNewPage((asking + "/").getBytes(StandardCharsets.UTF_8));
         // What the last page had yet to hand over went with it.
         for (Download pending : new ArrayList<>(downloads)) {
             if (pending.frame == null) notSaved(pending, "the page went away");
         }
+        // The port comes with the token of the page's own origin; a page of a served origin that ended gets none.
+        Served served = SERVED.get(asking);
+        if (served == null && !origins.contains(asking)) return;
+        String pageToken = served == null ? token : served.token;
         WebMessagePortCompat[] channel = WebViewCompat.createWebMessageChannel(webView);
         port = channel[0];
         port.setWebMessageCallback(ipc, new WebMessagePortCompat.WebMessageCallbackCompat() {
@@ -1033,7 +1121,7 @@ public class CrossbindActivity extends Activity implements ExtensionHost {
                 receive(from, message);
             }
         });
-        WebViewCompat.postWebMessage(webView, new WebMessageCompat("crossbind:" + token + ":" + ask, new WebMessagePortCompat[] {channel[1]}),
+        WebViewCompat.postWebMessage(webView, new WebMessageCompat("crossbind:" + pageToken + ":" + ask, new WebMessagePortCompat[] {channel[1]}),
                 origin);
     }
 
@@ -1082,13 +1170,14 @@ public class CrossbindActivity extends Activity implements ExtensionHost {
         }
 
         private boolean pageDialog(String url, Extension.PageDialog.Kind kind, String message, String defaultText, JsResult result) {
-            if (url == null || !allows(Uri.parse(url))) {
+            String origin = url == null ? "" : originOf(Uri.parse(url));
+            if (!isOwn(origin)) {
                 result.cancel();
                 return true;
             }
             Extension owner = Extensions.ROLES.get("page-dialogs");
             if (owner == null) return false;
-            Extension.PageDialog dialog = new Extension.PageDialog(kind, message == null ? "" : message, defaultText, result);
+            Extension.PageDialog dialog = new Extension.PageDialog(kind, message == null ? "" : message, defaultText, result, roleOf(origin));
             ask("page-dialogs", () -> owner.onPageDialog(CrossbindActivity.this, dialog), dialog::cancel);
             return !dialog.isLeft();
         }
@@ -1097,7 +1186,8 @@ public class CrossbindActivity extends Activity implements ExtensionHost {
         public boolean onShowFileChooser(WebView view, ValueCallback<Uri[]> files, FileChooserParams params) {
             Extension owner = Extensions.ROLES.get("page-files");
             if (owner == null) return false;
-            Extension.FileInput input = new Extension.FileInput(params, files);
+            String page = view.getUrl();
+            Extension.FileInput input = new Extension.FileInput(params, files, page == null ? "" : roleOf(originOf(Uri.parse(page))));
             ask("page-files", () -> owner.onFileInput(CrossbindActivity.this, input), input::cancel);
             if (input.isLeft()) return false;
             if (pendingFiles != null) pendingFiles.cancel();
@@ -1124,8 +1214,8 @@ public class CrossbindActivity extends Activity implements ExtensionHost {
         private void askPermission(List<String> kinds, String origin, Consumer<Boolean> answer) {
             Extension owner = Extensions.ROLES.get("page-permissions");
             boolean isListed = kinds.stream().allMatch((kind) -> isListed(kind));
-            Extension.PagePermission request = new Extension.PagePermission(kinds, origin, isListed, answer);
-            if (!origins.contains(origin) || owner == null) {
+            Extension.PagePermission request = new Extension.PagePermission(kinds, origin, isListed, answer, roleOf(origin));
+            if (!isOwn(origin) || owner == null) {
                 request.deny();
                 return;
             }

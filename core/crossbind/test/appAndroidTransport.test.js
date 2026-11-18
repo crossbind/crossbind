@@ -72,7 +72,7 @@ activityPort.onmessage = ({ data }) => {
         const call = String(nextCall);
         nextCall += 1;
         pageIds.set(call, id);
-        globalThis.__crossbind_frame(call, query, data.slice(4 + headerLength), PAGE);
+        globalThis.__crossbind_frame(call, query, data.slice(4 + headerLength), PAGE, 'app');
         return;
     }
     const bar = data.indexOf('|');
@@ -97,7 +97,7 @@ activityPort.onmessage = ({ data }) => {
     const call = String(nextCall);
     nextCall += 1;
     pageIds.set(call, id);
-    globalThis.__crossbind_receive(call, rest.slice(TOKEN.length), PAGE);
+    globalThis.__crossbind_receive(call, rest.slice(TOKEN.length), PAGE, 'app');
 };
 
 let m;
