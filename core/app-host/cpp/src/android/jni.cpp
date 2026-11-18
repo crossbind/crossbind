@@ -35,6 +35,9 @@ jmethodID responseOf;
 jmethodID answerHttpAuthentication;
 jmethodID answerDownload;
 jmethodID stopDownload;
+// HostFetch, the fetch() of the activity's Java, which a thread of the host's own finds by the activity's class loader.
+jclass fetchClass;
+jmethodID fetchMethod;
 std::string resources;
 // The app's own folders, which the activity names.
 std::string dataDir;
@@ -329,6 +332,8 @@ extern "C" JNIEXPORT jobjectArray JNICALL Java_dev_crossbind_app_CrossbindActivi
         answerHttpAuthentication = env->GetStaticMethodID(type, "answerHttpAuthentication", "(I[B[B)V");
         answerDownload = env->GetStaticMethodID(type, "answerDownload", "(II[B)V");
         stopDownload = env->GetStaticMethodID(type, "stopDownload", "(I)V");
+        fetchClass = static_cast<jclass>(env->NewGlobalRef(env->FindClass("dev/crossbind/app/HostFetch")));
+        fetchMethod = env->GetStaticMethodID(fetchClass, "fetch", "(I[B[B[[BII)V");
         resources = asciiOf(env, files);
         dataDir = asciiOf(env, data);
         cacheDir = asciiOf(env, cache);
@@ -444,6 +449,104 @@ extern "C" JNIEXPORT void JNICALL Java_dev_crossbind_app_CrossbindActivity_nativ
 extern "C" JNIEXPORT jint JNICALL Java_dev_crossbind_app_CrossbindActivity_nativeNavigation(JNIEnv *env, jclass, jbyteArray url,
     jboolean isMainFrame, jboolean isUserInitiated) {
     return static_cast<jint>(app::decideNavigation(nullptr, textOf(env, url), isMainFrame == JNI_TRUE, isUserInitiated == JNI_TRUE, false));
+}
+
+namespace {
+
+// The fetches that wait for the activity's Java, by the ids it answers with: what gets the answer, and the answer so
+// far.
+struct Fetching {
+    app::FetchDone done;
+    crossbind::FetchResponse response;
+};
+std::mutex fetchesMutex;
+std::unordered_map<jint, Fetching> fetches;
+jint nextFetch = 0;
+
+// Hands a fetch its answer, or why it failed, once.
+void fetched(jint id, std::optional<std::string> failure) {
+    Fetching ended;
+    {
+        std::lock_guard<std::mutex> lock(fetchesMutex);
+        const auto found = fetches.find(id);
+        if (found == fetches.end()) return;
+        ended = std::move(found->second);
+        fetches.erase(found);
+    }
+    if (failure) ended.done(failure, {});
+    else ended.done(std::nullopt, std::move(ended.response));
+}
+
+}  // namespace
+
+void crossbind::app::fetchOnPlatform(const std::string &method, const std::string &url, const crossbind::Request::Headers &headers, FetchDone done) {
+    jint id = 0;
+    {
+        std::lock_guard<std::mutex> lock(fetchesMutex);
+        id = nextFetch++;
+        fetches.emplace(id, Fetching{std::move(done), {}});
+    }
+    std::vector<std::string> fields;
+    for (const auto &[name, value] : headers) {
+        fields.push_back(name);
+        fields.push_back(value);
+    }
+    JNIEnv *env = attachedEnv();
+    jbyteArray asked = bytesOf(env, method);
+    jbyteArray address = bytesOf(env, url);
+    jobjectArray sent = byteArraysOf(env, fields);
+    env->CallStaticVoidMethod(fetchClass, fetchMethod, id, asked, address, sent, static_cast<jint>(FETCH_SECONDS), static_cast<jint>(MAX_FETCH_REDIRECTS));
+    const bool hasFailed = env->ExceptionCheck();
+    clearException(env);
+    env->DeleteLocalRef(sent);
+    env->DeleteLocalRef(address);
+    env->DeleteLocalRef(asked);
+    if (hasFailed) fetched(id, "crossbind: the activity could not start the fetch of " + url);
+}
+
+// The answer's status, the length it declares or -1, and its headers: false where it declares more than a fetch takes.
+extern "C" JNIEXPORT jboolean JNICALL Java_dev_crossbind_app_HostFetch_nativeResponse(JNIEnv *env, jclass, jint id, jint status, jlong declared,
+    jobjectArray headers) {
+    if (declared > static_cast<jlong>(app::MAX_FETCH_BYTES)) {
+        fetched(id, app::declaredTooLarge(static_cast<std::uint64_t>(declared)));
+        return JNI_FALSE;
+    }
+    const std::vector<std::string> fields = textsOf(env, headers);
+    std::lock_guard<std::mutex> lock(fetchesMutex);
+    const auto found = fetches.find(id);
+    if (found == fetches.end()) return JNI_FALSE;
+    found->second.response.status = status;
+    for (size_t at = 0; at + 1 < fields.size(); at += 2) found->second.response.headers.emplace_back(fields[at], fields[at + 1]);
+    return JNI_TRUE;
+}
+
+// The next bytes of the body: false once it passes what a fetch takes.
+extern "C" JNIEXPORT jboolean JNICALL Java_dev_crossbind_app_HostFetch_nativeData(JNIEnv *env, jclass, jint id, jbyteArray bytes, jint length) {
+    bool isOver = false;
+    {
+        std::lock_guard<std::mutex> lock(fetchesMutex);
+        const auto found = fetches.find(id);
+        if (found == fetches.end()) return JNI_FALSE;
+        std::string &body = found->second.response.body;
+        isOver = body.size() + static_cast<size_t>(length) > app::MAX_FETCH_BYTES;
+        if (!isOver) {
+            const size_t at = body.size();
+            body.resize(at + static_cast<size_t>(length));
+            env->GetByteArrayRegion(bytes, 0, length, reinterpret_cast<jbyte *>(body.data() + at));
+        }
+    }
+    if (isOver) fetched(id, app::passedTheLimit());
+    return isOver ? JNI_FALSE : JNI_TRUE;
+}
+
+// How the fetch ended, in HostFetch's numbers: done, failed with the system's words, timed out, or redirected too often.
+extern "C" JNIEXPORT void JNICALL Java_dev_crossbind_app_HostFetch_nativeEnd(JNIEnv *env, jclass, jint id, jint reason, jbyteArray failure) {
+    switch (reason) {
+    case 0: fetched(id, std::nullopt); break;
+    case 2: fetched(id, app::tookTooLong()); break;
+    case 3: fetched(id, app::redirectedTooOften()); break;
+    default: fetched(id, failure ? textOf(env, failure) : std::string("crossbind: the fetch failed"));
+    }
 }
 
 namespace {

@@ -709,6 +709,23 @@ void inBackground(Call call, std::function<Value()> work);
 // call that fails at once or that its function answers there.
 void invoke(const std::string &name, Value options, std::function<void(std::optional<std::string> failure, Value result)> done);
 
+// What a server answered a fetch(): its status, its headers, their names in lower case, and its body.
+struct FetchResponse {
+    int status = 0;
+    Request::Headers headers;
+    std::string body;
+};
+
+// Asks a server with the system's own client, from any thread: a GET or a HEAD of an http or https URL with these
+// headers, without cookies, a cache or credentials, for the body uncompressed, as Accept-Encoding: identity asks. A
+// method, a URL or a header the client would not send throws. It follows a redirect within the URL's origin, and gives one
+// elsewhere as its 3xx; an answer over 256 MiB, or one that takes over 60 s, fails. done gets why it failed, in the
+// system's words, or the answer, once, on a thread of the host's. On iOS, on macOS in an app its user opens, and on
+// Android 17 once crossbind targets API 37, an address on the local network answers only once the user allows the app
+// there: until then the fetch fails at once on Apple's platforms and times out on Android.
+void fetch(const std::string &method, const std::string &url, const Request::Headers &headers,
+    std::function<void(std::optional<std::string> failure, FetchResponse response)> done);
+
 // The arguments and the working folder the system started the app with, on the desktop, from any thread: the links of
 // the app's schemes left out, and in an app that opens files its files, which reach their owners. A phone's app starts
 // with none.
