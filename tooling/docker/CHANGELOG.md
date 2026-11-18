@@ -11,6 +11,9 @@
   the handle destroyed it again. A `%template` instance in a hand-written interface now binds: the
   bridge spelled it as SWIG does (`Box<(int)>`) and did not compile. The bridges of interfaces
   without either are byte-identical to those of `8a568e37`.
+- The `linux` image fetches its WebKitGTK packages in a stage of their own while Hermes builds,
+  rather than before it, so a slow Launchpad no longer holds up the Hermes build. The image's files
+  are unchanged.
 
 ## Image family 1.0.22
 
