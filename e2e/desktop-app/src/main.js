@@ -977,7 +977,7 @@ async function checkWindows(m, isDesktop, isAndroid) {
 
 const otherWindow = new URLSearchParams(location.search).get('window');
 // Spike: the keys' origins take the suite's place.
-const IS_SPIKE = true;
+const IS_SPIKE = false;
 if (otherWindow) runOtherWindow(otherWindow);
 else if (IS_SPIKE) runSpike().catch((error) => console.log(`SPIKE failed ${error?.message ?? error}`));
 else initNative().then(async (m) => {

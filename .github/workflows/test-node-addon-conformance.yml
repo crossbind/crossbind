@@ -1,16 +1,14 @@
 name: test node addon conformance
-# Spike of test/app-host/windows-project-origin-spike, which is never a pull request: Windows' origin for a project,
-# http://<key>.localhost/, in the e2e app, on both Windows runners, from the app's folder and from its MSIX package.
+# Scratch of test/app-host/windows-project-origin-spike, which is never a pull request: WebKitGTK's storage features on
+# the runner's WebKitGTK, which the app lists and with CROSSBIND_SCRATCH_OPFS=1 turns on, for the app's own page's OPFS.
 on:
     workflow_dispatch:
 
 permissions: {}
 jobs:
-    app-windows:
+    app-linux:
         runs-on: ubuntu-latest
         timeout-minutes: 60
-        env:
-            CROSSBIND_APP_PLATFORM: windows
         steps:
             - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
             - name: Install pnpm
@@ -30,109 +28,25 @@ jobs:
                   write-key-id: ${{ secrets.SCCACHE_R2_WRITE_KEY_ID }}
                   write-secret: ${{ secrets.SCCACHE_R2_WRITE_SECRET }}
                   endpoint: ${{ vars.SCCACHE_R2_ENDPOINT }}
-            - name: Make a throwaway key, with which the build signs the app and its MSIX package
-              run: >-
-                  keytool -genkeypair -alias "crossbind e2e" -keyalg RSA -keysize 2048 -validity 2 -dname "CN=crossbind e2e"
-                  -ext EKU=codeSigning -keystore "$RUNNER_TEMP/e2e.p12" -storetype PKCS12 -storepass e2e-pass
             - name: Build the app
-              env:
-                  CROSSBIND_WINDOWS_SIGNING_STORETYPE: PKCS12
-                  CROSSBIND_WINDOWS_SIGNING_KEYSTORE: ${{ runner.temp }}/e2e.p12
-                  CROSSBIND_WINDOWS_SIGNING_ALIAS: crossbind e2e
-                  CROSSBIND_WINDOWS_SIGNING_STOREPASS: e2e-pass
               run: pnpm --filter=@crossbind/e2e-desktop-app run build
-            - name: Keep the app for the runners that open it
-              uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
-              with:
-                  name: windows-app
-                  if-no-files-found: error
-                  overwrite: true
-                  path: |
-                      e2e/desktop-app/dist/crossbind-e2e-desktop-app-win32-x64/
-                      e2e/desktop-app/dist/crossbind-e2e-desktop-app-win32-arm64/
-                      e2e/desktop-app/dist/crossbind-e2e-desktop-app-win32-*.msix
-                  retention-days: 3
-    app-windows-run:
-        needs: app-windows
-        strategy:
-            fail-fast: false
-            matrix:
-                include:
-                    - { runner: windows-latest, arch: x64 }
-                    - { runner: windows-11-arm, arch: arm64 }
-        runs-on: ${{ matrix.runner }}
-        timeout-minutes: 15
-        steps:
-            - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-            - name: Use Node.js
-              uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
-              with:
-                  node-version-file: .nvmrc
-                  architecture: ${{ matrix.arch }}
-            - name: Restore the app
-              uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
-              with:
-                  name: windows-app
-                  path: e2e/desktop-app/dist
-            - name: The spike, with nothing listening on the machine's port 80
-              continue-on-error: true
-              run: node e2e/desktop-app/e2e/spike-windows.mjs
-            - name: The spike, with a listener of the run's own on the machine's port 80
-              continue-on-error: true
+            - name: Install the app's Debian package, whose dependencies bring the WebKitGTK it runs on
               run: |
-                  Start-Sleep -Seconds 5
-                  node e2e/desktop-app/e2e/spike-windows.mjs --listen
-            - name: Keep what the spike printed
+                  sudo apt-get update
+                  sudo apt-get install -y --no-install-recommends ./e2e/desktop-app/dist/crossbind-e2e-desktop-app-linux-x64.deb dbus python3-gi xdotool x11-utils
+                  dpkg -s libwebkit2gtk-4.1-0 | grep -E '^(Package|Version)'
+            - name: Run as it is, and with the storage features on
+              env:
+                  WEBKIT_DISABLE_SANDBOX_THIS_IS_DANGEROUS: '1'
+                  WEBKIT_DISABLE_COMPOSITING_MODE: '1'
+              run: |
+                  xvfb-run -a pnpm --filter=@crossbind/e2e-desktop-app run e2e:prod > plain.log 2>&1 || true
+                  echo '== as it is'; cat /tmp/crossbind-scratch-features.txt || true; rm -f /tmp/crossbind-scratch-features.txt
+                  CROSSBIND_SCRATCH_OPFS=1 xvfb-run -a pnpm --filter=@crossbind/e2e-desktop-app run e2e:prod > features.log 2>&1 || true
+                  echo '== with the features on'; cat /tmp/crossbind-scratch-features.txt || true
+                  for log in plain.log features.log; do echo "== $log"; grep -E 'SCRATCH webkitgtk|PAGE GETS (opfs|worker-|page )|CONFORMANCE' "$log" | cut -c1-400; done
+            - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
               if: always()
-              uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
               with:
-                  name: spike-plain-${{ matrix.arch }}
-                  path: e2e/desktop-app/dist/spike-*.log
-                  retention-days: 30
-    app-windows-msix:
-        needs: app-windows
-        strategy:
-            fail-fast: false
-            matrix:
-                include:
-                    - { runner: windows-latest, arch: x64 }
-                    - { runner: windows-11-arm, arch: arm64 }
-        runs-on: ${{ matrix.runner }}
-        timeout-minutes: 15
-        steps:
-            - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-            - name: Use Node.js
-              uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
-              with:
-                  node-version-file: .nvmrc
-                  architecture: ${{ matrix.arch }}
-            - name: Restore the app
-              uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
-              with:
-                  name: windows-app
-                  path: e2e/desktop-app/dist
-            - name: Trust the key the build signed with, as a user who installs a package handed out does
-              run: |
-                  $certificate = (Get-AuthenticodeSignature e2e\desktop-app\dist\crossbind-e2e-desktop-app-win32-${{ matrix.arch }}\crossbind-e2e-desktop-app.exe).SignerCertificate
-                  if (-not $certificate) { throw 'the app carries no signature' }
-                  $store = [System.Security.Cryptography.X509Certificates.X509Store]::new('TrustedPeople', 'LocalMachine')
-                  $store.Open('ReadWrite')
-                  $store.Add($certificate)
-                  $store.Close()
-            - name: Install the package
-              run: Add-AppxPackage -Path e2e\desktop-app\dist\crossbind-e2e-desktop-app-win32-${{ matrix.arch }}.msix
-            - name: The spike in the app from its package, with nothing listening on the machine's port 80
-              continue-on-error: true
-              run: node e2e/desktop-app/e2e/spike-windows.mjs --msix
-            - name: The spike in the app from its package, with a listener of the run's own on the machine's port 80
-              continue-on-error: true
-              run: |
-                  Start-Sleep -Seconds 5
-                  node e2e/desktop-app/e2e/spike-windows.mjs --msix --listen
-            - name: Keep what the spike printed
-              if: always()
-              uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
-              with:
-                  name: spike-msix-${{ matrix.arch }}
-                  path: e2e/desktop-app/dist/spike-*.log
-                  retention-days: 30
+                  name: linux-features
+                  path: '*.log'
