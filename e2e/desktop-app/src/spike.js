@@ -1,6 +1,6 @@
 // Spike: the app's own page, crossbind://app/, before and after the keys' origins: what it gets there, and what it holds
 // of their marks, which it must not see. It goes to http://k1.localhost/spike/ first, and prints SPIKE done once back.
-import { invoke } from 'crossbind/app';
+import 'crossbind/app';
 import { reportWebFeatures } from './web-features.js';
 
 const report = (name, value) => console.log(`SPIKE ${location.host} ${name} ${JSON.stringify(value)}`);
@@ -42,6 +42,7 @@ export async function runSpike() {
     }
     await reportWebFeatures(false);
     report('marks-seen', await seen().catch(failure));
-    const net = await invoke('probe.networkAddress').catch(() => null);
+    // invoke() waits for initNative(), which the spike leaves out; the page's own call of the app's functions does not.
+    const net = await globalThis.Crossbind.app('probe.networkAddress', {}).catch((error) => report('network-address', failure(error)));
     location.assign(`http://k1.localhost/spike/index.html?run=k1&net=${encodeURIComponent(net ?? '')}`);
 }
