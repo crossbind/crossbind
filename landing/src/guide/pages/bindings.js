@@ -12,20 +12,37 @@ export default {
             type: 'p',
             text: 'The binder reads only headers: a class defined only in the `.cpp`, an anonymous namespace around the API or a file-scope `static` function is invisible to it. Public members bind; private ones do not.',
         },
-        { type: 'h3', text: 'Single inheritance only' },
+        { type: 'h3', text: 'A class binds with its first base' },
         {
             type: 'p',
-            text: 'Single-base `virtual` polymorphism works. Multiple inheritance, diamonds especially, breaks the binder: use composition or a wrapper.',
+            text: 'Single-base inheritance works, `virtual` methods included. A class with several bases still binds, but with its first base only: the members of the others are missing in JavaScript, and the object is not accepted where another base is expected. For such a member, give the class a method of its own that calls it, or use composition.',
         },
-        { type: 'h3', text: 'Templates need explicit instantiation' },
+        { type: 'h3', text: 'Templates bind through a plain class or function' },
+        {
+            type: 'p',
+            text: 'A template does not bind, and an explicit instantiation or an alias does not change that. Put a plain class or function over the instantiation you want in JavaScript:',
+        },
         {
             type: 'code',
             file: 'C++',
             code: `template<typename T> class Buffer { /* ... */ };
 
-// name the instantiations you want in JavaScript
-template class Buffer<int>;
-template class Buffer<float>;`,
+class IntBuffer {
+public:
+    void push(int value) { buffer.push(value); }
+    int at(int index) const { return buffer.at(index); }
+private:
+    Buffer<int> buffer;
+};`,
+        },
+        {
+            type: 'p',
+            text: 'To bind `Buffer<int>` itself under a name, register it by hand: [the escape hatch](#escape).',
+        },
+        { type: 'h3', text: 'Overloads differ by argument count' },
+        {
+            type: 'p',
+            text: 'A call reaches the overload that takes as many arguments as it passes. Of two overloads with the same count the first one declared binds, and the build prints `embind cannot bind another overload of …, ignored.` for the other: give it another name.',
         },
         { type: 'h3', text: 'Fields are properties' },
         {
@@ -35,8 +52,8 @@ template class Buffer<float>;`,
         {
             type: 'callout',
             tone: 'warn',
-            title: 'Returning unique_ptr',
-            text: 'A `std::unique_ptr` returned across the boundary fails silently: the call returns `null` or `undefined`. Use `std::shared_ptr` for anything JavaScript holds.',
+            title: 'unique_ptr parameters',
+            text: 'A function may return a `std::unique_ptr`: JavaScript gets the object and owns it. Do not take one as a parameter: C++ frees the object when the call ends while the JavaScript handle still claims it, so freeing that handle afterwards destroys the object a second time. Take a reference, or a `std::shared_ptr` when C++ keeps the object.',
         },
 
         { type: 'h2', id: 'types', text: 'Primitive types' },
@@ -52,7 +69,7 @@ template class Buffer<float>;`,
                 ['`long`, `size_t`', '`Number` on wasm32, `BigInt` on React Native', ''],
                 ['`std::string`', '`String`', ''],
                 ['`const char *`', '`String`', 'see [pointers](#pointers)'],
-                ['`std::optional<T>`', 'the value or `null`', 'C++17, every runtime'],
+                ['`std::optional<T>`', 'the value; when empty, `undefined` on wasm and `null` on React Native and in a Node-API addon', 'C++17; read it with `??`. `T` is a type a [vector](#containers) holds'],
                 ['`emscripten::val`', 'anything', 'the untyped escape hatch'],
             ],
         },
@@ -64,7 +81,7 @@ template class Buffer<float>;`,
         { type: 'h2', id: 'containers', text: 'Vectors, maps and enums' },
         {
             type: 'p',
-            text: 'Vectors bind under generated names: `VectorInt`, `VectorDouble`, `VectorString`, `VectorInt64` and so on. `std::vector<MyClass>` becomes `VectorMyClass`.',
+            text: 'Vectors bind under generated names: `VectorChar`, `VectorUChar`, `VectorShort`, `VectorInt`, `VectorInt64`, `VectorFloat`, `VectorDouble` and `VectorString`. A vector of objects is a `std::vector<std::shared_ptr<MyClass>>`, which becomes `VectorMyClass`; a vector of a class by value does not bind.',
         },
         {
             type: 'code',
@@ -93,6 +110,10 @@ setMyVector(m.toVector(VectorInt, values)); // Array -> vector`,
         {
             type: 'p',
             text: 'Maps bind the same way (`MapIntInt`, `MapStringString`, `MapStringInt`, `MapIntString`). Enums, `enum` and `enum class` alike, arrive as objects keyed by their member names.',
+        },
+        {
+            type: 'p',
+            text: 'A function over another type (`std::pair`, `std::tuple`, `std::array`, `std::set`, `std::unordered_map`, `std::variant`, a vector of `bool` or of vectors) still binds, and throws when called: `Cannot call … due to unbound types`. Return a struct or one of the containers above, or register the type [by hand](#escape).',
         },
         {
             type: 'callout',
@@ -249,24 +270,36 @@ private:
         { type: 'h2', id: 'escape', text: 'The escape hatch' },
         {
             type: 'p',
-            text: 'When neither the rules nor a wrapper fit, hand-write a SWIG interface file next to the header and import it from JavaScript. It is also how you register a container the generator does not cover:',
+            text: 'When neither the rules nor a wrapper fit, hand-write a SWIG interface file next to the header and import it from JavaScript. It is also how you bind a template instantiation under a name, or register a container the generator does not cover:',
         },
         {
             type: 'code',
-            file: 'src/native/mycustom.i',
+            file: 'src/native/boxes.i',
             code: `#pragma once
 
-%module mycustom
+%module boxes
 
 %{
-EMSCRIPTEN_BINDINGS(mycustom) {
-    emscripten::register_vector<Abc>("VectorAbc");
+#include <map>
+#include <string>
+#include "box.h"
+
+EMSCRIPTEN_BINDINGS(boxes) {
+    emscripten::class_<Box<int>>("BoxInt")
+        .constructor<>()
+        .function("set", &Box<int>::set)
+        .function("get", &Box<int>::get);
+    emscripten::register_map<std::string, double>("MapStringDouble");
 }
 %}
 
 %feature("shared_ptr");
 %feature("polymorphic_shared_ptr");`,
         },
-        { type: 'code', file: 'src/index.js', code: "import './native/mycustom.i';" },
+        { type: 'code', file: 'src/index.js', code: "import './native/boxes.i';" },
+        {
+            type: 'p',
+            text: 'The module `initNative()` resolves to then has `BoxInt` and `MapStringDouble`, and a function that takes or returns a `Box<int>` can be called.',
+        },
     ],
 };

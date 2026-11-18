@@ -99,26 +99,39 @@ Upstream lib has a tool / utility that's built and signed, but you don't have a 
 
 ## Binding-time errors
 
-### `binding ... silently produces null` or `function returns undefined`
+### `Cannot call ... due to unbound types`
 
-Your C++ function violated a binding rule. See [`cpp-binding-rules.md`](./cpp-binding-rules.md).
+The function binds, but its signature names a type the bridge does not know, so the call throws. On wasm the message ends with the type's mangled name. See [`cpp-binding-rules.md`](./cpp-binding-rules.md).
 
-- Returning `unique_ptr` instead of `shared_ptr`? Switch.
-- Returning a raw pointer (`MyClass*`)? A class the bridge knows comes back as an instance; anything else is a `NativePointer` handle you read with the pointer helpers.
-- Using multiple inheritance? Refactor to composition.
-- Template not explicitly instantiated? Add `template class X<int>;`.
-- Definition only in `.cpp`, not in `.h`? Move definition (or at least public surface) into the header.
+- A template instantiation (`Buffer<int>`)? Put a plain class over it, or register it by hand (rule 5).
+- `std::pair`, `std::tuple`, `std::array`, `std::set`, `std::unordered_map` or `std::variant`? Return a struct, or a container rule 2 lists.
+- A vector of a class by value? Return `std::vector<std::shared_ptr<T>>`.
+- A vector, map or optional of another element type (`bool`, an enum, another vector)? Use a type rule 2 lists.
+
+### `... is not a function` on an object
+
+The class JavaScript got does not have the method.
+
+- A method of a second base class? A class binds with its first base only (rule 4).
+- A method inherited from a template? The class binds with its own members only (rule 5).
+- A private method, or an operator? Neither binds: add a public method that does the work.
+- A `NativePointer` handle, not an instance? A raw pointer (`MyClass*`) comes back as an instance for a class the bridge knows; anything else is a handle you read with the pointer helpers.
+
+### An overload throws a `TypeError` about its argument
+
+`int takes a number, got "seven"` in a release wasm build, `Cannot convert "seven" to int` in a debug one and in a Node-API addon. Overloads are told apart by their number of arguments, so of two with the same number only the first one declared binds, and a call meant for the other reaches it. The build printed `embind cannot bind another overload of ...` for the one it left out. Give that one another name (rule 11).
 
 ### SWIG generation failures (`%feature` errors, `Unable to find ...`)
 
 Auto-generated `.i` doesn't fit. Write a manual one — see [`swig-escape.md`](./swig-escape.md).
 
-### `Error: Tried to call ... but the function is not exposed`
+### A function or class is missing from the module
 
-Function not in the public binding surface.
+The import is reported as a missing export (`does not provide an export named ...`), and a call through the module object fails with `m.name is not a function`, or with `crossbind: name is not bound in the native module` in a worker.
 
-- **Cause A:** function is in an anonymous namespace or `static` at file scope. Move to public surface.
-- **Cause B:** declared in `.h` but defined in `.cpp` with a `static` or `inline` qualifier the binder skips. Match declaration and definition.
+- Declared only in the `.cpp`, or in an anonymous namespace? The binder reads headers: put the declaration in the header, outside the anonymous namespace.
+- A template? It does not bind (rule 5).
+- A function or class of a dependency's header? It binds when the app imports it by name (rule 9).
 
 ### `BindingError: Cannot register public name '<Name>' twice`
 

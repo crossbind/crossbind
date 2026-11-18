@@ -49,24 +49,38 @@ export default {
         },
 
         { type: 'h2', id: 'binding', text: 'Binding errors' },
-        { type: 'h3', text: 'A function silently returns null or undefined' },
+        { type: 'h3', text: 'Cannot call … due to unbound types' },
         {
             type: 'p',
-            text: 'The C++ broke one of the [binding rules](/guide/bindings/#rules). In order of likelihood:',
+            text: 'The function binds, but its signature names a type the bridge does not know, so the call throws. The [binding rules](/guide/bindings/#rules) have the details:',
         },
         {
             type: 'ul',
             items: [
-                'Returning `unique_ptr` instead of `shared_ptr`.',
-                'Multiple inheritance in the bound class.',
-                'A template with no explicit instantiation.',
-                'The definition lives only in the `.cpp`; the public surface has to be in the header.',
+                'A template instantiation such as `Buffer<int>`: put a plain class over it.',
+                '`std::pair`, `std::tuple`, `std::array`, `std::set`, `std::unordered_map` or `std::variant`: return a struct, or one of the [vectors and maps](/guide/bindings/#containers) that bind.',
+                'A vector of a class by value: return `std::vector<std::shared_ptr<MyClass>>`.',
             ],
         },
-        { type: 'h3', text: 'Tried to call … but the function is not exposed' },
+        { type: 'h3', text: '… is not a function' },
         {
             type: 'p',
-            text: 'The function is not on the public binding surface: an anonymous namespace, a file-scope `static`, or a declaration and definition that disagree on `static`/`inline`.',
+            text: 'The name is missing from the object or from the module:',
+        },
+        {
+            type: 'ul',
+            items: [
+                'A method of a second base class: a class binds with its first base only.',
+                'A template, or a method inherited from one.',
+                'A private member or an operator.',
+                'A function or class declared only in the `.cpp` or in an anonymous namespace: the public surface has to be in the header.',
+                'A function of a library header that the app does not import by name: see [what a library header binds](/guide/bindings/#imports).',
+            ],
+        },
+        { type: 'h3', text: 'An overload answers with an argument error' },
+        {
+            type: 'p',
+            text: 'Overloads are told apart by their number of arguments, so of two with the same number only the first one declared binds, and a call meant for the other throws a `TypeError` such as `int takes a number, got "…"`. The build names each overload it left out: give it another name.',
         },
 
         { type: 'h2', id: 'runtime', text: 'Runtime errors' },
