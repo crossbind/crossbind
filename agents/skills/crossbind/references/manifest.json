@@ -64,7 +64,7 @@
     {
       "source": "docs/api/init.md",
       "output": "api/init.md",
-      "sha256": "09a82b708263094fd7ba8304b097d44a56590422ed9941b210c5821d861e0ff4"
+      "sha256": "51985cd15b484680b7633477b9839bd305b4fb0aa1c440f6673a4833c9ff1bc6"
     },
     {
       "source": "docs/api/lifecycle-and-types.md",
@@ -104,7 +104,7 @@
     {
       "source": "docs/api/threading.md",
       "output": "api/threading.md",
-      "sha256": "74399273499fb154deb6c0319f1c811562e5a4d6c7ed48dd4184e42bba3b4397"
+      "sha256": "5201a30b5201cda5df886d7edd24fc2b33644c8dbac5177b50dad32ec33f5bb8"
     },
     {
       "source": "docs/api/troubleshooting.md",

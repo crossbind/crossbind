@@ -25,6 +25,7 @@ beforeEach(() => {
     globalThis.Worker = class {
         constructor(url) {
             created.push(url);
+            this.addEventListener = vi.fn();
             this.terminate = vi.fn();
         }
     };

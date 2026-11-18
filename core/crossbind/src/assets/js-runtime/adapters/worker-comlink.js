@@ -86,20 +86,23 @@ const LOCAL_MEMBERS = {
     [Symbol.toPrimitive]: (hint) => (hint === 'number' ? NaN : '[object Object]'),
 };
 
-// The main thread side: once a handle is collected, the worker lets go of its object, the ids collected in one task
-// in one message.
-const collected = [];
-
-function releaseLater(id) {
-    collected.push(id);
-    if (collected.length > 1) return;
-    setTimeout(() => {
-        const ids = collected.splice(0);
-        Promise.resolve(remoteModule?.[RELEASE](ids)).catch(() => {});
-    }, 0);
+// The main thread side: once a handle is collected, the worker that handed it out lets go of its object, the ids
+// collected in one task in one message. Every worker numbers its objects from one, so each has a watcher of its own:
+// an id of a terminated worker names another object in the next.
+function watcherOf(remote) {
+    if (typeof FinalizationRegistry !== 'function') return null;
+    const collected = [];
+    return new FinalizationRegistry((id) => {
+        collected.push(id);
+        if (collected.length > 1) return;
+        setTimeout(() => {
+            const ids = collected.splice(0);
+            Promise.resolve(remote[RELEASE](ids)).catch(() => {});
+        }, 0);
+    });
 }
 
-const handleWatcher = typeof FinalizationRegistry === 'function' ? new FinalizationRegistry(releaseLater) : null;
+let handleWatcher = null;
 
 function handleFor(id) {
     const handle = new Proxy(remoteModule[HANDLES][id], {
@@ -145,7 +148,8 @@ Comlink.transferHandlers.set('proxy', {
         if (data != null && typeof data === 'object' && '__embindId' in data) {
             return handleFor(data.__embindId);
         }
-        return _proxyHandler.deserialize(data);
+        // The main thread reaches the module through such a port.
+        return isWorkerScope ? _proxyHandler.deserialize(data) : Comlink.wrap(answered(data));
     },
 });
 
@@ -305,6 +309,45 @@ Comlink.transferHandlers.set('embindProxyArray', {
 
 let _worker = null;
 
+// Comlink settles a call when the worker answers it, which a terminated worker never does. Every channel to the
+// worker goes through one of these, which answers the calls still waiting at terminate, and the ones made after it,
+// as comlink answers a call that threw.
+const TERMINATED = 'crossbind: the worker was terminated before it answered this call';
+const openChannels = new Set();
+
+function answered(port) {
+    const waiting = new Set();
+    const listeners = new Set();
+    let isClosed = false;
+    const refuse = (id) => {
+        const value = { isError: false, value: new DOMException(TERMINATED, 'AbortError') };
+        listeners.forEach((listener) => listener({ data: { id, type: 'HANDLER', name: 'throw', value } }));
+    };
+    port.addEventListener('message', (event) => {
+        if (isClosed) return;
+        waiting.delete(event.data?.id);
+        listeners.forEach((listener) => listener(event));
+    });
+    port.start?.();
+    openChannels.add(() => {
+        isClosed = true;
+        waiting.forEach(refuse);
+        waiting.clear();
+    });
+    return {
+        addEventListener: (type, listener) => listeners.add(listener),
+        removeEventListener: (type, listener) => listeners.delete(listener),
+        postMessage(message, transfer) {
+            if (isClosed) {
+                refuse(message.id);
+                return;
+            }
+            waiting.add(message.id);
+            port.postMessage(message, transfer);
+        },
+    };
+}
+
 // Configurable, so the coercion wrapper wraps the objects read through it as it does every other member.
 export function moduleRoot(m) {
     Object.defineProperty(m, HANDLES, {
@@ -320,6 +363,7 @@ export function moduleRoot(m) {
 
 export function adoptModule(remote) {
     remoteModule = remote;
+    handleWatcher = watcherOf(remote);
     return remote;
 }
 
@@ -347,7 +391,7 @@ function exposeWorker(systemConfig, createModule) {
 async function initWithWorker(config, userConfig) {
     const scriptUrl = config.workerUrl || resolveScriptUrl(config);
     _worker = new Worker(scriptUrl);
-    const workerApi = Comlink.wrap(_worker);
+    const workerApi = Comlink.wrap(answered(_worker));
 
     const {
         logHandler, errorHandler, onRuntimeInitialized, getWasmFunction, useWorker, workerUrl,
@@ -406,6 +450,8 @@ function terminate() {
     if (_worker) {
         _worker.terminate();
         _worker = null;
+        openChannels.forEach((close) => close());
+        openChannels.clear();
     }
 }
 

@@ -117,7 +117,7 @@ You don't need it when:
 | `m.FS.writeFile(...)` returns | `undefined` | `Promise<undefined>` |
 | Synchronous callbacks | Work | Don't work — use returned promises |
 | OPFS storage | Throws | Works (if browser supports) |
-| Termination | n/a | `initNative.terminate()` kills the worker |
+| Termination | n/a | `initNative.terminate()` kills the worker; the calls it has not answered reject with an `AbortError` |
 
 Bound objects such as vectors and structs are proxied too; `m.toArray(vec)` and `m.toVector(cls, arr)` work as on the page thread.
 
