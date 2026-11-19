@@ -49,6 +49,9 @@ const DEVTOOLS_PORT = 9223;
 const SETTLE_MS = 1000;
 // How long the page's button waits for DevTools' click, which comes at once.
 const CLICK_TIMEOUT_MS = 5000;
+// How long the run waits after the clipboard's click before full screen's: on windows-11-arm WebView2 refused ("not
+// granted") most full screen requests that came at once, and none that came about a second later.
+const FULL_SCREEN_PAUSE_MS = 2000;
 // How long an app takes to quit and open anew after app.relaunch(), and for its output to arrive after its exit.
 const RELAUNCH_TIMEOUT_MS = 30000;
 const RELAUNCH_POLL_MS = 500;
@@ -879,6 +882,7 @@ async function fillScreen() {
         finish(`the window could not be told the system sleeps and wakes: ${error.message}`);
     }
     await readClipboard();
+    await new Promise((done) => { setTimeout(done, FULL_SCREEN_PAUSE_MS); });
     try {
         // The run's own times beside the page's FULL SCREEN lines, which a failed run shows.
         console.log(`crossbind e2e: full screen clicked at ${new Date().toISOString()}; ${foreground('Report')}`);
