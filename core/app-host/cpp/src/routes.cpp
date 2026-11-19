@@ -301,7 +301,7 @@ void serveRoute(SchemeRequest request, SchemeRespond respond) {
 }
 
 void answerOriginRequest(const std::string &name, std::function<void(Request)> handler, SchemeRequest request, SchemeRespond respond) {
-    if (auto refused = originRefusalOf(request.path, request.method, "crossbind: the origin " + name + " answers GET and HEAD alone")) {
+    if (auto refused = refusalOf(request.path, request.method, "crossbind: the origin " + name + " answers GET and HEAD alone")) {
         respond(std::move(*refused));
         return;
     }
