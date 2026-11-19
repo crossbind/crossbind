@@ -3,6 +3,133 @@
 <!-- release-notes:start -->
 <!-- Generated from releases/crossbind/<version>.md by scripts/release/render-changelog.mjs. Edit the note, then run `pnpm changelog`. -->
 
+## 2.0.0-beta.79
+
+An app goes to a store's testers with `crossbind app upload` and out to everyone with `crossbind app release`, which builds nothing, and `crossbind app store --send` sends a store's page alone; an empty `std::optional` is null on every runtime, a function that takes a `std::unique_ptr` stays out of the bridge, and in WebAssembly curl's multi interface runs through fetch, so GDAL's `/vsicurl/`, `/vsis3/` and WMS tile requests reach their servers.
+
+### Highlights
+
+### Upload to testers, release to everyone
+
+- `crossbind app upload [store]`, the former `crossbind app publish`, builds the app and sends it to the store's
+  testers, changing nothing its users see: a Google Play testing track, internal unless `--track` names another; App
+  Store Connect, whose TestFlight hands it to testers; a Microsoft Store submission it leaves for the release; and a
+  draft GitHub release.
+- `crossbind app release [store]` puts out to everyone what the testers have, with no build, and sends the page the
+  store's folder in `store/` holds with it. Google Play puts its newest testing release out on production, App Store
+  Connect hands App Review the version of `package.json`'s number with its newest TestFlight build, the Microsoft Store
+  submits the upload's submission for certification, and GitHub puts the draft release out.
+- `--rollout 10`, or `10%`, starts a release with that share of the users: Google Play stages it, the Microsoft Store
+  rolls it out gradually and App Store Connect releases the version in phases over 7 days. A share below 100 stops the
+  release before any store releases where one of its stores has no stages, as GitHub.
+- `app.stores` in `crossbind.config.js` names the stores a bare `crossbind app upload`, `release` and `store` act on, in
+  its order.
+- `crossbind app store --send` sends a store's page, the listing, screenshots and settings `store/` holds, with no build;
+  `-p` sends one platform's. `crossbind app store` also tells what each store has now, with the credentials at hand:
+  Google Play's tracks, App Store Connect's versions and newest builds, and Partner Center's submissions.
+- `crossbind app upload app-store` without `-p` sends the iOS app, then the macOS one, as App Store Connect keeps both in
+  one record. Each platform is checked before the first build, and where one fails after the other went, the error says
+  which went and the `-p` that sends the rest.
+- `crossbind app key` says which keys sign the app and where each is kept. `crossbind app key upload` makes this
+  machine's upload key and `crossbind app key updater` the updater's pair; an extension's `keys` add their own.
+- For extension authors: a publisher may give `release`, `send` and `state` steps and `canStage`, and its
+  `guide(api)` gives `{ uploads, sends, releases, problems, where, steps }`.
+
+### Bindings
+
+- An empty `std::optional` is `null` on every runtime, as a null pointer is; it was `undefined` on wasm, which also
+  refused `null` for an optional number. An optional parameter takes `null` or `undefined` for an empty one.
+- On React Native and in a Node-API addon, a function's or method's trailing optional arguments may be left out, as on
+  wasm, and a vector's or map's `get` past the end answers `null`.
+- A function, method or constructor that takes a `std::unique_ptr`, by value, as an rvalue, through a const reference
+  or through an alias such as GEOS's `Geometry::Ptr`, is left out of the bridge, with a line in the build for each: a
+  call destroyed the object its argument's JavaScript handle still held, and freeing the handle destroyed it again. A
+  returned `std::unique_ptr` binds as before, and JavaScript owns the object.
+- In a hand-written interface beside a header, a `%template` instance binds, a function template's under the name
+  `%template` gives it, and so do the methods an `%extend` block adds to a class; the bridge of either did not compile.
+- Builds run on toolchain image family 1.0.23, from 1.0.21, whose SWIG makes these changes. The bridges' format moves
+  with it, so the first build after the upgrade makes each bridge again.
+- The C++ binding rules, the SWIG escape page and troubleshooting say what the binder does, each line measured on wasm
+  and on a Node-API addon, and troubleshooting names the messages the runtimes print.
+
+### curl in WebAssembly
+
+- `curl_multi_perform` runs the transfers added to a multi handle through fetch, each as `curl_easy_perform` does, and
+  all of them are done when it returns. In WebAssembly curl has no sockets of its own, so such a transfer could not
+  connect, and GDAL's `/vsicurl/`, `/vsis3/` and WMS tile requests failed with it.
+
+### Docs and the site
+
+- The guide, the API reference, the playbooks and the READMEs say the same with less, and their wide tables became
+  lists. Wrong statements went: crossbind needs Node.js 26, as its engines say, not 24, and the Vite plugin sets
+  COOP/COEP in dev and preview only.
+- The tutorial is 23 lessons in five parts, Start, C++, Rust, Libraries and Runtime, each with a runnable sample and a
+  "Try it", and the playground has 25 samples.
+
+Reference: "Publishing" and "Releasing to everyone" in `docs/api/app.md`, "Publishers" and "Keys" in
+`docs/api/extensions.md`, `docs/api/cpp-binding-rules.md`.
+
+### Breaking changes
+
+- `crossbind app publish` is `crossbind app upload`, `crossbind app upload-key` is `crossbind app key upload` and
+  `crossbind app updater-key` is `crossbind app key updater`; the old names are gone.
+- An upload puts nothing out: `crossbind app upload` takes no `--submit`, `--phased`, `--draft` or `--rollout`, refuses
+  `--track production` and sends no store page. An upload to the Microsoft Store leaves its submission for the release,
+  and one to GitHub leaves the release a draft.
+- A publisher's `guide(api)` gives what an upload sends as `uploads`; `sends` is now what `--send` sends.
+- An empty `std::optional` is `null` on wasm, where it was `undefined`.
+- A function, method or constructor that takes a `std::unique_ptr` is no longer bound.
+
+### Migration notes
+
+- Upgrade the crossbind packages a project uses to `2.0.0-beta.79` together.
+- In scripts and CI, write `crossbind app upload` for `crossbind app publish`, `crossbind app key upload` for
+  `crossbind app upload-key` and `crossbind app key updater` for `crossbind app updater-key`.
+- Where a publish put the app out, upload it and then release it: `--submit` and `--track production` become
+  `crossbind app release app-store` and `crossbind app release google-play`, and `--phased` and `--rollout` become the
+  release's `--rollout`. Send a store's page with `crossbind app store --send`, or with the release.
+- Code that tells an empty optional by `=== undefined` on wasm tests `== null`.
+- A function that took a `std::unique_ptr` takes a reference or a `std::shared_ptr` to stay bound; returning a
+  `std::unique_ptr` is fine.
+
+### Fixes
+
+- `crossbind app dev -p ios --device` loads the page from the phone's own `http://localhost`, which the app's debug
+  host relays to the dev server, as `adb reverse` does for an Android device. From the Mac's address WebKit ran the page
+  without its JavaScript compiler and outside a secure context: its JavaScript ran about 34 times slower than in the
+  built app and its wasm about 26 times, with no OPFS, `crypto.subtle`, clipboard or WebGPU. iOS asks the phone's user
+  to allow the app on the local network first.
+- `initNative.terminate()` rejects each call the worker has not answered with an `AbortError`, as it does a later call
+  on the old module and an `initNative()` still starting; they never settled. A collected handle of a terminated worker
+  no longer releases an object of the next worker.
+- `paths.wasm`, `paths.data`, `paths.js` and `paths.worker` take a full address, a `blob:` or an `https:` one, a Windows
+  drive or a path from the root, as it is; they were always looked up under `path`.
+- Where Xcode 27's sign-in has lapsed ("Failed to Use Accounts"), an upload to App Store Connect ends on the hint to sign
+  in again under Xcode › Settings › Accounts, and on a terminal the export runs again once the user has signed in and
+  pressed Enter.
+
+### Known limitations
+
+- No app has been released with `crossbind app release`, or had its page sent with `crossbind app store --send`, on a
+  real store yet; tests stand in for the stores' APIs.
+- The Microsoft Store refuses the Windows setup program, which downloads WebView2 when it is missing (policy 10.2.9).
+  The MSIX package is the way in, and the Store has not certified a crossbind app's package yet.
+- The Mac App Store path is verified up to Xcode's signed export; no crossbind app has been uploaded, tested on
+  TestFlight or through App Review on it yet. A sandboxed app opens only the files its user picks, so a dataset's
+  companion files, as a Shapefile's, need picking too.
+- In WebAssembly, curl's multi transfers run one after another, so they do not overlap. In a browser, `/vsis3/` needs
+  the bucket's CORS rules to expose `Content-Range`.
+- A class binds with its first base only, and a template binds nothing but the instances `%template` names in a
+  hand-written interface; the build prints no line for either.
+- `CROSSBIND_SCCACHE` caches neither a wasm build's compiles, as sccache can cache none of emscripten's, nor Rust's.
+- `crossbind-licenses.json` leaves out a file a stylesheet inlines, under Vite's 4 KB `assetsInlineLimit`, and worker
+  bundles; the webpack and Metro plugins do not write it.
+- Conan packages come from ConanCenter only and have no WASI builds. An option a recipe gives no default and drops
+  for a target is read as one the recipe does not have.
+- The Node.js wasm `fsync` workaround reaches the operating system but does not force data to disk.
+- The Android app image's Gradle and Android build tools still carry the Guava issue tracked in
+  `docs/known-issues.md`, under the existing scan exception until 15 December 2026.
+
 ## 2.0.0-beta.78
 
 A desktop app reaches two more stores, a Windows app as an MSIX package through Partner Center's submission API and a sandboxed macOS app through App Store Connect, which signs it in the cloud as it does an iOS app, and `crossbind app store` tells, per store, what a publish sends, what the store would refuse of the project's `store/` folder and the steps only its website takes.

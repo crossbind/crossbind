@@ -1,6 +1,6 @@
 {
     "name": "@crossbind/extension-microsoft-store",
-    "version": "2.0.0-beta.78",
+    "version": "2.0.0-beta.79",
     "description": "crossbind app extension: sends a Windows app's MSIX packages and listing to the Microsoft Store through Partner Center's submission API.",
     "homepage": "https://github.com/crossbind/crossbind/tree/main/extensions/microsoft-store#readme",
     "repository": "https://github.com/crossbind/crossbind.git",
