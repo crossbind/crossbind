@@ -120,7 +120,7 @@ import './native/boxes.i';
 const m = await initNative();   // m.BoxInt, m.MapStringDouble
 ```
 
-The module then has the classes `BoxInt` and `MapStringDouble`, and a function of `box.h` that takes or returns a `Box<int>` can be called. SWIG's own `%template(BoxInt) Box<int>;` does not do this: the bridge it generates does not compile.
+The module then has the classes `BoxInt` and `MapStringDouble`, and a function of `box.h` that takes or returns a `Box<int>` can be called. A template instance also binds through SWIG's own `%template`, in the `.i` beside its header after the `%include`: `%template(BoxInt) Box<int>;` binds the class `BoxInt`, and `%template(largerInt) larger<int>;` the function `largerInt`.
 
 ## Caveats
 

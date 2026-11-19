@@ -4,7 +4,8 @@
 #include <memory>
 #include <string>
 
-// The class whose hand-written interface, confextend.i beside this header, adds methods with %extend.
+// The class whose hand-written interface, confextend.i beside this header, adds methods with %extend, and the
+// templates whose instances it names with %template.
 
 class ConfExtended {
 public:
@@ -16,5 +17,17 @@ public:
 private:
     std::string value;
 };
+
+template <typename T> class ConfTemplateBox {
+public:
+    ConfTemplateBox() : value() {}
+    void set(T v) { value = v; }
+    T get() const { return value; }
+
+private:
+    T value;
+};
+
+template <typename T> T confLarger(T a, T b) { return a > b ? a : b; }
 
 #endif
