@@ -28,6 +28,11 @@ export function wrapperChecks({ add, skip }, w, { worker }) {
         const leaves = await w.confWrapCachedMany();
         return [await size(leaves), await (await at(leaves, 1)).doubled()];
     }, [2, 4]);
+    add('wrap:uniquePtrReturned', async () => (await w.confWrapOwned(4)).doubled(), 8);
+    // A call taking a std::unique_ptr would destroy the object its argument's handle still holds, so none binds.
+    add('wrap:uniquePtrParamsUnbound', () => Promise.all(['confWrapTake', 'confWrapTakeAlias', 'confWrapTakeMoved', 'confWrapPeekOwned']
+        .map(async (name) => typeof (await w[name]))), ['undefined', 'undefined', 'undefined', 'undefined']);
+    add('wrap:uniquePtrMethodUnbound', async () => typeof (await (await new w.ConfWrapTree()).adopt), 'undefined');
     add('wrap:uniquePtrReference', async () => (await (await new w.ConfWrapTree()).child()).doubled(), 10);
     // The tree is unreachable once its child() returns; collected before the leaf is read, it takes the leaf along
     // unless the leaf's handle keeps it. Only a runtime started with --expose-gc collects on demand.

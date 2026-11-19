@@ -53,7 +53,7 @@ private:
             type: 'callout',
             tone: 'warn',
             title: 'unique_ptr parameters',
-            text: 'A function may return a `std::unique_ptr`: JavaScript gets the object and owns it. Do not take one as a parameter: C++ frees the object when the call ends while the JavaScript handle still claims it, so freeing that handle afterwards destroys the object a second time. Take a reference, or a `std::shared_ptr` when C++ keeps the object.',
+            text: 'A function may return a `std::unique_ptr`: JavaScript gets the object and owns it. A function, method or constructor that takes one is left out, and the build prints a line for it: the call would destroy the object the JavaScript handle still holds. Take a reference, or a `std::shared_ptr` when C++ keeps the object.',
         },
 
         { type: 'h2', id: 'types', text: 'Primitive types' },

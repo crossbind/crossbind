@@ -18,7 +18,8 @@ skips (search `KNOWN ENGINE GAP` in `spec/run.mjs`).
 - `native/confpointers.h`, `confcallbacks.h`, `conftext.h`, `confwrappers.h`, `conftypes.h` (+
   `conftypes2.h`, `confkinda.h`, `confkindb.h`, `confprelude.h`, `confpreludedeps.h`, `confexport.h`) — the pointer and handle
   rules: number/byte/void*/struct/opaque handles and their helpers, out-parameters, C function
-  pointers, `const char *` as a string, smart pointer wrappers, unique_ptr references, enums,
+  pointers, `const char *` as a string, smart pointer wrappers, unique_ptr results and references (a
+  unique_ptr parameter stays unbound), enums,
   every 64-bit integer spelling, virtual bases, registration guards across headers, a header prelude and an ignored
   declaration. Also header-only, and prefixed because the kit directory joins every leg's include path (a
   `strings.h` here shadows the POSIX header). `config.mjs` carries the header options these need

@@ -8,8 +8,8 @@
 // Smart pointer wrappers that convert to std::shared_ptr cross as the object: returned by value,
 // by const reference and in vectors. A const reference parameter takes the object when the
 // wrapper builds from a shared_ptr (ConfNotNull, like gsl::not_null) and stays unbound when it
-// does not (ConfChecked, like PROJ's nn). Also references to unique_ptr members, fluent setters
-// and references to uncopyable objects.
+// does not (ConfChecked, like PROJ's nn). Also unique_ptr results, references to unique_ptr
+// members, fluent setters and references to uncopyable objects.
 
 template <class P> class ConfNotNull {
 public:
@@ -42,6 +42,7 @@ private:
 
 class ConfWrapLeaf {
 public:
+    typedef std::unique_ptr<ConfWrapLeaf> Ptr;
     explicit ConfWrapLeaf(int v) : value(v) {}
     int doubled() const { return value * 2; }
 
@@ -70,10 +71,20 @@ inline const std::vector<ConfLeafRef> &confWrapCachedMany() {
     return leaves;
 }
 
+// A unique_ptr result is the object, which JavaScript then owns. A unique_ptr parameter would destroy the object its
+// argument's handle still holds: by value, through an alias such as GEOS's Geometry::Ptr, as an rvalue or through a
+// const reference, it stays out of the bridge.
+inline std::unique_ptr<ConfWrapLeaf> confWrapOwned(int v) { return std::make_unique<ConfWrapLeaf>(v); }
+inline int confWrapTake(std::unique_ptr<ConfWrapLeaf> leaf) { return leaf->doubled(); }
+inline int confWrapTakeAlias(ConfWrapLeaf::Ptr leaf) { return leaf->doubled(); }
+inline int confWrapTakeMoved(std::unique_ptr<ConfWrapLeaf> &&leaf) { return leaf->doubled(); }
+inline int confWrapPeekOwned(const std::unique_ptr<ConfWrapLeaf> &leaf) { return leaf->doubled(); }
+
 class ConfWrapTree {
 public:
     ConfWrapTree() : leaf(new ConfWrapLeaf(5)) {}
     const std::unique_ptr<ConfWrapLeaf> &child() const { return leaf; }
+    void adopt(std::unique_ptr<ConfWrapLeaf> other) { leaf = std::move(other); }
 
 private:
     std::unique_ptr<ConfWrapLeaf> leaf;
