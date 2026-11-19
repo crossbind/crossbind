@@ -62,6 +62,12 @@ export function answerPage(request, response, dist) {
         response.end('headers');
         return true;
     }
+    // A path of the kind a dev server names, with a colon, as Vite's virtual modules have.
+    if (inPage === '/__e2e/id:virtual') {
+        response.writeHead(200, { 'content-type': 'text/plain' });
+        response.end('id:virtual');
+        return true;
+    }
     const file = pageFile(dist, inPage);
     if (!file) {
         response.writeHead(404, { 'content-type': 'text/plain' });

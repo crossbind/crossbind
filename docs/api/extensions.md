@@ -572,7 +572,9 @@ registry.function("acme.open", [](crossbind::Call call) {
   or a function. `name`, its host: lowercase letters and digits, which dashes may join, 63 at most, neither `app` nor a
   name served now; `role`, what its pages are, of the same letters, not `app`. What it refuses throws, saying why.
   `handler` gets each GET and HEAD of the origin as a route gets its own (a `Request`, as [Routes](#routes) tells), its
-  path from the origin's `/`, on the thread the webview asks on, which it must not hold up. The host answers another
+  path from the origin's `/`, on the thread the webview asks on, which it must not hold up. Unlike a route's, its
+  `path()` holds the colons, backslashes and empty parts a dev server's URLs have, as Vite's `/@id/__x00__virtual:…` or
+  `/@fs/C:/…`, never a part `..`, so a handler that joins it to a folder checks it itself. The host answers another
   method with 405, what `handler` throws with 500, and the paths under `/__crossbind/b/` itself: the bytes its pages'
   calls send and take, with their token.
 - `Origin`: Any thread may hold a copy. `url()`, its URL with the path `/`, as `crossbind://acme-notes/`. `end()`, from

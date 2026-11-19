@@ -58,6 +58,22 @@ bool leavesItsFolder(const std::string &path) {
     return false;
 }
 
+// Whether the path has a part "..", which on Windows a backslash parts as well.
+bool hasParentPart(const std::string &path) {
+#ifdef _WIN32
+    constexpr const char *SEPARATORS = "/\\";
+#else
+    constexpr const char *SEPARATORS = "/";
+#endif
+    for (size_t start = 0;;) {
+        const size_t end = path.find_first_of(SEPARATORS, start);
+        const size_t length = (end == std::string::npos ? path.size() : end) - start;
+        if (length == 2 && path.compare(start, 2, "..") == 0) return true;
+        if (end == std::string::npos) return false;
+        start = end + 1;
+    }
+}
+
 // What a Range header asks of a file of size bytes: the whole file for none, for several ranges and for one the host
 // cannot read; a part, from start to end, both in it; or nothing the file holds.
 struct ByteRange {
@@ -225,14 +241,25 @@ namespace app {
 
 namespace {
 
-// What the host answers itself of a request for a route or a served origin: 400 for a path that could leave a folder,
-// and 405, saying why, for another method than GET and HEAD.
-std::optional<SchemeResponse> refusalOf(const std::string &path, const std::string &method, const std::string &why) {
-    if (leavesItsFolder(path)) return textResponse(400, "crossbind: the path of a route's URL has no part \"..\", no empty part and, on Windows, no \\ or :");
+// 405, saying why, for another method than GET and HEAD.
+std::optional<SchemeResponse> methodRefusal(const std::string &method, const std::string &why) {
     if (method == "GET" || method == "HEAD") return std::nullopt;
     SchemeResponse refused = textResponse(405, why);
     refused.headers.emplace_back("Allow", "GET, HEAD");
     return refused;
+}
+
+// What the host answers itself of a request for a route: 400 for a path that could leave a folder, else methodRefusal().
+std::optional<SchemeResponse> refusalOf(const std::string &path, const std::string &method, const std::string &why) {
+    if (leavesItsFolder(path)) return textResponse(400, "crossbind: the path of a route's URL has no part \"..\", no empty part and, on Windows, no \\ or :");
+    return methodRefusal(method, why);
+}
+
+// And of a served origin's, whose handler gets every path its source names but one with a part "..": a dev server's
+// colons, backslashes and empty parts among them.
+std::optional<SchemeResponse> originRefusalOf(const std::string &path, const std::string &method, const std::string &why) {
+    if (hasParentPart(path)) return textResponse(400, "crossbind: the path of a served origin's URL has no part \"..\"");
+    return methodRefusal(method, why);
 }
 
 // Hands a request to its owner's route or handler, which answers it on the thread the webview asks on.
@@ -274,7 +301,7 @@ void serveRoute(SchemeRequest request, SchemeRespond respond) {
 }
 
 void answerOriginRequest(const std::string &name, std::function<void(Request)> handler, SchemeRequest request, SchemeRespond respond) {
-    if (auto refused = refusalOf(request.path, request.method, "crossbind: the origin " + name + " answers GET and HEAD alone")) {
+    if (auto refused = originRefusalOf(request.path, request.method, "crossbind: the origin " + name + " answers GET and HEAD alone")) {
         respond(std::move(*refused));
         return;
     }
