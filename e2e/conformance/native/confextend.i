@@ -26,4 +26,8 @@
 
 %include "confextend.h"
 
+// An instance of a template binds under the name %template gives it.
+%template(ConfTemplateBoxInt) ConfTemplateBox<int>;
+%template(confLargerInt) confLarger<int>;
+
 #endif
