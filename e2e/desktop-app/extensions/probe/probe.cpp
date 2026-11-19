@@ -230,13 +230,17 @@ void crossbind_extension_probe(crossbind::Registry &registry) {
         call.resolve(Value::Object{{"starts", starts.load()}, {"isStartFirst", isStartFirst.load()}, {"windows", windows.load()},
                                    {"isAppWindow", isAppWindow.load()}, {"appId", crossbind::appId()}});
     });
-    // The probe's URLs: a text it answers whole, with the query and a header it was asked with; a file the host reads,
-    // under a path the route gets decoded; and a request it lets go of unanswered.
+    // The probe's URLs: a text it answers whole, with the query and a header it was asked with; a document that tells the
+    // page framing it that it shows; a file the host reads, under a path the route gets decoded; and a request it lets go
+    // of unanswered.
     registry.route([](crossbind::Request request) {
         if (request.path() == "/hello.txt") {
             request.respond(200,
                 {{"Content-Type", "text/plain; charset=utf-8"}, {"X-Probe-Header", request.header("X-PROBE")}, {"X-Probe-Page", request.page().id() != 0 ? "yes" : "no"}},
                 "hello " + request.query());
+        } else if (request.path() == "/frame.html") {
+            request.respond(200, {{"Content-Type", "text/html; charset=utf-8"}},
+                "<!doctype html><script>parent.postMessage({ routeFrame: location.href }, '*');</script>");
         } else if (request.path() == "/a b/file.bin") {
             request.respondFile(text(routeFile()));
         } else if (request.path() != "/unanswered") {
