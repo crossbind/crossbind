@@ -69,7 +69,7 @@ private:
                 ['`long`, `size_t`', '`Number` on wasm32, `BigInt` on React Native', ''],
                 ['`std::string`', '`String`', ''],
                 ['`const char *`', '`String`', 'see [pointers](#pointers)'],
-                ['`std::optional<T>`', 'the value; when empty, `undefined` on wasm and `null` on React Native and in a Node-API addon', 'C++17; read it with `??`. `T` is a type a [vector](#containers) holds'],
+                ['`std::optional<T>`', 'the value, or `null` when empty; a parameter also takes `undefined`', 'C++17; may be left out as a function\'s last argument. `T` is a type a [vector](#containers) holds'],
                 ['`emscripten::val`', 'anything', 'the untyped escape hatch'],
             ],
         },

@@ -128,6 +128,17 @@ describe('buildWasm link step', () => {
             + 'var argsWired=new Array(expectedArgCount);var invokerFuncArgs=[];var destructors=[];var thisWired;');
     });
 
+    // An empty std::optional is null, as on every other runtime (utils/embindOptional.js).
+    test.each(Object.keys(ENVIRONMENTS))('gives an empty optional as null in the %s glue', async (runtimeEnv) => {
+        const target = makeTarget(runtimeEnv);
+        fs.writeFileSync(`${work}/${target.rawJsName}`, 'var EmValOptionalType=Object.assign({optional:true},EmValType);'
+            + 'var imports={j:rawOptionalType=>{registerType(rawOptionalType,EmValOptionalType);}};');
+
+        await buildWasm(target, { force: true });
+
+        expect(fs.readFileSync(`${work}/${target.rawJsName}`, 'utf8')).toContain('return value===undefined?null:value');
+    });
+
     test.each(Object.keys(ENVIRONMENTS))('exports FS from the %s link', async (runtimeEnv) => {
         await buildWasm(makeTarget(runtimeEnv), { force: true });
 

@@ -64,7 +64,7 @@ public:
     static std::shared_ptr<ConfShape> asShape() { return std::make_shared<ConfCircle>(); }
 };
 
-// Free-standing statics: exceptions -> JS Error, std::optional -> null/undefined.
+// Free-standing statics: exceptions -> JS Error, std::optional -> null.
 class ConfOps {
 public:
     static double checkedSqrt(double x) {
@@ -75,6 +75,7 @@ public:
         if (v % 2 != 0) return std::nullopt;
         return v / 2;
     }
+    static int orMinusOne(std::optional<int> v) { return v.value_or(-1); }
     static std::string echo(std::string s) { return s; }
     static int sumOfSixteen(int a1, int a2, int a3, int a4, int a5, int a6, int a7, int a8, int a9, int a10,
                             int a11, int a12, int a13, int a14, int a15, int a16) {

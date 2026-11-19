@@ -2669,7 +2669,8 @@ namespace internal {
             if (index < v.size()) {
                 return val(v[index]);
             } else {
-                return val::undefined();
+                // Upstream returns an empty optional here, which crosses as null.
+                return val::null();
             }
         }
 
@@ -2692,7 +2693,7 @@ namespace internal {
 template<typename T>
 void register_optional() {
     // Mirrors upstream embind: the optional<T> TYPEID resolves to a JS converter that
-    // delegates to T's converter, with no-value crossing as undefined.
+    // delegates to T's converter. No value crosses as null, as crossbind's wasm glue makes it.
     internal::_embind_register_optional(
             internal::TypeID<std::optional<T>>::get(),
             internal::TypeID<T>::get());
@@ -2732,7 +2733,8 @@ namespace internal {
         ) {
             auto i = m.find(k);
             if (i == m.end()) {
-                return val::undefined();
+                // Upstream returns an empty optional here, which crosses as null.
+                return val::null();
             } else {
                 return val(i->second);
             }
