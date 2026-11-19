@@ -19,6 +19,19 @@ const systemKeys = {
         description: 'The JSON key of the service account crossbind app upload uploads to Google Play as, where gcloud is not, as in CI. The CROSSBIND_GOOGLE_PLAY_KEY environment variable overrides it.',
         default: '',
     },
+    APPLE_API_KEY: {
+        description: "The .p8 file of the App Store Connect API key with which crossbind app store --send and crossbind app release reach App Store Connect, uploads go to it in place of Xcode's account, and Apple notarizes a macOS app: its path, which crossbind config set keeps whole, and never the key's own text. The CROSSBIND_APPLE_API_KEY environment variable overrides it.",
+        default: '',
+        isFile: true,
+    },
+    APPLE_API_KEY_ID: {
+        description: "The ID of the API key in APPLE_API_KEY, which its file's name gives where it keeps App Store Connect's AuthKey_<key id>.p8. The CROSSBIND_APPLE_API_KEY_ID environment variable overrides it.",
+        default: '',
+    },
+    APPLE_API_ISSUER: {
+        description: 'The issuer ID of the API key in APPLE_API_KEY, which App Store Connect shows above its keys. The CROSSBIND_APPLE_API_ISSUER environment variable overrides it.',
+        default: '',
+    },
     RUNNER: {
         description: 'Where toolchain steps run: DOCKER_RUN, DOCKER_EXEC, LOCAL, or REMOTE on the runners REMOTE_URL and REMOTE_URL_<IMAGE> name; a machine that names none builds on crossbind cloud once signed in with crossbind login. The CROSSBIND_RUNNER environment variable overrides it.',
         options: ['DOCKER_RUN', 'DOCKER_EXEC', 'LOCAL', 'REMOTE'],

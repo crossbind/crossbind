@@ -286,7 +286,7 @@ export default function extensionApi(name, {
             },
         }),
         apple: Object.freeze({
-            key: () => appStoreKey(),
+            key: () => appStoreKey(process.env, state.config.system),
             teams: () => xcodeTeams(),
             xcodebuild: (what, args, xcodebuildOptions) => xcodebuild(what, args, xcodebuildOptions),
             unreasonedApis: (binary, privacy) => unreasonedImports(binary, privacy),

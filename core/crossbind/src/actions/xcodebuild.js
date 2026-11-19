@@ -20,7 +20,7 @@ const CAUSES = [
     },
     {
         pattern: /Cloud signing permission error/i,
-        hint: () => "the API key may not sign in the cloud, which takes its Admin role: use an Admin key, make an Apple Distribution certificate once in Xcode, under Settings › Accounts › Manage Certificates, or unset CROSSBIND_APPLE_API_KEY to upload with Xcode's account.",
+        hint: () => "the API key may not sign in the cloud, which takes its Admin role: use an Admin key, make an Apple Distribution certificate once in Xcode, under Settings › Accounts › Manage Certificates, or unset CROSSBIND_APPLE_API_KEY and run crossbind config delete APPLE_API_KEY to upload with Xcode's account.",
     },
     {
         pattern: /cannot be registered to your development team because it is not available/i,

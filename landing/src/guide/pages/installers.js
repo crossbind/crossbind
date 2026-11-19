@@ -76,6 +76,10 @@ export default {
         },
         {
             type: 'p',
+            text: "On your own Mac, `crossbind config set APPLE_API_KEY <its .p8 file>` and `crossbind config set APPLE_API_ISSUER <its issuer ID>` keep the key in `~/.crossbind.json`, which takes the file's path and never the key's own text; a variable the environment sets wins over each.",
+        },
+        {
+            type: 'p',
             text: 'The API key alone signs nothing, since it also serves [App Store](/guide/app-store/) uploads: without an identity the app is signed ad hoc. The build stops before compiling when the keychain lacks the identity, or when two of its identities share the name, as after a renewal.',
         },
         {

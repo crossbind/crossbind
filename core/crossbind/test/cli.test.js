@@ -3,6 +3,7 @@ import { spawn, spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import upath from 'upath';
 import { fileURLToPath } from 'node:url';
 
 const CLI = fileURLToPath(new URL('../src/cli.js', import.meta.url));
@@ -47,6 +48,25 @@ describe('crossbind outside a project', () => {
         expect(crossbind('config', 'get', 'RUNNER').stdout).toContain("'LOCAL'");
         expect(crossbind('config', 'delete', 'RUNNER').status).toBe(0);
         expect(JSON.parse(fs.readFileSync(file, 'utf8'))).not.toHaveProperty('RUNNER');
+    });
+
+    test("keeps the full path of an App Store Connect API key's file, and neither a key's own text nor a file that is not there", () => {
+        const file = upath.join(home, '.crossbind.json');
+        const key = upath.join(home, 'AuthKey_7K2M9P4Q1Z.p8');
+        fs.writeFileSync(key, 'key');
+        const kept = () => JSON.parse(fs.readFileSync(file, 'utf8')).APPLE_API_KEY;
+
+        expect(crossbind('config', 'set', 'APPLE_API_KEY', 'home/AuthKey_7K2M9P4Q1Z.p8').status).toBe(0);
+        expect(upath.isAbsolute(kept())).toBe(true);
+        expect(fs.realpathSync(kept())).toBe(fs.realpathSync(key));
+        const text = crossbind('config', 'set', 'APPLE_API_KEY', '-----BEGIN PRIVATE KEY-----MIGTAgEAMBMGByqGSM49-----END PRIVATE KEY-----');
+        expect(text).toMatchObject({
+            status: 1,
+            stderr: expect.stringContaining("crossbind: APPLE_API_KEY takes the path of a file, not a key's own text, which crossbind keeps in no file: set the path, or give the text as CROSSBIND_APPLE_API_KEY."),
+        });
+        expect(text.stderr).not.toContain('MIGTAgEAMBMGByqGSM49');
+        expect(crossbind('config', 'set', 'APPLE_API_KEY', 'home/missing.p8')).toMatchObject({ status: 1, stderr: expect.stringContaining('missing.p8, which is no file.') });
+        expect(fs.realpathSync(kept())).toBe(fs.realpathSync(key));
     });
 
     test("lists, reads and deletes an extension's own settings by its name and theirs", () => {

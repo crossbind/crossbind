@@ -31,8 +31,9 @@ now.
 5. Run `pnpm crossbind app dev` to develop, `pnpm crossbind app build` to get `dist/<name>.app` and its disk image. Its
    icon comes from the square PNG `app.icon` names in `crossbind.config.js`, at best 1024 × 1024. To ship it to other
    Macs, set `CROSSBIND_APPLE_SIGNING_IDENTITY` to a Developer ID and `CROSSBIND_APPLE_API_KEY`,
-   `CROSSBIND_APPLE_API_KEY_ID` and `CROSSBIND_APPLE_API_ISSUER` to an App Store Connect API key: the build then signs
-   the app and Apple notarizes it. A Windows app is signed with `CROSSBIND_WINDOWS_SIGNING_STORETYPE` and the key it
+   `CROSSBIND_APPLE_API_KEY_ID` and `CROSSBIND_APPLE_API_ISSUER` to an App Store Connect API key, which
+   `crossbind config set APPLE_API_KEY` and `APPLE_API_ISSUER` keep on your Mac instead: the build then signs the app
+   and Apple notarizes it. A Windows app is signed with `CROSSBIND_WINDOWS_SIGNING_STORETYPE` and the key it
    names, as `docs/api/app.md` tells.
 6. For a desktop app that updates itself, run `pnpm crossbind app key updater`: its public key goes in
    `crossbind.config.js` with the address of the updates (`app: { updater: { url, publicKey } }`), its private key in
