@@ -827,8 +827,11 @@ where it may show a modal dialog, which on Windows runs once WebView2's event ha
 
 A page of the role `app` loads the origins extensions serve, in any frame. A page of a served origin loads its own,
 and the host refuses it the app's own origins and every other served origin before any holder hears of them, as such a
-URL means nothing outside the app; Android's WebView loads a frame of them without asking, which gets nothing of the
-app's. Every other URL reaches `page-navigation` with the page, whose `role()` tells them apart.
+URL means nothing outside the app: a link, a URL with a user's name, which is no part of an origin, and a form's POST,
+which Android's host answers with 204, so the page stays. Android's WebView loads a frame without asking: the app's own
+documents refuse to show in a frame of another origin (`Content-Security-Policy: frame-ancestors 'self'`), and a frame
+of another served origin gets nothing of the app's. Every other URL reaches `page-navigation` with the page, whose
+`role()` tells them apart.
 
 The host's own `page-navigation` loads the origins `app.navigation.load` lists, opens any other link its user follows
 outside and refuses the rest. As the holder of `page-authentication` it takes neither authentications nor certificate

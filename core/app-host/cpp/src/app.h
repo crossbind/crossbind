@@ -23,7 +23,7 @@ void relaunchApp();
 // Readies the webview of the window of this id for the page, and returns the URL it opens first. An Android app's
 // activity does this in Java.
 std::string attach(Core &core, void *webView, const char *devUrl, uint64_t window);
-// The scheme and authority of a URL: the origin a webview names a page by.
+// The scheme, host and port of a URL: the origin a webview names a page by.
 std::string originOf(const std::string &url);
 // A link of the app's schemes the system opened it with, or on iOS and Android one of app.links, on any thread: the
 // extension that owns its scheme or link gets it, for one of the app's own the host's links, which holds it for the page

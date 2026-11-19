@@ -276,44 +276,59 @@ async function checkOwnCalls() {
     }
 }
 
-// 4. A frame of the app's page in a project's: the host refuses its load but on Android, whose WebView loads a frame
-// without asking, and there it gets nothing of the app's.
+// 4. A frame of the app's page in a project's: the host refuses its load, and on Android, whose WebView loads a frame
+// without asking, the app's documents refuse to show in it.
 async function checkAppFrame(appOrigin, isAndroid) {
     const { frame, said } = await frameAt(appOrigin, FRAME_MS);
     let isFirstDocument = false;
     try {
         isFirstDocument = frame.contentWindow.location.href === 'about:blank';
     } catch {
-        // A document of another origin, which loaded.
+        // A document of another origin, which loaded, or the error page Android's WebView shows in its place.
     }
     frame.remove();
     if (said) checkFrameGotNothing(said, "a frame of the app's page in the project's");
     const read = await fetch(under(appOrigin, FRAME_PAGE)).then((response) => `read ${response.status}`, failure);
     if (read.startsWith('read')) throw new Error(`a project's page ${read} of the app's origin`);
-    if (!isAndroid && (said || !isFirstDocument)) throw new Error(`a frame of the app's page loaded in the project's: ${JSON.stringify(said)}`);
-    show('app-frame', { frame: said ?? 'loaded nothing', read });
+    if (said || (!isAndroid && !isFirstDocument)) throw new Error(`a frame of the app's page loaded in the project's: ${JSON.stringify(said)}`);
+    show('app-frame', { frame: 'loaded nothing', read });
+}
+
+// A form's POST of the top frame, which Android's WebView asks the host nothing of before its request.
+function post(url) {
+    const form = document.createElement('form');
+    form.method = 'post';
+    form.action = url;
+    document.body.append(form);
+    form.submit();
 }
 
 // 5. A link elsewhere reaches page-navigation with the role; the app's own origin and another served one, as the top
-// frame's or a window's, are refused before any holder hears of them. Were one loaded, its page would find the stage
-// refused and say so.
+// frame's, with a user's name, which is no part of an origin, as a form's POST or as a window's, are refused before any
+// holder hears of them. Were one loaded, its page would find the stage refused and say so.
 async function checkNavigation(app) {
     const away = 'https://crossbind-e2e.invalid/project';
     location.href = away;
     const asked = await until('page-navigation.asked', ({ url }) => url === away, `page-navigation was not asked for ${away}`);
     if (asked.role !== 'project') throw new Error(`page-navigation heard of the project's ${away} with the role ${JSON.stringify(asked.role)}`);
     const refused = [under(app.origin, '?from=project'), under(app.other, '?from=project')];
+    const named = refused.map((url) => url.replace('://', '://x@'));
+    const posted = [under(app.origin, '?from=project-post'), under(app.other, '?from=project-post')];
     await invoke('probe.setStage', { stage: 'refused' });
-    for (const url of refused) {
+    for (const url of [...refused, ...named]) {
         location.href = url;
+        await sleep(QUIET_MS);
+    }
+    for (const url of posted) {
+        post(url);
         await sleep(QUIET_MS);
     }
     window.open(refused[0]);
     await sleep(QUIET_MS);
     await invoke('probe.setStage', { stage: 'project' });
-    const heard = (await invoke('page-navigation.asked')).filter(({ url }) => refused.includes(url));
+    const heard = (await invoke('page-navigation.asked')).filter(({ url }) => url.includes('from=project'));
     if (heard.length > 0) throw new Error(`page-navigation heard of ${JSON.stringify(heard)}`);
-    show('navigation', { away: asked, refused });
+    show('navigation', { away: asked, refused: [...refused, ...named, ...posted] });
 }
 
 // 9. The probe's proxy: a Range, the headers it drops, its source down, and a method the host refuses.

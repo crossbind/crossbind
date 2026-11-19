@@ -94,6 +94,7 @@ public class CrossbindActivity extends Activity implements ExtensionHost {
     private static final String TAG = "Crossbind";
     private static final String HOST = "appassets.androidplatform.net";
     private static final String APP_ORIGIN = "https://" + HOST;
+    private static final String FRAME_ANCESTORS = "frame-ancestors 'self'";
     // The object a page of the app's origins asks for its port with.
     private static final String READY = "__crossbind_ready";
     // The object the page hands a download's name and bytes to, and the function the host asks for them with.
@@ -310,6 +311,9 @@ public class CrossbindActivity extends Activity implements ExtensionHost {
     // A navigation beyond the app's origins, which the extension page-navigation decides on the UI thread, in UTF-8:
     // LOAD loads it, OUTSIDE opens it in the browser or the mail app, and any other answer refuses it.
     private static native int nativeNavigation(byte[] url, boolean isMainFrame, boolean isUserInitiated);
+
+    // Whether the host's navigation rule alone refuses this URL, in UTF-8, from any thread, page-navigation unasked.
+    private static native boolean nativeRefuses(byte[] url);
 
     // A server's ask for a name and password, in UTF-8, which page-navigation answers through answerHttpAuthentication()
     // under the same id.
@@ -1073,6 +1077,11 @@ public class CrossbindActivity extends Activity implements ExtensionHost {
             // Every one of http://<name>.localhost, served or not, as one of them would reach the device's port 80.
             boolean isServed = "http".equals(url.getScheme()) && host != null && host.endsWith(".localhost") && url.getPort() == -1;
             if (!isApp && !isServed) return null;
+            // A form's POST of the top frame, which Android asks shouldOverrideUrlLoading nothing of, keeps to the rule as
+            // well: one it refuses loads nothing, as a 204 leaves the page where it is.
+            if (request.isForMainFrame() && !"GET".equals(request.getMethod()) && nativeRefuses(url.toString().getBytes(StandardCharsets.UTF_8))) {
+                return responseOf(204, "text/plain", new byte[0][], new byte[0], null, null);
+            }
             String path = url.getEncodedPath() == null ? "/" : url.getEncodedPath();
             // The host decodes the path, as Uri does here.
             if (isApp && url.getPath() != null && url.getPath().startsWith("/b/")) return responseOf(404, "text/plain", new byte[0][], new byte[0], null, null);
@@ -1082,7 +1091,8 @@ public class CrossbindActivity extends Activity implements ExtensionHost {
                 headers.add(header.getKey().getBytes(StandardCharsets.UTF_8));
                 headers.add(header.getValue().getBytes(StandardCharsets.UTF_8));
             }
-            return nativeRequest(request.getMethod(), host, path, query == null ? "" : query, headers.toArray(new byte[0][]));
+            WebResourceResponse response = nativeRequest(request.getMethod(), host, path, query == null ? "" : query, headers.toArray(new byte[0][]));
+            return isApp ? framedByItsOwnOrigin(response) : response;
         }
 
         // A page of the app's origins or of a served one asks for its port, which tells native code of it; a page of
@@ -1231,6 +1241,22 @@ public class CrossbindActivity extends Activity implements ExtensionHost {
                 cancel.run();
             }
         }
+    }
+
+    // An answer of the app's own origin, which a frame of another origin shows nothing of: the WebView asks the host of no
+    // frame's first load, so the documents refuse such a frame themselves, as the host does on the other platforms.
+    static WebResourceResponse framedByItsOwnOrigin(WebResourceResponse response) {
+        if (response == null) return null;
+        Map<String, String> fields = new HashMap<>();
+        if (response.getResponseHeaders() != null) fields.putAll(response.getResponseHeaders());
+        String name = "Content-Security-Policy";
+        for (String given : fields.keySet()) {
+            if (given.equalsIgnoreCase(name)) name = given;
+        }
+        String policy = fields.get(name);
+        fields.put(name, policy == null ? FRAME_ANCESTORS : policy + ", " + FRAME_ANCESTORS);
+        response.setResponseHeaders(fields);
+        return response;
     }
 
     // The host's answer to a request: its headers' names and values in UTF-8, one after the other, and the body, or the
