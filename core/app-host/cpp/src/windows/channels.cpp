@@ -1,3 +1,4 @@
+#include "app.h"
 #include "platform.h"
 #include "windows/com.h"
 
@@ -67,10 +68,90 @@ std::map<std::string, MessageHandler> &handlers() {
     return *all;
 }
 
-std::string originOf(const std::string &url) {
-    const auto scheme = url.find("://");
-    if (scheme == std::string::npos) return url;
-    return url.substr(0, url.find_first_of("/?#", scheme + 3));
+// What each webview's top frame shows, on the UI thread: the documents ContentLoading counted, and the navigations from
+// their start to their new document or their end, through which replies wait. WebView2 posts a message to whatever
+// document the webview shows, so a reply reaches the page that asked or no page.
+struct Shown {
+    uint64_t document = 0;
+    std::set<UINT64> navigations;
+    std::vector<std::wstring> held;
+};
+
+std::map<ICoreWebView2 *, Shown> &shown() {
+    static auto *all = new std::map<ICoreWebView2 *, Shown>();
+    return *all;
+}
+
+void postReply(ICoreWebView2 *core, uint64_t document, const std::wstring &message) {
+    Shown &now = shown()[core];
+    if (now.document != document) return;
+    if (!now.navigations.empty()) {
+        now.held.push_back(message);
+        return;
+    }
+    core->PostWebMessageAsString(message.c_str());
+}
+
+// Keeps count of what the webview shows, for postReply().
+void followDocuments(ICoreWebView2 *core) {
+    EventRegistrationToken token;
+    auto *starting = new Handler<ICoreWebView2NavigationStartingEventHandler, ICoreWebView2 *, ICoreWebView2NavigationStartingEventArgs *>(
+        IID_ICoreWebView2NavigationStartingEventHandler, [core](ICoreWebView2 *, ICoreWebView2NavigationStartingEventArgs *args) -> HRESULT {
+            BOOL isCancelled = FALSE;
+            UINT64 id = 0;
+            if (SUCCEEDED(args->get_Cancel(&isCancelled)) && !isCancelled && SUCCEEDED(args->get_NavigationId(&id))) shown()[core].navigations.insert(id);
+            return S_OK;
+        });
+    core->add_NavigationStarting(starting, &token);
+    starting->Release();
+    auto *loading = new Handler<ICoreWebView2ContentLoadingEventHandler, ICoreWebView2 *, ICoreWebView2ContentLoadingEventArgs *>(
+        IID_ICoreWebView2ContentLoadingEventHandler, [core](ICoreWebView2 *, ICoreWebView2ContentLoadingEventArgs *args) -> HRESULT {
+            Shown &now = shown()[core];
+            UINT64 id = 0;
+            if (SUCCEEDED(args->get_NavigationId(&id))) now.navigations.erase(id);
+            // The page that asked went, and what it waited for with it.
+            now.document += 1;
+            now.held.clear();
+            return S_OK;
+        });
+    core->add_ContentLoading(loading, &token);
+    loading->Release();
+    auto *completed = new Handler<ICoreWebView2NavigationCompletedEventHandler, ICoreWebView2 *, ICoreWebView2NavigationCompletedEventArgs *>(
+        IID_ICoreWebView2NavigationCompletedEventHandler, [core](ICoreWebView2 *, ICoreWebView2NavigationCompletedEventArgs *args) -> HRESULT {
+            Shown &now = shown()[core];
+            UINT64 id = 0;
+            // One that ended without a new document, refused, cancelled, a download or a 204, left the page that asked,
+            // which WebView2 tells of a cancelled one too.
+            if (FAILED(args->get_NavigationId(&id)) || now.navigations.erase(id) == 0 || !now.navigations.empty()) return S_OK;
+            const std::vector<std::wstring> held = std::move(now.held);
+            now.held.clear();
+            for (const auto &message : held) core->PostWebMessageAsString(message.c_str());
+            return S_OK;
+        });
+    core->add_NavigationCompleted(completed, &token);
+    completed->Release();
+}
+
+// A URL's host and port, without a user's name and password.
+std::string hostAndPortOf(const std::string &url) {
+    const size_t scheme = url.find("://");
+    if (scheme == std::string::npos) return "";
+    std::string host = url.substr(scheme + 3, url.find_first_of("/?#", scheme + 3) - scheme - 3);
+    const size_t user = host.rfind('@');
+    if (user != std::string::npos) host.erase(0, user + 1);
+    return host;
+}
+
+// Whether a request is the host's: one of its scheme, or of http://<label>.localhost on port 80, served or not, which would
+// reach the machine's port 80 else. The filter that hands the host those matches over the whole URL, as
+// http://example.com/?next=http://a.localhost/ does, and the host sets no answer for such a one, which WebView2 sends on.
+bool isHostsRequest(const std::string &url, const std::string &scheme) {
+    if (url.rfind(scheme + "://", 0) == 0) return true;
+    if (url.rfind("http://", 0) != 0) return false;
+    const std::string host = hostAndPortOf(url);
+    const std::string suffix = ".localhost";
+    return host.size() > suffix.size() && host.compare(host.size() - suffix.size(), suffix.size(), suffix) == 0
+           && crossbind::app::isLabel(host.substr(0, host.size() - suffix.size()));
 }
 
 // WebView2 adds a script later; the UI thread waits for it, as webview's own scripts do, so the first page gets it.
@@ -95,14 +176,15 @@ void addScript(ICoreWebView2 *core, const std::string &source) {
     done->Release();
 }
 
-// Each window's webview, once: the channels' handlers are the same for all, and each reply goes to its own page. The
-// host holds each webview as long as the app runs, so none that comes later takes its place here, and a reply that comes
-// after its window closed goes to no page.
+// Each window's webview, once: the channels' handlers are the same for all, and each reply goes to the page that asked,
+// as postReply() keeps it. The host holds each webview as long as the app runs, so none that comes later takes its place
+// here, and a reply that comes after its window closed goes to no page.
 void listen(ICoreWebView2 *core) {
     static std::set<ICoreWebView2 *> listening;
     if (!listening.insert(core).second) return;
     core->AddRef();
     addScript(core, CHANNELS_SCRIPT);
+    followDocuments(core);
     auto *received = new Handler<ICoreWebView2WebMessageReceivedEventHandler, ICoreWebView2 *, ICoreWebView2WebMessageReceivedEventArgs *>(
         IID_ICoreWebView2WebMessageReceivedEventHandler, [core](ICoreWebView2 *, ICoreWebView2WebMessageReceivedEventArgs *args) -> HRESULT {
             LPWSTR raw = nullptr;
@@ -115,10 +197,11 @@ void listen(ICoreWebView2 *core) {
             if (handler == handlers().end()) return S_OK;
             LPWSTR source = nullptr;
             // A sender WebView2 cannot name is no origin a page may call from.
-            const std::string origin = SUCCEEDED(args->get_Source(&source)) ? originOf(take(source)) : "null";
+            const std::string origin = SUCCEEDED(args->get_Source(&source)) ? crossbind::app::originOf(take(source)) : "null";
             const std::string id = text.substr(first + 1, second - first - 1);
-            handler->second(origin, text.substr(second + 1), [core, id](const std::string &reply) {
-                onMainThread([core, message = wide(id + "\n" + reply)] { core->PostWebMessageAsString(message.c_str()); });
+            const uint64_t document = shown()[core].document;
+            handler->second(origin, text.substr(second + 1), [core, id, document](const std::string &reply) {
+                onMainThread([core, document, message = wide(id + "\n" + reply)] { postReply(core, document, message); });
             });
             return S_OK;
         });
@@ -332,23 +415,28 @@ void registerSchemeHandler(void *target, const char *scheme, SchemeHandler handl
     auto *serve = new SchemeHandler(std::move(handler));
     auto *requested = new Handler<ICoreWebView2WebResourceRequestedEventHandler, ICoreWebView2 *, ICoreWebView2WebResourceRequestedEventArgs *>(
         IID_ICoreWebView2WebResourceRequestedEventHandler,
-        [serve, environment, target](ICoreWebView2 *, ICoreWebView2WebResourceRequestedEventArgs *args) -> HRESULT {
+        [serve, environment, target, own = std::string(scheme)](ICoreWebView2 *, ICoreWebView2WebResourceRequestedEventArgs *args) -> HRESULT {
             ICoreWebView2WebResourceRequest *request = nullptr;
             if (FAILED(args->get_Request(&request))) return S_OK;
+            LPWSTR uri = nullptr;
+            request->get_Uri(&uri);
+            const std::string url = take(uri);
+            if (!isHostsRequest(url, own)) {
+                request->Release();
+                return S_OK;
+            }
             SchemeRequest incoming;
             incoming.webView = target;
             LPWSTR method = nullptr;
             request->get_Method(&method);
             incoming.method = take(method);
-            LPWSTR uri = nullptr;
-            request->get_Uri(&uri);
-            const std::string url = take(uri);
             const size_t authority = url.find("://");
             const size_t path = url.find('/', authority == std::string::npos ? 0 : authority + 3);
             const size_t query = url.find('?', path == std::string::npos ? 0 : path);
             incoming.path = path == std::string::npos ? "/" : url.substr(path, query == std::string::npos ? std::string::npos : query - path);
             incoming.query = query == std::string::npos ? "" : url.substr(query + 1, url.find('#', query) - query - 1);
-            if (authority != std::string::npos) incoming.host = url.substr(authority + 3, url.find_first_of("/?#:", authority + 3) - authority - 3);
+            const std::string host = hostAndPortOf(url);
+            incoming.host = host.substr(0, host.find(':'));
             IStream *content = nullptr;
             if (SUCCEEDED(request->get_Content(&content)) && content) {
                 incoming.body = readAll(content);

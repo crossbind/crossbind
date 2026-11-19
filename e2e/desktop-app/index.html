@@ -3,6 +3,14 @@
 <head>
     <meta charset="utf-8">
     <title>crossbind app conformance</title>
+    <script>
+        // What the page hears on WebView2's channel from its first script on, which a project's page checks
+        // (src/served-origins.js).
+        if (window.chrome?.webview) {
+            window.e2eHeard = [];
+            chrome.webview.addEventListener('message', (event) => window.e2eHeard.push(String(event.data)));
+        }
+    </script>
 </head>
 <body>
     <pre id="conf">conformance: running ...</pre>

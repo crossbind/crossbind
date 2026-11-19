@@ -172,6 +172,17 @@ void addPageFunctions(crossbind::Registry &registry) {
         call.resolve();
     });
     registry.function("probe.appOnlyRuns", PAGES, [](Call call) { call.resolve(appOnlyRuns.load()); });
+    // Windows posts a reply to whatever page the webview shows. The app's page calls these as it opens the project's:
+    // one holds up the module's thread, as a function must not, so that its answer and the cancel of the other, which
+    // answers nothing, come once the project's page shows, which must hear neither.
+    registry.function("probe.holdUp", [](Call call) {
+        std::this_thread::sleep_for(std::chrono::duration<double, std::milli>(call.options()["ms"].asNumber(0)));
+        call.resolve(std::string("held up for the app's page"));
+    });
+    registry.function("probe.appWaits", [](Call call) {
+        std::lock_guard<std::mutex> lock(originsMutex);
+        waiting.push_back(call);
+    });
     registry.function("probe.stage", PAGES, [](Call call) {
         std::lock_guard<std::mutex> lock(originsMutex);
         call.resolve(stage);
