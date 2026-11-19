@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>no role</title>
+</head>
+<body>
+<script>
+// A page of another origin than the app's, which src/served-origins.js opens and the app's page-navigation loads, so it
+// has no role. Its top frame's POST toward the app's origin and toward a served one must load nothing: it posts each,
+// stays, and goes back to the app's page by a link page-navigation loads, saying how many it stayed through.
+(() => {
+    const QUIET_MS = 1500;
+    const query = new URLSearchParams(location.search);
+    const app = query.get('app');
+    const targets = [`${app}/?from=no-role-post`, `${query.get('served')}?from=no-role-post`];
+    const post = (url) => {
+        const form = document.createElement('form');
+        form.method = 'post';
+        form.action = url;
+        document.body.append(form);
+        form.submit();
+    };
+    const next = (posted) => {
+        if (posted === targets.length) {
+            location.href = `${app}/?from=no-role-back&posted=${posted}`;
+            return;
+        }
+        post(targets[posted]);
+        setTimeout(() => next(posted + 1), QUIET_MS);
+    };
+    next(0);
+})();
+</script>
+</body>
+</html>

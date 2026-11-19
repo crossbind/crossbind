@@ -9,7 +9,9 @@ import { reportWebFeatures } from './web-features.js';
 const PROJECT = 'e2e-project';
 const OTHER = 'e2e-other';
 const ENDED = 'e2e-ended';
+const POSTED = 'e2e-posted';
 const FRAME_PAGE = 'frame-probe.html';
+const NO_ROLE_PAGE = 'no-role.html';
 // The run's endpoint, on the device's own loopback, or where a build for a phone names it, as http://<the Mac's
 // address>:47831, which e2e/endpoint.mjs serves when run alone.
 const ENDPOINT = import.meta.env.VITE_E2E_ENDPOINT || `http://127.0.0.1:${REACH_PORT}`;
@@ -33,6 +35,8 @@ const MAX_LOOP_RATIO = 8;
 const END_AFTER_MS = 300;
 // How long the app's page holds up the module's thread as it opens the project's, past that page's first script.
 const HOLD_MS = 2000;
+// How long the origin a page of no role posts toward stays served: past that page's POSTs and its way back.
+const POSTED_END_MS = 20000;
 
 const sleep = (ms) => new Promise((resolve) => { setTimeout(resolve, ms); });
 // A path of an origin, or of a URL whose path is "/".
@@ -180,16 +184,37 @@ function holdUpReplies() {
     invoke('probe.appWaits').catch(() => {});
 }
 
-// The app's page as the round trip starts: it serves the origins, checks what needs no project's page, and opens the
-// project's page in its window.
+// The app's page as the round trip starts: it serves the origins, checks what needs no project's page, and opens a page
+// of no role in its window, public/no-role.html at the run's endpoint, which page-navigation loads.
 async function start(isAndroid) {
     const otherUrl = await invoke('probe.serveOrigin', { name: OTHER, source: SOURCE });
     checkRefusals(await invoke('probe.refusedOrigins', { served: OTHER }));
     await checkFetch();
     if (isWebView2()) await checkOtherRequests();
     await checkTokens(isAndroid, otherUrl, globalThis.__crossbind_token, 'app');
-    const project = await invoke('probe.serveOrigin', { name: PROJECT, source: SOURCE });
     await invoke('probe.report', { key: 'app', value: { href: location.href, origin: location.origin, other: otherUrl } });
+    const posted = await invoke('probe.serveOrigin', { name: POSTED, source: SOURCE });
+    // A POST that loaded this origin's page, which has no script, leaves the window there until the origin ends.
+    await invoke('probe.endOrigin', { name: POSTED, afterMs: POSTED_END_MS });
+    await invoke('probe.setStage', { stage: 'no-role' });
+    const page = `${SOURCE}/${NO_ROLE_PAGE}?app=${encodeURIComponent(location.origin)}&served=${encodeURIComponent(posted)}`;
+    location.href = page;
+    await sleep(ANSWER_MS);
+    throw new Error(`the window did not open ${page}`);
+}
+
+// 5. The app's page once the page of no role came back by its way back, which page-navigation loads, having stayed
+// through its POSTs toward the app's origin and a served one. Were a POST loaded, the window shows this page at its URL,
+// or at its first once the served origin ended. Then the project's page opens.
+async function afterNoRole() {
+    const back = new URLSearchParams(location.search);
+    if (back.get('from') !== 'no-role-back') {
+        const loaded = back.get('from') === 'no-role-post' ? 'it' : `a page of ${POSTED}, whose end brought the window back`;
+        throw new Error(`the app's page opened at ${location.href} at the stage no-role: a POST of a page of no role loaded ${loaded}`);
+    }
+    const heard = (await invoke('page-navigation.asked')).filter(({ url }) => url.includes('no-role')).map(({ url, role }) => ({ url, role }));
+    show('no-role', { back: location.href, heard });
+    const project = await invoke('probe.serveOrigin', { name: PROJECT, source: SOURCE });
     await invoke('probe.setStage', { stage: 'project' });
     if (isWebView2()) holdUpReplies();
     location.href = project;
@@ -231,6 +256,7 @@ export async function runServedRoundTrip(isAndroid) {
     const stage = await invoke('probe.stage');
     const reports = await invoke('probe.reports');
     if (stage === 'start') return start(isAndroid).then(() => false);
+    if (stage === 'no-role') return afterNoRole().then(() => false);
     if (stage === 'ended') return afterTheEnd(isAndroid, reports).then(() => false);
     if (stage === 'done') return reports;
     throw new Error(`the app's page opened at ${location.href} at the stage ${stage}${stage === 'refused' ? ", which the project's page navigated to" : ''}`);

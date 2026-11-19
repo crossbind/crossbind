@@ -312,8 +312,8 @@ public class CrossbindActivity extends Activity implements ExtensionHost {
     // LOAD loads it, OUTSIDE opens it in the browser or the mail app, and any other answer refuses it.
     private static native int nativeNavigation(byte[] url, boolean isMainFrame, boolean isUserInitiated);
 
-    // Whether the host's navigation rule alone refuses this URL, in UTF-8, from any thread, page-navigation unasked.
-    private static native boolean nativeRefuses(byte[] url);
+    // Whether the host's navigation rule loads this URL, in UTF-8, by itself, from any thread, page-navigation unasked.
+    private static native boolean nativeLoads(byte[] url);
 
     // A server's ask for a name and password, in UTF-8, which page-navigation answers through answerHttpAuthentication()
     // under the same id.
@@ -1077,9 +1077,10 @@ public class CrossbindActivity extends Activity implements ExtensionHost {
             // Every one of http://<name>.localhost, served or not, as one of them would reach the device's port 80.
             boolean isServed = "http".equals(url.getScheme()) && host != null && host.endsWith(".localhost") && url.getPort() == -1;
             if (!isApp && !isServed) return null;
-            // A form's POST of the top frame, which Android asks shouldOverrideUrlLoading nothing of, keeps to the rule as
-            // well: one it refuses loads nothing, as a 204 leaves the page where it is.
-            if (request.isForMainFrame() && !"GET".equals(request.getMethod()) && nativeRefuses(url.toString().getBytes(StandardCharsets.UTF_8))) {
+            // A form's POST of the top frame, which Android asks shouldOverrideUrlLoading nothing of, loads only what the
+            // rule loads by itself, as page-navigation, which decides the rest, answers on the UI thread and not on this
+            // one: any other loads nothing, as a 204 leaves the page where it is.
+            if (request.isForMainFrame() && !"GET".equals(request.getMethod()) && !nativeLoads(url.toString().getBytes(StandardCharsets.UTF_8))) {
                 return responseOf(204, "text/plain", new byte[0][], new byte[0], null, null);
             }
             String path = url.getEncodedPath() == null ? "/" : url.getEncodedPath();
