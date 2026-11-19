@@ -1,55 +1,55 @@
 {
-    "version": "1.0.22",
+    "version": "1.0.23",
     "registry": "ghcr.io/crossbind",
     "toolchains": {
         "rust": "1.99.1"
     },
     "images": {
         "rust-sysroot": {
-            "index": "sha256:ddcc6cf0ef5b4915b67c3a69318f2125adca0ec95b6cf7c60bf9d5250c133ee4",
+            "index": "sha256:7936ff022c9ffcc90826dbddf4a50508a0ef07d81ebf8bd39dde17ac98c64da0",
             "platforms": {
-                "linux/arm64": "sha256:5ec5f8ea0afcdf737c0a4425493c7a6602a3eee193f718df03d4a6ad34e1cdcf",
-                "linux/amd64": "sha256:95f7608847385815403a6f494ca6b48af3c9e40ea9c54e78251e869b1d421e20"
+                "linux/arm64": "sha256:e9da4cd64dcf49f1b766d2d9b0a28c640f03ddcc2c260c9331c0bb274ea580e7",
+                "linux/amd64": "sha256:831d0ff6310ea7637a8022bb652158cd636f021032d1ec4fd9acf393d16bfa0d"
             }
         },
         "base": {
-            "index": "sha256:c56040bfcca0d20da37193d832bd1ae5ee3ba76d63f1384d44db02f5dcef29ee",
+            "index": "sha256:cefb59b67bd74d887f60c5c554026e564d6d77e53d6a671030677dbea10e80cb",
             "platforms": {
-                "linux/amd64": "sha256:5fe24017fa77e57e6cae437316d2e2b8f92633b5978fc6853bff0e6612a0f268",
-                "linux/arm64": "sha256:a26a42867b1345da9b6a0812576220fd32d1677dd2e99e226ef737e4e083dac4"
+                "linux/arm64": "sha256:e8b46981237c07e9d8e68548af12404d3beaac7f719cc021e0b7c92e01791a96",
+                "linux/amd64": "sha256:3fae2a356b0448315b371603b00feb02508ba051083c78d085dbd917040053bd"
             }
         },
         "web": {
-            "index": "sha256:e4886ee37bb1fb8218d7be357054a85c2edff6d9ff7611aa714ede15dc06a7f8",
+            "index": "sha256:409dbc2d036baf0c55cef4fee45e38ac4f6383b8ebfbce0ed92cbade5f9277a7",
             "platforms": {
-                "linux/arm64": "sha256:070c6529d5e12fdb087eab9b63b5fd563825f5374ba04d06063142edab784bda",
-                "linux/amd64": "sha256:3c08dac726f431d810e90dc1bc011ce82f388a8ac059c4804a5038df87f8fdf7"
+                "linux/amd64": "sha256:257d5ef588187807534b1b247695c2e57a7c6e1fab87f631ea102fd01604bca0",
+                "linux/arm64": "sha256:45c9c6ae66440a732a6752739445efde8aa2720d42887dc1e58b007dc747e0c0"
             }
         },
         "android": {
-            "index": "sha256:74a70d4a642f8f7ca9eb3b7665c2477498c7161ccedd7599478a4ff652675e04",
+            "index": "sha256:bc1dc79214ce9c00c959de5e2efb70f95ccaa90221765b443ab16bef58900f05",
             "platforms": {
-                "linux/amd64": "sha256:068ed4aae0c4137fb160f4fe2f5083259674ec3cc9401c8986d32c26e5f812a2"
+                "linux/amd64": "sha256:17814593d0af9975677210ad0b8b832d23b273bb68c1d6827c91cd230b409f91"
             }
         },
         "android-app": {
-            "index": "sha256:9948c59c10f7d75f605bea58a0edb64c73677de161c125a197551586128004af",
+            "index": "sha256:324f098b13448b6d853dbf2c57d58a491257f3e2934417c8e573ee2772ae0724",
             "platforms": {
-                "linux/amd64": "sha256:06d830c775c586510bf9371ff134647d5f8eaf639ffa54a35a79687fe9a56295"
+                "linux/amd64": "sha256:6cb8eeca6e2e33fc7b19d3ec980bc1918736d4581e5dbfda9c174fac1f4bbd88"
             }
         },
         "linux": {
-            "index": "sha256:ed05ec6a13d8fecadd073b96f1ac7003db0764acd753dbc182d7669ebf462df5",
+            "index": "sha256:c4ceecf321087dd852fe77e0b8b09e88a132310f69f9b5f97c4efba1b5b2f0bf",
             "platforms": {
-                "linux/arm64": "sha256:87922d89254c31423546bcaa04be034e1a2d99295db8d4376cc7d8a32c6c2073",
-                "linux/amd64": "sha256:3ee946907ebc7848814282c22e9895bbdb604a4367d5f28737ba518cc2c38d34"
+                "linux/amd64": "sha256:6d74dd76c405a8a42a843a5a66f410a6d55b0053d29d3b9731288f76b6ee3304",
+                "linux/arm64": "sha256:2a55bd339a2b972c33b87e77922d743b5266a65b76005383a125c1c29dde6bc2"
             }
         },
         "windows": {
-            "index": "sha256:6747887accd468527df359d7a85b5fa15c11289f70ee4ddd81dbe084f5f88db5",
+            "index": "sha256:8d177c2e055cdfc4b2b5408009913b7a59fa7eb18b252d1841213edbaef529b9",
             "platforms": {
-                "linux/amd64": "sha256:216c015f4ea3b8188c0a99561e3b56e0c9b2fd798c7a49d6a0328ad13773591e",
-                "linux/arm64": "sha256:3bdb2e92e768b521a7a524fbe115d8a80473e3d7498aed5511e8f41b2a844782"
+                "linux/arm64": "sha256:88482a508b96e49d90aebc0d2664a50405a3541db7a41f64c239b0da3bd58637",
+                "linux/amd64": "sha256:8fecd84bf39c2e7d39d590b44f2e2ebb953733f9e9321f91933e851c8901fcb4"
             }
         }
     }
