@@ -201,7 +201,7 @@ void listen(ICoreWebView2 *core) {
             const std::string id = text.substr(first + 1, second - first - 1);
             const uint64_t document = shown()[core].document;
             handler->second(origin, text.substr(second + 1), [core, id, document](const std::string &reply) {
-                onMainThread([core, document, message = wide(id + "\n" + reply)] { postReply(core, document, message); });
+                onMainThread([core, document, message = wide(id + "\n" + reply)] { core->PostWebMessageAsString(message.c_str()); });
             });
             return S_OK;
         });
@@ -421,6 +421,10 @@ void registerSchemeHandler(void *target, const char *scheme, SchemeHandler handl
             LPWSTR uri = nullptr;
             request->get_Uri(&uri);
             const std::string url = take(uri);
+            if (!isHostsRequest(url, own)) {
+                request->Release();
+                return S_OK;
+            }
             SchemeRequest incoming;
             incoming.webView = target;
             LPWSTR method = nullptr;
