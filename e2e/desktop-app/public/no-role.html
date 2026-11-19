@@ -11,9 +11,15 @@
 // stays, and goes back to the app's page by a link page-navigation loads, saying how many it stayed through.
 (() => {
     const QUIET_MS = 1500;
+    // The app's origin and the served one, as each platform names them: the page goes to those its query names among
+    // these alone, never to a URL a query makes up.
+    const APP_ORIGINS = ['https://appassets.androidplatform.net', 'crossbind://app'];
+    const SERVED_ORIGINS = ['http://e2e-posted.localhost/', 'crossbind://e2e-posted/'];
     const query = new URLSearchParams(location.search);
-    const app = query.get('app');
-    const targets = [`${app}/?from=no-role-post`, `${query.get('served')}?from=no-role-post`];
+    const app = APP_ORIGINS.find((origin) => origin === query.get('app'));
+    const served = SERVED_ORIGINS.find((origin) => origin === query.get('served'));
+    if (!app || !served) throw new Error("no-role.html takes the app's origin and the served one it knows");
+    const targets = [`${app}/?from=no-role-post`, `${served}?from=no-role-post`];
     const post = (url) => {
         const form = document.createElement('form');
         form.method = 'post';
