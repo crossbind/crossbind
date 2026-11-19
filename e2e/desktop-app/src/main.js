@@ -780,6 +780,28 @@ async function checkRoutes() {
     if (JSON.stringify(statuses) !== JSON.stringify([416, 200, 405, 400, 500, 404])) throw new Error(`the probe's route answered ${JSON.stringify(statuses)}`);
 }
 
+// How long a document of the probe's route takes to say it shows in a frame.
+const ROUTE_FRAME_MS = 5000;
+
+// A document of the probe's route shows in a frame of the app's page, a development session's too, whose page is the dev
+// server's: on Android the app's documents show in a frame of the app's own origins alone.
+async function checkRouteFrame() {
+    const frame = document.createElement('iframe');
+    const shown = new Promise((resolve) => {
+        addEventListener('message', function heard({ source, data }) {
+            if (source !== frame.contentWindow || !data?.routeFrame) return;
+            removeEventListener('message', heard);
+            resolve(data.routeFrame);
+        });
+    });
+    frame.src = routeUrl('probe', '/frame.html');
+    document.body.append(frame);
+    const said = await Promise.race([shown, new Promise((resolve) => { setTimeout(() => resolve(null), ROUTE_FRAME_MS); })]);
+    frame.remove();
+    if (!said) throw new Error(`a document of the probe's route did not show in a frame of the app's page at ${location.origin}`);
+    console.log(`PAGE GETS route-frame ${JSON.stringify({ page: location.origin, shown: said })}`);
+}
+
 // An iOS app's App Group, which the probe's targets share: the probe writes into it, and app.paths() names its folder.
 // Elsewhere there is none.
 async function checkAppGroup(isIos) {
@@ -1034,6 +1056,7 @@ else initNative().then(async (m) => {
         if (!isAndroid && (!isDesktop || navigator.userAgent.includes('Macintosh'))) await checkNotifications(isDesktop);
         await checkContract(isDesktop, isAndroid);
         await checkRoutes();
+        await checkRouteFrame();
         await checkCalls(isAndroid);
         await checkAppGroup(!isAndroid && !isDesktop);
         await checkWindows(m, isDesktop, isAndroid);

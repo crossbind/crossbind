@@ -94,7 +94,6 @@ public class CrossbindActivity extends Activity implements ExtensionHost {
     private static final String TAG = "Crossbind";
     private static final String HOST = "appassets.androidplatform.net";
     private static final String APP_ORIGIN = "https://" + HOST;
-    private static final String FRAME_ANCESTORS = "frame-ancestors 'self'";
     // The object a page of the app's origins asks for its port with.
     private static final String READY = "__crossbind_ready";
     // The object the page hands a download's name and bytes to, and the function the host asks for them with.
@@ -477,7 +476,7 @@ public class CrossbindActivity extends Activity implements ExtensionHost {
         webView.setDownloadListener((address, userAgent, disposition, mime, length) -> {
             download(address, URLUtil.guessFileName(address, disposition, mime), mime);
         });
-        webView.setWebViewClient(new PageClient());
+        webView.setWebViewClient(new PageClient("frame-ancestors " + String.join(" ", origins)));
         webView.setWebChromeClient(new PageChrome(!devUrl.isEmpty() || (isDebuggable && getIntent().hasExtra("CROSSBIND_APP_CONSOLE"))));
         // The page stays clear of the system bars, the display cutout and the keyboard.
         FrameLayout frame = new FrameLayout(this);
@@ -1038,6 +1037,14 @@ public class CrossbindActivity extends Activity implements ExtensionHost {
     }
 
     private final class PageClient extends WebViewClient {
+        // The policy of the app's own documents: a frame of the app's own origins alone shows them, the dev server's page
+        // among them during development.
+        private final String frameAncestors;
+
+        PageClient(String frameAncestors) {
+            this.frameAncestors = frameAncestors;
+        }
+
         // What the host's navigation rule loads goes on, what it refuses loads nothing, and the extension
         // page-navigation decides every other URL, as native code answers. A page of another origin gets no token, so
         // it reaches none of the app's functions.
@@ -1093,7 +1100,7 @@ public class CrossbindActivity extends Activity implements ExtensionHost {
                 headers.add(header.getValue().getBytes(StandardCharsets.UTF_8));
             }
             WebResourceResponse response = nativeRequest(request.getMethod(), host, path, query == null ? "" : query, headers.toArray(new byte[0][]));
-            return isApp ? framedByItsOwnOrigin(response) : response;
+            return isApp ? framedByItsOwnOrigin(response, frameAncestors) : response;
         }
 
         // A page of the app's origins or of a served one asks for its port, which tells native code of it; a page of
@@ -1245,8 +1252,9 @@ public class CrossbindActivity extends Activity implements ExtensionHost {
     }
 
     // An answer of the app's own origin, which a frame of another origin shows nothing of: the WebView asks the host of no
-    // frame's first load, so the documents refuse such a frame themselves, as the host does on the other platforms.
-    static WebResourceResponse framedByItsOwnOrigin(WebResourceResponse response) {
+    // frame's first load, so the documents refuse such a frame themselves, as the host does on the other platforms. The
+    // policy names the app's own origins, as during development the app's page is the dev server's.
+    static WebResourceResponse framedByItsOwnOrigin(WebResourceResponse response, String frameAncestors) {
         if (response == null) return null;
         Map<String, String> fields = new HashMap<>();
         if (response.getResponseHeaders() != null) fields.putAll(response.getResponseHeaders());
@@ -1255,7 +1263,7 @@ public class CrossbindActivity extends Activity implements ExtensionHost {
             if (given.equalsIgnoreCase(name)) name = given;
         }
         String policy = fields.get(name);
-        fields.put(name, policy == null ? FRAME_ANCESTORS : policy + ", " + FRAME_ANCESTORS);
+        fields.put(name, policy == null ? frameAncestors : policy + ", " + frameAncestors);
         response.setResponseHeaders(fields);
         return response;
     }
