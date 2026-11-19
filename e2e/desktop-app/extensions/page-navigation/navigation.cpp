@@ -1,6 +1,7 @@
 // Every navigation beyond the app's origins is refused, as src/main.js asks for some, but the page of no role that
-// src/served-origins.js opens and that page's way back to the app's, which load; page-navigation.asked gives what each
-// asked, to a page of the app's and of a project's, whose page src/main.js runs at the probe's origin.
+// src/served-origins.js opens, without a refused= in its query, and that page's way back to the app's, which load;
+// page-navigation.asked gives what each asked, to a page of the app's and of a project's, whose page src/main.js runs at
+// the probe's origin.
 #include "crossbind/extension.h"
 
 #include <mutex>
@@ -14,7 +15,8 @@ crossbind::Value::Array asked;
 bool isLoaded(const crossbind::Navigation &navigation) {
     const std::string &url = navigation.url();
     const std::string &role = navigation.page().role();
-    return (role == "app" && url.find("/page/no-role.html?") != std::string::npos) || (role.empty() && url.find("/?from=no-role-back&") != std::string::npos);
+    const bool isNoRolePage = url.find("/page/no-role.html?") != std::string::npos && url.find("&refused=") == std::string::npos;
+    return (role == "app" && isNoRolePage) || (role.empty() && url.find("/?from=no-role-back&") != std::string::npos);
 }
 
 }  // namespace
