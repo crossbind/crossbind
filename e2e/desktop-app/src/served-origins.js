@@ -353,7 +353,8 @@ async function checkNavigation(app) {
     show('navigation', { away: asked, refused: [...refused, ...named, ...posted] });
 }
 
-// 9. The probe's proxy: a Range, the headers it drops, its source down, and a method the host refuses.
+// 9. The probe's proxy: a Range, the headers it drops, its source down, a method the host refuses, and a path with a
+// colon, as a dev server names its virtual modules.
 async function checkProxy() {
     const ranged = await fetch('/index.html', { headers: { Range: 'bytes=0-14' } });
     const range = { status: ranged.status, contentRange: ranged.headers.get('content-range'), text: await ranged.text() };
@@ -369,7 +370,10 @@ async function checkProxy() {
     const posted = await fetch('/index.html', { method: 'POST', body: 'x' });
     const refusal = await posted.text();
     if (posted.status !== 405 || !refusal.includes(`the origin ${PROJECT} answers GET and HEAD alone`)) throw new Error(`a POST got ${posted.status} ${refusal}`);
-    show('proxy', { range, down: `${down.status} ${reason}`, ext: `${routed.status} ${routeText}`, post: `${posted.status} ${refusal}` });
+    const named = await fetch('/__e2e/id:virtual');
+    const namedText = await named.text();
+    if (named.status !== 200 || namedText !== 'id:virtual') throw new Error(`a path with a colon, as a dev server names, got ${named.status} ${namedText}`);
+    show('proxy', { range, down: `${down.status} ${reason}`, ext: `${routed.status} ${routeText}`, post: `${posted.status} ${refusal}`, colon: namedText });
 }
 
 // 10. On an Android emulator, plain http and ws from a project's page reach the run's machine, as the probe's cleartext
