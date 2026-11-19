@@ -1231,6 +1231,8 @@ function __embind_register_optional(rawOptionalType, rawInnerType) {
     var inner = innerTypes[0];
     return [{
       name: `std::optional<${inner.name}>`,
+      // As in emscripten's embind, a last argument of this type may be left out.
+      optional: true,
       // No value crosses as null (a wire of undefined reads the same); a present value
       // rides the inner type's own converters unchanged.
       'fromWireType': function (wt) {
@@ -1776,10 +1778,15 @@ function craftInvokerFunction(humanName, argTypes, classType, cppInvokerFunc, cp
     argsListWired += (i !== 0 ? ", " : "") + "arg" + i + "Wired";
   }
 
+  // Trailing optional arguments may be left out, and cross as empty.
+  var minArgs = argCount - 2;
+  while (minArgs > 0 && argTypes[minArgs + 1].optional) --minArgs;
+  var expectedArgs = minArgs === argCount - 2 ? minArgs : minArgs + " to " + (argCount - 2);
+
   var invokerFnBody =
     "return function " + makeLegalFunctionName(humanName) + "(" + argsList + ") {\n" +
-    "if (arguments.length !== " + (argCount - 2) + ") {\n" +
-    "throwBindingError('function " + humanName + " called with ' + arguments.length + ' arguments, expected " + (argCount - 2) + " args!');\n" +
+    "if (arguments.length < " + minArgs + " || arguments.length > " + (argCount - 2) + ") {\n" +
+    "throwBindingError('function " + humanName + " called with ' + arguments.length + ' arguments, expected " + expectedArgs + " args!');\n" +
     "}\n";
 
   if (needsDestructorStack) {

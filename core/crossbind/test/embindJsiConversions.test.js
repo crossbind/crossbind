@@ -73,3 +73,25 @@ describe('embind-jsi conversions', () => {
         expect(() => toWire('hint', undefined)).toThrow(/got undefined/);
     });
 });
+
+// An empty std::optional is null, and a last optional argument may be left out, as on wasm.
+test('an optional is null when empty and may be left out as the last argument', () => {
+    const context = vm.createContext({ console });
+    context.globalThis = context;
+    vm.runInContext(fs.readFileSync(runtime, 'utf8').replace(/^export default .*$/m, ''), context);
+    context.__embind_register_integer('int', 'int', 4, -2147483648, 2147483647);
+    context.__embind_register_optional('optional int', 'int');
+    // Each stands in for a C++ function, which gets the wire values: undefined for an empty optional.
+    const [orMinusOne, sum, half] = vm.runInContext(`[
+        craftInvokerFunction('orMinusOne', [registeredTypes.int, null, registeredTypes.int, registeredTypes['optional int']], null,
+            (fn, base, value) => (value === undefined ? -1 : value), 0),
+        craftInvokerFunction('sum', [registeredTypes.int, null, registeredTypes.int, registeredTypes.int], null, (fn, a, b) => a + b, 0),
+        craftInvokerFunction('half', [registeredTypes['optional int'], null, registeredTypes.int], null,
+            (fn, value) => (value % 2 ? undefined : value / 2), 0),
+    ]`, context);
+
+    expect([orMinusOne(1, 5), orMinusOne(1, undefined), orMinusOne(1, null), orMinusOne(1)]).toEqual([5, -1, -1, -1]);
+    expect(() => orMinusOne()).toThrow('function orMinusOne called with 0 arguments, expected 1 to 2 args!');
+    expect(() => sum(1)).toThrow('function sum called with 1 arguments, expected 2 args!');
+    expect([half(8), half(7)]).toEqual([4, null]);
+});

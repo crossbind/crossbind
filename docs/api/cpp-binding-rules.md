@@ -75,9 +75,9 @@ constructor's in direct mode. A `std::vector` returned by value is a vector on d
 (wasm and JSI), freed like any value JavaScript owns (`lifecycle-and-types.md`), and a plain array
 on worker runtimes; `Module.toArray` takes both.
 
-An empty `std::optional` arrives as `undefined` on wasm and as `null` on React Native and in a
-Node-API addon: test it with `== null` or `??`. For an empty optional parameter pass `undefined`,
-which every runtime takes; wasm refuses `null` for an optional number.
+An empty `std::optional` arrives as `null` on every runtime, as a null pointer does. An optional
+parameter takes `null` or `undefined` for an empty one, and a function's or method's last one can
+be left out; a constructor's cannot.
 
 A function whose signature names another type still binds, and throws when it is called:
 `Cannot call minMax due to unbound types`. That goes for `std::pair`, `std::tuple`, `std::array`,

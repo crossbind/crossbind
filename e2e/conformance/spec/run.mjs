@@ -96,6 +96,8 @@ export function buildChecks(s) {
             // Direct legs (node, direct wasm, jsi): by-value returns are real vector
             // proxies; params take a vector instance built from another return.
             add('cpp:vectorOut', async () => { const d = await (await new ConfBox(6, 4)).dims(); return [await d.get(0), await d.get(1)]; }, [6, 4]);
+            // wasm reads past the end as an empty optional, so every direct runtime answers null.
+            add('cpp:vectorPastEnd', async () => (await (await new ConfBox(6, 4)).dims()).get(5), null);
             add('cpp:vectorIntIn', async () => { const b = await new ConfBox(1, 2); return b.sum(await (await new ConfBox(6, 4)).dims()); }, 10);
             add('cpp:vectorStrIn', async () => { const b = await new ConfBox(6, 4); return b.join(await b.letters()); }, 'x,y');
         }
@@ -120,7 +122,12 @@ export function buildChecks(s) {
         }, true);
         add('cpp:noThrow', () => ConfOps.checkedSqrt(9), 3);
         add('cpp:optionalSome', () => ConfOps.half(42), 21);
-        add('cpp:optionalNone', async () => (await ConfOps.half(7)) ?? 'empty', 'empty');
+        // An empty optional is null on every runtime, as a C++ nullptr and Rust's None are.
+        add('cpp:optionalNone', () => ConfOps.half(7), null);
+        // An optional parameter takes null, undefined or, as the last argument, nothing at all.
+        add('cpp:optionalParamUndefined', () => ConfOps.orMinusOne(undefined), -1);
+        add('cpp:optionalParamNull', () => ConfOps.orMinusOne(null), -1);
+        add('cpp:optionalParamOmitted', () => ConfOps.orMinusOne(), -1);
         // The jsi dispatch stopped at 15 arguments, a method's receiver counting as one; GDAL calls take up to 19.
         add('cpp:manyArgsStatic', () => ConfOps.sumOfSixteen(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16), 136);
         add('cpp:manyArgsMethod', async () => (await new ConfBox(6, 4)).areaPlusFifteen(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15), 144);
