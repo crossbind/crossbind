@@ -71,9 +71,13 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 import java.util.regex.Matcher;
@@ -201,6 +205,9 @@ public class CrossbindActivity extends Activity implements ExtensionHost {
     // nativeNavigation()'s answers, in the order of the host's NavigationAnswer.
     private static final int LOAD = 0;
     private static final int OUTSIDE = 1;
+    // How long the WebView's thread of requests waits for page-navigation's answer to a POST: as long as Android waits for
+    // a UI thread before it calls the app not responding.
+    private static final int POST_ANSWER_MS = 5000;
     // The authentications page-navigation has yet to answer, by their ids.
     private static final Map<Integer, HttpAuthHandler> authentications = new ConcurrentHashMap<>();
     private static final AtomicInteger nextAuthentication = new AtomicInteger();
@@ -1053,14 +1060,35 @@ public class CrossbindActivity extends Activity implements ExtensionHost {
             Uri url = request.getUrl();
             int answer = nativeNavigation(url.toString().getBytes(StandardCharsets.UTF_8), request.isForMainFrame(), request.hasGesture());
             if (answer == LOAD) return false;
-            if (answer == OUTSIDE) {
-                try {
-                    startActivity(new Intent(Intent.ACTION_VIEW, url));
-                } catch (ActivityNotFoundException none) {
-                    Log.w(TAG, "nothing opens " + url);
-                }
-            }
+            if (answer == OUTSIDE) openOutside(url);
             return true;
+        }
+
+        private void openOutside(Uri url) {
+            try {
+                startActivity(new Intent(Intent.ACTION_VIEW, url));
+            } catch (ActivityNotFoundException none) {
+                Log.w(TAG, "nothing opens " + url);
+            }
+        }
+
+        // A top frame's POST toward an origin the host does not answer, which Android asks shouldOverrideUrlLoading
+        // nothing of: page-navigation decides it on the UI thread all the same, for POST_ANSWER_MS at most. One it loads
+        // goes on to the network, one it opens outside opens there, and any other, or one it does not answer in time,
+        // loads nothing.
+        private WebResourceResponse askOfPost(Uri url, boolean isUserInitiated) {
+            CompletableFuture<Integer> answer = new CompletableFuture<>();
+            MAIN.post(() -> answer.complete(nativeNavigation(url.toString().getBytes(StandardCharsets.UTF_8), true, isUserInitiated)));
+            try {
+                int decided = answer.get(POST_ANSWER_MS, TimeUnit.MILLISECONDS);
+                if (decided == LOAD) return null;
+                if (decided == OUTSIDE) MAIN.post(() -> openOutside(url));
+            } catch (InterruptedException interrupted) {
+                Thread.currentThread().interrupt();
+            } catch (ExecutionException | TimeoutException unanswered) {
+                Log.w(TAG, "crossbind: page-navigation gave no answer to a POST of " + url + " in " + POST_ANSWER_MS + " ms", unanswered);
+            }
+            return noContent();
         }
 
         // A server's ask for a name and password, which page-navigation answers; a cancel goes on without them, so the
@@ -1083,13 +1111,11 @@ public class CrossbindActivity extends Activity implements ExtensionHost {
             boolean isApp = "https".equals(url.getScheme()) && HOST.equals(host);
             // Every one of http://<name>.localhost, served or not, as one of them would reach the device's port 80.
             boolean isServed = "http".equals(url.getScheme()) && host != null && host.endsWith(".localhost") && url.getPort() == -1;
-            if (!isApp && !isServed) return null;
-            // A form's POST of the top frame, which Android asks shouldOverrideUrlLoading nothing of, loads only what the
-            // rule loads by itself, as page-navigation, which decides the rest, answers on the UI thread and not on this
-            // one: any other loads nothing, as a 204 leaves the page where it is.
-            if (request.isForMainFrame() && !"GET".equals(request.getMethod()) && !nativeLoads(url.toString().getBytes(StandardCharsets.UTF_8))) {
-                return responseOf(204, "text/plain", new byte[0][], new byte[0], null, null);
-            }
+            boolean isTopPost = request.isForMainFrame() && !"GET".equals(request.getMethod());
+            if (!isApp && !isServed) return isTopPost ? askOfPost(url, request.hasGesture()) : null;
+            // A form's POST of the top frame toward the app's origin or a served one loads only what the rule loads by
+            // itself: a page of another origin's, which the rule leaves to page-navigation, loads nothing as well.
+            if (isTopPost && !nativeLoads(url.toString().getBytes(StandardCharsets.UTF_8))) return noContent();
             String path = url.getEncodedPath() == null ? "/" : url.getEncodedPath();
             // The host decodes the path, as Uri does here.
             if (isApp && url.getPath() != null && url.getPath().startsWith("/b/")) return responseOf(404, "text/plain", new byte[0][], new byte[0], null, null);
@@ -1266,6 +1292,11 @@ public class CrossbindActivity extends Activity implements ExtensionHost {
         fields.put(name, policy == null ? frameAncestors : policy + ", " + frameAncestors);
         response.setResponseHeaders(fields);
         return response;
+    }
+
+    // An answer that loads nothing: a 204 leaves the page where it is.
+    static WebResourceResponse noContent() {
+        return responseOf(204, "text/plain", new byte[0][], new byte[0], null, null);
     }
 
     // The host's answer to a request: its headers' names and values in UTF-8, one after the other, and the body, or the

@@ -184,35 +184,47 @@ function holdUpReplies() {
     invoke('probe.appWaits').catch(() => {});
 }
 
+// The page of no role at the run's endpoint, public/no-role.html, with the app's origin and the served one it posts
+// toward.
+const noRolePage = (app, served) => `${SOURCE}/${NO_ROLE_PAGE}?app=${encodeURIComponent(app)}&served=${encodeURIComponent(served)}`;
+
 // The app's page as the round trip starts: it serves the origins, checks what needs no project's page, and opens a page
-// of no role in its window, public/no-role.html at the run's endpoint, which page-navigation loads.
+// of no role in its window. 5. It does so by a form's POST toward that other origin, which page-navigation loads, after
+// one it refuses, which loads nothing: were it loaded, the page of no role would come back saying so.
 async function start(isAndroid) {
     const otherUrl = await invoke('probe.serveOrigin', { name: OTHER, source: SOURCE });
     checkRefusals(await invoke('probe.refusedOrigins', { served: OTHER }));
     await checkFetch();
     if (isWebView2()) await checkOtherRequests();
     await checkTokens(isAndroid, otherUrl, globalThis.__crossbind_token, 'app');
-    await invoke('probe.report', { key: 'app', value: { href: location.href, origin: location.origin, other: otherUrl } });
     const posted = await invoke('probe.serveOrigin', { name: POSTED, source: SOURCE });
     // A POST that loaded this origin's page, which has no script, leaves the window there until the origin ends.
     await invoke('probe.endOrigin', { name: POSTED, afterMs: POSTED_END_MS });
+    await invoke('probe.report', { key: 'app', value: { href: location.href, origin: location.origin, other: otherUrl, posted } });
     await invoke('probe.setStage', { stage: 'no-role' });
-    const page = `${SOURCE}/${NO_ROLE_PAGE}?app=${encodeURIComponent(location.origin)}&served=${encodeURIComponent(posted)}`;
-    location.href = page;
+    const page = noRolePage(location.origin, posted);
+    post(`${page}&refused=app`);
+    await sleep(QUIET_MS);
+    post(page);
     await sleep(ANSWER_MS);
     throw new Error(`the window did not open ${page}`);
 }
 
 // 5. The app's page once the page of no role came back by its way back, which page-navigation loads, having stayed
 // through its POSTs toward the app's origin and a served one. Were a POST loaded, the window shows this page at its URL,
-// or at its first once the served origin ended. Then the project's page opens.
-async function afterNoRole() {
+// or at its first once the served origin ended. page-navigation heard both of the app's page's POSTs with its role.
+// Then the project's page opens.
+async function afterNoRole(reports) {
     const back = new URLSearchParams(location.search);
     if (back.get('from') !== 'no-role-back') {
         const loaded = back.get('from') === 'no-role-post' ? 'it' : `a page of ${POSTED}, whose end brought the window back`;
         throw new Error(`the app's page opened at ${location.href} at the stage no-role: a POST of a page of no role loaded ${loaded}`);
     }
-    const heard = (await invoke('page-navigation.asked')).filter(({ url }) => url.includes('no-role')).map(({ url, role }) => ({ url, role }));
+    const asked = await invoke('page-navigation.asked');
+    const page = noRolePage(reports.app.origin, reports.app.posted);
+    const unheard = [`${page}&refused=app`, page].filter((url) => !asked.some((one) => one.url === url && one.role === 'app'));
+    if (unheard.length > 0) throw new Error(`page-navigation did not hear the app's page's POST of ${unheard.join(' and ')} with the role app`);
+    const heard = asked.filter(({ url }) => url.includes('no-role')).map(({ url, role }) => ({ url, role }));
     show('no-role', { back: location.href, heard });
     const project = await invoke('probe.serveOrigin', { name: PROJECT, source: SOURCE });
     await invoke('probe.setStage', { stage: 'project' });
@@ -253,10 +265,14 @@ async function afterTheEnd(isAndroid, reports) {
 // The app's page at the stage the round trip reached: false once it sent the window elsewhere, else what the project's
 // pages reported, at its end.
 export async function runServedRoundTrip(isAndroid) {
+    const refused = new URLSearchParams(location.search).get('refused');
+    if (refused) {
+        throw new Error(`a form's POST of a page of the role ${refused} toward another origin, which page-navigation refused, loaded the page of no role, which came back to ${location.href}`);
+    }
     const stage = await invoke('probe.stage');
     const reports = await invoke('probe.reports');
     if (stage === 'start') return start(isAndroid).then(() => false);
-    if (stage === 'no-role') return afterNoRole().then(() => false);
+    if (stage === 'no-role') return afterNoRole(reports).then(() => false);
     if (stage === 'ended') return afterTheEnd(isAndroid, reports).then(() => false);
     if (stage === 'done') return reports;
     throw new Error(`the app's page opened at ${location.href} at the stage ${stage}${stage === 'refused' ? ", which the project's page navigated to" : ''}`);
@@ -351,9 +367,10 @@ function post(url) {
     form.submit();
 }
 
-// 5. A link elsewhere reaches page-navigation with the role; the app's own origin and another served one, as the top
-// frame's, with a user's name, which is no part of an origin, as a form's POST or as a window's, are refused before any
-// holder hears of them. Were one loaded, its page would find the stage refused and say so.
+// 5. A link elsewhere reaches page-navigation with the role, and so does a form's POST elsewhere, which it refuses, so
+// it loads nothing; the app's own origin and another served one, as the top frame's, with a user's name, which is no
+// part of an origin, as a form's POST or as a window's, are refused before any holder hears of them. Were one loaded,
+// its page would find the stage refused and say so, and the page of no role would say whose POST it was.
 async function checkNavigation(app) {
     const away = 'https://crossbind-e2e.invalid/project';
     location.href = away;
@@ -362,12 +379,13 @@ async function checkNavigation(app) {
     const refused = [under(app.origin, '?from=project'), under(app.other, '?from=project')];
     const named = refused.map((url) => url.replace('://', '://x@'));
     const posted = [under(app.origin, '?from=project-post'), under(app.other, '?from=project-post')];
+    const elsewhere = `${noRolePage(app.origin, app.posted)}&refused=project`;
     await invoke('probe.setStage', { stage: 'refused' });
     for (const url of [...refused, ...named]) {
         location.href = url;
         await sleep(QUIET_MS);
     }
-    for (const url of posted) {
+    for (const url of [...posted, elsewhere]) {
         post(url);
         await sleep(QUIET_MS);
     }
@@ -376,7 +394,9 @@ async function checkNavigation(app) {
     await invoke('probe.setStage', { stage: 'project' });
     const heard = (await invoke('page-navigation.asked')).filter(({ url }) => url.includes('from=project'));
     if (heard.length > 0) throw new Error(`page-navigation heard of ${JSON.stringify(heard)}`);
-    show('navigation', { away: asked, refused: [...refused, ...named, ...posted] });
+    const postedElsewhere = (await invoke('page-navigation.asked')).find(({ url }) => url === elsewhere);
+    if (postedElsewhere?.role !== 'project') throw new Error(`page-navigation did not hear the project's POST of ${elsewhere} with the role project: ${JSON.stringify(postedElsewhere)}`);
+    show('navigation', { away: asked, refused: [...refused, ...named, ...posted], elsewhere: { url: elsewhere, role: postedElsewhere.role } });
 }
 
 // 9. The probe's proxy: a Range, the headers it drops, its source down, a method the host refuses, and a path with a

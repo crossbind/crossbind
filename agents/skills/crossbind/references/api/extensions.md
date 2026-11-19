@@ -835,9 +835,12 @@ URL means nothing outside the app: a link, a URL with a user's name, which is no
 which Android's host answers with 204, so the page stays. Android's WebView loads a frame without asking: the app's own
 documents show in a frame of the app's own origins alone, the dev server's page during development among them
 (`Content-Security-Policy: frame-ancestors` names them), and a frame of another served origin gets nothing of the app's.
-Every other URL reaches `page-navigation` with the page, whose `role()` tells them apart. On Android a top frame's form
-POST toward the app's origins or a served one, of which the WebView asks no one, loads only where the rule loads it by
-itself: a page of another origin's gets 204, so that page stays.
+Every other URL reaches `page-navigation` with the page, whose `role()` tells them apart, a form's POST too. Android's
+WebView asks no one of a top frame's POST, so the host does before its request: toward the app's origins or a served
+one, the POST loads only where the rule loads it by itself, and a page of another origin's gets 204, so that page stays;
+toward any other origin, `page-navigation` decides it on the main thread, as a link, while the WebView's thread of
+requests waits 5 s at most: `load` sends it, `openOutside` opens it outside, and any other answer, or none in time,
+leaves the page where it is.
 
 The host's own `page-navigation` loads the origins `app.navigation.load` lists, opens any other link its user follows
 outside and refuses the rest. As the holder of `page-authentication` it takes neither authentications nor certificate
