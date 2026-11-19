@@ -20,7 +20,12 @@ std::atomic<bool> isOpeningAnew{false};
 std::string originOf(const std::string &url) {
     const auto scheme = url.find("://");
     if (scheme == std::string::npos) return url;
-    return url.substr(0, url.find_first_of("/?#", scheme + 3));
+    const auto host = scheme + 3;
+    std::string origin = url.substr(0, url.find_first_of("/?#", host));
+    // A user's name and password are no part of an origin: crossbind://x@app/ is the app's page to its webview.
+    const auto user = origin.rfind('@');
+    if (user != std::string::npos) origin.erase(host, user + 1 - host);
+    return origin;
 }
 
 const char *devUrl() {
