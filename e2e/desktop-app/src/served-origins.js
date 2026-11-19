@@ -31,12 +31,16 @@ const AT_ONCE_MS = 5000;
 const MAX_LOOP_RATIO = 8;
 // The probe ends the project's origin from a thread of its own while the page goes on calling.
 const END_AFTER_MS = 300;
+// How long the app's page holds up the module's thread as it opens the project's, past that page's first script.
+const HOLD_MS = 2000;
 
 const sleep = (ms) => new Promise((resolve) => { setTimeout(resolve, ms); });
 // A path of an origin, or of a URL whose path is "/".
 const under = (base, path) => `${base.replace(/\/$/, '')}/${path}`;
 const failure = (error) => `${error?.name ?? 'Error'}: ${error?.message ?? error}`;
 const show = (name, value) => console.log(`PAGE GETS served-${name} ${JSON.stringify(value)}`);
+// WebView2's pages, to whose webview the host posts each reply.
+const isWebView2 = () => Boolean(globalThis.chrome?.webview);
 
 export const isServedPage = () => /^e2e-[a-z0-9-]+(\.localhost)?$/.test(location.hostname);
 
@@ -160,16 +164,34 @@ async function checkTokens(isAndroid, otherUrl, token, owner) {
     show(`tokens-${owner}`, checked);
 }
 
+// The host takes no request of another origin's: on Windows the filter that hands it http://<name>.localhost's matches
+// over the whole URL, as this one's query.
+async function checkOtherRequests() {
+    const url = `${ENDPOINT}/reach?u=http://a.localhost/`;
+    const reached = await fetch(url).then(async (response) => `${response.status} ${await response.text()}`, failure);
+    if (reached !== '200 ok') throw new Error(`a fetch of ${url} got ${reached}`);
+    show('other-requests', { url, reached });
+}
+
+// Replies of the app's page that come once the project's page shows: an answer, as its function holds up the module's
+// thread past that page's first script, and the cancel of a call that answered nothing, which checkHeardReplies() seeks.
+function holdUpReplies() {
+    invoke('probe.holdUp', { ms: HOLD_MS }).catch(() => {});
+    invoke('probe.appWaits').catch(() => {});
+}
+
 // The app's page as the round trip starts: it serves the origins, checks what needs no project's page, and opens the
 // project's page in its window.
 async function start(isAndroid) {
     const otherUrl = await invoke('probe.serveOrigin', { name: OTHER, source: SOURCE });
     checkRefusals(await invoke('probe.refusedOrigins', { served: OTHER }));
     await checkFetch();
+    if (isWebView2()) await checkOtherRequests();
     await checkTokens(isAndroid, otherUrl, globalThis.__crossbind_token, 'app');
     const project = await invoke('probe.serveOrigin', { name: PROJECT, source: SOURCE });
     await invoke('probe.report', { key: 'app', value: { href: location.href, origin: location.origin, other: otherUrl } });
     await invoke('probe.setStage', { stage: 'project' });
+    if (isWebView2()) holdUpReplies();
     location.href = project;
     await sleep(ANSWER_MS);
     throw new Error(`the window did not open ${project}`);
@@ -375,7 +397,16 @@ async function endFromWithin() {
     throw new Error("the window did not show the app's first page once the project's origin ended");
 }
 
+// What the project's page heard on WebView2's channel from its first script on, index.html's: none of the app's page's
+// replies that holdUpReplies() asked for.
+function checkHeardReplies() {
+    const others = (globalThis.e2eHeard ?? []).filter((text) => /probe\.appWaits|held up for the app's page/.test(text));
+    if (others.length > 0) throw new Error(`a project's page heard the app's page's replies: ${others.join(' | ')}`);
+    show('replies', { heard: globalThis.e2eHeard?.length ?? 'nothing' });
+}
+
 async function projectStage(m, isAndroid) {
+    if (isWebView2()) checkHeardReplies();
     localStorage.clear();
     const { app } = await invoke('probe.reports');
     const got = await reportWebFeatures(isAndroid, 'project-');
