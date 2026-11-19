@@ -104,7 +104,7 @@ export default {
         },
         {
             type: 'p',
-            text: 'With `CROSSBIND_APPLE_API_KEY`, `CROSSBIND_APPLE_API_KEY_ID` and `CROSSBIND_APPLE_API_ISSUER` set, as for [notarizing a macOS app](/guide/installers/#macos), an App Store Connect API key uploads instead of the account, as in CI. Apple signs in the cloud only for an Admin key; a key of another role needs an Apple Distribution certificate in the keychain, which Xcode makes once under Settings › Accounts › Manage Certificates.',
+            text: 'With an App Store Connect API key, as for [notarizing a macOS app](/guide/installers/#macos), in `CROSSBIND_APPLE_API_KEY`, `CROSSBIND_APPLE_API_KEY_ID` and `CROSSBIND_APPLE_API_ISSUER` as in CI, or kept by `crossbind config set APPLE_API_KEY` and `APPLE_API_ISSUER` on your Mac, the key uploads instead of the account. Apple signs in the cloud only for an Admin key; a key of another role needs an Apple Distribution certificate in the keychain, which Xcode makes once under Settings › Accounts › Manage Certificates.',
         },
         {
             type: 'p',

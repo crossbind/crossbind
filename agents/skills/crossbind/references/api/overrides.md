@@ -176,6 +176,9 @@ copyToDist: { 'assets/cacert.pem': ['ssl/certs/cacert.pem'] }
 - **`XCODE_DEVELOPMENT_TEAM`**, default `''`: required for iOS device builds (not the simulator).
 - **`ANDROID_KEYSTORE`**, default `''`: this machine's upload key, which signs an Android app's release and its bundle; `crossbind app key upload` sets it ([app.md](./app.md#the-upload-key)). Env: `CROSSBIND_ANDROID_KEYSTORE`.
 - **`ANDROID_KEY_ALIAS`**, default `''`: the upload key's alias in `ANDROID_KEYSTORE`. Env: `CROSSBIND_ANDROID_KEY_ALIAS`.
+- **`APPLE_API_KEY`**, default `''`: the `.p8` file of an App Store Connect API key, with which `crossbind app store --send` and `crossbind app release` reach App Store Connect, uploads go in place of Xcode's account and Apple notarizes a macOS app ([app.md](./app.md#signing-a-macos-app)). `crossbind config set` keeps its full path and refuses the key's own text. Env: `CROSSBIND_APPLE_API_KEY`.
+- **`APPLE_API_KEY_ID`**, default `''`: the key's ID, which the file's name gives where it is `AuthKey_<key id>.p8`. Env: `CROSSBIND_APPLE_API_KEY_ID`.
+- **`APPLE_API_ISSUER`**, default `''`: the key's issuer ID, which App Store Connect shows above its keys. Env: `CROSSBIND_APPLE_API_ISSUER`.
 - **`RUNNER`**, default `'DOCKER_RUN'`: where toolchain steps run. Env: `CROSSBIND_RUNNER`.
   - `'DOCKER_EXEC'` reuses a long-lived container that you create yourself. crossbind never creates one; when it is missing or wrong, it prints the exact `docker run` command, name and both mounts.
   - `'LOCAL'` skips Docker and needs every toolchain installed.

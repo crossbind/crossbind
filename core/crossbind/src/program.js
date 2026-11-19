@@ -1,4 +1,5 @@
 import fs from 'node:fs';
+import path from 'node:path';
 import { Command, Option } from 'commander';
 
 import {
@@ -87,10 +88,12 @@ export function addSystemCommands(program) {
         .argument('<key>', 'configuration key to read')
         .action((key) => getSystemConfig(key));
 
+    // A value that starts with a dash is a value, as a key's own text is, which the refusal of it does not repeat.
     commandConfig.command('set')
         .description('set the crossbind system configuration')
         .argument('<key>', 'configuration key to set')
         .argument('<value>', 'value to assign')
+        .allowUnknownOption()
         .action((key, value) => setSystemConfig(key, value));
 
     commandConfig.command('delete')
@@ -159,7 +162,18 @@ function setSystemConfig(key, value) {
         throw new Error(`Value ${value} is not available. Please choose from the following available values: ${systemKeys[key].options.join(', ')}`);
     }
 
-    writeJson(systemConfigPath(), { ...loadSystemConfig(), [key]: value });
+    writeJson(systemConfigPath(), { ...loadSystemConfig(), [key]: systemKeys[key].isFile ? keptFile(key, value) : value });
+}
+
+// A setting that names a file keeps its full path, which names it from any folder, and never a key's own text, which
+// reaches crossbind from the environment alone, so that ~/.crossbind.json keeps no secret.
+function keptFile(key, value) {
+    if (/-----BEGIN /.test(value)) {
+        throw new Error(`crossbind: ${key} takes the path of a file, not a key's own text, which crossbind keeps in no file: set the path, or give the text as CROSSBIND_${key}.`);
+    }
+    const file = path.resolve(value);
+    if (!fs.statSync(file, { throwIfNoEntry: false })?.isFile()) throw new Error(`crossbind: ${key} names ${file}, which is no file.`);
+    return file;
 }
 
 function deleteSystemConfig(key) {

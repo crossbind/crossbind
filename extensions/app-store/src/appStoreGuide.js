@@ -102,7 +102,7 @@ export function appStoreGuide(api) {
         ...lackedSteps(listings, settings),
         ...(api.app.encryption === null ? [{ text: 'Set app.encryption in crossbind.config.js, whose answer App Store Connect takes of every build and App Review of every submission.' }] : []),
         ...(api.app.encryption === true ? [{ text: 'App Information › App Encryption Documentation: what export compliance takes of an app that uses encryption.' }] : []),
-        { text: "For --send, releases and CI: Users and Access › Integrations › App Store Connect API: a key of the App Manager or Admin role, as CROSSBIND_APPLE_API_KEY, CROSSBIND_APPLE_API_KEY_ID and CROSSBIND_APPLE_API_ISSUER; Apple signs the uploads of an Admin key in the cloud, as it does those of Xcode's account on your Mac.", url: API_KEYS },
+        { text: "For --send, releases and CI: Users and Access › Integrations › App Store Connect API: a key of the App Manager or Admin role, which crossbind config set APPLE_API_KEY <its .p8 file> and APPLE_API_ISSUER <its issuer ID> keep on this Mac, and CI gives as CROSSBIND_APPLE_API_KEY, CROSSBIND_APPLE_API_KEY_ID and CROSSBIND_APPLE_API_ISSUER. Uploads then go with the key too: Apple signs the uploads of an Admin key in the cloud, as it does those of Xcode's account on your Mac.", url: API_KEYS },
     ];
     return {
         uploads, sends, releases, problems, where: 'App Store Connect', steps,

@@ -433,7 +433,7 @@ signed: apt checks the signature of a repository, not of a package.
 Developer ID it signs the app and its framework with that identity instead, in the hardened runtime, and with an App
 Store Connect API key Apple also notarizes the app, whose ticket the build staples to it before it makes the disk
 image: the app then opens on any Mac, offline too. The disk image stays unsigned, so that Gatekeeper judges the app in
-it, which Apple has notarized. Both come from the environment alone:
+it, which Apple has notarized. Both come from the environment, and the key from `~/.crossbind.json` too:
 
 - `CROSSBIND_APPLE_SIGNING_IDENTITY`: A code signing identity in the keychain, by name or hash, as
   `Developer ID Application: <name> (<team>)`.
@@ -442,6 +442,12 @@ it, which Apple has notarized. Both come from the environment alone:
 - `CROSSBIND_APPLE_API_KEY_ID`: The key's ID, which the file's name tells where it keeps the one App Store Connect gives
   it, `AuthKey_<key id>.p8`.
 - `CROSSBIND_APPLE_API_ISSUER`: The issuer ID of the key's team.
+
+On a Mac of your own, `~/.crossbind.json` keeps the key under the same names without `CROSSBIND_`, and each variable the
+environment sets wins: `crossbind config set APPLE_API_KEY <its .p8 file>` keeps the file's full path, and refuses the
+key's own text, which goes in no file; `crossbind config set APPLE_API_ISSUER <its issuer ID>` keeps the issuer, and
+`APPLE_API_KEY_ID` the ID where the file has another name. The key then serves `crossbind app store app-store --send`,
+releases and App Store Connect uploads too.
 
 An identity the keychain does not hold or a name two of its identities share, as after a renewal, stops
 `crossbind app build` before anything compiles, and so does a key beside the identity that lacks one of its three
@@ -1717,9 +1723,10 @@ macOS one. It runs on macOS, with Xcode. Before the build it checks all it needs
 crossbind archives the app unsigned and signs it ad hoc, so archiving takes no development certificate, profile,
 registered device or Apple account. The account Xcode is signed in to then uploads it: it signs the app for
 distribution, in the cloud, and numbers the build: the version's own number at first, the next free one for each later
-upload of that version, unless `CROSSBIND_APP_BUILD_NUMBER` gives one. With
-`CROSSBIND_APPLE_API_KEY`, `CROSSBIND_APPLE_API_KEY_ID` and `CROSSBIND_APPLE_API_ISSUER` set, as for notarizing a macOS
-app, an App Store Connect API key does it in place of the account, as in CI. Apple signs in the cloud for an Admin key
+upload of that version, unless `CROSSBIND_APP_BUILD_NUMBER` gives one. With an App Store Connect API key, as for
+[notarizing a macOS app](#signing-a-macos-app), in `CROSSBIND_APPLE_API_KEY`, `CROSSBIND_APPLE_API_KEY_ID` and
+`CROSSBIND_APPLE_API_ISSUER` as in CI, or kept by `crossbind config set APPLE_API_KEY` and `APPLE_API_ISSUER` on your
+Mac, the key does it in place of the account. Apple signs in the cloud for an Admin key
 alone; a key of another role needs an Apple Distribution certificate in the keychain, which Xcode makes once under
 Settings › Accounts › Manage Certificates. `--track` is Google Play's, and stops an iOS upload.
 

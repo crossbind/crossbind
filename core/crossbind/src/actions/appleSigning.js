@@ -4,8 +4,8 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { secretFile } from '../utils/secretFile.js';
 
-// The Developer ID that signs a macOS app and the App Store Connect API key Apple notarizes it with, named by the
-// environment alone so that no secret reaches a file.
+// The Developer ID that signs a macOS app and the App Store Connect API key Apple notarizes it with, as the environment
+// names them; ~/.crossbind.json may name the key too, by its file, as it keeps no secret.
 export const APPLE_SIGNING = {
     identity: 'CROSSBIND_APPLE_SIGNING_IDENTITY',
     key: 'CROSSBIND_APPLE_API_KEY',
@@ -35,32 +35,46 @@ function signingIdentities() {
         .map(([, hash, name]) => ({ hash, name }));
 }
 
-// The App Store Connect API key the environment names, with which Apple notarizes a macOS app and xcodebuild uploads an
-// iOS one in place of Xcode's account, or null: all of it or none, but for its ID where its file's name tells it. The key
-// is its file, or its text, which goes to a file as the tools take files.
-export function appStoreKey(env = process.env) {
-    const set = NOTARY.filter((name) => env[name]);
+// A part of the App Store Connect API key, from the environment, else from ~/.crossbind.json under its name without
+// CROSSBIND_, as crossbind config set keeps it: where it is set, and its value.
+function keyPart(name, env, system) {
+    const kept = name.replace(/^CROSSBIND_/, '');
+    if (env[name]) return { from: name, value: env[name] };
+    return system[kept] ? { from: `${kept} in ~/.crossbind.json`, value: system[kept] } : null;
+}
+
+// The App Store Connect API key the environment or ~/.crossbind.json names, with which Apple notarizes a macOS app and
+// xcodebuild uploads an iOS one in place of Xcode's account, or null: all of it or none, but for its ID where its file's
+// name tells it. The key is its file, or its text from the environment alone, which goes to a file as the tools take
+// files.
+export function appStoreKey(env = process.env, system = {}) {
+    const parts = Object.fromEntries(NOTARY.map((name) => [name, keyPart(name, env, system)]));
+    const set = NOTARY.filter((name) => parts[name]);
     if (!set.length) return null;
-    const given = env[APPLE_SIGNING.key] ?? '';
+    const { from, value: given = '' } = parts[APPLE_SIGNING.key] ?? {};
     const isText = KEY_TEXT.test(given);
-    const keyId = env[APPLE_SIGNING.keyId] || (isText ? undefined : path.basename(given).match(KEY_FILE)?.[1]);
-    const missing = NOTARY.filter((name) => !env[name] && !(name === APPLE_SIGNING.keyId && keyId));
+    if (isText && !env[APPLE_SIGNING.key]) {
+        throw new Error(`crossbind: ${from} is a key's own text, which crossbind keeps in no file: set it to the path of the key's .p8 file, as crossbind config set APPLE_API_KEY <path> does, or give the text as ${APPLE_SIGNING.key}.`);
+    }
+    const keyId = parts[APPLE_SIGNING.keyId]?.value || (isText ? undefined : path.basename(given).match(KEY_FILE)?.[1]);
+    const missing = NOTARY.filter((name) => !parts[name] && !(name === APPLE_SIGNING.keyId && keyId));
     if (missing.length) {
         const byName = missing.includes(APPLE_SIGNING.keyId) && !isText ? ', the ID unless its file keeps the name App Store Connect gives it, AuthKey_<key id>.p8' : '';
-        throw new Error(`crossbind: ${listed(set)} set, but ${listed(missing)} not: an App Store Connect API key takes all three${byName}.`);
+        const configHint = 'crossbind config set keeps each in ~/.crossbind.json, under its name without CROSSBIND_';
+        throw new Error(`crossbind: ${listed(set.map((name) => parts[name].from))} set, but ${listed(missing)} not: an App Store Connect API key takes all three${byName}. ${configHint}.`);
     }
     const key = isText ? secretFile('AuthKey.p8', `${given.trim()}\n`) : path.resolve(given);
-    if (!fs.statSync(key, { throwIfNoEntry: false })?.isFile()) throw new Error(`crossbind: ${APPLE_SIGNING.key} names ${key}, which is no file.`);
-    return { key, keyId, issuer: env[APPLE_SIGNING.issuer] };
+    if (!fs.statSync(key, { throwIfNoEntry: false })?.isFile()) throw new Error(`crossbind: ${from} names ${key}, which is no file.`);
+    return { key, keyId, issuer: parts[APPLE_SIGNING.issuer].value };
 }
 
 // The identity a macOS app is signed with and the key Apple notarizes it with, or null without an identity: the app is
 // then signed ad hoc, which opens it on the Mac that built it alone, even with the key, which iOS uploads take too.
 // codesign takes the identity's hash, which the renewed certificates of one name do not share.
-export function appleSigning(env = process.env) {
+export function appleSigning(env = process.env, system = {}) {
     const identity = env[APPLE_SIGNING.identity];
     if (!identity) return null;
-    const notary = appStoreKey(env);
+    const notary = appStoreKey(env, system);
     const found = signingIdentities().filter(({ hash, name }) => hash === identity.toUpperCase() || name.includes(identity));
     const matches = [...new Map(found.map((match) => [match.hash, match])).values()];
     if (!matches.length) throw new Error(`crossbind: ${APPLE_SIGNING.identity} names ${JSON.stringify(identity)}, which no valid code signing identity in the keychain is; \`security find-identity -v -p codesigning\` lists them.`);

@@ -350,7 +350,7 @@ function signWindowsApp(app, target, page) {
 
 // A macOS app with its page is the one that ships: Apple notarizes it, or the build says why another Mac refuses it.
 function shipMacApp(app, signing) {
-    const notarize = `${APPLE_SIGNING.key}, ${APPLE_SIGNING.keyId} and ${APPLE_SIGNING.issuer} to have Apple notarize it`;
+    const notarize = `${APPLE_SIGNING.key}, ${APPLE_SIGNING.keyId} and ${APPLE_SIGNING.issuer}, or crossbind config set APPLE_API_KEY and APPLE_API_ISSUER, to have Apple notarize it`;
     if (signing?.notary) notarizeApp(app, signing.notary);
     else if (signing) console.warn(`crossbind: ${path.basename(app)} is signed with your Developer ID but not notarized, so another Mac opens it only once its user allows it in System Settings. Set ${notarize}.`);
     else console.warn(`crossbind: ${path.basename(app)} is signed ad hoc, which opens it on this Mac alone. Set ${APPLE_SIGNING.identity} to sign it with your Developer ID, and ${notarize}.`);
@@ -507,7 +507,7 @@ export function publishApp(target, { to = appOutputPath(target), page = null } =
         });
     }
     if (target.platform === 'darwin') {
-        const signing = appleSigning();
+        const signing = appleSigning(process.env, state.config.system);
         signApp(to, target, signing);
         if (page) shipMacApp(to, signing);
     } else if (target.platform === 'android' && target.buildType === 'release') {

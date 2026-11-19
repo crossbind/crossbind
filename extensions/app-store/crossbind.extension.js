@@ -21,9 +21,11 @@ const NO_APP_ID = 'crossbind: App Store Connect knows an app by its bundle id, a
 const NO_TEAM = "crossbind: App Store Connect takes uploads from an Apple Developer Program team, which neither app.team in crossbind.config.js nor this machine's XCODE_DEVELOPMENT_TEAM names: set either to its id, which developer.apple.com/account shows under Membership details.";
 const NO_CATEGORY = 'crossbind: the Mac App Store takes no app without its category: set app.category in crossbind.config.js.';
 const NO_ENCRYPTION = 'crossbind: app.encryption is not set, so App Store Connect asks whether this build uses encryption before TestFlight hands it out; set it in crossbind.config.js to answer for every build.';
-const NO_KEY_TO_RELEASE = "crossbind: crossbind app release hands the version to App Review through App Store Connect's API, which takes an API key: set CROSSBIND_APPLE_API_KEY, CROSSBIND_APPLE_API_KEY_ID and CROSSBIND_APPLE_API_ISSUER, as app.md's Publishing says.";
-const NO_KEY_TO_SEND = "crossbind: crossbind app store --send sends the page through App Store Connect's API, which takes an API key: set CROSSBIND_APPLE_API_KEY, CROSSBIND_APPLE_API_KEY_ID and CROSSBIND_APPLE_API_ISSUER, as app.md's Publishing says.";
-const NO_KEY_TO_SEE = "Set CROSSBIND_APPLE_API_KEY, CROSSBIND_APPLE_API_KEY_ID and CROSSBIND_APPLE_API_ISSUER, an App Store Connect API key's, to see what App Store Connect has.";
+// Where an App Store Connect API key comes from: this machine's ~/.crossbind.json, or the environment, as in CI.
+const KEY_SETTINGS = 'crossbind config set APPLE_API_KEY <its .p8 file> and APPLE_API_ISSUER <its issuer ID>, or CROSSBIND_APPLE_API_KEY, CROSSBIND_APPLE_API_KEY_ID and CROSSBIND_APPLE_API_ISSUER, as in CI';
+const NO_KEY_TO_RELEASE = `crossbind: crossbind app release hands the version to App Review through App Store Connect's API, which takes an API key: set one with ${KEY_SETTINGS}, as app.md's Publishing says.`;
+const NO_KEY_TO_SEND = `crossbind: crossbind app store --send sends the page through App Store Connect's API, which takes an API key: set one with ${KEY_SETTINGS}, as app.md's Publishing says.`;
+const NO_KEY_TO_SEE = `Set an App Store Connect API key with ${KEY_SETTINGS}, to see what App Store Connect has.`;
 const TEAM_ID = /^[A-Z0-9]{10}$/;
 const noIcon = (platform) => `crossbind: App Store Connect takes no ${platform} app without an icon: set app.icon in crossbind.config.js to a square PNG, at best 1024 × 1024.`;
 const notOnMac = (id, then = 'upload again, or upload the iOS app alone with -p ios') => `crossbind: App Store Connect's app ${id} is not on macOS yet: add the platform there, with the + beside its platform in the sidebar, which makes it a universal purchase, then ${then}.`;

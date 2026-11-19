@@ -254,6 +254,15 @@ describe("an extension's api", () => {
         expect(Object.isFrozen(api.apple.privacyCategories.fileTimestamp.reasons)).toBe(true);
     });
 
+    test("gives the App Store Connect API key this machine's ~/.crossbind.json names, where the environment names none", () => {
+        const api = extensionApi('demo-store', { platform: 'ios' });
+        const file = upath.join(base, 'AuthKey_7K2M9P4Q1Z.p8');
+        fs.writeFileSync(file, 'key');
+        state.config.system = { APPLE_API_KEY: file, APPLE_API_ISSUER: 'issuer-uuid' };
+        const key = api.apple.key();
+        expect({ ...key, key: upath.toUnix(key.key) }).toEqual({ key: file, keyId: '7K2M9P4Q1Z', issuer: 'issuer-uuid' });
+    });
+
     test("runs an installer's tools where crossbind packages its app's platform, in a folder under the project's base", () => {
         const linux = { platform: 'linux', arch: 'x64' };
         const api = extensionApi('demo-installer', { platform: 'linux', target: linux });
