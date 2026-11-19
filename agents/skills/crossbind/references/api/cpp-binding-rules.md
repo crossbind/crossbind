@@ -90,7 +90,7 @@ or a listed container, or register the type by hand
 
 Avoid:
 
-- A `std::unique_ptr` parameter. C++ frees the object when the call ends while the JavaScript handle still claims it, so freeing that handle afterwards, with `.delete()` or by the garbage collector, destroys the object a second time: a Node-API addon and a debug wasm build abort there, and a release wasm build runs the destructor again and goes on. Take a reference, or a `std::shared_ptr` when C++ keeps the object. Returning a `std::unique_ptr` is fine: JavaScript gets the instance and owns it.
+- A `std::unique_ptr` parameter, by value, as an rvalue or through a const reference, an alias such as GEOS's `Geometry::Ptr` included. The call would destroy the object the JavaScript handle still holds, so the function, method or constructor is left out, and the build prints a line for it: `crossbind: native.h:21: takeTool takes a std::unique_ptr, so embind cannot bind it; skipped.` Take a reference, or a `std::shared_ptr` when C++ keeps the object. Returning a `std::unique_ptr` is fine: JavaScript gets the instance and owns it.
 - C-style strings (`char*`) and C-style arrays (`int[]`) in public API
 - Custom allocators, placement new, manual `malloc`/`free` exposed to JS
 
@@ -374,7 +374,7 @@ Use cases: callbacks into JS that fetch network data, awaiting JS promises mid-C
 
 ## Common mistakes (from the build-pipeline source code)
 
-1. **Taking a `std::unique_ptr` parameter** → C++ frees the object while the JavaScript handle still claims it, and freeing the handle afterwards destroys it a second time. Take a reference or a `std::shared_ptr`; returning a `unique_ptr` is fine.
+1. **Taking a `std::unique_ptr` parameter** → the function is left out, with a line in the build: the call would destroy the object the JavaScript handle still holds. Take a reference or a `std::shared_ptr`; returning a `unique_ptr` is fine.
 2. **Defining the class in the `.cpp` only** (forward-declared in `.h`, full definition hidden) → binder needs the full definition in the header it scans.
 3. **Anonymous namespaces wrapping the public API** → not exposed. Public API stays in named or no namespace.
 4. **`extern "C"` decoration on C++ class methods** → invalid. Only use `extern "C"` for C-style free functions.
