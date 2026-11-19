@@ -115,6 +115,54 @@ public static class Power {
 '@
 [Power]::Sleep((Get-Process -Id APP_PID).MainWindowHandle)
 `;
+// Prints which window is in front, with ACTION Report, and with Bring brings the app's window there when another is, as
+// its user's click would.
+const FOREGROUND_SCRIPT = `
+$ErrorActionPreference = 'Stop'
+Add-Type -TypeDefinition @'
+using System;
+using System.Text;
+using System.Runtime.InteropServices;
+public static class Foreground {
+    [DllImport("user32.dll")] static extern IntPtr GetForegroundWindow();
+    [DllImport("user32.dll")] static extern uint GetWindowThreadProcessId(IntPtr window, out uint process);
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern int GetWindowText(IntPtr window, StringBuilder text, int length);
+    [DllImport("user32.dll")] static extern bool AttachThreadInput(uint from, uint to, bool attach);
+    [DllImport("kernel32.dll")] static extern uint GetCurrentThreadId();
+    [DllImport("user32.dll")] static extern bool BringWindowToTop(IntPtr window);
+    [DllImport("user32.dll")] static extern bool SetForegroundWindow(IntPtr window);
+    [DllImport("user32.dll")] static extern bool ShowWindow(IntPtr window, int command);
+    static string Describe(IntPtr window) {
+        uint process;
+        GetWindowThreadProcessId(window, out process);
+        StringBuilder text = new StringBuilder(256);
+        GetWindowText(window, text, text.Capacity);
+        return string.Format("the window of process {0}, '{1}'", process, text);
+    }
+    public static string Report(IntPtr app) {
+        IntPtr front = GetForegroundWindow();
+        if (front == app) return "the app's window is in front";
+        return (front == IntPtr.Zero ? "no window" : Describe(front)) + " is in front";
+    }
+    public static string Bring(IntPtr app) {
+        IntPtr front = GetForegroundWindow();
+        if (front == app) return "the app's window was in front";
+        string was = front == IntPtr.Zero ? "no window" : Describe(front);
+        uint process;
+        uint thread = GetWindowThreadProcessId(front, out process);
+        uint own = GetCurrentThreadId();
+        // Windows lets a process take the front from the one that has it once their input is joined.
+        AttachThreadInput(own, thread, true);
+        ShowWindow(app, 5);
+        BringWindowToTop(app);
+        SetForegroundWindow(app);
+        AttachThreadInput(own, thread, false);
+        return string.Format("{0} was in front; the app's window {1}", was, GetForegroundWindow() == app ? "came to the front" : "could not be brought to the front");
+    }
+}
+'@
+[Foreground]::ACTION((Get-Process -Id APP_PID).MainWindowHandle)
+`;
 // Asks the window whether its user's session may end, as Windows does with WM_QUERYENDSESSION as its user signs out,
 // and prints its answer, 0 for no. A window that takes 5 s to answer fails.
 const END_SESSION_SCRIPT = `
@@ -745,13 +793,13 @@ function openLink() {
 }
 
 // Sends commands to the page through WebView2's DevTools, in order, and gives the last one's result. The page has the
-// focus a user's click gives it.
-async function devTools(...commands) {
+// focus a user's click gives it, unless isFocusEmulated is false.
+async function devTools(commands, { isFocusEmulated = true } = {}) {
     const signal = AbortSignal.timeout(ASKED_TIMEOUT_MS);
     const targets = await (await fetch(`http://127.0.0.1:${DEVTOOLS_PORT}/json`, { signal })).json();
     const page = targets.find((target) => target.type === 'page');
     if (!page) throw new Error('WebView2 lists no page');
-    const sent = [{ method: 'Emulation.setFocusEmulationEnabled', params: { enabled: true } }, ...commands];
+    const sent = [...(isFocusEmulated ? [{ method: 'Emulation.setFocusEmulationEnabled', params: { enabled: true } }] : []), ...commands];
     const socket = new WebSocket(page.webSocketDebuggerUrl);
     try {
         const { error, result } = await new Promise((done, fail) => {
@@ -773,25 +821,30 @@ async function devTools(...commands) {
 // Runs an expression in the page, after the commands given before it, as a user's click would unless userGesture is
 // false, and gives its value.
 async function inPage(expression, userGesture = true, ...before) {
-    const { result } = await devTools(...before, { method: 'Runtime.evaluate', params: { expression, userGesture, awaitPromise: true, returnByValue: true } });
+    const { result } = await devTools([...before, { method: 'Runtime.evaluate', params: { expression, userGesture, awaitPromise: true, returnByValue: true } }]);
     return result.value;
 }
 
-// The page reads the clipboard on its user's click alone: a button at its corner reads it when DevTools clicks it with
-// the mouse, as the page's user would, and the run waits for the read, which may come after the click's answer.
+// What the expression gives that a button at the page's corner runs as DevTools clicks it with the mouse, as the page's
+// user would, which the run waits for, as it may come after the click's answer.
+async function onClick(expression) {
+    const mouse = (type) => ({ method: 'Input.dispatchMouseEvent', params: { type, x: 20, y: 20, button: 'left', clickCount: 1 } });
+    await inPage(`void (globalThis.crossbindClicked = new Promise((resolve) => {
+        const button = document.body.appendChild(document.createElement('button'));
+        button.style.cssText = 'position: fixed; left: 0; top: 0; width: 40px; height: 40px; z-index: 2147483647';
+        button.onclick = () => { resolve(${expression}); button.remove(); };
+        setTimeout(() => resolve('the click missed its button'), ${CLICK_TIMEOUT_MS});
+    }))`, false);
+    return inPage('globalThis.crossbindClicked', false, mouse('mousePressed'), mouse('mouseReleased'));
+}
+
+// The page reads the clipboard on its user's click alone.
 async function readClipboard() {
     const read = "navigator.clipboard.readText().then(() => 'read', (error) => error.message)";
-    const mouse = (type) => ({ method: 'Input.dispatchMouseEvent', params: { type, x: 20, y: 20, button: 'left', clickCount: 1 } });
     try {
         const unclicked = await inPage(read, false);
         if (unclicked === 'read') finish("the page read the clipboard without its user's click");
-        await inPage(`void (globalThis.crossbindRead = new Promise((resolve) => {
-            const button = document.body.appendChild(document.createElement('button'));
-            button.style.cssText = 'position: fixed; left: 0; top: 0; width: 40px; height: 40px; z-index: 2147483647';
-            button.onclick = () => { resolve(${read}); button.remove(); };
-            setTimeout(() => resolve('the click missed its button'), ${CLICK_TIMEOUT_MS});
-        }))`, false);
-        const clicked = await inPage('globalThis.crossbindRead', false, mouse('mousePressed'), mouse('mouseReleased'));
+        const clicked = await onClick(read);
         if (clicked !== 'read') finish(`the page could not read the clipboard on its user's click: ${clicked}`);
     } catch (error) {
         finish(`the clipboard could not be checked: ${error.message}`);
@@ -802,6 +855,21 @@ async function readClipboard() {
 // full screen, then a new scale of the screen, after which the window must cover the screen still, then the page out of
 // full screen.
 let isScreenFilled = false;
+// The element full screen on the user's click, as a page asks for it: one WebView2 refuses says how the page stood as it
+// asked, its focus, its visibility and whether the click's activation reached it.
+const FULL_SCREEN = `((stood) => document.documentElement.requestFullscreen().then(() => 'full', (error) => error.message + ' (' + stood + ')'))(
+    'focus ' + document.hasFocus() + ', ' + document.visibilityState + ', activation ' + navigator.userActivation?.isActive)`;
+// What FOREGROUND_SCRIPT says, doing what action names, or why it could not.
+function foreground(action) {
+    try {
+        const script = FOREGROUND_SCRIPT.replace('ACTION', action).replace('APP_PID', String(app.pid));
+        return execFileSync('powershell', ['-NoProfile', '-Command', script], { encoding: 'utf8', timeout: ASKED_TIMEOUT_MS }).trim();
+    } catch (error) {
+        return `the window in front is unknown: ${error.message}`;
+    }
+}
+// The full screen click's answer, or why it gave none, as DevTools may go with the page.
+const clickedFull = () => onClick(FULL_SCREEN).catch((error) => `the click failed: ${error.message}`);
 async function fillScreen() {
     if (isScreenFilled || !FILL_SCREEN.test(out)) return;
     isScreenFilled = true;
@@ -812,7 +880,21 @@ async function fillScreen() {
     }
     await readClipboard();
     try {
-        await inPage('document.documentElement.requestFullscreen()');
+        // The run's own times beside the page's FULL SCREEN lines, which a failed run shows.
+        console.log(`crossbind e2e: full screen clicked at ${new Date().toISOString()}; ${foreground('Report')}`);
+        const entered = await clickedFull();
+        if (entered !== 'full') {
+            // What the page's focus is without DevTools', and which window is in front, which comes there if it was
+            // another; then the click once more, whose answer the run shows either way.
+            const at = new Date().toISOString();
+            const isFocused = await devTools([{ method: 'Runtime.evaluate', params: { expression: 'document.hasFocus()', returnByValue: true } }], { isFocusEmulated: false })
+                .then(({ result }) => result.value, (error) => `unknown: ${error.message}`);
+            const front = foreground('Bring');
+            const again = await clickedFull();
+            const told = `${entered}, answered at ${at}; the page's own focus ${isFocused}; ${front}; asked again: ${again}`;
+            if (again !== 'full') throw new Error(told);
+            console.log(`crossbind e2e: full screen came at the second click: ${told}`);
+        }
         await new Promise((done) => { setTimeout(done, SETTLE_MS); });
         const script = SCALE_SCRIPT.replace('APP_PID', String(app.pid));
         const covered = execFileSync('powershell', ['-NoProfile', '-Command', script], { encoding: 'utf8', timeout: ASKED_TIMEOUT_MS }).trim();

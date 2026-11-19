@@ -1,67 +1,11 @@
 name: test node addon conformance
-# Scratch of test/app-host/windows-project-origin-spike, which is never a pull request: the fetch's limits of
-# feat/app-host/an-extension-serves-an-origin (an answer past 256 MiB without a length, and one past 60 s), checked
-# once on Linux x64 and on Windows x64 and arm64.
+# Scratch of test/app-host/windows-project-origin-spike, which is never a pull request: the review's Windows
+# checks of feat/app-host/an-extension-serves-an-origin on Windows x64, each run with one fix undone, which must fail.
 on:
     workflow_dispatch:
 
 permissions: {}
 jobs:
-    app-linux:
-        # The app builds in crossbind's linux image, as the addons do, against the Hermes and the WebKitGTK headers and
-        # libraries the image carries, and runs on the runner's own WebKitGTK.
-        runs-on: ubuntu-latest
-        # main's pushes alone reach the ci-cache environment, whose secrets write the compiler cache; it records no deployment.
-        environment:
-            name: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && 'ci-cache' || '' }}
-            deployment: false
-        timeout-minutes: 60
-        steps:
-            - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-            - name: Install pnpm
-              uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
-            - name: Use Node.js
-              uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
-              with:
-                  node-version-file: .nvmrc
-                  cache: 'pnpm'
-            - name: Install dependencies
-              run: pnpm install
-            - name: Set up the compiler cache
-              uses: ./.github/actions/setup-sccache
-              with:
-                  read-key-id: ${{ secrets.SCCACHE_R2_READ_KEY_ID }}
-                  read-secret: ${{ secrets.SCCACHE_R2_READ_SECRET }}
-                  write-key-id: ${{ secrets.SCCACHE_R2_WRITE_KEY_ID }}
-                  write-secret: ${{ secrets.SCCACHE_R2_WRITE_SECRET }}
-                  endpoint: ${{ vars.SCCACHE_R2_ENDPOINT }}
-            - name: Build the app
-              run: pnpm --filter=@crossbind/e2e-desktop-app run build
-            # The app's own page-dialogs and page-permissions take the place of the host's, which this app keeps.
-            - name: Build e2e/app-page-requests
-              run: pnpm --filter=@crossbind/e2e-app-page-requests run build
-            - name: Build an app with none of crossbind's own extensions
-              run: pnpm --filter=@crossbind/e2e-app-bare run build
-            - name: Install the app's Debian package, whose dependencies bring the WebKitGTK it runs on
-              # The run starts a session bus of its own, on which e2e/tray-host.py plays a tray and a notification
-              # server.
-              run: |
-                  sudo apt-get update
-                  sudo apt-get install -y --no-install-recommends ./e2e/desktop-app/dist/crossbind-e2e-desktop-app-linux-x64.deb dbus python3-gi xdotool x11-utils
-            - name: Run the conformance suite in the app and in the installed app
-              # WebKitGTK runs without its sandbox and GPU compositing, as in the containers the app was measured in.
-              env:
-                  WEBKIT_DISABLE_SANDBOX_THIS_IS_DANGEROUS: '1'
-                  WEBKIT_DISABLE_COMPOSITING_MODE: '1'
-                  CROSSBIND_E2E_FETCH_LIMITS: '1'
-              run: |
-                  xvfb-run -a pnpm --filter=@crossbind/e2e-desktop-app run e2e:prod
-                  xvfb-run -a node e2e/desktop-app/e2e/run.mjs --installed
-            - name: Answer the host's own page dialogs as the app's user would
-              env:
-                  WEBKIT_DISABLE_SANDBOX_THIS_IS_DANGEROUS: '1'
-                  WEBKIT_DISABLE_COMPOSITING_MODE: '1'
-              run: xvfb-run -a pnpm --filter=@crossbind/e2e-app-page-requests run e2e:prod
     app-windows:
         # A hosted Windows runner cannot run crossbind's windows image, a Linux one, so this runner builds the app in it,
         # against the Hermes and the WebView2 SDK headers the image carries.
@@ -149,14 +93,12 @@ jobs:
             matrix:
                 include:
                     - { runner: windows-latest, arch: x64 }
-                    - { runner: windows-11-arm, arch: arm64 }
         runs-on: ${{ matrix.runner }}
         timeout-minutes: 15
         env:
             # The common name of the signer the updater holds an update to, once the runner trusts the build's key:
             # e2e/run.mjs checks the app named it.
             CROSSBIND_E2E_UPDATE_SIGNER: crossbind e2e
-            CROSSBIND_E2E_FETCH_LIMITS: '1'
         defaults:
             run:
                 working-directory: ünicode

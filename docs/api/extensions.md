@@ -572,7 +572,9 @@ registry.function("acme.open", [](crossbind::Call call) {
   or a function. `name`, its host: lowercase letters and digits, which dashes may join, 63 at most, neither `app` nor a
   name served now; `role`, what its pages are, of the same letters, not `app`. What it refuses throws, saying why.
   `handler` gets each GET and HEAD of the origin as a route gets its own (a `Request`, as [Routes](#routes) tells), its
-  path from the origin's `/`, on the thread the webview asks on, which it must not hold up. The host answers another
+  path from the origin's `/`, on the thread the webview asks on, which it must not hold up. Unlike a route's, its
+  `path()` holds the colons, backslashes and empty parts a dev server's URLs have, as Vite's `/@id/__x00__virtual:…` or
+  `/@fs/C:/…`, never a part `..`, so a handler that joins it to a folder checks it itself. The host answers another
   method with 405, what `handler` throws with 500, and the paths under `/__crossbind/b/` itself: the bytes its pages'
   calls send and take, with their token.
 - `Origin`: Any thread may hold a copy. `url()`, its URL with the path `/`, as `crossbind://acme-notes/`. `end()`, from
@@ -827,8 +829,11 @@ where it may show a modal dialog, which on Windows runs once WebView2's event ha
 
 A page of the role `app` loads the origins extensions serve, in any frame. A page of a served origin loads its own,
 and the host refuses it the app's own origins and every other served origin before any holder hears of them, as such a
-URL means nothing outside the app; Android's WebView loads a frame of them without asking, which gets nothing of the
-app's. Every other URL reaches `page-navigation` with the page, whose `role()` tells them apart.
+URL means nothing outside the app: a link, a URL with a user's name, which is no part of an origin, and a form's POST,
+which Android's host answers with 204, so the page stays. Android's WebView loads a frame without asking: the app's own
+documents refuse to show in a frame of another origin (`Content-Security-Policy: frame-ancestors 'self'`), and a frame
+of another served origin gets nothing of the app's. Every other URL reaches `page-navigation` with the page, whose
+`role()` tells them apart.
 
 The host's own `page-navigation` loads the origins `app.navigation.load` lists, opens any other link its user follows
 outside and refuses the rest. As the holder of `page-authentication` it takes neither authentications nor certificate
@@ -1763,6 +1768,9 @@ The host's core does what every extension stands on, and no extension takes its 
 - **Origins** take GET and HEAD alone, as routes do, and `fetch()` no other method, no request's body and no answer
   read in parts. On Windows a served origin is `http://<name>.localhost`, which WebView2 gives OPFS, while the app's
   own `crossbind://app` has none; on Linux no page has it, as WebKitGTK keeps it off ([known issues](../known-issues.md)).
+  On Android and Windows every `http://<label>.localhost/` on port 80 is the host's, in every app, served or not, which
+  keeps an ended origin's requests from the machine's port 80: a page that asks a local server of such a name gets the
+  host's 404, and one of another port, as `http://<label>.localhost:5173/`, goes to the network.
 - **Routes** answer whole, with a body or a file, as WebView2 reads a response only once all of it is there, and take
   GET and HEAD alone, as Android's WebView gives no request's body: a stream goes as a call's messages, and what the
   page sends as a call's options.

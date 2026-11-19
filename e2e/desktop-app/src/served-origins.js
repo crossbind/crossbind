@@ -31,12 +31,16 @@ const AT_ONCE_MS = 5000;
 const MAX_LOOP_RATIO = 8;
 // The probe ends the project's origin from a thread of its own while the page goes on calling.
 const END_AFTER_MS = 300;
+// How long the app's page holds up the module's thread as it opens the project's, past that page's first script.
+const HOLD_MS = 2000;
 
 const sleep = (ms) => new Promise((resolve) => { setTimeout(resolve, ms); });
 // A path of an origin, or of a URL whose path is "/".
 const under = (base, path) => `${base.replace(/\/$/, '')}/${path}`;
 const failure = (error) => `${error?.name ?? 'Error'}: ${error?.message ?? error}`;
 const show = (name, value) => console.log(`PAGE GETS served-${name} ${JSON.stringify(value)}`);
+// WebView2's pages, to whose webview the host posts each reply.
+const isWebView2 = () => Boolean(globalThis.chrome?.webview);
 
 export const isServedPage = () => /^e2e-[a-z0-9-]+(\.localhost)?$/.test(location.hostname);
 
@@ -160,16 +164,34 @@ async function checkTokens(isAndroid, otherUrl, token, owner) {
     show(`tokens-${owner}`, checked);
 }
 
+// The host takes no request of another origin's: on Windows the filter that hands it http://<name>.localhost's matches
+// over the whole URL, as this one's query.
+async function checkOtherRequests() {
+    const url = `${ENDPOINT}/reach?u=http://a.localhost/`;
+    const reached = await fetch(url).then(async (response) => `${response.status} ${await response.text()}`, failure);
+    if (reached !== '200 ok') throw new Error(`a fetch of ${url} got ${reached}`);
+    show('other-requests', { url, reached });
+}
+
+// Replies of the app's page that come once the project's page shows: an answer, as its function holds up the module's
+// thread past that page's first script, and the cancel of a call that answered nothing, which checkHeardReplies() seeks.
+function holdUpReplies() {
+    invoke('probe.holdUp', { ms: HOLD_MS }).catch(() => {});
+    invoke('probe.appWaits').catch(() => {});
+}
+
 // The app's page as the round trip starts: it serves the origins, checks what needs no project's page, and opens the
 // project's page in its window.
 async function start(isAndroid) {
     const otherUrl = await invoke('probe.serveOrigin', { name: OTHER, source: SOURCE });
     checkRefusals(await invoke('probe.refusedOrigins', { served: OTHER }));
     await checkFetch();
+    if (isWebView2()) await checkOtherRequests();
     await checkTokens(isAndroid, otherUrl, globalThis.__crossbind_token, 'app');
     const project = await invoke('probe.serveOrigin', { name: PROJECT, source: SOURCE });
     await invoke('probe.report', { key: 'app', value: { href: location.href, origin: location.origin, other: otherUrl } });
     await invoke('probe.setStage', { stage: 'project' });
+    if (isWebView2()) holdUpReplies();
     location.href = project;
     await sleep(ANSWER_MS);
     throw new Error(`the window did not open ${project}`);
@@ -276,47 +298,63 @@ async function checkOwnCalls() {
     }
 }
 
-// 4. A frame of the app's page in a project's: the host refuses its load but on Android, whose WebView loads a frame
-// without asking, and there it gets nothing of the app's.
+// 4. A frame of the app's page in a project's: the host refuses its load, and on Android, whose WebView loads a frame
+// without asking, the app's documents refuse to show in it.
 async function checkAppFrame(appOrigin, isAndroid) {
     const { frame, said } = await frameAt(appOrigin, FRAME_MS);
     let isFirstDocument = false;
     try {
         isFirstDocument = frame.contentWindow.location.href === 'about:blank';
     } catch {
-        // A document of another origin, which loaded.
+        // A document of another origin, which loaded, or the error page Android's WebView shows in its place.
     }
     frame.remove();
     if (said) checkFrameGotNothing(said, "a frame of the app's page in the project's");
     const read = await fetch(under(appOrigin, FRAME_PAGE)).then((response) => `read ${response.status}`, failure);
     if (read.startsWith('read')) throw new Error(`a project's page ${read} of the app's origin`);
-    if (!isAndroid && (said || !isFirstDocument)) throw new Error(`a frame of the app's page loaded in the project's: ${JSON.stringify(said)}`);
-    show('app-frame', { frame: said ?? 'loaded nothing', read });
+    if (said || (!isAndroid && !isFirstDocument)) throw new Error(`a frame of the app's page loaded in the project's: ${JSON.stringify(said)}`);
+    show('app-frame', { frame: 'loaded nothing', read });
+}
+
+// A form's POST of the top frame, which Android's WebView asks the host nothing of before its request.
+function post(url) {
+    const form = document.createElement('form');
+    form.method = 'post';
+    form.action = url;
+    document.body.append(form);
+    form.submit();
 }
 
 // 5. A link elsewhere reaches page-navigation with the role; the app's own origin and another served one, as the top
-// frame's or a window's, are refused before any holder hears of them. Were one loaded, its page would find the stage
-// refused and say so.
+// frame's, with a user's name, which is no part of an origin, as a form's POST or as a window's, are refused before any
+// holder hears of them. Were one loaded, its page would find the stage refused and say so.
 async function checkNavigation(app) {
     const away = 'https://crossbind-e2e.invalid/project';
     location.href = away;
     const asked = await until('page-navigation.asked', ({ url }) => url === away, `page-navigation was not asked for ${away}`);
     if (asked.role !== 'project') throw new Error(`page-navigation heard of the project's ${away} with the role ${JSON.stringify(asked.role)}`);
     const refused = [under(app.origin, '?from=project'), under(app.other, '?from=project')];
+    const named = refused.map((url) => url.replace('://', '://x@'));
+    const posted = [under(app.origin, '?from=project-post'), under(app.other, '?from=project-post')];
     await invoke('probe.setStage', { stage: 'refused' });
-    for (const url of refused) {
+    for (const url of [...refused, ...named]) {
         location.href = url;
+        await sleep(QUIET_MS);
+    }
+    for (const url of posted) {
+        post(url);
         await sleep(QUIET_MS);
     }
     window.open(refused[0]);
     await sleep(QUIET_MS);
     await invoke('probe.setStage', { stage: 'project' });
-    const heard = (await invoke('page-navigation.asked')).filter(({ url }) => refused.includes(url));
+    const heard = (await invoke('page-navigation.asked')).filter(({ url }) => url.includes('from=project'));
     if (heard.length > 0) throw new Error(`page-navigation heard of ${JSON.stringify(heard)}`);
-    show('navigation', { away: asked, refused });
+    show('navigation', { away: asked, refused: [...refused, ...named, ...posted] });
 }
 
-// 9. The probe's proxy: a Range, the headers it drops, its source down, and a method the host refuses.
+// 9. The probe's proxy: a Range, the headers it drops, its source down, a method the host refuses, and a path with a
+// colon, as a dev server names its virtual modules.
 async function checkProxy() {
     const ranged = await fetch('/index.html', { headers: { Range: 'bytes=0-14' } });
     const range = { status: ranged.status, contentRange: ranged.headers.get('content-range'), text: await ranged.text() };
@@ -332,7 +370,10 @@ async function checkProxy() {
     const posted = await fetch('/index.html', { method: 'POST', body: 'x' });
     const refusal = await posted.text();
     if (posted.status !== 405 || !refusal.includes(`the origin ${PROJECT} answers GET and HEAD alone`)) throw new Error(`a POST got ${posted.status} ${refusal}`);
-    show('proxy', { range, down: `${down.status} ${reason}`, ext: `${routed.status} ${routeText}`, post: `${posted.status} ${refusal}` });
+    const named = await fetch('/__e2e/id:virtual');
+    const namedText = await named.text();
+    if (named.status !== 200 || namedText !== 'id:virtual') throw new Error(`a path with a colon, as a dev server names, got ${named.status} ${namedText}`);
+    show('proxy', { range, down: `${down.status} ${reason}`, ext: `${routed.status} ${routeText}`, post: `${posted.status} ${refusal}`, colon: namedText });
 }
 
 // 10. On an Android emulator, plain http and ws from a project's page reach the run's machine, as the probe's cleartext
@@ -360,7 +401,16 @@ async function endFromWithin() {
     throw new Error("the window did not show the app's first page once the project's origin ended");
 }
 
+// What the project's page heard on WebView2's channel from its first script on, index.html's: none of the app's page's
+// replies that holdUpReplies() asked for.
+function checkHeardReplies() {
+    const others = (globalThis.e2eHeard ?? []).filter((text) => /probe\.appWaits|held up for the app's page/.test(text));
+    if (others.length > 0) throw new Error(`a project's page heard the app's page's replies: ${others.join(' | ')}`);
+    show('replies', { heard: globalThis.e2eHeard?.length ?? 'nothing' });
+}
+
 async function projectStage(m, isAndroid) {
+    if (isWebView2()) checkHeardReplies();
     localStorage.clear();
     const { app } = await invoke('probe.reports');
     const got = await reportWebFeatures(isAndroid, 'project-');

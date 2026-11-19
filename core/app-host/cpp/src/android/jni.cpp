@@ -468,6 +468,11 @@ extern "C" JNIEXPORT jint JNICALL Java_dev_crossbind_app_CrossbindActivity_nativ
     return static_cast<jint>(app::decideNavigation(nullptr, address, isMainFrame == JNI_TRUE, isUserInitiated == JNI_TRUE, false));
 }
 
+// The rule alone, from the WebView's thread of requests, as a POST of the top frame comes there and nowhere else.
+extern "C" JNIEXPORT jboolean JNICALL Java_dev_crossbind_app_CrossbindActivity_nativeRefuses(JNIEnv *env, jclass, jbyteArray url) {
+    return app::navigationRule(nullptr, textOf(env, url)) == app::NavigationRule::refuse ? JNI_TRUE : JNI_FALSE;
+}
+
 // The activity's WebView takes a served origin: its scripts and objects, with the origin's token, from now on.
 void crossbind::app::originServed(const std::string &name) {
     const std::optional<ServedOrigin> served = servedOrigin(name);

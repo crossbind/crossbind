@@ -195,18 +195,26 @@ const FULL_SCREEN_TIMEOUT_MS = 150000;
 // window's screen a new scale, checks the window still covers it, and leaves full screen: the page waits for both changes.
 function checkScaledFullScreen() {
     let counted;
+    let erred;
     let timer;
+    // When the page went in and out of full screen and how it stood, which e2e/run.mjs shows of a run that fails.
+    const told = (what) => console.log(`${what} at ${new Date().toISOString()}: ${document.fullscreenElement?.localName ?? 'none'}, ${document.visibilityState}, focus ${document.hasFocus()}`);
     return new Promise((resolve, reject) => {
         let changes = 0;
         counted = () => {
             changes += 1;
+            told(`FULL SCREEN CHANGE ${changes}`);
             if (changes === 2) resolve();
         };
+        erred = () => told('FULL SCREEN ERROR');
         document.addEventListener('fullscreenchange', counted);
+        document.addEventListener('fullscreenerror', erred);
         timer = setTimeout(() => reject(new Error('the page was not shown full screen and back')), FULL_SCREEN_TIMEOUT_MS);
+        told('FULL SCREEN ASKED');
         console.log('FILL SCREEN');
     }).finally(() => {
         document.removeEventListener('fullscreenchange', counted);
+        document.removeEventListener('fullscreenerror', erred);
         clearTimeout(timer);
     });
 }
