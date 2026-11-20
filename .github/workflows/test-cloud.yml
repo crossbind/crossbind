@@ -1,0 +1,57 @@
+name: test cloud
+on:
+    workflow_dispatch:
+    push:
+        branches:
+            - main
+        paths:
+            - tooling/cloud/**
+            - core/crossbind/src/**
+            - core/crossbind/package.json
+            - .nvmrc
+            - .github/workflows/test-cloud.yml
+            - '!**/*.md'
+    pull_request:
+        branches:
+            - main
+        paths:
+            - tooling/cloud/**
+            - core/crossbind/src/**
+            - core/crossbind/package.json
+            - .nvmrc
+            - .github/workflows/test-cloud.yml
+            - '!**/*.md'
+
+permissions: {}
+concurrency:
+    # A newer push to the same pull request or branch supersedes the running checks.
+    group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+    cancel-in-progress: true
+jobs:
+    tested:
+        uses: ./.github/workflows/tested-tree.yml
+        permissions:
+            actions: read
+            contents: read
+            pull-requests: read
+        with:
+            workflow: test-cloud.yml
+    # The Worker, the compiler and the accounts database. crossbind's own loader reads the config a compile writes.
+    unit:
+        needs: tested
+        if: needs.tested.outputs.tested != 'true'
+        runs-on: ubuntu-latest
+        timeout-minutes: 15
+        steps:
+            - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+            - name: Install pnpm
+              uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+            - name: Use Node.js
+              uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+              with:
+                  node-version-file: .nvmrc
+                  cache: 'pnpm'
+            - name: Install dependencies
+              run: pnpm install --frozen-lockfile --filter @crossbind/cloud --filter crossbind
+            - name: Unit tests
+              run: pnpm --filter @crossbind/cloud test
