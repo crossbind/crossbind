@@ -28,6 +28,46 @@ export function readCookie(request, name) {
 export const sessionCookie = (name, value, maxAgeSeconds) => `${name}=${value}; Max-Age=${maxAgeSeconds}; Path=/; Secure; HttpOnly; SameSite=Lax`;
 export const clearCookie = (name) => sessionCookie(name, '', 0);
 
+export const PENDING_COOKIE = '__Host-pg_pending';
+export const PENDING_TTL_SECONDS = 600;
+
+// A value this API alone could have made: base64url JSON and its HMAC, taken under the cookie's name, so that no
+// cookie's value passes for another's.
+async function seal(name, value, secret) {
+    const payload = toBase64Url(utf8.encode(JSON.stringify(value)));
+    const signature = await crypto.subtle.sign('HMAC', await hmacKey(secret), utf8.encode(`${name}.${payload}`));
+    return `${payload}.${toBase64Url(signature)}`;
+}
+
+async function unseal(name, sealed, secret) {
+    const [payload, signature, extra] = sealed?.split('.') ?? [];
+    if (!payload || !signature || extra !== undefined) return null;
+    try {
+        if (!(await crypto.subtle.verify('HMAC', await hmacKey(secret), fromBase64Url(signature), utf8.encode(`${name}.${payload}`)))) return null;
+        return JSON.parse(new TextDecoder().decode(fromBase64Url(payload)));
+    } catch {
+        return null;
+    }
+}
+
+// A first sign-in with an identity crossbind does not know: the identity its provider confirmed, waiting ten minutes
+// for its person's answer on the account's page, and where that sign-in was to return. Sealed: anyone can set a
+// cookie in their own browser, and an identity written there by hand would make or sign in to its account.
+export async function pendingCookie({ provider, subject, login }, next, secret, now = Date.now()) {
+    const value = await seal(PENDING_COOKIE, {
+        provider, subject, login, next, exp: now + PENDING_TTL_SECONDS * 1000,
+    }, secret);
+    return sessionCookie(PENDING_COOKIE, value, PENDING_TTL_SECONDS);
+}
+
+export async function readPending(request, secret, now = Date.now()) {
+    const pending = await unseal(PENDING_COOKIE, readCookie(request, PENDING_COOKIE), secret);
+    if (!pending || !(pending.exp > now) || ![pending.provider, pending.subject, pending.login].every((field) => typeof field === 'string')) return null;
+    return {
+        provider: pending.provider, subject: pending.subject, login: pending.login, next: pending.next === 'playground' ? 'playground' : 'account',
+    };
+}
+
 export const NOTICE_COOKIE = '__Host-pg_notice';
 const NOTICE_SECONDS = 60;
 

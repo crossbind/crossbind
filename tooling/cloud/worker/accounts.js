@@ -94,12 +94,13 @@ export function createAccounts(db, now = () => Date.now(), drawId = randomAccoun
     }
 
     return {
-        // The account an identity signs in to, made at once for an identity crossbind does not know: { user }, or
-        // { freeFrom } for one unlinked this month from an account with build seconds then (unlink), which holds it
-        // until the 1st; one unlinked in an earlier month is free. An account deleted this month comes back under its
-        // id, its month spent: while its seconds stay, so do its identities (migrations/0002's triggers). Never looked
-        // up by a GitHub id.
-        async signIn({ provider, subject, login }) {
+        // The account an identity signs in to: { user }, or { freeFrom } for one unlinked this month from an account
+        // with build seconds then (unlink), which holds it until the 1st; one unlinked in an earlier month is free. An
+        // identity crossbind does not know makes its account at once, or with `create: false` answers { unknown },
+        // for the page to ask its person first. An account deleted this month comes back under its id, its month
+        // spent: while its seconds stay, so do its identities (migrations/0002's triggers). Never looked up by a
+        // GitHub id.
+        async signIn({ provider, subject, login }, { create = true } = {}) {
             for (let attempt = 0; attempt < MAX_SIGN_IN_ATTEMPTS; attempt += 1) {
                 const identity = await db.prepare('SELECT user_id, unlinked_at FROM identities WHERE provider = ? AND subject = ?').bind(provider, subject).first();
                 if (identity?.unlinked_at === null) {
@@ -116,6 +117,7 @@ export function createAccounts(db, now = () => Date.now(), drawId = randomAccoun
                     if (isThisMonth(identity.unlinked_at)) return { freeFrom: firstOfNextMonth(now()) };
                     await db.prepare('DELETE FROM identities WHERE provider = ? AND subject = ? AND unlinked_at IS NOT NULL').bind(provider, subject).run();
                 }
+                if (!create) return { unknown: true };
                 const user = await createAccount({ provider, subject, login });
                 if (user) return { user };
             }

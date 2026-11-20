@@ -5,18 +5,15 @@ import { createAccounts, OWN_IDS_FROM } from '../worker/accounts.js';
 import { handleRequest } from '../worker/api.js';
 import { CLIENT_SECRET_SECONDS } from '../worker/apple.js';
 import { STATE_COOKIE } from '../worker/oauth.js';
-import { NOTICE_COOKIE, SESSION_COOKIE } from '../worker/session.js';
+import { NOTICE_COOKIE, PENDING_COOKIE, SESSION_COOKIE } from '../worker/session.js';
 import { sqliteD1 } from '../scripts/sqlite-d1.mjs';
+import {
+    APPLE_ENV, KEYS, SUB, apple as appleAt, codeFor, jsonOf,
+} from './support/providers.mjs';
 
 const API = 'https://api.crossbind.dev';
 const SITE = 'https://crossbind.dev';
 const NOW = Date.parse('2026-11-20T10:00:00Z');
-// A key made for these tests alone, in the form of Apple's .p8: a PEM of PKCS #8.
-const KEYS = await webcrypto.subtle.generateKey({ name: 'ECDSA', namedCurve: 'P-256' }, true, ['sign', 'verify']);
-const PEM = `-----BEGIN PRIVATE KEY-----\n${Buffer.from(await webcrypto.subtle.exportKey('pkcs8', KEYS.privateKey)).toString('base64').match(/.{1,64}/g).join('\n')}\n-----END PRIVATE KEY-----\n`;
-const APPLE_ENV = {
-    APPLE_SERVICES_ID: 'dev.made-up.signin', APPLE_TEAM_ID: 'MADEUPTEAM', APPLE_KEY_ID: 'MADEUPKEY1', APPLE_PRIVATE_KEY: PEM,
-};
 const env = {
     SESSION_SECRET: 'a-session-secret-of-at-least-32-characters',
     GITHUB_CLIENT_ID: 'gh-id',
@@ -26,37 +23,8 @@ const env = {
     MIN_GITHUB_ACCOUNT_DAYS: '30',
     ...APPLE_ENV,
 };
-// A made-up Apple id, in the form of Apple's `sub`.
-const SUB = '000123.made0up0apple0id0for0tests.0456';
 const fromBase64Url = (text) => Buffer.from(text, 'base64url');
-const jsonOf = (part) => JSON.parse(fromBase64Url(part).toString());
-
-// Apple as the Worker asks it: its token endpoint gives an id_token for the code of the person `subject`, with the nonce
-// the authorize URL carried (the code holds it, as Apple keeps it with the code), and records each revoke.
-function apple({
-    subject = SUB, claims = {}, status = 200, refresh = 'made-up-refresh-token', revokeStatus = 200, extra = { email: 'made-up@example.com' },
-} = {}) {
-    const calls = { token: [], revoke: [] };
-    const fetcher = async (url, init) => {
-        const body = Object.fromEntries(new URLSearchParams(init.body));
-        if (url === 'https://appleid.apple.com/auth/revoke') {
-            calls.revoke.push(body);
-            return new Response(null, { status: revokeStatus });
-        }
-        assert.equal(url, 'https://appleid.apple.com/auth/token');
-        calls.token.push(body);
-        if (status !== 200) return Response.json({ error: 'invalid_grant' }, { status });
-        const { nonce } = jsonOf(body.code);
-        const payload = {
-            iss: 'https://appleid.apple.com', aud: APPLE_ENV.APPLE_SERVICES_ID, exp: Math.floor(NOW / 1000) + 600, iat: Math.floor(NOW / 1000), sub: subject, nonce, ...extra, ...claims,
-        };
-        const idToken = [{ alg: 'RS256', kid: 'made-up' }, payload].map((part) => Buffer.from(JSON.stringify(part)).toString('base64url')).join('.');
-        return Response.json({
-            access_token: 'made-up-access-token', token_type: 'Bearer', expires_in: 3600, id_token: `${idToken}.made-up-signature`, ...(refresh ? { refresh_token: refresh } : {}),
-        });
-    };
-    return { fetcher, calls };
-}
+const apple = (options = {}) => appleAt({ now: NOW, ...options });
 
 function setup({ fetcher = apple().fetcher, environment = env } = {}) {
     const db = sqliteD1();
@@ -71,7 +39,7 @@ function setup({ fetcher = apple().fetcher, environment = env } = {}) {
 const cookiesOf = (response) => Object.fromEntries(response.headers.getSetCookie().map((cookie) => cookie.split(';')[0].split(/=(.*)/s).slice(0, 2)));
 
 // A sign-in in one browser: the start, then Apple's answer at the callback, with the code `answer` makes of the URL.
-async function signIn(send, { start = '/account/login/apple', answer = (asked) => ({ code: Buffer.from(JSON.stringify({ nonce: asked.searchParams.get('nonce') })).toString('base64url'), state: asked.searchParams.get('state') }) } = {}) {
+async function signIn(send, { start = '/account/login/apple', answer = (asked) => ({ code: codeFor(asked), state: asked.searchParams.get('state') }) } = {}) {
     const started = await send(start);
     const asked = new URL(started.headers.get('location'));
     const back = new URL(`${API}/playground/callback/apple`);
@@ -148,13 +116,17 @@ test('exchanges the code with a client secret of five minutes signed by the key,
     assert.ok(!kept.includes('@') && !kept.includes('made-up-refresh-token'));
 });
 
-test('makes an account for an Apple ID crossbind does not know, named by the last four digits of its id', async () => {
+test('asks before it makes an account for an Apple ID crossbind does not know, then names it by the last four digits of its id', async () => {
     const { db, send } = setup();
 
     const { response } = await signIn(send);
-    const page = await (await send('/login', { cookie: `${SESSION_COOKIE}=${cookiesOf(response)[SESSION_COOKIE]}` })).text();
+    const made = await handleRequest(new Request(`${API}/account/new`, { method: 'POST', headers: { origin: API, cookie: `${PENDING_COOKIE}=${cookiesOf(response)[PENDING_COOKIE]}` } }), env, {
+        limits: { api: { limit: async () => ({ success: true }) } }, accounts: createAccounts(db, () => NOW, () => OWN_IDS_FROM + 1643), now: () => NOW,
+    });
+    const page = await (await send('/login', { cookie: `${SESSION_COOKIE}=${cookiesOf(made)[SESSION_COOKIE]}` })).text();
 
-    assert.equal(response.headers.get('location'), `${API}/login#login=ok`);
+    assert.deepEqual([response.headers.get('location'), cookiesOf(response)[SESSION_COOKIE]], [`${API}/login`, undefined]);
+    assert.deepEqual([made.status, made.headers.get('location')], [303, `${API}/login#login=ok`]);
     assert.deepEqual((await db.prepare('SELECT id, login FROM users').all()).results, [{ id: OWN_IDS_FROM + 1643, login: '' }]);
     assert.deepEqual((await db.prepare('SELECT provider, subject FROM identities').all()).results, [{ provider: 'apple', subject: SUB }]);
     assert.ok(page.includes(`Signed in as <strong>Apple account …${String(OWN_IDS_FROM + 1643).slice(-4)}</strong>.`));
@@ -163,7 +135,7 @@ test('makes an account for an Apple ID crossbind does not know, named by the las
 test('signs nobody in on an answer that is not this sign-in\'s, and revokes what Apple gave all the same', async () => {
     const tries = {
         'Apple\'s cancel': [{}, (asked) => ({ error: 'user_cancelled_authorize', state: asked.searchParams.get('state') })],
-        'another state': [{}, (asked) => ({ code: Buffer.from(JSON.stringify({ nonce: asked.searchParams.get('nonce') })).toString('base64url'), state: 'made-up-state' })],
+        'another state': [{}, (asked) => ({ code: codeFor(asked), state: 'made-up-state' })],
         'another nonce': [{}, (asked) => ({ code: Buffer.from(JSON.stringify({ nonce: 'made-up-nonce' })).toString('base64url'), state: asked.searchParams.get('state') })],
         'Apple\'s 400': [{ status: 400 }],
         'another issuer': [{ claims: { iss: 'https://evil.example' } }],
@@ -225,6 +197,10 @@ test('signs in when Apple refuses the revoke, logging its status alone, and neve
     const lines = t.mock.method(console, 'log', () => {});
     const refusing = apple({ revokeStatus: 503 });
     const ok = setup({ fetcher: refusing.fetcher });
+    await ok.db.batch([
+        ok.db.prepare("INSERT INTO users (id, login, created_at, last_login_at) VALUES (583231, 'made_up_dev', ?1, ?1)").bind(new Date(NOW).toISOString()),
+        ok.db.prepare("INSERT INTO identities (provider, subject, user_id, created_at) VALUES ('apple', ?2, 583231, ?1)").bind(new Date(NOW).toISOString(), SUB),
+    ]);
     const lying = setup({ fetcher: apple({ claims: { iss: 'https://evil.example' } }).fetcher });
 
     const { response } = await signIn(ok.send);

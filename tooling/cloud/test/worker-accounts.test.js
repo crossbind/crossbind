@@ -75,6 +75,17 @@ test('signs an account made before identities in as itself, by its identity and 
     ]);
 });
 
+test('answers an identity it does not know with { unknown } and writes nothing, when the page is to ask before making its account', async () => {
+    const { db, accounts } = setup();
+
+    const asked = await accounts.signIn(madeUp, { create: false });
+    const made = await accounts.signIn(madeUp);
+
+    assert.deepEqual(asked, { unknown: true });
+    assert.deepEqual(made, signedInAs(OWN[0], 'made_up_two'));
+    assert.deepEqual(await rows(db, 'SELECT id FROM users'), [{ id: OWN[0] }]);
+});
+
 test('reports a blocked account at sign-in and when asked', async () => {
     const { db, accounts } = setup();
     await accountOfToday(db, octocat);
