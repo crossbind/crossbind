@@ -1,7 +1,7 @@
 import { userKey } from './accounts.js';
 import { log } from './http.js';
 import {
-    signSession, sessionCookie, clearCookie, readCookie, randomToken, SESSION_COOKIE, SESSION_TTL_MS,
+    signSession, sessionCookie, clearCookie, readCookie, randomToken, toBase64Url, SESSION_COOKIE, SESSION_TTL_MS,
 } from './session.js';
 import { numberOr } from './settings.js';
 
@@ -39,13 +39,13 @@ export const minAccountDays = (env) => numberOr(env.MIN_GITHUB_ACCOUNT_DAYS, DEF
 
 // Neither flow asks for a scope: an id and a name are all a sign-in needs. A fresh GitHub account per day would
 // multiply the daily limits, so young accounts are turned away.
-async function githubAccount(accessToken, env, fetcher, now) {
+async function githubIdentity(accessToken, env, fetcher, now) {
     const user = await json(await fetcher(USER_URL, {
         headers: { authorization: `Bearer ${accessToken}`, accept: 'application/vnd.github+json', 'user-agent': 'crossbind-cloud' },
     }));
     if (!Number.isSafeInteger(user.id) || typeof user.login !== 'string') throw new LoginFailed('GitHub sent no user');
     if (!(now - Date.parse(user.created_at) >= minAccountDays(env) * DAY_MS)) return { failure: 'too-new' };
-    return { account: { id: String(user.id), login: user.login.slice(0, MAX_NAME_LENGTH) } };
+    return { identity: { provider: 'github', subject: String(user.id), login: user.login.slice(0, MAX_NAME_LENGTH) } };
 }
 
 const callbackUrl = (request) => `${new URL(request.url).origin}/playground/callback/github`;
@@ -56,12 +56,18 @@ function redirect(location, cookies) {
     return new Response(null, { status: 302, headers });
 }
 
-export function startLogin(request, env) {
+// PKCE (S256) binds GitHub's code to this browser: the verifier waits in its HttpOnly cookie beside the state, so a code
+// caught on its way is worth nothing in another browser.
+export async function startLogin(request, env) {
     if (!isLoginConfigured(env)) return Response.json({ error: 'Signing in with GitHub is not set up.' }, { status: 503 });
     const state = randomToken();
+    const verifier = randomToken();
+    const challenge = toBase64Url(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(verifier)));
     const url = new URL(AUTHORIZE_URL);
-    Object.entries({ client_id: env.GITHUB_CLIENT_ID, redirect_uri: callbackUrl(request), state }).forEach(([key, value]) => url.searchParams.set(key, value));
-    return redirect(url.href, [sessionCookie(STATE_COOKIE, state, STATE_TTL_SECONDS)]);
+    Object.entries({
+        client_id: env.GITHUB_CLIENT_ID, redirect_uri: callbackUrl(request), state, code_challenge: challenge, code_challenge_method: 'S256',
+    }).forEach(([key, value]) => url.searchParams.set(key, value));
+    return redirect(url.href, [sessionCookie(STATE_COOKIE, `${state}.${verifier}`, STATE_TTL_SECONDS)]);
 }
 
 // Always returns to the configured playground page, never to an address the request names.
@@ -70,19 +76,26 @@ export async function finishLogin(request, env, { fetcher = fetch, now = Date.no
     const params = new URL(request.url).searchParams;
     if (params.get('error')) return back('cancelled');
     const state = params.get('state');
-    if (!state || readCookie(request, STATE_COOKIE) !== state) return back('failed');
+    const [expected, verifier] = readCookie(request, STATE_COOKIE)?.split('.') ?? [];
+    if (!state || state !== expected || !verifier) return back('failed');
     try {
         const token = await json(await post(fetcher, TOKEN_URL, {
-            client_id: env.GITHUB_CLIENT_ID, client_secret: env.GITHUB_CLIENT_SECRET, code: params.get('code') ?? '', redirect_uri: callbackUrl(request),
+            client_id: env.GITHUB_CLIENT_ID,
+            client_secret: env.GITHUB_CLIENT_SECRET,
+            code: params.get('code') ?? '',
+            redirect_uri: callbackUrl(request),
+            code_verifier: verifier,
         }));
         if (typeof token.access_token !== 'string') throw new LoginFailed('GitHub sent no access token');
-        const { account, failure } = await githubAccount(token.access_token, env, fetcher, now);
+        const { identity, failure } = await githubIdentity(token.access_token, env, fetcher, now);
         if (failure) return back(failure);
-        if ((await accounts.signIn(account)).blocked) {
-            log({ event: 'blocked-sign-in', who: userKey(account.id) });
+        const { user, freeFrom } = await accounts.signIn(identity);
+        if (freeFrom) return back('held');
+        if (user.blocked) {
+            log({ event: 'blocked-sign-in', who: userKey(user.id) });
             return back('blocked');
         }
-        const session = await signSession({ id: account.id, name: account.login }, env.SESSION_SECRET, now);
+        const session = await signSession({ id: user.id, name: user.login }, env.SESSION_SECRET, now);
         return back('ok', [sessionCookie(SESSION_COOKIE, session, SESSION_TTL_MS / 1000)]);
     } catch (error) {
         log({ event: 'login-failed', message: error.message });
@@ -111,5 +124,5 @@ export async function pollDeviceCode(deviceCode, env, { fetcher = fetch, now = D
         return { failure: DEVICE_OUTCOMES[answer.error] ?? 'failed' };
     }
     if (typeof answer.access_token !== 'string') throw new LoginFailed('GitHub sent no access token');
-    return githubAccount(answer.access_token, env, fetcher, now);
+    return githubIdentity(answer.access_token, env, fetcher, now);
 }

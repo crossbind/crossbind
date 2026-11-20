@@ -95,7 +95,7 @@ test('compiles for a signed-in user without the browser check, against their own
     const response = await handleRequest(compileRequest({ cookie: `${SESSION_COOKIE}=${session}`, body: { files } }), env, deps);
 
     assert.equal(response.status, 200);
-    assert.deepEqual(calls.reserve, [{ key: 'github:583231', limit: 100, globalLimit: 1000 }]);
+    assert.deepEqual(calls.reserve, [{ key: 'user:583231', limit: 100, globalLimit: 1000 }]);
     assert.equal(calls.siteverify.length, 0);
 });
 

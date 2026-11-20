@@ -18,6 +18,8 @@ const dev = { id: '8000000001', login: 'made_up_dev' };
 const rows = async (db, sql) => (await db.prepare(sql).all()).results;
 const rowsOf = (db, sql) => db.prepare(sql).all().map((row) => ({ ...row }));
 const github = (id, createdAt) => ({ provider: 'github', subject: String(id), user_id: id, created_at: createdAt, unlinked_at: null });
+// An account as the code before identities made one: under its GitHub id.
+const accountOfToday = (db, { id, login }) => db.prepare('INSERT INTO users (id, login, created_at, last_login_at) VALUES (?1, ?2, ?3, ?3)').bind(id, login, AT).run();
 
 // A database as 0001 leaves it, as every deployed one was before 0002.
 function databaseBefore() {
@@ -70,18 +72,19 @@ test('gives an account made under a GitHub id its identity, and an id of crossbi
     assert.deepEqual(await rows(db, 'SELECT * FROM identities ORDER BY user_id'), [github(8000000001, AT), github(OWN_IDS_FROM - 1, AT)]);
 });
 
-test('keeps today\'s sign-in, tokens and deletion as they are, a deleted account that signs in again this month included', async () => {
+test('signs an account made before it in as itself through that identity, a deleted account that signs in again this month included', async () => {
     const db = sqliteD1();
     const accounts = createAccounts(db, () => NOW);
-    await accounts.signIn(dev);
-    await accounts.signIn(dev);
+    const identity = { provider: 'github', subject: dev.id, login: dev.login };
+    await accountOfToday(db, dev);
+    await accounts.signIn(identity);
     await accounts.addBuildSeconds(dev.id, NOW, 'web', 600);
     await accounts.deleteAccount(dev.id);
 
-    assert.deepEqual(await accounts.signIn(dev), { ...dev, blocked: false });
+    assert.deepEqual(await accounts.signIn(identity), { user: { ...dev, blocked: false } });
     const token = await accounts.issueToken(dev.id);
 
-    assert.deepEqual(await accounts.userOfToken(token), { ...dev, blocked: false });
+    assert.deepEqual(await accounts.userOfToken(token), { ...dev, blocked: false, kind: 'cli' });
     assert.deepEqual(await rows(db, 'SELECT kind, label FROM tokens'), [{ kind: 'cli', label: 'crossbind CLI' }]);
     assert.deepEqual(await rows(db, 'SELECT * FROM identities'), [github(8000000001, AT)]);
     assert.equal((await accounts.buildBudget(dev.id, NOW)).mine, 600);
@@ -90,7 +93,7 @@ test('keeps today\'s sign-in, tokens and deletion as they are, a deleted account
 test('takes an account\'s sessions and the device codes it approved with its row, and refuses either for no account', async () => {
     const db = sqliteD1();
     const accounts = createAccounts(db, () => NOW);
-    await accounts.signIn(dev);
+    await accountOfToday(db, dev);
     const session = (id, userId) => db.prepare(`INSERT INTO sessions (id, user_id, source, project_id, project_name, addresses, protocol, key, created_at, expires_at)
         VALUES (?, ?, 'snapshot', 'made-up-project', 'made-up-app', '[]', 1, 'made-up-key', ?, ?)`).bind(id, userId, AT, AT).run();
     const deviceCode = (hash, userCode, userId) => db.prepare(`INSERT INTO device_codes (hash, user_code, client, label, created_at, expires_at, user_id)
@@ -136,14 +139,14 @@ test('takes a deleted account\'s identities with its row, or with the prune of i
     const accounts = createAccounts(db, () => now);
     const holders = async () => (await rows(db, 'SELECT user_id FROM identities ORDER BY user_id')).map((row) => row.user_id);
     const [idle, spent, live, blocked, late] = ['8000000001', '8000000002', '8000000003', '8000000004', '8000000005'];
-    for (const id of [idle, spent, live, blocked, late]) await accounts.signIn({ id, login: `made_up_${id.at(-1)}` });
+    for (const id of [idle, spent, live, blocked, late]) await accountOfToday(db, { id, login: `made_up_${id.at(-1)}` });
     await accounts.addBuildSeconds(spent, NOW, 'web', 600);
     await accounts.addBuildSeconds(live, Date.parse('2026-07-10T10:00:00Z'), 'web', 10);
     await db.prepare('UPDATE users SET blocked = 1 WHERE id = ?').bind(blocked).run();
 
     for (const id of [idle, spent, blocked]) await accounts.deleteAccount(id);
     const afterDeletion = await holders();
-    const back = await accounts.signIn({ id: spent, login: 'made_up_2' });
+    const { user: back } = await accounts.signIn({ provider: 'github', subject: spent, login: 'made_up_2' });
     const monthSpent = (await accounts.buildBudget(spent, now)).mine;
     await accounts.deleteAccount(spent);
     // An account deleted as the month ends, whose runner is metered once more, into the next month.
@@ -174,15 +177,19 @@ const UNDO = [
 ];
 const SCHEMA = 'SELECT type, name, tbl_name, sql FROM sqlite_master ORDER BY name';
 
-test('only adds: dropping what it added leaves the schema before it, with its accounts and tokens working', async () => {
+test('only adds: dropping what it added leaves the schema before it, with its accounts and tokens', async () => {
     const db = sqliteD1();
     const accounts = createAccounts(db, () => NOW);
-    await accounts.signIn(dev);
-    const token = await accounts.issueToken(dev.id);
+    await accountOfToday(db, dev);
+    await accounts.issueToken(dev.id);
 
     for (const statement of UNDO) await db.prepare(statement).run();
+    await accounts.issueToken(dev.id);
 
     assert.deepEqual(await rows(db, SCHEMA), rowsOf(databaseBefore(), SCHEMA));
-    assert.deepEqual(await accounts.userOfToken(token), { ...dev, blocked: false });
-    assert.deepEqual(await accounts.userOfToken(await accounts.issueToken(dev.id)), { ...dev, blocked: false });
+    // A token made before the undo and one made after it, read as the code before identities read them.
+    assert.deepEqual(await rows(db, 'SELECT users.id, users.login, users.blocked FROM tokens JOIN users ON users.id = tokens.user_id'), [
+        { id: 8000000001, login: 'made_up_dev', blocked: 0 },
+        { id: 8000000001, login: 'made_up_dev', blocked: 0 },
+    ]);
 });

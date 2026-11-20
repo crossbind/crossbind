@@ -12,7 +12,7 @@ async function setup({ overLimit = {}, runnerThrows = false } = {}) {
     let now = NOW;
     const db = sqliteD1();
     const accounts = createAccounts(db, () => now);
-    await accounts.signIn({ id: '583231', login: 'octocat' });
+    await db.prepare("INSERT INTO users (id, login, created_at, last_login_at) VALUES (583231, 'octocat', '', '')").run();
     const token = await accounts.issueToken('583231');
     const forwarded = [];
     const limited = { api: [], runner: [] };
@@ -86,6 +86,17 @@ test('answers 401 without a valid token and 403 to a blocked account, before any
     await db.prepare('UPDATE users SET blocked = 1').run();
 
     assert.deepEqual([...statuses, (await call('/web/v1/exec')).status], [401, 401, 403]);
+    assert.equal(forwarded.length, 0);
+});
+
+test('refuses a token of the crossbind app, which builds nothing, before any runner wakes', async () => {
+    const { db, forwarded, call } = await setup();
+    await db.prepare("UPDATE tokens SET kind = 'app'").run();
+
+    const response = await call('/web/v1/exec');
+
+    assert.equal(response.status, 403);
+    assert.deepEqual(await response.json(), { error: 'This token cannot be used here.' });
     assert.equal(forwarded.length, 0);
 });
 
