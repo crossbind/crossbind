@@ -47,7 +47,41 @@ Value presentationOf(UNNotificationPresentationOptions options) {
                                {"sound", (options & UNNotificationPresentationOptionSound) != 0}, {"badge", (options & UNNotificationPresentationOptionBadge) != 0}});
 }
 
+#if !TARGET_OS_IPHONE
+// Whether the view, or one within it, is a text field of this text, as an alert shows its message.
+bool showsText(NSView *view, NSString *text) {
+    if ([view isKindOfClass:NSTextField.class] && [((NSTextField *)view).stringValue isEqualToString:text]) return true;
+    for (NSView *subview in view.subviews) {
+        if (showsText(subview, text)) return true;
+    }
+    return false;
+}
+#endif
+
 }  // namespace
+
+void closeMessageDialog(const std::string &message, std::function<void(bool)> done) {
+    NSString *text = @(message.c_str());
+#if TARGET_OS_IPHONE
+    crossbind::onMainThread([text, done] {
+        UIViewController *top = ((__bridge UIWindow *)crossbind::appWindow()).rootViewController;
+        while (top.presentedViewController) top = top.presentedViewController;
+        const bool isShown = [top isKindOfClass:UIAlertController.class] && [top.title isEqualToString:text];
+        if (isShown) [top dismissViewControllerAnimated:NO completion:nil];
+        done(isShown);
+    });
+#else
+    // The alert's modal loop runs in a block of the main queue, which holds the queue's next ones, so this runs in the
+    // loop's own mode.
+    CFRunLoopPerformBlock(CFRunLoopGetMain(), (__bridge CFArrayRef) @[ NSModalPanelRunLoopMode, NSDefaultRunLoopMode ], ^{
+      NSWindow *modal = NSApp.modalWindow;
+      const bool isShown = modal && showsText(modal.contentView, text);
+      if (isShown) [NSApp abortModal];
+      done(isShown);
+    });
+    CFRunLoopWakeUp(CFRunLoopGetMain());
+#endif
+}
 
 void tellActive(bool isActive) {
 #if TARGET_OS_IPHONE

@@ -4,8 +4,15 @@
 #ifdef __cplusplus
 #include "crossbind/extension.h"
 
+#include <functional>
+#include <string>
+
 // What the probe adds on its platform alone, from the source of the platform's.
 void probePlatform(crossbind::Registry &registry);
+
+// Closes the message dialog the app shows of this message, as its user would, from any thread: done gets whether one
+// showed. Windows' task dialog tells no text, so there the app's one dialog closes.
+void closeMessageDialog(const std::string &message, std::function<void(bool)> done);
 
 // The probe's origins and its fetch, from origins.cpp.
 void probeOrigins(crossbind::Registry &registry);

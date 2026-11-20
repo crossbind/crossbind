@@ -206,6 +206,10 @@ void addPageFunctions(crossbind::Registry &registry) {
         std::lock_guard<std::mutex> lock(originsMutex);
         call.resolve(Value(reports));
     });
+    // The message dialog a page showed, closed as its user would: whether one of the message showed.
+    registry.function("probe.closeDialog", PAGES, [](Call call) {
+        closeMessageDialog(call.options()["message"].asString(), [call](bool isShown) { call.resolve(isShown); });
+    });
 }
 
 // The host's fetch() of a URL: its status, headers, size and short text, whether its bytes are those the endpoint makes,

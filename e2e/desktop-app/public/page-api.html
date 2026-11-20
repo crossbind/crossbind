@@ -9,11 +9,16 @@
 // A page of the project's origin, which src/served-origins.js opens there, with no crossbind.js of the app's: it imports
 // crossbind/app from /__crossbind/app.js, which the host answers from the app's own files, and tells the app's page what
 // it got. An app's function is refused naming the page's role, also once globalThis.Crossbind is what a web build's
-// crossbind.js makes it.
+// crossbind.js makes it; dialog.message, which the role project reaches, shows the system's dialog, which waits for its
+// user until the probe closes it.
 (async () => {
+    const QUIET_MS = 3000;
+    const ANSWER_MS = 10000;
+    const MESSAGE = "crossbind e2e: a project's dialog";
     const name = location.hostname.split('.')[0];
     const failure = (error) => `${error?.name ?? 'Error'}: ${error?.message ?? error}`;
     const answered = (promise) => promise.then((value) => `answered ${JSON.stringify(value)}`, failure);
+    const within = (promise, ms, otherwise) => Promise.race([promise, new Promise((resolve) => { setTimeout(() => resolve(otherwise), ms); })]);
     let api;
     try {
         api = await import('/__crossbind/app.js');
@@ -28,6 +33,12 @@
         got.paths = await answered(api.app.paths());
         globalThis.Crossbind = { initNative: () => Promise.resolve({}) };
         got.pathsAfter = await answered(api.app.paths());
+        const shown = answered(api.dialog.message({ message: MESSAGE }));
+        got.dialog = await within(shown, QUIET_MS, 'shown');
+        if (got.dialog === 'shown') {
+            got.closed = await api.invoke('probe.closeDialog', { message: MESSAGE }).catch(failure);
+            got.dialogClosed = await within(shown, ANSWER_MS, 'no answer once closed');
+        }
     } catch (error) {
         got.failure = failure(error);
     }
