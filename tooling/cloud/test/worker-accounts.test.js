@@ -479,6 +479,7 @@ test(`keeps the ${MAX_APP_TOKENS_PER_USER} most recently used tokens of the cros
         apps.push(await accounts.issueToken(octocat.id, { kind: 'app', label: `crossbind app 1.0.${count} on iOS 27.1` }));
     }
 
+    assert.equal(MAX_APP_TOKENS_PER_USER, 10);
     assert.deepEqual(await rows(db, 'SELECT kind, count(1) AS kept FROM tokens GROUP BY kind ORDER BY kind'), [{ kind: 'app', kept: MAX_APP_TOKENS_PER_USER }, { kind: 'cli', kept: 1 }]);
     assert.equal(await accounts.userOfToken(apps[0]), null);
     assert.deepEqual([(await accounts.userOfToken(apps[1])).kind, (await accounts.userOfToken(cli)).kind], ['app', 'cli']);

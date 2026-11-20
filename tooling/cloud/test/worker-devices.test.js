@@ -142,6 +142,14 @@ test('starts a device\'s sign-in with a code of eight letters and the cloud\'s o
     ]);
 });
 
+test('keeps no country where Cloudflare reads none: XX, its unknown, nor T1, which names none either', async () => {
+    const context = setup();
+
+    for (const country of ['XX', 'T1', 'tr', 'TUR']) await start(context, CLI, { country });
+
+    assert.deepEqual(await rows(context.db, 'SELECT country FROM device_codes'), Array(4).fill({ country: null }));
+});
+
 test('refuses a start out of its form, free text included, and writes nothing', async () => {
     const context = setup({ limits: { login: limiter() } });
     const bodies = [
@@ -244,20 +252,52 @@ test('gives a code one try: a wrong number ends it, and the right one after it g
     assert.deepEqual(await rows(context.db, 'SELECT count(1) AS tokens FROM tokens'), [{ tokens: 0 }]);
 });
 
-test('gives numbers sent at once one try between them: three of them, or the right one three times, get one token at most', async () => {
-    const context = setup();
-    const { user } = await context.accounts.signIn(dev);
-    const mixed = await approved(context, user);
-    const repeated = await approved(context, user);
+// A database on which `polls` polls each read their code before any compares its number: the race that the one
+// statement closes, as each would otherwise have found the code approved.
+function racedAt(db, polls) {
+    let read = 0;
+    let allRead;
+    const reading = new Promise((resolve) => { allRead = resolve; });
+    const wrap = (sql, statement) => ({
+        bind: (...values) => wrap(sql, statement.bind(...values)),
+        async first(column) {
+            if (sql.startsWith('UPDATE device_codes SET state = CASE')) await reading;
+            const row = await statement.first(column);
+            if (sql.startsWith('SELECT state, expires_at FROM device_codes')) {
+                read += 1;
+                if (read === polls) allRead();
+            }
+            return row;
+        },
+        all: () => statement.all(),
+        run: () => statement.run(),
+    });
+    return { ...db, prepare: (sql) => wrap(sql, db.prepare(sql)) };
+}
 
-    const guesses = await Promise.all([otherThan(mixed.match), mixed.match, otherThan(otherThan(mixed.match))].map((match) => poll(context, mixed.started.device_code, match)));
-    const sameNumber = await Promise.all([1, 2, 3].map(() => poll(context, repeated.started.device_code, repeated.match)));
-    const signedByGuesses = guesses.filter((answer) => answer.status === 200).length;
+test('gives numbers sent at once one try between them, though each poll read the code approved before any compared', async () => {
+    const outcomes = [];
+    for (const numbers of [(match) => [match, match, match], (match) => [otherThan(match), match, otherThan(otherThan(match))]]) {
+        const context = setup();
+        const { user } = await context.accounts.signIn(dev);
+        const { started, match } = await approved(context, user);
+        context.deps.devices = createDeviceCodes(racedAt(context.db, 3), () => NOW);
 
-    assert.ok(signedByGuesses <= 1);
-    assert.deepEqual(sameNumber.map((answer) => answer.status).sort(), [200, 400, 400]);
-    assert.deepEqual(await rows(context.db, 'SELECT count(1) AS tokens FROM tokens'), [{ tokens: 1 + signedByGuesses }]);
-    assert.notEqual((await poll(context, mixed.started.device_code, mixed.match)).status, 200);
+        const answers = await Promise.all(numbers(match).map((each) => poll(context, started.device_code, each)));
+
+        outcomes.push({
+            statuses: answers.map((answer) => answer.status),
+            tokens: (await rows(context.db, 'SELECT count(1) AS tokens FROM tokens'))[0].tokens,
+            state: (await rows(context.db, 'SELECT state FROM device_codes'))[0].state,
+        });
+    }
+
+    // The right number three times signs in once. Of three numbers, whichever is compared first ends the code: a token
+    // at most, and the code used only if the right number came first.
+    const [same, mixed] = outcomes;
+    const signedIn = mixed.statuses.filter((status) => status === 200).length;
+    assert.deepEqual(same, { statuses: [200, 400, 400], tokens: 1, state: 'used' });
+    assert.ok(signedIn <= 1 && mixed.tokens === signedIn && mixed.state === (signedIn === 1 ? 'used' : 'denied'), JSON.stringify(mixed));
 });
 
 test('ends a code after ten minutes, approved or not, for the device and the page', async () => {
@@ -328,13 +368,21 @@ test('signs no device in for an account blocked since its approval, and none for
 
 test('draws user codes and numbers without bias: in 100,000 draws each letter, and each number of 10 to 99, falls within its expected range', () => {
     const DRAWS = 100_000;
-    const letters = new Map([...CODE_LETTERS].map((letter) => [letter, 0]));
-    const numbers = new Map(Array.from({ length: MATCH_TO - MATCH_FROM + 1 }, (_, index) => [MATCH_FROM + index, 0]));
+    // RFC 8628 6.1's set: no vowel, and nothing that passes for a digit.
+    const letters = new Map([...'BCDFGHJKLMNPQRSTVWXZ'].map((letter) => [letter, 0]));
+    const numbers = new Map(Array.from({ length: 90 }, (_, index) => [10 + index, 0]));
+    const outsideTheSets = [];
 
     for (let draw = 0; draw < DRAWS; draw += 1) {
-        for (const letter of drawUserCode()) letters.set(letter, letters.get(letter) + 1);
+        const code = drawUserCode();
+        if (code.length !== 8) outsideTheSets.push(code);
+        for (const letter of code) {
+            if (letters.has(letter)) letters.set(letter, letters.get(letter) + 1);
+            else outsideTheSets.push(letter);
+        }
         const match = drawMatch();
-        numbers.set(match, numbers.get(match) + 1);
+        if (numbers.has(match)) numbers.set(match, numbers.get(match) + 1);
+        else outsideTheSets.push(match);
     }
 
     // Six standard deviations each side: a fair draw falls outside about once in five hundred million, while
@@ -344,9 +392,10 @@ test('draws user codes and numbers without bias: in 100,000 draws each letter, a
         const spread = 6 * Math.sqrt(total * share * (1 - share));
         return [...counts].filter(([, count]) => Math.abs(count - total * share) > spread).map(([value]) => value);
     };
-    assert.equal(letters.size, 20);
+    assert.deepEqual(outsideTheSets.slice(0, 5), []);
+    assert.equal(CODE_LETTERS, 'BCDFGHJKLMNPQRSTVWXZ');
+    assert.deepEqual([MATCH_FROM, MATCH_TO], [10, 99]);
     assert.deepEqual(outside(letters, DRAWS * 8), []);
-    assert.equal(numbers.size, 90);
     assert.deepEqual(outside(numbers, DRAWS), []);
 });
 
