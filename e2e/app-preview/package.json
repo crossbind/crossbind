@@ -1,0 +1,15 @@
+{
+    "name": "@crossbind/e2e-app-preview",
+    "version": "0.0.0",
+    "private": true,
+    "description": "crossbind - a page of JavaScript alone, which the conformance app opens as a preview",
+    "license": "MIT",
+    "type": "module",
+    "dependencies": {
+        "@crossbind/core-app-host": "workspace:^",
+        "@crossbind/extension-clipboard": "workspace:^",
+        "@crossbind/plugin-vite": "workspace:^",
+        "crossbind": "workspace:^",
+        "vite": "^8.2.1"
+    }
+}

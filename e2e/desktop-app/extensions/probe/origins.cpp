@@ -60,10 +60,10 @@ std::string escaped(const std::string &path) {
     return out;
 }
 
-// Each GET and HEAD of the origin is a fetch of its source with the request's Accept, Accept-Language and Range alone.
-// The answer passes with its status and the headers PASSED names; a failure, and a redirect elsewhere, which no web view
-// follows for an app's origin, answer 502 with the reason.
-void proxy(const std::string &name, const std::string &source, crossbind::Request request) {
+// Each GET and HEAD of the origin is a fetch of its source with the request's Accept, Accept-Language and Range alone,
+// and a preview's gate token where it has one. The answer passes with its status and the headers PASSED names; a
+// failure, and a redirect elsewhere, which no web view follows for an app's origin, answer 502 with the reason.
+void proxy(const std::string &name, const std::string &source, const std::string &previewToken, crossbind::Request request) {
     {
         std::lock_guard<std::mutex> lock(originsMutex);
         handled[name] += 1;
@@ -72,6 +72,7 @@ void proxy(const std::string &name, const std::string &source, crossbind::Reques
     const bool isDown = request.path().rfind("/down/", 0) == 0;
     const std::string url = (isDown ? DOWN_SOURCE : source) + escaped(request.path()) + (request.query().empty() ? "" : "?" + request.query());
     crossbind::Request::Headers headers;
+    if (!previewToken.empty()) headers.emplace_back("X-Crossbind-Preview", previewToken);
     for (const char *header : {"Accept", "Accept-Language", "Range"}) {
         const std::string value = request.header(header);
         if (!value.empty()) headers.emplace_back(header, value);
@@ -95,11 +96,14 @@ void proxy(const std::string &name, const std::string &source, crossbind::Reques
 
 void addOriginFunctions(crossbind::Registry &registry) {
     // Serves an origin of the role project under this name, whose handler is the proxy of the source given, the run's
-    // endpoint's page by default, and gives its URL.
+    // endpoint's page by default, with a preview's gate token where it is given, and gives its URL.
     registry.function("probe.serveOrigin", [](Call call) {
         const std::string name = call.options()["name"].asString();
         const std::string source = call.options()["source"].asString(SOURCE);
-        const crossbind::Origin origin = crossbind::serveOrigin(name, "project", [name, source](crossbind::Request request) { proxy(name, source, std::move(request)); });
+        const std::string previewToken = call.options()["previewToken"].asString("");
+        const crossbind::Origin origin = crossbind::serveOrigin(name, "project", [name, source, previewToken](crossbind::Request request) {
+            proxy(name, source, previewToken, std::move(request));
+        });
         std::lock_guard<std::mutex> lock(originsMutex);
         origins.insert_or_assign(name, origin);
         call.resolve(origin.url());
