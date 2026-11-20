@@ -177,77 +177,126 @@ async function until(read, ms = 30_000) {
     throw new Error(`waited ${ms / 1000} s in vain`);
 }
 
+// How long a device's step waits for the page or a client before its check fails.
+const STEP_MS = 15_000;
+
+// A check whose steps may throw: what threw fails it, with its first line, and the run goes on.
+async function step(name, run) {
+    try {
+        const { ok, detail } = await run();
+        check(name, ok, detail);
+    } catch (error) {
+        check(name, false, error.message.split('\n')[0]);
+    }
+}
+
 // A code entered on the device page as its person types it, then approved or denied there: the words the page shows of
 // what asked, what it says after, and the number it shows once approved.
 async function decideOnPage(page, typed, approve = true) {
     await page.goto(`${API}/device`);
-    await page.fill('#user-code', typed);
+    await page.fill('#user-code', typed, { timeout: STEP_MS });
     await page.click('button:has-text("Continue")');
-    await page.waitForSelector('#device-asked:not([hidden])');
+    await page.waitForSelector('#device-asked:not([hidden])', { timeout: STEP_MS });
     const words = await page.textContent('#device-words');
     await page.click(`#device-asked button:has-text("${approve ? 'Approve' : 'Deny'}")`);
-    const said = await (await page.waitForSelector('#device-said:not([hidden])')).textContent();
+    const said = await (await page.waitForSelector('#device-said:not([hidden])', { timeout: STEP_MS })).textContent();
     return { words, said, number: Number(/^Type (\d{2}) on your device\. It gets one try\.$/.exec(said)?.[1]) };
+}
+
+// scripts/device-check.mjs playing the app: the code it prints entered on the page, and the number read there typed into
+// it once it asks.
+async function deviceCheck(page) {
+    const checker = spawn(process.execPath, [path.join(PACKAGE_DIR, 'scripts/device-check.mjs'), '--url', API], { stdio: ['pipe', 'pipe', 'pipe'] });
+    let printed = '';
+    checker.stdout.on('data', (chunk) => { printed += chunk; });
+    checker.stderr.on('data', (chunk) => { printed += chunk; });
+    const exited = new Promise((resolve) => { checker.on('close', resolve); });
+    try {
+        const shown = await until(() => /enter the code ([A-Z]{4}-[A-Z]{4})/.exec(printed)?.[1], STEP_MS);
+        const app = await decideOnPage(page, ` ${shown.toLowerCase().replace('-', ' ')} `);
+        await until(() => printed.includes('type it here'), STEP_MS);
+        checker.stdin.end(`${app.number}\n`);
+        const status = await exited;
+        // An answer piped in is not echoed, so the check after the question shares its line.
+        const passes = printed.match(/(?:PASS|FAIL) [^\n]*/g) ?? [];
+        return {
+            ok: status === 0 && app.words === `The crossbind app 0.0.0 on macOS 0.0 asked just now, from ${COUNTRY_NAME}, to sign in as ${NAME}.` && passes.length === 4 && passes.every((line) => line.startsWith('PASS')),
+            detail: `${app.words} ${app.said} ${passes.join('; ')}`,
+        };
+    } finally {
+        checker.kill();
+    }
+}
+
+// crossbind login's own code, its question answered with the number read off the page. Answers its token too.
+async function cliSignInOnPage(page) {
+    const home = fs.mkdtempSync(path.join(os.tmpdir(), 'crossbind-cloud-local-cli-'));
+    try {
+        const credentials = path.join(home, 'credentials.json');
+        let printed = '';
+        let typeNumber;
+        const typed = new Promise((resolve) => { typeNumber = resolve; });
+        const signingIn = cliLogin({
+            url: API, version: CROSSBIND_VERSION, file: credentials, print: (line) => { printed += `${line}\n`; }, ask: async () => String(await typed), isTerminal: () => true,
+        });
+        // A step that fails leaves the sign-in polling until the Worker stops: its end is no part of the run then.
+        signingIn.catch(() => {});
+        const code = await until(() => /enter the code ([A-Z]{4}-[A-Z]{4})/.exec(printed)?.[1], STEP_MS);
+        const cli = await decideOnPage(page, code);
+        typeNumber(cli.number);
+        const { login } = await signingIn;
+        const token = JSON.parse(fs.readFileSync(credentials, 'utf8'))[API].token;
+        return {
+            token, ok: login === NAME && cli.words.startsWith(`The crossbind CLI ${CROSSBIND_VERSION} asked`) && await usage(token) === 200, detail: `${printed.trim()} ${cli.words}`,
+        };
+    } finally {
+        fs.rmSync(home, { recursive: true, force: true });
+    }
 }
 
 // A device's sign-in, approved on the device page by `page`, signed in to the stand-in's account: the app played by
 // scripts/device-check.mjs, which reads the number from its input, and the CLI by crossbind login's own code; a denial;
 // the site refused; and the device page's own sign-in. Answers the CLI's token.
 async function runDevice(browser, page) {
-    const checker = spawn(process.execPath, [path.join(PACKAGE_DIR, 'scripts/device-check.mjs'), '--url', API], { stdio: ['pipe', 'pipe', 'pipe'] });
-    let printed = '';
-    checker.stdout.on('data', (chunk) => { printed += chunk; });
-    checker.stderr.on('data', (chunk) => { printed += chunk; });
-    const exited = new Promise((resolve) => { checker.on('close', resolve); });
-    const shown = await until(() => /enter the code ([A-Z]{4}-[A-Z]{4})/.exec(printed)?.[1]);
-    const app = await decideOnPage(page, ` ${shown.toLowerCase().replace('-', ' ')} `);
-    await until(() => printed.includes('type it here'));
-    checker.stdin.end(`${app.number}\n`);
-    const status = await exited;
-    // An answer piped in is not echoed, so the check after the question shares its line.
-    const passes = printed.match(/(?:PASS|FAIL) [^\n]*/g) ?? [];
-    check('scripts/device-check.mjs, playing the app, signs in through the device page: its code typed in lower case with spaces, what asked named with its country, and the number read off the page typed into it',
-        status === 0 && app.words === `The crossbind app 0.0.0 on macOS 0.0 asked just now, from ${COUNTRY_NAME}, to sign in as ${NAME}.` && passes.length === 4 && passes.every((line) => line.startsWith('PASS')),
-        `${app.words} ${app.said} ${passes.join('; ')}`);
+    await step('scripts/device-check.mjs, playing the app, signs in through the device page: its code typed in lower case with spaces, what asked named with its country, and the number read off the page typed into it',
+        () => deviceCheck(page));
 
-    const home = fs.mkdtempSync(path.join(os.tmpdir(), 'crossbind-cloud-local-cli-'));
-    const credentials = path.join(home, 'credentials.json');
-    let cliPrinted = '';
-    let typeNumber;
-    const typed = new Promise((resolve) => { typeNumber = resolve; });
-    const signingIn = cliLogin({
-        url: API, version: CROSSBIND_VERSION, file: credentials, print: (line) => { cliPrinted += `${line}\n`; }, ask: async () => String(await typed), isTerminal: () => true,
+    let cliToken;
+    await step('crossbind login\'s own code signs in through the same page, which names the CLI', async () => {
+        const signed = await cliSignInOnPage(page);
+        cliToken = signed.token;
+        return signed;
     });
-    const cliCode = await until(() => /enter the code ([A-Z]{4}-[A-Z]{4})/.exec(cliPrinted)?.[1]);
-    const cli = await decideOnPage(page, cliCode);
-    typeNumber(cli.number);
-    const { login } = await signingIn;
-    const cliToken = JSON.parse(fs.readFileSync(credentials, 'utf8'))[API].token;
-    fs.rmSync(home, { recursive: true, force: true });
-    check('crossbind login\'s own code signs in through the same page, which names the CLI', login === NAME && cli.words.startsWith(`The crossbind CLI ${CROSSBIND_VERSION} asked`) && await usage(cliToken) === 200,
-        `${cliPrinted.trim()} ${cli.words}`);
 
-    const denied = await post('/v1/device/authorize', APP);
-    const deny = await decideOnPage(page, denied.user_code, false);
-    const after = await post('/v1/device/token', { device_code: denied.device_code });
-    check('a code denied on the page ends for its device', deny.said === 'Denied. That code no longer works.' && after.error === 'access_denied', `${deny.said} ${after.error}`);
+    await step('a code denied on the page ends for its device', async () => {
+        const denied = await post('/v1/device/authorize', APP);
+        const deny = await decideOnPage(page, denied.user_code, false);
+        const after = await post('/v1/device/token', { device_code: denied.device_code });
+        return { ok: deny.said === 'Denied. That code no longer works.' && after.error === 'access_denied', detail: `${deny.said} ${after.error}` };
+    });
 
-    const waiting = await post('/v1/device/authorize', APP);
-    const site = await page.context().newPage();
-    await site.goto(`${SITE}/approve.html#${waiting.user_code}`);
-    await site.waitForFunction(() => document.title.endsWith(', sent'));
-    const fetched = await site.title();
-    await site.close();
-    const still = await decideOnPage(page, waiting.user_code);
-    check('the site, another origin of the same site, approves no code: its JSON request blocked and its plain request refused, the code still waiting for the page',
-        fetched === 'blocked, sent' && Number.isInteger(still.number), `${fetched}; ${still.said}`);
+    await step('the site, another origin of the same site, approves no code: its JSON request blocked and its plain request refused, the code still waiting for the page', async () => {
+        const waiting = await post('/v1/device/authorize', APP);
+        const site = await page.context().newPage();
+        await site.goto(`${SITE}/approve.html#${waiting.user_code}`);
+        await site.waitForFunction(() => document.title.endsWith(', sent'), null, { timeout: STEP_MS });
+        const fetched = await site.title();
+        await site.close();
+        const still = await decideOnPage(page, waiting.user_code);
+        return { ok: fetched === 'blocked, sent' && Number.isInteger(still.number), detail: `${fetched}; ${still.said}` };
+    });
 
-    const fresh = await newBrowser(browser);
-    await fresh.goto(`${API}/device`);
-    await fresh.click('a:has-text("Sign in with GitHub")');
-    await fresh.waitForSelector('[data-notice="login=ok"]:not([hidden])');
-    check('signed out, the device page signs in and comes back to itself, signed in', fresh.url() === `${API}/device` && (await fresh.textContent('main')).includes(`Signed in as ${NAME}`), fresh.url());
-    await fresh.context().close();
+    await step('signed out, the device page signs in and comes back to itself, signed in', async () => {
+        const fresh = await newBrowser(browser);
+        try {
+            await fresh.goto(`${API}/device`);
+            await fresh.click('a:has-text("Sign in with GitHub")');
+            await fresh.waitForSelector('[data-notice="login=ok"]:not([hidden])', { timeout: STEP_MS });
+            return { ok: fresh.url() === `${API}/device` && (await fresh.textContent('main')).includes(`Signed in as ${NAME}`), detail: fresh.url() };
+        } finally {
+            await fresh.context().close();
+        }
+    });
     return cliToken;
 }
 
